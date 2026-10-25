@@ -2469,6 +2469,16 @@ export interface StationState {
 	message?: string;
 	/** Offline, why as the device can tell (Link's `cause`). Absent otherwise. */
 	cause?: string;
+	/**
+	 * Its agents at work, as it counts them (its overview's `counts.running`); 0 while it is not up. Absent from a
+	 * core before it.
+	 */
+	running?: number;
+	/**
+	 * What it is doing in a few words, as the stations' card says it: 3 个正在运行 | 空闲 | 正在连接 | 离线…
+	 * Absent from a core before it.
+	 */
+	doing?: string;
 }
 
 /**
@@ -2499,6 +2509,15 @@ export interface StationsGlyph {
 	working: number;
 	summary: string;
 	label: string;
+	/** The agents at work on them all (their `running`). Absent from a core before it. */
+	running?: number;
+	/** That in a line, the stations' card's head: 8 个 agent 正在运行 | 暂无 agent 在运行. Absent from a core before it. */
+	now?: string;
+	/**
+	 * What follows the number of them on the card shared (个 agent 正在运行, agents running). Absent from a core
+	 * before it.
+	 */
+	unit?: string;
 }
 
 export interface ChatsView {
@@ -3226,6 +3245,59 @@ export interface FilesTabsView {
 	current: string;
 	/** The side in front of the tab shown: what the page's address says. */
 	front: FilesPane;
+}
+
+export interface FleetDay {
+	label: string;
+	/** Its calls as a share of the busiest day's (0 to 1). */
+	share: number;
+	today: boolean;
+}
+
+export interface FleetModel {
+	name: string;
+	maker?: string;
+	count: number;
+	/** How many in words: ×4. */
+	text: string;
+}
+
+export interface FleetStat {
+	label: string;
+	value: string;
+}
+
+export interface FleetStation {
+	station: string;
+	name: string;
+	/** Its machine in a few words: Apple M2 Max · 64 GB. */
+	machine?: string;
+	running: number;
+	/** Who made the models of its agents at work (their marks' keys), the most first. */
+	makers: string[];
+}
+
+export interface FleetWeek {
+	title: string;
+	/** Its calls, input tokens and cost, as the usage page's tiles say them. */
+	stats: FleetStat[];
+	days: FleetDay[];
+}
+
+/** The card shared of a workspace's agents at work (the `fleet` view, views/fleet.ts). */
+export interface FleetView {
+	/** The agents at work on the workspace's stations, as each counts its own. */
+	running: number;
+	/** What follows the number of them: 个 agent 正在运行. */
+	unit: string;
+	/** Where they are in a line: 分布在 3 台设备 · 3 种模型. */
+	where: string;
+	/** The stations at work, the most first. */
+	stations: FleetStation[];
+	/** The models at work, the most first (4 at most). */
+	models: FleetModel[];
+	/** What they did over the last 7 days; absent while it is read, or with nothing spent. */
+	week?: FleetWeek;
 }
 
 export interface FlowChoice {

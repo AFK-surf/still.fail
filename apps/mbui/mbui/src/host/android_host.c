@@ -922,6 +922,47 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
 // (MBView.onDrawFrame, GL thread: only a native view's picture changed since the last frame)
 JNIEXPORT void JNICALL Java_dev_mbui_Native_redraw(JNIEnv *env, jclass c) { draw_kept(); }
 
+// The frame presented last, drawn again into a framebuffer of its own the surface's size (as on the surface: what the
+// surface holds is gone once it is shown), and its pixels in the rectangle x, y, w × h (from the top left) into `out`
+// as RGBA, premultiplied, rows from the top (host_native.mbt drawn_pixels; GL thread, as all MoonBit is): 1 when read,
+// 0 where the rectangle is not all in the frame.
+static GLuint read_fb, read_tex;
+static int read_w, read_h;
+
+int32_t mb_render_drawn_pixels(int32_t x, int32_t y, int32_t w, int32_t h, moonbit_bytes_t out) {
+  if (kept_count <= 0 || fb_w <= 0 || fb_h <= 0 || w <= 0 || h <= 0 || x < 0 || y < 0 || x + w > fb_w || y + h > fb_h)
+    return 0;
+  if ((size_t)Moonbit_array_length(out) < (size_t)w * h * 4) return 0;
+  if (!read_fb || read_w != fb_w || read_h != fb_h) {
+    if (read_fb) {
+      glDeleteFramebuffers(1, &read_fb);
+      glDeleteTextures(1, &read_tex);
+    }
+    glGenTextures(1, &read_tex);
+    glBindTexture(GL_TEXTURE_2D, read_tex);
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, fb_w, fb_h);
+    glGenFramebuffers(1, &read_fb);
+    glBindFramebuffer(GL_FRAMEBUFFER, read_fb);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, read_tex, 0);
+    read_w = fb_w;
+    read_h = fb_h;
+  }
+  GLuint was = target_fb;
+  target_fb = read_fb;
+  draw_kept();
+  target_fb = was;
+  size_t row = (size_t)w * 4;
+  unsigned char *px = malloc(row * h);
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, read_fb);
+  glPixelStorei(GL_PACK_ALIGNMENT, 1);
+  // (GL's rows from the foot: the app's top is the surface's)
+  glReadPixels(x, fb_h - y - h, w, h, GL_RGBA, GL_UNSIGNED_BYTE, px);
+  for (int r = 0; r < h; r++) memcpy(out + row * r, px + row * (h - 1 - r), row);
+  free(px);
+  glBindFramebuffer(GL_FRAMEBUFFER, was);
+  return 1;
+}
+
 static void draw_kept(void) {
   int32_t count = kept_count;
   double r = kept_r, g = kept_g, b = kept_b;

@@ -807,6 +807,18 @@ fn image_pixels(id : Int, out : FixedArray[Byte]) -> Bool {
   ffi_image_pixels(id, out) == 1
 }
 
+// The frame presented last, drawn again (apple_render.m, android_host.c, win_render.cpp: mb_render_drawn_pixels).
+
+#borrow(out)
+extern "C" fn ffi_drawn_pixels(x : Int, y : Int, w : Int, h : Int, out : FixedArray[Byte]) -> Int = "mb_render_drawn_pixels"
+
+///|
+/// The last frame's pixels in the rectangle `x`, `y`, `w` by `h` (device pixels from its top left), RGBA premultiplied,
+/// rows from the top, into `out`: false where it is not all in the frame.
+fn drawn_pixels(x : Int, y : Int, w : Int, h : Int, out : FixedArray[Byte]) -> Bool {
+  ffi_drawn_pixels(x, y, w, h, out) == 1
+}
+
 // A sign-in in the browser that comes back here (browser_login.mbt; apple_browser_login.m, and on Android
 // android_host.c on android/…/BrowserLogin.java).
 

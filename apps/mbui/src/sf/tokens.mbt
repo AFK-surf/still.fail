@@ -1223,7 +1223,8 @@ pub fn mix(a : Int64, share : Double, b : Int64) -> Int64 {
 /// has, each with the line it has where a `Text` there says no `lineHeight` (ui/Theme.kt WebType: 1.4em, the web
 /// phone's root.css.ts), and mbui's two under Xs (Xs3 10, Xs2 11) on the same rule: Xs 12 (120 places), Sm 13 (292), Base 14 (156), Lg 15 (206: the body), Xl 16 (a bar's
 /// title, Parts.kt:527), Xl2 17 (back, Parts.kt:491), Xl3 22 (a title, bold: Security.kt:473, NewChat.kt:183,
-/// Usage.kt:130, Workspaces.kt:191), Xl4 32 (a large title, Parts.kt:559).
+/// Usage.kt:130, Workspaces.kt:191), Xl4 32 (a large title, Parts.kt:559); past them Tailwind's own, on lines as tall as
+/// they are, for a number standing alone in a picture (the card shared of the agents at work: Xl7 72).
 pub let text_scale : @ui.TextScale = {
   // (the roles: each screen's own, Type's, set by ui_theme: text_roles)
   caption: (11.0, 16.0),
@@ -1243,6 +1244,9 @@ pub let text_scale : @ui.TextScale = {
   xl2: (17.0, 23.8),
   xl3: (22.0, 30.8),
   xl4: (32.0, 44.8),
+  xl5: (48.0, 48.0),
+  xl6: (60.0, 60.0),
+  xl7: (72.0, 72.0),
 }
 
 ///|
@@ -1439,6 +1443,33 @@ pub let sign_in_title_size : @ui.TextSize = Exact(28.0, 39.2)
 
 ///|
 pub let sign_in_side : @ui.Space = Exact(30.0)
+
+///|
+/// The card shared of the agents at work (sfpages' stations_now.mbt): the same in either theme, as a poster is: a night's
+/// ground with still.fail's orange and a violet glowing on it, its words white, and white thinned for what is said of
+/// them, for what stands on the ground (a station's tile), for a day's bar.
+pub let share_ground : Int64 = 0x0F0F14FFL
+
+///|
+pub let share_ink : Int64 = 0xF6F5F3FFL
+
+///|
+pub let share_dim : Int64 = 0xF6F5F3A6L
+
+///|
+pub let share_tile : Int64 = 0xFFFFFF14L
+
+///|
+pub let share_bar : Int64 = 0xFFFFFF59L
+
+///|
+pub let share_orange : Int64 = 0xE5704AFFL
+
+///|
+pub let share_glow_orange : Int64 = 0xE5704A8CL
+
+///|
+pub let share_glow_violet : Int64 = 0x7C5CFF66L
 
 ///|
 /// A picking row's line under its words (Controls.kt PickRow: 12.sp on 17.sp), between L4's 16 and L5's 18.

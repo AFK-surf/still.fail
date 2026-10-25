@@ -1152,6 +1152,22 @@ fn h_image_pixels(id : Int, out : FixedArray[Byte]) -> Bool {
 }
 
 ///|
+/// The last frame's pixels in a rectangle of it (device pixels; premultiplied RGBA, rows from the top) into `out`: a
+/// live Tester's host's as it drew the frame (a film's), the fake host's every pixel a mid grey, opaque.
+fn h_drawn_pixels(x : Int, y : Int, w : Int, h : Int, out : FixedArray[Byte]) -> Bool {
+  match fake.val {
+    Some({ live: Some(l), .. }) => l.host.drawn_pixels(x, y, w, h, out)
+    Some(_) => {
+      for i in 0..<(w * h * 4) {
+        out[i] = if i % 4 == 3 { b'\xFF' } else { b'\x80' }
+      }
+      true
+    }
+    None => @hostapi.drawn_pixels(x, y, w, h, out)
+  }
+}
+
+///|
 fn h_image_free(id : Int) -> Unit {
   outside_end(outside_image, id)
   match fake.val {

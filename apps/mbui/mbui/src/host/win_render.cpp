@@ -887,9 +887,9 @@ static int write_png(const wchar_t *path, const uint8_t *bgra, int w, int h, int
   return ok;
 }
 
-int mb_render_snapshot(const wchar_t *path) {
-  int w = fb_w, h = fb_h;
-  if (!dev || w <= 0 || h <= 0) return 0;
+// The last presented frame drawn again into a texture of its own, the size of the window's, and copied where the CPU
+// reads it (a staging texture, to Map; NULL where it could not be made).
+static ID3D11Texture2D *redrawn(int w, int h) {
   D3D11_TEXTURE2D_DESC td = {};
   td.Width = (UINT)w;
   td.Height = (UINT)h;
@@ -900,14 +900,53 @@ int mb_render_snapshot(const wchar_t *path) {
   td.BindFlags = D3D11_BIND_RENDER_TARGET;
   ID3D11Texture2D *tex = NULL, *staging = NULL;
   ID3D11RenderTargetView *view = NULL;
-  dev->CreateTexture2D(&td, NULL, &tex);
-  dev->CreateRenderTargetView(tex, NULL, &view);
+  if (FAILED(dev->CreateTexture2D(&td, NULL, &tex))) return NULL;
+  if (FAILED(dev->CreateRenderTargetView(tex, NULL, &view))) {
+    tex->Release();
+    return NULL;
+  }
   encode(view, w, h, last_count, last_bg, last_inst);
   td.Usage = D3D11_USAGE_STAGING;
   td.BindFlags = 0;
   td.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-  dev->CreateTexture2D(&td, NULL, &staging);
-  ctx->CopyResource(staging, tex);
+  if (SUCCEEDED(dev->CreateTexture2D(&td, NULL, &staging))) ctx->CopyResource(staging, tex);
+  view->Release();
+  tex->Release();
+  if (rtv) ctx->OMSetRenderTargets(1, &rtv, NULL);
+  return staging;
+}
+
+extern "C" int32_t mb_render_drawn_pixels(int32_t x, int32_t y, int32_t w, int32_t h, moonbit_bytes_t out) {
+  int fw = fb_w, fh = fb_h;
+  if (!dev || !last_inst || fw <= 0 || fh <= 0 || w <= 0 || h <= 0 || x < 0 || y < 0 || x + w > fw || y + h > fh) return 0;
+  if ((size_t)Moonbit_array_length(out) < (size_t)w * h * 4) return 0;
+  ID3D11Texture2D *staging = redrawn(fw, fh);
+  if (!staging) return 0;
+  int ok = 0;
+  D3D11_MAPPED_SUBRESOURCE m;
+  if (SUCCEEDED(ctx->Map(staging, 0, D3D11_MAP_READ, 0, &m))) {
+    for (int r = 0; r < h; r++) {
+      const uint8_t *s = (const uint8_t *)m.pData + (size_t)(y + r) * m.RowPitch + (size_t)x * 4;
+      uint8_t *d = out + (size_t)r * w * 4;
+      for (int k = 0; k < w; k++, s += 4, d += 4) {
+        d[0] = s[2];
+        d[1] = s[1];
+        d[2] = s[0];
+        d[3] = s[3];
+      }
+    }
+    ctx->Unmap(staging, 0);
+    ok = 1;
+  }
+  staging->Release();
+  return ok;
+}
+
+int mb_render_snapshot(const wchar_t *path) {
+  int w = fb_w, h = fb_h;
+  if (!dev || w <= 0 || h <= 0) return 0;
+  ID3D11Texture2D *staging = redrawn(w, h);
+  if (!staging) return 0;
   int ok = 0;
   D3D11_MAPPED_SUBRESOURCE m;
   if (SUCCEEDED(ctx->Map(staging, 0, D3D11_MAP_READ, 0, &m))) {
@@ -935,9 +974,6 @@ int mb_render_snapshot(const wchar_t *path) {
     ctx->Unmap(staging, 0);
   }
   staging->Release();
-  view->Release();
-  tex->Release();
-  if (rtv) ctx->OMSetRenderTargets(1, &rtv, NULL);
   return ok;
 }
 

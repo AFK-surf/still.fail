@@ -4,13 +4,14 @@
 
 ///|
 /// What the settings' pages read and call, and how they move, for both frames: the core as the app has it (Source),
-/// the app's stack; the frame's own way home (`home`: the phone's sheets put down too) and a station's login as the
-/// frame's card (by station and id, marked).
+/// the app's stack; the frame's own way home (`home`: the phone's sheets put down too), a station's login as the
+/// frame's card (by station and id, marked) and the card to share of the workspace's agents at work (`share_card`).
 pub fn settings_core_of(
   src : Source,
   w : Workspace,
   home~ : () -> Unit,
   login_card~ : (@ui.Ctx, String, String, Bool) -> Unit,
+  share_card~ : () -> Unit,
 ) -> @settings.Core {
   // a picture asked of the system's picker for a mark: its answer given (the host asks for a frame as it answers)
   match picture_pick.val {
@@ -108,6 +109,7 @@ pub fn settings_core_of(
       }
     },
     login_card,
+    share_card,
     face_preview: fn(id, index, variable) { face_preview(src, id, index, variable) },
     face_here: face_here,
     face_failed: face_failed,

@@ -104,6 +104,7 @@ export type Topic =
   | { topic: "imageNear"; station: string; session: string; path: string }
   // The services and jobs left up a long while on the scope's stations that are up.
   | { topic: "longJobs"; scope: string }
+  | { topic: "fleet"; scope: string }
   | { topic: "profiles"; scope: string }
   // What the agents of a scope's stations spent over its last `days` (7 or 30), by day, person, chat, profile and model
   // (client/core-ts/src/views/usage.ts). A core from before it answers an error.

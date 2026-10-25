@@ -105,6 +105,7 @@ export const TOPICS: Record<string, Spec> = {
   longJobs: { scope: S },
   stationUsage: { station: S },
   usage: { scope: S, days: ["u32", "skip"] },
+  fleet: { scope: S },
   settings: { scope: S },
   stationResources: { station: S },
   resources: { scope: S, station: ["string", "skip"] },
@@ -195,7 +196,7 @@ export function sameTopic(a: Topic, b: Topic): boolean {
 }
 
 const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory"]);
-const VIEWS = new Set(["chats", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "chatLetters", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays"]);
+const VIEWS = new Set(["chats", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "chatLetters", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "fleet", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays"]);
 
 /// The station a station topic belongs to; null for the account topics, the core's own and the views.
 export function topicStation(topic: Topic): string | null {

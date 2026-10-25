@@ -816,6 +816,34 @@ uint8_t *mb_render_read(const double *inst, int32_t count, double r, double g, d
   }
 }
 
+// The frame presented last drawn again (read_last), and its pixels in the rectangle x, y, w × h (from its top left)
+// into `out` as RGBA, premultiplied, rows from the top (host_native.mbt drawn_pixels): 1 when read, 0 where the
+// rectangle is not all in the frame or none was presented.
+int32_t mb_render_drawn_pixels(int32_t x, int32_t y, int32_t w, int32_t h, moonbit_bytes_t out) {
+  if (!dev || !last_inst || w <= 0 || h <= 0 || x < 0 || y < 0) return 0;
+  if ((size_t)Moonbit_array_length(out) < (size_t)w * h * 4) return 0;
+  @autoreleasepool {
+    int fw, fh;
+    uint8_t *px = read_last(&fw, &fh);
+    if (x + w > fw || y + h > fh) {
+      free(px);
+      return 0;
+    }
+    for (int r = 0; r < h; r++) {
+      const uint8_t *s = px + ((size_t)(y + r) * fw + x) * 4;
+      uint8_t *d = out + (size_t)r * w * 4;
+      for (int k = 0; k < w; k++, s += 4, d += 4) {
+        d[0] = s[2];
+        d[1] = s[1];
+        d[2] = s[0];
+        d[3] = s[3];
+      }
+    }
+    free(px);
+  }
+  return 1;
+}
+
 int mb_render_snapshot(const char *path) {
   int w, h;
   uint8_t *px = read_last(&w, &h);

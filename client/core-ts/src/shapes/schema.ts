@@ -1104,6 +1104,8 @@ export const SHAPES: Record<string, Shape> = {
     ["state", "String", { doc: "online | connecting | offline | error" }],
     ["message", opt("String"), { said: true }],
     ["cause", opt("String"), { doc: "Offline, why as the device can tell (Link's `cause`). Absent otherwise." }],
+    ["running", opt("i64"), { client: opt("I54"), doc: "Its agents at work, as it counts them (its overview's `counts.running`); 0 while it is not up. Absent from a\ncore before it." }],
+    ["doing", opt("String"), { doc: "What it is doing in a few words, as the stations' card says it: 3 个正在运行 | 空闲 | 正在连接 | 离线…\nAbsent from a core before it." }],
   ]),
   StationTrouble: struct([
     ["text", "String", { said: true }],
@@ -1119,6 +1121,9 @@ export const SHAPES: Record<string, Shape> = {
     ["working", "i64", { client: "I54" }],
     ["summary", "String"],
     ["label", "String"],
+    ["running", opt("i64"), { client: opt("I54"), doc: "The agents at work on them all (their `running`). Absent from a core before it." }],
+    ["now", opt("String"), { doc: "That in a line, the stations' card's head: 8 个 agent 正在运行 | 暂无 agent 在运行. Absent from a core before it." }],
+    ["unit", opt("String"), { doc: "What follows the number of them on the card shared (个 agent 正在运行, agents running). Absent from a core\nbefore it." }],
   ], { doc: "The stations at a glance (the glyph): how many are online, offline or connecting (`dim`), failing, and at work; the\nline beside it while all is well (the one station by name, else how many; and who works), and all of it in words.", keepNone: true }),
   ListNote: struct([
     ["reading", "bool"],
@@ -2491,6 +2496,41 @@ export const SHAPES: Record<string, Shape> = {
     ["basis", "String"],
     ["prices", opt(vec("UsagePriceTable")), { doc: "Each station's own calculation table; absent with older cores." }],
   ], { doc: "What the agents of a workspace spent over its last `days` (the `usage` view, client/core-ts/src/views/usage.ts): a few\ntotals (`tiles`), each day's cost split by the people who spent most (`series`, the rest as 其他), and lists of who,\nwhich chats, which accounts and which models spent the most, at the providers' API prices (`basis` says what that\nmeans). `notes`: what is missing or still being read, in lines; `loading` while a station has not answered.", keepNone: true }),
+  FleetView: struct([
+    ["running", "i64", { client: "I54", doc: "The agents at work on the workspace's stations, as each counts its own." }],
+    ["unit", "String", { doc: "What follows the number of them: 个 agent 正在运行." }],
+    ["where", "String", { doc: "Where they are in a line: 分布在 3 台设备 · 3 种模型." }],
+    ["stations", vec("FleetStation"), { doc: "The stations at work, the most first." }],
+    ["models", vec("FleetModel"), { doc: "The models at work, the most first (4 at most)." }],
+    ["week", opt("FleetWeek"), { doc: "What they did over the last 7 days; absent while it is read, or with nothing spent." }],
+  ], { doc: "The card shared of a workspace's agents at work (the `fleet` view, views/fleet.ts).", keepNone: true }),
+  FleetStation: struct([
+    ["station", "String"],
+    ["name", "String", { said: true }],
+    ["machine", opt("String"), { doc: "Its machine in a few words: Apple M2 Max · 64 GB." }],
+    ["running", "i64", { client: "I54" }],
+    ["makers", vec("String"), { doc: "Who made the models of its agents at work (their marks' keys), the most first." }],
+  ]),
+  FleetModel: struct([
+    ["name", "String"],
+    ["maker", opt("String")],
+    ["count", "i64", { client: "I54" }],
+    ["text", "String", { doc: "How many in words: ×4." }],
+  ]),
+  FleetWeek: struct([
+    ["title", "String"],
+    ["stats", vec("FleetStat"), { doc: "Its calls, input tokens and cost, as the usage page's tiles say them." }],
+    ["days", vec("FleetDay")],
+  ]),
+  FleetStat: struct([
+    ["label", "String"],
+    ["value", "String"],
+  ]),
+  FleetDay: struct([
+    ["label", "String"],
+    ["share", "f64", { doc: "Its calls as a share of the busiest day's (0 to 1)." }],
+    ["today", "bool"],
+  ]),
   ResourcesView: struct([
     ["wait", "ListNote", { doc: "What it still waits on (looks.ts waitNote): the stations not read yet, those that could not be." }],
     ["empty", "bool", { doc: "No station reads what its processes use (none answered yet, none on macOS, all from before)." }],
@@ -3402,6 +3442,7 @@ export const TOPIC_SHAPES: Record<string, Ty> = {
   longJobs: "LongJobsView",
   profiles: "ProfilesView",
   usage: "UsageView",
+  fleet: "FleetView",
   settings: "SettingsView",
   job: "Job",
   drive: "DriveFolder",

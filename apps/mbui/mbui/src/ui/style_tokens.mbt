@@ -272,7 +272,7 @@ pub(all) enum Radius {
 ///|
 /// A size of words with its line's height: by what the words are (`Caption` … `Display`: the theme's roles, as a
 /// design system's type tokens say them, each its own size on each screen), the theme's scale (Tailwind's names, and
-/// Xs2, Xs3 under Xs, as Xl2, Xl3 over Xl), or `Exact(size, line)`.
+/// Xs2, Xs3 under Xs, as Xl2, Xl3 over Xl; Xl5 … Xl7 past them, a picture's one number), or `Exact(size, line)`.
 pub(all) enum TextSize {
   /// the smallest words: a time, a count on a badge, a small status
   Caption
@@ -298,6 +298,9 @@ pub(all) enum TextSize {
   Xl2
   Xl3
   Xl4
+  Xl5
+  Xl6
+  Xl7
   Exact(Double, Double)
 } derive(Eq, Show, Debug)
 

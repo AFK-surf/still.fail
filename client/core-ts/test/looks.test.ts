@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
-import { answer, face, glyph, linkShown, listNote, memorySections, outboxWaits, stationLine, stationUpdate, waitNote } from "../src/looks.ts";
+import { answer, doing, face, glyph, linkShown, listNote, memorySections, outboxWaits, stationLine, stationUpdate, waitNote } from "../src/looks.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -21,6 +21,24 @@ test("the_glyph_counts_stations_by_their_links_and_says_who_works", () => {
   g = glyph([station("w/a", "A", "connecting"), station("w/b", "B", "offline")], []);
   assert.deepEqual([g.dim, g.connecting], [2, 1]);
   assert.equal(g.label, "2 台 station，0 台在线，1 台正在连接，1 台离线");
+});
+
+test("the_stations_card_says_how_many_agents_each_station_has_at_work_and_all_of_them", () => {
+  // Up, as it counts its own (its overview's `counts.running`); idle; connecting until its overview is read.
+  assert.deepEqual(doing("online", undefined, { counts: { running: 3 } }), { running: 3, doing: "3 个正在运行" });
+  assert.deepEqual(doing("online", undefined, { counts: { running: 0 } }), { running: 0, doing: "空闲" });
+  assert.deepEqual(doing("online", undefined, undefined), { running: 0, doing: "正在连接" });
+  // Down, none at work whatever it last said, and why as its link says.
+  assert.deepEqual(doing("offline", undefined, { counts: { running: 2 } }), { running: 0, doing: "离线" });
+  assert.deepEqual(doing("offline", "network", undefined).doing, "本机网络不可用");
+  assert.deepEqual(doing("offline", "lock", undefined).doing, "安全模式未放行");
+  assert.deepEqual(doing("error", undefined, { counts: { running: 1 } }), { running: 0, doing: "连不上" });
+  assert.deepEqual(doing("connecting", undefined, undefined).doing, "正在连接");
+  // All of them: the card's head, and what follows the number on the card shared.
+  const at = (address: string, name: string, running: number) => ({ ...station(address, name, "online"), running });
+  const g = glyph([at("w/a", "Studio", 5), at("w/b", "ccvm", 3), station("w/c", "MBA", "offline")], []);
+  assert.deepEqual([g.running, g.now, g.unit], [8, "8 个 agent 正在运行", "个 agent 正在运行"]);
+  assert.deepEqual([glyph([at("w/a", "Studio", 0)], []).running, glyph([at("w/a", "Studio", 0)], []).now], [0, "暂无 agent 在运行"]);
 });
 
 test("a_view_gathered_from_stations_says_whom_it_waits_on_and_who_failed", () => {

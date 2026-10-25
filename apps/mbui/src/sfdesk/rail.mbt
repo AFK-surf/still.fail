@@ -564,7 +564,13 @@ fn rail_place(
       } else {
         @sf.icon(c, rail_icon(place), size=rail_icon_size, color~) |> ignore
       }
-    }, label~)
+    }, label~, tipped=place != "stations")
+    // Station's: how many agents are at work on each station, and the card to share of them, beside it as the pointer
+    // rests on it (in place of its tip: what it said is in the card)
+    if place == "stations" && !wide.editing {
+      @sfpages.hover(c, "rail/stations-now", id, side=Right, along=Start, fn() { @sfpages.stations_now(c, src, w) })
+      |> ignore
+    }
     // what wants the person in a list, as its rows' marks: on its icon's corner while the sidebar is folded (open,
     // the rows show it; Rail.css.ts listMark)
     let tone = match place {

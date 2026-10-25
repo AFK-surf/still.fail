@@ -575,6 +575,13 @@ fn image_pixels(id : Int, out : FixedArray[Byte]) -> Bool {
   js_image_pixels(id, out) == 1
 }
 
+///|
+/// The last frame's pixels (as host_native.mbt's): a page's canvas is not read back here.
+fn drawn_pixels(x : Int, y : Int, w : Int, h : Int, out : FixedArray[Byte]) -> Bool {
+  ignore((x, y, w, h, out))
+  false
+}
+
 // A sign-in in the browser that comes back here (browser_login.mbt): a page cannot listen.
 
 ///|
