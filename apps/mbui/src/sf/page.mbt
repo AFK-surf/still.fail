@@ -1183,16 +1183,48 @@ pub fn choice_row(
 let no_reach : @ui.Style = @ui.css("")
 
 ///|
+/// A list of a page's rows at a dialog's foot (a station's card's ways on), each pressed as a whole, `style` round
+/// them: as dialog_rows' are, the rows round as their height (a wide row's, desk_row_least: no note under its title),
+/// out past the dialog's words at its sides and its foot to where the last stands concentric with its foot corners,
+/// their words back on the dialog's line (row_line); elsewhere (a sheet's) as they are.
+pub fn dialog_foot_rows(c : @ui.Ctx, style : @ui.Style, body : () -> Unit) -> Unit {
+  if !in_dialog.val {
+    c.box(style~, body) |> ignore
+    return
+  }
+  let was = foot_rows_now.val
+  foot_rows_now.val = true
+  c.box(style=style.then(@ui.style(mb=room(-foot_rows_out()))), body) |> ignore
+  foot_rows_now.val = was
+}
+
+///|
+/// How far a dialog's foot rows reach out past its words: from its side (dialog_pad) to where a capsule a wide row high
+/// stands concentric with its corner.
+fn foot_rows_out() -> Double {
+  dialog_pad - capsule_in(dialog_r, desk_row_least)
+}
+
+///|
+// kept across runs: said by dialog_foot_rows round the rows it draws, false between
+let foot_rows_now : Ref[Bool] = { val: false }
+
+///|
 /// Where a row of a page's (link_row, choice_row, said_row, item_row) stands across: in a panel's column, its ground
 /// reaching out across the room the panel leaves, its words on the column's line (row_reach); in a small panel, a
-/// menu's row, at its padding, its words a row's padding in, concentric with it; on a card or a page, as its own.
+/// menu's row, at its padding, its words a row's padding in, concentric with it; at a dialog's foot (dialog_foot_rows),
+/// a capsule out to where it is concentric with the dialog's foot corners, its words on the dialog's line; on a card or
+/// a page, as its own.
 fn row_line(narrow : Bool) -> @ui.Style {
   let reach = if in_card.val > 0 {
     0.0
   } else {
     row_reach(if narrow { card_pad - corner_inset } else { desk_list_out })
   }
-  if in_small_panel() {
+  if foot_rows_now.val && !narrow {
+    let out = foot_rows_out()
+    @ui.style(mx=room(-out), px=room(out), radius=Full)
+  } else if in_small_panel() {
     panel_row_in()
   } else if reach > 0.0 {
     @ui.style(mx=room(-reach), px=room(reach))

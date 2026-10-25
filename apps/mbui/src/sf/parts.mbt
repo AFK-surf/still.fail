@@ -1748,9 +1748,11 @@ pub fn dialog(
           c.box(style=dialog_lead_at, fn() { c.text(s.description, style=dialog_lead) |> ignore }) |> ignore
         }
         // what it holds scrolls in itself when the dialog would be taller than the window leaves it (dialogBody's
-        // overflow: auto, its minimum 0): its title and its buttons stay
-        c.capped(key + "/body", c.height, shrinks=true, fn() {
-          c.box(style=dialog_body, fn() {
+        // overflow: auto, its minimum 0): its title and its buttons stay. Out to the dialog's sides, what it holds back
+        // on its words' line, and with no buttons down to its foot, 24 under what it holds: what reaches out to its
+        // corners on purpose (dialog_rows, dialog_foot_rows) is not cut short of them.
+        c.capped(key + "/body", c.height, shrinks=true, mx=-dialog_pad, padx=dialog_pad, fn() {
+          c.box(style=if footer is None { dialog_body_end } else { dialog_body }, fn() {
             // (its rows told they are in a dialog: dialog_rows)
             let was = in_dialog.val
             in_dialog.val = true
@@ -1762,7 +1764,7 @@ pub fn dialog(
         |> ignore
         match footer {
           Some(f) => c.box(style=dialog_foot.then(dialog_corner_foot(dialog_pad)), f) |> ignore
-          None => c.box(style=dialog_end, fn() {  }) |> ignore
+          None => ()
         }
         },
       )
@@ -1867,9 +1869,9 @@ pub fn dialog_rows(row_h : Double) -> (@ui.Style, @ui.Style) {
 let no_style : @ui.Style = @ui.css("")
 
 ///|
-/// With none, 24 under what it holds.
+/// With no buttons, its body down to its foot, 24 under what it holds.
 // kept across runs: a value (no field of it changes)
-let dialog_end : @ui.Style = @ui.css("h=S6")
+let dialog_body_end : @ui.Style = dialog_body.then(@ui.css("pb=S6"))
 
 // ---------------------------------------------------------------------------
 // Fields, selects, choices (parts.tsx Field, Select, Choices; parts.css.ts field, select, choice, radio)
