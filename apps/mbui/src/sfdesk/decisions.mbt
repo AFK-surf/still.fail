@@ -55,7 +55,7 @@ fn decisions_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let band = band_h(src, w)
   c.box(style=lists_fill, fn() {
     c.list(key, lines.length(), zou_row_h, fn(i) {
-      let n = c.box(style=lists_inset, fn() {
+      let n = c.box(style=@sf.list_line(Side), fn() {
         match lines[i] {
           Top => side_space(c, band + @sfpages.lists_top_in)
           Aside => c.box(style=zou_group, fn() { c.text(@sf.t("web-main.decisions.defer"), style=zou_group_words) |> ignore }) |> ignore
@@ -113,11 +113,13 @@ fn zou_row(c : @ui.Ctx, src : Source, w : Workspace, d : Json, on : Bool, more :
       c.text(question, style=zou_question) |> ignore
       c.box(style=zou_meta, fn() {
         c.box(style=zou_where, fn() {
-          c.text(text(v, "title") + " · ", style=zou_meta_words.then(@ui.text_style(w=Hug))) |> ignore
+          // (its chat's title cut where the room runs out, the station it is on whole after it)
+          c.text(text(v, "title"), style=zou_meta_cut) |> ignore
+          c.text(" · ", style=zou_meta_hug) |> ignore
           if @sf.has_station_mark(text(v, "stationEmoji"), text(v, "stationIcon")) {
             @sf.station_mark(c, text(v, "stationEmoji"), text(v, "stationIcon"), @sfpages.kind_mark, t.p.subtle)
           }
-          c.text(text(v, "stationName"), style=zou_meta_words) |> ignore
+          c.text(text(v, "stationName"), style=zou_meta_hug) |> ignore
         })
         |> ignore
         match stamp_of(field(v, "message"), "createdAt") {
@@ -169,7 +171,11 @@ let zou_where : @ui.Style = @ui.css("row w=Full align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zou_meta_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, leading=L5, wrap=false, w=Full)
+let zou_meta_hug : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, leading=L5, wrap=false, w=Hug)
+
+///|
+// kept across runs: a value (no field of it changes)
+let zou_meta_cut : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, leading=L5, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)

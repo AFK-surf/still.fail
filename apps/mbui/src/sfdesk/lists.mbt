@@ -30,11 +30,8 @@ fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit 
   let band = band_h(src, w)
   let t = @sf.theme()
   let frame : @sfpages.ListsFrame = {
-    ..@sfpages.bare_lists(band, 0.0, side_top_h(), if side_folded() || wide.tape { apart_ground() } else { t.p.sidebar }, mode),
+    ..@sfpages.bare_lists(band, 0.0, side_top_h(), if side_folded() || wide.tape { apart_ground() } else { t.p.sidebar }, mode, Side),
     others: [fn() { decisions_pane(c, src, w) }, fn() { archive_pane(c, src, w) }],
-    // on the tape, a panel of its own beside the rail: its rows as far in from its left as from its right (16), not a
-    // phone's 22 from the screen's edge (pengxiao, 2026-10-25: the list too far from the rail)
-    beside_rail: wide.tape,
   }
   // under a finger's search (sfpages' search.mbt): the band and the foot away with the lists, the search over them
   let away = @sfpages.search_away(c)
@@ -239,7 +236,7 @@ fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // (read now: the rows are made as the list is laid out, after the closed bar's drawing is over)
   let band = band_h(src, w)
   c.list("side/archive/" + w.id, lines.length(), 54.0, fn(i) {
-    c.box(style=lists_inset, fn() {
+    c.box(style=@sf.list_line(Side), fn() {
       match lines[i] {
         Top => side_space(c, band + 4.0)
         // (its 4 under it, as the web's margins: in a heading's 14 over it, not on top of it)
@@ -247,7 +244,7 @@ fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         Failing(words) => side_said(c, words, true)
         Waiting => side_breathing(c)
         Said(words) => side_said(c, words, false)
-        Day(label) => @sfpages.list_heading(c, label)
+        Day(label) => @sfpages.list_heading(c, label, Side)
         Row(it) => archive_side_row(c, src, it, i + 1 < lines.length() && lines[i + 1] is Row(_))
       }
     })
@@ -452,11 +449,6 @@ fn archive_main(c : @ui.Ctx) -> Unit {
 ///|
 // kept across runs: a value (no field of it changes)
 let lists_fill : @ui.Style = @ui.css("w=Full h=Full")
-
-///|
-/// A list's lines 8 in from the sidebar's sides (Sidebar.css.ts navScroll).
-// kept across runs: a value (no field of it changes)
-let lists_inset : @ui.Style = @ui.css("w=Full px=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)

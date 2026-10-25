@@ -13,9 +13,8 @@
 /// box they are in where the search's bar goes under it (a phone's status bar, the sidebar's top row), their ground (what a
 /// row's faces' rings are cut in), what stands at a list's top before its words and rows (`before`) and after its
 /// words (`after`), each said for a list's filter and its view; the lists on the track after the three (each drawn the
-/// pane's whole), and which of all of them is shown (0 all, 1 mine, 2 watching, then the others'); whether it is a
-/// panel of its own beside a rail (`beside_rail`): a finger's rows and days' headings 16 and 14 in from its left, as
-/// far as from its right, not a phone's 22 and 20 from the screen's edge.
+/// pane's whole), and which of all of them is shown (0 all, 1 mine, 2 watching, then the others'); where the lists
+/// stand (`at`: a side column's, their rows in and rounded, or across the whole screen: @sf.ListAt).
 pub(all) struct ListsFrame {
   top : Double
   foot : Double
@@ -25,7 +24,7 @@ pub(all) struct ListsFrame {
   after : (String, ChatsView?) -> Array[ListPart]
   others : Array[() -> Unit]
   shown : Int
-  beside_rail : Bool
+  at : @sf.ListAt
 }
 
 ///|
@@ -38,9 +37,9 @@ pub(all) struct ListPart {
 }
 
 ///|
-/// A frame's lists with nothing of the frame's own in them.
-pub fn bare_lists(top : Double, foot : Double, inset : Double, ground : Int64, shown : Int) -> ListsFrame {
-  { top, foot, inset, ground, before: fn(_, _) { [] }, after: fn(_, _) { [] }, others: [], shown, beside_rail: false }
+/// A frame's lists with nothing of the frame's own in them, standing `at`.
+pub fn bare_lists(top : Double, foot : Double, inset : Double, ground : Int64, shown : Int, at : @sf.ListAt) -> ListsFrame {
+  { top, foot, inset, ground, before: fn(_, _) { [] }, after: fn(_, _) { [] }, others: [], shown, at }
 }
 
 ///|
@@ -214,7 +213,7 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
   if !@sf.theme().chat_list.keys {
     match view {
       Some({ note: Some({ empty: true, .. }), .. }) | None => ()
-      Some(_) => lines.push(Part({ key: "search", draw: fn() { search_field(c) }, tucked: true }))
+      Some(_) => lines.push(Part({ key: "search", draw: fn() { search_field(c, frame.at) }, tucked: true }))
     }
   }
   for p in (frame.before)(filter, view) {
@@ -280,14 +279,14 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
   let l = @sf.theme().chat_list
   c.box(style=lists_fill, id=pane, fn() {
     c.list(key, count, l.row_h, fn(i) {
-      let n = c.box(style=@sf.pane_line(), fn() {
+      let n = c.box(style=@sf.list_line(frame.at), fn() {
         match line_at(i) {
           Top => list_space(c, frame.top + l.top_in)
           Foot => list_space(c, frame.foot + l.foot_in)
           Part(p) => (p.draw)()
           Wait(note, error) => list_waiting(c, note, error)
           Empty(v) => list_empty(c, v, filter)
-          Heading(label) => list_heading(c, label, beside_rail=frame.beside_rail)
+          Heading(label) => list_heading(c, label, frame.at)
           Row(item) => {
             let name = key + "\u{1}" + key_at(i)
             let on = match open {
@@ -301,7 +300,7 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
               lead,
               on~,
               list_ground=frame.ground,
-              beside_rail=frame.beside_rail,
+              at=frame.at,
               more=i + 1 < count && line_at(i + 1) is Row(_),
               lifted=@motion.lifted(c, lid, name),
               unghost=fn(off) { @motion.list_unghost(c, lid, name, off~) },
@@ -422,10 +421,10 @@ fn list_space(c : @ui.Ctx, h : Double) -> Unit {
 
 ///|
 /// A day's heading (SidebarList.tsx NavSection; its look the theme's chats' list's), in from the list's left as its
-/// rows are (`beside_rail`: as they are beside a rail).
-pub fn list_heading(c : @ui.Ctx, label : String, beside_rail? : Bool = false) -> Unit {
+/// rows are where the list stands (`at`).
+pub fn list_heading(c : @ui.Ctx, label : String, at : @sf.ListAt) -> Unit {
   let l = @sf.theme().chat_list
-  c.box(style=if beside_rail { l.heading_beside_rail } else { l.heading }, fn() {
+  c.box(style=l.heading.then(@sf.list_heading_in(at)), fn() {
     c.text(label, style=l.heading_words) |> ignore
   })
   |> ignore

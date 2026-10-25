@@ -102,7 +102,7 @@ let row_held : Ref[(Int, Bool)] = Ref((0, false))
 /// `lifted`: how far it is in going ahead of others (its ground of its own over them; -1 not); `unghost` whether it
 /// leaves the list without a copy (swiped off), or with one again. `found`: a chat a search found (pressed alone: not
 /// held, archived nor swiped); `opened`: what a press does instead of opening its chat. Its answer is the box that
-/// moves as the list changes. `beside_rail`: a finger's row in a list beside a rail, 16 in from its left (ListsFrame).
+/// moves as the list changes. `at`: where its list stands (ListsFrame), its words in and its ground rounded so.
 pub fn chat_row(
   c : @ui.Ctx,
   src : Source,
@@ -115,7 +115,7 @@ pub fn chat_row(
   found? : Bool = false,
   opened? : (ChatRef) -> Unit,
   unghost? : (Bool) -> Unit = fn(_) {  },
-  beside_rail? : Bool = false,
+  at? : @sf.ListAt = Whole,
 ) -> Int {
   let t = @sf.theme()
   // (its sizes the theme's, by the screen; how it answers by the hand: docs/architecture.md)
@@ -219,9 +219,7 @@ pub fn chat_row(
     // (what shows of it over the list's: what its faces' rings are cut in)
     let face_ground = @sf.over(list_ground, ground)
     c.box(style=if more { look.more } else { row_last }, tx~, fn() {
-      // (beside a rail: as far in from its list's left as the theme's list has it there)
-      let row = if beside_rail { look.row.then(look.beside_rail) } else { look.row }
-      c.box(style=row.then(@ui.style(bg=Data(ground))), id~, fn() {
+      c.box(style=look.row.then(@sf.list_row_in(at)).then(@ui.style(bg=Data(ground))), id~, fn() {
         c.box(style=if item.settled { look.text_settled } else { look.text }, fn() {
           c.box(style=if archive_key { look.head_room } else { look.head }, fn() {
             let tone = @sfbase.row_tone(item)
@@ -309,7 +307,8 @@ pub fn chat_row(
             if shows_time {
               c.text(item.ago, style=row_time) |> ignore
             } else {
-              row_aside(c, src, item, lead, face_ground, lift=look.aside_lift)
+              // (concentric with the row's foot corner where its ground is rounded: a side column's)
+              row_aside(c, src, item, lead, face_ground, lift=if at == Side { look.aside_lift } else { 0.0 })
             }
           })
           |> ignore
