@@ -14,8 +14,8 @@ c.rich(runs, style=@sf.body)
 
 A named style is said in one of two ways, and which is not a choice:
 
-- all tokens and numbers: its text, `@ui.css("…")` (`src/ui/style_css.mbt`). The same items as `style(…)`'s, `row`
-  and `clip` alone for `=true`, a state's block in braces; a `.then(…)` of named styles adds its literal part the
+- all tokens and numbers: its text, `@ui.css("…")` (`src/ui/style_css.mbt`). The same items as `style(…)`'s, `row`,
+  `clip` and `dashed` alone for `=true`, a state's block in braces; a `.then(…)` of named styles adds its literal part the
   same way (`base.then(@ui.css("bg=AccentBg"))`). Longer than a line, its text goes on `#|` lines.
 - naming a variable (`w=@sf.grow`, `Fixed(side_w)`, `shadow=@sf.floating.cast()`) or worked out: `@ui.style(…)`;
   inside a function always `@ui.style(…)` (made as the frame is built, no constant).
@@ -67,7 +67,8 @@ another under part of a view.
 
 A box: `row`, `w` `h` `min_w` `max_w` `min_h` `max_h`, `p` `px` `py` `pl` `pr` `pt` `pb`, `m` `mx` `my` `ml` `mr` `mt` `mb`
 (margins, as CSS's), `gap`, `align`, `justify`,
-`bg`, `radius`, `border`, `border_color`, `shadow`, `clip`, `opacity`. Words: `size` (with its line), `weight`, `color`,
+`bg`, `radius`, `border`, `border_color`, `dashed` (the border as CSS's `dashed`: dashes three of its widths and gaps
+two, spread to come round evenly), `shadow`, `clip`, `opacity`. Words: `size` (with its line), `weight`, `color`,
 `leading` (the line's height in place of the size's own; `line=` in the call over it), `w`, `center`, `wrap` (false: one
 line, cut with an ellipsis), `tracking`, `max_lines` (wrapped words cut after that
 many lines, the last ending in an ellipsis: what follows of its paragraph up to what fits with it, as Android's

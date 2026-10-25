@@ -985,6 +985,7 @@ pub fn Ctx::box(
     },
   ).unwrap_or(0.0)
   n.border_c = first(border_color, opt_color(th, st.border_color)).unwrap_or(0L)
+  n.dashed = st.dashed.unwrap_or(false)
   n.shadow = first(shadow, sh_blur).unwrap_or(0.0)
   n.clip = first(clip, st.clip).unwrap_or(false)
   n.tx = tx

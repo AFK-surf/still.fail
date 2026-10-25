@@ -95,6 +95,8 @@ struct Node {
   mut radii : FixedArray[Double]?
   mut border_w : Double
   mut border_c : Int64
+  // its border drawn as dashes (Patch's `dashed`)
+  mut dashed : Bool
   mut shadow : Double
   // the shadow's colour and how far down it falls (-1: a third of its blur)
   mut shadow_c : Int64
@@ -291,6 +293,7 @@ fn Node::new() -> Node {
     radii: None,
     border_w: 0.0,
     border_c: 0L,
+    dashed: false,
     shadow: 0.0,
     shadow_c: 0x0000002EL,
     shadow_y: -1.0,
@@ -461,6 +464,7 @@ fn Node::reset_look(self : Node) -> Unit {
   self.radii = None
   self.border_w = 0.0
   self.border_c = 0L
+  self.dashed = false
   self.shadow = 0.0
   self.shadow_c = 0x0000002EL
   self.shadow_y = -1.0

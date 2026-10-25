@@ -600,6 +600,7 @@ fn Css::patch(self : Css, states : CssStates?) -> Patch {
   let mut radius : Radius? = None
   let mut border : Stroke? = None
   let mut border_color : Color? = None
+  let mut dashed : Bool? = None
   let mut shadow : Shadow? = None
   let mut clip : Bool? = None
   let mut opacity : Opacity? = None
@@ -666,6 +667,7 @@ fn Css::patch(self : Css, states : CssStates?) -> Patch {
           "radius" => radius = Some(self.radius())
           "border" => border = Some(self.stroke())
           "border_color" => border_color = Some(self.color())
+          "dashed" => dashed = Some(self.bool())
           "shadow" => shadow = Some(self.shadow())
           "clip" => clip = Some(self.bool())
           "opacity" => opacity = Some(self.opacity())
@@ -676,6 +678,7 @@ fn Css::patch(self : Css, states : CssStates?) -> Patch {
         match key {
           "row" => row = Some(true)
           "clip" => clip = Some(true)
+          "dashed" => dashed = Some(true)
           _ => self.fail("\{key} with no value")
         }
     }
@@ -715,6 +718,7 @@ fn Css::patch(self : Css, states : CssStates?) -> Patch {
     radius,
     border,
     border_color,
+    dashed,
     shadow,
     clip,
     opacity,

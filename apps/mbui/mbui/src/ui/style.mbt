@@ -35,6 +35,8 @@ pub(all) struct Patch {
   radius : Radius?
   border : Stroke?
   border_color : Color?
+  /// its border drawn as dashes (CSS's `dashed`), not one line
+  dashed : Bool?
   shadow : Shadow?
   clip : Bool?
   opacity : Opacity?
@@ -85,6 +87,7 @@ pub fn patch(
   radius? : Radius,
   border? : Stroke,
   border_color? : Color,
+  dashed? : Bool,
   shadow? : Shadow,
   clip? : Bool,
   opacity? : Opacity,
@@ -118,6 +121,7 @@ pub fn patch(
     radius,
     border,
     border_color,
+    dashed,
     shadow,
     clip,
     opacity,
@@ -155,6 +159,7 @@ pub fn style(
   radius? : Radius,
   border? : Stroke,
   border_color? : Color,
+  dashed? : Bool,
   shadow? : Shadow,
   clip? : Bool,
   opacity? : Opacity,
@@ -196,6 +201,7 @@ pub fn style(
       radius,
       border,
       border_color,
+      dashed,
       shadow,
       clip,
       opacity,
@@ -274,6 +280,7 @@ pub fn Patch::then(self : Patch, o : Patch) -> Patch {
     radius: or_else(o.radius, a.radius),
     border: or_else(o.border, a.border),
     border_color: or_else(o.border_color, a.border_color),
+    dashed: or_else(o.dashed, a.dashed),
     shadow: or_else(o.shadow, a.shadow),
     clip: or_else(o.clip, a.clip),
     opacity: or_else(o.opacity, a.opacity),

@@ -23,7 +23,7 @@ test "css: every property, a token read by its property's type" {
   css_same(
     "w=Full h=Hug min_w=S0 max_w=S96 min_h=SPx max_h=S0_5 p=S1 px=S1_5 py=S2_5 pl=S3_5 pr=S4_5 pt=S5 pb=S6 " +
     "m=S8 mx=S9 my=S10 ml=S11 mr=S12 mt=S14 mb=S16 gap=S20 align=AStretch justify=JBetween bg=Card " +
-    "radius=Full border=B0_5 border_color=Border shadow=Sm clip opacity=O35",
+    "radius=Full border=B0_5 border_color=Border dashed shadow=Sm clip opacity=O35",
     style(
       w=Full,
       h=Hug,
@@ -52,6 +52,7 @@ test "css: every property, a token read by its property's type" {
       radius=Full,
       border=B0_5,
       border_color=Border,
+      dashed=true,
       shadow=Sm,
       clip=true,
       opacity=O35,

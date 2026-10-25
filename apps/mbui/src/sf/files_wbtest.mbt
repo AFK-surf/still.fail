@@ -109,3 +109,50 @@ test "a quote's card (QuoteCard): whose and the passage, what is said under it; 
   t.tap(x + w / 2.0, y + h / 2.0)
   assert_true(done.val.removed)
 }
+
+///|
+test "a station's file named by its path (RefCard): no ground, its edge dashed in the strong line, where it is and how it goes in the quiet ink, not a failure's" {
+  let t = @ui.Tester::new(
+    fn(c) {
+      let _ = begin(c)
+      c.box(style=@ui.css("w=Full h=Full p=S4"), fn() {
+        file_card(c, "ref", "发布清单.md", 4210.0, named=true, meta="Studio · 路径", open=true, remove=true) |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=200.0,
+  )
+  t.draw()
+  let card = t.boxes().filter(fn(l) { l.dashed })
+  assert_eq(card.length(), 1)
+  assert_eq((card[0].bg & 0xFFL, card[0].border_w, card[0].border_c), (0L, 1.0, theme().p.line_strong))
+  let said = t.boxes().filter(fn(l) { l.text == "Studio · 路径" })
+  assert_eq(said.length(), 1)
+  assert_eq(said[0].color, ui_theme().color(Muted))
+}
+
+///|
+test "a file going up while how far is not known: a spinner where its sheet is, turning; known, its sheet filling" {
+  let sent : Ref[Double?] = Ref(None)
+  let t = @ui.Tester::new(
+    fn(c) {
+      let _ = begin(c)
+      c.box(style=@ui.css("w=Full h=Full p=S4"), fn() {
+        file_card(c, "zip", "设计稿.zip", 0.0, pending=true, sent=sent.val, remove=true) |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=200.0,
+  )
+  t.draw()
+  let first = t.drawn_lines()
+  assert_true(first.length() > 0, msg="no spinner")
+  t.run_for(200.0)
+  t.draw()
+  assert_true(t.drawn_lines() != first, msg="the spinner stands still")
+  sent.val = Some(0.0)
+  t.draw()
+  assert_eq(t.drawn_lines().length(), 0)
+}
