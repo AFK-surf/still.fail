@@ -10,8 +10,10 @@
 // side on a tape wider than the window, each a panel apart (the closed bar's: 6 from the window's edges, 8 between
 // them, on the sidebar's ground, each on the ground its pages have on a phone): the sidebar in use its own width (a
 // list's: the user, 2026-10-26, the chats' list needs no more), the page beside it showing what the window leaves; the
-// page or the side panel in use as wide as the window leaves past a strip of each beside it as wide as the rail at the
-// window's edge (tape_shows: the user, 2026-10-26, what shows of those not in use smaller); as screens beside it,
+// side panel in use as wide as the window leaves past a strip of the page, the page in use past a strip of each beside
+// it, as wide as the rail at the window's edge (tape_shows: the user, 2026-10-26, what shows of those not in use
+// smaller); the edge between the sidebar or the side panel in use and the page dragged, its width (tape_edge: the
+// user, 2026-10-26, its width to be set), the page showing what it leaves; as screens beside it,
 // untinted (the user, 2026-10-25: the page's ground as a phone's). What shows of another is not used where it is: a press on it, a tap or a click, only brings it
 // over (the tape moving, 380 ms), and what it holds answers from then on; dragged across, it comes with the finger and,
 // let go, over or back (the user, 2026-10-25: only there; a drag on the one in use is its own). Something chosen to be
@@ -649,7 +651,7 @@ pub fn frame(
   // is; which is in use and how far the tape is moved
   let panel_of = if wide.tape { side_open_for(src, w, app.nav.top()) } else { None }
   let panel_w = match panel_of {
-    Some(_) => tape_one_beside(c.width)
+    Some(_) => tape_panel_w(c.width)
     None => 0.0
   }
   let main_w = if !wide.tape {
@@ -659,7 +661,7 @@ pub fn frame(
   } else {
     tape_one_beside(c.width)
   }
-  let at = tape_at(col, main_w)
+  let at = tape_at(c.width, col, main_w, panel_w)
   // (the chat shown has its view: what its side panel shows is known)
   let known = match app.nav.top() {
     Chat(r) | History(r, _, _) => (src.topic)("chat", chat_params(r)).value is Some(_)
@@ -853,6 +855,54 @@ pub fn frame(
         panels.push((Panel, col + main_w + closed_bar_gap, panel_w))
       }
       tape_covers(c, tape_x, at, panels, panel_top, panel_h)
+      // the edge between the sidebar or the side panel in use and the page beside it: dragged, its width (the
+      // sidebar's kept as the wide frame's is: side_follow), the page beside it showing what it leaves
+      let side_edge = c.id("tape/side-edge")
+      match wide.tape_at {
+        Side if !gated => {
+          let said = tape_edge(
+            c,
+            "tape/side-edge",
+            @sf.t("web-pages.workspace.resizeSidebar"),
+            col - closed_bar_gap,
+            tape_x,
+            panel_top,
+            panel_h,
+            wide.side_w,
+            side_min,
+            tape_side_most(c.width),
+            Right,
+          )
+          match said {
+            Dragging(x) | Dropped(x) => wide.side_w = x
+            Twice => wide.side_w = side_default(side_group(src, w.id))
+            Pressed | Untouched => ()
+          }
+          wide.edge_held = c.pressed(side_edge) || said is Dragging(_)
+        }
+        Panel if panel_of is Some(_) => {
+          wide.edge_held = false
+          match
+            tape_edge(
+              c,
+              "tape/panel-edge",
+              @sf.t("web-pages.chat.resizePanel"),
+              col + main_w,
+              tape_x,
+              panel_top,
+              panel_h,
+              panel_w,
+              dmin(panel_min, tape_one_beside(c.width)),
+              tape_one_beside(c.width),
+              Left,
+            ) {
+            Dragging(x) | Dropped(x) => panel_own.width = Some(x)
+            Twice => panel_own.width = None
+            Pressed | Untouched => ()
+          }
+        }
+        _ => wide.edge_held = false
+      }
     }
   })
   // (the sidebar's edge: on its right edge open, between the bar and the page folded, at the edge of the sidebar shown
@@ -951,12 +1001,91 @@ let tape_moves : Array[(String, Array[String])] = [
 ]
 
 ///|
-/// Where the tape is with each of its panels in use (`d`: where the page's panel starts on it, `page_w`: the page's
-/// panel's width): the sidebar 6 in from the window's left (0); the page, and the side panel, 8 past what shows of the
-/// one before it (tape_shows).
-fn tape_at(d : Double, page_w : Double) -> (Double, Double, Double) {
-  let start = tape_shows + closed_bar_gap
-  (0.0, start - d, start - (d + page_w + closed_bar_gap))
+/// Where the tape is with each of its panels in use, a window `width` wide (`d`: where the page's panel starts on it,
+/// `page_w`, `panel_w`: the page's panel's width and the side panel's): the sidebar 6 in from the window's left (0); the
+/// page 8 past what shows of the sidebar (tape_shows); the side panel 6 in from the window's right, the page beside it
+/// showing what it leaves (all of the window but that strip, as it is at first: tape_panel_w).
+fn tape_at(width : Double, d : Double, page_w : Double, panel_w : Double) -> (Double, Double, Double) {
+  (0.0, tape_shows + closed_bar_gap - d, width - closed_bar_in - (d + page_w + closed_bar_gap + panel_w))
+}
+
+///|
+/// How wide a chat's side panel is on the tape, a window `width` wide: as wide as it was dragged (tape_edge, the wide
+/// frame's edge too: panel_own, kept while the app runs), the page beside it showing what it leaves; else as wide as
+/// the window leaves past a strip of the page (tape_one_beside). From panel_min to that.
+fn tape_panel_w(width : Double) -> Double {
+  let most = tape_one_beside(width)
+  match panel_own.width {
+    Some(w) => dmax(dmin(panel_min, most), dmin(w, most))
+    None => most
+  }
+}
+
+///|
+/// The widest the sidebar is dragged to on the tape, a window `width` wide: a panel with a strip of the page beside it,
+/// less the rail's (tape_side_w), and the wide frame's most (side_max).
+fn tape_side_most(width : Double) -> Double {
+  dmax(side_min, dmin(side_max, tape_one_beside(width) - rail_w - rail_tape_more()))
+}
+
+///|
+/// The edge between the sidebar or the side panel in use on the tape and the page beside it, in the gap between the two
+/// (`gap`: the gap's left on the tape, `x`: how far the tape is moved; `top`, `h`: the panels'), the library's (its bar
+/// and its line, @sf.edge_look, in the gap's middle; always shown to touch, which points at nothing, else while the
+/// pointer is on it), over the gap and as far into each panel as @sf.edge_reach says (over what shows of the page
+/// there: drawn after tape_covers, the drags across that land on it are its own, @sf.handle_drag): dragged, the width
+/// of the one in use, from `width` between `least` and `most` (its `edge`: the sidebar's right, the side panel's left),
+/// the page beside it showing what it leaves; what was done with it said (the second of two presses: its own width
+/// again; a press on the page's part is the page's, tape_frame).
+fn tape_edge(
+  c : @ui.Ctx,
+  key : String,
+  label : String,
+  gap : Double,
+  x : Double,
+  top : Double,
+  h : Double,
+  width : Double,
+  least : Double,
+  most : Double,
+  edge : @ui.Side,
+) -> @sf.Resized {
+  let id = c.id(key)
+  c.cursor(id, ResizeX)
+  let said = @sf.handle_drag(c, id, width, min=least, max=most, edge~)
+  let held = c.pressed(id) || said is Dragging(_)
+  // (the gap `before` from its left and `after` from its right, the look in its middle)
+  let (into_in, into_page) = @sf.edge_reach(closed_bar_gap)
+  let (before, after) = if edge is Left { (into_page, into_in) } else { (into_in, into_page) }
+  c.layer(fn() {
+    let strip = c.box(
+      style=@ui.style(
+        row=true,
+        w=Fixed(before + closed_bar_gap + after),
+        h=Fixed(h),
+        pl=@sf.room_of(before),
+        pr=@sf.room_of(after),
+        justify=JCenter,
+      ),
+      left=gap - before,
+      top~,
+      tx=x,
+      id~,
+      fn() {
+        @sf.edge_look(
+          c,
+          key,
+          over=@sf.pointed_or_finger(c, false),
+          on=c.lit(id) || c.focus_shown(id) || held,
+          active=held,
+        )
+      },
+    )
+    c.semantics(strip, Separator, id~, label~)
+    @sf.edge_tip(c, key, id, label, side=if edge is Left { Left } else { Right })
+  })
+  |> ignore
+  said
 }
 
 ///|
@@ -1009,6 +1138,16 @@ fn tape_frame(c : @ui.Ctx, panel : SideOf?, at : (Double, Double, Double), known
         }
       }
       None => ()
+    }
+  }
+  // a press on the edge beside the page (tape_edge) where it lies over what shows of the page: the page's, as a press
+  // there would be without it (the edge takes that much of it for a finger's drag); in the gap the edge's own
+  for key in ["tape/side-edge", "tape/panel-edge"] {
+    let id = c.id(key)
+    match (c.drag_of(id), c.rect_of(c.id("tape/Page"))) {
+      (Some(d), Some((px, py, pw, ph))) if c.clicked(id) && d.x >= px && d.x < px + pw && d.y >= py && d.y < py + ph =>
+        wide.tape_ask = Some(Page)
+      _ => ()
     }
   }
   // the back gesture's pull ended (tape_back): gone through, the one it pulled brought over from where it got to;

@@ -2680,7 +2680,7 @@ let chooser_words_lit : @ui.TextStyle = chooser_words.then(@ui.text_style(color=
 pub(all) enum Resized {
   /// nothing
   Untouched
-  /// dragged (once it went 3 from where it was pressed) to this width
+  /// dragged (once it went past the slop from where it was pressed) to this width
   Dragging(Double)
   /// let go after it was dragged, at this width
   Dropped(Double)
@@ -2691,11 +2691,10 @@ pub(all) enum Resized {
 } derive(Eq, Show, Debug)
 
 ///|
-/// An edge in hand: where the press went down, its column's width then, whether it has gone past the slop.
+/// An edge in hand: where the press went down, its column's width then.
 priv struct Handling {
   x0 : Double
   w0 : Double
-  mut moved : Bool
 }
 
 ///|
@@ -2703,11 +2702,13 @@ priv struct Handling {
 let handlings : Map[Int, Handling] = {}
 
 ///|
-/// What the pointer does with the edge `id` of a column `width` wide, on its `edge`: pressed and gone 3 from where it
-/// went down, the width it is dragged to (the width it had then, the pointer's way on the right edge, the other way on
-/// the left, between `min` and `max` on whole pixels); let go, the width it ends at, or a press without moving, or the
-/// second of two clicks. The pointer is the edge's while it is pressed, over it or not. A width that changes builds the
-/// frame again (Ctx::built_from_changed): the page takes it there, the column and its edge under the pointer at once.
+/// What the pointer does with the edge `id` of a column `width` wide, on its `edge`, a drag area across (Ctx::drag_on:
+/// a finger's or a mouse's, what scrolls or drags under it taking what goes its own way, claim.mbt; once it is the
+/// drag's, no tap and no long press of it): pressed and gone past the slop from where it went down, the width it is
+/// dragged to (the width it had then, the pointer's way on the right edge, the other way on the left, between `min`
+/// and `max` on whole pixels); let go, the width it ends at, or a press without moving, or the second of two clicks.
+/// A width that changes builds the frame again (Ctx::built_from_changed): the page takes it there, the column and its
+/// edge under the pointer at once.
 pub fn handle_drag(
   c : @ui.Ctx,
   id : Int,
@@ -2716,40 +2717,39 @@ pub fn handle_drag(
   max~ : Double,
   edge? : @ui.Side = Right,
 ) -> Resized {
-  let (px, _, down) = c.pointer()
-  let at = fn(h : Handling) {
-    let d = if edge is Left { h.x0 - px } else { px - h.x0 }
+  c.drag_on(id, axis=Horizontal)
+  let at = fn(h : Handling, x : Double) {
+    let d = if edge is Left { h.x0 - x } else { x - h.x0 }
     dmax(min, dmin(max, (h.w0 + d).round()))
   }
-  if c.pressed(id) {
+  guard c.drag_of(id) is Some(d) else { return Untouched }
+  if d.down {
+    // (from where it went down: the frame that sees the press may see it moved already)
     let h = match handlings.get(id) {
       Some(h) => h
       None => {
-        // (from where it went down: the frame that sees the press may see it moved already)
-        let h : Handling = { x0: c.press_x, w0: width, moved: false }
+        let h : Handling = { x0: d.x0, w0: width }
         handlings[id] = h
         h
       }
     }
-    h.moved = h.moved || (px - h.x0).abs() >= handle_slop
-    if !h.moved {
+    if !d.moving {
       return Untouched
     }
-    let w = at(h)
+    let w = at(h, d.x)
     // (the column was built at `width`: built again at this one, the edge under the pointer in this frame)
     if w != width {
       c.built_from_changed("a column's edge dragged")
     }
     return Dragging(w)
   }
-  let held = if down { None } else { handlings.get(id) }
-  if !down {
-    handlings.remove(id)
-  }
+  // (pressed, moved and let go before a frame saw it: from the width it has)
+  let h = handlings.get(id).unwrap_or({ x0: d.x0, w0: width })
+  handlings.remove(id)
   if c.double_clicked(id) {
     Twice
-  } else if held is Some(h) && h.moved {
-    let w = at(h)
+  } else if d.take_end() {
+    let w = at(h, d.x)
     if w != width {
       c.built_from_changed("a column's edge let go")
     }
@@ -2886,9 +2886,10 @@ let edge_tips_away : Map[String, Int] = {}
 ///|
 /// A tip that follows the pointer along a tall thin thing (usePointerTip: an edge), `id`: shown 300 ms after the pointer
 /// comes onto it, 14 beside the pointer on `side`, its middle level with it, as the pointer moves along; gone as it
-/// leaves, and as it presses, until it has left and come again. Said each frame the thing is drawn.
+/// leaves, and as it presses or drags it, until it has left and come again. Said each frame the thing is drawn. A
+/// mouse's only: a finger points at nothing (held on an edge, it is to drag it; lifted, it is nowhere).
 pub fn edge_tip(c : @ui.Ctx, key : String, id : Int, words : String, side? : @ui.Side = Right) -> Unit {
-  if words == "" || id == 0 {
+  if words == "" || id == 0 || @ui.pointing() is Finger {
     return
   }
   let (px, py, down) = c.pointer()
@@ -2898,7 +2899,8 @@ pub fn edge_tip(c : @ui.Ctx, key : String, id : Int, words : String, side? : @ui
       None => false
     })
   let frame = c.frame_number()
-  if c.pressed(id) || c.clicked(id) {
+  // (a drag area's in hand from the press on: pressed no more once it is dragged, Ctx::drag_on)
+  if c.pressed(id) || c.clicked(id) || c.drag_of(id) is Some({ down: true, .. }) {
     edge_tips_away[key] = frame
   } else if !on && !down {
     match edge_tips_away.get(key) {

@@ -4,12 +4,12 @@
 
 ///|
 /// Whether a press at (x, y) lands on a control: what its semantics say it is, named (a box pressed for itself alone,
-/// a page's, a list's, says no name).
+/// a page's, a list's, says no name; a panel's edge, dragged, is a Separator named).
 fn control_at(t : @ui.Tester, x : Double, y : Double) -> Bool {
   t.semantics().iter().any(fn(s) {
     let (sx, sy, sw, sh) = s.rect
     let control = s.role
-      is (Button | Link | Tab | Switch | Checkbox | Radio | TextField | Combobox | MenuItem | Slider | Option)
+      is (Button | Link | Tab | Switch | Checkbox | Radio | TextField | Combobox | MenuItem | Slider | Option | Separator)
     !s.hidden && control && s.label != "" && x >= sx && x < sx + sw && y >= sy && y < sy + sh
   })
 }

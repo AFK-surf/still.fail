@@ -27,6 +27,21 @@ pub fn more_held() -> Bool {
 }
 
 ///|
+/// How far an edge standing in a gap `gap` wide between two panels (the tape's, sfdesk's tape_edge) takes presses past
+/// the gap, into the panel it sizes and into the one beside it: with touch none of its own (a row there is swiped
+/// across) and edge_finger_reach of the other, the gap and that as wide as a finger aims at a thing that thin; with
+/// keyboard and mouse as much of each as makes the wide frame's edge's 12 (S3: Rail.css.ts edge). The native input's:
+/// the boxes never follow the hand.
+pub fn edge_reach(gap : Double) -> (Double, Double) {
+  if native_input() is Finger {
+    (0.0, edge_finger_reach)
+  } else {
+    let each = (@ui.Space::px(S3) - gap) / 2.0
+    (each, each)
+  }
+}
+
+///|
 /// A press on `id` rippling from where a finger pressed it, its corner `corner` (a mouse's press shows as its ground).
 pub fn press_ripple(c : @ui.Ctx, id : Int, corner : Double) -> Unit {
   if @ui.pointing() is Finger {

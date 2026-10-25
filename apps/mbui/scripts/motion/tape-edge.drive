@@ -1,0 +1,17 @@
+# Laid out Medium on an opened fold's inner screen upright (MBUI_WIN=690x840 MBUI_FILM_PLATFORM=2), a finger: the
+# tape's edge (sfdesk frame.mbt tape_edge) between the one in use and the page. The sidebar's dragged 120 wider (the page
+# beside it showing less); the page brought over, a chat's side panel opened (as wide as the window leaves past a strip
+# of the page) and its edge dragged 220 narrower (the page beside it showing more).
+system {"size_class":{"width":"medium","height":"medium"}}
+timeout 20000
+until 新建对话
+wait 600
+drag 325 420 120 0 700
+wait 900
+tapxy -24 420
+wait 900
+tap icon:panel-open
+wait 1200
+drag 48 420 220 0 700
+wait 1200
+exit

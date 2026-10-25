@@ -2107,7 +2107,9 @@ pub let edge_bar_w : Double = 5.0
 pub let edge_line_steps : Int = 40
 
 ///|
-pub let handle_slop : Double = 3.0
+/// How far past its gap an edge between two panels takes a finger's presses, into the panel beside the one it sizes
+/// (edge_reach).
+pub let edge_finger_reach : Double = 24.0
 
 ///|
 /// A tip that follows the pointer along an edge (usePointerTip): 300 ms after the pointer comes, 14 beside it.
