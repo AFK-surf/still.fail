@@ -158,7 +158,7 @@ export function Eye(props: IconProps) {
 }
 
 export function FileAudio(props: IconProps) {
-  return <Svg {...props}><path d="M13.5 3.5H8Q4.5 3.5 4.5 7V17Q4.5 20.5 8 20.5H16Q19.5 20.5 19.5 17V9L13.5 3.5Z M13 4V7.5Q13 10 15.5 10H19 M11 17V12.6L15 11.8V16" /><circle cx="9.8" cy="17" r="1.2" /><circle cx="13.8" cy="16" r="1.2" /></Svg>;
+  return <Svg {...props}><path d="M7 3.5H13.5L20 10V17Q20 20.5 16.5 20.5H7.5Q4 20.5 4 17V7Q4 3.5 7 3.5Z M13.5 3.5V8Q13.5 10 15.5 10H20 M13 16.5V12.5L16 12" /><path d="M9 17a2 1.5 0 1 0 4 0a2 1.5 0 1 0 -4 0Z" /></Svg>;
 }
 
 export function FileCode(props: IconProps) {
@@ -166,7 +166,7 @@ export function FileCode(props: IconProps) {
 }
 
 export function FilePdf(props: IconProps) {
-  return <Svg {...props}><path d="M13.5 3.5H8Q4.5 3.5 4.5 7V17Q4.5 20.5 8 20.5H16Q19.5 20.5 19.5 17V9L13.5 3.5Z M13 4V7.5Q13 10 15.5 10H19 M8.5 17.5H15.5" /><rect x="8.5" y="12.5" width="7" height="2.5" rx="1" /></Svg>;
+  return <Svg {...props}><path d="M7 3.5H13.5L20 10V17Q20 20.5 16.5 20.5H7.5Q4 20.5 4 17V7Q4 3.5 7 3.5Z M13.5 3.5V8Q13.5 10 15.5 10H20" /><rect x="7.5" y="13.5" width="9" height="3.5" rx="1" /></Svg>;
 }
 
 export function FileText(props: IconProps) {
@@ -214,7 +214,7 @@ export function Key(props: IconProps) {
 }
 
 export function Keyboard(props: IconProps) {
-  return <Svg {...props}><rect x="2.5" y="5.5" width="19" height="13" rx="3" /><circle cx="6.5" cy="9.5" r="1" fill="currentColor" stroke="none" /><circle cx="10" cy="9.5" r="1" fill="currentColor" stroke="none" /><circle cx="14" cy="9.5" r="1" fill="currentColor" stroke="none" /><circle cx="17.5" cy="9.5" r="1" fill="currentColor" stroke="none" /><path d="M8 14.5H16" /></Svg>;
+  return <Svg {...props}><rect x="3.5" y="6" width="17" height="12" rx="3" /><path d="M7 10H7.2 M12 10H12.2 M17 10H17.2 M8 14.5H16" /></Svg>;
 }
 
 export function Landscape(props: IconProps) {
@@ -322,7 +322,7 @@ export function Option6(props: IconProps) {
 }
 
 export function Other(props: IconProps) {
-  return <Svg {...props}><path d="M4.43396 16.73762 L10.58579 10.58579 C12.00000 9.17157 9.66655 7.54523 11.71716 5.49462 L14.19203 3.01974 L15.95980 4.78751 L14.05061 6.69670 A2.3 2.3 0 0 0 17.30330 9.94939 L19.21249 8.04020 L20.98026 9.80797 L18.50538 12.28284 C16.45477 14.33345 14.82843 12.00000 13.41421 13.41421 L7.26238 19.56604 A2 2 0 0 1 4.43396 16.73762 Z" /></Svg>;
+  return <Svg {...props}><path d="M16.808 3.656L14.475 5.99L15.182 8.818L18.01 9.525L20.344 7.192C20.91 9.03 20.415 10.939 18.859 12.212C17.303 13.485 15.465 13.768 13.697 13.131L8.111 18.718C7.333 19.495 6.06 19.495 5.282 18.718C4.505 17.94 4.505 16.667 5.282 15.889L10.869 10.303C10.232 8.535 10.515 6.697 11.788 5.141C13.061 3.585 14.97 3.09 16.808 3.656Z" /></Svg>;
 }
 
 export function PanelClose(props: IconProps) {
@@ -339,6 +339,10 @@ export function Paste(props: IconProps) {
 
 export function Pause(props: IconProps) {
   return <Svg {...props}><path d="M7 5V19 M17 5V19" /></Svg>;
+}
+
+export function Phone(props: IconProps) {
+  return <Svg {...props}><rect x="6" y="2.5" width="12" height="19" rx="2.5" /><path d="M10 6H14 M11 18H13" /></Svg>;
 }
 
 export function Photo(props: IconProps) {
@@ -621,6 +625,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "panel-open": PanelOpen,
   "paste": Paste,
   "pause": Pause,
+  "phone": Phone,
   "photo": Photo,
   "pin": Pin,
   "play": Play,
@@ -673,7 +678,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
 };
 
 function StationDesktop(props: IconProps) {
-  return <Svg {...props}><rect x="3" y="4" width="18" height="12" rx="3" /><path d="M9 20H16 M12 16V20 M6.5 8H10 M6.5 11H8" /></Svg>;
+  return <Svg {...props}><path d="M8 3.5H16Q20.5 3.5 20.5 8V12Q20.5 16 16 16H8Q3.5 16 3.5 12V8Q3.5 3.5 8 3.5Z M12 16V20.5 M8 20.5H16" /></Svg>;
 }
 
 function StationLaptop(props: IconProps) {
@@ -737,7 +742,7 @@ function StationNetwork(props: IconProps) {
 }
 
 function StationShield(props: IconProps) {
-  return <Svg {...props}><path d="M11.2 3Q12 2.5 12.8 3Q15.5 4.65 18.5 4.94Q20 5 20 6.5V12Q20 17.5 12.8 21.1Q12 21.5 11.2 21.1Q4 17.5 4 12V6.5Q4 5 5.5 4.94Q8.5 4.65 11.2 3Z M8 12L11 15L16 9" /></Svg>;
+  return <Svg {...props}><path d="M12 3.5Q16 6 20 6V12C20 16.5 16.5 19 12 20.5C7.5 19 4 16.5 4 12V6Q8 6 12 3.5Z M8 12L10.5 14.5L16 9" /></Svg>;
 }
 
 function StationLock(props: IconProps) {
@@ -745,11 +750,11 @@ function StationLock(props: IconProps) {
 }
 
 function StationRobot(props: IconProps) {
-  return <Svg {...props}><rect x="4" y="7" width="16" height="14" rx="3" /><path d="M12 7V3 M10 3H14 M1.5 12V16 M22.5 12V16 M9 17H15" /><circle cx="8.5" cy="12" r="1.25" fill="currentColor" stroke="none" /><circle cx="15.5" cy="12" r="1.25" fill="currentColor" stroke="none" /></Svg>;
+  return <Svg {...props}><path d="M12 3.5V6 M8 6H16Q20 6 20 10V16Q20 20 16 20H8Q4 20 4 16V10Q4 6 8 6Z M1.5 11.5V15 M22.5 11.5V15 M9.5 16.5H14.5" /><circle cx="8.5" cy="11.5" r="1" fill="currentColor" stroke="none" /><circle cx="15.5" cy="11.5" r="1" fill="currentColor" stroke="none" /></Svg>;
 }
 
 function StationKeyboard(props: IconProps) {
-  return <Svg {...props}><rect x="2.5" y="6" width="19" height="12" rx="3" /><path d="M6 10H7 M11.5 10H12.5 M17 10H18 M7 14H17" /></Svg>;
+  return <Svg {...props}><rect x="3.5" y="6" width="17" height="12" rx="3" /><path d="M7 10H7.2 M12 10H12.2 M17 10H17.2 M8 14.5H16" /></Svg>;
 }
 
 function StationMouse(props: IconProps) {
@@ -765,7 +770,7 @@ function StationHeadphones(props: IconProps) {
 }
 
 function StationCamera(props: IconProps) {
-  return <Svg {...props}><path d="M4.68 7L6.465 7Q7 7 7.297 6.555L8.555 4.668Q9 4 9.803 4L14.197 4Q15 4 15.445 4.668L16.703 6.555Q17 7 17.535 7L19.32 7Q21 7 21 8.68L21 17.5Q21 20 18.5 20L5.5 20Q3 20 3 17.5L3 8.68Q3 7 4.68 7Z" /><circle cx="12" cy="13" r="4" /></Svg>;
+  return <Svg {...props}><path d="M8 6.5L9 3.5H15L16 6.5H17Q20.5 6.5 20.5 10V16.5Q20.5 20 17 20H7Q3.5 20 3.5 16.5V10Q3.5 6.5 7 6.5Z" /><circle cx="12" cy="13" r="3.5" /></Svg>;
 }
 
 function StationPrinter(props: IconProps) {
@@ -793,7 +798,7 @@ function StationBattery(props: IconProps) {
 }
 
 function StationPlug(props: IconProps) {
-  return <Svg {...props}><path d="M7.5 8H16.5Q18 8 18 9.5V11Q18 16 12 16Q6 16 6 11V9.5Q6 8 7.5 8Z M8 8V3 M16 8V3 M12 16V19Q12 21 9 21H7" /></Svg>;
+  return <Svg {...props}><path d="M8.5 3.5V8 M15.5 3.5V8 M6 8H18V11Q18 16 12 16Q6 16 6 11Z M12 16V18Q12 20.5 15 20.5H17" /></Svg>;
 }
 
 function StationFloppy(props: IconProps) {
@@ -801,11 +806,11 @@ function StationFloppy(props: IconProps) {
 }
 
 function StationFolder(props: IconProps) {
-  return <Svg {...props}><path d="M3 6Q3 4 5 4H8.2Q9 4 9.6 4.6L11.4 6.4Q12 7 12.8 7H19Q21 7 21 9V18Q21 20 19 20H5Q3 20 3 18Z" /></Svg>;
+  return <Svg {...props}><path d="M3.5 7.5Q3.5 4.5 6.5 4.5H9.5L12 7H17.5Q20.5 7 20.5 10V16.5Q20.5 19.5 17.5 19.5H6.5Q3.5 19.5 3.5 16.5Z" /></Svg>;
 }
 
 function StationDocument(props: IconProps) {
-  return <Svg {...props}><path d="M7.5 3L13.379 3Q14 3 14.439 3.439L18.561 7.561Q19 8 19 8.621L19 18.5Q19 21 16.5 21L7.5 21Q5 21 5 18.5L5 5.5Q5 3 7.5 3Z M14 3.3V6.5Q14 8 15.5 8H18.7 M9 12H15 M9 16H15" /></Svg>;
+  return <Svg {...props}><path d="M13.5 3.5H8Q4.5 3.5 4.5 7V17Q4.5 20.5 8 20.5H16Q19.5 20.5 19.5 17V9L13.5 3.5Z M13 4V7.5Q13 10 15.5 10H19 M8.5 13.5H15.5 M8.5 17H13" /></Svg>;
 }
 
 function StationInbox(props: IconProps) {
@@ -837,7 +842,7 @@ function StationFlag(props: IconProps) {
 }
 
 function StationPin(props: IconProps) {
-  return <Svg {...props}><path d="M8 3H16 M9 3L9 8.5Q9 9 8.7 9.4L6.2 12.733Q6 13 6 13.333L6 14.16Q6 15 6.84 15L17.16 15Q18 15 18 14.16L18 13.333Q18 13 17.8 12.733L15.3 9.4Q15 9 15 8.5L15 3 M12 15V22" /></Svg>;
+  return <Svg {...props}><path d="M8.5 3.5H15.5 M9.5 3.5V9L6.5 12.5Q5.5 13.5 5.5 14.5V15H18.5V14.5Q18.5 13.5 17.5 12.5L14.5 9V3.5 M12 15V20.5" /></Svg>;
 }
 
 function StationLink(props: IconProps) {
@@ -845,7 +850,7 @@ function StationLink(props: IconProps) {
 }
 
 function StationMagnifier(props: IconProps) {
-  return <Svg {...props}><circle cx="10" cy="10" r="7" /><path d="M15 15L21 21" /></Svg>;
+  return <Svg {...props}><path d="M17.5 10.5C17.5 15 15 17 11 17C6.5 17 3.5 14.6 3.5 10.5C3.5 6.3 6.1 3.5 10.5 3.5C14.7 3.5 17.5 6 17.5 10.5Z M16 16L20.5 20.5" /></Svg>;
 }
 
 function StationBulb(props: IconProps) {
@@ -853,11 +858,11 @@ function StationBulb(props: IconProps) {
 }
 
 function StationWrench(props: IconProps) {
-  return <Svg {...props}><path d="M14 3Q9 3 9 8L3.5 16.5Q2 19 4 20.5Q6 22 8 19.5L13.5 11.7Q14 11 14.9 11Q20.5 11.5 21 6.2Q21.1 5 20.1 5.7L17.8 7.4Q17 8 16.2 7.467L14.8 6.533Q14 6 14 5V3Z" /></Svg>;
+  return <Svg {...props}><path d="M16.808 3.656L14.475 5.99L15.182 8.818L18.01 9.525L20.344 7.192C20.91 9.03 20.415 10.939 18.859 12.212C17.303 13.485 15.465 13.768 13.697 13.131L8.111 18.718C7.333 19.495 6.06 19.495 5.282 18.718C4.505 17.94 4.505 16.667 5.282 15.889L10.869 10.303C10.232 8.535 10.515 6.697 11.788 5.141C13.061 3.585 14.97 3.09 16.808 3.656Z" /></Svg>;
 }
 
 function StationScrewdriver(props: IconProps) {
-  return <Svg {...props}><path d="M14 8L7 15 M14.581 8.291L15.581 8.79Q16 9 16.331 8.669L20.623 4.377Q21 4 20.704 3.557L20.369 3.053Q20 2.5 19.455 2.881L15.135 5.906Q15 6 14.926 6.147L14.291 7.419Q14 8 14.581 8.291Z M5.15 13.85Q6 13 6.85 13.85L10.15 17.15Q11 18 10.15 18.85L7.5 21.5Q6 22.5 4 20L2.5 18.5Q1.5 17 3 16Z" /></Svg>;
+  return <Svg {...props}><path d="M17.48 4.752L19.248 6.52L16.95 9.172L15.359 9.702L14.298 8.641L14.828 7.05ZM14.828 9.172L11.646 12.354M10.586 11.293L12.707 13.414Q13.414 14.121 12.707 14.828L8.818 18.718Q7.404 20.132 5.99 18.718L5.282 18.01Q3.868 16.596 5.282 15.182L9.172 11.293Q9.879 10.586 10.586 11.293Z" /></Svg>;
 }
 
 function StationRuler(props: IconProps) {
@@ -865,7 +870,7 @@ function StationRuler(props: IconProps) {
 }
 
 function StationPencil(props: IconProps) {
-  return <Svg {...props}><path d="M3 21L4.5 14.5L16 3Q17.5 1.5 20 4Q22 6 20.5 7.5L9 19Z M14 5L19 10 M4.5 14.5L9 19" /></Svg>;
+  return <Svg {...props}><path d="M5 14.5L15.2 4.3Q16.7 2.8 18.2 4.3L19.7 5.8Q21.2 7.3 19.7 8.8L9.5 19L3.5 20.5Z M13.5 6L18 10.5 M5 14.5L9.5 19" /></Svg>;
 }
 
 function StationBrush(props: IconProps) {
@@ -893,7 +898,7 @@ function StationMap(props: IconProps) {
 }
 
 function StationGlobe(props: IconProps) {
-  return <Svg {...props}><circle cx="12" cy="12" r="9" /><path d="M3 12H21 M12 3C6 8 6 16 12 21C18 16 18 8 12 3Z" /></Svg>;
+  return <Svg {...props}><path d="M20.5 12C20.5 17.5 17.5 20.5 12 20.5C6.5 20.5 3.5 17.5 3.5 12C3.5 6.5 6.5 3.5 12 3.5C17.5 3.5 20.5 6.5 20.5 12Z M12 3.5C7.5 8 7.5 16 12 20.5C16.5 16 16.5 8 12 3.5Z M4 12H20" /></Svg>;
 }
 
 function StationTarget(props: IconProps) {
@@ -925,7 +930,7 @@ function StationCalculator(props: IconProps) {
 }
 
 function StationChart(props: IconProps) {
-  return <Svg {...props}><path d="M3 3V18.5Q3 21 5.5 21H21 M7 17V12 M12 17V7 M17 17V10" /></Svg>;
+  return <Svg {...props}><path d="M3.5 20.5H20.5 M6.5 16.5V12 M12 16.5V5 M17.5 16.5V9" /></Svg>;
 }
 
 function StationCube(props: IconProps) {
@@ -941,7 +946,7 @@ function StationDna(props: IconProps) {
 }
 
 function StationMicroscope(props: IconProps) {
-  return <Svg {...props}><path d="M8.111 2.722L10.185 2.204Q11 2 11.341 2.768L14.612 10.127Q15 11 14.145 11.427L11.972 12.514Q11 13 10.596 11.991L7.425 4.064Q7 3 8.111 2.722Z M13 6Q21 6 21 13Q21 20 14 20 M4 21H21 M8 21V17 M4 17H13" /></Svg>;
+  return <Svg {...props}><path d="M7.111 2.722L9.185 2.204Q10 2 10.341 2.768L13.612 10.127Q14 11 13.145 11.427L10.972 12.514Q10 13 9.596 11.991L6.425 4.064Q6 3 7.111 2.722Z M12 6Q20 6 20 13Q20 20 14 20 M4 21H21 M8 21V17 M4 17H15.5" /></Svg>;
 }
 
 function StationTelescope(props: IconProps) {
@@ -989,11 +994,11 @@ function StationFire(props: IconProps) {
 }
 
 function StationMoon(props: IconProps) {
-  return <Svg {...props}><path d="M19.5 15.5Q12 17 9 10Q7.5 6 10 3Q2.5 5 3 12.5Q3.5 21 12 21Q17.5 21 19.5 15.5Z" /><circle cx="18" cy="5" r="1.3" fill="currentColor" stroke="none" /></Svg>;
+  return <Svg {...props}><path d="M19.5 14.5Q17.5 16 14.5 16Q8 16 8 9.5Q8 6.5 9.5 4.5Q3.5 6 3.5 12.5Q3.5 20.5 11.5 20.5Q18 20.5 19.5 14.5Z" /></Svg>;
 }
 
 function StationSun(props: IconProps) {
-  return <Svg {...props}><circle cx="12" cy="12" r="4.5" /><path d="M12 2V4 M12 20V22 M2 12H4 M20 12H22 M5 5L6.5 6.5 M17.5 17.5L19 19 M5 19L6.5 17.5 M17.5 6.5L19 5" /></Svg>;
+  return <Svg {...props}><circle cx="12" cy="12" r="4" /><path d="M12 2.5V4.5 M12 19.5V21.5 M2.5 12H4.5 M19.5 12H21.5 M5.3 5.3L6.7 6.7 M17.3 17.3L18.7 18.7 M5.3 18.7L6.7 17.3 M17.3 6.7L18.7 5.3" /></Svg>;
 }
 
 function StationRain(props: IconProps) {
@@ -1001,7 +1006,7 @@ function StationRain(props: IconProps) {
 }
 
 function StationSnow(props: IconProps) {
-  return <Svg {...props}><path d="M12 3V21 M4.2 7.5L19.8 16.5 M4.2 16.5L19.8 7.5 M9 4.5L12 7L15 4.5 M9 19.5L12 17L15 19.5 M4 11L7.5 9.5L7 6 M17 18L16.5 14.5L20 13 M4 13L7.5 14.5L7 18 M17 6L16.5 9.5L20 11" /></Svg>;
+  return <Svg {...props}><path d="M12 3.5V20.5 M4.6 7.7L19.4 16.3 M4.6 16.3L19.4 7.7 M9.8 5L12 7L14.2 5 M9.8 19L12 17L14.2 19 M4.8 10.4L7.6 9.4L7.1 6.5 M19.2 13.6L16.4 14.6L16.9 17.5 M4.8 13.6L7.6 14.6L7.1 17.5 M19.2 10.4L16.4 9.4L16.9 6.5" /></Svg>;
 }
 
 function StationWind(props: IconProps) {
@@ -1029,7 +1034,7 @@ function StationPlanet(props: IconProps) {
 }
 
 function StationStar(props: IconProps) {
-  return <Svg {...props}><path d="M12 2.5L15 8.5L21.5 9.5L17 14L18 21L12 17.5L6 21L7 14L2.5 9.5L9 8.5Z" /></Svg>;
+  return <Svg {...props}><path d="M12 3.5L14.6 8.8L20.4 9.6L16.2 13.7L17.2 19.5L12 16.8L6.8 19.5L7.8 13.7L3.6 9.6L9.4 8.8Z" /></Svg>;
 }
 
 function StationFlask(props: IconProps) {
@@ -1037,7 +1042,7 @@ function StationFlask(props: IconProps) {
 }
 
 function StationTools(props: IconProps) {
-  return <Svg {...props}><path d="M3.757 3.970Q4 3 4.707 3.707L5.576 4.576Q6 5 6.537 5.268L7.238 5.619Q8 6 8.709 5.528L10.168 4.555Q11 4 11 5V7Q11 10 7 10Q3 10 3 7Z M7 10L17.5 21 M3 21L11 13 M14 10L18 6 M15 3L21 9 M14 4L16 2.5" /></Svg>;
+  return <Svg {...props}><path d="M3.325 6.154L5.192 8.02L7.454 7.454L8.02 5.192L6.154 3.325C7.624 2.872 9.151 3.268 10.17 4.513C11.188 5.758 11.414 7.228 10.905 8.642Q10.453 10.453 8.642 10.905C7.228 11.414 5.758 11.188 4.513 10.17C3.268 9.151 2.872 7.624 3.325 6.154Z M10.113 10.113L20 20" /><path d="M15.889 3.161L20.839 8.111Q21.192 8.464 20.839 8.818L19.425 10.232Q19.071 10.586 18.718 10.232L13.768 5.282Q13.414 4.929 13.768 4.575L15.182 3.161Q15.536 2.808 15.889 3.161ZM16.243 7.757L13.768 10.232M10.232 13.768L4.929 19.071" /></Svg>;
 }
 
 function StationPenguin(props: IconProps) {
@@ -1113,7 +1118,7 @@ function StationTeapot(props: IconProps) {
 }
 
 function StationKey(props: IconProps) {
-  return <Svg {...props}><circle cx="8" cy="8" r="5" /><path d="M11.5 11.5L21 21 M16 16L19 13 M19 19L22 16" /><circle cx="6.5" cy="6.5" r="1.1" fill="currentColor" stroke="none" /></Svg>;
+  return <Svg {...props}><circle cx="15.5" cy="8.5" r="5" /><path d="M12 12L3.5 20.5 M5 19L7 21 M8 16L10 18" /></Svg>;
 }
 
 function StationMagnet(props: IconProps) {
@@ -1317,7 +1322,7 @@ function StationFeather(props: IconProps) {
 }
 
 function StationPaw(props: IconProps) {
-  return <Svg {...props}><path d="M6 21Q2 20 5 16L9 12Q12 10 15 12L19 16Q22 20 18 21Q15 22 12 20Q9 22 6 21Z" fill="currentColor" stroke="none" /><path d="M3 8C0 8 1 14 4 13C7 12 6 8 3 8Z M8 2C4 2 5 9 8 9C11 9 11 2 8 2Z M16 2C13 2 13 9 16 9C19 9 20 2 16 2Z M21 8C18 8 17 12 20 13C23 14 24 8 21 8Z" fill="currentColor" stroke="none" /></Svg>;
+  return <Svg {...props}><path d="M3.3 9a1.7 2.1 0 1 0 3.4 0a1.7 2.1 0 1 0 -3.4 0Z" /><path d="M7.8 5.8a1.7 2.3 0 1 0 3.4 0a1.7 2.3 0 1 0 -3.4 0Z" /><path d="M12.8 5.8a1.7 2.3 0 1 0 3.4 0a1.7 2.3 0 1 0 -3.4 0Z" /><path d="M17.3 9a1.7 2.1 0 1 0 3.4 0a1.7 2.1 0 1 0 -3.4 0Z" /><path d="M8.5 14Q12 10.5 15.5 14L18 17Q20 20 17 20.5Q14.5 21 12 19.5Q9.5 21 7 20.5Q4 20 6 17Z" /></Svg>;
 }
 
 function StationBone(props: IconProps) {
@@ -1433,7 +1438,7 @@ function StationTaco(props: IconProps) {
 }
 
 function StationHotdog(props: IconProps) {
-  return <Svg {...props}><path d="M4.57 13.69Q3.62 10.67 8.47 7.15Q13.33 3.62 15.90 5.46 M8.10 18.54Q10.67 20.38 15.53 16.85Q20.38 13.33 19.43 10.31 M4.57 13.69L15.90 5.46Q18.33 3.70 20.09 6.12Q21.85 8.55 19.43 10.31L8.10 18.54Q5.67 20.30 3.91 17.88Q2.15 15.45 4.57 13.69Z M7.15 15.53L8.99 12.95L12.59 12.81L13.84 9.43L16.85 8.47" /></Svg>;
+  return <Svg {...props}><path d="M5 10Q3 8 5 6Q7 4 10 5 M14 19Q17 20 19 18Q21 16 19 14 M5.5 13.5L13.5 5.5Q16 3 18.5 5.5Q21 8 18.5 10.5L10.5 18.5Q8 21 5.5 18.5Q3 16 5.5 13.5Z M8 15L9 12L12 12L13 9L16 9" /></Svg>;
 }
 
 function StationBeer(props: IconProps) {
@@ -1621,7 +1626,7 @@ function StationTorii(props: IconProps) {
 }
 
 function StationFerrisWheel(props: IconProps) {
-  return <Svg {...props}><circle cx="12" cy="10" r="7.5" /><path d="M12 2.5V10 M4.5 10H19.5 M6.5 5L17.5 15 M17.5 5L6.5 15 M12 10L7 21 M12 10L17 21 M5 21H19" /><circle cx="12" cy="2.5" r="1.7" fill="currentColor" stroke="none" /><circle cx="4.5" cy="10" r="1.7" fill="currentColor" stroke="none" /><circle cx="19.5" cy="10" r="1.7" fill="currentColor" stroke="none" /></Svg>;
+  return <Svg {...props}><path d="M13.8 3.236A7 7 0 0 1 18.837 8.5 M18.837 11.5A7 7 0 0 1 13.8 16.764 M10.2 16.764A7 7 0 0 1 5.163 11.5 M5.163 8.5A7 7 0 0 1 10.2 3.236 M12 4.8V15.8 M6.8 10H17.2 M9 16.3L7 21 M15 16.3L17 21 M6 21H18" /><rect x="10.2" y="1.8" width="3.6" height="3" rx="0.6" /><rect x="3.2" y="8.5" width="3.6" height="3" rx="0.6" /><rect x="17.2" y="8.5" width="3.6" height="3" rx="0.6" /><rect x="10.2" y="15.8" width="3.6" height="3" rx="0.6" /></Svg>;
 }
 
 function StationSchool(props: IconProps) {
@@ -1665,7 +1670,7 @@ function StationMicrophone(props: IconProps) {
 }
 
 function StationMusic(props: IconProps) {
-  return <Svg {...props}><path d="M9 17V6.5Q9 5 10.48 4.73L18.52 3.27Q20 3 20 4.5V15 M9 9L20 7" /><path d="M9 16C3 14 1 22 6 21C8 21 9 19 9 16Z M20 14C14 12 12 20 17 19C19 19 20 17 20 14Z" fill="currentColor" stroke="none" /></Svg>;
+  return <Svg {...props}><path d="M9 17.5V6L19 4V15.5 M9 9.5L19 7.5" /><path d="M4 18a2.5 2 0 1 0 5 0a2.5 2 0 1 0 -5 0Z" /><path d="M14 16a2.5 2 0 1 0 5 0a2.5 2 0 1 0 -5 0Z" /></Svg>;
 }
 
 function StationFilm(props: IconProps) {
@@ -1673,7 +1678,7 @@ function StationFilm(props: IconProps) {
 }
 
 function StationTicket(props: IconProps) {
-  return <Svg {...props}><path d="M5 6H19Q21 6 21 8V10Q17 12 21 14V16Q21 18 19 18H5Q3 18 3 16V14Q7 12 3 10V8Q3 6 5 6Z M15 8V9 M15 12V13 M15 16V16.5" /></Svg>;
+  return <Svg {...props}><path d="M5.5 5H18.5Q20.5 5 20.5 7V9.5A2.5 2.5 0 0 0 20.5 14.5V17Q20.5 19 18.5 19H5.5Q3.5 19 3.5 17V14.5A2.5 2.5 0 0 0 3.5 9.5V7Q3.5 5 5.5 5Z M14 8.5V15.5" /></Svg>;
 }
 
 function StationJoystick(props: IconProps) {
@@ -1733,7 +1738,7 @@ function StationCrystalBall(props: IconProps) {
 }
 
 function StationSparkles(props: IconProps) {
-  return <Svg {...props}><path d="M10 3Q11 10 17 12Q11 14 10 21Q9 14 3 12Q9 10 10 3Z M19 2V8 M16 5H22 M20 17V21 M18 19H22" /></Svg>;
+  return <Svg {...props}><path d="M9.5 8C10.5 12 12 13.5 16 14.5C12 15.5 10.5 17 9.5 21C8.5 17 7 15.5 3 14.5C7 13.5 8.5 12 9.5 8Z M17 3C17.5 5.5 18.5 6.5 21 7C18.5 7.5 17.5 8.5 17 11C16.5 8.5 15.5 7.5 13 7C15.5 6.5 16.5 5.5 17 3Z" /></Svg>;
 }
 
 function StationDice1(props: IconProps) {

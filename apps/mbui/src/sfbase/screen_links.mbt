@@ -16,16 +16,6 @@ pub let peek_ms : Double = 500.0
 pub let peek_size : Double = 640.0
 
 ///|
-/// The marks' grid (ScreenLinks.kt tile: 30 by 36, as the web's) and their strokes' width.
-pub let mark_grid_w : Double = 30.0
-
-///|
-pub let mark_grid_h : Double = 36.0
-
-///|
-pub let mark_stroke : Double = 1.5
-
-///|
 /// A preview's shape when its station has not said the screen's size (16:10), and the shapes it is kept within.
 pub let peek_ratio : Double = 1.6
 
@@ -36,44 +26,22 @@ pub let peek_ratio_least : Double = 0.75
 pub let peek_ratio_most : Double = 2.0
 
 ///|
-/// A mark: its name (its pictures kept by it) and its paths on the marks' grid.
+/// A card uses the same icon as its tab and the shared library, centered in the file tile's room.
 pub(all) struct LinkMark {
   name : String
-  paths : Array[String]
 }
 
 ///|
-/// A desktop's mark (ScreenLinks.kt Monitor).
-// kept across runs: a value (never written)
-pub let monitor_mark : LinkMark = {
-  name: "screen-desktop",
-  paths: [
-    "M6.25 8H23.75A2.5 2.5 0 0 1 26.25 10.5V21A2.5 2.5 0 0 1 23.75 23.5H6.25A2.5 2.5 0 0 1 3.75 21V10.5A2.5 2.5 0 0 1 6.25 8Z",
-    "M15 23.5V28.5M10.5 28.5H19.5",
-  ],
-}
+// kept across runs: an immutable icon name
+pub let monitor_mark : LinkMark = { name: "monitor" }
 
 ///|
-/// A browser tab's mark (ScreenLinks.kt Globe).
-// kept across runs: a value (never written)
-pub let globe_mark : LinkMark = {
-  name: "screen-browser",
-  paths: [
-    "M3.75 18A11.25 11.25 0 1 0 26.25 18A11.25 11.25 0 1 0 3.75 18Z",
-    "M3.75 18H26.25M15 6.75C11.75 10 10.25 14 10.25 18S11.75 26 15 29.25M15 6.75C18.25 10 19.75 14 19.75 18S18.25 26 15 29.25",
-  ],
-}
+// kept across runs: an immutable icon name
+pub let globe_mark : LinkMark = { name: "web" }
 
 ///|
-/// A phone, 共享调试's mark (AdbLinks.kt Phone).
-// kept across runs: a value (never written)
-pub let phone_mark : LinkMark = {
-  name: "adb-phone",
-  paths: [
-    "M11 5.25H19A2.75 2.75 0 0 1 21.75 8V28A2.75 2.75 0 0 1 19 30.75H11A2.75 2.75 0 0 1 8.25 28V8A2.75 2.75 0 0 1 11 5.25Z",
-    "M13 27H17",
-  ],
-}
+// kept across runs: an immutable icon name
+pub let phone_mark : LinkMark = { name: "phone" }
 
 // ── the cards' looks (ScreenLinks.kt ScreenLinkCard, AdbLinks.kt AdbLinkCard) ──
 
@@ -109,7 +77,7 @@ pub let peek_frame : @ui.Style = @ui.css("w=Full align=ACenter justify=JCenter b
 ///|
 /// A mark's room: 30 by 36.
 // kept across runs: a value (no field of it changes)
-pub let link_mark_box : @ui.Style = @ui.style(w=@sf.link_mark_w, h=S9)
+pub let link_mark_box : @ui.Style = @ui.style(w=@sf.link_mark_w, h=S9, align=ACenter, justify=JCenter)
 
 ///|
 /// The words beside the mark (or under the preview): what is left across.
@@ -223,7 +191,7 @@ pub fn link_mark(c : @ui.Ctx, mark : LinkMark?, tint : @ui.Color) -> Unit {
   c.box(style=link_mark_box, fn() {
     match mark {
       Some(m) =>
-        @sf.line_art(c, m.name, m.paths, mark_grid_w, mark_grid_h, mark_stroke, mark_grid_w, c.color(tint))
+        @sf.icon(c, m.name, size=24.0, color=c.color(tint))
         |> ignore
       None => ()
     }

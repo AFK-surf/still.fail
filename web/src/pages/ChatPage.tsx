@@ -5,7 +5,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, QuotaChip, MeterChips, PeopleStack } from "../components.tsx";
-import { Archive, ArrowUpRight, Boxes, Chats, Close, File, Folder, Info, Monitor, More, PanelClose, PanelOpen, Refresh, Shrink, Users, Web } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowUpRight, Boxes, Chats, Close, File, Folder, Info, Monitor, More, PanelClose, PanelOpen, Phone, Refresh, Shrink, Users, Web } from "@stillfail/ui/icons.tsx";
 import { Letters } from "../Letters.tsx";
 import { DriveTab } from "./DriveTab.tsx";
 import { DropHint, FILES, FilesTab, keepFocus, PANEL_MAX, PANEL_MIN, SidePane, paneId, tabId, useChatDrop, useSidePanel, useStationDrive } from "./ChatSide.tsx";
@@ -595,12 +595,7 @@ function ScreenTabTrigger({ tab, station, screen, onClose }: { tab: string; stat
 function ScreenMark({ kind }: { kind: string }) {
   if (kind === "browser") return <Web size={14} strokeWidth={1.75} />;
   if (kind !== "simulator") return <Monitor size={14} strokeWidth={1.75} />;
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="6.5" y="2.5" width="11" height="19" rx="2.5" />
-      <path d="M10.5 18.5H13.5" />
-    </svg>
-  );
+  return <Phone size={14} />;
 }
 /** The 任务 tab's key: every service and job of the chat's agents. */
 const JOBS = "jobs";

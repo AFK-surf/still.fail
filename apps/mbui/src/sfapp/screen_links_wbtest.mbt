@@ -148,7 +148,7 @@ test "共享调试's phone in the accent while this phone's adb is shared there,
   t.run_for(@ui.nav_push_ms)
   // (the phone's muted: as the card's line, 未共享)
   let muted = inks_of(t, "未共享")[0]
-  assert_true(shapes_named(t, "art/adb-phone/").has_suffix("/\{muted}"))
+  assert_true(shapes_named(t, "sf/icon/phone/24/").has_suffix("/\{muted}"))
   let t = screen_links_core(streams, cancelled, calls, over=fn(name, topic) {
     if name == "adbCard" {
       { ..topic, value: Some({ "title": "共享调试", "line": "共享中 · 剩余 58 分钟", "sharing": true, "lendable": true }) }
@@ -161,7 +161,7 @@ test "共享调试's phone in the accent while this phone's adb is shared there,
   assert_true(t.find("共享中 · 剩余 58 分钟") is Some(_))
   // (the phone's accent, sf's narrow palette: tokens.mbt)
   let accent = 0xE5704AFFL
-  assert_true(shapes_named(t, "art/adb-phone/").has_suffix("/\{accent}"))
+  assert_true(shapes_named(t, "sf/icon/phone/24/").has_suffix("/\{accent}"))
 }
 
 ///|

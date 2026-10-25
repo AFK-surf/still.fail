@@ -149,3 +149,14 @@ export function Progress({ part, label, className }: { part: number | null; labe
     </span>
   );
 }
+
+/** A determinate ring in the icon family's 24-unit grid; its parent supplies the accessible label. */
+export function ProgressRing({ part, size = 20 }: { part: number; size?: number }) {
+  const share = Math.min(1, Math.max(0, part));
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" opacity="0.18" />
+      {share > 0 && <circle cx="12" cy="12" r="8.5" pathLength="100" strokeDasharray={`${share * 100} 100`} transform="rotate(-90 12 12)" />}
+    </svg>
+  );
+}

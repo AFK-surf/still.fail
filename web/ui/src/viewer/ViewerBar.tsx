@@ -5,6 +5,7 @@
 // under a text), its ink and line with it. On a phone each keeps its own floating bars.
 import { useCallback, useEffect, useRef, useState, type ReactNode, type UIEvent, type PointerEvent } from "react";
 import { ChevronLeft, Download } from "../icons.tsx";
+import { ProgressRing } from "../waiting.tsx";
 import { Tip } from "../parts.tsx";
 import * as css from "./ViewerBar.css.ts";
 import { t } from "../i18n.ts";
@@ -79,16 +80,9 @@ function stands(bar: HTMLElement | null, x: number, y: number): boolean {
   return y >= top && y < top + bar.offsetHeight && x >= left && x < left + bar.offsetWidth;
 }
 
-/** How far a download has come, in its button's place: a ring of the bar's ink, 18 across, its track at 18%, `part` of a
- * turn from the top clockwise, 2 wide (the mbui app's progress_ring). */
+/** How far a download has come, in its button's place, using the shared icon-sized ring. */
 export function DownloadRing({ part }: { part: number }) {
-  const r = 7, round = 2 * Math.PI * r, share = Math.min(1, Math.max(0, part));
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-      <circle cx="9" cy="9" r={r} fill="none" stroke="currentColor" strokeOpacity="0.18" strokeWidth="2" />
-      {share > 0 && <circle cx="9" cy="9" r={r} fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray={`${round * share} ${round}`} transform="rotate(-90 9 9)" />}
-    </svg>
-  );
+  return <ProgressRing part={part} size={18} />;
 }
 
 /** One of a bar's tools: an icon, named on hover; `on` while what it opens is open. */

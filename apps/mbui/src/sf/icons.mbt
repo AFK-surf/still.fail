@@ -306,10 +306,11 @@ pub fn segments(c : @ui.Ctx, size : Double, stroke : Double, color : Int64, grou
 
 ///|
 /// A ring that says how far (PreviewLoad.kt's): `size` square, a track of `color` at 18% and `part` of a turn of it
-/// from the top, clockwise, 2 wide, still.
+/// from the top, clockwise, on the icon family's 24-unit grid (radius 8.5, stroke 1.75).
 pub fn progress_ring(c : @ui.Ctx, size : Double, part : Double, color : Int64) -> Int {
   let share = if part < 0.0 { 0.0 } else if part > 1.0 { 1.0 } else { part }
-  let r = size / 2.0 - 2.0
+  let r = 8.5 * size / 24.0
+  let width = 1.75 * size / 24.0
   let mid = size / 2.0
   let pi = 3.141592653589793
   let circle = fn(from : Double, to : Double, n : Int) -> Array[Double] {
@@ -322,11 +323,11 @@ pub fn progress_ring(c : @ui.Ctx, size : Double, part : Double, color : Int64) -
     pts
   }
   let track = (color & 0xFFFFFF00L) | ((color & 0xFFL).to_double() * 0.18).round().to_int64()
-  let shapes = [@ui.shape_of([(circle(0.0, 2.0 * pi, 48), true)], stroke=track, width=2.0)]
+  let shapes = [@ui.shape_of([(circle(0.0, 2.0 * pi, 48), true)], stroke=track, width~)]
   if share > 0.0 {
     let from = -0.5 * pi
     shapes.push(
-      @ui.shape_of([(circle(from, from + share * 2.0 * pi, (48.0 * share).ceil().to_int()), false)], stroke=color, width=2.0),
+      @ui.shape_of([(circle(from, from + share * 2.0 * pi, (48.0 * share).ceil().to_int()), false)], stroke=color, width~),
     )
   }
   c.shapes(shapes, w=Px(size), h=Px(size))
