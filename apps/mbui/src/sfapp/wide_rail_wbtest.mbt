@@ -481,7 +481,7 @@ fn bar_title_at(t : @ui.Tester) -> (Double, Double) raise {
 }
 
 ///|
-test "wide: the sidebar shown a while pinned open by its place pressed again, and folded back to shown a while: a chat's bar moves with its page, its title on its way from where it was to where it ends, never off it" {
+test "wide: the sidebar shown a while pinned open by its place pressed again, and folded back to shown a while: a chat's bar moves with its page, its title on its way from where it was to where it ends, never off it, as far from the sidebar's edge either way" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
   let press_lit = fn() {
@@ -504,6 +504,10 @@ test "wide: the sidebar shown a while pinned open by its place pressed again, an
     mid_x >= dmin(shown_x, open_x) && mid_x <= dmax(shown_x, open_x),
     msg="shown \{shown_x}, halfway \{mid_x}, open \{open_x}",
   )
+  // as far from the sidebar's edge either way (shown a while, the closed bar's 6 from the window's edge and 8 from the
+  // page: its edge 8 short of the open one's)
+  let s = @sfdesk.wide.side_w
+  assert_eq(shown_x - (@sfdesk.closed_bar_in + @sfdesk.rail_closed_w + s), open_x - (@sfdesk.rail_w + s))
   // pressed once more: folded, shown a while again, the same way back
   press_lit()
   t.run_for(@sfdesk.side_move_ms / 2.0)
@@ -515,6 +519,46 @@ test "wide: the sidebar shown a while pinned open by its place pressed again, an
     back_x >= dmin(open_x, again_x) && back_x <= dmax(open_x, again_x),
     msg="open \{open_x}, halfway \{back_x}, shown \{again_x}",
   )
+}
+
+///|
+test "wide, the window's buttons in the app's top row: the sidebar shown a while is under their row, a chat's title stays beside them as folded; pinned open, it goes with the page past the sidebar, and back" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat", window_inset=true)
+  let press_lit = fn() {
+    let (rx, ry, rw, rh) = t.query(Button, label="对话").unwrap().rect
+    t.tap(rx + rw / 2.0, ry + rh / 2.0)
+  }
+  // folded, the pointer off the rail: beside the window's buttons
+  press_lit()
+  t.move(1000.0, 400.0)
+  t.run_for(@sfdesk.peek_leave_ms)
+  t.frame()
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(@sfdesk.wide.folded && !@sfdesk.wide.peeking)
+  let (folded_x, _) = bar_title_at(t)
+  // the pointer on the rail: shown a while, the title where it was halfway and after
+  let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
+  t.move(rx + rw / 2.0, ry + rh / 2.0)
+  t.run_for(@sfdesk.side_move_ms / 2.0)
+  assert_true((bar_title_at(t).0 - folded_x).abs() < 0.01, msg="halfway at \{bar_title_at(t).0}, folded \{folded_x}")
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(@sfdesk.wide.peeking)
+  assert_true((bar_title_at(t).0 - folded_x).abs() < 0.01, msg="shown at \{bar_title_at(t).0}, folded \{folded_x}")
+  // its place pressed: open, the title on its way past the sidebar with the page
+  press_lit()
+  t.run_for(@sfdesk.side_move_ms / 2.0)
+  let (mid_x, _) = bar_title_at(t)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_false(@sfdesk.wide.folded)
+  let (open_x, _) = bar_title_at(t)
+  assert_true(open_x > @sfdesk.rail_w + @sfdesk.wide.side_w, msg="open at \{open_x}")
+  assert_true(mid_x > folded_x && mid_x < open_x, msg="folded \{folded_x}, halfway \{mid_x}, open \{open_x}")
+  // pressed again: shown a while, back beside the window's buttons
+  press_lit()
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(@sfdesk.wide.peeking)
+  assert_true((bar_title_at(t).0 - folded_x).abs() < 0.01, msg="back at \{bar_title_at(t).0}, folded \{folded_x}")
 }
 
 ///|
@@ -535,6 +579,12 @@ test "wide: a newer build of the desktop app: 更新 the update key in the sideb
   let (fx, _, _, _) = t.query(Button, label="更新").unwrap().rect
   assert_eq(fx, @sfdesk.update_closed_in)
   assert_eq(@sfdesk.wide.bar_pl, @sfdesk.bar_update_in)
+  // shown a while: 更新 back in the sidebar's first row, the bar starting past the sidebar with its own 12
+  let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
+  t.move(rx + rw / 2.0, ry + rh / 2.0)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(@sfdesk.wide.peeking)
+  assert_eq(@sfdesk.wide.bar_pl, @sfdesk.bar_in)
 }
 
 ///|

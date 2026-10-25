@@ -281,14 +281,14 @@ pub let side_move_ms : Double = @sf.move_state_ms
 ///|
 /// What moves as the sidebar opens, folds, is shown a while or goes to another place's width: brand.tsx moveSidebar's
 /// list, its selectors the boxes' `moves` names, what of each moves by its CSS names as the web lists them. The column
-/// the page starts after (the shell's grid-template-columns: the page is laid out in what it leaves, so a value), the
-/// page moved aside (main's left, as wide as it was), the edge, the rail as narrow as the closed bar and its top row, the
+/// the page starts after (the shell's grid-template-columns: the page is laid out in what it leaves, so a value), how
+/// far the page is moved aside (main's left: drawn moved, as wide as it was), the edge, the rail as narrow as the closed bar and its top row, the
 /// block's margins (values: it is placed by them), corner, ground, shadow and line, the sidebar in it (and whether it
 /// is drawn at all), its frosted bands' ground and top row, the lists' marks on the rail, the page bars' room.
 // kept across runs: a table, never written
 let side_moves : Array[(String, Array[String])] = [
   ("shell", ["--side-col"]),
-  ("main-shift", ["width"]),
+  ("main", ["--peek-shift"]),
   ("edge", ["left"]),
   ("rail", ["width", "padding-left", "padding-top", "padding-bottom"]),
   ("rail-top", ["height"]),
@@ -605,14 +605,21 @@ pub fn frame(
     _ => true
   }
   let tape_x = tape_frame(c, panel_of, at, known)
-  // shown a while, the page moved aside as wide as it was (shell.css.ts main's left: --peek-shift), its bars from the
-  // sidebar's edge to the window's (brand.css.ts); closed, their padding clear of the bar (and of the window's buttons)
+  // shown a while, the page moved aside as wide as it was (shell.css.ts main's left: --peek-shift), drawn moved
+  // (page_in); closed, its bars' padding clear of the bar (and of the window's buttons)
   let shift = if peek { wide.peek_shift } else { 0.0 }
+  let aside = c.moved("--peek-shift", shift)
+  // shown a while, where the window's buttons are in the app's top row, the sidebar is under that row as the closed bar
+  // is (dock: closed_bar_top), the row the page's bars are in: they stay as folded, from the rail, their words beside the
+  // window's buttons, not moved aside with the page (their margin at their start the page's move back). Else it reaches
+  // over them: they start past its edge (brand.css.ts), their own padding past it as open (what the closed padding
+  // clears is left of it then), their words as far from its edge as open. Either way their end by the window's.
+  let over_bars = peek && !inset
   // (closed, with 更新 over their start: clear of it too, brand.css.ts)
   wide.closed = bar
   let updating = !gated && update_shown()
   // (where the move has got to, as the page beside them: every bar builds its room from these)
-  wide.bar_pl = c.moved("--bar-pl", if !bar {
+  wide.bar_pl = c.moved("--bar-pl", if !bar || over_bars {
     bar_in
   } else if updating {
     if inset {
@@ -625,7 +632,13 @@ pub fn frame(
   } else {
     bar_in
   })
-  wide.bar_ml = c.moved("--bar-ml", if peek { dmax(0.0, s - closed_bar_gap - shift) } else { 0.0 })
+  wide.bar_ml = c.moved("--bar-ml", if over_bars {
+    dmax(0.0, s - closed_bar_gap - shift)
+  } else if peek {
+    -shift
+  } else {
+    0.0
+  })
   wide.bar_mr = c.moved("--bar-mr", shift)
   // what the sidebar's parts work out from, where the move has got to: its top row (Sidebar.css.ts brand: none in the
   // closed bar), its frosted bands' ground (the block's), the lists' marks on the rail (Rail.css.ts listMark: in as it
@@ -665,7 +678,17 @@ pub fn frame(
         } else {
           // a chat and a new chat switched between: the composer moving, the rest crossfading (switch.mbt)
           page_switch_frame(c)
-          c.nav_flat(app.nav, fn(page) { main_page(c, src, w, all, invited, page) }, bg=@sf.theme().p.bg)
+          // (moved aside for the sidebar shown a while within what cuts the page at its edges, so a bar of it that
+          // stays as folded is not cut there: page_bar_row; what moves in it of its own takes its place from its foot,
+          // the move aside moving none of it)
+          c.nav_flat(
+            app.nav,
+            fn(page) {
+              let moved = c.box(style=page_aside, tx=aside, fn() { main_page(c, src, w, all, invited, page) })
+              @motion.scope(c, moved, bottom=true)
+            },
+            bg=@sf.theme().p.bg,
+          )
           |> ignore
         }
       }
@@ -736,9 +759,8 @@ pub fn frame(
       |> ignore
     } else {
       c.box(style=frame_row, fn() {
-        // the rail's and the sidebar's column (the block over it, below), and the page moved aside by as much as it is
+        // the rail's and the sidebar's column (the block over it, below); the page beside it, moved aside in it
         c.box(style=frame_col.then(@ui.style(w=Fixed(col))), fn() {  }) |> ignore
-        c.box(style=frame_col.then(@ui.style(w=Fixed(shift))), moves="main-shift", fn() {  }) |> ignore
         // a right click in it: what is picked copied (context_menu.mbt)
         context_page(c, page_id)
         // (the window cutting what goes past its edge)
@@ -1122,16 +1144,39 @@ let frame_col : @ui.Style = @ui.css("h=Full")
 let frame_main : @ui.Style = @ui.css("h=Full clip")
 
 ///|
+/// The page in it, drawn moved aside while the sidebar is shown a while.
+// kept across runs: a value (no field of it changes)
+let page_aside : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
 // kept across runs: a value (no field of it changes)
 let frame_gate : @ui.Style = @ui.css("bg=Bg")
 
 ///|
 /// A page's bar's padding at its left and its right (styles/sidebar.css.ts pageBar: 12; brand.css.ts, railed, closed:
-/// 28 in a window with its buttons in the app's top row, which reach 12 past the rail), and its margins while the folded
-/// sidebar is shown a while (from its edge to the window's): where the block's move has got to (side_moves' page-bar),
-/// so a bar built of them moves with the page it is on, its words not jumping ahead of it.
+/// 28 in a window with its buttons in the app's top row, which reach 12 past the rail; 12 again while the folded
+/// sidebar shown a while reaches over the bar, which starts past it), and its margins while it is shown a while (from
+/// its edge to the window's; under the window's buttons' row, from the rail as folded: less than none at its start, the
+/// page's move aside taken back): where the block's move has got to (side_moves' page-bar), so a bar built of them
+/// moves with the page it is on, its words not jumping ahead of it.
 pub fn page_bar_room() -> (Double, Double, Double, Double) {
   (wide.bar_pl, if wide.tape { @sf.tape_bar_end(bar_in) } else { bar_in }, wide.bar_ml, wide.bar_mr)
+}
+
+///|
+/// A page's bar's row (`style`: as wide as the page, its height) with its room (page_bar_room) round what `bar` builds
+/// (told its padding at its left and its right): its margins as spaces at its ends, one less than none taken back by
+/// drawing the row moved back as far (the page drawn moved aside within what cuts it: frame's page_in). Named
+/// "page-bar" (what the page shows across leaves it out: peek_shift).
+pub fn page_bar_row(c : @ui.Ctx, style : @ui.Style, bar : (Double, Double) -> Unit) -> Int {
+  let (pl, pr, ml, mr) = page_bar_room()
+  let room = fn(x : Double) { c.box(style=@ui.style(w=Fixed(x), h=Full), fn() {  }) |> ignore }
+  let back = dmin(0.0, ml)
+  c.box(style~, moves="page-bar", tx=back, fn() {
+    room(dmax(0.0, ml))
+    bar(pl, pr)
+    room(mr + back)
+  })
 }
 
 ///|
