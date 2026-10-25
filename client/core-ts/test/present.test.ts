@@ -308,6 +308,11 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   assert.equal(merged.statusText, "已完成：已合并所有代码");
   assert.equal(p.rowStateText(row([merged], false)), "已完成：已合并所有代码");
   assert.ok(!p.settled(row([done], true)));
+  // Ended read or not (settled only once read); not while an agent asks, works or there is none.
+  assert.ok(p.ended(row([done], true)));
+  assert.ok(!p.ended(row([done, helped], false)));
+  assert.ok(!p.ended(row([done, works], false)));
+  assert.ok(!p.ended(row([], false)));
   assert.ok(!p.settled(row([done, helped], false)));
   assert.equal(p.rowStateText(row([done, helped], false)), "需要你处理：要 key");
   assert.equal(p.rowStateText(row([done, waits], false)), "等待：CI 跑完");
@@ -318,6 +323,8 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   asked.card = card;
   // A line that asks for a decision is about no message: the chat leads to what it asks.
   assert.deepEqual([p.settled(asked), p.rowStateLine(asked)], [false, ["奏 · 域名用哪个？", null, "域名用哪个？", { kind: "decision", text: "奏", rest: " · 域名用哪个？" }]]);
+  // A card waiting for the viewer: not ended, its agent's done or not.
+  assert.ok(!p.ended(asked));
   asked.agents = [agent(null, "running")];
   assert.equal(p.rowStateText(asked), "奏 · 域名用哪个？");
   asked.agents = [waits];

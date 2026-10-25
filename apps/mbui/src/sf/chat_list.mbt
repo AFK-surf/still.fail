@@ -258,6 +258,24 @@ pub fn list_row_in(at : ListAt) -> @ui.Style {
 let whole_row_in : @ui.Style = @ui.style(pl=phone_row_in, pr=S4)
 
 ///|
+/// What holds a row of a list moved across in it (a finger's swipe): the row's own place, what moves in it cut to the
+/// row's ground's corners where its list stands (list_row_in): rounded in a side column, square across the whole screen.
+pub fn list_row_slot(at : ListAt) -> @ui.Style {
+  match at {
+    Side => side_row_slot
+    Whole => whole_row_slot
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let side_row_slot : @ui.Style = @ui.style(w=Full, clip=true, radius=side_row_radius)
+
+///|
+// kept across runs: a value (no field of it changes)
+let whole_row_slot : @ui.Style = @ui.css("w=Full clip")
+
+///|
 /// How far in a list's heading is: in a side column the theme's (heading_in, from the list's line); across the whole
 /// screen the phone's section header's (20).
 pub fn list_heading_in(at : ListAt) -> @ui.Style {

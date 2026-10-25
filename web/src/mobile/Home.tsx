@@ -384,7 +384,7 @@ const ChatPane = memo(function ChatPane({ chats, filter, onSearch }: { chats: To
       for (const item of day.items) {
         const key = `${item.station}/${item.id}`;
         // An archiving row folds to zero before the topic removes it: measure that motion.
-        items.push({ key, estimate: 66, ...(!item.archivable ? { exact: 66 } : {}) });
+        items.push({ key, estimate: 66, ...(!item.swipeArchive ? { exact: 66 } : {}) });
         drawn.set(key, <ChatRow item={item} lead={lead} />);
       }
     }
@@ -468,8 +468,8 @@ const ChatRow = memo(function ChatRow({ item, lead }: { item: ChatItem; lead: "a
   };
   const path = `${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`;
   const open = useOpenPage(path);
-  // Nothing left in it (the core's `archivable`): swiped left, archived.
-  const archivable = !!item.archivable && !item.offline && !item.pending;
+  // Ended, its station there (the core's `swipeArchive`): swiped left, archived.
+  const archivable = !!item.swipeArchive;
   const row = (
     <button type="button" className={css.mChatRow} data-held={held || undefined} data-offline={item.offline ? true : undefined}
       data-settled={item.settled || undefined} data-open={open || undefined} data-archivable={archivable || undefined}
@@ -520,7 +520,7 @@ const TAKES = 0.35;
 const FLING = 0.6;
 
 /**
- * A row whose chat has nothing left in it (the core's `archivable`): swiped left, it is archived. The row follows the
+ * A row whose chat has ended (the core's `swipeArchive`): swiped left, it is archived. The row follows the
  * finger, 归档 showing in ink where it uncovers; let go far enough or flung, it goes off and the list closes over it, else
  * it springs back. Read on the frame, which does not move (going up or down first is the list's scrolling).
  */

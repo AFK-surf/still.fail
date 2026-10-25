@@ -173,7 +173,7 @@ globalStyle(`${mRecentRows} ${mChatRow}[data-open] ${mChatTitle}`, { color: "var
 globalStyle(`${mNewChat}[data-small]`, { width: "32px", height: "32px" });
 
 /**
- * A row swiped left to archive it (the core's `archivable`, Home.tsx SwipeArchive): a frame that stays put, reading the
+ * A row swiped left to archive it (the core's `swipeArchive`, Home.tsx SwipeArchive): a frame that stays put, reading the
  * swipe; in it the row sliding, and what it uncovers on the right.
  */
 export const mChatRowWrap = style({

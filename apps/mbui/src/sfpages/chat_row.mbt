@@ -193,12 +193,13 @@ pub fn chat_row(
   // menu's 归档
   let archive_key = !finger && menu && !renaming && c.hand_lit(hover)
   // (swiped to archive, where what the row offers is not under a pointer's hover: the screen's, as its ⋯ is; a pointer
-  // has its 归档 key)
-  let archivable = @sf.more_held() && item.archivable && item.offline is None && !item.pending && !found
+  // has its 归档 key), which rows the core says: those ended, their stations there
+  let swipes = @sf.more_held() && item.swipe_archive && !found
   let busy = row_busy(src, item)
   let failed = row_failed(src, item)
   let offline = item.offline is Some(_)
-  let draw = fn(tx : Double) -> Int {
+  // (`apart`: the room its list keeps under it, outside the slot a swipe moves it in)
+  let draw = fn(tx : Double, apart : Bool) -> Int {
     let ground = if finger {
       // held, its menu open, or pressed where it rests (not swiped over its 归档): the ink at 5%
       if held || menu_on || (pressed && tx == 0.0 && !found) {
@@ -210,6 +211,7 @@ pub fn chat_row(
         let p = lifted / lift_ms
         @sf.alpha(@sf.over(t.p.bg, @sf.alpha(t.p.text, 0.06)), if p < 0.6 { 1.0 } else { 1.0 - (p - 0.6) / 0.4 })
       } else if tx != 0.0 {
+        // moved across: over 归档's words, which it uncovers as it goes
         t.p.bg
       } else {
         0L
@@ -222,7 +224,7 @@ pub fn chat_row(
     // (in a side column who is in it stands in the row's foot's end corner, placed there by the corner rule; across
     // the whole screen at its second line's end; the row pointed at says when instead)
     let cornered = at == Side && !shows_time && row_aside_shows(item, lead)
-    c.box(style=if more { @sf.list_more(at) } else { row_last }, tx~, fn() {
+    c.box(style=if apart { @sf.list_more(at) } else { row_last }, tx~, fn() {
       // (the library's list row, a chat's as high as its row always is: @sf.list_row)
       @sf.list_row(
         c,
@@ -350,10 +352,12 @@ pub fn chat_row(
       }
     })
   }
-  if archivable {
-    swipe_to_archive(c, src, item, busy, draw, unghost~)
+  if swipes {
+    c.box(style=if more { @sf.list_more(at) } else { row_last }, fn() {
+      swipe_to_archive(c, src, item, busy, at, fn(tx) { draw(tx, false) }, unghost~) |> ignore
+    })
   } else {
-    draw(0.0)
+    draw(0.0, more)
   }
 }
 
@@ -730,18 +734,19 @@ pub let swipe_off_ms : Double = 200.0
 let swipe_fill_ms : Double = 140.0
 
 ///|
-/// A finger's archivable row (mobile/Home.tsx SwipeArchive), swiped left to archive it: it follows the finger,
-/// uncovering 归档 at the right edge (filled in ink once letting go would archive it); let go past `archive_at_share`
-/// of its width or flung left, it goes off to the left and is archived, else it springs back. Archiving refused, it
-/// comes back; one keeping watch springs back and asks first, as its menu's 归档. Across first it is the swipe (the
-/// row's tap and hold let go); up or down first it is the list's. `row` draws the row moved across by so much;
-/// `unghost` says whether it leaves the list without a copy (swiped off), or with one again (its archiving refused).
-/// Its answer is the box holding it all, what moves as the list changes.
+/// A finger's archivable row (mobile/Home.tsx SwipeArchive), swiped left to archive it: it follows the finger in its
+/// slot (cut to its corners where its list stands, `at`), uncovering 归档 at the right edge (filled in ink once letting
+/// go would archive it); let go past `archive_at_share` of its width or flung left, it goes off to the left and is
+/// archived, else it springs back. Archiving refused, it comes back; one keeping watch springs back and asks first, as
+/// its menu's 归档. Across first it is the swipe (the row's tap and hold let go); up or down first it is the list's.
+/// `row` draws the row moved across by so much; `unghost` says whether it leaves the list without a copy (swiped off),
+/// or with one again (its archiving refused). Its answer is the box holding it all.
 fn swipe_to_archive(
   c : @ui.Ctx,
   src : Source,
   item : ChatItem,
   busy : Bool,
+  at : @sf.ListAt,
   row : (Double) -> Int,
   unghost? : (Bool) -> Unit = fn(_) {  },
 ) -> Int {
@@ -790,9 +795,9 @@ fn swipe_to_archive(
       back(0.0)
     })
   }
-  let at = off.get()
+  let moved = off.get()
   // past the line letting go archives at: felt as it is passed (Home.kt SwipeToArchive: TextHandleMove)
-  let past = at < -width * archive_at_share
+  let past = moved < -width * archive_at_share
   c.after_build("haptic/" + key, fn() {
     if past && rows.felt_past.get(key) != Some(true) {
       @ui.haptic(TextHandleMove)
@@ -800,18 +805,25 @@ fn swipe_to_archive(
     rows.felt_past[key] = past
   })
   let fill = @motion.animate(c, key + "/fill", if past { 1.0 } else { 0.0 }, spec=@motion.tween(swipe_fill_ms))
-  c.drag_area(id, axis=Horizontal, w=Fill(1.0), h=Px(touch_row_h), fn() {
-    c.box(style=swipe_frame, fn() {
-      // under it, at the right edge it uncovers: 归档, quiet until letting go would archive it, then filled in ink
-      let under = if at != 0.0 { @sf.mix(t.p.text, fill, t.p.chip) } else { 0L }
-      c.box(style=swipe_under.then(@ui.style(bg=Data(under))), fn() {
-        if at != 0.0 {
-          c.text(@sf.t("android-chat.archive"), style=swipe_words.then(@ui.text_style(color=Data(@sf.mix(t.p.bg, fill, t.p.muted)))))
+  c.drag_area(id, axis=Horizontal, w=Fill(1.0), fn() {
+    c.box(style=@sf.list_row_slot(at), fn() {
+      if moved < 0.0 {
+        // at the end it uncovers, as far as the row has gone and no further (mobile/Home.tsx mSwipeUnder): quiet until
+        // letting go would archive it, then ink. Never under the row, whose edges would show round it.
+        let ground = @ui.style(w=Fixed(-moved), bg=Data(@sf.mix(t.p.text, fill, t.p.chip)))
+        c.box(style=ground, top=0.0, right=0.0, bottom=0.0, fn() {  }) |> ignore
+        // 归档 at that end, laid out the slot across so it is whole, under the row (what of it the row has not
+        // uncovered yet, the row hides)
+        c.layer(fn() {
+          c.box(style=swipe_words_line, fn() {
+            c.text(@sf.t("android-chat.archive"), style=swipe_words.then(@ui.text_style(color=Data(@sf.mix(t.p.bg, fill, t.p.muted)))))
+            |> ignore
+          })
           |> ignore
-        }
-      })
-      |> ignore
-      c.box(style=swipe_over, ty=-touch_row_h, fn() { row(at) |> ignore }) |> ignore
+        })
+        |> ignore
+      }
+      row(moved) |> ignore
     })
     |> ignore
   })
@@ -819,23 +831,14 @@ fn swipe_to_archive(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let swipe_frame : @ui.Style = @ui.style(w=Full, h=Fixed(touch_row_h), clip=true)
-
-///|
-// kept across runs: a value (no field of it changes)
-let swipe_under : @ui.Style = @ui.style(
+let swipe_words_line : @ui.Style = @ui.style(
   row=true,
   w=Full,
-  h=Fixed(touch_row_h),
-  min_h=Fixed(touch_row_h),
+  h=Full,
   pr=@sf.phone_row_in,
   align=ACenter,
   justify=JEnd,
 )
-
-///|
-// kept across runs: a value (no field of it changes)
-let swipe_over : @ui.Style = @ui.style(w=Full, h=Fixed(touch_row_h), min_h=Fixed(touch_row_h))
 
 ///|
 // kept across runs: a value (no field of it changes)

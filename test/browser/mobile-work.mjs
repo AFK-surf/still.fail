@@ -26,7 +26,7 @@ let doing=[],noStations=false;
 const lists=new Map();
 extendDemo({call(name,params){if(name!=='chat.archive')return;window.archived=true;for(const list of lists.values())list.days=list.days.map(d=>({...d,items:d.items.filter(i=>i.session!==params.session)}));setTimeout(()=>demoCore.publish(),0);return null;},topic:t=>t.topic==='doing'?{doing}:t.topic==='stations'&&noStations?[]:undefined,then(t,v){
  if(t.topic!=='chats'||!v?.days?.[0]?.items?.length)return;
- const key=JSON.stringify(t);if(!lists.has(key)){const item=v.days[0].items[0];lists.set(key,{...v,days:[{...v.days[0],items:Array.from({length:1000},(_,i)=>({...item,id:'row-'+i,session:'row-'+i,title:'会话 '+i,archivable:i===0,watch:null}))}]});}return lists.get(key);
+ const key=JSON.stringify(t);if(!lists.has(key)){const item=v.days[0].items[0];lists.set(key,{...v,days:[{...v.days[0],items:Array.from({length:1000},(_,i)=>({...item,id:'row-'+i,session:'row-'+i,title:'会话 '+i,swipeArchive:i===0,watch:null}))}]});}return lists.get(key);
 }});
 window.probeRenders=0;window.activeHome=0;
 const Probe=memo(({id})=>{const on=useDoing('chat.pin',{session:id});window.probeRenders++;return <span>{String(on)}</span>;});

@@ -210,7 +210,7 @@ function deciding(id: string, th: number, seq: number, at: number, dismissed: bo
 const ids = (v: J): string[] => v.days.flatMap((d: J) => d.items.map((i: J) => i.id));
 
 /// A value without what the clients show of it: what a view puts together, alone.
-const SHOWN = new Set(["trouble", "settled", "archivable", "stateText", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "originKind", "summary", "modelsText", "stateBusy", "problems", "changes", "modeWords", "modeLabel", "modeSentence", "placeText"]);
+const SHOWN = new Set(["trouble", "settled", "archivable", "swipeArchive", "stateText", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "originKind", "summary", "modelsText", "stateBusy", "problems", "changes", "modeWords", "modeLabel", "modeSentence", "placeText"]);
 function plain(v: J): J {
   if (Array.isArray(v)) return v.map(plain);
   if (v !== null && typeof v === "object") return Object.fromEntries(Object.entries(v).filter(([k, x]) => !SHOWN.has(k) && x !== null && x !== undefined).map(([k, x]) => [k, plain(x)]));
@@ -840,6 +840,38 @@ test("a_done_chat_is_offered_to_archive_as_the_archive_hint_says_and_archivable_
     assert.equal(shown.settled, offered ? true : undefined, String(hint));
     assert.equal(shown.archivable, true, String(hint));
   }
+});
+
+test("an_ended_chat_is_swiped_away_unread_pinned_kept_or_not_recommended_alike_its_station_there", async () => {
+  const t = setup();
+  const now = t.host.nowMs();
+  const u = ui();
+  t.subscribe(1, { topic: "chats", scope: "ws" });
+  t.set(workspace(), oneStation());
+  t.set(link("ws/st"), { state: "online" });
+  await t.host.time.pass(100);
+  const done = (id: string, more: J): J => {
+    const r = row(id, now);
+    r.agents[0].lastTurn = { kind: "message", declared: "final", ending: "all_done", outcome: "completed", startedAt: 1, endedAt: 1 };
+    return { ...r, ...more };
+  };
+  t.set(rows("ws/st"), [
+    done("unread", { unread: true }),
+    done("pinned", { pinned: 5 }),
+    done("kept", { archiveReminderDismissed: true }),
+    done("reviewed", { archiveReviewed: true, archiveRecommended: false }),
+    row("active", now - 1),
+  ]);
+  await t.read(u, 1);
+  const flags = (v: J): J => Object.fromEntries(v.days.flatMap((d: J) => d.items.map((i: J) => [i.id, [i.swipeArchive ?? false, i.archivable ?? false]])));
+  // Each ended: swiped away, though none of them is offered to archive with one tap.
+  assert.deepEqual(flags(u.value), {
+    unread: [true, false], pinned: [true, false], kept: [true, false], reviewed: [true, false], active: [false, false],
+  });
+  // Its station offline: nothing there to take it.
+  t.set(link("ws/st"), { state: "offline" });
+  await t.read(u, 1);
+  assert.equal(u.value.days.flatMap((d: J) => d.items).some((i: J) => i.swipeArchive === true), false);
 });
 
 test("pinned_rows_go_above_the_days_the_latest_pinned_first", async () => {
