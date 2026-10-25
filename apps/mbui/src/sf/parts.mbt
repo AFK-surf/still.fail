@@ -3209,9 +3209,11 @@ let sign_in_many : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=f
 
 ///|
 /// A newer build offered (Home.kt's update key; one look wherever a frame puts it, the size of the keys beside it:
-/// `side` across, its mark `mark`): the download mark with an accent dot in its top right; while it comes, how far
-/// (`progress`, e.g. 42%) in the mark's place; one that failed, its dot red, `why` its tip. Said to be `label`.
-/// True on the frame it is pressed, not while it is `busy`.
+/// `side` across, its mark `mark`): the download mark with an accent dot in its top right; while it is `busy` (asked
+/// again first, downloaded, installed), the mark with how far it has come under it, the library's progress bar as
+/// wide as the mark (`coming`, 0 to 1; None while not known: its piece sweeping), no words, as any transfer that has a
+/// size shows it; one that failed, its dot red, `why` its tip. Said to be `label` (下载中 42% while it comes). True on
+/// the frame it is pressed, not while it is busy.
 pub fn update_key(
   c : @ui.Ctx,
   key : String,
@@ -3219,7 +3221,7 @@ pub fn update_key(
   mark : Double,
   label : String,
   why : String,
-  progress : String,
+  coming : Double?,
   failed : Bool,
   busy : Bool,
 ) -> Bool {
@@ -3231,8 +3233,12 @@ pub fn update_key(
     style=(if hot { update_key_hot } else { update_key_box }).then(@ui.style(w=Fixed(side), h=Fixed(side))),
     id~,
     fn() {
-      if progress != "" {
-        c.text(progress, style=update_key_words) |> ignore
+      if busy {
+        c.box(style=update_key_coming, fn() {
+          icon(c, "download", size=mark, color=t.p.text) |> ignore
+          progress(c, key + "/coming", coming, w=Px(mark))
+        })
+        |> ignore
       } else {
         icon(c, "download", size=mark, color=t.p.text) |> ignore
         c.layer(fn() {
@@ -3269,8 +3275,9 @@ let update_key_box : @ui.Style = @ui.css("radius=Full align=ACenter justify=JCen
 let update_key_hot : @ui.Style = update_key_box.then(@ui.css("bg=Hover"))
 
 ///|
+/// While it comes: the mark and its bar under it, 2 apart, the two in the key's middle.
 // kept across runs: a value (no field of it changes)
-let update_key_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
+let update_key_coming : @ui.Style = @ui.css("gap=S0_5 align=ACenter")
 
 ///|
 /// Its dot: 3 in from the key's top right, 9 across on a ring of the page's ground 2 wide (Home.kt).

@@ -5,7 +5,7 @@
 /// Whether the desktop app has a newer build to offer, or one on its way in (brand.tsx UpdateButton: the app's update
 /// state, none while there is none).
 fn update_shown() -> Bool {
-  update.available is Some(_) || update_busy() || update.phase == "failed"
+  update.available is Some(_) || update_under_way() || update.phase == "failed"
 }
 
 ///|
@@ -23,20 +23,11 @@ fn update_button(c : @ui.Ctx, src : Source, inset : Bool, top : Double) -> Unit 
 
 ///|
 /// 更新 in a row of keys (the sidebar's first, before the filter): the library's update key, the filter's size; how far
-/// it has come in its place, a red dot where it failed (why, its tip). Pressed, the build is downloaded and the app
+/// it has come under its mark, a red dot where it failed (why, its tip). Pressed, the build is downloaded and the app
 /// restarts as it.
 fn update_in_row(c : @ui.Ctx, src : Source) -> Unit {
   let (label, why, busy) = update_said()
-  // (under way: how far, the label's last word: 42%; else …)
-  let progress = if !busy {
-    ""
-  } else {
-    match label.rev_find(" ") {
-      Some(i) => label.view(start_offset=i + 1).to_owned()
-      None => "…"
-    }
-  }
-  if @sf.update_key(c, "side/update", update_key_side, update_key_mark, label, why, progress, update.phase == "failed", busy) {
+  if @sf.update_key(c, "side/update", update_key_side, update_key_mark, label, why, update_part(), update.phase == "failed", busy) {
     update_install(src)
   }
 }
@@ -54,7 +45,7 @@ fn update_said() -> (String, String, Bool) {
   // (its phase as the host says it, what went wrong said once: updates.mbt)
   update_progress() |> ignore
   let v = try Some(@json.parse(@ui.update_state())) catch { _ => None }
-  let busy = update_busy()
+  let busy = update_under_way()
   let label = match update.phase {
     "downloading" | "retrying" =>
       @sf.t("web-main.appUpdate.downloading", args=[("percent", dmax(0.0, number(v, "percent")).to_int().to_string())])

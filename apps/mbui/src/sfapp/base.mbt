@@ -358,6 +358,8 @@ pub using @sfbase {
   update_error,
   update_progress,
   update_busy,
+  update_under_way,
+  update_part,
   update_first,
   update_say,
   type Relaying,
