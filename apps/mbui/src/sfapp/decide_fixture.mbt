@@ -21,6 +21,7 @@ fn decide_mode(mode : String) -> Bool {
     "chat-info", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
     "chat-letters-info", "chat-letters", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
     "chat-jobs-side", "chat-history-side", "chat-tabs-side", "chat-model-pop", "chat-find", "chat-agent-card",
+    "chat-station-tag",
   ].contains(mode)
 }
 
@@ -143,6 +144,19 @@ fn fix_context_actions(chat : Json) -> Json {
           }
         }),
       )
+      Json::object(o)
+    }
+    other => other
+  }
+}
+
+///|
+/// The chat's view with no agent in it yet (`chat-station-tag`).
+fn fix_no_agent(chat : Json) -> Json {
+  match chat {
+    Object(m) => {
+      let o = m.copy()
+      o["agents"] = []
       Json::object(o)
     }
     other => other
@@ -458,6 +472,9 @@ fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Json]) 
       let base = if f.mode.has_prefix("chat-letters") { base.map(fix_with_letters) } else { base }
       if session == "s-c1" && f.mode == "chat-agent-unsaid" {
         Some(base.map(fn(b) { fix_context_actions(fix_detailed_chat(b)) }))
+      } else if session == "s-c1" && f.mode == "chat-station-tag" {
+        // no agent in it yet: its station's tag in its bar (pressed by the film's step: its card beside it)
+        Some(base.map(fn(b) { fix_no_agent(fix_detailed_chat(b)) }))
       } else if session == "s-c1" {
         Some(base.map(fix_detailed_chat))
       } else {

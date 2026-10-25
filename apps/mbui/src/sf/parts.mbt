@@ -519,6 +519,7 @@ pub fn menu_item(
   label : String,
   key? : String = "",
   icon? : String = "",
+  mark? : (@ui.Ctx, Double) -> Unit,
   danger? : Bool = false,
   on? : Bool = false,
   note? : String = "",
@@ -540,12 +541,16 @@ pub fn menu_item(
     radius=small_panel_inner(r_menu),
     id~,
     fn() {
-      if panel && (icon != "" || word != "") {
+      if panel && (icon != "" || word != "" || mark is Some(_)) {
         c.box(style=panel_row_icon, fn() {
-          if word != "" {
-            c.text(word, style=panel_row_word) |> ignore
-          } else {
-            draw_icon(c, icon, panel_icon, t.p.muted)
+          match mark {
+            Some(m) => m(c, panel_icon)
+            None =>
+              if word != "" {
+                c.text(word, style=panel_row_word) |> ignore
+              } else {
+                draw_icon(c, icon, panel_icon, t.p.muted)
+              }
           }
         })
         |> ignore
@@ -816,6 +821,7 @@ pub fn menu_row(
   gap : Double,
   end : ((@ui.Ctx, @kit.MenuItemState) -> Unit)?,
   danger? : Bool = false,
+  mark? : (@ui.Ctx, Double) -> Unit,
 ) -> Unit {
   let t = theme()
   let (choice, checked) = match s.entry.kind {
@@ -850,6 +856,11 @@ pub fn menu_row(
         })
         |> ignore
       }
+      // its own mark (a station's, a maker's) after the check, before its words, as wide as the check's column
+      match mark {
+        Some(m) => c.box(style=menu_check, fn() { m(c, menu_check_w) }) |> ignore
+        None => ()
+      }
       // (a danger's in red, its icon with it: menuItem[data-danger])
       c.text(s.entry.label, style=if off { menu_words_off } else if danger { menu_words_danger } else { menu_words }) |> ignore
       // what stands at its end (a ＋): pushed there
@@ -878,6 +889,10 @@ let chooser_gap : Double = 6.0
 /// its middle.
 // kept across runs: a value (no field of it changes)
 let menu_check : @ui.Style = @ui.css("w=S3_5 align=ACenter")
+
+///|
+/// How wide the column before a menu item's words is (menu_check's S3_5).
+let menu_check_w : Double = 14.0
 
 ///|
 /// A menu item's words: as long as they are (the menu as wide as its longest, controls.css.ts menuList).
@@ -927,6 +942,7 @@ pub fn dropdown(
   at? : (Double, Double, Double, Double),
   row_end? : (@ui.Ctx, @kit.MenuItemState) -> Unit,
   danger? : Array[String] = [],
+  marks? : Map[String, (@ui.Ctx, Double) -> Unit] = {},
 ) -> @kit.Menu {
   // (a column before every item's words where one has an icon or is one of a choice, so all their words are on one
   // line; a menu of choices alone, each chosen or not, its check 6 from its words)
@@ -947,10 +963,13 @@ pub fn dropdown(
     at?,
     look=fn(c, w, body) { small_panel(c, min_w=w, body) |> ignore },
     item_look=fn(c, s) {
-      menu_row(c, s, icons.get(s.entry.value).unwrap_or(""), lead, gap, row_end, danger=danger.contains(s.entry.value))
+      menu_row(c, s, icons.get(s.entry.value).unwrap_or(""), lead, gap, row_end, danger=danger.contains(s.entry.value), mark?=marks.get(s.entry.value))
     },
+    // (a heading's words on its items' words' line: past the column before them, where there is one)
     heading_look=fn(c, label) {
-      c.box(style=menu_heading, fn() { c.text(label, style=menu_heading_words) |> ignore }) |> ignore
+      let past = (if lead { menu_check_w + gap } else { 0.0 }) + (if marks.is_empty() { 0.0 } else { menu_check_w + gap })
+      c.box(style=menu_heading.then(@ui.style(pl=room(text_in + past))), fn() { c.text(label, style=menu_heading_words) |> ignore })
+      |> ignore
     },
     rule_look=menu_rule,
   )
@@ -1725,7 +1744,9 @@ pub fn dialog(
         shadow_y=dialog_shadow_y,
         shadow_color=theme().p.shadow,
         fn() {
-        c.box(style=dialog_head, fn() {
+        // (its title and what it says on the line of its words: a panel's dialog's are a row's padding in, words_in_now)
+        let words_at = @ui.style(pl=room(words_in_now.val))
+        c.box(style=dialog_head.then(words_at), fn() {
           // a step's count beside the title (Connect.css.ts dialogStep: the ui's 13 in 400 muted, 8 after it)
           if step != "" {
             c.box(style=dialog_title_line, fn() {
@@ -1747,7 +1768,7 @@ pub fn dialog(
         })
         |> ignore
         if s.description != "" {
-          c.box(style=dialog_lead_at, fn() { c.text(s.description, style=dialog_lead) |> ignore }) |> ignore
+          c.box(style=dialog_lead_at.then(words_at), fn() { c.text(s.description, style=dialog_lead) |> ignore }) |> ignore
         }
         // what it holds scrolls in itself when the dialog would be taller than the window leaves it (dialogBody's
         // overflow: auto, its minimum 0): its title and its buttons stay. Out to the dialog's sides, what it holds back

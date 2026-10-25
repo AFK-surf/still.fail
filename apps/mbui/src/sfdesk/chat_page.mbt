@@ -373,7 +373,14 @@ fn chat_station(c : @ui.Ctx, station : String, s : Station?) -> Unit {
     @settings.open_station_peek(station, from=Of(id))
   }
   let hot = c.lit(id)
-  c.box(style=if hot { chat_station_hot } else { chat_station_tag }, id~, label=s.name, fn() {
+  // (its dot in its round end, concentric with it: as far in from its edge as from its top, the line round it within)
+  let look = if hot { chat_station_hot } else { chat_station_tag }
+  let look = if s.via != "" {
+    look.then(@ui.style(pl=@sf.room_of(chat_station_dot_in)))
+  } else {
+    look
+  }
+  c.box(style=look, id~, label=s.name, fn() {
     if s.via != "" {
       via_dot(c, s.via)
     }
@@ -852,6 +859,21 @@ let chat_station_tag : @ui.Style = @ui.style(
 ///|
 // kept across runs: a value (no field of it changes)
 let chat_station_hot : @ui.Style = chat_station_tag.then(@ui.css("border_color=Border"))
+
+///|
+/// The tag's height (its words' 18 line, 1 over and under) and the line round it (B1), and its dot's side (via_direct's
+/// S2): its dot in its round end (chat_station).
+let chat_station_h : Double = 20.0
+
+///|
+let chat_station_line : Double = 1.0
+
+///|
+let via_dot_side : Double = 8.0
+
+///|
+/// How far in from the line round the tag its dot stands: concentric with its round end (@sf.capsule_in), the line within.
+let chat_station_dot_in : Double = @sf.capsule_in(chat_station_h / 2.0, via_dot_side) - chat_station_line
 
 ///|
 // kept across runs: a value (no field of it changes)

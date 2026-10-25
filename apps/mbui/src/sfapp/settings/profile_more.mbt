@@ -30,7 +30,13 @@ fn online_stations(core : Core, here : Here, only? : String = "") -> Array[Json]
 /// Where something is added: one of the stations online picked (openPickStation), the library's pick opened `from`
 /// what was pressed (a sheet with touch short of Large, else beside it), what it is for its title.
 fn open_pick_station(stations : Array[Json], go : (String) -> Unit, from~ : @sf.Anchor) -> Unit {
-  let choices = stations.map(fn(s) { @sf.choice(text(Some(s), "station"), text(Some(s), "name")) })
+  // (each by its mark, as the sidebar and a chat's bar have it)
+  let choices = stations.map(fn(s) {
+    let sv = Some(s)
+    @sf.choice(text(sv, "station"), text(sv, "name"), mark=fn(c, size) {
+      @sf.station_icon(c, text(sv, "emoji"), text(sv, "icon"), size, @sf.theme().p.text)
+    })
+  })
   @sf.pick(tr("android-settings.pickStation"), choices, "", go, from~)
 }
 

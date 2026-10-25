@@ -1213,8 +1213,9 @@ let foot_rows_now : Ref[Bool] = { val: false }
 /// Where a row of a page's (link_row, choice_row, said_row, item_row) stands across: in a panel's column, its ground
 /// reaching out across the room the panel leaves, its words on the column's line (row_reach); in a small panel, a
 /// menu's row, at its padding, its words a row's padding in, concentric with it; at a dialog's foot (dialog_foot_rows),
-/// a capsule out to where it is concentric with the dialog's foot corners, its words on the dialog's line; on a card or
-/// a page, as its own.
+/// a capsule out to where it is concentric with the dialog's foot corners, its words on the dialog's line; where a
+/// panel's rows stand at its padding and its words in from it (a dialog's, a sheet opened by a press: panel_words_in),
+/// its words that far in, as the panel's other words; on a card or a page, as its own.
 fn row_line(narrow : Bool) -> @ui.Style {
   let reach = if in_card.val > 0 {
     0.0
@@ -1226,6 +1227,8 @@ fn row_line(narrow : Bool) -> @ui.Style {
     @ui.style(mx=room(-out), px=room(out), radius=Full)
   } else if in_small_panel() {
     panel_row_in()
+  } else if in_card.val == 0 && words_in_now.val > 0.0 {
+    panel_words_in()
   } else if reach > 0.0 {
     @ui.style(mx=room(-reach), px=room(reach))
   } else {

@@ -386,7 +386,10 @@ fn station_switch(c : @ui.Ctx, src : Source, f : FolderOf, front_it : () -> Unit
       if !s.online {
         meta.push(@sf.t("web-pages.stations.offline"))
       }
-      @sf.choice(s.station, s.name, note=meta.join(" · "))
+      // (each by its mark, as the chip names the one shown)
+      @sf.choice(s.station, s.name, note=meta.join(" · "), mark=fn(c, size) {
+        @sf.station_icon(c, s.emoji, s.icon, size, @sf.theme().p.muted, here=s.station == here)
+      })
     })
     @sf.pick(@sf.t("web-pages.files.switchNote"), choices, at.station, picked, from=Of(chip))
     go.switching = @sf.last_presented()
