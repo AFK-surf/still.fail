@@ -29,43 +29,58 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   if on {
     page_switch.new_view = v
   }
-  let drive = on &&
-    items(v, "stations").iter().any(fn(s) { field(field(Some(s), "overview"), "drive") is Some(Object(_)) })
-  if !drive {
+  if new_drive_station(src, w) is None {
     @sfpages.new_chat_page(c, src, w, frame)
     return
   }
   let files = new_files_open(src, w.id)
   let page = c.id("new/page")
-  // its panel slides in and out as a chat's does (useSidePanel)
-  side_beside(
-    c,
-    "new:" + w.id,
-    files,
-    side_width(c.width),
-    fn() {
-      c.box(style=new_frame_style, id=page, fn() {
-        @sfpages.new_chat_page(c, src, w, frame)
-        // its bar (newChatBar): 文件 where a chat's bar has it, over the page, what is in its middle where it is
-        c.layer(fn() {
-          c.box(style=new_files_bar, fn() {
-            if icon_button(c, "new/files", "folder", label=@sf.t("web-pages.chat.files")) {
-              new_files_set(src, w.id, !files)
-            }
-            // (its end by the window's while the page is moved aside for the sidebar shown a while)
-            page_bar_end(c)
-          })
-          |> ignore
+  let with_bar = fn() {
+    c.box(style=new_frame_style, id=page, fn() {
+      @sfpages.new_chat_page(c, src, w, frame)
+      // its bar (newChatBar): 文件 where a chat's bar has it, over the page, what is in its middle where it is
+      c.layer(fn() {
+        c.box(style=new_files_bar, fn() {
+          if icon_button(c, "new/files", "folder", label=@sf.t("web-pages.chat.files")) {
+            new_files_set(src, w.id, !files)
+          }
+          // (its end by the window's while the page is moved aside for the sidebar shown a while)
+          page_bar_end(c)
         })
         |> ignore
-        // a row of the 文件 tab carried over it, let go there: into its message (DropHint, useChatDrop)
-        drop_hint(c, page)
-        chat_drop(c, src, address, "new:" + address, page)
       })
       |> ignore
-    },
-    fn() { new_files_panel(c, src, w, address) },
-  )
+      // a row of the 文件 tab carried over it, let go there: into its message (DropHint, useChatDrop)
+      drop_hint(c, page)
+      chat_drop(c, src, address, "new:" + address, page)
+    })
+    |> ignore
+  }
+  // (on the tape, laid out Medium, its panel is a panel of its own beside the page's, as a chat's: the frame's,
+  // tape_side)
+  if wide.tape {
+    with_bar()
+    return
+  }
+  // its panel slides in and out as a chat's does (useSidePanel)
+  side_beside(c, "new:" + w.id, files, side_width(c.width), with_bar, fn() { new_files_panel(c, src, w, address) })
+}
+
+///|
+/// The station workspace `w`'s new chat starts on, where the stations lend their files (useStationDrive: as the view
+/// has its stations): its 文件 tab is had; None where it is not (blocked, no station, none with a drive).
+fn new_drive_station(src : Source, w : Workspace) -> String? {
+  let v = (src.topic)("newChat", { "scope": Json::string(w.id) }).value
+  let station = field(v, "station")
+  let address = text(station, "station")
+  let on = station is Some(Object(_)) && text(v, "blocked") == "" && address != ""
+  let drive = on &&
+    items(v, "stations").iter().any(fn(s) { field(field(Some(s), "overview"), "drive") is Some(Object(_)) })
+  if drive {
+    Some(address)
+  } else {
+    None
+  }
 }
 
 ///|
@@ -74,9 +89,13 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 fn new_left(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, up : Double, fade : Double) -> Unit {
   let frame = new_frame(src, w)
   let files = new_files_open(src, w.id)
-  side_beside(c, "new:" + w.id, files, side_width(c.width), fn() {
-    @sfpages.new_chat_left(c, src, w, frame, v, up, fade)
-  }, fn() {  })
+  let left = fn() { @sfpages.new_chat_left(c, src, w, frame, v, up, fade) }
+  // (on the tape its panel is the frame's: the page alone)
+  if wide.tape {
+    left()
+    return
+  }
+  side_beside(c, "new:" + w.id, files, side_width(c.width), left, fn() {  })
 }
 
 ///|
@@ -124,7 +143,7 @@ fn new_files_set(src : Source, ws : String, on : Bool) -> Unit {
 /// workspace's stations, what is added going into the new chat's draft (DriveTab).
 fn new_files_panel(c : @ui.Ctx, src : Source, w : Workspace, address : String) -> Unit {
   c.box(style=side_panel_style, fn() {
-    c.box(style=if @sf.in_pane() { side_bar_tape() } else { side_bar }, fn() {
+    c.box(style=if side_on_tape.val || @sf.in_pane() { side_bar_tape() } else { side_bar }, fn() {
       c.box(style=side_tab_list, fn() {
         let close = c.id("new/files-tab-close")
         c.cursor(close, Hand)

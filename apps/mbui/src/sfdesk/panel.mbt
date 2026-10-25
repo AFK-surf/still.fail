@@ -393,18 +393,30 @@ pub fn with_side(
 }
 
 ///|
-/// The chat whose side panel is open on page `p` (a chat's, or an agent's history asked as a page: its chat's), as its
-/// view has it; None with none open.
-pub fn side_open_for(src : Source, p : Page) -> ChatRef? {
-  let r = match p {
-    Chat(r) => r
-    History(r, _, _) => r
-    _ => return None
+/// Whose side panel is open (what the frame puts beside the page on the tape): a chat's, or workspace `ws`'s new
+/// chat's (its Station 文件, kept by the same `chatTabs`, by `new:<ws>`).
+pub(all) enum SideOf {
+  ChatSide(ChatRef)
+  NewSide(String)
+} derive(Eq)
+
+///|
+/// The key its panel is kept by (chatTabs).
+pub fn SideOf::key(self : SideOf) -> String {
+  match self {
+    ChatSide(r) => chat_key(r)
+    NewSide(ws) => "new:" + ws
   }
-  if side_now(src, r).0.length() > 0 {
-    Some(r)
-  } else {
-    None
+}
+
+///|
+/// Whose side panel is open on page `p` in workspace `w`: a chat's (or an agent's history asked as a page: its
+/// chat's), as its view has it; the new chat's, its 文件 open where the stations lend their files; None with none open.
+pub fn side_open_for(src : Source, w : Workspace, p : Page) -> SideOf? {
+  match p {
+    Chat(r) | History(r, _, _) => if side_now(src, r).0.length() > 0 { Some(ChatSide(r)) } else { None }
+    NewChat => if new_files_open(src, w.id) && new_drive_station(src, w) is Some(_) { Some(NewSide(w.id)) } else { None }
+    _ => None
   }
 }
 
@@ -421,20 +433,28 @@ pub fn tape_side_width(window : Double, peek : Double, apart : Double) -> Double
 }
 
 ///|
-/// Chat `r`'s side panel on the tape, a panel of its own beside the page's: its tabs as its view has them, its edge not
-/// dragged (its width the tape's: tape_side_width).
-pub fn tape_side(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
-  match (src.topic)("chat", chat_params(r)).value {
-    Some(v) => {
-      let view = chat_view(v)
-      let (tabs, front) = side_of(view)
-      side_over.val = true
-      side_on_tape.val = true
-      side_panel(c, src, w, r, view, tabs, front)
-      side_on_tape.val = false
-    }
-    None => ()
+/// The side panel `side` on the tape, a panel of its own beside the page's: a chat's tabs as its view has them, a new
+/// chat's Station 文件; its edge not dragged (its width the tape's: tape_side_width).
+pub fn tape_side(c : @ui.Ctx, src : Source, w : Workspace, side : SideOf) -> Unit {
+  side_over.val = true
+  side_on_tape.val = true
+  match side {
+    ChatSide(r) =>
+      match (src.topic)("chat", chat_params(r)).value {
+        Some(v) => {
+          let view = chat_view(v)
+          let (tabs, front) = side_of(view)
+          side_panel(c, src, w, r, view, tabs, front)
+        }
+        None => ()
+      }
+    NewSide(_) =>
+      match new_drive_station(src, w) {
+        Some(address) => new_files_panel(c, src, w, address)
+        None => ()
+      }
   }
+  side_on_tape.val = false
 }
 
 ///|
