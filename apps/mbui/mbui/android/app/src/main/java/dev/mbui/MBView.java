@@ -123,6 +123,8 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         double t = shotClock;
         takeBacks(Long.MAX_VALUE);
         Native.frame(w, h, density, t);
+        // (a run to a moment: the native views' frames put where they show at once)
+        NativeViews.framed(false);
         Script.frameDrawn();
         if (shotTaken) return;
         shotFrames++;
@@ -194,6 +196,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         // the app or the system asked for is the app's
         if (pictured && !app) {
             Native.redraw();
+            NativeViews.framed(false);
             return;
         }
         long began = System.nanoTime();
@@ -206,6 +209,8 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         boolean later = takeBacks(v != 0 ? v : began);
         boolean more = Native.frame(w, h, density, now);
         if (more || later) wantFrame();
+        // (the native views moved in it: their frames follow once they rest)
+        NativeViews.framed(more || later);
         Script.frameDrawn();
         frameWorked(System.nanoTime() - began);
     }

@@ -76,9 +76,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * They live in `layer`, a FrameLayout over the MBView in the view tree, so a WebView takes the touches on it and is
  * laid out, attached and shown as the system's views are; on the screen the MBView's surface is over it, and the
- * views draw nothing in the window. Each sits in a frame (TouchFrame) put where it shows, moved by its translation, for
- * the touches on it: a page's or a site's frame is its content's rect, the part of it seen its `seen`; a video's is its
- * clip rect.
+ * views draw nothing in the window. Each sits in a frame (TouchFrame) put where it shows once it rests (moving with a
+ * list, only its picture moves: place), moved by its translation, for the touches on it: a page's or a site's frame is
+ * its content's rect, the part of it seen its `seen`; a video's is its clip rect.
  *
  * Kind 1, a video: Media3's ExoPlayer onto its picture's surface, reading the file through the app (ViewSource:
  * ranged reads the app answers through the core, `station.file.part` or `drive.read`), never from a file or a URL of
@@ -179,6 +179,15 @@ final class NativeViews {
         /** Where it was told to go before it was made (made once the window has had the focus): put there as it is. */
         float[] pendingTo;
         boolean pendingShown;
+        /**
+         * (GL thread) Where it was last told to go (device pixels, as `at`) and whether shown; moved there in the frame
+         * being drawn; told and not put there yet (it moves with what holds it: its frame follows once it rests, settle).
+         */
+        float[] toldTo;
+        boolean toldShown, movedNow;
+        volatile boolean unsettled;
+        /** Where it was last told to go, for the main thread (whether its frame is there: TouchFrame). */
+        volatile float[] lastTo;
         boolean shown;
         private boolean told;
         // (main thread) placed once where told and shown; its host done with it (ready or failed); its first picture
@@ -257,6 +266,14 @@ final class NativeViews {
         }
 
         void make(Context c) {}
+
+        /** Whether its frame is where it was last told to go (main thread): a finger down on it is the view's then. */
+        boolean where() {
+            float[] to = lastTo;
+            if (to == null) return true;
+            for (int i = 0; i < 8; i++) if (Math.abs(at[i] - to[i]) >= 0.5f) return false;
+            return true;
+        }
 
         /**
          * Its picture made anew (a new GL context: Picture.make), on the main thread before the old one's surface is
@@ -450,6 +467,9 @@ final class NativeViews {
         public boolean dispatchTouchEvent(MotionEvent e) {
             // (through: none of it is the view's; MBView, under this layer, is given it by the window)
             if (mode.equals("through")) return false;
+            // (a finger down while its view moves, its frame not where the view shows yet: the canvas's, as what
+            // moves under a finger is the list's to stop)
+            if (e.getActionMasked() == MotionEvent.ACTION_DOWN && !owner.where()) return false;
             // (a finger down on what is not seen of it is not the view's: the window gives it to MBView)
             if (e.getActionMasked() == MotionEvent.ACTION_DOWN) {
                 android.graphics.Rect r = seen;
@@ -615,12 +635,52 @@ final class NativeViews {
         }
     }
 
+    /**
+     * Where the app says view `id` shows (GL thread, as the frame is drawn). Moved only (as large, as round, still shown;
+     * cut anew or not: a list scrolled under it, its edge), nothing is done for it now: the canvas draws its picture
+     * there in this frame, as cut as it is, and its frame, which takes the touches on it, follows once it rests
+     * (framed): a move of a system view makes the window draw again, each frame of a scroll. Shown, hidden or sized
+     * anew, it is put there at once.
+     */
     static void place(int id, float x, float y, float w, float h, float cx0, float cy0, float cx1, float cy1,
                       float radius, boolean shown) {
         NView v = views.get(id);
         if (v == null) return;
         float d = Host.view.density;
         float[] to = {x * d, y * d, w * d, h * d, cx0 * d, cy0 * d, cx1 * d, cy1 * d, radius * d};
+        float[] was = v.toldTo;
+        boolean moved = was != null && shown && v.toldShown && Math.abs(to[2] - was[2]) < 0.5f
+                && Math.abs(to[3] - was[3]) < 0.5f && Math.abs(to[8] - was[8]) < 0.5f;
+        v.toldTo = to;
+        v.toldShown = shown;
+        v.lastTo = to;
+        if (moved) {
+            v.movedNow = true;
+            v.unsettled = true;
+            return;
+        }
+        v.unsettled = false;
+        tellPut(v, to, shown);
+    }
+
+    /**
+     * A frame drawn (MBView, GL thread): `more` whether another follows at once (the app asks for one). A view moved in
+     * it rests once a frame passes that does not move it, or none follows: its frame put where it shows.
+     */
+    static void framed(boolean more) {
+        for (NView v : views.values()) {
+            if (!v.unsettled) continue;
+            if (v.movedNow) {
+                v.movedNow = false;
+                if (more) continue;
+            }
+            v.unsettled = false;
+            tellPut(v, v.toldTo, v.toldShown);
+        }
+    }
+
+    /** View `v` put at `to`, shown or not, on the main thread (once made: where it is to go kept until then). */
+    private static void tellPut(NView v, float[] to, boolean shown) {
         Host.main.post(() -> {
             if (v.closed) return;
             if (v.clip == null) {
