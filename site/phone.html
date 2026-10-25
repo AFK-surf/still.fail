@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>still.fail</title>
+<meta name="robots" content="noindex">
+<!-- The theme chosen in the site's bar (web/src/site/ThemeSwitch.tsx), before the first paint: light when none was;
+     "system" leaves it to the system. The demo's app follows the same data-theme. -->
+<script>try{var t=localStorage.getItem("stillfail.site.theme");if(t===null){t=localStorage.getItem("ember.site.theme");if(t!==null)localStorage.setItem("stillfail.site.theme",t)}if(t!=="system")document.documentElement.dataset.theme=t==="dark"?"dark":"light"}catch(e){document.documentElement.dataset.theme="light"}</script>
+<!-- The site's page changes its theme as this page's opener does: the choice is kept in the same storage. -->
+<script>addEventListener("storage",function(e){if(e.key!=="stillfail.site.theme")return;var t=e.newValue,r=document.documentElement;if(t==="system")delete r.dataset.theme;else r.dataset.theme=t==="dark"?"dark":"light"})</script>
+<meta name="color-scheme" content="light dark">
+</head>
+<body style="margin:0;overflow:hidden">
+<!-- The phone beside the computer on the site's page (web/src/site/OneComputer.tsx): the demo's app as wide as a
+     phone, so that it is laid out as on one (web/src/site/phone.tsx). -->
+<div id="demo" style="width:100vw;height:100vh"></div>
+<script type="module" src="./phone.ts"></script>
+</body>
+</html>

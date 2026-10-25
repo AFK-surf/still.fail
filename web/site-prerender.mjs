@@ -21,6 +21,8 @@ Object.assign(globalThis, {
   // A document with no body: what the app would put on the page (the sidebar's buddy) is drawn in place (brand.tsx).
   document: { documentElement: { dataset: { theme: "dark" }, hasAttribute: () => false }, body: null, getElementById: () => null, getElementsByTagName: () => [], querySelector: () => null, addEventListener: noop, removeEventListener: noop },
 });
+// Node's own navigator says nothing of the system, where the math typesetter (MathJax, as it loads) reads appVersion.
+Object.defineProperty(globalThis, "navigator", { configurable: true, value: { userAgent: "", appVersion: "", platform: "", language: "zh-CN", languages: ["zh-CN"] } });
 
 // Node's own navigator says no appVersion, which MathJax reads as it loads (the core's formulas, client/core-ts's
 // math.ts: @mathjax/src's util/context.js, which then looks for its script among the document's): one that says it, empty.
@@ -29,11 +31,15 @@ Object.defineProperty(globalThis, "navigator", { value: { userAgent: navigator.u
 const dist = (path) => fileURLToPath(new URL(`../dist/${path}`, import.meta.url));
 const { render } = await import(pathToFileURL(dist("site-ssr/prerender.js")).href);
 // STILLFAIL_SITE=beta: the test channel's site, youdid.wtf (web/vite.demo.config.ts).
-const page = dist(process.env.STILLFAIL_SITE === "beta" ? "site-beta/index.html" : "site/index.html");
-const html = readFileSync(page, "utf8");
-if (!html.includes("<!--site-->")) throw new Error(`${page} has no <!--site--> to fill`);
-writeFileSync(page, html.replace("<!--site-->", render()));
+// The page in Chinese at /, in English at /en/.
+const root = process.env.STILLFAIL_SITE === "beta" ? "site-beta" : "site";
+for (const [lang, file] of [["zh", "index.html"], ["en", "en/index.html"]]) {
+  const page = dist(`${root}/${file}`);
+  const html = readFileSync(page, "utf8");
+  if (!html.includes("<!--site-->")) throw new Error(`${page} has no <!--site--> to fill`);
+  writeFileSync(page, html.replace("<!--site-->", render(lang)));
+  console.log(`prerendered ${page}`);
+}
 rmSync(dist("site-ssr"), { recursive: true, force: true });
-console.log(`prerendered ${page}`);
 // What the app started (timers, the demo's lingering topics) has nothing more to do.
 process.exit(0);

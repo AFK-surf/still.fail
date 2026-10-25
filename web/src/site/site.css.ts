@@ -1,7 +1,7 @@
-// The official site's page (Site.tsx): big type, a thin grid and a beam of still.fail's orange, near black by default and
-// light when chosen (the switch in its bar: ThemeSwitch.tsx; the demo's app follows the same data-theme). What moves is
-// CSS (no script runs for it), still for those who ask for less motion.
-import { createVar, globalStyle, keyframes, style } from "@vanilla-extract/css";
+// The official site's page (Site.tsx): quiet type on a light page (dark when chosen: the switch in its bar,
+// ThemeSwitch.tsx; the demo's app follows the same data-theme), still.fail's orange only where things connect. What
+// moves is CSS and the picture's SVG (no script runs for it), still for those who ask for less motion.
+import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 const NARROW = "screen and (max-width: 860px)";
@@ -15,7 +15,7 @@ const ink = (percent: number) => `color-mix(in srgb, var(--s-ink) ${percent}%, t
 const LINE = ink(9);
 const CARD = ink(3.5);
 
-// The palette, dark (the site's own look, and its default) and light; "system" (no data-theme) follows the system.
+// The palette, light (the default) and dark; "system" (no data-theme) follows the system.
 const DARK = {
   "--s-bg": "#09090B", "--s-fg": "#F4F4F5", "--s-muted": "#A1A1AA", "--s-dim": "#71717A", "--s-faint": "#52525B", "--s-ink": "#FFFFFF",
   "--s-node": "#111114", "--s-primary": "#FAFAFA", "--s-on-primary": "#09090B", "--s-title": "#FFFFFF", "--s-mono": "invert(1)",
@@ -37,24 +37,7 @@ export const wrap = style({ maxWidth: "1160px", margin: "0 auto", padding: "0 24
 
 // ---- Motion ----
 
-const rise = keyframes({ from: { opacity: 0, transform: "translateY(48px) scale(.97)" }, to: { opacity: 1, transform: "none" } });
-/** Comes up into place as it scrolls into view (a scroll-driven animation; where there are none, it is simply there). */
-export const reveal = style({
-  animation: `${rise} linear both`, animationTimeline: "view()", animationRange: "entry 0% cover 28%",
-  "@media": { [STILL]: { animation: "none" } },
-});
-const enter = keyframes({
-  from: { opacity: 0, transform: "perspective(1800px) rotateX(22deg) translateY(60px) scale(.9)" },
-  to: { opacity: 1, transform: "none" },
-});
 const fadeUp = keyframes({ from: { opacity: 0, transform: "translateY(16px)" }, to: { opacity: 1, transform: "none" } });
-const sway = keyframes({ "0%,100%": { transform: "translateX(-50%) rotate(-4deg)" }, "50%": { transform: "translateX(-50%) rotate(4deg)" } });
-
-/** The grid over a section, fading out from where its light comes. */
-const gridLines = {
-  backgroundImage: `linear-gradient(${LINE} 1px, transparent 1px), linear-gradient(90deg, ${LINE} 1px, transparent 1px)`,
-  backgroundSize: "64px 64px",
-};
 
 // While the theme changes (ThemeSwitch.tsx), nothing eases into it: the page changes in one frame.
 globalStyle(":root[data-theme-switching] *, :root[data-theme-switching] *::before, :root[data-theme-switching] *::after", { transition: "none !important" });
@@ -150,139 +133,44 @@ globalStyle(`${button}:hover ${roll} > span + span`, { transitionDelay: ".03s" }
 
 // ---- Hero ----
 
-export const hero = style({
-  position: "relative", paddingTop: "120px", paddingBottom: "110px", textAlign: "center", isolation: "isolate",
-  "@media": { [NARROW]: { paddingTop: "64px", paddingBottom: "72px" } },
+export const hero = style({ padding: "88px 0 72px", "@media": { [NARROW]: { padding: "48px 0 40px" } } });
+/** What it is on the left, the picture of it on the right; one under the other on a narrow screen. */
+export const heroRow = style({
+  display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.08fr)", gap: "56px", alignItems: "center",
+  "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "40px" } },
 });
-export const grid = style({
-  position: "absolute", inset: "0", zIndex: "-1", pointerEvents: "none", ...gridLines,
-  maskImage: "radial-gradient(ellipse 60% 50% at 50% 0%, #000 20%, transparent 72%)",
-  WebkitMaskImage: "radial-gradient(ellipse 60% 50% at 50% 0%, #000 20%, transparent 72%)",
-});
-/** Light falling from the top, swaying a little. */
-export const beam = style({
-  position: "absolute", left: "50%", top: "-160px", width: "1000px", height: "760px", zIndex: "-1", pointerEvents: "none",
-  transformOrigin: "50% 0", transform: "translateX(-50%)", filter: "blur(44px)", opacity: ".75",
-  background: `conic-gradient(from 180deg at 50% 0%, transparent 40%, color-mix(in srgb, ${ORANGE} 60%, transparent) 50%, transparent 60%)`,
-  animation: `${sway} 14s ease-in-out infinite`, "@media": { [STILL]: { animation: "none" } },
-});
-export const title = style({
-  margin: "0 auto", fontSize: "clamp(64px, 15vw, 232px)", lineHeight: ".92", letterSpacing: "-.06em", fontWeight: "800",
-  animation: `${fadeUp} .9s .06s ${vars.easeOut} both`,
-  // Script opens the page with the Chinese and brings the English in itself (motion.ts).
-  selectors: { ":root[data-motion] &": { animation: "none" } },
-});
-/** The title and, over it, the intro. */
-export const titleStage = style({ position: "relative" });
-/**
- * The intro: the two lines in Chinese, large, over where the title will be. Never seen: it only lays out where each
- * character stands while large; the characters on the dots are the ones drawn there (motion.ts).
- */
-export const intro = style({
-  position: "absolute", inset: "0", display: "none", visibility: "hidden", flexDirection: "column", alignItems: "center", justifyContent: "center",
-  fontSize: "clamp(56px, 12.5vw, 196px)", fontWeight: "900", lineHeight: "1.08", letterSpacing: ".02em", pointerEvents: "none",
-  selectors: { ":root[data-motion] &": { display: "flex" } },
-});
-export const introLine = style({
-  display: "block", whiteSpace: "nowrap", color: "var(--s-title)",
-  selectors: {
-    [`:root:not([data-host="youdid.wtf"]) &[data-line="still.fail"], :root[data-host="youdid.wtf"] &[data-line="youdid.wtf"]`]: {
-      color: ORANGE, textShadow: `0 0 60px color-mix(in srgb, ${ORANGE} 55%, transparent)`,
-    },
-  },
-});
-export const introChar = style({ display: "inline-block", opacity: 0 });
-/**
- * A line of the title that is a domain. The one the page was opened on (data-host on the root; still.fail otherwise) is
- * lit, warm orange and glowing; the other sits dim behind it. Padded, so what hangs out of a letter (y, f) is not cut
- * off by the text clip, and pulled back by as much.
- */
-const lit = {
-  backgroundImage: `linear-gradient(180deg, #FFC2A3, ${ORANGE} 70%)`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
-};
-const LIT = `:root:not([data-host="youdid.wtf"]) [data-domain="still.fail"], :root[data-host="youdid.wtf"] [data-domain="youdid.wtf"]`;
-export const titleDomain = style({
-  display: "inline-block", color: "color-mix(in srgb, var(--s-title) 16%, var(--s-bg))",
-  selectors: {
-    [`:root:not([data-host="youdid.wtf"]) &[data-domain="still.fail"], :root[data-host="youdid.wtf"] &[data-domain="youdid.wtf"]`]: {
-      filter: `drop-shadow(0 0 48px color-mix(in srgb, ${ORANGE} 45%, transparent))`,
-    },
-  },
-});
-/** The English of a line, painted on its own (so that it can be brought in apart from the Chinese on its dot). */
-export const word = style({
-  // Unseen until the opening brings it in, when script plays one.
-  selectors: { ":root[data-motion] &": { opacity: 0 } },
-});
-globalStyle(`:is(${LIT}) ${word}`, lit);
-/**
- * A domain's dot and what the domain says in Chinese, written upright on it (above, and below when it goes on), lit
- * with its line. Its own colour, not the line's text clip, which does not reach positioned boxes.
- */
-export const dot = style({
-  position: "relative", display: "inline-block", width: "0",
-  color: "color-mix(in srgb, var(--s-title) 30%, var(--s-bg))", WebkitTextFillColor: "currentColor",
-  selectors: {
-    [`:root:not([data-host="youdid.wtf"]) [data-domain="still.fail"] &, :root[data-host="youdid.wtf"] [data-domain="youdid.wtf"] &`]: { color: ORANGE },
-  },
-});
-/** Where the words stand, in the title's em: just clear of the dot's top, or of the baseline under it. */
-export const dotSay = style({
-  position: "absolute", left: "-.12em", transform: "translateX(-50%)", pointerEvents: "none",
-  selectors: { "&[data-at=above]": { bottom: ".22em" }, "&[data-at=below]": { top: ".06em" } },
-});
-export const dotWords = style({
-  display: "block", writingMode: "vertical-rl", textOrientation: "upright",
-  fontSize: "max(.1em, 8px)", fontWeight: "600", lineHeight: "1", whiteSpace: "nowrap",
-});
+export const heroWords = style({ animation: `${fadeUp} .8s .05s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } } });
+export const title = style({ margin: "0", fontSize: "clamp(44px, 5.4vw, 80px)", lineHeight: "1.08", letterSpacing: "-.02em", fontWeight: "700", color: "var(--s-title)" });
+export const lede = style({ maxWidth: "30em", margin: "24px 0 0", fontSize: "clamp(17px, 1.6vw, 20px)", lineHeight: "1.65", color: "var(--s-muted)", textWrap: "balance", wordBreak: "keep-all" });
+export const heroActions = style({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px 20px", marginTop: "36px" });
+export const heroNote = style({ fontSize: vars.textUi, color: DIM });
 
-/** A character of those words: they land one at a time (motion.ts), unseen till then when script will move them. */
-/**
- * A character of those words: a box of its own size, the glyph centred in it, so that the glyph can fly in at another
- * size and place (motion.ts) and end exactly where it rests, the same element drawn the same way.
- */
-export const dotChar = style({ position: "relative", display: "inline-block", inlineSize: "1em", blockSize: "1em", marginInlineEnd: ".12em", verticalAlign: "top" });
-export const dotGlyph = style({
-  position: "absolute", inset: "0", display: "flex", alignItems: "center", justifyContent: "center", whiteSpace: "nowrap",
-  selectors: { ":root[data-motion] &": { opacity: 0 } },
-});
+export const pictureBox = style({ animation: `${fadeUp} .8s .18s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } } });
+/** A dot going along a line now and then: none where less motion is asked for. */
+export const pulse = style({ fill: ORANGE, "@media": { [STILL]: { display: "none" } } });
+/** Online: the green of a machine that is there. */
+export const onlineSpot = style({ fill: vars.online });
 
-export const heroActions = style({
-  marginTop: "clamp(64px, 7vw, 100px)", animation: `${fadeUp} .9s .24s ${vars.easeOut} both`,
-  // With the opening, held until the title has landed (motion.ts), not for a time guessed at.
-  selectors: { ":root[data-motion] &": { animationDelay: "0s", animationPlayState: "paused" }, ":root[data-motion][data-opened] &": { animationPlayState: "running" } },
-});
+// ---- The app ----
 
-/** The demo's stage: it rises out of a tilt as the page opens, a beam of light running round its edge. */
-export const stage = style({
-  position: "relative", margin: "80px auto 0", maxWidth: "1200px", animation: `${enter} 1.4s .3s cubic-bezier(.2,.8,.2,1) both`,
-  "@media": { [NARROW]: { marginTop: "52px" }, [STILL]: { animation: "none" } },
-  selectors: { ":root[data-motion] &": { animationDelay: ".1s", animationPlayState: "paused" }, ":root[data-motion][data-opened] &": { animationPlayState: "running" } },
-});
-/** Its glow on the page under it. */
-export const stageGlow = style({
-  position: "absolute", inset: "12% 8% -4%", zIndex: "-1", borderRadius: "40px", filter: "blur(70px)",
-  background: `color-mix(in srgb, ${ORANGE} 40%, transparent)`, opacity: ".45",
-});
-/**
- * The edge the beam is seen through: a hairline of a turning light around the box. The light is the edge's own
- * background, turned by animating the gradient's angle (a registered property), not a huge spinning layer behind it:
- * the browser left parts of that layer unpainted at times, and the beam went missing along the edge.
- */
-const beamAngle = createVar({ syntax: "<angle>", inherits: false, initialValue: "0deg" });
-const turn = keyframes({ to: { vars: { [beamAngle]: "360deg" } } });
+export const stageSection = style({ padding: "24px 0 0" });
 /** Where the demo shows the phone's app (under 700 wide, the box being the page's width less its margins): its box
  *  has a phone's large corners, around its composer's: the capsule's 26px plus the 10px it sits in from the box. */
 const PHONE_BOX = "screen and (max-width: 747px)";
+/** The demo's frame: a hairline round it and a soft shadow under it. */
 export const edge = style({
   position: "relative", padding: "1px", borderRadius: "20px",
-  background: `conic-gradient(from ${beamAngle}, transparent 0 72%, ${ORANGE} 84%, #FFE2D2 89%, transparent 95%), ${ink(14)}`,
-  animation: `${turn} 7s linear infinite`,
+  background: ink(12), boxShadow: "0 40px 90px -40px rgba(0, 0, 0, .35)",
   "@media": { [NARROW]: { borderRadius: "14px" }, [PHONE_BOX]: { borderRadius: "37px" }, [STILL]: { animation: "none" } },
 });
 /** The demo's box (demo/): the app in it, at its size. Its corners cut by a clip, not a rounded overflow: under one,
  *  Chromium ignored the phone bar's glass's clip-path (a frosted layer, mobile/Bar.tsx) set while it was out of view,
  *  and drew the bar as a plain rectangle. */
+/** Each idea of the page (Site.tsx): the first unless the root says the second. */
+export const idea = style({ selectors: {
+  ':root[data-v="2"] &[data-idea="1"]': { display: "none" },
+  ':root:not([data-v="2"]) &[data-idea="2"]': { display: "none" },
+} });
 export const demo = style({
   position: "relative", height: "720px", overflow: "hidden", clipPath: "inset(0 round 19px)", background: vars.canvas,
   "@media": { [NARROW]: { clipPath: "inset(0 round 13px)", height: "620px" }, [PHONE_BOX]: { clipPath: "inset(0 round 36px)" } },
@@ -291,27 +179,53 @@ export const demo = style({
  *  700 wide, the box being the page's width less its margins), the desktop's elsewhere. */
 export const frameWide = style({ height: "100%", "@media": { [PHONE_BOX]: { display: "none" } } });
 export const framePhone = style({ height: "100%", display: "none", "@media": { [PHONE_BOX]: { display: "block" } } });
-export const key = style({ padding: "2px 8px", borderRadius: "6px", background: `${ink(8)}`, color: FG, fontWeight: "500", whiteSpace: "nowrap" });
+export const caption = style({ margin: "16px 0 0", textAlign: "center", fontSize: vars.textUi, color: DIM });
 
 // ---- Sections ----
 
-export const section = style({ position: "relative", padding: "130px 0", isolation: "isolate", "@media": { [NARROW]: { padding: "80px 0" } } });
-/** A section's light: the grid, fading from its top. */
-export const sectionLight = style({
-  position: "absolute", inset: "0", zIndex: "-1", pointerEvents: "none", ...gridLines,
-  maskImage: "radial-gradient(ellipse 50% 40% at 50% 0%, #000 10%, transparent 70%)",
-  WebkitMaskImage: "radial-gradient(ellipse 50% 40% at 50% 0%, #000 10%, transparent 70%)",
+export const section = style({ padding: "120px 0 0", "@media": { [NARROW]: { padding: "80px 0 0" } } });
+export const headingTitle = style({ margin: "0", fontSize: "clamp(30px, 3.6vw, 44px)", lineHeight: "1.2", letterSpacing: "-.02em", fontWeight: "700", color: "var(--s-title)", textWrap: "balance" });
+/** Words that wrap only as a whole. */
+export const phrase = style({ display: "inline-block" });
+export const headingLede = style({ margin: "14px 0 0", fontSize: "clamp(16px, 1.5vw, 18px)", lineHeight: "1.65", color: "var(--s-muted)", textWrap: "balance" });
+
+// What it connects: three, side by side under a rule each; one under another on a narrow screen.
+export const links = style({
+  display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "48px", margin: "56px 0 0", padding: "0", listStyle: "none",
+  "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "40px", marginTop: "40px" } },
 });
-// Installing.
+/** What it is for (OneComputer.tsx): four across, two on a middling screen, one under another on a phone. */
+export const scenes = style({
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "40px",
+  "@media": { "(max-width: 1080px)": { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }, [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)" } },
+});
+export const link = style({ paddingTop: "24px", borderTop: `1px solid ${ink(14)}` });
+export const linkNumber = style({ display: "block", fontFamily: vars.fontMono, fontSize: vars.textUi, color: ORANGE });
+export const linkTitle = style({ margin: "14px 0 0", fontSize: vars.textHeading, fontWeight: "600", letterSpacing: "-.01em", color: FG });
+export const linkText = style({ margin: "10px 0 0", fontSize: vars.textTitle, lineHeight: "1.7", color: "var(--s-muted)" });
+export const parts = style({ display: "flex", flexWrap: "wrap", gap: "8px", margin: "18px 0 0", padding: "0", listStyle: "none" });
+globalStyle(`${parts} > li`, { padding: "4px 12px", borderRadius: "999px", background: ink(5), color: "var(--s-muted)", fontSize: vars.textUi });
+
+// What it promises: two panels.
+export const promises = style({ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "20px", "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)" } } });
+export const promise = style({ padding: "40px", borderRadius: vars.rCard, background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}`, "@media": { [NARROW]: { padding: "28px" } } });
+export const promiseTitle = style({ margin: "0", fontSize: "clamp(24px, 2.6vw, 32px)", lineHeight: "1.25", letterSpacing: "-.02em", fontWeight: "700", color: "var(--s-title)" });
+export const promiseText = style({ margin: "12px 0 0", fontSize: vars.textTitle, lineHeight: "1.7", color: "var(--s-muted)" });
+
+// Installing: what to do on the left, the command on the right.
+export const install = style({
+  display: "grid", gridTemplateColumns: "minmax(0, .7fr) minmax(0, 1.3fr)", gap: "48px", alignItems: "center", paddingBottom: "120px",
+  "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "28px", paddingBottom: "80px" } },
+});
+/** The command, in a terminal's colours in either theme. */
 export const terminal = style({
-  position: "relative", maxWidth: "840px", margin: "0 auto", borderRadius: "18px", overflow: "hidden",
-  background: "#0F0F12", color: "#E9E9EA", border: `1px solid ${LINE}`,
-  boxShadow: `0 50px 100px -40px color-mix(in srgb, ${ORANGE} 50%, transparent)`,
-  font: `16px/1.8 ${vars.fontMono}`, "@media": { [NARROW]: { fontSize: vars.textMeta } },
+  borderRadius: vars.rCard, overflow: "hidden", background: "#111114", color: "#E9E9EA",
+  boxShadow: `0 30px 70px -40px rgba(0, 0, 0, .5), inset 0 0 0 1px ${LINE}`,
+  font: `14px/1.8 ${vars.fontMono}`, "@media": { [NARROW]: { fontSize: vars.textMeta } },
 });
-export const terminalBar = style({ display: "flex", gap: "8px", padding: "16px 18px", borderBottom: `1px solid ${LINE}` });
-export const terminalDot = style({ width: "12px", height: "12px", borderRadius: "50%", background: "#2A2A30" });
-export const terminalBody = style({ padding: "24px 28px 30px", overflowX: "auto" });
+export const terminalBody = style({ padding: "26px 28px", overflowX: "auto" });
+/** The command's line: the prompt and the command kept together, scrolled sideways where it is too long. */
+export const command = style({ display: "block", whiteSpace: "nowrap" });
 const type = keyframes({ from: { width: "0" }, to: { width: "var(--chars)" } });
 const blink = keyframes({ "50%": { borderColor: "transparent" } });
 export const typed = style({
@@ -333,6 +247,133 @@ export const output = style({
   "@media": { [STILL]: { animation: "none", opacity: 1 } },
 });
 export const prompt = style({ color: ORANGE, userSelect: "none" });
+
+// ---- The first idea: the same machine (SameMachine.tsx) ----
+
+export const sameHero = style({ padding: "96px 0 32px", textAlign: "center", "@media": { [NARROW]: { padding: "48px 0 16px" } } });
+export const sameTitle = style({
+  margin: "0", fontSize: "clamp(40px, 5.6vw, 76px)", lineHeight: "1.12", letterSpacing: "-.02em", fontWeight: "700", color: "var(--s-title)",
+  animation: `${fadeUp} .8s .05s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } },
+});
+export const sameActions = style({ marginTop: "32px" });
+
+/** The scene: as tall as its places, the stage held in view while it is scrolled through. */
+export const scene = style({ position: "relative" });
+export const sceneStick = style({
+  position: "sticky", top: "64px", height: "calc(100vh - 64px)", display: "flex", flexDirection: "column", padding: "16px 0 28px",
+});
+/** Where the devices and the window are placed (OneComputer.tsx). */
+export const oneRoom = style({ position: "relative", flex: "1", minHeight: "0", marginTop: "12px" });
+export const oneWires = style({ position: "absolute", inset: "0", width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" });
+const flowing = keyframes({ to: { strokeDashoffset: -26 } });
+globalStyle(`${oneWires} path`, {
+  fill: "none", stroke: `color-mix(in srgb, ${ORANGE} 60%, transparent)`, strokeWidth: 1.5, strokeDasharray: "5 8",
+  animation: `${flowing} 1.4s linear infinite`, "@media": { [STILL]: { animation: "none" } },
+});
+/** The computer's window (OneComputer.tsx): placed and stepped back by script; its shadow follows what of it shows. */
+/** The window under its shadow (of what of it shows: the devices flying, then the window growing out of them). */
+export const oneLift = style({ position: "absolute", inset: "0", zIndex: 1, pointerEvents: "none", filter: "drop-shadow(0 30px 40px rgba(0, 0, 0, .18))" });
+export const oneWindow = style({ position: "absolute", transformOrigin: "0 0", pointerEvents: "auto" });
+/** The screen: the app, cut to the screen's corners, round within its shell's (as far in as the shell's edge is wide).
+ *  All of the app is in it; what flies in is over it until it lands (oneAir). */
+export const oneScreen = style({
+  position: "absolute", inset: "0", background: vars.canvas, clipPath: "inset(0 round 20px)", // own corner: a laptop's screen
+  "@media": { [NARROW]: { clipPath: "inset(0 round 36px)" } }, // own corner: a phone's screen
+});
+/** Over the devices: the rows while they fly, each the row as the app draws it, until it lands in its place. */
+export const oneAir = style({ position: "absolute", inset: "0", zIndex: 4, pointerEvents: "none" });
+/** The shells (OneComputer.tsx SHELL): a laptop's edge round its screen and its base under it; on a narrow screen,
+ *  where the window is a phone, a phone's edge. */
+const BEZEL = "#060607";
+/** A metal edge round a device's black face: dark where it meets the glass, light on its face, dark at its rim. */
+const METAL = "0 0 0 1.5px #2C2C2F, 0 0 0 3.5px #B8B8BE, 0 0 0 4.5px #6E6E74";
+/** Metal, lit from above: buttons, a laptop's base. */
+const ALU = "linear-gradient(180deg, #F4F4F6 0%, #DCDCE0 38%, #B7B7BD 78%, #8C8C92 100%)";
+export const oneEdge = style({
+  // A laptop's lid round its screen, its camera at the top of its frame.
+  position: "absolute", inset: "-14px", borderRadius: "34px", background: BEZEL, // own corner: a laptop's
+  boxShadow: `${METAL}, inset 0 0 0 1px rgba(255, 255, 255, .06)`,
+  selectors: {
+    "&::after": {
+      content: "\"\"", position: "absolute", top: "4px", left: "calc(50% - 3px)", width: "6px", height: "6px", borderRadius: "50%",
+      background: "radial-gradient(circle at 40% 35%, #3A4A5E, #0B0F14 70%)", boxShadow: "0 0 0 1px #1A1A1C",
+    },
+  },
+  // A phone's face round its screen (a narrow screen's window).
+  "@media": { [NARROW]: { inset: "-12px", borderRadius: "48px", selectors: { "&::after": { display: "none" } } } }, // own corner: a phone's
+});
+/** A laptop's base: metal, its hinge under the lid, the scoop in its front edge to lift the lid by. */
+export const oneBase = style({
+  position: "absolute", left: "-84px", right: "-84px", top: "calc(100% + 18px)", height: "14px", background: ALU,
+  borderRadius: "3px 3px 18px 18px / 3px 3px 12px 12px", boxShadow: "inset 0 1px 0 #FFFFFF, 0 2px 3px rgba(0, 0, 0, .18)", // own corner: a laptop's base
+  selectors: {
+    // The hinge, dark, under the lid.
+    "&::before": { content: "\"\"", position: "absolute", left: "12%", right: "12%", top: "-4px", height: "4px", background: "linear-gradient(180deg, #1E1E21, #4A4A4F)" },
+    // The scoop.
+    "&::after": {
+      content: "\"\"", position: "absolute", left: "calc(50% - 70px)", top: "0", width: "140px", height: "6px", borderRadius: "0 0 10px 10px", // own corner: the scoop
+      background: "linear-gradient(180deg, #9C9CA2, #C9C9CE)",
+    },
+  },
+  "@media": { [NARROW]: { display: "none" } },
+});
+/** A phone's camera island at the top of its screen; `oneIslandInWindow` the one of a narrow screen's window. */
+const island = { position: "absolute", left: "calc(50% - 56px)", width: "112px", height: "32px", borderRadius: "16px", background: "#000", zIndex: 2, pointerEvents: "none" } as const; // own corner: an island
+export const oneIsland = style({ ...island, top: "23px" });
+export const oneIslandInWindow = style({ ...island, top: "11px", display: "none", "@media": { [NARROW]: { display: "block" } } });
+/** A phone's buttons on its metal edge: the volume keys on the left, the power key on the right. `oneKeysInWindow` the
+ *  ones of a narrow screen's window (its edge outside its screen). */
+const keys = (out: number) => ({
+  position: "absolute", inset: `0 -${out}px`, pointerEvents: "none",
+  selectors: {
+    "&::before": { content: "\"\"", position: "absolute", left: "0", top: "170px", width: "4px", height: "128px", borderRadius: "2px", background: `linear-gradient(180deg, transparent 0 0, #9A9AA0 0 46%, transparent 46% 54%, #9A9AA0 54%)` }, // own corner: a key
+    "&::after": { content: "\"\"", position: "absolute", right: "0", top: "220px", width: "4px", height: "92px", borderRadius: "2px", background: "linear-gradient(90deg, #8C8C92, #D2D2D7)" }, // own corner: a key
+  },
+} as const);
+export const oneKeys = style(keys(8));
+export const oneKeysInWindow = style({ ...keys(20), display: "none", "@media": { [NARROW]: { display: "block" } } });
+/** The app in it: as large as the window. */
+export const oneDemo = style({});
+globalStyle(`${oneScreen} > ${oneDemo}`, { height: "100%", clipPath: "none", "@media": { [NARROW]: { height: "100%", clipPath: "none" } } });
+/** The phone, a device among the others (a wide screen's; on a narrow one the window is the phone). */
+export const onePhone = style({
+  // Its shadow a box shadow round its corners, not a filter: under a filter the phone bar's frosted glass loses its
+  // shape (Chromium draws it as a plain rectangle).
+  position: "absolute", top: "0", left: "0", zIndex: 3, transformOrigin: "0 0", boxSizing: "border-box", borderRadius: "56px", background: BEZEL, // own corner: a phone's
+  boxShadow: `${METAL}, inset 0 0 0 1px rgba(255, 255, 255, .06), 0 30px 50px -12px rgba(0, 0, 0, .35)`,
+  "@media": { [NARROW]: { display: "none" } },
+});
+/** Its screen: the phone's app, a page of its own (site/phone.html); its corners cut by a clip. */
+export const onePhoneScreen = style({ display: "block", border: "0", clipPath: "inset(0 round 44px)", background: vars.canvas });
+
+// ---- The second idea: the distance (Distance.tsx) ----
+
+export const map = style({ display: "block", width: "100%", height: "auto", overflow: "visible" });
+export const mapGrid = style({ stroke: ink(7), strokeWidth: 1 });
+export const mapDegree = style({ fill: "var(--s-faint)", fontFamily: vars.fontMono, fontSize: vars.textCaption, "@media": { [NARROW]: { fontSize: vars.textUi } } });
+export const mapCity = style({});
+globalStyle(`${mapCity} > circle`, { fill: ink(28) });
+globalStyle(`${mapCity} > text`, { fill: DIM, fontSize: vars.textUi, "@media": { [NARROW]: { fontSize: vars.textTitle } } });
+const flow = keyframes({ to: { strokeDashoffset: -28 } });
+export const mapRoute = style({
+  fill: "none", stroke: ORANGE, strokeWidth: 2, strokeDasharray: "6 8", animation: `${flow} 1.2s linear infinite`,
+  "@media": { [STILL]: { animation: "none" } },
+});
+export const mapLink = style({});
+globalStyle(`${mapLink} > rect`, { fill: "var(--s-node)", stroke: ORANGE, strokeWidth: 1.5 });
+export const mapLinkMain = style({ fill: FG, fontSize: vars.textBody, fontWeight: 600, "@media": { [NARROW]: { fontSize: vars.textTitle } } });
+export const mapLinkSub = style({ fill: DIM, fontFamily: vars.fontMono, fontSize: vars.textMeta, "@media": { [NARROW]: { fontSize: vars.textUi } } });
+const breathe = keyframes({ "0%": { opacity: 0.5, transform: "scale(.6)" }, "100%": { opacity: 0, transform: "scale(1.6)" } });
+export const mapHalo = style({
+  fill: `color-mix(in srgb, ${ORANGE} 35%, transparent)`, transformBox: "fill-box", transformOrigin: "center",
+  animation: `${breathe} 2.4s ease-out infinite`, "@media": { [STILL]: { animation: "none", opacity: 0.3 } },
+});
+export const mapSpot = style({ fill: ORANGE, stroke: "var(--s-bg)", strokeWidth: 3 });
+export const mapCard = style({ filter: "drop-shadow(0 12px 24px rgba(0, 0, 0, .12))" });
+globalStyle(`${mapCard} > rect`, { fill: "var(--s-node)", stroke: ink(12), strokeWidth: 1 });
+export const mapCardMain = style({ fill: FG, fontSize: vars.textTitle, fontWeight: 600, "@media": { [NARROW]: { fontSize: vars.textHeading } } });
+export const mapCardSub = style({ fill: DIM, fontSize: vars.textUi, "@media": { [NARROW]: { fontSize: vars.textTitle } } });
+export const demoAfterHeading = style({ marginTop: "40px" });
 
 // ---- Footer ----
 
