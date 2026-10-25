@@ -362,3 +362,102 @@ test "a last resort cuts none in vain: where what never gives way is wider than 
   let label = laid_words("Size")
   assert_eq(label.fw, label.text_layout(1.0e9).w)
 }
+
+///|
+/// How many code units of the words `n` shows (laid out as `tl`), -1 none laid out.
+fn shown_len(tl : TextLayout?) -> Int {
+  match tl {
+    Some(tl) => tl.shaped.len
+    None => -1
+  }
+}
+
+///|
+test "words on one line said a shorter way: the longest that fits whole, in a row needing no more than the shortest" {
+  let long = "the longest way of saying it"
+  let shorter = ["a shorter way", "short way"]
+  let width = Ref(400.0)
+  let t = Tester::new(
+    fn(c) {
+      c.box(dir=Row, w=Px(width.val), h=Px(20.0), fn() {
+        c.text(long, size=10.0, wrap=false, shorter~) |> ignore
+        c.box(w=Px(40.0), h=Px(20.0), fn() {  }) |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=100.0,
+  )
+  t.draw()
+  let n = laid_words(long)
+  assert_eq(shown_len(n.tl), long.length())
+  // (less room than all of them take: the longest shorter way that fits there, whole)
+  width.val = 40.0 + n.worded(shorter[0]).w + 1.0
+  t.frame()
+  assert_eq(shown_len(laid_words(long).tl), shorter[0].length())
+  width.val = 40.0 + n.worded(shorter[1]).w + 1.0
+  t.frame()
+  assert_eq(shown_len(laid_words(long).tl), shorter[1].length())
+  assert_true(t.squeeze_faults().is_empty(), msg=t.squeeze_faults().join("\n"))
+  // (what they need at least, the box beside them squeezed by nothing: the shortest whole)
+  assert_eq(laid_words(long).least, n.worded(shorter[1]).w)
+  // (less room than the shortest takes: that cut with an ellipsis, as a last resort)
+  width.val = 40.0 + n.worded(shorter[1]).w - 8.0
+  t.frame()
+  let cut = laid_words(long).tl.unwrap()
+  assert_true(cut.w <= laid_words(long).fw + 0.5)
+  assert_eq(cut.shaped.cu[cut.shaped.cu.length() - 1], '…'.to_int())
+}
+
+///|
+/// What of its placeholder the field shows now, laid out.
+fn hint_now() -> TextLayout {
+  let c = g()
+  for i in 0..<c.count {
+    let n = c.nodes[i]
+    if n.kind == kind_editor {
+      match c.editors.get(n.id) {
+        Some(st) => return n.hint_shown(st.line)
+        None => ()
+      }
+    }
+  }
+  abort("no field")
+}
+
+///|
+test "a field's placeholder is said the longest way that fits it, whole, the shortest cut where none does; never cut by its edge" {
+  let long = "the longest way of saying it"
+  let shorter = ["a shorter way", "short way"]
+  let width = Ref(400.0)
+  let wide = fn(s : String) { layout_text(s, 10.0, 400, 1.0e9, false).w }
+  let t = Tester::new(
+    fn(c) {
+      c.box(w=Px(width.val), h=Px(20.0), fn() {
+        c.editor("field", placeholder=long, shorter~, font_size=10.0, max_lines=1, plain=true) |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=100.0,
+  )
+  t.draw()
+  assert_eq(hint_now().shaped.len, long.length())
+  width.val = wide(shorter[0]) + 1.0
+  t.frame()
+  assert_eq(hint_now().shaped.len, shorter[0].length())
+  assert_true(t.squeeze_faults().is_empty(), msg=t.squeeze_faults().join("\n"))
+  // (less room than its shortest way: that cut with an ellipsis in the field, as words on one line are)
+  width.val = wide(shorter[1]) - 1.0
+  t.frame()
+  let cut = hint_now()
+  assert_true(cut.w <= width.val + 0.5, msg="\{cut.w} in \{width.val}")
+  assert_eq(cut.shaped.cu[cut.shaped.cu.length() - 1], '…'.to_int())
+  assert_true(t.squeeze_faults().is_empty(), msg=t.squeeze_faults().join("\n"))
+  // (cut down to nothing: squeezed)
+  width.val = wide("…") + 1.0
+  t.frame()
+  let faults = t.squeeze_faults()
+  assert_eq(faults.length(), 1, msg=faults.join("\n"))
+  assert_true(faults[0].contains("placeholder cut to 0"), msg=faults[0])
+}

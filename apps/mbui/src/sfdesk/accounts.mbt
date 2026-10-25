@@ -1617,7 +1617,13 @@ fn add_model(c : @ui.Ctx, core : Core, address : String, id : String, foot? : Bo
   }
   c.box(style=if foot { pf_input_row.then(@sf.foot_reach(@sf.button_height(), start=@sf.input_height())) } else { pf_input_row }, fn() {
     c.box(style=pf_input_grow, fn() {
-      if @sf.input(c, "profile-add-model/" + address + "/" + id, placeholder=@sf.t("web-pages.profiles.addModelPlaceholder"), field=f).submitted {
+      if @sf.input(
+          c,
+          "profile-add-model/" + address + "/" + id,
+          placeholder=@sf.t("web-pages.profiles.addModelPlaceholder"),
+          shorter=[@sf.t("web-mobile.profiles.addModelPlaceholder")],
+          field=f,
+        ).submitted {
         add()
       }
     })

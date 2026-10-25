@@ -59,22 +59,63 @@ fn Node::words_style(self : Node) -> Int {
 }
 
 ///|
-/// One-line text cut to fit `w`, ending in an ellipsis.
-fn ellipsized(n : Node, tl : TextLayout, w : Double) -> TextLayout {
-  let s = tl.shaped
-  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false, line=n.line_h, trim=n.line_trim, spacing=n.spacing, style=n.words_style())
+/// Its words said as `s` (one of its `shorter` ways), on one line.
+fn Node::worded(self : Node, s : String) -> TextLayout {
+  layout_text(s, self.font_size, self.weight, 1.0e9, false, line=self.line_h, trim=self.line_trim, spacing=self.spacing, style=self.words_style())
+}
+
+///|
+/// Words on one line in `w`, all of them laid out (`tl`): those where they fit, else the longest of their shorter ways
+/// that fits (Ctx::text `shorter`), else the shortest cut to `w` with an ellipsis.
+fn Node::one_line_in(self : Node, tl : TextLayout, w : Double) -> TextLayout {
+  if tl.w <= w + 0.5 {
+    return tl
+  }
+  said_in(self.text, tl, self.shorter, w, fn(s) { self.worded(s) })
+}
+
+///|
+/// Words on one line in `w`, said `said` (laid out as `tl`) or, where that does not fit, one of their `shorter` ways
+/// (each shorter than the one before; `lay` lays words out on one line as they are drawn): the first that fits whole,
+/// else the last cut to `w` with an ellipsis.
+fn said_in(
+  said : String,
+  tl : TextLayout,
+  shorter : Array[String],
+  w : Double,
+  lay : (String) -> TextLayout,
+) -> TextLayout {
+  if tl.w <= w + 0.5 {
+    return tl
+  }
+  let mut said = said
+  let mut last = tl
+  for s in shorter {
+    said = s
+    last = lay(s)
+    if last.w <= w + 0.5 {
+      return last
+    }
+  }
+  ellipsized(said, last, w, lay)
+}
+
+///|
+/// One-line words (`s`, laid out as `tl` by `lay`) cut to fit `w`, ending in an ellipsis.
+fn ellipsized(s : String, tl : TextLayout, w : Double, lay : (String) -> TextLayout) -> TextLayout {
+  let shaped = tl.shaped
+  let dots = lay("…")
   let room = w - dots.w
   let mut end = 0
-  while end < s.starts.length() && tl.xs[end] + s.adv[end] <= room {
+  while end < shaped.starts.length() && tl.xs[end] + shaped.adv[end] <= room {
     end = end + 1
   }
   // no space left before the dots
-  while end > 0 && s.cu[end - 1] == 32 {
+  while end > 0 && shaped.cu[end - 1] == 32 {
     end = end - 1
   }
-  let cut = if end < s.starts.length() { s.starts[end] } else { s.len }
-  let text = n.text.view(end_offset=cut).to_string() + "…"
-  layout_text(text, n.font_size, n.weight, 1.0e9, false, line=n.line_h, trim=n.line_trim, spacing=n.spacing, style=n.words_style())
+  let cut = if end < shaped.starts.length() { shaped.starts[end] } else { shaped.len }
+  lay(s.view(end_offset=cut).to_string() + "…")
 }
 
 ///|
@@ -129,6 +170,15 @@ fn Node::one_line_w(self : Node) -> Double {
 }
 
 ///|
+/// How wide words on one line are at least, shown whole: the shortest way they are said (Ctx::text `shorter`).
+fn Node::one_line_least_w(self : Node) -> Double {
+  match self.shorter {
+    [.., last] if self.kind == kind_text => self.worded(last).w
+    _ => self.one_line_w()
+  }
+}
+
+///|
 /// Whether lines ending at `line_end` (clusters, whose first code units are `cu`) were broken where the width ran out,
 /// not only at the words' own new lines.
 fn soft_wrapped(line_end : Array[Int], cu : Array[Int]) -> Bool {
@@ -155,6 +205,12 @@ fn leaf_size(
   // as wide as its constraint, not its widest line), as a message's bubble is
   if n.kind == kind_text {
     let tl = n.text_layout(max_w)
+    // (on one line wider than it may be, said a shorter way: as wide as that is)
+    let tl = if !n.wrap && wm == AtMost && n.shorter.length() > 0 && tl.w > max_w + 0.5 {
+      n.one_line_in(tl, max_w)
+    } else {
+      tl
+    }
     (if wm == Exactly || (wm == AtMost && n.wrap && soft_wrapped(tl.line_end, tl.shaped.cu)) { w } else { tl.w }, tl.h)
   } else if n.kind == kind_rich {
     // (on one line, as wide as it is, as Ctx::text's words: cut, where it is, as it is placed narrower)
@@ -618,6 +674,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     }
     if k == kind_text {
       if n.lk_text != n.text ||
+        n.lk_shorter != n.shorter ||
         n.lk_size != n.font_size ||
         n.lk_weight != n.weight ||
         n.lk_line != n.line_h ||
@@ -628,6 +685,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         n.lk_max_lines != n.max_lines ||
         n.lk_shaped != words_shaped_in.val {
         n.lk_text = n.text
+        n.lk_shorter = n.shorter
         n.lk_size = n.font_size
         n.lk_weight = n.weight
         n.lk_line = n.line_h
@@ -775,8 +833,8 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
           dmax(row, widest_held) + pad_l + pad_r
         }
       } else if pdir == 1 && n.one_line_words() {
-        // (in a row; in a column, cut to the column's width)
-        n.one_line_w() + pad_l + pad_r
+        // (in a row, said its shortest way; in a column, cut to the column's width)
+        n.one_line_least_w() + pad_l + pad_r
       } else {
         0.0
       }
@@ -794,7 +852,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   // (all of them, fewer; all of them said to be kept: Ctx::text `keep`), what holds them as it holds them; else its
   // least
   let mut fit_least = if n.w is Cut && n.one_line_words() {
-    let whole = n.one_line_w()
+    let whole = n.one_line_least_w()
     (if n.keep { whole } else { dmin(whole, cut_kept_ems * n.font_size) }) + pad_l + pad_r
   } else if k == kind_box && (n.w is Auto || (n.w is Fill(_) && n.keep)) && !(n.clip || n.sideways) {
     let row = if more_need >= 0.0 && droppable {
@@ -999,7 +1057,7 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> Unit
   let ih = dmax(n.fh - n.pad_t - n.pad_b, 0.0)
   if n.kind == kind_text {
     let tl = n.text_layout(iw)
-    n.tl = Some(if !n.wrap && tl.w > iw + 0.5 { ellipsized(n, tl, iw) } else { tl })
+    n.tl = Some(if n.wrap { tl } else { n.one_line_in(tl, iw) })
   } else if n.kind == kind_rich {
     n.rich_layout(iw) |> ignore
   } else if n.kind == kind_editor {

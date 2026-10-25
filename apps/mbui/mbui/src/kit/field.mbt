@@ -22,7 +22,8 @@ pub(all) struct FieldState {
 }
 
 ///|
-/// A one-line field (see the file's head), its editor `key`'s, `placeholder` while empty, `w` wide; `field`: what it
+/// A one-line field (see the file's head), its editor `key`'s, `placeholder` while empty (said one of its `shorter` ways
+/// where it has less room: Ctx::editor's), `w` wide; `field`: what it
 /// holds, the view's own to read and write (mbui's Field), else the editor's. `secret`: drawn as dots; `enter_sends`:
 /// Enter is handed on (else a new line is not taken either: one line); `size` and `line` the words' size and line
 /// (0: the theme's); `look` draws its frame round the editor (`editor`, built where the look says), by default the pill.
@@ -30,6 +31,7 @@ pub fn text_field(
   c : @ui.Ctx,
   key : String,
   placeholder? : String = "",
+  shorter? : Array[String] = [],
   w? : @ui.Size = Fill(1.0),
   disabled? : Bool = false,
   secret? : Bool = false,
@@ -49,6 +51,7 @@ pub fn text_field(
     placeholder,
     fn(e) { out = { text: e.text, submitted: e.submitted is Some(_) } },
     fn() {  },
+    shorter~,
     enter_sends~,
     size~,
     line~,
@@ -71,6 +74,7 @@ fn pill_field(
   got : (@ui.EditorResult) -> Unit,
   after : () -> Unit,
   invalid? : Bool = false,
+  shorter? : Array[String] = [],
   enter_sends? : Bool = true,
   size? : Double = 0.0,
   line? : Double = 0.0,
@@ -85,6 +89,7 @@ fn pill_field(
       c.editor(
         key,
         placeholder~,
+        shorter~,
         w=Fill(1.0),
         max_lines=1,
         plain=true,

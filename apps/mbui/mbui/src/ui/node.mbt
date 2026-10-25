@@ -65,6 +65,11 @@ let kind_rich = 7
 let kind_native = 8
 
 ///|
+/// Words said one way only (Node's `shorter`).
+// kept across runs: a table, never written
+let no_words : Array[String] = []
+
+///|
 struct Node {
   mut kind : Int
   mut id : Int
@@ -127,6 +132,9 @@ struct Node {
   mut notch_f : Double
   // text
   mut text : String
+  // other ways to say its words on one line where they have less room, each shorter than the one before (Ctx::text,
+  // Ctx::editor's placeholder: `shorter`)
+  mut shorter : Array[String]
   mut font_size : Double
   mut weight : Int
   mut color : Int64
@@ -255,6 +263,7 @@ struct Node {
   // image's size), the layout epoch
   mut lk_kind : Int
   mut lk_text : String
+  mut lk_shorter : Array[String]
   mut lk_size : Double
   mut lk_weight : Int
   mut lk_line : Double
@@ -326,6 +335,7 @@ fn Node::new() -> Node {
     notch_r: 0.0,
     notch_f: 0.0,
     text: "",
+    shorter: no_words,
     font_size: 14.0,
     weight: 400,
     color: 0x000000FFL,
@@ -391,6 +401,7 @@ fn Node::new() -> Node {
     leaf: None,
     lk_kind: -1,
     lk_text: "",
+    lk_shorter: no_words,
     lk_size: 0.0,
     lk_weight: 0,
     lk_line: 0.0,
@@ -507,6 +518,7 @@ fn Node::reset_look(self : Node) -> Unit {
 /// What Ctx::text sets, all of it.
 fn Node::reset_words(self : Node) -> Unit {
   self.text = ""
+  self.shorter = no_words
   self.font_size = 14.0
   self.weight = 400
   self.color = 0x000000FFL

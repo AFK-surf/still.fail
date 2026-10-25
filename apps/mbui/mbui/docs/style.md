@@ -127,7 +127,8 @@ nothing else gives way:
   under each other. Worked out as it is laid out (Node's `least`), it is what its row may squeeze it to. A box sized by
   its room (`Fill`, `Pct`) takes what it is given, and what it holds is squeezed in it where that is too little: a
   fault, which `Tester::squeeze_faults` says (two things drawn over each other, something cut off by what clips it or
-  by the window, words cut down to nothing, words wrapped narrower than a word of them or four characters).
+  by the window, words cut down to nothing, words wrapped narrower than a word of them or four characters, a field's
+  placeholder cut down to nothing).
 - Words on one line (`wrap=false`, Ctx::text's and Ctx::rich's alike) are one line whatever they hold: their line
   breaks are spaces (CSS's white-space: nowrap), unless `breaks` keeps them (code shown as written, in what scrolls
   sideways: CSS's pre).
@@ -154,6 +155,12 @@ nothing else gives way:
     to four of their size); then they are not squeezed further: what is beside them gives way no more than that, and
     none of their room is left empty (a new chat's station and model: the model's runtime and how hard it thinks
     leave, k 3 and 4, before the station's name, 5);
+  - words on one line said a shorter way where they have less room: Ctx::text's `shorter`, and a field's
+    placeholder's (Ctx::editor `shorter`: 搜索全部内容, then 搜索), each shorter than the one before. The longest of
+    them all that fits is shown whole (SwiftUI's ViewThatFits), and in a row they need no more than the shortest at
+    least; where none fits, the shortest is cut with an ellipsis. A placeholder is words on one line as any others:
+    never cut by its field's edge, cut with an ellipsis where it has no shorter way that fits (one an agent wrote has
+    none);
   - what is cut or scrolled by its own box: `clip`, `sideways` (not a box's corners: what draws inside them keeps to
     them itself, as a press's ripple does).
 - A row that has not the room for every least even so (a page that said not how something gives, words longer than

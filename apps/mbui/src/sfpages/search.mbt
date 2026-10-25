@@ -202,19 +202,19 @@ let search_bar_row : @ui.Style = @ui.css("row w=Full pl=S4 pr=S4 pt=S2 pb=S2 gap
 let search_slot : @ui.Style = @ui.style(w=@sf.grow, h=@sf.search_field_h)
 
 ///|
-/// The field (Search.kt SearchField, SearchPage's): a capsule of the ink at 6%, its icon 8 before the words; at the
-/// list's top as high and as far in as the theme's band (38, 12).
+/// The field's ground (Search.kt SearchField, SearchPage's): a capsule of the ink at 6%.
 // kept across runs: a value (no field of it changes)
-let search_field_box : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  h=@sf.search_field_h,
-  px=S3,
-  gap=S2,
-  align=ACenter,
-  radius=Full,
-  bg=@sf.search_ground,
-)
+let search_field_ground : @ui.Style = @ui.style(w=Full, h=@sf.search_field_h, radius=Full, bg=@sf.search_ground)
+
+///|
+/// What it holds: its icon 8 before the words.
+// kept across runs: a value (no field of it changes)
+let search_field_in : @ui.Style = @ui.style(row=true, w=Full, h=@sf.search_field_h, px=S3, gap=S2, align=ACenter)
+
+///|
+/// The field, its ground and what it holds; at the list's top as high and as far in as the theme's band (38, 12).
+// kept across runs: a value (no field of it changes)
+let search_field_box : @ui.Style = search_field_ground.then(search_field_in)
 
 ///|
 /// The field at the list's top: 6 under it (how far in: search_field).
@@ -242,6 +242,12 @@ let search_list_box : @ui.Style = @ui.style(w=Full, h=@sf.grow)
 // ── Home's field ───────────────────────────────────────────────────────
 
 ///|
+/// What the field says where 搜索全部内容 does not fit (in the list's and as it is typed in alike).
+fn search_field_shorter() -> Array[String] {
+  [@sf.t("common.search")]
+}
+
+///|
 /// The search at the list's top (Search.kt SearchField): a quiet field; tapped, the search opens from it. Not seen
 /// while the search's field is it (one field at a time, flying from and back to here). It stands on the list's line
 /// (`at`: where the list stands, @sf.list_line).
@@ -265,7 +271,12 @@ fn search_field(c : @ui.Ctx, at : @sf.ListAt) -> Unit {
   c.box(style=line, fn() {
     let f = c.box(style=search_field_box.then(@ui.style(h=Fixed(band.band_h), px=@sf.room_of(band.band_pad))), id~, fn() {
       @sf.icon(c, "search", size=band.band_icon, color=t.p.muted) |> ignore
-      c.text(@sf.t("android-chat.search.field"), style=band.band_words.then(search_field_words)) |> ignore
+      c.text(
+        @sf.t("android-chat.search.field"),
+        shorter=search_field_shorter(),
+        style=band.band_words.then(search_field_words),
+      )
+      |> ignore
     })
     if search.open {
       c.look(f, { ..@ui.still_look, alpha: 0.0 })
@@ -320,15 +331,24 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @s
           Some((_, y, rw, _)) => (rw, y)
           None => (search.wide, search.from)
         }
+        let dy = (search.from - rest_y) * (1.0 - u)
         c.box(style=search_slot, id=slot, fn() {
           c.layer(fn() {
             let now = dmax(if search.wide > 0.0 { search.wide + (room - search.wide) * u } else { room }, 0.0)
-            let f = c.box(style=search_field_box.then(@ui.style(w=Fixed(now))), fn() {
+            let ground = c.box(style=search_field_ground.then(@ui.style(w=Fixed(now))), fn() {  })
+            c.look(ground, { ..@ui.still_look, dy })
+          })
+          |> ignore
+          // what it holds laid out where it rests from the first, over its ground on its way there: its words said
+          // the way that fits there (search_field_shorter) all the way up, not changed on the way
+          c.layer(fn() {
+            let f = c.box(style=search_field_in, fn() {
               @sf.icon(c, "search", size=17.0, color=t.p.muted) |> ignore
               c.box(style=search_grow, fn() {
                 let res = c.editor(
                   "search-field",
                   placeholder=@sf.t("android-chat.search.field"),
+                  shorter=search_field_shorter(),
                   font_size=16.0,
                   max_lines=1,
                   // the keyboard's search key (Search.kt: ImeAction.Search), giving the words up as a keyboard's
@@ -354,7 +374,7 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @s
               })
               |> ignore
             })
-            c.look(f, { ..@ui.still_look, dy: (search.from - rest_y) * (1.0 - u) })
+            c.look(f, { ..@ui.still_look, dy })
           })
           |> ignore
         })
