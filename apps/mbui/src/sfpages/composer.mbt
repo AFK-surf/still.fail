@@ -688,6 +688,7 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
               named=true,
               meta=text(ref_, "stationName") + " · " + @sf.t("web-main.file.modePath"),
               open=true,
+              composer=true,
             )
           // a link shared in (share-in.ts): its title and its site, drawn as a file is; tapped, it opens (Composer.kt
           // LinkCard); sent as words, nothing going up
@@ -705,6 +706,7 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
                 t => t
               },
               meta=text(l, "site"),
+              composer=true,
             )
             if card.opened {
               c.tell("composer/link/" + id, fn() { open_link(url) })
@@ -730,6 +732,7 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
               meta=@sf.t("web-main.composer.pasteAttachment", args=[("count", @sf.grouped(number(info, "characters")))]),
               retry=error != "",
               restore=can_restore,
+              composer=true,
             )
             if card.restored {
               let words = if w.text == "" { text(info, "text") } else { w.text + "\n" + text(info, "text") }
@@ -760,6 +763,7 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
               // (a station's file going as the file: how it goes, pressed)
               open=ref_ is Some(Object(_)),
               retry=error != "" && field(v, "pasted") is None,
+              composer=true,
             )
         }
         // a station's file (by its path or as the file): pressed, how it goes (composer_ref.mbt)

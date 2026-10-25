@@ -185,7 +185,8 @@ pub(all) struct FileCardDone {
 /// said as calling that off and asking it again (`remove_label`, `retry_label`). `dir`: a folder's (file_tile).
 /// `named`: a file named where it is and not going (a station's file sent as its path: Chat.css.ts fileCard[data-named]),
 /// its card no ground, its edge dashed in the strong line. Going up and how far not known yet (`pending`, no `sent`),
-/// a spinner where its sheet is: what goes on is seen to (an empty sheet that stays so looks stuck).
+/// a spinner where its sheet is: what goes on is seen to (an empty sheet that stays so looks stuck). `composer`: waiting
+/// in the composer, on composer_card's ground.
 pub fn file_card(
   c : @ui.Ctx,
   key : String,
@@ -207,6 +208,7 @@ pub fn file_card(
   restore? : Bool = false,
   remove_label? : String = "",
   retry_label? : String = "",
+  composer? : Bool = false,
 ) -> FileCardDone {
   let id = c.id(key)
   if open {
@@ -241,9 +243,18 @@ pub fn file_card(
   } else {
     download.map(fn(d) { d.0 })
   }
-  let ground = if named { card_named } else { card_box }
+  let ground = if named {
+    card_named
+  } else if composer && open {
+    card_composer_open
+  } else if composer {
+    card_composer
+  } else {
+    card_box
+  }
   let b = c.box(
-    style=if open && c.hovered(id) { ground.then(card_hot) } else { ground },
+    // (in the composer, pointed at: the hover's tint over its own ground, not in its place)
+    style=if open && !(composer && !named) && c.hovered(id) { ground.then(card_hot) } else { ground },
     border_color?=if named { Some(theme().p.line_strong) } else { None },
     id~,
     fn() {
@@ -416,6 +427,22 @@ let card_hot : @ui.Style = @ui.css("bg=Hover")
 /// A named file's card (fileCard[data-named]: no ground, 1px dashed in --line-strong, given as it is drawn).
 // kept across runs: a value (no field of it changes)
 let card_named : @ui.Style = card_box.then(@ui.css("bg=Clear border=B1 dashed"))
+
+///|
+/// What waits in the composer (a file's card, a quote), off its frosted ground, which a card's neutral one is lost on
+/// (the user, 2026-10-16: 附件有点难以分辨): on the page's own ground, a step up in the dark (the text at 10% over what
+/// floats), a faint shadow under it (Chat.css.ts `composerFiles fileCard, composerQuote quoteCard`). One named by its
+/// path keeps card_named's: no ground, outlined.
+// kept across runs: a value (no field of it changes)
+pub let composer_card : @ui.Style = @ui.css("bg=Bg shadow=Sm dark{bg=Over(Raised, A(Fg, O10))}")
+
+///|
+// kept across runs: a value (no field of it changes)
+let card_composer : @ui.Style = card_box.then(composer_card)
+
+///|
+// kept across runs: a value (no field of it changes)
+let card_composer_open : @ui.Style = card_composer.then(@ui.css("hovered{bg=Hover}"))
 
 ///|
 /// Where the sheet is while what goes up says not how far (the old phone's going card: a 16 spinner).
@@ -591,7 +618,7 @@ let quote_corner : Double = row_corner
 
 ///|
 // kept across runs: a value (no field of it changes)
-let quote_box_composer : @ui.Style = quote_box.then(@ui.style(radius=InnerOr(rounded(composer_inner))))
+let quote_box_composer : @ui.Style = quote_box.then(@ui.style(radius=InnerOr(rounded(composer_inner)))).then(composer_card)
 
 ///|
 /// What sits in the composer's corners is rounded concentric with it, the ladder's next step in.
