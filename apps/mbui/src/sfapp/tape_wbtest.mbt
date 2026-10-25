@@ -520,3 +520,21 @@ test "on the tape a page's head is a chat's bar: its title where a chat's stands
     }
   }
 }
+
+///|
+test "on the tape 新建对话 in the sidebar brings its page over, as ⌘N does" {
+  // an opened fold's inner screen upright, a finger
+  let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  t.tap_text("新建对话")
+  assert_true(app.nav.top() is NewChat)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  // back: the sidebar again
+  t.back()
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  @sfdesk.new_chat()
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+}

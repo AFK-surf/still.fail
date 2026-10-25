@@ -861,7 +861,7 @@ fn tape_frame(c : @ui.Ctx, panel : ChatRef?, at : (Double, Double, Double), know
   // comes over; closed while in use, the page. Another chat shown while a panel was in use: its page, not the panel
   // open in it (pengxiao, 2026-10-25: the chat in the middle is what one comes to; a panel shown as its view comes is
   // not one opened). Nothing else moves the tape by itself: a chat opened from the sidebar shows in the page beside
-  // it, the sidebar still in use
+  // it, the sidebar still in use (a new chat asks for its page: new_chat)
   let chat = match app.nav.top() {
     Chat(r) | History(r, _, _) => chat_key(r)
     _ => ""
