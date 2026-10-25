@@ -56,9 +56,9 @@ test "a 画质 kept on the device is asked for as the view opens" {
   let r = screen_rig()
   r.quality.val = "original"
   // (the page opened again: a view of its own)
-  @sfbase.close_page(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome" })) |> ignore
+  @sfbase.close_page(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome", until_gone: false })) |> ignore
   nav_rested(r.t)
-  app.nav.push(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome" }))
+  app.nav.push(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome", until_gone: false }))
   nav_rested(r.t)
   let asked = r.told("screen.view")
   assert_eq(number(Some(asked[asked.length() - 1]), "maxWidth"), 7680.0)
