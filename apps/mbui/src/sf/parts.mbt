@@ -2272,7 +2272,16 @@ pub fn choices(
           // a menu's parts are set apart by one, docs/ui-panels.md)
           match extra.bind(fn(f) { f(v) }) {
             Some(f) if s.on =>
-              c.box(style=choice_extra, fn() { c.box(style=choice_extra_in, f) |> ignore }) |> ignore
+              c.box(style=choice_extra, fn() {
+                c.box(style=choice_extra_in, fn() {
+                  // (on the choice as on a card: a row's ground there rounds in its corners, in_card)
+                  in_card.val += 1
+                  f()
+                  in_card.val -= 1
+                })
+                |> ignore
+              })
+              |> ignore
             _ => ()
           }
       })
