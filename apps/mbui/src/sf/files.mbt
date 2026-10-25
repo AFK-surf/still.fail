@@ -332,11 +332,13 @@ pub fn file_card(
 
 ///|
 /// What waits to go with a message (a composer's picture, a file's card, a quote), `w` wide (none: the width it is
-/// given, less the reach) and rounded `corner`, with its ✕
+/// given) and rounded `corner`, with its ✕
 /// hung on its top right corner (docs/ui-panels.md: the user, 2026-10-17, on the corner, not in it): 20 round, solid
 /// (the ink's, the page's ✕ on it: part of it is on the ground round it), its centre on the corner's curve where it
-/// turns 45° (on_corner), reaching past the top as far as past the right edge; the room for that kept at its end, so
-/// what comes next stands the row's gap past it. `key` names it (its ✕ `key/remove`), `label` what a screen reader
+/// turns 45° (on_corner), reaching past the top as far as past the right edge. `w` wide, the room for that kept at its
+/// end, so what comes next in its row stands the row's gap past it; the width it is given (a quote: nothing beside it),
+/// none: it reaches past its right edge into the room round it as past its top, as far from that room's edge there as
+/// it is from its top (the user, 2026-10-26: 上边距和右边距不一致). `key` names it (its ✕ `key/remove`), `label` what a screen reader
 /// calls its ✕. Whether its ✕ was pressed.
 pub fn with_corner_remove(
   c : @ui.Ctx,
@@ -353,23 +355,27 @@ pub fn with_corner_remove(
     None => @ui.style(row=true, w=Full)
   }
   c.box(style=outer, fn() {
-    match w {
-      Some(w) => c.box(style=@ui.style(w=Fixed(w)), body) |> ignore
-      None => {
-        c.box(style=@ui.style(w=grow), body) |> ignore
-        c.box(style=@ui.style(w=Fixed(reach)), fn() {  }) |> ignore
-      }
-    }
-    c.layer(fn() {
-      c.box(style=corner_remove_at, fn() {
-        let b = c.box(style=corner_remove_box, id=x, ty=-reach, fn() {
-          icon(c, "close", size=card_close_icon, color=theme().p.canvas) |> ignore
+    // (the ✕ over the corner of what it is hung on, as far past its right edge as past its top)
+    c.box(
+      style=match w {
+        Some(w) => @ui.style(w=Fixed(w))
+        None => @ui.style(w=grow)
+      },
+      fn() {
+        body()
+        c.layer(fn() {
+          c.box(style=corner_remove_at, fn() {
+            let b = c.box(style=corner_remove_box, id=x, tx=reach, ty=-reach, fn() {
+              icon(c, "close", size=card_close_icon, color=theme().p.canvas) |> ignore
+            })
+            c.cursor(x, Hand)
+            c.semantics(b, Button, id=x, label~)
+          })
+          |> ignore
         })
-        c.cursor(x, Hand)
-        c.semantics(b, Button, id=x, label~)
-      })
-      |> ignore
-    })
+        |> ignore
+      },
+    )
     |> ignore
   })
   |> ignore
