@@ -19,25 +19,27 @@ export const kindMark = style({ color: vars.text });
 /**
  * An agent: its model's maker on a tile; where it stands is a mark at the corner in the chat list's colours
  * (ChatMark.css.ts): yellow spokes stepping round at work, red when it wants someone (blocked, failed); no halo, the tile is
- * small. A gap of the ground (`--ring`) round it.
+ * small. A gap of the ground (`--ring`: the page's, a panel's where it is in one) round it. The badge as a 20 one's has
+ * it and no larger on a larger mark; on a smaller one all of it as much smaller (`--badge`, AgentMark's: a badge 12
+ * across covered a 14 one's whole maker but a sliver).
  */
 export const agentMark = style({
   position: "relative", display: "inline-grid", placeItems: "center", flex: "none", width: "var(--mark)",
   height: "var(--mark)", borderRadius: `calc(var(--mark) * .3 * ${vars.cornerScale})`, background: vars.neutralBg,
   cornerShape: vars.cornerShape,
-  vars: { "--ring": vars.canvas },
   selectors: {
     "&[data-badge]::after": {
-      content: "\"\"", position: "absolute", right: "-3px", bottom: "-3px", width: "12px", height: "12px",
-      boxSizing: "border-box", borderRadius: "50%", border: "2px solid var(--ring)", background: "var(--ring)",
+      content: "\"\"", position: "absolute", right: "calc(-3px * var(--badge))", bottom: "calc(-3px * var(--badge))",
+      width: "calc(12px * var(--badge))", height: "calc(12px * var(--badge))", boxSizing: "border-box", borderRadius: "50%",
+      border: `calc(2px * var(--badge)) solid var(--ring, ${vars.canvas})`, background: `var(--ring, ${vars.canvas})`,
     },
     "&[data-badge=\"block\"]::after, &[data-badge=\"failed\"]::after": { background: "#e5484d" },
     // At work: yellow spokes stepping round (spokes.ts), 10px, with no disc of the ground round them (it showed as a
     // dark rim, 2026-10-19).
     "&[data-badge=\"run\"]::after": { display: "none" },
     "&[data-badge=\"run\"]::before": {
-      content: "\"\"", position: "absolute", right: "-2px", bottom: "-2px", width: "10px", height: "10px", zIndex: 1,
-      ...spokesBox("#f2b01e"),
+      content: "\"\"", position: "absolute", right: "calc(-2px * var(--badge))", bottom: "calc(-2px * var(--badge))",
+      width: "calc(10px * var(--badge))", height: "calc(10px * var(--badge))", zIndex: 1, ...spokesBox("#f2b01e"),
     },
     [`${STILL} &[data-badge="run"]::before`]: stillLoop(),
   },
@@ -50,8 +52,8 @@ spokesTurn(`${agentMark}[data-badge="run"]::before`);
 export const agentMarkJoined = style({
   display: "inline-flex", width: "auto", gap: "0", color: vars.muted, fontSize: vars.textMeta, lineHeight: "1", whiteSpace: "nowrap",
   selectors: {
-    "&[data-badge]::after": { right: "auto", left: "calc(var(--mark) - 9px)" },
-    "&[data-badge=\"run\"]::before": { right: "auto", left: "calc(var(--mark) - 8px)" },
+    "&[data-badge]::after": { right: "auto", left: "calc(var(--mark) - 9px * var(--badge))" },
+    "&[data-badge=\"run\"]::before": { right: "auto", left: "calc(var(--mark) - 8px * var(--badge))" },
   },
 });
 // Hover tints meet at straight edges inside the tile; only its two outside ends are rounded.

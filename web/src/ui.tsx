@@ -207,11 +207,13 @@ export function AgentMark({ maker, runtime, badge, badgeText, size = 20, wrap, c
   wrap?: ((logo: ReactNode) => ReactNode) | undefined; children?: ReactNode;
 }) {
   const logo = <ModelLogo maker={maker} runtime={runtime} size={Math.round(size * 0.62)} />;
+  // (its badge as a 20 one's, as much smaller on a smaller mark: ui.css.ts agentMark)
+  const sized = { "--mark": `${size}px`, "--badge": String(Math.min(size / 20, 1)) } as CSSProperties;
   if (children == null) {
-    return <span className={css.agentMark} style={{ "--mark": `${size}px` } as CSSProperties} data-badge={badge ?? undefined} role="img" aria-label={badgeText ?? undefined}>{logo}</span>;
+    return <span className={css.agentMark} style={sized} data-badge={badge ?? undefined} role="img" aria-label={badgeText ?? undefined}>{logo}</span>;
   }
   return (
-    <span className={`${css.agentMark} ${css.agentMarkJoined}`} style={{ "--mark": `${size}px` } as CSSProperties} data-badge={badge ?? undefined}>
+    <span className={`${css.agentMark} ${css.agentMarkJoined}`} style={sized} data-badge={badge ?? undefined}>
       {wrap ? wrap(logo) : logo}{children}
     </span>
   );

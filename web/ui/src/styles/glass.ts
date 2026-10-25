@@ -6,8 +6,9 @@ import { vars } from "./tokens.css.ts";
  * round it (over a dense list or the messages, glass let the rows read through). White in light; in dark the raised
  * grey, a step off the page.
  */
+export const panelGround = `light-dark(${vars.canvas}, ${vars.raised})`;
 export const panel = {
-  background: `light-dark(${vars.canvas}, ${vars.raised})`,
+  background: panelGround,
   border: `1px solid ${vars.line}`,
   WebkitBackdropFilter: "none",
   backdropFilter: "none",
