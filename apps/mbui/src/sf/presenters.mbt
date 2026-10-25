@@ -181,15 +181,15 @@ pub fn panel(
 }
 
 ///|
-/// How far in from its sides a panel opened by a press lays out its rows where it is drawn now: nothing beside what
-/// opened it (small_panel's pad is round it already), in a sheet as far in as a pick's rows are (sheet_rows). The
-/// presenters' sheet_body says so while it draws one's body; what reaches the sheet's sides on purpose (a strip that
-/// scrolls under them) does not ask.
-pub fn panel_sides() -> @ui.Space {
-  room(panel_sides_in.val)
+/// What reaches a panel's sides on purpose (a strip that scrolls under them, attach's photos): out across the room
+/// the panel leaves at its sides where it is drawn (beside what opened it small_panel's pad, in a sheet as far as its
+/// rows are in), what it holds laying out its own sides. All else in a panel stands in that room by itself.
+pub fn panel_bleed() -> @ui.Style {
+  @ui.style(mx=room(-panel_sides_in.val))
 }
 
 ///|
+/// The room a panel leaves at its sides while its body is drawn (the presenters set it): what panel_bleed reaches across.
 let panel_sides_in : Ref[Double] = { val: 0.0 }
 
 ///|
@@ -562,11 +562,14 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
       if x.title != "" {
         panel_head(c, x.title)
       }
+      // (small_panel's pad round it: what reaches its sides on purpose goes out past that, panel_bleed)
+      panel_sides_in.val = panel_pad
       if x.tall > 0.0 {
         c.box(style=panel_grows, fn() { (x.body)(c, close) }) |> ignore
       } else {
         (x.body)(c, close)
       }
+      panel_sides_in.val = 0.0
       match x.foot {
         Some(f) => c.box(style=panel_foot_at.then(panel_corner_foot()), fn() { f(c, close) }) |> ignore
         None => ()
@@ -915,23 +918,25 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
         c.box(style=sheet_words_at, fn() { c.text(description, style=sheet_lead) |> ignore }) |> ignore
       }
       // what it holds in from the sheet's sides as its words are, opened by nothing (a form, a question); one opened
-      // by a press, as its rows are in a panel beside it, lays out its own sides (filling its room when tall); the
-      // sheet's foot under it unless its buttons are (sheet_foot_at): the sheet's, as a panel's padding beside what
-      // opened it is the panel's, not what it holds
+      // by a press as far in as a pick's rows are, as small_panel's pad has it beside what opened it (what reaches
+      // the sides on purpose says so: panel_bleed); one filling a share lays out its own; the sheet's foot under it
+      // unless its buttons are (sheet_foot_at): the sheet's, as a panel's padding beside what opened it is the
+      // panel's, not what it holds
+      let pressed = p.from != Unanchored
       let room = if x.tall > 0.0 {
         sheet_grows
-      } else if p.from != Unanchored {
+      } else if pressed {
         if x.foot is None {
           sheet_held
         } else {
-          full_width
+          sheet_held_sides
         }
       } else {
         sheet_panel
       }
       let body = fn() {
-        // (its rows, where it has them, as far in from the sheet's sides as a pick's are: panel_sides)
-        panel_sides_in.val = if p.from != Unanchored { sheet_row_sides } else { 0.0 }
+        // (filling its share, it lays out its own sides)
+        panel_sides_in.val = if x.tall > 0.0 { 0.0 } else if pressed { sheet_row_sides } else { sheet_panel_sides }
         (x.body)(c, close)
         panel_sides_in.val = 0.0
       }
@@ -1131,9 +1136,18 @@ let sheet_search_at : @ui.Style = @ui.css("w=Full px=S5 pb=S2_5")
 let sheet_panel : @ui.Style = @ui.css("w=Full px=S5 pb=S6 gap=S2_5")
 
 ///|
-/// What a panel opened by a press holds in a sheet: its own sides, 24 under.
+/// What a panel opened by a press holds in a sheet: as far in as a pick's rows (sheet_rows), 24 under.
 // kept across runs: a value (no field of it changes)
-let sheet_held : @ui.Style = @ui.css("w=Full pb=S6")
+let sheet_held : @ui.Style = @ui.css("w=Full px=S3 pb=S6")
+
+///|
+/// The same with a foot under it (the foot's room under it, not its own).
+// kept across runs: a value (no field of it changes)
+let sheet_held_sides : @ui.Style = @ui.css("w=Full px=S3")
+
+///|
+/// How far in from a sheet's sides what a panel opened by nothing holds is (sheet_panel's px).
+let sheet_panel_sides : Double = 20.0
 
 ///|
 /// A confirm's and a question's words (PageParts.kt confirm, ask): 20 in, 10 apart.

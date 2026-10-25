@@ -116,7 +116,7 @@ pub fn model_triple(
     pick_draft(src, station, of, { "open": Json::boolean(true) })
     @sf.panel(
       @sf.t("android-chat.new.model"),
-      fn(c, _) { c.box(style=@ui.style(w=Full, px=@sf.panel_sides()), fn() { triple_panel(c, src, station, of) }) |> ignore },
+      fn(c, _) { triple_panel(c, src, station, of) },
       from=Of(id),
       w=triple_panel_w,
       foot=fn(c, close) { triple_foot(c, src, station, of, saved, close) },
@@ -429,7 +429,7 @@ fn triple_runs_who(c : @ui.Ctx, src : Source, station : String, of : String, v :
   if c.clicked(who) {
     @sf.panel(
       @sf.t("web-main.model.account"),
-      fn(c, close) { c.box(style=@ui.style(w=Full, px=@sf.panel_sides()), fn() { triple_accounts(c, src, station, of, close) }) |> ignore },
+      fn(c, close) { triple_accounts(c, src, station, of, close) },
       from=Of(who),
       focus=false,
     )
