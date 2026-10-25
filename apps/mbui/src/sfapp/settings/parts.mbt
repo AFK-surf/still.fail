@@ -61,6 +61,18 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
 }
 
 ///|
+/// What a page shows over what scrolls (a field filtering it), standing in its column as its blocks do (scroll_page):
+/// in the wide frame as far in from the pane's sides as they are; elsewhere at its own sides (`style`'s).
+fn over_scroll(c : @ui.Ctx, style : @ui.Style, body : () -> Unit) -> Unit {
+  if wide.val {
+    let side = wide_side(c)
+    c.box(style=style.then(@ui.style(px=@sf.room_of(side))), body) |> ignore
+  } else {
+    c.box(style~, body) |> ignore
+  }
+}
+
+///|
 /// A page's head in the wide frame (pages.css.ts pageHead), the desktop's own pages' too (src/sfdesk): back above it
 /// only on a page under another (`deep`; `on_back` when it is said, else the page popped), the title (`about`: what
 /// the page is for, said by a mark beside it), what it does at its end.

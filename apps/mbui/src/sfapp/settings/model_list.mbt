@@ -13,7 +13,7 @@ let model_list_page : @ui.Style = @ui.css("w=Full h=Full")
 let model_from_seen : @ui.Style = @ui.css("opacity=O100")
 
 ///|
-/// The filter's room: 18 from the sides, 8 over it and 4 under.
+/// The filter's room: 18 from the sides (in the wide frame, the page's column's: over_scroll), 8 over it and 4 under.
 // kept across runs: a value (no field of it changes)
 let model_filter_room : @ui.Style = @ui.css("w=Full px=S4_5 pt=S2 pb=S1")
 
@@ -70,7 +70,7 @@ fn model_list(
   c.box(style=model_list_page, fn() {
     let filter = if models.length() > 8 {
       let mut words = ""
-      c.box(style=model_filter_room, fn() { words = field_box(c, key + "/filter", tr("android-chat.run.model.search")) }) |> ignore
+      over_scroll(c, model_filter_room, fn() { words = field_box(c, key + "/filter", tr("android-chat.run.model.search")) })
       words.trim(chars=" ").to_string().to_lower()
     } else {
       ""
