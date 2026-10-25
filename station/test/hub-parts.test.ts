@@ -2,10 +2,12 @@
 // links, the live view, the agent home, the account pool, the decision protocol, references to other chats.
 import assert from "node:assert/strict";
 import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { brief, readTimeline, transcriptPaths } from "../src/read/transcript.ts";
+import { brief, claudeProject, readTimeline, sessionPlaces, transcriptPaths } from "../src/read/transcript.ts";
 import { linkAgentHome, linkTranscripts, writeBuiltinSkills } from "../src/sessions/agent-home.ts";
 import { isSlackMethod, isStopCommand, slackWithFiles, threadCommand } from "../src/sessions/args.ts";
 import { splitForSlack } from "../src/sessions/chat.ts";
@@ -504,6 +506,48 @@ test("a session's transcripts are found in the shared place, else in the home of
   });
   writeFileSync(join(b, "projects", "w", "three.jsonl"), line("three", "m3"));
   assert.equal(transcriptPaths("claude", dir, [b, a], ["one", "two", "three"]).current, true);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a Claude transcript is looked for in the project of its session's working directory, the projects listed only for one that ran elsewhere", () => {
+  const dir = temp();
+  const shared = join(dir, "transcripts", "claude");
+  const workspace = join(dir, "sessions", "ember", "c-1", "workspace");
+  const moved = join(dir, "repos", "app");
+  const [here, there] = [claudeProject(workspace)!, claudeProject(moved)!];
+  assert.equal(claudeProject("/Users/a/.stillfail/sessions/ember/c-1/workspace"), "-Users-a--stillfail-sessions-ember-c-1-workspace");
+  assert.equal(claudeProject(`/${"x".repeat(200)}`), null, "one Claude Code shortens and hashes");
+  for (const project of [here, there, "-old-place", ...Array.from({ length: 40 }, (_, i) => `-other-${i}`)]) mkdirSync(join(shared, project), { recursive: true });
+  writeFileSync(join(shared, here, "now.jsonl"), line("now", "m1"));
+  writeFileSync(join(shared, there, "since.jsonl"), line("since", "m2"));
+  // Before the data directory moved: in a project no place of the session's names.
+  writeFileSync(join(shared, "-old-place", "before.jsonl"), line("before", "m0"));
+  // Each listing of a directory, counted.
+  const listed: string[] = [];
+  const real = fs.readdirSync;
+  fs.readdirSync = ((path: fs.PathLike, ...rest: unknown[]) => (listed.push(String(path)), (real as (...a: unknown[]) => unknown)(path, ...rest))) as unknown as typeof real;
+  syncBuiltinESMExports();
+  try {
+    const places = sessionPlaces({ cwd: null, workspace });
+    assert.deepEqual(transcriptPaths("claude", dir, [], ["now"], places), { paths: [join(shared, here, "now.jsonl")], current: true });
+    assert.deepEqual(listed, [], "found where it works: nothing listed");
+    // One that ran elsewhere: found by listing the projects, then where it was found.
+    assert.deepEqual(transcriptPaths("claude", dir, [], ["before", "now"], places).paths, [join(shared, "-old-place", "before.jsonl"), join(shared, here, "now.jsonl")]);
+    assert.equal(listed.length, 1);
+    assert.equal(transcriptPaths("claude", dir, [], ["before", "now"], places).paths.length, 2);
+    assert.equal(listed.length, 1, "where it was found");
+    // Moved to another directory: there first, its workspace's still.
+    const both = sessionPlaces({ cwd: moved, workspace });
+    assert.deepEqual(both, [moved, workspace]);
+    assert.deepEqual(transcriptPaths("claude", dir, [], ["now", "since"], both).paths, [join(shared, here, "now.jsonl"), join(shared, there, "since.jsonl")]);
+    assert.equal(listed.length, 1);
+    // No places said: every project's looked in, as before.
+    assert.deepEqual(transcriptPaths("claude", dir, [], ["since"]).paths, [join(shared, there, "since.jsonl")]);
+    assert.equal(listed.length, 2);
+  } finally {
+    fs.readdirSync = real;
+    syncBuiltinESMExports();
+  }
   rmSync(dir, { recursive: true, force: true });
 });
 

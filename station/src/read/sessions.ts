@@ -20,7 +20,7 @@ import { watching } from "./store.ts";
 import * as store from "./store.ts";
 import type { AuthorKind, Json, SessionRow, Store, ThreadRow, ThreadSummary } from "./store.ts";
 import { setLang, tr } from "./spoken.ts";
-import { homesFirst, transcriptPaths } from "./transcript.ts";
+import { homesFirst, sessionPlaces, transcriptPaths } from "./transcript.ts";
 import { chainOf, entriesOf, lengthOf, marksDir, stateOf } from "./transcripts.ts";
 import { HttpError, messageView } from "./views.ts";
 import { type Thumbnail, SMALL, dir as thumbsDir, idOf, kept, wanted as thumbWanted } from "../drive/thumbs.ts";
@@ -319,7 +319,7 @@ function transcriptsOf(s: Store, key: string): { runtime: RuntimeKind; paths: st
   const row = sessionRow(s, key);
   const runtime = runtimeKind(row.runtime) ?? null;
   if (runtime === null || store.runtimeSessions(s, key).length === 0) return null;
-  return { runtime, paths: transcriptPaths(runtime, s.dataDir, homesFirst(configOf(s).profiles, row.profile), store.runtimeSessions(s, key)).paths };
+  return { runtime, paths: transcriptPaths(runtime, s.dataDir, homesFirst(configOf(s).profiles, row.profile), store.runtimeSessions(s, key), sessionPlaces(row)).paths };
 }
 
 /// Where the reading of a session's transcripts stands (read/transcripts.ts `stateOf`), for its live view to go on from
@@ -336,7 +336,7 @@ export function transcriptFile(s: Store, key: string, lang: Lang): Json {
   const row = sessionRow(s, key);
   const runtime = runtimeKind(row.runtime) ?? null;
   if (runtime === null || row.runtimeSessionId === null) return { path: null };
-  const { paths, current } = transcriptPaths(runtime, s.dataDir, homesFirst(configOf(s).profiles, row.profile), store.runtimeSessions(s, key));
+  const { paths, current } = transcriptPaths(runtime, s.dataDir, homesFirst(configOf(s).profiles, row.profile), store.runtimeSessions(s, key), sessionPlaces(row));
   return { path: current ? paths.at(-1)! : null };
 }
 

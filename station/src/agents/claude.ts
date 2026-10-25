@@ -17,6 +17,7 @@
 import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { log } from "../ops/log.ts";
+import { claudeProject } from "../read/transcript.ts";
 import { LiveFromClaude, chars, type ClaudeLiveState } from "./live.ts";
 import { CLAUDE_TOKEN_MARGIN_MS, machineClaudeToken, type Env, type MachineToken } from "./machine-logins.ts";
 import { fileCredentials, takeBack } from "./no-keychain.ts";
@@ -74,8 +75,11 @@ export function toolsLostIn(frame: Json, calls: Set<string>): string | null {
 
 export const userMessage = (text: string) => JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text }] } });
 
-/// Claude keeps a session at $CLAUDE_CONFIG_DIR/projects/<encoded cwd>/<id>.jsonl.
-export function transcriptExists(home: string, sessionId: string): boolean {
+/// Claude keeps a session at $CLAUDE_CONFIG_DIR/projects/<encoded cwd>/<id>.jsonl: looked for in the directory of `cwd`
+/// (where it runs on), then in every project's (it ran elsewhere before: 923 directories on ccvm, each looked at).
+export function transcriptExists(home: string, sessionId: string, cwd: string): boolean {
+  const project = claudeProject(cwd);
+  if (project !== null && existsSync(join(home, "projects", project, `${sessionId}.jsonl`))) return true;
   let dirs: string[];
   try {
     dirs = readdirSync(join(home, "projects"));
@@ -267,7 +271,7 @@ export class ClaudeDriver implements AgentDriver {
   async open(options: OpenOptions, events: (event: RuntimeEvent) => void): Promise<AgentSession> {
     const home = options.profile.home;
     mkdirSync(home, { recursive: true });
-    if (options.resume !== undefined && !transcriptExists(home, options.resume)) {
+    if (options.resume !== undefined && !transcriptExists(home, options.resume, options.cwd)) {
       // claude would start and exit at once; failing here lets the caller start fresh.
       throw new Error(`no claude transcript for session ${options.resume}`);
     }

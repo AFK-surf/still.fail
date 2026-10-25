@@ -150,6 +150,32 @@ export function transcriptPath(runtime: RuntimeKind, home: string, id: string): 
   return transcriptIn(runtime, join(home, transcriptDir(runtime)), id);
 }
 
+/// The directory Claude Code keeps a working directory's transcripts in, in projects/ (its sanitizePath): each character
+/// but an ASCII letter or digit a dash. Past 200 characters it shortens the name and adds a hash of it: none said.
+export function claudeProject(cwd: string): string | null {
+  const name = cwd.replace(/[^a-zA-Z0-9]/g, "-");
+  return name.length <= 200 ? name : null;
+}
+
+/// Where a Claude session's transcript is in a directory of them when it ran in one of `places` (the session's working
+/// directories): looked for there alone, a file or two, not in every project's directory (the shared place has one for
+/// each chat the station ever had: 923 on ccvm, each looked at in turn on the main thread).
+function placedIn(runtime: RuntimeKind, dir: string, id: string, places: readonly string[]): string | null {
+  if (runtime !== "claude") return null;
+  for (const place of places) {
+    const project = claudeProject(place);
+    if (project === null) continue;
+    const path = join(dir, project, `${id}.jsonl`);
+    if (isFile(storage(path))) return path;
+  }
+  return null;
+}
+
+/// The Claude transcripts found in a project not of their session's places (it ran before the data directory moved, or
+/// in a terminal's directory), by directory and id: a transcript stays where it is (put away, its `.zst` beside), so each
+/// is looked for in every project once a process.
+const elsewhere = new Map<string, string>();
+
 /// Where a session's transcript is in a directory of the runtime's transcripts (a home's, `transcriptDir`, or the shared
 /// place), if it is there.
 function transcriptIn(runtime: RuntimeKind, dir: string, id: string): string | null {
@@ -160,9 +186,12 @@ function transcriptIn(runtime: RuntimeKind, dir: string, id: string): string | n
     return isFile(storage(path)) ? path : null;
   }
   if (runtime === "claude") {
+    const at = `${dir}\0${id}`;
+    const kept = elsewhere.get(at);
+    if (kept !== undefined && isFile(storage(kept))) return kept;
     for (const project of entriesOf(dir) ?? []) {
       const path = join(dir, project, `${id}.jsonl`);
-      if (isFile(storage(path))) return path;
+      if (isFile(storage(path))) return (elsewhere.set(at, path), path);
     }
     return null;
   }
@@ -216,28 +245,44 @@ export const homesFirst = (profiles: readonly { id: string; home: string }[], fi
 /// write them, whichever account and home a runtime session ran on and whatever the config says now; then in each of
 /// `homes` (its profile's first) for a home that keeps its own (one outside the data directory that had transcripts in
 /// it before it was a profile's, agent-home.ts `linkTranscripts`). `current` is whether the current one's is there: a
-/// runtime writes it only once its conversation has begun.
-export function transcriptPaths(runtime: RuntimeKind, dataDir: string, homes: string[], ids: string[]): { paths: string[]; current: boolean } {
-  // Each directory once, however it is reached (a home's that links to the shared place is that place).
-  const seen = new Set<string>();
-  const dirs = [sharedTranscripts(dataDir, runtime), ...homes.map((home) => join(home, transcriptDir(runtime)))].filter((dir) => {
-    let real: string;
+/// runtime writes it only once its conversation has begun. `places`: where the session works and worked (`sessionPlaces`),
+/// where a Claude transcript is looked for first, in every directory, before anywhere else in them.
+export function transcriptPaths(runtime: RuntimeKind, dataDir: string, homes: string[], ids: string[], places: readonly string[] = []): { paths: string[]; current: boolean } {
+  // Each directory once, however it is reached (a home's that links to the shared place is that place), the homes' made
+  // out only once one is to be looked in: nearly every transcript is in the shared place, the first.
+  const shared = sharedTranscripts(dataDir, runtime);
+  const ways = homes.map((home) => join(home, transcriptDir(runtime)));
+  const real = (dir: string): string | null => {
     try {
-      real = realpathSync(dir);
+      return realpathSync(dir);
     } catch {
-      return false;
+      return null;
     }
-    return !seen.has(real) && (seen.add(real), true);
-  });
-  const found = ids.map((id) => {
-    for (const dir of dirs) {
-      const path = transcriptIn(runtime, dir, id);
+  };
+  let seen: Set<string> | null = null;
+  const dirs = [shared];
+  const dirAt = (i: number): string | undefined => {
+    while (dirs.length <= i && ways.length > 0) {
+      seen ??= new Set([real(shared) ?? shared]);
+      const dir = ways.shift()!;
+      const at = real(dir);
+      if (at !== null && !seen.has(at)) (seen.add(at), dirs.push(dir));
+    }
+    return dirs[i];
+  };
+  const inDirs = (look: (dir: string) => string | null): string | null => {
+    for (let i = 0; dirAt(i) !== undefined; i++) {
+      const path = look(dirs[i]!);
       if (path !== null) return path;
     }
     return null;
-  });
+  };
+  const found = ids.map((id) => inDirs((dir) => placedIn(runtime, dir, id, places)) ?? inDirs((dir) => transcriptIn(runtime, dir, id)));
   return { paths: found.filter((p) => p !== null), current: found.at(-1) != null };
 }
+
+/// Where a session works and worked, for `transcriptPaths`: the directory it was moved to, and its workspace.
+export const sessionPlaces = (row: { cwd: string | null; workspace: string }): string[] => (row.cwd !== null && row.cwd !== row.workspace ? [row.cwd, row.workspace] : [row.workspace]);
 
 function clip(text: string): string {
   const chars = Array.from(text);
