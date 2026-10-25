@@ -1,0 +1,17 @@
+# The wide frame's sidebar switched between shown a while and pinned open with a chat open (Rail.tsx's rail
+# onClickCapture): MBUI_FIXTURE=webdemo MBUI_WIN=1280x800: 对话 pressed (folded, shown a while: the pointer is on the
+# rail), pressed again (open), and once more (shown a while); the chat's bar moving with its page each time.
+timeout 20000
+until 新建对话
+wait 600
+tap 把那个弄一下
+wait 900
+hover icon:chats
+wait 200
+tap icon:chats
+wait 900
+tap icon:chats
+wait 900
+tap icon:chats
+wait 900
+exit
