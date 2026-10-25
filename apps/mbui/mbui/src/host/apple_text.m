@@ -1,6 +1,7 @@
 // Text with Core Text: shaping into grapheme clusters with their advances,
-// and rasterizing each cluster into the RGBA atlas when it is first drawn
-// (drawn ahead, off the frames' thread, where it was shaped a frame before).
+// and rasterizing each cluster into an atlas when it is first drawn (drawn
+// ahead, off the frames' thread, where it was shaped a frame before): the
+// words' (their cover, a byte a texel) or colour glyphs' (RGBA).
 #import "apple.h"
 #import <CoreGraphics/CoreGraphics.h>
 #import <ImageIO/ImageIO.h>
@@ -26,7 +27,13 @@ static NSMutableArray<NSString *> *texts;
 static glyph_entry *entries;
 static int n_entries, cap_entries;
 static NSMutableDictionary<NSString *, id> *fonts;
-static int pack_x, pack_y, pack_h;
+// Where each atlas (apple.h: the words', colour glyphs') has room: glyphs in rows left to right, each row as tall as
+// its tallest; the atlas as tall as it is now (grown twice as tall as a row would not fit, up to `most`: then started
+// over), the place the next goes, its row's height.
+typedef struct {
+  int h, most, x, y, row;
+} packer;
+static packer packs[2] = {{MB_ATLAS_W, 4 * MB_ATLAS_W, 0, 0, 0}, {MB_ATLAS_W / 4, MB_ATLAS_W, 0, 0, 0}};
 static int generation;
 
 moonbit_string_t mb_string_from_ns(NSString *s) {
@@ -136,7 +143,7 @@ static void faces_changed(void) {
   ahead_forget();
   last_size = -1;
   for (int i = 0; i < n_entries; i++) entries[i].done = 0;
-  pack_x = pack_y = pack_h = 0;
+  for (int c = 0; c < 2; c++) packs[c].x = packs[c].y = packs[c].row = 0;
   generation++;
 }
 
@@ -664,6 +671,13 @@ static MBDrawn *draw_cluster(NSString *cluster, CTFontRef f, int style, BOOL clo
   CGContextSetTextMatrix(ctx, oblique ? CGAffineTransformMake(1, 0, slant, 1, 0, 0) : CGAffineTransformIdentity);
   CGContextSetTextPosition(ctx, -b.origin.x, -b.origin.y);
   CTLineDraw(line, ctx);
+  if (!color) {
+    // (drawn in white: its cover alone is kept, the words' atlas's byte a texel)
+    uint8_t *a = malloc((size_t)pw * ph);
+    for (size_t i = 0; i < (size_t)pw * ph; i++) a[i] = px[i * 4 + 3];
+    free(px);
+    px = a;
+  }
   if (closer) {
     double iso = NAN;
     for (CFIndex r = 0; r < CFArrayGetCount(runs); r++) {
@@ -688,38 +702,45 @@ static MBDrawn *draw_cluster(NSString *cluster, CTFontRef f, int style, BOOL clo
   return d;
 }
 
-// The glyph of `key` put in the atlas from its picture (drawn at mb_text_scale).
+// The glyph of `key` put in its atlas (the words', or colour glyphs') from its picture (drawn at mb_text_scale).
 static void place(int key, MBDrawn *d) {
   glyph_entry *e = &entries[key];
   e->done = 1;
   if (!d.px) return;
   double sc = mb_text_scale;
-  int pw = d.pw, ph = d.ph;
-  if (pack_x + pw + 1 > mb_atlas_size) {
-    pack_x = 0;
-    pack_y += pack_h + 1;
-    pack_h = 0;
+  int pw = d.pw, ph = d.ph, c = d.color;
+  packer *p = &packs[c];
+  if (p->x + pw + 1 > MB_ATLAS_W) {
+    p->x = 0;
+    p->y += p->row + 1;
+    p->row = 0;
   }
-  if (pack_y + ph + 1 > mb_atlas_size) {
+  // (taller as it fills: started over only past its most, every glyph in it drawn again then; the other's kept)
+  while (p->y + ph + 1 > p->h && p->h < p->most) {
+    p->h = MIN(p->h * 2, p->most);
+    mb_atlas_grow(c, p->h);
+  }
+  if (p->y + ph + 1 > p->h) {
     // full: start over; MoonBit drops its glyph cache when the generation changes
-    for (int i = 0; i < n_entries; i++) entries[i].done = 0;
+    for (int i = 0; i < n_entries; i++)
+      if (entries[i].color == c) entries[i].done = 0;
     e->done = 1;
-    pack_x = pack_y = pack_h = 0;
+    p->x = p->y = p->row = 0;
     generation++;
   }
-  mb_atlas_upload(pack_x, pack_y, pw, ph, d.px);
+  mb_atlas_upload(c, p->x, p->y, pw, ph, d.px);
   CGRect b = d.b;
-  e->u = pack_x;
-  e->v = pack_y;
+  e->u = p->x + (c ? MB_ATLAS_COLOR_U : 0);
+  e->v = p->y;
   e->w = pw / sc;
   e->h = ph / sc;
   e->ox = b.origin.x;
   // moved by as much as its glyphs sit further right in the line than they do on their own
   if (e->dx != 0) e->ox += e->dx - (isnan(d.iso) ? 0 : d.iso);
   e->oy = -(b.origin.y + b.size.height);
-  e->color = d.color;
-  pack_x += pw + 1;
-  if (ph > pack_h) pack_h = ph;
+  e->color = c;
+  p->x += pw + 1;
+  if (ph > p->row) p->row = ph;
 }
 
 // ---- drawing ahead: the glyphs a frame shaped and did not draw (text.mbt glyphs_ahead), drawn on a queue of their

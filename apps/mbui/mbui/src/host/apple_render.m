@@ -4,7 +4,6 @@
 #import <ImageIO/ImageIO.h>
 #import <CoreGraphics/CoreGraphics.h>
 
-int mb_atlas_size = 2048;
 // the numbers of an instance (src/ui/scene.mbt)
 #define MB_INST 52
 
@@ -14,7 +13,8 @@ static id<MTLRenderPipelineState> mpipe;
 static id<MTLRenderPipelineState> rpipe_off;
 // holes for native views (kind 9): written, not blended
 static id<MTLRenderPipelineState> hpipe;
-static id<MTLTexture> atlas;
+// the words' glyphs (R8) and colour glyphs (RGBA): MB_ATLAS_W wide, as tall as last made
+static id<MTLTexture> atlas, catlas;
 static CAMetalLayer *mlayer;
 static id<MTLBuffer> bufs[3];
 static size_t buf_cap[3];
@@ -113,7 +113,7 @@ MB_CORNER_SL
 "}\n"
 "fragment float4 fmain(VOut in [[stage_in]], const device Inst* inst [[buffer(0)]],\n"
 "    constant U& u [[buffer(1)]], constant G& g [[buffer(2)]], texture2d<float> atlas [[texture(0)]],\n"
-"    texture2d<float> img [[texture(1)]], texture2d<float> bd [[texture(2)]]) {\n"
+"    texture2d<float> img [[texture(1)]], texture2d<float> bd [[texture(2)]], texture2d<float> catlas [[texture(3)]]) {\n"
 "  Inst I = inst[in.iid];\n"
 "  float2 p = in.p, cp = in.cp;\n"
 "  // cut to its clip: a rect's, hard; a rounded one's, covered as edges are\n"
@@ -131,11 +131,14 @@ MB_CORNER_SL
 "  float4 col = I.color;\n"
 "  if (kind == 1 || kind == 3 || kind == 7) {\n"
 "    constexpr sampler s(filter::linear, coord::pixel);\n"
-"    // within its own cell (c2: where in the atlas, in texels), however its rect is stretched or turned: a sample\n"
-"    // past the cell's edge texels would blend in what lies beside it (another glyph, one left from before the atlas\n"
-"    // started over)\n"
-"    float2 uv = clamp(I.c2.xy + (p - I.rect.xy) / I.rect.zw * I.c2.zw, I.c2.xy + 0.5, I.c2.xy + I.c2.zw - 0.5);\n"
-"    float4 t = atlas.sample(s, uv);\n"
+"    // within its own cell (c2: where in the atlas, in texels; a colour glyph's MB_ATLAS_COLOR_U across past its place\n"
+"    // in theirs), however its rect is stretched or turned: a sample past the cell's edge texels would blend in what\n"
+"    // lies beside it (another glyph, one left from before the atlas started over). The words' atlas has a glyph's\n"
+"    // cover alone: white, premultiplied, as the colour one would have it.\n"
+"    bool colour = I.c2.x >= 16384.0;\n"
+"    float2 at = float2(I.c2.x - (colour ? 16384.0 : 0.0), I.c2.y);\n"
+"    float2 uv = clamp(at + (p - I.rect.xy) / I.rect.zw * I.c2.zw, at + 0.5, at + I.c2.zw - 0.5);\n"
+"    float4 t = colour ? catlas.sample(s, uv) : float4(atlas.sample(s, uv).r);\n"
 "    if (kind == 1) return (float4(col.rgb, 1.0) * (t.a * col.a)) * cover;\n"
 "    if (kind == 7) {\n"
 "      // inked by how light what is under its glass is, looked at round the glass's middle\n"
@@ -310,6 +313,17 @@ static id<MTLRenderPipelineState> make_pipe(id<MTLLibrary> lib, MTLPixelFormat f
   return p;
 }
 
+// An atlas `h` texels tall (MB_ATLAS_W wide): the words' a byte a texel, colour glyphs' four.
+static id<MTLTexture> atlas_texture(int color, int h) {
+  MTLTextureDescriptor *td = [MTLTextureDescriptor
+      texture2DDescriptorWithPixelFormat:color ? MTLPixelFormatRGBA8Unorm : MTLPixelFormatR8Unorm
+                                   width:MB_ATLAS_W
+                                  height:(NSUInteger)h
+                               mipmapped:NO];
+  td.usage = MTLTextureUsageShaderRead;
+  return [dev newTextureWithDescriptor:td];
+}
+
 void mb_render_init(CAMetalLayer *layer) {
   dev = MTLCreateSystemDefaultDevice();
   queue = [dev newCommandQueue];
@@ -335,13 +349,8 @@ void mb_render_init(CAMetalLayer *layer) {
   pd.colorAttachments[0].pixelFormat = MTLPixelFormatRGB10A2Unorm;
   ppipe_deep = [dev newRenderPipelineStateWithDescriptor:pd error:&err];
   if (!ppipe_deep) NSLog(@"post pipeline: %@", err);
-  MTLTextureDescriptor *td = [MTLTextureDescriptor
-      texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
-                                   width:mb_atlas_size
-                                  height:mb_atlas_size
-                               mipmapped:NO];
-  td.usage = MTLTextureUsageShaderRead;
-  atlas = [dev newTextureWithDescriptor:td];
+  atlas = atlas_texture(0, MB_ATLAS_W);
+  catlas = atlas_texture(1, MB_ATLAS_W / 4);
   inflight = dispatch_semaphore_create(3);
 }
 
@@ -355,8 +364,25 @@ void mb_render_set_size(double w, double h, double scale) {
   if (!CGSizeEqualToSize(mlayer.drawableSize, want)) mlayer.drawableSize = want;
 }
 
-void mb_atlas_upload(int x, int y, int w, int h, const void *rgba) {
-  [atlas replaceRegion:MTLRegionMake2D(x, y, w, h) mipmapLevel:0 withBytes:rgba bytesPerRow:w * 4];
+void mb_atlas_upload(int color, int x, int y, int w, int h, const void *px) {
+  [(color ? catlas : atlas) replaceRegion:MTLRegionMake2D(x, y, w, h) mipmapLevel:0 withBytes:px
+                              bytesPerRow:(NSUInteger)w * (color ? 4 : 1)];
+}
+
+// Atlas `color` made `h` texels tall, what it has kept where it is (copied by the CPU, which alone writes it; the
+// frames still on the GPU keep the one they were given).
+void mb_atlas_grow(int color, int h) {
+  id<MTLTexture> was = color ? catlas : atlas;
+  if ((int)was.height >= h) return;
+  id<MTLTexture> t = atlas_texture(color, h);
+  NSUInteger bpr = was.width * (color ? 4 : 1);
+  void *px = malloc(bpr * was.height);
+  MTLRegion r = MTLRegionMake2D(0, 0, was.width, was.height);
+  [was getBytes:px bytesPerRow:bpr fromRegion:r mipmapLevel:0];
+  [t replaceRegion:r mipmapLevel:0 withBytes:px bytesPerRow:bpr];
+  free(px);
+  if (color) catlas = t;
+  else atlas = t;
 }
 
 // ---------------------------------------------------------------------------
@@ -508,6 +534,7 @@ static id<MTLRenderCommandEncoder> begin_pass(id<MTLCommandBuffer> cb, id<MTLTex
   [enc setFragmentBytes:&u length:sizeof(u) atIndex:1];
   [enc setFragmentBytes:&gu length:sizeof(gu) atIndex:2];
   [enc setFragmentTexture:atlas atIndex:0];
+  [enc setFragmentTexture:catlas atIndex:3];
   [enc setFragmentTexture:(gtex ?: atlas) atIndex:2];
   return enc;
 }
