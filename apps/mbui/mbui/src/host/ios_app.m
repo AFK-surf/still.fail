@@ -145,6 +145,7 @@ static void run_script_step(int step);
   self.editMenu = [[UIEditMenuInteraction alloc] initWithDelegate:self];
   [self addInteraction:self.editMenu];
   self.link = [CADisplayLink displayLinkWithTarget:self selector:@selector(tick:)];
+  // (past 60 on an iPhone only as its Info.plist allows: scripts/ios.sh sets CADisableMinimumFrameDurationOnPhone)
   self.link.preferredFrameRateRange = CAFrameRateRangeMake(60, 120, 120);
   [self.link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
   return self;
