@@ -207,7 +207,7 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
       }
       let busy = @settings.is_doing(core, ["machineLogin.browser"], [("station", station), ("id", id)])
       let again = if relay {
-        [(@sf.t("web-main.logins.signIn"), fn() { login_relay_now(core, station, id, text(l, "title")) })]
+        [(@sf.t("web-main.logins.signIn"), fn() { login_relay(c, core, station, id, text(l, "title")) })]
       } else {
         []
       }
@@ -290,37 +290,33 @@ fn login_open(core : Core, url : String) -> Unit {
 /// station's own machine: the browser comes back there by itself), then answers the page to open; this device's port
 /// taken is said on the card (the core's `relayText`), nothing opened.
 fn login_relay(c : @ui.Ctx, core : Core, station : String, id : String, title : String) -> Unit {
-  c.tell("login-open/" + id, fn() { login_relay_now(core, station, id, title) })
-}
-
-///|
-/// login_relay's, at once (outside a build: a menu's item chosen).
-fn login_relay_now(core : Core, station : String, id : String, title : String) -> Unit {
   let here = this_machine() == station
-  // the app held up while the core waits for the browser, by a notice saying which login (LoginRelay.kt: its title;
-  // where the system keeps nothing up, nothing)
-  @ui.hold_words(
-    channel=@sf.t("web-main.logins.title"),
-    title=if title == "" { @sf.t("web-main.logins.title") } else { title },
-    body=@sf.t("web-main.logins.waitingBrowser"),
-  )
-  (core.call)(
-    "machineLogin.open",
-    { "station": Json::string(station), "id": Json::string(id), "here": Json::boolean(here) },
-    fn(r) {
-      match r {
-        Ok(v) => login_open(core, text(Some(v), "url"))
-        Err(e) if text(Some(e), "code") == "port_taken" => ()
-        Err(e) =>
-          (core.say)(
-            @sf.t("android-misc.act.failed", args=[
-              ("what", @sf.t("web-main.logins.openWhat")),
-              ("error", error_words(e)),
-            ]),
-          )
-      }
-    },
-  )
+  c.tell("login-open/" + id, fn() {
+    // the app held up while the core waits for the browser, by a notice saying which login (LoginRelay.kt: its title;
+    // where the system keeps nothing up, nothing)
+    @ui.hold_words(
+      channel=@sf.t("web-main.logins.title"),
+      title=if title == "" { @sf.t("web-main.logins.title") } else { title },
+      body=@sf.t("web-main.logins.waitingBrowser"),
+    )
+    (core.call)(
+      "machineLogin.open",
+      { "station": Json::string(station), "id": Json::string(id), "here": Json::boolean(here) },
+      fn(r) {
+        match r {
+          Ok(v) => login_open(core, text(Some(v), "url"))
+          Err(e) if text(Some(e), "code") == "port_taken" => ()
+          Err(e) =>
+            (core.say)(
+              @sf.t("android-misc.act.failed", args=[
+                ("what", @sf.t("web-main.logins.openWhat")),
+                ("error", error_words(e)),
+              ]),
+            )
+        }
+      },
+    )
+  })
 }
 
 ///|

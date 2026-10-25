@@ -8,7 +8,7 @@ import { stationApi, useAction, useMemberships, useOverview, useProfiles, useSta
 import type { MachineLogin, ProfileFlowView, RuntimeInstall, WorkspaceProfile } from "../core/shapes.ts";
 import { hosts, profileGroups } from "../cloud/settings.tsx";
 import { ACCESS, KEYED, RUNTIME_LABEL } from "../format.ts";
-import { Check, ChevronRight, Key, Monitor, More } from "@stillfail/ui/icons.tsx";
+import { Check, ChevronRight, Key, More } from "@stillfail/ui/icons.tsx";
 import type { Choice } from "../pages/Accounts.tsx";
 import { useProfileFlow } from "../profileFlow.ts";
 import { QuotaBars } from "../components.tsx";
@@ -1024,7 +1024,15 @@ function LoginSteps({ job, provider, send, inStation }: {
   const otherWays = t("common.login.otherWays");
   const stationStep = inStation && job?.browser ? (
     <button type="button" className={css.mStepMore} aria-label={otherWays} disabled={inStation.busy}
-      onClick={(e) => app.menu({ anchor: e.currentTarget.getBoundingClientRect(), items: [{ label, icon: <Monitor size={18} />, action: () => open(inStation.ask, label) }] })}>
+      onClick={() => app.sheet({ height: 0.25, content: () => (
+        <>
+          <SheetGrab />
+          <SheetHead title={otherWays} />
+          <div className={sheetsCss.mSheetScroll}>
+            <PickRow label={label} onClick={() => { app.sheet(null); open(inStation.ask, label); }} />
+          </div>
+        </>
+      ) })}>
       <More size={18} />
     </button>
   ) : null;
