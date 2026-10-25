@@ -136,10 +136,12 @@ export class Changelog implements Owner {
     });
   }
 
-  /// What build `to` brings `app` at build `from`: the lines of its changes after `from`, up to `to`, newest first. The
-  /// changelog kept is read again first when it was read before `to` was out, so a build is known with its lines.
-  brings(app: string, from: number, to: number): Effect.Effect<string[]> {
+  /// What build `to` brings this app (as the device said it is: `client.device`) at build `from`: the lines of its
+  /// changes after `from`, up to `to`, newest first. The changelog kept is read again first when it was read before `to`
+  /// was out, so a build is known with its lines.
+  brings(from: number, to: number): Effect.Effect<string[]> {
     return Effect.gen({ self: this }, function* () {
+      const app = this.#app();
       const known = (feed: J) => partsOf(app).every((part) => (int(get(get(feed, "released"), part)) ?? -Infinity) >= to);
       if (!known(this.#data.record(TABLE, "feed"))) yield* this.read();
       const feed = this.#data.record(TABLE, "feed") as J;
@@ -151,9 +153,15 @@ export class Changelog implements Owner {
     });
   }
 
+  /// The app the device said it is (web, desktop or android); "" before it says.
+  #app(): string {
+    const app = get(this.#data.record(TABLE, "device") ?? null, "app");
+    return typeof app === "string" ? app : "";
+  }
+
   value(): J {
     const device: J = this.#data.record(TABLE, "device") ?? null;
-    const app = typeof get(device, "app") === "string" ? device.app : "";
+    const app = this.#app();
     const build = int(get(device, "build"));
     const seen = int(this.#data.record(TABLE, "seen"));
     const feed = this.#data.record(TABLE, "feed") as J;
