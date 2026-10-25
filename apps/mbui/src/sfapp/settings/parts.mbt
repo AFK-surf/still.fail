@@ -321,7 +321,7 @@ fn place_page(
   body : () -> Unit,
   back? : String = tr("android-settings.title"),
   actions? : () -> Unit,
-  primary? : (String, () -> Unit),
+  primary? : (String, (@sf.Anchor) -> Unit),
   about? : String = "",
 ) -> Unit {
   c.box(style=page_fill, fn() {
@@ -345,7 +345,7 @@ fn place_page(
                   _ => ""
                 }
                 if head_pill(c, key, label) {
-                  run()
+                  run(Of(c.id(key)))
                 }
               }
               None => ()
@@ -385,7 +385,7 @@ fn place_page(
                       _ => ""
                     },
                   ) {
-                  run()
+                  run(Of(c.id(key)))
                 }
               None => ()
             }

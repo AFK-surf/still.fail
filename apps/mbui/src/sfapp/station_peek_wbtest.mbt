@@ -63,7 +63,7 @@ test "an agent's station's card: 文件 opens its files" {
 test "a station's card while it is offline: says so, no figures; its page still a tap away" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat")
-  @settings.open_station_peek("ws1/st2")
+  @settings.open_station_peek("ws1/st2", from=Unanchored)
   t.frame()
   assert_true(t.find("MBA") is Some(_))
   assert_true(t.find("离线：在该机器上打开 still.fail 即可重新连接") is Some(_))

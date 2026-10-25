@@ -1069,7 +1069,10 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   let place_add = match active {
     Some("connects") => {
       let core = settings_core(src, ws)
-      @sfdesk.connects_add(src, core, @settings.here_of(core, ws.id, ws.name))
+      match @sfdesk.connects_add(src, core, @settings.here_of(core, ws.id, ws.name)) {
+        Some(run) => Some(fn(_) { run() })
+        None => None
+      }
     }
     Some(a) => @settings.place_action(settings_core(src, ws), @settings.here_of(settings_core(src, ws), ws.id, ws.name), a)
     None => None
@@ -1260,7 +1263,8 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
       "ling" => new_chat(c)
       "plus" =>
         match place_add {
-          Some(run) => run()
+          // (what it puts up opened by the notch)
+          Some(run) => run(Of(action_id))
           None => files_lend(c, src, ws)
         }
       _ => ()

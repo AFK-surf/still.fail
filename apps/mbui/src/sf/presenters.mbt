@@ -799,6 +799,12 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
     p.open,
     title,
     fn() {
+      // (the dialog's padding round what it holds: what reaches its sides on purpose goes out across it, panel_bleed;
+      // its rows' grounds stand at it, concentric with its corner as the last is with its foot's, their words a row's
+      // padding in, and its words that are not a row's as far in, panel_words_in, as a small panel's)
+      let (was, words_were) = (panel_sides_in.val, words_in_now.val)
+      panel_sides_in.val = dialog_pad
+      words_in_now.val = card_pad - corner_inset
       // a tall one's body fills its share of the window (what it holds lays itself out in the room it is given)
       if x.tall > 0.0 {
         let room = x.tall * wh_of(c)
@@ -806,6 +812,8 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
       } else {
         (x.body)(c, close)
       }
+      panel_sides_in.val = was
+      words_in_now.val = words_were
     },
     description~,
     footer?=match x.foot {

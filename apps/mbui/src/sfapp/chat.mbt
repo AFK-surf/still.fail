@@ -413,7 +413,7 @@ fn station_chip(c : @ui.Ctx, address : String, s : Station) -> Unit {
   let id = c.id("bar-station")
   c.cursor(id, Hand)
   if c.clicked(id) {
-    @settings.open_station_peek(address)
+    @settings.open_station_peek(address, from=Of(id))
   }
   c.box(id~, fn() { station_tag(c, s) }) |> ignore
 }
