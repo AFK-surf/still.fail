@@ -121,7 +121,7 @@ pub fn viewer_tool(
     c.cursor(id, Hand)
   }
   let hot = live && (c.lit(id) || c.pressed(id))
-  let b = c.box(style=if tools_across.val { viewer_tool_box.then(finger_least()) } else { viewer_tool_box }, selected=on, disabled~, id=if live { id } else { 0 }, fn() {
+  let b = c.box(style=viewer_tool_box, selected=on, disabled~, id=if live { id } else { 0 }, fn() {
     icon(c, icon_name, size=viewer_tool_icon, color=if on || hot { ink.ink } else { ink.muted }) |> ignore
   })
   c.semantics(b, Button, id~, label~, pressed=on, disabled~)

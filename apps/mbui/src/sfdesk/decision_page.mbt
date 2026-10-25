@@ -148,7 +148,7 @@ fn zou_bar_button(c : @ui.Ctx, key : String, label : String, on : Bool) -> Bool 
   let id = if on { c.id(key) } else { 0 }
   c.cursor(id, Hand)
   let hot = on && c.lit(id)
-  let b = c.box(style=(if !on { zp_button_off } else if hot { zp_button_hot } else { zp_button }).then(@sf.finger_least_h()), id~, fn() {
+  let b = c.box(style=if !on { zp_button_off } else if hot { zp_button_hot } else { zp_button }, id~, fn() {
     c.text(label, style=if hot { zp_button_words_hot } else { zp_button_words }) |> ignore
   })
   c.semantics(b, Button, id~, label~)
@@ -605,7 +605,7 @@ fn zp_bar_tape() -> @ui.Style {
       h=Fixed(@sf.wide_bar_h + @sf.tape_bar_over()),
       pt=@sf.tape_bar_over_room(),
       pb=SPx,
-      pr=@sf.room_of(@sf.tape_bar_end(zp_bar_end, side=@sf.finger_side(zp_button_h))),
+      pr=@sf.room_of(@sf.tape_bar_end(zp_bar_end, side=zp_button_h)),
     ),
   )
 }

@@ -44,7 +44,9 @@ upright after. A tablet and an opened fold's inner screen turn as they are held.
   and `set_web_lines(wide)` go, and so does every use of the input for any of these.
   - **The tier:** how the shell arranges the panes, and where something opened goes (pushed, a pane, a side tab).
   - **The native input:**
-    - the look: the theme's palette, type scale and row heights, and touch targets (44 at least with touch);
+    - the look: the theme's palette, type scale and row heights, and touch targets (44 at least with touch: a row that
+      high; a button drawn its own size, a finger reaching it from round it, mbui's finger_reach: what shows and what a
+      finger takes need not be the same, the user, 2026-10-26);
       touch's is the phone's, keyboard and mouse's the web's. The panes side by side are told apart by their grounds in
       both, as the web's: the sidebar a step under the page's ground (touch: the page's beige `bg`, the sidebar a step
       under it, what is chosen in it a step under that);
@@ -82,7 +84,7 @@ What differs comes of two things alone, the native input and a width, and none o
 
 | What differs | By | Decided in |
 |---|---|---|
-| Sizes: the type, row heights, density, touch targets (44 at least with touch) | the native input | the theme, chosen once (`@sf.begin`) |
+| Sizes: the type, row heights, density, touch targets (44 at least with touch: rows; buttons reached from round them, drawn their own size) | the native input | the theme, chosen once (`@sf.begin`) |
 | What only a pointer's hover would show (a row's 归档, its time, its ⋯): with touch always there, or on a long press | the native input | the library's parts (sf/hand.mbt) |
 | A menu, a pick, a confirm: a sheet from the foot, or a popover or a dialog | the native input and the tier | the presenters |
 | Reaching things: the search field over the chats' list or ⌘K; the bottom bar or the rail | the native input and the tier | the shell |

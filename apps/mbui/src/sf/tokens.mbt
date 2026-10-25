@@ -872,18 +872,10 @@ let wide_control_h : Double = 36.0
 let narrow_control_h : Double = 44.0
 
 ///|
-/// What a thing pressed takes at least, by the screen (docs/architecture.md: touch targets 44 at least on a touch
-/// device): there, 44 by 44 at least, what it shows in its middle; with keyboard and mouse nothing more. For a button.
-pub fn finger_least() -> @ui.Style {
-  if theme().narrow {
-    finger_square
-  } else {
-    finger_none
-  }
-}
-
-///|
-/// As finger_least, its height alone: for a row, which is as wide as its list.
+/// What a row takes at least, by the screen: on a touch device 44 high, what it shows in its middle (a row is as wide as
+/// its list, its height the one a finger aims at); with keyboard and mouse nothing more. A button is drawn its own size
+/// on either: a finger reaches one smaller than its tip from round it (mbui's finger_reach, the system's 44 or 48), what
+/// shows and what a finger takes not the same (the user, 2026-10-26: 视觉跟触控区域可以不一样).
 pub fn finger_least_h() -> @ui.Style {
   if theme().narrow {
     finger_high
@@ -893,19 +885,16 @@ pub fn finger_least_h() -> @ui.Style {
 }
 
 ///|
-/// How wide and high a button finger_least gives is (its side: what stands in a corner concentric with it): `web`'s
-/// with keyboard and mouse, 44 at least with touch.
-pub fn finger_side(web : Double) -> Double {
+/// The height finger_least_h holds a row to at least (44 on a touch device; none with keyboard and mouse).
+pub fn finger_row_h() -> Double {
   if theme().narrow {
-    dmax(web, narrow_control_h)
+    narrow_control_h
   } else {
-    web
+    0.0
   }
 }
 
-///|
-// kept across runs: a value (no field of it changes)
-let finger_square : @ui.Style = @ui.style(min_w=Fixed(narrow_control_h), min_h=Fixed(narrow_control_h))
+
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1720,6 +1709,10 @@ pub let wide_bar_h_size : @ui.Len = Fixed(wide_bar_h)
 pub let wide_bar_h : Double = 45.0
 
 ///|
+/// A bar's round button's side (icon_button's 32: drawn so on either hand, a finger reaching it from round it).
+pub let bar_key_side : Double = 32.0
+
+///|
 /// A page's bar in a panel of the tape (laid out Medium, its corners pane_round): its buttons (32 across) on the tape's
 /// one line, where they are concentric with the ladder's pane corner, its bar as much taller over them
 /// (`tape_bar_over`: every bar of the tape and the sidebar's first row on it); at its end as far in as makes the last
@@ -1728,7 +1721,7 @@ pub let wide_bar_h : Double = 45.0
 /// with: a Mac's page at the window's edge, its corner the window's) (`tape_bar_end`); a round button at its start (a
 /// settings page's back) so in its top left one (`tape_bar_start`); `side` the last's height (a round button's 32, a
 /// finger's 44: line_end_in; a capsule's of words, its own).
-pub fn tape_bar_end(alone : Double, side? : Double = finger_side(32.0)) -> Double {
+pub fn tape_bar_end(alone : Double, side? : Double = bar_key_side) -> Double {
   match pane_top_right() {
     Some(k) => line_end_in(k, alone, side~)
     None => alone
@@ -1736,7 +1729,7 @@ pub fn tape_bar_end(alone : Double, side? : Double = finger_side(32.0)) -> Doubl
 }
 
 ///|
-pub fn tape_bar_start(alone : Double, side? : Double = finger_side(32.0)) -> Double {
+pub fn tape_bar_start(alone : Double, side? : Double = bar_key_side) -> Double {
   match pane_radii() {
     Some(k) => line_end_in(k[0], alone, side~)
     None => alone
@@ -1748,7 +1741,7 @@ pub fn tape_bar_start(alone : Double, side? : Double = finger_side(32.0)) -> Dou
 /// stands in a corner `corner` round (tape_bar_end, tape_bar_start), `side` across (a bar's 32, a finger's 44): on the
 /// line in the ladder's pane corner, concentric with it (tape_line: a finger's as far in as makes it so, its middle on
 /// the line as a mouse's is); in one that follows the window (too square for a button there) clear of it.
-pub fn line_end_in(corner : Double, alone : Double, side? : Double = finger_side(32.0)) -> Double {
+pub fn line_end_in(corner : Double, alone : Double, side? : Double = bar_key_side) -> Double {
   if (corner - pane_corner).abs() <= 0.5 || capsule_fits(corner, side) {
     capsule_in(corner, side)
   } else {
@@ -1786,14 +1779,13 @@ pub fn bar_keys_link() -> @ui.CornerOf? {
   if in_pane() {
     return None
   }
-  let side = finger_side(32.0)
-  Some(Follow(Window, bar_keys_top(), side / 2.0))
+  Some(Follow(Window, bar_keys_top(), bar_key_side / 2.0))
 }
 
 ///|
 /// How far under a bar's top its buttons stand (a bar 45 high, its line under it; a 32 button's 6).
 pub fn bar_keys_top() -> Double {
-  dmax(0.0, (wide_bar_h - hairline_h - finger_side(32.0)) / 2.0)
+  dmax(0.0, (wide_bar_h - hairline_h - bar_key_side) / 2.0)
 }
 
 ///|

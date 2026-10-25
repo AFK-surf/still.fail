@@ -1025,7 +1025,8 @@ pub fn drive_row(
         if held_more {
           return
         }
-        c.box(style=more_place, fn() {
+        let row_h = dmax(@sf.finger_row_h(), if compact { items.least - compact_less } else { items.least })
+        c.box(style=more_place_at(row_h, if compact { more_compact } else { more_size }), fn() {
           let shown = over || open
           if busy && !stacked {
             @sf.spinner(c) |> ignore
@@ -1550,6 +1551,14 @@ let end_compact : @ui.Style = @ui.css("w=S7")
 /// Its ⋯ (more), and › in columns (next: 24), 6 in from its end, in its middle.
 // kept across runs: a value (no field of it changes)
 let more_place : @ui.Style = @ui.css("row w=Full h=Full pr=S1_5 gap=SPx align=ACenter justify=JEnd")
+
+///|
+/// The same at a row `row` high, its ⋯ `side` across: as far from the row's end as from its top and foot, in the middle
+/// of the row's capsule end concentric with it (entry_capsule).
+fn more_place_at(row : Double, side : Double) -> @ui.Style {
+  let end = dmax(0.0, (row - side) / 2.0)
+  more_place.then(@ui.style(pr=@sf.room_of(end)))
+}
 
 ///|
 /// The ⋯ shown (pointed at, or a finger's), or there and clear.
