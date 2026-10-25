@@ -615,7 +615,8 @@ thread, else its session), `chats.archived`,
 `slack.people`, `slack.createAppUrl`, `slack.identity`, `profile.add`,
 `profile.useMachineLogin`, `profile.put`, `profile.delete`, `profile.quota`,
 `profile.check`, `profile.login`, `profile.cancelLogin`, `profile.loginCode`,
-`login.new`, `login.code`, `login.drop`, `job.get`, `job.log`, `job.stop`,
+`profile.loginBrowser`, `login.new`, `login.code`, `login.drop`, `login.browser` (a sign-in's page opened in the
+station's own browser: `{screen}`, docs/remote-login.md), `job.get`, `job.log`, `job.stop`,
 `memory.get`, `software.update`, `software.check`, `software.channel`, `drive.setRoots` (a station in several workspaces keeps a
 list for each: the asker's), `permissions.request` (`grant`: still.fail Helper's window for it up on that Mac, docs/remote-screens.md "Grants"; the overview read again). still.fail cloud's take
 `account`: `workspace.create`, `workspace.rename`, `workspace.setRelays`, `workspace.delete`,

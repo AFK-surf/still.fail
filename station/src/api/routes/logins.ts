@@ -5,6 +5,7 @@
 import { type Answer, type Request, error, json } from "../request.ts";
 import type { Route } from "../admin.ts";
 import { Logins, Refused, type Login } from "../../logins/index.ts";
+import type { Accounts } from "../../accounts/index.ts";
 import { readOnly } from "../../mesh/credential.ts";
 
 /// A request's JSON object: nothing is `{}`; more than a megabyte refused.
@@ -80,6 +81,58 @@ export const routes = (logins: () => Logins | undefined): Route[] => {
           const headers = body.headers && typeof body.headers === "object" && !Array.isArray(body.headers) ? Object.fromEntries(Object.entries(body.headers as Record<string, unknown>).filter((e): e is [string, string] => typeof e[1] === "string")) : {};
           if (typeof body.method !== "string" || typeof body.path !== "string") throw new Refused(400, "method and path");
           return ok(await l.callback(id(login!), { method: body.method, path: body.path, headers, ...(typeof body.body === "string" ? { body: body.body } : {}) }, { email: r.viewer.email, name: r.viewer.name }));
+        }),
+    },
+  ];
+};
+
+/// A login's page opened in the station's own browser (logins/pages.ts) for the person asking, who finishes it there:
+/// `{screen}`, the screen of its tab (docs/remote-screens.md). A login to a command-line tool; a profile's sign-in; a
+/// sign-in for a new profile (`/logins/<id>`, accounts.ts). Not for a read-only member.
+export const pageRoutes = (logins: () => Logins | undefined, accounts: () => Accounts | undefined): Route[] => {
+  const answer = async (r: Request, f: () => Promise<string>): Promise<Answer> => {
+    if (readOnly(r.viewer)) return error(403, "read-only");
+    try {
+      return ok({ screen: await f() });
+    } catch (e) {
+      if (e instanceof Refused) return error(e.status, e.message);
+      return error(409, (e as Error)?.message ?? String(e));
+    }
+  };
+  const segment = (s: string) => decodeURIComponent(s);
+  return [
+    {
+      method: "POST",
+      pattern: /^\/machine-logins\/+([^/]+)\/+browser\/*$/,
+      handle: (r, [login]) =>
+        answer(r, async () => {
+          const l = logins();
+          if (l === undefined) throw new Refused(503, "station starting");
+          return l.openPage(segment(login!), { email: r.viewer.email, name: r.viewer.name });
+        }),
+    },
+    {
+      method: "POST",
+      pattern: /^\/*profiles\/+([^/]+)\/+login-browser\/*$/,
+      handle: (r, [id]) =>
+        answer(r, async () => {
+          const a = accounts();
+          if (a === undefined) throw new Refused(503, "station starting");
+          const profile = segment(id!);
+          if (!a.profiles().some((p) => p.id === profile)) throw new Refused(404, `unknown profile ${profile}`);
+          return a.logins.openPage(profile, r.lang);
+        }),
+    },
+    {
+      method: "POST",
+      pattern: /^\/*logins\/+([^/]+)\/+browser\/*$/,
+      handle: (r, [id]) =>
+        answer(r, async () => {
+          const a = accounts();
+          if (a === undefined) throw new Refused(503, "station starting");
+          const login = segment(id!);
+          if (!a.hasPending(login)) throw new Refused(404, `no route ${r.method} ${r.path}`);
+          return a.logins.openPage(login, r.lang);
         }),
     },
   ];

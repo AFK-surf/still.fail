@@ -38,6 +38,8 @@ export interface ChromeHost {
   find(): Promise<Running | null>;
   /// Starts it.
   launch(): Promise<Running>;
+  /// Whether there is a Chrome here to start (none: taken to be).
+  installed?(): boolean;
   /// Makes sure it has ended (asked to close first by the caller): waits a little for it, then ends its group.
   kill(running: Running): Promise<void>;
   connect(url: string): Promise<Cdp>;
@@ -258,6 +260,7 @@ export function chromeHost(o: ChromeOptions): ChromeHost {
 
   return {
     find,
+    installed: () => (o.binary ?? platform.browsers(process.env)[0]) !== undefined,
     async launch() {
       try {
         return await launch();

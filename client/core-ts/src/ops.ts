@@ -134,6 +134,8 @@ export const PARAMS: Record<string, string> = {
   "login.new": "runtime?:string access?:string",
   "login.code": "id:string code?:string",
   "login.drop": "id:string",
+  "profile.loginBrowser": "id:string",
+  "login.browser": "id:string",
   "job.get": "id:string",
   "job.log": "id:string lines:number",
   "job.stop": "id:string",
@@ -160,6 +162,7 @@ export const PARAMS: Record<string, string> = {
   "software.auto": "on?:boolean",
   "machineLogin.cancel": "id:string",
   "machineLogin.answer": "id:string text:string",
+  "machineLogin.browser": "id:string",
   "workspace.create": "name?:string invite_code?:string",
   "workspace.rename": "workspace:string name?:string emoji?:string icon?:string",
   "workspace.setRelays": "workspace:string relays?:strings",
@@ -483,6 +486,12 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/logins/${p.at("id")}/code`, p.pick(["code"]), { kind: "login", id: p.str("id"), from: "needs_code" });
     case "login.drop":
       return op("DELETE", () => `/logins/${p.at("id")}`, null, { kind: "login", id: p.str("id"), from: null });
+    // A sign-in's page opened in the station's own browser (docs/remote-login.md, 在 station 的浏览器中登录), for the
+    // person to finish there: `{screen}`, the screen of its tab, to open. Its job says the tab from then on (`screen`).
+    case "profile.loginBrowser":
+      return op("POST", () => `/profiles/${p.at("id")}/login-browser`, null, NONE);
+    case "login.browser":
+      return op("POST", () => `/logins/${p.at("id")}/browser`, null, NONE);
     case "job.get":
       return op("GET", () => `/jobs/${p.at("id")}`, null, NONE);
     case "job.log":
@@ -548,6 +557,9 @@ function stationOp(name: string, params: unknown): Request | null {
     // What a login's page gave (a code), entered by the person from its card: the station types it into the command.
     case "machineLogin.answer":
       return op("POST", () => `/machine-logins/${p.at("id")}/answer`, p.pick(["text"]), { kind: "machineLogins" });
+    // Its page opened in the station's own browser, for the person to finish it there: `{screen}`, to open.
+    case "machineLogin.browser":
+      return op("POST", () => `/machine-logins/${p.at("id")}/browser`, null, NONE);
     default:
       return null;
   }

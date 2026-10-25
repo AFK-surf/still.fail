@@ -113,7 +113,7 @@ fn profile_view(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, look :
   let blocks : Array[() -> Unit] = []
   // a subscription that needs signing in, or is signing in: that first
   if !copy && signs_in && !machine && (text(check, "state") == "login" || signing_in) {
-    blocks.push(fn() { profile_sign_in(c, core, address, p, true) })
+    blocks.push(fn() { profile_sign_in(c, core, address, text(s, "name"), p, true) })
   }
   blocks.push(fn() { profile_quota(c, core, address, p) })
   blocks.push(fn() { profile_usage(c, core, here, s, p, entry) })
@@ -139,7 +139,7 @@ fn profile_view(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, look :
       blocks.push(fn() { profile_machine_account(c, s, p) })
     } else {
       blocks.push(fn() {
-        profile_account(c, core, address, p, text(check, "state") != "login" && !signing_in)
+        profile_account(c, core, address, text(s, "name"), p, text(check, "state") != "login" && !signing_in)
       })
     }
     if kind == "env" {
@@ -325,8 +325,8 @@ fn profile_menu(c : @ui.Ctx, core : Core, here : Here, address : String, p : Jso
 ///|
 /// Signing a subscription in without a terminal (SignIn): still.fail runs the runtime's login on its machine and this
 /// relays the browser's steps. Not under way: why (needed, or again), the way to start it, the command to run by hand.
-/// Under way: what the person does in the browser (LoginSteps), 取消.
-fn profile_sign_in(c : @ui.Ctx, core : Core, address : String, p : Json?, needed : Bool) -> Unit {
+/// Under way: what the person does in the browser (LoginSteps), there or in the station's own (`station_name`'s), 取消.
+fn profile_sign_in(c : @ui.Ctx, core : Core, address : String, station_name : String, p : Json?, needed : Bool) -> Unit {
   let id = text(p, "id")
   let on = [("station", address), ("id", id)]
   let job = field(p, "login")
@@ -397,15 +397,28 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, address : String, p : Json?, needed
       c.text(@sf.t("web-pages.profiles.signingInNote"), style=desk_muted) |> ignore
     })
     |> ignore
-    login_steps(c, core, address + "/" + id, job, provider, is_doing(core, ["profile.loginCode"], on), fn(code, sent) {
-      @settings.act(
-        core,
-        @sf.t("web-pages.profiles.finish"),
-        "profile.loginCode",
-        obj([("station", str(address)), ("id", str(id)), ("code", str(code))]),
-        then=fn(_) { sent() },
-      )
-    })
+    login_steps(
+      c,
+      core,
+      address + "/" + id,
+      job,
+      provider,
+      is_doing(core, ["profile.loginCode"], on),
+      fn(code, sent) {
+        @settings.act(
+          core,
+          @sf.t("web-pages.profiles.finish"),
+          "profile.loginCode",
+          obj([("station", str(address)), ("id", str(id)), ("code", str(code))]),
+          then=fn(_) { sent() },
+        )
+      },
+      in_station=(station_name, is_doing(core, ["profile.loginBrowser"], on), fn(what) {
+        @settings.act(core, what, "profile.loginBrowser", obj([("station", str(address)), ("id", str(id))]), then=fn(v) {
+          (core.open_screen)(address, text(Some(v), "screen"))
+        })
+      }),
+    )
     c.box(style=pf_card_foot.then(@sf.foot_reach(@sf.button_height())), fn() {
       let cancelling = is_doing(core, ["profile.cancelLogin"], on)
       if @sf.button(c, @sf.t("common.cancel"), key="profile-login-cancel/" + key, tone=Ghost, busy=cancelling) {
@@ -422,6 +435,10 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, address : String, p : Json?, needed
 /// (Claude, Devin), the code to enter on the page that opens (DeviceCode: Codex, Grok, OpenCode, Kimi, Cursor's page
 /// alone); while it is checked or added, said so.
 /// `key`: whose steps they are; `send`: a code pasted back sent, then `sent` (its field emptied); `sending` while it is.
+/// Where its job says the station has a browser of its own (`browser`), the same page there (`in_station`: the
+/// station's name, whether it is being opened, and what opens it given what it is called), under the page's button:
+/// its tab's view opened here, gone back from as the sign-in ends; Claude's comes back to its command there, with no
+/// code to paste.
 fn login_steps(
   c : @ui.Ctx,
   core : Core,
@@ -430,9 +447,23 @@ fn login_steps(
   provider : String,
   sending : Bool,
   send : (String, () -> Unit) -> Unit,
+  in_station? : (String, Bool, (String) -> Unit),
 ) -> Unit {
   let state = text(job, "state")
   let url = text(job, "url")
+  // its page open in the station's browser: that is where it goes on (回到 … 的浏览器, the solid one)
+  let there = text(job, "screen") != ""
+  let station_step = fn() {
+    match in_station {
+      Some((name, busy, open)) if flag(job, "browser") => {
+        let label = @sf.t(if there { "common.login.backToStation" } else { "common.login.openInStation" }, args=[("station", name)])
+        if @sf.button(c, label, key="profile-station/" + key, tone=if there { Primary } else { Plain }, busy~) {
+          open(label)
+        }
+      }
+      _ => ()
+    }
+  }
   let waiting = fn(words : String) {
     c.box(style=pf_wait_line, fn() {
       @sf.spinner(c, size=pf_spin) |> ignore
@@ -452,9 +483,10 @@ fn login_steps(
           style=desk_words,
         )
         |> ignore
-        if @sf.button(c, @sf.t("web-pages.profiles.openAuth"), key="profile-auth/" + key, tone=Primary, icon="external") {
+        if @sf.button(c, @sf.t("web-pages.profiles.openAuth"), key="profile-auth/" + key, tone=if there { Plain } else { Primary }, icon="external") {
           (core.open_link)(url)
         }
+        station_step()
       })
       |> ignore
       c.box(style=pf_step, fn() {
@@ -510,7 +542,7 @@ fn login_steps(
               @sf.t("web-pages.profiles.copyOpen")
             },
             key="profile-device/" + key,
-            tone=Primary,
+            tone=if there { Plain } else { Primary },
             icon="external",
           ) {
           if !filled {
@@ -519,6 +551,7 @@ fn login_steps(
           }
           (core.open_link)(url)
         }
+        station_step()
         c.text(
           if code == "" {
             @sf.t("web-pages.profiles.deviceCodeNoteCursor")
@@ -1373,7 +1406,7 @@ fn profile_machine_account(c : @ui.Ctx, s : Json?, p : Json?) -> Unit {
 ///|
 /// The account itself (AccountSection): its key masked (replaced here: a new key, its address where the provider is
 /// the person's own), or a subscription signed in again.
-fn profile_account(c : @ui.Ctx, core : Core, address : String, p : Json?, signed_in : Bool) -> Unit {
+fn profile_account(c : @ui.Ctx, core : Core, address : String, station_name : String, p : Json?, signed_in : Bool) -> Unit {
   let id = text(p, "id")
   let key = address + "/" + id
   let access = field(p, "access")
@@ -1387,7 +1420,7 @@ fn profile_account(c : @ui.Ctx, core : Core, address : String, p : Json?, signed
   }
   @sf.section(c, @sf.t("web-pages.profiles.account"), fn() {
     if !keyed {
-      profile_sign_in(c, core, address, p, false)
+      profile_sign_in(c, core, address, station_name, p, false)
       return
     }
     let label = if kind == "opencode-go" {

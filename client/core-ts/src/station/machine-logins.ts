@@ -143,6 +143,10 @@ export function loginShown(l: J, station: string, stationName: string, now: numb
     ...(code !== null && active ? { code } : {}),
     ...(https(l.codeUrl) !== null && active ? { codeUrl: l.codeUrl } : {}),
     ...(typeof get(l.callback, "port") === "number" ? { port: get(l.callback, "port") } : {}),
+    // Its page in the station's own browser: offered while it can be, back to its tab while that is open.
+    ...(l.browser === true && active
+      ? { browser: true, ...(str(l.screen) !== null ? { screen: l.screen } : {}), browserText: t(str(l.screen) !== null ? "common.login.backToStation" : "common.login.openInStation", { station: stationName }) }
+      : {}),
     waiting,
     ...(paste ? { paste: true } : {}),
     listening: listening && active,

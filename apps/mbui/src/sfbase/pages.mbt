@@ -58,11 +58,14 @@ pub(all) struct PageFrame {
 
 ///|
 /// A station's screen to view: its station (`<workspace>/<station>`), its id there, and its title until the core says
-/// one (the link's own, or the row's it was opened from; "" none).
+/// one (the link's own, or the row's it was opened from; "" none). `until_gone`: opened for a while only (a login's
+/// page in the station's browser, its tab closed as the login ends): the page goes back by itself once the screen is
+/// gone.
 pub(all) struct ScreenAt {
   station : String
   screen : String
   title : String
+  until_gone : Bool
 } derive(Eq)
 
 ///|

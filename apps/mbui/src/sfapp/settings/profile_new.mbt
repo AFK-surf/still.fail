@@ -292,11 +292,25 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
               drop_login(core, station, n)
             }
           } else {
-            login_steps(c, core, station + "/new/" + n.login, job, provider, fn(code) {
-              if n.login != "" {
-                act(core, tr("android-settings.login.finish"), "login.code", obj([("station", str(station)), ("id", str(n.login)), ("code", str(code))]))
-              }
-            })
+            login_steps(
+              c,
+              core,
+              station + "/new/" + n.login,
+              job,
+              provider,
+              fn(code) {
+                if n.login != "" {
+                  act(core, tr("android-settings.login.finish"), "login.code", obj([("station", str(station)), ("id", str(n.login)), ("code", str(code))]))
+                }
+              },
+              in_station=(text(s, "name"), fn(what) {
+                if n.login != "" {
+                  act(core, what, "login.browser", obj([("station", str(station)), ("id", str(n.login))]), then=fn(v) {
+                    (core.open_screen)(station, text(Some(v), "screen"))
+                  })
+                }
+              }),
+            )
           }
           if text(d, "usesLine") != "" {
             c.text(text(d, "usesLine"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore

@@ -26,7 +26,7 @@ let screen_fix_mode : Ref[String] = Ref("")
 ///|
 /// The fixture's screen, as Android's test has it.
 // kept across runs: a value (no field of it changes)
-let screen_fix_at : ScreenAt = { station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome" }
+let screen_fix_at : ScreenAt = { station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome", until_gone: false }
 
 ///|
 /// MBUI_FIXTURE=screen-…: the screen's viewer over the chats.

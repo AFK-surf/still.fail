@@ -1,9 +1,10 @@
 // A station's screen on a phone (`/w/<workspace>/s/<station>/screen/<id>`, as on the desktop): the whole page, its bars
 // floating above and below the picture (../screen/ScreenViewer.tsx), fingers driving it; and the station's page's rows
 // of them.
-import { useParams } from "react-router";
+import { useLocation, useParams } from "react-router";
 import { useStation } from "../station.tsx";
 import { ScreenViewer } from "../screen/ScreenViewer.tsx";
+import { UNTIL_GONE } from "../screen/InStation.tsx";
 import { lacks, ScreenMark, screensShown, useScreens } from "../screen/ScreenList.tsx";
 import * as listCss from "../screen/ScreenList.css.ts";
 import { ChevronRight, Monitor } from "@stillfail/ui/icons.tsx";
@@ -18,9 +19,12 @@ export function ScreenScreen() {
   const app = useApp();
   const { id = "" } = useParams();
   const station = useStation();
+  // Opened for a while only (a sign-in's page in the station's browser): back by itself once its screen is gone.
+  const leaves = new URLSearchParams(useLocation().search).has(UNTIL_GONE);
   return (
     <div className={pagesCss.mScreen}>
-      <ScreenViewer key={`${station.address} ${id}`} station={station.address} screen={id} backLabel={t("common.back")} onBack={app.pop} phone />
+      <ScreenViewer key={`${station.address} ${id}`} station={station.address} screen={id} backLabel={t("common.back")} onBack={app.pop} phone
+        onGone={leaves ? app.pop : undefined} />
     </div>
   );
 }

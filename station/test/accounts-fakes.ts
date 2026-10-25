@@ -8,6 +8,7 @@ import { createServer, type IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { WINDOWS, platform } from "../src/platform/index.ts";
+import { LoginPages, type PagesBrowser } from "../src/logins/pages.ts";
 
 /// A stand-in's test that a variable names a path under its HOME: `sameAs("CODEX_HOME", "cx")`. Git's sh (Windows)
 /// has HOME in a form of its own (/tmp/…, /c/…), so both are compared as Windows has them there.
@@ -186,3 +187,43 @@ export async function until<T>(f: () => T | undefined | null | false, _what: str
 }
 
 export const idToken = (claims: unknown) => `x.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.y`;
+
+/// The station's browser as the logins see it (logins/pages.ts): its tabs in memory (`T1`, `T2`…, each at the page it
+/// opened), each page visited by `visit` as Chrome would load it, the tabs brought forward said; `gone` closes one as a
+/// person would.
+export function fakeBrowser(visit: (url: string) => void = () => {}, available = true) {
+  const tabs = new Map<string, string>();
+  const fronted: string[] = [];
+  let next = 0;
+  let changed = () => {};
+  const browser: PagesBrowser = {
+    available: () => available,
+    async openTab(url) {
+      const id = `T${++next}`;
+      tabs.set(id, url);
+      changed();
+      visit(url);
+      return id;
+    },
+    hasTab: (id) => tabs.has(id),
+    async front(id) {
+      fronted.push(id);
+    },
+    async closeTab(id) {
+      if (tabs.delete(id)) changed();
+    },
+  };
+  const pages = new LoginPages(browser, (c) => {
+    changed = c;
+    return () => {};
+  });
+  return {
+    pages,
+    tabs,
+    fronted,
+    gone: (id: string) => {
+      tabs.delete(id);
+      changed();
+    },
+  };
+}

@@ -2,17 +2,20 @@
 // the event streams as it changes, its screen followed by the pages; one an agent started tells that agent as it asks
 // something and as it ends, its cards closed. Its routes (machine-logins) and the agents' `login` tool. A login on
 // another station of the workspace (the tool's `station`) is that station's, asked over the station transport
-// (`login.call`); it tells the agent here as it asks something and as it ends (`login.told`).
+// (`login.call`); it tells the agent here as it asks something and as it ends (`login.told`). A login's page, and a
+// profile's sign-in's, opened in the station's own browser for a person to finish there (pages.ts).
 import { Effect, Layer } from "effect";
-import { routes } from "../api/routes/logins.ts";
+import { pageRoutes, routes } from "../api/routes/logins.ts";
+import { Browser } from "../browser/service.ts";
 import { Refused } from "../mesh/bus.ts";
 import { nameOf, peerNamed } from "../mesh/peer-http.ts";
 import { log } from "../ops/log.ts";
 import { Agents } from "../sessions/agents.ts";
 import { sender } from "../sessions/messages.ts";
-import { ControlPlane, Events, Parts, Paths, Peers, Readers, Store } from "../services.ts";
+import { ControlPlane, Events, Parts, Paths, Peers, Readers, ScreenRegistry, Store } from "../services.ts";
 import { act, endedNotice, loginTools, promptNotice, type Where } from "../tools/login.ts";
 import { Logins, type Starter } from "./index.ts";
+import { LoginPages } from "./pages.ts";
 
 export const LoginsLive = Layer.effectDiscard(
   Effect.gen(function* () {
@@ -24,8 +27,12 @@ export const LoginsLive = Layer.effectDiscard(
     const parts = yield* Parts;
     const bus = yield* Peers;
     const cloud = plane.state;
-    const { hub, place } = yield* Agents;
-    const logins = yield* Effect.acquireRelease(Effect.sync(() => new Logins({ data, clock: hub.clock })), (l) => Effect.promise(() => l.close()));
+    const { hub, place, accounts } = yield* Agents;
+    const browser = yield* Browser;
+    const screens = yield* ScreenRegistry;
+    const pages = new LoginPages(browser, (changed) => screens.watch(() => changed()));
+    const logins = yield* Effect.acquireRelease(Effect.sync(() => new Logins({ data, clock: hub.clock, pages })), (l) => Effect.promise(() => l.close()));
+    accounts.logins.attach(pages);
     const loginLink = (session: string | null, id: string) => {
       const s = place();
       if (!s || !plane.spec().pages) return null;
@@ -91,6 +98,7 @@ export const LoginsLive = Layer.effectDiscard(
     // A login's screen, followed on the event streams (`login=`).
     events.follow({ loginScreen: (id, send) => logins.follow(id, send) });
     parts.routes(routes(() => logins));
+    parts.routes(pageRoutes(() => logins, () => accounts));
     // The chat's starter: whom the agent works for.
     const starterOf = (session: string): Starter => {
       const row = store.getSession(session);

@@ -390,7 +390,7 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
                 let id = c.id("station-screen/" + address + "/" + text(sv, "id"))
                 c.cursor(id, Hand)
                 if c.clicked(id) {
-                  @sfbase.open_page(Screen({ station: address, screen: text(sv, "id"), title: text(sv, "title") }))
+                  @sfbase.open_page(Screen({ station: address, screen: text(sv, "id"), title: text(sv, "title"), until_gone: false }))
                 }
                 c.box(style=desk_list_link, id~, fn() {
                   @sf.icon(c, if text(sv, "kind") == "browser" { "web" } else { "monitor" }, size=desk_chevron, color=t.p.muted)
@@ -698,7 +698,7 @@ fn open_screen_link(core : Core, link : String) -> Unit {
   (core.call)("link.parse", obj([("url", str(link))]), fn(r) {
     match r {
       Ok(Object(_) as v) if text(Some(v), "opens") == "screen" =>
-        @sfbase.open_page(Screen({ station: text(Some(v), "station"), screen: text(Some(v), "screen"), title: "" }))
+        @sfbase.open_page(Screen({ station: text(Some(v), "station"), screen: text(Some(v), "screen"), title: "", until_gone: false }))
       _ => ()
     }
   })

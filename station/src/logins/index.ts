@@ -17,6 +17,7 @@ import { log } from "../ops/log.ts";
 import { platform } from "../platform/index.ts";
 import { commandWords, domainOf, programOf } from "./parse.ts";
 import { type Answered, type Callback, Refused, relay } from "./relay.ts";
+import { type LoginPages, webPage } from "./pages.ts";
 import { type Key, KEYS, LoginRun, type Screen } from "./run.ts";
 
 export { Refused };
@@ -64,6 +65,10 @@ export type Login = {
   error?: string;
   /// Failed for want of time.
   timedOut?: boolean;
+  /// Its browser step can be done in the station's browser now (pages.ts): `POST …/browser` opens its page there.
+  browser?: boolean;
+  /// The screen of the tab its page is open in, in the station's browser, while it is.
+  screen?: string;
 };
 
 type Entry = { run: LoginRun; starter: Starter; doneBy?: Person; screens: Set<(screen: Screen) => void> };
@@ -74,13 +79,27 @@ export type LoginsOptions = {
   env?: () => Record<string, string>;
   clock?: Clock.Clock;
   lang?: () => Lang;
+  /// Where its page opens in the station's browser (none: it does not).
+  pages?: LoginPages;
 };
+
+/// A login's tab in the station's browser (pages.ts) is known by this.
+const pageKey = (id: string) => `machine:${id}`;
+
+/// The page a login's browser step opens in the station's browser: the one its command opened (a loopback one comes
+/// back to it here), a device code's own page, or the page to open; null when its step needs no browser now.
+function stationPage(r: LoginRun): string | null {
+  if (!r.active || r.state === "verifying") return null;
+  const url = r.step === "device" ? (r.codeUrl ?? r.url) : r.step === "loopback" || r.step === "open" ? r.url : null;
+  return webPage(url) ? url : null;
+}
 
 export class Logins {
   readonly #data: string;
   readonly #env: () => Record<string, string>;
   readonly #fibers: Fibers;
   readonly #lang: () => Lang;
+  readonly #pages: LoginPages | null;
   readonly #entries = new Map<string, Entry>();
   readonly #listeners = new Set<(change: { login: string }) => void>();
   readonly #ended = new Set<(login: Login, starter: Starter) => void>();
@@ -95,6 +114,12 @@ export class Logins {
     this.#env = o.env ?? (() => startEnv(SCRUBBED));
     this.#fibers = new Fibers("logins", o.clock);
     this.#lang = o.lang ?? stationLang;
+    this.#pages = o.pages ?? null;
+    // Its tab came or went (a person closed it): told again.
+    this.#pages?.changes((key) => {
+      const id = key.startsWith("machine:") ? key.slice("machine:".length) : null;
+      if (id !== null && this.#entries.has(id)) this.#tell({ login: id });
+    });
   }
 
   // ── what is told ──
@@ -207,6 +232,7 @@ export class Logins {
     const id = entry.run.id;
     if (this.#endedOnce.has(id)) return;
     this.#endedOnce.add(id);
+    this.#pages?.close(pageKey(id));
     const shown = this.#shown(entry);
     try {
       this.#record(shown);
@@ -318,6 +344,31 @@ export class Logins {
     return this.#heard.has(id);
   }
 
+  /// Its page opened in the station's browser for the person `by` (who goes on to finish it there): the screen of its
+  /// tab, the one open already if there is one.
+  async openPage(id: string, by?: Person): Promise<string> {
+    const e = this.#entry(id);
+    const lang = this.#lang();
+    if (!e.run.active) throw new Refused(409, tr(lang, "station.machineLogin.ended"));
+    if (this.#pages === null || !this.#pages.can()) throw new Refused(501, tr(lang, "station.loginPage.noBrowser"));
+    const url = stationPage(e.run);
+    const open = this.#pages.screenOf(pageKey(id));
+    if (url === null && open === null) throw new Refused(409, tr(lang, "station.loginPage.nothing"));
+    let screen: string;
+    try {
+      screen = await this.#pages.open(pageKey(id), url ?? "about:blank");
+    } catch (error) {
+      throw new Refused(502, tr(lang, "station.loginPage.failed", { error: (error as Error).message }));
+    }
+    // Ended meanwhile: its tab goes too.
+    if (!e.run.active) {
+      this.#pages.close(pageKey(id));
+      throw new Refused(409, tr(lang, "station.machineLogin.ended"));
+    }
+    if (by) e.doneBy = by;
+    return screen;
+  }
+
   /// Its screen as its agent reads it.
   screen(id: string): Screen | null {
     return this.#entries.get(id)?.run.screen() ?? null;
@@ -375,12 +426,17 @@ export class Logins {
     if (r.code) login.code = r.code;
     if (r.codeUrl) login.codeUrl = r.codeUrl;
     if (r.error) login.error = r.error;
+    if (this.#pages !== null && r.active) {
+      const screen = this.#pages.screenOf(pageKey(r.id));
+      if (screen !== null) login.screen = screen;
+      if ((screen !== null || stationPage(r) !== null) && this.#pages.can()) login.browser = true;
+    }
     return login;
   }
 
   /// A login as a read-only member may see it.
   static limited(login: Login): Login {
-    const { url: _u, callback: _c, code: _k, codeUrl: _q, error: _e, ...rest } = login;
+    const { url: _u, callback: _c, code: _k, codeUrl: _q, error: _e, browser: _b, screen: _s, ...rest } = login;
     return rest;
   }
 

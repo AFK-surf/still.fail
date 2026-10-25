@@ -128,6 +128,11 @@ test("a_persons_input_is_checked_and_put_in_the_frame", () => {
   assert.deepEqual((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", codecs: ["h265", "h264", "jpeg"] }) as J).call.ask.codecs, ["h265", "h264", "jpeg"]);
   assert.deepEqual((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1" }) as J).call.ask.codecs, ["h264", "jpeg"]);
   assert.throws(() => parseCall("screen.control", { view: "v1" }));
+  // The stage a phone shows it on goes with it (a tab of the station's browser is laid out for it); not a preview's.
+  const fit = { width: 389.6, height: 701, scale: 3 };
+  assert.deepEqual((parseCall("screen.view", { station: "ws/st", screen: "browser:T1", view: "v1", codecs: ["jpeg"], fit }) as J).call.ask.fit, { width: 390, height: 701, scale: 3 });
+  assert.equal((parseCall("screen.view", { station: "ws/st", screen: "browser:T1", view: "v1", codecs: ["jpeg"], fit, peek: true }) as J).call.ask.fit, undefined);
+  for (const bad of [{ ...fit, width: 0 }, { ...fit, scale: "3" }, null]) assert.equal((parseCall("screen.view", { station: "ws/st", screen: "browser:T1", view: "v1", fit: bad }) as J).call.ask.fit, undefined, JSON.stringify(bad));
 });
 
 test("a_screen_link_opens_the_screen", () => {
@@ -609,7 +614,7 @@ each("the_station_says_what_a_view_takes_and_lacks_and_when_it_stops", async (se
   views[1]!.send(stateFrame({ ended: "gone" }));
   await host.settle();
   said(host, log);
-  assert.deepEqual([lastState(log, 1).phase, lastState(log, 1).message], ["ended", "此屏幕已不存在"]);
+  assert.deepEqual([lastState(log, 1).phase, lastState(log, 1).message], ["gone", "此屏幕已不存在"], "its screen went: over for good, nothing to open again");
   core.close();
 });
 

@@ -407,7 +407,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         // a station's screen: over the whole window, as Android's ScreenActivity is over the app
         match app.nav.top() {
           Screen(at) =>
-            c.layer(fn() { screen_page(c, src, at.station, at.screen, at.title) }) |> ignore
+            c.layer(fn() { screen_page(c, src, at) }) |> ignore
           // a drive's text read, a film played: over the whole window too, as the web's pages of a file opened
           // (Drive.css.ts opened: fixed over everything)
           DriveRead(at) => c.layer(fn() { reader_page(c, src, at) }) |> ignore
@@ -583,7 +583,7 @@ fn page_view(
         Decisions => decisions_page(c, src, w)
         History(r, key, entry) => history_page(c, src, r, key, entry)
         Words(head, words) => words_page(c, src, head, words)
-        Screen(at) => screen_page(c, src, at.station, at.screen, at.title)
+        Screen(at) => screen_page(c, src, at)
       }
       // the page runs under the status bar; it keeps the paper behind its icons, moving with it (App.kt: the list, a
       // place's top page with the bar and a chat have frosted bars there instead; a book and a film their own)

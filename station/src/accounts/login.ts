@@ -15,11 +15,13 @@
 // - Kimi Code (`startKimi`): the same with Kimi's device grant (kimi.ts).
 // - Cursor (`startCursor`): no command either; the station makes the login's page itself (accounts/cursor.ts), with no
 //   code to enter: the person confirms it there, the station mints the profile's key and keeps it in its home.
-// A stand-in `open` on PATH keeps the commands from opening a browser on the server. Who follows hears each change of a
-// job (`changes`): pushed, not asked again.
+// A stand-in `open` on PATH keeps the commands from opening a browser on the server; it writes down the page a command
+// would have opened, which the station's own browser opens when a person asks (logins/pages.ts: Claude's comes back
+// to the command's loopback port, with no code to paste). Who follows hears each change of a job (`changes`): pushed,
+// not asked again.
 import type { Clock } from "effect";
 import { type ChildProcess, spawn } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { fileCredentials } from "../agents/no-keychain.ts";
 import { CONSOLE, type ConsoleLogin, type Device, type DeviceAnswer, deviceToken, startDevice, type Token, whoIs, writeConsole } from "./console.ts";
@@ -32,6 +34,8 @@ import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { Fibers, wall } from "../ops/fibers.ts";
 import { platform } from "../platform/index.ts";
+import { loopbackOf, urlsIn } from "../logins/parse.ts";
+import { type LoginPages, webPage } from "../logins/pages.ts";
 
 export type LoginState = "starting" | "needs_code" | "needs_approval" | "verifying" | "done" | "failed" | "cancelled";
 
@@ -47,7 +51,14 @@ export type LoginJob = {
   error: string | null;
   startedAt: number;
   expiresAt: number;
+  /// Its page can be opened in the station's browser now (`openPage`).
+  browser?: boolean;
+  /// The screen of the tab its page is open in, in the station's browser, while it is.
+  screen?: string;
 };
+
+/// A sign-in's tab in the station's browser (logins/pages.ts) is known by this.
+const pageKey = (profile: string) => `profile:${profile}`;
 
 const TIMEOUT_MS = 15 * 60_000;
 /// Variables that would make the login command talk to something other than the subscription.
@@ -62,8 +73,9 @@ export type LoginCommands = { claude: string; codex: string; grok?: string; devi
 /// What a sign-in is for: a profile's id, the runtime it signs in to, and its home.
 export type LoginProfile = { id: string; runtime: Runtime; home: string };
 
-/// A sign-in under way: its command (none for OpenCode's, which `stop` ends).
-type Running = { run: number; job: LoginJob; child: ChildProcess | null; raw: string; output: string; cancelTimer: () => void; exited: boolean; lang: Lang; stop?: () => void };
+/// A sign-in under way: its command (none for OpenCode's, which `stop` ends), and the file its stand-in browser writes
+/// the pages it opens to.
+type Running = { run: number; job: LoginJob; child: ChildProcess | null; raw: string; output: string; cancelTimer: () => void; exited: boolean; lang: Lang; stop?: () => void; opened?: string };
 
 export class LoginManager {
   private jobs = new Map<string, Running>();
@@ -83,6 +95,8 @@ export class LoginManager {
   /// Cursor signed in to (cursor.ts CURSOR; a test's stand-in), and the name its key is given (the station's).
   private cursor: CursorUrls;
   private keyName: () => string;
+  /// Where a sign-in's page opens in the station's browser (none until the browser's part attaches it).
+  private pages: LoginPages | null = null;
 
   constructor(data: string, commands: LoginCommands = { claude: "claude", codex: "codex" }, env: () => Record<string, string> = () => cleanEnv(SCRUBBED), clock?: Clock.Clock, console = CONSOLE, cursor: CursorUrls = CURSOR, keyName: () => string = () => "still.fail", kimi = KIMI_AUTH) {
     this.console = console;
@@ -101,11 +115,66 @@ export class LoginManager {
     return () => this.listeners.delete(listener);
   }
 
+  /// The station's browser, for the pages of sign-ins (logins/module.ts): a tab coming or going is told as a change.
+  attach(pages: LoginPages) {
+    this.pages = pages;
+    pages.changes((key) => {
+      const profile = key.startsWith("profile:") ? key.slice("profile:".length) : null;
+      if (profile !== null && this.jobs.has(profile)) this.emit(profile);
+    });
+  }
+
   get(profile: string): LoginJob | null {
     const running = this.jobs.get(profile);
-    if (running) return { ...running.job };
+    if (running) {
+      const job: LoginJob = { ...running.job };
+      if (this.pages !== null) {
+        const screen = this.pages.screenOf(pageKey(profile));
+        if (screen !== null) job.screen = screen;
+        if ((screen !== null || this.stationPage(running) !== null) && this.pages.can()) job.browser = true;
+      }
+      return job;
+    }
     const done = this.finished.get(profile);
     return done ? { ...done } : null;
+  }
+
+  /// The page a sign-in under way opens in the station's browser: the one its command opened where that comes back to
+  /// it here (Claude's loopback one), else the one it gives to open; null when it has none (yet).
+  private stationPage(running: Running): string | null {
+    const { job } = running;
+    if (job.state !== "needs_code" && job.state !== "needs_approval") return null;
+    if (running.opened) {
+      let opened: string[] = [];
+      try {
+        opened = urlsIn(readFileSync(running.opened, "utf8"));
+      } catch {}
+      const back = opened.findLast((u) => loopbackOf(u) !== null);
+      if (back !== undefined) return back;
+    }
+    return webPage(job.url) ? job.url : null;
+  }
+
+  /// Opens the page of `profile`'s sign-in in the station's browser (the tab open already, if there is one): its
+  /// screen.
+  async openPage(profile: string, lang: Lang = stationLang()): Promise<string> {
+    const running = this.jobs.get(profile);
+    if (!running) throw new Error(tr(lang, "station.loginPage.nothing"));
+    if (this.pages === null || !this.pages.can()) throw new Error(tr(lang, "station.loginPage.noBrowser"));
+    const url = this.stationPage(running);
+    if (url === null && this.pages.screenOf(pageKey(profile)) === null) throw new Error(tr(lang, "station.loginPage.nothing"));
+    let screen: string;
+    try {
+      screen = await this.pages.open(pageKey(profile), url ?? "about:blank");
+    } catch (error) {
+      throw new Error(tr(lang, "station.loginPage.failed", { error: (error as Error).message }));
+    }
+    // Ended (or started again) meanwhile: its tab goes too.
+    if (this.jobs.get(profile) !== running) {
+      this.pages.close(pageKey(profile));
+      throw new Error(tr(lang, "station.loginPage.nothing"));
+    }
+    return screen;
   }
 
   /// Starts a sign-in for a subscription profile, replacing any running one.
@@ -116,6 +185,10 @@ export class LoginManager {
     const [noBrowser, open] = this.noBrowser();
     const env = platform.prependPath(this.env(), noBrowser) as Record<string, string>;
     env.BROWSER = open;
+    // The pages it opens, written down for the station's browser (one file a sign-in).
+    const opened = join(noBrowser, `${profile.id}.opened`);
+    rmSync(opened, { force: true });
+    env.STILLFAIL_LOGIN_OPENED = opened;
     let command: string;
     let args: string[];
     if (profile.runtime === "claude") {
@@ -163,6 +236,7 @@ export class LoginManager {
       raw: "",
       output: "",
       exited: false,
+      opened,
       lang,
       cancelTimer: this.background.after(TIMEOUT_MS, () => this.failRun(id, run, tr(lang, "station.login.timedOut"))),
     };
@@ -401,6 +475,8 @@ export class LoginManager {
         running.child.kill("SIGTERM");
       } catch {}
     }
+    if (running.opened) rmSync(running.opened, { force: true });
+    this.pages?.close(pageKey(profile));
     this.finished.set(profile, { ...running.job, state, error });
     log.info("login", "login ended", { profile, state, error });
     this.emit(profile);
@@ -416,11 +492,13 @@ export class LoginManager {
     }
   }
 
-  /// A directory whose `open` and `xdg-open` do nothing, put first on the login command's PATH; and what `open` is to
-  /// be called by (BROWSER).
+  /// A directory whose `open` and `xdg-open` open nothing, put first on the login command's PATH; and what `open` is to
+  /// be called by (BROWSER). Each writes the pages it is given to the file STILLFAIL_LOGIN_OPENED names (on Windows it
+  /// does nothing).
   private noBrowser(): [dir: string, open: string] {
     mkdirSync(this.noBrowserDir, { recursive: true });
-    const [open] = ["open", "xdg-open"].map((name) => platform.makeCommand(join(this.noBrowserDir, name), "#!/bin/sh\nexit 0\n", true));
+    const script = `#!/bin/sh\n# A browser for a sign-in run by still.fail (station/src/accounts/login.ts): the page goes to the station.\n[ -n "$STILLFAIL_LOGIN_OPENED" ] || exit 0\nfor a in "$@"; do printf '%s\\n' "$a" >> "$STILLFAIL_LOGIN_OPENED"; done\nexit 0\n`;
+    const [open] = ["open", "xdg-open"].map((name) => platform.makeCommand(join(this.noBrowserDir, name), script, true));
     return [this.noBrowserDir, open!];
   }
 }

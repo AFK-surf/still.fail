@@ -96,18 +96,26 @@ fn phase_over(p : String) -> Bool {
 let rail_say_ms : Double = 3000.0
 
 ///|
-/// The viewer of `screen` on `station` (ScreenViewer): `title` until the core says one (the link's own, or the row's it
-/// was opened from).
-fn screen_page(c : @ui.Ctx, src : Source, station : String, screen : String, title : String) -> Unit {
+/// The viewer of `at.screen` on `at.station` (ScreenViewer): `at.title` until the core says one (the link's own, or the
+/// row's it was opened from); one opened until its screen is gone (a login's page) goes back by itself then.
+fn screen_page(c : @ui.Ctx, src : Source, at : ScreenAt) -> Unit {
+  let station = at.station
+  let screen = at.screen
+  let title = at.title
   let key = screen_key(station, screen)
   // its 关闭: closed through the shell, the page it is
-  let close = fn() { @sfbase.close_page(Screen({ station, screen, title })) |> ignore }
+  let close = fn() { @sfbase.close_page(Screen(at)) |> ignore }
   let s = screen_sess(src, station, screen)
   let u = screen_ui(key)
   // open while the app is in sight (ScreenActivity onStart / onStop): the last frame kept between
   let shown = @ui.app_visible()
   c.after_build("screen-open/" + key, fn() {
     s.own_stream()
+    // on a phone or a tablet, a page of the station's browser is laid out for the stage it is shown on, as this
+    // device's own browser would lay it out (the station takes no notice of it for other screens)
+    if @sf.touch_system() && u.box_w > 0.0 && u.box_h > 0.0 && s.fit is None {
+      s.fit = Some((u.box_w, u.box_h, c.scale))
+    }
     if shown {
       s.open(src)
     } else {
@@ -119,6 +127,10 @@ fn screen_page(c : @ui.Ctx, src : Source, station : String, screen : String, tit
       @ui.keep_awake(shown)
     }
   })
+  // its screen gone (the login's tab closed as it ended): back to where it was opened from
+  if at.until_gone && s.phase() == "gone" {
+    c.after_build("screen-gone/" + key, close)
+  }
   // over (ended, gone…): out of 全屏, the bar's × and what happened in sight
   let over = !s.open_now()
   if over && u.full {

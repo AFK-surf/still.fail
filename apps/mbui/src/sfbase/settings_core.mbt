@@ -82,6 +82,7 @@ pub fn settings_core_of(
         toast_later(@sf.t("android-misc.link.cantOpen"))
       }
     },
+    open_screen: fn(station, screen) { open_page(Screen({ station, screen, title: "", until_gone: true })) },
     pick_picture: fn(done) {
       match @ui.pick(@hostapi.PickKind::Photos) {
         Some(p) => {

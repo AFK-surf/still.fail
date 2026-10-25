@@ -8,7 +8,10 @@
 // open goes straight to the browser (in the press, so a web page's browser lets it open); a loopback login's needs this
 // device to take the browser's callback back to the station, which only an app can (`canRelay`: the desktop app; the
 // Android app's card is its own, LoginCards.kt): the core listens, then answers what to open; this device's port taken,
-// the card says so. A step this client cannot do is said in the card.
+// the card says so. Where the station has a browser of its own (`browser`), the same step can be done there, under the
+// step's button: its page opened in a tab of the station's browser and that tab's view opened here (screen/InStation.tsx),
+// a loopback's callback coming back to the command there; for a step this client cannot do (a web page and a loopback)
+// it is the step. A step this client cannot do at all is said in the card.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { MachineLoginShown, MachineLoginsView } from "./core/shapes.ts";
 import { useCall, useTopic } from "./core/react.ts";
@@ -22,6 +25,7 @@ import { ArrowUpRight, Close, Key } from "@stillfail/ui/icons.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./MachineLogins.css.ts";
 import { t } from "./i18n.ts";
+import { useInStation } from "./screen/InStation.tsx";
 
 const loginsTopic = (station: string) => ({ topic: "machineLogins", station }) as const;
 const loginTopic = (station: string, id: string) => ({ topic: "machineLogin", station, id }) as const;
@@ -122,29 +126,53 @@ function ActiveCard({ station, login, canRelay }: { station: string; login: Mach
   // Its one button solid while it is the thing to do, a plain grey one once pressed here (as a pasted code's steps).
   const [pressed, setPressed] = useState(false);
   if (login.paste && login.url) return <PasteSteps station={station} login={login} />;
+  // Its page open in the station's browser: that is where it goes on.
+  const there = login.screen !== undefined;
   let said: ReactNode = waiting(login.statusText);
   let main: ReactNode = null;
+  let inStation = false;
   if (step === "device" && login.code) {
     said = <><span className={css.cardStatus}>{t("web-main.logins.device", { domain: login.domain ?? "" })}</span><CardCode code={login.code} /></>;
-    main = <StepButton label={t("web-main.logins.copyOpen")} solid={!pressed} onClick={() => { setPressed(true); copyAndOpen(login); }} />;
+    main = <StepButton label={t("web-main.logins.copyOpen")} solid={!pressed && !there} onClick={() => { setPressed(true); copyAndOpen(login); }} />;
+    inStation = true;
   } else if (step === "loopback") {
-    // A web page cannot take the browser's callback: said here, the page's host all the same.
-    if (!canRelay) said = <><span className={css.cardStatus}>{t("web-main.logins.needsDesktop")}</span>{domain}</>;
-    else {
+    // A web page cannot take the browser's callback: the station's browser can, else said here; the page's host all the same.
+    if (!canRelay) {
+      said = login.browser ? domain : <><span className={css.cardStatus}>{t("web-main.logins.needsDesktop")}</span>{domain}</>;
+      if (login.browser) main = <InStation station={station} login={login} solid />;
+    } else {
       said = relay.opened ? waiting(t("web-main.logins.waitingBrowser"))
         : login.relayText ? <><span className={css.cardStatusFailed}>{login.relayText}</span>{domain}</> : domain;
-      main = <StepButton label={relay.opened ? t("web-main.logins.openAgain") : t("web-main.logins.signIn")} solid={!relay.opened} busy={relay.busy} onClick={relay.open} />;
+      main = <StepButton label={relay.opened ? t("web-main.logins.openAgain") : t("web-main.logins.signIn")} solid={!relay.opened && !there} busy={relay.busy} onClick={relay.open} />;
+      inStation = true;
     }
   } else if (step === "open" && login.url) {
     said = domain;
-    main = <StepButton label={t("web-main.logins.signIn")} solid={!pressed} onClick={() => { setPressed(true); openPage(login.url); }} />;
+    main = <StepButton label={t("web-main.logins.signIn")} solid={!pressed && !there} onClick={() => { setPressed(true); openPage(login.url); }} />;
+    inStation = true;
   }
   return (
     <>
       {said}
       {main}
+      {inStation && <InStation station={station} login={login} />}
     </>
   );
+}
+
+/**
+ * The step in the station's own browser, where the station has one: its page opened in a tab there (the one open, if it
+ * is) and the tab's view opened here, gone back from once the login ends. Solid as the step's own way (`solid`), or
+ * while its tab is open (回到 … 的浏览器).
+ */
+function InStation({ station, login, solid = false }: { station: string; login: MachineLoginShown; solid?: boolean }) {
+  const call = useCall();
+  const open = useInStation(station);
+  const busy = useDoing("machineLogin.browser", { station, id: login.id });
+  if (!login.browser || !login.browserText) return null;
+  const label = login.browserText;
+  return <StepButton label={label} solid={solid || login.screen !== undefined} busy={busy} data-login-station=""
+    onClick={() => open(() => call("machineLogin.browser", { station, id: login.id }), label)} />;
 }
 
 /** 取消, as the card's ×: in its corner, concentric with it. */
@@ -179,8 +207,9 @@ function PasteSteps({ station, login }: { station: string; login: MachineLoginSh
     <>
       {/* Checked: said here, its spinner where 完成 was pressed. */}
       <span className={css.cardStatus}>{checking || !login.domain ? login.statusText : t("web-main.logins.pasteLead", { domain: login.domain })}</span>
-      <StepButton label={t("web-main.logins.openPage")} solid={!opened && !typed && !busy} external data-login-paste-open=""
+      <StepButton label={t("web-main.logins.openPage")} solid={!opened && !typed && !busy && login.screen === undefined} external data-login-paste-open=""
         onClick={() => { setOpened(true); openPage(login.url); }} />
+      <InStation station={station} login={login} />
       <CodeField busy={busy} onTyped={setTyped}
         send={(code) => act(call("machineLogin.answer", { station, id: login.id, text: code }), t("web-main.logins.answerWhat"))} />
     </>

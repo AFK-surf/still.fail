@@ -151,6 +151,26 @@ station: 命令轮询到结果，写凭据，退出 0 → done
 - **客户端端口被占**（本机也在跑 gcloud 之类）：同上，改成贴地址。卡片说清是哪个端口被占。
 - **回调不是本机回环、又没有设备码**（少数 CLI 回调到服务商自己的页面再让命令去取），或者上面两条都不行：卡片给「在 station 的浏览器里登录」，打开远程屏幕（remote-screens.md 的 station 浏览器）。这时 `BROWSER` 换成 station 浏览器开新标签页，回调在 station 本机完成。
 
+### 在 station 的浏览器中登录（2026-10-25，chat EMBER/1792894388.635000）
+
+凡是要人在浏览器里做一步的登录，都可以改在 station 自己的浏览器（remote-screens.md「The station's browser」，agent 用的那个 Chrome）里做，人在 app 里看着那个标签页的画面操作：
+
+- **入口**：登录卡片（命令行登录）和 Profile 的登录（「连接 Anthropic / OpenAI…」、Profile 页的重新登录，手机、桌面、网页都有）在这一步自己的按钮下面加一个按钮「在 dev-prod 的浏览器中打开」。主按钮还是用自己设备的浏览器（手机上有密码管理器、passkey、已经登录的 Google；10-17 定过 station 浏览器只是兜底）。设备自己做不了这一步时它就是这一步：网页版接不住回环登录的回调，原来只说「这一步要在桌面或安卓 app 里完成」。station 没有 Chrome、或者是旧 station（不说 `browser`）时不显示。只读成员没有。
+- **打开的是哪一页**：命令本来要打开的那一页。命令行登录：回环的是它打开的那页（回调到本机端口），设备码的是带码的那页（`codeUrl`，没有就验证页），只要打开网址的就是那个网址。Profile 的登录：`claude auth login` 的 `BROWSER`/`open` 替身原来什么都不做，现在把要打开的网址写进这次登录的文件（`STILLFAIL_LOGIN_OPENED`），station 浏览器打开其中回调到本机端口的那一页；这样授权完浏览器直接回到命令，**不用贴授权码**。别的（Codex、Grok、OpenCode、Kimi、Cursor 的设备码页，Devin 要贴回来的页）打开它给的那一页；设备码在画面里粘贴（这台设备的剪贴板经画面的粘贴过去），Devin 的码在画面里复制，回到登录页粘贴。
+- **标签页跟着这次登录走**（`station/src/logins/pages.ts`）：每次登录最多一个，不属于任何会话（不挂在 chat 下，chat 归档也不关）。再点一次（别的设备也一样）是同一个标签页，拿到前面来。中途退出不关，这时登录页和卡片上的按钮变成实底的「回到 dev-prod 的浏览器」（登录带 `screen`）。登录完成、失败、取消、超时或重新开始时 station 关掉它；人自己关了，登录再告诉一遍（没有 `screen` 了）。
+- **画面**：按钮的回答是标签页的屏幕 id，客户端打开那个屏幕的页面，并记下「只到它消失为止」（mbui 的 `ScreenAt.until_gone`、网页的 `?until-gone`）：标签页一关（view 以 `ended: gone` 结束，core 说 `phase: gone`），页面自己退回登录页，登录页这时已经是「已登录，正在添加」或已连接。在手机和平板上，station 浏览器的标签页按这台设备显示画面的区域排版（remote-screens.md 的 `fit`），手指点哪就是哪（不用触控板方式）。
+- **用的就是 agent 那个 Chrome**：在里面登录过的 claude.ai 等会留着，下次只要点「授权」。agent 本来就能拿到这台机器上的登录，不会多暴露什么。
+
+接口（都不给只读成员，回 `{screen}`：标签页的屏幕 id）：
+
+| 方法和路径 | 作用 |
+|---|---|
+| `POST /machine-logins/<id>/browser` | 命令行登录的这一页在 station 浏览器里打开；记下是谁（`doneBy`） |
+| `POST /profiles/<id>/login-browser` | Profile 的登录（重新登录）的这一页 |
+| `POST /logins/<id>/browser` | 新 Profile 的登录的这一页 |
+
+`Login`（命令行登录）和 `LoginJob`（Profile 的登录）各加两个可选字段：`browser`（现在能在 station 浏览器里做，进行中、有页可开、station 有 Chrome）、`screen`（标签页开着时它的屏幕 id）。core 的调用：`machineLogin.browser`、`profile.loginBrowser`、`login.browser`；卡片上按钮的字是 core 给的 `browserText`。旧 station 没有这些路由（404），也不说 `browser`，按钮不出现。
+
 ### 几台 station 一起登录
 
 卡片里「也在其他 station 上登录」勾几台，每台各起一次同样的命令。卡片按台排成一列，一次做一台：
@@ -210,11 +230,13 @@ station: 命令轮询到结果，写凭据，退出 0 → done
 
 客户端没有「起登录」的接口，往终端写也只有贴回网页给的码这一条：起登录和答命令的问题都是 agent 的（`login` 工具在 station 里直接调）。转发回调时记下是谁的浏览器回来的（`doneBy`）。
 | `POST /machine-logins/<id>/callback` | `{method, path, headers, body?}`（body 是 base64）→ 命令的回应 `{status, headers, body}`（body 是 base64，整份；回调页很小，不做流式） |
+| `POST /machine-logins/<id>/browser` | 它的页在 station 自己的浏览器里打开 → `{screen}`（见「在 station 的浏览器中登录」） |
 | `GET /events?login=<id>` | 这次登录的终端（事件 `login-screen`），见上面「要输入」 |
 
 ```
 Login   = {id, name, command, state, step?, url?, domain?, callback?: {host, port, path, state, post},
-           code?, codeUrl?, waiting, paste?, by, workspace?, chat?, chatTitle?, doneBy?, startedAt, expiresAt, endedAt?, error?, timedOut?}
+           code?, codeUrl?, waiting, paste?, by, workspace?, chat?, chatTitle?, doneBy?, startedAt, expiresAt, endedAt?, error?, timedOut?,
+           browser?, screen?}
 state   = starting | browser | code | input | verifying | done | failed | cancelled
 step    = loopback | device | open | terminal          // 现在要人做的那一步
 ```

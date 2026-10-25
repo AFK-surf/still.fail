@@ -3,7 +3,9 @@
 // there (Cursor). Each step's button solid until it is pressed (LoginCards.kt StepButton), the code's field with 完成 in
 // its end once a code is in (CodeField); the last of them in the card's foot corners, so all of them capsules a
 // settings button high, reaching past the card's words to its foot's inset (parts.mbt Foot's Capsule: foot_across),
-// 完成 a capsule concentric in the field's end.
+// 完成 a capsule concentric in the field's end. Under the page's button, where the station has a browser of its own, the
+// same page opened there (its tab's view opened here, gone back from as the sign-in ends): Claude's comes back to its
+// command there, with no code to paste.
 
 ///|
 /// A step's button (StepButton): the card's foot's width, 8 under what is over it, a settings button high, solid (the
@@ -99,13 +101,36 @@ let device_code_line : Double = 28.0
 ///|
 /// What the person does in the browser for a sign-in under way (Profiles.kt LoginSteps), `k` the profile's key: its
 /// states' waiting lines, and while it waits on the person, its steps. The page is handed to `open_link`: the system's
-/// browser.
-fn login_steps(c : @ui.Ctx, core : Core, k : String, job : Json?, provider : String, send : (String) -> Unit) -> Unit {
+/// browser; or, where its job says the station has one (`browser`), to the station's own (`in_station`: the station's
+/// name, and what opens it there, given what it is called).
+fn login_steps(
+  c : @ui.Ctx,
+  core : Core,
+  k : String,
+  job : Json?,
+  provider : String,
+  send : (String) -> Unit,
+  in_station? : (String, (String) -> Unit),
+) -> Unit {
   let t = @sf.theme()
   let state = text(job, "state")
   let url = text(job, "url")
   let user_code = text(job, "userCode")
+  // its page open in the station's browser: that is where it goes on
+  let there = text(job, "screen") != ""
   let copied = login_state.copied.get(k).unwrap_or(false)
+  // the same page in the station's browser, under the page's button: solid while its tab is open
+  let station_step = fn() {
+    match in_station {
+      Some((name, open)) if flag(job, "browser") => {
+        let label = fill(if there { "common.login.backToStation" } else { "common.login.openInStation" }, [("station", name)])
+        if step_button_of(c, "login-station", label, there) {
+          open(label)
+        }
+      }
+      _ => ()
+    }
+  }
   if job is None || state == "starting" {
     wait_line(c, fill("android-settings.login.making", [("provider", provider)]))
   } else if state == "verifying" {
@@ -115,10 +140,11 @@ fn login_steps(c : @ui.Ctx, core : Core, k : String, job : Json?, provider : Str
   } else if state == "needs_approval" && url != "" && user_code == "" {
     // no code: the page only asks to confirm (Cursor's)
     c.text(tr("android-settings.login.cursorNote"), style=step_note) |> ignore
-    if step_button_of(c, "login-open", tr("android-settings.login.openPage"), !copied, external=true) {
+    if step_button_of(c, "login-open", tr("android-settings.login.openPage"), !copied && !there, external=true) {
       login_state.copied[k] = true
       (core.open_link)(url)
     }
+    station_step()
   } else if state == "needs_approval" && url != "" {
     c.box(style=code_box, fn() {
       mono(c, user_code, size=device_code_size, line=device_code_line)
@@ -148,7 +174,7 @@ fn login_steps(c : @ui.Ctx, core : Core, k : String, job : Json?, provider : Str
             "android-settings.login.copyOpen"
           },
         ),
-        !copied,
+        !copied && !there,
         external=filled,
       ) {
       if !filled {
@@ -157,6 +183,7 @@ fn login_steps(c : @ui.Ctx, core : Core, k : String, job : Json?, provider : Str
       login_state.copied[k] = true
       (core.open_link)(url)
     }
+    station_step()
   } else if state == "needs_code" && url != "" {
     // what to do said once, then its two steps in the order they are done, the next one solid: its page, then the
     // code it gives in the field (完成 in its end)
@@ -170,10 +197,11 @@ fn login_steps(c : @ui.Ctx, core : Core, k : String, job : Json?, provider : Str
     let key = "login-code/" + k
     let field = field_of(key)
     let typed = field.text().trim(chars=" \n").to_owned() != ""
-    if step_button_of(c, "login-open", tr("android-settings.login.openPage"), !copied && !typed, external=true) {
+    if step_button_of(c, "login-open", tr("android-settings.login.openPage"), !copied && !typed && !there, external=true) {
       login_state.copied[k] = true
       (core.open_link)(url)
     }
+    station_step()
     c.box(style=code_field_room, fn() {
       c.box(style=code_field, fn() {
         let mut code = ""

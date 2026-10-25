@@ -100,6 +100,40 @@ export class StationBrowser {
     return this.#up?.tabs.list() ?? [];
   }
 
+  /// Whether it can be had here: it runs, or there is a Chrome on the machine to start.
+  available(): boolean {
+    return this.#up !== null || (this.#o.chrome.installed?.() ?? true);
+  }
+
+  /// A tab of the station's own (no session's) at `url`, the browser started if it is not running: its target id, once
+  /// it is among the screens.
+  async openTab(url: string): Promise<string> {
+    this.used();
+    const up = await this.#ensure();
+    const { targetId } = await up.cdp.send("Target.createTarget", { url });
+    if (typeof targetId !== "string" || targetId === "") throw new Error("Chrome opened no tab.");
+    await up.tabs.arrived(targetId);
+    return targetId;
+  }
+
+  /// Whether tab `targetId` is there.
+  hasTab(targetId: string): boolean {
+    return this.#up?.tabs.has(targetId) ?? false;
+  }
+
+  /// Brings tab `targetId` to the front of its window.
+  async front(targetId: string): Promise<void> {
+    this.used();
+    await this.#up?.cdp.send("Target.activateTarget", { targetId });
+  }
+
+  /// Closes tab `targetId`, if it is there.
+  async closeTab(targetId: string): Promise<void> {
+    const up = this.#up;
+    if (up === null || !up.tabs.has(targetId)) return;
+    await up.tabs.closeTab(targetId).catch(() => {});
+  }
+
   /// Tab `targetId` was opened by `session` (on its own connection, proxy.ts).
   own(targetId: string, session: string) {
     if (this.#up) this.#up.tabs.owned(targetId, session);

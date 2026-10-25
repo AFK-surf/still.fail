@@ -7,6 +7,7 @@ import { Navigate, useNavigate, useParams, useSearchParams } from "react-router"
 import { useAction, useApi, useOverview, useStations } from "../api.ts";
 import { Plus } from "@stillfail/ui/icons.tsx";
 import { StationContext, stationBase } from "../station.tsx";
+import { useDoing } from "../doing.ts";
 import { useProfileFlow } from "../profileFlow.ts";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { BackLink, Button, Field, ProviderLogo, Segmented, Select, Waiting } from "../ui.tsx";
@@ -77,6 +78,7 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
   const pending = login ? overview.value?.logins.find((l) => l.id === login) : undefined;
   const start = useAction(() => api.newLogin(signIn!.runtime, signIn!.access), ({ id }) => setLogin(id));
   const send = useAction(() => api.newLoginCode(login!, code), () => setCode(""));
+  const inStationBusy = useDoing("login.browser", { station: address, id: login ?? "" });
   const started = useRef(false);
   // A station without the runtime it signs in with installs it first (core `install`): the sign-in starts after.
   const planning = d?.step === "connect" && d.method === "plan" && !d.install && signIn !== null;
@@ -138,7 +140,8 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
         d.install ? <InstallStep install={d.install} />
         : pending?.error || pending?.job?.state === "failed" || pending?.job?.state === "cancelled"
           ? <div className={css.form}><p className={controlsCss.fieldError}>{pending?.error ?? pending?.job?.error ?? t("web-pages.profiles.signInUnfinished")}</p><Button onClick={() => { if (login) void api.dropLogin(login).catch(() => undefined); setLogin(null); void start.run(); }}>{t("web-pages.profiles.restart")}</Button></div>
-          : <div className={css.form}><LoginSteps job={pending?.job ?? null} provider={signIn?.provider ?? ""} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} /></div>
+          : <div className={css.form}><LoginSteps job={pending?.job ?? null} provider={signIn?.provider ?? ""} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null}
+            inStation={login ? { ask: () => api.newLoginBrowser(login), busy: inStationBusy } : undefined} /></div>
       ) : (
         <ConnectForm key={d.tile?.id} d={d} edit={edit} submitting={submitting} onSubmit={() => void submit().then(added, () => undefined)} />
       )}

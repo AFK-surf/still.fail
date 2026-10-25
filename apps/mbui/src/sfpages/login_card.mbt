@@ -4,8 +4,9 @@
 // on the station page's 登录 while it is under way (station_cards.mbt, settings' station_logins.mbt).
 // Its title with 取消 as its × in the card's corner; what the person does now by its step — a device code with 复制并打开,
 // a page to open, a loopback login's page once the core listens for the browser's callback, a page whose code is pasted
-// back — the step's button the card's width, solid while it is the next thing to do; while its agent answers the
-// command or it is checked, how it stands. Ended, one quiet line saying how. What it shows is the core's
+// back — the step's button the card's width, solid while it is the next thing to do, and under it the same step in the
+// station's own browser where the station has one (its tab's view opened here); while its agent answers the command or
+// it is checked, how it stands. Ended, one quiet line saying how. What it shows is the core's
 // (`machineLogins`, `machineLogin`); what is done goes through its calls, under way on its button (the core's `doing`).
 
 ///|
@@ -145,7 +146,8 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
     "" => ""
     d => @sf.t("web-main.logins.domain", args=[("domain", d)])
   }
-  let pressed = logins_here.pressed.get(id).unwrap_or(false)
+  // its page open in the station's browser: that is where it goes on
+  let pressed = logins_here.pressed.get(id).unwrap_or(false) || text(l, "screen") != ""
   let code = text(l, "code")
   match step {
     "device" if code != "" => {
@@ -160,14 +162,22 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
           u => u
         })
       }
+      login_in_station(c, core, station, l)
     }
-    // a page that cannot take the browser's callback: said here, the page's host all the same
-    "loopback" if !relay => {
-      login_said(c, @sf.t("web-main.logins.needsDesktop"), last=domain == "")
-      if domain != "" {
-        login_said(c, domain, last=true)
+    // a page that cannot take the browser's callback here: the station's browser, which can, else said so; the page's
+    // host all the same
+    "loopback" if !relay =>
+      if flag(l, "browser") {
+        if domain != "" {
+          login_said(c, domain)
+        }
+        login_in_station(c, core, station, l, solid=true)
+      } else {
+        login_said(c, @sf.t("web-main.logins.needsDesktop"), last=domain == "")
+        if domain != "" {
+          login_said(c, domain, last=true)
+        }
       }
-    }
     "loopback" => {
       let opened = flag(l, "listening")
       if opened {
@@ -182,9 +192,10 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
       }
       let busy = @settings.is_doing(core, ["machineLogin.open"], [("station", station), ("id", id)])
       let label = @sf.t(if opened { "web-main.logins.openAgain" } else { "web-main.logins.signIn" })
-      if login_step(c, "login-main/" + id, label, !opened, busy~) {
+      if login_step(c, "login-main/" + id, label, !opened && text(l, "screen") == "", busy~) {
         login_relay(c, core, station, id, text(l, "title"))
       }
+      login_in_station(c, core, station, l)
     }
     "open" if url != "" => {
       if domain != "" {
@@ -194,8 +205,30 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
         logins_here.pressed[id] = true
         login_open(core, url)
       }
+      login_in_station(c, core, station, l)
     }
     _ => login_said(c, text(l, "statusText"), busy=true, last=true)
+  }
+}
+
+///|
+/// The step in the station's own browser (`machineLogin.browser`), where the station has one: its page opened in a tab
+/// there (the one open, if it is), whose view opens here and goes back by itself once the login ends; the loopback's
+/// callback comes back to the command there, nothing relayed or pasted. Solid as the step's own way (a device that
+/// cannot take the callback), or while its tab is open (回到 … 的浏览器).
+fn login_in_station(c : @ui.Ctx, core : Core, station : String, l : Json?, solid? : Bool = false) -> Unit {
+  if !flag(l, "browser") {
+    return
+  }
+  let id = text(l, "id")
+  let label = text(l, "browserText")
+  let busy = @settings.is_doing(core, ["machineLogin.browser"], [("station", station), ("id", id)])
+  if login_step(c, "login-station/" + id, label, solid || text(l, "screen") != "", busy~) {
+    c.tell("login-station/" + id, fn() {
+      @settings.act(core, label, "machineLogin.browser", { "station": Json::string(station), "id": Json::string(id) }, then=fn(v) {
+        (core.open_screen)(station, text(Some(v), "screen"))
+      })
+    })
   }
 }
 
@@ -289,10 +322,11 @@ fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?) -> Unit {
       d => @sf.t("web-main.logins.pasteLead", args=[("domain", d)])
     }
   })
-  if login_step(c, "login-paste-open/" + id, @sf.t("web-main.logins.openPage"), !opened && !typed && !busy, external=true) {
+  if login_step(c, "login-paste-open/" + id, @sf.t("web-main.logins.openPage"), !opened && !typed && !busy && text(l, "screen") == "", external=true) {
     logins_here.pressed[id] = true
     login_open(core, text(l, "url"))
   }
+  login_in_station(c, core, station, l)
   let send = fn(code : String) {
     c.tell("login-answer/" + id, fn() {
       @settings.act(core, @sf.t("web-main.logins.answerWhat"), "machineLogin.answer", {

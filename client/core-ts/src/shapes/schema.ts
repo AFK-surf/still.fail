@@ -565,6 +565,8 @@ export const SHAPES: Record<string, Shape> = {
     ["error", opt("String")],
     ["startedAt", "i64", { client: "I54" }],
     ["expiresAt", "i64", { client: "I54" }],
+    ["browser", opt("bool"), { doc: "Its page can be opened in the station's own browser now (`profile.loginBrowser`, `login.browser`); absent from a\nstation that cannot (no Chrome, or from before)." }],
+    ["screen", opt("String"), { doc: "The screen of the tab its page is open in, in the station's browser, while it is: 回到 … 的浏览器." }],
   ]),
   Profile: struct([
     ["id", "String"],
@@ -2641,6 +2643,9 @@ export const SHAPES: Record<string, Shape> = {
     ["code", opt("String"), { doc: "A device code to enter." }],
     ["codeUrl", opt("String"), { doc: "The page with the code already in it, where the service gives one." }],
     ["port", opt("u32"), { doc: "Loopback: the port its callback comes to." }],
+    ["browser", opt("bool"), { doc: "Its browser step can be done in the station's own browser (`machineLogin.browser`); absent where it cannot (no\nChrome there, a station from before, a read-only viewer)." }],
+    ["screen", opt("String"), { doc: "The screen of the tab its page is open in, in the station's browser, while it is." }],
+    ["browserText", opt("String"), { doc: "What the button to the station's browser says: 在 dev-prod 的浏览器中打开, or 回到 dev-prod 的浏览器 while its tab is\nopen. Absent with `browser`." }],
     ["waiting", "bool", { doc: "The command waits on a prompt: its agent answers it (等 agent 回答命令的问题)." }],
     ["paste", opt("bool"), { doc: "Open: after its page, the command waits for what the page gives (gcloud --no-launch-browser's verification code):\nthe person enters it on the card (`machineLogin.answer`). Then `waiting` is false." }],
     ["listening", "bool", { doc: "This device listens for its loopback callback now (opened here, in the desktop or Android app): 等浏览器回来." }],

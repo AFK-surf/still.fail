@@ -51,6 +51,9 @@ pub(all) struct Core {
   /// a web page to open (a sign-in's, Slack's): handed to the system's browser (@ui.open_url), said so where nothing
   /// took it
   open_link : (String) -> Unit
+  /// a page opened in the station's own browser (a sign-in's): its tab's screen in the viewer, by station and screen,
+  /// gone back from by itself once the tab is gone (closed as the sign-in ends)
+  open_screen : (String, String) -> Unit
   /// the system's photo picker asked for a picture (false: this host has none); its bytes given as it answers (None:
   /// called off, nothing read)
   pick_picture : ((Bytes?) -> Unit) -> Bool
