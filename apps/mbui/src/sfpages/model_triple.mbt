@@ -206,7 +206,7 @@ pub fn model_triple(
         |> ignore
         if profile is Some(Object(_)) {
           c.box(style=triple_part, drop=triple_drop_account, fn() {
-            @settings.quota_chips(c, field(profile, "quota"), small=true)
+            @sf.quota_chips(c, field(profile, "quota"), small=true)
           })
           |> ignore
         }

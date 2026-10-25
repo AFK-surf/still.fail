@@ -189,7 +189,7 @@ fn peek_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
           c.box(style=peek_meters, fn() {
             for m in items(host, "meters") {
               let m = Some(m)
-              meter_chip(c, m)
+              @sf.meter_chip(c, m)
             }
           })
           |> ignore

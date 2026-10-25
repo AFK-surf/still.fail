@@ -14,51 +14,6 @@ fn quota_trouble(q : Json?) -> String {
 }
 
 ///|
-/// A profile's allowance in a line (Parts.kt QuotaChips): a box per window, what is left in it, its mark when there is
-/// more than one; `small`, a lower line (a chat's agents, an execution's notes); `gap` apart; `tip`: told each one's
-/// box (its id) and window, for words over it while it is pointed at (the web's Tip over each).
-pub fn quota_chips(
-  c : @ui.Ctx,
-  q : Json?,
-  small? : Bool = false,
-  gap? : Double = 8.0,
-  tip? : (Int, Json) -> Unit,
-) -> Unit {
-  if text(q, "state") != "ok" {
-    return
-  }
-  let windows = items(q, "windows")
-  if windows.length() == 0 {
-    return
-  }
-  c.box(dir=Row, gap~, align=ACenter, fn() {
-    for w in windows {
-      let wv = Some(w)
-      let left = clamp(count(wv, "left"))
-      let chip = fn() {
-        @sf.fill_chip(
-          c,
-          left,
-          text(wv, "level"),
-          if windows.length() == 1 { "" } else { text(wv, "mark") },
-          left.to_string() + "%",
-          small~,
-        )
-      }
-      match tip {
-        Some(f) => {
-          let id = c.id("quota-chip/" + text(wv, "mark"))
-          c.box(id~, taps=false, chip) |> ignore
-          f(id, w)
-        }
-        None => chip()
-      }
-    }
-  })
-  |> ignore
-}
-
-///|
 /// The profiles (ProfilesScreen): the workspace's, or a station's (`only`) and back to it.
 fn profiles_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
   let topic = stations_of(core, here)
@@ -258,7 +213,7 @@ fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit
                   // its allowance a line of its own, so the name and where it is keep the row's width (Profiles.kt)
                   if usable && text(field(p, "quota"), "state") == "ok" && items(field(p, "quota"), "windows").length() > 0 {
                     // (in its row's corner, 12 in: the row's corner concentric round its own, @sf.fill_chip_corner)
-                    c.box(style=quota_line, fn() { quota_chips(c, field(p, "quota")) })
+                    c.box(style=quota_line, fn() { @sf.quota_chips(c, field(p, "quota")) })
                     |> ignore
                   }
                 })
@@ -348,7 +303,7 @@ fn profile_row(c : @ui.Ctx, core : Core, station : String, p : Json) -> Unit {
       let calls = ["profile.check", "profile.quota"]
       let on = [("station", station), ("id", id)]
       doing_mark(c, is_doing(core, calls, on), failed_of(core, calls, on))
-      quota_chips(c, field(pv, "quota"))
+      @sf.quota_chips(c, field(pv, "quota"))
       chevron(c)
     }) {
     (core.push)(Profile(station, id))

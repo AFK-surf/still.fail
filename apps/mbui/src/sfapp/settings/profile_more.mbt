@@ -133,7 +133,7 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : J
                 }
               })
               |> ignore
-              quota_chips(c, field(lv, "quota"))
+              @sf.quota_chips(c, field(lv, "quota"))
               // a refused account is said so, with nothing to do with it here
               if !blocked {
                 if busy {

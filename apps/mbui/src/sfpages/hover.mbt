@@ -143,7 +143,10 @@ pub fn agent_card(c : @ui.Ctx, src : Source, station : String, a : Json) -> Unit
         |> ignore
         // each with what is left of it over it while it is pointed at, 4 apart
         if windows.length() > 0 {
-          @settings.quota_chips(c, quota, small=true, gap=agent_card_chips_gap.px(), tip=fn(id, w) {
+          @sf.quota_chips(c, quota, small=true, marked=windows.length() > 1, gap=agent_card_chips_gap.px(), tip=fn(
+            id,
+            w,
+          ) {
             let said = @sf.t("web-main.quota.left", args=[
               ("label", text(Some(w), "label")),
               ("left", count(Some(w), "left").to_string()),

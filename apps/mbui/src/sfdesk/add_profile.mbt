@@ -510,7 +510,7 @@ fn machine_offers(c : @ui.Ctx, core : Core, s : Json?, sign_in : (String) -> Uni
           }
         })
         |> ignore
-        @settings.quota_chips(c, quota, small=true)
+        @sf.quota_chips(c, quota, small=true)
         })
         |> ignore
         if !blocked {

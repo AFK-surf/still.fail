@@ -115,7 +115,7 @@ fn wh_summary(c : @ui.Ctx, a : Json?) -> Unit {
         Some(Object(_)) as q => {
           let id = c.id("history/attention/" + i.to_string())
           c.box(id~, taps=false, fn() {
-            @settings.quota_chips(
+            @sf.quota_chips(
               c,
               Some({
                 "state": "ok",

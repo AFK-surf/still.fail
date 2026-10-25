@@ -449,7 +449,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
                   c.text(line, size=t.t.caption, color=t.p.muted, wrap=false) |> ignore
                 })
                 |> ignore
-                @settings.quota_chips(c, match field(field(av, "account"), "quota") {
+                @sf.quota_chips(c, match field(field(av, "account"), "quota") {
                   Some(_) as q => q
                   None => field(field(av, "profile"), "quota")
                 })
@@ -777,7 +777,7 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
         }
         // changing how it runs is a page of its own (History.kt RunSettingsScreen)
         if agent_row(c, "agent/account", tr("android-chat.agent.account"), value, fn() {
-            @settings.quota_chips(c, field(account, "quota"))
+            @sf.quota_chips(c, field(account, "quota"))
           }) {
           close_sheet(c)
           app.nav.push(Setting(@settings.Route::RunSettings(r.station, key)))
