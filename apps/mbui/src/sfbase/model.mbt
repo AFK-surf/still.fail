@@ -110,7 +110,8 @@ pub(all) struct ChatItem {
   people_text : String
   pending : Bool
   settled : Bool
-  archivable : Bool
+  /// ended and its station there: a finger's swipe left archives it (the core's swipeArchive)
+  swipe_archive : Bool
   watch_ask : String?
   /// lastActiveAt in words (3 分钟前)
   ago : String
@@ -201,7 +202,7 @@ pub fn chat_item(v : Json) -> ChatItem {
     people_text: text(s, "peopleText"),
     pending: flag(s, "pending"),
     settled: flag(s, "settled"),
-    archivable: flag(s, "archivable"),
+    swipe_archive: flag(s, "swipeArchive"),
     watch_ask: opt_text(field(s, "watch"), "ask"),
     ago: text(time, "ago"),
     agents: items(s, "agents").map(fn(a) {

@@ -1380,6 +1380,9 @@ export class Views implements Owner {
       row.archivable = true;
       if (present.offered(row, hint)) row.settled = true;
     }
+    // Swiped away by a finger whenever it has ended: unread, pinned, kept or not recommended by its station's review
+    // alike (the swipe is the viewer's own say, nothing offered), its station there to take it.
+    if (present.ended(row) && row.offline === undefined) row.swipeArchive = true;
     const line = present.rowStateLine(row);
     if (line !== null) {
       row.stateText = line[0];

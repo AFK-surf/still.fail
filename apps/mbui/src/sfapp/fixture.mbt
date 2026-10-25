@@ -445,6 +445,7 @@ fn fixture_days(f : Fixture) -> Array[Json] {
     row("c8", "把旧的截图都换成新的", "ws1/st1", "昨天 10:30", {
       "settled": true,
       "archivable": true,
+      "swipeArchive": true,
       "stateText": "做完了",
       "stateLead": "done",
       "stateRest": "",

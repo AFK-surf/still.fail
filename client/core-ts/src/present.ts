@@ -248,9 +248,14 @@ export function rowState(agents: J[]): string | null {
   return ["block", "run", "failed"].find((b) => marks.includes(b)) ?? null;
 }
 
-export function settled(row: J): boolean {
+/// Ended: each of its agents ended all_done and no card waits for the viewer, read or not.
+export function ended(row: J): boolean {
   const agents: J[] = arr(get(row, "agents")) ?? [];
-  return agents.length > 0 && agents.every((a) => shownStatus(a) === "final") && !decisions.waits(row) && get(row, "unread") !== true;
+  return agents.length > 0 && agents.every((a) => shownStatus(a) === "final") && !decisions.waits(row);
+}
+
+export function settled(row: J): boolean {
+  return ended(row) && get(row, "unread") !== true;
 }
 
 /// Archived with one tap (the page's bar, a phone's swipe): settled, not pinned, not kept by the viewer; and where its
