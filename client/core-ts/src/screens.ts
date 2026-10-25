@@ -13,6 +13,7 @@ import { handlers } from "./core/execute.ts";
 import { CoreError, asCoreError } from "./error.ts";
 import { t } from "./i18n.ts";
 import { encode } from "./ops.ts";
+import { unavailable } from "./permissions.ts";
 import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type ClipType, FrameReader, ackFrame, clipboardFrame, inputFrame, keyframeFrame } from "./screen-frames.ts";
 import { StationAddr } from "./station/addr.ts";
 import type { ScreenAsk, WireSocket } from "./station/wire.ts";
@@ -233,6 +234,13 @@ function itemLine(item: J): string {
   return parts.join(" · ");
 }
 
+/// What a screen's station lacks for it, in a line for its row: what cannot be done now (the station's message, which
+/// also says where it is granted, is for its view); null when nothing is.
+function lacking(access: J): string | null {
+  const missing = [...(access.capture ? [] : ["capture"]), ...(access.control ? [] : ["control"])];
+  return missing.length > 0 ? unavailable(missing) : null;
+}
+
 /// The chat a session is in among the viewer's chats of the station (its `chatRows`): the session's own chat over one it
 /// only takes part in; null when the viewer has none with it (archived, another workspace's, not read yet).
 export function chatOf(inner: Inner, station: string, session: string): { id: string; title: string; link: string } | null {
@@ -277,7 +285,7 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
     const access = accessOf(get(s, "access"));
     const clipboard = clipTypesOf(get(s, "clipboard"));
     const drop = dropOf(get(s, "drop"));
-    return [{ ...item, ...(access ? { access } : {}), ...(clipboard.length ? { clipboard } : {}), ...(drop ? { drop } : {}), line: access?.message ?? itemLine(item), link: screenPath(station, id) }];
+    return [{ ...item, ...(access ? { access } : {}), ...(clipboard.length ? { clipboard } : {}), ...(drop ? { drop } : {}), line: (access && lacking(access)) ?? itemLine(item), link: screenPath(station, id) }];
   });
   return { screens, outdated: false, control, known: true };
 }

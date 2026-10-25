@@ -81,9 +81,12 @@ pub let large_title : @ui.TextStyle = @ui.text_style(
 )
 
 ///|
-/// Modifiers laid over a role (`@sf.meta.then(@sf.bad)`): what went wrong, quieter, heavier, on one line, centred
-/// across where it is.
+/// Modifiers laid over a role (`@sf.meta.then(@sf.bad)`): what went wrong, what is lacking, quieter, heavier, on one
+/// line, centred across where it is.
 pub let bad : @ui.TextStyle = @ui.text_style(color=Danger)
+
+///|
+pub let lacking : @ui.TextStyle = @ui.text_style(color=Warn)
 
 ///|
 pub let quiet : @ui.TextStyle = @ui.text_style(color=Muted)

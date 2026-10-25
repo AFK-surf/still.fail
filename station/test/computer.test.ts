@@ -285,7 +285,7 @@ test("a missing grant: the access message and the screen's link for a person; no
   await assert.rejects(
     computer.act("s1", { screen: "desktop" }),
     (e: Error) =>
-      /This Mac hasn't let still\.fail Helper record its screen yet/.test(e.message) &&
+      /This Mac hasn't let still\.fail Helper record its screen or control it yet/.test(e.message) &&
       e.message.includes("https://still.fail/w/W/s/S/screen/desktop") &&
       /chat_post kind=need_human/.test(e.message),
   );

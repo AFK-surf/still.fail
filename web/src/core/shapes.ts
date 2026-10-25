@@ -5354,7 +5354,10 @@ export interface ScreenItem {
 	closable?: boolean;
 	/** The chat that opened it (an agent's tab), when it is one of the viewer's chats of the station. */
 	chat?: ScreenChat;
-	/** What the core says of it under its title: what it is, its size, the chat that opened it, who is on it (core). */
+	/**
+	 * What the core says of it under its title: what it is, its size, the chat that opened it, who is on it; or, while its
+	 * station lacks a grant for it, what cannot be done now (core).
+	 */
 	line: string;
 	/** Its page in the app: `/w/<workspace>/s/<station>/screen/<id>` (the id encoded), as the agents' links name it. */
 	link: string;
