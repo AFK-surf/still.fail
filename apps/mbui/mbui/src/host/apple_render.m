@@ -704,31 +704,15 @@ static int same_as_shown(const double *inst, int32_t count, double r, double g, 
   return 1;
 }
 
-// Idle, the GPU's memory of drawing given back. The driver keeps 30 to 50 MB of its own (the footprint's "owned
-// unmapped (graphics)") for as long as frames come, and frees it a second or two after the last; Core Animation keeps
-// the layer's drawables (three or four, each the window's size in pixels: 22 MB at 3024 × 1890), and the glass its
-// levels. trim_after_s after the last frame drawn, the drawables shrink to a pixel, which frees all but the one shown
-// (Core Animation shows it on), and the levels go; the next frame makes them again at full size (mb_render_set_size).
-static const double trim_after_s = 2.0;
-static double drawn_at;
-static int trim_armed, trimmed;
-
-static void trim_check(void);
-
-// (a time, as the driver's own: nothing the app shows or does waits on it, the frame shown stays as it is)
-static void trim_in(double s) {
-  dispatch_time_t at = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(s * NSEC_PER_SEC));
-  dispatch_after(at, dispatch_get_main_queue(), ^{ trim_check(); }); // det-ok(host-delay): memory let go while idle
-}
-
-static void trim_check(void) {
-  double left = drawn_at + trim_after_s - CACurrentMediaTime();
-  if (left > 0.01) {
-    trim_in(left);
-    return;
-  }
-  trim_armed = 0;
-  if (trimmed || !mlayer) return;
+// What drawing holds, given back as the window stops being the one in front (mac_app.m tell_state: another app's
+// in front, the window covered, minimized or hidden): Core Animation keeps the layer's drawables (three or four, each
+// the window's size in pixels: 22 MB at 3024 × 1890), and the glass its levels. The drawables shrink to a pixel, which
+// frees all but the one shown (Core Animation shows it on), and the levels go; a frame after makes what it needs again
+// at full size (mb_render_set_size). (The driver's own memory, 30 to 100 MB of the footprint's "owned unmapped
+// (graphics)", it gives back itself a second or two after the last frame: same_as_shown and the caret at rest are what
+// stop the frames.)
+void mb_render_trim(void) {
+  if (!mlayer || CGSizeEqualToSize(mlayer.drawableSize, CGSizeMake(1, 1))) return;
   // (nothing of the GPU's still in flight uses what goes)
   for (int i = 0; i < 3; i++) dispatch_semaphore_wait(inflight, DISPATCH_TIME_FOREVER);
   for (int i = 0; i < 3; i++) dispatch_semaphore_signal(inflight);
@@ -741,15 +725,6 @@ static void trim_check(void) {
   [CATransaction setDisableActions:YES];
   mlayer.drawableSize = CGSizeMake(1, 1);
   [CATransaction commit];
-  trimmed = 1;
-}
-
-static void drawn_now(void) {
-  drawn_at = CACurrentMediaTime();
-  trimmed = 0;
-  if (trim_armed) return;
-  trim_armed = 1;
-  trim_in(trim_after_s);
 }
 
 void mb_render_present(const double *inst, int32_t count, double r, double g, double b) {
@@ -772,7 +747,6 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
     shown_streams = 0;
     const float *f = (const float *)buf.contents;
     for (int32_t i = 0; i < count && !shown_streams; i++) shown_streams = f[i * MB_INST + 20] > (float)MB_STREAM_TEX;
-    drawn_now();
   }
   // (a layer that presents with its transaction: shown with the window's change it was drawn for, mac_app.m
   // drawWithWindow; once its commands are scheduled, as Core Animation asks)

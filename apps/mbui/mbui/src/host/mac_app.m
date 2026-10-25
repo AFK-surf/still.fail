@@ -1867,6 +1867,8 @@ static void tell_state(void) {
   if (!state_cb || !w) return;
   int shown = w.isVisible && !w.isMiniaturized && (w.occlusionState & NSWindowOcclusionStateVisible) != 0;
   int front = shown && NSApp.isActive && w.isKeyWindow;
+  // (not in front: what drawing holds given back, the frame shown kept; a frame after makes what it needs again)
+  if (!front) mb_render_trim();
   state_cb((shown ? 1 : 0) | (front ? 2 : 0));
   [the_view requestFrame];
 }
