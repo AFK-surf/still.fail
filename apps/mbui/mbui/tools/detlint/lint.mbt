@@ -33,6 +33,8 @@ priv struct Config {
   // files that frame the pages and name those pieces for them (not counted)
   one_look : Array[String]
   page_frames : Array[String]
+  // the parts a page used to take from an older copy (`@settings.button`, …), the library's now (page-old-part)
+  old_parts : Array[String]
 }
 
 ///|
@@ -76,6 +78,7 @@ fn Config::new(d : @rjson.Value) -> Config {
     pages: strs(sect(d, "pages").get("roots"), []),
     one_look: strs(sect(d, "pages").get("one_look"), []),
     page_frames: strs(sect(d, "pages").get("frames"), []),
+    old_parts: strs(sect(d, "pages").get("old_parts"), []),
   }
 }
 
@@ -221,6 +224,10 @@ fn lint_mbt(
     // a page reading the screen's kind
     if c.name == "touch_system" && c.kind == "pkg" && c.qual == "@sf" && !in_t && under(f.rel, cfg.pages) {
       add("page-screen", c.at, f.line_text(c.at))
+    }
+    // a page taking a part from the settings' older copy where the library has the one
+    if c.kind == "pkg" && c.qual == "@settings" && cfg.old_parts.contains(c.name) && !in_t && under(f.rel, cfg.pages) {
+      add("page-old-part", c.at, f.line_text(c.at))
     }
     // a motion following what the layout measured: a place or a size moves for its cause, not because what it was
     // laid out at changed (the app's docs/motion.md)

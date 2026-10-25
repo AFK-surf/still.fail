@@ -359,3 +359,58 @@ fn glyph_paths(name : String) -> (Array[String], Array[String])? {
 
 ///|
 let glyphs_read : Map[String, (Array[String], Array[String])] = {}
+
+///|
+/// Whose service a profile runs on (ProviderLogo; Parts.kt ProviderMark): OpenCode's square, a listed provider's maker
+/// (`mark`; the plug where there is none), else Anthropic, xAI, Cursor, Devin, Hermes or OpenAI by its runtime (`kind`
+/// the profile's access: an API provider's, OpenCode Go's, Anthropic's API).
+pub fn provider_logo(c : @ui.Ctx, runtime : String, kind : String, size : Double, mark : String) -> Unit {
+  let t = theme()
+  if kind == "opencode-go" || mark == "opencode" {
+    // (OpenCodeMark: a frame half as wide as its size and two thirds as high)
+    c.box(style=logo_room.then(@ui.style(w=Fixed(size), h=Fixed(size))), fn() {
+      c.box(style=opencode_frame.then(@ui.style(w=Fixed(size * opencode_w), h=Fixed(size * opencode_h))), fn() {  })
+      |> ignore
+    })
+    |> ignore
+    return
+  }
+  // (a profile of the environment's own keys: the sliders)
+  if kind == "env" {
+    icon(c, "sliders", size~, color=t.p.text) |> ignore
+    return
+  }
+  let maker = if kind == "api-provider" {
+    mark
+  } else if runtime == "claude" || kind == "anthropic-api" {
+    "anthropic"
+  } else {
+    match runtime {
+      "grok" => "xai"
+      "cursor" => "cursor"
+      "devin" => "devin"
+      "hermes" => "hermes"
+      _ => "openai"
+    }
+  }
+  if maker == "" || !has_drawable("maker_" + maker.replace_all(old="-", new="_")) {
+    icon(c, "plug", size~, color=t.p.text) |> ignore
+  } else {
+    maker_mark(c, maker, runtime, size) |> ignore
+  }
+}
+
+///|
+/// OpenCode's mark: a frame in the words' ink, half as wide as the mark and two thirds as high.
+let opencode_w : Double = 0.5
+
+///|
+let opencode_h : Double = 0.6667
+
+///|
+// kept across runs: a value (no field of it changes)
+let opencode_frame : @ui.Style = @ui.css("border=B1_5 border_color=Fg")
+
+///|
+// kept across runs: a value (no field of it changes)
+let logo_room : @ui.Style = @ui.css("align=ACenter justify=JCenter")

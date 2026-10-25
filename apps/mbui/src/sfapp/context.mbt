@@ -70,7 +70,7 @@ fn context_sheet(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit {
   sheet_frame(c, "context", c.height * 0.34, fit=true, fn() {
     sheet_head(c, tr("web-pages.chat.context"))
     if flag(s, "canCompact") &&
-      @settings.pick_row(c, "context/compact", tr("web-pages.chat.compact"), sub=tr("web-mobile.agent.compactSub")) {
+      @sf.choice_row(c, "context/compact", false, tr("web-pages.chat.compact"), note=tr("web-mobile.agent.compactSub")) {
       close_sheet(c)
       let params : Json = { "station": Json::string(r.station), "key": Json::string(key) }
       // told once the frame's builds are over, not while this one builds
@@ -79,7 +79,7 @@ fn context_sheet(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit {
       })
     }
     if flag(s, "canClear") &&
-      @settings.pick_row(c, "context/clear", tr("web-pages.chat.clear"), sub=tr("web-mobile.agent.clearSub"), color=@sf.theme().p.red) {
+      @sf.choice_row(c, "context/clear", false, tr("web-pages.chat.clear"), note=tr("web-mobile.agent.clearSub"), ink=@sf.theme().p.red) {
       open_sheet(c, ClearContext(r, key))
     }
   })

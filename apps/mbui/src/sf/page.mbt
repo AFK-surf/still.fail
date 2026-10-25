@@ -828,34 +828,90 @@ pub fn link_row(
 }
 
 ///|
-/// A row of a list of choices, one of them `chosen` (a face, a place): what it is given (`body`: its mark, its words),
-/// and a check at its end where it is the one chosen; the whole row takes the press, lit under the pointer or a
-/// finger's press (narrow: a card's row; wide: the web's list row). Said to be `label`. True on the frame it is
-/// pressed; `c.lit(c.id(key))` says it is pointed at.
-pub fn choice_row(c : @ui.Ctx, key : String, chosen : Bool, label : String, body : () -> Unit) -> Bool {
+/// A row of a list of choices, one of them `chosen` (a face, a place, a way to sign in): what it is given (`body`: its
+/// mark, its words; or `lead` before `label` with `tag` after it on its line and `note` under them, a page row's), and
+/// a check at its end where it is the one chosen (turning while `busy`); the whole row takes the press, lit under the
+/// pointer or a finger's press (narrow: a card's row; wide: the web's list row), not while `disabled` (its words
+/// faint) or busy. `ink`: its label's own (red for one that takes something away). Said to be `label`. True on the
+/// frame it is pressed; `c.lit(c.id(key))` says it is pointed at.
+pub fn choice_row(
+  c : @ui.Ctx,
+  key : String,
+  chosen : Bool,
+  label : String,
+  body? : () -> Unit,
+  note? : String = "",
+  lead? : () -> Unit,
+  tag? : () -> Unit,
+  ink? : Int64,
+  disabled? : Bool = false,
+  busy? : Bool = false,
+) -> Bool {
   let th = theme()
   let id = c.id(key)
-  c.cursor(id, Hand)
-  let b = match look() {
-    Narrow =>
-      c.box(style=narrow_row(true), id~, fn() {
-        body()
-        if chosen {
-          icon(c, "check", size=pg_chevron, color=th.p.accent) |> ignore
-        }
-        row_ripple(c, id)
-      })
-    Wide =>
-      c.box(style=desk_list_link, id~, fn() {
-        body()
-        if chosen {
-          icon(c, "check", size=desk_chevron, color=th.p.accent) |> ignore
-        }
-      })
+  let goes = !disabled && !busy
+  if goes {
+    c.cursor(id, Hand)
   }
-  c.semantics(b, Button, id~, label~, selected=chosen)
-  c.clicked(id)
+  let narrow = look() is Narrow
+  // its words as a page's row has them: the label (its own ink; faint while it cannot be chosen), what follows it on
+  // its line, the note under them
+  let words = fn() {
+    match lead {
+      Some(f) => f()
+      None => ()
+    }
+    let color = if disabled { Some(th.p.subtle) } else { ink }
+    c.box(style=if narrow { pg_row_words } else { desk_list_text }, fn() {
+      c.box(style=choice_label_line, fn() {
+        c.text(label, style=if narrow { pg_row_title } else { desk_list_title }, color?) |> ignore
+        match tag {
+          Some(f) => f()
+          None => ()
+        }
+      })
+      |> ignore
+      if note != "" {
+        c.text(note, style=if narrow { pg_link_note } else { wide_list_note }) |> ignore
+      }
+    })
+    |> ignore
+  }
+  let end = fn(size : Double) {
+    if busy {
+      spinner(c, size~) |> ignore
+    } else if chosen {
+      icon(c, "check", size~, color=th.p.accent) |> ignore
+    }
+  }
+  let b = if narrow {
+    c.box(style=narrow_row(goes), id=if goes { id } else { 0 }, fn() {
+      match body {
+        Some(f) => f()
+        None => words()
+      }
+      end(pg_chevron)
+      if goes {
+        row_ripple(c, id)
+      }
+    })
+  } else {
+    c.box(style=if goes { desk_list_link } else { wide_list_row }, id=if goes { id } else { 0 }, fn() {
+      match body {
+        Some(f) => f()
+        None => words()
+      }
+      end(desk_chevron)
+    })
+  }
+  c.semantics(b, Button, id~, label~, selected=chosen, disabled~)
+  goes && c.clicked(id)
 }
+
+///|
+/// A choice's label and what follows it on its line (a model's maker), 6 apart.
+// kept across runs: a value (no field of it changes)
+let choice_label_line : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
 
 ///|
 /// A row that turns something on or off (parts.tsx SwitchRow): its title, `note` quieter under it, the switch at its

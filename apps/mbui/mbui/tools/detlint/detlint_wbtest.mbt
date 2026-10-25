@@ -1654,6 +1654,22 @@ test "page-screen" {
 }
 
 ///|
+test "page-old-part" {
+  let cfg = Config::new(@rjson.parse("{\"pages\": {\"roots\": [\"src/pages\"], \"old_parts\": [\"button\"]}}"))
+  // a page taking the settings' older button; another of their parts, the library's button and a test's not counted
+  found(
+    [
+      ("src/pages/row.mbt", "fn v(c : Ctx) -> Unit {\n  @settings.button(c, \"k\", \"好\", true) |> ignore\n  @settings.field(c) |> ignore\n  @sf.button(c, \"好\") |> ignore\n}\n"),
+      ("src/pages/row_wbtest.mbt", "test \"t\" {\n  @settings.button(c, \"k\", \"好\", true) |> ignore\n}\n"),
+    ],
+    "page-old-part",
+    1,
+    cfg~,
+  )
+  |> ignore
+}
+
+///|
 test "page-look" {
   let cfg = Config::new(
     @rjson.parse(

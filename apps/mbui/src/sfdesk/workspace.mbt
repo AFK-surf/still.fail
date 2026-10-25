@@ -650,14 +650,7 @@ fn ws_member_panel(core : Core, here : Here, v : Json?, m : Json, name : String,
     if text(v, "role") == "owner" {
       let setting = is_doing(core, ["workspace.setRole"], [("workspace", ws), ("member", sub)])
       for r in ["owner", "admin", "member"] {
-        if @settings.pick_row(
-            c,
-            "role/" + r,
-            role_label(r),
-            sub=@sf.t("android-misc.role." + r + ".hint"),
-            checked=text(mv, "role") == r,
-            enabled=!setting,
-          ) {
+        if @sf.choice_row(c, "role/" + r, text(mv, "role") == r, role_label(r), note=@sf.t("android-misc.role." + r + ".hint"), disabled=!(!setting)) {
           close()
           if r != text(mv, "role") {
             @settings.act(
@@ -671,7 +664,7 @@ fn ws_member_panel(core : Core, here : Here, v : Json?, m : Json, name : String,
         }
       }
     }
-    if @settings.pick_row(c, "move-out", @sf.t("android-settings.members.moveOutRow"), color=t.p.red) {
+    if @sf.choice_row(c, "move-out", false, @sf.t("android-settings.members.moveOutRow"), ink=t.p.red) {
       close()
       confirm(
         @sf.t("android-settings.members.moveOutTitle", args=[("email", email), ("name", text(v, "name"))]),

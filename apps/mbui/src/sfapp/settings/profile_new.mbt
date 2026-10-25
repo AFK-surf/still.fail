@@ -216,7 +216,7 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
               for p in items(Some(g), "providers") {
                 let pv = Some(p)
                 if list_row(c, key="provider/" + text(pv, "id"), fn() {
-                    provider_mark(
+                    @sf.provider_logo(
                       c,
                       match text(pv, "runtime") {
                         "" => "claude"
@@ -256,8 +256,8 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
                   k => k
                 }
               }
-              if pick_row(c, "method/" + cid, text(cv, "title"), sub=text(cv, "hint"), mark=fn() {
-                  provider_mark(c, runtime, kind, 18.0, text(tile, "mark"))
+              if @sf.choice_row(c, "method/" + cid, false, text(cv, "title"), note=text(cv, "hint"), lead=fn() {
+                  @sf.provider_logo(c, runtime, kind, 18.0, text(tile, "mark"))
                 }) {
                 edit([("method", str(cid))])
               }
@@ -370,7 +370,7 @@ fn connect_form(
     label(tr("web-mobile.profiles.region"))
     group_box(fn() {
       for r in regions {
-        if pick_row(c, "region/" + text(Some(r), "id"), text(Some(r), "label"), checked=text(Some(r), "id") == text(d, "region")) {
+        if @sf.choice_row(c, "region/" + text(Some(r), "id"), text(Some(r), "id") == text(d, "region"), text(Some(r), "label")) {
           edit([("region", str(text(Some(r), "id")))])
         }
       }
@@ -381,7 +381,7 @@ fn connect_form(
     label(tr("web-mobile.profiles.protocol"))
     group_box(fn() {
       for p in protocols {
-        if pick_row(c, "protocol/" + text(Some(p), "id"), text(Some(p), "label"), checked=text(Some(p), "id") == text(d, "protocol")) {
+        if @sf.choice_row(c, "protocol/" + text(Some(p), "id"), text(Some(p), "id") == text(d, "protocol"), text(Some(p), "label")) {
           edit([("protocol", str(text(Some(p), "id")))])
         }
       }

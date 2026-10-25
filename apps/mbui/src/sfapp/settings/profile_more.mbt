@@ -37,7 +37,7 @@ fn open_pick_station(title : String, stations : Array[Json], go : (String) -> Un
     })
     |> ignore
     for s in stations {
-      if pick_row(c, "pick-station/" + text(Some(s), "station"), text(Some(s), "name")) {
+      if @sf.choice_row(c, "pick-station/" + text(Some(s), "station"), false, text(Some(s), "name")) {
         close_sheet()
         go(text(Some(s), "station"))
       }
@@ -94,7 +94,7 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : J
             let blocked = text(field(lv, "quota"), "state") == "blocked"
             let busy = is_doing(core, ["profile.useMachineLogin"], [("station", station), ("runtime", rt)])
             list_row(c, fn() {
-              provider_mark(c, rt, "subscription", 18.0, "")
+              @sf.provider_logo(c, rt, "subscription", 18.0, "")
               c.box(w=Fill(1.0), gap=2.0, fn() {
                 c.box(dir=Row, gap=6.0, align=ACenter, fn() {
                   c.text(runtime_label(rt), size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore

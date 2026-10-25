@@ -133,12 +133,12 @@ fn group_mark(c : @ui.Ctx, group : String) -> Unit {
   match group {
     "key" => @sf.icon(c, "key", size=16.0, color=@sf.theme().p.text) |> ignore
     // signed in to an account: its provider's
-    "kimi" => provider_mark(c, "claude", "api-provider", 16.0, "kimi")
-    "opencode" => provider_mark(c, "claude", "opencode-go", 16.0, "")
+    "kimi" => @sf.provider_logo(c, "claude", "api-provider", 16.0, "kimi")
+    "opencode" => @sf.provider_logo(c, "claude", "opencode-go", 16.0, "")
     // a subscription: its vendor's, by the runtime it is (ChatGPT's Codex; SuperGrok's xAI, Cursor's, Devin's)
-    "chatgpt" => provider_mark(c, "codex", "subscription", 16.0, "")
-    "" => provider_mark(c, "claude", "subscription", 16.0, "")
-    g => provider_mark(c, g, "subscription", 16.0, "")
+    "chatgpt" => @sf.provider_logo(c, "codex", "subscription", 16.0, "")
+    "" => @sf.provider_logo(c, "claude", "subscription", 16.0, "")
+    g => @sf.provider_logo(c, g, "subscription", 16.0, "")
   }
 }
 

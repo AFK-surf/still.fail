@@ -153,7 +153,7 @@ fn face_row(
   if c.lit(c.id(rkey)) {
     fonts_trying.val = if id == "" { "\u{1}" } else { id }
   }
-  if @sf.choice_row(c, rkey, on, name, fn() { face_words(c, rkey, name, face, status, bad) }) {
+  if @sf.choice_row(c, rkey, on, name, body=fn() { face_words(c, rkey, name, face, status, bad) }) {
     @settings.set_font(core, place, if id == "" { None } else { Some(id) })
   }
 }
@@ -191,7 +191,7 @@ fn local_face_row(c : @ui.Ctx, core : Core, place : String, chosen : String) -> 
   let rkey = "fonts/face/" + place + "/local"
   let tid = c.id(rkey)
   let name = if picked != "" { picked } else { @sf.t("web-pages.appearance.fonts.local") }
-  if @sf.choice_row(c, rkey, picked != "", @sf.t("web-pages.appearance.fonts.local"), fn() {
+  if @sf.choice_row(c, rkey, picked != "", @sf.t("web-pages.appearance.fonts.local"), body=fn() {
       face_words(c, rkey, name, face, "", false)
     }) {
     local_open.val = !local_open.val
