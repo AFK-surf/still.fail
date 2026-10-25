@@ -10,8 +10,9 @@
 
 ///|
 /// What a popover's, a hover card's or a tooltip's look is given: the side of its trigger it went on, how tall it can be
-/// there (Ctx::room_beside, Radix's --radix-popper-available-height) and the panel's box (its size read back): what it
-/// holds is kept within that room by in_room, or it runs out of the window.
+/// (Ctx::place_most: flipped to the side with the room, else moved over its trigger to stay in the window, it is made
+/// shorter only past the window's height) and the panel's box (its size read back): what it holds is kept within that
+/// room by in_room, or it runs out of the window.
 pub(all) struct PopState {
   side : @ui.Side
   room : Double
@@ -19,8 +20,8 @@ pub(all) struct PopState {
 }
 
 ///|
-/// What panel `s` holds (`body`, as its look is given it), kept within the room the panel has where it went (Radix's
-/// content at its available height, its overflow auto): as it is while the panel fits, and while it is no taller than
+/// What panel `s` holds (`body`, as its look is given it), kept within the room the panel has (s.room; Radix's content
+/// at its available height, its overflow auto): as it is while the panel fits, and while it is no taller than
 /// `most` (what a list scrolls past); else scrolling in a box as tall as that room leaves it once the rest of the panel
 /// (its padding, its lines, what stands over and under this) is taken off, each read back as it is laid out. `gap`
 /// between what it holds, `padx` in from its sides, which reach `mx` out (below 0: across the panel's padding, so that
@@ -289,8 +290,7 @@ fn beside(
     None => c.rect_of(anchor).unwrap_or((0.0, 0.0, 0.0, 0.0))
   }
   let went = went_side(c, pid, ar, side, along, offset)
-  let room = c.room_beside(ar, went, offset~)
-  let i = c.box(id=pid, fn() { look(c, { side: went, room, panel: pid }, body) })
+  let i = c.box(id=pid, fn() { look(c, { side: went, room: c.place_most(), panel: pid }, body) })
   c.place_by_size(i, fn(pw, ph) {
     let (x, y, _) = c.place(ar, pw, ph, side~, along~, offset~)
     (x, y)
@@ -301,8 +301,8 @@ fn beside(
 
 ///|
 /// The side of `ar` that panel `pid` goes on as this frame lays it out (read back: laid out another size, the frame is
-/// built again; before it is first laid out, `side`, asked for), so the room its look is given is the room on the side
-/// it is placed on; its place is worked out as it is laid out, from its size then.
+/// built again; before it is first laid out, `side`, asked for), what its look grows out of; its place is worked out as
+/// it is laid out, from its size then.
 fn went_side(
   c : @ui.Ctx,
   pid : Int,

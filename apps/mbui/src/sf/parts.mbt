@@ -460,8 +460,8 @@ pub fn small_panel(
 
 ///|
 /// A small panel's look beside what opened it (@kit.popover's, @kit.hover_card's), `w` wide: what it holds kept within
-/// the room the panel has on the side it went (@kit.in_room: scrolling out to its sides where that is short, and past
-/// `most`), in `inner` where said (its own room round what it holds and between).
+/// the room the panel has (@kit.in_room: scrolling out to its sides past the window's height, and past `most`), in
+/// `inner` where said (its own room round what it holds and between).
 pub fn beside_look(
   w : @ui.Size,
   inner? : @ui.Style,

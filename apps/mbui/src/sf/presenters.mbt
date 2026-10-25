@@ -631,8 +631,8 @@ fn pick_popover(
 ///|
 /// A small panel beside what opened it (parts.tsx's: @sf.small_panel, PanelHead), what is at its foot in its foot
 /// corner (panel_corner_foot); as tall as `tall` of the window, what it holds takes what the foot leaves. Within the
-/// room it has on the side it went (@kit.in_room): where that is short, what it holds scrolls between its title and
-/// its foot.
+/// window (@kit.in_room: flipped, else moved over what opened it, it is made shorter only past the window's height),
+/// what it holds then scrolling between its title and its foot.
 fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool, Bool) {
   let (anchor, at) = anchor_of(c, p.from)
   let close = fn() { done_with(c, p, fn() {  }) }

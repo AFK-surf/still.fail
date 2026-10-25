@@ -174,13 +174,12 @@ fn menu_panel(
   let (ww, _) = c.window_size()
   c.focusable(pid, keys=0)
   // by its trigger, by its size as laid out (its first frame too), growing out of the side it went on (as this frame
-  // lays it out; its first, the side asked for); its entries within the room it has there (in_room: scrolling in what
-  // that room leaves them where they are more)
+  // lays it out; its first, the side asked for); its entries within the window (in_room: scrolling only where they are
+  // more than it holds)
   let went = went_side(c, pid, anchor, side, along, offset)
-  let room = c.room_beside(anchor, went, offset~)
   let i = c.box(id=pid, max_w=ww - 16.0, fn() {
     look(c, min_w, fn() {
-      in_room(c, { side: went, room, panel: pid }, key=key + "/room", fn() {
+      in_room(c, { side: went, room: c.place_most(), panel: pid }, key=key + "/room", fn() {
         c.roving(key + "/items", orientation=Vertical, wrap=false, fn() {
           for n, e in entries {
             match e.kind {

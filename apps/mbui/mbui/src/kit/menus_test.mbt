@@ -392,7 +392,7 @@ fn words_span(t : @ui.Tester, words : String) -> (Double, Double) raise {
 }
 
 ///|
-test "dropdown menu: taller than the room on either side of its trigger, within the room over it, its items scrolled to" {
+test "dropdown menu: taller than the window, as tall as it lets it, its items scrolled to" {
   let open = Ref(true)
   let entries = Array::makei(40, fn(i) { menu_item("i\{i}", label="Item \{i + 1}") })
   let t = @ui.Tester::new(
@@ -410,14 +410,13 @@ test "dropdown menu: taller than the room on either side of its trigger, within 
     h=400.0,
   )
   t.run_for(presence_in_ms)
-  let (trigger, _) = words_span(t, "More")
-  // over its trigger, the side with the room, its first item in the window
+  // its first item in the window, its last past it until scrolled to
   let (first, _) = words_span(t, "Item 1")
   assert_true(first > 0.0, msg="its first item out of the window")
-  assert_true(words_span(t, "Item 40").0 > trigger, msg="its last item not past what it shows")
-  // its last item reached by the wheel, above its trigger
+  assert_true(words_span(t, "Item 40").0 > 400.0, msg="its last item not past what it shows")
   let (x, y) = t.find("Item 1").unwrap()
   t.wheel(x, y, 5000.0)
-  assert_true(words_span(t, "Item 40").1 < trigger, msg="its items not scrolled to their end")
+  assert_true(words_span(t, "Item 40").1 < 400.0, msg="its items not scrolled to their end")
+  assert_true(words_span(t, "Item 1").0 < 0.0)
   assert_true(open.val)
 }

@@ -55,7 +55,7 @@ fn ref_menu(
             Some((_, _, cw, _)) => cw
             None => ref_menu_least
           }
-          // (its chats scrolling past its most, or what the room over the composer leaves them)
+          // (its chats scrolling past its most, or past what the window leaves them)
           c.box(style=ref_menu_box.then(@ui.style(w=Fixed(width))), glass=@sf.glass_floating(), fn() {
             @kit.in_room(c, s, key="composer/ref-list", most=ref_menu_max - 2.0 * @sf.panel_pad, body) |> ignore
           })
