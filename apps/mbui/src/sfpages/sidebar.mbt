@@ -152,7 +152,49 @@ let placed : Map[String, Bool] = {}
 ///|
 fn sidebar_reset() -> Unit {
   placed.clear()
+  rows_laid.clear()
   filter_menu_serial.val = -1
+}
+
+///|
+/// A list's days as lines (a heading and its rows each), made once for the days shown (the very array: a view's, read
+/// once a version, or the order held while a finger is on it), not every frame: as many as the list has rows, of
+/// which a frame builds only those in view. Their keys among the list's lines, the chats in them, and the names they
+/// move by (the list's key and a line's).
+priv struct DayLines {
+  days : Array[ChatDay]
+  lines : Array[Line]
+  keys : Array[String]
+  shown : Array[ChatItem]
+  moving : Array[String]
+}
+
+///|
+/// Each list's days as lines, as last laid out (DayLines).
+// kept across runs: put back by sidebar_reset (reset)
+let rows_laid : Map[String, DayLines] = {}
+
+///|
+/// List `key`'s days `days` as lines: those made for them last, while they are the same.
+fn day_lines(key : String, days : Array[ChatDay]) -> DayLines {
+  match rows_laid.get(key) {
+    Some(l) if physical_equal(l.days, days) => l
+    _ => {
+      let lines : Array[Line] = []
+      let shown : Array[ChatItem] = []
+      for d in days {
+        lines.push(Heading(d.label))
+        for item in d.items {
+          lines.push(Row(item))
+          shown.push(item)
+        }
+      }
+      let keys = lines.map(line_key)
+      let l = { days, lines, keys, shown, moving: keys.map(fn(k) { key + "\u{1}" + k }) }
+      rows_laid[key] = l
+      l
+    }
+  }
 }
 
 ///|
@@ -167,6 +209,8 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
     Some(v) if current => @sfbase.open_listed(v)
     _ => ()
   }
+  // the lines over its days (its room under the bar, what the frame puts at its top, its states), then its days', then
+  // its foot
   let lines : Array[Line] = [Top]
   // a finger's search at the list's top, out of view until scrolled to (Home.kt top), while it has rows to look in;
   // a mouse has ⌘K (a finger has no keys to press)
@@ -179,7 +223,7 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
   for p in (frame.before)(filter, view) {
     lines.push(Part(p))
   }
-  let shown : Array[ChatItem] = []
+  let mut rows : DayLines? = None
   match view {
     None => lines.push(Wait(None, error))
     Some(v) => {
@@ -197,18 +241,36 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
       // while a finger is on the list, the pointer over it or it moves, the rows keep their places (a row pinned or
       // let go moves at once: Sidebar.tsx pinMoved)
       let days = @sfbase.held_order(key, v.days, list_held(c, key, pane) && !pin_moved(key, v.days))
-      for d in days {
-        lines.push(Heading(d.label))
-        for item in d.items {
-          lines.push(Row(item))
-          shown.push(item)
-        }
-      }
+      rows = Some(day_lines(key, days))
     }
   }
-  lines.push(Foot)
+  let head = lines.length()
+  let (day, day_keys, moving) = match rows {
+    Some(r) => (r.lines, r.keys, r.moving)
+    None => ([], [], [])
+  }
+  let count = head + day.length() + 1
+  let line_at = fn(i : Int) -> Line {
+    if i < head {
+      lines[i]
+    } else if i - head < day.length() {
+      day[i - head]
+    } else {
+      Foot
+    }
+  }
+  let key_at = fn(i : Int) -> String {
+    if i >= head && i - head < day_keys.length() {
+      day_keys[i - head]
+    } else {
+      line_key(line_at(i))
+    }
+  }
   if current {
-    listed.val = shown
+    listed.val = match rows {
+      Some(r) => r.shown
+      None => []
+    }
   }
   let lead = match view {
     Some(v) => v.leading
@@ -217,18 +279,12 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
   let open = open_chat()
   // the rows and days move as the list changes (listMotion.ts useListMotion: by their keys); only they count: the
   // first rows, after the list waited, come as they are
-  let keys = lines.map(line_key)
-  let lid = @motion.list_keys(
-    c,
-    key,
-    keys.filter(fn(k) { k.has_prefix("h/") || k.has_prefix("r/") }).map(fn(k) { key + "\u{1}" + k }),
-    liftable=fn(k) { !k.contains("\u{1}h/") },
-  )
+  let lid = @motion.list_keys(c, key, moving, liftable=fn(k) { !k.contains("\u{1}h/") })
   let row_h = if finger { touch_row_h } else { mouse_row_h }
   c.box(style=lists_fill, id=pane, fn() {
-    c.list(key, lines.length(), row_h, fn(i) {
+    c.list(key, count, row_h, fn(i) {
       let n = c.box(style=@sf.pane_line(), fn() {
-        match lines[i] {
+        match line_at(i) {
           Top => list_space(c, frame.top + (if finger { 0.0 } else { lists_top_in }))
           Foot => list_space(c, frame.foot + (if finger { 0.0 } else { lists_foot_in }))
           Part(p) => (p.draw)()
@@ -236,7 +292,7 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
           Empty(v) => list_empty(c, v, filter)
           Heading(label) => list_heading(c, label)
           Row(item) => {
-            let name = key + "\u{1}" + keys[i]
+            let name = key + "\u{1}" + key_at(i)
             let on = match open {
               Some(r) => r.station == item.station && (r.session == item.session || r.session == item.id)
               None => false
@@ -248,7 +304,7 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
               lead,
               on~,
               list_ground=frame.ground,
-              more=i + 1 < lines.length() && lines[i + 1] is Row(_),
+              more=i + 1 < count && line_at(i + 1) is Row(_),
               lifted=@motion.lifted(c, lid, name),
               unghost=fn(off) { @motion.list_unghost(c, lid, name, off~) },
             )
@@ -256,8 +312,8 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
           }
         }
       })
-      match lines[i] {
-        Heading(_) | Row(_) => row_moving(c, lid, key, keys[i], n)
+      match line_at(i) {
+        Heading(_) | Row(_) => row_moving(c, lid, key, key_at(i), n)
         _ => ()
       }
     })
@@ -321,8 +377,11 @@ fn list_held(c : @ui.Ctx, key : String, pane : Int) -> Bool {
 
 ///|
 /// Whether a row shown in list `key` was pinned or let go since: it moves at once, even while the list is held still
-/// (Sidebar.tsx pinMoved).
+/// (Sidebar.tsx pinMoved). Nothing come since the order shown was made, none was.
 fn pin_moved(key : String, days : Array[ChatDay]) -> Bool {
+  if !@sfbase.days_new(key, days) {
+    return false
+  }
   let was : Map[String, Bool] = {}
   for d in @sfbase.shown_days.get(key).unwrap_or([]) {
     for item in d.items {

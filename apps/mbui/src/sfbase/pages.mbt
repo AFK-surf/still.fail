@@ -211,6 +211,7 @@ pub fn reset() -> Unit {
   read_views.clear()
   open_titled.val = ""
   shown_days.clear()
+  held_from.clear()
   // the core's downloads being taken and kept (downloads.mbt)
   downloads_reset()
   // the drafts as the core keeps them (compose.mbt)

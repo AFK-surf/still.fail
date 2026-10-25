@@ -126,6 +126,20 @@ pub fn open_listed(view : ChatsView) -> Unit {
 pub let shown_days : Map[String, Array[ChatDay]] = {}
 
 ///|
+/// The days, by list, the order last shown was made from (held_order): while they are the same, so is it.
+let held_from : Map[String, Array[ChatDay]] = {}
+
+///|
+/// Whether `days` (the very array: a view's, read once a version) are not what list `key`'s order shown was last made
+/// from: something has come since.
+pub fn days_new(key : String, days : Array[ChatDay]) -> Bool {
+  match held_from.get(key) {
+    Some(f) => !physical_equal(f, days)
+    None => true
+  }
+}
+
+///|
 /// `days` as shown (ListMotion.kt HeldOrder): while `hold` (a finger on the list, or it moving) rows keep their
 /// places and their days, each with what is new of it, so the row about to be tapped does not move away; ones gone
 /// go, new ones come in where they would be in their day (a day not shown yet comes where it would be). Let go, the
@@ -134,7 +148,12 @@ pub fn held_order(key : String, days : Array[ChatDay], hold : Bool) -> Array[Cha
   let shown = shown_days.get(key).unwrap_or([])
   if !hold || shown.is_empty() {
     shown_days[key] = days
+    held_from[key] = days
     return days
+  }
+  // (nothing come since the order shown was made: the very same, not made again each frame the list is held)
+  if !days_new(key, days) {
+    return shown
   }
   let fresh : Map[String, ChatItem] = {}
   for d in days {
@@ -186,6 +205,7 @@ pub fn held_order(key : String, days : Array[ChatDay], hold : Bool) -> Array[Cha
   }
   let result = out.filter(fn(o) { o.1.length() > 0 }).map(fn(o) { ChatDay::{ label: o.0, items: o.1 } })
   shown_days[key] = result
+  held_from[key] = days
   result
 }
 
