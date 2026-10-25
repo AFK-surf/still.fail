@@ -796,6 +796,50 @@ let wide_control_h : Double = 36.0
 let narrow_control_h : Double = 44.0
 
 ///|
+/// What a thing pressed takes at least, by the screen (docs/architecture.md: touch targets 44 at least on a touch
+/// device): there, 44 by 44 at least, what it shows in its middle; on a computer nothing more. For a button.
+pub fn finger_least() -> @ui.Style {
+  if theme().narrow {
+    finger_square
+  } else {
+    finger_none
+  }
+}
+
+///|
+/// As finger_least, its height alone: for a row, which is as wide as its list.
+pub fn finger_least_h() -> @ui.Style {
+  if theme().narrow {
+    finger_high
+  } else {
+    finger_none
+  }
+}
+
+///|
+/// How wide and high a button finger_least gives is (its side: what stands in a corner concentric with it): `web`'s
+/// on a computer, 44 at least on a touch device.
+pub fn finger_side(web : Double) -> Double {
+  if theme().narrow {
+    dmax(web, narrow_control_h)
+  } else {
+    web
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let finger_square : @ui.Style = @ui.style(min_w=Fixed(narrow_control_h), min_h=Fixed(narrow_control_h))
+
+///|
+// kept across runs: a value (no field of it changes)
+let finger_high : @ui.Style = @ui.style(min_h=Fixed(narrow_control_h))
+
+///|
+// kept across runs: a value (no field of it changes)
+let finger_none : @ui.Style = @ui.css("")
+
+///|
 /// The phone's: a size up, as Android's.
 let narrow_type : Type = {
   ..wide_type,

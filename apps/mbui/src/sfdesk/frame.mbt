@@ -582,7 +582,12 @@ pub fn frame(
     dmax(0.0, c.width - peek_w - closed_bar_in)
   }
   let at = tape_at(c.width, col, peek_w, main_w, panel_w)
-  let tape_x = tape_frame(c, panel_of, at)
+  // (the chat shown has its view: what its side panel shows is known)
+  let known = match app.nav.top() {
+    Chat(r) | History(r, _, _) => (src.topic)("chat", chat_params(r)).value is Some(_)
+    _ => true
+  }
+  let tape_x = tape_frame(c, panel_of, at, known)
   // shown a while, the page moved aside as wide as it was (shell.css.ts main's left: --peek-shift), its bars from the
   // sidebar's edge to the window's (brand.css.ts); closed, their padding clear of the bar (and of the window's buttons)
   let shift = if peek { wide.peek_shift } else { 0.0 }
@@ -817,7 +822,7 @@ fn tape_x_of(at : (Double, Double, Double), p : TapePane) -> Double {
 /// over: the side panel as it opens beside the chat it was closed for, the page again as it closes — and how far the
 /// tape is moved where its move has got to. 0 off the tape. `panel`: the chat whose side panel is open (tape_side);
 /// `at`: tape_at's.
-fn tape_frame(c : @ui.Ctx, panel : ChatRef?, at : (Double, Double, Double)) -> Double {
+fn tape_frame(c : @ui.Ctx, panel : ChatRef?, at : (Double, Double, Double), known : Bool) -> Double {
   if !wide.tape {
     wide.tape_ask = None
     wide.tape_chat = ""
@@ -852,9 +857,11 @@ fn tape_frame(c : @ui.Ctx, panel : ChatRef?, at : (Double, Double, Double)) -> D
       None => ()
     }
   }
-  // the chat's side panel opened beside it (the same chat as before, its panel closed then): the panel comes over;
-  // closed while in use, the page. Nothing else moves the tape by itself: a chat opened from the sidebar shows in the
-  // page beside it, the sidebar still in use
+  // the chat's side panel opened beside it (the same chat as before, its panel closed then, its view come): the panel
+  // comes over; closed while in use, the page. Another chat shown while a panel was in use: its page, not the panel
+  // open in it (pengxiao, 2026-10-25: the chat in the middle is what one comes to; a panel shown as its view comes is
+  // not one opened). Nothing else moves the tape by itself: a chat opened from the sidebar shows in the page beside
+  // it, the sidebar still in use
   let chat = match app.nav.top() {
     Chat(r) | History(r, _, _) => chat_key(r)
     _ => ""
@@ -864,14 +871,18 @@ fn tape_frame(c : @ui.Ctx, panel : ChatRef?, at : (Double, Double, Double)) -> D
     None => ""
   }
   if wide.tape_ask is None {
-    if open != "" && open != wide.tape_panel && chat == wide.tape_chat {
+    if chat != wide.tape_chat {
+      if wide.tape_at == Panel {
+        wide.tape_ask = Some(Page)
+      }
+    } else if open != "" && open != wide.tape_panel && wide.tape_panel != tape_unknown && known {
       wide.tape_ask = Some(Panel)
-    } else if open == "" && wide.tape_at == Panel {
+    } else if open == "" && known && wide.tape_at == Panel {
       wide.tape_ask = Some(Page)
     }
   }
   wide.tape_chat = chat
-  wide.tape_panel = open
+  wide.tape_panel = if known { open } else { tape_unknown }
   match wide.tape_ask {
     Some(p) => {
       wide.tape_ask = None
@@ -894,6 +905,10 @@ fn tape_frame(c : @ui.Ctx, panel : ChatRef?, at : (Double, Double, Double)) -> D
   let pulled = if wide.tape_pull is Some(_) { wide.tape_drag } else { 0.0 }
   c.moved("--tape-x", tape_x_of(at, wide.tape_at) + pulled)
 }
+
+///|
+/// What the frame knew of the shown chat's side panel while its view had not come (tape_frame): neither open nor not.
+let tape_unknown : String = "?"
 
 ///|
 /// How far the finger may move the tape pulling `p` over: from where it is with the one in use to where it has `p` in

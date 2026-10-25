@@ -924,7 +924,7 @@ pub fn drive_row(
   }
   c.box(style=entry_room, fn() {
     let box = c.box(style=if busy { ground.then(entry_busy_look) } else { ground }, id~, fn() {
-      c.box(style=inner, fn() {
+      c.box(style=inner.then(@sf.finger_least_h()), fn() {
         if tree {
           // (in by its depth: 18 a step, past the 6 every tree row is in by)
           c.box(style=@ui.style(w=Fixed(indent)), fn() {  }) |> ignore

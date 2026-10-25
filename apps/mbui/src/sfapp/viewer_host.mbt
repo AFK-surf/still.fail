@@ -7,7 +7,8 @@
 /// What the app gives its viewers over `src`.
 fn viewer_host_of(c : @ui.Ctx, src : Source) -> @sf.ViewerHost {
   {
-    room: fn() { if @sfdesk.is_wide(c) { (0.0, 0.0) } else { (status_top(), nav_foot()) } },
+    // (in every tier: a tablet's status bar and navigation bar are over the viewer as a phone's are)
+    room: fn() { (status_top(), nav_foot()) },
     // a phone's: the drive's reader sheet (drive_parts.mbt dv_sheet_frame)
     sheet: Some(fn(c, s) {
       dv_sheet_frame(
