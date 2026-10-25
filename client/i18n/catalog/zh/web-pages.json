@@ -1636,7 +1636,7 @@
     "one": "{n} 条密钥尚未加密",
     "other": "{n} 条密钥尚未加密"
   },
-  "web-pages.vault.migrate.body": "开启安全模式前保存的密钥仍以明文保存在 station 上。加密后存入你的库，并从 station 上删除明文。",
+  "web-pages.vault.migrate.body": "开启安全模式前保存的密钥仍以明文保存在 station 上",
   "web-pages.vault.migrate.go": "加密",
   "web-pages.vault.migrate.what": "加密密钥",
   "web-pages.vault.migrate.done": {
@@ -1660,10 +1660,6 @@
   "web-pages.vault.count": {
     "one": "{n} 条",
     "other": "{n} 条"
-  },
-  "web-pages.vault.waitingCount": {
-    "one": "{n} 个待批准",
-    "other": "{n} 个待批准"
   },
   "web-pages.vault.appOnly": "请在客户端查看和批准",
   "web-pages.vault.appOnlyWhy": "网页端仅显示名称，无法解密",
@@ -1689,6 +1685,7 @@
   "web-pages.vault.personal": "个人",
   "web-pages.vault.createWhat": "创建个人库",
   "web-pages.vault.requests": "待批准",
+  "web-pages.vault.all": "全部密钥",
   "web-pages.vault.reason": "理由",
   "web-pages.vault.command": "命令",
   "web-pages.vault.how": "方式",

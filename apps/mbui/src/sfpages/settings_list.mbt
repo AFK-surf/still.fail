@@ -254,7 +254,7 @@ pub fn settings_row_of(r : @settings.Route) -> @settings.Route {
   match r {
     Fonts => Appearance
     SecurityOpen => Security
-    VaultItem(_, _) => Vault
+    VaultItems | VaultItem(_, _) => Vault
     Station(_) | AdbShare(_) => Stations
     Profile(_, _) | PickModels(_, _) | ProfileModels(_, _) | NewProfile(_) | ProfileAccount(_) => Profiles("")
     Connects(_) | Connect(_, _) | RunSettings(_, _) => Connects("")

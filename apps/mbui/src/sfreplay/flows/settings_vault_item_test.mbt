@@ -1,4 +1,4 @@
-// 85-vault-item (e2e/traces/settings-vault-item.trace): 密钥 → ＋ → Token: a name, its value, agents by the proxy to a
+// 85-vault-item (e2e/traces/settings-vault-item.trace): 密钥 → 全部密钥 → ＋ → Token: a name, its value, agents by the proxy to a
 // host, 保存 (vault.putItem); its page, 编辑 (vault.open, then its editor) → 删除 (vault.deleteItem). 添加, the editor
 // and asking first are the presenters' (a sheet on a phone).
 
@@ -11,6 +11,9 @@ test "85-vault-item" {
     f.tap("密钥")
     f.run_to(@ui.nav_rest())
     f.see("未加锁")
+    // what it keeps, a page under it: adding there
+    f.tap("全部密钥")
+    f.run_to(@ui.nav_rest())
     f.tap("icon:plus")
     f.run_to(@kit.sheet_rest("sf-present"))
     f.tap("=Token")
@@ -32,8 +35,6 @@ test "85-vault-item" {
     f.tap("=保存")
     f.answered("vault.putItem", 1)
     f.run_to(@kit.sheet_rest("sf-present"))
-    // the secrets under the longest grant's choices, down the page
-    f.wheel_at("默认最长授权", 500.0)
     f.see("=e2e-080726")
     f.tap("=e2e-080726")
     f.run_to(@ui.nav_rest())

@@ -289,9 +289,11 @@ test "profiles, connects, the vault: their lists" {
   let t2 = settings_tester("connects")
   assert_true(t2.find("星火助手 · 星火") is Some(_))
   assert_true(t2.find("值班机器人") is Some(_))
+  // 密钥: the request waiting on the viewer, its secrets a page under it (全部密钥)
   let t3 = settings_tester("vault")
-  assert_true(t3.find("GitHub token") is Some(_))
   assert_true(t3.find("git push origin main") is Some(_))
+  assert_true(t3.find("部署机") is None)
+  assert_true(settings_tester("vault-items").find("部署机") is Some(_))
   // the bottom bar going out of the way, on its own springs and glides, to where it rests
   t3.run_for(bar.rest() - t3.time())
   t3.assert_idle()
@@ -624,15 +626,20 @@ test "a secret's longest grant: on its page its own or its vault's, in its edito
   t.draw()
   assert_true(t.find("最长授权") is Some(_))
   assert_true(t.find("跟随默认 · 直到对话归档") is Some(_))
-  // its editor, agents let ask for it: 跟随默认 first, each of its own, what it means under them
-  let e = settings_tester("vault", shows="settings-vault-editor")
+  // its editor, agents let ask for it: 跟随默认 first, what it means under it; each of its own offered from it (its
+  // four not side by side in the editor's width: the chosen one alone, the others in a pick)
+  let e = settings_tester("vault-items", shows="settings-vault-editor")
   sheet_rested(e, "settings-sheet")
   assert_true(e.find("跟随默认") is None)
   e.tap_text("允许 agent 申请")
   e.draw()
   assert_true(e.find("跟随默认") is Some(_))
-  assert_true(e.find("仅一次") is Some(_))
   assert_true(e.find("批准这个密钥的申请时") is Some(_))
+  assert_true(e.find("仅一次") is None)
+  e.tap_text("跟随默认")
+  e.frame()
+  presented_in(e)
+  assert_true(e.find("仅一次") is Some(_))
 }
 
 ///|

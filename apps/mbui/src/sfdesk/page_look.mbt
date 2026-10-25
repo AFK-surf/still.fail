@@ -189,6 +189,7 @@ pub fn back_label(p : Page) -> String {
     Setting(Route::Usage) => @sf.t("web-pages.settings.nav.usage")
     Setting(Route::Security) => @sf.t("web-pages.security.title")
     Setting(Route::Vault) => @sf.t("web-pages.vault.title")
+    Setting(Route::VaultItems) => @sf.t("web-pages.vault.all")
     Setting(Route::Connects(_)) | Place("connects") => @sf.t("android-settings.connects.title")
     Place("usage") => @sf.t("web-pages.settings.nav.usage")
     _ => @sf.t("common.back")

@@ -57,18 +57,23 @@ test "secrets left in plain text from before security mode: how many, 加密 enc
   let t = settings_tester("vault", mode="settings-vault-plain", shows="settings-vault-plain")
   shown_on_page(t, "2 条密钥尚未加密")
   assert_true(t.find("2 条密钥尚未加密") is Some(_))
-  // (the button: the last words with 加密 in them, the title says it too)
+  // (its row pressed: 加密 where it says what it does, the last words with 加密 in them as the title says it too)
   let (x, y) = t.find_last("加密").unwrap()
   t.tap(x, y)
   assert_true(t.find("2 条密钥尚未加密") is None)
 }
 
 ///|
-test "密钥: 默认最长授权 over the profiles' keys, its note and its three choices (Vault.kt DefaultLasts)" {
+test "密钥: 默认最长授权 a row over the profiles' keys, the one now under it; pressed, its three choices, each with what it means (Vault.kt DefaultLasts)" {
   let t = settings_tester("vault")
   shown_on_page(t, "默认最长授权")
-  assert_true(t.find("默认最长授权") is Some(_))
-  for words in ["仅一次", "1 小时", "直到对话归档", "每次使用都要你批准一次"] {
+  assert_true(t.find("直到对话归档") is Some(_))
+  assert_true(t.find("每次使用都要你批准一次") is None)
+  let (x, y) = t.find("默认最长授权").unwrap()
+  t.tap(x, y)
+  t.frame()
+  presented_in(t)
+  for words in ["仅一次", "1 小时", "每次使用都要你批准一次", "最长能选「本对话直到归档」，至多 30 天"] {
     assert_true(t.find(words) is Some(_), msg=words)
   }
 }

@@ -1,51 +1,39 @@
-// 密钥, one page in every frame (web/src/cloud/Vault.tsx VaultSettings, Library; the narrow app's mobile/Vault.tsx), laid
-// out by its width (page_look.mbt): under its title what it keeps and 添加; what has to come first (security mode, this
-// device signing, this device set up, the recovery words written down), then the requests waiting on the viewer (each
-// one's card, as in its chat), whether it is encrypted (and locking it again), the longest a grant lasts, the profiles'
-// accounts, each vault's secrets a section a kind (or, with no key here, its items' names), the devices that hold its
-// keys, the stations that refused it. Adding, a secret's editor and the recovery words typed are the presenters'
-// (vault_dialogs.mbt).
+// 密钥, one page in every frame and the same on every width (the user, 2026-10-26: 「这个页面需要整体重新设计，现在乱得
+// 一批」: its state a card of its own, the longest approval a heading, a paragraph and three cards of their own, each on
+// an edge of its own, what it keeps under the fold), and 全部密钥 under it. What has to come first (security mode, this
+// device signing, this device set up, the recovery words written down): a card alone on either, with the way on. Set
+// up, 密钥 is what waits on the viewer and how the library stands, not what it keeps (「密钥管理不需要入口做这么浅，因为
+// 平时不会手动操作，顶多就是类似 1p，进去看一眼复制一下」): the requests waiting on the viewer first (each one's card, as
+// in its chat); a row to 全部密钥; how its secrets are kept, a row each on one list card, each what it is with how it
+// stands under it (encrypted or not, and unlocked here a while; those still in plain text from before; the longest an
+// approval lasts, picked through the presenters; the devices holding its key); deleting the vault in red at its foot,
+// asked first; the stations that refused it. 全部密钥 is what it keeps, a section a kind (the profiles' accounts as the
+// profiles list them, then each vault's secrets), each a row to its page, and 添加 at its head. Made of the library's
+// page parts (@sf.section, group, link_row, page_card), laid out by the page's width (page_look.mbt). Adding, a
+// secret's editor and the recovery words typed are the presenters' (vault_dialogs.mbt).
 
 ///|
 /// 密钥 (VaultSettings, VaultScreen): as the core's `vaults` says where the viewer stands.
 fn vault_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let ws = here.workspace
-  let topic = (core.topic)("vaults", { "workspace": str(ws) })
-  let v = topic.value
-  let words = recovery_words.get(ws)
-  let usable = v is Some(_) &&
-    words is None &&
-    (flag(v, "plain") || (flag(v, "available") && flag(v, "locked") && flag(v, "canSign") && flag(v, "setUp")))
-  let body : Array[() -> Unit] = match v {
-    _ if words is Some(w) => [fn() { vault_words(c, look, ws, w) }]
-    None =>
-      [
-        fn() {
-          waiting_cards(
-            c,
-            error=match topic.error {
-              Some(e) => error_text(e)
-              None => ""
-            },
-          )
-        },
-      ]
-    Some(_) if flag(v, "plain") => vault_library(c, core, look, ws, v)
-    Some(_) if !flag(v, "available") => {
-      let out : Array[() -> Unit] = []
-      for row in items(v, "vaults") {
-        out.append(vault_named(c, core, look, ws, row))
-      }
-      out.push(fn() { @sf.page_note(c, @sf.t("android-settings.vault.readOnly")) })
-      out
-    }
-    Some(_) if !flag(v, "locked") =>
-      [fn() { vault_gate(c, core, look, @sf.t("web-pages.vault.needsLock"), @sf.t("web-pages.vault.needsLockWhy")) }]
-    Some(_) if !flag(v, "canSign") =>
-      [fn() { vault_gate(c, core, look, @sf.t("web-pages.vault.notSigner"), @sf.t("web-pages.vault.notSignerWhy")) }]
-    Some(_) if !flag(v, "setUp") => [fn() { vault_off(c, core, look, ws) }]
-    Some(_) => vault_library(c, core, look, ws, v)
+  let v = (core.topic)("vaults", { "workspace": str(ws) }).value
+  let body = match vault_first(c, core, ws) {
+    Some(first) => first
+    None => vault_library(c, core, look, ws, v)
+  }
+  look_page(c, core, frame, "vault", @sf.t("web-pages.vault.title"), lead=@sf.t("web-pages.vault.lead"), body)
+}
+
+///|
+/// 全部密钥 (VaultItems): what the library keeps, 添加 at its head; what has to come first, as on 密钥.
+fn vault_items_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
+  let look = look_of(c)
+  let ws = here.workspace
+  let v = (core.topic)("vaults", { "workspace": str(ws) }).value
+  let (body, usable) = match vault_first(c, core, ws) {
+    Some(first) => (first, false)
+    None => (vault_all(c, core, ws, v), true)
   }
   let add = fn() {
     match look {
@@ -59,61 +47,54 @@ fn vault_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit 
         }
     }
   }
-  look_page(c, core, frame, "vault",
-    @sf.t("web-pages.vault.title"),
-    lead=@sf.t("web-pages.vault.lead"),
-    actions?=if usable { Some(add) } else { None },
-    body,
-  )
+  look_page(c, core, frame, "vault-items", @sf.t("web-pages.vault.all"), actions?=if usable { Some(add) } else { None }, body)
 }
 
 ///|
-/// A card of the page's own: its state first (its mark before it where `icon`; amber where `risk`), what it means
-/// under it, `then` after (its buttons).
-fn vt_card(
-  c : @ui.Ctx,
-  look : Look,
-  title : String,
-  why : String,
-  icon? : String = "",
-  risk? : Bool = false,
-  then? : () -> Unit,
-) -> Unit {
-  let t = @sf.theme()
-  let draw = fn() {
-    c.box(style=vt_state_line, fn() {
-      if icon != "" {
-        @sf.icon(c, icon, size=vt_glyph, color=if risk { t.p.warn_ink } else { t.p.text }) |> ignore
+/// What 密钥 and 全部密钥 show before the library, as the core's `vaults` says where the viewer stands: the recovery
+/// words to write down; waiting for the core; a web page's names; what has to come first. None where the library is
+/// there to be used (in plain text on the station, or locked, signed and set up here).
+fn vault_first(c : @ui.Ctx, core : Core, ws : String) -> Array[() -> Unit]? {
+  let topic = (core.topic)("vaults", { "workspace": str(ws) })
+  let v = topic.value
+  match v {
+    _ if recovery_words.get(ws) is Some(w) => Some([fn() { vault_words(c, ws, w) }])
+    None =>
+      Some([
+        fn() {
+          waiting_cards(
+            c,
+            error=match topic.error {
+              Some(e) => error_text(e)
+              None => ""
+            },
+          )
+        },
+      ])
+    Some(_) if flag(v, "plain") => None
+    // (a web page's: what it may say first, then the names it is told)
+    Some(_) if !flag(v, "available") => {
+      let out : Array[() -> Unit] = [fn() { @sf.page_note(c, @sf.t("android-settings.vault.readOnly")) }]
+      for row in items(v, "vaults") {
+        out.push(fn() { vault_named(c, core, ws, row) })
       }
-      c.text(title, style=if risk { vt_state_risk } else { vt_state }) |> ignore
-    })
-    |> ignore
-    if why != "" {
-      c.text(why, style=desk_muted) |> ignore
+      Some(out)
     }
-    match then {
-      Some(f) => f()
-      None => ()
-    }
-  }
-  match look {
-    Narrow => @sf.page_card(c, draw)
-    Wide => c.box(style=desk_card.then(vt_lead), draw) |> ignore
+    Some(_) if !flag(v, "locked") =>
+      Some([fn() { vault_gate(c, core, @sf.t("web-pages.vault.needsLock"), @sf.t("web-pages.vault.needsLockWhy")) }])
+    Some(_) if !flag(v, "canSign") =>
+      Some([fn() { vault_gate(c, core, @sf.t("web-pages.vault.notSigner"), @sf.t("web-pages.vault.notSignerWhy")) }])
+    Some(_) if !flag(v, "setUp") => Some([fn() { vault_off(c, core, ws) }])
+    Some(_) => None
   }
 }
 
 ///|
-/// A card's buttons at its foot, its words before them (the row goes on under where it has not the room): in the card's
-/// foot corners, concentric with them (@sf.foot_reach; `words_first`: words lead the row, only its end reaching).
-fn vt_buttons(c : @ui.Ctx, words_first? : Bool = false, f : () -> Unit) -> Unit {
-  c.box(style=vt_actions.then(@sf.foot_reach(@sf.button_height(), words_first~)), flow=true, f) |> ignore
-}
-
-///|
-/// What the vault waits for before anything else (Gate, ToSecurity): said, with the way there.
-fn vault_gate(c : @ui.Ctx, core : Core, look : Look, title : String, why : String) -> Unit {
-  vt_card(c, look, title, why, then=fn() {
-    vt_buttons(c, fn() {
+/// What the vault waits for before anything else (Gate, ToSecurity): said on a card, with the way there at its foot.
+fn vault_gate(c : @ui.Ctx, core : Core, title : String, why : String) -> Unit {
+  @sf.page_card(c, footed=true, fn() {
+    @sf.card_lines(c, title, note=why)
+    @sf.card_foot(c, fn() {
       if @sf.button(c, @sf.t("web-pages.vault.toSecurity"), key="vault-to-security", tone=Primary) {
         (core.push)(Security)
       }
@@ -122,12 +103,17 @@ fn vault_gate(c : @ui.Ctx, core : Core, look : Look, title : String, why : Strin
 }
 
 ///|
-/// Not set up on this device yet (Off): what it is and what agents do with it; 开启 (`vault.setup`).
-fn vault_off(c : @ui.Ctx, core : Core, look : Look, ws : String) -> Unit {
-  vt_card(c, look, @sf.t("android-settings.vault.offTitle"), @sf.t("android-settings.vault.offWhat"), then=fn() {
-    c.text(@sf.t("android-settings.vault.offAgents") + " " + @sf.t("android-settings.vault.offUnlock"), style=desk_muted)
-    |> ignore
-    vt_buttons(c, fn() {
+/// Not set up on this device yet (Off): what it is, what agents do with it and how it is opened, a line each; 开启
+/// (`vault.setup`) at its foot.
+fn vault_off(c : @ui.Ctx, core : Core, ws : String) -> Unit {
+  @sf.page_card(c, footed=true, fn() {
+    @sf.card_lines(
+      c,
+      @sf.t("android-settings.vault.offTitle"),
+      words=@sf.t("android-settings.vault.offWhat"),
+      note=@sf.t("android-settings.vault.offAgents") + "\n" + @sf.t("android-settings.vault.offUnlock"),
+    )
+    @sf.card_foot(c, fn() {
       if @sf.button(
           c,
           @sf.t("android-settings.vault.turnOn"),
@@ -153,10 +139,16 @@ fn vault_setup(core : Core, ws : String) -> Unit {
 }
 
 ///|
-/// The 24 recovery words, numbered, three to a row, for the person to copy out (Words); written down, the person says so
-/// (only once shown: the core gives them the once).
-fn vault_words(c : @ui.Ctx, look : Look, ws : String, words : Array[String]) -> Unit {
-  vt_card(c, look, @sf.t("android-settings.vault.wordsTitle"), @sf.t("android-settings.vault.wordsWhy"), then=fn() {
+/// The 24 recovery words, numbered, three to a row, for the person to copy out (Words): why, and that they are shown
+/// this once (the core gives them the once); written down, the person says so at its foot.
+fn vault_words(c : @ui.Ctx, ws : String, words : Array[String]) -> Unit {
+  @sf.page_card(c, footed=true, fn() {
+    @sf.card_lines(
+      c,
+      @sf.t("android-settings.vault.wordsTitle"),
+      words=@sf.t("android-settings.vault.wordsWhy"),
+      note=@sf.t("android-settings.vault.wordsOnce"),
+    )
     c.box(style=vt_words, fn() {
       let rows = (words.length() + 2) / 3
       for r in 0..<rows {
@@ -176,8 +168,7 @@ fn vault_words(c : @ui.Ctx, look : Look, ws : String, words : Array[String]) -> 
       }
     })
     |> ignore
-    vt_buttons(c, words_first=true, fn() {
-      c.text(@sf.t("android-settings.vault.wordsOnce"), style=desk_note) |> ignore
+    @sf.card_foot(c, fn() {
       if @sf.button(c, @sf.t("android-settings.vault.wordsDone"), key="vault-words-done", tone=Primary) {
         recovery_words.remove(ws)
       }
@@ -204,74 +195,11 @@ fn vault_library(c : @ui.Ctx, core : Core, look : Look, ws : String, v : Json?) 
       })
     })
   }
-  // whether it is encrypted, and locking it again once unlocked here a while
-  out.push(fn() {
-    vt_card(
-      c,
-      look,
-      @sf.t(if plain { "web-pages.vault.lib.plain" } else { "web-pages.vault.lib.sealed" }),
-      @sf.t(if plain { "web-pages.vault.lib.plainLong" } else { "web-pages.vault.lib.sealedWhy" }),
-      icon="shield-check",
-      risk=plain,
-      then=fn() {
-        if plain {
-          vt_buttons(c, fn() {
-            if @sf.button(c, @sf.t("web-pages.vault.lib.turnOn"), key="vault-turn-on", tone=Primary) {
-              (core.push)(Security)
-            }
-          })
-        } else if vaults.iter().any(fn(x) { flag(Some(x), "open") }) {
-          vt_buttons(c, words_first=true, fn() {
-            c.text(@sf.t("web-pages.vault.opened"), style=desk_note) |> ignore
-            let locking = is_doing(core, ["vault.lock"], [("workspace", ws)])
-            if @sf.button(c, @sf.t("web-pages.vault.lockNow"), key="vault-lock", tone=Ghost, busy=locking) {
-              vault_act(core, ws, "lock", [], @sf.t("web-pages.vault.lockNow"))
-            }
-          })
-        }
-      },
-    )
-  })
-  // the longest a grant of the viewer's secrets lasts where a secret says none
-  match vaults.iter().find_first(fn(r) { flag(Some(r), "mine") }) {
-    Some(mine) => out.push(fn() { vault_lasts_row(c, core, look, ws, mine) })
-    None => ()
-  }
-  let left = number(v, "plainLeft").to_int()
-  if !plain && left > 0 {
-    out.push(fn() {
-      vt_card(c, look, @sf.t("web-pages.vault.migrate.title", args=[("n", left.to_string())]), @sf.t("web-pages.vault.migrate.body"), risk=true, then=fn() {
-        vt_buttons(c, fn() {
-          if @sf.button(c, @sf.t("web-pages.vault.migrate.go"), key="vault-migrate", tone=Primary, busy=is_doing(core, ["vault.migrate"], [("workspace", ws)])) {
-            @settings.act(core, @sf.t("web-pages.vault.migrate.what"), "vault.migrate", obj([("workspace", str(ws))]), done=@sf.t("android-settings.vault.migrate.done"))
-          }
-        })
-      })
-    })
-  }
-  // the profiles' accounts it keeps, a section a kind as the profiles list them, each to its profile
-  let profiles = (core.topic)("profiles", { "scope": str(ws) }).value
-  for g in profile_groups(items(profiles, "items")) {
-    out.push(fn() {
-      @sf.section(c, g.0, heads=true, fn() {
-        vt_list(c, look, fn() {
-          for e in g.1 {
-            let ev = Some(e)
-            let p = field(ev, "profile")
-            if vt_row(c, look, "vault-profile/" + text(ev, "key"), text(p, "name"), join(["Profile", text(ev, "where")], " · "), fn() {
-                @sf.provider_logo(c, text(p, "runtime"), text(field(p, "access"), "kind"), vt_glyph, text(p, "providerMark"))
-              }) {
-              (core.push)(Profile(text(ev, "station"), text(p, "id")))
-            }
-          }
-        })
-      })
-    })
-  }
   if !plain && vaults.length() == 0 {
     out.push(fn() {
-      vt_card(c, look, @sf.t("web-pages.vault.none"), "", then=fn() {
-        vt_buttons(c, fn() {
+      @sf.page_card(c, footed=true, fn() {
+        @sf.card_lines(c, @sf.t("web-pages.vault.none"))
+        @sf.card_foot(c, fn() {
           if @sf.button(c, @sf.t("web-pages.vault.setUp"), key="vault-create", tone=Primary, busy=is_doing(core, ["vault.create"], [("workspace", ws)])) {
             @settings.act(core, @sf.t("web-pages.vault.createWhat"), "vault.create", obj([("workspace", str(ws)), ("name", str(@sf.t("web-pages.vault.personal")))]))
           }
@@ -279,48 +207,29 @@ fn vault_library(c : @ui.Ctx, core : Core, look : Look, ws : String, v : Json?) 
       })
     })
   }
+  // this device holding no key to one of them: how to get one
   for row in vaults {
-    if plain || flag(Some(row), "keyed") {
-      out.append(vault_secrets(c, core, look, ws, row, plain, vaults.length() > 1))
-    } else {
-      out.append(vault_named(c, core, look, ws, row))
+    if !plain && !flag(Some(row), "keyed") {
+      out.push(fn() { vault_no_key(c, core, ws, Some(row)) })
     }
   }
-  if !plain && vaults.length() > 0 {
+  // what it keeps (the profiles' accounts, the vaults' secrets), a page of its own
+  out.push(fn() {
+    @sf.group(c, fn() {
+      if @sf.link_row(c, "vault-all", @sf.t("web-pages.vault.all")) {
+        (core.push)(VaultItems)
+      }
+    })
+  })
+  out.push(fn() { vault_kept(c, core, ws, v) })
+  // deleting a vault of the viewer's own, in red at the page's foot, asked first (what goes with it said)
+  let mine = vaults.filter(fn(x) { flag(Some(x), "mine") })
+  if !plain && mine.length() > 0 {
     out.push(fn() {
-      @sf.section(c, @sf.t("web-pages.vault.vaults"), heads=true, fn() {
-        sec_group(c, look, fn() {
-          // each vault a row: its name, and how many devices hold its key or, where some have none yet, how many; its
-          // owner's ⋯ deletes it
-          for row in vaults {
-            let rv = Some(row)
-            let id = text(rv, "id")
-            let missing = count(rv, "missing")
-            sec_line(
-              c,
-              look,
-              text(rv, "name"),
-              note=if missing > 0 {
-                @sf.t("web-pages.vault.missing", args=[("n", missing.to_string())])
-              } else {
-                @sf.t("web-pages.vault.devicesHold", args=[("n", count(rv, "devices").to_string())])
-              },
-              warn=missing > 0,
-              strong=false,
-              end=fn() {
-                if missing > 0 && flag(rv, "mine") && flag(rv, "keyed") {
-                  let giving = is_doing(core, ["vault.addDevice"], [("workspace", ws), ("vault", id)])
-                  if sec_do(c, look, "vault-give/" + id, @sf.t("web-pages.vault.addDevice"), busy=giving) {
-                    vault_act(core, ws, "addDevice", [("vault", str(id))], @sf.t("web-pages.vault.addDeviceWhat"), done=@sf.t("web-pages.vault.addedDevice"))
-                  }
-                }
-                if flag(rv, "mine") {
-                  vault_menu(c, core, ws, rv)
-                }
-              },
-            )
-          }
-        })
+      @sf.group(c, fn() {
+        for row in mine {
+          vault_delete_row(c, core, ws, Some(row), vaults.length() > 1)
+        }
       })
     })
   }
@@ -337,6 +246,43 @@ fn vault_library(c : @ui.Ctx, core : Core, look : Look, ws : String, v : Json?) 
         ]),
       )
     })
+  }
+  out
+}
+
+///|
+/// 全部密钥 (LibraryItems): the profiles' accounts it keeps, a section a kind as the profiles list them, each to its
+/// profile; then each vault's secrets (a vault this device has no key to, the names it is told).
+fn vault_all(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Unit] {
+  let plain = flag(v, "plain")
+  let vaults = items(v, "vaults")
+  let out : Array[() -> Unit] = []
+  let profiles = (core.topic)("profiles", { "scope": str(ws) }).value
+  let groups = profile_groups(items(profiles, "items"))
+  for g in groups {
+    out.push(fn() {
+      @sf.section(c, g.0, fn() {
+        @sf.group(c, fn() {
+          for e in g.1 {
+            let ev = Some(e)
+            let p = field(ev, "profile")
+            if @sf.link_row(c, "vault-profile/" + text(ev, "key"), text(p, "name"), note=text(ev, "where")) {
+              (core.push)(Profile(text(ev, "station"), text(p, "id")))
+            }
+          }
+        })
+      })
+    })
+  }
+  for row in vaults {
+    if plain || flag(Some(row), "keyed") {
+      out.append(vault_secrets(c, core, ws, row, vaults.length() > 1, groups.length() > 0))
+    } else {
+      out.push(fn() { vault_named(c, core, ws, row) })
+    }
+  }
+  if out.length() == 0 {
+    out.push(fn() { @sf.page_note(c, @sf.t("web-pages.vault.empty")) })
   }
   out
 }
@@ -373,73 +319,155 @@ fn vault_request(c : @ui.Ctx, core : Core, ws : String, r : Json) -> Unit {
 }
 
 ///|
-/// The longest a grant of the viewer's secrets lasts where a secret says none (Lasts, DefaultLasts): the library's
-/// choices, each with what it means.
-fn vault_lasts_row(c : @ui.Ctx, core : Core, look : Look, ws : String, mine : Json) -> Unit {
+/// How the library keeps its secrets, a row each on one list card (as a page's own settings stand first: a workspace's
+/// name and mark): encrypted, or in plain text on the station (the way to security mode at its end), unlocked here a
+/// while (locked again at once from its end); those still in plain text from before (encrypted from its end); the
+/// longest an approval of the viewer's secrets lasts where a secret says none (its choices, each with what it means,
+/// through the presenters); the devices holding each vault's key (given to new ones from its end). A row that does
+/// something does it pressed, saying what at its end (vault_do_row); what is not as it should be said in amber.
+fn vault_kept(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Unit {
+  let plain = flag(v, "plain")
+  let vaults = items(v, "vaults")
+  let left = number(v, "plainLeft").to_int()
+  @sf.group(c, fn() {
+    if plain {
+      if vault_do_row(c, "vault-turn-on", @sf.t("web-pages.vault.lib.plain"), @sf.t("web-pages.vault.lib.plainWhy"), @sf.t("web-pages.vault.lib.turnOn"), lacks=true) {
+        (core.push)(Security)
+      }
+    } else {
+      let open = vaults.iter().any(fn(x) { flag(Some(x), "open") })
+      let sealed = @sf.t("web-pages.vault.lib.sealed")
+      if open {
+        let locking = is_doing(core, ["vault.lock"], [("workspace", ws)])
+        if vault_do_row(c, "vault-lock", sealed, @sf.t("web-pages.vault.opened"), @sf.t("web-pages.vault.lockNow"), busy=locking) {
+          vault_act(core, ws, "lock", [], @sf.t("web-pages.vault.lockNow"))
+        }
+      } else {
+        @sf.link_row(c, "", sealed, note=@sf.t("web-pages.vault.lib.sealedWhy"), goes=false) |> ignore
+      }
+      if left > 0 {
+        let moving = is_doing(core, ["vault.migrate"], [("workspace", ws)])
+        if vault_do_row(
+            c,
+            "vault-migrate",
+            @sf.t("web-pages.vault.migrate.title", args=[("n", left.to_string())]),
+            @sf.t("android-settings.vault.migrate.body"),
+            @sf.t("web-pages.vault.migrate.go"),
+            lacks=true,
+            busy=moving,
+          ) {
+          @settings.act(core, @sf.t("web-pages.vault.migrate.what"), "vault.migrate", obj([("workspace", str(ws))]), done=@sf.t("android-settings.vault.migrate.done"))
+        }
+      }
+    }
+    match vaults.iter().find_first(fn(r) { flag(Some(r), "mine") }) {
+      Some(mine) => vault_lasts_row(c, core, ws, mine)
+      None => ()
+    }
+    if !plain {
+      for row in vaults {
+        vault_devices_row(c, core, ws, Some(row), vaults.length() > 1)
+      }
+    }
+  })
+}
+
+///|
+/// A row that does one thing (as 解锁's: vault_secrets): pressed anywhere, it does it; what it does in the link's ink
+/// where a row says how it stands (under its title where the line has not the room), turning while it is done (not
+/// done again then). True on the frame it is pressed.
+fn vault_do_row(c : @ui.Ctx, key : String, title : String, note : String, action : String, lacks? : Bool = false, busy? : Bool = false) -> Bool {
+  @sf.link_row(c, key, title, note~, lacks~, value=action, value_lit=true, chevron=false, tail=fn() { doing_mark(c, busy, None) }) &&
+  !busy
+}
+
+///|
+/// The longest a grant of the viewer's secrets lasts where a secret says none (Lasts, DefaultLasts): the one now under
+/// it; pressed, the library's choices, each with what it means (a sheet with a finger, a panel by it with a pointer).
+fn vault_lasts_row(c : @ui.Ctx, core : Core, ws : String, mine : Json) -> Unit {
   let id = text(Some(mine), "id")
   let now = match vault_scopes.search(text(Some(mine), "lasts")) {
     Some(_) => text(Some(mine), "lasts")
     None => "chat"
   }
-  let choose = fn() {
-    let picked = @sf.choices(
-      c,
-      "vault-lasts",
+  let key = "vault-lasts"
+  let on = [("workspace", ws), ("vault", id)]
+  if @sf.link_row(c, key, @sf.t("web-pages.vault.lasts.title"), note=@sf.t("web-pages.vault.lasts." + now), tail=fn() {
+      doing_mark(c, is_doing(core, ["vault.setLasts"], on), failed_of(core, ["vault.setLasts"], on))
+    }) {
+    @sf.pick(
+      @sf.t("web-pages.vault.lasts.title"),
+      vault_scopes.map(fn(s) {
+        @sf.choice(s, @sf.t("web-pages.vault.lasts." + s), note=@sf.t("web-pages.vault.lasts." + s + "Detail"))
+      }),
       now,
-      vault_scopes.map(fn(s) { (s, @sf.t("web-pages.vault.lasts." + s), @sf.t("web-pages.vault.lasts." + s + "Detail")) }),
-      label=@sf.t("web-pages.vault.lasts.title"),
+      fn(picked) {
+        if picked != now {
+          vault_act(core, ws, "setLasts", [("vault", str(id)), ("lasts", str(picked))], @sf.t("web-pages.vault.lasts.what"))
+        }
+      },
+      from=Of(c.id(key)),
     )
-    if picked != now {
-      c.after_build("vault-lasts", fn() {
-        vault_act(core, ws, "setLasts", [("vault", str(id)), ("lasts", str(picked))], @sf.t("web-pages.vault.lasts.what"))
-      })
-    }
-  }
-  match look {
-    // (at the card's foot, reaching past its words to the ladder's inset: the last in its corners concentric with them)
-    Wide =>
-      vt_card(c, look, @sf.t("web-pages.vault.lasts.title"), @sf.t("web-pages.vault.lasts.note"), then=fn() {
-        c.box(style=vt_choices_across, choose) |> ignore
-      })
-    // (narrow: its title over it, the note, the choices on the page's ground, each its own card)
-    Narrow => {
-      @sf.heading(c, @sf.t("web-pages.vault.lasts.title"))
-      @sf.page_note(c, @sf.t("web-pages.vault.lasts.note"))
-      c.box(style=vt_choices_narrow, choose) |> ignore
-    }
   }
 }
 
 ///|
-/// A vault's ⋯ (its owner's): deleting it, asked first, saying what goes with it.
-fn vault_menu(c : @ui.Ctx, core : Core, ws : String, rv : Json?) -> Unit {
+/// The devices holding a vault's key (its name where there are more than one): how many, under it; where some new
+/// ones have none yet, how many, in amber, given it from its end by its owner's device holding it.
+fn vault_devices_row(c : @ui.Ctx, core : Core, ws : String, rv : Json?, many : Bool) -> Unit {
   let id = text(rv, "id")
-  let key = "vault-more/" + id
-  if !@sf.icon_action(c, "more", key, @sf.t("common.more"), disabled=is_doing(core, ["vault.delete"], [("workspace", ws), ("vault", id)])) {
+  let title = if many { text(rv, "name") } else { @sf.t("android-settings.vault.devices") }
+  let missing = count(rv, "missing")
+  if missing == 0 {
+    @sf.link_row(c, "", title, note=@sf.t("web-pages.vault.devicesHold", args=[("n", count(rv, "devices").to_string())]), goes=false)
+    |> ignore
+    return
+  }
+  let note = @sf.t("web-pages.vault.missing", args=[("n", missing.to_string())])
+  // (given it from its owner's device holding it)
+  if !(flag(rv, "mine") && flag(rv, "keyed")) {
+    @sf.link_row(c, "", title, note~, lacks=true, goes=false) |> ignore
+    return
+  }
+  let giving = is_doing(core, ["vault.addDevice"], [("workspace", ws), ("vault", id)])
+  if vault_do_row(c, "vault-give/" + id, title, note, @sf.t("web-pages.vault.addDevice"), lacks=true, busy=giving) {
+    vault_act(core, ws, "addDevice", [("vault", str(id))], @sf.t("web-pages.vault.addDeviceWhat"), done=@sf.t("web-pages.vault.addedDevice"))
+  }
+}
+
+///|
+/// Deleting a vault of the viewer's own (its name after where there are more than one), in red: asked first, saying
+/// what goes with it.
+fn vault_delete_row(c : @ui.Ctx, core : Core, ws : String, rv : Json?, many : Bool) -> Unit {
+  let id = text(rv, "id")
+  let on = [("workspace", ws), ("vault", id)]
+  let label = @sf.t("web-pages.vault.deleteVault") + (if many { " · " + text(rv, "name") } else { "" })
+  if !@sf.link_row(c, "vault-delete/" + id, label, danger=true, chevron=false, tail=fn() {
+      doing_mark(c, is_doing(core, ["vault.delete"], on), failed_of(core, ["vault.delete"], on))
+    }) ||
+    is_doing(core, ["vault.delete"], on) {
     return
   }
   let n = count(rv, "items")
-  let delete = fn() {
-    confirm(
-      @sf.t("web-pages.vault.deleteTitle", args=[("name", text(rv, "name"))]),
-      if n > 0 {
-        @sf.t("web-pages.vault.deleteVaultBody", args=[("n", n.to_string())])
-      } else {
-        @sf.t("web-pages.vault.deleteVaultEmpty")
-      },
-      @sf.t("common.delete"),
-      danger=true,
-      fn() { vault_act(core, ws, "delete", [("vault", str(id))], @sf.t("web-pages.vault.deleteWhat"), done=@sf.t("web-pages.vault.deleted")) },
-    )
-  }
-  @sf.menu([Some(@sf.menu_item_of(@sf.t("web-pages.vault.deleteVault"), icon="trash", danger=true, delete))], from=Of(c.id(key)), along=End)
+  confirm(
+    @sf.t("web-pages.vault.deleteTitle", args=[("name", text(rv, "name"))]),
+    if n > 0 {
+      @sf.t("web-pages.vault.deleteVaultBody", args=[("n", n.to_string())])
+    } else {
+      @sf.t("web-pages.vault.deleteVaultEmpty")
+    },
+    @sf.t("common.delete"),
+    danger=true,
+    fn() { vault_act(core, ws, "delete", [("vault", str(id))], @sf.t("web-pages.vault.deleteWhat"), done=@sf.t("web-pages.vault.deleted")) },
+  )
 }
 
 ///|
-/// A vault's secrets, a section a kind (LibraryVault): each one's name and when an agent last used it, else how it
-/// may be asked for (not encrypted first, in a library not locked); locked, those it does not name and unlocking.
-fn vault_secrets(c : @ui.Ctx, core : Core, look : Look, ws : String, row : Json, plain : Bool, many : Bool) -> Array[() -> Unit] {
-  let t = @sf.theme()
+/// A vault's secrets, a section a kind (LibraryVault; the vault's name after the kind's where there are more than one):
+/// each one's name and when an agent last used it, else how it may be asked for, leading to its page; locked, a row of
+/// those it does not name and unlocking; nothing in it said where nothing else is listed (`quiet`: the profiles'
+/// accounts are).
+fn vault_secrets(c : @ui.Ctx, core : Core, ws : String, row : Json, many : Bool, quiet : Bool) -> Array[() -> Unit] {
   let rv = Some(row)
   let topic = (core.topic)("vaultItems", { "workspace": str(ws), "vault": str(text(rv, "id")) })
   let list = match topic.value {
@@ -454,14 +482,12 @@ fn vault_secrets(c : @ui.Ctx, core : Core, look : Look, ws : String, row : Json,
     }
     let title = @sf.t("web-pages.vault.kind." + kind)
     out.push(fn() {
-      @sf.section(c, title + (if many { " · " + text(rv, "name") } else { "" }), heads=true, fn() {
-        vt_list(c, look, fn() {
+      @sf.section(c, title + (if many { " · " + text(rv, "name") } else { "" }), fn() {
+        @sf.group(c, fn() {
           for it in rows {
             let iv = Some(it)
             // (the core's: when an agent last used it, else how agents may ask for it)
-            if vt_row(c, look, "vault-item/" + text(iv, "id"), text(iv, "name"), text(iv, "lineText"), risk=plain, fn() {
-                @sf.icon(c, @settings.kind_icon(kind), size=vt_glyph, color=t.p.muted) |> ignore
-              }) {
+            if @sf.link_row(c, "vault-item/" + text(iv, "id"), text(iv, "name"), note=text(iv, "lineText")) {
               (core.push)(VaultItem(text(rv, "id"), text(iv, "id")))
             }
           }
@@ -469,196 +495,93 @@ fn vault_secrets(c : @ui.Ctx, core : Core, look : Look, ws : String, row : Json,
       })
     })
   }
-  // locked, those it does not name: a row of the list to unlock it
+  // locked, those it does not name: a row of a list of its own, unlocking them
   let hidden = list.filter(fn(x) { !has(Some(x), "name") })
   if hidden.length() > 0 {
     out.push(fn() {
-      vt_list(c, look, fn() {
-        if vt_row(
+      @sf.group(c, fn() {
+        if @sf.link_row(
             c,
-            look,
             "vault-unlock/" + text(rv, "id"),
             @sf.t("web-pages.vault.hidden", args=[("n", hidden.length().to_string())]),
-            "",
             value=@sf.t("web-pages.vault.unlock"),
-            fn() { @sf.icon(c, "key", size=vt_glyph, color=t.p.muted) |> ignore },
+            value_lit=true,
+            chevron=false,
           ) {
           @settings.act(core, @sf.t("web-pages.vault.unlockWhat"), "vault.open", obj([("workspace", str(ws)), ("item", str(text(Some(hidden[0]), "id")))]))
         }
       })
     })
   }
-  if list.length() == 0 {
+  if list.length() == 0 && !quiet {
     out.push(fn() { @sf.page_note(c, @sf.t("web-pages.vault.empty")) })
   }
   out
 }
 
 ///|
-/// A vault known by its items' names only (VaultSection): a web page's, or one this device has no key to (then how to
-/// get one, the recovery words where they can).
-fn vault_named(c : @ui.Ctx, core : Core, look : Look, ws : String, row : Json) -> Array[() -> Unit] {
-  let t = @sf.theme()
-  let rv = Some(row)
-  let topic = (core.topic)("vaultItems", { "workspace": str(ws), "vault": str(text(rv, "id")) })
-  let list = items(topic.value, "items")
-  let out : Array[() -> Unit] = []
-  out.push(fn() {
-    @sf.section(c, text(rv, "name"), heads=true, fn() {
-      if flag((core.topic)("vaults", { "workspace": str(ws) }).value, "available") && !flag(rv, "keyed") {
-        vt_card(c, look, @sf.t("android-settings.vault.noKey"), @sf.t("android-settings.vault.noKeyHow"), then=fn() {
-          if flag(rv, "recoverable") {
-            vt_buttons(c, fn() {
-              if @sf.button(c, @sf.t("android-settings.vault.recover"), key="vault-recover/" + text(rv, "id"), tone=Ghost) {
-                vault_recover_dialog(core, ws)
-              }
-            })
-          }
-        })
-      }
-      if list.length() == 0 {
-        match topic.value {
-          None =>
-            match topic.error {
-              Some(e) => @sf.page_note(c, error_text(e), bad=true)
-              None => @sf.wait_line(c, @sf.t("common.reading"))
-            }
-          Some(_) => @sf.page_note(c, @sf.t("android-settings.vault.empty"))
-        }
-      } else {
-        sec_group(c, look, fn() {
-          for it in list {
-            let iv = Some(it)
-            let named = opt_text(iv, "name")
-            sec_line(
-              c,
-              look,
-              named.unwrap_or(@sf.t("android-settings.vault.lockedItem")),
-              note=text(iv, "agentText"),
-              strong=false,
-              mark=fn() {
-                @sf.icon(c, @settings.kind_icon(text(iv, "kind")), size=vt_glyph, color=if has(iv, "kind") { t.p.text } else { t.p.subtle })
-                |> ignore
-              },
-              end=fn() {
-                if flag(iv, "listed") {
-                  c.box(style=vt_listed, fn() {  }) |> ignore
-                }
-              },
-            )
+/// A vault this device has no key to (VaultSection's), under its name: that it has none, how to get one, and the
+/// recovery words typed where they can give it one.
+fn vault_no_key(c : @ui.Ctx, core : Core, ws : String, rv : Json?) -> Unit {
+  let recoverable = flag(rv, "recoverable")
+  @sf.section(c, text(rv, "name"), fn() {
+    @sf.page_card(c, footed=recoverable, fn() {
+      @sf.card_lines(c, @sf.t("android-settings.vault.noKey"), note=@sf.t("android-settings.vault.noKeyHow"))
+      if recoverable {
+        @sf.card_foot(c, fn() {
+          if @sf.button(c, @sf.t("android-settings.vault.recover"), key="vault-recover/" + text(rv, "id"), tone=Primary) {
+            vault_recover_dialog(core, ws)
           }
         })
       }
     })
   })
-  out
 }
 
 ///|
-/// Rows that open something together (narrow: ListCard; wide: the web's list).
-fn vt_list(c : @ui.Ctx, look : Look, body : () -> Unit) -> Unit {
-  match look {
-    Narrow => @sf.group(c, body)
-    Wide => c.box(style=desk_list, body) |> ignore
-  }
-}
-
-///|
-/// A row of a list that opens something (rowButton, ListRow): its mark 16 in a column of its own (the muted, at the
-/// name's line), its name, its line under it (`risk`: 未加密 first in the amber), `value` at its end in the link's ink.
-/// Whether it was pressed.
-fn vt_row(
-  c : @ui.Ctx,
-  look : Look,
-  key : String,
-  name : String,
-  line : String,
-  risk? : Bool = false,
-  value? : String = "",
-  mark : () -> Unit,
-) -> Bool {
-  let t = @sf.theme()
-  let id = c.id(key)
-  c.cursor(id, Hand)
-  let words = fn(title : @ui.TextStyle, note : @ui.TextStyle, warn : @ui.TextStyle) {
-    c.box(style=if look == Wide { desk_list_text } else { narrow_row_words }, fn() {
-      c.text(name, style=title) |> ignore
-      if line != "" || risk {
-        c.box(style=desk_said_line, fn() {
-          if risk {
-            c.text(@sf.t("web-pages.vault.risk.row") + " · ", style=warn) |> ignore
+/// A vault known by its items' names only (VaultSection), a section under its name: a web page's, or one this device
+/// has no key to (how to get one is 密钥's: vault_no_key); each item's name (locked, that it is), how agents may ask
+/// for it under it, a green dot at its end where agents are told of it.
+fn vault_named(c : @ui.Ctx, core : Core, ws : String, row : Json) -> Unit {
+  let rv = Some(row)
+  let topic = (core.topic)("vaultItems", { "workspace": str(ws), "vault": str(text(rv, "id")) })
+  let list = items(topic.value, "items")
+  @sf.section(c, text(rv, "name"), fn() {
+    if list.length() == 0 {
+      match topic.value {
+        None =>
+          match topic.error {
+            Some(e) => @sf.page_note(c, error_text(e), bad=true)
+            None => @sf.wait_line(c, @sf.t("common.reading"))
           }
-          c.text(line, style=note) |> ignore
-        })
-        |> ignore
+        Some(_) => @sf.page_note(c, @sf.t("android-settings.vault.empty"))
       }
-    })
-    |> ignore
-  }
-  let b = match look {
-    Wide =>
-      c.box(style=desk_list_link, id~, fn() {
-        c.box(style=vt_row_icon, mark) |> ignore
-        words(desk_list_title, desk_note, vt_warn)
-        if value != "" {
-          c.text(value, style=vt_link_words) |> ignore
+    } else {
+      @sf.group(c, fn() {
+        for it in list {
+          let iv = Some(it)
+          @sf.link_row(
+            c,
+            "",
+            opt_text(iv, "name").unwrap_or(@sf.t("android-settings.vault.lockedItem")),
+            note=text(iv, "agentText"),
+            goes=false,
+            tail?=if flag(iv, "listed") { Some(fn() { c.box(style=vt_listed, fn() {  }) |> ignore }) } else { None },
+          )
+          |> ignore
         }
       })
-    Narrow =>
-      c.box(style=narrow_row, id~, fn() {
-        c.box(style=vt_row_icon, mark) |> ignore
-        words(narrow_row_title, vt_narrow_note, vt_narrow_warn)
-        if value != "" {
-          c.text(value, style=vt_narrow_link) |> ignore
-        } else {
-          @sf.icon(c, "chevron-right", size=narrow_chevron, color=t.p.subtle) |> ignore
-        }
-        finger_ripple(c, id)
-      })
-  }
-  c.semantics(b, Link, id~, label=name)
-  hit(c, id)
+    }
+  })
 }
-
-///|
-/// (the page, its foot over it)
-// kept across runs: a value (no field of it changes)
-let vt_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 let vt_glyph : Double = 16.0
 
 ///|
-/// (state: first in its card, the body's size, 500, its icon 8 before it)
-// kept across runs: a value (no field of it changes)
-let vt_state : @ui.TextStyle = @ui.text_style(size=Body, leading=L7, weight=Medium, color=Fg, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vt_state_risk : @ui.TextStyle = vt_state.then(@ui.text_style(color=Warn))
-
-///|
-// kept across runs: a value (no field of it changes)
-let vt_state_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
-
-///|
-/// (lead: the first card as far from what follows as a section is)
-// kept across runs: a value (no field of it changes)
-let vt_lead : @ui.Style = @ui.css("mb=S7")
-
-///|
 /// (actions: a card's buttons at its foot, 8 apart, its words before them)
 // kept across runs: a value (no field of it changes)
 let vt_actions : @ui.Style = @ui.css("row w=Full gap=S2 pt=S1 align=ACenter")
-
-///|
-/// (count: the red's ground, the meta's size, 7 in)
-// kept across runs: a value (no field of it changes)
-let vt_count : @ui.Style = @ui.css("px=S1_5 radius=Full bg=DangerBg")
-
-///|
-// kept across runs: a value (no field of it changes)
-let vt_count_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=Danger, wrap=false)
 
 ///|
 /// (requests: each one's card, 10 apart as the page's cards: pagesCss.card)
@@ -671,45 +594,14 @@ let vt_requests : @ui.Style = @ui.css("w=Full gap=S2_5")
 let vt_request : @ui.Style = @ui.css("w=Full")
 
 ///|
-/// (link: the accent's ink, the list's size)
+/// Narrow: the requests' cards in the page's room, 10 apart.
 // kept across runs: a value (no field of it changes)
-let vt_link_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=AccentText, wrap=false)
-
-///|
-/// (warn: the amber, the meta's size)
-// kept across runs: a value (no field of it changes)
-let vt_warn : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Warn, wrap=false)
+let vt_requests_narrow : @ui.Style = @ui.css("w=Full pb=S2_5 gap=S2_5")
 
 ///|
 /// (rowIcon: 16 wide, the muted, at the name's line)
 // kept across runs: a value (no field of it changes)
 let vt_row_icon : @ui.Style = @ui.css("w=S4 pt=S0_5 align=ACenter")
-
-///|
-/// (row: the devices' line, 30 high at least, its button at its end)
-// kept across runs: a value (no field of it changes)
-let vt_device_row : @ui.Style = @ui.style(row=true, w=Full, min_h=Fixed(vt_row_least), gap=S3, align=ACenter)
-
-///|
-let vt_row_least : Double = 30.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let vt_device_text : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S2_5, align=AEnd)
-
-///|
-/// Narrow: the requests' cards in the page's room, 10 apart; a row's line under its name (the secondary's, on
-/// one line), amber where it is not encrypted.
-// kept across runs: a value (no field of it changes)
-let vt_requests_narrow : @ui.Style = @ui.css("w=Full pb=S2_5 gap=S2_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let vt_narrow_note : @ui.TextStyle = @sf.secondary.then(@sf.one_line)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vt_narrow_warn : @ui.TextStyle = vt_narrow_note.then(@ui.text_style(color=Warn))
 
 ///|
 /// An item agents are told of (listed): a green dot 6 round at its row's end.
@@ -741,19 +633,3 @@ let vt_word_number_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtl
 ///|
 // kept across runs: a value (no field of it changes)
 let vt_word_words : @ui.TextStyle = @ui.text_style(size=Body, color=Fg, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vt_narrow_link : @ui.TextStyle = @sf.link.then(@sf.one_line)
-
-///|
-/// Narrow: the longest grant's choices in the page's room, 8 under its note, 10 over what follows.
-// kept across runs: a value (no field of it changes)
-let vt_choices_narrow : @ui.Style = @ui.css("w=Full pt=S2 pb=S2_5")
-
-///|
-/// Choices at a card's foot: across it to the ladder's inset (@sf.block_across), and as far past its words under them.
-// kept across runs: a value (no field of it changes)
-let vt_choices_across : @ui.Style = @ui.css("w=Full").then(@sf.block_across).then(
-  @ui.style(mb=@sf.room_of(@sf.corner_inset - @sf.card_pad)),
-)

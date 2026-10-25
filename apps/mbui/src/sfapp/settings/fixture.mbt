@@ -304,8 +304,8 @@ pub fn fixture_page(mode : String) -> String {
     "settings-connect-run" | "settings-slack-app" => "connect:ws1/st1#k1"
     "settings-new-connect" | "settings-new-connect-platform" | "settings-new-connect-scan" | "settings-new-connect-app" =>
       "connects"
-    "settings-vault-off" | "settings-vault-words" | "settings-vault-add" | "settings-vault-editor" => "vault"
-    "settings-vault-recover" | "settings-vault-plain" => "vault"
+    "settings-vault-off" | "settings-vault-words" | "settings-vault-recover" | "settings-vault-plain" => "vault"
+    "settings-vault-items" | "settings-vault-add" | "settings-vault-editor" => "vault-items"
     "settings-vault-item" => "vault-item:v1#it1"
     "settings-decisions" => "decisions-settings"
     "settings-completion" => "completion"
