@@ -133,15 +133,19 @@ list's turns, words flying, everything in the hand). Each step below is a PR; a 
 5. **The chat's list.** Done: a turn waits for the list's glide after what came, as the list was last laid out, not
    for the reader's hand (ListInfo's `glide_rest`, listQueue.ts listStill); the list glides after a row new to it the
    frame it comes, with no half second after it was shown first (what was there or caught up on is there at once)
-   (#1683). The agent's
-   line and words not yet in the chat make way for the newest row that came in over them, their one cause
-   (row_keys's `came`, `makes_way`): not for the page before, words flying in or their own message out of the
-   avatar, with no stand-ins for those (#1691). What is drawn where real things are while they move is placed as
-   this frame lays them out (`@motion.placed`), never a frame behind: the avatar flying out of an activity to its
-   message and back, a new chat's list drawn up behind its first words and the pictures flying with them. The line
-   folding to its avatar goes from the width it was shown at as it starts folding (the shape it had), no target.
-6. **The sidebar and the side panel.** Folding moves when it is folded, not when its width changed
-   (sfdesk/frame.mbt:530); a side panel moves when it is opened or closed, wherever that was asked (sfdesk/panel.mbt:287).
+   (#1683). The agent's line and words not yet in the chat make way for the newest row that came in over them, their
+   one cause (row_keys's `came`, `makes_way`): not for the page before, words flying in or their own message out of
+   the avatar, with no stand-ins for those (#1691). What is drawn where real things are while they move is placed as
+   this frame lays them out (`@motion.placed`), never a frame behind, moved from where it is laid out: the avatar
+   flying out of an activity to its message and back, a new chat's list drawn up behind its first words and the
+   pictures flying with them (#1697). The line folding to its avatar goes from the width it was shown at as it starts
+   folding (the shape it had), no target.
+6. **The sidebar and the side panel.** Done: the sidebar moves for what it is asked (folded or opened as chosen,
+   shown a while, a place with no sidebar of its own, another place's own width: brand.tsx moveSidebar's callers), not
+   for the window's room (a tablet's too narrow, a fold, the tape coming or going), which puts it there at once. A side
+   panel moves when it is opened or closed by what the page asks (side_change, from its header, its tabs, a link, a
+   menu: the web's useSidePanel `changing`), and is so at once as a page opens with its tabs as they were left or a
+   chat made from the new chat opens its 文件 with it; that was already so.
    Logic that reads a motion: a new chat leaving (sfdesk/chat_talk.mbt:58, sfapp/newchat.mbt:619), 奏's cards
    (sfapp/decisions.mbt:571, sfdesk/decision_page.mbt:404), the search going back (sfpages/search.mbt:287), a row
    swiped away (sfpages/chat_row.mbt:879), the bar's 令 (sfapp/bar.mbt:1261).
