@@ -90,6 +90,21 @@ pub fn go_back() -> Bool {
 }
 
 ///|
+/// Page `p` shown in place of the one on top (a page's step on from it, leaving it: a profile added gone on to choosing
+/// its models): that one taken off and `p` put where it was, over the one under it as it was (Nav::push_over: on the
+/// tape, opened from the page, it slides in; chosen in the sidebar, it stays the one chosen), sliding in as a push does
+/// where pushes slide. Not back: what back would do there (bring the sidebar over on the tape) is not asked.
+pub fn open_in_place(p : Page) -> Unit {
+  let over = app.nav.top_over()
+  app.nav.pop() |> ignore
+  if over {
+    app.nav.push_over(p)
+  } else {
+    app.nav.push(p)
+  }
+}
+
+///|
 /// Page `p` opened on the stack (a phone's way): pushed, a new chat risen from the foot (App.kt: the new chat slides
 /// up).
 pub fn stack_open(p : Page) -> Unit {

@@ -8,17 +8,20 @@
 //
 // Medium, the rail and the sidebar, the page, and a chat's side panel while it is open are as they are Large, side by
 // side on a tape wider than the window, each a panel apart (the closed bar's: 6 from the window's edges, 8 between
-// them, on the sidebar's ground, each on the ground its pages have on a phone): the one in use as wide as the window
-// leaves, each beside it showing a strip of itself as wide as the rail at the window's edge (tape_shows: the user,
-// 2026-10-26, what shows of those not in use smaller), as screens beside it, untinted (the user, 2026-10-25: the page's
-// ground as a phone's). What shows of another is not used where it is: a press on it, a tap or a click, only brings it
+// them, on the sidebar's ground, each on the ground its pages have on a phone): the sidebar in use its own width (a
+// list's: the user, 2026-10-26, the chats' list needs no more), the page beside it showing what the window leaves; the
+// page or the side panel in use as wide as the window leaves past a strip of each beside it as wide as the rail at the
+// window's edge (tape_shows: the user, 2026-10-26, what shows of those not in use smaller); as screens beside it,
+// untinted (the user, 2026-10-25: the page's ground as a phone's). What shows of another is not used where it is: a press on it, a tap or a click, only brings it
 // over (the tape moving, 380 ms), and what it holds answers from then on; dragged across, it comes with the finger and,
 // let go, over or back (the user, 2026-10-25: only there; a drag on the one in use is its own). Something chosen to be
 // shown in the page (a row of the sidebar, a search's, ⌘K's, a link's) brings the page over to show it, as a phone's
 // list opens its page (show_page); nothing else puts the sidebar away (no ⌘\, no lit place pressed again: asked,
-// 2026-10-24); the sidebar at first. The side panel comes over as it opens (the page again as it closes). Back goes
-// from the side panel to the page, from the page to the sidebar, from the sidebar of another place to the chats', the
-// tape following the system's back gesture as it goes, as a phone's page does (tape_back).
+// 2026-10-24); the sidebar at first. The side panel comes over as it opens (the page again as it closes). What is
+// opened from the page in use (or its side panel) goes over it as on a phone, sliding in (page_goes_on); chosen in the
+// sidebar, in its place. Back goes from the side panel to the page, takes what was opened over the page off one at a
+// time (sliding as a phone's page does), then from the page to the sidebar, from the sidebar of another place to the
+// chats'; each following the system's back gesture as it goes (the page's stack, Ctx::nav_flat's; the tape, tape_back).
 
 ///|
 /// What the settings' pages read and call, and how they move, as the desktop has them (sfbase's settings_core_of): its
@@ -244,9 +247,9 @@ pub fn is_wide(c : @ui.Ctx) -> Bool {
 ///|
 /// Something chosen to be shown in the page (a row of the sidebar's lists, a search's, ⌘K's, a link's, a
 /// notification's, what the bell's panel or the services' open): on the tape the page comes over to show it, as a
-/// phone's list opens its page; what shows of the page beside the sidebar is a strip (tape_shows), what was chosen
-/// would not be seen there. Off the tape nothing: the page is beside the list. What a place is gone to with (the rail,
-/// its list's own page) is not one: its list is the sidebar's.
+/// phone's list opens its page: what is chosen is to be used there, where the page is in use. Off the tape nothing:
+/// the page is beside the list. What a place is gone to with (the rail, its list's own page) is not one: its list is
+/// the sidebar's.
 pub fn show_page() -> Unit {
   if wide.tape {
     wide.tape_ask = Some(Page)
@@ -595,11 +598,11 @@ pub fn frame(
   // as the state changes, all together (brand.tsx moveSidebar: 380 ms, ease out); not the width the edge drags, which
   // follows the pointer at once
   let bar = (own && side_folded()) || bare
-  // (on the tape as wide as the window leaves past what shows of the page beside it: tape_side_w)
+  // (on the tape its own, the page beside it what the window leaves: tape_side_w)
   let s = if gated {
     0.0
   } else if wide.tape {
-    tape_side_w(c.width)
+    tape_side_w(c.width, wide.side_w)
   } else {
     on_fold.unwrap_or(wide.side_w)
   }
@@ -739,6 +742,8 @@ pub fn frame(
           // (moved aside for the sidebar shown a while within what cuts the page at its edges, so a bar of it that
           // stays as folded is not cut there: page_bar_row; what moves in it of its own takes its place from its foot,
           // the move aside moving none of it)
+          // (on the tape the page a phone's screen: what is opened from it pushed over it, slid in and taken off by
+          // back as a phone's are, down to the page chosen to be shown in it: page_goes_on)
           c.nav_flat(
             app.nav,
             fn(page) {
@@ -746,6 +751,9 @@ pub fn frame(
               @motion.scope(c, moved, bottom=true)
             },
             bg=@sf.theme().p.bg,
+            stacks=wide.tape,
+            // (back its while the page is in use: the side panel's, the sidebar's first)
+            takes_back=!wide.tape || wide.tape_at == Page,
           )
           |> ignore
         }
@@ -879,8 +887,8 @@ pub fn frame(
 ///|
 /// Back on the wide frame (docs/architecture.md, the tiers' table): what is over the whole window (a screen, a file
 /// read or played) put away first, a page of the stack popped. On the tape, with a chat's side panel in use, the page
-/// brought over; with the page in use, the sidebar brought over from the page the sidebar opened (the chats' place's
-/// chat, a settings page), else the page popped; with the sidebar in use, the chats' from another place's (or the
+/// brought over; with the page in use, what was opened over it from there taken off (Nav::push_over), else the
+/// sidebar brought over (the page it chose: the chats' place's chat, a settings page); with the sidebar in use, the chats' from another place's (or the
 /// archive), as a phone's place goes back to them; nothing with the chats' in use (the system's: as from a phone's
 /// list). Laid out Large, the stack's top popped, but for the new chat beside the chats alone: the page there is never
 /// empty (land: popped, a new chat would come again), so nothing to go back to.
@@ -914,22 +922,24 @@ pub fn wide_back() -> (() -> Unit)? {
 ///|
 /// How much shows on the tape of each panel beside the one in use, at the window's edge: a strip as wide as the rail
 /// (the user, 2026-10-26: what shows of those not in use smaller), a finger's width past the edge a phone's system takes
-/// for its back gesture, to be tapped or dragged over. Whichever is in use, those beside it show as much.
+/// for its back gesture, to be tapped or dragged over. The page or the side panel in use, those beside it show as much;
+/// the sidebar in use, the page beside it shows what the sidebar's own width leaves (tape_side_w).
 pub let tape_shows : Double = 56.0
 
 ///|
 /// How wide a panel is on the tape with one beside it, a window `width` wide: what the window leaves in use past what
-/// shows of the other (tape_shows, 8 from it) and 6 from the window's other edge. The sidebar's, the page's without a
-/// side panel, the side panel's.
+/// shows of the other (tape_shows, 8 from it) and 6 from the window's other edge. The page's without a side panel, the
+/// side panel's; the sidebar's at most.
 fn tape_one_beside(width : Double) -> Double {
   dmax(0.0, width - tape_shows - closed_bar_gap - closed_bar_in)
 }
 
 ///|
-/// How wide the sidebar is on the tape, a window `width` wide: its panel as wide as one with one beside it
-/// (tape_one_beside), less the rail's.
-fn tape_side_w(width : Double) -> Double {
-  dmax(0.0, tape_one_beside(width) - rail_w - rail_tape_more())
+/// How wide the sidebar is on the tape, a window `width` wide: its own, as the person left it (a list as wide as a list
+/// needs: the user, 2026-10-26, the chats' list stretched across the window had no need to be), the page beside it
+/// showing what the window leaves; at most as wide as a panel with one beside it (tape_one_beside), less the rail's.
+fn tape_side_w(width : Double, own : Double) -> Double {
+  dmax(0.0, dmin(own, tape_one_beside(width) - rail_w - rail_tape_more()))
 }
 
 ///|
@@ -1188,18 +1198,46 @@ fn tape_back(p : TapePane, step : @ui.BackStep) -> Unit {
 }
 
 ///|
-/// Which panel back brings over on the tape: the page from the side panel, the sidebar from the page the sidebar
-/// opened (the stack holding the place's list and that page alone); None where back is not the tape's (a page popped
-/// in the page, what is over the whole window put away, the sidebar's own: wide_back).
+/// Which panel back brings over on the tape: the page from the side panel, the sidebar from the page chosen to be shown
+/// with nothing of the pane's under it (page_back_pops); None where back is not the tape's (a page opened over that one
+/// taken off, as a phone's are: the page's stack, Ctx::nav_flat's; what is over the whole window put away, the
+/// sidebar's own: wide_back).
 fn tape_back_to() -> TapePane? {
   if !wide.tape || app.nav.top() is (Screen(_) | DriveRead(_) | DrivePlay(_)) {
     return None
   }
   match wide.tape_at {
     Panel => Some(Page)
-    Page => if app.nav.depth() <= 2 { Some(Side) } else { None }
+    Page => if page_back_pops() { None } else { Some(Side) }
     Side => None
   }
+}
+
+///|
+/// Whether back with the page in use on the tape goes back in the page: what was opened over it taken off (Nav::push_over,
+/// sliding as a phone's), or a page of the pane's own under it come back to (a settings page under the one it opened:
+/// its bar's back there too, setting_page). Not where under it is a place's own (the chats', the settings', 文件's…:
+/// what the pane shows before anything is chosen, the sidebar its list): the sidebar comes over instead.
+fn page_back_pops() -> Bool {
+  let pages = app.nav.pages()
+  let n = pages.length()
+  app.nav.top_over() || (n >= 2 && !(pages[n - 2] is (Home | Settings | Place(_) | Files | Decisions | Archived)))
+}
+
+///|
+/// Whether what is opened now goes over the page shown (laid out on the tape, the page or its side panel in use: what
+/// it opens from there, as a phone's page does, pushed over it, Nav::push_over, back coming to it again) rather than in
+/// its place (the sidebar in use, choosing what the page shows; laid out Large, the web's pane).
+pub fn page_goes_on() -> Bool {
+  wide.tape && wide.tape_at != Side
+}
+
+///|
+/// Whether page `p`, opened now, goes over the page shown (page_goes_on): one that is a page of the pane's own
+/// (shown_in_page), not a chat's detail asked as a page (its history, a service, a file: the frame lays it beside its
+/// chat, in the chat's place).
+pub fn goes_over(p : Page) -> Bool {
+  page_goes_on() && shown_in_page(p) && !(p is (History(_, _, _) | Service(_, _) | PreviewFile(_, _, _, _)))
 }
 
 ///|

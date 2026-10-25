@@ -1885,10 +1885,7 @@ fn pick_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, ad
   }
   let p = Some(items(o, "profiles")[i])
   // on to its page, in this one's place
-  let leave = fn() {
-    (core.pop)()
-    (core.push)(Profile(address, id))
-  }
+  let leave = fn() { (core.in_place)(Profile(address, id)) }
   let buttons = fn() {
     if @sf.button(c, @sf.t("web-pages.profiles.pickModels.skip"), key=key + "/skip", tone=Ghost) {
       leave()

@@ -37,6 +37,7 @@ pub fn settings_core_of(
       }
     },
     pop: fn() { go_back() |> ignore },
+    in_place: fn(r) { open_in_place(Setting(r)) },
     home,
     open_chat: fn(station, session, title) {
       // its station's name, as the chats' rows have it

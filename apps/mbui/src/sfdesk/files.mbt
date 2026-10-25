@@ -6,10 +6,17 @@
 
 ///|
 /// A folder opened in the side in front (the stack's page above the files' place, in place of what was open); in the
-/// chat's 文件 tab while it is built, there.
+/// chat's 文件 tab while it is built, there. On the tape opened from the page in use (a folder in it, its path): over
+/// it, as a phone's is, back coming to the folder it was opened from (page_goes_on).
 pub fn files_go(at : DriveAt) -> Unit {
   if tab_building() {
     tab_go(at)
+    return
+  }
+  if page_goes_on() {
+    if !(app.nav.top() is Drive(here) && here == at) {
+      app.nav.push_over(Drive(at))
+    }
     return
   }
   while app.nav.depth() > 1 {

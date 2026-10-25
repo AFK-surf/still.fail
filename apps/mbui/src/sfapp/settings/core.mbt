@@ -22,6 +22,9 @@ pub(all) struct Core {
   push : (Route) -> Unit
   /// back to the page under this one
   pop : () -> Unit
+  /// this page left for another in its place (a step on from it: a profile added on to choosing its models, those
+  /// chosen on to its page), over the page under it as this one was
+  in_place : (Route) -> Unit
   /// back to the chats (a workspace left)
   home : () -> Unit
   /// a chat opened: its station, its session, its title

@@ -553,3 +553,64 @@ test "nav_flat: not asked to wait (Nav::shows_when), a page put on top shows at 
   t.draw()
   assert_true(t.find("page two") is Some(_))
 }
+
+///|
+/// A stack drawn flat whose pages pushed over (Nav::push_over) are its own (Ctx::nav_flat `stacks`): each page its
+/// title, as wide as the window.
+fn stacking_view(nav : @ui.Nav[String]) -> (@ui.Ctx) -> Unit {
+  fn(c) {
+    c.nav_flat(nav, fn(p) { c.text(p, wrap=false) |> ignore }, bg=0xFFFFFFFFL, stacks=true) |> ignore
+  }
+}
+
+///|
+test "nav_flat stacking: one pushed over slides in, back takes it off sliding; one put in place shows in place, back not its" {
+  let nav = @ui.Nav::new("list")
+  let t = @ui.Tester::new(stacking_view(nav))
+  // put in place (a list's choice): at once, and back is not the stack's
+  nav.push("chosen")
+  t.draw()
+  assert_eq(t.rect_of("chosen").unwrap().0, 0.0)
+  assert_false(t.takes_back())
+  // pushed over it: it slides in from the right, the one under it beside it
+  nav.push_over("opened")
+  t.draw()
+  t.run_for(@ui.nav_push_ms / 2.0)
+  let x = t.rect_of("opened").unwrap().0
+  assert_true(x > 0.0 && x < 390.0, msg="halfway in at \{x}")
+  assert_true(t.rect_of("chosen") is Some(_))
+  t.run_for(nav.rest() - t.time())
+  assert_eq(t.rect_of("opened").unwrap().0, 0.0)
+  assert_true(t.takes_back())
+  // the system's back gesture: it follows, called off it comes back; gone through, on from where it was let go, the
+  // one put in place under it, back not the stack's again
+  t.back_gesture(100.0, false)
+  t.run_for(nav.rest() - t.time())
+  assert_eq(nav.depth(), 3)
+  t.back_gesture(150.0, true)
+  let x = t.rect_of("opened").unwrap().0
+  assert_true(x >= 150.0 && x < 390.0, msg="let go at \{x}")
+  t.run_for(nav.rest() - t.time())
+  assert_eq(nav.pages(), ["list", "chosen"])
+  assert_eq(t.rect_of("chosen").unwrap().0, 0.0)
+  assert_false(t.takes_back())
+  t.assert_idle()
+}
+
+///|
+test "nav_flat stacking: what is put in place of one pushed over is over too; popped past it, in place again" {
+  let nav = @ui.Nav::new("list")
+  let t = @ui.Tester::new(stacking_view(nav))
+  nav.push("chosen")
+  nav.push_over("opened")
+  t.run_for(@ui.nav_push_ms)
+  nav.replace("opened again")
+  t.draw()
+  assert_true(nav.top_over())
+  assert_true(t.takes_back())
+  t.back()
+  t.run_for(nav.rest() - t.time())
+  assert_false(nav.top_over())
+  assert_eq(t.rect_of("chosen").unwrap().0, 0.0)
+  assert_false(t.takes_back())
+}

@@ -21,7 +21,12 @@ fn one_page_tester(
   }
   t.draw()
   app.nav.push(Settings)
-  app.nav.push(Setting(route))
+  // (on the tape opened from the settings' page in use, over it, as their pages open their next: back takes it off)
+  if @sfdesk.wide.tape {
+    app.nav.push_over(Setting(route))
+  } else {
+    app.nav.push(Setting(route))
+  }
   t.draw()
   t.run_for(@ui.nav_push_ms)
   // laid out Medium, the settings' list in use beside it: the page brought over (as a press on it does) before what is

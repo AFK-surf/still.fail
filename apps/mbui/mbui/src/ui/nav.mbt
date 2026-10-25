@@ -37,6 +37,9 @@ struct NavPage[P] {
   under : P?
   // it rose from the bottom (Nav::rise): it goes back down the same way
   mut rise : Bool
+  // pushed over the one under it as a phone's are where the stack is drawn flat (Nav::push_over): Ctx::nav_flat slides
+  // it in and back off
+  mut over : Bool
   // its time on top: a number of its own each time it is put there (pushed, or come back to as the one over it went),
   // what is built on it reads (Ctx::page_stint)
   mut stint : Int
@@ -51,7 +54,7 @@ let nav_serial : Ref[Int] = { val: 0 }
 ///|
 fn[P] nav_page(page : P, under : P?) -> NavPage[P] {
   nav_serial.val = nav_serial.val + 1
-  { serial: nav_serial.val, page, under, rise: false, stint: next_stint() }
+  { serial: nav_serial.val, page, under, rise: false, over: false, stint: next_stint() }
 }
 
 ///|
@@ -124,6 +127,9 @@ struct Nav[P] {
   mut flat_from : Double
   // the page being built (Ctx::nav, Ctx::nav_flat), what Nav::under answers for
   mut built : NavPage[P]?
+  // the pages at and under this index are not the stack's to slide or go back from (Ctx::nav's `floor`: a pane's stack
+  // over a list kept elsewhere, Ctx::nav_flat's `stacks`); 0, all of them
+  mut floor : Int
 }
 
 ///|
@@ -167,6 +173,7 @@ pub fn[P] Nav::new(
     flat_for: -1,
     flat_from: -1.0,
     built: None,
+    floor: 0,
   }
 }
 
@@ -317,6 +324,26 @@ pub let nav_let_go_min_ms : Double = 120.0
 let nav_held : Double = -2.0
 
 ///|
+/// Whether what the stack shows was pushed over the page under it (Nav::push_over): its top, at rest, coming in or
+/// swiped; or one going back off it.
+fn[P] Nav::stacked(self : Nav[P]) -> Bool {
+  match self.leaving {
+    Some(e) => e.over
+    None => self.top_over()
+  }
+}
+
+///|
+/// The page those pushed over it lie over (Nav::push_over): the topmost put in place, as Ctx::nav's `floor`.
+fn[P] Nav::over_floor(self : Nav[P]) -> Int {
+  let mut k = self.pages.length() - 1
+  while k > 0 && self.pages[k].over {
+    k = k - 1
+  }
+  k
+}
+
+///|
 /// The most a slide bringing a page in waits for its first frame to reach the screen (still.fail's LOCAL_MS, as long
 /// as a page opening waits for what it shows): later than that, it moves on from its time.
 pub let nav_late_most : Double = 100.0
@@ -378,6 +405,22 @@ pub fn[P] Nav::push(self : Nav[P], page : P) -> Unit {
 }
 
 ///|
+/// Pushes `page` over the one on top as Nav::push does, and so too where the stack is drawn flat (Ctx::nav_flat with
+/// `stacks`: a pane on a tape, a phone's screen beside a list): there it slides in over it, and back takes it off
+/// sliding, following the system's gesture, as a phone's stack has it; a page pushed (Nav::push) or put in place there
+/// is shown in place.
+pub fn[P] Nav::push_over(self : Nav[P], page : P) -> Unit {
+  self.push(page)
+  self.pages[self.pages.length() - 1].over = true
+}
+
+///|
+/// Whether the page on top was pushed over the one under it (Nav::push_over).
+pub fn[P] Nav::top_over(self : Nav[P]) -> Bool {
+  self.pages[self.pages.length() - 1].over
+}
+
+///|
 /// Pushes `page` rising from the bottom over the one on top, which stays where it is (App.kt: a new chat, 380 ms on
 /// (.2, .8, .2, 1)); back, it sinks down the same way (swiped back, it goes down with the finger).
 pub fn[P] Nav::rise(self : Nav[P], page : P) -> Unit {
@@ -430,11 +473,18 @@ pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
 /// The top page replaced by `page`, in place (nothing slides).
 pub fn[P] Nav::replace(self : Nav[P], page : P) -> Unit {
   self.settle()
-  match self.pages.pop() {
+  let was = self.pages.pop()
+  match was {
     Some(e) => self.gone.push(e)
     None => ()
   }
-  self.pages.push(nav_page(page, self.pages.last().map(fn(e) { e.page })))
+  let e = nav_page(page, self.pages.last().map(fn(e) { e.page }))
+  // (in its place: over the one under it as it was, Nav::push_over)
+  match was {
+    Some(w) => e.over = w.over
+    None => ()
+  }
+  self.pages.push(e)
   wake()
 }
 
@@ -449,12 +499,12 @@ fn wake() -> Unit {
 /// Back as a back gesture asks: kind 0 started at x (in a view `w` wide), 1
 /// moved to x, 2 let go there (back if past a third or flung), 3 called
 /// off, 4 back (the system decided: from where a gesture had it, or a back
-/// with none); `t` the time.
+/// with none); `t` the time. Never past its floor (Ctx::nav's `floor`).
 fn[P] Nav::gesture(self : Nav[P], kind : Int, x : Double, w : Double, t : Double) -> Unit {
   let w = dmax(w, 1.0)
   match kind {
     0 =>
-      if self.mode == 0 && self.pages.length() > 1 {
+      if self.mode == 0 && self.pages.length() > self.floor + 1 {
         self.mode = 3
         self.p = 0.0
         self.x0 = x
@@ -481,7 +531,12 @@ fn[P] Nav::gesture(self : Nav[P], kind : Int, x : Double, w : Double, t : Double
         }
       }
     3 => if self.mode == 3 { self.go(4, 0.0, nav_return_ms, Standard) }
-    _ => if self.mode == 3 { self.let_go() } else { self.pop() |> ignore }
+    _ =>
+      if self.mode == 3 {
+        self.let_go()
+      } else if self.pages.length() > self.floor + 1 {
+        self.pop() |> ignore
+      }
   }
 }
 
@@ -498,14 +553,24 @@ fn[P] Nav::let_go(self : Nav[P]) -> Unit {
 /// moves, the page beside it), each built by `page` on a ground of `bg`.
 /// Back (Ctx::back, the left edge's swipe within `edge` of its side, the
 /// system's) comes here while it has a page to go back to, unless the top
-/// page takes it itself (what is open in it closed first).
+/// page takes it itself (what is open in it closed first). `floor`: the
+/// pages at and under that index are not this stack's to go back from (a
+/// pane's stack over a list kept beside it: Ctx::nav_flat's `stacks`):
+/// back comes here while it has a page over the floor. `takes_back`: false,
+/// back is not its now (the pane it is drawn in not the one in use).
 pub fn[P] Ctx::nav(
   self : Ctx,
   nav : Nav[P],
   page : (P) -> Unit,
   bg? : Int64 = 0L,
   edge? : Double = 20.0,
+  floor? : Int = 0,
+  takes_back? : Bool = true,
 ) -> Int {
+  nav.floor = floor
+  if nav.mode == 3 {
+    self.page_in_hand = true
+  }
   for e in nav.gone {
     self.forget(e.serial)
     (nav.on_leave)(e.page)
@@ -593,9 +658,9 @@ pub fn[P] Ctx::nav(
     // (going back: the page leaving takes nothing)
     self.nav_layer(nav, top, if rising { 0.0 } else { way * p }, if rising { p * self.height } else { 0.0 }, bg, page, inert=leaving)
   })
-  if self.back_next is Some(_) && !leaving {
+  if self.back_next is Some(_) && !leaving && takes_back {
     ()
-  } else if n > 1 || nav.mode != 0 {
+  } else if takes_back && (n > floor + 1 || nav.mode >= 3 || (floor == 0 && nav.mode != 0)) {
     self.back_next = Some(fn(kind, x, w, t) { nav.gesture(kind, x, w, t) })
     self.back_node_next = i
     self.back_edge_next = edge
@@ -766,7 +831,26 @@ pub fn Ctx::follow_back(self : Ctx, f : (BackStep) -> Unit) -> Unit {
 /// The top page of `nav` alone, in place, nothing sliding and nothing swiped back: a desktop's pane beside a sidebar,
 /// whose pages are the same stack as a phone's (Ctx::nav draws it so on a narrow window). A page gone is forgotten
 /// (its widgets' state, `on_leave` told) as Ctx::nav forgets it; one moving is put where it was going.
-pub fn[P] Ctx::nav_flat(self : Ctx, nav : Nav[P], page : (P) -> Unit, bg? : Int64 = 0L) -> Int {
+/// `stacks`: what is pushed over (Nav::push_over) a stack of the pane's own, as a phone's (a pane on a tape, a phone's
+/// screen beside a list): it slides in over the page under it, and back takes it off sliding (following the system's
+/// gesture) as Ctx::nav has them, down to the page put there in place (its `floor`), which is shown in place as ever;
+/// `takes_back` false, back not its now (Ctx::nav's: the pane not the one in use).
+pub fn[P] Ctx::nav_flat(
+  self : Ctx,
+  nav : Nav[P],
+  page : (P) -> Unit,
+  bg? : Int64 = 0L,
+  stacks? : Bool = false,
+  takes_back? : Bool = true,
+) -> Int {
+  if stacks && nav.stacked() {
+    // (one pushed over it slides in once it has what it shows, waiting as long as one put in place waits:
+    // Nav::shows_when's, asked this frame)
+    if nav.flat_asked == self.frame_no {
+      nav.comes_when(nav.flat_ready, nav.flat_most)
+    }
+    return self.nav(nav, page, bg~, floor=nav.over_floor(), takes_back~)
+  }
   if nav.mode != 0 || nav.leaving is Some(_) {
     nav.settle()
   }
