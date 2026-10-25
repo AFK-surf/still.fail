@@ -445,7 +445,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         viz_full_layer(c, src)
       } else {
         // a page opened slides in once the core has given what it shows (App.kt Pages: LOCAL_MS at most)
-        app.nav.comes_when(fn() { page_ready(src, app.nav.top()) }, page_local_ms)
+        app.nav.comes_when(fn() { page_ready(src, w, app.nav.top()) }, page_local_ms)
         // pointed at with a mouse (a desktop's narrow window): the wheel and the trackpad scroll the lists and a drag
         // picks words, as on the wide frame's page; a finger drags the lists and holds to pick (pick.mbt)
         let finger = @ui.pointing() is Finger
@@ -875,15 +875,24 @@ fn dmax(a : Double, b : Double) -> Double {
 let page_local_ms : Double = @sf.local_ms
 
 ///|
-/// Whether the core has answered (a value or why not) for what page `p` shows as it opens (App.kt opening): a chat,
-/// an agent's history; any other page is not waited for.
-fn page_ready(src : Source, p : Page) -> Bool {
+/// Whether the core has answered (a value or why not) for what page `p` of workspace `w` shows as it opens (App.kt
+/// opening): a chat, an agent's history, Home's list and what the last update brought over it (home.mbt); any other
+/// page is not waited for.
+fn page_ready(src : Source, w : Workspace, p : Page) -> Bool {
   let answered = fn(t : Topic) { t.value is Some(_) || t.error is Some(_) }
   match p {
     Chat(r) => answered((src.topic)("chat", chat_params(r)))
     History(r, key, _) => answered((src.topic)("chat", chat_params(r))) && answered((src.topic)("history", history_params(r, key)))
+    Home => list_ready(src, w) && answered((src.topic)("changelog", Map::new()))
     _ => true
   }
+}
+
+///|
+/// Whether the core has answered for workspace `w`'s chats' list as it is filtered (Home's, the wide frame's sidebar's).
+fn list_ready(src : Source, w : Workspace) -> Bool {
+  let (list, error) = chats_of(src, w.id, filter_of(src, w.id))
+  list is Some(_) || error is Some(_)
 }
 
 ///|
@@ -898,19 +907,14 @@ fn first_page_shown(c : @ui.Ctx, src : Source, w : Workspace) -> Bool {
 }
 
 ///|
-/// Whether the core has answered for what the app's first page shows, as a page opening waits for it (page_ready,
-/// pane_ready): the chats' list as it is filtered (Home's, the wide frame's sidebar's), what the last update brought
-/// over it, and the page on top.
+/// Whether the core has answered for what the app's first page shows, as a page opening waits for it: laid out Small
+/// the page on top (page_ready), in the wide frame the sidebar's list and the page in the pane (pane_ready).
 fn first_page_ready(c : @ui.Ctx, src : Source, w : Workspace) -> Bool {
-  let (list, error) = chats_of(src, w.id, filter_of(src, w.id))
-  let news = (src.topic)("changelog", Map::new())
-  (list is Some(_) || error is Some(_)) &&
-  (news.value is Some(_) || news.error is Some(_)) &&
-  (if @sfdesk.is_wide(c) {
-    pane_ready(src, app.nav.top())
+  if @sfdesk.is_wide(c) {
+    list_ready(src, w) && pane_ready(src, app.nav.top())
   } else {
-    page_ready(src, app.nav.top())
-  })
+    page_ready(src, w, app.nav.top())
+  }
 }
 
 ///|

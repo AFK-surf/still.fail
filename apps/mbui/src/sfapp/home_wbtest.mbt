@@ -190,6 +190,10 @@ test "a row archived: an archivable row under it closes over it whole, its swipe
 test "the list while it is read: no rows, the shapes" {
   let t = tester("loading")
   t.frame()
+  // (the first page waits for its list, LOCAL_MS at most: the splash's ground till then, not its shapes swapped for
+  // its rows a frame later)
+  assert_true(t.find("星火工作室") is None)
+  t.run_for(page_local_ms)
   assert_true(t.find("整理发布清单") is None)
   assert_true(t.find("星火工作室") is Some(_))
 }
