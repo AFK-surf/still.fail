@@ -660,7 +660,7 @@ pub fn frame(
         // a right click in it: what is picked copied (context_menu.mbt)
         context_page(c, page_id)
         let page_corners = tape_pane_corners(Page, panel_of is Some(_))
-        let pane = c.box(
+        let pane = tape_behind(c, Page, fn() { c.box(
           style=page_apart.then(
             @ui.style(w=Fixed(main_w), h=Fixed(panel_h), radius=@sf.corners_radius(page_corners)),
           ),
@@ -673,13 +673,13 @@ pub fn frame(
             page_in(panel_h)
             @sf.pane_round.val = None
           },
-        )
+        ) })
         // what moves in the page of its own (the composer) takes its place from the page's foot: the tape moving the
         // page, a keyboard making it shorter, move none of it (it goes with the page, at once)
         @motion.scope(c, pane, bottom=true)
         match panel_of {
           Some(r) =>
-            c.box(
+            tape_behind(c, Panel, fn() { c.box(
               style=page_apart.then(
                 @ui.style(
                   w=Fixed(panel_w),
@@ -695,7 +695,7 @@ pub fn frame(
                 c.sized(panel_w, panel_h, fn() { tape_side(c, src, w, r) })
                 @sf.pane_round.val = None
               },
-            )
+            ) })
             |> ignore
           None => ()
         }
@@ -721,7 +721,7 @@ pub fn frame(
       })
       |> ignore
     }
-    dock(c, src, w, all, bar, peek, s, col, top, foot, tape_x)
+    tape_behind(c, Side, fn() { dock(c, src, w, all, bar, peek, s, col, top, foot, tape_x) })
     if updating {
       update_button(c, src, bar, s, inset, top, tape_x)
     }
@@ -915,6 +915,18 @@ fn tape_frame(c : @ui.Ctx, panel : ChatRef?, at : (Double, Double, Double), know
 ///|
 /// What the frame knew of the shown chat's side panel while its view had not come (tape_frame): neither open nor not.
 let tape_unknown : String = "?"
+
+///|
+/// What `body` draws of panel `p` (its answer): on the tape behind the one in use, on the ground a step darker
+/// (@sf.behind_ground), what is on it as it is; in use, or off the tape, on its own.
+fn[T] tape_behind(c : @ui.Ctx, p : TapePane, body : () -> T) -> T {
+  if !wide.tape || wide.tape_at == p {
+    return body()
+  }
+  let mut out : T? = None
+  @sf.with_ground(c, @sf.behind_ground(), fn() { out = Some(body()) })
+  out.unwrap()
+}
 
 ///|
 /// How far the finger may move the tape pulling `p` over: from where it is with the one in use to where it has `p` in
