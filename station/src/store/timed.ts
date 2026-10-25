@@ -28,7 +28,8 @@ export function askedBy(stack: string | undefined): string {
   const names: string[] = [];
   for (const line of (stack ?? "").split("\n").slice(1)) {
     const name = /^\s*at (?:async )?([^\s(]+) \(/.exec(line)?.[1];
-    if (name === undefined || name === "time" || name.includes("#") || name.includes("<anonymous>")) continue;
+    // (`time2`: `time` as the bundle names it.)
+    if (name === undefined || /^time\d*$/.test(name) || name.includes("#") || name.includes("<anonymous>")) continue;
     names.push(name);
     if (names.length === 3) break;
   }

@@ -9,7 +9,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { monitorEventLoopDelay } from "node:perf_hooks";
+import { PerformanceObserver, monitorEventLoopDelay } from "node:perf_hooks";
 import { join } from "node:path";
 import { Effect, Fiber, Layer, SubscriptionRef } from "effect";
 import { enroll, id, joinWorkspace, lockCommand, staysIn, status } from "./cli.ts";
@@ -187,13 +187,34 @@ function run() {
     // `stillfail heap`: a snapshot of this thread's heap, asked for from the command line.
     answerHeapRequests(data);
     // The main thread held (a query of seconds, a long parse): said as it is let go, with how long. Every device's
-    // requests wait meanwhile; the slow queries say what held it (store/timed.ts).
+    // requests wait meanwhile; the slow queries say what held it (store/timed.ts). With no slow query, what the
+    // process did meanwhile says whether it worked (`cpuMs`, all its threads'), collected its garbage (`gcMs`, this
+    // thread's, and the longest pause) or waited on pages of its memory read back from the disk (`pageFaults`).
     const held = monitorEventLoopDelay({ resolution: 50 });
     held.enable();
+    const gc = { ms: 0, longest: 0 };
+    new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) {
+        gc.ms += e.duration;
+        gc.longest = Math.max(gc.longest, e.duration);
+      }
+    }).observe({ entryTypes: ["gc"] });
+    let cpu = process.cpuUsage();
+    let faults = process.resourceUsage().majorPageFault;
     wall.every(HELD_EVERY_MS, () => {
       const ms = held.max / 1e6;
-      if (ms >= HELD_MS) log.warn("station", "the main thread was held", { ms: Math.round(ms) });
+      const used = process.cpuUsage(cpu);
+      const faulted = process.resourceUsage().majorPageFault;
+      if (ms >= HELD_MS) {
+        log.warn("station", "the main thread was held", {
+          ms: Math.round(ms), cpuMs: Math.round((used.user + used.system) / 1000), gcMs: Math.round(gc.ms), gcLongestMs: Math.round(gc.longest), pageFaults: faulted - faults,
+        });
+      }
       held.reset();
+      cpu = process.cpuUsage();
+      faults = faulted;
+      gc.ms = 0;
+      gc.longest = 0;
     });
     wall.every(process.env.STILLFAIL_MEMLOG ? 10_000 : 600_000, () => {
       const m = process.memoryUsage();
