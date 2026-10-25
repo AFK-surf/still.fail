@@ -1446,7 +1446,9 @@ export class Store {
   /// message started goes on with the work of the one before it, so it is theirs.
   startTurnFor(id: string, session: string, kind: string, by: TurnFor): void {
     this.#with((changes) => {
-      const before = (column: string) => `(SELECT ${column} FROM turns WHERE session_key = ?2 AND ${column} IS NOT NULL ORDER BY started_at DESC LIMIT 1)`;
+      // The latest turn's alone (by the index on them): each says it, so one with none had none before it to say. Asked
+      // for the latest that says it, a session that never had anyone's read back over every turn it had (1.4 s on ccvm).
+      const before = (column: string) => `(SELECT ${column} FROM turns WHERE session_key = ?2 ORDER BY started_at DESC LIMIT 1)`;
       this.#run(
         `INSERT INTO turns (id, session_key, kind, started_at, profile, person, thread) VALUES (?1, ?2, ?3, ?4, ?5, COALESCE(?6, ${before("person")}), COALESCE(?7, ${before("thread")}))`,
         id, session, kind, this.now(), by.profile, by.person, by.thread,
@@ -1791,14 +1793,10 @@ export class Store {
     return usage.usageActiveSessions(this.db, since);
   }
 
-  /// A session's turns, oldest first, each with whom it worked for (store/usage.ts says how).
-  usageTurns(session: string): usage.UsageTurn[] {
-    return usage.usageTurns(this.db, session);
-  }
-
-  /// What a session's turns are made of, said short: equal, `usageTurns` gives the same (store/usage.ts).
-  usageTurnsStamp(session: string): string {
-    return usage.usageTurnsStamp(this.db, session);
+  /// The turns of a session calls made from `from` until `until` (ms) were made in, oldest first, each with whom it
+  /// worked for (store/usage.ts says how).
+  usageTurns(session: string, from: number, until: number): usage.UsageTurn[] {
+    return usage.usageTurns(this.db, session, from, until);
   }
 
   /// The calls from `from` until `to` (ms), added up by day in the asker's time zone and by thread, person, profile and

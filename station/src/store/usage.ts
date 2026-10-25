@@ -73,24 +73,26 @@ export function usageActiveSessions(db: DatabaseSync, since: number): string[] {
   return [...new Set(rows.map((r) => r.session_key as string))];
 }
 
-/// What `usageTurns` makes a session's turns of, said short: its turns (how many, the latest's start), the messages it
-/// took (how many, the latest's delivery) and whose it is. Equal, `usageTurns` gives the same.
-export function usageTurnsStamp(db: DatabaseSync, session: string): string {
-  const r = db
-    .prepare(
-      `SELECT (SELECT COUNT(*) || ':' || IFNULL(MAX(started_at), '') FROM turns WHERE session_key = ?1)
-         || '/' || (SELECT COUNT(*) || ':' || IFNULL(MAX(delivered_at), '') FROM deliveries WHERE session = ?1 AND delivered_at IS NOT NULL)
-         || '/' || IFNULL((SELECT IFNULL(created_by, '') || ':' || profile FROM sessions WHERE key = ?1), '') AS stamp`,
-    )
-    .get(session) as Json;
-  return String(r.stamp);
-}
+/// Where `usageTurns` begins for calls from `?2` on: the last of the session's turns to start by then (the first of all,
+/// for calls before them all).
+export const TURNS_FROM = `SELECT IFNULL((SELECT MAX(started_at) FROM turns WHERE session_key = ?1 AND started_at <= ?2),
+  (SELECT MIN(started_at) FROM turns WHERE session_key = ?1)) AS at`;
+/// A session's turns that began from `?2` until `?3`, oldest first, by the index on them (schema.ts turns_by_session).
+export const TURNS_BETWEEN = "SELECT id, kind, started_at, profile, person, thread FROM turns WHERE session_key = ?1 AND started_at >= ?2 AND started_at <= ?3 ORDER BY started_at";
+/// The people's messages a session took from `?3` on, as they were delivered (schema.ts deliveries_taken).
+export const TAKEN_SINCE = `SELECT d.delivered_at AS at, CASE WHEN t.surface = ?2 THEN e.author ELSE 'slack:' || ts.connect || ':' || e.author END AS who, e.thread AS thread
+  FROM deliveries d JOIN entries e ON e.thread = d.thread AND e.n = d.n JOIN threads t ON t.id = d.thread
+  JOIN thread_sessions ts ON ts.thread = d.thread AND ts.session = d.session
+  WHERE d.session = ?1 AND d.delivered_at IS NOT NULL AND d.delivered_at >= ?3 AND e.author_kind = 'person' ORDER BY d.delivered_at`;
 
-/// usage_turns: a session's turns, oldest first, each with whom it worked for. Turns from before stations said so are
-/// worked out: a turn that answered messages is for the first person whose message it took, in that message's thread;
-/// any other goes on with the work of the one before. What is still unknown is the session's: its creator, its own chat,
-/// its profile.
-export function usageTurns(db: DatabaseSync, session: string): UsageTurn[] {
+/// usage_turns: the turns of a session calls made from `from` until `until` (ms) were made in, oldest first, each with
+/// whom it worked for: the last to begin by `from` (the first of all, for calls before them all) and those after it
+/// until `until`. A few rows, by the index on them: the usage counter asks at each part of a transcript it reads (every
+/// few seconds while agents work), and read whole, a long session's thousand turns were each read where they lie.
+/// A turn says whom it worked for as it began (store.ts startTurnFor). One from before turns said so is worked out: a
+/// turn that answered messages is for the first person whose message it took, in that message's thread; any other goes
+/// on with the work of the one before. What is still unknown is the session's: its creator, its own chat, its profile.
+export function usageTurns(db: DatabaseSync, session: string, from: number, until: number): UsageTurn[] {
   const row = db.prepare("SELECT created_by, profile FROM sessions WHERE key = ?").get(session) as Json;
   const creator: string | null = row ? row.created_by : null;
   const profile: string = row ? row.profile : "";
@@ -98,19 +100,11 @@ export function usageTurns(db: DatabaseSync, session: string): UsageTurn[] {
     .prepare("SELECT id FROM threads WHERE home = ?1 UNION ALL SELECT thread FROM (SELECT thread FROM thread_sessions WHERE session = ?1 ORDER BY joined_at LIMIT 1) LIMIT 1")
     .get(session) as Json;
   const home: number | null = homeRow ? homeRow.id : null;
-  const turns = db.prepare("SELECT id, kind, started_at, profile, person, thread FROM turns WHERE session_key = ? ORDER BY started_at").all(session) as Json[];
+  const begins: number | null = (db.prepare(TURNS_FROM).get(session, from) as Json).at;
+  const turns = begins === null ? [] : (db.prepare(TURNS_BETWEEN).all(session, begins, Math.max(begins, until)) as Json[]);
   // The people's messages the session took, as they were delivered (only needed for turns from before).
   const delivered: [number, string, number][] = turns.some((t) => t.person === null)
-    ? (
-        db
-          .prepare(
-            `SELECT d.delivered_at AS at, CASE WHEN t.surface = ?2 THEN e.author ELSE 'slack:' || ts.connect || ':' || e.author END AS who, e.thread AS thread
-             FROM deliveries d JOIN entries e ON e.thread = d.thread AND e.n = d.n JOIN threads t ON t.id = d.thread
-             JOIN thread_sessions ts ON ts.thread = d.thread AND ts.session = d.session
-             WHERE d.session = ?1 AND d.delivered_at IS NOT NULL AND e.author_kind = 'person' ORDER BY d.delivered_at`,
-          )
-          .all(session, STILLFAIL_SURFACE) as Json[]
-      ).map((r) => [r.at, r.who, r.thread])
+    ? (db.prepare(TAKEN_SINCE).all(session, STILLFAIL_SURFACE, begins) as Json[]).map((r) => [r.at, r.who, r.thread])
     : [];
   const out: UsageTurn[] = [];
   let next = 0;
