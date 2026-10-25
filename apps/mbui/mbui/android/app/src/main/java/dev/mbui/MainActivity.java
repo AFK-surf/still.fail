@@ -143,6 +143,14 @@ public class MainActivity extends Activity {
             if (imeShown && !shown && Host.imeActive && !Host.imeAwaited && mbView.hasWindowFocus()) {
                 mbView.toGL(() -> Native.text(7, "", 0, 0));
             }
+            // a keyboard the system brought back with no field of the app's wanting it: put away, unless a native
+            // view's field (a page's) has the focus. (The app sent behind with the keyboard up, its field let go of as
+            // the keyboard went; brought back, some systems put the keyboard up again over no field, and nothing the
+            // app did let go of it: pengxiao 2026-10-25, scrolling a chat did not put it away)
+            if (!imeShown && shown && !Host.imeActive && !Host.imeAwaited && root.findFocus() == mbView) {
+                ((android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE))
+                        .hideSoftInputFromWindow(mbView.getWindowToken(), 0);
+            }
             imeShown = shown;
             Host.imeVisible = shown;
             if (shown) Host.imeAwaited = false;
