@@ -347,13 +347,21 @@ fn run_row(c : @ui.Ctx, a : Json?) -> Bool {
       id~,
       fn() {
         @sf.maker_mark(c, text(field(s, "maker"), "id"), text(s, "runtime"), 15.0) |> ignore
-        c.text(model, size=t.t.ui, color=t.p.text, wrap=false, w=Cut, keep=true) |> ignore
-        // (short of room, its allowance leaves the line, how it runs whole)
-        c.box(w=Fill(1.0), keep=true, fn() {
-          c.text(" · " + effort + " · " + account, size=t.t.meta, color=t.p.muted, wrap=false, w=Cut, keep=true) |> ignore
+        // how it runs on its line, its account's allowance under it, a line of its own (beside it, the allowance left
+        // the line where it had not the room: gone)
+        c.box(style=run_words, keep=true, fn() {
+          c.box(style=run_line, fn() {
+            c.text(model, size=t.t.ui, color=t.p.text, wrap=false, w=Cut, keep=true) |> ignore
+            c.box(w=Fill(1.0), keep=true, fn() {
+              c.text(" · " + effort + " · " + account, size=t.t.meta, color=t.p.muted, wrap=false, w=Cut, keep=true)
+              |> ignore
+            })
+            |> ignore
+          })
+          |> ignore
+          allowance_line(c, field(field(a, "account"), "quota"))
         })
         |> ignore
-        c.box(drop=1, fn() { @sf.quota_chips(c, field(field(a, "account"), "quota")) }) |> ignore
         @sf.icon(c, "chevron-down", size=14.0, color=t.p.muted) |> ignore
         // History.kt: clip(Smooth(10)).clickable
         @motion.ripple(c, id, 10.0)
@@ -399,3 +407,13 @@ let boxed_n : Ref[Int] = { val: 0 }
 ///|
 /// The steps' parts as the core read them (`history.tool`), by what was asked.
 let tool_parts : Map[String, Json] = {}
+
+///|
+/// How it runs and its account's allowance under it, in what the row leaves its mark and its chevron.
+// kept across runs: a value (no field of it changes)
+let run_words : @ui.Style = @ui.css("w=Full")
+
+///|
+/// How it runs: its model, how hard it thinks and its account, on a line.
+// kept across runs: a value (no field of it changes)
+let run_line : @ui.Style = @ui.css("row w=Full align=ACenter")

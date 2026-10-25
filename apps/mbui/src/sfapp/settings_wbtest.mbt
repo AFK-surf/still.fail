@@ -508,6 +508,23 @@ test "an agent's allowance in its sheet filled as far as is left (QuotaChips): 5
 }
 
 ///|
+test "a chat's info on a phone: each agent's name whole and its allowance under how it is, a line of its own" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-info")
+  // (beside its name the allowance cut the name to 「Claud…」, then left the row on a phone: the allowance gone,
+  // 2026-10-26)
+  let (_, name_y) = t.find("Claude · Opus 5.5").unwrap()
+  let (_, chip_y) = t.find("62%").unwrap()
+  assert_true(t.find("18%") is Some(_))
+  assert_true(chip_y > name_y, msg="its allowance \{chip_y} under its name \{name_y}")
+  // and in its sheet, its account's allowance under the account
+  let t = decide_core(calls, "chat-agent")
+  let (_, account_y) = t.find("林的 Max · 自动").unwrap()
+  let (_, chip_y) = t.find("62%").unwrap()
+  assert_true(chip_y > account_y, msg="its allowance \{chip_y} under its account \{account_y}")
+}
+
+///|
 test "a subscription signing in: what to do in the browser, then the code typed and 完成登录 sends it (Accounts.tsx LoginSteps)" {
   let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-login")
   let y = fn(words : String) { t.find(words).unwrap().1 }
