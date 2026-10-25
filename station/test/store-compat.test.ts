@@ -50,7 +50,7 @@ const ADDED_INDEXES = ["entries_letters", "sessions_by_connect", "threads_home",
 const MERGED_ADDS = [", m.letter"];
 /// Tables the TS station makes as it opens (schema.ts `addUsageTotals`, `addUsageCompactions`): each with its columns,
 /// and the indexes and triggers that keep it (named after it).
-const MADE = ["usage_totals", "usage_compactions"];
+const MADE = ["usage_totals", "usage_compactions", "thread_state", "thread_people", "session_first"];
 const made = (l: string) => MADE.some((t) => l.startsWith(`table ${t}:`) || l.startsWith(`  ${t}.`) || l.startsWith(`trigger ${t}_`) || l.startsWith(`index ${t}_`));
 
 const noToken = <T extends { token: string }>(r: T) => {
@@ -118,6 +118,22 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
         assert.deepEqual(store.lastMessage(t.id), read.lastMessage(r, t.id));
         assert.deepEqual(store.pendingCard(t.id), read.pendingCard(r, t.id));
       }
+      // What lists say of each thread and session, kept (schema.ts LIST_STATE), as their messages say it.
+      const rows = (sql: string) => store.db.prepare(sql).all().map((x) => JSON.stringify(x));
+      assert.deepEqual(
+        rows("SELECT thread, last_n, said_n, person_n, letters FROM thread_state ORDER BY thread"),
+        rows(`SELECT thread, MAX(n) AS last_n, MAX(CASE WHEN kind = 'message' AND letter IS NULL THEN n END) AS said_n,
+          MIN(CASE WHEN kind = 'message' AND author_kind = 'person' THEN n END) AS person_n,
+          COUNT(CASE WHEN kind = 'message' AND letter IS NOT NULL THEN 1 END) AS letters FROM entries GROUP BY thread ORDER BY thread`),
+      );
+      assert.deepEqual(
+        rows("SELECT thread, author, first_n FROM thread_people ORDER BY thread, author"),
+        rows("SELECT thread, author, MIN(n) AS first_n FROM entries WHERE kind = 'message' AND author_kind = 'person' GROUP BY thread, author ORDER BY thread, author"),
+      );
+      assert.deepEqual(
+        rows("SELECT session, thread, n FROM session_first ORDER BY session"),
+        rows("SELECT d.session, d.thread, d.n FROM deliveries d WHERE d.rowid = (SELECT MIN(rowid) FROM deliveries x WHERE x.session = d.session) ORDER BY d.session"),
+      );
     } finally {
       r.db.close();
     }

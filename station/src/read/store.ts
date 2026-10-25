@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
-import { type InWorkspace, JOBS_RUNNING, LETTER_SQL, type Letter, isLetter, liveShare, sees, toChatShare, withLetter } from "../store/rows.ts";
+import { type InWorkspace, JOBS_RUNNING, LETTER_SQL, PEOPLE_AT, type Letter, isLetter, liveShare, sees, toChatShare, withLetter } from "../store/rows.ts";
 
 export type Json = any;
 
@@ -510,14 +510,14 @@ export function lastMessage(s: Store, thread: number, at?: number | null): Messa
 export function letterCount(s: Store, thread: number, at?: number | null): number {
   const archived = archivedSummary(s, thread, at);
   if (archived !== null) return archived.messages.filter((m) => m.letter).length;
-  return one(s, `SELECT COUNT(*) AS c FROM entries WHERE thread = ? AND kind = 'message' AND ${LETTER_SQL}`, thread).c;
+  return one(s, "SELECT letters FROM thread_state WHERE thread = ?", thread)?.letters ?? 0;
 }
 
 /// The thread's latest message that is not a letter (isLetter), for lists: what they show and sort by.
 export function lastSaid(s: Store, thread: number, at?: number | null): MessageRow | null {
   const archived = archivedSummary(s, thread, at);
   if (archived !== null) return archived.lastSaid === null ? null : { ...archived.lastSaid };
-  const r = one(s, `SELECT * FROM merged WHERE thread = ? AND NOT ${LETTER_SQL} ORDER BY n DESC LIMIT 1`, thread);
+  const r = one(s, "SELECT m.* FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.said_n WHERE t.thread = ?", thread);
   return r ? toMessage(r) : null;
 }
 
@@ -552,11 +552,7 @@ function threadPeople(s: Store, thread: number, surface: string, at?: number | n
   if (archived !== null) {
     authors = archived.authors;
   } else {
-    authors = all(
-      s,
-      "SELECT author, MIN(n) AS first FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' GROUP BY author ORDER BY first",
-      thread,
-    ).map((r) => r.author);
+    authors = all(s, "SELECT author FROM thread_people WHERE thread = ? ORDER BY first_n", thread).map((r) => r.author);
   }
   if (surface === STILLFAIL_SURFACE) return authors;
   return connect === null ? [] : authors.map((a) => `slack:${connect}:${a}`);
@@ -566,7 +562,7 @@ function threadPeople(s: Store, thread: number, surface: string, at?: number | n
 function firstText(s: Store, thread: number, at?: number | null): string | null {
   const archived = archivedSummary(s, thread, at);
   if (archived !== null) return archived.firstText;
-  const r = one(s, "SELECT substr(text, 1, 300) AS t FROM merged WHERE thread = ? AND author_kind = 'person' ORDER BY n LIMIT 1", thread);
+  const r = one(s, "SELECT substr(m.text, 1, 300) AS t FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.person_n WHERE t.thread = ?", thread);
   return r ? r.t : null;
 }
 
@@ -799,8 +795,7 @@ export function sessionStats(s: Store, key: string | string[] | null): Map<strin
   const sql = `SELECT s.key,
        (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
        (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
-       (SELECT substr(m.text, 1, 300) FROM deliveries d JOIN merged m ON m.thread = d.thread AND m.n = d.n
-         WHERE d.session = s.key ORDER BY d.rowid LIMIT 1) AS first_text,
+       (SELECT substr(m.text, 1, 300) FROM session_first f JOIN merged m ON m.thread = f.thread AND m.n = f.n WHERE f.session = s.key) AS first_text,
        l.id AS turn_id, l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
      FROM sessions s
      LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
@@ -975,7 +970,7 @@ export function participants(s: Store, session: string | null): Map<string, stri
     const authors: [string, number][] =
       r.archived_at !== null
         ? archivedSummary(s, r.id, r.archived_at)!.firstAt
-        : all(s, "SELECT author, MIN(at) AS at FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' GROUP BY author", r.id).map((a) => [a.author, a.at]);
+        : all(s, PEOPLE_AT, r.id).map((a) => [a.author, a.at]);
     const refs = firsts.get(r.session) ?? new Map<string, number>();
     firsts.set(r.session, refs);
     for (const [author, at] of authors) {

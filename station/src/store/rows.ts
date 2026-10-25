@@ -487,3 +487,7 @@ export const JOBS_RUNNING = "SELECT * FROM jobs WHERE state = 'running' ORDER BY
 /// A context falling under half of what the call before sent (at least this much), on the same account and model, was
 /// compacted (sessions/pool.ts; what schema.ts USAGE_COMPACTIONS keeps).
 export const COMPACTED_FROM = 50_000;
+
+/// Who wrote in a thread, each with when they first did: as the database keeps them (schema.ts LIST_STATE
+/// thread_people), each's first message's time.
+export const PEOPLE_AT = "SELECT p.author, e.at FROM thread_people p JOIN entries e ON e.thread = p.thread AND e.n = p.first_n WHERE p.thread = ?";

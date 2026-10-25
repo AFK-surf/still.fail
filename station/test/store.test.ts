@@ -260,6 +260,38 @@ test("an archived thread keeps its entries in the database; one a station before
   assert.deepEqual(store.entriesAfter(shared.id, 0).map((e) => e.text), ["hi"], "b's archived thread stays");
 });
 
+test("what lists say of a thread and a session is kept as its messages are written, and goes with them", () => {
+  const store = memory();
+  session(store, "a");
+  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  store.joinThread(thread.id, "a", "ember");
+  const state = () => store.db.prepare("SELECT last_n, said_n, person_n, letters FROM thread_state WHERE thread = ?").get(thread.id);
+  const people = () => store.db.prepare("SELECT author, first_n FROM thread_people WHERE thread = ? ORDER BY first_n").all(thread.id).map((r: any) => [r.author, r.first_n]);
+  assert.equal(state(), undefined);
+  const [first] = say(store, thread.id, "1.2", "person", "x@a", "先看看日志");
+  store.deliver(thread.id, first, ["a"]);
+  say(store, thread.id, "1.3", "agent", "a", "在看");
+  store.insertMessage({ ...newMessage(thread.id, "1.4", "agent", "b", "来自 [备份](https://x/o/w/s/b)：\n\n好了"), letter: { way: "in", title: "备份", link: "https://x/o/w/s/b" } });
+  const [second] = say(store, thread.id, "1.5", "person", "y@a", "我也看");
+  store.deliver(thread.id, second, ["a"]);
+  say(store, thread.id, "1.6", "person", "x@a", "好");
+  assert.deepEqual({ ...(state() as object) }, { last_n: 5, said_n: 5, person_n: 1, letters: 1 });
+  assert.deepEqual(people(), [["x@a", 1], ["y@a", 4]]);
+  // An edit is an entry of its own: the last, nothing else; what is said of the message as merged is its new words.
+  store.editMessage("ember", "EMBER", "1.1", "1.2", "先看看今天的日志");
+  assert.deepEqual({ ...(state() as object) }, { last_n: 6, said_n: 5, person_n: 1, letters: 1 });
+  const [listed] = store.listThreads("x@a", null, thread.id);
+  assert.deepEqual([listed!.firstText, listed!.lastMessage?.text, listed!.letters, listed!.people], ["先看看今天的日志", "好", 1, ["x@a", "y@a"]]);
+  assert.equal(store.sessionStats("a").get("a")!.firstText, "先看看今天的日志");
+  // The first message given goes: the next given is the first.
+  store.db.prepare("DELETE FROM deliveries WHERE thread = ? AND n = ?").run(thread.id, first);
+  assert.equal(store.sessionStats("a").get("a")!.firstText, "我也看");
+  // The thread goes: what was kept of it with it.
+  store.db.prepare("DELETE FROM entries WHERE thread = ?").run(thread.id);
+  assert.equal(state(), undefined);
+  assert.deepEqual(people(), []);
+});
+
 test("what two chats' agents wrote each other is neither a chat's unread nor what lists show of it, archived or not", () => {
   const data = tempdir();
   const store = open(join(data, "stillfail.db"), join(data, "archive"));
@@ -302,8 +334,10 @@ test("letters from before they were marked are marked as the column comes, by th
   say(store, thread.id, "1.4", "agent", "a", "来自 [备份](https://x/o/w/s/b)：\n\n照它说的改了");
   say(store, thread.id, "1.5", "agent", "b", "由 [备份](https://x/o/w/s/b) 开的 chat：\n\n看看备份");
   store.close();
-  // As a station from before letters left it.
+  // As a station from before letters left it (from before the lists' kept state too, whose trigger reads the column).
   const db = new DatabaseSync(path);
+  db.exec("DROP TRIGGER thread_state_add; DROP TRIGGER thread_state_drop; DROP TRIGGER session_first_add; DROP TRIGGER session_first_drop");
+  db.exec("DROP TABLE thread_state; DROP TABLE thread_people; DROP TABLE session_first");
   db.exec("DROP VIEW merged; DROP INDEX entries_letters; ALTER TABLE entries DROP COLUMN letter");
   db.close();
   const again = open(path);
