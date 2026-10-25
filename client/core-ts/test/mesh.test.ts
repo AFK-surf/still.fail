@@ -14,7 +14,7 @@ import { CoreError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Iroh } from "../src/iroh.ts";
-import { ALPN, clearlyBetter, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_MIN_BYTES, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
+import { ALPN, clearlyBetter, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_FRESH_MS, SPEED_MIN_BYTES, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -852,6 +852,35 @@ sim("requests_leave_a_way_found_slow_for_one_that_brings_replies_sooner", async 
   // And it stays on a.
   await s.time.pass(30 * 60_000);
   assert.ok(sameRelay(via(mesh, id), a), `${via(mesh, id)}`);
+  await close(s, station, mesh);
+});
+
+/// b brings replies fast, then slowly (its line to the device down to 256 KiB/s: more crowded, a hop further). Past
+/// SPEED_FRESH_MS the slower replies say how fast it is now, and the requests leave it for a, not held there for hours
+/// by how fast it once was. And a network change: what was seen is let go, to be found out again from there.
+sim("a_way_grown_slower_is_judged_by_how_it_brings_replies_now_and_a_new_network_by_its_own", async (s) => {
+  const a = s.relay("https://a.relay.test/", { station: { ms: 100 } });
+  const b = s.relay("https://b.relay.test/", { device: { ms: 60 } });
+  const { station, mesh, id: bare } = await onRelays(s, [b, a]);
+  const id = `w/${bare}`;
+  await reach(s, mesh, id);
+  const wire = wireOf(s, mesh);
+  const addr = StationAddr.parse(id);
+  const big = () => s.run(Effect.scoped(Effect.flatMap(wire.request(addr, { method: "GET", path: "/admin/api/big", headers: [] }, new Uint8Array()), (r) => readAll(r.body))));
+  await s.until(() => sameRelay(via(mesh, id), b), 5 * 60_000);
+  await big();
+  const fast = mesh.speed(id, b);
+  assert.ok(fast !== null, "how fast b is, seen");
+  await s.time.pass(SPEED_FRESH_MS);
+  s.relay(b, { device: { ms: 60, bps: 256 * 1024 } });
+  await big();
+  const now = mesh.speed(id, b);
+  assert.ok(now !== null && now < fast / 2, `b at ${now} B/s now, at ${fast} before`);
+  await s.until(() => sameRelay(via(mesh, id), a), 5 * 60_000);
+  // Elsewhere now: nothing seen on the last network counts.
+  s.wakes.wake(network(s.host));
+  await s.time.pass(TICK_MS);
+  assert.equal(mesh.speed(id, b), null);
   await close(s, station, mesh);
 });
 
