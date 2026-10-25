@@ -155,13 +155,16 @@ fn lines(args : Array[String]) -> Int {
 ///|
 /// (Android) the round page pictured (MBUI_VIEWCHECK=hold: left on the screen once placed): at each of its four
 /// corners, just inside its rect but outside its round, the canvas's ground (the view cut there, and its hole as
-/// round: no square corner of the page, nothing of what is under the canvas); a little further in, the page
+/// round: no square corner of the page, nothing of what is under the canvas); a little further in, the page. And the
+/// tall page under it (viewcheck.mbt view_check_tall: its content told 40,000 points tall, more device pixels): where
+/// it is seen, near its top, its middle and its bottom, its band of green, the part of it there
 fn views_round(args : Array[String]) -> Int {
   if args.length() != 2 {
     @sys.eprintln("chk views-round LOG PNG")
     return 2
   }
   let mut page : Array[Double]? = None
+  let mut tall : Array[Double]? = None
   for line in text_lines(@sys.read_text(args[0]).unwrap_or("")) {
     match line.find("VIEWTOLD ") {
       Some(i) => {
@@ -170,6 +173,9 @@ fn views_round(args : Array[String]) -> Int {
           let p = ws[1:10].to_array().map(fn(x) { double_of_signed(x) })
           if p[8] > 0.0 {
             page = Some(p)
+          }
+          if p[3] >= 40000.0 {
+            tall = Some(p)
           }
         }
       }
@@ -249,12 +255,27 @@ fn views_round(args : Array[String]) -> Int {
       bad.push("\{name}: \{rgb_text(inside)} inside the round, not the page")
     }
   }
+  match tall {
+    Some(t) => {
+      // (where it is seen: its clip, moved as the round page was)
+      let green = (0x00, 0xaa, 0x00)
+      let mx = (t[4] + t[6]) / 2.0 + dx
+      for probe in [("near its top", t[5] + 3.0), ("in its middle", (t[5] + t[7]) / 2.0), ("near its bottom", t[7] - 3.0)] {
+        let (name, ty) = probe
+        let seen = px(mx, ty + dy)
+        if !near(seen, green) {
+          bad.push("the tall page \{name}: \{rgb_text(seen)}, not its band of green \{rgb_text(green)}")
+        }
+      }
+    }
+    None => bad.push("no tall page told (VIEWTOLD 40,000 or more tall)")
+  }
   if bad.length() > 0 {
-    say("views contract (android): its round corners: " + bad.join("; "))
+    say("views contract (android): its round corners, the tall page: " + bad.join("; "))
     return 1
   }
   say(
-    "views contract (android): the page's four corners round (\{num_text(r)} px), the ground outside them, the page inside",
+    "views contract (android): the page's four corners round (\{num_text(r)} px), the ground outside them, the page inside; the tall page's part seen where it is seen",
   )
   0
 }

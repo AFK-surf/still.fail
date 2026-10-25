@@ -85,7 +85,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * its own.
  * Kind 2, a page of HTML in a WebView, as still.fail's Android app shows an HTML file (FilePreview.kt HtmlPage):
  * scripts on, no file or content access, no DOM storage, no link followed. A page's and a site's frame draws its
- * WebView into its picture (TouchFrame.draw) as the WebView changes, not as it moves.
+ * WebView into its picture (TouchFrame.draw) as the WebView changes, not as it moves; a page taller than a picture can
+ * be, a part of it at a time (Page).
  *
  * Called on the GL thread (MoonBit's); views are made and moved on the main thread.
  */
@@ -174,8 +175,9 @@ final class NativeViews {
         // how it stands, for info (the GL thread reads these)
         volatile int state;
         volatile double duration = -1, position, playing, nw, nh, bytes, framed, buffering, buffered, ended;
-        // placed: x y w h cx0 cy0 cx1 cy1, the content's corners' radius, in pixels; shown
-        final float[] at = new float[9];
+        // placed: x y w h cx0 cy0 cx1 cy1, the content's corners' radius, the part of the content its frame is (its
+        // top, from the content's, and its height: partOf), in pixels; shown
+        final float[] at = new float[11];
         /** Where it was told to go before it was made (made once the window has had the focus): put there as it is. */
         float[] pendingTo;
         boolean pendingShown;
@@ -285,6 +287,29 @@ final class NativeViews {
         }
 
         void moved() {}
+
+        /**
+         * The part of its content its frame is, and so its picture (GL thread, as it is told where it goes): `to`'s
+         * last two, from where it is to go (`to`) and the part it was (`was`, null at first). All of it; a tall page's
+         * is a part of it (Page.partOf).
+         */
+        void partOf(float[] to, float[] was, boolean shown) {
+            to[9] = 0;
+            to[10] = to[3];
+        }
+
+        /**
+         * The part of its content a picture of its frame `h` pixels tall is, drawn now (main thread): its top and its
+         * height, of the content's (0 to 1). All of it but a tall page's (Page.drawnPart).
+         */
+        float[] drawnPart(int h) {
+            return WHOLE;
+        }
+
+        /** Whether a picture drawn now is the part of its content its frame is (main thread): a page scrolled to it. */
+        boolean partDrawn() {
+            return true;
+        }
 
         void control(int op, double value) {}
 
@@ -433,6 +458,8 @@ final class NativeViews {
             int w = getWidth(), h = getHeight();
             if (st == null || s == null || !s.isValid() || w <= 0 || h <= 0) return;
             if (w != p.w || h != p.h) st.setDefaultBufferSize(w, h);
+            // (the part of its content this picture is, as its page is scrolled now: Page.partOf)
+            float[] part = v.drawnPart(h);
             Canvas c;
             try {
                 c = s.lockHardwareCanvas();
@@ -446,8 +473,10 @@ final class NativeViews {
             } finally {
                 p.w = w;
                 p.h = h;
-                // (this frame's time, which its buffer's is not before: a frame from then on said, Picture.latch)
-                if (sayNext) {
+                p.drawn(System.nanoTime(), part);
+                // (this frame's time, which its buffer's is not before: a frame from then on said, Picture.latch; a tall
+                // page's once it shows the part asked)
+                if (sayNext && v.partDrawn()) {
                     sayNext = false;
                     p.sayAfter = System.nanoTime();
                 }
@@ -640,17 +669,19 @@ final class NativeViews {
      * cut anew or not: a list scrolled under it, its edge), nothing is done for it now: the canvas draws its picture
      * there in this frame, as cut as it is, and its frame, which takes the touches on it, follows once it rests
      * (framed): a move of a system view makes the window draw again, each frame of a scroll. Shown, hidden or sized
-     * anew, it is put there at once.
+     * anew, or a tall page's part of it moved on (partOf), it is put there at once.
      */
     static void place(int id, float x, float y, float w, float h, float cx0, float cy0, float cx1, float cy1,
                       float radius, boolean shown) {
         NView v = views.get(id);
         if (v == null) return;
         float d = Host.view.density;
-        float[] to = {x * d, y * d, w * d, h * d, cx0 * d, cy0 * d, cx1 * d, cy1 * d, radius * d};
+        float[] to = {x * d, y * d, w * d, h * d, cx0 * d, cy0 * d, cx1 * d, cy1 * d, radius * d, 0, 0};
         float[] was = v.toldTo;
+        v.partOf(to, was, shown);
         boolean moved = was != null && shown && v.toldShown && Math.abs(to[2] - was[2]) < 0.5f
-                && Math.abs(to[3] - was[3]) < 0.5f && Math.abs(to[8] - was[8]) < 0.5f;
+                && Math.abs(to[3] - was[3]) < 0.5f && Math.abs(to[8] - was[8]) < 0.5f
+                && Math.abs(to[9] - was[9]) < 0.5f && Math.abs(to[10] - was[10]) < 0.5f;
         v.toldTo = to;
         v.toldShown = shown;
         v.lastTo = to;
@@ -697,19 +728,20 @@ final class NativeViews {
         {
             int id = v.id;
             boolean same = v.shown == shown;
-            for (int i = 0; i < 9 && same; i++) same = Math.abs(v.at[i] - to[i]) < 0.5f;
+            for (int i = 0; i < v.at.length && same; i++) same = Math.abs(v.at[i] - to[i]) < 0.5f;
             if (same) return;
-            System.arraycopy(to, 0, v.at, 0, 9);
+            System.arraycopy(to, 0, v.at, 0, v.at.length);
             v.shown = shown;
             int l = Math.round(to[4]), t = Math.round(to[5]);
             int cw = Math.max(0, Math.round(to[6]) - l), ch = Math.max(0, Math.round(to[7]) - t);
             // The frame moved by its translation, never by its margins: a layout each frame a list scrolls (a page
-            // in a message) dropped frames. A page's or a site's frame is its content's rect, the part of it within
-            // the clip `seen`, so only a new size lays it out again (and draws its picture again); a video's is the
-            // clip's. Moved, nothing of it is drawn again: the canvas draws its picture where the app paints it.
+            // in a message) dropped frames. A page's or a site's frame is its content's rect (a tall page's, the part
+            // of it near what is seen: partOf), the part of it within the clip `seen`, so only a new size lays it out
+            // again (and draws its picture again); a video's is the clip's. Moved, nothing of it is drawn again: the
+            // canvas draws its picture where the app paints it.
             boolean whole = v.kind != 1;
-            int fx = whole ? Math.round(to[0]) : l, fy = whole ? Math.round(to[1]) : t;
-            int fw = whole ? Math.max(0, Math.round(to[2])) : cw, fh = whole ? Math.max(0, Math.round(to[3])) : ch;
+            int fx = whole ? Math.round(to[0]) : l, fy = whole ? Math.round(to[1]) + Math.round(to[9]) : t;
+            int fw = whole ? Math.max(0, Math.round(to[2])) : cw, fh = whole ? Math.max(0, Math.round(to[10])) : ch;
             FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) v.clip.getLayoutParams();
             if (p.leftMargin != 0 || p.topMargin != 0 || p.width != fw || p.height != fh) {
                 p.leftMargin = 0;
@@ -776,6 +808,18 @@ final class NativeViews {
 
     /** The texture the canvas draws view `id`'s picture with now (0: none; android_host.c's MB_VIEW_TEX + id). */
     static native void texture(int id, int tex);
+
+    /**
+     * The part of view `id`'s content its picture is now: its top and its height, of the content's (0 to 1; all of it
+     * but a tall page's, Page.partOf). The canvas draws the picture there, and nothing of the content outside it.
+     */
+    static native void part(int id, float top, float height);
+
+    /** All of a view's content. */
+    static final float[] WHOLE = {0f, 1f};
+
+    /** The largest texture the GL context takes, in pixels a side (GL thread, as the first picture is made). */
+    static volatile int textureMost;
 
     /** Pictures done with, their SurfaceTextures let go of on the GL thread as it next latches. */
     private static final ConcurrentLinkedQueue<Object[]> doneWith = new ConcurrentLinkedQueue<>();
@@ -847,13 +891,53 @@ final class NativeViews {
          */
         volatile long sayAfter = Long.MAX_VALUE;
         private long stamp;
+        /**
+         * The part of its content each frame sent was (TouchFrame.draw), with when it was sent (System.nanoTime, before
+         * its buffer's time), the oldest first; the part the frame latched last is (GL thread).
+         */
+        private final java.util.ArrayDeque<Sent> sent = new java.util.ArrayDeque<>();
+        private float[] latchedPart = WHOLE;
+
+        private static final class Sent {
+            final long at;
+            final float[] part;
+
+            Sent(long at, float[] part) {
+                this.at = at;
+                this.part = part;
+            }
+        }
 
         Picture(int id) {
             this.id = id;
         }
 
+        /** A frame sent now (`at`), the part `part` of its content (main thread, as it is drawn). */
+        void drawn(long at, float[] part) {
+            synchronized (sent) {
+                sent.addLast(new Sent(at, part));
+                while (sent.size() > 16) sent.removeFirst();
+            }
+        }
+
+        /**
+         * The part of its content the frame latched is, by its buffer's time (GL thread): the last sent by then, as the
+         * one sent after it may be sent before it is latched.
+         */
+        private float[] partAt(long stamp) {
+            synchronized (sent) {
+                while (!sent.isEmpty() && sent.peekFirst().at <= stamp) latchedPart = sent.removeFirst().part;
+            }
+            return latchedPart;
+        }
+
         /** Its SurfaceTexture made (anew) on a new external texture of the context there is (GL thread). */
         void make() {
+            if (textureMost == 0) {
+                int[] most = {0};
+                GLES30.glGetIntegerv(GLES30.GL_MAX_TEXTURE_SIZE, most, 0);
+                textureMost = most[0] > 0 ? most[0] : 2048;
+            }
             ext = Streams.external();
             SurfaceTexture t = new SurfaceTexture(ext);
             arrived.set(0);
@@ -899,6 +983,8 @@ final class NativeViews {
                     }
                     Streams.blitFrame(t, ext, tex, pw, ph);
                     texture(id, tex);
+                    float[] part = partAt(stamp);
+                    part(id, part[0], part[1]);
                 }
             }
             long say = sayAfter;
@@ -914,6 +1000,7 @@ final class NativeViews {
         /** The view closed (GL thread): no frame draws it from now on. Its external texture, let go of with it. */
         int drop() {
             texture(id, 0);
+            part(id, 0, 1);
             if (tex != 0) GLES30.glDeleteTextures(1, new int[] {tex}, 0);
             tex = 0;
             return ext;
@@ -1897,12 +1984,89 @@ final class NativeViews {
 
     // ---- a page ----
 
+    /**
+     * A page, its WebView as large as its frame. One taller than its picture can be (partMost; a page placed in a
+     * message is as tall as its content: a catalogue of icons twenty screens and 50,000 pixels tall, past the 16,384
+     * a phone's GPU takes, had no picture at all) is drawn a part of it at a time: its frame and its WebView that part,
+     * the WebView scrolled to it, moved on as what is seen of the page nears the part's edge (partOf). Each picture says
+     * which part of the page it is (drawnPart), and the canvas draws it there and nothing of the page outside it.
+     */
     static final class Page extends NView {
         final String html;
+        /** (main thread) The top of the part of it its frame is, its WebView scrolled to (pixels); -1: all of it. */
+        int partTop = -1;
 
         Page(int id, String html) {
             super(id, 2);
             this.html = html;
+        }
+
+        /**
+         * The tallest part of a page drawn at once (pixels): three of the screen's heights (what is seen, and a screen's
+         * worth either side of it to scroll into before the next part is drawn), at most the GPU's largest texture.
+         */
+        static int partMost() {
+            int most = textureMost > 0 ? textureMost : 2048;
+            MBView m = Host.view;
+            int screen = m != null ? m.getHeight() : 0;
+            return screen > 0 ? Math.min(3 * screen, most) : most;
+        }
+
+        @Override
+        void partOf(float[] to, float[] was, boolean shown) {
+            float full = to[3], most = partMost();
+            if (full <= most) {
+                super.partOf(to, was, shown);
+                return;
+            }
+            float top = was != null && Math.abs(was[10] - most) < 0.5f ? Math.min(was[9], full - most) : -1;
+            // what is seen of it, from its top
+            float s0 = Math.max(0, to[5] - to[1]), s1 = Math.min(full, to[7] - to[1]);
+            if (shown && s1 > s0) {
+                // kept while what is seen is no nearer its edge than a quarter of the room left around it (where there
+                // is more of the page that way); else the part about what is seen, as much of it above as below
+                float near = (most - (s1 - s0)) / 4;
+                boolean keeps = top >= 0 && (top <= 0 || s0 - top >= near) && (top + most >= full || top + most - s1 >= near);
+                if (!keeps) top = Math.max(0, Math.min(full - most, Math.round((s0 + s1 - most) / 2)));
+            } else if (top < 0) {
+                top = 0;
+            }
+            to[9] = Math.round(top);
+            to[10] = most;
+        }
+
+        @Override
+        float[] drawnPart(int h) {
+            float full = at[3];
+            if (partTop < 0 || web == null || full <= 0) return WHOLE;
+            // (the part its WebView is scrolled to now, whatever the part asked: scrolled elsewhere (by a finger, by the
+            // page), or not to it yet (the page not laid out at its new size), it is asked again)
+            int top = web.getScrollY();
+            if (top != partTop) web.post(this::scrollToPart);
+            return new float[] {top / full, h / full};
+        }
+
+        @Override
+        boolean partDrawn() {
+            return partTop < 0 || web == null || web.getScrollY() == partTop;
+        }
+
+        @Override
+        void moved() {
+            if (web == null) return;
+            boolean part = at[10] < at[3] - 0.5f;
+            boolean was = partTop >= 0;
+            partTop = part ? Math.round(at[9]) : -1;
+            if (part != was) {
+                web.setVerticalScrollBarEnabled(!part);
+                if (!part) web.scrollTo(0, 0);
+            }
+            scrollToPart();
+        }
+
+        /** Its WebView scrolled to the part its frame is (main thread). */
+        void scrollToPart() {
+            if (web != null && partTop >= 0 && web.getScrollY() != partTop) web.scrollTo(0, partTop);
         }
 
         @SuppressLint("SetJavaScriptEnabled")

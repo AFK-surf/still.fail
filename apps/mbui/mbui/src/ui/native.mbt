@@ -2,7 +2,8 @@
 // of kind 9 whose image is the view's (@hostapi.view_tex_base + its id) and whose c2 is the part of its content seen.
 // A host that keeps its views under the app's surface (macOS, iOS, Windows, the browser) leaves the canvas clear there
 // (transparent, written without blending): a hole it shows through. Android draws each view into a picture of its own
-// and draws that there, in the frame, so a view moves with a list in step with what is around it. What is painted
+// and draws that there, in the frame, so a view moves with a list in step with what is around it (a page taller than a
+// picture can be, the part of it near what is seen: NativeViews.Page; c2 is still the part of all of it). What is painted
 // after it draws over the view (a bar, a video's controls, frosted or not); what is painted around it, or a clip, hides
 // the rest of it. The host places the view where its node was painted, every frame it moves (where it takes a touch),
 // and hides it on the frames it is not painted (a page gone under another, scrolled away).
