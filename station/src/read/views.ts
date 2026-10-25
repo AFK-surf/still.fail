@@ -430,7 +430,6 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
   const rows: Json[] = [];
   // The decisions the viewer said they will not take up.
   const dismissed = store.dismissed(s, viewer.email);
-  const kept = store.keptChats(s, viewer.email);
   // The cards the viewer answered lately, by chat.
   const answered = new Map<number, Json[]>();
   if (!archived) {
@@ -480,7 +479,6 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
       creator: creator_,
       people: people_,
     };
-    row.archiveReminderDismissed = kept.has(t.thread.id);
     // The decision looked at it (after its agent said all done) and found nothing left to do; with the review on, only
     // such a chat is shown as one to archive (`archiveReviewed`), not every one whose agents are done.
     row.archiveRecommended = !archived && store.archiveSuggested(s, t.thread.id);
@@ -543,9 +541,13 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
     if (archived) row.archived = archivedOf(x);
     rows.push(row);
   }
-  // When the viewer pinned each to the top of their list, or null.
+  // When the viewer pinned each to the top of their list, or null: pinned, it is kept out of the archive too, as a
+  // chat of its own tells clients from before pins did that (`archiveReminderDismissed`: their 保留).
   const pins = store.pins(s, viewer.email);
-  for (const row of rows) row.pinned = typeof row.id === "string" ? (pins.get(row.id) ?? null) : null;
+  for (const row of rows) {
+    row.pinned = typeof row.id === "string" ? (pins.get(row.id) ?? null) : null;
+    if (row.thread !== null) row.archiveReminderDismissed = row.pinned !== null;
+  }
   // Which other workspaces each is shared with (docs/chat-share.md), only those that are.
   const shares = store.chatShares(s);
   for (const row of rows) {

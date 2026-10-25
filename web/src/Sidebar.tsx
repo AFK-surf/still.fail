@@ -1,4 +1,4 @@
-import { Archive, ArrowUpRight, Copy, Edit, File, Pin, ShieldCheck, Unplug } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowUpRight, Copy, Edit, File, Pin, Unplug } from "@stillfail/ui/icons.tsx";
 import { openRelay } from "./Relay.tsx";
 import { StationMark } from "./StationMark.tsx";
 import { StationInWords } from "./StationNamed.tsx";
@@ -13,7 +13,7 @@ import { prime, useTopic, useTopicSelect } from "./core/react.ts";
 import type { Topic } from "./core/client.ts";
 import { RowAside } from "./RowPicture.tsx";
 import { Retry, Waiting as StatusWaiting, WaitingItems } from "./Status.tsx";
-import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
+import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { Confirm, ConnectKindIcon, ICON, Time, Tip, Waiting } from "./ui.tsx";
 import { chatClicked } from "./telemetry.ts";
 import { useComposerMove } from "./dock.tsx";
@@ -292,7 +292,6 @@ function ChatRowOf({ item, lead }: { item: ChatItem; lead: "agents" | "people" }
   const [asking, setAsking] = useState(false);
   const archiveAsked = () => { if (item.watch) setAsking(true); else void archive(); };
   const pin = usePin(item);
-  const keep = useKeep(item);
   const toast = useToast();
   const copyLink = useCopyChatLink(toast);
   const copyTranscripts = useCopyTranscripts(item.station, toast);
@@ -359,8 +358,6 @@ function ChatRowOf({ item, lead }: { item: ChatItem; lead: "agents" | "people" }
             {/* A station from before pins says nothing of them: its chats are not pinned from here. */}
             {item.pinned != null && <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => void pin()}><Pin size={14} />{item.pinned ? t("web-main.chat.unpin") : t("web-main.chat.pin")}</ContextMenu.Item>}
             <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => setEditing(true)}><Edit size={14} />{t("web-main.chat.rename")}</ContextMenu.Item>
-            {/* Kept: never offered for archiving, nor archived on its own (a chat of its own only: a thread). */}
-            {item.thread != null && <ContextMenu.Item className={controlsCss.menuItem} onSelect={keep}><ShieldCheck size={14} />{item.kept ? t("web-main.chat.unkeep") : t("web-main.chat.keep")}</ContextMenu.Item>}
             {/* Its link, for another chat's agent to read it (chat_read / session_history), on any station of the workspace. */}
             <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => copyLink(item)}><Copy size={14} />{t("web-main.chat.copyLink")}</ContextMenu.Item>
             {/* Relayed to a channel (docs/relay.md): a chat with an agent to go on there. */}
@@ -444,17 +441,6 @@ function usePin(item: ChatItem) {
     } catch (error) {
       toast(t(item.pinned ? "web-main.chat.unpinFailed" : "web-main.chat.pinFailed", { error: failure(error) }));
     }
-  };
-}
-
-/** 保留 from a row's menu, or 取消保留 once kept: the toast says what it means for the archive. */
-function useKeep(item: ChatItem) {
-  const api = stationApi(useStationCall(item.station));
-  const act = useAct();
-  return () => {
-    if (item.thread == null) return;
-    const kept = item.kept === true;
-    act(api.keepChat(item.thread, !kept), t(kept ? "web-main.chat.unkeep.what" : "web-main.chat.keep.what"), t(kept ? "web-main.chat.unkeep.done" : "web-main.chat.keep.done"));
   };
 }
 

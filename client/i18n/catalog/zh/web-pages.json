@@ -167,7 +167,7 @@
   "web-pages.archive.title": "已归档",
   "web-pages.archiving.title": "归档",
   "web-pages.archiving.auto.title": "自动归档",
-  "web-pages.archiving.auto.description": "station 会把做完、又空闲了一段时间的 chat 自动收进归档：没有任务在跑、没在等人、发起人没有未读。归档后随时可以在归档里还原；置顶和「保留」的 chat 不会被自动归档。每台 station 分开设置，只有 workspace 管理员能改。",
+  "web-pages.archiving.auto.description": "station 会把做完、又空闲了一段时间的 chat 自动收进归档：没有任务在跑、没在等人、发起人没有未读。归档后随时可以在归档里还原；固定的 chat 不会被自动归档。每台 station 分开设置，只有 workspace 管理员能改。",
   "web-pages.archiving.mode.off": "不自动归档",
   "web-pages.archiving.mode.idle": "空闲就归档",
   "web-pages.archiving.mode.reviewed": "按模型判断",

@@ -34,8 +34,6 @@ let zh_decide : Map[String, String] = {
   "android-chat.archive.ask": "归档「{title}」？",
   "android-chat.archive.verb": "归档",
   "android-chat.asks.go": "跳转到待决策的消息",
-  "web-main.chat.keep.what": "保留此对话",
-  "web-main.chat.unkeep.what": "取消保留",
   "android-chat.chat.latest.failed": "无法跳到最新：{error}",
   "android-chat.history.detail.machine": "机器",
   "android-chat.history.detail.name": "名称",

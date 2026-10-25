@@ -75,7 +75,6 @@ export const PARAMS: Record<string, string> = {
   "session.delete": "key:string",
   "session.settings": "key:string profile?:string model?:string effort?:string fast?:boolean repick?:boolean",
   "chat.archive": "archived?:boolean session:string thread?:number",
-  "chat.keep": "kept?:boolean thread:number",
   "chat.rename": "session?:string title?:string thread?:number",
   "chat.pin": "pinned?:boolean session:string",
   "chat.relayPlaces": "thread:number",
@@ -325,12 +324,6 @@ function stationOp(name: string, params: unknown): Request | null {
       const r = op(method, () => `/threads/${thread}/archive`, null, { kind: "thread", archived: true });
       r.fallback = fallback;
       return r;
-    }
-    case "chat.keep": {
-      // The thread is read before the station here (its `?` is in the closure's arguments).
-      const thread = p.u64("thread");
-      // Kept (the default), or let go (`kept: false`): offered for archiving again.
-      return op(p.has("kept") && p.value("kept") === false ? "DELETE" : "PUT", () => `/threads/${thread}/keep`, null, { kind: "thread", archived: false });
     }
     case "chat.rename": {
       const thread = optU64("thread");

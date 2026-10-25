@@ -263,7 +263,7 @@ CREATE TABLE IF NOT EXISTS dismissed (
   at INTEGER NOT NULL,
   PRIMARY KEY (viewer, thread, n)
 );
--- A viewer keeps a chat instead of receiving archive reminders.
+-- Chats a viewer kept out of the archive, from before a pin did that: moved into pins as the store opens (keptIntoPins).
 CREATE TABLE IF NOT EXISTS kept_chats (
   viewer TEXT NOT NULL,
   thread INTEGER NOT NULL,
@@ -711,4 +711,25 @@ export function addWorkspaceColumns(db: DatabaseSync): void {
   if (!has(db, "archive_policy", "ws")) db.exec("ALTER TABLE archive_policy ADD COLUMN ws TEXT");
   // The sessions counted by connect and workspace (store.ts SESSION_COUNTS, in every overview): from the index alone.
   db.exec("CREATE INDEX IF NOT EXISTS sessions_by_connect ON sessions (connect, ws)");
+}
+
+/// The chats kept out of the archive (`kept_chats`, 保留) pinned instead, as of `now`: a pin keeps a chat out of the
+/// archive itself, and keeping is no mark of its own any more. Each pins the session the chat is the item of (its home,
+/// else the first to join it); emptied, the table stays for a station from before to read.
+export function keptIntoPins(db: DatabaseSync, now: number): void {
+  if (db.prepare("SELECT 1 FROM kept_chats LIMIT 1").get() === undefined) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(
+      `INSERT OR IGNORE INTO pins (viewer, session, at)
+       SELECT viewer, session, ? FROM (
+         SELECT k.viewer, COALESCE(t.home, (SELECT ts.session FROM thread_sessions ts WHERE ts.thread = t.id ORDER BY ts.joined_at, ts.rowid LIMIT 1)) AS session
+         FROM kept_chats k JOIN threads t ON t.id = k.thread)
+       WHERE session IS NOT NULL`,
+    ).run(now);
+    db.exec("DELETE FROM kept_chats; COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
 }

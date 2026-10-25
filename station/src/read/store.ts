@@ -673,16 +673,11 @@ export function publishedByThread(s: Store): Map<number, { id: string; key: stri
   return out;
 }
 
-// ── pins, kept chats ──
+// ── pins ──
 
 /// The chats a viewer pinned (by their session's key), with when.
 export function pins(s: Store, viewer: string): Map<string, number> {
   return new Map(all(s, "SELECT session, at FROM pins WHERE viewer = ?", viewer).map((r) => [r.session, r.at]));
-}
-
-/// Chats kept instead of offered for archiving. Null selects every viewer.
-export function keptChats(s: Store, viewer: string | null): Set<number> {
-  return new Set(all(s, "SELECT DISTINCT thread FROM kept_chats WHERE ?1 IS NULL OR viewer = ?1", viewer).map((r) => r.thread));
 }
 
 // ── cards ──

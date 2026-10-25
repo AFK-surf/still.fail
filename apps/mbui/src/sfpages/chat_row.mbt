@@ -6,7 +6,7 @@
 // pointed at, its time in that place and 归档 at its top right; right clicked, its menu at the pointer; renamed in
 // place. With a finger: 66 high and in the phone's type; held, its time, and held long its menu; a chat with nothing
 // left in it is swiped left to archive it. The menu is the presenters' (@sf.menu): 固定,
-// 重命名, 保留, 复制会话链接, 转到频道, 复制 session 文件路径, 归档, each where the chat has it.
+// 重命名, 复制会话链接, 转到频道, 复制 session 文件路径, 归档, each where the chat has it.
 
 ///|
 /// What the rows keep: the row whose title is being written in place (a mouse's 重命名, its key; "" none) and its field,
@@ -417,7 +417,7 @@ let row_icon : Double = 16.0
 
 ///|
 /// A row's menu (Sidebar.tsx ContextMenu, mobile/Home.tsx useRowMenu), from row `id` at (`x`, `y`): 固定 / 取消固定 (a
-/// station from before pins says nothing: none), 重命名, 保留 / 取消保留 (a chat of its own: a thread), 复制会话链接,
+/// station from before pins says nothing: none; pinned, a chat is kept out of the archive too), 重命名, 复制会话链接,
 /// 转到频道 (a thread with an agent), 复制 session 文件路径, 归档. Held by a finger, felt as it opens and from the row
 /// (a sheet, or under it); right clicked, at the pointer.
 fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y : Double) -> Unit {
@@ -459,24 +459,6 @@ fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y 
       }),
     ),
   )
-  match item.thread {
-    Some(th) =>
-      items.push(
-        Some(
-          @sf.menu_item_of(@sf.t(if item.kept { "web-main.chat.unkeep" } else { "web-main.chat.keep" }), icon="shield-check", fn() {
-            act(
-              src,
-              @sf.t(if item.kept { "web-main.chat.unkeep.what" } else { "web-main.chat.keep.what" }),
-              "",
-              "chat.keep",
-              { "station": Json::string(item.station), "thread": Json::number(th), "kept": Json::boolean(!item.kept) },
-              done=@sf.t(if item.kept { "web-main.chat.unkeep.done" } else { "web-main.chat.keep.done" }),
-            )
-          }),
-        ),
-      )
-    None => ()
-  }
   let link = @sfbase.chat_link(item.station, item.session)
   if link != "" {
     items.push(
