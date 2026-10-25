@@ -111,7 +111,11 @@ CREATE TABLE IF NOT EXISTS entries (
   PRIMARY KEY (thread, n)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS entries_ts ON entries (thread, ts) WHERE ts IS NOT NULL;
-CREATE INDEX IF NOT EXISTS entries_target ON entries (thread, target) WHERE target IS NOT NULL;
+-- A message's latest edit (the merged view, at each message any list or page reads): by the thread, the message and
+-- the edit's own number, found at once. With (thread, target) alone, node's SQLite (3.53) took the latest from the
+-- primary key instead, going back over the whole thread for a message never edited: every message read had a long
+-- chat's every page read with it, 5 to 8 s on ccvm with its pages put out (2026-10-25).
+CREATE INDEX IF NOT EXISTS entries_edits ON entries (thread, target, n) WHERE target IS NOT NULL;
 CREATE TABLE IF NOT EXISTS deliveries (
   thread INTEGER NOT NULL,
   n INTEGER NOT NULL,

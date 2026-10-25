@@ -137,6 +137,12 @@ test("a thread is a log, edits are entries of their own", () => {
   assert.deepEqual(merged, [[1, "1.1 edited", true], [2, "1.2 edited", true], [3, "1.3", false], [6, "new", false]]);
   assert.deepEqual(store.messagesBefore(thread.id, 3, 1).map((m) => m.ts), ["1.2"]);
   assert.equal(store.lastMessage(thread.id)!.declared, "final");
+  store.editMessage("slack:T1", "C1", "1.1", "1.1", "1.1 again");
+  assert.equal(store.messagesBefore(thread.id, 2, 1)[0]!.text, "1.1 again", "the latest edit");
+  // Each message's latest edit is found at once by the index of edits, as the station's SQLite (node's) plans it, not by
+  // going back over the whole thread.
+  const plan = (store.db.prepare("EXPLAIN QUERY PLAN SELECT * FROM merged WHERE thread = ? AND n = ?").all(thread.id, 1) as { detail: string }[]).map((r) => r.detail);
+  assert.ok(plan.some((d) => d.includes("entries_edits (thread=? AND target=?)")), plan.join(" | "));
 });
 
 test("a message still pending reaches the agent as it reads at delivery", () => {
