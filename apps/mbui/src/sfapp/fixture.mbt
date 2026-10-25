@@ -38,6 +38,9 @@ priv struct Fixture {
   queue_gone : Map[String, Bool]
   queue_set_aside : Map[String, Int]
   mut queue_was : Json
+  /// each sidebar's width and folding as kept on this device (the prefs' `sidebars`, by `<workspace>\n<group>`), as
+  /// the core's prefs.ts keeps a map: by key, null letting one go
+  sidebars : Map[String, Json]
 }
 
 ///|
@@ -691,6 +694,7 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
         "workspace": Json::string(f.workspace),
         "chatTabs": Json::object(f.chat_tabs),
         "listFilter": Json::object(lf),
+        "sidebars": Json::object(f.sidebars),
         "appearance": Json::string(f.appearance),
         "motion": Json::string(f.motion),
         "fonts": fixture_fonts(f.fonts),
@@ -851,6 +855,7 @@ pub fn fixture(mode : String) -> Source {
     queue_gone: {},
     queue_set_aside: {},
     queue_was: { "key": Json::null(), "at": 0 },
+    sidebars: {},
   }
   if f.mode == "home-motion" {
     // the list changing on its own, a step every 1.6 s from MBUI_MOTION_AT ms (2000) after it starts: rows moving,
@@ -992,6 +997,16 @@ pub fn fixture(mode : String) -> Source {
                 match v {
                   String(s) => f.filters[k] = s
                   _ => ()
+                }
+              }
+            _ => ()
+          }
+          match field(Some(params), "sidebars") {
+            Some(Object(m)) =>
+              for k, v in m {
+                match v {
+                  Null => f.sidebars.remove(k)
+                  _ => f.sidebars[k] = v
                 }
               }
             _ => ()

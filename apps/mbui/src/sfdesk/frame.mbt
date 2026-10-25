@@ -1528,7 +1528,7 @@ fn side_follow(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   let group = side_group(src, ws)
   let key = ws + "\n" + group
   if wide.side_key != key {
-    let said = text(field(field(prefs, "sidebars"), key), "")
+    let said = text(field(prefs, "sidebars"), key)
     let parts = said.split(",").map(fn(p) { p.to_string() }).collect()
     let closed = parts.contains("closed")
     let width = if parts.length() > 0 && parts[0] != "closed" { parts[0] } else { "" }

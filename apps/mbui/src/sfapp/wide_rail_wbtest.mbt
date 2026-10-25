@@ -134,6 +134,41 @@ test "wide: the lit place pressed again folds its sidebar, shown a while (the po
 }
 
 ///|
+test "wide: each place's sidebar as it was left: 对话's folded at its width, 文件's open; back on 对话 from the rail, folded, shown a while with the pointer on it and folded again as it leaves" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  let press = fn(label : String) {
+    let (x, y, w, h) = t.query(Button, label~).unwrap().rect
+    t.move(x + w / 2.0, y + h / 2.0)
+    t.tap(x + w / 2.0, y + h / 2.0)
+    t.run_for(@sfdesk.side_move_ms)
+  }
+  // 对话's dragged to 300, then folded
+  let edge = @sfdesk.rail_w + 240.0
+  t.drag(edge, 400.0, edge + 60.0, 400.0)
+  t.frame()
+  t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(@sfdesk.wide.folded)
+  // 文件 pressed from the bar: its own, never folded, open at its own width
+  press("文件")
+  assert_false(@sfdesk.wide.folded)
+  assert_eq(@sfdesk.wide.side_w, 240.0)
+  // 对话 pressed: its sidebar as it was left, folded, 300 wide, shown a while (the pointer is on the rail)
+  press("对话")
+  assert_true(@sfdesk.wide.folded && @sfdesk.wide.peeking)
+  assert_eq(@sfdesk.wide.side_w, 300.0)
+  assert_true(t.find("新建对话") is Some(_))
+  // the pointer off it: folded again a moment after
+  t.move(1000.0, 400.0)
+  t.run_for(@sfdesk.peek_leave_ms)
+  t.frame()
+  t.run_for(@sfdesk.side_move_ms)
+  assert_false(@sfdesk.wide.peeking)
+  assert_true(t.find("新建对话") is None)
+}
+
+///|
 test "wide: the sidebar's edge let go a little past where the last frame drew it: there at once, nothing moving after" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
