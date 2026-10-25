@@ -565,45 +565,42 @@ fn app_fields(c : @ui.Ctx, core : Core, d : SaDraft, sections : Array[Json], fre
 }
 
 ///|
-/// The avatars to start from (avatarPicker: 15 to a line, 6 apart, 16 over them, 10 under; avatarTile: square, edged in
-/// the line, a corner of 9, its picture 1.18 times it, a maker's mark in white where it is drawn in one colour; the
-/// one picked ringed in the ink), each named by its tip.
+/// The avatars to start from (avatarPicker: 15 to a line, fewer where the room is less, 6 apart, 16 over them, 10
+/// under; avatarTile: square, edged in the line, a corner of 9, its picture 1.18 times it, a maker's mark in white
+/// where it is drawn in one colour; the one picked ringed in the ink), each named by its tip.
 fn sa_avatar_picker(c : @ui.Ctx, d : SaDraft, all : Array[@sf.AppAvatar], width : Double, pick : (@sf.AppAvatar) -> Unit) -> Unit {
   let gap = sa_tile_gap
   let side = (width - gap * (sa_tile_columns - 1).to_double()) / sa_tile_columns.to_double()
+  // (as many to a line as the room takes, 15 where it is as wide as a dialog's: on a phone's sheet a line of 15 ran
+  // past its edge)
   c.box(style=sa_picker, fn() {
-    let mut i = 0
-    while i < all.length() {
-      let row = all[i:if i + sa_tile_columns < all.length() { i + sa_tile_columns } else { all.length() }].to_array()
-      c.box(style=sa_picker_row, fn() {
-        for a in row {
-          let tid = c.id(d.key + "/avatar/" + a.id)
-          c.cursor(tid, Hand)
-          if hit(c, tid) {
-            pick(a)
-          }
-          let ground = @sf.hex_color(a.bg).unwrap_or(@sf.icon_fallback)
-          let on = d.picked == a.id
-          let tb = c.box(
-            style=(if on { sa_tile_on } else { sa_tile }).then(@ui.style(w=Fixed(side), h=Fixed(side), bg=Data(ground))),
-            id=tid,
-            fn() {
-              if a.mark != "" {
-                @sf.drawable(c, a.mark, side * sa_mark_share, tint?=if a.mono { Some(sa_white) } else { None }) |> ignore
-              } else {
-                let thumb = c.image(@sf.avatars_base() + "/avatars/" + a.id + ".thumb.webp", w=Fill(1.0), h=Fill(1.0), fit=FitCover, bg=0L)
-                c.look(thumb, @ui.look(scale=sa_thumb_scale))
-              }
-            },
-          )
-          let label = if a.label.has_prefix("android-") { @sf.t(a.label) } else { a.label }
-          c.semantics(tb, Button, id=tid, label~, selected=on)
-          @sf.tip(c, d.key + "/avatar-tip/" + a.id, tid, label)
+    c.box(style=sa_picker_row, flow=true, line_gap=gap, fn() {
+      for a in all {
+        let tid = c.id(d.key + "/avatar/" + a.id)
+        c.cursor(tid, Hand)
+        if hit(c, tid) {
+          pick(a)
         }
-      })
-      |> ignore
-      i = i + sa_tile_columns
-    }
+        let ground = @sf.hex_color(a.bg).unwrap_or(@sf.icon_fallback)
+        let on = d.picked == a.id
+        let tb = c.box(
+          style=(if on { sa_tile_on } else { sa_tile }).then(@ui.style(w=Fixed(side), h=Fixed(side), bg=Data(ground))),
+          id=tid,
+          fn() {
+            if a.mark != "" {
+              @sf.drawable(c, a.mark, side * sa_mark_share, tint?=if a.mono { Some(sa_white) } else { None }) |> ignore
+            } else {
+              let thumb = c.image(@sf.avatars_base() + "/avatars/" + a.id + ".thumb.webp", w=Fill(1.0), h=Fill(1.0), fit=FitCover, bg=0L)
+              c.look(thumb, @ui.look(scale=sa_thumb_scale))
+            }
+          },
+        )
+        let label = if a.label.has_prefix("android-") { @sf.t(a.label) } else { a.label }
+        c.semantics(tb, Button, id=tid, label~, selected=on)
+        @sf.tip(c, d.key + "/avatar-tip/" + a.id, tid, label)
+      }
+    })
+    |> ignore
   })
   |> ignore
 }
@@ -849,7 +846,7 @@ let sa_picker : @ui.Style = @ui.css("w=Full pt=S4 pb=S2_5 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sa_picker_row : @ui.Style = @ui.css("row gap=S1_5")
+let sa_picker_row : @ui.Style = @ui.css("row w=Full gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)

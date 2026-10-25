@@ -182,7 +182,7 @@
   "web-mobile.connects.waiting.token": "缺少 token",
   "web-mobile.connects.feishu.name": "飞书",
   "web-mobile.connects.feishu.slackNote": "在 Slack 的频道和私信中使用",
-  "web-mobile.connects.feishu.feishuNote": "在飞书的群和私聊中使用，含国际版 Lark",
+  "web-mobile.connects.feishu.feishuNote": "在飞书的群和私聊中使用，含 Lark",
   "web-mobile.connects.feishu.update": "更新此 station 后可用",
   "web-mobile.connects.feishu.scan": "扫码创建",
   "web-mobile.connects.feishu.scanNote": "用飞书扫码，自动创建并配置机器人",

@@ -264,8 +264,8 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> U
 
 ///|
 /// A person among the workspace's people, a row of its list card on either width (MemberRow): their picture, their
-/// name (`badge` after it: 你), what is said under it, what is at its end (their role, what can be done there); pressed
-/// where `id` is given.
+/// name (`badge` after it: 你) and what is at its end on its first line (their role, what can be done there), what is
+/// said under them; pressed where `id` is given.
 fn ws_person(
   c : @ui.Ctx,
   look : Look,
@@ -285,23 +285,29 @@ fn ws_person(
   }
   c.box(style~, id~, fn() {
     picture()
-    c.box(style=if narrow { narrow_row_words } else { desk_list_text }, fn() {
-      c.box(style=desk_named, fn() {
+    // (their name and what is at its end on its first line, what is said under it a line of its own as wide as their
+    // words: docs/ui-panels.md 放不下的时候)
+    @sf.row_lines(c, fn() {
+      c.box(style=desk_named.then(ws_row_head), fn() {
         c.text(name, style=if narrow { mem_narrow_title } else { desk_list_title }) |> ignore
         if badge != "" {
           you(c, badge)
         }
       })
       |> ignore
-      c.text(under, style=if narrow { narrow_note } else { desk_note }) |> ignore
-    })
-    |> ignore
-    end()
+      @sf.line_end(c, end)
+    }, fn() { c.text(under, style=if narrow { narrow_note } else { desk_note }) |> ignore }, spaced=!narrow)
     if id != 0 && narrow {
       finger_ripple(c, id)
     }
   })
 }
+
+///|
+/// A person's row's head: what names them, taking what its first line leaves what is at its end (their role, 移除,
+/// 撤回).
+// kept across runs: a value (no field of it changes)
+let ws_row_head : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 /// A person in the workspace (MemberRow): their picture, name (你 for the viewer) and email, their role at its end;

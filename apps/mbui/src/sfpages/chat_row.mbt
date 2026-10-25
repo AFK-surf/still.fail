@@ -244,7 +244,7 @@ pub fn chat_row(
               row_rename(c, src, item)
             } else {
               let title = if item.unread { look.title_unread } else { look.title }
-              c.text(item.title, style=if offline { title.then(title_dim) } else { title }) |> ignore
+              @sf.name_words(c, item.title, if offline { title.then(title_dim) } else { title }) |> ignore
             }
             // the station it runs on, by its mark (the core gives one only with several stations)
             if @sf.has_station_mark(item.station_emoji, item.station_icon) && !renaming {
@@ -316,7 +316,7 @@ pub fn chat_row(
                   )
                 })
                 |> ignore
-              None => c.text(item.last.unwrap_or(""), style=look.last) |> ignore
+              None => @sf.name_words(c, item.last.unwrap_or(""), look.last) |> ignore
             }
             if shows_time {
               c.text(item.ago, style=row_time) |> ignore

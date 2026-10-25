@@ -136,6 +136,16 @@ nothing else gives way:
   whatever its alignment: cut with an ellipsis there. A `max_w` said as well is that where the column has the room and
   the column's where it has less (CSS's `min(100%, 560px)`). In a row they are as wide as they are, unless they say
   otherwise.
+- Words beside something else in a row (a value, a button, a switch, a chevron) are words of a length known (a title,
+  a label, a button's words, a short number) that fit there whole in the narrowest window, in every language; words of
+  no length known (what is under way, why something failed, a note, a line of facts, a path) stand on a line of their
+  own, what their row has at its end on its first line beside its title (a round control, a switch, a radio, across
+  the row's middle: on its first line it would stand in the row's corner, not concentric with it; its title and its
+  note beside it are words of a length known, a line there or a paragraph of lines, never a line but for a word or
+  two it pushes onto a second). A name cut short beside a time or a count says so (`w=Cut`). What stands before words in their row (a mark, a face, a box to tick, a table's labels) is the
+  row's own column, not beside them; so is another share of a row the words' box is a share of (tiles side by side). `Tester::squeeze_faults` says words broken onto lines or cut short only for what
+  is after them in their row (in its room as well they would be one line, whole), unless they are said to be cut
+  short.
 - What may give way says so, and how:
   - words cut short with an ellipsis: `w=Cut` (as wide as they are, cut where the row has less), `w=Fill` (what the
     row leaves, cut where that is less), `min_w` the least of them kept; in a row that leaves parts out (`drop`

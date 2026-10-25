@@ -520,8 +520,9 @@ fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, clo
         c.box(style=screen_line_row, fn() {
           signal_bars(c, text(field(screen_net(s), "rtt"), "level"))
           c.text(seen_for(u), style=screen_time_words) |> ignore
+          // (short of room, the core's line leaves the row whole before it is cut to a word: how long is kept)
           if said_line {
-            c.text("· " + line, style=screen_line_words) |> ignore
+            c.box(drop=1, fn() { c.text("· " + line, style=screen_line_words) |> ignore }) |> ignore
           }
         })
         |> ignore
@@ -884,7 +885,8 @@ fn take_over(c : @ui.Ctx, s : ScreenSess) -> Unit {
     |> ignore
     // the main solid button, as the web's primary (dark in the light theme, light in the dark one), not the accent
     let id = c.id("screen-take-over")
-    let i = c.box(style=take_over_button, id~, fn() {
+    // (whole, what says who drives cut short beside it)
+    let i = c.box(style=take_over_button, id~, keep=true, fn() {
       c.text(tr("android-misc.screen.takeOver"), style=take_over_button_words) |> ignore
     })
     c.semantics(i, Button, id~, label=tr("android-misc.screen.takeOver"), actions=[Activate])

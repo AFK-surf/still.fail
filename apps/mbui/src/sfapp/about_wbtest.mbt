@@ -80,23 +80,43 @@ test "关于, at each width and with either hand: this build, 更新日志, the 
 }
 
 ///|
-test "关于's version row, at each width and with either hand: its button, 检查更新 or 更新到 the newer build; what is under way under the version, the button turning" {
+test "关于's version rows, at each width and with either hand: this build alone on its row; under it a row doing what it says, 检查更新 or 更新到 the newer build, what is under way under its words, a spinner at its end and the row taking no press meanwhile" {
   for case in one_page_cases {
     let (w, platform, regular, _) = case
     let t = one_page_tester(@settings.Route::About, w, platform~, regular~)
     let at = "\{w} platform \{platform}"
-    assert_true(t.query(Button, label="检查更新") is Some(_), msg=at)
+    assert_true(t.query(Link, label="检查更新") is Some(_), msg=at)
     update.available = Some({ "versionCode": 2, "versionName": "0.1.1", "file": "android/stillfail-2.apk" })
     t.draw()
-    assert_true(t.query(Button, label="更新到 0.1.1") is Some(_), msg=at)
-    // pressed: still.fail cloud asked again before it is downloaded, said under the version; the button turning, its
-    // words kept, taking no press
+    assert_true(t.query(Link, label="更新到 0.1.1") is Some(_), msg=at)
+    // pressed: still.fail cloud asked again before it is downloaded, said under the row's words; the row taking no
+    // press, its words kept
     update.installing = true
     t.draw()
     assert_true(t.find("正在检查最新版本") is Some(_), msg=at)
     assert_true(t.find("更新到 0.1.1") is Some(_), msg=at)
-    assert_true(t.query(Button, label="更新到 0.1.1") is None, msg=at)
+    assert_true(t.query(Link, label="更新到 0.1.1") is None, msg=at)
+    // nothing beside what is under way, nor beside the build's name: each whole on its line
+    let (_, ny, _, nh) = t.rect_of("正在检查最新版本").unwrap()
+    let (_, uy, _, uh) = t.rect_of("更新到 0.1.1").unwrap()
+    assert_true(ny >= uy + uh, msg=at)
+    assert_true(t.beside_faults().length() == 0, msg="\{at}: \{t.beside_faults()}")
+    update.installing = false
+    update.available = None
   }
+}
+
+///|
+test "关于's 检查更新 pressed asks still.fail cloud now" {
+  let t = one_page_tester(@settings.Route::About, 390.0, platform=2)
+  let asked : Ref[Int] = Ref(0)
+  update_version.val = 2
+  set_update_source(Some({ check: fn(_, now, _) { if now { asked.val += 1 } }, url: fn(f) { f } }))
+  tap_in_page(t, "检查更新")
+  t.draw()
+  assert_eq(asked.val, 1)
+  assert_true(t.find("正在检查") is Some(_))
+  update_reset()
 }
 
 ///|

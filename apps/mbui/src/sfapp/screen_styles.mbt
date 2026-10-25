@@ -66,7 +66,8 @@ let screen_bar : @ui.Style = @ui.css("row w=Full h=S14 pl=S1_5 pr=S2_5 gap=S2 al
 let screen_bar_words : @ui.Style = @ui.css("w=Full")
 
 ///|
-/// The title (15 on 20, semibold), the line under it (12 on 16, muted); one line each.
+/// The title (15 on 20, semibold), the line under it (12 on 16, muted); one line each, cut short where the bar's
+/// buttons leave them less (a window's name, the core's line of who is on it: a bar has no second line to give them).
 // kept across runs: a value (no field of it changes)
 let screen_title_words : @ui.TextStyle = @ui.text_style(
   size=Ui,
@@ -74,11 +75,12 @@ let screen_title_words : @ui.TextStyle = @ui.text_style(
   weight=Semibold,
   color=Fg,
   wrap=false,
+  w=Cut,
 )
 
 ///|
 // kept across runs: a value (no field of it changes)
-let screen_line_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Muted, wrap=false)
+let screen_line_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Muted, wrap=false, w=Cut)
 
 ///|
 /// 只看 / 控制 (Parts.kt Seg at 32 high, its corner 16, 2 in): a track of the ink at 6%, the chosen one on a light
@@ -409,19 +411,21 @@ let drop_row_least : Double = drop_key_in + drop_key_side + @sf.card_corner
 let drop_key_side : Double = 34.0
 
 ///|
+/// Its mark by its first line, as high as its keys, across their middle.
 // kept across runs: a value (no field of it changes)
-let drop_icon_box : @ui.Style = @ui.css("pt=SPx")
+let drop_icon_box : @ui.Style = @ui.style(h=@sf.row_key, justify=JCenter)
 
 ///|
 let drop_icon : Double = 20.0
 
 ///|
+/// Its name, taking what its first line leaves its keys.
 // kept across runs: a value (no field of it changes)
-let drop_words : @ui.Style = @ui.css("w=Full")
+let drop_words : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let drop_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, wrap=false)
+let drop_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)

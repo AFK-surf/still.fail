@@ -1,9 +1,10 @@
-// What does not fit, measured (mbui's Tester::squeeze_faults): sffix's screens in the narrowest windows each frame is
-// drawn in, in both of the app's languages, over the Tester's own text (CI's: the faults a screen has are its own,
-// the same on every machine). Each screen keeps to the bar squeeze_known says for it (the faults it still has): one
-// more fails, and one less until the bar is lowered there. A screen not listed has none. The corner test's sweep
-// (corners_wbtest.mbt) measures it on the frame it opens for the corners, so no screen is opened twice. scripts/squeeze.sh
-// shows the same screens in a Mac's text, as pictures.
+// What does not fit, measured (mbui's Tester::squeeze_faults): every screen sffix opens (the corner test's,
+// corner_modes: 76 of them until 2026-10-26, when words squeezed by what is beside them were measured too and the rest
+// had none either) in the narrowest windows each frame is drawn in, in both of the app's languages, over the Tester's
+// own text (CI's: the faults a screen has are its own, the same on every machine). Each screen keeps to the bar
+// squeeze_known says for it (the faults it still has): one more fails, and one less until the bar is lowered there. A
+// screen not listed has none. The corner test's sweep (corners_wbtest.mbt) measures it on the frame it opens for the
+// corners, so no screen is opened twice. scripts/squeeze.sh shows the same screens in a Mac's text, as pictures.
 
 ///|
 /// The windows, corner_windows' each the narrowest of its layout (@sf.layout): a desktop's laid out Medium (600 across:
@@ -12,22 +13,6 @@
 /// pointed at with a finger, in the phone's theme; a phone's.
 let squeeze_windows : Array[String] = ["desk", "touch", "tablet", "phone"]
 
-///|
-/// The screens, as sffix opens them (fixture.mbt open_fixture_mode).
-let squeeze_modes : Array[String] = [
-  "home", "chat", "chat-compose", "chat-attach", "chat-quote", "chat-cards", "chat-md", "chat-pick", "chat-info",
-  "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "chat-jobs-side", "chat-letters-side",
-  "chat-find", "chat-model-pop", "chat-login", "chat-update", "chat-working", "chat-station-files", "chat-preview-image",
-  "chat-preview-code", "newchat", "newchat-station", "newchat-model", "newchat-profiles", "place", "files",
-  "files-columns", "files-list", "files-preview", "files-transfers", "files-tree", "drive", "drive-roots", "drive-sub",
-  "drive-upload", "drive-empty", "reader", "decisions", "decisions-text", "history", "history-details",
-  "switcher", "keys-dialog", "search", "search-results", "home-jobs", "service", "settings-home", "settings-appearance",
-  "settings-me", "settings-workspace", "settings-security", "settings-vault", "settings-vault-item", "settings-stations",
-  "settings-station", "settings-station-env", "settings-station-processes", "settings-profiles", "settings-profile", "settings-profile-models",
-  "settings-connects", "settings-connect", "settings-memory", "settings-memory-doc", "settings-usage",
-  "settings-archive", "settings-run-models", "settings-run", "settings-decisions", "settings-changelog",
-  "settings-new-profile",
-]
 
 ///|
 /// How round the system draws a desktop's window on `platform` (@hostapi.window_corner): a Mac's 16 (macOS 27), Windows
@@ -108,12 +93,11 @@ fn squeeze_wrong(at : String, faults : Array[String]) -> String? {
 }
 
 ///|
-/// The corner test's sweep measures the squeeze only on the screens it opens (corner_modes, corner_windows): one listed
-/// here and not there would be measured nowhere.
-test "squeeze: every screen and window it measures is among the corner test's" {
-  let missing = squeeze_modes.filter(m => !corner_modes.contains(m)) +
-    squeeze_windows.filter(w => !corner_windows.iter().any(c => c.0 == w))
+/// The corner test's sweep measures the squeeze only in the windows it opens (corner_windows): one listed here and not
+/// there would be measured nowhere.
+test "squeeze: every window it measures is among the corner test's" {
+  let missing = squeeze_windows.filter(w => !corner_windows.iter().any(c => c.0 == w))
   if missing.length() > 0 {
-    fail("not in corner_modes or corner_windows (corners_wbtest.mbt), so never measured: \{missing.join(", ")}")
+    fail("not in corner_windows (corners_wbtest.mbt), so never measured: \{missing.join(", ")}")
   }
 }

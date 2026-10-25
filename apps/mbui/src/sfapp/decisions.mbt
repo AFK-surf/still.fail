@@ -234,8 +234,8 @@ fn open_decision_chat(v : Json?) -> Unit {
 }
 
 ///|
-/// A chat at work (the turning yellow ring) or a card answered (a quiet dot): its words over where it is, when at its
-/// end (Decisions.kt IdleRow).
+/// A chat at work (the turning yellow ring) or a card answered (a quiet dot): its words over where it is, when at the
+/// end of its words' line (Decisions.kt IdleRow).
 fn idle_row(c : @ui.Ctx, key : String, main : String, meta : String, at : String, busy : Bool) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
@@ -256,12 +256,11 @@ fn idle_row(c : @ui.Ctx, key : String, main : String, meta : String, at : String
         }
       })
       |> ignore
-      c.box(w=Fill(1.0), fn() {
-        c.text(main, size=t.t.ui, weight=500, color=t.p.text, wrap=false) |> ignore
-        c.text(meta, size=t.t.meta, color=t.p.subtle, wrap=false) |> ignore
-      })
-      |> ignore
-      c.text(at, size=t.t.caption, color=t.p.subtle, wrap=false) |> ignore
+      // its words and when on its first line, where it is under them as wide as the words (a line of its own)
+      @sf.row_lines(c, fn() {
+        @sf.name_words(c, main, idle_main) |> ignore
+        c.text(at, size=t.t.caption, color=t.p.subtle, wrap=false) |> ignore
+      }, fn() { c.text(meta, size=t.t.meta, color=t.p.subtle, wrap=false, w=Fill(1.0)) |> ignore })
       // Decisions.kt IdleRow: clip(Smooth(10)).clickable
       @motion.ripple(c, id, 10.0)
     },
@@ -269,6 +268,11 @@ fn idle_row(c : @ui.Ctx, key : String, main : String, meta : String, at : String
   |> ignore
   c.clicked(id)
 }
+
+///|
+/// An idle row's words (what it asked, the chat at work): a line, cut short where its time leaves it less.
+// kept across runs: a value (no field of it changes)
+let idle_main : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 ///|
 /// How long a decision takes to fly off across, to go up after it is answered, to go back where it rests let go short,

@@ -106,8 +106,10 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : J
             let busy = is_doing(core, ["profile.useMachineLogin"], [("station", station), ("runtime", rt)])
             list_row(c, fn() {
               @sf.provider_logo(c, rt, "subscription", 18.0, "")
-              c.box(w=Fill(1.0), gap=2.0, fn() {
-                c.box(dir=Row, gap=6.0, align=ACenter, fn() {
+              // what it is and using it on its first line; how it is signed in, what is wrong and its allowance under
+              // them, each as wide as its words (lines of their own)
+              @sf.row_lines(c, fn() {
+                c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
                   c.text(runtime_label(rt), size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
                   let plan = text(lv, "planText")
                   if plan != "" {
@@ -115,61 +117,64 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : J
                   }
                 })
                 |> ignore
-                c.box(dir=Row, gap=5.0, align=ACenter, fn() {
-                  c.box(w=Px(6.0), h=Px(6.0), radius=3.0, bg=if blocked { t.p.red } else { t.p.green }, fn() {  }) |> ignore
-                  c.text(
-                    tr(if blocked { "android-settings.quota.blocked" } else { "android-settings.machine.signedIn" }),
-                    size=t.t.caption,
-                    color=if blocked { t.p.red } else { t.p.muted },
-                    wrap=false,
-                  )
-                  |> ignore
-                  c.text(
-                    "· " +
-                    (match text(lv, "email") {
-                      "" => tr("android-settings.machine.someone")
-                      e => e
-                    }),
-                    size=t.t.caption,
-                    color=t.p.muted,
-                    wrap=false,
-                    w=Fill(1.0),
-                  )
-                  |> ignore
-                })
-                |> ignore
-                let trouble = quota_trouble(field(lv, "quota"))
-                if trouble != "" {
-                  c.text(trouble, size=t.t.caption, color=if blocked { t.p.red } else { t.p.muted }, w=Fill(1.0), line=17.0) |> ignore
-                }
-              })
-              |> ignore
-              @sf.quota_chips(c, field(lv, "quota"))
-              // a refused account is said so, with nothing to do with it here
-              if !blocked {
-                if busy {
-                  spinner(c)
-                } else if tap_text(
-                    c,
-                    "machine-use/" + rt,
-                    tr(if flag(lv, "usable") { "android-settings.machine.use" } else { "android-settings.login.signIn" }),
-                    size=14.0,
-                  ) {
-                  if flag(lv, "usable") {
-                    (core.call)("profile.useMachineLogin", obj([("station", str(station)), ("runtime", str(rt))]), fn(r) {
-                      match r {
-                        Ok(v) => {
-                          (core.say)(tr("android-settings.machine.added"))
-                          (core.push)(PickModels(station, text(Some(v), "id")))
+                // a refused account is said so, with nothing to do with it here
+                if !blocked {
+                  if busy {
+                    spinner(c)
+                  } else if tap_text(
+                      c,
+                      "machine-use/" + rt,
+                      tr(if flag(lv, "usable") { "android-settings.machine.use" } else { "android-settings.login.signIn" }),
+                      size=14.0,
+                    ) {
+                    if flag(lv, "usable") {
+                      (core.call)("profile.useMachineLogin", obj([("station", str(station)), ("runtime", str(rt))]), fn(r) {
+                        match r {
+                          Ok(v) => {
+                            (core.say)(tr("android-settings.machine.added"))
+                            (core.push)(PickModels(station, text(Some(v), "id")))
+                          }
+                          Err(e) => (core.say)(error_text(e))
                         }
-                        Err(e) => (core.say)(error_text(e))
-                      }
-                    })
-                  } else {
-                    go_new(rt)
+                      })
+                    } else {
+                      go_new(rt)
+                    }
                   }
                 }
-              }
+              }, fn() {
+                c.box(style=machine_under, fn() {
+                  c.box(dir=Row, w=Fill(1.0), gap=5.0, align=ACenter, fn() {
+                    c.box(w=Px(6.0), h=Px(6.0), radius=3.0, bg=if blocked { t.p.red } else { t.p.green }, fn() {  }) |> ignore
+                    c.text(
+                      tr(if blocked { "android-settings.quota.blocked" } else { "android-settings.machine.signedIn" }),
+                      size=t.t.caption,
+                      color=if blocked { t.p.red } else { t.p.muted },
+                      wrap=false,
+                    )
+                    |> ignore
+                    c.text(
+                      "· " +
+                      (match text(lv, "email") {
+                        "" => tr("android-settings.machine.someone")
+                        e => e
+                      }),
+                      size=t.t.caption,
+                      color=t.p.muted,
+                      wrap=false,
+                      w=Fill(1.0),
+                    )
+                    |> ignore
+                  })
+                  |> ignore
+                  let trouble = quota_trouble(field(lv, "quota"))
+                  if trouble != "" {
+                    c.text(trouble, size=t.t.caption, color=if blocked { t.p.red } else { t.p.muted }, w=Fill(1.0), line=17.0) |> ignore
+                  }
+                  c.box(style=machine_chips, fn() { @sf.quota_chips(c, field(lv, "quota")) }) |> ignore
+                })
+                |> ignore
+              })
             })
             |> ignore
           }
@@ -177,3 +182,13 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : J
     },
   ]
 }
+
+///|
+/// What is under an account signed in on the machine's first line: how it is signed in, what is wrong, its allowance
+/// 4 under them; 2 apart, 2 under its first line.
+// kept across runs: a value (no field of it changes)
+let machine_under : @ui.Style = @ui.css("w=Full pt=S0_5 gap=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let machine_chips : @ui.Style = @ui.css("row pt=S1")

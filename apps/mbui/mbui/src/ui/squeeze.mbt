@@ -1,10 +1,11 @@
 // What the last frame laid out in less room than it needs, as it shows (Tester::squeeze_faults): two things side by
 // side drawn over each other, something cut off by the window's edge, words cut down to nothing or wrapped a letter
-// or two a line, a field's placeholder cut down to nothing. Room runs short by design in four ways only, none of them
-// a fault: words said a shorter way (Ctx::text's, a field's placeholder's: `shorter`), words cut short with an
-// ellipsis (keeping some of them), what a row says may go left out of it (Ctx::box `drop`, into its ⋯ where it has
-// one), what scrolls or is cut by its own box (a list, a scroll, `sideways`, `clip`). What overlaps on purpose says
-// so: a margin below 0 (faces in a stack), a layer, something put where it is said.
+// or two a line, a field's placeholder cut down to nothing, words broken or cut short only for what shares their row.
+// Room runs short by design in four ways only, none of them a fault: words said a shorter way (Ctx::text's, a field's
+// placeholder's: `shorter`), words cut short with an ellipsis (keeping some of them; for what is beside them, only
+// those said to be: `w=Cut`), what a row says may go left out of it (Ctx::box `drop`, into its ⋯ where it has one),
+// what scrolls or is cut by its own box (a list, a scroll, `sideways`, `clip`). What overlaps on purpose says so: a
+// margin below 0 (faces in a stack), a layer, something put where it is said.
 
 ///|
 /// How far two things may run into each other, or past the window, and still be apart: the layout's rounding.
@@ -24,7 +25,7 @@ let squeeze_wrap_ems : Double = 4.0
 /// a box drawn over each other (by how far), the outermost box that runs past the window's edge, words cut down to
 /// less than `squeeze_kept_chars` characters before their ellipsis, words wrapped narrower than a word of them (broken
 /// inside it) or than `squeeze_wrap_ems` of their size, a field's placeholder cut so (said its shortest way: Ctx::editor
-/// `shorter`).
+/// `shorter`), words broken onto lines or cut short only for what shares their row (Ctx::beside_faults).
 pub fn Tester::squeeze_faults(self : Tester) -> Array[String] {
   ignore(self)
   g().squeeze_faults()
@@ -194,7 +195,20 @@ fn Ctx::squeeze_faults(self : Ctx) -> Array[String] {
       }
     }
   }
-  out
+  out + self.beside_faults(seen)
+}
+
+///|
+/// Whether each node of the last frame shows (it and all it is in more than transparent).
+fn Ctx::squeeze_seen(self : Ctx) -> Array[Bool] {
+  let n = self.count
+  let seen = Array::make(n, true)
+  for i in 0..<n {
+    let b = self.nodes[i]
+    let p = b.parent
+    seen[i] = (p < 0 || p >= n || seen[p]) && b.opacity > 0.01
+  }
+  seen
 }
 
 ///|
@@ -295,4 +309,107 @@ fn Node::squeeze_aside(self : Node) -> Bool {
 /// How far a node runs past the edges of a window `w` wide (below 0: inside it).
 fn Node::squeeze_past(self : Node, w : Double) -> Double {
   dmax(self.x + self.fw - w, -self.x)
+}
+
+///|
+/// Words broken onto lines, or cut short, only for what shares their row after them (in the frame's nodes `seen`, none
+/// of it in what scrolls sideways): laid in the room what is at the row's end takes as well, they would be one line,
+/// whole. A line shared with what is at a row's end holds words of a length known that fit beside it; words of no
+/// length known stand on a line of their own (what stands before them, a mark's or a face's column, a table's labels,
+/// is their row's own column: its lines stand after it). Words said to be cut short there (`w=Cut`, theirs or a box's they are in on the
+/// way to that row: a name, beside a time or a count) may be.
+fn Ctx::beside_faults(self : Ctx, seen : Array[Bool]) -> Array[String] {
+  let out : Array[String] = []
+  let n = self.count
+  let apart = Array::make(n, false)
+  for i in 0..<n {
+    let p = self.nodes[i].parent
+    if p >= 0 && p < n {
+      apart[i] = apart[p] || self.nodes[p].sideways
+    }
+  }
+  for i in 0..<n {
+    let b = self.nodes[i]
+    guard b.kind == kind_text && b.text != "" && b.fw > 0.0 && seen[i] && !apart[i] else { continue }
+    guard b.tl is Some(shown) else { continue }
+    let lines = shown.line_start.length()
+    let wrapped = b.wrap && lines > 1
+    let cut = !b.wrap &&
+      (match b.full {
+        Some(f) => f.w > b.fw + squeeze_slack
+        None => false
+      })
+    guard wrapped || cut else { continue }
+    // the room taken by what else shows in the nearest row it shares (not one that goes on in lines: what does not fit
+    // there has a line of its own)
+    // (words said to be cut short, or in a box that is, there: `w=Cut`)
+    let mut k = i
+    let mut p = b.parent
+    let mut spare = 0.0
+    let mut said_cut = b.w is Cut
+    while p >= 0 && p < n {
+      let a = self.nodes[p]
+      if a.squeeze_cuts() {
+        break
+      }
+      if a.dir == Row && !a.flow && self.shows_after(k) {
+        let on = self.nodes[k]
+        spare = if a.rtl {
+          on.x - on.mar_l - (a.x + a.pad_l)
+        } else {
+          a.x + a.fw - a.pad_r - (on.x + on.fw + on.mar_r)
+        }
+        break
+      }
+      k = p
+      p = a.parent
+      said_cut = said_cut || a.w is Cut
+    }
+    let alone = dmin(b.fw + spare, b.max_w)
+    guard !(cut && said_cut) && spare > squeeze_slack && alone > b.fw + squeeze_slack else { continue }
+    let tl = layout_text(
+      b.text,
+      b.font_size,
+      b.weight,
+      alone,
+      b.wrap,
+      line=b.line_h,
+      trim=b.line_trim,
+      spacing=b.spacing,
+      style=b.words_style(),
+    )
+    if wrapped && tl.line_start.length() == 1 {
+      out.push("\{self.named(i)}: \{lines} lines for what shares their row (alone there, one: \{tl.w.round()} of \{alone.round()})")
+    } else if cut && tl.w <= alone + squeeze_slack {
+      out.push("\{self.named(i)}: cut short for what shares their row (alone there, whole: \{tl.w.round()} of \{alone.round()})")
+    }
+  }
+  out
+}
+
+///|
+/// Whether something shows after node `k` in the row it is in (at its end: what stands before it is the row's own
+/// column, a mark's, a face's, a table's labels'), in its flow, drawn or holding what is; not another share of the row
+/// where `k` is one (a grid's next column, a tile beside a tile: its words' room is their own share).
+fn Ctx::shows_after(self : Ctx, k : Int) -> Bool {
+  let shared = self.nodes[k].w is Fill(_)
+  let mut ch = self.nodes[k].next
+  while ch >= 0 {
+    let cn = self.nodes[ch]
+    if !cn.squeeze_aside() && cn.fw > squeeze_slack && cn.opacity > 0.01 && (cn.first >= 0 || cn.squeeze_shows()) &&
+      !(shared && cn.w is Fill(_)) {
+      return true
+    }
+    ch = cn.next
+  }
+  false
+}
+
+///|
+/// The words of the last frame broken or cut short only for what shares their row (Ctx::beside_faults), a line each:
+/// those squeeze_faults says among the rest.
+pub fn Tester::beside_faults(self : Tester) -> Array[String] {
+  ignore(self)
+  let c = g()
+  c.beside_faults(c.squeeze_seen())
 }

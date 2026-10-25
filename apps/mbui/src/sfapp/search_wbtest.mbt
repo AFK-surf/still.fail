@@ -70,7 +70,8 @@ test "what the words find: chats, messages, then each kind, the words bold in th
   assert_true(t.find("正在核对第三项") is Some(_))
   // the messages: the line that has them, who said it and when
   assert_true(t.find("安装包的签名对上了") is Some(_))
-  assert_true(t.find("Claude · 5 分钟前") is Some(_))
+  // (who, a part of the line under it that leaves it before where it is is cut short; when)
+  assert_true(t.find("Claude ·") is Some(_) && t.find("5 分钟前") is Some(_))
   assert_true(t.find("查看更多") is Some(_))
   // a kind: its heading, what was found
   assert_true(t.find("文件") is Some(_))
@@ -259,8 +260,9 @@ test "as the Android app's SearchResultsTest: each kind, 查看更多 only where
   assert_true(t.find("成员") is Some(_))
   assert_true(t.find("Safari 17 上点了登录没有任何反应") is Some(_))
   // two stations: each found thing says which it is on, with when
-  assert_true(t.find("studio · 10 分钟前") is Some(_))
-  assert_true(t.find("mac · 80 分钟前") is Some(_))
+  // (which, a part of the line under it that leaves it before what was found is cut short; when)
+  assert_true(t.find("studio ·") is Some(_) && t.find("10 分钟前") is Some(_))
+  assert_true(t.find("mac ·") is Some(_) && t.find("80 分钟前") is Some(_))
   // a member: no station
   assert_true(t.find("登录组 · 王五") is Some(_))
   assert_true(t.find("mini 离线，其上的内容未搜索") is Some(_))

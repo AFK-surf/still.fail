@@ -128,19 +128,21 @@ fn sec_line(
           Some(f) => f()
           None => ()
         }
-        c.box(style=narrow_row_words, fn() {
-          c.text(title, style=narrow_row_title) |> ignore
+        // its title and what is at its end on its first line, its note under them as wide as its words (a line of its
+        // own)
+        @sf.row_lines(c, fn() {
+          c.box(style=sec_title_room, fn() { c.text(title, style=narrow_row_title) |> ignore }) |> ignore
+          // (at the row's top: at a card's first row's end in its corner as far from its top as from its side, and
+          // clear of its last's foot corner)
+          match end {
+            Some(f) => c.box(style=sec_end_top, f) |> ignore
+            None => ()
+          }
+        }, fn() {
           if note != "" {
             c.text(note, style=if warn { sec_narrow_warn } else { narrow_link_note }) |> ignore
           }
         })
-        |> ignore
-        // (at the row's top: at a card's first row's end in its corner as far from its top as from its side, and clear
-        // of its last's foot corner)
-        match end {
-          Some(f) => c.box(style=sec_end_top, f) |> ignore
-          None => ()
-        }
       })
       |> ignore
     Wide =>
@@ -215,16 +217,16 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
         c.box(style=sec_state_line, fn() {
           c.box(style=sec_dot_on, fn() {  }) |> ignore
           c.text(@sf.t("web-pages.security.on"), style=sec_state) |> ignore
-          c.text(
-            "· " +
-            @sf.t("web-pages.security.onMeta", args=[
-              ("signers", count(lock, "signers").to_string()),
-              ("stations", count(lock, "protected").to_string()),
-            ]),
-            style=sec_state_meta,
-          )
-          |> ignore
         })
+        |> ignore
+        // how many sign and what it protects, a line of its own under its state
+        c.text(
+          @sf.t("web-pages.security.onMeta", args=[
+            ("signers", count(lock, "signers").to_string()),
+            ("stations", count(lock, "protected").to_string()),
+          ]),
+          style=sec_state_meta,
+        )
         |> ignore
         c.text(@sf.t("web-pages.security.onLead"), style=sec_said) |> ignore
         if !signs && !flag(me, "waiting") && !flag(me, "unsigned") {
@@ -745,7 +747,7 @@ let sec_state_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_state_meta : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false, w=Cut)
+let sec_state_meta : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -785,6 +787,11 @@ let sec_point_rest : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7, color
 /// what it is the meta's 12 muted 6 after it); a person's devices 42 in, 8 apart.
 // kept across runs: a value (no field of it changes)
 let sec_rows : @ui.Style = @ui.css("w=Full gap=S3")
+
+///|
+/// A narrow row's title, taking what its first line leaves what is at its end.
+// kept across runs: a value (no field of it changes)
+let sec_title_room : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 /// What a narrow row has at its end, at its top.

@@ -77,9 +77,12 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
           } else {
             @sf.t("android-settings.me.signOutOnly")
           }
-          if @sf.button(c, words, key="sign-out/" + here.sub, tone=Ghost) {
-            sign_out(here.sub, here.email)
-          }
+          // (words alone: on its title's line, its email and how it signs in as close under it as a row's without one)
+          @sf.line_end(c, fn() {
+            if @sf.button(c, words, key="sign-out/" + here.sub, tone=Ghost) {
+              sign_out(here.sub, here.email)
+            }
+          })
         },
       )
       |> ignore
@@ -135,9 +138,10 @@ fn acc_devices(c : @ui.Ctx, core : Core, look : Look, here : Here) -> Unit {
       let dv = Some(d)
       let id = text(dv, "id")
       let current = flag(dv, "current")
+      // its name, 当前 or 退出 on its first line; when it signed in and until when under them, a line of its own
       c.box(style=if narrow { narrow_said_row } else { desk_list_row }, fn() {
-        c.box(style=desk_list_text, fn() {
-          c.box(style=desk_named, fn() {
+        @sf.row_lines(c, spaced=true, fn() {
+          c.box(style=desk_named.then(acc_device_head), fn() {
             c.text(
               match text(dv, "name") {
                 "" => @sf.t("web-pages.settings.account.unnamedDevice")
@@ -152,27 +156,34 @@ fn acc_devices(c : @ui.Ctx, core : Core, look : Look, here : Here) -> Unit {
             }
           })
           |> ignore
-          let times = @sf.t("web-pages.settings.account.sessionTimes", args=[("time", stamp(dv, "created_at", "ago")), ("until", stamp(dv, "expires_at", "until"))])
-          c.text(times, style=if narrow { @sf.secondary } else { desk_muted }) |> ignore
-        })
-        |> ignore
-        if !current {
-          let revoking = is_doing(core, ["loginSession.revoke"], [("id", id)])
-          if @sf.button(c, @sf.t("web-pages.settings.account.revoke"), key="revoke/" + id, tone=Ghost, busy=revoking) {
-            @settings.act(
-              core,
-              @sf.t("web-pages.settings.account.revoke"),
-              "loginSession.revoke",
-              obj([("id", str(id)), ("account", str(here.sub))]),
-              done=@sf.t("web-pages.settings.account.revoked"),
-            )
+          if !current {
+            @sf.line_end(c, fn() {
+              let revoking = is_doing(core, ["loginSession.revoke"], [("id", id)])
+              if @sf.button(c, @sf.t("web-pages.settings.account.revoke"), key="revoke/" + id, tone=Ghost, busy=revoking) {
+                @settings.act(
+                  core,
+                  @sf.t("web-pages.settings.account.revoke"),
+                  "loginSession.revoke",
+                  obj([("id", str(id)), ("account", str(here.sub))]),
+                  done=@sf.t("web-pages.settings.account.revoked"),
+                )
+              }
+            })
           }
-        }
+        }, fn() {
+          let times = @sf.t("web-pages.settings.account.sessionTimes", args=[("time", stamp(dv, "created_at", "ago")), ("until", stamp(dv, "expires_at", "until"))])
+          c.text(times, style=if narrow { @sf.secondary.then(@sf.full_words) } else { desk_muted }) |> ignore
+        })
       })
       |> ignore
     }
   })
 }
+
+///|
+/// A device's name and 当前 taking what its first line leaves 退出.
+// kept across runs: a value (no field of it changes)
+let acc_device_head : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 /// (a device's name, narrow: as wide as it is, cut short where 当前 after it leaves it less)

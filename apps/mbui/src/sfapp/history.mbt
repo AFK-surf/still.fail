@@ -86,8 +86,9 @@ fn history_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : In
       state_of_badge(text(a, "badge")),
       t.p.bg,
     )
+    // (its name cut short where what it does and its tabs leave it less: a name)
     c.box(w=Fill(1.0), fn() {
-      c.text(text(s, "agentText"), size=t.t.title, weight=700, color=t.p.text, wrap=false) |> ignore
+      c.text(text(s, "agentText"), size=t.t.title, weight=700, color=t.p.text, wrap=false, w=Cut) |> ignore
     })
     |> ignore
     history_actions(c, src, r, a)
@@ -346,12 +347,13 @@ fn run_row(c : @ui.Ctx, a : Json?) -> Bool {
       id~,
       fn() {
         @sf.maker_mark(c, text(field(s, "maker"), "id"), text(s, "runtime"), 15.0) |> ignore
-        c.text(model, size=t.t.ui, color=t.p.text, wrap=false) |> ignore
-        c.box(w=Fill(1.0), fn() {
-          c.text(" · " + effort + " · " + account, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
+        c.text(model, size=t.t.ui, color=t.p.text, wrap=false, w=Cut, keep=true) |> ignore
+        // (short of room, its allowance leaves the line, how it runs whole)
+        c.box(w=Fill(1.0), keep=true, fn() {
+          c.text(" · " + effort + " · " + account, size=t.t.meta, color=t.p.muted, wrap=false, w=Cut, keep=true) |> ignore
         })
         |> ignore
-        @sf.quota_chips(c, field(field(a, "account"), "quota"))
+        c.box(drop=1, fn() { @sf.quota_chips(c, field(field(a, "account"), "quota")) }) |> ignore
         @sf.icon(c, "chevron-down", size=14.0, color=t.p.muted) |> ignore
         // History.kt: clip(Smooth(10)).clickable
         @motion.ripple(c, id, 10.0)

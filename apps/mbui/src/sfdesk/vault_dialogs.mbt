@@ -287,7 +287,8 @@ fn vault_recover_dialog(core : Core, ws : String) -> Unit {
         shut()
       }
       let (busy, _) = state.val
-      if @sf.button(c, @sf.t("web-pages.vault.recover"), key=key + "/go", tone=Primary, busy~, disabled=n != 24) {
+      // (its button's words short beside the count and 取消 on a phone: the dialog's title says what it is)
+      if @sf.button(c, @sf.t("web-pages.vault.recoverGo"), key=key + "/go", tone=Primary, busy~, disabled=n != 24) {
         state.val = (true, "")
         (core.call)("vault.recover", obj([("workspace", str(ws)), ("words", str(words.val.trim(chars=" \n").to_lower().to_owned()))]), fn(
           r,

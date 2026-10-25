@@ -259,7 +259,7 @@ pub fn update_stands() -> @settings.VersionNow {
     Some(v) => text(Some(v), "versionName")
     None => ""
   }
-  { doing, newer }
+  { doing, part: update_part(), newer }
 }
 
 ///|

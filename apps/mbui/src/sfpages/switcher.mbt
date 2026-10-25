@@ -576,17 +576,19 @@ fn found_line(
   let t = @sf.theme()
   let f = t.chat_list.found
   // who, where and when (`meta`), said at the end of its words
-  let meta = match line {
+  let meta_all : Array[String] = match line {
     Chat(ch) =>
-      @sf.join_meta([
+      [
         if ch.archived { @sf.t("web-main.switcher.archived") } else { "" },
         if several { ch.item.station_name } else { "" },
         ch.item.ago,
-      ])
-    Message(m) => @sf.join_meta([m.by, m.ago])
-    Item(it) => @sf.join_meta([if it.kind != "station" && several { it.station_name } else { "" }, it.ago])
-    _ => ""
+      ]
+    Message(m) => [m.by, m.ago]
+    Item(it) => [if it.kind != "station" && several { it.station_name } else { "" }, it.ago]
+    _ => []
   }
+  let parts = meta_all.filter(fn(p) { p != "" })
+  let meta = @sf.join_meta(parts)
   // where the line is narrow, who, where and when go under its words, its first line all theirs (found_stacked)
   let stacked = meta != "" && narrow
   let two = stacked ||
@@ -611,7 +613,17 @@ fn found_line(
   // beside where it is (`stacked`)
   let words = fn(first : () -> Unit, meta : String, under : () -> Unit) {
     let said = fn() {
-      if meta != "" {
+      if meta != "" && stacked && parts.length() > 1 && meta == @sf.join_meta(parts) {
+        // (beside where it is, who and where leave the line before its name is cut to fewer than four of its
+        // size; when stays)
+        for i, part in parts {
+          if i + 1 < parts.length() {
+            c.box(drop=1, fn() { c.text(part + " ·", style=f.meta) |> ignore }) |> ignore
+          } else {
+            c.text(part, style=f.meta) |> ignore
+          }
+        }
+      } else if meta != "" {
         c.text(meta, style=f.meta) |> ignore
       }
     }
@@ -654,15 +666,15 @@ fn found_line(
         match ch.found {
           Some(found) =>
             words(fn() { @sf.found_line(c, "sw/" + key, found, ch.marks, f.words, t.p.text) }, meta, fn() {
-              c.text(ch.item.title, style=f.under) |> ignore
+              @sf.name_words(c, ch.item.title, f.under) |> ignore
             })
-          None => words(fn() { c.text(ch.item.title, style=f.title) |> ignore }, meta, fn() {  })
+          None => words(fn() { @sf.name_words(c, ch.item.title, f.title) |> ignore }, meta, fn() {  })
         }
       }
       Message(m) => {
         picture(m.chat)
         words(fn() { @sf.found_line(c, "sw/" + key, m.text, m.marks, f.words, t.p.text) }, meta, fn() {
-          c.text(m.chat.title, style=f.under) |> ignore
+          @sf.name_words(c, m.chat.title, f.under) |> ignore
         })
       }
       Item(it) => {
@@ -674,7 +686,7 @@ fn found_line(
         } else {
           mark(if it.kind == "file" && it.dir { "folder" } else { @sf.kind_icon(it.kind) })
         }
-        words(fn() { c.text(it.title, style=f.title) |> ignore }, meta, fn() {
+        words(fn() { @sf.name_words(c, it.title, f.title) |> ignore }, meta, fn() {
           if it.text != "" {
             @sf.found_line(c, "sw/i/" + key, it.text, it.marks, f.under_words, t.p.text)
           }

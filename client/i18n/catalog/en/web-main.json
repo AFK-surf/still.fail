@@ -298,7 +298,7 @@
   "web-main.file.remove": "Remove {name}",
   "web-main.file.pathOn": "Path on {station}",
   "web-main.file.folderOn": "Folder on {station}",
-  "web-main.file.chatAsFiles": "Send files by default in this chat",
+  "web-main.file.chatAsFiles": "Send as file in this chat",
   "web-main.file.retryDownload": "Download again",
   "web-main.file.sendAs": "Send as",
   "web-main.file.modePath": "Path",

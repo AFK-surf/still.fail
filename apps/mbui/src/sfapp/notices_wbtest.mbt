@@ -296,7 +296,7 @@ test "settings: usage statistics and error reports switched off on this device, 
   t.draw()
   t.scroll_to_end()
   t.draw()
-  assert_true(t.find("帮助改进 still.fail。不包含聊天内容。") is Some(_))
+  assert_true(t.find("不会包含你的聊天内容") is Some(_))
   t.tap_text("发送使用统计和错误报告")
   // off: what Crashes.send then sends is nothing (Crashes.java: !reporting, no batch goes)
   assert_eq(told, [false])

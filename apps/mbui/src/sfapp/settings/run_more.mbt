@@ -142,12 +142,16 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
               }
               let was = strings(v, "was")
               let becomes = strings(v, "becomes")
+              // (the labels' column as wide as the widest of them, in this language: words of a length known, whole)
+              let label_w = labels.fold(init=0.0, fn(m, l) {
+                dmax(m, c.words_across(l, run_label).ceil())
+              })
               for i, label in labels {
                 let w = was.get(i).unwrap_or("")
                 let b = becomes.get(i).unwrap_or("")
                 let moved = b != w
                 c.box(dir=Row, w=Fill(1.0), gap=8.0, align=ACenter, fn() {
-                  c.box(w=Px(32.0), fn() { c.text(label, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore }) |> ignore
+                  c.box(w=Px(label_w), fn() { c.text(label, style=run_label) |> ignore }) |> ignore
                   c.text(w, size=t.t.meta, color=if moved { t.p.muted } else { t.p.text }, wrap=false) |> ignore
                   if moved {
                     @sf.icon(c, "arrow-right", size=14.0, color=t.p.accent) |> ignore
@@ -842,3 +846,8 @@ let run_opened : Map[String, Bool] = Map([])
 ///|
 // kept across runs: said by a run's page; the settings' reset empties it
 let run_list : Map[String, String] = Map([])
+
+///|
+/// A property's label in what a run was and becomes (meta, muted, on one line).
+// kept across runs: a value (no field of it changes)
+let run_label : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
