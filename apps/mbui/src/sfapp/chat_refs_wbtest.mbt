@@ -81,6 +81,26 @@ test "`@` with nothing found says so; another workspace's chat says whose" {
 }
 
 ///|
+test "`@` with a title longer than its row has room for: the title cut short, when it was last active whole after it" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  // (a narrow phone: the menu as wide as the composer, less than the row would need)
+  t.resize(240.0, 640.0)
+  t.tap_text("发消息")
+  t.type_text("看 @首页")
+  let words = t.words()
+  guard words.iter().find_first(fn(w) { w.0 == "首页的列表改成按天分组" }) is Some((_, title_x, title_y, title_w, _, _)) else {
+    fail("no title")
+  }
+  guard words.iter().find_first(fn(w) { w.0 == "8 分钟前" && w.2 - title_y < 20.0 && title_y - w.2 < 20.0 })
+    is Some((_, when_x, _, _, _, _)) else {
+    fail("no when")
+  }
+  assert_true(title_w > 0.0)
+  assert_true(title_x + title_w <= when_x)
+}
+
+///|
 test "a link pasted, written after before the core makes its mark: the mark where the link is now" {
   let calls : Array[Made] = []
   let t = fake_core(calls)

@@ -275,7 +275,7 @@ let ref_title_cell : @ui.Style = @ui.style(row=true, w=@sf.grow, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ref_title : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
+let ref_title : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Cut)
 
 ///|
 /// Whose it is (refChipStation): a pill 4 after the title, 1 by 6 in, the meta size, muted, on the hover's ground.
