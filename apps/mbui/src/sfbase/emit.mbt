@@ -207,10 +207,10 @@ pub fn emit_next(c : @ui.Ctx, e : Emits, agent : String, at? : Double) -> Unit {
     return
   }
   let (seq, who, fold) = e.queue.remove(0)
-  // folded already (or its agent's avatar out already): on its way; else what is left of its folding (how far its
-  // folding has gone, from when it began waiting), from here: from where the turn before was declared to end, else
-  // from this frame
-  let float = who == agent || !fold.moving()
+  // folded already (its folding at the end it declared, or its agent's avatar out already): on its way; else what is
+  // left of its folding (how far its folding has gone, from when it began waiting), from here: from where the turn
+  // before was declared to end, else from this frame
+  let float = who == agent || fold.over()
   let left = Fold.ms() * (1.0 - fold.get())
   e.current = Some({
     seq,
@@ -289,7 +289,7 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
     // the avatar on its way while words sent from here land after it would: its way the rest of it until they land,
     // so it comes down as they do (not there before them, waiting)
     let t = match t.pose {
-      Float if sending >= 0.0 && sending > t.clock.ends() && sending != e.held_until && t.clock.moving() => {
+      Float if sending >= 0.0 && sending > t.clock.ends() && sending != e.held_until && !t.clock.over() => {
         let u = t.clock.get()
         // (its way is linear: where it is says when now is on it)
         let now = t.clock.ends() - (1.0 - u) * pose_ms(Float, t.from)
@@ -303,7 +303,8 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
       }
       _ => t
     }
-    if t.clock.moving() {
+    // (a pose goes on till the end it declared as it set out)
+    if !t.clock.over() {
       break
     }
     // the next from where this one was declared to end, whichever frame sees it

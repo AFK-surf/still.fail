@@ -150,8 +150,8 @@ list's turns, words flying, everything in the hand). Each step below is a PR; a 
    leaving, 奏's cards going off and going back (the phone's and the desktop's), the search going back, a row swiped away
    (archived at that end, not when it is seen at its place), the bar's panel (its spring's declared rest, `Spr::end`); a
    stroke, a picture's way in and a row's rise started once by what they are told, not by whether they move; what only
-   logs a motion logs it while it is off its target. Left: a message out of an avatar and words sent (emit.mbt,
-   flight.mbt), the viewer's strip.
+   logs a motion logs it while it is off its target. A message out of an avatar (its poses), words sent (their
+   way) and the viewer's strip likewise.
 7. **Presets.** `src/sf/motion.mbt` holds the table above; every motion uses a preset; one curve enum; the copies in
    sfapp that nothing calls go (emit_flyer.mbt, flash.mbt, `composer_page*`, …).
 8. **The page crossfade** between a new chat and a chat on a computer (sfdesk/switch.mbt). Done: the new chat's scene

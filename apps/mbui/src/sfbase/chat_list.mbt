@@ -394,7 +394,7 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
     // (emit_step)
     let sending = match send_flight.val {
       Some(f) if f.turns == rk && !f.placed => -2.0
-      Some(f) if f.turns == rk && f.way.moving() => f.way.ends()
+      Some(f) if f.turns == rk && !f.way.over() => f.way.ends()
       _ => -1.0
     }
     emit_step(c, em, turns, sending)
