@@ -206,6 +206,11 @@ impl @hostapi.Host for Native with text_menu(_, shown, x, y, w, h, can) {
 }
 
 ///|
+impl @hostapi.Host for Native with edit_can(_, can) {
+  ffi_edit_can(can)
+}
+
+///|
 impl @hostapi.Host for Native with clipboard_set(_, s) {
   clipboard_set(s)
 }

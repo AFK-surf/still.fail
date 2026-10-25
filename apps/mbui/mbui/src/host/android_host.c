@@ -1408,6 +1408,9 @@ void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moo
 }
 
 // The system's floating text menu over a field's words, or put away (Host.textMenu: ActionMode.TYPE_FLOATING).
+// no menu bar of the app's here
+void mb_host_edit_can(int32_t can) { (void)can; }
+
 void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, int32_t can) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, host_cls, m_text_menu, shown ? JNI_TRUE : JNI_FALSE, x, y, w, h, can);

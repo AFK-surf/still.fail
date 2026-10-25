@@ -652,6 +652,9 @@ void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, in
   (void)shown, (void)x, (void)y, (void)w, (void)h, (void)can;
 }
 
+// no menu bar of the app's here
+void mb_host_edit_can(int32_t can) { (void)can; }
+
 void mb_host_clipboard_set(moonbit_string_t s) {
   int n = Moonbit_array_length(s), k = 0;
   // other Windows programs expect CR LF

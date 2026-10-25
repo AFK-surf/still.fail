@@ -966,6 +966,9 @@ void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moo
 
 // The system's floating edit menu over a field's words (@hostapi.text_menu, as Android's ActionMode.TYPE_FLOATING):
 // over the rectangle given, offering what `can` says (MBView's canPerformAction), put away when not shown.
+// (an iPad's menu bar asks canPerformAction:, which the floating menu's `can` answers)
+void mb_host_edit_can(int32_t can) { (void)can; }
+
 void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, int32_t can) {
   MBView *v = the_view;
   menu_can = can;
