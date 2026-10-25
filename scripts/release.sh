@@ -3,7 +3,8 @@
 # them in the cloud's releases bucket, where install.sh (cloud/src/install.ts) gets them: darwin-arm64, linux-x64 and
 # linux-arm64, each with its Node and its native parts (prebuilt for that platform: scripts/native.ts); and win32-x64,
 # a zip, which install.ps1 gets (cloud/src/install-windows.ts), its Node nodejs.org's zip.
-# The apps too, for their updaters: `desktop` (apps/desktop/build.sh: the zip, its blockmap and stillfail-mac.yml, in desktop/),
+# The apps too, for their updaters: `desktop` (the Mac app: apps/desktop/build.sh's, the zip, its blockmap and
+# stillfail-mac.yml, in desktop/; the beta's apps/mbui's in its place, below),
 # `desktop-win` (build.sh --win, from the Mac too: the NSIS installer stillfail-<version>-x64-win.exe, its blockmap and
 # stillfail.yml, in desktop/; not signed yet) and
 # `android` (apps/android/build.py --release: stillfail-<n>.apk and latest.json, in android/; the beta app mbui's in the
@@ -14,10 +15,10 @@
 #   release.sh [--beta] [PLATFORM…]   (default: the station's four; desktop, android and modules only when named)
 #   release.sh promote [station]
 # --beta: to the test channel instead (cloud/src/install.ts): the station's tarballs in beta/ and station-beta.json; the
-# beta apps, apps of their own beside the released ones (fail.still.desktop.beta: apps/desktop/build.sh --beta, its
-# stillfail-beta-<version> zip and blockmap and its feed desktop/stillfail-beta-mac.yml, electron-updater's channel
-# stillfail-beta; fail.still.android.beta: apps/mbui's, MBUI_VARIANT=beta, android/stillfail-beta-<n>.apk and
-# android/beta/latest.json).
+# beta apps, apps of their own beside the released ones (fail.still.desktop.beta: apps/mbui's MBUI_VARIANT=beta, its
+# stillfail-beta-<version> zip, its feeds mac/beta/latest.json and desktop/stillfail-beta-mac.yml, electron-updater's
+# channel stillfail-beta; the Windows one apps/desktop/build.sh --beta --win; fail.still.android.beta: apps/mbui's,
+# MBUI_VARIANT=beta, android/stillfail-beta-<n>.apk and android/beta/latest.json).
 # promote: the test channel's station release becomes the stable one: its tarballs and station.json copied to the
 # stable names, nothing built (the signed words name no channel: they hold for both). (The beta apps are other apps: a released app is released by release.sh desktop/android.
 # The web app is promoted by cloud/deploy.py promote-web.)
@@ -101,14 +102,50 @@ released() {
 for platform in $platforms; do
   case $platform in
     desktop)
-      # The app (fail.still.desktop) on its feed, stillfail-mac.yml; with --beta the beta app (fail.still.desktop.beta)
-      # on stillfail-beta-mac.yml.
-      sh "$root/apps/desktop/build.sh" ${beta:+--beta}
-      zip="stillfail${beta:+-beta}-0.1.$build-arm64-mac.zip"
-      feed="stillfail${beta:+-beta}-mac.yml"
-      put "$root/apps/desktop/out/$zip" "desktop/$zip" application/zip
-      put "$root/apps/desktop/out/$zip.blockmap" "desktop/$zip.blockmap" application/octet-stream
-      put "$root/apps/desktop/out/$feed" "desktop/$feed" "text/yaml; charset=utf-8"
+      # The Mac app (fail.still.desktop) on its feeds; with --beta the beta app (fail.still.desktop.beta). The beta's is
+      # mbui's (apps/mbui) in the Electron app's place since 2026-10-26 (as asked: the stable one's follows once the
+      # beta's move over is seen through; the Electron app stays Windows' alone): mac-app.sh's beta variant, with the
+      # Electron app's ids, name and links, signed by the same team, so an installed Electron app's updater takes it
+      # (Squirrel.Mac installs an update only if it meets the running app's designated requirement: apps/desktop/
+      # after-sign.cjs; apps/mbui/scripts/handoff.sh tries it) and it keeps that app's data, sign-in and sealed keys
+      # where they were (apps/mbui src/sfcore/apple_engine.m, src/host/apple_core.mm). Built as apps/mbui's own app is
+      # (scripts/beta.sh mac: MoonBit, the core's shell prebuilt), warm in a cache of its own. Its zip is named as the
+      # Electron app's were (the site's download, /releases/latest/mac, and release-prune.ts go by the yml's), on two
+      # feeds (scripts/mac-feeds.sh): mbui's own updater's (mac/beta/latest.json, an AppRelease: what the core's
+      # app.update reads) and electron-updater's (stillfail-beta-mac.yml), which moves an installed Electron app over.
+      if [ -z "$beta" ]; then
+        sh "$root/apps/desktop/build.sh"
+        zip="stillfail-0.1.$build-arm64-mac.zip"
+        put "$root/apps/desktop/out/$zip" "desktop/$zip" application/zip
+        put "$root/apps/desktop/out/$zip.blockmap" "desktop/$zip.blockmap" application/octet-stream
+        put "$root/apps/desktop/out/stillfail-mac.yml" "desktop/stillfail-mac.yml" "text/yaml; charset=utf-8"
+      else
+        variant=beta
+        mbui_cache=${MBUI_MAC_CACHE:-$HOME/stillfail-ci/mbui-mac-$variant}
+        MBUI_CACHE=$mbui_cache bash "$root/apps/mbui/scripts/beta.sh" tools
+        MBUI_CACHE=$mbui_cache MBUI_TOOLS=$mbui_cache/tools MBUI_VARIANT=$variant RELEASE_DIR="$out/mbui" \
+          bash "$root/apps/mbui/scripts/beta.sh" mac
+        app_zip="$out/mbui/mac/app-$variant.zip"
+        id=fail.still.desktop${beta:+.beta}
+        # what is in it checked before anything is uploaded: the app it replaces (its id), signed by still.fail's team
+        # (an installed app takes nothing else; UNSIGNED=1, as build.sh's: for trying it out, never put), its build
+        rm -rf "$out/mac-check" && mkdir -p "$out/mac-check" && ditto -x -k "$app_zip" "$out/mac-check"
+        app=$(find "$out/mac-check" -maxdepth 1 -name '*.app' | head -1)
+        [ -n "$app" ] || { echo "release.sh: no app in $app_zip" >&2; exit 1; }
+        codesign --verify --deep --strict "$app" || { echo "release.sh: $app does not verify (codesign): not released" >&2; exit 1; }
+        signed=$(codesign -dvv "$app" 2>&1)
+        have_id=$(printf '%s\n' "$signed" | sed -n 's/^Identifier=//p')
+        have_team=$(printf '%s\n' "$signed" | sed -n 's/^TeamIdentifier=//p')
+        have_build=$(plutil -extract CFBundleVersion raw "$app/Contents/Info.plist")
+        [ "$have_id" = "$id" ] && [ "$have_build" = "$build" ] || { echo "release.sh: $app is $have_id $have_build, not $id $build: not released" >&2; exit 1; }
+        [ "$have_team" = D9AAN3VJK8 ] || [ -n "${UNSIGNED:-}" ] || { echo "release.sh: $app is signed by ${have_team:-no team}, not still.fail's (D9AAN3VJK8): not released" >&2; exit 1; }
+        echo "$app: $have_id $have_build, signed by team $have_team"
+        zip="stillfail${beta:+-beta}-0.1.$build-arm64-mac.zip"
+        put "$app_zip" "desktop/$zip" application/zip
+        sh "$root/scripts/mac-feeds.sh" "$app_zip" "$zip" "$build" "$out/mac-latest.json" "$out/mac.yml"
+        put "$out/mac-latest.json" "mac/${beta:+beta/}latest.json" application/json
+        put "$out/mac.yml" "desktop/stillfail${beta:+-beta}-mac.yml" "text/yaml; charset=utf-8"
+      fi
       ;;
     desktop-win)
       # The Windows app on stillfail.yml; with --beta the beta app on stillfail-beta.yml (electron-updater's feed for

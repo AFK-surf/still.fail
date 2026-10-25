@@ -13,6 +13,8 @@
 #   apps/mbui/scripts/beta.sh mac        the macOS app (scripts/mac-app.sh: still.fail mbui.app, fail.still.mbui),
 #                                        signed with still.fail's identity (.github/mac_signing.py), zipped, into
 #                                        $RELEASE_DIR as mac/stillfail-mbui-<n>-arm64-mac.zip and mac/mbui/latest.json
+#                                        (MBUI_VARIANT=stable or beta: still.fail's Mac app itself, in the Electron
+#                                        app's place, for scripts/release.sh: $RELEASE_DIR/mac/app-<variant>.zip)
 #   apps/mbui/scripts/beta.sh win        the Windows app (scripts/win.sh's build, its engine, shell and core.hbc beside it),
 #                                        zipped into $RELEASE_DIR as win/stillfail-mbui-<n>-x64-win.zip and
 #                                        win/mbui/latest.json
@@ -203,19 +205,34 @@ build() {
 
 # The macOS app, built in WORK (warm as the APK's: moon's outputs, the compiler's; the core's shell is
 # still.fail's natives, scripts/core.sh apple), signed under .github/mac_signing.py (still.fail's identity, its signing
-# lock held for the signing only).
+# lock held for the signing only; a caller holding it already, .github/release-desktop.py, signs in its keychain:
+# MAC_SIGN_IDENTITY set). MBUI_VARIANT=stable or beta: still.fail's Mac app itself, in the Electron app's place
+# (mac-app.sh's variants: fail.still.desktop(.beta)), for scripts/release.sh, which puts it on that app's feeds: the
+# signed app's zip alone, in $RELEASE_DIR/mac/app-<variant>.zip.
 mac() {
-  local t0=$(now) n zip name tb
+  local t0=$(now) n zip name tb variant=${MBUI_VARIANT:-mbui} sign
   n=$(build_number)
   copy
   rm -rf "$RELEASE_DIR/mac" && mkdir -p "$RELEASE_DIR/mac/mac"
   env MBUI_BUILD=$n EMBER="$REPO" bash "$WORK/scripts/mac-app.sh" build 2>&1 \
     | tee "$C/mac-build.log"
   tb=$(secs $t0)
-  MBUI_BUILD=$n EMBER="$REPO" python3 "$REPO/.github/mac_signing.py" run -- bash "$WORK/scripts/mac-app.sh" sign 2>&1 | tee "$C/mac-sign.log"
-  zip=$WORK/out/mac/stillfail-mbui-$n-arm64-mac.zip
+  sign=(python3 "$REPO/.github/mac_signing.py" run --)
+  [ -z "${MAC_SIGN_IDENTITY:-}" ] || sign=()
+  MBUI_BUILD=$n EMBER="$REPO" "${sign[@]}" bash "$WORK/scripts/mac-app.sh" sign 2>&1 | tee "$C/mac-sign.log"
+  case $variant in
+    stable) zip=$WORK/out/mac/stillfail-$n-arm64-mac.zip ;;
+    beta) zip=$WORK/out/mac/stillfail-beta-$n-arm64-mac.zip ;;
+    *) zip=$WORK/out/mac/stillfail-mbui-$n-arm64-mac.zip ;;
+  esac
   [ -f "$zip" ] || { echo "beta: no zip of the app" >&2; exit 1; }
-  grep -q '^codesign: Authority=' "$C/mac-sign.log" || { echo "beta: the app is not signed with an identity" >&2; exit 1; }
+  # (UNSIGNED=1, as scripts/release.sh's: trying it out, signed ad hoc; never put)
+  grep -q '^codesign: Authority=' "$C/mac-sign.log" || [ -n "${UNSIGNED:-}" ] || { echo "beta: the app is not signed with an identity" >&2; exit 1; }
+  if [ "$variant" != mbui ]; then
+    cp "$zip" "$RELEASE_DIR/mac/app-$variant.zip"
+    summary "- macOS app ($variant) 0.1.$n: $(wc -c < "$zip" | tr -d ' ') bytes, $(grep '^codesign: Authority=' "$C/mac-sign.log" | head -1 | sed 's/^codesign: //'); built in $tb s, signed and zipped in $(secs $t0) s"
+    return 0
+  fi
   name=mac/stillfail-mbui-$n-arm64-mac.zip
   cp "$zip" "$RELEASE_DIR/mac/$name"
   feed mac "$n" "$name" "$zip"

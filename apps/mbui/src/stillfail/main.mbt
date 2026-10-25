@@ -391,6 +391,8 @@ fn main {
       @sfapp.set_update_source(Some(@sfapp.cloud_updates(core_source, feed, origin)))
     }
   }
+  // built in still.fail's desktop app's place: the station that app ran here carried on (sfbase local_station.mbt)
+  @sfbase.local_station_carry_on()
   // crash reports and the bar's timing, where the host has them (reports.mbt: Android)
   reports_start()
   @sfapp.use_core_markdown(core_source)

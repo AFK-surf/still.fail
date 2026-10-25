@@ -68,6 +68,9 @@ const APP_FILES: [RegExp, string][] = [
   [/^android\/beta\/latest\.json$/, "application/json"],
   [/^desktop\/stillfail-mac\.yml$/, "text/yaml; charset=utf-8"],
   [/^desktop\/stillfail-(beta-)?[0-9.]+-arm64-mac\.zip$/, "application/zip"],
+  // The Mac app's own updater's feeds, stable and beta (it is mbui's, apps/mbui, in the Electron app's place:
+  // scripts/release.sh desktop; an AppRelease naming the zip above, which stillfail(-beta)-mac.yml names too).
+  [/^mac\/(beta\/)?latest\.json$/, "application/json"],
   // Its blockmap, for the updater to download only what changed since the zip it has (releases.ts).
   [/^desktop\/stillfail-(beta-)?[0-9.]+-arm64-mac\.zip\.blockmap$/, "application/octet-stream"],
   // The Windows app's (apps/desktop/build.sh --win): its feed (electron-updater's, named by the channel alone), its NSIS

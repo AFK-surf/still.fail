@@ -52,6 +52,7 @@ jobs:
       station: ${{ steps.plan.outputs.station }}
       modules: ${{ steps.plan.outputs.modules }}
       android_beta: ${{ steps.plan.outputs.android_beta }}
+      mac_beta: ${{ steps.plan.outputs.mac_beta }}
       desktop: ${{ steps.plan.outputs.desktop }}
       desktop_web: ${{ steps.plan.outputs.desktop_web }}
       windows: ${{ steps.plan.outputs.windows }}
@@ -118,9 +119,14 @@ jobs:
           # Java, the client's, media's, vendor's), or to how it is released.
           android_beta=false
           if has '^(apps/mbui/(src|core|android|ios|engine)/|apps/mbui/mbui/(src|android)/|apps/mbui/(mbui/)?moon\.(mod|work)$|client/|media/|vendor/|scripts/(release\.sh|native\.ts)$|\.github/release\.sh$|apps/mbui/scripts/(beta|android|android-core|core)\.sh$)'; then android_beta=true; fi
-          # The desktop app carries the core, a station and the web app. A change to the first two (its shell) is a new
-          # app; to the web app alone, a web release the beta app takes without one (scripts/desktop-web.ts,
-          # docs/desktop-web-updates.md): desktop=… and desktop_web=….
+          # The beta Mac app: mbui's in the Electron one's place (scripts/release.sh --beta desktop), released, as the
+          # Android one, for a change to what apps/mbui's Mac app is made of (its code, mbui's with its Mac host, the
+          # client's, media's, vendor's) or to how it is built and released.
+          mac_beta=false
+          if has '^(apps/mbui/(src|core|engine)/|apps/mbui/mbui/src/|apps/mbui/(mbui/)?moon\.(mod|work)$|client/|media/|vendor/|scripts/(release|mac-feeds)\.sh$|scripts/native\.ts$|\.github/(release-desktop|mac_signing)\.py$|apps/mbui/scripts/(beta|mac-app|mac|core)\.sh$|apps/mbui/scripts/mac-icon\.swift$)'; then mac_beta=true; fi
+          # The Electron app (Windows' alone since the Mac's is mbui's) carries the core, a station and the web app. A
+          # change to the first two (its shell) is a new app; to the web app alone, a web release the beta app takes
+          # without one (scripts/desktop-web.ts, docs/desktop-web-updates.md): desktop=… and desktop_web=….
           eval "$(printf '%s\n' "$changed" | node scripts/desktop-web.ts plan)"
           # A branch's Windows app and its smoke run (windows-build, windows-smoke): only for what is Windows' own in it,
           # the app's code and its iroh addon (a change to the web app it carries is the Mac app's check too).
@@ -143,13 +149,14 @@ jobs:
             echo "station=$station"
             echo "modules=$modules"
             echo "android_beta=$android_beta"
+            echo "mac_beta=$mac_beta"
             echo "desktop=$desktop"
             echo "desktop_web=$desktop_web"
             echo "windows=$windows"
             echo "windows_natives=$windows_natives"
             echo "mbui=$mbui"
           } >> "$GITHUB_OUTPUT"
-          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station modules=$modules android_beta=$android_beta desktop=$desktop desktop_web=$desktop_web relay=$relay mbui=$mbui"
+          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station modules=$modules android_beta=$android_beta mac_beta=$mac_beta desktop=$desktop desktop_web=$desktop_web relay=$relay mbui=$mbui"
 
   # The native parts for this commit (scripts/native.ts): each one whose key the release native-artifacts lacks is
   # built here (once per key and machine: mini1's cache is shared by its runners and the checks beside this job wait
@@ -362,12 +369,13 @@ jobs:
       - name: deploy.py --dry-run
         run: sh .github/deploy.sh --dry-run $([ '${{ needs.plan.outputs.api }}' = true ] && echo api) ${{ needs.plan.outputs.parts }}
 
-  # A branch: the apps main would release, built with the prebuilt native parts (unsigned, nothing sent): the desktop
-  # app and the TypeScript station's bundle. On GitHub's macos-15 (free for
-  # a public repository): unsigned, it needs nothing of Mini1's (main's signed builds stay there, with its keychain).
+  # A branch: the TypeScript station's bundle main would release, built with the prebuilt native parts (unsigned,
+  # nothing sent). On GitHub's macos-15 (free for a public repository): unsigned, it needs nothing of Mini1's (main's
+  # signed builds stay there, with its keychain). (The Mac app is mbui's: its build is mbui.yml's and mbui-host-mac's;
+  # the Electron app's, Windows' alone now, is windows-build's.)
   mac-build:
     needs: [plan, natives]
-    if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && (needs.plan.outputs.desktop == 'true' || needs.plan.outputs.station == 'true') }}
+    if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && needs.plan.outputs.station == 'true' }}
     runs-on: macos-15
     timeout-minutes: 10
     steps:
@@ -381,12 +389,6 @@ jobs:
           (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           sh scripts/station-bundle.sh "$RUNNER_TEMP/station" darwin-arm64
           du -sh "$RUNNER_TEMP/station/stillfail"
-      - name: The desktop app (beta, unsigned)
-        if: needs.plan.outputs.desktop == 'true'
-        run: |
-          (cd apps/desktop && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
-          UNSIGNED=1 sh apps/desktop/build.sh --beta
-          ls -la apps/desktop/out/*.zip
 
   # The Windows app (beta, unsigned), built on mini1 beside mac-build, for windows-smoke: a branch's, when it changes
   # what is Windows' own in it (plan: windows).
@@ -557,19 +559,22 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: "release-android-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
 
-  # The desktop app (fail.still.desktop.beta), on desktop/stillfail-beta-mac.yml: built and signed on the organization Mac.
-  # Its Windows app is desktop-win's, beside it: one after the other they took ~140 s, then their 268 MB went up.
+  # The Mac app (fail.still.desktop.beta: mbui's, apps/mbui, in the Electron app's place), on mac/beta/latest.json and
+  # desktop/stillfail-beta-mac.yml (which moves an installed Electron beta over): built, signed and notarized on the
+  # organization Mac, warm in a cache of its own there (scripts/release.sh desktop). The Windows app is Electron's still,
+  # desktop-win's.
   desktop:
     needs: [plan, natives]
-    if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop == 'true' }}
+    if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.mac_beta == 'true' }}
     runs-on: [self-hosted, mini1]
     environment: production
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0 } # its build is the commits in the history
       - uses: ./.github/actions/setup-mac
-      - name: Build and sign the beta desktop app on the organization Mac
+      - uses: ./.github/actions/natives
+      - name: Build, sign and notarize the beta Mac app on the organization Mac
         env:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
           # AFK's Developer ID and notary profile (.github/mac_signing.py).
@@ -586,8 +591,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: "release-desktop-mac-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
 
-  # The Windows desktop app (beta), on desktop/stillfail-beta.yml: built on the organization Mac too (build.sh --win),
-  # in a runner of its own beside desktop's Mac app. Not code-signed; its installer's .sig is (docs/release-signing.md).
+  # The Windows desktop app (beta, Electron's), on desktop/stillfail-beta.yml: built on the organization Mac (build.sh
+  # --win), for a change to the Electron app. Not code-signed; its installer's .sig is (docs/release-signing.md).
   desktop-win:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop == 'true' }}
@@ -681,7 +686,7 @@ jobs:
   # failed. Then the changelog that says so (scripts/changelog-put.sh): in this job, not one more after it.
   put:
     needs: [plan, check, check-linux, check-browser, api, static, station, modules, android, desktop, desktop-win, desktop-web]
-    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result) && (needs.station.result == 'success' || needs.modules.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-web.result == 'success')
+    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result) && (needs.station.result == 'success' || needs.modules.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-win.result == 'success' || needs.desktop-web.result == 'success')
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 10
@@ -787,7 +792,7 @@ jobs:
           planned '${{ needs.plan.outputs.station }}' '${{ needs.station.result }}' station
           planned '${{ needs.plan.outputs.modules }}' '${{ needs.modules.result }}' modules
           planned '${{ needs.plan.outputs.android_beta }}' '${{ needs.android.result }}' android
-          planned '${{ needs.plan.outputs.desktop }}' '${{ needs.desktop.result }}' desktop
+          planned '${{ needs.plan.outputs.mac_beta }}' '${{ needs.desktop.result }}' desktop
           planned '${{ needs.plan.outputs.desktop }}' '${{ needs.desktop-win.result }}' desktop-win
           [ '${{ needs.plan.outputs.desktop }}' = true ] || planned '${{ needs.plan.outputs.desktop_web }}' '${{ needs.desktop-web.result }}' desktop-web
           if [ -n "$missed" ]; then echo "::error::changed, planned, and not released:$missed"; exit 1; fi

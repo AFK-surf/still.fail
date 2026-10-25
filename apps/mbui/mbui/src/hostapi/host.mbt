@@ -1160,9 +1160,9 @@ pub fn menu_setup(json : String) -> Unit {
 }
 
 ///|
-/// This machine's station as the system says it (macOS: its data ~/.stillfail, whether it runs and by what, its release,
-/// the workspace its data is in, what is being done to it and what failed last), as JSON; "" where there is none or no
-/// way to it.
+/// This machine's station as the system says it (macOS: its data ~/.stillfail, whether it runs and by what, its release
+/// and whether the installer put one there, `installed`, the workspace its data is in, what is being done to it and
+/// what failed last), as JSON; "" where there is none or no way to it.
 pub fn local_station() -> String {
   current.val.local_station()
 }

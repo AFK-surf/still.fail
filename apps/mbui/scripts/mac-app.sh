@@ -41,7 +41,10 @@ esac
 OUT=$A/out/mac
 APPDIR="$OUT/$NAME.app"
 ZIP=$OUT/$ZIP_NAME-$N-arm64-mac.zip
+# its program: built in the Electron app's place, named as that app's is (its name): the Electron app's updater
+# (Squirrel.Mac) names the bundle it puts in place after the new one's program, and would leave the app renamed
 EXE=stillfail-mbui
+[ -z "$OWN" ] || EXE=$NAME
 mkdir -p "$OUT"
 t0=$(now)
 export MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-12.0}
@@ -60,6 +63,8 @@ sign() {
   local how=(--timestamp=none)
   case "${MAC_SIGN_IDENTITY:-}" in "Developer ID Application:"*) how=(--options runtime --timestamp) ;; esac
   codesign --force --sign "${MAC_SIGN_IDENTITY:--}" "${how[@]}" "$APPDIR/Contents/Frameworks/hermes.framework"
+  [ ! -d "$APPDIR/Contents/Frameworks/Squirrel.framework" ] ||
+    codesign --force --sign "${MAC_SIGN_IDENTITY:--}" "${how[@]}" "$APPDIR/Contents/Frameworks/Squirrel.framework"
   codesign --force --sign "${MAC_SIGN_IDENTITY:--}" "${how[@]}" "$APPDIR"
   codesign --verify --deep --strict --verbose=2 "$APPDIR" 2>&1 | sed 's/^/codesign: /'
   codesign -dvv "$APPDIR" 2>&1 | grep -E '^(Identifier|Authority|TeamIdentifier|Signature|Format)=' | sed 's/^/codesign: /'
@@ -97,6 +102,22 @@ cp "$BIN" "$APPDIR/Contents/MacOS/$EXE"
 # Hermes from the app's Frameworks (@executable_path/../Frameworks), not from the build's tree (the other rpath, gone)
 install_name_tool -delete_rpath @executable_path/../../../../../../out/core/hermes/Library/Frameworks/macosx "$APPDIR/Contents/MacOS/$EXE"
 ditto out/core/hermes/Library/Frameworks/macosx/hermes.framework "$APPDIR/Contents/Frameworks/hermes.framework"
+# Built in the Electron app's place: what that app's updater runs out of the app it has put in place to open it
+# (src/host/shipit.c), where it runs it: Frameworks/Squirrel.framework/Resources/ShipIt, here the framework's program
+SQUIRREL=$APPDIR/Contents/Frameworks/Squirrel.framework
+if [ -n "$OWN" ]; then
+  mkdir -p "$SQUIRREL/Versions/A/Resources"
+  clang -O2 -mmacosx-version-min="$MACOSX_DEPLOYMENT_TARGET" -o "$SQUIRREL/Versions/A/Squirrel" src/host/shipit.c
+  ln -s ../Squirrel "$SQUIRREL/Versions/A/Resources/ShipIt"
+  plutil -create xml1 "$SQUIRREL/Versions/A/Resources/Info.plist"
+  for kv in "CFBundleIdentifier $ID.shipit" "CFBundleExecutable Squirrel" "CFBundleName Squirrel" "CFBundlePackageType FMWK" \
+    "CFBundleInfoDictionaryVersion 6.0" "CFBundleShortVersionString 0.1.$N" "CFBundleVersion $N"; do
+    plutil -insert "${kv%% *}" -string "${kv#* }" "$SQUIRREL/Versions/A/Resources/Info.plist"
+  done
+  ln -s A "$SQUIRREL/Versions/Current"
+  ln -s Versions/Current/Squirrel "$SQUIRREL/Squirrel"
+  ln -s Versions/Current/Resources "$SQUIRREL/Resources"
+fi
 cp out/core/core.hbc "$APPDIR/Contents/Resources/core.hbc"
 cp "$ICON" "$APPDIR/Contents/Resources/AppIcon.icns"
 # the oldest macOS the program runs on, as it was linked: the one asked for
@@ -142,6 +163,7 @@ plutil -lint "$PLIST" > /dev/null
 
 # ad hoc for now: `sign` after (still.fail's identity in CI)
 codesign --force --sign - --timestamp=none "$APPDIR/Contents/Frameworks/hermes.framework"
+[ -z "$OWN" ] || codesign --force --sign - --timestamp=none "$SQUIRREL"
 codesign --force --sign - --timestamp=none "$APPDIR"
 echo "mac-app.sh: $NAME.app 0.1.$N in $(secs $t0) s: the app and the core's parts $(python3 -c "print(f'{$t2-$t0:.1f}')") s," \
   "the bundle $(secs $t2) s"

@@ -51,6 +51,8 @@ jobs:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
         run: sh .github/release.sh --stable android
 
+  # The Mac app (scripts/release.sh desktop: the Electron app until the beta's move over to mbui's is seen through,
+  # 2026-10-26) and, beside it in a runner of its own, the Windows app (Electron's), as main's beta builds them.
   desktop:
     needs: plan
     runs-on: [self-hosted, mini1]
@@ -60,7 +62,8 @@ jobs:
       - uses: actions/checkout@v5
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
       - uses: ./.github/actions/setup-mac
-      - name: Publish stable desktop with its original signing identity
+      - uses: ./.github/actions/natives
+      - name: Publish the stable Mac app with its original signing identity
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
@@ -68,11 +71,27 @@ jobs:
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
           KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
+        run: python3 .github/release-desktop.py --stable --only mac
+
+  desktop-win:
+    needs: plan
+    runs-on: [self-hosted, mini1]
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
+      - uses: ./.github/actions/setup-mac
+      - name: Publish the stable Windows app (Electron's), its installer's .sig signed
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          # The installer's signature (its .sig): none is an error.
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
-        run: python3 .github/release-desktop.py --stable
+        run: python3 .github/release-desktop.py --stable --only win
 
   web:
-    needs: [plan, android, desktop]
+    needs: [plan, android, desktop, desktop-win]
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 10
@@ -141,7 +160,7 @@ jobs:
         run: sh .github/deploy.sh site
 
   done:
-    needs: [plan, android, desktop, web, station, modules, site]
+    needs: [plan, android, desktop, desktop-win, web, station, modules, site]
     runs-on: [self-hosted, mini1]
     timeout-minutes: 10
     permissions:

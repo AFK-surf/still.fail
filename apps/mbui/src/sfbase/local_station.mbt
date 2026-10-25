@@ -43,3 +43,32 @@ fn local_station_install(src : Source, workspace : String) -> Unit {
 fn local_station_update() -> Unit {
   @ui.local_station_act("update " + local_install_ask(""))
 }
+
+///|
+/// The station still.fail's desktop app ran here carried on as this app takes that app's place (MBUI_OWN: built as
+/// it, its ids and data). That app ran the station it carried in its own bundle while it ran, never installed on its
+/// own; its bundle replaced by this one's, that station is gone, and the machine would drop out of its workspace. So a
+/// station only that app ran (its data in a workspace, not removed from it; no release of its own, `installed`, nor a
+/// service; nothing running it) is made a service as it is: the installer without a token, as 更新到最新版 runs it
+/// (the user, 2026-10-24: the app manages the station there is), how far on 本机 Station's page. Not one added anew:
+/// that is 添加这台 Mac's alone. Asked as the app starts; once it is a service, never again.
+pub fn local_station_carry_on() -> Unit {
+  if @ui.env("MBUI_OWN") != "1" {
+    return
+  }
+  let s = match @ui.local_station() {
+    "" => return
+    j => try Some(@json.parse(j)) catch { _ => None }
+  }
+  let workspace = field(s, "workspace")
+  let only_that_apps = text(workspace, "id") != "" &&
+    !flag(workspace, "removed") &&
+    text(s, "runner") == "none" &&
+    field(s, "service") is None &&
+    !flag(s, "installed") &&
+    text(s, "doing") == ""
+  if only_that_apps {
+    @hostapi.log("local station: the one still.fail's desktop app ran, made a service")
+    local_station_update()
+  }
+}

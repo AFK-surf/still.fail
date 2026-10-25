@@ -1035,8 +1035,8 @@ int32_t mb_host_mods_held(void) {
 
 // This machine's station (@hostapi.local_station; apps/desktop/src/main.ts localStation, installed.ts): its data
 // (~/.stillfail), whether it runs (run/station.json's pid alive) and by what (a launchd service the installer made, or a
-// process started by hand), its release, the workspace its data is in; what is being done to it and what went wrong
-// last. "" where there is neither data nor a service. Its acts (@hostapi.local_station_act) run off the main thread:
+// process started by hand), its release, whether the installer put one there, the workspace its data is in; what is
+// being done to it and what went wrong last. "" where there is neither data nor a service. Its acts (@hostapi.local_station_act) run off the main thread:
 // start, stop, restart (the service's launchctl, a hand-started one only stopped), the log or the folder opened.
 static NSString *local_doing = nil;
 static NSString *local_failed = nil;
@@ -1081,6 +1081,8 @@ moonbit_string_t mb_host_local_station(void) {
     if (build.length) version = [@"0.1." stringByAppendingString:build];
   }
   if (version) o[@"version"] = version;
+  // a release of its own (<data>/app: the installer's); a station still.fail's desktop app ran from its bundle has none
+  if ([NSFileManager.defaultManager fileExistsAtPath:[data stringByAppendingPathComponent:@"app"]]) o[@"installed"] = @YES;
   if (service) o[@"service"] = @{ @"kind" : @"launchd", @"name" : service };
   NSDictionary *c = local_json([data stringByAppendingPathComponent:@"mesh/cloud.json"]);
   if ([c[@"workspace"] isKindOfClass:NSString.class] && [c[@"workspace"] length]) {
