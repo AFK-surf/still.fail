@@ -14,7 +14,7 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     // in the closed bar, what stands in its top right corner (the filter) 6 from its top and side, the band ending 6
     // under it (Sidebar.css.ts navNew, closed)
     let in_bar = wide.in_bar
-    c.box(style=if in_bar { band_new_bar } else if wide.tape { band_new_tape() } else { nav_new() }, fn() {
+    c.box(style=if in_bar { band_new_bar() } else if wide.tape { band_new_tape() } else { nav_new() }, fn() {
       let is_new = app.nav.top() is NewChat
       c.box(style=side_full, fn() {
         // (on one line with the search's field under it: its ground's edge, its mark and its words the band's)
@@ -45,10 +45,31 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// 新建对话's row and the filter beside it stand in every list's action's band (nav_new); in the closed bar 6 from its
-/// side and 6 under.
+/// 新建对话's row and the filter beside it stand in every list's action's band (nav_new); in the closed bar the filter
+/// where its link to the bar's top right corner puts it (filter_bar_link: as far from its top and side as the link is
+/// in, the row's middle on it), 6 under.
+fn band_new_bar() -> @ui.Style {
+  let lift = (band_row_h() - filter_side) / 2.0
+  let top = dmax(0.0, filter_bar_in - lift)
+  band_new_bar_look.then(@ui.style(pr=@sf.room_of(filter_bar_in), pt=@sf.room_of(top)))
+}
+
+///|
 // kept across runs: a value (no field of it changes)
-let band_new_bar : @ui.Style = @ui.css("row w=Full pl=S2 pr=S1_5 pt=S1_5 pb=S1_5 gap=S1 align=ACenter")
+let band_new_bar_look : @ui.Style = @ui.css("row w=Full pl=S2 pb=S1_5 gap=S1 align=ACenter")
+
+///|
+/// The filter in the closed bar, linked to the corner it stands in, the bar's top right (@ui.CornerOf: the bar's there,
+/// the window's less its 6 where it follows the window), `filter_bar_in` in from its top and side: its ground's corner
+/// and its place both from this one link (band_new_bar, filter_box_bar), its corner following that one corner, not the
+/// rail's places' at the bar's other side (the user, 2026-10-25: 「它应该关联它这边的那个圆角」).
+fn filter_bar_link() -> @ui.CornerOf {
+  Follow(@sf.closed_bar_of(rail_closed_ground_in), filter_bar_in, @sf.small_corner)
+}
+
+///|
+/// How far in from the closed bar's top and side the filter stands (as the rail's places do from its edges).
+let filter_bar_in : Double = 6.0
 
 ///|
 /// In the sidebar's panel on the tape (laid out Medium, its corners @sf.tape_side_corners): the filter (a circle 32
@@ -222,10 +243,12 @@ fn filter_named(filter : String) -> String {
 let filter_box : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter")
 
 ///|
-/// In the closed bar's top right corner (band_new_bar: 6 from its top and side), its ground one of the bar's places'
-/// grounds, as round as theirs (@sf.rail_ground_radius: concentric with the bar's corner, a Mac's 6.4; a circle where
-/// that is round enough for one), not a circle in a corner too square for it (the user, 2026-10-25).
+/// In the closed bar's top right corner, its ground's corner linked to that corner (filter_bar_link: concentric with it,
+/// a Mac's 6.4), a circle where that is as round as its half or rounder (the bar's corner round enough for one).
 fn filter_box_bar() -> @ui.Style {
-  filter_box.then(@ui.style(radius=@sf.rail_ground_radius(@sf.closed_bar_of(rail_closed_ground_in), rail_closed_ground_in)))
+  let link = filter_bar_link()
+  let round = link.radius() >= filter_side / 2.0 - 0.5
+  let r : @ui.Radius = if round { Full } else { Linked(link) }
+  filter_box.then(@ui.style(radius=r))
 }
 
