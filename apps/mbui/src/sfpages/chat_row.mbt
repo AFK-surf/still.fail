@@ -98,7 +98,7 @@ let row_held : Ref[(Int, Bool)] = Ref((0, false))
 
 ///|
 /// A chat's row in a list (Sidebar.tsx ChatRow, mobile/Home.tsx ChatRow): `lead` whose pictures lead, `on` its chat the
-/// page in view, `list_ground` the list's ground (round its faces), `more` another row under it (2 between, with a mouse).
+/// page in view, `list_ground` the list's ground (round its faces), `more` another row under it (@sf.list_more).
 /// `lifted`: how far it is in going ahead of others (its ground of its own over them; -1 not); `unghost` whether it
 /// leaves the list without a copy (swiped off), or with one again. `found`: a chat a search found (pressed alone: not
 /// held, archived nor swiped); `opened`: what a press does instead of opening its chat. Its answer is the box that
@@ -218,7 +218,7 @@ pub fn chat_row(
     }
     // (what shows of it over the list's: what its faces' rings are cut in)
     let face_ground = @sf.over(list_ground, ground)
-    c.box(style=if more { look.more } else { row_last }, tx~, fn() {
+    c.box(style=if more { @sf.list_more(at) } else { row_last }, tx~, fn() {
       // (the library's list row, a chat's as high as its row always is: @sf.list_row)
       @sf.list_row(
         c,

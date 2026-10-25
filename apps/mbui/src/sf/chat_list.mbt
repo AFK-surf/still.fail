@@ -22,7 +22,8 @@ pub(all) struct ChatList {
   title : @ui.TextStyle
   title_unread : @ui.TextStyle
   last : @ui.TextStyle
-  /// a row with another under it (2 between with keyboard and mouse, none with touch)
+  /// a row with another under it across the whole screen (2 between with keyboard and mouse, none with touch; in a
+  /// side column: list_more)
   more : @ui.Style
   /// in a side column, where its ground is rounded (list_row_in): how far over its second line's middle what stands at
   /// its end does, and how far in from the row's end it is, so its last face is concentric with the row's foot corner

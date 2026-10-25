@@ -151,20 +151,42 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     _ => None
   }
   let rails = rail_items(src, w.id)
-  let page = fn(r : @settings.Route, key : String, icon : String, label : String) {
-    if nav_row(c, "settings-nav/" + key, here == Some(r), fn() {
-        @sf.icon(c, icon, size=settings_nav_icon, color=t.p.muted) |> ignore
-        nav_words(c, label)
-      }) {
-      while app.nav.depth() > 1 {
-        if !app.nav.pop() {
-          break
-        }
-      }
-      app.nav.push(Setting(r))
-    }
-  }
   let here_of = @settings.here_of(settings_core(src, w), w.id, w.name)
+  // its lines, a heading over each part and a row a page, so a row knows whether another row is under it
+  let lines : Array[SettingsLine] = [
+    Part(@sf.t("web-pages.settings.nav.client")),
+    PageRow(Route::Appearance, "appearance", "sliders", @sf.t("web-pages.settings.nav.appearance")),
+    PageRow(Route::Notifications, "notifications", "bell", @sf.t("web-pages.settings.nav.notifications")),
+    PageRow(Route::Permissions, "permissions", "key", @sf.t("web-pages.settings.nav.permissions")),
+    PageRow(Route::Changelog, "changelog", "sparks", @sf.t("web-pages.settings.nav.changelog")),
+    PageRow(Route::About, "about", "info", @sf.t("web-pages.settings.nav.about")),
+    // the desktop's own (cloud/settings.tsx: the client's part)
+    PageRow(Route::Shortcuts, "shortcuts", "command", @sf.t("web-pages.settings.nav.shortcuts")),
+  ]
+  if @ui.platform() == 0 {
+    lines.push(PageRow(Route::LocalStation, "local-station", "monitor", @sf.t("web-pages.localStation.title")))
+  }
+  lines.push(Part("Station"))
+  if !rails.contains("stations") {
+    lines.push(PageRow(Route::Stations, "stations", "server", "Station"))
+  }
+  if !rails.contains("connects") {
+    lines.push(PageRow(Route::Connects(""), "connects", "im", @sf.t("web-pages.settings.nav.connects")))
+  }
+  if !rails.contains("profiles") {
+    lines.push(PageRow(Route::Profiles(""), "profiles", "quota", "Profile"))
+  }
+  lines.push(PageRow(Route::Archiving, "archive", "archive", @sf.t("web-pages.archiving.title")))
+  lines.push(PageRow(Route::AutoDecisions, "automatic-decisions", "check", @sf.t("web-pages.automaticDecisions.title")))
+  lines.push(PageRow(Route::Memories, "memory", "brain", @sf.t("web-pages.settings.nav.memory")))
+  if !rails.contains("usage") {
+    lines.push(PageRow(Route::Usage, "usage", "chart", @sf.t("web-pages.settings.nav.usage")))
+  }
+  lines.push(Part("Cloud"))
+  lines.push(PageRow(Route::Workspace, "workspace", "users", "Workspace · " + w.name))
+  lines.push(PageRow(Route::Security, "security", "shield-check", @sf.t("web-pages.security.title")))
+  lines.push(PageRow(Route::Vault, "vault", "key", @sf.t("web-pages.vault.title")))
+  lines.push(PageRow(Route::Me, "account", "user", if here_of.email != "" { here_of.email } else { w.email }))
   c.box(style=settings_side_fill, fn() {
     side_top(c)
     side_scroll(c, "settings-nav", fn() {
@@ -182,41 +204,41 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         }
         wide.landed = ""
       }
-      @sf.list_heading(c, @sf.t("web-pages.settings.nav.client"), Side)
-      page(Route::Appearance, "appearance", "sliders", @sf.t("web-pages.settings.nav.appearance"))
-      page(Route::Notifications, "notifications", "bell", @sf.t("web-pages.settings.nav.notifications"))
-      page(Route::Permissions, "permissions", "key", @sf.t("web-pages.settings.nav.permissions"))
-      page(Route::Changelog, "changelog", "sparks", @sf.t("web-pages.settings.nav.changelog"))
-      page(Route::About, "about", "info", @sf.t("web-pages.settings.nav.about"))
-      // the desktop's own (cloud/settings.tsx: the client's part)
-      page(Route::Shortcuts, "shortcuts", "command", @sf.t("web-pages.settings.nav.shortcuts"))
-      if @ui.platform() == 0 {
-        page(Route::LocalStation, "local-station", "monitor", @sf.t("web-pages.localStation.title"))
+      for i, line in lines {
+        match line {
+          Part(label) => @sf.list_heading(c, label, Side)
+          PageRow(r, key, icon, label) => {
+            let more = i + 1 < lines.length() && lines[i + 1] is PageRow(_)
+            if nav_row(
+                c,
+                "settings-nav/" + key,
+                here == Some(r),
+                fn() {
+                  @sf.icon(c, icon, size=settings_nav_icon, color=t.p.muted) |> ignore
+                  nav_words(c, label)
+                },
+                more~,
+              ) {
+              while app.nav.depth() > 1 {
+                if !app.nav.pop() {
+                  break
+                }
+              }
+              app.nav.push(Setting(r))
+            }
+          }
+        }
       }
-      @sf.list_heading(c, "Station", Side)
-      if !rails.contains("stations") {
-        page(Route::Stations, "stations", "server", "Station")
-      }
-      if !rails.contains("connects") {
-        page(Route::Connects(""), "connects", "im", @sf.t("web-pages.settings.nav.connects"))
-      }
-      if !rails.contains("profiles") {
-        page(Route::Profiles(""), "profiles", "quota", "Profile")
-      }
-      page(Route::Archiving, "archive", "archive", @sf.t("web-pages.archiving.title"))
-      page(Route::AutoDecisions, "automatic-decisions", "check", @sf.t("web-pages.automaticDecisions.title"))
-      page(Route::Memories, "memory", "brain", @sf.t("web-pages.settings.nav.memory"))
-      if !rails.contains("usage") {
-        page(Route::Usage, "usage", "chart", @sf.t("web-pages.settings.nav.usage"))
-      }
-      @sf.list_heading(c, "Cloud", Side)
-      page(Route::Workspace, "workspace", "users", "Workspace · " + w.name)
-      page(Route::Security, "security", "shield-check", @sf.t("web-pages.security.title"))
-      page(Route::Vault, "vault", "key", @sf.t("web-pages.vault.title"))
-      page(Route::Me, "account", "user", if here_of.email != "" { here_of.email } else { w.email })
     })
   })
   |> ignore
+}
+
+///|
+/// A line of the settings' sidebar: a heading over a part, or a page's row (its route, key, icon and words).
+priv enum SettingsLine {
+  Part(String)
+  PageRow(@settings.Route, String, String, String)
 }
 
 ///|

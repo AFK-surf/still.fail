@@ -51,6 +51,23 @@ pub fn list_row_line(c : @ui.Ctx, body : () -> Unit) -> Unit {
 let list_row_mark : @ui.Style = @ui.css("w=S4 align=ACenter justify=JCenter")
 
 ///|
+/// A row's box with another row under it, where its list stands (ListAt): in a side column, where its ground is
+/// rounded and in, 2 under it with either input (lit_apart; Sidebar.css.ts navRow `& + &`), so the row pressed or
+/// pointed at and the one open never touch and read as one block; across the whole screen the theme's (its rows
+/// flush with a finger).
+pub fn list_more(at : ListAt) -> @ui.Style {
+  match at {
+    Side => side_more
+    Whole => theme().chat_list.more
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+// (pb: lit_apart's 2, the scale's S0_5)
+let side_more : @ui.Style = @ui.css("w=Full pb=S0_5")
+
+///|
 /// A heading over a part of a list (SidebarList.tsx NavSection; Sidebar.css.ts navHeading: the chats' days, the
 /// profiles' kinds, a sidebar's parts), its look the theme's chats' list's, in from the list's left as its rows are where
 /// the list stands (`at`).
