@@ -34,7 +34,7 @@ test "a chat's 文件 tab (DriveTab.tsx): at the chat's station's home, the trai
   let calls : Array[Made] = []
   let t = tab_tester(calls)
   t.frame()
-  // the home: its trail (Studio › 主目录), its folders in columns
+  // the home: its trail (Studio › 主目录), its folders in a list
   assert_true(t.query(Button, label="Studio") is Some(_))
   assert_true(t.find("主目录") is Some(_))
   assert_true(t.find("文档") is Some(_))
@@ -43,14 +43,15 @@ test "a chat's 文件 tab (DriveTab.tsx): at the chat's station's home, the trai
   t.frame()
   assert_true(t.find("照片") is Some(_), msg="MBA's pinned folder")
   assert_true(t.find("离线") is Some(_), msg="MBA away")
-  t.click(Button, label="文档")
+  t.click(Link, label="文档")
   t.frame()
-  // 文档 (pinned): its rows; a folder pressed in its column: the tab there
+  // 文档 (pinned): its rows; a folder pressed: gone into
   assert_true(t.find("长篇小说.txt") is Some(_))
   let (x, y) = t.find("设计稿").unwrap()
   t.tap(x, y)
   t.frame()
-  assert_true(t.find("图标.png") is Some(_), msg="设计稿 open beside")
+  t.frame()
+  assert_true(t.find("图标.png") is Some(_), msg="设计稿 gone into: " + t.words().map(fn(w) { w.0 }).join("|"))
   match @sfdesk.tab_place("ws1") {
     Some(Some(at)) => assert_eq(at.path, "设计稿")
     _ => fail("the tab not in 设计稿")
@@ -62,6 +63,8 @@ test "a chat's 文件 tab: a row's menu puts it into the chat's message (添加�
   let calls : Array[Made] = []
   let t = tab_tester(calls)
   @sfdesk.tab_place_set("ws1", Some({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
+  // (the folder asked of the made-up core on the first frame, its rows on the next)
+  t.frame()
   t.frame()
   let (x, y) = t.find("发布清单.md").unwrap()
   t.right_click(x, y)
@@ -90,22 +93,26 @@ test "a chat's 文件 tab: a row's menu puts it into the chat's message (添加�
 }
 
 ///|
-test "a chat's 文件 tab on a touch device: the picker the phone's ＋ opens, its places, a folder entered, a file ticked, 添加 putting it into the chat's message" {
-  let calls : Array[Made] = []
-  let t = tab_tester(calls, platform=2)
-  t.frame()
-  // the places (each station's home and its pinned folders), no ways to switch, nothing to drag
-  assert_true(t.find("所有位置") is Some(_))
-  assert_true(t.query(Radio, label="分栏") is None)
-  t.tap_text("文档")
-  t.frame()
-  assert_true(t.find("整个文件夹") is Some(_))
-  t.tap_text("发布清单.md")
-  t.frame()
-  t.tap_text("添加 1 个")
-  t.frame()
-  let sent = @sfbase.files_taken("s-c1")
-  assert_eq(sent.length(), 1)
-  assert_eq(sent[0].abs, fix_docs + "/发布清单.md")
-  assert_false(sent[0].dir)
+test "a chat's 文件 tab, the same on a touch device and on a computer: the places, a folder gone into, a file picked by a press, the folder as a whole at its top, 添加 n putting them into the chat's message" {
+  for platform in [2, 0] {
+    let calls : Array[Made] = []
+    let t = tab_tester(calls, platform~)
+    @sfdesk.tab_place_set("ws1", None)
+    t.frame()
+    // the places: each station a section, its home and its pinned folders a row each
+    assert_true(t.find("照片") is Some(_), msg="MBA's pinned folder: \{platform}")
+    t.tap_text("文档")
+    t.frame()
+    t.frame()
+    assert_true(t.find("整个文件夹") is Some(_), msg="\{platform}")
+    // a file pressed: picked (again: no longer), then 添加 1 个
+    t.tap_text("发布清单.md")
+    t.frame()
+    t.tap_text("添加 1 个")
+    t.frame()
+    let sent = @sfbase.files_taken("s-c1")
+    assert_eq(sent.length(), 1, msg="\{platform}")
+    assert_eq(sent[0].abs, fix_docs + "/发布清单.md")
+    assert_false(sent[0].dir)
+  }
 }

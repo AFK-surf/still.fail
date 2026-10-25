@@ -3,7 +3,7 @@
 // folders pinned, under its name, 离线 beside it while away), a folder entered by a tap, the way back as crumbs over
 // them; files ticked (and the folder shown, as a whole), then 添加: each into the chat's message as the 文件 tab's
 // 添加到消息 puts it (sfbase's files_into: the composer takes it, named by its path or as a file as the chat says).
-// One component: in the ＋'s sheet (the library's panel: station_files_pick) and in a narrow 文件 tab (files_tab).
+// In the ＋'s sheet (the library's panel: station_files_pick); a chat's 文件 tab picks as it does (drive_tab.mbt).
 
 ///|
 /// Where the picker is (None: the places): a station's folder (`root` its place there, `path` under it), with the
