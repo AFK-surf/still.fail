@@ -654,3 +654,20 @@ test "on the tape 新建对话 is in line with the chats' rows under it: its ico
   let ic = icons[0].x + icons[0].w / 2.0
   assert_true((mc - ic).abs() <= 1.0, msg="mark's middle \{mc}, icon's \{ic}")
 }
+
+///|
+test "on the tape a passage left picked keeps nothing from coming over: the sidebar pulled over comes and stays" {
+  let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
+  hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
+  t.draw()
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(pk.ts != "")
+  // what shows of the sidebar pulled across, the passage still picked: the sidebar comes over, and stays
+  t.drag(30.0, 400.0, 500.0, 400.0)
+  assert_true(pk.ts != "")
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+}
