@@ -29,47 +29,25 @@ fn up(key : String, args? : Array[(String, String)] = []) -> String {
 }
 
 ///|
-/// Home's update key (Home.kt): a newer build that brings something the changelog says, quiet like the bar's other
-/// keys (the download icon with an accent dot); while it downloads, how far it is instead. Tapped, it is installed.
+/// Home's update key (Home.kt, the library's update_key): a newer build that brings something the changelog says,
+/// the size of the bar's other keys; while it downloads, how far it is in its place. Tapped, it is installed.
 fn update_button(c : @ui.Ctx, src : Source) -> Unit {
-  let t = @sf.theme()
   let progress = update_progress()
-  if progress != "" {
-    // (read out whole: Home.kt's contentDescription = progress)
-    c.box(label=progress, fn() {
-      c.text(
-        match progress.find(" ") {
-          Some(i) => progress.view(start_offset=i + 1).to_owned()
-          None => "…"
-        },
-        size=13.0,
-        color=t.p.muted,
-        wrap=false,
-      )
-      |> ignore
-    })
-    |> ignore
+  let offered = match update.available {
+    Some(v) => items(Some(v), "news").length() > 0
+    None => false
+  }
+  if progress == "" && !offered && update.phase != "failed" {
     return
   }
-  match update.available {
-    Some(v) if items(Some(v), "news").length() > 0 =>
-      c.box(fn() {
-        if nav_button(c, "download", 20.0, key="home-update", said=up("android-chat.home.update", args=[("version", text(Some(v), "versionName"))])) {
-          update_install(src)
-        }
-        c.layer(align=AEnd, fn() {
-          c.box(pt=3.0, pr=3.0, fn() {
-            c.box(w=Px(13.0), h=Px(13.0), radius=6.5, bg=t.p.bg, pad=2.0, fn() {
-              c.box(w=Fill(1.0), h=Fill(1.0), radius=4.5, bg=t.p.accent, fn() {  }) |> ignore
-            })
-            |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
-    _ => ()
+  let said = up("android-chat.home.update", args=[("version", text(update.available, "versionName"))])
+  let short = match progress.find(" ") {
+    Some(i) => progress.view(start_offset=i + 1).to_owned()
+    None => if progress != "" { "…" } else { "" }
+  }
+  let failed = update.phase == "failed"
+  let why = if failed { update_error("") } else { "" }
+  if @sf.update_key(c, "home-update", 34.0, 20.0, if progress != "" { progress } else { said }, why, short, failed, update_busy()) {
+    update_install(src)
   }
 }
-

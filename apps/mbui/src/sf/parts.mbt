@@ -3168,3 +3168,100 @@ let sign_in_words : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, col
 // kept across runs: a value (no field of it changes)
 let sign_in_many : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false, leading=Font)
 
+
+///|
+/// A newer build offered (Home.kt's update key; one look wherever a frame puts it, the size of the keys beside it:
+/// `side` across, its mark `mark`): the download mark with an accent dot in its top right; while it comes, how far
+/// (`progress`, e.g. 42%) in the mark's place; one that failed, its dot red, `why` its tip. Said to be `label`.
+/// True on the frame it is pressed, not while it is `busy`.
+pub fn update_key(
+  c : @ui.Ctx,
+  key : String,
+  side : Double,
+  mark : Double,
+  label : String,
+  why : String,
+  progress : String,
+  failed : Bool,
+  busy : Bool,
+) -> Bool {
+  let t = theme()
+  let id = c.id(key)
+  c.cursor(id, Hand)
+  let hot = c.lit(id) && !busy
+  let b = c.box(
+    style=(if hot { update_key_hot } else { update_key_box }).then(@ui.style(w=Fixed(side), h=Fixed(side))),
+    id~,
+    fn() {
+      if progress != "" {
+        c.text(progress, style=update_key_words) |> ignore
+      } else {
+        icon(c, "download", size=mark, color=t.p.text) |> ignore
+        c.layer(fn() {
+          c.box(style=update_dot_at, fn() {
+            c.box(style=update_dot_ring, fn() {
+              c.box(style=if failed { update_dot_bad } else { update_dot }, fn() {  }) |> ignore
+            })
+            |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      }
+      if !busy {
+        press_ripple(c, id, side / 2.0)
+      }
+    },
+  )
+  c.semantics(b, Button, id~, label~, disabled=busy)
+  if why != "" {
+    tip(c, key + "/tip", id, why, side=Bottom)
+  }
+  c.clicked(id) && !busy
+}
+
+///|
+/// The key: round, what it holds in its middle.
+// kept across runs: a value (no field of it changes)
+let update_key_box : @ui.Style = @ui.css("radius=Full align=ACenter justify=JCenter")
+
+///|
+/// Under the pointer: on the hover's ground.
+// kept across runs: a value (no field of it changes)
+let update_key_hot : @ui.Style = update_key_box.then(@ui.css("bg=Hover"))
+
+///|
+// kept across runs: a value (no field of it changes)
+let update_key_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+
+///|
+/// Its dot: 3 in from the key's top right, 9 across on a ring of the page's ground 2 wide (Home.kt).
+// kept across runs: a value (no field of it changes)
+let update_dot_at : @ui.Style = @ui.style(w=Full, h=Full, pt=room(update_dot_in), pr=room(update_dot_in), align=AEnd)
+
+///|
+let update_dot_in : Double = 3.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let update_dot_ring : @ui.Style = @ui.style(
+  w=Fixed(update_dot_side),
+  h=Fixed(update_dot_side),
+  radius=Full,
+  bg=Bg,
+  p=room(update_dot_rim),
+)
+
+///|
+let update_dot_side : Double = 13.0
+
+///|
+let update_dot_rim : Double = 2.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let update_dot : @ui.Style = @ui.css("w=Full h=Full radius=Full bg=Accent")
+
+///|
+// kept across runs: a value (no field of it changes)
+let update_dot_bad : @ui.Style = @ui.css("w=Full h=Full radius=Full bg=Danger")

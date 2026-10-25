@@ -616,11 +616,10 @@ pub fn frame(
   // what the sidebar's parts work out from, where the move has got to: its top row (Sidebar.css.ts brand: none in the
   // closed bar), its frosted bands' ground (the block's), the lists' marks on the rail (Rail.css.ts listMark: in as it
   // folds)
-  // (with 更新 over it and no window's buttons, as on a phone's wide screen: their row, its room, not over the first row)
-  // (on the tape 更新 is in the first row: update_in_row, no row of its own)
+  // (更新 is in the first row, before the filter: update_in_row, no row of its own)
   wide.brand_h = c.moved("--brand", if bar {
     0.0
-  } else if inset || (updating && !wide.tape) {
+  } else if inset {
     side_top_inset
   } else {
     side_top_web
@@ -733,8 +732,9 @@ pub fn frame(
       |> ignore
     }
     tape_behind(c, Side, fn() { dock(c, src, w, all, bar, peek, s, col, top, foot, tape_x) })
-    if updating && !(wide.tape && !bar) {
-      update_button(c, src, bar, s, inset, top, tape_x)
+    // (with the sidebar closed, where its first row is not shown: 更新 where the bar's start leaves room for it)
+    if updating && bar && !peek && !wide.tape {
+      update_button(c, src, inset, top)
     }
     if wide.tape {
       let panels = [(Side, closed_bar_in, col - tape_apart), (Page, col, main_w)]

@@ -28,8 +28,8 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         }
       })
       |> ignore
-      // (on the tape 更新 here, before the filter: brand.mbt update_in_row)
-      if wide.tape && !in_bar && update_shown() {
+      // 更新 here, before the filter, wherever the sidebar shows this row (brand.mbt update_in_row)
+      if update_shown() {
         update_in_row(c, src)
       }
       match view {
