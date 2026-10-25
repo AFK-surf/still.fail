@@ -1,7 +1,7 @@
 // 32-sheet-drag (e2e/traces/sheet-drag.trace): a sheet dragged by its top: the workspaces' sheet opened from the
 // name (70%), drawn up to nearly all the screen (94%), dragged down past 30%: closed. Then a new chat's station sheet
-// (half the screen, not draggable): dragged down a little it comes back, past 80 it closes; opened again, its
-// station tapped (newChat.pick).
+// (as tall as its stations, not draggable): dragged down a little it comes back, flicked down 100 (to the window's
+// foot: a Mac's drag ends there) it closes; opened again, its station tapped (newChat.pick).
 
 ///|
 test "32-sheet-drag" {
@@ -25,7 +25,7 @@ test "32-sheet-drag" {
     f.drag("选择运行的 station", 0.0, 40.0, steps=sheet_flick_steps)
     f.run_to(@kit.sheet_rest("sf-present"))
     f.see("选择运行的 station")
-    f.drag("选择运行的 station", 0.0, 200.0, steps=sheet_flick_steps)
+    f.drag("选择运行的 station", 0.0, 100.0, steps=sheet_flick_steps)
     f.run_to(@kit.sheet_rest("sf-present"))
     f.gone("选择运行的 station")
     f.tap("=studio")

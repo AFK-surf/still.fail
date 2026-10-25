@@ -348,8 +348,8 @@ pub fn open_mode(mode : String) -> Unit {
   if mode.has_prefix("newchat") {
     app.nav.rise(NewChat)
     match mode {
-      "newchat-station" => raise_sheet(PickStation("ws1"))
-      "newchat-model" => raise_sheet(RunPicker("ws1/st1"))
+      "newchat-station" => @sfpages.new_chat_ask("station")
+      "newchat-model" => @sfpages.new_chat_ask("model")
       _ => ()
     }
   } else if mode == "home-bars" {

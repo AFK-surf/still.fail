@@ -40,7 +40,6 @@ fn reset() -> Unit {
   steadies.clear()
   sheet_host.kind = NoSheet
   sheet_host.serial = 0
-  sheet_host.accounts = false
   bar_reset()
   composer_page_from.val = None
   new_fix.station = "st1"
@@ -129,8 +128,6 @@ fn reset() -> Unit {
   flash_row.val = None
   bench_on.val = -1
   boxed_n.val = 0
-  run_picker_opened.val = false
-  run_picker_saving.val = false
   // the composer: its ids counted from the start, what waits for it
   next_pending.val = 1
   quote_fields.clear()
@@ -488,8 +485,6 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       }
       sheet_contents(fn(kind) {
         match kind {
-          PickStation(scope) => pick_station_sheet(c, src, scope)
-          RunPicker(station) => run_picker_sheet(c, src, station)
           ShareSheet => share_in_sheet(c, src, w)
           InviteLink => invite_sheet(c, src)
           NoSheet => ()

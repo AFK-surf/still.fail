@@ -18,7 +18,7 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
     None => {
       // (a chat just made from a new chat is the core's own: nothing breathing while its first view comes)
       // (under the bar, as the list's first row is)
-      if error is Some(_) || !new_chat_made(c, r) {
+      if error is Some(_) || !@sfbase.new_chat_made(c, r) {
         c.box(style=@ui.style(w=Full, pt=@sf.under_bar_room()), fn() {
           @sf.waiting(c, shape=Messages, error=match error {
             Some(e) => @sf.t("android-chat.chat.unreadable", args=[("error", text(Some(e), "message"))])
@@ -47,15 +47,6 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
   chat_drop(c, src, r.station, draft, pane)
   flight_waiting(c, draft)
   flight_files(c, draft)
-}
-
-///|
-/// Whether chat `r` was just made from a new chat, its page still leaving or its first words still carried.
-fn new_chat_made(c : @ui.Ctx, r : ChatRef) -> Bool {
-  match fresh.became {
-    Some(b) if b == r => new_leave(c).moving() || flight_carried(r.station + ":" + r.session)
-    _ => false
-  }
 }
 
 ///|

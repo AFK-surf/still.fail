@@ -61,6 +61,6 @@ fn switch_new_out(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     return
   }
   let v = page_switch.new_view
-  let l = c.layer(fn() { new_page(c, src, w, v, field(v, "station"), Some((gone, new_fade(c).get()))) })
+  let l = c.layer(fn() { new_left(c, src, w, v, gone, new_fade(c).get()) })
   c.draw_only(l)
 }
