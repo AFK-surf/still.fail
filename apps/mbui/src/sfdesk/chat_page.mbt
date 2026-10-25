@@ -645,7 +645,14 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
         let connect = field(av, "connect")
         c.box(style=info_agent, fn() {
           c.box(style=info_agent_head, fn() {
-            agent_mark(c, text(field(s, "maker"), "id"), text(s, "runtime"), text(av, "badge"), side=14.0)
+            agent_mark(
+              c,
+              text(field(s, "maker"), "id"),
+              text(s, "runtime"),
+              text(av, "badge"),
+              side=info_mark_side,
+              ground=@sf.panel_ground(),
+            )
             c.text(text(s, "agentText"), style=info_words) |> ignore
           })
           |> ignore
@@ -1061,6 +1068,10 @@ let info_agent : @ui.Style = @ui.css("w=Full gap=S0_5")
 /// 10 apart: info_row), its line under its label (pengxiao, 2026-10-25: their edges out of line).
 // kept across runs: a value (no field of it changes)
 let info_agent_head : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
+
+///|
+/// (the mark as wide as the rows' icons' column, its line as far in as its label: info_agent_line)
+let info_mark_side : Double = 14.0
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -98,6 +98,7 @@ pub fn agent_card(c : @ui.Ctx, src : Source, station : String, a : Json) -> Unit
           text(av, "badge"),
           side=agent_card_mark,
           said=text(s, "badgeText"),
+          ground=@sf.panel_ground(),
         )
         c.box(style=agent_card_name_room, fn() { c.text(text(s, "agentText"), style=agent_card_name) |> ignore })
         |> ignore
