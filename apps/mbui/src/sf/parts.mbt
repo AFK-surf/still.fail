@@ -1253,10 +1253,13 @@ pub fn check_row(c : @ui.Ctx, key : String, label : String, on : Bool, note? : S
 
 ///|
 /// A tick row's room (check_row): 12 by 10 in, its box 12 before its words, a row's corner, the hover grey under the
-/// hand; as high at least, its words and its box as the theme's rows (Rows).
+/// hand; as high at least, its words and its box as the theme's rows (Rows). Its box stands clear of the row's corners,
+/// as far in from its start as the row is round: in the row's middle, as high as both its corners reach, no box of a
+/// tick could be concentric with them (a computer's 18 in a 40 row: 11 from its top and foot, as round as 9.2 there,
+/// a circle), so it stands alone, its own corner.
 // kept across runs: a value (no field of it changes)
 let check_row_box : @ui.Style = @ui.css("row w=Full px=S3 py=S2_5 gap=S3 align=ACenter hovered{bg=Hover} pressed{bg=Hover}").then(
-  @ui.style(radius=row_radius),
+  @ui.style(radius=row_radius, pl=room(row_corner)),
 )
 
 
