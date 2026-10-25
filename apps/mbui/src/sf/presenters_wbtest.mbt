@@ -96,6 +96,41 @@ test "a menu with a mouse at Large: beside what opened it; Escape closes it, an 
 }
 
 ///|
+/// The colours the glyphs of the first words containing `words` are drawn in (those whose quads start in the words'
+/// upper half).
+fn inks_of(t : @ui.Tester, words : String) -> Array[Int64] raise {
+  let (x, y, w, h) = match t.rect_of(words) {
+    Some(r) => r
+    None => fail("no \{words}")
+  }
+  let out = []
+  for g in t.drawn_glyphs() {
+    if g.0 >= x - 1.0 && g.0 <= x + w + 1.0 && g.1 >= y - 1.0 && g.1 < y + h / 2.0 && !out.contains(g.2) {
+      out.push(g.2)
+    }
+  }
+  out
+}
+
+///|
+test "a menu with a mouse at Large: an item not to be chosen now in the subtle ink (it is never lit), clicked does nothing" {
+  let said : Array[String] = []
+  let items = [
+    Some(menu_item_of("重命名", fn() { said.push("rename") }, icon="edit")),
+    Some(menu_item_of("启动", fn() { said.push("start") }, icon="play", disabled=true)),
+  ]
+  let t = presenting_tester(desk, fn(from) { menu(items, from~) })
+  open_it(t)
+  assert_eq(presented_how, [AsPopover])
+  let p = theme().p
+  assert_eq(inks_of(t, "启动"), [p.subtle])
+  assert_eq(inks_of(t, "重命名"), [p.text])
+  t.tap_text("启动")
+  assert_eq(said, [])
+  assert_true(presenting())
+}
+
+///|
 /// Choices to pick from, `n` of them: 第1项 … 第n项, known as c1 … cn. (No words are told in a test: a key is said
 /// as it is, common.search.)
 fn choices_of(n : Int) -> Array[Choice] {

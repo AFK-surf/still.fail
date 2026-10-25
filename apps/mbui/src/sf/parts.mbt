@@ -751,8 +751,9 @@ pub fn panel_ground() -> Int64 {
 
 ///|
 /// A menu's item (controls.css.ts menuItem), as mbui's menus draw it: 34 high at least, 7 by 10 in, its icon (14,
-/// muted) and words (13), 8 apart; the pointer's or the keyboard's ground on it. In a menu of choices (`chooser`,
-/// parts.tsx ChooserItem) a column 14 wide before the words instead, the one chosen checked in it, 6 apart.
+/// muted) and words (13), 8 apart; the pointer's or the keyboard's ground on it; one not to be chosen now (its entry
+/// disabled: never lit) in the subtle ink (menuItem[data-disabled]). In a menu of choices (`chooser`, parts.tsx
+/// ChooserItem) a column 14 wide before the words instead, the one chosen checked in it, 6 apart.
 pub fn menu_row(
   c : @ui.Ctx,
   s : @kit.MenuItemState,
@@ -766,6 +767,7 @@ pub fn menu_row(
     Choice(true) | Check(true) => true
     _ => false
   }
+  let off = s.entry.disabled
   c.box(
     dir=Row,
     w=Fill(1.0),
@@ -788,10 +790,10 @@ pub fn menu_row(
         // 奏 its word (Rail.css.ts zouSmall)
         c.text("奏", style=menu_zou) |> ignore
       } else if icon_name != "" {
-        icon(c, icon_name, size=14.0, color=if danger { t.p.red } else { t.p.muted }) |> ignore
+        icon(c, icon_name, size=14.0, color=if danger { if off { t.p.subtle } else { t.p.red } } else { t.p.muted }) |> ignore
       }
       // (a danger's in red, its icon with it: menuItem[data-danger])
-      c.text(s.entry.label, style=if danger { menu_words_danger } else { menu_words }) |> ignore
+      c.text(s.entry.label, style=if off { menu_words_off } else if danger { menu_words_danger } else { menu_words }) |> ignore
       // what stands at its end (a ＋): pushed there
       match end {
         Some(f) => {
@@ -825,6 +827,10 @@ let menu_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, leading=L5, w
 ///|
 // kept across runs: a value (no field of it changes)
 let menu_words_danger : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, leading=L5, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let menu_words_off : @ui.TextStyle = @ui.text_style(size=Ui, color=Subtle, leading=L5, wrap=false)
 
 ///|
 /// A heading among a menu's items (controls.css.ts menuLabel): 6 over, 4 under, 10 in; 12, muted.
