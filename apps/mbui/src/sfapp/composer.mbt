@@ -1185,21 +1185,23 @@ fn composer_room_with(c : @ui.Ctx, d : Draft, v : ChatView?) -> Double {
 // ── sending ─────────────────────────────────────────────────────────────
 
 ///|
-/// The draft's files that are up, and its images still going up, each from its tile in the composer (what flies to the
-/// message sent: flight.mbt; ChatHost.kt sending: those up, each from where its tile is).
+/// The draft's files that are up, and its images still going up, each from its tile in the composer to what it is in
+/// its message (file_key: one put up from here its upload, up or not; any other its path) (what flies to the message
+/// sent: flight.mbt; ChatHost.kt sending: those up, each from where its tile is).
 fn draft_flying(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft) -> Array[FlyingFile] {
   let flying : Array[FlyingFile] = []
   for f in d.files {
-    // (an image still going up: where its message draws it from its picture here, named by its upload: sent_local)
-    let path = match f.done {
+    // (an image still going up: where its message draws it from its picture here: sent_local)
+    let key = match f.done {
+      Some(_) if f.core_id != "" => @sfbase.upload_path(f.core_id)
       Some(a) => text(Some(a), "path")
       None if f.core_id != "" && f.error is None && kind_of(f.name) == "image" => @sfbase.upload_path(f.core_id)
       None => ""
     }
     match @motion.measured_rect(c, "composer/tile/\{f.id}") {
-      Some(from) if path != "" =>
+      Some(from) if key != "" =>
         flying.push({
-          path,
+          key,
           from,
           picture: if draft_is_picture(f, draft_picture_key(src, r, f)) { draft_picture_key(src, r, f) } else { "" },
           face: draft_face(c, src, r, d, f),
@@ -1223,8 +1225,11 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   // (the station files sent as files with them, taken before the draft lets go of its refs)
   let files = up_files(d)
   let uploads = up_uploads(d)
+  // (as its row has them till the core's comes: sent_local)
+  let shown = up_shown(d)
   for a in ref_attachments(d.key) {
     files.push(a)
+    shown.push(a)
   }
   let taken_refs = refs_of(d.key)
   draft_refs.remove(d.key)
@@ -1240,13 +1245,13 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   for x in taken_refs {
     match (x.up, @motion.measured_rect(c, "composer/tile/ref/\{x.order}")) {
       (Some({ done: Some(a), .. }), Some(from)) if x.mode == "file" && text(Some(a), "path") != "" =>
-        flying.push({ path: text(Some(a), "path"), from, picture: "", face: fn() { ref_card(c, d.key, x) } })
+        flying.push({ key: text(Some(a), "path"), from, picture: "", face: fn() { ref_card(c, d.key, x) } })
       _ => ()
     }
   }
   // in the list from now, before the core has it (chat.mbt LocalSent): what is sent is on screen first
   let rk = r.station + "\u{1}" + r.session
-  let row = sent_local(rk, Some(v), words, files, going=uploads)
+  let row = sent_local(rk, Some(v), words, shown, going=uploads)
   let room = @motion.measured(c, "composer/content").unwrap_or(0.0)
   let chat = d.key
   flight_start(
@@ -2476,6 +2481,23 @@ fn file_tile(c : @ui.Ctx, f : Pending, again? : Int = 0) -> Int {
 /// The files that go up with the message: those up, a link shared in left out (it goes as words).
 fn up_files(d : Draft) -> Array[Json] {
   d.files.filter_map(fn(f) { f.done }).filter(fn(j) { field(Some(j), "link") is None })
+}
+
+///|
+/// The draft's files that are up as its message has them (sent_local): one put up from here naming its upload, as the
+/// core's row does (file_key).
+fn up_shown(d : Draft) -> Array[Json] {
+  d.files.filter_map(fn(f) {
+    match f.done {
+      Some(Object(a)) if field(f.done, "link") is None && f.core_id != "" => {
+        let shown = a.copy()
+        shown["upload"] = Json::string(f.core_id)
+        Some(Json::object(shown))
+      }
+      Some(a) if field(Some(a), "link") is None => Some(a)
+      _ => None
+    }
+  })
 }
 
 ///|

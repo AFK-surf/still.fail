@@ -571,7 +571,14 @@ export class Composers {
     inner.runner.fork(
       run.pipe(
         Effect.match({
-          onSuccess: (done) => { upload.file = null; change({ done }); Deferred.doneUnsafe(upload.done, Effect.succeed(done)); },
+          onSuccess: (done) => {
+            upload.file = null;
+            // Put up from here: every message it goes with says which upload it was, the same file to the pages before
+            // it was up and after, whenever it was sent.
+            if (f.blob) inner.views.local.uploadedHere(station, isObject(done) ? done.path : undefined, f.id);
+            change({ done });
+            Deferred.doneUnsafe(upload.done, Effect.succeed(done));
+          },
           onFailure: (e) => {
             upload.error = true;
             change({ error: e.message || t("core-misc.composer.upload_failed") });

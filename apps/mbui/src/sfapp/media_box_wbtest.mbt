@@ -82,7 +82,7 @@ test "a strip sent flies to its picture's place in the message, letterboxed ther
     font: 15.0,
     line: 20.0,
     desk: false,
-    files: [{ path, from: (16.0, 640.0, 56.0, 56.0), picture: "strip", face: fn() {  } }],
+    files: [{ key: path, from: (16.0, 640.0, 56.0, 56.0), picture: "strip", face: fn() {  } }],
     key: "o:1",
     placed: false,
     placed_frame: -1,
@@ -112,5 +112,72 @@ test "a strip sent flies to its picture's place in the message, letterboxed ther
   // no ground under it: the message shows the picture on none
   let neutral = @sf.theme().p.neutral_bg
   assert_false(t.drawn_rects().iter().any(fn(r) { r.4 == neutral }))
+  send_flight.val = None
+}
+
+///|
+test "an image sent while it goes up flies on to its place once it is up: its message knows it by its upload, before and after" {
+  reset()
+  // the message's file: going up (its path its upload's), then up (the station's), the same upload throughout (the
+  // core's views.ts goingUp, uploadOf)
+  let shot : Ref[Attachment] = {
+    val: {
+      name: "shot.png",
+      path: @sfbase.upload_path("u1"),
+      size: 300.0,
+      width: 1200.0,
+      height: 800.0,
+      thumbhash: "",
+      owner: "",
+      upload: "u1",
+    },
+  }
+  let faced = Ref(0)
+  let f : SendFlight = {
+    chat: "ws1/st1:s-c1",
+    turns: "ws1/st1:s-c1",
+    text: "",
+    from_x: 16.0,
+    from_y: 700.0,
+    field_x: 16.0,
+    field_y: 700.0,
+    field_w: 300.0,
+    field_h: 40.0,
+    room: 0.0,
+    hold: fn(_) {  },
+    font: 15.0,
+    line: 20.0,
+    desk: true,
+    files: [{ key: @sfbase.upload_path("u1"), from: (16.0, 640.0, 56.0, 56.0), picture: "shot", face: fn() { faced.val += 1 } }],
+    key: "o:1",
+    placed: false,
+    placed_frame: -1,
+    way: @motion.Anim::new(0.0),
+    carried: false,
+    from_top: 640.0,
+  }
+  send_flight.val = Some(f)
+  let t = @ui.Tester::new(
+    fn(c) {
+      let item = c.box(style=@ui.style(w=Fixed(240.0), h=Fixed(160.0)), fn() {  })
+      flight_landing(c, f, item, @sfbase.file_key(shot.val))
+      flight_placed(c, f)
+      flight_files(c, f.chat)
+    },
+    w=390.0,
+    h=844.0,
+  )
+  t.add_image("shot", 1200, 800)
+  t.draw()
+  t.draw()
+  // a fifth of its way: up now, at the station's path; on to more than half of it
+  t.run_for(@sfbase.flight_len(true) * 0.2)
+  faced.val = 0
+  shot.val = { ..shot.val, path: "uploads/fx/shot.png" }
+  t.run_for(@sfbase.flight_len(true) * 0.4)
+  // still the picture flying to its place, never drawn back where its tile was
+  assert_eq(faced.val, 0)
+  let drawn = t.drawn_images()
+  assert_true(drawn.iter().any(fn(i) { i[2] > 56.0 && i[2] < 240.0 }), msg="\{drawn}")
   send_flight.val = None
 }

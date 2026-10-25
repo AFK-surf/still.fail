@@ -94,9 +94,9 @@ export class Local {
   readonly #archiving: [string, number | null, string][] = [];
   /// Recent outbox-to-message identities (the UI may skip the acknowledgement frame), by `station␁thread␁seq`.
   readonly delivered = new Map<string, string>();
-  /// Files that went up after their message was sent, by the name the station keeps each under (unique; it keeps it as
-  /// it moves the file into the chat's uploads): the upload each was here (`composer.add`'s id), whose picture this
-  /// device still has (the latest few).
+  /// Files put up from here (from this device's bytes, or while their message waited), by the name the station keeps
+  /// each under (unique; it keeps it as it moves the file into the chat's uploads): the upload each was here
+  /// (`composer.add`'s id), whose picture this device still has (the latest few).
   readonly #uploadedFrom = new Map<string, string>();
   /// Messages sent from here that their station has taken: station, thread, seq.
   readonly #sentIn: [string, number, number][] = [];
@@ -466,18 +466,22 @@ export class Local {
   /// Persist resolved attachments before delivery, so a retry/restart never needs their source Blobs again.
   outboxUploaded(station: string, thread: number, id: string, files: J[]): void {
     const uploads = this.outboxGet(station, thread, id)?.uploads;
-    files.forEach((f, i) => {
-      const from = get(arr(uploads)[i], "id");
-      const path = get(f, "path");
-      if (typeof from !== "string" || typeof path !== "string") return;
-      this.#uploadedFrom.set(`${station}\n${keptName(path)}`, from);
-      while (this.#uploadedFrom.size > 64) this.#uploadedFrom.delete(this.#uploadedFrom.keys().next().value!);
-    });
+    files.forEach((f, i) => this.uploadedHere(station, get(f, "path"), get(arr(uploads)[i], "id")));
     this.#outboxPut(station, thread, this.outbox(station, thread).map((m) => m.id === id ? { ...m, attachments: [...(m.attachments ?? []), ...files], uploads: [] } : m));
     this.onChange({ kind: "outbox", station, thread });
   }
 
-  /// The upload (`composer.add`'s id) a file of `station` kept at `path` was here, sent before it was up.
+  /// A file went up to `station` from here as upload `from` (`composer.add`'s id) and is kept there at `path`: its
+  /// messages say so (`uploadOf`), the latest 64.
+  uploadedHere(station: string, path: unknown, from: unknown): void {
+    if (typeof from !== "string" || typeof path !== "string") return;
+    const key = `${station}\n${keptName(path)}`;
+    this.#uploadedFrom.delete(key);
+    this.#uploadedFrom.set(key, from);
+    while (this.#uploadedFrom.size > 64) this.#uploadedFrom.delete(this.#uploadedFrom.keys().next().value!);
+  }
+
+  /// The upload (`composer.add`'s id) a file of `station` kept at `path` was here (`uploadedHere`).
   uploadOf(station: string, path: unknown): string | undefined {
     return typeof path === "string" ? this.#uploadedFrom.get(`${station}\n${keptName(path)}`) : undefined;
   }
