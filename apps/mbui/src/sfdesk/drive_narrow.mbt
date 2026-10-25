@@ -103,7 +103,7 @@ pub fn folder_narrow(c : @ui.Ctx, src : Source, f : FolderOf, n : NarrowOf) -> U
     if narrow_bar(c, n, name, fn() { narrow_folder_actions(c, src, f, b) }) {
       (n.back)()
     }
-    c.list("files/narrow/" + f.key + "/" + at.station + "/" + root + "/" + at.path, list.length(), narrow_row_est, fn(i) {
+    @sf.rows_list(c, "files/narrow/" + f.key + "/" + at.station + "/" + root + "/" + at.path, list.length(), narrow_row_est, fn(i) {
       match list[i] {
         NCrumbs => narrow_crumbs(c, f)
         NStale(e) =>
@@ -113,7 +113,7 @@ pub fn folder_narrow(c : @ui.Ctx, src : Source, f : FolderOf, n : NarrowOf) -> U
         NFailed(e) => narrow_retry(c, e, narrow_failed_words, fn() { refresh_folder(c, src, at) })
         NReading => @sf.waiting(c, count=7)
         NCount(s) => c.box(style=narrow_count_box, fn() { c.text(s, style=narrow_count_words) |> ignore }) |> ignore
-        NUp(u, first, last) => card_row(c, first, last, 0, fn() { narrow_upload_row(c, src, u) })
+        NUp(u, first, last) => @sf.group_row(c, first, last, fn() { narrow_upload_row(c, src, u) })
         NEmpty =>
           narrow_empty(c, @sf.t("web-pages.drive.emptyFolder"), if write {
             Some((@sf.t("web-pages.drive.upload"), fn() { dv_upload(c, at) }))
@@ -355,7 +355,7 @@ fn narrow_entry_row(c : @ui.Ctx, src : Source, f : FolderOf, b : Browse, e : DvE
         }
     }
   }
-  card_row(c, first, last, if busy { 0 } else { id }, fn() {
+  @sf.group_row(c, first, last, id=if busy { 0 } else { id }, fn() {
     let row = c.box(style=narrow_entry, fn() {
       @sf.icon(c, dv_kind_icon(if e.dir { "folder" } else { e.kind }), size=narrow_kind_icon, color=t.p.muted) |> ignore
       c.box(style=narrow_entry_words, fn() {
@@ -577,7 +577,7 @@ pub fn roots_narrow(
         })
       Some(s) => {
         let rs = s.roots
-        c.list("files/narrow/roots/" + s.station, rs.length() + 2, narrow_row_est, fn(i) {
+        @sf.rows_list(c, "files/narrow/roots/" + s.station, rs.length() + 2, narrow_row_est, fn(i) {
           if i == 0 {
             c.box(style=narrow_count_box, fn() {
               c.text(@sf.t("web-pages.drive.rootsCount", args=[("n", rs.length().to_string())]), style=narrow_count_words) |> ignore
@@ -622,7 +622,7 @@ fn narrow_root_row(
     Some(_) => ()
     None => if c.clicked(id) { go({ station: s.station, root: Some(r.path), path: "" }) }
   }
-  card_row(c, first, last, id, fn() {
+  @sf.group_row(c, first, last, id~, fn() {
     let b = c.box(style=narrow_entry, fn() {
       @sf.icon(c, "folder", size=narrow_kind_icon, color=t.p.muted) |> ignore
       c.box(style=narrow_entry_words, fn() {
@@ -655,60 +655,6 @@ pub fn ask_unpin(c : @ui.Ctx, src : Source, s : DvStation, r : DvRoot) -> Unit {
   )
 }
 
-///|
-/// The rows of a card (ListCard, ListRow): 12 in from the box's sides, the first and last carrying its corners, 10
-/// under the last; each row 8 in from the card's sides (and from its top on the first, its bottom on the last), its
-/// ground concentric with the card's, lit under the pointer or a finger's press (`id`; 0: none), rippling under a
-/// finger.
-fn card_row(c : @ui.Ctx, first : Bool, last : Bool, id : Int, body : () -> Unit) -> Unit {
-  let ground = if id != 0 && c.lit(id) { Some(@sf.theme().p.hover) } else { None }
-  c.box(style=if last { card_room_last } else { card_room }, fn() {
-    c.box(style=card_inner, fn() {
-      // the card's ground: rounded where it ends (its first row's top, its last's bottom), square between rows
-      c.layer(fn() {
-        c.box(style=card_whole, fn() {
-          if !first {
-            c.box(style=card_corner_room, fn() {  }) |> ignore
-          }
-          c.box(style=if first || last { card_ground_end } else { card_ground }, fn() {  }) |> ignore
-          if !last {
-            c.box(style=card_corner_room, fn() {  }) |> ignore
-          }
-        })
-        |> ignore
-      })
-      |> ignore
-      if !first {
-        c.layer(fn() { c.box(style=card_square, fn() {  }) |> ignore }) |> ignore
-      }
-      if !last {
-        c.layer(fn() {
-          c.spacer()
-          c.box(style=card_square, fn() {  }) |> ignore
-        })
-        |> ignore
-      }
-      let room = match (first, last) {
-        (true, true) => card_row_only
-        (true, false) => card_row_first
-        (false, true) => card_row_last
-        (false, false) => card_row_mid
-      }
-      c.box(style=room, fn() {
-        c.box(style=if first || last { card_row_ground_end } else { card_row_ground }, bg?=ground, id~, fn() {
-          body()
-          if id != 0 {
-            @sf.press_ripple(c, id, if first || last { @sf.inner_corner(@sf.drive_card_corner, @sf.list_pad) } else { @sf.row_corner })
-          }
-        })
-        |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
 
 ///|
 /// How tall a row is taken to be before it is laid out.
@@ -880,66 +826,17 @@ let narrow_upload_failed : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, c
 // kept across runs: a value (no field of it changes)
 let narrow_progress : @ui.Style = @ui.css("w=Full pt=S1_25")
 
-///|
-/// A card's room in its box (ListCard: 12 from the box's sides, 10 under the last row).
-// kept across runs: a value (no field of it changes)
-let card_room : @ui.Style = @ui.css("w=Full px=S3")
 
-///|
-// kept across runs: a value (no field of it changes)
-let card_room_last : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5")
 
-///|
-// kept across runs: a value (no field of it changes)
-let card_whole : @ui.Style = @ui.css("w=Full h=Full")
 
-///|
-/// A card's row as tall as what it holds, the card's ground layered under it.
-// kept across runs: a value (no field of it changes)
-let card_inner : @ui.Style = @ui.css("w=Full")
 
-///|
-// kept across runs: a value (no field of it changes)
-let card_corner_room : @ui.Style = @ui.style(w=Full, h=Fixed(@sf.drive_card_corner))
 
-///|
-// kept across runs: a value (no field of it changes)
-let card_ground : @ui.Style = @ui.css("w=Full h=Full bg=Card")
 
-///|
-// kept across runs: a value (no field of it changes)
-let card_ground_end : @ui.Style = @ui.css("w=Full h=Full radius=Xl2 bg=Card")
 
-///|
-/// Between rows the card goes on square to the row's edge (its corner's room twice).
-// kept across runs: a value (no field of it changes)
-let card_square : @ui.Style = @ui.style(w=Full, h=Fixed(card_square_h), bg=Card)
 
-///|
-let card_square_h : Double = @sf.drive_card_corner * 2.0
 
-///|
-/// A row's room on its card: 8 in from its sides, and from its top on the first, its bottom on the last.
-// kept across runs: a value (no field of it changes)
-let card_row_mid : @ui.Style = @ui.css("w=Full px=S2")
 
-///|
-// kept across runs: a value (no field of it changes)
-let card_row_first : @ui.Style = @ui.css("w=Full px=S2 pt=S2")
 
-///|
-// kept across runs: a value (no field of it changes)
-let card_row_last : @ui.Style = @ui.css("w=Full px=S2 pb=S2")
 
-///|
-// kept across runs: a value (no field of it changes)
-let card_row_only : @ui.Style = @ui.css("w=Full p=S2")
 
-///|
-/// A row's own ground (lit): its corner the row's, concentric with the card's at its ends.
-// kept across runs: a value (no field of it changes)
-let card_row_ground : @ui.Style = @ui.css("w=Full radius=Xl2")
 
-///|
-// kept across runs: a value (no field of it changes)
-let card_row_ground_end : @ui.Style = @ui.style(w=Full, radius=@sf.drive_row_end_radius)

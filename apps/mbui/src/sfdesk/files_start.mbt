@@ -96,7 +96,8 @@ pub fn files_station(
     }
     (Some(s), Some(r), Narrow) if s.drive => {
       let here : DriveAt = { station: at.station, root: Some(r), path: at.path }
-      folder_narrow(
+      // (its arrangement said for what draws it, its rows on their card)
+      @sf.with_look(look, fn() { folder_narrow(
         c,
         src,
         {
@@ -114,9 +115,9 @@ pub fn files_station(
           manage: Some(fn() { manage_roots(src, w.id, s.station) }),
         },
         narrow,
-      )
+      ) })
     }
-    (_, _, Narrow) => roots_narrow(c, src, w.id, st, known is None, error, manage, narrow, go)
+    (_, _, Narrow) => @sf.with_look(look, fn() { roots_narrow(c, src, w.id, st, known is None, error, manage, narrow, go) })
     _ => {
       desk_page(
         c,

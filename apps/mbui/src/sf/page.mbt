@@ -448,6 +448,170 @@ pub fn group(c : @ui.Ctx, body : () -> Unit, card? : Bool = false) -> Unit {
 }
 
 ///|
+/// A page's long list (its rows laid out as they come into view: `Ctx::list`), its rows drawn in the arrangement of
+/// the page it is in: they are drawn after the page's frame has said it (group_row reads it).
+pub fn rows_list(c : @ui.Ctx, key : String, count : Int, est : Double, row : (Int) -> Unit) -> Int {
+  let l = look()
+  c.list(key, count, est, fn(i) { with_look(l, fn() { row(i) }) })
+}
+
+///|
+/// What stands over a group's rows and tells of them (a list's head: where it is, what it holds), in as far as their
+/// words: narrow, those on its card (20; 2 over, 8 under); wide, a wide list's rows' (12; 12 over, 8 under); 6 between
+/// its lines.
+pub fn rows_head(c : @ui.Ctx, body : () -> Unit) -> Unit {
+  c.box(style=if look() is Narrow { rows_head_narrow } else { rows_head_wide }, body) |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let rows_head_narrow : @ui.Style = @ui.css("w=Full px=S5 pt=S0_5 pb=S2 gap=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let rows_head_wide : @ui.Style = @ui.css("w=Full px=S3 pt=S3 pb=S2 gap=S1_5")
+
+///|
+/// A row of rows together drawn one at a time (a long list's, each laid out as it comes into view), as `group` holds
+/// them: narrow, on its share of a rounded card (ListCard, ListRow: 12 in from the box's sides, the first and last
+/// carrying its corners, 10 under the last; each row 8 in from the card's sides, and from its top on the first, its
+/// bottom on the last; its ground concentric with the card's, lit under the pointer or a finger's press (`id`; 0:
+/// none, the row lights itself), rippling under a finger); wide, the row alone, on the page.
+pub fn group_row(c : @ui.Ctx, first : Bool, last : Bool, body : () -> Unit, id? : Int = 0) -> Unit {
+  let ground = if id != 0 && c.lit(id) { Some(theme().p.hover) } else { None }
+  if look() is Wide {
+    // (on the page: lit under the pointer or a finger's press where it is pressed itself)
+    if id == 0 {
+      body()
+    } else {
+      c.box(style=group_wide_row, bg?=ground, id~, fn() {
+        body()
+        press_ripple(c, id, row_corner)
+      })
+      |> ignore
+    }
+    return
+  }
+  in_card.val += 1
+  c.box(style=if last { group_room_last } else { group_room }, fn() {
+    c.box(style=group_inner, fn() {
+      // the card's ground: rounded where it ends (its first row's top, its last's bottom), square between rows
+      c.layer(fn() {
+        c.box(style=group_whole, fn() {
+          if !first {
+            c.box(style=group_corner_room, fn() {  }) |> ignore
+          }
+          c.box(style=if first || last { group_ground_end } else { group_ground }, fn() {  }) |> ignore
+          if !last {
+            c.box(style=group_corner_room, fn() {  }) |> ignore
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+      if !first {
+        c.layer(fn() { c.box(style=group_square, fn() {  }) |> ignore }) |> ignore
+      }
+      if !last {
+        c.layer(fn() {
+          c.spacer()
+          c.box(style=group_square, fn() {  }) |> ignore
+        })
+        |> ignore
+      }
+      let room = match (first, last) {
+        (true, true) => group_row_only
+        (true, false) => group_row_first
+        (false, true) => group_row_last
+        (false, false) => group_row_mid
+      }
+      c.box(style=room, fn() {
+        c.box(style=if first || last { group_row_ground_end } else { group_row_ground }, bg?=ground, id~, fn() {
+          body()
+          if id != 0 {
+            press_ripple(c, id, if first || last { inner_corner(group_corner, list_pad) } else { row_corner })
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+  in_card.val -= 1
+}
+
+///|
+/// A row pressed itself on a wide page: the row's corner.
+// kept across runs: a value (no field of it changes)
+let group_wide_row : @ui.Style = @ui.css("w=Full radius=Xl2")
+
+///|
+/// A card's room in its box (ListCard: 12 from the box's sides, 10 under the last row).
+// kept across runs: a value (no field of it changes)
+let group_room : @ui.Style = @ui.css("w=Full px=S3")
+
+///|
+// kept across runs: a value (no field of it changes)
+let group_room_last : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let group_whole : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+/// A card's row as tall as what it holds, the card's ground layered under it.
+// kept across runs: a value (no field of it changes)
+let group_inner : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let group_corner_room : @ui.Style = @ui.style(w=Full, h=Fixed(group_corner))
+
+///|
+// kept across runs: a value (no field of it changes)
+let group_ground : @ui.Style = @ui.css("w=Full h=Full bg=Card")
+
+///|
+// kept across runs: a value (no field of it changes)
+let group_ground_end : @ui.Style = @ui.css("w=Full h=Full radius=Xl2 bg=Card")
+
+///|
+/// Between rows the card goes on square to the row's edge (its corner's room twice).
+// kept across runs: a value (no field of it changes)
+let group_square : @ui.Style = @ui.style(w=Full, h=Fixed(group_square_h), bg=Card)
+
+///|
+let group_square_h : Double = group_corner * 2.0
+
+///|
+/// A row's room on its card: 8 in from its sides, and from its top on the first, its bottom on the last.
+// kept across runs: a value (no field of it changes)
+let group_row_mid : @ui.Style = @ui.css("w=Full px=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let group_row_first : @ui.Style = @ui.css("w=Full px=S2 pt=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let group_row_last : @ui.Style = @ui.css("w=Full px=S2 pb=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let group_row_only : @ui.Style = @ui.css("w=Full p=S2")
+
+///|
+/// A row's own ground (lit): its corner the row's, concentric with the card's at its ends.
+// kept across runs: a value (no field of it changes)
+let group_row_ground : @ui.Style = @ui.css("w=Full radius=Xl2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let group_row_ground_end : @ui.Style = @ui.style(w=Full, radius=group_row_end_radius)
+
+///|
 /// How many wide lists what is drawn now is in (a switch's row, a block in one stands in as far as its rows' words).
 // kept across runs: counted up and down round what a list draws (0 between them)
 let in_list : Ref[Int] = Ref(0)

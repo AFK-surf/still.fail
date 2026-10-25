@@ -157,7 +157,7 @@ fn station_pick_places(c : @ui.Ctx, src : Source, ws : String) -> Unit {
       rows.push((s, r.path, r.name, false))
     }
   }
-  c.list("station-pick/places", rows.length(), narrow_row_est, fn(i) {
+  @sf.rows_list(c, "station-pick/places", rows.length(), narrow_row_est, fn(i) {
     let (s, path, name, home) = rows[i]
     if path == "" && name == "" {
       c.box(style=narrow_count_box, fn() {
@@ -173,7 +173,7 @@ fn station_pick_places(c : @ui.Ctx, src : Source, ws : String) -> Unit {
       if c.clicked(id) {
         spick.at = Some({ station: s.station, station_name: s.name, root: path, root_name: name, path: "" })
       }
-      card_row(c, first, last, id, fn() {
+      @sf.group_row(c, first, last, id~, fn() {
         let b = c.box(style=narrow_entry, fn() {
           @sf.icon(c, if home { "server" } else { "folder" }, size=narrow_kind_icon, color=t.p.muted) |> ignore
           c.box(style=narrow_entry_words, fn() {
@@ -225,7 +225,7 @@ fn station_pick_folder(c : @ui.Ctx, src : Source, at : PickAt) -> Unit {
     if c.clicked(id) {
       press()
     }
-    card_row(c, first, last, id, fn() {
+    @sf.group_row(c, first, last, id~, fn() {
       let b = c.box(style=narrow_entry, fn() {
         @sf.icon(c, icon, size=narrow_kind_icon, color=t.p.muted) |> ignore
         c.box(style=narrow_entry_words, fn() {
@@ -250,7 +250,7 @@ fn station_pick_folder(c : @ui.Ctx, src : Source, at : PickAt) -> Unit {
       }
     Some(_) => {
       let n = shown.length() + 1
-      c.list("station-pick/folder/" + at.station + "|" + at.root + "|" + at.path, n, narrow_row_est, fn(i) {
+      @sf.rows_list(c, "station-pick/folder/" + at.station + "|" + at.root + "|" + at.path, n, narrow_row_est, fn(i) {
         if i == 0 {
           row("whole", true, shown.length() == 0, "folder", @sf.t("web-mobile.files.wholeFolder"), whole.abs, ticked(whole), fn() {
             toggle(whole)
