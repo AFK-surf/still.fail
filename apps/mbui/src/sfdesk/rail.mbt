@@ -134,11 +134,16 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
   // Rail.css.ts rail, top: 56 wide, its places in its middle (9 from its edge; the sidebar reaches over its last 8, so
   // the rail is as wide as the rest), 9 under the last; its top row (41 under the window's buttons, else 5) 6 over its
   // first place; in the bar none, its first place 2 from the bar's top
-  // its grounds' corner: concentric with the corner they stand in, all one (open, its places where the bar's are)
-  rail_round.val = if wide.tape {
+  // its grounds' corner, all one, linked to the corner they stand in: the closed bar's; the tape's sidebar panel's;
+  // open, the window's, its places where the bar's are (12 in: through the bar, the same corner), as round as the
+  // bar's would have them where the window has none to follow
+  let in_bar : @ui.CornerOf = Follow(@sf.closed_bar_of(rail_closed_ground_in), rail_closed_ground_in, @sf.small_corner)
+  rail_round.val = if bar {
+    @sf.rail_ground_radius(@sf.closed_bar_of(rail_closed_ground_in), rail_closed_ground_in)
+  } else if wide.tape {
     @sf.rail_ground_radius(@sf.tape_side_corners()[3], @sf.rail_in_tape() + rail_ground_in)
   } else {
-    @sf.rail_ground_radius(@sf.closed_bar_round(closed_bar_in, rail_closed_ground_in), rail_closed_ground_in)
+    @sf.rail_ground_radius(Window, closed_bar_in + rail_closed_ground_in, alone=in_bar.radius())
   }
   let look = if bar {
     rail_closed

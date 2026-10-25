@@ -1,0 +1,115 @@
+// Corners linked (corner_of.mbt): a corner says where it comes from, the chain is worked out from the window's corner
+// each frame, and the corner rule holds what is linked to its link.
+
+///|
+/// A panel at the right of a window 400 by 200, 6 from its top, right and foot, its right corners linked to the
+/// window's (6 in, 34 alone) and its left the ladder's 34; in its foot right corner, `d` from its right and foot, a
+/// ground 30 square linked to the panel's corner there, 6 in (10 alone).
+fn linked_panel(d : Double) -> (Ctx) -> Unit {
+  fn(c) {
+    c.with_theme({ ..Theme::light(), corner_ladder: [34.0, 26.0, 18.0, 10.0], corner_fit: Some(fit_ranges) }, fn() {
+      c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+        let edge = Follow(Window, 6.0, 34.0)
+        c.box(
+          style=style(radius=LinkedEach(Own(34.0), edge, edge, Own(34.0))),
+          w=Px(300.0),
+          h=Px(188.0),
+          left=94.0,
+          top=6.0,
+          bg=0x333333FFL,
+          fn() {
+            c.box(
+              style=style(radius=Linked(Follow(edge, 6.0, 10.0))),
+              w=Px(30.0),
+              h=Px(30.0),
+              left=300.0 - 30.0 - d,
+              top=188.0 - 30.0 - d,
+              bg=0x555555FFL,
+              fn() {  },
+            )
+            |> ignore
+          },
+        )
+        |> ignore
+      })
+      |> ignore
+    })
+  }
+}
+
+///|
+/// The panel and the ground of linked_panel: their nodes.
+fn linked_nodes() -> (Node, Node) {
+  let c = g()
+  let mut panel : Node? = None
+  let mut ground : Node? = None
+  for i in 0..<c.count {
+    let n = c.nodes[i]
+    if n.kind == kind_box && n.bg == 0x333333FFL {
+      panel = Some(n)
+    }
+    if n.kind == kind_box && n.bg == 0x555555FFL {
+      ground = Some(n)
+    }
+  }
+  match (panel, ground) {
+    (Some(p), Some(b)) => (p, b)
+    _ => abort("no panel and ground")
+  }
+}
+
+///|
+test "corners linked: a panel's corners linked to a Mac window's follow it, a ground linked to the panel's follows that, the rule holds both" {
+  let follow = concentric(16.0, 6.0)
+  let t = Tester::new(linked_panel(6.0), w=400.0, h=200.0, window_corner=16.0)
+  t.draw()
+  let (p, b) = linked_nodes()
+  assert_eq(corners4(p), (34.0, follow, follow, 34.0))
+  assert_eq(corners4(b), (concentric(follow, 6.0), concentric(follow, 6.0), concentric(follow, 6.0), concentric(follow, 6.0)))
+  assert_eq(t.corner_faults(), [])
+}
+
+///|
+test "corners linked: the window square, each stands alone, worked out again; a ground's link as round as its half, a circle" {
+  let t = Tester::new(linked_panel(6.0), w=400.0, h=200.0)
+  t.draw()
+  let (p, b) = linked_nodes()
+  assert_eq(corners4(p), (34.0, 34.0, 34.0, 34.0))
+  // (the panel's 34 less 6 in: 29.2, past the ground's half, so drawn as a circle)
+  assert_eq(b.radius, concentric(34.0, 6.0))
+  assert_eq(b.corner(), 15.0)
+  assert_eq(t.corner_faults(), [])
+}
+
+///|
+test "corners linked: one standing elsewhere than its link says is said" {
+  let t = Tester::new(linked_panel(8.0), w=400.0, h=200.0, window_corner=16.0, corners_held=false)
+  t.draw()
+  let faults = t.corner_faults()
+  assert_true(faults.iter().any(fn(f) { f.contains("linked to follow") }), msg="\{faults}")
+}
+
+///|
+test "corners linked: a link's radius, whether it follows, where it stands" {
+  let t = Tester::new(
+    fn(c) {
+      c.with_theme({ ..Theme::light(), corner_fit: Some(fit_ranges) }, fn() { c.box(fn() {  }) |> ignore })
+    },
+    window_corner=16.0,
+  )
+  t.draw()
+  g().corner_fit = Some(fit_ranges)
+  let edge = Follow(Window, 6.0, 34.0)
+  assert_eq(edge.radius(), concentric(16.0, 6.0))
+  assert_true(edge.follows())
+  assert_eq(edge.inset(), Some(6.0))
+  assert_eq(edge.source(), Some(16.0))
+  // too far in to follow it (4.8, squarer than the ranges let a corner be): alone, standing nowhere it says
+  let deep = Follow(Window, 14.0, 34.0)
+  assert_eq(deep.radius(), 34.0)
+  assert_false(deep.follows())
+  assert_eq(deep.inset(), None)
+  // a capsule 30 high in a 34: 19 in
+  assert_eq(Own(34.0).capsule_at(30.0), None)
+  assert_eq(Own(34.0).capsule_at(40.0), Some(14.0))
+}

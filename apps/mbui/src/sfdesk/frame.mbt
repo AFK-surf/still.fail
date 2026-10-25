@@ -304,7 +304,7 @@ let side_moves : Array[(String, Array[String])] = [
 ///|
 /// The closed bar (shell.css.ts dock, closed): 6 from the window's edges (44 from its top under the window's buttons'
 /// row where they are in the app's top row), 8 from the page.
-pub let closed_bar_in : Double = 6.0
+pub let closed_bar_in : Double = @sf.window_in
 
 ///|
 let closed_bar_top : Double = 44.0
@@ -399,7 +399,7 @@ fn dock(
   let look = if apart {
     dock_apart.then(@ui.style(radius=@sf.corners_radius(tape_pane_corners(Side, false))))
   } else if bar {
-    dock_closed.then(@ui.style(radius=@sf.closed_bar_corner(closed_bar_in, rail_closed_ground_in)))
+    dock_closed.then(@ui.style(radius=@sf.closed_bar_corner(rail_closed_ground_in)))
   } else {
     dock_open
   }
@@ -514,10 +514,6 @@ pub fn frame(
   let own = !gated && !bare
   // laid out Medium, with a sidebar to show: the rail and the sidebar beside the page on the tape
   wide.tape = own && @sf.layout(c.width) is Medium
-  // the tape's panels' corner this frame where they stand at the window's edge: the ladder's pane corner, or the
-  // window's less their 6 from its edges where they follow it (a Mac's 16); each panel's others the pane corner, and
-  // what stands in a corner stands by the one it is in (tape_pane_corners)
-  @sf.tape_edge.val = @sf.window_follow(closed_bar_in, @sf.pane_corner)
   // (off the tape, a phone's or a tablet's screen with less than a phone's width for the page beside it: folded
   // whatever was chosen)
   wide.crowded = own &&
@@ -668,7 +664,7 @@ pub fn frame(
           tx=tape_x,
           id=page_id,
           fn() {
-            @sf.pane_round.val = Some(page_corners)
+            @sf.pane_round.val = Some(@sf.corner_radii(page_corners))
             page_in(panel_h)
             @sf.pane_round.val = None
           },
@@ -690,7 +686,7 @@ pub fn frame(
               top=panel_top,
               tx=tape_x,
               fn() {
-                @sf.pane_round.val = Some(tape_pane_corners(Panel, true))
+                @sf.pane_round.val = Some(@sf.corner_radii(tape_pane_corners(Panel, true)))
                 c.sized(panel_w, panel_h, fn() { tape_side(c, src, w, r) })
                 @sf.pane_round.val = None
               },
@@ -1007,7 +1003,7 @@ fn tape_veils(
 /// The corners of panel `p` on the tape (@sf.tape_corners): on the side it stands at the window's edge in use the
 /// window's less its 6 from it where they follow it, the others the ladder's pane corner. The sidebar's at the window's
 /// left, the side panel's at its right, the page's at its right with no side panel open after it (`panel`).
-fn tape_pane_corners(p : TapePane, panel : Bool) -> FixedArray[Double] {
+fn tape_pane_corners(p : TapePane, panel : Bool) -> FixedArray[@ui.CornerOf] {
   match p {
     Side => @sf.tape_side_corners()
     Page => @sf.tape_corners(left=false, right=!panel)

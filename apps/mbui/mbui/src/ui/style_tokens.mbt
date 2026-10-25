@@ -259,6 +259,10 @@ pub(all) enum Radius {
   /// each corner its own (top left, top right, bottom right, bottom left: CSS's border-radius of four): a panel whose
   /// corners in the window's follow it and the others stand alone
   Corners(Double, Double, Double, Double)
+  /// a corner linked to where it comes from (corner_of.mbt: the window's, another followed so far in): all four
+  Linked(CornerOf)
+  /// the same each its own (top left, then round it)
+  LinkedEach(CornerOf, CornerOf, CornerOf, CornerOf)
 } derive(Eq, Show, Debug)
 
 ///|

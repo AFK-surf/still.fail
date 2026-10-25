@@ -93,6 +93,8 @@ struct Node {
   // drawn): said so (Radius::Corners), or worked out once laid out where some lie in a container's corners and others
   // in none (corners.mbt); None where all four are `radius`
   mut radii : FixedArray[Double]?
+  /// where its corners come from, each, where they are linked (Radius::Linked: the corner rule holds it to them)
+  mut links : FixedArray[CornerOf]?
   mut border_w : Double
   mut border_c : Int64
   mut shadow : Double
@@ -289,6 +291,7 @@ fn Node::new() -> Node {
     bg: 0L,
     radius: 0.0,
     radii: None,
+    links: None,
     border_w: 0.0,
     border_c: 0L,
     shadow: 0.0,
@@ -459,6 +462,7 @@ fn Node::reset_look(self : Node) -> Unit {
   self.bg = 0L
   self.radius = 0.0
   self.radii = None
+  self.links = None
   self.border_w = 0.0
   self.border_c = 0L
   self.shadow = 0.0

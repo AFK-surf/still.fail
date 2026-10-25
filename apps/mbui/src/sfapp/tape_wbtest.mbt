@@ -356,7 +356,7 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   t.tap(650.0, 400.0)
   t.run_for(@sfdesk.side_move_ms * 2.0)
   // (a square window: the panels' corners all the ladder's)
-  assert_eq(@sf.tape_edge.val, @sf.pane_corner)
+  assert_eq(@sf.tape_edge.radius(), @sf.pane_corner)
   let panel = @sf.pane_corner
   // one line: a capsule (its half: a pill in the panel's corner keeps its own, as round as the panel's less the inset
   // where its buttons are a computer's 32), its buttons round in its ends; the screen's buttons (a touch screen's
@@ -411,7 +411,7 @@ test "on a Mac's tape each panel's corners follow the window's where it stands a
   t.run_for(@ui.nav_push_ms)
   // the window's 16, 6 in: 11.2
   let edge = @ui.concentric(16.0, 6.0)
-  assert_eq(@sf.tape_edge.val, edge)
+  assert_eq(@sf.tape_edge.radius(), edge)
   let pane = @sf.pane_corner
   // the sidebar in use: its left corners at the window's, the page's right ones past its right edge as they will be
   // there
