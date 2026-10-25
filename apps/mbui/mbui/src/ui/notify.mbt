@@ -116,6 +116,19 @@ pub fn notice_settings() -> Bool {
 }
 
 ///|
+/// Whether the system shows the number the app puts on its icon (@hostapi.badge_shown). Under a Tester, or a program
+/// playing another system (set_platform), as that system does: macOS and iOS.
+pub fn badge_shown() -> Bool {
+  match fake.val {
+    None if said_platform.val < 0 => @hostapi.badge_shown()
+    _ => {
+      let p = platform()
+      p == 0 || p == 1
+    }
+  }
+}
+
+///|
 /// What the system lets the app show from the next frame on: "granted", "denied", "ask" (not asked yet), "unknown".
 pub fn Tester::set_notice_permission(self : Tester, state : String) -> Unit {
   self.fake.notice_perm = state

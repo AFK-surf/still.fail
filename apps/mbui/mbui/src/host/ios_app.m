@@ -1486,9 +1486,11 @@ void mb_host_notice_cancel(moonbit_string_t tag) {
 
 // 0: what the system allows (1 granted, 2 denied, 3 not asked, 0 not known yet); 1: asked (the system's alert), when
 // it was never asked: 1, else 0; 2: its answer, once (1 allowed, 0 refused, -1 none); 3: the Settings app's page of the
-// app's notifications opened (1; before iOS 15.4 the app's page).
+// app's notifications opened (1; before iOS 15.4 the app's page); 4: the app's number shown on its icon (1: the home
+// screen's badge, mb_host_set_badge).
 int32_t mb_host_notice_state(int32_t what) {
   if (what == 0) return notice_allowed;
+  if (what == 4) return 1;
   if (what == 2) {
     int32_t a = notice_answered;
     if (a >= 0) notice_answered = -1;
@@ -1584,7 +1586,14 @@ void mb_host_set_full_screen(int32_t on) { (void)on; }
 double mb_host_window_corner(void) { return 0; }
 void mb_host_window_drag(void) {}
 void mb_host_set_cursor(int32_t kind) { (void)kind; }
-void mb_host_set_badge(int32_t n) { (void)n; }
+// The number on the app's icon on the home screen (@hostapi.set_badge): what waits for the person; 0 none. (Shown once
+// the person let the app's notifications show badges: asked with them.)
+void mb_host_set_badge(int32_t n) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (@available(iOS 16.0, *)) [[UNUserNotificationCenter currentNotificationCenter] setBadgeCount:n withCompletionHandler:nil];
+    else UIApplication.sharedApplication.applicationIconBadgeNumber = n;
+  });
+}
 // The menu bar (@hostapi.menu_setup): none here.
 void mb_host_menu_setup(moonbit_string_t json) { (void)json; }
 moonbit_string_t mb_host_local_station(void) { return mb_string_from_ns(@""); }

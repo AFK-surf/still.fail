@@ -99,7 +99,8 @@ public final class Notices {
 
     /**
      * 0: what the system allows (1 granted, 2 denied, 3 off and maybe never asked); 1: ask (1 asked); 2: the answer,
-     * once; 3: the system's page of the app's notifications opened (1), where they are allowed again once refused.
+     * once; 3: the system's page of the app's notifications opened (1), where they are allowed again once refused; 4:
+     * the app's number shown on its icon: never (0), the launcher's dot is the system's, while a notification shows.
      */
     static int state(int what) {
         Context c = context();

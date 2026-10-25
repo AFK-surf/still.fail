@@ -2399,9 +2399,10 @@ void mb_host_notice_cancel(moonbit_string_t tag) {
 
 // 0: what the system allows (1 granted, 2 denied, 3 not asked, 0 not known: always so for a bare executable);
 // 1: ask it (1 when asked: not asked before); 2: its answer to the ask, once (1, 0; -1 none yet); 3: System Settings'
-// Notifications opened (1).
+// Notifications opened (1); 4: the app's number shown on its icon (1: the Dock's tile, mb_host_set_badge).
 int32_t mb_host_notice_state(int32_t what) {
   if (what == 0) return notice_allowed;
+  if (what == 4) return 1;
   if (what == 2) {
     int32_t a = notice_answered;
     if (a >= 0) notice_answered = -1;
