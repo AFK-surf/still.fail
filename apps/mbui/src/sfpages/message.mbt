@@ -389,6 +389,13 @@ pub fn person_words(c : @ui.Ctx, words : String, key : String, found? : Array[St
 }
 
 ///|
+/// How wide what the viewer sent may be at the column's end (msgMine msgBubble: 78% of the column, 560 at most): its
+/// bubble, and the quotes over it.
+fn mine_most(c : @ui.Ctx) -> Double {
+  dmin(c.width * bubble_share, bubble_most)
+}
+
+///|
 /// The viewer's words in their bubble (MineBubble: 78% of the column and 560 at most, 8 by 14 in, 18 round, on the
 /// neutral ground).
 fn mine_bubble(c : @ui.Ctx, here : MessageHere, words : String, key : String, found? : Array[String] = []) -> Unit {
@@ -399,9 +406,7 @@ fn mine_bubble(c : @ui.Ctx, here : MessageHere, words : String, key : String, fo
     _ => 1.0
   }
   let b = c.box(
-    style=(if ground < 1.0 { bubble_bare } else { bubble }).then(
-      @ui.style(max_w=Fixed(dmin(c.width * bubble_share, bubble_most))),
-    ),
+    style=(if ground < 1.0 { bubble_bare } else { bubble }).then(@ui.style(max_w=Fixed(mine_most(c)))),
     fn() {
       if ground < 1.0 {
         let g = c.layer(fn() { c.box(style=bubble_ground, fn() {  }) |> ignore })
@@ -707,7 +712,8 @@ pub fn quotes(
   if quotes.length() == 0 {
     return
   }
-  c.box(style=if mine { quote_cards_end } else { quote_cards }, fn() {
+  let style = if mine { quote_cards_end.then(@ui.style(max_w=Fixed(mine_most(c)))) } else { quote_cards }
+  c.box(style~, fn() {
     for i, q in quotes {
       let own = quote_file(q, files)
       let seq = match here.view.messages.iter().find_first(fn(m) { q.ts != "" && m.ts == q.ts }) {
@@ -1099,8 +1105,10 @@ let blocked_act : @ui.TextStyle = @ui.text_style(size=Xs2, leading=L5, weight=Se
 let quote_cards : @ui.Style = @ui.css("w=Full gap=S1 align=AStart")
 
 ///|
+/// The viewer's: as wide as the widest of them needs, at most as its bubble may be (mine_most), at the column's end
+/// over it, as their message is one column there (msgMine: the web's quoteCards justified to its end).
 // kept across runs: a value (no field of it changes)
-let quote_cards_end : @ui.Style = @ui.css("w=Full gap=S1 align=AEnd")
+let quote_cards_end : @ui.Style = @ui.css("gap=S1")
 
 ///|
 /// Where it went (msgRoute): its mark in the accent, the words muted, the place, 6 apart.
