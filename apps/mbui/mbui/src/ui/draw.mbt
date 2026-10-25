@@ -831,6 +831,52 @@ fn Ctx::paint_overlays(self : Ctx) -> Unit {
 }
 
 ///|
+/// What is painted over everything of its layer wherever it is painted (an editor's handles: on Android windows of
+/// their own over the app's window, a dialog's over them), as this frame's instances [from, to): put after the rest of
+/// its layer (the page, or one of overlay.mbt's) once that is painted (Ctx::raise_tops), so that nothing of it painted
+/// after them covers them, and a layer opened over them does; drawn where they were painted (what holds them moved them
+/// with its look, as what it holds).
+let tops : Array[(Int, Int)] = []
+
+///|
+/// What was painted since instance `from` said to be over everything (`tops`); not where only what is tapped is
+/// painted (what is painted so is dropped).
+fn Ctx::paint_top(self : Ctx, from : Int) -> Unit {
+  if dr.mode != mode_hits && self.ninst > from {
+    tops.push((from, self.ninst))
+  }
+}
+
+///|
+/// Once a layer is painted (Ctx::paint; the page: app.mbt): what is over everything in it (`tops`) moved after all
+/// the rest painted so far, each as it was painted and in the order it was, the rest closed up in its order.
+fn Ctx::raise_tops(self : Ctx) -> Unit {
+  if tops.is_empty() {
+    return
+  }
+  let a = self.inst
+  let raised : Array[Double] = []
+  for r in tops {
+    for q in (r.0 * inst_size)..<(r.1 * inst_size) {
+      raised.push(a[q])
+    }
+  }
+  let mut to = tops[0].0 * inst_size
+  for k, r in tops {
+    let end = if k + 1 < tops.length() { tops[k + 1].0 } else { self.ninst }
+    for q in (r.1 * inst_size)..<(end * inst_size) {
+      a[to] = a[q]
+      to = to + 1
+    }
+  }
+  for v in raised {
+    a[to] = v
+    to = to + 1
+  }
+  tops.clear()
+}
+
+///|
 /// Under list node `i`'s rows: what the hooks draw there.
 fn Ctx::paint_underlay(self : Ctx, i : Int) -> Unit {
   if underlay_hooks.is_empty() || dr.mode == mode_hits {

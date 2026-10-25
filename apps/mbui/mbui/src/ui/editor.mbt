@@ -1007,7 +1007,8 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   pop_clip()
   // Android's handle under the caret (Compose's cursor handle, TextFieldSelectionManager): a drop in the caret's colour
   // hanging from the middle of its foot, a circle 25 across under a corner turned to point up, over everything (a
-  // popup's: no box cuts it)
+  // popup's, a window of its own over the app's on Android: no box cuts it and nothing painted after it covers it,
+  // Ctx::paint_top)
   if focused && st.handle && h_feel() == 2 && a == b && ml == 0 && st.text.length() > 0 {
     let (cx, cy, cw, ch) = st.caret_box(tl, n, st.caret)
     let x = cx + cw / 2.0
@@ -1023,6 +1024,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     self.emit_rect(x, y, r, r, 0.0, st.caret_color, 0.0, 0L, alpha)
     turn_insts(self.inst, i0, self.ninst, 3.141592653589793 / 4.0, x, y, outer)
     pop_clip()
+    self.paint_top(i0)
   } else {
     st.handle_on = false
     if !focused {
@@ -1041,6 +1043,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     st.sel_by = st.oy + (bl + 1).to_double() * tl.line_h
     st.sel_on = true
     push_unclipped()
+    let i0 = self.ninst
     // the start's: the circle to the tip's left, its square corner at the tip
     self.emit_rect(st.sel_ax - 2.0 * r, st.sel_ay, 2.0 * r, 2.0 * r, r, st.caret_color, 0.0, 0L, alpha)
     self.emit_rect(st.sel_ax - r, st.sel_ay, r, r, 0.0, st.caret_color, 0.0, 0L, alpha)
@@ -1048,6 +1051,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     self.emit_rect(st.sel_bx, st.sel_by, 2.0 * r, 2.0 * r, r, st.caret_color, 0.0, 0L, alpha)
     self.emit_rect(st.sel_bx, st.sel_by, r, r, 0.0, st.caret_color, 0.0, 0L, alpha)
     pop_clip()
+    self.paint_top(i0)
   } else {
     st.sel_on = false
     if !focused || a == b {

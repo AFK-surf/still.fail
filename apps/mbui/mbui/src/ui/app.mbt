@@ -302,6 +302,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   }
   let t2 = h_now()
   c.ninst = 0
+  tops.clear()
   c.segs.clear()
   text_runs.runs.clear()
   c.next_hit_ids.clear()
@@ -314,7 +315,11 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.across_seen.clear()
   c.glass_frame()
   c.paint(root, 1.0)
+  // what is over everything of the page wherever it was painted (an editor's handles), after the rest of it (a layer's
+  // after the rest of the layer: Ctx::paint); what flies over everything over them still
+  c.raise_tops()
   c.paint_overlays()
+  c.raise_tops()
   // what was shaped and not drawn, for the host to draw ahead while it presents this frame (text.mbt)
   glyphs_ahead()
   c.emit_segs()
