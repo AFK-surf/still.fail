@@ -1718,7 +1718,7 @@
   "web-pages.vault.empty": "暂无条目",
   "web-pages.vault.sealed": "仅你的设备可解密",
   "web-pages.vault.opened": "已解锁，5 分钟后自动锁定",
-  "web-pages.vault.devices": "设备",
+  "web-pages.vault.vaults": "库",
   "web-pages.vault.devicesHold": {
     "one": "{n} 台设备已授权",
     "other": "{n} 台设备已授权"
@@ -1780,6 +1780,12 @@
   "web-pages.vault.deleteBody": "删除后不可恢复，已批准的授权在到期前仍有效",
   "web-pages.vault.deleteWhat": "删除",
   "web-pages.vault.deleted": "已删除",
+  "web-pages.vault.deleteVault": "删除此库",
+  "web-pages.vault.deleteVaultEmpty": "此库中暂无密钥",
+  "web-pages.vault.deleteVaultBody": {
+    "one": "其中 {n} 条密钥会一并删除，不可恢复；已批准的授权在到期前仍有效",
+    "other": "其中 {n} 条密钥会一并删除，不可恢复；已批准的授权在到期前仍有效"
+  },
   "web-pages.vault.conflict": "已在其他设备修改，已刷新",
   "web-pages.vault.openWhat": "打开",
   "web-pages.vault.show": "显示",

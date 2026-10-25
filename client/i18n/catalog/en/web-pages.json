@@ -1793,7 +1793,7 @@
   "web-pages.vault.empty": "Nothing here yet",
   "web-pages.vault.sealed": "Only your devices open it",
   "web-pages.vault.opened": "Unlocked · locks itself in 5 minutes",
-  "web-pages.vault.devices": "Devices",
+  "web-pages.vault.vaults": "Vaults",
   "web-pages.vault.devicesHold": {
     "one": "{n} device holds the key",
     "other": "{n} devices hold the key"
@@ -1855,6 +1855,12 @@
   "web-pages.vault.deleteBody": "Agents can no longer ask for it; grants already given last till they end",
   "web-pages.vault.deleteWhat": "delete",
   "web-pages.vault.deleted": "Deleted",
+  "web-pages.vault.deleteVault": "Delete vault",
+  "web-pages.vault.deleteVaultEmpty": "There are no secrets in this vault",
+  "web-pages.vault.deleteVaultBody": {
+    "one": "The {n} secret in it is deleted with it and can't be recovered; grants already given last till they end",
+    "other": "The {n} secrets in it are deleted with it and can't be recovered; grants already given last till they end"
+  },
   "web-pages.vault.conflict": "Changed elsewhere; refreshed",
   "web-pages.vault.openWhat": "open",
   "web-pages.vault.show": "Show",

@@ -1,6 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { cardFoot } from "../styles/pages.css.ts";
+import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
+import { CARD_INNER, cardFoot } from "../styles/pages.css.ts";
 
 // 设置 › 密钥 (Vault.tsx): the settings pages' cards and lists (pages.css.ts), what is the vault's own here.
 export const sub = style({ display: "block", margin: "0", color: vars.muted });
@@ -41,6 +42,9 @@ export const link = style({ color: vars.accentText, textDecoration: "none", font
 
 /** A row of a card's list (the devices). */
 export const rows = style({ display: "grid", gap: "12px" });
+/** A row's ⋯ (a vault's), at the card's end: its ground concentric with the card's corner, where the first and last
+ *  row's stand in it. */
+globalStyle(`${rows} ${iconBtn}`, { borderRadius: CARD_INNER });
 export const row = style({ display: "flex", alignItems: "center", gap: "12px", fontSize: vars.textUi, minHeight: "30px" });
 export const rowText = style({ flex: "1", minWidth: "0", display: "flex", alignItems: "baseline", gap: "6px 10px", flexWrap: "wrap" });
 export const rowName = style({ fontWeight: "500", color: vars.text, fontSize: vars.textUi });

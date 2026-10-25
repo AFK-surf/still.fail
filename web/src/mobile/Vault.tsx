@@ -4,7 +4,7 @@
 // opens in a bottom sheet (its fields masked, shown or copied) and is edited in another. A web page only lists the
 // names it is told. All of it is the core's (`vaults`, `vaultItems`, `vault.*`; ../vault.ts): this only draws.
 import { useState } from "react";
-import { ChevronRight, Copy, Edit, Eye, Plus, Quota, ShieldCheck } from "@stillfail/ui/icons.tsx";
+import { ChevronRight, Copy, Edit, Eye, More, Plus, Quota, ShieldCheck, Trash } from "@stillfail/ui/icons.tsx";
 import { useParams } from "react-router";
 import { useProfiles } from "../api.ts";
 import { hosts, profileGroups } from "../cloud/settings.tsx";
@@ -26,6 +26,7 @@ import { Button, LargeTitle, LinkButton, ListCard, ListRow, NavBar, NavButton, P
 import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
+import * as barsCss from "./styles/bars.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import * as connectsCss from "./Connects.css.ts";
 import * as securityCss from "./Security.css.ts";
@@ -137,7 +138,7 @@ function Vaults({ view }: { view: VaultsView }) {
       <ProfileAccounts />
       {view.vaults.map((v) => (plain || v.keyed ? <LibraryVault key={v.id} v={v} plain={plain} /> : <VaultItems key={v.id} v={v} />))}
       {!plain && view.vaults.length > 0 && <>
-        <SectionHeader title={t("web-pages.vault.devices")} start={24} />
+        <SectionHeader title={t("web-pages.vault.vaults")} start={24} />
         <ListCard>{view.vaults.map((v) => <Devices key={v.id} v={v} />)}</ListCard>
       </>}
     </>
@@ -221,17 +222,32 @@ function ItemRow({ row, onOpen }: { row: VaultItemRow; onOpen: (() => void) | un
  * owner gives it to (done by itself as the owner's device next has the key in hand). */
 function Devices({ v }: { v: VaultRow }) {
   const app = useApp();
+  const ws = app.entry.id;
   const run = useVaultCall();
-  const adding = useDoing("vault.addDevice", { workspace: app.entry.id, vault: v.id });
+  const adding = useDoing("vault.addDevice", { workspace: ws, vault: v.id });
+  const deleting = useDoing("vault.delete", { workspace: ws, vault: v.id });
   const can = v.missing > 0 && v.mine && v.keyed;
+  const remove = () => confirm(app, {
+    title: t("web-pages.vault.deleteTitle", { name: v.name }), action: t("common.delete"), danger: true,
+    text: v.items > 0 ? t("web-pages.vault.deleteVaultBody", { n: v.items }) : t("web-pages.vault.deleteVaultEmpty"),
+    run: () => run("vault.delete", { workspace: ws, vault: v.id }, t("web-pages.vault.deleteWhat"), t("web-pages.vault.deleted")),
+  });
   return (
-    <ListRow onClick={can && !adding ? () => void run("vault.addDevice", { workspace: app.entry.id, vault: v.id }, t("web-pages.vault.addDeviceWhat"), t("web-pages.vault.addedDevice")) : undefined}>
+    <ListRow>
       <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
         <span className={listsCss.mRowTitle}>{v.name}</span>
         {v.missing > 0 ? <span className={securityCss.mWarn}>{t("web-pages.vault.missing", { n: v.missing })}</span>
           : <span className={listsCss.mRowNote}>{t("web-pages.vault.devicesHold", { n: v.devices })}</span>}
       </span>
-      {adding ? <Spinner inline /> : can && <span className={partsCss.mAccent}>{t("web-pages.vault.addDevice")}</span>}
+      {can && <LinkButton label={t("web-pages.vault.addDevice")} busy={adding}
+        onClick={() => void run("vault.addDevice", { workspace: ws, vault: v.id }, t("web-pages.vault.addDeviceWhat"), t("web-pages.vault.addedDevice"))} />}
+      {deleting ? <Spinner inline /> : v.mine && (
+        // (its owner's ⋯: deleting it, asked first; the menu is 180 wide, its right edge under the button's)
+        <button type="button" className={barsCss.mNavButton} aria-label={t("common.more")} onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          app.menu({ anchor: new DOMRect(r.right - 180, r.top, 0, r.height), items: [{ label: t("web-pages.vault.deleteVault"), icon: <Trash size={16} />, action: remove }] });
+        }}><More size={18} /></button>
+      )}
     </ListRow>
   );
 }

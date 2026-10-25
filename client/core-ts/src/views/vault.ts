@@ -22,6 +22,7 @@
 //                                 the first time (`{words}`, shown once: never kept); one's own vault made when one
 //                                 has none (`{made}`)
 //   create {name, station?}       a vault of one's own, keyed for each of one's devices set up
+//   delete {vault}                a vault of one's own deleted, its items with it (the person asked when it holds any)
 //   addDevice {vault, device?}    the vault's key sealed for members' devices set up since (its owner signs; done by
 //                                 itself too whenever the owner's device unseals it)
 //   putItem {vault, id?, plain, listing?}  an item written (a new one without `id`)
@@ -45,7 +46,7 @@ import type { Owner } from "../core/routing.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { type Entry, Signer } from "../lock.ts";
-import { signerOf } from "./lock.ts";
+import { askPerson, signerOf } from "./lock.ts";
 import type { Topic } from "../protocol.ts";
 import { StationAddr } from "../station/addr.ts";
 import { Priority } from "../sync/scheduler.ts";
@@ -261,9 +262,12 @@ function readStation(inner: Inner, address: string): Effect.Effect<void, CoreErr
     }
     for (const v of [...(plainItems !== null ? [PLAIN] : []), ...(list ?? []).map((v) => v.id)]) yield* readUses(inner, address, v);
     // Each item as the latest version any station holds (a copy behind its host's says nothing newer).
-    for (const v of list ?? []) changeItems(inner, ws, v.id, (held) => {
-      for (const i of all) if (i.vault === v.id && newer(i, held[i.id])) held[i.id] = i;
-    });
+    for (const v of list ?? []) {
+      if (v.deleted) inner.data.forgetRecord("vaultItems", `${ws}/${v.id}`);
+      else changeItems(inner, ws, v.id, (held) => {
+        for (const i of all) if (i.vault === v.id && newer(i, held[i.id])) held[i.id] = i;
+      });
+    }
     change(inner, ws, (h) => {
       if (list !== null) {
         delete h.refused[station];
@@ -327,7 +331,7 @@ function lacks(h: Pick<Held, "vaults" | "on">, items: (vault: string) => Record<
   return Object.values(h.vaults).flatMap((v) => {
     const have = h.on[v.id]?.[station];
     const behind = have === undefined || have.seq < v.seq;
-    const missing = Object.values(items(v.id)).filter((i) => (have?.items[i.id] ?? -1) < i.version);
+    const missing = v.deleted ? [] : Object.values(items(v.id)).filter((i) => (have?.items[i.id] ?? -1) < i.version);
     return behind || missing.length > 0 ? [{ id: v.id, vault: behind ? v : null, items: missing }] : [];
   });
 }
@@ -378,8 +382,9 @@ function heard(inner: Inner, address: string, name: string, data: unknown): void
       if (typeof d?.id !== "string") return;
       const known = held(inner, ws).on[d.id]?.[station] !== undefined;
       change(inner, ws, (h) => holds(h, d as Vault, station, null));
+      if (d.deleted) inner.data.forgetRecord("vaultItems", `${ws}/${d.id}`);
       // One this person was just put in (or this station was just brought): its items are read.
-      if (!known) inner.scheduler.enqueue(address, `${address} vault/${d.id}`, Priority.background, readItems(inner, address, d.id));
+      else if (!known) inner.scheduler.enqueue(address, `${address} vault/${d.id}`, Priority.background, readItems(inner, address, d.id));
       spreadAll(inner, ws);
       return;
     }
@@ -549,7 +554,7 @@ export function vaultsView(inner: Inner, ws: string): J {
   const vouched = certs(inner, ws, lock);
   const mine = self ? vouched.find((c) => c.device === self.device) : undefined;
   const vaults = Object.values(h.vaults)
-    .filter((v) => trusted(lock, v) && sub !== null && v.members.includes(sub))
+    .filter((v) => !v.deleted && trusted(lock, v) && sub !== null && v.members.includes(sub))
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : 1))
     .map((v) => {
       const keyed = new Map(v.keys.map((k) => [k.cert.device, k.cert.box]));
@@ -568,7 +573,7 @@ export function vaultsView(inner: Inner, ws: string): J {
     });
   // (a secret to keep is told only to whom it is for: it may be meant for no vault yet)
   const requests = Object.values(h.requests)
-    .filter((r) => r.status === "pending" && (r.save !== undefined || (h.vaults[r.vault] !== undefined && sub !== null && h.vaults[r.vault]!.members.includes(sub))))
+    .filter((r) => r.status === "pending" && (r.save !== undefined || (h.vaults[r.vault] !== undefined && !h.vaults[r.vault]!.deleted && sub !== null && h.vaults[r.vault]!.members.includes(sub))))
     .sort((a, b) => a.at - b.at)
     .map((r) => {
       const listing = items(inner, ws, r.vault)[r.item]?.listing;
@@ -632,7 +637,7 @@ export function itemsView(inner: Inner, ws: string, id: string): J {
   const last = lastUses(inner, ws, id);
   const v = held(inner, ws).vaults[id];
   const lock = lockOf(inner, ws);
-  if (!v || lock instanceof CoreError || !trusted(lock, v)) return { vault: id, name: "", open: false, items: [] };
+  if (!v || v.deleted || lock instanceof CoreError || !trusted(lock, v)) return { vault: id, name: "", open: false, items: [] };
   const key = unlocked(inner, v) ? mem(inner).keys.get(keyOf(v))!.key : null;
   const list = Object.values(items(inner, ws, id))
     .filter((i) => !i.deleted)
@@ -692,6 +697,8 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
       return v.setup();
     case "create":
       return v.create(p("name"), str(c.params.station));
+    case "delete":
+      return v.delete(p("vault"));
     case "addDevice":
       return v.addDevice(p("vault"), str(c.params.device));
     case "putItem":
@@ -769,7 +776,7 @@ class Vaults {
 
   #vault(lock: Checked, id: string): Effect.Effect<Vault, CoreError> {
     const v = held(this.#inner, this.ws).vaults[id];
-    if (!v || !trusted(lock, v)) return fail("vault_unknown", t("core-misc.vault.unknown"));
+    if (!v || v.deleted || !trusted(lock, v)) return fail("vault_unknown", t("core-misc.vault.unknown"));
     return Effect.succeed(v);
   }
 
@@ -910,7 +917,7 @@ class Vaults {
       const stations = published.filter(([, ok]) => ok).map(([id]) => id);
       for (const s of stations) yield* Effect.ignore(readStation(inner, `${self.ws}/${s}`));
       // (not made, it is offered on the page as when there is none)
-      const own = Object.values(held(inner, self.ws).vaults).some((v) => trusted(lock, v) && v.owner === who.sub);
+      const own = Object.values(held(inner, self.ws).vaults).some((v) => !v.deleted && trusted(lock, v) && v.owner === who.sub);
       const made = own ? null : yield* Effect.orElseSucceed(Effect.map(self.create(t("core-misc.vault.personal"), null), (m) => (m as { id: string }).id), () => null);
       return { words, device: who.device, stations, made };
     });
@@ -948,6 +955,27 @@ class Vaults {
       const v = yield* self.#putVault(next, on);
       self.#keep(v, key);
       return { id, station: on };
+    });
+  }
+
+  /// A vault of one's own deleted: its last version, which its owner signs, sealed to no one under a new epoch (the
+  /// stations let its items go, and bring it to those holding an older one); the person asked first when it holds any
+  /// item, which goes with it.
+  delete(id: string): Effect.Effect<unknown, CoreError> {
+    const self = this;
+    return Effect.gen(function* () {
+      const inner = self.#inner;
+      const { lock, signer, self: who } = yield* self.#ready();
+      const v = yield* self.#vault(lock, id);
+      if (v.owner !== who.sub) return yield* fail("vault_not_owner", t("core-misc.vault.notOwnerDelete"));
+      const n = Object.values(items(inner, self.ws, v.id)).filter((i) => !i.deleted).length;
+      if (n > 0) yield* askPerson(inner, t("core-misc.vault.reason.delete", { name: v.name }), "vault_refused");
+      const { sig: _, recovery: _r, ...rest } = v;
+      yield* self.#putVault(sign({ ...rest, seq: v.seq + 1, epoch: v.epoch + 1, keys: [], deleted: true as const, at: nowS(inner) }, TAG.vault, signer), held(inner, self.ws).at[v.id] ?? "");
+      mem(inner).keys.delete(keyOf(v));
+      inner.data.forgetRecord("vaultItems", `${self.ws}/${v.id}`);
+      invalidate(inner, self.ws);
+      return { deleted: v.id };
     });
   }
 
@@ -1192,7 +1220,7 @@ class Vaults {
       const theirs = Object.values(h.vaults).filter(keyedHere).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : 1));
       const chosen = (h.vaults[r.vault] && keyedHere(h.vaults[r.vault]!) ? h.vaults[r.vault] : undefined) ?? theirs.find((x) => x.owner === who.sub) ?? theirs[0];
       // Their own vault this device has no key to yet: given it by a device that has (not a second one made here).
-      if (!chosen && Object.values(h.vaults).some((v) => trusted(lock, v) && v.owner === who.sub)) return yield* fail("vault_no_key", t("core-misc.vault.noKey"));
+      if (!chosen && Object.values(h.vaults).some((v) => !v.deleted && trusted(lock, v) && v.owner === who.sub)) return yield* fail("vault_no_key", t("core-misc.vault.noKey"));
       const priv = yield* self.#boxKey(t("core-misc.vault.reason.save", { name: s.name }));
       if (boxPublic(priv) !== sealed.box) return yield* fail("vault_no_key", t("core-misc.vault.notSealedHere"));
       const body = yield* Effect.try({
@@ -1359,7 +1387,9 @@ class Vaults {
     return Effect.gen(function* () {
       const inner = self.#inner;
       const { lock, self: who } = yield* self.#ready();
-      const own = Object.values(held(inner, self.ws).vaults).find((v) => trusted(lock, v) && v.owner === who.sub);
+      // (one this device holds a key to first)
+      const owns = Object.values(held(inner, self.ws).vaults).filter((v) => !v.deleted && trusted(lock, v) && v.owner === who.sub);
+      const own = owns.find((v) => v.keys.some((k) => k.cert.device === who.device)) ?? owns[0];
       if (!own) return yield* fail("vault_not_set_up", t("core-misc.vault.notSetUp"));
       const same = (p: Plain) => JSON.stringify([p.kind, p.name, p.fields]);
       const had = new Set((yield* self.unsealOwn()).map((s) => same(s.plain)));

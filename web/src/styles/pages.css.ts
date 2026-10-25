@@ -45,6 +45,8 @@ export const CARD_BUTTON = 36;
 export const LIST_PAD = 8;
 /** The settings cards' corner, for one with nothing drawn in its corners. */
 const CARD_CORNER = `calc(22px * ${vars.cornerScale})`;
+/** The corner of what stands in a card of words' corner, its padding in from both edges: concentric with the card's. */
+export const CARD_INNER = `calc(${CARD_CORNER} - ${CARD_PAD}px)`;
 /** A pressable row's corner in a list card, and a button's: one curve. */
 export const ROW_CORNER = `calc(${CARD_BUTTON / 2}px * ${vars.cornerScale})`;
 export const cardGround = `color-mix(in oklab, ${vars.text} 4%, ${vars.canvas})`;

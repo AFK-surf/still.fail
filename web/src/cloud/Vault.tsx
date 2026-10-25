@@ -5,10 +5,10 @@
 // names it is told. All of it is the core's (`vaults`, `vaultItems`, `vault.*`; ../vault.ts): this only draws.
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
-import { Copy, Devices, Eye, Key, Plus, Server, ShieldCheck, User } from "@stillfail/ui/icons.tsx";
+import { Copy, Devices, Eye, Key, Plus, Server, ShieldCheck, Trash, User } from "@stillfail/ui/icons.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing } from "../doing.ts";
-import { Button, Choices, Confirm, Dialog, Field, IconButton, MobileBack, ProviderLogo, Section, Segmented, SwitchRow, Spinner, Waiting } from "../ui.tsx";
+import { Button, Choices, Confirm, Dialog, Field, IconButton, Menu, MobileBack, ProviderLogo, Section, Segmented, SwitchRow, Spinner, Waiting } from "../ui.tsx";
 import { useProfiles, useStations } from "../api.ts";
 import { profilePath } from "../ProfilesNav.tsx";
 import { profileGroups } from "./settings.tsx";
@@ -180,7 +180,7 @@ function Library({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view
       {/* Nothing of its own yet says so only where the page lists nothing else (the profiles' accounts above). */}
       {view.vaults.map((v) => <LibraryVault key={v.id} entry={entry} v={v} plain={plain} many={view.vaults.length > 1} quiet={(profiles?.items.length ?? 0) > 0} />)}
       {!plain && view.vaults.length > 0 && (
-        <Section title={t("web-pages.vault.devices")}>
+        <Section title={t("web-pages.vault.vaults")}>
           <div className={pagesCss.card}><div className={css.rows}>{view.vaults.map((v) => <DevicesRow key={v.id} entry={entry} v={v} />)}</div></div>
         </Section>
       )}
@@ -396,11 +396,14 @@ function ItemRow({ entry, row, readOnly, onOpen }: { entry: WorkspaceEntry; row:
     : <button type="button" className={`${pagesCss.listRow} ${css.rowButton}`} disabled={opening} onClick={onOpen}>{body}</button>}</li>;
 }
 
-/** A vault's devices: its name, how many hold its key or, where some have none yet, how many; members' new ones its
- * owner gives it to (done by itself as the owner's device next has the key in hand). */
+/** A vault: its name, how many devices hold its key or, where some have none yet, how many; members' new ones its
+ * owner gives it to (done by itself as the owner's device next has the key in hand); its owner's ⋯ deletes it, asked
+ * first. */
 function DevicesRow({ entry, v }: { entry: WorkspaceEntry; v: VaultRow }) {
   const run = useVaultCall();
   const adding = useDoing("vault.addDevice", { workspace: entry.id, vault: v.id });
+  const deleting = useDoing("vault.delete", { workspace: entry.id, vault: v.id });
+  const [asking, setAsking] = useState(false);
   return (
     <div className={css.row}>
       <div className={css.rowText}>
@@ -410,6 +413,10 @@ function DevicesRow({ entry, v }: { entry: WorkspaceEntry; v: VaultRow }) {
       </div>
       {v.missing > 0 && v.mine && v.keyed && <Button variant="ghost" busy={adding}
         onClick={() => void run("vault.addDevice", { workspace: entry.id, vault: v.id }, t("web-pages.vault.addDeviceWhat"), t("web-pages.vault.addedDevice"))}>{t("web-pages.vault.addDevice")}</Button>}
+      {deleting ? <Spinner inline /> : v.mine && <Menu items={[{ label: t("web-pages.vault.deleteVault"), icon: Trash, danger: true, onSelect: () => setAsking(true) }]} />}
+      <Confirm open={asking} onClose={() => setAsking(false)} title={t("web-pages.vault.deleteTitle", { name: v.name })} action={t("common.delete")}
+        description={v.items > 0 ? t("web-pages.vault.deleteVaultBody", { n: v.items }) : t("web-pages.vault.deleteVaultEmpty")}
+        onConfirm={() => { setAsking(false); void run("vault.delete", { workspace: entry.id, vault: v.id }, t("web-pages.vault.deleteWhat"), t("web-pages.vault.deleted")); }} />
     </div>
   );
 }
