@@ -697,6 +697,13 @@ pub let composer_inner : Double = row_corner
 pub let composer_pad : Double = corner_inset
 
 ///|
+/// How much short of the box's padding the files over a composer's words end their lines: the rest of its top corner
+/// past the padding (card_corner less composer_pad). What wraps there ends where it lands, so the last of the first
+/// line would otherwise stand in that corner at some widths, neither concentric with it nor out of it (the corner
+/// rule); kept out of it, it is out at every width.
+pub let composer_files_end : Double = card_corner - composer_pad
+
+///|
 /// quoteCardSource: 7 by 11 over the words (in the composer 9 over, 16 at its start, 34 at its end for its ✕).
 // kept across runs: a value (no field of it changes)
 let quote_source : @ui.Style = @ui.style(w=Full, px=room(quote_in), pt=room(quote_over), pb=room(quote_over))
