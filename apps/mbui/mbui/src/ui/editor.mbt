@@ -1347,15 +1347,63 @@ fn EditorState::pick_word(self : EditorState, x : Double, y : Double, now : Doub
 }
 
 ///|
-/// A finger sliding on from a long press's word: the selection widened by words to where it is (Compose's word
-/// granularity), from the word first picked.
-fn EditorState::widen_to(self : EditorState, x : Double, y : Double) -> Unit {
+/// What a double click picks in a field and a drag on from it goes by (Words), and a triple click's (Paragraphs).
+priv enum PickBy {
+  Words
+  Paragraphs
+}
+
+///|
+/// The word (a secret's words all one, as a move by words has them) or the paragraph `off` is in.
+fn EditorState::unit_at(self : EditorState, off : Int, by : PickBy) -> (Int, Int) {
+  match by {
+    Words if self.secret => (0, self.text.length())
+    Words => word_at(self.text, off)
+    Paragraphs => (paragraph_end(self.text, off, -1), paragraph_end(self.text, off, 1))
+  }
+}
+
+///|
+/// A double click's (`by` Words) or a triple click's (Paragraphs), the caret put where it was pressed: the word or the
+/// paragraph there picked, what a drag on from it widens from (`word_a`, `word_b`).
+fn EditorState::pick_at(self : EditorState, by : PickBy) -> Unit {
+  let (a, b) = self.unit_at(self.caret, by)
+  if b > a {
+    self.anchor = a
+    self.caret = b
+  }
+  self.word_a = self.anchor
+  self.word_b = self.caret
+}
+
+///|
+/// A press with Shift at (`x`, `y`) (a mouse's): what is picked widened to there from its anchor, what was composed
+/// committed first.
+fn EditorState::widen_by_pointer(self : EditorState, x : Double, y : Double, t : Double) -> Unit {
+  self.blink0 = t
+  self.menu = false
+  self.sel_handles = false
+  match self.tl {
+    Some(tl) => {
+      if self.marked.length() > 0 {
+        self.text_input(2, "", 0, 0, t)
+      }
+      self.caret_to_point(tl, x, y)
+    }
+    None => ()
+  }
+}
+
+///|
+/// A finger sliding on from a long press's word, or a mouse dragged on from a double click's (a triple click's: `by`
+/// Paragraphs): the selection widened by them to where it is (Compose's word granularity), from the one first picked.
+fn EditorState::widen_to(self : EditorState, x : Double, y : Double, by? : PickBy = Words) -> Unit {
   let tl = match self.tl {
     Some(t) => t
     None => return
   }
   let off = imin(tl.offset_at(x - self.ox, y - self.oy), self.text.length())
-  let (a, b) = word_at(self.text, off)
+  let (a, b) = self.unit_at(off, by)
   if off >= self.word_a {
     self.anchor = self.word_a
     self.caret = if b > off { b } else { imax(off, self.word_b) }
@@ -1466,6 +1514,25 @@ pub fn Ctx::field_edit(self : Ctx, id : Int, what : Int, paste? : String = "") -
     }
     None => ()
   }
+}
+
+///|
+/// Tells the host what the menu bar's editing items can do now (@hostapi.edit_can), said again only when it changes:
+/// the focused field's (what its right-click menu offers, and its edits to undo and do again, none while the input
+/// method composes), else copy where words are picked with the pointer.
+fn Ctx::sync_edit_can(self : Ctx) -> Unit {
+  let can = match self.editors.get(self.focus) {
+    Some(st) =>
+      st.can() |
+      (if st.undos.length() > 0 && st.marked == "" { @hostapi.text_menu_undo } else { 0 }) |
+      (if st.redos.length() > 0 && st.marked == "" { @hostapi.text_menu_redo } else { 0 })
+    None => if selected_words() != "" { @hostapi.text_menu_copy } else { 0 }
+  }
+  if can == self.edit_can_told {
+    return
+  }
+  self.edit_can_told = can
+  h_edit_can(can)
 }
 
 ///|

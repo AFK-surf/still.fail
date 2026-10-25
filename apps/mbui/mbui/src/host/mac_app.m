@@ -132,6 +132,9 @@ static void drop_post(NSString *json) {
   mb_post("mbui.drop", (const char *)d.bytes, d.length, NULL, 0);
 }
 
+// What the menu bar's editing items can do (@hostapi.edit_can: text_menu_* bits), -1 till the app first says.
+static int32_t edit_can_now = -1;
+
 @implementation MBView
 
 - (instancetype)initWithFrame:(NSRect)f {
@@ -461,7 +464,19 @@ static NSCursor *cursor_of(int kind) {
   return YES;
 }
 
-// The menu bar's editing items (the system's Edit menu, mb_host_menu_setup): each the key it names, pressed.
+// The menu bar's editing items (the system's Edit menu, mb_host_menu_setup): each the key it names, pressed; greyed
+// where the app says it can do nothing (mb_host_edit_can), as the system's fields have theirs.
+- (BOOL)validateMenuItem:(NSMenuItem *)item {
+  SEL a = item.action;
+  int32_t bit = a == @selector(cut:)         ? 1
+                : a == @selector(copy:)      ? 2
+                : a == @selector(paste:)     ? 4
+                : a == @selector(selectAll:) ? 8
+                : a == @selector(undo:)      ? 16
+                : a == @selector(redo:)      ? 32
+                                             : 0;
+  return bit == 0 || edit_can_now < 0 || (edit_can_now & bit) != 0;
+}
 - (void)cut:(id)sender { mb_cb.key(14, 8); }
 - (void)copy:(id)sender { mb_cb.key(13, 8); }
 - (void)paste:(id)sender { paste_now(8); }
@@ -1800,6 +1815,8 @@ void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moo
 void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, int32_t can) {
   (void)shown, (void)x, (void)y, (void)w, (void)h, (void)can;
 }
+
+void mb_host_edit_can(int32_t can) { edit_can_now = can; }
 
 void mb_host_clipboard_set(moonbit_string_t s) {
   NSPasteboard *pb = [NSPasteboard generalPasteboard];

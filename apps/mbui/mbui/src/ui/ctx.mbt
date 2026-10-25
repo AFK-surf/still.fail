@@ -116,7 +116,7 @@ struct EditorState {
   mut handle_y : Double
   /// Android's: words picked by a finger (a long press, a double tap, all selected from the menu): the selection's two
   /// handles shown, and where their tips were drawn last (`sel_on` false: not drawn); the word a long press picked
-  /// first, which sliding on widens from
+  /// first (or a double click's, the paragraph a triple click's), which sliding on widens from
   mut sel_handles : Bool
   mut sel_on : Bool
   mut sel_ax : Double
@@ -262,6 +262,10 @@ pub struct Ctx {
   /// (Ctx::double_clicked); the last click (its id, when, where), for the next to be the second of two
   double_clicked : Array[Int]
   mut last_click : (Int, Double, Double, Double)
+  /// how many presses in a row the last one was (NSEvent's clickCount: 2 a double click's second), and how many, when
+  /// and where, for the next to count on from
+  mut clicks : Int
+  mut press_run : (Int, Double, Double, Double)
   mut drag_scroll : Int
   /// what scrolls or is dragged under the press, innermost first (claim.mbt): until one claims it (`claimed`), the
   /// press is none of theirs; `drag_scroll` is the innermost meanwhile
@@ -309,8 +313,10 @@ pub struct Ctx {
   mut word_drag : Int
   /// the last tap on a field as it lifted (its id, when, where): a second soon after picks the word there
   mut last_tap : (Int, Double, Double, Double)
-  /// what the host was last told of the floating text menu (text_menu)
+  /// what the host was last told of the floating text menu (text_menu), and of what the menu bar's editing items can
+  /// do (edit_can; -1 nothing yet)
   mut menu_sig : String
+  mut edit_can_told : Int
   mut handle_dy : Double
   // persistent widget state
   lists : Map[Int, ListState]
@@ -524,6 +530,8 @@ fn Ctx::new() -> Ctx {
     clicked: [],
     double_clicked: [],
     last_click: (0, 0.0, 0.0, 0.0),
+    clicks: 0,
+    press_run: (0, -1.0e9, 0.0, 0.0),
     drag_scroll: 0,
     press_chain: [],
     claimed: true,
@@ -555,6 +563,7 @@ fn Ctx::new() -> Ctx {
     word_drag: 0,
     last_tap: (0, -1.0e9, 0.0, 0.0),
     menu_sig: "",
+    edit_can_told: -1,
     handle_dy: 0.0,
     lists: Map::new(),
     editors: Map::new(),

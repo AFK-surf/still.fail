@@ -280,7 +280,6 @@ fn desk_reset() -> Unit {
   picked.base = 0
   picked.dragging = false
   picked.target = None
-  select_last.val = (-1.0e9, 0.0, 0.0)
 }
 
 ///|
@@ -652,12 +651,10 @@ fn sel_at(x : Double, y : Double) -> SelTarget? {
 }
 
 ///|
-/// A primary press at (x, y) at `t`: on words that are picked with the pointer, picking starts there (the second of
-/// two quick presses there picks the word under it, as a browser's double click does); elsewhere what was picked is
-/// let go.
-fn select_press(x : Double, y : Double, t : Double) -> Unit {
-  let (was, ax, ay) = select_last.val
-  select_last.val = (t, x, y)
+/// A primary press at (x, y), the `clicks`th in a row (Ctx's `clicks`): on words that are picked with the pointer,
+/// picking starts there (a double click's second picks the word under it, a triple's the paragraph, as a browser's
+/// do); elsewhere what was picked is let go.
+fn select_press(x : Double, y : Double, clicks : Int) -> Unit {
   match sel_at(x, y) {
     Some(target) => {
       let off = target.lay.offset_at(x - target.ox, y - target.oy)
@@ -667,12 +664,15 @@ fn select_press(x : Double, y : Double, t : Double) -> Unit {
       picked.dragging = true
       picked.text = target.text
       picked.target = Some(target)
-      if t - was <= double_click_ms && (x - ax).abs() <= double_click_slop && (y - ay).abs() <= double_click_slop {
-        let (s, e) = word_at(target.text, off)
+      if clicks > 1 {
+        let (s, e) = if clicks == 2 {
+          word_at(target.text, off)
+        } else {
+          (paragraph_end(target.text, off, -1), paragraph_end(target.text, off, 1))
+        }
         picked.a = s
         picked.b = e
         picked.dragging = false
-        select_last.val = (-1.0e9, 0.0, 0.0)
       }
     }
     None => {
@@ -697,10 +697,6 @@ pub fn Ctx::keeps_selection(self : Ctx, id : Int) -> Unit {
 fn keeps_selection_on(target : Int) -> Bool {
   desk.keeps.contains(target)
 }
-
-///|
-/// When and where the last press that could pick went down (a double click's first).
-let select_last : Ref[(Double, Double, Double)] = Ref((-1.0e9, 0.0, 0.0))
 
 ///|
 /// Where what is picked with the pointer lies in the window, once the pointer has let it go (the box round its

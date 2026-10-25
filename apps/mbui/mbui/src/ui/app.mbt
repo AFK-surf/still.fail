@@ -358,6 +358,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.bars_frame_end()
   c.sync_ime()
   c.sync_text_menu()
+  c.sync_edit_can()
   fx_frame_end(c)
   match frame_hook.val {
     Some(f) => f()
@@ -605,9 +606,20 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int) -> U
       h_window_drag()
       return
     }
+    // how many presses in a row this one is (NSEvent's clickCount: a double click's second 2, a triple's third 3):
+    // one soon after the last (double_click_ms) and near it (double_click_slop) counts on from it
+    let (n, at, ax, ay) = c.press_run
+    c.clicks = if t - at <= double_click_ms &&
+      (x - ax).abs() <= double_click_slop &&
+      (y - ay).abs() <= double_click_slop {
+      n + 1
+    } else {
+      1
+    }
+    c.press_run = (c.clicks, t, x, y)
     // words picked with the pointer (desktop.mbt), not in a field, nor on what keeps them (Ctx::keeps_selection)
     if !c.editors.contains(target) && !keeps_selection_on(target) {
-      select_press(x, y, t)
+      select_press(x, y, c.clicks)
     }
     // what lies over the page sees it (overlay.mbt); the focus goes as a press moves it (focus.mbt)
     c.press_down = Some((x, y))
@@ -734,7 +746,16 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int) -> U
       Some(st) => {
         c.focus = target
         c.editor_drag = true
-        place_caret(st, x, y, t)
+        // a press with Shift: what is picked widened to it; a double click's second the word there, a triple's the
+        // paragraph, the drag on from it going by them (a Mac's fields, a browser's)
+        if (mods & mod_shift_key) != 0 {
+          st.widen_by_pointer(x, y, t)
+        } else {
+          place_caret(st, x, y, t)
+          if c.clicks > 1 {
+            st.pick_at(if c.clicks == 2 { Words } else { Paragraphs })
+          }
+        }
       }
       None => if target == 0 { c.focus = 0 }
     }
@@ -780,6 +801,8 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int) -> U
         c.active = 0
       } else if c.editor_drag {
         match c.editors.get(c.active) {
+          Some(st) if c.clicks > 1 && (c.press_mods & mod_shift_key) == 0 =>
+            st.widen_to(x, y, by=if c.clicks == 2 { Words } else { Paragraphs })
           Some(st) =>
             match st.tl {
               Some(tl) => st.caret_to_point(tl, x, y)

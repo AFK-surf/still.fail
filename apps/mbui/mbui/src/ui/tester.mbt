@@ -208,6 +208,7 @@ pub fn Tester::new(
     ime_sel: (0, 0),
     ime_told: 0,
     text_menu: (false, 0.0, 0.0, 0.0, 0.0, 0),
+    edit_can: -1,
     ime_rect: (0.0, 0.0, 0.0, 0.0),
     clipboard: "",
     badge: 0,
@@ -737,6 +738,12 @@ pub fn Tester::ime(self : Tester) -> (Bool, String, Int, Int) {
 /// what `can` says (@hostapi.text_menu_*).
 pub fn Tester::text_menu(self : Tester) -> (Bool, Double, Double, Double, Double, Int) {
   self.fake.text_menu
+}
+
+///|
+/// What the menu bar's editing items can do as the host was last told it (@hostapi.edit_can: text_menu_*; -1 not told).
+pub fn Tester::edit_can(self : Tester) -> Int {
+  self.fake.edit_can
 }
 
 ///|

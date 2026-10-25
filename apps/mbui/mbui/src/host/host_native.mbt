@@ -81,6 +81,9 @@ extern "C" fn ffi_present(
 ///|
 extern "C" fn ffi_text_menu(shown : Int, x : Double, y : Double, w : Double, h : Double, can : Int) -> Unit = "mb_host_text_menu"
 
+///|
+extern "C" fn ffi_edit_can(can : Int) -> Unit = "mb_host_edit_can"
+
 #borrow(text)
 extern "C" fn ffi_set_ime(
   active : Int,

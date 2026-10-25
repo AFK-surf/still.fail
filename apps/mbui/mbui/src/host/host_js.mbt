@@ -73,6 +73,11 @@ extern "js" fn ffi_text_menu(shown : Int, x : Double, y : Double, w : Double, h 
   #|(s, x, y, w, h, c) => { if (globalThis.__mbhost && globalThis.__mbhost.textMenu) globalThis.__mbhost.textMenu(s, x, y, w, h, c) }
 
 ///|
+/// (a browser's page has no menu bar of the app's)
+extern "js" fn ffi_edit_can(can : Int) -> Unit =
+  #|(c) => {}
+
+///|
 extern "js" fn js_set_ime(
   active : Bool,
   x : Double,

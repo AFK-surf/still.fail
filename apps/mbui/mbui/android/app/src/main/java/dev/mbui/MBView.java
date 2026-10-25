@@ -504,6 +504,12 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             if (Host.imeActive) paste();
             return true;
         }
+        int sk = shortcutKey(e);
+        if (sk != 0) {
+            int mods = Device.keyMods(e);
+            toGL(() -> Native.key(sk, mods));
+            return true;
+        }
         int k = keyCode(code);
         if (k != 0) {
             int mods = Device.keyMods(e);
@@ -517,6 +523,24 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             return true;
         }
         return super.onKeyDown(code, e);
+    }
+
+    /** A letter or digit with Ctrl or Meta held (a hardware keyboard's shortcut, which types no character): Ctrl+A, C
+     * and X the field's select all, copy and cut (12, 13, 14, as Windows' host sends them), any other the app's or the
+     * field's key as 1000 + the character (Ctrl+Z, Ctrl+Y to undo and do again, Ctrl+K); 0 for none. */
+    static int shortcutKey(KeyEvent e) {
+        if (!e.isCtrlPressed() && !e.isMetaPressed()) return 0;
+        int k = e.getKeyCode();
+        int ch;
+        if (k >= KeyEvent.KEYCODE_A && k <= KeyEvent.KEYCODE_Z) ch = 'a' + (k - KeyEvent.KEYCODE_A);
+        else if (k >= KeyEvent.KEYCODE_0 && k <= KeyEvent.KEYCODE_9) ch = '0' + (k - KeyEvent.KEYCODE_0);
+        else return 0;
+        if (e.isCtrlPressed()) {
+            if (ch == 'a') return 12;
+            if (ch == 'c') return 13;
+            if (ch == 'x') return 14;
+        }
+        return 1000 + ch;
     }
 
     static int keyCode(int code) {
@@ -651,9 +675,10 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             }
             if (e.getKeyCode() == KeyEvent.KEYCODE_PASTE) { view.paste(); return true; }
             int k = keyCode(e.getKeyCode());
+            if (k == 0) k = shortcutKey(e);
             if (k != 0) {
-                int mods = Device.keyMods(e);
-                view.toGL(() -> Native.key(k, mods));
+                int kk = k, mods = Device.keyMods(e);
+                view.toGL(() -> Native.key(kk, mods));
                 return true;
             }
             int ch = e.getUnicodeChar();

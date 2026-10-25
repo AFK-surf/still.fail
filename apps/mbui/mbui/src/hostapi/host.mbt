@@ -50,6 +50,7 @@ pub(open) trait Host {
   present(Self, FixedArray[Double], Int, Double, Double, Double) -> Unit = _
   set_ime(Self, Bool, Double, Double, Double, Double, String, Int, Int) -> Unit = _
   text_menu(Self, Bool, Double, Double, Double, Double, Int) -> Unit = _
+  edit_can(Self, Int) -> Unit = _
   clipboard_set(Self, String) -> Unit = _
   clipboard_set_secret(Self, String, Double) -> Unit = _
   clipboard_set_image(Self, Bytes) -> Unit = _
@@ -379,6 +380,11 @@ impl Host with set_ime(_, _, _, _, _, _, _, _, _) {
 
 ///|
 impl Host with text_menu(_, _, _, _, _, _, _) {
+  ()
+}
+
+///|
+impl Host with edit_can(_, _) {
   ()
 }
 
@@ -1394,12 +1400,28 @@ pub let text_menu_paste : Int = 4
 pub let text_menu_select_all : Int = 8
 
 ///|
+/// What a field has to undo and to do again (edit_can's `can`, beside the four above).
+pub let text_menu_undo : Int = 16
+
+///|
+pub let text_menu_redo : Int = 32
+
+///|
 /// The system's floating menu for a field's words (Android's text toolbar: ActionMode.TYPE_FLOATING) `shown` over the
 /// window's rectangle (`x`, `y`, `w`, `h`: the words picked, or the caret), offering what `can` says (text_menu_*); or
 /// put away. What is chosen comes as the keys and the paste the field already takes (select all, copy, cut: keys 12,
 /// 13, 14; paste: the clipboard's words as text), the menu then gone. A host with none shows nothing.
 pub fn text_menu(shown : Bool, x : Double, y : Double, w : Double, h : Double, can : Int) -> Unit {
   current.val.text_menu(shown, x, y, w, h, can)
+}
+
+///|
+/// What the menu bar's editing items (a Mac's 编辑: 撤销, 重做, 剪切, 拷贝, 粘贴, 全选) can do now, said as it changes:
+/// text_menu_* (text_menu_undo, text_menu_redo with them) for the field with the focus, or copy for the words picked
+/// with the pointer where no field has it; an item it does not say is greyed, as the system's fields have theirs. A
+/// host with no menu bar does nothing with it.
+pub fn edit_can(can : Int) -> Unit {
+  current.val.edit_can(can)
 }
 
 ///|
