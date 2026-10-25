@@ -7,7 +7,8 @@
 //    2): two lit grounds side by side read as one block. Measured between their boxes, in the same layer, where they share a column or a row;
 //    what holds others that light up as wide or as tall as it (a list, a rail) is where they are, not one of them.
 //    Not held to it: the parts of one control (in a ground of their own that hugs them: a segmented choice's
-//    options), and rows across the whole window (a list there keeps nothing lit: one lights at a time).
+//    options), and things where nothing stays lit (no ground shown with no hand on them in what holds them: one
+//    lights at a time; a list across the whole screen, a card of options).
 // 3. Two blocks with grounds of their own beside each other in one box never meet (0 between them) or run over each
 //    other: they stand apart, or are one block. Lines (thinner than `gap_line`) are what parts things, not a block.
 // 4. What a box with a ground or an edge holds (words, a drawing) stands in from its edges, never touching one; and
@@ -210,17 +211,30 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
         _ => false
       }
     }
-    // (rows across the whole window: a list there opens what is pressed over itself, so nothing in it stays lit; one
-    // lights at a time, pressed or pointed at, and never reads as one block with another: the app's lists across the
-    // whole screen, ListAt's Whole)
-    let across = fn(i : Int) {
-      let b = self.nodes[i]
-      b.x <= gap_slack && b.x + b.fw >= self.width - gap_slack
+    // (where nothing stays lit, one lights at a time, pressed or pointed at, and never reads as one block with
+    // another: two count where one of them, or another that lights up in what holds them both, shows its ground with
+    // no hand on it (the frame is drawn with none): kept lit, the page in view's row, the one chosen. A list across
+    // the whole screen opens what is pressed over itself and keeps none (the app's ListAt's Whole: a phone's chats); a
+    // card of options shows the one chosen otherwise)
+    let within = fn(i : Int, o : Int) {
+      let mut q = i
+      while q >= 0 && q != o {
+        q = self.nodes[q].parent
+      }
+      q == o
+    }
+    let kept = lit.filter(fn(i) { self.nodes[i].grounded() })
+    let some_kept = fn(a : Int, b : Int) {
+      let mut o = self.nodes[a].parent
+      while o >= 0 && !within(b, o) {
+        o = self.nodes[o].parent
+      }
+      o >= 0 && kept.iter().any(fn(k) { within(k, o) })
     }
     for x in 0..<lit.length() {
       for y in (x + 1)..<lit.length() {
         let (a, b) = (lit[x], lit[y])
-        if layer[a] != layer[b] || one_control(a, b) || (across(a) && across(b)) {
+        if layer[a] != layer[b] || one_control(a, b) || !some_kept(a, b) {
           continue
         }
         match gap_between(rect(a), rect(b)) {
