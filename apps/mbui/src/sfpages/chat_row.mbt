@@ -238,8 +238,9 @@ pub fn chat_row(
         corner?=if cornered { Some(fn() { row_aside(c, src, item, lead, face_ground) }) } else { None },
         corner_w=if cornered { row_aside_w(c, item, lead) } else { 0.0 },
         fn() {
+            // (renamed, the field takes the head's whole width, its mark's place too: rename_box)
             let tone = @sfbase.row_tone(item)
-            if tone != "" {
+            if tone != "" && !renaming {
               c.box(style=mark_slot, fn() { row_mark(c, key, tone) }) |> ignore
             }
             if renaming {
@@ -612,18 +613,24 @@ fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
 }
 
 ///|
-/// The field in the title's place (Rename.css.ts titleInput): as wide as the row's head leaves, 24 high on the canvas,
-/// its words where the title's were, 4 taller than the title's line without making the row taller; a 1 line round it in
-/// the strong grey; the title's words (13 on 24). In the row's top corners: a capsule (its shape its height's) standing
-/// where it is concentric with them (@sf.capsule_in: the row's 18 its distance and its half, 6), as far from the row's
-/// top as from its sides, its words back where the title's were; all four corners alike, not the row's followed in two
-/// and its own 6 in the others (the user, 2026-10-26).
+/// The field in the title's place (Rename.css.ts titleInput): the row's head across, its mark's place too (the mark
+/// left out while it shows), 24 high on the canvas, 4 taller than the title's line without making the row taller; a 1
+/// line round it in the strong grey; the title's words (13 on 24). In the row's top corners: a capsule (its shape its
+/// height's) standing where it is concentric with both (@sf.capsule_in: the row's 18 its distance and its half, 6), as
+/// far from the row's top as from its sides; all four corners alike, not the row's followed in two and its own 6 in the
+/// others (the user, 2026-10-26). Its words its half in from its end, as a capsule field's are (@sf.input's), not 6 in
+/// where the title's were (the user, 2026-10-26: 离首字太近).
 fn rename_box() -> @ui.Style {
   let d = @sf.capsule_in(@sf.row_corner, rename_h)
   let side = @sf.theme().chat_list.band_pad - d
   let over = @sf.row_in_y - d
   rename_look.then(
-    @ui.style(px=@sf.room_of(side), mx=@sf.room_of(-side), mt=@sf.room_of(-over), mb=@sf.room_of(over - rename_taller)),
+    @ui.style(
+      px=@sf.room_of(rename_words_in),
+      mx=@sf.room_of(-side),
+      mt=@sf.room_of(-over),
+      mb=@sf.room_of(over - rename_taller),
+    ),
   )
 }
 
@@ -634,6 +641,10 @@ let rename_look : @ui.Style = @ui.css("w=Full h=S6 radius=Full bg=Bg border=B1 j
 ///|
 /// Its height (h=S6).
 let rename_h : Double = 24.0
+
+///|
+/// Its words in from either end: its half, as a capsule field's are.
+let rename_words_in : Double = rename_h / 2.0
 
 ///|
 let rename_taller : Double = 4.0

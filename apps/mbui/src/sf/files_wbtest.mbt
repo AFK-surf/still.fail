@@ -111,7 +111,7 @@ test "a quote's card (QuoteCard): whose and the passage, what is said under it; 
 }
 
 ///|
-test "a quote waiting in the composer has its ✕ hung on its corner, as everything waiting there: its centre on the curve, the room for its reach at its end" {
+test "a quote waiting in the composer has its ✕ hung on its corner, as everything waiting there: its centre on the curve, the quote its room across, the ✕ past its side as far as past its top" {
   let removed = Ref(false)
   let t = @ui.Tester::new(
     fn(c) {
@@ -140,8 +140,10 @@ test "a quote waiting in the composer has its ✕ hung on its corner, as everyth
   let near = fn(a : Double, b : Double) { (a - b).abs() < 0.01 }
   assert_true(near(x + w / 2.0, q.0 + q.2 - m), msg="across: \{x + w / 2.0}, the corner's curve at \{q.0 + q.2 - m}")
   assert_true(near(y + h / 2.0, q.1 + m), msg="down: \{y + h / 2.0}, the corner's curve at \{q.1 + m}")
-  // the room for its reach kept at its end: the ✕ ends where the quote's room does (16 in from the window's edge)
-  assert_true(near(x + w, 400.0 - 16.0), msg="its end at \{x + w}")
+  // nothing beside it, no room kept at its end: the quote ends where its room does (16 in from the window's edge), its
+  // ✕ past that as far as past its top (the user, 2026-10-26: 上边距和右边距不一致)
+  assert_true(near(q.0 + q.2, 400.0 - 16.0), msg="its end at \{q.0 + q.2}")
+  assert_true(near(x + w - (q.0 + q.2), q.1 - y), msg="past its side \{x + w - (q.0 + q.2)}, past its top \{q.1 - y}")
   t.tap(x + w / 2.0, y + h / 2.0)
   assert_true(removed.val)
 }
