@@ -358,6 +358,10 @@ pub fn open_mode(mode : String) -> Unit {
     bar.open_panel(true)
   } else if mode == "place" {
     app.nav.replace(Files)
+  } else if mode == "archived" {
+    // 已归档: on the wide frame the sidebar's list of them, the newest beside it (lists.mbt archive_pane); laid out
+    // Small its page
+    app.nav.push(Archived)
   } else if mode.has_prefix("place-") {
     // a place of the rail's in the wide frame (wide_places.mbt): place-stations, place-profiles, place-connects,
     // place-usage
