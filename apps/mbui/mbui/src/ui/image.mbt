@@ -349,11 +349,12 @@ fn Ctx::paint_image(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
         n.radius,
         alpha,
         fade=n.fade,
+        ground=n.bg,
       )
   }
-  // (its corners each its own, where it was drawn)
-  if self.ninst > before {
-    self.corners_last(n)
+  // (its corners each its own, where it was drawn: its ground's, its picture's)
+  for k = before; k < self.ninst; k = k + 1 {
+    self.corners_on(k, n)
   }
 }
 
@@ -390,7 +391,8 @@ pub let image_fade_ms : Double = 150.0
 
 ///|
 /// Draws the image from `src` in the box (x, y, w, h), loading it at the
-/// size of the box.
+/// size of the box; `ground` under it until it is in (decoded, faded in), never under it once it is: its edge's
+/// pixels, partly covered by it, would show that through as a rim round it.
 fn Ctx::draw_image(
   self : Ctx,
   src : String,
@@ -403,14 +405,21 @@ fn Ctx::draw_image(
   alpha : Double,
   fade? : Bool = true,
   max_px? : Int = 8192,
+  ground? : Int64 = 0L,
 ) -> Unit {
+  let grounded = (ground & 0xFFL) != 0L && bw > 0.0 && bh > 0.0
   // a side still 0 waits for the image's proportions: load it anyway,
   // small if it has no size yet at all
   let px = dmin(dmax(bw, bh) * self.scale, max_px.to_double())
   let px = if px <= 0.0 { 256.0 } else { px }
   let e = match self.image_for(src, px) {
     Some(e) => e
-    None => return
+    None => {
+      if grounded {
+        self.emit_rect(bx, by, bw, bh, radius, ground, 0.0, 0L, alpha)
+      }
+      return
+    }
   }
   if bw <= 0.0 || bh <= 0.0 {
     return
@@ -419,6 +428,9 @@ fn Ctx::draw_image(
     dclamp((self.now - e.ready_at) / image_fade_ms, 0.0, 1.0)
   } else {
     1.0
+  }
+  if grounded && fade < 1.0 {
+    self.emit_rect(bx, by, bw, bh, radius, ground, 0.0, 0L, alpha)
   }
   if fade < 1.0 && !e.fade_told {
     e.fade_told = true
