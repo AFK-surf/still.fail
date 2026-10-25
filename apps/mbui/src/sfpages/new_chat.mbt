@@ -175,9 +175,10 @@ fn new_station_words(station : Json?) -> String {
 // ── narrow: the web's mobile page ─────────────────────────────────────────
 
 ///|
-/// The page narrow (the web's mobile NewChatOn, mNewBody, mNewFoot): the scene over what is left, scrolled when it
-/// does not fit (the keyboard up, the choices and the composer stay over it); at its foot what is wrong for now, the
-/// choices, the composer where a chat's is (chat_composer: the page becomes the chat, its composer where it was).
+/// The page narrow (the web's mobile NewChatOn, mNewBody, mNewFoot): the scene in all of it, scrolled when it does not
+/// fit, its end clear of the foot over it (the keyboard up, the choices and the composer stay over it); the foot a band
+/// of glass, what is wrong for now, the choices, the composer where a chat's is (chat_composer: the page becomes the
+/// chat, its composer where it was).
 fn new_narrow(
   c : @ui.Ctx,
   src : Source,
@@ -193,32 +194,64 @@ fn new_narrow(
     _ => (0.0, 0.0)
   }
   let going = state is Going(_, _)
-  let room = c.box(style=new_scene_room, fn() {
+  // the scene in all the page, its end clear of the foot over it (mNewBody's --m-new-foot: as tall as the foot was
+  // last laid out)
+  let clear = @motion.measured(c, "new/foot").unwrap_or(0.0)
+  c.box(style=new_scene_room, fn() {
     c.list("new/scene", 1, new_scene_guess, fn(_) {
-      let scene = c.box(style=new_scene_narrow, fn() { new_scene_narrow_body(c, src, w, frame, v, station, state) })
-      // up out of view as it fades, a little smaller, from its middle (madeChat.ts: translateY(-32px) scale(.96))
-      if going {
-        c.look(scene, @ui.look(alpha=1.0 - up, dy=-new_leave_rise * up, scale=1.0 - new_leave_shrink * up))
-      }
+      c.box(style=new_scene_column, fn() {
+        let scene = c.box(style=new_scene_narrow, fn() { new_scene_narrow_body(c, src, w, frame, v, station, state) })
+        // up out of view as it fades, a little smaller, from its middle (madeChat.ts: translateY(-32px) scale(.96))
+        if going {
+          c.look(scene, @ui.look(alpha=1.0 - up, dy=-new_leave_rise * up, scale=1.0 - new_leave_shrink * up))
+        }
+        list_space(c, clear)
+      })
+      |> ignore
     })
     |> ignore
   })
+  |> ignore
   let width = composer_width(c.width)
   // (in a panel of its own, at its foot: as far from its foot as from its sides, in the panel's corners, as a chat's)
   let apart = @sf.in_pane() && frame.foot == 0.0
-  let foot = c.box(style=if apart { chat_foot_apart() } else { chat_foot }, fn() {
-    if !going {
-      new_notices(c, v, station, width)
-    }
-    c.box(style=@ui.style(w=Fixed(width)), fn() {
-      new_choosers(c, src, w, frame, v, station, state)
-      new_composer_place(c, src, w, frame, v, address, station, state, width)
+  // (16 under it, as a chat's composer: chat_foot)
+  let under : @ui.Space = if apart { @sf.room_of(composer_side()) } else { S4 }
+  c.layer(fn() {
+    c.spacer()
+    let foot = c.box(style=new_foot, fn() {
+      // a band of glass from over the choices to the page's foot (mNewFoot, glassFoot), the composer on it: what the
+      // scene has under it frosted all over, not seen between the choices, nor pressed through it; as the page becomes
+      // the chat, over the choices alone (the composer there is the chat's, under it, not to be frosted)
+      let band = c.id("new/band")
+      c.box(style=new_band.then(@ui.style(pb=if going { S0 } else { under })), glass=@sf.glass_foot(), id=band, fn() {
+        if !going {
+          new_notices(c, v, station, width)
+        }
+        c.box(style=@ui.style(w=Fixed(width)), fn() {
+          new_choosers(c, src, w, frame, v, station, state)
+          if !going {
+            new_composer_place(c, src, w, frame, v, address, station, state, width)
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+      if going {
+        c.box(style=@ui.style(w=Fixed(width), pb=under), fn() {
+          new_composer_place(c, src, w, frame, v, address, station, state, width)
+        })
+        |> ignore
+      }
     })
-    |> ignore
+    @motion.measure(c, foot, "new/foot")
+    // over the scene: its scroll bar keeps clear of it
+    c.floats_over(foot)
+    if going {
+      c.look(foot, @ui.look(alpha=1.0 - fade))
+    }
   })
-  if going {
-    c.look(foot, @ui.look(alpha=1.0 - fade))
-  }
+  |> ignore
 }
 
 ///|
@@ -919,9 +952,13 @@ let new_bar_room : @ui.Style = @ui.css("w=Full")
 let new_room : @ui.Style = @ui.style(w=Full, h=@sf.grow)
 
 ///|
-/// The scene narrow in what is left over the foot (mNewBody: 30 in, 10 under, its parts 6 apart, centred).
+/// The scene narrow, all the page (mNewBody: 30 in, 10 under, its parts 6 apart, centred), the foot's room under it.
 // kept across runs: a value (no field of it changes)
 let new_scene_room : @ui.Style = @ui.style(w=Full, h=@sf.grow, clip=true)
+
+///|
+// kept across runs: a value (no field of it changes)
+let new_scene_column : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -944,6 +981,16 @@ let new_held_line_box : @ui.Style = @ui.css("w=Full h=S5 align=ACenter justify=J
 /// What keeps it from starting narrow (mNewProblem: 6 over it).
 // kept across runs: a value (no field of it changes)
 let new_problem_box : @ui.Style = @ui.css("w=Full pt=S1_5")
+
+///|
+/// The foot narrow, over the scene's end: the band, and as the page becomes the chat the composer's place under it.
+// kept across runs: a value (no field of it changes)
+let new_foot : @ui.Style = @ui.css("w=Full align=ACenter")
+
+///|
+/// The band (mNewFoot, mNewBottom): 8 over the choices; its corners square but where it lies in a panel's.
+// kept across runs: a value (no field of it changes)
+let new_band : @ui.Style = @ui.css("w=Full pt=S2 align=ACenter radius=InnerOr(Sharp)")
 
 ///|
 /// The choices narrow (mChoosers: 6 apart, 6 over and under, 2 in).
