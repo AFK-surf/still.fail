@@ -77,10 +77,14 @@ fn image_menu(c : @ui.Ctx, id : Int, src : String, quote? : (() -> Unit)? = None
 /// What a menu's choice left, done: a link opened by the system once the frame is built, words copied, a picture read
 /// whole and put on the clipboard (as Electron's copyImage: decoded, as PNG) once it is read.
 fn menus_frame(c : @ui.Ctx) -> Unit {
+  // (taken when it is opened, not while the frame is built: a frame built again lets go of what its earlier builds
+  // said, Ctx::after_build)
   if menu_doing.open != "" {
     let href = menu_doing.open
-    menu_doing.open = ""
-    c.after_build("menu-open", fn() { @ui.open_url(href) |> ignore })
+    c.after_build("menu-open", fn() {
+      menu_doing.open = ""
+      @ui.open_url(href) |> ignore
+    })
   }
   if menu_doing.copy != "" {
     c.copy_text(menu_doing.copy)

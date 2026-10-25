@@ -419,11 +419,12 @@ fn policy_body(c : @ui.Ctx, core : Core, station : String, policy : Json?) -> Un
       })
     })
   }
-  // a fixture's dialog (MBUI_FIXTURE=settings-policy-text, settings-policy-option), once the page is built
+  // a fixture's dialog (MBUI_FIXTURE=settings-policy-text, settings-policy-option), once the page is built: taken when
+  // it is put up, not while it is built (a frame built again lets go of what its earlier builds said: Ctx::after_build)
   if fx_policy_up.val != "" {
     let what = fx_policy_up.val
-    fx_policy_up.val = ""
     c.after_build("policy-fixture", fn() {
+      fx_policy_up.val = ""
       if what == "text" {
         policy_dialog(core, station, form, policy, "", "", None)
       } else {
