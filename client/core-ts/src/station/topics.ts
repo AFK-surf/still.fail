@@ -20,6 +20,7 @@ import { PAGE, TRANSCRIPT_PAGE, entriesOf, transcriptOf } from "./channel-kinds.
 import type { StationsSync } from "./sync.ts";
 import type { LinkNet } from "./wire.ts";
 import { screenCard, screensChanged, screensView } from "../screens.ts";
+import { down, downWords } from "../views/views.ts";
 import type { Link } from "./link.ts";
 import * as logins from "./machine-logins.ts";
 import { laterSleep } from "../runtime.ts";
@@ -110,7 +111,7 @@ export class StationTopics implements Owner {
   #changed(address: string, what: string, key?: string): void {
     const store = this.#core.store;
     const of = (pick: (t: Topic) => boolean) => store.invalidateAll((t) => t.station === address && pick(t));
-    if (what === "link") of((t) => t.topic === "link" || t.topic === "live" || t.topic === "screens" || t.topic === "screenCard");
+    if (what === "link") of((t) => t.topic === "link" || t.topic === "live" || t.topic === "screens" || t.topic === "screenCard" || t.topic === "drive");
     else if (what === "live") of((t) => t.topic === "live" && (key === undefined || t.key === key));
     else if (what === "host") of((t) => t.topic === "host");
     else if (what === "screens") {
@@ -270,6 +271,11 @@ export class StationTopics implements Owner {
       case "letters":
         if (error) return { err: error };
         return this.#letters(topic);
+      case "drive":
+        // Nothing held (what is goes out first): a station down says so, not a wait until it is back; else why it was
+        // not read, once known.
+        if (link && down(link.state)) return { err: new CoreError("offline", downWords(link.state, this.#core.views.stationName(station))) };
+        return error ? { err: error } : undefined;
       default:
         // Held: what is held goes out (the store reads it); with nothing held, why not, once known.
         return error ? { err: error } : undefined;

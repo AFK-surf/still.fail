@@ -260,10 +260,13 @@ export class StationsSync {
     });
   }
 
-  /// The station's stream was away: the threads a UI shows are asked what was said in them after what is held.
+  /// The station's stream was away: the threads a UI shows are asked what was said in them after what is held, and the
+  /// drive's folders shown are read again (one never read while the station was down is read now).
   #catchUpShown(address: string): void {
     for (const topic of this.#core.store.liveTopics()) {
-      if (topic.topic === "thread" && topic.station === address && typeof topic.thread === "number") this.channels.catchUp(entriesOf(address, topic.thread), Priority.shown);
+      if (topic.station !== address) continue;
+      if (topic.topic === "thread" && typeof topic.thread === "number") this.channels.catchUp(entriesOf(address, topic.thread), Priority.shown);
+      else if (topic.topic === "drive" && this.#core.store.inUse(topic)) this.driveShown(address, String(topic.root), String(topic.path));
     }
   }
 
@@ -549,7 +552,9 @@ export class StationsSync {
   }
 
   /// A folder of the drive read: held as the station has it now. Refused (gone, out of its root, not a root any more):
-  /// said so even where it was held before, which stays to be seen meanwhile.
+  /// said so even where it was held before, which stays to be seen meanwhile. Not answered (no answer in time, the
+  /// station failing, the link dropping): what is held stays; where nothing is, why is said rather than a wait that never
+  /// ends (it is read again as it is shown again, and as the station's stream comes back).
   #drive(address: string, root: string, path: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
@@ -565,6 +570,9 @@ export class StationsSync {
         // Not there now: what was held of it is let go, for the refusal to be what is shown.
         link.errors.set(key, answer.failure);
         this.#core.data.forgetTopic(topic);
+        this.onChange(address, "errors", key);
+      } else if (this.#core.data.shared(topic) === undefined) {
+        link.errors.set(key, answer.failure);
         this.onChange(address, "errors", key);
       }
     });
