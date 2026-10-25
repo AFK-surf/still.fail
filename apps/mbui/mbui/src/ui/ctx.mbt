@@ -1402,8 +1402,13 @@ pub fn Ctx::moment(self : Ctx) -> Double {
 /// `t` (ms) in whole ms, as a motion's and the runtime's time go: rounded down, a moment summed one way or another
 /// (1316.9999999999998 for 1317) the same.
 pub fn whole_ms(t : Double) -> Double {
-  (t + 1.0e-6).floor()
+  (t + same_moment_ms).floor()
 }
+
+///|
+/// How far apart two moments summed one way and another may be and still be the same one (whole_ms; a motion done
+/// by it at its end, the next of a chain from that end: Anim::animate's start_at).
+pub let same_moment_ms : Double = 1.0e-6
 
 ///|
 pub fn Ctx::frame_ms(self : Ctx) -> Double {

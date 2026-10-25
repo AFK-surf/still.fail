@@ -1374,19 +1374,20 @@ fn capsule_room() -> Double {
 }
 
 ///|
-/// The room a chat's composer takes opened with one line at its pane's foot (its box 12 in, the line under 8, its
-/// buttons' row 10 under it; 12 over and 16 under the box): what a list that keeps its words in place as the composer
-/// closes keeps clear at least (ChatHost.kt roomForList).
+/// The room a chat's composer takes opened with one line at its pane's foot (its box, composer_open_box; 12 over and 16
+/// under it): what a list that keeps its words in place as the composer closes keeps clear at least (ChatHost.kt
+/// roomForList).
 pub fn composer_open_room() -> Double {
   composer_open_box() + 12.0 + 16.0
 }
 
 ///|
-/// Its box opened with one line (composer_open_room without what is over and under it; its buttons' row as far from
-/// its foot as makes them concentric with its corner, @sf.composer_round_in).
+/// Its box opened with one line (composer_open_room without what is over and under it): as composer_box_open lays it
+/// out, its padding over the line (text_open: 8 over it), its parts 10 apart, its buttons' row as far from its foot as
+/// makes them concentric with its corner (@sf.composer_round_in).
 fn composer_open_box() -> Double {
   let t = @sf.theme()
-  12.0 + (8.0 + t.t.input_line) + 10.0 + t.round.side + @sf.composer_round_in()
+  @sf.composer_pad + (8.0 + t.t.input_line) + 10.0 + t.round.side + @sf.composer_round_in()
 }
 
 ///|

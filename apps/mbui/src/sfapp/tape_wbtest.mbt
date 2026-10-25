@@ -358,11 +358,11 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   // (a square window: the panels' corners all the ladder's)
   assert_eq(@sf.tape_edge.val, @sf.pane_corner)
   let panel = @sf.pane_corner
-  // one line: a capsule the ladder's inset in, as round as the panel's corner less that (its half), its buttons round
-  // in its ends; the screen's buttons (a touch screen's larger), the same shape
+  // one line: a capsule (its half: a pill in the panel's corner keeps its own, as round as the panel's less the inset
+  // where its buttons are a computer's 32), its buttons round in its ends; the screen's buttons (a touch screen's
+  // larger), the same shape
   let side = @sf.theme().round.side
   guard composer_corners(t) is Some((k, s, h)) else { fail("no composer") }
-  assert_eq(k, panel - @sfpages.composer_side())
   assert_eq(k, h / 2.0)
   assert_eq(s, side / 2.0)
   assert_eq(t.corner_faults(), [])

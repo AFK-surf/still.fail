@@ -226,12 +226,18 @@ pub fn Anim::animate(
   // (this frame shows it at its start: where it is now)
   self.start = match start_at {
     Some(at) => {
-      if at > c.now() {
+      // (the motion before done at its end as whole_ms has it, its end summed another way than now: the same moment,
+      // 4066.666666666667 for 4066.6666666666665, from now)
+      if at > c.now() + @ui.same_moment_ms {
         let s = "Anim::animate: start_at \{at} is later than now (\{c.now()}), told at \{loc}"
         println(s)
         abort(s)
       }
-      at
+      if at > c.now() {
+        c.now()
+      } else {
+        at
+      }
     }
     None => c.moment()
   }
