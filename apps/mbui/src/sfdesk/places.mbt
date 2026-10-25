@@ -139,7 +139,10 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 
 ///|
 /// A station's row (StationRow): its mark and name, how it is at the end (its agents at work, or when it was last seen
-/// away); while up, what is left of its CPU, memory and disk in small boxes, and how this device reaches it.
+/// away); while up, a line of what is left of its CPU, memory and disk in small boxes (never onto another: as short as
+/// the line needs, @sf.meter_chips), and a line of how this device reaches it (the core's `stationNet`, there only while
+/// this device holds a connection of its own to it: 未连接 while it does not). Each line kept whatever comes and goes in
+/// it, so a row is as high whichever station is open and whether this device is connected to it.
 fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, more : Bool, pick : () -> Unit) -> Unit {
   let t = @sf.theme()
   let address = text(s, "station")
@@ -163,28 +166,21 @@ fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, more : Bool
           |> ignore
         }
       },
+      // while up, its two lines always there, what is in them as it comes
       lines=fn() {
-        if meters.length() > 0 {
-          c.box(style=place_meters, flow=true, line_gap=4.0, fn() {
-            for m in meters {
-              @sf.meter_chip(c, Some(m), brief=true)
-            }
-          })
-          |> ignore
-        }
-        match net {
-          Some(Object(_)) =>
-            nav_line(c, fn() {
-              c.text(
+        if online {
+          nav_line(c, fn() { @sf.meter_chips(c, meters, brief=true) })
+          nav_line(c, fn() {
+            let words = match net {
+              Some(Object(_)) =>
                 match text(field(net, "rtt"), "text") {
                   "" => text(net, "path")
                   rtt => text(net, "path") + " · " + rtt
-                },
-                style=nav_meta(),
-              )
-              |> ignore
-            })
-          _ => ()
+                }
+              _ => @sf.t("web-pages.stations.netNone")
+            }
+            c.text(words, style=nav_meta()) |> ignore
+          })
         }
       },
       more~,
@@ -369,12 +365,6 @@ let place_dot_on : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Positive")
 ///|
 // kept across runs: a value (no field of it changes)
 let place_dot_off : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Faint")
-
-///|
-/// Its meters in a line (rowMeters), a chip each (MeterChip brief bare, @settings.meter_chip), 4 apart, onto another
-/// line where the row is narrow; 4 under its name, 2 over what is under.
-// kept across runs: a value (no field of it changes)
-let place_meters : @ui.Style = @ui.css("row w=Full gap=S1 mt=S1 mb=S0_5 align=ACenter")
 
 ///|
 /// No station picked: while they are read, said so; none in the workspace, the first to add (its scene, 添加 station).

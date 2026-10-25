@@ -1052,6 +1052,7 @@
   "web-pages.stations.total": "共 {total}",
   "web-pages.stations.ways": "各线路延迟（ping 往返）",
   "web-pages.stations.wayNone": "未连接",
+  "web-pages.stations.netNone": "未连接",
   "web-pages.stations.wayCurrent": "使用中",
   "web-pages.stations.page.parts": "显示",
   "web-pages.stations.page.part.overview": "概览",
