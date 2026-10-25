@@ -313,7 +313,6 @@ pub using @sfbase {
   emit_held,
   emit_emitting,
   emit_folded,
-  emit_away,
   emit_keeps,
   emit_release,
   emit_next,

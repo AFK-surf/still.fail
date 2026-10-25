@@ -101,12 +101,12 @@ pub fn chat_list(
             let here = here_of(r, v, rk, turns, em, None, core, inline=narrow, gutter~)
             @motion.reveal(c, mk, p, fn() {
               let ri = row_box(c, side, top, fn() { activity_row(c, src, here, a, em, rk, leaving) })
-              @motion.keyed(c, ri, mk, exit=@motion.trans(fade=0.0, spec=@motion.tween(leave_ms)), by=rows_over(i))
-              // pushed down by what comes in above it (its cause: the rows over it, as many more), it glides there; older
-              // pages come in above, words flown and its picture away move it otherwise
-              if !lf.older_came && flight is None && !emit_away(em, a.key) {
-                @motion.layout(c, ri, mk, spec=@motion.spring(stiffness=300.0, threshold=1.0), by=rows_over(i))
-              }
+              let way = makes_way(lf, keys[i])
+              @motion.keyed(c, ri, mk, exit=@motion.trans(fade=0.0, spec=@motion.tween(leave_ms)), by=way)
+              // pushed down by a row that came in over it (its cause: the newest that came over it), it glides there;
+              // what else moves it (the page before come in above, words sent flying in, its own message out of its
+              // avatar, which comes back to where it now is) puts it there at once
+              @motion.layout(c, ri, mk, spec=@motion.spring(stiffness=300.0, threshold=1.0), by=way)
               c.look(ri, @ui.look(alpha=p * fade, scale=0.5 + 0.5 * p, ox=(side + 9.0) / c.width, oy=0.5))
             })
           }
@@ -141,17 +141,23 @@ pub fn chat_list(
               // the rows above go up with the words
               Some(f) if f.placed =>
                 @motion.layout(c, ri, mk, screen=true, drive=flight_up(flight_p(c, f), f.desk))
-              // what was sent from here not in the chat yet, pushed down by a message coming in over it out of a picture
-              // (its cause: the rows over it, as many more): it glides there, as an agent's activity does
-              None if e is Out(_) && em.current is Some(_) && !lf.older_came =>
-                @motion.layout(c, ri, mk, spec=@motion.spring(stiffness=300.0, threshold=1.0), by=rows_over(i))
+              // what was sent from here not in the chat yet, pushed down by a row that came in over it (out of a picture,
+              // or simply: its cause, the newest that came over it): it glides there, as an agent's activity does
+              None if e is Out(_) =>
+                @motion.layout(c, ri, mk, spec=@motion.spring(stiffness=300.0, threshold=1.0), by=makes_way(lf, keys[i]))
               _ => ()
             }
             // what leaves the chat from the outbox fades, not what was sent from here and is now the core's
             match e {
               Out(o) if !local_sent(o) =>
-                @motion.keyed(c, ri, mk, exit=@motion.trans(fade=0.0, spec=@motion.tween(leave_ms)), by=rows_over(i))
-              _ => @motion.keyed(c, ri, mk, by=rows_over(i))
+                @motion.keyed(
+                  c,
+                  ri,
+                  mk,
+                  exit=@motion.trans(fade=0.0, spec=@motion.tween(leave_ms)),
+                  by=makes_way(lf, keys[i]),
+                )
+              _ => @motion.keyed(c, ri, mk, by=makes_way(lf, keys[i]))
             }
             // what is new to the list while it is followed eases in ([data-enter]: 220 ms from 6 under), not one out of
             // a picture
@@ -642,8 +648,9 @@ pub fn composer_side() -> Double {
 }
 
 ///|
-/// What row `i` moves for when what comes in over it pushes it down: how many rows are over it (one come in over it,
-/// or gone from over it, is its cause; a row over it grown, a keyboard, moves it at once).
-fn rows_over(i : Int) -> String {
-  "over \{i}"
+/// What row `k` moves for when what comes in over it pushes it down (one that makes way: an agent's line, what was
+/// sent not in the chat yet): the newest row that came in over it (row_keys's makes_way). The page before come in
+/// above it, words sent flying in, a row over it grown or gone, a keyboard: none of them, it is put there at once.
+fn makes_way(lf : @sfbase.ListFrame, k : String) -> String {
+  "came " + lf.rd.makes_way.get(k).unwrap_or("")
 }

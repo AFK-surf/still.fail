@@ -172,15 +172,6 @@ pub fn emit_folded(e : Emits, agent : String) -> Bool {
 }
 
 ///|
-/// Its avatar away flying (its activity does not glide meanwhile).
-pub fn emit_away(e : Emits, agent : String) -> Bool {
-  match e.current {
-    Some(t) => t.agent == agent && t.pose != Fold
-    None => false
-  }
-}
-
-///|
 /// Agents whose activity must stay while their messages come out.
 pub fn emit_keeps(e : Emits) -> Map[String, Bool] {
   let out : Map[String, Bool] = {}

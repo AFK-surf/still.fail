@@ -87,6 +87,13 @@ pub(all) struct Reading {
   fresh : Map[String, Bool]
   /// the frame a row new to it last came into it (`fresh`): what comes at its end then is glided after (Follow.kt)
   mut came_frame : Int
+  /// the rows that came new to it while it shows, by key: the how-manieth (`came_n`), and the agent whose avatar it
+  /// came out of ("" none). Words sent from here are not among them: they fly in (flight.mbt)
+  came : Map[String, (Int, String)]
+  mut came_n : Int
+  /// what a row that makes way (an agent's line, what was sent not in the chat yet) last saw come in over it, as last
+  /// built ("" nothing): its cause to glide down (sfpages chat_list)
+  makes_way : Map[String, String]
   /// rows asked a turn to come in (turns.mbt: Chat.kt admitted); each row's rise in, by key, while it rises
   admitted : Map[String, Bool]
   rises : Map[String, @motion.Anim]
@@ -176,6 +183,9 @@ pub fn reading_of(key : String) -> Reading {
         ticked: -10,
         fresh: {},
         came_frame: -10,
+        came: {},
+        came_n: 0,
+        makes_way: {},
         admitted: {},
         rises: {},
         history: {},
@@ -868,6 +878,23 @@ pub fn row_keys(
       if !rd.known.contains(keys[i]) && !caught {
         rd.fresh[keys[i]] = true
         rd.came_frame = c.frame_number()
+        // (out of whose avatar; words sent from here fly in, as nothing coming)
+        let from = match e {
+          Out(o) if local_sent(o) => None
+          Said(m) =>
+            match em.current {
+              Some(t) if t.seq == m.seq => Some(t.agent)
+              _ => Some("")
+            }
+          _ => Some("")
+        }
+        match from {
+          Some(a) => {
+            rd.came_n += 1
+            rd.came[keys[i]] = (rd.came_n, a)
+          }
+          None => ()
+        }
         // what comes in takes back the room an agent's line left (Chat.kt floor)
         if rd.floor > 0.0 {
           rd.floor_takers[keys[i]] = 0.0
@@ -879,7 +906,35 @@ pub fn row_keys(
   // it at once (Chat.tsx useHistoryFade, Chat.css.ts data-history-fade: 180 ms, the ease out); not what is new (it
   // rises in) nor what was sent from here
   let mut came : @motion.Anim? = None
+  // what each row that makes way saw come in over it last: the newest of the rows over it that came, by whose avatar
+  // they came out of (an agent's line not for its own: its avatar away, it comes back to where the line now is)
+  let newest : Map[String, (Int, String)] = {}
+  rd.makes_way.clear()
   for i, k in keys {
+    match list[i] {
+      Working(_) | Out(_) => {
+        let own = match list[i] {
+          Working(a) => a.key
+          _ => "\u{1}"
+        }
+        let mut best = (0, "")
+        for from, n in newest {
+          if from != own && n.0 > best.0 {
+            best = n
+          }
+        }
+        rd.makes_way[k] = best.1
+      }
+      _ => ()
+    }
+    match rd.came.get(k) {
+      Some((n, from)) =>
+        match newest.get(from) {
+          Some((m, _)) if m >= n => ()
+          _ => newest[from] = (n, k)
+        }
+      None => ()
+    }
     if history_fade && !rd.known.contains(k) && !rd.fresh.contains(k) && list[i] is Said(_) {
       let a = match came {
         Some(a) => a
@@ -1183,14 +1238,14 @@ pub fn list_frame(
   // a new chat's list comes up out of the composer with its first words (flight.mbt flight_carry_shift); not drawn
   // the build their row is first laid out, where it is not known yet
   let carry = flight_carry_shift(c, draft)
-  { key, rk: ek, rd, em, turns, list, keys, flight, glides, older_came, carry }
+  { key, rk: ek, rd, em, turns, list, keys, flight, glides, carry }
 }
 
 ///|
 /// A chat's list as list_frame made it this frame (its key, its chat's key, what the page keeps of it, its messages
 /// out of avatars, its turns, its rows and their keys, the words sent flying to it, whether what comes at its end
-/// glides, whether the page before came in above it, how far it is drawn below its place as a new chat's first words
-/// carry it up: None the build their row is first laid out, the list not seen then).
+/// glides, how far it is drawn below its place as a new chat's first words carry it up: None the build their row is
+/// first laid out, the list not seen then).
 pub(all) struct ListFrame {
   key : String
   rk : String
@@ -1201,7 +1256,6 @@ pub(all) struct ListFrame {
   keys : Array[String]
   flight : SendFlight?
   glides : Bool
-  older_came : Bool
   carry : Double?
 }
 

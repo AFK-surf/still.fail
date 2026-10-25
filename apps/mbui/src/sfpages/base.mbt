@@ -71,7 +71,6 @@ using @sfbase {
   download_retry,
   each_second,
   elapsed,
-  emit_away,
   emit_emitting,
   emit_flight,
   emit_folded,
