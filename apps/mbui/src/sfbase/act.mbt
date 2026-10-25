@@ -21,15 +21,19 @@ pub fn acting_reset() -> Unit {
 }
 
 ///|
-/// Says `words` in the toast from the next frame on (from a call's answer, between frames).
-pub fn toast_later(words : String) -> Unit {
+/// Says `words` in the toast from the next frame on (from a call's answer, between frames), with a button of
+/// `action`'s words on it doing `run` ("" none).
+pub fn toast_later(words : String, action? : String = "", run? : () -> Unit = fn() {  }) -> Unit {
   app.toast = words
   app.toast_n += 1
+  app.toast_action = action
+  app.toast_run = run
 }
 
 ///|
 /// Has the core do something (AppState.act): `key` under way until it answers (its button's spinner), `done` said
-/// when it did, why not said when it could not (`failed` told then). Nothing with MBUI_READONLY=1.
+/// when it did (with a button of `done_action`'s words doing `done_run`, "" none), why not said when it could not
+/// (`failed` told then). Nothing with MBUI_READONLY=1.
 pub fn act(
   src : Source,
   what : String,
@@ -37,6 +41,8 @@ pub fn act(
   call : String,
   params : Json,
   done? : String = "",
+  done_action? : String = "",
+  done_run? : () -> Unit = fn() {  },
   ok? : (Json) -> Unit = fn(_) {  },
   failed? : () -> Unit = fn() {  },
 ) -> Unit {
@@ -61,7 +67,7 @@ pub fn act(
     match res {
       Ok(v) => {
         if done != "" {
-          toast_later(done)
+          toast_later(done, action=done_action, run=done_run)
         }
         ok(v)
       }
@@ -142,4 +148,22 @@ pub fn core_failed(src : Source, calls : Array[String], on : Array[(String, Stri
 ///|
 fn doing_of(d : Json, calls : Array[String], on : Array[(String, String)]) -> Bool {
   calls.contains(text(Some(d), "call")) && on.iter().all(fn(kv) { text(field(Some(d), "params"), kv.0) == kv.1 })
+}
+
+///|
+/// What the toast saying a chat went into the archive offers (its 撤销): the chat archived by `params` (the
+/// `chat.archive` asked) back in the list, said once it is, or why not.
+pub fn archive_undo(src : Source, params : Map[String, Json]) -> () -> Unit {
+  fn() {
+    let p = params.copy()
+    p["archived"] = Json::boolean(false)
+    act(
+      src,
+      @sf.t("android-misc.archive.restoreWhat"),
+      "",
+      "chat.archive",
+      Json::object(p),
+      done=@sf.t("android-misc.archive.restored"),
+    )
+  }
 }

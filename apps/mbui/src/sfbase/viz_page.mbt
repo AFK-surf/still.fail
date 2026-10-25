@@ -106,8 +106,7 @@ pub fn viz_said(f : VizFrame, hears : VizHears, words : String) -> Unit {
               Some(f) => f(cut)
               None => false
             }
-            app.toast = viz_tr(if took { "android-misc.viz.followupDrafted" } else { "android-misc.viz.cantSend" })
-            app.toast_n += 1
+            toast_later(viz_tr(if took { "android-misc.viz.followupDrafted" } else { "android-misc.viz.cantSend" }))
           }
         }
         _ => ()
@@ -449,8 +448,7 @@ pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
     None => ()
     Some(Err(_)) => {
       c.tell("viz/full-failed", fn() { viz_close_full() })
-      app.toast = viz_tr("android-misc.viz.cantRead")
-      app.toast_n += 1
+      toast_later(viz_tr("android-misc.viz.cantRead"))
     }
     Some(Ok((html, state))) => {
       let chart = v.mermaid is Some(_)

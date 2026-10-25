@@ -111,8 +111,7 @@ pub fn pick_new(src : Source, ws : String, fill : Map[String, Json]) -> Unit {
   (src.call)("newChat.pick", Json::object(fill), fn(res) {
     match res {
       Err(e) => {
-        app.toast = @sf.t("android-chat.pick.failed", args=[("error", text(Some(e), "message"))])
-        app.toast_n += 1
+        toast_later(@sf.t("android-chat.pick.failed", args=[("error", text(Some(e), "message"))]))
       }
       _ => ()
     }

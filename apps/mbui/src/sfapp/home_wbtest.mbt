@@ -459,3 +459,63 @@ test "the filter's menu, a finger's: the presenters' sheet of 全部会话, 我�
   t.run_for(@ui.nav_push_ms)
   assert_true(app.nav.top() == Archived)
 }
+
+///|
+test "a chat archived from its row says so with 撤销, which asks it back into the list (chat.archive, archived false)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  hold_row(t, "夜里的构建又失败了")
+  let (lx, ly) = t.find_last("归档").unwrap()
+  t.tap(lx, ly)
+  assert_eq(named(calls, "chat.archive").length(), 1)
+  t.draw()
+  assert_true(t.find("夜里的构建又失败了") is None)
+  assert_true(t.find("已归档") is Some(_))
+  // (come in)
+  t.run_for(@kit.presence_in_ms)
+  t.tap_text("撤销")
+  let asked = named(calls, "chat.archive")
+  assert_eq(asked.length(), 2)
+  assert_eq(field(Some(asked[1].params), "archived"), Some(Json::boolean(false)))
+  assert_eq(text(Some(asked[1].params), "session"), text(Some(asked[0].params), "session"))
+  t.draw()
+  // the toast goes, said again once it is done
+  assert_true(t.find("撤销") is None)
+  assert_true(t.find("已恢复到列表") is Some(_))
+}
+
+///|
+test "a toast with 撤销 stays its longer time; one without, its 2.6 s" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  hold_row(t, "夜里的构建又失败了")
+  let (lx, ly) = t.find_last("归档").unwrap()
+  t.tap(lx, ly)
+  t.draw()
+  t.run_for(toast_ms + 100.0)
+  assert_true(t.find("撤销") is Some(_))
+  t.run_for(@sf.toast_action_ms)
+  assert_true(t.find("撤销") is None)
+  assert_eq(named(calls, "chat.archive").length(), 1)
+}
+
+///|
+test "wide: a chat archived from its row with a mouse says so with 撤销 too, which asks it back (archived false)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  let (x, y) = t.find("夜里的构建又失败了").unwrap()
+  t.move(x, y)
+  t.frame()
+  let (bx, by, bw, bh) = t.query(Button, label="归档「夜里的构建又失败了」").unwrap().rect
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
+  assert_eq(named(calls, "chat.archive").length(), 1)
+  t.draw()
+  assert_true(t.find("已归档") is Some(_))
+  // (come in)
+  t.run_for(@kit.presence_in_ms)
+  t.tap_text("撤销")
+  let asked = named(calls, "chat.archive")
+  assert_eq(asked.length(), 2)
+  assert_eq(field(Some(asked[1].params), "archived"), Some(Json::boolean(false)))
+  assert_eq(text(Some(asked[1].params), "session"), text(Some(asked[0].params), "session"))
+}

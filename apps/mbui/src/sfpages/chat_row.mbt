@@ -743,6 +743,8 @@ fn archive_row(src : Source, item : ChatItem, then? : () -> Unit = fn() {  }, fa
       "chat.archive",
       Json::object(params),
       done=@sf.t("web-main.chat.archived"),
+      done_action=@sf.t("android-chat.archived.undo"),
+      done_run=@sfbase.archive_undo(src, params),
       failed~,
     )
   }

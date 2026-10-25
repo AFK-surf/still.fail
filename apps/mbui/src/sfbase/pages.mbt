@@ -82,6 +82,9 @@ pub(all) struct App {
   /// what was said last of a write (a toast), and which saying it is (one said again is a new one)
   mut toast : String
   mut toast_n : Int
+  /// what the toast offers to do (its button's words, "" none: an archive's 撤销), and what that does
+  mut toast_action : String
+  mut toast_run : () -> Unit
 }
 
 ///|
@@ -95,6 +98,8 @@ pub let app : App = {
   held_long: false,
   toast: "",
   toast_n: 0,
+  toast_action: "",
+  toast_run: fn() {  },
 }
 
 ///|
@@ -191,6 +196,8 @@ pub fn reset() -> Unit {
   app.held = 0
   app.held_long = false
   app.toast = ""
+  app.toast_action = ""
+  app.toast_run = fn() {  }
   left_pages.clear()
   felt_holds.clear()
   // the drive's files going up and being fetched (drive_upload.mbt, drive_keep.mbt)
