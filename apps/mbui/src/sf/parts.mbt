@@ -431,12 +431,15 @@ let field_frame : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 radius=Xl bg=Card bo
 /// A small panel's ground (controls.css.ts popover): the canvas (the raised
 /// grey in dark), a line round it, its shadow; padded panel_pad, its corner
 /// the menu's. `min_w`: as wide as what it holds, at least that (a menu's,
-/// controls.css.ts menuList).
+/// controls.css.ts menuList); `max_h`: no taller than that (the room beside
+/// what opened it); `id`: what its size is read back by.
 pub fn small_panel(
   c : @ui.Ctx,
   w? : @ui.Size = Auto,
   h? : @ui.Size = Auto,
   min_w? : Double,
+  max_h? : Double,
+  id? : Int = 0,
   body : () -> Unit,
 ) -> Int {
   let t = theme()
@@ -444,6 +447,9 @@ pub fn small_panel(
     w~,
     h~,
     min_w?,
+    max_h?,
+    id~,
+    taps=false,
     pad=panel_pad,
     bg=panel_ground(),
     radius=r_menu,

@@ -9,9 +9,12 @@
 // back into it, a little quicker (`pop_out`).
 
 ///|
-/// What a popover's, a hover card's or a tooltip's look is given: the side of its trigger it went on.
+/// What a popover's, a hover card's or a tooltip's look is given: the side of its trigger it went on, and how tall it
+/// can be there (Ctx::room_beside, Radix's --radix-popper-available-height): a look taller than that holds itself to
+/// it, what it holds scrolling, or it runs out of the window.
 pub(all) struct PopState {
   side : @ui.Side
+  room : Double
 }
 
 ///|
@@ -255,7 +258,8 @@ fn beside(
     None => c.rect_of(anchor).unwrap_or((0.0, 0.0, 0.0, 0.0))
   }
   let went = went_side(c, pid, ar, side, along, offset)
-  let i = c.box(id=pid, fn() { look(c, { side: went }, body) })
+  let room = c.room_beside(ar, went, offset~)
+  let i = c.box(id=pid, fn() { look(c, { side: went, room }, body) })
   c.place_by_size(i, fn(pw, ph) {
     let (x, y, _) = c.place(ar, pw, ph, side~, along~, offset~)
     (x, y)
@@ -265,8 +269,9 @@ fn beside(
 }
 
 ///|
-/// The side of `ar` that panel `pid` went on as laid out last frame (its first: `side`, asked for); its place is worked
-/// out as it is laid out, from its size then.
+/// The side of `ar` that panel `pid` goes on as this frame lays it out (read back: laid out another size, the frame is
+/// built again; before it is first laid out, `side`, asked for), so the room its look is given is the room on the side
+/// it is placed on; its place is worked out as it is laid out, from its size then.
 fn went_side(
   c : @ui.Ctx,
   pid : Int,
@@ -275,8 +280,8 @@ fn went_side(
   along : @ui.Along,
   offset : Double,
 ) -> @ui.Side {
-  match c.rect_of(pid) {
-    Some((_, _, w, h)) if w > 0.0 => c.place(ar, w, h, side~, along~, offset~).2
+  match c.laid_size(pid) {
+    Some((w, h)) if w > 0.0 => c.place(ar, w, h, side~, along~, offset~).2
     _ => side
   }
 }
