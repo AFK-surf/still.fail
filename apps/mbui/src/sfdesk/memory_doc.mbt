@@ -15,7 +15,7 @@ fn memory_doc_reset() -> Unit {
 ///|
 /// The page (MemoryDoc): `skill` "" the global memory, `at` the part first shown.
 fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, at : Int) -> Unit {
-  let read = memory_of(c, core, address)
+  let read = memory_of(core, address)
   let key = "memory-doc/" + address + "/" + skill
   let title = if skill == "" { @sf.t("web-main.memory.global") } else { skill }
   let back = @sf.t("web-pages.settings.nav.memory")
@@ -73,8 +73,6 @@ fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, a
               @sf.t("web-main.memory.share.switch"),
               "skill.share",
               obj([("station", str(address)), ("name", str(skill)), ("on", Json::boolean(now))]),
-              // read again: its sharing as the station has it now
-              then=fn(_) { read.asked = false },
             )
           }
           let conflicts = strings(share, "conflicts")

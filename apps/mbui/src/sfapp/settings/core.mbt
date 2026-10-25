@@ -481,11 +481,6 @@ let left_core : Ref[Core?] = Ref(None)
 pub fn left(route : Route) -> Unit {
   match route {
     Archive => archive_reset()
-    Memory(a) | MemoryDoc(a, _, _) =>
-      match memories.get(a) {
-        Some(m) => m.asked = false
-        None => ()
-      }
     Connects(_) => connects_mine.val = false
     Station(a) => station_parts.remove(a)
     NewProfile(a) =>
@@ -528,7 +523,6 @@ pub fn reset() -> Unit {
   adb_reset()
   keyed_fields.clear()
   notify_switched.val = None
-  memories.clear()
   connects_mine.val = false
   chosen.clear()
   builtin_open.clear()

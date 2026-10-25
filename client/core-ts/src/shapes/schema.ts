@@ -1179,7 +1179,7 @@ export const SHAPES: Record<string, Shape> = {
   StationMemory: struct([
     ["global", "MemoryFile"],
     ["skills", vec("SkillFile")],
-  ], { doc: "The agents' memory on a station (`memory.get`): the global one, and the skills (projects' memories among them).", keepNone: true }),
+  ], { doc: "The agents' memory on a station (the `memory` topic, and `memory.get`): the global one, and the skills (projects'\nmemories among them).", keepNone: true }),
   MemoryFile: struct([
     ["path", "String"],
     ["text", "String"],
@@ -3400,6 +3400,7 @@ export const TOPIC_SHAPES: Record<string, Ty> = {
   drivePlace: { opt: "DrivePlace" },
   jobLog: "JobLogView",
   machineLogins: "MachineLoginsView",
+  memory: "StationMemory",
   machineLogin: { opt: "MachineLoginShown" },
   machineLoginScreen: { opt: "MachineLoginScreen" },
   prefs: "PrefsView",

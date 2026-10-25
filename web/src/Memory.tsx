@@ -3,7 +3,7 @@
 // 项目记忆： and says when it applies (its whole text is read when a task matches). The station's other skills are
 // listed too. A page lists them (the global memory by its parts, a row for each skill), and each opens on a page of
 // its own to be read: a skill with its other files, the global memory a part at a time.
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
 import { stationApi, useStationCall, type SkillFile, type StationMemory as Memory } from "./api.ts";
 import type { MemorySection, StationView } from "./core/shapes.ts";
@@ -41,20 +41,11 @@ export const MEMORY_TEXT = {
   failed: (error: string) => t("web-main.memory.failed", { error }),
 };
 
-/** The last memory read of each station, so a page opened from the list has it at once (it is read again). */
-const kept = new Map<string, Memory>();
-
-/** A station's memory, read as a page opens (it changes as agents write it, not while it is looked at), or why it
- * could not be. */
-export function useMemory(station: string): { memory: Memory | null; error: string | null; reload: () => void } {
-  const call = useStationCall(station);
-  const [memory, setMemory] = useState<Memory | null>(() => kept.get(station) ?? null);
-  const [error, setError] = useState<string | null>(null);
-  const [round, setRound] = useState(0);
-  useEffect(() => {
-    stationApi(call).memory<Memory>().then((m) => { kept.set(station, m); setMemory(m); setError(null); }, (e: Error) => setError(e.message));
-  }, [call, station, round]);
-  return { memory, error, reload: () => setRound((n) => n + 1) };
+/** A station's memory as the core holds it (the `memory` topic: read each time a page shows it, what was read last
+ * shown meanwhile, the app opened again too), or why it could not be read while none is held. */
+export function useMemory(station: string): { memory: Memory | null; error: string | null } {
+  const topic = useTopic<Memory>({ topic: "memory", station });
+  return { memory: topic.value ?? null, error: topic.value === undefined ? (topic.error?.message ?? null) : null };
 }
 
 /** Whose a skill is, after its name: the station's own, another station's, or shared from here. */
@@ -71,8 +62,8 @@ export function SkillTags({ skill, station, className }: { skill: SkillFile; sta
 }
 
 /** Whether a skill of this station's is shared with the workspace's other stations (none for the station's own or
- * another's copy), and the edits two stations made at once. */
-export function SkillShare({ skill, station, changed }: { skill: SkillFile; station: string; changed: () => void }) {
+ * another's copy; the core reads the memory again once it changes), and the edits two stations made at once. */
+export function SkillShare({ skill, station }: { skill: SkillFile; station: string }) {
   const call = useStationCall(station);
   const act = useAct();
   const sharing = useDoing("skill.share", { station, name: skill.name });
@@ -81,7 +72,7 @@ export function SkillShare({ skill, station, changed }: { skill: SkillFile; stat
   return (
     <>
       <SwitchRow title={t("web-main.memory.share.switch")} checked={share?.role === "host"} busy={sharing} disabled={sharing}
-        onChange={(on) => act(stationApi(call).shareSkill(skill.name, on, null).then(changed), t("web-main.memory.share.switch"))} />
+        onChange={(on) => act(stationApi(call).shareSkill(skill.name, on, null), t("web-main.memory.share.switch"))} />
       {(share?.conflicts?.length ?? 0) > 0 && <p className={css.memoryConflict}>{t("web-main.memory.share.conflicts", { names: share!.conflicts!.join(t("web-main.list.separator")) })}</p>}
     </>
   );
@@ -164,7 +155,7 @@ export function DocChips({ items, picked, onPick, className, chip }: { items: { 
 /** One of a station's memory pages on the wide screen (settings/memory/:station/global or /skill/:name, in
  * ./cloud/settings.tsx): a skill with when it is read, its sharing and its files, or the global memory a part at a time. */
 export function MemoryDoc({ station, name, at, file, pick }: { station: string; name: string | null; at: number; file: string; pick: (key: "at" | "file", value: string | number) => void }) {
-  const { memory, error, reload } = useMemory(station);
+  const { memory, error } = useMemory(station);
   if (!memory) return <Waiting count={4} error={error ? MEMORY_TEXT.failed(error) : null} />;
   const doc = (text: string) => <div className={`${css.memoryDoc} ${conversationCss.markdown}`}><Prose>{text}</Prose></div>;
   if (name === null) {
@@ -186,7 +177,7 @@ export function MemoryDoc({ station, name, at, file, pick }: { station: string; 
     <>
       <div className={`${pagesCss.card} ${css.memoryHead}`}>
         <div className={css.memoryWhen}><b>{skill.kindText} · {t("web-main.memory.when")}</b>{skill.whenText}</div>
-        <SkillShare skill={skill} station={station} changed={reload} />
+        <SkillShare skill={skill} station={station} />
       </div>
       <DocChips items={pages.map((p) => ({ label: p.label, note: p.size }))} picked={i} onPick={(n) => pick("file", pages[n]!.key)} className={css.memoryChips} chip={css.memoryChip} />
       {doc(pages[i]!.text)}

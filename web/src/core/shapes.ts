@@ -5742,7 +5742,10 @@ export interface SlackTokensView {
 	ready: boolean;
 }
 
-/** The agents' memory on a station (`memory.get`): the global one, and the skills (projects' memories among them). */
+/**
+ * The agents' memory on a station (the `memory` topic, and `memory.get`): the global one, and the skills (projects'
+ * memories among them).
+ */
 export interface StationMemory {
 	global: MemoryFile;
 	skills: SkillFile[];

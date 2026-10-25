@@ -86,7 +86,7 @@ export function MemoryDocScreen() {
   const station = useStation();
   const { name } = useParams();
   const [q] = useSearchParams();
-  const { memory, error, reload } = useMemory(station.address);
+  const { memory, error } = useMemory(station.address);
   const [at, setAt] = useState(() => Number(q.get("at") ?? 0));
   const skill = name === undefined ? null : memory?.skills.find((s) => s.name === name);
   const doc = (text: string) => <Card><div className={`${rootCss.wide} ${conversationCss.markdown} ${css.mMemoryDoc}`}><Prose>{text}</Prose></div></Card>;
@@ -110,7 +110,7 @@ export function MemoryDocScreen() {
       <>
         <Card>
           <div className={css.mMemoryWhen}><b>{t("web-main.memory.when")}</b>{skill.whenText}</div>
-          {!skill.builtin && skill.share?.role !== "user" && <div className={css.mMemoryShare}><SkillShare skill={skill} station={station.address} changed={reload} /></div>}
+          {!skill.builtin && skill.share?.role !== "user" && <div className={css.mMemoryShare}><SkillShare skill={skill} station={station.address} /></div>}
         </Card>
         <DocChips items={pages.map((p) => ({ label: p.label, note: p.size }))} picked={i} onPick={setAt} className={css.mMemoryChips} chip={css.mMemoryChip} />
         {doc(pages[i]!.text)}

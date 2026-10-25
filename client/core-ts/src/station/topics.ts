@@ -21,9 +21,10 @@ import type { StationsSync } from "./sync.ts";
 import type { LinkNet } from "./wire.ts";
 import { screenCard, screensChanged, screensView } from "../screens.ts";
 import { down, downWords } from "../views/views.ts";
-import { type Link, logKey } from "./link.ts";
+import { type Link, MEMORY, logKey } from "./link.ts";
 import * as logins from "./machine-logins.ts";
 import { laterSleep } from "../runtime.ts";
+import * as looks from "../looks.ts";
 
 /// A chat shows a window of its thread's entries: at most this many.
 export const WINDOW = 3 * PAGE;
@@ -40,7 +41,7 @@ export function packetsSince(was: LinkNet["packets"], now: LinkNet["packets"]): 
   return { sent: now.sent - was.sent, lost: now.lost - was.lost };
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory"]);
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
@@ -197,6 +198,8 @@ export class StationTopics implements Owner {
     if (topic.topic === "drive") this.#sync.driveShown(station, topic.root as string, topic.path as string);
     // What a search finds there: asked once its words settle, while shown (sync.ts `searchShown`).
     if (topic.topic === "stationSearch") this.#sync.searchShown(topic);
+    // The agents' memory: read each time it is shown (agents write it as they work), what was read last shown meanwhile.
+    if (topic.topic === "memory") this.#sync.memoryShown(station);
   }
 
   stop(topic: Topic): void {
@@ -282,6 +285,18 @@ export class StationTopics implements Owner {
         // not read, once known.
         if (link && down(link.state)) return { err: new CoreError("offline", downWords(link.state, this.#core.views.stationName(station))) };
         return error ? { err: error } : undefined;
+      case "memory": {
+        // As the station said it last (kept: there as the app opens again), with what the clients show of it; nothing
+        // read yet, as `drive`.
+        const v = link?.memory.get(MEMORY);
+        if (v !== undefined) {
+          const shown = structuredClone(v);
+          looks.answer("GET", "/memory", shown);
+          return { ok: shown };
+        }
+        if (link && down(link.state)) return { err: new CoreError("offline", downWords(link.state, this.#core.views.stationName(station))) };
+        return error ? { err: error } : undefined;
+      }
       default:
         // Held: what is held goes out (the store reads it); with nothing held, why not, once known.
         return error ? { err: error } : undefined;

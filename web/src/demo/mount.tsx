@@ -144,6 +144,7 @@ function demoValueOf(topic: Topic): unknown {
     case "resources": return station.resources();
     case "decisions": return station.decisions(chats);
     case "drive": return station.driveFolder(topic.root, topic.path);
+    case "memory": return station.op("memory.get");
     case "drivePlace": return null;
     case "driveBrowse": return browsing.view(topic);
     case "filesTabs": return browsing.tabsView(topic.workspace);

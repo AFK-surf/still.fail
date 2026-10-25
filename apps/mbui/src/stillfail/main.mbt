@@ -128,7 +128,7 @@ let read_only : Bool = @ui.env("MBUI_READONLY") == "1"
 /// whatever page asks it.
 let read_only_calls : Array[String] = [
   "chat.older", "chat.newer", "chat.latest", "draft.get", "station.file", "station.file.part", "station.poster",
-  "picture", "memory.get", "prefs.set", "drive.read", "drive.folders", "drive.refresh", "fonts.fetch", "fonts.file",
+  "picture", "prefs.set", "drive.read", "drive.folders", "drive.refresh", "fonts.fetch", "fonts.file",
   "fonts.keep", "fonts.preview",
 ]
 

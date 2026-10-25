@@ -1631,6 +1631,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
         ),
       )
     "archive" => Some(fx_archive())
+    "memory" => Some(fx_memory())
     // (settings-me-reading: where the account is signed in not read yet, its wait line shown)
     "loginSessions" if mode.has_prefix("settings-me-reading") => None
     "loginSessions" =>
@@ -1709,7 +1710,6 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       fx.version += 1
       Some(Ok(obj([])))
     }
-    "memory.get" => Some(Ok(fx_memory()))
     // still.fail's buddies a Slack app can wear (the core's own list, web/public/avatars/index.json: three of it)
     "buddies" =>
       Some(
