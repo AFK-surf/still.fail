@@ -272,18 +272,59 @@ test("taken_to_send_it_empties_and_comes_back_when_it_could_not_go_unless_someth
   t.core.close();
 });
 
-test("a_new_chats_words_go_on_into_the_chat_it_made_and_a_new_chat_moved_takes_its_words_not_its_files", async () => {
+test("a_new_chats_draft_is_its_workspaces_whatever_station_it_runs_on_and_goes_on_into_the_chat_it_made", async () => {
   const t = await setup();
-  await t.watch(1, "new:ws/st");
-  await t.ask("text", { key: "new:ws/st", text: "第一句" });
-  await t.ask("carry", { key: "new:ws/st", to: "ws/st:made" });
+  await t.watch(1, "new:ws");
+  await t.ask("text", { key: "new:ws", text: "第一句" });
+  // Kept by the workspace, as long as an account reaches it.
+  await t.host.time.pass(SOON_MS + 50);
+  await t.host.settle();
+  t.core.inner.cloudSync.forgetUnreachable();
+  await Effect.runPromise(t.core.inner.data.written);
+  const kept = () => t.host.rows(dbName("s1"), "SELECT station, chat, json FROM draft ORDER BY station, chat").map(([station, chat, json]) => [station, chat, JSON.parse(json as string).text]);
+  assert.deepEqual(kept(), [["ws", "new", "第一句"]]);
+  await t.ask("carry", { key: "new:ws", to: "ws/st:made" });
   await t.watch(2, "ws/st:made");
   assert.deepEqual([v(t.values, 2).text, v(t.values, 2).ready], ["第一句", true]);
   assert.deepEqual([v(t.values, 1).text, v(t.values, 1).ready], ["", false]);
-  await t.ask("text", { key: "new:ws/st", text: "换个 station" });
-  await t.ask("move", { key: "new:ws/st", to: "new:ws/other" });
-  await t.watch(3, "new:ws/other");
-  assert.equal(v(t.values, 3).text, "换个 station");
+  t.core.close();
+});
+
+test("a_new_chats_draft_kept_by_the_station_it_was_to_start_on_comes_back_as_the_workspaces", async () => {
+  const t = await setup();
+  t.core.inner.data.set({ topic: "draft", station: "ws/st", chat: "new" }, { text: "还没写完", quotes: [], files: [] });
+  t.core.inner.choose.pickNew("ws", { station: "st" });
+  await t.watch(1, "new:ws");
+  assert.equal(v(t.values, 1).text, "还没写完");
+  await Effect.runPromise(t.core.inner.data.written);
+  assert.deepEqual(t.host.rows(dbName("s1"), "SELECT station, chat FROM draft"), [["ws", "new"]]);
+  t.core.close();
+});
+
+test("a_new_chats_file_goes_up_again_to_the_station_its_message_goes_to_and_is_let_go_once_it_leaves", async () => {
+  const t = await setup();
+  const parts: string[] = [];
+  (t.core.inner.stations.requests as J).uploadPart = (addr: J, q: J, bytes: Uint8Array) => {
+    parts.push(`${addr.station} ${q.name}`);
+    return Effect.succeed({ have: bytes.length, file: { name: q.name, path: `/${addr.station}/${q.name}`, size: bytes.length } });
+  };
+  let released = 0;
+  const picked = new FileSource(3, "", () => Promise.resolve(new Uint8Array([1, 2, 3]).buffer), () => { released++; });
+  await t.watch(1, "new:ws");
+  // One file picked while it was to run on st, one after it was changed to other.
+  await t.ask("add", { key: "new:ws", station: "ws/st", files: [{ id: "f1", name: "a.bin", size: 3, blob: picked }] });
+  await t.ask("add", { key: "new:ws", station: "ws/other", files: [{ id: "f2", name: "b.bin", size: 1, blob: new Blob(["b"]) }] });
+  assert.deepEqual(v(t.values, 1).files.map((f: J) => f.done.path), ["/st/a.bin", "/other/b.bin"]);
+  // Up, but kept to go again while it is in a new chat's draft.
+  assert.equal(released, 0);
+  call(t.core, t.ui, 900, "composer.take", { key: "new:ws", station: "ws/other" });
+  await t.host.settle();
+  const taken = answers(t.host.takeEmitted(), 900)?.ok as J;
+  assert.deepEqual([taken.attachments.map((a: J) => a.path), taken.uploads.map((u: J) => u.id)], [["/other/b.bin"], ["f1"]]);
+  assert.deepEqual(parts, ["st a.bin", "other b.bin", "other a.bin"]);
+  assert.equal((await Effect.runPromise(t.core.inner.composers.uploaded("ws/other", [{ id: "f1", name: "a.bin" }])))[0].path, "/other/a.bin");
+  t.core.inner.composers.release([{ id: "f1" }]);
+  assert.equal(released, 1);
   t.core.close();
 });
 

@@ -80,8 +80,8 @@ test("sent_or_put_back_empty_the_next_draft_is_another", async () => {
     // written to again: still the next one
     assert.equal((await t.ask("draft.put", { key: "ws/st:ember:a", ...draft })).id, next);
     // a new chat's, sent (its chat made), then another new chat on the same station: another draft
-    const fresh = (await t.ask("draft.put", { key: "new:ws/st", ...draft })).id;
-    const after = (await t.ask("draft.put", { key: "new:ws/st", ...blank })).id;
+    const fresh = (await t.ask("draft.put", { key: "new:ws", ...draft })).id;
+    const after = (await t.ask("draft.put", { key: "new:ws", ...blank })).id;
     assert.notEqual(after, fresh);
     // another chat's draft is another draft
     assert.notEqual((await t.ask("draft.get", { key: "ws/st:ember:b" })).id, next);

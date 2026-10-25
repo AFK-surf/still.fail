@@ -110,10 +110,11 @@ test("a_link_shared_goes_into_the_composer_of_the_chat_picked_and_that_chat_come
   assert.equal(taken.text, `先看这个\n${yt}\nA 的标题\nhttps://a.com/x`);
   assert.deepEqual(taken.attachments, []);
 
-  // Text from another app, into a new chat's composer on the station, with the title the app gave.
+  // Text from another app, into the workspace's new chat's composer, to start on the station, with the title the app
+  // gave.
   const made = await ask(host, core, ui, 8, "shareIn.open", { scope: "ws", source: "一段笔记", title: "标题", station: "ws/st" });
-  assert.deepEqual(made, { station: "ws/st", key: "new:ws/st" });
-  subscribe(core, ui, 9, { topic: "composer", key: "new:ws/st" });
+  assert.deepEqual(made, { station: "ws/st", key: "new:ws" });
+  subscribe(core, ui, 9, { topic: "composer", key: "new:ws" });
   subscribe(core, ui, 10, { topic: "newChat", scope: "ws" });
   await host.settle();
   apply(host, values);

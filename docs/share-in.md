@@ -26,9 +26,9 @@ is its agent's business (a chat kept for videos, told once what to do with them)
   `xhslink.com` …; text without a link is a site of its own), listed first, with why (`text`). `stations`: the
   scope's stations up now (`{station, name}`), and `newOn`, the one a new chat starts on unless another is picked.
 - `shareIn.open` (`scope`, `source`, `station`, `id?`, `title?` (what the app gave as its subject), `key?` (a new
-  chat's composer key on the page that opens it, when not `new:<station>`: the phone web's `new:`)): into the chat's
-  composer (`<station>:<session>`, the row's; with no `id`, the new chat's on `station`, which new chats then start
-  on): its first link as a `ComposerFile` with `link` (`{url, title?, site?}`: the app's subject as its title, else
+  chat's composer key on the page that opens it, when not `new:<workspace>`: the phone web's `new:`)): into the
+  chat's composer (`<station>:<session>`, the row's; with no `id`, the workspace's new chat's, `station` then the one
+  new chats start on): its first link as a `ComposerFile` with `link` (`{url, title?, site?}`: the app's subject as its title, else
   the short words before it, as apps put a page's title before its link; what apps add to a link to know who shared it,
   YouTube's `si`, `utm_*`, Bilibili's `spm_id_from` …, left out), once per link; the words around it after
   what is written, once. The composer keeps links with its draft and sends them as words after the text

@@ -52,7 +52,7 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       |> ignore
       // a row of the 文件 tab carried over it, let go there: into its message (DropHint, useChatDrop)
       drop_hint(c, page)
-      chat_drop(c, src, address, "new:" + address, page)
+      chat_drop(c, src, address, "new:" + w.id, page)
     })
     |> ignore
   }
@@ -167,7 +167,7 @@ fn new_files_panel(c : @ui.Ctx, src : Source, w : Workspace, address : String) -
       }
     })
     |> ignore
-    c.box(style=side_pane, fn() { files_tab(c, src, w.id, "new:" + address, address) }) |> ignore
+    c.box(style=side_pane, fn() { files_tab(c, src, w.id, "new:" + w.id, address) }) |> ignore
   })
   |> ignore
   // (panel.close: the panel closed)

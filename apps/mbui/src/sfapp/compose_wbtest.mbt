@@ -58,9 +58,9 @@ test "a draft's quotes: added with the focus on its comment line, said about, le
 test "what is written in a new chat goes on into the chat it made (composer.carry), the new chat's left empty" {
   reset()
   let src = fixture("chat")
-  let w = @sfbase.writing(src, "new:ws1/st1")
+  let w = @sfbase.writing(src, "new:ws1")
   @sfbase.writing_text(src, w, "把发布说明写一下")
-  @sfbase.writing_carry(src, "new:ws1/st1", "ws1/st1:s-new")
+  @sfbase.writing_carry(src, "new:ws1", "ws1/st1:s-new")
   assert_eq(@sfbase.writing(src, "ws1/st1:s-new").text, "把发布说明写一下")
-  assert_eq(@sfbase.writing(src, "new:ws1/st1").text, "")
+  assert_eq(@sfbase.writing(src, "new:ws1").text, "")
 }

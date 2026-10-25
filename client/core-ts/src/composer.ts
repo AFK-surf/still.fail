@@ -1,8 +1,9 @@
 // What is being written in a chat, as the core keeps it (the `composer` topic, by the draft's key: `<station>:<chat>`,
-// `new:<station>` a new chat there, `decision:…` a reply to one): its words, the passages quoted, the files going up
-// to the station (the core uploads them, and says how far), whether it can be sent, and what went wrong. Each chat has
-// its own while the page shows another; what is in it is kept on the device as the chat's draft (the `draft` topic),
-// and read back from there the first time it is asked for. The pages only draw it and say what was done.
+// `new:<workspace>` the workspace's new chat, whichever station it is to run on, `decision:…` a reply to one): its
+// words, the passages quoted, the files going up to the station (the core uploads them, and says how far), whether it
+// can be sent, and what went wrong. Each chat has its own while the page shows another; what is in it is kept on the
+// device as the chat's draft (the `draft` topic), and read back from there the first time it is asked for. The pages
+// only draw it and say what was done.
 //
 // The words are typed in the page, which has them at once: what it sends (`composer.text`) comes back in the topic's
 // `text` without the page taking it again; the core's own words for it (read back, taken to send, put back, carried
@@ -120,6 +121,9 @@ export class Composers {
   #uploads = new Map<string, { station: string; file: FileIn | null; done: Deferred.Deferred<J, CoreError>; error: boolean }>();
   /// Files named by their path, kept to send up should they be switched to files (`mode`), by id.
   #held = new Map<string, { station: string; file: FileIn }>();
+  /// A new chat's files as they were handed over, by id, until they leave its draft: its station may be changed under
+  /// them, and its message takes each up again from here to the station it goes to (`take`).
+  #sources = new Map<string, FileIn>();
   /// Images' sizes as read here, by upload id, until the upload is let go: a message the page sent before it heard of
   /// one is given it all the same (`sizeOf`).
   #sizes = new Map<string, { width: number; height: number }>();
@@ -212,7 +216,21 @@ export class Composers {
   }
 
   #read(key: string): State {
-    return this.#from(this.#kept(key), this.#db(key));
+    return this.#from(this.#kept(key) ?? this.#before(key), this.#db(key));
+  }
+
+  /// A workspace's new chat's draft as it was kept before it had one whatever its station (by `new:<station>`): the
+  /// one of the station it was to start on, moved under its own key.
+  #before(key: string): unknown {
+    const at = draftAt(key);
+    if (!at || at[1] !== "new" || at[0].includes("/")) return undefined;
+    const id = this.#inner.choose.keptStation(at[0]);
+    const old = { topic: "draft", station: `${at[0]}/${id}`, chat: "new" };
+    const kept = id !== "" ? this.#inner.data.get(old) : undefined;
+    if (!isObject(kept)) return undefined;
+    this.#inner.data.set({ topic: "draft", station: at[0], chat: "new" }, kept, false);
+    this.#inner.data.forgetTopic(old);
+    return kept;
   }
 
   #from(kept: unknown, db: AccountDb | undefined): State {
@@ -395,6 +413,7 @@ export class Composers {
   add(key: string, station: string, files: FileIn[]): number {
     const s = this.#state(key);
     for (const f of files) {
+      if (key.startsWith("new:")) this.#sources.set(f.id, f);
       const ref = f.ref ? { ...f.ref, mode: f.ref.dir && !zippable(f, station) ? "path" as const : f.ref.mode } : undefined;
       if (ref?.mode === "path") {
         // Named by its path: nothing goes up unless it is switched to a file.
@@ -456,7 +475,10 @@ export class Composers {
     const upload = { station, file: f as FileIn | null, done: Deferred.makeUnsafe<J, CoreError>(), error: false };
     this.#uploads.set(f.id, upload);
     const id = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
+    // Gone up again to another station since (a new chat's, `take`): what this one does says nothing of the file.
+    const replaced = () => this.#uploads.has(f.id) && this.#uploads.get(f.id) !== upload;
     const change = (patch: Partial<ComposerFile>) => {
+      if (replaced()) return;
       for (const [k, s] of this.#all) {
         if (s.db !== this.#db(k)) continue;
         if (s.taken?.files.some((x) => x.id === f.id)) s.taken.files = s.taken.files.map((x) => x.id === f.id ? { ...x, ...patch } : x);
@@ -470,7 +492,7 @@ export class Composers {
     const step = Math.max(SENT_STEP, Math.ceil(f.size / 200));
     let said = -1;
     const went = (sent: number) => {
-      if (sent !== f.size && said >= 0 && Math.abs(sent - said) < step) return;
+      if (replaced() || (sent !== f.size && said >= 0 && Math.abs(sent - said) < step)) return;
       said = sent;
       if (this.#uploads.get(f.id) === upload) this.#sent.set(f.id, sent);
       change({ sent });
@@ -562,7 +584,7 @@ export class Composers {
       if (size) saved = { ...saved, ...size };
       // What its station said written down for its message (before the message can take it and let it go), the bytes
       // no longer needed.
-      if (kept) {
+      if (kept && !replaced()) {
         yield* inner.driveKept.noteUpload(f.id, { ...noted, done: saved });
         yield* inner.driveKept.forget(outboxKeptId(f.id));
       }
@@ -578,8 +600,9 @@ export class Composers {
             Deferred.doneUnsafe(upload.done, Effect.fail(e));
           },
         }),
-        // A failed upload retains its source for the outbox's retry. Success or interruption releases it.
-        Effect.ensuring(Effect.sync(() => { if (!upload.error && f.blob instanceof FileSource) f.blob.close(); })),
+        // A failed upload retains its source for the outbox's retry; a new chat's file, until it leaves the draft.
+        // Success or interruption releases it.
+        Effect.ensuring(Effect.sync(() => { if (!upload.error && f.blob instanceof FileSource && this.#sources.get(f.id)?.blob !== f.blob) f.blob.close(); })),
       ),
     );
     void key;
@@ -635,6 +658,7 @@ export class Composers {
 
   release(files: { id: string }[]): void {
     for (const f of files) {
+      this.#unkeep(f.id);
       this.#sizes.delete(f.id);
       this.#sent.delete(f.id);
       const held = this.#held.get(f.id)?.file.blob;
@@ -647,12 +671,21 @@ export class Composers {
     }
   }
 
+  /// A new chat's file out of its draft: what it was read from let go, unless what sends it up reads from it still.
+  #unkeep(id: string): void {
+    const kept = this.#sources.get(id)?.blob;
+    this.#sources.delete(id);
+    if (kept instanceof FileSource && kept !== this.#uploads.get(id)?.file?.blob && kept !== this.#held.get(id)?.file.blob) kept.close();
+  }
+
   /// What is written, taken to be sent (the words trimmed), the composer left empty; `restore` puts it back. Its files
   /// as they are at this moment, each one way: up, as the station keeps it (`attachments`), or still going up
   /// (`uploads`: its message waits for it). The page sends them as said here, not as it last drew them: one up in
-  /// between went as both, and twice.
-  take(key: string): { text: string; attachments: J[]; quotes: J[]; uploads: { id: string; name: string; size: number }[]; version: number } {
+  /// between went as both, and twice. `station`, the one the message goes to: a new chat's file that went up to another
+  /// (its station changed under it) goes up there again, and is one still going up.
+  take(key: string, station: string | null = null): { text: string; attachments: J[]; quotes: J[]; uploads: { id: string; name: string; size: number }[]; version: number } {
     const s = this.#state(key);
+    if (station !== null) s.files = s.files.map((f) => this.#again(f, station));
     const taken = { text: s.text, quotes: s.quotes, files: s.files, id: this.#id(s) };
     s.taken = taken;
     // what is written next is another draft
@@ -667,6 +700,8 @@ export class Composers {
     const links = taken.files.flatMap((f) => (f.link ? [f.link] : []));
     const paths = taken.files.filter((f) => f.ref?.mode === "path");
     const sent = taken.files.filter((f) => !named(f));
+    // (one up goes as the station has it: nothing more is read of it)
+    for (const f of sent) if (f.done) this.#unkeep(f.id);
     return {
       text: [taken.text.trim(), ...links.map(linkWords), ...paths.map((f) => pathWords(f.ref!))].filter((w) => w !== "").join("\n"),
       attachments: sent.flatMap((f) => (f.done ? [f.done] : [])),
@@ -674,6 +709,19 @@ export class Composers {
       uploads: sent.filter((f) => !f.done && !f.error).map(({ id, name, size }) => ({ id, name, size })),
       version,
     };
+  }
+
+  /// A new chat's file up, or going up, to another station than `station`: sent up there again from what it was read
+  /// from, what went before taking no part (a file of the first station's drive read from there).
+  #again(f: ComposerFile, station: string): ComposerFile {
+    const kept = this.#sources.get(f.id);
+    const upload = this.#uploads.get(f.id);
+    if (!kept || !upload || upload.station === station || named(f)) return f;
+    const source = kept.drive && kept.drive.station === undefined ? { ...kept, drive: { ...kept.drive, station: upload.station } } : kept;
+    this.#sources.set(f.id, source);
+    this.#upload("", station, source);
+    const { sent: _, ...going } = f;
+    return { ...going, done: null, error: null };
   }
 
   /// What was taken comes back (a chat that could not be made, a message never sent), saying why; with `unlessWritten`,
@@ -705,20 +753,6 @@ export class Composers {
     this.#all.set(from, { ...empty(s.db), joined: s.joined, rev: s.rev + 1, version: s.version });
     this.#changed(from, this.#all.get(from)!);
     return this.#changed(to, next);
-  }
-
-  /// A new chat moved to another station: what is written goes with it; files stay with the station they went up to.
-  move(from: string, to: string): number {
-    const a = this.#state(from);
-    const b = this.#state(to);
-    if (a === b) return b.version;
-    b.quotes = [...b.quotes, ...a.quotes];
-    if (a.text) this.#say(b, a.text);
-    b.error = null;
-    a.quotes = [];
-    this.#say(a, "");
-    this.#changed(from, a);
-    return this.#changed(to, b);
   }
 }
 
@@ -814,13 +848,11 @@ export function parseComposer(name: string, params: unknown): Call | null {
     case "mode":
       return { kind: "composer", key, act: { mode: str(p, "mode") === "file" ? "file" : "path", file: str(p, "id") } };
     case "take":
-      return { kind: "composer", key, act: { take: true } };
+      return { kind: "composer", key, act: { take: true, station: strOr(p, "station") || null } };
     case "restore":
       return { kind: "composer", key, act: { restore: true, error: strOr(p, "error"), unlessWritten: p.unlessWritten === true } };
     case "carry":
       return { kind: "composer", key, act: { carry: str(p, "to") } };
-    case "move":
-      return { kind: "composer", key, act: { move: str(p, "to") } };
   }
   throw CoreError.invalid(`unknown call: ${name}`);
 }
@@ -829,7 +861,7 @@ export function parseComposer(name: string, params: unknown): Call | null {
 export type ComposerAct =
   | { text: string } | { append: string } | { quote: ComposerQuote; focus: boolean; attachment?: J; fileId?: string } | { comment: string; words: string }
   | { unquote: string } | { focused: true } | { error: string | null } | { starting: boolean } | { add: FileIn[]; station: string }
-  | { remove: string } | { retry: string } | { mode: "path" | "file"; file: string } | { take: true } | { restore: true; error: string | null; unlessWritten: boolean } | { carry: string } | { move: string };
+  | { remove: string } | { retry: string } | { mode: "path" | "file"; file: string } | { take: true; station: string | null } | { restore: true; error: string | null; unlessWritten: boolean } | { carry: string };
 
 export function install(): void {
   handlers.composer = (inner, call) => {
@@ -849,10 +881,9 @@ export function install(): void {
       if ("remove" in a) return { version: all.remove(c.key, a.remove) };
       if ("retry" in a) return { version: all.retry(c.key, a.retry) };
       if ("mode" in a) return { version: all.mode(c.key, a.file, a.mode) };
-      if ("take" in a) return all.take(c.key);
+      if ("take" in a) return all.take(c.key, a.station);
       if ("restore" in a) return { version: all.restore(c.key, a.error, a.unlessWritten) };
       if ("carry" in a) return { version: all.carry(c.key, a.carry) };
-      if ("move" in a) return { version: all.move(c.key, a.move) };
       return null;
     });
   };

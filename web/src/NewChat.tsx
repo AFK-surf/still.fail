@@ -55,7 +55,7 @@ export function NewChat({ scope, onCreated }: { scope: string; onCreated(station
   const onStation = (id: string) => chat.pick({ station: id });
   const view = choice?.station;
   if (!choice?.stations) {
-    // The station it will most likely be, by the one last written to (its draft comes with it).
+    // The station it will most likely be, by the one last written to (its draft is the workspace's, whichever it is).
     const stationId = choice?.kept ?? "";
     const error = choice?.error ?? chat.error?.message;
     const address = `${scope}/${stationId}`;
@@ -68,7 +68,7 @@ export function NewChat({ scope, onCreated }: { scope: string; onCreated(station
         </div>
         {/* The composer itself (dock.tsx), locked until there is a station to write to: it goes on from the page before
             without leaving the screen for as long as the stations take to come (the first time the page is opened). */}
-        <ComposerSlot variant="new" station={held} draftKey={`new:${held.address}`} thread={null} sessionKey={null} placeholder={t("web-main.newChat.placeholder")} locked roomy />
+        <ComposerSlot variant="new" station={held} draftKey={`new:${scope}`} thread={null} sessionKey={null} placeholder={t("web-main.newChat.placeholder")} locked roomy />
         <div className={css.newChatUnder}>
           {error ? <p className={`${css.newChatStatus} ${controlsCss.fieldError}`}>{error}</p>
             : <WaitLine text={t("common.readingStations")} className={css.newChatStatus} />}
@@ -118,18 +118,18 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
     </>
   ), [stations, station, runtime, model, pick, act]);
 
-  const draftKey = `new:${station.address}`;
-  // The workspace's stations' files beside it, as beside a chat (../pages/DriveTab.tsx): what is added goes into its
-  // message, and dropped anywhere on the page too. Open or not for the workspace's new chat, whichever station it is
-  // on; open as the page becomes the chat, open there.
-  const tabsKey = `new:${workspace}`;
-  const kept = usePrefs((p) => p.chatTabs[tabsKey]);
+  // The workspace's new chat, whichever station it is to run on: what is written (its files go up to that station),
+  // and the workspace's stations' files beside it, as beside a chat (../pages/DriveTab.tsx): what is added goes into
+  // its message, and dropped anywhere on the page too. Open or not for the workspace's new chat; open as the page
+  // becomes the chat, open there.
+  const draftKey = `new:${workspace}`;
+  const kept = usePrefs((p) => p.chatTabs[draftKey]);
   const drive = useStationDrive(station.address);
   const open = drive && kept?.tabs.includes(FILES) ? [FILES] : [];
   const side = useSidePanel(open, open[0] ?? null);
   const setFiles = (on: boolean) => {
     side.changing(on);
-    changeTabs(tabsKey, on ? "open" : "close", FILES);
+    changeTabs(draftKey, on ? "open" : "close", FILES);
   };
   useShortcut("panel.close", open.length ? () => setFiles(false) : null);
   const drop = useChatDrop(draftKey, station.address);

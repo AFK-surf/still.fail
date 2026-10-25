@@ -168,43 +168,43 @@ export function useDraft({ key: given, station, carry }: {
   now.current = { key, text, shown, view };
 
   // Another chat (or the first key, or the chat a new one made): what is written goes where it belongs, in the core.
-  const was = useRef(key);
+  // The same draft, its files to go to another station (a new chat's, to run elsewhere): it is the same message.
+  const here = station ?? contextStation;
+  const was = useRef({ key, here });
   useLayoutEffect(() => {
     const before = was.current;
-    if (before === key) return;
-    was.current = key;
+    if (before.key === key && before.here === here) return;
+    was.current = { key, here };
+    if (before.key === key) {
+      // Each file picked here goes up there again from the file itself, with a fresh id: a late answer from the
+      // station before cannot replace it. One kept from before has no file here: known by the station it was on.
+      for (const f of now.current.shown.files) {
+        if (named(f)) continue;
+        if (!fileStations.has(f.id)) fileStations.set(f.id, before.here);
+        const source = wentTo.get(f.id);
+        if (!source || source.station === here) continue;
+        remove(f.id);
+        add([source.file], f.pasted as PastedInfo | undefined);
+      }
+      return;
+    }
     // Each key counts its own versions: what was answered for the one before says nothing of this one's (counted on from
     // it, this one's were all older until it had been written to as much, and the one before's files stayed shown).
     seenRev.current = -1;
     acked.current = 0;
     if (carry && carry.current === key) {
       carry.current = null;
-      void act("carry", { key: before, to: key });
+      void act("carry", { key: before.key, to: key });
       return;
     }
-    if (before === NO_KEY) {
+    if (before.key === NO_KEY) {
       // The first key: what was written before it goes on into it; with nothing written, its own draft comes back.
       const { text: written, shown: s } = now.current;
-      if (written || s.files.length || s.quotes.length) { void act("carry", { key: before, to: key }); return; }
-    } else if (before.startsWith("new:") && key.startsWith("new:")) {
-      // The selector changes where this message will run, not which message is being written. Carry its files too;
-      // adopting the destination's files made the pasted picture disappear or turn into an older draft's picture.
-      const moving = now.current.shown.files;
-      for (const f of moving) if (!named(f) && !fileStations.has(f.id)) fileStations.set(f.id, before.slice(4));
-      void act("carry", { key: before, to: key });
-      // Start fresh uploads from the local bytes, with fresh ids: a late answer from the old station cannot replace
-      // the new attachment. These calls are queued behind carry, before the core's destination draft is adopted.
-      for (const f of moving) {
-        const source = wentTo.get(f.id);
-        if (named(f) || !source || source.station === (station ?? contextStation)) continue;
-        remove(f.id);
-        add([source.file], f.pasted as PastedInfo | undefined);
-      }
-      return;
+      if (written || s.files.length || s.quotes.length) { void act("carry", { key: before.key, to: key }); return; }
     }
     // Shown as the core has it (at once when it has it already), else empty until it says.
     adopt(now.current.view, true);
-  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key, here]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** The core's value shown, unless the page has done something it has not answered yet. */
   const adopted = useRef<ComposerView | undefined>(undefined);
@@ -258,10 +258,10 @@ export function useDraft({ key: given, station, carry }: {
     });
     const ids = new Set(files.map((f) => f.id));
     for (const f of files) {
-      wentTo.set(f.id, { station: station ?? contextStation, file: f.blob });
-      fileStations.set(f.id, station ?? contextStation);
+      wentTo.set(f.id, { station: here, file: f.blob });
+      fileStations.set(f.id, here);
     }
-    void act("add", { station: station ?? contextStation, files }, (s) => ({
+    void act("add", { station: here, files }, (s) => ({
       ...s,
       files: [...s.files, ...files.map((f): ComposerFile => ({ id: f.id, name: f.name, size: f.size, ...(f.size > MAX_FILE ? { error: t("web-main.draft.tooBig") } : {}), ...(pasted ? { pasted } : {}) }))],
     })).then((answer) => {
@@ -275,7 +275,7 @@ export function useDraft({ key: given, station, carry }: {
   const asFiles = usePrefs((p) => p.dropFiles[key]) ?? byDefault;
   const addDropped = (items: Dropped[]) => {
     const files = items.map((f) => ({ id: `f${Date.now()}-${nextId++}`, name: f.name, size: f.size, ref: { ...f.ref, mode: asFiles && !f.ref.dir ? "file" as const : "path" as const }, ...(f.drive ? { drive: f.drive } : {}), ...(f.blob ? { blob: f.blob } : {}) }));
-    void act("add", { station: station ?? contextStation, files }, (s) => ({
+    void act("add", { station: here, files }, (s) => ({
       ...s,
       files: [...s.files, ...files.map((f): ComposerFile => ({ id: f.id, name: f.name, size: f.size, ref: f.ref }))],
     }));
@@ -345,7 +345,6 @@ export function useDraft({ key: given, station, carry }: {
     const from = key;
     // A file that went up to another station than this one (picked before the chat's station was changed): not sent
     // from there, which this one would refuse; it goes up here again and the message waits to be sent once more.
-    const here = station ?? contextStation;
     const unavailable = files.filter((f) => !named(f) && fileStations.has(f.id) && fileStations.get(f.id) !== here && !wentTo.has(f.id));
     if (unavailable.length) {
       setError(t("web-main.draft.selectAgain", { names: unavailable.map((f) => f.name).join(", ") }));
@@ -365,8 +364,8 @@ export function useDraft({ key: given, station, carry }: {
     // row and then its message draw it.
     for (const f of files) {
       if (!f.image || f.error) continue;
-      if (f.done) keepSentImage(station ?? contextStation, f.done.path, f.image);
-      else keepSentImage(station ?? contextStation, uploadImageKey(f.id), f.image, 10 * 60_000);
+      if (f.done) keepSentImage(here, f.done.path, f.image);
+      else keepSentImage(here, uploadImageKey(f.id), f.image, 10 * 60_000);
     }
     const { text: written, files: all, quotes: sentQuotes } = take();
     // Links and those named by their path go as words after what is written (each link, then where each file is), as

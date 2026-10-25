@@ -34,11 +34,11 @@ fn station_pick_reset() -> Unit {
 }
 
 ///|
-/// ＋'s Station 文件 for draft `key` (`<station>:<chat>`, `new:<station>`): the picker over the chat, from the
+/// ＋'s Station 文件 for draft `key` (`<station>:<chat>`, `new:<workspace>`): the picker over the chat, from the
 /// places; 添加 puts what is ticked into the draft.
 pub fn station_files_pick(src : Source, key : String) -> Unit {
   station_pick_reset()
-  let ws = workspace_of(draft_station(key))
+  let ws = draft_workspace(key)
   @sf.panel(
     @sf.t("web-pages.chat.files"),
     fn(c, _) { station_pick(c, src, ws) },
@@ -66,13 +66,12 @@ pub fn station_pick_set(at : PickAt, ticked : Array[Dragged]) -> Unit {
 }
 
 ///|
-/// The station of draft `key` (`<station>:<chat>`, `new:<station>`).
-fn draft_station(key : String) -> String {
-  let rest = if key.has_prefix("new:") { key.view(start_offset=4).to_owned() } else { key }
-  // (the station's address has no ':'; the chat's key after it may: `ember:c-…`)
-  match rest.find(":") {
-    Some(i) => rest.view(end_offset=i).to_owned()
-    None => rest
+/// The workspace of draft `key` (`<station>:<chat>`, its station's; `new:<workspace>`).
+fn draft_workspace(key : String) -> String {
+  if key.has_prefix("new:") {
+    key.view(start_offset=4).to_owned()
+  } else {
+    workspace_of(key)
   }
 }
 

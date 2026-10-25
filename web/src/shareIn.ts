@@ -70,7 +70,7 @@ interface Opened { station: string; key: string; session?: string; thread?: numb
 /**
  * Puts it in the composer of the chat by its row's `id`, or with no `id` of a new chat on `station` (`shareIn.open`):
  * answers the page to open, the chat's at the session its composer is kept by, or the workspace's new chat. `newKey`:
- * the key the new chat's composer is kept by on the page that opens it, when not the core's `new:<station>` (the
+ * the key the new chat's composer is kept by on the page that opens it, when not the core's `new:<workspace>` (the
  * phone's, before its chat is made: draft.ts NO_KEY).
  */
 export async function openShare(scope: string, s: Shared, station: string, id?: string, newKey?: string): Promise<string> {
