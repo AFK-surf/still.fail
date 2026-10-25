@@ -147,8 +147,8 @@ pub fn open_chat_at(r : ChatRef, seq : Double, held? : Bool = false) -> Unit {
 /// at the top, none at its end). Never with Source.readonly.
 fn chat_left(src : Source, r : ChatRef) -> Unit {
   let k = r.station + "\u{1}" + r.session
-  match (read_chats.get(k), readings.get(k)) {
-    (Some((_, v, _)), Some(rd)) if !src.read_only => {
+  match (chat_kept(r), readings.get(k)) {
+    (Some(v), Some(rd)) if !src.read_only => {
       (src.call)("client.focus", { "left": focus_chat(r, v, None) }, fn(_) {  })
       match v.thread {
         Some(_) if rd.placed => tell_place(src, r, v, rd)
@@ -173,7 +173,6 @@ fn chat_left(src : Source, r : ChatRef) -> Unit {
     None => ()
   }
   near_left(src, r.station)
-  read_chats.remove(k)
 }
 
 ///|

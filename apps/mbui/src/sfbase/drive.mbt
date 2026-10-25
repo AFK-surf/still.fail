@@ -68,6 +68,18 @@ pub(all) struct DvStation {
 }
 
 ///|
+/// Folder `path` of `root` on `station`: its entries as the station said them (the core's `drive` topic), worked out
+/// once for each version of it; None while it has not said them.
+pub fn dv_entries(src : Source, station : String, root : String, path : String) -> Array[DvEntry]? {
+  dv_entries_read.read(src, drive_params(station, root, path)).0
+}
+
+///|
+/// A folder's entries as the core's `drive` topic gives them.
+// kept across runs: what it keeps is let go of by a run anew and by reset (derived.mbt)
+let dv_entries_read : Derived[Array[DvEntry]] = Derived::new("drive", fn(v) { items(Some(v), "entries").map(dv_entry) })
+
+///|
 pub fn dv_entry(v : Json) -> DvEntry {
   let s = Some(v)
   {

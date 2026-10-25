@@ -144,6 +144,13 @@ settings page, each place, sign-in, the landing. There is no phone copy and desk
   keyboard and mouse's piece under an `if`. detlint's `page-screen` counts what reads `@sf.native_input()` in the pages
   (`pages.roots`), each file's bar only falling, to 0. The current input reaches it only through the library's primitives
   (above). Never the tier, and never `@ui.pointing()` itself.
+- **What it works out of the core's data:** the view is built again each frame, so whatever a page works out as it
+  builds is worked out again each frame. A field or two of a topic's value it reads as it is; what it makes of the whole
+  of it (a chat's messages, the chats' list, a folder's entries, an agent's history, a job's output) it reads through
+  sfbase's `Derived` (a topic's value worked out once for each of its versions) or `Memo` (worked out again only when
+  what it is made of changes), never in a loop over the topic in the frame (the user, 2026-10-26: 「不应该有个跟 preact
+  signals 一样的机制来保证只计算一次吗」). The chat's and the chats' list's converters are sfbase's own: a page has their
+  views only from `view_of_chat` and `chats_of`.
 - **Opening things:** it says what to open: a page (`Page`), or a detail of the chat (a history, a service, a
   visualization, jobs, letters, files). The shell decides where that goes. A page never pushes onto the stack or moves
   the tape itself.

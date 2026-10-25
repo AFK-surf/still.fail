@@ -329,7 +329,7 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
   // as on the files' page, but nothing here changes the files: ⏎ opens what is chosen rather than renaming it
   let b_ref : Ref[Browse?] = Ref(None)
   let held = fn(folder : String) {
-    items((src.topic)("drive", { "station": Json::string(at.station), "root": Json::string(root), "path": Json::string(folder) }).value, "entries").map(dv_entry)
+    @sfbase.dv_entries(src, at.station, root, folder).unwrap_or([])
   }
   // a folder's entries as shown (for a preview to step through the pictures beside it): the one shown's
   let folder_of = fn(in_ : DriveAt) -> Array[DvEntry] {

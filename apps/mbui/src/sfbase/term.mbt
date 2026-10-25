@@ -84,3 +84,46 @@ pub fn term_lines(runs : Array[Json], ink : Int64, dark : Bool) -> Array[Array[@
   out.map(fn(l) { if l.length() == 0 { [@ui.span(" ", mono=true)] } else { l } })
 }
 
+
+///|
+/// Job `job`'s output on `station`, its last `lines` lines as the core's `jobLog` topic gives them, a line at a time:
+/// in a terminal's colours where the core says them (its `runs`: term_lines, on `ink`, `dark` or not), else as words;
+/// worked out once for each version of it and each ink. None while it has not been read; none where the job wrote
+/// nothing.
+pub fn job_output_lines(
+  src : Source,
+  station : String,
+  job : String,
+  lines : Double,
+  ink : Int64,
+  dark : Bool,
+) -> Array[Array[@ui.Run]]? {
+  let params : Map[String, Json] = {
+    "station": Json::string(station),
+    "job": Json::string(job),
+    "lines": Json::number(lines),
+  }
+  let topic = (src.topic)("jobLog", params)
+  match topic.value {
+    Some(Object(_)) as v =>
+      Some(
+        job_outputs.get(Json::object(params).stringify(), "\{topic.version} \{ink} \{dark}", fn() {
+          let words = text(v, "text")
+          let runs = items(v, "runs")
+          if words == "" {
+            []
+          } else if runs.length() > 0 {
+            term_lines(runs, ink, dark)
+          } else {
+            words.split("\n").map(fn(l) { [@ui.span(l.to_owned(), mono=true)] }).to_array()
+          }
+        }),
+      )
+    _ => None
+  }
+}
+
+///|
+/// Each job's output as its lines' runs (job_output_lines).
+// kept across runs: what it keeps is let go of by a run anew and by reset (derived.mbt)
+let job_outputs : Memo[Array[Array[@ui.Run]]] = Memo::new()

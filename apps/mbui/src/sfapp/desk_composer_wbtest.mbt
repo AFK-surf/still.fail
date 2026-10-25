@@ -34,8 +34,8 @@ fn desk_composer_tester(
       let ws : Workspace = { id: "ws1", name: "Acme", emoji: "", icon: "", email: "" }
       c.box(style=@ui.css("w=Full h=Full p=S4 justify=JEnd"), fn() {
         @sfpages.composer(c, src, ws, spec_of({ station: r.station, key: "ws1/st1:s-c1" }), fn(w) {
-          match (src.topic)("chat", chat_params(r)).value {
-            Some(v) => @sfpages.send_in_chat(c, src, r, chat_view(v), w)
+          match view_of_chat(src, r).0 {
+            Some(v) => @sfpages.send_in_chat(c, src, r, v, w)
             None => ()
           }
         })
@@ -558,7 +558,7 @@ test "desk composer: 抄送 opens a menu of the chat's Slack and Feishu threads;
       @sf.set_words(fill)
       let _ = @sf.begin(c)
       let ws : Workspace = { id: "ws1", name: "Acme", emoji: "", icon: "", email: "" }
-      let v = chat_view({
+      let v = chat_view_made({
         "title": "整理发布清单",
         "thread": { "id": 7 },
         "cc": [

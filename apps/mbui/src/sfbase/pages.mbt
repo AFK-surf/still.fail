@@ -208,8 +208,8 @@ pub fn reset() -> Unit {
   ups_reset()
   dv_fetches.clear()
   keepings.clear()
-  // the chats' list (rows.mbt)
-  read_views.clear()
+  // what was worked out of the core's topics (derived.mbt)
+  memo_reset()
   open_titled.val = ""
   shown_days.clear()
   held_from.clear()
@@ -254,7 +254,6 @@ pub fn reset() -> Unit {
   send_flight.val = None
   landing_shares.clear()
   // the chats' lists as kept while they show and where they were left (chat_list.mbt)
-  read_chats.clear()
   readings.clear()
   kept_places.clear()
   flash_held.val = false

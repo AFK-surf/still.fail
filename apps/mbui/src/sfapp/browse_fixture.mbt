@@ -7,17 +7,26 @@
 ///|
 /// What the browsing holds (its snapshot: null before any call), the number its next new id is made of, the prefs it
 /// and the pages keep (each by its key, as prefs.set merges it), and the topics' values worked out since the fixture last
-/// changed (by their params).
+/// changed (by their params); how often a test changed what it holds itself (not by a call of the fixture's, which
+/// counts in its version): counted in the topics' versions as the core counts every change (fixture_topic).
 priv struct FixBrowse {
   mut state : Json
   mut id : Int
   prefs : Map[String, Map[String, Json]]
   shown : Map[String, Json?]
   mut version : Int
+  mut changes : Int
 }
 
 ///|
-let fix_browse : FixBrowse = { state: Json::null(), id: 0, prefs: {}, shown: {}, version: -1 }
+let fix_browse : FixBrowse = { state: Json::null(), id: 0, prefs: {}, shown: {}, version: -1, changes: 0 }
+
+///|
+/// What the browsing holds changed: the topics' values worked out again, their versions on by one.
+fn fix_browse_changed() -> Unit {
+  fix_browse.shown.clear()
+  fix_browse.changes += 1
+}
 
 ///|
 fn fix_browse_reset() -> Unit {
@@ -26,6 +35,7 @@ fn fix_browse_reset() -> Unit {
   fix_browse.prefs.clear()
   fix_browse.shown.clear()
   fix_browse.version = -1
+  fix_browse.changes = 0
 }
 
 ///|
@@ -63,7 +73,7 @@ fn fix_browse_prefs_set(params : Json) -> Bool {
           }
         }
         changed = true
-        fix_browse.shown.clear()
+        fix_browse_changed()
       }
       _ => ()
     }
@@ -243,7 +253,7 @@ fn fix_browse_do(f : Fixture?, mode : String, name : String, params : Json) -> R
         None => ()
       }
       fix_browse.id = number(Some(a), "id").to_int()
-      fix_browse.shown.clear()
+      fix_browse_changed()
       for p in items(Some(a), "prefs") {
         fix_browse_prefs_set(p) |> ignore
       }

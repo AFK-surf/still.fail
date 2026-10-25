@@ -516,9 +516,16 @@ pub(all) struct ChatTabs {
 }
 
 ///|
-/// A chat's view as the core gives it, each of its messages read. A chat's topic is read so only through view_of_chat,
-/// once for each of its versions: read so each frame, a chat with many messages read is slow to scroll.
-pub fn chat_view(v : Json) -> ChatView {
+/// A chat's view made here, not read from the core's `chat` topic: a decision's messages as their chat would show
+/// them, a test's. A chat's topic is read through view_of_chat, worked out once for each version of it.
+pub fn chat_view_made(v : Json) -> ChatView {
+  chat_view(v)
+}
+
+///|
+/// A chat's view as the core gives it, each of its messages read: for view_of_chat alone (chat_read), so no page
+/// works it out of the topic again, each frame.
+fn chat_view(v : Json) -> ChatView {
   let s = Some(v)
   let thread = field(s, "thread")
   {
