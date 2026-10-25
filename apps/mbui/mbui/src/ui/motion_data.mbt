@@ -152,20 +152,53 @@ pub fn Ctx::every(
 }
 
 ///|
-/// Where a cycle of `period` ms is now, from 0 to 1 (a spinner's turn, a breath): read by what shows it, a frame each
-/// frame while it is shown. A test's idle is not broken by it: it is said (Tester::cycles), as what never ends.
+/// How far apart a cycle steps (ms): every endless decoration (a breath, a spinner, a beat, a blink) on one clock, the
+/// spokes' (still.fail's: 「进行中」逐格走), drawn once a step, together, never on each of the display's frames. (Drawn
+/// as the display refreshed, one shown redrew the whole window 60 to 120 times a second for as long as it showed.)
+pub let cycle_step_ms : Double = 100.0
+
+///|
+/// Where a cycle of `period` ms is now, from 0 to 1 (a spinner's turn, a breath), at the step of the clock it is at
+/// (cycle_step_ms): read by what shows it, a frame at the next step, none between, while it is shown. A cycle of 0
+/// is drawn each frame (a player playing: its pictures come as the display's frames do). A test's idle is not broken
+/// by it: it is said (Tester::cycles), as what never ends.
 #callsite(autofill(loc))
 pub fn Ctx::cycle(self : Ctx, period : Double, loc~ : SourceLoc) -> Double {
-  self.cycling = true
   if !self.cycles.iter().any(fn(c) { c.1.to_string() == loc.to_string() }) {
     self.cycles.push((period, loc))
   }
   if period <= 0.0 {
-    0.0
-  } else {
-    let p = self.now / period
-    p - p.floor()
+    self.cycling = true
+    return 0.0
   }
+  let step = (self.now / cycle_step_ms).floor()
+  self.wake_at_time((step + 1.0) * cycle_step_ms, later=true)
+  let p = step * cycle_step_ms / period
+  p - p.floor()
+}
+
+///|
+/// Where a loop of `length` ms is now (ms into it) whose look changes at `ends` (ms into it, ascending: a moving
+/// picture's frames' ends), a frame as the next comes, none between. Said as a cycle (Ctx::cycle).
+#callsite(autofill(loc))
+fn Ctx::loop_at(self : Ctx, length : Double, ends : Array[Double], loc~ : SourceLoc) -> Double {
+  if !self.cycles.iter().any(fn(c) { c.1.to_string() == loc.to_string() }) {
+    self.cycles.push((length, loc))
+  }
+  if length <= 0.0 {
+    return 0.0
+  }
+  let laps = (self.now / length).floor()
+  let t = self.now - laps * length
+  let mut next = length
+  for e in ends {
+    if e > t {
+      next = e
+      break
+    }
+  }
+  self.wake_at_time(laps * length + next, later=true)
+  t
 }
 
 ///|

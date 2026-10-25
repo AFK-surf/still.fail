@@ -210,8 +210,9 @@ fn icon_shapes(data : Array[Double], k : Double, color : Int64) -> Array[@ui.Sha
 
 ///|
 /// What is at work steps round (Spokes.kt, the web's spokes.ts): eight, the brightest a step further every 100 ms,
-/// the others fading behind it. It steps, it does not turn: a frame for each step, none between.
-pub let spoke_step_ms : Double = 100.0
+/// the others fading behind it. It steps, it does not turn: a frame for each step, none between, on the clock every
+/// endless decoration steps on (@ui.cycle_step_ms).
+pub let spoke_step_ms : Double = @ui.cycle_step_ms
 
 ///|
 /// The spokes' strength from the brightest back (Spokes.kt SPOKE_ALPHA).

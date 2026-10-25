@@ -27,7 +27,7 @@ Reduced motion is unchanged: the same clock going fast (docs/ui-panels.md 减少
 | 5. Another page | you went somewhere | pushed and popped, risen, another place on the bar, the tape | navigation | its way says where the page is (deeper, over, beside); what is on the page does not move of its own as it comes | `@ui.Nav`, the shell |
 | 6. Scrolled to | the view goes where you should look | new rows at the end followed, words sent, a message jumped to | its cause (rows came, a send, a jump) | one law, the glide | `Ctx::list_to_end`, `glide_on_growth` |
 | 7. A control answering | it took your hand, or its value changed | a ripple, a hover, a switch, a segmented thumb, a fill, "copied" | the control's own state | a value of its own look, never its layout | `@motion.animate` / `follow` on that state, `@motion.ripple`, `Ctx::cover` |
-| 8. Waiting | something is under way | the skeleton's breath, a spinner, a progress band | the clock, as a cycle | only these three (docs/ui-panels.md 等待) | `Ctx::cycle`, `Ctx::every` |
+| 8. Waiting | something is under way | the skeleton's breath, a spinner, a progress band | the clock, as a cycle, a step each 100 ms (逐格走: never on each of the display's frames) | only these three (docs/ui-panels.md 等待) | `Ctx::cycle`, `Ctx::every` |
 | 9. Emphasis | look here | a message jumped to, lit; a search's strokes; a mark's pop | its cause (the jump, the match) | lit, then gone | `Anim::animate` told at the cause |
 
 Kind 7 is the only one where "its state changed, so it eases to the new value", what a CSS transition does, is

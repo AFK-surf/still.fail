@@ -358,8 +358,8 @@ fn Ctx::paint_image(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
 }
 
 ///|
-/// What a picture node shows now: a GIF that moves the frame of its cycle at this frame's time (Ctx::cycle: as long as
-/// its frames' lengths summed), unless held still; any other its source. Every frame of it is asked for at the size
+/// What a picture node shows now: a GIF that moves the frame of its loop at this frame's time (Ctx::loop_at: as long as
+/// its frames' lengths summed, a frame of the window as its next frame comes), unless held still; any other its source. Every frame of it is asked for at the size
 /// it is shown, so each is decoded before its turn; one not yet is stood in for by the last one before it that is
 /// (never a frame of nothing between them).
 fn Ctx::moving_src(self : Ctx, n : Node) -> String {
@@ -368,7 +368,8 @@ fn Ctx::moving_src(self : Ctx, n : Node) -> String {
       let px = dmax(n.fw, n.fh) * self.scale
       let px = if px <= 0.0 { 256.0 } else { px }
       let ready = m.keys.map(fn(k) { self.image_ready(k, px) })
-      let want = moving_frame(m, self.cycle(m.ends[m.ends.length() - 1]))
+      let length = m.ends[m.ends.length() - 1]
+      let want = moving_frame(m, self.loop_at(length, m.ends) / length)
       let mut k = m.keys.search(want).unwrap_or(0)
       while k > 0 && !ready[k] {
         k = k - 1
