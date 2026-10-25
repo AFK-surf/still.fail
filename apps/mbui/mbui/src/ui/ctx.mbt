@@ -433,6 +433,9 @@ pub struct Ctx {
   // the ids whose look asked this frame whether the hand is on them (Ctx::lit) or were drawn selected: what lights
   // up, and how far apart such things stand (Theme::lit_apart): the spacing rules' (gaps.mbt)
   lit_asked : Set[Int]
+  // the ids whose choice the hand moves this frame (Ctx::hand_on: the one chosen follows the pointer), so chosen is not
+  // kept lit while the hand is on another (gaps.mbt)
+  hand_chooses : Set[Int]
   mut lit_apart : Double
   mut window_corner : Double
   mut direction : Direction
@@ -642,6 +645,7 @@ fn Ctx::new() -> Ctx {
     corner_ladder: [],
     corner_fit: None,
     lit_asked: Set::new(),
+    hand_chooses: Set::new(),
     lit_apart: 0.0,
     window_corner: 0.0,
     inner_faults: [],
@@ -1328,7 +1332,7 @@ pub fn Ctx::lit(self : Ctx, id : Int) -> Bool {
   if id != 0 {
     self.lit_asked.add(id)
   }
-  self.hand_on(id)
+  self.hand_at(id)
 }
 
 ///|
@@ -1336,6 +1340,15 @@ pub fn Ctx::lit(self : Ctx, id : Int) -> Bool {
 /// pointer over a found line choosing it, as the keys do: the one chosen shown so, one at a time). Not a look that
 /// lights up: the spacing rules hold what asks Ctx::lit (gaps.mbt).
 pub fn Ctx::hand_on(self : Ctx, id : Int) -> Bool {
+  if id != 0 {
+    self.hand_chooses.add(id)
+  }
+  self.hand_at(id)
+}
+
+///|
+/// Whether the hand is on `id`: a mouse's pointer resting on it or on what is in it, a finger pressing it.
+fn Ctx::hand_at(self : Ctx, id : Int) -> Bool {
   match pointing() {
     Mouse => self.hovered(id)
     Finger => self.pressed(id)

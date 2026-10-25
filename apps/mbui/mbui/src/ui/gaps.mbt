@@ -212,7 +212,8 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
       }
     }
     // (where nothing stays lit, one lights at a time, pressed or pointed at, and never reads as one block with
-    // another: two count where one of them, or another that lights up in what holds them both, shows its ground with
+    // another: two count where one of them, or another of theirs that lights up (parting from them where they part),
+    // shows its ground with
     // no hand on it (the frame is drawn with none): kept lit, the page in view's row, the one chosen. A list across
     // the whole screen opens what is pressed over itself and keeps none (the app's ListAt's Whole: a phone's chats); a
     // card of options shows the one chosen otherwise)
@@ -223,24 +224,50 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
       }
       q == o
     }
-    let kept = lit.filter(fn(i) { self.nodes[i].grounded() })
-    let some_kept = fn(a : Int, b : Int) {
+    // (kept: its ground with no hand on it, and not where the hand moves the choice, the one chosen following the
+    // pointer: one lit at a time)
+    let kept = lit.filter(fn(i) { self.nodes[i].grounded() && !self.hand_chooses.contains(self.nodes[i].id) })
+    // (what holds both, the nearest; one kept lit is of theirs where it parts from them there and is of their kind, in
+    // their column as wide or in their line as high: a row of their list, not a tool or a filter kept on over it)
+    let holder = fn(a : Int, b : Int) {
       let mut o = self.nodes[a].parent
       while o >= 0 && !within(b, o) {
         o = self.nodes[o].parent
       }
-      o >= 0 && kept.iter().any(fn(k) { within(k, o) })
+      o
+    }
+    let kept_by = fn(a : Int, b : Int) -> Int? {
+      let o = holder(a, b)
+      if o < 0 {
+        return None
+      }
+      // (of their kind: in their column as wide, or in their line as high, as one of them is)
+      let like = fn(k : Int, i : Int) {
+        let kn = self.nodes[k]
+        let n = self.nodes[i]
+        ((kn.x - n.x).abs() <= gap_slack && (kn.fw - n.fw).abs() <= gap_slack) ||
+        ((kn.y - n.y).abs() <= gap_slack && (kn.fh - n.fh).abs() <= gap_slack)
+      }
+      kept
+      .iter()
+      .find_first(fn(k) {
+        k == a || k == b || (within(k, o) && holder(a, k) == o && (like(k, a) || like(k, b)))
+      })
     }
     for x in 0..<lit.length() {
       for y in (x + 1)..<lit.length() {
         let (a, b) = (lit[x], lit[y])
-        if layer[a] != layer[b] || one_control(a, b) || !some_kept(a, b) {
+        let by = match kept_by(a, b) {
+          Some(k) => k
+          None => continue
+        }
+        if layer[a] != layer[b] || one_control(a, b) {
           continue
         }
         match gap_between(rect(a), rect(b)) {
           Some((d, _)) if d < self.lit_apart - gap_slack =>
             out.push(
-              "rule 1: \{self.named(a)} and \{self.named(b)} light up \{d} apart (\{self.lit_apart} at least)",
+              "rule 1: \{self.named(a)} and \{self.named(b)} light up \{d} apart (\{self.lit_apart} at least; kept lit: \{self.named(by)})",
             )
           _ => ()
         }
