@@ -464,8 +464,8 @@ fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
 }
 
 ///|
-/// The glyphs of the first `n` of `keys` drawn ahead, off the frames' thread (Android's MBText.ahead); the other
-/// hosts draw a glyph as it is first asked for.
+/// The glyphs of the first `n` of `keys` drawn ahead, off the frames' thread (Android's MBText.ahead, Apple's
+/// apple_text.m); Windows draws a glyph as it is first asked for.
 fn glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
   ffi_glyphs_ahead(keys, n)
 }
