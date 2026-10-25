@@ -1039,6 +1039,57 @@ test "a box reshaped for its cause: what it holds there at once, its ground from
 }
 
 ///|
+/// A box 100 wide gone 100 down for its cause, from 20 high to 60, with (`there`) what it did not hold before in its
+/// foot: 10 square at its left, under 50 of room; keyed.
+fn moved_box(there : Ref[Bool], carry : Bool) -> @ui.Tester {
+  @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      c.box(w=Px(10.0), h=Px(if there.val { 100.0 } else { 0.0 }), fn() {  }) |> ignore
+      let b = c.box(w=Px(100.0), h=Px(if there.val { 60.0 } else { 20.0 }), bg=0xFF0000FFL, fn() {
+        if there.val {
+          c.box(w=Px(10.0), h=Px(50.0), fn() {  }) |> ignore
+          let n = c.box(w=Px(10.0), h=Px(10.0), bg=0x00FF00FFL, fn() {  })
+          @motion.layout(c, n, "box/new", spec=@motion.tween(reshape_ms, ease=Linear), by="\{there.val}")
+        }
+      })
+      @motion.reshape(c, b, "box", by="\{there.val}", spec=@motion.tween(reshape_ms, ease=Linear), carry~)
+    })
+    |> ignore
+  })
+}
+
+///|
+test "a box gone with what it holds (carry): what is new in it carried on its ground, as far from its nearer edges, until it is there" {
+  let there = Ref::new(false)
+  let t = moved_box(there, true)
+  there.val = true
+  t.frame()
+  // its ground as it was (0, 0, 100 by 20), what is new in it at that ground's foot
+  assert_eq(drawn_box(t, 0xFF0000FFL), (0.0, 0.0, 100.0, 20.0))
+  assert_eq(drawn_box(t, 0x00FF00FFL), (0.0, 10.0, 10.0, 10.0))
+  // half way: the ground 50 down, 40 high; still at its foot
+  t.run_for(reshape_midway_ms)
+  assert_eq(drawn_box(t, 0xFF0000FFL), (0.0, 50.0, 100.0, 40.0))
+  assert_eq(drawn_box(t, 0x00FF00FFL), (0.0, 80.0, 10.0, 10.0))
+  assert_true(@motion.layout_rest("box/new") > t.time())
+  t.run_for(@motion.layout_rest("box") - t.time())
+  assert_eq(drawn_box(t, 0x00FF00FFL), (0.0, 150.0, 10.0, 10.0))
+  t.assert_idle()
+}
+
+///|
+test "a box changed in its place (no carry): what is new in it is in its place from the first" {
+  let there = Ref::new(false)
+  let t = moved_box(there, false)
+  there.val = true
+  t.frame()
+  assert_eq(drawn_box(t, 0xFF0000FFL), (0.0, 0.0, 100.0, 20.0))
+  assert_eq(drawn_box(t, 0x00FF00FFL), (0.0, 150.0, 10.0, 10.0))
+  t.run_for(@motion.layout_rest("box") - t.time())
+  t.assert_idle()
+}
+
+///|
 test "a box resized by what holds it, its cause the same, has its ground its new shape at once" {
   let w = Ref::new(100.0)
   let t = @ui.Tester::new(fn(c) {
