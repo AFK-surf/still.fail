@@ -315,8 +315,18 @@ jobs:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, filter: "blob:none" } # (the build's number: the commits in the history)
       # Node alone first (the natives' fetch, the build's scripts): the rest of the setup (pnpm, its store) is done while
-      # cl compiles the app
-      - uses: actions/setup-node@v5
+      # cl compiles the app. The image's Node, from its tool cache, put on the PATH as it is: setup-node's would print
+      # npm's and yarn's versions, their first start on the runner (29-81 s of some runs, 2026-10-25, 40225325122; the
+      # setup's own setup-node after it, ~0.5 s), and that start is the setup's, beside cl. setup-node when the image
+      # has not that Node.
+      - id: node
+        run: |
+          d="$(cygpath -u "$RUNNER_TOOL_CACHE")/node/$(tr -d 'v[:space:]' < .node-version)/x64"
+          [ -x "$d/node.exe" ] || exit 0
+          cygpath -w "$d" >> "$GITHUB_PATH"
+          echo "kept=true" >> "$GITHUB_OUTPUT"
+      - if: steps.node.outputs.kept != 'true'
+        uses: actions/setup-node@v5
         with: { node-version-file: .node-version, package-manager-cache: false }
       - uses: ./.github/actions/msvc
       - uses: ./.github/actions/mbui-moonbit
