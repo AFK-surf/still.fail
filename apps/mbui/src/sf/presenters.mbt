@@ -81,6 +81,8 @@ priv struct Presented {
   /// so or was said
   gone : () -> Unit
   mut ended : Bool
+  /// as a sheet, found taller than a sheet's most: that tall from then on, what it holds scrolling in it
+  mut over : Bool
 }
 
 ///|
@@ -131,6 +133,7 @@ fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit
     focused: false,
     gone,
     ended: false,
+    over: false,
   })
 }
 
@@ -738,13 +741,20 @@ let sheet_ask : Double = 0.42
 /// at 28%) closing it when tapped, back, Escape, its top dragged down. Whether it is open, and whether it is drawn.
 fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
   let (_, wh) = c.window_size()
-  let fit_key = "sf-present/fit/\{p.serial}"
-  // a panel taller than a sheet's most, as it was laid out: the sheet that tall, what it holds scrolling in it (as a
-  // dialog's body does), its foot in reach
-  let over = match @motion.measured(c, fit_key) {
-    Some(m) => m > wh * sheet_most
-    None => false
+  // what it holds, as tall as this frame lays it out (read back: laid out another height, the frame is built again),
+  // so the sheet is as tall as that in the frame it shows, and with it as it changes: placed by its size, not chased
+  // to the size the frame before measured (docs/motion.md)
+  let fit = c.id("sf-present/fit/\{p.serial}")
+  let natural = match c.laid_size(fit) {
+    Some((_, h)) => Some(h)
+    None => None
   }
+  // a panel taller than a sheet's most: the sheet that tall from then on, what it holds scrolling in it (as a dialog's
+  // body does), its foot in reach
+  if natural is Some(m) && m > wh * sheet_most {
+    p.over = true
+  }
+  let over = p.over
   let share = match p.shows {
     Pick(_, choices, _, _) if choices.length() >= pick_search_from => Some(sheet_long_pick)
     Confirm(_, _, _, _, _) => Some(sheet_confirm)
@@ -757,10 +767,10 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
     Panel(x) => x.grows
     _ => false
   }
-  let h = match (share, @motion.measured(c, fit_key)) {
+  let h = match (share, natural) {
     (Some(s), _) => s * wh
     (None, Some(m)) => dmin(m, wh * sheet_most)
-    // (until it is laid out: half the window)
+    // (before what it holds is first laid out: built again at once, as tall as it is)
     (None, None) => wh * 0.5
   }
   let look = if presented_alone.val { sheet_look(ground=theme().p.bg) } else { sheet_look() }
@@ -773,14 +783,14 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
           sheet_foot(c)
         })
         |> ignore
-      None => {
-        let shown = c.box(style=full_width, fn() {
+      None =>
+        // (named to be read back, not to be pressed: a tap goes to what is in it)
+        c.box(style=full_width, id=fit, taps=false, fn() {
           sheet_grab(c)
           sheet_body(c, key, p)
           sheet_foot(c)
         })
-        @motion.measure(c, shown, fit_key)
-      }
+        |> ignore
     }
   })
   // what it comes to, for scripted runs (e2e: a sheet opened and closed by dragging)

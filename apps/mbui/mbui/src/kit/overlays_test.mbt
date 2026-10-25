@@ -465,11 +465,7 @@ test "sheet: closed by the view, it sinks away and is gone" {
 }
 
 ///|
-/// A moment into a sheet's way to another height (its spring's first stretch).
-let growing_ms : Double = 50.0
-
-///|
-test "sheet: closed while still on its way to a new height, it sinks away from where it is and is gone" {
+test "sheet: asked another height while open (what it holds grown), that tall at once; closed, it sinks away from there and is gone" {
   let open = Ref(true)
   let tall = Ref(300.0)
   let shown = Ref(false)
@@ -481,12 +477,13 @@ test "sheet: closed while still on its way to a new height, it sinks away from w
     }
   })
   to_rest(t, "s")
-  // what it holds grew (a fitted sheet measured): on its way up to 600
+  // what it holds grew (a fitted sheet as this frame lays it out): placed by its size, not chased to it
   tall.val = 600.0
   t.draw()
-  t.run_for(growing_ms)
   let (_, _, _, h) = t.get(@ui.Dialog).rect
-  assert_true(h > 300.0 && h < 600.0, msg="\{h}")
+  assert_eq(h, 600.0)
+  // (nothing set off by it: the sheet at rest)
+  assert_true(sheet_rest("s") <= t.time())
   open.val = false
   t.draw()
   t.run_for(sheet_rest("s") - t.time())

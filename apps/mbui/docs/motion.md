@@ -123,8 +123,11 @@ list's turns, words flying, everything in the hand). Each step below is a PR; a 
    Laid out as it ends at once, its page's foot and the ↓ button follow what it is laid out as. The page's foot stays
    what its parts take their places from (`@motion.scope`): the page moving, with the composer in it, moves none of
    them.
-4. **Sheets.** A sheet's height from the content as this frame lays it out, placed, not chased; one sheet host
-   (the presenters) for the chat's, the settings', the drive's and the link menu.
+4. **Sheets.** Done: a sheet's height is what it holds as this frame lays it out (read back, the frame built again
+   at once), there in its first frame and with it as that changes, never sprung to what the frame before measured
+   (`@kit.sheet`, the presenters, the chat's sheets, a station file's); one found taller than a sheet's most stays
+   that tall while open. Its rising, sinking and a finger's drag are its only motions. The hosts becoming one (the
+   presenters for the chat's, the settings', the drive's and the link menu) goes with each of those pages' merge.
 5. **The chat's list.** The agent's line and words not yet in the chat making way for the rows' change
    (sfpages/chat_list.mbt:105, 144); an avatar's landing, a new chat's first words and the line folding to its avatar
    by what their cause laid out, not re-aimed each frame (sfbase/emit.mbt, sfbase/flight.mbt:259, sfpages/chat_rows.mbt:273);
