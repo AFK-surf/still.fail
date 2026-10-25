@@ -9,7 +9,7 @@ import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
   ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, type EntryRow, JOBS_RUNNING, JOBS_UP, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS,
-  MANUAL, type NewMessage, OPTIONS_BEFORE, RUNNING_SESSIONS, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, STATS_OF, Store, type StoreChange, newMessage,
+  MANUAL, type NewMessage, OPTIONS_BEFORE, RUNNING_SESSIONS, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
@@ -876,13 +876,14 @@ test("usage: the sessions at work are found by when their turns ended, once each
 test("what the station asks again and again is planned by an index, never a scan of what grows with time", () => {
   const store = memory();
   // As the station's SQLite (node's) plans each: a scan only of an index that holds the sessions shown or running, the
-  // login cards, or of the small one that counts sessions; a table, or an index of every turn, job or entry, never.
+  // login cards, or of the small one that counts sessions (or of what a subquery found); a table, or an index of every
+  // turn, job or entry, never.
   const planned: [string, unknown[]][] = [
     [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [RUNNING_SESSIONS, []], [JOBS_RUNNING, []], [JOBS_UP, []], [SESSION_JOBS, ["a"]],
     [STATS_OF, ["a"]], [SESSION_COUNTS, []], [LATEST_DECISIONS, [0]], [CLOSED_SINCE, [0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
-    [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]],
+    [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]],
   ];
-  const scans = /^SCAN (?!CONSTANT ROW$|\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards)\b)/;
+  const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards)\b)/;
   const plans = new Map<string, string[]>();
   for (const [sql, args] of planned) {
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
@@ -915,6 +916,13 @@ test("what the station asks again and again is planned by an index, never a scan
   assert.deepEqual(store.sessionsInUse().map((s) => s.key), ["a", "b"]);
   store.setRunning("a", true);
   assert.deepEqual(store.sessionsInUse().map((s) => s.key).sort(), ["a", "b"], "each once");
+  // The session that went on with a runtime's session: by its current one, or one it ran in before.
+  store.setRuntimeSessionId("a", "r2");
+  store.ranIn("b", "r1", null);
+  assert.equal(store.sessionOfRuntime("claude", "r2")?.key, "a");
+  assert.equal(store.sessionOfRuntime("claude", "r1")?.key, "b");
+  assert.equal(store.sessionOfRuntime("codex", "r1"), null, "another runtime's");
+  assert.equal(store.sessionOfRuntime("claude", "r9"), null);
 });
 
 test("usage: where a model's context was compacted is kept as calls are recorded, and made once from those before", () => {

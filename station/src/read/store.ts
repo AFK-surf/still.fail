@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
-import { CARD_BEFORE, CLOSED_SINCE, type InWorkspace, JOBS_RUNNING, LETTER_SQL, OPTIONS_BEFORE, SESSION_JOBS, PEOPLE_AT, type Letter, isLetter, liveShare, sees, toChatShare, withLetter } from "../store/rows.ts";
+import { CARD_BEFORE, CLOSED_SINCE, type InWorkspace, JOBS_RUNNING, LETTER_SQL, OPTIONS_BEFORE, SESSION_JOBS, SESSION_OF_RUNTIME, PEOPLE_AT, type Letter, isLetter, liveShare, sees, toChatShare, withLetter } from "../store/rows.ts";
 
 export type Json = any;
 
@@ -346,6 +346,11 @@ export function seesThread(s: Store, viewer: InWorkspace | null | undefined, thr
 /// Every session, most recently active first.
 export function listSessions(s: Store): SessionRow[] {
   return all(s, "SELECT * FROM sessions ORDER BY last_active_at DESC").map(toSession);
+}
+
+/// Store::sessionOfRuntime: the session that went on with `runtime`'s session `id`, the latest active if more did.
+export function sessionOfRuntime(s: Store, runtime: string, id: string): string | null {
+  return one(s, SESSION_OF_RUNTIME, runtime, id)?.key ?? null;
 }
 
 /// Store::runtimeSessions: the runtime sessions a session has run in, the first first, ending with its current one.
