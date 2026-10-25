@@ -478,16 +478,16 @@ let cn_kind_box : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter")
 /// The filter, as wide as what it says, 8 further under the head than the head's own room, where the web's is
 /// (pageHead: 28 under it), and 12 over the list; the waiting apps' title (sectionTitleQuiet: the meta's 12 in 500 muted, 6 under).
 // kept across runs: a value (no field of it changes)
-let cn_filter_room : @ui.Style = @ui.css("w=Full px=S4 pt=S2 pb=S3 align=AStart")
+let cn_filter_room : @ui.Style = @ui.css("w=Full pt=S2 pb=S3 align=AStart")
 
 ///|
-/// The lists at the column's edges (their rows reaching 12 past them: desk_list).
+/// The lists at the column's edges, as the head and every other page's (desk_list: a list card).
 // kept across runs: a value (no field of it changes)
-let cn_list_room : @ui.Style = @ui.css("w=Full px=S4")
+let cn_list_room : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_quiet_room : @ui.Style = @ui.css("w=Full px=S4 pb=S1_5")
+let cn_quiet_room : @ui.Style = @ui.css("w=Full pb=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -495,7 +495,7 @@ let cn_quiet : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medi
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_none_room : @ui.Style = @ui.css("w=Full px=S4")
+let cn_none_room : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)

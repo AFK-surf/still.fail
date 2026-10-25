@@ -87,7 +87,7 @@ What differs comes of two things alone, the native input and a width, and none o
 | Enter makes a new line or sends; the keyboard raised as a chat opens or not | the native input | the library's fields |
 | Scroll bars: none with touch | the native input | the library (`scroll_bar.mbt`) |
 | The panes: one stack, the tape, columns | the tier (the window's width) | the shell |
-| A page's anatomy: narrow, under 640 (back over a large title, its rows grouped on inset cards under their headings), or wide (its head, one column at most 760 in the middle, sections with their titles, lists and cards) | the page's own width | the library's parts |
+| A page's head and column: narrow, under 640 (back over a large title, the page's room 12 at its sides), or wide (its head, one column at most 760 in the middle). On both, its sections under their titles (one level: no heading under a section's), a section's rows on a list card (`@sf.group`), words with their buttons on a content card (the user, 2026-10-26: 「设置感觉很乱」, a wide page's rows were on the page or on cards for no reason) | the page's own width | the library's parts |
 
 So:
 - **A phone:** Small, a page at a time, laid out narrow, touch's sizes, sheets, the bottom bar, swiped back,

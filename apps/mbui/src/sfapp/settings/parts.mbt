@@ -578,8 +578,10 @@ let wide_section_first_said : @ui.Style = wide_section_first.then(@ui.css("pb=S2
 let wide_section_line : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
+/// A section's title in the wide frame: its scale's Xl2, 14 on 22 there (page: wide_heading), as the library's section
+/// title is, one size for every page's.
 // kept across runs: a value (no field of it changes)
-let wide_section_title : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Fg, wrap=false)
+let wide_section_title : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -737,13 +739,12 @@ let card_foot_ground : @ui.Style = card_ground.then(@sf.foot_pad(settings_button
 
 ///|
 /// Rows on one rounded card, no lines between them (Parts.kt ListCard, RowsCard): its rows know they are on one
-/// (`on_card`, LocalOnCard).
-/// In the wide frame the web's list (pages.css.ts list, listRow): its rows on the page, no ground under them but the
-/// pointer's, their words at the column's edge; `boxed`, on its ground still (a card of rows: listCard).
+/// (`on_card`, LocalOnCard). On every width, as the library's group is (docs/ui-panels.md 页面卡片: a group of rows on
+/// a list card wide too; `boxed`, said where a page asked for the card in the wide frame before it was always one).
 fn list_card(c : @ui.Ctx, body : () -> Unit, boxed? : Bool = false) -> Unit {
-  let flat = wide.val && !boxed
-  c.box(style=if flat { wide_list_room } else if wide.val { wide_card_room } else { card_room }, fn() {
-    c.box(style=if flat { wide_list_ground } else { list_ground }, fn() {
+  ignore(boxed)
+  c.box(style=if wide.val { wide_card_room } else { card_room }, fn() {
+    c.box(style=list_ground, fn() {
       let was = on_card.val
       on_card.val = true
       body()
@@ -765,15 +766,6 @@ fn rows_card(c : @ui.Ctx, body : () -> Unit) -> Unit {
   })
   |> ignore
 }
-
-///|
-/// The wide frame's list on the page: its rows' words 16 in (the row's own 12), as the title's.
-// kept across runs: a value (no field of it changes)
-let wide_list_room : @ui.Style = @ui.css("w=Full px=S1 pb=S2_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let wide_list_ground : @ui.Style = @ui.css("w=Full gap=SPx")
 
 ///|
 /// Whether what is being drawn is on a list card (Parts.kt LocalOnCard): a PickRow's ground is then the card's
@@ -815,7 +807,12 @@ fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "", piece? : (Bool, 
 /// ground, 8 in above its first row and under its last, its corners there (the halves that are no end of the card
 /// squared again by a patch of its ground), the card's 10 under it.
 fn card_piece(c : @ui.Ctx, first : Bool, last : Bool, body : () -> Unit) -> Unit {
-  c.box(style=if last { card_room } else { card_piece_room }, fn() {
+  c.box(style=match (last, wide.val) {
+    (true, true) => wide_card_room
+    (true, false) => card_room
+    (false, true) => wide_card_piece_room
+    (false, false) => card_piece_room
+  }, fn() {
     let ground = match (first, last) {
       (true, true) => list_ground_open
       (true, false) => list_piece_first
@@ -855,6 +852,11 @@ fn card_piece(c : @ui.Ctx, first : Bool, last : Bool, body : () -> Unit) -> Unit
 let card_piece_room : @ui.Style = @ui.css("w=Full px=S3")
 
 ///|
+/// (in the wide frame, at the column's edge as its other cards: wide_card_room)
+// kept across runs: a value (no field of it changes)
+let wide_card_piece_room : @ui.Style = @ui.css("w=Full px=S4")
+
+///|
 /// A list card's piece: its rows 8 in from its sides (LIST_PAD); 8 above the card's first, under its last.
 // kept across runs: a value (no field of it changes)
 let list_piece_ground : @ui.Style = @ui.style(w=Full, px=@sf.inset_room)
@@ -890,9 +892,8 @@ let list_piece_line : @ui.Style = list_line.then(@ui.css("radius=Xl2"))
 ///|
 /// The wide frame's row (pages.css.ts listRow): 52 high at least, 10 by 12 in, the field's corner under the pointer.
 // kept across runs: a value (no field of it changes)
-let wide_list_line : @ui.Style = @ui.css(
-  #|row w=Full min_h=S12 px=S3 py=S2_5 gap=S3 radius=Xl align=ACenter hovered{bg=Hover}
-)
+let wide_list_line : @ui.Style = @ui.css("row w=Full min_h=S12 py=S2_5 gap=S3 radius=Inner align=ACenter hovered{bg=Hover}")
+  .then(@ui.style(px=@sf.list_words_room))
 
 ///|
 /// ListRow's line: 12 and 12 in, 12 apart, rounded concentric with its card.
