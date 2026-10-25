@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from "react";
+import { ProgressRing } from "@stillfail/ui/waiting.tsx";
 import { Popover } from "radix-ui";
 import { useTopic } from "./core/react.ts";
 import * as css from "./Preview.css.ts";
@@ -29,10 +30,7 @@ export function LoadRing({ value }: { value: ResourceLoad }) {
     <Popover.Trigger asChild>
       <button type="button" className={`${pageCss.iconBtn} ${css.loadRing}`} data-failed={value.failed > 0 || undefined} aria-label={label}
         onPointerEnter={(e) => { if (e.pointerType === "mouse") { hold(); setOpen(true); } }} onPointerLeave={(e) => { if (e.pointerType === "mouse") leave(); }}>
-        <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
-          <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.18" />
-          <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" strokeWidth="2" pathLength="100" strokeDasharray={`${value.percent} 100`} transform="rotate(-90 10 10)" />
-        </svg>
+        <ProgressRing part={value.percent / 100} size={20} />
       </button>
     </Popover.Trigger>
     <Popover.Portal><Popover.Content className={css.loadDetails} sideOffset={6} collisionPadding={8} align="start"

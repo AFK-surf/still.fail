@@ -4,7 +4,7 @@
 // of its browser); within a sentence, its title where the link was. On a chat's page the card also opens the screen
 // beside the chat (OpenScreen: a tab of its side panel, `screen:[…]`), so it is seen and driven while the chat goes on.
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { PanelOpen } from "@stillfail/ui/icons.tsx";
+import { Monitor, PanelOpen, Phone, Web } from "@stillfail/ui/icons.tsx";
 import { Tip } from "../ui.tsx";
 import { core, useTopic } from "../core/react.ts";
 import type { ScreenCard as Card } from "../core/shapes.ts";
@@ -51,22 +51,9 @@ function useCard(href: string): Card | null {
 function ScreenTile({ kind }: { kind: string | undefined }) {
   return (
     <svg className={chatCss.fileTile} width="30" height="36" viewBox="0 0 30 36" aria-hidden="true">
-      {kind === "browser" ? (
-        <>
-          <circle cx="15" cy="18" r="11.25" />
-          <path d="M3.75 18H26.25M15 6.75C11.75 10 10.25 14 10.25 18S11.75 26 15 29.25M15 6.75C18.25 10 19.75 14 19.75 18S18.25 26 15 29.25" />
-        </>
-      ) : kind === "desktop" ? (
-        <>
-          <rect x="3.75" y="8" width="22.5" height="15.5" rx="2.5" />
-          <path d="M15 23.5V28.5M10.5 28.5H19.5" />
-        </>
-      ) : kind === "simulator" ? (
-        <>
-          <rect x="8.25" y="5.25" width="13.5" height="25.5" rx="3" />
-          <path d="M13.5 26.25H16.5" />
-        </>
-      ) : null}
+      {kind === "browser" ? <Web x={3} y={6} size={24} stroke="inherit" />
+        : kind === "desktop" ? <Monitor x={3} y={6} size={24} stroke="inherit" />
+        : kind === "simulator" ? <Phone x={3} y={6} size={24} stroke="inherit" /> : null}
     </svg>
   );
 }

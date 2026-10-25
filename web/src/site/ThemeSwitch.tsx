@@ -1,5 +1,6 @@
 // The site's theme, in its bar: the system's, light or dark (light when none was chosen). The
 // page's root says which (data-theme, set before the first paint by site/index.html), and the demo's app follows it.
+import { Monitor, Moon, Sun } from "@stillfail/ui/icons.tsx";
 import { useSyncExternalStore } from "react";
 import { announceAppearance } from "../theme.ts";
 import * as css from "./site.css.ts";
@@ -28,11 +29,10 @@ function choose(theme: SiteTheme): void {
   announceAppearance();
 }
 
-const ICON = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.75, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
 const CHOICES: { value: SiteTheme; icon: React.ReactNode }[] = [
-  { value: "system", icon: <svg {...ICON}><path d="M8 3.5H16Q20.5 3.5 20.5 8V12Q20.5 16 16 16H8Q3.5 16 3.5 12V8Q3.5 3.5 8 3.5Z M12 16V20.5 M8 20.5H16" /></svg> },
-  { value: "light", icon: <svg {...ICON}><circle cx="12" cy="12" r="4" /><path d="M12 2.5V4.5 M12 19.5V21.5 M2.5 12H4.5 M19.5 12H21.5 M5.3 5.3L6.7 6.7 M17.3 17.3L18.7 18.7 M5.3 18.7L6.7 17.3 M17.3 6.7L18.7 5.3" /></svg> },
-  { value: "dark", icon: <svg {...ICON}><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 A8.5 8.5 0 1 0 20 14.5Z" /></svg> },
+  { value: "system", icon: <Monitor size={16} /> },
+  { value: "light", icon: <Sun size={16} /> },
+  { value: "dark", icon: <Moon size={16} /> },
 ];
 
 export function ThemeSwitch() {

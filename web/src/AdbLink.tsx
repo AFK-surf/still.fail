@@ -2,6 +2,7 @@
 // `adbCard` topic says it: on a line of its own, a card as a screen's is (screen/ScreenLink.tsx: a phone for its mark,
 // 共享调试, how this phone's sharing with that station stands); within a sentence, 共享调试 where the link was. Only the
 // Android app can lend its adb: here the card says so and opens nothing.
+import { Phone } from "@stillfail/ui/icons.tsx";
 import type { ReactNode } from "react";
 import { useTopic } from "./core/react.ts";
 import type { AdbCard as Card } from "./core/shapes.ts";
@@ -19,8 +20,7 @@ function useCard(href: string): Card | null {
 function PhoneTile({ sharing }: { sharing: boolean }) {
   return (
     <svg className={`${chatCss.fileTile} ${css.adbTile}`} data-sharing={sharing || undefined} width="30" height="36" viewBox="0 0 30 36" aria-hidden="true">
-      <rect x="8.25" y="5.25" width="13.5" height="25.5" rx="2.75" />
-      <path d="M13 27H17" />
+      <Phone x={3} y={6} size={24} stroke="inherit" />
     </svg>
   );
 }
