@@ -833,7 +833,7 @@ pub fn reader(
             reader_column(c, r, book, style, p, left~, right~, top=room_top + narrow_reader_top, foot=room_foot + narrow_reader_foot, headings=true, cut=true)
           } else {
             let (left, right) = desk_reader_sides(c, r, style)
-            reader_column(c, r, book, style, p, left~, right~, top=desk_reader_top, foot=desk_reader_foot, headings=true, cut=true)
+            reader_column(c, r, book, style, p, left~, right~, top=room_top + desk_reader_top, foot=room_foot + desk_reader_foot, headings=true, cut=true)
           }
         }
       (None, Some(why)) =>
@@ -985,7 +985,7 @@ fn desk_reader_chrome(
     if r.hit >= 0 && r.matches.length() > 0 {
       let panel = if r.panel == NoPanel { desk_none } else { desk_panel_w }
       c.box(style=desk_found_place, fn() {
-        c.box(style=desk_found_top, fn() {  }) |> ignore
+        c.box(style=desk_found_top(), fn() {  }) |> ignore
         c.box(style=desk_found_row, fn() {
           c.box(style=desk_grow_middle, fn() { desk_found(c, r, p) }) |> ignore
           c.box(style=@ui.style(w=Fixed(panel)), fn() {  }) |> ignore
@@ -1080,7 +1080,7 @@ fn desk_panel(
     None => 0.0
   }
   c.box(style=desk_panel_place, fn() {
-    c.box(style=desk_panel_top, fn() {  }) |> ignore
+    c.box(style=desk_panel_top(), fn() {  }) |> ignore
     c.box(style=desk_panel_row, fn() {
       c.box(style=desk_panel_room, fn() {  }) |> ignore
       c.box(style=desk_panel_rule.then(@ui.style(bg=Data(p.line))), fn() {  }) |> ignore
@@ -2163,7 +2163,9 @@ let desk_found_place : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_found_top : @ui.Style = @ui.style(w=Full, h=Fixed(viewer_bar_h + desk_found_gap))
+fn desk_found_top() -> @ui.Style {
+  @ui.style(w=Full, h=Fixed(viewer_bar_under() + desk_found_gap))
+}
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2195,7 +2197,9 @@ pub let desk_panel_place : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let desk_panel_top : @ui.Style = @ui.style(w=Full, h=Fixed(viewer_bar_h))
+pub fn desk_panel_top() -> @ui.Style {
+  @ui.style(w=Full, h=Fixed(viewer_bar_under()))
+}
 
 ///|
 // kept across runs: a value (no field of it changes)

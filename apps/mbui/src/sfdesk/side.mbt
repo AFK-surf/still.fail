@@ -53,7 +53,7 @@ pub fn nav_row(
     nav_row_look.then(@ui.style(align~))
   }
   let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), on)
-  c.box(style=look.then(@ui.style(bg=Data(ground))), id~, body) |> ignore
+  c.box(style=look.then(@sf.finger_least_h()).then(@ui.style(bg=Data(ground))), id~, body) |> ignore
   c.clicked(id)
 }
 

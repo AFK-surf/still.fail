@@ -144,7 +144,7 @@ fn zou_bar_button(c : @ui.Ctx, key : String, label : String, on : Bool) -> Bool 
   let id = if on { c.id(key) } else { 0 }
   c.cursor(id, Hand)
   let hot = on && c.lit(id)
-  let b = c.box(style=if !on { zp_button_off } else if hot { zp_button_hot } else { zp_button }, id~, fn() {
+  let b = c.box(style=(if !on { zp_button_off } else if hot { zp_button_hot } else { zp_button }).then(@sf.finger_least_h()), id~, fn() {
     c.text(label, style=if hot { zp_button_words_hot } else { zp_button_words }) |> ignore
   })
   c.semantics(b, Button, id~, label~)

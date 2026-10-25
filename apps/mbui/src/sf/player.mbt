@@ -1037,6 +1037,11 @@ fn desk_player(
           c.box(style=@ui.style(w=Fixed(panel)), fn() {  }) |> ignore
         })
         |> ignore
+        // (over the navigation bar where the system's bars are over the window: a tablet's)
+        let foot = (viewer_host().room)().1
+        if foot > 0.0 {
+          c.box(style=@ui.style(h=Fixed(foot)), fn() {  }) |> ignore
+        }
       })
       |> ignore
     })
@@ -1259,7 +1264,7 @@ fn desk_play_list(
   }
   let ink : ViewerInk = { ground, ink: words, muted: quiet, line }
   c.box(style=desk_panel_place, fn() {
-    c.box(style=desk_panel_top, fn() {  }) |> ignore
+    c.box(style=desk_panel_top(), fn() {  }) |> ignore
     c.box(style=desk_panel_row, fn() {
       c.box(style=desk_panel_room, fn() {  }) |> ignore
       c.box(style=desk_panel_rule.then(@ui.style(bg=Data(line))), fn() {  }) |> ignore

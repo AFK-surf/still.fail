@@ -153,6 +153,8 @@ pub fn icon_button(
   label? : String = "",
 ) -> Bool {
   let t = theme()
+  // (a finger's: 44 at least, the icon in its middle)
+  let size = finger_side(size)
   let ink = ink.unwrap_or(t.p.text)
   let quiet = quiet.unwrap_or(t.p.muted)
   let id = c.id(if key == "" { "sf-ib/" + icon } else { key })

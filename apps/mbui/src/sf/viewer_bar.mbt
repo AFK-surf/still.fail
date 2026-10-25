@@ -50,7 +50,12 @@ pub fn viewer_bar(
     saturation=viewer_bar_saturation,
   )
   let mut went = false
+  // (its ground on under the status bar where the system's bars are over the window: a tablet's)
+  let top = (viewer_host().room)().0
   let node = c.box(style=viewer_bar_box, glass~, id=if live { bar } else { 0 }, fn() {
+    if top > 0.0 {
+      c.box(style=@ui.style(w=Full, h=Fixed(top)), fn() {  }) |> ignore
+    }
     c.box(style=viewer_bar_row, fn() {
       // clear of the window's buttons (ViewerBar.css.ts: 84 in, not in full screen)
       if @ui.window_inset() {
@@ -79,15 +84,26 @@ pub fn viewer_bar(
       })
       |> ignore
       // (short of room, the tools kept whole: the way back and the name give way)
-      c.box(style=viewer_bar_end, keep=true, tools) |> ignore
+      c.box(style=viewer_bar_end, keep=true, fn() {
+        tools_across.val = true
+        tools()
+        tools_across.val = false
+      })
+      |> ignore
     })
     |> ignore
     c.box(style=viewer_bar_rule.then(@ui.style(bg=Data(alpha(ink.line, viewer_line_share)))), fn() {  })
     |> ignore
   })
-  c.look(node, @ui.look(alpha=1.0 - gone, dy=-viewer_bar_h * gone))
+  c.look(node, @ui.look(alpha=1.0 - gone, dy=-(viewer_bar_h + top) * gone))
   went
 }
+
+///|
+/// Whether the tools being drawn are the bar's across the top (viewer_bar), which a finger's are 44 at least in (the
+/// floating head's, laid out Small, are as the phone's are).
+// kept across runs: true only while viewer_bar draws its tools, false again after them
+let tools_across : Ref[Bool] = Ref(false)
 
 ///|
 /// One of a bar's tools (ViewerBar.tsx ViewerTool): an 18 icon in a 32 button, in the file's quieter ink until
@@ -107,7 +123,7 @@ pub fn viewer_tool(
     c.cursor(id, Hand)
   }
   let hot = live && (c.lit(id) || c.pressed(id))
-  let b = c.box(style=viewer_tool_box, selected=on, disabled~, id=if live { id } else { 0 }, fn() {
+  let b = c.box(style=if tools_across.val { viewer_tool_box.then(finger_least()) } else { viewer_tool_box }, selected=on, disabled~, id=if live { id } else { 0 }, fn() {
     icon(c, icon_name, size=viewer_tool_icon, color=if on || hot { ink.ink } else { ink.muted }) |> ignore
   })
   c.semantics(b, Button, id~, label~, pressed=on, disabled~)
@@ -188,6 +204,13 @@ pub let viewer_bar_reach : Double = 72.0
 /// How tall the bar is (VIEWER_BAR: a page's bar, its 32 buttons level with the window's): what is under it starts
 /// below it or goes under it.
 pub let viewer_bar_h : Double = 45.0
+
+///|
+/// How far down from the window's top what is under the bar starts: the bar, and the status bar over it where the
+/// system's bars are over the window (a tablet's).
+pub fn viewer_bar_under() -> Double {
+  viewer_bar_h + (viewer_host().room)().0
+}
 
 ///|
 /// Its going and coming (ViewerBar.css.ts: transform and opacity, 240 ms ease-out).

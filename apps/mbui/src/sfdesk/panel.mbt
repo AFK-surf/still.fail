@@ -173,8 +173,8 @@ pub fn side_bar_tape() -> @ui.Style {
   // (the tab 30 high, the switch 32, both in the row's middle: the row's top where the tab's is concentric, less its
   // half the switch is taller)
   let tab_at = @sf.capsule_in(left, @sf.side_tab_side)
-  let at = tab_at - (bar_button_side - @sf.side_tab_side) / 2.0
-  let end = if @sf.capsule_fits(right, bar_button_side) && (@sf.capsule_in(right, bar_button_side) - at).abs() <= 0.5 {
+  let at = tab_at - (bar_button_side() - @sf.side_tab_side) / 2.0
+  let end = if @sf.capsule_fits(right, bar_button_side()) && (@sf.capsule_in(right, bar_button_side()) - at).abs() <= 0.5 {
     at
   } else {
     side_bar_end
@@ -455,14 +455,20 @@ fn side_panel(
       c.window_drag(bar)
     }
     c.box(style=if side_on_tape.val { side_bar_tape() } else { side_bar }, id=bar, fn() {
-      c.box(style=side_tab_list, fn() {
-        for tab in tabs {
-          side_tab_of(c, src, r, v, tab, tab == front)
-        }
-      })
-      |> ignore
+      // a panel of its own on the tape showing one tab: that tab its title, the panel's close its only ×; else the tabs
+      let alone = side_on_tape.val && tabs.length() == 1
+      if alone {
+        side_title(c, src, r, v, tabs[0])
+      } else {
+        c.box(style=side_tab_list, fn() {
+          for tab in tabs {
+            side_tab_of(c, src, r, v, tab, tab == front)
+          }
+        })
+        |> ignore
+      }
       // the panel's switch stays in its top right corner, open or closed
-      if icon_button(c, "side/close", "panel-close", label=@sf.t("web-pages.chat.closePanel"), action="panel.close") {
+      if icon_button(c, "side/close", if alone { "close" } else { "panel-close" }, label=@sf.t("web-pages.chat.closePanel"), action="panel.close") {
         side_change(src, r, "clear", None)
       }
     })
@@ -517,22 +523,10 @@ fn side_panel(
 }
 
 ///|
-/// A tab (sideTab): an agent's by its maker's mark and label (all of it in its tip where it is cut), 任务's, 文件's,
-/// agent 往来's; a press brings it in front, its × closes it.
-fn side_tab_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : String, front : Bool) -> Unit {
-  let t = @sf.theme()
-  let id = c.id("side/tab/" + tab)
-  c.cursor(id, Hand)
-  if c.clicked(id) {
-    side_change(src, r, "front", Some(tab))
-  }
-  let close = c.id("side/tab-close/" + tab)
-  c.cursor(close, Hand)
-  if c.clicked(close) {
-    side_change(src, r, "close", Some(tab))
-  }
+/// What a tab is called and how its close is said: an agent's by its label, a web service's by its name, a
+/// visualization's by its file's name, 任务's, 文件's, agent 往来's by theirs.
+fn side_tab_names(src : Source, r : ChatRef, v : ChatView, tab : String) -> (String, String) {
   let agent = v.agents.iter().find_first(fn(a) { a.key == tab })
-  // a web service's by its name and a dot of how it is; a visualization's by its file's name
   let service = match tab_service(tab) {
     Some(job) => Some((src.topic)("job", { "station": Json::string(r.station), "id": Json::string(job) }).value)
     None => None
@@ -562,23 +556,59 @@ fn side_tab_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : Strin
         @sf.t("web-main.letters.close")
       }
   }
-  let b = c.box(style=side_tab, selected=front, id~, fn() {
-    match (agent, service) {
-      (Some(a), _) => @sf.maker_mark(c, a.maker, a.runtime, 14.0) |> ignore
-      (_, Some(j)) => c.box(style=side_tab_mark, fn() { job_dot(c, text(j, "tone")) }) |> ignore
-      _ => {
-        let icon = if file is Some(_) {
-          "file"
-        } else if tab == "jobs" {
-          "boxes"
-        } else if tab == "files" {
-          "folder"
-        } else {
-          "chats"
-        }
-        @sf.icon(c, icon, size=14.0, color=if front { t.p.text } else { t.p.muted }) |> ignore
-      }
+  (label, closing)
+}
+
+///|
+/// A tab's mark: an agent's maker's, a web service's dot of how it is, else the icon of what it shows (in the words'
+/// colour when `front`).
+fn side_tab_mark_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : String, front : Bool) -> Unit {
+  let t = @sf.theme()
+  match v.agents.iter().find_first(fn(a) { a.key == tab }) {
+    Some(a) => {
+      @sf.maker_mark(c, a.maker, a.runtime, 14.0) |> ignore
+      return
     }
+    None => ()
+  }
+  match tab_service(tab) {
+    Some(job) => {
+      let j = (src.topic)("job", { "station": Json::string(r.station), "id": Json::string(job) }).value
+      c.box(style=side_tab_mark, fn() { job_dot(c, text(j, "tone")) }) |> ignore
+      return
+    }
+    None => ()
+  }
+  let icon = if tab_file(tab) is Some(_) {
+    "file"
+  } else if tab == "jobs" {
+    "boxes"
+  } else if tab == "files" {
+    "folder"
+  } else {
+    "chats"
+  }
+  @sf.icon(c, icon, size=14.0, color=if front { t.p.text } else { t.p.muted }) |> ignore
+}
+
+///|
+/// A tab (sideTab): its mark and label (all of it in its tip where it is cut); a press brings it in front, its ×
+/// closes it.
+fn side_tab_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : String, front : Bool) -> Unit {
+  let t = @sf.theme()
+  let id = c.id("side/tab/" + tab)
+  c.cursor(id, Hand)
+  if c.clicked(id) {
+    side_change(src, r, "front", Some(tab))
+  }
+  let close = c.id("side/tab-close/" + tab)
+  c.cursor(close, Hand)
+  if c.clicked(close) {
+    side_change(src, r, "close", Some(tab))
+  }
+  let (label, closing) = side_tab_names(src, r, v, tab)
+  let b = c.box(style=side_tab, selected=front, id~, fn() {
+    side_tab_mark_of(c, src, r, v, tab, front)
     c.text(label, style=if front { side_tab_front } else { side_tab_words }) |> ignore
     let x = c.box(style=side_tab_close, id=close, fn() {
       @sf.icon(c, "close", size=12.0, color=t.p.muted) |> ignore
@@ -586,10 +616,33 @@ fn side_tab_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : Strin
     c.semantics(x, Button, id=close, label=closing)
   })
   c.semantics(b, Tab, id~, label~, selected=front)
-  if agent is Some(_) || service is Some(_) || file is Some(_) {
+  if !(tab == "jobs" || tab == "files" || tab == "letters") {
     @sf.tip(c, "side/tab-tip/" + tab, id, label)
   }
 }
+
+///|
+/// The one tab of a panel of its own on the tape, as its title (pengxiao, 2026-10-25: a tab alone in a panel's corner
+/// is a capsule against its corner, its × beside the panel's): its mark and its name as the page's bar has its title,
+/// what closes the panel at the bar's end the only close.
+fn side_title(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : String) -> Unit {
+  let (label, _) = side_tab_names(src, r, v, tab)
+  let b = c.box(style=side_title_row, fn() {
+    side_tab_mark_of(c, src, r, v, tab, true)
+    c.text(label, style=side_title_words) |> ignore
+  })
+  c.semantics(b, Heading, label~)
+}
+
+///|
+/// The title's row: grown into the bar, its mark over what the tab shows under it (16 more in), its name 8 after it.
+// kept across runs: a value (no field of it changes)
+let side_title_row : @ui.Style = @ui.style(w=@sf.grow).then(@ui.css("row pl=S4 gap=S2 align=ACenter"))
+
+///|
+/// The title's words: as the page's bar's title (chat_title_words).
+// kept across runs: a value (no field of it changes)
+let side_title_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, leading=L6, wrap=false, w=Cut)
 
 ///|
 /// An icon button of a page's bar (page.css.ts iconBtn): 32 square, the nav's corner, the pointer's ground and ink
@@ -600,7 +653,7 @@ pub fn icon_button(c : @ui.Ctx, key : String, icon : String, label? : String = "
   let id = c.id(key)
   c.cursor(id, Hand)
   let hot = c.lit(id) || c.pressed(id)
-  let b = c.box(style=bar_icon_button, id~, fn() {
+  let b = c.box(style=bar_icon_button.then(@sf.finger_least()), id~, fn() {
     @sf.icon(c, icon, size=16.0, color=if hot { t.p.text } else { t.p.muted }) |> ignore
   })
   if label != "" {
@@ -617,5 +670,8 @@ let bar_icon_button : @ui.Style = @ui.css(
 )
 
 ///|
-/// A bar's icon button's side (bar_icon_button: 32): a circle, so in a panel's corner it stands where it is concentric.
-let bar_button_side : Double = 32.0
+/// A bar's icon button's side (bar_icon_button: 32, a finger's 44: @sf.finger_side): a circle, so in a panel's corner
+/// it stands where it is concentric.
+fn bar_button_side() -> Double {
+  @sf.finger_side(32.0)
+}

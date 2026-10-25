@@ -69,6 +69,12 @@ fn look_page(
       if top > 0.0 {
         blocks.push(fn() { c.box(style=@ui.style(w=Full, h=Fixed(top)), fn() {  }) |> ignore })
       }
+      // in a panel of its own (the tape's) with no back over its title (the sidebar beside it the way back) and no bar
+      // naming it: the room a page's bar takes there over it, so the title stands where what the page beside it shows
+      // starts, not against the panel's top
+      if frame.back is None && !frame.named && @sf.in_pane() {
+        blocks.push(fn() { c.box(style=@ui.style(w=Full, pt=@sf.under_bar_room()), fn() {  }) |> ignore })
+      }
       // back to where it was opened from (TopBack), then its large title (LargeTitle), what it is for under it
       match frame.back {
         Some(label) =>
