@@ -154,13 +154,13 @@ fn decision_panel(c : @ui.Ctx, core : Core, station : String, name : String, vie
           },
         ) &&
         !busy {
-        open_sheet(0.5, fn(c, core) {
+        // the library's panel, beside the row (a sheet with touch short of Large), half the window tall
+        @sf.panel(tr("web-pages.automaticDecisions.model"), from=Of(c.id("auto-model/" + station)), tall=0.5, fn(c, close) {
           let d = (core.topic)("decisionForm", { "station": str(station), "form": str(form) }).value
-          sheet_head(c, tr("web-pages.automaticDecisions.model"))
           c.box(w=Fill(1.0), h=Fill(1.0), fn() {
             // every model it can move to (SettingParts.kt ModelList), codex's
             model_list(c, "auto-models/" + station, items(field(d, "pick"), "options"), "codex", text(d, "model"), fn(m) {
-              close_sheet()
+              close()
               act(
                 core,
                 tr("web-pages.automaticDecisions.configAction"),
@@ -272,7 +272,7 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
     let busy = !(d is Some(Object(_))) || flag(d, "pending")
     let saving = is_doing(core, ["automaticDecisions.policy.save"], [("station", station), ("form", form)])
     let save = fn() {
-      close_sheet()
+      @sf.close_presented()
       act(
         core,
         tr("web-pages.archivePolicy.saveAction"),
@@ -282,7 +282,7 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
       )
     }
     let cancel = fn() {
-      close_sheet()
+      @sf.close_presented()
       call("edit", [("reset", Json::boolean(true))], fn(_) {  })
     }
     // an option of the station's (by its id), else a new one (by its draft key), else the policy's words
@@ -290,7 +290,16 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
       profile_forms.val += 1
       let serial = profile_forms.val.to_string()
       let filled : Map[String, Bool] = Map([])
-      open_sheet(0.85, fn(c, core) {
+      let title = if id == "" && key == "" {
+        tr("web-pages.archivePolicy.title")
+      } else {
+        match ov {
+          Some(_) => text(ov, "name")
+          None => tr("web-pages.archivePolicy.newOption")
+        }
+      }
+      // the library's panel, as tall as most of the window, what it holds at its own sides
+      @sf.panel(title, from=Unanchored, tall=0.85, fn(c, _) {
         let t = @sf.theme()
         let d = (core.topic)("policyForm", { "station": str(station), "form": str(form) }).value
         guard d is Some(Object(_)) else { return }
@@ -338,7 +347,6 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
           |> ignore
         }
         if id == "" && key == "" {
-          sheet_head(c, tr("web-pages.archivePolicy.title"))
           c.box(w=Fill(1.0), padx=20.0, gap=12.0, fn() {
             c.text(tr("web-pages.archivePolicy.textLead"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
             let words = field_in("policy", text(d, "policy"), tr("web-pages.archivePolicy.title"), 8)
@@ -360,10 +368,6 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
         guard o is Some(oj) else { return }
         let ov2 = Some(oj)
         let okey = text(ov2, "key")
-        sheet_head(c, match ov {
-          Some(_) => text(ov, "name")
-          None => tr("web-pages.archivePolicy.newOption")
-        })
         c.box(w=Fill(1.0), h=Fill(1.0), fn() {
           scroll_page(c, "policy-option/" + serial, [
             fn() {
@@ -415,7 +419,7 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
                 tools(
                   if key == "" {
                     Some(fn() {
-                      close_sheet()
+                      @sf.close_presented()
                       call("edit", [("remove", str(okey))], fn(_) {
                         act(core, tr("web-pages.archivePolicy.saveAction"), "automaticDecisions.policy.save", obj([("station", str(station)), ("form", str(form)), ("input", obj([]))]), done=tr("web-pages.archivePolicy.saved"))
                       })

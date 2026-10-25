@@ -861,19 +861,18 @@ let chat_station_tag : @ui.Style = @ui.style(
 let chat_station_hot : @ui.Style = chat_station_tag.then(@ui.css("border_color=Border"))
 
 ///|
-/// The tag's height (its words' 18 line, 1 over and under) and the line round it (B1), and its dot's side (via_direct's
-/// S2): its dot in its round end (chat_station).
+/// The tag's height (its words' 18 line, 1 over and under) and its dot's side (via_direct's S2): its dot in its round
+/// end (chat_station).
 let chat_station_h : Double = 20.0
 
-///|
-let chat_station_line : Double = 1.0
 
 ///|
 let via_dot_side : Double = 8.0
 
 ///|
-/// How far in from the line round the tag its dot stands: concentric with its round end (@sf.capsule_in), the line within.
-let chat_station_dot_in : Double = @sf.capsule_in(chat_station_h / 2.0, via_dot_side) - chat_station_line
+/// How far in from the tag's edge its dot stands: concentric with its round end (@sf.capsule_in; the line round it is
+/// drawn over its padding, not in it).
+let chat_station_dot_in : Double = @sf.capsule_in(chat_station_h / 2.0, via_dot_side)
 
 ///|
 // kept across runs: a value (no field of it changes)

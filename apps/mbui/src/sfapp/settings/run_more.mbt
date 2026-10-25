@@ -304,7 +304,7 @@ pub fn machine_sessions_offer(c : @ui.Ctx, core : Core, station : String, name :
   let id = c.id("machine-offer/" + station)
   c.cursor(id, Hand)
   if hit(c, id) {
-    open_machine_sessions(core, station, name)
+    open_machine_sessions(core, station, name, from=Of(id))
   }
   let lit = c.lit(id)
   let words = fill("android-chat.new.machine.offer", [
@@ -337,12 +337,12 @@ let machine_offer_words_lit : @ui.TextStyle = machine_offer_words.then(@ui.text_
 let machine_offer_mark : Double = 14.0
 
 ///|
-/// The machine's sessions in a sheet (openMachineSessions), each a look at it before going on with it.
-pub fn open_machine_sessions(_core : Core, station : String, name : String) -> Unit {
+/// The machine's sessions (openMachineSessions), each a look at it before going on with it: the library's panel opened
+/// `from` what was pressed, most of the window tall, what it holds at its own sides.
+pub fn open_machine_sessions(core : Core, station : String, name : String, from? : @sf.Anchor = Unanchored) -> Unit {
   let shown = if name == "" { tr("android-chat.new.machine.here") } else { name }
-  open_sheet(0.7, fn(c, core) {
+  @sf.panel(fill("android-chat.new.machine.title", [("station", shown)]), from~, tall=0.7, fn(c, close) {
     let t = @sf.theme()
-    sheet_head(c, fill("android-chat.new.machine.title", [("station", shown)]))
     c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=8.0, fn() {
       c.text(tr("android-chat.new.machine.text"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
     })
@@ -354,6 +354,8 @@ pub fn open_machine_sessions(_core : Core, station : String, name : String) -> U
             let sv = Some(s)
             let id = c.id("machine-session/" + text(sv, "id"))
             if hit(c, id) {
+              // (the look in its place)
+              close()
               look_at_machine_session(core, station, name, s)
             }
             c.box(dir=Row, w=Fill(1.0), padx=20.0, pady=10.0, gap=12.0, align=ACenter, id~, fn() {
@@ -394,9 +396,8 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
       Err(e) => error.val = error_text(e)
     }
   })
-  open_sheet(0.85, fn(c, core) {
+  @sf.panel(first_text(sv, ["title", "first"], ""), from=Unanchored, tall=0.85, fn(c, close) {
     let t = @sf.theme()
-    sheet_head(c, first_text(sv, ["title", "first"], ""))
     c.box(w=Fill(1.0), pl=18.0, pr=18.0, pb=8.0, fn() {
       c.text(text(sv, "meta"), size=t.t.caption, color=t.p.muted, wrap=false, w=Fill(1.0), line=17.0) |> ignore
     })
@@ -463,6 +464,8 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
     let busy = is_doing(core, ["machineSessions.continue"], [("station", station), ("id", text(sv, "id"))])
     c.box(dir=Row, w=Fill(1.0), pl=20.0, pr=20.0, pt=10.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
       if @sf.button(c, tr("common.back"), key="machine-back") {
+        // (the list in its place)
+        close()
         open_machine_sessions(core, station, name)
       }
       if @sf.button(c, tr(if has(sv, "session") { "android-chat.new.machine.open" } else { "android-chat.new.machine.continue" }), key="machine-go", tone=Primary, busy=busy) {
@@ -470,7 +473,7 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
         (core.call)("machineSessions.continue", obj([("station", str(station)), ("runtime", str(text(sv, "runtime"))), ("id", str(text(sv, "id")))]), fn(r) {
           match r {
             Ok(v) => {
-              close_sheet()
+              close()
               (core.pop)()
               (core.open_chat)(station, text(Some(v), "key"), first_text(sv, ["title", "first"], ""))
             }
@@ -527,7 +530,7 @@ fn role_hint(role : String) -> String {
 /// Adding people by email (AddSheet): no invitation to accept, members at once when they have signed in to still.fail
 /// before, from their first sign-in otherwise (`workspace.addMembers`). Typed or pasted, or picked from the people of
 /// the Slack workspaces the online stations are in (`slack.people`); their role; what came of it said.
-pub fn open_add_people(_core : Core, here : Here, view : Json?) -> Unit {
+pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Anchor = Unanchored) -> Unit {
   vault_serial.val += 1
   let key = "add-people/" + vault_serial.val.to_string()
   let role : Ref[String] = Ref("member")
@@ -545,16 +548,16 @@ pub fn open_add_people(_core : Core, here : Here, view : Json?) -> Unit {
     inside.push(text(Some(a), "email").to_lower())
   }
   let roles = if text(view, "role") == "owner" { ["member", "admin", "owner"] } else { ["member", "admin"] }
-  open_sheet(0.8, fn(c, core) {
+  // the library's panel opened `from` what was pressed, most of the window tall, what it holds at its own sides
+  @sf.panel(tr("android-settings.add.title"), from~, tall=0.8, fn(c, close) {
     let t = @sf.theme()
     let online = online_stations(core, here)
-    sheet_head(c, tr("android-settings.add.title"))
     if done.val != "" {
       c.box(w=Fill(1.0), padx=20.0, gap=10.0, fn() {
         c.text(done.val, size=t.t.ui, color=t.p.text, w=Fill(1.0), line=20.0) |> ignore
         c.box(dir=Row, w=Fill(1.0), pb=24.0, justify=JEnd, fn() {
           if @sf.button(c, tr("common.done"), key="add-people-done", tone=Primary) {
-            close_sheet()
+            close()
           }
         })
         |> ignore
@@ -717,7 +720,7 @@ pub fn open_add_people(_core : Core, here : Here, view : Json?) -> Unit {
       c.box(dir=Row, w=Fill(1.0), pt=6.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
         if @sf.button(c, tr("common.cancel"), key="add-cancel") {
           c.blur()
-          close_sheet()
+          close()
         }
         if @sf.button(c, if emails.length() > 1 {
               fill("android-settings.add.many", [("n", emails.length().to_string())])

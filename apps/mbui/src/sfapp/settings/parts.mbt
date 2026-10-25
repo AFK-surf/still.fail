@@ -29,6 +29,12 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
   // (its blocks drawn as its list lays them out, maybe after this returns: in the page's arrangement, @sf.look)
   let l = @sf.look()
   let blocks = blocks.map(fn(b) { fn() { @sf.with_look(l, b) } })
+  // in a panel (the library's presenters'), in the room the panel gives it: no page's column, no frame's room over or
+  // under it
+  if @sf.in_panel() {
+    c.list("settings/" + key, blocks.length(), 80.0, fn(i) { (blocks[i])() }) |> ignore
+    return
+  }
   if wide.val {
     let side = wide_side(c)
     c.list("settings/" + key, blocks.length() + 1, 80.0, fn(i) {

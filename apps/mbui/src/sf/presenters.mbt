@@ -225,6 +225,26 @@ pub fn panel_bleed() -> @ui.Style {
 let panel_sides_in : Ref[Double] = { val: 0.0 }
 
 ///|
+/// A panel's body drawn (its `body` given what closes it), saying meanwhile that what is drawn is a panel's (in_panel).
+fn draw_panel_body(x : PanelOf, c : @ui.Ctx, close : () -> Unit) -> Unit {
+  panel_body_now.val += 1
+  (x.body)(c, close)
+  panel_body_now.val -= 1
+}
+
+///|
+/// Whether what is drawn now is a panel's body (the presenters', in whatever way it shows): what lays itself out as a
+/// page's (a page's column in the window, the room over and under it the frame leaves) lays itself out in the panel's
+/// room instead.
+pub fn in_panel() -> Bool {
+  panel_body_now.val > 0
+}
+
+///|
+// kept across runs: counted up and down round what a panel's body draws (0 between them)
+let panel_body_now : Ref[Int] = Ref(0)
+
+///|
 /// Whether the panel whose body is drawn now is held shorter than what it holds (beside what opened it, to the room on
 /// its side; a sheet, to its most), its body scrolling in it as one: what would scroll in itself there (a list held to
 /// a height of its own) lays itself out whole instead, so that one scroll, not one in another, takes the wheel.
@@ -758,8 +778,13 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
       small_panel(c, w=Px(x.w), h~, inner) |> ignore
     },
     fn() {
-      if x.title != "" {
-        panel_head(c, x.title)
+      // (its title as it is now, `live`'s, as a dialog's and a sheet's are)
+      let title = match x.live {
+        Some(f) => f().0
+        None => x.title
+      }
+      if title != "" {
+        panel_head(c, title)
       }
       // (small_panel's pad round it: what reaches its sides on purpose goes out past that, panel_bleed; its rows stand
       // at it)
@@ -768,13 +793,13 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
       words_in_now.val = text_in
       rule_over_now.val = if x.ruled && x.foot is Some(_) { panel_pad } else { 0.0 }
       if x.tall > 0.0 {
-        c.box(style=panel_grows, fn() { (x.body)(c, close) }) |> ignore
+        c.box(style=panel_grows, fn() { draw_panel_body(x, c, close) }) |> ignore
       } else {
         // (scrolling, where it does, out to the panel's sides, what it holds as far in as without: what reaches them
         // still does; told so as it is drawn, panel_held)
         let k = key + "/panel"
         panel_held_now.val = @kit.held_in_room(c, beside_given.val, key=k)
-        @kit.in_room(c, beside_given.val, key=k, reach=held_reach(), style=held_in(), fn() { (x.body)(c, close) }) |> ignore
+        @kit.in_room(c, beside_given.val, key=k, reach=held_reach(), style=held_in(), fn() { draw_panel_body(x, c, close) }) |> ignore
         panel_held_now.val = false
       }
       panel_sides_in.val = 0.0
@@ -823,9 +848,9 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
       // a tall one's body fills its share of the window (what it holds lays itself out in the room it is given)
       if x.tall > 0.0 {
         let room = x.tall * wh_of(c)
-        c.box(style=@ui.style(w=Full, h=Fixed(room)), fn() { (x.body)(c, close) }) |> ignore
+        c.box(style=@ui.style(w=Full, h=Fixed(room)), fn() { draw_panel_body(x, c, close) }) |> ignore
       } else {
-        (x.body)(c, close)
+        draw_panel_body(x, c, close)
       }
       panel_sides_in.val = was
     },
@@ -1177,7 +1202,7 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
         rows_out.val = panel_sides_in.val
         words_in_now.val = if x.tall <= 0.0 && pressed { sheet_panel_sides - sheet_row_sides } else { 0.0 }
         rule_over_now.val = if x.ruled && x.foot is Some(_) { sheet_rule_over } else { 0.0 }
-        (x.body)(c, close)
+        draw_panel_body(x, c, close)
         panel_sides_in.val = 0.0
         rows_out.val = 0.0
         words_in_now.val = 0.0

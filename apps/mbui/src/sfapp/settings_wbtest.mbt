@@ -562,7 +562,7 @@ test "本机缓存: the drives' files kept, counted with the chats', let go when
   assert_true(t.find("共 57.7 MB") is Some(_))
   // tapped, asked first; 删除: let go, read again
   t.tap_text("文件浏览")
-  sheet_rested(t, "settings-sheet")
+  sheet_rested(t, "sf-present")
   // (its button: the words 删除 alone, not those that tell what it does)
   match t.words().iter().find_first(fn(w) { w.0 == "删除" }) {
     Some((_, x, y, w, h, _)) => t.tap(x + w / 2.0, y + h / 2.0)
@@ -635,7 +635,7 @@ test "a secret's longest grant: on its page its own or its vault's, in its edito
   // its editor, agents let ask for it: 跟随默认 first, what it means under it; each of its own offered from it (its
   // four not side by side in the editor's width: the chosen one alone, the others in a pick)
   let e = settings_tester("vault-items", shows="settings-vault-editor")
-  sheet_rested(e, "settings-sheet")
+  sheet_rested(e, "sf-present")
   assert_true(e.find("跟随默认") is None)
   e.tap_text("允许 agent 申请")
   e.draw()

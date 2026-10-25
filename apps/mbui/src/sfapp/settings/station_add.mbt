@@ -67,7 +67,7 @@ pub fn place_action(core : Core, here : Here, place : String) -> ((@sf.Anchor) -
   match place {
     "stations" =>
       match station_ids(core, here) {
-        Some(ids) if manager_of(core, here) == Some(true) => Some(fn(_) { open_add_station(core, here, ids) })
+        Some(ids) if manager_of(core, here) == Some(true) => Some(fn(from) { open_add_station(core, here, ids, from~) })
         _ => None
       }
     // a profile is added on a station online (the only one, without asking)
@@ -91,14 +91,20 @@ pub fn place_action(core : Core, here : Here, place : String) -> ((@sf.Anchor) -
 
 ///|
 /// 添加 station (openAddStation): the choice of a new machine or one of another workspace's (while there is one to
-/// offer), then that one's steps.
-fn open_add_station(_core : Core, here : Here, known : Array[String], existing? : Bool = false) -> Unit {
+/// offer), then that one's steps: the library's panel opened `from` what was pressed, most of the window tall, what it
+/// holds at its own sides.
+fn open_add_station(
+  core : Core,
+  here : Here,
+  known : Array[String],
+  existing? : Bool = false,
+  from? : @sf.Anchor = Unanchored,
+) -> Unit {
   adding_reset(known, existing)
-  open_sheet(0.72, fn(c, core) {
+  @sf.panel(tr("android-settings.station.add"), from~, tall=0.72, fn(c, close) {
     let joinable = (core.topic)("joinable", { "workspace": str(here.workspace) }).value
     let rows = joinable_rows(joinable)
     let offered = flag(joinable, "offered") && rows.length() > 0
-    sheet_head(c, tr("android-settings.station.add"))
     // the choice stays at the top; only what is under it scrolls
     if offered && adding.made is None {
       c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=10.0, fn() {
@@ -132,7 +138,7 @@ fn open_add_station(_core : Core, here : Here, known : Array[String], existing? 
           },
           fn() {
             c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=24.0, fn() {
-              add_station_steps(c, core, here, cancel=true, fn() { close_sheet() })
+              add_station_steps(c, core, here, cancel=true, fn() { close() })
             })
             |> ignore
           },
@@ -252,7 +258,7 @@ fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], load
     |> ignore
     c.box(dir=Row, w=Fill(1.0), padx=20.0, pt=10.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
       if @sf.button(c, tr(if adding.took.length() == 0 { "common.cancel" } else { "common.done" }), key="join-close") {
-        close_sheet()
+        @sf.close_presented()
       }
       if @sf.button(c, tr("web-pages.settings.stations.joinAction"), key="join-go", tone=Primary, busy=busy, disabled=chosen is None) {
         match chosen {
@@ -325,7 +331,7 @@ fn add_station_steps(
         c.box(dir=Row, w=Fill(1.0), pt=6.0, gap=8.0, justify=JEnd, fn() {
           if cancel && @sf.button(c, tr("common.cancel"), key="add-cancel") {
             c.blur()
-            close_sheet()
+            @sf.close_presented()
           }
           if @sf.button(c, tr("android-settings.station.make"), key="add-make", tone=Primary, busy=busy, disabled=name == "") {
             c.blur()
@@ -456,7 +462,7 @@ fn first_station(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           |> ignore
         Some(_) => {
           // (the page's own steps: a new start each time the page has no station)
-          if sheet.draw is None && adding.known.length() > 0 {
+          if !@sf.presenting() && adding.known.length() > 0 {
             adding_reset([], false)
           }
           add_station_steps(

@@ -194,7 +194,7 @@
       "src/sfapp/settings/profile_new.mbt": 58,
       "src/sfapp/settings/profiles.mbt": 47,
       "src/sfapp/settings/run_more.mbt": 146,
-      "src/sfapp/settings/sheet.mbt": 14,
+      "src/sfapp/settings/sheet.mbt": 3,
       "src/sfapp/settings/station_add.mbt": 85,
       "src/sfapp/settings/station_mark.mbt": 1,
       "src/sfapp/settings/station_parts.mbt": 22,
@@ -245,7 +245,7 @@
       "src/sfapp/settings/profile_new.mbt": 31,
       "src/sfapp/settings/profiles.mbt": 27,
       "src/sfapp/settings/run_more.mbt": 65,
-      "src/sfapp/settings/sheet.mbt": 4,
+      "src/sfapp/settings/sheet.mbt": 1,
       "src/sfapp/settings/station_add.mbt": 33,
       "src/sfapp/settings/station_mark.mbt": 2,
       "src/sfapp/settings/station_parts.mbt": 11,
@@ -329,9 +329,6 @@
     "page-old-sheet": {
       "src/sfapp/chat.mbt": 3,
       "src/sfapp/context.mbt": 2,
-      "src/sfapp/settings/more_pages.mbt": 2,
-      "src/sfapp/settings/run_more.mbt": 3,
-      "src/sfapp/settings/station_add.mbt": 1,
       "src/sfapp/sheets.mbt": 6
     },
     "corners-each": {}

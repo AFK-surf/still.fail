@@ -251,7 +251,7 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> U
         let id = c.id("ws-add-people")
         c.cursor(id, Hand)
         if c.clicked(id) {
-          open_add_people(core, here, v)
+          open_add_people(core, here, v, from=Of(id))
         }
         let b = c.box(style=ws_add_box, id~, fn() { @sf.icon(c, "user-plus", size=ws_add_icon, color=@sf.link_ink()) |> ignore })
         c.semantics(b, Button, id~, label=@sf.t("web-pages.settings.members.add"))
