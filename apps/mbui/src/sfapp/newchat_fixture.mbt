@@ -156,6 +156,8 @@ fn fix_pick() -> Json {
     } else {
       "自动"
     },
+    // who runs it as the control says it: the station's pick (no profile kept to)
+    "account": { "text": "自动分配", "auto": true, "level": "ok" },
     "autoNote": "由 station 选择：现在是 Claude 订阅",
     "changed": Json::boolean(changed),
     "was": [],

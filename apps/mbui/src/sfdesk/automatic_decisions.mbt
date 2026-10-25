@@ -8,13 +8,10 @@
 fn decisions_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let said = (core.topic)("settings", { "scope": Json::string(here.workspace) }).value
-  look_page(c, core, frame, look, "auto-decisions", @sf.t("web-pages.automaticDecisions.title"), about=@sf.t("web-pages.automaticDecisions.choosePoint"), [
+  look_page(c, core, frame, "auto-decisions", @sf.t("web-pages.automaticDecisions.title"), about=@sf.t("web-pages.automaticDecisions.choosePoint"), [
     fn() {
-      look_group(c, look, fn() {
-        if look_link(
-            c,
-            look,
-            "auto-completion",
+      @sf.group(c, fn() {
+        if @sf.link_row(c, "auto-completion",
             @sf.t("web-pages.automaticDecisions.completion"),
             note=@sf.t(if look == Narrow { "web-pages.automaticDecisions.completionShort" } else { "web-pages.automaticDecisions.completionNote" }),
             value=text(said, "decisionsText"),

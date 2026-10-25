@@ -91,7 +91,7 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
     // out of by itself, another added
     Narrow =>
       blocks.push(fn() {
-        look_group(c, look, fn() {
+        @sf.group(c, fn() {
           c.box(style=narrow_said_row, fn() {
             c.box(style=narrow_row_words, identity) |> ignore
             if acc_sign_out_link(c, "sign-out/" + here.sub, if others.length() > 0 { @sf.t("android-settings.me.signOut") } else { @sf.t("android-settings.me.signOutOnly") }) {
@@ -110,7 +110,7 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
             })
             |> ignore
           }
-          if look_link(c, look, "add-account", @sf.t("android-settings.me.addAccount"), chevron=false) {
+          if @sf.link_row(c, "add-account", @sf.t("android-settings.me.addAccount"), chevron=false) {
             (core.sign_in)()
           }
         })
@@ -118,7 +118,7 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
     Wide => ()
   }
   blocks.push(fn() {
-    look_section(c, look, @sf.t("web-pages.settings.account.sessions"), heads=true, note=if look == Wide { @sf.t("web-pages.settings.account.sessionsLead", args=[("name", "still.fail")]) } else { "" }, fn() {
+    @sf.section(c, @sf.t("web-pages.settings.account.sessions"), heads=true, note=if look == Wide { @sf.t("web-pages.settings.account.sessionsLead", args=[("name", "still.fail")]) } else { "" }, fn() {
       acc_devices(c, core, look, here)
     })
   })
@@ -139,7 +139,7 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
               })
               |> ignore
             }
-            if look_link(c, look, "add-account", @sf.t("android-settings.me.addAccount"), chevron=false) {
+            if @sf.link_row(c, "add-account", @sf.t("android-settings.me.addAccount"), chevron=false) {
               (core.sign_in)()
             }
           })
@@ -187,7 +187,7 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
     Narrow =>
       blocks.push(fn() {
         c.box(style=acc_narrow_foot, fn() {
-          look_group(c, look, fn() {
+          @sf.group(c, fn() {
             let id = c.id("delete-account")
             c.cursor(id, Hand)
             if c.clicked(id) {
@@ -203,12 +203,7 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
         |> ignore
       })
   }
-  look_page(
-    c,
-    core,
-    frame,
-    look,
-    "me",
+  look_page(c, core, frame, "me",
     @sf.t("android-settings.me.title"),
     head?=if look == Wide { Some(identity) } else { None },
     blocks,
@@ -231,14 +226,14 @@ fn acc_devices(c : @ui.Ctx, core : Core, look : Look, here : Here) -> Unit {
     Some(Array(a)) => a
     _ => {
       match topic.error {
-        Some(e) => look_note(c, look, @sf.t("web-pages.settings.account.sessionsFailed", args=[("error", error_text(e))]), bad=true)
+        Some(e) => @sf.page_note(c, @sf.t("web-pages.settings.account.sessionsFailed", args=[("error", error_text(e))]), bad=true)
         None => @sf.wait_line(c, @sf.t("common.reading"))
       }
       return
     }
   }
   let narrow = look == Narrow
-  look_group(c, look, fn() {
+  @sf.group(c, fn() {
     for d in list {
       let dv = Some(d)
       let id = text(dv, "id")

@@ -6,64 +6,34 @@
 /// A machine's CPU, memory and disk (MeterDials): each what is left large over its cells, filled as far as is used,
 /// its name and its total under them.
 fn meter_dials(c : @ui.Ctx, meters : Array[Json]) -> Unit {
-  // (on as many lines as they take: quotaDials' flex-wrap)
-  c.box(style=dl_row, flow=true, line_gap=dl_lines, fn() {
-    for m in meters {
+  @sf.dials(
+    c,
+    meters.map(fn(m) {
       let mv = Some(m)
-      dial(c, text(mv, "big"), text(mv, "unit"), 100 - dial_part(count(mv, "left")), text(mv, "level"), text(mv, "title"), text(mv, "total"))
-    }
-  })
-  |> ignore
+      {
+        number: text(mv, "big"),
+        unit: text(mv, "unit"),
+        fill: 100 - count(mv, "left"),
+        level: text(mv, "level"),
+        label: text(mv, "title"),
+        note: text(mv, "total"),
+      }
+    }),
+  )
 }
 
 ///|
 /// An allowance's windows on its profile's page (QuotaBars, not compact): each what is left large over its cells, as
 /// far as is left, its name and when it refills.
 fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
-  c.box(style=dl_row, flow=true, line_gap=dl_lines, fn() {
-    for w in windows {
+  @sf.dials(
+    c,
+    windows.map(fn(w) {
       let wv = Some(w)
       let left = count(wv, "left")
-      dial(c, left.to_string(), "%", dial_part(left), text(wv, "level"), text(wv, "label"), text(wv, "refills"))
-    }
-  })
-  |> ignore
-}
-
-///|
-/// A share kept in 0–100.
-fn dial_part(n : Int) -> Int {
-  @cmp.maximum(0, @cmp.minimum(100, n))
-}
-
-///|
-/// A figure large (Dial), ten cells lit as far as `fill` (0–100) in the colour of its level (green while plenty), its
-/// name and a quiet note under; the figure the words' ink until it runs low.
-fn dial(c : @ui.Ctx, number : String, unit : String, fill : Int, level : String, label : String, note : String) -> Unit {
-  let t = @sf.theme()
-  let ink = match level {
-    "amber" | "warn" => t.p.warn_ink
-    "red" => t.p.red
-    _ => t.p.green
-  }
-  let low = level == "amber" || level == "warn" || level == "red"
-  let lit = (fill.to_double() / 10.0).round().to_int()
-  c.box(style=dl_dial, fn() {
-    c.box(style=dl_number_line, fn() {
-      c.text(number, style=if low { dl_number.then(@ui.text_style(color=Data(ink))) } else { dl_number }) |> ignore
-      c.text(unit, style=dl_unit) |> ignore
-    })
-    |> ignore
-    c.box(style=dl_cells, fn() {
-      for i in 0..<10 {
-        c.box(style=if i < lit { dl_cell.then(@ui.style(bg=Data(ink))) } else { dl_cell }, fn() {  }) |> ignore
-      }
-    })
-    |> ignore
-    c.text(label, style=dl_label) |> ignore
-    c.text(if note == "" { " " } else { note }, style=dl_reset) |> ignore
-  })
-  |> ignore
+      { number: left.to_string(), unit: "%", fill: left, level: text(wv, "level"), label: text(wv, "label"), note: text(wv, "refills") }
+    }),
+  )
 }
 
 ///|
@@ -185,54 +155,51 @@ fn software_list(c : @ui.Ctx, core : Core, station : String, updates : Array[Jso
     return
   }
   let batch = is_doing(core, ["software.updateAll"], [("station", station)])
-  c.box(style=desk_list, fn() {
-    for u in updates {
-      let v = Some(u)
-      let id = text(v, "id")
-      let busy = batch || is_doing(core, ["software.update"], [("station", station), ("id", id)])
-      software_row(c, core, station, v, manager, busy, beta)
+  for u in updates {
+    let v = Some(u)
+    let id = text(v, "id")
+    let busy = batch || is_doing(core, ["software.update"], [("station", station), ("id", id)])
+    software_row(c, core, station, v, manager, busy, beta)
+  }
+  c.box(style=sw_foot, fn() {
+    let checked = match field(Some(updates[0]), "checkedAt") {
+      Some(Number(n, ..)) => Some(n)
+      _ => None
     }
-    c.box(style=sw_foot, fn() {
-      let checked = match field(Some(updates[0]), "checkedAt") {
-        Some(Number(n, ..)) => Some(n)
-        _ => None
-      }
-      c.text(
-        match checked {
-          None => @sf.t("web-main.versions.checkingVersions")
-          Some(n) => @sf.t("web-main.versions.lastChecked", args=[("time", @settings.short_date_time(n))])
-        },
-        style=sw_foot_words,
-      )
-      |> ignore
-      match software_failed.get(station) {
-        Some(f) => c.text(f, style=sw_failed) |> ignore
-        None => ()
-      }
-      if checked is Some(_) {
-        let checking = is_doing(core, ["software.check"], [("station", station)])
-        let cid = c.id("software-check/" + station)
-        if !checking {
-          c.cursor(cid, Hand)
-          if c.clicked(cid) {
-            software_call(core, station, "software.check", [])
-          }
-        }
-        c.box(style=sw_check, id=cid, fn() {
-          c.text(
-            if checking {
-              @sf.t("web-main.versions.checking")
-            } else {
-              @sf.t("web-main.versions.check")
-            },
-            style=if c.hovered(cid) && !checking { sw_check_lit } else { sw_check_words },
-          )
-          |> ignore
-        })
-        |> ignore
-      }
-    })
+    c.text(
+      match checked {
+        None => @sf.t("web-main.versions.checkingVersions")
+        Some(n) => @sf.t("web-main.versions.lastChecked", args=[("time", @settings.short_date_time(n))])
+      },
+      style=sw_foot_words,
+    )
     |> ignore
+    match software_failed.get(station) {
+      Some(f) => c.text(f, style=sw_failed) |> ignore
+      None => ()
+    }
+    if checked is Some(_) {
+      let checking = is_doing(core, ["software.check"], [("station", station)])
+      let cid = c.id("software-check/" + station)
+      if !checking {
+        c.cursor(cid, Hand)
+        if c.clicked(cid) {
+          software_call(core, station, "software.check", [])
+        }
+      }
+      c.box(style=sw_check, id=cid, fn() {
+        c.text(
+          if checking {
+            @sf.t("web-main.versions.checking")
+          } else {
+            @sf.t("web-main.versions.check")
+          },
+          style=if c.hovered(cid) && !checking { sw_check_lit } else { sw_check_words },
+        )
+        |> ignore
+      })
+      |> ignore
+    }
   })
   |> ignore
 }
@@ -253,7 +220,7 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
   }
   let own = id == "station"
   let switches = own && manager && ((beta && has(v, "channel")) || has(v, "auto"))
-  c.box(style=sw_row, fn() {
+  @sf.item_row(c, fn() {
     c.box(style=sw_mark, fn() {
       if own {
         @sf.drawable(c, if @sf.theme().dark { "stillfail_mark_dark" } else { "stillfail_mark" }, sw_glyph) |> ignore
@@ -262,9 +229,9 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
       }
     })
     |> ignore
-    c.box(style=desk_card_text, fn() {
+    c.box(style=sw_words, fn() {
       c.box(style=sw_name_line, fn() {
-        c.text(text(v, "name"), style=desk_strong_line) |> ignore
+        c.text(text(v, "name"), style=sw_name) |> ignore
         if text(v, "channel") == "beta" && !switches {
           c.box(style=sw_beta, fn() { c.text(@sf.t("web-main.versions.beta"), style=sw_beta_words) |> ignore }) |> ignore
         }
@@ -338,7 +305,6 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
     })
     |> ignore
   })
-  |> ignore
 }
 
 ///|
@@ -363,7 +329,7 @@ fn station_logins(c : @ui.Ctx, core : Core, station : String) -> Unit {
       |> ignore
     }
     if past.length() > 0 {
-      c.box(style=desk_list, fn() {
+      @sf.group(c, fn() {
         for l in past {
           let lv = Some(l)
           let by = text(lv, "doneByText")
@@ -373,68 +339,27 @@ fn station_logins(c : @ui.Ctx, core : Core, station : String) -> Unit {
           } else {
             ""
           }
-          c.box(style=desk_list_row, fn() {
-            c.box(style=st_grant_mark, fn() { @sf.icon(c, "key", size=st_grant_glyph, color=t.p.text) |> ignore }) |> ignore
-            c.box(style=desk_list_text, fn() {
-              c.text(text(lv, "command"), style=desk_list_title) |> ignore
-              c.text(join([started, rest], " · "), style=if text(lv, "state") == "failed" { desk_note_bad } else { desk_note })
-              |> ignore
-            })
-            |> ignore
-          })
+          @sf.link_row(
+            c,
+            "",
+            text(lv, "command"),
+            note=join([started, rest], " · "),
+            goes=false,
+            lead=fn() { st_row_mark(c, "key") },
+            tail=fn() {
+              if text(lv, "state") == "failed" {
+                @sf.pill(c, text(lv, "statusText"), tone=Red)
+              }
+            },
+          )
           |> ignore
         }
       })
-      |> ignore
     }
   })
 }
 
 // ── styles ──────────────────────────────────────────────────────────────
-
-///|
-/// The dials in a line, 36 apart (12 when they wrap).
-// kept across runs: a value (no field of it changes)
-let dl_row : @ui.Style = @ui.css("row gap=S9 align=AStart")
-
-///|
-/// Between the dials' lines (quotaDials: 12).
-let dl_lines : Double = 12.0
-
-///|
-/// A dial (quotaDial: 96 wide at least, 2 apart).
-// kept across runs: a value (no field of it changes)
-let dl_dial : @ui.Style = @ui.css("min_w=S24 gap=S0_5 align=AStart")
-
-///|
-// kept across runs: a value (no field of it changes)
-let dl_number_line : @ui.Style = @ui.css("row gap=SPx align=AEnd")
-
-///|
-/// Its figure (quotaDialNumber: the display size, 600, the words' ink while there is plenty).
-// kept across runs: a value (no field of it changes)
-let dl_number : @ui.TextStyle = @ui.text_style(size=@sf.code_big_size, weight=Semibold, color=Fg, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let dl_unit : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Muted, wrap=false)
-
-///|
-/// Its ten cells (quotaDialCells: 3 apart, 4 over and 6 under; a cell 8 by 14, round 2, the neutral ground).
-// kept across runs: a value (no field of it changes)
-let dl_cells : @ui.Style = @ui.css("row gap=SPx pt=S1 pb=S1_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let dl_cell : @ui.Style = @ui.css("w=S2 h=S3_5 radius=Sm bg=Neutral mr=SPx")
-
-///|
-// kept across runs: a value (no field of it changes)
-let dl_label : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Fg, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let dl_reset : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// The connection (net: 14 apart, 8 between its lines where the speeds go under, the ui's 13 muted, its figures bold
@@ -507,21 +432,12 @@ let sw_glyph : Double = 18.0
 let sw_progress_w : Double = 60.0
 
 ///|
-/// A piece of software (softRow: a list's row, its mark, its words, what is done with it at its end).
-// kept across runs: a value (no field of it changes)
-let sw_row : @ui.Style = @ui.style(row=true, w=Full, min_h=Fixed(desk_row_least), px=S3, py=S2_5, gap=S3, align=ACenter, radius=Xl)
-
-///|
 // kept across runs: a value (no field of it changes)
 let sw_mark : @ui.Style = @ui.css("w=S9 h=S9 radius=Full bg=Neutral align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
 let sw_name_line : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_strong_line : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -594,3 +510,12 @@ let sw_check_lit : @ui.TextStyle = sw_check_words.then(@ui.text_style(color=Fg))
 /// Logins under way, their cards 12 apart.
 // kept across runs: a value (no field of it changes)
 let lg_cards : @ui.Style = @ui.css("w=Full gap=S3 pb=S3")
+
+///|
+/// A piece of software's words: its name and its version, 2 apart; its name strong, on one line.
+// kept across runs: a value (no field of it changes)
+let sw_words : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sw_name : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Fg, wrap=false)

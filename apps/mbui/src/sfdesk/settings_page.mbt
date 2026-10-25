@@ -1,112 +1,44 @@
-// A settings page on the desktop as the web's frames one (ember web/src/styles/pages.css.ts page, pageNarrow,
-// pageHead; brand.css.ts: the narrow page's column): its head, then what it holds in the 760 column in the pane's
-// middle, 28 under the head, 80 room at its foot. The pages ported from the web's onto the library's parts
-// (notifications.mbt, …) are laid out in it, their words in the library's true sizes.
+// What the desktop's settings pages share beside the library's page (src/sf page.mbt): a place's page across the
+// pane, a hint, a list's filter, a dialog. The web's desktop pieces they still draw themselves (desk_card, desk_list,
+// …) are the library's, named here; detlint's page-look counts them in the pages, each file's only falling.
 
-///|
-/// `title`'s page holding `content`, a block at a time (each laid out as it comes into view), `about` what it is for
-/// said by a mark beside its title, or `lead` under it; back over it on a page under another (`back` where it goes).
-fn desk_page(
-  c : @ui.Ctx,
-  core : Core,
-  key : String,
-  title : String,
-  content : Array[() -> Unit],
-  about? : String = "",
-  lead? : String = "",
-  back? : String = @sf.t("android-settings.title"),
-  actions? : () -> Unit,
-  head? : () -> Unit,
-  on_back? : () -> Unit,
-  deep? : Bool = settings_deep.val,
-  top? : Double = 0.0,
-  foot? : Double = 0.0,
-) -> Unit {
-  let blocks : Array[() -> Unit] = []
-  // the room the frame keeps over it (a status bar's)
-  if top > 0.0 {
-    blocks.push(fn() { c.box(style=@ui.style(w=Full, h=Fixed(top)), fn() {  }) |> ignore })
-  }
-  // a head of its own in place of the title (an account's: who it is), as the page's first block
-  match head {
-    // as far down as a title's head stands
-    Some(h) =>
-      blocks.push(fn() {
-        let deep = deep || on_back is Some(_)
-        c.box(style=if deep { desk_own_head_deep } else { desk_own_head }, fn() {
-          // back over it on a page under another (BackLink), as a title's head has it
-          if deep {
-            desk_back(c, core, back, on_back)
-          }
-          h()
-        })
-        |> ignore
-      })
-    None =>
-      blocks.push(fn() {
-        // (a step of the page's own: its back goes to the step before)
-        @settings.wide_head(c, core, back, title, trailing?=actions, inside=true, about~, lead~, on_back?, deep=deep || on_back is Some(_))
-      })
-  }
-  for i, b in content {
-    blocks.push(fn() { c.box(style=if i == 0 { desk_first } else { desk_block }, fn() { b() }) |> ignore })
-  }
-  desk_lanes(c, key, blocks, foot~)
+using @sf {
+  desk_lanes,
+  desk_lane,
+  desk_lane_column,
+  desk_lane_most,
+  desk_lane_in,
+  desk_column_most,
+  desk_column_in,
+  desk_own_head,
+  desk_hint_box,
+  desk_hint_words,
+  desk_card,
+  desk_card_row,
+  desk_card_text,
+  desk_strong,
+  desk_words,
+  desk_muted,
+  desk_row_least,
+  desk_chevron,
+  desk_mark,
+  desk_list,
+  desk_list_out,
+  desk_list_link,
+  desk_list_text,
+  desk_named,
+  desk_list_title,
+  desk_note_line,
+  desk_note_bad,
 }
 
 ///|
-/// The way back over a page's own head (BackLink): its chevron and where it goes, the ink under the pointer.
-fn desk_back(c : @ui.Ctx, core : Core, back : String, on_back : (() -> Unit)?) -> Unit {
-  let t = @sf.theme()
-  let id = c.id("settings-back")
-  c.cursor(id, Hand)
-  if c.clicked(id) {
-    match on_back {
-      Some(f) => f()
-      None => (core.pop)()
-    }
-  }
-  let lit = c.hovered(id)
-  let b = c.box(style=desk_back_line, id~, fn() {
-    @sf.icon(c, "chevron-left", size=desk_back_icon, color=if lit { t.p.text } else { t.p.muted }) |> ignore
-    c.text(back, style=if lit { desk_back_lit } else { desk_back_words }) |> ignore
-  })
-  c.semantics(b, Link, id~, label=back)
-}
-
-///|
-let desk_back_icon : Double = 14.0
+// kept across runs: a value (no field of it changes)
+let desk_list_row : @ui.Style = @sf.wide_list_row
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_back_line : @ui.Style = @ui.css("row pb=S2 gap=S1 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_back_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_back_lit : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Fg, wrap=false)
-
-///|
-/// A page's blocks in a list, each laid out as it comes into view: in the pane's middle, 24 from its sides at least,
-/// 80 room at its foot.
-fn desk_lanes(c : @ui.Ctx, key : String, blocks : Array[() -> Unit], foot? : Double = 0.0) -> Unit {
-  c.list("settings/" + key, blocks.length() + 1, 80.0, fn(i) {
-    if i == blocks.length() {
-      // (and the frame's room under that)
-      if foot > 0.0 {
-        c.box(style=@ui.style(w=Full, h=Fixed(desk_foot_h + foot)), fn() {  }) |> ignore
-      } else {
-        c.box(style=desk_foot, fn() {  }) |> ignore
-      }
-    } else {
-      c.box(style=desk_lane, fn() { c.box(style=desk_lane_column, fn() { (blocks[i])() }) |> ignore }) |> ignore
-    }
-  })
-  |> ignore
-}
+let desk_note : @ui.TextStyle = @sf.wide_list_note
 
 ///|
 /// A place's page across the pane (连接: Connects.tsx's page): its head standing over what scrolls, its title, what it
@@ -147,70 +79,10 @@ fn desk_column(c : @ui.Ctx) -> Double {
 }
 
 ///|
-/// A block's lane across the pane, its column in the middle: 792 at most, 24 from the pane's sides at least (its blocks'
-/// own 16 inside it: the 760 column).
-// kept across runs: a value (no field of it changes)
-let desk_lane : @ui.Style = @ui.css("w=Full px=S6 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_lane_column : @ui.Style = @ui.style(w=Full, max_w=Fixed(desk_lane_most))
-
-///|
-let desk_lane_most : Double = 792.0
-
-///|
-let desk_lane_in : Double = 24.0
-
-///|
-/// The room at the page's foot.
-// kept across runs: a value (no field of it changes)
-let desk_foot : @ui.Style = @ui.css("w=Full h=S20")
-
-///|
-let desk_foot_h : Double = 80.0
-
-///|
-/// A page's head of its own (an account's): where a title's head would stand.
-// kept across runs: a value (no field of it changes)
-let desk_own_head : @ui.Style = @ui.css("w=Full px=S4 pt=S10")
-
-///|
-/// (with the way back over it: as high as a title's head with it stands)
-// kept across runs: a value (no field of it changes)
-let desk_own_head_deep : @ui.Style = @ui.css("w=Full px=S4 pt=S5")
-
-///|
-let desk_column_most : Double = 760.0
-
-///|
-let desk_column_in : Double = 16.0
-
-///|
-/// A block of the page, at the column's edges; the first 28 under the head (its own 12 and these 16).
-// kept across runs: a value (no field of it changes)
-let desk_block : @ui.Style = @ui.css("w=Full px=S4")
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_first : @ui.Style = desk_block.then(@ui.css("pt=S4"))
-
-///|
 /// What the option chosen above it does (chat.css.ts appearanceHint: 8 under it, the meta's 12 muted, 52em at most).
 fn desk_hint(c : @ui.Ctx, words : String) -> Unit {
   c.box(style=desk_hint_box, fn() { c.text(words, style=desk_hint_words) |> ignore }) |> ignore
 }
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_hint_box : @ui.Style = @ui.style(w=Full, max_w=Fixed(desk_hint_most), pt=S2)
-
-///|
-let desk_hint_most : Double = 624.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_hint_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=Full)
 
 ///|
 /// A hint and its link in a line (8 under what is over it).
@@ -220,94 +92,6 @@ let desk_hint_line : @ui.Style = @ui.css("w=Full pt=S2 gap=S1")
 ///|
 // kept across runs: a value (no field of it changes)
 let desk_said_line : @ui.Style = @ui.css("row w=Full align=ACenter")
-
-///|
-/// A card of words (pages.css.ts card: 20 in, its rows 14 apart, the settings' corner on the card's ground; a row of
-/// it: cardRow, 12 apart in its middle; its words cardRowText, 2 apart, the ui's 13 on 20, the title in 600).
-// kept across runs: a value (no field of it changes)
-let desk_card : @ui.Style = @ui.css("w=Full p=S5 gap=S3_5 radius=Xl3 bg=Card")
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_card_row : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_card_text : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_strong : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Fg, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_muted : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, w=Full)
-
-///|
-/// A list (pages.css.ts list, listRow: reaching 12 past the column, its rows 2 apart, each 52 high at least, 10 by 12 in,
-/// 12 apart, the field's corner; one that opens on the list's ground under the pointer; its title in 500, what is under
-/// it the meta's 12 muted, red where it is wrong; a station's mark before its name, 6 apart; a chevron 16).
-let desk_row_least : Double = 52.0
-
-///|
-let desk_chevron : Double = 16.0
-
-///|
-let desk_mark : Double = 14.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_list : @ui.Style = @sf.outset(desk_list_out).then(@ui.css("gap=S0_5"))
-
-///|
-let desk_list_out : Double = 12.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_list_row : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  min_h=Fixed(desk_row_least),
-  px=S3,
-  py=S2_5,
-  gap=S3,
-  align=ACenter,
-  radius=Xl,
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_list_link : @ui.Style = desk_list_row.then(@ui.css("hovered{bg=Hover}"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_list_text : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_named : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_list_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Fg, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=Full)
-
-///|
-/// A note on one line beside or under what it is about (a name's station, the stations that may use it, 离线, an
-/// account's address): cut short where it has less, never wrapped a letter a line.
-// kept across runs: a value (no field of it changes)
-let desk_note_line : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false, w=Cut)
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_note_bad : @ui.TextStyle = desk_note.then(@ui.text_style(color=Danger))
 
 ///|
 /// A choice of a few (Segmented) as wide as its options, at the column's start.

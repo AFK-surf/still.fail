@@ -6,7 +6,8 @@ let rule_names : Array[String] = [
   "host-import", "frame-wait", "at-rest-wait", "frame-count", "literal-time", "stable-mode",
   "retired-api", "app-clock", "wall-clock", "engine-math", "poll", "host-read", "builtin-hash",
   "hash-order", "globals", "style-literal", "box-loose", "style-exact", "style-text", "build-effect",
-  "unsettled-ok", "host-delay", "library-import", "reset-wire", "page-hand", "follow-layout", "motion-read",
+  "unsettled-ok", "host-delay", "library-import", "reset-wire", "page-hand", "page-screen", "page-look", "follow-layout",
+  "motion-read",
 ]
 
 ///|
@@ -33,6 +34,8 @@ let rule_words : Map[String, String] = {
   "hash-order": "a @hashmap / @hashset, its order the process's hash's: a Map (in the order put), or sort it",
   "globals": "a mutable global its package's reset does not put back, nor says `// kept across runs: why`",
   "page-hand": "a page reads the hand (@ui.pointing()): what it shows, where and how big is the screen's (@sf.touch_system(), the tier, its own width); how it answers the hand is the library's primitives' (c.lit, c.menu_asked, the app's own: still.fail's sf/hand.mbt)",
+  "page-screen": "a page reads the screen's kind (@sf.touch_system()): what differs by it is the theme's, the library's parts', the presenters' and the shell's; a page that needs it asks the library for a part that holds it for every page",
+  "page-look": "a page draws one arrangement's piece itself (narrow_*, desk_*, its own branch on Narrow or Wide): its parts are the library's (a page's parts, src/sf page.mbt), which the page's frame lays out by its width, the same page on every screen",
   "reset-wire": "a global its package's reset sets to something other than its `let`'s value: a wire (a hook given what does the work), which reset sets only as a Tester starts, never in the app; set it once in the package's `fn init`, and keep it across runs",
   "style-literal": "a number where a style is said (a box's or words' look, @ui.style…), or an Exact(…) outside the token files: name it with a token (docs/style.md)",
   "box-loose": "a box or words said by their loose look (pad=, bg=, size=…): say it as a named style (style=)",

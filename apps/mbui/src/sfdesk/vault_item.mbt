@@ -33,12 +33,12 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, vau
   let key = "vault-item/" + vault + "/" + item
   let back = @sf.t("web-pages.vault.title")
   guard view is Some(_) && list is Some(_) else {
-    look_page(c, core, frame, look, key, back, [fn() { waiting_cards(c, count=2) }])
+    look_page(c, core, frame, key, back, [fn() { waiting_cards(c, count=2) }])
   }
   let v = items(view, "vaults").search_by(fn(x) { text(Some(x), "id") == vault })
   let row = items(list, "items").search_by(fn(x) { text(Some(x), "id") == item })
   guard v is Some(vi) && row is Some(ri) else {
-    look_page(c, core, frame, look, key, back, [fn() { look_note(c, look, @sf.t("web-pages.vault.empty")) }])
+    look_page(c, core, frame, key, back, [fn() { @sf.page_note(c, @sf.t("web-pages.vault.empty")) }])
   }
   let vv = Some(items(view, "vaults")[vi])
   let rv = Some(items(list, "items")[ri])
@@ -62,9 +62,9 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, vau
   }
   let editing_busy = opening && vi_reveal.get(item) is None
   let section = fn(title : String, body : () -> Unit) {
-    look_section(c, look, title, heads=true, fn() {
+    @sf.section(c, title, heads=true, fn() {
       match look {
-        Narrow => look_card(c, look, body)
+        Narrow => @sf.page_card(c, body)
         Wide => body()
       }
     })
@@ -73,7 +73,7 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, vau
   // in a library not locked: that it is not encrypted, the way to lock it
   if plain {
     blocks.push(fn() {
-      look_card(c, look, fn() {
+      @sf.page_card(c, fn() {
         c.text(@sf.t("web-pages.vault.risk.title"), style=vi_risk_title) |> ignore
         c.text(@sf.t("web-pages.vault.risk.body", args=[("station", text(vv, "stationName"))]), style=desk_muted) |> ignore
         // (its button in its foot corner, concentric with it)
@@ -205,7 +205,7 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, vau
   let sub = join([text(rv, "kindText"), @sf.t("web-pages.vault.storedOn", args=[("station", text(vv, "stationName"))])], " · ")
   match look {
     Wide =>
-      look_page(c, core, frame, look, key, text(rv, "name"), blocks, head=fn() {
+      look_page(c, core, frame, key, text(rv, "name"), blocks, head=fn() {
         c.box(style=pf_head, fn() {
           c.box(style=pf_mark, fn() {
             @sf.icon(c, @settings.kind_icon(text(rv, "kind")), size=vi_mark_glyph, color=t.p.text) |> ignore
@@ -224,7 +224,7 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, vau
       })
     // (narrow: its name the large title, what it is and where under it, 编辑 at the title's end)
     Narrow =>
-      look_page(c, core, frame, look, key, text(rv, "name"), blocks, lead=sub, actions=fn() {
+      look_page(c, core, frame, key, text(rv, "name"), blocks, lead=sub, actions=fn() {
         if editing_busy {
           @sf.spinner(c, size=pf_spin) |> ignore
         } else if @sf.icon_button(c, "edit", key=key + "/edit", round=true, label=@sf.t("common.edit")) {

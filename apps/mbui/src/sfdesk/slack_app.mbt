@@ -127,87 +127,78 @@ fn slack_app_reset() -> Unit {
 /// Slack has it (read through the station: being read, none, no configuration token to write it with, or why it could
 /// not be read), its form, and Slack's page of it.
 fn slack_app_section(c : @ui.Ctx, core : Core, station : String, cv : Json?) -> Unit {
-  let t = @sf.theme()
   let id = text(cv, "id")
   let me = station + "/" + id
   let open = sa_open.get(me).unwrap_or(false)
-  c.box(style=sa_fold, fn() {
-    let fid = c.id("slack-app-fold/" + me)
-    c.cursor(fid, Hand)
-    if hit(c, fid) {
+  // folded: a row of its own that opens it; open, what it holds on a card under it, apart from what follows
+  @sf.apart(c, fn() { slack_app_fold(c, core, station, id, me, open) })
+}
+
+///|
+/// The Slack app's fold: its row, and open, what it holds.
+fn slack_app_fold(c : @ui.Ctx, core : Core, station : String, id : String, me : String, open : Bool) -> Unit {
+  @sf.group(c, fn() {
+    if @sf.link_row(
+        c,
+        "slack-app-fold/" + me,
+        "Slack app",
+        note=@sf.t("web-pages.slackApp.foldNote"),
+        value=if open { @sf.t("web-pages.profiles.collapse") } else { "" },
+        chevron=!open,
+      ) {
       sa_open[me] = !open
     }
-    let b = c.box(style=sa_fold_line, id=fid, fn() {
-      @sf.icon(c, if open { "chevron-down" } else { "chevron-right" }, size=cd_icon, color=t.p.muted) |> ignore
-      c.text("Slack app", style=sa_fold_title) |> ignore
-      c.text(@sf.t("web-pages.slackApp.foldNote"), style=sa_perms_said) |> ignore
-    })
-    c.semantics(b, Button, id=fid, label="Slack app", expanded=open)
-    if !open {
-      return
-    }
-    let topic = (core.topic)("slackApp", { "station": str(station), "connect": str(id) })
-    let view = topic.value
-    let links = field(view, "links")
-    c.box(style=sa_fold_body, fn() {
-      match (topic.error, view) {
-        (Some(e), _) => c.text(error_text(e), style=desk_note_bad) |> ignore
-        (_, None) => c.text(@sf.t("web-pages.slackApp.loading"), style=desk_muted) |> ignore
-        (_, Some(_)) =>
-          match text(view, "state") {
-            "no_app" =>
-              c.text(
-                match opt_text(view, "error") {
-                  Some(e) => @sf.t("web-pages.slackApp.noApp", args=[("error", e)])
-                  None => @sf.t("web-pages.slackApp.notConnected")
-                },
-                style=desk_muted,
-              )
-              |> ignore
-            "no_config_token" =>
-              sa_token_card(c, core, station, me, @sf.t("web-pages.slackApp.needsToken"), @sf.t("web-pages.slackApp.needsTokenNote"), @sf.t(
-                  "web-pages.slackApp.addToken",
-                ), false)
-            "error" =>
-              sa_token_card(c, core, station, me, @sf.t("web-pages.slackApp.readFailed", args=[("error", text(view, "error"))]), "", @sf.t(
-                  "web-pages.slackApp.replaceToken",
-                ), true)
-            _ => sa_form(c, core, station, id, field(view, "settings"), links, items(view, "sections"))
-          }
-      }
-      match opt_text(links, "settings") {
-        Some(url) if url != "" =>
-          if cd_text_button(c, "slack-app-open/" + me, @sf.t("web-pages.slackApp.openInSlack")) {
-            (core.open_link)(url)
-          }
-        _ => ()
-      }
-    })
-    |> ignore
   })
-  |> ignore
+  if !open {
+    return
+  }
+  let topic = (core.topic)("slackApp", { "station": str(station), "connect": str(id) })
+  let view = topic.value
+  let links = field(view, "links")
+  match (topic.error, view) {
+    (Some(e), _) => @sf.page_note(c, error_text(e), bad=true)
+    (_, None) => @sf.page_note(c, @sf.t("web-pages.slackApp.loading"))
+    (_, Some(_)) =>
+      match text(view, "state") {
+        "no_app" =>
+          @sf.page_note(c, match opt_text(view, "error") {
+            Some(e) => @sf.t("web-pages.slackApp.noApp", args=[("error", e)])
+            None => @sf.t("web-pages.slackApp.notConnected")
+          })
+        "no_config_token" =>
+          sa_token_card(c, core, station, me, @sf.t("web-pages.slackApp.needsToken"), @sf.t("web-pages.slackApp.needsTokenNote"), @sf.t(
+              "web-pages.slackApp.addToken",
+            ), false)
+        "error" =>
+          sa_token_card(c, core, station, me, @sf.t("web-pages.slackApp.readFailed", args=[("error", text(view, "error"))]), "", @sf.t(
+              "web-pages.slackApp.replaceToken",
+            ), true)
+        _ => sa_form(c, core, station, id, field(view, "settings"), links, items(view, "sections"))
+      }
+  }
+  match opt_text(links, "settings") {
+    Some(url) if url != "" =>
+      @sf.group(c, fn() {
+        if @sf.link_row(c, "slack-app-open/" + me, @sf.t("web-pages.slackApp.openInSlack"), out=true) {
+          (core.open_link)(url)
+        }
+      })
+    _ => ()
+  }
 }
 
 ///|
 /// A card saying the app wants a configuration token (none, or one Slack refused: `bad`), and the button that adds one
 /// (in a dialog: ConfigTokenForm).
 fn sa_token_card(c : @ui.Ctx, core : Core, station : String, me : String, words : String, note : String, action : String, bad : Bool) -> Unit {
-  c.box(style=desk_card, fn() {
-    c.box(style=desk_card_row, fn() {
-      c.box(style=desk_card_text, fn() {
-        c.text(words, style=if bad { desk_note_bad } else { desk_words }) |> ignore
-        if note != "" {
-          c.text(note, style=desk_muted) |> ignore
-        }
-      })
-      |> ignore
+  @sf.page_card(c, footed=true, fn() {
+    @sf.card_lines(c, "", words=if bad { "" } else { words }, note~, bad=if bad { words } else { "" })
+    @sf.card_foot(c, fn() {
       if @sf.button(c, action, key="slack-app-token/" + me) {
         config_token_dialog(core, station)
       }
     })
-    |> ignore
   })
-  |> ignore
 }
 
 ///|
@@ -345,7 +336,7 @@ fn sa_form(c : @ui.Ctx, core : Core, station : String, id : String, settings : J
     }
   }
   let busy = is_doing(core, ["connect.putSlackApp"], [("station", station), ("connect", id)])
-  c.box(style=cd_footed_card(), fn() {
+  @sf.page_card(c, footed=true, fn() {
     match sa_approve.get(me) {
       Some(install) =>
         c.box(style=sa_blue.then(@ui.style(bg=Data(@sf.theme().p.blue_bg))), fn() {
@@ -362,12 +353,12 @@ fn sa_form(c : @ui.Ctx, core : Core, station : String, id : String, settings : J
     }
     app_fields(c, core, d, sections, false, desk_column(c) - 2.0 * sa_card_in)
     if d.icon_error != "" {
-      c.text(d.icon_error, style=desk_note_bad) |> ignore
+      @sf.card_lines(c, "", bad=d.icon_error)
     }
     let now = sa_settings(d, settings)
     let changed = now != sa_settings(sa_draft(key, settings), settings)
     let dirty = changed || d.icon != ""
-    c.box(style=cd_foot_actions(), fn() {
+    @sf.card_foot(c, at_end=true, fn() {
       if dirty && @sf.button(c, @sf.t("web-pages.slackApp.revert"), key=key + "/revert", tone=Ghost) {
         sa_drafts.remove(key)
       }
@@ -406,9 +397,7 @@ fn sa_form(c : @ui.Ctx, core : Core, station : String, id : String, settings : J
         )
       }
     })
-    |> ignore
   })
-  |> ignore
 }
 
 ///|

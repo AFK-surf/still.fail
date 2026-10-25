@@ -190,10 +190,10 @@ fn shortcuts_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
           )
         // narrow: its heading, its rows on a card, what the keys do under the first
         Narrow => {
-          look_heading(c, look, text(Some(g), "name"))
-          look_card(c, look, rows)
+          @sf.heading(c, text(Some(g), "name"))
+          @sf.page_card(c, rows)
           if i == 0 {
-            look_note(c, look, @sf.t("web-main.shortcuts.hint"))
+            @sf.page_note(c, @sf.t("web-main.shortcuts.hint"))
             if any {
               c.box(style=narrow_note_box, reset_all) |> ignore
             }
@@ -202,7 +202,7 @@ fn shortcuts_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       }
     })
   }
-  look_page(c, core, frame, look, "shortcuts", @sf.t("web-main.shortcuts.title"), blocks)
+  look_page(c, core, frame, "shortcuts", @sf.t("web-main.shortcuts.title"), blocks)
 }
 
 ///|

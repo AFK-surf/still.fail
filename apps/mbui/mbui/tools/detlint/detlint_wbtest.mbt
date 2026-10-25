@@ -1637,6 +1637,45 @@ test "page-hand" {
 }
 
 ///|
+test "page-screen" {
+  let cfg = Config::new(@rjson.parse("{\"pages\": {\"roots\": [\"src/pages\"]}}"))
+  // a page reading the screen's kind; the library's and a page's test's not counted
+  found(
+    [
+      ("src/pages/row.mbt", "fn v() -> Unit {\n  let f = @sf.touch_system()\n}\n"),
+      ("src/sf/parts.mbt", "pub fn by_touch() -> Bool {\n  @sf.touch_system()\n}\n"),
+      ("src/pages/row_wbtest.mbt", "test \"t\" {\n  assert_true(@sf.touch_system())\n}\n"),
+    ],
+    "page-screen",
+    1,
+    cfg~,
+  )
+  |> ignore
+}
+
+///|
+test "page-look" {
+  let cfg = Config::new(
+    @rjson.parse(
+      "{\"pages\": {\"roots\": [\"src/pages\"], \"frames\": [\"src/pages/frame.mbt\"], \"one_look\": [\"desk_card\", \"Narrow\"]}}",
+    ),
+  )
+  // a page's own piece of one arrangement and its branch on one; the frame that names them, a page's test and other
+  // names not counted
+  found(
+    [
+      ("src/pages/row.mbt", "fn v(c : Ctx, l : Look) -> Unit {\n  if l == Narrow {\n    c.box(style=desk_card)\n  }\n  c.box(style=card)\n}\n"),
+      ("src/pages/frame.mbt", "let desk_card : Style = @sf.desk_card\n"),
+      ("src/pages/row_wbtest.mbt", "test \"t\" {\n  assert_true(look() == Narrow)\n}\n"),
+    ],
+    "page-look",
+    2,
+    cfg~,
+  )
+  |> ignore
+}
+
+///|
 test "follow-layout" {
   // a follow of a measured size, through a name bound to one, an animate of the keyboard's; a follow of a state, a
   // layout told its cause and a test's, not counted

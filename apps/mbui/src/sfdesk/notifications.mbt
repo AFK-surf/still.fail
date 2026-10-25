@@ -132,7 +132,7 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
   let blocks : Array[() -> Unit] = []
   if notify is None {
     blocks.push(fn() { waiting_cards(c) })
-    look_page(c, core, frame, look, "notify", @sf.t("web-pages.settings.nav.notifications"), blocks)
+    look_page(c, core, frame, "notify", @sf.t("web-pages.settings.nav.notifications"), blocks)
     return
   }
   let permission = text(notify, "permission")
@@ -161,7 +161,7 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
   }
   blocks.push(fn() { side(fn() { notify_preview(c, core, here, notify, on, shown_kind, preview_w) }) })
   blocks.push(fn() {
-    look_section(c, look, @sf.t("web-pages.notifications.ways.title"), heads=true, note=if look == Wide { @sf.t("web-pages.notifications.noteDevice") } else { "" }, fn() {
+    @sf.section(c, @sf.t("web-pages.notifications.ways.title"), heads=true, note=if look == Wide { @sf.t("web-pages.notifications.noteDevice") } else { "" }, fn() {
       side(fn() { c.box(style=way_tiles, fn() {
         // a banner: the system's word asked first, or its settings opened where it refused
         let action = match permission {
@@ -190,12 +190,12 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
       })
       |> ignore })
       if look == Narrow {
-        look_note(c, look, @sf.t("web-pages.notifications.noteDevice"))
+        @sf.page_note(c, @sf.t("web-pages.notifications.noteDevice"))
       }
     })
   })
   blocks.push(fn() {
-    look_section(c, look, @sf.t("web-pages.notifications.kinds.title"), heads=true, fn() {
+    @sf.section(c, @sf.t("web-pages.notifications.kinds.title"), heads=true, fn() {
       side(fn() { c.box(style=kinds_card, fn() {
         for i, kind in notify_kinds {
           if i > 0 {
@@ -208,7 +208,7 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
     })
   })
   blocks.push(fn() {
-    look_section(c, look, @sf.t("web-pages.notifications.more.title"), heads=true, fn() {
+    @sf.section(c, @sf.t("web-pages.notifications.more.title"), heads=true, fn() {
       side(fn() { c.box(style=more_card, fn() {
         let preview = flag(notify, "preview") || field(notify, "preview") is None
         let now = @sf.switch_row(
@@ -246,7 +246,7 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
       |> ignore })
     })
   })
-  look_page(c, core, frame, look, "notify", @sf.t("web-pages.settings.nav.notifications"), blocks)
+  look_page(c, core, frame, "notify", @sf.t("web-pages.settings.nav.notifications"), blocks)
 }
 
 ///|

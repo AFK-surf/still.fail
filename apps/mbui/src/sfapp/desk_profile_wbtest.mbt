@@ -14,7 +14,7 @@ fn desk_shown(t : @ui.Tester, words : String) -> Unit {
 }
 
 ///|
-test "wide: a profile's page says who it is and whether it works, then its allowance, what it spent, sharing, its models, how it runs, who uses it" {
+test "wide: a profile's page says who it is and whether it works, then its allowance, what it spent, who uses it, how it runs, sharing" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="settings")
   t.draw()
@@ -27,16 +27,17 @@ test "wide: a profile's page says who it is and whether it works, then its allow
   // what is left of its allowance, a dial each
   assert_true(t.find("额度") is Some(_))
   assert_true(t.find("5 小时") is Some(_) && t.find("本周") is Some(_), msg="its windows")
-  // shared, for its home's other workspaces, fast, its models
-  assert_true(t.find("分享给其他 station") is Some(_), msg="sharing")
-  desk_shown(t, "默认 Fast")
-  assert_true(t.find("默认 Fast") is Some(_))
+  // who uses it, how it runs, whom it is shared with
   desk_shown(t, "使用它的连接")
   assert_true(t.find("使用它的连接") is Some(_))
+  desk_shown(t, "默认 Fast")
+  assert_true(t.find("默认 Fast") is Some(_))
+  desk_shown(t, "分享给其他 station")
+  assert_true(t.find("分享给其他 station") is Some(_), msg="sharing")
 }
 
 ///|
-test "wide: a key's profile shows its key masked, replaced in place" {
+test "wide: a key's profile shows its key masked, a new one asked for from its row" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="settings")
   t.draw()
@@ -49,8 +50,8 @@ test "wide: a key's profile shows its key masked, replaced in place" {
     Some((x, y)) => t.tap(x, y)
     None => abort("no 更换")
   }
-  t.draw()
-  assert_true(t.find("新的 API key") is Some(_), msg="a new key typed in its place")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("新的 API key") is Some(_), msg="a new key asked for")
 }
 
 ///|

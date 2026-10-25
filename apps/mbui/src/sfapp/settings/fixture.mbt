@@ -700,7 +700,14 @@ fn fx_station(address : String) -> Json {
       ("online", Json::boolean(true)),
       ("link", obj([("state", str("online"))])),
       ("runtimes", []),
-      ("models", []),
+      // what its profiles have turned on (Claude 主账号's: Opus 5.5 and Sonnet 5, on claude)
+      (
+        "models",
+        [
+          obj([("model", str("claude-opus-5-5")), ("name", str("Opus 5.5")), ("family", str("Opus")), ("maker", obj([("id", str("anthropic"))])), ("runtimes", ["claude"])]),
+          obj([("model", str("claude-sonnet-5")), ("name", str("Sonnet 5")), ("family", str("Sonnet")), ("maker", obj([("id", str("anthropic"))])), ("runtimes", ["claude"])]),
+        ],
+      ),
       (
         "host",
         obj([

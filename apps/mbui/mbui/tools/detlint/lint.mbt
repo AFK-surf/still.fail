@@ -27,8 +27,12 @@ priv struct Config {
   // an app's component library (web/ui's): its packages, and what they may import (prefixes); nothing else of the app
   library : Array[String]
   library_imports : Array[String]
-  // an app's pages: where the hand (@ui.pointing()) is never read (page-hand)
+  // an app's pages: where the hand (@ui.pointing()) is never read (page-hand), nor the screen's kind (page-screen)
   pages : Array[String]
+  // what of one arrangement a page may not draw itself (page-look): names (a style's, a part's, a branch's), and the
+  // files that frame the pages and name those pieces for them (not counted)
+  one_look : Array[String]
+  page_frames : Array[String]
 }
 
 ///|
@@ -70,6 +74,8 @@ fn Config::new(d : @rjson.Value) -> Config {
     library: strs(sect(d, "library").get("roots"), []),
     library_imports: strs(sect(d, "library").get("imports"), ["mbui/", "moonbitlang/"]),
     pages: strs(sect(d, "pages").get("roots"), []),
+    one_look: strs(sect(d, "pages").get("one_look"), []),
+    page_frames: strs(sect(d, "pages").get("frames"), []),
   }
 }
 
@@ -114,6 +120,14 @@ fn lint_mbt(
     out.push(finding(rule, f.rel, toks[k].line, what))
   }
 
+  // a page drawing one arrangement's piece itself (not in its tests, nor in the files that frame the pages)
+  if under(f.rel, cfg.pages) && !under(f.rel, cfg.page_frames) && cfg.one_look.length() > 0 {
+    for k, tk in toks {
+      if tk.kind == "ident" && cfg.one_look.contains(tk.text) && !f.in_test(k) {
+        add("page-look", k, f.line_text(k))
+      }
+    }
+  }
   for c in f.calls {
     // the interfaces given up: neither defined nor called, anywhere
     if retired.contains(c.name) &&
@@ -203,6 +217,10 @@ fn lint_mbt(
     // a page reading the hand (its tests may say which hand they are)
     if c.name == "pointing" && c.kind == "pkg" && c.qual == "@ui" && !in_t && under(f.rel, cfg.pages) {
       add("page-hand", c.at, f.line_text(c.at))
+    }
+    // a page reading the screen's kind
+    if c.name == "touch_system" && c.kind == "pkg" && c.qual == "@sf" && !in_t && under(f.rel, cfg.pages) {
+      add("page-screen", c.at, f.line_text(c.at))
     }
     // a motion following what the layout measured: a place or a size moves for its cause, not because what it was
     // laid out at changed (the app's docs/motion.md)

@@ -325,13 +325,13 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> U
 /// its mark, renamed and picked by its managers; its people in one list (those in it, those added who have not signed
 /// in, the invitations out), 添加成员 at the title's end; its relays; leaving or deleting it in red, asked first.
 fn workspace_narrow(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
-  let look = Narrow
+  let look : Look = Narrow
   let t = @sf.theme()
   let topic = workspace_view(core, here)
   let v = topic.value
   let title = @sf.t("android-settings.workspace.title")
   guard v is Some(_) else {
-    look_page(c, core, frame, look, "workspace", title, [
+    look_page(c, core, frame, "workspace", title, [
       fn() {
         waiting_cards(
           c,
@@ -356,10 +356,7 @@ fn workspace_narrow(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) ->
   let blocks : Array[() -> Unit] = []
   // who the viewer is there and how many it holds
   blocks.push(fn() {
-    look_note(
-      c,
-      look,
-      @sf.t(if manager { "android-settings.workspace.aboutRename" } else { "android-settings.workspace.about" }, args=[
+    @sf.page_note(c, @sf.t(if manager { "android-settings.workspace.aboutRename" } else { "android-settings.workspace.about" }, args=[
         ("role", role_label(role)),
         ("people", @sf.t("android-settings.members.count", args=[("n", n)])),
         ("stations", @sf.t("android-settings.workspace.stations", args=[("n", items(v, "stations").length().to_string())])),
@@ -368,8 +365,8 @@ fn workspace_narrow(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) ->
   })
   // its name and its mark: renamed, picked by its managers
   blocks.push(fn() {
-    look_group(c, look, fn() {
-      if look_link(c, look, "ws-name", @sf.t("android-settings.workspace.name"), value=name, chevron=manager) && manager {
+    @sf.group(c, fn() {
+      if @sf.link_row(c, "ws-name", @sf.t("android-settings.workspace.name"), value=name, chevron=manager) && manager {
         ask(@sf.t("android-settings.workspace.name"), name, @sf.t("android-settings.workspace.namePlaceholder"), @sf.t("common.save"), fn(
           line,
         ) {
@@ -414,10 +411,7 @@ fn workspace_narrow(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) ->
   })
   // its people in one list
   blocks.push(fn() {
-    look_heading(
-      c,
-      look,
-      @sf.t("android-settings.members.title"),
+    @sf.heading(c, @sf.t("android-settings.members.title"),
       note=if waiting > 0 {
         @sf.t("android-settings.members.waiting", args=[("n", n), ("waiting", waiting.to_string())])
       } else {
@@ -426,7 +420,7 @@ fn workspace_narrow(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) ->
     )
   })
   blocks.push(fn() {
-    look_group(c, look, fn() {
+    @sf.group(c, fn() {
       for m in members {
         ws_member_narrow(c, core, here, v, m)
       }
@@ -486,10 +480,10 @@ fn workspace_narrow(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) ->
   })
   // its own relays
   if manager || relays.length() > 0 {
-    blocks.push(fn() { look_heading(c, look, @sf.t("android-settings.relays.title")) })
+    blocks.push(fn() { @sf.heading(c, @sf.t("android-settings.relays.title")) })
     blocks.push(fn() {
       let busy = is_doing(core, ["workspace.setRelays"], [("workspace", ws)])
-      look_group(c, look, fn() {
+      @sf.group(c, fn() {
         for url in relays {
           c.box(style=narrow_said_row, fn() {
             c.text(url.replace(old="https://", new="").replace(old="http://", new=""), style=narrow_row_title) |> ignore
@@ -505,7 +499,7 @@ fn workspace_narrow(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) ->
           })
           |> ignore
         }
-        if manager && look_link(c, look, "relay-add", @sf.t(if busy { "common.saving" } else { "android-settings.relays.add" }), chevron=false) && !busy {
+        if manager && @sf.link_row(c, "relay-add", @sf.t(if busy { "common.saving" } else { "android-settings.relays.add" }), chevron=false) && !busy {
           ask(
             @sf.t("android-settings.relays.add"),
             "",
@@ -526,13 +520,13 @@ fn workspace_narrow(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) ->
           )
         }
       })
-      look_note(c, look, @sf.t("android-settings.relays.lead", args=[("app", "still.fail")]))
+      @sf.page_note(c, @sf.t("android-settings.relays.lead", args=[("app", "still.fail")]))
     })
   }
   // leaving or deleting it, in red at the foot, asked first
   blocks.push(fn() {
     c.box(style=ws_narrow_foot, fn() {
-      look_group(c, look, fn() {
+      @sf.group(c, fn() {
         if ws_red_row(c, "ws-leave", @sf.t("android-settings.workspace.leaveRow")) {
           confirm(
             @sf.t("android-settings.workspace.leaveTitle", args=[("name", name)]),
@@ -573,12 +567,7 @@ fn workspace_narrow(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) ->
     })
     |> ignore
   })
-  look_page(
-    c,
-    core,
-    frame,
-    look,
-    "workspace",
+  look_page(c, core, frame, "workspace",
     name,
     blocks,
     // adding people, by email or from Slack: its managers'

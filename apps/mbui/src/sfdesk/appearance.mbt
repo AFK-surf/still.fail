@@ -12,7 +12,7 @@ fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   // a choice of a few (Segmented, Seg), its kept value or the one just chosen while the core takes it
   let choice = fn(key : String, options : Array[(String, String)], now : String) {
     let at = options.search_by(fn(o) { o.0 == now }).unwrap_or(0)
-    let picked = look_choice(c, look, "appearance/" + key, options.map(fn(o) { @sf.t(o.1) }), at)
+    let picked = @sf.page_choice(c, "appearance/" + key, options.map(fn(o) { @sf.t(o.1) }), at)
     if picked != at {
       c.after_build("appearance/" + key, fn() { @settings.set_pref(core, key, options[picked].0) })
     }
@@ -20,10 +20,10 @@ fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   // a section: its title over it; what it is for under its title (wide: the web's Section), under the choice (narrow:
   // mSegNote, where the phone's says it)
   let section = fn(title : String, note : String, narrow_note : Bool, body : () -> Unit) {
-    look_section(c, look, title, heads=true, note=if look == Wide { note } else { "" }, fn() {
+    @sf.section(c, title, heads=true, note=if look == Wide { note } else { "" }, fn() {
       body()
       if look == Narrow && narrow_note && note != "" {
-        look_note(c, look, note)
+        @sf.page_note(c, note)
       }
     })
   }
@@ -46,8 +46,8 @@ fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
         // (12 under the theme's switch, the faces' row on a card of its own: SettingsHome.kt, mobile FontRow)
         Narrow =>
           c.box(style=appearance_fonts_room, fn() {
-            look_group(c, look, fn() {
-              if look_link(c, look, "appearance/fonts", @sf.t("web-pages.appearance.fonts.title"), value=fonts_said(prefs)) {
+            @sf.group(c, fn() {
+              if @sf.link_row(c, "appearance/fonts", @sf.t("web-pages.appearance.fonts.title"), value=fonts_said(prefs)) {
                 (core.push)(Fonts)
               }
             })
@@ -91,7 +91,7 @@ fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       })
     })
   }
-  look_page(c, core, frame, look, "appearance", @sf.t("web-pages.appearance.title"), blocks)
+  look_page(c, core, frame, "appearance", @sf.t("web-pages.appearance.title"), blocks)
 }
 
 ///|
@@ -132,7 +132,7 @@ fn fonts_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
     Wide => [fn() { font_setting(c, core) }]
   }
   // (wide, what it is for under its title, as 外观's section says it; narrow, under the faces)
-  look_page(c, core, frame, look, "fonts", @sf.t("web-pages.appearance.fonts.title"), blocks, lead=if look == Wide {
+  look_page(c, core, frame, "fonts", @sf.t("web-pages.appearance.fonts.title"), blocks, lead=if look == Wide {
     @sf.t("web-pages.appearance.fonts.description")
   } else {
     ""

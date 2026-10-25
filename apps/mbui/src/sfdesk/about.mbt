@@ -14,13 +14,13 @@ fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   let blocks : Array[() -> Unit] = []
   // this build (its name and version, and the way to a newer one: pressed, installed or asked now), and what changed
   blocks.push(fn() {
-    look_section(c, look, @sf.t("web-pages.settings.nav.version"), fn() {
-      look_group(c, look, fn() {
+    @sf.section(c, heads=false, @sf.t("web-pages.settings.nav.version"), fn() {
+      @sf.group(c, fn() {
         let (words, newer) = (core.version_words)()
-        if look_link(c, look, "about/version", "still.fail mbui " + build_version(), value=words, value_lit=newer, chevron=false) {
+        if @sf.link_row(c, "about/version", "still.fail mbui " + build_version(), value=words, value_lit=newer, chevron=false) {
           (core.version_tap)()
         }
-        if look_link(c, look, "about/changelog", @sf.t("web-pages.settings.nav.changelog")) {
+        if @sf.link_row(c, "about/changelog", @sf.t("web-pages.settings.nav.changelog")) {
           (core.push)(Changelog)
         }
       })
@@ -30,12 +30,9 @@ fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   match (core.reporting)() {
     Some(on) =>
       blocks.push(fn() {
-        look_section(c, look, @sf.t("web-pages.about.privacy"), fn() {
-          look_group(c, look, card=true, fn() {
-            let now = look_switch(
-              c,
-              look,
-              "about/reporting",
+        @sf.section(c, heads=false, @sf.t("web-pages.about.privacy"), fn() {
+          @sf.group(c, card=true, fn() {
+            let now = @sf.switch_row(c, "about/reporting",
               @sf.t("common.telemetry.title"),
               on,
               note=@sf.t("common.telemetry.note", args=[("name", "still.fail")]),
@@ -50,17 +47,17 @@ fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   }
   // on still.fail's site, in the browser
   blocks.push(fn() {
-    look_section(c, look, @sf.t("web-pages.about.legal"), fn() {
-      look_group(c, look, fn() {
+    @sf.section(c, heads=false, @sf.t("web-pages.about.legal"), fn() {
+      @sf.group(c, fn() {
         for l in [("terms", "common.legal.terms"), ("privacy", "common.legal.privacy")] {
-          if look_link(c, look, "about/" + l.0, @sf.t(l.1), out=true) {
+          if @sf.link_row(c, "about/" + l.0, @sf.t(l.1), out=true) {
             (core.open_link)(@settings.legal_url(l.0))
           }
         }
       })
     })
   })
-  look_page(c, core, frame, look, "about", @sf.t("web-pages.settings.nav.about"), blocks)
+  look_page(c, core, frame, "about", @sf.t("web-pages.settings.nav.about"), blocks)
 }
 
 ///|
@@ -148,9 +145,9 @@ fn changelog_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       match look {
         // the day's heading, its changes on a card under it
         Narrow => {
-          blocks.push(fn() { look_heading(c, look, text(Some(day), "label")) })
+          blocks.push(fn() { @sf.heading(c, text(Some(day), "label")) })
           blocks.push(fn() {
-            look_group(c, look, fn() {
+            @sf.group(c, fn() {
               for e in items(Some(day), "entries") {
                 change_narrow(c, Some(e))
               }
@@ -171,12 +168,7 @@ fn changelog_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       }
     }
   }
-  look_page(
-    c,
-    core,
-    frame,
-    look,
-    "changelog/" + at.to_string(),
+  look_page(c, core, frame, "changelog/" + at.to_string(),
     @sf.t("web-pages.settings.nav.changelog"),
     lead=if has(v, "build") && !(field(v, "build") is Some(Null)) {
       @sf.t("web-pages.changelog.build", args=[("build", count(v, "build").to_string())])

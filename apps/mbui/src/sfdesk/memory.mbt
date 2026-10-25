@@ -28,15 +28,15 @@ fn memories_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Un
           )
           return
         }
-        look_group(c, look, fn() {
+        @sf.group(c, fn() {
           for s in stations {
             let sv = Some(s)
             if flag(sv, "online") {
-              if look_link(c, look, "memory/" + text(sv, "station"), text(sv, "name"), value=@sf.t("android-misc.memory.row")) {
+              if @sf.link_row(c, "memory/" + text(sv, "station"), text(sv, "name"), value=@sf.t("android-misc.memory.row")) {
                 (core.push)(Memory(text(sv, "station")))
               }
             } else {
-              look_said_row(c, look, text(sv, "name"), @sf.t("web-pages.settings.memory.offline"))
+              @sf.said_row(c, text(sv, "name"), @sf.t("web-pages.settings.memory.offline"))
             }
           }
         })
@@ -63,12 +63,7 @@ fn memories_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Un
       }
     }
   }
-  look_page(
-    c,
-    core,
-    frame,
-    look,
-    "memories",
+  look_page(c, core, frame, "memories",
     @sf.t("web-pages.settings.memory.title"),
     body,
     about=@sf.t("web-pages.settings.memory.lead"),
@@ -90,7 +85,7 @@ fn memory_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address
       name = text(Some(s), "name")
     }
   }
-  look_page(c, core, frame, look, "memory/" + address, name, about=@sf.t("web-pages.settings.memory.lead"), [
+  look_page(c, core, frame, "memory/" + address, name, about=@sf.t("web-pages.settings.memory.lead"), [
     fn() { memory_view(c, core, look, address, station_names(stations)) },
   ])
 }
@@ -142,11 +137,11 @@ fn memory_view(c : @ui.Ctx, core : Core, look : Look, address : String, names : 
     }
   }
   let global_said = join([@sf.t("web-main.memory.global.when"), text(field(m, "global"), "size")], " · ")
-  look_section(c, look, @sf.t("web-main.memory.global"), heads=true, note=global_said, fn() {
+  @sf.section(c, @sf.t("web-main.memory.global"), heads=true, note=global_said, fn() {
     if sections.length() == 0 {
       none(@sf.t("web-main.memory.empty"))
     } else {
-      look_group(c, look, fn() {
+      @sf.group(c, fn() {
         for i, p in sections {
           if memory_row(c, look, "memory/" + address + "/part/" + i.to_string(), p.0, "", p.2) {
             (core.push)(MemoryDoc(address, "", i))
@@ -155,11 +150,11 @@ fn memory_view(c : @ui.Ctx, core : Core, look : Look, address : String, names : 
       })
     }
   })
-  look_section(c, look, @sf.t("web-main.memory.projects"), heads=true, note=@sf.t("web-main.memory.projects.when"), fn() {
+  @sf.section(c, @sf.t("web-main.memory.projects"), heads=true, note=@sf.t("web-main.memory.projects.when"), fn() {
     if projects.length() == 0 {
       none(@sf.t("web-main.memory.projects.none"))
     } else {
-      look_group(c, look, fn() {
+      @sf.group(c, fn() {
         for k in projects {
           skill_row(k)
         }
@@ -167,8 +162,8 @@ fn memory_view(c : @ui.Ctx, core : Core, look : Look, address : String, names : 
     }
   })
   if others.length() + builtin.length() > 0 {
-    look_section(c, look, @sf.t("web-main.memory.others"), heads=true, fn() {
-      look_group(c, look, fn() {
+    @sf.section(c, @sf.t("web-main.memory.others"), heads=true, fn() {
+      @sf.group(c, fn() {
         for k in others {
           skill_row(k)
         }
