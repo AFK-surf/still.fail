@@ -217,13 +217,28 @@ final class NativeViews {
             });
         }
 
+        /** (main thread) How many parts of it its frame has been since its first (a tall page's, Page.moved). */
+        int partsShown;
+
+        /**
+         * A new part of it its frame is (main thread): a picture of that part said once it is on the display (VIEWDRAWN
+         * id part n).
+         */
+        void drawnAgain() {
+            partsShown++;
+            drawnSaid = false;
+            drawnWhenBoth();
+        }
+
         /**
          * Once placed and done: the canvas's frame with a picture of it from then (a page's drawn again now; a video's
-         * the frame it shows) said once it is on the display (VIEWDRAWN id, Picture.latch), once.
+         * the frame it shows) said once it is on the display (VIEWDRAWN id, Picture.latch), once (a tall page's, once
+         * for each part of it its frame is).
          */
         void drawnWhenBoth() {
             if (!placedOnce || !doneOnce || drawnSaid || clip == null || closed || picture == null) return;
             drawnSaid = true;
+            picture.sayPart = partsShown;
             if (kind == 1) {
                 picture.sayAfter = Long.MIN_VALUE;
             } else {
@@ -890,6 +905,8 @@ final class NativeViews {
          * showing it said on the display (VIEWDRAWN; Long.MAX_VALUE: not asked); the time it was latched at.
          */
         volatile long sayAfter = Long.MAX_VALUE;
+        /** The part of it (NView.partsShown) the frame said shows: 0, its first. */
+        volatile int sayPart;
         private long stamp;
         /**
          * The part of its content each frame sent was (TouchFrame.draw), with when it was sent (System.nanoTime, before
@@ -990,10 +1007,12 @@ final class NativeViews {
             long say = sayAfter;
             if (say != Long.MAX_VALUE && tex != 0 && stamp >= say) {
                 sayAfter = Long.MAX_VALUE;
+                int n = sayPart;
+                String said = "VIEWDRAWN " + id + (n > 0 ? " part " + n : "");
                 // drawn as this frame, swapped as it ends, taken by the compositor at the next vsync, shown by the one
                 // after (MBView's SHOT)
                 Host.main.post(() -> Choreographer.getInstance().postFrameCallback(f ->
-                        Choreographer.getInstance().postFrameCallback(g -> Host.log("VIEWDRAWN " + id))));
+                        Choreographer.getInstance().postFrameCallback(g -> Host.log(said))));
             }
         }
 
@@ -1988,12 +2007,13 @@ final class NativeViews {
      * A page, its WebView as large as its frame. One taller than its picture can be (partMost; a page placed in a
      * message is as tall as its content: a catalogue of icons twenty screens and 50,000 pixels tall, past the 16,384
      * a phone's GPU takes, had no picture at all) is drawn a part of it at a time: its frame and its WebView that part,
-     * the WebView scrolled to it, moved on as what is seen of the page nears the part's edge (partOf). Each picture says
-     * which part of the page it is (drawnPart), and the canvas draws it there and nothing of the page outside it.
+     * the page scrolled to it (scrollToPart), moved on as what is seen of the page nears the part's edge (partOf). Each
+     * picture says which part of the page it is (drawnPart), and the canvas draws it there and nothing of the page
+     * outside it.
      */
     static final class Page extends NView {
         final String html;
-        /** (main thread) The top of the part of it its frame is, its WebView scrolled to (pixels); -1: all of it. */
+        /** (main thread) The top of the part of it its frame is, its page scrolled to (pixels); -1: all of it. */
         int partTop = -1;
 
         Page(int id, String html) {
@@ -2039,16 +2059,24 @@ final class NativeViews {
         float[] drawnPart(int h) {
             float full = at[3];
             if (partTop < 0 || web == null || full <= 0) return WHOLE;
-            // (the part its WebView is scrolled to now, whatever the part asked: scrolled elsewhere (by a finger, by the
-            // page), or not to it yet (the page not laid out at its new size), it is asked again)
+            // (the part the page is scrolled to now, which the WebView's scroll mirrors, whatever the part asked: not
+            // there yet (the page not loaded, or not that tall yet), or scrolled elsewhere (by a finger, by the page),
+            // it is asked again)
             int top = web.getScrollY();
-            if (top != partTop) web.post(this::scrollToPart);
+            if (!atPart(top)) web.post(this::scrollToPart);
+            if (drawLog()) Host.log("VIEWPIC " + id + " scrolled " + top + " part " + partTop + " tall " + h + " of " + full + " page "
+                    + Math.round(web.getContentHeight() * Host.view.density));
             return new float[] {top / full, h / full};
         }
 
         @Override
         boolean partDrawn() {
-            return partTop < 0 || web == null || web.getScrollY() == partTop;
+            return partTop < 0 || web == null || atPart(web.getScrollY());
+        }
+
+        /** Whether the page is scrolled to the part its frame is, but for the rounding of its CSS pixels (main thread). */
+        private boolean atPart(int top) {
+            return Math.abs(top - partTop) <= 1;
         }
 
         @Override
@@ -2056,18 +2084,29 @@ final class NativeViews {
             if (web == null) return;
             boolean part = at[10] < at[3] - 0.5f;
             boolean was = partTop >= 0;
-            partTop = part ? Math.round(at[9]) : -1;
+            int top = part ? Math.round(at[9]) : -1;
+            boolean moves = top != partTop;
+            partTop = top;
             if (part != was) {
                 web.setVerticalScrollBarEnabled(!part);
-                if (!part) web.scrollTo(0, 0);
+                if (!part) script(SCROLL_TOP.replace("$", "0"));
             }
             scrollToPart();
+            if (moves && part) drawnAgain();
         }
 
-        /** Its WebView scrolled to the part its frame is (main thread). */
+        /**
+         * The page scrolled to the part its frame is, by its own script (main thread). A page's own scroll: the WebView's
+         * (WebView.scrollTo) is a user's, which a page whose root does not scroll takes nothing of (as a viz's does not:
+         * ember-viz.css, overflow: hidden), and a picture of its top said to be a part of it far down (0.1.5309).
+         */
         void scrollToPart() {
-            if (web != null && partTop >= 0 && web.getScrollY() != partTop) web.scrollTo(0, partTop);
+            if (web == null || partTop < 0 || atPart(web.getScrollY())) return;
+            script(SCROLL_TOP.replace("$", Float.toString(partTop / Host.view.density)));
         }
+
+        /** The page's script to scroll its root to `$` (CSS pixels) at once, whatever its scroll-behavior. */
+        static final String SCROLL_TOP = "try{scrollTo({top:$,behavior:'instant'})}catch(e){scrollTo(0,$)}";
 
         @SuppressLint("SetJavaScriptEnabled")
         @Override

@@ -9,6 +9,8 @@ fn reset() -> Unit {
   view_check_placed.val = false
   view_check_page.val = None
   view_check_tall.val = None
+  view_check_grow.val = None
+  view_check_grown.val = false
   site_check_view.val = None
   site_check_page.val = None
   site_check_events.val = None
