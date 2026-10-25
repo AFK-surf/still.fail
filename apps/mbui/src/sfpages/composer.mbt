@@ -501,17 +501,14 @@ fn attach(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files 
     }
   }
   ignore(spec)
-  // (a finger's reach round it, the theme's: @sf.round_reach)
-  let b = c.box(style=@sf.round_reach(), id~, fn() {
-    c.box(style=if hot { @sf.round_face().then(round_hot) } else { @sf.round_face() }, fn() {
-      @sf.icon(c, "plus", size=plus_icon, color=if no_files {
-        @sf.alpha(p.text, faint)
-      } else if hot {
-        p.text
-      } else {
-        p.muted
-      })
-      |> ignore
+  // (a finger reaches it from round it, the system's least target: @ui's finger_reach)
+  let b = c.box(style=if hot { @sf.round_face().then(round_hot) } else { @sf.round_face() }, id~, fn() {
+    @sf.icon(c, "plus", size=plus_icon, color=if no_files {
+      @sf.alpha(p.text, faint)
+    } else if hot {
+      p.text
+    } else {
+      p.muted
     })
     |> ignore
   })
@@ -549,15 +546,12 @@ fn send_button(c : @ui.Ctx, ready : Bool, starting : Bool, submit : () -> Unit) 
   } else {
     @sf.over(p.raised, @sf.alpha(p.text, send_off))
   }
-  let b = c.box(style=@sf.round_reach(), id~, fn() {
-    c.box(style=@sf.round_face().then(@ui.style(bg=Data(ground))), fn() {
-      if starting {
-        @sf.spinner(c, size=@sf.theme().round.glyph) |> ignore
-      } else {
-        @sf.icon(c, "arrow-up", size=@sf.theme().round.glyph, color=if ready { p.canvas } else { p.raised }) |> ignore
-      }
-    })
-    |> ignore
+  let b = c.box(style=@sf.round_face().then(@ui.style(bg=Data(ground))), id~, fn() {
+    if starting {
+      @sf.spinner(c, size=@sf.theme().round.glyph) |> ignore
+    } else {
+      @sf.icon(c, "arrow-up", size=@sf.theme().round.glyph, color=if ready { p.canvas } else { p.raised }) |> ignore
+    }
   })
   c.semantics(b, Button, id~, label=@sf.t("web-main.composer.send"), disabled=!ready)
   b

@@ -88,10 +88,10 @@ pub(all) struct Type {
 
 ///|
 /// A round control standing in a field's capsule (the composer's ＋ and send: mPlus, mSend; attachBtn, sendBtn): how
-/// wide it shows, how far round it a press takes it (a finger's: 44 at least), its glyph's size.
+/// wide it shows and its glyph's size (a finger reaches it from round it as it reaches any target smaller than the
+/// system's least: @ui's finger_reach).
 pub(all) struct Round {
   side : Double
-  reach : Double
   glyph : Double
 }
 
@@ -798,29 +798,15 @@ let narrow_type : Type = {
 }
 
 ///|
-/// The computer's round controls (attachBtn, sendBtn: 32, the arrow 16), pressed where they show.
-let wide_round : Round = { side: 32.0, reach: 32.0, glyph: 16.0 }
+/// The computer's round controls (attachBtn, sendBtn: 32, the arrow 16).
+let wide_round : Round = { side: 32.0, glyph: 16.0 }
 
 ///|
-/// The phone's (mPlus, mSend: 36, both glyphs 18), a finger's reach 44 round them.
-let narrow_round : Round = { side: 36.0, reach: 44.0, glyph: 18.0 }
+/// The phone's (mPlus, mSend: 36, both glyphs 18).
+let narrow_round : Round = { side: 36.0, glyph: 18.0 }
 
 ///|
-/// A round control's press: `reach` across, over its own `side` (what it takes of the layout: past it by a margin
-/// below 0 each way), what shows in its middle.
-pub fn round_reach() -> @ui.Style {
-  let r = theme().round
-  @ui.style(
-    w=Fixed(r.reach),
-    h=Fixed(r.reach),
-    m=room(-(r.reach - r.side) / 2.0),
-    align=ACenter,
-    justify=JCenter,
-  )
-}
-
-///|
-/// What shows of it: `side` round.
+/// It: `side` round, what it shows in its middle.
 pub fn round_face() -> @ui.Style {
   let r = theme().round
   @ui.style(w=Fixed(r.side), h=Fixed(r.side), radius=InnerOr(Full), align=ACenter, justify=JCenter)
