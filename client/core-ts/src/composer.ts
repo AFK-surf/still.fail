@@ -712,7 +712,7 @@ export class Composers {
   }
 
   /// A new chat's file up, or going up, to another station than `station`: sent up there again from what it was read
-  /// from, what went before taking no part (a file of the first station's drive read from there).
+  /// from (one of the first station's drive, read from there).
   #again(f: ComposerFile, station: string): ComposerFile {
     const kept = this.#sources.get(f.id);
     const upload = this.#uploads.get(f.id);
