@@ -59,6 +59,12 @@ fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
+/// 待处理's panel open (a screen's fixture).
+pub fn open_attention() -> Unit {
+  wide.attention_open = true
+}
+
+///|
 /// The panel 300 wide (Attention.css.ts panel: its trigger's width, 300 at least), 10 past the rail's bell, 6 under
 /// 待处理.
 let attention_w : Double = 300.0
@@ -371,13 +377,18 @@ let att_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg,
 let att_line : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L4_75, wrap=false)
 
 ///|
-/// 忽略 (dismiss): a small pill, 1 by 6 in, 12, muted; in ink on the pointer's ground pointed at.
+/// 忽略 (dismiss): a small pill, 1 by 6 in, 12, muted; in ink on the pointer's ground pointed at. Shown only under
+/// the pointer, it makes the row no taller (its words' line 19, the pill 21, the title's 20): its ground reaches the
+/// 1 over and under past them (align.mbt bleed_y).
 // kept across runs: a value (no field of it changes)
-let att_dismiss : @ui.Style = @ui.css("px=S1_5 py=SPx radius=Full")
+let att_dismiss : @ui.Style = @ui.css("px=S1_5 radius=Full").then(@sf.bleed_y(att_dismiss_bleed))
+
+///|
+let att_dismiss_bleed : Double = 1.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let att_dismiss_on : @ui.Style = @ui.css("px=S1_5 py=SPx radius=Full bg=Hover")
+let att_dismiss_on : @ui.Style = att_dismiss.then(@ui.css("bg=Hover"))
 
 ///|
 // kept across runs: a value (no field of it changes)

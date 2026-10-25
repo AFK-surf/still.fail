@@ -727,12 +727,15 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
     "job" | "previewLoad" => fixture_service_topic(f, name, params)
     "shareIn" => fixture_share_topic(params)
     "imageNear" => fixture_image_near(params)
+    // (待处理 open, MBA offline: decide_fixture.mbt)
+    "chats" if f.mode == "home-attention" => fixture_chats(f, params).map(fn(v) { fix_with_trouble(v, params) })
     "chats" => fixture_chats(f, params)
     "search" => fixture_search(f, params)
     // the archive's chats (the settings' made-up ones): the wide frame's sidebar lists them
     "archive" => @settings.fixture_topic(f.mode, name, params)
     // (the web's demo has none)
     "workspaceMarks" if f.mode == "webdemo" => Some({ "workspaces": { "ws1": {} } })
+    "workspaceMarks" if f.mode == "home-attention" => Some(fix_attention_marks())
     "workspaceMarks" =>
       Some({
         "workspaces": {

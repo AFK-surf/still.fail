@@ -10,7 +10,8 @@
 // 任务), "chat-model-pop" (its agent's model control's panel
 // open), "chat-find" (⌘F's bar, a word typed in it), "chat-agent-card" (the chat, its agent's details and card read:
 // what its card over its picture says); "home-jobs"
-// (Home with the jobs left up a long while at its top); "history-link" (Home, the history there for a link to open at
+// (Home with the jobs left up a long while at its top); "home-attention" (the wide frame's 待处理 open: a decision to let
+// go, a failure looked at, a station offline); "history-link" (Home, the history there for a link to open at
 // an entry: what apps/android's MbuiCompareTest pictures beside it). Every word here is made up.
 
 ///|
@@ -21,7 +22,7 @@ fn decide_mode(mode : String) -> Bool {
     "chat-info", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
     "chat-letters-info", "chat-letters", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
     "chat-jobs-side", "chat-history-side", "chat-tabs-side", "chat-model-pop", "chat-find", "chat-agent-card",
-    "chat-station-tag",
+    "chat-station-tag", "home-attention",
   ].contains(mode)
 }
 
@@ -659,6 +660,7 @@ pub fn open_fixture(mode : String) -> Unit {
     // the wide frame's (wide_panel.mbt): the chat's "…" open, its services' popover, what is opened beside it
     "chat-letters-pop" => @sfdesk.open_info_pop()
     "chat-jobs-pop" => @sfdesk.open_jobs_pop()
+    "home-attention" => @sfdesk.open_attention()
     // (what is beside it: the made-up core keeps it so, fixture.mbt fixture_chat_tabs)
     "chat-letters-side" => {
       dui.letters_open = ""
@@ -695,6 +697,55 @@ fn fix_with_letters(v : Json) -> Json {
     Object(m) => {
       let o = m.copy()
       o["letters"] = Json::number(4.0)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// What wants the viewer in 待处理 (home-attention: the core's `workspaceMarks`): a decision waiting in 整理发布清单,
+/// to be let go, and a failure in another chat, looked at.
+fn fix_attention_marks() -> Json {
+  let item = fn(kind : String, title : String, what : String, station : String, name : String, thread : Double) {
+    let m : Map[String, Json] = {
+      "kind": Json::string(kind),
+      "title": Json::string(title),
+      "what": Json::string(what),
+      "station": Json::string(station),
+      "stationName": Json::string(name),
+      "thread": Json::number(thread),
+      "workspaceName": "家里",
+    }
+    m
+  }
+  let wait = item("wait", "整理发布清单", "选一个发布的时间", "ws1/st1", "Studio", 7.0)
+  wait["session"] = Json::string("s-c1")
+  wait["seq"] = Json::number(12.0)
+  let failed = item("alert", "夜里的备份", "备份没有跑完", "ws1/st2", "MBA", 9.0)
+  failed["seen"] = Json::boolean(true)
+  {
+    "workspaces": {
+      "ws1": {
+        "alert": 1,
+        "wait": 1,
+        "tone": "alert",
+        "items": [Json::object(wait), Json::object(failed)],
+      },
+    },
+    "others": "done",
+    "badge": 1,
+    "badgeKinds": { "on": true, "wait": true, "failed": true, "done": false, "message": false },
+  }
+}
+
+///|
+/// The chats' view of `ws1` with its stations' trouble (home-attention: MBA offline).
+fn fix_with_trouble(v : Json, params : Map[String, Json]) -> Json {
+  match (v, params.get("scope")) {
+    (Object(m), Some(String("ws1"))) => {
+      let o = m.copy()
+      o["trouble"] = { "text": "MBA 离线" }
       Json::object(o)
     }
     _ => v

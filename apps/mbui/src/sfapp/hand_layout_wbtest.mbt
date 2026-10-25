@@ -26,6 +26,39 @@ let hand_modes : Array[String] = [
 let hand_known : Array[String] = []
 
 ///|
+/// 待处理 open from the rail's bell over the wide frame, in a Windows window, every row lit and its 忽略 shown, each as
+/// tall as at rest (the user, 2026-10-26: 「待处理里某个 station 离线也是」「好像是 hover 让高度变化了」: 忽略 a point
+/// taller than the row's line). The corners' check holds every screen so (Tester::hand_moves); 待处理 open is none of
+/// its screens: in its Mac windows, no window buttons in their top row, the bell lit with its panel open stands off
+/// the window's corner (to be stood right apart from this). A Windows window's corner is too square to follow.
+test "the hand grows no row of 待处理: a station offline and a decision to let go, 忽略 shown, as tall as at rest" {
+  let src : Ref[Source?] = Ref(None)
+  let t = @ui.Tester::new(
+    fn(c) {
+      let s = match src.val {
+        Some(s) => s
+        None => {
+          let s = fixture_app("home-attention")
+          src.val = Some(s)
+          s
+        }
+      }
+      view(c, s)
+    },
+    w=1280.0,
+    h=800.0,
+    platform=3,
+    window_corner=test_window_corner(3),
+    env=[("MBUI_REDUCE_MOTION", "1")],
+  )
+  t.run_for(squeeze_opening)
+  t.frame()
+  assert_true(t.find("MBA 离线") is Some(_))
+  assert_true(t.find("选一个发布的时间") is Some(_))
+  assert_eq(t.hand_moves(), [])
+}
+
+///|
 /// Page `mode` in window `win`, pointed at by `hand`, as laid out once it has opened.
 fn hand_layout(mode : String, win : (String, Double, Double, Int), hand : @ui.Pointing) -> String {
   let (_, w, h, platform) = win

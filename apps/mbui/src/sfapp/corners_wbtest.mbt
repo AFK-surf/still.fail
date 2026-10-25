@@ -74,6 +74,7 @@ let corner_modes : Array[String] = [
 fn corners_check(lang : String) -> Unit raise {
   let wrong : Array[String] = []
   let gaps : Array[String] = []
+  let moves : Array[String] = []
   for win in corner_windows {
     let squeezed = squeeze_windows.contains(win.0)
     for mode in corner_modes {
@@ -99,6 +100,11 @@ fn corners_check(lang : String) -> Unit raise {
           faults.push(f)
         }
       }
+      // and with every thing the hand lights lit at once, and all it shows shown: none another size, none moved, no
+      // words otherwise (the hand changes a thing's ground and ink alone: Tester::hand_moves)
+      for f in t.hand_moves() {
+        moves.push("\{at}: \{f}")
+      }
       let known = corners_everywhere_known.get(at).unwrap_or(0)
       if faults.length() != known {
         wrong.push(
@@ -120,6 +126,14 @@ fn corners_check(lang : String) -> Unit raise {
   match gaps_wrong(lang, gaps) {
     Some(w) => wrong.push(w)
     None => ()
+  }
+  if moves.length() > 0 {
+    wrong.push(
+      "\{moves.length()} things the hand changes the size or place of, or the words' look (its hot style another than " +
+      "its rest one's ink: say it as the rest one's .then(@ui.text_style(color=…)); what shows under it kept to the " +
+      "room of what it is in):\n  " +
+      moves.join("\n  "),
+    )
   }
   if wrong.length() > 0 {
     fail(wrong.join("\n"))

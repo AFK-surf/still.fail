@@ -1900,7 +1900,7 @@ let desk_back_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, colo
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_back_lit : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, wrap=false)
+let desk_back_lit : @ui.TextStyle = desk_back_words.then(@ui.text_style(color=Fg))
 
 ///|
 /// A block's lane across the pane, its column in the middle: 792 at most, 24 from the pane's sides at least (its blocks'
