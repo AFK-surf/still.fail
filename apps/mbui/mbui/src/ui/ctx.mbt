@@ -1191,6 +1191,8 @@ pub fn Ctx::spacer(self : Ctx) -> Unit {
 /// Compose sets words in a TextStyle of their own; else as a theme's words: set_line).
 /// `keep`: words cut short (`w=Cut`) in a row that may leave a part of it out (Ctx::box `drop`) kept whole till all
 /// it may leave has left, cut only then (a way's last folder, its name before the folders over it).
+/// Words that do not wrap are one line: their line breaks shown as spaces (CSS's white-space: nowrap), unless
+/// `breaks` keeps them, each line as it is (code shown as written, in what scrolls sideways: CSS's pre).
 pub fn Ctx::text(
   self : Ctx,
   s : String,
@@ -1207,20 +1209,28 @@ pub fn Ctx::text(
   max_lines? : Int,
   tabular? : Bool,
   keep? : Bool = false,
+  breaks? : Bool = false,
 ) -> Int {
   let st = self.text_patch(style)
   let (s_size, s_line) = self.text_sizes(st)
   let i = self.alloc_part(kind_text, true, false)
   let n = self.nodes[i]
   n.center = first(center, st.center).unwrap_or(false)
-  n.text = s
+  n.wrap = first(wrap, st.wrap).unwrap_or(true)
+  n.text = if n.wrap || breaks || !has_nl(s) {
+    s
+  } else {
+    match one_line([s]) {
+      Some(t) => t[0]
+      None => s
+    }
+  }
   // (sizes as the original's sp: the system's size of words applied, fontscale.mbt)
   n.font_size = self.sp(first(size, s_size).unwrap_or(15.0))
   n.line_h = first(line, s_line).map(fn(l) { self.sp(l) }).unwrap_or(self.theme.text_line * n.font_size)
   n.line_trim = trim
   n.weight = first(weight, opt_weight(st.weight)).unwrap_or(400)
   n.color = first(color, opt_color(self.theme, st.color)).unwrap_or(self.theme.fg)
-  n.wrap = first(wrap, st.wrap).unwrap_or(true)
   n.w = first(w, opt_size(st.w)).unwrap_or(Auto)
   n.spacing = match (tracking, st.tracking) {
     (Some(v), _) => self.sp(v)

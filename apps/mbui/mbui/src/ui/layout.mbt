@@ -105,6 +105,30 @@ fn cut_to_lines(n : Node, tl : TextLayout, w : Double) -> TextLayout {
 }
 
 ///|
+/// Whether a node is words on one line (Ctx::text's or Ctx::rich's, `wrap` false): never laid wider than a column they
+/// are in, as wide as they are in a row unless they say otherwise (docs/style.md, Short of room).
+fn Node::one_line_words(self : Node) -> Bool {
+  (self.kind == kind_text || self.kind == kind_rich) && !self.wrap
+}
+
+///|
+/// How wide words on one line are, all of them.
+fn Node::one_line_w(self : Node) -> Double {
+  if self.kind == kind_rich {
+    // (as it was laid out, cut or not: laid out again only for other runs)
+    if rich_same(self.rl_for, self.rich) && !self.rl_whole.is_nan() {
+      return self.rl_whole
+    }
+    match self.rich_layout(1.0e9) {
+      Some(rl) => rl.w
+      None => 0.0
+    }
+  } else {
+    self.text_layout(1.0e9).w
+  }
+}
+
+///|
 /// Whether lines ending at `line_end` (clusters, whose first code units are `cu`) were broken where the width ran out,
 /// not only at the words' own new lines.
 fn soft_wrapped(line_end : Array[Int], cu : Array[Int]) -> Bool {
@@ -362,8 +386,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   // ellipsis where it is narrower, whatever the column's alignment; as CSS's block with its overflow hidden. A max said
   // as well is that where the column has the room and the column's where it has less, CSS's min(100%, 560px): a card
   // as wide as its words up to 560 is not 560 in a column of 360)
-  let capped = pdir == 2 &&
-    (n.w is Cut || (n.kind == kind_text && !n.wrap && !(n.w is Px(_))))
+  let capped = pdir == 2 && (n.w is Cut || (n.one_line_words() && !(n.w is Px(_))))
   if capped {
     let (k, v) = if has_max_w { (@flex.LEN_WITHIN, max_w) } else { (@flex.LEN_PCT, 100.0) }
     if s.max_width_kind() != k || s.max_width_value() != v {
@@ -744,9 +767,9 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
           }
           dmax(row, widest_held) + pad_l + pad_r
         }
-      } else if k == kind_text && pdir == 1 && !n.wrap {
+      } else if pdir == 1 && n.one_line_words() {
         // (in a row; in a column, cut to the column's width)
-        n.text_layout(1.0e9).w + pad_l + pad_r
+        n.one_line_w() + pad_l + pad_r
       } else {
         0.0
       }
@@ -763,8 +786,8 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   // what its row's fit (Ctx::box drop) keeps of it before a part of the row leaves: words cut short four of their size
   // (all of them, fewer; all of them said to be kept: Ctx::text `keep`), what holds them as it holds them; else its
   // least
-  let mut fit_least = if k == kind_text && n.w is Cut && !n.wrap {
-    let whole = n.text_layout(1.0e9).w
+  let mut fit_least = if n.w is Cut && n.one_line_words() {
+    let whole = n.one_line_w()
     (if n.keep { whole } else { dmin(whole, cut_kept_ems * n.font_size) }) + pad_l + pad_r
   } else if k == kind_box && (n.w is Auto || (n.w is Fill(_) && n.keep)) && !(n.clip || n.sideways) {
     let row = if more_need >= 0.0 && droppable {

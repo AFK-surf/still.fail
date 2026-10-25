@@ -180,3 +180,69 @@ test "a row leaves out what it may before words cut short in it go under four of
   assert_eq(laid_box(d).4, 0.0)
   assert_eq(g().nodes[i].fw, 100.0)
 }
+
+///|
+test "one_line: a line break with the spaces round it one space, none at the ends, across runs; none where no break" {
+  assert_eq(one_line(["a  b", "c "]), None)
+  assert_eq(one_line(["\n a \n\t b \n"]), Some(["a b"]))
+  assert_eq(one_line(["ab \n", "\n cd"]), Some(["ab ", "cd"]))
+  assert_eq(one_line(["a\r\nb"]), Some(["a b"]))
+  assert_eq(one_line(["x", "\n", "y"]), Some(["x", " ", "y"]))
+}
+
+///|
+test "words on one line hold their row alike, plain or in runs: as wide as they are, what is beside them gives way" {
+  let ids : Map[Bool, Int] = {}
+  let t = Tester::new(
+    fn(c) {
+      for rich in [false, true] {
+        let id = c.id("held/\{rich}")
+        ids[rich] = id
+        c.box(dir=Row, w=Px(100.0), h=Px(20.0), fn() {
+          c.box(dir=Row, id~, taps=false, fn() {
+            let words = "words much longer than the row"
+            if rich {
+              c.rich([plain(words)], size=10.0, wrap=false) |> ignore
+            } else {
+              c.text(words, size=10.0, wrap=false) |> ignore
+            }
+          })
+          |> ignore
+          c.box(w=Fill(1.0), h=Px(20.0), fn() {  }) |> ignore
+        })
+        |> ignore
+      }
+    },
+    w=400.0,
+    h=100.0,
+  )
+  t.draw()
+  let (_, _, plain_w, _, _) = laid_box(ids[false])
+  let (_, _, rich_w, _, _) = laid_box(ids[true])
+  assert_true(plain_w > 100.0, msg="\{plain_w}")
+  assert_eq(rich_w, plain_w)
+}
+
+///|
+test "squeeze_faults: words on one line cut to nothing, plain or in runs" {
+  let t = Tester::new(
+    fn(c) {
+      c.box(dir=Row, w=Px(30.0), h=Px(20.0), fn() {
+        c.text("plain words", size=10.0, wrap=false, w=Cut) |> ignore
+        c.box(w=Px(28.0), h=Px(20.0), fn() {  }) |> ignore
+      })
+      |> ignore
+      c.box(dir=Row, w=Px(30.0), h=Px(20.0), fn() {
+        c.rich([plain("words in runs")], size=10.0, wrap=false, w=Cut) |> ignore
+        c.box(w=Px(28.0), h=Px(20.0), fn() {  }) |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=100.0,
+  )
+  t.draw()
+  let faults = t.squeeze_faults()
+  assert_eq(faults.length(), 2, msg=faults.join("\n"))
+  assert_true(faults.iter().all(fn(f) { f.contains("cut to 0 characters") }), msg=faults.join("\n"))
+}

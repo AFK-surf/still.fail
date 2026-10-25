@@ -700,8 +700,9 @@ fn RichLayout::pieces(self : RichLayout, k : Int) -> Array[(Int, Int, Int)] {
 /// from another paragraph's with the same words. `tracking`: letter spacing in pixels, in every run (a style's
 /// `Tracking` in ems of `size`). `max_lines`: wrapped words cut after that many lines, ending in an ellipsis in the
 /// style of the run it follows (as Ctx::text's, Android's maxLines with TextOverflow.Ellipsis); on one line (`wrap`
-/// false), cut so where it is laid narrower than it is (`w` Cut in a row with less room, a share, a width said), as
-/// Ctx::text's words are; in what scrolls sideways it is as wide as it is, never cut. `words`: what people
+/// false), as Ctx::text's words are: never wider than a column it is in, cut so where it is laid narrower than it is
+/// (`w` Cut in a row with less room, a share, a width said), its line breaks spaces unless `breaks` keeps them (code
+/// shown as written); in what scrolls sideways it is as wide as it is, never cut. `words`: what people
 /// and agents wrote (a message, a composer's words), set in the face given for them (faces.mbt, @hostapi.face_text) where
 /// there is one. `face`: every run in that face (4 to 15, face_add), where it is given (a face shown in itself).
 /// `tabular`: digits all one width (as Ctx::text's; where unsaid, the theme's for the app's own words, none for what
@@ -730,6 +731,7 @@ pub fn Ctx::rich(
   words? : Bool = false,
   face? : Int = 0,
   tabular? : Bool,
+  breaks? : Bool = false,
 ) -> Int {
   // its style (style.mbt) under what is said here, as Ctx::text's
   let st = self.text_patch(style)
@@ -744,6 +746,15 @@ pub fn Ctx::rich(
     (Some(v), _) => self.sp(v)
     (None, Some(t)) => t.px(size)
     (None, None) => 0.0
+  }
+  // (on one line: its line breaks spaces, as Ctx::text's)
+  let runs = if wrap || breaks || !runs.iter().any(fn(r) { has_nl(r.text) }) {
+    runs
+  } else {
+    match one_line(runs.map(fn(r) { r.text })) {
+      Some(texts) => runs.mapi(fn(k, r) { { ..r, text: texts[k] } })
+      None => runs
+    }
   }
   let sb = StringBuilder()
   for r in runs {
@@ -857,6 +868,7 @@ fn Node::rich_layout(self : Node, max_w : Double) -> RichLayout? {
         _ => ()
       }
       let rl = layout_rich(r, max_w)
+      self.rl_whole = if r.wrap { 0.0 / 0.0 } else { rl.w }
       let cut = if r.wrap && r.max_lines > 0 && rl.line_start.length() > r.max_lines {
         Some(cut_rich(r, rl, max_w))
       } else if !r.wrap && rl.line_start.length() == 1 && rl.w > max_w + 0.5 {
