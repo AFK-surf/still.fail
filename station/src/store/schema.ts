@@ -2,6 +2,7 @@
 // came after schema version 12 without changing it, added in place on open (add_*_columns), the same way and in the
 // same order as the Rust station does, so either station opens what the other kept.
 import type { DatabaseSync } from "node:sqlite";
+import { COMPACTED_FROM } from "./rows.ts";
 
 /// Bump on schema changes. A database of another version is refused: there is one station, and its data is moved by
 /// hand when the schema changes (no migrations are kept in the code).
@@ -543,6 +544,50 @@ export function addUsageTotals(db: DatabaseSync): void {
   db.exec("BEGIN IMMEDIATE");
   try {
     if (!made()) db.exec(USAGE_TOTALS);
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
+/// What a main-thread call sent, all of it (store/usage.ts CONTEXT).
+const SENT = (row: string) => `${row}.input + ${row}.cache_read + ${row}.cache_write + ${row}.cache_write_long`;
+
+/// Where a model's context was compacted, at each call it was (pool.ts `cheapToLeave` asks the last days' most): the
+/// call's time and model, and what the call before it sent. Made once from the calls recorded before (what
+/// compactionPoints worked out from every call of the last days, by a window over them, each time it was asked: 4 s
+/// on ccvm, 2026-10-25), and kept by a trigger as each main-thread call is recorded: the session's call before it,
+/// looked up by its index.
+const USAGE_COMPACTIONS = `
+CREATE TABLE usage_compactions (
+  at INTEGER NOT NULL,
+  model TEXT NOT NULL,
+  point INTEGER NOT NULL
+);
+CREATE INDEX usage_compactions_at ON usage_compactions (at);
+INSERT INTO usage_compactions
+  SELECT at, model, before FROM (
+    SELECT at, model, profile, ${SENT("u")} AS context, LAG(${SENT("u")}) OVER w AS before, LAG(profile) OVER w AS was, LAG(model) OVER w AS of
+    FROM usage u WHERE subagent = 0 WINDOW w AS (PARTITION BY session ORDER BY at))
+  WHERE before >= ${COMPACTED_FROM} AND context * 2 < before AND profile IS was AND model IS of AND model IS NOT NULL;
+CREATE TRIGGER usage_compactions_add AFTER INSERT ON usage WHEN NEW.subagent = 0 AND NEW.model IS NOT NULL BEGIN
+  INSERT INTO usage_compactions
+    SELECT NEW.at, NEW.model, p.context FROM (
+      SELECT ${SENT("b")} AS context, b.profile, b.model FROM usage b
+      WHERE b.session = NEW.session AND b.subagent = 0 AND b.at < NEW.at ORDER BY b.at DESC LIMIT 1) p
+    WHERE p.context >= ${COMPACTED_FROM} AND (${SENT("NEW")}) * 2 < p.context AND p.profile IS NEW.profile AND p.model IS NEW.model;
+END;
+`;
+
+/// The compactions (USAGE_COMPACTIONS), made once from the calls recorded before, in the same transaction as the
+/// trigger that keeps them from then on (as addUsageTotals).
+export function addUsageCompactions(db: DatabaseSync): void {
+  const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_compactions'").get() !== undefined;
+  if (made()) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!made()) db.exec(USAGE_COMPACTIONS);
     db.exec("COMMIT");
   } catch (e) {
     db.exec("ROLLBACK");

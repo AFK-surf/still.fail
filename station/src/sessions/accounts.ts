@@ -7,7 +7,7 @@ import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import type { Store } from "../store/store.ts";
 import { type HubConfig, type Profile, runs, runtimeNamed, runtimeTitle, sameModel, spelling } from "./config.ts";
-import { availableEfforts, COMPACTED_FROM, cheapToLeave, commonEfforts, type ProfileHealth, pickProfile, serves, urgency, usable, windowsOf } from "./pool.ts";
+import { availableEfforts, cheapToLeave, commonEfforts, type ProfileHealth, pickProfile, serves, urgency, usable, windowsOf } from "./pool.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
 
 /// How long a profile a turn ran into the allowance of is passed over when its allowance is not read again.
@@ -121,7 +121,7 @@ export class Accounts {
   private cheapToLeave(key: string): boolean {
     const now = this.deps.clock.currentTimeMillisUnsafe();
     const { store } = this.deps;
-    if (this.compactions === null || now - this.compactions[0] > COMPACTIONS_EVERY_MS) this.compactions = [now, store.compactionPoints(now - COMPACTIONS_OVER_MS, COMPACTED_FROM)];
+    if (this.compactions === null || now - this.compactions[0] > COMPACTIONS_EVERY_MS) this.compactions = [now, store.compactionPoints(now - COMPACTIONS_OVER_MS)];
     return cheapToLeave(store.lastContexts(key, CALLS_LOOKED_AT), this.compactions[1]);
   }
 

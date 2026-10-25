@@ -141,16 +141,10 @@ export function lastContexts(db: DatabaseSync, session: string, limit: number): 
 }
 
 /// Where each model's context was compacted on this station since `since`: the most a main-thread call sent before
-/// the next, on the same account and model, sent under half of it (at least `least` before).
-export function compactionPoints(db: DatabaseSync, since: number, least: number): Map<string, number> {
-  const rows = db
-    .prepare(
-      `SELECT model, MAX(before) AS point FROM (
-         SELECT model, profile, ${CONTEXT} AS context, LAG(${CONTEXT}) OVER w AS before, LAG(profile) OVER w AS was, LAG(model) OVER w AS of
-         FROM usage WHERE at >= ?1 AND subagent = 0 WINDOW w AS (PARTITION BY session ORDER BY at))
-       WHERE before >= ?2 AND context * 2 < before AND profile IS was AND model IS of AND model IS NOT NULL GROUP BY model`,
-    )
-    .all(since, least) as Json[];
+/// the next, on the same account and model, sent under half of it (at least COMPACTED_FROM before), as the database
+/// keeps them (schema.ts USAGE_COMPACTIONS): a few rows, by their time's index.
+export function compactionPoints(db: DatabaseSync, since: number): Map<string, number> {
+  const rows = db.prepare("SELECT model, MAX(point) AS point FROM usage_compactions WHERE at >= ? GROUP BY model").all(since) as Json[];
   return new Map(rows.map((r) => [r.model, r.point]));
 }
 
