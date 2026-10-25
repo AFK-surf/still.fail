@@ -338,7 +338,8 @@ pub fn Ctx::look_of(self : Ctx, i : Int) -> Look {
 
 ///|
 /// Node `i` drawn over its siblings (1), or over everything, the window's whole room its clip (2: what flies over
-/// bars and the composer). Tapped where it is laid out, in its place among the rest.
+/// bars and the composer; in what is drawn moved by a look of its own, a list carried up, over everything of its layer
+/// where that moves it: drawn_paint). Tapped where it is laid out, in its place among the rest.
 pub fn Ctx::put_over(self : Ctx, i : Int, z? : Int = 1) -> Unit {
   // what a list's row holds: the row, over the list's other rows
   let p = self.nodes[i].parent
@@ -647,6 +648,12 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       d.frame = self.frame_no
     }
     _ => ()
+  }
+  // over everything though it could not be put off (what holds it is drawn by a look of its own, or only drawn, or
+  // cut: painted as it looks, where a look of ours is not one more pass): after the rest of its layer once that is
+  // painted (raise_tops), where what holds it moved it to, as an editor's handles are
+  if e.z == 2 && !dr.overlaying {
+    self.paint_top(i0)
   }
   true
 }

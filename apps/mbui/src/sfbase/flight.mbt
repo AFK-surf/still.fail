@@ -30,7 +30,8 @@
 // becomes it), until their row is laid out in the chat's list; then the list comes up out of the composer with them,
 // across and up together on Ease.Arrive (480 ms, 90 after: the choices fade first; in the wide frame from the middle of
 // the page at once, the composer going down to the chat's foot meanwhile: sfpages composer.mbt), their bubble's ground
-// and time coming in on the same way. The composer is not held for them. The list is not cut at the composer's top as
+// and time coming in on the same way. The composer is held as tall as it was while they and their files are in it,
+// the new chat's and then its chat's, as for words sent in a chat, till they set out. The list is not cut at the composer's top as
 // Android's is (ChatHost.kt clipRect): their bubble, in it, is drawn over the composer only while nothing over it cuts
 // what it draws (Ctx::put_over), and what else is in it then (its time) is all but clear there.
 
@@ -50,7 +51,7 @@ pub(all) struct SendFlight {
   /// the composer's room when sent (held a quarter of the way: `hold`, the composer's own, told how long), and whether
   /// it is the desktop's (the web's flight: desk)
   room : Double
-  hold : (Double) -> Unit
+  mut hold : (Double) -> Unit
   desk : Bool
   /// the field's words as it laid them out (where each line starts, where each offset stood) and where the words sent
   /// start in them (what came before them trimmed off): what their pieces go from (flight_pieces); None, they go as
@@ -166,14 +167,17 @@ pub fn flight_start(
 
 ///|
 /// A new chat's first words (and files) take off from its field (before it is emptied), carried (ChatHost.kt sending,
-/// carried): drawn where they were from now, while the chat is made; nothing held of the composer. `chat`: the new
-/// chat's draft's key, till flight_carry_into; its field, the desktop's or not as flight_start's.
+/// carried): drawn where they were from now, while the chat is made, the new chat's composer held as tall as it was
+/// till then (`hold`, its own, told for how long: at most their wait for their row; flight_carry_into hands it on to
+/// its chat's). `chat`: the new chat's draft's key, till flight_carry_into; its field, the desktop's or not as
+/// flight_start's.
 pub fn flight_carry_start(
   c : @ui.Ctx,
   chat : String,
   words : String,
   files : Array[FlyingFile],
   field~ : String,
+  hold~ : (Double) -> Unit,
   desk~ : Bool,
 ) -> Unit {
   send_flight.val = None
@@ -199,7 +203,7 @@ pub fn flight_carry_start(
         field_w: w,
         field_h: h,
         room: 0.0,
-        hold: fn(_) {  },
+        hold,
         desk,
         // (carried with the list as its chat comes up: as one block)
         lines: None,
@@ -212,6 +216,7 @@ pub fn flight_carry_start(
         carried: true,
         from_top,
       })
+      hold(flight_wait_ms)
     }
     None => ()
   }
@@ -219,13 +224,22 @@ pub fn flight_carry_start(
 
 ///|
 /// The new chat's first words, carried from its draft `from`, go on to the chat it became: its draft `chat`, its list's
-/// turns `turns`, row `key` (in its list from now: sent_local). What is asked in its list after them waits for them.
-pub fn flight_carry_into(from : String, chat : String, turns : String, key : String) -> Unit {
+/// turns `turns`, row `key` (in its list from now: sent_local), its composer held as the new chat's was (`hold`, the
+/// chat's own) till they set out. What is asked in its list after them waits for them.
+pub fn flight_carry_into(
+  from : String,
+  chat : String,
+  turns : String,
+  key : String,
+  hold~ : (Double) -> Unit,
+) -> Unit {
   match flight_of(from) {
     Some(f) if f.carried => {
       f.chat = chat
       f.turns = turns
       f.key = key
+      f.hold = hold
+      hold(flight_wait_ms)
       turns_of(turns).send(@ui.current(), flight_wait_ms + flight_len(f.desk))
     }
     _ => ()
@@ -261,12 +275,21 @@ pub fn flight_carry_gone(from : String) -> Unit {
 /// drawn up by it in the same frame, never a frame behind.
 pub fn flight_carry_shift(c : @ui.Ctx, chat : String) -> Double {
   match flight_of(chat) {
-    Some(f) if f.carried && f.placed =>
-      match @motion.measured_rect(c, flight_carry_anchor(f)) {
-        Some((_, y, _, _)) => (f.from_top - y) * (1.0 - flight_carry_e(f))
-        None => 0.0
-      }
-    _ => 0.0
+    Some(f) => flight_carry_rise(c, f) * (1.0 - flight_carry_e(f))
+    None => 0.0
+  }
+}
+
+///|
+/// How far a new chat's list has to come up in all, as its first words set out (flight_carry_shift's at the start):
+/// from where they were typed to where their row has them, this frame laid out; 0 for any other words.
+fn flight_carry_rise(c : @ui.Ctx, f : SendFlight) -> Double {
+  if !f.carried || !f.placed {
+    return 0.0
+  }
+  match @motion.measured_rect(c, flight_carry_anchor(f)) {
+    Some((_, y, _, _)) => f.from_top - y
+    None => 0.0
   }
 }
 
@@ -443,6 +466,8 @@ pub fn flight_placed(c : @ui.Ctx, f : SendFlight) -> Unit {
       // once, the composer going to the chat's foot with them (Chat.tsx toMadeChat: no wait)
       let after = if f.desk { 0.0 } else { flight_carry_after_ms }
       f.way.animate(1.0, @motion.tween(flight_carry_ms, ease=Linear, delay=after))
+      // (the composer let go as they set out: their ground comes in round them from there)
+      (f.hold)(after)
     } else {
       f.way.animate(1.0, @motion.tween(flight_len(f.desk), ease=Linear))
       (f.hold)(flight_settle * flight_len(f.desk))
@@ -765,14 +790,15 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
           let pic = c.box(style=@ui.style(w=Fixed(w), h=Fixed(h)), fn() {
             c.image(ff.picture, w=Px(w), h=Px(h), fit=FitCover, radius=@sf.message_file_corner, bg=0L) |> ignore
           })
-          // between its tile and its place as this frame lays it out, a new chat's list drawn up with it
-          // (flight_carry_shift): with the list as it moves, not a frame behind; moved from where it is laid out (its
-          // layer's corner, wherever the chat is in the window)
+          // between its tile and its place as this frame lays it out (not a frame behind), on the words' way: a new
+          // chat's list comes up with them on the same (flight_carry_shift), so the picture goes from its tile to its
+          // place straight, as their bubble goes from where they were typed to its own, each as far from the other all
+          // the way as it starts and ends (a place moving with the list as the target would have it lag the list and
+          // cross the words); moved from where it is laid out (its layer's corner, wherever the chat is in the window)
           @motion.placed(c, pic, fn() {
             match @motion.measured_rect(c, to) {
               Some((bx, by, bw, bh)) => {
                 let (ex, ey) = (bx + bw * (1.0 - sw) / 2.0, by + bh * (1.0 - sh) / 2.0)
-                let ey = ey + flight_carry_shift(c, chat)
                 let (px, py, _, _) = c.node_rect(pic)
                 @ui.look(dx=fx + (ex - fx) * across - px, dy=fy + (ey - fy) * up - py)
               }
@@ -820,5 +846,7 @@ pub fn flight_landing(c : @ui.Ctx, f : SendFlight, i : Int, key : String, share?
     Some((_, _, ew, eh)) if ew > 0.0 && eh > 0.0 => dmax(fw / ew, fh / eh)
     _ => 1.0
   }
-  @motion.fly(c, i, fx, fy, scale=s0, px=flight_across_of(c, f), py=up, ps=up)
+  // (in a new chat's list coming up with the words, drawn below its place by as much: from its tile all the same,
+  // straight, as its words go: flight_carry_shift)
+  @motion.fly(c, i, fx, fy - flight_carry_rise(c, f), scale=s0, px=flight_across_of(c, f), py=up, ps=up)
 }

@@ -4,6 +4,20 @@
 // `version` each change counts. Read back the first time from the chat's seeded draft, as the core reads its kept one.
 
 ///|
+/// The pictures of a mode's seeded draft drawn from them in its tiles, as a picture picked here is (the composer's
+/// `writing_pictures`): newchat-attach's and chat-attach-pic's (the films of sending them: scripts/motion).
+fn seeded_pictures(mode : String, files : Array[Json]) -> Unit {
+  if mode != "newchat-attach" && mode != "chat-attach-pic" {
+    return
+  }
+  for i, a in files {
+    if number(Some(a), "width") > 0.0 {
+      @sfbase.writing_pictures["seed-\{i}"] = fixture_file(text(Some(a), "name"))
+    }
+  }
+}
+
+///|
 /// A fixture composer, by its key.
 priv struct FixWrite {
   mut text : String
@@ -51,6 +65,7 @@ fn fix_write(f : Fixture, key : String) -> FixWrite {
               "done": a,
             }
           })
+        seeded_pictures(f.mode, seeded)
       }
       w
     }
