@@ -217,13 +217,28 @@ final class NativeViews {
             });
         }
 
+        /** (main thread) How many parts of it its frame has been since its first (a tall page's, Page.moved). */
+        int partsShown;
+
+        /**
+         * A new part of it its frame is (main thread): a picture of that part said once it is on the display (VIEWDRAWN
+         * id part n).
+         */
+        void drawnAgain() {
+            partsShown++;
+            drawnSaid = false;
+            drawnWhenBoth();
+        }
+
         /**
          * Once placed and done: the canvas's frame with a picture of it from then (a page's drawn again now; a video's
-         * the frame it shows) said once it is on the display (VIEWDRAWN id, Picture.latch), once.
+         * the frame it shows) said once it is on the display (VIEWDRAWN id, Picture.latch), once (a tall page's, once
+         * for each part of it its frame is).
          */
         void drawnWhenBoth() {
             if (!placedOnce || !doneOnce || drawnSaid || clip == null || closed || picture == null) return;
             drawnSaid = true;
+            picture.sayPart = partsShown;
             if (kind == 1) {
                 picture.sayAfter = Long.MIN_VALUE;
             } else {
@@ -890,6 +905,8 @@ final class NativeViews {
          * showing it said on the display (VIEWDRAWN; Long.MAX_VALUE: not asked); the time it was latched at.
          */
         volatile long sayAfter = Long.MAX_VALUE;
+        /** The part of it (NView.partsShown) the frame said shows: 0, its first. */
+        volatile int sayPart;
         private long stamp;
         /**
          * The part of its content each frame sent was (TouchFrame.draw), with when it was sent (System.nanoTime, before
@@ -990,10 +1007,12 @@ final class NativeViews {
             long say = sayAfter;
             if (say != Long.MAX_VALUE && tex != 0 && stamp >= say) {
                 sayAfter = Long.MAX_VALUE;
+                int n = sayPart;
+                String said = "VIEWDRAWN " + id + (n > 0 ? " part " + n : "");
                 // drawn as this frame, swapped as it ends, taken by the compositor at the next vsync, shown by the one
                 // after (MBView's SHOT)
                 Host.main.post(() -> Choreographer.getInstance().postFrameCallback(f ->
-                        Choreographer.getInstance().postFrameCallback(g -> Host.log("VIEWDRAWN " + id))));
+                        Choreographer.getInstance().postFrameCallback(g -> Host.log(said))));
             }
         }
 
@@ -2043,6 +2062,8 @@ final class NativeViews {
             // page), or not to it yet (the page not laid out at its new size), it is asked again)
             int top = web.getScrollY();
             if (top != partTop) web.post(this::scrollToPart);
+            if (drawLog()) Host.log("VIEWPIC " + id + " scrolled " + top + " part " + partTop + " tall " + h + " of " + full + " page "
+                    + Math.round(web.getContentHeight() * Host.view.density));
             return new float[] {top / full, h / full};
         }
 
@@ -2056,12 +2077,15 @@ final class NativeViews {
             if (web == null) return;
             boolean part = at[10] < at[3] - 0.5f;
             boolean was = partTop >= 0;
-            partTop = part ? Math.round(at[9]) : -1;
+            int top = part ? Math.round(at[9]) : -1;
+            boolean moves = top != partTop;
+            partTop = top;
             if (part != was) {
                 web.setVerticalScrollBarEnabled(!part);
                 if (!part) web.scrollTo(0, 0);
             }
             scrollToPart();
+            if (moves && part) drawnAgain();
         }
 
         /** Its WebView scrolled to the part its frame is (main thread). */
