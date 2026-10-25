@@ -62,6 +62,7 @@ let zh : Map[String, String] = {
   "android-chat.annotate.selectAll": "全选",
   "android-chat.archive": "归档",
   "android-chat.archived": "已归档",
+  "android-chat.archived.undo": "撤销",
   "android-chat.asks.dismiss": "忽略",
   "android-chat.attach.camera": "拍照",
   "android-chat.attach.files": "文件",

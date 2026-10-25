@@ -226,6 +226,8 @@ fn archive_chat(src : Source, r : ChatRef, v : ChatView) -> Unit {
     "chat.archive",
     Json::object(p),
     done=tr("android-chat.archived"),
+    done_action=tr("android-chat.archived.undo"),
+    done_run=@sfbase.archive_undo(src, p),
   )
 }
 

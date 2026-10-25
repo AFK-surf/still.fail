@@ -184,8 +184,7 @@ pub fn notices_frame(src : Source, w : Workspace) -> Unit {
   match (h.answer)() {
     Some(granted) => {
       if !granted && notice_state.from_switch {
-        app.toast = @sf.t("android-misc.notify.allowInSettings", args=[("app", "still.fail")])
-        app.toast_n += 1
+        toast_later(@sf.t("android-misc.notify.allowInSettings", args=[("app", "still.fail")]))
       }
       notice_state.from_switch = false
       (src.call)(

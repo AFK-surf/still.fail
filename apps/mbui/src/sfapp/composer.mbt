@@ -1303,8 +1303,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
           d.error = Some(text(Some(e), "message"))
           save_draft(src, d)
         } else {
-          app.toast = fill("android-chat.composer.send.failed", [("error", text(Some(e), "message"))])
-          app.toast_n += 1
+          toast_later(fill("android-chat.composer.send.failed", [("error", text(Some(e), "message"))]))
         }
       _ => ()
     }

@@ -74,6 +74,7 @@ let en : Map[String, String] = {
   "android-chat.annotate.selectAll": "All",
   "android-chat.archive": "Archive",
   "android-chat.archived": "Archived",
+  "android-chat.archived.undo": "Undo",
   "android-chat.asks.dismiss": "Dismiss",
   "android-chat.attach.camera": "Camera",
   "android-chat.attach.files": "Files",

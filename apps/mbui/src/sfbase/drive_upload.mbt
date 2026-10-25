@@ -242,8 +242,7 @@ pub let read_only_words : String = "只读运行：不发送，不上传，不�
 ///|
 pub fn say(c : @ui.Ctx, words : String) -> Unit {
   ignore(c)
-  app.toast = words
-  app.toast_n += 1
+  toast_later(words)
 }
 
 ///|

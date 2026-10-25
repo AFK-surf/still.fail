@@ -178,7 +178,12 @@ fn archive(src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
   }
   (src.call)("chat.archive", Json::object(p), fn(res) {
     match res {
-      Ok(_) => toast_later(@sf.t("web-pages.chat.archived"))
+      Ok(_) =>
+        toast_later(
+          @sf.t("web-pages.chat.archived"),
+          action=@sf.t("android-chat.archived.undo"),
+          run=@sfbase.archive_undo(src, p),
+        )
       Err(e) => toast_later(@sf.t("web-pages.chat.archiveFailed", args=[("error", error_words(e))]))
     }
   })

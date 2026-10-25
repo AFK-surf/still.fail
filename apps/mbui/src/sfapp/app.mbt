@@ -730,14 +730,32 @@ fn place_switch(c : @ui.Ctx) -> @motion.Anim {
 /// coming in and going out; one said again is a new one.
 fn toast(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
+  let action = if app.toast != "" { app.toast_action } else { "" }
+  let duration = if action != "" { toast_action_ms } else { toast_ms }
+  // its action's button the toaster's (the focus on it holds the toast)
+  let action_id = c.id("toast/t\{app.toast_n}/action")
+  // pressed: done, and the toast goes
+  let acted = fn() {
+    let run = app.toast_run
+    app.toast = ""
+    app.toast_action = ""
+    app.toast_run = fn() {  }
+    run()
+  }
   // the wide frame's the web's (the library's: @sf.toast_look, 24 over the window's foot, what an unconfirmed write
   // did said as not known)
   if @sfdesk.is_wide(c) {
     let said = if app.toast != "" { [@kit.toast("t\{app.toast_n}", @sf.toast_said(app.toast))] } else { [] }
-    let r = @kit.toaster(c, "toast", said, duration=toast_ms, bottom=@sf.toast_bottom, look=fn(c, s, _action, _close) {
-      @sf.toast_look(c, s)
+    let mut pressed = false
+    let r = @kit.toaster(c, "toast", said, duration~, bottom=@sf.toast_bottom, look=fn(c, s, _action, _close) {
+      let live = s.toast.id == "t\{app.toast_n}"
+      if @sf.toast_look(c, s, action=if live { action } else { "" }, action_id~) {
+        pressed = true
+      }
     })
-    if app.toast != "" && r.open.is_empty() {
+    if pressed {
+      acted()
+    } else if app.toast != "" && r.open.is_empty() {
       app.toast = ""
     }
     return
@@ -745,14 +763,29 @@ fn toast(c : @ui.Ctx) -> Unit {
   let said = if app.toast != "" { [@kit.toast("t\{app.toast_n}", app.toast)] } else { [] }
   // (above the navigation bar the view reaches under: Sheet.kt's navigationBars padding)
   let foot = nav_foot()
-  let r = @kit.toaster(c, "toast", said, duration=toast_ms, bottom=bar_room + foot, look=fn(c, s, _action, _close) {
+  let mut pressed = false
+  let r = @kit.toaster(c, "toast", said, duration~, bottom=bar_room + foot, look=fn(c, s, _action, _close) {
     let k = if s.t > 1.0 { 1.0 } else if s.t < 0.0 { 0.0 } else { s.t }
+    let live = s.toast.id == "t\{app.toast_n}"
     c.box(padx=16.0, pady=10.0, bg=t.p.text, radius=18.0, opacity=k, tx=s.dx, fn() {
-      c.text(s.toast.title, size=14.0, color=t.p.bg, line=20.0) |> ignore
+      let words = fn() { c.text(s.toast.title, size=14.0, color=t.p.bg, line=20.0) |> ignore }
+      if live && action != "" {
+        c.box(style=@sf.toast_row, fn() {
+          words()
+          if @sf.toast_button(c, action_id, action) {
+            pressed = true
+          }
+        })
+        |> ignore
+      } else {
+        words()
+      }
     })
     |> ignore
   })
-  if app.toast != "" && r.open.is_empty() {
+  if pressed {
+    acted()
+  } else if app.toast != "" && r.open.is_empty() {
     app.toast = ""
   }
 }
@@ -760,6 +793,10 @@ fn toast(c : @ui.Ctx) -> Unit {
 ///|
 /// How long a toast stays (paused while the pointer is on it): the library's (toast.tsx).
 pub let toast_ms : Double = @sf.toast_ms
+
+///|
+/// How long a toast offering something to do stays (an archive's 撤销): the library's.
+pub let toast_action_ms : Double = @sf.toast_action_ms
 
 ///|
 /// The app starting, or waiting for what every page needs (Parts.kt Splash): still.fail's mark floating; what it

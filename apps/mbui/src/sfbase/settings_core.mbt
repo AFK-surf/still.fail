@@ -56,8 +56,7 @@ pub fn settings_core_of(
     open_drive: fn(station) { open_page(Drive({ station, root: None, path: "" })) },
     sign_in: fn() { (src.sign_in)() },
     say: fn(words) {
-      app.toast = words
-      app.toast_n += 1
+      toast_later(words)
     },
     picture: fn(url, frame) { (src.picture)(url, frame) },
     now: src.now,
@@ -80,8 +79,7 @@ pub fn settings_core_of(
     // the system's browser (LocalUriHandler.openUri); nothing took it, said so (android-misc.link.cantOpen)
     open_link: fn(url) {
       if !@ui.open_url(url) {
-        app.toast = @sf.t("android-misc.link.cantOpen")
-        app.toast_n += 1
+        toast_later(@sf.t("android-misc.link.cantOpen"))
       }
     },
     pick_picture: fn(done) {
