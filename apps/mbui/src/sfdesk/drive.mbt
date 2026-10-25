@@ -436,7 +436,8 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : () -> Unit, foot
     if write && c.shortcut('n', shift=true) {
       b.new_folder(c, src, at.path)
     }
-    if c.shortcut('p', shift=true) {
+    // (the keymap's files.preview: ⌘⇧P, as Finder's preview pane, or as changed)
+    if @settings.action_pressed(c, (src.topic)("prefs", {}).value, "files.preview") {
       set_preview_shown(src, "page", !previewing)
     }
   }
@@ -743,6 +744,7 @@ pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf, style? : @ui.Styl
         if previewing { "panel-close" } else { "panel-open" },
         @sf.t(if previewing { "web-pages.files.hidePreview" } else { "web-pages.files.showPreview" }),
         on_press=fn() { set_preview_shown(src, "page", !previewing) },
+        shortcut="files.preview",
         drop=folder_drop_preview,
         lit?=on(previewing),
       ),

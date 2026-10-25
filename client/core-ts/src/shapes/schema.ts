@@ -1772,9 +1772,9 @@ export const SHAPES: Record<string, Shape> = {
     ["group", "KeyGroupName"],
     ["name", "String", { doc: "Its name, as the list of shortcuts heads it." }],
   ]),
-  KeyGroupName: words(["global","chat"], { doc: "Where an action works: anywhere in the app, or in a chat." }),
+  KeyGroupName: words(["global","chat","files"], { doc: "Where an action works: anywhere in the app, in a chat, or in a folder of the files." }),
   KeyTyping: words(["yes","no","empty"], { doc: "Whether an action works with the cursor in a text field: always (a binding with ⌘ or ⌥ does nothing there),\nnever (it is a key the field types), or when the field is empty (the key moves the cursor in text)." }),
-  KeyActionName: words(["chat.switch","chat.new","chat.prev","chat.next","sidebar.toggle","nav.back","nav.forward","settings","shortcuts","composer.focus","composer.file","chat.stop","chat.history","chat.jobs","chat.latest","chat.find","chat.archive","panel.close"], { doc: "An action keys do (keymap.ts ACTIONS)." }),
+  KeyActionName: words(["chat.switch","chat.new","chat.prev","chat.next","sidebar.toggle","nav.back","nav.forward","settings","shortcuts","composer.focus","composer.file","chat.stop","chat.history","chat.jobs","chat.latest","chat.find","chat.archive","panel.close","files.preview"], { doc: "An action keys do (keymap.ts ACTIONS)." }),
   KeyAction: struct([
     ["action", "KeyActionName"],
     ["group", "KeyGroupName"],

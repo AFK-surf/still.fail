@@ -33,6 +33,7 @@ import { carriesDrive, draggedNow, draggedOf, droppedOf, endDrag, startDrag } fr
 import { keepFilesPage, keepOpened, lastFilesPage, useKeptScroll } from "../drive/kept.ts";
 import { dropInto, effectOf, rowKey, takes, useBrowse } from "../drive/browse.ts";
 import { transfer } from "../drive/transfer.ts";
+import { useShortcut } from "../keymap.ts";
 import { useFavorites } from "../drive/favorites.ts";
 import { useFilesActions } from "./Files.tsx";
 import { StationSwitch } from "./FilesGo.tsx";
@@ -343,8 +344,8 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
   const shown: Shown = { ...browse.drawing, rowOf, dropOn: into, clear: browse.clear };
   const newFolder = () => act(browse.newFolder(at, entries), t("web-pages.drive.mkdirWhat"));
   const empty = <Empty text={t("web-pages.drive.emptyFolder")} action={d.write ? <Button icon={Upload} onClick={() => files.current?.click()}>{t("web-pages.drive.upload")}</Button> : undefined} />;
-  const togglePreview = useRef(() => {});
-  togglePreview.current = () => setPreviewing(!previewing);
+  // ⌘⇧P (the keymap's files.preview): the preview beside the list, shown or not, while this folder is in front.
+  useShortcut("files.preview", front ? () => setPreviewing(!previewing) : null);
   const newFolderRef = useRef(newFolder);
   newFolderRef.current = newFolder;
   // The keys are the rows' wherever on the page they are pressed (a folder gone into leaves nothing focused), but in a
@@ -373,8 +374,6 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
       if (e.key.toLowerCase() === "u") { e.preventDefault(); files.current?.click(); }
       // ⌘⇧N: a new folder, as Finder makes one.
       if (e.shiftKey && e.key.toLowerCase() === "n") { e.preventDefault(); newFolderRef.current(); }
-      // ⌘⇧P: the preview beside the list, shown or not.
-      if (e.shiftKey && e.key.toLowerCase() === "p") { e.preventDefault(); togglePreview.current(); }
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
@@ -393,7 +392,7 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
   const actions = (
     <div className={css.actions}>
       <ViewSwitch value={view} onChange={setView} />
-      <span className={css.pin} data-on={previewing || undefined}><IconButton label={t(previewing ? "web-pages.files.hidePreview" : "web-pages.files.showPreview")} icon={previewing ? PanelClose : PanelOpen} onClick={() => setPreviewing(!previewing)} /></span>
+      <span className={css.pin} data-on={previewing || undefined}><IconButton label={t(previewing ? "web-pages.files.hidePreview" : "web-pages.files.showPreview")} shortcut="files.preview" icon={previewing ? PanelClose : PanelOpen} onClick={() => setPreviewing(!previewing)} /></span>
       {d.write && <IconButton label={t("web-pages.drive.upload")} icon={Upload} onClick={() => files.current?.click()} />}
       {d.write && <IconButton label={t("web-pages.drive.mkdir")} icon={FolderPlus} onClick={newFolder} />}
       <span className={css.spin} data-on={refreshing || undefined}><IconButton label={t("web-pages.drive.refresh")} icon={Refresh} onClick={reload} /></span>

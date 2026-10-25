@@ -3783,10 +3783,10 @@ export interface KeptTabs {
 }
 
 /** An action keys do (keymap.ts ACTIONS). */
-export type KeyActionName = "chat.switch" | "chat.new" | "chat.prev" | "chat.next" | "sidebar.toggle" | "nav.back" | "nav.forward" | "settings" | "shortcuts" | "composer.focus" | "composer.file" | "chat.stop" | "chat.history" | "chat.jobs" | "chat.latest" | "chat.find" | "chat.archive" | "panel.close";
+export type KeyActionName = "chat.switch" | "chat.new" | "chat.prev" | "chat.next" | "sidebar.toggle" | "nav.back" | "nav.forward" | "settings" | "shortcuts" | "composer.focus" | "composer.file" | "chat.stop" | "chat.history" | "chat.jobs" | "chat.latest" | "chat.find" | "chat.archive" | "panel.close" | "files.preview";
 
-/** Where an action works: anywhere in the app, or in a chat. */
-export type KeyGroupName = "global" | "chat";
+/** Where an action works: anywhere in the app, in a chat, or in a folder of the files. */
+export type KeyGroupName = "global" | "chat" | "files";
 
 /**
  * Whether an action works with the cursor in a text field: always (a binding with ⌘ or ⌥ does nothing there),

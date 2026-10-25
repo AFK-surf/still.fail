@@ -23,6 +23,7 @@ let fx_key_actions : Array[(String, String, Array[String], Array[String], String
   ("chat.find", "chat", ["Mod+F"], [], "yes"),
   ("chat.archive", "chat", ["Shift+Mod+E"], [], "yes"),
   ("panel.close", "chat", ["Escape"], [], "yes"),
+  ("files.preview", "files", ["Shift+Mod+P"], [], "yes"),
 ]
 
 ///|
@@ -90,7 +91,7 @@ fn fixture_keymap(changed : Map[String, Array[String]]) -> Json {
     "changeable": Json::boolean(true),
     "mac": Json::boolean(mac),
     "groups": Json::array(
-      ["global", "chat"].map(fn(g) {
+      ["global", "chat", "files"].map(fn(g) {
         Json::object({ "group": Json::string(g), "name": Json::string(tr("web-main.keymap.group." + g)) })
       }),
     ),

@@ -1095,6 +1095,7 @@ pub fn tool_of(key : String, draw : () -> Unit, drop? : Int = 0, instead? : Arra
 /// An icon button as a tool (icon_button: `label` its tip, `lit` its ink and quiet, as one that is on; as a bar's
 /// buttons are: round on the tape, the last in its panel's corner concentric with it, at a window's corner the corner
 /// they share, @sf.bar_keys_link): pressed, `on_press`; gone (the `drop`-th), the ⋯'s line of the same icon and words.
+/// `shortcut`: the action whose keys its tip says (tip).
 pub fn tool_button(
   c : @ui.Ctx,
   key : String,
@@ -1104,12 +1105,13 @@ pub fn tool_button(
   drop? : Int = 0,
   lit? : Int64,
   disabled? : Bool = false,
+  shortcut? : String = "",
 ) -> Tool {
   {
     key,
     drop,
     draw: fn() {
-      if icon_button(c, icon, key~, ink?=lit, quiet?=lit, round=true, linked?=bar_keys_link(), disabled~, label~) {
+      if icon_button(c, icon, key~, ink?=lit, quiet?=lit, round=true, linked?=bar_keys_link(), disabled~, label~, shortcut~) {
         on_press()
       }
     },
