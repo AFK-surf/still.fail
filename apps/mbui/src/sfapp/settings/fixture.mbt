@@ -18,6 +18,11 @@ priv struct SettingsFixture {
   /// the subscription's sign-in: "" none, "needs_code" under way (settings-profile-login), "failed"
   /// (settings-profile-login-failed)
   mut login : String
+  /// the sign-in's page can be opened in the station's own browser (settings-profile-login-station,
+  /// settings-new-profile-login-station)
+  mut login_station : Bool
+  /// a new profile's page at an Anthropic plan's sign-in, waiting for the code (settings-new-profile-login…)
+  mut new_login : Bool
   /// Claude 主账号's trouble: "" none, "quota" its allowance unreadable (settings-profile-quota-failed), "blocked"
   /// its allowance used up (settings-profile-blocked), "login" to be signed in to again (settings-profile-signin)
   mut trouble : String
@@ -51,6 +56,8 @@ let fx : SettingsFixture = {
   auto: false,
   none: false,
   login: "",
+  login_station: false,
+  new_login: false,
   trouble: "",
   vault_off: false,
   plain_left: 0,
@@ -124,6 +131,8 @@ fn fixture_reset() -> Unit {
   fx.auto = false
   fx.none = false
   fx.login = ""
+  fx.login_station = false
+  fx.new_login = false
   fx.trouble = ""
   fx.vault_off = false
   fx.plain_left = 0
@@ -189,6 +198,16 @@ pub fn fixture_page(mode : String) -> String {
       fx.login = "needs_code"
       up("", "settings/profile/ws1/st1/cc", 0)
     }
+    "settings-profile-login-station" => {
+      fx.login = "needs_code"
+      fx.login_station = true
+      up("", "settings/profile/ws1/st1/cc", 0)
+    }
+    "settings-new-profile-login" => fx.new_login = true
+    "settings-new-profile-login-station" => {
+      fx.new_login = true
+      fx.login_station = true
+    }
     "settings-profile-login-failed" => {
       fx.login = "failed"
       up("", "settings/profile/ws1/st1/cc", 0)
@@ -245,8 +264,9 @@ pub fn fixture_page(mode : String) -> String {
     "settings-stations-add" | "settings-stations-existing" | "settings-stations-command" | "settings-first-station" =>
       "stations"
     "settings-adb" => "adb:ws1/st1"
-    "settings-profile-menu" | "settings-profile-lower" | "settings-profile-login" => "profile:ws1/st1#cc"
-    "settings-new-profile" => "new-profile:ws1/st1"
+    "settings-profile-menu" | "settings-profile-lower" | "settings-profile-login" | "settings-profile-login-station" =>
+      "profile:ws1/st1#cc"
+    "settings-new-profile" | "settings-new-profile-login" | "settings-new-profile-login-station" => "new-profile:ws1/st1"
     "settings-connect-menu" | "settings-connect-mode" => "connect:ws1/st1#k1"
     "settings-connect-run" | "settings-slack-app" => "connect:ws1/st1#k1"
     "settings-new-connect" | "settings-new-connect-platform" | "settings-new-connect-scan" | "settings-new-connect-app" =>
@@ -419,15 +439,7 @@ fn fx_profiles() -> Array[Json] {
               ("startedAt", Json::number(0.0)),
               ("expiresAt", Json::number(0.0)),
             ])
-          state =>
-            obj([
-              ("profile", str("cc")),
-              ("runtime", str("claude")),
-              ("state", str(state)),
-              ("url", str("https://claude.example/oauth/authorize")),
-              ("startedAt", Json::number(0.0)),
-              ("expiresAt", Json::number(0.0)),
-            ])
+          state => fx_login_job("cc", state)
         },
       ),
     ])),
@@ -731,6 +743,8 @@ fn fx_station(address : String) -> Json {
         obj([
           ("connects", [fx_connect("k1", "星火助手", "online", "在线", "multi-session")]),
           ("profiles", Json::array(fx_profiles())),
+          // a new profile's sign-in under way (settings-new-profile-login…)
+          ("logins", if fx.new_login { [obj([("id", str("login-new")), ("runtime", str("claude")), ("job", fx_login_job("login-new", "needs_code"))])] } else { [] }),
           ("processesText", str("2 个 agent 进程 · claude 1.2 GB")),
           ("slackApps", []),
           ("drive", obj([("roots", [{ "path": "~/项目", "name": "项目", "state": "ok" }, { "path": "~/文档", "name": "文档", "state": "ok" }]), ("all", Json::boolean(false))])),
@@ -1228,6 +1242,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ),
         ]),
       )
+    "profileFlow" if fx.new_login => Some(fx_profile_flow_plan())
     "profileFlow" => Some(fx_profile_flow())
     "pick" if text(Some(Json::object(params)), "of").has_prefix("session:") => Some(fx_session_pick())
     "connectFlow" if fx_connect_step.val != "team" && fx_connect_step.val != "app" =>
@@ -1797,6 +1812,8 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       Some(Ok(obj([])))
     }
     // the drafts' forms (a new profile's, a new connect's, the decisions' and the archive policy's), opened and edited
+    // an Anthropic plan's sign-in for a new profile, begun (settings-new-profile-login…)
+    "login.new" if fx.new_login => Some(Ok(obj([("id", str("login-new")), ("job", fx_login_job("login-new", "needs_code"))])))
     "profile.flow.open" | "profile.flow.edit" | "profile.flow.drop" | "connect.flow.open" | "connect.flow.edit"
     | "connect.flow.drop" | "automaticDecisions.form.open" | "automaticDecisions.form.edit"
     | "automaticDecisions.form.drop" | "automaticDecisions.policy.open" | "automaticDecisions.policy.drop" =>
@@ -1937,6 +1954,50 @@ fn fx_words() -> Array[String] {
     "amber", "basin", "cedar", "delta", "ember", "fable", "grove", "harbor", "island", "jasper", "kettle", "lantern", "meadow",
     "nectar", "orbit", "pebble", "quarry", "river", "saddle", "timber", "umbra", "velvet", "willow", "zephyr",
   ]
+}
+
+///|
+/// A subscription's sign-in under way in `state` (a profile's, or a new one's by its login's id): its page, and that
+/// the station's own browser can open it where the fixture says so.
+fn fx_login_job(profile : String, state : String) -> Json {
+  let o = [
+    ("profile", str(profile)),
+    ("runtime", str("claude")),
+    ("state", str(state)),
+    ("url", str("https://claude.example/oauth/authorize")),
+    ("startedAt", Json::number(0.0)),
+    ("expiresAt", Json::number(0.0)),
+  ]
+  if fx.login_station {
+    o.push(("browser", Json::boolean(true)))
+  }
+  obj(o)
+}
+
+///|
+/// A new profile's draft at an Anthropic plan's sign-in (`profileFlow`, settings-new-profile-login…): 连接 Anthropic.
+fn fx_profile_flow_plan() -> Json {
+  obj([
+    ("step", str("connect")),
+    ("station", str("ws1/st1")),
+    ("title", str("连接 Anthropic")),
+    ("hint", str("")),
+    ("method", str("plan")),
+    ("tile", obj([("id", str("anthropic")), ("name", str("Anthropic")), ("kind", str("subscription")), ("runtime", str("claude")), ("mark", str("anthropic"))])),
+    ("signIn", obj([("runtime", str("claude")), ("provider", str("Claude")), ("access", str(""))])),
+    ("groups", []),
+    ("choices", []),
+    ("showEndpoint", Json::boolean(false)),
+    ("endpoint", str("")),
+    ("protocols", []),
+    ("showKey", Json::boolean(false)),
+    ("key", str("")),
+    ("keyLabel", str("")),
+    ("canSubmit", Json::boolean(false)),
+    ("pending", Json::boolean(false)),
+    ("submitLabel", str("")),
+    ("usesLine", str("")),
+  ])
 }
 
 ///|

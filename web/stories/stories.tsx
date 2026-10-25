@@ -172,13 +172,14 @@ const kimiCode: DemoExtension = {
     };
   },
 };
-/** The demo's profile as a Claude subscription being signed in again: Claude's page is up and its code is pasted back. */
-const claudeSignIn: DemoExtension = {
+/** The demo's profile as a Claude subscription being signed in again: Claude's page is up and its code is pasted back;
+ * `inStation`, where the station's own browser can open it too (docs/remote-login.md). */
+const claudeSigningIn = (inStation = false): DemoExtension => ({
   then: (t, value) => {
     if (t.topic !== "overview" || !value || typeof value !== "object") return undefined;
     const o = value as { profiles: Record<string, unknown>[] };
     const at = Date.UTC(2026, 9, 19, 3, 0);
-    const login = { profile: "machine-claude", runtime: "claude", state: "needs_code", url: "https://claude.ai/oauth/authorize?code=true&client_id=still.fail", startedAt: at, expiresAt: at + 600_000 };
+    const login = { profile: "machine-claude", runtime: "claude", state: "needs_code", url: "https://claude.ai/oauth/authorize?code=true&client_id=still.fail", startedAt: at, expiresAt: at + 600_000, ...(inStation ? { browser: true } : {}) };
     return {
       ...o,
       profiles: o.profiles.map((p) => ({
@@ -187,7 +188,8 @@ const claudeSignIn: DemoExtension = {
       })),
     };
   },
-};
+});
+const claudeSignIn = claudeSigningIn();
 /** The workspace's list with an account of each kind, a section each, its mark before its title. */
 const everyKind: DemoExtension = {
   then: (t, value) => {
@@ -841,6 +843,7 @@ export const stories: Story[] = [
   { id: "app-profile-kimi-signing-in", group: "应用", title: "Profile · Kimi Code 重新登录（设备码）", app: true, demo: kimiCode, steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-supergrok", group: "应用", title: "Profile · SuperGrok 订阅（Grok Build）", app: true, demo: superGrok(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-claude-signing-in", group: "应用", title: "Profile · Claude 订阅重新登录（贴回代码）", app: true, demo: claudeSignIn, steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-claude-signing-in-station", group: "应用", title: "Profile · Claude 订阅重新登录 · 也能在 station 的浏览器里做", app: true, demo: claudeSigningIn(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-add-install", group: "应用", title: "添加 Profile · SuperGrok · 先安装 Grok Build", app: true, demo: installFlowDemo("missing"), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
   { id: "app-profile-add-installing", group: "应用", title: "添加 Profile · SuperGrok · 正在安装 Grok Build", app: true, demo: installFlowDemo("installing"), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
   { id: "app-profile-supergrok-signing-in", group: "应用", title: "Profile · SuperGrok 重新登录（设备码）", app: true, demo: superGrok(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
@@ -911,6 +914,9 @@ export const stories: Story[] = [
   { id: "login-card-loopback-listening", group: "登录", title: "卡片 · 回环 · 等浏览器回来", render: loginCard("listening"), demo: logins() },
   { id: "login-card-loopback-taken", group: "登录", title: "卡片 · 回环 · 本机端口被占用", render: loginCard("taken"), demo: logins() },
   { id: "login-card-device", group: "登录", title: "卡片 · 设备码", render: loginCard("device"), demo: logins() },
+  { id: "login-card-in-station", group: "登录", title: "卡片 · 回环 · 也能在 station 的浏览器里做（桌面）", render: loginCard("inStation"), demo: logins() },
+  { id: "login-card-in-station-web", group: "登录", title: "卡片 · 回环 · 网页：在 station 的浏览器里做", render: loginCard("inStation"), demo: logins({ canRelay: false }) },
+  { id: "login-card-in-station-open", group: "登录", title: "卡片 · 回环 · station 浏览器的标签页开着", render: loginCard("inStationOpen"), demo: logins() },
   { id: "login-card-paste", group: "登录", title: "卡片 · 打开网址，再贴回页面给的码", render: loginCard("paste"), demo: logins() },
   { id: "login-card-paste-phone", group: "登录", title: "卡片 · 贴码 · 手机", phone: true, render: loginCard("paste", 12), demo: logins() },
   { id: "login-card-checking", group: "登录", title: "卡片 · 码已贴回，正在确认", render: loginCard("checking"), demo: logins() },
@@ -1216,6 +1222,7 @@ export const stories: Story[] = [
   { id: "phone-profile-kimi-signing-in", group: "手机", title: "Profile · Kimi Code 重新登录（设备码）", app: true, phone: true, demo: kimiCode, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-supergrok", group: "手机", title: "Profile · SuperGrok 订阅（Grok Build）", app: true, phone: true, demo: superGrok(false), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-claude-signing-in", group: "手机", title: "Profile · Claude 订阅重新登录（贴回代码）", app: true, phone: true, demo: claudeSignIn, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "phone-profile-claude-signing-in-station", group: "手机", title: "Profile · Claude 订阅重新登录 · 也能在 station 的浏览器里做", app: true, phone: true, demo: claudeSigningIn(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-supergrok-signing-in", group: "手机", title: "Profile · SuperGrok 重新登录（设备码）", app: true, phone: true, demo: superGrok(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-add-kimi", group: "手机", title: "添加 Profile · Kimi：订阅 Kimi Code 或 API key", app: true, phone: true, demo: kimiMethodDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { click: '[aria-label="添加 Profile"]' }] },
   { id: "phone-profile-add-cursor", group: "手机", title: "添加 Profile · 选择服务商（Cursor 只有订阅）", app: true, phone: true, demo: cursorPickDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { click: '[aria-label="添加 Profile"]' }] },
