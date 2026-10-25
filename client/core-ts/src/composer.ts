@@ -502,11 +502,24 @@ export class Composers {
         .then((whole) => createImageBitmap(whole)).then((m) => { const s = { width: m.width, height: m.height }; m.close(); return s; })
       : null;
     const shown = (b: Blob | FileSource) => shownSize((start, end) => b.slice(start, end).arrayBuffer().then((part) => new Uint8Array(part)), b.size);
-    // A file from here kept as it goes, with what it is: its message goes on from it should the app end before it is
-    // sent (`fromKept`). Kept already when it is that.
+    // A file from here kept whole on the device, with what it is, read through beside its going up (not as it goes: the
+    // app ended part way up, what had gone was all there was, and its message failed all the same, pengxiao
+    // 2026-10-25): its message goes on from it should the app end before it is sent (`fromKept`). Kept already when it
+    // is that; no more once it is up or let go.
     const noted = { station, name: f.name, size: f.size, type: f.blob?.type ?? "" };
     const keeping = f.blob !== undefined && f.kept !== true && f.size > 0 && f.size <= KEEP_OUTBOX_MOST;
-    if (keeping) inner.runner.fork(inner.driveKept.noteUpload(f.id, noted));
+    if (keeping) {
+      const source = f.blob!;
+      const going = () => this.#uploads.get(f.id) === upload && upload.file !== null;
+      inner.runner.fork(Effect.gen(function* () {
+        yield* inner.driveKept.noteUpload(f.id, noted);
+        for (let at = 0; at < f.size && going(); at += PART) {
+          const bytes = yield* Effect.orElseSucceed(Effect.tryPromise({ try: () => source.slice(at, at + PART).arrayBuffer(), catch: asCoreError }), () => null);
+          if (bytes === null || !going()) return;
+          yield* inner.driveKept.keep(outboxKeptId(f.id), "outbox", 0, f.size, noted.type, at, new Uint8Array(bytes));
+        }
+      }));
+    }
     const kept = keeping || f.kept === true;
     const sizing: Promise<{ width: number; height: number } | null> = (isBlob(blob) || blob instanceof FileSource) && (blob.type.startsWith("image/") || blob.type.startsWith("video/"))
       ? shown(blob).then((s) => s ?? decoded(blob)).then((s) => {
@@ -536,7 +549,6 @@ export class Composers {
         if (!blob) return yield* Effect.fail(new CoreError("upload", t("core-misc.composer.upload_missing", { name: f.name })));
         const bytes = new Uint8Array(yield* Effect.tryPromise({ try: () => blob.slice(have, have + PART).arrayBuffer(), catch: asCoreError }));
         const from = have;
-        if (keeping) yield* inner.driveKept.keep(outboxKeptId(f.id), "outbox", 0, f.size, noted.type, from, bytes);
         const told = yield* inner.stations.requests.uploadPart(addr, { id, name: f.name, size: f.size, offset: have }, bytes, null, (n) => went(from + n));
         if (told.file !== undefined) saved = told.file;
         else if (told.have === have) return yield* Effect.fail(new CoreError("upload", t("core-misc.composer.upload_failed")));
