@@ -2,9 +2,14 @@
 <resources>
     <color name="paper">#F5F3EF</color>
     <!-- The window before the first frame draws: the app's paper (as still.fail's apps/android themes.xml), so opening
-         does not flash white or black. -->
+         does not flash white or black. The system's splash (Android 12 on) that paper alone, no icon, as iOS's launch
+         screen (ios/Info.plist UILaunchScreen): what the app draws first is that paper too, until its first page has
+         what it shows (src/sfapp app.mbt splash), so opening is one picture, then the page; with the launcher's icon
+         on it, the icon gave way to the app's own mark, then the page, each a moment apart. -->
     <style name="Theme.StillFail" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/paper</item>
+        <item name="android:windowSplashScreenBackground">@color/paper</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
     </style>
     <!-- Over the app something is shared from (mbui's OverActivity, as still.fail's ShareActivity): nothing of its own
          until its sheet comes up, which draws its own scrim and motion. -->

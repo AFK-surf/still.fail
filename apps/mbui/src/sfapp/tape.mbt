@@ -128,6 +128,10 @@ fn tape_source(tape : Tape, at : () -> Double) -> Source {
           version = version + 1
         }
       }
+      // (the device's prefs, which Android's tapes kept none of: a new device's, as the core has them from the start)
+      if name == "prefs" && value is None {
+        return { value: Some(Json::object(Map::new())), error: None, version: 1 }
+      }
       { value, error: None, version }
     },
     call: fn(name, params, done) {

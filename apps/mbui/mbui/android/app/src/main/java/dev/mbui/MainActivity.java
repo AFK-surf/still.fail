@@ -189,12 +189,13 @@ public class MainActivity extends Activity {
         // system's windows and, the soft input adjusting nothing, kept the keyboard's from the view: its height never
         // told, the composer under it (scripts/android-keyboard.sh on CI's API 34 emulator, run 39528189692)
         getWindow().setDecorFitsSystemWindows(false);
+        // the bars' icons as dark as the ground under them is light, the system's (the root's above) until the app says
+        // its own (Host.setDark): dark icons on a dark ground till then, they showed a moment late as the app opened
         WindowInsetsController c = getWindow().getInsetsController();
         if (c != null) {
-            c.setSystemBarsAppearance(WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
-                    | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
-                    WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
-                    | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
+            int bars = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                    | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+            c.setSystemBarsAppearance(night(getResources().getConfiguration()) ? 0 : bars, bars);
         }
         Host.activity = this;
         Host.view = view;
