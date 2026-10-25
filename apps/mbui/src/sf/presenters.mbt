@@ -334,7 +334,7 @@ fn draw_presented(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
     Menu(items, title, along) => menu_popover(c, key, p, items, title, along)
     Pick(title, choices, chosen, choose) => pick_popover(c, key, p, title, choices, chosen, choose)
     Panel(x) if p.from == Unanchored => panel_centred(c, key, p, x)
-    Panel(x) => panel_popover(c, key, p, x.title, x.body, x.w, x.tall, x.focus)
+    Panel(x) => panel_popover(c, key, p, x)
     Confirm(title, words, action, danger, run) => confirm_centred(c, key, p, title, words, action, danger, run)
     Ask(title, value, placeholder, action, hint, secret, run) =>
       ask_centred(c, key, p, title, value, placeholder, action, hint, secret, run)
@@ -529,19 +529,12 @@ fn pick_popover(
 }
 
 ///|
-/// A small panel beside what opened it (parts.tsx's: @sf.small_panel, PanelHead).
-fn panel_popover(
-  c : @ui.Ctx,
-  key : String,
-  p : Presented,
-  title : String,
-  body : (@ui.Ctx, () -> Unit) -> Unit,
-  w : Double,
-  tall : Double,
-  focus : Bool,
-) -> (Bool, Bool) {
+/// A small panel beside what opened it (parts.tsx's: @sf.small_panel, PanelHead), what is at its foot in its foot
+/// corner (panel_corner_foot); as tall as `tall` of the window, what it holds takes what the foot leaves.
+fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool, Bool) {
   let (anchor, at) = anchor_of(c, p.from)
-  let h : @ui.Size = if tall > 0.0 { Px(tall * wh_of(c)) } else { Auto }
+  let h : @ui.Size = if x.tall > 0.0 { Px(x.tall * wh_of(c)) } else { Auto }
+  let close = fn() { done_with(c, p, fn() {  }) }
   let r = @kit.popover(
     c,
     key,
@@ -549,15 +542,23 @@ fn panel_popover(
     anchor,
     along=Start,
     at?,
-    label=title,
+    label=x.title,
     modal=true,
-    focus~,
-    look=fn(c, _, inner) { small_panel(c, w=Px(w), h~, inner) |> ignore },
+    focus=x.focus,
+    look=fn(c, _, inner) { small_panel(c, w=Px(x.w), h~, inner) |> ignore },
     fn() {
-      if title != "" {
-        panel_head(c, title)
+      if x.title != "" {
+        panel_head(c, x.title)
       }
-      body(c, fn() { done_with(c, p, fn() {  }) })
+      if x.tall > 0.0 {
+        c.box(style=panel_grows, fn() { (x.body)(c, close) }) |> ignore
+      } else {
+        (x.body)(c, close)
+      }
+      match x.foot {
+        Some(f) => c.box(style=panel_foot_at.then(panel_corner_foot()), fn() { f(c, close) }) |> ignore
+        None => ()
+      }
     },
   )
   (r.value, p.open)
@@ -1111,6 +1112,16 @@ let sheet_hint : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted)
 /// A panel's buttons in a sheet (its foot): 20 in, at its end, 8 apart, 24 under.
 // kept across runs: a value (no field of it changes)
 let sheet_foot_at : @ui.Style = @ui.css("row w=Full px=S5 pb=S6 gap=S2 justify=JEnd")
+
+///|
+/// A small panel's foot (beside what opened it): a row, its buttons at its end, 8 apart, 8 under what is over them;
+/// what it holds over it, as tall as the panel is made, the rest.
+// kept across runs: a value (no field of it changes)
+let panel_foot_at : @ui.Style = @ui.css("row w=Full pt=S2 gap=S2 align=ACenter justify=JEnd")
+
+///|
+// kept across runs: a value (no field of it changes)
+let panel_grows : @ui.Style = @ui.style(w=Full, h=grow)
 
 ///|
 /// Its buttons at its end: 6 over, 24 under, 8 apart.

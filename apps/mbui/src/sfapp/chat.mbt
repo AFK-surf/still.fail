@@ -78,7 +78,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         // a chat just made from a new chat (its scene leaving, its first words on their way) is the core's own:
         // nothing to read from a station, nothing breathing for the frames until the core's view of it comes
         // (Chat.kt made)
-        if failed is Some(_) || !new_chat_made(c, r) {
+        if failed is Some(_) || !@sfbase.new_chat_made(c, r) {
           waiting_messages(c, failed)
         }
         c.layer(fn() { chat_foot(c, src, w, r, None) })

@@ -9,6 +9,10 @@
 // shows asks for another height, it goes there on the spring.
 
 ///|
+/// How short a sheet with detents is dragged at most.
+let sheet_least_h : Double = 120.0
+
+///|
 /// What a sheet's look is given: its scrim's share (0 … 1, how far in it is), its height (on the spring), how far
 /// below its place it is.
 pub(all) struct SheetState {
@@ -158,7 +162,10 @@ pub fn sheet(
       if dy != 0.0 {
         let from = if s.held >= 0.0 { s.held } else { s.h.value_at(c) }
         let top = if draggable { total * detents.fold(init=0.0, fn(a, b) { dmax(a, b) }) } else { target }
-        let to = dclamp(from - dy, 120.0, top)
+        // (one with detents no shorter than its least drag keeps; one without follows the finger down all the way,
+        // however short it is: else one shorter than that and 80 could never be dragged closed)
+        let least = if draggable { sheet_least_h } else { 0.0 }
+        let to = dclamp(from - dy, least, top)
         s.held = to
         s.h.put(to)
       }

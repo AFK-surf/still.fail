@@ -1038,6 +1038,31 @@ let error_box : @ui.Style = @ui.css("w=Full px=S8 pt=S1 pb=S2_5")
 let composer_error_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, leading=L5)
 
 ///|
+/// The files of a draft that are up, flying as it is sent, each from its tile (ChatHost.kt sending): from where its
+/// card or its picture is (its box's, keyed composer/file/<id>).
+fn flying_files(c : @ui.Ctx, w : Writing) -> Array[FlyingFile] {
+  w.files.filter_map(fn(f) {
+    let v = Some(f)
+    let id = text(v, "id")
+    match (field(v, "done"), c.rect_of(c.id("composer/file/" + id))) {
+      (Some(done), Some(from)) if text(Some(done), "path") != "" => {
+        let picture = writing_pictures.get(id).unwrap_or("")
+        Some({
+          path: text(Some(done), "path"),
+          from,
+          picture,
+          face: fn() {
+            let c = @ui.current()
+            @sf.file_card(c, "flying/" + id, text(v, "name"), number(v, "size")) |> ignore
+          },
+        })
+      }
+      _ => None
+    }
+  })
+}
+
+///|
 /// What is written sent into chat `r` (`v` its view: its thread, what is in it now; sendDraft, draft.ts send): in the
 /// list and flying there in the frame it is sent, before the core has it (sent_local: the rule), the composer empty at
 /// once; then what the core took (`composer.take`: the words with the links and the paths after them, the files up,
@@ -1057,26 +1082,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   // its words take off from the field as they are (before it is emptied), its room held till they let go of it
   let room = @motion.measured(c, "composer/foot").unwrap_or(0.0)
   // its files that are up fly too, each from its tile (ChatHost.kt sending)
-  let flying : Array[FlyingFile] = w.files.filter_map(fn(f) {
-    let v = Some(f)
-    let id = text(v, "id")
-    // (from where its card or its picture is: its box's, keyed composer/file/<id>)
-    match (field(v, "done"), c.rect_of(c.id("composer/file/" + id))) {
-      (Some(done), Some(from)) if text(Some(done), "path") != "" => {
-        let picture = writing_pictures.get(id).unwrap_or("")
-        Some({
-          path: text(Some(done), "path"),
-          from,
-          picture,
-          face: fn() {
-            let c = @ui.current()
-            @sf.file_card(c, "flying/" + id, text(v, "name"), number(v, "size")) |> ignore
-          },
-        })
-      }
-      _ => None
-    }
-  })
+  let flying = flying_files(c, w)
   @sfbase.flight_start(
     c,
     w.key,

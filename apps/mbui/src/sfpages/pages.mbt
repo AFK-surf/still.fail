@@ -27,4 +27,5 @@ pub fn reset() -> Unit {
   landing_reset()
   workspace_reset()
   outside_reset()
+  new_chat_reset()
 }

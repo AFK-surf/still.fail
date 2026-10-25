@@ -7,10 +7,6 @@
 /// Which sheet: what it shows and how it sits.
 priv enum SheetKind {
   NoSheet
-  /// where a new chat runs (NewChat.kt pickStation): half the screen
-  PickStation(String)
-  /// what a new chat runs on (NewChat.kt openRunPicker): 66%; its accounts' list in place of it while `accounts`
-  RunPicker(String)
   /// what another app shares in, to a chat (ShareSheet.kt): 72%, draggable
   ShareSheet
   /// what an invitation's link leads to, before it is accepted (Workspaces.kt InviteLinkSheet): half the screen
@@ -21,8 +17,6 @@ priv enum SheetKind {
 /// How a sheet sits: its share of the screen at first, whether its top drags it between half and full.
 fn sheet_spec(kind : SheetKind) -> (Double, Bool) {
   match kind {
-    PickStation(_) => (0.5, false)
-    RunPicker(_) => (0.66, false)
     ShareSheet => (0.72, true)
     InviteLink => (0.5, false)
     NoSheet => (0.5, false)
@@ -30,26 +24,14 @@ fn sheet_spec(kind : SheetKind) -> (Double, Bool) {
 }
 
 ///|
-/// A kind's title (Sheet.kt SheetHead), its panel's; "" for one that draws its own head (the run picker's, what is
-/// shared, an invitation).
-fn sheet_title(kind : SheetKind) -> String {
-  match kind {
-    PickStation(_) => tr("android-chat.new.station.pick")
-    _ => ""
-  }
-}
-
-///|
-/// The sheet up (NoSheet: none), and the presenter it is (@sf.last_presented); the run picker showing its accounts'
-/// list.
+/// The sheet up (NoSheet: none), and the presenter it is (@sf.last_presented).
 priv struct SheetHost {
   mut kind : SheetKind
   mut serial : Int
-  mut accounts : Bool
 }
 
 ///|
-let sheet_host : SheetHost = { kind: NoSheet, serial: 0, accounts: false }
+let sheet_host : SheetHost = { kind: NoSheet, serial: 0 }
 
 ///|
 /// What each kind draws, as this frame has it (its source, its workspace): told by the frame before the library's
@@ -65,11 +47,10 @@ fn raise_sheet(kind : SheetKind, from? : @sf.Anchor = Unanchored) -> Unit {
   lower_sheet()
   let s = sheet_host
   s.kind = kind
-  s.accounts = false
-  run_picker_opened.val = false
   let (share, draggable) = sheet_spec(kind)
   @sf.panel(
-    sheet_title(kind),
+    // (each draws its own head: what is shared, an invitation)
+    "",
     fn(_, _) { (sheet_drawer.val)(kind) },
     from~,
     tall=share,

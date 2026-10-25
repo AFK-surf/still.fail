@@ -1,6 +1,6 @@
 // A station's drive laid out narrow, as the web's narrow app has it (ember web/src/mobile/Drive.tsx RootsPage,
 // RootRow, FolderPage, Crumbs, EntryRow, UploadRow, Empty; Drive.css.ts m*): the files' page and a folder's in a box
-// narrower than page_look.mbt's narrow_most, in whichever frame (the phone's stack, a tablet's pane), with either hand.
+// narrower than @sf.page_narrow_most, in whichever frame (the phone's stack, a tablet's pane), with either hand.
 // The bar: back where the frame has somewhere to go back to, the folder's name, read again, ＋ (put files up, a new
 // folder) and ⋯ (the order, hidden files, its path, 收藏, pin, 管理). Under it the way down from its root, what it holds
 // in a line, the files going up, its entries on a card: pressed, one opens as its entry says (a folder gone into, a

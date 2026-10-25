@@ -18,16 +18,12 @@ enum Look {
 ///|
 /// How the page being drawn is laid out, by the width of its box.
 fn look_of(c : @ui.Ctx) -> Look {
-  if c.width < narrow_most {
+  if c.width < @sf.page_narrow_most {
     Narrow
   } else {
     Wide
   }
 }
-
-///|
-/// The widest a page is laid out as the narrow app is (the web's: max-width 640, where its narrow app takes over).
-let narrow_most : Double = 640.0
 
 ///|
 /// A page of the settings: `title`'s, holding `content` a block at a time (each laid out as it comes into view), in the

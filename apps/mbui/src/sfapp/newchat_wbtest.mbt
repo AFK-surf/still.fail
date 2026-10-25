@@ -161,7 +161,7 @@ test "a new chat: its station picked in the sheet, its model in the run picker" 
   run_to_sheet_rest(t)
   let (mx, my) = t.find_last("MBA").unwrap()
   t.tap(mx, my)
-  assert_true(!sheet_open())
+  assert_true(!@sf.presented_open_of(@sf.last_presented()))
   assert_eq(new_fix.station, "st2")
   assert_true(t.find("它会在 MBA 上") is Some(_))
   t.tap_text("Opus 5.5 · high")
@@ -172,11 +172,7 @@ test "a new chat: its station picked in the sheet, its model in the run picker" 
   assert_true(t.find("确定") is Some(_))
   let (ox, oy) = t.find_last("确定").unwrap()
   t.tap(ox, oy)
-  assert_true(!sheet_open())
-  for l in t.dump().split("\n") {
-    if l.contains("GPT") || l.contains("Opus") || l.contains("high") || l.contains("高") {
-        }
-  }
+  assert_true(!@sf.presented_open_of(@sf.last_presented()))
   assert_true(t.find("GPT-6 · high") is Some(_))
   // cancelled, it sinks back down
   t.tap_text("取消")

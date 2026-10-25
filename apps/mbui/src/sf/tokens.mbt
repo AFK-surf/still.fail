@@ -1031,6 +1031,10 @@ pub let found_start : @ui.Space = Exact(22.0)
 pub let grow : @ui.Len = Grow(1.0)
 
 ///|
+/// The models' column of a new chat's run picker beside the rest (NewChat.kt openRunPicker: weight(1.35f)).
+pub let run_models_grow : @ui.Len = Grow(1.35)
+
+///|
 /// Words on one line given the room left in their row, cut there with an ellipsis (Compose's Text with maxLines = 1
 /// in a Row: measured in what is left).
 pub let line_left : @ui.Size = Fill(1.0)
@@ -1265,6 +1269,19 @@ pub let small_button : @ui.Len = Fixed(22.0)
 ///|
 /// The pill offering to quote what is picked (the web's Chat.css.ts quotePop: 26 high).
 pub let quote_pop_h : @ui.Len = Fixed(26.0)
+
+///|
+/// The widest a page is laid out as the web's narrow app lays its pages out (max-width 640, where its narrow app takes
+/// over): wider, as its desktop pages are. A page's own width, not the tier (docs/architecture.md Pages).
+pub let page_narrow_most : Double = 640.0
+
+///|
+/// A choice standing over the composer (the web's mobile NewChat.css.ts mChooser: 30 high, a capsule of the
+/// composer's glass), the widest a station's name in it is.
+pub let glass_chooser_h : @ui.Len = Fixed(30.0)
+
+///|
+pub let glass_chooser_station_most : @ui.Len = Fixed(128.0)
 
 ///|
 /// A page's bar in the wide frame (the web's sidebar.css.ts pageBar: 45 high).
@@ -1568,6 +1585,14 @@ pub let composer_pad_room : @ui.Space = room(composer_pad)
 pub fn dialog_corner_foot(pad : Double) -> @ui.Style {
   let at = capsule_in(dialog_r, button_height())
   @ui.style(pb=room(at), mr=room(at - pad))
+}
+
+///|
+/// Where a small panel's buttons stand in its foot corner (the theme's button: a capsule): as far from its foot and its
+/// side as makes the last concentric with its corner (r_menu), the row reaching past its padding (panel_pad) to there.
+pub fn panel_corner_foot() -> @ui.Style {
+  let at = room(capsule_in(r_menu, button_height()) - panel_pad)
+  @ui.style(mr=at, mb=at)
 }
 
 ///|
