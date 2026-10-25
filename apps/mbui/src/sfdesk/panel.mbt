@@ -38,8 +38,8 @@ pub fn side_of(v : ChatView) -> (Array[String], String) {
 ///|
 /// Chat `r`'s tabs as its view has them now.
 pub fn side_now(src : Source, r : ChatRef) -> (Array[String], String) {
-  match (src.topic)("chat", chat_params(r)).value {
-    Some(v) => side_of(chat_view(v))
+  match view_of_chat(src, r).0 {
+    Some(v) => side_of(v)
     None => ([], "")
   }
 }
@@ -456,9 +456,8 @@ pub fn tape_side(c : @ui.Ctx, src : Source, w : Workspace, side : SideOf) -> Uni
   side_on_tape.val = true
   match side {
     ChatSide(r) =>
-      match (src.topic)("chat", chat_params(r)).value {
-        Some(v) => {
-          let view = chat_view(v)
+      match view_of_chat(src, r).0 {
+        Some(view) => {
           let (tabs, front) = side_of(view)
           side_panel(c, src, w, r, view, tabs, front)
         }

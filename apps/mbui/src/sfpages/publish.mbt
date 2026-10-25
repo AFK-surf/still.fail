@@ -155,7 +155,10 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
                 let here : MessageHere = {
                   station: r.station,
                   session: r.session,
-                  view: @sfbase.chat_view((src.topic)("chat", chat_params(r)).value.unwrap_or(Json::null())),
+                  view: match @sfbase.view_of_chat(src, r).0 {
+                    Some(v) => v
+                    None => @sfbase.chat_view(Json::null())
+                  },
                   go: None,
                   inline: true,
                   gutter: 0.0,
