@@ -145,6 +145,9 @@ case "${1:-build}" in
       -lm $SECT $APP_LINK
     cp ${MBUI_IOS_PLIST:-$ROOT/ios/Info.plist} $APPDIR/Info.plist
     plutil -replace CFBundleIdentifier -string $BID $APPDIR/Info.plist
+    # the host's display link asks for up to 120 frames a second (ios_app.m): an iPhone with ProMotion lets an app have
+    # more than 60 only where its Info.plist says so
+    plutil -replace CADisableMinimumFrameDurationOnPhone -bool YES $APPDIR/Info.plist
     if [ -n "${MBUI_IOS_BUILD:-}" ]; then
       plutil -replace CFBundleVersion -string "$MBUI_IOS_BUILD" $APPDIR/Info.plist
       plutil -replace CFBundleShortVersionString -string "${MBUI_IOS_VERSION:-0.1.$MBUI_IOS_BUILD}" $APPDIR/Info.plist
