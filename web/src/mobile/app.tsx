@@ -171,6 +171,12 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
     if (type === "POP" && at >= 0) {
       next = pages.slice(0, at + 1);
       forward = false;
+    } else if (type === "POP" && placeOfPath(location.pathname, home) !== null) {
+      // History can return to a place from before this shell mounted (or before its root was
+      // replaced by a bar switch). It is a root again, not another page over the old stack:
+      // keeping that stack would leave the bottom bar hidden on the place's own page.
+      next = [page];
+      forward = false;
     } else if (type === "REPLACE" && (location.state as { fresh?: boolean } | null)?.fresh) {
       // Another chat from the latest chats: a page of its own in place of the one that was open. A place switched to
       // on the bar: its page as it was left, if it was.

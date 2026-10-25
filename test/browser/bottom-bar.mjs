@@ -27,11 +27,16 @@ createRoot(root).render(<DemoApp phone />);
   madeFixture = true;
   await writeFile(html, '<!doctype html><html lang="zh"><meta name="viewport" content="width=device-width, initial-scale=1"><div id="app"></div><script type="module" src="/bottom-bar-check.tsx"></script></html>', { flag: 'wx' });
   madeHtml = true;
-  server = await createServer({ configFile: fileURLToPath(new URL('../../web/vite.demo.config.ts', import.meta.url)), root: fileURLToPath(new URL('../../web', import.meta.url)), server: { host: '127.0.0.1', port: 0, hmr: false } });
+  server = await createServer({ configFile: fileURLToPath(new URL('../../web/vite.demo.config.ts', import.meta.url)), root: fileURLToPath(new URL('../../web', import.meta.url)),
+    plugins: [{ name: 'bar-history-check', enforce: 'pre', transform(code, id) {
+      if (!id.split('?')[0].endsWith('/demo/mount.tsx')) return;
+      return code.replace('const go = useNavigate();', 'const go = useNavigate(); (window as any).barHistoryGo = go;')
+        .replace('const here = useLocation().pathname;', 'const here = useLocation().pathname; (window as any).barHistoryPath = here;');
+    } }], server: { host: '127.0.0.1', port: 0, hmr: false } });
   await server.listen();
   const base = `http://127.0.0.1:${server.httpServer.address().port}`;
   if (out) await mkdir(out, { recursive: true });
-  browser = await playwright.chromium.launch();
+  browser = await playwright.chromium.launch({ executablePath: process.env.CHROMIUM });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'zh-CN' });
   const page = await context.newPage();
   await page.clock.install();
@@ -67,6 +72,7 @@ createRoot(root).render(<DemoApp phone />);
   // The demo opens on a chat: back to the list, a place's top page.
   await page.locator('header').first().waitFor({ timeout: 30000 });
   await rest();
+  const chatPath = await page.evaluate(() => window.barHistoryPath);
   await page.getByRole('button', { name: /返回|会话/ }).first().tap();
   await rest();
   await tab('对话').waitFor({ timeout: 10000 });
@@ -80,6 +86,22 @@ createRoot(root).render(<DemoApp phone />);
   assert.equal(await page.getByRole('button', { name: '返回' }).count(), 0, 'no back on a place\'s top page');
   await shot('home');
   await shot('home-dark', true);
+
+  // The initial chat was replaced with Home by its back button. The older Home entry
+  // predates the shell's page stack: browser back must still land on a root with its bar.
+  await page.evaluate(() => window.barHistoryGo(-1));
+  await rest();
+  await shot('home-after-browser-back');
+  assert.equal(await page.locator('[data-bar=host][data-away]').count(), 0, 'browser back to an older home restores the bar');
+  await tab('对话').tap();
+  await rest();
+  assert.equal(await page.locator('[data-role=top]').count(), 1, 'the returned home is the active root');
+  await page.evaluate((path) => window.barHistoryGo(path), chatPath);
+  await rest();
+  assert.equal(await page.locator('[data-bar=host][data-away]').count(), 1, 'opening a chat hides the bar');
+  await page.getByRole('button', { name: /返回|会话/ }).first().tap();
+  await rest();
+  assert.equal(await page.locator('[data-bar=host][data-away]').count(), 0, 'returning from that chat restores the bar again');
 
   // The panel snaps as the ball does (one other bar: 56 of travel): held a little way above the bar, it opens of itself
   // (but for a quarter's lean toward the finger) and stays so while held; back down below the line, it closes while
