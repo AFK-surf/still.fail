@@ -46,7 +46,7 @@ pub(all) struct Core {
   under : () -> String
   /// how this build's update stands (关于's version row, settings' 关于 row)
   version_now : () -> VersionNow
-  /// the version row's button pressed: a newer build installed, or still.fail cloud asked now
+  /// the version row pressed: a newer build installed, or still.fail cloud asked now; the update dialog saying how it goes
   version_tap : () -> Unit
   /// 本机 Station's installer run (the app's local_station.mbt): `true` a station downloaded and joined to this
   /// workspace (none here), `false` the one here brought up to the latest release and run as a service
@@ -170,12 +170,13 @@ pub(all) enum Route {
 
 ///|
 /// How this build's update stands: what is under way (正在检查, 下载中 40%, 正在安装; "" while nothing is), how far
-/// it has come while it downloads and the host says how far (0 to 1, else None), and the newer build known, by its name
-/// ("" while none is).
+/// it has come while it downloads and the host says how far (0 to 1, else None), the newer build known, by its name
+/// ("" while none is), and whether newer builds are asked for here at all (not on iOS, nor run from the sources).
 pub(all) struct VersionNow {
   doing : String
   part : Double?
   newer : String
+  asks : Bool
 }
 
 ///|

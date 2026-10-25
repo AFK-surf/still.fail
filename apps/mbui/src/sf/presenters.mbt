@@ -1197,7 +1197,8 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
         })
         |> ignore
       } else {
-        c.box(style=room, body) |> ignore
+        // (holding nothing this time, none of its room: its title and what it says straight over its foot)
+        c.box(style=room, gone_empty=true, body) |> ignore
       }
       match x.foot {
         Some(f) => {

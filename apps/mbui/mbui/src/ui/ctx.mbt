@@ -790,6 +790,8 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 /// a ⋯ that offers it instead); `more`: the row's ⋯, there only while something of it is left out.
 /// `flow`: a row that goes on in lines when what it holds does not fit, each thing in it as wide as it is, `gap` apart
 /// along the line and between the lines, or `line_gap` between the lines (Compose's FlowRow and its two spacedBy).
+/// `gone_empty`: built holding nothing, it takes no room, its padding and margins none (CSS's :empty { display: none }):
+/// the room over a part that has nothing in it this time (a dialog's body) not left standing empty.
 /// `label`: what it is called where it shows no words (an icon's button, as Compose's contentDescription), found by
 /// them whole as words are (a drive's `=WORDS`, Tester::locate). `name`: what it stands for in another app's tree (the
 /// web page's class it is ported from, `shellCss.dock`), read only by a tool comparing the two (Tester::boxes).
@@ -864,6 +866,7 @@ pub fn Ctx::box(
   shadow_out? : Bool = false,
   flow? : Bool = false,
   line_gap? : Double = -1.0,
+  gone_empty? : Bool = false,
   label? : String = "",
   name? : String = "",
   id? : Int = 0,
@@ -1062,6 +1065,17 @@ pub fn Ctx::box(
     self.move_node(i)
   }
   self.with_parent(i, body)
+  // holding nothing, no room of its own
+  if gone_empty && n.first < 0 {
+    n.pad_l = 0.0
+    n.pad_r = 0.0
+    n.pad_t = 0.0
+    n.pad_b = 0.0
+    n.mar_l = 0.0
+    n.mar_r = 0.0
+    n.mar_t = 0.0
+    n.mar_b = 0.0
+  }
   i
 }
 

@@ -466,13 +466,17 @@ update button, SettingsHome.kt Version): the app keeping itself current (src/sfa
   MBUI_UPDATE_FEED=<feed> gives the cloud's (the local cloud's in e2e). A release published elsewhere meets it with a
   latest.json of the same AppRelease shape beside its APK (and a source that reads it).
 - Asked once the app is signed in. Home's top bar offers a build that brings something (its `news`): the download key
-  with its accent dot, how far while it downloads (40%); the settings' version row any build (更新到 0.1.1, in the accent;
-  检查更新 asks now: 正在检查, then 已是最新 or why it failed). Tapped: asked again now, then the host downloads it
+  with its accent dot, how far while it downloads (40%); the settings' version row any build (更新到 0.1.1; 检查更新
+  where newer builds are asked for at all). The row and the Mac's menu bar (检查更新…) open the update dialog (a sheet
+  with a finger short of Large; sfbase updates.mbt update_dialog), which says it all in place as it goes: 正在检查最新版本,
+  then 已是最新版本 or why it could not ask (重试), or the newer build and what it brings (更新 or 稍后), how far it has
+  come and what went wrong. Tapped: asked again now, then the host downloads it
   (@hostapi.update_install; Android's Updates.java: into the cache, a cut connection picked up by a range, six tries with
   growing pauses, 网络中断，正在继续下载 meanwhile; checked against its sha256: 下载的文件不完整 when not), and hands it
   to the system's installer (PackageInstaller, as this app's own newer build; the confirmation the installer asks for
   opened by InstallResult); without leave to install apps the system's page for it opens (允许 still.fail 安装应用后，
-  再点一次更新). What failed is said in a toast (无法更新：…). Hosts with no version code (all but Android) never ask.
+  再点一次更新). What failed is said in the dialog while it is open, else in a toast (无法更新：…). Hosts with no
+  version code or no source (iOS, a build run from the sources) never ask, and 关于 offers no check.
 
 Not yet, against the current app: checking again as the app comes back to the front (only at its start), an APK of a
 chat installed from the file preview (安装), a source for the mbui build's own release (it is to publish a latest.json

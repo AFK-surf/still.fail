@@ -1,7 +1,7 @@
 // The phone's offers of a newer build (ember apps/android app/Updates.kt; Home.kt's update button): Home offers a build
 // that brings something the changelog says (a download key with its dot; how far while it downloads); the words of
-// updates, both frames'. How an update stands, where a build comes from and the settings' version row (更新到 …;
-// 检查更新 asks now, 已是最新 said when none) are both frames' (sfbase updates.mbt).
+// updates, both frames'. How an update stands, where a build comes from, the settings' version row (更新到 …,
+// 检查更新) and the dialog it and the menu bar open are both frames' (sfbase updates.mbt).
 
 ///|
 // kept across runs: a table, never written
@@ -21,6 +21,12 @@ let up_zh : Map[String, String] = {
   "android-settings.version.check": "检查更新",
   "android-settings.version.checking": "正在检查",
   "android-settings.version.update": "更新到 {version}",
+  "desktop.update.available": "有新版本 {version}",
+  "desktop.update.checkFailed": "检查更新失败",
+  "desktop.update.dev": "开发版不检查更新",
+  "desktop.update.later": "稍后",
+  "desktop.update.latest": "已是最新版本",
+  "desktop.update.update": "更新",
 }
 
 ///|
