@@ -139,9 +139,14 @@ export const fpStage = style({
     "&[data-pan]:active": { cursor: "grabbing" },
   },
 });
+/** An image on the stage, raised off the canvas round it; on a phone's width flat: it spans the stage but for a gutter
+ * of 12 at its sides (zoom.ts), too narrow for the shadow, which would only smear into it and be cut at the window's edges. */
 export const fpImage = style({
   position: "absolute", left: "50%", top: "50%", maxWidth: "none", transformOrigin: "center",
   boxShadow: "0 1px 3px rgba(0, 0, 0, .08), 0 8px 28px rgba(0, 0, 0, .10)", WebkitUserDrag: "none",
+  "@media": {
+    "(max-width: 640px)": { boxShadow: "none" },
+  },
 });
 // Around an image, a click closes it (`data-closes`): the image zooms, not what is around it.
 globalStyle(`${fpStage}[data-closes]:not([data-pan])`, { cursor: "default" });

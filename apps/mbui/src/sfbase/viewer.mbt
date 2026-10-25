@@ -1779,8 +1779,8 @@ pub fn Viewer::shown_picture(self : Viewer, c : @ui.Ctx, src : Source, r : (Doub
 /// value takes the box to the picture's place and its corners to none, and the picture from where it lies in the box
 /// to there, at its own proportions all the way. From the thumbnail where the chat lays it out now (it may move under
 /// the viewer: the keyboard let go as it opened, a message come), else where it was last. `ground`: under the picture
-/// in the box (a film's black); `shadowed`: an image's ground and shadow on the stage (desk_image_ground), coming with
-/// the flight from none in the chat.
+/// in the box (a film's black); `shadowed`: an image's ground and shadow on the stage (desk_image_ground), where the
+/// stage raises it (image_raised), coming with the flight from none in the chat.
 pub fn Viewer::draw_flight(
   self : Viewer,
   c : @ui.Ctx,
@@ -1810,7 +1810,7 @@ pub fn Viewer::draw_flight(
   let (bx, by, bw, bh) = (along(from.x, tx), along(from.y, ty), along(from.w, tw), along(from.h, th))
   let (px, py, pw, ph) = (along(px0, tx), along(py0, ty), along(pw0, tw), along(ph0, th))
   let r = from.radius * (1.0 - p)
-  if shadowed && p > 0.0 {
+  if shadowed && p > 0.0 && image_raised(c) {
     c.layer(fn() {
       c.box(style=desk_image_shadow, w=Px(bw), h=Px(bh), tx=bx, ty=by, radius=r, opacity=p, fn() {  }) |> ignore
     })
@@ -1944,7 +1944,7 @@ pub fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int
       v.draw_flight(c, v.shown_picture(c, src, r), r, v.flying(), shadowed=true)
     Some(r) if picture != "" => {
       let (x, y, w, h) = r
-      // on the canvas with the web's shadow round it (FilePreview.css.ts fpImage)
+      // on the canvas, raised off it where the stage is wide (FilePreview.css.ts fpImage)
       desk_image_ground(c, x + sx, y, w, h)
       c.picture(v.shown_picture(c, src, r), x=x + sx, y~, w~, h~, max_px=stage_px) |> ignore
     }
@@ -1964,13 +1964,13 @@ pub fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int
     }
   }
   match pv_strip.leaving {
-    // the one going, drawn from where it was (it has no place of its own any more)
-    Some(l) =>
-      c.layer(fn() {
-        c.picture(l.picture, x=l.x + sx - l.dir.to_double() * l.width, y=l.y, w=l.w, h=l.h, max_px=stage_px) |> ignore
-      })
-      |> ignore
-    // those beside it, out of sight until a swipe brings them in
+    // the one going, drawn from where it was (it has no place of its own any more), on its ground as it lay
+    Some(l) => {
+      let lx = l.x + sx - l.dir.to_double() * l.width
+      desk_image_ground(c, lx, l.y, l.w, l.h)
+      c.layer(fn() { c.picture(l.picture, x=lx, y=l.y, w=l.w, h=l.h, max_px=stage_px) |> ignore }) |> ignore
+    }
+    // those beside it, out of sight until a swipe brings them in, each on its ground as it will lie (fpPeek's fpImage)
     None =>
       if sx != 0.0 {
         for side in [(before, -1.0), (after, 1.0)] {
@@ -1982,8 +1982,9 @@ pub fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int
                 Some(r) if p != "" => {
                   let (x, y, w, h) = r
                   let shown = n.shown_picture(c, src, r)
-                  c.layer(fn() { c.picture(shown, x=x + sx + side.1 * width, y~, w~, h~, max_px=stage_px) |> ignore })
-                  |> ignore
+                  let x = x + sx + side.1 * width
+                  desk_image_ground(c, x, y, w, h)
+                  c.layer(fn() { c.picture(shown, x~, y~, w~, h~, max_px=stage_px) |> ignore }) |> ignore
                 }
                 _ => ()
               }
