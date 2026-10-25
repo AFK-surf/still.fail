@@ -55,6 +55,45 @@ test "a picture waiting in the composer, tapped, opens in the viewer from the by
 }
 
 ///|
+test "a waiting picture's ✕ hangs on its tile's corner, its centre on the curve, on a phone and a computer alike, clear of the next; tapped, it takes the picture out" {
+  // (Android, then macOS: one design on every screen, docs/ui-panels.md)
+  for platform in [2, 0] {
+    let calls : Array[Made] = []
+    let made : Ref[Source?] = Ref(None)
+    let t = fake_core(calls, made~, platform~)
+    let src = made.val.unwrap()
+    let w = @sfbase.writing(src, "ws1/st1:s-c1")
+    @sfbase.writing_add(src, w, "ws1/st1", "照片.png", png_head())
+    @sfbase.writing_add(src, w, "ws1/st1", "第二张.png", png_head())
+    t.draw()
+    t.run_for(@sfpages.morph_ms)
+    let tiles = @sfbase.writing(src, "ws1/st1:s-c1").files.filter_map(fn(f) {
+      thumb_of(t.ctx(), "ws1/st1//draft:" + text(Some(f), "id"))
+    })
+    assert_eq(tiles.length(), 2)
+    let first = tiles[0]
+    let next = tiles[1]
+    let (x, y, bw, bh) = match t.query(Button, label=@sf.t("web-main.file.remove", args=[("name", "照片.png")])) {
+      Some(b) => b.rect
+      None => fail("no ✕ on the picture (platform \{platform})")
+    }
+    let m = @ui.smooth_middle(first.radius)
+    let near = fn(a : Double, b : Double) { (a - b).abs() < 0.01 }
+    assert_true(near(x + bw / 2.0, first.x + first.w - m), msg="its centre across (platform \{platform}): \{x + bw / 2.0}")
+    assert_true(near(y + bh / 2.0, first.y + m), msg="its centre down (platform \{platform}): \{y + bh / 2.0}")
+    // over the corner: as far past the tile's top as past its right edge
+    assert_true(near(first.y - y, x + bw - (first.x + first.w)), msg="its reach (platform \{platform})")
+    // the next picture the row's gap (6) past the ✕, not under it
+    assert_true(next.x >= x + bw + 6.0 - 0.01, msg="the next at \{next.x}, the ✕ ends at \{x + bw}")
+    t.tap(x + bw / 2.0, y + bh / 2.0)
+    t.draw()
+    let left = @sfbase.writing(src, "ws1/st1:s-c1").files
+    assert_eq(left.length(), 1)
+    assert_eq(text(Some(left[0]), "name"), "第二张.png")
+  }
+}
+
+///|
 test "an archived chat's restore failing says why under it, in red; tapped again it is tried again" {
   let calls : Array[Made] = []
   let t = fake_core(calls, over=fn(name, tp) {
