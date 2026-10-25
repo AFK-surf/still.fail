@@ -33,6 +33,8 @@ export const large = style({
 globalStyle(`${large}[data-picture] img`, { borderRadius: 0 });
 /** Only what it has, for those who may not change it. */
 export const shown = style({ display: "grid", flex: "none" });
+/** The mark at a row's end: a line's square, the letter muted and bold while it has none. */
+export const rowMark = style({ display: "grid", placeItems: "center", flex: "none", minWidth: "28px", height: "28px", color: vars.muted, fontWeight: "600" });
 /** The panel: a panel's room (12); whatever sits in a corner is as round as the panel's corner less its padding. */
 export const pick = style({ width: "300px" });
 export const panel = style({ display: "flex", flexDirection: "column", gap: "6px" });

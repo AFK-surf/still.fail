@@ -28,7 +28,8 @@ export function AppVersionPage({ back }: { back: string }) {
   );
 }
 
-function AppVersion() {
+/** This app's version and looking for a newer build (关于's first row, and this page's). */
+export function AppVersion() {
   const desktop = window.stillfailDesktop;
   const update = useAppUpdate();
   const [checking, setChecking] = useState(false);

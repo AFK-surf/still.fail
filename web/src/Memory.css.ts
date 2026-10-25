@@ -1,14 +1,12 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { bleedX } from "@stillfail/ui/styles/align.ts";
 import { cardGround } from "./styles/pages.css.ts";
-import { memoryStation } from "./cloud/settings.css.ts";
 
 export const memoryDoc = style({ fontSize: vars.textBody });
-/** A row of the list: its words in the section's column, its ground reaching past them (pages.css.ts listRow). */
+/** A row of a list card (pages.css.ts listRow), a link or a button. */
 export const memoryRow = style({
-  ...bleedX(12), width: "calc(100% + 24px)", border: "0", background: "none", color: vars.text, font: "inherit",
-  textAlign: "left", textDecoration: "none", cursor: "pointer",
+  width: "100%", border: "0", background: "none", color: vars.text, font: "inherit", textAlign: "left",
+  textDecoration: "none", cursor: "pointer",
 });
 export const memoryRowTitle = style({ display: "flex", alignItems: "baseline", gap: "8px", minWidth: "0" });
 export const memoryRowSub = style({ fontSize: vars.textMeta, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
@@ -36,5 +34,3 @@ export const memoryChip = style({
 globalStyle(`${memoryChip} span`, { fontSize: vars.textMeta, opacity: "0.6" });
 globalStyle(`${memoryDoc} > :first-child`, { marginTop: "0" });
 globalStyle(`${memoryDoc} > :last-child`, { marginBottom: "0" });
-/** Here rather than with its class: it comes after .memory-doc > :first-child, and wins over it. */
-globalStyle(`${memoryStation} + ${memoryStation}`, { marginTop: "36px" });

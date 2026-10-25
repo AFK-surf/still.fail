@@ -1,5 +1,5 @@
 import { useDoing } from "../doing.ts";
-// The workspace itself on a narrow screen, from settings (./Settings.tsx): its name as the title (a tap renames it), its
+// The workspace itself on a narrow screen, from settings (./Settings.tsx): its name as the title, renamed from its row, its
 // people in one list (those in it, those added who have not signed in, the invitations out), adding them from the ＋
 // at the top, and leaving or deleting it at the bottom. What the desktop's workspace settings do, in the Android app's manner.
 import { parseEmails, useSlackPeople } from "../cloud/adding.ts";
@@ -9,7 +9,7 @@ import { cloud, errorText, useWorkspace, type LoginSession, type MemberView, typ
 import { useTopic } from "../core/react.ts";
 import { ROLE_HINT, ROLE_LABEL } from "../cloud/settings.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
-import { Check, UserPlus } from "@stillfail/ui/icons.tsx";
+import { Check, ChevronRight, UserPlus } from "@stillfail/ui/icons.tsx";
 import { Avatar, Button, failedIn, Field, LargeTitle, LinkButton, ListCard, ListRow, NavButton, PickRow, SectionHeader, TopBack } from "./parts.tsx";
 import { Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import { doingMatches, failed, useDoingList } from "../doing.ts";
@@ -23,6 +23,8 @@ import * as css from "./WorkspacePage.css.ts";
 import * as sheetsCss from "./styles/sheets.css.ts";
 import * as settingsCss from "./styles/settings.css.ts";
 import * as homeCss from "./styles/home.css.ts";
+import * as settingsRowCss from "./Settings.css.ts";
+import { GoRow } from "./Settings.tsx";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
@@ -54,20 +56,25 @@ export function WorkspaceScreen() {
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} trailing={manager ? <NavButton icon={UserPlus} iconSize={20} label={t("web-mobile.workspace.add")} onClick={add} /> : undefined} />
-      {/* Its name is the title, renamed by a tap on it (by its owner and admins). */}
-      <div className={manager ? css.mRename : undefined} role={manager ? "button" : undefined} tabIndex={manager ? 0 : undefined} onClick={manager ? rename : undefined}>
-        <LargeTitle small="" big={view.name} />
-      </div>
-      <p className={css.mLead}>{t(manager ? "web-mobile.workspace.leadManager" : "web-mobile.workspace.lead", { role: ROLE_LABEL[view.role], members: t("web-mobile.settings.members", { n: view.members.length }), stations: t("web-mobile.workspaces.stations", { n: view.stations.length }) })}</p>
-      {/* Its mark, where it is switched to (its letter till it has one): picked in the stations' sheet. */}
-      {manager && (
-        <ListCard>
+      <LargeTitle small="" big={view.name} />
+      <p className={css.mLead}>{t("web-mobile.workspace.lead", { role: ROLE_LABEL[view.role], members: t("web-mobile.settings.members", { n: view.members.length }), stations: t("web-mobile.workspaces.stations", { n: view.stations.length }) })}</p>
+      {/* Its name and its mark (its letter till it has one, picked in the stations' sheet): renamed and picked by its
+          owner and admins, as on every width (../cloud/settings.tsx WorkspaceSettings). */}
+      <ListCard>
+        {manager ? <GoRow title={t("web-pages.settings.workspace.name")} value={view.name} onClick={rename} /> : (
+          <ListRow>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("web-pages.settings.workspace.name")}</span>
+            <span className={settingsRowCss.mValue}>{view.name}</span>
+          </ListRow>
+        )}
+        {manager && (
           <ListRow onClick={() => app.sheet({ height: 0.78, content: () => <MarkSheet s={view} set={(m) => cloud.setWorkspaceMark(me.sub, view.id, m)} /> })}>
             <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("web-mobile.stations.emoji")}</span>
             <span className={css.mMark}><WorkspaceMark w={view} size={20} picture={28} /></span>
+            <ChevronRight size={14} className={partsCss.mSubtle} />
           </ListRow>
-        </ListCard>
-      )}
+        )}
+      </ListCard>
       {/* Its people in one list: those in it, then those added who have not signed in yet, then the invitations out; which is which on each row's second line. */}
       <SectionHeader title={t("web-mobile.workspace.members")} trailing={waiting ? t("web-mobile.settings.membersWaiting", { n: view.members.length, waiting }) : t("web-mobile.settings.members", { n: view.members.length })} start={24} />
       <ListCard>

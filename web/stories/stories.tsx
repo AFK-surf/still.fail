@@ -983,12 +983,12 @@ export const stories: Story[] = [
   { id: "phone-chat-login-card", group: "登录", title: "手机 · 对话里的卡片", app: true, phone: true, demo: logins({ card: "device" }) },
 
   // ── settings ──
-  { id: "settings-appearance", group: "设置", title: "外观", app: true, steps: [{ click: '[aria-label="设置"]' }] },
+  { id: "settings-appearance", group: "设置", title: "外观", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "外观" }] },
   { id: "phone-settings", group: "设置", title: "手机 · 设置（账号、workspace 两张卡，各组带图标）", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }] },
   { id: "phone-settings-about", group: "设置", title: "手机 · 关于（更新日志、使用统计、条款）", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "关于" }] },
   { id: "phone-settings-appearance", group: "设置", title: "手机 · 外观", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "外观" }] },
-  { id: "settings-appearance-fonts", group: "设置", title: "外观 · 字体已选（思源宋体、霞鹜文楷、Maple Mono）", app: true, demo: chosenFonts, steps: [{ click: '[aria-label="设置"]' }] },
-  { id: "settings-appearance-fonts-text", group: "设置", title: "外观 · 字体 · 正文，指着思源宋体（预览里先试）", app: true, demo: chosenFonts, steps: [{ click: '[aria-label="设置"]' }, { click: '[aria-label="字体"] button:has-text("正文")' }, { hover: 'button[aria-pressed]:has-text("思源宋体")' }] },
+  { id: "settings-appearance-fonts", group: "设置", title: "外观 · 字体已选（思源宋体、霞鹜文楷、Maple Mono）", app: true, demo: chosenFonts, steps: [{ click: '[aria-label="设置"]' }, { text: "外观" }] },
+  { id: "settings-appearance-fonts-text", group: "设置", title: "外观 · 字体 · 正文，指着思源宋体（预览里先试）", app: true, demo: chosenFonts, steps: [{ click: '[aria-label="设置"]' }, { text: "外观" }, { click: '[aria-label="字体"] button:has-text("正文")' }, { hover: 'button[aria-pressed]:has-text("思源宋体")' }] },
   { id: "phone-settings-fonts", group: "设置", title: "手机 · 外观 › 字体", app: true, phone: true, demo: chosenFonts, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "外观" }, { text: "字体" }] },
   { id: "app-chat-fonts", group: "设置", title: "对话 · 字体已选（思源宋体、霞鹜文楷、Maple Mono）", app: true, demo: chosenFonts },
   { id: "settings-notifications", group: "设置", title: "通知", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "通知" }] },
@@ -1001,7 +1001,8 @@ export const stories: Story[] = [
       </div>
     </div>),
   },
-  { id: "settings-permissions", group: "设置", title: "权限", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "权限" }] },
+  // (not a row of the settings' list: 通知's page asks for it; ⌘K finds it)
+  { id: "settings-permissions", group: "设置", title: "权限", app: true, steps: [{ click: "textarea" }, { key: "ControlOrMeta+k" }, { key: "p" }, { key: "e" }, { key: "r" }, { key: "m" }, { key: "i" }, { key: "s" }, { key: "Enter" }] },
   {
     id: "settings-permissions-states", group: "设置", title: "权限 · 各种状态",
     render: () => stage(<div style={{ display: "grid", gap: 10, padding: 32, maxWidth: 720 }}>
@@ -1011,18 +1012,22 @@ export const stories: Story[] = [
       ))}
     </div>),
   },
-  { id: "settings-changelog", group: "设置", title: "更新日志", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "更新日志" }] },
+  { id: "settings-changelog", group: "设置", title: "更新日志", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "关于" }, { text: "更新日志" }] },
   { id: "settings-about", group: "设置", title: "关于", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "关于" }] },
-  { id: "settings-account-delete", group: "设置", title: "账号 · 注销", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "you@acme.dev" }, { click: 'button:has-text("注销")' }] },
+  // (the settings come to the account's page, their list's first row's)
+  { id: "settings-account-delete", group: "设置", title: "账号 · 注销", app: true, steps: [{ click: '[aria-label="设置"]' }, { click: 'button:has-text("注销")' }] },
   { id: "phone-me", group: "设置", title: "手机 · 账号", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "you@acme.dev" }] },
   { id: "phone-me-delete", group: "设置", title: "手机 · 账号 · 注销", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "you@acme.dev" }, { text: "注销账号" }] },
   { id: "settings-archive", group: "设置", title: "归档", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "归档" }] },
   { id: "settings-decisions", group: "设置", title: "自动决策", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "自动决策" }] },
   { id: "settings-memory", group: "设置", title: "记忆", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }] },
-  { id: "settings-memory-skill", group: "设置", title: "记忆 · 项目", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "acme-web" }] },
-  { id: "settings-memory-global", group: "设置", title: "记忆 · 全局", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "合并" }] },
-  { id: "settings-workspace", group: "设置", title: "Workspace", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "Workspace · Acme" }] },
-  { id: "settings-security", group: "设置", title: "安全", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }] },
+  { id: "settings-memory-station", group: "设置", title: "记忆 · Studio", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }] },
+  { id: "settings-memory-skill", group: "设置", title: "记忆 · 项目", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }, { text: "acme-web" }] },
+  { id: "settings-memory-global", group: "设置", title: "记忆 · 全局", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }, { text: "合并" }] },
+  { id: "settings-workspace", group: "设置", title: "Workspace", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "Acme" }] },
+  { id: "settings-workspace-member", group: "设置", title: "Workspace · 成员的角色和移出", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "Acme" }, { text: "陈默" }] },
+  { id: "phone-workspace", group: "设置", title: "手机 · Workspace", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Acme" }] },
+  { id: "settings-security", group: "设置", title: "安全 · 此 workspace 没有安全模式（设置的目录里不列）", app: true, steps: [{ click: '[aria-label="设置"]' }] },
   { id: "settings-security-on", group: "设置", title: "安全 · 已开启", app: true, demo: lockDemo("on"), steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }] },
   { id: "settings-security-turn-off", group: "设置", title: "安全 · 关闭安全模式", app: true, demo: lockDemo("on"), steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }, { click: 'button:has-text("关闭安全模式")' }] },
   { id: "settings-security-turn-off-typed", group: "设置", title: "安全 · 关闭安全模式 · 已输入名称", app: true, demo: lockDemo("on"), steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }, { click: 'button:has-text("关闭安全模式")' }, { key: "A" }, { key: "c" }, { key: "m" }, { key: "e" }] },

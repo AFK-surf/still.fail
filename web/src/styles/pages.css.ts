@@ -86,6 +86,9 @@ export const listRow = style({
     "&:hover": { background: vars.hover },
   },
 });
+/** A row to press (a button: adding an account, leaving the workspace, a member's menu): the row's look, not a button's. */
+globalStyle(`button${listRow}`, { width: "100%", border: "0", background: "none", textAlign: "left", cursor: "pointer" });
+globalStyle(`button${listRow}:disabled`, { cursor: "default" });
 export const listRowText = style({ flex: "1", display: "grid", gap: "2px", minWidth: "0" });
 export const listRowTitle = style({
   flex: "1", minWidth: "0", fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",

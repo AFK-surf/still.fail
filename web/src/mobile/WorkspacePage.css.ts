@@ -6,8 +6,6 @@ export const mYou = style({
   cornerShape: vars.cornerShape, background: "var(--m-accent-bg)",
   color: "var(--m-accent-ink)", fontSize: vars.textCaption, verticalAlign: "1px",
 });
-/** The name as the title, renamed by a tap. */
-export const mRename = style({ cursor: "pointer", WebkitTapHighlightColor: "transparent" });
 export const mLead = style({ padding: "0 16px 4px", fontSize: vars.textMeta, color: "var(--m-muted)" });
 export const mGap = style({ height: "18px" });
 /** Its mark at the icon row's end (its letter, muted, while it has none). */

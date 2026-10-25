@@ -4,14 +4,11 @@ import { muted } from "../styles/shell.css.ts";
 import { runtimeLogo } from "../ui.css.ts";
 import { machineLogins } from "../pages/Accounts.css.ts";
 import { btn } from "@stillfail/ui/styles/controls.css.ts";
-import { BUTTON_CARD_CORNER, CARD_PAD, cardLook } from "../styles/pages.css.ts";
+import { BUTTON_CARD_CORNER, CARD_PAD, LIST_PAD, cardLook } from "../styles/pages.css.ts";
 import { bleedStart } from "@stillfail/ui/styles/align.ts";
 import { DIALOG_INNER, command, dialogBody } from "@stillfail/ui/parts.css.ts";
 
 export const groupHead = style({});
-/** A group within the members' list (those added, the invitations): its name and how many, in line with the rows' words. */
-export const memberGroup = style({ display: "flex", alignItems: "baseline", gap: "8px", margin: "18px 12px 2px", fontSize: vars.textUi });
-export const roleSelect = style({ width: "120px", flex: "none" });
 export const stationHeading = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
 /** As the settings pages' cards (pages.css.ts card). */
 // Its buttons reach its corners (the first station's form): its corner theirs (pages.css.ts BUTTON_CARD_CORNER).
@@ -40,8 +37,6 @@ export const firstStationName = style({
   flex: "1", minWidth: "0", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 export const firstStation = style({});
-export const memoryStation = style({});
-export const memoryStationName = style({ margin: "0 0 8px", fontSize: vars.textTitle, fontWeight: "600" });
 globalStyle(`${groupHead} ${runtimeLogo}`, { alignSelf: "center" });
 /** As tall as the field beside it. */
 globalStyle(`${onboardingRow} ${btn}`, { height: "auto" });
@@ -62,7 +57,7 @@ export const profileAway = style({ opacity: ".55" });
 /** An account's state on its page: its pill, what its check said. */
 export const accountState = style({ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "12px", fontSize: vars.textUi });
 
-// ── the workspace's page (WorkspaceSettings) ──
+// ── a station's page (StationPage.tsx) ──
 /** Its head: its mark's square, its name as the title, what it is to the viewer under it. */
 export const workspaceHead = style({ display: "flex", alignItems: "center", gap: "16px", marginTop: "8px", marginBottom: "36px" });
 export const workspaceFacts = style({
@@ -83,5 +78,33 @@ export const titleField = style({
 });
 /** How many, after a section's title. */
 export const titleCount = style({ marginLeft: "8px", color: vars.subtle, fontWeight: "500" });
-/** Leaving and deleting on the page's own ground. */
-export const dangerList = style({ display: "grid", gap: "18px", padding: "4px 0" });
+
+// ── the workspace's page (WorkspaceSettings) ──
+/** Who the viewer is there and how many it holds, under its name. */
+export const workspaceLead = style({ margin: "2px 0 0", color: vars.muted, fontSize: vars.textUi, lineHeight: "20px" });
+/** How a row's thing stands at its end (its name, a member's role): muted, on one line. */
+export const rowValue = style({ flex: "none", maxWidth: "50%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: vars.muted, fontSize: vars.textUi });
+export const rowChevron = style({ flex: "none", color: vars.subtle });
+/** A field in a list card where its row was (adding a relay): in as a row's words. */
+export const rowField = style({ padding: `10px ${CARD_PAD - LIST_PAD}px` });
+
+// ── the settings' list in the sidebar (settings.tsx SettingsNav) ──────────────────────────────────────────────────
+
+/** Two groups with no heading between them: a heading's room over the second (navHeading's 14 over it, 4 under). */
+export const navApart = style({ height: 16 });
+/** A row's name, as long as the row leaves it. */
+export const navTitle = style({ flex: "1", minWidth: "0" });
+/** How things stand at a row's end (the narrow screen's settings page says the same): the meta's size, muted, as wide
+ *  as it is; its dot before it, 6 apart. */
+export const navValue = style({
+  display: "flex", alignItems: "center", gap: 6, flex: "none", fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted, whiteSpace: "nowrap",
+});
+/** Something waits there: in red. */
+export const navValueBad = style({ color: vars.red });
+
+// ── 账号 (settings.tsx AccountSettings) ───────────────────────────────────────────────────────────────────────────
+
+/** The account in view's name on its row: who it is, strong. */
+export const accountName = style({ fontWeight: "600" });
+/** 注销账号: a row that takes something away, in red. */
+export const accountDelete = style({ color: vars.red });
