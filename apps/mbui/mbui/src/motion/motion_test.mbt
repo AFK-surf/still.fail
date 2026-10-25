@@ -455,6 +455,58 @@ test "a list's row gone leaves by a copy; the rest close over it, late" {
 }
 
 ///|
+test "a list's rows alike at its start and its end are none of its change: only those between come, go and go ahead" {
+  let keys = Ref::new(["p", "q", "x", "y", "r", "s"])
+  let t = @ui.Tester::new(
+    fn(c) {
+      let ks = keys.val
+      @motion.list_keys(c, "rows", ks.map(fn(k) { "row/" + k })) |> ignore
+      c.list("rows", ks.length(), 40.0, fn(i) {
+        let k = ks[i]
+        let n = c.box(w=Fill(1.0), h=Px(40.0), bg=0x202020FFL, id=c.id("row/" + k), fn() {
+          c.text(k) |> ignore
+        })
+        @motion.layout(
+          c,
+          n,
+          "row/" + k,
+          enter=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(240.0, ease=Out)),
+          exit=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(200.0, ease=CssOut)),
+        )
+      })
+      |> ignore
+    },
+    w=200.0,
+    h=400.0,
+  )
+  let list = t.ctx().id("rows")
+  // y goes ahead of x: it alone is lifted, not those before them nor after
+  keys.val = ["p", "q", "y", "x", "r", "s"]
+  t.frame()
+  let lifted_at = t.time()
+  assert_true(@motion.lifted(t.ctx(), list, "row/y") >= 0.0)
+  for k in ["p", "q", "x", "r", "s"] {
+    assert_eq(@motion.lifted(t.ctx(), list, "row/" + k), -1.0, msg=k)
+  }
+  // (to the end of their moves and of y's lift over x)
+  let x_end = @motion.layout_rest("row/x")
+  let y_end = @motion.layout_rest("row/y")
+  t.run_for((if x_end > y_end { x_end } else { y_end }) - t.time())
+  if lifted_at + @motion.lift_ms > t.time() {
+    t.run_for(lifted_at + @motion.lift_ms - t.time())
+  }
+  t.assert_idle()
+  // between them x goes and n comes: n comes in, x's copy leaves, the rest stay where they are
+  keys.val = ["p", "q", "y", "n", "r", "s"]
+  t.frame()
+  assert_true(@motion.layout_rest("row/n") > t.time())
+  assert_true(@motion.layout_rest("row/x") > t.time())
+  for k in ["p", "q", "y", "r", "s"] {
+    assert_eq(@motion.layout_rest("row/" + k), -1.0, msg=k)
+  }
+}
+
+///|
 test "a node flown from a rect is drawn there first, then at its place" {
   let p = Ref::new(0.0)
   let mut id = 0

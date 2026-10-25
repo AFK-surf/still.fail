@@ -157,7 +157,12 @@ settings page, each place, sign-in, the landing. There is no phone copy and desk
   `@settings.fixture_changed`; a test's topic worked out as it is read, `topic_as_read`). Never a loop over a topic in
   the frame (the user, 2026-10-26: 「不应该有个跟 preact signals 一样的机制来保证只计算一次吗」「实现可以抄一下
   alien-signals」「让这套 signals 机制从 core 到 ui 能完整连上」). The chat's and the chats' list's converters are sfbase's
-  own: a page has their views only from `view_of_chat` and `chats_of`.
+  own: a page has their views only from `view_of_chat` and `chats_of`. What a frame does with what was worked out goes
+  over only what changed, too: a chat's list's rows and keys are made again only as its entries (the same array while
+  nothing changed), whether it follows its end, what was sent from here or a row waiting its turn change (row_keys'
+  `RowsMade`), and its motion is told the same keys (`@motion.list_keys` goes over none while they are the same, and
+  over only those between the rows alike at the start and the end as they change): a frame of a chat of 3000 messages
+  goes over none of them while nothing changed (the user, 2026-10-26: 「中型屏下内容很多的 chat 性能好像比较差」).
 - **Opening things:** it says what to open: a page (`Page`), or a detail of the chat (a history, a service, a
   visualization, jobs, letters, files). The shell decides where that goes. A page never pushes onto the stack or moves
   the tape itself.

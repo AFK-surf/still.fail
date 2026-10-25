@@ -193,36 +193,65 @@ pub fn[T] Derived::kept(self : Derived[T], params : Map[String, Json]) -> T? {
 
 ///|
 /// `jsons` made (`make`) each, from what was made of them last (`was`: each with the JSON it was made of): one that is
-/// the same JSON as before (the core's deltas keep what they do not touch: src/core delta.mbt) taken as it was made,
-/// found where it was or by `key`; only what changed is made anew.
+/// the same JSON as before (the core's deltas keep what they do not touch: src/core delta.mbt) taken as it was made;
+/// only what changed is made anew. Looked for where the last one found was and on from there (what was between them
+/// gone, or one moved on), then among those passed over (one moved back); by `key` once that has looked at twice as many
+/// as there were (a page come before them, all of it new): a message come at the end, one changed, one gone are
+/// matched where they stand, never a key made of each.
 pub fn[T] made_again(
   jsons : Array[Json],
   was : Array[(Json, T)],
   key : (Json) -> String,
   make : (Json) -> T,
 ) -> Array[(Json, T)] {
+  let n = was.length()
+  let most = 2 * n + 16
+  let mut looked = 0
+  // where the next is looked for first: after the last found
+  let mut at = 0
+  // those passed over on the way to one found further on (gone, or wanted later: moved back)
+  let passed : Array[Int] = []
   let by : Ref[Map[String, (Json, T)]?] = Ref(None)
-  jsons.mapi(fn(i, j) {
-    match was.get(i) {
-      Some((pj, t)) if physical_equal(pj, j) => (pj, t)
-      _ => {
-        // (moved, or more came before it: found by its key)
-        let index = match by.val {
-          Some(m) => m
-          None => {
-            let m : Map[String, (Json, T)] = {}
-            for p in was {
-              m[key(p.0)] = p
-            }
-            by.val = Some(m)
-            m
+  jsons.map(fn(j) {
+    if looked < most {
+      for q in at..<n {
+        looked += 1
+        if physical_equal(was[q].0, j) {
+          for s in at..<q {
+            passed.push(s)
           }
+          at = q + 1
+          return was[q]
         }
-        match index.get(key(j)) {
-          Some((pj, t)) if physical_equal(pj, j) => (pj, t)
-          _ => (j, make(j))
+        if looked >= most {
+          break
         }
       }
+      for s in passed {
+        looked += 1
+        if physical_equal(was[s].0, j) {
+          return was[s]
+        }
+      }
+      if looked < most {
+        return (j, make(j))
+      }
+    }
+    // (too much looked at: by its key)
+    let index = match by.val {
+      Some(m) => m
+      None => {
+        let m : Map[String, (Json, T)] = {}
+        for p in was {
+          m[key(p.0)] = p
+        }
+        by.val = Some(m)
+        m
+      }
+    }
+    match index.get(key(j)) {
+      Some((pj, t)) if physical_equal(pj, j) => (pj, t)
+      _ => (j, make(j))
     }
   })
 }

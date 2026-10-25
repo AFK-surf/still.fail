@@ -206,3 +206,102 @@ test "a chat's messages the core's change did not touch are kept as they were re
   assert_false(physical_equal(seen.val[1], before[1]))
   assert_eq(seen.val[1].text, "第二句，改过")
 }
+
+///|
+/// What made_again made of `before` (each made the text of its words), then of `now` from that, and how many of `now`
+/// it made anew.
+fn made_again_of(before : Array[Json], now : Array[Json]) -> (Array[(Json, String)], Array[(Json, String)], Int) {
+  let made = Ref(0)
+  let make = fn(j : Json) {
+    made.val += 1
+    text(Some(j), "text")
+  }
+  let key = fn(j : Json) { text(Some(j), "ts") }
+  let was = @sfbase.made_again(before, [], key, make)
+  made.val = 0
+  let then = @sfbase.made_again(now, was, key, make)
+  (was, then, made.val)
+}
+
+///|
+test "made again: one come at the end, one changed, one gone, one moved back, a page come before: only what is new made" {
+  let ms = Array::makei(50, fn(i) { said(i + 1, "第 \{i + 1} 句") })
+  let same = fn(was : Array[(Json, String)], then : Array[(Json, String)], w : Int, t : Int) {
+    physical_equal(was[w].1, then[t].1)
+  }
+  // one come at the end
+  let more = ms.copy()
+  more.push(said(51, "新的一句"))
+  let (was, then, made) = made_again_of(ms, more)
+  assert_eq(made, 1)
+  assert_true(same(was, then, 0, 0) && same(was, then, 49, 49))
+  assert_eq(then[50].1, "新的一句")
+  // one changed in the middle
+  let changed = ms.mapi(fn(i, m) { if i == 20 { said(21, "改过") } else { m } })
+  let (was, then, made) = made_again_of(ms, changed)
+  assert_eq(made, 1)
+  assert_true(same(was, then, 19, 19) && same(was, then, 21, 21))
+  assert_eq(then[20].1, "改过")
+  // one gone from the middle
+  let gone = ms.filter(fn(m) { !physical_equal(m, ms[30]) })
+  let (was, then, made) = made_again_of(ms, gone)
+  assert_eq(made, 0)
+  assert_true(same(was, then, 29, 29) && same(was, then, 31, 30))
+  // the last moved to the front
+  let moved = [ms[49]]
+  for i in 0..<49 {
+    moved.push(ms[i])
+  }
+  let (was, then, made) = made_again_of(ms, moved)
+  assert_eq(made, 0)
+  assert_true(same(was, then, 49, 0) && same(was, then, 0, 1) && same(was, then, 48, 49))
+  // a page come before them, all of it new
+  let older = Array::makei(20, fn(i) { said(-i, "更早的 \{i}") })
+  let page = older.copy()
+  page.push_iter(ms.iter())
+  let (was, then, made) = made_again_of(ms, page)
+  assert_eq(made, 20)
+  assert_true(same(was, then, 0, 20) && same(was, then, 49, 69))
+}
+
+///|
+test "a chat's page with nothing changed goes over none of its rows again; a message come, its rows made again" {
+  reset()
+  let base = fixture("chat")
+  let messages = Array::makei(30, fn(i) { said(i + 1, "第 \{i + 1} 句") })
+  let changes = @signals.signal(1)
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      if name == "chat" && params.get("session") == Some(Json::string("s-c1")) {
+        let version = changes.get()
+        let chat : Json = {
+          "title": "整理发布清单",
+          "thread": { "id": 1 },
+          "messages": Json::array(messages),
+          "agents": [],
+          "people": [],
+        }
+        { value: Some(chat), error: None, version }
+      } else {
+        (base.topic)(name, params)
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.nav_push_ms)
+  let rd = @sfbase.reading_of("ws1/st1\u{1}s-c1")
+  let rows = rd.motion_keys
+  assert_true(rows.length() > 30)
+  t.frame()
+  t.frame()
+  assert_true(physical_equal(rd.motion_keys, rows))
+  // one more said: its rows made again, the new one among them once it has come in
+  messages.push(said(31, "新的一句"))
+  changes.set(2)
+  t.frame()
+  assert_false(physical_equal(rd.motion_keys, rows))
+  t.run_for(@sf.enter_ms)
+  assert_true(rd.motion_keys.iter().any(fn(k) { k.has_suffix("m:t31") }), msg=rd.motion_keys.to_string())
+}

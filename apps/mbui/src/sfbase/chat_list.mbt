@@ -142,6 +142,26 @@ pub(all) struct Reading {
   mut found_words : Array[String]
   found_drawn : @motion.Anim
   mut found_centre : Bool
+  /// its rows and their keys as row_keys last made them, and of what: made again only as one of those changed (a
+  /// frame that changed nothing goes over none of its rows); its keys as the list's motion is told them (list_frame)
+  mut rows_made : RowsMade?
+  mut motion_of : Array[String]
+  mut motion_list : String
+  mut motion_keys : Array[String]
+}
+
+///|
+/// What row_keys made of a chat's entries (`all`, of view `v`, the list following its end or not, nothing sent from
+/// here waiting for its row, no row waiting its turn), and the rows it knew then.
+pub struct RowsMade {
+  all : Array[Entry]
+  v : ChatView
+  following : Bool
+  rise_ms : Double
+  history_fade : Bool
+  known : Int
+  list : Array[Entry]
+  keys : Array[String]
 }
 
 ///|
@@ -212,6 +232,10 @@ pub fn reading_of(key : String) -> Reading {
         found_words: [],
         found_drawn: @motion.Anim::new(0.0),
         found_centre: false,
+        rows_made: None,
+        motion_of: [],
+        motion_list: "",
+        motion_keys: [],
       }
       readings[key] = r
       r
@@ -522,13 +546,15 @@ pub fn act_rooms(c : @ui.Ctx, rd : Reading, key : String, keys : Array[String]) 
     if !whole {
       continue
     }
-    match keys.search(k) {
-      Some(i) =>
+    // (looked for from the end, where the agents' lines are)
+    for i = keys.length() - 1; i >= 0; i = i - 1 {
+      if keys[i] == k {
         match c.list_row_height(key, i) {
           Some(h) => rd.act_room[k] = h
           None => ()
         }
-      None => ()
+        break
+      }
     }
   }
 }
@@ -753,6 +779,33 @@ pub fn row_keys(
   rise_ms~ : Double,
   history_fade~ : Bool,
 ) -> (Array[Entry], Array[String]) {
+  let info = c.list_info_as(key, follows)
+  let following = match info {
+    Some(i) => i.at_end || i.gliding || i.following_row
+    None => true
+  }
+  rd.following_row = match info {
+    Some(i) => i.following_row
+    None => false
+  }
+  rd.list_read = Some(c.list_reader(key))
+  // the same entries of the same view as the last frame's, the list following as it did, nothing sent from here
+  // waiting for its row and no row for its turn (then and now): what it made then, its rows not gone over again
+  let sending = sending_of(rk)
+  match rd.rows_made {
+    Some(m) if rd.drawn &&
+      physical_equal(m.all, all) &&
+      physical_equal(m.v, v) &&
+      m.following == following &&
+      m.rise_ms == rise_ms &&
+      m.history_fade == history_fade &&
+      m.known == rd.known.length() &&
+      sending.is_empty() &&
+      turns.waiting.is_empty() => return (m.list, m.keys)
+    _ => ()
+  }
+  let made_whole = sending.is_empty() && turns.waiting.is_empty()
+  let given = all
   for o in v.outbox {
     if o.seq >= 0.0 {
       rd.sent[o.seq] = o.id
@@ -781,7 +834,6 @@ pub fn row_keys(
   // (the core's rows taken for what was sent before its own row was ever in the list: new to the list's end, they take
   // back the floor as what comes in does)
   let came_new : Array[String] = []
-  let sending = sending_of(rk)
   for l in sending {
     let mut came = ""
     for i, e in all {
@@ -849,16 +901,6 @@ pub fn row_keys(
       rd.act_whole.remove(k) |> ignore
     }
   }
-  let info = c.list_info_as(key, follows)
-  let following = match info {
-    Some(i) => i.at_end || i.gliding || i.following_row
-    None => true
-  }
-  rd.following_row = match info {
-    Some(i) => i.following_row
-    None => false
-  }
-  rd.list_read = Some(c.list_reader(key))
   if rd.drawn && following {
     for i, e in all {
       let k = all_keys[i]
@@ -987,6 +1029,11 @@ pub fn row_keys(
     }
   }
   rd.drawn = true
+  rd.rows_made = if made_whole && turns.waiting.is_empty() {
+    Some({ all: given, v, following, rise_ms, history_fade, known: rd.known.length(), list, keys })
+  } else {
+    None
+  }
   (list, keys)
 }
 
@@ -995,11 +1042,15 @@ pub fn row_keys(
 /// end: followed from its top, its top follow_margin under the bar (Chat.kt newestKey, Follow.kt anchor), not past its
 /// end; the row kept by its key as rows come and go round it.
 pub fn follow_newest(c : @ui.Ctx, rd : Reading, list : Array[Entry], keys : Array[String], key : String, top~ : Double) -> Unit {
+  // (the last that is not one of those: looked for from the end)
   let mut at = -1
-  for i, e in list {
-    match e {
+  for i = list.length() - 1; i >= 0; i = i - 1 {
+    match list[i] {
       Working(_) | Foot | Newer => ()
-      _ => at = i
+      _ => {
+        at = i
+        break
+      }
     }
   }
   let newest = if at >= 0 { keys[at] } else { "" }
@@ -1014,9 +1065,12 @@ pub fn follow_newest(c : @ui.Ctx, rd : Reading, list : Array[Entry], keys : Arra
   rd.newest = newest
   // (by its index as the rows stand now, while the list holds it: the reader's scroll lets it go)
   if came || rd.following_row {
-    match keys.search(rd.follow_key) {
-      Some(i) => c.list_follow_from(key, i, margin=top + follow_margin)
-      None => ()
+    // (looked for from the end, where the newest are)
+    for i = keys.length() - 1; i >= 0; i = i - 1 {
+      if keys[i] == rd.follow_key {
+        c.list_follow_from(key, i, margin=top + follow_margin)
+        break
+      }
     }
   }
 }
@@ -1243,7 +1297,13 @@ pub fn list_frame(
   // what comes at its end glides after it when it is new to the list (said while it shows, sent, an agent starting:
   // row_keys's fresh), not what was there or caught up on (the chat opened, its pages coming in), at once
   let glides = rd.came_frame == c.frame_number()
-  @motion.list_keys(c, key, keys.map(fn(k) { key + "\u{1}" + k })) |> ignore
+  // (the same keys as the last frame's, the same names: the motion goes over none of them)
+  if !physical_equal(rd.motion_of, keys) || rd.motion_list != key {
+    rd.motion_of = keys
+    rd.motion_list = key
+    rd.motion_keys = keys.map(fn(k) { key + "\u{1}" + k })
+  }
+  @motion.list_keys(c, key, rd.motion_keys) |> ignore
   // the first message's row: the page before come in above it, it stays where it is (Chat.kt: the list keeps its
   // first item in view by its key, or the first row after the spinner)
   let mut head = ""
