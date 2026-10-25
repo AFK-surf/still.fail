@@ -210,11 +210,9 @@ fn chat_bar(
   if @ui.window_inset() {
     c.window_drag(bar)
   }
-  // (beside the rail its room as the block moves: page_bar_room)
-  let (room_l, room_r, ml, mr) = page_bar_room()
+  // (beside the rail its room as the block moves: page_bar_row)
   let room = fn(x : Double) { c.box(style=@ui.style(w=Fixed(x), h=Full), fn() {  }) |> ignore }
-  let bar_row = c.box(style=if @sf.in_pane() { chat_bar_row_tape() } else { chat_bar_row }, moves="page-bar", fn() {
-  room(ml)
+  let bar_row = page_bar_row(c, if @sf.in_pane() { chat_bar_row_tape() } else { chat_bar_row }, fn(room_l, room_r) {
   c.box(style=if @sf.in_pane() { chat_bar_box_tape() } else { chat_bar_box }, id=bar, fn() {
       room(room_l)
       // the title, its people and agents 10 apart, 8 in from the bar's padding (conversation.css.ts pageBarTitle)
@@ -275,7 +273,6 @@ fn chat_bar(
       room(room_r)
   })
   |> ignore
-  room(mr)
   })
   // over the messages: their scroll bar keeps clear of it
   c.floats_over(bar_row)
@@ -729,7 +726,7 @@ fn info_row(c : @ui.Ctx, key : String, icon : String, label : String, end : Stri
 let chat_bar_box : @ui.Style = @ui.style(row=true, w=@sf.grow, h=@sf.wide_bar_h_size, pb=SPx, gap=S4, align=ACenter, bg=Bg)
 
 ///|
-/// The bar with its margins while the folded sidebar is shown a while (page_bar_room), moved with the block.
+/// The bar with its room while the folded sidebar is shown a while (page_bar_row), moved with the block.
 // kept across runs: a value (no field of it changes)
 let chat_bar_row : @ui.Style = @ui.style(row=true, w=Full, h=@sf.wide_bar_h_size)
 

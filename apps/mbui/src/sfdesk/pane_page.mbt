@@ -42,10 +42,8 @@ fn pane_bar(
   small? : String = "",
   actions? : () -> Unit,
 ) -> Unit {
-  let (room_l, room_r, ml, mr) = page_bar_room()
   let room = fn(x : Double) { c.box(style=@ui.style(w=Fixed(x), h=Full), fn() {  }) |> ignore }
-  c.box(style=chat_bar_row_tape(), moves="page-bar", fn() {
-    room(ml)
+  page_bar_row(c, chat_bar_row_tape(), fn(room_l, room_r) {
     c.box(style=chat_bar_box_tape(), fn() {
       match back {
         Some((label, go)) => {
@@ -73,7 +71,6 @@ fn pane_bar(
       room(room_r)
     })
     |> ignore
-    room(mr)
   })
   |> ignore
 }
