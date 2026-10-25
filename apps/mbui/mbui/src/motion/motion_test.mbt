@@ -1179,3 +1179,32 @@ test "placed: drawn where what it reads is as this frame lays it out, never a fr
   assert_eq(drawn_box(t, 0xFF0000FFL).1, 50.0)
   assert_eq(drawn_box(t, 0x00FF00FFL), (0.0, 70.0, 10.0, 10.0))
 }
+
+///|
+test "an Anim is over at the end it declared as it was told, whoever asks and however its frames fall" {
+  let a = @motion.Anim::new(0.0)
+  let seen : Array[Bool] = []
+  let t = @ui.Tester::new(fn(c) {
+    ignore(c)
+    seen.push(a.over())
+    c.box(fn() {  }) |> ignore
+  })
+  // never told: over
+  assert_true(seen[seen.length() - 1])
+  // told in a frame: not over till its end (200 ms on), over from then
+  let told = Ref::new(false)
+  let t2 = @ui.Tester::new(fn(c) {
+    if !told.val {
+      told.val = true
+      a.animate(1.0, @motion.tween(reshape_ms, ease=Linear))
+    }
+    seen.push(a.over())
+    c.box(fn() {  }) |> ignore
+  })
+  assert_false(seen[seen.length() - 1])
+  t2.run_for(reshape_midway_ms)
+  assert_false(a.over())
+  t2.run_for(reshape_ms - reshape_midway_ms)
+  assert_true(a.over())
+  ignore(t)
+}

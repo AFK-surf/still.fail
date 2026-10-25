@@ -146,9 +146,12 @@ list's turns, words flying, everything in the hand). Each step below is a PR; a 
    panel moves when it is opened or closed by what the page asks (side_change, from its header, its tabs, a link, a
    menu: the web's useSidePanel `changing`), and is so at once as a page opens with its tabs as they were left or a
    chat made from the new chat opens its 文件 with it; that was already so.
-   Logic that reads a motion: a new chat leaving (sfdesk/chat_talk.mbt:58, sfapp/newchat.mbt:619), 奏's cards
-   (sfapp/decisions.mbt:571, sfdesk/decision_page.mbt:404), the search going back (sfpages/search.mbt:287), a row
-   swiped away (sfpages/chat_row.mbt:879), the bar's 令 (sfapp/bar.mbt:1261).
+   Logic that reads a motion, now its cause and the end it declared as it was told (`Anim::over`, mbui): a new chat
+   leaving, 奏's cards going off and going back (the phone's and the desktop's), the search going back, a row swiped away
+   (archived at that end, not when it is seen at its place), the bar's panel (its spring's declared rest, `Spr::end`); a
+   stroke, a picture's way in and a row's rise started once by what they are told, not by whether they move; what only
+   logs a motion logs it while it is off its target. Left: a message out of an avatar and words sent (emit.mbt,
+   flight.mbt), the viewer's strip.
 7. **Presets.** `src/sf/motion.mbt` holds the table above; every motion uses a preset; one curve enum; the copies in
    sfapp that nothing calls go (emit_flyer.mbt, flash.mbt, `composer_page*`, …).
 8. **The page crossfade** between a new chat and a chat on a computer (sfdesk/switch.mbt). Done: the new chat's scene

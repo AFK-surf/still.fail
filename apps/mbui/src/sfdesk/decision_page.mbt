@@ -410,7 +410,8 @@ fn zou_leaving(c : @ui.Ctx, src : Source, w : Workspace, core : Core, dw : Doubl
     None => return
   }
   let a = zou_anim(c, "zou/leave")
-  if !a.moving() {
+  // (gone at the end it declared as it set off)
+  if a.over() {
     zou_own.leaving = None
     return
   }

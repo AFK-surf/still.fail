@@ -31,7 +31,7 @@ pub fn found_line(
   // its strokes drawn in as the line comes: 520 ms each, one 180 ms after the other
   let total = strokes_ms(marks.length())
   let drawn = @motion.anim(c, "search/drawn/" + key + "/" + text, 0.0, global=true)
-  if drawn.target() == 0.0 && !drawn.moving() && marks.length() > 0 {
+  if drawn.target() == 0.0 && marks.length() > 0 {
     drawn.animate(total, @motion.tween(total, ease=Linear))
   }
   let at_ms = drawn.get()

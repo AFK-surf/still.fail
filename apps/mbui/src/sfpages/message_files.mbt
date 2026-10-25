@@ -306,7 +306,7 @@ pub fn image_reveal(c : @ui.Ctx, key : String, w : Double, h : Double, fit : @ui
   // its way in, said once as it is first seen decoded
   let p = match way {
     Some(a) if ready => {
-      if !a.moving() && a.get() == 0.0 {
+      if a.target() == 0.0 {
         a.animate(1.0, @motion.tween(reveal_ms, ease=Linear))
       }
       a.get()

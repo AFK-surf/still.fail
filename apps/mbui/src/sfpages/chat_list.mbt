@@ -97,7 +97,8 @@ pub fn chat_list(
             }
             let fade = @motion.animate(c, "fade/" + mk, if leaving { 0.0 } else { 1.0 }, spec=@motion.tween(linger_out_ms))
             let p = open.get()
-            rd.act_whole[keys[i]] = p >= 1.0 && !open.moving()
+            // (its room whole once its opening is at its end: a tween's, 1 only there)
+            rd.act_whole[keys[i]] = p >= 1.0
             let here = here_of(r, v, rk, turns, em, None, core, inline=narrow, gutter~)
             @motion.reveal(c, mk, p, fn() {
               let ri = row_box(c, side, top, fn() { activity_row(c, src, here, a, em, rk, leaving) })
@@ -177,7 +178,8 @@ pub fn chat_list(
             match rd.rises.get(keys[i]) {
               Some(a) => {
                 let p = a.get()
-                if !a.moving() && p >= 1.0 {
+                // (risen: at its end, a tween's 1 only there)
+                if p >= 1.0 {
                   rd.rises.remove(keys[i]) |> ignore
                 } else {
                   c.look(ri, @ui.look(alpha=p, dy=@sf.enter_rise * (1.0 - p)))
@@ -187,7 +189,7 @@ pub fn chat_list(
             }
             // what was there as it came into the list fades in, all at once (useHistoryFade)
             match rd.history.get(keys[i]) {
-              Some(a) if a.moving() => c.look(ri, @ui.look(alpha=a.get()))
+              Some(a) if a.get() < 1.0 => c.look(ri, @ui.look(alpha=a.get()))
               Some(_) => rd.history.remove(keys[i]) |> ignore
               None => ()
             }
