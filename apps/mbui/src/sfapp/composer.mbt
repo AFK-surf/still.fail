@@ -2351,8 +2351,8 @@ fn pasted_card(
     pt=8.0,
     pb=8.0,
     gap=10.0,
-    // (off the capsule's frosted ground: the page's own, as every waiting card's, @sf.composer_card)
-    style=files_card().then(@sf.composer_card),
+    // (off the capsule's frosted ground by its own, as every waiting card's: @sf.composer_card)
+    style=files_card().then(@sf.composer_card()),
     align=ACenter,
     fn() {
       if busy {
@@ -2425,8 +2425,8 @@ fn file_tile(c : @ui.Ctx, f : Pending, again? : Int = 0) -> Int {
     padx=10.0,
     pady=8.0,
     gap=10.0,
-    // (off the capsule's frosted ground: the page's own, as every waiting card's, @sf.composer_card)
-    style=files_card().then(@sf.composer_card),
+    // (off the capsule's frosted ground by its own, as every waiting card's: @sf.composer_card)
+    style=files_card().then(@sf.composer_card()),
     align=ACenter,
     id=if link is Some(_) { open } else { 0 },
     fn() {
