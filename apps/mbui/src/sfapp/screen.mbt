@@ -63,6 +63,12 @@ priv struct ScreenSess {
   mut pumping : Bool
   /// a paste under way
   mut pasting : Bool
+  /// the frames that came and their bytes, counted as they come (控制中心's 连接 reads a second's of them)
+  mut frames : Int
+  mut bytes : Int
+  /// the 画质 the open view was asked with (prefs `screenQuality`; "": as this device's screen is): another chosen
+  /// opens it again
+  mut asked : String
 }
 
 ///|
@@ -116,6 +122,9 @@ fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
         drops_serial: 0,
         pumping: false,
         pasting: false,
+        frames: 0,
+        bytes: 0,
+        asked: "",
       }
       screens_open[key] = s
       s
@@ -278,6 +287,31 @@ fn ScreenSess::undriven(self : ScreenSess) -> String? {
 }
 
 ///|
+/// The screen's display scale while this viewer drives one whose station changes it (Windows): now, the one its system
+/// recommends, the steps it takes (in percent, lowest first); None elsewhere, or while only looking.
+fn ScreenSess::scale(self : ScreenSess) -> (Int, Int, Array[Int])? {
+  if !self.driving() {
+    return None
+  }
+  match field(self.state, "scale") {
+    Some(Object(_)) as sc => {
+      let steps = items(sc, "steps").filter_map(fn(j) {
+        match j {
+          Number(n, ..) => Some(n.to_int())
+          _ => None
+        }
+      })
+      if steps.is_empty() {
+        None
+      } else {
+        Some((number(sc, "percent").to_int(), number(sc, "recommended").to_int(), steps))
+      }
+    }
+    _ => None
+  }
+}
+
+///|
 /// Where the station says its pointer is (0..1 of the frame), when it says.
 fn ScreenSess::cursor(self : ScreenSess) -> (Double, Double)? {
   match field(self.state, "cursor") {
@@ -316,8 +350,30 @@ fn ScreenSess::pad(self : ScreenSess, src : Source) -> Bool {
 }
 
 ///|
+/// How large a picture this device asks for (prefs `screenQuality`, 控制中心's 画质): `smooth`, `hd`, `original`, or
+/// "" (as this device's screen is: screen_max_w × screen_max_h).
+fn screen_quality(src : Source) -> String {
+  match text((src.topic)("prefs", {}).value, "screenQuality") {
+    "smooth" | "hd" | "original" as q => q
+    _ => ""
+  }
+}
+
+///|
+/// The bounds a 画质 asks for (web/src/screen/frames.ts QUALITY): `original` the largest a view may ask (the screen's own
+/// size).
+fn quality_bounds(quality : String) -> (Int, Int) {
+  match quality {
+    "smooth" => (1280, 720)
+    "hd" => (1920, 1080)
+    "original" => (7680, 4320)
+    _ => (screen_max_w, screen_max_h)
+  }
+}
+
+///|
 /// Opens the view (again: after a pause, or 重新打开): `screen.view`, the frames it can decode said (H.264 where the
-/// host decodes it), as large as this device's screen at most.
+/// host decodes it), as large as 画质 asks.
 fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
   if self.call != 0 {
     return
@@ -328,6 +384,9 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
   }
   self.failure = None
   self.finished = false
+  let quality = screen_quality(src)
+  self.asked = quality
+  let (mw, mh) = quality_bounds(quality)
   let codecs = if @ui.h264_here() {
     [Json::string("h264"), Json::string("jpeg")]
   } else {
@@ -338,8 +397,8 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
     "screen": Json::string(self.screen),
     "view": Json::string(self.view),
     "codecs": Json::array(codecs),
-    "maxWidth": Json::number(screen_max_w.to_double()),
-    "maxHeight": Json::number(screen_max_h.to_double()),
+    "maxWidth": Json::number(mw.to_double()),
+    "maxHeight": Json::number(mh.to_double()),
   }
   match self.fit {
     Some((w, h, scale)) =>
@@ -369,6 +428,16 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
       }
     },
   )
+}
+
+///|
+/// 画质 chosen otherwise since the open view was asked: opened again with it, the frame on screen kept meanwhile.
+fn ScreenSess::asked_again(self : ScreenSess, src : Source) -> Unit {
+  if self.call == 0 || self.asked == screen_quality(src) {
+    return
+  }
+  self.pause(src)
+  self.open(src)
 }
 
 ///|
@@ -522,12 +591,15 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
       // a frame that brings nothing to show (no bytes, no codec yet): taken, as far as the station is concerned
       match bytes {
         None => screen_ack(self.src, self, ts)
-        Some(b) =>
+        Some(b) => {
+          self.frames += 1
+          self.bytes += b.length()
           match (self.codec, self.stream) {
             (Some("h264"), Some(st)) => st.frame(b, key, ts)
             (Some("jpeg"), Some(st)) => st.jpeg(b, ts)
             _ => screen_ack(self.src, self, ts)
           }
+        }
       }
     }
     _ => ()

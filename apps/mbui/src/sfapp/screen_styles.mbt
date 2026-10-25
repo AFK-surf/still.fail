@@ -465,3 +465,120 @@ let soft_button_box : @ui.Style = @ui.style(
 ///|
 // kept across runs: a value (no field of it changes)
 let soft_button_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, wrap=false)
+
+// ── how the view goes (screen_panel.mbt) ─────────────────────────────────
+
+///|
+/// Under the title, live: the signal mark, how long it has been seen, the core's line, 6 apart.
+// kept across runs: a value (no field of it changes)
+let screen_line_row : @ui.Style = @ui.css("row w=Full h=S4 gap=S1_5 align=ACenter")
+
+///|
+/// How long it has been seen (12 on 16, muted, its figures as wide as each other).
+// kept across runs: a value (no field of it changes)
+let screen_time_words : @ui.TextStyle = @ui.text_style(
+  size=Xs,
+  leading=L4,
+  color=Muted,
+  wrap=false,
+  tabular=true,
+)
+
+///|
+/// The signal mark's bars side by side, 2 apart, standing on its foot.
+// kept across runs: a value (no field of it changes)
+let bars_row : @ui.Style = @ui.css("row gap=S0_5 align=AEnd")
+
+///|
+/// Its bars: 4 wide, 4, 8 and 12 high, rounded.
+// kept across runs: a value (no field of it changes)
+let bar_low : @ui.Style = @ui.css("w=S1 h=S1 radius=Sm")
+
+///|
+// kept across runs: a value (no field of it changes)
+let bar_mid : @ui.Style = @ui.css("w=S1 h=S2 radius=Sm")
+
+///|
+// kept across runs: a value (no field of it changes)
+let bar_high : @ui.Style = @ui.css("w=S1 h=S3 radius=Sm")
+
+///|
+/// The view's figures (the web's netPanel: 280 wide, 10 between its parts).
+let net_panel_w : Double = 280.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let net_panel_box : @ui.Style = @ui.css("w=Full px=S2_5 py=S2 gap=S2_5")
+
+///|
+/// Its head: the mark at 20, the round trip beside it (15, semibold), 10 apart.
+// kept across runs: a value (no field of it changes)
+let net_head_box : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let net_head_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, wrap=false, tabular=true)
+
+///|
+/// A group of its figures: a hairline over it (the ink at 10%), 10 under that, a row each 4 apart.
+// kept across runs: a value (no field of it changes)
+let net_group_box : @ui.Style = @ui.css("w=Full gap=S2_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let net_rule : @ui.Style = @ui.css("w=Full h=SPx bg=A(Fg,O10)")
+
+///|
+// kept across runs: a value (no field of it changes)
+let net_rows : @ui.Style = @ui.css("w=Full gap=S1")
+
+///|
+/// A figure's row: its name in a column 88 wide, its value beside it, 12 apart.
+// kept across runs: a value (no field of it changes)
+let net_row_box : @ui.Style = @ui.css("row w=Full gap=S3")
+
+///|
+let net_name_w : Double = 88.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let net_row_name : @ui.Style = @ui.style(w=Fixed(net_name_w))
+
+///|
+// kept across runs: a value (no field of it changes)
+let net_name_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let net_value_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, tabular=true)
+
+// ── 控制中心 (screen_panel.mbt) ───────────────────────────────────────────
+
+///|
+/// A choice of it (画质, 缩放): a segmented row in by a panel row's padding.
+// kept across runs: a value (no field of it changes)
+let center_choice : @ui.Style = @ui.css("w=Full px=S2_5 py=S1")
+
+///|
+/// The combos' tiles: rows of three, 8 apart, in by a panel row's padding.
+// kept across runs: a value (no field of it changes)
+let tiles_box : @ui.Style = @ui.css("w=Full px=S2_5 py=S1 gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tiles_row : @ui.Style = @ui.css("row w=Full gap=S2")
+
+///|
+/// A tile: its icon over its name, on the ink at 6% (8% pressed), 64 high, its corner 12.
+// kept across runs: a value (no field of it changes)
+let tile_box : @ui.Style = @ui.style(w=@sf.grow).then(
+  @ui.css("h=S16 gap=S1_5 radius=Xl bg=Tint align=ACenter justify=JCenter pressed{bg=TintStrong}"),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tile_gap : @ui.Style = @ui.style(w=@sf.grow).then(@ui.css("h=S16"))
+
+///|
+// kept across runs: a value (no field of it changes)
+let tile_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)

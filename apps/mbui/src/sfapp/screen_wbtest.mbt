@@ -15,8 +15,9 @@ priv struct ScreenRig {
   cancelled : Array[Int]
   /// how the fake core answers a call (None: as the fixture does)
   answer : Ref[(String, Json) -> Result[Json, Json]?]
-  /// the prefs' `screenTouch`
+  /// the prefs' `screenTouch`, `screenQuality`
   touch : Ref[String]
+  quality : Ref[String]
 }
 
 ///|
@@ -41,6 +42,7 @@ fn screen_rig(
   let cancelled : Array[Int] = []
   let answer : Ref[(String, Json) -> Result[Json, Json]?] = Ref(fn(_, _) { None })
   let touch_ = Ref(touch)
+  let quality_ = Ref("")
   let ask = fn(name : String, params : Json, bytes : Bytes?, done : (Result[Json, Json]) -> Unit, fallback : () -> Unit) {
     calls.push((name, params, bytes))
     match (answer.val)(name, params) {
@@ -57,12 +59,17 @@ fn screen_rig(
     ..base,
     topic: fn(name, params) {
       let tp = (base.topic)(name, params)
-      if name == "prefs" && touch_.val != "" {
+      if name == "prefs" && (touch_.val != "" || quality_.val != "") {
         let m = match tp.value {
           Some(Object(m)) => m.copy()
           _ => {}
         }
-        m["screenTouch"] = Json::string(touch_.val)
+        if touch_.val != "" {
+          m["screenTouch"] = Json::string(touch_.val)
+        }
+        if quality_.val != "" {
+          m["screenQuality"] = Json::string(quality_.val)
+        }
         { ..tp, value: Some(Json::object(m)) }
       } else {
         tp
@@ -73,6 +80,11 @@ fn screen_rig(
         match field(Some(params), "screenTouch") {
           Some(String(v)) => touch_.val = v
           Some(Null) => touch_.val = ""
+          _ => ()
+        }
+        match field(Some(params), "screenQuality") {
+          Some(String(v)) => quality_.val = v
+          Some(Null) => quality_.val = ""
           _ => ()
         }
       }
@@ -95,7 +107,7 @@ fn screen_rig(
   t.draw()
   app.nav.push(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome", until_gone }))
   nav_rested(t)
-  { t, calls, views, cancelled, answer, touch: touch_ }
+  { t, calls, views, cancelled, answer, touch: touch_, quality: quality_ }
 }
 
 ///|
@@ -159,6 +171,7 @@ fn ScreenRig::state(
   line? : String,
   clipboard? : Array[String],
   drop? : Json,
+  more? : Map[String, Json] = {},
 ) -> Unit {
   let m : Map[String, Json] = {
     "phase": Json::string(phase),
@@ -201,6 +214,9 @@ fn ScreenRig::state(
   match drop {
     Some(d) => m["drop"] = d
     None => ()
+  }
+  for k, v in more {
+    m[k] = v
   }
   self.say(Json::object({ "state": Json::object(m) }))
 }
@@ -462,10 +478,13 @@ test "the keys row short of room on a phone: Esc and the arrows in it, the least
 }
 
 ///|
-test "全屏: the screen alone, sideways, its tools folded into one button; opened, the same tools; 退出全屏 upright" {
+test "全屏 (控制中心's upright): the screen alone, sideways, its tools folded into one button; opened, the same tools; 退出全屏 upright" {
   let r = screen_rig()
   r.live(others=[])
-  r.tap_label("全屏")
+  assert_true(r.labelled("全屏") is None)
+  open_center(r)
+  r.t.tap_text("全屏")
+  r.t.run_for(@kit.presence_out_ms + @sf.later_ms)
   r.t.resize(844.0, 390.0)
   r.t.draw()
   let u = r.ui()
@@ -481,7 +500,7 @@ test "全屏: the screen alone, sideways, its tools folded into one button; open
   r.t.resize(390.0, 844.0)
   r.t.draw()
   assert_true(!r.ui().full)
-  assert_true(r.labelled("全屏") is Some(_))
+  assert_true(r.labelled("控制中心") is Some(_))
   screen_done(r.t)
 }
 
@@ -681,10 +700,10 @@ fn driven(r : ScreenRig) -> Unit {
 }
 
 ///|
-test "driving it: 发送文件 and 粘贴 beside the keyboard; 粘贴 sends the device's clipboard; refused, said; empty, said" {
+test "driving it: 粘贴 beside the keyboard (发送文件 in 控制中心); 粘贴 sends the device's clipboard; refused, said; empty, said" {
   let r = screen_rig()
   driven(r)
-  assert_true(r.labelled("发送文件") is Some(_))
+  assert_true(r.labelled("发送文件") is None)
   assert_true(r.labelled("粘贴手机剪贴板") is Some(_))
   assert_true(r.labelled("键盘") is Some(_))
   r.t.clipboard_gives("hello from the phone")
@@ -803,7 +822,10 @@ test "files go onto the machine one after another, the first beside the one of i
     Some(Ok(Json::object(a)))
   }
   r.t.picks([("季度报告.pdf", Bytes::make(300 * 1024, b'\x01')), ("notes.txt", b"still.fail\n")])
-  r.tap_label("发送文件")
+  // 控制中心's 发送文件
+  open_center(r)
+  r.t.tap_text("发送文件")
+  r.t.run_for(@sf.later_ms)
   r.t.draw()
   r.t.draw()
   assert_true(r.t.find("/Users/alice/Downloads/季度报告 2.pdf") is Some(_))
