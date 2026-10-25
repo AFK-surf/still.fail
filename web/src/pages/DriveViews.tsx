@@ -62,13 +62,19 @@ export interface Shown extends Drawing {
   clear: () => void;
 }
 
-/** Where a folder takes a drop: marked while something it takes is over it. */
-export function useDropZone(target: DropTarget | undefined): { over: boolean; props: { onDragOver?: (e: DragEvent) => void; onDragLeave?: (e: DragEvent) => void; onDrop?: (e: DragEvent) => void } } {
+/** Where a folder takes a drop: marked while something it takes is over it (not while a folder in it takes it instead). */
+export function useDropZone(target: DropTarget | undefined): {
+  over: boolean;
+  props: { onDragOverCapture?: () => void; onDragOver?: (e: DragEvent) => void; onDragLeave?: (e: DragEvent) => void; onDropCapture?: () => void; onDrop?: (e: DragEvent) => void };
+} {
   const [over, setOver] = useState(false);
   if (!target) return { over: false, props: {} };
   return {
     over,
     props: {
+      // Unmarked on the way down, marked again on the way up: a folder in it that takes the drag stops it on its way up.
+      onDragOverCapture: () => setOver(false),
+      onDropCapture: () => setOver(false),
       onDragOver: (e) => {
         if (!target.takes(e.dataTransfer)) return;
         e.preventDefault();
@@ -77,7 +83,7 @@ export function useDropZone(target: DropTarget | undefined): { over: boolean; pr
         setOver(true);
       },
       onDragLeave: (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false); },
-      onDrop: (e) => { setOver(false); if (!target.takes(e.dataTransfer)) return; e.preventDefault(); e.stopPropagation(); target.drop(e.dataTransfer, modsOf(e)); },
+      onDrop: (e) => { if (!target.takes(e.dataTransfer)) return; e.preventDefault(); e.stopPropagation(); target.drop(e.dataTransfer, modsOf(e)); },
     },
   };
 }
