@@ -18,7 +18,7 @@ fn vault_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit 
     words is None &&
     (flag(v, "plain") || (flag(v, "available") && flag(v, "locked") && flag(v, "canSign") && flag(v, "setUp")))
   let body : Array[() -> Unit] = match v {
-    _ if words is Some(w) => [fn() { vault_words(c, core, look, ws, v, w) }]
+    _ if words is Some(w) => [fn() { vault_words(c, look, ws, w) }]
     None =>
       [
         fn() {
@@ -44,7 +44,7 @@ fn vault_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit 
       [fn() { vault_gate(c, core, look, @sf.t("web-pages.vault.needsLock"), @sf.t("web-pages.vault.needsLockWhy")) }]
     Some(_) if !flag(v, "canSign") =>
       [fn() { vault_gate(c, core, look, @sf.t("web-pages.vault.notSigner"), @sf.t("web-pages.vault.notSignerWhy")) }]
-    Some(_) if !flag(v, "setUp") => [fn() { vault_off(c, core, look, ws, v) }]
+    Some(_) if !flag(v, "setUp") => [fn() { vault_off(c, core, look, ws) }]
     Some(_) => vault_library(c, core, look, ws, v)
   }
   let add = fn() {
@@ -123,7 +123,7 @@ fn vault_gate(c : @ui.Ctx, core : Core, look : Look, title : String, why : Strin
 
 ///|
 /// Not set up on this device yet (Off): what it is and what agents do with it; 开启 (`vault.setup`).
-fn vault_off(c : @ui.Ctx, core : Core, look : Look, ws : String, v : Json?) -> Unit {
+fn vault_off(c : @ui.Ctx, core : Core, look : Look, ws : String) -> Unit {
   vt_card(c, look, @sf.t("android-settings.vault.offTitle"), @sf.t("android-settings.vault.offWhat"), then=fn() {
     c.text(@sf.t("android-settings.vault.offAgents") + " " + @sf.t("android-settings.vault.offUnlock"), style=desk_muted)
     |> ignore
@@ -135,35 +135,27 @@ fn vault_off(c : @ui.Ctx, core : Core, look : Look, ws : String, v : Json?) -> U
           tone=Primary,
           busy=is_doing(core, ["vault.setup"], [("workspace", ws)]),
         ) {
-        vault_setup(core, ws, v)
+        vault_setup(core, ws)
       }
     })
   })
 }
 
 ///|
-/// This device set up (`vault.setup`): the first time the recovery words come back, to be written down; then (or at
-/// once, when one of the person's devices made them before) their personal vault, when they have none.
-fn vault_setup(core : Core, ws : String, v : Json?) -> Unit {
+/// This device set up (`vault.setup`, which makes the person's own vault when they have none): the first time the
+/// recovery words come back, to be written down.
+fn vault_setup(core : Core, ws : String) -> Unit {
   vault_act(core, ws, "setup", [], @sf.t("android-settings.vault.turnOn"), then=fn(said) {
-    match opt_text(Some(said), "words") {
-      Some(words) =>
-        recovery_words[ws] = words.trim(chars=" \n").to_owned().split(" ").map(fn(w) { w.to_owned() }).filter(fn(w) { w != "" }).collect()
-      None => if items(v, "vaults").length() == 0 { vault_create_first(core, ws) }
+    if opt_text(Some(said), "words") is Some(words) {
+      recovery_words[ws] = words.trim(chars=" \n").to_owned().split(" ").map(fn(w) { w.to_owned() }).filter(fn(w) { w != "" }).collect()
     }
   })
 }
 
 ///|
-/// The person's first vault made (`vault.create`, their personal one).
-fn vault_create_first(core : Core, ws : String) -> Unit {
-  vault_act(core, ws, "create", [("name", str(@sf.t("android-settings.vault.personal")))], @sf.t("android-settings.vault.create"))
-}
-
-///|
 /// The 24 recovery words, numbered, three to a row, for the person to copy out (Words); written down, the person says so
 /// (only once shown: the core gives them the once).
-fn vault_words(c : @ui.Ctx, core : Core, look : Look, ws : String, v : Json?, words : Array[String]) -> Unit {
+fn vault_words(c : @ui.Ctx, look : Look, ws : String, words : Array[String]) -> Unit {
   vt_card(c, look, @sf.t("android-settings.vault.wordsTitle"), @sf.t("android-settings.vault.wordsWhy"), then=fn() {
     c.box(style=vt_words, fn() {
       let rows = (words.length() + 2) / 3
@@ -188,9 +180,6 @@ fn vault_words(c : @ui.Ctx, core : Core, look : Look, ws : String, v : Json?, wo
       c.text(@sf.t("android-settings.vault.wordsOnce"), style=desk_note) |> ignore
       if @sf.button(c, @sf.t("android-settings.vault.wordsDone"), key="vault-words-done", tone=Primary) {
         recovery_words.remove(ws)
-        if items(v, "vaults").length() == 0 {
-          vault_create_first(core, ws)
-        }
       }
     })
   })
@@ -301,17 +290,21 @@ fn vault_library(c : @ui.Ctx, core : Core, look : Look, ws : String, v : Json?) 
     out.push(fn() {
       @sf.section(c, @sf.t("web-pages.vault.devices"), heads=true, fn() {
         sec_group(c, look, fn() {
+          // each vault a row: its name, and how many devices hold its key or, where some have none yet, how many
           for row in vaults {
             let rv = Some(row)
             let id = text(rv, "id")
-            let hold = @sf.t("web-pages.vault.devicesHold", args=[("n", count(rv, "devices").to_string())])
             let missing = count(rv, "missing")
             sec_line(
               c,
               look,
-              (if vaults.length() > 1 { text(rv, "name") + " · " } else { "" }) + hold,
-              note=if missing > 0 { @sf.t("web-pages.vault.missing", args=[("n", missing.to_string())]) } else { "" },
-              warn=true,
+              text(rv, "name"),
+              note=if missing > 0 {
+                @sf.t("web-pages.vault.missing", args=[("n", missing.to_string())])
+              } else {
+                @sf.t("web-pages.vault.devicesHold", args=[("n", count(rv, "devices").to_string())])
+              },
+              warn=missing > 0,
               strong=false,
               end=fn() {
                 if missing > 0 && flag(rv, "mine") && flag(rv, "keyed") {

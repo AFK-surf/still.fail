@@ -19,9 +19,11 @@
 // encrypt, sign or ask the person for. Security mode on, what is left of it is moved into their vault (`migrate`).
 // Calls (vault.<name> {workspace, …}):
 //   setup                         this device's box key (made once), its certificate published; the recovery words
-//                                 the first time (`{words}`, shown once: never kept)
+//                                 the first time (`{words}`, shown once: never kept); one's own vault made when one
+//                                 has none (`{made}`)
 //   create {name, station?}       a vault of one's own, keyed for each of one's devices set up
-//   addDevice {vault, device?}    the vault's key sealed for members' devices set up since (its owner signs)
+//   addDevice {vault, device?}    the vault's key sealed for members' devices set up since (its owner signs; done by
+//                                 itself too whenever the owner's device unseals it)
 //   putItem {vault, id?, plain, listing?}  an item written (a new one without `id`)
 //   deleteItem {vault, item}      an item deleted
 //   open {item}                   an item's plaintext (asks the person, unless its vault is unlocked)
@@ -557,7 +559,8 @@ export function vaultsView(inner: Inner, ws: string): J {
         members: v.members.map((s) => ({ sub: s, name: nameOf(s) })),
         station: h.at[v.id] ?? "", stationName: stationName.get(h.at[v.id] ?? "") ?? "",
         items: all.length, devices: v.keys.length, open: unlocked(inner, v),
-        // Whether this device has a key to it; members' devices set up since that have none yet (its owner adds them).
+        // Whether this device has a key to it; members' devices set up since that have none yet (its owner's device gives
+        // them the key as it next has it in hand, or as asked: addDevice).
         keyed: self !== null && mine !== undefined && keyed.get(self.device) === mine.box,
         missing: vouched.filter((c) => v.members.includes(c.sub) && keyed.get(c.device) !== c.box).length,
         recoverable: v.recovery !== undefined, lasts: v.lasts ?? "chat",
@@ -781,21 +784,59 @@ class Vaults {
   }
 
   /// A vault's key: kept unsealed a while, else unsealed with this device's box key (the person asked); `fresh`: asked
-  /// even when it is kept (an agent's grant).
-  #key(v: Vault, self: { device: string }, fresh: boolean, reason: string): Effect.Effect<Uint8Array, CoreError> {
+  /// even when it is kept (an agent's grant). In hand, it is given on to the members' devices set up since that have
+  /// none (`#give`: its owner's device only), unless the call is that giving itself (`give` false).
+  #key(v: Vault, self: { device: string }, fresh: boolean, reason: string, give = true): Effect.Effect<Uint8Array, CoreError> {
     const inner = this.#inner;
     const ws = this.ws;
     const self_ = this;
+    return Effect.tap(
+      Effect.gen(function* () {
+        const kept = mem(inner).keys.get(keyOf(v));
+        if (!fresh && kept && kept.until > inner.host.nowMs()) return kept.key;
+        const mine = v.keys.find((k) => k.cert.device === self.device);
+        if (!mine) return yield* fail("vault_no_key", t("core-misc.vault.noKey"));
+        const priv = yield* self_.#boxKey(reason);
+        if (boxPublic(priv) !== mine.cert.box) return yield* fail("vault_no_key", t("core-misc.vault.noKey"));
+        const key = yield* Effect.try({ try: () => openSeal(priv, mine.wrapped, keyContext(ws, v.id, v.epoch)), catch: asCoreError });
+        self_.#keep(v, key);
+        return key;
+      }),
+      (key) => Effect.sync(() => void (give && inner.runner.fork(Effect.ignore(self_.#give(v.id, v.epoch, key, null))))),
+    );
+  }
+
+  /// The members' devices set up (their box certificates the lock vouches for) that vault `v` has no key for (or
+  /// `device` alone).
+  #missing(lock: Checked, v: Vault, device: string | null): (BoxCert & { sub: string })[] {
+    const keyed = new Map(v.keys.map((k) => [k.cert.device, k.cert.box]));
+    return certs(this.#inner, this.ws, lock).filter((c) => v.members.includes(c.sub) && keyed.get(c.device) !== c.box && (device === null || c.device === device));
+  }
+
+  /// Vault `id`'s key (of `epoch`, unsealed here) sealed for the members' devices set up since it was keyed (or
+  /// `device` alone): its next version, which its owner signs (another member's device gives none). How many it gave.
+  #give(id: string, epoch: number, key: Uint8Array, device: string | null): Effect.Effect<number, CoreError> {
+    const self = this;
     return Effect.gen(function* () {
-      const kept = mem(inner).keys.get(keyOf(v));
-      if (!fresh && kept && kept.until > inner.host.nowMs()) return kept.key;
-      const mine = v.keys.find((k) => k.cert.device === self.device);
-      if (!mine) return yield* fail("vault_no_key", t("core-misc.vault.noKey"));
-      const priv = yield* self_.#boxKey(reason);
-      if (boxPublic(priv) !== mine.cert.box) return yield* fail("vault_no_key", t("core-misc.vault.noKey"));
-      const key = yield* Effect.try({ try: () => openSeal(priv, mine.wrapped, keyContext(ws, v.id, v.epoch)), catch: asCoreError });
-      self_.#keep(v, key);
-      return key;
+      const inner = self.#inner;
+      const { lock, signer, self: who } = yield* self.#ready();
+      const v = yield* self.#vault(lock, id);
+      if (v.owner !== who.sub || v.epoch !== epoch) return 0;
+      const add = self.#missing(lock, v, device);
+      if (add.length === 0) return 0;
+      const devices = new Set(add.map((c) => c.device));
+      const context = keyContext(self.ws, v.id, v.epoch);
+      const keys = [
+        ...v.keys.filter((k) => !devices.has(k.cert.device)),
+        ...add.map(({ sub: _, ...cert }) => {
+          const eph = new Uint8Array(32);
+          inner.host.randomBytes(eph);
+          return { cert, wrapped: sealWith(cert.box, key, context, eph) };
+        }),
+      ];
+      const { sig: _, ...rest } = v;
+      yield* self.#putVault(sign({ ...rest, seq: v.seq + 1, keys, at: nowS(inner) }, TAG.vault, signer), held(inner, self.ws).at[v.id] ?? "");
+      return add.length;
     });
   }
 
@@ -834,7 +875,9 @@ class Vaults {
 
   /// This device set up for the vault in this workspace: its box key (made once, in the secure storage), its
   /// certificate signed and published to the workspace's stations. The person's recovery words the first time: one of
-  /// their devices that published a recovery key already gives it (none are made then).
+  /// their devices that published a recovery key already gives it (none are made then). Their own vault made (`made`)
+  /// only when they have none, as the stations hold them now: a device set up after the first is given that one's
+  /// key by a device that has it (`#give`), never a second vault.
   setup(): Effect.Effect<unknown, CoreError> {
     const self = this;
     return Effect.gen(function* () {
@@ -864,7 +907,12 @@ class Vaults {
       const published = yield* Effect.forEach(stationsOf(inner, self.ws), (s) => Effect.map(Effect.result(self.#station(s.id, "PUT", "/vault/boxes", cert)), (r) => [s.id, r._tag === "Success"] as const), { concurrency: 4 });
       if (!published.some(([, ok]) => ok)) return yield* fail("vault_no_station", t("core-misc.vault.noStation"));
       change(inner, self.ws, (h) => void (h.boxes[cert.device] = cert));
-      return { words, device: who.device, stations: published.filter(([, ok]) => ok).map(([id]) => id) };
+      const stations = published.filter(([, ok]) => ok).map(([id]) => id);
+      for (const s of stations) yield* Effect.ignore(readStation(inner, `${self.ws}/${s}`));
+      // (not made, it is offered on the page as when there is none)
+      const own = Object.values(held(inner, self.ws).vaults).some((v) => trusted(lock, v) && v.owner === who.sub);
+      const made = own ? null : yield* Effect.orElseSucceed(Effect.map(self.create(t("core-misc.vault.personal"), null), (m) => (m as { id: string }).id), () => null);
+      return { words, device: who.device, stations, made };
     });
   }
 
@@ -927,31 +975,17 @@ class Vaults {
     });
   }
 
-  /// The vault's key sealed for members' devices set up since it was keyed (or `device` alone): its owner signs.
+  /// The vault's key sealed for members' devices set up since it was keyed (or `device` alone): its owner signs. (Done
+  /// by itself whenever the owner's device unseals the key: this for when it has not been since.)
   addDevice(id: string, device: string | null): Effect.Effect<unknown, CoreError> {
     const self = this;
     return Effect.gen(function* () {
-      const inner = self.#inner;
-      const { lock, signer, self: who } = yield* self.#ready();
+      const { lock, self: who } = yield* self.#ready();
       const v = yield* self.#vault(lock, id);
       if (v.owner !== who.sub) return yield* fail("vault_not_owner", t("core-misc.vault.notOwner"));
-      const keyed = new Map(v.keys.map((k) => [k.cert.device, k.cert.box]));
-      const add = certs(inner, self.ws, lock).filter((c) => v.members.includes(c.sub) && keyed.get(c.device) !== c.box && (device === null || c.device === device));
-      if (add.length === 0) return { added: 0 };
-      const key = yield* self.#key(v, who, false, t("core-misc.vault.reason.unlock", { name: v.name }));
-      const devices = new Set(add.map((c) => c.device));
-      const context = keyContext(self.ws, v.id, v.epoch);
-      const keys = [
-        ...v.keys.filter((k) => !devices.has(k.cert.device)),
-        ...add.map(({ sub: _, ...cert }) => {
-          const eph = new Uint8Array(32);
-          inner.host.randomBytes(eph);
-          return { cert, wrapped: sealWith(cert.box, key, context, eph) };
-        }),
-      ];
-      const { sig: _, ...rest } = v;
-      yield* self.#putVault(sign({ ...rest, seq: v.seq + 1, keys, at: nowS(inner) }, TAG.vault, signer), held(inner, self.ws).at[v.id] ?? "");
-      return { added: add.length };
+      if (self.#missing(lock, v, device).length === 0) return { added: 0 };
+      const key = yield* self.#key(v, who, false, t("core-misc.vault.reason.unlock", { name: v.name }), false);
+      return { added: yield* self.#give(v.id, v.epoch, key, device) };
     });
   }
 
@@ -1137,8 +1171,9 @@ class Vaults {
   /// A secret an agent asked to keep, approved. The plain library's is written by the station that asked. A vault's is
   /// opened with this device's box key (that station sealed it to the person's devices set up), written under the
   /// request's item id into one of their vaults this device holds a key to (the one asked for first, their own next; a
-  /// new one when they have none), its copy brought to that station, which is then told where it went, with the grant
-  /// that lets the asking chat use it. Either way the chat that asked may use it at once.
+  /// new one only when they have none of their own: one this device has no key to yet, refused), its copy brought to
+  /// that station, which is then told where it went, with the grant that lets the asking chat use it. Either way the
+  /// chat that asked may use it at once.
   #keepSaved(r: Request, station: string): Effect.Effect<unknown, CoreError> {
     const self = this;
     return Effect.gen(function* () {
@@ -1152,6 +1187,12 @@ class Vaults {
       const { lock, signer, self: who } = yield* self.#ready();
       const sealed = (r.sealed ?? []).find((x) => x.device === who.device);
       if (!sealed) return yield* fail("vault_no_key", t("core-misc.vault.notSealedHere"));
+      const keyedHere = (v: Vault) => trusted(lock, v) && v.members.includes(who.sub) && v.keys.some((k) => k.cert.device === who.device && k.cert.box === sealed.box);
+      const h = held(inner, self.ws);
+      const theirs = Object.values(h.vaults).filter(keyedHere).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : 1));
+      const chosen = (h.vaults[r.vault] && keyedHere(h.vaults[r.vault]!) ? h.vaults[r.vault] : undefined) ?? theirs.find((x) => x.owner === who.sub) ?? theirs[0];
+      // Their own vault this device has no key to yet: given it by a device that has (not a second one made here).
+      if (!chosen && Object.values(h.vaults).some((v) => trusted(lock, v) && v.owner === who.sub)) return yield* fail("vault_no_key", t("core-misc.vault.noKey"));
       const priv = yield* self.#boxKey(t("core-misc.vault.reason.save", { name: s.name }));
       if (boxPublic(priv) !== sealed.box) return yield* fail("vault_no_key", t("core-misc.vault.notSealedHere"));
       const body = yield* Effect.try({
@@ -1164,10 +1205,7 @@ class Vaults {
         },
         catch: asCoreError,
       });
-      const keyedHere = (v: Vault) => trusted(lock, v) && v.members.includes(who.sub) && v.keys.some((k) => k.cert.device === who.device && k.cert.box === sealed.box);
-      const h = held(inner, self.ws);
-      const theirs = Object.values(h.vaults).filter(keyedHere).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : 1));
-      let v = (h.vaults[r.vault] && keyedHere(h.vaults[r.vault]!) ? h.vaults[r.vault] : undefined) ?? theirs.find((x) => x.owner === who.sub) ?? theirs[0];
+      let v = chosen;
       if (!v) {
         const made = (yield* self.create(t("core-misc.vault.personal"), null)) as { id: string };
         v = held(inner, self.ws).vaults[made.id];
@@ -1179,6 +1217,7 @@ class Vaults {
       const wrapped = vault.keys.find((k) => k.cert.device === who.device)!.wrapped;
       const key = kept && kept.until > inner.host.nowMs() ? kept.key : yield* Effect.try({ try: () => openSeal(priv, wrapped, keyContext(self.ws, vault.id, vault.epoch)), catch: asCoreError });
       self.#keep(vault, key);
+      inner.runner.fork(Effect.ignore(self.#give(vault.id, vault.epoch, key, null)));
       // Written once: an approval tried again after the station was not told finds it there.
       const had = items(inner, self.ws, vault.id)[r.item];
       if (had?.deleted) return yield* fail("vault_unknown", t("core-misc.vault.unknownItem"));
