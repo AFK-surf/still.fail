@@ -476,7 +476,9 @@ export class Hub {
     const createdBy = `slack:${connect.id}:${message.user}`;
     if (wanted && !exists) {
       try {
-        this.createSession(config, key, connect, single ? "all" : "thread", message, null, createdBy);
+        // A direct message's chat is its people's alone (docs/private-chats.md); a single-session connect's is everyone's.
+        const privateTo = !single && message.direct !== undefined ? await this.directPeople(chat, message) : null;
+        this.createSession(config, key, connect, single ? "all" : "thread", message, null, createdBy, privateTo);
         if (single) this.store.setBinding(connect.id, key);
       } catch (error) {
         log.error("hub", "cannot create session", { session: key, error: (error as Error).message });
@@ -924,9 +926,27 @@ export class Hub {
     return s !== null && s !== undefined && this.wsOf(s) === workspace;
   }
 
+  /// The emails of the people of the direct message `message` was said in (docs/private-chats.md): its sender, and in a
+  /// group's the others the platform names. One whose email the platform does not share is left out: the chat is then
+  /// private to fewer people, none at all if no one's is known.
+  private async directPeople(chat: ChatSurface, message: InboundMessage): Promise<string[]> {
+    let users = [message.user];
+    if (message.direct === "group") {
+      try {
+        users = [...new Set([message.user, ...((await chat.directMembers?.(message.channel)) ?? [])])];
+      } catch (error) {
+        log.warn("hub", "a group direct message's people not known; private to its sender alone", { channel: message.channel, error: (error as Error).message });
+      }
+    }
+    const emails = await Promise.all(users.map((u) => (chat.userEmail ? chat.userEmail(u).catch(() => null) : Promise.resolve(null))));
+    const known = [...new Set(emails.filter((e): e is string => typeof e === "string" && e !== "").map((e) => e.toLowerCase()))];
+    if (known.length < users.length) log.warn("hub", "some of a direct message's people have no email the platform shares; the chat is private to those known", { channel: message.channel, people: users.length, known: known.length });
+    return known;
+  }
+
   /// A session for a connect: the connect's own profile when it keeps to one (and it still can run it); else any of its
-  /// runtime, the model's first (pool.ts).
-  createSession(config: HubConfig, key: string, connect: Connect, scope: "thread" | "all", message: InboundMessage | null, title: string | null, createdBy: string | null) {
+  /// runtime, the model's first (pool.ts). `privateTo`: the people its chat is private to (docs/private-chats.md).
+  createSession(config: HubConfig, key: string, connect: Connect, scope: "thread" | "all", message: InboundMessage | null, title: string | null, createdBy: string | null, privateTo: string[] | null = null) {
     const fits = profilesFor(config, connect, this.workspaces()[0] ?? null);
     if (fits.length === 0 && profilesFor(config, connect).length > 0) throw new Error(tr(stationLang(), "station.session.noProfileHere", { runtime: runtimeTitle(connect.bind.runtime) }));
     const model = connect.bind.model ?? null;
@@ -956,6 +976,7 @@ export class Hub {
       createdAt: now,
       lastActiveAt: now,
       ws: connect.workspace ?? null,
+      privateTo,
     });
     log.info("hub", "session created", { session: key, connect: connect.id, scope, runtime: connect.bind.runtime, profile: profile.id });
   }

@@ -11,7 +11,7 @@ import { managesStation, readOnly } from "../../mesh/credential.ts";
 import type { Asker } from "../../search/match.ts";
 
 /// What a viewer is asking as.
-export const askerOf = (viewer: Request["viewer"]): Asker => ({ workspace: viewer.workspace, home: viewer.home !== false, scopes: readOnly(viewer) ? [] : ["write"] });
+export const askerOf = (viewer: Request["viewer"]): Asker => ({ workspace: viewer.workspace, home: viewer.home !== false, scopes: readOnly(viewer) ? [] : ["write"], reader: [viewer.email] });
 
 /// What people find here.
 export const PEOPLE = ["chat", "message", "job", "file"];

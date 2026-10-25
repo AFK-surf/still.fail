@@ -197,6 +197,7 @@ export function toEvent(event: Json, botUserId: string, botId: string): ChatEven
       text: body,
       addressed: kind === "app_mention" || event.channel_type === "im" || body.includes(`<@${botUserId}>`),
       ...(files.length > 0 ? { files } : {}),
+      ...(event.channel_type === "im" ? { direct: "one" as const } : event.channel_type === "mpim" ? { direct: "group" as const } : {}),
     },
   };
 }
@@ -725,6 +726,21 @@ export class SlackSurface implements ChatSurface {
   async userEmail(user: string): Promise<string | null> {
     const email = (await this.profile(user))?.email ?? "";
     return email === "" ? null : email;
+  }
+
+  /// The people of a group direct message besides the bot (conversations.members, mpim:read).
+  async directMembers(channel: string): Promise<string[]> {
+    const out: string[] = [];
+    let cursor = "";
+    for (;;) {
+      const params: [string, string][] = [["channel", channel], ["limit", "200"]];
+      if (cursor !== "") params.push(["cursor", cursor]);
+      const page = await this.client.api("conversations.members", params, this.botToken);
+      for (const m of Array.isArray(page?.members) ? page.members : []) if (typeof m === "string" && m !== this.botUserId()) out.push(m);
+      const next = page?.response_metadata?.next_cursor;
+      cursor = typeof next === "string" ? next : "";
+      if (cursor === "") return out;
+    }
   }
 
   /// A person as far as already known, without waiting; an unknown one is looked up in the background, and so is one

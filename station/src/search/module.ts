@@ -55,7 +55,7 @@ export const SearchLive = Layer.effectDiscard(
           const row = store.getSession(session);
           if (!row) return null;
           const home = cloud.home();
-          return { workspace: row.ws ?? home ?? "", home: row.ws === null || row.ws === home };
+          return { workspace: row.ws ?? home ?? "", home: row.ws === null || row.ws === home, reader: row.privateTo };
         },
         link,
         stations: async (workspace) => {

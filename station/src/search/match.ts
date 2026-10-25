@@ -1,6 +1,7 @@
 // What a search finds among what the station has (docs/search.md): nothing is indexed, everything is looked through as
 // it is asked for (search/worker.ts reads it). Each thing found is a document: its kind, whom it is for (the workspace
 // it is in, and a scope a viewer must have), what it is called, what it says, when, and what opens it.
+import { opensTo } from "../store/rows.ts";
 
 export type Doc = {
   /// Unique among all documents: its kind's and its own (`m:<thread>:<n>`, `h:<session>:<i>`…).
@@ -10,6 +11,8 @@ export type Doc = {
   ws: string | null;
   /// What else a viewer must have (`write`: a member who may write); null: none.
   scope?: string | null;
+  /// The people it is private to (a direct message's chat, docs/private-chats.md); absent or null: none.
+  to?: string[] | null;
   title: string;
   body: string;
   at: number | null;
@@ -17,8 +20,9 @@ export type Doc = {
   ref: Record<string, unknown>;
 };
 
-/// Whom a search is for: their workspace, whether it is the station's home one, and the scopes they have.
-export type Asker = { workspace: string; home: boolean; scopes: string[] };
+/// Whom a search is for: their workspace, whether it is the station's home one, and the scopes they have; `reader`:
+/// those who see what it finds (store/rows.ts `opensTo`; absent: anyone, so nothing private).
+export type Asker = { workspace: string; home: boolean; scopes: string[]; reader?: string[] | null };
 
 export type Hit = { kind: string; key: string; title: string; text: string; at: number | null } & Record<string, unknown>;
 /// `left`: the sessions whose execution history was not looked through, the time being up.
@@ -54,8 +58,9 @@ export function excerpt(body: string, words: string[]): string {
 }
 
 /// Whether `asker` may see `doc`.
-export const sees = (doc: Pick<Doc, "ws" | "scope">, asker: Asker): boolean =>
-  (doc.ws === "*" || doc.ws === asker.workspace || (doc.ws === null && asker.home)) && (doc.scope == null || asker.scopes.includes(doc.scope));
+export const sees = (doc: Pick<Doc, "ws" | "scope" | "to">, asker: Asker): boolean =>
+  (doc.ws === "*" || doc.ws === asker.workspace || (doc.ws === null && asker.home)) && (doc.scope == null || asker.scopes.includes(doc.scope)) &&
+  opensTo(asker.reader, doc.to);
 
 /// Whether a text has every word, case aside.
 export const has = (text: string, words: string[]): boolean => {

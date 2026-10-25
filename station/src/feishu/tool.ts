@@ -1,7 +1,7 @@
 // feishu_api (docs/feishu.md「agent 看到的」): any Feishu OpenAPI call as the bot of one of the session's Feishu chats.
 // Messages are not sent through it (chat_post answers a chat, and keeps what was said), nor is the app itself managed.
 import { jsString } from "../sessions/args.ts";
-import { target } from "../sessions/conversations.ts";
+import { platformReadable, target } from "../sessions/conversations.ts";
 import type { Hub } from "../sessions/hub.ts";
 import type { Tool } from "../tools/mcp.ts";
 
@@ -52,6 +52,9 @@ export function feishuTools(hub: () => Hub | undefined, isFeishu: (connect: stri
         if (connect === null || !isFeishu(connect)) throw new Error("this session has no Feishu conversation: give to= one of your Feishu chats");
         const chat = h.chat(connect);
         if (!chat.api) throw new Error("this Feishu connect is not connected");
+        // Not a direct message of other people (docs/private-chats.md): the chats its path and arguments name.
+        const named = [...path.split(/[/?&=]/), ...Object.values(params).filter((v): v is string => typeof v === "string")].filter((w) => w.startsWith("oc_"));
+        platformReadable(h, key, h.surface(connect), named);
         const result = await chat.api(method, params);
         const text = JSON.stringify(result);
         const chars = Array.from(text);

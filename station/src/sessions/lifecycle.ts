@@ -32,6 +32,8 @@ export type NewChat = {
   clientKey?: string | null;
   /// The workspace its chat is in (the asker's, or the opening session's); absent: the station's home one.
   ws?: string | null;
+  /// The people its chat is private to (its opener's, opened from a direct message's: docs/private-chats.md).
+  privateTo?: string[] | null;
 };
 
 const trimmed = (v: string | null | undefined) => {
@@ -163,6 +165,7 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
     createdAt: now,
     lastActiveAt: now,
     ws: options.ws ?? null,
+    privateTo: options.privateTo ?? null,
   });
   log.info("hub", "session created", { session: key, connect: INTERNAL_CONNECT, runtime, profile: profile.id, model });
   return [key, openChat(hub, key, options.createdBy, title)];

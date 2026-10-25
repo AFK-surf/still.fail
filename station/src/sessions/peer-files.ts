@@ -63,7 +63,8 @@ export async function fileForPeer(hub: Hub, request: Json, ws: string | null = n
   const given = typeof request?.path === "string" ? request.path : "";
   const offset = typeof request?.offset === "number" && Number.isSafeInteger(request.offset) && request.offset >= 0 ? request.offset : 0;
   if (chat.trim() === "" || given === "") throw new Error("chat and path are required");
-  const what = named(hub, chat, ws);
+  // Read for another station's session: not a direct message's (docs/private-chats.md).
+  const what = named(hub, chat, ws, false, null);
   const sessions = what.type === "session" ? [what.key] : hub.store.threadSessions(what.thread.id).map((m) => m.session);
   const path = clean(given);
   const base = basename(path);
