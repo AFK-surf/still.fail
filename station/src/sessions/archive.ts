@@ -372,7 +372,13 @@ async function lockWorktrees(dir: string, marker: string, locks: string[]): Prom
       if (!entry.isFile()) continue;
       const said = (await readFile(path, "utf8")).trim();
       if (!said.startsWith("gitdir: ")) continue;
-      const gitdir = await realpath(resolve(dir, said.slice("gitdir: ".length)));
+      const gitdir = await realpath(resolve(dir, said.slice("gitdir: ".length))).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return null;
+        throw error;
+      });
+      // Its repository has no record of it any more (pruned, removed): nothing to lock, and the rest is packed all the
+      // same. One such worktree left a chat's 1.4G unpacked (2026-10-23).
+      if (gitdir === null) continue;
       const locked = join(gitdir, "locked");
       let file;
       try {

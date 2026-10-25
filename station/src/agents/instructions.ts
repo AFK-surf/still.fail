@@ -66,7 +66,7 @@ Formatting: every chat takes the same Markdown (GitHub-flavoured): **bold**, *it
 | a chat's link | shows as a chip with its title | a link | a link |
 
 Where you work:
-${project}- Session workspace: ${workspace}. Scratch files, clones and git worktrees belong here. A week after its chat is archived (the station's setting), only the files sent in the chat stay in it: push or move elsewhere what must outlive the chat.
+${project}- Session workspace: ${workspace}. Scratch files, clones and git worktrees belong here. A week after its chat is archived (the station's setting; sooner when its disk runs low), only the files sent in the chat stay in it: push or move elsewhere what must outlive the chat.
 - Shared repository cache: ${repos_dir}. Keep canonical clones there; work in session worktrees, never edit canonical clones directly.
 
 Memory and skills:

@@ -19,6 +19,7 @@ import { Jobs, notifyEndpoint, screenEndpoint } from "../jobs/jobs.ts";
 import { liveMemory } from "../jobs/memory.ts";
 import { Remote, followRoster } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
+import { DISK_EVERY_MS, DISK_LOW_BYTES, diskFree } from "../ops/disk.ts";
 import { lentFile, placeIn, sandboxConfig, sandboxed } from "../agents/sandbox.ts";
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
@@ -60,7 +61,7 @@ import type { TailState } from "../read/tail.ts";
 import { ColdRooms } from "./cold.ts";
 import { Hub } from "./hub.ts";
 import { InternalChat } from "./internal.ts";
-import { autoArchive, expireArchived } from "./lifecycle.ts";
+import { autoArchive, expireArchived, relieveArchived } from "./lifecycle.ts";
 import { fromPeer, sender } from "./messages.ts";
 import { CREATE, NOTICE, createForPeer, noticeForPeer } from "./opened.ts";
 import { chatsTouched, forPeer, READ } from "./others.ts";
@@ -637,6 +638,28 @@ export const AgentsLive = (control: Control) =>
         time.after(Math.min(3_600_000, next === null ? Infinity : next - hub.now()), emptying);
       };
       time.after(300_000, emptying);
+
+      // The disk of the station's data low: the mirrors of other stations' tasks not in use go, then archived
+      // workspaces before their time (ops/disk.ts).
+      const relieving = async () => {
+        const free = () => {
+          try {
+            return diskFree(data);
+          } catch {
+            return Infinity;
+          }
+        };
+        try {
+          if (free() < DISK_LOW_BYTES) {
+            await remote.relieve(hub.now());
+            await relieveArchived(hub, free);
+          }
+        } catch (error) {
+          log.warn("hub", "making room on the disk failed", { error: (error as Error).message });
+        }
+        time.after(DISK_EVERY_MS, relieving);
+      };
+      time.after(DISK_EVERY_MS, relieving);
 
       // The threads a station before wrote out to their archive files, back into the database a few at a time
       // (store.ts `bringInArchived`), once the devices have come back from the start.

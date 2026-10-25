@@ -4,7 +4,7 @@
 // chat here whose agent runs the same commands: shell execution as the station's OS user, not a sandbox. A source session's
 // tasks share one working directory on the target (remote/sessions/<id>/work). The source asks for it to be removed
 // when the session is archived or deleted; the target removes it itself after IDLE_MS unused, and a directory mirrored
-// in it (a task's `dir`) after MIRROR_IDLE_MS without a task, or sooner when its disk runs low (DISK_LOW_BYTES).
+// in it (a task's `dir`) after MIRROR_IDLE_MS without a task, or sooner when the station's disk runs low (ops/disk.ts).
 //
 // The records are the Rust's files, written the same way (remote/incoming/<id>/task.json, sessions/<id>/session.json,
 // outgoing/<id>.json, used/<id>.json), so either station reads what the other wrote. What asks other machines (a
@@ -13,10 +13,11 @@
 import { createHash, randomBytes } from "node:crypto";
 import {
   appendFileSync, closeSync, constants, existsSync, fstatSync, fsyncSync, ftruncateSync, lstatSync, mkdirSync, openSync, readFileSync,
-  readSync, readdirSync, readlinkSync, renameSync, rmSync, statSync, statfsSync, writeFileSync, writeSync,
+  readSync, readdirSync, readlinkSync, renameSync, rmSync, statSync, writeFileSync, writeSync,
 } from "node:fs";
 import { link, open, readFile, readdir, rename, rm } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { DISK_LOW_BYTES, diskFree } from "../ops/disk.ts";
 import { relativeParts } from "../ops/paths.ts";
 import { PlaceRefused, Places } from "../ops/places.ts";
 import { platform } from "../platform/index.ts";
@@ -57,12 +58,8 @@ export const GIVE_UP_MS = 10 * 60_000;
 /// its tasks made there; the next start syncs it anew. Chats made one for each worktree and kept them all: 204 of
 /// one session's on Studio, a session's 78 holding 112G, the stations' disks full in hours (2026-10-20).
 export const MIRROR_IDLE_MS = 24 * 3600 * 1000;
-/// Less free than this on the disk of the station's data, mirrors go sooner: the longest unused first, until there is
-/// this much again; never one a task runs in or one used within MIRROR_RECENT_MS.
-export const DISK_LOW_BYTES = 20 * 1024 ** 3;
+/// With the station's disk low (`relieve`), a mirror used within this stays.
 export const MIRROR_RECENT_MS = 3600 * 1000;
-/// How often a target looks at its free space.
-const DISK_EVERY = "5 minutes";
 
 export type RemoteOptions = {
   /// The data directory: remote/ and mesh/cloud.json in it.
@@ -226,10 +223,7 @@ export class Remote {
     this.jobs = options.jobs;
     this.notify = options.notify;
     this.places = options.places ?? new Places();
-    this.diskFree = options.diskFree ?? ((path) => {
-      const st = statfsSync(path);
-      return st.bavail * st.bsize;
-    });
+    this.diskFree = options.diskFree ?? diskFree;
     this.root = join(options.data, "remote");
     for (const name of ["incoming", "outgoing", "sessions", "used", "prepared"]) mkdirSync(join(this.root, name), { recursive: true });
     this.scope = Effect.runSync(Scope.make());
@@ -257,9 +251,6 @@ export class Remote {
     void this.resume().catch(() => undefined);
     void this.run(
       Effect.promise(() => this.sweep(this.store.now())).pipe(Effect.repeat(Schedule.spaced(SWEEP_EVERY)), Effect.asVoid),
-    ).catch(() => undefined);
-    void this.run(
-      Effect.promise(() => this.relieve(this.store.now())).pipe(Effect.repeat(Schedule.spaced(DISK_EVERY)), Effect.asVoid),
     ).catch(() => undefined);
   }
 
@@ -552,8 +543,9 @@ export class Remote {
     }
   }
 
-  /// The disk of the station's data has less than DISK_LOW_BYTES free: mirrors go, the longest unused first, until
-  /// there is that much again. One a task runs in or syncs to, or used within MIRROR_RECENT_MS, stays.
+  /// The disk of the station's data has less than DISK_LOW_BYTES free (looked at by the station, ops/disk.ts): mirrors
+  /// go, the longest unused first, until there is that much again. One a task runs in or syncs to, or used within
+  /// MIRROR_RECENT_MS, stays.
   async relieve(now: number): Promise<void> {
     const free = () => {
       try {
