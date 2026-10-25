@@ -1640,3 +1640,8 @@ let check_room : @ui.Style = @ui.style(w=@sf.check_room_w, align=ACenter)
 fn head_pill(c : @ui.Ctx, key : String, label : String) -> Bool {
   @sf.button(c, label, key~, icon="plus")
 }
+
+///|
+/// A block of a sheet laid out here (in its column: @sf.sheet_column), 10 over the next.
+// kept across runs: a value (no field of it changes)
+let sheet_block : @ui.Style = @ui.css("w=Full pb=S2_5")
