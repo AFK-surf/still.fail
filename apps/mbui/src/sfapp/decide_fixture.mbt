@@ -6,7 +6,8 @@
 // "chat-job"; "chat-letters-info" (the chat's sheet with its row for what its agents and other chats' wrote each
 // other), "chat-letters" (their sheet: the chats written with), "chat-letters-open" (one of them opened); the wide
 // frame's "chat-letters-pop" (the chat's "…" open), "chat-jobs-pop" (its services' popover), "chat-letters-side",
-// "chat-jobs-side", "chat-history-side" (what is opened beside it), "chat-model-pop" (its agent's model control's panel
+// "chat-jobs-side", "chat-history-side" (what is opened beside it), "chat-tabs-side" (two of them: the history behind
+// 任务), "chat-model-pop" (its agent's model control's panel
 // open), "chat-find" (⌘F's bar, a word typed in it), "chat-agent-card" (the chat, its agent's details and card read:
 // what its card over its picture says); "home-jobs"
 // (Home with the jobs left up a long while at its top); "history-link" (Home, the history there for a link to open at
@@ -19,7 +20,7 @@ fn decide_mode(mode : String) -> Bool {
     "decisions", "decisions-text", "decisions-idle", "history", "history-details",
     "chat-info", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
     "chat-letters-info", "chat-letters", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
-    "chat-jobs-side", "chat-history-side", "chat-model-pop", "chat-find", "chat-agent-card",
+    "chat-jobs-side", "chat-history-side", "chat-tabs-side", "chat-model-pop", "chat-find", "chat-agent-card",
   ].contains(mode)
 }
 

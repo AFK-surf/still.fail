@@ -730,9 +730,23 @@ pub fn alpha(c : Int64, a : Double) -> Int64 {
 }
 
 ///|
-/// `top` laid over `under` (both RRGGBBAA; `under` taken as opaque): the colour it shows as.
+/// `top` laid over `under` (both RRGGBBAA): the colour it shows as; over a tint (a ground pointed at laid over a
+/// translucent one: style.mbt Patch::lit_by), the two as one tint, as much of what is under them showing through.
 pub fn over(under : Int64, top : Int64) -> Int64 {
   let a = (top & 0xFFL).to_double() / 255.0
+  let ua = (under & 0xFFL).to_double() / 255.0
+  if ua < 1.0 {
+    let oa = a + ua * (1.0 - a)
+    if oa <= 0.0 {
+      return 0L
+    }
+    let mix = fn(sh : Int) -> Int64 {
+      let u = ((under >> sh) & 0xFFL).to_double()
+      let t = ((top >> sh) & 0xFFL).to_double()
+      ((t * a + u * ua * (1.0 - a)) / oa).round().to_int64() << sh
+    }
+    return mix(24) | mix(16) | mix(8) | (oa * 255.0).round().to_int64()
+  }
   let ch = fn(sh : Int) -> Int64 {
     let u = ((under >> sh) & 0xFFL).to_double()
     let t = ((top >> sh) & 0xFFL).to_double()

@@ -348,7 +348,8 @@ fn message_name(
     }
   }
   c.box(style=msg_name_room, id~, fn() {
-    c.text(name, style=if goes && c.hovered(id) { msg_name_hot } else { msg_name }) |> ignore
+    // (the accent's words already: pointed at, underlined, docs/ui-panels.md 悬停)
+    c.rich([@ui.span(name, underline=goes && c.hovered(id))], style=msg_name) |> ignore
   })
   |> ignore
 }
@@ -931,9 +932,6 @@ pub let msg_name_room : @ui.Style = @ui.style(max_w=@sf.name_max)
 // kept across runs: a value (no field of it changes)
 pub let msg_name : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, leading=L5, color=AccentText, wrap=false)
 
-///|
-// kept across runs: a value (no field of it changes)
-let msg_name_hot : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, leading=L5, color=Accent, wrap=false)
 
 ///|
 /// A time (msgTime): 11, muted.

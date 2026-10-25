@@ -307,6 +307,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.next_hit_ids.clear()
   c.next_hit_rects.clear()
   c.next_hit_clips.clear()
+  c.next_hit_ends.clear()
   c.next_scroll_ids.clear()
   c.next_scroll_rects.clear()
   c.next_bars.clear()
@@ -343,6 +344,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   let hc = c.hit_clips
   c.hit_clips = c.next_hit_clips
   c.next_hit_clips = hc
+  let he = c.hit_ends
+  c.hit_ends = c.next_hit_ends
+  c.next_hit_ends = he
   // (what said its presses are another's, under a Tester: that one takes them there)
   c.check_press_owners()
   let si = c.scroll_ids
@@ -773,7 +777,7 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int) -> U
     }
     // (a finger hovers over nothing: Pointing)
     if pointing() is Mouse {
-      c.hover = hit_in(c.hit_ids, c.hit_rects, x, y)
+      c.point_at(x, y)
     }
     c.bar_pointer(x, y)
     if c.down {

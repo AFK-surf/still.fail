@@ -150,6 +150,17 @@ fn fixture_chat_tabs(mode : String) -> Map[String, Json] {
     "chat-letters-side" => { "ws1/st1:s-c1": kept("letters") }
     "chat-jobs-side" => { "ws1/st1:s-c1": kept("jobs") }
     "chat-history-side" | "chat-model-pop" => { "ws1/st1:s-c1": kept("s-c1") }
+    "chat-tabs-side" => { "ws1/st1:s-c1": { "tabs": ["s-c1", "jobs"], "active": "jobs" } }
+    _ => {}
+  }
+}
+
+///|
+/// The tabs shown to begin with where more than one is kept (chat-tabs-side: the agent's history behind 任务, the
+/// panel's two tabs pointed at), as the core shows what is kept (chat-tabs.ts tabsOf).
+fn fixture_tabs_shown(mode : String) -> Map[String, Json] {
+  match mode {
+    "chat-tabs-side" => { "ws1/st1:s-c1": { "open": ["s-c1", "jobs"], "shown": "jobs" } }
     _ => {}
   }
 }
@@ -834,7 +845,7 @@ pub fn fixture(mode : String) -> Source {
     older: 0,
     step: 0,
     chat_tabs: fixture_chat_tabs(mode),
-    tabs_shown: {},
+    tabs_shown: fixture_tabs_shown(mode),
     queue_gone: {},
     queue_set_aside: {},
     queue_was: { "key": Json::null(), "at": 0 },

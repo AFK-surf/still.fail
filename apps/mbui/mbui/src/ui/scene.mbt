@@ -568,7 +568,20 @@ fn Ctx::paint_held(self : Ctx, n : Node, alpha : Double) -> Unit {
 }
 
 ///|
+/// Node `i` drawn, and what it holds: a hit target of its own holds the targets drawn in it (Ctx::hit_ends: what
+/// holds the one under the pointer is pointed at too, Ctx::hovered).
 fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
+  let h0 = self.next_hit_ids.length()
+  self.paint_node(i, alpha_in)
+  let id = self.nodes[i].id
+  // (its own target the first it drew, if it took presses: none drawn before it)
+  if id != 0 && self.next_hit_ids.length() > h0 + 1 && self.next_hit_ids[h0] == id {
+    self.next_hit_ends[h0] = self.next_hit_ids.length()
+  }
+}
+
+///|
+fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   // drawn by its look, tapped as laid out (draw.mbt), when it has one
   if dr.any && self.drawn_paint(i, alpha_in) {
     return

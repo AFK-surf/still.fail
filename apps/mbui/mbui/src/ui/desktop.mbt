@@ -332,9 +332,9 @@ fn Ctx::desk_frame_end(self : Ctx) -> Unit {
       // the one after it was lifted, still read where it was, for what a tap there opens)
       self.px = -1.0
       self.py = -1.0
-      self.hover = 0
+      self.point_nowhere()
     } else {
-      self.hover = hit_in(self.hit_ids, self.hit_rects, self.px, self.py)
+      self.point_at(self.px, self.py)
     }
   }
   self.show_cursor()
@@ -541,7 +541,7 @@ fn Ctx::pointer_left(self : Ctx) -> Unit {
   }
   self.px = -1.0
   self.py = -1.0
-  self.hover = 0
+  self.point_nowhere()
   self.show_cursor()
 }
 

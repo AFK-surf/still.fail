@@ -572,7 +572,7 @@ let tiles_row : @ui.Style = @ui.css("row w=Full gap=S2")
 /// A tile: its icon over its name, on the ink at 6% (8% pressed), 64 high, its corner 12.
 // kept across runs: a value (no field of it changes)
 let tile_box : @ui.Style = @ui.style(w=@sf.grow).then(
-  @ui.css("h=S16 gap=S1_5 radius=Xl bg=Tint align=ACenter justify=JCenter pressed{bg=TintStrong}"),
+  @ui.css("h=S16 gap=S1_5 radius=Xl bg=Tint align=ACenter justify=JCenter pressed{bg=Hover}"),
 )
 
 ///|

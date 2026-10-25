@@ -355,11 +355,11 @@ let vfr_steps_gap : @ui.Style = @ui.style(w=grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vfr_step : @ui.Style = @ui.css("w=S10 h=S10 radius=Full align=ACenter justify=JCenter shadow=Base hovered{bg=Bg}")
+let vfr_step : @ui.Style = @ui.css("w=S10 h=S10 radius=Full align=ACenter justify=JCenter shadow=Base hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vfr_step_small : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter justify=JCenter shadow=Base hovered{bg=Bg}")
+let vfr_step_small : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter justify=JCenter shadow=Base hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -239,6 +239,10 @@ pub struct Ctx {
   // rounded clip cut away misses it
   mut hit_clips : Array[Double]
   mut next_hit_clips : Array[Double]
+  // what each hit target holds as it was drawn: one past the last target drawn in it (its own index and one, holding
+  // none), for what holds the one under the pointer to be pointed at too (Ctx::hovered)
+  mut hit_ends : Array[Int]
+  mut next_hit_ends : Array[Int]
   mut scroll_ids : Array[Int]
   mut scroll_rects : Array[Double]
   mut next_scroll_ids : Array[Int]
@@ -258,6 +262,8 @@ pub struct Ctx {
   mut py : Double
   mut down : Bool
   mut hover : Int
+  /// what holds the one under the pointer (`hover`), as the last frame drew them, outermost first (Ctx::hovered)
+  hover_in : Array[Int]
   mut active : Int
   mut focus : Int
   clicked : Array[Int]
@@ -516,6 +522,8 @@ fn Ctx::new() -> Ctx {
     next_hit_rects: [],
     hit_clips: [],
     next_hit_clips: [],
+    hit_ends: [],
+    next_hit_ends: [],
     scroll_ids: [],
     scroll_rects: [],
     next_scroll_ids: [],
@@ -530,6 +538,7 @@ fn Ctx::new() -> Ctx {
     py: -1.0,
     down: false,
     hover: 0,
+    hover_in: [],
     active: 0,
     focus: 0,
     clicked: [],
@@ -1294,20 +1303,47 @@ pub fn Ctx::set_clear(self : Ctx, color : Int64) -> Unit {
 }
 
 ///|
-/// Whether a mouse's pointer rests on `id` (a finger hovers over nothing: Pointing). For what only a resting pointer
-/// is shown; a look that answers the hand on it is Ctx::lit.
+/// Whether a mouse's pointer rests on `id`, or on what is drawn in it (a finger hovers over nothing: Pointing): a
+/// tab's ×, a row's buttons pointed at, the tab and the row are still pointed at (the web's `:hover`, which holds for
+/// what holds it). For what only a resting pointer is shown; a look that answers the hand on it is Ctx::lit.
 pub fn Ctx::hovered(self : Ctx, id : Int) -> Bool {
-  self.hover == id
+  self.hover == id || (id != 0 && self.hover_in.contains(id))
 }
 
 ///|
-/// Whether `id` is lit by the hand on it: a mouse's pointer resting on it, a finger pressing it (the web's `:hover`
-/// with a fine pointer, `:active` with a coarse one). What a style's `hovered` patch and a widget's hovered look go by.
+/// Whether `id` is lit by the hand on it: a mouse's pointer resting on it or on what is in it (Ctx::hovered), a finger
+/// pressing it, itself (the web's `:hover` with a fine pointer, `:active` with a coarse one). What a style's `hovered`
+/// patch and a widget's hovered look go by.
 pub fn Ctx::lit(self : Ctx, id : Int) -> Bool {
   match pointing() {
-    Mouse => self.hover == id
+    Mouse => self.hovered(id)
     Finger => self.pressed(id)
   }
+}
+
+///|
+/// The pointer at (x, y), as the last frame drew what is there: the topmost hit target under it, and what holds that
+/// one (Ctx::hovered).
+fn Ctx::point_at(self : Ctx, x : Double, y : Double) -> Unit {
+  let k = hit_at(self.hit_ids, self.hit_rects, self.hit_clips, x, y)
+  self.hover = if k >= 0 { self.hit_ids[k] } else { 0 }
+  self.hover_in.clear()
+  for j in 0..<k {
+    let id = self.hit_ids[j]
+    if j < self.hit_ends.length() &&
+      self.hit_ends[j] > k &&
+      id != self.hover &&
+      !self.hover_in.contains(id) {
+      self.hover_in.push(id)
+    }
+  }
+}
+
+///|
+/// The pointer over nothing (gone from the window, a finger lifted).
+fn Ctx::point_nowhere(self : Ctx) -> Unit {
+  self.hover = 0
+  self.hover_in.clear()
 }
 
 ///|
@@ -1448,9 +1484,8 @@ pub fn Ctx::pointer_velocity(self : Ctx) -> (Double, Double) {
 }
 
 ///|
-fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> Int {
-  let targets = physical_equal(rects, g().hit_rects)
-  let clips = if targets { g().hit_clips } else { [] }
+/// Which of the hit targets `rects` (in paint order, cut by `clips`) is topmost at (x, y): its index, -1 none.
+fn hit_at(ids : Array[Int], rects : Array[Double], clips : Array[Double], x : Double, y : Double) -> Int {
   let mut k = ids.length() - 1
   while k >= 0 {
     let r = k * 4
@@ -1463,6 +1498,14 @@ fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> In
     }
     k = k - 1
   }
+  k
+}
+
+///|
+fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> Int {
+  let targets = physical_equal(rects, g().hit_rects)
+  let clips = if targets { g().hit_clips } else { [] }
+  let k = hit_at(ids, rects, clips, x, y)
   // a finger: what is smaller than a fingertip is reached from round it (Pointing)
   if targets && pointing() is Finger {
     match finger_reach(ids, rects, clips, k, x, y) {
@@ -1587,6 +1630,8 @@ fn Ctx::push_hit(
   y1 : Double,
 ) -> Unit {
   self.next_hit_ids.push(id)
+  // (holding none till what is drawn in it is: Ctx::paint)
+  self.next_hit_ends.push(self.next_hit_ids.length())
   self.next_hit_rects.push(x0)
   self.next_hit_rects.push(y0)
   self.next_hit_rects.push(x1)

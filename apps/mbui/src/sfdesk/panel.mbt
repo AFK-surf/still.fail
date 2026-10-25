@@ -203,9 +203,9 @@ pub let side_tab_list : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S0_5, al
 ///|
 /// A tab (sideTabWrap, sideTab): 30 high, its mark (in a 14 room) and label 6 apart, its close 5 from its end, each in
 /// the middle of its end, concentric with it (a service's dot too); a capsule (so in a panel's corner it stands where
-/// its shape is concentric with it), the pointer's ground on it, the selected ground under the one in front.
+/// its shape is concentric with it).
 // kept across runs: a value (no field of it changes)
-pub let side_tab : @ui.Style = @ui.style(
+let side_tab_shape : @ui.Style = @ui.style(
   row=true,
   h=@sf.side_tab_h,
   pl=@sf.capsule_end_room(@sf.side_tab_side, side_tab_mark_side),
@@ -213,9 +213,18 @@ pub let side_tab : @ui.Style = @ui.style(
   gap=S1_5,
   align=ACenter,
   radius=Full,
-  hovered=@ui.patch(bg=Hover),
-  selected=@ui.patch(bg=Selected),
 )
+
+///|
+/// One behind: the pointer's ground on it (and its × a step more, pointed at: docs/ui-panels.md 悬停).
+// kept across runs: a value (no field of it changes)
+pub let side_tab : @ui.Style = side_tab_shape.then(@ui.css("hovered{bg=Hover}"))
+
+///|
+/// The one in front: the selected ground under it; pressed, it does nothing, so pointed at it stays as it is (its ×
+/// lights over it).
+// kept across runs: a value (no field of it changes)
+pub let side_tab_in_front : @ui.Style = side_tab_shape.then(@ui.css("bg=Selected"))
 
 ///|
 /// Its mark's room: an icon's, a maker's mark's, a service's dot in its middle.
@@ -231,13 +240,18 @@ let side_tab_mark : @ui.Style = @ui.css("w=S3_5 h=S3_5 align=ACenter justify=JCe
 pub let side_tab_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
+/// One behind, pointed at: its words in the words' colour.
+// kept across runs: a value (no field of it changes)
+let side_tab_words_lit : @ui.TextStyle = side_tab_words.then(@ui.text_style(color=Fg))
+
+///|
 // kept across runs: a value (no field of it changes)
 pub let side_tab_front : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 ///|
-/// Its close (sideTabClose): 20 round, concentric in the tab's end, the line's ground on it.
+/// Its close (sideTabClose): 20 round, concentric in the tab's end; pointed at, the pointer's ground over the tab's.
 // kept across runs: a value (no field of it changes)
-pub let side_tab_close : @ui.Style = @ui.css("w=S5 h=S5 radius=Full align=ACenter justify=JCenter hovered{bg=Line}")
+pub let side_tab_close : @ui.Style = @ui.css("w=S5 h=S5 radius=Full align=ACenter justify=JCenter hovered{bg=Hover}")
 
 ///|
 /// What the tab in front shows, under the bar.
@@ -581,7 +595,7 @@ fn side_tab_names(src : Source, r : ChatRef, v : ChatView, tab : String) -> (Str
 
 ///|
 /// A tab's mark: an agent's maker's, a web service's dot of how it is, else the icon of what it shows (in the words'
-/// colour when `front`).
+/// colour when `front`: in front, or lit by the hand).
 fn side_tab_mark_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : String, front : Bool) -> Unit {
   let t = @sf.theme()
   match v.agents.iter().find_first(fn(a) { a.key == tab }) {
@@ -627,11 +641,20 @@ fn side_tab_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : Strin
     side_change(src, r, "close", Some(tab))
   }
   let (label, closing) = side_tab_names(src, r, v, tab)
-  let b = c.box(style=side_tab, selected=front, id~, fn() {
-    side_tab_mark_of(c, src, r, v, tab, front)
-    c.text(label, style=if front { side_tab_front } else { side_tab_words }) |> ignore
+  // lit, a tab's muted words and marks come up to the words' colour, as its ground comes (docs/ui-panels.md 悬停)
+  let lit = !front && c.lit(id)
+  let b = c.box(style=if front { side_tab_in_front } else { side_tab }, id~, fn() {
+    side_tab_mark_of(c, src, r, v, tab, front || lit)
+    c.text(label, style=if front {
+      side_tab_front
+    } else if lit {
+      side_tab_words_lit
+    } else {
+      side_tab_words
+    })
+    |> ignore
     let x = c.box(style=side_tab_close, id=close, fn() {
-      @sf.icon(c, "close", size=12.0, color=t.p.muted) |> ignore
+      @sf.icon(c, "close", size=12.0, color=if c.lit(close) { t.p.text } else { t.p.muted }) |> ignore
     })
     c.semantics(x, Button, id=close, label=closing)
   })

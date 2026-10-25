@@ -1635,7 +1635,7 @@ fn letters_params(r : ChatRef, thread : Double) -> Map[String, Json] {
 /// A chat written with, its row in the letters' sheet (Letters.kt): 18 in, 10 over and under, its two lines 2 apart;
 /// pressed a shade.
 // kept across runs: a value (no field of it changes)
-let letters_row : @ui.Style = @ui.css("w=Full px=S4_5 py=S2_5 gap=S0_5 pressed{bg=A(Fg,O5)}")
+let letters_row : @ui.Style = @ui.css("w=Full px=S4_5 py=S2_5 gap=S0_5 pressed{bg=Hover}")
 
 ///|
 /// Its first line: its title as wide as there is room, how many and when at its end, 8 apart.
@@ -1672,7 +1672,7 @@ let letters_head : @ui.Style = @ui.css("row w=Full pl=S1_5 pr=S4_5 pb=S1_5 gap=S
 
 ///|
 // kept across runs: a value (no field of it changes)
-let letters_back : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter justify=JCenter pressed{bg=A(Fg,O5)}")
+let letters_back : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter justify=JCenter pressed{bg=Hover}")
 
 ///|
 /// A letter, as the chat draws a message: 14 in, 20 under the one before.

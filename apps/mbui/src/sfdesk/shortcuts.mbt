@@ -223,13 +223,7 @@ fn keys_row(c : @ui.Ctx, core : Core, a : Json) -> Unit {
     let none = strings(av, "keys").length() == 0
     c.box(
       id~,
-      style=if on {
-        keys_record_on
-      } else if c.lit(id) {
-        keys_record_hot
-      } else {
-        keys_record
-      },
+      style=if on { keys_record_on } else { keys_record },
       fn() {
         c.text(if on { @sf.t("web-main.shortcuts.recording") } else { text(av, "text") }, style=if on {
           keys_record_on_words
@@ -288,8 +282,9 @@ let keys_row_label : @ui.Style = @ui.style(w=@sf.grow)
 let keys_row_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, w=Full)
 
 ///|
-/// Its keys (Shortcuts.css.ts record): 120 wide at least, 30 high, 12 in, the field's corner, the hover ground (the
-/// selected one pointed at), in the middle; none, subtle; recording, the accent's ground and words.
+/// Its keys (Shortcuts.css.ts record): 120 wide at least, 30 high, 12 in, the field's corner, the hover ground (and
+/// the pointer's over it, pointed at: docs/ui-panels.md 悬停), in the middle; none, subtle; recording, the accent's
+/// ground and words.
 // kept across runs: a value (no field of it changes)
 let keys_record : @ui.Style = @ui.style(
   row=true,
@@ -300,6 +295,7 @@ let keys_record : @ui.Style = @ui.style(
   bg=Hover,
   align=ACenter,
   justify=JCenter,
+  hovered=@ui.patch(bg=Hover),
 )
 
 ///|
@@ -308,9 +304,6 @@ let keys_record_w : Double = 120.0
 ///|
 let keys_record_h : Double = 30.0
 
-///|
-// kept across runs: a value (no field of it changes)
-let keys_record_hot : @ui.Style = keys_record.then(@ui.css("bg=Selected"))
 
 ///|
 // kept across runs: a value (no field of it changes)

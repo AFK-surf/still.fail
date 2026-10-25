@@ -44,7 +44,8 @@ pub(all) struct Patch {
 
 ///|
 /// A box's style: what it looks like, and what it looks like instead in a state (each a Patch over it). The states
-/// are laid on in one order, the later winning: narrow, dark, selected, hovered, focused, pressed, disabled.
+/// are laid on in one order, the later winning: narrow, dark, selected, hovered, focused, pressed, disabled; the
+/// ground of `hovered` and `pressed` laid over the ground under it (Style::resolve).
 pub(all) struct Style {
   base : Patch
   narrow : Patch?
@@ -323,23 +324,39 @@ fn Style::resolve(
   pressed : Bool,
   disabled : Bool,
 ) -> Patch {
+  // (whether each answers the hand: its ground laid over the one under it)
   let blocks = [
-    (self.narrow, narrow),
-    (self.dark, dark),
-    (self.selected, selected),
-    (self.hovered, hovered),
-    (self.focused, focused),
-    (self.pressed, pressed),
-    (self.disabled, disabled),
+    (self.narrow, narrow, false),
+    (self.dark, dark, false),
+    (self.selected, selected, false),
+    (self.hovered, hovered, true),
+    (self.focused, focused, false),
+    (self.pressed, pressed, true),
+    (self.disabled, disabled, false),
   ]
   let mut p = self.base
   for b in blocks {
     match b {
-      (Some(b), true) => p = p.then(b)
+      // what answers the hand (pointed at, pressed) is laid over the ground under it, the box's own or its
+      // selected one, not put in its place: a tint over any ground is a step more, a box pointed at in a box
+      // pointed at a step more again (the kit's `tinted`)
+      (Some(b), true, true) => p = p.lit_by(b)
+      (Some(b), true, false) => p = p.then(b)
       _ => ()
     }
   }
   p
+}
+
+///|
+/// `self` with a hand's state block `o` over it: what `o` says in place of what `self` does, but its ground over
+/// `self`'s.
+fn Patch::lit_by(self : Patch, o : Patch) -> Patch {
+  let p = self.then(o)
+  match (self.bg, o.bg) {
+    (Some(under), Some(top)) if under != Clear => { ..p, bg: Some(Over(under, top)) }
+    _ => p
+  }
 }
 
 ///|

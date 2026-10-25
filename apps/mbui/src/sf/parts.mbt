@@ -65,8 +65,9 @@ pub fn button(
         let g = mix(p.primary_hover, h, p.primary)
         (g, g, p.on_primary)
       }
+      // a solid ground pointed at: a step towards the page, as the primary's (docs/ui-panels.md 悬停)
       DangerSolid => {
-        let g = mix(mix(p.red, 0.85, 0x000000FFL), h, p.red)
+        let g = mix(mix(p.red, 0.85, p.canvas), h, p.red)
         (g, g, 0xFFFFFFFFL)
       }
       Ghost => (alpha(p.hover, h), 0L, p.text)
@@ -2413,9 +2414,7 @@ let panel_button_box : @ui.Style = @ui.css(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_button_filled : @ui.Style = panel_button_box.then(
-  @ui.css("bg=AccentBg hovered{bg=A(Accent,O20)}"),
-)
+let panel_button_filled : @ui.Style = panel_button_box.then(@ui.css("bg=AccentBg"))
 
 ///|
 // kept across runs: a value (no field of it changes)
