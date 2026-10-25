@@ -282,8 +282,13 @@ static int image_new(void) {
 
 // the numbers of an instance (src/ui/scene.mbt)
 #define MB_INST 52
-// the glyphs' atlas, pixels a side (the fragment shader's 2048.0); what goes where in it is MoonBit's (atlas.mbt)
-#define MB_ATLAS 2048
+// the glyphs' atlases, square, what goes where in them MoonBit's (hostapi's atlas.mbt): the words' (a byte a texel,
+// how much of it the glyph covers: drawn in the text's colour; as many bytes as one RGBA atlas half as wide) and colour
+// glyphs' (RGBA: an emoji's own). A colour glyph's place across is MB_ATLAS_COLOR_U past its place in its atlas (what
+// MoonBit says of it, @hostapi.colour_atlas_u): the shader takes the atlas by it, as Apple's does.
+#define MB_ATLAS 4096
+#define MB_ATLAS_COLOR 1024
+#define MB_ATLAS_COLOR_U 16384
 
 static const char *VS =
     "#version 300 es\n"
@@ -331,6 +336,7 @@ static const char *FS =
     "flat in vec4 v_rc; flat in vec4 v_rs; flat in vec4 v_rr; flat in vec4 v_oclip; flat in vec4 v_orc; flat in vec4 v_ors;\n"
     "uniform float u_scale;\n"
     "uniform sampler2D u_atlas;\n"
+    "uniform sampler2D u_catlas;\n"
     "uniform sampler2D u_img;\n"
     "// glass (src/ui/glass.mbt): the blurred copy under it and where a point is in it (uv = p * u_map.xy + u_map.zw, kept\n"
     "// in u_uvc), a liquid group's shapes and corners, how many\n"
@@ -419,11 +425,15 @@ static const char *FS =
     "    return;\n"
     "  }\n"
     "  if (kind == 1 || kind == 3 || kind == 7) {\n"
-    "    // within its own cell (c2: where in the atlas, in texels), however its rect is stretched or turned: a sample\n"
-    "    // past the cell's edge texels would blend in what lies beside it (another glyph, one left from before the atlas\n"
-    "    // started over)\n"
-    "    vec2 uv = clamp(v_c2.xy + (p - v_rect.xy) / v_rect.zw * v_c2.zw, v_c2.xy + 0.5, v_c2.xy + v_c2.zw - 0.5) / 2048.0;\n"
-    "    vec4 t = texture(u_atlas, uv);\n"
+    "    // within its own cell (c2: where in the atlas, in texels; a colour glyph's 16384 across past its place in theirs),\n"
+    "    // however its rect is stretched or turned: a sample past the cell's edge texels would blend in what lies beside\n"
+    "    // it (another glyph, one left there before). The words' atlas has a glyph's cover alone: white, premultiplied, as\n"
+    "    // the colour one would have it\n"
+    "    bool colour = v_c2.x >= 16384.0;\n"
+    "    vec2 at = vec2(v_c2.x - (colour ? 16384.0 : 0.0), v_c2.y);\n"
+    "    vec2 uv = clamp(at + (p - v_rect.xy) / v_rect.zw * v_c2.zw, at + 0.5, at + v_c2.zw - 0.5);\n"
+    "    vec4 t = colour ? textureLod(u_catlas, uv / vec2(textureSize(u_catlas, 0)), 0.0)\n"
+    "                    : vec4(textureLod(u_atlas, uv / vec2(textureSize(u_atlas, 0)), 0.0).r);\n"
     "    if (kind == 7) {\n"
     "      // inked by how light what is under its glass is, looked at round the glass's middle\n"
     "      vec2 c = v_pad.yz; float r = v_pad.w * 0.5;\n"
@@ -583,8 +593,8 @@ static const char *PFS =
     "  o = s / wsum;\n"
     "}\n";
 
-static GLuint prog, vao, vbo, atlas, post;
-static GLint u_vp, u_scale, u_atlas, u_img, u_bd, u_map, u_uvc, u_gb, u_shape, u_rad, u_n, pu_src, pu_a, pu_b;
+static GLuint prog, vao, vbo, atlas, catlas, post;
+static GLint u_vp, u_scale, u_atlas, u_catlas, u_img, u_bd, u_map, u_uvc, u_gb, u_shape, u_rad, u_n, pu_src, pu_a, pu_b;
 static float *fbuf;
 // the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), for the shader
 // to read (u_segs): a float texture of SEGS_ROW fours a row (157 instances' 13), as many rows as they take
@@ -622,6 +632,7 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_surfaceCreated(JNIEnv *env, jclass c
   u_vp = glGetUniformLocation(prog, "u_vp");
   u_scale = glGetUniformLocation(prog, "u_scale");
   u_atlas = glGetUniformLocation(prog, "u_atlas");
+  u_catlas = glGetUniformLocation(prog, "u_catlas");
   u_img = glGetUniformLocation(prog, "u_img");
   u_bd = glGetUniformLocation(prog, "u_bd");
   u_map = glGetUniformLocation(prog, "u_map");
@@ -650,19 +661,26 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_surfaceCreated(JNIEnv *env, jclass c
     glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, MB_INST * 4, (void *)(intptr_t)(i * 16));
     glVertexAttribDivisor(i, 1);
   }
-  glGenTextures(1, &atlas);
-  glBindTexture(GL_TEXTURE_2D, atlas);
-  glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, MB_ATLAS, MB_ATLAS);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  // the words' atlas a byte a texel, colour glyphs' four (MB_ATLAS above)
+  GLuint *texs[2] = {&atlas, &catlas};
+  for (int k = 0; k < 2; k++) {
+    glGenTextures(1, texs[k]);
+    glBindTexture(GL_TEXTURE_2D, *texs[k]);
+    if (k == 0) glTexStorage2D(GL_TEXTURE_2D, 1, GL_R8, MB_ATLAS, MB_ATLAS);
+    else glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, MB_ATLAS_COLOR, MB_ATLAS_COLOR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  }
   glEnable(GL_BLEND);
   glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
   images_lost(env);
 }
 
 JNIEXPORT jint JNICALL Java_dev_mbui_Native_atlasTexture(JNIEnv *env, jclass c) { return (jint)atlas; }
+
+JNIEXPORT jint JNICALL Java_dev_mbui_Native_colourAtlasTexture(JNIEnv *env, jclass c) { return (jint)catlas; }
 
 JNIEXPORT void JNICALL Java_dev_mbui_Native_resize(JNIEnv *env, jclass c, jint w, jint h) {
   fb_w = w;
@@ -824,6 +842,9 @@ static void main_state(void) {
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glUniform2f(u_vp, (float)cur_w, (float)cur_h);
   glUniform1f(u_scale, (float)cur_scale);
+  glActiveTexture(GL_TEXTURE4);
+  glBindTexture(GL_TEXTURE_2D, catlas);
+  glUniform1i(u_catlas, 4);
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, atlas);
   glUniform1i(u_atlas, 0);
@@ -1394,8 +1415,8 @@ void mb_host_glyph_put(int32_t key, int32_t x, int32_t y) {
   (*env)->CallStaticVoidMethod(env, text_cls, m_glyph_put, key, x, y);
 }
 
-// (one atlas: colour glyphs in it with the others)
-int32_t mb_host_atlas_size(int32_t colour) { return colour ? 0 : MB_ATLAS; }
+// The side of the words' atlas, or of colour glyphs' (MB_ATLAS above).
+int32_t mb_host_atlas_size(int32_t colour) { return colour ? MB_ATLAS_COLOR : MB_ATLAS; }
 
 // The glyphs shaped and not drawn yet (text.mbt glyphs_ahead): MBText draws them on a thread of its own, for glyph to
 // find drawn.

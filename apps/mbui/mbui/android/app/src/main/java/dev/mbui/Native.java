@@ -27,6 +27,8 @@ final class Native {
         postBytes(channel, json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
     static native int atlasTexture();
+
+    static native int colourAtlasTexture();
     static native boolean snapshot(String path);
     static native void imageDone(int id, int tex, int w, int h, int ow, int oh);
     /** What the host did for the app is done (android_host.c's mb_host_set_outside): on the GL thread. */
