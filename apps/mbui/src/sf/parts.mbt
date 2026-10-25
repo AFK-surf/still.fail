@@ -248,8 +248,9 @@ let segmented_strip : @ui.Style = @ui.css("row gap=S0_5")
 /// and sliding to it; its options equal columns, as wide as the widest in the chosen weight with 12 either side
 /// (segmented, segmentedOption, segmentedSizer), `item_w` at least, the track never wider than where it is. Where those
 /// columns need more room than there is, the track takes what there is and its options share it as option_widths has
-/// them (as alike as their words let them, their sides narrower, else their words on more lines; cut short only where
-/// not even each one's longest word fits): nothing out of view, nothing scrolled. Returns the chosen index.
+/// them: as alike as their words let them, their sides narrower, else their words smaller alike (to the system's own
+/// size of words), else the chosen one alone in the track, the others in a pick (choice_pick). Always one line, each
+/// one's words whole: nothing wrapped, cut or scrolled. Returns the chosen index.
 pub fn segmented(
   c : @ui.Ctx,
   key : String,
@@ -275,91 +276,113 @@ pub fn segmented(
   // otherwise): less than its columns need, its options give way from them to what option_widths has them in it
   // (their columns as wide where the room is, the track then laid out as wide as they need)
   let track = c.id(key + "/track")
-  let squeezed = match c.laid_size(track) {
+  let fit = match c.laid_size(track) {
     Some((w, _)) if w < whole - 0.5 =>
-      Some(
-        option_widths(
-          words,
-          labels.map(fn(l) { @ui.text_least(l, size~, weight=500) }),
-          w - 2.0 * segmented_pad - gaps,
-          segmented_in,
-          segmented_least,
-        ),
-      )
+      Some(fitted(c, labels, w - 2.0 * segmented_pad - gaps, t.t.ui, 500, segmented_in, segmented_least))
     _ => None
   }
-  // (cut short, its words on one line in its column are cut with an ellipsis as they are laid: words in a column)
-  let wraps = squeezed.map(fn(s) { s.1 }).unwrap_or(OneLine) == Wrapped
+  // its track: round its options (as wide as they are, cut to where it is), or round the chosen one where they do not
+  // fit side by side (as wide as where it is)
+  let track_box = fn(wide : Bool, inner : () -> Unit) -> Int {
+    c.box(
+      style=if wide { segmented_track_wide } else { segmented_track },
+      id=track,
+      pad=segmented_pad,
+      bg=alpha(ink, 0.06),
+      radius=segmented_corner + segmented_pad,
+      inner,
+    )
+  }
+  // an option: its words in its middle, in the chosen weight and the ink where chosen (`on`), in the ink pointed at
+  // (`lit`); short of room, their least in from its sides
+  let option = fn(label : String, on : Bool, lit : Bool) {
+    c.box(h=Px(segmented_h), padx?=fit.map(fn(_) { segmented_least }), align=ACenter, justify=JCenter, fn() {
+      c.text(
+        label,
+        size=t.t.ui,
+        weight=if on { 500 } else { 400 },
+        color=if on || lit { ink } else { t.p.muted },
+        wrap=false,
+      )
+      |> ignore
+    })
+    |> ignore
+  }
+  // (not side by side: the chosen one in its track, as wide as where it is, a chevron at its end; all of them in a
+  // pick)
+  if fit is Some({ fit: Menu, .. }) {
+    return choice_pick(c, key, track, labels, chosen, fn(_, _, words) {
+      track_box(true, fn() {
+        c.box(style=segmented_menu, fn() {
+          option(words, true, false)
+          icon(c, "chevron-down", size=segmented_chevron, color=t.p.muted) |> ignore
+        })
+        |> ignore
+      })
+    })
+  }
   let items = labels.mapi(fn(i, l) { @kit.item(i.to_string(), label=l) })
-  let now = @kit.toggle_group(
-    c,
-    key,
-    items,
-    [chosen.to_string()],
-    slide=true,
-    widths=match squeezed {
-      Some((widths, _)) => widths.map(fn(w) { (col, w) })
-      None => Array::make(n, (col, col))
-    },
-    look=fn(c, s) {
-      c.box(
-        // (short of room: its words their least in from its sides; on more lines, as tall as they are and as far from
-        // its top and foot as the track's ground, in the middle of its item as tall as the tallest)
-        h=if wraps { Auto } else { Px(segmented_h) },
-        min_h=segmented_h,
-        padx?=squeezed.map(fn(_) { segmented_least }),
-        pady?=if wraps { Some(segmented_pad) } else { None },
-        align=ACenter,
-        justify=JCenter,
-        fn() {
-          c.text(
-            s.label,
-            size=t.t.ui,
-            weight=if s.on { 500 } else { 400 },
-            color=if s.on || s.hovered { ink } else { t.p.muted },
-            wrap=wraps,
-            center=wraps,
-            w?=if wraps { Some(Fill(1.0)) } else { None },
-          )
-          |> ignore
-        },
-      )
-      |> ignore
-    },
-    thumb=fn(c, w, h) {
-      c.box(
-        w=Px(w),
-        h=Px(h),
-        bg=thumb,
-        radius=segmented_corner,
-        border=0.5,
-        border_color=t.p.line,
-        shadow=1.0,
-        shadow_color=t.p.shadow,
-        shadow_y=0.0,
-        fn() {  },
-      )
-      |> ignore
-    },
-    ground=fn(c, _, items) {
-      c.box(
-        dir=Row,
-        w=Cut,
-        id=track,
-        pad=segmented_pad,
-        bg=alpha(ink, 0.06),
-        radius=segmented_corner + segmented_pad,
-        fn() { c.box(style=segmented_strip, items) |> ignore },
-      )
-      |> ignore
-    },
-  ).value
+  // (made smaller to fit: their words drawn that much smaller)
+  let smaller = match fit {
+    Some({ fit: Smaller(k), .. }) => k
+    _ => 1.0
+  }
+  let now = c.words_smaller(smaller, fn() {
+    @kit.toggle_group(
+      c,
+      key,
+      items,
+      [chosen.to_string()],
+      slide=true,
+      widths=match fit {
+        Some(f) => f.widths.map(fn(w) { (col, w) })
+        None => Array::make(n, (col, col))
+      },
+      look=fn(_, s) { option(s.label, s.on, s.hovered) },
+      thumb=fn(c, w, h) {
+        c.box(
+          w=Px(w),
+          h=Px(h),
+          bg=thumb,
+          radius=segmented_corner,
+          border=0.5,
+          border_color=t.p.line,
+          shadow=1.0,
+          shadow_color=t.p.shadow,
+          shadow_y=0.0,
+          fn() {  },
+        )
+        |> ignore
+      },
+      ground=fn(c, _, items) { track_box(false, fn() { c.box(style=segmented_strip, items) |> ignore }) |> ignore },
+    ).value
+  })
   // the chosen one tapped again stays chosen
   match now {
     [v] => items.search_by(fn(it) { it.value == v }).unwrap_or(chosen)
     _ => chosen
   }
 }
+
+///|
+/// Its track: its options in a line, as wide as they are, cut to where it is; where they do not fit side by side, as
+/// wide as where it is.
+// kept across runs: a value (no field of it changes)
+let segmented_track : @ui.Style = @ui.css("row w=Cut")
+
+///|
+// kept across runs: a value (no field of it changes)
+let segmented_track_wide : @ui.Style = @ui.css("row w=Full")
+
+///|
+/// A segmented choice whose options do not fit side by side (choice_pick), in its track: the chosen one as its option
+/// is at its start (its words as far in, cut short where they must be), a chevron at its end; a press on the track
+/// opens the pick.
+// kept across runs: a value (no field of it changes)
+let segmented_menu : @ui.Style = @ui.css("row w=Full pr=S2 gap=S2 align=ACenter justify=JBetween")
+
+///|
+let segmented_chevron : Double = 16.0
 
 ///|
 /// An option's height on one line (segmentedOption: 30), and the thumb's corner, a pill's (the track's concentric
