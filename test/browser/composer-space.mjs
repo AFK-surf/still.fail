@@ -92,15 +92,18 @@ createRoot(root).render(<BrowserRouter><MobileShell entry={{ id: 'demo', name: '
       await page.evaluate(() => document.fonts.ready);
       await input.fill('一行');
       await finish();
+      await page.evaluate(() => { window.probe = document.querySelector('textarea[aria-hidden]'); });
+      await input.fill('一行文字');
+      assert(await page.evaluate(() => window.probe === document.querySelector('textarea[aria-hidden]')), `${engine}: typing reuses the measurement textarea`);
       for (const fresh of [true, false]) {
         await page.evaluate(fresh => window.composerMode(fresh), fresh);
         await input.fill('一行');
         await finish();
         const before = await size();
         await input.fill('一行\n两行\n三行\n四行\n五行');
-        await page.waitForFunction(() => document.querySelector('[data-made-composer]').getAnimations().some(a => a.playState === 'paused'));
+        await page.waitForFunction(() => document.querySelector('[data-made-composer]').getAnimations({ subtree: true }).some(a => a.playState === 'paused'));
         await page.evaluate(() => {
-          window.composerMotion = document.querySelector('[data-made-composer]').getAnimations()[0];
+          window.composerMotion = document.querySelector('[data-made-composer]').getAnimations({ subtree: true }).find(a => a.effect.getKeyframes().some(k => k.inset !== undefined));
           window.composerMotion.pause();
         });
         for (const progress of [0.25, 0.5, 0.75]) {

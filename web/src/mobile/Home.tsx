@@ -2,9 +2,9 @@
 // and grouped by day. A fixed head (settings · workspace · the filter · stations) and the new-chat button floating
 // at the bottom. The lists (all, mine, watching) are followed at once, side by side: switching slides from one to another with nothing to wait for.
 import { StationMark } from "../StationMark.tsx";
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { Activity, memo, useCallback, useMemo, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motionValue } from "motion";
-import { animate, MOVE, play, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
+import { animate, MOVE, motionMs, play, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
 import { stationApi, useChats, useSearch, useStationCall, useStations, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
 import type { FoundMessage, SearchItem } from "../core/shapes.ts";
 import { jumpTo } from "../jumpTo.ts";
@@ -35,6 +35,8 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as homeCss from "./styles/home.css.ts";
 import { Tip } from "../ui.tsx";
+import { useVirtualList, useVirtualModel } from "../virtual/list.tsx";
+import type { Item } from "../virtual/model.ts";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { t } from "../i18n.ts";
 
@@ -45,6 +47,19 @@ export function Home() {
   const mine = useChats(scope, true);
   const watching = useChats(scope, false, true);
   const [filter] = useChatFilter();
+  // Keep the departing pane alive through its slide; at rest only the chosen pane does UI work.
+  const [leaving, setLeaving] = useState<ChatFilter[]>([]);
+  const previous = useRef(filter);
+  useLayoutEffect(() => {
+    // Effects resume when Home is uncovered too: a transition interrupted by another page is over.
+    if (previous.current === filter) { setLeaving((was) => was.length ? [] : was); return; }
+    const from = previous.current;
+    setLeaving((was) => was.includes(from) ? was : [...was, from]);
+    previous.current = filter;
+    const timer = setTimeout(() => setLeaving([]), motionMs(240));
+    return () => clearTimeout(timer);
+  }, [filter]);
+  const awake = (pane: ChatFilter) => filter === pane || leaving.includes(pane) || previous.current === pane;
   const invited = useWorkspaces().value?.some((a) => a.invitations.length > 0) ?? false;
   // The other workspaces have something waiting: its dot by the name, before an invitation's.
   const marks = useWorkspaceMarks(scope);
@@ -63,9 +78,9 @@ export function Home() {
         <div className={css.mHomePanes} {...pull.handlers}><div className={css.mHomePane} style={{ display: "flex", flexDirection: "column" }}><FirstStation /></div></div>
       ) : (
         <div className={css.mHomePanes} data-filter={filter} {...pull.handlers}>
-          <ChatPane chats={all} filter="all" onSearch={search} />
-          <ChatPane chats={mine} filter="mine" onSearch={search} />
-          <ChatPane chats={watching} filter="watching" onSearch={search} />
+          <div className={css.mHomeSlide}><Activity mode={awake("all") ? "visible" : "hidden"}><ChatPane chats={all} filter="all" onSearch={search} /></Activity></div>
+          <div className={css.mHomeSlide}><Activity mode={awake("mine") ? "visible" : "hidden"}><ChatPane chats={mine} filter="mine" onSearch={search} /></Activity></div>
+          <div className={css.mHomeSlide}><Activity mode={awake("watching") ? "visible" : "hidden"}><ChatPane chats={watching} filter="watching" onSearch={search} /></Activity></div>
         </div>
       )}
       <div ref={pull.mark} className={`${css.mPull} ${pagesCss.mFloating}`} aria-hidden="true"><Refresh size={18} /></div>
@@ -353,29 +368,43 @@ const ChatPane = memo(function ChatPane({ chats, filter, onSearch }: { chats: To
   const view = chats.value;
   const scope = useApp().entry.id;
   const lead = view?.leading ?? "agents";
+  const pane = useRef<HTMLDivElement>(null);
+  const made = useVirtualModel(`home:${scope}:${filter}`, 0, false);
+  // Navigation starts at its head, unlike a conversation which follows its newest message.
+  const opened = useRef(false);
+  if (!opened.current) { made.model.goto("intro", "start"); opened.current = true; }
+  const content = useMemo(() => {
+    const items: Item[] = [{ key: "intro", estimate: 100 }];
+    const drawn = new Map<string, ReactNode>();
+    for (const day of view?.days ?? []) {
+      const head = `day:${day.daysAgo}`;
+      items.push({ key: head, estimate: 42 });
+      drawn.set(head, <SectionHeader title={day.label} />);
+      for (const item of day.items) {
+        const key = `${item.station}/${item.id}`;
+        // An archiving row folds to zero before the topic removes it: measure that motion.
+        items.push({ key, estimate: 66, ...(!item.archivable ? { exact: 66 } : {}) });
+        drawn.set(key, <ChatRow item={item} lead={lead} />);
+      }
+    }
+    return { items, drawn };
+  }, [view?.days, lead]);
+  const virtual = useVirtualList(pane, made, content.items, { cover: (lead) => lead, deferResize: true });
+  const intro = <>
+    {view && !view.note?.empty && <SearchField onOpen={onSearch} />}
+    <ChangelogNews />
+    {!view ? <Waiting text={t("web-mobile.home.reading")} error={chats.error?.message} /> : <>
+      {(view.note?.reading || !!view.note?.failing.length) && <Waiting note={view.note} text={t("web-mobile.home.reading")} count={view.note.reading ? 7 : 4} />}
+      {view.note?.empty && <Empty view={view} filter={filter} />}
+      <OpenJobs scope={scope} />
+    </>}
+  </>;
   return (
-    <div className={css.mHomePane}>
-      {/* The search, at the list's top: there once the list is scrolled to it. */}
-      {view && !view.note?.empty && <SearchField onOpen={onSearch} />}
-      {/* What the last update brought (./Changelog.tsx), until it is seen: even while the list is being read. */}
-      <ChangelogNews />
-      {/* Not even the stations known yet: the rows to come, and what is wrong if the list cannot be read (@stillfail/ui waiting.tsx). */}
-      {!view ? <Waiting text={t("web-mobile.home.reading")} error={chats.error?.message} /> : (
-        <>
-          {/* A station's link coming back is said on its rows; only with no rows to show does the list say it (the core's
-              `note`): what it waits on over the rows to come, or the stations it cannot read over faded ones. */}
-          {(view.note?.reading || !!view.note?.failing.length) && <Waiting note={view.note} text={t("web-mobile.home.reading")} count={view.note.reading ? 7 : 4} />}
-          {view.note?.empty && <Empty view={view} filter={filter} />}
-          {/* What is left up a long while on the stations (./OpenJobs.tsx): nothing while there is none. */}
-          <OpenJobs scope={scope} />
-          {view.days.map((day) => (
-            <section key={day.daysAgo}>
-              <SectionHeader title={day.label} />
-              {day.items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} lead={lead} />)}
-            </section>
-          ))}
-        </>
-      )}
+    <div ref={pane} className={css.mHomePane} data-home-pane={filter}>
+      {virtual.layout.rows.flatMap((row, i) => [virtual.above(row, i === 0),
+        <div key={row.key} data-vk={row.key} className={css.mHomeItem}>{row.key === "intro" ? intro : content.drawn.get(row.key)}</div>,
+      ])}
+      {virtual.after()}
     </div>
   );
 });
@@ -420,6 +449,7 @@ const ChatRow = memo(function ChatRow({ item, lead }: { item: ChatItem; lead: "a
   const failed = changeFailed ?? pinFailed;
   const menu = useRowMenu(item, busy);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
   const longPressed = useRef(false);
   const holding = useRef(false);
   const touched = useRef(false);

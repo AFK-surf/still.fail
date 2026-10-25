@@ -15,7 +15,7 @@ import { Words } from "@stillfail/ui/words.tsx";
 import { StationWordsIn } from "../StationNamed.tsx";
 import { afterBack, useBackClose } from "@stillfail/ui/backClose.ts";
 import { backPage } from "../backPage.ts";
-import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Activity, createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useLocation, useNavigate, useNavigationType, type Location } from "react-router";
 import type { Account } from "../cloud/accounts.ts";
 import { NavBack } from "./parts.tsx";
@@ -358,7 +358,7 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
             if (kept(p)) {
               return (
                 <div key={p.key} className={css.mPage} data-role="kept" data-root="" style={{ visibility: "hidden", pointerEvents: "none" }} inert aria-hidden="true">
-                  <RootPage.Provider value><PageBody location={p.location} routes={routes} /></RootPage.Provider>
+                  <Activity mode="hidden"><RootPage.Provider value><PageBody location={p.location} routes={routes} /></RootPage.Provider></Activity>
                 </div>
               );
             }
@@ -383,9 +383,13 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
             return (
               <div key={p.key} ref={(el) => { if (el) pageEls.current.set(p.key, el); else pageEls.current.delete(p.key); }} className={css.mPage} data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
                 data-swiping={(swipe !== null && isTop) || undefined} data-place-in={comingIn ? comingIn.n : undefined} data-root={(p.key === rootKey && placeOfPath(p.location.pathname, home) !== null) || undefined} style={style}>
-                <RootPage.Provider value={p.key === rootKey && placeOfPath(p.location.pathname, home) !== null}>
-                  <PageBody location={p.location} routes={routes} />
-                </RootPage.Provider>
+                {/* Keep the page's state, but stop its subscriptions and observers while covered. A peek
+                    resumes before the first swipe frame so both pages can move with the finger. */}
+                <Activity mode={role === "under" ? "hidden" : "visible"}>
+                  <RootPage.Provider value={p.key === rootKey && placeOfPath(p.location.pathname, home) !== null}>
+                    <PageBody location={p.location} routes={routes} />
+                  </RootPage.Provider>
+                </Activity>
               </div>
             );
           })}

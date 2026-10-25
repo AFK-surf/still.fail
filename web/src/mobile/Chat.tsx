@@ -71,10 +71,15 @@ export function ChatScreen() {
   // A service's link (`?service=<job>`, from Slack): the service, full screen, over the chat.
   const app = useApp();
   const asked = new URLSearchParams(useLocation().search).get("service");
+  const service = asked ? servicePath(station.address, key, asked) : null;
+  // The link is an instruction for this visit, not for every resumption of its hidden page's effects.
+  const openedService = useRef<string | null>(null);
   useEffect(() => {
-    if (asked) app.push(servicePath(station.address, key, asked));
+    if (!service || openedService.current === service) return;
+    openedService.current = service;
+    app.push(service);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [asked]);
+  }, [service]);
   // The page slides in once its chat is read from the device (LOCAL_MS at most), not empty; one that has to come from
   // its station is not waited for: the page slides in, showing it coming.
   useReady({ topic: "chat", station: station.address, session: key }, LOCAL_MS);
@@ -83,10 +88,10 @@ export function ChatScreen() {
   const navigate = useNavigate();
   const stationKey = key.startsWith(PENDING) ? view?.key : undefined;
   useEffect(() => {
-    if (!stationKey) return;
+    if (!stationKey || address === stationKey) return;
     renamed.set(stationKey, key);
     navigate(`${stationBase(station.address)}/chats/${encodeURIComponent(stationKey)}`, { replace: true });
-  }, [stationKey]);
+  }, [stationKey, address]);
   const lives = useLives(station.address, (view?.agents ?? []).map((a) => a.session.key));
   // Until the core has the chat, the page is already a chat's page (its bar, empty): what comes fills it in place.
   if (!view) {

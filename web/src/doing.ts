@@ -3,7 +3,7 @@
 // button shows its own at once (a spinner, not pressed again), even after the menu that asked it has closed; one that
 // failed stays a few seconds more with why (`stage` failed, `error`), for that place to say so.
 
-import { useTopic } from "./core/react.ts";
+import { useTopic, useTopicSelect } from "./core/react.ts";
 import type { DoingItem, DoingView } from "./core/shapes.ts";
 import { t } from "./i18n.ts";
 
@@ -29,11 +29,13 @@ export function useDoingList(): DoingItem[] {
 
 /** Whether one of `calls` is under way about what `on` names, e.g. `useDoing("job.stop", { station, id })`. */
 export function useDoing(calls: string | readonly string[], on: Words = {}): boolean {
-  return useDoingList().some((item) => !failed(item) && doingMatches(item, calls, on));
+  return useTopicSelect<DoingView, boolean>(TOPIC, (s) => s.value?.doing.some((item) => !failed(item) && doingMatches(item, calls, on)) ?? false);
 }
 
 /** Why one of `calls` about what `on` names failed a moment ago (shown a few seconds); undefined when none did. */
 export function useDoingFailed(calls: string | readonly string[], on: Words = {}): string | undefined {
-  const item = useDoingList().findLast((i) => failed(i) && doingMatches(i, calls, on));
-  return item ? (item.error ?? t("web-main.doing.failed")) : undefined;
+  return useTopicSelect<DoingView, string | undefined>(TOPIC, (s) => {
+    const item = s.value?.doing.findLast((i) => failed(i) && doingMatches(i, calls, on));
+    return item ? (item.error ?? t("web-main.doing.failed")) : undefined;
+  });
 }

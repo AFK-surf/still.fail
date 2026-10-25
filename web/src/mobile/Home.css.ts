@@ -10,9 +10,8 @@ export const mDot = style({
 export const mHome = style({ position: "absolute", inset: "0", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" });
 globalStyle(`${mHome} input, ${mHome} textarea`, { userSelect: "text", WebkitUserSelect: "text", WebkitTouchCallout: "default" });
 export const mHomePanes = style({ position: "absolute", inset: "0", overflow: "hidden" });
-export const mHomePane = style({
-  position: "absolute", inset: "0", overflowY: "auto", overscrollBehavior: "contain",
-  padding: "calc(var(--m-top) + 58px) 0 calc(var(--m-foot) + 126px)", transition: "transform 240ms var(--m-standard)",
+export const mHomeSlide = style({
+  position: "absolute", inset: "0", transition: "transform 240ms var(--m-standard)",
   selectors: {
     "&:nth-child(2)": { transform: "translateX(100%)" },
     "&:nth-child(3)": { transform: "translateX(200%)" },
@@ -24,6 +23,12 @@ export const mHomePane = style({
     [`${mHomePanes}[data-filter=watching] &:nth-child(3)`]: { transform: "none" },
   },
 });
+export const mHomePane = style({
+  position: "absolute", inset: "0", display: "flex", flexDirection: "column", overflowY: "auto", overscrollBehavior: "contain",
+  overflowAnchor: "none", vars: { "--list-gap": "0px" },
+  padding: "calc(var(--m-top) + 58px) 0 calc(var(--m-foot) + 126px)",
+});
+export const mHomeItem = style({ flex: "none", display: "flow-root" });
 /**
  * A list pulled down from its top (./pull.ts): a frosted disc in the middle of the gap the list leaves under the bar,
  * its arrow turning as it opens, in the accent once letting go reloads, spinning as it does.
