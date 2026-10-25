@@ -1,5 +1,5 @@
 // 19-drive-rename (e2e/traces/drive-rename.trace: Studio against the local still.fail): in the lent folder the photo
-// the run's 18 put up right clicked: 重命名, its new name asked for and saved (drive.check, then drive.rename from the
+// the run's 18 put up right clicked: 重命名, its new name typed in its row (⏎) (drive.check, then drive.rename from the
 // old name to the new: Flow::end has it asked as the run asked it).
 
 ///|
@@ -14,12 +14,11 @@ test "19-drive-rename" {
     f.right_click("e2e-photo.jpg")
     f.run_for(@kit.presence_in_ms)
     f.tap("重命名")
-    f.run_for(@kit.presence_in_ms)
-    f.see("=保存")
+    // (its name changed in its row: the field there, its name picked but its extension)
+    f.run_for(@kit.presence_out_ms)
     f.clear()
     f.type_text("照片-082940.jpg")
-    f.tap("=保存")
-    f.run_for(@kit.presence_out_ms)
+    f.enter()
     f.see("照片-082940.jpg")
     f.gone("e2e-photo.jpg")
     f.end()

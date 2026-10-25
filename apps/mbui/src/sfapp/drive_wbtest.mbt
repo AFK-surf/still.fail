@@ -94,10 +94,10 @@ test "a folder: what it holds in a line, folders first, hidden files left out; i
 }
 
 ///|
-test "held: what can be done to it in a sheet (EntrySheet); 重命名 asks its new name, the folder shows it" {
+test "held: what can be done to it in a sheet (EntrySheet); 重命名 changes its name in place, the folder shows it" {
   let t = drive_tester("drive")
   hold(t, "季度数据.csv")
-  let log = t.drive("until 复制路径\nuntil 移到废纸篓\ntap 重命名\nuntil 保存\ntap 季度数据.csv\nclear\ntype 年度数据.csv\ntap 保存\ngone 保存\n")
+  let log = t.drive("until 复制路径\nuntil 移到废纸篓\ntap 重命名\nclear\ntype 年度数据.csv\nenter\nuntil 年度数据.csv\n")
   assert_true(log.contains("EXIT 0"))
   assert_true(!@sf.presenting())
   // (its sheet sunk away)
@@ -109,13 +109,16 @@ test "held: what can be done to it in a sheet (EntrySheet); 重命名 asks its n
 }
 
 ///|
-test "held: deleted to the station's trash, said so; ＋'s 新建文件夹 asks its name and makes it" {
+test "held: deleted to the station's trash, said so; 新建文件夹 makes one, named in place" {
   let t = drive_tester("drive")
   hold(t, "合同草稿.pdf")
   let log = t.drive("tap 移到废纸篓\ngone 合同草稿.pdf\nuntil 移到 station 的废纸篓\n")
   assert_true(log.contains("EXIT 0"))
   sheet_rested(t, "sf-present")
-  let log = t.drive("tap icon:plus\ntap 新建文件夹\ntap 文件夹名\ntype 新的文件夹\ntap =新建\nuntil 新的文件夹\n")
+  t.click(Button, label="新建文件夹")
+  // (made as 未命名文件夹, its name's field in its row at once)
+  t.frame()
+  let log = t.drive("clear\ntype 新的文件夹\nenter\nuntil 新的文件夹\n")
   assert_true(log.contains("EXIT 0"))
   assert_true(t.find("新的文件夹") is Some(_))
   sheet_rested(t, "sf-present")
@@ -239,9 +242,9 @@ test "a Markdown file read as a chat's Markdown is drawn, its words searched whe
 }
 
 ///|
-test "a folder's buttons said to a screen reader: 刷新, 添加, 更多操作" {
+test "a folder's buttons said to a screen reader: 上传文件, 新建文件夹, 更多操作" {
   let t = drive_tester("drive")
-  assert_true(t.query(Button, label="刷新") is Some(_))
-  assert_true(t.query(Button, label="添加") is Some(_))
+  assert_true(t.query(Button, label="上传文件") is Some(_))
+  assert_true(t.query(Button, label="新建文件夹") is Some(_))
   assert_true(t.query(Button, label="更多操作") is Some(_))
 }
