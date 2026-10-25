@@ -72,7 +72,7 @@ Everything that scrolls has the same bar, drawn by mbui, with no call of its own
 to a height (`Ctx::capped`), a box scrolled sideways (`Ctx::sideways`; boxes scrolled as one, `across`, one bar along
 the foot of the list they are in), a field of more lines than it shows (`Ctx::editor` with `max_lines` over 1: its
 words scroll in it as a capped box's do, by the wheel, a finger and its bar, the caret's line brought into view only
-as the caret or the words change). It is still.fail's web's (`web/src/scrollbars.ts`), for every hand:
+as the caret or the words change). It is still.fail's web's (`web/src/scrollbars.ts`), a mouse's:
 
 - **Look.** A thumb 3 wide, round, 2 in from the edge it runs along (the right, or the foot of what scrolls
   sideways), the theme's words' colour at 26%, 45% while the pointer is on it or holds it; at least 28 long. Over
@@ -89,7 +89,8 @@ as the caret or the words change). It is still.fail's web's (`web/src/scrollbars
   the pointer is along its edge (12 in from it) or holds its thumb, and as long after it leaves or lets go.
 - **The hand.** With a mouse its thumb (and 4 round it) is a target as any (what lies over it takes the press): held,
   dragged, it scrolls what it is for as far as the thumb moves along its track; nothing under it is pressed, no words
-  are picked, the focus stays. A finger sees the bar only as what it is for scrolls, and presses what is under it.
+  are picked, the focus stays. A finger has none (`@ui.pointing()` Finger: on a touch screen what scrolls moving
+  under it says enough; the user, 2026-10-25), and presses what is under the edge.
 
 ## Time and motion (src/kit/time.mbt)
 

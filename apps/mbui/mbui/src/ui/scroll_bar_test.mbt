@@ -1,5 +1,5 @@
 // What scrolls shows where it is with one bar (scroll_bar.mbt): its look and place, when it shows, the pointer at it
-// and on its thumb, a finger's, and the boxes that scroll inside a list.
+// and on its thumb, none for a finger, and the boxes that scroll inside a list.
 
 ///|
 /// A list of 200 rows 40 high (8000 in all), each row pressable: what was pressed, the rows' presses.
@@ -125,19 +125,17 @@ test "scroll bar: its thumb dragged scrolls the list as far as it moves, darker 
 }
 
 ///|
-test "scroll bar: a finger sees it as the list scrolls, not where it rests; its thumb is no target of a finger's" {
+test "scroll bar: a finger sees none, its list scrolled or flung, and presses what is along the edge" {
   let pressed : Array[Int] = []
   let t = @ui.Tester::new(bar_rows(pressed), w=300.0, h=400.0, platform=2)
   t.drag(150.0, 300.0, 150.0, 100.0)
-  // to the fling's end: its bar out yet
-  t.run_for(t.ctx().list_info("list").unwrap().rest - t.time())
-  let shown = thumbs(t)
-  assert_eq(shown.length(), 1)
-  let (x, y, _, h, _) = shown[0]
-  t.tap(x + 1.0, y + h / 2.0)
-  assert_eq(pressed.length(), 1)
-  t.run_for(@ui.scrollbar_hold_ms + @ui.scrollbar_fade_ms)
+  t.run_for(@ui.scrollbar_fade_ms)
   assert_eq(thumbs(t).length(), 0)
+  // to the fling's end: at rest then, no bar to fade
+  t.run_for(t.ctx().list_info("list").unwrap().rest - t.time())
+  t.tap(296.0, 200.0)
+  assert_eq(pressed.length(), 1)
+  t.assert_idle()
 }
 
 ///|
@@ -250,5 +248,5 @@ test "scroll bar: a finger dragging a field of more lines than it shows scrolls 
   assert_eq(f.selection(), (twelve_lines().length(), twelve_lines().length()))
   assert_eq(t.ctx().field_focused(), false)
   t.run_for(@ui.scrollbar_fade_ms)
-  assert_eq(thumbs(t).length(), 1)
+  assert_eq(thumbs(t).length(), 0)
 }

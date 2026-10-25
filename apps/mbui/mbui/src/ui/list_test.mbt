@@ -444,14 +444,16 @@ test "list: a list not built (a page over it) is at rest, its scroll bar too; sh
 }
 
 ///|
-test "list: on Android too a list scrolled shows its scroll bar, and is at rest once that has faded (scroll_bar.mbt)" {
+test "list: a finger's list scrolled draws no scroll bar, and is at rest once its scroll is (scroll_bar.mbt)" {
   let t = @ui.Tester::new(boxes(fn() { 200 }, varied), w=300.0, h=400.0, platform=2)
   t.move(100.0, 100.0)
   t.wheel(100.0, 100.0, 300.0)
   t.run_for(@ui.scrollbar_fade_ms)
-  assert_true(t.drawn_rects().iter().any(fn(r) { r.0 == 300.0 - 2.0 - 3.0 && r.2 == 3.0 }), msg="\{t.drawn_rects()}")
-  assert_true(t.ctx().list_rest("list") > t.time())
-  t.run_for(@ui.scrollbar_hold_ms)
+  assert_true(t.drawn_rects().iter().all(fn(r) { r.2 != 3.0 }), msg="\{t.drawn_rects()}")
+  let rest = t.ctx().list_rest("list")
+  if rest > t.time() {
+    t.run_for(rest - t.time())
+  }
   t.assert_idle()
 }
 

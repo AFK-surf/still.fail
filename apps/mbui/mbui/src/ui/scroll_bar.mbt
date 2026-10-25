@@ -1,6 +1,8 @@
-// The bar along what scrolls (a list, a box kept to a height, a box scrolled sideways), saying where its view is in
-// what it holds: one look and one way of showing for every one of them and every hand, as still.fail's web draws its
-// own (web/src/scrollbars.ts) and the systems' overlay scrollers float.
+// The bar along what scrolls (a list, a box kept to a height, a box scrolled sideways, a field of more lines than it
+// shows), saying where its view is in what it holds: one look and one way of showing for every one of them, as
+// still.fail's web draws its own for a mouse (web/src/scrollbars.ts). A finger has none (the user, 2026-10-25: on a
+// touch screen what it scrolls moving under it says enough; a bar drawn over a strip of choices was ugly): a bar is
+// the pointer's, a response of the hand's (@ui.pointing), not the layout's.
 //
 // A thumb scroll_bar_size wide, round, scroll_bar_inset in from the edge it runs along (the right of what scrolls up
 // and down, the foot of what scrolls sideways), in the words' colour at 26% (45% pointed at or held), at least
@@ -13,8 +15,7 @@
 // it to a row or gliding it to its end, rows come at the end it follows; not where it is first put) and
 // scrollbar_hold_ms after; then it fades out over scrollbar_fade_ms, as it comes in. With a mouse also while the
 // pointer is along its edge (scroll_bar_near in from it), or holds its thumb, and as long after: its thumb (and a
-// little round it) is a target as any, pressed and dragged to scroll, nothing under it pressed. A finger sees it only
-// as what it is for scrolls.
+// little round it) is a target as any, pressed and dragged to scroll, nothing under it pressed.
 
 ///|
 /// A bar's thumb: how wide, how far in from the edge it runs along and from its track's ends, how long at least (the
@@ -78,8 +79,18 @@ fn Bar::hides_at(self : Bar, scrolled : Double) -> Double {
 }
 
 ///|
+/// Whether bars are drawn at all: for a mouse, not a finger (the file's head).
+fn bars_drawn() -> Bool {
+  pointing() is Mouse
+}
+
+///|
 /// How far it shows at `now` (0-1): coming in from when it came in, going from when it hides; a function of the time.
+/// None for a finger.
 fn Bar::shown(self : Bar, now : Double, scrolled : Double) -> Double {
+  if !bars_drawn() {
+    return 0.0
+  }
   let hide = self.hides_at(scrolled)
   let come = fn(t : Double) {
     self.in_from + (1.0 - self.in_from) * Curve::at(Out, (t - self.in_at) / scrollbar_fade_ms)
@@ -102,8 +113,12 @@ fn Bar::wake(self : Bar, now : Double, scrolled : Double) -> Unit {
 }
 
 ///|
-/// When it is at rest (-1: it is at `now`; inf: what it is for scrolls on to a time not known yet).
+/// When it is at rest (-1: it is at `now`; inf: what it is for scrolls on to a time not known yet). A finger's none: at
+/// rest.
 fn Bar::rest(self : Bar, now : Double, scrolled : Double) -> Double {
+  if !bars_drawn() {
+    return -1.0
+  }
   let t = if self.near || self.held {
     self.in_at + scrollbar_fade_ms
   } else {

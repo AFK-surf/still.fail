@@ -1298,7 +1298,7 @@ The app on iOS is Android's, as on an Android phone (2026-10-23):
   asked for plain text, no capitals or curly quotes of its own, its return key a new line (a search field's its search
   key); put away by the person (not the app), the field lets go of the focus.
 - Its touches and fields feel as Android's (@sfapp.host_setup: `@ui.feel_as(2)`): lists fling and give at their edges
-  as Compose's (their scroll bar mbui's own, as on every host: src/ui/scroll_bar.mbt), a field takes a tap as it
+  as Compose's and show no scroll bar (a finger's: src/ui/scroll_bar.mbt), a field takes a tap as it
   lifts, draws Compose's caret and handles, picks words by a long press or a double tap, with the system's floating
   edit menu over them (UIEditMenuInteraction: 剪切, 拷贝, 粘贴, 全选, as Android's ActionMode).
 - Back: the left edge's swipe is the app's own (src/ui/nav.mbt), as on every host; iOS has no system back of its own.

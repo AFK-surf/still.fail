@@ -10,7 +10,8 @@
 //   MBUI_FILM=<out.mp4> MBUI_FILM_DRIVE=<script> [MBUI_WIN=390x844] [MBUI_FILM_SCALE=2] [MBUI_FILM_PLATFORM=0]
 //   [MBUI_DARK=1] [MBUI_FILM_INSET=1: the window's buttons in the app's top row, a Mac's] [MBUI_FILM_FRAMES=3000]
 //   [MBUI_FILM_WINDOW_CORNER=16: how round the system draws the window's corners, a Mac's: @hostapi.window_corner]
-//   [MBUI_LOCALE=en-US: the app's language, as a device's]
+//   [MBUI_LOCALE=en-US: the app's language, as a device's] [MBUI_FONT_SCALE=1.3: the system's size of words, as a
+//   device's set bigger]
 // What it cannot show: what is not drawn by mbui (the system's keyboard and dialogs, a native view's content: a
 // video playing, a web page), and a stream's frames (none decoded under a Tester).
 
@@ -70,6 +71,10 @@ pub fn film(
   // (the window's buttons in the app's top row, as a Mac's window has them: Tester::set_window_inset)
   if inset {
     t.set_window_inset(true)
+  }
+  match number(arg("MBUI_FONT_SCALE")) {
+    Some(f) if f > 0.0 => t.set_font_scale(f)
+    _ => ()
   }
   let pw = (w * scale).round().to_int()
   let ph = (h * scale).round().to_int()

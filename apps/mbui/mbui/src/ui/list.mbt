@@ -202,10 +202,21 @@ impl Moving for ListState with rest_at(self, now, frame) {
   if self.glide && self.glide_t0 == @double.infinity {
     return @double.infinity
   }
-  let bar = self.bar.rest(now, self.shown_until())
-  let eased = if self.ease == 0.0 { -1.0 } else { self.ease_t0 + ease_end(self.ease) }
-  let glided = if self.glide { self.glide_rest } else { -1.0 }
-  dmax(bar, dmax(eased, glided))
+  // (its own motions, and its bar's after them: a finger's list has none, its rest theirs)
+  let mut t = self.bar.rest(now, self.shown_until())
+  if self.ease != 0.0 {
+    t = dmax(t, self.ease_t0 + ease_end(self.ease))
+  }
+  if self.fling != 0 && self.vel != 0.0 {
+    t = dmax(t, self.fling_rest())
+  }
+  if self.over_state == 2 {
+    t = dmax(t, self.back_rest())
+  }
+  if self.glide {
+    t = dmax(t, self.glide_rest)
+  }
+  t
 }
 
 ///|

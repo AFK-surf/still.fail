@@ -198,15 +198,15 @@ fn Ctx::squeeze_faults(self : Ctx) -> Array[String] {
 ///|
 /// The least words wrapped onto lines are laid across without being squeezed: their longest word (between spaces),
 /// `squeeze_wrap_ems` of their size where they break anywhere (a wide character: Chinese, Japanese, Korean), all of
-/// them where that is less.
-fn Node::squeeze_wrap_w(self : Node) -> Double {
+/// them where that is less. What sizes a box by its words wrapped (a choice's options short of room) asks it too.
+pub fn text_least(text : String, size? : Double = 15.0, weight? : Int = 400) -> Double {
   let mut widest = 0.0
   let mut word = StringBuilder::new()
   let mut in_word = false
-  for ch in self.text + " " {
+  for ch in text + " " {
     if ch == ' ' || ch == '\n' || ch == '\t' || ch.to_int() >= 0x2E80 {
       if in_word {
-        widest = dmax(widest, text_advance(word.to_string(), size=self.font_size, weight=self.weight))
+        widest = dmax(widest, text_advance(word.to_string(), size~, weight~))
         word = StringBuilder::new()
         in_word = false
       }
@@ -215,7 +215,13 @@ fn Node::squeeze_wrap_w(self : Node) -> Double {
       in_word = true
     }
   }
-  dmin(self.text_layout(1.0e9).w, dmax(widest, squeeze_wrap_ems * self.font_size))
+  dmin(text_advance(text, size~, weight~), dmax(widest, squeeze_wrap_ems * size))
+}
+
+///|
+/// text_least of a node's words, as it lays them.
+fn Node::squeeze_wrap_w(self : Node) -> Double {
+  dmin(self.text_layout(1.0e9).w, text_least(self.text, size=self.font_size, weight=self.weight))
 }
 
 ///|
