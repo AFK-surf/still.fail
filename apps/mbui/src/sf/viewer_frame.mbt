@@ -155,8 +155,8 @@ pub fn viewer_steps(c : @ui.Ctx, key : String, before : Bool, after : Bool, awak
 }
 
 ///|
-/// A tool that says words (FilePreview.css.ts fpToolText: the zoom's per cent, 1:1): 32 high, 36 wide at least (52
-/// `wide`), 8 in, 12 in the quieter ink until pointed at. True on the frame after it was pressed.
+/// A tool that says words (FilePreview.css.ts fpToolText: the zoom's per cent, 1:1): 32 high, a capsule as the tools
+/// beside it are round, 36 wide at least (52 `wide`), 8 in, 12 in the quieter ink until pointed at. True on the frame after it was pressed.
 pub fn viewer_text_tool(c : @ui.Ctx, key : String, words : String, label : String, ink : ViewerInk, wide? : Bool = false) -> Bool {
   let id = c.id(key)
   c.cursor(id, Hand)
@@ -293,13 +293,13 @@ let vfr_head_room : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
 /// The floating bar (fpHead): 44 high, 12 between what it holds, 16 in at its start and 6 at its end (4 and 12 under
-/// 640), its corner 14.
+/// 640), a capsule (its round tools in the middle of its end, 6 in, concentric with it: 外圆角 = 距离 + 半高).
 // kept across runs: a value (no field of it changes)
-let vfr_head_box : @ui.Style = @ui.css("row h=S11 gap=S3 pl=S4 pr=S1_5 radius=Xl align=ACenter clip")
+let vfr_head_box : @ui.Style = @ui.css("row h=S11 gap=S3 pl=S4 pr=S1_5 radius=Full align=ACenter clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vfr_head_box_small : @ui.Style = @ui.css("row h=S11 gap=S1 pl=S3 pr=S1_5 radius=Xl align=ACenter clip")
+let vfr_head_box_small : @ui.Style = @ui.css("row h=S11 gap=S1 pl=S3 pr=S1_5 radius=Full align=ACenter clip")
 
 ///|
 /// Its name and meta (fpTitle): the name first, its line's meta after it 10 on; the rest pushed to the end.
@@ -329,7 +329,7 @@ let vfr_zoom : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let vfr_text_tool_box : @ui.Style = @ui.css(
-  #|h=S8 min_w=S9 px=S2 radius=Xl align=ACenter justify=JCenter hovered{bg=Hover}
+  #|h=S8 min_w=S9 px=S2 radius=Full align=ACenter justify=JCenter hovered{bg=Hover}
 )
 
 ///|

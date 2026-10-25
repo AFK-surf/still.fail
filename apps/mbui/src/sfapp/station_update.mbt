@@ -157,9 +157,19 @@ let update_detail : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=
 let update_versions : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, leading=L4, wrap=false)
 
 ///|
-/// Its close button: 32, round.
+/// Its close button: 32, round, in its top corner as far in as makes it concentric with it (capsule_in), past its
+/// padding.
 // kept across runs: a value (no field of it changes)
-let update_close : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter")
+let update_close : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter").then(
+  @ui.style(
+    mt=@sf.capsule_room(@sf.r_menu, update_close_side, less=@sf.panel_pad),
+    mr=@sf.capsule_room(@sf.r_menu, update_close_side, less=@sf.panel_pad),
+  ),
+)
+
+///|
+/// Its side (update_close's S8).
+let update_close_side : Double = 32.0
 
 ///|
 /// The versions (where its words stand) and 立即更新 (in its foot corner, concentric with it), 12 apart.

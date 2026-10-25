@@ -468,7 +468,8 @@ pub fn jobs_tab(c : @ui.Ctx, src : Source, station : String, chat : String, view
 /// time of day and its last output, or its output as it grows.
 fn job_detail(c : @ui.Ctx, src : Source, station : String, job : Json?) -> Unit {
   let id = text(job, "id")
-  c.box(style=job_detail_box.then(@sf.pane_foot_card()), fn() {
+  let running = text(job, "state") == "running"
+  c.box(style=job_detail_box.then(@sf.pane_foot_card()).then(job_detail_at(running)), fn() {
     c.box(style=job_detail_head, fn() {
       job_dot(c, text(job, "tone"))
       c.text(text(job, "name"), style=job_detail_name) |> ignore
@@ -480,7 +481,7 @@ fn job_detail(c : @ui.Ctx, src : Source, station : String, job : Json?) -> Unit 
         jobs_own.output = picked == 1
       })
       |> ignore
-      if text(job, "state") == "running" {
+      if running {
         let (stopping, failed) = job_stopping(src, station, job)
         let sid = c.id("jobs-tab/stop")
         if !stopping {
@@ -899,9 +900,31 @@ let jobs_tab_list : @ui.Style = @ui.css("w=Full pt=S1 px=S2 pb=S2")
 
 ///|
 /// The job picked (jobDetail): a card across the tab's foot (in a panel's foot corners, concentric with them:
-/// @sf.pane_foot_card), 10 over, 6 at its end, 14 at its start, on the paper.
+/// @sf.pane_foot_card), 14 at its start, on the paper; over and at its end as its head stands (job_detail_at).
 // kept across runs: a value (no field of it changes)
-let job_detail_box : @ui.Style = @ui.style(w=Full, h=@sf.grow, pt=S2_5, pr=S1_5, pl=S3_5, bg=Card)
+let job_detail_box : @ui.Style = @ui.style(w=Full, h=@sf.grow, pl=S3_5, bg=Card)
+
+///|
+/// Where its head stands in it: its stop while it runs (round) in its top end corner as far in as makes it concentric
+/// with it (capsule_in), the head's middle on the stop's (the choice beside it the head's tallest); else 10 over, 6 at
+/// its end.
+fn job_detail_at(running : Bool) -> @ui.Style {
+  if !running {
+    return job_detail_alone
+  }
+  let d = @sf.capsule_in(@sf.card_corner, job_stop_side)
+  // (the head's middle the stop's: as much less over it as the choice is taller)
+  let over = d - (dmax(@sf.segmented_height(), job_stop_side) - job_stop_side) / 2.0
+  @ui.style(pt=@sf.room_of(over), pr=@sf.room_of(d))
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let job_detail_alone : @ui.Style = @ui.css("pt=S2_5 pr=S1_5")
+
+///|
+/// Its stop's side (job_detail_stop's S7).
+let job_stop_side : Double = 28.0
 
 ///|
 /// Its head (jobDetailHead): 8 apart, its name 13 in 600, its state 12 muted; the choice 120 wide; the stop 28.
@@ -927,7 +950,7 @@ let job_detail_choice : @ui.Style = @ui.css("row")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_detail_stop : @ui.Style = @ui.css("w=S7 h=S7 radius=Xl align=ACenter justify=JCenter hovered{bg=Hover}")
+let job_detail_stop : @ui.Style = @ui.css("w=S7 h=S7 radius=Full align=ACenter justify=JCenter hovered{bg=Hover}")
 
 ///|
 /// Its command (jobDetailCommand): 4 over, 6 under, 11.5 mono on 1.5, subtle, a line.

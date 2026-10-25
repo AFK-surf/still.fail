@@ -120,7 +120,8 @@ pub fn media_head(c : @ui.Ctx, part : Double, color : Int64, small? : Bool = fal
 }
 
 ///|
-/// One of the controls' buttons (page.css.ts iconBtn in vvBar: 32, its corner the bar's less 6): a 20 icon (18
+/// One of the controls' buttons (page.css.ts iconBtn in vvBar: 32, round, as the speed by them is: the first and the
+/// last in the bar's corners, 10 in, concentric with its 26): a 20 icon (18
 /// `small`), in the quieter ink until pointed at, a bright one's (play) in the words'; `lit` while what it turns on is.
 /// Named on hover. True on the frame after it was pressed.
 pub fn media_key(
@@ -251,4 +252,4 @@ let media_rate_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let media_key_box : @ui.Style = @ui.css("w=S8 h=S8 radius=Lg align=ACenter justify=JCenter disabled{opacity=O35}")
+let media_key_box : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter disabled{opacity=O35}")

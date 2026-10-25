@@ -66,7 +66,46 @@ let list_row_under : @ui.Style = @ui.style(w=grow)
 // kept across runs: a value (no field of it changes)
 let list_row_under_line : @ui.Style = @ui.css("row w=Full")
 
+///|
+/// Keys over a row's top end (a chat's 归档, an archived one's 恢复 and 删除), drawn by `body` (each row_key_box): in a
+/// layer over the row, 2 apart, each a circle as far in from the row's top and end as makes it concentric with the
+/// row's corner (capsule_in: the ladder's row corner less its half, 6), not standing off it in the row's first line
+/// (the user, 2026-10-25). The row keeps its first line's end clear for them (list_row's end_room: row_keys_room).
+pub fn row_corner_keys(c : @ui.Ctx, body : () -> Unit) -> Unit {
+  c.layer(fn() { c.box(style=row_keys_at, fn() { c.box(style=row_keys_line, body) |> ignore }) |> ignore }) |> ignore
+}
 
+///|
+/// A row's key (row_corner_keys): round, 24 across, the pointer's ground on it.
+// kept across runs: a value (no field of it changes)
+pub let row_key_box : @ui.Style = @ui.css("w=S6 h=S6 radius=Full align=ACenter justify=JCenter hovered{bg=Hover}")
+
+///|
+/// The room `n` keys take at a row's first line's end (row_corner_keys): theirs and what is between them.
+pub fn row_keys_room(n : Int) -> Double {
+  n.to_double() * row_key_side + (n - 1).to_double() * row_keys_gap
+}
+
+///|
+/// Where the keys stand (row_corner_keys).
+// kept across runs: a value (no field of it changes)
+let row_keys_at : @ui.Style = @ui.style(
+  w=Full,
+  align=AEnd,
+  pt=room(capsule_in(row_corner, row_key_side)),
+  pr=room(capsule_in(row_corner, row_key_side)),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let row_keys_line : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
+
+///|
+/// A row's key's side (row_key_box: S6), and the room between keys (row_keys_line: S0_5).
+let row_key_side : Double = 24.0
+
+///|
+let row_keys_gap : Double = 2.0
 
 ///|
 /// A line under a row's first line (SidebarList.css.ts line): as high as a chat's second line, its parts beside each

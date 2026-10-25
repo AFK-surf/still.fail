@@ -308,7 +308,7 @@ let find_button_w : Double = 26.0
 
 ///|
 /// The field's height (32: S8): a capsule.
-let find_field_h : Double = 32.0
+pub let find_field_h : Double = 32.0
 
 ///|
 /// How light the strokes under the words in the messages other than the one the reader is at are (ChatFind.css.ts: .45).

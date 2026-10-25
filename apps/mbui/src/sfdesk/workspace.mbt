@@ -418,9 +418,9 @@ let ws_add_icon : Double = 20.0
 let ws_add_box : @ui.Style = @ui.css("w=S10 h=S10 radius=Full align=ACenter justify=JCenter hovered{bg=Hover}")
 
 ///|
-/// ⋯ (an icon button: 32, its corner 12).
+/// ⋯ (an icon button: 32, round: at its row's end in the middle of it, in none of its corners).
 // kept across runs: a value (no field of it changes)
-let ws_more : @ui.Style = @ui.css("w=S8 h=S8 radius=Xl align=ACenter justify=JCenter hovered{bg=Hover}")
+let ws_more : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter hovered{bg=Hover}")
 
 ///|
 let ws_more_icon : Double = 16.0

@@ -440,9 +440,25 @@ let keep_off : @ui.Style = @ui.css("w=Full radius=Xl")
 let keep_on : @ui.Style = keep_off.then(@ui.css("border=B1 border_color=Accent"))
 
 ///|
-/// A favourite's remove (unkeep): 20 across.
+/// A favourite's remove (unkeep): 20 across, round, in the middle of its row's end (a sidebar's row 32 high, a capsule)
+/// as far in as makes it concentric with it (capsule_in: 6), past the row's 10.
 // kept across runs: a value (no field of it changes)
-let unkeep : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter radius=Base hovered{bg=Hover}")
+let unkeep : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter radius=Full hovered{bg=Hover}").then(
+  @ui.style(mr=@sf.room_of(unkeep_off)),
+)
+
+///|
+/// How far past its row's padding the remove stands (unkeep), its row's height and padding, its side.
+let unkeep_off : Double = @sf.capsule_in(unkeep_row_h / 2.0, unkeep_side) - unkeep_row_pad
+
+///|
+let unkeep_row_h : Double = 32.0
+
+///|
+let unkeep_row_pad : Double = 10.0
+
+///|
+let unkeep_side : Double = 20.0
 
 ///|
 // kept across runs: a value (no field of it changes)

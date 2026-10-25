@@ -33,7 +33,9 @@ fn pane_page(
 ///|
 /// The bar of a page in a panel of its own, as a chat's there (chat_bar: its measures, its title's words and place): back
 /// (where it goes, said; what it does) a round button before the title in the panel's top left corner; the title,
-/// `small` (what the page is of) after it, `about` said by a mark beside them; `actions` at its end.
+/// `small` (what the page is of) after it, `about` said by a mark beside them; `actions` at its end, the last in the
+/// panel's top right corner concentric with it by its own height (as they were last laid out: a round button's 32, a
+/// finger's 44, a choice's 36, an added person's 40; @sf.tape_bar_end).
 fn pane_bar(
   c : @ui.Ctx,
   back : (String, () -> Unit)?,
@@ -42,32 +44,42 @@ fn pane_bar(
   small? : String = "",
   actions? : () -> Unit,
 ) -> Unit {
+  let acts = c.id("pane-bar/actions")
   let room = fn(x : Double) { c.box(style=@ui.style(w=Fixed(x), h=Full), fn() {  }) |> ignore }
   page_bar_row(c, chat_bar_row_tape(), fn(room_l, room_r) {
+    // (its rooms at its ends, what is in it 16 apart and not from them; back in the panel's top left corner concentric
+    // with it; its last action in the top right one by its own height, as last laid out)
+    let room_r = match c.laid_size(acts) {
+      Some((_, h)) if h > 0.0 => @sf.tape_bar_end(bar_in, side=h)
+      _ => room_r
+    }
+    let start = if back is Some(_) { @sf.tape_bar_start(room_l) } else { room_l }
     c.box(style=chat_bar_box_tape(), fn() {
-      match back {
-        Some((label, go)) => {
-          room(@sf.tape_bar_start(room_l))
-          if @sf.icon_button(c, "chevron-left", key="settings-back", round=true, label~) {
-            go()
+      room(start)
+      c.box(style=chat_bar_inner, fn() {
+        match back {
+          Some((label, go)) =>
+            if @sf.icon_button(c, "chevron-left", key="settings-back", round=true, label~) {
+              go()
+            }
+          None => ()
+        }
+        c.box(style=chat_bar_title_row, keep=true, fn() {
+          c.text(title, style=chat_title_words) |> ignore
+          if small != "" {
+            c.text(small, style=pane_bar_small) |> ignore
           }
-        }
-        None => room(room_l)
-      }
-      c.box(style=chat_bar_title_row, keep=true, fn() {
-        c.text(title, style=chat_title_words) |> ignore
-        if small != "" {
-          c.text(small, style=pane_bar_small) |> ignore
-        }
-        if about != "" {
-          @sf.about(c, "settings-about", about, label=@sf.t("web-main.about"))
+          if about != "" {
+            @sf.about(c, "settings-about", about, label=@sf.t("web-main.about"))
+          }
+        })
+        |> ignore
+        match actions {
+          Some(f) => c.box(style=chat_bar_buttons, id=acts, taps=false, fn() { f() }) |> ignore
+          None => ()
         }
       })
       |> ignore
-      match actions {
-        Some(f) => c.box(style=chat_bar_buttons, fn() { f() }) |> ignore
-        None => ()
-      }
       room(room_r)
     })
     |> ignore

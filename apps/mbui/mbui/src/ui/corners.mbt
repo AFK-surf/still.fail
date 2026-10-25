@@ -24,6 +24,22 @@ fn Node::grounded(self : Node) -> Bool {
 }
 
 ///|
+/// Whether node `n` has a ground in a state it is not in now, whatever it shows in this frame: one its style gives it
+/// pointed at, pressed, chosen or focused (state_ground), or, a press target rounded, the one it draws as it is lit (a
+/// button's hover or press ground drawn from Ctx::lit); not a row pressed as a whole (pressed_row: a container of what
+/// is in it). The corner rule holds it as one with a ground, so a ground seen only under the hand is held to the rule
+/// as one at rest is, not only when a test happens to point at it (the user, 2026-10-25: a row's 归档 under the pointer
+/// stood off the row's corner, not found).
+fn Node::lit_ground(self : Node) -> Bool {
+  self.kind == kind_box &&
+  self.opacity > 0.01 &&
+  self.fw > 0.0 &&
+  self.fh > 0.0 &&
+  !self.pressed_row() &&
+  (self.state_ground || (self.id != 0 && self.hit && self.radius >= 0.5))
+}
+
+///|
 /// Whether node `n` is a row pressed as a whole (a press target wider than tall: a list's row, a menu's), whose ground
 /// shows while it is pointed at or pressed: what is in it stands in that ground's corner then, not its card's (the web's
 /// test/browser/measure.mjs pressedBox the same).
@@ -131,6 +147,19 @@ pub fn Tester::corner_faults(self : Tester) -> Array[String] {
 }
 
 ///|
+/// Where a frame built with all that shows only while lit shown (Ctx::lit_shown: a row's 归档 under the pointer, every
+/// row's at once) breaks the corner rule; the frames after it as before.
+pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
+  let c = g()
+  c.lit_all = true
+  self.frame()
+  let faults = c.corner_faults()
+  c.lit_all = false
+  self.frame()
+  faults
+}
+
+///|
 /// Where the frame just built breaks the corner rule (Tester::corner_faults; a scripted run's `corners`).
 fn Ctx::corner_faults(self : Ctx) -> Array[String] {
   let c = self
@@ -140,9 +169,10 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
   let pictures = c.pictures()
   let ladder = c.corner_ladder
   let off_ladder : Set[Int] = Set::new()
+  let holds = c.round_held(grounds, pictures)
   for i in 0..<c.count {
     let b = c.nodes[i]
-    if !b.grounded() || b.layer {
+    if !(b.grounded() || b.lit_ground()) || b.layer {
       continue
     }
     let ct = match c.corner_container(i, grounds) {
@@ -214,13 +244,17 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       }
       // linked (Radius::Linked, corner_of.mbt) and following what it is linked to: held to its link, as far in from
       // the container's edges as the link says, the container's corner there the one it follows
+      // (one standing where its link says follows that corner by its link, the whole of it: concentric as the link
+      // works it out, as round as its box lets it where that is rounder than its half)
       match b.links {
         Some(ls) =>
           match (ls[k].inset(), ls[k].source()) {
-            (Some(e), Some(src)) if (dx - e).abs() > 0.5 || (dy - e).abs() > 0.5 || (ra - src).abs() > 0.5 => {
-              out.push(
-                "\{c.named(i)} (corner \{rb}) in the \{corner_names[k]} of \{c.named(p)} (corner \{ra}): linked to follow a corner \{src} round from \{e} in, it stands \{dx} and \{dy} from its edges",
-              )
+            (Some(e), Some(src)) => {
+              if (dx - e).abs() > 0.5 || (dy - e).abs() > 0.5 || (ra - src).abs() > 0.5 {
+                out.push(
+                  "\{c.named(i)} (corner \{rb}) in the \{corner_names[k]} of \{c.named(p)} (corner \{ra}): linked to follow a corner \{src} round from \{e} in, it stands \{dx} and \{dy} from its edges",
+                )
+              }
               continue
             }
             _ => ()
@@ -239,6 +273,20 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       // none of the theme's ranges makes it concentric there (Theme::corner_fit: the container too square for it, or
       // too round, a window's corner among them): it stands as it would alone, and the rule asks nothing more of it
       if !in_step && !c.fit_there(ra, rb, round) {
+        continue
+      }
+      // nor one that holds a circle in its own corner there which could not follow it if it followed this one (a
+      // composer's send in a window's corner too square for the send: following it, its corner too square for what is
+      // in it; the user, 2026-10-25: the corner followed the window's, the send did not): it stands alone
+      if !round && !in_step && c.holds_unfollowing(holds, i, k, concentric(ra, dmax(dx, dy))) {
+        continue
+      }
+      // and one that does follow it, so square there that the circle in its own corner cannot follow it in turn: it
+      // stands alone instead, round enough for what it holds
+      if !round && even && in_step && c.holds_unfollowing(holds, i, k, rb) {
+        out.push(
+          "\{c.named(i)} (corner \{rb}) in the \{corner} of \{c.named(p)} (corner \{ra}): follows it, too square for the circle in its own corner to follow it in turn; it stands alone, round enough for that",
+        )
         continue
       }
       // concentric where it stands, but with a corner the ranges do not let it have (squarer than the least: as good
@@ -306,6 +354,82 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
     }
   }
   out
+}
+
+///|
+/// Whether a corner `ra` round is too square for a circle or a capsule `rb` round (its half) to follow it: concentric
+/// there, it would stand nearer its edges than the theme lets what follows a corner stand (Theme::corner_fit near).
+fn Ctx::too_square(self : Ctx, ra : Double, rb : Double) -> Bool {
+  match self.corner_fit {
+    Some(f) => ra - rb < f.near - 0.5
+    None => ra - rb < -0.5
+  }
+}
+
+///|
+/// The circles and capsules in each rounded box's corners (round_held): by the box, each one's corner (0 top left,
+/// then round it) and how round it is (its half). One in its corner as far from both its edges, where what follows a
+/// corner may stand (Theme::corner_fit far), whether the box is round enough for it there or not (a composer's send
+/// 10 in, its corner following a window's 6).
+fn Ctx::round_held(self : Ctx, grounds : Map[Int, Int], pictures : Set[Int]) -> Map[Int, Array[(Int, Double)]] {
+  let out : Map[Int, Array[(Int, Double)]] = {}
+  for j in 0..<self.count {
+    let b = self.nodes[j]
+    if !(b.grounded() || b.lit_ground()) || b.layer {
+      continue
+    }
+    let half = dmin(b.fw, b.fh) / 2.0
+    let ct = match self.corner_container(j, grounds) {
+      Some(found) => found
+      None => continue
+    }
+    if ct.window || self.corner_exempt(j, ct.node, self.container_most(ct), ct.ground, pictures) {
+      continue
+    }
+    let a = self.nodes[ct.node]
+    let l = b.x - a.x
+    let t = b.y - a.y
+    let r = a.x + a.fw - (b.x + b.fw)
+    let d = a.y + a.fh - (b.y + b.fh)
+    let far = match self.corner_fit {
+      Some(f) => f.far
+      None => 0.0
+    }
+    for k in 0..<4 {
+      let ra = self.container_r(ct, k)
+      // (as the rule has them: one in the middle of the box along an axis it is not round all along is in none of its
+      // corners, an avatar in the middle of a row taller than its corners are round; a mark smaller than the gap it
+      // would leave reads as a point)
+      if ((t - d).abs() <= 0.5 && ra < a.fh / 2.0 - 0.5) || ((l - r).abs() <= 0.5 && ra < a.fw / 2.0 - 0.5) {
+        continue
+      }
+      let side = dmax(b.fw, b.fh)
+      if side < ra - side / 2.0 + 0.5 {
+        continue
+      }
+      let (dx, dy) = corner_gaps(a, b, k)
+      let near_both = (dx < ra && dy < ra) || ((dx - dy).abs() <= 0.5 && dx <= far + 0.5)
+      // (a circle there: one whose corner there is its half; one round elsewhere but following the corner there, a
+      // block in it, InnerOr's, is no circle there)
+      if b.corner_at(k) >= half - 0.5 && dx >= -0.5 && dy >= -0.5 && near_both && nearest_corner(k, l, t, r, d) {
+        match out.get(ct.node) {
+          Some(list) => list.push((k, half))
+          None => out[ct.node] = [(k, half)]
+        }
+      }
+    }
+  }
+  out
+}
+
+///|
+/// Whether box `i` holds in its corner `k` a circle or a capsule (round_held) that could not follow that corner were
+/// it `rb` round (as following its own container's would make it): one too round for it there.
+fn Ctx::holds_unfollowing(self : Ctx, holds : Map[Int, Array[(Int, Double)]], i : Int, k : Int, rb : Double) -> Bool {
+  match holds.get(i) {
+    Some(list) => list.iter().any(fn(h) { h.0 == k && self.too_square(rb, h.1) })
+    None => false
+  }
 }
 
 ///|

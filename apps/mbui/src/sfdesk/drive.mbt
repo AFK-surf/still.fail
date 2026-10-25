@@ -920,7 +920,7 @@ pub fn drive_row(
   if open {
     drive_row_menu_now(key, (row.items)())
   }
-  let ground = if lit is Some(_) {
+  let ground = (if lit is Some(_) {
     entry_drop
   } else if row.chosen {
     entry_chosen
@@ -928,7 +928,7 @@ pub fn drive_row(
     entry_along
   } else {
     entry_plain
-  }
+  }).then(if held_more { entry_held } else { entry_capsule })
   let tree = depth is Some(_)
   let indent = match depth {
     Some(d) => tree_step * d.to_double()
@@ -1034,12 +1034,14 @@ pub fn drive_row(
           } else if shown || !(column && e.dir && along) {
             // (there whether shown or not, clear while not: the hand changes no box)
             c.box(style=if shown { more_shown } else { more_clear }, fn() {
+              // (round, in the middle of the row's capsule end, concentric with it)
               if @sf.icon_button(
                   c,
                   "more",
                   key=key + "/menu/more",
                   size=if compact { more_compact } else { more_size },
                   on=open,
+                  round=true,
                   label=@sf.t("web-main.menu.more"),
                 ) {
                 drive_row_menu(key, (row.items)(), Of(more), along=End)
@@ -1058,7 +1060,7 @@ pub fn drive_row(
       |> ignore
       // (a finger's press ripples)
       if live {
-        @sf.press_ripple(c, id, @sf.row_corner)
+        @sf.press_ripple(c, id, if held_more { @sf.row_corner } else { row_round })
       }
     })
     c.semantics(box, Button, id~, label=e.name, selected=row.chosen, expanded?=if tree && e.dir { Some(expanded == Some(true)) } else { None })
@@ -1386,6 +1388,10 @@ let row_stack_below : Double = 440.0
 let disclosure_icon : Double = 12.0
 
 ///|
+/// A ripple's corner on a row (entry_plain, a capsule): past any row's half, so as round as the row.
+let row_round : Double = 1000.0
+
+///|
 let more_size : Double = 32.0
 
 ///|
@@ -1441,10 +1447,21 @@ let pane_slot_row : @ui.Style = @ui.css("row h=Full")
 let entry_room : @ui.Style = @ui.css("w=Full pb=S0_5")
 
 ///|
-/// A row's ground (entry): the field's corner; the list's under the pointer, the selected's chosen, the accent's
-/// ringed where a drop goes in; faded while something is under way on it.
+/// A row's ground (entry): with its ⋯ at its end (a pointer's), a capsule, as round as it is high (the round ⋯ in the
+/// middle of its end concentric with it, whatever its height: 外圆角 = 距离 + 半高); its ⋯ had by holding it (a
+/// finger's), a row's corner of the ladder's (what is in the middle of its end in none of its corners); as its press
+/// ripples; the list's under the pointer, the selected's chosen, the accent's ringed where a drop goes in; faded while
+/// something is under way on it.
 // kept across runs: a value (no field of it changes)
-let entry_plain : @ui.Style = @ui.css("w=Full radius=Xl")
+let entry_plain : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let entry_capsule : @ui.Style = @ui.css("radius=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let entry_held : @ui.Style = @ui.style(radius=@sf.row_radius)
 
 ///|
 // kept across runs: a value (no field of it changes)

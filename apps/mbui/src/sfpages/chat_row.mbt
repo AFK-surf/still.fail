@@ -189,8 +189,9 @@ pub fn chat_row(
   // pointed at by a mouse (its menu open beside it too); a finger's, held or its menu open
   let hover = !finger && (parts.iter().any(fn(p) { c.hovered(p) }) || c.hovered(archive) || menu_on)
   let shows_time = hover || held || (finger && menu_on)
-  // its 归档 key while pointed at by a mouse; a finger has its swipe and its menu's 归档
-  let archive_key = hover && menu && !renaming
+  // its 归档 key while pointed at by a mouse (shown only under the hand: Ctx::hand_lit); a finger has its swipe and its
+  // menu's 归档
+  let archive_key = !finger && menu && !renaming && c.hand_lit(hover)
   // (swiped to archive, where what the row offers is not under a pointer's hover: the screen's, as its ⋯ is; a pointer
   // has its 归档 key)
   let archivable = @sf.more_held() && item.archivable && item.offline is None && !item.pending && !found
@@ -231,7 +232,7 @@ pub fn chat_row(
         high=true,
         faded=item.settled,
         // (归档 over its first line's end: Sidebar.css.ts rowArchive, 24)
-        end_room=if archive_key { row_archive_room } else { 0.0 },
+        end_room=if archive_key { @sf.row_keys_room(1) } else { 0.0 },
         corner?=if cornered { Some(fn() { row_aside(c, src, item, lead, face_ground) }) } else { None },
         corner_w=if cornered { row_aside_w(c, item, lead) } else { 0.0 },
         fn() {
@@ -333,23 +334,19 @@ pub fn chat_row(
         },
       )
       |> ignore
-      // 归档, at the row's top right while a mouse points at it (Sidebar.css.ts rowArchive: 5 down, 6 in)
+      // 归档, at the row's top right while a mouse points at it (concentric with the row's corner: @sf.row_corner_keys)
       if archive_key {
-        c.layer(fn() {
-          c.box(style=archive_at, fn() {
-            c.cursor(archive, Hand)
-            if c.clicked(archive) {
-              archive_row(src, item)
-            }
-            let b = c.box(style=archive_button, id=archive, fn() {
-              @sf.icon(c, "archive", size=row_icon, color=if c.lit(archive) { t.p.text } else { t.p.muted }) |> ignore
-            })
-            c.semantics(b, Button, id=archive, label=@sf.t("web-main.chat.archiveNamed", args=[("title", item.title)]))
-            @sf.tip(c, "row/archive-tip/" + key, archive, @sf.t("web-main.chat.archive"))
+        @sf.row_corner_keys(c, fn() {
+          c.cursor(archive, Hand)
+          if c.clicked(archive) {
+            archive_row(src, item)
+          }
+          let b = c.box(style=@sf.row_key_box, id=archive, fn() {
+            @sf.icon(c, "archive", size=row_icon, color=if c.lit(archive) { t.p.text } else { t.p.muted }) |> ignore
           })
-          |> ignore
+          c.semantics(b, Button, id=archive, label=@sf.t("web-main.chat.archiveNamed", args=[("title", item.title)]))
+          @sf.tip(c, "row/archive-tip/" + key, archive, @sf.t("web-main.chat.archive"))
         })
-        |> ignore
       }
     })
   }
@@ -413,16 +410,6 @@ pub let kind_mark : Double = 12.0
 ///|
 /// A row's icons (16).
 let row_icon : Double = 16.0
-
-///|
-/// 归档 at the row's top right (rowArchive: 5 down, 6 in, 24 square; page.css.ts iconBtn's corner, the pointer's
-/// ground on it).
-// kept across runs: a value (no field of it changes)
-let archive_at : @ui.Style = @ui.css("w=Full pt=S1_25 pr=S1_5 align=AEnd")
-
-///|
-// kept across runs: a value (no field of it changes)
-let archive_button : @ui.Style = @ui.css("w=S6 h=S6 radius=Lg align=ACenter justify=JCenter hovered{bg=Hover}")
 
 ///|
 /// A row's menu (Sidebar.tsx ContextMenu, mobile/Home.tsx useRowMenu), from row `id` at (`x`, `y`): 固定 / 取消固定 (a
@@ -882,6 +869,3 @@ pub fn rename_escape(c : @ui.Ctx) -> Bool {
   true
 }
 
-///|
-/// The room 归档 takes at a row's first line's end while a pointer is over it (Sidebar.css.ts head, pointed at: 24).
-let row_archive_room : Double = 24.0

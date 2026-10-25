@@ -625,6 +625,7 @@ pub fn workspace_squares(c : @ui.Ctx, src : Source, w : Workspace, all : Array[W
   // (always to a finger, which hovers over nothing: Rail.css.ts workspaceAdd `hover: none`)
   let over = open ||
     @sf.pointed_or_finger(
+      c,
       c.lit(area) || c.lit(add) || all.iter().any(fn(x) { c.lit(c.id("rail/ws/" + x.id)) }),
     )
   let waiting = invitations_waiting(src).length() > 0

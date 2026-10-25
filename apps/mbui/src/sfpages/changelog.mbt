@@ -28,7 +28,8 @@ pub fn news_of(src : Source) -> Json? {
 let news_room : @ui.Style = @ui.css("w=Full px=S3 pt=S1 pb=S2_5")
 
 ///|
-/// The card (22 round: its × 6 in, and its half, on the surface).
+/// The card (a card's corner of the ladder's, its × in its top right corner concentric with it: news_close_place), on
+/// the surface.
 // kept across runs: a value (no field of it changes)
 let news_card : @ui.Style = @ui.css("w=Full radius=Xl3 bg=Surface clip")
 
@@ -52,9 +53,17 @@ let news_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=
 let news_line : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L5, wrap=false, w=Full)
 
 ///|
-/// Its ×: 32, round, 6 from the card's top and right.
+/// Its ×: 32, round, as far from the card's top and right as makes it concentric with its corner (capsule_in: 10).
 // kept across runs: a value (no field of it changes)
-let news_close_place : @ui.Style = @ui.css("w=Full p=S1_5 align=AEnd")
+let news_close_place : @ui.Style = @ui.style(
+  w=Full,
+  p=@sf.room_of(@sf.capsule_in(@sf.card_corner, news_close_side)),
+  align=AEnd,
+)
+
+///|
+/// Its ×'s side (news_close's S8).
+let news_close_side : Double = 32.0
 
 ///|
 // kept across runs: a value (no field of it changes)

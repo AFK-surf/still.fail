@@ -437,6 +437,8 @@ pub struct Ctx {
   // kept lit while the hand is on another (gaps.mbt)
   hand_chooses : Set[Int]
   mut lit_apart : Double
+  // what is shown only while lit (Ctx::lit_shown) shown everywhere at once: a test's (Tester::lit_all_faults)
+  mut lit_all : Bool
   mut window_corner : Double
   mut direction : Direction
   // what the widgets built this frame say they are (semantics.mbt), and how deep in a part hidden from it the view
@@ -647,6 +649,7 @@ fn Ctx::new() -> Ctx {
     lit_asked: Set::new(),
     hand_chooses: Set::new(),
     lit_apart: 0.0,
+    lit_all: false,
     window_corner: 0.0,
     inner_faults: [],
     direction: Ltr,
@@ -881,6 +884,11 @@ pub fn Ctx::box(
         id != 0 && self.pressed(id),
         disabled,
       )
+  }
+  // (a ground it has in any of its states, whichever it is in now: the corner rule holds it as one with a ground)
+  n.state_ground = match style {
+    Some(s) => [s.hovered, s.pressed, s.selected, s.focused].iter().any(fn(p) { p is Some({ bg: Some(_), .. }) })
+    None => false
   }
   let th = self.theme
   n.dir = first(
@@ -1332,6 +1340,31 @@ pub fn Ctx::set_clear(self : Ctx, color : Int64) -> Unit {
 /// what holds it). For what only a resting pointer is shown; a look that answers the hand on it is Ctx::lit.
 pub fn Ctx::hovered(self : Ctx, id : Int) -> Bool {
   self.hover == id || (id != 0 && self.hover_in.contains(id))
+}
+
+///|
+/// What is shown only while `id` is lit (Ctx::lit: a row's 归档 and ⋯ under the pointer), built by `body` then; and
+/// built whatever is lit where a test asks for everything so shown (Tester::lit_all), so that what shows only under the
+/// hand is held to the corner rule as what shows at rest is, without pointing at each in turn.
+pub fn Ctx::lit_shown(self : Ctx, id : Int, body : () -> Unit) -> Unit {
+  self.hand_shown(self.lit(id), body)
+}
+
+///|
+/// The same where what lights it is more than one id (a row pointed at in any of its parts, its menu open beside it):
+/// `body` built while `lit`, and where a test asks for everything shown only under the hand (Tester::lit_all).
+pub fn Ctx::hand_shown(self : Ctx, lit : Bool, body : () -> Unit) -> Unit {
+  if self.hand_lit(lit) {
+    body()
+  }
+}
+
+///|
+/// Whether what is shown only under the hand, lit by `lit`, is shown in this frame (hand_shown): while it is lit, and
+/// where a test asks for all of it (Tester::lit_all). What makes room for it goes by this too, so it is laid out as it
+/// is under the hand.
+pub fn Ctx::hand_lit(self : Ctx, lit : Bool) -> Bool {
+  lit || self.lit_all
 }
 
 ///|

@@ -79,7 +79,7 @@ fn band_new_tape() -> @ui.Style {
   let corner = @sf.tape_side_corners()[1].radius()
   nav_new().then(
     @ui.style(
-      pr=@sf.room_of(@sf.line_end_in(corner, band_new_end)),
+      pr=@sf.room_of(@sf.line_end_in(corner, band_new_end, side=filter_side)),
       pt=@sf.room_of(band_new_top + band_new_tape_over()),
     ),
   )
@@ -244,11 +244,9 @@ let filter_box : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justif
 
 ///|
 /// In the closed bar's top right corner, its ground's corner linked to that corner (filter_bar_link: concentric with it,
-/// a Mac's 6.4), a circle where that is as round as its half or rounder (the bar's corner round enough for one).
+/// a Mac's 6.4; as round as its half where the bar's corner is round enough, drawn so), never a circle that does not
+/// follow it.
 fn filter_box_bar() -> @ui.Style {
-  let link = filter_bar_link()
-  let round = link.radius() >= filter_side / 2.0 - 0.5
-  let r : @ui.Radius = if round { Full } else { Linked(link) }
-  filter_box.then(@ui.style(radius=r))
+  filter_box.then(@ui.style(radius=Linked(filter_bar_link())))
 }
 

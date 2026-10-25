@@ -659,6 +659,12 @@ pub fn rail_overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
+/// The rail's menu opened as a right click on `place` opens it (sffix's rail-menu).
+pub fn open_rail_menu(place : String) -> Unit {
+  wide.rail_menu = Some((place, 0.0, 0.0))
+}
+
+///|
 /// The rail's menu (Rail.tsx's DropdownMenu, from a right click on it), beside the place right clicked (else its
 /// first), 8 past it, clear of the window's buttons' row: the places not in it (pressed, their page; their ＋, shown on
 /// the row pointed at, puts one in it and the rail is changed from there), 从侧边条移除 the place right clicked,
@@ -751,7 +757,7 @@ fn rail_menu_add(c : @ui.Ctx, place : String, label : String, hot : Bool) -> Boo
   let shown = @kit.animate(
     c,
     "rail-menu/add-shown/" + place,
-    if @sf.pointed_or_finger(hot || over) { 1.0 } else { 0.0 },
+    if @sf.pointed_or_finger(c, hot || over) { 1.0 } else { 0.0 },
     transition=nav_fade,
   )
   let b = c.box(style=if over { rail_menu_plus_on } else { rail_menu_plus }, id~, fn() {
