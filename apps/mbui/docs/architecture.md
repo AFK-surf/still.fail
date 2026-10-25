@@ -58,7 +58,9 @@ upright after. A tablet and an opened fold's inner screen turn as they are held.
   - feedback: `c.lit` lights on hover with a mouse and on press with a finger;
   - what a pointer over a thing shows (`c.hovered`: a row's time, its 归档), which a finger reaches otherwise (the
     row's menu);
-  - menus: `c.menu_asked`, a right click or a long press, opening the same menu, shown as the screen says;
+  - menus: `c.menu_asked`, a right click or a long press, opening the same menu, shown as the screen says; a right
+    click is on what a press there would be on (the innermost asker under it, never what lies under what is over it:
+    an open menu, the file preview, a panel on the tape not in use), one right click one menu;
   - tips: on hover, or on a long press;
   - lists scrolled by a finger's drag or by the wheel, words picked by a drag or a hold, drag and drop.
 

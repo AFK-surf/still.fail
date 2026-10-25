@@ -76,9 +76,9 @@ fn context_at(c : @ui.Ctx, x : Double, y : Double, link? : String = "", image? :
 
 ///|
 /// A right click in the page (box `page`): the words picked's menu, where words are picked and nothing in the page
-/// opened one.
+/// that has a menu of its own was right clicked (Ctx::menu_asked: a message's image is its own menu's alone).
 pub fn context_page(c : @ui.Ctx, page : Int) -> Unit {
-  match c.right_clicked(page) {
+  match c.menu_asked(page) {
     Some((x, y)) if context.frame != c.frame_number() && c.selected_text().trim(chars=" \n\t") != "" =>
       context_at(c, x, y)
     _ => ()

@@ -615,3 +615,36 @@ test "desktop: one right click, one menu: the innermost asker's under it (a row'
   t.right_click(20.0, 120.0)
   assert_eq(menus, ["list"])
 }
+
+///|
+test "desktop: a right click is on what a press there is on: not on what lies under a layer over it (its panel, its ground)" {
+  let menus : Array[String] = []
+  let t = @ui.Tester::new(
+    fn(c) {
+      let row = c.id("row")
+      let panel = c.id("panel")
+      if c.menu_asked(row) is Some(_) {
+        menus.push("row")
+      }
+      if c.right_clicked(panel) is Some(_) {
+        menus.push("panel")
+      }
+      c.box(id=row, w=Px(400.0), h=Px(300.0), fn() {  }) |> ignore
+      // a menu open over it: its panel, its ground over all the rest
+      c.overlay("menu", modal=true, fn() {
+        c.box(tx=100.0, ty=100.0, w=Px(180.0), h=Px(80.0), id=panel, fn() {  }) |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+  )
+  t.draw()
+  // on the menu's panel: its, not the row's under it (a second menu of the row's over the first)
+  t.right_click(150.0, 120.0)
+  assert_eq(menus, ["panel"])
+  menus.clear()
+  // on its ground: nobody's
+  t.right_click(20.0, 250.0)
+  assert_eq(menus, [])
+}

@@ -163,7 +163,8 @@ pub let mod_cmd : Int = 8
 
 ///|
 priv struct Desk {
-  /// what was clicked with the secondary button since the last frame: the targets under it (topmost first), where
+  /// what was clicked with the secondary button since the last frame: the target under it and what holds it
+  /// (innermost first: Ctx::secondary_press), where
   mutable_menus : Array[(Array[Int], Double, Double)]
   /// what this frame reads of them (moved over from `mutable_menus` as a frame starts)
   menus : Array[(Array[Int], Double, Double)]
@@ -510,21 +511,17 @@ pub fn Ctx::field_focused(self : Ctx) -> Bool {
 }
 
 ///|
-/// A secondary press at (x, y) (on_pointer's button 2): recorded for Ctx::right_clicked, nothing pressed.
+/// A secondary press at (x, y) (on_pointer's button 2): recorded for Ctx::right_clicked, nothing pressed. It is on
+/// what a press there would be: the topmost target under it and what holds that one (Ctx::hovered's), innermost
+/// first; never on what only lies under them (the page under a menu, a dialog or a file open over the window, a
+/// list's image under the composer floating over it), as a press is not.
 fn Ctx::secondary_press(self : Ctx, x : Double, y : Double) -> Unit {
   let under : Array[Int] = []
-  let mut k = self.hit_ids.length() - 1
-  while k >= 0 {
-    let r = k * 4
-    if x >= self.hit_rects[r] &&
-      x < self.hit_rects[r + 2] &&
-      y >= self.hit_rects[r + 1] &&
-      y < self.hit_rects[r + 3] &&
-      in_round_clip(self.hit_clips, k, x, y) &&
-      !under.contains(self.hit_ids[k]) {
-      under.push(self.hit_ids[k])
-    }
-    k = k - 1
+  let k = hit_at(self.hit_ids, self.hit_rects, self.hit_clips, x, y)
+  if k >= 0 {
+    self.holders(k, under)
+    under.push(self.hit_ids[k])
+    under.rev_in_place()
   }
   desk.mutable_menus.push((under, x, y))
   // a press all the same for what lies over the page (overlay.mbt)

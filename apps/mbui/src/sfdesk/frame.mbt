@@ -866,11 +866,11 @@ fn tape_frame(c : @ui.Ctx, panel : SideOf?, at : (Double, Double, Double), known
     wide.tape_drag = 0.0
     return 0.0
   }
-  // a press on what shows of another (tape_covers); or what shows of it dragged across: the tape in the hand from there,
-  // let go brought over or back (tape_let_go)
+  // a press on what shows of another (tape_covers), a right click there as well (no menu of what it holds); or what
+  // shows of it dragged across: the tape in the hand from there, let go brought over or back (tape_let_go)
   for p in [Side, Page, Panel] {
     let id = c.id("tape/" + p.to_string())
-    if c.clicked(id) {
+    if c.clicked(id) || c.right_clicked(id) is Some(_) {
       wide.tape_ask = Some(p)
     }
     match c.drag_of(id) {
@@ -1018,8 +1018,8 @@ let tape_fling : Double = 900.0
 
 ///|
 /// What shows of the panels not in use on the tape, each under a cover of its shape that takes what is done there, drawn
-/// nothing (the panel as it is, its pages' ground a phone's): a press there, a tap or a click, brings it over
-/// (tape_frame) and goes to nothing it holds; dragged across, it comes with the finger (the tape in the hand) and, let go,
+/// nothing (the panel as it is, its pages' ground a phone's): a press there, a tap, a click or a right click, brings it
+/// over (tape_frame) and goes to nothing it holds; dragged across, it comes with the finger (the tape in the hand) and, let go,
 /// over or back. Drags on the one in use are its own (a row swiped, words scrolled across). `x`: how far the tape is
 /// moved; `at`: tape_at's; `panels`: each panel, its left on the tape and its width; `top`, `h`: theirs.
 fn tape_covers(

@@ -89,6 +89,12 @@ test "a narrow folder's row held with a finger: what can be done to it in a shee
   // (held, it does not open)
   assert_true(viewer.val is None)
   let m = files_page_tester(720.0, 900.0, 0)
+  // (laid out Medium, the sidebar in use: a right click on the page beside it brings it over, as a press does, and
+  // asks nothing of what it holds)
+  let (x, y) = rightmost(m, "季度数据.csv")
+  m.right_click(x, y)
+  m.run_for(@sfdesk.side_move_ms)
+  assert_false(@sf.presenting())
   let (x, y) = rightmost(m, "季度数据.csv")
   m.right_click(x, y)
   m.run_for(@kit.presence_in_ms)
