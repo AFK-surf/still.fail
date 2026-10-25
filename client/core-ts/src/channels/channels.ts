@@ -53,7 +53,7 @@ export type Channel = { readonly kind: Kind; readonly station: string; readonly 
 /// Where channels' items are held, and how far each is known to go.
 export type Held = {
   /// The numbers held of a channel, in order; the lowest and highest of them (null: none); how many of `from ..= to`.
-  numbers(channel: Channel): number[];
+  numbers(channel: Channel): readonly number[];
   span(channel: Channel): { min: number; max: number } | null;
   count(channel: Channel, from: number, to: number): number;
   /// Items into a channel, by number, in place of those held under the same numbers. `cutAfter`: nothing past it is
