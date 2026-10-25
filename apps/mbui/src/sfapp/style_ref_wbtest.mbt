@@ -61,18 +61,18 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     #|finding wide 61047:3348b3f0
     #|finding-dark narrow 30913:f031fa9b
     #|finding-dark wide 61092:a66a3be2
-    #|code narrow 25188:ece3b2af
-    #|code wide 55319:e2c1c094
-    #|code-dark narrow 25056:bc890b91
-    #|code-dark wide 55255:cb54bba0
-    #|wrong narrow 26613:251ef6c1
-    #|wrong wide 56800:997a60f3
-    #|wrong-dark narrow 26529:999b4f9b
-    #|wrong-dark wide 56730:d68d4fab
-    #|checking narrow 33010:39ecd102
-    #|checking wide 63193:e947f809
-    #|checking-dark narrow 32968:6e865ea1
-    #|checking-dark wide 63217:9f2315ea
+    #|code narrow 25188:b8b35c32
+    #|code wide 55319:21ae9c89
+    #|code-dark narrow 25056:d93a866e
+    #|code-dark wide 55255:60a51b73
+    #|wrong narrow 26613:92c50060
+    #|wrong wide 56800:15d51e02
+    #|wrong-dark narrow 26529:5595144c
+    #|wrong-dark wide 56730:25c88d54
+    #|checking narrow 33010:2b017c49
+    #|checking wide 63193:856182f2
+    #|checking-dark narrow 32968:d564c480
+    #|checking-dark wide 63217:9f609cd7
     #|none narrow 27850:5bc911d7
     #|none wide 57643:79693395
     #|none-dark narrow 27704:6014a47f
