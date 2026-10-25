@@ -24,7 +24,7 @@ let step_button_solid : @ui.Style = step_button.then(@ui.css("bg=Fg"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let step_words : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, wrap=false)
+let step_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -33,7 +33,7 @@ let step_words_solid : @ui.TextStyle = step_words.then(@ui.text_style(color=Bg))
 ///|
 /// What a step says (13 on 19 lines, muted).
 // kept across runs: a value (no field of it changes)
-let step_note : @ui.TextStyle = @ui.text_style(size=Sm, leading=L4_75, color=Muted, w=Full)
+let step_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4_75, color=Muted, w=Full)
 
 ///|
 /// The device code's box: the card's foot's width (as its buttons), on the chips' grey, 10 in, the code in its middle;
@@ -65,7 +65,7 @@ let code_finish_h : Double = 30.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let code_finish_words : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Bg, wrap=false)
+let code_finish_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Bg, wrap=false)
 
 ///|
 /// A step's button: true on the frame after it was pressed. `more`: other ways of doing the step, seldom used, in a ⋯
@@ -280,4 +280,4 @@ fn login_steps(
 ///|
 /// What went wrong with the code sent, in red, 6 under the field.
 // kept across runs: a value (no field of it changes)
-let step_error : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, w=Full)
+let step_error : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, w=Full)

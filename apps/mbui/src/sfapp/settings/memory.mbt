@@ -116,7 +116,7 @@ fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, a
     let title = if skill == "" { tr("android-misc.memory.global") } else { skill }
     if sub != "" {
       nav_bar(c, core, tr("android-misc.memory.title"), title, sub=fn() {
-        c.text(sub, size=11.0, color=t.p.muted, wrap=false, line=16.0) |> ignore
+        c.text(sub, size=t.t.caption, color=t.p.muted, wrap=false, line=16.0) |> ignore
       })
     } else {
       nav_bar(c, core, tr("android-misc.memory.title"), title)
@@ -130,7 +130,7 @@ fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, a
     }
     if skill != "" && kv is None {
       c.box(w=Fill(1.0), pad=24.0, fn() {
-        c.text(tr("web-main.memory.gone"), size=14.0, color=t.p.muted, w=Fill(1.0), line=20.0) |> ignore
+        c.text(tr("web-main.memory.gone"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=20.0) |> ignore
       })
       |> ignore
       return
@@ -149,11 +149,11 @@ fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, a
         c.box(style=card_room, fn() {
           c.box(style=skill_card, fn() {
             c.box(style=skill_card_words, fn() {
-              c.text(tr("web-main.memory.when"), size=12.0, weight=500, color=t.p.subtle, wrap=false, line=17.0) |> ignore
+              c.text(tr("web-main.memory.when"), size=t.t.caption, weight=500, color=t.p.subtle, wrap=false, line=17.0) |> ignore
               c.box(w=Fill(1.0), pt=2.0, fn() {
                 c.text(
                   text(kv, "whenText"),
-                  size=13.0,
+                  size=t.t.meta,
                   color=t.p.muted,
                   w=Fill(1.0),
                   line=18.0,
@@ -214,10 +214,10 @@ fn doc_chips(
   // a pill: its words and how much is in it beside them, the one shown in ink
   let pill = fn(id : Int, words : String, much : String, on : Bool) {
     c.box(dir=Row, padx=14.0, pady=7.0, radius=16.0, bg=if on { t.p.text } else { t.p.chip }, id~, fn() {
-      c.text(words, size=13.0, weight=if on { 600 } else { 400 }, color=if on { t.p.bg } else { t.p.text }, wrap=false)
+      c.text(words, size=t.t.meta, weight=if on { 600 } else { 400 }, color=if on { t.p.bg } else { t.p.text }, wrap=false)
       |> ignore
       if much != "" {
-        c.text("  " + much, size=13.0, color=@sf.alpha(if on { t.p.bg } else { t.p.text }, 0.6), wrap=false) |> ignore
+        c.text("  " + much, size=t.t.meta, color=@sf.alpha(if on { t.p.bg } else { t.p.text }, 0.6), wrap=false) |> ignore
       }
     })
     |> ignore
@@ -306,7 +306,7 @@ let share_switch_h : Double = 26.0
 ///|
 /// Its words (14, the ink, as wide as the row lets them).
 // kept across runs: a value (no field of it changes)
-let skill_share_words : @ui.TextStyle = @ui.text_style(size=Base, color=Fg, w=Full)
+let skill_share_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, w=Full)
 
 ///|
 /// The edits two stations made at once (12, the warning's ink), 6 under it, 12 in.
@@ -315,7 +315,7 @@ let skill_conflicts_room : @ui.Style = @ui.css("w=Full px=S3 pt=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let skill_conflicts_words : @ui.TextStyle = @ui.text_style(size=Xs, w=Full)
+let skill_conflicts_words : @ui.TextStyle = @ui.text_style(size=Caption, w=Full)
 
 ///|
 /// Whether a skill of this station's is shared with the workspace's other stations (MemoryDocScreen's ShareRow): a tap

@@ -285,4 +285,4 @@ let recent_ask : @ui.Style = @ui.css("px=S2 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let recent_ask_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L4, center=true)
+let recent_ask_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L4, center=true)

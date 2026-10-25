@@ -117,11 +117,11 @@ let outside_chip : @ui.Style = @ui.css("row gap=SPx align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let outside_hash : @ui.TextStyle = @ui.text_style(size=Sm, color=A(Accent, O70), wrap=false)
+let outside_hash : @ui.TextStyle = @ui.text_style(size=Ui, color=A(Accent, O70), wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let outside_title : @ui.TextStyle = @ui.text_style(size=Sm, color=Accent, wrap=false)
+let outside_title : @ui.TextStyle = @ui.text_style(size=Ui, color=Accent, wrap=false)
 
 ///|
 /// Whose it is (refChipStation): a pill 4 after it, 1 by 6 in, the meta size, muted, on the hover's ground.
@@ -130,9 +130,9 @@ let outside_whose : @ui.Style = @ui.css("ml=S1 px=S1_5 py=SPx radius=Full bg=Hov
 
 ///|
 // kept across runs: a value (no field of it changes)
-let outside_whose_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let outside_whose_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// Why it may not be shared, and why sharing failed (outsideCannot): the meta size, in red, a line of its own.
 // kept across runs: a value (no field of it changes)
-let outside_cannot : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, w=Full)
+let outside_cannot : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, w=Full)

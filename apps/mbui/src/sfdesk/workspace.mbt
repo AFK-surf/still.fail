@@ -921,7 +921,7 @@ let ws_mark : @ui.Style = @ui.css("w=S14 h=S14 radius=Xl bg=Neutral align=ACente
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_mark_letter : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Muted, wrap=false)
+let ws_mark_letter : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -934,7 +934,7 @@ let ws_name_box : @ui.Style = @ui.css("h=S10 px=S2 align=AStart justify=JCenter 
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_name : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, wrap=false)
+let ws_name : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// Who the viewer is, how many (workspaceFacts: the ui's 13 on 20, muted, a subtle · 8 from each between).
@@ -953,20 +953,20 @@ let ws_facts_line : Double = 4.0
 ///|
 /// How many in a group and what becomes of them, after its name: cut short where its line has not the room.
 // kept across runs: a value (no field of it changes)
-let ws_group_note : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false, w=Cut)
+let ws_group_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_fact : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let ws_fact : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
 
 ///|
 /// A fact after its dot, on more lines where one has not the room.
 // kept across runs: a value (no field of it changes)
-let ws_fact_wrap : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted)
+let ws_fact_wrap : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_fact_dot : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Subtle, wrap=false)
+let ws_fact_dot : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Subtle, wrap=false)
 
 
 
@@ -978,7 +978,7 @@ let ws_title_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_section_count : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, weight=Medium, color=Subtle, wrap=false)
+let ws_section_count : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7, weight=Medium, color=Subtle, wrap=false)
 
 
 
@@ -990,15 +990,15 @@ let ws_row_text : @ui.Style = @ui.style(w=@sf.grow, min_w=S20, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_row_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Fg, wrap=false, w=Cut)
+let ws_row_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_row_sub : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let ws_row_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_row_sub_wrap : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=Full)
+let ws_row_sub_wrap : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
 
 ///|
 /// 你 by the viewer (choiceBadge: 1 by 7 in, a capsule on the accent's ground, the meta's 12 in 500).
@@ -1007,7 +1007,7 @@ let ws_badge : @ui.Style = @ui.css("px=S1_5 py=SPx radius=Full bg=AccentBg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_badge_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, color=AccentText, wrap=false)
+let ws_badge_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=AccentText, wrap=false)
 
 
 
@@ -1024,7 +1024,7 @@ let ws_group_box : @ui.Style = @ui.css("row w=Full px=S6 pt=S4_5 pb=S0_5 gap=S2 
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_group_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Fg, wrap=false)
+let ws_group_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// A card (pages.css.ts card: 20 in, its corner the card's, the card's ground; its rows 14 apart).
@@ -1037,7 +1037,7 @@ let ws_card_row : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_card_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Fg, w=@sf.grow, wrap=false)
+let ws_card_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, w=@sf.grow, wrap=false)
 
 ///|
 /// 退出与删除 (dangerList: 18 apart, 4 over and under).
@@ -1046,7 +1046,7 @@ let ws_danger_list : @ui.Style = @ui.css("w=Full py=S1 gap=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_danger_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Fg, wrap=false)
+let ws_danger_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// A section at the column's edges (the library's Section in it).

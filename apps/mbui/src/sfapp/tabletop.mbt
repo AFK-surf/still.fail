@@ -115,7 +115,7 @@ let recent_waiting : Int = 4
 
 ///|
 // kept across runs: a value (no field of it changes)
-let recent_empty : @ui.TextStyle = @ui.text_style(size=Base, color=Muted, w=Full)
+let recent_empty : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)

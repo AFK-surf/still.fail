@@ -24,7 +24,7 @@ let model_group_room : @ui.Style = @ui.css("w=Full px=S5 pt=S3_5 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let model_group_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted)
+let model_group_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 
 ///|
 /// None matching (14, muted, 16 over and under).
@@ -33,7 +33,7 @@ let model_none_room : @ui.Style = @ui.css("w=Full px=S5 py=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let model_none_words : @ui.TextStyle = @ui.text_style(size=Base, color=Muted, w=Full)
+let model_none_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 /// Where a model comes from, small: half seen while it is not usable here yet.
@@ -42,7 +42,7 @@ let model_from_faint : @ui.Style = @ui.css("opacity=O50")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let model_from_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let model_from_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
 
 ///|
 /// The model the core's `picked` names: by its own name, else among the names it also goes by (optionOf).

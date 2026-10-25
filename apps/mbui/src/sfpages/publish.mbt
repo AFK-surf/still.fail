@@ -357,11 +357,11 @@ let publish_note : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCen
 
 ///|
 // kept across runs: a value (no field of it changes)
-let publish_note_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted)
+let publish_note_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let publish_problem : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger)
+let publish_problem : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger)
 
 ///|
 /// What it would hold (page): the chat's width (760 at most) in the middle, 84 down, 32 in, 96 under, 16 apart.
@@ -386,7 +386,7 @@ let publish_page_in : Double = 32.0
 ///|
 /// Who can read it (lead: the ui's size, muted).
 // kept across runs: a value (no field of it changes)
-let publish_lead : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full)
+let publish_lead : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 /// The bar's place: in the middle.
@@ -411,7 +411,7 @@ let publish_drop_note : Int = 1
 
 ///|
 // kept across runs: a value (no field of it changes)
-let publish_name : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, wrap=false)
+let publish_name : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// How much was hidden (headNote, note: its shield 4 or 6 before it, the meta's size, muted).
@@ -420,7 +420,7 @@ let publish_head_note : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let publish_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let publish_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// The attachments under a message (files: 8 apart, 6 under its words), each as wide as the chat draws it.
@@ -445,4 +445,4 @@ let publish_made_link : @ui.Style = @ui.css("w=Full h=S10 px=S4_5 radius=Full bg
 
 ///|
 // kept across runs: a value (no field of it changes)
-let publish_made_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, max_lines=1)
+let publish_made_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, max_lines=1)

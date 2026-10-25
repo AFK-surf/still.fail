@@ -543,7 +543,7 @@ let panel_row_icon : @ui.Style = @ui.css("w=S5 align=ACenter")
 ///|
 /// A word for an icon in a panel's row (Rail.css.ts zouSmall: 14 on 18, 600).
 // kept across runs: a value (no field of it changes)
-let panel_row_word : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, leading=L5, wrap=false)
+let panel_row_word : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, color=Fg, leading=L5, wrap=false)
 
 // ---------------------------------------------------------------------------
 // Pages (styles/pages.css.ts)
@@ -728,11 +728,11 @@ let tip_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tip_words : @ui.TextStyle = @ui.text_style(size=Xs, color=OnPrimary)
+let tip_words : @ui.TextStyle = @ui.text_style(size=Meta, color=OnPrimary)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tip_keys : @ui.TextStyle = @ui.text_style(size=Xs, color=OnPrimary, wrap=false)
+let tip_keys : @ui.TextStyle = @ui.text_style(size=Meta, color=OnPrimary, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -820,11 +820,11 @@ let menu_check : @ui.Style = @ui.css("w=S3_5 align=ACenter")
 ///|
 /// A menu item's words: as long as they are (the menu as wide as its longest, controls.css.ts menuList).
 // kept across runs: a value (no field of it changes)
-let menu_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, leading=L5, wrap=false)
+let menu_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, leading=L5, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let menu_words_danger : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, leading=L5, wrap=false)
+let menu_words_danger : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, leading=L5, wrap=false)
 
 ///|
 /// A heading among a menu's items (controls.css.ts menuLabel): 6 over, 4 under, 10 in; 12, muted.
@@ -833,12 +833,12 @@ let menu_heading : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1_5 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let menu_heading_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L4_75, wrap=false)
+let menu_heading_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L4_75, wrap=false)
 
 ///|
 /// 奏 as an icon in a menu or a panel's row: 14 on 18, 600 (Rail.css.ts zouSmall).
 // kept across runs: a value (no field of it changes)
-let menu_zou : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, leading=L5, wrap=false)
+let menu_zou : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, color=Fg, leading=L5, wrap=false)
 
 ///|
 /// A menu (parts.tsx Menu: mbui's dropdown menu, in the web's look): `entries` with their icons (by value), as wide as
@@ -1367,11 +1367,11 @@ let section_title_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let section_title : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, weight=Semibold, color=Fg)
+let section_title : @ui.TextStyle = @ui.text_style(size=Body, leading=L7, weight=Semibold, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let section_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted)
+let section_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1439,7 +1439,7 @@ pub fn steps(c : @ui.Ctx, steps : Array[() -> Unit]) -> Unit {
 
 ///|
 /// A step's words (the ui's 13 on 20).
-pub let step_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg)
+pub let step_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1455,7 +1455,7 @@ let step_number : @ui.Style = @ui.css("w=S5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let step_number_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let step_number_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1481,7 +1481,7 @@ let verify_line : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let verify_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Positive)
+let verify_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Positive)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1489,7 +1489,7 @@ let pill_box : @ui.Style = @ui.style(row=true, h=Fixed(pill_h), gap=S1, radius=F
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pill_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, wrap=false)
+let pill_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, wrap=false)
 
 ///|
 /// How something stands, at a glance (parts.tsx StatusDot, parts.css.ts statusDot): a dot 7 round, online the online
@@ -1565,11 +1565,11 @@ let first_title_at : @ui.Style = @ui.css("pt=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let first_title : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Fg, center=true)
+let first_title : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Fg, center=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let first_lead : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, center=true)
+let first_lead : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, center=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1678,7 +1678,7 @@ let dialog_head : @ui.Style = @ui.css("row w=Full justify=JBetween align=ACenter
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dialog_title : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg)
+let dialog_title : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1686,7 +1686,7 @@ let dialog_lead_at : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dialog_lead : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted)
+let dialog_lead : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted)
 
 ///|
 /// What it holds: 18 under the title (or its lead), its parts 16 apart.
@@ -1751,15 +1751,15 @@ let field_top : @ui.Style = @ui.css("row w=Full justify=JBetween align=AEnd gap=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let field_label : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Fg)
+let field_label : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let field_error : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Danger)
+let field_error : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Danger)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let field_hint : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted)
+let field_hint : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)
 
 ///|
 /// A line to type in (controls.css.ts input, a one-line one: a pill as the buttons beside it are, 36 high at least,
@@ -1952,7 +1952,7 @@ let select_box_hot : @ui.Style = select_box.then(@ui.css("border_color=FieldHove
 
 ///|
 // kept across runs: a value (no field of it changes)
-let select_words : @ui.TextStyle = @ui.text_style(size=Base, leading=L6, wrap=false, color=Fg)
+let select_words : @ui.TextStyle = @ui.text_style(size=Body, leading=L6, wrap=false, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1965,7 +1965,7 @@ let select_item : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let select_hint : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let select_hint : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// One of a few (a choice whose options need no sentence each: an account, a role): up to `one_of_listed_most` of
@@ -2129,11 +2129,11 @@ let choice_words : @ui.Style = @ui.css("w=Grow(1.0) gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let choice_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Fg)
+let choice_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let choice_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted)
+let choice_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)
 
 ///|
 /// The radio mark: 18 round, edged 1.5 (the strong grey; the ink chosen), its dot 8 in the ink.
@@ -2235,7 +2235,7 @@ let confirm_error_at : @ui.Style = @ui.css("w=Full pt=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let confirm_error : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Danger)
+let confirm_error : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Danger)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2349,11 +2349,11 @@ let panel_head_box : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1_5 pb=S1 gap=S0_5"
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Fg)
+let panel_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_note_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted)
+let panel_note_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2411,7 +2411,7 @@ let panel_button_filled : @ui.Style = panel_button_box.then(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_button_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L6, weight=Medium, wrap=false, color=Fg)
+let panel_button_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, weight=Medium, wrap=false, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2458,7 +2458,7 @@ let command_words_at : @ui.Style = @ui.css("w=Grow(1.0)")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let command_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Fg, wrap=false)
+let command_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, wrap=false)
 
 ///|
 /// A choice that opens a menu of what it can be (Chooser, controls.css.ts chooser): quiet words (12) and a small
@@ -2499,7 +2499,7 @@ let chooser_box : @ui.Style = @ui.css(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let chooser_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, wrap=false, color=Muted)
+let chooser_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, wrap=false, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2928,7 +2928,7 @@ pub fn options_card(
                 if i < 6 {
                   icon(c, "option-\{i + 1}", size=ot.disc, color~) |> ignore
                 } else {
-                  c.text("\{i + 1}", size=12.0, weight=600, color~, wrap=false) |> ignore
+                  c.text("\{i + 1}", size=theme().t.caption, weight=600, color~, wrap=false) |> ignore
                 }
               },
             )
@@ -2965,7 +2965,7 @@ let dialog_title_line : @ui.Style = @ui.style(row=true, w=grow, gap=S2, align=AE
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dialog_step : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let dialog_step : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3029,16 +3029,16 @@ let wait_icon_touch : Double = 44.0
 ///|
 /// The title: the heading's size, 600 (waitingTitle); a touch screen's bold (mWaitingTitle, a <b>).
 // kept across runs: a value (no field of it changes)
-let wait_title : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, center=true)
+let wait_title : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, center=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wait_title_touch : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Bold, color=Fg, center=true)
+let wait_title_touch : @ui.TextStyle = @ui.text_style(size=Heading, weight=Bold, color=Fg, center=true)
 
 ///|
 /// What it waits for: the body's, muted (waitingLead).
 // kept across runs: a value (no field of it changes)
-let wait_lead : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, color=Muted, center=true)
+let wait_lead : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7, color=Muted, center=true)
 
 ///|
 /// The way into an app, signed out (the web's cloud/gate.tsx SignInPage; SignIn.kt SignInScreen), in the box it is
@@ -3133,7 +3133,7 @@ let sign_in_title : @ui.TextStyle = @ui.text_style(
 ///|
 /// What still.fail is for: the body's size, muted, centred (SignIn.kt: 15.sp, lineHeight 21.sp).
 // kept across runs: a value (no field of it changes)
-let sign_in_note : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, center=true, w=Full)
+let sign_in_note : @ui.TextStyle = @ui.text_style(size=Body, color=Muted, center=true, w=Full)
 
 ///|
 /// 6 more over the button.
@@ -3165,12 +3165,12 @@ let sign_in_button_touch : @ui.Style = sign_in_button(sign_in_touch_w)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sign_in_words : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Bg, wrap=false, leading=Font)
+let sign_in_words : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Bg, wrap=false, leading=Font)
 
 ///|
 /// 可同时登录多个账号: small, muted.
 // kept across runs: a value (no field of it changes)
-let sign_in_many : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false, leading=Font)
+let sign_in_many : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, leading=Font)
 
 
 ///|
@@ -3236,7 +3236,7 @@ let update_key_hot : @ui.Style = update_key_box.then(@ui.css("bg=Hover"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_key_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let update_key_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// Its dot: 3 in from the key's top right, 9 across on a ring of the page's ground 2 wide (Home.kt).

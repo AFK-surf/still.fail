@@ -499,16 +499,16 @@ let ug_tile_link : @ui.Style = ug_tile.then(@ui.css("hovered{bg=Hover}"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_tile_label : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false, w=Full)
+let ug_tile_label : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Full)
 
 ///|
 /// Its figure (tileValue: the heading's 22 on 30, 600).
 // kept across runs: a value (no field of it changes)
-let ug_tile_value : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, wrap=false, w=Full)
+let ug_tile_value : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_tile_sub : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Subtle, wrap=false, w=Full)
+let ug_tile_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -522,7 +522,7 @@ let ug_day_head : @ui.Style = @ui.css("w=Full pb=S4 gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_day_name : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let ug_day_name : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -530,7 +530,7 @@ let ug_day_figures : @ui.Style = @ui.css("row gap=S2 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_day_cost : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, wrap=false)
+let ug_day_cost : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -538,7 +538,7 @@ let ug_day_calls_box : @ui.Style = @ui.css("pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_day_calls : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let ug_day_calls : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
 
 ///|
 /// The plot (150 high), its scale's lines across it, said at the right just over each in the caption's 11 subtle.
@@ -555,7 +555,7 @@ let ug_tick_line : @ui.Style = @ui.css("row w=Full justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_tick_words : @ui.TextStyle = @ui.text_style(size=Xs2, leading=L4, color=Subtle, wrap=false)
+let ug_tick_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Subtle, wrap=false)
 
 ///|
 /// The days side by side, 6 apart (2 with many), clear of the scale's words at the right (24).
@@ -612,7 +612,7 @@ let ug_label_cell : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_label : @ui.TextStyle = @ui.text_style(size=Xs2, leading=L4, color=Subtle, wrap=false)
+let ug_label : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Subtle, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -638,11 +638,11 @@ let ug_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_who : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, wrap=false, w=@sf.grow)
+let ug_who : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, wrap=false, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_part_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, wrap=false)
+let ug_part_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -692,7 +692,7 @@ let ug_rank_box : @ui.Style = @ui.css("w=S5 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_rank : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Subtle, wrap=false)
+let ug_rank : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -700,11 +700,11 @@ let ug_row_text : @ui.Style = @ui.style(w=@sf.grow, gap=SPx)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_row_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Fg, wrap=false, w=Full)
+let ug_row_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, wrap=false, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_row_sub : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false, w=Full)
+let ug_row_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -712,11 +712,11 @@ let ug_row_cost : @ui.Style = @ui.css("gap=SPx align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_cost : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Bold, color=Fg, wrap=false)
+let ug_cost : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Bold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_row_share_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let ug_row_share_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// The share's bar from the row's words on (its lead's 20 and the 12 after it), what it had in the strong line's grey.
@@ -735,7 +735,7 @@ let ug_more : @ui.Style = @ui.css("mt=S1 px=S3 py=S1_5 radius=Xl hovered{bg=Hove
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_more_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let ug_more_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -748,7 +748,7 @@ let ug_notes : @ui.Style = @ui.css("w=Full gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Subtle, w=Full)
+let ug_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, w=Full)
 
 ///|
 /// Nothing spent (empty: 28 over and under, in the middle, the ui's 13 muted).
@@ -757,7 +757,7 @@ let ug_empty_box : @ui.Style = @ui.css("w=Full py=S7 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_empty : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let ug_empty : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
 
 ///|
 /// The prices the usage is counted at (UsagePricesSettings, Usage.tsx PriceTables): each station's, on a card of its own,
@@ -837,4 +837,4 @@ fn up_said(c : @ui.Ctx, look : Look, words : String) -> Unit {
 ///|
 /// A station's name over its prices (priceStation: the title's size, semibold).
 // kept across runs: a value (no field of it changes)
-let up_station : @ui.TextStyle = @ui.text_style(size=Lg, leading=L7, weight=Semibold, color=Fg, w=Full)
+let up_station : @ui.TextStyle = @ui.text_style(size=Ui, leading=L7, weight=Semibold, color=Fg, w=Full)

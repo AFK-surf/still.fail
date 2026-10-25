@@ -245,12 +245,12 @@ let ls_title : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S2_5, align=AEnd)
 ///|
 /// (name: the body's size, 600)
 // kept across runs: a value (no field of it changes)
-let ls_name : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, weight=Semibold, color=Fg, wrap=false)
+let ls_name : @ui.TextStyle = @ui.text_style(size=Body, leading=L7, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// (state: the list's size, muted)
 // kept across runs: a value (no field of it changes)
-let ls_state : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let ls_state : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
 
 ///|
 /// (cardFoot: its facts 12 apart in lines, past its dot: 17 in)
@@ -263,7 +263,7 @@ let ls_past : @ui.Style = @ui.css("row w=Full gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ls_fact : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let ls_fact : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// What comes under its facts, as far in.
@@ -277,7 +277,7 @@ let ls_bar : @ui.Style = @ui.css("w=Full py=S1")
 ///|
 /// (warn: red, the list's size, 500)
 // kept across runs: a value (no field of it changes)
-let ls_warn : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Danger, w=Full)
+let ls_warn : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Danger, w=Full)
 
 ///|
 /// 版本 (AppVersionPage): the desktop app's own version, what the last look found under it, and its button: 检查更新,

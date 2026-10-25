@@ -163,13 +163,13 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
   let phone = adb_phone(c)
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
     nav_bar(c, core, "Station", tr("android-misc.adb.title"), sub=fn() {
-      c.text(name, size=11.0, color=t.p.muted, wrap=false, line=16.0) |> ignore
+      c.text(name, size=t.t.caption, color=t.p.muted, wrap=false, line=16.0) |> ignore
     })
     let blocks : Array[() -> Unit] = [
       fn() { gap(c, 12.0) },
       fn() {
         c.box(w=Fill(1.0), padx=24.0, pb=10.0, fn() {
-          c.text(fill("android-misc.adb.about", [("name", name)]), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0)
+          c.text(fill("android-misc.adb.about", [("name", name)]), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0)
           |> ignore
         })
         |> ignore
@@ -182,7 +182,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
       blocks.push(fn() {
         list_card(c, fn() {
           list_row(c, fn() {
-            c.text(tr("android-misc.adb.unsupported"), size=15.0, color=t.p.muted, w=Fill(1.0), line=21.0) |> ignore
+            c.text(tr("android-misc.adb.unsupported"), size=t.t.body, color=t.p.muted, w=Fill(1.0), line=21.0) |> ignore
           })
           |> ignore
         })
@@ -193,7 +193,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
           // lent or not, as settings' switches are; what it is doing under the title
           if list_row(c, key="adb-switch", fn() {
               c.box(w=Fill(1.0), fn() {
-                c.text(tr("android-misc.adb.title"), size=15.0, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
+                c.text(tr("android-misc.adb.title"), size=t.t.body, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
                 let stopped = if !sharing { text(view, "message") } else { "" }
                 let sub = if there {
                   adb_state(c, view, (core.now)())
@@ -207,7 +207,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
                 let adb = text(view, "adb")
                 c.text(
                   sub,
-                  size=13.0,
+                  size=t.t.meta,
                   color=if there && (adb == "missing" || adb == "failed") { t.p.red } else { t.p.muted },
                   w=Fill(1.0),
                   line=18.0,
@@ -247,7 +247,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
             let line = adb_state(c, view, (core.now)())
             if text(view, "adb") != "connected" && said != "" && said != line && !line.has_suffix(said) {
               list_row(c, fn() {
-                c.text(said, size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+                c.text(said, size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
               })
               |> ignore
             }
@@ -412,7 +412,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
     }
     blocks.push(fn() {
       c.box(w=Fill(1.0), padx=24.0, pt=16.0, fn() {
-        c.text(tr("android-misc.adb.warning"), size=12.0, color=t.p.subtle, w=Fill(1.0), line=17.0) |> ignore
+        c.text(tr("android-misc.adb.warning"), size=t.t.caption, color=t.p.subtle, w=Fill(1.0), line=17.0) |> ignore
       })
       |> ignore
     })

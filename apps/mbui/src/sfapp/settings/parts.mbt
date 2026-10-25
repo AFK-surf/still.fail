@@ -86,7 +86,7 @@ pub fn wide_head(
       c.cursor(id, Hand)
       c.box(style=wide_back, id~, fn() {
         @sf.icon(c, "chevron-left", size=14.0, color=t.p.muted) |> ignore
-        c.text(back, size=13.0, color=if c.lit(id) { t.p.text } else { t.p.muted }, wrap=false) |> ignore
+        c.text(back, size=t.t.meta, color=if c.lit(id) { t.p.text } else { t.p.muted }, wrap=false) |> ignore
       })
       |> ignore
       if hit(c, id) {
@@ -99,7 +99,7 @@ pub fn wide_head(
     c.box(style=title_line, fn() {
       c.box(style=if about == "" { title_words } else { title_about }, fn() {
         // (short of room, cut short before what is at its end: never under a few words, title_words)
-        c.text(title, size=22.0, weight=600, color=t.p.text, wrap=false, line=34.0, w=Cut) |> ignore
+        c.text(title, size=t.t.heading, weight=600, color=t.p.text, wrap=false, line=34.0, w=Cut) |> ignore
         if about != "" {
           @sf.about(c, "settings-about", about, label=tr("web-main.about"))
         }
@@ -125,7 +125,7 @@ let wide_head_lead_box : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_head_lead : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, w=Full)
+let wide_head_lead : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)
 
 ///|
 /// Which of a wide page's blocks is being laid out (-1: none, outside its list), and which drew its head (-1: a head
@@ -579,15 +579,15 @@ let wide_section_line : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_section_title : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Semibold, color=Fg, wrap=false)
+let wide_section_title : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_section_sub : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let wide_section_sub : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let wide_meta : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
 
 ///|
 /// What a section is about, under its head where the wide frame says it (page.css.ts sectionSub: 12, muted, 3 under
@@ -605,7 +605,7 @@ let wide_section_note : @ui.Style = @ui.css("w=Full px=S4 pt=S0_5 pb=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_note_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let wide_note_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full)
 
 ///|
 /// What stands at the column's edge in the wide frame, 16 in as the title is (a section's control); 12 on a phone.
@@ -642,7 +642,7 @@ let wide_page_note : @ui.Style = @ui.css("w=Full px=S4 pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_lead : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, w=Full)
+let wide_lead : @ui.TextStyle = @ui.text_style(size=Body, color=Muted, w=Full)
 
 ///|
 /// PageNote's room: 24 in, 10 under it.
@@ -911,23 +911,23 @@ fn row_title(c : @ui.Ctx, words : String, color? : Int64) -> Unit {
 ///|
 /// The wide frame's row words (pages.css.ts listRow, cardRowText: 13; what is under them 12).
 // kept across runs: a value (no field of it changes)
-let wide_row_title : @ui.TextStyle = @ui.text_style(size=Lg, color=Fg, wrap=false, w=Full)
+let wide_row_title : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_row_title_lines : @ui.TextStyle = @ui.text_style(size=Lg, color=Fg, w=Full)
+let wide_row_title_lines : @ui.TextStyle = @ui.text_style(size=Body, color=Fg, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_row_sub : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false, w=Full)
+let wide_row_sub : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_row_sub_lines : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let wide_row_sub_lines : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_value : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let wide_value : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
 
 ///|
 /// A row's title: the body's words on one line, as wide as the row lets them.
@@ -1739,15 +1739,15 @@ let status_line : @ui.Style = @ui.css("row align=ACenter")
 ///|
 /// A state's words, as small as where they stand has them: 11, 12, 13 (Connects.kt), muted, on one line.
 // kept across runs: a value (no field of it changes)
-let status_xs2 : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, wrap=false)
+let status_xs2 : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let status_xs : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let status_xs : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let status_sm : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+let status_sm : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// A state's lead as an icon, as tall as the words (StatusText.kt: 14).

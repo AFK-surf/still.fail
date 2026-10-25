@@ -428,7 +428,7 @@ let go_field_box : @ui.Style = @ui.css("row w=Full h=S9 px=S3 align=ACenter radi
 ///|
 /// Where it goes (goWhere): 8 under the field, muted, small.
 // kept across runs: a value (no field of it changes)
-let go_where : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let go_where : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -450,7 +450,7 @@ let go_row_on : @ui.Style = go_row.then(@ui.css("bg=Selected"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let go_row_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, w=@sf.grow)
+let go_row_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=@sf.grow)
 
 ///|
 /// The key (kbd): 5 in at its sides, a hairline round it, its corner 4.
@@ -459,12 +459,12 @@ let go_key_box : @ui.Style = @ui.css("px=S1_25 radius=Base border=B1 border_colo
 
 ///|
 // kept across runs: a value (no field of it changes)
-let go_key : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, wrap=false)
+let go_key : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
 
 ///|
 /// Under the list, its keys (goKeys): 10 under it, faint.
 // kept across runs: a value (no field of it changes)
-let go_keys : @ui.TextStyle = @ui.text_style(size=Xs2, color=Subtle, w=Full)
+let go_keys : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -480,5 +480,5 @@ let switch_button : @ui.Style = @ui.css(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let switch_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Fg, wrap=false)
+let switch_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg, wrap=false)
 

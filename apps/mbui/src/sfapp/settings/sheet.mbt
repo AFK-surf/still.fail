@@ -108,7 +108,7 @@ fn sheet_head(c : @ui.Ctx, title : String, lead? : () -> Unit) -> Unit {
       Some(f) => f()
       None => ()
     }
-    c.text(title, size=17.0, weight=700, color=t.p.text, wrap=false, w=Fill(1.0), line=24.0) |> ignore
+    c.text(title, size=t.t.title, weight=700, color=t.p.text, wrap=false, w=Fill(1.0), line=24.0) |> ignore
   })
   |> ignore
 }

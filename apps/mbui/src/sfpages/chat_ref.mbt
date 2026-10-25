@@ -228,11 +228,11 @@ let ref_head : @ui.Style = @ui.css("row w=Full px=S2_5 py=S1_5 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ref_head_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let ref_head_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ref_query : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let ref_query : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 /// What it says in place of chats (refEmpty): 6 by 10 in, the ui size, muted.
@@ -241,7 +241,7 @@ let ref_empty : @ui.Style = @ui.css("w=Full px=S2_5 py=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ref_empty_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full)
+let ref_empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 /// A chat (refItem): its mark in 16, its title, when; 10 apart, 38 high at least, 8 by 10 in, concentric with the
@@ -273,7 +273,7 @@ let ref_title_cell : @ui.Style = @ui.style(row=true, w=@sf.grow, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ref_title : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false)
+let ref_title : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
 
 ///|
 /// Whose it is (refChipStation): a pill 4 after the title, 1 by 6 in, the meta size, muted, on the hover's ground.
@@ -282,9 +282,9 @@ let ref_chip_station : @ui.Style = @ui.css("row ml=S1 px=S1_5 py=SPx gap=SPx rad
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ref_chip_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let ref_chip_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// When (refTime): the meta size, muted.
 // kept across runs: a value (no field of it changes)
-let ref_time : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let ref_time : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)

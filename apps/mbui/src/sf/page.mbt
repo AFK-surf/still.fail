@@ -1129,7 +1129,7 @@ let dl_number : @ui.TextStyle = @ui.text_style(size=code_big_size, weight=Semibo
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dl_unit : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Muted, wrap=false)
+let dl_unit : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, weight=Medium, color=Muted, wrap=false)
 
 ///|
 /// Its ten cells (quotaDialCells: 4 over and 6 under; a cell 8 by 14, 2 apart, round 2, the neutral ground; narrow 6
@@ -1151,11 +1151,11 @@ let dl_cell_narrow : @ui.Style = @ui.css("w=S1_5 h=S3_5 radius=Sm bg=Neutral")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dl_label : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Fg, wrap=false)
+let dl_label : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dl_reset : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let dl_reset : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// A page's own head (an account's, a station's, a connect's: who it is), in place of its title: its `mark` in its box
@@ -1439,12 +1439,12 @@ let wide_heading_line : @ui.Style = @ui.css("w=Full pt=S5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let wide_heading : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Semibold, color=Fg, w=Full)
+pub let wide_heading : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Fg, w=Full)
 
 ///|
 /// What a wide row says at its end (the meta's 12, muted, on one line).
 // kept across runs: a value (no field of it changes)
-pub let wide_value : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+pub let wide_value : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// The page's head (pageHead): on a page under another (back over its title) 20 down, else 40; 12 under it; 16 in.
@@ -1472,7 +1472,7 @@ let desk_title_about : @ui.Style = desk_title_words.then(@ui.css("row gap=S1_5 a
 ///|
 /// Its title (22 on 32, 600: the web's 34 off the line scale, its nearest).
 // kept across runs: a value (no field of it changes)
-let desk_title : @ui.TextStyle = @ui.text_style(size=Xl3, leading=L8, weight=Semibold, color=Fg, wrap=false, w=Cut)
+let desk_title : @ui.TextStyle = @ui.text_style(size=Heading, leading=L8, weight=Semibold, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1487,11 +1487,11 @@ let desk_back_line : @ui.Style = @ui.css("row pb=S2 gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_back_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Muted, wrap=false)
+let desk_back_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_back_lit : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Fg, wrap=false)
+let desk_back_lit : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, wrap=false)
 
 ///|
 /// A block's lane across the pane, its column in the middle: 792 at most, 24 from the pane's sides at least (its blocks'
@@ -1556,7 +1556,7 @@ let desk_hint_most : Double = 624.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let desk_hint_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=Full)
+pub let desk_hint_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
 
 ///|
 /// A card of words (pages.css.ts card: 20 in, its rows 14 apart, the settings' corner on the card's ground; a row of
@@ -1574,15 +1574,15 @@ pub let desk_card_text : @ui.Style = @ui.style(w=grow, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let desk_strong : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Fg, w=Full)
+pub let desk_strong : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let desk_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, w=Full)
+pub let desk_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let desk_muted : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, w=Full)
+pub let desk_muted : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)
 
 ///|
 /// A list (pages.css.ts list, listRow: reaching 12 past the column, its rows 2 apart, each 52 high at least, 10 by 12 in,
@@ -1630,16 +1630,16 @@ pub let desk_named : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let desk_list_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Fg, wrap=false)
+pub let desk_list_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let wide_list_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=Full)
+pub let wide_list_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
 
 ///|
 /// A note on one line beside or under what it is about: cut short where it has less, never wrapped a letter a line.
 // kept across runs: a value (no field of it changes)
-pub let desk_note_line : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false, w=Cut)
+pub let desk_note_line : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1671,7 +1671,7 @@ let pg_action : @ui.Style = @ui.css("p=S1 radius=Lg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pg_action_words : @ui.TextStyle = @ui.text_style(size=Base, color=Link, wrap=false)
+let pg_action_words : @ui.TextStyle = @ui.text_style(size=Body, color=Link, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1696,15 +1696,15 @@ let fig_tile : @ui.Style = @ui.style(w=grow, min_w=S28, px=S4, py=S3_5, gap=S0_5
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fig_label : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false, w=Full)
+let fig_label : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fig_value : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, wrap=false, w=Full)
+let fig_value : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fig_sub : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Subtle, wrap=false, w=Full)
+let fig_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false, w=Full)
 
 ///|
 /// A page's own head: wide, its mark 48 and its words beside it, 16 apart, 28 over what follows; narrow, its mark 40,
@@ -1734,7 +1734,7 @@ let head_name_line : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let head_name_wide : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, wrap=false, w=Cut)
+let head_name_wide : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1742,7 +1742,7 @@ let head_name_narrow : @ui.TextStyle = large_title.then(full_words)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let head_line : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, w=Full)
+let head_line : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)
 
 ///|
 /// How it stands, under its lines (8 apart).
@@ -1755,11 +1755,11 @@ let head_actions : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let head_warn_red : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Danger, w=Full)
+let head_warn_red : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Danger, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let head_warn_amber : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Warn, w=Full)
+let head_warn_amber : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Warn, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)

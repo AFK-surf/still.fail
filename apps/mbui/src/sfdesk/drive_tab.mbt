@@ -493,11 +493,11 @@ let ftab_step : @ui.Style = @ui.css("px=S1 py=SPx radius=Md hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftab_step_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let ftab_step_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftab_step_last : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, color=Fg, wrap=false)
+let ftab_step_last : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -510,7 +510,7 @@ let ftab_list : @ui.Style = @ui.style(w=Full, h=@sf.grow, px=S2, pb=S2, clip=tru
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftab_note : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let ftab_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 /// A station's name over its places (group: 8 over, 10 in, 4 under, muted, medium).
@@ -519,7 +519,7 @@ let ftab_group : @ui.Style = @ui.css("row w=Full pt=S2 px=S2_5 pb=S1 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftab_group_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Muted, wrap=false)
+let ftab_group_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -558,11 +558,11 @@ let place_row : @ui.Style = @ui.css("row w=Full h=S9 px=S2 gap=S2 align=ACenter 
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tab_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, w=@sf.grow)
+let tab_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tab_trouble : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=false)
+let tab_trouble : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
 /// On a touch device: the picker over 添加, at the foot's end.

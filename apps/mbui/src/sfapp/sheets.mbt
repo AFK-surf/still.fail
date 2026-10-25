@@ -309,7 +309,7 @@ fn agent_status(c : @ui.Ctx, src : Source, a : Json?) -> Unit {
     if since != "" {
       runs.push(@ui.span(" · " + since, color=t.p.muted))
     }
-    c.rich(runs, size=13.0, line=18.0, color=t.p.text, w=Fill(1.0), max_lines=2) |> ignore
+    c.rich(runs, size=t.t.meta, line=18.0, color=t.p.text, w=Fill(1.0), max_lines=2) |> ignore
   })
   |> ignore
 }
@@ -348,7 +348,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
     c.box(w=Fill(1.0), pl=sheet_side, pr=sheet_side, pb=chat_info_foot, fn() {
       c.box(dir=Row, w=Fill(1.0), pt=4.0, gap=12.0, align=AStart, fn() {
         c.box(w=Fill(1.0), max_h=48.0, clip=true, fn() {
-          c.text(title, size=18.0, weight=700, color=t.p.text, line=24.0) |> ignore
+          c.text(title, size=t.t.title, weight=700, color=t.p.text, line=24.0) |> ignore
         })
         |> ignore
         if open {
@@ -417,7 +417,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
           |> ignore
         }
         c.box(w=Fill(1.0), fn() {
-          c.text(facts.join(" · "), size=13.0, color=t.p.muted, wrap=false) |> ignore
+          c.text(facts.join(" · "), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
         })
         |> ignore
       })
@@ -439,14 +439,14 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
                   @sf.over(t.p.bg, @sf.alpha(t.p.card, 0.8)),
                 )
                 c.box(w=Fill(1.0), fn() {
-                  c.text(text(s, "agentText"), size=15.0, weight=600, color=t.p.text, wrap=false) |> ignore
+                  c.text(text(s, "agentText"), size=t.t.ui, weight=600, color=t.p.text, wrap=false) |> ignore
                   let since = agent_since(c, src, av)
                   let line = if since == "" {
                     text(s, "statusText")
                   } else {
                     text(s, "statusText") + " · " + since
                   }
-                  c.text(line, size=12.0, color=t.p.muted, wrap=false) |> ignore
+                  c.text(line, size=t.t.caption, color=t.p.muted, wrap=false) |> ignore
                 })
                 |> ignore
                 @settings.quota_chips(c, match field(field(av, "account"), "quota") {
@@ -488,7 +488,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
                   c.box(w=Fill(1.0), fn() {
                     c.text(
                       tr(if p { "android-chat.unpin" } else { "android-chat.info.pinTop" }),
-                      size=14.0,
+                      size=t.t.ui,
                       color=t.p.text,
                       wrap=false,
                     )
@@ -518,7 +518,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
             info_row(c, "info/link", fn() {
               @sf.icon(c, "copy", size=16.0, color=t.p.text) |> ignore
               c.box(w=Fill(1.0), fn() {
-                c.text(tr("web-main.chat.copyLink"), size=14.0, color=t.p.text, wrap=false) |> ignore
+                c.text(tr("web-main.chat.copyLink"), size=t.t.ui, color=t.p.text, wrap=false) |> ignore
               })
               |> ignore
             }) {
@@ -567,7 +567,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
             info_row(c, "info/archive", fn() {
               @sf.icon(c, "archive", size=16.0, color=t.p.text) |> ignore
               c.box(w=Fill(1.0), fn() {
-                c.text(tr("android-chat.info.archive"), size=14.0, color=t.p.text, wrap=false) |> ignore
+                c.text(tr("android-chat.info.archive"), size=t.t.ui, color=t.p.text, wrap=false) |> ignore
               })
               |> ignore
             }) {
@@ -645,7 +645,7 @@ fn rename_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double?, was : 
         },
       )
       |> ignore
-      c.text(tr("android-chat.rename.note"), size=12.0, color=t.p.muted, line=17.0) |> ignore
+      c.text(tr("android-chat.rename.note"), size=t.t.caption, color=t.p.muted, line=17.0) |> ignore
       c.box(dir=Row, w=Fill(1.0), pt=6.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
         if sheet_button(c, "rename/cancel", tr("common.cancel"), false, true) {
           rename_field.set("")
@@ -689,7 +689,7 @@ fn sheet_button(c : @ui.Ctx, key : String, label : String, primary : Bool, enabl
     bg=ground,
     id~,
     fn() {
-      c.text(label, size=15.0, weight=600, color=if primary { t.p.bg } else { t.p.text }, wrap=false)
+      c.text(label, size=t.t.ui, weight=600, color=if primary { t.p.bg } else { t.p.text }, wrap=false)
       |> ignore
       // Controls.kt Button: clickable over its clip
       if enabled {
@@ -729,7 +729,7 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
           @sf.over(t.p.bg, @sf.alpha(t.p.card, 0.8)),
         )
         c.box(w=Fill(1.0), gap=1.0, fn() {
-          c.text(text(s, "agentText"), size=17.0, weight=700, color=t.p.text, wrap=false) |> ignore
+          c.text(text(s, "agentText"), size=t.t.title, weight=700, color=t.p.text, wrap=false) |> ignore
           agent_status(c, src, a)
         })
         |> ignore
@@ -747,12 +747,12 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
         match station {
           Some(st) =>
             if info_row(c, "agent/station", fn() {
-                c.text(tr("android-chat.agent.station"), size=14.0, color=t.p.muted, wrap=false) |> ignore
+                c.text(tr("android-chat.agent.station"), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
                 c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
                   if @sf.has_station_mark(st.emoji, st.icon) {
                     @sf.station_mark(c, st.emoji, st.icon, 15.0, t.p.text)
                   }
-                  c.text(st.name, size=14.0, color=t.p.text, wrap=false) |> ignore
+                  c.text(st.name, size=t.t.ui, color=t.p.text, wrap=false) |> ignore
                 })
                 |> ignore
                 chevron(c)
@@ -834,9 +834,9 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
 fn agent_row(c : @ui.Ctx, key : String, label : String, value : String, trailing : () -> Unit) -> Bool {
   let t = @sf.theme()
   info_row(c, key, fn() {
-    c.text(label, size=14.0, color=t.p.muted, wrap=false) |> ignore
+    c.text(label, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
     c.box(w=Fill(1.0), fn() {
-      c.text(value, size=14.0, color=t.p.text, wrap=false) |> ignore
+      c.text(value, size=t.t.ui, color=t.p.text, wrap=false) |> ignore
     })
     |> ignore
     trailing()
@@ -876,7 +876,7 @@ fn stop_button(c : @ui.Ctx, src : Source, station : String, key : String) -> Uni
       } else {
         @sf.icon(c, "stop", size=11.0, color=t.p.red) |> ignore
       }
-      c.text(tr("android-chat.agent.stop"), size=13.0, weight=500, color=t.p.red, wrap=false) |> ignore
+      c.text(tr("android-chat.agent.stop"), size=t.t.meta, weight=500, color=t.p.red, wrap=false) |> ignore
       // its clip clickable
       @motion.ripple(c, id, 16.0)
     },
@@ -896,7 +896,7 @@ fn agent_lines(c : @ui.Ctx, card : Json?) -> Unit {
     for l in latest {
       c.text(
         text(Some(l), "text"),
-        size=13.0,
+        size=t.t.meta,
         color=if flag(Some(l), "now") { t.p.text } else { t.p.muted },
         wrap=false,
         line=18.0,
@@ -996,7 +996,7 @@ fn agent_notes(c : @ui.Ctx, card : Json?, top : Double) -> Unit {
     for n in notes {
       c.text(
         text(Some(n), "text"),
-        size=13.0,
+        size=t.t.meta,
         color=if text(Some(n), "level") == "amber" { 0xD9962BFFL } else { t.p.red },
         line=18.0,
       )
@@ -1065,7 +1065,7 @@ fn job_row(c : @ui.Ctx, key : String, job : Json?) -> Bool {
       c.box(pt=job_dot_over, opacity=if off { 0.55 } else { 1.0 }, fn() { job_dot(c, text(job, "tone")) })
       |> ignore
       c.box(w=Fill(1.0), gap=1.0, opacity=if off { 0.55 } else { 1.0 }, fn() {
-        c.text(text(job, "name"), size=15.0, weight=500, color=t.p.text, wrap=false) |> ignore
+        c.text(text(job, "name"), size=t.t.ui, weight=500, color=t.p.text, wrap=false) |> ignore
         job_meta(c, job, 12.5)
       })
       |> ignore
@@ -1080,7 +1080,7 @@ fn job_row(c : @ui.Ctx, key : String, job : Json?) -> Bool {
 /// A group's label (Controls.kt GroupLabel): 13, muted, 14 above it and 4 under.
 fn group_label(c : @ui.Ctx, label : String) -> Unit {
   c.box(pt=14.0, pb=4.0, fn() {
-    c.text(label, size=13.0, color=@sf.theme().p.muted, wrap=false) |> ignore
+    c.text(label, size=@sf.theme().t.meta, color=@sf.theme().p.muted, wrap=false) |> ignore
   })
   |> ignore
 }
@@ -1161,8 +1161,8 @@ fn jobs_sheet(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
     if jobs.length() == 0 {
       rows.push(fn() {
         c.box(padx=2.0, pady=12.0, gap=4.0, fn() {
-          c.text(tr("android-misc.jobs.none"), size=15.0, weight=600, color=t.p.text) |> ignore
-          c.text(tr("android-misc.jobs.none.text"), size=13.0, color=t.p.muted) |> ignore
+          c.text(tr("android-misc.jobs.none"), size=t.t.ui, weight=600, color=t.p.text) |> ignore
+          c.text(tr("android-misc.jobs.none.text"), size=t.t.meta, color=t.p.muted) |> ignore
         })
         |> ignore
       })
@@ -1170,7 +1170,7 @@ fn jobs_sheet(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
     if jobs.length() > 0 && shown.length() == 0 {
       rows.push(fn() {
         c.box(padx=20.0, pady=8.0, fn() {
-          c.text(tr("android-misc.jobs.noneNow"), size=13.0, color=t.p.muted) |> ignore
+          c.text(tr("android-misc.jobs.noneNow"), size=t.t.meta, color=t.p.muted) |> ignore
         })
         |> ignore
       })
@@ -1180,10 +1180,10 @@ fn jobs_sheet(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
       rows.push(fn() {
         if sheet_link(c, "jobs/all", fn() {
             if dui.jobs_all {
-              c.text(tr("android-misc.jobs.onlyNow"), size=14.0, color=@sf.link_ink(), wrap=false) |> ignore
+              c.text(tr("android-misc.jobs.onlyNow"), size=@sf.theme().t.ui, color=@sf.link_ink(), wrap=false) |> ignore
             } else {
-              c.text(text(view, "allText"), size=14.0, color=@sf.link_ink(), wrap=false) |> ignore
-              c.text(text(view, "hiddenText"), size=12.0, color=t.p.muted) |> ignore
+              c.text(text(view, "allText"), size=@sf.theme().t.ui, color=@sf.link_ink(), wrap=false) |> ignore
+              c.text(text(view, "hiddenText"), size=t.t.caption, color=t.p.muted) |> ignore
             }
           }) {
           dui.jobs_all = !dui.jobs_all
@@ -1194,7 +1194,7 @@ fn jobs_sheet(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
       rows.push(fn() {
         if sheet_link(c, "jobs/clear", fn() {
             c.box(dir=Row, gap=6.0, align=ACenter, fn() {
-              c.text(text(view, "clearText"), size=14.0, color=@sf.link_ink(), wrap=false) |> ignore
+              c.text(text(view, "clearText"), size=@sf.theme().t.ui, color=@sf.link_ink(), wrap=false) |> ignore
               if doing(clear_key) {
                 @sf.spinner(c, size=12.0) |> ignore
               }
@@ -1261,7 +1261,7 @@ fn waiting_rows(c : @ui.Ctx, n : Int, error : Json?) -> Unit {
   c.box(w=Fill(1.0), padx=18.0, gap=12.0, fn() {
     match error {
       Some(e) =>
-        c.text(error_words(e), size=13.0, color=t.p.red, line=18.0) |> ignore
+        c.text(error_words(e), size=t.t.meta, color=t.p.red, line=18.0) |> ignore
       None => ()
     }
     let breath = if error is None { @sf.breath(c) } else { 0.6 }
@@ -1296,7 +1296,7 @@ fn job_sheet(c : @ui.Ctx, src : Source, r : ChatRef, id : String) -> Unit {
         c.box(padx=18.0, fn() {
           c.text(
             if topic.value is Some(_) { tr("android-misc.jobs.gone") } else { tr("common.reading") },
-            size=14.0,
+            size=t.t.meta,
             color=t.p.muted,
           )
           |> ignore
@@ -1321,7 +1321,7 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
   c.box(dir=Row, w=Fill(1.0), pl=22.0, pr=22.0, pt=4.0, pb=14.0, gap=12.0, align=AStart, fn() {
     c.box(pt=8.0, fn() { job_dot(c, text(j, "tone")) }) |> ignore
     c.box(w=Fill(1.0), fn() {
-      c.text(text(j, "name"), size=16.0, weight=600, color=t.p.text) |> ignore
+      c.text(text(j, "name"), size=t.t.title, weight=600, color=t.p.text) |> ignore
       job_meta(c, j, 12.5)
     })
     |> ignore
@@ -1330,7 +1330,7 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
   c.box(w=Fill(1.0), h=Fill(1.0), pl=18.0, pr=18.0, pb=24.0, gap=14.0, fn() {
     let command = text(j, "command")
     if command.trim(chars=" \n").to_string() != "" {
-      c.rich([@ui.span(command, mono=true)], size=11.5, line=17.0, color=t.p.muted, w=Fill(1.0)) |> ignore
+      c.rich([@ui.span(command, mono=true)], size=t.t.caption, line=17.0, color=t.p.muted, w=Fill(1.0)) |> ignore
     }
     if !service {
       dui.job_tab = seg(
@@ -1347,18 +1347,18 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
       c.box(w=Fill(1.0), gap=12.0, fn() {
         if notices.length() == 0 {
           c.box(padx=20.0, pady=8.0, fn() {
-            c.text(tr("android-misc.jobs.noNotices"), size=13.0, color=t.p.muted) |> ignore
+            c.text(tr("android-misc.jobs.noNotices"), size=t.t.meta, color=t.p.muted) |> ignore
           })
           |> ignore
         }
         for n in notices {
           c.box(dir=Row, w=Fill(1.0), gap=10.0, fn() {
             c.box(w=Px(48.0), fn() {
-              c.text(text(Some(n), "clock"), size=14.0, color=t.p.subtle, wrap=false) |> ignore
+              c.text(text(Some(n), "clock"), size=t.t.meta, color=t.p.subtle, wrap=false) |> ignore
             })
             |> ignore
             c.box(w=Fill(1.0), fn() {
-              c.text(text(Some(n), "text"), size=14.0, color=t.p.text) |> ignore
+              c.text(text(Some(n), "text"), size=t.t.ui, color=t.p.text) |> ignore
             })
             |> ignore
           })
@@ -1377,10 +1377,10 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
       }
       if said != "" {
         c.box(w=Fill(1.0), gap=2.0, fn() {
-          c.text(said, size=11.0, color=t.p.subtle) |> ignore
+          c.text(said, size=t.t.caption, color=t.p.subtle) |> ignore
           match text(last, "last") {
             "" => ()
-            l => c.rich([@ui.span(l, mono=true)], size=11.5, color=t.p.muted, wrap=false) |> ignore
+            l => c.rich([@ui.span(l, mono=true)], size=t.t.caption, color=t.p.muted, wrap=false) |> ignore
           }
         })
         |> ignore
@@ -1427,7 +1427,7 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
                       Some(ls) => ls[i]
                       None => [@ui.span(lines[i], mono=true)]
                     }
-                    c.rich(line, size=11.5, line=17.0, color=t.p.text, w=Fill(1.0)) |> ignore
+                    c.rich(line, size=t.t.caption, line=17.0, color=t.p.text, w=Fill(1.0)) |> ignore
                   })
                   |> ignore
                 },
@@ -1471,7 +1471,7 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
           } else {
             @sf.icon(c, "stop", size=16.0, color=t.p.red) |> ignore
           }
-          c.text(tr("android-misc.jobs.stop"), size=15.0, weight=500, color=t.p.red, wrap=false)
+          c.text(tr("android-misc.jobs.stop"), size=t.t.ui, weight=500, color=t.p.red, wrap=false)
           |> ignore
           // Jobs.kt: clip(Smooth(23)).clickable
           @motion.ripple(c, sid, 23.0)
@@ -1505,7 +1505,7 @@ fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       }
       c.box(w=Fill(1.0), gap=2.0, fn() {
         c.box(padx=10.0, pady=2.0, fn() {
-          c.text(text(gv, "head"), size=12.0, color=t.p.muted, wrap=false) |> ignore
+          c.text(text(gv, "head"), size=t.t.caption, color=t.p.muted, wrap=false) |> ignore
         })
         |> ignore
         for j in shown {
@@ -1519,7 +1519,7 @@ fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           c.box(padx=10.0, pady=3.0, radius=8.0, id~, fn() {
             c.text(
               fill("android-misc.openJobs.more", [("n", (list.length() - shown.length()).to_string())]),
-              size=12.0,
+              size=t.t.caption,
               color=t.p.muted,
               wrap=false,
             )
@@ -1578,10 +1578,10 @@ fn open_job_row(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
     fn() {
       c.box(w=Px(16.0), align=ACenter, fn() { job_dot(c, text(job, "tone")) }) |> ignore
       c.box(w=Fill(1.0), fn() {
-        c.text(text(job, "name"), size=14.0, color=t.p.text, wrap=false, line=18.0) |> ignore
+        c.text(text(job, "name"), size=t.t.ui, color=t.p.text, wrap=false, line=18.0) |> ignore
         c.text(
           text(job, "whereText") + " · " + text(job, "age"),
-          size=12.0,
+          size=t.t.caption,
           color=t.p.muted,
           wrap=false,
           line=16.0,
@@ -1607,7 +1607,7 @@ fn open_job_row(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
 ///|
 /// An info row's words (14, the ink, on one line).
 // kept across runs: a value (no field of it changes)
-let info_words : @ui.TextStyle = @ui.text_style(size=Base, color=Fg, wrap=false)
+let info_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
 
 ///|
 /// A link opened in the system's app for it (ChatInfo.kt: ACTION_VIEW), said when there is none.
@@ -1650,11 +1650,11 @@ let letters_grow : @ui.Style = @ui.style(w=@sf.grow)
 ///|
 /// A chat's title (15, medium) and what is said in brief of it (13, muted), each on a line.
 // kept across runs: a value (no field of it changes)
-let letters_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Medium, color=Fg, wrap=false)
+let letters_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let letters_meta : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+let letters_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// None: said 18 in, 12 over and under, 15 muted.
@@ -1663,7 +1663,7 @@ let letters_none_box : @ui.Style = @ui.css("px=S4_5 py=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let letters_none : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted)
+let letters_none : @ui.TextStyle = @ui.text_style(size=Body, color=Muted)
 
 ///|
 /// One opened, its head: back (a round 36, pressed a shade), then its title; 6 in at the start, 18 at the end.

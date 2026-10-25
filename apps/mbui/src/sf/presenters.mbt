@@ -777,11 +777,11 @@ let panel_empty_at : @ui.Style = @ui.css("w=Full px=S2_5 py=S2")
 ///|
 /// A choice's note at its row's end in a menu of choices (13, muted).
 // kept across runs: a value (no field of it changes)
-let pick_note : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Muted, wrap=false)
+let pick_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_empty : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Muted)
+let panel_empty : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)
 
 // ---------------------------------------------------------------------------
 // The phone's: a sheet from the window's foot (Sheet.kt SheetHost, mbui's @kit.sheet)
@@ -1132,7 +1132,7 @@ let sheet_title_row : @ui.Style = @ui.css("row w=Full px=S4_5 pt=S1 pb=S2_5 alig
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sheet_title_words : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Bold, color=Fg, wrap=false)
+let sheet_title_words : @ui.TextStyle = @ui.text_style(size=Title, weight=Bold, color=Fg, wrap=false)
 
 ///|
 /// A sheet's rows: 12 in at its sides, 24 under the last.
@@ -1163,7 +1163,7 @@ let sheet_row_words : @ui.TextStyle = @ui.text_style(wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sheet_row_note : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted)
+let sheet_row_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 
 ///|
 /// A long pick's search: 20 in, 10 under.
@@ -1197,11 +1197,11 @@ let sheet_words_at : @ui.Style = @ui.css("w=Full px=S5 gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sheet_lead : @ui.TextStyle = @ui.text_style(size=Base, leading=L6, color=Muted)
+let sheet_lead : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sheet_hint : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted)
+let sheet_hint : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 
 ///|
 /// A panel's buttons in a sheet (its foot): 20 in, across it (each its share: parts.mbt foot_fills), 8 apart, 24 under.

@@ -33,11 +33,11 @@ let ref_menu_head : @ui.Style = @ui.css("row w=Full pl=S3 pr=S3 pb=S1_5 gap=S1_5
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ref_menu_head_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+let ref_menu_head_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ref_menu_head_query : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false)
+let ref_menu_head_query : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 /// What it says in place of chats: 15, muted, 12 in, 6 over, 4 under.
@@ -46,7 +46,7 @@ let ref_menu_note_box : @ui.Style = @ui.css("w=Full pl=S3 pr=S3 pt=S1_5 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ref_menu_note : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, w=Full)
+let ref_menu_note : @ui.TextStyle = @ui.text_style(size=Body, color=Muted, w=Full)
 
 ///|
 /// A chat: 44 high at least, 12 and 8 in, its maker's mark in 16, 10 apart; rounded concentric with the card (its
@@ -79,11 +79,11 @@ let ref_menu_title_box : @ui.Style = @ui.css("")
 ///|
 /// (weight(1f, fill = false): the title as wide as it is, cut short first, with an ellipsis)
 // kept across runs: a value (no field of it changes)
-let ref_menu_title : @ui.TextStyle = @ui.text_style(size=Lg, color=Fg, wrap=false, w=Full)
+let ref_menu_title : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ref_menu_ago : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+let ref_menu_ago : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// The menu's most.

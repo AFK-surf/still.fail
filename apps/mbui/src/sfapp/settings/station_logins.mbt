@@ -15,7 +15,7 @@ let logins_lead_room : @ui.Style = @ui.css("w=Full px=S6 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let logins_lead_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, leading=L4_75, w=Full)
+let logins_lead_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L4_75, w=Full)
 
 ///|
 /// The station's logins, as blocks of its page.

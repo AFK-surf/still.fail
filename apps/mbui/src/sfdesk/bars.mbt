@@ -249,11 +249,11 @@ let bar_side : Double = 30.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let bar_place_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let bar_place_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let bar_add_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=false)
+let bar_add_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
 /// The "−" that takes a place out: 20 round, on the neutral wash, 6 in from its slot's top right corner (the slot

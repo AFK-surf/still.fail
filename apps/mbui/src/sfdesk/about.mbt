@@ -267,7 +267,7 @@ let cl_day : @ui.Style = @ui.css("w=Full pt=S5 gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cl_heading : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, color=Muted, w=@sf.grow)
+let cl_heading : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=Muted, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -302,28 +302,28 @@ let cl_kind_new : @ui.Style = @ui.css("px=S1_5 radius=Base bg=AccentBg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cl_kind_words : @ui.TextStyle = @ui.text_style(size=Xs2, leading=L5, color=Muted, wrap=false)
+let cl_kind_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L5, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cl_kind_new_words : @ui.TextStyle = @ui.text_style(size=Xs2, leading=L5, color=AccentText, wrap=false)
+let cl_kind_new_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L5, color=AccentText, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cl_line : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Fg, w=@sf.grow)
+let cl_line : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cl_version : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Subtle, wrap=false)
+let cl_version : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false)
 
 ///|
 /// What is not out yet (note: meta, muted; the accent's where an update would bring it).
 // kept across runs: a value (no field of it changes)
-let cl_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=@sf.grow)
+let cl_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cl_note_new : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=AccentText, w=@sf.grow)
+let cl_note_new : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=AccentText, w=@sf.grow)
 
 // ── the narrow page's (mobile/Changelog.css.ts) ─────────────────────────
 
@@ -334,7 +334,7 @@ let cl_narrow_said : @ui.Style = @ui.css("w=Full px=S3 py=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cl_narrow_note : @ui.TextStyle = @ui.text_style(size=Base, leading=L5, color=Muted, w=Full)
+let cl_narrow_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -356,7 +356,7 @@ let cl_narrow_meta : @ui.Style = @ui.css("row w=Full gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cl_narrow_version : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+let cl_narrow_version : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

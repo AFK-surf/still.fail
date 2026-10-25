@@ -182,7 +182,7 @@ let ws_label_box : @ui.Style = @ui.css("px=S5 pt=S1_5 pb=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_label_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false, leading=Font)
+let ws_label_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, leading=Font)
 
 ///|
 /// A row (Controls.kt PickRow, Workspaces.kt WorkspaceRow): what, a line under it, a check on the chosen one; before
@@ -272,16 +272,16 @@ let ws_row_check : Double = 14.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_row_letter : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Muted, wrap=false, leading=Font)
+let ws_row_letter : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Muted, wrap=false, leading=Font)
 
 ///|
 /// What, 15 on 21; the line under it 12 on 17, muted.
 // kept across runs: a value (no field of it changes)
-let ws_row_label : @ui.TextStyle = @ui.text_style(size=Lg, color=Fg, wrap=false)
+let ws_row_label : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_row_sub : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false, leading=@sf.pick_sub_line)
+let ws_row_sub : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, leading=@sf.pick_sub_line)
 
 ///|
 /// What a workspace has waiting, after its name (SettingParts.kt MarkCounts): the chats its person takes part in that
@@ -317,7 +317,7 @@ let ws_count : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_count_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false, leading=Font)
+let ws_count_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, leading=Font)
 
 // ── the invitations ────────────────────────────────────────────────────
 
@@ -393,11 +393,11 @@ let invite_line : @ui.Style = @ui.css("row w=Full px=S5 py=S2 gap=S2 align=ACent
 
 ///|
 // kept across runs: a value (no field of it changes)
-let invite_line_words : @ui.TextStyle = @ui.text_style(size=Lg, color=Fg, w=Full)
+let invite_line_words : @ui.TextStyle = @ui.text_style(size=Body, color=Fg, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let invite_line_email : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let invite_line_email : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 /// An invitation joined (its workspace the one in view, `joined` first: what showed it closed) or ignored, said so
@@ -553,7 +553,7 @@ fn new_workspace_foot(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
 ///|
 /// What else went wrong (fieldError: the meta's size, red).
 // kept across runs: a value (no field of it changes)
-let new_ws_failed : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, w=Full)
+let new_ws_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, w=Full)
 
 ///|
 /// Makes it (`workspace.create`): the one in view once made, what showed it closed; else why, and the code's field
@@ -702,11 +702,11 @@ let rail_ws_mark : Double = 18.0
 ///|
 /// A workspace's letter (Rail.css.ts workspaceItem: textUi, 600), muted unless it is the one in view or pointed at.
 // kept across runs: a value (no field of it changes)
-let rail_letter : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Muted, wrap=false)
+let rail_letter : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rail_letter_on : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Fg, wrap=false)
+let rail_letter_on : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// The workspaces' column: 4 in from the rail's 38 (its squares where the places' grounds are), 4 above and under, 6

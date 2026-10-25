@@ -180,7 +180,7 @@ let open_jobs_head_box : @ui.Style = @ui.css("w=Full px=S2_5 py=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let open_jobs_head : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let open_jobs_head : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// A job (openJob): what its stop stands over.
@@ -205,17 +205,17 @@ let open_job_text : @ui.Style = @ui.style(w=@sf.grow)
 ///|
 /// Its name (openJobName: the ui's size, cut short).
 // kept across runs: a value (no field of it changes)
-let open_job_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, max_lines=1)
+let open_job_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, max_lines=1)
 
 ///|
 /// Where it is (openJobWhere: the meta's size, muted, cut short).
 // kept across runs: a value (no field of it changes)
-let open_job_where : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false, max_lines=1)
+let open_job_where : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, max_lines=1)
 
 ///|
 /// How long it has been up (openJobAge: the meta's size, muted); hidden under its stop.
 // kept across runs: a value (no field of it changes)
-let open_job_age : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let open_job_age : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -242,7 +242,7 @@ let open_jobs_more : @ui.Style = @ui.css("px=S2_5 py=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let open_jobs_more_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let open_jobs_more_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

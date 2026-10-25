@@ -457,7 +457,7 @@ let rail_dot : @ui.Style = @ui.css("w=Full h=Full radius=Full bg=Danger")
 ///|
 /// 奏, the word, its size the icons' (Rail.css.ts zou: textTitle, 20 high, 600).
 // kept across runs: a value (no field of it changes)
-let rail_zou : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, leading=L6, wrap=false)
+let rail_zou : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, leading=L6, wrap=false)
 
 ///|
 /// One place of the rail: its icon (奏 its word), what waits on it a dot at its corner; pressed, its page.
@@ -1004,16 +1004,16 @@ let adder_body : @ui.Style = @ui.css("w=Full gap=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let adder_title : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Fg, leading=L6)
+let adder_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, leading=L6)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let adder_lead : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L5)
+let adder_lead : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L5)
 
 ///|
 /// A kind's label in the adder (parts.css.ts panelLabel: 12, muted, on the page's line, 1.55 of it).
 // kept across runs: a value (no field of it changes)
-let adder_label : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L4_75)
+let adder_label : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L4_75)
 
 ///|
 /// The rail in the closed bar (Rail.css.ts rail, closed): as narrow as the bar, its places 2 from its every edge.

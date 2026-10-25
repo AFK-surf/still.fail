@@ -714,7 +714,7 @@ let sec_big_code : @ui.TextStyle = @ui.text_style(
 ///|
 /// A note under it, in the middle (Security.css.ts note, centred).
 // kept across runs: a value (no field of it changes)
-let sec_note_centred : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=Full, center=true)
+let sec_note_centred : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full, center=true)
 
 ///|
 /// The sizes: what it changes, its marks 18 in a column of 20; a device's mark 16.
@@ -737,7 +737,7 @@ let sec_lead : @ui.Style = desk_card.then(@ui.css("mb=S7"))
 ///|
 /// The state (state: the body's 14 in 500; its meta the ui's 13 muted).
 // kept across runs: a value (no field of it changes)
-let sec_state : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, weight=Medium, color=Fg, wrap=false)
+let sec_state : @ui.TextStyle = @ui.text_style(size=Body, leading=L7, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -745,11 +745,11 @@ let sec_state_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_state_meta : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false, w=Cut)
+let sec_state_meta : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=Full)
+let sec_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -774,11 +774,11 @@ let sec_point_words : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_point_text : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, color=Fg, w=Full)
+let sec_point_text : @ui.TextStyle = @ui.text_style(size=Body, leading=L7, color=Fg, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_point_rest : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, color=Muted, w=Full)
+let sec_point_rest : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7, color=Muted, w=Full)
 
 ///|
 /// A card's rows (rows: 12 apart; a row 30 high at least, 12 apart, the ui's 13; its words in a line, the name in 500,
@@ -801,15 +801,15 @@ let sec_row_text : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1_5, align=A
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_row_name : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Fg, wrap=false)
+let sec_row_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_row_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, wrap=false)
+let sec_row_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_row_meta : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false, w=Cut)
+let sec_row_meta : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Cut)
 
 ///|
 /// What leaves a waiting device's row first, short of room: which device it is and when it asked; whole on its line.
@@ -822,15 +822,15 @@ let sec_meta_slot : @ui.Style = @ui.css("row")
 ///|
 /// What a row says of itself at its end (受保护): the meta's words, never cut.
 // kept across runs: a value (no field of it changes)
-let sec_row_state : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let sec_row_state : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_warn : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Warn, wrap=false, w=Cut)
+let sec_warn : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Warn, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_warn_state : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Warn, wrap=false)
+let sec_warn_state : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Warn, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -845,7 +845,7 @@ let sec_code : @ui.Style = @ui.css("px=S2 radius=Lg bg=Tint justify=JCenter").th
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_code_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, wrap=false)
+let sec_code_words : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -853,7 +853,7 @@ let sec_count : @ui.Style = @ui.css("px=S1_5 radius=Full bg=AccentBg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_count_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, color=AccentText, wrap=false)
+let sec_count_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=AccentText, wrap=false)
 
 ///|
 /// A station's dot (dot: 7 round, the online green, amber where it is not protected).
@@ -872,7 +872,7 @@ let sec_said : @ui.TextStyle = desk_muted
 ///|
 /// A note beside a button, as wide as it is (the row goes on under where it has not the room).
 // kept across runs: a value (no field of it changes)
-let sec_note_line : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted)
+let sec_note_line : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)
 
 ///|
 /// Narrow: a person's device under them, further in (Security.tsx's mobile DeviceRow: 14 more); what it is amber where
@@ -904,4 +904,4 @@ let sec_open_foot_narrow : @ui.Style = @ui.css("row w=Full px=S1 pt=S4 gap=S3 al
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_open_foot_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted)
+let sec_open_foot_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)

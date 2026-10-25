@@ -387,7 +387,7 @@ let pick_button : @ui.Style = @ui.css("row h=S8 px=S3 gap=S1_25 radius=Full alig
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pick_button_words : @ui.TextStyle = @ui.text_style(size=Base, color=Fg, wrap=false)
+let pick_button_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
 
 ///|
 let pick_icon : Double = 15.0
@@ -436,7 +436,7 @@ let pick_pop_hot : @ui.Style = pick_pop_box.then(@ui.css("bg=A(Primary,O80)"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pick_pop_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=OnPrimary, wrap=false)
+let pick_pop_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Medium, color=OnPrimary, wrap=false)
 
 ///|
 /// How long the pick's bar takes to come (@kit.pop_in's).

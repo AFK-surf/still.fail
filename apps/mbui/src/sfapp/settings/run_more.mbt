@@ -71,7 +71,7 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
     }
     let group = fn(words : String) {
       c.box(w=Fill(1.0), pl=6.0, pt=16.0, pb=6.0, fn() {
-        c.text(words, size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+        c.text(words, size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
       })
       |> ignore
     }
@@ -86,7 +86,7 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
             run(o)
           }
           c.box(padx=chip_px, pady=chip_py, radius=chip_corner, bg=if on { t.p.text } else { t.p.chip }, id~, fn() {
-            c.text(o, size=14.0, weight=if on { 600 } else { 400 }, color=if on { t.p.bg } else { t.p.text }, wrap=false)
+            c.text(o, size=t.t.ui, weight=if on { 600 } else { 400 }, color=if on { t.p.bg } else { t.p.text }, wrap=false)
             |> ignore
           })
           |> ignore
@@ -122,20 +122,20 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
                 let b = becomes.get(i).unwrap_or("")
                 let moved = b != w
                 c.box(dir=Row, w=Fill(1.0), gap=8.0, align=ACenter, fn() {
-                  c.box(w=Px(32.0), fn() { c.text(label, size=13.0, color=t.p.muted, wrap=false) |> ignore }) |> ignore
-                  c.text(w, size=14.0, color=if moved { t.p.muted } else { t.p.text }, wrap=false) |> ignore
+                  c.box(w=Px(32.0), fn() { c.text(label, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore }) |> ignore
+                  c.text(w, size=t.t.meta, color=if moved { t.p.muted } else { t.p.text }, wrap=false) |> ignore
                   if moved {
                     @sf.icon(c, "arrow-right", size=14.0, color=t.p.accent) |> ignore
-                    c.text(b, size=14.0, weight=600, color=@sf.link_ink(), wrap=false, w=Fill(1.0)) |> ignore
+                    c.text(b, size=@sf.theme().t.ui, weight=600, color=@sf.link_ink(), wrap=false, w=Fill(1.0)) |> ignore
                   }
                 })
                 |> ignore
               }
               match opt_text(v, "force") {
-                Some(f) => c.text(f, size=12.0, color=t.p.warn_ink, w=Fill(1.0), line=17.0) |> ignore
+                Some(f) => c.text(f, size=t.t.caption, color=t.p.warn_ink, w=Fill(1.0), line=17.0) |> ignore
                 None => ()
               }
-              c.text(tr("android-chat.run.next"), size=12.0, color=t.p.subtle, w=Fill(1.0), line=17.0) |> ignore
+              c.text(tr("android-chat.run.next"), size=t.t.caption, color=t.p.subtle, w=Fill(1.0), line=17.0) |> ignore
             })
             |> ignore
           })
@@ -153,7 +153,7 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
         fn() {
           group(tr("android-chat.run.effort.title"))
           c.box(w=Fill(1.0), pb=8.0, fn() {
-            c.text(tr("android-chat.run.effort.note"), size=12.0, color=t.p.muted, w=Fill(1.0), line=17.0) |> ignore
+            c.text(tr("android-chat.run.effort.note"), size=t.t.caption, color=t.p.muted, w=Fill(1.0), line=17.0) |> ignore
           })
           |> ignore
           let default = tr("android-chat.pick.default")
@@ -166,7 +166,7 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
           if fast {
             group(tr("android-chat.run.label.speed"))
             c.box(w=Fill(1.0), pb=8.0, fn() {
-              c.text(tr("android-chat.run.speed.note"), size=12.0, color=t.p.muted, w=Fill(1.0), line=17.0) |> ignore
+              c.text(tr("android-chat.run.speed.note"), size=t.t.caption, color=t.p.muted, w=Fill(1.0), line=17.0) |> ignore
             })
             |> ignore
             let as_plan = tr("android-chat.pick.speed.follow")
@@ -184,10 +184,10 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
           group(tr("android-chat.run.label.account"))
           if setting_row("session-run-account", fn() {
               c.box(w=Fill(1.0), fn() {
-                c.text(text(v, "accountText"), size=15.0, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0) |> ignore
-                c.text(text(v, "accountNote"), size=12.0, color=t.p.muted, w=Fill(1.0), line=17.0) |> ignore
+                c.text(text(v, "accountText"), size=t.t.ui, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0) |> ignore
+                c.text(text(v, "accountNote"), size=t.t.caption, color=t.p.muted, w=Fill(1.0), line=17.0) |> ignore
                 if flag(v, "accountWarn") {
-                  c.text(tr("android-chat.run.account.warn"), size=12.0, color=t.p.warn_ink, w=Fill(1.0), line=17.0) |> ignore
+                  c.text(tr("android-chat.run.account.warn"), size=t.t.caption, color=t.p.warn_ink, w=Fill(1.0), line=17.0) |> ignore
                 }
               })
               |> ignore
@@ -207,7 +207,7 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
       Some(Object(_)) as b => {
         let allowed = flag(b, "allowed")
         c.box(w=Fill(1.0), pl=22.0, pr=22.0, pt=8.0, fn() {
-          c.text(if allowed { text(b, "note") } else { opt_text(b, "why").unwrap_or(text(b, "note")) }, size=12.0, color=t.p.muted, w=Fill(1.0), line=17.0)
+          c.text(if allowed { text(b, "note") } else { opt_text(b, "why").unwrap_or(text(b, "note")) }, size=t.t.caption, color=t.p.muted, w=Fill(1.0), line=17.0)
           |> ignore
         })
         |> ignore
@@ -280,7 +280,7 @@ pub fn machine_sessions_offer(c : @ui.Ctx, core : Core, station : String, name :
       @sf.icon(c, "monitor", size=14.0, color=t.p.muted) |> ignore
       c.text(
         fill("android-chat.new.machine.offer", [("station", if name == "" { tr("android-chat.new.machine.here") } else { name })]),
-        size=14.0,
+        size=t.t.meta,
         color=t.p.muted,
         wrap=false,
       )
@@ -300,7 +300,7 @@ pub fn open_machine_sessions(_core : Core, station : String, name : String) -> U
     let t = @sf.theme()
     sheet_head(c, fill("android-chat.new.machine.title", [("station", shown)]))
     c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=8.0, fn() {
-      c.text(tr("android-chat.new.machine.text"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+      c.text(tr("android-chat.new.machine.text"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
     })
     |> ignore
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
@@ -315,12 +315,12 @@ pub fn open_machine_sessions(_core : Core, station : String, name : String) -> U
             c.box(dir=Row, w=Fill(1.0), padx=20.0, pady=10.0, gap=12.0, align=ACenter, id~, fn() {
               @sf.maker_mark(c, "", text(sv, "runtime"), 18.0) |> ignore
               c.box(w=Fill(1.0), fn() {
-                c.text(first_text(sv, ["title", "first"], ""), size=15.0, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0) |> ignore
-                c.text(text(sv, "meta"), size=12.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=17.0) |> ignore
+                c.text(first_text(sv, ["title", "first"], ""), size=t.t.ui, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0) |> ignore
+                c.text(text(sv, "meta"), size=t.t.caption, color=t.p.muted, wrap=false, w=Fill(1.0), line=17.0) |> ignore
               })
               |> ignore
               if has(sv, "session") {
-                c.text(fill("android-chat.new.machine.inApp", [("app", "still.fail")]), size=12.0, color=t.p.muted, wrap=false) |> ignore
+                c.text(fill("android-chat.new.machine.inApp", [("app", "still.fail")]), size=t.t.caption, color=t.p.muted, wrap=false) |> ignore
               }
               @motion.ripple(c, id, 0.0)
             })
@@ -354,7 +354,7 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
     let t = @sf.theme()
     sheet_head(c, first_text(sv, ["title", "first"], ""))
     c.box(w=Fill(1.0), pl=18.0, pr=18.0, pb=8.0, fn() {
-      c.text(text(sv, "meta"), size=12.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=17.0) |> ignore
+      c.text(text(sv, "meta"), size=t.t.caption, color=t.p.muted, wrap=false, w=Fill(1.0), line=17.0) |> ignore
     })
     |> ignore
     c.box(w=Fill(1.0), h=Fill(1.0), padx=16.0, fn() {
@@ -368,7 +368,7 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
           let left = total - list.length()
           if left > 0 {
             blocks.push(fn() {
-              c.text(fill("android-chat.new.machine.more", [("n", left.to_string())]), size=12.0, color=t.p.muted, center=true, w=Fill(1.0), line=17.0)
+              c.text(fill("android-chat.new.machine.more", [("n", left.to_string())]), size=t.t.caption, color=t.p.muted, center=true, w=Fill(1.0), line=17.0)
               |> ignore
             })
           }
@@ -384,7 +384,7 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
                 if flag(mv, "person") {
                   c.box(dir=Row, w=Fill(1.0), justify=JEnd, fn() {
                     c.box(max_w=300.0, padx=14.0, pady=9.0, radius=18.0, bg=t.p.chip, fn() {
-                      c.text(text(mv, "text"), size=15.0, color=t.p.text, line=21.0) |> ignore
+                      c.text(text(mv, "text"), size=t.t.body, color=t.p.text, line=21.0) |> ignore
                     })
                     |> ignore
                   })
@@ -393,7 +393,7 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
                   c.box(w=Fill(1.0), gap=4.0, fn() {
                     c.box(dir=Row, gap=6.0, align=ACenter, fn() {
                       @sf.maker_mark(c, "", runtime, 16.0) |> ignore
-                      c.text(model, size=13.0, weight=600, color=t.p.text, wrap=false) |> ignore
+                      c.text(model, size=t.t.meta, weight=600, color=t.p.text, wrap=false) |> ignore
                     })
                     |> ignore
                     @sf.markdown(c, text(mv, "text"), key="machine-said/" + i.to_string()) |> ignore
@@ -412,7 +412,7 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
     |> ignore
     if error.val != "" {
       c.box(w=Fill(1.0), padx=20.0, pady=6.0, fn() {
-        c.text(error.val, size=13.0, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
+        c.text(error.val, size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
       })
       |> ignore
     }
@@ -507,7 +507,7 @@ pub fn open_add_people(_core : Core, here : Here, view : Json?) -> Unit {
     sheet_head(c, tr("android-settings.add.title"))
     if done.val != "" {
       c.box(w=Fill(1.0), padx=20.0, gap=10.0, fn() {
-        c.text(done.val, size=14.0, color=t.p.text, w=Fill(1.0), line=20.0) |> ignore
+        c.text(done.val, size=t.t.ui, color=t.p.text, w=Fill(1.0), line=20.0) |> ignore
         c.box(dir=Row, w=Fill(1.0), pb=24.0, justify=JEnd, fn() {
           if button(c, "add-people-done", tr("common.done"), true) {
             close_sheet()
@@ -521,11 +521,11 @@ pub fn open_add_people(_core : Core, here : Here, view : Json?) -> Unit {
     let mut typed = ""
     let blocks : Array[() -> Unit] = [
       fn() {
-        c.text(fill("android-settings.add.note", [("name", text(view, "name")), ("app", "still.fail")]), size=14.0, color=t.p.muted, w=Fill(1.0), line=20.0)
+        c.text(fill("android-settings.add.note", [("name", text(view, "name")), ("app", "still.fail")]), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=20.0)
         |> ignore
       },
       fn() {
-        c.text(tr("android-settings.add.emails"), size=13.0, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
+        c.text(tr("android-settings.add.emails"), size=t.t.meta, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
         c.box(w=Fill(1.0), pt=6.0, fn() {
           c.box(w=Fill(1.0), padx=12.0, pady=10.0, radius=12.0, bg=t.p.card, border=1.0, border_color=t.p.line, fn() {
             typed = c.editor(
@@ -606,7 +606,7 @@ pub fn open_add_people(_core : Core, here : Here, view : Json?) -> Unit {
                   ("n", list.length().to_string()),
                   ("picked", picked.filter(fn(e) { !inside.contains(e) }).length().to_string()),
                 ]),
-                size=13.0,
+                size=t.t.meta,
                 color=t.p.muted,
                 w=Fill(1.0),
                 line=18.0,
@@ -652,14 +652,14 @@ pub fn open_add_people(_core : Core, here : Here, view : Json?) -> Unit {
               }
             }
             if problems.length() > 0 {
-              c.text(join(problems, tr("android-settings.add.problemSep")), size=13.0, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
+              c.text(join(problems, tr("android-settings.add.problemSep")), size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
             }
           })
         }
       }
     }
     blocks.push(fn() {
-      c.text(tr("android-settings.add.role"), size=13.0, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
+      c.text(tr("android-settings.add.role"), size=t.t.meta, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
       for r in roles {
         if pick_row(c, "add-role/" + r, role_label(r), sub=role_hint(r), checked=role.val == r) {
           role.val = r
@@ -676,7 +676,7 @@ pub fn open_add_people(_core : Core, here : Here, view : Json?) -> Unit {
         }
       }
       if error.val != "" {
-        c.text(error.val, size=13.0, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
+        c.text(error.val, size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
       }
       c.box(dir=Row, w=Fill(1.0), pt=6.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
         if button(c, "add-cancel", tr("common.cancel"), false) {
@@ -800,7 +800,7 @@ let account_note_room : @ui.Style = @ui.css("w=Full pt=S2 pb=S1")
 ///|
 /// 12sp, muted.
 // kept across runs: a value (no field of it changes)
-let account_note_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let account_note_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full)
 
 ///|
 /// The pickers opened (their `pick.set {open}` sent once a page), and which list a run page shows ("" its first view).

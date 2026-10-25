@@ -37,7 +37,7 @@ let update_dot_trouble : @ui.Style = update_dot.then(@ui.css("bg=Danger"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_label : @ui.TextStyle = @ui.text_style(size=Xs, color=AccentText, leading=L5, wrap=false)
+let update_label : @ui.TextStyle = @ui.text_style(size=Caption, color=AccentText, leading=L5, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -140,21 +140,21 @@ let update_name_row : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 ///|
 /// The station's name, or what is said where there is none (13 on 19, medium, the ink).
 // kept across runs: a value (no field of it changes)
-let update_name : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, leading=L4_75, wrap=false)
+let update_name : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg, leading=L4_75, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_said : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, leading=L4_75, w=Full)
+let update_said : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg, leading=L4_75, w=Full)
 
 ///|
 /// What more is said (12, muted; on 16.8, Xs's own, for Android's 17: off the scale's lines).
 // kept across runs: a value (no field of it changes)
-let update_detail : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let update_detail : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full)
 
 ///|
 /// The versions it goes between (11 on 16, the code face, muted, on one line).
 // kept across runs: a value (no field of it changes)
-let update_versions : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, leading=L4, wrap=false)
+let update_versions : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, leading=L4, wrap=false)
 
 ///|
 /// Its close button: 32, round.
@@ -183,7 +183,7 @@ let update_now : @ui.Style = @ui.css("row px=S3 gap=S1 radius=Full bg=AccentBg a
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_now_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=AccentText, wrap=false)
+let update_now_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Medium, color=AccentText, wrap=false)
 
 ///|
 /// How far the update is, where its words stand.

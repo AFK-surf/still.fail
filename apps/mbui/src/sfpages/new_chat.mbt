@@ -1010,7 +1010,7 @@ let glass_chooser_box : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let new_capsule_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Fg, wrap=false, w=Cut)
+let new_capsule_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, wrap=false, w=Cut)
 
 ///|
 /// A station's name in its control: cut short past 128 (mChooser's max-width).
@@ -1033,11 +1033,11 @@ let station_row_words : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let station_row_name : @ui.TextStyle = @ui.text_style(size=Base, leading=L6, color=Fg, wrap=false, w=Cut)
+let station_row_name : @ui.TextStyle = @ui.text_style(size=Body, leading=L6, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let station_row_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, color=Muted)
+let station_row_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4, color=Muted)
 
 ///|
 /// newChat: what it holds in the middle of the pane; newChatInner: its parts 10 apart, centred.
@@ -1055,7 +1055,7 @@ let new_alone_box : @ui.Style = @ui.css("w=Full px=S8 gap=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let new_alone_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, center=true, w=Full)
+let new_alone_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, center=true, w=Full)
 
 ///|
 /// 新对话 (newChatTitle: the heading's, 600).
@@ -1064,7 +1064,7 @@ let new_title_box : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let new_title : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, center=true, w=Full)
+let new_title : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, center=true, w=Full)
 
 ///|
 /// What it does (newChatSub: 13 on 20, muted, 8 under it).
@@ -1073,7 +1073,7 @@ let new_sub_box : @ui.Style = @ui.css("w=Full pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let new_sub : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, center=true, w=Full)
+let new_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, center=true, w=Full)
 
 ///|
 /// The composer: the column's whole width, its words from the left.
@@ -1083,11 +1083,11 @@ let new_composer_box : @ui.Style = @ui.css("w=Full")
 ///|
 /// What it waits for (newChatStatus), why its stations could not be read (fieldError).
 // kept across runs: a value (no field of it changes)
-let new_status : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, center=true, w=Full)
+let new_status : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, center=true, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let new_error : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Danger, center=true, w=Full)
+let new_error : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Danger, center=true, w=Full)
 
 ///|
 /// Where the offer of the machine's sessions hangs, under the status line (newChatOffer).
@@ -1101,7 +1101,7 @@ let new_notice_box : @ui.Style = @ui.css("px=S3 py=S2 mb=S2 radius=Lg bg=A(Warn,
 
 ///|
 // kept across runs: a value (no field of it changes)
-let new_notice_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Fg, w=Full)
+let new_notice_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, w=Full)
 
 ///|
 /// The way to where models are chosen (controls.css.ts chooser as a link): 28 high, 8 in, the link's ink.
@@ -1110,7 +1110,7 @@ let new_link_box : @ui.Style = @ui.css("row h=S7 px=S2 radius=Lg align=ACenter h
 
 ///|
 // kept across runs: a value (no field of it changes)
-let new_link : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Link, wrap=false, w=Cut)
+let new_link : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Link, wrap=false, w=Cut)
 
 ///|
 /// FrequentCombos.css.ts frequent: its name over them, 8 apart, 12 over and under; label: 12, muted.
@@ -1119,7 +1119,7 @@ let combos_box : @ui.Style = @ui.css("w=Full py=S3 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let combos_label : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let combos_label : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// choices: wrapped, centred, 6 apart.
@@ -1138,7 +1138,7 @@ let combo_on : @ui.Style = combo_off.then(@ui.css("bg=Selected"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let combo_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Muted)
+let combo_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)

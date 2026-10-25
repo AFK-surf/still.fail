@@ -283,7 +283,7 @@ let nav_line_box : @ui.Style = @ui.css("row w=Full min_h=S4_5 gap=S1 align=ACent
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_title_look : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, leading=L6, wrap=false, w=@sf.grow)
+let nav_title_look : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, leading=L6, wrap=false, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -292,4 +292,4 @@ let nav_title_away : @ui.TextStyle = nav_title_look.then(@ui.text_style(color=Mu
 ///|
 /// What a row says in a line under its title or at its end (SidebarList.css.ts line, end): 12 on 18, muted.
 // kept across runs: a value (no field of it changes)
-pub let nav_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L5, wrap=false)
+pub let nav_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L5, wrap=false)

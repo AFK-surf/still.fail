@@ -509,7 +509,7 @@ pub let viz_full_name_box : @ui.Style = @ui.css("w=Full clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let viz_full_name : @ui.TextStyle = @ui.text_style(size=Lg, color=Fg, wrap=false)
+pub let viz_full_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

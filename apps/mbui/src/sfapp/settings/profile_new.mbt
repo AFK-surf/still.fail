@@ -179,7 +179,7 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
         Some(x) => x
         None => tr("android-settings.profile.add")
       },
-      sub=fn() { c.text(text(s, "name"), size=11.0, color=t.p.muted, wrap=false, line=16.0) |> ignore },
+      sub=fn() { c.text(text(s, "name"), size=t.t.caption, color=t.p.muted, wrap=false, line=16.0) |> ignore },
       on_back=leave,
     )
     guard d is Some(Object(_)) else {
@@ -197,7 +197,7 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
     let group_box = fn(f : () -> Unit) { rows_card(c, f) }
     if step == "pick" {
       blocks.push(fn() {
-        pad(fn() { c.text(text(d, "hint"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore })
+        pad(fn() { c.text(text(d, "hint"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore })
       })
       // the machine's own logins not used yet: a profile on one needs no sign-in
       for b in machine_login_offers(c, core, station, field(s, "overview"), inset=18.0, fn(rt) {
@@ -209,7 +209,7 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
         blocks.push(fn() {
           pad(fn() {
             c.box(w=Fill(1.0), pl=6.0, pt=6.0, fn() {
-              c.text(text(Some(g), "title"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+              c.text(text(Some(g), "title"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
             })
             |> ignore
             group_box(fn() {
@@ -282,7 +282,7 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
                   None => tr("android-settings.login.unfinished")
                 }
               },
-              size=13.0,
+              size=t.t.meta,
               color=t.p.red,
               w=Fill(1.0),
               line=18.0,
@@ -313,7 +313,7 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
             )
           }
           if text(d, "usesLine") != "" {
-            c.text(text(d, "usesLine"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+            c.text(text(d, "usesLine"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
           }
         })
       })
@@ -341,7 +341,7 @@ fn connect_form(
   let form = n.form
   let tile = field(d, "tile")
   let label = fn(words : String) {
-    c.text(words, size=13.0, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
+    c.text(words, size=t.t.meta, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
   }
   let group_box = fn(f : () -> Unit) { rows_card(c, f) }
   let ekey = "profile-endpoint/" + form
@@ -361,7 +361,7 @@ fn connect_form(
       edit([("endpoint", str(endpoint))])
     }
     match opt_text(d, "endpointHint") {
-      Some(h) => c.text(h, size=12.0, color=t.p.muted, w=Fill(1.0), line=17.0) |> ignore
+      Some(h) => c.text(h, size=t.t.caption, color=t.p.muted, w=Fill(1.0), line=17.0) |> ignore
       None => ()
     }
   }
@@ -403,7 +403,7 @@ fn connect_form(
         }
     }
     match note {
-      Some((words, bad)) => c.text(words, size=12.0, color=if bad { t.p.red } else { t.p.muted }, w=Fill(1.0), line=17.0) |> ignore
+      Some((words, bad)) => c.text(words, size=t.t.caption, color=if bad { t.p.red } else { t.p.muted }, w=Fill(1.0), line=17.0) |> ignore
       None => ()
     }
   }
@@ -426,7 +426,7 @@ fn connect_form(
   })
   |> ignore
   if text(d, "usesLine") != "" {
-    c.text(text(d, "usesLine"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+    c.text(text(d, "usesLine"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
   }
 }
 
@@ -466,7 +466,7 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
               ],
               " · ",
             ),
-            size=11.0,
+            size=t.t.caption,
             color=t.p.muted,
             wrap=false,
             line=16.0,
@@ -481,7 +481,7 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
                 c.box(w=Fill(1.0), fn() {
                   c.box(dir=Row, gap=6.0, align=ACenter, fn() {
                     presence_dot(c, tone_dot(text(p, "checkTone")))
-                    c.text(text(p, "checkText"), size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
+                    c.text(text(p, "checkText"), size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
                   })
                   |> ignore
                   c.text(
@@ -489,7 +489,7 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
                       Some(x) => x
                       None => tr("android-settings.profile.notChecked")
                     },
-                    size=13.0,
+                    size=t.t.meta,
                     color=t.p.muted,
                     w=Fill(1.0),
                     line=18.0,
@@ -522,7 +522,7 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
                           tone_dot(text(mv, "checkTone"))
                         },
                       )
-                      c.text(text(mv, "stationName"), size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
+                      c.text(text(mv, "stationName"), size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
                     })
                     |> ignore
                     c.text(
@@ -531,7 +531,7 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
                       } else {
                         tr("android-settings.profiles.stationOffline")
                       },
-                      size=13.0,
+                      size=t.t.meta,
                       color=t.p.muted,
                       w=Fill(1.0),
                       line=18.0,
@@ -563,7 +563,7 @@ pub fn install_step(c : @ui.Ctx, core : Core, station : String, install : Json?)
   let busy = is_doing(core, ["software.update"], [("station", station), ("id", runtime)])
   card(c, fn() {
     c.box(w=Fill(1.0), gap=10.0, fn() {
-      c.text(text(install, "title"), size=15.0, weight=600, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
+      c.text(text(install, "title"), size=t.t.ui, weight=600, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
       let detail = opt_text(install, "detail")
       c.text(
         match detail {
@@ -574,7 +574,7 @@ pub fn install_step(c : @ui.Ctx, core : Core, station : String, install : Json?)
               None => tr("web-pages.profiles.installThenSignIn")
             }
         },
-        size=13.0,
+        size=t.t.meta,
         color=if detail is Some(_) { t.p.red } else { t.p.muted },
         w=Fill(1.0),
         line=18.0,

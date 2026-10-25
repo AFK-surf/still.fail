@@ -768,7 +768,7 @@ fn toast(c : @ui.Ctx) -> Unit {
     let k = if s.t > 1.0 { 1.0 } else if s.t < 0.0 { 0.0 } else { s.t }
     let live = s.toast.id == "t\{app.toast_n}"
     c.box(padx=16.0, pady=10.0, bg=t.p.text, radius=18.0, opacity=k, tx=s.dx, fn() {
-      let words = fn() { c.text(s.toast.title, size=14.0, color=t.p.bg, line=20.0) |> ignore }
+      let words = fn() { c.text(s.toast.title, size=t.t.ui, color=t.p.bg, line=20.0) |> ignore }
       if live && action != "" {
         c.box(style=@sf.toast_row, fn() {
           words()
@@ -838,7 +838,7 @@ fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
         Some(s) => {
           let shown = now || splash_waited.val
           c.box(opacity=if shown { 1.0 } else { 0.0 }, fn() {
-            c.text(s, size=13.0, color=t.p.muted, center=true, line=18.0)
+            c.text(s, size=t.t.meta, color=t.p.muted, center=true, line=18.0)
             |> ignore
           })
           |> ignore

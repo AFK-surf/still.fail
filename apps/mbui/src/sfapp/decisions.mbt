@@ -141,12 +141,12 @@ fn decisions_idle(c : @ui.Ctx, view : Json?, top : Double) -> Unit {
           @sf.drawable(c, if t.dark { "buddy_idle_dark" } else { "buddy_idle" }, 72.0) |> ignore
         }
         c.box(pt=8.0, fn() {
-          c.text(tr("android-misc.decisions.idle.title"), size=17.0, weight=600, color=t.p.text, wrap=false)
+          c.text(tr("android-misc.decisions.idle.title"), size=t.t.title, weight=600, color=t.p.text, wrap=false)
           |> ignore
         })
         |> ignore
         c.box(pt=4.0, fn() {
-          c.text(tr("android-misc.decisions.idle.note"), size=14.0, color=t.p.muted, wrap=false) |> ignore
+          c.text(tr("android-misc.decisions.idle.note"), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
         })
         |> ignore
         if today is Some(Object(_)) {
@@ -154,7 +154,7 @@ fn decisions_idle(c : @ui.Ctx, view : Json?, top : Double) -> Unit {
             let figure = fn(f : String, words : String) {
               c.box(align=ACenter, fn() {
                 c.text(f, size=20.0, weight=600, color=t.p.text, wrap=false) |> ignore
-                c.text(words, size=12.0, color=t.p.subtle, wrap=false) |> ignore
+                c.text(words, size=t.t.caption, color=t.p.subtle, wrap=false) |> ignore
               })
               |> ignore
             }
@@ -173,7 +173,7 @@ fn decisions_idle(c : @ui.Ctx, view : Json?, top : Double) -> Unit {
   ]
   let title = fn(words : String) {
     c.box(pl=10.0, pt=28.0, pb=4.0, fn() {
-      c.text(words, size=12.0, weight=500, color=t.p.subtle, wrap=false) |> ignore
+      c.text(words, size=t.t.caption, weight=500, color=t.p.subtle, wrap=false) |> ignore
     })
     |> ignore
   }
@@ -257,11 +257,11 @@ fn idle_row(c : @ui.Ctx, key : String, main : String, meta : String, at : String
       })
       |> ignore
       c.box(w=Fill(1.0), fn() {
-        c.text(main, size=15.0, weight=500, color=t.p.text, wrap=false) |> ignore
-        c.text(meta, size=13.0, color=t.p.subtle, wrap=false) |> ignore
+        c.text(main, size=t.t.ui, weight=500, color=t.p.text, wrap=false) |> ignore
+        c.text(meta, size=t.t.meta, color=t.p.subtle, wrap=false) |> ignore
       })
       |> ignore
-      c.text(at, size=12.0, color=t.p.subtle, wrap=false) |> ignore
+      c.text(at, size=t.t.caption, color=t.p.subtle, wrap=false) |> ignore
       // Decisions.kt IdleRow: clip(Smooth(10)).clickable
       @motion.ripple(c, id, 10.0)
     },
@@ -514,7 +514,7 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json], at : Int) -> Unit {
             fn() {
               c.text(
                 tr(if x > 0.0 { "android-misc.decisions.dismiss" } else { "android-misc.decisions.defer" }),
-                size=16.0,
+                size=t.t.title,
                 weight=600,
                 color=t.p.muted,
                 wrap=false,
@@ -549,10 +549,10 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json], at : Int) -> Unit {
     // the hint, and where this one is among them
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=8.0, pb=10.0, align=ACenter, fn() {
       c.box(w=Fill(1.0), fn() {
-        c.text(tr("android-misc.decisions.hint"), size=12.0, color=t.p.subtle, wrap=false) |> ignore
+        c.text(tr("android-misc.decisions.hint"), size=t.t.caption, color=t.p.subtle, wrap=false) |> ignore
       })
       |> ignore
-      c.text("\{at + 1} / \{n}", size=12.0, color=t.p.subtle, wrap=false) |> ignore
+      c.text("\{at + 1} / \{n}", size=t.t.caption, color=t.p.subtle, wrap=false) |> ignore
     })
     |> ignore
   })
@@ -664,7 +664,7 @@ fn decision_face(
       align=ACenter,
       id=open,
       fn() {
-        c.box(fn() { c.text(text(v, "title"), size=13.0, color=t.p.muted, wrap=false) |> ignore })
+        c.box(fn() { c.text(text(v, "title"), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore })
         |> ignore
         @sf.icon(c, "chevron-right", size=14.0, color=t.p.subtle) |> ignore
         // Decisions.kt: the row clickable
@@ -674,7 +674,7 @@ fn decision_face(
     |> ignore
     match opt_text(card, "assigneeText") {
       Some(a) =>
-        c.box(padx=16.0, pady=4.0, fn() { c.text(a, size=13.0, color=t.p.muted) |> ignore }) |> ignore
+        c.box(padx=16.0, pady=4.0, fn() { c.text(a, size=t.t.meta, color=t.p.muted) |> ignore }) |> ignore
       None => ()
     }
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
@@ -709,13 +709,13 @@ fn decision_face(
           }
           _ =>
             c.box(w=Fill(1.0), gap=8.0, fn() {
-              c.text(tr("android-misc.decisions.replyInChat"), size=13.0, color=t.p.muted) |> ignore
+              c.text(tr("android-misc.decisions.replyInChat"), size=t.t.meta, color=t.p.muted) |> ignore
               let go = c.id(pre + "go-reply")
               if live && c.clicked(go) {
                 open_decision_chat(v)
               }
               c.box(w=Fill(1.0), pady=12.0, radius=12.0, bg=t.p.text, align=ACenter, id=go, fn() {
-                c.text(tr("android-misc.decisions.goReply"), size=15.0, weight=500, color=t.p.bg, wrap=false)
+                c.text(tr("android-misc.decisions.goReply"), size=t.t.ui, weight=500, color=t.p.bg, wrap=false)
                 |> ignore
               })
               |> ignore

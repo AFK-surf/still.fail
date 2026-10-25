@@ -329,11 +329,11 @@ let fp_who_line : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fp_who_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=AccentText)
+let fp_who_words : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, color=AccentText)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fp_time_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle)
+let fp_time_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle)
 
 ///|
 /// A face's name over a line of it, 2 apart, each on one line: the body's in the ink, the small's in the muted.
@@ -342,11 +342,11 @@ let face_lines : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let face_name_words : @ui.TextStyle = @ui.text_style(size=Xl, color=Fg, w=Full, max_lines=1)
+let face_name_words : @ui.TextStyle = @ui.text_style(size=Title, color=Fg, w=Full, max_lines=1)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let face_sample_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full, max_lines=1)
+let face_sample_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full, max_lines=1)
 
 ///|
 /// How a face stands, at its row's end: 140 wide at most, the small's subtle on one line.
@@ -355,7 +355,7 @@ let face_status_room : @ui.Style = @ui.style(max_w=@sf.face_status_most)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let face_status_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=false)
+let face_status_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
 /// What a face of this machine's own is said as in the prefs' `fonts` (client/core-ts/src/fonts.ts LOCAL).
@@ -447,7 +447,7 @@ let local_row_hot : @ui.Style = local_row.then(@ui.css("bg=Hover"))
 ///|
 /// (localName: the body's size, cut short)
 // kept across runs: a value (no field of it changes)
-let local_name : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, color=Fg, wrap=false, w=Full, max_lines=1)
+let local_name : @ui.TextStyle = @ui.text_style(size=Body, leading=L7, color=Fg, wrap=false, w=Full, max_lines=1)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -455,7 +455,7 @@ let local_note_box : @ui.Style = @ui.css("w=Full px=S2_5 py=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let local_note : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, w=Full)
+let local_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)
 
 ///|
 /// A face's size to fetch, in thousands as the fonts' own pages say it (kB, MB, GB: Android's

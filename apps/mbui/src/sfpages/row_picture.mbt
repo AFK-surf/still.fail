@@ -128,7 +128,7 @@ let aside_faces : @ui.Style = @ui.css("row pl=S0_5 align=ACenter")
 ///|
 /// How many more than are shown (RowPicture.css.ts asideMore): 12, muted.
 // kept across runs: a value (no field of it changes)
-let aside_more : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let aside_more : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// The pixel after who started it (RowPicture.css.ts: marginRight 1).

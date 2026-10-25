@@ -410,7 +410,7 @@ let place_est : Double = 36.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_trouble : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=false)
+let nav_trouble : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
 /// The list's words in place of rows (empty, reading), 8 by 10 in.
@@ -442,7 +442,7 @@ let here_chip : @ui.Style = @ui.css("px=S1_25 radius=Full bg=AccentBg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let here_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=AccentText, wrap=false)
+let here_words : @ui.TextStyle = @ui.text_style(size=Caption, color=AccentText, wrap=false)
 
 ///|
 /// A station's places, in under it (places: 14; and a row's own 6).

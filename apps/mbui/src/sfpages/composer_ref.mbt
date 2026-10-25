@@ -70,7 +70,7 @@ fn set_drops_as_files(src : Source, key : String, on : Bool) -> Unit {
 ///|
 /// Where it is (where): the meta size, a line under its name, 14 over what follows.
 // kept across runs: a value (no field of it changes)
-let ref_where : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let ref_where : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 /// Each part (block): its label over it, 8 apart, 14 over the next.
@@ -80,4 +80,4 @@ let ref_block : @ui.Style = @ui.css("w=Full gap=S2 pt=S3_5")
 ///|
 /// A part's label (label): the meta size, muted.
 // kept across runs: a value (no field of it changes)
-let ref_label : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted)
+let ref_label : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)

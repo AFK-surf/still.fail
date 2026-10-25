@@ -731,40 +731,40 @@ let triple_on : @ui.Style = @ui.css("row h=S7 px=S2_5 gap=S1_5 align=ACenter rad
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false)
+let triple_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_picked : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false)
+let triple_picked : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_muted : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+let triple_muted : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_amber : @ui.TextStyle = @ui.text_style(size=Sm, color=Warn, wrap=false)
+let triple_amber : @ui.TextStyle = @ui.text_style(size=Ui, color=Warn, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_red : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, wrap=false)
+let triple_red : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_amber_sm : @ui.TextStyle = @ui.text_style(size=Xs, color=Warn)
+let triple_amber_sm : @ui.TextStyle = @ui.text_style(size=Meta, color=Warn)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_red_sm : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger)
+let triple_red_sm : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_note : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let triple_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// A column's head (runPicker h4): 12, muted, medium; 4 over it, 6 under, as far in as the rows' words.
 // kept across runs: a value (no field of it changes)
-let triple_head : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Muted, wrap=false)
+let triple_head : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -838,11 +838,11 @@ let triple_who : @ui.Style = @ui.css("row h=Full px=S2_5 gap=S1 align=ACenter ra
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_who_lead : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=false)
+let triple_who_lead : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_who_name : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Fg, wrap=false)
+let triple_who_name : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -864,15 +864,15 @@ let small_quiet : @ui.Style = @ui.css("h=S6 px=S2_5 align=ACenter justify=JCente
 
 ///|
 // kept across runs: a value (no field of it changes)
-let small_primary_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=OnPrimary, wrap=false)
+let small_primary_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=OnPrimary, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let small_quiet_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let small_quiet_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let confirm_line : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted)
+let confirm_line : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -908,11 +908,11 @@ let triple_small_on : @ui.Style = @ui.css("row h=S7 px=S2 gap=S1_5 align=ACenter
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let triple_words_xs : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+pub let triple_words_xs : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let triple_muted_xs : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+pub let triple_muted_xs : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// The control of the pick `of` on `station` with its panel open (a screen's fixture).

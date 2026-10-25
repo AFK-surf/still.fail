@@ -606,7 +606,7 @@ pub let workspace_tile_mark : Double = 26.0
 ///|
 /// A workspace's first letter in its square, where it has no mark: 22 on a line of 22 (Xl3, L7: SettingsHome.kt's
 /// lineHeight, near the account's initial beside it, half its picture), semibold, muted (Rail.css.ts workspaceItem).
-pub let workspace_letter : @ui.TextStyle = @ui.text_style(size=Xl3, leading=L7, weight=Semibold, color=Muted, wrap=false)
+pub let workspace_letter : @ui.TextStyle = @ui.text_style(size=Heading, leading=L7, weight=Semibold, color=Muted, wrap=false)
 
 ///|
 /// A chip whose ground fills from the left (an allowance's, a machine's load, a download's: Parts.kt FILL_CHIP_CORNER):
@@ -804,7 +804,7 @@ let wide_type : Type = {
   input: 14.0,
   input_line: 21.0,
   // (the body's line, the web's --leading-body 22: msgPlain's 1.55 is 21.7, off the scale)
-  words: @ui.text_style(size=Base, leading=L7, color=Fg),
+  words: @ui.text_style(size=Body, leading=L7, color=Fg),
 }
 
 ///|
@@ -896,8 +896,8 @@ let bars_drawn : Bars = { key: 28.0, icon: 14.0, field: 30.0 }
 // kept across runs: a value (no field of it changes)
 let wide_items : Items = {
   least: 44.0,
-  name: @ui.text_style(size=Sm, color=Fg, wrap=false),
-  meta: @ui.text_style(size=Xs, color=Muted, wrap=false),
+  name: @ui.text_style(size=Ui, color=Fg, wrap=false),
+  meta: @ui.text_style(size=Meta, color=Muted, wrap=false),
   mark: 20.0,
 }
 
@@ -905,8 +905,8 @@ let wide_items : Items = {
 // kept across runs: a value (no field of it changes)
 let narrow_items : Items = {
   least: 48.0,
-  name: @ui.text_style(size=Lg, leading=L6, color=Fg, wrap=false),
-  meta: @ui.text_style(size=Xs, leading=L4, color=Muted, wrap=false),
+  name: @ui.text_style(size=Ui, leading=L6, color=Fg, wrap=false),
+  meta: @ui.text_style(size=Meta, leading=L4, color=Muted, wrap=false),
   mark: 22.0,
 }
 
@@ -914,8 +914,8 @@ let narrow_items : Items = {
 let wide_rows : Rows = {
   least: Fixed(40.0),
   pick: menu_row_min,
-  title: @ui.text_style(size=Sm, leading=L6, color=Fg),
-  note: @ui.text_style(size=Xs, leading=L5, color=Muted),
+  title: @ui.text_style(size=Ui, leading=L6, color=Fg),
+  note: @ui.text_style(size=Meta, leading=L5, color=Muted),
   check: 18.0,
   field_w: Fixed(52.0),
   field_h: Fixed(28.0),
@@ -928,8 +928,8 @@ let wide_rows : Rows = {
 let narrow_rows : Rows = {
   least: Fixed(48.0),
   pick: narrow_control_h,
-  title: @ui.text_style(size=Lg, color=Fg),
-  note: @ui.text_style(size=Sm, leading=L5, color=Muted),
+  title: @ui.text_style(size=Body, color=Fg),
+  note: @ui.text_style(size=Ui, leading=L5, color=Muted),
   check: 22.0,
   field_w: Fixed(72.0),
   field_h: Fixed(36.0),
@@ -1186,7 +1186,7 @@ fn text_roles(t : Type) -> @ui.TextScale {
     body: (t.body, t.body_line),
     title: (t.title, t.title_line),
     heading: (t.heading, t.heading_line),
-    display: (t.display, t.heading_line),
+    display: (t.display, text_scale.display.1),
   }
 }
 

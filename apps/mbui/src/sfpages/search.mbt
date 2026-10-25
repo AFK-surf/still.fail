@@ -232,7 +232,7 @@ let search_grow : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let search_cancel : @ui.TextStyle = @ui.text_style(size=Xl, color=Link, wrap=false)
+let search_cancel : @ui.TextStyle = @ui.text_style(size=Title, color=Link, wrap=false)
 
 ///|
 /// What the words find, under the field: its lines where its list's are (@sf.list_line), the rest of its height.

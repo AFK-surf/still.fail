@@ -131,7 +131,7 @@ let narrow_note_inline : @ui.TextStyle = @sf.secondary.then(@sf.one_line)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_hint_inline : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let desk_hint_inline : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

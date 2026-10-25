@@ -272,7 +272,7 @@ let vi_mark_glyph : Double = 24.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vi_risk_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Warn, w=Full)
+let vi_risk_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Warn, w=Full)
 
 ///|
 /// Its fields (fields: 14 apart; a field its name over its line, 4 apart).
@@ -285,7 +285,7 @@ let vi_secret : @ui.Style = @ui.css("w=Full gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vi_label : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, color=Muted, w=Full)
+let vi_label : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -293,11 +293,11 @@ let vi_secret_line : @ui.Style = @ui.css("row w=Full gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vi_value : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, wrap=false, w=@sf.grow, max_lines=1)
+let vi_value : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, wrap=false, w=@sf.grow, max_lines=1)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vi_value_lines : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, w=@sf.grow)
+let vi_value_lines : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=@sf.grow)
 
 ///|
 /// How agents may use it (facts: its terms in a column, 4 by 14 apart).
@@ -314,11 +314,11 @@ let vi_term_room : @ui.Style = @ui.css("w=S24")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vi_term : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let vi_term : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vi_fact_value : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, w=@sf.grow)
+let vi_fact_value : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=@sf.grow)
 
 ///|
 /// Its uses (uses: 14 apart; a use its chat and how, its time at its end).
@@ -335,12 +335,12 @@ let vi_use_text : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vi_chat : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, wrap=false)
+let vi_chat : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vi_chat_lit : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=AccentText, wrap=false)
+let vi_chat_lit : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=AccentText, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vi_use_time : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let vi_use_time : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)

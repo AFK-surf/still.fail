@@ -1125,7 +1125,7 @@ let steps_foot : @ui.Style = @ui.css("w=Full h=S10")
 ///|
 /// Its top (historyEdge): 4 over and under, 12 muted, in the middle; on their way, a spinner before the words.
 // kept across runs: a value (no field of it changes)
-let steps_edge : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full, center=true)
+let steps_edge : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full, center=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1165,7 +1165,7 @@ let h_turn : @ui.Style = @ui.css("row w=Full pt=S2 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_turn_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, wrap=false)
+let h_turn_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1236,11 +1236,11 @@ let h_label : @ui.Style = @ui.css("row w=Full min_h=S5 gap=S1_5 align=ACenter cl
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_label_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let h_label_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_strong : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Semibold, color=Fg, wrap=false)
+let h_strong : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1257,16 +1257,16 @@ let h_place_hot : @ui.Style = h_place.then(@ui.css("bg=Hover"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_place_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Semibold, color=Fg, wrap=false)
+let h_place_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// A person's words (hWords: 13, the ink); a job's (hOutput: 11 mono on 1.55).
 // kept across runs: a value (no field of it changes)
-let h_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Fg, w=Full)
+let h_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_output : @ui.TextStyle = @ui.text_style(size=Xs2, color=Fg, w=Full)
+let h_output : @ui.TextStyle = @ui.text_style(size=Caption, color=Fg, w=Full)
 
 ///|
 /// A message it sent (hCard): 4 under its line, 8 by 12 in, a line round it, round as a field, on the paper; red when it
@@ -1297,11 +1297,11 @@ let h_fold_toggle : @ui.Style = @ui.css("row py=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_toggle_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let h_toggle_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_toggle_hot : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let h_toggle_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 /// An event in one line (hOne): 20 high, 12 muted (the ink pointed at, red when it failed), 6 apart; 收起 at its end;
@@ -1311,19 +1311,19 @@ let h_one : @ui.Style = @ui.css("row w=Full min_h=S5 gap=S1_5 align=ACenter clip
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_one_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false, w=Cut)
+let h_one_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_one_hot : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Fg, wrap=false, w=Cut)
+let h_one_hot : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_one_red : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Danger, wrap=false, w=Cut)
+let h_one_red : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Danger, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_one_fold : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let h_one_fold : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1331,7 +1331,7 @@ let h_one_body : @ui.Style = @ui.css("w=Full pt=S0_5 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_note_plain : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let h_note_plain : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 /// What kind of words a one-line event's are (hTag): 5 in, round 4, on the neutral ground, 11.
@@ -1340,7 +1340,7 @@ let h_tag : @ui.Style = @ui.css("row px=S1_25 radius=Base bg=Neutral")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_tag_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, wrap=false)
+let h_tag_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1357,7 +1357,7 @@ let h_state_line : @ui.Style = @ui.css("row w=Full min_h=S5 gap=S1_5 align=ACent
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_state_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let h_state_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// How much of the most it waits has gone (hWaitBar): a 3 bar under the words, its fill in the blue.
@@ -1380,11 +1380,11 @@ let h_group_head : @ui.Style = @ui.css("row w=Full px=S1_5 gap=S2 align=ACenter 
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_group_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false, w=Cut)
+let h_group_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_group_hot : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Fg, wrap=false, w=Cut)
+let h_group_hot : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, wrap=false, w=Cut)
 
 ///|
 /// Its calls, opened (hSteps): in its words' column (past the 20 gutter and 8), 2 apart, 2 under its line.
@@ -1402,27 +1402,27 @@ let h_step_summary : @ui.Style = @ui.css("row w=Full py=S1_25 px=S1_5 gap=S2 ali
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_step_name : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, color=Fg, wrap=false)
+let h_step_name : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_step_name_red : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, color=Danger, wrap=false)
+let h_step_name_red : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Danger, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_step_hint : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, max_lines=1, w=Full)
+let h_step_hint : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, max_lines=1, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_step_said : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false, w=Cut)
+let h_step_said : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_step_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=false)
+let h_step_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_step_meta_red : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=false)
+let h_step_meta_red : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
 /// A step's or thought's words (hStepBody: 4 by 6 in, 8 under, 12); a thought alone (hThinking: 2 over, 6 under and at
@@ -1436,25 +1436,25 @@ let h_thinking : @ui.Style = @ui.css("w=Full pt=S0_5 pb=S1_5 pl=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_thinking_muted : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let h_thinking_muted : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 /// The thinking streaming in (hLiveThinking): 12 on 20, muted, a line.
 // kept across runs: a value (no field of it changes)
-let live_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false, w=Cut)
+let live_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Cut)
 
 ///|
 /// Where the turn stands (hPhase: 12, muted; responding in the ink), its clock subtle.
 // kept across runs: a value (no field of it changes)
-let h_phase_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let h_phase_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_phase_now : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let h_phase_now : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_phase_time : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=false)
+let h_phase_time : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
 /// A call opened (ToolStep.css.ts body): 4 by 6 in, 10 under, the call and what came back 8 apart; each a section, its
@@ -1482,15 +1482,15 @@ let tool_box_red : @ui.Style = tool_box.then(@ui.css("bg=DangerBg"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_mono : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, w=Full)
+let tool_mono : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_mono_muted : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let tool_mono_muted : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_mono_head : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Link, w=Full)
+let tool_mono_head : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Link, w=Full)
 
 ///|
 /// The facts (facts): 4 by 10 apart, 11 subtle, a fact's value in mono, muted.
@@ -1499,7 +1499,7 @@ let tool_facts : @ui.Style = @ui.css("row w=Full px=S0_5 gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_fact : @ui.TextStyle = @ui.text_style(size=Xs2, color=Subtle, wrap=false)
+let tool_fact : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, wrap=false)
 
 ///|
 /// A path (path): 2 in, 12 mono on 1.5, the ink; what of it after, 11 subtle.
@@ -1508,11 +1508,11 @@ let tool_path : @ui.Style = @ui.css("row w=Full px=S0_5 gap=S2 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_path_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, w=@sf.grow)
+let tool_path_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_path_extra : @ui.TextStyle = @ui.text_style(size=Xs2, color=Subtle, wrap=false)
+let tool_path_extra : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, wrap=false)
 
 ///|
 /// A diff (diff: the box, 6 over and under, no sides; a line 22 in at its start, 12 at its end; taken out on the red's
@@ -1553,15 +1553,15 @@ let tool_plan_mark : @ui.Style = @ui.css("w=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_plan_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, w=@sf.grow)
+let tool_plan_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_plan_done : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=@sf.grow)
+let tool_plan_done : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_plan_now : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, color=Fg, w=@sf.grow)
+let tool_plan_now : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Fg, w=@sf.grow)
 
 ///|
 /// Fields (fields): 4 apart, 2 in; a key in a column 64 wide at least (11 subtle), its value 12 apart (12 mono), long
@@ -1579,15 +1579,15 @@ let tool_field_key : @ui.Style = @ui.css("min_w=S16")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_key_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=Subtle, wrap=false)
+let tool_key_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_value : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, w=Full)
+let tool_value : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_long_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, w=Full)
+let tool_long_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, w=Full)
 
 ///|
 /// The one thing it asked about (lead): 2 in, 12 mono on 1.5; nothing (none): 11 subtle.
@@ -1596,8 +1596,8 @@ let tool_lead : @ui.Style = @ui.css("w=Full px=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_lead_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, w=Full)
+let tool_lead_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_none : @ui.TextStyle = @ui.text_style(size=Xs2, color=Subtle, w=Full)
+let tool_none : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, w=Full)

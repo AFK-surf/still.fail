@@ -374,11 +374,11 @@ let card_slot : @ui.Style = @ui.style(w=Fixed(card_button_side), h=Fixed(card_bu
 
 ///|
 // kept across runs: a value (no field of it changes)
-let card_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, leading=L6, wrap=false)
+let card_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, leading=L6, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let card_meta : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, leading=L4, wrap=false)
+let card_meta : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, leading=L4, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -588,7 +588,7 @@ let quote_mark : @ui.Style = @ui.css("h=S4_5 justify=JCenter")
 ///|
 /// quoteCardText: 12 on 18 (1.5), two lines at most, muted; the text's ink under the pointer when it leads somewhere.
 // kept across runs: a value (no field of it changes)
-let quote_text : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, max_lines=2)
+let quote_text : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, max_lines=2)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -602,7 +602,7 @@ let quote_pin : @ui.Style = @ui.css("h=S4 min_w=S4 px=S1 radius=Full bg=Accent a
 
 ///|
 // kept across runs: a value (no field of it changes)
-let quote_pin_words : @ui.TextStyle = @ui.text_style(size=Xs3, weight=Semibold, color=OnAccent, wrap=false)
+let quote_pin_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=OnAccent, wrap=false)
 
 ///|
 /// quoteCardPicture: 6 over it, 11 in (in the composer 16).
@@ -624,7 +624,7 @@ let quote_comment_composer : @ui.Style = @ui.style(w=Full, px=S4, pt=room(quote_
 
 ///|
 // kept across runs: a value (no field of it changes)
-let quote_said : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg)
+let quote_said : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg)
 
 ///|
 /// Its ✕ at its top right corner, as far in as makes it concentric with it (a circle: capsule_in).

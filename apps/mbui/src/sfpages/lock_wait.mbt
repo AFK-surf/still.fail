@@ -99,11 +99,11 @@ let lock_note : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let lock_note_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, center=true)
+let lock_note_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let lock_failed : @ui.TextStyle = @ui.text_style(size=Xs, leading=L6, color=Danger, center=true)
+let lock_failed : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Danger, center=true)
 
 ///|
 let lock_spin : Double = 12.0

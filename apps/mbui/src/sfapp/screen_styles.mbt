@@ -69,7 +69,7 @@ let screen_bar_words : @ui.Style = @ui.css("w=Full")
 /// The title (15 on 20, semibold), the line under it (12 on 16, muted); one line each.
 // kept across runs: a value (no field of it changes)
 let screen_title_words : @ui.TextStyle = @ui.text_style(
-  size=Lg,
+  size=Ui,
   leading=L6,
   weight=Semibold,
   color=Fg,
@@ -78,7 +78,7 @@ let screen_title_words : @ui.TextStyle = @ui.text_style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let screen_line_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, color=Muted, wrap=false)
+let screen_line_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Muted, wrap=false)
 
 ///|
 /// 只看 / 控制 (Parts.kt Seg at 32 high, its corner 16, 2 in): a track of the ink at 6%, the chosen one on a light
@@ -98,11 +98,11 @@ let seg_thumb : @ui.Style = @ui.css("radius=Inner bg=Lifted border=B0_5 border_c
 
 ///|
 // kept across runs: a value (no field of it changes)
-let seg_on_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false)
+let seg_on_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let seg_off_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+let seg_off_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// 全屏's tools: a capsule floating still, a round button 4 in from its edge, 4 between.
@@ -132,7 +132,7 @@ let rail_badge : @ui.Style = @ui.css("min_w=S3_5 h=S3_5 radius=Full bg=Fg align=
 ///|
 // kept across runs: a value (no field of it changes)
 let rail_badge_words : @ui.TextStyle = @ui.text_style(
-  size=Xs3,
+  size=Caption,
   weight=Semibold,
   color=Bg,
   center=true,
@@ -157,7 +157,7 @@ let rail_say_box : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rail_say_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Fg, max_lines=2)
+let rail_say_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, max_lines=2)
 
 // ── the foot and the keys row ─────────────────────────────────────────────
 
@@ -184,7 +184,7 @@ let key_icon : Double = 18.0
 ///|
 // kept across runs: a value (no field of it changes)
 let row_key_words : @ui.TextStyle = @ui.text_style(
-  size=Base,
+  size=Ui,
   leading=L4_75,
   weight=Semibold,
   color=Fg,
@@ -237,7 +237,7 @@ let take_over_words_box : @ui.Style = @ui.css("w=Cut")
 ///|
 // kept across runs: a value (no field of it changes)
 let take_over_words : @ui.TextStyle = @ui.text_style(
-  size=Base,
+  size=Ui,
   leading=L4_75,
   weight=Semibold,
   color=Fg,
@@ -253,7 +253,7 @@ let take_over_button : @ui.Style = @ui.css("h=S8 px=S3_5 radius=Full bg=Fg align
 ///|
 // kept across runs: a value (no field of it changes)
 let take_over_button_words : @ui.TextStyle = @ui.text_style(
-  size=Base,
+  size=Ui,
   leading=L4_75,
   weight=Semibold,
   color=Bg,
@@ -303,7 +303,7 @@ let undriven_icon : Double = 16.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let undriven_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Muted, max_lines=3)
+let undriven_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, max_lines=3)
 
 ///|
 /// On its way (Waiting.kt WaitPill floating over the frame): 24 round it, the capsule floating still with no ground of
@@ -322,7 +322,7 @@ let wait_spinner : Double = 12.0
 ///|
 // kept across runs: a value (no field of it changes)
 let wait_pill_words : @ui.TextStyle = @ui.text_style(
-  size=Sm,
+  size=Meta,
   leading=L5,
   color=Fg,
   center=true,
@@ -337,7 +337,7 @@ let ended_box : @ui.Style = @ui.style(p=S6, max_w=@sf.ended_max, gap=S1, align=A
 ///|
 // kept across runs: a value (no field of it changes)
 let ended_title : @ui.TextStyle = @ui.text_style(
-  size=Xl,
+  size=Title,
   leading=L7,
   weight=Semibold,
   color=OnVeil,
@@ -346,7 +346,7 @@ let ended_title : @ui.TextStyle = @ui.text_style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ended_why : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=A(OnVeil, O70), center=true)
+let ended_why : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=A(OnVeil, O70), center=true)
 
 ///|
 /// 重新打开 (Controls.kt Button at 34 high, 16 in, 12 more under the words): the ink with the page's colour on it in
@@ -367,11 +367,11 @@ let again_soft : @ui.Style = again_solid.then(@ui.css("bg=Neutral"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let again_solid_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Bg, wrap=false)
+let again_solid_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Bg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let again_soft_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, wrap=false)
+let again_soft_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, wrap=false)
 
 // ── the files sent ────────────────────────────────────────────────────────
 
@@ -398,19 +398,19 @@ let drop_words : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let drop_name : @ui.TextStyle = @ui.text_style(size=Lg, leading=L6, weight=Semibold, color=Fg, wrap=false)
+let drop_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let drop_path_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, color=Muted, max_lines=2)
+let drop_path_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Muted, max_lines=2)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let drop_failed_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, color=Danger, max_lines=3)
+let drop_failed_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Danger, max_lines=3)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let drop_going_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, color=Muted, wrap=false)
+let drop_going_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -464,7 +464,7 @@ let soft_button_box : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let soft_button_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, wrap=false)
+let soft_button_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, wrap=false)
 
 // ── how the view goes (screen_panel.mbt) ─────────────────────────────────
 
@@ -477,7 +477,7 @@ let screen_line_row : @ui.Style = @ui.css("row w=Full h=S4 gap=S1_5 align=ACente
 /// How long it has been seen (12 on 16, muted, its figures as wide as each other).
 // kept across runs: a value (no field of it changes)
 let screen_time_words : @ui.TextStyle = @ui.text_style(
-  size=Xs,
+  size=Caption,
   leading=L4,
   color=Muted,
   wrap=false,
@@ -517,7 +517,7 @@ let net_head_box : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let net_head_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, wrap=false, tabular=true)
+let net_head_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, wrap=false, tabular=true)
 
 ///|
 /// A group of its figures: a hairline over it (the ink at 10%), 10 under that, a row each 4 apart.
@@ -546,11 +546,11 @@ let net_row_name : @ui.Style = @ui.style(w=Fixed(net_name_w))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let net_name_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+let net_name_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let net_value_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, tabular=true)
+let net_value_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, tabular=true)
 
 // ── 控制中心 (screen_panel.mbt) ───────────────────────────────────────────
 
@@ -581,4 +581,4 @@ let tile_gap : @ui.Style = @ui.style(w=@sf.grow).then(@ui.css("h=S16"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tile_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let tile_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Fg, wrap=false)

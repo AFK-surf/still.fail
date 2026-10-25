@@ -228,11 +228,11 @@ let side_tab_mark : @ui.Style = @ui.css("w=S3_5 h=S3_5 align=ACenter justify=JCe
 ///|
 /// Its label: muted, 13; the one in front in the words' colour and 500.
 // kept across runs: a value (no field of it changes)
-pub let side_tab_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+pub let side_tab_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let side_tab_front : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false)
+pub let side_tab_front : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 ///|
 /// Its close (sideTabClose): 20 round, concentric in the tab's end, the line's ground on it.
@@ -662,7 +662,7 @@ let side_title_row : @ui.Style = @ui.style(w=@sf.grow).then(@ui.css("row pl=S4 g
 ///|
 /// The title's words: as the page's bar's title (chat_title_words).
 // kept across runs: a value (no field of it changes)
-let side_title_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, leading=L6, wrap=false, w=Cut)
+let side_title_words : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, color=Fg, leading=L6, wrap=false, w=Cut)
 
 ///|
 /// An icon button of a page's bar (page.css.ts iconBtn): 32 square, the nav's corner, the pointer's ground and ink

@@ -654,7 +654,7 @@ let rs_page : @ui.Style = @ui.css("w=Full gap=S3_5")
 ///|
 /// Nothing to see (empty): in the middle, 28 over and under.
 // kept across runs: a value (no field of it changes)
-let rs_empty : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Muted, center=true, w=Full)
+let rs_empty : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, center=true, w=Full)
 
 ///|
 /// The totals (tiles): in pairs on a line, 8 apart along it and between the lines.
@@ -679,17 +679,17 @@ let rs_tile_head : @ui.Style = @ui.css("row w=Full gap=S2 justify=JBetween")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rs_tile_label : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let rs_tile_label : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// (tileSub: subtle, cut at its end)
 // kept across runs: a value (no field of it changes)
-let rs_tile_sub : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=false, w=Cut)
+let rs_tile_sub : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false, w=Cut)
 
 ///|
 /// Its figure (tileValue: the title's 16, 600).
 // kept across runs: a value (no field of it changes)
-let rs_tile_value : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Fg, wrap=false)
+let rs_tile_value : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// The line's room (spark: as wide as the tile, 26 high, 2 under the figure).
@@ -815,7 +815,7 @@ let rs_title_box : @ui.Style = @ui.css("w=Cut")
 ///|
 /// A head (head: the meta's 12, 500, muted).
 // kept across runs: a value (no field of it changes)
-let rs_head : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Muted, wrap=false)
+let rs_head : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Muted, wrap=false)
 
 ///|
 /// The column sorted by, and one under the pointer (sorted).
@@ -825,31 +825,31 @@ let rs_head_on : @ui.TextStyle = rs_head.then(@ui.text_style(color=Fg))
 ///|
 /// A group's name (nameText: 500, cut at its end).
 // kept across runs: a value (no field of it changes)
-let rs_name_text : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false, w=Cut)
+let rs_name_text : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rs_cell_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, w=Cut)
+let rs_cell_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Cut)
 
 ///|
 /// A process under its group (process: muted).
 // kept across runs: a value (no field of it changes)
-let rs_process_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false, w=Cut)
+let rs_process_name : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
 
 ///|
 /// Whose (whose: muted, cut at its end).
 // kept across runs: a value (no field of it changes)
-let rs_whose : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false, w=Cut)
+let rs_whose : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
 
 ///|
 /// What it is, its pid (meta: subtle, the meta's 12).
 // kept across runs: a value (no field of it changes)
-let rs_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=false)
+let rs_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
 /// A figure (number: tabular, on one line).
 // kept across runs: a value (no field of it changes)
-let rs_figure : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, tabular=true)
+let rs_figure : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false, tabular=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -871,7 +871,7 @@ let rs_foot_box : @ui.Style = @ui.css("w=Full gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rs_foot_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, w=Full)
+let rs_foot_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, w=Full)
 
 ///|
 /// The line (uses: 14 apart, muted, the text's under the pointer).
@@ -880,7 +880,7 @@ let rs_uses : @ui.Style = @ui.css("row w=Full gap=S3_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rs_uses_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false, tabular=true)
+let rs_uses_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, tabular=true)
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -349,7 +349,7 @@ let fpane_rule_below : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fpane_none : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full, center=true)
+let fpane_none : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full, center=true)
 
 ///|
 /// What it shows (body: the field's corner, on the neutral ground), a picture centred in it, 120 high at least.
@@ -376,7 +376,7 @@ let fpane_code : @ui.Style = @ui.css("w=Full px=S3 py=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fpane_code_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=Fg, w=Full, leading=L4)
+let fpane_code_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Fg, w=Full, leading=L4)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -384,7 +384,7 @@ let fpane_prose : @ui.Style = @ui.css("w=Full px=S3 py=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fpane_more : @ui.TextStyle = @ui.text_style(size=Xs2, color=Subtle, w=Full)
+let fpane_more : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, w=Full)
 
 ///|
 /// A kind's mark and how to open it, 10 apart, 180 high at least.
@@ -393,7 +393,7 @@ let fpane_mark : @ui.Style = @ui.style(w=Full, min_h=Fixed(fpane_mark_least), ga
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fpane_mark_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let fpane_mark_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// What the file is (about: 8 between), its name (the ui's words, bold).
@@ -402,7 +402,7 @@ let fpane_about : @ui.Style = @ui.css("w=Full gap=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fpane_name : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Fg, w=Full)
+let fpane_name : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, w=Full)
 
 ///|
 /// Its facts (facts: two columns, 4 by 12 between).
@@ -419,16 +419,16 @@ let fpane_values_column : @ui.Style = @ui.style(w=@sf.grow, gap=S1, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fpane_fact_said : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let fpane_fact_said : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fpane_fact_value : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let fpane_fact_value : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 /// Its path, in the code's letters, on one line (cut where it does not fit).
 // kept across runs: a value (no field of it changes)
-let fpane_path : @ui.TextStyle = @ui.text_style(size=Xs2, color=Fg, wrap=false, max_lines=1, leading=L4)
+let fpane_path : @ui.TextStyle = @ui.text_style(size=Caption, color=Fg, wrap=false, max_lines=1, leading=L4)
 
 ///|
 /// 打开, 下载, 复制路径 (actions: 6 apart, wrapped).

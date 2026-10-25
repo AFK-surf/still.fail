@@ -196,7 +196,7 @@ fn ask_dismiss(
       // (6 under the options)
       c.box(pt=6.0, fn() {
         c.box(id=if shown { id } else { 0 }, fn() {
-          c.rich([@ui.span(tr("android-chat.asks.dismiss"))], size=12.0, color=t.p.muted, line=18.0) |> ignore
+          c.rich([@ui.span(tr("android-chat.asks.dismiss"))], size=t.t.caption, color=t.p.muted, line=18.0) |> ignore
         })
         |> ignore
       })
@@ -349,7 +349,7 @@ let sheet_detents : Array[Double] = [0.55, @sf.sheet_most]
 fn sheet_head(c : @ui.Ctx, title : String) -> Unit {
   let t = @sf.theme()
   c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, pb=10.0, align=ACenter, fn() {
-    c.text(title, size=17.0, weight=700, color=t.p.text, wrap=false) |> ignore
+    c.text(title, size=t.t.title, weight=700, color=t.p.text, wrap=false) |> ignore
   })
   |> ignore
 }

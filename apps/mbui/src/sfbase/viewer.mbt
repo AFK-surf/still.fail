@@ -1532,7 +1532,7 @@ pub fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
           Some(e) => {
             tap_stage(c, v, stage)
             v.note(c, fn() {
-              c.text(pv_fill("android-chat.file.loadFailed", [("error", e)]), size=15.0, color=@sf.theme().p.muted)
+              c.text(pv_fill("android-chat.file.loadFailed", [("error", e)]), size=@sf.theme().t.body, color=@sf.theme().p.muted)
               |> ignore
             })
           }
@@ -1579,7 +1579,7 @@ pub let reading_pill_box : @ui.Style = @ui.css("row px=S3 py=S1_5 gap=S2 align=A
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let reading_pill_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, leading=L5, wrap=false)
+pub let reading_pill_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L5, wrap=false)
 
 ///|
 pub let reading_spinner : Double = 12.0
@@ -1633,7 +1633,7 @@ pub let file_progress_card : @ui.Style = @ui.style(w=@sf.file_progress_w, px=S3_
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let file_progress_words : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, center=true)
+pub let file_progress_words : @ui.TextStyle = @ui.text_style(size=Body, color=Muted, center=true)
 
 ///|
 pub let file_progress_corner : Double = 14.0
@@ -1836,7 +1836,7 @@ pub fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int
   if v.image != "" && @ui.image_state(v.image) == -1 {
     tap_stage(c, v, stage)
     v.note(c, fn() {
-      c.text(pv("android-chat.file.image.failed"), size=15.0, color=dark_muted) |> ignore
+      c.text(pv("android-chat.file.image.failed"), size=@sf.theme().t.body, color=dark_muted) |> ignore
     })
     return
   }
@@ -2592,7 +2592,7 @@ pub fn Viewer::pdf_stage(self : Viewer, c : @ui.Ctx, b : Bytes, stage : Int) -> 
       c.text(
         pv_fill("android-chat.file.pdf.failed", [("error", if @ui.platform() == 3 || @ui.platform() == 4 {
  @sf.t("android-chat.preview.noPdf") } else { "" })]),
-        size=15.0,
+        size=t.t.body,
         color=t.p.muted,
         center=true,
       )
@@ -2672,7 +2672,7 @@ pub fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, s
         c.native(page) |> ignore
       } else if !page.here() {
         v.note(c, fn() {
-          c.text(pv("android-chat.file.cantPreview"), size=15.0, color=t.p.muted) |> ignore
+          c.text(pv("android-chat.file.cantPreview"), size=t.t.body, color=t.p.muted) |> ignore
         })
       }
     })
@@ -2809,7 +2809,7 @@ pub fn runs_by_line(runs : Array[@ui.Run]) -> Array[Array[@ui.Run]] {
 pub fn cut_line(c : @ui.Ctx, words : String) -> Unit {
   let warn = 0xD9962BFFL
   c.box(w=Fill(1.0), pl=20.0, pr=20.0, pt=8.0, pb=8.0, bg=@sf.alpha(warn, 0.14), fn() {
-    c.text(words, size=13.0, color=warn) |> ignore
+    c.text(words, size=@sf.theme().t.meta, color=warn) |> ignore
   })
   |> ignore
 }

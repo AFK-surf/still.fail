@@ -87,7 +87,7 @@ fn history_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : In
       t.p.bg,
     )
     c.box(w=Fill(1.0), fn() {
-      c.text(text(s, "agentText"), size=16.0, weight=700, color=t.p.text, wrap=false) |> ignore
+      c.text(text(s, "agentText"), size=t.t.title, weight=700, color=t.p.text, wrap=false) |> ignore
     })
     |> ignore
     history_actions(c, src, r, a)
@@ -203,7 +203,7 @@ fn history_summary(c : @ui.Ctx, a : Json?) -> Unit {
         _ =>
           c.text(
             text(nv, "text"),
-            size=12.0,
+            size=t.t.caption,
             color=if text(nv, "kind") == "disk" { 0xD9962BFFL } else { t.p.red },
             wrap=false,
           )
@@ -235,9 +235,9 @@ fn history_details(c : @ui.Ctx, src : Source, r : ChatRef, key : String, a : Jso
   let host = (src.topic)("host", { "station": Json::string(r.station) }).value
   let detail = fn(label : String, value : String) {
     c.box(dir=Row, w=Fill(1.0), gap=16.0, fn() {
-      c.box(w=Px(76.0), fn() { c.text(label, size=14.0, color=t.p.muted, wrap=false) |> ignore })
+      c.box(w=Px(76.0), fn() { c.text(label, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore })
       |> ignore
-      c.box(w=Fill(1.0), fn() { c.text(value, size=14.0, color=t.p.text) |> ignore }) |> ignore
+      c.box(w=Fill(1.0), fn() { c.text(value, size=t.t.ui, color=t.p.text) |> ignore }) |> ignore
     })
     |> ignore
   }
@@ -346,9 +346,9 @@ fn run_row(c : @ui.Ctx, a : Json?) -> Bool {
       id~,
       fn() {
         @sf.maker_mark(c, text(field(s, "maker"), "id"), text(s, "runtime"), 15.0) |> ignore
-        c.text(model, size=14.0, color=t.p.text, wrap=false) |> ignore
+        c.text(model, size=t.t.ui, color=t.p.text, wrap=false) |> ignore
         c.box(w=Fill(1.0), fn() {
-          c.text(" · " + effort + " · " + account, size=14.0, color=t.p.muted, wrap=false) |> ignore
+          c.text(" · " + effort + " · " + account, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
         })
         |> ignore
         @settings.quota_chips(c, field(field(a, "account"), "quota"))
@@ -375,7 +375,7 @@ fn words_page(c : @ui.Ctx, src : Source, head : String, words : String) -> Unit 
       c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=if i == 1 { 30.0 } else { 12.0 }, fn() {
         if i == 0 {
           if head != "" {
-            c.text(head, size=13.0, color=t.p.muted) |> ignore
+            c.text(head, size=t.t.meta, color=t.p.muted) |> ignore
           }
         } else {
           @sf.markdown(c, words) |> ignore

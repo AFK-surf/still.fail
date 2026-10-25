@@ -913,11 +913,11 @@ let st_grant_glyph : Double = 18.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let st_mark_letter : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Muted, wrap=false)
+let st_mark_letter : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let st_fact : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let st_fact : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
 
 ///|
 /// Between the facts' lines (workspaceFacts: 4).
@@ -935,11 +935,11 @@ let st_parts : @ui.Style = @ui.css("row w=Full")
 ///|
 /// A section's count beside its title (titleCount: 8 after it, 500, subtle).
 // kept across runs: a value (no field of it changes)
-let st_count : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, weight=Medium, color=Subtle, wrap=false)
+let st_count : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7, weight=Medium, color=Subtle, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let st_memory : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, w=Full)
+let st_memory : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -973,7 +973,7 @@ let st_editor : @ui.Style = @ui.css("w=Full gap=S3")
 ///|
 /// A line of the variables the core cannot take (the meta's 12, muted; red where it is an error).
 // kept across runs: a value (no field of it changes)
-let st_problem : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=Full)
+let st_problem : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)

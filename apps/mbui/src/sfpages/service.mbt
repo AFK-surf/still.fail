@@ -24,7 +24,7 @@ pub fn service_note(c : @ui.Ctx, words : String) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let note_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, center=true, w=Full)
+let note_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true, w=Full)
 
 ///|
 /// The service's view in the box it is given (Preview.kt ServicePage, ServiceFrame): its bar, the stage. `file`: a visualization's page, served from here.
@@ -164,7 +164,7 @@ fn service_page_bar(
           c.box(style=file_name_box, fn() { c.text(name, style=file_name_words) |> ignore }) |> ignore
           return
         }
-        c.text(name, size=13.0, weight=500, color=t.p.text, wrap=false) |> ignore
+        c.text(name, size=t.t.meta, weight=500, color=t.p.text, wrap=false) |> ignore
         // where it went is what the bar says, unless someone is typing there
         if !editing && at != p.shown_path {
           p.shown_path = at
@@ -239,7 +239,7 @@ let size_key_moving : @ui.Style = size_key_sized.then(@ui.style(bg=@sf.mark_key_
 
 ///|
 // kept across runs: a value (no field of it changes)
-let size_key_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let size_key_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -534,11 +534,11 @@ let service_restart_words : @ui.Style = @ui.css("gap=SPx")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let service_restart_title : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Fg, wrap=false)
+let service_restart_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let service_restart_note : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let service_restart_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// The preset a size is (either way round), if it is one.
@@ -699,7 +699,7 @@ let custom_field : @ui.Style = @ui.style(radius=@sf.custom_field_r, bg=Faint, px
 
 ///|
 // kept across runs: a value (no field of it changes)
-let custom_by : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=false)
+let custom_by : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -833,7 +833,7 @@ fn load_list(c : @ui.Ctx, src : Source, station : String, port : Int) -> Unit {
     let ended = field(rr, "ended") is Some(Number(_, ..))
     c.box(w=Fill(1.0), pt=6.0, pb=6.0, fn() {
       c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, fn() {
-        c.box(w=Fill(1.0), fn() { c.text(text(rr, "path"), size=13.0, color~, max_lines=1) |> ignore }) |> ignore
+        c.box(w=Fill(1.0), fn() { c.text(text(rr, "path"), size=@sf.theme().t.meta, color~, max_lines=1) |> ignore }) |> ignore
         c.text(
           if !ended {
             svc("common.reading")
@@ -842,19 +842,19 @@ fn load_list(c : @ui.Ctx, src : Source, station : String, port : Int) -> Unit {
           } else {
             number(rr, "status").to_int().to_string()
           },
-          size=12.0,
+          size=@sf.theme().t.caption,
           color~,
           wrap=false,
         )
         |> ignore
         if ended {
           let ms = dmax(0.0, number(rr, "ended") - number(rr, "since")).to_int64()
-          c.text("\{ms} ms", size=12.0, color~, wrap=false) |> ignore
+          c.text("\{ms} ms", size=@sf.theme().t.caption, color~, wrap=false) |> ignore
         }
       })
       |> ignore
       if text(rr, "error") != "" {
-        c.text(text(rr, "error"), size=12.0, color~) |> ignore
+        c.text(text(rr, "error"), size=@sf.theme().t.caption, color~) |> ignore
       }
     })
     |> ignore
@@ -865,10 +865,10 @@ fn load_list(c : @ui.Ctx, src : Source, station : String, port : Int) -> Unit {
     }
   }
   c.box(w=Fill(1.0), padx=20.0, fn() {
-    c.text(svc("android-chat.load.note"), size=12.0, color=t.p.muted) |> ignore
+    c.text(svc("android-chat.load.note"), size=t.t.caption, color=t.p.muted) |> ignore
     c.box(w=Fill(1.0), pt=12.0, fn() {
       if number(v, "total") <= 0.0 {
-        c.text(svc("android-chat.load.waiting"), size=13.0, color=t.p.muted) |> ignore
+        c.text(svc("android-chat.load.waiting"), size=t.t.meta, color=t.p.muted) |> ignore
       }
       c.capped("service/load", dmin(load_list_most, load_list_share * c.window_size().1), rows) |> ignore
     })
@@ -911,7 +911,7 @@ let file_name_box : @ui.Style = @ui.css("w=Full clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let file_name_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false)
+let file_name_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 
 

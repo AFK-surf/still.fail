@@ -406,15 +406,15 @@ let tab_split : @ui.Style = @ui.css("w=SPx h=S2_5 bg=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tab_folder : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let tab_folder : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tab_folder_on : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Fg, wrap=false)
+let tab_folder_on : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tab_station : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=false)
+let tab_station : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
 /// A station's colour on the tabs: one of six, by its place among the workspace's (dot: 7 across).
@@ -465,4 +465,4 @@ let missing_box : @ui.Style = @ui.css("w=Full px=S10 pt=S3 pb=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let missing_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let missing_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)

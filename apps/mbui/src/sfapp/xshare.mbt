@@ -5,7 +5,7 @@
 ///|
 /// The row's name (14, the ink, whole on one line).
 // kept across runs: a value (no field of it changes)
-let xshare_name : @ui.TextStyle = @ui.text_style(size=Base, color=Fg, wrap=false)
+let xshare_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
 
 ///|
 /// Where it is shared, at the row's end (13, muted, cut short rather than wrapped).

@@ -44,12 +44,12 @@ let news_head : @ui.Style = @ui.css("row pb=S0_5 gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let news_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, wrap=false)
+let news_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// A change (13 on 18, muted, one line).
 // kept across runs: a value (no field of it changes)
-let news_line : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, leading=L5, wrap=false, w=Full)
+let news_line : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L5, wrap=false, w=Full)
 
 ///|
 /// Its ×: 32, round, 6 from the card's top and right.

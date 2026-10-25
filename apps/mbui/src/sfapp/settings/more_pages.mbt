@@ -192,13 +192,13 @@ fn decision_panel(c : @ui.Ctx, core : Core, station : String, name : String, vie
         Some(Object(_)) as policy =>
           if list_row(c, key="auto-policy/" + station, fn() {
               c.box(w=Fill(1.0), gap=5.0, fn() {
-                c.text(tr("web-pages.archivePolicy.title"), size=15.0, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
+                c.text(tr("web-pages.archivePolicy.title"), size=t.t.body, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
                 c.text(
                   join(
                     [fill("web-pages.archivePolicy.optionCount", [("n", items(policy, "options").length().to_string())]), text(policy, "summaryText")],
                     " · ",
                   ),
-                  size=13.0,
+                  size=t.t.meta,
                   color=if count(policy, "failed") > 0 { t.p.red } else { t.p.muted },
                   w=Fill(1.0),
                   line=18.0,
@@ -340,7 +340,7 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
         if id == "" && key == "" {
           sheet_head(c, tr("web-pages.archivePolicy.title"))
           c.box(w=Fill(1.0), padx=20.0, gap=12.0, fn() {
-            c.text(tr("web-pages.archivePolicy.textLead"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+            c.text(tr("web-pages.archivePolicy.textLead"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
             let words = field_in("policy", text(d, "policy"), tr("web-pages.archivePolicy.title"), 8)
             if words != text(d, "policy") {
               call("edit", [("policy", str(words))], fn(_) {  })
@@ -386,7 +386,7 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
                   call("edit", [("option", str(okey)), ("archive", Json::boolean(i == 0))], fn(_) {  })
                 }
                 if count(ov, "count") > 0 {
-                  c.text(fill("web-pages.archivePolicy.chats", [("days", count(policy, "days").to_string())]), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0)
+                  c.text(fill("web-pages.archivePolicy.chats", [("days", count(policy, "days").to_string())]), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0)
                   |> ignore
                 }
               })
@@ -398,7 +398,7 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
                   list_card(c, fn() {
                     for ch in items(ov, "chats") {
                       if list_row(c, key="policy-chat/" + text(Some(ch), "session"), fn() {
-                          c.text(text(Some(ch), "title"), style=row_title_words.then(@ui.text_style(size=Base))) |> ignore
+                          c.text(text(Some(ch), "title"), style=row_title_words.then(@ui.text_style(size=Ui))) |> ignore
                           chevron(c)
                         }) {
                         cancel()
@@ -457,7 +457,7 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
     blocks.push(fn() {
       list_card(c, fn() {
         if list_row(c, key=if busy { "" } else { "policy-text" }, fn() {
-            c.text(text(policy, "text"), size=14.0, color=t.p.text, w=Fill(1.0), line=22.0) |> ignore
+            c.text(text(policy, "text"), size=t.t.ui, color=t.p.text, w=Fill(1.0), line=22.0) |> ignore
           }) {
           open_one("", None)
         }
@@ -473,11 +473,11 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
             let ov = Some(o)
             if list_row(c, key=if busy { "" } else { "policy-option/" + text(ov, "id") }, fn() {
                 c.box(w=Fill(1.0), gap=3.0, fn() {
-                  c.text(text(ov, "name"), size=15.0, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
-                  c.text(text(ov, "rubric"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+                  c.text(text(ov, "name"), size=t.t.body, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
+                  c.text(text(ov, "rubric"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
                 })
                 |> ignore
-                c.text(count(ov, "count").to_string(), size=13.0, color=t.p.muted, wrap=false) |> ignore
+                c.text(count(ov, "count").to_string(), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
               }) {
               open_one(text(ov, "id"), ov)
             }
@@ -494,7 +494,7 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
       c.box(w=Fill(1.0), pl=24.0, pr=24.0, pt=4.0, pb=10.0, fn() {
         c.text(
           join([text(policy, "changeText"), text(policy, "summaryText")], " · "),
-          size=13.0,
+          size=t.t.meta,
           color=if count(policy, "failed") > 0 { t.p.red } else { t.p.muted },
           w=Fill(1.0),
           line=18.0,
@@ -701,7 +701,7 @@ fn size_row(
   let t = @sf.theme()
   list_row(c, key~, piece?, fn() {
     row_lines(c, title, sub)
-    c.text(size_words(size), size=14.0, color=t.p.muted, wrap=false) |> ignore
+    c.text(size_words(size), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
     if more {
       chevron(c)
     }

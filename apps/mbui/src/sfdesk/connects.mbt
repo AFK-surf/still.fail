@@ -491,7 +491,7 @@ let cn_quiet_room : @ui.Style = @ui.css("w=Full px=S4 pb=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_quiet : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, color=Muted, wrap=false)
+let cn_quiet : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -499,11 +499,11 @@ let cn_none_room : @ui.Style = @ui.css("w=Full px=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_error : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Danger, w=Full)
+let cn_error : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Danger, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_note : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, w=Full)
+let cn_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)
 
 ///|
 /// A row's words (listRowText: 2 apart, as wide as the row lets them; its title in 500, how it runs muted).
@@ -516,11 +516,11 @@ let cn_title_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Fg, wrap=false)
+let cn_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_sub : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let cn_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
 
 ///|
 /// Its Slack workspace after its name (connectTeam: 8 after it, its mark 4 from its name, the meta's 12 muted).
@@ -529,7 +529,7 @@ let cn_team : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_meta : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let cn_meta : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// Its team after its name, whole or not at all where its line has not the room.
@@ -550,7 +550,7 @@ let cn_tag : @ui.Style = @ui.css("row px=S2 py=SPx gap=S1 align=ACenter radius=M
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_tag_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, color=Muted, wrap=false)
+let cn_tag_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -558,11 +558,11 @@ let cn_owner_box : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_owner_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Fg, wrap=false)
+let cn_owner_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_owner_none : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Subtle, wrap=false)
+let cn_owner_none : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false)
 
 ///|
 /// ⋯ (an icon button: 32, its corner 12).

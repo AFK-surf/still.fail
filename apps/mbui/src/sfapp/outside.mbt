@@ -26,7 +26,7 @@ let outside_lead_box : @ui.Style = @ui.css("w=Full pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let outside_lead : @ui.TextStyle = @ui.text_style(size=Base, leading=L6, color=Muted, w=Full)
+let outside_lead : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)
 
 ///|
 /// A chat's row: 5 above and under; its title after `@` (15/22, the link's ink, `@` at 70% of it) and whose it is in a
@@ -44,11 +44,11 @@ let outside_title_box : @ui.Style = @ui.css("row")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let outside_at : @ui.TextStyle = @ui.text_style(size=Lg, leading=L7, color=A(Link, O70), wrap=false)
+let outside_at : @ui.TextStyle = @ui.text_style(size=Ui, leading=L7, color=A(Link, O70), wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let outside_title : @ui.TextStyle = @ui.text_style(size=Lg, leading=L7, color=Link, wrap=false)
+let outside_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L7, color=Link, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -56,7 +56,7 @@ let outside_cannot_box : @ui.Style = @ui.css("w=Full pt=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let outside_cannot : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Danger, w=Full)
+let outside_cannot : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Danger, w=Full)
 
 ///|
 /// Why sharing failed: 13/18, red, 8 under the chats.
@@ -80,7 +80,7 @@ let words_tag : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let words_tag_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, color=Muted, wrap=false)
+let words_tag_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Muted, wrap=false)
 
 ///|
 /// The presenter asking for each draft's sharing (@sf.last_presented), while it is drawn.

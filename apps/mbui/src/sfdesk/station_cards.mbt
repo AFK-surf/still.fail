@@ -380,16 +380,16 @@ let nt_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nt_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let nt_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
 
 ///|
 /// The last of a line's words, cut short where the line is (netLine's last child).
 // kept across runs: a value (no field of it changes)
-let nt_words_cut : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false, w=Cut)
+let nt_words_cut : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nt_figure : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Fg, wrap=false)
+let nt_figure : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, wrap=false)
 
 ///|
 /// ↑ over ↓ (netRates: the speed 9.5 characters wide at least, so the totals line up; its total after it).
@@ -419,11 +419,11 @@ let hd_values : @ui.Style = @ui.style(w=@sf.grow, gap=S2)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let hd_label : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Subtle, wrap=false)
+let hd_label : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let hd_value : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false, w=Full)
+let hd_value : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Full)
 
 ///|
 let sw_glyph : Double = 18.0
@@ -445,11 +445,11 @@ let sw_version_box : @ui.Style = @ui.css("row")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sw_version : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let sw_version : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sw_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=Full)
+let sw_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
 
 ///|
 /// The test channel's tag beside a version (betaTag).
@@ -458,12 +458,12 @@ let sw_beta : @ui.Style = @ui.css("px=S1_5 radius=Full bg=AccentBg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sw_beta_words : @ui.TextStyle = @ui.text_style(size=Xs2, leading=L4, weight=Medium, color=AccentText, wrap=false)
+let sw_beta_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, weight=Medium, color=AccentText, wrap=false)
 
 ///|
 /// A switch's word beside it (channel: the ui's 13, on one line).
 // kept across runs: a value (no field of it changes)
-let sw_switch_word : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let sw_switch_word : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -479,11 +479,11 @@ let sw_rest : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sw_newer : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let sw_newer : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sw_failed : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Danger, wrap=false)
+let sw_failed : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Danger, wrap=false)
 
 ///|
 /// When it was last checked, checking again beside it (cardFoot).
@@ -492,7 +492,7 @@ let sw_foot : @ui.Style = @ui.css("row w=Full px=S3 pt=S2 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sw_foot_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let sw_foot_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -500,7 +500,7 @@ let sw_check : @ui.Style = @ui.css("px=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sw_check_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, color=AccentText, wrap=false)
+let sw_check_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=AccentText, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -518,4 +518,4 @@ let sw_words : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sw_name : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Fg, wrap=false)
+let sw_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, wrap=false)
