@@ -130,7 +130,7 @@ test "while the chat is read: its bar, the messages to come, the composer" {
 
 ///|
 test "references and addresses in plain words" {
-  let runs = ref_runs("看 [首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2) 和 https://example.com/a。")
+  let runs = message_runs("看 [首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2) 和 https://example.com/a。", @sf.theme().p.accent)
   assert_eq(runs.length(), 6)
   assert_eq(runs[1].text, "@")
   assert_eq(runs[2].text, "首页")
@@ -152,9 +152,9 @@ test "images take their own proportions before they load" {
     owner: "",
     upload: "",
   }
-  assert_eq(image_box(a, 16.0), (139.0, 300.0, false))
-  assert_eq(image_box({ ..a, width: 1600.0, height: 900.0 }, 16.0), (360.0, 203.0, false))
-  assert_eq(image_box({ ..a, width: 0.0, height: 0.0 }, 16.0), (240.0, 160.0, false))
+  assert_eq(@sfpages.image_box(a, @sfpages.image_least), (139.0, 300.0, false))
+  assert_eq(@sfpages.image_box({ ..a, width: 1600.0, height: 900.0 }, @sfpages.image_least), (360.0, 203.0, false))
+  assert_eq(@sfpages.image_box({ ..a, width: 0.0, height: 0.0 }, @sfpages.image_least), (240.0, 160.0, false))
   assert_eq(elapsed(200000.0), "3m 20s")
 }
 

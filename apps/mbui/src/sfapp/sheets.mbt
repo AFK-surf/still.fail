@@ -1752,12 +1752,20 @@ fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
         })
         |> ignore
       })
-      let here = { station: r.station, session: r.session, view: v }
+      // each as its chat draws it (sfpages' rows, as the desktop's letters have them)
+      let here : @sfpages.MessageHere = {
+        station: r.station,
+        session: r.session,
+        view: v,
+        go: None,
+        inline: true,
+        gutter: 0.0,
+        list: None,
+        core: None,
+      }
       for m in items(ch, "letters") {
         let message = message_of(m)
-        rows.push(fn() {
-          c.box(style=letters_said, fn() { said(c, src, here, message, [], decide=false) }) |> ignore
-        })
+        rows.push(fn() { c.box(style=letters_said, fn() { @sfpages.message_row(c, src, here, message) }) |> ignore })
       }
     }
     _ =>
