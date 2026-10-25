@@ -977,9 +977,9 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
         if field(o, "blob") is Some(_) {
           fix_put_up["uploads/" + id + "/" + name] = id
         }
-        // (pasted words: what the core said of them; a station's file: where it is; kept with the file as
-        // composer.ts keeps them)
-        for k in ["pasted", "ref"] {
+        // (pasted words: what the core said of them; a station's file: where it is; the quote it is the picture of;
+        // kept with the file as composer.ts keeps them)
+        for k in ["pasted", "ref", "quote"] {
           match field(o, k) {
             Some(x) => kept[k] = x
             None => ()

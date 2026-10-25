@@ -2539,7 +2539,11 @@ export interface ComposerQuote {
 	comment: string;
 	ts?: string;
 	role?: string;
-	file?: string;
+	/**
+	 * Its picture (an image of a message quoted, a mark's screenshot): shown in its card, not among the files;
+	 * out of the draft with it (`composer.unquote`). The message names it in this quote.
+	 */
+	own?: ComposerFile;
 }
 
 /** What is being written in a chat (the `composer` topic, by the draft's key), as the core keeps it (composer.ts). */

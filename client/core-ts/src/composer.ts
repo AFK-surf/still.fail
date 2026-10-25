@@ -26,19 +26,41 @@ import { localId } from "./ids.ts";
 
 type J = any;
 
-/// A passage quoted, with what is said about it; `id` names it while it is written.
-export type ComposerQuote = { id: string; author: string; text: string; comment: string; ts?: string; role?: string; file?: string };
+/// A passage quoted, with what is said about it; `id` names it while it is written. Its picture, if it has one, is the
+/// file that says it goes with it (`ComposerFile.quote`).
+export type ComposerQuote = { id: string; author: string; text: string; comment: string; ts?: string; role?: string };
 
 /// A file in what is written: going up (`sent` of `size`), up (`done`, as the station keeps it) or failed (`error`).
 /// `pasted`: long words pasted, kept as a file (what the page says of them). `ref`: one dragged in from where it is.
 /// `link`: a link shared into the chat (share-in.ts), drawn as a file is and sent as words: nothing goes up.
-export type ComposerFile = { id: string; name: string; size: number; sent?: number; width?: number; height?: number; done: J | null; error: string | null; pasted?: J; ref?: ComposerRef; link?: ComposerLink };
+/// `quote`: the quote it is the picture of (an image of a message quoted, a mark's screenshot): shown in its card, not
+/// among the files, and out of the draft with it; the message names it in that quote (`file`).
+export type ComposerFile = { id: string; name: string; size: number; sent?: number; width?: number; height?: number; done: J | null; error: string | null; pasted?: J; ref?: ComposerRef; link?: ComposerLink; quote?: string };
 
 /// A link in what is written, as a file is: where it goes, what the app that shared it called it, and its site.
 export type ComposerLink = { url: string; title?: string; site?: string };
 
 /// What a link in what is written goes as: its title on a line, then where it goes.
 const linkWords = (link: ComposerLink) => (link.title ? `${link.title}\n${link.url}` : link.url);
+
+/// A quote as the page says it, its picture said apart (`attachment`, `composer.add`'s `quote`).
+const quoteOf = (q: J, id: string): ComposerQuote => ({
+  id, author: String(q.author ?? ""), text: String(q.text ?? ""), comment: typeof q.comment === "string" ? q.comment : "",
+  ...(typeof q.ts === "string" && q.ts ? { ts: q.ts } : {}), ...(typeof q.role === "string" && q.role ? { role: q.role } : {}),
+});
+
+/// A quote as a message has it: its picture named by the name its file goes as (`file`), among the message's files.
+function sentQuote({ id, ...q }: ComposerQuote, files: ComposerFile[]): J {
+  const own = files.find((f) => f.quote === id);
+  return { ...q, ...(own ? { file: String(own.done?.name ?? own.name) } : {}) };
+}
+
+/// The files up, each once (the same image quoted twice is one file of the message).
+function upOnce(files: ComposerFile[]): J[] {
+  const up = new Map<string, J>();
+  for (const f of files) if (f.done && !up.has(f.done.path)) up.set(f.done.path, f.done);
+  return [...up.values()];
+}
 
 /// Nothing of it goes up: named by its path, or a link.
 const named = (f: ComposerFile) => f.ref?.mode === "path" || f.link !== undefined;
@@ -52,7 +74,8 @@ export type ComposerRef = { station: string; stationName: string; path: string; 
 /// station's drive (`drive`: the chat's station copies it among its uploads; another station's is read from there and
 /// sent up as a picked one would be). A folder named by its path has neither.
 /// `kept`: its bytes are those kept on the device as it went up before (`outbox`, drive-kept.ts), not kept again.
-export type FileIn = { id: string; name: string; size: number; blob?: Blob | FileSource; pasted?: J; drive?: { station?: string; root: string; path: string }; ref?: ComposerRef; kept?: boolean };
+/// `quote`: the quote it is the picture of (a mark's screenshot), when that quote is in the draft.
+export type FileIn = { id: string; name: string; size: number; blob?: Blob | FileSource; pasted?: J; drive?: { station?: string; root: string; path: string }; ref?: ComposerRef; kept?: boolean; quote?: string };
 
 type State = {
   /// Cached only for the account database it was read from.
@@ -140,10 +163,16 @@ export class Composers {
     const s = this.#state(key);
     const uploading = s.files.some((f) => !f.done && !f.error && !named(f));
     const ready = (s.text.trim() !== "" || s.files.some((f) => !f.error) || s.quotes.length > 0) && !s.starting && !s.files.some((f) => f.pasted && f.error);
+    // Nothing said for what is not (yet): a file not up has no `done`, one not failed no `error`.
+    const shown = ({ done, error, quote: _, ...f }: ComposerFile) => ({ ...f, ...(done !== null ? { done } : {}), ...(error !== null ? { error } : {}) });
     return {
-      text: s.text, rev: s.rev, quotes: s.quotes, ...(s.focus !== null ? { focus: s.focus } : {}),
-      // Nothing said for what is not (yet): a file not up has no `done`, one not failed no `error`.
-      files: s.files.map(({ done, error, ...f }) => ({ ...f, ...(done !== null ? { done } : {}), ...(error !== null ? { error } : {}) })),
+      text: s.text, rev: s.rev, ...(s.focus !== null ? { focus: s.focus } : {}),
+      // A quote's picture in it, not among the files.
+      quotes: s.quotes.map((q) => {
+        const own = s.files.find((f) => f.quote === q.id);
+        return own ? { ...q, own: shown(own) } : q;
+      }),
+      files: s.files.filter((f) => f.quote === undefined).map(shown),
       uploading, ready, starting: s.starting, ...(s.error !== null ? { error: s.error } : {}), version: s.version,
     };
   }
@@ -238,8 +267,15 @@ export class Composers {
     if (!isObject(kept)) return s;
     s.text = typeof kept.text === "string" ? kept.text : "";
     if (s.text) s.rev = 1;
-    s.quotes = (Array.isArray(kept.quotes) ? kept.quotes : []).filter(isObject).map((q: J) => ({ ...q, id: localId("kept") }) as ComposerQuote);
     s.files = (Array.isArray(kept.files) ? kept.files : []).filter(isObject).map((f: J) => ({ id: localId("kept"), name: String(f.name ?? ""), size: Number(f.size ?? 0), done: f, error: null }));
+    s.quotes = (Array.isArray(kept.quotes) ? kept.quotes : []).filter(isObject).map((q: J) => {
+      const quote = quoteOf(q, localId("kept"));
+      // Its picture: the file it names, each quote its own (the same image quoted twice is a file each).
+      const named = typeof q.file === "string" && q.file ? s.files.find((f) => f.name === q.file) : undefined;
+      if (named && named.quote === undefined) named.quote = quote.id;
+      else if (named) s.files.push({ ...named, id: localId("kept"), quote: quote.id });
+      return quote;
+    });
     if (typeof kept.id === "string") s.id = kept.id;
     for (const l of Array.isArray(kept.links) ? kept.links : []) {
       if (isObject(l) && typeof l.url === "string") s.files.push(linkFile(localId("kept"), l as ComposerLink));
@@ -249,7 +285,7 @@ export class Composers {
 
   #draft(s: State) {
     const links = s.files.flatMap((f) => (f.link ? [f.link] : []));
-    return { text: s.text, quotes: s.quotes.map(({ id: _, ...q }) => q), files: s.files.flatMap((f) => f.done ? [f.done] : []), ...(links.length ? { links } : {}), ...(s.id ? { id: s.id } : {}) };
+    return { text: s.text, quotes: s.quotes.map((q) => sentQuote(q, s.files)), files: upOnce(s.files), ...(links.length ? { links } : {}), ...(s.id ? { id: s.id } : {}) };
   }
 
   /// The draft's name, given the first time it is asked for (`State.id`): the core's, as its other names are (random:
@@ -363,12 +399,12 @@ export class Composers {
   }
 
   /// A passage quoted; or a file of a message (`attachment`, already on the station: it goes again with the message,
-  /// nothing goes up; `fileId`, the page's id for it), the quote naming it (`file`).
+  /// nothing goes up; `fileId`, the page's id for it), its picture.
   quote(key: string, quote: ComposerQuote, focus: boolean, attachment?: J, fileId?: string): number {
     const s = this.#state(key);
     s.quotes = [...s.quotes, quote];
-    if (attachment && quote.file && !s.files.some((f) => f.done?.path === attachment.path)) {
-      s.files = [...s.files, { id: fileId ?? localId("quoted"), name: String(attachment.name ?? ""), size: Number(attachment.size ?? 0), done: attachment, error: null }];
+    if (attachment) {
+      s.files = [...s.files, { id: fileId ?? localId("quoted"), name: String(attachment.name ?? ""), size: Number(attachment.size ?? 0), done: attachment, error: null, quote: quote.id }];
     }
     if (focus) s.focus = quote.id;
     return this.#changed(key, s);
@@ -380,9 +416,13 @@ export class Composers {
     return this.#changed(key, s);
   }
 
+  /// A quote taken out, its picture with it.
   unquote(key: string, id: string): number {
     const s = this.#state(key);
+    const own = s.files.filter((f) => f.quote === id);
     s.quotes = s.quotes.filter((q) => q.id !== id);
+    s.files = s.files.filter((f) => f.quote !== id);
+    this.release(own);
     if (s.focus === id) s.focus = null;
     return this.#changed(key, s);
   }
@@ -422,7 +462,8 @@ export class Composers {
         continue;
       }
       const tooBig = f.size > MAX_FILE;
-      s.files = [...s.files, { id: f.id, name: f.name, size: f.size, done: null, error: tooBig ? t("core-misc.composer.too_big") : null, ...(f.pasted ? { pasted: f.pasted } : {}), ...(ref ? { ref } : {}) }];
+      const quote = f.quote !== undefined && s.quotes.some((q) => q.id === f.quote) ? { quote: f.quote } : {};
+      s.files = [...s.files, { id: f.id, name: f.name, size: f.size, done: null, error: tooBig ? t("core-misc.composer.too_big") : null, ...(f.pasted ? { pasted: f.pasted } : {}), ...(ref ? { ref } : {}), ...quote }];
       if (!tooBig) this.#upload(key, station, f);
       else if (f.blob instanceof FileSource) f.blob.close();
     }
@@ -711,8 +752,8 @@ export class Composers {
     for (const f of sent) if (f.done) this.#unkeep(f.id);
     return {
       text: [taken.text.trim(), ...links.map(linkWords), ...paths.map((f) => pathWords(f.ref!))].filter((w) => w !== "").join("\n"),
-      attachments: sent.flatMap((f) => (f.done ? [f.done] : [])),
-      quotes: taken.quotes.map(({ author, text, comment, ts, role, file }) => ({ author, text, comment: comment.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}), ...(file ? { file } : {}) })),
+      attachments: upOnce(sent),
+      quotes: taken.quotes.map((q) => sentQuote({ ...q, comment: q.comment.trim() }, sent)),
       uploads: sent.filter((f) => !f.done && !f.error).map(({ id, name, size }) => ({ id, name, size })),
       version,
     };
@@ -809,8 +850,8 @@ export function parseComposer(name: string, params: unknown): Call | null {
     case "quote": {
       const q = p.quote;
       if (!isObject(q) || typeof q.author !== "string" || typeof q.text !== "string") throw CoreError.invalid(t("core-misc.params.missing", { field: "quote" }));
-      const quote = { ...(q as J), id: str(p, "id"), comment: typeof q.comment === "string" ? q.comment : "" } as ComposerQuote;
-      const attachment = isObject(p.attachment) && typeof (p.attachment as J).path === "string" && quote.file ? p.attachment as J : undefined;
+      const quote = quoteOf(q, str(p, "id"));
+      const attachment = isObject(p.attachment) && typeof (p.attachment as J).path === "string" ? p.attachment as J : undefined;
       const fileId = typeof p.fileId === "string" && p.fileId !== "" ? p.fileId : undefined;
       return { kind: "composer", key, act: { quote, focus: p.focus === true, ...(attachment ? { attachment, ...(fileId ? { fileId } : {}) } : {}) } };
     }
@@ -844,7 +885,7 @@ export function parseComposer(name: string, params: unknown): Call | null {
         // A folder named by its path, with no drive to zip it from: nothing to send.
         if (ref.ref?.dir) return { id: x.id, name: typeof x.name === "string" ? x.name : "", size: 0, ...ref } as FileIn;
         if (!(isBlob(x.blob) || x.blob instanceof FileSource)) throw CoreError.invalid(t("core-misc.params.missing", { field: "files" }));
-        return { id: x.id, name: typeof x.name === "string" ? x.name : x.blob.name ?? "", size: typeof x.size === "number" ? x.size : x.blob.size, blob: x.blob, ...(isObject(x.pasted) ? { pasted: x.pasted } : {}), ...ref } as FileIn;
+        return { id: x.id, name: typeof x.name === "string" ? x.name : x.blob.name ?? "", size: typeof x.size === "number" ? x.size : x.blob.size, blob: x.blob, ...(isObject(x.pasted) ? { pasted: x.pasted } : {}), ...(typeof x.quote === "string" ? { quote: x.quote } : {}), ...ref } as FileIn;
       });
       return { kind: "composer", key, act: { add: list, station: str(p, "station") } };
     }

@@ -5,7 +5,7 @@
 // quote per numbered mark saying where it is and what was said about it (or, outside a chat, is downloaded).
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ArrowUpRight, Cursor, Download, Edit, Redo, Retry, Scribble, Send, Square, Text, Trash } from "@stillfail/ui/icons.tsx";
-import { DraftKey, offerToDraft, type DraftQuote } from "../draft.ts";
+import { DraftKey, offerToDraft, type OfferedQuote } from "../draft.ts";
 import { Tip } from "../ui.tsx";
 import * as css from "./ImageMarks.css.ts";
 import * as marksCss from "./Marks.css.ts";
@@ -461,7 +461,7 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
       const fileName = t("web-main.annotate.pageFile", { name: name.replace(/\.[^.]+$/, ""), stamp });
       if (how === "draft") {
         // A quote per numbered mark: where it is, for the agent (the first line is also what the composer shows), and what was said.
-        const quotes: DraftQuote[] = [...numbersOf(all)].map(([id, n]) => {
+        const quotes: OfferedQuote[] = [...numbersOf(all)].map(([id, n]) => {
           const s = all.find((x) => x.id === id)!, r = (v: number) => Math.round(v);
           const what = s.tool === "rect"
             ? (({ x, y, w, h }) => t("web-main.annotate.image.rect", { x: r(x), y: r(y), w: r(w), h: r(h) }))(boxOf(s))

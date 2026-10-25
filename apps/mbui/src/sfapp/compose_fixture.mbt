@@ -67,11 +67,22 @@ fn fix_compose_view(f : Fixture, key : String) -> Json {
     files.iter().any(fn(x) { text(Some(x), "error") == "" }) ||
     w.quotes.length() > 0) &&
     !w.starting
+  // a quote's picture in it, not among the files
+  let quotes = w.quotes.map(fn(q) {
+    match (q, files.iter().find_first(fn(x) { text(Some(x), "quote") == text(Some(q), "id") })) {
+      (Object(m), Some(own)) => {
+        let n = m.copy()
+        n["own"] = own
+        Json::object(n)
+      }
+      _ => q
+    }
+  })
   let v : Map[String, Json] = {
     "text": Json::string(w.text),
     "rev": Json::number(w.rev.to_double()),
-    "quotes": Json::array(w.quotes),
-    "files": Json::array(files),
+    "quotes": Json::array(quotes),
+    "files": Json::array(files.filter(fn(x) { text(Some(x), "quote") == "" })),
     "uploading": Json::boolean(uploading),
     "ready": Json::boolean(ready),
     "starting": Json::boolean(w.starting),
@@ -114,6 +125,21 @@ fn fix_compose_call(f : Fixture, name : String, params : Json) -> Result[Json, J
         q["comment"] = Json::string("")
       }
       w.quotes.push(Json::object(q))
+      // an image of a message: its picture, up already, by the page's id for it
+      match field(p, "attachment") {
+        Some(a) =>
+          fix_composers[key] = fix_composers.get(key).unwrap_or([]) +
+            [
+              {
+                "id": Json::string(text(p, "fileId")),
+                "name": Json::string(text(Some(a), "name")),
+                "size": Json::number(number(Some(a), "size")),
+                "done": a,
+                "quote": Json::string(text(p, "id")),
+              },
+            ]
+        None => ()
+      }
       if flag(p, "focus") {
         w.focus = text(p, "id")
       }
@@ -134,6 +160,8 @@ fn fix_compose_call(f : Fixture, name : String, params : Json) -> Result[Json, J
     }
     "composer.unquote" => {
       w.quotes = w.quotes.filter(fn(q) { text(Some(q), "id") != text(p, "id") })
+      // its picture with it
+      fix_composers[key] = fix_composers.get(key).unwrap_or([]).filter(fn(x) { text(Some(x), "quote") != text(p, "id") })
       if w.focus == text(p, "id") {
         w.focus = ""
       }

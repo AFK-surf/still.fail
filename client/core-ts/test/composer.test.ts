@@ -232,20 +232,47 @@ test("what_is_written_shows_with_what_it_can_do_and_is_kept_as_the_chats_draft",
   t.core.close();
 });
 
-test("an_image_of_a_message_quoted_goes_again_with_the_message_as_it_is_on_the_station_nothing_going_up", async () => {
+test("an_image_of_a_message_quoted_is_its_quotes_picture_goes_with_it_and_again_with_the_message_as_it_is_on_the_station", async () => {
   const t = await setup();
   await t.watch(1, "ws/st:k");
   const image = { name: "shot.png", path: "/w/uploads/shot.png", size: 120, width: 40, height: 30, owner: "s1" };
-  const quote = { author: "agent", text: "shot.png", ts: "1.0", role: "agent", file: "shot.png" };
+  const quote = { author: "agent", text: "shot.png", ts: "1.0", role: "agent" };
   await t.ask("quote", { key: "ws/st:k", id: "q1", quote, focus: true, attachment: image, fileId: "f1" });
-  // Quoted twice: the file goes once.
+  // Quoted twice: each quote its own picture.
   await t.ask("quote", { key: "ws/st:k", id: "q2", quote, attachment: image });
+  await t.ask("quote", { key: "ws/st:k", id: "q3", quote: { author: "agent", text: "这段" } });
   const shown = v(t.values, 1);
-  assert.deepEqual([shown.quotes.map((q: J) => q.file), shown.files.map((f: J) => f.done), shown.uploading, shown.ready], [["shot.png", "shot.png"], [image], false, true]);
-  assert.equal(shown.files[0].id, "f1");
-  // Without the quote naming it, an attachment offered is not taken.
-  await t.ask("quote", { key: "ws/st:k", id: "q3", quote: { author: "agent", text: "这段" }, attachment: { ...image, path: "/w/uploads/other.png" } });
-  assert.equal(v(t.values, 1).files.length, 1);
+  assert.deepEqual([shown.quotes.map((q: J) => q.own?.done), shown.files, shown.uploading, shown.ready], [[image, image, undefined], [], false, true]);
+  assert.equal(shown.quotes[0].own.id, "f1");
+  // Taken out, its picture goes with it; the other's stays.
+  await t.ask("unquote", { key: "ws/st:k", id: "q1" });
+  assert.deepEqual([v(t.values, 1).quotes.map((q: J) => [q.id, q.own?.done]), v(t.values, 1).files], [[["q2", image], ["q3", undefined]], []]);
+  // Kept on the device as a message has it: the file once, named in its quote.
+  await t.host.time.pass(SOON_MS + 50);
+  await t.host.settle();
+  const [kept] = t.host.rows(dbName("s1"), "SELECT json FROM draft").map(([json]) => JSON.parse(json as string));
+  assert.deepEqual([kept.quotes.map((q: J) => q.file), kept.files], [["shot.png", undefined], [image]]);
+  // Sent the same way.
+  await t.ask("quote", { key: "ws/st:k", id: "q4", quote, attachment: image });
+  call(t.core, t.ui, 960, "composer.take", { key: "ws/st:k" });
+  await t.host.settle();
+  const took = answers(t.host.takeEmitted(), 960)?.ok as J;
+  assert.deepEqual([took.attachments, took.quotes.map((q: J) => q.file), took.uploads], [[image], ["shot.png", undefined, "shot.png"], []]);
+  t.core.close();
+});
+
+test("a_kept_drafts_quotes_take_the_files_they_name_as_their_pictures", async () => {
+  const t = await setup();
+  const image = { name: "shot.png", path: "/u/shot.png", size: 3 };
+  const other = { name: "a.png", path: "/u/a.png", size: 3 };
+  const quote = { author: "agent", text: "shot.png", comment: "" };
+  call(t.core, t.ui, 50, "draft.put", { key: "ws/st:old", text: "", quotes: [{ ...quote, file: "shot.png" }, { ...quote, file: "shot.png" }], files: [image, other] });
+  await t.settle();
+  await t.watch(1, "ws/st:old");
+  const shown = v(t.values, 1);
+  assert.deepEqual([shown.quotes.map((q: J) => q.own?.done), shown.files.map((f: J) => f.done)], [[image, image], [other]]);
+  for (const id of shown.quotes.map((q: J) => q.id)) await t.ask("unquote", { key: "ws/st:old", id });
+  assert.deepEqual([v(t.values, 1).quotes, v(t.values, 1).files.map((f: J) => f.done)], [[], [other]]);
   t.core.close();
 });
 

@@ -1261,7 +1261,7 @@ export const SHAPES: Record<string, Shape> = {
     ["comment", "String"],
     ["ts", opt("String")],
     ["role", opt("String")],
-    ["file", opt("String")],
+    ["own", opt("ComposerFile"), { doc: "Its picture (an image of a message quoted, a mark's screenshot): shown in its card, not among the files;\nout of the draft with it (`composer.unquote`). The message names it in this quote." }],
   ], { doc: "A passage quoted in what is being written, with what is said about it." }),
   ComposerFile: struct([
     ["id", "String", { doc: "The page's id for it (`composer.add`)." }],

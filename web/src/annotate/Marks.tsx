@@ -5,7 +5,7 @@
 // beside the pin; they follow the page as it scrolls (the frame says where the marks are).
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { Close, Edit, Send, Trash } from "@stillfail/ui/icons.tsx";
-import { offerToDraft, type DraftQuote } from "../draft.ts";
+import { offerToDraft, type OfferedQuote } from "../draft.ts";
 import type { Picked } from "./frame.ts";
 import * as css from "./Marks.css.ts";
 import { Tip } from "../ui.tsx";
@@ -115,21 +115,20 @@ export function useMarks({ frame, origin, nonce, name, draftKey, able, scale = 1
         tell({ capture: id, each: true });
       });
       const stamp = new Date().toTimeString().slice(0, 8).replaceAll(":", "");
-      const quote = (m: Mark, text: string): DraftQuote => ({
+      const quote = (m: Mark, text: string): OfferedQuote => ({
         id: `mark-${nonce}-${stamp}-${m.picked.n}`, author: t("web-main.annotate.pageAuthor", { name, n: m.picked.n }), role: "page", text, comment: m.comment,
       });
-      let offer: { files: File[]; quotes: DraftQuote[] };
+      let offer: { files: File[]; quotes: OfferedQuote[] };
       if (got.shots) {
-        // Each mark with its own picture, its file named after it and named in its quote.
-        const files: File[] = [], quotes: DraftQuote[] = [];
+        // Each mark with its own picture, its file named after it.
+        const quotes: OfferedQuote[] = [];
         for (const m of marks) {
           const png = got.shots.find((s) => s.n === m.picked.n)?.png;
           if (!png) throw new Error(t("web-main.annotate.markNoShot", { n: m.picked.n }));
           const file = new File([png], t("web-main.annotate.markFile", { name, n: m.picked.n, stamp }), { type: "image/png" });
-          files.push(file);
-          quotes.push({ ...quote(m, where(m.picked, file.name)), file: file.name });
+          quotes.push({ ...quote(m, where(m.picked, file.name)), picture: file });
         }
-        offer = { files, quotes };
+        offer = { files: [], quotes };
       } else if (got.png) {
         offer = { files: [new File([got.png], t("web-main.annotate.pageFile", { name, stamp }), { type: "image/png" })], quotes: marks.map((m) => quote(m, where(m.picked, null))) };
       } else throw new Error(got.error ? frameError(got.error) : t("web-main.annotate.noShot"));

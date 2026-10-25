@@ -2119,9 +2119,9 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, no
 }
 
 /**
- * What waits to go with the message, as both screens' composers show it: the quotes, each with a line for a comment
- * (the one just added, `focusQuote`, takes the focus; Enter in it goes back to the text, `onDone`), then the files, an
- * image as its picture.
+ * What waits to go with the message, as both screens' composers show it: the quotes, each with its picture and a line
+ * for a comment (the one just added, `focusQuote`, takes the focus; Enter in it goes back to the text, `onDone`), then
+ * the files, an image as its picture.
  */
 export function ComposerExtras({ draft, focusQuote, onFocused, onDone, onRef }: {
   draft: Draft; focusQuote: string | null; onFocused(): void; onDone(): void;
@@ -2129,7 +2129,6 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone, onRef }: 
   onRef?: ((f: Pending) => void) | undefined;
 }) {
   const { quotes, files } = draft;
-  const rest = besideQuotes(quotes, files) ?? [];
   const quoteInputs = useRef(new Map<string, HTMLInputElement>());
   useEffect(() => {
     if (!focusQuote) return;
@@ -2141,13 +2140,13 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone, onRef }: 
       {quotes.length > 0 && (
         <div className={css.composerQuotes}>
           {quotes.map((q) => {
-            const own = fileOf(q, files);
+            const own = q.own;
             // An image of a message quoted is the station's already (none of this device's): a small picture of it.
             const kept = own?.done && !own.preview ? own.done : undefined;
             return (
             <div key={q.id} className={css.composerQuote} onClick={(e) => e.stopPropagation()}>
               <QuoteCard quote={q} picture={own && (kept?.owner ? <QuotedThumb sessionKey={kept.owner} file={kept} /> : <PendingFile file={own} />)}
-                onRemove={() => { draft.unquote(q.id); if (own && !quotes.some((o) => o !== q && fileOf(o, files) === own)) draft.remove(own.id); }} comment={
+                onRemove={() => draft.unquote(q.id)} comment={
                 <input ref={(el) => { if (el) quoteInputs.current.set(q.id, el); else quoteInputs.current.delete(q.id); }}
                   className={`${css.quoteCardComment} ${css.quoteCardInput}`} value={q.comment} placeholder={t("web-main.quote.commentPlaceholder")} aria-label={t("web-main.quote.commentLabel", { author: q.author })}
                   onChange={(e) => draft.comment(q.id, e.target.value)}
@@ -2158,9 +2157,9 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone, onRef }: 
           })}
         </div>
       )}
-      {rest.length > 0 && (
+      {files.length > 0 && (
         <div className={css.composerFiles}>
-          {rest.map((f) => f.link ? <LinkCard key={f.id} file={f} onRemove={() => draft.remove(f.id)} /> : f.ref ? <RefCard key={f.id} file={f} draft={draft} onRemove={() => draft.remove(f.id)} onTap={onRef && (() => onRef(f))} /> : <PendingFile key={f.id} file={f} onRemove={() => draft.remove(f.id)}
+          {files.map((f) => f.link ? <LinkCard key={f.id} file={f} onRemove={() => draft.remove(f.id)} /> : f.ref ? <RefCard key={f.id} file={f} draft={draft} onRemove={() => draft.remove(f.id)} onTap={onRef && (() => onRef(f))} /> : <PendingFile key={f.id} file={f} onRemove={() => draft.remove(f.id)}
             onRetry={!f.error ? undefined : f.pastedFile ? () => { draft.remove(f.id); draft.add([f.pastedFile!], f.pasted); } : f.pasted || f.size > MAX_FILE ? undefined : () => draft.retry(f.id)}
             onRestore={f.pasted?.text === undefined || draft.starting ? undefined : () => {
               draft.setText(draft.text ? `${draft.text}\n${f.pasted!.text}` : f.pasted!.text!);
