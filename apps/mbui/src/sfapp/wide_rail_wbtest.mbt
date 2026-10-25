@@ -457,15 +457,16 @@ test "wide: shown a while, the page moves aside as far as what it shows is from 
 }
 
 ///|
-test "wide: a newer build of the desktop app: 更新 at the open sidebar's top right, 12 in from its edge; folded, past the rail, the page bar's start clear of it (brand.css.ts sidebarUpdate)" {
+test "wide: a newer build of the desktop app: 更新 the update key in the sidebar's first row before the filter, as large as it; folded, past the rail, the page bar's start clear of it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
   update.available = Some({ "versionName": "0.1.9999" })
   t.frame()
   t.frame()
-  let (x, y, w, _) = t.query(Button, label="更新").unwrap().rect
-  assert_eq(x + w, @sfdesk.rail_w + @sfdesk.wide.side_w - @sfdesk.bar_in)
-  assert_eq(y, @sfdesk.update_top)
+  let (x, y, w, h) = t.query(Button, label="更新").unwrap().rect
+  let (fx, fy, _, fh) = t.query(Button, label="筛选会话：全部").unwrap().rect
+  assert_eq((y, h), (fy, fh))
+  assert_true(x + w <= fx, msg="更新 to \{x + w}, the filter from \{fx}")
   // folded: 68 from the window's edge, the page bar's words clear of it (72 in)
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
   t.move(1000.0, 400.0)
@@ -476,7 +477,7 @@ test "wide: a newer build of the desktop app: 更新 at the open sidebar's top r
 }
 
 ///|
-test "wide: under a phone's status bar, 更新 below it (the bar takes what is pressed on it), its own row over the sidebar's first" {
+test "wide: under a phone's status bar, 更新 below it (the bar takes what is pressed on it), in the sidebar's first row" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":32,\"bottom\":0,\"left\":0,\"right\":0}}")
@@ -484,10 +485,10 @@ test "wide: under a phone's status bar, 更新 below it (the bar takes what is p
   t.frame()
   t.run_for(@sfdesk.side_move_ms)
   let (_, y, _, h) = t.query(Button, label="更新").unwrap().rect
-  assert_eq(y, 32.0 + @sfdesk.update_top)
-  // the sidebar's first row (新建对话) under it, not beside it
-  let (_, ny, _, _) = t.rect_of("新建对话").unwrap()
-  assert_true(ny >= y + h, msg="\{ny} \{y + h}")
+  assert_true(y >= 32.0, msg="\{y}")
+  // in the sidebar's first row (新建对话's), on its line
+  let (_, fy, _, fh) = t.query(Button, label="筛选会话：全部").unwrap().rect
+  assert_eq((y, h), (fy, fh))
   // pressed, the newer build asked for (update_install: asked again first)
   update.source = Some({ check: fn(_, _, done) { done(Ok(Json::null())) }, url: fn(f) { f } })
   update_version.val = 1

@@ -9,74 +9,44 @@ fn update_shown() -> Bool {
 }
 
 ///|
-/// The desktop app's newer build (brand.tsx UpdateButton, brand.css.ts sidebarUpdate): 更新 at the open sidebar's top
-/// right, 12 in from its edge, or past the rail (and the window's buttons) when it is closed, moved with it; how far it
-/// has downloaded, 正在重启 while it is put in place, 更新失败，重试 when it failed (why, its tip). Pressed, the build is
-/// downloaded and the app restarts as it. `top`: the system's bars over the window (a phone's status bar), which take
-/// what is pressed under them: it goes below them. `x`: how far the tape is moved (laid out Medium).
-fn update_button(
-  c : @ui.Ctx,
-  src : Source,
-  bar : Bool,
-  s : Double,
-  inset : Bool,
-  top : Double,
-  x : Double,
-) -> Unit {
-  let (label, tip, busy) = update_said()
-  let id = c.id("side/update")
-  // open, its end 12 in from the sidebar's (translateX(-100%)); closed, its start past the rail and the window's buttons
-  let width = match c.laid_size(id) {
-    Some((w, _)) => w
-    None => 0.0
-  }
-  // (on the tape, moved with it: x)
-  let (left, tx) = if bar {
-    (if inset { update_closed_inset } else { update_closed_in }, 0.0)
-  } else {
-    (rail_w + s - bar_in, x - width)
-  }
-  c.cursor(id, Hand)
+/// The desktop app's newer build, the library's update key (Home.kt's, one look on every screen), the size of the
+/// filter beside it (32, its mark 16): in the sidebar's first row before the filter (update_in_row); with the sidebar
+/// closed, where the bar's start leaves room for it, past the rail (and the window's buttons). `top`: the system's
+/// bars over the window (a phone's status bar), which take what is pressed under them: it goes below them.
+fn update_button(c : @ui.Ctx, src : Source, inset : Bool, top : Double) -> Unit {
+  let left = if inset { update_closed_inset } else { update_closed_in }
   c.layer(fn() {
-    let b = c.box(style=update_at, moves="side-update", left~, top=top + update_top, tx~, id~, fn() {
-      @sf.pill(c, label, tone=Accented)
-    })
-    c.semantics(b, Button, id~, label~)
+    c.box(style=update_at, moves="side-update", left~, top=top + update_top, fn() { update_in_row(c, src) }) |> ignore
   })
   |> ignore
-  @sf.tip(c, "side/update-tip", id, tip, side=Bottom)
-  if c.clicked(id) && !busy {
-    update_install(src)
-  }
 }
 
 ///|
-/// 更新 in the tape's sidebar's first row (新建对话's, before the filter): as large as the filter beside it, its words in
-/// it, the row where it is whether there is one or not (pengxiao, 2026-10-25: its own row over the sidebar pushed the
-/// sidebar down, and its pill was small for a finger).
+/// 更新 in a row of keys (the sidebar's first, before the filter): the library's update key, the filter's size; how far
+/// it has come in its place, a red dot where it failed (why, its tip). Pressed, the build is downloaded and the app
+/// restarts as it.
 fn update_in_row(c : @ui.Ctx, src : Source) -> Unit {
-  let t = @sf.theme()
-  let (label, tip, busy) = update_said()
-  let id = c.id("side/update")
-  c.cursor(id, Hand)
-  let b = c.box(style=update_in_row_box.then(@ui.style(bg=Data(t.p.accent_bg))), id~, fn() {
-    c.text(label, style=update_in_row_words.then(@ui.text_style(color=Data(t.p.accent_text)))) |> ignore
-  })
-  c.semantics(b, Button, id~, label~)
-  @sf.tip(c, "side/update-tip", id, tip, side=Bottom)
-  if c.clicked(id) && !busy {
+  let (label, why, busy) = update_said()
+  // (under way: how far, the label's last word: 42%; else …)
+  let progress = if !busy {
+    ""
+  } else {
+    match label.rev_find(" ") {
+      Some(i) => label.view(start_offset=i + 1).to_owned()
+      None => "…"
+    }
+  }
+  if @sf.update_key(c, "side/update", update_key_side, update_key_mark, label, why, progress, update.phase == "failed", busy) {
     update_install(src)
   }
 }
 
 ///|
-/// 更新 in the first row: a capsule as high as the filter (32), its words 12 in.
-// kept across runs: a value (no field of it changes)
-let update_in_row_box : @ui.Style = @ui.css("row h=S8 px=S3 radius=Full align=ACenter justify=JCenter")
+/// The key's side and its mark's: the filter's beside it (filter_box: 32; side_icon: 16).
+let update_key_side : Double = 32.0
 
 ///|
-// kept across runs: a value (no field of it changes)
-let update_in_row_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, wrap=false)
+let update_key_mark : Double = 16.0
 
 ///|
 /// What 更新 says, its tip, and whether it is under way.
@@ -112,6 +82,6 @@ pub let update_closed_in : Double = 68.0
 let update_closed_inset : Double = 80.0
 
 ///|
-/// 更新's box: its pill's size.
+/// 更新's box with the sidebar closed: its key's size.
 // kept across runs: a value (no field of it changes)
 let update_at : @ui.Style = @ui.css("row")
