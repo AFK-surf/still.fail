@@ -10,6 +10,8 @@ fn hold_on(t : @ui.Tester, words : String) -> (Double, Double) {
   t.press_at(x, y)
   t.run_for(long_press_ms)
   t.release(x, y)
+  // (its bar come in: @sfbase.pick_bar_in_ms)
+  t.run_for(pick_bar_in_ms)
   (x, y)
 }
 
@@ -57,6 +59,7 @@ test "a finger sliding on widens it by words, from the word first held; the list
   assert_eq(t.list_offset(), before)
   // lifting it tapped nothing: still picked
   assert_true(pk.ts != "")
+  t.run_for(pick_bar_in_ms)
   t.assert_idle()
 }
 

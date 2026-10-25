@@ -33,7 +33,8 @@ test "wide: 分享给其他 workspace from the chat's info: a dialog lists the w
   let sent = named(calls, "chat.xshare")
   assert_eq(sent.length(), 1)
   assert_eq(field(Some(sent[0].params), "to"), Some(Json::array([Json::string("ws3")])))
-  // (the dialog goes as a presenter does: at once)
+  // (the dialog goes as a presenter does: back the way it came, @kit.pop_out)
+  t.run_for(@kit.pop_out_ms)
   t.frame()
   assert_true(t.find("日常") is None, msg="the dialog gone")
 }

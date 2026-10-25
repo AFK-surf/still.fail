@@ -269,7 +269,7 @@ pub fn pick_layer(
     c.box(style=@ui.style(h=Fixed(y - fy)), fn() {  }) |> ignore
     c.box(style=pick_bar_row, fn() {
       c.box(tx=x - fx - fw / 2.0, fn() {
-        c.box(
+        let b = c.box(
           style=pick_bar,
           id=bar,
           fn() {
@@ -280,7 +280,12 @@ pub fn pick_layer(
             }
           },
         )
-        |> ignore
+        // coming as a small panel does (@kit.pop_in), each passage picked anew; a handle moved, or the list let go of,
+        // it is where it is
+        match @motion.presence(c, "pick/bar/\{pk.ts}/\{pk.taken_at}", true, enter=@kit.pop_in, initial=true) {
+          Some(l) => c.look(b, l)
+          None => ()
+        }
       })
       |> ignore
     })
@@ -432,3 +437,7 @@ let pick_pop_hot : @ui.Style = pick_pop_box.then(@ui.css("bg=A(Primary,O80)"))
 ///|
 // kept across runs: a value (no field of it changes)
 let pick_pop_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=OnPrimary, wrap=false)
+
+///|
+/// How long the pick's bar takes to come (@kit.pop_in's).
+pub let pick_bar_in_ms : Double = @kit.pop_ms

@@ -109,7 +109,7 @@ test "popover: beside its trigger, the focus in it; its trigger toggles it, a pr
 }
 
 ///|
-test "popover: it comes from 97% and clear, the first time it opens too; it goes at once" {
+test "popover: it comes from 97% and clear, the first time it opens too; it goes back the same way, a little quicker" {
   let open = Ref(false)
   let t = @ui.Tester::new(fn(c) {
     let tr = button(c, "Filters", key="filters")
@@ -126,9 +126,14 @@ test "popover: it comes from 97% and clear, the first time it opens too; it goes
   assert_true(alpha > 0.0 && alpha < 1.0, msg="\{alpha}")
   t.run_for(pop_ms)
   assert_eq(t.look_of("Unread only"), Some((1.0, 1.0, 1.0)))
-  // closed by its trigger: gone in the frame it closes
+  // closed by its trigger: going (half way out: smaller and fainter, pop_out_ms), then gone
   t.click(@ui.Button, label="Filters")
   assert_false(open.val)
+  t.run_for(pop_out_ms / 2.0)
+  let (sx, _, alpha) = t.look_of("Unread only").unwrap()
+  assert_true(sx > 0.97 && sx < 1.0, msg="\{sx}")
+  assert_true(alpha > 0.0 && alpha < 1.0, msg="\{alpha}")
+  t.run_for(pop_out_ms)
   assert_true(t.find("Unread only") is None)
 }
 
