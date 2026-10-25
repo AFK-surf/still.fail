@@ -225,6 +225,7 @@ pub using @sfbase {
   type Viewport,
   pk,
   pick_clear,
+  pick_bar_in_ms,
   type ChatPick,
   list_frame,
   list_after,

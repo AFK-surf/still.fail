@@ -5,8 +5,8 @@
 // Tooltip: words about its trigger, shown once the pointer has rested on it or at once when the keyboard's focus comes
 // to it; shut by a press on the trigger and by Escape until the pointer leaves; one shown soon after another closed
 // skips the wait; to a finger, which rests on nothing, shown as it is held on the trigger, as Android's tooltips are).
-// They come in growing out of the side of what they hang on (@motion.presence: `pop_in`, a tooltip `tip_in`) and go at
-// once (`pop_out`), as still.fail's small panels do.
+// They come in growing out of the side of what they hang on (@motion.presence: `pop_in`, a tooltip `tip_in`) and go
+// back into it, a little quicker (`pop_out`).
 
 ///|
 /// What a popover's, a hover card's or a tooltip's look is given: the side of its trigger it went on.
@@ -16,8 +16,10 @@ pub(all) struct PopState {
 
 ///|
 /// How a small panel by its trigger comes (still.fail's: controls.css.ts popover, popKeyframes): from 97% of its size
-/// and clear to itself over 140 ms on the ease-out, growing out of the side of what it hangs on; it goes at once, as
-/// the web's (unmounted) does. A popover's, a menu's, a select's, a hover card's by default.
+/// and clear to itself over 140 ms on the ease-out, growing out of the side of what it hangs on; it goes the way it
+/// came, back to 97% and clear over 100 ms on the leaving fade's ease (not at once as the web's, unmounted: still.fail's Android
+/// app, pengxiao 2026-10-25, its dialogs and menus vanishing as they closed). A popover's, a menu's, a select's, a
+/// hover card's, a dialog's by default.
 // kept across runs: a value (no field of it changes)
 pub let pop_in : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, spec=@motion.tween(pop_ms, ease=Out))
 
@@ -26,7 +28,10 @@ pub let pop_ms : Double = 140.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let pop_out : @motion.Trans = @motion.trans(spec=@motion.Snap(0.0))
+pub let pop_out : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, spec=@motion.tween(pop_out_ms, ease=LeaveFade))
+
+///|
+pub let pop_out_ms : Double = 100.0
 
 ///|
 /// How a tooltip comes (parts.css.ts tooltip: fadeKeyframes, 120 ms on the ease-out); it goes at once.
