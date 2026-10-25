@@ -131,7 +131,9 @@ nothing else gives way:
   there. In a row they are as wide as they are, unless they say otherwise.
 - What may give way says so, and how:
   - words cut short with an ellipsis: `w=Cut` (as wide as they are, cut where the row has less), `w=Fill` (what the
-    row leaves, cut where that is less), `min_w` the least of them kept;
+    row leaves, cut where that is less), `min_w` the least of them kept; in a row that leaves parts out (`drop`
+    below), four of their size are kept before a part leaves, all of them with Ctx::text's `keep` (cut only once all
+    that may leave has left: a way's last folder);
   - a box that takes what its row leaves, but never less than what it holds needs: `w=Fill` with `keep` (words cut
     short in it counted at what they keep, four of their size: what is beside it gives way first);
   - a box as wide as it is said (`w=Px`) where its row has the room, less down to a least said below it (`min_w`)

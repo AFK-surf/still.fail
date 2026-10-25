@@ -60,7 +60,7 @@ let pasted_card_w : Double = 260.0
 ///|
 /// The files' row (the draft's files and its station files, in one): 2 in from the capsule's room at its sides and
 /// top, 10 from its edges (Composer.kt `beyond`), the reach of the last picture's remove button kept at its end (`end =
-/// beyond + PictureRemoveOut`), its items' tops in line; laid out as wide as it is, in a box that scrolls it sideways
+/// beyond + PictureRemoveOut`), its items' tops in line; what it has not the room for leaves it for its +N
 /// (draft_files_row).
 // kept across runs: a value (no field of it changes)
 let composer_files_row : @ui.Style = @ui.style(
@@ -2153,26 +2153,70 @@ fn draft_items(d : Draft) -> Array[DraftItem] {
 
 ///|
 /// The files' row (Composer.kt DraftExtras): as far from the capsule's left edge as from its top, past its own room
-/// (composer_files_row, capsule_top); its items' tops in line (Compose's Row: Alignment.Top); wider than the capsule,
-/// it scrolls sideways (horizontalScroll).
+/// (composer_files_row, capsule_top); its items' tops in line (Compose's Row: Alignment.Top). Where it has not the
+/// room for them all, the last leave it first, a +N tile at its end standing for them: pressed, a sheet of them all.
+/// Nothing scrolled, nothing wrapped in the row (the user, 2026-10-25).
 fn draft_files_row(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool) -> Unit {
   let items = draft_items(d)
   if items.length() == 0 {
     return
   }
-  c.sideways("composer/files/" + d.key, fn() {
-    c.box(style=composer_files_row, fn() {
-      for item in items {
-        match item {
-          ARef(x) => ref_card(c, d.key, x)
-          AFile(f) => draft_file(c, src, r, d, f, locked)
-        }
+  let n = items.length()
+  let slot = fn(item : DraftItem) { c.id("composer/file-slot/" + d.key + "/\{item.order()}") }
+  let draw = fn(item : DraftItem) {
+    match item {
+      ARef(x) => ref_card(c, d.key, x)
+      AFile(f) => draft_file(c, src, r, d, f, locked)
+    }
+  }
+  // how many the row left out as last laid out (read back: the frame is built again where that changes)
+  let out = items.filter(fn(item) { c.left_out(slot(item)) }).length()
+  c.box(style=composer_files_row, fn() {
+    for i, item in items {
+      c.box(id=slot(item), taps=false, drop=n - i, fn() { draw(item) }) |> ignore
+    }
+    // (the +N, there only while one is out: all of them in a sheet, apart from the row's by their own keys)
+    c.box(more=true, fn() {
+      let id = c.id("composer/files-more/" + d.key)
+      if c.clicked(id) {
+        @sf.panel(
+          tr("android-chat.attach.files"),
+          fn(c, _) {
+            c.scope(c.id("composer/files-all/" + d.key), fn() {
+              c.box(style=composer_files_all, flow=true, fn() {
+                for item in draft_items(d) {
+                  draw(item)
+                }
+              })
+              |> ignore
+            })
+          },
+          from=Of(id),
+        )
       }
+      let b = c.box(style=files_more_tile.then(files_card()), id~, fn() {
+        c.text("+\{out}", style=files_more_words) |> ignore
+      })
+      c.semantics(b, Button, id~, label=tr("android-chat.attach.files"), actions=[Activate])
     })
     |> ignore
   })
   |> ignore
 }
+
+///|
+/// The +N tile at the files' row's end (a picture's tile's size and ground), and its words.
+// kept across runs: a value (no field of it changes)
+let files_more_tile : @ui.Style = @ui.css("w=S14 h=S14 bg=Tint align=ACenter justify=JCenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let files_more_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, wrap=false)
+
+///|
+/// The sheet of all the draft's files: as they are in the row, in lines, 11 apart.
+// kept across runs: a value (no field of it changes)
+let composer_files_all : @ui.Style = @ui.style(row=true, w=Full, gap=@sf.files_gap, align=AStart)
 
 ///|
 /// What a draft's picture shows: the one picked, or (a draft kept, which keeps no picture, only the file it went up

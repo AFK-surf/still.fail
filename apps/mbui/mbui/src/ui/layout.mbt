@@ -748,9 +748,11 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   }
   n.least = least
   // what its row's fit (Ctx::box drop) keeps of it before a part of the row leaves: words cut short four of their size
-  // (all of them, fewer), what holds them as it holds them; else its least
+  // (all of them, fewer; all of them said to be kept: Ctx::text `keep`), what holds them as it holds them; else its
+  // least
   let mut fit_least = if k == kind_text && n.w is Cut && !n.wrap {
-    dmin(n.text_layout(1.0e9).w, cut_kept_ems * n.font_size) + pad_l + pad_r
+    let whole = n.text_layout(1.0e9).w
+    (if n.keep { whole } else { dmin(whole, cut_kept_ems * n.font_size) }) + pad_l + pad_r
   } else if k == kind_box && (n.w is Auto || (n.w is Fill(_) && n.keep)) && !(n.clip || n.sideways) {
     let row = if more_need >= 0.0 && droppable {
       fsum + (if placed_in > 0 { gap } else { 0.0 }) + more_need

@@ -112,7 +112,6 @@ fn station_pick(c : @ui.Ctx, src : Source, ws : String) -> Unit {
 ///|
 /// The way to the folder shown: all the places, then its station's place and the folders under it; each a way back.
 fn station_pick_way(c : @ui.Ctx) -> Unit {
-  let t = @sf.theme()
   let steps : Array[(String, PickAt?)] = [(@sf.t("web-mobile.files.places"), None)]
   match spick.at {
     Some(at) => {
@@ -127,28 +126,7 @@ fn station_pick_way(c : @ui.Ctx) -> Unit {
     }
     None => ()
   }
-  // (scrolled across when long, its end in view)
-  c.sideways("station-pick/way", to_end=steps.length().to_string(), fn() {
-    c.box(style=narrow_crumbs_row, fn() {
-      for i, step in steps {
-        let (name, to) = step
-        if i > 0 {
-          @sf.icon(c, "chevron-right", size=narrow_crumb_chevron, color=t.p.subtle) |> ignore
-        }
-        let last = i == steps.length() - 1
-        let id = c.id("station-pick/way/\{i}")
-        if !last && c.clicked(id) {
-          spick.at = to
-        }
-        c.box(style=narrow_crumb, id=if last { 0 } else { id }, fn() {
-          c.text(name, style=if last { narrow_crumb_here } else { narrow_crumb_words }) |> ignore
-        })
-        |> ignore
-      }
-    })
-    |> ignore
-  })
-  |> ignore
+  way_line(c, "station-pick/way", steps.map(fn(s) { s.0 }), narrow_way(), fn(i) { spick.at = steps[i].1 })
 }
 
 ///|

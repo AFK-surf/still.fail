@@ -728,11 +728,17 @@ fn Md::placed(
 }
 
 ///|
-/// Items with their markers in the list's 20 of indent.
+/// Items with their markers in the list's 20 of indent; numbers wider than that (a list past 9, words drawn larger)
+/// as wide as the widest of them needs (in a row: never cut short, whatever it measures), all of them lined up.
 fn Md::list(self : Md, l : MdList, depth : Int) -> Piece {
   let c = self.c
   let s = self.size
   let ink = self.ink
+  let marker_w = if l.ordered {
+    dmax(md_marker_w, @ui.text_advance("\{l.start + l.items.length() - 1}.", size=c.sp(s)) + md_marker_gap)
+  } else {
+    md_marker_w
+  }
   // (its tables in its indent, not out to the page's margin)
   let bleed = self.bleed
   self.bleed = 0.0
@@ -759,7 +765,7 @@ fn Md::list(self : Md, l : MdList, depth : Int) -> Piece {
       draw: fn() {
         c.box(dir=Row, align=AStart, fn() {
           if l.ordered {
-            c.box(w=Px(20.0), pr=5.0, align=AEnd, fn() {
+            c.box(dir=Row, min_w=marker_w, pr=md_marker_gap, justify=JEnd, fn() {
               c.text("\{number}.", size=s, line=self.lh(s), color=ink, wrap=false)
               |> ignore
             })
@@ -788,6 +794,13 @@ fn Md::list(self : Md, l : MdList, depth : Int) -> Piece {
   }
   { top, bottom, draw: fn() { c.column(fn() { stack(c, items, false) }) |> ignore } }
 }
+
+///|
+/// A list's indent, where its markers are (20), and how far a number's dot stands from the item (5).
+let md_marker_w : Double = 20.0
+
+///|
+let md_marker_gap : Double = 5.0
 
 ///|
 /// A bulleted item's marker as a browser draws it outside the item (disc,

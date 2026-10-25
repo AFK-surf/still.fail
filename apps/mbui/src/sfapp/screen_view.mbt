@@ -42,6 +42,9 @@ priv struct ScreenUi {
   /// the device kept awake, the window sideways: as last told to the host
   mut awake : Bool
   mut sideways_told : Bool
+  /// the keys row turned to the keys its first face had not the room for (keys_row's ⋯), by their names; none: its
+  /// first face
+  mut keys_turned : Array[String]
 }
 
 ///|
@@ -74,6 +77,7 @@ fn screen_ui(key : String) -> ScreenUi {
         copies: 0,
         awake: false,
         sideways_told: false,
+        keys_turned: [],
       }
       screen_uis[key] = u
       u
@@ -697,56 +701,91 @@ priv struct RowKey {
   code : String
   mod_ : Int
   icon : String
+  /// where the row has not the room for every key: the k-th to leave it for its ⋯ (Ctx::box `drop`; 0: never)
+  drop : Int
 }
 
 ///|
 fn screen_row_keys() -> Array[RowKey] {
-  let k = fn(label, name, key, code, mod_, icon) -> RowKey { { label, name, key, code, mod_, icon } }
+  let k = fn(label, name, key, code, mod_, icon, drop) -> RowKey { { label, name, key, code, mod_, icon, drop } }
+  // (short of room the least used leave first: ⌥, ⌃, ⇧, Tab, ⌘, then up and down, left and right last; Esc stays)
   [
-    k("Esc", "Esc", "Escape", "Escape", 0, ""),
-    k("Tab", "Tab", "Tab", "Tab", 0, ""),
-    k("⌘", tr("android-misc.screen.key.command"), "", "", mod_meta, ""),
-    k("⌃", tr("android-misc.screen.key.control"), "", "", mod_ctrl, ""),
-    k("⌥", tr("android-misc.screen.key.option"), "", "", mod_alt, ""),
-    k("⇧", tr("android-misc.screen.key.shift"), "", "", mod_shift, ""),
-    k("", tr("android-misc.screen.key.left"), "ArrowLeft", "ArrowLeft", 0, "arrow-left"),
-    k("", tr("android-misc.screen.key.up"), "ArrowUp", "ArrowUp", 0, "arrow-up"),
-    k("", tr("android-misc.screen.key.down"), "ArrowDown", "ArrowDown", 0, "arrow-down"),
-    k("", tr("android-misc.screen.key.right"), "ArrowRight", "ArrowRight", 0, "arrow-right"),
+    k("Esc", "Esc", "Escape", "Escape", 0, "", 0),
+    k("Tab", "Tab", "Tab", "Tab", 0, "", 4),
+    k("⌘", tr("android-misc.screen.key.command"), "", "", mod_meta, "", 5),
+    k("⌃", tr("android-misc.screen.key.control"), "", "", mod_ctrl, "", 2),
+    k("⌥", tr("android-misc.screen.key.option"), "", "", mod_alt, "", 1),
+    k("⇧", tr("android-misc.screen.key.shift"), "", "", mod_shift, "", 3),
+    k("", tr("android-misc.screen.key.left"), "ArrowLeft", "ArrowLeft", 0, "arrow-left", 7),
+    k("", tr("android-misc.screen.key.up"), "ArrowUp", "ArrowUp", 0, "arrow-up", 6),
+    k("", tr("android-misc.screen.key.down"), "ArrowDown", "ArrowDown", 0, "arrow-down", 6),
+    k("", tr("android-misc.screen.key.right"), "ArrowRight", "ArrowRight", 0, "arrow-right", 7),
   ]
 }
 
 ///|
 /// The keys a phone's keyboard has not (Esc, Tab, the arrows) and the modifiers (⌘ ⌃ ⌥ ⇧: held, shown solid, for the
-/// next key, typed or here), in a row that scrolls when it is wider than its room.
+/// next key, typed or here), in a row. Where it has not the room for them all, the least used leave it (RowKey's
+/// `drop`; a modifier held never), and a ⋯ key at its end turns the row to them, as a keyboard turns to its other
+/// keys (lit while turned; pressed again, back): nothing scrolled, nothing wrapped, nothing over the keyboard.
 fn keys_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
-  c.sideways("screen-keys-row/" + s.view, fn() {
-    c.box(style=keys_row_box, fn() {
-      for k in screen_row_keys() {
-        let on = k.mod_ != 0 && (u.held.mods & k.mod_) != 0
-        let id = c.id("screen-key/" + k.name)
-        let i = c.box(style=row_key_box, selected=on, id~, fn() {
-          if k.icon != "" {
-            @sf.icon(c, k.icon, size=key_icon, color=c.color(Fg)) |> ignore
-          } else {
-            c.text(k.label, style=if on { row_key_on_words } else { row_key_words }) |> ignore
-          }
-        })
-        c.semantics(i, Button, id~, label=k.name, pressed=on, actions=[Activate])
-        if c.clicked(id) {
-          if k.mod_ != 0 {
-            u.held.toggle(k.mod_)
-          } else {
-            let mods = u.held.take()
-            let n = c.frame_number()
-            c.tell("screen-row-key/" + s.view + "/\{n}", fn() {
-              stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, mods)
-            })
-          }
-        }
+  let keys = screen_row_keys()
+  let held = fn(k : RowKey) { k.mod_ != 0 && (u.held.mods & k.mod_) != 0 }
+  let leaves = fn(k : RowKey) { if held(k) { 0 } else { k.drop } }
+  let slot = fn(k : RowKey) { c.id("screen-key-slot/" + s.view + "/" + k.name) }
+  let more = c.id("screen-keys-more/" + s.view)
+  if c.clicked(more) {
+    // (turned to those the first face left out as last laid out: read back, the frame built again where that
+    // changes; or back)
+    u.keys_turned = if u.keys_turned.is_empty() {
+      keys.filter(fn(k) { leaves(k) > 0 && c.left_out(slot(k)) }).map(fn(k) { k.name })
+    } else {
+      []
+    }
+  }
+  let turned = !u.keys_turned.is_empty()
+  let key = fn(k : RowKey) {
+    let on = held(k)
+    let id = c.id("screen-key/" + k.name)
+    let i = c.box(style=row_key_box, selected=on, id~, fn() {
+      if k.icon != "" {
+        @sf.icon(c, k.icon, size=key_icon, color=c.color(Fg)) |> ignore
+      } else {
+        c.text(k.label, style=if on { row_key_on_words } else { row_key_words }) |> ignore
       }
     })
-    |> ignore
+    c.semantics(i, Button, id~, label=k.name, pressed=on, actions=[Activate])
+    if c.clicked(id) {
+      if k.mod_ != 0 {
+        u.held.toggle(k.mod_)
+      } else {
+        let mods = u.held.take()
+        let n = c.frame_number()
+        c.tell("screen-row-key/" + s.view + "/\{n}", fn() { stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, mods) })
+      }
+    }
+  }
+  let more_key = fn() {
+    let i = c.box(style=row_key_box, selected=turned, id=more, fn() {
+      @sf.icon(c, "more", size=key_icon, color=c.color(if turned { Bg } else { Fg })) |> ignore
+    })
+    c.semantics(i, Button, id=more, label=tr("common.more"), pressed=turned, actions=[Activate])
+  }
+  c.box(style=keys_row_box, fn() {
+    if turned {
+      for k in keys {
+        if u.keys_turned.contains(k.name) {
+          key(k)
+        }
+      }
+      more_key()
+    } else {
+      for k in keys {
+        c.box(id=slot(k), taps=false, drop=leaves(k), fn() { key(k) }) |> ignore
+      }
+      // (the ⋯, there only while a key is out)
+      c.box(more=true, fn() { more_key() }) |> ignore
+    }
   })
   |> ignore
 }

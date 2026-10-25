@@ -171,10 +171,11 @@ let screen_foot : @ui.Style = @ui.css("row w=Full h=S14 px=S2 gap=S1_5 align=ACe
 let keys_row_box : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
-/// A key: 36 high, 40 wide at least, round, 10 in; the ink at 6%, or the ink while it is held.
+/// A key: 36 high, 40 wide at least, round, 10 in, its words or mark in a row (never squeezed: a key short of room
+/// leaves whole); the ink at 6%, or the ink while it is held.
 // kept across runs: a value (no field of it changes)
 let row_key_box : @ui.Style = @ui.css(
-  #|h=S9 min_w=S10 px=S2_5 radius=Full bg=Tint align=ACenter justify=JCenter selected{bg=Fg}
+  #|row h=S9 min_w=S10 px=S2_5 radius=Full bg=Tint align=ACenter justify=JCenter selected{bg=Fg}
 )
 
 ///|

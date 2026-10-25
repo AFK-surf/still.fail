@@ -5,7 +5,7 @@
 // Words built under no widget that names itself are nodes of their own (role Text); a box that takes presses (an `id`,
 // `taps`) and says nothing is a Button named by its `label` or the words in it, as Compose's clickable is, unless it
 // covers nearly the whole window (a scrim, a page's ground). A part can be hidden from it
-// (Ctx::hidden_from_semantics: what only decorates); a modal over the page hides what is under it. An action asked of
+// (Ctx::hidden_from_semantics: what only decorates; one its row left out); a modal over the page hides what is under it. An action asked of
 // a node (by a test, later by the host's VoiceOver, TalkBack or UI Automation) comes to its widget the next frame as
 // though it were done by hand (Ctx::interact: Activate is a click). The tree is made when asked
 // (Ctx::semantics_tree), from what the last frame built.
@@ -243,7 +243,9 @@ pub fn Ctx::semantics_tree(self : Ctx) -> Array[SemNode] {
     let n = self.nodes[i]
     let p = n.parent
     let parent_out = if p >= 0 { up[p] } else { -1 }
-    let parent_hid = (p >= 0 && hid[p]) || hidden_node[i]
+    // (a part its row left out, Ctx::box `drop`: laid out nowhere, not read out either)
+    let left = p >= 0 && n.fl.left_out() && self.nodes[p].fl.style.fits
+    let parent_hid = (p >= 0 && hid[p]) || hidden_node[i] || left
     let parent_named = p >= 0 && named[p]
     if p >= 0 && in_modal[p] {
       in_modal[i] = true

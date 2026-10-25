@@ -1147,6 +1147,8 @@ pub fn Ctx::spacer(self : Ctx) -> Unit {
 /// `tabular`: digits all one width, a number keeping its width as it changes (the theme's `tabular` where unsaid).
 /// `trim`: a font taller than the line not padded beyond its own reach where a host sets lines on whole pixels (as
 /// Compose sets words in a TextStyle of their own; else as a theme's words: set_line).
+/// `keep`: words cut short (`w=Cut`) in a row that may leave a part of it out (Ctx::box `drop`) kept whole till all
+/// it may leave has left, cut only then (a way's last folder, its name before the folders over it).
 pub fn Ctx::text(
   self : Ctx,
   s : String,
@@ -1162,6 +1164,7 @@ pub fn Ctx::text(
   tracking? : Double,
   max_lines? : Int,
   tabular? : Bool,
+  keep? : Bool = false,
 ) -> Int {
   let st = self.text_patch(style)
   let (s_size, s_line) = self.text_sizes(st)
@@ -1184,6 +1187,7 @@ pub fn Ctx::text(
   }
   n.max_lines = first(max_lines, st.max_lines).unwrap_or(0)
   n.tabular = first(tabular, st.tabular).unwrap_or(self.theme.tabular)
+  n.keep = keep
   i
 }
 
