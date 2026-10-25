@@ -2544,8 +2544,6 @@ fn attach_sheet(
     }
   }
   ignore(r)
-  // the gallery's recent photos (recent.mbt), read again as the sheet opens
-  @sfpages.recent_frame(src, cui.attach)
   let tapped_tile = fn(i : Int) {
     if i == 0 {
       ask(Camera)
@@ -2575,6 +2573,8 @@ fn attach_sheet(
   }
   // what it shows, as this frame has it, drawn by the library's host (attach_open)
   attach_drawer.val = fn(c) {
+    // the gallery's recent photos (recent.mbt), read as the sheet opened (attach_open), taken once read
+    @sfpages.recent_frame(src)
     let photos = c.id("attach/photos")
     let files = c.id("attach/files")
     let station = c.id("attach/station")
@@ -2661,6 +2661,8 @@ fn attach_reset() -> Unit {
 fn attach_open(plus : Int) -> Unit {
   @sf.panel("", fn(c, _) { (attach_drawer.val)(c) }, from=Of(plus), gone=fn() { cui.attach = false })
   attach_shown.val = @sf.last_presented()
+  // the gallery's recent photos read again as it opens
+  @sfpages.recent_opened()
 }
 
 ///|

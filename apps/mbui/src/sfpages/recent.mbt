@@ -21,26 +21,26 @@ let recent_step : Double = 98.0
 ///|
 /// The strip's state while the app runs.
 priv struct Recent {
-  /// the sheet was open last frame (its opening reads the gallery again)
-  mut open : Bool
   /// the gallery's answers when last read
   mut answers : Int
   mut access : @hostapi.GalleryAccess
   mut reading : @ui.GalleryRead?
+  /// read again once the read under way is taken (asked for while it read)
+  mut again : Bool
   mut photos : Array[@hostapi.GalleryPhoto]
   /// the photos chosen to go together (their `src`), in the order chosen; none as the sheet opens
   chosen : Array[String]
 }
 
 ///|
-let recent : Recent = { open: false, answers: -1, access: NoGallery, reading: None, photos: [], chosen: [] }
+let recent : Recent = { answers: -1, access: NoGallery, reading: None, again: false, photos: [], chosen: [] }
 
 ///|
 fn recent_reset() -> Unit {
-  recent.open = false
   recent.answers = -1
   recent.access = NoGallery
   recent.reading = None
+  recent.again = false
   recent.photos = []
   recent.chosen.clear()
 }
@@ -106,24 +106,40 @@ fn latest_photos(photos : Array[@hostapi.GalleryPhoto], now : Int64, n : Int) ->
 }
 
 ///|
-/// Each frame ＋'s sheet is drawn: the gallery read again as it opens and on each of the system's answers.
-pub fn recent_frame(src : Source, open : Bool) -> Unit {
-  let answers = @hostapi.gallery_answers()
-  if open && !recent.open {
-    recent.chosen.clear()
+/// ＋'s sheet opened (by what opens it, as it does): none chosen, the gallery read again, what it took in since it was
+/// last read with it (a screenshot just taken). Not seen by the sheet's frames: they are drawn only while it is up, so
+/// they never see it down between two openings.
+pub fn recent_opened() -> Unit {
+  recent.chosen.clear()
+  recent_read()
+}
+
+///|
+/// The gallery read as it is now; asked while a read is under way, read again once that one is taken (one at a time,
+/// none let go of unread).
+fn recent_read() -> Unit {
+  recent.answers = @hostapi.gallery_answers()
+  if recent.reading is Some(_) {
+    recent.again = true
+    return
   }
-  if open && (!recent.open || answers != recent.answers) {
-    recent.answers = answers
-    recent.access = @hostapi.gallery_access()
-    recent.reading = match recent.access {
-      Whole | Chosen => @ui.gallery_read()
-      _ => {
-        recent.photos = []
-        None
-      }
+  recent.access = @hostapi.gallery_access()
+  recent.reading = match recent.access {
+    Whole | Chosen => @ui.gallery_read()
+    _ => {
+      recent.photos = []
+      None
     }
   }
-  recent.open = open
+}
+
+///|
+/// Each frame ＋'s sheet is drawn: the gallery read again on each of the system's answers (an ask for it answered), a
+/// read done taken.
+pub fn recent_frame(src : Source) -> Unit {
+  if @hostapi.gallery_answers() != recent.answers {
+    recent_read()
+  }
   match recent.reading {
     Some(r) =>
       match r.photos() {
@@ -133,6 +149,10 @@ pub fn recent_frame(src : Source, open : Bool) -> Unit {
           // (one chosen and gone from the gallery since: not chosen)
           recent.chosen.retain(fn(s) { recent.photos.iter().any(fn(p) { p.src == s }) })
           @hostapi.log("recent photos: \{recent.photos.length()} of \{all.length()}")
+          if recent.again {
+            recent.again = false
+            recent_read()
+          }
         }
         // (read on the host's side: its word that it is done brings the frame that takes it)
         None => ()

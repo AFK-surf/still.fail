@@ -457,3 +457,33 @@ impl @hostapi.Host for FakeHost with cs_decode(_, data, charset) {
     ""
   }
 }
+
+///|
+/// (a Tester's gallery, Tester::gallery: all of it; none given, as a host the app may read none of: 0)
+impl @hostapi.Host for FakeHost with ga_access(self) {
+  if self.gallery is Some(_) {
+    1
+  } else {
+    0
+  }
+}
+
+///|
+impl @hostapi.Host for FakeHost with ga_read(self) {
+  self.gallery_read()
+}
+
+///|
+impl @hostapi.Host for FakeHost with ga_read_state(self, a0) {
+  self.gallery_read_state(a0)
+}
+
+///|
+impl @hostapi.Host for FakeHost with ga_read_rows(self, a0) {
+  self.gallery_read_rows(a0)
+}
+
+///|
+impl @hostapi.Host for FakeHost with ga_read_end(self, a0) {
+  self.gallery_read_end(a0)
+}
