@@ -9,6 +9,8 @@ test "33-settings-appearance" {
     f.tap("icon:settings")
     f.run_for(@ui.nav_push_ms)
     f.see("=设置")
+    // (此设备's rows under the fold: what the page holds scrolled to them, the wheel over the window's middle)
+    f.wheel(300.0)
     f.see("外观")
     f.tap("外观")
     f.run_for(@ui.nav_push_ms)
@@ -21,7 +23,8 @@ test "33-settings-appearance" {
     f.run_for(@ui.cover_slide_ms)
     f.back()
     f.run_for(@ui.nav_push_ms)
-    f.see("=设置")
+    // (back on the settings where it was left, scrolled to 此设备's rows: the page's title above them)
+    f.see("=外观")
     f.end()
   })
 }
