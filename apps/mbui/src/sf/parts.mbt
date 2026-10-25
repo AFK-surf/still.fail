@@ -12,7 +12,12 @@ fn ease_to(c : @ui.Ctx, key : String, on : Bool) -> Double {
 ///|
 /// For parts whose own parameter is called `icon`.
 fn draw_icon(c : @ui.Ctx, name : String, size : Double, color : Int64) -> Unit {
-  icon(c, name, size~, color~) |> ignore
+  // (a runtime's mark by its runtime, `runtime:<runtime>`: its maker's, as maker_mark draws it)
+  if name.has_prefix("runtime:") {
+    maker_mark(c, "", name.view(start_offset=8).to_string(), size) |> ignore
+  } else {
+    icon(c, name, size~, color~) |> ignore
+  }
 }
 
 ///|
@@ -2017,7 +2022,9 @@ let input_box_small_hot : @ui.Style = input_box_small.then(@ui.css("border_color
 /// height and body words), what is chosen in it cut short, the placeholder subtle, a chevron at its end; pressed (or
 /// Enter, Space), its options through the presenters (@sf.pick: beside it a menu's, the arrows, letters and Enter;
 /// a sheet of rows with touch), the chosen checked, `hints` a quieter note at an option's end. `options`: each
-/// value and its words; `choose` is given the one chosen.
+/// value and its words; `choose` is given the one chosen. `whole`: never narrower than what is chosen in it says, its
+/// words never cut (what is beside it gives way). `icons`: an option's icon by its value (an icon's name, or
+/// `runtime:<runtime>` for a runtime's mark), before its words in its row and, chosen, in the select.
 pub fn select(
   c : @ui.Ctx,
   key : String,
@@ -2029,6 +2036,8 @@ pub fn select(
   disabled? : Bool = false,
   w? : Double = select_w,
   hints? : Map[String, String] = {},
+  whole? : Bool = false,
+  icons? : Map[String, String] = {},
 ) -> Unit {
   let t = theme()
   let id = c.id(key)
@@ -2041,11 +2050,19 @@ pub fn select(
     style=(if hot { select_box_hot } else { select_box }).then(control_height()).then(@ui.style(max_w=Fixed(w))),
     id=if disabled { 0 } else { id },
     disabled~,
+    keep=whole,
     fn() {
-      c.text(if words == "" { placeholder } else { words }, style=if words == "" {
-        select_placeholder
-      } else {
-        select_words
+      c.box(style=select_lead, fn() {
+        match icons.get(value) {
+          Some(i) if words != "" => draw_icon(c, i, select_icon, t.p.text)
+          _ => ()
+        }
+        c.text(if words == "" { placeholder } else { words }, style=if words == "" {
+          select_placeholder
+        } else {
+          select_words
+        })
+        |> ignore
       })
       |> ignore
       icon(c, "chevron-down", size=select_chevron, color=t.p.muted) |> ignore
@@ -2055,7 +2072,7 @@ pub fn select(
   if !disabled && c.clicked(id) {
     pick(
       label,
-      options.map(fn(o) { choice(o.0, o.1, note=hints.get(o.0).unwrap_or("")) }),
+      options.map(fn(o) { choice(o.0, o.1, note=hints.get(o.0).unwrap_or(""), icon=icons.get(o.0).unwrap_or("")) }),
       value,
       choose,
       from=Of(id),
@@ -2074,6 +2091,15 @@ let select_box : @ui.Style = @ui.css(
 /// Pointed at, open or focused: the field's hover grey round it.
 // kept across runs: a value (no field of it changes)
 let select_box_hot : @ui.Style = select_box.then(@ui.css("border_color=FieldHover"))
+
+///|
+/// What is chosen in a select: its icon (where it has one) and its words, 6 apart.
+// kept across runs: a value (no field of it changes)
+let select_lead : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
+
+///|
+/// A chosen option's icon in a select: as a row's mark (14).
+let select_icon : Double = 14.0
 
 ///|
 // kept across runs: a value (no field of it changes)

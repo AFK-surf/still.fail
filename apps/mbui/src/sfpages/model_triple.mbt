@@ -1,8 +1,8 @@
 // The one way a model is chosen (ember web/src/ModelTriple.tsx, ModelTriple.css.ts; NewChat.kt's run picker said the
 // same): a control that says the model, the runtime (where it can still change and the model runs on more than one),
 // how hard it thinks and who runs it, in one line; pressed, its panel through the presenters (beside it with keyboard and mouse,
-// a sheet with touch): the models by series (a filter over them when there are many), the runtimes, the
-// efforts and the speed, side by side as the panel's width lets them; at its foot who runs it (the accounts in a
+// a sheet with touch): the models by series (a filter over them when there are many), under them the runtime, the
+// effort and the speed as selects, every name whole; at its foot who runs it (the accounts in a
 // panel of their own, from it), 取消 and 确定. Its rows are the screen's (Theme::rows pick). Picks there are the
 // core's draft (`pick.set`) until 确定 (`pick.save`); a model another station has is borrowed first, asked in a dialog.
 
@@ -32,9 +32,14 @@ fn triple_reset() -> Unit {
 }
 
 ///|
-/// What is at a row's end (its check, what goes with it): the rest of the row after its words, at its end.
+/// What is at a row's end (its check, what goes with it): the rest of the row after its words, at its end; or as wide
+/// as what it holds where the words take the rest (triple_option's body_grows).
 // kept across runs: a value (no field of it changes)
 let triple_end : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1_5, align=ACenter, justify=JEnd)
+
+///|
+// kept across runs: a value (no field of it changes)
+let triple_end_held : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 /// An effort as it is said (low → 低); one the words do not know, as it is spelled, its first letter up.
@@ -122,6 +127,8 @@ pub fn model_triple(
       foot=fn(c, close) { triple_foot(c, src, station, of, saved, close) },
       gone=fn() { triple.open = "" },
       focus=false,
+      // (the models scroll by themselves, what goes with the one picked beside them in view)
+      lists=true,
       // (the line over its foot across the whole panel, out past its padding to its edges, over the foot where what it
       // holds scrolls: 2026-10-25 用户「分割线边上不要留空」)
       ruled=true,
@@ -229,11 +236,10 @@ pub fn model_triple(
 }
 
 ///|
-/// The panel: the filter across its top (more than 8 models), the models by series and what goes with the one picked
-/// (its runtimes, how hard it thinks, how fast) beside them, a line between, where the panel has the room for all their
-/// words beside each other (the widest model's, the widest runtime's and effort's), else under them; what borrowing
-/// would do under them. Beside what opened it the models' column scrolls by itself past 360 (the web's); in a sheet all
-/// of it, the sheet as tall as that up to its most (@sf.panel_column).
+/// The panel: the filter across its top (more than 8 models), the models by series, and beside them the runtimes, how
+/// hard it thinks and how fast as columns where all their words fit, else under them as selects side by side: the
+/// models scrolling by themselves, what goes with them in view. What borrowing would do under them. Beside what opened it the models scroll past 360 (the web's); in a sheet the
+/// sheet is as tall as all of it up to its most, the models scrolling in what is left then (@sf.panel_column).
 fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Unit {
   let v = (src.topic)("pick", pick_params(station, of)).value
   if v is None {
@@ -273,10 +279,53 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Uni
   let runtimes = items(v, "runtimes")
   let efforts = items(v, "efforts")
   let fast = flag(v, "fastAvailable")
-  let columns = c.id("triple/columns")
-  // (the models and the rest beside them where both have the room for their words, else the rest under the models: a
-  // row that goes on in lines, each as wide as its words need at least, sharing what their line has)
-  c.box(style=triple_columns, flow=true, line_gap=triple_lines, id=columns, taps=false, fn() {
+  let runs_on : Array[(String, String)] = []
+  for r in runtimes {
+    if r is String(r) {
+      runs_on.push((r, @settings.runtime_label(r)))
+    }
+  }
+  let all_efforts : Array[(String, String)] = []
+  if efforts.length() > 0 {
+    all_efforts.push(("", @sf.t("web-main.model.default")))
+    for e in efforts {
+      if e is String(e) {
+        all_efforts.push((e, effort_text(e)))
+      }
+    }
+  }
+  let speed_now = match field(draft, "fast") {
+    Some(True) => "fast"
+    Some(False) => "standard"
+    _ => ""
+  }
+  let speeds = [
+    ("", @sf.t("web-main.model.fastSubscription")),
+    ("standard", @sf.t("web-main.model.standard")),
+    ("fast", "Fast"),
+  ]
+  let pick_runtime = fn(r : String) { pick_draft(src, station, of, { "runtime": Json::string(r) }) }
+  let pick_effort = fn(e : String) {
+    pick_draft(src, station, of, { "effort": if e == "" { Json::null() } else { Json::string(e) } })
+  }
+  let pick_speed = fn(f : String) {
+    let fv : Json = match f {
+      "" => Json::null()
+      "fast" => Json::boolean(true)
+      _ => Json::boolean(false)
+    }
+    pick_draft(src, station, of, { "fast": fv })
+  }
+  let has_rest = runs_on.length() > 0 || all_efforts.length() > 0 || fast
+  // the models and, beside them, the runtimes and how hard it thinks (and how fast) as columns of their own, where the
+  // panel has the room for all of their words (beside what opened it, as the web's: nothing is said of them twice);
+  // where it has not (a phone's sheet), those columns leave the row whole (their own row's `drop`, read back) and are
+  // selects under the models instead, side by side (2026-10-26 用户「你不如把运行时和思考深度缩成两个独立 select」):
+  // either way in view whatever model is picked, the models scrolling by themselves (「用户选完模型根本看不到下面的
+  // runtime 和思考深度」), every name whole (「看不出是什么模型怎么办」)
+  let rest = c.id("triple/rest")
+  let under = has_rest && c.left_out(rest)
+  c.box(style=triple_columns, fn() {
     c.box(style=triple_models, keep=true, fn() {
       @sf.panel_column(c, "triple/models", triple_list_h, triple_rows, fn() {
         // (no head of its own: the panel's title says what they are)
@@ -295,89 +344,55 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Uni
       })
     })
     |> ignore
-    let runtime_column = fn() {
-      triple_column_head(c, @sf.t("web-main.model.runtime"))
-      for r in runtimes {
-        if r is String(r) {
-          let on = text(draft, "runtime") == r
-          if triple_option(c, "triple/runtime/" + r, @settings.runtime_label(r), on, fn() {
-              @sf.maker_mark(c, "", r, 14.0) |> ignore
-              c.text(@settings.runtime_label(r), style=if on { triple_picked } else { triple_words }) |> ignore
-            }) {
-            pick_draft(src, station, of, { "runtime": Json::string(r) })
-          }
-        }
-      }
-    }
-    let effort_column = fn() {
-      if efforts.length() > 0 {
-        triple_column_head(c, @sf.t("web-main.model.effort"))
-        let now = text(draft, "effort")
-        let all : Array[String] = [""]
-        for e in efforts {
-          if e is String(e) {
-            all.push(e)
-          }
-        }
-        for e in all {
-          let on = now == e
-          let words = if e == "" { @sf.t("web-main.model.default") } else { effort_text(e) }
-          if triple_option(c, "triple/effort/" + e, words, on, fn() {
-              c.text(words, style=if on { triple_picked } else { triple_words }) |> ignore
-            }) {
-            pick_draft(src, station, of, { "effort": if e == "" { Json::null() } else { Json::string(e) } })
-          }
-        }
-      }
-      if fast {
-        triple_column_head(c, @sf.t("web-main.model.speed"))
-        let now = match field(draft, "fast") {
-          Some(True) => "fast"
-          Some(False) => "standard"
-          _ => ""
-        }
-        for f in ["", "standard", "fast"] {
-          let on = now == f
-          let words = match f {
-            "" => @sf.t("web-main.model.fastSubscription")
-            "fast" => "Fast"
-            _ => @sf.t("web-main.model.standard")
-          }
-          if triple_option(c, "triple/fast/" + f, words, on, fn() {
-              c.text(words, style=if on { triple_picked } else { triple_words }) |> ignore
-            }) {
-            let fv : Json = match f {
-              "" => Json::null()
-              "fast" => Json::boolean(true)
-              _ => Json::boolean(false)
+    if has_rest {
+      c.box(style=triple_rest, drop=1, id=rest, taps=false, fn() {
+        // (the lines between columns out of their flow, in the middle of the 8 before each, as tall as the columns)
+        triple_line_before(c)
+        if runs_on.length() > 0 {
+          c.box(style=triple_column, fn() {
+            triple_column_head(c, @sf.t("web-main.model.runtime"))
+            for o in runs_on {
+              let (r, words) = o
+              let on = text(draft, "runtime") == r
+              if triple_option(c, "triple/runtime/" + r, words, on, fn() {
+                  @sf.maker_mark(c, "", r, 14.0) |> ignore
+                  c.text(words, style=if on { triple_picked } else { triple_words }) |> ignore
+                }) {
+                pick_runtime(r)
+              }
             }
-            pick_draft(src, station, of, { "fast": fv })
-          }
+          })
+          |> ignore
         }
-      }
-    }
-    let efforts_shown = efforts.length() > 0 || fast
-    if runtimes.length() > 0 || efforts_shown {
-      // the rest, its columns side by side (a line between); a line before it where it is beside the models, none
-      // where it has a line of its own under them (as wide as all of theirs)
-      let rest = c.id("triple/rest")
-      let under = match (c.laid_size(columns), c.laid_size(rest)) {
-        (Some((all, _)), Some((w, _))) => w >= all - 0.5
-        _ => false
-      }
-      c.box(style=triple_rest, keep=true, id=rest, taps=false, fn() {
-        if !under {
-          triple_line_before(c)
-        }
-        if runtimes.length() > 0 {
-          c.box(style=triple_column, keep=true, runtime_column) |> ignore
-        }
-        if efforts_shown {
-          c.box(style=triple_column, keep=true, fn() {
-            if runtimes.length() > 0 {
+        if all_efforts.length() > 0 || fast {
+          c.box(style=triple_column, fn() {
+            if runs_on.length() > 0 {
               triple_line_before(c)
             }
-            effort_column()
+            if all_efforts.length() > 0 {
+              triple_column_head(c, @sf.t("web-main.model.effort"))
+              for o in all_efforts {
+                let (e, words) = o
+                let on = text(draft, "effort") == e
+                if triple_option(c, "triple/effort/" + e, words, on, fn() {
+                    c.text(words, style=if on { triple_picked } else { triple_words }) |> ignore
+                  }) {
+                  pick_effort(e)
+                }
+              }
+            }
+            if fast {
+              triple_column_head(c, @sf.t("web-main.model.speed"))
+              for o in speeds {
+                let (f, words) = o
+                let on = speed_now == f
+                if triple_option(c, "triple/fast/" + f, words, on, fn() {
+                    c.text(words, style=if on { triple_picked } else { triple_words }) |> ignore
+                  }) {
+                  pick_speed(f)
+                }
+              }
+            }
           })
           |> ignore
         }
@@ -386,6 +401,44 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Uni
     }
   })
   |> ignore
+  if under {
+    c.box(style=triple_selects, fn() {
+      if runs_on.length() > 0 {
+        let head = @sf.t("web-main.model.runtime")
+        let icons : Map[String, String] = {}
+        for o in runs_on {
+          icons[o.0] = "runtime:" + o.0
+        }
+        triple_select_of(c, head, fn() {
+          @sf.select(
+            c,
+            "triple/runtime",
+            text(draft, "runtime"),
+            runs_on,
+            pick_runtime,
+            label=head,
+            disabled=runs_on.length() < 2,
+            w=triple_select_most,
+            whole=true,
+            icons~,
+          )
+        })
+      }
+      if all_efforts.length() > 0 {
+        let head = @sf.t("web-main.model.effort")
+        triple_select_of(c, head, fn() {
+          @sf.select(c, "triple/effort", text(draft, "effort"), all_efforts, pick_effort, label=head, w=triple_select_most, whole=true)
+        })
+      }
+      if fast {
+        let head = @sf.t("web-main.model.speed")
+        triple_select_of(c, head, fn() {
+          @sf.select(c, "triple/fast", speed_now, speeds, pick_speed, label=head, w=triple_select_most, whole=true)
+        })
+      }
+    })
+    |> ignore
+  }
   // the model picked is another station's: said over the foot, which borrows it rather than confirming
   let borrow = field(v, "borrow")
   if borrow is Some(Object(_)) {
@@ -485,12 +538,12 @@ fn triple_model_row(c : @ui.Ctx, src : Source, station : String, of : String, v 
     Some(String(r)) => r
     _ => text(field(v, "value"), "runtime")
   }
-  if triple_option(c, "triple/model/" + model, text(o, "name"), picked, fn() {
+  if triple_option(c, "triple/model/" + model, text(o, "name"), picked, body_grows=true, fn() {
       @sf.maker_mark(c, text(field(o, "maker"), "id"), runs, 14.0) |> ignore
-      c.box(style=triple_option_text, fn() {
-        // (all of its name what its column needs at least, where the panel has the room: cut short only where even
-        // the panel's width has not the room for it)
-        c.text(text(o, "name"), style=if picked { triple_row_picked } else { triple_row_name }, keep=true) |> ignore
+      c.box(style=triple_name_column, fn() {
+        // (all of its name in the room its column leaves it, on a second line where one is not enough: what goes with
+        // the model picked beside the models takes the room its words need first)
+        c.text(text(o, "name"), style=if picked { triple_row_picked } else { triple_row_name }) |> ignore
         match text(field(o, "spent"), "text") {
           "" => ()
           sp => c.text(sp, style=triple_note) |> ignore
@@ -512,10 +565,22 @@ fn triple_model_row(c : @ui.Ctx, src : Source, station : String, of : String, v 
 }
 
 ///|
-/// The line before a column beside the one before it, in the middle of what is between them, as tall as the column:
-/// out of its flow (none where it is under the other, and no room taken by it).
+/// The line before a column beside another (the models, the runtimes), out of its flow, in the middle of the 8 between
+/// them, from the top of the column down to the line over the panel's foot.
 fn triple_line_before(c : @ui.Ctx) -> Unit {
-  c.box(style=triple_rule_side, left=-triple_between_rule, top=0.0, bottom=0.0, fn() {  }) |> ignore
+  // (down to the line over the panel's foot, meeting it, past the room left under the columns)
+  c.box(style=triple_rule_side, left=-triple_between_rule, top=0.0, bottom=-@sf.panel_rule_over(), fn() {  }) |> ignore
+}
+
+///|
+/// A select under the models, its name `head` over it (as a column's head is over its rows): its share of their line,
+/// never less than what it says needs (a long runtime's name whole, the others sharing what is left).
+fn triple_select_of(c : @ui.Ctx, head : String, select : () -> Unit) -> Unit {
+  c.box(style=triple_select_box, keep=true, fn() {
+    triple_column_head(c, head)
+    select()
+  })
+  |> ignore
 }
 
 ///|
@@ -527,8 +592,17 @@ fn triple_column_head(c : @ui.Ctx, words : String) -> Unit {
 ///|
 /// A row of a column (runPickerOption): as high as the screen's picker rows at least (Theme::rows pick), 4 by 10 in, its ground under the pointer and while picked,
 /// `trail` (a button of its own) at its end, a check after it while picked (its room kept while not, as the web's
-/// hidden check). True on the frame after a press.
-fn triple_option(c : @ui.Ctx, key : String, label : String, on : Bool, body : () -> Unit, trail? : () -> Unit) -> Bool {
+/// hidden check); `body_grows`: what `body` lays out takes the room left (a model's name, on two lines where it needs
+/// them). True on the frame after a press.
+fn triple_option(
+  c : @ui.Ctx,
+  key : String,
+  label : String,
+  on : Bool,
+  body : () -> Unit,
+  trail? : () -> Unit,
+  body_grows? : Bool = false,
+) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
   c.cursor(id, Hand)
@@ -536,8 +610,9 @@ fn triple_option(c : @ui.Ctx, key : String, label : String, on : Bool, body : ()
   let b = c.box(style=(if on { triple_option_on } else { triple_option_style }).then(@ui.style(min_h=Fixed(t.rows.pick))), id~, keep=true, fn() {
     body()
     // what is at its end, at the end: the room left (no spacer of its own, whose gap took a gap's room from the
-    // words), never less than it needs; the check's room kept while it is not picked
-    c.box(style=triple_end, keep=true, fn() {
+    // words), never less than it needs; the check's room kept while it is not picked; where what it says takes the
+    // room left (`body_grows`), as wide as what it holds
+    c.box(style=if body_grows { triple_end_held } else { triple_end }, keep=true, fn() {
       match trail {
         Some(f) => f()
         None => ()
@@ -808,48 +883,61 @@ let triple_search : @ui.Style = @ui.css("w=Full pb=S2")
 // kept across runs: a value (no field of it changes)
 pub let triple_rule_h : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
 
+
 ///|
-/// The line before a column beside another (triple_line_before), as tall as the column.
+/// The models and the rest beside them (a line between, in the middle of the 8 between them), or the models alone
+/// across the panel where the rest left the row; as tall as the room a sheet held to its most leaves them (the models
+/// scroll in it), else as tall as they are.
+// kept across runs: a value (no field of it changes)
+let triple_columns : @ui.Style = @ui.style(row=true, w=Full, h=@sf.grow, gap=S2)
+
+///|
+/// The models' column: what the rest leaves of the panel, 200 at least (the web's).
+// kept across runs: a value (no field of it changes)
+let triple_models : @ui.Style = @ui.style(w=@sf.grow, min_w=Within(triple_models_least))
+
+///|
+let triple_models_least : Double = 200.0
+
+///|
+/// The runtimes, how hard it thinks and how fast beside the models: columns as wide as their words, 8 apart, a line
+/// between; there whole or not at all (a row's `drop`).
+// kept across runs: a value (no field of it changes)
+let triple_rest : @ui.Style = @ui.css("row gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let triple_column : @ui.Style = @ui.css("gap=SPx")
+
+///|
+/// Where the line before a column beside another starts, from its start: in the middle of the 8 between them.
+let triple_between_rule : Double = 4.5
+
+///|
+/// The line before a column beside another: as tall as the column.
 // kept across runs: a value (no field of it changes)
 let triple_rule_side : @ui.Style = @ui.css("w=SPx bg=Line")
 
 ///|
-/// The models and the rest beside them (a line between, in the middle of the 8 between them), or the rest under them.
+/// The selects under the models (the runtime, how hard it thinks, how fast): side by side, each its share, 8 apart,
+/// 8 under the models.
 // kept across runs: a value (no field of it changes)
-let triple_columns : @ui.Style = @ui.css("row w=Full gap=S2")
+let triple_selects : @ui.Style = @ui.css("row w=Full pt=S2 gap=S2")
 
 ///|
-/// Where the line between two columns side by side starts, from the start of the column after it: in the middle of
-/// the 8 between them (triple_columns', triple_rest's gap), out of their flow.
-let triple_between_rule : Double = 4.5
-
-///|
-/// What is between the models and the rest under them: as its rows are apart.
-let triple_lines : Double = 1.0
-
-///|
-/// The models' column: what the rest leave of the panel, its widest model's words at least (200 at least, the web's),
-/// never wider than the panel (a name longer than that cut short in it).
+/// A select's share of their line: its name over it.
 // kept across runs: a value (no field of it changes)
-let triple_models : @ui.Style = @ui.style(w=@sf.models_grow, min_w=Within(triple_models_w))
+let triple_select_box : @ui.Style = @ui.style(w=@sf.grow, gap=SPx)
+
+///|
+/// How wide a select is at most: all of its share.
+let triple_select_most : Double = 1.0e9
 
 ///|
 /// A column's rows, 1 apart.
 // kept across runs: a value (no field of it changes)
 let triple_rows : @ui.Style = @ui.css("w=Full gap=SPx")
 
-///|
-/// What goes with the model, its columns side by side (a line between, in the middle of the 8 between them): beside
-/// the models or under them, sharing what its line has with them, all of its columns' words at least.
-// kept across runs: a value (no field of it changes)
-let triple_rest : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S2)
-
-///|
-/// A column of the rest (the runtimes; how hard it thinks and how fast): its share of the rest, its widest words at
-/// least (no least of its own: the web's 120 and 128 would put the rest under the models where their words fit beside
-/// them).
-// kept across runs: a value (no field of it changes)
-let triple_column : @ui.Style = @ui.style(w=@sf.grow, gap=SPx)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -868,13 +956,19 @@ let triple_option_on : @ui.Style = @ui.css(
 let triple_option_text : @ui.Style = @ui.css("gap=SPx")
 
 ///|
-/// A model's name in its row: all of it kept (Ctx::text keep), cut short only past the panel's width.
+/// A model's name in its row: across the room left in it, on two lines where it needs them (cut short past those, a
+/// name longer than any).
 // kept across runs: a value (no field of it changes)
-let triple_row_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Cut)
+let triple_row_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, w=Full, max_lines=2)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_row_picked : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false, w=Cut)
+let triple_row_picked : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, w=Full, max_lines=2)
+
+///|
+/// A model's name and what is under it: the room its row leaves.
+// kept across runs: a value (no field of it changes)
+let triple_name_column : @ui.Style = @ui.style(w=@sf.grow, gap=SPx)
 
 ///|
 /// Where a row's check is while it is not picked: the row as wide picked or not (its column's words then as wide).
@@ -942,11 +1036,8 @@ let confirm_line : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 let confirm_foot : @ui.Style = @ui.css("row w=Full pt=S3 gap=S2 align=ACenter justify=JEnd")
 
 ///|
-/// The models' column beside what opened it: 360 high at most (runPicker); 200 wide at least.
+/// The models beside what opened it: 360 high at most (runPicker).
 let triple_list_h : Double = 360.0
-
-///|
-let triple_models_w : Double = 200.0
 
 ///|
 /// The panel's width beside its control (the web's: the models' 200, the runtimes' and the efforts' columns).
