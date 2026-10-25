@@ -625,9 +625,15 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int) -> U
       1
     }
     c.press_run = (c.clicks, t, x, y)
-    // words picked with the pointer (desktop.mbt), not in a field, nor on what keeps them (Ctx::keeps_selection)
+    // words picked with the pointer (desktop.mbt), not in a field, nor on what keeps them (Ctx::keeps_selection);
+    // picking them lets go of what the focused field had picked, the focus staying its (focus.mbt): one thing picked
+    // in the window, as in a browser, and it is what ⌘C copies
     if !c.editors.contains(target) && !keeps_selection_on(target) {
       select_press(x, y, c.clicks)
+      match c.editors.get(c.focus) {
+        Some(st) if picked.base != 0 => st.anchor = st.caret
+        _ => ()
+      }
     }
     // what lies over the page sees it (overlay.mbt); the focus goes as a press moves it (focus.mbt)
     c.press_down = Some((x, y))
@@ -1193,8 +1199,9 @@ fn key_in(code : Int, mods : Int) -> Unit {
       None => ()
     }
   }
-  // ⌘C with no field focused: the words picked with the pointer
-  if code == key_copy && !c.editors.contains(c.focus) && selected_words() != "" {
+  // ⌘C: the words picked with the pointer, unless the focused field has words of its own picked (a field keeps the
+  // focus through a press on the page's words, which lets go of what it had picked: the press above)
+  if code == key_copy && selected_words() != "" && !field_picks(c) {
     h_clipboard_set(selected_words())
     return
   }
