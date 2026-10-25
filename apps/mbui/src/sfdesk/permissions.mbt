@@ -39,7 +39,7 @@ fn permissions_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
           where_,
           state,
           fn() { (core.notify_ask)() },
-          fn() { open_notify_settings(core) },
+          fn() { open_notify_settings(c) },
         )
       },
     ],

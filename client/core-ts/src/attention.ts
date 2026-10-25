@@ -127,6 +127,8 @@ export class Attention implements Owner {
             yield* attend.set(c.on, c.asked, c.kinds, c.preview);
             store.invalidateAll((t) => t.topic === "notify");
             if (c.on === false && handlers.pushUnregister) yield* handlers.pushUnregister(core, { kind: "pushUnregister" }, progress, at, ctx);
+            // what it shows changed: its registration given again (pushes made so), not waited on
+            else if ((c.kinds !== null || c.preview !== null) && attend.on()) core.runner.fork(Effect.ignore(core.cloudSync.pushRegistered()));
             return attend.value(null);
           });
         case "permission":

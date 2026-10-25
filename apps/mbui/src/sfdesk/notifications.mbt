@@ -164,7 +164,7 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
         }
         if way_tile(c, "notify-banner", "banner", on, action~, busy=pending) && !pending {
           match permission {
-            "denied" => open_notify_settings(core)
+            "denied" => open_notify_settings(c)
             "default" => (core.notify_ask)()
             _ => use_notify(core, !on)
           }
@@ -438,15 +438,10 @@ fn app_icon(c : @ui.Ctx, side : Double) -> Unit {
 }
 
 ///|
-/// The system's notification settings for this app, where it can open them (macOS's; Windows' its own).
-fn open_notify_settings(core : Core) -> Unit {
-  (core.open_link)(
-    if @ui.platform() == 0 {
-      "x-apple.systempreferences:com.apple.preference.notifications"
-    } else {
-      "ms-settings:notifications"
-    },
-  )
+/// The system's settings of this app's notifications, where they are allowed again once refused (the host knows where:
+/// Android's page of the app's notifications, iOS's, macOS's and Windows' Notifications), told as the frame ends.
+fn open_notify_settings(c : @ui.Ctx) -> Unit {
+  c.tell("notify-settings", fn() { @ui.notice_settings() |> ignore })
 }
 
 

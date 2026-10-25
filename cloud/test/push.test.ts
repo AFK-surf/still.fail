@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import test from "node:test";
 import { exportPKCS8, generateKeyPair } from "jose";
 import { harness, type OutboundRequest } from "./harness.ts";
-import { line, noticeBody } from "../src/noticeText.ts";
+import { line, noticeBody, noticeBodyFor, shown, showsOf } from "../src/noticeText.ts";
 import { encrypt, fromB64url, senderKeys, toB64url, vapidAuthorization } from "../src/webpush.ts";
 
 type Harness = Awaited<ReturnType<typeof harness>>;
@@ -116,6 +116,20 @@ test("a notification's text is one line of at most 140 characters, made by its k
   assert.ok(long.endsWith("…"));
   assert.equal(Array.from(line("🔥".repeat(141))).length, 140, "cut by character, not UTF-16 unit");
   assert.equal(line("x".repeat(140)), "x".repeat(140));
+});
+
+test("a device that says what it shows gets only those kinds, and with its preview off only what happened", () => {
+  const shows = showsOf({ kinds: { wait: true, failed: true, done: "off", message: false }, preview: false });
+  assert.deepEqual([shown(shows, "block"), shown(shows, "failed"), shown(shows, "done"), shown(shows, "message"), shown(shows, "new_kind")], [true, true, false, false, false]);
+  assert.equal(noticeBodyFor(shows, "block", "要你确认", "Claude"), "待你决定");
+  assert.equal(noticeBodyFor(shows, "failed", "token runs out", undefined, "en"), "Something went wrong");
+  // A done turn's while away or always: a push comes with no page in front.
+  assert.ok(shown(showsOf({ kinds: { done: "away" }, preview: true }), "done"));
+  assert.equal(noticeBodyFor(showsOf({ kinds: {}, preview: true }), "message", "hi", "Bob"), "Bob: hi");
+  // An older app says nothing: every kind, in full.
+  assert.equal(showsOf({ kind: "fcm", token: "t" }), null);
+  assert.ok(shown(null, "message"));
+  assert.equal(noticeBodyFor(null, "message", "hi", "Bob"), "Bob: hi");
 });
 
 // ── still.fail cloud ──────────────────────────────────────────────────────
@@ -398,6 +412,14 @@ test("Android devices get a high-priority FCM data message; an unregistered toke
     assert.deepEqual(await (await notify(h, station, [notice(["alice@example.test", "bob@example.test"])])).json(), { sent: 1 });
     assert.equal(got.filter((r) => r.url === account.token_uri).length, 1);
     assert.equal(got.filter((r) => r.url.endsWith("messages:send")).length, 3);
+
+    // Alice's phone registered again, its preview off and people's messages off: only what happened, none of those.
+    const hidden = { kind: "fcm", token: "alice-token", kinds: { wait: true, failed: true, done: "away", message: false }, preview: false };
+    assert.equal((await register(h, aliceTokens, "POST", hidden)).status, 204);
+    assert.deepEqual(await (await notify(h, station, [notice(["alice@example.test"], { kind: "failed", text: "token runs out" }), notice(["alice@example.test"], { kind: "message", by: "Bob", text: "hi" })])).json(), { sent: 1 });
+    const last = JSON.parse(new TextDecoder().decode(got.filter((r) => r.url.endsWith("messages:send")).at(-1)!.body)).message;
+    assert.equal(last.data.body, "出错", "what was said not sent");
+    assert.equal(last.data.title, "部署挂了");
   } finally {
     await h.close();
   }

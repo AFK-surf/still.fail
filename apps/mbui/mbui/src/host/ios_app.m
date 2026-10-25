@@ -1466,7 +1466,8 @@ void mb_host_notice_cancel(moonbit_string_t tag) {
 }
 
 // 0: what the system allows (1 granted, 2 denied, 3 not asked, 0 not known yet); 1: asked (the system's alert), when
-// it was never asked: 1, else 0; 2: its answer, once (1 allowed, 0 refused, -1 none).
+// it was never asked: 1, else 0; 2: its answer, once (1 allowed, 0 refused, -1 none); 3: the Settings app's page of the
+// app's notifications opened (1; before iOS 15.4 the app's page).
 int32_t mb_host_notice_state(int32_t what) {
   if (what == 0) return notice_allowed;
   if (what == 2) {
@@ -1474,6 +1475,15 @@ int32_t mb_host_notice_state(int32_t what) {
     if (a >= 0) notice_answered = -1;
     return a;
   }
+  if (what == 3) {
+    NSString *where = UIApplicationOpenSettingsURLString;
+    if (@available(iOS 15.4, *)) where = UIApplicationOpenNotificationSettingsURLString;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [UIApplication.sharedApplication openURL:[NSURL URLWithString:where] options:@{} completionHandler:nil];
+    });
+    return 1;
+  }
+  if (what != 1) return 0;
   if (notice_allowed != 3) return 0;
   UNAuthorizationOptions o = UNAuthorizationOptionAlert | UNAuthorizationOptionSound | UNAuthorizationOptionBadge;
   [[UNUserNotificationCenter currentNotificationCenter] requestAuthorizationWithOptions:o

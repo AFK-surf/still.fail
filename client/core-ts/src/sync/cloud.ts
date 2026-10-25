@@ -14,7 +14,7 @@ import { encode } from "../ops.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import { CLOUD } from "../status.ts";
 import { GONE, NETWORK } from "../wake.ts";
-import { isObject, parseJson, pointer, toJsonBytes } from "../util.ts";
+import { equal, isObject, parseJson, pointer, toJsonBytes } from "../util.ts";
 import type { LockClaim } from "../lock.ts";
 import * as prefs from "../prefs.ts";
 import { Priority } from "./scheduler.ts";
@@ -436,19 +436,25 @@ export class CloudSync {
       let withSubs = (Array.isArray(raw.with) ? raw.with : []).filter((s): s is string => typeof s === "string" && accounts.some((a) => a.sub === s));
       let lang = typeof raw.lang === "string" ? raw.lang : null;
       const code = current();
-      if (lang !== code) {
+      // What it shows of notices (which kinds, whether what was said: the cloud makes each push so) changed since it
+      // was given, or its language: given again to every account.
+      const shows = core.attention?.attend.shows() ?? null;
+      if (lang !== code || !equal(raw.shows ?? null, shows)) {
         withSubs = [];
         lang = code;
       }
       const registration = raw.registration;
-      if (isObject(registration)) registration.lang = code;
+      if (isObject(registration)) {
+        registration.lang = code;
+        if (shows) Object.assign(registration, shows);
+      }
       let failed: CoreError | null = null;
       for (const account of accounts.filter((a) => !withSubs.includes(a.sub))) {
         const sent = yield* Effect.result(core.provider.request(account.sub, "POST", "/v1/push", registration));
         if (sent._tag === "Success") withSubs.push(account.sub);
         else failed = sent.failure;
       }
-      yield* Effect.ignore(core.host.storageSet(PUSH_KEY, toJsonBytes({ registration, with: withSubs, lang })));
+      yield* Effect.ignore(core.host.storageSet(PUSH_KEY, toJsonBytes({ registration, with: withSubs, lang, shows })));
       if (failed) return yield* Effect.fail(failed);
       return null;
     });

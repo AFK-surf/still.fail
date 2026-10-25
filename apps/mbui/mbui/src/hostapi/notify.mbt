@@ -62,6 +62,13 @@ pub fn notice_answer() -> Bool? {
 }
 
 ///|
+/// Opens the system's settings of the app's notifications (Android's page of the app's notifications, iOS's, macOS's
+/// Notifications, Windows'), where they are allowed again once refused: false where this host has none to open.
+pub fn notice_settings() -> Bool {
+  nt_state(3) == 1
+}
+
+///|
 /// The `opens` of a notification tapped since the last look, once ("" none). A frame is asked for as one comes.
 pub fn notice_opened() -> String {
   nt_text(0)

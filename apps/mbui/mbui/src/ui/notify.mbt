@@ -103,6 +103,19 @@ pub fn notice_answer() -> Bool? {
 }
 
 ///|
+/// Opens the system's settings of the app's notifications, where they are allowed or turned off
+/// (@hostapi.notice_settings): false where it has none to open. Under a Tester counted (Tester::notice_settings_opened).
+pub fn notice_settings() -> Bool {
+  match fake.val {
+    Some(f) => {
+      f.notice_settings += 1
+      true
+    }
+    None => @hostapi.notice_settings()
+  }
+}
+
+///|
 /// What the system lets the app show from the next frame on: "granted", "denied", "ask" (not asked yet), "unknown".
 pub fn Tester::set_notice_permission(self : Tester, state : String) -> Unit {
   self.fake.notice_perm = state
@@ -120,4 +133,10 @@ pub fn Tester::set_notice_reply(self : Tester, reply : Bool?) -> Unit {
 /// How often the app asked to show notifications (notice_ask).
 pub fn Tester::notice_asks(self : Tester) -> Int {
   self.fake.notice_asks
+}
+
+///|
+/// How often the app opened the system's settings of its notifications (notice_settings).
+pub fn Tester::notice_settings_opened(self : Tester) -> Int {
+  self.fake.notice_settings
 }

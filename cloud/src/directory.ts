@@ -19,6 +19,7 @@ import type { Env } from "./env";
 import { grantKeys } from "./grants";
 import { langOf, type Lang } from "./i18n.ts";
 import { isIconUrl } from "./icons";
+import { showsOf, type Shows } from "./noticeText";
 import { MAX_RELAYS, parseRelays, relays, relayUrls, sameUrl } from "./relays";
 import type { Part } from "./changelog";
 import type { FeedbackInput } from "./feedback";
@@ -83,7 +84,7 @@ type Row = Record<string, SqlStorageValue>;
 /** A device to push to, as registered (POST /v1/push). */
 export type PushDevice = { kind: "web"; endpoint: string; p256dh: string; auth: string } | { kind: "fcm"; token: string };
 /** A device registered, with the language its notifications are said in (Chinese for one registered before languages). */
-export type PushRegistration = PushDevice & { id: string; lang: Lang };
+export type PushRegistration = PushDevice & { id: string; lang: Lang; shows: Shows | null };
 
 export class Directory extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
@@ -135,6 +136,8 @@ export class Directory extends DurableObject<Env> {
     if (!this.#rows("PRAGMA table_info(workspaces)").some((r) => r.name === "relays")) this.#run("ALTER TABLE workspaces ADD COLUMN relays TEXT");
     // Nor did push keep a device's language, before there were languages.
     if (!this.#rows("PRAGMA table_info(push)").some((r) => r.name === "lang")) this.#run("ALTER TABLE push ADD COLUMN lang TEXT");
+    // Nor what a device shows of notices (JSON: noticeText.ts Shows; null all, in full), before a device said.
+    if (!this.#rows("PRAGMA table_info(push)").some((r) => r.name === "shows")) this.#run("ALTER TABLE push ADD COLUMN shows TEXT");
     // Nor had workspaces a mark of their own (an emoji, an icon, as a station's), before they could; their first letter till then.
     const marked = new Set(this.#rows("PRAGMA table_info(workspaces)").map((r) => r.name as string));
     for (const column of ["emoji TEXT", "icon TEXT"]) {
@@ -1020,13 +1023,14 @@ export class Directory extends DurableObject<Env> {
   // (revokeSessions).
 
   /** Registers a device's push subscription or token to an account's session (moving it there from the account's other). */
-  registerPush(sub: string, sid: string, device: PushDevice, lang: Lang = "zh"): void {
+  registerPush(sub: string, sid: string, device: PushDevice, lang: Lang = "zh", shows: Shows | null = null): void {
     const [column, value] = device.kind === "web" ? ["endpoint", device.endpoint] : ["token", device.token];
     this.#run(`DELETE FROM push WHERE sub = ? AND ${column} = ?`, sub, value);
+    const said = shows ? JSON.stringify(shows) : null;
     if (device.kind === "web") {
-      this.#run("INSERT INTO push (id, sub, sid, kind, endpoint, p256dh, auth, created, lang) VALUES (?, ?, ?, 'web', ?, ?, ?, ?, ?)", ulid(), sub, sid, device.endpoint, device.p256dh, device.auth, nowSeconds(), lang);
+      this.#run("INSERT INTO push (id, sub, sid, kind, endpoint, p256dh, auth, created, lang, shows) VALUES (?, ?, ?, 'web', ?, ?, ?, ?, ?, ?)", ulid(), sub, sid, device.endpoint, device.p256dh, device.auth, nowSeconds(), lang, said);
     } else {
-      this.#run("INSERT INTO push (id, sub, sid, kind, token, created, lang) VALUES (?, ?, ?, 'fcm', ?, ?, ?)", ulid(), sub, sid, device.token, nowSeconds(), lang);
+      this.#run("INSERT INTO push (id, sub, sid, kind, token, created, lang, shows) VALUES (?, ?, ?, 'fcm', ?, ?, ?, ?)", ulid(), sub, sid, device.token, nowSeconds(), lang, said);
     }
     // An account's oldest go past a few dozen devices.
     this.#run("DELETE FROM push WHERE sub = ? AND id NOT IN (SELECT id FROM push WHERE sub = ? ORDER BY id DESC LIMIT ?)", sub, sub, LIMITS.pushPerUser);
@@ -1057,12 +1061,13 @@ export class Directory extends DurableObject<Env> {
     const devices: Record<string, PushRegistration[]> = {};
     for (const email of new Set(emails.map((e) => e.toLowerCase()))) {
       devices[email] = this.#rows(
-        `SELECT p.id, p.kind, p.endpoint, p.p256dh, p.auth, p.token, p.lang FROM push p JOIN users u ON u.sub = p.sub JOIN members m ON m.sub = p.sub AND m.workspace = ?
+        `SELECT p.id, p.kind, p.endpoint, p.p256dh, p.auth, p.token, p.lang, p.shows FROM push p JOIN users u ON u.sub = p.sub JOIN members m ON m.sub = p.sub AND m.workspace = ?
          WHERE lower(u.email) = ? ORDER BY p.id LIMIT ?`,
         workspace, email, LIMITS.pushPerUser,
       ).map((r): PushRegistration => {
         const lang = langOf(r.lang as string | null);
-        return r.kind === "web" ? { id: r.id as string, lang, kind: "web", endpoint: r.endpoint as string, p256dh: r.p256dh as string, auth: r.auth as string } : { id: r.id as string, lang, kind: "fcm", token: r.token as string };
+        const shows = typeof r.shows === "string" ? showsOf(JSON.parse(r.shows) as Record<string, unknown>) : null;
+        return r.kind === "web" ? { id: r.id as string, lang, shows, kind: "web", endpoint: r.endpoint as string, p256dh: r.p256dh as string, auth: r.auth as string } : { id: r.id as string, lang, shows, kind: "fcm", token: r.token as string };
       });
     }
     return { workspace, devices };

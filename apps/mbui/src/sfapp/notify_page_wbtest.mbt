@@ -17,3 +17,15 @@ test "通知, at each width and with either hand: the ways, each kind with what 
     assert_true(t.find("计入红点") is Some(_), msg=at)
   }
 }
+
+///|
+test "通知, the system having refused them: the banner's way to allow them opens the system's settings of the app's notifications" {
+  for case in one_page_cases {
+    let (w, platform, regular, _) = case
+    let t = one_page_tester(@settings.Route::Notifications, w, platform~, regular~, mode="settings-notify-denied")
+    let at = "\{w} platform \{platform}"
+    tap_in_page(t, "在系统设置中开启")
+    t.draw()
+    assert_eq(t.notice_settings_opened(), 1, msg=at)
+  }
+}

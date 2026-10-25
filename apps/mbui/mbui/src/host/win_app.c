@@ -882,7 +882,11 @@ void mb_host_notice_show(moonbit_string_t channel, moonbit_string_t tag, moonbit
 
 void mb_host_notice_cancel(moonbit_string_t tag) { (void)tag; }
 
-int32_t mb_host_notice_state(int32_t what) { return what == 2 ? -1 : 0; }
+int32_t mb_host_notice_state(int32_t what) {
+  // 3: Settings' Notifications opened (1)
+  if (what == 3) return (INT_PTR)ShellExecuteW(NULL, L"open", L"ms-settings:notifications", NULL, NULL, SW_SHOWNORMAL) > 32 ? 1 : 0;
+  return what == 2 ? -1 : 0;
+}
 
 moonbit_string_t mb_host_notice_text(int32_t what) {
   (void)what;
