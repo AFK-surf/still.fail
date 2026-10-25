@@ -244,7 +244,7 @@ fn provider_group(c : @ui.Ctx, g : Json?, pick : (String) -> Unit) -> Unit {
             }
             let b = c.box(style=ap_tile, id~, fn() {
               c.box(style=ap_tile_mark, fn() {
-                @settings.provider_mark(
+                @sf.provider_logo(
                   c,
                   match text(pv, "runtime") {
                     "" => "claude"
@@ -483,7 +483,7 @@ fn machine_offers(c : @ui.Ctx, core : Core, s : Json?, sign_in : (String) -> Uni
       // a card of the ladder's: its mark, words and quota in a row 20 in, its button across its foot corners
       c.box(style=if blocked { ap_offer } else { ap_offer_footed_style() }, fn() {
         c.box(style=ap_offer_head, fn() {
-        c.box(style=ap_offer_mark, fn() { @settings.provider_mark(c, rt, "subscription", ap_offer_glyph, "") }) |> ignore
+        c.box(style=ap_offer_mark, fn() { @sf.provider_logo(c, rt, "subscription", ap_offer_glyph, "") }) |> ignore
         // (short of room, its name kept: whether it is signed in leaves its line first, then its plan)
         c.box(style=desk_list_text, keep=true, fn() {
           c.box(style=pf_name_line, fn() {

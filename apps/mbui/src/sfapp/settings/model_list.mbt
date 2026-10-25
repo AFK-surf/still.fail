@@ -110,14 +110,7 @@ fn model_list(
           // not usable here till borrowed: faint, until it is the one picked
           let faint = text(mv, "availability") == "borrowable" && !is_on
           let from = field(mv, "fromStation")
-          if pick_row(
-              c,
-              key + "/" + model,
-              text(mv, "name"),
-              checked=is_on,
-              color=if faint { t.p.muted } else { t.p.text },
-              mark=fn() { @sf.maker_mark(c, text(field(mv, "maker"), "id"), runtime, 18.0) |> ignore },
-              tag?=match from {
+          if @sf.choice_row(c, key + "/" + model, is_on, text(mv, "name"), ink=if faint { t.p.muted } else { t.p.text }, lead=fn() { @sf.maker_mark(c, text(field(mv, "maker"), "id"), runtime, 18.0) |> ignore }, tag?=match from {
                 Some(Object(_)) =>
                   Some(fn() {
                     c.box(style=if faint { model_from_faint } else { model_from_seen }, fn() {
@@ -130,8 +123,7 @@ fn model_list(
                     |> ignore
                   })
                 _ => None
-              },
-            ) {
+              }) {
             on_pick(model)
           }
         })

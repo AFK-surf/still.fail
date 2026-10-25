@@ -636,15 +636,7 @@ pub fn open_add_people(_core : Core, here : Here, view : Json?) -> Unit {
                 "" => e
                 n => n
               }
-              if pick_row(
-                  c,
-                  "add-person/" + e,
-                  name,
-                  sub=join([e, if there { tr("android-settings.add.in") } else if flag(pv, "guest") { tr("android-settings.add.guest") } else { "" }], " · "),
-                  checked=there || picked.contains(e),
-                  enabled=!there,
-                  mark=fn() { avatar(c, core, e, name, 28.0, picture=text(pv, "image")) },
-                ) {
+              if @sf.choice_row(c, "add-person/" + e, there || picked.contains(e), name, note=join([e, if there { tr("android-settings.add.in") } else if flag(pv, "guest") { tr("android-settings.add.guest") } else { "" }], " · "), disabled=!(!there), lead=fn() { avatar(c, core, e, name, 28.0, picture=text(pv, "image")) }) {
                 match picked.search(e) {
                   Some(i) => picked.remove(i) |> ignore
                   None => picked.push(e)
@@ -661,7 +653,7 @@ pub fn open_add_people(_core : Core, here : Here, view : Json?) -> Unit {
     blocks.push(fn() {
       c.text(tr("android-settings.add.role"), size=t.t.meta, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
       for r in roles {
-        if pick_row(c, "add-role/" + r, role_label(r), sub=role_hint(r), checked=role.val == r) {
+        if @sf.choice_row(c, "add-role/" + r, role.val == r, role_label(r), note=role_hint(r)) {
           role.val = r
         }
       }
@@ -755,21 +747,20 @@ fn account_list(c : @ui.Ctx, key : String, accounts : Array[Json], runtime : Str
     fn() {
       c.box(style=account_list_room, fn() {
         c.box(style=account_note_room, fn() { c.text(tr("android-chat.run.account.note"), style=account_note_words) |> ignore }) |> ignore
-        if pick_line_row(c, key + "/auto", tr("android-chat.run.account.auto"), "", picked == "") {
+        if @sf.choice_row(c, key + "/auto", picked == "", tr("android-chat.run.account.auto")) {
           pick(None)
         }
         for a in accounts {
           let av = Some(a)
           let id = text(av, "id")
           let own = text(av, "runtime")
-          if pick_line_row(
+          if @sf.choice_row(
               c,
               key + "/" + id,
-              text(av, "name"),
-              "",
               picked == id,
-              leading=fn() { provider_mark(c, if own == "" { runtime } else { own }, text(av, "kind"), 18.0, text(av, "mark")) },
-              trailing=fn() { @sf.quota_chips(c, field(av, "quota")) },
+              text(av, "name"),
+              lead=fn() { @sf.provider_logo(c, if own == "" { runtime } else { own }, text(av, "kind"), 18.0, text(av, "mark")) },
+              tag=fn() { @sf.quota_chips(c, field(av, "quota")) },
             ) {
             pick(Some(id))
           }

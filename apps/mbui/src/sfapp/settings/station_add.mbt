@@ -221,28 +221,20 @@ fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], load
           let mark = fn() { station_mark(c, v, 15.0, t.p.text) }
           let marked = @sf.has_station_mark(text(v, "emoji"), text(v, "icon"))
           if took_it(s) {
-            pick_row(c, "join/" + id, text(v, "name"), sub=tr("web-pages.settings.stations.joinedRow"), checked=true, mark?=if marked {
+            @sf.choice_row(c, "join/" + id, true, text(v, "name"), note=tr("web-pages.settings.stations.joinedRow"), lead?=if marked {
               Some(mark)
             } else {
               None
             })
             |> ignore
-          } else if pick_row(
-              c,
-              "join/" + id,
-              text(v, "name"),
-              sub=text(v, "line"),
-              checked=match chosen {
+          } else if @sf.choice_row(c, "join/" + id, match chosen {
                 Some(ch) => text(Some(ch), "station") == id
                 None => false
-              },
-              enabled=!busy && !flag(v, "needsLock"),
-              mark?=if marked {
+              }, text(v, "name"), note=text(v, "line"), disabled=!(!busy && !flag(v, "needsLock")), lead?=if marked {
                 Some(mark)
               } else {
                 None
-              },
-            ) {
+              }) {
             adding.picked = id
             adding.error = ""
           }

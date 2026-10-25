@@ -41,38 +41,6 @@ let desk_list_row : @ui.Style = @sf.wide_list_row
 let desk_note : @ui.TextStyle = @sf.wide_list_note
 
 ///|
-/// A place's page across the pane (连接: Connects.tsx's page): its head standing over what scrolls, its title, what it
-/// is for by a mark beside it, what it does at its end; what it shows 8 under it.
-fn desk_place(
-  c : @ui.Ctx,
-  core : Core,
-  title : String,
-  body : () -> Unit,
-  about? : String = "",
-  actions? : () -> Unit,
-) -> Unit {
-  c.box(style=desk_place_fill, fn() {
-    c.box(style=desk_lane, fn() {
-      c.box(style=desk_lane_column, fn() {
-        @settings.wide_head(c, core, "", title, trailing?=actions, inside=true, about~, deep=false)
-      })
-      |> ignore
-    })
-    |> ignore
-    c.box(style=desk_place_body, fn() { body() }) |> ignore
-  })
-  |> ignore
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_place_fill : @ui.Style = @ui.css("w=Full h=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_place_body : @ui.Style = desk_place_fill.then(@ui.css("pt=S2"))
-
-///|
 /// How wide the page's column is (pageNarrow: 760 at most), for what is drawn to its width before it is laid out.
 fn desk_column(c : @ui.Ctx) -> Double {
   dmin(desk_column_most, dmin(c.width - 2.0 * desk_lane_in, desk_lane_most) - 2.0 * desk_column_in)

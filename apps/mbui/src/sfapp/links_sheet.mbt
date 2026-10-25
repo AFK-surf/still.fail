@@ -269,7 +269,7 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
           c.box(style=@sf.full_width, fn() {
             for a in list {
               let s = text(Some(a), "sub")
-              if pick_row(c, "invite/as/" + s, text(Some(a), "email"), "", s == sub, "") {
+              if @sf.choice_row(c, "invite/as/" + s, s == sub, text(Some(a), "email")) {
                 invite.chosen = s
               }
             }

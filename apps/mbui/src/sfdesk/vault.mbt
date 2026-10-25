@@ -270,7 +270,7 @@ fn vault_library(c : @ui.Ctx, core : Core, look : Look, ws : String, v : Json?) 
             let ev = Some(e)
             let p = field(ev, "profile")
             if vt_row(c, look, "vault-profile/" + text(ev, "key"), text(p, "name"), join(["Profile", text(ev, "where")], " · "), fn() {
-                provider_mark(c, text(p, "runtime"), text(field(p, "access"), "kind"), vt_glyph, text(p, "providerMark"))
+                @sf.provider_logo(c, text(p, "runtime"), text(field(p, "access"), "kind"), vt_glyph, text(p, "providerMark"))
               }) {
               (core.push)(Profile(text(ev, "station"), text(p, "id")))
             }

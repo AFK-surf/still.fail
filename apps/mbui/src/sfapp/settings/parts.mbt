@@ -1290,74 +1290,6 @@ let wide_button_h : Double = 46.0
 let wide_button_box : @ui.Style = @ui.css("row w=Full px=S5 radius=Full gap=S2 align=ACenter justify=JCenter")
 
 ///|
-/// A row of a picking sheet (Controls.kt PickRow): what, a line under it, a check on the one chosen; `mark` before
-/// what. True on the frame after a tap.
-pub fn pick_row(
-  c : @ui.Ctx,
-  key : String,
-  label : String,
-  sub? : String = "",
-  checked? : Bool = false,
-  enabled? : Bool = true,
-  color? : Int64,
-  mark? : () -> Unit,
-  busy? : Bool = false,
-  tag? : () -> Unit,
-) -> Bool {
-  let t = @sf.theme()
-  let id = c.id(key)
-  let line = match (on_card.val, enabled) {
-    (true, true) => pick_card_line
-    (true, false) => pick_card_line_off
-    (false, true) => pick_line
-    (false, false) => pick_line_off
-  }
-  c.box(style=if on_card.val { @sf.full_width } else { pick_room }, fn() {
-    c.box(style=line, id~, fn() {
-      c.box(style=@sf.full_width, fn() {
-        c.box(style=pick_label_line, fn() {
-          match mark {
-            Some(f) => f()
-            None => ()
-          }
-          // Controls.kt:69, 72 (15sp, in lines where it is long)
-          // (with a tag after it, as wide as its words, on one line: PickLine's weight(1f, fill = false))
-          c.text(
-            label,
-            style=if tag is Some(_) { row_title_tagged } else { row_title_lines },
-            color=if enabled { color.unwrap_or(t.p.text) } else { t.p.subtle },
-          )
-          |> ignore
-          // what follows it on its line (PickLine's tag: where a model comes from)
-          match tag {
-            Some(f) => f()
-            None => ()
-          }
-        })
-        |> ignore
-        if sub != "" {
-          // Controls.kt:74 (12sp)
-          c.text(sub, style=@sf.caption.then(@sf.full_words)) |> ignore
-        }
-      })
-      |> ignore
-      if busy {
-        spinner(c)
-      } else if checked {
-        @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
-      }
-      // Controls.kt PickRow: clickable (not when off or busy) over its clip, Smooth(LIST_ROW_CORNER)
-      if enabled && !busy {
-        @motion.ripple(c, id, @sf.row_corner)
-      }
-    })
-    |> ignore
-  })
-  |> ignore
-  enabled && !busy && hit(c, id)
-}
-
-///|
 /// PickRow: 12 from the sheet's sides; its line 8 and 12 in, 12 apart, rippled where it is pressed (not when off);
 /// its label after its mark, 6 apart. On a list card (Controls.kt:62 onCard) to the card's padding, its line
 /// 12 in and rounded concentric with the card, as a ListRow.
@@ -1685,51 +1617,6 @@ let status_sm : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=fals
 ///|
 /// A state's lead as an icon, as tall as the words (StatusText.kt: 14).
 let status_icon : Double = 14.0
-
-///|
-/// A choice on a card (Parts.kt PickLine): its label (15) over its line (12, muted), a check (16, the accent) at its
-/// end where it is the one chosen; 4 and 11 in, rounded 10, rippled where it is pressed. True on the frame after a
-/// tap.
-fn pick_line_row(
-  c : @ui.Ctx,
-  key : String,
-  label : String,
-  sub : String,
-  checked : Bool,
-  leading? : () -> Unit,
-  trailing? : () -> Unit,
-) -> Bool {
-  let t = @sf.theme()
-  let id = c.id(key)
-  c.box(style=pick_line_ground, id~, fn() {
-    // what it is before its words, what it says after them (PickLine's leading, trailing)
-    match leading {
-      Some(f) => f()
-      None => ()
-    }
-    c.box(style=@sf.full_width, fn() {
-      c.text(label, style=row_title_words) |> ignore
-      if sub != "" {
-        c.text(sub, style=@sf.caption.then(@sf.full_words)) |> ignore
-      }
-    })
-    |> ignore
-    match trailing {
-      Some(f) => f()
-      None => ()
-    }
-    c.box(style=check_room, fn() {
-      if checked {
-        @sf.icon(c, "check", size=16.0, color=t.p.accent) |> ignore
-      }
-    })
-    |> ignore
-    // SettingParts.kt PickLine: clickable over its clip, Smooth(10)
-    @motion.ripple(c, id, 10.0)
-  })
-  |> ignore
-  hit(c, id)
-}
 
 ///|
 // kept across runs: a value (no field of it changes)

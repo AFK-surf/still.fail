@@ -49,38 +49,6 @@ pub fn vault_scopes_up_to(lasts : String) -> Array[String] {
 }
 
 ///|
-/// Whose service a profile runs on (Parts.kt ProviderMark): OpenCode's square, a listed provider's maker (the plug where
-/// there is none), Anthropic, xAI, Cursor, Devin or OpenAI by its runtime.
-pub fn provider_mark(c : @ui.Ctx, runtime : String, kind : String, size : Double, mark : String) -> Unit {
-  let t = @sf.theme()
-  if kind == "opencode-go" || mark == "opencode" {
-    c.box(w=Px(size), h=Px(size), align=ACenter, justify=JCenter, fn() {
-      c.box(w=Px(size / 2.0), h=Px(size * 2.0 / 3.0), border=size / 10.0, border_color=t.p.text, fn() {  }) |> ignore
-    })
-    |> ignore
-    return
-  }
-  let maker = if kind == "api-provider" {
-    mark
-  } else if runtime == "claude" || kind == "anthropic-api" {
-    "anthropic"
-  } else {
-    match runtime {
-      "grok" => "xai"
-      "cursor" => "cursor"
-      "devin" => "devin"
-      "hermes" => "hermes"
-      _ => "openai"
-    }
-  }
-  if maker == "" || !@sf.has_drawable("maker_" + maker.replace_all(old="-", new="_")) {
-    @sf.icon(c, "plug", size~, color=t.p.text) |> ignore
-  } else {
-    @sf.maker_mark(c, maker, runtime, size) |> ignore
-  }
-}
-
-///|
 /// Where the group `g` is among `out`, if it is.
 fn index_of(out : Array[(String, String, Array[Json])], g : String) -> Int? {
   for i, x in out {
