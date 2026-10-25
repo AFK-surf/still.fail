@@ -48,7 +48,6 @@ using @sfbase {
   act_rooms,
   asks_in_view,
   close_turn_ms,
-  emit_away,
   emit_emitting,
   emit_flight,
   emit_folded,
