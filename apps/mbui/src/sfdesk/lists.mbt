@@ -617,14 +617,17 @@ fn todo_shown(src : Source, w : Workspace) -> Bool {
 }
 
 ///|
-/// The band's height over the lists: its top row, 新建对话's (6 + 32 + 2; in the closed bar 6 + 32 + 6), 待处理's when
-/// there (2 + 32 + 8).
+/// The band's height over the lists: its top row, 新建对话's (6 + a row + 2; in the closed bar 6 + a row + 6), 待处理's
+/// when there (2 + a row + 8); a row nav_row_h high (32, a finger's taller: pengxiao, 2026-10-25, the search at the
+/// lists' top half under the band when the rows grew and this did not).
 fn band_h(src : Source, w : Workspace) -> Double {
   side_top_h() +
-  side_new_h +
+  band_new_top +
+  nav_row_h() +
+  side_new_under +
   (if wide.tape && !wide.in_bar { band_new_tape_over() } else { 0.0 }) +
   (if wide.in_bar { bar_band_in - side_new_under } else { 0.0 }) +
-  (if todo_shown(src, w) { side_todo_h } else { 0.0 })
+  (if todo_shown(src, w) { side_todo_around + nav_row_h() } else { 0.0 })
 }
 
 ///|
@@ -635,7 +638,5 @@ let side_new_under : Double = 2.0
 let bar_band_in : Double = 6.0
 
 ///|
-let side_new_h : Double = 40.0
-
-///|
-let side_todo_h : Double = 42.0
+/// 待处理's room over and under its row (2 + 8).
+let side_todo_around : Double = 10.0
