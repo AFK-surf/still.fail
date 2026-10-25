@@ -277,18 +277,23 @@ pub fn panel_words_in() -> @ui.Style {
 }
 
 ///|
-/// A row of a panel's body, its words so (panel_words_in), concentric with a small panel where it is in one.
+/// A row of a panel's body, its words so (panel_words_in), concentric with a small panel where it is in one; one to
+/// press (a box with an id), its ground under the hand (parts.css.ts panelRow: a button's :hover).
 pub fn panel_row_in() -> @ui.Style {
   if small_panel_now.val {
     small_panel_row_in
   } else {
-    panel_words_in()
+    panel_words_in().then(panel_row_lit)
   }
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
-let small_panel_row_in : @ui.Style = @ui.style(px=room(text_in), radius=Inner)
+let small_panel_row_in : @ui.Style = @ui.style(px=room(text_in), radius=Inner, hovered=@ui.patch(bg=Hover))
+
+///|
+// kept across runs: a value (no field of it changes)
+let panel_row_lit : @ui.Style = @ui.css("hovered{bg=Hover}")
 
 ///|
 // kept across runs: said by the presenters while a panel's body is drawn
