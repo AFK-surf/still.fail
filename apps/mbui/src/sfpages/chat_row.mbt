@@ -5,7 +5,7 @@
 // last thing said, who is in it at the second line's end; pressed, its chat (where the shell has it). With a mouse:
 // pointed at, its time in that place and 归档 at its top right; right clicked, its menu at the pointer; renamed in
 // place. With a finger: 66 high and in the phone's type; held, its time, and held long its menu; a chat with nothing
-// left in it has 归档 at its start and is swiped left to archive it. The menu is the presenters' (@sf.menu): 固定,
+// left in it is swiped left to archive it. The menu is the presenters' (@sf.menu): 固定,
 // 重命名, 保留, 复制会话链接, 转到频道, 复制 session 文件路径, 归档, each where the chat has it.
 
 ///|
@@ -189,11 +189,10 @@ pub fn chat_row(
   // pointed at by a mouse (its menu open beside it too); a finger's, held or its menu open
   let hover = !finger && (parts.iter().any(fn(p) { c.hovered(p) }) || c.hovered(archive) || menu_on)
   let shows_time = hover || held || (finger && menu_on)
-  // its 归档 key while pointed at by a mouse; a finger has 归档 at the row's start or in its menu
+  // its 归档 key while pointed at by a mouse; a finger has its swipe and its menu's 归档
   let archive_key = hover && menu && !renaming
-  // (swiped to archive, a finger's: its 归档 at the row's start; a pointer has its 归档 key)
-  // (archived from the row itself, a chip at its start and a swipe, where what the row offers is not under a pointer's
-  // hover: the screen's, as its ⋯ is)
+  // (swiped to archive, where what the row offers is not under a pointer's hover: the screen's, as its ⋯ is; a pointer
+  // has its 归档 key)
   let archivable = @sf.more_held() && item.archivable && item.offline is None && !item.pending && !found
   let busy = row_busy(src, item)
   let failed = row_failed(src, item)
@@ -223,9 +222,6 @@ pub fn chat_row(
       // (beside a rail: as far in from its list's left as the theme's list has it there)
       let row = if beside_rail { look.row.then(look.beside_rail) } else { look.row }
       c.box(style=row.then(@ui.style(bg=Data(ground))), id~, fn() {
-        if archivable {
-          archive_chip(c, src, item, busy)
-        }
         c.box(style=if item.settled { look.text_settled } else { look.text }, fn() {
           c.box(style=if archive_key { look.head_room } else { look.head }, fn() {
             let tone = @sfbase.row_tone(item)
@@ -657,10 +653,10 @@ let rename_line : Double = 24.0
 let listed : Ref[Array[ChatItem]] = Ref([])
 
 ///|
-/// Archives a row's chat (Sidebar.tsx useArchive, mobile/Home.tsx useRowArchive): its 归档 at the row's start or end,
-/// its menu's, its swipe; one keeping watch only once asked, in the core's words (its watch runs on in the archive).
-/// Its chat in view goes to the chat after it in the list (else before it; else the list alone) at once. Said once
-/// done; why not, when not (`failed` told then).
+/// Archives a row's chat (Sidebar.tsx useArchive, mobile/Home.tsx useRowArchive): its 归档 key, its menu's, its swipe;
+/// one keeping watch only once asked, in the core's words (its watch runs on in the archive). Its chat in view goes to
+/// the chat after it in the list (else before it; else the list alone) at once. Said once done; why not, when not
+/// (`failed` told then).
 fn archive_row(src : Source, item : ChatItem, then? : () -> Unit = fn() {  }, failed? : () -> Unit = fn() {  }) -> Unit {
   let params : Map[String, Json] = {
     "station": Json::string(item.station),
@@ -715,34 +711,6 @@ fn leave_archived(item : ChatItem) -> Unit {
     None => (@sfbase.shell.val.home)()
   }
 }
-
-///|
-/// A small 归档 at a finger's row's start, for a chat with nothing left in it (mobile/Home.css.ts mRowArchive): a tap
-/// archives it, not while its pin or archive is under way.
-fn archive_chip(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool) -> Unit {
-  let id = c.id("archive/" + @sfbase.row_name(item))
-  if c.clicked(id) && !busy {
-    archive_row(src, item)
-  }
-  let chip = c.box(style=chip_look.then(@ui.style(bg=Data(@sf.theme().p.chip))), id~, fn() {
-    c.text(@sf.t("android-chat.archive"), style=chip_words) |> ignore
-    if !busy {
-      @motion.ripple(c, id, chip_corner)
-    }
-  })
-  c.semantics(chip, Button, id~, label=@sf.t("android-chat.archive.named", args=[("title", item.title)]), disabled=busy)
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let chip_look : @ui.Style = @ui.css("px=S2_5 py=S1 radius=Xl")
-
-///|
-let chip_corner : Double = 12.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let chip_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Muted, leading=L4, wrap=false)
 
 ///|
 /// Let go past this share of its width (or flung left), a swiped row is archived (mobile/Home.tsx TAKES).

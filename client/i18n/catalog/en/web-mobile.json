@@ -265,7 +265,6 @@
   "web-mobile.home.archive": "Archive",
   "web-mobile.home.archiveAsk": "Archive \"{title}\"?",
   "web-mobile.home.archiveFailed": "Couldn't archive: {error}",
-  "web-mobile.home.archiveTitle": "Archive \"{title}\"",
   "web-mobile.home.archived": "Archived",
   "web-mobile.home.busy": "Working",
   "web-mobile.home.decisions": {

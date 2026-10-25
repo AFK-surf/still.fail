@@ -467,7 +467,7 @@ const ChatRow = memo(function ChatRow({ item, lead }: { item: ChatItem; lead: "a
   };
   const path = `${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`;
   const open = useOpenPage(path);
-  // Nothing left in it (the core's `archivable`): archived with one tap, at the row's end.
+  // Nothing left in it (the core's `archivable`): swiped left, archived.
   const archivable = !!item.archivable && !item.offline && !item.pending;
   const row = (
     <button type="button" className={css.mChatRow} data-held={held || undefined} data-offline={item.offline ? true : undefined}
@@ -519,10 +519,9 @@ const TAKES = 0.35;
 const FLING = 0.6;
 
 /**
- * A row whose chat has nothing left in it (the core's `archivable`): 归档 in words at its start, and swiped left it is
- * archived. The row follows the finger, 归档 showing in ink where it uncovers; let go far enough or flung, it goes off and
- * the list closes over it, else it springs back. Read on the frame, which does not move (going up or down first is the
- * list's scrolling).
+ * A row whose chat has nothing left in it (the core's `archivable`): swiped left, it is archived. The row follows the
+ * finger, 归档 showing in ink where it uncovers; let go far enough or flung, it goes off and the list closes over it, else
+ * it springs back. Read on the frame, which does not move (going up or down first is the list's scrolling).
  */
 function SwipeArchive({ item, busy, onDrag, children }: { item: ChatItem; busy: boolean; onDrag: () => void; children: ReactNode }) {
   const archive = useRowArchive(item);
@@ -605,7 +604,6 @@ function SwipeArchive({ item, busy, onDrag, children }: { item: ChatItem; busy: 
       onClickCapture={(e) => { if (swiped.current) { swiped.current = false; e.preventDefault(); e.stopPropagation(); } }}>
       <div ref={under} className={css.mSwipeUnder} aria-hidden="true"><span>{t("web-mobile.home.archive")}</span></div>
       <div ref={slide} className={css.mSwipeSlide}>
-        <button type="button" className={css.mRowArchive} aria-label={t("web-mobile.home.archiveTitle", { title: item.title })} disabled={busy} onClick={() => archive()}>{t("web-mobile.home.archive")}</button>
         {children}
       </div>
     </div>
@@ -620,14 +618,14 @@ function useRowArchive(item: ChatItem) {
   const app = useApp();
   const api = stationApi(useStationCall(item.station));
   const go = () => api.archive(item, true).then(() => app.toast(t("web-mobile.home.archived")));
-  return (leave?: () => Promise<void>, stay?: () => void) => {
+  return (leave: () => Promise<void>, stay: () => void) => {
     if (item.watch) {
-      stay?.();
+      stay();
       confirm(app, { title: t("web-mobile.home.archiveAsk", { title: item.title }), text: item.watch.ask, action: t("web-mobile.home.archive"), run: go });
       return;
     }
-    void (leave ? leave() : Promise.resolve()).then(go).catch((error: unknown) => {
-      stay?.();
+    void leave().then(go).catch((error: unknown) => {
+      stay();
       app.toast(t("web-mobile.home.archiveFailed", { error: error instanceof Error ? error.message : String(error) }));
     });
   };

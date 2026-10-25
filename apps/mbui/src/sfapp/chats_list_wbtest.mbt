@@ -1,5 +1,5 @@
 // The chats' lists, one in every tier (sfpages' sidebar.mbt, chat_row.mbt): at a width of each tier with a finger and
-// with a mouse, the same lists and rows; a finger's the phone's (66 high, held for its menu, 归档 at its start), a
+// with a mouse, the same lists and rows; a finger's the phone's (66 high, held for its menu, swiped to archive), a
 // mouse's the web's desktop's (54 high, 2 apart, pointed at for its 归档, right clicked for its menu). And where the
 // shell opens a chat pressed in them, on the wide frame: in the page pane in place of what was there.
 
@@ -59,7 +59,7 @@ test "a row's menu at each width and with either hand: held by a finger, right c
 }
 
 ///|
-test "a mouse pointing at a row: its time and 归档 at its top right; a finger's row with nothing left in it has 归档 at its start" {
+test "a mouse pointing at a row: its time and 归档 at its top right; a finger's row with nothing left in it has no 归档 of its own" {
   for case in one_page_cases {
     let (w, platform, regular, _) = case
     let calls : Array[Made] = []
@@ -68,7 +68,8 @@ test "a mouse pointing at a row: its time and 归档 at its top right; a finger'
     t.scroll_to(12)
     t.draw()
     if platform == 2 {
-      assert_true(t.query(Button, label="归档「把旧的截图都换成新的」") is Some(_), msg=at)
+      // (swiped left, or held for its menu's)
+      assert_true(t.query(Button, label="归档「把旧的截图都换成新的」") is None, msg=at)
     } else {
       assert_true(t.query(Button, label="归档「夜里的构建又失败了」") is None, msg=at)
       let (x, y) = t.find("夜里的构建又失败了").unwrap()

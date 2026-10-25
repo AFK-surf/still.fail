@@ -253,7 +253,6 @@
   "web-mobile.home.archive": "归档",
   "web-mobile.home.archiveAsk": "归档「{title}」？",
   "web-mobile.home.archiveFailed": "无法归档：{error}",
-  "web-mobile.home.archiveTitle": "归档「{title}」",
   "web-mobile.home.archived": "已归档",
   "web-mobile.home.busy": "正在处理",
   "web-mobile.home.decisions": "奏：{n} 件待你决定",

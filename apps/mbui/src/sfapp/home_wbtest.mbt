@@ -159,16 +159,6 @@ test "the filter: 我参与的 shows only the chats the viewer is in" {
 }
 
 ///|
-test "归档 at a row's start archives its chat" {
-  let t = tester("home")
-  t.scroll_to(12)
-  t.draw()
-  assert_true(t.find("把旧的截图都换成新的") is Some(_))
-  t.tap_text("归档")
-  assert_true(t.find("把旧的截图都换成新的") is None)
-}
-
-///|
 test "a row archived: an archivable row under it closes over it whole, its swipe's clip moving with it" {
   // (Home.kt: the list's animateItem moves the whole of SwipeToArchive. Filmed on a phone: the 归档 rows under one
   // archived gone a moment, then coming up cut off below, the row moved inside a clip left where it is laid out)
@@ -177,7 +167,7 @@ test "a row archived: an archivable row under it closes over it whole, its swipe
   let under = "把旧的截图都换成新的"
   let (_, y_was, _, h) = t.rect_of(under).unwrap()
   hold_row(t, "Slack 里问的报销流程")
-  // the menu's 归档 (its last item; the rows' own 归档 over it in the list)
+  // the menu's 归档 (its last item)
   let (lx, ly) = t.find_last("归档").unwrap()
   t.tap(lx, ly)
   assert_true(t.find("Slack 里问的报销流程") is None)
