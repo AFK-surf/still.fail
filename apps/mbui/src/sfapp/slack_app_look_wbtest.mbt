@@ -32,7 +32,7 @@ fn look_tester(route : @settings.Route, calls : Array[Made], mode? : String = "s
 test "a connect's Slack app, at a phone's width: its fold opened, the buddies and the makers to pick from, a picture to upload" {
   let calls : Array[Made] = []
   let t = look_tester(@settings.Route::Connect("ws1/st1", "k1"), calls)
-  let (x, y, w, h) = t.query(Button, label="Slack app").unwrap().rect
+  let (x, y, w, h) = t.query(Link, label="Slack app").unwrap().rect
   t.tap(x + w / 2.0, y + h / 2.0)
   t.frame()
   // the core's buddies asked for once, then the makers after them

@@ -1385,7 +1385,7 @@ test "wide: 连接 as the web's: one list of every station's, each its station's
 }
 
 ///|
-test "wide: a connect's page as the web's: back to the connects, who it is and how it is, how it runs in one card, its sessions; its ⋯; 更改 says what switching does before it is done" {
+test "wide: a connect's page: back to the connects, who it is and how it is, how it runs, its sessions; its ⋯; its way of making sessions says what switching does before it is done" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   app.nav.replace(Place("connects"))
@@ -1411,8 +1411,9 @@ test "wide: a connect's page as the web's: back to the connects, who it is and h
   }
   t.key(@ui.key_escape)
   t.run_for(@ui.nav_push_ms)
-  // 更改: the ways, what switching to all in one does (the core's), its button the core's words
-  t.click(Button, label="更改")
+  // its way of making sessions, a row: the ways, what switching to all in one does (the core's), its button the core's
+  // words
+  t.click(Link, label="会话")
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("更改会话方式") is Some(_), msg="its dialog: " + t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("更改后") is None, msg="nothing said while nothing changes")
@@ -1434,7 +1435,7 @@ test "wide: a connect's page as the web's: back to the connects, who it is and h
 }
 
 ///|
-test "wide: a Slack connect's app folded on its page as the web's: its look and permissions; 应用 writes it with what it started from" {
+test "wide: a Slack connect's app folded on its page, a row opening it: its look and permissions; 应用 writes it with what it started from" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, h=1400.0)
   app.nav.replace(Place("connects"))
@@ -1444,7 +1445,7 @@ test "wide: a Slack connect's app folded on its page as the web's: its look and 
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("名字、头像和权限") is Some(_), msg="its fold: " + t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("应用到 Slack") is None, msg="folded")
-  t.click(Button, label="Slack app")
+  t.click(Link, label="Slack app")
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("权限 · 已开启 4 / 16") is Some(_), msg="its permissions counted: " + t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("在 Slack 中打开此 app") is Some(_))

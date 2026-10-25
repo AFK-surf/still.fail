@@ -24,12 +24,7 @@ fn permissions_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
     },
     args=[("name", "still.fail")],
   )
-  look_page(
-    c,
-    core,
-    frame,
-    look,
-    "permissions",
+  look_page(c, core, frame, "permissions",
     @sf.t("web-pages.settings.nav.permissions"),
     lead=@sf.t("web-pages.permissions.lead", args=[("name", "still.fail")]),
     [
@@ -67,7 +62,7 @@ fn permission_row(
   open : () -> Unit,
 ) -> Unit {
   let t = @sf.theme()
-  look_card(c, look, fn() {
+  @sf.page_card(c, fn() {
     c.box(style=desk_card_row, fn() {
       c.box(style=permission_icon, fn() { @sf.icon(c, icon, size=permission_glyph, color=t.p.text) |> ignore }) |> ignore
       c.box(style=desk_card_text, fn() {
@@ -139,17 +134,17 @@ fn archiving_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> U
   let reviews = text(said, "hintReviewText")
   let none_review = flag(said, "hintNoReview")
   let hints = ["off", "done", "reviewed"]
-  look_page(c, core, frame, look, "archiving", @sf.t("web-pages.archiving.title"), [
+  look_page(c, core, frame, "archiving", @sf.t("web-pages.archiving.title"), [
     fn() {
-      look_section(c, look, @sf.t("web-pages.appearance.archive.title"), heads=true, note=if look == Wide { @sf.t("web-pages.appearance.archive.description") } else { "" }, fn() {
+      @sf.section(c, @sf.t("web-pages.appearance.archive.title"), heads=true, note=if look == Wide { @sf.t("web-pages.appearance.archive.description") } else { "" }, fn() {
         let at = hints.search(hint_now).unwrap_or(1)
-        let picked = look_choice(c, look, "archiveHint", hints.map(fn(h) { @sf.t("web-pages.appearance.archive." + h) }), at)
+        let picked = @sf.page_choice(c, "archiveHint", hints.map(fn(h) { @sf.t("web-pages.appearance.archive." + h) }), at)
         // (按模型判断 not to be picked while no station reviews, unless it is what is set)
         if picked != at && !(hints[picked] == "reviewed" && none_review) {
           let next = if hints[picked] == "done" { "" } else { hints[picked] }
           c.after_build("archive-hint", fn() { set_pref(core, "archiveHint", next) })
         }
-        look_note(c, look, @sf.t("web-pages.appearance.archive." + hint_now + "Hint"))
+        @sf.page_note(c, @sf.t("web-pages.appearance.archive." + hint_now + "Hint"))
         if reviews != "" && (hint_now == "reviewed" || none_review) {
           c.box(style=if look == Narrow { narrow_note_box } else { desk_hint_line }, fn() {
             c.text(reviews, style=if look == Narrow { narrow_note } else { desk_hint_words }) |> ignore
@@ -160,22 +155,22 @@ fn archiving_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> U
           |> ignore
         }
         if look == Narrow {
-          look_note(c, look, @sf.t("web-pages.appearance.archive.description"))
+          @sf.page_note(c, @sf.t("web-pages.appearance.archive.description"))
         }
       })
     },
     fn() {
-      look_section(c, look, @sf.t("web-pages.archiving.auto.title"), heads=true, note=if look == Wide { @sf.t("web-pages.archiving.auto.description") } else { "" }, fn() {
+      @sf.section(c, @sf.t("web-pages.archiving.auto.title"), heads=true, note=if look == Wide { @sf.t("web-pages.archiving.auto.description") } else { "" }, fn() {
         if read is None {
           @sf.wait_line(c, @sf.t("common.readingStations"), key="archiving-stations")
         }
-        look_group(c, look, fn() {
+        @sf.group(c, fn() {
           for s in stations {
             archiving_row(c, core, look, Some(s))
           }
         })
         if look == Narrow {
-          look_note(c, look, @sf.t("web-pages.archiving.auto.description"))
+          @sf.page_note(c, @sf.t("web-pages.archiving.auto.description"))
         }
       })
     },
@@ -287,11 +282,11 @@ fn station_archiving_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFra
         m => m
       }
       if !flag(v, "canEdit") {
-        blocks.push(fn() { look_note(c, look, @sf.t("web-pages.archiving.adminOnly")) })
+        blocks.push(fn() { @sf.page_note(c, @sf.t("web-pages.archiving.adminOnly")) })
       }
       // its review: how it stands and the way to it
       blocks.push(fn() {
-        look_section(c, look, @sf.t("web-pages.archiving.review"), heads=true, fn() {
+        @sf.section(c, @sf.t("web-pages.archiving.review"), heads=true, fn() {
           c.box(style=if look == Narrow { narrow_note_box } else { desk_said_line }, fn() {
             c.box(style=desk_said_line, fn() {
               // (its words as wide as they are, the way to it right after them)
@@ -308,24 +303,24 @@ fn station_archiving_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFra
       // how it archives: each way, what choosing it saves (the core's)
       let modes = items(v, "modes")
       blocks.push(fn() {
-        look_section(c, look, @sf.t("web-pages.archiving.mode"), heads=true, fn() {
+        @sf.section(c, @sf.t("web-pages.archiving.mode"), heads=true, fn() {
           let at = modes.search_by(fn(m) { text(Some(m), "mode") == mode }).unwrap_or(0)
-          let picked = look_choice(c, look, "archiving-mode", modes.map(fn(m) { text(Some(m), "label") }), at)
+          let picked = @sf.page_choice(c, "archiving-mode", modes.map(fn(m) { text(Some(m), "label") }), at)
           if picked != at && !locked {
             let m = Some(modes[picked])
             if flag(m, "allowed") {
               save(number(m, "days"), slack, flag(m, "reviewed"))
             }
           }
-          look_note(c, look, text(v, "modeNote"))
+          @sf.page_note(c, text(v, "modeNote"))
         })
       })
       if mode != "off" {
         blocks.push(fn() {
-          look_section(c, look, @sf.t("web-pages.archiving.idle"), heads=true, fn() {
+          @sf.section(c, @sf.t("web-pages.archiving.idle"), heads=true, fn() {
             let offered = items(v, "daysOffered").map(fn(n) { n.as_number().unwrap_or(0.0) })
             let at = offered.search(days).unwrap_or(0)
-            let picked = look_choice(c, look, "archiving-idle", strings(v, "daysOfferedText"), at)
+            let picked = @sf.page_choice(c, "archiving-idle", strings(v, "daysOfferedText"), at)
             if picked != at && !locked && picked < offered.length() {
               save(offered[picked], slack, flag(v, "reviewed"))
             }
@@ -333,23 +328,20 @@ fn station_archiving_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFra
         })
       }
       blocks.push(fn() {
-        look_section(c, look, @sf.t("web-pages.archiving.slack"), heads=true, fn() {
+        @sf.section(c, @sf.t("web-pages.archiving.slack"), heads=true, fn() {
           let offered = items(v, "slackDaysOffered").map(fn(n) { n.as_number().unwrap_or(0.0) })
           let at = offered.search(slack).unwrap_or(0)
-          let picked = look_choice(c, look, "archiving-slack", strings(v, "slackDaysOfferedText"), at)
+          let picked = @sf.page_choice(c, "archiving-slack", strings(v, "slackDaysOfferedText"), at)
           if picked != at && !locked && picked < offered.length() {
             save(days, offered[picked], flag(v, "reviewed"))
           }
-          look_note(c, look, @sf.t("web-pages.archiving.slackHint"))
+          @sf.page_note(c, @sf.t("web-pages.archiving.slackHint"))
         })
       })
     }
     _ =>
       blocks.push(fn() {
-        look_note(
-          c,
-          look,
-          if !flag(s, "online") {
+        @sf.page_note(c, if !flag(s, "online") {
             @sf.t("web-pages.automaticDecisions.offline")
           } else if !(field(s, "overview") is Some(Object(_))) {
             @sf.t("common.connecting")
@@ -359,7 +351,7 @@ fn station_archiving_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFra
         )
       })
   }
-  look_page(c, core, frame, look, "station-archiving/" + station, title, blocks)
+  look_page(c, core, frame, "station-archiving/" + station, title, blocks)
 }
 
 ///|

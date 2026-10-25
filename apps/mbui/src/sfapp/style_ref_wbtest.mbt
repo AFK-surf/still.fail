@@ -115,6 +115,7 @@ test "styles: the lock's waiting page, every state, drawn as before" {
 
 
 
+
   ))
 }
 
@@ -135,18 +136,22 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
   }
   inspect(out.to_string(), content=(
     #|settings narrow 95512:951d1d07
-    #|station narrow 55450:8c1dfc69
+    #|station narrow 67103:7d926a93
     #|me-reading narrow 9899:3a2845c4
-    #|settings wide 196362:82b9f002
-    #|station wide 225794:9b1de77
+    #|settings wide 196362:742ce956
+    #|station wide 228348:6ce93bc7
     #|me-reading wide 170933:80801b3a
     #|settings-dark narrow 95616:82183247
-    #|station-dark narrow 55062:4ce9e088
+    #|station-dark narrow 66867:d05ac102
     #|me-reading-dark narrow 9940:ffbeae23
-    #|settings-dark wide 195989:bf353b17
-    #|station-dark wide 225360:b7b5f79e
+    #|settings-dark wide 195989:3594978d
+    #|station-dark wide 227912:fc153ecc
     #|me-reading-dark wide 170580:aac3ee
     #|
+
+
+
+
 
 
 

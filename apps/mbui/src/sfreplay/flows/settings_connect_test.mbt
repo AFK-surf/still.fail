@@ -24,8 +24,8 @@ test "84-connect" {
     if down > f.t.time() {
       f.run_to(down)
     }
-    // 更改 at its way of making sessions: the dialog of the ways (a sheet on a phone)
-    f.tap("=更改")
+    // its way of making sessions, a row: the dialog of the ways (a sheet on a phone)
+    f.tap("=会话")
     f.run_to(@kit.sheet_rest("sf-present"))
     f.tap("所有 thread 共用一个会话")
     f.see("改为单会话")

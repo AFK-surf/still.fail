@@ -1184,8 +1184,8 @@ pub fn switch_look(c : @ui.Ctx, key : String, on : Bool, small? : Bool = false) 
 
 ///|
 /// A setting's row (parts.tsx SwitchRow, switchRow): what it is on the left, `note` quieter under it, its switch on the
-/// right, 16 apart; its words press the switch too. What it is now.
-pub fn switch_row(
+/// right, 16 apart; its words press the switch too. What it is now. (A page's switch_row, wide: page.mbt.)
+fn wide_switch_row(
   c : @ui.Ctx,
   key : String,
   title : String,
@@ -1272,8 +1272,8 @@ let switch_row_words : @ui.Style = @ui.css("w=Grow(1.0) gap=S0_5")
 ///|
 /// A titled block of a page (parts.tsx Section, page.css.ts section, parts.css.ts sectionHead): its title (14 on 22,
 /// 600) and `note` under it (12, muted, 3 under, 52em at most), its `actions` at the head's end on the title's centre
-/// line, 10 over what it holds; 28 under it all.
-pub fn section(
+/// line, 10 over what it holds; 28 under it all. (A page's section, wide: page.mbt.)
+fn wide_section(
   c : @ui.Ctx,
   title : String,
   body : () -> Unit,
@@ -1992,8 +1992,9 @@ let one_of_check : Double = 16.0
 ///|
 /// Exclusive options that need a sentence each (parts.tsx Choices: mbui's radio group, @kit.radio_group): bordered
 /// cards 8 apart, each its `icon` (by its value) before its title (13, 600) and `description` (12, muted), a radio mark
-/// at its end; the chosen one edged in the ink, what it holds more (`extra`, by its value: a switch of it) under a line
-/// in it; those `disabled` faded and not chosen; `note`: what draws a description of its own, by its value. `options`: each value, title and description. What is chosen now.
+/// at its end; the chosen one edged in the ink, what it holds more (`extra`, by its value: a switch of it; none, nor
+/// its line, where it has none) under a line in it; those `disabled` faded and not chosen; `note`: what draws a
+/// description of its own, by its value. `options`: each value, title and description. What is chosen now.
 pub fn choices(
   c : @ui.Ctx,
   key : String,
@@ -2001,7 +2002,7 @@ pub fn choices(
   options : Array[(String, String, String)],
   label? : String = "",
   icon? : (String) -> Unit,
-  extra? : (String) -> Unit,
+  extra? : (String) -> (() -> Unit)?,
   disabled? : Array[String] = [],
   note? : (String) -> Unit,
 ) -> String {
@@ -2038,11 +2039,11 @@ pub fn choices(
           })
           |> ignore
           // (parts.css.ts choiceExtra: 14 in at its sides, under a line, 12 over and 14 under what it holds)
-          match extra {
+          match extra.bind(fn(f) { f(v) }) {
             Some(f) if s.on =>
               c.box(style=choice_extra, fn() {
                 c.box(style=choice_rule, fn() {  }) |> ignore
-                c.box(style=choice_extra_in, fn() { f(v) }) |> ignore
+                c.box(style=choice_extra_in, f) |> ignore
               })
               |> ignore
             _ => ()

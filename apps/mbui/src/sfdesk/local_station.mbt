@@ -290,10 +290,10 @@ fn version_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   let note = if newer || words == check { "" } else { words }
   let lead = @sf.t("web-pages.version.lead")
   // (what it is for: narrow under the page's title, wide under its section's)
-  look_page(c, core, frame, look, "version", @sf.t("web-pages.settings.nav.version"), lead=if look == Narrow { lead } else { "" }, [
+  look_page(c, core, frame, "version", @sf.t("web-pages.settings.nav.version"), lead=if look == Narrow { lead } else { "" }, [
     fn() {
       let title = @sf.t("web-pages.version.title", args=[("name", "still.fail")])
-      look_section(c, look, title, heads=true, note=if look == Wide { lead } else { "" }, fn() {
+      @sf.section(c, title, heads=true, note=if look == Wide { lead } else { "" }, fn() {
         let row = fn() {
           c.box(style=ver_text, fn() {
             c.text("still.fail mbui " + build_version(), style=desk_words) |> ignore
@@ -308,7 +308,7 @@ fn version_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
         }
         match look {
           // (narrow: on a card of its own; wide: on the page under its section's title)
-          Narrow => look_card(c, look, fn() { c.box(style=ver_row, row) |> ignore })
+          Narrow => @sf.page_card(c, fn() { c.box(style=ver_row, row) |> ignore })
           Wide => c.box(style=ver_row, row) |> ignore
         }
       })

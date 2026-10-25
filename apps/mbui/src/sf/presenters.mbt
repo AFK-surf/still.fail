@@ -338,6 +338,14 @@ fn how_of(shows : Shows, from : Anchor, sheet : Bool) -> How {
 ///|
 /// `p` drawn as a sheet or as the web's: whether it is open now, and whether it is drawn at all (still going).
 fn draw_presented(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
+  // what it holds laid out as its kind is: a sheet's as a narrow page's, the web's as a wide one's (page.mbt)
+  let mut drawn = (false, false)
+  with_look(if sheet { Narrow } else { Wide }, fn() { drawn = draw_presented_as(c, p, sheet) })
+  drawn
+}
+
+///|
+fn draw_presented_as(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
   let key = "sf-present"
   if sheet {
     return present_sheet(c, key, p)

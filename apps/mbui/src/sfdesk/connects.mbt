@@ -88,8 +88,8 @@ fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : Pa
           |> ignore
         }
         Narrow => {
-          look_heading(c, look, @sf.t("web-pages.connects.waiting"))
-          look_group(c, look, fn() {
+          @sf.heading(c, @sf.t("web-pages.connects.waiting"))
+          @sf.group(c, fn() {
             for w in waiting {
               cn_waiting_app(c, src, core, here, look, w.0, w.1)
             }
@@ -143,13 +143,10 @@ fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : Pa
             let name = text(Some(here_list[0]), "stationName")
             blocks.push(fn() {
               if only == "" {
-                look_heading(
-                  c,
-                  look,
-                  if sv is None || flag(sv, "online") { name } else { @sf.t("android-settings.connects.offline", args=[("name", name)]) },
+                @sf.heading(c, if sv is None || flag(sv, "online") { name } else { @sf.t("android-settings.connects.offline", args=[("name", name)]) },
                 )
               }
-              look_group(c, look, fn() {
+              @sf.group(c, fn() {
                 for x in here_list {
                   cn_row(c, core, look, address, name, sv, field(Some(x), "connect"))
                 }
@@ -170,12 +167,7 @@ fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : Pa
   } else {
     None
   }
-  look_page(
-    c,
-    core,
-    frame,
-    look,
-    "connects/" + only + "/" + mine.to_string(),
+  look_page(c, core, frame, "connects/" + only + "/" + mine.to_string(),
     @sf.t("android-settings.connects.title"),
     about=@sf.t("web-pages.connects.about", args=[("name", "still.fail")]),
     // (a place's top page under a phone's bar: its ＋ the bar's notch, connects_add)

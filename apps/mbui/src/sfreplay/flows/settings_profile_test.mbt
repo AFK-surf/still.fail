@@ -1,7 +1,7 @@
-// 83-profile (e2e/traces/settings-profile.trace): the profile's page (sfdesk accounts.mbt) → its head's ✎, the name asked
-// in the presenters' sheet (profile.put), its head's 重新检查 (profile.check), named cc again; ＋: the providers,
-// Anthropic → API key, a made-up key, 验证并添加: refused, nothing added; back to the providers, back again out of the
-// page.
+// 83-profile (e2e/traces/settings-profile.trace): the profile's page (sfdesk accounts.mbt) → its name pressed (a
+// phone's: its head's large title), the name asked in the presenters' sheet (profile.put), its head's 重新检查
+// (profile.check), named cc again; ＋: the providers, Anthropic → API key, a made-up key, 验证并添加: refused, nothing added;
+// back to the providers, back again out of the page.
 
 ///|
 test "83-profile" {
@@ -15,7 +15,8 @@ test "83-profile" {
     f.run_to(@ui.nav_rest())
     // its page: its allowance under its head
     f.see("额度")
-    f.tap("icon:edit")
+    // (its name, the higher: the list's row may still be going out under the page)
+    f.tap("=cc", top=true)
     f.run_to(@kit.sheet_rest("sf-present"))
     f.see("=名称")
     f.clear()
@@ -27,7 +28,7 @@ test "83-profile" {
     f.see("=e2e-080726")
     // (its head's ↻, the highest: 额度's 刷新 is under it)
     f.tap("icon:refresh", top=true)
-    f.tap("icon:edit")
+    f.tap("=e2e-080726")
     f.run_to(@kit.sheet_rest("sf-present"))
     // (its field there and taking the typing: a scripted run's clear waits for it so)
     f.see("=名称")

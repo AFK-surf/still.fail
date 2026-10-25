@@ -37,7 +37,7 @@ fn vault_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit 
       for row in items(v, "vaults") {
         out.append(vault_named(c, core, look, ws, row))
       }
-      out.push(fn() { look_note(c, look, @sf.t("android-settings.vault.readOnly")) })
+      out.push(fn() { @sf.page_note(c, @sf.t("android-settings.vault.readOnly")) })
       out
     }
     Some(_) if !flag(v, "locked") =>
@@ -59,12 +59,7 @@ fn vault_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit 
         }
     }
   }
-  look_page(
-    c,
-    core,
-    frame,
-    look,
-    "vault",
+  look_page(c, core, frame, "vault",
     @sf.t("web-pages.vault.title"),
     lead=@sf.t("web-pages.vault.lead"),
     actions?=if usable { Some(add) } else { None },
@@ -102,7 +97,7 @@ fn vt_card(
     }
   }
   match look {
-    Narrow => look_card(c, look, draw)
+    Narrow => @sf.page_card(c, draw)
     Wide => c.box(style=desk_card.then(vt_lead), draw) |> ignore
   }
 }
@@ -269,7 +264,7 @@ fn vault_library(c : @ui.Ctx, core : Core, look : Look, ws : String, v : Json?) 
   let profiles = (core.topic)("profiles", { "scope": str(ws) }).value
   for g in profile_groups(items(profiles, "items")) {
     out.push(fn() {
-      look_section(c, look, g.0, heads=true, fn() {
+      @sf.section(c, g.0, heads=true, fn() {
         vt_list(c, look, fn() {
           for e in g.1 {
             let ev = Some(e)
@@ -304,7 +299,7 @@ fn vault_library(c : @ui.Ctx, core : Core, look : Look, ws : String, v : Json?) 
   }
   if !plain && vaults.length() > 0 {
     out.push(fn() {
-      look_section(c, look, @sf.t("web-pages.vault.devices"), heads=true, fn() {
+      @sf.section(c, @sf.t("web-pages.vault.devices"), heads=true, fn() {
         sec_group(c, look, fn() {
           for row in vaults {
             let rv = Some(row)
@@ -340,10 +335,7 @@ fn vault_library(c : @ui.Ctx, core : Core, look : Look, ws : String, v : Json?) 
       n => n
     }
     out.push(fn() {
-      look_note(
-        c,
-        look,
-        @sf.t(if text(rv, "code") == "vault_needs_lock" { "android-settings.vault.refusedLock" } else { "android-settings.vault.refusedOld" }, args=[
+      @sf.page_note(c, @sf.t(if text(rv, "code") == "vault_needs_lock" { "android-settings.vault.refusedLock" } else { "android-settings.vault.refusedOld" }, args=[
           ("name", name),
         ]),
       )
@@ -410,8 +402,8 @@ fn vault_lasts_row(c : @ui.Ctx, core : Core, look : Look, ws : String, mine : Js
     Wide => vt_card(c, look, @sf.t("web-pages.vault.lasts.title"), @sf.t("web-pages.vault.lasts.note"), then=choose)
     // (narrow: its title over it, the note, the choices on the page's ground, each its own card)
     Narrow => {
-      look_heading(c, look, @sf.t("web-pages.vault.lasts.title"))
-      look_note(c, look, @sf.t("web-pages.vault.lasts.note"))
+      @sf.heading(c, @sf.t("web-pages.vault.lasts.title"))
+      @sf.page_note(c, @sf.t("web-pages.vault.lasts.note"))
       c.box(style=vt_choices_narrow, choose) |> ignore
     }
   }
@@ -436,7 +428,7 @@ fn vault_secrets(c : @ui.Ctx, core : Core, look : Look, ws : String, row : Json,
     }
     let title = @sf.t("web-pages.vault.kind." + kind)
     out.push(fn() {
-      look_section(c, look, title + (if many { " · " + text(rv, "name") } else { "" }), heads=true, fn() {
+      @sf.section(c, title + (if many { " · " + text(rv, "name") } else { "" }), heads=true, fn() {
         vt_list(c, look, fn() {
           for it in rows {
             let iv = Some(it)
@@ -471,7 +463,7 @@ fn vault_secrets(c : @ui.Ctx, core : Core, look : Look, ws : String, row : Json,
     })
   }
   if list.length() == 0 {
-    out.push(fn() { look_note(c, look, @sf.t("web-pages.vault.empty")) })
+    out.push(fn() { @sf.page_note(c, @sf.t("web-pages.vault.empty")) })
   }
   out
 }
@@ -486,7 +478,7 @@ fn vault_named(c : @ui.Ctx, core : Core, look : Look, ws : String, row : Json) -
   let list = items(topic.value, "items")
   let out : Array[() -> Unit] = []
   out.push(fn() {
-    look_section(c, look, text(rv, "name"), heads=true, fn() {
+    @sf.section(c, text(rv, "name"), heads=true, fn() {
       if flag((core.topic)("vaults", { "workspace": str(ws) }).value, "available") && !flag(rv, "keyed") {
         vt_card(c, look, @sf.t("android-settings.vault.noKey"), @sf.t("android-settings.vault.noKeyHow"), then=fn() {
           if flag(rv, "recoverable") {
@@ -502,10 +494,10 @@ fn vault_named(c : @ui.Ctx, core : Core, look : Look, ws : String, row : Json) -
         match topic.value {
           None =>
             match topic.error {
-              Some(e) => look_note(c, look, error_text(e), bad=true)
+              Some(e) => @sf.page_note(c, error_text(e), bad=true)
               None => @sf.wait_line(c, @sf.t("common.reading"))
             }
-          Some(_) => look_note(c, look, @sf.t("android-settings.vault.empty"))
+          Some(_) => @sf.page_note(c, @sf.t("android-settings.vault.empty"))
         }
       } else {
         sec_group(c, look, fn() {
@@ -540,7 +532,7 @@ fn vault_named(c : @ui.Ctx, core : Core, look : Look, ws : String, row : Json) -
 /// Rows that open something together (narrow: ListCard; wide: the web's list).
 fn vt_list(c : @ui.Ctx, look : Look, body : () -> Unit) -> Unit {
   match look {
-    Narrow => look_group(c, look, body)
+    Narrow => @sf.group(c, body)
     Wide => c.box(style=desk_list, body) |> ignore
   }
 }

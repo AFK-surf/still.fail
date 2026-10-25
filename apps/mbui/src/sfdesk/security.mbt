@@ -25,11 +25,11 @@ fn security_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Un
         )
       })
     Some(_) if !flag(lock, "available") =>
-      blocks.push(fn() { look_card(c, look, fn() { c.text(@sf.t("web-pages.security.unavailable"), style=sec_said) |> ignore }) })
+      blocks.push(fn() { @sf.page_card(c, fn() { c.text(@sf.t("web-pages.security.unavailable"), style=sec_said) |> ignore }) })
     Some(_) if flag(lock, "locked") => blocks.append(lock_on(c, core, here, look, lock))
     Some(_) => blocks.append(lock_off(c, core, look, lock))
   }
-  look_page(c, core, frame, look, "security", @sf.t("web-pages.security.title"), blocks, lead=@sf.t("web-pages.security.lead"))
+  look_page(c, core, frame, "security", @sf.t("web-pages.security.title"), blocks, lead=@sf.t("web-pages.security.lead"))
 }
 
 ///|
@@ -66,8 +66,8 @@ fn lock_off(c : @ui.Ctx, core : Core, look : Look, lock : Json?) -> Array[() -> 
       })
     },
     fn() {
-      look_section(c, look, @sf.t("web-pages.security.signing"), heads=true, fn() {
-        look_card(c, look, fn() { c.text(@sf.t("web-pages.security.signingWho"), style=sec_said) |> ignore })
+      @sf.section(c, @sf.t("web-pages.security.signing"), heads=true, fn() {
+        @sf.page_card(c, fn() { c.text(@sf.t("web-pages.security.signingWho"), style=sec_said) |> ignore })
       })
     },
   ]
@@ -77,7 +77,7 @@ fn lock_off(c : @ui.Ctx, core : Core, look : Look, lock : Json?) -> Array[() -> 
 /// The state's card, first on the page (lead: a card, as far from what follows as a section is).
 fn sec_lead_card(c : @ui.Ctx, look : Look, body : () -> Unit) -> Unit {
   match look {
-    Narrow => look_card(c, look, body)
+    Narrow => @sf.page_card(c, body)
     Wide => c.box(style=sec_lead, body) |> ignore
   }
 }
@@ -101,7 +101,7 @@ fn sec_point(c : @ui.Ctx, icon : String, words : String, rest : String) -> Unit 
 /// A section's rows together: narrow, on a rounded card (ListCard); wide, on the web's card, 12 apart.
 fn sec_group(c : @ui.Ctx, look : Look, body : () -> Unit) -> Unit {
   match look {
-    Narrow => look_group(c, look, body)
+    Narrow => @sf.group(c, body)
     Wide => c.box(style=desk_card, fn() { c.box(style=sec_rows, body) |> ignore }) |> ignore
   }
 }
@@ -275,7 +275,7 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
     })
   }
   blocks.push(fn() {
-    look_section(c, look, @sf.t("web-pages.security.people"), heads=true, fn() {
+    @sf.section(c, @sf.t("web-pages.security.people"), heads=true, fn() {
       sec_group(c, look, fn() {
         for m in items(lock, "members") {
           let mv = Some(m)
@@ -303,10 +303,10 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
     })
   })
   blocks.push(fn() {
-    look_section(c, look, "Station", heads=true, fn() {
+    @sf.section(c, "Station", heads=true, fn() {
       let stations = items(lock, "stations")
       if stations.length() == 0 {
-        look_card(c, look, fn() { c.text(@sf.t("web-pages.security.noStations"), style=sec_said) |> ignore })
+        @sf.page_card(c, fn() { c.text(@sf.t("web-pages.security.noStations"), style=sec_said) |> ignore })
       } else {
         sec_group(c, look, fn() {
           for st in stations {
@@ -317,8 +317,8 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
     })
   })
   blocks.push(fn() {
-    look_section(c, look, @sf.t("web-pages.security.webTitle"), heads=true, fn() {
-      look_card(c, look, fn() { c.text(@sf.t("web-pages.security.webRisk"), style=sec_said) |> ignore })
+    @sf.section(c, @sf.t("web-pages.security.webTitle"), heads=true, fn() {
+      @sf.page_card(c, fn() { c.text(@sf.t("web-pages.security.webRisk"), style=sec_said) |> ignore })
     })
   })
   if flag(lock, "owner") && signs {
@@ -335,7 +335,7 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
         // at the foot, in red, on a card of its own (Security.tsx's mobile On)
         Narrow =>
           c.box(style=acc_narrow_foot, fn() {
-            look_group(c, look, fn() {
+            @sf.group(c, fn() {
               let id = c.id("lock-off")
               if !off {
                 c.cursor(id, Hand)
@@ -365,7 +365,7 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
 fn sec_section(c : @ui.Ctx, look : Look, title : String, count~ : Int, body : () -> Unit) -> Unit {
   match look {
     Narrow => {
-      look_heading(c, look, title + " · " + count.to_string())
+      @sf.heading(c, title + " · " + count.to_string())
       body()
     }
     Wide =>
@@ -477,10 +477,7 @@ fn security_open_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) 
     }
     let members = items(draft, "members")
     blocks.push(fn() {
-      look_section(
-        c,
-        look,
-        @sf.t("web-pages.security.members"),
+      @sf.section(c, @sf.t("web-pages.security.members"),
         heads=true,
         note=@sf.t("web-pages.security.peopleCount", args=[("n", members.length().to_string())]),
         fn() {
@@ -494,7 +491,7 @@ fn security_open_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) 
       )
     })
     blocks.push(fn() {
-      look_section(c, look, @sf.t("web-pages.security.devices"), heads=true, note=@sf.t("web-pages.security.devicesWhich"), fn() {
+      @sf.section(c, @sf.t("web-pages.security.devices"), heads=true, note=@sf.t("web-pages.security.devicesWhich"), fn() {
         sec_group(c, look, fn() {
           for d in items(draft, "devices") {
             let dv = Some(d)
@@ -506,7 +503,7 @@ fn security_open_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) 
       })
     })
     blocks.push(fn() {
-      look_section(c, look, "Station", heads=true, fn() {
+      @sf.section(c, "Station", heads=true, fn() {
         sec_group(c, look, fn() {
           for st in items(draft, "stations") {
             let sv = Some(st)
@@ -518,7 +515,7 @@ fn security_open_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) 
             sec_check_line(c, look, "draft-station/" + text(sv, "id"), text(sv, "name"), note, sv, fn() { toggle(text(sv, "id")) })
           }
         })
-        look_note(c, look, @sf.t("web-pages.security.unprotectedNote"))
+        @sf.page_note(c, @sf.t("web-pages.security.unprotectedNote"))
       })
     })
     // what signing it means for a web page, cancel, 签名并开启 (foot)
@@ -557,12 +554,7 @@ fn security_open_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) 
       |> ignore
     })
   }
-  look_page(
-    c,
-    core,
-    frame,
-    look,
-    "security-open",
+  look_page(c, core, frame, "security-open",
     @sf.t("web-pages.security.openTitle"),
     blocks,
     lead=@sf.t("web-pages.security.openLead"),
