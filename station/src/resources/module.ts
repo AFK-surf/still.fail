@@ -8,7 +8,7 @@ import { basename, join } from "node:path";
 import { promisify } from "node:util";
 import { Effect, Layer } from "effect";
 import { resourceRoutes } from "../api/routes/usage.ts";
-import { runnersWithSessions, watchedJobs } from "../jobs/memory.ts";
+import { runnerSessions, runnersWithSessions, watchedJobs } from "../jobs/memory.ts";
 import { loadMesh } from "../mesh/native.ts";
 import { platform } from "../platform/index.ts";
 import { Agents } from "../sessions/agents.ts";
@@ -85,17 +85,18 @@ export const ResourcesLive = Layer.effectDiscard(
     }
     const mesh = loadMesh();
     const isApp = appBundles();
+    const whose = runnerSessions(store);
     const watch = yield* Effect.acquireRelease(
       Effect.sync(() => new ResourceWatch({
         clock: hub.clock,
         table: () => platform.processTable(false),
         args: async () => parseArgs((await run("ps", ["-axo", "pid=,args="], { maxBuffer: 32 << 20 })).stdout),
         // A chat's own directory, not where it works (a repository people also work in).
-        places: () => store.listSessions().flatMap((s) => (s.workspace && s.workspace !== "/" && s.workspace !== homedir() ? [{ dir: s.workspace, session: s.key }] : [])),
+        places: () => store.liveSessions().flatMap((s) => (s.workspace && s.workspace !== "/" && s.workspace !== homedir() ? [{ dir: s.workspace, session: s.key }] : [])),
         usage: (pids) => (typeof mesh.processUsage === "function" ? mesh.processUsage(pids) : pids.map(() => null)),
         // Every process's, once: some 20 ms.
         traffic: async () => parseNettop((await run("nettop", ["-P", "-L", "1", "-x", "-J", "bytes_in,bytes_out", "-n"], { maxBuffer: 16 << 20, timeout: 5000 })).stdout),
-        runners: () => runnersWithSessions(data, store),
+        runners: () => runnersWithSessions(data, whose),
         jobs: () => watchedJobs(store),
         isApp,
         self: [process.pid, ...(launcher() ? [process.ppid] : [])],

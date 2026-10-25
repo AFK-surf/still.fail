@@ -56,11 +56,13 @@ test("work is a running turn, a wait on what a session started, or a running job
   type Last = { declared: string | null; endedAt: number | null; waitSeconds: number | null };
   type Job = { state: string; watch: boolean; port: number | null; sessionKey?: string; startedAt?: number };
   const now = 100_000_000;
+  // The sessions shown are those with a last turn (keyed by its place); the jobs are session "0"'s.
   const store = (sessions: { running: boolean }[], jobs: Job[], last: Last[] = []) =>
     ({
-      listSessions: () => sessions,
-      listJobs: () => jobs.map((j) => ({ sessionKey: "0", startedAt: now, ...j })),
-      sessionStats: () => new Map(last.map((l, i) => [String(i), { lastTurn: l }])),
+      anyRunning: () => sessions.some((s) => s.running),
+      liveSessions: () => last.map((_, i) => ({ key: String(i) })),
+      jobsRunning: () => jobs.filter((j) => j.state === "running").map((j) => ({ sessionKey: "0", startedAt: now, ...j })),
+      statsOf: (keys: Iterable<string>) => new Map([...keys].flatMap((k) => (last[Number(k)] ? [[k, { lastTurn: last[Number(k)] }] as const] : []))),
     }) as never;
   assert.equal(working(store([{ running: false }], []), now), false);
   assert.equal(working(store([{ running: true }], []), now), true);

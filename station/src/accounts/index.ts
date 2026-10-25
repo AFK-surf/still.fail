@@ -19,7 +19,7 @@
 import { runtimeKind, runtimeLabel } from "../agents/runtime.ts";
 import type { Clock } from "effect";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import type { Env, MachineToken } from "../agents/machine-logins.ts";
@@ -1279,12 +1279,32 @@ export function accountEmail(runtime: Runtime, home: string): string | null {
     return typeof email === "string" ? email : null;
   }
   for (const file of [join(home, ".claude.json"), join(home, "claude.json")]) {
-    try {
-      const email = JSON.parse(readFileSync(file, "utf8"))?.oauthAccount?.emailAddress;
-      if (typeof email === "string") return email;
-    } catch {}
+    const email = claudeEmail(file);
+    if (email !== null) return email;
   }
   return null;
+}
+
+/// Claude's account record's email as `file` says it, read again only once the file changed (its size or time): the
+/// file is megabytes Claude Code rewrites as it goes, and every overview asks it of every profile.
+const claudeEmails = new Map<string, { stamp: string; email: string | null }>();
+function claudeEmail(file: string): string | null {
+  let stamp: string;
+  try {
+    const st = statSync(file);
+    stamp = `${st.size}:${st.mtimeMs}`;
+  } catch {
+    return null;
+  }
+  const kept = claudeEmails.get(file);
+  if (kept?.stamp === stamp) return kept.email;
+  let email: string | null = null;
+  try {
+    const said = JSON.parse(readFileSync(file, "utf8"))?.oauthAccount?.emailAddress;
+    if (typeof said === "string") email = said;
+  } catch {}
+  claudeEmails.set(file, { stamp, email });
+  return email;
 }
 
 /// A slug for an id: lower case, runs of anything else as one dash, at most `max` long.

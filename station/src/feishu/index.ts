@@ -73,8 +73,9 @@ export type FeishuParts = ReturnType<typeof makeFeishu>;
 export function makeFeishu(options: FeishuOptions) {
   const { config, store } = options;
   const names = new NameBook(join(options.data, "feishu-names.json"), { saveAfterMs: 200, learnAfterMs: 400 });
+  // (The sessions shown: an archived one's summary is read again as it is shown, names and all.)
   names.onLearn(() => {
-    for (const session of store.listSessions()) store.notify(session.key);
+    for (const session of store.liveSessions()) store.notify(session.key);
   });
   const threads = new FeishuThreads(join(options.data, "feishu-threads.json"));
   const registrations = new Registrations({ clock: options.clock });

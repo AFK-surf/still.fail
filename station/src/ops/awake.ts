@@ -23,14 +23,16 @@ const JOB_SPAN = 2 * 60 * 60_000;
 /// Whether the station has work going at `now`: a session's turn; a session waiting on what it started, until the
 /// wait it gave is up (then the station wakes it, a turn again); or a job that is work (watched, or with no port: a
 /// service on a port runs on by itself and keeps nobody waiting) within JOB_SPAN of its session's last turn.
-export function working(store: Pick<StationStore, "listSessions" | "listJobs" | "sessionStats">, now: number): boolean {
-  if (store.listSessions().some((s) => s.running)) return true;
-  const stats = store.sessionStats(null);
+/// Looked at every EVERY: what it reads is the sessions shown and the jobs running, never every one ever (an archived
+/// session waits on nothing).
+export function working(store: Pick<StationStore, "anyRunning" | "liveSessions" | "statsOf" | "jobsRunning">, now: number): boolean {
+  if (store.anyRunning()) return true;
+  const jobs = store.jobsRunning().filter((j) => j.watch || j.port === null);
+  const stats = store.statsOf([...store.liveSessions().map((s) => s.key), ...jobs.map((j) => j.sessionKey)]);
   for (const { lastTurn: t } of stats.values()) {
     if (t?.declared === "waiting" && t.endedAt !== null && now < t.endedAt + (t.waitSeconds ?? 0) * 1000 + LINGER) return true;
   }
-  return store.listJobs(null).some((j) => {
-    if (j.state !== "running" || !(j.watch || j.port === null)) return false;
+  return jobs.some((j) => {
     const last = stats.get(j.sessionKey)?.lastTurn;
     const since = last ? (last.endedAt ?? now) : j.startedAt;
     return now - since < JOB_SPAN;

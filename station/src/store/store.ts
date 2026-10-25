@@ -24,11 +24,26 @@ import {
   type Quote, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
   type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
-  LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary,
+  LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING,
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addUsageTotals, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
+
+// What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
+// (and rows.ts JOBS_RUNNING, the readers' too).
+export { JOBS_RUNNING };
+export const LIVE_SESSIONS = "SELECT * FROM sessions WHERE archived_at IS NULL ORDER BY last_active_at DESC";
+export const SESSION_COUNTS = "SELECT connect, ws, COUNT(*) AS n FROM sessions GROUP BY connect, ws";
+export const ANY_RUNNING = "SELECT 1 AS r FROM sessions WHERE running = 1 LIMIT 1";
+export const JOBS_UP = "SELECT * FROM (SELECT * FROM jobs WHERE state = 'running' UNION ALL SELECT * FROM jobs WHERE state = 'exited' AND port IS NOT NULL) ORDER BY started_at DESC";
+export const STATS_OF = `SELECT
+    (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
+    (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
+    l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
+  FROM sessions s
+  LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
+  WHERE s.key = ?`;
 
 export * from "./rows.ts";
 export { SCHEMA_VERSION } from "./schema.ts";
@@ -60,6 +75,8 @@ export class Store {
   #archived: [number, EntryRow[]][] = [];
   #listeners: ((change: StoreChange) => void)[] = [];
   #statements = new Map<string, StatementSync>();
+  /// How many times the decision checks or the archive policy were written in this process (decisionsVersion).
+  #decisions = 0;
 
   /// Its time: what the rows say things happened at (a TestClock in tests).
   readonly clock: Clock.Clock;
@@ -221,6 +238,23 @@ export class Store {
   /// Every session, most recently active first.
   listSessions(): SessionRow[] {
     return this.#all("SELECT * FROM sessions ORDER BY last_active_at DESC").map(toSession);
+  }
+
+  /// The sessions shown (not archived), the latest active first: what the station's own periodic work goes over. The
+  /// archived only grow with time; each is looked at again as it is shown.
+  liveSessions(): SessionRow[] {
+    return this.#all(LIVE_SESSIONS).map(toSession);
+  }
+
+  /// How many sessions each connect has, in each workspace (null: the home one's), archived ones too: from the index
+  /// alone, not every session's row.
+  sessionCounts(): { connect: string; ws: string | null; n: number }[] {
+    return this.#all(SESSION_COUNTS).map((r) => ({ connect: r.connect, ws: r.ws ?? null, n: r.n }));
+  }
+
+  /// Whether any session runs a turn now.
+  anyRunning(): boolean {
+    return this.#one(ANY_RUNNING) !== undefined;
   }
 
   /// Says the sessions of workspace `from` (null: those that say none, the home one's) are `to`'s (null: the home
@@ -860,6 +894,12 @@ export class Store {
     });
   }
 
+  /// Changes each time a decision check or the archive policy is written here: what is made of them (the overview's
+  /// automatic decisions) is made again only then.
+  decisionsVersion(): number {
+    return this.#decisions;
+  }
+
   recentDecisions(): Json[] {
     return this.#all("SELECT id, session, created_at, result FROM decision_checks ORDER BY id DESC LIMIT 30").map((r) => ({
       id: r.id, session: r.session, at: r.created_at, detail: parsed(r.result) ?? null,
@@ -871,6 +911,7 @@ export class Store {
     this.#with((changes) => {
       this.#run("INSERT INTO decision_checks(session, created_at, result) VALUES (?, ?, ?)", session, this.now(), JSON.stringify(result));
       changes.push({ type: "decisionChecks" });
+      this.#decisions++;
     });
   }
 
@@ -902,6 +943,7 @@ export class Store {
     this.#with((changes) => {
       this.#run("INSERT INTO archive_policy(at, policy, author, summary, ws) VALUES (?, ?, ?, ?, ?)", this.now(), JSON.stringify(policy), JSON.stringify(author), summary, ws);
       changes.push({ type: "decisionChecks" });
+      this.#decisions++;
     });
   }
 
@@ -1437,6 +1479,18 @@ export class Store {
     return this.#all("SELECT * FROM turns WHERE session_key = ? ORDER BY started_at", session).map((r) => ({ id: r.id, summary: toTurnSummary(r) }));
   }
 
+  /// For each of `keys` that is a session: its turn count, latest turn and undelivered messages as sessionStats says them,
+  /// but not the first message it heard (`firstText` null: a read of its deliveries and their messages each). Each a
+  /// row's lookups, for the station's own periodic work over the sessions at hand, not every session ever.
+  statsOf(keys: Iterable<string>): Map<string, SessionStats> {
+    const out = new Map<string, SessionStats>();
+    for (const key of new Set(keys)) {
+      const r = this.#one(STATS_OF, key);
+      if (r !== undefined) out.set(key, { turns: r.turns, pending: r.pending, firstText: null, lastTurn: r.started_at === null ? null : toTurnSummary(r) });
+    }
+    return out;
+  }
+
   /// Per session (or for one): turn count, the latest turn, undelivered messages and the first one it heard.
   sessionStats(key: string | null): Map<string, SessionStats> {
     const sql = `SELECT s.key,
@@ -1553,6 +1607,12 @@ export class Store {
     return r ? toJob(r) : null;
   }
 
+  /// The jobs running, and the services stopped on their own that hold their port (an exited one with a port), the
+  /// latest first: what a session has up.
+  jobsUp(): JobRow[] {
+    return this.#all(JOBS_UP).map(toJob);
+  }
+
   /// A session's jobs (all sessions' with null), newest first.
   listJobs(session: string | null): JobRow[] {
     return this.#all("SELECT * FROM jobs WHERE ?1 IS NULL OR session_key = ?1 ORDER BY started_at DESC", session).map(toJob);
@@ -1561,7 +1621,7 @@ export class Store {
   /// The jobs running now, as listJobs gives them (by the index on their state: the queue reads them at each look, and
   /// each second a command waits for the screen, jobs/jobs.ts `line`).
   jobsRunning(): JobRow[] {
-    return this.#all("SELECT * FROM jobs WHERE state = 'running' ORDER BY started_at DESC").map(toJob);
+    return this.#all(JOBS_RUNNING).map(toJob);
   }
 
   /// How many jobs are running now: other stations' tasks here (`remote_…`, jobs/remote.ts), web services (a port) and

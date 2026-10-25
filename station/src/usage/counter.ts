@@ -447,6 +447,8 @@ export class UsageCounter {
   #clock: Clock.Clock;
   /// The sessions the read under way recorded new calls of.
   #counted = new Set<string>();
+  /// What was read of each transcript (usage_files): the store's at the first read, and what this counter wrote since.
+  #files: Map<string, UsageFile> | null = null;
   /// Each session's turns as the last read made them (`usageTurns`), and what they were made of (`usageTurnsStamp`).
   #turnsKept = new Map<string, { stamp: string; turns: UsageTurn[] }>();
 
@@ -546,9 +548,12 @@ export class UsageCounter {
     const last = this.#last;
     this.#first = last === 0;
     const store = this.#store;
-    const sessions: SessionRow[] = store.listSessions();
     const wanted: Set<string> | null = last === 0 ? null : new Set(store.usageActiveSessions(last - MARGIN_MS));
-    const known = store.usageFiles();
+    // Every session the first time; then those that ran since, by their rows (a read comes every few seconds while
+    // agents work: not every session ever).
+    const sessions: SessionRow[] = wanted === null ? store.listSessions() : [...wanted].flatMap((key) => store.getSession(key) ?? []);
+    // What was read of each transcript: as the store has it the first time, then as this counter wrote it (it alone does).
+    const known = (this.#files ??= store.usageFiles());
     const config = this.#config();
     let added = 0;
     this.#counted.clear();
@@ -606,7 +611,11 @@ export class UsageCounter {
     for (const root of codexRoots) await rolloutsIn(root, found);
     const rollouts = [...new Set(found)];
     if (rollouts.length > 0) {
-      const codex = sessions.filter((s) => s.runtime === "codex");
+      // A new one is matched among the sessions read, then (it may be one that ran before the last read) among every
+      // Codex session, asked only then: one matched to none is passed over for good.
+      let codex = sessions.filter((s) => s.runtime === "codex");
+      let every = wanted === null;
+      const match = (meta: [string | null, string | null]) => codex.find((s) => s.runtimeSessionId === meta[0] || (s.cwd === null && s.workspace === meta[1]))?.key ?? null;
       const turnsOf = new Map<string, { of: UsageTurn[] | null }>();
       for (const path of rollouts) {
         const file = readBefore(path, "codex");
@@ -614,7 +623,12 @@ export class UsageCounter {
         if (file !== undefined) session = file.session;
         else {
           const meta = await codexMeta(path);
-          session = meta === null ? null : (codex.find((s) => s.runtimeSessionId === meta[0] || (s.cwd === null && s.workspace === meta[1]))?.key ?? null);
+          session = meta === null ? null : match(meta);
+          if (session === null && meta !== null && !every) {
+            codex = store.listSessions().filter((s) => s.runtime === "codex");
+            every = true;
+            session = match(meta);
+          }
         }
         if (session === null) {
           if (file === undefined) {
@@ -624,6 +638,7 @@ export class UsageCounter {
               size = (await stat(path)).size;
             } catch {}
             store.recordUsage(path, { session: null, offset: size, model: null }, "codex", []);
+            known.set(path, { session: null, offset: size, model: null });
           }
           continue;
         }
@@ -709,6 +724,7 @@ export class UsageCounter {
         return [c, of[Math.max(lo - 1, 0)]!.of];
       });
       const recorded = this.#store.recordUsage(path, { session: session.key, offset: part.offset, model: state.model }, runtime, withFor);
+      this.#files?.set(path, { session: session.key, offset: part.offset, model: state.model });
       if (recorded > 0) this.#counted.add(session.key);
       added += recorded;
       await breathe();

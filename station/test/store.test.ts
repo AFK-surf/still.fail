@@ -8,7 +8,8 @@ import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
-  AUTO, type AuthorKind, type EntryRow, type JobRow, MANUAL, type NewMessage, SCHEMA_VERSION, Store, type StoreChange, newMessage,
+  ANY_RUNNING, AUTO, type AuthorKind, type EntryRow, JOBS_RUNNING, JOBS_UP, type JobRow, LIVE_SESSIONS, MANUAL, type NewMessage, SCHEMA_VERSION,
+  SESSION_COUNTS, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
 import { ACTIVE_SESSIONS } from "../src/store/usage.ts";
@@ -830,9 +831,31 @@ test("usage: the sessions at work are found by when their turns ended, once each
   store.startTurn("t4", "b", "job");
   assert.deepEqual(store.usageActiveSessions(0).sort(), ["a", "b"]);
   assert.deepEqual(store.usageActiveSessions(Number.MAX_SAFE_INTEGER).sort(), ["a", "b"], "running ones whenever");
-  // As the station's SQLite plans it: by the index on when turns ended, never a scan of every turn.
-  const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${ACTIVE_SESSIONS}`).all(0) as { detail: string }[]).map((r) => r.detail);
-  assert.ok(plan.every((d) => !d.startsWith("SCAN")), plan.join(" | "));
+});
+
+test("what the station's own periodic work asks is planned by an index, never a scan of what grows with time", () => {
+  const store = memory();
+  // As the station's SQLite (node's) plans each: a scan only of an index that holds the sessions shown or running, or of
+  // the small one that counts them; a table, or an index of every turn or job, never.
+  const planned: [string, unknown[]][] = [
+    [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [JOBS_RUNNING, []], [JOBS_UP, []], [STATS_OF, ["a"]], [SESSION_COUNTS, []],
+  ];
+  const scans = /^SCAN (?!\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect)\b)/;
+  for (const [sql, args] of planned) {
+    const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
+    assert.ok(!plan.some((d) => scans.test(d)), `${sql}\n  ${plan.join(" | ")}`);
+  }
+  // What each says.
+  session(store, "a");
+  session(store, "b");
+  store.setArchived("b", true, MANUAL);
+  assert.deepEqual(store.liveSessions().map((s) => s.key), ["a"]);
+  assert.deepEqual(store.sessionCounts(), [{ connect: "ds", ws: null, n: 2 }]);
+  assert.equal(store.anyRunning(), false);
+  store.startTurn("t1", "a", "input");
+  const stats = store.statsOf(["a", "missing"]);
+  assert.deepEqual([...stats.keys()], ["a"]);
+  assert.deepEqual([stats.get("a")!.turns, stats.get("a")!.pending, stats.get("a")!.firstText, stats.get("a")!.lastTurn?.kind], [1, 0, null, "input"]);
 });
 
 test("usage: a call is recorded once, its output grown; turns tell whom they were for", () => {

@@ -479,3 +479,7 @@ export function takeChars(text: string, n: number): string {
 
 /// Rust's ordering of String keys (a BTreeMap's): by their UTF-8 bytes.
 export const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.from(b));
+
+/// The jobs running now, the latest first, by the index on their state (schema.ts jobs_up): the main thread's and the
+/// readers' (who keeps watch).
+export const JOBS_RUNNING = "SELECT * FROM jobs WHERE state = 'running' ORDER BY started_at DESC";

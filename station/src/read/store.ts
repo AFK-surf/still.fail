@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
-import { type InWorkspace, LETTER_SQL, type Letter, isLetter, liveShare, sees, toChatShare, withLetter } from "../store/rows.ts";
+import { type InWorkspace, JOBS_RUNNING, LETTER_SQL, type Letter, isLetter, liveShare, sees, toChatShare, withLetter } from "../store/rows.ts";
 
 export type Json = any;
 
@@ -836,7 +836,8 @@ export function jobNotices(s: Store, id: string, limit: number): { at: number; t
 /// when one last said something.
 export function watching(s: Store): Map<string, Json> {
   const by = new Map<string, JobRow[]>();
-  for (const job of listJobs(s, null).filter((j) => j.watch && j.state === "running")) {
+  // (The jobs running, by their state's index: every summary and list asks this, not every job ever.)
+  for (const job of all(s, JOBS_RUNNING).map(toJob).filter((j) => j.watch)) {
     by.set(job.sessionKey, [...(by.get(job.sessionKey) ?? []), job]);
   }
   const out = new Map<string, Json>();
