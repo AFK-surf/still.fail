@@ -196,6 +196,9 @@ pub struct Ctx {
   id_stack : Array[Int]
   mut width : Double
   mut height : Double
+  /// the window's size this frame (width, height: the box being built's, Ctx::sized)
+  mut window_w : Double
+  mut window_h : Double
   mut scale : Double
   /// whether the host sets things on whole device pixels (whole_px_layout), as the frame began
   mut whole_px : Bool
@@ -487,6 +490,8 @@ fn Ctx::new() -> Ctx {
     id_stack: [],
     width: 800.0,
     height: 600.0,
+    window_w: 800.0,
+    window_h: 600.0,
     scale: 2.0,
     whole_px: false,
     now: 0.0,
@@ -1384,7 +1389,7 @@ pub fn Ctx::request_frame(self : Ctx, loc~ : SourceLoc) -> Unit {
 ///|
 /// The window's size in logical pixels (w, h), as this frame lays it out: what a dialog is put in the middle of.
 pub fn Ctx::window_size(self : Ctx) -> (Double, Double) {
-  (self.width, self.height)
+  (self.window_w, self.window_h)
 }
 
 ///|

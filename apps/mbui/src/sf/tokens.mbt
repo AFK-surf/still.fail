@@ -1035,7 +1035,7 @@ fn screen_layout(width : Double) -> Layout {
 /// (sfapp messages.mbt `ink`) until they and the web's are one (the way there 4): call at the top of a view.
 pub fn begin(c : @ui.Ctx) -> Theme {
   let dark = dark_set.val.unwrap_or(false)
-  let narrow = touch_system() || layout(c.width) is Small
+  let narrow = touch_system() || layout(c.window_size().0) is Small
   let p = match (narrow, dark) {
     (false, false) => wide_light
     (false, true) => wide_dark

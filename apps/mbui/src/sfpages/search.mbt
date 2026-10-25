@@ -177,8 +177,7 @@ fn search_gone() -> Unit {
 /// gives it over that page, `inset` from its top; nothing while there is none.
 pub fn search_over(c : @ui.Ctx, src : Source, w : Workspace, inset : Double) -> Unit {
   if search.over {
-    // (laid out Small: across the window)
-    search_page(c, src, w, inset, Whole, c.width)
+    search_page(c, src, w, inset, Whole)
   }
 }
 
@@ -278,9 +277,8 @@ fn search_field(c : @ui.Ctx, at : @sf.ListAt) -> Unit {
 // ── the page ───────────────────────────────────────────────────────────
 
 ///|
-/// The search over Home (Search.kt SearchPage), while it is open, over lists that stand `at` (its lines stand so), in
-/// a box `width` wide.
-fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @sf.ListAt, width : Double) -> Unit {
+/// The search over Home (Search.kt SearchPage), while it is open, over lists that stand `at` (its lines stand so).
+fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @sf.ListAt) -> Unit {
   if !search.open {
     return
   }
@@ -377,8 +375,10 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @s
       |> ignore
       // what the words find (sfpages' finder): a row opened, its page over this one, back to it
       let lb = c.box(style=search_list_box.then(@sf.list_line(at)), fn() {
-        let lines_w = width - 2.0 * @sf.list_line_in(at)
-        finder_list(c, src, w, search.offered, close, idle_chats=search.summoned, width=lines_w, at~)
+        // (its lines as wide as the line they stand on: what they go by)
+        c.sized(c.width - 2.0 * @sf.list_line_in(at), c.height, fn() {
+          finder_list(c, src, w, search.offered, close, idle_chats=search.summoned, at~)
+        })
       })
       c.look(lb, { ..@ui.still_look, alpha: u })
     })
