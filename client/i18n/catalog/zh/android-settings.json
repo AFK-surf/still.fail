@@ -292,7 +292,7 @@
   "android-settings.pickStation": "添加到 station",
   "android-settings.profile.add": "添加 Profile",
   "android-settings.profile.addedLogin": "已登录，已添加 Profile",
-  "android-settings.profile.background": "新消息到达时，将正在执行的命令转到后台",
+  "android-settings.profile.background": "新消息到达时，后台运行当前命令",
   "android-settings.profile.backgroundOff": "新消息需等正在执行的命令或 subagent 结束后才会被读取。",
   "android-settings.profile.backgroundOn": "命令和 subagent 转到后台继续运行，agent 立即读取消息。",
   "android-settings.profile.change": "更换",

@@ -100,13 +100,13 @@ let agent_sheet_foot : Double = 24.0
 let info_row_radius : Double = @sf.row_corner
 
 ///|
-/// An info card round its rows: a card of the ladder's, its rows the ladder's inset in.
-let info_list_radius : Double = @sf.card_corner
+/// An info card round its rows: a list card's, its rows list_pad in.
+let info_list_radius : Double = @sf.list_card_corner
 
 ///|
-/// Rows on one quiet card (Android ChatInfo.kt InfoList): its rows the ladder's inset in, the ink at 5%.
+/// Rows on one quiet card (Android ChatInfo.kt InfoList): its rows list_pad in (a list card's), the ink at 5%.
 // kept across runs: a value (no field of it changes)
-let info_list_style : @ui.Style = @ui.css("w=Full p=S2_5 bg=A(Fg,O5) clip")
+let info_list_style : @ui.Style = @ui.css("w=Full bg=A(Fg,O5) clip").then(@ui.style(p=@sf.list_room))
 
 ///|
 fn info_list(c : @ui.Ctx, body : () -> Unit) -> Unit {
@@ -121,7 +121,7 @@ let info_row_style : @ui.Style = @ui.css("row w=Full min_h=S11 px=S2_5 py=S1 gap
 
 ///|
 /// A row that leads with a tile (a model's mark, 36): its tile the ladder's inset in from the row's top and start, so
-/// in the card's corner it is twice that in, round by the ladder's step after the row's (mbui works it out).
+/// in the card's corner that and list_pad in, round by the ladder's small step (mbui works it out: 10.2 in 23, 16 in).
 // kept across runs: a value (no field of it changes)
 let info_row_tile : @ui.Style = @ui.css("p=S2_5 align=AStart")
 
@@ -134,8 +134,8 @@ let info_tile : Double = 38.0
 /// its edges as makes it concentric with it (@sf.capsule_in), its words on the dot's line.
 // kept across runs: a value (no field of it changes)
 let info_row_dot : @ui.Style = @ui.style(
-  pl=@sf.capsule_room(@sf.card_corner, job_dot_side, less=@sf.corner_inset),
-  pt=@sf.capsule_room(@sf.card_corner, job_dot_side, less=@sf.corner_inset + job_dot_over),
+  pl=@sf.capsule_room(info_list_radius, job_dot_side, less=@sf.list_pad),
+  pt=@sf.capsule_room(info_list_radius, job_dot_side, less=@sf.list_pad + job_dot_over),
 )
 
 ///|

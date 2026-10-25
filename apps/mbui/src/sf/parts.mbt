@@ -3058,12 +3058,13 @@ pub fn resize_handle(
 // A card of options (SettingParts.kt DecisionOptions; Decisions.css.ts options, choice)
 
 ///|
-/// How far in the card of options' rows stand (the ladder's inset: round by its next step, 18, in the card's corners).
-let options_card_pad : Double = corner_inset
+/// How far in the card of options' rows stand: a list card's (list_pad, as a menu's rows in its panel), round by the
+/// ladder's row corner in its corners.
+let options_card_pad : Double = list_pad
 
 ///|
-/// An option's row's corner (the ladder's next step in from the card's).
-let option_row_corner : Double = 18.0
+/// An option's row's corner (the ladder's row corner, concentric in the card's).
+let option_row_corner : Double = row_corner
 
 ///|
 /// An option's measures, the theme's for the screen (decided once: docs/architecture.md): its number's disc a list
@@ -3116,13 +3117,13 @@ fn options_w(options : Array[(String, String, Bool)], ot : OptionType, wide : Bo
 }
 
 ///|
-/// The card's corner: a card's of the ladder, its rows the ladder's inset in round by its next step (18) and their
-/// discs concentric with them (as far in as their half less that: the row's pad_in).
-let options_card_radius : Double = card_corner
+/// The card's corner: a list card's (a column of rows list_pad in, list_card_corner), its rows round by the ladder's
+/// row corner and their discs concentric with them (as far in as their half less that: the row's pad_in).
+let options_card_radius : Double = list_card_corner
 
 ///|
-/// A card of options (SettingParts.kt DecisionOptions): each a row to be pressed (its ground under the finger the
-/// ladder's inset in from the card's edge, rounded 18), its number in a disc (the one recommended in the accent), its label and what it
+/// A card of options (SettingParts.kt DecisionOptions): each a row to be pressed (its ground under the finger list_pad
+/// in from the card's edge, as a list card's, rounded 18), its number in a disc (the one recommended in the accent), its label and what it
 /// leads to (`options`: each its label, its detail, whether recommended); half there when not `enabled`, a spinner on
 /// the one being answered (`busy`, none pressed meanwhile; `chosen` stays whole); its measures the theme's for the
 /// screen (option_type). Under a post as the web's (`wide`: as wide as what it says, `room` at most, on the text at

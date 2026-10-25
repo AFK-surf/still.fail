@@ -24,6 +24,15 @@
 //    a step of the scale (`gap_align_step`) juts out or falls short (a sheet's row past its others, a card short of
 //    the segmented choice over it).
 //
+// 7. A column of rows that light up under the hand (rule 1's) or are pressed whole, rounded (wider than tall, no ground
+//    with no hand on them, not capsules) in a box with a ground (as wide as most of it, from its top to its foot: a
+//    list's rows on its card, a menu's in its panel, a card's options) stand the theme's `lit_reach` in from its sides,
+//    the first from its top, the last from its foot: a row's ground is the row shown under the hand, not a block of its
+//    own the ladder's inset in, and further in it reads as floating off the edge (still.fail's user, 2026-10-26: a card
+//    of options' grounds 10 in, 「6px 就差不多了」, as a menu's are since 2026-10-25). Not rows flush with it (a list whose
+//    rows are as wide as it, their grounds its own edge to edge), nor a page's or a pane's, among its heads and bars in
+//    its column, as far in as its words say.
+//
 // Rules 2 (siblings of a kind equally spaced) and 6 (gaps on the scale) are still.fail's too, not measured yet.
 
 ///|
@@ -620,6 +629,79 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
           let how = if (side == 0) == (d < 0.0) { "juts out" } else { "falls short" }
           let which = if side == 0 { "left" } else { "right" }
           out.push("rule 5: \{self.named(k)} \{how} \{d.abs()} at its \{which} of the others' edge, on \{self.named(on)}")
+        }
+      }
+    }
+  }
+  // 7. a column of rows that light up, the theme's lit_reach in from the edges of the box with a ground round them
+  if self.lit_reach > 0.0 {
+    // (each row that lights up only under the hand, or is pressed as a whole and rounded, its ground or its ripple
+    // shown as it is: wider than tall, no ground with no hand on it (a block of its own, a code's, stands the
+    // ladder's inset in), not a capsule; by the nearest box with a ground round it, in its layer, as wide as most of
+    // it)
+    let rows : Map[Int, Array[Int]] = {}
+    for i in 0..<n {
+      let b = self.nodes[i]
+      if !whole[i] ||
+        !(self.gap_lights(i) || (b.pressed_row() && b.radius >= 0.5)) ||
+        b.grounded() ||
+        b.fw <= b.fh * 1.5 ||
+        b.corner() >= b.fh / 2.0 - gap_slack {
+        continue
+      }
+      let mut q = b.parent
+      while q >= 0 && layer[q] == layer[i] && ground_of(q) is None {
+        q = self.nodes[q].parent
+      }
+      if q < 0 || layer[q] != layer[i] || b.fw < self.nodes[q].fw * gap_spans {
+        continue
+      }
+      match rows.get(q) {
+        Some(list) => list.push(i)
+        None => rows[q] = [i]
+      }
+    }
+    for entry in rows {
+      let (q, list) = entry
+      let a = self.nodes[q]
+      let top = fn(i : Int) { self.nodes[i].y - a.y }
+      let foot = fn(i : Int) { a.y + a.fh - (self.nodes[i].y + self.nodes[i].fh) }
+      let mut first = list[0]
+      let mut last = list[0]
+      for i in list {
+        if top(i) < top(first) {
+          first = i
+        }
+        if foot(i) < foot(last) {
+          last = i
+        }
+      }
+      // (a column of them: its rows from its top to its foot, nothing else over the first or under the last (a page's
+      // or a pane's rows stand in its column, among its heads and bars, as far in as its words say))
+      if top(first) >= gap_align_step || foot(last) >= gap_align_step {
+        continue
+      }
+      for i in list {
+        let b = self.nodes[i]
+        let sides = [("left", b.x - a.x), ("right", a.x + a.fw - (b.x + b.fw))]
+        if i == first {
+          sides.push(("top", top(i)))
+        }
+        if i == last {
+          sides.push(("foot", foot(i)))
+        }
+        let off : Array[String] = []
+        for s in sides {
+          let (name, d) = s
+          // (flush with it: a list whose rows are as wide as it, their grounds its own edge to edge)
+          if d > gap_slack && (d - self.lit_reach).abs() > gap_slack {
+            off.push("\{d} from its \{name}")
+          }
+        }
+        if off.length() > 0 {
+          out.push(
+            "rule 7: \{self.named(i)} lights up in \{self.named(q)}, " + off.join(", ") + " (\{self.lit_reach} in)",
+          )
         }
       }
     }
