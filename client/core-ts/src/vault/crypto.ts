@@ -20,6 +20,8 @@ export type Vault = {
   keys: { cert: BoxCert; wrapped: string }[]; recovery?: string; at: number; sig: Sig;
   /// The longest grant its items are given for, where an item's listing says none (absent: any).
   lasts?: Scope;
+  /// Deleted by its owner (`vault.delete`): sealed to no one under a new epoch, its items gone; it stays deleted.
+  deleted?: true;
 };
 export type Kind = "token" | "ssh_key" | "login";
 export type Mode = "proxy" | "ssh" | "env";

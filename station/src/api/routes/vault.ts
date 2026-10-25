@@ -3,7 +3,8 @@
 // and whose they are, without it the control plane could add a device of its own and be given the keys. A member sees
 // the vaults they are a member of and those vaults' items; each write is checked against the lock and the version it
 // follows (vault/crypto.ts), and told to the members' streams as it is kept (`vault`, `vault-item`, `vault-box`; a
-// member taken out of a vault is told `vault-gone`). A vault is written on one station (its host) and copied to the
+// member taken out of a vault is told `vault-gone`; a vault deleted is kept as its last version, `deleted`, its items
+// gone). A vault is written on one station (its host) and copied to the
 // others by its members' devices (`?copy=1`: a later version than the one held, not necessarily the next; one not later
 // is answered with the one held, unchanged), so that agents on any station may ask for its secrets.
 import type { LockState } from "../../cloud/lock.ts";
@@ -105,6 +106,7 @@ export const routes = ({ vaults, lock, events, boxed }: VaultDeps): Route[] => {
         if (next === null || typeof next !== "object" || typeof next.vault !== "string" || typeof next.id !== "string") return refuse(400, "vault_invalid", "an item, as JSON");
         const vault = vaults.vault(l.ws, next.vault);
         if (vault === null || !sees(vault, r.viewer)) return refuse(404, "vault_unknown", "no such vault here, or not one of yours");
+        if (vault.deleted) return refuse(404, "vault_unknown", "that vault was deleted");
         const prev = vaults.item(l.ws, vault.id, next.id);
         const copy = param(r, "copy") === "1";
         if (copy && prev !== null && Number.isSafeInteger(next.version) && next.version <= prev.version) return json(200, JSON.stringify({ item: prev }));

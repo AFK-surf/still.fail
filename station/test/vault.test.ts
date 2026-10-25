@@ -141,10 +141,10 @@ const boxOf = (p: Person) => certOf(p.signer, p.base.hex, newBoxPair().pub);
 const ulid = (n: number) => `01HZZZZZZZZZZZZZZZZZZZZZ${String(n).padStart(2, "0")}`;
 
 /// A vault's version, signed by `by` (alice's first device by default).
-function vaultOf(w: ReturnType<typeof lock>, o: { seq?: number; members?: Person[]; epoch?: number; by?: Person; owner?: string; certs?: BoxCert[]; id?: string }): Vault {
+function vaultOf(w: ReturnType<typeof lock>, o: { seq?: number; members?: Person[]; epoch?: number; by?: Person; owner?: string; certs?: BoxCert[]; id?: string; deleted?: boolean }): Vault {
   const members = o.members ?? [w.alice];
-  const certs = o.certs ?? members.map(boxOf);
-  return signed({ v: 1 as const, ws: WS, id: o.id ?? VAULT, seq: o.seq ?? 0, owner: o.owner ?? "alice", name: "Team", members: members.map((m) => m.sub), epoch: o.epoch ?? 0, keys: certs.map((cert) => ({ cert, wrapped: seal(cert.box, fill(4), keyContext(WS, o.id ?? VAULT, o.epoch ?? 0)) })), at: 1000 }, TAG.vault, (o.by ?? w.alice).signer);
+  const certs = o.certs ?? (o.deleted ? [] : members.map(boxOf));
+  return signed({ v: 1 as const, ws: WS, id: o.id ?? VAULT, seq: o.seq ?? 0, owner: o.owner ?? "alice", name: "Team", members: members.map((m) => m.sub), epoch: o.epoch ?? 0, keys: certs.map((cert) => ({ cert, wrapped: seal(cert.box, fill(4), keyContext(WS, o.id ?? VAULT, o.epoch ?? 0)) })), ...(o.deleted ? { deleted: true as const } : {}), at: 1000 }, TAG.vault, (o.by ?? w.alice).signer);
 }
 
 function itemOf(o: { version?: number; epoch?: number; by: Person; deleted?: boolean; id?: string; vault?: string }): Item {
@@ -313,6 +313,23 @@ test("routes: a version out of order is a conflict, sent the one held; a bad one
   assert.equal((await s.ask("PUT", "/vault/items", "alice", itemOf({ by: w.alice, version: 1 }))).status, 200);
   // Of another workspace.
   assert.equal((await s.ask("PUT", "/vault/vaults", "alice", { ...vaultOf(w, { id: `v_${ulid(2)}` }), ws: "OTHER" })).body.code, "vault_invalid");
+});
+
+test("routes: a vault its owner deleted is kept as its last version, sealed to no one, its items gone; it stays deleted", async () => {
+  const w = lock();
+  const s = station(w);
+  await s.ask("PUT", "/vault/vaults", "alice", vaultOf(w, {}));
+  assert.equal((await s.ask("PUT", "/vault/items", "alice", itemOf({ by: w.alice }))).status, 200);
+  // Still sealed to someone: not deleted.
+  assert.match((await s.ask("PUT", "/vault/vaults", "alice", vaultOf(w, { seq: 1, epoch: 1, deleted: true, certs: [boxOf(w.alice)] }))).body.error, /sealed to no one/);
+  // Its keys gone under the same epoch: refused as any device taken out is.
+  assert.match((await s.ask("PUT", "/vault/vaults", "alice", vaultOf(w, { seq: 1, deleted: true }))).body.error, /new epoch/);
+  const gone = vaultOf(w, { seq: 1, epoch: 1, deleted: true });
+  assert.equal((await s.ask("PUT", "/vault/vaults", "alice", gone)).status, 200);
+  assert.deepEqual((await s.ask("GET", "/vault/vaults", "alice")).body.vaults, [gone], "kept, so a station holding an older one is brought it");
+  assert.deepEqual((await s.ask("GET", `/vault/items?vault=${VAULT}`, "alice")).body.items, []);
+  assert.equal((await s.ask("PUT", "/vault/items", "alice", itemOf({ by: w.alice, version: 1, epoch: 1 }))).body.code, "vault_unknown");
+  assert.match((await s.ask("PUT", "/vault/vaults", "alice", vaultOf(w, { seq: 2, epoch: 2 }))).body.error, /stays deleted/);
 });
 
 test("a copy from another station: any later version, checked as one written here; never an earlier one", () => {

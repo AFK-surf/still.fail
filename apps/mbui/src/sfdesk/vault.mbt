@@ -288,9 +288,10 @@ fn vault_library(c : @ui.Ctx, core : Core, look : Look, ws : String, v : Json?) 
   }
   if !plain && vaults.length() > 0 {
     out.push(fn() {
-      @sf.section(c, @sf.t("web-pages.vault.devices"), heads=true, fn() {
+      @sf.section(c, @sf.t("web-pages.vault.vaults"), heads=true, fn() {
         sec_group(c, look, fn() {
-          // each vault a row: its name, and how many devices hold its key or, where some have none yet, how many
+          // each vault a row: its name, and how many devices hold its key or, where some have none yet, how many; its
+          // owner's ⋯ deletes it
           for row in vaults {
             let rv = Some(row)
             let id = text(rv, "id")
@@ -312,6 +313,9 @@ fn vault_library(c : @ui.Ctx, core : Core, look : Look, ws : String, v : Json?) 
                   if sec_do(c, look, "vault-give/" + id, @sf.t("web-pages.vault.addDevice"), busy=giving) {
                     vault_act(core, ws, "addDevice", [("vault", str(id))], @sf.t("web-pages.vault.addDeviceWhat"), done=@sf.t("web-pages.vault.addedDevice"))
                   }
+                }
+                if flag(rv, "mine") {
+                  vault_menu(c, core, ws, rv)
                 }
               },
             )
@@ -400,6 +404,31 @@ fn vault_lasts_row(c : @ui.Ctx, core : Core, look : Look, ws : String, mine : Js
       c.box(style=vt_choices_narrow, choose) |> ignore
     }
   }
+}
+
+///|
+/// A vault's ⋯ (its owner's): deleting it, asked first, saying what goes with it.
+fn vault_menu(c : @ui.Ctx, core : Core, ws : String, rv : Json?) -> Unit {
+  let id = text(rv, "id")
+  let key = "vault-more/" + id
+  if !@sf.icon_action(c, "more", key, @sf.t("common.more"), disabled=is_doing(core, ["vault.delete"], [("workspace", ws), ("vault", id)])) {
+    return
+  }
+  let n = count(rv, "items")
+  let delete = fn() {
+    confirm(
+      @sf.t("web-pages.vault.deleteTitle", args=[("name", text(rv, "name"))]),
+      if n > 0 {
+        @sf.t("web-pages.vault.deleteVaultBody", args=[("n", n.to_string())])
+      } else {
+        @sf.t("web-pages.vault.deleteVaultEmpty")
+      },
+      @sf.t("common.delete"),
+      danger=true,
+      fn() { vault_act(core, ws, "delete", [("vault", str(id))], @sf.t("web-pages.vault.deleteWhat"), done=@sf.t("web-pages.vault.deleted")) },
+    )
+  }
+  @sf.menu([Some(@sf.menu_item_of(@sf.t("web-pages.vault.deleteVault"), icon="trash", danger=true, delete))], from=Of(c.id(key)), along=End)
 }
 
 ///|

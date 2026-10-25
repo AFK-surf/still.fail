@@ -612,6 +612,46 @@ test("one vault of one's own: a device set up later makes none, and is given its
   r.core.close();
 });
 
+test("a vault of one's own deleted: its last version sealed to no one, brought to every station; the person asked when it holds secrets", async () => {
+  const r = await rig(false, true);
+  r.putLock();
+  const { made: empty } = await r.ask("vault.setup", {});
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  await r.host.time.pass(1000);
+  assert.ok(r.st2.vaults.get(empty), "copied to the other station");
+  // Empty: deleted as it is asked, nobody asked again.
+  const asked = r.host.secureAsked.length;
+  assert.deepEqual(await r.ask("vault.delete", { vault: empty }), { deleted: empty });
+  assert.equal(r.host.secureAsked.length, asked);
+  await r.host.time.pass(1000);
+  r.take();
+  const last = r.st.vaults.get(empty)!;
+  assert.ok(signedOk(last, TAG.vault));
+  assert.deepEqual([last.deleted, last.seq, last.epoch, last.keys, last.recovery], [true, 1, 1, [], undefined]);
+  assert.deepEqual(r.st2.vaults.get(empty), last, "the other station brought it too");
+  assert.deepEqual(vaults().vaults, []);
+  await fails(r.ask("vault.putItem", { vault: empty, plain: { kind: "token", name: "x", fields: { value: "y" } } }), "vault_unknown");
+  await fails(r.ask("vault.delete", { vault: empty }), "vault_unknown");
+  // Read again from the stations (a page shown anew): still gone.
+  await r.watch(2, { topic: "vaultItems", workspace: "ws", vault: empty });
+  await r.host.time.pass(1000);
+  assert.deepEqual(vaults().vaults, []);
+
+  // One holding a secret: the person asked first; their no keeps it.
+  const { id } = await r.ask("vault.create", { name: "Work" });
+  await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } } });
+  assert.equal(vaults().vaults[0].items, 1);
+  r.host.secureRefused = true;
+  await fails(r.ask("vault.delete", { vault: id }), "user_cancelled");
+  assert.equal(r.st.vaults.get(id)!.deleted, undefined);
+  r.host.secureRefused = false;
+  await r.ask("vault.delete", { vault: id });
+  assert.match(r.host.secureAsked.at(-1)?.reason ?? "", /Work/);
+  assert.equal(r.st.vaults.get(id)!.deleted, true);
+  assert.deepEqual(vaults().vaults, []);
+  r.core.close();
+});
+
 test("a vault made on one station is copied to the workspace's others, so an agent on any of them may ask for its secrets", async () => {
   const r = await rig(false, true);
   r.putLock();

@@ -360,12 +360,12 @@ function owner(inner: Inner): Owner {
 }
 
 /// The person asked by the system before what they should mean (host.ts `secureAsk`): fails with the host's code
-/// (`user_cancelled`, …) as the call's; a phone with no screen lock has nothing to ask with, and goes on.
-function askPerson(inner: Inner, reason: string): Effect.Effect<void, CoreError> {
+/// (`user_cancelled`, …) as the call's (else `code`); a phone with no screen lock has nothing to ask with, and goes on.
+export function askPerson(inner: Inner, reason: string, code = "lock_refused"): Effect.Effect<void, CoreError> {
   const ask = inner.host.secureAsk;
   if (!ask) return Effect.void;
   return Effect.catch(ask.call(inner.host, reason), (e) =>
-    e.message === "no_device_lock" ? Effect.void : Effect.fail(CoreError.refused(e, "lock_refused")));
+    e.message === "no_device_lock" ? Effect.void : Effect.fail(CoreError.refused(e, code)));
 }
 
 /// A device's name as people know it: its label, or what kind of client it is (an older client's, said so).

@@ -15,6 +15,9 @@ export type Vault = {
   keys: { cert: BoxCert; wrapped: string }[]; recovery?: string; at: number; sig: Sig;
   /// The longest grant its items are given for, where an item's listing says none (absent: any).
   lasts?: Scope;
+  /// Deleted by its owner: its key sealed to no one (a new epoch), its items let go; it stays deleted. Kept as its
+  /// last version so the stations that hold an older one are brought this one, not the older one back.
+  deleted?: true;
 };
 /// How agents may ask for an item; `lasts`: the longest grant its owner gives (absent: as its vault says).
 export type Listing = { name: string; kind: Kind; modes: Mode[]; hosts: string[]; env?: string; lasts?: Scope };
@@ -225,6 +228,7 @@ export function vaultOk(lock: LockState, prev: Vault | null, next: Vault, copy =
   if (!Array.isArray(v.keys) || v.keys.length > 1024) return "keys is a list";
   if (v.recovery !== undefined && !b64(v.recovery, 200)) return "recovery is a seal";
   if (v.lasts !== undefined && !SCOPES.includes(v.lasts)) return "lasts is once, hour or chat";
+  if (v.deleted !== undefined && (v.deleted !== true || v.keys.length > 0 || v.recovery !== undefined)) return "a deleted vault is sealed to no one";
   if (!sigShape(v.sig)) return "a vault is signed";
   if (prev === null) {
     if (v.seq !== 0 && !copy) return "a vault's first version is seq 0";
@@ -232,6 +236,7 @@ export function vaultOk(lock: LockState, prev: Vault | null, next: Vault, copy =
     if (v.id !== prev.id) return "another vault";
     if (copy ? v.seq <= prev.seq : v.seq !== prev.seq + 1) return copy ? `a copy is later than seq ${prev.seq}` : `seq ${prev.seq + 1} follows ${prev.seq}`;
     if (v.owner !== prev.owner) return "a vault's owner does not change";
+    if (prev.deleted && !v.deleted) return "a deleted vault stays deleted";
     if (v.epoch < prev.epoch) return "the epoch does not go back";
     const devices = new Set(v.keys.map((k: any) => k?.cert?.device));
     const gone = prev.members.some((m) => !v.members.includes(m)) || prev.keys.some((k) => !devices.has(k.cert.device));

@@ -73,6 +73,7 @@ chat EMBER/1792240320.234000。凭据都放在「密钥」这一个库里；库�
 - **库（vault）**：`{id, owner, name, members[], keys[], recovery, epoch}`。`members` 是能用这个库的成员（锁里的 `sub`）；`keys` 给这些成员的每台 app 设备各包一份。每次加人、删人、删设备，`epoch` 加一。
 - **库元数据也要签**：每一版都由库 owner 的一台锁里设备签名，station 不认没签名的，客户端也不信，否则 station 被攻破后就能把自己塞进 `members`。owner 定了不变，所以验证不用翻历史。这一期只有 owner 管成员；成员自己加新设备，由 owner 的任一台设备在确认锁的同时补签。
 - **条目（item）**：`{id, vault, version, epoch, ct, listing?}`。密文里是 `{kind, name, fields, domains, notes}`。`kind` 先只有 `token`、`ssh_key`、`login`。名字在密文里，station 不知道存的是什么；只有打开「给 agent 用」的条目带一个明文的 `listing`（名字、允许的方式和域名），agent 要靠它知道有什么能申请。`listing` 由写入的设备签名，station 改不了。
+- **删除库**（2026-10-26 用户定，chat EMBER/1792949811.536000）：owner 在「密钥」页「库」一栏某个库的 ⋯ 里删除，先确认（库里有条目时再过一次系统验证）。core 签一个新版本：`deleted: true`、`epoch` 加一、`keys: []`、不带 `recovery`，谁都解不开了，`vault.delete {vault}`。station 照样存这一版（旧 station 也收：它只是又一个 seq+1 的版本），新 station 存它时把这个库的条目一起删掉、不再收这个库的条目；不删这一版本身，这样还拿着旧版本的 station 会被 core 补上这一版，而不是把旧版本补回来。新 station 不收把已删除的库改回来的版本。core 和各页面不再显示它，`spread` 不再搬它的条目；它的条目 epoch 对不上，旧 station 也不会再列给 agent。已批准的授权照样到期才失效（和删条目一样）。
 - **移除**：删人或删设备之后，生成新的库钥匙，`epoch` 加一。之后新写的条目都用新钥匙加密；旧条目下次被打开时由那台设备顺手重新加密（被删的人以前看过的值，本来就该去各服务那边换掉，界面上会提示）。
 
 ## 存储和同步
@@ -266,7 +267,7 @@ core → station（走现有的 admin/工作区路由，按锁认出设备和成
 - 推送（事件流，和其他数据一样，断线续传）：`vault`（一版库，发给它的成员）、`vault-gone` `{id}`（被移出库的人）、`vault-item`（一版条目，发给库的成员）、`vault-box`（证书，发给 workspace 的人）、`vault-request`（申请，状态变了也发，发给库的成员）。
 - 旧 station 回 404，core 记成这台不能放库（`vaults` topic 的 `refused`）。
 
-core 的调用（`vault.<名字> {workspace, …}`，`client/core-ts/src/views/vault.ts`）：`setup`（建箱钥匙、发证书；第一次回 24 个词，只回这一次；这个人还没有自己的库就建「个人」库，回 `made`）、`create {name, station?}`、`addDevice {vault, device?}`（owner 把库钥匙封给成员新设置的设备；owner 的设备手上有库钥匙时也会自己做）、`putItem {vault, id?, plain, listing?}`、`deleteItem {vault, item}`、`open {item}`、`recover {words}`（用恢复码把这台设备加回自己的库）、`approve {request, scope}`（`once`/`hour` 授权一小时，`chat` 到对话归档、最长 30 天；超出生效 `lasts` 的回 `vault_scope`）、`setLasts {vault, lasts}`（默认最长授权：加锁库由 owner 签一个新版本，明文库发给存着它的 station）、`deny {request}`、`lock`。网页 host 没有 `secure*`，这些调用都回 `vault_unavailable`。这一期只有个人库：加人（`members` 变多）的调用还没做，格式和 station 已经支持。
+core 的调用（`vault.<名字> {workspace, …}`，`client/core-ts/src/views/vault.ts`）：`setup`（建箱钥匙、发证书；第一次回 24 个词，只回这一次；这个人还没有自己的库就建「个人」库，回 `made`）、`create {name, station?}`、`delete {vault}`（owner 删除自己的库）、`addDevice {vault, device?}`（owner 把库钥匙封给成员新设置的设备；owner 的设备手上有库钥匙时也会自己做）、`putItem {vault, id?, plain, listing?}`、`deleteItem {vault, item}`、`open {item}`、`recover {words}`（用恢复码把这台设备加回自己的库）、`approve {request, scope}`（`once`/`hour` 授权一小时，`chat` 到对话归档、最长 30 天；超出生效 `lasts` 的回 `vault_scope`）、`setLasts {vault, lasts}`（默认最长授权：加锁库由 owner 签一个新版本，明文库发给存着它的 station）、`deny {request}`、`lock`。网页 host 没有 `secure*`，这些调用都回 `vault_unavailable`。这一期只有个人库：加人（`members` 变多）的调用还没做，格式和 station 已经支持。
 
 agent → station（MCP 工具，在 `stillfail` 服务器里）：
 

@@ -48,9 +48,11 @@ export class VaultStore {
     return parse<Vault>(this.#db.prepare("SELECT body FROM vaults WHERE ws = ? AND id = ?").all(ws, id))[0] ?? null;
   }
 
-  /// A vault's new version, in place of the one before (checked to follow it).
+  /// A vault's new version, in place of the one before (checked to follow it). Deleted, its items go with it: sealed
+  /// under a key no one holds any more.
   putVault(v: Vault): void {
     this.#db.prepare("INSERT INTO vaults (ws, id, seq, body) VALUES (?, ?, ?, ?) ON CONFLICT (ws, id) DO UPDATE SET seq = excluded.seq, body = excluded.body").run(v.ws, v.id, v.seq, JSON.stringify(v));
+    if (v.deleted) this.#db.prepare("DELETE FROM vault_items WHERE ws = ? AND vault = ?").run(v.ws, v.id);
   }
 
   /// A vault's items, latest versions (deleted ones too: a version saying so).
