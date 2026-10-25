@@ -332,6 +332,11 @@ pub fn panel_column(c : @ui.Ctx, key : String, most : Double, style : @ui.Style,
 /// it holds as far in from its sides as a sheet's words are (sheet_panel_sides), its rows' grounds reaching out across
 /// that room, their words on the column's line, as in a sheet the presenters lay out.
 pub fn sheet_column(c : @ui.Ctx, body : () -> Unit) -> Unit {
+  // (in a panel that stands what it holds in such a column already, a dialog's: in it as it is)
+  if column_given.val {
+    body()
+    return
+  }
   let (was, rows_were, words_were) = (panel_sides_in.val, rows_out.val, words_in_now.val)
   // (in a panel that says its words' line, that far in: a dialog's; else a sheet's; its rows reaching out across it)
   let sides = if words_in_now.val > 0.0 { words_in_now.val } else { sheet_panel_sides }
@@ -347,6 +352,18 @@ pub fn sheet_column(c : @ui.Ctx, body : () -> Unit) -> Unit {
 ///|
 // kept across runs: a value (no field of it changes)
 let sheet_column_box : @ui.Style = @ui.css("w=Full")
+
+///|
+/// Whether what is drawn now stands in a column on its panel's words' line already (a dialog's body: panel_centred),
+/// so a sheet's column in it is that one.
+// kept across runs: said by panel_centred round what a dialog holds
+let column_given : Ref[Bool] = { val: false }
+
+///|
+/// How far in from its padding the column a dialog's body stands in is (its words' line: panel_centred), 0 elsewhere:
+/// what reaches out to the dialog's sides and corners from it reaches across this too (dialog_rows, dialog_foot_rows).
+// kept across runs: said by panel_centred round what a dialog holds
+let column_in_now : Ref[Double] = { val: 0.0 }
 
 ///|
 /// How far a row's ground reaches out of the column it stands in, its words on the column's line: as far as its own
@@ -890,14 +907,26 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
     p.open,
     title,
     fn() {
-      let was = panel_sides_in.val
-      panel_sides_in.val = dialog_pad
+      // what it holds in a column on its words' line, as its title is (what is not a row: its fields, what it says, a
+      // switch), its rows' grounds reaching out across that to the dialog's padding, their words on the line, as
+      // sheet_column has a sheet's
+      let words = words_in_now.val
+      let (was, rows_were, given_was, in_was) = (panel_sides_in.val, rows_out.val, column_given.val, column_in_now.val)
+      panel_sides_in.val = dialog_pad + words
+      rows_out.val = words
+      words_in_now.val = 0.0
+      column_given.val = true
+      column_in_now.val = words
       // as tall as what it holds, whatever share a sheet of it would take (the dialog's body scrolls in itself where
       // it is taller than the window leaves it): what would scroll in itself lays itself out whole (panel_whole)
       panel_whole_now.val += 1
       draw_panel_body(x, c, close)
       panel_whole_now.val -= 1
       panel_sides_in.val = was
+      rows_out.val = rows_were
+      words_in_now.val = words
+      column_given.val = given_was
+      column_in_now.val = in_was
     },
     description~,
     footer?=match x.foot {
@@ -907,6 +936,7 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
     wide=x.wide,
     close_label=t("common.close"),
     step~,
+    column_in=card_pad - corner_inset,
   )
   words_in_now.val = words_were
   (still && p.open, dialog_built(c, key, p.open))

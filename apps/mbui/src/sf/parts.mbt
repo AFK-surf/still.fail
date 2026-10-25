@@ -1709,7 +1709,8 @@ let first_actions : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter justify
 /// button follow its edge: DIALOG_PAD), a small panel's ground and line, a deep shadow. Its title (22, 600) 25 under
 /// its top beside the close button (round, 32: `close_label`, none when ""), `description` 6 under it (13, muted),
 /// what `body` holds 18 under that (its parts 16 apart; none of that room where it holds nothing), and `footer`'s
-/// buttons at its end 24 under it, 8 apart.
+/// buttons at its end 24 under it, 8 apart; what it holds `column_in` in from its padding (a panel's dialog's: on its
+/// words' line, panel_centred).
 /// Whether it is open now (closed by its close button too).
 pub fn dialog(
   c : @ui.Ctx,
@@ -1723,6 +1724,7 @@ pub fn dialog(
   w? : Double,
   close_label? : String = "",
   step? : String = "",
+  column_in? : Double = 0.0,
 ) -> Bool {
   let closed = Ref(false)
   let w = w.unwrap_or(if wide { dialog_wide_w } else { dialog_w })
@@ -1777,7 +1779,9 @@ pub fn dialog(
         // corners on purpose (dialog_rows, dialog_foot_rows) is not cut short of them.
         c.capped(key + "/body", c.height, shrinks=true, mx=-dialog_pad, padx=dialog_pad, fn() {
           // (holding nothing this time, none of its room: its title and what it says straight over its buttons)
-          c.box(style=if footer is None { dialog_body_end } else { dialog_body }, gone_empty=true, fn() {
+          // (what it holds `column_in` in from its padding: a panel's dialog's, on its words' line)
+          let column = @ui.style(px=room(column_in))
+          c.box(style=(if footer is None { dialog_body_end } else { dialog_body }).then(column), gone_empty=true, fn() {
             // (its rows told they are in a dialog: dialog_rows)
             let was = in_dialog.val
             in_dialog.val = true
@@ -1885,8 +1889,10 @@ pub fn dialog_rows(row_h : Double) -> (@ui.Style, @ui.Style) {
   if !in_dialog.val {
     return (no_style, no_style)
   }
+  // (from its column: its padding, and the room a panel's dialog stands what it holds in from that, column_in_now)
   let out = capsule_in(dialog_r, row_h) - dialog_pad
-  (@ui.style(mx=room(out), mb=room(out)), @ui.style(radius=Full, px=room(-out)))
+  let side = out - column_in_now.val
+  (@ui.style(mx=room(side), mb=room(out)), @ui.style(radius=Full, px=room(-side)))
 }
 
 ///|

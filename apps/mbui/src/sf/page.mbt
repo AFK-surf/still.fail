@@ -1208,7 +1208,8 @@ pub fn dialog_foot_rows(c : @ui.Ctx, style : @ui.Style, body : () -> Unit) -> Un
 /// How far a dialog's foot rows reach out past its words: from its side (dialog_pad) to where a capsule a wide row high
 /// stands concentric with its corner.
 fn foot_rows_out() -> Double {
-  dialog_pad - capsule_in(dialog_r, desk_row_least)
+  // (and across the room a panel's dialog stands what it holds in from its padding: column_in_now)
+  dialog_pad - capsule_in(dialog_r, desk_row_least) + column_in_now.val
 }
 
 ///|
