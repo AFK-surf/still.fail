@@ -3,8 +3,9 @@
 // tells its person about their chats, and how, laid out as a phone's notification settings are: a preview that follows
 // the settings (the banner of the kind looked at, the app's badge with what it counts), the ways it tells as tiles each
 // with a picture of it, each kind of thing that happens with which of those it uses (opened, each way on or off), and
-// the rest. The phone's settings have a switch of their own
-// (SettingsHome.kt's).
+// the rest. The preview and the pictures are of this device's system (notice_system: where its banners come, its
+// icons), and the badge is a way only where the system shows the app's number (@ui.badge_shown): elsewhere a switch of
+// it would change nothing. The phone's settings have a switch of their own (SettingsHome.kt's).
 
 // ---------------------------------------------------------------------------
 // 通知
@@ -54,9 +55,32 @@ fn set_badge_kind(core : Core, kind : String, on : Bool) -> Unit {
 }
 
 ///|
-/// Whether this app shows a badge where it runs (macOS's Dock tile).
-fn badge_here() -> Bool {
-  @ui.platform() == 0
+/// How this device's system shows the app's notifications, as the preview and the tiles draw it: macOS a banner in
+/// the screen's top right corner and the app's icon in the Dock; Windows a banner in the bottom right corner over the
+/// taskbar; a phone's system (Android, iOS) a banner across the top under the status bar and the app's icon among the
+/// home screen's at the foot. (The web's page draws macOS's on every system.)
+priv enum NoticeSystem {
+  MacOS
+  Windows
+  Phone
+} derive(Eq)
+
+///|
+fn notice_system() -> NoticeSystem {
+  match @ui.platform() {
+    1 | 2 => Phone
+    3 => Windows
+    _ => MacOS
+  }
+}
+
+///|
+/// What the preview's app icon carries: the number the app puts on it, where the system shows it (@ui.badge_shown);
+/// else on a phone the system's own dot while a notification of the app shows (Android's launcher's); else nothing.
+priv enum IconMark {
+  Count(Int)
+  Dot
+  Unmarked
 }
 
 ///|
@@ -169,9 +193,12 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
             _ => use_notify(core, !on)
           }
         }
-        let badge_on = badge_kind(core, here, "on")
-        if way_tile(c, "notify-badge", "badge", badge_on) {
-          c.after_build("notify-badge", fn() { set_badge_kind(core, "on", !badge_on) })
+        // the badge, where the system shows the app's number
+        if @ui.badge_shown() {
+          let badge_on = badge_kind(core, here, "on")
+          if way_tile(c, "notify-badge", "badge", badge_on) {
+            c.after_build("notify-badge", fn() { set_badge_kind(core, "on", !badge_on) })
+          }
         }
       })
       |> ignore
@@ -232,8 +259,10 @@ fn way_tile(c : @ui.Ctx, key : String, way : String, on : Bool, action? : String
   let lit = on && action == ""
   let b = c.box(style=if action != "" { tile_action } else if lit { tile_on } else { tile }, id~, fn() {
     c.box(style=tile_picture, fn() {
-      match way {
-        "banner" => c.box(style=pic_banner, top=pic_in, right=pic_in, fn() {  }) |> ignore
+      match (way, notice_system()) {
+        ("banner", MacOS) => c.box(style=pic_banner, top=pic_in, right=pic_in, fn() {  }) |> ignore
+        ("banner", Windows) => c.box(style=pic_banner, right=pic_in, bottom=pic_in, fn() {  }) |> ignore
+        ("banner", Phone) => c.box(style=pic_banner_across, left=pic_in, top=pic_in, right=pic_in, fn() {  }) |> ignore
         _ =>
           c.box(style=pic_app, bottom=pic_in, left=pic_app_left, fn() {
             c.box(style=pic_badge, top=pic_badge_top, right=pic_badge_right, fn() {  }) |> ignore
@@ -282,7 +311,7 @@ fn kind_row(c : @ui.Ctx, core : Core, here : Here, notify : Json?, kind : String
       },
     )
   }
-  if badge_kind(core, here, "on") && badge_kind(core, here, kind) {
+  if @ui.badge_shown() && badge_kind(core, here, "on") && badge_kind(core, here, kind) {
     ways.push(@sf.t("web-pages.notifications.ways.badge"))
   }
   let open = kind_open.val == kind
@@ -334,12 +363,14 @@ fn kind_row(c : @ui.Ctx, core : Core, here : Here, notify : Json?, kind : String
         set_kind(core, kind, Json::boolean(v))
       })
     }
-    // 计入红点: whether the app's icon counts it (off while the badge is)
-    way_switch(c, "notify-badge/" + kind, @sf.t("web-pages.notifications.inBadge"), badge_kind(core, here, kind), !badge_kind(core, here, "on"), fn(
-      v,
-    ) {
-      c.after_build("notify-badge/" + kind, fn() { set_badge_kind(core, kind, v) })
-    })
+    // 计入红点: whether the app's icon counts it (off while the badge is), where the system shows the app's number
+    if @ui.badge_shown() {
+      way_switch(c, "notify-badge/" + kind, @sf.t("web-pages.notifications.inBadge"), badge_kind(core, here, kind), !badge_kind(core, here, "on"), fn(
+        v,
+      ) {
+        c.after_build("notify-badge/" + kind, fn() { set_badge_kind(core, kind, v) })
+      })
+    }
   })
   |> ignore
 }
@@ -358,9 +389,18 @@ fn way_switch(c : @ui.Ctx, key : String, title : String, now : Bool, off : Bool,
 }
 
 ///|
-/// The preview (Preview): a small screen as the settings make it: the banner of `kind` (the latest one that came,
-/// else a sample) in its top right corner, the app's icon in the Dock below with what its badge counts now.
-fn notify_preview(c : @ui.Ctx, core : Core, here : Here, notify : Json?, on : Bool, kind : String, w : Double) -> Unit {
+/// The preview (Preview): a small screen of this device's system as the settings make it (notice_system): the banner of
+/// `kind` (the latest one that came, else a sample) where the system shows one, the app's icon among others with what
+/// it carries now (IconMark).
+fn notify_preview(
+  c : @ui.Ctx,
+  core : Core,
+  here : Here,
+  notify : Json?,
+  on : Bool,
+  kind : String,
+  w : Double,
+) -> Unit {
   let t = @sf.theme()
   let latest = items((core.topic)("notices", { "workspace": str(here.workspace) }).value, "items")
     .rev()
@@ -380,7 +420,23 @@ fn notify_preview(c : @ui.Ctx, core : Core, here : Here, notify : Json?, on : Bo
     (core.topic)("workspaceMarks", { "workspace": str(here.workspace) }).value,
     "badge",
   )
-  let badge = badge_kind(core, here, "on") && count > 0
+  let system = notice_system()
+  let mark = if @ui.badge_shown() {
+    if badge_kind(core, here, "on") && count > 0 {
+      Count(count)
+    } else {
+      Unmarked
+    }
+  } else if system == Phone && banner {
+    Dot
+  } else {
+    Unmarked
+  }
+  if system == Phone {
+    let b = device_preview(c, w, banner, title, body, mark)
+    c.semantics(b, Image, label=@sf.t("web-pages.notifications.previewLabel"))
+    return
+  }
   let b = c.box(style=screen, fn() {
     // (its ground the web's linear-gradient(150deg, blue-bg, accent-bg): the column's width by the screen's height)
     c.box(left=0.0, top=0.0, right=0.0, bottom=0.0, fn() {
@@ -388,47 +444,132 @@ fn notify_preview(c : @ui.Ctx, core : Core, here : Here, notify : Json?, on : Bo
     })
     |> ignore
     if banner {
-      c.box(top=banner_in, right=banner_in, fn() {
-        c.box(style=banner_box, fn() {
-          app_icon(c, banner_icon)
-          c.box(style=banner_text, fn() {
-            c.box(style=banner_head, fn() {
-              c.text(title, style=banner_title) |> ignore
-              c.text(@sf.t("web-pages.notifications.now"), style=banner_muted) |> ignore
-            })
-            |> ignore
-            c.text(body, style=banner_body) |> ignore
-          })
-          |> ignore
-        })
+      if system == Windows {
+        c.box(right=banner_in, bottom=taskbar_h + banner_in, fn() { banner_card(c, banner_box, title, body) })
         |> ignore
+      } else {
+        c.box(top=banner_in, right=banner_in, fn() { banner_card(c, banner_box, title, body) }) |> ignore
+      }
+    }
+    if system == Windows {
+      c.box(style=taskbar, left=0.0, right=0.0, bottom=0.0, fn() {
+        icons_with_mine(c, dock_app, dock_app_mine, dock_icon, mark)
+      })
+      |> ignore
+    } else {
+      c.box(style=dock_at, left=0.0, right=0.0, bottom=dock_bottom, fn() {
+        c.box(style=dock_bar, fn() { icons_with_mine(c, dock_app, dock_app_mine, dock_icon, mark) }) |> ignore
       })
       |> ignore
     }
-    c.box(style=dock_at, left=0.0, right=0.0, bottom=dock_bottom, fn() {
-      c.box(style=dock_bar, fn() {
-        c.box(style=dock_app, fn() {  }) |> ignore
-        c.box(style=dock_app, fn() {  }) |> ignore
-        c.box(style=dock_app_mine, fn() {
-          app_icon(c, dock_icon)
-          if badge {
-            c.box(top=dock_badge_top, right=dock_badge_right, fn() {
-              c.box(style=dock_badge, fn() {
-                c.text(if count > 99 { "99+" } else { count.to_string() }, style=dock_badge_words) |> ignore
-              })
-              |> ignore
+  })
+  c.semantics(b, Image, label=@sf.t("web-pages.notifications.previewLabel"))
+}
+
+///|
+/// A phone's system's preview: the device itself, a phone (a tablet where a tablet's frame has room), standing up from
+/// the preview's foot with its top in view: its frame round its screen, on the screen the status bar (its camera
+/// where the system has it: iOS's island, Android's hole), the banner across the top (a phone's width at most) over
+/// the home screen's first row of icons, the app's with its mark.
+fn device_preview(
+  c : @ui.Ctx,
+  w : Double,
+  banner : Bool,
+  title : String,
+  body : String,
+  mark : IconMark,
+) -> Int {
+  let t = @sf.theme()
+  let room = w - 2.0 * device_side
+  let device_w = if room >= tablet_w { tablet_w } else if room >= phone_w { phone_w } else { room }
+  let inner = c.theme().corner(Xl2)
+  c.box(style=device_stage, fn() {
+    c.box(style=device_at, left=0.0, top=device_top, right=0.0, fn() {
+      c.box(style=device_frame.then(@ui.style(w=Fixed(device_w), h=Fixed(screen_h))), fn() {
+        c.box(style=device_screen, fn() {
+          // (its wallpaper the preview's ground as it was: the web's linear-gradient(150deg, blue-bg, accent-bg))
+          c.box(left=0.0, top=0.0, right=0.0, bottom=0.0, fn() {
+            @sf.gradient(
+              c,
+              device_w - 2.0 * device_bezel,
+              screen_h - 2.0 * device_bezel,
+              screen_angle,
+              t.p.blue_bg,
+              t.p.accent_bg,
+              radius=inner,
+            )
+          })
+          |> ignore
+          c.box(style=status_row, left=status_in, top=0.0, right=status_in, fn() {
+            c.text(status_time, style=status_words) |> ignore
+            c.box(style=status_battery, fn() {  }) |> ignore
+          })
+          |> ignore
+          c.box(style=camera_at, left=0.0, top=camera_top, right=0.0, fn() {
+            c.box(style=if @ui.platform() == 1 { camera_island } else { camera_hole }, fn() {  }) |> ignore
+          })
+          |> ignore
+          c.box(style=home_row, left=0.0, top=home_top, right=0.0, fn() {
+            icons_with_mine(c, home_app, home_app_mine, home_icon, mark)
+          })
+          |> ignore
+          if banner {
+            c.box(style=banner_across_at, left=banner_side, top=status_h, right=banner_side, fn() {
+              banner_card(c, banner_across, title, body)
             })
             |> ignore
           }
         })
         |> ignore
-        c.box(style=dock_app, fn() {  }) |> ignore
       })
       |> ignore
     })
     |> ignore
   })
-  c.semantics(b, Image, label=@sf.t("web-pages.notifications.previewLabel"))
+}
+
+///|
+/// A banner (banner): the app's icon, the chat's title with when, what it says.
+fn banner_card(c : @ui.Ctx, style : @ui.Style, title : String, body : String) -> Unit {
+  c.box(style~, fn() {
+    app_icon(c, banner_icon)
+    c.box(style=banner_text, fn() {
+      c.box(style=banner_head, fn() {
+        c.text(title, style=banner_title) |> ignore
+        c.text(@sf.t("web-pages.notifications.now"), style=banner_muted) |> ignore
+      })
+      |> ignore
+      c.text(body, style=banner_body) |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// Apps' icons in a row, the app's third (`side` square) with its mark: the number in a red capsule, or the system's
+/// dot, at its top right corner.
+fn icons_with_mine(c : @ui.Ctx, other : @ui.Style, mine : @ui.Style, side : Double, mark : IconMark) -> Unit {
+  c.box(style=other, fn() {  }) |> ignore
+  c.box(style=other, fn() {  }) |> ignore
+  c.box(style=mine, fn() {
+    app_icon(c, side)
+    match mark {
+      Count(n) =>
+        c.box(top=dock_badge_top, right=dock_badge_right, fn() {
+          c.box(style=dock_badge, fn() {
+            c.text(if n > 99 { "99+" } else { n.to_string() }, style=dock_badge_words) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      Dot =>
+        c.box(top=icon_dot_at, right=icon_dot_at, fn() { c.box(style=icon_dot, fn() {  }) |> ignore }) |> ignore
+      Unmarked => ()
+    }
+  })
+  |> ignore
+  c.box(style=other, fn() {  }) |> ignore
 }
 
 ///|
@@ -562,6 +703,155 @@ let dock_badge : @ui.Style = @ui.style(
 let dock_badge_words : @ui.TextStyle = @ui.text_style(size=Caption, color=OnPrimary, wrap=false)
 
 ///|
+/// Windows' taskbar (the whole width at the screen's foot, its icons in its middle, on what floats at 70%).
+let taskbar_h : Double = 44.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let taskbar : @ui.Style = @ui.style(
+  row=true,
+  h=Fixed(taskbar_h),
+  gap=S2_5,
+  align=ACenter,
+  justify=JCenter,
+  radius=InnerOr(Sharp),
+  bg=A(Raised, O70),
+)
+
+///|
+/// A phone's system's preview (device_preview): the device a tablet's width where it has the room, else a phone's at
+/// most, 32 at least from the preview's sides and 20 under its top, as high as the preview (so its foot is out of
+/// it); its frame 6 round its screen, the frame's corner the screen's with it concentric; the preview round it the
+/// card's ground.
+let phone_w : Double = 300.0
+
+///|
+let tablet_w : Double = 520.0
+
+///|
+let device_side : Double = 32.0
+
+///|
+let device_top : Double = 20.0
+
+///|
+let device_bezel : Double = 6.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let device_stage : @ui.Style = @ui.style(w=Full, h=Fixed(screen_h), mb=S7, clip=true, radius=Xl4, bg=Card)
+
+///|
+// kept across runs: a value (no field of it changes)
+let device_at : @ui.Style = @ui.css("row justify=JCenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let device_frame : @ui.Style = @ui.css("p=S1_5 radius=Xl4 bg=Fg")
+
+///|
+// kept across runs: a value (no field of it changes)
+let device_screen : @ui.Style = @ui.css("w=Full h=Full clip radius=Xl2")
+
+///|
+/// Its status bar (its time at the start, its battery at the end, both as far in as past the screen's corner), its
+/// camera in the middle of it (Android's hole, 8 round; iOS's island, 36 by 11); its banner across the top 8 from the
+/// screen's sides (a phone's width at most, in the middle of a tablet's), over the home screen's first row of icons
+/// (36 square, 24 apart, in the middle).
+let status_h : Double = 24.0
+
+///|
+let status_in : Double = 22.0
+
+///|
+let status_time : String = "9:41"
+
+///|
+let status_battery_w : Double = 18.0
+
+///|
+let status_battery_h : Double = 9.0
+
+///|
+let camera_top : Double = 8.0
+
+///|
+let camera_hole_side : Double = 8.0
+
+///|
+let camera_island_w : Double = 36.0
+
+///|
+let camera_island_h : Double = 11.0
+
+///|
+let banner_side : Double = 8.0
+
+///|
+let banner_across_most : Double = 400.0
+
+///|
+let home_icon : Double = 36.0
+
+///|
+let home_top : Double = 100.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let status_row : @ui.Style = @ui.style(row=true, h=Fixed(status_h), align=ACenter, justify=JBetween)
+
+///|
+// kept across runs: a value (no field of it changes)
+let status_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let status_battery : @ui.Style = @ui.style(w=Fixed(status_battery_w), h=Fixed(status_battery_h), radius=Sm, bg=Fg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let camera_at : @ui.Style = @ui.css("row justify=JCenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let camera_hole : @ui.Style = @ui.style(w=Fixed(camera_hole_side), h=Fixed(camera_hole_side), radius=Full, bg=Fg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let camera_island : @ui.Style = @ui.style(w=Fixed(camera_island_w), h=Fixed(camera_island_h), radius=Full, bg=Fg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let banner_across_at : @ui.Style = @ui.css("row justify=JCenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let banner_across : @ui.Style = banner_box.then(@ui.style(w=Full, max_w=Fixed(banner_across_most)))
+
+///|
+// kept across runs: a value (no field of it changes)
+let home_row : @ui.Style = @ui.css("row justify=JCenter gap=S6")
+
+///|
+// kept across runs: a value (no field of it changes)
+let home_app : @ui.Style = @ui.style(w=Fixed(home_icon), h=Fixed(home_icon), radius=Lg, bg=Line)
+
+///|
+// kept across runs: a value (no field of it changes)
+let home_app_mine : @ui.Style = @ui.style(w=Fixed(home_icon), h=Fixed(home_icon))
+
+///|
+/// The system's dot on the app's icon (Android's launcher's: 10, red, a little over its corner).
+let icon_dot_at : Double = -3.0
+
+///|
+let icon_dot_side : Double = 10.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let icon_dot : @ui.Style = @ui.style(w=Fixed(icon_dot_side), h=Fixed(icon_dot_side), radius=Full, bg=Danger)
+
+///|
 /// The ways' tiles side by side, 10 apart, as wide as they share.
 // kept across runs: a value (no field of it changes)
 let way_tiles : @ui.Style = @ui.css("row w=Full gap=S2_5")
@@ -644,6 +934,11 @@ let pic_banner : @ui.Style = @ui.style(w=Fixed(pic_banner_w), h=Fixed(pic_banner
 ///|
 // kept across runs: a value (no field of it changes)
 let pic_app : @ui.Style = @ui.style(w=Fixed(pic_app_side), h=Fixed(pic_app_side), radius=Md, bg=Accent)
+
+///|
+/// A phone's banner across the picture's top.
+// kept across runs: a value (no field of it changes)
+let pic_banner_across : @ui.Style = @ui.style(h=Fixed(pic_banner_h), radius=Base, bg=Border)
 
 ///|
 // kept across runs: a value (no field of it changes)

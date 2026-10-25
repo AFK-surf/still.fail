@@ -14,7 +14,9 @@ test "通知, at each width and with either hand: the ways, each kind with what 
     assert_true(t.find("横幅（离开时）") is Some(_), msg=at)
     tap_in_page(t, "待你决定")
     t.draw()
-    assert_true(t.find("计入红点") is Some(_), msg=at)
+    // the badge a way where the system shows the app's number (a Mac's Dock), none on Android (its dot the system's)
+    assert_eq(t.find("计入红点") is Some(_), platform == 0, msg=at)
+    assert_eq(t.words().iter().any(fn(w) { w.0 == "红点" }), platform == 0, msg=at)
   }
 }
 

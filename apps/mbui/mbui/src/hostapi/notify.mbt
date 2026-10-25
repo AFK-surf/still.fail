@@ -69,6 +69,14 @@ pub fn notice_settings() -> Bool {
 }
 
 ///|
+/// Whether the system shows the number the app puts on its icon (@hostapi.set_badge: macOS's Dock tile, iOS's home
+/// screen). Not on Android, whose launcher puts a dot of its own on the icon while a notification of the app shows
+/// (no app numbers it, nor turns it off for itself), nor on Windows yet (its taskbar's overlay is not drawn).
+pub fn badge_shown() -> Bool {
+  nt_state(4) == 1
+}
+
+///|
 /// The `opens` of a notification tapped since the last look, once ("" none). A frame is asked for as one comes.
 pub fn notice_opened() -> String {
   nt_text(0)
