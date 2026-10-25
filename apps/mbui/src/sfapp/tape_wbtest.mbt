@@ -558,3 +558,21 @@ test "on the tape a finger's search at the lists' top: tucked under the band at 
   let (_, y, _, _) = said_at(t, "搜索全部内容").unwrap()
   assert_true(y >= band_foot(), msg="the search from \{y}, the band to \{band_foot()}")
 }
+
+///|
+test "on the tape a passage held in the page beside the sidebar brings the page over, and its 引用 quotes it" {
+  let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
+  t.draw()
+  assert_true(pk.ts != "")
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  t.run_for(@sfdesk.side_move_ms)
+  // still picked, its bar over it where the page is now
+  assert_true(pk.ts != "")
+  t.tap_text("引用")
+  t.draw()
+  assert_true(pk.ts == "")
+  assert_true(t.find("添加说明（可选）") is Some(_))
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+}

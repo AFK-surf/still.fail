@@ -862,6 +862,12 @@ fn tape_frame(c : @ui.Ctx, panel : ChatRef?, at : (Double, Double, Double), know
   // open in it (pengxiao, 2026-10-25: the chat in the middle is what one comes to; a panel shown as its view comes is
   // not one opened). Nothing else moves the tape by itself: a chat opened from the sidebar shows in the page beside
   // it, the sidebar still in use (a new chat asks for its page: new_chat)
+  // a passage of a message picked while the page is not in use (held where it shows beside the sidebar): the page
+  // comes over with it, its bar there to be pressed (pengxiao, 2026-10-25: 引用 pressed there went to what showed of
+  // the page and brought it over, quoting nothing)
+  if @sfbase.pk.ts != "" && wide.tape_at != Page && wide.tape_ask is None && wide.tape_pull is None {
+    wide.tape_ask = Some(Page)
+  }
   let chat = match app.nav.top() {
     Chat(r) | History(r, _, _) => chat_key(r)
     _ => ""
