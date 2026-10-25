@@ -4,9 +4,10 @@
 // the composer: across first and up a little after, so the words rise on a curve (Ease.Flight over 80% of its 600 ms, up 12% late), its ground coming
 // in round them from a quarter of the way, its time and the rest of its row coming in as they settle (Ease.Arrive from
 // 24%). Meanwhile the rows above, put up by the new one at once, go there with the words (sendReflow: on the same
-// way up); the composer's room stays as tall as when they were sent until they are a quarter of the way, and its
-// hint comes back once they are out of it (200 ms, Ease.Arrive). Their row never laid out (its page not shown, 2 s):
-// the composer as it was. With motion reduced (or in screenshots) none of it: the row is where it is.
+// way up); the composer (its box and its room) stays as tall as when they were sent until they are a quarter of the
+// way, coming down then, not from under them as they set out, and its hint comes back once they are out of it (200
+// ms, Ease.Arrive). Their row never laid out (its page not shown, 2 s): the composer as it was. With motion reduced (or
+// in screenshots) none of it: the row is where it is.
 //
 // The files sent with them go from their tiles in the composer (ChatHost.kt FlyingFile, landingFile, files): drawn as
 // their tiles were where they were until the row is in the list, then each to its place in the message, across and up
@@ -97,9 +98,9 @@ let flight_settle : Double = 0.24
 
 ///|
 /// What is sent from the composer of chat `chat` takes off from its field (`field`, before it is emptied: its words'
-/// size and line `font`, `line`), to row `key` (in the list from now: sent_local). The composer's room is held as tall
-/// as it was until the words let go of it (`hold`, the composer's, told for how long), said now: at most their wait for
-/// the row. `desk`: the desktop's flight (the web's).
+/// size and line `font`, `line`), to row `key` (in the list from now: sent_local). The composer (its box and its room)
+/// is held as tall as it was until the words let go of it (`hold`, the composer's, told for how long), said now: at
+/// most their wait for the row. `desk`: the desktop's flight (the web's).
 pub fn flight_start(
   c : @ui.Ctx,
   chat : String,
@@ -421,7 +422,7 @@ pub fn flight_takes(chat : String, key : String) -> Bool {
 
 ///|
 /// The row the words go to is in the list: they go from the next frame on, all of their way said now (and the
-/// composer's room let go a quarter of the way).
+/// composer let go a quarter of the way).
 pub fn flight_placed(c : @ui.Ctx, f : SendFlight) -> Unit {
   if !f.placed {
     f.placed = true

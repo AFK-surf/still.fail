@@ -172,9 +172,13 @@ pub fn composer(
   if lost_long {
     composing.let_go = false
   }
+  // words just sent from it still in it: as tall as it was then, its field where it was and its ＋ and send at its foot
+  // (composer_hold), so nothing in it moves until it comes down
+  let sent_box = composer_held_box(c, spec.draft)
   let multiline = spec.roomy ||
     focused ||
     held ||
+    sent_box > 0.0 ||
     w.text != "" ||
     w.files.length() > 0 ||
     w.quotes.length() > 0
@@ -219,7 +223,13 @@ pub fn composer(
   let mut send_i = -1
   let mut chosen = -1
   let box = c.box(
-    style=if multiline { composer_box_open } else { composer_box.then(capsule_place(capsule_in)) },
+    style=if sent_box > 0.0 {
+      composer_box_open.then(@ui.style(min_h=Fixed(sent_box), justify=JBetween))
+    } else if multiline {
+      composer_box_open
+    } else {
+      composer_box.then(capsule_place(capsule_in))
+    },
     // (the raised ground's glass, the accent's over it while dragged over)
     glass=@sf.glass_floating(tint?=if dragging { Some(@sf.alpha(p.accent, drag_tint)) } else { None }),
     id=cap,
@@ -258,13 +268,15 @@ pub fn composer(
   // from where they showed to their places; laid out for the other page (a new chat's in the page, a chat's at its
   // foot: dock.tsx), the same from where it was there, one composer changing, and what it holds there that it did not
   // here (a new chat's choices) carried on its ground (morph.ts morph), what it held there and does not here leaving
-  // on it. Moved by nothing of these (the window, the sidebar, a keyboard), or another chat's on the same page (what it
-  // holds swapped, not changed), it is where it is laid out at once (docs/motion.md)
+  // on it; words sent from it, as they let go of it (held till then: composer_hold). Moved by nothing of these (the
+  // window, the sidebar, a keyboard), or another chat's on the same page (what it holds swapped, not changed), it is
+  // where it is laid out at once (docs/motion.md)
   composing.roomy = Some(spec.roomy)
   let holds = if whose != composing.draft_before && !moved {
     ""
   } else {
-    "\{spec.roomy}|\{multiline}|\{w.files.length()}|\{w.quotes.length()}|\{w.error != ""}|" + w.field.text()
+    "\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{w.files.length()}|\{w.quotes.length()}|\{w.error != ""}|" +
+    w.field.text()
   }
   let shape = @motion.tween(if moved { page_move_ms } else { morph_ms }, ease=Out)
   @motion.reshape(c, box, "composer/box", by=holds, spec=shape, carry=moved)
@@ -1189,8 +1201,10 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   let words = w.text.trim(chars=" \n\t").to_string()
   let rk = r.station + "\u{1}" + r.session
   let row = sent_local(rk, Some(v), words, up_files(w), going=going_files(w))
-  // its words take off from the field as they are (before it is emptied), its room held till they let go of it
+  // its words take off from the field as they are (before it is emptied), the composer (its box and its room) held as
+  // tall as it is till they let go of it
   let room = @motion.measured(c, "composer/foot").unwrap_or(0.0)
+  let box = @motion.measured(c, "composer/content").unwrap_or(0.0)
   // its files that are up fly too, each from its tile (ChatHost.kt sending)
   let flying = flying_files(c, w)
   @sfbase.flight_start(
@@ -1202,7 +1216,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
     room,
     flying,
     field=composer_field_key,
-    hold=fn(ms) { composer_hold(w.key, room, ms) },
+    hold=fn(ms) { composer_hold(w.key, room, box, ms) },
     font=@sf.theme().t.input,
     line=@sf.theme().t.input_line,
     desk=true,
@@ -1245,20 +1259,33 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
 }
 
 ///|
-/// What was sent from draft `draft`'s composer holds its room as tall as it was (`room`) for `ms`, then gives it up as
-/// it shrinks (dock.tsx: the list's foot kept where it was till the message's row is in).
-fn composer_hold(draft : String, room : Double, ms : Double) -> Unit {
+/// What was sent from draft `draft`'s composer holds it as tall as it was, its box (`box`) and its room (`room`), for
+/// `ms`: the words are in it till then, and it comes down as they let go of it, not from under them as they set out
+/// (ChatHost.kt hold; dock.tsx: the list's foot kept where it was till the message's row is in). Then its box is laid
+/// out as it is, its ground going down to that (composer's reshape, for this), and its room down on the same curve.
+fn composer_hold(draft : String, room : Double, box : Double, ms : Double) -> Unit {
   let c = @ui.current()
   @motion.anim(c, "composer/held/" + draft, 0.0, global=true).snap(room)
   let a = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true)
   a.snap(1.0)
   a.animate(0.0, @motion.tween(morph_ms, ease=Out, delay=ms))
+  let b = @motion.anim(c, "composer/held-box/" + draft, 0.0, global=true)
+  b.snap(box)
+  b.animate(0.0, @motion.Snap(ms))
+}
+
+///|
+/// How tall draft `draft`'s composer box is held for words sent from it, while they are in it (composer_hold); 0 when
+/// it is not.
+fn composer_held_box(c : @ui.Ctx, draft : String) -> Double {
+  @motion.anim(c, "composer/held-box/" + draft, 0.0, global=true).get()
 }
 
 ///|
 /// How much room draft `draft`'s composer takes at its page's foot (what the list leaves free under its last row): as
 /// tall as its place (chat_composer: its box, what it says under it, its margins), at least as tall as that opened with
-/// one line, or as it was when words were sent from it until they let go of it (composer_hold).
+/// one line; let go by words sent from it (composer_hold), from as tall as it was then down to that, on its ground's
+/// curve.
 pub fn composer_room(c : @ui.Ctx, draft : String) -> Double {
   // (not laid out yet: a capsule's)
   let foot = @motion.measured(c, "composer/foot").unwrap_or(capsule_room(c.width))
