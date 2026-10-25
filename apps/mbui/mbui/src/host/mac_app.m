@@ -61,6 +61,9 @@ static NSView *the_box;
 static int cursor_kind;
 static NSEvent *down_event;
 static int down_secondary;
+// whether the press under way went to the window (@hostapi.window_drag), and the one before it: a double click is the
+// window's only where its first press was the window's too (not a button's there, gone with that press)
+static bool down_dragged, last_down_dragged;
 static const char *shot_path;
 static void tell_state(void);
 static void bring_back(void);  // the window out again (below: the app's life on the Mac)
@@ -182,6 +185,15 @@ static double frame_late, last_tick = -1;
 
 - (BOOL)isFlipped { return YES; }
 - (BOOL)acceptsFirstResponder { return YES; }
+
+// Every press on the canvas is the app's, in the system's title bar too (an inset window's: AppKit lays it out 44 high
+// over the app's top row, MBWindow): the app says where its top row moves the window and what a double click there does
+// (@hostapi.window_drag), its buttons there take theirs. Not window background (mouseDownCanMoveWindow), and opaque to
+// window moves where it lies under the title bar (AppKit's own question of a view there, as WebKit's WKWebView answers
+// it): else AppKit took each press in the bar before the app saw it, a drag of the window, a double click its zoom, on
+// the app's buttons as well.
+- (BOOL)mouseDownCanMoveWindow { return NO; }
+- (NSRect)_opaqueRectForWindowMoveWhenInTitlebar { return self.bounds; }
 
 // the pointer over a web view shown under the canvas goes to it
 - (NSView *)hitTest:(NSPoint)p {
@@ -392,6 +404,8 @@ static void mouse_button(int kind, NSPoint p, NSEvent *e, int button) {
     mouse_button(0, p, e, 2);
     return;
   }
+  last_down_dragged = down_dragged;
+  down_dragged = false;
   down_event = e;
   mouse(0, p, e);
   down_event = nil;
@@ -987,13 +1001,23 @@ double mb_host_window_corner(void) {
   return NSProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26 ? 16 : 10;
 }
 
-// The press under way drags the window (the app's top row: @hostapi.window_drag); twice, what the system's title bar
-// does on a double click (zoom, minimize or nothing, as set in the system's settings).
+// The press under way drags the window (the app's top row: @hostapi.window_drag); the second of a double click there
+// (the first the window's too), what the system's title bar does on a double click, as AppKit's frame does it for its
+// own (fill, zoom, minimize or nothing, as set in the system's settings; the press's modifiers as there); where the
+// frame has no such answer, by that setting read here.
 void mb_host_window_drag(void) {
   NSWindow *w = the_view.window;
   NSEvent *e = down_event;
   if (!w || !e) return;
-  if (e.clickCount >= 2) {
+  down_dragged = true;
+  if (e.clickCount >= 2 && last_down_dragged) {
+    NSView *frame = w.contentView.superview;
+    SEL own = NSSelectorFromString(@"_handlePossibleDoubleClickWithModifiers:");
+    if ([frame respondsToSelector:own]) {
+      ((BOOL (*)(id, SEL, NSUInteger))objc_msgSend)(frame, own,
+                                                     e.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask);
+      return;
+    }
     NSString *act = [[NSUserDefaults standardUserDefaults] stringForKey:@"AppleActionOnDoubleClick"];
     if ([act isEqualToString:@"Minimize"]) [w performMiniaturize:nil];
     else if (![act isEqualToString:@"None"]) [w performZoom:nil];

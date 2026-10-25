@@ -315,6 +315,17 @@ pub let closed_bar_in : Double = @sf.window_in
 let closed_bar_top : Double = 44.0
 
 ///|
+/// In a window with its buttons in the app's top row (macOS's: no title bar of the system's), a row `h` high at the top
+/// of what it is built in, under what is built there after it, which is the window's title bar (shell.css.ts main's and
+/// gate's ::before): a press on it that nothing over it takes drags the window, a double click does what the system's
+/// title bar does (Ctx::window_drag). The system takes none of the app's presses there itself (mbui's mac host).
+fn title_row(c : @ui.Ctx, name : String, h : Double) -> Unit {
+  let id = c.id(name)
+  c.window_drag(id)
+  c.box(style=@ui.style(h=Fixed(h)), left=0.0, top=0.0, right=0.0, id~, fn() {  }) |> ignore
+}
+
+///|
 let closed_bar_gap : Double = 8.0
 
 ///|
@@ -636,7 +647,12 @@ pub fn frame(
   let panel_top = top + closed_bar_in
   let panel_h = dmax(0.0, page_h - 2.0 * closed_bar_in)
   // the page in its pane, `ph` high
+  // (its top row, a bar's height, the window's title bar under the page, whether the page has a bar there or not: a
+  // new chat, settings, 奏: title_row)
   let page_in = fn(ph : Double) {
+    if inset {
+      title_row(c, "page-title-row", @sf.wide_bar_h + (if wide.tape { @sf.tape_bar_over() } else { 0.0 }))
+    }
     c.sized(main_w, ph, fn() {
       let page = fn() {
         if gated {
@@ -660,6 +676,10 @@ pub fn frame(
         c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), page)
       }
     })
+  }
+  // (the window's buttons' row under all of the frame, where nothing of it is: over the closed bar, title_row)
+  if inset {
+    title_row(c, "window-title-row", closed_bar_top)
   }
   // what the page or the sidebar takes back for (a sheet, a menu, a step of a page's) goes back before the stack does
   let took = c.took_back(fn() {

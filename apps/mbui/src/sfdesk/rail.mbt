@@ -164,13 +164,13 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
     rail_top_web + rail_gap
   }
   c.box(style=look, moves="rail", id=rail_id, fn() {
+    // its top row the window's title bar (the macOS app's buttons in it) across all of it, its padding too; not in the
+    // closed bar
+    if inset && !bar {
+      title_row(c, "rail/top", top_h)
+    }
     c.box(style=rail_head, fn() {
-      // its top row drags the window (the macOS app's buttons in it), not in the closed bar
-      let top = c.id("rail/top")
-      if inset && !bar {
-        c.window_drag(top)
-      }
-      c.box(style=rail_top.then(@ui.style(h=Fixed(top_h))), moves="rail-top", id=top, fn() {  }) |> ignore
+      c.box(style=rail_top.then(@ui.style(h=Fixed(top_h))), moves="rail-top", fn() {  }) |> ignore
       let places = rail_items(src, w.id)
       // a list's place lit while its list is the one shown (Rail.tsx `on`): 我参与的, 监控中 by the filter when they
       // are in the rail, else 对话; 已归档 while the archive is open (shownList)

@@ -1799,6 +1799,13 @@ pub fn Tester::window_drags(self : Tester) -> Int {
 }
 
 ///|
+/// Whether a press at (x, y) would drag the window (what it lands on is a target of Ctx::window_drag), pressing nothing.
+pub fn Tester::drags_window_at(self : Tester, x : Double, y : Double) -> Bool {
+  let c = self.ctx()
+  desk_drags(hit_in(c.hit_ids, c.hit_rects, x, y))
+}
+
+///|
 /// Tab (Shift+Tab when `back`): the focus to the next stop (focus.mbt).
 pub fn Tester::tab(self : Tester, back? : Bool = false) -> Unit {
   self.key(key_tab, mods=if back { mod_shift_key } else { 0 })
