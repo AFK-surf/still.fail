@@ -67,7 +67,7 @@ extendDemo({
 // What the tests read: the stories and how each is reached.
 (window as unknown as { endDemo: () => void }).endDemo = endDemo;
 (window as unknown as { demoTape: typeof demoTape }).demoTape = demoTape;
-(window as unknown as { stories: unknown }).stories = stories.map(({ id, group, title, steps, phone, share }) => ({ id, group, title, steps: steps ?? [], phone: !!phone, share: share ?? null }));
+(window as unknown as { stories: unknown }).stories = stories.map(({ id, group, title, steps, phone, system, share }) => ({ id, group, title, steps: steps ?? [], phone: !!phone, system: system ?? null, share: share ?? null }));
 
 if (id) {
   if (!story) root.textContent = `no story ${id}`;

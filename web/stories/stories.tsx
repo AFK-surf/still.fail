@@ -76,6 +76,9 @@ export interface Story {
   steps?: Step[];
   /** In a phone's window (wide by default). */
   phone?: boolean;
+  /** In a browser of this phone's or tablet's system (its name for itself and its platform, as the page reads them):
+   *  what draws the system itself (通知's preview) draws that one. The browser's own by default. */
+  system?: "android" | "ios" | "ipad";
   /** Shows the changelog's news (the notices' bubble). */
   news?: boolean;
   /** Its chat's messages carry files (data.ts SENT): pictures and files' cards. */
@@ -993,6 +996,7 @@ export const stories: Story[] = [
   { id: "app-chat-fonts", group: "设置", title: "对话 · 字体已选（思源宋体、霞鹜文楷、Maple Mono）", app: true, demo: chosenFonts },
   { id: "settings-notifications", group: "设置", title: "通知", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "通知" }] },
   { id: "settings-notifications-type", group: "设置", title: "通知 · 展开一个类别", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "通知" }, { click: 'button:has-text("有人发言")' }] },
+  { id: "settings-notifications-ipad", group: "设置", title: "通知 · iPad 的浏览器（预览是一台平板，没有红点）", app: true, system: "ipad", steps: [{ click: '[aria-label="设置"]' }, { text: "通知" }] },
   {
     id: "settings-notifications-refused", group: "设置", title: "通知 · 系统没允许",
     render: () => stage(<div style={{ display: "grid", gap: 10, padding: 32, maxWidth: 720 }}>
