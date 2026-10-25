@@ -106,6 +106,32 @@ fn covered(t : @ui.Tester, label : String) -> (Double, Double)? {
 }
 
 ///|
+test "on the tape with the window's buttons in the app's top row (a Mac's) what shows at the window's left holds them, as much room past them as before them from the window's edge; the strip at the right as before" {
+  // (the host's buttons: 16 from the window's left, 54 across: mbui's mac_app.m)
+  let (buttons_in, buttons_w) = (16.0, 54.0)
+  for w in [600.0, 720.0, 839.0] {
+    let at = "\{w}"
+    let t = tape_chat(0, w, 840.0)
+    t.set_window_inset(true)
+    t.run_for(@sfdesk.side_move_ms)
+    let left = @sfdesk.tape_shows_left()
+    assert_eq(left - (buttons_in + buttons_w), buttons_in, msg=at)
+    // the page in use: the sidebar's strip at the left holds them, the page past it
+    page_over(t, w)
+    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page, msg=at)
+    assert_eq(covered(t, "展开侧边栏").map(fn(e) { e.1 }), Some(left), msg=at)
+    // its side panel in use: the page's strip at the left holds them; at the right as before
+    tap_said(t, "打开侧栏")
+    t.run_for(@sfdesk.side_move_ms)
+    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel, msg=at)
+    assert_eq(covered(t, "收起侧边栏").map(fn(e) { e.1 }), Some(left), msg=at)
+    t.back()
+    t.run_for(@sfdesk.side_move_ms)
+    assert_eq(covered(t, "打开侧栏").map(fn(e) { e.0 }), Some(w - @sfdesk.tape_shows), msg=at)
+  }
+}
+
+///|
 test "on the tape the page or the side panel in use has the window but a strip of each beside it; the sidebar its own width" {
   let shows = @sfdesk.tape_shows
   let (inside, apart) = (@sfdesk.closed_bar_in, 8.0)
