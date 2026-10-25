@@ -58,7 +58,8 @@ pub(all) struct Wide {
   mut band : Double
   mut mark : Double
   /// the page's bars' padding at its left (clear of the closed bar) and their margins while the folded sidebar is shown
-  /// a while: from its edge (the sidebar less 8 less how far the page moved) to the window's (how far it moved)
+  /// a while: from its edge (the sidebar less 8 less how far the page moved) to the window's (how far it moved); where
+  /// the block's move has got to, as the page beside them
   mut bar_pl : Double
   mut bar_ml : Double
   mut bar_mr : Double
@@ -301,8 +302,7 @@ let side_moves : Array[(String, Array[String])] = [
   ("nav-band", ["--band"]),
   ("brand", ["--brand"]),
   ("list-mark", ["--mark"]),
-  ("page-bar", ["padding-left", "margin-left", "margin-right"]),
-  ("page-bar-end", ["width"]),
+  ("page-bar", ["--bar-pl", "--bar-ml", "--bar-mr"]),
   ("side-update", ["left", "transform"]),
 ]
 
@@ -611,7 +611,8 @@ pub fn frame(
   // (closed, with 更新 over their start: clear of it too, brand.css.ts)
   wide.closed = bar
   let updating = !gated && update_shown()
-  wide.bar_pl = if !bar {
+  // (where the move has got to, as the page beside them: every bar builds its room from these)
+  wide.bar_pl = c.moved("--bar-pl", if !bar {
     bar_in
   } else if updating {
     if inset {
@@ -623,9 +624,9 @@ pub fn frame(
     bar_closed_inset
   } else {
     bar_in
-  }
-  wide.bar_ml = if peek { dmax(0.0, s - closed_bar_gap - shift) } else { 0.0 }
-  wide.bar_mr = shift
+  })
+  wide.bar_ml = c.moved("--bar-ml", if peek { dmax(0.0, s - closed_bar_gap - shift) } else { 0.0 })
+  wide.bar_mr = c.moved("--bar-mr", shift)
   // what the sidebar's parts work out from, where the move has got to: its top row (Sidebar.css.ts brand: none in the
   // closed bar), its frosted bands' ground (the block's), the lists' marks on the rail (Rail.css.ts listMark: in as it
   // folds)
@@ -1127,17 +1128,17 @@ let frame_gate : @ui.Style = @ui.css("bg=Bg")
 ///|
 /// A page's bar's padding at its left and its right (styles/sidebar.css.ts pageBar: 12; brand.css.ts, railed, closed:
 /// 28 in a window with its buttons in the app's top row, which reach 12 past the rail), and its margins while the folded
-/// sidebar is shown a while (from its edge to the window's): the box named "page-bar", moved with the block
-/// (side_moves).
+/// sidebar is shown a while (from its edge to the window's): where the block's move has got to (side_moves' page-bar),
+/// so a bar built of them moves with the page it is on, its words not jumping ahead of it.
 pub fn page_bar_room() -> (Double, Double, Double, Double) {
   (wide.bar_pl, if wide.tape { @sf.tape_bar_end(bar_in) } else { bar_in }, wide.bar_ml, wide.bar_mr)
 }
 
 ///|
 /// At the end of a page's bar that has no padding of its own there (a new chat's): as wide as its right margin while the
-/// folded sidebar is shown a while (page_bar_room), its end by the window's; moved with the block.
+/// folded sidebar is shown a while (page_bar_room), its end by the window's; moved with the block as that is.
 pub fn page_bar_end(c : @ui.Ctx) -> Unit {
-  c.box(style=@ui.style(w=Fixed(wide.bar_mr)), moves="page-bar-end", fn() {  }) |> ignore
+  c.box(style=@ui.style(w=Fixed(wide.bar_mr)), fn() {  }) |> ignore
 }
 
 ///|

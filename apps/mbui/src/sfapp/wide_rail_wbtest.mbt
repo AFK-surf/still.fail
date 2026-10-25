@@ -473,6 +473,51 @@ test "wide: shown a while, the page moves aside as far as what it shows is from 
 }
 
 ///|
+/// Where a chat's bar has its title (x, y): the first words of it built, the page's (built before the sidebar's list).
+fn bar_title_at(t : @ui.Tester) -> (Double, Double) raise {
+  let (x, y, _, _) = t.rect_of("整理发布清单").unwrap()
+  assert_true(y < @sf.wide_bar_h, msg="not the bar's: \{y}")
+  (x, y)
+}
+
+///|
+test "wide: the sidebar shown a while pinned open by its place pressed again, and folded back to shown a while: a chat's bar moves with its page, its title on its way from where it was to where it ends, never off it" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  let press_lit = fn() {
+    let (rx, ry, rw, rh) = t.query(Button, label="对话").unwrap().rect
+    t.tap(rx + rw / 2.0, ry + rh / 2.0)
+  }
+  // folded with the pointer on the rail: shown a while
+  press_lit()
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(@sfdesk.wide.folded && @sfdesk.wide.peeking)
+  let (shown_x, _) = bar_title_at(t)
+  // pressed again: open; halfway there, the title between where it was and where it ends
+  press_lit()
+  t.run_for(@sfdesk.side_move_ms / 2.0)
+  let (mid_x, _) = bar_title_at(t)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_false(@sfdesk.wide.folded)
+  let (open_x, _) = bar_title_at(t)
+  assert_true(
+    mid_x >= dmin(shown_x, open_x) && mid_x <= dmax(shown_x, open_x),
+    msg="shown \{shown_x}, halfway \{mid_x}, open \{open_x}",
+  )
+  // pressed once more: folded, shown a while again, the same way back
+  press_lit()
+  t.run_for(@sfdesk.side_move_ms / 2.0)
+  let (back_x, _) = bar_title_at(t)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(@sfdesk.wide.folded && @sfdesk.wide.peeking)
+  let (again_x, _) = bar_title_at(t)
+  assert_true(
+    back_x >= dmin(open_x, again_x) && back_x <= dmax(open_x, again_x),
+    msg="open \{open_x}, halfway \{back_x}, shown \{again_x}",
+  )
+}
+
+///|
 test "wide: a newer build of the desktop app: 更新 the update key in the sidebar's first row before the filter, as large as it; folded, past the rail, the page bar's start clear of it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
