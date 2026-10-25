@@ -32,7 +32,18 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
   // in a panel (the library's presenters'), in the room the panel gives it: no page's column, no frame's room over or
   // under it
   if @sf.in_panel() {
-    c.list("settings/" + key, blocks.length(), 80.0, fn(i) { (blocks[i])() }) |> ignore
+    // (a dialog's, as tall as what it holds: its blocks one under another, the dialog's body scrolling them)
+    if @sf.panel_whole() {
+      c.box(style=@sf.full_width, fn() {
+        for b in blocks {
+          b()
+        }
+      })
+      |> ignore
+    } else {
+      // (its blocks drawn as the list lays them out, as the panel has what it holds)
+      @sf.panel_list(c, "settings/" + key, blocks.length(), 80.0, fn(i) { (blocks[i])() }) |> ignore
+    }
     return
   }
   if wide.val {
