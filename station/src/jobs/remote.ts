@@ -266,18 +266,23 @@ export class Remote {
   /// The tasks started from here not told yet followed again, and the sessions closing: their records read off the
   /// station's thread (every task's ever started from here is kept: 13,000 on ccvm, read at each start).
   private async resume(): Promise<void> {
-    for (const [dir, take] of [
-      ["outgoing", (path: string, v: Json) => v.delivered !== true && this.watch(path)],
-      ["used", (path: string, v: Json) => field(v, "closing") === true && this.closer(path)],
-    ] as const) {
+    const read = async (dir: string, wanted: (v: Json) => boolean): Promise<string[]> => {
       const names = await readdir(join(this.root, dir)).catch(() => [] as string[]);
+      const found: string[] = [];
       for (const name of names.filter((n) => n.endsWith(".json"))) {
-        if (this.stopped) return;
+        if (this.stopped) break;
         const path = join(this.root, dir, name);
         const v = await readJsonSoon(path).catch(() => null);
-        if (v !== null) take(path, v);
+        if (v !== null && wanted(v)) found.push(path);
       }
-    }
+      return found;
+    };
+    // All of them found before any is followed: those on one station are asked about together (`follow`).
+    const followed = await read("outgoing", (v) => v.delivered !== true);
+    const closing = await read("used", (v) => field(v, "closing") === true);
+    if (this.stopped) return;
+    for (const path of followed) this.watch(path);
+    for (const path of closing) this.closer(path);
   }
 
   /// Its schedules end (the station stops).
