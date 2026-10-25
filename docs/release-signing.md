@@ -22,7 +22,7 @@
 - 不绑定渠道：`release.sh promote` 原样把 beta 拷成 stable 也能用。
 - key id 是公钥原始字节 sha256 的前 16 位十六进制（`keyId`）。
 
-Windows 桌面版（NSIS 安装包，没有代码签名）同样签：`desktop/<安装包>.exe.sig`，内容 `{kind: "stillfail-desktop-win", version, build, file, sha256, size}`。mac 版（测试版 2026-10-26 起是 mbui 的）验代码签名：还在 Electron 上的由 Squirrel 验（新 app 要满足旧 app 的 designated requirement），mbui 自己更新时由宿主验（`mac_app.m` Updates：同一个 team、同一个 id）；安卓由系统验 APK 签名，不另外签。测试版桌面 app 单独更新的网页包也签：feed `desktop/web/stillfail-beta-web.json`，内容 `{kind: "stillfail-desktop-web", version, build, needs, file, sha256, size}`（[desktop-web-updates.md](desktop-web-updates.md)）。
+Windows 桌面版（NSIS 安装包，没有代码签名）同样签：`desktop/<安装包>.exe.sig`，内容 `{kind: "stillfail-desktop-win", version, build, file, sha256, size}`。mac 版（2026-10-26 起是 mbui 的）验代码签名：还在 Electron 上的由 Squirrel 验（新 app 要满足旧 app 的 designated requirement），mbui 自己更新时由宿主验（`mac_app.m` Updates：同一个 team、同一个 id）；安卓由系统验 APK 签名，不另外签。测试版桌面 app 单独更新的网页包也签：feed `desktop/web/stillfail-beta-web.json`，内容 `{kind: "stillfail-desktop-web", version, build, needs, file, sha256, size}`（[desktop-web-updates.md](desktop-web-updates.md)）。
 
 station 自己装的模块包（[station-modules.md](station-modules.md)「包」）也签：`scripts/module-bundle.ts pack` 打出 `releases/modules/<id>/<id>-0.1.N.tar.gz`，再用 `release-sign.ts module` 签 feed `modules/<id>/<id>.json`（测试渠道 `<id>-beta.json`）：
 
