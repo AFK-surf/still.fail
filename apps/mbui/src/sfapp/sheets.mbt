@@ -1025,7 +1025,7 @@ fn job_tint(tone : String) -> Int64? {
 /// A job's status (JobDot): a small dot (a restarting service's breathes).
 fn job_dot(c : @ui.Ctx, tone : String) -> Unit {
   let t = @sf.theme()
-  let breath = if tone == "restart" { @sf.breath(c, low=0.35) } else { 1.0 }
+  let breath = if tone == "restart" { @sf.breath(c, low=0.35, resident=true) } else { 1.0 }
   c.box(
     w=Px(8.0),
     h=Px(8.0),

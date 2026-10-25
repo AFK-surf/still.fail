@@ -39,10 +39,10 @@ fn job_dot(c : @ui.Ctx, tone : String) -> Unit {
     _ => job_dot_off
   }
   let n = c.box(style=dot, fn() {
-    // alive: its breath out round it, from .6 to 1.15 and back, fading (jobLive)
+    // alive: its breath out round it, from .6 to 1.15 and back, fading (jobLive); resident: up as long as it runs
     if tone == "live" {
       c.layer(fn() {
-        let f = c.cycle(job_live_ms)
+        let f = c.cycle(job_live_ms, resident=true)
         let p = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
         let halo = c.box(style=job_halo, tx=-job_halo_out, ty=-job_halo_out, fn() {  })
         c.look(halo, @ui.look(scale=0.6 + 0.55 * p, alpha=0.35 * (1.0 - p)))
@@ -52,7 +52,7 @@ fn job_dot(c : @ui.Ctx, tone : String) -> Unit {
   })
   // restarting: breathing to .35 and back (jobBreathe)
   if tone == "restart" {
-    c.look(n, @ui.look(alpha=@sf.breath(c, low=0.35)))
+    c.look(n, @ui.look(alpha=@sf.breath(c, low=0.35, resident=true)))
   }
 }
 

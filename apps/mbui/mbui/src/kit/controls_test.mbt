@@ -294,7 +294,7 @@ test "snap: in range, on the step from min" {
 }
 
 ///|
-test "progress: its value as a percentage and its range; not known, neither, and its band a cycle said (a frame a step while shown)" {
+test "progress: its value as a percentage and its range; not known, neither, and its band a cycle said (a frame each frame while shown)" {
   let v : Ref[Double?] = Ref(Some(30.0))
   let t = @ui.Tester::new(fn(c) { progress(c, "upload", v.val, max=60.0, label="Upload") })
   let p = t.get(@ui.ProgressBar, label="Upload")
@@ -303,9 +303,9 @@ test "progress: its value as a percentage and its range; not known, neither, and
   v.val = None
   t.draw()
   assert_eq(t.get(@ui.ProgressBar, label="Upload").range, None)
-  // a frame at its next step (Ctx::cycle), none asked for between, said as a cycle: what never ends does not keep a
+  // a wait: a frame asked for each frame while it shows (Ctx::cycle), said as a cycle: what never ends does not keep a
   // test from idle
-  assert_true(!t.ctx().wants_frame)
+  assert_true(t.ctx().wants_frame)
   assert_eq(t.cycles().length(), 1)
   t.assert_idle()
 }
