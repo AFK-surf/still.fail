@@ -9,13 +9,13 @@ let phone : (Int, Double, Double) = (2, 390.0, 844.0)
 let desk : (Int, Double, Double) = (0, 1280.0, 800.0)
 
 ///|
-/// A page with one button, 打开 (at its foot with `low`, as a composer's choices are), that opens what `open` presents
-/// (given what opened it), and the host over it.
-fn presenting_view(open : (Anchor) -> Unit, low? : Bool = false) -> (@ui.Ctx) -> Unit {
+/// A page with one button, 打开 (`at` its top, its middle, or its foot as a composer's choices are), that opens what
+/// `open` presents (given what opened it), and the host over it.
+fn presenting_view(open : (Anchor) -> Unit, at? : @ui.Justify = JStart) -> (@ui.Ctx) -> Unit {
   fn(c) {
     begin(c) |> ignore
     c.with_theme(ui_theme(), fn() {
-      c.box(w=Fill(1.0), h=Fill(1.0), pad=40.0, justify=if low { JEnd } else { JStart }, fn() {
+      c.box(w=Fill(1.0), h=Fill(1.0), pad=40.0, justify=at, fn() {
         if button(c, "打开", key="open") {
           open(Of(c.id("open")))
         }
@@ -27,10 +27,10 @@ fn presenting_view(open : (Anchor) -> Unit, low? : Bool = false) -> (@ui.Ctx) ->
 }
 
 ///|
-fn presenting_tester(at : (Int, Double, Double), open : (Anchor) -> Unit, low? : Bool = false) -> @ui.Tester {
+fn presenting_tester(at : (Int, Double, Double), open : (Anchor) -> Unit, button_at? : @ui.Justify = JStart) -> @ui.Tester {
   presenters_reset()
   let (platform, w, h) = at
-  let t = @ui.Tester::new(presenting_view(open, low~), w~, h~, platform~)
+  let t = @ui.Tester::new(presenting_view(open, at=button_at), w~, h~, platform~)
   t.draw()
   t
 }
@@ -273,18 +273,44 @@ test "a panel with a mouse beside what opened it, as tall as what it holds where
 }
 
 ///|
-test "a panel with a mouse taller than the room beside what opened it: held to that room, its title and foot in the window, what it holds scrolled to" {
+test "a panel with a mouse opened at the window's foot, with the room over it: over it, as tall as what it holds" {
+  let held = Ref(true)
+  let short = (0, 1280.0, 360.0)
+  let t = presenting_tester(short, fn(from) { panel("面板", lines_body(3, held), from~, foot=ok_foot([])) }, button_at=JEnd)
+  let (_, by) = where_is(t, "打开")
+  open_it(t)
+  let (_, bottom) = drawn_span(t, "好的")
+  assert_true(bottom < by, msg="not over what opened it")
+  assert_true(!held.val)
+}
+
+///|
+test "a panel with a mouse taller than the room on either side of what opened it, not than the window: moved over it to stay in, as tall as what it holds" {
+  let held = Ref(true)
+  let mid = (0, 1280.0, 400.0)
+  let t = presenting_tester(mid, fn(from) { panel("面板", lines_body(10, held), from~, foot=ok_foot([])) }, button_at=JCenter)
+  let (_, by) = where_is(t, "打开")
+  open_it(t)
+  // all of it in the window, over the button rather than shortened
+  let (top, _) = drawn_span(t, "面板")
+  let (_, bottom) = drawn_span(t, "好的")
+  assert_true(top > 0.0 && bottom < mid.2, msg="out of the window")
+  assert_true(top < by && bottom > by, msg="not moved over what opened it")
+  assert_true(!held.val, msg="shortened while the window has the room for it")
+  assert_true(drawn_span(t, "第10行").1 < bottom)
+}
+
+///|
+test "a panel with a mouse taller than the window: as tall as the window lets it, its title and foot in it, what it holds scrolled to" {
   let said : Array[String] = []
   let held = Ref(false)
   let short = (0, 1280.0, 320.0)
   let t = presenting_tester(short, fn(from) { panel("面板", lines_body(40, held), from~, foot=ok_foot(said)) })
-  let (_, by) = where_is(t, "打开")
   open_it(t)
   assert_eq(presented_how, [AsPopover])
-  // under the button (more room there than over it), all of it in the window
   let (top, _) = drawn_span(t, "面板")
   let (_, bottom) = drawn_span(t, "好的")
-  assert_true(top > by, msg="not under what opened it")
+  assert_true(top > 0.0, msg="its title out of the window")
   assert_true(bottom < short.2, msg="its foot out of the window")
   assert_true(held.val, msg="what it holds not told it scrolls as one")
   // its last line under the foot until what it holds is scrolled, then over it
@@ -297,21 +323,6 @@ test "a panel with a mouse taller than the room beside what opened it: held to t
   t.tap_text("好的")
   assert_eq(said, ["ok"])
   assert_true(!presenting())
-}
-
-///|
-test "a panel with a mouse opened at the window's foot, taller than the room over it: over it, held to that room, its title in the window" {
-  let held = Ref(false)
-  let short = (0, 1280.0, 360.0)
-  let t = presenting_tester(short, fn(from) { panel("面板", lines_body(40, held), from~, foot=ok_foot([])) }, low=true)
-  let (_, by) = where_is(t, "打开")
-  open_it(t)
-  // over the button, the side with the room: its title not run out of the window's top
-  let (top, _) = drawn_span(t, "面板")
-  let (_, bottom) = drawn_span(t, "好的")
-  assert_true(top > 0.0, msg="its title out of the window")
-  assert_true(bottom < by, msg="not over what opened it")
-  assert_true(held.val)
 }
 
 ///|

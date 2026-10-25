@@ -171,106 +171,110 @@ fn menu_panel(
     }
     typeahead(c, pid, entries, ids, live)
   }
-  let (ww, wh) = c.window_size()
+  let (ww, _) = c.window_size()
   c.focusable(pid, keys=0)
-  let i = c.box(id=pid, max_h=wh - 16.0, max_w=ww - 16.0, fn() {
+  // by its trigger, by its size as laid out (its first frame too), growing out of the side it went on (as this frame
+  // lays it out; its first, the side asked for); its entries within the window (in_room: scrolling only where they are
+  // more than it holds)
+  let went = went_side(c, pid, anchor, side, along, offset)
+  let i = c.box(id=pid, max_w=ww - 16.0, fn() {
     look(c, min_w, fn() {
-      c.roving(key + "/items", orientation=Vertical, wrap=false, fn() {
-        for n, e in entries {
-          match e.kind {
-            // a line of the words' colour faintly (in dark the panel is lighter than the page: its line a groove)
-            Rule =>
-              c.box(pady=6.0, padx=4.0, fn() {
-                c.box(h=Px(1.0), w=Fill(1.0), bg=@ui.alpha(c.theme().fg, 0.12), fn() {  }) |> ignore
-              })
-              |> ignore
-            Heading => heading_look(c, e.label)
-            _ => {
-              let iid = ids[n]
-              let r = c.interact(iid, disabled=e.disabled)
-              // the pointer moving onto it: the focus (unseen), and its submenu open or another's closed
-              if r.hovered && pointer_moved(c) && !e.disabled {
-                if !c.has_focus(iid) {
-                  c.focus_on(iid)
-                }
-                sub = if e.kind is Sub(_) { n } else { -1 }
-              }
-              let opens = if c.rtl() { @ui.key_code_left } else { @ui.key_code_right }
-              match e.kind {
-                Sub(_) =>
-                  if r.clicked || (c.has_focus(iid) && c.take_key(opens)) {
-                    sub = n
-                  }
-                _ => if r.clicked { chosen = Some(e.value) }
-              }
-              let on = sub == n && e.kind is Sub(_)
-              let row = c.box(id=if e.disabled { 0 } else { iid }, fn() {
-                item_look(c, {
-                  entry: e,
-                  lit: c.has_focus(iid) || (on && !mine),
-                  open: on,
-                  hot: (c.has_focus(iid) && (c.focus_shown(iid) || r.hovered)) || (on && !mine),
-                  id: iid,
+      in_room(c, { side: went, room: c.place_most(), panel: pid }, key=key + "/room", fn() {
+        c.roving(key + "/items", orientation=Vertical, wrap=false, fn() {
+          for n, e in entries {
+            match e.kind {
+              // a line of the words' colour faintly (in dark the panel is lighter than the page: its line a groove)
+              Rule =>
+                c.box(pady=6.0, padx=4.0, fn() {
+                  c.box(h=Px(1.0), w=Fill(1.0), bg=@ui.alpha(c.theme().fg, 0.12), fn() {  }) |> ignore
                 })
-              })
-              let actions = pick(e.disabled, [], [@ui.Activate])
-              match e.kind {
-                Check(v) =>
-                  c.semantics(row, MenuItemCheckbox, id=iid, label=e.label, check=pick(v, On, Off), disabled=e.disabled, actions~)
-                Choice(v) =>
-                  if listbox {
-                    c.semantics(row, Option, id=iid, label=e.label, selected=v, disabled=e.disabled, actions~)
-                  } else {
-                    c.semantics(row, MenuItemRadio, id=iid, label=e.label, check=pick(v, On, Off), disabled=e.disabled, actions~)
+                |> ignore
+              Heading => heading_look(c, e.label)
+              _ => {
+                let iid = ids[n]
+                let r = c.interact(iid, disabled=e.disabled)
+                // the pointer moving onto it: the focus (unseen), and its submenu open or another's closed
+                if r.hovered && pointer_moved(c) && !e.disabled {
+                  if !c.has_focus(iid) {
+                    c.focus_on(iid)
                   }
-                Sub(_) =>
-                  c.semantics(row, MenuItem, id=iid, label=e.label, expanded=on, disabled=e.disabled, actions~)
-                _ => c.semantics(row, MenuItem, id=iid, label=e.label, disabled=e.disabled, actions~)
-              }
-              // its submenu, beside it
-              match e.kind {
-                Sub(children) if on => {
-                  let by_key = c.focus_shown(iid)
-                  let sk = key + "/" + n.to_string()
-                  let mut out : PanelOut = { chosen: None, back: false }
-                  let o = c.overlay(sk, anchor=iid, initial_focus=if by_key { first_item(c, sk, children) } else { 0 }, fn() {
-                    out = menu_panel(
-                      c,
-                      sk,
-                      children,
-                      c.rect_of(iid).unwrap_or(anchor),
-                      if c.rtl() { Left } else { Right },
-                      Start,
-                      -4.0,
-                      @ui.still_look,
-                      e.label,
-                      depth + 1,
-                      false,
-                      min_w,
-                      look,
-                      item_look,
-                      heading_look~,
-                    )
-                  })
-                  if out.chosen is Some(_) {
-                    chosen = out.chosen
-                  }
-                  if out.back || o.dismissed is Some(_) {
-                    sub = -1
-                    c.focus_on(iid, visible=true)
-                  }
+                  sub = if e.kind is Sub(_) { n } else { -1 }
                 }
-                _ => ()
+                let opens = if c.rtl() { @ui.key_code_left } else { @ui.key_code_right }
+                match e.kind {
+                  Sub(_) =>
+                    if r.clicked || (c.has_focus(iid) && c.take_key(opens)) {
+                      sub = n
+                    }
+                  _ => if r.clicked { chosen = Some(e.value) }
+                }
+                let on = sub == n && e.kind is Sub(_)
+                let row = c.box(id=if e.disabled { 0 } else { iid }, fn() {
+                  item_look(c, {
+                    entry: e,
+                    lit: c.has_focus(iid) || (on && !mine),
+                    open: on,
+                    hot: (c.has_focus(iid) && (c.focus_shown(iid) || r.hovered)) || (on && !mine),
+                    id: iid,
+                  })
+                })
+                let actions = pick(e.disabled, [], [@ui.Activate])
+                match e.kind {
+                  Check(v) =>
+                    c.semantics(row, MenuItemCheckbox, id=iid, label=e.label, check=pick(v, On, Off), disabled=e.disabled, actions~)
+                  Choice(v) =>
+                    if listbox {
+                      c.semantics(row, Option, id=iid, label=e.label, selected=v, disabled=e.disabled, actions~)
+                    } else {
+                      c.semantics(row, MenuItemRadio, id=iid, label=e.label, check=pick(v, On, Off), disabled=e.disabled, actions~)
+                    }
+                  Sub(_) =>
+                    c.semantics(row, MenuItem, id=iid, label=e.label, expanded=on, disabled=e.disabled, actions~)
+                  _ => c.semantics(row, MenuItem, id=iid, label=e.label, disabled=e.disabled, actions~)
+                }
+                // its submenu, beside it
+                match e.kind {
+                  Sub(children) if on => {
+                    let by_key = c.focus_shown(iid)
+                    let sk = key + "/" + n.to_string()
+                    let mut out : PanelOut = { chosen: None, back: false }
+                    let o = c.overlay(sk, anchor=iid, initial_focus=if by_key { first_item(c, sk, children) } else { 0 }, fn() {
+                      out = menu_panel(
+                        c,
+                        sk,
+                        children,
+                        c.rect_of(iid).unwrap_or(anchor),
+                        if c.rtl() { Left } else { Right },
+                        Start,
+                        -4.0,
+                        @ui.still_look,
+                        e.label,
+                        depth + 1,
+                        false,
+                        min_w,
+                        look,
+                        item_look,
+                        heading_look~,
+                      )
+                    })
+                    if out.chosen is Some(_) {
+                      chosen = out.chosen
+                    }
+                    if out.back || o.dismissed is Some(_) {
+                      sub = -1
+                      c.focus_on(iid, visible=true)
+                    }
+                  }
+                  _ => ()
+                }
               }
             }
           }
-        }
+        })
       })
+      |> ignore
     })
   })
-  // by its trigger, by its size as laid out (its first frame too), growing out of the side it went on (as laid out
-  // last frame; its first, the side asked for)
-  let went = went_side(c, pid, anchor, side, along, offset)
   c.place_by_size(i, fn(pw, ph) {
     let (x, y, _) = c.place(anchor, pw, ph, side~, along~, offset~)
     (x, y)

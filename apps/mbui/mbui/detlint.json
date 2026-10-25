@@ -95,7 +95,7 @@
       "src/kit/field.mbt": 7,
       "src/kit/form.mbt": 4,
       "src/kit/look.mbt": 3,
-      "src/kit/menu.mbt": 32,
+      "src/kit/menu.mbt": 31,
       "src/kit/password.mbt": 3,
       "src/kit/popover.mbt": 10,
       "src/kit/progress.mbt": 8,
@@ -238,6 +238,7 @@
     "page-screen": {},
     "page-look": {},
     "follow-layout": {},
-    "motion-read": {}
+    "motion-read": {},
+    "page-old-part": {}
   }
 }

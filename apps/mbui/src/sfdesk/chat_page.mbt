@@ -508,7 +508,7 @@ fn bar_popovers(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatV
     c.id("chat-more"),
     side=Bottom,
     along=End,
-    look=fn(c, _, body) { @sf.small_panel(c, w=@ui.Size::Px(chat_info_w), body) |> ignore },
+    look=@sf.beside_look(@ui.Size::Px(chat_info_w)),
     fn() { chat_info(c, src, w, r, v, chat) },
   )
   // (closed by what was pressed in it, or as a popover closes: Escape, a press outside)
@@ -520,7 +520,7 @@ fn bar_popovers(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatV
     c.id("chat-jobs"),
     side=Bottom,
     along=End,
-    look=fn(c, _, body) { @sf.small_panel(c, w=@ui.Size::Px(jobs_pop_w), body) |> ignore },
+    look=@sf.beside_look(@ui.Size::Px(jobs_pop_w)),
     fn() {
       let open = fn(id : String) {
         chat_own.jobs_open = false

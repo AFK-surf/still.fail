@@ -881,9 +881,7 @@ fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     along=Start,
     offset=rail_adder_off,
     at=(0.0, rail_menu_clear, rail_w, 0.0),
-    look=fn(c, _, body) {
-      @sf.small_panel(c, w=Px(rail_adder_w), fn() { c.box(style=adder_body, body) |> ignore }) |> ignore
-    },
+    look=@sf.beside_look(Px(rail_adder_w), inner=adder_body),
     fn() {
       c.box(style=adder_head, fn() {
         c.text(@sf.t("web-main.rail.customize"), style=adder_title) |> ignore

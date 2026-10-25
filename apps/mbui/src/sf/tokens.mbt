@@ -437,6 +437,18 @@ pub fn card_foot_in(height : Double) -> Double {
 }
 
 ///|
+/// What scrolls in a small panel held to the room it has (@kit.in_room's `reach`): its box out across the panel's
+/// padding, so that it and its bar reach the panel's sides; what it holds (`style`) back in as far.
+pub fn held_reach() -> @ui.Style {
+  @ui.style(w=Full, mx=room(-panel_pad))
+}
+
+///|
+pub fn held_in() -> @ui.Style {
+  @ui.style(w=Full, px=room(panel_pad))
+}
+
+///|
 pub fn foot_across(height : Double) -> @ui.Style {
   @ui.style(mx=room(card_foot_in(height) - card_pad))
 }

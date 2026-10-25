@@ -50,19 +50,20 @@ fn ref_menu(
         offset=ref_menu_off,
         label=@sf.t("web-main.chatRef.title"),
         focus=false,
-        look=fn(c, _, body) {
+        look=fn(c, s, body) {
           let width = match c.rect_of(cap) {
             Some((_, _, cw, _)) => cw
             None => ref_menu_least
           }
-          c.box(style=ref_menu_box.then(@ui.style(w=Fixed(width))), glass=@sf.glass_floating(), body) |> ignore
+          // (its chats scrolling past its most, or past what the window leaves them)
+          c.box(style=ref_menu_box.then(@ui.style(w=Fixed(width))), glass=@sf.glass_floating(), fn() {
+            @kit.in_room(c, s, key="composer/ref-list", most=ref_menu_max - 2.0 * @sf.panel_pad, body) |> ignore
+          })
+          |> ignore
         },
         fn() {
-          c.capped("composer/ref-list", ref_menu_max - 2.0 * @sf.panel_pad, fn() {
-            c.box(style=@sf.full_width, fn() {
-              ref_menu_body(c, spec, query, topic, chats, @sfbase.refs_active(w.key, n), pick, w.key)
-            })
-            |> ignore
+          c.box(style=@sf.full_width, fn() {
+            ref_menu_body(c, spec, query, topic, chats, @sfbase.refs_active(w.key, n), pick, w.key)
           })
           |> ignore
         },
