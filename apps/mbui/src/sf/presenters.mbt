@@ -22,17 +22,25 @@ pub fn at_point(x : Double, y : Double) -> Anchor {
 }
 
 ///|
-/// One to pick (`pick`): what it is known by, its words, a line under or beside them (`note`), its icon.
+/// One to pick (`pick`): what it is known by, its words, a line under or beside them (`note`), its icon (by name), or
+/// its mark (`mark`: what marks it elsewhere, drawn as large as the row's mark column says: a station's, a maker's).
 pub(all) struct Choice {
   key : String
   label : String
   note : String
   icon : String
+  mark : ((@ui.Ctx, Double) -> Unit)?
 }
 
 ///|
-pub fn choice(key : String, label : String, note? : String = "", icon? : String = "") -> Choice {
-  { key, label, note, icon }
+pub fn choice(
+  key : String,
+  label : String,
+  note? : String = "",
+  icon? : String = "",
+  mark? : (@ui.Ctx, Double) -> Unit,
+) -> Choice {
+  { key, label, note, icon, mark }
 }
 
 ///|
@@ -655,10 +663,15 @@ fn pick_popover(
       entries.push(@kit.menu_radio(x.key, x.key == chosen, label=x.label))
     }
     let icons : Map[String, String] = {}
+    let marks : Map[String, (@ui.Ctx, Double) -> Unit] = {}
     let notes : Map[String, String] = {}
     for x in choices {
       if x.icon != "" {
         icons[x.key] = x.icon
+      }
+      match x.mark {
+        Some(m) => marks[x.key] = m
+        None => ()
       }
       if x.note != "" {
         notes[x.key] = x.note
@@ -668,7 +681,7 @@ fn pick_popover(
       At(_, _, 0.0, 0.0) => 0.0
       _ => 6.0
     }
-    let m = dropdown(c, key, p.open, anchor, entries, icons, chooser_menu_w, offset~, at?, row_end=fn(c, s) {
+    let m = dropdown(c, key, p.open, anchor, entries, icons, chooser_menu_w, offset~, at?, marks~, row_end=fn(c, s) {
       match notes.get(s.entry.value) {
         Some(n) => c.text(n, style=pick_note) |> ignore
         None => ()
@@ -709,7 +722,7 @@ fn pick_popover(
       // (scrolling past pick_list_most, or what the room it has leaves it)
       @kit.in_room(c, beside_given.val, key=key + "/list", most=pick_list_most, fn() {
         for x in found {
-          if menu_item(c, x.label, key=key + "/" + x.key, icon=x.icon, on=x.key == chosen, note=x.note, panel=x.icon != "") {
+          if menu_item(c, x.label, key=key + "/" + x.key, icon=x.icon, mark?=x.mark, on=x.key == chosen, note=x.note, panel=x.icon != "" || x.mark is Some(_)) {
             done_with(c, p, fn() { choose(x.key) })
           }
         }
@@ -793,18 +806,20 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
     Some(f) => f()
     None => (x.title, "", x.description)
   }
+  // (the dialog's padding round what it holds: what reaches its sides on purpose goes out across it, panel_bleed;
+  // its rows' grounds stand at it, concentric with its corner as the last is with its foot's, their words a row's
+  // padding in, and its words that are not a row's as far in, its title's and what it says too, panel_words_in, as a
+  // small panel's)
+  let words_were = words_in_now.val
+  words_in_now.val = card_pad - corner_inset
   let still = dialog(
     c,
     key,
     p.open,
     title,
     fn() {
-      // (the dialog's padding round what it holds: what reaches its sides on purpose goes out across it, panel_bleed;
-      // its rows' grounds stand at it, concentric with its corner as the last is with its foot's, their words a row's
-      // padding in, and its words that are not a row's as far in, panel_words_in, as a small panel's)
-      let (was, words_were) = (panel_sides_in.val, words_in_now.val)
+      let was = panel_sides_in.val
       panel_sides_in.val = dialog_pad
-      words_in_now.val = card_pad - corner_inset
       // a tall one's body fills its share of the window (what it holds lays itself out in the room it is given)
       if x.tall > 0.0 {
         let room = x.tall * wh_of(c)
@@ -813,7 +828,6 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
         (x.body)(c, close)
       }
       panel_sides_in.val = was
-      words_in_now.val = words_were
     },
     description~,
     footer?=match x.foot {
@@ -824,6 +838,7 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
     close_label=t("common.close"),
     step~,
   )
+  words_in_now.val = words_were
   (still && p.open, dialog_built(c, key, p.open))
 }
 
@@ -1112,7 +1127,7 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
           c.box(style=sheet_words_at, fn() { c.text(t("common.noMatch"), style=sheet_lead) |> ignore }) |> ignore
         }
         for x in found {
-          if sheet_row(c, key + "/" + x.key, x.label, note=x.note, icon=x.icon, on=x.key == chosen) {
+          if sheet_row(c, key + "/" + x.key, x.label, note=x.note, icon=x.icon, mark?=x.mark, on=x.key == chosen) {
             done_with(c, p, fn() { choose(x.key) })
           }
         }
@@ -1257,7 +1272,7 @@ fn wh_of(c : @ui.Ctx) -> Double {
 }
 
 ///|
-/// A sheet's title (Sheet.kt SheetHead): 17 bold, 18 in, 4 over and 10 under.
+/// A sheet's title (Sheet.kt SheetHead): 17 bold, on its words' line (sheet_panel_sides in), 4 over and 10 under.
 fn sheet_title(c : @ui.Ctx, title : String) -> Unit {
   c.box(style=sheet_title_row, fn() { c.text(title, style=sheet_title_words) |> ignore }) |> ignore
 }
@@ -1272,6 +1287,7 @@ fn sheet_row(
   label : String,
   note? : String = "",
   icon? : String = "",
+  mark? : (@ui.Ctx, Double) -> Unit,
   on? : Bool = false,
   danger? : Bool = false,
   disabled? : Bool = false,
@@ -1287,8 +1303,12 @@ fn sheet_row(
   }
   // (a list's item on this screen: Theme.items, as a folder's entries are)
   c.box(style=sheet_row_box.then(@ui.style(min_h=Fixed(th.items.least))), id=if disabled { 0 } else { id }, fn() {
-    if icon != "" {
-      draw_icon(c, icon, th.items.mark, if danger { ink } else { th.p.muted })
+    match mark {
+      Some(m) => m(c, th.items.mark)
+      None =>
+        if icon != "" {
+          draw_icon(c, icon, th.items.mark, if danger { ink } else { th.p.muted })
+        }
     }
     c.box(style=sheet_row_words_at, fn() {
       c.text(label, style=th.items.name.then(sheet_row_words).then(@ui.text_style(color=Data(ink)))) |> ignore
@@ -1324,7 +1344,7 @@ let sheet_grows : @ui.Style = @ui.style(w=Full, h=grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sheet_title_row : @ui.Style = @ui.css("row w=Full px=S4_5 pt=S1 pb=S2_5 align=ACenter")
+let sheet_title_row : @ui.Style = @ui.css("row w=Full pt=S1 pb=S2_5 align=ACenter").then(@ui.style(px=room(sheet_panel_sides)))
 
 ///|
 // kept across runs: a value (no field of it changes)
