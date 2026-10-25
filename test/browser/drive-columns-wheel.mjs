@@ -23,7 +23,7 @@ try {
   /** The files' page in columns, 主目录 › code › acme › web, on a page of its own (a wheel's gesture stays with the
    * scroller it began over a while: each case a page of its own, as a new gesture). */
   const opened = async () => {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 360 }, locale: 'zh-CN' });
+    const page = await browser.newPage({ viewport: { width: 1280, height: 330 }, locale: 'zh-CN' });
     await page.goto(`${base}?story=app-files-deep&theme=light`);
     await page.locator('[aria-label="文件"]').filter({ visible: true }).first().click();
     await page.getByText('主目录', { exact: true }).filter({ visible: true }).first().click();
@@ -52,16 +52,19 @@ try {
     const { page, where, wheelOver } = await opened();
     const before = await where();
     assert.ok(before.scrolled.length >= 3, `the columns: ${JSON.stringify(before)}`);
-    await wheelOver('vite.config.ts');
+    await wheelOver('notes');
     await page.waitForTimeout(400);
-    assert.deepEqual(await where(), before, 'a wheel over the last column, which shows all it has: nothing moves');
+    assert.deepEqual(await where(), before, 'a wheel over a column that shows all it has (code\'s): nothing moves');
     await page.close();
   }
   {
     const { page, where, wheelOver } = await opened();
     const before = await where();
+    const [shows, room] = before.sizes[0].split('/').map(Number);
+    assert.ok(shows > room, `the first column has more than it shows: ${JSON.stringify(before)}`);
     await wheelOver('Documents');
-    await page.waitForFunction(() => document.querySelector('[data-view="columns"] > * > * > :first-child').scrollTop > 0);
+    await page.waitForFunction(() => document.querySelector('[data-view="columns"] > * > * > :first-child').scrollTop > 0, null, { timeout: 5000 })
+      .catch(async () => assert.fail(`the first column scrolled: ${JSON.stringify(await where())}`));
     const after = await where();
     assert.equal(after.page, 0, 'the page itself never scrolls');
     assert.deepEqual(after.tops, before.tops, 'no column moves on the window');

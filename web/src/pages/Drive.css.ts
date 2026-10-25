@@ -222,5 +222,5 @@ globalStyle(`${withPane} > :first-child`, { flex: "1", minWidth: "0" });
 // On the files' page, columns as tall as the page leaves them under its head, each scrolling on its own: the page
 // itself has nothing to scroll, or a wheel over a column with no more to show would scroll it, every column with it.
 globalStyle(`${page}:has(> ${withPane} > ${list}[data-view="columns"])`, { display: "flex", flexDirection: "column", paddingBottom: "24px" });
-globalStyle(`${page} > ${withPane}:has(> ${list}[data-view="columns"])`, { flex: "1", minHeight: "160px", alignItems: "stretch" });
-globalStyle(`${list}[data-view="columns"]`, { display: "block" });
+globalStyle(`${page} > ${withPane}:has(> ${list}[data-view="columns"])`, { flex: "1", minHeight: "120px", alignItems: "stretch" });
+globalStyle(`${list}[data-view="columns"]`, { display: "block", minHeight: "0" });
