@@ -116,6 +116,10 @@ pub(all) struct Theme {
   round : Round
   /// what a list's item is on this screen (Items)
   items : Items
+  /// what a chats' list is on this screen (ChatList: its rows' sizes and density, by the screen's kind alone): not
+  /// `items`, a list's one-line row (files, picks), but the chats' own anatomy (two lines, faces, the state line, the
+  /// days' headings, its panes' motion)
+  chat_list : ChatList
 }
 
 ///|
@@ -949,6 +953,7 @@ let current : Ref[Theme] = {
     bars: bars_drawn,
     round: wide_round,
     items: wide_items,
+    chat_list: mouse_chat_list,
   },
 }
 
@@ -1047,6 +1052,8 @@ pub fn begin(c : @ui.Ctx) -> Theme {
     bars: bars_drawn,
     round: if narrow { narrow_round } else { wide_round },
     items: if narrow { narrow_items } else { wide_items },
+    // (a computer's window made narrow keeps a computer's chats' list: the narrow anatomy at a computer's sizes)
+    chat_list: if touch_system() { touch_chat_list } else { mouse_chat_list },
   }
   current.val
 }

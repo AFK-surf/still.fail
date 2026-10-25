@@ -23,14 +23,15 @@ pub fn row_aside(
   if groups.length() == 0 && !with_people {
     return
   }
-  let finger = @sf.touch_system()
+  // (its sizes the screen's: the theme's chats' list)
+  let l = @sf.theme().chat_list
   let agents = fn() {
     let said = item.agents.map(fn(a) { a.text }).filter(fn(s) { s != "" })
     c.box(style=aside_agents, label=said.join(@sf.t("web-main.list.separator")), fn() {
       for k, g in groups {
         if k < aside_most {
           c.box(style=aside_agent, fn() {
-            @sf.maker_mark(c, g.maker, g.runtime, if finger { touch_agent_mark } else { aside_agent_mark }) |> ignore
+            @sf.maker_mark(c, g.maker, g.runtime, l.agent_mark) |> ignore
           })
           |> ignore
         }
@@ -41,11 +42,7 @@ pub fn row_aside(
     })
     |> ignore
   }
-  let (face, after, round, ring, d) = if finger {
-    (touch_face, touch_face_after, touch_face_ground, touch_face_ring, touch_face_d)
-  } else {
-    (mouse_face, mouse_face_after, mouse_face_ground, mouse_face_ring, mouse_face_d)
-  }
+  let (face, after, round, ring, d) = (l.face, l.face_after, l.face_ground, l.face_ring, l.face_d)
   let round = round.then(@ui.style(bg=Data(ground)))
   let faces = fn() {
     let shown = if people.length() > aside_most { people[:aside_most].to_array() } else { people }
@@ -97,14 +94,8 @@ pub fn row_aside(
 }
 
 ///|
-/// A face at a row's end: 16 across with a mouse, 18 with a finger; 3 over the one before it (RowPicture.css.ts aside
+/// A face at a row's end (its size the theme's chats' list): 3 over the one before it (RowPicture.css.ts aside
 /// overlap(3)); its ground a pixel round it, who started it ringed 2 out; three shown at most.
-let mouse_face_d : Double = 16.0
-
-///|
-let touch_face_d : Double = 18.0
-
-///|
 let face_over : Double = 3.0
 
 ///|
@@ -115,13 +106,6 @@ let face_ring_out : Double = 2.0
 
 ///|
 let aside_most : Int = 3
-
-///|
-/// An agent's mark at a row's end: 4 less than the faces (RowAside: size - 4).
-let aside_agent_mark : Double = 12.0
-
-///|
-let touch_agent_mark : Double = 14.0
 
 ///|
 /// What stands at a row's second line's end (RowPicture.css.ts aside): the agents and the people 6 apart, each 2 in.
@@ -147,43 +131,7 @@ let aside_faces : @ui.Style = @ui.css("row pl=S0_5 align=ACenter")
 let aside_more : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
 
 ///|
-/// A face, round; one after the first takes 3 less (3 of it over the one before).
-// kept across runs: a value (no field of it changes)
-let mouse_face : @ui.Style = @ui.css("w=S4 h=S4")
-
-///|
-// kept across runs: a value (no field of it changes)
-let mouse_face_after : @ui.Style = @ui.style(w=@sf.side_face_step, h=S4)
-
-///|
-// kept across runs: a value (no field of it changes)
-let touch_face : @ui.Style = @ui.css("w=S4_5 h=S4_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let touch_face_after : @ui.Style = @ui.style(w=@sf.touch_face_step, h=S4_5)
-
-///|
 /// The pixel after who started it (RowPicture.css.ts: marginRight 1).
 // kept across runs: a value (no field of it changes)
 let face_gap : @ui.Style = @ui.css("w=SPx h=S4")
 
-///|
-/// A pixel of the row's ground round a face (RowPicture.css.ts face: box-shadow 1px of --mark-around), its colour the
-/// row's.
-// kept across runs: a value (no field of it changes)
-let mouse_face_ground : @ui.Style = @ui.css("w=S4_5 h=S4_5 radius=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
-let touch_face_ground : @ui.Style = @ui.css("w=S5 h=S5 radius=Full")
-
-///|
-/// Who started it ringed in ink, a pixel of ground between: a line 1 wide from 1 to 2 out (RowPicture.css.ts
-/// face[data-starter]::after).
-// kept across runs: a value (no field of it changes)
-let mouse_face_ring : @ui.Style = @ui.css("w=S5 h=S5 radius=Full border=B1 border_color=Fg")
-
-///|
-// kept across runs: a value (no field of it changes)
-let touch_face_ring : @ui.Style = @ui.style(w=@sf.touch_face_ring, h=@sf.touch_face_ring, radius=Full, border=B1, border_color=Fg)

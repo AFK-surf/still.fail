@@ -270,6 +270,26 @@ pub fn ask(
 }
 
 ///|
+/// Words asked of a thing that can take them where it is (a row's title renamed): on a touch device asked over the
+/// page as `ask` does (the keyboard rising over the list would cover the row), on a computer where it is: `here` makes
+/// the thing its own field (Rename.tsx TitleInput), which says the words itself.
+pub fn ask_here(
+  title : String,
+  action : String,
+  run : (String) -> Unit,
+  here : () -> Unit,
+  value? : String = "",
+  placeholder? : String = "",
+  hint? : String = "",
+) -> Unit {
+  if touch_system() {
+    ask(title, action, run, value~, placeholder~, hint~)
+  } else {
+    here()
+  }
+}
+
+///|
 /// Whether anything is presented now (the shell's own back waits while it is).
 pub fn presenting() -> Bool {
   presented_now.iter().any(fn(p) { p.open })

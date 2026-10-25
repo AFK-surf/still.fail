@@ -118,8 +118,8 @@ pub fn chat_row(
   beside_rail? : Bool = false,
 ) -> Int {
   let t = @sf.theme()
-  // (how it looks and what it offers by the screen; how it answers by the hand: docs/architecture.md)
-  let touch = @sf.touch_system()
+  // (its sizes the theme's, by the screen; how it answers by the hand: docs/architecture.md)
+  let look = @sf.theme().chat_list
   // (a finger rests on nothing: a press reads ahead, a hold shows the time; a pointer's over it shows them)
   let finger = !@sf.pointer_rests()
   let key = @sfbase.row_name(item)
@@ -191,13 +191,15 @@ pub fn chat_row(
   let shows_time = hover || held || (finger && menu_on)
   // its 归档 key while pointed at by a mouse; a finger has 归档 at the row's start or in its menu
   let archive_key = hover && menu && !renaming
-  let archivable = touch && item.archivable && item.offline is None && !item.pending && !found
+  // (swiped to archive, a finger's: its 归档 at the row's start; a pointer has its 归档 key)
+  // (archived from the row itself, a chip at its start and a swipe, where what the row offers is not under a pointer's
+  // hover: the screen's, as its ⋯ is)
+  let archivable = @sf.more_held() && item.archivable && item.offline is None && !item.pending && !found
   let busy = row_busy(src, item)
   let failed = row_failed(src, item)
   let offline = item.offline is Some(_)
-  let look = if touch { touch_look } else { mouse_look }
   let draw = fn(tx : Double) -> Int {
-    let ground = if touch {
+    let ground = if finger {
       // held, its menu open, or pressed where it rests (not swiped over its 归档): the ink at 5%
       if held || menu_on || (pressed && tx == 0.0 && !found) {
         @sf.alpha(t.p.text, 0.05)
@@ -217,9 +219,9 @@ pub fn chat_row(
     }
     // (what shows of it over the list's: what its faces' rings are cut in)
     let face_ground = @sf.over(list_ground, ground)
-    c.box(style=if more && !touch { row_more } else { row_last }, tx~, fn() {
-      // (a finger's beside a rail: as far in from its list's left as from its right)
-      let row = if touch && beside_rail { look.row.then(row_beside_rail) } else { look.row }
+    c.box(style=if more { look.more } else { row_last }, tx~, fn() {
+      // (beside a rail: as far in from its list's left as the theme's list has it there)
+      let row = if beside_rail { look.row.then(look.beside_rail) } else { look.row }
       c.box(style=row.then(@ui.style(bg=Data(ground))), id~, fn() {
         if archivable {
           archive_chip(c, src, item, busy)
@@ -311,7 +313,7 @@ pub fn chat_row(
             if shows_time {
               c.text(item.ago, style=row_time) |> ignore
             } else {
-              row_aside(c, src, item, lead, face_ground, lift=if touch { 0.0 } else { mouse_aside_lift })
+              row_aside(c, src, item, lead, face_ground, lift=look.aside_lift)
             }
           })
           |> ignore
@@ -355,83 +357,14 @@ pub fn chat_row(
 let lift_ms : Double = 480.0
 
 ///|
-/// A row's looks, by the screen (mobile/Home.css.ts mChatRow… on a touch device, Sidebar.css.ts navSession… on a
-/// computer).
-priv struct RowLook {
-  row : @ui.Style
-  text : @ui.Style
-  text_settled : @ui.Style
-  head : @ui.Style
-  head_room : @ui.Style
-  meta : @ui.Style
-  title : @ui.TextStyle
-  title_unread : @ui.TextStyle
-  last : @ui.TextStyle
-}
+/// A finger's row's height (the theme's touch lists': mobile/Home.css.ts mChatRow).
+pub let touch_row_h : Double = @sf.touch_list_row_h
 
 ///|
-/// A mouse's (Sidebar.css.ts navRow, navSession: 54 high, 7 by 10 in, its words from the top, its corner a sidebar row's;
-/// two lines 2 apart, its title 13 on 20, 500 while something in it is unread; its second line 12 on 18).
+/// A row in its list with another under it, 2 over it (Sidebar.css.ts navSessionWrap + navSessionWrap: the computer's
+/// lists', ChatList::more).
 // kept across runs: a value (no field of it changes)
-let mouse_look : RowLook = {
-  row: @ui.style(row=true, w=Full, h=@sf.side_row_h, px=S2_5, py=@sf.row_in, gap=S2, align=AStart, radius=@sf.side_row_radius),
-  text: @ui.css("w=Full gap=S0_5"),
-  text_settled: @ui.css("w=Full gap=S0_5 opacity=O45"),
-  head: @ui.css("row w=Full h=S5 gap=S1_5 align=ACenter"),
-  // (pointed at, room at its end for 归档: 24)
-  head_room: @ui.css("row w=Full h=S5 pr=S6 gap=S1_5 align=ACenter"),
-  meta: @ui.css("row w=Full h=S4_5 gap=S1_5 align=ACenter"),
-  title: @ui.text_style(size=Sm, color=Fg, leading=L6, wrap=false, w=Full),
-  title_unread: @ui.text_style(size=Sm, weight=Medium, color=Fg, leading=L6, wrap=false, w=Full),
-  last: @ui.text_style(size=Xs, color=Muted, leading=L5, wrap=false, w=Full),
-}
-
-///|
-/// How far over its second line's middle what stands at its end does (row_aside's `lift`) in a mouse's row: as far from
-/// the row's foot as from its end, its last face concentric with the row's foot corner when its ground shows (the
-/// ladder's row corner less a face's half, @sf.capsule_in: 10, as the row's 10 at its end), where its line's middle
-/// would have it 8 (7 in, the face 16 in the line's 18).
-let mouse_aside_lift : Double = @sf.capsule_in(@sf.row_corner, mouse_face_d) -
-  (mouse_row_in + (mouse_meta_h - mouse_face_d) / 2.0)
-
-///|
-/// A mouse's row's padding over its foot (py=@sf.row_in) and its second line's height (meta: S4_5).
-let mouse_row_in : Double = 7.0
-
-///|
-let mouse_meta_h : Double = 18.0
-
-///|
-/// A finger's (mobile/Home.css.ts mChatRow: 66 high, 22 in on the left and 16 on the right, two lines in its middle;
-/// its title 16 on 22, 600 while something in it is unread; its second line 14 on 20).
-// kept across runs: a value (no field of it changes)
-let touch_look : RowLook = {
-  row: @ui.style(row=true, w=Full, h=Fixed(touch_row_h), pl=@sf.phone_row_in, pr=S4, gap=S1_5, align=ACenter),
-  text: @ui.css("w=Full justify=JCenter"),
-  text_settled: @ui.css("w=Full justify=JCenter opacity=O45"),
-  head: @ui.style(row=true, w=Full, h=Fixed(touch_title_h), gap=S2, align=ACenter),
-  head_room: @ui.style(row=true, w=Full, h=Fixed(touch_title_h), gap=S2, align=ACenter),
-  meta: @ui.css("row w=Full h=S5 gap=S2 align=ACenter"),
-  title: @ui.text_style(size=Xl, color=Fg, leading=L7, wrap=false, w=Full),
-  title_unread: @ui.text_style(size=Xl, weight=Semibold, color=Fg, leading=L7, wrap=false, w=Full),
-  last: @ui.text_style(size=Base, color=Muted, leading=L6, wrap=false, w=Full),
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let row_beside_rail : @ui.Style = @ui.css("pl=S4")
-
-///|
-/// A finger's row's height and its title's line (mobile/Home.css.ts mChatRow, mChatLine1).
-pub let touch_row_h : Double = 66.0
-
-///|
-let touch_title_h : Double = 22.0
-
-///|
-/// A row in its list, 2 over the row under it with a mouse (Sidebar.css.ts navSessionWrap + navSessionWrap).
-// kept across runs: a value (no field of it changes)
-pub let row_more : @ui.Style = @ui.css("w=Full pb=S0_5")
+pub let row_more : @ui.Style = @sf.mouse_chat_list.more
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -513,19 +446,17 @@ fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y 
   items.push(
     Some(
       @sf.menu_item_of(@sf.t("web-main.chat.rename"), icon="edit", fn() {
-        // on a computer in place (Rename.tsx TitleInput); on a touch device asked (mobile/Home.tsx ask)
-        if @sf.touch_system() {
-          @sf.ask(
-            @sf.t("android-chat.rename.title"),
-            @sf.t("common.save"),
-            fn(title) { rename(src, item, title) },
-            value=item.title,
-            placeholder=@sf.t("android-chat.rename.field"),
-            hint=@sf.t("android-chat.rename.note"),
-          )
-        } else {
-          rows.renaming = @sfbase.row_name(item)
-        }
+        // asked where the presenters ask it: on a computer the row's title its own field (Rename.tsx TitleInput), on a
+        // touch device over the page (mobile/Home.tsx ask)
+        @sf.ask_here(
+          @sf.t("android-chat.rename.title"),
+          @sf.t("common.save"),
+          fn(title) { rename(src, item, title) },
+          fn() { rows.renaming = @sfbase.row_name(item) },
+          value=item.title,
+          placeholder=@sf.t("android-chat.rename.field"),
+          hint=@sf.t("android-chat.rename.note"),
+        )
       }),
     ),
   )
