@@ -75,6 +75,7 @@ fn reset() -> Unit {
   share_closing.val = false
   splash_waited.val = false
   first_shown.val = false
+  first_waiting.val = false
   drafts.clear()
   cui.attach = false
   cui.picking = None
@@ -352,7 +353,8 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
     over_view(c, src)
     return
   }
-  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
+  first_waiting.val = false
+  let ground = c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
     let accounts = (src.topic)("accounts", {})
     match (accounts.value, (src.fatal)()) {
       (_, Some(why)) => splash(c, Some(why), true)
@@ -379,7 +381,12 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
         )
     }
   })
-  |> ignore
+  // the first page built, waiting for what it shows (signed_in): not shown yet, the splash over the window's ground
+  // (what the host clears to, the ground's colour) in its place, its words as while the workspaces are read
+  if first_waiting.val {
+    c.look(ground, { ..@ui.still_look, alpha: 0.0 })
+    c.layer(fn() { splash(c, Some(t_reading_workspaces(src)), false) }) |> ignore
+  }
 }
 
 ///|
@@ -414,12 +421,9 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       keeps_frame(c)
       // the app's keys, in every tier (sfdesk's keys.mbt): what is the wide frame's alone does nothing laid out Small
       @sfdesk.keys(c, src, w)
-      // the first page shows once it has what it shows (LOCAL_MS at most), as a page opening does: the splash till
-      // then (its words as while the workspaces are read), not the page's loading look and its list a frame or two later
-      if !first_page_shown(c, src, w) {
-        splash(c, Some(t_reading_workspaces(src)), false)
-        return
-      }
+      // the first page built as it opens, asking for all it shows, and shown once it has it (LOCAL_MS at most), as a
+      // page opening is: under the splash till then (view_in), not its loading look and its list a frame or two later
+      first_waiting.val = !first_page_shown(c, src, w)
       if @sfdesk.is_wide(c) {
         // a page opened in the pane shows once the core has given what it shows, the one before staying till then
         // (LOCAL_MS at most), as a page pushed on a phone slides in then
@@ -920,6 +924,10 @@ fn first_page_ready(c : @ui.Ctx, src : Source, w : Workspace) -> Bool {
 ///|
 /// Whether the app's first page has shown (first_page_shown).
 let first_shown : Ref[Bool] = Ref(false)
+
+///|
+/// Whether this frame's first page is built and not shown yet (signed_in, view_in).
+let first_waiting : Ref[Bool] = Ref(false)
 
 ///|
 /// Whether the core has answered for what the wide frame's pane shows of page `p`: a chat; an agent's history, a
