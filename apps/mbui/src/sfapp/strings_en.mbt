@@ -614,6 +614,7 @@ let en : Map[String, String] = {
   "web-pages.profiles.account": "Account",
   "web-pages.profiles.addModel": "Add",
   "web-pages.profiles.addModelPlaceholder": "Add a model by name, e.g. qwen3.8-flash",
+  "web-mobile.profiles.addModelPlaceholder": "Add a model by name",
   "web-pages.profiles.addModelWhat": "add this model",
   "web-pages.profiles.adding": "Signed in, adding",
   "web-pages.profiles.background": "Move running commands to the background on new messages",

@@ -369,6 +369,7 @@ let zh_wide : Map[String, String] = {
   "web-pages.profiles.account": "账号",
   "web-pages.profiles.addModel": "添加",
   "web-pages.profiles.addModelPlaceholder": "按名称添加模型，如 qwen3.8-flash",
+  "web-mobile.profiles.addModelPlaceholder": "按名称添加模型",
   "web-pages.profiles.addModelWhat": "添加这个模型",
   "web-pages.profiles.adding": "已登录，正在添加",
   "web-pages.profiles.background": "新消息到达时，将正在执行的命令转到后台",

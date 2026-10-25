@@ -696,11 +696,15 @@ pub fn enter_sends_by(max_lines : Int, ime_action : Int) -> Bool {
 /// A field of words. `enter_sends`: whether Enter gives the words up (`submitted`) rather than starting a new line;
 /// unsaid, the way the words come in decides (enter_sends_by): a keyboard's Enter gives them up (Shift+Enter a new
 /// line); a finger's keyboard's Enter is a new line where the field holds more than one and the keyboard has no key of
-/// its own for it (`ime_action`), else that key, giving them up.
+/// its own for it (`ime_action`), else that key, giving them up. `placeholder`: what it shows while nothing is typed in
+/// it, on one line; `shorter`, other ways to say that where the field has less room, each shorter than the one before
+/// (搜索全部内容, then 搜索): the longest of them all that fits is shown whole, the shortest cut with an ellipsis only
+/// where none does, as Ctx::text's words (Node::hint_shown).
 pub fn Ctx::editor(
   self : Ctx,
   key : String,
   placeholder? : String = "",
+  shorter? : Array[String] = no_words,
   w? : Size = Fill(1.0),
   font_size? : Double = 15.0,
   max_lines? : Int = 5,
@@ -830,6 +834,7 @@ pub fn Ctx::editor(
   n.line_trim = trim
   n.clip = true
   n.text = placeholder
+  n.shorter = shorter
   if plain {
     // no frame of its own: what holds it draws one
     n.min_h = lh
@@ -925,6 +930,21 @@ fn EditorState::caret_box(
 }
 
 ///|
+/// What the field `n` shows while nothing is typed in it, laid out in its `line` (EditorState's): its placeholder on one
+/// line, as words that do not wrap, said the longest way that fits the room its words have (Ctx::editor `shorter`), the
+/// shortest cut with an ellipsis where none does; never cut by the field's edge.
+fn Node::hint_shown(self : Node, line : Double) -> TextLayout {
+  let lay = self.hint_lay(line)
+  said_in(self.text, lay(self.text), self.shorter, self.fw - self.pad_l - self.pad_r, lay)
+}
+
+///|
+/// How the field `n` lays its placeholder out on one line, in its `line`.
+fn Node::hint_lay(self : Node, line : Double) -> (String) -> TextLayout {
+  fn(s) { layout_text(s, self.font_size, 400, 1.0e9, false, line~, trim=self.line_trim) }
+}
+
+///|
 fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   let st = match self.editors.get(n.id) {
     Some(s) => s
@@ -961,9 +981,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     }
   }
   if st.text.length() == 0 && ml == 0 && n.text.length() > 0 {
-    // on one line, as a text that does not wrap
-    let ph = layout_text(n.text, n.font_size, 400, 1.0e9, false, line=st.line, trim=n.line_trim)
-    self.emit_text(ph, st.ox, st.oy, st.ph_color, alpha)
+    self.emit_text(n.hint_shown(st.line), st.ox, st.oy, st.ph_color, alpha)
   } else {
     let spans = if st.secret { [] } else { st.look_of(st.display()).1 }
     self.emit_text(tl, st.ox, st.oy, st.color, alpha, spans~)

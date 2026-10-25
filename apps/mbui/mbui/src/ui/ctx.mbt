@@ -1201,6 +1201,9 @@ pub fn Ctx::spacer(self : Ctx) -> Unit {
 /// it may leave has left, cut only then (a way's last folder, its name before the folders over it).
 /// Words that do not wrap are one line: their line breaks shown as spaces (CSS's white-space: nowrap), unless
 /// `breaks` keeps them, each line as it is (code shown as written, in what scrolls sideways: CSS's pre).
+/// `shorter`: other ways to say words on one line where they have less room, each shorter than the one before
+/// (搜索全部内容, then 搜索): the longest of them all that fits is shown whole, the shortest cut with an ellipsis only
+/// where none does; in a row they need no more than the shortest at least (SwiftUI's ViewThatFits).
 pub fn Ctx::text(
   self : Ctx,
   s : String,
@@ -1218,6 +1221,7 @@ pub fn Ctx::text(
   tabular? : Bool,
   keep? : Bool = false,
   breaks? : Bool = false,
+  shorter? : Array[String] = no_words,
 ) -> Int {
   let st = self.text_patch(style)
   let (s_size, s_line) = self.text_sizes(st)
@@ -1248,6 +1252,7 @@ pub fn Ctx::text(
   n.max_lines = first(max_lines, st.max_lines).unwrap_or(0)
   n.tabular = first(tabular, st.tabular).unwrap_or(self.theme.tabular)
   n.keep = keep
+  n.shorter = shorter
   i
 }
 
