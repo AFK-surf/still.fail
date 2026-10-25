@@ -755,7 +755,8 @@ pub fn row_keys(
       let k = all_keys[i]
       let mine = match e {
         Out(_) => true
-        Said(m) => m.mine && !m.system
+        // (after what was there as it was sent: not one of an older page read meanwhile)
+        Said(m) => m.mine && !m.system && m.seq > l.newest
         _ => false
       }
       if mine && !l.before.contains(k) && !taken.contains(k) {

@@ -29,10 +29,13 @@ pub fn sent_reset() -> Unit {
 /// What was sent from here, in the list from the frame it was sent until the core's view has it (Chat.kt shows the
 /// core's outbox; here the core's row comes a round trip later, and what is sent is on screen first): drawn as an
 /// outbox entry of its words, by a key of its own ("local:n"); the first of this device's own rows not there when it
-/// was sent (an outbox entry, or the message it became) is it, from then on by that row's key.
+/// was sent (an outbox entry, or a message after the newest there then: what it became) is it, from then on by that
+/// row's key. (An older page of the chat read meanwhile has the viewer's own messages in it, not there when it was sent
+/// either: taken for it, it left the list and its words had nowhere to fly, pengxiao 2026-10-25.)
 pub(all) struct LocalSent {
   row : Outgoing
   before : Map[String, Bool]
+  newest : Double
 }
 
 ///|
@@ -87,6 +90,10 @@ pub fn sent_local(rk : String, v : ChatView?, words : String, files : Array[Json
     before: match v {
       Some(v) => sent_before(v)
       None => Map::new()
+    },
+    newest: match v {
+      Some(v) => v.messages.fold(init=-@double.infinity, fn(n, m) { if m.seq > n { m.seq } else { n } })
+      None => -@double.infinity
     },
   })
   "o:" + id
