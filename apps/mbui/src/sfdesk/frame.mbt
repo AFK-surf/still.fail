@@ -270,7 +270,7 @@ pub let side_max : Double = 480.0
 ///|
 /// How long the sidebar takes to open, fold, or be shown a while (brand.tsx moveSidebar: motion.ts moveState's 380 ms,
 /// its ease out).
-pub let side_move_ms : Double = 380.0
+pub let side_move_ms : Double = @sf.move_state_ms
 
 ///|
 /// What moves as the sidebar opens, folds, is shown a while or goes to another place's width: brand.tsx moveSidebar's

@@ -861,11 +861,11 @@ pub let let_go_ms : Double = 300.0
 
 ///|
 /// (what a test runs to once the composer changes shape)
-pub let morph_ms : Double = 260.0
+pub let morph_ms : Double = @sf.shape_ms
 
 ///|
 /// Laid out for the other page, how long it goes there (dock.tsx: 340, the ease out).
-pub let page_move_ms : Double = 340.0
+pub let page_move_ms : Double = @sf.composer_page_ms
 
 ///|
 /// Typing warms the agent's runtime at most once a minute.

@@ -103,7 +103,7 @@ pub fn chat_list(
             @motion.reveal(c, mk, p, fn() {
               let ri = row_box(c, side, top, fn() { activity_row(c, src, here, a, em, rk, leaving) })
               let way = makes_way(lf, keys[i])
-              @motion.keyed(c, ri, mk, exit=@motion.trans(fade=0.0, spec=@motion.tween(leave_ms)), by=way)
+              @motion.keyed(c, ri, mk, exit=@sf.leave, by=way)
               // pushed down by a row that came in over it (its cause: the newest that came over it), it glides there;
               // what else moves it (the page before come in above, words sent flying in, its own message out of its
               // avatar, which comes back to where it now is) puts it there at once
@@ -148,14 +148,15 @@ pub fn chat_list(
                 @motion.layout(c, ri, mk, spec=@sf.move_spring, by=makes_way(lf, keys[i]))
               _ => ()
             }
-            // what leaves the chat from the outbox fades, not what was sent from here and is now the core's
+            // what leaves the chat from the outbox goes as what leaves a list does, not what was sent from here and is
+            // now the core's
             match e {
               Out(o) if !local_sent(o) =>
                 @motion.keyed(
                   c,
                   ri,
                   mk,
-                  exit=@motion.trans(fade=0.0, spec=@motion.tween(leave_ms)),
+                  exit=@sf.leave,
                   by=makes_way(lf, keys[i]),
                 )
               _ => @motion.keyed(c, ri, mk, by=makes_way(lf, keys[i]))
@@ -493,9 +494,6 @@ fn float_trans() -> @motion.Trans {
   @motion.trans(fade=0.0, spec=@motion.tween(float_ms, ease=Out), fade_spec=@motion.tween(float_ms, ease=Out))
 }
 
-///|
-/// What leaves the list (an agent's line, what goes from the outbox) fades this long.
-let leave_ms : Double = 200.0
 
 ///|
 /// The column's width at most, and how far in its sides stand at least.
