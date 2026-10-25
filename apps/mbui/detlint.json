@@ -277,6 +277,7 @@
     },
     "page-screen": {
       "src/sfapp/composer.mbt": 2,
+      "src/sfapp/screen_view.mbt": 1,
       "src/sfdesk/appearance.mbt": 1,
       "src/sfdesk/drive_tab.mbt": 1,
       "src/sfdesk/files_nav.mbt": 1,
