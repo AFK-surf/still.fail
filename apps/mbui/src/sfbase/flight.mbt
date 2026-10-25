@@ -547,13 +547,15 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
             c.image(ff.picture, w=Px(w), h=Px(h), fit=FitCover, radius=r, bg=@sf.theme().p.neutral_bg) |> ignore
           })
           // between its tile and its place as this frame lays it out, a new chat's list drawn up with it
-          // (flight_carry_shift): with the list as it moves, not a frame behind
+          // (flight_carry_shift): with the list as it moves, not a frame behind; moved from where it is laid out (its
+          // layer's corner, wherever the chat is in the window)
           let to = "flight/to/" + ff.path
           @motion.placed(c, pic, fn() {
             match @motion.measured_rect(c, to) {
               Some((ex, ey, _, _)) => {
                 let ey = ey + flight_carry_shift(c, chat)
-                @ui.look(dx=fx + (ex - fx) * across, dy=fy + (ey - fy) * up)
+                let (px, py, _, _) = c.node_rect(pic)
+                @ui.look(dx=fx + (ex - fx) * across - px, dy=fy + (ey - fy) * up - py)
               }
               None => @ui.look(alpha=0.0)
             }
@@ -563,7 +565,10 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
         Some(_) => ()
         None => {
           let tile = c.box(fn() { (ff.face)() })
-          c.look(tile, @ui.look(dx=fx, dy=fy))
+          @motion.placed(c, tile, fn() {
+            let (tx, ty, _, _) = c.node_rect(tile)
+            @ui.look(dx=fx - tx, dy=fy - ty)
+          })
         }
       }
     }
