@@ -95,6 +95,7 @@ of them. Their numbers are the web's at the same place (paths from the repositor
 | 3 | a layout switched: the sidebar, a side panel, the tape | 380 ms ease-out (`@sf.move_state_ms`) | `moveState`, web/ui/src/motion.ts:287 |
 | 3 | rows making way, the agent's line among them | spring 0.28 s (`@sf.move_spring`) | `MOVE`, web/src/listMotion.ts |
 | 4 | words sent | 520 ms on the flight's curve (0.6, 0, 0.2, 1) | web/src/madeChat.ts:329-331 (sfbase/flight.mbt) |
+| 4 | the composer under words sent: as tall as it was till they are a quarter of the way, then down as a shape | `@sf.shape_ms` from then | ChatHost.kt `hold` (the web keeps only the list's foot, dock.tsx) |
 | 4 | the composer's hint under words sent: gone at once, back once they are out of its field | 200 ms on the arrival's curve (`@sf.hint_back_ms`) | web/src/madeChat.css.ts:19-20 |
 | 4 | a picture into the viewer and back | 320 ms `--m-ease`; back 280 ms | none on the web, which fades it in over 140 ms (web/src/FilePreview.css.ts); Android's FilePreview.kt (sfbase/viewer.mbt) |
 | 5 | pushed, popped | 300 ms `--m-standard`; swiped back and let go, 200 ms | web/src/mobile/app.css.ts:16, 22-30 |
@@ -134,8 +135,11 @@ list's turns, words flying, everything in the hand). Each step below is a PR; a 
 3. **The composer** (sfpages/composer.mbt, every tier's since #1646). Done: reshaped for what it holds (its words,
    files, quotes, its being opened, its error) and for its page, its ＋, words, send and choices carried from where
    they showed by the same cause; for its page, what it holds there and did not here (a new chat's choices) carried
-   on its ground until that is there (`@motion.reshape` `carry`, morph.ts `morph`); held for words sent; nothing for
-   the window, the sidebar, a keyboard or the tier.
+   on its ground until that is there (`@motion.reshape` `carry`, morph.ts `morph`); nothing for the window, the
+   sidebar, a keyboard or the tier. Words sent: it is held as tall as it was, its box and its room, while they are in
+   it, and comes down for their letting go of it, a quarter of their way, not from under them as they set out
+   (ChatHost.kt hold, which sfapp's composer had; its box gone down at once since the phone took the shared one,
+   #1646, the words left hanging over it, the user 2026-10-26: 「发消息好像会瞬间把 composer 高度重置」).
    Laid out as it ends at once, its page's foot and the ↓ button follow what it is laid out as. The page's foot stays
    what its parts take their places from (`@motion.scope`): the page moving, with the composer in it, moves none of
    them.

@@ -1,0 +1,15 @@
+# Three lines typed on a phone and sent: the composer from three lines to one, the words flying into their bubble.
+timeout 20000
+until 发消息
+wait 600
+tap 发消息
+wait 500
+type 先看一下签名
+enter
+type 再看发布说明
+enter
+type 最后核对版本号
+wait 700
+tap icon:arrow-up
+wait 1500
+exit

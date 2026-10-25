@@ -1,0 +1,16 @@
+# The wide frame: three lines typed and sent: the composer stays as tall as it was while the words are in it, then
+# comes down as they let go of it (sfpages composer.mbt composer_hold). MBUI_WIN=1280x800.
+timeout 20000
+until 发消息
+wait 600
+tap 发消息
+wait 500
+type 先看一下签名
+key shift+enter
+type 再看发布说明
+key shift+enter
+type 最后核对版本号
+wait 700
+tap icon:arrow-up
+wait 1500
+exit

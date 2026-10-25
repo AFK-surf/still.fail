@@ -189,6 +189,47 @@ test "words sent fly from the field into their bubble" {
 }
 
 ///|
+test "words sent: the composer stays as it was while they are in it, and comes down as they let go of it, not from under them" {
+  reset()
+  let clock = Ref::new(0.0)
+  fix_clock.val = Some(fn() { clock.val })
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.nav_push_ms)
+  t.tap_text("发消息")
+  t.type_text("第一行\n第二行\n第三行")
+  // (its box grown to the three lines)
+  t.run_for(composer_morph_ms)
+  let box = fn() { @motion.measured(t.ctx(), "composer/content").unwrap() }
+  let reshaping = fn() { t.moving().iter().any(fn(m) { m.contains("layout composer/") }) }
+  let tall = box()
+  let room = @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
+  tap_send(t)
+  t.frame()
+  // sent, its words on their way: the composer as tall as it was, nothing in it moving (its field emptied where it
+  // was, its ＋ and send where they were), the list's room under its last row as it was
+  assert_true(flight_of("ws1/st1:s-c1") is Some(f) && f.placed)
+  assert_eq(box(), tall)
+  assert_true(!reshaping(), msg="\{t.moving()}")
+  assert_eq(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1"), room)
+  // let go of once the words are on their way: it comes down from as tall as it was, its field with it
+  let go = t.rest_of("composer/held-box/")
+  assert_true(go > t.time() && go < @double.infinity, msg="\{go} \{t.time()}")
+  t.run_for(go - t.time())
+  assert_true(
+    flight_of("ws1/st1:s-c1") is Some(f) && flight_p(t.ctx(), f) > 0.0,
+    msg="the words not yet on their way",
+  )
+  assert_true(box() < tall, msg="\{box()} \{tall}")
+  assert_true(reshaping(), msg="\{t.moving()}")
+  // and its room under the list down with it, on the same curve
+  t.run_for(t.rest_of("composer/hold/") - t.time())
+  assert_true(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") < room)
+  fix_clock.val = None
+}
+
+///|
 test "Home: the first rows, after the list waited, come as they are and a tap on one opens it at once" {
   reset()
   let src = fixture("home")
