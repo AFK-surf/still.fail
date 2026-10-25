@@ -91,6 +91,8 @@ pub(all) struct Wide {
   /// since it took it
   mut tape_pull : TapePane?
   mut tape_drag : Double
+  /// the passage picked last frame (its message and the frame it was taken), a new one bringing the page over
+  mut tape_pick : String
 }
 
 ///|
@@ -139,6 +141,7 @@ pub let wide : Wide = {
   tape_panel: "",
   tape_pull: None,
   tape_drag: 0.0,
+  tape_pick: "",
 }
 
 ///|
@@ -200,6 +203,7 @@ fn wide_reset() -> Unit {
   wide.tape_panel = ""
   wide.tape_pull = None
   wide.tape_drag = 0.0
+  wide.tape_pick = ""
 }
 
 ///|
@@ -866,10 +870,13 @@ fn tape_frame(c : @ui.Ctx, panel : ChatRef?, at : (Double, Double, Double), know
   // it, the sidebar still in use (a new chat asks for its page: new_chat)
   // a passage of a message picked while the page is not in use (held where it shows beside the sidebar): the page
   // comes over with it, its bar there to be pressed (pengxiao, 2026-10-25: 引用 pressed there went to what showed of
-  // the page and brought it over, quoting nothing)
-  if @sfbase.pk.ts != "" && wide.tape_at != Page && wide.tape_ask is None && wide.tape_pull is None {
+  // the page and brought it over, quoting nothing). As it is picked, once: a passage left picked keeps nothing from
+  // being brought over after (pengxiao, 2026-10-25: the sidebar pressed or pulled over went straight back)
+  let pick = if @sfbase.pk.ts == "" { "" } else { "\{@sfbase.pk.ts}\u{1}\{@sfbase.pk.taken_at}" }
+  if pick != "" && pick != wide.tape_pick && wide.tape_at != Page && wide.tape_ask is None && wide.tape_pull is None {
     wide.tape_ask = Some(Page)
   }
+  wide.tape_pick = pick
   let chat = match app.nav.top() {
     Chat(r) | History(r, _, _) => chat_key(r)
     _ => ""
