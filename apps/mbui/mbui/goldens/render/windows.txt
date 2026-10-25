@@ -4,7 +4,9 @@
 # where the new one draws every reference the same to the byte, a line of it beside the old (WARP 33648 on image
 # 20261018.275.1: run 39473079125's controls.png the reference's to the byte). Made again with WARP pinned
 # (Microsoft.Direct3D.WARP 1.0.21 beside the program, .github/actions/warp; run 39524573902's artifact): 1157 pixels
-# one step of a channel off the image's WARP's, the picture looked at beside the last.
+# one step of a channel off the image's WARP's, the picture looked at beside the last. Made again as MoonBit came to
+# place the glyphs in the atlas (#1728, run 40158934489's artifact): 37 pixels of a few glyphs' edge rows one step of a
+# channel off, a glyph sampled from another place in the atlas.
 image win25-vs2026 20261007.264.1
 system Microsoft Windows NT 10.0.26100.0
 warp 1.0.21.0.20260922.2

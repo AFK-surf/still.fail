@@ -245,12 +245,8 @@ fn drawlist_of(c : Ctx, bytes? : Bool = false) -> String {
   dl_num(sb, g)
   dl_num(sb, b)
   sb.write_char('\n')
-  // the glyphs drawn, by what they are: their atlas places (as this Tester's host had them) to their keys
-  let key_at : Map[String, Int] = {}
-  match text_table.val {
-    Some(t) => t.glyphs.each(fn(key, r) { if r.length() >= 2 { key_at["\{r[0]} \{r[1]}"] = key } })
-    None => ()
-  }
+  // the glyphs drawn, by what they are: their atlas places to their keys
+  let key_at = glyph_keys()
   let names = glyph_names()
   // each glyph drawn, numbered as first drawn, by its name (one name, one number)
   let glyph_no : Map[String, Int] = {}

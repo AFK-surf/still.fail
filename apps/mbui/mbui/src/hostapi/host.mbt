@@ -40,6 +40,8 @@ pub(open) trait Host {
   shape(Self, String, Double, Int, Int, FixedArray[Double]) -> Int = _
   text_key(Self, String, Double, Int, Int) -> Int = _
   glyph(Self, Int, FixedArray[Double]) -> Unit = _
+  glyph_put(Self, Int, Int, Int) -> Unit = _
+  atlas_size(Self, Bool) -> Int = _
   glyphs_ahead(Self, FixedArray[Int], Int) -> Unit = _
   face_add(Self, Int, String, Int) -> Bool = _
   face_add_bytes(Self, Int, Bytes, Int) -> Bool = _
@@ -331,6 +333,16 @@ impl Host with text_key(_, _, _, _, _) {
 ///|
 impl Host with glyph(_, _, _) {
   ()
+}
+
+///|
+impl Host with glyph_put(_, _, _, _) {
+  ()
+}
+
+///|
+impl Host with atlas_size(_, _) {
+  0
 }
 
 ///|
@@ -1309,9 +1321,33 @@ pub fn text_key(text : String, size : Double, weight : Int, style : Int) -> Int 
 }
 
 ///|
+/// Glyph `key` (a cluster `shape` or `text_key` gave) drawn, its picture held for `glyph_put`: in `out` 0 and 0 (where
+/// it goes in the atlas is the caller's: atlas.mbt), its picture's width and height in points (its pixels at the
+/// host's scale; 0: nothing to draw), where its top left is from the pen on the baseline, and 1 where it is in colours
+/// of its own (an emoji), else 0. Drawn again each time it is asked for: the caller asks for what its atlas lacks.
 pub fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
   current.val.glyph(key, out)
 }
+
+///|
+/// The picture of glyph `key`, drawn by the `glyph` asked last, put in its atlas with its top left at pixel `x`, `y`
+/// (there before the next frame is drawn), over whatever was there: in colour glyphs' own atlas (where the host has
+/// one) `x` is `colour_atlas_u` past its place across in it, as its instances say it.
+pub fn glyph_put(key : Int, x : Int, y : Int) -> Unit {
+  current.val.glyph_put(key, x, y)
+}
+
+///|
+/// The side of the host's atlas the glyphs of its words are drawn from, in pixels, or (`colour`) of colour glyphs'
+/// own (an emoji's: 0, they are in the words' atlas with the others); 0: none.
+pub fn atlas_size(colour : Bool) -> Int {
+  current.val.atlas_size(colour)
+}
+
+///|
+/// How far across past its place in it a glyph in colour glyphs' own atlas is said, to the host (glyph_put) and in its
+/// instances (scene.mbt: its renderer takes the atlas by it).
+pub let colour_atlas_u : Int = 16384
 
 ///|
 /// The glyphs of the first `n` of `keys`, shaped and not drawn yet (on a page still off the screen, or below what is
@@ -1357,6 +1393,8 @@ pub fn face_clear(face : Int) -> Unit {
 }
 
 ///|
+/// Moves on as what the host drew and measured before is gone: its faces or its scale changed, its atlas lost (a new
+/// drawing surface). Never as its atlas fills: what goes where in it is the caller's (atlas.mbt).
 pub fn atlas_generation() -> Int {
   current.val.atlas_generation()
 }

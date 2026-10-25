@@ -319,7 +319,7 @@ fn Ctx::paint_page(self : Ctx, n : Node, alpha : Double) -> Unit {
         for c in a..<e {
           let key = s.keys[c]
           if key >= 0 {
-            let gl = glyph(key)
+            let gl = glyph(key, sc)
             if gl.gw > 0.0 {
               let gx = ((ox + x0 + tl.xs[c] + shift + gl.ox) * sc).round() / sc
               let gy = ((oy + y + tl.ascent + gl.oy) * sc).round() / sc

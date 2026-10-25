@@ -538,6 +538,31 @@ fn h_glyph(key : Int, out : FixedArray[Double]) -> Unit {
 }
 
 ///|
+/// The picture of glyph `key`, drawn by the h_glyph asked last, put in the atlas at `x`, `y`: a fake host has no
+/// pictures.
+fn h_glyph_put(key : Int, x : Int, y : Int) -> Unit {
+  match fake.val {
+    Some({ live: Some(l), .. }) => l.host.glyph_put(key, x, y)
+    Some(_) => ()
+    None => @hostapi.glyph_put(key, x, y)
+  }
+}
+
+///|
+/// The side of a fake host's atlas: Android's and Windows' (its glyphs placed in it as a host's are), colour glyphs in
+/// it with the others.
+let fake_atlas_size : Int = 2048
+
+///|
+fn h_atlas_size(colour : Bool) -> Int {
+  match fake.val {
+    Some({ live: Some(l), .. }) => l.host.atlas_size(colour)
+    Some(_) => if colour { 0 } else { fake_atlas_size }
+    None => @hostapi.atlas_size(colour)
+  }
+}
+
+///|
 /// The glyphs of the first `n` of `keys` for the host to draw ahead (text.mbt glyphs_ahead): a Tester's hosts, fake
 /// or live, draw each as it is asked for.
 fn h_glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {

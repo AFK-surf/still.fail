@@ -38,7 +38,7 @@ static jclass host_cls, text_cls, images_cls, login_cls, picks_cls, views_cls, p
 static jmethodID m_reduce_motion;
 static jmethodID m_text_menu;
 static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m_bench,
-    m_exit, m_metrics, m_shape, m_glyph, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
+    m_exit, m_metrics, m_shape, m_glyph, m_glyph_put, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
     m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes, m_pk_info,
     m_pk_end, m_drive, m_ref_begin, m_ref_text, m_ref_end, m_ref_frame, m_text_key, m_v_open, m_v_place, m_v_close,
     m_v_control, m_v_info, m_v_read_next, m_v_read_answer, m_v_site_next, m_v_site_body, m_v_site_head,
@@ -115,6 +115,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_metrics = (*env)->GetStaticMethodID(env, text_cls, "fontMetrics", "(DII[D)V");
   m_shape = (*env)->GetStaticMethodID(env, text_cls, "shape", "(Ljava/lang/String;DII[D)I");
   m_glyph = (*env)->GetStaticMethodID(env, text_cls, "glyph", "(I[D)V");
+  m_glyph_put = (*env)->GetStaticMethodID(env, text_cls, "glyphPut", "(III)V");
   m_generation = (*env)->GetStaticMethodID(env, text_cls, "atlasGeneration", "()I");
   m_text_key = (*env)->GetStaticMethodID(env, text_cls, "textKey", "(Ljava/lang/String;DII)I");
   m_face_add = (*env)->GetStaticMethodID(env, text_cls, "faceAdd", "(ILjava/lang/String;I)Z");
@@ -281,6 +282,8 @@ static int image_new(void) {
 
 // the numbers of an instance (src/ui/scene.mbt)
 #define MB_INST 52
+// the glyphs' atlas, pixels a side (the fragment shader's 2048.0); what goes where in it is MoonBit's (atlas.mbt)
+#define MB_ATLAS 2048
 
 static const char *VS =
     "#version 300 es\n"
@@ -649,7 +652,7 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_surfaceCreated(JNIEnv *env, jclass c
   }
   glGenTextures(1, &atlas);
   glBindTexture(GL_TEXTURE_2D, atlas);
-  glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, 2048, 2048);
+  glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, MB_ATLAS, MB_ATLAS);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -1384,6 +1387,15 @@ void mb_host_glyph(int32_t key, double *out) {
   (*env)->CallStaticVoidMethod(env, text_cls, m_glyph, key, small_buf);
   (*env)->GetDoubleArrayRegion(env, small_buf, 0, 7, out);
 }
+
+// The glyph drawn last put in the atlas at x, y (uploaded with the frame's others before it is drawn: MBText.flush).
+void mb_host_glyph_put(int32_t key, int32_t x, int32_t y) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, text_cls, m_glyph_put, key, x, y);
+}
+
+// (one atlas: colour glyphs in it with the others)
+int32_t mb_host_atlas_size(int32_t colour) { return colour ? 0 : MB_ATLAS; }
 
 // The glyphs shaped and not drawn yet (text.mbt glyphs_ahead): MBText draws them on a thread of its own, for glyph to
 // find drawn.

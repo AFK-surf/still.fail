@@ -167,8 +167,8 @@ Nothing else in a build tells outside (detlint's build-effect): those two are it
   MBUI_TEXT_RECORD=1), made a Tester's test by scripts/chk textrec and run in the same job: every frame's hash the
   same, or it fails with the first frame as the host drew it (MBUI_DRAW_DUMP=1) beside the Tester's. `text` gives
   kitdemo MBUI_TEXTCHECK=NAME (src/kitdemo/gallery/textcheck.mbt): every metrics, shaping, whole-word key and glyph box of the
-  kept run NAME asked of the host again, in the order the run first asked them (so the host hands out glyph keys and
-  atlas places in the same order), each answer written as the log writes it (its JSON) and compared to the kept one
+  kept run NAME asked of the host again, in the order the run first asked them (so the host hands out glyph keys in
+  the same order; where a glyph goes in the atlas is the app's, hostapi's atlas.mbt, and not compared), each answer written as the log writes it (its JSON) and compared to the kept one
   to the character; what differs is listed, and the run fails saying how to record it again. A kept run is
   `src/kitdemo/gallery/textrec_NAME.mbt` (its data, built into kitdemo so a host can ask it again) and
   `textrec_NAME_wbtest.mbt` (its replay, in CI's test job with every kept run); `textrec_runs.txt` lists the runs kept (an explicit list: what a working directory happens to hold, a CI run's own `ci_HOST`, is never listed), `textrec_runs.mbt` is made from it, and CI checks the two and the runs git keeps agree (`scripts/chk textrec --check`).

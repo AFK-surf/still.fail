@@ -48,9 +48,10 @@ fn reset_globals() -> Unit {
   clear_shapes()
   text_cache.fonts.clear()
   text_cache.metrics.clear()
-  text_cache.glyphs.clear()
-  text_cache.fresh.clear()
+  glyphs_forget()
   text_cache.generation = -1
+  text_cache.frame = 0
+  text_cache.thinned = -1
   web_lines.val = false
   faces_reset()
   text_table.val = None

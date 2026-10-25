@@ -13,7 +13,7 @@ static id<MTLRenderPipelineState> mpipe;
 static id<MTLRenderPipelineState> rpipe_off;
 // holes for native views (kind 9): written, not blended
 static id<MTLRenderPipelineState> hpipe;
-// the words' glyphs (R8) and colour glyphs (RGBA): MB_ATLAS_W wide, as tall as last made
+// the words' glyphs (R8) and colour glyphs (RGBA), square (apple.h)
 static id<MTLTexture> atlas, catlas;
 static CAMetalLayer *mlayer;
 static id<MTLBuffer> bufs[3];
@@ -313,12 +313,12 @@ static id<MTLRenderPipelineState> make_pipe(id<MTLLibrary> lib, MTLPixelFormat f
   return p;
 }
 
-// An atlas `h` texels tall (MB_ATLAS_W wide): the words' a byte a texel, colour glyphs' four.
-static id<MTLTexture> atlas_texture(int color, int h) {
+// An atlas `side` texels square: the words' a byte a texel, colour glyphs' four.
+static id<MTLTexture> atlas_texture(int color, int side) {
   MTLTextureDescriptor *td = [MTLTextureDescriptor
       texture2DDescriptorWithPixelFormat:color ? MTLPixelFormatRGBA8Unorm : MTLPixelFormatR8Unorm
-                                   width:MB_ATLAS_W
-                                  height:(NSUInteger)h
+                                   width:(NSUInteger)side
+                                  height:(NSUInteger)side
                                mipmapped:NO];
   td.usage = MTLTextureUsageShaderRead;
   return [dev newTextureWithDescriptor:td];
@@ -349,8 +349,8 @@ void mb_render_init(CAMetalLayer *layer) {
   pd.colorAttachments[0].pixelFormat = MTLPixelFormatRGB10A2Unorm;
   ppipe_deep = [dev newRenderPipelineStateWithDescriptor:pd error:&err];
   if (!ppipe_deep) NSLog(@"post pipeline: %@", err);
-  atlas = atlas_texture(0, MB_ATLAS_W);
-  catlas = atlas_texture(1, MB_ATLAS_W / 4);
+  atlas = atlas_texture(0, MB_ATLAS_SIDE);
+  catlas = atlas_texture(1, MB_ATLAS_COLOR_SIDE);
   inflight = dispatch_semaphore_create(3);
 }
 
@@ -367,22 +367,6 @@ void mb_render_set_size(double w, double h, double scale) {
 void mb_atlas_upload(int color, int x, int y, int w, int h, const void *px) {
   [(color ? catlas : atlas) replaceRegion:MTLRegionMake2D(x, y, w, h) mipmapLevel:0 withBytes:px
                               bytesPerRow:(NSUInteger)w * (color ? 4 : 1)];
-}
-
-// Atlas `color` made `h` texels tall, what it has kept where it is (copied by the CPU, which alone writes it; the
-// frames still on the GPU keep the one they were given).
-void mb_atlas_grow(int color, int h) {
-  id<MTLTexture> was = color ? catlas : atlas;
-  if ((int)was.height >= h) return;
-  id<MTLTexture> t = atlas_texture(color, h);
-  NSUInteger bpr = was.width * (color ? 4 : 1);
-  void *px = malloc(bpr * was.height);
-  MTLRegion r = MTLRegionMake2D(0, 0, was.width, was.height);
-  [was getBytes:px bytesPerRow:bpr fromRegion:r mipmapLevel:0];
-  [t replaceRegion:r mipmapLevel:0 withBytes:px bytesPerRow:bpr];
-  free(px);
-  if (color) catlas = t;
-  else atlas = t;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,8 @@
 # The renderer's pixel references on Android (docs/determinism.md): made and checked on GitHub's ubuntu-24.04 runner, in an
 # x86_64 emulator on SwiftShader, offscreen. Checked: the emulator, the system image and its build (all the drawing is
 # theirs); the rest is said. Any new: every reference made again in one PR (the render-android workflow's artifact).
+# Made again as MoonBit came to place the glyphs in the atlas (#1728, run 40158934494's artifact): 93 pixels of a few
+# glyphs' edge rows one to three steps of a channel off, a glyph sampled from another place in the atlas.
 image ubuntu24 20261012.334.1
 emulator 37.2.12
 system android-34/default/x86_64 2

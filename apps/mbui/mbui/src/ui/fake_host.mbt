@@ -79,6 +79,16 @@ impl @hostapi.Host for FakeHost with glyph(_, a0, a1) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with glyph_put(_, a0, a1, a2) {
+  h_glyph_put(a0, a1, a2)
+}
+
+///|
+impl @hostapi.Host for FakeHost with atlas_size(_, a0) {
+  h_atlas_size(a0)
+}
+
+///|
 impl @hostapi.Host for FakeHost with face_add(_, a0, a1, a2) {
   h_face_add(a0, a1, a2)
 }
