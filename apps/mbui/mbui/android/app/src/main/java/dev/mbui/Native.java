@@ -10,6 +10,8 @@ final class Native {
     static native void surfaceCreated();
     static native void resize(int w, int h);
     static native boolean frame(float w, float h, float scale, double now);
+    /** The last frame drawn again as it was presented, the native views' pictures as they are now (android_host.c). */
+    static native void redraw();
     static native void pointer(int kind, float x, float y, double time);
     static native void key(int code, int mods);
     static native void text(int kind, String s, int a, int b);

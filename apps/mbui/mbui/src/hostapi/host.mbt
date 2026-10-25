@@ -1771,6 +1771,15 @@ pub fn view_open(kind : Int, arg : String) -> Int {
 }
 
 ///|
+/// What the image (scene.mbt's slot 20) of the instance the app paints where a native view shows (kind 9) is: this plus
+/// the view's id (exact in the renderers' 32-bit floats, above `stream_tex_base`'s). Its c2 says the part of the view's
+/// content it covers (u0 v0 du dv, shares of the content's rect). A host whose views are under its surface (macOS,
+/// iOS, Windows, the browser) leaves the canvas clear there, a hole the view shows through, and draws nothing of it; a
+/// host that draws each view into a picture of its own (Android: NativeViews.Picture) draws that part of it there, in
+/// the frame, so it moves as what is around it does.
+pub let view_tex_base : Int = 8388608
+
+///|
 /// Where the view shows, in the app's coordinates (logical pixels from the window's top left): its content in (x, y,
 /// w, h) (a video's picture is stretched to it), its corners round by `radius` (0: square), seen only within the clip
 /// (cx0, cy0)-(cx1, cy1); hidden when not `shown`. Told again whenever it moves (each frame it does).

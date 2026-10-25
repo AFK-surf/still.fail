@@ -81,6 +81,27 @@ test "a native view inside a clip shows only in it: its hole cut to the clip" {
 }
 
 ///|
+test "a native view scrolled partly out of its clip: its hole the part seen, and which part of its content that is" {
+  let cell : Ref[@ui.NativeView?] = { val: None }
+  let t = @ui.Tester::new(
+    fn(c) {
+      let v = once(cell, fn() { @ui.NativeView::page("<p>hi</p>") })
+      // a page 400 tall, its top 100 scrolled above a stage 300 tall
+      c.box(w=Px(390.0), h=Px(300.0), clip=true, fn() {
+        c.native(v, w=Px(390.0), h=Px(400.0), content=Some((0.0, -100.0, 390.0, 400.0))) |> ignore
+      })
+      |> ignore
+    },
+    w=390.0,
+    h=844.0,
+  )
+  assert_eq(t.holes(), [(0.0, 0.0, 390.0, 300.0)])
+  // the page from a quarter down, three quarters of it: what a host drawing the page's picture draws there
+  assert_eq(t.hole_parts(), [(1, 0.0, 0.25, 1.0, 0.75)])
+  cell.val.unwrap().close()
+}
+
+///|
 test "a native view's corners round: the host told its radius, its hole as round over its content's rect, a clip cutting it" {
   let cell : Ref[@ui.NativeView?] = { val: None }
   let radius : Ref[Double] = { val: 44.0 }
@@ -100,12 +121,15 @@ test "a native view's corners round: the host told its radius, its hole as round
   // the hole is the content's own rect, rounded; the clip cuts it as it cuts what is painted
   assert_eq(t.holes(), [(40.0, 20.0, 300.0, 600.0)])
   assert_eq(t.hole_radii(), [44.0])
+  // (all of the page in it, for a host that draws the view's picture there)
+  assert_eq(t.hole_parts(), [(1, 0.0, 0.0, 1.0, 1.0)])
   assert_true(t.views().contains("place 1 40 20 300 600 in 0 0 390 500 round 44"))
-  // square again: told so, its hole cut to where it shows
+  // square again: told so, its hole cut to where it shows, the page's top 480 of its 600 in it
   radius.val = 0.0
   t.frame()
   assert_eq(t.holes(), [(40.0, 20.0, 300.0, 480.0)])
   assert_eq(t.hole_radii(), [0.0])
+  assert_eq(t.hole_parts(), [(1, 0.0, 0.0, 1.0, 0.8)])
   assert_true(t.views().contains("place 1 40 20 300 600 in 0 0 390 500"))
   cell.val.unwrap().close()
 }

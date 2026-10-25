@@ -49,8 +49,8 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         density = c.getResources().getDisplayMetrics().density;
         setEGLContextClientVersion(3);
         setEGLConfigChooser(8, 8, 8, 8, 0, 0);
-        // On top of the window, translucent: native views (NativeViews: a player, a page) sit under it and show
-        // through the holes the app paints (transparent, kind 9); everywhere else each frame is opaque.
+        // On top of the window, translucent: the app over another app (OverActivity) draws over that app, nothing of
+        // its own ground; native views (NativeViews: a player, a page) are drawn in it, by their pictures.
         getHolder().setFormat(android.graphics.PixelFormat.TRANSLUCENT);
         setZOrderOnTop(true);
         setPreserveEGLContextOnPause(true);
@@ -171,6 +171,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         // a view not the host's (its activity paused under another of the app's: an OverActivity's draws), kept as it
         // last drew: one thread draws the app at a time
         if (Host.view != this) return;
+        boolean app = appWanted.getAndSet(false), pictured = picturesOnly.getAndSet(false);
         // another view set the drawing up in its own context since this one did (an OverActivity came and went): set
         // up again here, at this view's size
         if (mine != setUp) {
@@ -178,12 +179,21 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             MBText.reset();
             Native.resize(getWidth(), getHeight());
             mine = ++setUp;
+            app = true;
         }
+        // the native views' pictures come since the last frame, for this one to draw where it shows them
+        NativeViews.latch();
         // the soft keyboard's height off the bottom (Host.imeBottom, as it moves): the app lays out above it, the
         // surface keeps its size (resizing it with each step of the keyboard's motion would be far too slow)
         float w = getWidth() / density, h = Math.max(1, getHeight() - Host.imeBottom) / density;
         if (Host.shotAt >= 0) {
             shotFrame(w, h);
+            return;
+        }
+        // only a view's picture changed (pictureFrame): the last frame drawn again with it, the app not asked; a frame
+        // the app or the system asked for is the app's
+        if (pictured && !app) {
+            Native.redraw();
             return;
         }
         long began = System.nanoTime();
@@ -343,10 +353,26 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     /** A frame at the next vsync (from any thread). */
     void wantFrame() {
         if (shotTaken) return;
+        appWanted.set(true);
         if (!wanted.compareAndSet(false, true)) return;
         if (Looper.myLooper() == Looper.getMainLooper()) postVsync.run();
         else Host.main.post(postVsync);
     }
+
+    /**
+     * A native view's new picture to show (NativeViews.Picture, from any thread): the last frame drawn again at the next
+     * vsync, with it, unless the app has asked for a frame by then.
+     */
+    void pictureFrame() {
+        if (shotTaken) return;
+        picturesOnly.set(true);
+        if (!wanted.compareAndSet(false, true)) return;
+        if (Looper.myLooper() == Looper.getMainLooper()) postVsync.run();
+        else Host.main.post(postVsync);
+    }
+
+    /** A frame asked of the app (wantFrame), or only for a view's picture (pictureFrame), since the last was drawn. */
+    private final AtomicBoolean appWanted = new AtomicBoolean(), picturesOnly = new AtomicBoolean();
 
     /** Runs r on the GL thread and asks for a frame. */
     void toGL(Runnable r) {

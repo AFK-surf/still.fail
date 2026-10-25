@@ -905,6 +905,31 @@ pub fn Tester::hole_radii(self : Tester) -> Array[Double] {
 }
 
 ///|
+/// What each hole in the last frame shows of its view (kind 9, in the order of holes): the view's id (its image less
+/// @hostapi.view_tex_base) and the part of its content there (u0, v0, du, dv: shares of the content's rect), as a host
+/// that draws the view's picture draws it.
+pub fn Tester::hole_parts(self : Tester) -> Array[(Int, Double, Double, Double, Double)] {
+  ignore(self)
+  let out = []
+  for i in 0..<g().ninst {
+    let b = i * inst_size
+    let a = g().inst
+    if a[b + 5] == 9.0 {
+      out.push(
+        (
+          a[b + 20].to_int() - @hostapi.view_tex_base,
+          a[b + 12],
+          a[b + 13],
+          a[b + 14],
+          a[b + 15],
+        ),
+      )
+    }
+  }
+  out
+}
+
+///|
 fn r(x : Double) -> Int {
   x.round().to_int()
 }

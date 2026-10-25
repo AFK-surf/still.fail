@@ -759,10 +759,12 @@ static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count
     int hole = (int)(f[start * MB_INST + 5] + 0.5f) == 9;
     end = start + 1;
     while (end < count && (int)f[end * MB_INST + 20] == tid && ((int)(f[end * MB_INST + 5] + 0.5f) == 9) == hole) end++;
-    ID3D11ShaderResourceView *t = tid > MB_STREAM_TEX ? (ID3D11ShaderResourceView *)mb_stream_srv(tid - MB_STREAM_TEX)
+    // (a hole's image is its view's, src/hostapi/host.mbt view_tex_base + its id: the view is under the canvas here)
+    ID3D11ShaderResourceView *t = hole ? atlas_srv
+                                  : tid > MB_STREAM_TEX ? (ID3D11ShaderResourceView *)mb_stream_srv(tid - MB_STREAM_TEX)
                                   : tid ? (ID3D11ShaderResourceView *)mb_image_srv(tid) : atlas_srv;
     // (a stream with no frame of its own yet: nothing, not the atlas)
-    if (tid > MB_STREAM_TEX && !t) {
+    if (!hole && tid > MB_STREAM_TEX && !t) {
       start = end;
       continue;
     }

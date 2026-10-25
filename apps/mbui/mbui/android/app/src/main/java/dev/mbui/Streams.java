@@ -169,7 +169,7 @@ final class Streams {
 
     /** The GL context was lost (android_host.c images_lost): every stream's textures made anew in the new one. */
     static void lost() {
-        blit = 0;
+        blitLost();
         for (Stream s : streams.values()) {
             if (hold > 0 && s.video != null) s.video.hold(hold);
             s.lost();
@@ -184,6 +184,11 @@ final class Streams {
     // ---- the copy of a SurfaceTexture's frame into a plain texture (GL thread) ----
 
     private static int blit, blitMatrix, blitFb;
+
+    /** A new GL context: the copy's program and framebuffer made anew in it as they are next used (GL thread). */
+    static void blitLost() {
+        blit = 0;
+    }
 
     private static int shader(int type, String src) {
         int s = GLES30.glCreateShader(type);
@@ -232,22 +237,65 @@ final class Streams {
     /** A plain texture `w` × `h` (made, or made anew at another size): its name. */
     private static int target(Stream s, int w, int h) {
         if (s.tex != 0 && s.texW == w && s.texH == h) return s.tex;
-        if (s.tex == 0) {
+        s.tex = plain(s.tex, w, h);
+        s.texW = w;
+        s.texH = h;
+        texture(s.id, s.tex);
+        return s.tex;
+    }
+
+    /** Plain texture `tex` (0: a new one) made `w` × `h`, as the renderer samples it: its name (GL thread). */
+    static int plain(int tex, int w, int h) {
+        if (tex == 0) {
             int[] t = {0};
             GLES30.glGenTextures(1, t, 0);
-            s.tex = t[0];
+            tex = t[0];
         }
         GLES30.glActiveTexture(GLES30.GL_TEXTURE1);
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, s.tex);
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, tex);
         GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR);
         GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
         GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
         GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
         GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA8, w, h, 0, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, null);
-        s.texW = w;
-        s.texH = h;
-        texture(s.id, s.tex);
-        return s.tex;
+        return tex;
+    }
+
+    /** A new external texture, for a SurfaceTexture on it: its name (GL thread). */
+    static int external() {
+        int[] t = {0};
+        GLES30.glGenTextures(1, t, 0);
+        GLES30.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, t[0]);
+        GLES30.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR);
+        GLES30.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
+        GLES30.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
+        GLES30.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
+        return t[0];
+    }
+
+    /**
+     * The frame latched on SurfaceTexture `st` (on external texture `ext`) drawn into plain texture `tex`, `w` × `h`,
+     * whole, its top in the texture's first row (GL thread): a stream's frame shown, a native view's picture
+     * (NativeViews.Picture).
+     */
+    static void blitFrame(SurfaceTexture st, int ext, int tex, int w, int h) {
+        blitProgram();
+        float[] m = new float[16];
+        st.getTransformMatrix(m);
+        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, blitFb);
+        GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0, GLES30.GL_TEXTURE_2D, tex, 0);
+        GLES30.glViewport(0, 0, w, h);
+        GLES30.glDisable(GLES30.GL_BLEND);
+        GLES30.glUseProgram(blit);
+        GLES30.glUniformMatrix4fv(blitMatrix, 1, false, m, 0);
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE3);
+        GLES30.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, ext);
+        GLES30.glBindVertexArray(0);
+        GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 3);
+        GLES30.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, 0);
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE0);
+        GLES30.glEnable(GLES30.GL_BLEND);
+        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
     }
 
     // ---- a stream ----
@@ -290,14 +338,7 @@ final class Streams {
         void surfaceAnew() {
             SurfaceTexture oldSt = st;
             Surface oldSurface = surface;
-            int[] t = {0};
-            GLES30.glGenTextures(1, t, 0);
-            ext = t[0];
-            GLES30.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, ext);
-            GLES30.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR);
-            GLES30.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
-            GLES30.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
-            GLES30.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
+            ext = external();
             st = new SurfaceTexture(ext);
             surface = new Surface(st);
             // the old one let go once the decoder drawing on it has stopped (on its thread)
@@ -334,24 +375,7 @@ final class Streams {
 
         /** The SurfaceTexture's frame, latched, drawn into the plain texture (GL thread). */
         void copy(int w, int h) {
-            blitProgram();
-            int t = target(this, w, h);
-            float[] m = new float[16];
-            st.getTransformMatrix(m);
-            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, blitFb);
-            GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0, GLES30.GL_TEXTURE_2D, t, 0);
-            GLES30.glViewport(0, 0, w, h);
-            GLES30.glDisable(GLES30.GL_BLEND);
-            GLES30.glUseProgram(blit);
-            GLES30.glUniformMatrix4fv(blitMatrix, 1, false, m, 0);
-            GLES30.glActiveTexture(GLES30.GL_TEXTURE3);
-            GLES30.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, ext);
-            GLES30.glBindVertexArray(0);
-            GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 3);
-            GLES30.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, 0);
-            GLES30.glActiveTexture(GLES30.GL_TEXTURE0);
-            GLES30.glEnable(GLES30.GL_BLEND);
-            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
+            blitFrame(st, ext, target(this, w, h), w, h);
         }
 
         /** A new GL context (GL thread): the textures of the old gone with it. A JPEG shown is uploaded again; the

@@ -5,12 +5,16 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.Bitmap;
-import android.graphics.Matrix;
+import android.graphics.Canvas;
+import android.graphics.PorterDuff;
+import android.graphics.SurfaceTexture;
 import android.media.MediaDataSource;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
+import android.opengl.GLES30;
 import android.provider.MediaStore;
-import android.view.TextureView;
+import android.view.Choreographer;
+import android.view.Surface;
 import android.view.View;
 import android.view.MotionEvent;
 import android.webkit.CookieManager;
@@ -63,17 +67,25 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Native views over the canvas (src/host/host_native.mbt `view_*`, src/ui/native.mbt). They live in `layer`, a
- * FrameLayout over the MBView in the view tree (so a WebView takes the touches on it) but under its surface on the
- * screen: the MBView's surface is on top of the window and translucent, and the app paints a hole (kind 9,
- * transparent) where a view shows, so what it paints after the hole draws over the view and what it paints around it
- * clips it. Each view sits in a clipping frame, moved by its translation: a page's or a site's frame is its content's
- * rect cut to its clip rect by its clip bounds; a video's is its clip rect, the picture at its content rect within it.
+ * Native views in the canvas (src/host/host_native.mbt `view_*`, src/ui/native.mbt). Each draws into a picture of its
+ * own (Picture: a SurfaceTexture of the app's GL context), which the canvas draws where the app paints the view (its
+ * instance of kind 9, whose image is MB_VIEW_TEX + its id: android_host.c), in the same frame as what is around it:
+ * the system never puts a view on the screen itself. What the app paints after the view draws over it, a clip it is
+ * painted in cuts it, and it moves with a list as the list moves, in step to the frame; moved, it costs nothing but
+ * that frame (no window drawn again, no page composited again).
  *
- * Kind 1, a video: Media3's ExoPlayer on a TextureView, reading the file through the app (ViewSource: ranged reads
- * the app answers through the core, `station.file.part` or `drive.read`), never from a file or a URL of its own.
+ * They live in `layer`, a FrameLayout over the MBView in the view tree, so a WebView takes the touches on it and is
+ * laid out, attached and shown as the system's views are; on the screen the MBView's surface is over it, and the
+ * views draw nothing in the window. Each sits in a frame (TouchFrame) put where it shows, moved by its translation, for
+ * the touches on it: a page's or a site's frame is its content's rect, the part of it seen its `seen`; a video's is its
+ * clip rect.
+ *
+ * Kind 1, a video: Media3's ExoPlayer onto its picture's surface, reading the file through the app (ViewSource:
+ * ranged reads the app answers through the core, `station.file.part` or `drive.read`), never from a file or a URL of
+ * its own.
  * Kind 2, a page of HTML in a WebView, as still.fail's Android app shows an HTML file (FilePreview.kt HtmlPage):
- * scripts on, no file or content access, no DOM storage, no link followed.
+ * scripts on, no file or content access, no DOM storage, no link followed. A page's and a site's frame draws its
+ * WebView into its picture (TouchFrame.draw) as the WebView changes, not as it moves.
  *
  * Called on the GL thread (MoonBit's); views are made and moved on the main thread.
  */
@@ -156,6 +168,8 @@ final class NativeViews {
         android.content.MutableContextWrapper context;
         TouchFrame clip;
         View content;
+        /** What it shows, drawn by the canvas (made on the GL thread as it opens). */
+        Picture picture;
         volatile boolean closed;
         // how it stands, for info (the GL thread reads these)
         volatile int state;
@@ -167,8 +181,8 @@ final class NativeViews {
         boolean pendingShown;
         boolean shown;
         private boolean told;
-        // (main thread) placed once where told and shown; its host done with it (ready or failed); its first frame so
-        // on the display said (VIEWDRAWN: scripts/host_contract.sh android views takes its picture then)
+        // (main thread) placed once where told and shown; its host done with it (ready or failed); its first picture
+        // since on the display said (VIEWDRAWN: scripts/host_contract.sh android views takes its picture then)
         private boolean placedOnce, doneOnce, drawnSaid;
 
         NView(int id, int kind) {
@@ -192,12 +206,19 @@ final class NativeViews {
             });
         }
 
-        /** Once placed and done: the next frame committed to the display with it said (VIEWDRAWN id), once. */
+        /**
+         * Once placed and done: the canvas's frame with its next picture (a page's drawn again now; a video's the
+         * frame it shows) said once it is on the display (VIEWDRAWN id, Picture.latch), once.
+         */
         void drawnWhenBoth() {
-            if (!placedOnce || !doneOnce || drawnSaid || clip == null || closed) return;
+            if (!placedOnce || !doneOnce || drawnSaid || clip == null || closed || picture == null) return;
             drawnSaid = true;
-            clip.getViewTreeObserver().registerFrameCommitCallback(() -> Host.log("VIEWDRAWN " + id));
-            clip.invalidate();
+            if (kind == 1) {
+                picture.sayAt = Math.max(1, picture.arrived.get());
+            } else {
+                clip.sayNext = true;
+                clip.invalidate();
+            }
         }
 
         /**
@@ -236,6 +257,16 @@ final class NativeViews {
         }
 
         void make(Context c) {}
+
+        /**
+         * Its picture made anew (a new GL context: Picture.make), on the main thread before the old one's surface is
+         * let go of: a page's or a site's frame drawn again on it, at its size.
+         */
+        void pictureAnew() {
+            picture.w = picture.h = 0;
+            picture.sent = 0;
+            if (clip != null) clip.invalidate();
+        }
 
         void moved() {}
 
@@ -343,15 +374,24 @@ final class NativeViews {
     }
 
     /**
-     * The frame a view sits in (its clip rect), which takes a finger as the app says (view_tell 2, ui's
-     * NativeView::touch): its view's ("all"); the canvas's (MBView: "through", none of it to the view); the view's
-     * until a second finger comes down ("pinch") or the finger has gone further up or down than across past the slop
-     * ("vertical"; a finger that went sideways past it first stays the view's to its end), the canvas's from there: the
-     * view told the touch is called off, the canvas given it from where it went down. A finger that goes down where the
-     * app draws something that takes a press over the view (view_tell 4: `covers`) is the canvas's.
+     * The frame a view sits in, which takes a finger as the app says (view_tell 2, ui's NativeView::touch): its view's
+     * ("all"); the canvas's (MBView: "through", none of it to the view); the view's until a second finger comes down
+     * ("pinch") or the finger has gone further up or down than across past the slop ("vertical"; a finger that went
+     * sideways past it first stays the view's to its end), the canvas's from there: the view told the touch is called
+     * off, the canvas given it from where it went down. A finger that goes down where the app draws something that
+     * takes a press over the view (view_tell 4: `covers`), or outside the part of it seen (`seen`), is the canvas's.
+     *
+     * It draws nothing in the window: a page's or a site's draws itself, its WebView in it, into its view's picture
+     * instead, whole (the part seen is the canvas's to cut), each time something in it changes (Flutter's
+     * PlatformViewWrapper draws a platform view so); a video's player draws into its picture itself.
      */
     static final class TouchFrame extends FrameLayout {
+        final NView owner;
         String mode = "all";
+        /** The part of it seen (its frame's pixels), null for all of it: a finger down outside is the canvas's. */
+        android.graphics.Rect seen;
+        /** Its next picture's frame said once it is on the display (NView.drawnWhenBoth). */
+        boolean sayNext;
         /** Where the app draws what takes a press over the view: x0 y0 x1 y1 …, the canvas's pixels. */
         float[] covers = new float[0];
         float slop;
@@ -360,17 +400,60 @@ final class NativeViews {
         /** The finger went sideways past the slop first (vertical): the page's to the end of the touch. */
         boolean sideways;
 
-        TouchFrame(Context c) {
+        TouchFrame(Context c, NView owner) {
             super(c);
+            this.owner = owner;
+            // (drawn by draw(), below, not only its children's dispatchDraw)
+            setWillNotDraw(false);
+        }
+
+        @Override
+        public void draw(Canvas canvas) {
+            NView v = owner;
+            Picture p = v.picture;
+            if (v.kind == 1 || v.closed || p == null) return;
+            SurfaceTexture st = p.st;
+            Surface s = p.surface;
+            int w = getWidth(), h = getHeight();
+            if (st == null || s == null || !s.isValid() || w <= 0 || h <= 0) return;
+            if (w != p.w || h != p.h) st.setDefaultBufferSize(w, h);
+            Canvas c;
+            try {
+                c = s.lockHardwareCanvas();
+            } catch (RuntimeException e) {
+                Host.log("view " + v.id + ": its picture not drawn: " + e);
+                return;
+            }
+            try {
+                c.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
+                super.draw(c);
+            } finally {
+                p.w = w;
+                p.h = h;
+                p.sent++;
+                s.unlockCanvasAndPost(c);
+            }
+            if (sayNext) {
+                sayNext = false;
+                p.sayAt = p.sent;
+            }
+        }
+
+        // (something in it changed, the WebView's page or how it is laid out or scaled: its picture drawn again; the
+        // window would draw only the view that changed, not this frame)
+        @Override
+        public void onDescendantInvalidated(View child, View target) {
+            super.onDescendantInvalidated(child, target);
+            invalidate();
         }
 
         @Override
         public boolean dispatchTouchEvent(MotionEvent e) {
             // (through: none of it is the view's; MBView, under this layer, is given it by the window)
             if (mode.equals("through")) return false;
-            // (a finger down on what its clip bounds cut away is not the view's: the window gives it to MBView)
+            // (a finger down on what is not seen of it is not the view's: the window gives it to MBView)
             if (e.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                android.graphics.Rect r = getClipBounds();
+                android.graphics.Rect r = seen;
                 if (r != null && !r.contains((int) e.getX(), (int) e.getY())) return false;
             }
             // (down under what the app draws over the view: the canvas's, the rest of the touch with it)
@@ -475,6 +558,9 @@ final class NativeViews {
         if (kind < 1 || kind > 3) return 0;
         int id = next.incrementAndGet();
         NView v = kind == 1 ? new Video(id, arg) : kind == 2 ? new Page(id, arg) : new Site(id, arg);
+        // (its picture's SurfaceTexture is of the GL context, made here, on its thread, before the view is)
+        v.picture = new Picture(id);
+        v.picture.make();
         views.put(id, v);
         Host.log("view " + id + ": open " + (kind == 1 ? "video " + arg : kind == 2 ? "page of " + arg.length() + " characters" : "site at " + arg));
         Host.main.post(() -> {
@@ -518,7 +604,7 @@ final class NativeViews {
             return;
         }
         v.context = new android.content.MutableContextWrapper(layer.getContext());
-        v.clip = new TouchFrame(v.context);
+        v.clip = new TouchFrame(v.context, v);
         v.clip.setClipChildren(true);
         v.clip.setBackgroundColor(kind == 1 ? Color.BLACK : kind == 2 ? Color.WHITE : Color.TRANSPARENT);
         v.clip.setVisibility(View.GONE);
@@ -559,9 +645,9 @@ final class NativeViews {
             int l = Math.round(to[4]), t = Math.round(to[5]);
             int cw = Math.max(0, Math.round(to[6]) - l), ch = Math.max(0, Math.round(to[7]) - t);
             // The frame moved by its translation, never by its margins: a layout each frame a list scrolls (a page
-            // in a message) dropped frames. A page's or a site's frame is its content's rect, cut to the clip by its
-            // clip bounds, so only a new size lays it out again; a video's is the clip's (its picture moved by the
-            // texture's transform).
+            // in a message) dropped frames. A page's or a site's frame is its content's rect, the part of it within
+            // the clip `seen`, so only a new size lays it out again (and draws its picture again); a video's is the
+            // clip's. Moved, nothing of it is drawn again: the canvas draws its picture where the app paints it.
             boolean whole = v.kind != 1;
             int fx = whole ? Math.round(to[0]) : l, fy = whole ? Math.round(to[1]) : t;
             int fw = whole ? Math.max(0, Math.round(to[2])) : cw, fh = whole ? Math.max(0, Math.round(to[3])) : ch;
@@ -575,43 +661,23 @@ final class NativeViews {
             }
             v.clip.setTranslationX(fx);
             v.clip.setTranslationY(fy);
-            if (whole) v.clip.setClipBounds(new android.graphics.Rect(l - fx, t - fy, l - fx + cw, t - fy + ch));
+            v.clip.seen = whole ? new android.graphics.Rect(l - fx, t - fy, l - fx + cw, t - fy + ch) : null;
             v.clip.setVisibility(shown && cw > 0 && ch > 0 ? View.VISIBLE : View.GONE);
             v.moved();
-            round(v);
-            // where it is now, in device pixels (scripts/host_contract.sh HOST views compares it with VIEWTOLD)
             if (shown) {
-                Host.log(String.format(java.util.Locale.ROOT, "VIEWAT %d %.4f %.4f %.4f %.4f %d %d %d %d %.4f", id, to[0],
-                        to[1], to[2], to[3], l, t, l + cw, t + ch, to[8]));
+                // where it is now, in device pixels (scripts/host_contract.sh HOST views compares it with VIEWTOLD),
+                // on a run's draw log only: not at each step of a scroll
+                if (drawLog()) Host.log(String.format(java.util.Locale.ROOT, "VIEWAT %d %.4f %.4f %.4f %.4f %d %d %d %d %.4f",
+                        id, to[0], to[1], to[2], to[3], l, t, l + cw, t + ch, to[8]));
                 v.placedOnce = true;
                 v.drawnWhenBoth();
             }
         }
     }
 
-    /**
-     * The content's corners round (at[8], pixels; 0 square): its clipping frame cut to the content's rect within it,
-     * rounded (an outline the render thread clips the frame's drawing to, whatever the view in it is: a page, a site,
-     * a video's texture), as the hole the app paints for it is.
-     */
-    private static void round(NView v) {
-        boolean on = v.at[8] > 0f;
-        if (on && !v.clip.getClipToOutline()) {
-            v.clip.setOutlineProvider(new android.view.ViewOutlineProvider() {
-                @Override
-                public void getOutline(View view, android.graphics.Outline o) {
-                    // (a page's or a site's frame is its content's rect: the content at its top left)
-                    boolean whole = v.kind != 1;
-                    int l = whole ? 0 : Math.round(v.at[0] - v.at[4]), t = whole ? 0 : Math.round(v.at[1] - v.at[5]);
-                    o.setRoundRect(l, t, l + Math.round(v.at[2]), t + Math.round(v.at[3]), v.at[8]);
-                }
-            });
-            v.clip.setClipToOutline(true);
-        } else if (!on && v.clip.getClipToOutline()) {
-            v.clip.setClipToOutline(false);
-            v.clip.setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);
-        }
-        if (on) v.clip.invalidateOutline();
+    /** Whether the run keeps a draw log (MBUI_DRAW_LOG): where each view is put said there. */
+    static boolean drawLog() {
+        return "1".equals(android.system.Os.getenv("MBUI_DRAW_LOG"));
     }
 
     /**
@@ -636,11 +702,187 @@ final class NativeViews {
         if (v == null) return;
         v.closed = true;
         Host.log("view " + id + ": closed (" + (long) v.bytes + " bytes given)");
+        // (no frame draws its picture from now on; its surface let go once nothing draws on it)
+        Picture p = v.picture;
+        int ext = p.drop();
         Host.main.post(() -> {
             v.destroy();
             // out of whichever layer it is in (an activity's other than the one resumed now, not yet moved)
             if (v.clip != null && v.clip.getParent() != null) ((android.view.ViewGroup) v.clip.getParent()).removeView(v.clip);
+            p.letGo(ext);
         });
+    }
+
+    // ---- the views' pictures ----
+
+    /** The texture the canvas draws view `id`'s picture with now (0: none; android_host.c's MB_VIEW_TEX + id). */
+    static native void texture(int id, int tex);
+
+    /** Pictures done with, their SurfaceTextures let go of on the GL thread as it next latches. */
+    private static final ConcurrentLinkedQueue<Object[]> doneWith = new ConcurrentLinkedQueue<>();
+
+    /**
+     * As a frame begins (MBView.onDrawFrame, GL thread): each view's new picture, if any, latched and drawn into its
+     * texture, for the frame to draw it where it shows; the SurfaceTextures done with let go.
+     */
+    static void latch() {
+        for (Object[] d; (d = doneWith.poll()) != null; ) {
+            ((SurfaceTexture) d[0]).release();
+            int ext = (Integer) d[1];
+            if (ext != 0) GLES30.glDeleteTextures(1, new int[] {ext}, 0);
+        }
+        for (NView v : views.values()) {
+            Picture p = v.picture;
+            if (p != null) p.latch();
+        }
+    }
+
+    /**
+     * A new GL context (android_host.c images_lost, GL thread): each picture made anew in it, its producer drawing on
+     * the new one (a page's frame drawn again; a video's player put on it).
+     */
+    static void lost() {
+        // (the copy into a picture's texture made anew too: Streams' own, there may be no stream to say so)
+        Streams.blitLost();
+        for (NView v : views.values()) {
+            Picture p = v.picture;
+            if (p == null || v.closed) continue;
+            SurfaceTexture oldSt = p.st;
+            Surface oldSurface = p.surface;
+            p.make();
+            Host.main.post(() -> {
+                if (!v.closed) v.pictureAnew();
+                oldSurface.release();
+                doneWith.add(new Object[] {oldSt, 0});
+                Host.requestFrame();
+            });
+        }
+    }
+
+    /**
+     * What a view shows, drawn by the canvas where the app paints the view (its instance of kind 9, whose image is
+     * MB_VIEW_TEX + its id), in the frame with what is around it. Its producer (a page's or a site's frame,
+     * TouchFrame.draw; a video's player) draws on `surface`, a SurfaceTexture of the app's GL context; the frames it
+     * sends are latched as the canvas's next frame begins (latch), the last drawn into a plain texture of its size, as
+     * a stream's frame is (Streams.blitFrame). The canvas is asked only to draw its last frame again with it
+     * (MBView.pictureFrame), not the app for a frame of its own: the view's place is the same.
+     */
+    static final class Picture {
+        final int id;
+        /** Its SurfaceTexture and the surface on it its producer draws on (made on the GL thread, read on any). */
+        volatile SurfaceTexture st;
+        volatile Surface surface;
+        // (GL thread) the external texture under the SurfaceTexture; the plain texture drawn, and its size
+        private int ext, tex, texW, texH;
+        /** The frames that have come on its SurfaceTexture, and those of them latched (GL thread). */
+        final AtomicInteger arrived = new AtomicInteger();
+        private int latched;
+        /** The size of the frames its producer sends (pixels): a page's frame's, a video's picture's. */
+        volatile int w, h;
+        /** The frames a page's frame has sent (main thread). */
+        int sent;
+        /** Once this many of its frames are latched, the frame showing them said on the display (VIEWDRAWN; 0: not asked). */
+        volatile int sayAt;
+
+        Picture(int id) {
+            this.id = id;
+        }
+
+        /** Its SurfaceTexture made (anew) on a new external texture of the context there is (GL thread). */
+        void make() {
+            ext = Streams.external();
+            SurfaceTexture t = new SurfaceTexture(ext);
+            arrived.set(0);
+            latched = 0;
+            // (said on the main thread; one from a SurfaceTexture let go is not this one's)
+            t.setOnFrameAvailableListener(x -> {
+                if (st != t) return;
+                arrived.incrementAndGet();
+                MBView m = Host.view;
+                if (m != null) m.pictureFrame();
+            }, Host.main);
+            st = t;
+            surface = new Surface(t);
+            if (tex != 0) texture(id, 0);
+            tex = 0;
+            texW = texH = 0;
+        }
+
+        /** Its frames come since the last latched, the last of them drawn into its texture (GL thread). */
+        void latch() {
+            SurfaceTexture t = st;
+            int a = arrived.get();
+            int pw = w, ph = h;
+            if (t != null && a > latched && pw > 0 && ph > 0) {
+                boolean got = true;
+                for (; latched < a; latched++) {
+                    try {
+                        t.updateTexImage();
+                    } catch (RuntimeException e) {
+                        // (the picture stays as it was)
+                        Host.log("view " + id + ": updateTexImage: " + e);
+                        got = false;
+                        latched = a;
+                        break;
+                    }
+                }
+                if (got) {
+                    if (tex == 0 || texW != pw || texH != ph) {
+                        tex = Streams.plain(tex, pw, ph);
+                        texW = pw;
+                        texH = ph;
+                    }
+                    Streams.blitFrame(t, ext, tex, pw, ph);
+                    texture(id, tex);
+                }
+            }
+            int say = sayAt;
+            if (say > 0 && latched >= say && tex != 0) {
+                sayAt = 0;
+                // drawn as this frame, swapped as it ends, taken by the compositor at the next vsync, shown by the one
+                // after (MBView's SHOT)
+                Host.main.post(() -> Choreographer.getInstance().postFrameCallback(f ->
+                        Choreographer.getInstance().postFrameCallback(g -> Host.log("VIEWDRAWN " + id))));
+            }
+        }
+
+        /** The view closed (GL thread): no frame draws it from now on. Its external texture, let go of with it. */
+        int drop() {
+            texture(id, 0);
+            if (tex != 0) GLES30.glDeleteTextures(1, new int[] {tex}, 0);
+            tex = 0;
+            return ext;
+        }
+
+        /** Its producer stopped (main thread): its surface let go of, its SurfaceTexture and `ext` on the GL thread. */
+        void letGo(int ext) {
+            Surface s = surface;
+            SurfaceTexture t = st;
+            st = null;
+            surface = null;
+            if (s != null) s.release();
+            if (t != null) doneWith.add(new Object[] {t, ext});
+            Host.requestFrame();
+        }
+
+        /**
+         * What it shows now, its texture's pixels, its top row first (GL thread); null when it has shown nothing.
+         */
+        Bitmap read() {
+            if (tex == 0 || texW <= 0 || texH <= 0) return null;
+            int[] fb = {0};
+            GLES30.glGenFramebuffers(1, fb, 0);
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fb[0]);
+            GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0, GLES30.GL_TEXTURE_2D, tex, 0);
+            java.nio.ByteBuffer px = java.nio.ByteBuffer.allocateDirect(texW * texH * 4).order(java.nio.ByteOrder.nativeOrder());
+            GLES30.glReadPixels(0, 0, texW, texH, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, px);
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
+            GLES30.glDeleteFramebuffers(1, fb, 0);
+            Bitmap b = Bitmap.createBitmap(texW, texH, Bitmap.Config.ARGB_8888);
+            px.rewind();
+            b.copyPixelsFromBuffer(px);
+            return b;
+        }
     }
 
     static void control(int id, int op, double value) {
@@ -879,7 +1121,6 @@ final class NativeViews {
         long waitSince = -1;
         double waitBytes;
         ExoPlayer player;
-        TextureView texture;
         final Runnable tick = new Runnable() {
             @Override
             public void run() {
@@ -1320,32 +1561,45 @@ final class NativeViews {
         }
 
         /**
-         * The frame showing now, the texture's (its content at the video's proportions, not the transform the app's
-         * zoom puts on it), at most `side` pixels on its longer side, as a JPEG: `still` once it is made (main thread).
+         * The frame showing now, its picture's (its content at the video's proportions, not the transform the app's
+         * zoom puts on it), at most `side` pixels on its longer side, as a JPEG: `still` once it is made (main thread;
+         * read on the GL thread).
          * As still.fail's Android app keeps the frame a video was left at (VideoViewer.kt frameOut: getBitmap).
          */
         void grabShown(double side) {
             stillState = 1;
             still = new byte[0];
-            Bitmap b = null;
-            if (texture != null && framed > 0 && nw > 0 && nh > 0) {
-                double k = Math.min(1.0, side / Math.max(nw, nh));
+            Picture p = picture;
+            if (p == null || framed <= 0 || nw <= 0 || nh <= 0) {
+                grabbedShown(null, 0, 0);
+                return;
+            }
+            double k = Math.min(1.0, side / Math.max(nw, nh));
+            int gw = Math.max(1, (int) Math.round(nw * k)), gh = Math.max(1, (int) Math.round(nh * k));
+            Host.view.toGL(() -> {
+                Bitmap b = null;
                 try {
-                    b = texture.getBitmap(Math.max(1, (int) Math.round(nw * k)), Math.max(1, (int) Math.round(nh * k)));
+                    b = p.read();
                 } catch (RuntimeException e) {
                     Host.log("view " + id + ": the frame shown not grabbed: " + e);
                 }
-            }
+                grabbedShown(b, gw, gh);
+            });
+        }
+
+        /** The frame shown, read (null: none), made a JPEG of `gw` × `gh` on a thread of its own. */
+        private void grabbedShown(Bitmap b, int gw, int gh) {
             if (b == null) {
                 stillState = -1;
                 Native.tell(Native.OUTSIDE_GRAB, id, -1);
                 return;
             }
-            Bitmap shot = b;
             new Thread(() -> {
+                Bitmap shot = Bitmap.createScaledBitmap(b, gw, gh, true);
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
                 shot.compress(Bitmap.CompressFormat.JPEG, 90, out);
-                shot.recycle();
+                if (shot != b) shot.recycle();
+                b.recycle();
                 still = out.toByteArray();
                 stillState = 2;
                 Host.log("view " + id + ": the frame shown grabbed (" + still.length + " bytes)");
@@ -1362,15 +1616,12 @@ final class NativeViews {
                 java.io.File[] left = new java.io.File(cacheDir, "mbui-views").listFiles();
                 if (left != null) for (java.io.File f : left) f.delete();
             }
-            texture = new TextureView(c);
-            clip.addView(texture, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT));
-            texture.addOnLayoutChangeListener((view, l, t, r, b, ol, ot, or, ob) -> moved());
             // the frames between a key frame and the one a seek goes to decoded without being put out (Android 14 on:
             // MediaCodec's decode-only flag), so an exact seek gets there sooner
             player = new ExoPlayer.Builder(c, new DefaultRenderersFactory(c).experimentalSetEnableMediaCodecBufferDecodeOnlyFlag(true)).build();
             player.setSeekParameters(SeekParameters.EXACT);
-            player.setVideoTextureView(texture);
+            // its frames onto its picture, which the canvas draws where the app puts the video
+            player.setVideoSurface(picture.surface);
             player.addListener(new Player.Listener() {
                 @Override
                 public void onPlaybackStateChanged(int s) {
@@ -1421,6 +1672,9 @@ final class NativeViews {
                     if (s.width > 0 && s.height > 0) {
                         nw = s.width * s.pixelWidthHeightRatio;
                         nh = s.height;
+                        // (its picture as large as its frames, drawn at the video's proportions where the app puts it)
+                        picture.w = s.width;
+                        picture.h = s.height;
                         Host.requestFrame();
                     }
                 }
@@ -1450,14 +1704,8 @@ final class NativeViews {
         }
 
         @Override
-        void moved() {
-            // the picture where the app puts it, within the clip: the texture fills the clip, its transform makes it
-            // the picture's rect (as the Android app's VideoViewer does)
-            if (texture == null || texture.getWidth() == 0 || texture.getHeight() == 0) return;
-            Matrix m = new Matrix();
-            m.setScale(at[2] / texture.getWidth(), at[3] / texture.getHeight());
-            m.postTranslate(at[0] - at[4], at[1] - at[5]);
-            texture.setTransform(m);
+        void pictureAnew() {
+            if (player != null) player.setVideoSurface(picture.surface);
         }
 
         @Override
@@ -1602,6 +1850,9 @@ final class NativeViews {
             s.setAllowFileAccess(false);
             s.setAllowContentAccess(false);
             s.setDomStorageEnabled(false);
+            // all of its page drawn, not only what was on the screen as it last drew: its picture is moved by the
+            // canvas, the page not told (a page scrolled in from off the screen shows whole)
+            s.setOffscreenPreRaster(true);
             bridge(web);
             web.setWebViewClient(new WebViewClient() {
                 @Override
@@ -1870,6 +2121,8 @@ final class NativeViews {
             st.setDomStorageEnabled(true);
             st.setAllowFileAccess(false);
             st.setAllowContentAccess(false);
+            // (all of its page drawn, as a page's: its picture is moved by the canvas)
+            st.setOffscreenPreRaster(true);
             CookieManager.getInstance().setAcceptCookie(true);
             bridge(web);
             web.setWebViewClient(new WebViewClient() {
