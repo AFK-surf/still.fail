@@ -4,10 +4,10 @@
 
 ///|
 /// A phone as narrow as most get (`w` across), newchat-crowded's page (`mode`) risen over it.
-fn crowded(mode : String, w? : Double = crowded_w) -> @ui.Tester {
+fn crowded(mode : String, w? : Double = crowded_w, h? : Double = crowded_h) -> @ui.Tester {
   reset()
   let src = fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=crowded_h, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=2)
   open_mode(mode)
   t.draw()
   t.run_for(@ui.nav_rise_ms)
@@ -19,6 +19,10 @@ let crowded_w : Double = 360.0
 
 ///|
 let crowded_h : Double = 780.0
+
+///|
+/// A phone's window too short for all of the crowded model's panel.
+let crowded_short : Double = 600.0
 
 ///|
 /// The narrowest phones (320 across: as narrow as a 349 one with its words 15% bigger, the person's of 2026-10-26).
@@ -99,48 +103,70 @@ test "narrow: each frequent combination on one line in the window, a long one le
 }
 
 ///|
-/// Whether words `name` are laid out whole (as wide as they advance, none cut short) inside `r` across.
-fn whole_in(t : @ui.Tester, name : String, r : (Double, Double, Double, Double)) -> Bool {
-  let (x, _, w, _) = r
+/// The rectangle of the words `name` drawn in the sheet (`sheet`), whole (as wide as they advance).
+fn words_whole(t : @ui.Tester, name : String, sheet : (Double, Double, Double, Double)) -> (Double, Double, Double, Double)? {
+  let (sx, sy, sw, sh) = sheet
   t
   .boxes()
   .iter()
-  .any(fn(b) {
+  .find_first(fn(b) {
     b.kind == "text" &&
     b.text == name &&
-    b.x >= x - 0.5 &&
-    b.x + b.w <= x + w + 0.5 &&
+    b.y >= sy &&
+    b.y < sy + sh &&
+    b.x >= sx &&
+    b.x + b.w <= sx + sw + 0.5 &&
     b.w >= @ui.text_advance(name, size=b.font_size, weight=b.weight) - 0.5
   })
+  .map(fn(b) { (b.x, b.y, b.w, b.h) })
 }
 
 ///|
-test "narrow: the model's panel lays the runtimes and how hard it thinks under the models, every name whole, the sheet as tall as its most" {
-  let t = crowded("newchat-crowded-model")
+test "narrow: the model's panel has the models across it, every name whole, the runtime and how hard it thinks as selects under them in view as they scroll" {
+  // (a window too short for all of it)
+  let t = crowded("newchat-crowded-model", h=crowded_short)
   run_to_sheet_rest(t)
   let sheet = t.get(@ui.Dialog).rect
   let (_, _, _, sh) = sheet
-  // more than the window has room for: the sheet as tall as its most, scrolling as one
-  assert_true((sh - crowded_h * @sf.sheet_most).abs() < 1.0, msg="the sheet is \{sh} high")
-  // the models, the runtimes, how hard it thinks: their rows in the sheet, their names whole in them
-  let names = [
-    "Opus 5.5", "GPT-6 Astra", "DeepSeek V4.1 Flash", "Grok 4.7 Build Fast", "Kimi For Coding", "SWE-2", "Claude Code",
-    "Codex", "DeepSeek Harness", "默认", "高",
-  ]
-  for name in names {
-    let row = t.get(Button, label=name).rect
-    assert_true(row.0 >= sheet.0 && row.0 + row.2 <= sheet.0 + sheet.2, msg="\{name}: \{row} out of \{sheet}")
-    assert_true(whole_in(t, name, row), msg="\{name} not whole in its row")
+  // more than the window has room for: the sheet as tall as its most
+  assert_true((sh - crowded_short * @sf.sheet_most).abs() < 1.0, msg="the sheet is \{sh} high")
+  // the models' names whole
+  for name in ["Opus 5.5", "GPT-6 Astra", "DeepSeek V4.1 Flash", "Grok 4.7 Build Fast"] {
+    assert_true(words_whole(t, name, sheet) is Some(_), msg="\{name} not whole in the sheet")
   }
-  // the runtimes and how hard it thinks under the models (the last of them over them)
-  let swe = t.get(Button, label="SWE-2").rect
-  for name in ["Claude Code", "DeepSeek Harness", "默认", "高"] {
-    assert_true(t.get(Button, label=name).rect.1 > swe.1, msg="\{name} not under the models")
+  // the runtime and how hard it thinks: selects side by side under the models, their words whole, in the sheet
+  let runtime = t.get(Button, label="运行时: DeepSeek Harness").rect
+  let effort = t.get(Button, label="思考深度: 高").rect
+  let model = t.get(Button, label="Opus 5.5").rect
+  assert_true(runtime.1 > model.1 && (runtime.1 - effort.1).abs() < 0.5 && effort.0 > runtime.0 + runtime.2)
+  assert_true(runtime.1 + runtime.3 <= sheet.1 + sh && effort.0 + effort.2 <= sheet.0 + sheet.2)
+  assert_true(words_whole(t, "DeepSeek Harness", sheet) is Some(_), msg="DeepSeek Harness not whole")
+  // the models scrolled: the selects where they were
+  let mx = model.0 + model.2 / 2.0
+  t.drag(mx, runtime.1 - 40.0, mx, model.1 + 40.0)
+  t.run_for(@kit.presence_in_ms)
+  assert_true(t.get(Button, label="运行时: DeepSeek Harness").rect == runtime, msg="the runtime moved with the models")
+  assert_true(t.get(Button, label="思考深度: 高").rect == effort, msg="how hard it thinks moved with the models")
+  assert_true(t.get(Button, label="Opus 5.5").rect.1 < model.1, msg="the models did not scroll")
+}
+
+///|
+test "narrow, few models: the same panel, its one runtime's select not to be pressed" {
+  let t = crowded("newchat-model")
+  run_to_sheet_rest(t)
+  let sheet = t.get(@ui.Dialog).rect
+  let model = t.get(Button, label="GPT-6").rect
+  let runtime = t.get(Button, label="运行时: Claude Code")
+  assert_true(runtime.disabled)
+  assert_true(runtime.rect.1 > model.1)
+  assert_true(t.get(Button, label="思考深度: 高").rect.1 > model.1)
+  for name in ["Opus 5.5", "Sonnet 5", "GPT-6", "Claude Code", "高"] {
+    assert_true(words_whole(t, name, sheet) is Some(_), msg="\{name} not whole in the sheet")
   }
 }
 
 ///|
-test "wide: the model's panel beside its control has the models, the runtimes and how hard it thinks side by side" {
+test "wide: the model's panel beside its control has room for all three columns: the models, the runtimes, how hard it thinks side by side" {
   let src = fixture_app("newchat-crowded-model")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
   t.run_for(squeeze_opening)
@@ -149,4 +175,6 @@ test "wide: the model's panel beside its control has the models, the runtimes an
   let effort = t.get(Button, label="高").rect
   assert_true(runtime.0 > model.0 + model.2, msg="\{model} \{runtime}")
   assert_true(effort.0 > runtime.0 + runtime.2, msg="\{runtime} \{effort}")
+  // (no selects for them: they are not said twice)
+  assert_true(t.query(Button, label="运行时: DeepSeek Harness") is None)
 }

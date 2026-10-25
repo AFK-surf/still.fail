@@ -1473,10 +1473,6 @@ pub let found_start : @ui.Space = Exact(22.0)
 pub let grow : @ui.Len = Grow(1.0)
 
 ///|
-/// The models' column of a model's picker beside what goes with it (NewChat.kt openRunPicker: weight(1.35f)).
-pub let models_grow : @ui.Len = Grow(1.35)
-
-///|
 /// Words on one line given the room left in their row, cut there with an ellipsis (Compose's Text with maxLines = 1
 /// in a Row: measured in what is left).
 pub let line_left : @ui.Size = Fill(1.0)
