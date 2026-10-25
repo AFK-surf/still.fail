@@ -1532,14 +1532,16 @@ pub fn Ctx::field_edit(self : Ctx, id : Int, what : Int, paste? : String = "") -
 ///|
 /// Tells the host what the menu bar's editing items can do now (@hostapi.edit_can), said again only when it changes:
 /// the focused field's (what its right-click menu offers, and its edits to undo and do again, none while the input
-/// method composes), else copy where words are picked with the pointer.
+/// method composes), and copy where words are picked with the pointer (the field focused or not).
 fn Ctx::sync_edit_can(self : Ctx) -> Unit {
+  let pointer = if selected_words() != "" { @hostapi.text_menu_copy } else { 0 }
   let can = match self.editors.get(self.focus) {
     Some(st) =>
       st.can() |
+      pointer |
       (if st.undos.length() > 0 && st.marked == "" { @hostapi.text_menu_undo } else { 0 }) |
       (if st.redos.length() > 0 && st.marked == "" { @hostapi.text_menu_redo } else { 0 })
-    None => if selected_words() != "" { @hostapi.text_menu_copy } else { 0 }
+    None => pointer
   }
   if can == self.edit_can_told {
     return

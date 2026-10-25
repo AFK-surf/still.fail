@@ -642,6 +642,35 @@ test "wide: a right click in a chat as the desktop app's: a link's 在浏览器�
 }
 
 ///|
+test "wide: words picked in a message are what ⌘C copies while the composer keeps the focus" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  t.run_for(history_fade_ms)
+  let (fx, fy) = match t.find("发消息") {
+    Some(at) => at
+    None => fail("no composer")
+  }
+  t.tap(fx, fy)
+  t.type_text("发布前再看一眼")
+  t.frame()
+  for _ in 0..<12 {
+    match t.run_rects("第二屏的插画") {
+      [(_, y, _, _), ..] if y > 100.0 && y < 600.0 => break
+      _ => t.wheel(900.0, 400.0, -200.0)
+    }
+  }
+  t.run_for(history_fade_ms)
+  let (px, py, pw, ph) = words_rect(t, "第二屏的插画")
+  t.drag(px + 1.0, py + ph / 2.0, px + pw - 1.0, py + ph / 2.0)
+  t.frame()
+  assert_eq(t.ctx().selected_text(), "第二屏的插画")
+  assert_true(t.ctx().field_focused())
+  t.key(@ui.key_code_copy, mods=@ui.mod_cmd)
+  t.frame()
+  assert_eq(t.clipboard(), "第二屏的插画")
+}
+
+///|
 test "wide: a right click on the composer's words as the desktop app's: 剪切, 复制, 粘贴, 全选 as they can be done" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")

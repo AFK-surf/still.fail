@@ -602,6 +602,18 @@ fn selected_words() -> String {
 }
 
 ///|
+/// Whether the focused field has words of its own picked (copied before those picked with the pointer).
+fn field_picks(c : Ctx) -> Bool {
+  match c.editors.get(c.focus) {
+    Some(st) => {
+      let (a, b) = st.sel()
+      a != b
+    }
+    None => false
+  }
+}
+
+///|
 /// A paragraph that can be picked, as painted (rich.mbt paint_rich).
 fn selectable_painted(
   base : Int,

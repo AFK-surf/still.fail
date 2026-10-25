@@ -247,6 +247,44 @@ test "desktop: words of a selectable paragraph are picked by a drag and copied; 
 }
 
 ///|
+test "desktop: with a field focused, words picked with the pointer are what ⌘C copies; picking them lets go of the field's" {
+  let f = @ui.Field::new(text="draft words")
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.mouse_drags_lists(false)
+      c.column(w=Fill(1.0), fn() {
+        c.editor("e", field=f, font_size=10.0) |> ignore
+        c.box(h=Px(40.0), fn() {  }) |> ignore
+        // (in a row of its own, as a chat's message is: a press on it is the row's, which leaves the field its focus)
+        c.selectable(fn() {
+          c.box(id=c.id("row"), fn() { c.rich([@ui.plain("hello wide world")], size=15.0) |> ignore }) |> ignore
+        })
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+  )
+  t.draw()
+  t.tap(14.0, 14.0)
+  t.key(@ui.key_code_select_all, mods=@ui.mod_cmd)
+  assert_eq(f.selection(), (0, 11))
+  let (_, y, _, h) = t.rect_of("hello wide world").unwrap()
+  t.drag(1.0, y + h / 2.0, 200.0, y + h / 2.0)
+  // the field keeps the focus, what it had picked let go of
+  assert_true(t.ctx().editor_focused("e"))
+  assert_eq(f.selection(), (11, 11))
+  assert_eq(t.ctx().selected_text(), "hello wide world")
+  assert_true((t.edit_can() & @hostapi.text_menu_copy) != 0)
+  t.key(@ui.key_code_copy, mods=@ui.mod_cmd)
+  assert_eq(t.clipboard(), "hello wide world")
+  // words picked in the field again: theirs
+  t.key(@ui.key_code_select_all, mods=@ui.mod_cmd)
+  t.key(@ui.key_code_copy, mods=@ui.mod_cmd)
+  assert_eq(t.clipboard(), "draft words")
+}
+
+///|
 test "desktop: a press on what keeps the words picked (a quote of them) leaves them picked; a press elsewhere lets them go" {
   let pressed = Ref(0)
   let t = @ui.Tester::new(
