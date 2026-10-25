@@ -44,7 +44,16 @@ export class RenewRefused extends Error {
 
 export function readConsole(home: string): ConsoleLogin | null {
   try {
-    const j: Json = JSON.parse(readFileSync(join(home, CONSOLE_FILE), "utf8"));
+    return consoleIn(readFileSync(join(home, CONSOLE_FILE), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+/// What a sign-in's file says (`readConsole`).
+export function consoleIn(file: string): ConsoleLogin | null {
+  try {
+    const j: Json = JSON.parse(file);
     if (typeof j?.access !== "string" || typeof j?.refresh !== "string" || typeof j?.expiresAt !== "number") return null;
     const text = (v: unknown) => (typeof v === "string" && v !== "" ? v : null);
     return { access: j.access, refresh: j.refresh, expiresAt: j.expiresAt, org: text(j.org), email: text(j.email), workspace: text(j.workspace) };

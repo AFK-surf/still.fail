@@ -404,6 +404,28 @@ describe("the accounts routes", { concurrency: true }, () => {
     await s.close();
   });
 
+  test("a profile's home is read on the thread for its first view alone; what changes in it shows once read again off the thread, ten seconds on", async () => {
+    // Its time moves only as the test says.
+    const time = testClock();
+    const data = temp("homes-read");
+    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "sx", runtime: "codex", home: "homes/sx", access: { kind: "subscription" } }], connects: [] }));
+    const t = await rig({ data, clock: time.clock });
+    assert.deepEqual([t.view("sx")!.homeExists, t.view("sx")!.email], [false, null]);
+    // Signed in from a terminal: nothing told the station.
+    const home = join(data, "homes", "sx");
+    mkdirSync(home, { recursive: true });
+    const claims = Buffer.from(JSON.stringify({ email: "b@x.com" })).toString("base64url");
+    writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { id_token: `h.${claims}.s` } }));
+    assert.deepEqual([t.view("sx")!.homeExists, t.view("sx")!.email], [false, null], "as last read: not read on the thread again");
+    await time.adjust(10_000);
+    const seen = await upon((wake) => t.accounts.onChange(wake), () => {
+      const v = t.view("sx")!;
+      return v.email === "b@x.com" && v.homeExists;
+    }, "the home read again");
+    assert.ok(seen);
+    await t.close();
+  });
+
   test("a profile just made has its allowance read at once, without waiting for a round", async () => {
     const quota = { n: 0 };
     // Its time never moves: no round comes.
