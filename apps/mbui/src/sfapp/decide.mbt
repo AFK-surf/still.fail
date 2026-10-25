@@ -15,12 +15,6 @@ priv enum Sheet {
   JobsOf(ChatRef)
   /// one job, by its id (Jobs.kt openJob)
   JobOf(ChatRef, String)
-  /// renaming the chat (ChatInfo.kt askTitle): its thread and its name as it was
-  Rename(ChatRef, Double?, String)
-  /// what can be done to an agent's context (AgentSheet.kt openContext): its session
-  ContextOf(ChatRef, String)
-  /// asking before an agent's context is cleared (AgentSheet.kt, PageParts.kt confirm): its session
-  ClearContext(ChatRef, String)
   /// what its agents and other chats' wrote each other (Letters.kt openLetters): its thread
   LettersOf(ChatRef, Double)
 }
@@ -367,9 +361,6 @@ fn sheets(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     AgentOf(r, key) => agent_sheet(c, src, w, r, key)
     JobsOf(r) => jobs_sheet(c, src, r)
     JobOf(r, id) => job_sheet(c, src, r, id)
-    Rename(r, thread, was) => rename_sheet(c, src, r, thread, was)
-    ContextOf(r, key) => context_sheet(c, src, r, key)
-    ClearContext(r, key) => clear_context_sheet(c, src, r, key)
     LettersOf(r, thread) => letters_sheet(c, src, r, thread)
   }
 }

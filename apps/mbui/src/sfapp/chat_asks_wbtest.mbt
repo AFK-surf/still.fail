@@ -1,0 +1,43 @@
+// The chat's questions through the library's presenters (sheets.mbt open_rename, context.mbt open_context): its name
+// asked (@sf.ask, an empty one said too: named anew), its agent's context compacted or cleared (@sf.panel), clearing
+// asked first (@sf.confirm).
+
+///|
+test "renaming the chat: asked for its name, an empty one said too (named anew, as its note says)" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-info")
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  open_rename(decide_src.val.unwrap(), r, Some(7.0), "整理发布清单", from=Unanchored)
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("重命名对话") is Some(_), msg="its question")
+  for _ in 0..<12 {
+    t.press("Backspace")
+  }
+  t.frame()
+  t.tap_text("保存")
+  t.run_for(@ui.nav_push_ms)
+  let sent = named(calls, "chat.rename")
+  assert_eq(sent.length(), 1)
+  assert_eq(text(Some(sent[0].params), "title"), "")
+  assert_eq(text(Some(sent[0].params), "session"), "s-c1")
+}
+
+///|
+test "an agent's context: its tile opens what can be done; clearing it asked first, cleared once it is said" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-agent-unsaid")
+  let tile = if t.find("压缩上下文") is Some(_) { "压缩上下文" } else { "上下文" }
+  t.tap_text(tile)
+  t.run_for(@ui.nav_push_ms)
+  assert_true(@sf.presenting(), msg="what can be done to it")
+  t.tap_text("清空上下文")
+  // (to where the presenters' sheet rests: the panel's gone down, the question's up in its place)
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  // asked first: nothing cleared yet, its action the one 清空上下文 there is
+  assert_true(t.find("清空此 agent 的上下文？") is Some(_), msg="the question")
+  assert_eq(t.locate("清空上下文").length(), 1)
+  assert_eq(named(calls, "session.clear").length(), 0)
+  t.tap_text("清空上下文")
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(named(calls, "session.clear").length(), 1)
+}

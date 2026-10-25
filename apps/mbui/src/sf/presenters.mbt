@@ -54,9 +54,9 @@ priv enum Shows {
   Panel(PanelOf)
   /// a confirm: its title, what it does, its action, whether that cannot be undone, what goes on once it is said
   Confirm(String, String, String, Bool, () -> Unit)
-  /// a question: its title, the line at first, its placeholder, its action, the hint under it, whether a secret, what
-  /// goes on with the line (trimmed)
-  Ask(String, String, String, String, String, Bool, (String) -> Unit)
+  /// a question: its title, the line at first, its placeholder, its action, the hint under it, whether a secret,
+  /// whether an empty line can be said, what goes on with the line (trimmed)
+  Ask(String, String, String, String, String, Bool, Bool, (String) -> Unit)
 }
 
 ///|
@@ -475,7 +475,8 @@ pub fn confirm(
 ///|
 /// Asks for a line (PageParts.kt ask): `title`, a field (`value` in it at first, `placeholder` while it is empty,
 /// `hint` under it, as dots when `secret`), the cancel and `action`, which can be pressed once the line has words that
-/// differ from `value` (Enter too). Said, it closes and `run` goes on with the line, trimmed.
+/// differ from `value` (Enter too); `empty`: an empty line too, where that says something (`hint` says what: a name
+/// cleared to be given again). Said, it closes and `run` goes on with the line, trimmed.
 pub fn ask(
   title : String,
   action : String,
@@ -484,9 +485,16 @@ pub fn ask(
   placeholder? : String = "",
   hint? : String = "",
   secret? : Bool = false,
+  empty? : Bool = false,
   from? : Anchor = Unanchored,
 ) -> Unit {
-  present(Ask(title, value, placeholder, action, hint, secret, run), from, line=value)
+  present(Ask(title, value, placeholder, action, hint, secret, empty, run), from, line=value)
+}
+
+///|
+/// Whether a question's line can be said (ask): words other than it had at first, or none where `empty` lets it.
+fn ask_can(words : String, value : String, empty : Bool) -> Bool {
+  (words != "" || empty) && words != value
 }
 
 ///|
@@ -586,7 +594,7 @@ fn how_of(shows : Shows, from : Anchor, sheet : Bool) -> How {
     (true, _) => AsSheet
     (false, Panel(x)) if from == Unanchored || x.form => AsDialog
     (false, Menu(_, _, _) | Pick(_, _, _, _) | Panel(_)) => AsPopover
-    (false, Confirm(_, _, _, _, _) | Ask(_, _, _, _, _, _, _)) => AsDialog
+    (false, Confirm(_, _, _, _, _) | Ask(_, _, _, _, _, _, _, _)) => AsDialog
   }
 }
 
@@ -611,8 +619,8 @@ fn draw_presented_as(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
     Panel(x) if p.from == Unanchored || x.form => panel_centred(c, key, p, x)
     Panel(x) => panel_popover(c, key, p, x)
     Confirm(title, words, action, danger, run) => confirm_centred(c, key, p, title, words, action, danger, run)
-    Ask(title, value, placeholder, action, hint, secret, run) =>
-      ask_centred(c, key, p, title, value, placeholder, action, hint, secret, run)
+    Ask(title, value, placeholder, action, hint, secret, empty, run) =>
+      ask_centred(c, key, p, title, value, placeholder, action, hint, secret, empty, run)
   }
 }
 
@@ -974,6 +982,7 @@ fn ask_centred(
   action : String,
   hint : String,
   secret : Bool,
+  empty : Bool,
   run : (String) -> Unit,
 ) -> (Bool, Bool) {
   let words = Ref(p.line.text().trim(chars=" \t\n").to_string())
@@ -990,7 +999,7 @@ fn ask_centred(
       if hint != "" {
         c.text(hint, style=field_hint) |> ignore
       }
-      if f.submitted && words.val != "" && words.val != value {
+      if f.submitted && ask_can(words.val, value, empty) {
         said = true
       }
     },
@@ -998,7 +1007,7 @@ fn ask_centred(
       if button(c, t("common.cancel"), key=key + "/cancel", tone=Ghost) {
         close_from_serial(p.serial)
       }
-      if button(c, action, key=key + "/go", tone=Primary, disabled=words.val == "" || words.val == value) {
+      if button(c, action, key=key + "/go", tone=Primary, disabled=!ask_can(words.val, value, empty)) {
         said = true
       }
     },
@@ -1109,7 +1118,7 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
   let share = match p.shows {
     Pick(_, choices, _, _) if choices.length() >= pick_search_from => Some(sheet_long_pick)
     Confirm(_, _, _, _, _) => Some(sheet_confirm)
-    Ask(_, _, _, _, _, _, _) => Some(sheet_ask)
+    Ask(_, _, _, _, _, _, _, _) => Some(sheet_ask)
     // (a form as tall as it is, as its dialog is: its buttons at its foot under what it holds, not at the foot of a
     // share with room between)
     Panel(x) if x.tall > 0.0 && !x.form => Some(x.tall)
@@ -1351,7 +1360,7 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
       })
       |> ignore
     }
-    Ask(title, value, placeholder, action, hint, secret, run) => {
+    Ask(title, value, placeholder, action, hint, secret, empty, run) => {
       sheet_title(c, title)
       c.box(style=sheet_words_at, fn() {
         let f = @kit.text_field(
@@ -1369,7 +1378,7 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
         if hint != "" {
           c.text(hint, style=sheet_hint) |> ignore
         }
-        let can = words != "" && words != value
+        let can = ask_can(words, value, empty)
         c.box(style=sheet_actions, fn() {
           if button(c, t("common.cancel"), key=key + "/cancel") {
             close_from_serial(p.serial)

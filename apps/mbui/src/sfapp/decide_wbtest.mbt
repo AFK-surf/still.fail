@@ -1,6 +1,10 @@
 // Slice 8 over a fake core: the fixture's topics (decide_fixture.mbt's modes), its calls kept for the test to look at.
 
 ///|
+/// The made-up core decide_core's Tester was last given (what a test opens something over it with).
+let decide_src : Ref[Source?] = Ref(None)
+
+///|
 /// The app over the fixture in `mode` (its pages opened as sffix opens them), its calls kept in `calls` and answered;
 /// in a desktop's window when `wide`.
 fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false) -> @ui.Tester {
@@ -19,6 +23,7 @@ fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false) -> @ui.
       }
     },
   }
+  decide_src.val = Some(src)
   if mode.has_prefix("chat") {
     open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   }

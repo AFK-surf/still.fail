@@ -20,14 +20,14 @@ priv struct ContextTile {
 
 ///|
 /// The card's entry for its context (canCompact, canClear), none when nothing can be done to it.
-fn context_entry(c : @ui.Ctx, r : ChatRef, key : String, s : Json?) -> ContextTile? {
+fn context_entry(c : @ui.Ctx, src : Source, r : ChatRef, key : String, s : Json?) -> ContextTile? {
   if !flag(s, "canCompact") && !flag(s, "canClear") {
     return None
   }
   let compacting = context_key("session.compact", r.station, key)
   let clearing = context_key("session.clear", r.station, key)
   Some({
-    open: fn() { open_sheet(c, ContextOf(r, key)) },
+    open: fn() { open_context(src, r, key) },
     busy: doing(compacting) || doing(clearing),
     failed: failed_lately(c, compacting) || failed_lately(c, clearing),
     compacts: flag(s, "canCompact"),
@@ -63,15 +63,14 @@ fn context_tile_name(c : @ui.Ctx, name : String, open : ContextTile?) -> Unit {
 }
 
 ///|
-/// What can be done to its context by hand (AgentSheet.kt openContext), in the card's place: compacted, or cleared
-/// (asked first in a sheet of its own).
-fn context_sheet(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit {
-  let s = field(agent_json((src.topic)("chat", chat_params(r)).value, key), "session")
-  sheet_frame(c, "context", c.height * 0.34, fit=true, fn() {
-    sheet_head(c, tr("web-pages.chat.context"))
+/// What can be done to its context by hand (AgentSheet.kt openContext), the library's panel: compacted, or cleared
+/// (asked first: @sf.confirm).
+fn open_context(src : Source, r : ChatRef, key : String) -> Unit {
+  @sf.panel(tr("web-pages.chat.context"), from=Unanchored, fn(c, close) {
+    let s = field(agent_json((src.topic)("chat", chat_params(r)).value, key), "session")
     if flag(s, "canCompact") &&
       @sf.choice_row(c, "context/compact", false, tr("web-pages.chat.compact"), note=tr("web-mobile.agent.compactSub")) {
-      close_sheet(c)
+      close()
       let params : Json = { "station": Json::string(r.station), "key": Json::string(key) }
       // told once the frame's builds are over, not while this one builds
       c.after_build("context/compact", fn() {
@@ -80,39 +79,18 @@ fn context_sheet(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit {
     }
     if flag(s, "canClear") &&
       @sf.choice_row(c, "context/clear", false, tr("web-pages.chat.clear"), note=tr("web-mobile.agent.clearSub"), ink=@sf.theme().p.red) {
-      open_sheet(c, ClearContext(r, key))
-    }
-  })
-}
-
-///|
-/// Asks before its context is cleared (PageParts.kt confirm, with `what`): the sheet goes as it is answered, the row
-/// shows it under way, a failure said by a toast.
-fn clear_context_sheet(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit {
-  sheet_frame(c, "clear-context", c.height * 0.36, fit=true, fn() {
-    sheet_head(c, tr("web-pages.chat.clearConfirm"))
-    c.box(style=clear_context_body, fn() {
-      c.text(tr("web-pages.chat.clearBody"), style=clear_context_words) |> ignore
-      c.box(style=clear_context_actions, fn() {
-        if sheet_button(c, "clear-context/cancel", tr("common.cancel"), false, true) {
-          close_sheet(c)
-        }
-        if sheet_button(c, "clear-context/clear", tr("web-pages.chat.clear"), true, true) {
-          close_sheet(c)
-          c.after_build("context/clear", fn() {
-            act(
-              src,
-              tr("web-pages.chat.clear"),
-              context_key("session.clear", r.station, key),
-              "session.clear",
-              { "station": Json::string(r.station), "key": Json::string(key) },
-            )
-          })
-        }
+      close()
+      // asked first (PageParts.kt confirm): the row shows it under way, a failure said by a toast
+      @sf.confirm(tr("web-pages.chat.clearConfirm"), tr("web-pages.chat.clearBody"), tr("web-pages.chat.clear"), danger=true, fn() {
+        act(
+          src,
+          tr("web-pages.chat.clear"),
+          context_key("session.clear", r.station, key),
+          "session.clear",
+          { "station": Json::string(r.station), "key": Json::string(key) },
+        )
       })
-      |> ignore
-    })
-    |> ignore
+    }
   })
 }
 
@@ -125,15 +103,3 @@ let tile_name : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=M
 // kept across runs: a value (no field of it changes)
 let tile_name_row : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
 
-///|
-/// The sheet that asks (PageParts.kt confirm): 20 in from its sides, its words muted (14/20), its buttons at the end.
-// kept across runs: a value (no field of it changes)
-let clear_context_body : @ui.Style = @ui.css("w=Full px=S5 gap=S2_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let clear_context_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)
-
-///|
-// kept across runs: a value (no field of it changes)
-let clear_context_actions : @ui.Style = @ui.css("row w=Full pt=S1_5 pb=S6 gap=S2 justify=JEnd")

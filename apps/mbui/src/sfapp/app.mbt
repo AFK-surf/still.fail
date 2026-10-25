@@ -134,8 +134,6 @@ fn reset() -> Unit {
   // the composer: its ids counted from the start, what waits for it
   next_pending.val = 1
   quote_fields.clear()
-  rename_field.set("")
-  rename_given.val = ""
   share_files_made.val = 0
   fix_fetches.clear()
   // a drive's files, a text read (keep.mbt, drive_reader.mbt)

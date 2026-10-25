@@ -355,7 +355,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
         if open {
           let id = c.id("info/rename")
           if c.clicked(id) {
-            open_sheet(c, Rename(r, opt_number(thread, "id"), title))
+            open_rename(src, r, opt_number(thread, "id"), title, from=Of(id))
           }
           c.box(
             w=Px(32.0),
@@ -600,109 +600,30 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
 }
 
 ///|
-/// The rename sheet's words (its field shows them), and the chat they were given the name of ("" none yet: given the
-/// next time it is shown).
-let rename_field : @ui.Field = @ui.Field::new()
-
-///|
-let rename_given : Ref[String] = Ref("")
-
-///|
-/// Renaming the chat (ChatInfo.kt askTitle): a field with its name, 取消 and 保存 (an empty name gives it back its
-/// first message); the sheet goes as it is saved, the core showing the new name at once.
-fn rename_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double?, was : String) -> Unit {
-  let t = @sf.theme()
-  let key = "rename/field"
-  sheet_frame(c, "rename", c.height * 0.42, fn() {
-    let whose = r.station + "/" + r.session
-    if rename_given.val != whose {
-      rename_given.val = whose
-      rename_field.set(was)
-      c.focus_editor(key)
-    }
-    sheet_head(c, tr("android-chat.rename.title"))
-    c.box(w=Fill(1.0), padx=20.0, gap=10.0, fn() {
-      let mut now = was
-      c.box(
-        w=Fill(1.0),
-        padx=14.0,
-        pady=12.0,
-        radius=12.0,
-        bg=t.p.card,
-        border=1.0,
-        border_color=t.p.line,
-        fn() {
-          let res = c.editor(
-            key,
-            placeholder=tr("android-chat.rename.field"),
-            font_size=15.0,
-            line=21.0,
-            max_lines=3,
-            plain=true,
-            color=t.p.text,
-            placeholder_color=t.p.subtle,
-            caret_color=t.p.accent,
-            enter_sends=false,
-            field=rename_field,
-          )
-          now = res.text
-        },
-      )
-      |> ignore
-      c.text(tr("android-chat.rename.note"), size=t.t.caption, color=t.p.muted, line=17.0) |> ignore
-      c.box(dir=Row, w=Fill(1.0), pt=6.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
-        if sheet_button(c, "rename/cancel", tr("common.cancel"), false, true) {
-          rename_field.set("")
-          rename_given.val = ""
-          close_sheet(c)
-        }
-        let title = now.trim(chars=" \n\t").to_string()
-        if sheet_button(c, "rename/save", tr("common.save"), true, title != was) {
-          rename_field.set("")
-          rename_given.val = ""
-          close_sheet(c)
-          let p : Map[String, Json] = {
-            "station": Json::string(r.station),
-            "session": Json::string(r.session),
-            "title": Json::string(title),
-          }
-          match thread {
-            Some(th) => p["thread"] = Json::number(th)
-            None => ()
-          }
-          act(src, tr("android-chat.rename.verb"), "", "chat.rename", Json::object(p))
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-}
-
-///|
-/// A sheet's button (Controls.kt Button): the ink with the page's colour on it when `primary`, the chip otherwise.
-fn sheet_button(c : @ui.Ctx, key : String, label : String, primary : Bool, enabled : Bool) -> Bool {
-  let t = @sf.theme()
-  let id = c.id(key)
-  let ground = if primary { t.p.text } else { t.p.chip }
-  c.box(
-    padx=18.0,
-    pady=10.0,
-    radius=12.0,
-    opacity=if enabled { 1.0 } else { 0.4 },
-    bg=ground,
-    id~,
-    fn() {
-      c.text(label, size=t.t.ui, weight=600, color=if primary { t.p.bg } else { t.p.text }, wrap=false)
-      |> ignore
-      // Controls.kt Button: clickable over its clip
-      if enabled {
-        @motion.ripple(c, id, 12.0)
+/// The chat renamed (ChatInfo.kt askTitle), asked for its name as it was (@sf.ask): said, the core's `chat.rename`.
+fn open_rename(src : Source, r : ChatRef, thread : Double?, was : String, from~ : @sf.Anchor) -> Unit {
+  @sf.ask(
+    tr("android-chat.rename.title"),
+    tr("common.save"),
+    fn(title) {
+      let p : Map[String, Json] = {
+        "station": Json::string(r.station),
+        "session": Json::string(r.session),
+        "title": Json::string(title),
       }
+      match thread {
+        Some(th) => p["thread"] = Json::number(th)
+        None => ()
+      }
+      act(src, tr("android-chat.rename.verb"), "", "chat.rename", Json::object(p))
     },
+    value=was,
+    placeholder=tr("android-chat.rename.field"),
+    hint=tr("android-chat.rename.note"),
+    // (empty: named anew, as its note says)
+    empty=true,
+    from~,
   )
-  |> ignore
-  c.clicked(id) && enabled
 }
 
 // ── an agent's card (AgentSheet.kt) ─────────────────────────────────────
@@ -743,7 +664,7 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
       })
       |> ignore
       agent_lines(c, card)
-      let entry = context_entry(c, r, key, s)
+      let entry = context_entry(c, src, r, key, s)
       agent_tiles(c, card, 14.0, entry~)
       agent_notes(c, card, 10.0)
       c.box(h=Px(12.0), fn() {  }) |> ignore
