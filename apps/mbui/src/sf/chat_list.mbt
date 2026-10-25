@@ -215,8 +215,8 @@ let touch_band_in : Double = 16.0
 let touch_band_pad : Double = 12.0
 
 ///|
-/// Where a list stands: in a side column beside a page (the wide frame's sidebar, on the tape or a computer's), or
-/// across the whole screen (a phone's home). How far in its rows are and whether their grounds are rounded follow it,
+/// Where a list stands: in a side column beside a page (the wide frame's sidebar, on the tape or a computer's) or a
+/// panel over it (⌘K's), or across the whole screen (a phone's home, its search). How far in its rows are and whether their grounds are rounded follow it,
 /// not the screen's kind (asked, 2026-10-25: a touch device's square rows, lit, in a tape's sidebar beside 新建对话's
 /// round ground).
 pub(all) enum ListAt {
@@ -266,6 +266,53 @@ pub fn list_heading_in(at : ListAt) -> @ui.Style {
 let whole_heading_in : @ui.Style = @ui.css("px=S5")
 
 ///|
+/// How far in a found line is and its corner, where its list stands: in a side column or a panel (⌘K's, the tape's
+/// sidebar's search) 12 in, rounded as a menu's row (Switcher.css.ts: 12 in); across the whole screen the phone's
+/// (mFound: 22 at the left, 16 at the right), square.
+pub fn found_row_in(at : ListAt) -> @ui.Style {
+  match at {
+    Side => found_side_row
+    Whole => found_whole_row
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let found_side_row : @ui.Style = @ui.style(px=S3, radius=InnerOr(row_radius))
+
+///|
+// kept across runs: a value (no field of it changes)
+let found_whole_row : @ui.Style = @ui.style(pl=found_start, pr=S4)
+
+///|
+/// How far in a found list's quiet words are (none found, the stations still answering, what the core says): as its
+/// lines' words, in a side column or a panel 12, across the whole screen the phone's 22.
+pub fn found_line_in(at : ListAt) -> @ui.Style {
+  match at {
+    Side => found_side_in
+    Whole => found_whole_in
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let found_side_in : @ui.Style = @ui.css("px=S3")
+
+///|
+// kept across runs: a value (no field of it changes)
+let found_whole_in : @ui.Style = @ui.style(px=found_start)
+
+///|
+/// How far in a found kind's heading is: in a side column or a panel as its lines' words (12), across the whole
+/// screen the phone's section header's (20).
+pub fn found_head_in(at : ListAt) -> @ui.Style {
+  match at {
+    Side => found_side_in
+    Whole => whole_heading_in
+  }
+}
+
+///|
 /// A touch device's chat row's height and its title's line (mobile/Home.css.ts mChatRow, mChatLine1).
 pub let touch_list_row_h : Double = 66.0
 
@@ -306,7 +353,8 @@ pub(all) struct Found {
   two_h : Double
   head_h : Double
   quiet_h : Double
-  /// a line (chosen by the keys: on the words' tint), one of two lines
+  /// a line (chosen by the keys: on the words' tint), one of two lines (how far in and whether rounded: where the
+  /// list stands, found_row_in)
   row : @ui.Style
   two : @ui.Style
   /// its mark's box, an icon's size and an agent's maker's in it
@@ -325,10 +373,11 @@ pub(all) struct Found {
   meta : @ui.TextStyle
   /// 全部结果 and 查看更多
   link : @ui.TextStyle
-  /// a kind's heading
+  /// a kind's heading (how far in: found_head_in)
   head : @ui.Style
   head_words : @ui.TextStyle
-  /// quiet words (none found), the stations still answering (one that failed closer), what the core says
+  /// quiet words (none found), the stations still answering (one that failed closer), what the core says (how far
+  /// in: found_line_in)
   quiet : @ui.Style
   quiet_words : @ui.TextStyle
   wait : @ui.Style
@@ -346,28 +395,8 @@ pub let mouse_found : Found = {
   two_h: 54.0,
   head_h: 32.0,
   quiet_h: 54.0,
-  row: @ui.style(
-    row=true,
-    w=Full,
-    min_h=Fixed(mouse_found_row_h),
-    px=S3,
-    py=S2,
-    gap=S2_5,
-    align=ACenter,
-    radius=InnerOr(row_radius),
-    selected=@ui.patch(bg=Tint),
-  ),
-  two: @ui.style(
-    row=true,
-    w=Full,
-    min_h=Fixed(mouse_found_row_h),
-    px=S3,
-    py=S2,
-    gap=S2_5,
-    align=AStart,
-    radius=InnerOr(row_radius),
-    selected=@ui.patch(bg=Tint),
-  ),
+  row: @ui.style(row=true, w=Full, min_h=Fixed(mouse_found_row_h), py=S2, gap=S2_5, align=ACenter, selected=@ui.patch(bg=Tint)),
+  two: @ui.style(row=true, w=Full, min_h=Fixed(mouse_found_row_h), py=S2, gap=S2_5, align=AStart, selected=@ui.patch(bg=Tint)),
   mark: @ui.css("w=S5 h=S5 align=ACenter justify=JCenter"),
   icon: 16.0,
   logo: 18.0,
@@ -380,12 +409,12 @@ pub let mouse_found : Found = {
   under_words: @ui.text_style(size=Sm, color=Muted, max_lines=1, w=grow),
   meta: @ui.text_style(size=Xs, color=Muted, wrap=false),
   link: @ui.text_style(size=Sm, color=Link, wrap=false, w=grow),
-  head: @ui.css("w=Full px=S3 pt=S2_5 pb=S1"),
+  head: @ui.css("w=Full pt=S2_5 pb=S1"),
   head_words: @ui.text_style(size=Xs, color=Muted, wrap=false),
-  quiet: @ui.css("w=Full px=S3 py=S3_5"),
+  quiet: @ui.css("w=Full py=S3_5"),
   quiet_words: @ui.text_style(size=Sm, color=Muted),
-  wait: @ui.css("w=Full px=S3 pt=S2 pb=S2_5"),
-  wait_failing: @ui.css("w=Full px=S3 pt=S2 pb=S2_5"),
+  wait: @ui.css("w=Full pt=S2 pb=S2_5"),
+  wait_failing: @ui.css("w=Full pt=S2 pb=S2_5"),
   said_words: @ui.text_style(size=Xs, color=Muted, w=Full),
 }
 
@@ -399,8 +428,8 @@ pub let touch_found : Found = {
   two_h: touch_found_two_h,
   head_h: 41.0,
   quiet_h: 44.0,
-  row: @ui.style(row=true, w=Full, min_h=Fixed(touch_found_row_h), pl=found_start, pr=S4, gap=S3, align=ACenter),
-  two: @ui.style(row=true, w=Full, min_h=Fixed(touch_found_two_h), pl=found_start, pr=S4, gap=S3, align=ACenter),
+  row: @ui.style(row=true, w=Full, min_h=Fixed(touch_found_row_h), gap=S3, align=ACenter),
+  two: @ui.style(row=true, w=Full, min_h=Fixed(touch_found_two_h), gap=S3, align=ACenter),
   mark: @ui.css("w=S5 h=S5 align=ACenter justify=JCenter"),
   icon: 18.0,
   logo: 18.0,
@@ -413,12 +442,12 @@ pub let touch_found : Found = {
   under_words: @ui.text_style(size=Base, leading=L6, color=Muted, max_lines=1, w=grow),
   meta: @ui.text_style(size=Xs, color=Muted, wrap=false),
   link: @ui.text_style(size=Base, color=Link, wrap=false, w=grow),
-  head: @ui.css("w=Full px=S5 pt=S3_5 pb=S1_5"),
+  head: @ui.css("w=Full pt=S3_5 pb=S1_5"),
   head_words: @ui.text_style(size=Lg, weight=Semibold, color=Fg, wrap=false),
-  quiet: @ui.style(w=Full, px=found_start, py=S4),
+  quiet: @ui.css("w=Full py=S4"),
   quiet_words: @ui.text_style(size=Base, color=Muted, w=Full),
-  wait: @ui.style(w=Full, px=found_start, py=S3),
-  wait_failing: @ui.style(w=Full, px=found_start, py=S1_5),
+  wait: @ui.css("w=Full py=S3"),
+  wait_failing: @ui.css("w=Full py=S1_5"),
   said_words: @ui.text_style(size=Sm, leading=L5, color=Muted, w=Full),
 }
 

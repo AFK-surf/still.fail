@@ -60,7 +60,7 @@ fn home_page(
     if away > 0.0 {
       c.look(bar, { ..@ui.still_look, alpha: 1.0 - away })
     }
-    @sfpages.chats_search(c, src, w, status_top())
+    @sfpages.chats_search(c, src, w, status_top(), Whole)
   })
   |> ignore
 }

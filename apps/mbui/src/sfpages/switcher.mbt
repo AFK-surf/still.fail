@@ -406,7 +406,8 @@ fn pickable(l : FindLine) -> Bool {
 /// The search's list in the box it is given, for workspace `w`: what the words in the field find and what of `offered`
 /// can be done by them; with nothing typed the latest chats where `idle_chats`. `most`: as tall as its lines up to so
 /// much (⌘K's panel), else the box's height. `close`: what the frame does as a line opens (⌘K closes; the phone's page
-/// stays under the chat). ↑ / ↓ choose a line.
+/// stays under the chat). ↑ / ↓ choose a line. `at`: where its list stands (a panel's, ⌘K's, as a side column's; the
+/// phone's search across the whole screen), its lines in and rounded so.
 pub fn finder_list(
   c : @ui.Ctx,
   src : Source,
@@ -415,6 +416,7 @@ pub fn finder_list(
   close : () -> Unit,
   idle_chats? : Bool = false,
   most? : Double,
+  at? : @sf.ListAt = Side,
 ) -> Unit {
   let f = @sf.theme().chat_list
   let query = finder.query.trim(chars=" \t\n\r\u{3000}").to_string()
@@ -478,7 +480,7 @@ pub fn finder_list(
       let lk = "switcher/row/" + finder_key(line)
       let k = pick_of[i]
       if k < 0 {
-        quiet_line(c, line)
+        quiet_line(c, line, at)
         return
       }
       let id = c.id(lk)
@@ -490,7 +492,7 @@ pub fn finder_list(
       if f.keys && c.lit(id) {
         finder.chosen = k
       }
-      found_line(c, lk, id, line, f.keys && k == finder.chosen, several)
+      found_line(c, lk, id, line, f.keys && k == finder.chosen, several, at)
     },
     h~,
   )
@@ -533,15 +535,19 @@ fn finder_h(l : FindLine, f : @sf.Found) -> Double {
 
 ///|
 /// What is not chosen: a kind's heading, none found, the stations still answering, what the core says.
-fn quiet_line(c : @ui.Ctx, line : FindLine) -> Unit {
+fn quiet_line(c : @ui.Ctx, line : FindLine, at : @sf.ListAt) -> Unit {
   let f = @sf.theme().chat_list.found
+  let inn = @sf.found_line_in(at)
   match line {
-    Head(words) => c.box(style=f.head, fn() { c.text(words, style=f.head_words) |> ignore }) |> ignore
-    Note(words) => c.box(style=f.quiet, fn() { c.text(words, style=f.quiet_words) |> ignore }) |> ignore
+    Head(words) =>
+      c.box(style=f.head.then(@sf.found_head_in(at)), fn() { c.text(words, style=f.head_words) |> ignore }) |> ignore
+    Note(words) => c.box(style=f.quiet.then(inn), fn() { c.text(words, style=f.quiet_words) |> ignore }) |> ignore
     Wait(words, error) =>
-      c.box(style=if error { f.wait_failing } else { f.wait }, fn() { @sf.wait_line(c, words, key="search", error~) })
+      c.box(style=(if error { f.wait_failing } else { f.wait }).then(inn), fn() {
+        @sf.wait_line(c, words, key="search", error~)
+      })
       |> ignore
-    Said(words) => c.box(style=f.wait, fn() { c.text(words, style=f.said_words) |> ignore }) |> ignore
+    Said(words) => c.box(style=f.wait.then(inn), fn() { c.text(words, style=f.said_words) |> ignore }) |> ignore
     _ => ()
   }
 }
@@ -552,7 +558,16 @@ fn quiet_line(c : @ui.Ctx, line : FindLine) -> Unit {
 /// words) where it says one. A chat its agent's maker, a message its chat's; a station its mark; something else its
 /// kind's icon; a command its icon, its keys at its end; 全部结果 and 查看更多 in the link's ink. `chosen`: by the keys,
 /// on the words' tint; pressed, rippled where a finger presses. `several`: more than one station, so where is said.
-fn found_line(c : @ui.Ctx, key : String, id : Int, line : FindLine, chosen : Bool, several : Bool) -> Unit {
+/// `list_at`: where its list stands, the line in and rounded so (@sf.found_row_in).
+fn found_line(
+  c : @ui.Ctx,
+  key : String,
+  id : Int,
+  line : FindLine,
+  chosen : Bool,
+  several : Bool,
+  list_at : @sf.ListAt,
+) -> Unit {
   let t = @sf.theme()
   let f = t.chat_list.found
   let two = match line {
@@ -602,7 +617,7 @@ fn found_line(c : @ui.Ctx, key : String, id : Int, line : FindLine, chosen : Boo
     |> ignore
   }
   let at = fn(station : String) { if several { station } else { "" } }
-  c.box(style=if two { f.two } else { f.row }, selected=chosen, id~, fn() {
+  c.box(style=(if two { f.two } else { f.row }).then(@sf.found_row_in(list_at)), selected=chosen, id~, fn() {
     match line {
       Back => {
         mark("chevron-left")
