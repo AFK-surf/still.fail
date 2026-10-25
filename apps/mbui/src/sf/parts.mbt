@@ -2269,11 +2269,12 @@ pub fn choices(
           })
           |> ignore
           // (parts.css.ts choiceExtra: 14 in at its sides, 12 over and 14 under what it holds; no line over it: only
-          // a menu's parts are set apart by one, docs/ui-panels.md)
+          // a menu's parts are set apart by one, docs/ui-panels.md. Narrow, its rows each a ground pressed whole: those
+          // a step of the ladder in from its sides and foot, round as that step, their words their own padding in)
           match extra.bind(fn(f) { f(v) }) {
             Some(f) if s.on =>
-              c.box(style=choice_extra, fn() {
-                c.box(style=choice_extra_in, fn() {
+              c.box(style=if look() is Narrow { choice_extra_rows } else { choice_extra }, fn() {
+                c.box(style=if look() is Narrow { choice_extra_rows_in } else { choice_extra_in }, fn() {
                   // (on the choice as on a card: a row's ground there rounds in its corners, in_card)
                   in_card.val += 1
                   f()
@@ -2318,6 +2319,16 @@ let choice_extra : @ui.Style = @ui.css("w=Full px=S3_5")
 ///|
 // kept across runs: a value (no field of it changes)
 let choice_extra_in : @ui.Style = @ui.css("w=Full pt=S3 pb=S3_5")
+
+///|
+/// Narrow, where what it holds are rows each a ground pressed whole: those a step of the ladder in from the choice's
+/// sides and its foot (corner_inset), round as that step (in_card: Inner), concentric with its corners.
+// kept across runs: a value (no field of it changes)
+let choice_extra_rows : @ui.Style = @ui.style(w=Full, px=inset_room)
+
+///|
+// kept across runs: a value (no field of it changes)
+let choice_extra_rows_in : @ui.Style = @ui.style(w=Full, pt=S3, pb=inset_room)
 
 ///|
 // kept across runs: a value (no field of it changes)
