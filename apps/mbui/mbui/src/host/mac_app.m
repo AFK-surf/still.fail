@@ -814,17 +814,24 @@ static void run_script_step(int step) {
 // each move told before the next is made, and a button not moved again while it is being moved). So the buttons are
 // placed again once AppKit is done, before the window shows it (buttons_moved), never between its moves: placed
 // then, from the places they had then, they were left apart unevenly and the last one where AppKit had put it.
-// Not while the system has them: from as it starts taking the window full screen till it has given it back (its own
-// bar there).
-static bool buttons_system, buttons_placing, buttons_due;
+// Not while the window is full screen or on its way there (full_screen_on: the system's own bar there), nor while
+// their title bar is not in the window (in full screen it is in a window of the system's).
+static bool buttons_placing, buttons_due;
 static double buttons_step;
+
+// Whether the window is full screen or on its way there: from as the system starts taking it there (WillEnter) till it
+// starts bringing it back (WillExit), or it did not go (MBAppDelegate). What the app lays out by (its top row with the
+// buttons or without: mb_host_window_inset; the window's corners), where the buttons are, follow it from the start of
+// the system's move, so the move shows the window as it will be: told at the move's end, the app changed its layout
+// once the window was back, a jump after it.
+static bool full_screen_on;
 
 static void place_buttons(NSWindow *w) {
   NSButton *close = [w standardWindowButton:NSWindowCloseButton];
   NSButton *mini = [w standardWindowButton:NSWindowMiniaturizeButton];
   NSButton *zoom = [w standardWindowButton:NSWindowZoomButton];
   NSView *bar = close.superview.superview;
-  if (!setup_inset || !close || !bar || buttons_system || (w.styleMask & NSWindowStyleMaskFullScreen)) return;
+  if (!setup_inset || !close || !bar || full_screen_on || bar.window != w) return;
   // (what is laid out while they are placed is this placing's own doing: not told again)
   buttons_placing = true;
   double bh = close.frame.size.height, h = bh + 2 * 15.0;
@@ -853,15 +860,17 @@ static void buttons_moved(NSWindow *w) {
   CFRunLoopWakeUp(CFRunLoopGetMain());
 }
 
-// The buttons the app's again: the window back from full screen, or it did not go (MBAppDelegate).
-static void buttons_back(NSWindow *w) {
-  buttons_system = false;
-  place_buttons(w);
+// The window full screen or going there (on), or a window or on its way back: the app drawn again for it, the buttons
+// placed in its top row again.
+static void full_screen_going(NSWindow *w, bool on) {
+  full_screen_on = on;
+  if (!on) buttons_moved(w);
+  [the_view requestFrame];
 }
 
 // The buttons placed as the window opens (as far apart as AppKit has them then), and again whenever AppKit lays their
 // title bar's container or one of them out anew (NSViewFrameDidChangeNotification), whatever made it, not after each
-// thing known to do it; the system's from as the window starts going full screen till it is back (or did not go).
+// thing known to do it; and once the window is back from full screen, their title bar in it again.
 static void watch_buttons(NSWindow *w) {
   NSButton *close = [w standardWindowButton:NSWindowCloseButton];
   NSButton *mini = [w standardWindowButton:NSWindowMiniaturizeButton];
@@ -874,10 +883,8 @@ static void watch_buttons(NSWindow *w) {
     [nc addObserverForName:NSViewFrameDidChangeNotification object:v queue:nil
                 usingBlock:^(NSNotification *n) { buttons_moved(w); }];
   }
-  [nc addObserverForName:NSWindowWillEnterFullScreenNotification object:w queue:nil
-              usingBlock:^(NSNotification *n) { buttons_system = true; }];
   [nc addObserverForName:NSWindowDidExitFullScreenNotification object:w queue:nil
-              usingBlock:^(NSNotification *n) { buttons_back(w); }];
+              usingBlock:^(NSNotification *n) { buttons_moved(w); }];
   place_buttons(w);
 }
 
@@ -893,21 +900,21 @@ void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_
   setup_inset = inset;
 }
 
-// Whether the window's buttons are in the app's top row now (an inset window, not full screen).
+// Whether the window's buttons are in the app's top row now (an inset window, not full screen nor going there).
 int32_t mb_host_window_inset(void) {
   NSWindow *w = the_view.window;
-  return setup_inset && w && !(w.styleMask & NSWindowStyleMaskFullScreen) ? 1 : 0;
+  return setup_inset && w && !full_screen_on ? 1 : 0;
 }
 
-// Whether the window fills the screen now (@hostapi.full_screen), and made to or back (as its green button does).
+// Whether the window fills the screen now or is going to (@hostapi.full_screen), and made to or back (as its green
+// button does).
 int32_t mb_host_full_screen(void) {
-  NSWindow *w = the_view.window;
-  return w && (w.styleMask & NSWindowStyleMaskFullScreen) ? 1 : 0;
+  return the_view.window && full_screen_on ? 1 : 0;
 }
 
 void mb_host_set_full_screen(int32_t on) {
   NSWindow *w = the_view.window;
-  if (w && (on != 0) != ((w.styleMask & NSWindowStyleMaskFullScreen) != 0)) [w toggleFullScreen:nil];
+  if (w && (on != 0) != full_screen_on) [w toggleFullScreen:nil];
 }
 
 // How round the system draws the window's corners (@hostapi.window_corner), in points: what AppKit's own frame of it
@@ -915,7 +922,7 @@ void mb_host_set_full_screen(int32_t on) {
 // where it says nothing, by the system's version (16 since macOS 26, 10 before). None filling the screen.
 double mb_host_window_corner(void) {
   NSWindow *w = the_view.window;
-  if (!w || (w.styleMask & NSWindowStyleMaskFullScreen)) return 0;
+  if (!w || full_screen_on) return 0;
   SEL s = NSSelectorFromString(@"_cornerRadius");
   if ([w respondsToSelector:s]) {
     NSMethodSignature *sig = [w methodSignatureForSelector:s];
@@ -1404,7 +1411,10 @@ static void bring_back(void) {
   return NO;
 }
 - (void)windowDidFailToEnterFullScreen:(NSWindow *)w {
-  buttons_back(w);
+  full_screen_going(w, false);
+}
+- (void)windowDidFailToExitFullScreen:(NSWindow *)w {
+  full_screen_going(w, true);
 }
 - (BOOL)applicationShouldHandleReopen:(NSApplication *)app hasVisibleWindows:(BOOL)visible {
   bring_back();
@@ -1665,15 +1675,13 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
                                                               }];
     [w makeKeyAndOrderFront:nil];
     [w makeFirstResponder:the_view];
-    if (setup_inset) {
-      watch_buttons(w);
-      // in full screen the buttons are out of the app's top row (the system's own bar), and back in it after: the app
-      // told (mb_host_window_inset)
-      for (NSNotificationName name in @[ NSWindowDidEnterFullScreenNotification, NSWindowDidExitFullScreenNotification ]) {
-        [[NSNotificationCenter defaultCenter] addObserverForName:name object:w queue:nil
-                                                      usingBlock:^(NSNotification *n) { [the_view requestFrame]; }];
-      }
-    }
+    if (setup_inset) watch_buttons(w);
+    // full screen from as the system starts taking the window there, a window from as it starts bringing it back
+    // (full_screen_on)
+    [[NSNotificationCenter defaultCenter] addObserverForName:NSWindowWillEnterFullScreenNotification object:w queue:nil
+                                                  usingBlock:^(NSNotification *n) { full_screen_going(w, true); }];
+    [[NSNotificationCenter defaultCenter] addObserverForName:NSWindowWillExitFullScreenNotification object:w queue:nil
+                                                  usingBlock:^(NSNotification *n) { full_screen_going(w, false); }];
     [NSApp activateIgnoringOtherApps:YES];
     // closed, the program ends (an app's bundle's window is put away instead: MBAppDelegate windowShouldClose)
     w.delegate = app_delegate;
