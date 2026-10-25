@@ -910,3 +910,49 @@ test("discarding_a_message_lets_go_of_its_files_kept_bytes", async () => {
   assert.equal(await Effect.runPromise(t.core.inner.driveKept.has("outbox\nslow")), false);
   t.core.close();
 });
+
+// Ended part way up (a big file's first part going), it is kept whole all the same: read through beside its going up,
+// not as it goes, so the message goes on from it as the app starts again.
+test("a_file_ended_part_way_up_is_kept_whole_and_its_message_sent_from_it", async () => {
+  const t = await setup();
+  const size = 4 * 1024 * 1024 + 3;
+  const bytes = Uint8Array.from({ length: size }, (_, i) => i % 251);
+  const gate = Deferred.makeUnsafe<J, CoreError>();
+  (t.core.inner.stations.requests as J).uploadPart = () => Deferred.await(gate);
+  (t.core.inner.stations as J).post = () => Effect.fail(new CoreError("mesh", "down"));
+  await t.watch(1, "ws/st:k");
+  await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [{ id: "big", name: "big.bin", size, blob: new Blob([bytes]) }] });
+  call(t.core, t.ui, 501, "chat.send", { station: "ws/st", thread: 7, text: "big one", uploads: [{ id: "big", name: "big.bin", size }] });
+  await t.settle();
+  assert.equal(await Effect.runPromise(t.core.inner.driveKept.whole("outbox\nbig", size)), true);
+  await t.host.time.pass(SOON_MS + 50);
+  await t.host.settle();
+  await Effect.runPromise(t.core.inner.data.written);
+  t.core.close();
+  t.host.takeEmitted();
+  const again = await Core.create(t.host, { clock: t.host.time.clock, sample: 0, wire: () => new HostWire(t.host) });
+  try {
+    const got: number[] = [];
+    let have = 0;
+    (again.inner.stations.requests as J).uploadPart = (_addr: unknown, q: J, part: Uint8Array) => {
+      if (q.sha256 !== undefined) return Effect.succeed({ have: 0 });
+      for (const b of part.subarray(0, 4)) got.push(b);
+      have = q.offset + part.length;
+      return Effect.succeed(have === size ? { have, file: { name: q.name, size, path: "/u/big.bin" } } : { have });
+    };
+    const posted: J[] = [];
+    (again.inner.stations as J).post = (_station: string, thread: number, message: J) => Effect.sync(() => { posted.push({ thread, ...message }); return posted.length; });
+    const ui = again.connect();
+    const entry = again.inner.views.local.outbox("ws/st", 7)[0];
+    call(again, ui, 601, "chat.retry", { station: "ws/st", thread: 7, id: entry.id });
+    for (let i = 0; i < 5; i++) {
+      await t.host.settle();
+      await t.host.time.pass(60);
+    }
+    await t.host.settle();
+    assert.equal(have, size);
+    assert.deepEqual(got.slice(0, 4), [0, 1, 2, 3]);
+    assert.equal(posted.length, 1);
+    assert.deepEqual(posted[0].attachments, [{ name: "big.bin", size, path: "/u/big.bin" }]);
+  } finally { again.close(); }
+});
