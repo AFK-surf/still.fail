@@ -3428,7 +3428,14 @@ export interface FrequentCombo {
 	model: string;
 	runtime: RuntimeKind;
 	effort?: string;
+	/** All of it in a line: the model, the runtime where it shows, the effort. */
 	label: string;
+	/** The model as people call it. */
+	name: string;
+	/** The runtime by name, only where the model runs on more than one. */
+	runtimeText?: string;
+	/** How hard it thinks as the model's picker says it (High / 高), or the default's words. */
+	effortText: string;
 	selected: boolean;
 }
 

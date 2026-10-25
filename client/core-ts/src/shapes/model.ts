@@ -139,7 +139,7 @@ function namedOf(base: string): string | null {
     return out.join(" ");
   }
   const parts = joined(words);
-  const dashed = first === "gpt" ? "GPT" : first === "glm" ? "GLM" : first === "swe" ? "SWE" : null;
+  const dashed = ["gpt", "glm", "swe"].includes(first) ? word(first) : null;
   if (dashed !== null && parts[1] !== undefined) {
     return [`${dashed}-${parts[1]}`, ...parts.slice(2).map(word)].join(" ");
   }
@@ -163,7 +163,7 @@ function joined(words: string[]): string[] {
 }
 
 const BRANDS: Record<string, string> = {
-  deepseek: "DeepSeek", minimax: "MiniMax", qwq: "QwQ", glm: "GLM", gpt: "GPT", oss: "OSS", moonshot: "Moonshot", devstral: "Devstral",
+  deepseek: "DeepSeek", minimax: "MiniMax", qwq: "QwQ", glm: "GLM", gpt: "GPT", swe: "SWE", oss: "OSS", moonshot: "Moonshot", devstral: "Devstral",
   codestral: "Codestral", llama: "Llama", ernie: "ERNIE", vl: "VL", r1: "R1", it: "IT",
 };
 

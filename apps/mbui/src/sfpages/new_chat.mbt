@@ -373,7 +373,10 @@ fn new_station_control(
       floating,
       fn() {
         @sf.station_mark(c, text(station, "emoji"), text(station, "icon"), new_mark, t.p.text)
-        c.box(style=new_station_name, fn() { c.text(text(station, "name"), style=new_capsule_words) |> ignore })
+        // (its name left out after what the model's control leaves out, its mark kept: the page says where it starts)
+        c.box(style=new_station_name, drop=new_drop_station_name, fn() {
+          c.text(text(station, "name"), style=new_capsule_words) |> ignore
+        })
         |> ignore
         @sf.icon(c, "chevron-down", size=new_chevron, color=t.p.muted) |> ignore
       },
@@ -651,8 +654,25 @@ fn new_combos(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, leaving : Boo
           c.tell("new/pick", fn() { @sfbase.pick_new(src, w.id, m) })
         }
         let lit = selected || c.lit(id)
+        let words = if lit { combo_words_lit } else { combo_words }
+        // (on one line: the model, the runtime where it is said, how hard it thinks; short of room, the runtime left
+        // out, the model never)
         let chip = c.box(style=if selected { combo_on } else { combo_off }, id~, fn() {
-          c.text(text(v, "label"), style=if lit { combo_words_lit } else { combo_words }) |> ignore
+          c.text(text(v, "name"), style=words) |> ignore
+          match text(v, "runtimeText") {
+            "" => ()
+            r =>
+              c.box(style=combo_part, drop=1, fn() {
+                c.text("·", style=words) |> ignore
+                c.text(r, style=words) |> ignore
+              })
+              |> ignore
+          }
+          c.box(style=combo_part, fn() {
+            c.text("·", style=words) |> ignore
+            c.text(text(v, "effortText"), style=words) |> ignore
+          })
+          |> ignore
         })
         c.semantics(chip, Button, id~, label=text(v, "label"), check=if selected { On } else { Off })
       }
@@ -1032,31 +1052,29 @@ let new_band : @ui.Style = @ui.css("w=Full align=ACenter radius=InnerOr(Sharp)")
 let new_choosers_row : @ui.Style = @ui.css("row w=Full px=S0_5 pb=S1_5 gap=S1_5 align=ACenter")
 
 ///|
-/// A glass choice (mChooser): 30 high, 12 in, 6 between its parts, a capsule.
+/// A glass choice (mChooser): 30 high, 12 in, 6 between its parts, a capsule; as wide as what it holds needs, never cut
+/// by its row (what is beside it gives way, or what of it may leave leaves: its press's ripple keeps to its shape
+/// itself).
 // kept across runs: a value (no field of it changes)
-let glass_chooser_box : @ui.Style = @ui.style(
-  row=true,
-  h=@sf.glass_chooser_h,
-  px=S3,
-  gap=S1_5,
-  align=ACenter,
-  radius=Full,
-  clip=true,
-)
+let glass_chooser_box : @ui.Style = @ui.style(row=true, h=@sf.glass_chooser_h, px=S3, gap=S1_5, align=ACenter, radius=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
 let new_capsule_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, wrap=false, w=Cut)
 
 ///|
-/// A station's name in its control: cut short past 128 (mChooser's max-width).
+/// A station's name in its control: cut short past 128 (mChooser's max-width); where its row has not the room for it
+/// and the model's control, left out whole, after all that control leaves out (its runtime, how hard it thinks).
 // kept across runs: a value (no field of it changes)
-let new_station_name : @ui.Style = @ui.style(max_w=@sf.glass_chooser_station_most, clip=true)
+let new_station_name : @ui.Style = @ui.style(max_w=@sf.glass_chooser_station_most)
+
+///|
+let new_drop_station_name : Int = triple_drop_effort + 1
 
 ///|
 /// A control in the composer's row (Chooser: 28 high, 8 in, its parts 6 apart, the hover's ground).
 // kept across runs: a value (no field of it changes)
-let new_capsule_in_row : @ui.Style = @ui.css("row h=S7 px=S2 gap=S1_5 align=ACenter radius=Lg clip hovered{bg=Hover}")
+let new_capsule_in_row : @ui.Style = @ui.css("row h=S7 px=S2 gap=S1_5 align=ACenter radius=Lg hovered{bg=Hover}")
 
 ///|
 /// A station's row in its pick (PickRow): its mark, its name over what it is, a check; 12 by 8 in.
@@ -1190,9 +1208,14 @@ let combos_choices : @ui.Style = @ui.css("row w=Full gap=S1_5 justify=JCenter")
 
 ///|
 /// combo: 8 by 10 in, the field's corner, on the pointer's ground; pressed in, on the chosen's; its words 13 on 18, muted
-/// (the ink pointed at or pressed in).
+/// (the ink pointed at or pressed in), on one line, its parts 6 apart (a dot between).
 // kept across runs: a value (no field of it changes)
-let combo_off : @ui.Style = @ui.css("px=S2_5 py=S2 radius=Xl bg=Hover")
+let combo_off : @ui.Style = @ui.css("row px=S2_5 py=S2 gap=S1_5 align=ACenter radius=Xl bg=Hover")
+
+///|
+/// A part of a combination's line after the model: the dot before it and what it says, left out whole.
+// kept across runs: a value (no field of it changes)
+let combo_part : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1200,7 +1223,7 @@ let combo_on : @ui.Style = combo_off.then(@ui.css("bg=Selected"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let combo_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)
+let combo_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

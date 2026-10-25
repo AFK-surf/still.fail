@@ -20,11 +20,26 @@ test("frequent_combos_rank_usage_break_ties_by_recency_and_never_substitute_unav
   });
   const combos = frequentCombos(history, options, current);
   assert.equal(combos.length, 3);
-  assert.equal(combos[0].label, "Astra · medium");
+  // (the effort as the model's picker says it)
+  assert.equal(combos[0].label, "Astra · 中");
+  assert.equal(combos[0].name, "Astra");
+  assert.equal(combos[0].effortText, "中");
+  assert.equal(combos[0].runtimeText, undefined);
   assert.equal(combos[0].selected, true);
   assert.equal(combos[1].effort, "high");
   assert.equal(combos[2].label, "Astra · 默认深度");
+  assert.equal(combos[2].effortText, "默认深度");
   assert.equal(combos[2].selected, false);
+});
+
+test("frequent_combos_name_the_runtime_only_where_the_model_runs_on_more_than_one", () => {
+  const options = [{ model: "deepseek-v4-1-flash", name: "DeepSeek V4.1 Flash", ids: ["deepseek-v4-1-flash"], runtimes: ["claude", "dsh"], efforts: { claude: ["low", "high"], dsh: ["low", "high"] }, accounts: { claude: [], dsh: [] } }];
+  const history = recordCombo([], { model: "deepseek-v4-1-flash", runtime: "dsh", effort: "high" }, 1);
+  const [combo] = frequentCombos(history, options, resolve(options, {}));
+  assert.equal(combo.label, "DeepSeek V4.1 Flash · DeepSeek Harness · 高");
+  assert.equal(combo.name, "DeepSeek V4.1 Flash");
+  assert.equal(combo.runtimeText, "DeepSeek Harness");
+  assert.equal(combo.effortText, "高");
 });
 
 test("frequent_combos_deduplicate_aliases_and_limit_visible_and_stored_history", () => {

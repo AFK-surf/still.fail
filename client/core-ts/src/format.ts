@@ -391,6 +391,15 @@ export function agentLabel(modelId: string | null | undefined, effort: string | 
   return effort ? `${m} · ${effort}` : m;
 }
 
+/// How hard a model thinks as it is said (high: 高, High), as the model's picker says it; one the words do not know, as
+/// it is spelled, its first letter up.
+export function effortLabel(effort: string): string {
+  const key = `web-main.model.effortLevel.${effort}`;
+  const words = said(key);
+  if (words !== key) return words;
+  return effort === "" ? effort : effort[0].toUpperCase() + effort.slice(1);
+}
+
 /// How hard a runtime's models can think, lowest first.
 export function efforts(runtime: string): string[] {
   return reasoning.fallback(runtime);

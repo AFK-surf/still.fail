@@ -109,7 +109,7 @@ test("models_read_as_people_call_them", () => {
 });
 
 test("models_list_by_series_newest_first", () => {
-  for (const [id, want] of [["claude-opus-5-5", "Opus"], ["sonnet[1m]", "Sonnet"], ["gpt-5.1-codex", "GPT"], ["o4-mini", "o 系列"], ["qwen3-coder", "Qwen"], ["deepseek-v4-pro", "DeepSeek"], ["something", null]] as const) {
+  for (const [id, want] of [["claude-opus-5-5", "Opus"], ["sonnet[1m]", "Sonnet"], ["gpt-5.1-codex", "GPT"], ["o4-mini", "o 系列"], ["qwen3-coder", "Qwen"], ["deepseek-v4-pro", "DeepSeek"], ["swe-2", "SWE"], ["glm-4.6", "GLM"], ["something", null]] as const) {
     assert.equal(family(id), want, id);
   }
   const ids = ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5-20251001", "claude-opus-5-5", "claude-fable-5-1", "claude-opus-5", "claude-sonnet-4-6"];

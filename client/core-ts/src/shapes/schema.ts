@@ -1951,7 +1951,10 @@ export const SHAPES: Record<string, Shape> = {
     ["model", "String"],
     ["runtime", "RuntimeKind"],
     ["effort", opt("String")],
-    ["label", "String"],
+    ["label", "String", { doc: "All of it in a line: the model, the runtime where it shows, the effort." }],
+    ["name", "String", { doc: "The model as people call it." }],
+    ["runtimeText", opt("String"), { doc: "The runtime by name, only where the model runs on more than one." }],
+    ["effortText", "String", { doc: "How hard it thinks as the model's picker says it (High / 高), or the default's words." }],
     ["selected", "bool"],
   ], { doc: "One-click model and depth for a new chat; ranked and labelled by the core." }),
   Picked: struct([

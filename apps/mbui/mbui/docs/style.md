@@ -147,8 +147,15 @@ nothing else gives way:
   - a part left out of its row: `Ctx::box drop=k`, there whole (as wide as what it holds) or not at all, the lowest k
     first, of the same k the last in the row first; left out, laid out nowhere, drawn and pressed nowhere; `more` is the row's ⋯, there only while something of it is left out, and
     `Ctx::left_out(id)` says what a row left out, for its ⋯ to offer instead (read back: the frame is built again
-    when it changes as it is laid out). The library's `@sf.tools_row` is a row of tools whose ⋯ does that;
-  - what is cut or scrolled by its own box: `clip`, `sideways`.
+    when it changes as it is laid out). The library's `@sf.tools_row` is a row of tools whose ⋯ does that. Such rows,
+    each as wide as what it keeps, in a row that has not the room for all it holds, leave out their parts as though
+    they were one row's (the lowest k across them first, of the same the last in the row first) until the row has the
+    room, what else is in it given way as their own row would have it (each down to the least it needs, words cut short
+    to four of their size); then they are not squeezed further: what is beside them gives way no more than that, and
+    none of their room is left empty (a new chat's station and model: the model's runtime and how hard it thinks
+    leave, k 3 and 4, before the station's name, 5);
+  - what is cut or scrolled by its own box: `clip`, `sideways` (not a box's corners: what draws inside them keeps to
+    them itself, as a press's ripple does).
 - A row that has not the room for every least even so (a page that said not how something gives, words longer than
   anyone thought) does not run past its room: as a last resort (flex's `soft_min`, `last_resort`) words on one line in
   it that say not how they give, and what holds them, come down, the widest first, all to one width where that is

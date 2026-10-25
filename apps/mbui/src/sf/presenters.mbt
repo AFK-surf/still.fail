@@ -66,6 +66,7 @@ priv struct PanelOf {
   tall : Double
   grows : Bool
   focus : Bool
+  ruled : Bool
 }
 
 ///|
@@ -177,7 +178,9 @@ pub fn pick(title : String, choices : Array[Choice], chosen : String, choose : (
 /// share of the window (as a sheet that tall, beside what opened it at most that tall; 0: as tall as what it holds);
 /// `grows`: a long list's, a sheet of it is dragged between half and nearly all of the window. Not `focus`: beside what
 /// opened it, the focus stays where it is as it opens, not on its first field (Radix's onOpenAutoFocus prevented: the
-/// web's page sizes).
+/// web's page sizes). `ruled`: its foot under a line across the panel, out to its sides (a panel of columns, the run
+/// picker's: kept, 2026-10-25 用户「这两个的分割线可以保留，第一个分割线边上不要留空」), over the foot where what it holds
+/// scrolls.
 pub fn panel(
   title : String,
   body : (@ui.Ctx, () -> Unit) -> Unit,
@@ -191,8 +194,9 @@ pub fn panel(
   tall? : Double = 0.0,
   grows? : Bool = false,
   focus? : Bool = true,
+  ruled? : Bool = false,
 ) -> Unit {
-  present(Panel({ title, description, body, foot, w, wide, live, tall, grows, focus }), from, gone~)
+  present(Panel({ title, description, body, foot, w, wide, live, tall, grows, focus, ruled }), from, gone~)
 }
 
 ///|
@@ -219,6 +223,20 @@ pub fn panel_held() -> Bool {
 ///|
 // kept across runs: said by the presenters while a panel's body is drawn
 let panel_held_now : Ref[Bool] = { val: false }
+
+///|
+/// A column of a panel's body in a column of `style`, its rows `body`: beside what opened it, scrolling by itself past
+/// `most` (the web's run picker's models, 360 high at most); where the panel lays out all it holds, all of it (a
+/// sheet: as tall as what it holds up to its most, scrolling as one past that; a small panel held short of what it
+/// holds, scrolling as one: panel_held), never one scroll in another, nor a sheet held short by a height of its own.
+pub fn panel_column(c : @ui.Ctx, key : String, most : Double, style : @ui.Style, body : () -> Unit) -> Unit {
+  if small_panel_now.val && !panel_held_now.val {
+    c.capped(key, most, shrinks=true, fn() { c.box(style~, body) |> ignore }) |> ignore
+  } else {
+    // (as wide as its rows need at least: what is beside it gives way, or goes under it)
+    c.box(style~, keep=true, body) |> ignore
+  }
+}
 
 ///|
 /// A sheet's column of its own (a sheet a page lays out itself: the settings' adding people, joining a station): what
@@ -731,7 +749,13 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
       small_panel_now.val = false
       words_in_now.val = 0.0
       match x.foot {
-        Some(f) => c.box(style=panel_foot_at.then(panel_corner_foot()), fn() { f(c, close) }) |> ignore
+        Some(f) => {
+          if x.ruled {
+            // (out past small_panel's pad to its sides, as far under what it holds as its rows are in from them)
+            c.box(style=foot_rule.then(@ui.style(mx=room(-panel_pad), mt=room(panel_pad))), fn() {  }) |> ignore
+          }
+          c.box(style=panel_foot_at.then(panel_corner_foot()), fn() { f(c, close) }) |> ignore
+        }
         None => ()
       }
     },
@@ -1126,7 +1150,10 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
         c.box(style=room, body) |> ignore
       }
       match x.foot {
-        Some(f) =>
+        Some(f) => {
+          if x.ruled {
+            c.box(style=sheet_foot_rule, fn() {  }) |> ignore
+          }
           c.box(style=sheet_foot_at, fn() {
             // its buttons across it, each its share (in a thumb's reach)
             foot_fills.val = true
@@ -1134,6 +1161,7 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
             foot_fills.val = false
           })
           |> ignore
+        }
         None => ()
       }
     }
@@ -1337,9 +1365,21 @@ let sheet_lead : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Mut
 let sheet_hint : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 
 ///|
-/// A panel's buttons in a sheet (its foot): 20 in, across it (each its share: parts.mbt foot_fills), 8 apart, 24 under.
+/// A panel's buttons in a sheet (its foot): 20 in, and as far under what is over them (the line over a run picker's
+/// foot, a form's last field: beside what opened it a foot is about as far under it as in from the panel's sides, 8
+/// and 6), across it (each its share: parts.mbt foot_fills), 8 apart, 24 under.
 // kept across runs: a value (no field of it changes)
-let sheet_foot_at : @ui.Style = @ui.css("row w=Full px=S5 pb=S6 gap=S2 justify=JEnd")
+let sheet_foot_at : @ui.Style = @ui.css("row w=Full px=S5 pt=S5 pb=S6 gap=S2 justify=JEnd")
+
+///|
+/// The line over a ruled panel's foot (`panel`'s `ruled`), across the panel.
+// kept across runs: a value (no field of it changes)
+let foot_rule : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
+
+///|
+/// The same in a sheet: as far under what it holds as its rows are in from its sides (sheet_held_sides: 12).
+// kept across runs: a value (no field of it changes)
+let sheet_foot_rule : @ui.Style = @ui.css("w=Full h=SPx mt=S3 bg=Line")
 
 ///|
 /// A small panel's foot (beside what opened it): a row, its buttons at its end, 8 apart, 8 under what is over them;
