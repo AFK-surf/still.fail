@@ -139,10 +139,17 @@ let panel_page_whole : @ui.Style = @ui.css("w=Full h=Full")
 let side_over_box : @ui.Style = @ui.css("bg=Bg shadow=Xl")
 
 ///|
-/// The panel (sidePanel): its ground the canvas, beside the page with no line between (only a menu's parts are set
-/// apart by one).
+/// The panel (sidePanel): its ground the canvas, a hairline at its left.
 // kept across runs: a value (no field of it changes)
 pub let side_panel_style : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
+
+///|
+// kept across runs: a value (no field of it changes)
+let side_rule : @ui.Style = @ui.css("w=SPx h=Full bg=Line")
+
+///|
+/// How wide that hairline is (its SPx), the panel's column being it and the panel.
+let side_rule_w : Double = 1.0
 
 ///|
 /// Its bar (sideBar): 45 high, the tabs from 8 in, the panel's switch at its right 12 in.
@@ -331,8 +338,8 @@ pub fn side_beside(c : @ui.Ctx, key : String, open : Bool, whole : Double, page 
     _ => ()
   }
   panel_own.was = Some((key, open))
-  // its column (the panel) as wide as it has got
-  let col = c.moved(name, if open { whole } else { 0.0 })
+  // its column (the rule, then the panel) as wide as it has got
+  let col = c.moved(name, if open { whole + (if over { 0.0 } else { side_rule_w }) } else { 0.0 })
   if col <= 0.0 {
     if !open && side_leaving(key) is Some(_) {
       panel_own.leaving = None
@@ -355,7 +362,11 @@ pub fn side_beside(c : @ui.Ctx, key : String, open : Bool, whole : Double, page 
   c.box(style=panel_row, fn() {
     c.box(style=@ui.style(w=Fixed(left), h=Full), fn() { c.sized(left, c.height, page) }) |> ignore
     c.box(style=@ui.style(w=Fixed(col), h=Full, clip=true), fn() {
-      c.box(style=@ui.style(w=Fixed(whole), h=Full), fn() { c.sized(whole, c.height, panel) }) |> ignore
+      c.box(style=@ui.style(row=true, w=Fixed(whole + side_rule_w), h=Full), fn() {
+        c.box(style=side_rule, fn() {  }) |> ignore
+        c.box(style=@ui.style(w=Fixed(whole), h=Full), fn() { c.sized(whole, c.height, panel) }) |> ignore
+      })
+      |> ignore
     })
     |> ignore
   })
