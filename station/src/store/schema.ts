@@ -123,10 +123,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS entries_ts ON entries (thread, ts) WHERE ts IS
 -- primary key instead, going back over the whole thread for a message never edited: every message read had a long
 -- chat's every page read with it, 5 to 8 s on ccvm with its pages put out (2026-10-25).
 CREATE INDEX IF NOT EXISTS entries_edits ON entries (thread, target, n) WHERE target IS NOT NULL;
--- A thread's cards and option posts (store.ts answersSince: the card each person's message since may answer, at each
--- list of chats): the latest before a message found at once, not by going back over the thread to it.
-CREATE INDEX IF NOT EXISTS entries_cards ON entries (thread, n) WHERE card IS NOT NULL;
-CREATE INDEX IF NOT EXISTS entries_options ON entries (thread, n) WHERE options IS NOT NULL;
+-- A thread's people's messages since a time (rows.ts SAID_SINCE: the cards they answered, of the sidebar items a change
+-- touched): without it each went over the thread's every entry.
+CREATE INDEX IF NOT EXISTS entries_people_since ON entries (thread, at) WHERE author_kind = 'person' AND kind = 'message';
 -- The login cards (store.ts closeLoginCards, as a login ends): without it each read every entry of the station's.
 CREATE INDEX IF NOT EXISTS entries_login_cards ON entries (thread, n) WHERE card LIKE '%"login"%';
 CREATE TABLE IF NOT EXISTS deliveries (

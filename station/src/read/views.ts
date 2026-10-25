@@ -382,8 +382,13 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
   const api = apiOf(station);
   const s = api.store;
   const mine = isMine(api, viewer);
-  // Only the chats of the viewer's workspace (docs/multi-workspace.md).
-  const sessions = store.listSessions(s).filter((x) => sees(viewer, x.ws));
+  // Only the chats of the viewer's workspace (docs/multi-workspace.md). For some items alone, the sessions they are made
+  // of alone: each change read every session the station ever had.
+  const sessions = (
+    scope === null
+      ? store.listSessions(s)
+      : [...scope.sessions].flatMap((key) => store.getSession(s, key) ?? []).sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+  ).filter((x) => sees(viewer, x.ws));
   const shown = new Map(sessions.filter((x) => (x.archivedAt !== null) === archived).map((x) => [x.key, x]));
   const order = sessions.filter((x) => (x.archivedAt !== null) === archived && (scope === null || scope.rows.has(x.key))).map((x) => x.key);
   // In the archive, a chat of its own shows its agents whatever they are doing elsewhere.
@@ -429,7 +434,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
   // The cards the viewer answered lately, by chat.
   const answered = new Map<number, Json[]>();
   if (!archived) {
-    for (const a of store.answersSince(s, store.nowMs() - ANSWERED_WITHIN)) {
+    for (const a of store.answersSince(s, store.nowMs() - ANSWERED_WITHIN, scope === null ? null : scope.threads)) {
       if (!mine(creator(a.by))) continue;
       const list = answered.get(a.question.thread) ?? [];
       list.push(answeredView(a));
