@@ -1875,7 +1875,6 @@ export const SHAPES: Record<string, Shape> = {
     ["others", opt("String"), { doc: "alert | wait | done: the others' mark; none when nothing there wants anyone." }],
     ["othersLabel", opt("String"), { doc: "其他 workspace：1 个出错了 · 2 个有新消息" }],
     ["badge", "u32", { default: true, doc: "What the app's badge says (the Dock's): every workspace's `badge`." }],
-    ["badgeCounts", "String", { default: true, doc: "What the badge counts, as the prefs' `badge` has it: decisions | attention | all (with `badgeKinds`:\ndecisions when it counts only the cards, else attention)." }],
     ["badgeKinds", "BadgeKinds", { default: true, doc: "What the badge counts, kind by kind: the prefs' `badgeKinds`, or as their `badge` says." }],
   ], { doc: "What each workspace has waiting for its person, for where workspaces are switched (the `workspaceMarks` view):\nby workspace id; and of those other than the one in view, the most urgent." }),
   WorkspaceMark: struct([
@@ -1887,7 +1886,7 @@ export const SHAPES: Record<string, Shape> = {
     ["label", opt("String"), { doc: "1 个出错了 · 2 个在等你 · 3 个有新消息" }],
     ["chat", opt("OpenChat")],
     ["badge", "u32", { default: true, doc: "What it adds to the badge, as the prefs' `badge` counts: `wait` (decisions), and `alert` (attention, the\ndefault), and `unread` (all)." }],
-    ["items", vec("MarkItem"), { default: true, doc: "The chats `alert` and `wait` count, the failed first, the latest first within: what the badge is made of." }],
+    ["items", vec("MarkItem"), { default: true, doc: "待处理: the chats that came to want them (`alert`, `wait`) and that they have not looked at since, of the\nkinds the badge counts (`badgeKinds` wait, failed); the failed first, the latest first within. One looked at is no\nlonger here: its row and 奏 still say it." }],
     ["elsewhere", opt("u32"), { doc: "Chats they take part in whose agent waits for someone else (not counted). Absent for 0." }],
     ["mineTone", opt("String"), { doc: "`tone` of only the chats they take part in (the 我参与的 list's; the whole list's is `tone`)." }],
     ["watchingTone", opt("String"), { doc: "`tone` of only the watching chats (the 监控中 list's)." }],
@@ -1904,9 +1903,8 @@ export const SHAPES: Record<string, Shape> = {
     ["text", "String", { said: true, doc: "Its row's state line: 奏 · …, 要你帮忙：…, 出问题：…" }],
     ["what", "String", { said: true, doc: "The same without its lead (奏 · , 需要你处理：, 出错：): what it asks, what it needs, why it stopped." }],
     ["seq", opt("u64"), { doc: "The waiting card's post (`decision.dismiss`), for `wait`." }],
-    ["seen", "bool", { default: true, doc: "Looked at since it came to want them: listed, not counted in the badge." }],
     ["at", "i64"],
-  ], { doc: "A chat the badge counts (`WorkspaceMark.items`)." }),
+  ], { doc: "A chat in 待处理 (`WorkspaceMark.items`)." }),
   NewChatView: struct([
     ["kept", "String", { doc: "The station last started on (or picked) in the scope, its id: the page holds its place with it until the\nstations are known." }],
     ["stations", opt(vec("StationView")), { doc: "The scope's stations up now; none until its workspace has been read (`error`: why it could not be)." }],

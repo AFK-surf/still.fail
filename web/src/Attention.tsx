@@ -1,8 +1,8 @@
-// What wants the viewer (the core's `workspaceMarks`), in the sidebar's foot: 待处理, with how many came since they
-// last looked (the badge, the Dock's number), and pressed, which chats: the cards and needs waiting for them (奏) and
-// the chats of theirs that went wrong, every workspace's, each leading to its chat. One looked at stays listed, quiet,
-// until it is answered or let go here (忽略, `decision.dismiss`). A station's trouble is the same: looked at, it no
-// longer lights the bell; let go, it is no longer listed, both until the trouble changes (kept on this device).
+// What wants the viewer and they have not looked at yet (the core's `workspaceMarks` items), in the sidebar's foot:
+// 待处理, with how many, and pressed, which chats: the cards and needs waiting for them (奏) and the chats of theirs
+// that went wrong, not read since they came, every workspace's, each leading to its chat. One read is no longer here
+// (its row and 奏 still say it), one let go here neither (忽略, `decision.dismiss`). A station's trouble is the same:
+// listed until the bell has shown it, then the stations' marks say it, until the trouble changes (kept on this device).
 import { useEffect, useState } from "react";
 import { Popover } from "radix-ui";
 import { NavLink, useNavigate } from "react-router";
@@ -27,30 +27,30 @@ const line = (i: MarkItem) => i.what || i.stationName;
 
 const keyOf = (i: MarkItem) => `${i.station}/${i.session ?? i.thread}`;
 
-/** Each workspace's listed chats (the one in view first), as the badge counts them: the cards alone with `decisions`. */
+/** Each workspace's chats in 待处理 (the one in view first). */
 function groups(marks: WorkspaceMarksView | undefined, scope: string): { workspace: string; name: string; items: MarkItem[] }[] {
-  const only = marks?.badgeCounts === "decisions";
   return Object.entries(marks?.workspaces ?? {})
     .sort(([a], [b]) => (a === scope ? -1 : b === scope ? 1 : 0))
     .map(([workspace, m]) => {
-      const items = (m.items ?? []).filter((i) => !only || i.kind === "wait");
+      const items = m.items ?? [];
       return { workspace, name: items[0]?.workspaceName ?? workspace, items };
     })
     .filter((g) => g.items.length > 0);
 }
 
-/** What this device last did with a scope's station trouble, by its words: `seen` looked at, `gone` let go. */
+/** What this device last did with a scope's station trouble, by its words: `seen` looked at (`gone`: let go, from before
+ * one looked at was no longer listed). */
 const troubleKey = (scope: string, what: "seen" | "gone") => `stillfail.trouble.${what}.${scope}`;
-const troubleRead = (scope: string, what: "seen" | "gone") => {
-  try { return localStorage.getItem(troubleKey(scope, what)); } catch { return null; }
+const troubleRead = (scope: string) => {
+  try { return localStorage.getItem(troubleKey(scope, "seen")); } catch { return null; }
 };
-const troubleKeep = (scope: string, what: "seen" | "gone", text: string) => {
-  try { localStorage.setItem(troubleKey(scope, what), text); } catch { /* private mode: for this page only */ }
+const troubleKeep = (scope: string, text: string) => {
+  try { localStorage.setItem(troubleKey(scope, "seen"), text); } catch { /* private mode: for this page only */ }
 };
 
 /**
- * `rail`: drawn in the rail (Rail.tsx) as its bell, there even with none, a dot on it while some came since they last
- * looked (how many in its label) or a station is in trouble or services were left up long, which it lists too.
+ * `rail`: drawn in the rail (Rail.tsx) as its bell, there even with none, a dot on it while it lists any (how many
+ * chats in its label): besides the chats, a station's trouble not looked at yet and the services left up long.
  */
 export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: string; count: string; label: string } }) {
   const marks = useWorkspaceMarks(scope);
@@ -61,34 +61,26 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
   const act = useAct();
   const listed = groups(marks, scope).map((g) => ({ ...g, items: g.items.filter((i) => !gone.has(keyOf(i))) })).filter((g) => g.items.length > 0);
   const all = listed.flatMap((g) => g.items);
-  const goneFresh = groups(marks, scope).flatMap((g) => g.items).filter((i) => gone.has(keyOf(i)) && !i.seen).length;
-  const n = Math.max(0, (marks?.badge ?? 0) - goneFresh);
+  const n = all.length;
   // In the rail's bell, besides: the stations' trouble and the services left up long (the sidebar's foot had them).
   const stationTrouble = useStationTrouble(scope);
-  const [troubleSeen, setTroubleSeen] = useState(() => troubleRead(scope, "seen"));
-  const [troubleGone, setTroubleGone] = useState(() => troubleRead(scope, "gone"));
-  const trouble = stationTrouble && stationTrouble.text !== troubleGone ? stationTrouble : undefined;
-  const troubleNew = !!trouble && trouble.text !== troubleSeen;
+  const [troubleSeen, setTroubleSeen] = useState(() => troubleRead(scope));
+  // (as it was before the bell opened while it is open: listed while it is first read)
+  const trouble = stationTrouble && stationTrouble.text !== troubleSeen ? stationTrouble : undefined;
   const jobs = useLongJobs(scope, useToast()).groups.reduce((sum, g) => sum + g.jobs.length, 0);
   const more = !!rail && (!!trouble || jobs > 0);
-  const lit = !!rail && (troubleNew || jobs > 0);
-  // Looked at as the bell opens (kept at once), drawn as looked at once it closes: new while it is first read.
+  // Looked at as the bell opens (kept at once), no longer listed once it closes.
   const opened = (on: boolean) => {
     setOpen(on);
-    if (on && rail && trouble) troubleKeep(scope, "seen", trouble.text);
-    if (!on) setTroubleSeen(troubleRead(scope, "seen"));
+    if (on && rail && trouble) troubleKeep(scope, trouble.text);
+    if (!on) setTroubleSeen(troubleRead(scope));
   };
   // Its stations all reached again: a trouble later in the same words is new.
   useEffect(() => {
-    if (stationTrouble !== null || (troubleSeen === null && troubleGone === null)) return;
+    if (stationTrouble !== null || troubleSeen === null) return;
     for (const what of ["seen", "gone"] as const) try { localStorage.removeItem(troubleKey(scope, what)); } catch { /* not kept */ }
     setTroubleSeen(null);
-    setTroubleGone(null);
-  }, [scope, stationTrouble, troubleSeen, troubleGone]);
-  const letTroubleGo = (text: string) => {
-    troubleKeep(scope, "gone", text);
-    setTroubleGone(text);
-  };
+  }, [scope, stationTrouble, troubleSeen]);
   if (!rail && (!marks || (all.length === 0 && !open))) return null;
   const several = listed.length > 1 || listed.some((g) => g.workspace !== scope);
   const go = (i: MarkItem) => {
@@ -114,13 +106,13 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
         {rail ? (
           <button type="button" className={rail.item} data-on={open || undefined} title={rail.label} aria-label={n > 0 ? t("web-main.attention.label", { n }) : rail.label}>
             <Bell size={20} />
-            {(n > 0 || lit) && <span className={rail.count} />}
+            {(n > 0 || more) && <span className={rail.count} />}
           </button>
         ) : (
         <button type="button" className={`${nav.navRow} ${css.entry}`} aria-label={n > 0 ? t("web-main.attention.label", { n }) : t("web-main.attention.entry")}>
           <Bell {...ICON} />
           <span className={css.name}>{t("web-main.attention.entry")}</span>
-          <span className={css.slot}>{n > 0 ? <span className={css.count}>{n}</span> : <span className={css.quiet}>{all.length}</span>}</span>
+          <span className={css.slot}>{n > 0 && <span className={css.count}>{n}</span>}</span>
         </button>
         )}
       </Popover.Trigger>
@@ -131,12 +123,10 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
           {rail && trouble && (
             <div className={css.group}>
               <div className={css.groupName}>Station</div>
-              <div role="button" tabIndex={0} className={css.item} data-seen={!troubleNew || undefined}
+              <div role="button" tabIndex={0} className={css.item}
                 onClick={() => goStations()} onKeyDown={(e) => { if (e.key === "Enter") goStations(); }}>
                 <span className={css.dot} data-kind="alert" role="img" aria-hidden="true" />
                 <span className={css.itemText}><span className={css.itemTitle}><StationInWords station={trouble.station} text={trouble.text} /></span></span>
-                <button type="button" className={css.dismiss} title={t("web-main.attention.dismissTrouble")}
-                  onClick={(e) => { e.stopPropagation(); letTroubleGo(trouble.text); }}>{t("web-main.attention.dismiss")}</button>
               </div>
             </div>
           )}
@@ -145,7 +135,7 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
             <div key={g.workspace} className={css.group}>
               {several && <div className={css.groupName}>{g.name}</div>}
               {g.items.map((i) => (
-                <div key={keyOf(i)} role="button" tabIndex={0} className={css.item} data-seen={i.seen || undefined} onClick={() => go(i)} onKeyDown={(e) => { if (e.key === "Enter") go(i); }}>
+                <div key={keyOf(i)} role="button" tabIndex={0} className={css.item} onClick={() => go(i)} onKeyDown={(e) => { if (e.key === "Enter") go(i); }}>
                   <span className={css.dot} data-kind={i.kind} aria-label={t(i.kind === "alert" ? "web-main.attention.alertOne" : "web-main.attention.waitOne")} role="img" />
                   <span className={css.itemText}>
                     <span className={css.itemTitle}>{i.title || t("web-main.attention.untitled")}</span>
