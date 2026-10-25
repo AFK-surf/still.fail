@@ -220,6 +220,8 @@ fn save_download(src : Source, id : String, name : String, size : Double) -> Uni
             keepings.push({
               keep: k,
               name,
+              saved: @sf.t("android-chat.file.saved"),
+              failed: @sf.t("android-chat.file.saveFailed"),
               then: fn(kept) {
                 match kept {
                   KeptAt(at) => done(at)

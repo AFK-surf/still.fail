@@ -1,10 +1,12 @@
 // A file the app has read (a drive's file, a folder zipped, a chat's picture) kept on the device, where the person
 // keeps files, as still.fail's Android app keeps a download (FileKinds.kt download: MediaStore's Downloads).
 //
-// Two ways: `Downloads`, nothing asked, where the system keeps downloads (Android: Downloads through MediaStore;
+// Three ways: `Downloads`, nothing asked, where the system keeps downloads (Android: Downloads through MediaStore;
 // macOS: ~/Downloads; Windows: the Downloads known folder); `Choose`, where the person says (Android: the documents
-// UI's ACTION_CREATE_DOCUMENT; macOS: a save panel over the window; Windows: the Downloads folder still). iOS has no
-// downloads of its own: either way the Files sheet asks where (UIDocumentPickerViewController exporting a copy).
+// UI's ACTION_CREATE_DOCUMENT; macOS: a save panel over the window; Windows: the Downloads folder still); `Photos`, a
+// picture into the phone's photo album (iOS: Photos, the system asking once whether the app may add to it; Android:
+// Pictures/<the app's name> through MediaStore, nothing asked), as Downloads elsewhere. iOS has no downloads of its
+// own: Downloads and Choose both have the Files sheet ask where (UIDocumentPickerViewController exporting a copy).
 // MBUI_DOWNLOADS_DIR (macOS, iOS, Windows) is the downloads for scripted runs, nothing asked either way.
 //
 // The bytes come a part at a time as they are read (`append`: into a file of the host's temporary directory, never
@@ -21,7 +23,9 @@ pub(all) enum KeepWay {
   Downloads
   /// where the person chooses (a save panel, the documents UI, the Files sheet)
   Choose
-}
+  /// a picture into the phone's photo album (iOS Photos, Android's Pictures); where there is none, as Downloads
+  Photos
+} derive(Eq, Show)
 
 ///|
 /// How a keep stands.
@@ -49,6 +53,7 @@ pub fn keep_begin(name : String, mime : String, way? : KeepWay = Downloads) -> K
   let id = kp_begin(name, mime, match way {
     Downloads => 1
     Choose => 2
+    Photos => 3
   })
   if id == 0 {
     None

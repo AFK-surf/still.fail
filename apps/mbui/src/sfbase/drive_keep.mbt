@@ -33,11 +33,13 @@ pub fn drive_keep(p : Map[String, Json], keep : String, mtime : Double, size : D
 }
 
 ///|
-/// A keep the host has not answered yet, its file's name, and what is done once it has answered (a chat's download
-/// said done to the core, downloads.mbt).
+/// A keep the host has not answered yet, its file's name, what is said once it is kept and once it failed, and what is
+/// done once the host has answered (a chat's download said done to the core, downloads.mbt).
 priv struct Keeping {
   keep : @ui.Keep
   name : String
+  saved : String
+  failed : String
   then : (@hostapi.Kept) -> Unit
 }
 
@@ -59,14 +61,14 @@ pub fn keeps_frame(c : @ui.Ctx) -> Unit {
       KeptAt(at) => {
         @hostapi.log("kept \{k.name}: \{at}")
         k.keep.end()
-        say(c, @sf.t("android-chat.file.saved"))
+        say(c, k.saved)
       }
       // the person called the panel or the sheet off: nothing to say
       CalledOff => k.keep.end()
       Failed => {
         @hostapi.log("keep \{k.name}: failed")
         k.keep.end()
-        say(c, @sf.t("android-chat.file.saveFailed"))
+        say(c, k.failed)
       }
     }
     if !(kept is Keeping) {
@@ -79,14 +81,23 @@ pub fn keeps_frame(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// Bytes all here (a chat's file the preview has read) kept: said once the host has answered; 下载失败 at once where
-/// the host keeps nothing.
-pub fn keep_bytes(c : @ui.Ctx, name : String, mime : String, bytes : Bytes) -> Unit {
+/// Bytes all here (a chat's file the preview has read, a picture made to share) kept `way` (where the system keeps
+/// downloads, or a picture into the photo album): `saved` or `failed` said once the host has answered (已保存到「下载」,
+/// 下载失败), `failed` at once where the host keeps nothing.
+pub fn keep_bytes(
+  c : @ui.Ctx,
+  name : String,
+  mime : String,
+  bytes : Bytes,
+  way? : @hostapi.KeepWay = Downloads,
+  saved? : String = @sf.t("android-chat.file.saved"),
+  failed? : String = @sf.t("android-chat.file.saveFailed"),
+) -> Unit {
   // (asked of the host once the frame's builds are over: its callers' bytes, given once)
   c.tell("keep/" + name, fn() {
-    match @ui.keep(name, mime, bytes) {
-      Some(k) => keepings.push({ keep: k, name, then: fn(_) {  } })
-      None => say(c, @sf.t("android-chat.file.saveFailed"))
+    match @ui.keep(name, mime, bytes, way~) {
+      Some(k) => keepings.push({ keep: k, name, saved, failed, then: fn(_) {  } })
+      None => say(c, failed)
     }
   })
 }

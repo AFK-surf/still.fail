@@ -51,9 +51,20 @@ test "the card to share in a dialog: the subscriptions' weekly quota used as rin
 }
 
 ///|
-test "the card to share on a phone: the rings smaller, what the first's share is of under them, today over the last 7 days, nothing cut short" {
+test "the card to share on a phone: the rings smaller, what the first's share is of under them, today over the last 7 days, nothing cut short; 保存到相册 keeps the picture in the photo album" {
   let src = fixture_app("share-card")
-  share_card_laid(@ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2), true)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  share_card_laid(t, true)
+  // a phone keeps pictures in its photo album: what is drawn of the picture kept there, a PNG, said once it is
+  assert_true(t.query(Button, label="复制图片") is None)
+  t.click(Button, label="保存到相册")
+  t.run_for(@kit.presence_in_ms)
+  assert_eq(t.kept_ways().map(fn(k) { (k.0, k.1.to_string()) }), [("still.fail.png", "Photos")])
+  match png_size(t.kept()[0].2) {
+    Some((pw, ph)) => assert_true(pw > 300 && ph > 300, msg="\{(pw, ph)}")
+    None => fail("not a PNG")
+  }
+  assert_true(t.find("已保存到相册") is Some(_))
 }
 
 ///|
