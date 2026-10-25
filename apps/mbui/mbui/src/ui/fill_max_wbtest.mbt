@@ -110,3 +110,30 @@ test "fill across held to a max: a day's bar in the middle of its day, as wide a
     assert_eq((bx, bw), (dx, dw))
   }
 }
+
+///|
+/// A column `pw` wide starting what it holds, a box in it as wide as its words (`Cut`) and at least 320 within the
+/// column (`min_w=Within(320)`): where that box is.
+fn within_column(pw : Double, words : String) -> (Double, Double, Double, Double) raise {
+  let t = Tester::new(fn(c) {
+    c.box(w=Px(pw), align=AStart, fn() {
+      c.box(style=style(w=Cut, min_w=Within(320.0)), bg=fill_max_ink, pad=8.0, fn() {
+        c.text(words, size=14.0) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  rect_of_bg(fill_max_ink)
+}
+
+///|
+test "a least within the room: 320 where the column has it, the column's where it has less, its words' past it" {
+  let (_, _, w, _) = within_column(600.0, "Keep it")
+  assert_eq(w, 320.0)
+  let (_, _, w, _) = within_column(300.0, "Keep it")
+  assert_eq(w, 300.0)
+  let (_, _, w, _) = within_column(600.0, "Keep the token for the deploys of tomorrow, and of the day after it")
+  assert_true(w > 320.0 && w <= 600.0, msg="as wide as its words: \{w}")
+}

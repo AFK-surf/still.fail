@@ -113,7 +113,8 @@ pub fn Space::margin_px(self : Space) -> Double {
 /// A width or a height: what it holds (`Hug`, the default; `Cut` cut short where its row has less), all of the parent's (`Full`), a share of what is left
 /// along the parent's main axis (`Grow(k)`), a share of the parent's room in percent (`Pct(p)`, CSS's 50%; a size only,
 /// not a bound), a spacing token, or `Fixed(v)` (a value worked out as the view builds: a list's width; in a token
-/// file, a value off the scale).
+/// file, a value off the scale); as a least across (`min_w`), `Within(v)`: `v` where the parent has the room, all of it
+/// where it has less (CSS's `min(100%, 320px)`).
 pub(all) enum Len {
   Hug
   /// as wide as what it holds, cut short where its row has less (words on one line in an ellipsis)
@@ -122,6 +123,8 @@ pub(all) enum Len {
   Grow(Double)
   Fixed(Double)
   Pct(Double)
+  /// a least across: as many points where the parent has the room, all of the parent's where it has less
+  Within(Double)
   S0
   SPx
   S0_5
@@ -216,6 +219,7 @@ fn Len::size(self : Len) -> Size {
     Grow(k) => Fill(k)
     Pct(p) => Pct(exact_ok(p, "Len Pct"))
     Fixed(v) => Px(exact_ok(v, "Len"))
+    Within(v) => abort("style: Within(\{v}) is a least across (min_w), not a size")
     l => Px(l.space().unwrap().px())
   }
 }
@@ -226,7 +230,7 @@ fn Len::bound(self : Len, none_is : Double) -> Double {
   match self {
     Hug | Cut | Full | Grow(_) => none_is
     Pct(p) => abort("style: a bound is not a share (Pct(\{p}))")
-    Fixed(v) => exact_ok(v, "Len")
+    Fixed(v) | Within(v) => exact_ok(v, "Len")
     l => l.space().unwrap().px()
   }
 }
