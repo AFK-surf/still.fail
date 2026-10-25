@@ -599,6 +599,9 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   // (the same, what it holds keeping what its row's fit keeps of it: Node's `fit_least`)
   let mut fsum = 0.0
   let mut fwidest = 0.0
+  // (and what it comes to as a last resort: Node's `soft_least`)
+  let mut ssum = 0.0
+  let mut swidest = 0.0
   let k = n.kind
   if k == kind_text ||
     k == kind_rich ||
@@ -680,6 +683,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         let margins = self.on_px(cn.mar_l, whole) + self.on_px(cn.mar_r, whole)
         let need = cn.least + margins
         let fneed = cn.fit_least + margins
+        let sneed = cn.soft_least + margins
         if along && cn.drop > 0 {
           droppable = true
         } else if along && cn.drop == -1 {
@@ -688,13 +692,16 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
           if placed_in > 0 {
             sum = sum + gap
             fsum = fsum + gap
+            ssum = ssum + gap
           }
           sum = sum + need
           fsum = fsum + fneed
+          ssum = ssum + sneed
           placed_in = placed_in + 1
         } else {
           widest = dmax(widest, need)
           fwidest = dmax(fwidest, fneed)
+          swidest = dmax(swidest, sneed)
         }
         if cn.drop != 0 {
           fits = true
@@ -807,6 +814,29 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   }
   fit_least = dmax(fit_least, least)
   n.fit_least = fit_least
+  // what it comes to as a last resort where its row has not the room for every least (docs/style.md, Short of room):
+  // words on one line in a row that say not how they give, none of them; what holds such words, as it holds them,
+  // but for what is pressed (a button, a chip: a control is never cut); else its least
+  let mut soft_least = if k == kind_box &&
+    (n.w is Auto || (n.w is Fill(_) && n.keep)) &&
+    !(n.clip || n.sideways) &&
+    !(n.id != 0 && n.hit) {
+    let row = if more_need >= 0.0 && droppable {
+      ssum + (if placed_in > 0 { gap } else { 0.0 }) + more_need
+    } else {
+      ssum
+    }
+    dmax(row, swidest) + pad_l + pad_r
+  } else if n.w is Auto && pdir == 1 && n.one_line_words() {
+    pad_l + pad_r
+  } else {
+    least
+  }
+  if n.min_w > 0.0 && !n.min_w_within {
+    soft_least = dmax(soft_least, said_min)
+  }
+  soft_least = dmin(soft_least, least)
+  n.soft_least = soft_least
   let fit_need = if fit_least > least + 0.01 { fit_least } else { 0.0 / 0.0 }
   if !(s.fit_need == fit_need || (s.fit_need.is_nan() && fit_need.is_nan())) {
     s.fit_need = fit_need
@@ -826,6 +856,25 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     0.0
   }
   let has_min_w = min_w > 0.0
+  // less than that as a last resort, where it has some of it to give and its row is not one to scroll sideways nor
+  // one that leaves it out (flex's soft_min, last_resort)
+  let soft_min = if in_row &&
+    !over &&
+    !at &&
+    !within &&
+    n.drop == 0 &&
+    !n.in_sideways &&
+    !(n.parent >= 0 && self.nodes[n.parent].sideways) &&
+    (n.w is Auto || (n.w is Fill(_) && n.keep)) &&
+    soft_least < min_w - 0.01 {
+    soft_least
+  } else {
+    0.0 / 0.0
+  }
+  if !(s.soft_min == soft_min || (s.soft_min.is_nan() && soft_min.is_nan())) {
+    s.soft_min = soft_min
+    ch = true
+  }
   // (said to give way to the parent's room: that much where the parent has it, all of the parent's where it has less)
   if within {
     if s.min_width_kind() != @flex.LEN_WITHIN || s.min_width_value() != min_w {

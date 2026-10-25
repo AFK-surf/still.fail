@@ -150,6 +150,10 @@ pub(all) struct Style {
   mut drop : Int
   mut fits : Bool
   mut fit_need : Double
+  // Not CSS's: the least an item of a row comes to as a last resort (NaN: its min-width), where the row has not the room
+  // for all it holds at their min-widths once what may give way has: words on one line that say not how they give, and
+  // what holds them. What may come down so, the widest first (layout.mbt last_resort).
+  mut soft_min : Double
   // bumped by every change to what the box comes from (its lengths and box
   // sizing): a node's box stands while it is the same (Node's box_ver)
   priv mut ver : Int
@@ -224,6 +228,7 @@ pub fn Style::new() -> Style {
     drop: 0,
     fits: false,
     fit_need: 0.0 / 0.0,
+    soft_min: 0.0 / 0.0,
     ver: 0,
     basis_v: 0.0,
     basis_k: LEN_AUTO,
@@ -297,6 +302,7 @@ pub fn Style::reset(self : Style) -> Unit {
   self.drop = 0
   self.fits = false
   self.fit_need = 0.0 / 0.0
+  self.soft_min = 0.0 / 0.0
   self.ver = self.ver + 1
   self.basis_v = 0.0
   self.basis_k = LEN_AUTO
