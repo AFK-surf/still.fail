@@ -47,7 +47,13 @@ createRoot(root).render(<DemoApp phone />);
     await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   };
   const cdp = await context.newCDPSession(page);
-  const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+  let controlled = null;
+  const touch = (type, x, y) => {
+    if (!controlled) return cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+    if (type !== 'touchEnd') Object.assign(controlled, { x, y });
+    return controlled.target.dispatchEvent(type === 'touchStart' ? 'pointerdown' : type === 'touchEnd' ? 'pointerup' : 'pointermove',
+      { pointerId: 1, pointerType: 'touch', buttons: type === 'touchEnd' ? 0 : 1, clientX: controlled.x, clientY: controlled.y });
+  };
   const tab = (name) => page.getByRole('tab', { name, exact: true });
   const NEW_CHAT = '新建对话';
   const bar = () => page.evaluate(() => {
@@ -86,6 +92,10 @@ createRoot(root).render(<DemoApp phone />);
   // Advance every animation frame: a loaded browser may deliver too few real frames before a wall-clock sleep ends.
   // The held panel must reach and keep its target regardless of how quickly this machine draws those frames.
   await page.clock.pauseAt(await page.evaluate(() => Date.now()));
+  // Native touch delivery follows the compositor's real clock; feed pointer events directly during this clocked part.
+  const heldTarget = page.locator('[data-bar=glass]').locator('..');
+  await heldTarget.evaluate(el => { window.savedCapture = el.setPointerCapture; el.setPointerCapture = () => {}; });
+  controlled = { target: heldTarget, x: px, y: top + 28 };
   const frames = async (ms) => { for (let at = 0; at < ms; at += 16) await page.clock.runFor(Math.min(16, ms - at)); };
   const fingerTo = async (y) => { await touch('touchMove', px, y); await frames(16); };
   await touch('touchStart', px, top + 28);
@@ -106,8 +116,10 @@ createRoot(root).render(<DemoApp phone />);
   await touch('touchEnd');
   await frames(900);
   assert.ok(await openness() > 0.97 && await page.locator('[data-bar=scrim]').count(), 'let go over the line: open');
-  await page.touchscreen.tap(195, 120);
+  await page.locator('[data-bar=scrim]').dispatchEvent('pointerdown');
   await frames(900);
+  controlled = null;
+  await heldTarget.evaluate(el => { el.setPointerCapture = window.savedCapture; });
   await page.clock.resume();
 
   // The list scrolled a little (on a shorter screen, for the demo's few chats to run past it), to be found so again.
