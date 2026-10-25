@@ -475,3 +475,19 @@ test "wide: the lists' filter (components.tsx MineFilter): its tip; its menu has
   assert_eq(@sfdesk.lit_place(), "chats")
   assert_true(named(calls, "prefs.set").iter().any(fn(m) { field(field(Some(m.params), "listFilter"), "ws1") == Some(Json::string("mine")) }))
 }
+
+///|
+test "wide: folded, the window made narrow enough for the tape: the sidebar on the tape at once, not moved for the window" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(t.find("新建对话") is None, msg="folded")
+  // the window's room changes nothing it was asked: the tape's sidebar where the tape has it from the first frame
+  t.resize(@sf.large_from - 40.0, 800.0)
+  t.draw()
+  let at_once = t.rect_of("新建对话")
+  assert_true(at_once is Some(_), msg="on the tape")
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(t.rect_of("新建对话"), at_once)
+}

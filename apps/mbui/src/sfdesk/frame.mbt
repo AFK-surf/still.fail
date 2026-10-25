@@ -49,8 +49,9 @@ pub(all) struct Wide {
   mut in_bar : Bool
   /// the block closed to the bar this frame (the web's data-sidebar="closed"): what is drawn in it as there
   mut closed : Bool
-  /// the state the block was last built in (closed, shown a while, the sidebar's width): a move sets out as it changes
-  mut moved_as : (Bool, Bool, Double)?
+  /// what the block last moved for, as it was last built (brand.tsx moveSidebar's callers: folded or opened as chosen,
+  /// shown a while, a place with no sidebar of its own, a place's own width): a move sets out as it changes
+  mut moved_as : (Bool, Bool, Bool, Double)?
   /// where the move has got to this frame: the sidebar's top row's height, its frosted bands' ground (0 the sidebar's,
   /// 1 the closed bar's), the lists' marks on the rail (0 gone, 1 in)
   mut brand_h : Double
@@ -543,9 +544,13 @@ pub fn frame(
   // while
   let page_id = c.id("main-page")
   let shown = c.shown_across(page_id, but="page-bar")
-  let state = (bar, peek, s)
+  // it moves for what it is asked (brand.tsx moveSidebar's callers): folded or opened as chosen (⌘\, its place pressed
+  // again), shown a while or no longer, a place with no sidebar of its own come to or left, another place's own width;
+  // not for the window's room folding it (crowded), a fold's place or the tape coming or going, which put it as they
+  // have it at once, nor for its edge in hand, which it follows at once
+  let cause = (wide.folded, wide.peeking, gated || bare, wide.side_w)
   match wide.moved_as {
-    Some(was) if was != state && !wide.edge_held => {
+    Some(was) if was != cause && !wide.edge_held => {
       // shown a while from now: how far the page moves aside, worked out once as it starts (Rail.tsx markPeek)
       if peek && !was.1 {
         wide.peek_shift = peek_shift(c, shown, wide.page_from, s)
@@ -554,7 +559,7 @@ pub fn frame(
     }
     _ => ()
   }
-  wide.moved_as = Some(state)
+  wide.moved_as = Some(cause)
   // the column the page starts after (shell.css.ts shell: the rail's 56 and the sidebar open, the rail's folded) where
   // its move has got to: the page laid out as wide as it leaves
   // (on the tape apart from the page: its panel 6 in from the window's edge, 8 from the page's: tape_apart; as much
