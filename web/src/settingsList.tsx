@@ -10,7 +10,7 @@
 // (更新日志 in 关于, the system's permission on 通知's page) is not a row of its own.
 import type { ComponentType } from "react";
 import { Archive, Bell, Brain, Chart, Check, Command, Im, Info, Key, Monitor, Quota, Server, ShieldCheck, Sliders, User, Users, ViewColumns, type IconProps } from "@stillfail/ui/icons.tsx";
-import { useConnects, useStations } from "./api.ts";
+import { useConnects, useProfiles, useStations } from "./api.ts";
 import { useWorkspace } from "./cloud/api.ts";
 import { useLock } from "./cloud/Security.tsx";
 import type { WorkspaceEntry } from "./cloud/workspace.tsx";
@@ -59,6 +59,7 @@ export function useSettingsList(entry: WorkspaceEntry, phone: boolean, bars?: st
   const view = useWorkspace(entry.id).value;
   const stations = useStations(entry.id).value;
   const connects = useConnects(entry.id).value;
+  const profiles = useProfiles(entry.id).value;
   const lock = useLock(entry.id);
   const vaults = useVaults(entry.id);
   const [appearance] = useAppearance();
@@ -68,8 +69,6 @@ export function useSettingsList(entry: WorkspaceEntry, phone: boolean, bars?: st
   const waiting = view ? view.added.length + view.invitations.length : 0;
   const online = stations?.filter((s) => s.online).length ?? 0;
   const failing = connects?.items.filter((i) => i.connect.presence === "error").length ?? 0;
-  const profiles = stations?.flatMap((s) => s.overview?.profiles ?? []) ?? [];
-  const short = profiles.filter((p) => p.trouble != null).length;
   const roleWords = view ? (t(`web-pages.roles.${view.role}`)) : "";
   const people = view ? (manager && waiting ? t("web-mobile.settings.membersWaiting", { n: view.members.length, waiting }) : t("web-mobile.settings.members", { n: view.members.length })) : "";
   const parts: SettingsPart[] = [];
@@ -95,7 +94,8 @@ export function useSettingsList(entry: WorkspaceEntry, phone: boolean, bars?: st
     rows: [
       { key: "stations", path: "stations", icon: Server, title: "Station", value: stations ? t("web-mobile.settings.stationsOnline", { online, n: stations.length }) : undefined, dot: stations ? online < stations.length : false },
       { key: "connects", path: "connects", icon: Im, title: t("web-mobile.settings.connects"), bad: failing > 0, value: connects ? (failing ? t("web-mobile.settings.connectsFailing", { n: failing }) : t("web-mobile.settings.connectsCount", { n: connects.items.length })) : undefined },
-      { key: "profiles", path: "profiles", icon: Quota, title: "Profile", bad: short > 0, value: stations ? (short ? t("web-mobile.settings.profilesShort", { n: short }) : t("web-mobile.settings.profilesCount", { n: profiles.length })) : undefined },
+      // (as many as their list has, those that need a look as the core counts them)
+      { key: "profiles", path: "profiles", icon: Quota, title: "Profile", bad: (profiles?.attention ?? 0) > 0, value: profiles ? (profiles.attention ? t("web-mobile.settings.profilesShort", { n: profiles.attention }) : t("web-mobile.settings.profilesCount", { n: profiles.items.length })) : undefined },
     ],
   });
   // how its agents work

@@ -2420,8 +2420,9 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "A chat's services and background jobs as its pages show them (the `chatJobs` view): every one, those that matter\nnow first (died, restarting, up and alive, over; newest first within each); what the button's dot says; each\ngroup's head's note; how many matter now, how many are over and whose they are (clearing them is per session)." }),
   ProfilesView: struct([
     ["items", vec("WorkspaceProfile")],
+    ["attention", "i64", { client: "I54", doc: "How many of them need a look (`look`): what the settings' row says." }],
     ["wait", "ListNote", { doc: "What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be." }],
-  ], { doc: "The workspace's profiles in one list (the `profiles` view): one shared between stations once, the others each with\nthe station they are on; by kind of account (`group`, in its order), usable ones first in each.", keepNone: true }),
+  ], { doc: "The workspace's profiles in one list (the `profiles` view): one shared between stations once, the others each with\nthe station they are on; by kind of account (`group`, in its order), those that need a look first in each.", keepNone: true }),
   WorkspaceProfile: struct([
     ["key", "String", { doc: "The share's id, or station/profile for one on a station only." }],
     ["group", "String", { doc: "The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), kimi (Kimi Code signed in), opencode (OpenCode Go signed in), cursor (Cursor), devin (Devin), key (the rest)." }],
@@ -2435,6 +2436,8 @@ export const SHAPES: Record<string, Shape> = {
     ["hostName", "String", { said: true }],
     ["hostOnline", "bool"],
     ["usable", "bool", { doc: "False for a shared subscription while the station signed in to it is away." }],
+    ["state", opt("ProfileState"), { doc: "How it is where that is not simply fine, as its row says it; absent: fine." }],
+    ["look", "bool", { doc: "It needs a look: nobody can use it now, or it has trouble (its profile's `trouble`). Counted where the list is\nentered (`attention`), first in its kind, its state in colour." }],
     ["where", "String", { said: true, doc: "Where it is, in words: 只在 studio / 登录在 studio · 只给 a、b." }],
     ["allow", opt(vec("String")), { doc: "The stations that may use a shared one; absent: every one." }],
     ["stations", vec("ShareStation"), { doc: "For a shared one: the workspace's stations and whether each may use it." }],
@@ -2442,6 +2445,10 @@ export const SHAPES: Record<string, Shape> = {
     ["canShare", "bool", { doc: "Its station can share it (one older than sharing cannot)." }],
     ["members", vec("ProfileMember"), { default: true, doc: "Each station that has this account: one row, its page their parts." }],
   ], { doc: "An account in the workspace's list: the same subscription or key on several stations (shared or each signed in) is one." }),
+  ProfileState: struct([
+    ["text", "String", { said: true, doc: "studio 离线; 需要登录; 额度查询失败; 未检查." }],
+    ["tone", "Tone", { doc: "red or amber: it needs a look; neutral: it does not (a check not made yet)." }],
+  ], { doc: "How a profile of the workspace's list is, in a few words and their tone." }),
   ProfileMember: struct([
     ["station", "String"],
     ["stationId", "String"],

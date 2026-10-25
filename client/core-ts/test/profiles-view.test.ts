@@ -42,6 +42,8 @@ test("a shared subscription whose host is away comes from a copy, unusable, firs
   ]);
   assert.equal(view.items[0].key, "share:sh-1");
   assert.equal(view.items[0].usable, false);
+  assert.deepEqual([view.items[0].look, view.items[0].state], [true, { text: "studio 离线", tone: "red" }]);
+  assert.equal(view.attention, 1);
   assert.equal(view.items[0].editable, false);
   // Still listed as up by the cloud, but not answering the station borrowing it: away all the same.
   const late = workspaceProfiles([
@@ -50,6 +52,26 @@ test("a shared subscription whose host is away comes from a copy, unusable, firs
   ]);
   assert.equal(late.items[0].usable, false);
   assert.equal(late.wait.reading, true, "studio is up and not read yet");
+});
+
+test("what needs a look says so in its row, is counted and comes first in its kind: its allowance not read as much as a sign-in wanted", () => {
+  const shown = (id: string, extra: Record<string, unknown>) => shownProfile(profile(id, { email: `${id}@x.test`, runtime: "claude", ...extra }));
+  const view = workspaceProfiles([
+    station(A, "studio", true, [
+      shown("a-fine", { check: { state: "ok" }, quota: { state: "ok", windows: [] } }),
+      shown("b-new", {}),
+      shown("c-quota", { check: { state: "ok" }, quota: { state: "unavailable", detail: "Kimi Code 没有返回额度信息" } }),
+      shown("d-login", { check: { state: "login" } }),
+    ]),
+  ]);
+  assert.deepEqual(view.items.map((e: any) => [e.profile.id, e.look, e.state]), [
+    ["c-quota", true, { text: "额度查询失败", tone: "amber" }],
+    ["d-login", true, { text: "需要登录", tone: "amber" }],
+    ["a-fine", false, null],
+    // (not checked yet: said, but nothing to look at)
+    ["b-new", false, { text: "未检查", tone: "neutral" }],
+  ]);
+  assert.equal(view.attention, 2);
 });
 
 test("the same account signed in on two stations each is one row, each station a member", () => {

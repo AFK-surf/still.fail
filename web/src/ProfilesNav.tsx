@@ -88,8 +88,8 @@ function isHere(e: WorkspaceProfile, path: string, scope: string): boolean {
 function ProfileRow({ entry, scope }: { entry: WorkspaceProfile; scope: string }) {
   const path = useLocation().pathname;
   const p = entry.profile;
-  // Only what is wrong is in colour: one nobody can use now, one whose check did not pass.
-  const trouble = !entry.usable ? t("web-pages.settings.profiles.hostAway", { station: entry.hostName }) : p.checkTone !== "green" ? p.checkText : null;
+  // How it is where that is not simply fine, as the core says it, in its tone: what needs a look in colour.
+  const trouble = entry.state?.text ?? null;
   const several = hosts(entry).length > 1;
   const facts = [
     entry.where,
@@ -101,7 +101,7 @@ function ProfileRow({ entry, scope }: { entry: WorkspaceProfile; scope: string }
     <NavItem to={profilePath(entry)} current={isHere(entry, path, scope)} away={!entry.usable} tip={windows ? facts || undefined : several ? entry.where : undefined}
       mark={<ProviderLogo runtime={p.runtime} kind={p.access.kind} mark={p.providerMark} size={16} />} title={p.name}>
       <NavLine>
-        {trouble && <span className={css.trouble} data-tone={entry.usable ? p.checkTone : "red"}>{trouble}</span>}
+        {trouble && <span className={css.trouble} data-tone={entry.state?.tone}>{trouble}</span>}
         {windows ?? <>{trouble && facts && <span aria-hidden="true">·</span>}<span className={navFill}>{facts}</span></>}
       </NavLine>
     </NavItem>

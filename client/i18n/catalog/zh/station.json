@@ -286,6 +286,7 @@
   "station.quota.chatgptNoWindows": "ChatGPT 没有返回额度信息",
   "station.quota.grokNoWindows": "SuperGrok 没有返回额度信息",
   "station.quota.kimiNoWindows": "Kimi Code 没有返回额度信息",
+  "station.quota.kimiNone": "Kimi Code 未提供此账号的额度信息",
   "station.quota.envUnsupported": "自定义环境变量的账号无法查询额度",
   "station.quota.noCredit": "没有可用的重置次数",
   "station.quota.nothingToReset": "当前没有可重置的额度",

@@ -234,6 +234,9 @@ async function kimiQuota(urls: Urls, key: string, lang: Lang): Promise<ProfileQu
   } catch {
     return quota("unavailable", [], tr(lang, "station.quota.kimiNoWindows"));
   }
+  // An answer with no allowance in it at all (`{}`, as Kimi gives an account it tells none of) has nothing to show, as
+  // a key billed per use; one with some that could not be read is unavailable.
+  if (isObject(body) && body.usage == null && !(Array.isArray(body.limits) && body.limits.length > 0)) return quota("unsupported", [], tr(lang, "station.quota.kimiNone"));
   return okOrUnavailable(kimiWindows(body), tr(lang, "station.quota.kimiNoWindows"));
 }
 

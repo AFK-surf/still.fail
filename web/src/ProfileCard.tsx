@@ -4,7 +4,7 @@
 // its action on a line of its own when narrow.
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import type { MachineLogin } from "./core/shapes.ts";
+import type { MachineLogin, ProfileState } from "./core/shapes.ts";
 import type { Profile } from "./api.ts";
 import { QuotaBars } from "./components.tsx";
 import { ACCESS, RUNTIME_LABEL } from "./format.ts";
@@ -17,10 +17,11 @@ import * as baseCss from "./styles/base.css.ts";
 import { t } from "./i18n.ts";
 
 /**
- * A profile: its name and runtimes, what it is and who uses it (`uses`, said by the page), its quota and its check.
+ * A profile: its name and runtimes, what it is and who uses it (`uses`, said by the page), its quota and its check, or
+ * how it is as the workspace's list says it (`state`, null: fine).
  * `framed`: a card of its own (not a row of a list); `to`: the whole of it leads there.
  */
-export function ProfileCard({ profile, uses, to, action, framed, state }: { profile: Profile; uses?: string; to?: string; action?: ReactNode; framed?: boolean; state?: ReactNode }) {
+export function ProfileCard({ profile, uses, to, action, framed, state }: { profile: Profile; uses?: string; to?: string; action?: ReactNode; framed?: boolean; state?: ProfileState | null }) {
   const quota = profile.quota;
   // Why its allowance could not be read (a refused account, a sign-in gone stale), shown on its state's hover.
   const trouble = quota && (quota.state === "blocked" || quota.state === "unavailable") ? quota.detail : null;
@@ -30,7 +31,8 @@ export function ProfileCard({ profile, uses, to, action, framed, state }: { prof
       title={<>{profile.name}<RuntimeTags runtimes={profile.runtimes} decision={profile.uses?.includes("decision")} /></>}
       sub={[profile.machine ? t("web-main.profile.machine") : profile.providerName ? null : ACCESS[profile.access.kind].label, profile.modelsText, uses]}
       quota={quota ? <QuotaBars quota={quota} compact /> : null}
-      state={state ?? (profile.checkTone !== "green" ? <State pill={<Pill tone={profile.checkTone}>{profile.checkText}</Pill>} why={trouble} /> : null)}
+      state={state !== undefined ? (state && <State pill={<Pill tone={state.tone}>{state.text}</Pill>} why={trouble} />)
+        : profile.checkTone !== "green" ? <State pill={<Pill tone={profile.checkTone}>{profile.checkText}</Pill>} why={trouble} /> : null}
       action={action ?? (to ? <ChevronRight {...ICON} className={css.profileCardChevron} /> : null)}
     />
   );

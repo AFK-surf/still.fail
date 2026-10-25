@@ -65,6 +65,7 @@ pub fn settings_parts(c : @ui.Ctx, core : Core, here : @settings.Here) -> Array[
   let connects = (core.topic)("connects", { "scope": Json::string(here.workspace), "mine": Json::boolean(false) }).value
   let lock = (core.topic)("lock", { "workspace": Json::string(here.workspace) }).value
   let vaults = (core.topic)("vaults", { "workspace": Json::string(here.workspace) }).value
+  let profiles = (core.topic)("profiles", { "scope": Json::string(here.workspace) }).value
   let parts : Array[SettingsPart] = []
   // who is signed in, the workspace in view
   let me = if here.person != "" { here.person } else { here.email }
@@ -112,27 +113,13 @@ pub fn settings_parts(c : @ui.Ctx, core : Core, here : @settings.Here) -> Array[
     settings_row(Vault, "vault", "key", @sf.t("android-settings.vault.title"), value=text(vaults, "statusText"), bad=flag(vaults, "statusBad")),
   )
   parts.push({ heading: "", rows: access })
-  // where its agents run: its stations, the chats' ways in, the agents' accounts
-  let (online, profiles, short) = match stations {
-    Some(a) => {
-      let mut on = 0
-      let mut p = 0
-      let mut sh = 0
-      for x in a {
-        if flag(Some(x), "online") {
-          on += 1
-        }
-        for pr in items(field(Some(x), "overview"), "profiles") {
-          p += 1
-          if @settings.has(Some(pr), "trouble") {
-            sh += 1
-          }
-        }
-      }
-      (on, p, sh)
-    }
-    None => (0, 0, 0)
+  // where its agents run: its stations, the chats' ways in, the agents' accounts (as many as their list has, those
+  // that need a look as the core counts them)
+  let online = match stations {
+    Some(a) => a.filter(fn(x) { flag(Some(x), "online") }).length()
+    None => 0
   }
+  let short = count(profiles, "attention")
   let mut failing = 0
   for x in items(connects, "items") {
     if text(field(Some(x), "connect"), "presence") == "error" {
@@ -175,12 +162,12 @@ pub fn settings_parts(c : @ui.Ctx, core : Core, here : @settings.Here) -> Array[
         "profiles",
         "quota",
         "Profile",
-        value=if stations is None {
+        value=if profiles is None {
           ""
         } else if short > 0 {
           @sf.t("android-settings.home.short", args=[("n", short.to_string())])
         } else {
-          @sf.t("android-settings.count", args=[("n", profiles.to_string())])
+          @sf.t("android-settings.count", args=[("n", items(profiles, "items").length().to_string())])
         },
         bad=short > 0,
       ),

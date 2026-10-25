@@ -1052,6 +1052,7 @@ let said_paths : Map[String, Array[String]] = {
     "items.*.profile.decisionText",
     "items.*.profile.checkLine",
     "items.*.hostName",
+    "items.*.state.text",
     "items.*.where",
     "items.*.stations.*.name",
     "items.*.members.*.stationName",

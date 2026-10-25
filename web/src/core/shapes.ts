@@ -5101,6 +5101,14 @@ export interface ProfileMember {
 	usedBy: number;
 }
 
+/** How a profile of the workspace's list is, in a few words and their tone. */
+export interface ProfileState {
+	/** studio 离线; 需要登录; 额度查询失败; 未检查. */
+	text: string;
+	/** red or amber: it needs a look; neutral: it does not (a check not made yet). */
+	tone: Tone;
+}
+
 export interface ShareStation {
 	id: string;
 	station: string;
@@ -5129,6 +5137,13 @@ export interface WorkspaceProfile {
 	hostOnline: boolean;
 	/** False for a shared subscription while the station signed in to it is away. */
 	usable: boolean;
+	/** How it is where that is not simply fine, as its row says it; absent: fine. */
+	state?: ProfileState;
+	/**
+	 * It needs a look: nobody can use it now, or it has trouble (its profile's `trouble`). Counted where the list is
+	 * entered (`attention`), first in its kind, its state in colour.
+	 */
+	look: boolean;
 	/** Where it is, in words: 只在 studio / 登录在 studio · 只给 a、b. */
 	where: string;
 	/** The stations that may use a shared one; absent: every one. */
@@ -5145,10 +5160,12 @@ export interface WorkspaceProfile {
 
 /**
  * The workspace's profiles in one list (the `profiles` view): one shared between stations once, the others each with
- * the station they are on; by kind of account (`group`, in its order), usable ones first in each.
+ * the station they are on; by kind of account (`group`, in its order), those that need a look first in each.
  */
 export interface ProfilesView {
 	items: WorkspaceProfile[];
+	/** How many of them need a look (`look`): what the settings' row says. */
+	attention: number;
 	/** What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be. */
 	wait: ListNote;
 }
