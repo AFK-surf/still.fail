@@ -3,7 +3,7 @@
 // failed is told. The wide screen's page is cloud/Vault.tsx, the phone's mobile/Vault.tsx, the approval card
 // VaultApproval.tsx: they only draw.
 import { useCallback, useState } from "react";
-import { useCall, useTopic } from "./core/react.ts";
+import { useCall, useTopic, useTopics } from "./core/react.ts";
 import type { VaultField, VaultItemRow, VaultItemsView, VaultRequest, VaultsView, VaultUsesView } from "./core/shapes.ts";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { t } from "./i18n.ts";
@@ -38,6 +38,11 @@ export function useVaults(workspace: string): VaultsView | undefined {
 
 export function useVaultItems(workspace: string, vault: string): VaultItemsView | undefined {
   return useTopic<VaultItemsView>({ topic: "vaultItems", workspace, vault }).value;
+}
+
+/** Each vault's items at once (全部密钥's one list), in the vaults' order. */
+export function useVaultsItems(workspace: string, vaults: string[]): (VaultItemsView | undefined)[] {
+  return useTopics<VaultItemsView>(vaults.map((vault) => ({ topic: "vaultItems", workspace, vault }))).map((s) => s.value);
 }
 
 /** An item's uses by agents, the latest first (the station's record of them). */

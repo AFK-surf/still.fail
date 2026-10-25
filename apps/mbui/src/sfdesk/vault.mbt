@@ -251,37 +251,160 @@ fn vault_library(c : @ui.Ctx, core : Core, look : Look, ws : String, v : Json?) 
 }
 
 ///|
-/// 全部密钥 (LibraryItems): the profiles' accounts it keeps, a section a kind as the profiles list them, each to its
-/// profile; then each vault's secrets (a vault this device has no key to, the names it is told).
+/// What 全部密钥's field looks for: words of a secret's row (its name, its kind, how it is given: its host, its
+/// variable; where it was last used).
+// kept across runs: what the page's field holds, the person's; vault_reset empties it
+let vault_find : @ui.Field = @ui.Field::new()
+
+///|
+/// Whether 全部密钥's profiles' accounts are shown (folded at its foot till then).
+// kept across runs: the person's; vault_reset folds them
+let vault_accounts_open : Ref[Bool] = Ref(false)
+
+///|
+fn vault_reset() -> Unit {
+  vault_find.set("")
+  vault_accounts_open.val = false
+}
+
+///|
+/// 全部密钥 (LibraryItems), as a password manager's list (the user, 2026-10-26: a section a kind of one row each was
+/// 「信息密度极低，找也找不到有意义的东西」): a field to find one by any of its words; then every one on one list card, a
+/// row each: its mark (the profile's service; a secret's kind), its name, and under it its kind and what is worth
+/// knowing of it (an account's station, and what is wrong with it; a secret's way to an agent and its last use, the
+/// core's lineText), each leading to its page: each vault's secrets (a vault this device has no key to, the names it is
+/// told, going nowhere), locked, a row of those it does not name; then the profiles' accounts on a card of their own,
+/// folded under a row naming them (they are the profiles' pages' first: the user, 2026-10-26, 「订阅一般在 profiles
+/// 看过了」), open where what is looked for is among them.
 fn vault_all(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Unit] {
+  let th = @sf.theme()
   let plain = flag(v, "plain")
   let vaults = items(v, "vaults")
-  let out : Array[() -> Unit] = []
-  let profiles = (core.topic)("profiles", { "scope": str(ws) }).value
-  let groups = profile_groups(items(profiles, "items"))
-  for g in groups {
+  let many = vaults.length() > 1
+  let find = vault_find.text().trim(chars=" ").to_lower()
+  let shows = fn(words : Array[String]) { find == "" || words.iter().any(fn(w) { w.to_lower().contains(find) }) }
+  // (a row's line: what is said of it, those words that are not empty, a dot between)
+  let said = fn(words : Array[String]) { words.filter(fn(w) { w != "" }).join(" · ") }
+  let rows : Array[() -> Unit] = []
+  let mut reading = false
+  // the profiles' accounts, as the profiles list them (folded at the foot: seen on the profiles' pages)
+  let accounts : Array[() -> Unit] = []
+  let account_names : Array[String] = []
+  let mut kept_accounts = 0
+  for g in profile_groups(items((core.topic)("profiles", { "scope": str(ws) }).value, "items")) {
+    for e in g.1 {
+      let ev = Some(e)
+      let p = field(ev, "profile")
+      kept_accounts += 1
+      if !shows([text(p, "name"), g.0, text(ev, "where")]) {
+        continue
+      }
+      account_names.push(text(p, "name"))
+      accounts.push(fn() {
+        if @sf.link_row(
+            c,
+            "vault-profile/" + text(ev, "key"),
+            text(p, "name"),
+            note=said([g.0, text(ev, "where")]),
+            trouble=if text(p, "checkTone") == "red" { text(p, "checkText") } else { "" },
+            lead=fn() { @settings.group_mark(c, text(p, "group")) },
+          ) {
+          (core.push)(Profile(text(ev, "station"), text(p, "id")))
+        }
+      })
+    }
+  }
+  // each vault's secrets, by name (the core's order); those it does not name, a row
+  let unnamed : Array[() -> Unit] = []
+  for row in vaults {
+    let rv = Some(row)
+    let topic = (core.topic)("vaultItems", { "workspace": str(ws), "vault": str(text(rv, "id")) })
+    if topic.value is None {
+      reading = true
+      continue
+    }
+    let list = items(topic.value, "items")
+    let keyed = plain || flag(rv, "keyed")
+    for it in list {
+      let iv = Some(it)
+      if !has(iv, "name") || !shows([text(iv, "name"), text(iv, "kindText"), text(iv, "lineText"), text(iv, "howText")]) {
+        continue
+      }
+      rows.push(fn() {
+        let mark = fn() { @sf.icon(c, @settings.kind_icon(text(iv, "kind")), size=vt_glyph, color=th.p.text) |> ignore }
+        // (its kind, its vault where there are more than one; the core's: how an agent gets it, when and where it was
+        // last used)
+        let line = said([text(iv, "kindText"), if many { text(rv, "name") } else { "" }, if keyed { text(iv, "lineText") } else { text(iv, "agentText") }])
+        if @sf.link_row(c, "vault-item/" + text(iv, "id"), text(iv, "name"), note=line, lead=mark, goes=keyed) {
+          (core.push)(VaultItem(text(rv, "id"), text(iv, "id")))
+        }
+      })
+    }
+    let hidden = list.filter(fn(x) { !has(Some(x), "name") })
+    if hidden.length() > 0 {
+      let words = @sf.t("web-pages.vault.hidden", args=[("n", hidden.length().to_string())])
+      unnamed.push(fn() {
+        // (its words where the names are; unlocked by opening one of them: the vault's key kept a while, every name
+        // shown; one this device has no key to, said alone)
+        let lead = fn() { c.box(style=vt_no_mark, fn() {  }) |> ignore }
+        if !keyed {
+          @sf.link_row(c, "", words, lead~, goes=false) |> ignore
+        } else if @sf.link_row(c, "vault-unlock/" + text(rv, "id"), words, value=@sf.t("web-pages.vault.unlock"), value_lit=true, chevron=false, lead~) {
+          @settings.act(core, @sf.t("web-pages.vault.unlockWhat"), "vault.open", obj([("workspace", str(ws)), ("item", str(text(Some(hidden[0]), "id")))]))
+        }
+      })
+    }
+  }
+  let out : Array[() -> Unit] = [
+    fn() {
+      c.box(style=vt_find, fn() {
+        @sf.input(c, "vault-find", placeholder=@sf.t("web-pages.vault.find"), field=vault_find) |> ignore
+      })
+      |> ignore
+    },
+  ]
+  if rows.length() + unnamed.length() > 0 {
     out.push(fn() {
-      @sf.section(c, g.0, fn() {
-        @sf.group(c, fn() {
-          for e in g.1 {
-            let ev = Some(e)
-            let p = field(ev, "profile")
-            if @sf.link_row(c, "vault-profile/" + text(ev, "key"), text(p, "name"), note=text(ev, "where")) {
-              (core.push)(Profile(text(ev, "station"), text(p, "id")))
-            }
-          }
-        })
+      @sf.group(c, fn() {
+        for r in rows {
+          r()
+        }
+        for r in unnamed {
+          r()
+        }
       })
     })
   }
-  for row in vaults {
-    if plain || flag(Some(row), "keyed") {
-      out.append(vault_secrets(c, core, ws, row, vaults.length() > 1, groups.length() > 0))
-    } else {
-      out.push(fn() { vault_named(c, core, ws, row) })
-    }
+  // the accounts, folded under a row naming them (open where what is looked for is among them)
+  if accounts.length() > 0 {
+    let open = vault_accounts_open.val || find != ""
+    out.push(fn() {
+      @sf.group(c, fn() {
+        // (its words where the names are, as those of the secrets' row of those it does not name)
+        if @sf.link_row(
+            c,
+            "vault-accounts",
+            @sf.t("web-pages.vault.accounts"),
+            note=if open { "" } else { account_names.join("、") },
+            folds=open,
+            lead=fn() { c.box(style=vt_no_mark, fn() {  }) |> ignore },
+          ) &&
+          find == "" {
+          vault_accounts_open.val = !open
+        }
+        if open {
+          for r in accounts {
+            r()
+          }
+        }
+      })
+    })
   }
-  if out.length() == 0 {
+  if reading {
+    out.push(fn() { @sf.wait_line(c, @sf.t("common.reading")) })
+  } else if rows.length() + accounts.length() == 0 && find != "" {
+    out.push(fn() { @sf.page_note(c, @sf.t("web-pages.vault.noMatch", args=[("q", vault_find.text().trim(chars=" ").to_owned())])) })
+  } else if rows.length() + unnamed.length() + kept_accounts == 0 {
     out.push(fn() { @sf.page_note(c, @sf.t("web-pages.vault.empty")) })
   }
   out
@@ -373,7 +496,7 @@ fn vault_kept(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Unit {
 }
 
 ///|
-/// A row that does one thing (as 解锁's: vault_secrets): pressed anywhere, it does it; what it does in the link's ink
+/// A row that does one thing (as 解锁's: vault_all): pressed anywhere, it does it; what it does in the link's ink
 /// where a row says how it stands (under its title where the line has not the room), turning while it is done (not
 /// done again then). True on the frame it is pressed.
 fn vault_do_row(c : @ui.Ctx, key : String, title : String, note : String, action : String, lacks? : Bool = false, busy? : Bool = false) -> Bool {
@@ -463,63 +586,6 @@ fn vault_delete_row(c : @ui.Ctx, core : Core, ws : String, rv : Json?, many : Bo
 }
 
 ///|
-/// A vault's secrets, a section a kind (LibraryVault; the vault's name after the kind's where there are more than one):
-/// each one's name and when an agent last used it, else how it may be asked for, leading to its page; locked, a row of
-/// those it does not name and unlocking; nothing in it said where nothing else is listed (`quiet`: the profiles'
-/// accounts are).
-fn vault_secrets(c : @ui.Ctx, core : Core, ws : String, row : Json, many : Bool, quiet : Bool) -> Array[() -> Unit] {
-  let rv = Some(row)
-  let topic = (core.topic)("vaultItems", { "workspace": str(ws), "vault": str(text(rv, "id")) })
-  let list = match topic.value {
-    Some(_) => items(topic.value, "items")
-    None => return [fn() { @sf.wait_line(c, @sf.t("common.reading")) }]
-  }
-  let out : Array[() -> Unit] = []
-  for kind in vault_kinds {
-    let rows = list.filter(fn(x) { has(Some(x), "name") && text(Some(x), "kind") == kind })
-    if rows.length() == 0 {
-      continue
-    }
-    let title = @sf.t("web-pages.vault.kind." + kind)
-    out.push(fn() {
-      @sf.section(c, title + (if many { " · " + text(rv, "name") } else { "" }), fn() {
-        @sf.group(c, fn() {
-          for it in rows {
-            let iv = Some(it)
-            // (the core's: when an agent last used it, else how agents may ask for it)
-            if @sf.link_row(c, "vault-item/" + text(iv, "id"), text(iv, "name"), note=text(iv, "lineText")) {
-              (core.push)(VaultItem(text(rv, "id"), text(iv, "id")))
-            }
-          }
-        })
-      })
-    })
-  }
-  // locked, those it does not name: a row of a list of its own, unlocking them
-  let hidden = list.filter(fn(x) { !has(Some(x), "name") })
-  if hidden.length() > 0 {
-    out.push(fn() {
-      @sf.group(c, fn() {
-        if @sf.link_row(
-            c,
-            "vault-unlock/" + text(rv, "id"),
-            @sf.t("web-pages.vault.hidden", args=[("n", hidden.length().to_string())]),
-            value=@sf.t("web-pages.vault.unlock"),
-            value_lit=true,
-            chevron=false,
-          ) {
-          @settings.act(core, @sf.t("web-pages.vault.unlockWhat"), "vault.open", obj([("workspace", str(ws)), ("item", str(text(Some(hidden[0]), "id")))]))
-        }
-      })
-    })
-  }
-  if list.length() == 0 && !quiet {
-    out.push(fn() { @sf.page_note(c, @sf.t("web-pages.vault.empty")) })
-  }
-  out
-}
-
-///|
 /// A vault this device has no key to (VaultSection's), under its name: that it has none, how to get one, and the
 /// recovery words typed where they can give it one.
 fn vault_no_key(c : @ui.Ctx, core : Core, ws : String, rv : Json?) -> Unit {
@@ -582,6 +648,16 @@ let vt_glyph : Double = 16.0
 /// (actions: a card's buttons at its foot, 8 apart, its words before them)
 // kept across runs: a value (no field of it changes)
 let vt_actions : @ui.Style = @ui.css("row w=Full gap=S2 pt=S1 align=ACenter")
+
+///|
+/// 全部密钥's field: over its list, as wide as its card, 10 above it.
+// kept across runs: a value (no field of it changes)
+let vt_find : @ui.Style = @ui.css("w=Full pb=S2_5")
+
+///|
+/// Where a row's mark would be, kept for one with none: its words where the others' names are.
+// kept across runs: a value (no field of it changes)
+let vt_no_mark : @ui.Style = @ui.css("w=S4")
 
 ///|
 /// (requests: each one's card, 10 apart as the page's cards: pagesCss.card)

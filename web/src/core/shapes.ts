@@ -5994,7 +5994,7 @@ export interface VaultItemRow {
 	kindText?: string;
 	/** Whether agents may ask for it and how (允许 agent 申请 · 代理 · api.github.com), or 仅自己可见. */
 	agentText?: string;
-	/** Its second line in a list: when an agent last used it, else `agentText`. */
+	/** Its line in a list: how an agent gets it (or that it is only the person's), when and in which chat it was last used. */
 	lineText?: string;
 	/** How agents are given it, a line each way joined by 、 (代理 · 限 api.github.com). */
 	howText?: string;

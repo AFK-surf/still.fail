@@ -21,20 +21,33 @@ export function howText(mode: string, hosts: readonly string[]): string {
 export const lastsText = (lasts: unknown): string => t(`core-views.vault.lasts.${typeof lasts === "string" && SCOPE_WORDS.includes(lasts) ? lasts : "chat"}`);
 
 /// An item's row's words: what kind it is; whether agents may ask for it and how (允许 agent 申请 · 代理 · api.github.com,
-/// or 仅自己可见); its second line in a list (when it was last used, else that); how it is given, a line a way; its
-/// longest grant (its own, or 跟随默认 · its vault's); its fields before it is opened.
-export function itemWords(row: { kind?: unknown; listed: boolean; modes: string[]; hosts: string[]; lasts: unknown; lastUse?: unknown }, vaultLasts: unknown): {
+/// or 仅自己可见); its line in a list, what is worth knowing of it at a glance (lineText); how it is given, a line a
+/// way; its longest grant (its own, or 跟随默认 · its vault's); its fields before it is opened.
+export function itemWords(row: { kind?: unknown; listed: boolean; modes: string[]; hosts: string[]; env?: unknown; lasts: unknown; lastUse?: unknown }, vaultLasts: unknown): {
   kindText: string; agentText: string; lineText: string; howText: string; lastsText: string; shut: { key: string; label: string; value: string; secret: boolean; mono: boolean }[];
 } {
   const agentText = row.listed ? [t("core-views.vault.agent_may"), ...row.modes.map(modeText), ...(row.modes.includes("proxy") ? row.hosts : [])].join(" · ") : t("core-views.vault.private");
   return {
     kindText: kindText(row.kind),
     agentText,
-    lineText: row.lastUse !== undefined ? t("core-views.vault.used", { when: String((row.lastUse as { at?: { ago?: unknown } } | undefined)?.at?.ago ?? "") }) : agentText,
+    lineText: lineText(row),
     howText: row.modes.map((m) => howText(m, row.hosts)).join("、"),
     lastsText: typeof row.lasts === "string" && row.lasts !== "" ? lastsText(row.lasts) : t("core-views.vault.lasts.following", { lasts: lastsText(vaultLasts) }),
     shut: shutFields(row.kind),
   };
+}
+
+/// An item's line in a list (全部密钥), what is worth knowing of it at a glance: how an agent gets it (代理 ·
+/// api.github.com, 环境变量 GH_TOKEN, ssh-agent; the variable it is named by where it is given another way), or that it
+/// is only the person's; when it was last used, and in which chat (昨天在「修 CI」用过).
+function lineText(row: { listed: boolean; modes: string[]; hosts: string[]; env?: unknown; lastUse?: unknown }): string {
+  const env = typeof row.env === "string" && row.env !== "" ? row.env : null;
+  const ways = !row.listed ? [t("core-views.vault.private")]
+    : [...row.modes.flatMap((m) => (m === "proxy" ? [modeText(m), ...row.hosts] : m === "env" && env ? [`${modeText(m)} ${env}`] : [modeText(m)])), ...(env && !row.modes.includes("env") ? [env] : [])];
+  const use = row.lastUse as { at?: { ago?: unknown }; chatTitle?: unknown } | undefined;
+  const when = String(use?.at?.ago ?? "");
+  const used = use === undefined ? [] : [typeof use.chatTitle === "string" && use.chatTitle !== "" ? t("core-views.vault.usedIn", { when, chat: use.chatTitle }) : t("core-views.vault.used", { when })];
+  return [...ways, ...used].join(" · ");
 }
 
 /// An opened item's fields as its page shows them, in order: what each is called, its value, whether it is masked,

@@ -1,7 +1,7 @@
 // 密钥, one page in every frame (src/sfdesk vault.mbt): at a width of each tier, with a finger and with a mouse; the
 // request waiting as its card, how its secrets are kept a row each (encrypted, the longest a grant lasts, its choices
-// through the presenters, the devices holding its key), 全部密钥 a row to its secrets' page; there its secrets and 添加
-// through the presenters.
+// through the presenters, the devices holding its key), 全部密钥 a row to its secrets' page; there its secrets, a row
+// each of one list found by their words, and 添加 through the presenters.
 
 ///|
 test "密钥, at each width and with either hand: the request's card, encrypted, the longest grant; its secrets a page under it, 添加 there asks what" {
@@ -43,6 +43,43 @@ test "密钥, at each width and with either hand: the request's card, encrypted,
     assert_true(@sf.presenting(), msg=at)
     @sf.close_presented()
     t.frame()
+  }
+}
+
+///|
+test "全部密钥, at each width and with either hand: every secret a row of one list, its kind and what is worth knowing of it under its name; the profiles' accounts folded at its foot; found by any of their words" {
+  for case in one_page_cases {
+    let (w, platform, regular, _) = case
+    let t = one_page_tester(@settings.Route::VaultItems, w, platform~, regular~)
+    let at = "\{w} platform \{platform}"
+    // (a secret: its kind, how an agent gets it, when and where it was last used)
+    for words in ["GitHub token", "Token · 代理 · api.github.com · 昨天在「修 CI」用过", "SSH 密钥 · ssh-agent", "订阅和 API Key", "Claude 主账号、ChatGPT 团队、备用 key"] {
+      assert_true(t.find(words) is Some(_), msg="\{at}: \{words}")
+    }
+    // the accounts folded till their row (naming them) is pressed: no row of theirs
+    assert_true(t.find("Claude 订阅 · 只在 Studio") is None, msg=at)
+    scrolled_to(t, w, "订阅和 API Key")
+    tap_in_page(t, "订阅和 API Key")
+    t.frame()
+    scrolled_to(t, w, "Claude 订阅 · 只在 Studio")
+    for words in ["Claude 主账号", "Claude 订阅 · 只在 Studio"] {
+      assert_true(t.find(words) is Some(_), msg="\{at}: \{words}")
+    }
+    // found: 部署机 by its way, nothing else
+    t.wheel(w - 120.0, 450.0, -3000.0)
+    t.frame()
+    let (fx, fy) = t.find("搜索名称、域名、变量名").unwrap()
+    t.tap(fx + 4.0, fy + 4.0)
+    t.frame()
+    t.type_text("ssh")
+    t.frame()
+    assert_true(t.find("部署机") is Some(_), msg=at)
+    for gone in ["GitHub token", "Claude", "订阅和 API Key"] {
+      assert_true(t.find(gone) is None, msg="\{at}: \{gone}")
+    }
+    t.type_text("zz")
+    t.frame()
+    assert_true(t.find("没有找到「sshzz」") is Some(_), msg=at)
   }
 }
 
