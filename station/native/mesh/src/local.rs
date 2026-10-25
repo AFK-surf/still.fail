@@ -90,6 +90,34 @@ fn local_path(destination: &str) -> std::result::Result<Option<PathBuf>, String>
     Err(format!("local file link does not name a readable file: {destination}; correct the path or write it as code instead of a link"))
 }
 
+/// A destination with no scheme that is neither from a root nor a fragment or a query (`films/a.mp4`, `report.pdf`):
+/// a path where the agent works, as `files` takes one.
+fn is_relative(destination: &str) -> bool {
+    let scheme = destination.split_once(':').is_some_and(|(s, _)| {
+        s.as_bytes().first().is_some_and(u8::is_ascii_alphabetic) && s.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'+' | b'-' | b'.'))
+    });
+    !destination.is_empty() && !scheme && !destination.starts_with(|c| matches!(c, '/' | '\\' | '#' | '?'))
+}
+
+/// A relative link's file: none when it names one of the message's files (`[report](report.pdf)` beside `files`, which
+/// the clients place by its name), else the one it names in the workspace. Naming neither, it is refused: no reader
+/// could open it.
+fn in_workspace(destination: &str, paths: &[String], workspace: &Path) -> std::result::Result<Option<PathBuf>, String> {
+    let decoded = percent_encoding::percent_decode_str(destination).decode_utf8_lossy();
+    let name = decoded.rsplit('/').next().unwrap_or_default();
+    if paths.iter().any(|p| Path::new(p).file_name().is_some_and(|n| n.to_string_lossy() == name)) {
+        return Ok(None);
+    }
+    let path = workspace.join(decoded.as_ref());
+    if path.is_file() {
+        return Ok(Some(path));
+    }
+    Err(format!(
+        "local file link {destination} names no file in the workspace ({}) nor one of the message's files; give its absolute path or attach it with files, use a full URL (https://…), or write it as code",
+        workspace.display()
+    ))
+}
+
 #[napi(object)]
 pub struct Prepared {
     pub text: String,
@@ -109,7 +137,15 @@ pub fn prepare_local_links(text: String, paths: Vec<String>, workspace: String) 
             Event::Start(Tag::Link { link_type, dest_url, .. } | Tag::Image { link_type, dest_url, .. }) => (link_type, dest_url),
             _ => continue,
         };
-        let Some(path) = local_path(&destination).map_err(fail)? else { continue };
+        let path = match local_path(&destination).map_err(fail)? {
+            Some(path) => path,
+            // (an email's autolink, <a@b.c>, is no path)
+            None if kind != LinkType::Email && is_relative(&destination) => match in_workspace(&destination, &paths, workspace).map_err(fail)? {
+                Some(path) => path,
+                None => continue,
+            },
+            None => continue,
+        };
         if kind != LinkType::Inline {
             return Err(fail(format!("local file link {destination} must use inline Markdown: [label](path); it will be attached automatically")));
         }
