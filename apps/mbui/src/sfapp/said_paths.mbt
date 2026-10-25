@@ -618,9 +618,6 @@ let said_paths : Map[String, Array[String]] = {
     "transfers.*.statusText",
     "transfers.*.error",
   ],
-  "fleet": [
-    "stations.*.name",
-  ],
   "footprint": [
     "chats.*.title",
     "memory.*.label",

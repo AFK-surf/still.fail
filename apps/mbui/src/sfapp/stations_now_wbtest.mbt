@@ -25,8 +25,8 @@ test "wide: the rail's Station place, the pointer resting on it, says how many a
   // the card to share, opened from it: the picture, 复制图片 under it
   t.click(Button, label="分享卡片")
   t.run_for(@kit.presence_in_ms)
-  assert_true(t.find("个 agent 正在为我工作") is Some(_), msg="the picture's words beside its number")
-  assert_true(t.find("扫码打开 still.fail") is Some(_))
+  assert_true(t.find("1 个 Claude 订阅账号的周额度") is Some(_), msg="the picture's words beside its number")
+  assert_true(t.find("在任何一台上，用所有设备") is Some(_))
   assert_eq(t.corner_faults(), [])
   t.click(Button, label="复制图片")
   t.frame()
@@ -45,25 +45,46 @@ test "wide: the rail's Station place, the pointer resting on it, says how many a
 }
 
 ///|
-test "the card to share: the number of agents at work large, where, each station at work with how many and its machine, the models, the last 7 days, still.fail's QR code; none for a station at rest" {
-  reset()
+test "the card to share in a dialog: the subscriptions' weekly quota used as rings, the first's share large and what it is of beside them, today and the last 7 days side by side, each day a bar, the chats at work, still.fail's line" {
   let src = fixture_app("share-card")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  share_card_laid(@ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0), false)
+}
+
+///|
+test "the card to share on a phone: the rings smaller, what the first's share is of under them, today over the last 7 days, nothing cut short" {
+  let src = fixture_app("share-card")
+  share_card_laid(@ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2), true)
+}
+
+///|
+/// The card to share as `t` shows it, laid out narrow or not.
+fn share_card_laid(t : @ui.Tester, narrow : Bool) -> Unit raise {
   t.run_for(@kit.presence_in_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
-  let number = word("9")
-  assert_true(number.length() == 1 && word("个 agent 正在为我工作").length() == 1, msg="\{number}")
-  // the stations at work, two a line in their order; MBA, at rest, not on it
-  let names = ["Studio", "ccvm", "Mini1"].map(fn(n) { word(n) })
-  assert_true(names.iter().all(fn(n) { n.length() == 1 }), msg="\{names}")
-  assert_true(names[0][0].2 == names[1][0].2 && names[0][0].1 < names[1][0].1 && names[1][0].2 < names[2][0].2)
-  assert_eq(word("MBA").length(), 0)
-  // how many at the end of each one's line, its machine under it; the models at work; the last 7 days
-  let fives = word("×5").filter(fn(w) { (w.2 - names[0][0].2).abs() < 8.0 })
-  assert_true(fives.length() == 1 && fives[0].1 > names[0][0].1 + names[0][0].3, msg="\{fives}")
-  assert_true(t.find("Apple M2 Max · 64 GB") is Some(_) && t.find("分布在 3 台设备 · 3 种模型") is Some(_))
-  assert_true(t.find("48,231 次") is Some(_) && t.find("$1,911") is Some(_))
-  assert_true(t.find("扫码打开 still.fail") is Some(_) && t.find("在任何一台上，用所有设备") is Some(_))
+  // the first kind's share large; what it is of beside the rings under it, or under them both; the other kind's in a
+  // line of its own
+  let share = word("170%")
+  let of = word("2 个 Claude 订阅账号的周额度")
+  assert_true(share.length() == 1 && of.length() == 1 && share[0].4 > of[0].4 * 2.0, msg="\{(share, of)}")
+  assert_true(of[0].2 > share[0].2 && (of[0].1 < share[0].1) == narrow, msg="\{(share, of)}")
+  assert_true(t.find("45% 1 个 ChatGPT 订阅账号的周额度") is Some(_))
+  // today and the last 7 days side by side, or one over the other (under the share: 今天 is the chats' heading too);
+  // each day's date under its bar
+  let today = word("今天").filter(fn(w) { w.2 > share[0].2 })
+  let week = word("近 7 天")
+  assert_true(today.length() == 1 && week.length() == 1, msg="\{(today, week)}")
+  if narrow {
+    assert_true(today[0].1 == week[0].1 && today[0].2 < week[0].2, msg="\{(today, week)}")
+  } else {
+    assert_true(today[0].2 == week[0].2 && today[0].1 < week[0].1, msg="\{(today, week)}")
+  }
+  assert_true(word("12 个").length() == 1 && word("57 个").length() == 1 && word("$1,911").length() == 1)
+  let days = ["10/20", "10/26"].map(fn(d) { word(d) })
+  assert_true(days.iter().all(fn(d) { d.length() == 1 }) && days[0][0].1 < days[1][0].1, msg="\{days}")
+  // the chats at work now, and still.fail's line
+  assert_true(t.find("9 个对话正在运行") is Some(_) && t.find("分布在 3 台设备") is Some(_))
+  assert_true(t.find("在任何一台上，用所有设备") is Some(_))
+  assert_eq(t.squeeze_faults(), [])
   assert_eq(t.corner_faults(), [])
   assert_eq(t.contrast_faults(), [])
 }

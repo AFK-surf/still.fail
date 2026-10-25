@@ -2497,32 +2497,29 @@ export const SHAPES: Record<string, Shape> = {
     ["prices", opt(vec("UsagePriceTable")), { doc: "Each station's own calculation table; absent with older cores." }],
   ], { doc: "What the agents of a workspace spent over its last `days` (the `usage` view, client/core-ts/src/views/usage.ts): a few\ntotals (`tiles`), each day's cost split by the people who spent most (`series`, the rest as 其他), and lists of who,\nwhich chats, which accounts and which models spent the most, at the providers' API prices (`basis` says what that\nmeans). `notes`: what is missing or still being read, in lines; `loading` while a station has not answered.", keepNone: true }),
   FleetView: struct([
-    ["running", "i64", { client: "I54", doc: "The agents at work on the workspace's stations, as each counts its own." }],
-    ["unit", "String", { doc: "What follows the number of them: 个 agent 正在为我工作." }],
     ["at", "String", { doc: "When this is, in words: 10月26日 04:12." }],
-    ["where", "String", { doc: "Where they are in a line: 分布在 3 台设备 · 3 种模型." }],
-    ["stations", vec("FleetStation"), { doc: "The stations at work, the most first." }],
-    ["models", vec("FleetModel"), { doc: "The models at work, the most first (4 at most)." }],
-    ["week", opt("FleetWeek"), { doc: "What they did over the last 7 days; absent while it is read, or with nothing spent." }],
+    ["quotaLead", "String", { doc: "What leads the quota used: 本周用掉了." }],
+    ["quota", vec("FleetQuota"), { doc: "The subscriptions' weekly quota used, by kind, the most accounts first; none read: empty." }],
+    ["chats", "i64", { client: "I54", doc: "The chats at work now." }],
+    ["chatsText", "String", { doc: "That in words: 9 个对话正在运行." }],
+    ["where", "String", { doc: "On how many stations: 分布在 3 台设备." }],
+    ["today", opt("FleetToday"), { doc: "The chats archived and what was spent today; absent while it is read, or with nothing spent nor archived." }],
+    ["week", opt("FleetWeek"), { doc: "The same over the last 7 days, each day's chats archived; absent with it." }],
   ], { doc: "The card shared of a workspace's agents at work (the `fleet` view, views/fleet.ts).", keepNone: true }),
-  FleetStation: struct([
-    ["station", "String"],
-    ["name", "String", { said: true }],
-    ["emoji", opt("String"), { doc: "Its mark, as the workspace gave it one (StationView's)." }],
-    ["icon", opt("String")],
-    ["machine", opt("String"), { doc: "Its machine in a few words: Apple M2 Max · 64 GB." }],
-    ["running", "i64", { client: "I54" }],
-    ["makers", vec("String"), { doc: "Who made the models of its agents at work (their marks' keys), the most first." }],
+  FleetQuota: struct([
+    ["kind", "String", { doc: "The kind of subscription (the profiles' group: claude, chatgpt…)." }],
+    ["accounts", "i64", { client: "I54" }],
+    ["used", "i64", { client: "I54", doc: "How much of a week's quota they used, in percent of one account's: each account's share of its own\nadded up (80% and 90%: 170%)." }],
+    ["usedText", "String", { doc: "170%." }],
+    ["text", "String", { doc: "What it is of: 2 个 Claude 订阅账号的周额度." }],
   ]),
-  FleetModel: struct([
-    ["name", "String"],
-    ["maker", opt("String")],
-    ["count", "i64", { client: "I54" }],
-    ["text", "String", { doc: "How many in words: ×4." }],
+  FleetToday: struct([
+    ["title", "String"],
+    ["stats", vec("FleetStat"), { doc: "Its chats archived and cost." }],
   ]),
   FleetWeek: struct([
     ["title", "String"],
-    ["stats", vec("FleetStat"), { doc: "Its calls, input tokens and cost, as the usage page's tiles say them." }],
+    ["stats", vec("FleetStat"), { doc: "Its chats archived; its input tokens and cost, as the usage page's tiles say them." }],
     ["days", vec("FleetDay")],
   ]),
   FleetStat: struct([
@@ -2531,7 +2528,7 @@ export const SHAPES: Record<string, Shape> = {
   ]),
   FleetDay: struct([
     ["label", "String"],
-    ["share", "f64", { doc: "Its calls as a share of the busiest day's (0 to 1)." }],
+    ["share", "f64", { doc: "Its chats archived as a share of the most on a day (0 to 1)." }],
     ["today", "bool"],
   ]),
   ResourcesView: struct([

@@ -1445,9 +1445,8 @@ pub let sign_in_title_size : @ui.TextSize = Exact(28.0, 39.2)
 pub let sign_in_side : @ui.Space = Exact(30.0)
 
 ///|
-/// The card shared of the agents at work (sfpages' stations_now.mbt): the same in either theme, as a poster is, in
-/// still.fail's buddies' own colours (design/mobile/assets: drawn in ink on paper, their faces orange): a warm paper
-/// with a peach light on it, ink words and ink thinned for what is said of them, white desks, still.fail's orange.
+/// The card shared of the agents at work (sfpages' stations_now.mbt): the same in either theme, as a poster is: a warm
+/// paper with a peach light on it, ink words and ink thinned for what is said of them, white cards, still.fail's orange.
 pub let share_paper : Int64 = 0xF6F1E9FFL
 
 ///|
@@ -1457,7 +1456,21 @@ pub let share_ink : Int64 = 0x24272BFFL
 pub let share_dim : Int64 = 0x24272B99L
 
 ///|
-pub let share_desk : Int64 = 0xFFFFFFFFL
+pub let share_card : Int64 = 0xFFFFFFFFL
+
+///|
+/// What a day's bar is drawn in (today's still.fail's orange): the ink thinned, seen on the paper.
+pub let share_bar : Int64 = 0x24272B2EL
+
+///|
+/// The rings of the subscriptions' weekly quota, one a kind, in this order: still.fail's orange, a green, a blue.
+// kept across runs: a table, never written
+pub let share_rings : Array[Int64] = [0xE5704AFFL, 0x1FA77AFFL, 0x4F74E8FFL]
+
+///|
+/// A ring's turn past its first (@sf.rings: a share past 1): this much of the turn before's colour, the rest black,
+/// as Activity's ring going round again is deeper.
+pub let ring_turn_keep : Double = 0.82
 
 ///|
 pub let share_orange : Int64 = 0xE5704AFFL

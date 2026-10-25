@@ -3249,16 +3249,23 @@ export interface FilesTabsView {
 
 export interface FleetDay {
 	label: string;
-	/** Its calls as a share of the busiest day's (0 to 1). */
+	/** Its chats archived as a share of the most on a day (0 to 1). */
 	share: number;
 	today: boolean;
 }
 
-export interface FleetModel {
-	name: string;
-	maker?: string;
-	count: number;
-	/** How many in words: ×4. */
+export interface FleetQuota {
+	/** The kind of subscription (the profiles' group: claude, chatgpt…). */
+	kind: string;
+	accounts: number;
+	/**
+	 * How much of a week's quota they used, in percent of one account's: each account's share of its own
+	 * added up (80% and 90%: 170%).
+	 */
+	used: number;
+	/** 170%. */
+	usedText: string;
+	/** What it is of: 2 个 Claude 订阅账号的周额度. */
 	text: string;
 }
 
@@ -3267,41 +3274,36 @@ export interface FleetStat {
 	value: string;
 }
 
-export interface FleetStation {
-	station: string;
-	name: string;
-	/** Its mark, as the workspace gave it one (StationView's). */
-	emoji?: string;
-	icon?: string;
-	/** Its machine in a few words: Apple M2 Max · 64 GB. */
-	machine?: string;
-	running: number;
-	/** Who made the models of its agents at work (their marks' keys), the most first. */
-	makers: string[];
+export interface FleetToday {
+	title: string;
+	/** Its chats archived and cost. */
+	stats: FleetStat[];
 }
 
 export interface FleetWeek {
 	title: string;
-	/** Its calls, input tokens and cost, as the usage page's tiles say them. */
+	/** Its chats archived; its input tokens and cost, as the usage page's tiles say them. */
 	stats: FleetStat[];
 	days: FleetDay[];
 }
 
 /** The card shared of a workspace's agents at work (the `fleet` view, views/fleet.ts). */
 export interface FleetView {
-	/** The agents at work on the workspace's stations, as each counts its own. */
-	running: number;
-	/** What follows the number of them: 个 agent 正在为我工作. */
-	unit: string;
 	/** When this is, in words: 10月26日 04:12. */
 	at: string;
-	/** Where they are in a line: 分布在 3 台设备 · 3 种模型. */
+	/** What leads the quota used: 本周用掉了. */
+	quotaLead: string;
+	/** The subscriptions' weekly quota used, by kind, the most accounts first; none read: empty. */
+	quota: FleetQuota[];
+	/** The chats at work now. */
+	chats: number;
+	/** That in words: 9 个对话正在运行. */
+	chatsText: string;
+	/** On how many stations: 分布在 3 台设备. */
 	where: string;
-	/** The stations at work, the most first. */
-	stations: FleetStation[];
-	/** The models at work, the most first (4 at most). */
-	models: FleetModel[];
-	/** What they did over the last 7 days; absent while it is read, or with nothing spent. */
+	/** The chats archived and what was spent today; absent while it is read, or with nothing spent nor archived. */
+	today?: FleetToday;
+	/** The same over the last 7 days, each day's chats archived; absent with it. */
 	week?: FleetWeek;
 }
 

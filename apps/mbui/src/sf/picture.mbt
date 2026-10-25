@@ -26,6 +26,13 @@ fn draw_drawable(c : @ui.Ctx, key : String, d : @pixels.Vector, w : Double, tint
 }
 
 ///|
+/// A picture made by the app (`d`: its viewport and its paths, each in its own colours) drawn `w` wide by the GPU, its
+/// shapes kept by `key`, which says what it is made of (the same picture each time it is asked for by it).
+pub fn vector(c : @ui.Ctx, key : String, d : @pixels.Vector, w : Double) -> Int {
+  draw_drawable(c, "made/" + key, d, w, None)
+}
+
+///|
 /// The picture `name` drawn `px` pixels wide (as tall as it is for that), in its own colours or all in `tint`: its
 /// width, height and pixels (RGBA, straight, rows from the top), to make another picture with; None when there is no
 /// such picture.
@@ -416,3 +423,49 @@ let opencode_frame : @ui.Style = @ui.css("border=B1_5 border_color=Fg")
 ///|
 // kept across runs: a value (no field of it changes)
 let logo_room : @ui.Style = @ui.css("align=ACenter justify=JCenter")
+
+///|
+/// Rings one inside another (Activity's), `side` across, each `width` wide and `gap` from the next, from the outside
+/// in: each its track all round in its colour at `track` (an alpha, 0-255), and as much of it as its share drawn round
+/// from its top in its colour, round at its ends; a share past 1 (two accounts' quota past one's) goes round again
+/// over it, each turn past the first deeper (ring_turn_keep), the last whole one under what is left of it.
+pub fn rings(c : @ui.Ctx, shares : Array[(Double, Int64)], side : Double, width : Double, gap : Double, track : Int64) -> Int {
+  let mid = side / 2.0
+  let layers : Array[@pixels.VectorPath] = []
+  let keys : Array[String] = []
+  for k, ring in shares {
+    let (share, color) = ring
+    let share = if share < 0.0 { 0.0 } else { share }
+    keys.push("\{share}/\{color}")
+    let r = mid - width / 2.0 - k.to_double() * (width + gap)
+    if r <= 0.0 {
+      break
+    }
+    let path = fn(d : String, stroke : Int64) -> @pixels.VectorPath {
+      { d, fill: 0L, stroke, width, even_odd: false, sx: 1.0, sy: 1.0, tx: 0.0, ty: 0.0 }
+    }
+    // turn `t` (0 the first): its colour, deeper past the first
+    let turn = fn(t : Int) -> Int64 {
+      let mut keep = 1.0
+      for _ in 0..<t {
+        keep = keep * ring_turn_keep
+      }
+      mix(color, keep, 0x000000FFL)
+    }
+    let circle = "M \{mid - r} \{mid} A \{r} \{r} 0 1 1 \{mid + r} \{mid} A \{r} \{r} 0 1 1 \{mid - r} \{mid}"
+    layers.push(path(circle, (color & 0xFFFFFF00L) | (track & 0xFFL)))
+    let whole = share.floor()
+    let rest = share - whole
+    if whole >= 1.0 {
+      layers.push(path(circle, turn(whole.to_int() - 1)))
+    }
+    if rest > 0.0 {
+      let a = rest * 2.0 * @math.PI
+      let (x, y) = (mid + r * @dmath.sin(a), mid - r * @dmath.cos(a))
+      let large = if rest > 0.5 { 1 } else { 0 }
+      layers.push(path("M \{mid} \{mid - r} A \{r} \{r} 0 \{large} 1 \{x} \{y}", turn(whole.to_int())))
+    }
+  }
+  vector(c, "rings/\{side}/\{width}/\{gap}/\{track}/" + keys.join(","), { w: side, h: side, layers }, side)
+}
+

@@ -3,9 +3,9 @@
 // card: how many agents are at work on them all, each station and what it is doing (the chats' view: its glyph's `now`,
 // each station's `doing`, as the core says them), and while any agent is at work, 分享卡片. The card to share: a
 // picture of the agents at work on the person's stations, copied whole to paste where others see it (a chat, a post):
-// a poster of them (the `fleet` view): how many and where, each station at work a desk with a buddy for each agent, the
-// models, the last 7 days, a QR code of still.fail's site beside its line; 复制图片 under it puts what is drawn of it on
-// the clipboard.
+// a poster (the `fleet` view): the subscriptions' weekly quota used as rings, today and the last 7 days, the chats at
+// work now, still.fail's line (no QR code: 2026-10-26 用户「不用放 still fail 的二维码」); 复制图片 under it puts what is
+// drawn of it on the clipboard.
 
 ///|
 /// The stations of workspace `w` at a glance (the rail's Station place's hover card): how many agents are at work on
@@ -137,24 +137,26 @@ pub fn share_card_open(src : Source, w : Workspace) -> Unit {
 let share_picture_key : String = "share-card/picture"
 
 ///|
-/// The picture shared, a poster of the agents at work (the `fleet` view; 2026-10-26 用户：「来点花哨的设计和更多信息」「太普通
-/// 了」): each agent at work one of still.fail's buddies at its machine's desk, so what is shared is a team at work,
-/// not a table of figures. On warm paper with a peach light on it, the same in either theme: still.fail's mark and
-/// name and when it is; the number large in still.fail's orange and what follows it, where they are under it; each
-/// station at work a desk (its mark, its name, how many, its machine) with a buddy at work for each agent; the models
-/// at work as chips with their makers' marks; the last 7 days in a line; still.fail's site as a QR code beside
-/// its line.
+/// The picture shared, a poster of what the agents did (the `fleet` view; 2026-10-26 用户：「改成 xx 个 xx 订阅账号的 xx% 周额度，
+/// 分天和周统计，还有当前 chat 数量」「不要小机器人」「这玩意儿是会超过 100% 的」「不如归档 chat 多少个」): on warm paper with a
+/// peach light on it, the same in either theme. still.fail's mark and name and when it is; the subscriptions' weekly
+/// quota used as rings, a kind each (Activity's rings, round again past 100%), the first kind's share large beside them
+/// and what it is of, the others' under it; today and the last 7 days side by side (the chats archived, what was
+/// spent), each day's chats archived a bar under them (today's orange, each day's date under its bar); the chats at
+/// work now, a dot before them; still.fail's line. With no quota read: the chats at work
+/// large in its place. Laid out narrower than pic_narrow_most (a phone's sheet): the rings smaller, what the first
+/// kind's share is of and the others' under the rings and it, its number smaller, today over the last 7 days, all
+/// closer.
 fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let fleet = (src.topic)("fleet", { "scope": Json::string(w.id) }).value
-  let stations = items(fleet, "stations")
-  let models = items(fleet, "models")
+  let quota = items(fleet, "quota")
   let picture = c.id(share_picture_key)
-  // the desks three a line where the picture is wide enough (a dialog's), else two (a sheet's), by its own width
-  let per = match c.laid_size(picture) {
-    Some((pw, _)) if pw >= pic_three_from => 3
-    _ => 2
+  // (as wide as it is laid out; the window's width until it is)
+  let narrow = match c.laid_size(picture) {
+    Some((pw, _)) if pw > 0.0 => pw < pic_narrow_most
+    _ => c.width < pic_narrow_most
   }
-  c.box(style=pic_box, id=picture, fn() {
+  c.box(style=if narrow { pic_box_narrow } else { pic_box }, id=picture, fn() {
     c.box(left=0.0, top=0.0, right=0.0, bottom=0.0, fn() {
       @sf.glow_ground(c, @sf.share_paper, pic_lights, pic_aspect, radius=pic_corner)
     })
@@ -168,65 +170,114 @@ fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       c.text(text(fleet, "at"), style=pic_at) |> ignore
     })
     |> ignore
-    // the number, what follows it and where they are beside it, on its foot
-    c.box(style=pic_hero, fn() {
-      c.text(count(fleet, "running").to_string(), style=pic_number) |> ignore
-      c.box(style=pic_hero_words, fn() {
-        c.text(text(fleet, "unit"), style=pic_unit) |> ignore
-        c.text(text(fleet, "where"), style=pic_where) |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-    c.box(style=pic_desks, fn() {
-      let mut k = 0
-      while k < stations.length() {
-        let end = if k + per < stations.length() { k + per } else { stations.length() }
-        let line = stations[k:end].to_array()
-        c.box(style=pic_desks_line, fn() {
-          for s in line {
-            pic_desk(c, Some(s))
-          }
-          // (the last line's room left kept: each desk as wide)
-          if stations.length() > line.length() {
-            for _ in line.length()..<per {
-              c.box(style=pic_grow, fn() {  }) |> ignore
-            }
+    if quota.length() > 0 {
+      c.box(style=pic_hero, fn() {
+        pic_rings(c, quota, narrow)
+        c.box(style=pic_hero_words, fn() {
+          c.text(text(fleet, "quotaLead"), style=pic_lead) |> ignore
+          // (in its ring's colour; smaller in a narrow picture, as wide as 170% is beside the rings there)
+          let first = ring_color(0)
+          let number = if narrow { pic_number_narrow } else { pic_number }
+          c.text(text(Some(quota[0]), "usedText"), style=number.then(@ui.text_style(color=Data(first)))) |> ignore
+          if !narrow {
+            pic_quota_words(c, quota)
           }
         })
         |> ignore
-        k += per
+      })
+      |> ignore
+      if narrow {
+        pic_quota_words(c, quota)
       }
-    })
-    |> ignore
-    if models.length() > 0 {
-      c.box(style=pic_chips, flow=true, line_gap=pic_chips_gap, fn() {
-        for m in models {
-          let m = Some(m)
-          c.box(style=pic_chip, fn() {
-            match text(m, "maker") {
-              "" => ()
-              maker => @sf.drawable(c, "maker_" + maker, pic_maker) |> ignore
-            }
-            c.rich([@ui.span(text(m, "name")), @ui.span(" " + text(m, "text"), color=@sf.share_orange)], style=pic_chip_words)
-            |> ignore
-          })
-          |> ignore
-        }
+    } else {
+      c.box(style=pic_hero, fn() {
+        c.text(count(fleet, "chats").to_string(), style=pic_number.then(@ui.text_style(color=Data(@sf.share_orange)))) |> ignore
+        c.box(style=pic_hero_words, fn() { c.text(text(fleet, "chatsText"), style=pic_unit) |> ignore }) |> ignore
       })
       |> ignore
     }
-    match field(fleet, "week") {
-      Some(Object(_)) as week => pic_week(c, week)
+    match (field(fleet, "today"), field(fleet, "week")) {
+      (Some(Object(_)) as today, Some(Object(_)) as week) => {
+        c.box(style=if narrow { pic_spans_narrow } else { pic_spans }, fn() {
+          pic_span(c, today)
+          pic_span(c, week)
+        })
+        |> ignore
+        pic_bars(c, week, narrow)
+      }
       _ => ()
     }
-    c.box(style=pic_foot, fn() {
-      @sf.qr_code(c, Some(site_qr), pic_qr, @sf.t("web-main.stations.shareQr"))
-      c.box(style=pic_line, fn() {
-        c.text(@sf.t("web-main.stations.shareTagline"), style=pic_tagline) |> ignore
-        c.text(@sf.t("web-main.stations.shareQr"), style=pic_scan) |> ignore
+    // the chats at work now (with the quota large: said here)
+    if quota.length() > 0 {
+      c.box(style=pic_live, fn() {
+        c.box(style=pic_live_dot, fn() {  }) |> ignore
+        c.rich([@ui.span(text(fleet, "chatsText"), weight=700), @ui.span("  ·  " + text(fleet, "where"), color=@sf.share_dim)], style=pic_live_words)
+        |> ignore
       })
       |> ignore
+    }
+    c.text(@sf.t("web-main.stations.shareTagline"), style=pic_tagline) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// The colour of the ring of kind `k` (in the quota's order), the last one's past them.
+fn ring_color(k : Int) -> Int64 {
+  @sf.share_rings[if k < @sf.share_rings.length() { k } else { @sf.share_rings.length() - 1 }]
+}
+
+///|
+/// What the first kind's share is of (2 个 Claude 订阅账号的周额度), then each other kind's: its colour's dot, its share
+/// and what it is of.
+fn pic_quota_words(c : @ui.Ctx, quota : Array[Json]) -> Unit {
+  c.box(style=@sf.full_width, fn() {
+    c.text(text(Some(quota[0]), "text"), style=pic_unit) |> ignore
+    for k, q in quota {
+      if k == 0 {
+        continue
+      }
+      let q = Some(q)
+      c.box(style=pic_other, fn() {
+        c.box(style=pic_key_dot.then(@ui.style(bg=Data(ring_color(k)))), fn() {  }) |> ignore
+        c.rich([@ui.span(text(q, "usedText") + " ", weight=700), @ui.span(text(q, "text"), color=@sf.share_dim)], style=pic_other_words)
+        |> ignore
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The rings: a kind of subscription each, from the outside in (as many as there are colours), as much of each drawn as
+/// the share of its weekly quota used (@sf.rings); smaller in a narrow picture.
+fn pic_rings(c : @ui.Ctx, quota : Array[Json], narrow : Bool) -> Unit {
+  let rings : Array[(Double, Int64)] = []
+  for k, q in quota {
+    if k >= @sf.share_rings.length() {
+      break
+    }
+    rings.push((number(Some(q), "used") / 100.0, ring_color(k)))
+  }
+  @sf.rings(c, rings, if narrow { pic_rings_side_narrow } else { pic_rings_side }, pic_ring_w, pic_ring_gap, pic_track_alpha)
+  |> ignore
+}
+
+///|
+/// A span of days (today, the last 7) on a white card: its title, then each figure over what it is.
+fn pic_span(c : @ui.Ctx, span : Json?) -> Unit {
+  c.box(style=pic_span_box, fn() {
+    c.text(text(span, "title"), style=pic_span_title) |> ignore
+    c.box(style=pic_stats, fn() {
+      for x in items(span, "stats") {
+        let x = Some(x)
+        c.box(style=pic_stat, fn() {
+          c.text(text(x, "value"), style=pic_stat_value) |> ignore
+          c.text(text(x, "label"), style=pic_stat_label) |> ignore
+        })
+        |> ignore
+      }
     })
     |> ignore
   })
@@ -234,65 +285,43 @@ fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// A station at work as a desk: its mark, its name and how many at its head, its machine under them, a buddy at work for
-/// each agent (so many, then +N).
-fn pic_desk(c : @ui.Ctx, s : Json?) -> Unit {
-  let n = count(s, "running")
-  let _ = c.box(style=pic_grow, fn() {
-    c.box(style=pic_desk_box, fn() {
-      c.box(style=pic_desk_head, fn() {
-        let emoji = text(s, "emoji")
-        let icon = text(s, "icon")
-        if @sf.has_station_mark(emoji, icon) {
-          @sf.station_mark(c, emoji, icon, pic_desk_mark, @sf.share_ink)
-        }
-        c.box(style=pic_grow, fn() { c.text(text(s, "name"), style=pic_desk_name) |> ignore }) |> ignore
-        c.text("×" + n.to_string(), style=pic_desk_n) |> ignore
+/// Each day's chats archived a bar, as tall as its share of the most on a day (4 at least: a day with none still seen), today's
+/// orange, its date under it; closer in a narrow picture.
+fn pic_bars(c : @ui.Ctx, week : Json?, narrow : Bool) -> Unit {
+  c.box(style=if narrow { pic_bars_row_narrow } else { pic_bars_row }, fn() {
+    for d in items(week, "days") {
+      let d = Some(d)
+      let h = dmax(pic_bar_least, number(d, "share") * pic_bars_h)
+      let today = flag(d, "today")
+      c.box(style=pic_day, fn() {
+        c.box(style=pic_bar_room, fn() {
+          c.box(style=pic_bar.then(@ui.style(h=Fixed(h), bg=Data(if today { @sf.share_orange } else { @sf.share_bar }))), fn() {  })
+          |> ignore
+        })
+        |> ignore
+        c.text(text(d, "label"), style=if today { pic_day_today } else { pic_day_label }) |> ignore
       })
       |> ignore
-      match text(s, "machine") {
-        "" => ()
-        machine => c.text(machine, style=pic_desk_machine) |> ignore
-      }
-      c.box(style=pic_buddies, flow=true, line_gap=0.0, fn() {
-        for _ in 0..<(if n < pic_buddies_most { n } else { pic_buddies_most }) {
-          @sf.drawable(c, "buddy_working", pic_buddy) |> ignore
-        }
-        if n > pic_buddies_most {
-          c.text("+" + (n - pic_buddies_most).to_string(), style=pic_more) |> ignore
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-}
-
-///|
-/// The last 7 days on a strip of their own, in a line (on two where it has not the room): their title, then each figure
-/// after what it is, the figures strong.
-fn pic_week(c : @ui.Ctx, week : Json?) -> Unit {
-  let runs = [@ui.span(text(week, "title") + "  ", color=@sf.share_dim)]
-  for i, x in items(week, "stats") {
-    let x = Some(x)
-    if i > 0 {
-      runs.push(@ui.span("  ·  ", color=@sf.share_dim))
     }
-    runs.push(@ui.span(text(x, "label") + " ", color=@sf.share_dim))
-    runs.push(@ui.span(text(x, "value"), weight=700))
-  }
-  c.box(style=pic_week_box, fn() { c.rich(runs, style=pic_week_words) |> ignore }) |> ignore
+  })
+  |> ignore
 }
 
 ///|
-/// The picture: 28 in (past its corner: what is at its edges stands clear of it), its parts 12 apart, round as a card,
+/// The picture: 28 in (past its corner: what is at its edges stands clear of it), its parts 16 apart, round as a card,
 /// on warm paper (what is drawn on it seen against that), its light over it clipped to it.
 // kept across runs: a value (no field of it changes)
-let pic_box : @ui.Style = @ui.css("w=Full p=S7 gap=S3 radius=Xl3 clip").then(@ui.style(bg=Data(@sf.share_paper)))
+let pic_box : @ui.Style = @ui.css("w=Full p=S7 gap=S4 radius=Xl3 clip").then(@ui.style(bg=Data(@sf.share_paper)))
 
 ///|
-/// How wide the picture is where its desks go three a line (a dialog's), else two (a phone's sheet).
-let pic_three_from : Double = 480.0
+/// Narrower than this (as laid out: a phone's sheet, 350 or so), the picture is laid out narrow: what is beside the
+/// rings, and today's and the last 7 days' figures side by side, need about this much.
+let pic_narrow_most : Double = 520.0
+
+///|
+/// A narrow one: its parts 12 apart.
+// kept across runs: a value (no field of it changes)
+let pic_box_narrow : @ui.Style = @ui.css("w=Full p=S7 gap=S3 radius=Xl3 clip").then(@ui.style(bg=Data(@sf.share_paper)))
 
 ///|
 /// Its corner (Xl3's), its light's picture's.
@@ -335,139 +364,148 @@ let pic_brand : @ui.TextStyle = @ui.text_style(size=Title, weight=Bold, color=Da
 let pic_at : @ui.TextStyle = @ui.text_style(size=Meta, color=Data(@sf.share_dim), wrap=false)
 
 ///|
+/// The rings and their words beside them, in the middle of each other's height.
 // kept across runs: a value (no field of it changes)
-let pic_hero : @ui.Style = @ui.css("row w=Full gap=S3 align=AEnd")
-
-///|
-/// What follows the number and where they are, on the number's foot.
-// kept across runs: a value (no field of it changes)
-let pic_hero_words : @ui.Style = @ui.css("gap=S1 pb=S2").then(@ui.style(w=@sf.grow))
-
-///|
-/// The number, as large as a picture's one number is (the scale's past its words', Xl7 72), drawn tight, orange.
-// kept across runs: a value (no field of it changes)
-let pic_number : @ui.TextStyle = @ui.text_style(size=Xl7, weight=Bold, tracking=Tight, color=Data(@sf.share_orange), wrap=false)
+let pic_hero : @ui.Style = @ui.css("row w=Full gap=S5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pic_unit : @ui.TextStyle = @ui.text_style(size=Heading, weight=Bold, color=Data(@sf.share_ink), wrap=false, w=Cut)
+let pic_hero_words : @ui.Style = @ui.css("gap=S1").then(@ui.style(w=@sf.grow))
+
+///|
+/// The rings: 128 across, each 12 wide, 4 apart; their tracks the colour at 30%.
+let pic_rings_side : Double = 128.0
+
+///|
+/// A narrow picture's: 96 across.
+let pic_rings_side_narrow : Double = 96.0
+
+///|
+let pic_ring_w : Double = 12.0
+
+///|
+let pic_ring_gap : Double = 4.0
+
+///|
+let pic_track_alpha : Int64 = 0x4DL
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pic_where : @ui.TextStyle = @ui.text_style(size=Ui, color=Data(@sf.share_dim), wrap=false, w=Cut)
+let pic_lead : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Data(@sf.share_dim), wrap=false)
 
 ///|
-/// The desks, 10 apart each way.
+/// The number, as large as a picture's one number is (the scale's past its words', Xl7 72), drawn tight.
 // kept across runs: a value (no field of it changes)
-let pic_desks : @ui.Style = @ui.css("w=Full gap=S2_5")
+let pic_number : @ui.TextStyle = @ui.text_style(size=Xl7, weight=Bold, tracking=Tight, color=Data(@sf.share_ink), wrap=false)
 
 ///|
+/// A narrow picture's: Xl6 (60).
 // kept across runs: a value (no field of it changes)
-let pic_desks_line : @ui.Style = @ui.css("row w=Full gap=S2_5 align=AStart")
-
-///|
-/// A desk: white on the paper, raised a little, 12 in, round, its lines 4 apart.
-// kept across runs: a value (no field of it changes)
-let pic_desk_box : @ui.Style = @ui.css("w=Full p=S3 gap=S1 radius=Xl shadow=Sm").then(@ui.style(bg=Data(@sf.share_desk)))
+let pic_number_narrow : @ui.TextStyle = pic_number.then(@ui.text_style(size=Xl6))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pic_desk_head : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
+let pic_unit : @ui.TextStyle = @ui.text_style(size=Title, weight=Bold, color=Data(@sf.share_ink), w=Full)
 
 ///|
-let pic_desk_mark : Double = 16.0
+/// Another kind's line.
+// kept across runs: a value (no field of it changes)
+let pic_other : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter pt=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pic_desk_name : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Data(@sf.share_ink), wrap=false, w=Cut)
+let pic_key_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pic_desk_n : @ui.TextStyle = @ui.text_style(size=Ui, weight=Bold, color=Data(@sf.share_orange), wrap=false)
+let pic_other_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Data(@sf.share_ink), w=Full)
+
+///|
+/// Today and the last 7 days, side by side, 10 apart.
+// kept across runs: a value (no field of it changes)
+let pic_spans : @ui.Style = @ui.css("row w=Full gap=S2_5 align=AStretch")
+
+///|
+/// A narrow picture's: one over the other, each as wide as the picture.
+// kept across runs: a value (no field of it changes)
+let pic_spans_narrow : @ui.Style = @ui.css("w=Full gap=S2_5 align=AStretch")
+
+///|
+/// A span: a white card, 12 in, round, raised a little; its title over its figures.
+// kept across runs: a value (no field of it changes)
+let pic_span_box : @ui.Style = @ui.css("p=S3 gap=S2 radius=Xl shadow=Sm").then(@ui.style(w=@sf.grow, bg=Data(@sf.share_card)))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pic_desk_machine : @ui.TextStyle = @ui.text_style(size=Caption, color=Data(@sf.share_dim), wrap=false, w=Cut)
-
-///|
-/// A buddy at work for each agent, side by side, on as many lines as they take.
-// kept across runs: a value (no field of it changes)
-let pic_buddies : @ui.Style = @ui.css("row w=Full pt=S1")
-
-///|
-let pic_buddy : Double = 26.0
-
-///|
-let pic_buddies_most : Int = 12
+let pic_span_title : @ui.TextStyle = @ui.text_style(size=Caption, weight=Medium, color=Data(@sf.share_dim), wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pic_more : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Data(@sf.share_dim), wrap=false)
-
-///|
-/// The models at work as white chips, their makers' marks before their names, 6 apart each way.
-// kept across runs: a value (no field of it changes)
-let pic_chips : @ui.Style = @ui.css("row w=Full gap=S1_5")
-
-///|
-let pic_chips_gap : Double = 6.0
+let pic_stats : @ui.Style = @ui.css("row w=Full gap=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pic_chip : @ui.Style = @ui.css("row px=S2_5 py=S1 gap=S1_5 radius=Full align=ACenter shadow=Sm").then(
-  @ui.style(bg=Data(@sf.share_desk)),
-)
-
-///|
-let pic_maker : Double = 14.0
+let pic_stat : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pic_chip_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Data(@sf.share_ink), wrap=false)
-
-///|
-/// The last 7 days: a white strip, 12 in, round.
-// kept across runs: a value (no field of it changes)
-let pic_week_box : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 radius=Xl shadow=Sm").then(@ui.style(bg=Data(@sf.share_desk)))
+let pic_stat_value : @ui.TextStyle = @ui.text_style(size=Ui, weight=Bold, color=Data(@sf.share_ink), wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pic_week_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Data(@sf.share_ink), w=Full)
+let pic_stat_label : @ui.TextStyle = @ui.text_style(size=Caption, color=Data(@sf.share_dim), wrap=false, w=Cut)
 
 ///|
-/// Its foot: the QR code, still.fail's line beside it, 14 apart.
+/// The days' bars side by side, 8 apart, each its date under it.
 // kept across runs: a value (no field of it changes)
-let pic_foot : @ui.Style = @ui.css("row w=Full gap=S3_5 align=ACenter")
+let pic_bars_row : @ui.Style = @ui.css("row w=Full gap=S2")
 
 ///|
-/// The QR code's side: 33 modules (25 and the quiet zone's 4 round them) of 2 each.
-let pic_qr : Double = 66.0
+/// A narrow picture's, 6 apart: each date as wide as it is under its bar.
+// kept across runs: a value (no field of it changes)
+let pic_bars_row_narrow : @ui.Style = @ui.css("row w=Full gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pic_line : @ui.Style = @ui.css("gap=S1")
+let pic_day : @ui.Style = @ui.style(w=@sf.grow, gap=S1, align=ACenter)
 
 ///|
+/// A bar's room: as tall as the busiest day's, its bar standing on its foot.
+// kept across runs: a value (no field of it changes)
+let pic_bar_room : @ui.Style = @ui.css("w=Full justify=JEnd").then(@ui.style(h=Fixed(pic_bars_h)))
+
+///|
+let pic_bars_h : Double = 40.0
+
+///|
+let pic_bar_least : Double = 4.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let pic_bar : @ui.Style = @ui.css("w=Full radius=Sm")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pic_day_label : @ui.TextStyle = @ui.text_style(size=Caption, color=Data(@sf.share_dim), wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pic_day_today : @ui.TextStyle = @ui.text_style(size=Caption, weight=Bold, color=Data(@sf.share_orange), wrap=false)
+
+///|
+/// The chats at work now: a dot, their number in words, where they are.
+// kept across runs: a value (no field of it changes)
+let pic_live : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pic_live_dot : @ui.Style = @ui.css("w=S2_5 h=S2_5 radius=Full").then(@ui.style(bg=Data(@sf.share_orange)))
+
+///|
+// kept across runs: a value (no field of it changes)
+let pic_live_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Data(@sf.share_ink), w=Full)
+
+///|
+/// Its foot: still.fail's line.
 // kept across runs: a value (no field of it changes)
 let pic_tagline : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Data(@sf.share_ink), wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let pic_scan : @ui.TextStyle = @ui.text_style(size=Meta, color=Data(@sf.share_dim), wrap=false)
-
-///|
-/// still.fail's site as a QR code, as the core makes one (qr.ts `qr("https://still.fail")`: 25 modules a side, `1`
-/// dark): what the picture's QR code opens.
-// kept across runs: a value (no field of it changes)
-let site_qr : Json = {
-  "size": 25,
-  "rows": [
-    "1111111000000100101111111", "1000001000010011101000001", "1011101010010001001011101", "1011101011100000001011101",
-    "1011101010100100101011101", "1000001011000111101000001", "1111111010101010101111111", "0000000011111101000000000",
-    "1011111001010011001111100", "1010110110001000110100010", "1101101100101001011111011", "0011100110111010101000001",
-    "1110101011010001011110111", "1001110000001110100101010", "1000101111000111000111011", "1000100101001100111110001",
-    "1011011001101010111110100", "0000000010100001100011000", "1111111001011000101010111", "1000001010110011100011000",
-    "1011101011110001111110101", "1011101010001111011011111", "1011101011000110100001101", "1000001000001101110111001",
-    "1111111010101010001111111",
-  ],
-}

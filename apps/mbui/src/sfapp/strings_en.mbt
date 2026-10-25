@@ -1136,7 +1136,6 @@ let en : Map[String, String] = {
   "web-main.jobs.chip": "Running {n}",
   "web-main.stations.shareCard": "Share card",
   "web-main.stations.shareTagline": "Use all of them from any one",
-  "web-main.stations.shareQr": "Scan to open still.fail",
   "web-main.stations.shareFailed": "Couldn't copy the image",
   "web-main.jobs.long": "Long-running services and jobs",
   "web-main.rail.customize": "Customize rail",

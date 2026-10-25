@@ -1302,40 +1302,41 @@ fn fixture_station_files(src : Source) -> Unit {
 }
 
 ///|
-/// The card shared of the agents at work (the core's `fleet` view, views/fleet.ts), as the made-up chats' stations have
-/// them: Studio's one alone; the card to share's (share-card, share-card-…) three stations, three models and their week.
+/// The card shared of the agents at work (the core's `fleet` view, views/fleet.ts), as the made-up workspace has it:
+/// its one Claude subscription's week, Studio's one chat at work; the card to share's (share-card, share-card-…) two
+/// kinds of subscription (two Claude accounts' past one's quota), nine chats at work on three stations, and their week.
 fn fixture_fleet(f : Fixture) -> Json {
   if !f.mode.has_prefix("share-card") {
     return {
-      "running": 1,
-      "unit": "个 agent 正在为我工作",
       "at": "10月26日 04:12",
-      "where": "分布在 1 台设备 · 1 种模型",
-      "stations": [{ "station": "ws1/st1", "name": "Studio", "machine": "Apple M2 Max · 64 GB", "running": 1, "makers": ["anthropic"] }],
-      "models": [{ "name": "Opus 5.5", "maker": "anthropic", "count": 1, "text": "×1" }],
+      "quotaLead": "本周用掉了",
+      "quota": [{ "kind": "claude", "accounts": 1, "used": 37, "usedText": "37%", "text": "1 个 Claude 订阅账号的周额度" }],
+      "chats": 1,
+      "chatsText": "1 个对话正在运行",
+      "where": "分布在 1 台设备",
     }
   }
-  let shares = [0.42, 0.58, 0.35, 0.71, 0.66, 0.9, 1.0]
+  // each day's chats archived (57 in all, 12 today), as a share of the most on a day
+  let shares = [5.0, 7.0, 4.0, 10.0, 8.0, 11.0, 12.0].map(fn(n) { n / 12.0 })
   let labels = ["10/20", "10/21", "10/22", "10/23", "10/24", "10/25", "10/26"]
   {
-    "running": 9,
-    "unit": "个 agent 正在为我工作",
     "at": "10月26日 04:12",
-    "where": "分布在 3 台设备 · 3 种模型",
-    "stations": [
-      { "station": "ws1/st1", "name": "Studio", "machine": "Apple M2 Max · 64 GB", "running": 5, "makers": ["anthropic", "openai"] },
-      { "station": "ws1/st3", "name": "ccvm", "machine": "Apple M4 · 8 GB", "running": 3, "makers": ["anthropic", "deepseek"] },
-      { "station": "ws1/st4", "name": "Mini1", "machine": "Apple M4 · 16 GB", "running": 1, "makers": ["openai"] },
+    "quotaLead": "本周用掉了",
+    "quota": [
+      { "kind": "claude", "accounts": 2, "used": 170, "usedText": "170%", "text": "2 个 Claude 订阅账号的周额度" },
+      { "kind": "chatgpt", "accounts": 1, "used": 45, "usedText": "45%", "text": "1 个 ChatGPT 订阅账号的周额度" },
     ],
-    "models": [
-      { "name": "Opus 5.5", "maker": "anthropic", "count": 4, "text": "×4" },
-      { "name": "GPT-6", "maker": "openai", "count": 3, "text": "×3" },
-      { "name": "DeepSeek V4", "maker": "deepseek", "count": 2, "text": "×2" },
-    ],
+    "chats": 9,
+    "chatsText": "9 个对话正在运行",
+    "where": "分布在 3 台设备",
+    "today": {
+      "title": "今天",
+      "stats": [{ "label": "归档的对话", "value": "12 个" }, { "label": "折合费用", "value": "$362" }],
+    },
     "week": {
       "title": "近 7 天",
       "stats": [
-        { "label": "模型调用", "value": "48,231 次" },
+        { "label": "归档的对话", "value": "57 个" },
         { "label": "输入 token", "value": "3.1 亿" },
         { "label": "折合费用", "value": "$1,911" },
       ],
@@ -1347,4 +1348,3 @@ fn fixture_fleet(f : Fixture) -> Json {
     },
   }
 }
-
