@@ -256,6 +256,9 @@ pub(all) enum Radius {
   /// capsule there: its distance from the two edges and its own corner; a smooth one: smooth.mbt concentric_out)
   Around
   Exact(Double)
+  /// each corner its own (top left, top right, bottom right, bottom left: CSS's border-radius of four): a panel whose
+  /// corners in the window's follow it and the others stand alone
+  Corners(Double, Double, Double, Double)
 } derive(Eq, Show, Debug)
 
 ///|

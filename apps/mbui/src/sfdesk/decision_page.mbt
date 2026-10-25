@@ -315,6 +315,8 @@ fn zou_answer(c : @ui.Ctx, src : Source, w : Workspace, x : Json, draft : String
     offline: false,
   }
   let width = composer_width(c.width)
+  // (in a panel of its own, at its foot: its capsule where its ends stand concentric with the corners they are in)
+  let capsule_in = @sfpages.composer_capsule_in(c.width)
   let foot = c.box(style=if @sf.in_pane() { zp_foot_tape() } else { zp_foot }, fn() {
     c.box(style=@ui.style(w=Fixed(width)), fn() {
       c.sized(width, c.height, fn() {
@@ -355,7 +357,7 @@ fn zou_answer(c : @ui.Ctx, src : Source, w : Workspace, x : Json, draft : String
               }
             })
           })
-        })
+        }, capsule_in~)
       })
     })
     |> ignore

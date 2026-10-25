@@ -89,13 +89,16 @@ pub let composer_field_key : String = "composer/field"
 
 ///|
 /// The composer (ComposerView) for `spec`, `send` what pressing send (or Enter) does with what is written once it is
-/// ready. Drawn where its place is; a page lays it out (its width: composer_width).
+/// ready. Drawn where its place is; a page lays it out (its width: composer_width). `capsule_in`: at a panel's foot,
+/// how much further in than its box its capsule stands from its left, its right and its foot (composer_capsule_in:
+/// each shape where it stands concentric with the corners it is in, the morph between them).
 pub fn composer(
   c : @ui.Ctx,
   src : Source,
   ws : Workspace,
   spec : ComposerSpec,
   send : (Writing) -> Unit,
+  capsule_in? : (Double, Double, Double) = (0.0, 0.0, 0.0),
 ) -> Unit {
   let p = @sf.theme().p
   let w = writing(src, spec.draft)
@@ -158,7 +161,7 @@ pub fn composer(
   let mut send_i = -1
   let mut chosen = -1
   let box = c.box(
-    style=if multiline { composer_box_open } else { composer_box },
+    style=if multiline { composer_box_open } else { composer_box.then(capsule_place(capsule_in)) },
     // (the raised ground's glass, the accent's over it while dragged over)
     glass=@sf.glass_floating(tint?=if dragging { Some(@sf.alpha(p.accent, drag_tint)) } else { None }),
     id=cap,
@@ -937,6 +940,31 @@ let on_veil : Int64 = 0xFFFFFFFFL
 let composer_box : @ui.Style = @ui.css("row w=Full gap=SPx pl=S2 pr=S2 py=S2 radius=InnerOr(Full) align=ACenter")
 
 ///|
+/// How high the capsule is: its buttons (32) 8 in.
+let capsule_h : Double = 32.0 + 2.0 * 8.0
+
+///|
+/// The capsule further in than the box by `capsule_in` (composer's), from its left, its right and its foot.
+fn capsule_place(capsule_in : (Double, Double, Double)) -> @ui.Style {
+  let (l, r, b) = capsule_in
+  @ui.style(ml=@sf.room_of(l), mr=@sf.room_of(r), mb=@sf.room_of(b))
+}
+
+///|
+/// At a panel's foot (`pane` wide), how much further in than its box (composer_side) the composer's capsule stands from
+/// the panel's left, its right and its foot: in a panel of its own (@sf.pane_round) whose foot corners it reaches (as
+/// wide as the panel leaves it: composer_width), each end as far in as makes it concentric with the corner it is in,
+/// an end that cannot the ladder's inset in, as it stands alone (@sf.foot_capsule); else none.
+pub fn composer_capsule_in(pane : Double) -> (Double, Double, Double) {
+  let d = composer_side()
+  if !@sf.in_pane() || composer_width(pane) < pane - 2.0 * d - 0.5 {
+    return (0.0, 0.0, 0.0)
+  }
+  let (l, r, b) = @sf.foot_capsule(capsule_h, @sf.corner_inset, @sf.corner_inset)
+  (l - d, r - d, b - d)
+}
+
+///|
 /// The box (composerBox[data-multiline]): a column its padding in (@sf.composer_pad: its buttons round in its corners
 /// concentric with it), its parts 10 apart, a card's corner of the ladder's; in a panel's corners concentric with them.
 // kept across runs: a value (no field of it changes)
@@ -1204,6 +1232,7 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
     },
   }
   let width = composer_width(c.width)
+  let capsule_in = if apart { composer_capsule_in(c.width) } else { (0.0, 0.0, 0.0) }
   // (apart: the composer as far from its foot as from its sides, so it stands in the panel's corners and follows them:
   // InnerOr)
   let foot = c.box(style=if apart { chat_foot_apart() } else { chat_foot }, fn() {
@@ -1213,12 +1242,19 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
     }
     c.box(style=@ui.style(w=Fixed(width)), fn() {
       c.sized(width, c.height, fn() {
-        composer(c, src, ws, spec, fn(w) {
-          match v {
-            Some(v) => send_in_chat(c, src, r, v, w)
-            None => ()
-          }
-        })
+        composer(
+          c,
+          src,
+          ws,
+          spec,
+          fn(w) {
+            match v {
+              Some(v) => send_in_chat(c, src, r, v, w)
+              None => ()
+            }
+          },
+          capsule_in~,
+        )
       })
     })
     |> ignore

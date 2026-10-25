@@ -160,23 +160,23 @@ priv struct Rec {
   mut was_fy : Double
   /// a build of this frame moved it (its offsets set from was_ox, was_oy, or the drive then)
   mut moved_now : Bool
-  /// reshape: the shape its ground set out from (x, y in its list or scope, w, h, its corner), how far it has gone
-  /// there (0 → 1), its corner as last laid out; and the same as the frame before left them
+  /// reshape: the shape its ground set out from (x, y in its list or scope, w, h, its corners: top left, then round
+  /// it), how far it has gone there (0 → 1), its corners as last laid out; and the same as the frame before left them
   mut gx : Double
   mut gy : Double
   mut gw : Double
   mut gh : Double
-  mut gr : Double
+  mut gr : (Double, Double, Double, Double)
   gp : Anim
-  mut rad : Double
+  mut rad : (Double, Double, Double, Double)
   mut was_w : Double
   mut was_h : Double
-  mut was_rad : Double
+  mut was_rad : (Double, Double, Double, Double)
   mut was_gx : Double
   mut was_gy : Double
   mut was_gw : Double
   mut was_gh : Double
-  mut was_gr : Double
+  mut was_gr : (Double, Double, Double, Double)
   mut was_gp : Double
   /// a build of this frame set its ground off anew
   mut g_now : Bool
@@ -186,6 +186,23 @@ priv struct Rec {
   /// none), and the edges of it it keeps to (1: its right, rather than its left; 2: its foot, rather than its top)
   mut on : Int
   mut on_edges : Int
+}
+
+///|
+/// Corners `r` (top left, then round it) as a box `w` by `h` draws them: each no more than half its shorter side.
+fn corners_in(r : (Double, Double, Double, Double), w : Double, h : Double) -> (Double, Double, Double, Double) {
+  let half = dmin(w, h) / 2.0
+  (dmin(r.0, half), dmin(r.1, half), dmin(r.2, half), dmin(r.3, half))
+}
+
+///|
+/// Corners `a` gone `p` of the way to `b`, each its own.
+fn corners_mix(
+  a : (Double, Double, Double, Double),
+  b : (Double, Double, Double, Double),
+  p : Double,
+) -> (Double, Double, Double, Double) {
+  (a.0 + (b.0 - a.0) * p, a.1 + (b.1 - a.1) * p, a.2 + (b.2 - a.2) * p, a.3 + (b.3 - a.3) * p)
 }
 
 ///|
@@ -228,17 +245,17 @@ fn Rec::new() -> Rec {
     gy: 0.0,
     gw: 0.0,
     gh: 0.0,
-    gr: 0.0,
+    gr: (0.0, 0.0, 0.0, 0.0),
     gp: Anim::new(1.0),
-    rad: 0.0,
+    rad: (0.0, 0.0, 0.0, 0.0),
     was_w: 0.0,
     was_h: 0.0,
-    was_rad: 0.0,
+    was_rad: (0.0, 0.0, 0.0, 0.0),
     was_gx: 0.0,
     was_gy: 0.0,
     was_gw: 0.0,
     was_gh: 0.0,
-    was_gr: 0.0,
+    was_gr: (0.0, 0.0, 0.0, 0.0),
     was_gp: 1.0,
     g_now: false,
     g_carry: false,
@@ -1170,8 +1187,7 @@ fn after_layout(c : @ui.Ctx) -> Unit {
       }
       // its ground on its way from the shape it had to the one it is laid out in, for its cause (reshape)
       if e.reshape {
-        let corner = fn(cr : Double, w : Double, h : Double) { dmin(cr, dmin(w, h) / 2.0) }
-        let to_r = corner(c.node_radius(e.node), nw, nh)
+        let to_r = corners_in(c.node_radii(e.node), nw, nh)
         let caused = e.by != "" && r.was_by != "" && e.by != r.was_by
         let changed_shape = (r.was_x - rx).abs() > 0.5 ||
           (r.was_y - ry).abs() > 0.5 ||
@@ -1183,12 +1199,12 @@ fn after_layout(c : @ui.Ctx) -> Unit {
           r.g_now = false
         } else if caused && changed_shape {
           // from the shape it showed as the frame began (on its way, or as it was laid out)
-          let wr = corner(r.was_rad, r.was_w, r.was_h)
+          let wr = corners_in(r.was_rad, r.was_w, r.was_h)
           r.gx = r.was_gx + (r.was_x - r.was_gx) * p0
           r.gy = r.was_gy + (r.was_y - r.was_gy) * p0
           r.gw = r.was_gw + (r.was_w - r.was_gw) * p0
           r.gh = r.was_gh + (r.was_h - r.was_gh) * p0
-          r.gr = r.was_gr + (wr - r.was_gr) * p0
+          r.gr = corners_mix(r.was_gr, wr, p0)
           r.gp.snap(0.0)
           r.gp.animate(1.0, e.spec)
           r.g_now = true
@@ -1219,11 +1235,11 @@ fn after_layout(c : @ui.Ctx) -> Unit {
             oy + r.gy + (ry - r.gy) * p,
             r.gw + (nw - r.gw) * p,
             r.gh + (nh - r.gh) * p,
-            r.gr + (to_r - r.gr) * p,
+            corners_mix(r.gr, to_r, p),
           )
         }
       }
-      r.rad = c.node_radius(e.node)
+      r.rad = c.node_radii(e.node)
       r.x = rx
       r.y = ry
       r.by = e.by

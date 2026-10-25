@@ -8,9 +8,10 @@
 // places and image ids are each renderer's own.
 //
 // The format, a line each, numbers as MoonBit writes doubles (exact), in this order:
-//   mbui-dl 4|5                   (5: an instance's 36 numbers, how it is turned 32-35, written only where something is
-//                                 turned; 4: 32, how smooth its clip's corners are 28-31; 3 had 28,
-//                                 its clip's corners' radii 24-27, round; 2 had 24)
+//   mbui-dl 4|5|6                 (6: an instance's 40 numbers, a box's corners each its own 36-39, written only where
+//                                 some box's are not one; 5: 36, how it is turned 32-35, written only where something
+//                                 is turned; 4: 32, how smooth its clip's corners are 28-31; 3 had 28, its clip's
+//                                 corners' radii 24-27, round; 2 had 24)
 //   window W H SCALE              the window in points, its device pixels a point
 //   clear R G B                   what is under everything (0-1), as this frame was presented
 //   glyph N SIZE WEIGHT STYLE CLUSTER "TEXT"
@@ -24,7 +25,7 @@
 //                                 (Tester::drawlist_images)
 //   bytes N BASE64                those bytes, when the list is to carry them (Tester::drawlist(bytes=true)): a list a
 //                                 renderer draws by itself, with no files beside it
-//   i N0 … N31                    an instance (scene.mbt: its 32 numbers), in drawing order, but a glyph's 12 its
+//   i N0 … N31                    an instance (scene.mbt: its 32 numbers, 36 or 40), in drawing order, but a glyph's 12 its
 //                                 glyph's N (13 0) and an image's 20 its image's N; 16-19 and 24-27 the rounded
 //                                 rect it is cut to (its rect, its corners' radii: top left, top right, bottom right,
 //                                 bottom left), 28-31 how smooth those corners are (smooth.mbt)
@@ -195,15 +196,35 @@ fn drawlist_of(c : Ctx, bytes? : Bool = false) -> String {
     _ => ()
   }
   let sb = StringBuilder()
-  // (turned: 5 and its 36 numbers; else 4 and 32, as before anything turned)
+  // (a box's corners each its own: 6 and its 40 numbers; turned: 5 and 36; else 4 and 32, as before anything turned)
   let mut turned = false
+  let mut each = false
   for k in 0..<c.ninst {
-    if c.inst[k * inst_size + 32] != 0.0 {
+    let o = k * inst_size
+    if c.inst[o + 32] != 0.0 {
       turned = true
     }
+    let r = c.inst[o + 4]
+    if c.inst[o + 36] != r || c.inst[o + 37] != r || c.inst[o + 38] != r || c.inst[o + 39] != r {
+      each = true
+    }
   }
-  let numbers = if turned { inst_size } else { 32 }
-  sb.write_string(if turned { "mbui-dl 5\n" } else { "mbui-dl 4\n" })
+  let numbers = if each {
+    inst_size
+  } else if turned {
+    36
+  } else {
+    32
+  }
+  sb.write_string(
+    if each {
+      "mbui-dl 6\n"
+    } else if turned {
+      "mbui-dl 5\n"
+    } else {
+      "mbui-dl 4\n"
+    },
+  )
   sb.write_string("window")
   dl_num(sb, c.width)
   dl_num(sb, c.height)

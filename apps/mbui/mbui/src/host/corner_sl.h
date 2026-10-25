@@ -39,6 +39,11 @@
   "  float u = pow(1.0 + tn, 1.0 / n);\n" \
   "  return (hi * u - R) * (1.0 + tn) / (u * sqrt(1.0 + tn1 * tn1));\n" \
   "}\n" \
+  "// Which of a box's corners' radii r (top left, top right, bottom right, bottom left: scene.mbt 36-39) p (from its\n" \
+  "// middle) is drawn by: the one of its quarter's corner.\n" \
+  "float mb_corner_of(float2 p, float4 r) {\n" \
+  "  return p.x < 0.0 ? (p.y < 0.0 ? r.x : r.w) : (p.y < 0.0 ? r.y : r.z);\n" \
+  "}\n" \
   "// A box's own corners: r at most its shorter half, as smooth as its size has room for (band: mb_sd_corner's).\n" \
   "float mb_sd_box(float2 p, float2 hs, float r, float band) {\n" \
   "  float room = min(hs.x, hs.y);\n" \

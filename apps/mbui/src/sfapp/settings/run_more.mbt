@@ -199,9 +199,9 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
       ])
     })
     |> ignore
-    // its button at its foot: in a panel of its own, in its foot corners concentric with it (@sf.foot_in)
-    let foot_x = @sf.foot_in(wide_button_h, 18.0)
-    let foot_b = @sf.foot_in(wide_button_h, 12.0)
+    // its button at its foot: in a panel of its own, each end in the foot corner it is in concentric with it
+    // (@sf.foot_capsule)
+    let (foot_l, foot_r, foot_b) = @sf.foot_capsule(wide_button_h, 18.0, 12.0)
     // the model picked is another station's: said so over the button, which borrows it (asked again)
     match field(v, "borrow") {
       Some(Object(_)) as b => {
@@ -211,7 +211,7 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
           |> ignore
         })
         |> ignore
-        c.box(w=Fill(1.0), padx=foot_x, pt=12.0, pb=foot_b, fn() {
+        c.box(w=Fill(1.0), pl=foot_l, pr=foot_r, pt=12.0, pb=foot_b, fn() {
           if wide_button(c, "session-borrow", text(b, "action"), allowed, busy=is_doing(core, ["pick.borrow"], [("station", station), ("of", of)]), enabled=allowed) {
             confirm_borrow(core, station, of, b)
           }
@@ -222,7 +222,7 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
         let busy = is_doing(core, ["pick.save"], [("station", station), ("of", of)])
         let changed = flag(v, "changed")
         let go = changed && has(v, "option") && !busy
-        c.box(w=Fill(1.0), padx=foot_x, pt=12.0, pb=foot_b, fn() {
+        c.box(w=Fill(1.0), pl=foot_l, pr=foot_r, pt=12.0, pb=foot_b, fn() {
           if wide_button(c, "session-save", text(v, "saveText"), changed, busy~) {
             // back at once, not waiting on the station; failed, a toast says why
             (core.pop)()

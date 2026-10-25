@@ -244,6 +244,10 @@ fn Ctx::emit_glass(self : Ctx, n : Node, gl : Glass, alpha : Double) -> Unit {
     if gl.liquid { 0.0 } else { gl.rim_back },
     alpha,
   )
+  // (frosted: its corners each its own; liquid merges shapes of one corner each, the renderers' groups: its roundest)
+  if !gl.liquid {
+    self.corners_last(n)
+  }
   let k = self.ninst - 1
   let b = k * inst_size
   let a = self.inst
@@ -311,6 +315,7 @@ fn Ctx::paint_glass(self : Ctx, n : Node, gl : Glass, alpha : Double) -> Unit {
     }
     self.emit_rect(n.x, n.y, n.fw, n.fh, n.radius, gl.solid, 0.0, 0L, alpha)
     self.notch_last(n)
+    self.corners_last(n)
     return
   }
   if !gl.liquid || glass_paint.in_group == 0 {
@@ -344,4 +349,5 @@ fn Ctx::paint_shadow(self : Ctx, n : Node, alpha : Double, outside : Bool) -> Un
     0.0,
     0.0,
   )
+  self.corners_last(n)
 }

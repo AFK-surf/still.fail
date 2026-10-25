@@ -31,6 +31,8 @@ pub(all) struct Laid {
   h : Double
   cut : (Double, Double, Double, Double)
   radius : Double
+  /// each of its corners as drawn (top left, top right, bottom right, bottom left); `radius` the roundest
+  radii : (Double, Double, Double, Double)
   bg : Int64
   border_w : Double
   border_c : Int64
@@ -133,6 +135,7 @@ pub fn Tester::boxes(self : Tester) -> Array[Laid] {
       h: n.fh,
       cut,
       radius: n.radius,
+      radii: (n.radius_at(0), n.radius_at(1), n.radius_at(2), n.radius_at(3)),
       bg: n.bg,
       border_w: n.border_w,
       border_c: n.border_c,

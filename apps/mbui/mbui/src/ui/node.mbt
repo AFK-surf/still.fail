@@ -89,6 +89,10 @@ struct Node {
   mut justify : Justify
   mut bg : Int64
   mut radius : Double
+  // its corners each their own where they are not all `radius` (top left, top right, bottom right, bottom left, as
+  // drawn): said so (Radius::Corners), or worked out once laid out where some lie in a container's corners and others
+  // in none (corners.mbt); None where all four are `radius`
+  mut radii : FixedArray[Double]?
   mut border_w : Double
   mut border_c : Int64
   mut shadow : Double
@@ -284,6 +288,7 @@ fn Node::new() -> Node {
     justify: JStart,
     bg: 0L,
     radius: 0.0,
+    radii: None,
     border_w: 0.0,
     border_c: 0L,
     shadow: 0.0,
@@ -453,6 +458,7 @@ fn Node::reset_look(self : Node) -> Unit {
   self.justify = JStart
   self.bg = 0L
   self.radius = 0.0
+  self.radii = None
   self.border_w = 0.0
   self.border_c = 0L
   self.shadow = 0.0
@@ -489,6 +495,37 @@ fn Node::reset_words(self : Node) -> Unit {
 /// Whether it is put in its parent by where it is said to be (`at_*`), out of the flow.
 fn Node::placed_at(self : Node) -> Bool {
   !self.at_l.is_nan() || !self.at_t.is_nan() || !self.at_r.is_nan() || !self.at_b.is_nan()
+}
+
+///|
+/// Its corner `j` as drawn (0 top left, 1 top right, 2 bottom right, 3 bottom left: round it, as a clip's and an
+/// instance's are): its own where its corners are each theirs (radii), else `radius`.
+fn Node::radius_at(self : Node, j : Int) -> Double {
+  match self.radii {
+    Some(r) => r[j]
+    None => self.radius
+  }
+}
+
+///|
+/// Its corners made `r` (radius_at's order): all four one, `radius`; else each its own.
+fn Node::set_radii(self : Node, r : FixedArray[Double]) -> Unit {
+  if r[0] == r[1] && r[1] == r[2] && r[2] == r[3] {
+    self.radius = r[0]
+    self.radii = None
+  } else {
+    self.radius = dmax(dmax(r[0], r[1]), dmax(r[2], r[3]))
+    self.radii = Some(r)
+  }
+}
+
+///|
+/// Its corners as drawn (radius_at's order), a copy.
+fn Node::radii_now(self : Node) -> FixedArray[Double] {
+  match self.radii {
+    Some(r) => FixedArray::from_array([r[0], r[1], r[2], r[3]])
+    None => FixedArray::make(4, self.radius)
+  }
 }
 
 ///|

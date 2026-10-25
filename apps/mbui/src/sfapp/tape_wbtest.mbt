@@ -295,7 +295,7 @@ fn composer_in_panel(t : @ui.Tester) -> (Double, Double)? {
   guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
   let ed = bs[e]
   for b in bs {
-    if @ui.Radius::Exact(b.radius) == @sf.page_panel_corner() && b.x <= ed.x && ed.x + ed.w <= b.x + b.w {
+    if b.radius == @sf.pane_corner && b.x <= ed.x && ed.x + ed.w <= b.x + b.w {
       return Some((ed.x - b.x, b.y + b.h - ed.y))
     }
   }
@@ -354,10 +354,9 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
   t.tap(650.0, 400.0)
   t.run_for(@sfdesk.side_move_ms * 2.0)
-  let panel = match @sf.page_panel_corner() {
-    Exact(r) => r
-    _ => abort("the panels' corner is a number")
-  }
+  // (a square window: the panels' corners all the ladder's)
+  assert_eq(@sf.tape_edge.val, @sf.pane_corner)
+  let panel = @sf.pane_corner
   // one line: a capsule the ladder's inset in, as round as the panel's corner less that (its half), its buttons round
   // in its ends
   guard composer_corners(t) is Some((k, s)) else { fail("no composer") }
@@ -374,4 +373,80 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   assert_eq(k, @sf.card_corner)
   assert_eq(s, 16.0)
   assert_eq(t.corner_faults(), [])
+}
+
+///|
+/// The panel of the tape the composer's field is in (the smallest box round it as round as a pane), and the
+/// composer's box (the glass round the field): as laid out.
+fn composer_and_panel(t : @ui.Tester) -> (@ui.Laid, @ui.Laid)? {
+  let bs = t.boxes()
+  guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
+  let ed = bs[e]
+  let round = fn(b : @ui.Laid) { b.x <= ed.x && ed.x + ed.w <= b.x + b.w && b.y <= ed.y && ed.y + ed.h <= b.y + b.h }
+  let mut panel : @ui.Laid? = None
+  let mut box : @ui.Laid? = None
+  for b in bs {
+    if round(b) && b.radius == @sf.pane_corner {
+      panel = Some(b)
+    }
+    if round(b) && b.glass {
+      box = Some(b)
+    }
+  }
+  match (box, panel) {
+    (Some(k), Some(p)) => Some((k, p))
+    _ => None
+  }
+}
+
+///|
+test "on a Mac's tape each panel's corners follow the window's where it stands at its edge, the others the ladder's" {
+  reset()
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=690.0, h=840.0, platform=0, window_corner=16.0)
+  t.run_for(@ui.nav_push_ms)
+  // the window's 16, 6 in: 11.2
+  let edge = @ui.concentric(16.0, 6.0)
+  assert_eq(@sf.tape_edge.val, edge)
+  let pane = @sf.pane_corner
+  // the sidebar in use: its left corners at the window's, the page's right ones past its right edge as they will be
+  // there
+  guard composer_and_panel(t) is Some((_, page)) else { fail("no composer in a panel") }
+  assert_true(near4(page.radii, (pane, edge, edge, pane)), msg="the page's panel: \{page.radii}")
+  assert_true(
+    t.boxes().iter().any(fn(b) { near4(b.radii, (edge, pane, pane, edge)) && b.x < 10.0 }),
+    msg="no sidebar's panel with its left corners the window's",
+  )
+  assert_eq(t.corner_faults(), [])
+  // the page brought over, its composer taking the cursor (a computer's): a box, where both its foot corners follow
+  // the panel's (6.5 in), its foot's concentric with each, its top's its own
+  t.tap(650.0, 400.0)
+  t.run_for(@sfdesk.side_move_ms * 2.0)
+  guard composer_and_panel(t) is Some((k, p)) else { fail("no composer in a panel") }
+  let d = @sf.foot_fit(pane, edge, @sf.corner_inset)
+  assert_true((d - 6.5).abs() < 0.01, msg="the box's place: \{d}")
+  let at = (k.x - p.x, p.x + p.w - (k.x + k.w), p.y + p.h - (k.y + k.h))
+  assert_true(near4((at.0, at.1, at.2, 0.0), (d, d, d, 0.0)), msg="the box from the panel's edges: \{at}")
+  assert_true(
+    near4(k.radii, (@sf.card_corner, @sf.card_corner, @ui.concentric(edge, d), @ui.concentric(pane, d))),
+    msg="the box's corners: \{k.radii}",
+  )
+  assert_eq(t.corner_faults(), [])
+  // let go of: a capsule, its left end concentric with the panel's 34 (10 in), its right in the window's 11.2, too
+  // square for it, the ladder's 10 in as alone; the box's place to the capsule's in the one change of shape
+  t.ctx().blur()
+  // (let go of from the next frame on; its change of shape over by twice its length after that)
+  t.run_for(@sfpages.let_go_ms + 2.0 * @sfpages.morph_ms)
+  guard composer_and_panel(t) is Some((k, p)) else { fail("no composer in a panel") }
+  let ten = @sf.corner_inset
+  let at = (k.x - p.x, p.x + p.w - (k.x + k.w), p.y + p.h - (k.y + k.h))
+  assert_true(near4((at.0, at.1, at.2, 0.0), (ten, ten, ten, 0.0)), msg="the capsule from the panel's edges: \{at}")
+  assert_eq(t.corner_faults(), [])
+}
+
+///|
+/// Whether four numbers are each within a hundredth of the other four's.
+fn near4(a : (Double, Double, Double, Double), b : (Double, Double, Double, Double)) -> Bool {
+  (a.0 - b.0).abs() < 0.01 && (a.1 - b.1).abs() < 0.01 && (a.2 - b.2).abs() < 0.01 && (a.3 - b.3).abs() < 0.01
 }

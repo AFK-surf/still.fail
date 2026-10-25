@@ -386,13 +386,15 @@ test "style: radius=InnerOr: alone its own corner; in a panel's corner the panel
   assert_eq(c.nodes[capsule].corner(), 22.0)
   assert_eq(c.nodes[button].corner(), 16.0)
   assert_eq(t.corner_faults(), [])
-  // a panel less round: the capsule concentric with it, and its button concentric with the capsule; nothing rounder
-  // than what holds it
+  // a panel less round: the capsule's foot corners, in the panel's, concentric with them, its top's (in none) round as
+  // alone; its button's in the capsule's foot corner concentric with it, the rest round; nothing rounder than what
+  // holds it where it lies in it
   let t = Tester::new(capsule_in_panel(24.0, 12.0))
   t.draw()
   let c = g()
-  assert_eq(c.nodes[capsule].corner(), concentric(24.0, 12.0))
-  assert_eq(c.nodes[button].corner(), concentric(concentric(24.0, 12.0), 6.0))
+  let foot = concentric(24.0, 12.0)
+  assert_eq(drawn4(c.nodes[capsule]), (22.0, 22.0, foot, foot))
+  assert_eq(drawn4(c.nodes[button]), (16.0, 16.0, 16.0, concentric(foot, 6.0)))
   assert_eq(t.corner_faults(), [])
   // nearer the panel's foot than its sides: its own corner kept, and said
   let t = Tester::new(fn(c) {
@@ -705,6 +707,12 @@ fn corner_strip(wide : Double) -> (Ctx) -> Unit {
 }
 
 ///|
+/// Node `n`'s corners as drawn (top left, then round it), each at most half its shorter side.
+fn drawn4(n : Node) -> (Double, Double, Double, Double) {
+  (n.corner_at(0), n.corner_at(1), n.corner_at(2), n.corner_at(3))
+}
+
+///|
 /// The box corner_strip draws (its ground).
 fn strip_box() -> Node {
   let c = g()
@@ -718,10 +726,10 @@ fn strip_box() -> Node {
 
 ///|
 test "corners: in a strip scrolled sideways with nothing to scroll, a box lies where it is: in the card's corner, concentric" {
-  // as narrow as the strip: still, so the card's corner is its
+  // as narrow as the strip: still, so the card's corner is its where it lies in it (its foot's left), its others its own
   let t = Tester::new(corner_strip(200.0))
   t.draw()
-  assert_eq(strip_box().radius, concentric(26.0, 20.0))
+  assert_eq(drawn4(strip_box()), (18.0, 18.0, 18.0, concentric(26.0, 20.0)))
   assert_eq(t.corner_faults(), [])
   // wider: it moves under the strip's edges, so where it is from the corner is not fixed; its own
   let t = Tester::new(corner_strip(400.0))
@@ -817,13 +825,23 @@ test "corners: a mark smaller than the gap it would leave in a corner stands by 
 ///|
 test "corners: a panel beside the window's, past its side, follows the window's corner as it will when it comes over" {
   // two panels on a strip as a Mac's 16 window lays them (6 from its top and foot), the second past the window's right
-  // edge: as round as the first, 11.2, and what lies in its corners (6.5 in) concentric with that, 6
+  // edge: its right corners, at the window's right edge when it comes over, as round as the first's, 11.2, its left
+  // ones (never at the window's) the ladder's 34; what lies in its corners 6.5 in concentric with each (6 and 28.8:
+  // where its right ones have it, off the ladder there)
   let follow = concentric(16.0, 6.0)
   let tape = fn(c : Ctx) {
     c.with_theme({ ..Theme::light(), corner_ladder: [34.0, 26.0, 18.0, 10.0], corner_fit: Some(fit_ranges) }, fn() {
       c.box(w=Fill(1.0), h=Fill(1.0), fn() {
         c.box(w=Px(588.0), h=Px(388.0), left=6.0, top=6.0, radius=follow, bg=0x333333FFL, fn() {  }) |> ignore
-        c.box(w=Px(300.0), h=Px(388.0), left=602.0, top=6.0, radius=follow, bg=0x333333FFL, pad=6.5, fn() {
+        c.box(
+          style=style(radius=Corners(34.0, follow, follow, 34.0)),
+          w=Px(300.0),
+          h=Px(388.0),
+          left=602.0,
+          top=6.0,
+          bg=0x333333FFL,
+          pad=6.5,
+          fn() {
           c.box(w=Fill(1.0), h=Fill(1.0), radius=concentric(follow, 6.5), bg=0xEEEEEEFFL, fn() {  }) |> ignore
         })
         |> ignore
