@@ -28,6 +28,7 @@ fn init {
       control_h: wide_control_h,
       bars: bars_drawn,
       round: wide_round,
+      lists: mouse_lists,
     }
   })
 }

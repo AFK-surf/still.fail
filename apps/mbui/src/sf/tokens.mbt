@@ -111,6 +111,8 @@ pub(all) struct Theme {
   bars : Bars
   /// the round controls standing in a field's capsule (Round)
   round : Round
+  /// what a chats' list is on this screen (Lists: its rows' sizes and density, by the screen's kind alone)
+  lists : Lists
 }
 
 ///|
@@ -914,6 +916,7 @@ let current : Ref[Theme] = {
     control_h: wide_control_h,
     bars: bars_drawn,
     round: wide_round,
+    lists: mouse_lists,
   },
 }
 
@@ -1011,6 +1014,8 @@ pub fn begin(c : @ui.Ctx) -> Theme {
     control_h: if narrow { narrow_control_h } else { wide_control_h },
     bars: bars_drawn,
     round: if narrow { narrow_round } else { wide_round },
+    // (a computer's window made narrow keeps a computer's lists: the narrow anatomy at a computer's sizes)
+    lists: if touch_system() { touch_lists } else { mouse_lists },
   }
   current.val
 }
