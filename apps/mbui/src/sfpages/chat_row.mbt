@@ -219,9 +219,16 @@ pub fn chat_row(
     // (what shows of it over the list's: what its faces' rings are cut in)
     let face_ground = @sf.over(list_ground, ground)
     c.box(style=if more { look.more } else { row_last }, tx~, fn() {
-      c.box(style=look.row.then(@sf.list_row_in(at)).then(@ui.style(bg=Data(ground))), id~, fn() {
-        c.box(style=if item.settled { look.text_settled } else { look.text }, fn() {
-          c.box(style=if archive_key { look.head_room } else { look.head }, fn() {
+      // (the library's list row, a chat's as high as its row always is: @sf.list_row)
+      @sf.list_row(
+        c,
+        id,
+        at,
+        ground,
+        high=true,
+        faded=item.settled,
+        head_room=archive_key,
+        fn() {
             let tone = @sfbase.row_tone(item)
             if tone != "" {
               c.box(style=mark_slot, fn() { row_mark(c, key, tone) }) |> ignore
@@ -280,8 +287,8 @@ pub fn chat_row(
                   @sf.tip(c, "row/away-tip/" + key, away, said)
                 }
             }
-          })
-          |> ignore
+        },
+        fn() {
           c.box(style=if offline { look.meta.then(meta_dim) } else { look.meta }, fn() {
             let state = match item.state_text {
               Some(s) => Some(s)
@@ -312,13 +319,14 @@ pub fn chat_row(
             }
           })
           |> ignore
-        })
-        |> ignore
+        },
         // a chat a search found, or in the latest chats: rippled where it is pressed (a finger's)
-        if found {
-          @motion.ripple(c, id, 0.0)
-        }
-      })
+        after=fn() {
+          if found {
+            @motion.ripple(c, id, 0.0)
+          }
+        },
+      )
       |> ignore
       // 归档, at the row's top right while a mouse points at it (Sidebar.css.ts rowArchive: 5 down, 6 in)
       if archive_key {

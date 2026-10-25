@@ -155,9 +155,10 @@ fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, pick : () -
       end=fn() {
         c.box(style=if online { place_dot_on } else { place_dot_off }, fn() {  }) |> ignore
         if !online {
-          c.text(text(s, "summary"), style=nav_meta) |> ignore
+          c.text(text(s, "summary"), style=nav_meta()) |> ignore
         } else if running > 0.0 {
-          c.text(@sf.t("web-pages.stations.page.runningShort", args=[("n", running.to_int().to_string())]), style=place_busy)
+          let busy = @sf.t("web-pages.stations.page.runningShort", args=[("n", running.to_int().to_string())])
+          c.text(busy, style=nav_meta().then(place_busy))
           |> ignore
         }
       },
@@ -178,7 +179,7 @@ fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, pick : () -
                   "" => text(net, "path")
                   rtt => text(net, "path") + " · " + rtt
                 },
-                style=nav_meta,
+                style=nav_meta(),
               )
               |> ignore
             })
@@ -231,13 +232,13 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             lines=fn() {
               nav_line(c, fn() {
                 if trouble != "" {
-                  c.text(trouble, style=place_trouble) |> ignore
+                  c.text(trouble, style=nav_meta().then(place_trouble)) |> ignore
                 }
                 let quota = field(p, "quota")
                 if text(quota, "state") == "ok" && items(quota, "windows").length() > 0 {
                   @settings.quota_chips(c, quota, small=true, gap=4.0)
                 } else if trouble == "" {
-                  c.text(text(e, "where"), style=nav_meta) |> ignore
+                  c.text(text(e, "where"), style=nav_meta()) |> ignore
                 }
               })
             },
@@ -269,8 +270,8 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
               fn() { nav_title(c, @settings.runtime_label(text(l, "runtime"))) },
               lines=fn() {
                 nav_line(c, fn() {
-                  c.box(style=place_grow, fn() { c.text(text(l, "email"), style=nav_meta) |> ignore }) |> ignore
-                  c.text(@sf.t("android-settings.machine.use"), style=place_use) |> ignore
+                  c.box(style=place_grow, fn() { c.text(text(l, "email"), style=nav_meta()) |> ignore }) |> ignore
+                  c.text(@sf.t("android-settings.machine.use"), style=nav_meta().then(place_use)) |> ignore
                 })
               },
             ) {
@@ -299,16 +300,16 @@ let place_grow : @ui.Style = @ui.style(w=@sf.grow, clip=true)
 ///|
 /// Its agents at work (StationPage.css.ts busy): the accent's words.
 // kept across runs: a value (no field of it changes)
-let place_busy : @ui.TextStyle = @ui.text_style(size=Meta, color=AccentText, wrap=false)
+let place_busy : @ui.TextStyle = @ui.text_style(color=AccentText)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let place_trouble : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
+let place_trouble : @ui.TextStyle = @ui.text_style(color=Danger)
 
 ///|
 /// 使用此账号 (ProfilesNav MachineLoginRow): the accent's words.
 // kept across runs: a value (no field of it changes)
-let place_use : @ui.TextStyle = @ui.text_style(size=Meta, color=AccentText, wrap=false)
+let place_use : @ui.TextStyle = @ui.text_style(color=AccentText)
 
 ///|
 /// Up or away: the rail's dot (railCss.dot: 6).
