@@ -52,6 +52,10 @@ jobs:
           moon test --target native -p mbui/text 2>&1 | tail -4
       - name: flexbox (Yoga's tests)
         run: moon test --target native -p mbui/flex 2>&1 | tail -3
+      - name: "signals (alien-signals ported: its own tests and the conformance suite it runs, docs/signals.md)"
+        run: |
+          set -o pipefail
+          moon test --target native -p mbui/signals 2>&1 | tail -3
       - name: "sin, exp, pow… worked out in MoonBit (mbui/dmath); gzip unzipped and SHA-256 (mbui/zip); pictures made from others, paths drawn, their PNGs and JPEGs, ThumbHash (mbui/pixels); base64, a link's parts, text's bytes, CSV, subtitles (mbui/codec)"
         run: |
           set -o pipefail

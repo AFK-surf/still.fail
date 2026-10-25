@@ -209,7 +209,7 @@ pub fn reset() -> Unit {
   dv_fetches.clear()
   keepings.clear()
   // what was worked out of the core's topics (derived.mbt)
-  memo_reset()
+  kept_reset()
   open_titled.val = ""
   shown_days.clear()
   held_from.clear()

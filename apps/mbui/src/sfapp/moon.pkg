@@ -19,4 +19,4 @@ import {
   "stillfail/sfpages",
 }
 
-import { "stillfail/sfkept", "stillfail/sfscreens" } for "wbtest"
+import { "stillfail/sfkept", "stillfail/sfscreens", "mbui/signals" } for "wbtest"
