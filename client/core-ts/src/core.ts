@@ -497,7 +497,8 @@ export class Core {
         }),
       ),
     );
-    // Only a call that holds something open for its page can be stopped; any other runs to its end whoever waits.
+    // Only a call that holds something open for its page, or streams to it what it reads, can be stopped (cancellable);
+    // any other runs to its end whoever waits.
     const fiber = inner.runner.fork(run);
     if (stoppable) inner.calls.set(key, fiber as Fiber.Fiber<unknown, unknown>);
   }

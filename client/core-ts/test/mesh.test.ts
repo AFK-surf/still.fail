@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import { createSocket } from "node:dgram";
 import { suite, test as register, type TestOptions } from "node:test";
-import { Effect, Queue } from "effect";
+import { Effect, Fiber, Queue } from "effect";
 import type { Credential } from "../src/cloud.ts";
 import { CoreError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
@@ -771,6 +771,47 @@ sim("a_read_slow_on_its_way_is_answered_on_another", async (s) => {
   const took = s.time.now() - started;
   assert.ok(took < HEDGE_FLOOR_MS + 1_000, `answered after ${took} ms`);
   await s.until(() => sameRelay(via(mesh, id), b), 2 * 60_000);
+  await close(s, station, mesh);
+});
+
+/// A read let go of while the station is slow to answer it (a player gone elsewhere, its view closed): its stream goes
+/// with it, and the station stops sending what no one would read.
+sim("a_read_let_go_of_before_its_answer_stops_the_station_sending_it", async (s) => {
+  const a = s.relay("https://a.relay.test/", { station: { ms: 10 } });
+  const { station, mesh, id: bare } = await onRelays(s, [a]);
+  const id = `w/${bare}`;
+  await reach(s, mesh, id);
+  const wire = wireOf(s, mesh);
+  station.lateMs = 5_000;
+  const read = Effect.scoped(Effect.flatMap(wire.request(StationAddr.parse(id), { method: "GET", path: "/admin/api/part", headers: [] }, new Uint8Array()), (r) => readAll(r.body)));
+  await s.run(
+    Effect.gen(function* () {
+      const reading = yield* Effect.forkChild(read);
+      yield* Effect.sleep(1_000);
+      yield* Fiber.interrupt(reading);
+    }),
+  );
+  await s.time.pass(10_000);
+  assert.deepEqual(station.letGo, ["/admin/api/part"]);
+  await close(s, station, mesh);
+});
+
+/// A read asked on another way as well, the station slow to answer it on both: once one answer is taken, the other
+/// attempt is let go of, not left to bring its answer to no one.
+sim("a_read_asked_on_two_ways_lets_go_of_the_one_not_taken", async (s) => {
+  const a = s.relay("https://a.relay.test/", { station: { ms: 10 } });
+  const b = s.relay("https://b.relay.test/", { station: { ms: 40 } });
+  const { station, mesh, id: bare } = await onRelays(s, [a, b]);
+  const id = `w/${bare}`;
+  await reach(s, mesh, id);
+  await s.time.pass(60_000);
+  const wire = wireOf(s, mesh);
+  station.lateMs = 3_000;
+  const status = await s.run(Effect.scoped(Effect.flatMap(wire.request(StationAddr.parse(id), { method: "GET", path: "/admin/api/part", headers: [] }, new Uint8Array()), (r) => Effect.map(readAll(r.body), () => r.status))));
+  assert.equal(status, 200);
+  assert.equal(station.served.filter((h) => h.path === "/admin/api/part").length, 2, "asked on both ways");
+  await s.time.pass(10_000);
+  assert.deepEqual(station.letGo, ["/admin/api/part"]);
   await close(s, station, mesh);
 });
 
