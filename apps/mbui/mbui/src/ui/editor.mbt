@@ -684,6 +684,19 @@ fn EditorState::text_set(self : EditorState, s : String, a : Int, b : Int) -> Un
 }
 
 ///|
+/// What Enter does in a field holding `max_lines` lines with the keyboard's action key `ime_action` (0 none), by the
+/// way the words come in (pointing): with a keyboard it gives the words up; with a finger's keyboard it starts a new
+/// line where there can be one and the keyboard has no key of its own for the field (a message's: Send is a button),
+/// else it is that key (a search's, an address's go) or the one line's end, giving them up.
+pub fn enter_sends_by(max_lines : Int, ime_action : Int) -> Bool {
+  pointing() is Mouse || max_lines <= 1 || ime_action != 0
+}
+
+///|
+/// A field of words. `enter_sends`: whether Enter gives the words up (`submitted`) rather than starting a new line;
+/// unsaid, the way the words come in decides (enter_sends_by): a keyboard's Enter gives them up (Shift+Enter a new
+/// line); a finger's keyboard's Enter is a new line where the field holds more than one and the keyboard has no key of
+/// its own for it (`ime_action`), else that key, giving them up.
 pub fn Ctx::editor(
   self : Ctx,
   key : String,
@@ -697,7 +710,7 @@ pub fn Ctx::editor(
   color? : Int64 = 0x1D1D1FFFL,
   placeholder_color? : Int64 = 0x8E8E93FFL,
   caret_color? : Int64 = 0x0A84FFFFL,
-  enter_sends? : Bool = true,
+  enter_sends? : Bool,
   leaves? : Array[Int] = [],
   ime_action? : Int = 0,
   paste_limit? : Int = 0,
@@ -727,7 +740,7 @@ pub fn Ctx::editor(
     }
   }
   st.limit = paste_limit
-  st.enter_sends = enter_sends
+  st.enter_sends = enter_sends.unwrap_or(enter_sends_by(max_lines, ime_action))
   st.leaves = leaves
   st.ime_action = ime_action
   st.secret = secret

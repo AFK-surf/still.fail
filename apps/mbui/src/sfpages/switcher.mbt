@@ -52,14 +52,16 @@ priv enum FindLine {
 }
 
 ///|
-/// The search as it stands: the kind looked at alone ("" every kind); the row chosen; its field and what is typed; the
-/// view last read (kept while the next words are looked up) and whether reading it failed; what was last asked of
-/// `commands.find`, its last answer and what it answered (kept: the list opened again with the same words has it at
-/// once; for other words none until the core has answered them); the lines as last drawn (what Enter opens); the list
-/// to go back to its top (into one kind or out of it).
+/// The search as it stands: the kind looked at alone ("" every kind); the row chosen, and whether it is shown so (a
+/// mouse's lines mark it; a finger's mark none, so its keyboard's search key opens nothing); its field and what is
+/// typed; the view last read (kept while the next words are looked up) and whether reading it failed; what was last
+/// asked of `commands.find`, its last answer and what it answered (kept: the list opened again with the same words has
+/// it at once; for other words none until the core has answered them); the lines as last drawn (what Enter opens); the
+/// list to go back to its top (into one kind or out of it).
 priv struct Finder {
   mut kind : String
   mut chosen : Int
+  mut chosen_shown : Bool
   field : @ui.Field
   mut query : String
   mut kept : SearchView?
@@ -77,6 +79,7 @@ priv struct Finder {
 let finder : Finder = {
   kind: "",
   chosen: 0,
+  chosen_shown: false,
   field: @ui.Field::new(),
   query: "",
   kept: None,
@@ -162,11 +165,12 @@ pub fn finder_back() -> Bool {
 }
 
 ///|
-/// Enter: the line chosen opened (`close` first, where the frame closes the search as one opens).
+/// Enter: the line chosen opened where it is shown chosen (`close` first, where the frame closes the search as one
+/// opens).
 pub fn finder_enter(close : () -> Unit) -> Unit {
   match finder.picks.get(finder.chosen) {
-    Some(k) => finder_go(finder.lines[k], close)
-    None => ()
+    Some(k) if finder.chosen_shown => finder_go(finder.lines[k], close)
+    _ => ()
   }
 }
 
@@ -430,6 +434,7 @@ pub fn finder_list(
   }
   finder.lines = lines
   finder.picks = picks
+  finder.chosen_shown = !finger
   if finder.chosen >= picks.length() {
     finder.chosen = if picks.length() > 0 { picks.length() - 1 } else { 0 }
   }

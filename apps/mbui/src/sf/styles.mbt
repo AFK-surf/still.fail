@@ -140,3 +140,18 @@ pub let phone_column : @ui.Style = @ui.style(w=Full, max_w=phone_max)
 ///|
 /// Things in a line, centred across it, a small gap between (an icon and its words, a label and its value).
 pub let beside : @ui.Style = @ui.css("row gap=S2 align=ACenter")
+
+///|
+/// Where a list's lines stand in a pane, its rows' grounds rounded under the pointer (Sidebar.css.ts navScroll): with
+/// a mouse 8 in from its sides, clear of its edge; with a finger across it, a row's ground its whole width.
+pub fn pane_line() -> @ui.Style {
+  if touch_system() {
+    full_width
+  } else {
+    pane_line_mouse
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let pane_line_mouse : @ui.Style = @ui.css("w=Full px=S2")

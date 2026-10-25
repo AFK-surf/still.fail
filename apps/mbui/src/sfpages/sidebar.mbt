@@ -227,7 +227,7 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
   let row_h = if finger { touch_row_h } else { mouse_row_h }
   c.box(style=lists_fill, id=pane, fn() {
     c.list(key, lines.length(), row_h, fn(i) {
-      let n = c.box(style=if finger { line_touch } else { line_mouse }, fn() {
+      let n = c.box(style=@sf.pane_line(), fn() {
         match lines[i] {
           Top => list_space(c, frame.top + (if finger { 0.0 } else { lists_top_in }))
           Foot => list_space(c, frame.foot + (if finger { 0.0 } else { lists_foot_in }))
@@ -541,15 +541,6 @@ let empty_link : @ui.TextStyle = @ui.text_style(size=Base, color=Link)
 ///|
 // kept across runs: a value (no field of it changes)
 let lists_fill : @ui.Style = @ui.css("w=Full h=Full")
-
-///|
-/// A list's lines: with a mouse 8 in from its sides (Sidebar.css.ts navScroll), with a finger across it.
-// kept across runs: a value (no field of it changes)
-let line_mouse : @ui.Style = @ui.css("w=Full px=S2")
-
-///|
-// kept across runs: a value (no field of it changes)
-let line_touch : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// A row's or a place's ground as the web moves it (Sidebar.css.ts navRow, Rail.css.ts item: `transition: background
