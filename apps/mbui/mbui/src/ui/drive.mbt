@@ -30,6 +30,7 @@
 //   pasten N TEXT               TEXT repeated to N characters, pasted
 //   wheel DY                    the list under the middle of the window scrolled by DY
 //   wheelat DY TEXT             the list under the lowest TEXT scrolled by DY, a mouse wheel's notches (eased in)
+//   wheelxat DX TEXT            what scrolls sideways under the lowest TEXT scrolled by DX, a wheel's (a trackpad's)
 //   move X Y                    the pointer moved there, no button down (negative: from the right, the bottom)
 //   hover TEXT                  the pointer moved onto the lowest TEXT, where the frame has it
 //   rightclick TEXT             a secondary click (a context menu's) on the lowest TEXT, where the frame has it
@@ -1037,8 +1038,8 @@ fn drive_steps(c : Ctx) -> Unit {
         acted()
         return
       }
-      "hover" | "rightclick" | "wheelat" => {
-        let (dy, what) = if cmd == "wheelat" {
+      "hover" | "rightclick" | "wheelat" | "wheelxat" => {
+        let (dy, what) = if cmd == "wheelat" || cmd == "wheelxat" {
           match arg.find(" ") {
             Some(i) =>
               (
@@ -1046,7 +1047,7 @@ fn drive_steps(c : Ctx) -> Unit {
                 arg.unsafe_substring(start=i + 1, end=arg.length()),
               )
             None => {
-              drive_fail(c, d, "wheelat DY TEXT")
+              drive_fail(c, d, cmd + " D TEXT")
               return
             }
           }
@@ -1054,7 +1055,7 @@ fn drive_steps(c : Ctx) -> Unit {
           (0.0, arg)
         }
         // (a wheel goes to the list under the words, whatever lies over them; a hover or a click is the finger's)
-        let at = if cmd == "wheelat" { on_screen(c, what) } else { reachable(c, what) }
+        let at = if cmd == "wheelat" || cmd == "wheelxat" { on_screen(c, what) } else { reachable(c, what) }
         if at.length() == 0 {
           if waited > d.timeout {
             drive_fail(c, d, not_reachable(c, what, d.timeout))
@@ -1069,6 +1070,7 @@ fn drive_steps(c : Ctx) -> Unit {
             on_pointer(0, x, y, 2)
             on_pointer(2, x, y, 2)
           }
+          "wheelxat" => on_wheel(x, y, dy, 0.0, 4)
           _ => on_wheel(x, y, 0.0, dy, 4)
         }
         acted()
