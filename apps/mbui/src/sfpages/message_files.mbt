@@ -203,9 +203,7 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     }
   }
   c.cursor(open, Hand)
-  // where it is, for the preview to fly from and back into; hidden while the preview is its picture
   let thumb = here.station + "/" + owner + "/" + a.path
-  note_thumb(c, thumb, open, @sf.message_file_corner, letterbox~)
   image_menu(c, open, key, quote=by.map(fn(b) {
     let (author, role, ts) = b
     let file = attachment_json(a, owner)
@@ -217,17 +215,23 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   let (sw, sh) = picture_share(a, image_least)
   let (pw, ph) = (w * sw, h * sh)
   let corner = if letterbox { 0.0 } else { @sf.message_file_corner }
+  let likeness = @gallery.thumbhash_image(a.thumbhash).unwrap_or("")
   let picture = fn() {
     if key != "" && sent is None {
       image_reveal(c, key, pw, ph, FitCover, a.thumbhash, radius=corner)
     } else if key != "" {
       c.image(key, w=Px(pw), h=Px(ph), fit=FitCover, radius=corner, bg=0L, fade=false) |> ignore
-    } else {
-      match @gallery.thumbhash_image(a.thumbhash) {
-        Some(likeness) => c.image(likeness, w=Px(pw), h=Px(ph), fit=FitCover, bg=0L, fade=false) |> ignore
-        None => ()
-      }
+    } else if likeness != "" {
+      c.image(likeness, w=Px(pw), h=Px(ph), fit=FitCover, bg=0L, fade=false) |> ignore
     }
+  }
+  // what it shows: its picture once decoded, until then its likeness (image_reveal's)
+  let shows = if key == "" || key == "!" {
+    likeness
+  } else if sent is None && !c.image_ready(key, reveal_px(c, pw, ph)) {
+    likeness
+  } else {
+    key
   }
   let b = c.box(style=image_box_style(w, h, key != "" && key != "!" || letterbox), id=open, fn() {
     if key == "!" {
@@ -244,6 +248,8 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
       picture()
     }
   })
+  // where it is and what it shows, for the preview to fly from and back into; hidden while the preview is its picture
+  note_thumb(c, thumb, b, @sf.message_file_corner, picture=shows, letterbox~)
   c.look(b, @ui.look(alpha=thumb_shows(thumb)))
   c.semantics(b, Button, id=open, label=@sf.t("web-main.file.view", args=[("name", a.name)]))
 }
@@ -270,7 +276,6 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   let (bw, bh, letterbox) = image_box(a, video_least)
   let h = bh * w / bw
   let thumb = here.station + "/" + owner + "/" + a.path
-  note_thumb(c, thumb, open, @sf.message_file_corner, letterbox~)
   let still = video_still(c, src, here.station, owner, a, thumb)
   let dl = download_of(src, here.station, owner, stored_name(a.path))
   let b = c.box(style=video_frame.then(@ui.style(w=Fixed(w), h=Fixed(h))), id=open, fn() {
@@ -300,6 +305,8 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     })
     |> ignore
   })
+  // where it is and what it shows, for the preview to fly from and back into; hidden while the preview is its picture
+  note_thumb(c, thumb, b, @sf.message_file_corner, picture=if still == "!" { "" } else { still }, letterbox~)
   c.look(b, @ui.look(alpha=thumb_shows(thumb)))
   c.semantics(b, Button, id=open, label=@sf.t("web-main.file.play", args=[("name", a.name)]))
 }
@@ -338,6 +345,13 @@ fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment) -> U
 }
 
 ///|
+/// How many pixels a message's picture `w` by `h` is decoded to on its longer side: the size it is drawn at
+/// (Ctx::image's).
+fn reveal_px(c : @ui.Ctx, w : Double, h : Double) -> Double {
+  dmin(dmax(w, h) * c.scale, image_px_most)
+}
+
+///|
 /// A message's image coming in, as the web's (msgImageWait, msgImageReveal): until it is decoded what it waits on (its
 /// likeness, the ThumbHash sent with it, else the neutral ground); once it is, brushed in from its top (an edge half its
 /// height deep going down it), blurred to sharp and from 1.04 its size to its own (1100 ms, the ease out), what it
@@ -351,9 +365,7 @@ pub fn image_reveal(
   hash : String,
   radius? : Double = @sf.message_file_corner,
 ) -> Unit {
-  // (decoded at the size it is drawn at: Ctx::image's)
-  let px = dmin(dmax(w, h) * c.scale, image_px_most)
-  let ready = c.image_ready(key, px)
+  let ready = c.image_ready(key, reveal_px(c, w, h))
   let way = match reveals.get(key) {
     Some(a) => a
     None => {

@@ -313,7 +313,8 @@ pub fn player(
 /// pointer was (its moves wake the controls), whether it made the window fill the screen; the picture's zoom; a frame
 /// being saved and which; the speed a held finger made 2× (-1: none held); a finger's drag on the picture (along it
 /// through the time, down it to close it, moving what is zoomed in) and where it is; two fingers' last distance and
-/// middle; the end whose next was let go of; the end whose next's wait was first drawn.
+/// middle; the end whose next was let go of; the end whose next's wait was first drawn; where its picture was last
+/// drawn.
 priv struct PlayerView {
   mut listing : Bool
   mut list_closing : Bool
@@ -335,6 +336,9 @@ priv struct PlayerView {
   mut caught : Bool
   mut ended_off : String
   mut file : String
+  mut placed : (Double, Double, Double, Double)?
+  /// taken down past the line and let go: going, its picture left where the finger left it, its controls away
+  mut taken_down : Bool
 }
 
 ///|
@@ -376,10 +380,22 @@ fn view_for(key : String) -> PlayerView {
         caught: false,
         ended_off: "",
         file: "",
+        placed: None,
+        taken_down: false,
       }
       player_views[key] = v
       v
     }
+  }
+}
+
+///|
+/// Where the player keyed `key` last drew its picture in its stage (x, y, w, h: as a finger left it, zoomed in or taken
+/// down), while its view is open: what a viewer closing it flies back from.
+pub fn player_picture_at(key : String) -> (Double, Double, Double, Double)? {
+  match player_views.get(key) {
+    Some(v) => v.placed
+    None => None
   }
 }
 
@@ -787,6 +803,8 @@ pub fn player_view(
     v.zoom.fit_now()
     v.grabbing = false
     v.ended_off = ""
+    v.taken_down = false
+    v.drag_dy = 0.0
   }
   // laid out Small: a phone's player, as the viewer's frame
   if layout(c.width) is Small {
@@ -975,6 +993,7 @@ fn desk_player(
         match p.native() {
           Some(n) if n.here() => {
             let (x, y, pw, ph) = picture_place(v, p, s, w, c.height, still)
+            v.placed = Some((x, y, pw, ph))
             c.native(n, content=Some((x, y, pw, ph))) |> ignore
             player_still(c, n, still, x, y, pw, ph)
           }
@@ -1367,6 +1386,7 @@ fn phone_player(
       match p.native() {
         Some(n) if n.here() => {
           let (x, y, w, h) = picture_place(v, p, s, c.width, c.height, still)
+          v.placed = Some((x, y + v.drag_dy, w, h))
           c.native(n, content=Some((x, y + v.drag_dy, w, h))) |> ignore
           player_still(c, n, still, x, y + v.drag_dy, w, h)
         }
@@ -1398,8 +1418,8 @@ fn phone_player(
       })
       |> ignore
     }
-    let shown = if v.drag == DownClose { desk_none } else { f.shown }
-    let live = f.on && v.drag != DownClose
+    let shown = if v.drag == DownClose || v.taken_down { desk_none } else { f.shown }
+    let live = f.on && v.drag != DownClose && !v.taken_down
     // the bar at the top: back, the name, which of the folder's it is, 选集
     c.layer(fn() {
       c.box(style=@ui.style(h=Fixed(room_top)), fn() {  }) |> ignore
@@ -1529,7 +1549,12 @@ fn phone_gestures(
     let held = v.held >= 0.0
     match was {
       AlongTime => p.scrub_done()
-      DownClose => if v.drag_dy > player_close_dy { back() }
+      DownClose =>
+        if v.drag_dy > player_close_dy {
+          // going (not turned upright first): its picture stays where the finger left it, to go from there
+          v.taken_down = !p.is_sideways()
+          back()
+        }
       // let go moving: on at the finger's speed, slowing, to a stop or its edge
       MoveZoom =>
         if !v.pinched {
@@ -1543,7 +1568,9 @@ fn phone_gestures(
       v.held = -1.0
     }
     v.drag = NoDrag
-    v.drag_dy = 0.0
+    if !v.taken_down {
+      v.drag_dy = 0.0
+    }
     if !down {
       v.pinched = false
     }
