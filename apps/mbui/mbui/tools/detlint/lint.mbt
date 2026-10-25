@@ -35,6 +35,9 @@ priv struct Config {
   page_frames : Array[String]
   // the parts a page used to take from an older copy (`@settings.button`, …), the library's now (page-old-part)
   old_parts : Array[String]
+  // what puts a sheet up in an older host of its own (the settings' `open_sheet`, a chat's), not the library's
+  // presenters (page-old-sheet)
+  old_sheets : Array[String]
 }
 
 ///|
@@ -79,6 +82,7 @@ fn Config::new(d : @rjson.Value) -> Config {
     one_look: strs(sect(d, "pages").get("one_look"), []),
     page_frames: strs(sect(d, "pages").get("frames"), []),
     old_parts: strs(sect(d, "pages").get("old_parts"), []),
+    old_sheets: strs(sect(d, "pages").get("old_sheets"), []),
   }
 }
 
@@ -128,6 +132,19 @@ fn lint_mbt(
     for k, tk in toks {
       if tk.kind == "ident" && cfg.one_look.contains(tk.text) && !f.in_test(k) {
         add("page-look", k, f.line_text(k))
+      }
+    }
+  }
+  // a page putting a sheet up in an older host of its own (not in its tests; the host's own `fn` not counted)
+  if under(f.rel, cfg.pages) && cfg.old_sheets.length() > 0 {
+    for k, tk in toks {
+      if tk.kind == "ident" &&
+        cfg.old_sheets.contains(tk.text) &&
+        !f.in_test(k) &&
+        !(k > 0 && toks[k - 1].text == "fn") &&
+        k + 1 < toks.length() &&
+        toks[k + 1].text == "(" {
+        add("page-old-sheet", k, f.line_text(k))
       }
     }
   }

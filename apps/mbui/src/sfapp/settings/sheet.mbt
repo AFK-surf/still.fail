@@ -61,8 +61,15 @@ pub fn close() -> Unit {
 }
 
 ///|
+/// The core the settings' panels put up by what has none at hand draw with (a station's card, a device asking): the
+/// frame's, said by overlay.
+// kept across runs: said again by every frame (overlay)
+let panels_core : Ref[Core?] = Ref(None)
+
+///|
 /// The sheet, over everything the app shows: call after the pages each frame.
 pub fn overlay(c : @ui.Ctx, core : Core) -> Unit {
+  panels_core.val = Some(core)
   let up = sheet.draw is Some(_)
   if up {
     sheet.last = sheet.draw

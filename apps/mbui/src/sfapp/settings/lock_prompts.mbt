@@ -1,11 +1,11 @@
 // A new device showing this one's code (Security.kt LockPrompts, pairSheet; the core's `lockPrompts`, views/pair.ts):
-// put up over whichever page is open, in any workspace of the person's, and again after something else took its place,
-// until it is done or turned away. Nothing here approves it, only the code typed on the new device; turned away (拒绝),
+// put up over whichever page is open, in any workspace of the person's, once (the library's panel: what is put up
+// after it stands over it), until it is done or turned away. Nothing here approves it, only the code typed on the new device; turned away (拒绝),
 // it is denied (`lockPrompt.deny`) and its code is worth nothing; closed by hand (a tap beside it, back), it is no
 // longer shown (`lockPrompt.hide`) and its code still holds: read by then, it is typed on the new device next.
 
 ///|
-/// The asks turned away or closed here (a device and the code it was shown, `ask_of`): not put up again while the core
+/// The asks put up here (a device and the code it was shown, `ask_of`), then turned away or closed: not put up again while the core
 /// has yet to drop them. The same device asking again (a new code) is put up again: it was not until the app started
 /// again (2026-10-23, 弹窗不弹). What the core dropped is forgotten here too.
 let prompts_closed : Array[String] = []
@@ -31,7 +31,7 @@ pub fn lock_prompts(core : Core, free : Bool) -> Unit {
   }
   let waiting = pairing.iter().find_first(fn(r) { !prompts_closed.contains(ask_of(r)) })
   match waiting {
-    Some(r) if free && !sheet_up() => pair_sheet(core, r)
+    Some(r) if free && !@sf.presenting() => pair_sheet(core, r)
     _ => ()
   }
 }
@@ -42,31 +42,30 @@ pub fn lock_prompts(core : Core, free : Bool) -> Unit {
 fn pair_sheet(core : Core, r : Json) -> Unit {
   let rv = Some(r)
   let device = text(rv, "device")
+  // (put up once: closed by hand or by the core's drop alike, not again)
+  prompts_closed.push(ask_of(r))
   let deny = fn() {
-    prompts_closed.push(ask_of(r))
     act(core, tr("web-pages.security.denyDevice"), "lockPrompt.deny", obj([("device", str(device))]))
   }
   let hide = fn() {
-    prompts_closed.push(ask_of(r))
     (core.call)("lockPrompt.hide", obj([("device", str(device))]), fn(_) {  })
   }
   let who = match text(rv, "name") {
     "" => text(rv, "email")
     n => n
   }
-  open_sheet(0.55, on_close=hide, fn(c, _) {
+  @sf.panel(fill("web-pages.security.pairTitle", [("name", who)]), from=Unanchored, gone=hide, fn(c, close) {
     // done or turned away on another device: gone here too; asked in one more workspace meanwhile, named too
     let prompts = (core.topic)("lockPrompts", Map::new()).value
     let now = items(prompts, "pairing").iter().find_first(fn(x) { text(Some(x), "device") == device })
     if prompts is Some(_) && now is None {
-      close_sheet()
+      close()
       return
     }
     let shown = match now {
       Some(x) => Some(x)
       None => rv
     }
-    sheet_head(c, fill("web-pages.security.pairTitle", [("name", who)]))
     c.box(style=pair_column, fn() {
       c.text(fill("web-pages.security.pairBody", [("device", text(rv, "deviceText"))]), style=pair_body)
       |> ignore
@@ -81,7 +80,7 @@ fn pair_sheet(core : Core, r : Json) -> Unit {
       note(c, tr("web-pages.security.pairNote"))
       c.box(style=pair_deny_room, fn() {
         if wide_button(c, "lock-pair-deny", tr("web-pages.security.pairDeny"), false) {
-          close_sheet()
+          close()
           deny()
         }
       })
@@ -92,9 +91,9 @@ fn pair_sheet(core : Core, r : Json) -> Unit {
 }
 
 ///|
-/// What the sheet holds, 20 in from its sides, 12 apart (Security.kt:372).
+/// What the panel holds, 12 apart (Security.kt:372).
 // kept across runs: a value (no field of it changes)
-let pair_column : @ui.Style = @ui.css("w=Full px=S5 gap=S3")
+let pair_column : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
 /// Whose device it is and what (14 in the muted: Security.kt:373).

@@ -92,10 +92,10 @@ test "a chat with no agent in it: its station's tag in the bar opens the station
       _ => v
     }
   })
-  assert_true(!@settings.sheet_up())
+  assert_true(!@sf.presenting())
   t.tap_text("甲号机")
   t.frame()
-  assert_true(@settings.sheet_up(), msg="the station's card")
+  assert_true(@sf.presenting(), msg="the station's card")
   assert_true(t.find("机器详情") is Some(_))
 }
 

@@ -7,7 +7,7 @@ let rule_names : Array[String] = [
   "retired-api", "app-clock", "wall-clock", "engine-math", "poll", "host-read", "builtin-hash",
   "hash-order", "globals", "style-literal", "box-loose", "style-exact", "style-text", "build-effect",
   "unsettled-ok", "host-delay", "library-import", "reset-wire", "page-hand", "page-screen", "page-look", "follow-layout",
-  "motion-read", "page-old-part",
+  "motion-read", "page-old-part", "page-old-sheet",
 ]
 
 ///|
@@ -37,6 +37,7 @@ let rule_words : Map[String, String] = {
   "page-screen": "a page reads the native input (@sf.native_input(): touch, or keyboard and mouse, as the app was started): what differs by it is the theme's, the library's parts', the presenters' and the shell's; a page that needs it asks the library for a part that holds it for every page",
   "page-look": "a page draws one arrangement's piece itself (narrow_*, desk_*, its own branch on Narrow or Wide): its parts are the library's (a page's parts, src/sf page.mbt), which the page's frame lays out by its width, the same page on every screen",
   "page-old-part": "a page takes a part from an older copy of it (@settings.button, pick_row, provider_mark, wide_head, quota_chips, meter_chip): the library has the one, after the web's (@sf.button, choice_row, provider_logo, page_head, quota_chips, meter_chip)",
+  "page-old-sheet": "a page puts a sheet up in an older host of its own (the settings' open_sheet, a chat's): a menu, a pick, a panel, a confirm or a question is the library's presenters' (@sf.menu, @sf.pick, @sf.panel, @sf.confirm, @sf.ask), which show it as the screen and the native input have it (a sheet from the foot with touch short of Large; else beside what opened it, or a dialog)",
   "reset-wire": "a global its package's reset sets to something other than its `let`'s value: a wire (a hook given what does the work), which reset sets only as a Tester starts, never in the app; set it once in the package's `fn init`, and keep it across runs",
   "style-literal": "a number where a style is said (a box's or words' look, @ui.style…), or an Exact(…) outside the token files: name it with a token (docs/style.md)",
   "box-loose": "a box or words said by their loose look (pad=, bg=, size=…): say it as a named style (style=)",

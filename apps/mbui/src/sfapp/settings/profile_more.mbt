@@ -27,22 +27,11 @@ fn online_stations(core : Core, here : Here, only? : String = "") -> Array[Json]
 }
 
 ///|
-/// Where something is added: one of the stations online picked in a sheet (openPickStation).
-fn open_pick_station(title : String, stations : Array[Json], go : (String) -> Unit) -> Unit {
-  open_sheet(0.5, fn(c, _core) {
-    let t = @sf.theme()
-    sheet_head(c, title)
-    c.box(w=Fill(1.0), padx=20.0, pady=6.0, fn() {
-      c.text(tr("android-settings.pickStation"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
-    })
-    |> ignore
-    for s in stations {
-      if @sf.choice_row(c, "pick-station/" + text(Some(s), "station"), false, text(Some(s), "name")) {
-        close_sheet()
-        go(text(Some(s), "station"))
-      }
-    }
-  })
+/// Where something is added: one of the stations online picked (openPickStation), the library's pick (a sheet with
+/// touch short of Large, else a dialog), what it is for its title.
+fn open_pick_station(stations : Array[Json], go : (String) -> Unit) -> Unit {
+  let choices = stations.map(fn(s) { @sf.choice(text(Some(s), "station"), text(Some(s), "name")) })
+  @sf.pick(tr("android-settings.pickStation"), choices, "", go, from=Unanchored)
 }
 
 ///|
