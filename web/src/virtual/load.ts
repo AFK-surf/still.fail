@@ -3,14 +3,14 @@ import type { VirtualList } from "./list.tsx";
 
 /** Load once per entry cursor. A request owns its edge until both its answer and the
  * advanced cursor's measured, committed layout arrive. Failure waits for an explicit retry; layout notifications never retry it. */
-export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: boolean, at: number | string | undefined, load: () => Promise<unknown>): { failed: boolean; retry(): void } {
+export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: boolean, at: number | string | undefined, load: () => Promise<unknown>, allowAhead?: () => boolean): { failed: boolean; retry(): void } {
   const [failed, setFailed] = useState(false);
   const retry = useRef<(() => void) | null>(null);
-  const latest = useRef({ virtual, can, at, load });
+  const latest = useRef({ virtual, can, at, load, allowAhead });
   const changed = useRef<(() => void) | null>(null);
   // Publish only committed props; an interrupted render must not release an in-flight request.
   useLayoutEffect(() => {
-    latest.current = { virtual, can, at, load };
+    latest.current = { virtual, can, at, load, allowAhead };
     changed.current?.();
   });
   const { model } = virtual;
@@ -41,7 +41,9 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
       moved = false;
       if (!now.can || now.at === undefined || asked === now.at) return;
       if (!initial && !approached && !model.fits) return;
-      if (model.paneHeight <= 0 || (edge === "top" ? model.toStart : model.toEnd) > model.loadAhead(edge, latency)) return;
+      const distance = edge === "top" ? model.toStart : model.toEnd;
+      if (model.paneHeight <= 0 || distance > model.loadAhead(edge, latency)) return;
+      if (distance > model.paneHeight && now.allowAhead?.() === false) return;
       setFailed(false);
       initial = false;
       asked = now.at;

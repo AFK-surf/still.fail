@@ -1,3 +1,4 @@
+import { chatPageAhead } from "../web/src/chatPaging.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { sizesOf, Virtual, type Item, type Layout } from "../web/src/virtual/model.ts";
@@ -537,4 +538,16 @@ test("virtual_scroll_prediction_is_independent_of_event_frequency_and_limits_row
     return keys;
   };
   assert.deepEqual(run(60), run(120));
+});
+
+
+test("chat_prefetch_keeps_visible_records_when_the_opposite_page_will_be_trimmed", () => {
+  assert.equal(chatPageAhead("top", 1, 150, ["m:120"]), false, "a tall late message must not be trimmed by early older paging");
+  assert.equal(chatPageAhead("bottom", 1, 150, ["m:30"]), false);
+  assert.equal(chatPageAhead("top", 1, 150, ["m:30", "m:60"]), true);
+  assert.equal(chatPageAhead("bottom", 1, 150, ["m:100", "m:120"]), true);
+  assert.equal(chatPageAhead("top", 1, 150, ["m:60", "m:110"]), false, "all visible rows must stay");
+  assert.equal(chatPageAhead("top", 1, 150, ["e:letters"]), false, "unknown folded records use ordinary paging");
+  assert.equal(chatPageAhead("top", undefined, undefined, ["m:30"]), false);
+  assert.equal(chatPageAhead("top", 1, 1000, ["m:400"]), false, "a growing live window cannot use its midpoint as a safe bound");
 });

@@ -1,3 +1,4 @@
+import { chatPageAhead } from "./chatPaging.ts";
 import { useLoadNear, usePagingEdges } from "./virtual/load.ts";
 export { useLoadNear } from "./virtual/load.ts";
 import { makePastedFile, pastedInfo, PASTE_THRESHOLD } from "./pastedText.ts";
@@ -609,10 +610,15 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   // Without a chat there is nothing older (or newer) to load.
   const older = () => (id === null ? Promise.resolve() : sending.older(id));
   // Loaded as far as entries go, not messages: a page of what is not a message here (letters, edits) moves it too.
-  const olderPage = useLoadNear(virtual, "top", canOlder, chat.firstEntry ?? chat.messages[0]?.seq, older);
+  const ahead = (edge: "top" | "bottom") => {
+    const showing = model.showing();
+    const visible = showing ? Array.from({ length: showing.last - showing.first + 1 }, (_, i) => model.keyAt(showing.first + i)!) : [];
+    return chatPageAhead(edge, chat.firstEntry, chat.lastEntry, visible);
+  };
+  const olderPage = useLoadNear(virtual, "top", canOlder, chat.firstEntry ?? chat.messages[0]?.seq, older, () => ahead("top"));
   useJumpTo(list, virtual, station, id, messages, chat.more, older);
   const newer = () => (id === null ? Promise.resolve() : sending.newer(id));
-  const newerPage = useLoadNear(virtual, "bottom", canNewer, chat.lastEntry ?? chat.messages.at(-1)?.seq, newer);
+  const newerPage = useLoadNear(virtual, "bottom", canNewer, chat.lastEntry ?? chat.messages.at(-1)?.seq, newer, () => ahead("bottom"));
   useShowing(virtual, station, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
   const away = useAwayFromBottom(virtual);
   const toEnd = useToEnd(list, virtual, chat, () => (id === null ? Promise.resolve() : sending.latest(id)));

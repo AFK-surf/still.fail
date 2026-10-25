@@ -82,13 +82,14 @@ function LongList() {
     window.loads.push(first);
     if (adaptive) await new Promise<void>(resolve => { window.answer = resolve; });
     setFirst(n => n - 50);
-  });
+  }, () => !adaptive || window.allowAhead);
   Object.assign(window, { model: list.model, last: first, committed: list.committed });
   return <div id="pane" ref={pane} style={{ height: 650, width: 390, overflow: 'auto', overflowAnchor: 'none', display: 'flex', flexDirection: 'column', gap: 20, padding: 24, boxSizing: 'border-box' }}>
     {list.layout.rows.map((row, i) => <React.Fragment key={row.key}>{list.above(row, i === 0)}<div data-vk={row.key} style={{ flex: 'none', height: 100 }}>{row.key}</div></React.Fragment>)}{list.after()}
   </div>;
 }
 window.loads = [];
+window.allowAhead = false;
 const mode = new URLSearchParams(location.search).get('mode');
 createRoot(document.getElementById('root')!).render(mode === 'long' || mode === 'adaptive' ? <LongList /> : mode === 'window' || mode === 'switch' ? <EmptyWindow /> : <List />);
 `, { flag: 'wx' });
@@ -167,9 +168,13 @@ createRoot(document.getElementById('root')!).render(mode === 'long' || mode === 
   await page.clock.runFor(16);
   await scroll(1000);
   await page.clock.runFor(16);
+  assert.equal((await state()).loads.length, 0, 'unsafe record-window trimming vetoes extra lookahead');
+  await page.evaluate(() => { window.allowAhead = true; });
+  await scroll(950);
+  await page.clock.runFor(16);
   await page.waitForFunction(() => window.loads.length === 1);
   assert.equal(await page.evaluate(() => model.toStart > model.paneHeight), true, 'fast scroll fetches before the one-pane threshold');
-  await scroll(950);
+  await scroll(900);
   await page.clock.runFor(16);
   assert.equal((await state()).loads.length, 1, 'in-flight prefetch owns its cursor');
   await page.evaluate(() => window.answer());
