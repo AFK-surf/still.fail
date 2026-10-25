@@ -221,7 +221,8 @@ struct Node {
   mut lines : Array[Line]
   // shapes drawn over its ground (Ctx::shapes: shape.mbt)
   mut shapes : Array[Shape]
-  // its runs as laid out when cut after its max_lines (the ellipsis a run of its own), else None: what is drawn
+  // its runs as laid out when cut after its max_lines, or on one line laid narrower than it is (the ellipsis a run of
+  // its own), else None: what is drawn
   mut rcut : Rich?
   mut rl : RichLayout?
   mut rl_max : Double

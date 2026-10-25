@@ -699,7 +699,9 @@ fn RichLayout::pieces(self : RichLayout, k : Int) -> Array[(Int, Int, Int)] {
 /// paragraph's) on `code_bg` (0: none). `key` keeps its links' ids apart
 /// from another paragraph's with the same words. `tracking`: letter spacing in pixels, in every run (a style's
 /// `Tracking` in ems of `size`). `max_lines`: wrapped words cut after that many lines, ending in an ellipsis in the
-/// style of the run it follows (as Ctx::text's, Android's maxLines with TextOverflow.Ellipsis). `words`: what people
+/// style of the run it follows (as Ctx::text's, Android's maxLines with TextOverflow.Ellipsis); on one line (`wrap`
+/// false), cut so where it is laid narrower than it is (`w` Cut in a row with less room, a share, a width said), as
+/// Ctx::text's words are; in what scrolls sideways it is as wide as it is, never cut. `words`: what people
 /// and agents wrote (a message, a composer's words), set in the face given for them (faces.mbt, @hostapi.face_text) where
 /// there is one. `face`: every run in that face (4 to 15, face_add), where it is given (a face shown in itself).
 /// `tabular`: digits all one width (as Ctx::text's; where unsaid, the theme's for the app's own words, none for what
@@ -840,7 +842,9 @@ pub fn Ctx::rich(
 
 ///|
 /// The paragraph laid out in `max_w`; as text_layout, one layout serves
-/// every width from its widest line up to the one it was laid out in.
+/// every width from its widest line up to the one it was laid out in. On one line (not wrapped) and laid out
+/// narrower than it is, cut with an ellipsis there, as Ctx::text's words are (style.md, Short of room); not cut, it
+/// serves every width it fits in.
 fn Node::rich_layout(self : Node, max_w : Double) -> RichLayout? {
   match self.rich {
     None => None
@@ -848,21 +852,26 @@ fn Node::rich_layout(self : Node, max_w : Double) -> RichLayout? {
       // kept only for the same paragraph: the same words in other runs (a range moved, a run split) are laid out
       // again, whatever part of the frame asks
       match self.rl {
-        Some(rl) if rich_same(self.rl_for, self.rich) &&
-          (!r.wrap || (rl.w <= max_w + 0.01 && max_w <= self.rl_max)) => return Some(rl)
+        Some(rl) if rich_same(self.rl_for, self.rich) && rl.w <= max_w + 0.01 && max_w <= self.rl_max =>
+          return Some(rl)
         _ => ()
       }
       let rl = layout_rich(r, max_w)
-      let rl = if r.wrap && r.max_lines > 0 && rl.line_start.length() > r.max_lines {
-        let cut = cut_rich(r, rl, max_w)
-        self.rcut = Some(cut)
-        layout_rich(cut, max_w)
+      let cut = if r.wrap && r.max_lines > 0 && rl.line_start.length() > r.max_lines {
+        Some(cut_rich(r, rl, max_w))
+      } else if !r.wrap && rl.line_start.length() == 1 && rl.w > max_w + 0.5 {
+        // (its one line as the first of lines cut after it)
+        Some(cut_rich({ ..r, max_lines: 1 }, rl, max_w))
       } else {
-        self.rcut = None
-        rl
+        None
+      }
+      self.rcut = cut
+      let rl = match cut {
+        Some(c) => layout_rich(c, max_w)
+        None => rl
       }
       self.rl = Some(rl)
-      self.rl_max = max_w
+      self.rl_max = if !r.wrap && cut is None { 1.0e18 } else { max_w }
       self.rl_for = self.rich
       Some(rl)
     }

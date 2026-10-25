@@ -2,7 +2,9 @@
 // Resources.css.ts; the core's `resources` view, client/core-ts/src/views/resources.ts): a station's page's 进程, and
 // the line its overview says it in (StationCards.tsx Uses). Its totals with the last minutes' line under each, whose
 // uses what (a chat, the agents, the desktop app, the station) grouped or every process flat, sorted by a column, a
-// chat's process ended from its row (asked first).
+// chat's process ended from its row (asked first). Laid out by its own width: the totals four in a row or two over
+// two; the table's columns each as wide as its widest figure, so its rows line up, and where its names would have too
+// little room beside them (a phone's), each row's names on a line over its figures.
 
 ///|
 /// The core's `resources` view of the workspace in view, for station `address` (read, the station looking often,
@@ -97,9 +99,17 @@ fn resources_body(c : @ui.Ctx, core : Core, address : String, v : Json?) -> Unit
       rs_foot(c, v, false)
       return
     }
-    c.box(style=rs_tiles, fn() {
-      for tile in items(v, "tiles") {
-        rs_tile(c, address, Some(tile))
+    // (four in a row, or two over two where four have not the room: in pairs that go on in lines, never three and one,
+    // as the usage page's)
+    let tiles = items(v, "tiles")
+    c.box(style=rs_tiles, flow=true, fn() {
+      for k in 0..<((tiles.length() + 1) / 2) {
+        c.box(style=rs_tile_pair, keep=true, fn() {
+          for i in (k * 2)..<@cmp.minimum(k * 2 + 2, tiles.length()) {
+            rs_tile(c, address, Some(tiles[i]))
+          }
+        })
+        |> ignore
       }
     })
     |> ignore
@@ -206,14 +216,109 @@ fn rs_spark_shapes(points : Array[Double], w : Double, ink : Int64) -> Array[@ui
 }
 
 ///|
-/// The columns' heads (Heads): the first ones', then each column's, sorting by itself (the most first), the end's room.
-fn rs_heads(c : @ui.Ctx, address : String, first : Array[String], columns : Array[(String, String)], shown : RsShown) -> Unit {
-  rs_line(c, rs_head_row, 0, fn() {
-    for i, h in first {
-      c.box(style=if i == 0 { rs_name_cell } else { rs_whose_cell }, fn() { c.text(h, style=rs_head) |> ignore })
-      |> ignore
+/// How the table is laid out in its width: each figure's column as wide as the widest it says (its head, every row's
+/// figure, a group's processes' too, open or not), so its rows line up as a table's and none moves as a group opens;
+/// `stacked`, each row's names on a line of their own over its figures, where beside the figures they would have less
+/// than rs_name_least each; `share`, the sorted column's share before its figures, left out where the figures' line
+/// has not the room for it.
+priv struct RsLayout {
+  widths : Array[Double]
+  stacked : Bool
+  share : Bool
+}
+
+///|
+/// The layout of table `id` (as wide as it is laid out: read back) for `rows` (each row's use, and whether its sorted
+/// figure is said bold), with `names` columns of names first.
+fn rs_layout(
+  c : @ui.Ctx,
+  id : Int,
+  rows : Array[(Json?, Bool)],
+  columns : Array[(String, String)],
+  by : String,
+  names : Int,
+) -> RsLayout {
+  let room = match c.laid_size(id) {
+    Some((w, _)) => w
+    None => c.width
+  }
+  // (their words as drawn: the system's size of words applied, a figure's digits tabular)
+  let head = c.sp(c.text_size(Xs).0)
+  let figure = c.sp(c.text_size(Sm).0)
+  let widths = columns.map(fn(col) {
+    let sorted = col.0 == by
+    let name = @sf.t("web-main.resources.column." + col.0)
+    let mut widest = @ui.text_advance(if sorted { name + " ↓" } else { name }, size=head, weight=500)
+    for r in rows {
+      let weight = if sorted && r.1 { 600 } else { 400 }
+      widest = dmax(widest, @ui.text_advance(text(r.0, col.1), size=figure, weight~, style=@hostapi.style_tabular))
     }
-    for col in columns {
+    widest + 2.0 * c.space(S2)
+  })
+  let share_w = c.space(S9) + c.space(S2)
+  let sorted = columns.search_by(fn(col) { col.0 == by })
+  let figures = widths.fold(init=0.0, fn(s, w) { s + w }) + (if sorted is Some(_) { share_w } else { 0.0 })
+  let left = room - figures - c.space(S8)
+  let beside = left >= c.space(rs_name_least) * names.to_double()
+  let share = left >= 0.0
+  match sorted {
+    Some(k) if share => widths[k] = widths[k] + share_w
+    _ => ()
+  }
+  { widths, stacked: !beside, share }
+}
+
+///|
+/// Column `k`'s cell: as wide as its column; under its row's names (stacked), the line over it apart enough; `shared`,
+/// the share at its start, the figure at its end (the shares one under another, as bars of a chart).
+fn rs_column(lay : RsLayout, k : Int, under? : Bool = false, shared? : Bool = false) -> @ui.Style {
+  let s = rs_number_cell.then(@ui.style(min_w=Fixed(lay.widths[k])))
+  let s = if under { s.then(rs_number_under) } else { s }
+  if shared {
+    s.then(rs_number_shared)
+  } else {
+    s
+  }
+}
+
+///|
+/// A row of the table (rs_line) as it is laid out: its names, its figures and its end on one line; stacked, its names
+/// on a line of their own and its figures under them, under their heads, its end beside both.
+fn rs_table_row(c : @ui.Ctx, lay : RsLayout, style : @ui.Style, id : Int, names : () -> Unit, figures : () -> Unit, end : () -> Unit) -> Int {
+  rs_line(c, style, id, fn() {
+    if lay.stacked {
+      c.box(style=rs_stack, fn() {
+        c.box(style=rs_row, names) |> ignore
+        c.box(style=rs_figures_line, figures) |> ignore
+      })
+      |> ignore
+    } else {
+      names()
+      figures()
+    }
+    end()
+  })
+}
+
+///|
+/// The columns' heads (Heads): the first ones' (none stacked: the names have a line of their own), then each
+/// column's, sorting by itself (the most first), the end's room.
+fn rs_heads(
+  c : @ui.Ctx,
+  address : String,
+  first : Array[String],
+  columns : Array[(String, String)],
+  shown : RsShown,
+  lay : RsLayout,
+) -> Unit {
+  rs_line(c, if lay.stacked { rs_head_row_stacked } else { rs_head_row }, 0, fn() {
+    if !lay.stacked {
+      for i, h in first {
+        c.box(style=if i == 0 { rs_name_cell } else { rs_whose_cell }, fn() { c.text(h, style=rs_head) |> ignore })
+        |> ignore
+      }
+    }
+    for k, col in columns {
       let id = c.id("resources-by/" + address + "/" + col.0)
       c.cursor(id, Hand)
       if c.clicked(id) {
@@ -222,7 +327,7 @@ fn rs_heads(c : @ui.Ctx, address : String, first : Array[String], columns : Arra
       let on = col.0 == shown.by
       let name = @sf.t("web-main.resources.column." + col.0)
       let words = if on { name + " ↓" } else { name }
-      let b = c.box(style=rs_number_cell, id~, fn() {
+      let b = c.box(style=rs_column(lay, k), id~, fn() {
         c.text(words, style=if on || c.hovered(id) { rs_head_on } else { rs_head }) |> ignore
       })
       c.semantics(b, Button, id~, label=@sf.t("web-main.resources.by", args=[("column", name)]))
@@ -233,18 +338,28 @@ fn rs_heads(c : @ui.Ctx, address : String, first : Array[String], columns : Arra
 }
 
 ///|
-/// A row's figures (Figures): the sorted column's bold, with how much of the most it is before it; `plain`, none so.
-fn rs_figures(c : @ui.Ctx, u : Json?, columns : Array[(String, String)], by : String, most : Double, plain? : Bool = false) -> Unit {
-  for col in columns {
+/// A row's figures (Figures), each in its column: the sorted column's bold, with how much of the most it is before it
+/// where the layout has room for it; `plain`, none so.
+fn rs_figures(
+  c : @ui.Ctx,
+  u : Json?,
+  columns : Array[(String, String)],
+  by : String,
+  most : Double,
+  lay : RsLayout,
+  plain? : Bool = false,
+) -> Unit {
+  for k, col in columns {
     let strong = !plain && col.0 == by
-    c.box(style=rs_number_cell, fn() {
-      if strong {
-        let k = if most > 0.0 { @cmp.minimum(1.0, rs_use(u, by) / most) } else { 0.0 }
+    let shared = strong && lay.share
+    c.box(style=rs_column(lay, k, under=lay.stacked, shared~), fn() {
+      if shared {
+        let part = if most > 0.0 { @cmp.minimum(1.0, rs_use(u, by) / most) } else { 0.0 }
         c.box(style=rs_share, fn() {
-          if k > 0.0 {
-            c.box(style=rs_share_fill.then(@ui.style(w=Grow(k))), fn() {  }) |> ignore
+          if part > 0.0 {
+            c.box(style=rs_share_fill.then(@ui.style(w=Grow(part))), fn() {  }) |> ignore
           }
-          let rest = 1.0 - k
+          let rest = 1.0 - part
           if rest > 0.0 {
             c.box(style=@ui.style(w=Grow(rest)), fn() {  }) |> ignore
           }
@@ -297,8 +412,18 @@ fn rs_grouped(c : @ui.Ctx, core : Core, address : String, groups : Array[Json], 
     }
   }
   let most = sorted.fold(init=0.0, fn(m, g) { @cmp.maximum(m, rs_use(field(Some(g), "use"), by)) })
-  c.box(style=rs_table, fn() {
-    rs_heads(c, address, [@sf.t("web-main.resources.column.name")], columns, shown)
+  // (a group's figures bold, its processes' plain)
+  let rows : Array[(Json?, Bool)] = []
+  for g in groups {
+    rows.push((field(Some(g), "use"), true))
+    for p in items(Some(g), "processes") {
+      rows.push((field(Some(p), "use"), false))
+    }
+  }
+  let table = c.id("resources-table/" + address)
+  let lay = rs_layout(c, table, rows, columns, by, 1)
+  c.box(style=rs_table, id=table, taps=false, fn() {
+    rs_heads(c, address, [@sf.t("web-main.resources.column.name")], columns, shown, lay)
     for g in sorted {
       let gv = Some(g)
       let key = text(gv, "key")
@@ -312,20 +437,27 @@ fn rs_grouped(c : @ui.Ctx, core : Core, address : String, groups : Array[Json], 
           shown.open[key] = true
         }
       }
-      let b = rs_line(c, rs_group_row, id, fn() {
-        c.box(style=rs_name_cell, fn() {
-          c.box(style=rs_name, fn() {
-            @sf.icon(c, if on { "chevron-down" } else { "chevron-right" }, size=rs_toggle, color=@sf.theme().p.subtle) |> ignore
-            rs_title(c, core, key, gv, rs_name_text)
-            let meta = join([text(gv, "kindText"), items(gv, "processes").length().to_string()], " · ")
-            c.text(meta, style=rs_meta) |> ignore
+      let b = rs_table_row(
+        c,
+        lay,
+        rs_group_row,
+        id,
+        fn() {
+          c.box(style=rs_name_cell, fn() {
+            c.box(style=rs_name, fn() {
+              @sf.icon(c, if on { "chevron-down" } else { "chevron-right" }, size=rs_toggle, color=@sf.theme().p.subtle)
+              |> ignore
+              rs_title(c, core, key, gv, rs_name_text)
+              let meta = join([text(gv, "kindText"), items(gv, "processes").length().to_string()], " · ")
+              c.text(meta, style=rs_meta) |> ignore
+            })
+            |> ignore
           })
           |> ignore
-        })
-        |> ignore
-        rs_figures(c, field(gv, "use"), columns, by, most)
-        c.box(style=rs_end_cell, fn() {  }) |> ignore
-      })
+        },
+        fn() { rs_figures(c, field(gv, "use"), columns, by, most, lay) },
+        fn() { c.box(style=rs_end_cell, fn() {  }) |> ignore },
+      )
       c.semantics(b, Button, id~, expanded=on)
       if on {
         let ps = items(gv, "processes").copy()
@@ -333,15 +465,21 @@ fn rs_grouped(c : @ui.Ctx, core : Core, address : String, groups : Array[Json], 
         for p in ps {
           let pv = Some(p)
           let rid = c.id("resources-row/" + address + "/" + text(pv, "key"))
-          rs_line(c, rs_row, rid, fn() {
-            c.box(style=rs_process_cell, fn() {
-              c.text(text(pv, "name"), style=rs_process_name) |> ignore
-              c.text(number(pv, "pid").to_int().to_string(), style=rs_meta) |> ignore
-            })
-            |> ignore
-            rs_figures(c, field(pv, "use"), columns, by, most, plain=true)
-            rs_end(c, core, address, pv, gv, rid)
-          })
+          rs_table_row(
+            c,
+            lay,
+            rs_row,
+            rid,
+            fn() {
+              c.box(style=rs_process_cell, fn() {
+                c.text(text(pv, "name"), style=rs_process_name) |> ignore
+                c.text(number(pv, "pid").to_int().to_string(), style=rs_meta) |> ignore
+              })
+              |> ignore
+            },
+            fn() { rs_figures(c, field(pv, "use"), columns, by, most, lay, plain=true) },
+            fn() { rs_end(c, core, address, pv, gv, rid) },
+          )
           |> ignore
         }
       }
@@ -362,25 +500,33 @@ fn rs_flat(c : @ui.Ctx, core : Core, address : String, groups : Array[Json], col
   }
   rows.sort_by(fn(a, b) { rs_use(field(Some(b.0), "use"), by).compare(rs_use(field(Some(a.0), "use"), by)) })
   let most = rows.fold(init=0.0, fn(m, r) { @cmp.maximum(m, rs_use(field(Some(r.0), "use"), by)) })
-  c.box(style=rs_table, fn() {
-    rs_heads(c, address, [@sf.t("web-main.resources.column.process"), @sf.t("web-main.resources.column.whose")], columns, shown)
+  let table = c.id("resources-table/" + address)
+  let lay = rs_layout(c, table, rows.map(fn(r) { (field(Some(r.0), "use"), true) }), columns, by, 2)
+  c.box(style=rs_table, id=table, taps=false, fn() {
+    rs_heads(c, address, [@sf.t("web-main.resources.column.process"), @sf.t("web-main.resources.column.whose")], columns, shown, lay)
     for r in rows {
       let pv = Some(r.0)
       let gv = Some(r.1)
       let rid = c.id("resources-row/flat/" + address + "/" + text(pv, "key"))
-      rs_line(c, rs_row, rid, fn() {
-        c.box(style=rs_name_cell, fn() {
-          c.box(style=rs_name, fn() {
-            c.text(text(pv, "name"), style=rs_cell_words) |> ignore
-            c.text(number(pv, "pid").to_int().to_string(), style=rs_meta) |> ignore
+      rs_table_row(
+        c,
+        lay,
+        rs_row,
+        rid,
+        fn() {
+          c.box(style=rs_name_cell, fn() {
+            c.box(style=rs_name, fn() {
+              c.text(text(pv, "name"), style=rs_cell_words) |> ignore
+              c.text(number(pv, "pid").to_int().to_string(), style=rs_meta) |> ignore
+            })
+            |> ignore
           })
           |> ignore
-        })
-        |> ignore
-        c.box(style=rs_whose_cell, fn() { rs_title(c, core, "flat/" + text(pv, "key"), gv, rs_whose) }) |> ignore
-        rs_figures(c, field(pv, "use"), columns, by, most)
-        rs_end(c, core, address, pv, gv, rid)
-      })
+          c.box(style=rs_whose_cell, fn() { rs_title(c, core, "flat/" + text(pv, "key"), gv, rs_whose) }) |> ignore
+        },
+        fn() { rs_figures(c, field(pv, "use"), columns, by, most, lay) },
+        fn() { rs_end(c, core, address, pv, gv, rid) },
+      )
       |> ignore
     }
   })
@@ -511,14 +657,20 @@ let rs_page : @ui.Style = @ui.css("w=Full gap=S3_5")
 let rs_empty : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Muted, center=true, w=Full)
 
 ///|
-/// The totals (tiles): equal columns, 8 apart.
+/// The totals (tiles): in pairs on a line, 8 apart along it and between the lines.
 // kept across runs: a value (no field of it changes)
 let rs_tiles : @ui.Style = @ui.css("row w=Full gap=S2")
 
 ///|
-/// A total (tile): 10 down, 12 in, 8 up; 2 apart; the card's corner on the card's ground.
+/// Two of the totals side by side, sharing what their line has.
 // kept across runs: a value (no field of it changes)
-let rs_tile_box : @ui.Style = @ui.style(w=@sf.grow, min_w=S0, px=S3, pt=S2_5, pb=S2, gap=S0_5, radius=Xl3, bg=Card)
+let rs_tile_pair : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S2)
+
+///|
+/// A total (tile): 10 down, 12 in, 8 up; 2 apart; the card's corner on the card's ground. 144 at least: its figure
+/// whole at its longest (↓ 1023 KB/s), its label beside the start of what is under it.
+// kept across runs: a value (no field of it changes)
+let rs_tile_box : @ui.Style = @ui.style(w=@sf.grow, min_w=S36, px=S3, pt=S2_5, pb=S2, gap=S0_5, radius=Xl3, bg=Card)
 
 ///|
 /// Its label and what is under it, at its ends (tileHead).
@@ -579,9 +731,29 @@ let rs_row : @ui.Style = @ui.css("row w=Full align=ACenter")
 let rs_rule : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
 
 ///|
-/// The heads' row.
+/// The heads' row; stacked, only the figures' heads and the end's room, at the row's end over them.
 // kept across runs: a value (no field of it changes)
 let rs_head_row : @ui.Style = rs_row
+
+///|
+// kept across runs: a value (no field of it changes)
+let rs_head_row_stacked : @ui.Style = rs_row.then(@ui.css("justify=JEnd"))
+
+///|
+/// A stacked row's names and figures: what its row leaves beside its end, its two lines under each other.
+// kept across runs: a value (no field of it changes)
+let rs_stack : @ui.Style = @ui.style(w=@sf.grow, min_w=S0)
+
+///|
+/// A stacked row's figures, at its end under their heads.
+// kept across runs: a value (no field of it changes)
+let rs_figures_line : @ui.Style = @ui.css("row w=Full justify=JEnd")
+
+///|
+/// Beside the figures, the least each column of names keeps (a chat's title its first words, what it is and how many
+/// processes after it); with less the row is stacked.
+// kept across runs: a value (no field of it changes)
+let rs_name_least : @ui.Space = S40
 
 ///|
 /// A group's row: the page's hover under the pointer.
@@ -607,6 +779,16 @@ let rs_whose_cell : @ui.Style = @ui.css("w=Cut max_w=S48 px=S2 py=S1_5")
 /// A figure's column: at its end.
 // kept across runs: a value (no field of it changes)
 let rs_number_cell : @ui.Style = @ui.css("row px=S2 py=S1_5 gap=S2 align=ACenter justify=JEnd")
+
+///|
+/// Under a stacked row's names: nothing over it but their line's own 6 under them.
+// kept across runs: a value (no field of it changes)
+let rs_number_under : @ui.Style = @ui.css("pt=S0")
+
+///|
+/// The sorted column's cell with its share: the share at its start, the figure at its end.
+// kept across runs: a value (no field of it changes)
+let rs_number_shared : @ui.Style = @ui.css("justify=JBetween")
 
 ///|
 /// The row's end (endCell: 32, 2 by 4 in).

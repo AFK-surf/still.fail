@@ -3,12 +3,13 @@
 // window tall enough for all of a part.
 
 ///|
-/// Station `address`'s page, its part `part` (overview 概览, processes 进程, settings 设置, machine 软件与设备) shown.
-fn station_tester(address : String, part? : String = "overview") -> @ui.Tester {
+/// Station `address`'s page, its part `part` (overview 概览, processes 进程, settings 设置, machine 软件与设备) shown;
+/// `w` wide, pointed at as `platform` says (a phone's finger, else 0 a Mac's mouse).
+fn station_tester(address : String, part? : String = "overview", w? : Double = 390.0, platform? : Int = 2) -> @ui.Tester {
   reset()
   let src = fixture("settings")
   @settings.station_parts[address] = part
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=2400.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=2400.0, platform~)
   t.draw()
   app.nav.push(Settings)
   app.nav.push(Setting(@settings.Route::Station(address)))
@@ -89,5 +90,79 @@ test "a station's 进程: what still.fail uses of it, whose by whose, the overvi
   t.tap_text("平铺")
   t.draw()
   assert_true(t.find("stillfail") is Some(_))
-  assert_true(t.find("归属") is Some(_))
+  let node = drawn(t, "node")
+  let whose = drawn(t, "修一下登录")
+  assert_eq(node.1 + node.3 / 2.0, whose.1 + whose.3 / 2.0, msg="its chat beside its name")
+}
+
+///|
+/// Where words `s` are drawn (x, y, w, h): the first words that are just them.
+fn drawn(t : @ui.Tester, s : String) -> (Double, Double, Double, Double) raise {
+  match t.words().search_by(fn(w) { w.0 == s }) {
+    Some(i) => {
+      let (_, x, y, w, h, _) = t.words()[i]
+      (x, y, w, h)
+    }
+    None => fail("no \{s} drawn")
+  }
+}
+
+///|
+/// Each of `columns` (the words in it, its head's among them) ends at one edge, as a table's figures do.
+fn lined_up(t : @ui.Tester, columns : Array[Array[String]]) -> Unit raise {
+  for column in columns {
+    let ends = []
+    for s in column {
+      let (x, _, w, _) = drawn(t, s)
+      ends.push(x + w)
+    }
+    for i, e in ends {
+      assert_true((e - ends[0]).abs() < 0.5, msg="\{column[i]} ends at \{e}, \{column[0]} at \{ends[0]}")
+    }
+  }
+}
+
+///|
+/// The 进程's columns as the settings' fixture has them: CPU (sorted by), memory, disk, each with its group's figures,
+/// its first group's processes' (open) and the other chat's.
+let processes_columns : Array[Array[String]] = [
+  ["CPU ↓", "25.9%", "13.9%", "12.0%", "14.1%", "2.8%"],
+  ["59 MB", "18 MB", "41 MB", "980 MB", "363 MB"],
+  ["2.9 MB/s", "1.0 MB/s", "1.9 MB/s", "13 KB/s"],
+]
+
+///|
+test "a station's 进程 at a phone's width: its totals two to a line, each row's names over its figures, its columns lined up" {
+  let t = station_tester("ws1/st1", part="processes")
+  assert_eq(t.squeeze_faults(), [])
+  let cpu = drawn(t, "20.5%")
+  let memory = drawn(t, "508 MB")
+  let disk = drawn(t, "↓ 2.9 MB/s")
+  assert_eq(cpu.1, memory.1, msg="two to a line")
+  assert_true(disk.1 > cpu.1 + cpu.3, msg="the other two under them")
+  // a chat's title on a line of its own, its figures under it at the row's end
+  let title = drawn(t, "修一下登录")
+  let figure = drawn(t, "25.9%")
+  assert_true(figure.1 >= title.1 + title.3, msg="its figures under its name")
+  assert_true(t.find("名称") is None, msg="no head over the names: they have their own line")
+  lined_up(t, processes_columns)
+  // flat: the same
+  t.tap_text("平铺")
+  t.draw()
+  assert_eq(t.squeeze_faults(), [])
+  assert_true(drawn(t, "13.9%").1 > drawn(t, "node").1, msg="a process's figures under its name and whose")
+}
+
+///|
+test "a station's 进程 on a computer's wide page: its totals four in a row, each row on one line, its columns lined up" {
+  let t = station_tester("ws1/st1", part="processes", w=1280.0, platform=0)
+  assert_eq(t.squeeze_faults(), [])
+  let cpu = drawn(t, "20.5%")
+  let net = drawn(t, "↓ 1.6 KB/s")
+  assert_eq(cpu.1, net.1, msg="four in a row")
+  let title = drawn(t, "修一下登录")
+  let figure = drawn(t, "25.9%")
+  assert_eq(title.1 + title.3 / 2.0, figure.1 + figure.3 / 2.0, msg="its figures beside its name")
+  assert_true(t.find("名称") is Some(_), msg="the names' head")
+  lined_up(t, processes_columns)
 }
