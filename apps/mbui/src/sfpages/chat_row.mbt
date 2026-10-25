@@ -626,7 +626,7 @@ fn rename_box() -> @ui.Style {
   let over = @sf.row_in_y - d
   rename_look.then(
     @ui.style(
-      px=@sf.room_of(rename_h / 2.0),
+      px=@sf.room_of(rename_words_in),
       mx=@sf.room_of(-side),
       mt=@sf.room_of(-over),
       mb=@sf.room_of(over - rename_taller),
@@ -641,6 +641,10 @@ let rename_look : @ui.Style = @ui.css("w=Full h=S6 radius=Full bg=Bg border=B1 j
 ///|
 /// Its height (h=S6).
 let rename_h : Double = 24.0
+
+///|
+/// Its words in from either end: its half, as a capsule field's are.
+let rename_words_in : Double = rename_h / 2.0
 
 ///|
 let rename_taller : Double = 4.0
