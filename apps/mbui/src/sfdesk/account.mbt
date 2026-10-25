@@ -210,6 +210,7 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
     look,
     "me",
     @sf.t("android-settings.me.title"),
+    small=@sf.t("android-settings.me.title"),
     head?=if look == Wide { Some(identity) } else { None },
     blocks,
   )

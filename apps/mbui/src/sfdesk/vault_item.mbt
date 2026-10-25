@@ -205,7 +205,7 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, vau
   let sub = join([text(rv, "kindText"), @sf.t("web-pages.vault.storedOn", args=[("station", text(vv, "stationName"))])], " · ")
   match look {
     Wide =>
-      look_page(c, core, frame, look, key, text(rv, "name"), blocks, head=fn() {
+      look_page(c, core, frame, look, key, text(rv, "name"), blocks, small=@sf.t("web-pages.vault.title"), head=fn() {
         c.box(style=pf_head, fn() {
           c.box(style=pf_mark, fn() {
             @sf.icon(c, @settings.kind_icon(text(rv, "kind")), size=vi_mark_glyph, color=t.p.text) |> ignore

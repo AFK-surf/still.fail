@@ -78,7 +78,7 @@ fn connect_detail(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : P
   }
   blocks.push(fn() { cd_sessions(c, core, station, item) })
   let sections = blocks.map(fn(b) { fn() { cn_gutter(c, look, b) } })
-  look_page(c, core, frame, look, "connect/" + station + "/" + id, text(cv, "name"), sections, head?=if look == Wide {
+  look_page(c, core, frame, look, "connect/" + station + "/" + id, text(cv, "name"), sections, small=@sf.t("android-misc.bar.place.connects"), head?=if look == Wide {
     Some(fn() { cd_identity(c, core, here, station, text(item, "stationName"), cv) })
   } else {
     None

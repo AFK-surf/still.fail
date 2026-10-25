@@ -290,18 +290,6 @@ pub fn pane_top_right() -> Double? {
 }
 
 ///|
-/// How far under the top of the panel of its own the view is built in (pane_round) a page laid out as a phone's starts
-/// its rows (its back, its large title, a head of its own: 10 to 16 in from its sides, less than the panel's top
-/// corners are round): the rounder top corner's height, the rows under it as clear of the corners as of the sides, as
-/// a phone's page starts under its status bar, clear of the screen's round corners. None in a window's whole: 0.
-pub fn pane_head_room() -> Double {
-  match pane_round.val {
-    Some(k) => dmax(k[0], k[1])
-    None => 0.0
-  }
-}
-
-///|
 /// Whether the page being built is in a panel of its own (pane_round): what stands in its corners stands concentric
 /// with the panel's.
 pub fn in_pane() -> Bool {
@@ -1512,12 +1500,32 @@ pub let wide_bar_h : Double = 45.0
 ///|
 /// A page's bar in a panel of the tape (laid out Medium, its corners pane_round): what stands in the panel's top right
 /// corner (its buttons, 32 across, capsules and circles) as far from its top and side as makes them concentric with it
-/// (capsule_fit), else where they stand in the wide frame (`alone` at its end); its bar as much taller over them
-/// (`tape_bar_over`), as much in at its end (`tape_bar_end`).
+/// (capsule_fit), else clear of the corner (as far in as it is round, or where they stand in the wide frame, `alone`,
+/// if that is further: nothing of the bar's in a corner it cannot be concentric with); its bar as much taller over them
+/// (`tape_bar_over`), as much in at its end (`tape_bar_end`); a round button at its start (a settings page's back) so
+/// in the top left corner (`tape_bar_start`).
+pub fn tape_bar_start(alone : Double) -> Double {
+  match pane_round.val {
+    Some(k) => bar_end_in(k[0], alone)
+    None => alone
+  }
+}
+
+///|
 pub fn tape_bar_end(alone : Double) -> Double {
   match pane_top_right() {
-    Some(k) => capsule_fit(k, 32.0, alone)
+    Some(k) => bar_end_in(k, alone)
     None => alone
+  }
+}
+
+///|
+/// How far in from its side a bar's end stands in a corner `corner` round (tape_bar_end, tape_bar_start).
+fn bar_end_in(corner : Double, alone : Double) -> Double {
+  if capsule_fits(corner, 32.0) {
+    capsule_in(corner, 32.0)
+  } else {
+    dmax(alone, corner)
   }
 }
 

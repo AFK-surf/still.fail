@@ -148,7 +148,7 @@ fn profile_view(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, look :
   }
   // its head says who it is: no title over it (AccountView's identity); each part in the page's room as its cards
   let parts = blocks.map(fn(b) { fn() { cn_gutter(c, look, b) } })
-  look_page(c, core, frame, look, "profile/" + address + "/" + id, text(p, "name"), parts, head=fn() {
+  look_page(c, core, frame, look, "profile/" + address + "/" + id, text(p, "name"), parts, small=@sf.t("android-misc.bar.place.profiles"), head=fn() {
     profile_head(c, core, here, address, p, entry)
   })
 }

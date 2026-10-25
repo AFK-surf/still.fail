@@ -134,6 +134,11 @@ pub fn folder_narrow(c : @ui.Ctx, src : Source, f : FolderOf, n : NarrowOf) -> U
 /// The narrow bar (NavBar): back where the frame says (its words), the title in the middle, what it does at its end;
 /// true on the frame back was pressed.
 fn narrow_bar(c : @ui.Ctx, n : NarrowOf, title : String, trailing : () -> Unit) -> Bool {
+  // (in a panel of its own on the tape: a chat's bar, as a settings page's there)
+  if @sf.in_pane() {
+    pane_bar(c, n.frame.back.map(fn(label) { (label, n.back) }), title, actions=trailing)
+    return false
+  }
   @sf.nav_bar(
     c,
     "files/narrow/back",
@@ -146,8 +151,7 @@ fn narrow_bar(c : @ui.Ctx, n : NarrowOf, title : String, trailing : () -> Unit) 
       narrow_back_least
     },
     bg=@sf.theme().p.bg,
-    // (in a panel of its own under the panel's top corners)
-    top=dmax(n.frame.top, @sf.pane_head_room()),
+    top=n.frame.top,
   )
 }
 

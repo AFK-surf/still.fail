@@ -4,7 +4,9 @@
 //   LargeTitle, SectionHeader, ListCard, ListRow): back over a large title, its rows on rounded cards;
 // - wider, as the web's desktop pages are (web/src/styles/pages.css.ts page, pageHead, list, card; ui.tsx Section):
 //   their head, a column 760 wide at most in the pane's middle, sections with their titles, lists and cards
-//   (settings_page.mbt).
+//   (settings_page.mbt);
+// - either way, in a panel of its own on the tape (laid out Medium), under the bar a chat's page has there in place of
+//   its large title or its head (pane_page.mbt).
 // How it answers the hand is the input's: what lights under a mouse lights under a finger's press (a style's
 // `hovered`, `c.lit`), and a finger's press ripples.
 
@@ -30,7 +32,8 @@ fn look_of(c : @ui.Ctx) -> Look {
 /// frame it is given (`frame`: back where there is somewhere to go back to, the room over and under it). `lead`: what
 /// it is for, under its title; `about`: what it is for said by a mark beside its title (wide); `actions`: what it does,
 /// at its title's end; `head`: a head of its own in place of the title, which says its name (a station's, an account's);
-/// `small`: what the page is of, over its large title (narrow: LargeTitle's small line).
+/// `small`: what the page is of, over its large title (narrow: LargeTitle's small line), and with a head of its own
+/// what its bar says in a panel of its own (pane_page: Station, Profile).
 fn look_page(
   c : @ui.Ctx,
   core : Core,
@@ -46,6 +49,8 @@ fn look_page(
   small? : String = "",
 ) -> Unit {
   match look {
+    // in a panel of its own on the tape: a chat's bar over it (pane_page.mbt)
+    _ if @sf.in_pane() => pane_page(c, core, frame, look, key, title, content, lead~, about~, actions?, head?, small~)
     Wide =>
       desk_page(
         c,
@@ -64,10 +69,8 @@ fn look_page(
       )
     Narrow => {
       let blocks : Array[() -> Unit] = []
-      // under what stands over it (a status bar), and in a panel of its own under the panel's top corners
-      let top = dmax(frame.top, @sf.pane_head_room())
-      if top > 0.0 {
-        blocks.push(fn() { c.box(style=@ui.style(w=Full, h=Fixed(top)), fn() {  }) |> ignore })
+      if frame.top > 0.0 {
+        blocks.push(fn() { c.box(style=@ui.style(w=Full, h=Fixed(frame.top)), fn() {  }) |> ignore })
       }
       // back to where it was opened from (TopBack), then its large title (LargeTitle), what it is for under it
       match frame.back {
