@@ -124,7 +124,7 @@ let side_over_w : Double = 460.0
 let side_over : Ref[Bool] = Ref(false)
 
 ///|
-/// Whether the panel being built is a panel of its own on the tape (tape_side): round by the ladder's pane corner.
+/// Whether the panel being built is a panel of its own on the tape (tape_side): round by the tape's corner.
 // kept across runs: said by tape_side round the panel it builds
 let side_on_tape : Ref[Bool] = Ref(false)
 
@@ -179,7 +179,7 @@ pub fn side_bar_tape() -> @ui.Style {
   @ui.style(
     row=true,
     w=Full,
-    pt=@sf.room_of(@sf.capsule_in(@sf.pane_corner, side)),
+    pt=@sf.room_of(@sf.capsule_in(@sf.tape_corner, side)),
     pb=S1_5,
     pl=@sf.room_of(@sf.line_end_in(left, side_bar_start, side=@sf.side_tab_side)),
     pr=@sf.room_of(@sf.line_end_in(right, side_bar_end, side~)),

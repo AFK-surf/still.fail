@@ -111,9 +111,9 @@ fn band_new_tape_over() -> Double {
   let brand = side_top_h()
   let lift = (band_row_h() - filter_side) / 2.0
   let alone = brand + band_new_top + lift
-  // (on the tape's line in the ladder's pane corner; under a taller top row, 更新's or the window's buttons', it can not
+  // (on the tape's line in the tape's corner; under a taller top row, 更新's or the window's buttons', it can not
   // stand so high: where it stands alone)
-  let at = if (@sf.tape_side_corners()[1].radius() - @sf.pane_corner).abs() <= 0.5 {
+  let at = if (@sf.tape_side_corners()[1].radius() - @sf.tape_corner).abs() <= 0.5 {
     @sf.tape_line
   } else {
     alone
