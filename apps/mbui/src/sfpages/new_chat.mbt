@@ -32,21 +32,16 @@ pub(all) struct NewChatFrame {
 }
 
 ///|
-/// What the page keeps of its own: its station chooser's menu open (wide), the run picker showing who runs it, which
-/// of its picks is asked open as it is next drawn narrow (a fixture's: new_chat_ask).
+/// What the page keeps of its own: which of its picks is asked open as it is next drawn (a fixture's: new_chat_ask).
 priv struct NewChatPage {
-  mut station_menu : Bool
-  mut accounts : Bool
   mut asked : String
 }
 
 ///|
-let new_chat_state : NewChatPage = { station_menu: false, accounts: false, asked: "" }
+let new_chat_state : NewChatPage = { asked: "" }
 
 ///|
 fn new_chat_reset() -> Unit {
-  new_chat_state.station_menu = false
-  new_chat_state.accounts = false
   new_chat_state.asked = ""
 }
 
@@ -239,18 +234,7 @@ fn new_scene_narrow_body(
   station : Json?,
   state : NewState,
 ) -> Unit {
-  @sf.drawable(c, new_scene_art(), new_scene_narrow_w) |> ignore
-  c.box(style=new_heading_box, fn() { c.text(@sf.t("android-chat.new.heading"), style=new_title) |> ignore }) |> ignore
-  match state {
-    Held(error) =>
-      c.box(style=new_held_lines, fn() {
-        new_held_line(c, new_held_line_long, error == "")
-        new_held_line(c, new_held_line_short, error == "")
-      })
-      |> ignore
-    _ =>
-      c.text(@sf.t("android-chat.new.sub", args=[("station", new_station_words(station))]), style=new_sub) |> ignore
-  }
+  new_head(c, station, state, new_scene_narrow_w, fn(_) {  })
   new_combos(c, src, w, v, state is Going(_, _)) |> ignore
   let problem = match state {
     Held(error) => error
@@ -288,61 +272,103 @@ fn new_choosers(
       }
       _ => ()
     }
-    let address = text(station, "station")
-    let t = @sf.theme()
-    if glass_chooser(
-        c,
-        "new/station",
-        fn() { @sf.station_icon(c, text(station, "emoji"), text(station, "icon"), new_mark, t.p.text) },
-        text(station, "name"),
-        @sf.glass_chooser_station_most,
-        false,
-      ) &&
-      !going ||
-      take_asked("station") {
-      @sf.panel(
-        @sf.t("android-chat.new.station.pick"),
-        fn(c, close) { station_rows(c, src, w, v, close) },
-        from=Of(c.id("new/station")),
-      )
-    }
-    let p = field(v, "pick")
-    let runtime = text(v, "runtime")
-    let model = text(field(v, "model"), "model")
-    if flag(v, "waiting") {
-      @sf.bar(c, Px(held_model_w), held_chooser_h, breathing=true)
-    } else if p is None || items(p, "options").length() == 0 {
-      // nothing to choose from: the way to where models are enabled
-      if glass_chooser(c, "new/models", fn() {  }, @sf.t("android-chat.new.noModels"), Full, false) && !going {
-        open_page(Place("profiles"))
-      }
-    } else {
-      let label = if runtime == "" || model == "" { @sf.t("android-chat.pick.model") } else { triple_label(p) }
-      // (a model's maker: the core's Maker, its id the mark's)
-      let maker = match text(field(field(p, "valueOption"), "maker"), "id") {
-        "" => text(field(field(v, "model"), "maker"), "id")
-        m => m
-      }
-      let lead = if runtime == "" || model == "" {
-        fn() {  }
-      } else {
-        fn() { @sf.maker_mark(c, maker, runtime, new_mark) |> ignore }
-      }
-      if (glass_chooser(c, "new/model", lead, label, Full, true) && !going) || take_asked("model") {
-        // picked from what it runs on now, each time it is opened
-        new_chat_state.accounts = false
-        pick_draft(src, address, "new", { "open": Json::boolean(true) })
-        @sf.panel(
-          @sf.t("android-chat.new.model"),
-          fn(c, close) { run_picker(c, src, address) },
-          from=Of(c.id("new/model")),
-          tall=run_picker_tall,
-          foot=fn(c, close) { run_picker_foot(c, src, frame.core, address, close) },
-        )
-      }
-    }
+    new_controls(c, src, w, v, station, true, going)
   })
   |> ignore
+}
+
+///|
+/// Where it runs and what it runs on: the station's control (its mark, its name; pressed, the stations through the
+/// presenters) and the model's (model_triple.mbt, its panel through them too); with nothing to run it with, the way to
+/// where models are enabled; while its profiles are read, what it runs on breathing in its place. `floating`: over
+/// the composer (narrow: capsules of its glass), else in its row (wide).
+fn new_controls(
+  c : @ui.Ctx,
+  src : Source,
+  w : Workspace,
+  v : Json?,
+  station : Json?,
+  floating : Bool,
+  going : Bool,
+) -> Unit {
+  let address = text(station, "station")
+  if text(station, "name") != "" {
+    new_station_control(c, src, w, v, station, floating, going)
+  }
+  let p = field(v, "pick")
+  if flag(v, "waiting") {
+    @sf.bar(c, Px(held_model_w), held_chooser_h, breathing=true)
+  } else if p is None ||
+    items(p, "options").length() == 0 ||
+    text(v, "runtime") == "" ||
+    field(v, "model") is None {
+    // nothing to run it with: the way to where models are enabled
+    if new_capsule(c, "new/models", @sf.t("web-main.newChat.noModels"), floating, fn() {
+        c.text(@sf.t("web-main.newChat.noModels"), style=new_capsule_words) |> ignore
+      }) &&
+      !going {
+      open_page(Place("profiles"))
+    }
+  } else {
+    if take_asked("model") {
+      open_triple(address, "new")
+    }
+    model_triple(c, src, address, "new", up=true, page=p, small=true, floating~)
+  }
+}
+
+///|
+/// Where it runs (Chooser of the stations, mChooser): its mark, its name, a chevron; pressed, the workspace's stations
+/// through the presenters, the one it starts on checked (station_rows).
+fn new_station_control(
+  c : @ui.Ctx,
+  src : Source,
+  w : Workspace,
+  v : Json?,
+  station : Json?,
+  floating : Bool,
+  going : Bool,
+) -> Unit {
+  let t = @sf.theme()
+  if (new_capsule(
+      c,
+      "new/station",
+      text(station, "name"),
+      floating,
+      fn() {
+        @sf.station_mark(c, text(station, "emoji"), text(station, "icon"), new_mark, t.p.text)
+        c.box(style=new_station_name, fn() { c.text(text(station, "name"), style=new_capsule_words) |> ignore })
+        |> ignore
+        @sf.icon(c, "chevron-down", size=new_chevron, color=t.p.muted) |> ignore
+      },
+    ) &&
+    !going) ||
+    take_asked("station") {
+    @sf.panel(
+      @sf.t("android-chat.new.station.pick"),
+      fn(c, close) { station_rows(c, src, w, v, close) },
+      from=Of(c.id("new/station")),
+    )
+  }
+}
+
+///|
+/// A control of the page's (where it runs, the way to models): over the composer a capsule of its glass (mChooser,
+/// NewChat.kt Chooser), in its row as the composer's other controls (Chooser in NewChat.tsx's toolbar); what it holds
+/// `body`. True on the frame after it was pressed.
+fn new_capsule(c : @ui.Ctx, key : String, label : String, floating : Bool, body : () -> Unit) -> Bool {
+  let id = c.id(key)
+  c.cursor(id, Hand)
+  let b = if floating {
+    c.box(style=glass_chooser_box, glass=@sf.glass_floating(), id~, fn() {
+      body()
+      @sf.press_ripple(c, id, glass_chooser_corner)
+    })
+  } else {
+    c.box(style=new_capsule_in_row, id~, body)
+  }
+  c.semantics(b, Button, id~, label~)
+  c.clicked(id)
 }
 
 ///|
@@ -353,62 +379,6 @@ fn take_asked(what : String) -> Bool {
   }
   new_chat_state.asked = ""
   true
-}
-
-///|
-/// A choice over the composer (mChooser, NewChat.kt Chooser): a capsule of the composer's glass, its mark, its words
-/// (cut short, `most` wide at most), a chevron. True on the frame after it was pressed.
-fn glass_chooser(c : @ui.Ctx, key : String, lead : () -> Unit, label : String, most : @ui.Len, chevron : Bool) -> Bool {
-  let p = @sf.theme().p
-  let id = c.id(key)
-  c.cursor(id, Hand)
-  let b = c.box(style=glass_chooser_box.then(@ui.style(max_w=most)), glass=@sf.glass_floating(), id~, fn() {
-    lead()
-    c.text(label, style=glass_chooser_words) |> ignore
-    if chevron {
-      @sf.icon(c, "chevron-down", size=new_chevron, color=p.muted) |> ignore
-    }
-    @sf.press_ripple(c, id, glass_chooser_corner)
-  })
-  c.semantics(b, Button, id~, label~)
-  c.clicked(id)
-}
-
-///|
-/// What the model capsule says (NewChat.kt tripleLabel): the model, the runtime where there is a choice, how hard it
-/// thinks, how fast, who runs it when that matters.
-fn triple_label(p : Json?) -> String {
-  let value = field(p, "value")
-  let on = field(p, "valueOption")
-  let parts : Array[String] = []
-  parts.push(
-    match text(on, "name") {
-      "" =>
-        match text(value, "model") {
-          "" => @sf.t("android-chat.pick.model")
-          m => m
-        }
-      n => n
-    },
-  )
-  if !flag(p, "runtimeFixed") && items(on, "runtimes").length() > 1 {
-    parts.push(@settings.runtime_label(text(value, "runtime")))
-  }
-  parts.push(
-    match text(value, "effort") {
-      "" => @sf.t("android-chat.pick.effort.default")
-      e => e
-    },
-  )
-  match text(p, "fastText") {
-    "" => ()
-    f => parts.push(f)
-  }
-  match text(field(p, "account"), "text") {
-    "" => ()
-    a => parts.push(a)
-  }
-  parts.join(" · ")
 }
 
 ///|
@@ -460,30 +430,12 @@ fn new_wide(
   state : NewState,
 ) -> Unit {
   let address = new_address(w, v, station, state)
-  let here = new_station_words(station)
   new_column(c, fn(col) {
     // (data-made-leave="up": out of view above as it fades)
-    new_part(c, new_scene(c), state, true)
-    new_part(
-      c,
-      c.box(style=new_title_box, fn() { c.text(@sf.t("web-main.newChat.title"), style=new_title) |> ignore }),
-      state,
-      true,
-    )
-    let sub = match state {
-      Held(_) => @sf.t("web-main.newChat.subChosen")
-      _ => @sf.t("web-main.newChat.sub", args=[("name", here)])
-    }
-    new_part(c, c.box(style=new_sub_box, fn() { c.text(sub, style=new_sub) |> ignore }), state, true)
+    new_head(c, station, state, new_scene_w, fn(i) { new_part(c, i, state, true) })
     if !(state is Held(_)) {
-      // its station went as it was written in (the page stays, said so), or what is sent waits for its quota
-      if flag(v, "down") {
-        new_part(c, new_notice(c, @sf.t("web-main.newChat.down", args=[("name", here)]), col), state, true)
-      }
-      match text(v, "spent") {
-        "" => ()
-        spent => new_part(c, new_notice(c, spent, col), state, true)
-      }
+      // what is sent waits for its quota, or its station went as it was written in (the page stays, said so)
+      new_notices(c, v, station, col, part=fn(i) { new_part(c, i, state, true) })
     }
     new_composer_place(c, src, w, frame, v, address, station, state, col)
     // (data-made-leave="fade": fading where it is)
@@ -528,44 +480,9 @@ fn new_part(c : @ui.Ctx, i : Int, state : NewState, up : Bool) -> Unit {
 }
 
 ///|
-/// The composer's choices wide (NewChat.tsx toolbar): where it runs (its stations, a chooser over the composer), what
-/// it runs on (the model control, its panel over the composer); with nothing to run, the way to where models are
-/// chosen.
+/// The composer's choices wide (NewChat.tsx toolbar), in its row: the page's controls (new_controls).
 fn new_tools(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Json?) -> Unit {
-  if text(station, "name") != "" {
-    station_chooser(c, src, w, v, station, Top)
-  }
-  if text(v, "runtime") == "" || field(v, "model") is None {
-    let id = c.id("new/no-models")
-    c.cursor(id, Hand)
-    if c.clicked(id) {
-      open_page(Place("profiles"))
-    }
-    let b = c.box(style=new_link_box, id~, fn() { c.text(@sf.t("web-main.newChat.noModels"), style=new_link) |> ignore })
-    c.semantics(b, Link, id~, label=@sf.t("web-main.newChat.noModels"))
-  } else {
-    model_triple(c, src, text(station, "station"), "new", up=true, page=field(v, "pick"), small=true)
-  }
-}
-
-///|
-/// Where it runs wide (Chooser of the stations, StationMark before each name), the one it is on checked; chosen, the
-/// core picks it (`newChat.pick`).
-fn station_chooser(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Json?, side : @ui.Side) -> Unit {
-  let address = text(station, "station")
-  let entries = items(v, "stations").map(fn(s) {
-    let s = Some(s)
-    @kit.menu_radio(text(s, "id"), text(s, "station") == address, label=text(s, "name"))
-  })
-  let m = @sf.chooser(c, "new/station", text(station, "name"), entries, new_chat_state.station_menu, side~, lead=fn(ink) {
-    @sf.station_mark(c, text(station, "emoji"), text(station, "icon"), new_mark, ink)
-  })
-  new_chat_state.station_menu = m.open
-  match m.chosen {
-    // (told once the frame is built: what was chosen, once)
-    Some(id) => c.tell("new/pick", fn() { @sfbase.pick_new(src, w.id, { "station": Json::string(id) }) })
-    None => ()
-  }
+  new_controls(c, src, w, v, station, false, false)
 }
 
 // ── both ──────────────────────────────────────────────────────────────────
@@ -617,15 +534,15 @@ fn new_composer_place(
 }
 
 ///|
-/// What is wrong for now, over the composer narrow (mNewSpent): what is sent waits for its quota; its station went as
+/// What is wrong for now, over the composer (mNewSpent, spentNotice): what is sent waits for its quota; its station went as
 /// it was written in.
-fn new_notices(c : @ui.Ctx, v : Json?, station : Json?, width : Double) -> Unit {
+fn new_notices(c : @ui.Ctx, v : Json?, station : Json?, width : Double, part? : (Int) -> Unit = fn(_) {  }) -> Unit {
   match text(v, "spent") {
     "" => ()
-    spent => new_notice(c, spent, width) |> ignore
+    spent => part(new_notice(c, spent, width))
   }
   if flag(v, "down") {
-    new_notice(c, @sf.t("web-main.newChat.down", args=[("name", new_station_words(station))]), width) |> ignore
+    part(new_notice(c, @sf.t("web-main.newChat.down", args=[("name", new_station_words(station))]), width))
   }
 }
 
@@ -688,9 +605,26 @@ fn new_offer(c : @ui.Ctx, src : Source, frame : NewChatFrame, station : Json?, s
 }
 
 ///|
-/// The scene (Illustration "new-chat").
-fn new_scene(c : @ui.Ctx) -> Int {
-  @sf.drawable(c, new_scene_art(), new_scene_w)
+/// The page's head, the same at every width (NewChat.tsx's and the mobile page's say the same): the picture
+/// (Illustration "new-chat") `art_w` wide, what to do, where it starts (while its stations are read, two lines
+/// breathing in its place, still once what they wait on failed); each part given to `part` (how it leaves).
+fn new_head(c : @ui.Ctx, station : Json?, state : NewState, art_w : Double, part : (Int) -> Unit) -> Unit {
+  part(@sf.drawable(c, new_scene_art(), art_w))
+  part(c.box(style=new_heading_box, fn() { c.text(@sf.t("android-chat.new.heading"), style=new_title) |> ignore }))
+  part(
+    match state {
+      Held(error) =>
+        c.box(style=new_held_lines, fn() {
+          new_held_line(c, new_held_line_long, error == "")
+          new_held_line(c, new_held_line_short, error == "")
+        })
+      _ =>
+        c.box(style=new_sub_box, fn() {
+          c.text(@sf.t("android-chat.new.sub", args=[("station", new_station_words(station))]), style=new_sub)
+          |> ignore
+        })
+    },
+  )
 }
 
 ///|
@@ -786,7 +720,7 @@ fn new_blocked(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Js
             }
         }
         if items(v, "stations").length() > 1 {
-          station_chooser(c, src, w, v, station, Bottom)
+          new_station_control(c, src, w, v, station, false, false)
         }
       },
     )
@@ -908,297 +842,6 @@ fn new_send(
 
 // ── the run picker ────────────────────────────────────────────────────────
 
-///|
-/// What a new chat runs on narrow (NewChat.kt openRunPicker; the web's mobile pickModel, pickRuntime, pickEffort and
-/// its speed's sheet in one), on station `station`, in a panel of the presenters: the models in a column by series,
-/// the runtime, how hard it thinks and how fast beside them; who runs it in the foot (its list in the panel's place,
-/// and back). Picks are a draft (`pick.set`) until 确定 (`pick.save`); closed otherwise, nothing changes. A model
-/// another station has, picked: the foot borrows it, asked again first.
-fn run_picker(c : @ui.Ctx, src : Source, station : String) -> Unit {
-  let topic = (src.topic)("pick", pick_params(station, "new"))
-  let v = topic.value
-  if v is None {
-    @sf.waiting(c, error=match topic.error {
-      Some(e) => text(Some(e), "message")
-      None => ""
-    })
-    return
-  }
-  if new_chat_state.accounts {
-    run_accounts(c, src, station, v)
-    return
-  }
-  let draft = field(v, "draft")
-  let set = fn(patch : Map[String, Json]) { pick_draft(src, station, "new", patch) }
-  // side by side: the models (by series, in the core's order), and what goes with the one picked
-  c.box(style=run_columns, fn() {
-    c.box(style=run_models, fn() {
-      let series : Array[(String, Array[Json])] = []
-      for o in items(v, "options") {
-        let who = match text(Some(o), "family") {
-          "" => @sf.t("android-chat.pick.family.other")
-          f => f
-        }
-        match series.search_by(fn(s) { s.0 == who }) {
-          Some(i) => series[i].1.push(o)
-          None => series.push((who, [o]))
-        }
-      }
-      for s in series {
-        if series.length() > 1 {
-          run_label(c, s.0)
-        }
-        for o in s.1 {
-          let opt = Some(o)
-          let picked = text(v, "option") == text(opt, "model")
-          let runtime = match items(opt, "runtimes").get(0) {
-            Some(String(r)) => r
-            _ => text(draft, "runtime")
-          }
-          if run_option(
-              c,
-              "pick/model/" + text(opt, "model"),
-              text(opt, "name"),
-              text(field(opt, "spent"), "text"),
-              picked,
-              Some(fn() { @sf.maker_mark(c, text(field(opt, "maker"), "id"), runtime, run_mark) |> ignore }),
-              faint=text(opt, "availability") == "borrowable" && !picked,
-            ) {
-            set({ "model": Json::string(text(opt, "model")) })
-          }
-        }
-      }
-    })
-    |> ignore
-    c.box(style=run_side, fn() {
-      let runtimes = items(v, "runtimes")
-      if runtimes.length() > 0 {
-        run_label(c, @sf.t("android-chat.new.runtime"))
-        for r in runtimes {
-          if r is String(rt) &&
-            run_option(
-              c,
-              "pick/runtime/" + rt,
-              @settings.runtime_label(rt),
-              "",
-              text(draft, "runtime") == rt,
-              Some(fn() { @sf.maker_mark(c, "", rt, run_mark) |> ignore }),
-            ) {
-            set({ "runtime": Json::string(rt) })
-          }
-        }
-      }
-      run_label(c, @sf.t("android-chat.new.effort"))
-      if run_option(c, "pick/effort/", @sf.t("android-chat.pick.default"), "", text(draft, "effort") == "", None) {
-        set({ "effort": Json::null() })
-      }
-      for e in items(v, "efforts") {
-        if e is String(ef) &&
-          run_option(c, "pick/effort/" + ef, ef, "", text(draft, "effort") == ef, None) {
-          set({ "effort": Json::string(ef) })
-        }
-      }
-      if flag(v, "fastAvailable") {
-        run_label(c, @sf.t("android-chat.new.speed"))
-        let fast = field(draft, "fast")
-        if run_option(
-            c,
-            "pick/fast/follow",
-            @sf.t("android-chat.pick.speed.follow"),
-            "",
-            !(fast is Some(True) || fast is Some(False)),
-            None,
-          ) {
-          set({ "fast": Json::null() })
-        }
-        if run_option(c, "pick/fast/standard", @sf.t("android-chat.pick.speed.standard"), "", fast is Some(False), None) {
-          set({ "fast": Json::boolean(false) })
-        }
-        if run_option(c, "pick/fast/fast", "Fast", @sf.t("android-chat.new.fast.note"), fast is Some(True), None) {
-          set({ "fast": Json::boolean(true) })
-        }
-      }
-    })
-    |> ignore
-  })
-  |> ignore
-  // the model picked is another station's: said so over the foot
-  let borrow = field(v, "borrow")
-  if borrow is Some(Object(_)) {
-    c.box(style=run_borrow_box, fn() {
-      c.text(
-        if flag(borrow, "allowed") {
-          text(borrow, "note")
-        } else {
-          match text(borrow, "why") {
-            "" => text(borrow, "note")
-            why => why
-          }
-        },
-        style=run_note,
-      )
-      |> ignore
-    })
-    |> ignore
-  }
-}
-
-///|
-/// The run picker's foot (the presenter's, in its foot corner): who runs it, and 确定 (or borrowing it); nothing while
-/// its accounts are in its place.
-fn run_picker_foot(c : @ui.Ctx, src : Source, core : Core, station : String, close : () -> Unit) -> Unit {
-  let v = (src.topic)("pick", pick_params(station, "new")).value
-  if v is None || new_chat_state.accounts {
-    return
-  }
-  let borrow = field(v, "borrow")
-  c.box(style=run_foot, fn() {
-    let who = c.id("pick/who")
-    c.cursor(who, Hand)
-    if c.clicked(who) {
-      new_chat_state.accounts = true
-    }
-    let p = @sf.theme().p
-    c.box(style=run_who, id=who, fn() {
-      c.text(@sf.t("android-chat.new.account"), style=run_who_lead) |> ignore
-      c.text(text(v, "who"), style=if text(v, "whoLevel") != "" { run_who_amber } else { run_who_name }) |> ignore
-      @sf.icon(c, "chevron-right", size=new_mark, color=p.muted) |> ignore
-      @sf.press_ripple(c, who, run_who_corner)
-    })
-    |> ignore
-    if borrow is Some(Object(_)) {
-      let allowed = flag(borrow, "allowed")
-      if @sf.button(c, text(borrow, "action"), key="pick/borrow", tone=Primary, disabled=!allowed) && allowed {
-        @settings.confirm_borrow(core, station, "new", borrow)
-      }
-      return
-    }
-    let changed = flag(v, "changed")
-    let dkey = "pick.save/" + station + "/new"
-    if @sf.button(
-        c,
-        @sf.t(if changed { "android-chat.new.confirm" } else { "android-chat.new.unchanged" }),
-        key="pick/save",
-        tone=if changed { Primary } else { Plain },
-        busy=doing(dkey),
-      ) &&
-      text(v, "option") != "" &&
-      !doing(dkey) {
-      if !changed || src.read_only {
-        close()
-      } else {
-        act(src, @sf.t("android-chat.new.confirm"), dkey, "pick.save", Json::object(pick_params(station, "new")), ok=fn(_) {
-          close()
-        })
-      }
-    }
-  })
-  |> ignore
-}
-
-///|
-/// Who runs it, in the run picker's place (NewChat.kt's accounts): back to the picker, 自动 with what the station's pick
-/// is on now, then each account with what is left of it; picked, back to the picker.
-fn run_accounts(c : @ui.Ctx, src : Source, station : String, v : Json?) -> Unit {
-  let p = @sf.theme().p
-  let draft = field(v, "draft")
-  let back = c.id("pick/accounts-back")
-  c.cursor(back, Hand)
-  if c.clicked(back) {
-    new_chat_state.accounts = false
-  }
-  c.box(style=run_accounts_head, fn() {
-    c.box(style=run_back, id=back, fn() {
-      @sf.icon(c, "chevron-left", size=run_back_icon, color=p.text) |> ignore
-      @sf.press_ripple(c, back, run_back_corner)
-    })
-    |> ignore
-    c.text(@sf.t("android-chat.new.account"), style=run_accounts_title) |> ignore
-  })
-  |> ignore
-  c.box(style=run_accounts_list, fn() {
-    match text(v, "dropped") {
-      "" => ()
-      dropped => c.box(style=run_dropped_box, fn() { c.text(dropped, style=run_dropped) |> ignore }) |> ignore
-    }
-    if run_option(c, "pick/account/auto", @sf.t("android-chat.new.auto"), text(v, "autoNote"), text(draft, "profile") == "", None) {
-      pick_draft(src, station, "new", { "profile": Json::null() })
-      new_chat_state.accounts = false
-    }
-    for a in items(v, "accounts") {
-      let acc = Some(a)
-      let quota = field(acc, "quotaLine")
-      let runtime = match text(acc, "runtime") {
-        "" => text(draft, "runtime")
-        r => r
-      }
-      if run_option(
-          c,
-          "pick/account/" + text(acc, "id"),
-          text(acc, "name"),
-          text(quota, "text"),
-          text(draft, "profile") == text(acc, "id"),
-          Some(fn() { @sf.maker_mark(c, text(acc, "mark"), runtime, run_mark) |> ignore }),
-          amber=text(quota, "level") != "",
-        ) {
-        pick_draft(src, station, "new", { "profile": Json::string(text(acc, "id")) })
-        new_chat_state.accounts = false
-      }
-    }
-  })
-  |> ignore
-}
-
-///|
-/// A column's name in the run picker (CascadeLabel).
-fn run_label(c : @ui.Ctx, label : String) -> Unit {
-  c.box(style=run_label_box, fn() { c.text(label, style=run_label_words) |> ignore }) |> ignore
-}
-
-///|
-/// A choice in a column of the run picker (CascadeOption): the chosen one on the accent's pale ground, its words in
-/// the accent and bold, a check; `faint`: another station's not borrowed yet; `amber`: what is said under it a warning.
-/// True on the frame after it was pressed.
-fn run_option(
-  c : @ui.Ctx,
-  key : String,
-  label : String,
-  sub : String,
-  checked : Bool,
-  lead : (() -> Unit)?,
-  faint? : Bool = false,
-  amber? : Bool = false,
-) -> Bool {
-  let p = @sf.theme().p
-  let id = c.id(key)
-  c.cursor(id, Hand)
-  let b = c.box(style=if checked { run_option_on } else { run_option_box }, id~, fn() {
-    match lead {
-      Some(f) => f()
-      None => ()
-    }
-    c.box(style=run_option_words, fn() {
-      c.text(label, style=if checked {
-        run_picked
-      } else if faint {
-        run_faint
-      } else {
-        run_words
-      })
-      |> ignore
-      if sub != "" {
-        c.text(sub, style=if amber { run_amber } else { run_note }) |> ignore
-      }
-    })
-    |> ignore
-    if checked {
-      @sf.icon(c, "check", size=new_mark, color=p.accent) |> ignore
-    }
-    @sf.press_ripple(c, id, run_option_corner)
-  })
-  c.semantics(b, Button, id~, label~, check=if checked { On } else { Off })
-  c.clicked(id)
-}
 
 ///|
 /// How far what leaves goes up, and how much smaller it gets.
@@ -1257,26 +900,6 @@ let glass_chooser_corner : Double = 15.0
 
 ///|
 let station_row_mark : Double = 22.0
-
-///|
-/// The run picker: as tall as two thirds of the window (NewChat.kt openRunPicker: 66%), its marks, the corners its
-/// rows ripple in, its back's icon.
-let run_picker_tall : Double = 0.66
-
-///|
-let run_mark : Double = 16.0
-
-///|
-let run_option_corner : Double = 10.0
-
-///|
-let run_who_corner : Double = 12.0
-
-///|
-let run_back_corner : Double = 18.0
-
-///|
-let run_back_icon : Double = 20.0
 
 ///|
 /// The page's ground, its whole pane; its bar's room; what is left under it.
@@ -1342,7 +965,17 @@ let glass_chooser_box : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let glass_chooser_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Fg, wrap=false, w=Cut)
+let new_capsule_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Fg, wrap=false, w=Cut)
+
+///|
+/// A station's name in its control: cut short past 128 (mChooser's max-width).
+// kept across runs: a value (no field of it changes)
+let new_station_name : @ui.Style = @ui.style(max_w=@sf.glass_chooser_station_most, clip=true)
+
+///|
+/// A control in the composer's row (Chooser: 28 high, 8 in, its parts 6 apart, the hover's ground).
+// kept across runs: a value (no field of it changes)
+let new_capsule_in_row : @ui.Style = @ui.css("row h=S7 px=S2 gap=S1_5 align=ACenter radius=Lg clip hovered{bg=Hover}")
 
 ///|
 /// A station's row in its pick (PickRow): its mark, its name over what it is, a check; 12 by 8 in.
@@ -1465,111 +1098,3 @@ let combo_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Mute
 ///|
 // kept across runs: a value (no field of it changes)
 let combo_words_lit : @ui.TextStyle = combo_words.then(@ui.text_style(color=Fg))
-
-///|
-/// The run picker's columns side by side (the models a third wider than the rest, on the card's ground), 10 in, 8
-/// apart; each filling the panel's height, scrolled in it.
-// kept across runs: a value (no field of it changes)
-let run_columns : @ui.Style = @ui.style(row=true, w=Full, h=@sf.grow, px=S2_5, gap=S2)
-
-///|
-// kept across runs: a value (no field of it changes)
-let run_models : @ui.Style = @ui.style(w=@sf.run_models_grow, h=Full, clip=true)
-
-///|
-// kept across runs: a value (no field of it changes)
-let run_side : @ui.Style = @ui.style(w=@sf.grow, h=Full, p=S1, radius=Xl, bg=Card, clip=true)
-
-///|
-/// A column's name (CascadeLabel: 12, muted, 10 in, 10 over, 2 under).
-// kept across runs: a value (no field of it changes)
-let run_label_box : @ui.Style = @ui.css("pl=S2_5 pt=S2_5 pb=S0_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let run_label_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, color=Muted, wrap=false)
-
-///|
-/// A choice (CascadeOption): 10 in, 10 between, 10 round; the chosen on the accent's pale ground.
-// kept across runs: a value (no field of it changes)
-let run_option_box : @ui.Style = @ui.css("row w=Full p=S2_5 gap=S2_5 radius=Lg align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let run_option_on : @ui.Style = run_option_box.then(@ui.css("bg=AccentBg"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let run_option_words : @ui.Style = @ui.style(w=@sf.grow, clip=true)
-
-///|
-// kept across runs: a value (no field of it changes)
-let run_words : @ui.TextStyle = @ui.text_style(size=Base, leading=L6, color=Fg, wrap=false, w=Cut)
-
-///|
-// kept across runs: a value (no field of it changes)
-let run_picked : @ui.TextStyle = run_words.then(@ui.text_style(weight=Semibold, color=AccentText))
-
-///|
-// kept across runs: a value (no field of it changes)
-let run_faint : @ui.TextStyle = run_words.then(@ui.text_style(color=Muted))
-
-///|
-// kept across runs: a value (no field of it changes)
-let run_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, color=Muted)
-
-///|
-// kept across runs: a value (no field of it changes)
-let run_amber : @ui.TextStyle = run_note.then(@ui.text_style(color=Warn))
-
-///|
-/// What borrowing the model would do, over the foot (20 in, 8 over it).
-// kept across runs: a value (no field of it changes)
-let run_borrow_box : @ui.Style = @ui.css("w=Full px=S5 pt=S2")
-
-///|
-/// The foot: who runs it, then 确定, 8 apart, at its foot (where it stands the presenter's: 确定 in its corner, however
-/// tall who runs it is).
-// kept across runs: a value (no field of it changes)
-let run_foot : @ui.Style = @ui.css("row w=Full gap=S2 align=AEnd")
-
-///|
-// kept across runs: a value (no field of it changes)
-let run_who : @ui.Style = @ui.style(row=true, w=@sf.grow, p=S2_5, gap=S1, radius=Xl, align=ACenter)
-
-///|
-// kept across runs: a value (no field of it changes)
-let run_who_lead : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let run_who_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, w=Cut)
-
-///|
-// kept across runs: a value (no field of it changes)
-let run_who_amber : @ui.TextStyle = run_who_name.then(@ui.text_style(color=Warn))
-
-///|
-/// Who runs it in the picker's place: its head (back, 账号), its list, what was let go of over it.
-// kept across runs: a value (no field of it changes)
-let run_accounts_head : @ui.Style = @ui.css("row w=Full pl=S2 pr=S4_5 pt=S1 pb=S2_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let run_back : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter justify=JCenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let run_accounts_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Bold, color=Fg, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let run_accounts_list : @ui.Style = @ui.style(w=Full, h=@sf.grow, px=S3, clip=true)
-
-///|
-// kept across runs: a value (no field of it changes)
-let run_dropped_box : @ui.Style = @ui.css("px=S3 py=S1")
-
-///|
-// kept across runs: a value (no field of it changes)
-let run_dropped : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, color=Warn)

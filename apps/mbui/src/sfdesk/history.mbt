@@ -58,7 +58,7 @@ fn history_head(c : @ui.Ctx, src : Source, station : String, key : String, a : J
   let t = @sf.theme()
   c.box(style=wh_head, fn() {
     c.box(style=wh_identity, fn() {
-      @sfpages.model_triple(c, src, station, "session:" + key)
+      @sfpages.model_triple(c, src, station, "session:" + key, saved=@sf.t("web-pages.chat.pickSaved"))
       if items(a, "attention").length() > 0 {
         wh_summary(c, a)
       }

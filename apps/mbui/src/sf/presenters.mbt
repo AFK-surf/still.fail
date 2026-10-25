@@ -181,6 +181,18 @@ pub fn panel(
 }
 
 ///|
+/// How far in from its sides a panel opened by a press lays out its rows where it is drawn now: nothing beside what
+/// opened it (small_panel's pad is round it already), in a sheet as far in as a pick's rows are (sheet_rows). The
+/// presenters' sheet_body says so while it draws one's body; what reaches the sheet's sides on purpose (a strip that
+/// scrolls under them) does not ask.
+pub fn panel_sides() -> @ui.Space {
+  room(panel_sides_in.val)
+}
+
+///|
+let panel_sides_in : Ref[Double] = { val: 0.0 }
+
+///|
 /// The one presented last (what `close_presented_of` is given to close it).
 pub fn last_presented() -> Int {
   presented_count.val
@@ -917,14 +929,20 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
       } else {
         sheet_panel
       }
+      let body = fn() {
+        // (its rows, where it has them, as far in from the sheet's sides as a pick's are: panel_sides)
+        panel_sides_in.val = if p.from != Unanchored { sheet_row_sides } else { 0.0 }
+        (x.body)(c, close)
+        panel_sides_in.val = 0.0
+      }
       if scrolls && x.tall <= 0.0 {
         c.box(style=sheet_grows, fn() {
-          c.capped(key + "/panel", wh_of(c), shrinks=true, fn() { c.box(style=room, fn() { (x.body)(c, close) }) |> ignore })
+          c.capped(key + "/panel", wh_of(c), shrinks=true, fn() { c.box(style=room, body) |> ignore })
           |> ignore
         })
         |> ignore
       } else {
-        c.box(style=room, fn() { (x.body)(c, close) }) |> ignore
+        c.box(style=room, body) |> ignore
       }
       match x.foot {
         Some(f) =>
@@ -1074,6 +1092,10 @@ let sheet_title_words : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Bold, co
 /// A sheet's rows: 12 in at its sides, 24 under the last.
 // kept across runs: a value (no field of it changes)
 let sheet_rows : @ui.Style = @ui.css("w=Full px=S3 pb=S6")
+
+///|
+/// How far in from a sheet's sides its rows are (sheet_rows' px).
+let sheet_row_sides : Double = 12.0
 
 ///|
 /// A line between a sheet's rows (a menu's None): the line's colour, 8 in from the rows' ground, 4 over and under.

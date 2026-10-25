@@ -266,20 +266,20 @@ test "wide: a new chat as the web's: its scene and the composer in the pane's mi
   let t = wide_tester(calls)
   t.frame()
   assert_true(app.nav.top() == NewChat)
-  assert_true(t.find("新对话") is Some(_))
+  assert_true(t.find("想让 agent 做什么？") is Some(_))
   assert_true(t.find("做任何事") is Some(_))
   // the composer in the middle of the pane, not at its foot
   let (_, y) = t.find("做任何事").unwrap()
   assert_true(y < 600.0, msg="in the middle")
-  // where it runs: its stations in a menu
+  // where it runs: its stations in a panel beside it (the presenters')
   let station = t.query(Button, label="Studio")
   assert_true(station is Some(_))
   t.click(Button, label="Studio")
-  t.frame()
-  assert_true(t.query(MenuItemRadio, label="MBA") is Some(_))
+  t.run_for(@kit.presence_in_ms)
+  assert_true(t.query(Button, label="MBA") is Some(_))
   t.key(@ui.key_escape)
-  t.frame()
-  assert_true(t.query(MenuItemRadio, label="MBA") is None)
+  t.run_for(@kit.presence_in_ms)
+  assert_true(t.query(Button, label="MBA") is None)
 }
 
 ///|
@@ -310,13 +310,13 @@ test "wide: a new chat becomes its chat as the web's: its scene up and away, the
   let words = "把发布说明写一下"
   t.type_text(words)
   t.draw()
-  // its heading (the chat's bar says 新对话 too, smaller: told apart by their height)
-  let heading_h = match t.words().iter().find_first(fn(w) { w.0 == "新对话" }) {
+  // its heading
+  let heading_h = match t.words().iter().find_first(fn(w) { w.0 == "想让 agent 做什么？" }) {
     Some(w) => w.4
-    None => fail("no 新对话")
+    None => fail("no heading")
   }
   let heading = fn() {
-    t.words().iter().find_first(fn(w) { w.0 == "新对话" && (w.4 - heading_h).abs() < 0.5 }).map(fn(w) { w.2 })
+    t.words().iter().find_first(fn(w) { w.0 == "想让 agent 做什么？" && (w.4 - heading_h).abs() < 0.5 }).map(fn(w) { w.2 })
   }
   let title = heading().unwrap()
   let (bx, by, bw, bh) = composer_glass(t)
@@ -381,7 +381,7 @@ test "wide: a chat and a new chat switched by the sidebar: the composer goes bet
   assert_true(app.nav.top() == NewChat)
   let (_, y0, _, h0) = composer_glass(t)
   assert_true((y0 + h0 - (cy + ch)).abs() < 1.0, msg="from the chat's foot: \{(y0, h0)} \{(cy, ch)}")
-  assert_eq(t.look_of("新对话").map(fn(l) { l.2 }), Some(1.0))
+  assert_eq(t.look_of("想让 agent 做什么？").map(fn(l) { l.2 }), Some(1.0))
   // what it holds there and did not at the chat's foot (the new chat's choices) carried on its ground all the way
   choices_in_ground(t)
   t.run_for(@sfpages.page_move_ms / 2.0)
@@ -389,7 +389,7 @@ test "wide: a chat and a new chat switched by the sidebar: the composer goes bet
   t.run_for(went + @sfpages.page_move_ms + 1.0 - t.time())
   let (_, y1, _, h1) = composer_glass(t)
   assert_true(y1 + h1 < cy - 100.0, msg="in the page's middle: \{(y1, h1)}")
-  assert_eq(t.look_of("新对话").map(fn(l) { l.2 }), Some(1.0))
+  assert_eq(t.look_of("想让 agent 做什么？").map(fn(l) { l.2 }), Some(1.0))
   // back to the chat by its row: the composer down to its foot, the new chat's scene up out of view as it fades (its
   // own way, as one become its chat leaves), the chat there at once under it
   t.tap_text("整理发布清单")
@@ -397,12 +397,12 @@ test "wide: a chat and a new chat switched by the sidebar: the composer goes bet
   let back = t.time()
   assert_true(app.nav.top() is Chat(_))
   t.run_for(new_leave_ms / 2.0)
-  match t.look_of("新对话") {
+  match t.look_of("想让 agent 做什么？") {
     Some((_, _, a)) => assert_true(a > 0.05 && a < 0.95, msg="leaving: \{a}")
     None => fail("the new chat gone at once")
   }
   t.run_for(back + new_leave_ms + 1.0 - t.time())
-  assert_true(t.find("新对话") is None)
+  assert_true(t.find("想让 agent 做什么？") is None)
   t.run_for(back + @sfpages.page_move_ms + 1.0 - t.time())
   let (_, y2, _, h2) = composer_glass(t)
   assert_true((y2 + h2 - (cy + ch)).abs() < 1.0, msg="at the chat's foot again: \{(y2, h2)}")
