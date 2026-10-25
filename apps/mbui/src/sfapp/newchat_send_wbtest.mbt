@@ -152,6 +152,46 @@ test "a new chat's first words stay where typed while the chat is made and read,
 }
 
 ///|
+test "a new chat's first words hold its composer as tall as it was while they are in it, its chat's too, till they set out" {
+  let held : Map[String, () -> Unit] = {}
+  let unread = Ref(true)
+  let t = held_core(held, unread)
+  let (_, y) = bar_places_at()
+  t.tap(195.0, y - 28.0 - 4.0)
+  t.run_for(@ui.nav_rise_ms)
+  t.tap_text("做任何事")
+  t.type_text("第一行\n第二行\n第三行")
+  t.run_for(composer_morph_ms)
+  let box = fn() { @motion.measured(t.ctx(), "composer/content").unwrap() }
+  let tall = box()
+  tap_send(t)
+  t.draw()
+  assert_eq(box(), tall)
+  // while the chat is made, and as the page becomes it, unread
+  match held.get("newChat.create") {
+    Some(give) => give()
+    None => fail("no chat asked for")
+  }
+  t.draw()
+  assert_eq(box(), tall)
+  match held.get("chat.send") {
+    Some(give) => give()
+    None => fail("the message not sent")
+  }
+  t.draw()
+  assert_true(app.nav.top() is Chat(_))
+  assert_eq(box(), tall)
+  // read: their row laid out; let go of as they set out
+  unread.val = false
+  t.draw()
+  assert_eq(box(), tall)
+  let go = t.rest_of("composer/held-box/")
+  assert_true(go > t.time() && go < @double.infinity, msg="\{go} \{t.time()}")
+  t.run_for(go - t.time())
+  assert_true(box() < tall, msg="\{box()} \{tall}")
+}
+
+///|
 test "a new chat's first words with the core at once: never gone, up into their bubble with the list" {
   let t = tester("home")
   let words = "把发布说明写一下"

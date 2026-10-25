@@ -28,8 +28,9 @@ fn chat_empty(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// What was sent from here and is not in the chat yet (OutboxRow): as the viewer's message (its quotes, its words, its
-/// files, its images still going up among them already; any other still going up a card saying how far: the core's),
+/// What was sent from here and is not in the chat yet (OutboxRow): as the viewer's message (its quotes, its files, its
+/// images still going up among them already; any other still going up a card saying how far: the core's; its words:
+/// message.mbt mine_message's order),
 /// and under it "正在发送" (or what it waits on) once it has been on its way a while (800 ms from when it was sent)
 /// until the station takes it, then its time; not sent, said briefly (why in its tip), with sending it again (or,
 /// refused as it is, its words back in the composer: 编辑) and dropping it right beside.
@@ -38,9 +39,6 @@ fn outbox_row(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Un
   c.box(style=mine_column, fn() {
     c.box(style=if failed { outbox_words_unsent } else { outbox_words }, fn() {
       quotes(c, src, here, o.quotes, o.attachments, mine=true)
-      if o.text != "" {
-        mine_bubble(c, here, o.text, "o:" + o.id)
-      }
       message_files(c, src, here, beside_quotes(o.quotes, o.attachments), true)
       for i, u in o.uploads {
         let (name, size, sent) = u
@@ -54,6 +52,9 @@ fn outbox_row(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Un
           error=if failed { if o.error != "" { o.error } else { @sf.t("web-main.chat.notSent") } } else { "" },
         )
         |> ignore
+      }
+      if o.text != "" {
+        mine_bubble(c, here, o.text, "o:" + o.id)
       }
     })
     |> ignore

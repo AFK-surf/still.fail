@@ -1,0 +1,7 @@
+# A picture and a file waiting in the composer with words (MBUI_FIXTURE=chat-attach), sent on a phone: the composer as
+# it was while they are in it, the picture and the card flying to their places in the message (sfbase flight.mbt).
+timeout 20000
+wait 1500
+tap icon:arrow-up
+wait 1800
+exit

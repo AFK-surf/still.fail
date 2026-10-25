@@ -1,0 +1,7 @@
+# A new chat's first words sent with a picture on a phone (MBUI_FIXTURE=newchat-attach: its draft so): the words and
+# the picture carried up into the chat it becomes, its list coming up out of the composer (sfbase flight.mbt).
+timeout 20000
+wait 1500
+tap icon:arrow-up
+wait 2500
+exit

@@ -1,0 +1,11 @@
+# A picture and a file waiting in the composer, its words taken out (MBUI_FIXTURE=chat-attach), sent on a phone: the
+# row comes in where it is, the picture and the card flying into it, the composer as it was till they let go of it.
+timeout 20000
+wait 1500
+tapxy 120 -150
+wait 400
+clear
+wait 600
+tap icon:arrow-up
+wait 1800
+exit

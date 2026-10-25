@@ -822,13 +822,16 @@ fn new_send(
   }
   let words = d.text.trim(chars=" \n\t").to_string()
   let going = going_files(d)
-  // (its words where they were typed while the chat is made, its files where their tiles were: carried)
+  // (its words where they were typed while the chat is made, its files where their tiles were: carried, the composer
+  // held as tall as it is meanwhile, the new chat's and then its chat's, till they set out)
+  let box = @motion.measured(c, "composer/content").unwrap_or(0.0)
   @sfbase.flight_carry_start(
     c,
     d.key,
     words,
     flying_files(c, d),
     field=composer_field_key,
+    hold=fn(ms) { composer_hold(d.key, 0.0, box, ms) },
     // (the flight where the chat opens has: in this page's place, Android's; beside it, the web's)
     desk=!frame.in_place,
   )
@@ -871,7 +874,13 @@ fn new_send(
             // what the page was (新对话) until someone names it, as the core calls it
             let r : ChatRef = { station, session: key, title: @sf.t("web-main.newChat.title"), station_name: name }
             let rk = station + "\u{1}" + key
-            @sfbase.flight_carry_into(d.key, station + ":" + key, rk, sent_local(rk, None, words, up_files(d), going~))
+            @sfbase.flight_carry_into(
+              d.key,
+              station + ":" + key,
+              rk,
+              sent_local(rk, None, words, up_files(d), going~),
+              hold=fn(ms) { composer_hold(station + ":" + key, 0.0, box, ms) },
+            )
             // what is written meanwhile goes on in the chat's draft (dock.tsx carryTo)
             @sfbase.writing_carry(src, d.key, station + ":" + key)
             fresh.scene = v
