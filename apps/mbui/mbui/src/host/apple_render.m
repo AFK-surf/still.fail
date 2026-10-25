@@ -715,10 +715,10 @@ static int trim_armed, trimmed;
 
 static void trim_check(void);
 
+// (a time, as the driver's own: nothing the app shows or does waits on it, the frame shown stays as it is)
 static void trim_in(double s) {
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(s * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-    trim_check();
-  });
+  dispatch_time_t at = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(s * NSEC_PER_SEC));
+  dispatch_after(at, dispatch_get_main_queue(), ^{ trim_check(); }); // det-ok(host-delay): memory let go while idle
 }
 
 static void trim_check(void) {
