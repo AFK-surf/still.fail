@@ -96,6 +96,10 @@ export const cardStep = style({
     "&[data-next]:hover": { background: vars.primaryHover },
   },
 });
+/** A step's button and, at its end, a ⋯ of the other ways of doing it (seldom used): side by side, the ⋯ round, as high. */
+export const cardStepRow = style({ display: "flex", alignItems: "center", gap: "6px", width: "100%", marginTop: "8px" });
+globalStyle(`${cardStepRow} > ${cardStep}`, { marginTop: 0, flex: "1", minWidth: 0 });
+export const cardStepMore = style([cardStep, { flex: "none", width: STEP, padding: 0, marginTop: 0, borderRadius: "999px" }]);
 /**
  * The second, what the page gave (a code): a field the card's width at its foot, 完成 in its end once a code is in
  * (concentric with it, solid: the next thing to do then).

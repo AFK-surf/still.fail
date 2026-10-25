@@ -556,7 +556,7 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
  * pasted there with no trip back; the rest finishes by itself. OpenCode's and Kimi's pages have the code in their address: it is only
  * compared there, not copied. Cursor's has none: its page is only opened, and confirmed there.
  */
-function DeviceCode({ url, code, provider, there, children }: { url: string; code: string | null; provider: string; there: boolean; children?: ReactNode }) {
+function DeviceCode({ url, code, provider, children }: { url: string; code: string | null; provider: string; children?: ReactNode }) {
   const [copied, setCopied] = useState(false);
   const toast = useToast();
   const filled = provider === "OpenCode" || provider === "Kimi" || code === null;
@@ -569,7 +569,7 @@ function DeviceCode({ url, code, provider, there, children }: { url: string; cod
     <div className={css.deviceCode}>
       {code !== null && <span className={`${css.deviceCodeValue} ${shellCss.mono}`}>{code}</span>}
       <div className={css.stepButtons}>
-        <Button variant={there ? "secondary" : "primary"} icon={External} onClick={go}>{filled ? t("web-pages.profiles.openAuth") : copied ? t("web-pages.profiles.copiedReopen") : t("web-pages.profiles.copyOpen")}</Button>
+        <Button variant="primary" icon={External} onClick={go}>{filled ? t("web-pages.profiles.openAuth") : copied ? t("web-pages.profiles.copiedReopen") : t("web-pages.profiles.copyOpen")}</Button>
         {children}
       </div>
       <p className={shellCss.muted}>{code === null ? t("web-pages.profiles.deviceCodeNoteCursor") : provider === "OpenCode" ? t("web-pages.profiles.deviceCodeNoteOpencode") : provider === "Kimi" ? t("web-pages.profiles.deviceCodeNoteKimi") : provider === "Grok" ? t("web-pages.profiles.deviceCodeNoteGrok") : t("web-pages.profiles.deviceCodeNote", { name: NAME })}</p>
@@ -579,20 +579,19 @@ function DeviceCode({ url, code, provider, there, children }: { url: string; cod
 
 /** What the person does in the browser for a sign-in under way: the link and the code to paste (Claude, Devin), the link
  * and the one-time code to enter (Codex), or the link alone, to confirm there (Cursor). Where its job says the station
- * has a browser of its own (`browser`), the same page there (`inStation`: what asks the station to open it), under the
- * page's button: its tab's view opened here (screen/InStation.tsx); Claude's comes back to its command there, with no
- * code to paste. */
+ * has a browser of its own (`browser`), the same page there (`inStation`: what asks the station to open it), seldom used:
+ * in a ⋯ after the page's button (docs/ui-panels.md: what is used least goes into the row's ⋯). Its tab's view opens
+ * here (screen/InStation.tsx); Claude's comes back to its command there, with no code to paste. */
 export function LoginSteps({ job, provider, code, setCode, send, sending, sendError, inStation }: {
   job: LoginJob | null; provider: string; code: string; setCode(code: string): void; send(): void; sending: boolean; sendError: string | null;
   inStation?: { ask(): Promise<unknown>; busy: boolean } | undefined;
 }) {
   const station = useStation();
   const open = useInStation(station.address);
-  // Its page open in the station's browser: that is where it goes on (回到 … 的浏览器, the solid one).
-  const there = job?.screen !== undefined;
-  const label = t(there ? "common.login.backToStation" : "common.login.openInStation", { station: station.name });
+  // The same page in the station's browser (回到 … while its tab is open), in a ⋯ after the page's button.
+  const label = t(job?.screen !== undefined ? "common.login.backToStation" : "common.login.openInStation", { station: station.name });
   const stationStep = inStation && job?.browser
-    ? <Button variant={there ? "primary" : "secondary"} busy={inStation.busy} data-login-station="" onClick={() => open(inStation.ask, label)}>{label}</Button>
+    ? <Menu label={t("common.login.otherWays")} items={[{ label, onSelect: () => open(inStation.ask, label), disabled: inStation.busy }]} />
     : null;
   if (!job || job.state === "starting") return <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.generatingLink", { provider })}</p>;
   return (
@@ -602,7 +601,7 @@ export function LoginSteps({ job, provider, code, setCode, send, sending, sendEr
           <li>
             <span>{provider === "Devin" ? t("web-pages.profiles.step1Devin", { name: NAME }) : t("web-pages.profiles.step1", { name: NAME })}</span>
             <div className={css.stepButtonsInStep}>
-              <a className={there ? controlsCss.btn : `${controlsCss.btn} ${controlsCss.btnPrimary}`} href={job.url} target="_blank" rel="noopener"><External {...ICON} />{t("web-pages.profiles.openAuth")}</a>
+              <a className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} href={job.url} target="_blank" rel="noopener"><External {...ICON} />{t("web-pages.profiles.openAuth")}</a>
               {stationStep}
             </div>
           </li>
@@ -618,7 +617,7 @@ export function LoginSteps({ job, provider, code, setCode, send, sending, sendEr
         </ol>
       )}
       {/* No code where the page only asks to confirm (Cursor's). */}
-      {job.state === "needs_approval" && job.url && <DeviceCode url={job.url} code={job.userCode || null} provider={provider} there={there}>{stationStep}</DeviceCode>}
+      {job.state === "needs_approval" && job.url && <DeviceCode url={job.url} code={job.userCode || null} provider={provider}>{stationStep}</DeviceCode>}
       {job.state === "verifying" && <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.finishing")}</p>}
       {job.state === "done" && <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.adding")}</p>}
     </>

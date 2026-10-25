@@ -232,6 +232,12 @@ export const LOGINS: Record<string, MachineLoginShown> = {
     url: "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=32555940559.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F",
     statusText: "等你打开浏览器",
   }),
+  // This device's port taken just now: the station's browser is the step.
+  inStationTaken: login("inStationTaken", "gcloud auth login", {
+    step: "loopback", port: 8085, domain: "accounts.google.com", relayText: "本机 8085 端口被占用", browser: true, browserText: "在 Studio 的浏览器中打开",
+    url: "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=32555940559.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F",
+    statusText: "等你打开浏览器",
+  }),
   inStationOpen: login("inStationOpen", "gcloud auth login", {
     step: "loopback", port: 8085, domain: "accounts.google.com", browser: true, browserText: "回到 Studio 的浏览器", screen: "browser:T1",
     url: "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=32555940559.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F",
