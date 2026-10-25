@@ -422,17 +422,19 @@ test "on a Mac's tape each panel's corners follow the window's where it stands a
     msg="no sidebar's panel with its left corners the window's",
   )
   assert_eq(t.corner_faults(), [])
-  // the page brought over, its composer taking the cursor (keyboard and mouse's): a box, where both its foot corners follow
-  // the panel's (6.5 in), its foot's concentric with each, its top's its own
+  // the page brought over, its composer taking the cursor (keyboard and mouse's): a box, its foot's left corner
+  // following the panel's 34 (10 in: the ladder's card corner, its ＋ in it concentric with it); its right not the
+  // window's 11.2, which its send could not follow in turn (the user, 2026-10-25: the corner followed, the send did not),
+  // standing alone there, the send in it as in its other corners
   t.tap(650.0, 400.0)
   t.run_for(@sfdesk.side_move_ms * 2.0)
   guard composer_and_panel(t) is Some((k, p)) else { fail("no composer in a panel") }
-  let d = @sf.foot_fit(pane, edge, @sf.corner_inset)
-  assert_true((d - 6.5).abs() < 0.01, msg="the box's place: \{d}")
+  let d = @sf.foot_fit(pane, edge, @sf.corner_inset, least=@sf.holds_least(32.0))
+  assert_true((d - @sf.corner_inset).abs() < 0.01, msg="the box's place: \{d}")
   let at = (k.x - p.x, p.x + p.w - (k.x + k.w), p.y + p.h - (k.y + k.h))
   assert_true(near4((at.0, at.1, at.2, 0.0), (d, d, d, 0.0)), msg="the box from the panel's edges: \{at}")
   assert_true(
-    near4(k.radii, (@sf.card_corner, @sf.card_corner, @ui.concentric(edge, d), @ui.concentric(pane, d))),
+    near4(k.radii, (@sf.card_corner, @sf.card_corner, @sf.card_corner, @ui.concentric(pane, d))),
     msg="the box's corners: \{k.radii}",
   )
   assert_eq(t.corner_faults(), [])

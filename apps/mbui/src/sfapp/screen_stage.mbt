@@ -241,7 +241,7 @@ fn drops(c : @ui.Ctx, s : ScreenSess) -> Unit {
   if s.drops.is_empty() {
     return
   }
-  // a row's round key (34) 8 from its top and end, the first's in its corner: concentric with it (8 and its half)
+  // a row's round key (34) at its top end, the first's in the panel's corner concentric with it (drop_row_box)
   c.box(style=drops_box, fn() {
     for d in s.drops {
       c.scope(c.id("screen-drop/\{d.serial}"), fn() { drop_row(c, s, d) })

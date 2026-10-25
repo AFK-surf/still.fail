@@ -1623,7 +1623,7 @@ fn phone_controls(
     phone_timeline(c, v, p, s, fr, on, ink)
     c.box(style=phone_keys_row, fn() {
       if many &&
-        phone_key(c, key + "/prev", "skip-back", on && prev is Some(_), t("android-misc.drive.player.prev"), ink) {
+        phone_key(c, key + "/prev", "skip-back", on && prev is Some(_), t("android-misc.drive.player.prev"), ink, drop=phone_drop_steps) {
         match prev {
           Some(other) => go(other)
           None => ()
@@ -1650,7 +1650,7 @@ fn phone_controls(
         p.wake()
       }
       if many &&
-        phone_key(c, key + "/next", "skip-forward", on && next is Some(_), t("android-misc.drive.player.next"), ink) {
+        phone_key(c, key + "/next", "skip-forward", on && next is Some(_), t("android-misc.drive.player.next"), ink, drop=phone_drop_steps) {
         match next {
           Some(other) => go(other)
           None => ()
@@ -1670,7 +1670,7 @@ fn phone_controls(
         p.toggle_subtitle()
         p.wake()
       }
-      if inspect && phone_key(c, key + "/save-frame", "camera", on && !v.grabbing, t("android-chat.video.saveFrame"), ink) {
+      if inspect && phone_key(c, key + "/save-frame", "camera", on && !v.grabbing, t("android-chat.video.saveFrame"), ink, drop=phone_drop_grab) {
         grab(v, p, fr)
         p.wake()
       }
@@ -1719,10 +1719,20 @@ fn phone_timeline(c : @ui.Ctx, v : PlayerView, p : @kit.Media, s : @kit.MediaSta
 
 ///|
 /// A round key on the controls: 40, a 20 icon in the words; `lit`, a soft light behind it while what it turns on is
-/// on. True on the frame it was tapped; `on` false, it takes no tap (what is under it does).
-fn phone_key(c : @ui.Ctx, key : String, icon_name : String, on : Bool, said : String, ink : MediaInk, lit? : Bool = false) -> Bool {
+/// on; `drop`, the k-th to leave the row short of room (Ctx::box drop, phone_drop_grab). True on the frame it was
+/// tapped; `on` false, it takes no tap (what is under it does).
+fn phone_key(
+  c : @ui.Ctx,
+  key : String,
+  icon_name : String,
+  on : Bool,
+  said : String,
+  ink : MediaInk,
+  lit? : Bool = false,
+  drop? : Int = 0,
+) -> Bool {
   let id = c.id(key)
-  let b = c.box(style=phone_key_box.then(@ui.style(bg=Data(if lit { alpha(ink.text, media_lit_share) } else { no_ground }))), aspect=1.0, id=if on { id } else { 0 }, fn() {
+  let b = c.box(style=phone_key_box.then(@ui.style(bg=Data(if lit { alpha(ink.text, media_lit_share) } else { no_ground }))), aspect=1.0, id=if on { id } else { 0 }, drop~, fn() {
     icon(c, icon_name, size=viewer_back_icon, color=ink.text) |> ignore
     if on {
       @motion.ripple(c, id, phone_key_r)
@@ -1990,8 +2000,19 @@ let phone_keys_row : @ui.Style = @ui.css("row w=Full h=S10 gap=S0_5 align=ACente
 let phone_key_box : @ui.Style = @ui.css("w=S10 min_w=S8 radius=Full align=ACenter justify=JCenter")
 
 ///|
+/// Where the row has not the room for all its keys (a phone's narrowest with a paused picture's: its frames' steps, its
+/// captions, 保存此帧), what leaves it first: 保存此帧, then the files before and after; the last key at its end stays
+/// in the controls' foot corner, concentric with it, never past it.
+let phone_drop_grab : Int = 1
+
+///|
+let phone_drop_steps : Int = 2
+
+///|
+/// The speed: a capsule at least as wide as it is high (its ends 20 round: at the row's end in the controls' foot corner,
+/// 6 in, concentric with it, as a key there is), never a pill standing on its end.
 // kept across runs: a value (no field of it changes)
-let phone_speed_box : @ui.Style = @ui.css("min_w=S8 h=S10 px=S2 radius=Full align=ACenter justify=JCenter")
+let phone_speed_box : @ui.Style = @ui.css("min_w=S10 h=S10 px=S2 radius=Full align=ACenter justify=JCenter")
 
 ///|
 /// A song's mark (72) in the middle; the cue's words (16 on 1.6) on black at 60%; above the controls while they show

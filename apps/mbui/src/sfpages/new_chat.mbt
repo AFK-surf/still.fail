@@ -587,9 +587,11 @@ fn new_composer_place(
         offline: false,
       }
       let name = text(station, "name")
+      // (at the page's foot, laid out narrow: in a panel's foot corners as a chat's is; roomy, in the page's middle)
+      let at = if wide { composer_alone } else { composer_place(c.width) }
       let place = c.box(style=new_composer_box, fn() {
         c.sized(width, c.height, fn() {
-          composer(c, src, w, spec, fn(d) { new_send(c, src, frame, v, address, name, d) })
+          composer(c, src, w, spec, fn(d) { new_send(c, src, frame, v, address, name, d) }, place=at)
         })
       })
       // over what is under it on the page (the web's dock, over the page): going between its places, it passes over

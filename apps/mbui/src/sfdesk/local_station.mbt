@@ -113,7 +113,7 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
       if c.clicked(mid) {
         local_menu.val = !open
       }
-      let b = c.box(style=ws_more, id=mid, fn() { @sf.icon(c, "more", size=ws_more_icon, color=t.p.muted) |> ignore })
+      let b = c.box(style=ls_more, id=mid, fn() { @sf.icon(c, "more", size=ws_more_icon, color=t.p.muted) |> ignore })
       c.semantics(b, Button, id=mid, label=@sf.t("web-main.menu.more"), expanded=open)
       let entries : Array[@kit.Entry] = []
       if running {
@@ -236,6 +236,12 @@ let ls_card : @ui.Style = desk_card.then(@ui.css("gap=S2_5"))
 /// (cardHead: its dot, its title, its buttons, 10 apart)
 // kept across runs: a value (no field of it changes)
 let ls_head : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
+
+///|
+/// Its ⋯ (an icon button: 32, a block: in the card's top right corner on its words' line, 20 in, its corner worked out
+/// concentric with the card's, a small block's of the ladder's).
+// kept across runs: a value (no field of it changes)
+let ls_more : @ui.Style = @ui.css("w=S8 h=S8 radius=Xl align=ACenter justify=JCenter hovered{bg=Hover}")
 
 ///|
 /// (cardTitle: its name and how it is on a line, 10 apart)

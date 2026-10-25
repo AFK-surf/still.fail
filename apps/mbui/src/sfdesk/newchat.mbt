@@ -40,7 +40,7 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       @sfpages.new_chat_page(c, src, w, frame)
       // its bar (newChatBar): 文件 where a chat's bar has it, over the page, what is in its middle where it is
       c.layer(fn() {
-        c.box(style=new_files_bar, fn() {
+        c.box(style=if @sf.in_pane() { new_files_bar_tape() } else { new_files_bar }, fn() {
           if @sf.icon_button(c, "folder", key="new/files", round=true, label=@sf.t("web-pages.chat.files")) {
             new_files_set(src, w.id, !files)
           }
@@ -143,7 +143,7 @@ fn new_files_set(src : Source, ws : String, on : Bool) -> Unit {
 /// workspace's stations, what is added going into the new chat's draft (DriveTab).
 fn new_files_panel(c : @ui.Ctx, src : Source, w : Workspace, address : String) -> Unit {
   c.box(style=side_panel_style, fn() {
-    c.box(style=if side_on_tape.val || @sf.in_pane() { side_bar_tape() } else { side_bar }, fn() {
+    c.box(style=if side_on_tape.val || @sf.in_pane() { side_bar_tape() } else { side_bar() }, fn() {
       c.box(style=side_tab_list, fn() {
         let close = c.id("new/files-tab-close")
         c.cursor(close, Hand)
@@ -192,3 +192,21 @@ let new_frame_style : @ui.Style = @ui.css("w=Full h=Full")
 /// Where 文件 is: the chat's bar's end, over the page.
 // kept across runs: a value (no field of it changes)
 let new_files_bar : @ui.Style = @ui.style(row=true, w=Full, h=@sf.wide_bar_h_size, px=S3, align=ACenter, justify=JEnd)
+
+///|
+/// The same in a panel of the tape, as a chat's bar there (chat_page.mbt chat_bar_box_tape): on the tape's line, 文件 in
+/// the panel's top right corner concentric with it (@sf.tape_bar_end), clear of the line under a chat's bar as it is.
+fn new_files_bar_tape() -> @ui.Style {
+  new_files_bar.then(
+    @ui.style(
+      h=Fixed(@sf.wide_bar_h + @sf.tape_bar_over()),
+      pt=@sf.tape_bar_over_room(),
+      pb=SPx,
+      pr=@sf.room_of(@sf.tape_bar_end(new_files_end)),
+    ),
+  )
+}
+
+///|
+/// 文件's room at the bar's end (new_files_bar: px=S3).
+let new_files_end : Double = 12.0

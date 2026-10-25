@@ -138,7 +138,8 @@ pub fn button_height() -> Double {
 
 ///|
 /// An icon button (page.css.ts iconBtn, parts.tsx IconButton): `size` square (32), its corner 12 (`round`: a circle,
-/// where it stands in a pane's corner, concentric with it), the icon (16) quiet until pointed at; `on` held down
+/// where it stands in a pane's corner, concentric with it; `linked`: its corner where that comes from, a bar's buttons'
+/// at the window's corner: @sf.bar_keys_link), the icon (16) quiet until pointed at; `on` held down
 /// (aria-pressed); named for a screen reader and said in its tip with its keys (`shortcut`, an action's).
 /// `ink` and `quiet` for one over a ground of its own (the reader's paper).
 pub fn icon_button(
@@ -149,6 +150,7 @@ pub fn icon_button(
   icon_size? : Double = 16.0,
   on? : Bool = false,
   round? : Bool = false,
+  linked? : @ui.CornerOf,
   ink? : Int64,
   quiet? : Int64,
   disabled? : Bool = false,
@@ -168,13 +170,17 @@ pub fn icon_button(
     // the page's hover, as a tint of the ink it sits with
     alpha(ink, 0.065 * h)
   }
+  let corner : @ui.Radius = match linked {
+    Some(link) => Linked(link)
+    None => rounded(if round { size / 2.0 } else { r_field })
+  }
   let b = c.box(
+    style=@ui.style(radius=corner),
     w=Px(size),
     h=Px(size),
     align=ACenter,
     justify=JCenter,
     bg=ground,
-    radius=if round { size / 2.0 } else { r_field },
     opacity=if disabled { 0.35 } else { 1.0 },
     id=if disabled { 0 } else { id },
     fn() {
@@ -409,6 +415,17 @@ let segmented_h : Double = 30.0
 ///|
 /// A narrow page's (Seg filling, as the web's narrow pages' mSeg): 34 high.
 let segmented_narrow_h : Double = 34.0
+
+///|
+/// How high a segmented control stands where it is drawn now (segmented: a narrow page's 34, a wide page's track round
+/// its options, 36).
+pub fn segmented_height() -> Double {
+  if look() is Narrow {
+    segmented_narrow_h
+  } else {
+    segmented_h + 2.0 * segmented_pad
+  }
+}
 
 ///|
 let segmented_corner : Double = 15.0
@@ -1044,11 +1061,11 @@ fn menu_items(
 }
 
 ///|
-/// A menu behind ⋯ (parts.tsx Menu): an icon button (`label`, the app's word for 更多) that opens `items` under it,
-/// along its end, 4 below. Whether it is open.
+/// A menu behind ⋯ (parts.tsx Menu): an icon button (`label`, the app's word for 更多; shaped as a bar's tools are:
+/// tool_button) that opens `items` under it, along its end, 4 below. Whether it is open.
 pub fn menu_of(c : @ui.Ctx, key : String, items : Array[MenuItem?], label~ : String, size? : Double = 32.0) -> Bool {
   let open = menu_open.val == key
-  if icon_button(c, "more", key=key + "/more", size~, on=open, label~) {
+  if icon_button(c, "more", key=key + "/more", size~, on=open, round=true, linked?=bar_keys_link(), label~) {
     menu_open.val = if open { "" } else { key }
   }
   menu_items(c, key, c.id(key + "/more"), items, along=End, offset=4.0)
@@ -1071,8 +1088,9 @@ pub fn tool_of(key : String, draw : () -> Unit, drop? : Int = 0, instead? : Arra
 }
 
 ///|
-/// An icon button as a tool (icon_button: `label` its tip, `lit` its ink and quiet, as one that is on): pressed,
-/// `on_press`; gone (the `drop`-th), the ⋯'s line of the same icon and words.
+/// An icon button as a tool (icon_button: `label` its tip, `lit` its ink and quiet, as one that is on; as a bar's
+/// buttons are: round on the tape, the last in its panel's corner concentric with it, at a window's corner the corner
+/// they share, @sf.bar_keys_link): pressed, `on_press`; gone (the `drop`-th), the ⋯'s line of the same icon and words.
 pub fn tool_button(
   c : @ui.Ctx,
   key : String,
@@ -1086,7 +1104,11 @@ pub fn tool_button(
   {
     key,
     drop,
-    draw: fn() { if icon_button(c, icon, key~, ink?=lit, quiet?=lit, disabled~, label~) { on_press() } },
+    draw: fn() {
+      if icon_button(c, icon, key~, ink?=lit, quiet?=lit, round=true, linked?=bar_keys_link(), disabled~, label~) {
+        on_press()
+      }
+    },
     instead: [menu_item_of(label, on_press, icon~, disabled~)],
   }
 }
@@ -1706,9 +1728,13 @@ pub fn dialog(
           } else {
             c.text(s.title, style=dialog_title) |> ignore
           }
-          if close_label != "" &&
-            icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=close_label) {
-            closed.val = true
+          if close_label != "" {
+            c.box(style=dialog_close_at(), fn() {
+              if icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=close_label) {
+                closed.val = true
+              }
+            })
+            |> ignore
           }
         })
         |> ignore
@@ -1743,9 +1769,37 @@ let dialog_box : @ui.Style = @ui.css("px=S6 pt=S6 border=B1 border_color=Line")
 
 ///|
 /// Its title's row (dialogHead: 25 under the top, 26 from the right): the close button at its end, its middle on the
-/// title's.
+/// title's (where it stands alone: dialog_close_at).
 // kept across runs: a value (no field of it changes)
-let dialog_head : @ui.Style = @ui.css("row w=Full justify=JBetween align=ACenter gap=S3 min_h=S8 pt=SPx pr=S0_5")
+let dialog_head : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  justify=JBetween,
+  align=ACenter,
+  gap=S3,
+  min_h=Fixed(dialog_close),
+  pt=room(dialog_head_over),
+  pr=room(dialog_head_end),
+)
+
+///|
+/// How far its title's row stands under its padding's top, and in from its padding's end.
+let dialog_head_over : Double = 1.0
+
+///|
+let dialog_head_end : Double = 2.0
+
+///|
+/// Where its close button stands at its title's row's end: in its top right corner as far in as makes it concentric
+/// with it (capsule_in: a mouse's 32 18 in, the ladder's pane corner's own place for it as on the tape's line; a
+/// finger's 44, 12), the row as high as with a mouse's (its margins making up the rest, its middle no longer the
+/// title's; the user, 2026-10-25: 25 in, by the corner and not with it).
+fn dialog_close_at() -> @ui.Style {
+  let side = finger_side(dialog_close)
+  let d = capsule_in(dialog_r, side)
+  let up = d - (dialog_pad + dialog_head_over)
+  @ui.style(mt=room(up), mr=room(d - (dialog_pad + dialog_head_end)), mb=room(dialog_close - side - up))
+}
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2395,12 +2449,21 @@ pub fn panel_button(
 
 ///|
 /// An icon to press in a small panel (PanelIconButton: close, stop, a step): a 24 circle, the muted ink, the hover's
-/// ground and the ink pointed at; named on hover. True on the frame after it was pressed.
-pub fn panel_icon_button(c : @ui.Ctx, key : String, name : String, label : String, disabled? : Bool = false) -> Bool {
+/// ground and the ink pointed at; named on hover; `cornered`, in the panel's top end corner (panel_icon_corner). True
+/// on the frame after it was pressed.
+pub fn panel_icon_button(
+  c : @ui.Ctx,
+  key : String,
+  name : String,
+  label : String,
+  disabled? : Bool = false,
+  cornered? : Bool = false,
+) -> Bool {
   let p = theme().p
   let id = c.id(key)
   let hot = !disabled && c.lit(id)
-  let b = c.box(style=panel_icon_box, disabled~, id=if disabled { 0 } else { id }, fn() {
+  let style = if cornered { panel_icon_box.then(panel_icon_corner) } else { panel_icon_box }
+  let b = c.box(style~, disabled~, id=if disabled { 0 } else { id }, fn() {
     icon(c, name, size=panel_icon_size, color=if hot { p.text } else { p.muted }) |> ignore
   })
   c.semantics(b, Button, id~, label~, disabled~)
@@ -2489,6 +2552,18 @@ let panel_button_quiet : @ui.TextStyle = panel_button_words.then(@ui.text_style(
 let panel_icon_box : @ui.Style = @ui.css(
   #|w=S6 h=S6 radius=Full align=ACenter justify=JCenter hovered{bg=Hover} disabled{opacity=O35}
 )
+
+///|
+/// Where a small panel's icon button stands in its top end corner (its ×): as far in as makes its circle
+/// concentric with the panel's corner (capsule_in: the corner less its half), past the panel's padding (panel_pad).
+pub let panel_icon_corner : @ui.Style = @ui.style(mt=room(panel_icon_in), mr=room(panel_icon_in))
+
+///|
+let panel_icon_in : Double = capsule_in(r_menu, panel_icon_side) - panel_pad
+
+///|
+/// Its side (panel_icon_box's S6).
+let panel_icon_side : Double = 24.0
 
 // ---------------------------------------------------------------------------
 // A command to copy, a chooser (parts.tsx CopyCommand, Chooser; parts.css.ts command, controls.css.ts chooser)

@@ -289,8 +289,9 @@ let viewer_name_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold,
 let viewer_meta_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, wrap=false)
 
 ///|
-/// A tool (page.css.ts iconBtn): 32, the page's corner, the page's hover under the pointer, its chosen ground on.
+/// A tool (page.css.ts iconBtn): 32, round, as a bar's buttons are (in the corner of a bar 44 high, 6 in, as round as
+/// it is there), the page's hover under the pointer, its chosen ground on.
 // kept across runs: a value (no field of it changes)
 let viewer_tool_box : @ui.Style = @ui.css(
-  #|w=S8 h=S8 radius=Xl align=ACenter justify=JCenter hovered{bg=Hover} selected{bg=Selected} disabled{opacity=O35}
+  #|w=S8 h=S8 radius=Full align=ACenter justify=JCenter hovered{bg=Hover} selected{bg=Selected} disabled{opacity=O35}
 )

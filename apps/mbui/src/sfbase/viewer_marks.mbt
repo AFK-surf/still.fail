@@ -901,8 +901,9 @@ pub fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit, ink? : 
 }
 
 ///|
-/// The corner of what is on the viewer's bars (ImageMarks.kt PICTURE_KEY).
-pub let picture_key : Double = 12.0
+/// The corner of what is on the viewer's bars (ImageMarks.kt PICTURE_KEY): round, half their 32 (in the middle of a
+/// bar's capsule ends, 6 in, concentric with them: picture_bar_corner).
+pub let picture_key : Double = 16.0
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1230,8 +1231,13 @@ pub let note_ground : Int64 = @sf.over(note_bg, @sf.alpha(0x2A2C31FFL, 0.72))
 pub let note_box_corner : Double = 26.0
 
 ///|
-/// The bars' corner over a picture (ImageMarks.kt PictureBar: concentric out of a key's 12 by the bar's 6).
-pub let picture_bar_corner : Double = @sf.surface_corner(6.0, picture_key)
+/// The bars' corner over a picture (ImageMarks.kt PictureBar): its keys' 16 and the 6 they stand in (外圆角 = 距离 +
+/// 半高): a capsule 44 high.
+pub let picture_bar_corner : Double = picture_bar_in + picture_key
+
+///|
+/// How far in the bar's keys stand (its 6).
+let picture_bar_in : Double = 6.0
 
 ///|
 /// Between the tools' groups (ImageMarks.kt Gap): a line 1 by 18, white at 10%, 4 either side.

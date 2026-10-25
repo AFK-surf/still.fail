@@ -1826,23 +1826,25 @@ let narrow_sheet_half : Double = 0.5
 let narrow_bar_row : @ui.Style = @ui.css("row w=Full justify=JCenter")
 
 ///|
-/// The top bar (top): 48 high, 6 in, its corner 16; its ends at least 64 (minmax(64px, auto)).
+/// The top bar (top): 48 high, 6 in, a capsule (its round keys in the middle of its ends, 6 in, concentric with it:
+/// 外圆角 = 距离 + 半高); its ends at least 64 (minmax(64px, auto)).
 // kept across runs: a value (no field of it changes)
-let narrow_top_box : @ui.Style = @ui.css("row h=S12 px=S1_5 align=ACenter radius=Xl1_5")
+let narrow_top_box : @ui.Style = @ui.css("row h=S12 px=S1_5 align=ACenter radius=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
 let narrow_top_end : @ui.Style = @ui.css("row min_w=S16 align=ACenter")
 
 ///|
-/// The way back (back): 36 high, 4 before the chevron and 10 after, its corner 12; 搜索 (topButton) 36 across.
+/// The way back (back): 36 high, at least as wide, 4 before the chevron and 10 after; 搜索 (topButton) 36 across; both
+/// round, in the middle of the bar's capsule ends concentric with them.
 // kept across runs: a value (no field of it changes)
-let narrow_back_box : @ui.Style = @ui.css("row h=S9 pl=S1 pr=S2_5 align=ACenter radius=Xl hovered{bg=Tint}")
+let narrow_back_box : @ui.Style = @ui.css("row min_w=S9 h=S9 pl=S1 pr=S2_5 align=ACenter radius=Full hovered{bg=Tint}")
 
 ///|
 // kept across runs: a value (no field of it changes)
 let narrow_top_button : @ui.Style = @ui.css(
-  #|w=S9 h=S9 align=ACenter justify=JCenter radius=Xl hovered{bg=Tint} selected{bg=Tint}
+  #|w=S9 h=S9 align=ACenter justify=JCenter radius=Full hovered{bg=Tint} selected{bg=Tint}
 )
 
 ///|

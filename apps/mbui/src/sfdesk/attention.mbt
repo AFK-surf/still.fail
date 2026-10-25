@@ -303,7 +303,7 @@ fn attention_item(
     |> ignore
     match dismiss {
       // (always to a finger, which hovers over nothing)
-      Some(d) if @sf.pointed_or_finger(hover) => {
+      Some(d) if @sf.pointed_or_finger(c, hover) => {
         c.cursor(drop, Hand)
         if c.clicked(drop) {
           d()

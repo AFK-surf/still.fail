@@ -624,9 +624,18 @@ let view_on : @ui.Style = view_off.then(@ui.css("bg=Bg border=B0_5 border_color=
 let columns_strip : @ui.Style = @ui.css("row w=Full h=Full")
 
 ///|
-/// A column (column): as tall as the strip, its rows 2 apart, its corner the field's; lit while a drop goes into it.
+/// A column (column): as tall as the strip, its rows 2 apart, its top's corners the field's, its foot square (it goes on
+/// past the page's foot, its rows scrolling under it: where it meets a panel's foot corner, the panel's cut is its
+/// corner); lit while a drop goes into it.
 // kept across runs: a value (no field of it changes)
-let column_box : @ui.Style = @ui.css("h=Full radius=Xl clip")
+let column_box : @ui.Style = @ui.style(h=Full, radius=Corners(column_top, column_top, column_foot, column_foot), clip=true)
+
+///|
+/// Its top's corners (the field's, Xl) and its foot's.
+let column_top : Double = 12.0
+
+///|
+let column_foot : Double = 0.0
 
 ///|
 // kept across runs: a value (no field of it changes)

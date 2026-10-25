@@ -376,14 +376,37 @@ let again_soft_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, 
 // ── the files sent ────────────────────────────────────────────────────────
 
 ///|
-/// The files' panel: floating still, as wide as the foot, its corner 8 and a key's half (25).
+/// The files' panel: floating still, as wide as the foot, a card's corner of the ladder's (its rows' keys concentric
+/// with it: drop_key_in).
 // kept across runs: a value (no field of it changes)
-let drops_box : @ui.Style = @ui.css("w=Full radius=Around bg=Floating shadow=Sm clip")
+let drops_box : @ui.Style = @ui.style(w=Full, radius=@sf.card_radius, bg=Floating, shadow=Sm, clip=true)
 
 ///|
-/// A file's row: 18 in at its start, 8 elsewhere, 12 between.
+/// A file's row: 18 in at its start, 12 between; its key at its top end as far in as makes it concentric with the
+/// panel's corner (drop_key_in), the first's in its top one; as tall as keeps the last's out of its foot one
+/// (drop_row_least).
 // kept across runs: a value (no field of it changes)
-let drop_row_box : @ui.Style = @ui.css("row w=Full pl=S4_5 pr=S2 py=S2 gap=S3")
+let drop_row_box : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  min_h=Fixed(drop_row_least),
+  pl=S4_5,
+  pr=@sf.room_of(drop_key_in),
+  py=@sf.room_of(drop_key_in),
+  gap=S3,
+)
+
+///|
+/// How far in a row's round key stands from the panel's top and end (the ladder's card corner less its half).
+let drop_key_in : Double = @sf.capsule_in(@sf.card_corner, drop_key_side)
+
+///|
+/// A row's least height: its key at its top, and under it as far as the panel's foot corner is round.
+let drop_row_least : Double = drop_key_in + drop_key_side + @sf.card_corner
+
+///|
+/// A row's key's side (@sf.row_key).
+let drop_key_side : Double = 34.0
 
 ///|
 // kept across runs: a value (no field of it changes)

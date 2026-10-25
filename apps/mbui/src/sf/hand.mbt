@@ -12,9 +12,10 @@ pub fn pointer_rests() -> Bool {
 
 ///|
 /// What a pointer over a thing shows (a row's time, its ✕, a dismiss): while `pointed` (it is pointed at, or what it
-/// belongs to is), and always to a finger, which hovers over nothing.
-pub fn pointed_or_finger(pointed : Bool) -> Bool {
-  pointed || @ui.pointing() is Finger
+/// belongs to is: Ctx::hand_lit, so a test's frame with all of it shown shows it), and always to a finger, which hovers
+/// over nothing.
+pub fn pointed_or_finger(c : @ui.Ctx, pointed : Bool) -> Bool {
+  c.hand_lit(pointed) || @ui.pointing() is Finger
 }
 
 ///|

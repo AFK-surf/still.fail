@@ -84,7 +84,7 @@ fn update_panel(c : @ui.Ctx, src : Source, station : String, notice : Json?) -> 
     } else {
       @sf.t("web-main.stationUpdate.collapse")
     }
-    if @sf.panel_icon_button(c, "station-update/close", "close", closing) {
+    if @sf.panel_icon_button(c, "station-update/close", "close", closing, cornered=true) {
       c.tell("station-update/notice", fn() {
         update_notice(src, station, notice, if dismissible { "dismiss" } else { "close" })
       })

@@ -442,8 +442,9 @@ fn dock(
           rail(c, src, w, all, bar)
           c.box(style=dock_side.then(@ui.style(w=Fixed(side_w))), moves="sidebar", fn() {
             if shown && s > 0.0 {
-              // (in the bar: what the web's sidebar does there, at once, as the bar starts out)
-              wide.in_bar = side_folded()
+              // (in the bar: what the web's sidebar does there, at once, as the bar starts out; the bar's as long as it
+              // is drawn as the bar, its filter in the bar's corner)
+              wide.in_bar = bar
               // (what is in it as wide as it: a part that asks how wide its box is is told the sidebar's)
               c.sized(side_w, c.height, fn() { sidebar(c, src, w, side_w) })
               wide.in_bar = false
@@ -725,7 +726,7 @@ pub fn frame(
           tx=tape_x,
           id=page_id,
           fn() {
-            @sf.pane_round.val = Some(@sf.corner_radii(page_corners))
+            @sf.pane_round.val = Some(page_corners)
             page_in(panel_h)
             @sf.pane_round.val = None
           },
@@ -747,7 +748,7 @@ pub fn frame(
               top=panel_top,
               tx=tape_x,
               fn() {
-                @sf.pane_round.val = Some(@sf.corner_radii(tape_pane_corners(Panel, true)))
+                @sf.pane_round.val = Some(tape_pane_corners(Panel, true))
                 c.sized(panel_w, panel_h, fn() { tape_side(c, src, w, side) })
                 @sf.pane_round.val = None
               },
@@ -1153,14 +1154,15 @@ let page_aside : @ui.Style = @ui.css("w=Full h=Full")
 let frame_gate : @ui.Style = @ui.css("bg=Bg")
 
 ///|
-/// A page's bar's padding at its left and its right (styles/sidebar.css.ts pageBar: 12; brand.css.ts, railed, closed:
-/// 28 in a window with its buttons in the app's top row, which reach 12 past the rail; 12 again while the folded
-/// sidebar shown a while reaches over the bar, which starts past it), and its margins while it is shown a while (from
-/// its edge to the window's; under the window's buttons' row, from the rail as folded: less than none at its start, the
-/// page's move aside taken back): where the block's move has got to (side_moves' page-bar), so a bar built of them
-/// moves with the page it is on, its words not jumping ahead of it.
+/// A page's bar's padding at its left and its right (styles/sidebar.css.ts pageBar: 12, at its right where the window's
+/// corner has its last button in a window's whole: @sf.window_end_in; brand.css.ts, railed, closed: 28 in a window with
+/// its buttons in the app's top row, which reach 12 past the rail; 12 again while the folded sidebar shown a while
+/// reaches over the bar, which starts past it), and its margins while it is shown a while (from its edge to the
+/// window's; under the window's buttons' row, from the rail as folded: less than none at its start, the page's move
+/// aside taken back): where the block's move has got to (side_moves' page-bar), so a bar built of them moves with the
+/// page it is on, its words not jumping ahead of it.
 pub fn page_bar_room() -> (Double, Double, Double, Double) {
-  (wide.bar_pl, if wide.tape { @sf.tape_bar_end(bar_in) } else { bar_in }, wide.bar_ml, wide.bar_mr)
+  (wide.bar_pl, if wide.tape { @sf.tape_bar_end(bar_in) } else { @sf.window_end_in(bar_in) }, wide.bar_ml, wide.bar_mr)
 }
 
 ///|

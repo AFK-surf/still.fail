@@ -27,7 +27,7 @@ let corner_windows : Array[(String, Double, Double, Int, String)] = [
 /// The screens: every mode sffix opens (fixture.mbt open_fixture_mode, settings/fixture.mbt fixture_page).
 let corner_modes : Array[String] = [
   // (webdemo: the web's demo workspace, its chats' rows with people's faces, which chat's fixture has none)
-  "webdemo", "home", "home-bars", "home-jobs", "home-sheet", "home-news", "landing", "landing-invited", "blocked", "place",
+  "webdemo", "home", "home-bars", "home-jobs", "home-sheet", "home-news", "rail-menu", "landing", "landing-invited", "blocked", "place",
   "switcher", "switcher-found", "keys-dialog", "search", "search-jobs", "search-results", "chat", "chat-agent",
   "chat-agent-unsaid", "chat-answering", "chat-attach", "chat-attach-row", "chat-cards", "chat-compose", "chat-download", "chat-failed",
   "chat-file-links", "chat-find", "chat-flash", "chat-flash-mine", "chat-history-side", "chat-info", "chat-job",
@@ -82,6 +82,15 @@ fn corners_check(lang : String) -> Unit raise {
       for f in t.gap_faults() {
         gaps.push("\{at}: \{f}")
       }
+      // (the squeeze's on the screen at rest, before what shows only under the hand is shown)
+      let squeeze = if squeezed && squeeze_modes.contains(mode) { squeeze_wrong(at, t.squeeze_faults()) } else { None }
+      // and what it shows only under the hand (Ctx::lit_shown, hand_shown: a row's 归档), all of it at once, each fault
+      // once
+      for f in t.lit_all_faults() {
+        if !faults.contains(f) {
+          faults.push(f)
+        }
+      }
       let known = corners_everywhere_known.get(at).unwrap_or(0)
       if faults.length() != known {
         wrong.push(
@@ -95,10 +104,8 @@ fn corners_check(lang : String) -> Unit raise {
           faults.join("\n  "),
         )
       }
-      if squeezed && squeeze_modes.contains(mode) {
-        if squeeze_wrong(at, t.squeeze_faults()) is Some(w) {
-          wrong.push(w)
-        }
+      if squeeze is Some(w) {
+        wrong.push(w)
       }
     }
   }

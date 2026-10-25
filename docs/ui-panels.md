@@ -68,7 +68,7 @@
 - 控件自己里面紧贴边的部分（分段选择的滑块、表格头的底色，离边不到 5）和小块里面的东西，只要求同心，不要求在阶梯上。
 - mbui 自动算：落在圆角容器角里的方块，圆角由框架按同心算出来（`corners.mbt` 的 `corners_in_corners`），页面只写它单独站着时的形状；胶囊的位置由页面按 `capsule_in` 摆。
 - 不算的：滚得动的滚动区里的东西（列表、超出限高的引用、放不下的横向附件条），它们离角多远随滚动变；限高或横向滚动的框里东西放得下时不会动，照样算（卡片角上放得下的表格，按阶梯圆角）；画出来的图（`Image`，比如通知设置里画的系统屏幕、横幅和 Dock），那是别的系统的样子。
-- 检查：`Tester::corner_faults` 报不同心、两边不一样远、圆角不在阶梯上（`Theme::corner_ladder`）；主题有阶梯时，每个测试画出的每一帧（没有东西在动时）都按它查，不对就在那一帧让测试失败（`Tester::hold_corners`），所以测试走到的菜单、弹层、操作到一半的状态也都守着；`apps/mbui/src/sfapp/corners_wbtest.mbt` 在手机、手指中屏、电脑中屏、平板大屏、电脑大屏五种窗口，中英文各查 sffix 的全部页面，现在全是 0，只许保持（`corners_known_wbtest.mbt`）；`apps/mbui/scripts/corners.sh` 用 Mac 的字给这些页面出图，标出不对的地方。
+- 检查：`Tester::corner_faults` 报不同心、两边不一样远、圆角不在阶梯上（`Theme::corner_ladder`）；主题有阶梯时，每个测试画出的每一帧（没有东西在动时）都按它查，不对就在那一帧让测试失败（`Tester::hold_corners`），所以测试走到的菜单、弹层、操作到一半的状态也都守着；只在某个状态才有的底色（鼠标指着、按下、选中、聚焦时才出现的，style 里写的和按下时画的都算）不管这一帧在不在那个状态，都当作有底色来查；只在鼠标指着时才出现的东西（行上的 归档、恢复、删除、⋯）要用 `Ctx::lit_shown` / `hand_shown` / `hand_lit`（库里 `@sf.pointed_or_finger`）来显示，检查会多画一帧把它们全部显示出来一起查（`Tester::lit_all_faults`），不用一个个去指（2026-10-25，行上的 归档 不同心没查出来）；`apps/mbui/src/sfapp/corners_wbtest.mbt` 在手机、手指中屏、电脑中屏、平板大屏、电脑大屏五种窗口，中英文各查 sffix 的全部页面，现在全是 0，只许保持（`corners_known_wbtest.mbt`）；`apps/mbui/scripts/corners.sh` 用 Mac 的字给这些页面出图，标出不对的地方。
 - 整体调圆角只改最外层的 34 和间距 10 两个数，全 app 一起变，仍然同心。
 
 ### 窗口是最外层，和适应范围

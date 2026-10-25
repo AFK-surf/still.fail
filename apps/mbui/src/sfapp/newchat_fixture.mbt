@@ -477,6 +477,9 @@ pub fn open_mode(mode : String) -> Unit {
         fix_browse_prefs_set({ "filesTabs": { "ws1": Json::string(fix_split_tabs().stringify()) } }) |> ignore
       _ => ()
     }
+  } else if mode == "rail-menu" {
+    // the rail's menu, as a right click on 对话 opens it (rail.mbt rail_menu: the places not in it, each its ＋)
+    @sfdesk.open_rail_menu("chats")
   } else if mode == "switcher" || mode == "switcher-found" {
     // ⌘K in the wide frame (sfdesk/switcher.mbt): with nothing typed, and with 签名 typed (what the search finds)
     @sfdesk.switcher_open_with(if mode == "switcher-found" { "签名" } else { "" })

@@ -82,21 +82,23 @@ fn published_row(c : @ui.Ctx, src : Source, station : String, thread : Double, l
 
 ///|
 /// A link's words as a button, in the link's colour with no frame (Publish.kt TextAction): 14, a little room round
-/// them, 6 round when pressed. True on the frame after a tap.
+/// them, its ground pressed a small block's of the ladder's (text_action_box). True on the frame after a tap.
 fn text_action(c : @ui.Ctx, key : String, label : String) -> Bool {
   let id = c.id(key)
   c.box(style=text_action_box, id~, fn() {
     c.text(label, style=text_action_words) |> ignore
-    // Publish.kt TextAction: clip(Smooth(6)).clickable
-    @motion.ripple(c, id, 6.0)
+    // Publish.kt TextAction: clip(Smooth(…)).clickable
+    @motion.ripple(c, id, @sf.small_corner)
   })
   |> ignore
   c.clicked(id)
 }
 
 ///|
+/// Its box: 24 high, 4 in, round by the ladder's last (at the end of an info card's row, 44 high and 10 in, 20 from the
+/// card's side and foot both, concentric with its foot corner there).
 // kept across runs: a value (no field of it changes)
-let text_action_box : @ui.Style = @ui.css("px=S1 py=S0_5 radius=Md")
+let text_action_box : @ui.Style = @ui.style(h=S6, px=S1, radius=@sf.small_radius, align=ACenter, justify=JCenter)
 
 ///|
 // kept across runs: a value (no field of it changes)

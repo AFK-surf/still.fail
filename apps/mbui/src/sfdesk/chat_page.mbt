@@ -213,8 +213,34 @@ fn chat_bar(
   // (beside the rail its room as the block moves: page_bar_row)
   let room = fn(x : Double) { c.box(style=@ui.style(w=Fixed(x), h=Full), fn() {  }) |> ignore }
   let bar_row = page_bar_row(c, if @sf.in_pane() { chat_bar_row_tape() } else { chat_bar_row }, fn(room_l, room_r) {
+  // (its room at its ends, what is in it 16 apart and not from them: on the tape what ends it, ⌘F's field or a round
+  // button, in the panel's top right corner concentric with it by its own height; in a window's whole, at the window's
+  // corner while no panel is open beside it, following it: @sf.window_end_in; clear of a window's corner too square
+  // for ⌘F's field, a capsule)
+  let finding = match v {
+    Some(view) => find_chat() == chat_key(r) && view.thread is Some(_)
+    None => false
+  }
+  let beside = match v {
+    Some(view) => side_of(view).0.length() > 0
+    None => false
+  }
+  let room_r = if @sf.in_pane() {
+    if finding {
+      @sf.tape_bar_end(bar_in, side=@sfpages.find_field_h)
+    } else {
+      room_r
+    }
+  } else if beside {
+    bar_in
+  } else if finding {
+    @sf.window_clear_in(bar_in)
+  } else {
+    room_r
+  }
   c.box(style=if @sf.in_pane() { chat_bar_box_tape() } else { chat_bar_box }, id=bar, fn() {
-      room(room_l)
+    room(room_l)
+    c.box(style=chat_bar_inner, fn() {
       // the title, its people and agents 10 apart, 8 in from the bar's padding (conversation.css.ts pageBarTitle)
       // (short of room, its people leave first, then its station's update, then its agents but the first, the title cut
       // short meanwhile)
@@ -252,25 +278,27 @@ fn chat_bar(
           c.box(style=chat_bar_buttons, fn() {
             // nothing left in it (the core's `archivable`): archived with one press
             if view.archivable && !view.archived {
-              if @sf.icon_button(c, "archive", key="chat-archive", round=true, label=@sf.t("web-pages.chat.archive"), shortcut="chat.archive") {
+              if @sf.icon_button(c, "archive", key="chat-archive", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.archive"), shortcut="chat.archive") {
                 c.tell("chat/archive", fn() { archive_asked(src, w, r, view, chat) })
               }
             }
             jobs_trigger(c, src, r)
-            if view.thread is Some(_) && @sf.icon_button(c, "more", key="chat-more", round=true, label=@sf.t("web-pages.chat.info")) {
+            if view.thread is Some(_) && @sf.icon_button(c, "more", key="chat-more", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.info")) {
               chat_own.info_open = !chat_own.info_open
             }
             // the side panel's switch while it is closed: the first agent's history in it
             if side_of(view).0.length() == 0 &&
               view.agents.length() > 0 &&
-              @sf.icon_button(c, "panel-open", key="chat-panel", round=true, label=@sf.t("web-pages.chat.openPanel"), shortcut="chat.history") {
+              @sf.icon_button(c, "panel-open", key="chat-panel", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.openPanel"), shortcut="chat.history") {
               side_change(src, r, "open", Some(view.agents[0].key))
             }
           })
           |> ignore
         None => ()
       }
-      room(room_r)
+    })
+    |> ignore
+    room(room_r)
   })
   |> ignore
   })
@@ -479,7 +507,7 @@ fn jobs_trigger(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
   if items(view, "jobs").length() == 0 {
     return
   }
-  if @sf.icon_button(c, "web", key="chat-jobs", round=true, label=@sf.t("web-pages.chat.services"), shortcut="chat.jobs") {
+  if @sf.icon_button(c, "web", key="chat-jobs", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.services"), shortcut="chat.jobs") {
     chat_own.jobs_open = !chat_own.jobs_open
   }
   match text(view, "alarm") {
@@ -723,7 +751,12 @@ fn info_row(c : @ui.Ctx, key : String, icon : String, label : String, end : Stri
 ///|
 /// The bar (pageBar): 45 high, its line under it, its title's row and its buttons 16 apart.
 // kept across runs: a value (no field of it changes)
-let chat_bar_box : @ui.Style = @ui.style(row=true, w=@sf.grow, h=@sf.wide_bar_h_size, pb=SPx, gap=S4, align=ACenter, bg=Bg)
+let chat_bar_box : @ui.Style = @ui.style(row=true, w=@sf.grow, h=@sf.wide_bar_h_size, pb=SPx, align=ACenter, bg=Bg)
+
+///|
+/// What is in it between its rooms at its ends (page_bar_room): its title's row and its buttons 16 apart.
+// kept across runs: a value (no field of it changes)
+let chat_bar_inner : @ui.Style = @ui.style(row=true, w=@sf.grow, h=Full, gap=S4, align=ACenter)
 
 ///|
 /// The bar with its room while the folded sidebar is shown a while (page_bar_row), moved with the block.

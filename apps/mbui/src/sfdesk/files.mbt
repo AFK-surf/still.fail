@@ -153,7 +153,7 @@ pub fn files_shell(
     if @ui.window_inset() {
       c.window_drag(bar)
     }
-    c.box(style=if @sf.in_pane() { bar_box_tape() } else { bar_box }, id=bar, fn() {
+    c.box(style=if @sf.in_pane() { bar_box_tape() } else { bar_box_wide() }, id=bar, fn() {
       // the tabs as Safari's compact ones; one tab alone has none (as Finder's window): only the bar's buttons
       if tabs.tabs.length() > 1 {
         tab_row(c, stations, tabs, pane_at, fn(act, id) { show(act, None, Some(id), None) })
@@ -168,17 +168,21 @@ pub fn files_shell(
       c.box(style=bar_apart, fn() {  }) |> ignore
       transfers_button(c, src, ws, files_go)
       let lit = @sf.theme().p.accent
+      // (as a bar's buttons are: round on the tape, the last in the panel's corner concentric with it; at the window's
+      // corner the corner they share, following it: @sf.bar_keys_link)
       if @sf.icon_button(
           c,
           "view-columns",
           key="files/split",
           on=split_on,
+          round=true,
+          linked?=@sf.bar_keys_link(),
           ink?=if split_on { Some(lit) } else { None },
           label=@sf.t(if split_on { "web-pages.files.unsplit" } else { "web-pages.files.split" }),
         ) {
         show("split", None, None, None)
       }
-      if @sf.icon_button(c, "plus", key="files/new-tab", label=@sf.t("web-pages.files.newTab")) {
+      if @sf.icon_button(c, "plus", key="files/new-tab", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.files.newTab")) {
         show("open", Some(here), None, None)
       }
     })
@@ -230,7 +234,7 @@ fn tab_row(
         show("show", x.id)
       }
       // (its ✕ always to a finger, which hovers over nothing)
-      let hot = @sf.pointed_or_finger(c.lit(id) || c.lit(cid))
+      let hot = @sf.pointed_or_finger(c, c.lit(id) || c.lit(cid))
       let panes = Array::makei(x.panes.length(), fn(i) { pane_at(x, i) })
       let words = panes
         .map(fn(p) {
@@ -323,6 +327,13 @@ let page_box : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 /// The bar (bar): 44 high, what is on it at its end, 12 in, a line under it.
 // kept across runs: a value (no field of it changes)
 let bar_box : @ui.Style = @ui.css("row w=Full h=S11 px=S3 gap=S1 align=ACenter justify=JEnd")
+
+///|
+/// The same in a window's whole: its last button at the window's top right corner following it where the bar's buttons
+/// do (@sf.window_end_in).
+fn bar_box_wide() -> @ui.Style {
+  bar_box.then(@ui.style(pr=@sf.room_of(@sf.window_end_in(bar_in))))
+}
 
 ///|
 /// The same in a panel of its own on the tape, as a page's bar there: on the tape's one line (@sf.tape_bar_over), its

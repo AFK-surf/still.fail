@@ -87,7 +87,7 @@ fn decision_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 /// 不再提醒 on the right.
 fn zou_bar(c : @ui.Ctx, src : Source, d : Json?) -> Unit {
   let t = @sf.theme()
-  c.box(style=zp_bar, moves="page-bar", fn() {
+  c.box(style=if @sf.in_pane() { zp_bar_tape() } else { zp_bar }, moves="page-bar", fn() {
     c.box(style=zp_bar_lead, fn() {
       match d {
         Some(x) => {
@@ -132,7 +132,11 @@ fn zou_bar(c : @ui.Ctx, src : Source, d : Json?) -> Unit {
       }
     })
     |> ignore
-    page_bar_end(c)
+    // (its end by the window's while the page is moved aside: none on the tape, where its last button stands in the
+    // panel's corner)
+    if !@sf.in_pane() {
+      page_bar_end(c)
+    }
   })
   |> ignore
 }
@@ -326,7 +330,7 @@ fn zou_answer(c : @ui.Ctx, src : Source, w : Workspace, x : Json, draft : String
   }
   let width = composer_width(c.width)
   // (in a panel of its own, at its foot: its capsule where its ends stand concentric with the corners they are in)
-  let capsule_in = @sfpages.composer_capsule_in(c.width)
+  let place = @sfpages.composer_place(c.width)
   let foot = c.box(style=if @sf.in_pane() { zp_foot_tape() } else { zp_foot }, fn() {
     c.box(style=@ui.style(w=Fixed(width)), fn() {
       c.sized(width, c.height, fn() {
@@ -367,7 +371,7 @@ fn zou_answer(c : @ui.Ctx, src : Source, w : Workspace, x : Json, draft : String
               }
             })
           })
-        }, capsule_in~)
+        }, place~)
       })
     })
     |> ignore
@@ -593,6 +597,24 @@ let zp_page : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 let zp_bar : @ui.Style = @ui.style(row=true, w=Full, h=@sf.wide_bar_h_size, px=S3, gap=S2, align=ACenter)
 
 ///|
+/// The same in a panel of the tape, as a chat's bar there (chat_page.mbt chat_bar_box_tape): on the tape's line, its
+/// last button (a capsule of words) in the panel's top right corner concentric with it (@sf.tape_bar_end).
+fn zp_bar_tape() -> @ui.Style {
+  zp_bar.then(
+    @ui.style(
+      h=Fixed(@sf.wide_bar_h + @sf.tape_bar_over()),
+      pt=@sf.tape_bar_over_room(),
+      pb=SPx,
+      pr=@sf.room_of(@sf.tape_bar_end(zp_bar_end, side=@sf.finger_side(zp_button_h))),
+    ),
+  )
+}
+
+///|
+/// The bar's room at its end (zp_bar: px=S3).
+let zp_bar_end : Double = 12.0
+
+///|
 // kept across runs: a value (no field of it changes)
 let zp_bar_lead : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1_5, align=ACenter, clip=true)
 
@@ -629,10 +651,14 @@ let zp_drop_station : Int = 1
 let zp_bar_actions : @ui.Style = @ui.css("row gap=SPx align=ACenter")
 
 ///|
-/// 待定, 不再提醒 (barButton): 28 high, 10 in, 12 in the muted ink; the text's and the ground under the pointer; faint
-/// while it cannot be pressed.
+/// 待定, 不再提醒 (barButton): 28 high, a capsule (so the last, in a panel's corner, stands where it is concentric with
+/// it), 10 in, 12 in the muted ink; the text's and the ground under the pointer; faint while it cannot be pressed.
 // kept across runs: a value (no field of it changes)
-let zp_button : @ui.Style = @ui.css("row h=S7 px=S2_5 radius=Lg align=ACenter")
+let zp_button : @ui.Style = @ui.css("row h=S7 px=S2_5 radius=Full align=ACenter")
+
+///|
+/// Its height (zp_button's S7).
+let zp_button_h : Double = 28.0
 
 ///|
 // kept across runs: a value (no field of it changes)

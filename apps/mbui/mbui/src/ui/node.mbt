@@ -155,6 +155,8 @@ struct Node {
   mut pager : Int
   // laid over its parent rather than beside its siblings
   mut layer : Bool
+  // a ground its style gives it in a state it is not in now (pointed at, pressed, chosen, focused): the corner rule's
+  mut state_ground : Bool
   // its margins (CSS's: outside its border, below 0 pulling what is beside it over it)
   mut mar_l : Double
   mut mar_t : Double
@@ -338,6 +340,7 @@ fn Node::new() -> Node {
     page_no: -1,
     pager: 0,
     layer: false,
+    state_ground: false,
     mar_l: 0.0,
     mar_t: 0.0,
     mar_r: 0.0,
@@ -457,6 +460,7 @@ fn Node::reset_rest(self : Node) -> Unit {
 ///|
 /// What Ctx::box sets, all of it.
 fn Node::reset_look(self : Node) -> Unit {
+  self.state_ground = false
   self.dir = Column
   self.rtl = false
   self.aspect = 0.0

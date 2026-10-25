@@ -404,10 +404,10 @@ let publish_bar_room : @ui.Style = @ui.css("w=Full px=S4 align=ACenter")
 let publish_bar_top : Double = 16.0
 
 ///|
-/// The bar (fpHead, Publish.css.ts head): 44 high, a pill, 20 in at its start and 4 at its end, its parts 12 apart, a
-/// line round it and a shadow under it.
+/// The bar (fpHead, Publish.css.ts head): 44 high, a pill, 20 in at its start and 6 at its end (its close, round, as far
+/// from its end as from its top: concentric with it), its parts 12 apart, a line round it and a shadow under it.
 // kept across runs: a value (no field of it changes)
-let publish_bar : @ui.Style = @ui.css("row max_w=Full h=S11 pl=S5 pr=S1 gap=S3 radius=Full align=ACenter border=B1 border_color=Line shadow=Md")
+let publish_bar : @ui.Style = @ui.css("row max_w=Full h=S11 pl=S5 pr=S1_5 gap=S3 radius=Full align=ACenter border=B1 border_color=Line shadow=Md")
 
 ///|
 /// What was hidden, beside its name, is the first to give way where the bar has not the room (a phone's, in English):

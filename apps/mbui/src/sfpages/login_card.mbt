@@ -471,9 +471,19 @@ let lc_title_room : @ui.Style = @ui.css("w=Full px=S2_5 pt=S2_5")
 let lc_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, leading=L5)
 
 ///|
-/// 取消 (PanelIconButton): 24, round, its ground under the pointer.
+/// 取消 (PanelIconButton): 24, round, its ground under the pointer, in the card's top end corner as far in as makes it
+/// concentric with it (capsule_in: the card's corner less its half), past the card's padding.
 // kept across runs: a value (no field of it changes)
-let lc_cancel : @ui.Style = @ui.css("w=S6 h=S6 radius=Full align=ACenter justify=JCenter hovered{bg=Hover}")
+let lc_cancel : @ui.Style = @ui.css("w=S6 h=S6 radius=Full align=ACenter justify=JCenter hovered{bg=Hover}").then(
+  @ui.style(mt=@sf.room_of(lc_cancel_off), mr=@sf.room_of(lc_cancel_off)),
+)
+
+///|
+/// How far past the card's padding 取消 stands (lc_cancel), and its side (S6).
+let lc_cancel_off : Double = @sf.capsule_in(@sf.card_corner, lc_cancel_side) - @sf.corner_inset
+
+///|
+let lc_cancel_side : Double = 24.0
 
 ///|
 /// A line of how it stands (cardStatus): 12 on 18, grey, 10 in, a spinner 6 before it; last, 10 over the card's foot.

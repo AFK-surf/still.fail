@@ -152,44 +152,45 @@ let side_rule : @ui.Style = @ui.css("w=SPx h=Full bg=Line")
 let side_rule_w : Double = 1.0
 
 ///|
-/// Its bar (sideBar): 45 high, the tabs from 8 in, the panel's switch at its right 12 in.
-// kept across runs: a value (no field of it changes)
-pub let side_bar : @ui.Style = @ui.css("row w=Full h=S11 pl=S2 pr=S3 gap=S2 align=ACenter")
+/// Its bar (sideBar): 45 high, the tabs from 8 in, the panel's switch at its right 12 in (at the window's top right
+/// corner, following it where the bar's buttons do: @sf.window_end_in).
+pub fn side_bar() -> @ui.Style {
+  side_bar_look.then(@ui.style(pr=@sf.room_of(@sf.window_end_in(side_bar_end))))
+}
 
 ///|
-/// Its bar as a panel of its own on the tape (laid out Medium, its corners @sf.pane_round): the first tab in its top
-/// left corner and the switch in its top right each as far in as makes them concentric with the corner they are in
-/// (capsules: @sf.capsule_fit), its top by the first tab's, its foot as before; where its top left is too square for
-/// that, the bar as in the wide frame (side_bar); where its top right is (it follows a round window), the switch where
-/// it stands there.
+// kept across runs: a value (no field of it changes)
+let side_bar_look : @ui.Style = @ui.css("row w=Full h=S11 pl=S2 gap=S2 align=ACenter")
+
+///|
+/// Its bar as a panel of its own on the tape (laid out Medium, its corners @sf.pane_round): on the tape's one line, as
+/// every bar of the tape is (@sf.tape_line: what it holds in its middle as far under the panel's top as a bar's round
+/// buttons' middles, the page's beside it on the same), the first tab in its top left corner and the switch in its top
+/// right each as far in as makes them concentric with the corner they are in (@sf.line_end_in); in one too square for
+/// that (it follows a round window), clear of it, as in the wide frame at least (side_bar's 8 and 12); its foot as
+/// before.
 pub fn side_bar_tape() -> @ui.Style {
-  let (left, right) = match @sf.pane_round.val {
+  let (left, right) = match @sf.pane_radii() {
     Some(k) => (k[0], k[1])
-    None => return side_bar
+    None => return side_bar()
   }
-  if !@sf.capsule_fits(left, @sf.side_tab_side) {
-    return side_bar
-  }
-  // (the tab 30 high, the switch 32, both in the row's middle: the row's top where the tab's is concentric, less its
-  // half the switch is taller)
-  let tab_at = @sf.capsule_in(left, @sf.side_tab_side)
-  let at = tab_at - (bar_button_side() - @sf.side_tab_side) / 2.0
-  let end = if @sf.capsule_fits(right, bar_button_side()) && (@sf.capsule_in(right, bar_button_side()) - at).abs() <= 0.5 {
-    at
-  } else {
-    side_bar_end
-  }
+  // (the switch the tallest in it, the row's top its, the tab's middle on its)
+  let side = bar_button_side()
   @ui.style(
     row=true,
     w=Full,
-    pt=@sf.room_of(at),
+    pt=@sf.room_of(@sf.capsule_in(@sf.pane_corner, side)),
     pb=S1_5,
-    pl=@sf.room_of(tab_at),
-    pr=@sf.room_of(end),
+    pl=@sf.room_of(@sf.line_end_in(left, side_bar_start, side=@sf.side_tab_side)),
+    pr=@sf.room_of(@sf.line_end_in(right, side_bar_end, side~)),
     gap=S2,
     align=ACenter,
   )
 }
+
+///|
+/// The tabs' room at the bar's start in the wide frame (side_bar: pl=S2).
+let side_bar_start : Double = 8.0
 
 ///|
 /// The switch's room at the bar's end in the wide frame (side_bar: pr=S3).
@@ -488,7 +489,7 @@ fn side_panel(
     if @ui.window_inset() {
       c.window_drag(bar)
     }
-    c.box(style=if side_on_tape.val { side_bar_tape() } else { side_bar }, id=bar, fn() {
+    c.box(style=if side_on_tape.val { side_bar_tape() } else { side_bar() }, id=bar, fn() {
       // a panel of its own on the tape showing one tab: that tab its title, the panel's close its only ×; else the tabs
       let alone = side_on_tape.val && tabs.length() == 1
       if alone {
@@ -502,7 +503,7 @@ fn side_panel(
         |> ignore
       }
       // the panel's switch stays in its top right corner, open or closed
-      if @sf.icon_button(c, if alone { "close" } else { "panel-close" }, key="side/close", round=true, label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close") {
+      if @sf.icon_button(c, if alone { "close" } else { "panel-close" }, key="side/close", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close") {
         side_change(src, r, "clear", None)
       }
     })
