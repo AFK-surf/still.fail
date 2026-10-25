@@ -8,6 +8,8 @@
 #import <CommonCrypto/CommonDigest.h>
 #import <Security/Security.h>
 #include <dlfcn.h>
+#import <objc/runtime.h>
+#import <objc/message.h>
 #import <mach/mach.h>
 #include <pwd.h>
 #import "apple.h"
@@ -36,6 +38,7 @@ static void go_back(void) {
 @property(nonatomic) NSUInteger markedLen;
 @property(nonatomic, strong) CADisplayLink *link;
 @property(nonatomic) BOOL wantFrame;
+@property(nonatomic) CFTimeInterval drawnWithWindowAt;  // drawWithWindow's last frame (CACurrentMediaTime)
 @end
 
 static MBView *the_view;
@@ -270,6 +273,7 @@ static double record_t0 = -1;
   l.presentsWithTransaction = YES;
   [self drawFrame];
   l.presentsWithTransaction = NO;
+  self.drawnWithWindowAt = CACurrentMediaTime();
 }
 
 static int frames_drawn;
@@ -328,7 +332,12 @@ static void pump(void) {
   if (app_wants || script_wants || settle_wake >= 0) pump_soon();
 }
 
+// One frame a refresh: none of the display link's in a refresh whose frame was drawn with the window's change of size
+// (drawWithWindow); the frame asked for is drawn at the next. Drawn beside the change's, in a resize's run of changes
+// each one's frame waited for a drawable the two held till the screen's next refresh (CAMetalLayer nextDrawable), and
+// the resize with it.
 - (void)tick:(CADisplayLink *)l {
+  if (CACurrentMediaTime() - self.drawnWithWindowAt < l.targetTimestamp - l.timestamp) return;
   if (!self.wantFrame) {
     l.paused = YES;
     return;
@@ -824,18 +833,6 @@ static void run_script_step(int step) {
   }
 }
 
-// The window's buttons in the app's top row (an inset window): 16 from its left, centred on its 44, as still.fail's
-// desktop app has them (Electron's trafficLightPosition {16, 15}), as far apart as the system has them. AppKit lays its
-// title bar out again when it likes (the window resized, its appearance set dark or light): its container back at
-// its own height, each button put back in its own place one after the other (NSThemeFrame _updateButtonPositions,
-// each move told before the next is made, and a button not moved again while it is being moved). So the buttons are
-// placed again once AppKit is done, before the window shows it (buttons_moved), never between its moves: placed
-// then, from the places they had then, they were left apart unevenly and the last one where AppKit had put it.
-// Not while the window is full screen or on its way there (full_screen_on: the system's own bar there), nor while
-// their title bar is not in the window (in full screen it is in a window of the system's).
-static bool buttons_placing, buttons_due;
-static double buttons_step;
-
 // Whether the window is full screen or on its way there: from as the system starts taking it there (WillEnter) till it
 // starts bringing it back (WillExit), or it did not go (MBAppDelegate). What the app lays out by (its top row with the
 // buttons or without: mb_host_window_inset; the window's corners), where the buttons are, follow it from the start of
@@ -843,66 +840,70 @@ static double buttons_step;
 // once the window was back, a jump after it.
 static bool full_screen_on;
 
-static void place_buttons(NSWindow *w) {
-  NSButton *close = [w standardWindowButton:NSWindowCloseButton];
-  NSButton *mini = [w standardWindowButton:NSWindowMiniaturizeButton];
-  NSButton *zoom = [w standardWindowButton:NSWindowZoomButton];
-  NSView *bar = close.superview.superview;
-  if (!setup_inset || !close || !bar || full_screen_on || bar.window != w) return;
-  // (what is laid out while they are placed is this placing's own doing: not told again)
-  buttons_placing = true;
-  double bh = close.frame.size.height, h = bh + 2 * 15.0;
-  NSRect f = bar.frame;
-  f.size.height = h;
-  f.origin.y = w.frame.size.height - h;
-  if (!NSEqualRects(bar.frame, f)) bar.frame = f;
-  NSArray<NSButton *> *bs = @[ close, mini, zoom ];
-  for (NSUInteger i = 0; i < bs.count; i++) {
-    NSPoint o = NSMakePoint(16.0 + i * buttons_step, (h - bh) / 2.0);
-    if (!NSEqualPoints(bs[i].frame.origin, o)) [bs[i] setFrameOrigin:o];
+// The window's buttons in the app's top row (an inset window): 16 from its left, centred on its 44, as still.fail's
+// desktop app has them (Electron's trafficLightPosition {16, 15}), as far apart as the system has them. Put there by
+// AppKit itself, each time it lays their title bar out (the window resized, its appearance set, in and out of full
+// screen): the window's frame (NSThemeFrame) asks itself how high the bar is (_titlebarHeight), how far in from the
+// left its buttons start (_minXTitlebarWidgetInset) and whether they are centred in it (_shouldCenterTrafficLights),
+// and the window's is one of ours (MBWindow) that says 44, 16 and yes, as Chrome's has its buttons in its tab strip.
+// Moved there after AppKit had put them in its own place, they were in that place for a frame each time: shaking as
+// the window was resized, wrong as it came out of full screen. Not while the window is full screen or on its way
+// there (full_screen_on: the system's own bar there): AppKit's own answers. Where AppKit's frame has none of these, the
+// buttons stay in AppKit's own place.
+static Class frame_base;
+
+static bool buttons_inset(void) { return setup_inset && !full_screen_on; }
+
+static double frame_bar_height(id self, SEL s) {
+  return buttons_inset() ? 44 : ((double (*)(id, SEL))class_getMethodImplementation(frame_base, s))(self, s);
+}
+
+static double frame_buttons_left(id self, SEL s) {
+  return buttons_inset() ? 16 : ((double (*)(id, SEL))class_getMethodImplementation(frame_base, s))(self, s);
+}
+
+static BOOL frame_buttons_centred(id self, SEL s) {
+  return buttons_inset() || ((BOOL (*)(id, SEL))class_getMethodImplementation(frame_base, s))(self, s);
+}
+
+@interface NSWindow (MBFrameView)
++ (Class)frameViewClassForStyleMask:(NSWindowStyleMask)m;
+@end
+
+@interface MBWindow : NSWindow
+@end
+@implementation MBWindow
++ (Class)frameViewClassForStyleMask:(NSWindowStyleMask)m {
+  Class base = [super frameViewClassForStyleMask:m];
+  static Class ours;
+  if (!setup_inset) return base;
+  if (!ours) {
+    SEL h = NSSelectorFromString(@"_titlebarHeight"), x = NSSelectorFromString(@"_minXTitlebarWidgetInset"),
+        c = NSSelectorFromString(@"_shouldCenterTrafficLights");
+    if (![base instancesRespondToSelector:h] || ![base instancesRespondToSelector:x] ||
+        ![base instancesRespondToSelector:c])
+      return base;
+    ours = objc_allocateClassPair(base, "MBWindowFrame", 0);
+    class_addMethod(ours, h, (IMP)frame_bar_height, "d@:");
+    class_addMethod(ours, x, (IMP)frame_buttons_left, "d@:");
+    class_addMethod(ours, c, (IMP)frame_buttons_centred, "B@:");
+    objc_registerClassPair(ours);
+    frame_base = base;
   }
-  buttons_placing = false;
+  return base == frame_base ? ours : base;
 }
+@end
 
-// AppKit moved the title bar's container or a button: the buttons placed once it is done with them, before the window
-// is drawn (a block the run loop does once the event or the call it is in has returned, before it shows what changed;
-// at most one waiting).
-static void buttons_moved(NSWindow *w) {
-  if (buttons_placing || buttons_due) return;
-  buttons_due = true;
-  CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopCommonModes, ^{
-    buttons_due = false;
-    place_buttons(w);
-  });
-  CFRunLoopWakeUp(CFRunLoopGetMain());
-}
-
-// The window full screen or going there (on), or a window or on its way back: the app drawn again for it, the buttons
-// placed in its top row again.
+// The window full screen or going there (on), or a window or on its way back: the app drawn again for it, its title
+// bar laid out again for it (its height, where its buttons are: MBWindow) as AppKit lays it out itself
+// (_tileTitlebarAndRedisplay:; a layout asked for, of the frame or of the bar, does not). Else where the system did
+// not take the window there after all, the bar stayed as it was laid out for full screen.
 static void full_screen_going(NSWindow *w, bool on) {
   full_screen_on = on;
-  if (!on) buttons_moved(w);
+  NSView *frame = w.contentView.superview;
+  SEL tile = NSSelectorFromString(@"_tileTitlebarAndRedisplay:");
+  if ([frame respondsToSelector:tile]) ((void (*)(id, SEL, BOOL))objc_msgSend)(frame, tile, YES);
   [the_view requestFrame];
-}
-
-// The buttons placed as the window opens (as far apart as AppKit has them then), and again whenever AppKit lays their
-// title bar's container or one of them out anew (NSViewFrameDidChangeNotification), whatever made it, not after each
-// thing known to do it; and once the window is back from full screen, their title bar in it again.
-static void watch_buttons(NSWindow *w) {
-  NSButton *close = [w standardWindowButton:NSWindowCloseButton];
-  NSButton *mini = [w standardWindowButton:NSWindowMiniaturizeButton];
-  NSView *bar = close.superview.superview;
-  if (!close || !mini || !bar) return;
-  buttons_step = mini.frame.origin.x - close.frame.origin.x;
-  NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
-  for (NSView *v in @[ bar, close, mini, [w standardWindowButton:NSWindowZoomButton] ]) {
-    v.postsFrameChangedNotifications = YES;
-    [nc addObserverForName:NSViewFrameDidChangeNotification object:v queue:nil
-                usingBlock:^(NSNotification *n) { buttons_moved(w); }];
-  }
-  [nc addObserverForName:NSWindowDidExitFullScreenNotification object:w queue:nil
-              usingBlock:^(NSNotification *n) { buttons_moved(w); }];
-  place_buttons(w);
 }
 
 // ---------------------------------------------------------------------------
@@ -1629,7 +1630,7 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
     NSWindowStyleMask style = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
                               NSWindowStyleMaskResizable | NSWindowStyleMaskMiniaturizable;
     if (setup_inset) style |= NSWindowStyleMaskFullSizeContentView;
-    NSWindow *w = [[NSWindow alloc] initWithContentRect:r styleMask:style backing:NSBackingStoreBuffered defer:NO];
+    NSWindow *w = [[MBWindow alloc] initWithContentRect:r styleMask:style backing:NSBackingStoreBuffered defer:NO];
     w.title = mb_ns_from_string(title);
     if (setup_min_w > 0 || setup_min_h > 0) w.contentMinSize = NSMakeSize(setup_min_w, setup_min_h);
     if (!win && setup_w > 0) [w center];
@@ -1692,7 +1693,6 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
                                                               }];
     [w makeKeyAndOrderFront:nil];
     [w makeFirstResponder:the_view];
-    if (setup_inset) watch_buttons(w);
     // full screen from as the system starts taking the window there, a window from as it starts bringing it back
     // (full_screen_on)
     [[NSNotificationCenter defaultCenter] addObserverForName:NSWindowWillEnterFullScreenNotification object:w queue:nil
