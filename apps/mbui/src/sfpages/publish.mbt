@@ -433,9 +433,8 @@ let publish_files : @ui.Style = @ui.css("w=Full gap=S2 pt=S1_5 align=AStart")
 let publish_file_box : @ui.Style = @ui.css("align=AStart")
 
 ///|
-/// Its box (tick): at its end, half way down, the ladder's inset in. The web's stands in its top right corner, 8 in;
-/// on the ladder a box there would have to be concentric with the card's own corner (the chat's file card's, off the
-/// ladder), so it stands at the card's end, out of its corners.
+/// Its box (tick): at its end, half way down, the ladder's inset in: where a file card's own buttons are on the web
+/// (FileCard's fileCardAction: download's ✕, retry's ↻), so the box to tick stands where the card's action does.
 // kept across runs: a value (no field of it changes)
 let publish_tick : @ui.Style = @ui.css("w=Full h=Full pr=S2_5 align=AEnd justify=JCenter")
 

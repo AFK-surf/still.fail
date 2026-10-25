@@ -321,6 +321,8 @@ test "接力到频道 on a phone: the pages' relay as a sheet, the places the bo
   assert_eq(named(calls, "chat.relayPlaces").length(), 1)
   // (the info sheet goes, the relay's sheet comes up, to where it rests: the presenters')
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  // (on a touch device nothing takes the keyboard's focus as it opens: the keyboard would come up over the places)
+  assert_true(!t.ctx().field_focused(), msg="a field focused as the relay opened on a phone")
   assert_true(t.find("接力到频道") is Some(_))
   assert_true(t.find("#dev") is Some(_))
   assert_true(t.find("🔒 #ops") is Some(_))
