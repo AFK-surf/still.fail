@@ -135,6 +135,9 @@ CREATE TABLE IF NOT EXISTS deliveries (
 );
 CREATE INDEX IF NOT EXISTS deliveries_pending ON deliveries (session) WHERE delivered_at IS NULL;
 CREATE INDEX IF NOT EXISTS deliveries_session ON deliveries (session, thread);
+-- What a session took lately, as it was delivered (usage.ts TAKEN_SINCE: whom a turn from before turns said so worked
+-- for, as the usage counter reads its calls).
+CREATE INDEX IF NOT EXISTS deliveries_taken ON deliveries (session, delivered_at) WHERE delivered_at IS NOT NULL;
 CREATE TABLE IF NOT EXISTS reads (
   viewer TEXT NOT NULL,
   thread INTEGER NOT NULL,
@@ -433,8 +436,8 @@ export function addArchiveColumns(db: DatabaseSync): void {
 }
 
 /// The indexes on the threads' columns that came with homes (addArchiveColumns), made once those are there: a session's
-/// own chat (store.ts homeChat, usage.ts usageTurns: each read of the usage counter that makes a session's turns
-/// again), and the chats of their own the auto-archiving goes over, without reading every thread.
+/// own chat (store.ts homeChat, usage.ts usageTurns: each part of a transcript the usage counter reads), and the chats
+/// of their own the auto-archiving goes over, without reading every thread.
 export function addThreadIndexes(db: DatabaseSync): void {
   db.exec(`CREATE INDEX IF NOT EXISTS threads_home ON threads (home) WHERE home IS NOT NULL;
     CREATE INDEX IF NOT EXISTS threads_own ON threads (surface) WHERE home IS NULL AND hidden_at IS NULL;`);

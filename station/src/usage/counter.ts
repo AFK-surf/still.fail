@@ -16,7 +16,7 @@ import { basename, dirname, join, sep } from "node:path";
 import { createZstdDecompress } from "node:zlib";
 import { log } from "../ops/log.ts";
 import { parseIso, sharedTranscripts, transcriptDir, transcriptPaths } from "../read/transcript.ts";
-import type { SessionRow, Store, UsageCall, UsageFile, UsageFor, UsageTurn } from "../store/store.ts";
+import type { SessionRow, Store, UsageCall, UsageFile, UsageFor } from "../store/store.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
 
 /// Calls a little before a session was made (the runtime's clock against the station's) are still its own.
@@ -28,8 +28,6 @@ const MARGIN_MS = 60_000;
 export const SETTLE_MS = 2_000;
 /// How often everything that ran is read anyway, for what no turn's end told.
 export const SAFETY_MS = 10 * 60_000;
-/// How many sessions' turns are kept between reads (those of the sessions at work, the most recently read).
-const TURNS_KEPT = 64;
 /// How much of a transcript is read, parsed and recorded at a time before the event loop is let through.
 const CHUNK = 1 << 20;
 
@@ -449,8 +447,6 @@ export class UsageCounter {
   #counted = new Set<string>();
   /// What was read of each transcript (usage_files): the store's at the first read, and what this counter wrote since.
   #files: Map<string, UsageFile> | null = null;
-  /// Each session's turns as the last read made them (`usageTurns`), and what they were made of (`usageTurnsStamp`).
-  #turnsKept = new Map<string, { stamp: string; turns: UsageTurn[] }>();
 
   constructor(options: UsageCounterOptions) {
     this.#store = options.store;
@@ -596,13 +592,12 @@ export class UsageCounter {
       const project = claudeProject(s.cwd ?? s.workspace);
       const only = s.cwd !== null ? s.runtimeSessionId : null;
       if (s.cwd !== null && only === null) continue;
-      const turns: { of: UsageTurn[] | null } = { of: null };
       for (const root of claudeRoots) {
         for (const [path, subagent] of await claudeFiles(join(root, project), only)) {
           const real = await canonical(path);
           if (seenFiles.has(real)) continue;
           seenFiles.add(real);
-          added += await this.#readFile(path, "claude", subagent, s, readBefore(path, "claude"), turns);
+          added += await this.#readFile(path, "claude", subagent, s, readBefore(path, "claude"));
         }
       }
     }
@@ -616,7 +611,6 @@ export class UsageCounter {
       let codex = sessions.filter((s) => s.runtime === "codex");
       let every = wanted === null;
       const match = (meta: [string | null, string | null]) => codex.find((s) => s.runtimeSessionId === meta[0] || (s.cwd === null && s.workspace === meta[1]))?.key ?? null;
-      const turnsOf = new Map<string, { of: UsageTurn[] | null }>();
       for (const path of rollouts) {
         const file = readBefore(path, "codex");
         let session: string | null;
@@ -645,9 +639,7 @@ export class UsageCounter {
         if (wanted !== null && !wanted.has(session) && file !== undefined) continue;
         const s = codex.find((c) => c.key === session);
         if (s === undefined) continue;
-        let turns = turnsOf.get(session);
-        if (turns === undefined) turnsOf.set(session, (turns = { of: null }));
-        added += await this.#readFile(path, "codex", false, s, file, turns);
+        added += await this.#readFile(path, "codex", false, s, file);
       }
     }
     // DeepSeek Harness: each runtime session's own file, found as its history finds it (dsh.ts); Grok Build: what the
@@ -657,7 +649,6 @@ export class UsageCounter {
     for (const s of sessions) {
       if ((s.runtime !== "dsh" && s.runtime !== "grok" && s.runtime !== "cursor" && s.runtime !== "devin") || (wanted !== null && !wanted.has(s.key))) continue;
       const runtime = s.runtime;
-      const turns: { of: UsageTurn[] | null } = { of: null };
       for (const id of store.runtimeSessions(s.key)) {
         const transcript = transcriptPaths(runtime, config.dataDir, homes, [id]).paths[0];
         const path = transcript !== undefined && runtime === "grok" ? join(dirname(transcript), "stillfail-usage.jsonl") : transcript;
@@ -665,7 +656,7 @@ export class UsageCounter {
         const real = await canonical(path);
         if (seenFiles.has(real)) continue;
         seenFiles.add(real);
-        added += await this.#readFile(path, runtime, false, s, readBefore(path, runtime), turns);
+        added += await this.#readFile(path, runtime, false, s, readBefore(path, runtime));
       }
     }
     this.#last = started;
@@ -677,22 +668,8 @@ export class UsageCounter {
     return added;
   }
 
-  /// A session's turns, each with whom it worked for: made again only once what they are made of changed (a turn begun,
-  /// a message taken). A read comes every few seconds while agents work, and a long session has a thousand turns, each
-  /// row read where it lies.
-  #turnsOf(key: string): UsageTurn[] {
-    const stamp = this.#store.usageTurnsStamp(key);
-    const kept = this.#turnsKept.get(key);
-    if (kept !== undefined && kept.stamp === stamp) return kept.turns;
-    const turns = this.#store.usageTurns(key);
-    this.#turnsKept.delete(key);
-    this.#turnsKept.set(key, { stamp, turns });
-    while (this.#turnsKept.size > TURNS_KEPT) this.#turnsKept.delete(this.#turnsKept.keys().next().value!);
-    return turns;
-  }
-
   /// Reads one transcript of `session` on from where it was left, and records its calls, a part at a time.
-  async #readFile(path: string, runtime: Runtime, subagent: boolean, session: SessionRow, was: UsageFile | undefined, turns: { of: UsageTurn[] | null }): Promise<number> {
+  async #readFile(path: string, runtime: Runtime, subagent: boolean, session: SessionRow, was: UsageFile | undefined): Promise<number> {
     // A transcript put away (only its `.zst` there) was read before it was: its session is archived and idle, and it is
     // restored before its runtime writes in it again. Read again as the station starts, every one was decompressed
     // whole at each start (10.8 s on ccvm, 2026-10-24, the station slow to answer meanwhile). One never read is read once.
@@ -710,8 +687,8 @@ export class UsageCounter {
       }
       // What ran before the station had the session (a terminal's, continued here) is not the station's.
       const calls = callsOf(runtime, part.text, subagent, state).filter((c) => c.at >= session.createdAt - SKEW_MS);
-      turns.of ??= this.#turnsOf(session.key);
-      const of = turns.of;
+      // The turns they were made in, those alone (store/usage.ts usageTurns).
+      const of = calls.length === 0 ? [] : this.#store.usageTurns(session.key, calls.reduce((m, c) => Math.min(m, c.at), Infinity), calls.reduce((m, c) => Math.max(m, c.at), -Infinity));
       const withFor: [UsageCall, UsageFor][] = calls.map((c) => {
         // The turn it was made in: the last to start before it (the first, for one before them all).
         let lo = 0;

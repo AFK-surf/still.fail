@@ -12,7 +12,7 @@ import {
   MANUAL, type NewMessage, OPTIONS_BEFORE, RUNNING_SESSIONS, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
-import { ACTIVE_SESSIONS } from "../src/store/usage.ts";
+import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
 import * as read from "../src/read/store.ts";
 import { fileAway } from "./archived-before.ts";
 import { testClock } from "./hub-fakes.ts";
@@ -880,8 +880,9 @@ test("what the station asks again and again is planned by an index, never a scan
   const planned: [string, unknown[]][] = [
     [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [RUNNING_SESSIONS, []], [JOBS_RUNNING, []], [JOBS_UP, []], [SESSION_JOBS, ["a"]],
     [STATS_OF, ["a"]], [SESSION_COUNTS, []], [DECISIONS_SINCE, [0]], [CLOSED_SINCE, [0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
+    [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]],
   ];
-  const scans = /^SCAN (?!\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards)\b)/;
+  const scans = /^SCAN (?!CONSTANT ROW$|\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards)\b)/;
   const plans = new Map<string, string[]>();
   for (const [sql, args] of planned) {
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
@@ -891,6 +892,9 @@ test("what the station asks again and again is planned by an index, never a scan
   // The latest card before a message: by the index of cards, not by going back over the thread to it.
   assert.ok(plans.get(CARD_BEFORE)!.some((d) => d.includes("entries_cards")), plans.get(CARD_BEFORE)!.join(" | "));
   assert.ok(plans.get(OPTIONS_BEFORE)!.some((d) => d.includes("entries_options")), plans.get(OPTIONS_BEFORE)!.join(" | "));
+  // The turns the usage counter reads at each part of a transcript: those of its calls' time alone.
+  assert.ok(plans.get(TURNS_BETWEEN)!.some((d) => d.includes("turns_by_session (session_key=? AND started_at>? AND started_at<?)")), plans.get(TURNS_BETWEEN)!.join(" | "));
+  assert.ok(plans.get(TAKEN_SINCE)!.some((d) => d.includes("deliveries_taken (session=? AND delivered_at>?)")), plans.get(TAKEN_SINCE)!.join(" | "));
   // What each says.
   session(store, "a");
   session(store, "b");
@@ -947,7 +951,7 @@ test("usage: a call is recorded once, its output grown; turns tell whom they wer
   const [g] = store.usageGroups(0, 2000, 0);
   assert.deepEqual([g!.calls, g!.output, g!.fast, g!.day], [1, 9, true, "1970-01-01"]);
   assert.equal(store.usageSince(), 1000);
-  assert.deepEqual(store.usageTurns("a").map((t) => [t.id, t.of.person, t.of.thread, t.of.profile]), [["t1", "me@x", 3, "cc"]]);
+  assert.deepEqual(store.usageTurns("a", 0, 2000).map((t) => [t.id, t.of.person, t.of.thread, t.of.profile]), [["t1", "me@x", 3, "cc"]]);
   assert.deepEqual(store.usageActiveSessions(0), ["a"]);
   const h = heard(store);
   store.usageChanged(["a"]);
