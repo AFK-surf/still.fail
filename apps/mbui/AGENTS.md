@@ -52,8 +52,13 @@ particular to this app:
   - A page opens what it opens with `@sfbase.open_page(page)` and a chat's detail with `@sfbase.open_detail(src, chat,
     tab)`: the shell's (sfbase's `Shell`) decides where it goes per layout. It never pushes onto `app.nav` itself.
   - Don't add a branch on the tier inside a page. A page that needs another arrangement asks its own
-    width. Nor on `@ui.pointing()`: a page's look and what it offers follow `@sf.touch_system()`, and the hand reaches
-    it only through the library's primitives (`c.lit`, `c.menu_asked`, tips).
+    width. Nor on the screen's kind (`@sf.touch_system()`): what differs by the screen is the theme's, the library
+    parts', the presenters' and the shell's (docs/architecture.md, the same on every screen and what differs); a page
+    that needs it asks the library for a part. Nor on `@ui.pointing()`: the hand reaches a page only through the
+    library's primitives (`c.lit`, `c.menu_asked`, tips).
+  - A page is designed once from what it is for; the web's two and the Kotlin app's are read for their reasons, not
+    copied or picked between. Merging two copies keeps neither and drops the other: the page is no worse on either
+    screen than its copy was there, shown before and after.
 
 ## Motion
 
