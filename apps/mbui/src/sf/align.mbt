@@ -263,13 +263,15 @@ pub fn edge_row(s : Surface, x : Double, first? : Bool = false, last? : Bool = f
 
 ///|
 /// Words in a small panel have room of their own (2026-10-15): the panel is padded only as far as what has a ground
-/// (rows, buttons) stands from its edge: the corner ladder's inset (tokens.mbt corner_ladder: a small panel is a card
-/// of the ladder's, its rows as a list card's).
-pub let panel_pad : Double = corner_inset
+/// (rows, buttons) stands from its edge. A small panel is a list of rows floating over the page, denser than a card
+/// (2026-10-25 用户：「菜单的 hover 后背景距离边上是不是太远了」): its rows' grounds 6 from its edges, as a menu's
+/// highlight hugs it (the web's PANEL_PAD, the systems' menus), its corner theirs (r_menu: concentric with them), its
+/// words 16 in (text_in more), as the web's are.
+pub let panel_pad : Double = 6.0
 
 ///|
 /// Its words stand in by a row's own padding more (TEXT_IN), so a card's words and a menu's rows' words are on one
-/// line, panel_pad + text_in from its edge (card_pad, as a page's card's).
+/// line, panel_pad + text_in from its edge.
 pub let text_in : Double = 10.0
 
 ///|

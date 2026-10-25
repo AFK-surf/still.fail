@@ -617,3 +617,42 @@ test "toasts: toast_due says when the next goes (its time out), none while pause
   assert_eq(t.all(@ui.Status).length(), 0)
   t.assert_idle()
 }
+
+///|
+test "popover: a wheel turned over it scrolls nothing under it; beside it, what is under scrolls" {
+  let open = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      let tr = button(c, "Filters", key="filters")
+      if tr.clicked {
+        open.val = !open.val
+      }
+      scroll_area(c, "s", 400.0, label="Log", fn() {
+        c.column(fn() {
+          for i in 0..<80 {
+            c.text("line \{i}") |> ignore
+          }
+        })
+        |> ignore
+      })
+      open.val = popover(c, "pop", open.val, tr.id, label="Filters", focus=false, fn() { c.text("Unread only") |> ignore }).value
+    })
+    |> ignore
+  })
+  t.click(@ui.Button, label="Filters")
+  t.run_for(pop_ms)
+  let (px, py, pw, ph) = t.get(@ui.Dialog, label="Filters").rect
+  let (sx, sy, sw, sh) = t.get(@ui.ScrollArea, label="Log").rect
+  // (the popover lies over the list)
+  assert_true(py < sy + sh && py + ph > sy && px < sx + sw)
+  let (_, y0, _, _) = t.rect_of("line 0").unwrap()
+  t.wheel(px + pw / 2.0, py + ph / 2.0, 120.0)
+  t.run_for(pop_ms)
+  assert_eq(t.rect_of("line 0").map(fn(r) { r.1 }), Some(y0))
+  assert_true(open.val)
+  // beside it, the list takes the wheel
+  t.wheel(sx + sw - 4.0, sy + sh - 4.0, 120.0)
+  t.run_for(pop_ms)
+  let (_, y1, _, _) = t.rect_of("line 0").unwrap_or((0.0, -1000.0, 0.0, 0.0))
+  assert_true(y1 < y0)
+}
