@@ -509,100 +509,6 @@ fn draft_named(d : Draft, v : Json) -> Unit {
 let composer_morph_ms : Double = 260.0
 
 ///|
-/// Laid out for another page (a new chat become its chat, in the wide frame: dock.tsx), the composer goes from where
-/// and how big it was to where and how big it is now, over this long (Ease.Out): one composer changing, its ground
-/// from the shape it had to this one and what it holds from where it showed to its places (morph.ts morph).
-let composer_page_ms : Double = 340.0
-
-///|
-/// The composer's move to another page: the draft whose composer goes (the chat's), from where (x, y, w, h).
-let composer_page_from : Ref[(String, (Double, Double, Double, Double))?] = { val: None }
-
-///|
-/// The page under the composer changes from now (a new chat become chat `chat`'s, in the wide frame; "*": another
-/// page, whose composer is the next drawn): from where its ground was as the frame before laid it out.
-fn composer_page_starts(c : @ui.Ctx, chat : String) -> Unit {
-  composer_page_from.val = None
-  if @ui.reduced_motion() {
-    return
-  }
-  match @motion.measured_rect(c, "composer/ground") {
-    Some(rect) => {
-      composer_page_from.val = Some((chat, rect))
-      let a = @motion.anim(c, "composer/page", 1.0, global=true)
-      a.snap(0.0)
-      a.animate(1.0, @motion.tween(composer_page_ms, ease=Linear))
-    }
-    None => ()
-  }
-}
-
-///|
-/// The composer of chat `chat` on its way from another page's place: where it was, and how far it has come (0 … 1,
-/// Ease.Out); None once there.
-fn composer_page(c : @ui.Ctx, chat : String) -> ((Double, Double, Double, Double), Double)? {
-  match composer_page_from.val {
-    // (another page's, said before it was known whose: the first drawn there takes it)
-    Some(("*", from)) => {
-      composer_page_from.val = Some((chat, from))
-      composer_page(c, chat)
-    }
-    Some((key, from)) if key == chat => {
-      let a = @motion.anim(c, "composer/page", 1.0, global=true)
-      if a.moving() {
-        Some((from, @motion.Out.at(a.get())))
-      } else {
-        None
-      }
-    }
-    _ => None
-  }
-}
-
-///|
-/// The capsule (node `i`, box `cap`) on its way from another page's place (`from`: its ground there) to its own, `p` of
-/// the way: drawn with its bottom left edge from where the other's ground's was to where it is laid out (what it holds stands on that edge,
-/// each part going on from where it showed: their layout motion), its ground from that shape to its own (page_ground).
-fn page_carry(c : @ui.Ctx, i : Int, cap : Int, from : (Double, Double, Double, Double), p : Double) -> Unit {
-  let (fx, fy, _, fh) = from
-  match c.laid_rect(cap) {
-    Some((x, y, _, h)) => c.look(i, @ui.look(dx=(fx - x) * (1.0 - p), dy=(fy + fh - y - h) * (1.0 - p)))
-    // (not laid out yet: built again once it is)
-    None => ()
-  }
-}
-
-///|
-/// The capsule's ground on its way from another page's place (`from`) to its own (box `cap` as this frame lays it out,
-/// `to_h` high when it is not all of it), `p` of the way, on the capsule's bottom left edge (page_carry): its size, and
-/// its corner (a pill's while it is one line high, the box's past that, as in the wide frame).
-fn page_ground(c : @ui.Ctx, cap : Int, from : (Double, Double, Double, Double), p : Double, to_h : Double?) -> Unit {
-  let (_, _, fw, fh) = from
-  match c.laid_rect(cap) {
-    Some((_, _, w, laid_h)) => {
-      let h = to_h.unwrap_or(laid_h)
-      let corner = ct().corner
-      let r0 = dmin(corner, fh / 2.0)
-      let r1 = dmin(corner, h / 2.0)
-      c.box(style=page_ground_room, fn() {
-        c.box(style=@ui.style(w=Fixed(fw + (w - fw) * p), h=Fixed(fh + (h - fh) * p)), fn() {
-          floating_ground(c, Fill(1.0), corner=r0 + (r1 - r0) * p) |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
-    }
-    // (not laid out yet: built again once it is)
-    None => ()
-  }
-}
-
-///|
-/// What the ground stands in on its way: all of the capsule, from its bottom edge.
-// kept across runs: a value (no field of it changes)
-let page_ground_room : @ui.Style = @ui.css("w=Full h=Full justify=JEnd")
-
-///|
 /// Words sent from chat `chat`'s composer hold its room as tall as when they went (`room`) for `ms` from the next frame,
 /// then let it go to its own height over the morph's time: all of it said now, as they set off (flight_start), and
 /// anew when they know their way (flight_placed).
@@ -1211,10 +1117,6 @@ fn composer_morph(c : @ui.Ctx, chat : String, natural : Double?) -> Double? {
     Some(h) => {
       // (one motion wherever it is asked from: the list's rows ask in scopes of their own)
       let a = @motion.anim(c, "composer/morph", h, global=true)
-      // (laid out for another page, it goes there on the page's move, not this: composer_page)
-      if composer_page(c, chat) is Some(_) {
-        a.snap(h)
-      }
       a.follow(h, @motion.tween(composer_morph_ms, ease=Out))
       let m = a.get()
       let (room, share) = composer_held(c, chat)
@@ -1559,32 +1461,21 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   chat_ref_menu(c, src, d, r.station, if fresh is Some(_) { "" } else { r.session }, field_key, locked)
   let k = ct()
   let side = 10.0
-  // laid out for another page (a new chat become its chat, in the wide frame), from where it was (composer_page)
-  let page = composer_page(c, d.key)
   c.box(w=Fill(1.0), pl=side, pr=side, pt=k.over, pb=k.under, fn() {
     let capsule = c.box(w=Fill(1.0), pad=k.inset, pt=top, id=cap, fn() {
       // its ground, as tall as the morph has it, on the capsule's bottom edge (over it while it is taller); in the wide
       // frame its corner a pill's while it is one line high, the opened box's past that (the web's: its corners go from
       // capsule to box with its height)
-      let ground_h = match morph {
-        Some(h) => Some(h + top + k.inset)
-        None => composer_natural(c).map(fn(h) { h + top + k.inset })
-      }
       let corner = k.corner
       let ground = c.layer(fn() {
-        match page {
-          Some((from, p)) => page_ground(c, cap, from, p, ground_h)
-          None =>
-            c.box(w=Fill(1.0), h=Fill(1.0), justify=JEnd, fn() {
-              let g = floating_ground(c, match morph {
-                Some(h) => Px(h + top + k.inset)
-                None => Fill(1.0)
-              }, corner~)
-              // (where it was as its page changes: composer_page_starts)
-              @motion.measure(c, g, "composer/ground")
-            })
-            |> ignore
-        }
+        c.box(w=Fill(1.0), h=Fill(1.0), justify=JEnd, fn() {
+          floating_ground(c, match morph {
+            Some(h) => Px(h + top + k.inset)
+            None => Fill(1.0)
+          }, corner~)
+          |> ignore
+        })
+        |> ignore
       })
       c.draw_only(ground)
       // (named to be measured, not to be pressed: a tap anywhere in the capsule that nothing in it takes is the capsule's,
@@ -1612,11 +1503,6 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     })
     // over the messages: their scroll bar keeps clear of it
     c.floats_over(capsule)
-    // on its way from another page's place, carried with what it holds
-    match page {
-      Some((from, p)) => page_carry(c, capsule, cap, from, p)
-      None => ()
-    }
   })
   |> ignore
   match morph {
@@ -1832,8 +1718,7 @@ fn composer_bar(
   if c.clicked(send) {
     do_send()
   }
-  // (laid out for another page, on its move: composer_page)
-  let part_ms = if composer_page(c, d.key) is Some(_) { composer_page_ms } else { 260.0 }
+  let part_ms = composer_morph_ms
   // each part goes to its new place for what the bar holds (folded or opened, its words, files, quotes, what it says
   // under it), each draft's its own; moved by nothing of these (a keyboard, the window), there at once
   let holds = "\{expanded}|\{d.files.length()}|\{d.quotes.length()}|\{d.error is Some(_)}|" + d.field.text()

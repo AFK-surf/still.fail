@@ -861,7 +861,7 @@ pub let morph_ms : Double = 260.0
 
 ///|
 /// Laid out for the other page, how long it goes there (dock.tsx: 340, the ease out).
-let page_move_ms : Double = 340.0
+pub let page_move_ms : Double = 340.0
 
 ///|
 /// Typing warms the agent's runtime at most once a minute.

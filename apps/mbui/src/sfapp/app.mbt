@@ -41,7 +41,6 @@ fn reset() -> Unit {
   sheet_host.kind = NoSheet
   sheet_host.serial = 0
   bar_reset()
-  composer_page_from.val = None
   new_fix.station = "st1"
   new_fix.model = "claude-opus-5-5"
   new_fix.runtime = "claude"
@@ -125,7 +124,6 @@ fn reset() -> Unit {
   opened_notices.clear()
   tool_parts.clear()
   flashing.val = ("", 0.0)
-  flash_row.val = None
   bench_on.val = -1
   boxed_n.val = 0
   // the composer: its ids counted from the start, what waits for it
