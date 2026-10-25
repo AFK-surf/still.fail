@@ -621,8 +621,9 @@ fn share_open(
 }
 
 ///|
-/// What is shared gone into a chat's composer (`session`; "" a new chat on `station`, made the one new chats start on by
-/// `pick`): the sheet let go, the chat opened (a new chat rising), the files handed to its composer, which puts them up.
+/// What is shared gone into a chat's composer (`session`; "" the workspace's new chat, `station` made the one it starts
+/// on by `pick`): the sheet let go, the chat opened (a new chat rising), the files handed to its composer, which puts
+/// them up.
 fn share_opened(
   c : @ui.Ctx,
   station : String,
@@ -634,7 +635,7 @@ fn share_opened(
 ) -> Unit {
   let key = match key {
     Some(k) => k
-    None => if session == "" { "new:" + station } else { station + ":" + session }
+    None => if session == "" { "new:" + workspace_of(station) } else { station + ":" + session }
   }
   if files.length() > 0 {
     let list = shared_into.get(key).unwrap_or([])

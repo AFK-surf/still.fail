@@ -125,14 +125,14 @@ test("draft_snapshots_clear_whitespace_but_keep_quotes_or_uploaded_files_without
   const t = await setup();
   try {
     const blank = { text: "", quotes: [], files: [] };
-    t.composer.putDraft("ws/st", "new", { text: "  " });
-    assert.deepEqual(noId(t.composer.readDraft("ws/st", "new")), blank);
-    assert.equal((t.composer.value("new:ws/st") as J).text, "");
+    t.composer.putDraft("ws", "new", { text: "  " });
+    assert.deepEqual(noId(t.composer.readDraft("ws", "new")), blank);
+    assert.equal((t.composer.value("new:ws") as J).text, "");
     const quote = { author: "agent", text: "quoted", comment: "" };
-    t.composer.putDraft("ws/st", "new", { quotes: [quote] });
-    assert.deepEqual(noId(t.composer.readDraft("ws/st", "new")), { ...blank, quotes: [quote] });
+    t.composer.putDraft("ws", "new", { quotes: [quote] });
+    assert.deepEqual(noId(t.composer.readDraft("ws", "new")), { ...blank, quotes: [quote] });
     const file = { name: "a.txt", path: "/u/a.txt", size: 1 };
-    t.composer.putDraft("ws/st", "new", { files: [file] });
-    assert.deepEqual(noId(t.composer.readDraft("ws/st", "new")), { ...blank, files: [file] });
+    t.composer.putDraft("ws", "new", { files: [file] });
+    assert.deepEqual(noId(t.composer.readDraft("ws", "new")), { ...blank, files: [file] });
   } finally { t.core.close(); }
 });

@@ -287,7 +287,7 @@ function shareOpen(source: string, station: string, id: string | undefined, titl
   const link: ComposerLink | null = m ? { url: m[0], ...(tt || naming ? { title: tt || rest } : {}), ...(siteOf(m[0]) ? { site: siteOf(m[0])! } : {}) } : null;
   const words = m ? (naming || rest === tt ? "" : rest) : tt && !source.includes(tt) ? `${tt}\n${source}` : source;
   const row = id === undefined ? undefined : shareRows().find((r) => r.station === station && r.id === id);
-  const key = row ? `${station}:${row.session}` : newKey ?? `new:${station}`;
+  const key = row ? `${station}:${row.session}` : newKey ?? `new:${station.split("/")[0]}`;
   const c = composers.get(key) ?? { text: "", rev: 0, version: 0, links: [] };
   const text = words && !c.text.includes(words) ? (c.text.trim() ? `${c.text.trimEnd()}\n${words}` : words) : c.text;
   const links = link && !c.links.some((l) => l.url === link.url) ? [...c.links, link] : c.links;

@@ -1,4 +1,5 @@
-// The real useDraft: station selection retains the current image and uploads its bytes to the selected station.
+// The real useDraft: a new chat's one draft, its station picked anew: the image stays and its bytes go up to the station
+// picked.
 import { writeFile, rm } from 'node:fs/promises';
 import { createServer } from 'vite';
 import assert from 'node:assert/strict';
@@ -35,12 +36,11 @@ const state = (key: string) => {
   return states.get(key);
 };
 Object.assign(window, { restoreFile() {
-  const key = 'new:ws/a';
+  const key = 'new:ws';
   const next = {...state(key), rev:state(key).rev+1, version:state(key).version+1, files:[{id:'restored', name:'restored.png', size:100, done:{name:'restored.png', path:'/a/restored.png', size:100}}]};
   states.set(key,next);
   for (const cb of listeners.get(key) ?? []) cb(next);
 } });
-state('new:ws/b').files = [{id:'old', name:'older-picture.png', size:100, done:{name:'older-picture.png', path:'/b/old.png', size:100}}];
 setCore({
   focus: async () => {},
   subscribe(topic: any, cb: any) {
@@ -58,16 +58,6 @@ setCore({
       for (const f of p.files) uploads.push({station:p.station, blob:f.blob, id:f.id});
     }
     if (name === 'composer.remove') next.files = s.files.filter((f: any) => f.id !== p.id);
-    if (name === 'composer.carry' || name === 'composer.move') {
-      const target = state(p.to);
-      const carried = {...target, text:s.text, quotes:s.quotes, files:name === 'composer.carry' ? s.files : target.files, rev:target.rev+1, version:target.version+1};
-      states.set(p.to, carried);
-      for (const cb of listeners.get(p.to) ?? []) cb(carried);
-      next.text = ''; next.quotes = []; next.files = name === 'composer.carry' ? [] : s.files;
-      states.set(p.key,next);
-      for (const cb of listeners.get(p.key) ?? []) cb(next);
-      return {version:carried.version};
-    }
     if (name === 'composer.text') next.text = p.text;
     if (name === 'composer.take') { next.text = ''; next.files = []; next.quotes = []; next.rev++; }
     if (name === 'composer.starting') next.starting = p.starting;
@@ -77,14 +67,14 @@ setCore({
     return { version: next.version };
   }
 } as any);
-function Draft({ workspace }: { workspace: string }) {
-  const draft = useDraft({ key: \`new:ws/\${workspace}\`, station: \`ws/\${workspace}\` });
+function Draft({ station }: { station: string }) {
+  const draft = useDraft({ key: 'new:ws', station: \`ws/\${station}\` });
   Object.assign(window, { draft });
   return <div><button onClick={() => pickAttachment('image/*', false, draft.add)}>Pick photo</button><input type='file' onChange={e => draft.add(e.target.files!)} />{draft.files.map(f => <img key={f.id} src={f.preview} alt={f.name} />)}</div>;
 }
 function Page() {
-  const [workspace, change] = useState('a'); Object.assign(window, { change });
-  return <ToastProvider><StationContext value={{ address: 'ws/' + workspace } as any}><Draft workspace={workspace} /></StationContext></ToastProvider>;
+  const [station, change] = useState('a'); Object.assign(window, { change });
+  return <ToastProvider><StationContext value={{ address: 'ws/' + station } as any}><Draft station={station} /></StationContext></ToastProvider>;
 }
 createRoot(document.getElementById('root')!).render(<Page />);`, { flag: 'wx' });
   await writeFile(html, '<div id="root"></div><script type="module" src="/composer-station-check.tsx"></script>', { flag: 'wx' });

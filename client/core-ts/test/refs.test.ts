@@ -21,7 +21,7 @@ test("a_reference_shows_the_start_of_the_title_on_one_line", () => {
   assert.equal(title("一二三四五六七八九十一二三四五六七八九十一二三 四五"), "一二三四五六七八九十一二三四五六七八九十一二三…");
   assert.equal(title(" \n "), "对话");
   assert.equal(link("https://app.still.fail/", "ws/st", "a b/c"), "https://app.still.fail/w/ws/s/st/chats/a%20b%2Fc");
-  assert.deepEqual(draftAt("new:ws/st"), ["ws/st", "new"]);
+  assert.deepEqual(draftAt("new:ws"), ["ws", "new"]);
   assert.deepEqual(draftAt("ws/st:thread:7"), ["ws/st", "thread:7"]);
   assert.equal(draftAt("nothing"), null);
 });

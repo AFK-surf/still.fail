@@ -595,12 +595,12 @@ test("a_draft_written_as_it_is_typed_is_one_write_and_read_by_its_key", async ()
   await host.settle();
   assert.deepEqual(kept(), ["修一下"]);
   // Emptied before it was written: nothing is written after all.
-  call(core, ui, 5, "draft.put", { key: "new:ws/st", text: "新的" });
-  call(core, ui, 6, "draft.put", { key: "new:ws/st", text: "" });
+  call(core, ui, 5, "draft.put", { key: "new:ws", text: "新的" });
+  call(core, ui, 6, "draft.put", { key: "new:ws", text: "" });
   await host.time.pass(SOON_MS + 50);
   await host.settle();
   assert.deepEqual(kept(), ["修一下"]);
-  assert.deepEqual(noId(await ask(host, core, ui, 7, "draft.get", { key: "new:ws/st" })), { text: "", quotes: [], files: [] });
+  assert.deepEqual(noId(await ask(host, core, ui, 7, "draft.get", { key: "new:ws" })), { text: "", quotes: [], files: [] });
   core.close();
 });
 

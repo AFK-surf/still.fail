@@ -1,7 +1,7 @@
 // What is being written to a chat as the core keeps it (ember web/src/draft.ts useDraft; the core's composer.ts, the
-// `composer` topic, by the draft's key: `<station>:<chat>`, `new:<station>` a new chat there): its words, the
-// passages it quotes, the files going up to the station (the core sends them up and says how far), whether it can be
-// sent, what went wrong. Each chat has its own while the page shows another; the core keeps each on the device as the
+// `composer` topic, by the draft's key: `<station>:<chat>`, `new:<workspace>` the workspace's new chat): its words,
+// the passages it quotes, the files going up to the station (the core sends them up and says how far), whether it can
+// be sent, what went wrong. Each chat has its own while the page shows another; the core keeps each on the device as the
 // chat's draft. This only shows it and says what is done to it: what is typed is the page's at once (and told to the
 // core as it is typed), the rest as the page has done it until the core has it too.
 
@@ -401,14 +401,19 @@ pub fn writing_starting(src : Source, w : Writing, on : Bool) -> Unit {
 ///|
 /// What is written taken away to be sent (`composer.take`): the draft empty at once; `done` gets what the core took,
 /// as it goes (its words with the links and the paths named after them, the files that are up, the quotes, those still
-/// going up), sent as it says: its files as they were when it took them, not as this page last drew them.
-pub fn writing_take(src : Source, w : Writing, done : (Json?) -> Unit) -> Unit {
+/// going up), sent as it says: its files as they were when it took them, not as this page last drew them. `station`:
+/// the one it goes to, where a file that went up to another (a new chat's, its station changed) goes up again.
+pub fn writing_take(src : Source, w : Writing, station? : String = "", done : (Json?) -> Unit) -> Unit {
   w.taken = Some((w.text, w.quotes, w.files))
+  let params : Map[String, Json] = {}
+  if station != "" {
+    params["station"] = Json::string(station)
+  }
   writing_act(
     src,
     w,
     "take",
-    {},
+    params,
     show=fn(w) {
       w.text = ""
       w.field.set("")

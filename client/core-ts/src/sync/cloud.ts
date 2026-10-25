@@ -295,9 +295,10 @@ export class CloudSync {
     const core = this.#core;
     if (core.accounts.list().some((a) => core.data.record("me", a.sub) === undefined)) return;
     const workspaces = new Set(core.workspaces.owned().map(([id]) => id));
+    // (a workspace's own, held as a station's are: its new chat's draft)
     core.data.retain((station) => {
       const at = station.indexOf("/");
-      return at >= 0 && workspaces.has(station.slice(0, at));
+      return workspaces.has(at >= 0 ? station.slice(0, at) : station);
     }, workspaces);
   }
 

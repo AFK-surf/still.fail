@@ -604,7 +604,9 @@ src/sfapp/bar.mbt, sheet.mbt, newchat.mbt; src/ui/drag.mbt; Bar.kt, Places.kt, S
   {station}`) and what it runs on, as one control (the model · the runtime where there is a choice · how hard it
   thinks · how fast · who runs it; its sheet of the models by series beside the runtime, the depth and the speed, the
   accounts in its foot, `pick.set` until 确定 `pick.save`; with no model enabled, 没有可用模型 · 前往勾选). The composer
-  is the chat's (composer.mbt, its draft `new:<station>`: words, files, quotes as in a chat). Sent: the composer empties,
+  is the chat's (composer.mbt, its draft the workspace's `new:<workspace>`, whichever station is picked: words, files,
+  quotes as in a chat; its files go to the station it is sent to, the core sending one picked before up there again
+  as it is taken). Sent: the composer empties,
   the chat is made (`newChat.create`, once for what is picked: picked anew before a message went, made anew) and the
   message goes to it by its key (`chat.send {session}`); then the page becomes that chat in place (`Nav::become`: the
   same page, its composer's field and focus kept; back from it goes sideways), the new chat's scene going up out of

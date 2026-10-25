@@ -185,8 +185,8 @@ export class ShareIn implements Owner {
     return { ok: view };
   }
 
-  /// `shareIn.open`: what is shared into the composer of the chat it goes to (a chat by its row's `id`, else a new chat
-  /// on `station`, made the station new chats start on: `new:<station>`, or `newKey`, the key the page that opens it
+  /// `shareIn.open`: what is shared into the composer of the chat it goes to (a chat by its row's `id`, else the
+  /// workspace's new chat, made to start on `station`: `new:<workspace>`, or `newKey`, the key the page that opens it
   /// keeps a new chat's words by), after what is written there already, once; the page opens that chat and the person
   /// sends it from its composer. The chat is kept as where that site's things go.
   open(scope: string, source: string, title: string | null, target: Target, newKey: string | null = null): J {
@@ -195,7 +195,7 @@ export class ShareIn implements Owner {
     let key: string;
     if (target.id === undefined) {
       this.#inner.choose.pickNew(scope, { station: target.station.slice(target.station.lastIndexOf("/") + 1) });
-      key = newKey ?? `new:${target.station}`;
+      key = newKey ?? `new:${scope}`;
     } else {
       row = (this.#rows(scope) ?? []).find((r) => r.station === target.station && r.id === target.id);
       if (row === undefined) throw CoreError.invalid(t("core-views.error.no_chat"));

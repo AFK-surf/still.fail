@@ -44,7 +44,7 @@ fn fixture_share_topic(params : Map[String, Json]) -> Json? {
 }
 
 ///|
-/// `shareIn.open` as the core answers it: a chat's key and session, or a new chat's key.
+/// `shareIn.open` as the core answers it: a chat's key and session, or the workspace's new chat's key.
 fn fixture_share_call(name : String, params : Json) -> Result[Json, Json]? {
   if name != "shareIn.open" {
     return None
@@ -52,7 +52,7 @@ fn fixture_share_call(name : String, params : Json) -> Result[Json, Json]? {
   let p = Some(params)
   let station = text(p, "station")
   match text(p, "id") {
-    "" => Some(Ok({ "station": Json::string(station), "key": Json::string("new:" + station) }))
+    "" => Some(Ok({ "station": Json::string(station), "key": Json::string("new:" + workspace_of(station)) }))
     id =>
       Some(
         Ok({

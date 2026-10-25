@@ -216,11 +216,12 @@ export function excerpt(text: string, words: string[]): { text: string; marks: {
   return { text: shown, marks };
 }
 
-/// The chat a draft's key names, as the pages key them: `new:<station>` a new chat there, else `<station>:<chat>`.
+/// The chat a draft's key names, as the pages key them: `new:<workspace>` the workspace's new chat (kept by the
+/// workspace, as its own `new`), else `<station>:<chat>`.
 export function draftAt(key: string): [string, string] | null {
   if (key.startsWith("new:")) {
-    const station = key.slice(4);
-    return station !== "" ? [station, "new"] : null;
+    const workspace = key.slice(4);
+    return workspace !== "" ? [workspace, "new"] : null;
   }
   const at = key.indexOf(":");
   if (at < 0) return null;

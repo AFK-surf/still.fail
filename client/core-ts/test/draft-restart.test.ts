@@ -116,7 +116,7 @@ test("new_chat_and_thread_drafts_remain_separate_from_a_pending_sessions_draft",
     const pending = t.core.inner.views.local.pendingNew("ws/st", { runtime: "claude" });
     t.core.inner.views.local.pendingMade(pending, "ember:made", 9);
     const drafts = [
-      ["new:ws/st", "还没创建的新聊天"],
+      ["new:ws", "还没创建的新聊天"],
       ["ws/st:thread:9", "线程草稿"],
       [`ws/st:${pending}`, "已创建的聊天草稿"],
       ["ws/st:unrelated", "另一个聊天草稿"],
