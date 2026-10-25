@@ -1015,7 +1015,7 @@ fn drive_steps(c : Ctx) -> Unit {
         }
         h_clipboard_set(words)
         if !h_drive(3, "") {
-          on_text(0, words, 0, 0)
+          on_text(text_paste, words, 0, 0)
         }
         acted()
         return

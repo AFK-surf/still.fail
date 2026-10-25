@@ -104,7 +104,8 @@ static void send_text(int kind, NSString *s, int a, int b) {
 
 // ⌘V (the key, or the menu bar's 粘贴): files on the clipboard (copied in Finder, or by an app that copies a picture as
 // its file) or a picture are the app's ⌘V (1000 + v), which reads the clipboard for them (@hostapi.clip_read), as a
-// page's paste takes the clipboard's files; else its words, typed
+// page's paste takes the clipboard's files; else its words, pasted (text kind 8: put in as typed, a step of its own
+// to undo)
 static void paste_now(int mods) {
   NSPasteboard *pb = [NSPasteboard generalPasteboard];
   BOOL files = [pb canReadObjectForClasses:@[ NSURL.class ] options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
@@ -112,7 +113,7 @@ static void paste_now(int mods) {
     mb_cb.key(1000 + 'v', mods);
   } else {
     NSString *s = [pb stringForType:NSPasteboardTypeString];
-    if (s.length) send_text(0, s, 0, 0);
+    if (s.length) send_text(8, s, 0, 0);
   }
 }
 

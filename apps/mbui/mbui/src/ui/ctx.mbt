@@ -174,6 +174,12 @@ struct EditorState {
   /// the caret's blinking starts again (shown at once) the next time the editor is built: the app wrote what it holds
   /// (Field::new, set, take)
   mut blink_again : Bool
+  /// the person's edits kept to undo, each the field as it was before it (its words, anchor and caret), the last last;
+  /// those undone, to do again; and the field as the last typing left it, which typing from there goes on in (none:
+  /// something else was done since) (editor_undo.mbt)
+  undos : Array[(String, Int, Int)]
+  redos : Array[(String, Int, Int)]
+  mut typed : (String, Int, Int)?
   /// the frame it was last built in and the editor's key and id then: a Field given to a second editor (another id) in
   /// one frame is told
   mut built_frame : Int
