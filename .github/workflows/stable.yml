@@ -51,8 +51,9 @@ jobs:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
         run: sh .github/release.sh --stable android
 
-  # The Mac app (scripts/release.sh desktop: the Electron app until the beta's move over to mbui's is seen through,
-  # 2026-10-26) and, beside it in a runner of its own, the Windows app (Electron's), as main's beta builds them.
+  # The Mac app is mbui's (apps/mbui, its `stable` variant: fail.still.desktop, signed by the same team, so an installed
+  # Electron app's updater moves it over, its data and sign-in kept), as the beta's became on 2026-10-26; the Windows app
+  # is Electron's still, desktop-win's, beside it in a runner of its own.
   desktop:
     needs: plan
     runs-on: [self-hosted, mini1]
@@ -63,7 +64,7 @@ jobs:
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
       - uses: ./.github/actions/setup-mac
       - uses: ./.github/actions/natives
-      - name: Publish the stable Mac app with its original signing identity
+      - name: Publish the stable Mac app (mbui's) with its original signing identity
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
