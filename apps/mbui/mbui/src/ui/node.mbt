@@ -102,6 +102,8 @@ struct Node {
   mut radii : FixedArray[Double]?
   /// where its corners come from, each, where they are linked (Radius::Linked: the corner rule holds it to them)
   mut links : FixedArray[CornerOf]?
+  /// its corners worked out once laid out (corners.mbt: `Inner`, `InnerOr`, one in a container's corner), not said
+  mut corners_worked : Bool
   mut border_w : Double
   mut border_c : Int64
   // its border drawn as dashes (Patch's `dashed`)
@@ -316,6 +318,7 @@ fn Node::new() -> Node {
     radius: 0.0,
     radii: None,
     links: None,
+    corners_worked: false,
     border_w: 0.0,
     border_c: 0L,
     dashed: false,

@@ -1686,6 +1686,24 @@ test "page-old-sheet" {
 }
 
 ///|
+test "corners-each" {
+  let cfg = Config::new(@rjson.parse("{\"pages\": {\"roots\": [\"src/pages\"]}, \"library\": {\"roots\": [\"src/lib\"]}}"))
+  // corners said not alike in a page and in the library; one corner for all, a test's and another package's not counted
+  found(
+    [
+      ("src/pages/col.mbt", "let a : Style = style(radius=Corners(12.0, 12.0, 0.0, 0.0))\nlet b : Style = style(radius=Exact(12.0))\n"),
+      ("src/lib/panel.mbt", "fn f(k : CornerOf) -> Radius {\n  LinkedEach(k, k, Own(30.0), Own(30.0))\n}\n"),
+      ("src/pages/col_wbtest.mbt", "test \"t\" {\n  let _ = Corners(1.0, 2.0, 3.0, 4.0)\n}\n"),
+      ("src/other/x.mbt", "let c : Radius = Corners(1.0, 2.0, 3.0, 4.0)\n"),
+    ],
+    "corners-each",
+    2,
+    cfg~,
+  )
+  |> ignore
+}
+
+///|
 test "page-look" {
   let cfg = Config::new(
     @rjson.parse(

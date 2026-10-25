@@ -142,9 +142,10 @@ pub fn button_height() -> Double {
 }
 
 ///|
-/// An icon button (page.css.ts iconBtn, parts.tsx IconButton): `size` square (32), its corner 12 (`round`: a circle,
-/// where it stands in a pane's corner, concentric with it; `linked`: its corner where that comes from, a bar's buttons'
-/// at the window's corner: @sf.bar_keys_link), the icon (16) quiet until pointed at; `on` held down
+/// An icon button (page.css.ts iconBtn, parts.tsx IconButton): `size` square (32), its corner 12 (`corner`: the
+/// ladder's step where it stands, a card's text inset in its corner the small block's 10; `round`: a circle, where it
+/// stands in a pane's corner, concentric with it; `linked`: its corner where that comes from, a bar's buttons' at the
+/// window's corner: @sf.bar_keys_link), the icon (16) quiet until pointed at; `on` held down
 /// (aria-pressed); named for a screen reader and said in its tip with its keys (`shortcut`, an action's).
 /// `ink` and `quiet` for one over a ground of its own (the reader's paper).
 pub fn icon_button(
@@ -155,6 +156,7 @@ pub fn icon_button(
   icon_size? : Double = 16.0,
   on? : Bool = false,
   round? : Bool = false,
+  corner? : Double = r_field,
   linked? : @ui.CornerOf,
   ink? : Int64,
   quiet? : Int64,
@@ -176,7 +178,7 @@ pub fn icon_button(
   }
   let corner : @ui.Radius = match linked {
     Some(link) => Linked(link)
-    None => rounded(if round { size / 2.0 } else { r_field })
+    None => rounded(if round { size / 2.0 } else { corner })
   }
   let b = c.box(
     style=@ui.style(radius=corner),
@@ -1748,11 +1750,23 @@ pub fn dialog(
           c.box(style=dialog_lead_at, fn() { c.text(s.description, style=dialog_lead) |> ignore }) |> ignore
         }
         // what it holds scrolls in itself when the dialog would be taller than the window leaves it (dialogBody's
-        // overflow: auto, its minimum 0): its title and its buttons stay
-        c.capped(key + "/body", c.height, shrinks=true, fn() { c.box(style=dialog_body, inner) |> ignore }) |> ignore
+        // overflow: auto, its minimum 0): its title and its buttons stay. Out to the dialog's sides, what it holds back
+        // on its words' line, and with no buttons down to its foot, 24 under what it holds: what reaches out to its
+        // corners on purpose (dialog_rows, dialog_foot_rows) is not cut short of them.
+        c.capped(key + "/body", c.height, shrinks=true, mx=-dialog_pad, padx=dialog_pad, fn() {
+          c.box(style=if footer is None { dialog_body_end } else { dialog_body }, fn() {
+            // (its rows told they are in a dialog: dialog_rows)
+            let was = in_dialog.val
+            in_dialog.val = true
+            inner()
+            in_dialog.val = was
+          })
+          |> ignore
+        })
+        |> ignore
         match footer {
           Some(f) => c.box(style=dialog_foot.then(dialog_corner_foot(dialog_pad)), f) |> ignore
-          None => c.box(style=dialog_end, fn() {  }) |> ignore
+          None => ()
         }
         },
       )
@@ -1835,9 +1849,31 @@ let dialog_foot : @ui.Style = @ui.css("row w=Full justify=JEnd align=ACenter gap
 let dialog_pad : Double = 24.0
 
 ///|
-/// With none, 24 under what it holds.
+/// Whether a dialog's body is being drawn (dialog), what its rows reach out by (dialog_rows).
+// kept across runs: said by dialog round the body it draws, false between
+let in_dialog : Ref[Bool] = { val: false }
+
+///|
+/// A list of rows `row_h` high, each pressed as a whole (a station to pick), and each row: in a dialog the rows round as
+/// their height, the list out past the dialog's words at its sides and foot to where the last row stands concentric with
+/// its foot corners (capsule_in), each row's words back on the words' line; elsewhere (a sheet's, a small panel's) as
+/// the list and its rows are. One corner for all of them, the last's in the corners concentric, never that one's alone.
+pub fn dialog_rows(row_h : Double) -> (@ui.Style, @ui.Style) {
+  if !in_dialog.val {
+    return (no_style, no_style)
+  }
+  let out = capsule_in(dialog_r, row_h) - dialog_pad
+  (@ui.style(mx=room(out), mb=room(out)), @ui.style(radius=Full, px=room(-out)))
+}
+
+///|
 // kept across runs: a value (no field of it changes)
-let dialog_end : @ui.Style = @ui.css("h=S6")
+let no_style : @ui.Style = @ui.css("")
+
+///|
+/// With no buttons, its body down to its foot, 24 under what it holds.
+// kept across runs: a value (no field of it changes)
+let dialog_body_end : @ui.Style = dialog_body.then(@ui.css("pb=S6"))
 
 // ---------------------------------------------------------------------------
 // Fields, selects, choices (parts.tsx Field, Select, Choices; parts.css.ts field, select, choice, radio)
@@ -1935,7 +1971,8 @@ fn control_height() -> @ui.Style {
 ///|
 /// Lines to type in (controls.css.ts input as a textarea: --r-field round, not a pill; 12 by 7 in, the strong grey's
 /// line, the field's hover grey pointed at or written in, on the canvas; its words 14 on lines 1.6 of them), at least
-/// `rows` lines high and growing to `most`; `field`: what it holds, the view's own. What is in it now.
+/// `rows` lines high and growing to `most`; `field`: what it holds, the view's own; `corner`, the ladder's where it
+/// stands (first in a card, on its words' inset in its corners: the small block's 10). What is in it now.
 pub fn textarea(
   c : @ui.Ctx,
   key : String,
@@ -1943,12 +1980,16 @@ pub fn textarea(
   most? : Int = 16,
   placeholder? : String = "",
   field? : @ui.Field,
+  corner? : Double,
 ) -> String {
   let t = theme()
   let box_id = c.id(key + "/frame")
   let hot = c.lit(box_id) || c.has_focus(c.id(key))
   let mut words = ""
-  let tall = @ui.style(min_h=Fixed(rows.to_double() * textarea_line + textarea_in))
+  let tall = match corner {
+    Some(k) => @ui.style(min_h=Fixed(rows.to_double() * textarea_line + textarea_in), radius=rounded(k))
+    None => @ui.style(min_h=Fixed(rows.to_double() * textarea_line + textarea_in))
+  }
   c.box(id=box_id, style=(if hot { textarea_box_hot } else { textarea_box }).then(tall), fn() {
     words = c.editor(
       key,
@@ -2230,10 +2271,20 @@ pub fn choices(
           })
           |> ignore
           // (parts.css.ts choiceExtra: 14 in at its sides, 12 over and 14 under what it holds; no line over it: only
-          // a menu's parts are set apart by one, docs/ui-panels.md)
+          // a menu's parts are set apart by one, docs/ui-panels.md. Narrow, its rows each a ground pressed whole: those
+          // a step of the ladder in from its sides and foot, round as that step, their words their own padding in)
           match extra.bind(fn(f) { f(v) }) {
             Some(f) if s.on =>
-              c.box(style=choice_extra, fn() { c.box(style=choice_extra_in, f) |> ignore }) |> ignore
+              c.box(style=if look() is Narrow { choice_extra_rows } else { choice_extra }, fn() {
+                c.box(style=if look() is Narrow { choice_extra_rows_in } else { choice_extra_in }, fn() {
+                  // (on the choice as on a card: a row's ground there rounds in its corners, in_card)
+                  in_card.val += 1
+                  f()
+                  in_card.val -= 1
+                })
+                |> ignore
+              })
+              |> ignore
             _ => ()
           }
       })
@@ -2242,9 +2293,11 @@ pub fn choices(
 }
 
 ///|
+/// A choice: bordered, a block's corner of the ladder's (18: at a card's foot, reaching to its inset, concentric with
+/// its corners; every one alike).
 // kept across runs: a value (no field of it changes)
-let choice_card : @ui.Style = @ui.css(
-  #|w=Full radius=Xl1_5 bg=Surface border=B1 border_color=Border disabled{opacity=O55}
+let choice_card : @ui.Style = @ui.css("w=Full bg=Surface border=B1 border_color=Border disabled{opacity=O55}").then(
+  @ui.style(radius=row_radius),
 )
 
 ///|
@@ -2268,6 +2321,16 @@ let choice_extra : @ui.Style = @ui.css("w=Full px=S3_5")
 ///|
 // kept across runs: a value (no field of it changes)
 let choice_extra_in : @ui.Style = @ui.css("w=Full pt=S3 pb=S3_5")
+
+///|
+/// Narrow, where what it holds are rows each a ground pressed whole: those a step of the ladder in from the choice's
+/// sides and its foot (corner_inset), round as that step (in_card: Inner), concentric with its corners.
+// kept across runs: a value (no field of it changes)
+let choice_extra_rows : @ui.Style = @ui.style(w=Full, px=inset_room)
+
+///|
+// kept across runs: a value (no field of it changes)
+let choice_extra_rows_in : @ui.Style = @ui.style(w=Full, pt=S3, pb=inset_room)
 
 ///|
 // kept across runs: a value (no field of it changes)

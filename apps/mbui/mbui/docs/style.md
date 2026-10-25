@@ -84,11 +84,13 @@ Rich text (`Ctx::rich`) has both: letter spacing in every run, and `max_lines` (
 follows). Behaviour is not a style (`id`, `glass`, `notch_*`,
 `aspect`, `tx`/`ty`, a place in the parent: `left` `top` `right` `bottom`, `moves`).
 
-A box's corner is the one it has standing alone. Where the layout puts it in the corner of a rounded container that
-shows (the nearest round it with a ground, an edge, glass or a cut: `Tester::corner_faults`'s), near both edges that
-meet there and as far from both, its corner is worked out after layout, concentric with the container's (smooth.mbt
-`concentric`: corners.mbt `corners_in_corners`), so no page writes a corner relative to its container and one the
-window narrows into a corner, or out of one, is right in both. Not a capsule or a circle (its corner half its shorter
+A box's corner is the one it has standing alone. Where the layout puts it in the corners of a rounded container that
+shows (the nearest round it with a ground, an edge, glass or a cut: `Tester::corner_faults`'s), filling it (in all four
+of its corners, as far from each edge), its corner is worked out after layout, concentric with the container's
+(smooth.mbt `concentric`: corners.mbt `corners_in_corners`). In only some of its corners it keeps its own, all four
+alike: concentric there alone it would have corners unlike each other, which mbui never makes by the way (only a
+design says them, below); `corner_faults` says where it is not concentric, and the page gives it the corner, or the
+place, that is. Not a capsule or a circle (its corner half its shorter
 side): its shape is its height's, and where it stands is what makes it concentric (the container's corner its distance
 and its half), which the page lays out and `corner_faults` checks; nor one too small for the corner it would have there,
 nor one at different distances from the two edges: each keeps its own and `corner_faults` says so.
@@ -96,14 +98,16 @@ nor one at different distances from the two edges: each keeps its own and `corne
 `radius=Inner`: the corner of the container the corner rule measures against, as above, for a box near only one pair
 of its edges too (a row across a card, near its sides), drawn square where it cannot be (in no rounded container, near
 none of its edges, nearer one edge than another) and said so by `corner_faults`: a test fails, a person's screen does not
-stop. `InnerOr(own)`: the same, its own corner where it stands alone. `Around`: the other way, the container's corner
-round what lies in its corner.
+stop. `InnerOr(own)`: the same, its own corner where it stands alone, or where following would leave its corners
+unlike. `Around`: the other way, the container's corner round what lies in its corner.
 
 Each corner is its own (`Corners(tl, tr, br, bl)`, CSS's border-radius of four; every renderer draws a box's corner by
-the quarter it is in), and the rule works corner by corner: a box's corner lying in a container's corner is concentric
-with that corner, its others keep its own (an `Inner` one, with none of its own, follows the container's matching
-corner in all four). So a panel whose corners at the window's edge follow the window's and whose others stand alone
-holds what lies in each as that corner has it: a composer across its foot follows each foot corner, its top its own.
+the quarter it is in), and the rule works corner by corner. Corners unlike each other are a design's, said
+(`Corners`, `LinkedEach`: a panel whose corners at the window's edge follow the window's and whose others stand alone),
+each looked at and kept by a person (an app's detlint `corners-each`); what mbui works out is unlike only as the
+container's corners are, where it fills it (an `Inner` one, with none of its own, follows the container's matching
+corner in all four). A box whose own corner is rounder than any it could have concentric in a corner it stands in (a
+card's 26 in a window's 16) keeps it, alone. `Tester::mixed_corners` lists every box drawn with corners unlike, and how.
 
 A theme may say its corner ladder (`Theme::corner_ladder`, outermost first): the corners nested things are round by,
 each the next in at one inset. `corner_faults` then holds a rounded container with something in its corner, and a

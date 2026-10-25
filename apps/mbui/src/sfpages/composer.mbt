@@ -224,9 +224,9 @@ pub fn composer(
   let mut chosen = -1
   let box = c.box(
     style=if sent_box > 0.0 {
-      box_open(place.feet).then(@ui.style(min_h=Fixed(sent_box), justify=JBetween))
+      composer_box_open.then(@ui.style(min_h=Fixed(sent_box), justify=JBetween))
     } else if multiline {
-      box_open(place.feet)
+      composer_box_open
     } else {
       composer_box.then(capsule_place(place.capsule_in))
     },
@@ -237,7 +237,7 @@ pub fn composer(
       if multiline {
         composer_extras(c, src, spec, w)
         words = composer_text(c, src, ws, spec, w, cap, multiline, submit)
-        c.box(style=tools_row(place.feet), fn() {
+        c.box(style=tools_row(), fn() {
           plus = attach(c, src, spec, w, no_files)
           match (spec.toolbar, composing.toolbar_leaving) {
             (Some(f), _) => chosen = c.box(style=choices, f)
@@ -734,7 +734,7 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
     None => {
       // as wide as a card is (236), however little the row has: a card hugging its words in a row that wraps had none
       // left for them (its words squeezed to …); its ✕ hung on its corner, as a picture's (@sf.with_corner_remove)
-      let removed = @sf.with_corner_remove(c, key, remove_label(v, name), @sf.message_file_corner, w=dmin(@sf.file_card_w, c.width), fn() {
+      let removed = @sf.with_corner_remove(c, key, remove_label(v, name), @sf.composer_inner, w=dmin(@sf.file_card_w, c.width), fn() {
         let ref_ = field(v, "ref")
         let said = match ref_ {
           // named by its path: its station and that it goes as a path, its card the named one's (RefCard)
@@ -937,8 +937,9 @@ fn composer_picture(
 }
 
 ///|
-/// A waiting picture's corner, as its tile's.
-let thumb_corner : Double = @sf.message_file_corner
+/// A waiting picture's corner, as its tile's: what waits in the composer is round as its corners have what lies in them
+/// (@sf.composer_inner, the ladder's next step in), every one alike, the first in its corner concentric with it.
+let thumb_corner : Double = @sf.composer_inner
 
 ///|
 /// How long it stays a box after it loses the cursor (LET_GO_MS); how long its change of shape takes (morph.ts).
@@ -1024,36 +1025,36 @@ fn capsule_place(capsule_in : (Double, Double, Double)) -> @ui.Style {
 
 ///|
 /// Where the composer stands at a panel's foot (composer_place): how much further in than its box (composer_side) its
-/// capsule stands from the panel's left, its right and its foot; its box's foot corners there (left, right), each the
-/// panel's followed (@sf.pane_foot_corners), what its ＋ and send stand in. None where it reaches no panel's corners: a
-/// card's corner of the ladder's, concentric with what it lies in (InnerOr: a phone's screen's).
+/// capsule stands from the panel's left, its right and its foot. Its box, opened, is a card's corner wherever it is:
+/// as far in as makes that concentric with a panel's foot corner (@sf.pane_foot_in), alone in one too square for it.
 pub(all) struct ComposerPlace {
   capsule_in : (Double, Double, Double)
-  feet : (@ui.CornerOf, @ui.CornerOf)?
 }
 
 ///|
 /// Standing in no panel's corners (ComposerPlace).
 // kept across runs: a value (no field of it changes)
-pub let composer_alone : ComposerPlace = { capsule_in: (0.0, 0.0, 0.0), feet: None }
+pub let composer_alone : ComposerPlace = { capsule_in: (0.0, 0.0, 0.0) }
 
 ///|
 /// Where the composer stands at a panel's foot (`pane` wide): in a panel of its own (@sf.pane_round) whose foot corners
 /// it reaches (as wide as the panel leaves it: composer_width), its capsule's ends each as far in as makes it
 /// concentric with the corner it is in, an end that cannot the ladder's inset in, as it stands alone
-/// (@sf.foot_capsule), its box's foot corners the panel's followed; else as it stands alone (composer_alone).
+/// (@sf.foot_capsule); else as it stands alone (composer_alone).
 pub fn composer_place(pane : Double) -> ComposerPlace {
   let d = composer_side()
   if !@sf.in_pane() || composer_width(pane) < pane - 2.0 * d - 0.5 {
     return composer_alone
   }
   let (l, r, b) = @sf.foot_capsule(capsule_h, @sf.corner_inset, @sf.corner_inset)
-  { capsule_in: (l - d, r - d, b - d), feet: @sf.pane_foot_corners(@sf.card_corner, holds=@sf.theme().round.side) }
+  { capsule_in: (l - d, r - d, b - d) }
 }
 
 ///|
 /// The box (composerBox[data-multiline]): a column its padding in (@sf.composer_pad: its buttons round in its corners
-/// concentric with it), its parts 10 apart, a card's corner of the ladder's; in a panel's corners concentric with them.
+/// concentric with it), its parts 10 apart, a card's corner of the ladder's, all four alike: where it stands in a
+/// panel's foot corners (@sf.pane_foot_in) concentric with them; in a corner it would follow only in some of its corners
+/// (a phone's screen's, a Mac window's at a panel's foot), its own (InnerOr: corners not alike are a design's, said).
 // kept across runs: a value (no field of it changes)
 let composer_box_open : @ui.Style = @ui.style(
   w=Full,
@@ -1061,16 +1062,6 @@ let composer_box_open : @ui.Style = @ui.style(
   gap=S2_5,
   radius=InnerOr(@sf.composer_corner),
 )
-
-///|
-/// The box with its foot's corners `feet` (ComposerPlace's): the panel's followed, its top's a card's; none, as it lies.
-fn box_open(feet : (@ui.CornerOf, @ui.CornerOf)?) -> @ui.Style {
-  match feet {
-    Some((l, r)) =>
-      composer_box_open.then(@ui.style(radius=LinkedEach(Own(@sf.card_corner), Own(@sf.card_corner), r, l)))
-    None => composer_box_open
-  }
-}
 
 ///|
 /// The text's room (composerText): 5 over and under, 8 at its end on one line; opened, 8 in and 8 over.
@@ -1091,29 +1082,11 @@ pub fn composer_words_width(pane : Double) -> Double {
 
 ///|
 /// Its row under the text (composerToolbar, multiline: space-between, 4 apart), its ＋ and send round in the box's foot
-/// corners `feet` (round_in), what stands over them (a quote, a file) the ladder's inset in.
-fn tools_row(feet : (@ui.CornerOf, @ui.CornerOf)?) -> @ui.Style {
-  let (l, r, b) = round_in(feet)
-  let pad = @sf.composer_pad
-  tools_row_base.then(@ui.style(ml=@sf.room_of(l - pad), mr=@sf.room_of(r - pad), mb=@sf.room_of(b - pad)))
-}
-
-///|
-/// How far in from the opened box its ＋ and send (the theme's round controls) stand in its foot corners `feet`
-/// (ComposerPlace's), from its left, its right and its foot: as far in as makes them concentric with the corners they
-/// are in (外圆角 = 距离 + 半高: CornerOf::capsule_at), where they may stand there; one in a corner too square for it as
-/// far in as the other, evenly from both its edges (both alone: as in a card's corner of the ladder's,
-/// @sf.composer_round_in); its foot the one's that follows (the left's where both do, each apart).
-fn round_in(feet : (@ui.CornerOf, @ui.CornerOf)?) -> (Double, Double, Double) {
-  let alone = @sf.composer_round_in()
-  guard feet is Some((l, r)) else { return (alone, alone, alone) }
-  let side = @sf.theme().round.side
-  match (l.capsule_at(side), r.capsule_at(side)) {
-    (Some(a), Some(b)) => (a, b, a)
-    (Some(a), None) => (a, a, a)
-    (None, Some(b)) => (b, b, b)
-    (None, None) => (alone, alone, alone)
-  }
+/// corners, concentric with its card's corner (@sf.composer_round_in, 外圆角 = 距离 + 半高), what stands over them (a
+/// quote, a file) the ladder's inset in (the theme's round controls: a finger's larger).
+fn tools_row() -> @ui.Style {
+  let d = @sf.room_of(@sf.composer_round_in() - @sf.composer_pad)
+  tools_row_base.then(@ui.style(ml=d, mr=d, mb=d))
 }
 
 ///|
@@ -1149,12 +1122,12 @@ let quotes_column : @ui.Style = @ui.css("w=Full gap=S1_5")
 let files_flow : @ui.Style = @ui.style(row=true, w=Full, gap=S1_5, pr=@sf.room_of(@sf.composer_files_end))
 
 ///|
-let files_lines : Double = @ui.Space::px(S1_5) + @sf.corner_remove_reach(@sf.message_file_corner)
+let files_lines : Double = @ui.Space::px(S1_5) + @sf.corner_remove_reach(@sf.composer_inner)
 
 ///|
-/// A picture waiting: 56 square, the files' corner (MESSAGE_FILE_CORNER), clipped; failed, edged red.
+/// A picture waiting: 56 square, what waits in the composer's corner (thumb_corner), clipped; failed, edged red.
 // kept across runs: a value (no field of it changes)
-let thumb_box : @ui.Style = @ui.style(w=S14, h=S14, radius=@sf.message_file_radius, clip=true)
+let thumb_box : @ui.Style = @ui.style(w=S14, h=S14, radius=@sf.composer_inner_radius, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1346,7 +1319,7 @@ pub fn composer_room(c : @ui.Ctx, draft : String) -> Double {
   // --composer-room, max(the composer's height, an opened one-line composer's)): opened or let go, a capsule or a box,
   // the list keeps its words where they are; only a line more, a file, a quote, what is said over it move them
   let least = match @motion.measured(c, "composer/content") {
-    Some(box) => foot - box + composer_open_box(composer_place(c.width).feet)
+    Some(box) => foot - box + composer_open_box()
     None => composer_open_room(c.width)
   }
   let now = dmax(foot, least)
@@ -1622,7 +1595,7 @@ fn capsule_room(pane : Double) -> Double {
 /// 12 over it and its foot's room under it, composer_foot_in): what a list that keeps its words in place as the
 /// composer closes keeps clear at least (ChatHost.kt roomForList).
 pub fn composer_open_room(pane : Double) -> Double {
-  composer_open_box(composer_place(pane).feet) + 12.0 + composer_foot_in(pane)
+  composer_open_box() + 12.0 + composer_foot_in(pane)
 }
 
 ///|
@@ -1643,12 +1616,12 @@ pub fn composer_foot_in(pane : Double) -> Double {
 let composer_foot_wide : Double = 16.0
 
 ///|
-/// Its box opened with one line (composer_open_room without what is over and under it), its foot's corners `feet`: as
-/// composer_box_open lays it out, its padding over the line (text_open: 8 over it), its parts 10 apart, its buttons'
-/// row as far from its foot as makes them concentric with its corners (round_in).
-fn composer_open_box(feet : (@ui.CornerOf, @ui.CornerOf)?) -> Double {
+/// Its box opened with one line (composer_open_room without what is over and under it): as composer_box_open lays it
+/// out, its padding over the line (text_open: 8 over it), its parts 10 apart, its buttons' row as far from its foot as
+/// makes them concentric with its corners (tools_row).
+fn composer_open_box() -> Double {
   let t = @sf.theme()
-  @sf.composer_pad + (8.0 + @ui.current().style_size(t.t.words).1) + 10.0 + t.round.side + round_in(feet).2
+  @sf.composer_pad + (8.0 + @ui.current().style_size(t.t.words).1) + 10.0 + t.round.side + @sf.composer_round_in()
 }
 
 ///|

@@ -257,6 +257,7 @@ fn font_preview(c : @ui.Ctx, ui_face : Int, text_face : Int) -> Unit {
   @sf.page_card(c, fn() {
     c.box(style=fp_column, fn() {
       c.box(style=fp_mine_room, fn() {
+        c.box(style=fp_mine_clear, fn() {  }) |> ignore
         c.box(style=fp_bubble, fn() {
           c.rich([@ui.span(@sf.t("web-pages.appearance.fonts.sampleMine"))], key="fonts/sample-mine", style=@sf.body, words=true, face=text_face)
           |> ignore
@@ -298,11 +299,24 @@ let fp_column : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fp_mine_room : @ui.Style = @ui.css("w=Full align=AEnd").then(@ui.style(pl=@sf.corner_clear_room))
+let fp_mine_room : @ui.Style = @ui.css("row w=Full justify=JEnd")
 
 ///|
+/// What their bubble leaves at the row's start: as wide as the chat's at most (MineBubble: 78% of the column), its words
+/// wrapping in what is left.
 // kept across runs: a value (no field of it changes)
-let fp_bubble : @ui.Style = @ui.css("radius=Xl2 bg=Bg px=S3_5 py=S2_5")
+let fp_mine_clear : @ui.Style = @ui.style(w=Pct(fp_mine_clear_share))
+
+///|
+let fp_mine_clear_share : Double = 22.0
+
+///|
+/// The bubble out of its row, the ladder's inset in from the card's top right, not its words' 20: concentric with its
+/// corner there, a block's 18 of the ladder's, all four alike (its row on the column's edges, as the agent's words).
+// kept across runs: a value (no field of it changes)
+let fp_bubble : @ui.Style = @ui.css("radius=Xl2 bg=Bg px=S3_5 py=S2_5").then(
+  @ui.style(mt=@sf.room_of(@sf.corner_inset - @sf.card_pad), mr=@sf.room_of(@sf.corner_inset - @sf.card_pad)),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)

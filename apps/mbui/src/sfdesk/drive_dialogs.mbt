@@ -72,7 +72,9 @@ pub fn add_folder(src : Source, ws : String, stations : Array[DvStation]) -> Uni
         @sf.t("web-pages.drive.addRoot"),
         fn(c, close) {
           let t = @sf.theme()
-          c.box(style=roots_list, fn() {
+          // (in a dialog, round rows out to its corners, the last concentric with them: @sf.dialog_rows)
+          let (list, row) = @sf.dialog_rows(pick_row_h)
+          c.box(style=roots_list.then(list), fn() {
             for s in stations {
               let id = c.id("drive/which/" + s.station)
               c.cursor(id, Hand)
@@ -80,7 +82,7 @@ pub fn add_folder(src : Source, ws : String, stations : Array[DvStation]) -> Uni
                 close()
                 picker_open(src, ws, s.station)
               }
-              let b = c.box(style=pick_row, id~, fn() {
+              let b = c.box(style=pick_row.then(row), id~, fn() {
                 @sf.station_icon(c, s.emoji, s.icon, pick_icon, t.p.muted)
                 c.text(s.name, style=pick_name) |> ignore
                 if !s.online {

@@ -785,10 +785,11 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
           let (ew, eh) = (bw * sw, bh * sh)
           let w = fw + (ew - fw) * up
           let h = fh + (eh - fh) * up
-          // (on no ground and with a file's corner, as its tile and its message draw it: sfpages composer.mbt,
-          // message_files.mbt)
+          // (on no ground, its corner its tile's in the composer as it leaves, a file's in its message as it lands,
+          // in the one change of shape: sfpages composer.mbt, message_files.mbt)
+          let corner = @sf.composer_inner + (@sf.message_file_corner - @sf.composer_inner) * up
           let pic = c.box(style=@ui.style(w=Fixed(w), h=Fixed(h)), fn() {
-            c.image(ff.picture, w=Px(w), h=Px(h), fit=FitCover, radius=@sf.message_file_corner, bg=0L) |> ignore
+            c.image(ff.picture, w=Px(w), h=Px(h), fit=FitCover, radius=corner, bg=0L) |> ignore
           })
           // between its tile and its place as this frame lays it out (not a frame behind), on the words' way: a new
           // chat's list comes up with them on the same (flight_carry_shift), so the picture goes from its tile to its

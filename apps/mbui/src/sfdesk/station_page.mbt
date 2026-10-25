@@ -723,7 +723,8 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
   }
   let saving = is_doing(core, ["agentEnv.form.save"], [("station", address), ("form", form)])
   c.box(style=st_editor, fn() {
-    let typed = @sf.textarea(c, "env/" + address, rows=6, field=field_, placeholder=env_placeholder)
+    // (first in its card, in its corners on the words' inset: the ladder's small block's corner there)
+    let typed = @sf.textarea(c, "env/" + address, rows=6, field=field_, placeholder=env_placeholder, corner=@sf.small_corner)
     if env_seeded.contains(address) && typed != text(d, "text") && typed != env_sent.get(address).unwrap_or("") {
       env_sent[address] = typed
       c.tell("env-edit/" + form, fn() {
@@ -944,8 +945,12 @@ let st_count : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7, weight=Medi
 let st_memory : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)
 
 ///|
+/// A profile's maker's mark leading its row: a tile in the row's corner the ladder's inset in, concentric with it (the
+/// small block's 10), not a circle, which no row's corner there could hold concentric (the user, 2026-10-25: 不用圆形就行了).
 // kept across runs: a value (no field of it changes)
-let st_profile_mark : @ui.Style = @ui.css("w=S9 h=S9 radius=Full bg=Neutral align=ACenter justify=JCenter")
+let st_profile_mark : @ui.Style = @ui.css("w=S9 h=S9 bg=Neutral align=ACenter justify=JCenter").then(
+  @ui.style(radius=@sf.small_radius),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)

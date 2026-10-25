@@ -7,7 +7,7 @@ let rule_names : Array[String] = [
   "retired-api", "app-clock", "wall-clock", "engine-math", "poll", "host-read", "builtin-hash",
   "hash-order", "globals", "style-literal", "box-loose", "style-exact", "style-text", "build-effect",
   "unsettled-ok", "host-delay", "library-import", "reset-wire", "page-hand", "page-screen", "page-look", "follow-layout",
-  "motion-read", "page-old-part", "page-old-sheet",
+  "motion-read", "page-old-part", "page-old-sheet", "corners-each",
 ]
 
 ///|
@@ -48,6 +48,7 @@ let rule_words : Map[String, String] = {
   "library-import": "a package of the app's component library (detlint.json `library`) imports what is not the framework's nor said to be its own (the app's pages, its core, a station's, the cloud's): what it needs of the app, the app gives it as it starts (a function it sets: @sf.set_shortcuts)",
   "follow-layout": "a motion follows what the layout measured (a node's size or place, the window's, the keyboard's): what changed it is not its cause; tell the motion at its cause, with what it moves for (@motion.layout's `by`), and what its container does to it is no motion of its own (the app's docs/motion.md)",
   "motion-read": "the app reads whether a motion runs (moving()): what is shown, what takes a press, when state is let go follow from the cause and the motion's declared end (ends()); what only draws by it says so on its line (det-ok)",
+  "corners-each": "a box's corners said not all alike (Corners, LinkedEach): only a design's, each looked at and kept, never what came by the way (the user, 2026-10-26: 每个四边圆角不一致的都应该手动确认是否 by design); say why where it is said and list it in the app's docs/ui-panels.md (四角不一致的), then raise its count: mbui itself never works corners out unlike each other",
   "host-delay": "a host does something a fixed time later (postDelayed, dispatch_after, SetTimer, setTimeout): do it on the event it waits for (a callback, a listener, the system's word); a time the app asked for (its wake) says so on its line (det-ok)",
 }
 

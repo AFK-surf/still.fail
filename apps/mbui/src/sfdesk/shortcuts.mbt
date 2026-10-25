@@ -288,7 +288,8 @@ let keys_row_label : @ui.Style = @ui.style(w=@sf.grow)
 let keys_row_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, w=Full)
 
 ///|
-/// Its keys (Shortcuts.css.ts record): 120 wide at least, 30 high, 12 in, the field's corner, the hover ground (and
+/// Its keys (Shortcuts.css.ts record): 120 wide at least, 30 high, 12 in, the ladder's small block's corner (the first's
+/// and the last's in the card's corners on its words' inset, concentric there: every one alike), the hover ground (and
 /// the pointer's over it, pointed at: docs/ui-panels.md 悬停), in the middle; none, subtle; recording, the accent's
 /// ground and words.
 // kept across runs: a value (no field of it changes)
@@ -297,7 +298,7 @@ let keys_record : @ui.Style = @ui.style(
   min_w=Fixed(keys_record_w),
   h=Fixed(keys_record_h),
   px=S3,
-  radius=Xl,
+  radius=@sf.small_radius,
   bg=Hover,
   align=ACenter,
   justify=JCenter,

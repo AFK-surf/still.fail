@@ -1209,8 +1209,13 @@ pub fn fixture_app(mode : String) -> Source {
 
 ///|
 /// What the mode opens over the app once its source is made (what is put up reading through it), as open_fixture_mode
-/// opens its pages: ＋'s Station 文件 (chat-station-files); a station's file's card pressed, its panel (chat-station-sheet).
+/// opens its pages: ＋'s Station 文件 (chat-station-files); a station's file's card pressed, its panel (chat-station-sheet);
+/// the files' Pin 文件夹 with no one station in view, which station first (files-add-folder: its rows' grounds under the
+/// pointer, the last in the dialog's foot corners).
 pub fn open_fixture_src(mode : String, src : Source) -> Unit {
+  if mode == "files-add-folder" {
+    @sfdesk.add_folder(src, "ws1", @sfdesk.pin_stations(src, "ws1"))
+  }
   if mode == "chat-station-files" {
     fixture_station_files(src)
   }

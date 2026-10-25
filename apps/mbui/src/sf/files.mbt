@@ -269,7 +269,7 @@ pub fn file_card(
     download.map(fn(d) { d.0 })
   }
   let ground = if named && composer {
-    card_named.then(card_waiting)
+    card_named.then(card_waiting).then(card_composer_corner)
   } else if named {
     card_named
   } else if composer && open {
@@ -495,7 +495,12 @@ let card_waiting : @ui.Style = @ui.css("h=S14")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let card_composer : @ui.Style = card_box.then(card_waiting)
+let card_composer : @ui.Style = card_box.then(card_waiting).then(card_composer_corner)
+
+///|
+/// Round as what waits in the composer is (composer_inner): the first in its corner concentric with it, all alike.
+// kept across runs: a value (no field of it changes)
+let card_composer_corner : @ui.Style = @ui.style(radius=composer_inner_radius)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -685,11 +690,15 @@ let quote_corner : Double = row_corner
 
 ///|
 // kept across runs: a value (no field of it changes)
-let quote_box_composer : @ui.Style = quote_box.then(@ui.style(radius=InnerOr(rounded(composer_inner))))
+let quote_box_composer : @ui.Style = quote_box.then(@ui.style(radius=composer_inner_radius))
 
 ///|
-/// What sits in the composer's corners is rounded concentric with it, the ladder's next step in.
+/// What sits in the composer's corners is rounded concentric with it, the ladder's next step in: what waits in it (a
+/// quote, a file's card, a picture), every one alike.
 pub let composer_inner : Double = row_corner
+
+///|
+pub let composer_inner_radius : @ui.Radius = rounded(composer_inner)
 
 ///|
 /// The composer's padding: the ladder's inset, so what stands in its corners has the ladder's next corner (a quote's,

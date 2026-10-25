@@ -39,6 +39,11 @@ fn peek_name(address : String) -> String {
 let peek_body : @ui.Style = @ui.css("w=Full gap=S2_5")
 
 ///|
+/// Its rows, as far apart as its words and them (peek_body).
+// kept across runs: a value (no field of it changes)
+let peek_rows : @ui.Style = @ui.css("w=Full gap=S2_5")
+
+///|
 /// Its words, 10 apart.
 // kept across runs: a value (no field of it changes)
 let peek_words : @ui.Style = @ui.css("w=Full gap=S2_5")
@@ -91,33 +96,39 @@ fn station_peek(c : @ui.Ctx, core : Core, address : String, close : () -> Unit) 
       })
       |> ignore
     }
-    // where to go on: the panel's rows, their grounds out across its sides, their words on its line
-    // its files (docs/drive.md), where it has a drive: a way there from where it is named
-    match field(field(s, "overview"), "drive") {
-      Some(Object(_)) as drive => {
-        let n = items(drive, "roots").length()
-        if @sf.link_row(
-            c,
-            "peek-drive",
-            tr("android-misc.drive.title"),
-            value=if n == 0 {
-              tr("android-misc.drive.row.none")
-            } else {
-              fill("android-misc.drive.roots.count", [("n", n.to_string())])
-            },
-          ) {
-          close()
-          (core.open_drive)(address)
-        }
-      }
-      _ => ()
-    }
-    if @sf.link_row(c, "peek-station", tr("android-chat.station.details")) {
-      close()
-      (core.push)(Station(address))
-    }
+    // where to go on: the panel's rows, their grounds out across its sides, their words on its line (in a dialog, at
+    // its foot: concentric with its foot corners)
+    @sf.dialog_foot_rows(c, peek_rows, fn() { peek_ways(c, core, address, s, close) })
   })
   |> ignore
+}
+
+///|
+/// Where to go on from it: its files (docs/drive.md), where it has a drive, a way there from where it is named; its page.
+fn peek_ways(c : @ui.Ctx, core : Core, address : String, s : Json?, close : () -> Unit) -> Unit {
+  match field(field(s, "overview"), "drive") {
+    Some(Object(_)) as drive => {
+      let n = items(drive, "roots").length()
+      if @sf.link_row(
+          c,
+          "peek-drive",
+          tr("android-misc.drive.title"),
+          value=if n == 0 {
+            tr("android-misc.drive.row.none")
+          } else {
+            fill("android-misc.drive.roots.count", [("n", n.to_string())])
+          },
+        ) {
+        close()
+        (core.open_drive)(address)
+      }
+    }
+    _ => ()
+  }
+  if @sf.link_row(c, "peek-station", tr("android-chat.station.details")) {
+    close()
+    (core.push)(Station(address))
+  }
 }
 
 ///|

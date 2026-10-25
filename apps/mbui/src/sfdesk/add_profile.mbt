@@ -631,8 +631,12 @@ fn ap_offer_footed_style() -> @ui.Style {
 let ap_offer_head : @ui.Style = @ui.css("row w=Full gap=S3 align=AStart")
 
 ///|
+/// An offer's mark: 32 on the neutral ground, on the card's words' inset in its corner, the ladder's small block's
+/// corner there (10).
 // kept across runs: a value (no field of it changes)
-let ap_offer_mark : @ui.Style = @ui.css("w=S8 h=S8 radius=Lg bg=Neutral align=ACenter justify=JCenter")
+let ap_offer_mark : @ui.Style = @ui.css("w=S8 h=S8 bg=Neutral align=ACenter justify=JCenter").then(
+  @ui.style(radius=@sf.small_radius),
+)
 
 ///|
 /// What leaves a machine's login's line first, short of room: whether it is signed in, then its plan.
