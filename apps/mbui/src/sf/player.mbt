@@ -1722,7 +1722,7 @@ fn phone_timeline(c : @ui.Ctx, v : PlayerView, p : @kit.Media, s : @kit.MediaSta
 /// on. True on the frame it was tapped; `on` false, it takes no tap (what is under it does).
 fn phone_key(c : @ui.Ctx, key : String, icon_name : String, on : Bool, said : String, ink : MediaInk, lit? : Bool = false) -> Bool {
   let id = c.id(key)
-  let b = c.box(style=phone_key_box.then(@ui.style(bg=Data(if lit { alpha(ink.text, media_lit_share) } else { no_ground }))), id=if on { id } else { 0 }, fn() {
+  let b = c.box(style=phone_key_box.then(@ui.style(bg=Data(if lit { alpha(ink.text, media_lit_share) } else { no_ground }))), aspect=1.0, id=if on { id } else { 0 }, fn() {
     icon(c, icon_name, size=viewer_back_icon, color=ink.text) |> ignore
     if on {
       @motion.ripple(c, id, phone_key_r)
@@ -1978,16 +1978,20 @@ pub let player_track_inset : Double = @ui.Space::S2_5.px()
 let phone_timeline_box : @ui.Style = @ui.style(w=Full, h=Fixed(phone_timeline_h), px=S2_5, justify=JCenter)
 
 ///|
+/// The keys' row: 2 apart (media.css.ts vvGroup), so the one kept on (the subtitle, sideways) never meets the one
+/// pressed; 40 high, the keys as wide where it has the room (phone_key_box).
 // kept across runs: a value (no field of it changes)
-let phone_keys_row : @ui.Style = @ui.css("row w=Full align=ACenter")
+let phone_keys_row : @ui.Style = @ui.css("row w=Full h=S10 gap=S0_5 align=ACenter")
+
+///|
+/// A key: 40 across where the row has the room, down to 32 where it has less (the web's phone's keys: nine of them, a
+/// frame's keys and the speed's, in a phone's 332), round (as high as wide).
+// kept across runs: a value (no field of it changes)
+let phone_key_box : @ui.Style = @ui.css("w=S10 min_w=S8 radius=Full align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let phone_key_box : @ui.Style = @ui.css("w=S10 h=S10 radius=Full align=ACenter justify=JCenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let phone_speed_box : @ui.Style = @ui.css("min_w=S10 h=S10 px=S2 radius=Full align=ACenter justify=JCenter")
+let phone_speed_box : @ui.Style = @ui.css("min_w=S8 h=S10 px=S2 radius=Full align=ACenter justify=JCenter")
 
 ///|
 /// A song's mark (72) in the middle; the cue's words (16 on 1.6) on black at 60%; above the controls while they show
