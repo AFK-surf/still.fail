@@ -159,10 +159,11 @@ export async function review(hub: Hub, key: string): Promise<void> {
 /// model or policy), or while the model could not be reached. Nothing running or waiting to be heard, and not archived.
 export function undecided(hub: Hub): string[] {
   const { store } = hub;
-  const stats = store.sessionStats(null);
+  const live = store.liveSessions();
+  const stats = store.statsOf(live.map((s) => s.key));
   const keys: string[] = [];
-  for (const s of store.listSessions()) {
-    if (s.archivedAt !== null || s.running) continue;
+  for (const s of live) {
+    if (s.running) continue;
     const stat = stats.get(s.key);
     const last = stat?.lastTurn ?? null;
     if (!last || last.endedAt === null || last.ending !== "all_done" || (stat?.pending ?? 0) > 0) continue;

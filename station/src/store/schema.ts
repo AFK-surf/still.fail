@@ -59,6 +59,10 @@ CREATE TABLE IF NOT EXISTS sessions (
   shown_at INTEGER,
   cwd TEXT
 );
+-- The sessions shown (store.ts LIVE_SESSIONS): what the station's own periodic work goes over; the archived ones only grow.
+CREATE INDEX IF NOT EXISTS sessions_live ON sessions (last_active_at) WHERE archived_at IS NULL;
+-- The sessions running (store.ts ANY_RUNNING).
+CREATE INDEX IF NOT EXISTS sessions_running ON sessions (key) WHERE running = 1;
 CREATE TABLE IF NOT EXISTS threads (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   surface TEXT NOT NULL,
@@ -181,9 +185,11 @@ CREATE TABLE IF NOT EXISTS jobs (
   size TEXT
 );
 CREATE INDEX IF NOT EXISTS jobs_by_session ON jobs (session_key);
--- The jobs running (store.ts runningJobs, for every station_list that asks how busy this one is): without it each
--- asking scanned every job the station ever ran, its command and log path with it.
+-- The jobs running (store.ts runningJobs, JOBS_RUNNING: every station_list that asks how busy this one is, the
+-- memory's watch every ten seconds, who keeps watch), and the services stopped on their own that hold their port
+-- (JOBS_UP: what keeps a session from being archived): without them each looked at every job the station ever ran.
 CREATE INDEX IF NOT EXISTS jobs_state ON jobs (state);
+CREATE INDEX IF NOT EXISTS jobs_up ON jobs (state, port);
 CREATE TABLE IF NOT EXISTS job_notices (
   job_id TEXT NOT NULL,
   at INTEGER NOT NULL,
@@ -549,4 +555,6 @@ export function addUsageTotals(db: DatabaseSync): void {
 export function addWorkspaceColumns(db: DatabaseSync): void {
   if (!has(db, "sessions", "ws")) db.exec("ALTER TABLE sessions ADD COLUMN ws TEXT");
   if (!has(db, "archive_policy", "ws")) db.exec("ALTER TABLE archive_policy ADD COLUMN ws TEXT");
+  // The sessions counted by connect and workspace (store.ts SESSION_COUNTS, in every overview): from the index alone.
+  db.exec("CREATE INDEX IF NOT EXISTS sessions_by_connect ON sessions (connect, ws)");
 }

@@ -191,7 +191,7 @@ export function shown(store: Store, job: JobRow): Json {
 /// start; a notice is news to the pages, output is not).
 export function watching(store: Store): Map<string, { names: string[]; since: number; at: number }> {
   const by = new Map<string, JobRow[]>();
-  for (const job of store.listJobs(null).filter((j) => j.watch && j.state === "running")) {
+  for (const job of store.jobsRunning().filter((j) => j.watch)) {
     const list = by.get(job.sessionKey) ?? [];
     list.push(job);
     by.set(job.sessionKey, list);
@@ -368,7 +368,7 @@ export class Jobs {
     }
     if (port !== null) {
       // A service holds its port until it is stopped (between its restarts too).
-      const taken = this.store.listJobs(null).find((j) => j.port === port && (j.state === "running" || j.state === "exited"));
+      const taken = this.store.jobsUp().find((j) => j.port === port);
       if (taken) throw new Error(`port ${port} is ${named(taken)}'s already`);
     }
     const jobId = id ?? `job_${hex(4)}`;

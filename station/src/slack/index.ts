@@ -72,8 +72,9 @@ export function makeConnections(options: SlackOptions) {
   // Slack's names for people and channels, kept on disk; learning new ones refreshes what shows them.
   // Saved before the pages are told: the readers read the names from the file.
   const names = new NameBook(join(options.data, "slack-names.json"), { saveAfterMs: 200, learnAfterMs: 400 });
+  // (The sessions shown: an archived one's summary is read again as it is shown, names and all.)
   names.onLearn(() => {
-    for (const session of store.listSessions()) store.notify(session.key);
+    for (const session of store.liveSessions()) store.notify(session.key);
   });
   const create =
     options.create ??

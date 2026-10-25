@@ -268,8 +268,11 @@ export function autoArchive(hub: Hub, now: number): number | null {
   };
   const unread = (t: ThreadRow) => t.createdBy !== null && t.surface === STILLFAIL_SURFACE && store.unreadCount(t.createdBy, t.id) > 0;
   const bound = store.listBindings();
-  const stats = store.sessionStats(null);
-  const jobs = new Set(store.listJobs(null).filter((j) => j.state === "running" || (j.port !== null && j.state === "exited")).map((j) => j.sessionKey));
+  // Over the sessions shown and the chats of their own (and those chats' sessions), never every one ever archived.
+  const live = store.liveSessions();
+  const own = store.chatsOfTheirOwn();
+  const stats = store.statsOf([...live.map((s) => s.key), ...own.flatMap((t) => store.threadSessions(t.id).map((m) => m.session))]);
+  const jobs = new Set(store.jobsUp().map((j) => j.sessionKey));
   const working = (key: string) => {
     const row = store.getSession(key);
     if (!row) return true;
@@ -283,8 +286,8 @@ export function autoArchive(hub: Hub, now: number): number | null {
   const kept = store.keptChats(null);
   // Where only what the archive review recommended goes (`autoArchiveReviewed`): none while the review is off.
   const recommended = (thread: number) => !autoArchiveReviewed || (automaticDecisions.completion.enabled && store.archiveSuggested(thread));
-  for (const s of store.listSessions()) {
-    if (s.archivedAt !== null || bound.has(s.key) || pinned.has(s.key)) continue;
+  for (const s of live) {
+    if (bound.has(s.key) || pinned.has(s.key)) continue;
     const threads = store.sessionThreads(s.key);
     const slack = threads.length > 0 && threads.every((t) => t.thread.surface !== STILLFAIL_SURFACE);
     const done = idle([s.lastActiveAt, s.shownAt]) && !busy(s.key);
@@ -295,7 +298,7 @@ export function autoArchive(hub: Hub, now: number): number | null {
     log.info("hub", "archiving an idle session", { session: s.key });
     archiveBy(hub, s.key, true, AUTO);
   }
-  for (const t of store.chatsOfTheirOwn()) {
+  for (const t of own) {
     const said = store.lastMessage(t.id)?.createdAt ?? null;
     if (kept.has(t.id) || !idle([t.createdAt, said, t.shownAt]) || unread(t) || !recommended(t.id)) continue;
     if (store.threadSessions(t.id).some((m) => pinned.has(m.session) || busy(m.session))) continue;

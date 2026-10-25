@@ -76,6 +76,20 @@ async function processMemory(pgids: number[]): Promise<Map<number, number>> {
   return pgids.length === 0 ? new Map() : platform.groupMemory(pgids);
 }
 
+/// processMemory, as measured within MEMORY_KEPT_MS for the same groups: every overview (each viewer's, at each change)
+/// asked it of `ps` anew.
+const MEMORY_KEPT_MS = 5_000;
+const memoryKept = new WeakMap<object, { at: number; pgids: string; memory: Map<number, number> }>();
+async function keptMemory(d: OverviewDeps, pgids: number[]): Promise<Map<number, number>> {
+  const key = pgids.join(",");
+  const kept = memoryKept.get(d.store);
+  const now = d.store.now();
+  if (kept !== undefined && kept.pgids === key && now - kept.at < MEMORY_KEPT_MS) return kept.memory;
+  const memory = await processMemory(pgids);
+  memoryKept.set(d.store, { at: now, pgids: key, memory });
+  return memory;
+}
+
 /// The data disk's room: what clients warn of when it runs low.
 function diskRoom(path: string): unknown {
   try {
@@ -89,10 +103,13 @@ function diskRoom(path: string): unknown {
 export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Promise<unknown> {
   const raw = d.config() ?? {};
   // What is of the viewer's workspace (docs/multi-workspace.md): its chats, and the connects added in it.
-  const sessions = d.store.listSessions().filter((s) => sees(viewer, s.ws));
+  // (Counted by connect from an index, not every session's row; the processes not cold are the hub's few.)
+  const counted = d.store.sessionCounts().filter((c) => sees(viewer, c.ws));
+  const sessionsOf = (connect: string | null) => counted.reduce((n, c) => (connect === null || c.connect === connect ? n + c.n : n), 0);
+  const states = [...d.hub.processes()].filter(([key]) => sees(viewer, d.store.getSession(key)?.ws ?? null)).map(([, state]) => state);
   // The agents' runtime processes; background jobs' groups are recorded too (to be reaped), but they are jobs.
   const processes = d.store.listProcesses().filter((p) => p.runtime !== "job");
-  const memory = await processMemory(processes.map((p) => p.pgid));
+  const memory = await keptMemory(d, processes.map((p) => p.pgid));
   const connects = (Array.isArray(raw.connects) ? raw.connects : []).filter((c: any) => sees(viewer, typeof c?.workspace === "string" && c.workspace !== "" ? c.workspace : null)).map((c: any) => {
     const mode = c.mode ?? "multi-session";
     const slack = c.slack ?? {};
@@ -112,7 +129,7 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
       slack: { appToken: mask(slack.appToken ?? ""), botToken: mask(slack.botToken ?? "") },
       connection: d.slack?.connection(c) ?? (c.enabled === false ? { state: "disabled" } : !slack.appToken || !slack.botToken ? { state: "no_tokens" } : { state: "starting" }),
       createdBy: c.createdBy?.id ? c.createdBy : null,
-      sessions: sessions.filter((s) => s.connect === c.id).length,
+      sessions: sessionsOf(c.id),
       session: mode === "single-session" ? d.store.binding(c.id) : null,
     };
     // Another kind's: its own connection and names (a station without that part says it is starting).
@@ -120,7 +137,6 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     if (other !== undefined) return { ...shown, ...other.shown(c), connection: other.connection(c) ?? (c.enabled === false ? { state: "disabled" } : { state: "starting" }) };
     return shown;
   });
-  const states = sessions.map((s) => d.hub.processState(s.key));
   return {
     automaticDecisions: d.accounts ? decisionsView(d, viewer) : null,
     archiving: archivingView(raw, viewer),
@@ -133,7 +149,7 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
       const kb = memory.get(p.pgid);
       return { ...p, rssMb: kb === undefined ? null : Math.round(kb / 1024) };
     }),
-    counts: { sessions: sessions.length, running: states.filter((s) => s === "running").length, warm: states.filter((s) => s === "warm").length },
+    counts: { sessions: sessionsOf(null), running: states.filter((s) => s === "running").length, warm: states.filter((s) => s === "warm").length },
     slackUsers: d.store.slackIdentities(viewer.email),
     // The Slack workspaces the station can make and edit apps in itself (an app configuration token each).
     slackTeams: d.slack?.teams(viewer) ?? [],
@@ -185,6 +201,25 @@ function withPermissions(d: OverviewDeps, viewer: Viewer): { permissions?: unkno
 /// their workspace (docs/multi-workspace.md: one each), which its owners and admins edit (`canEditPolicy`). The rest
 /// (the rule, its model) is the station's, its workspaces' managers' alike.
 function decisionsView(d: OverviewDeps, viewer: Viewer): unknown {
+  // Made again only once a check or the policy is written, the rule or its models change, or DECISIONS_KEPT_MS on (the
+  // last days' window moves, a chat is renamed): each making reads the checks of the last days and names their chats.
+  const stamp = JSON.stringify([d.store.decisionsVersion(), d.config()?.automaticDecisions ?? null, d.accounts!.decisionModels()]);
+  const whose = `${viewer.role}\0${viewer.home}\0${viewer.workspace ?? ""}\0${viewer.email}`;
+  let kept = decisionsKept.get(d.store);
+  if (kept === undefined) decisionsKept.set(d.store, (kept = new Map()));
+  const now = d.store.now();
+  const was = kept.get(whose);
+  if (was !== undefined && was.stamp === stamp && now - was.at < DECISIONS_KEPT_MS) return structuredClone(was.view);
+  const view = madeDecisionsView(d, viewer);
+  kept.set(whose, { at: now, stamp, view: structuredClone(view) });
+  return view;
+}
+
+/// How long the automatic decisions are kept as they were made at most (decisionsView).
+const DECISIONS_KEPT_MS = 60_000;
+const decisionsKept = new WeakMap<object, Map<string, { at: number; stamp: string; view: unknown }>>();
+
+function madeDecisionsView(d: OverviewDeps, viewer: Viewer): unknown {
   const view = d.accounts!.automaticDecisionsView(viewer);
   const mine = (session: unknown) => typeof session === "string" && sees(viewer, d.store.getSession(session)?.ws ?? null);
   const manages = viewer.role === "owner" || viewer.role === "admin";
