@@ -84,7 +84,8 @@ pub(all) struct Type {
   /// what is typed (textInput: the phone's 16, as iOS zooms into less; the computer's 14), on its line
   input : Double
   input_line : Double
-  /// what a person wrote, read in a message (msgPlain): the body's size on lines 1.55 of it
+  /// what a person wrote, read in a message (msgPlain, PersonWords): the body's size on its line; a phone's on a
+  /// message's line, as the agent's Markdown beside it (Chat.kt: 15 on 24.75)
   words : @ui.TextStyle
 }
 
@@ -788,8 +789,8 @@ let wide_type : Type = {
   display: 28.0,
   input: 14.0,
   input_line: 21.0,
-  // det-ok(style-exact): msgPlain's lines, 1.55 of the body's 14 (21.7), off the leading scale
-  words: @ui.text_style(size=Base, leading=Exact(21.7), color=Fg),
+  // (the body's line, the web's --leading-body 22: msgPlain's 1.55 is 21.7, off the scale)
+  words: @ui.text_style(size=Base, leading=L7, color=Fg),
 }
 
 ///|
@@ -856,8 +857,7 @@ let narrow_type : Type = {
   body_line: 22.0,
   input: 16.0,
   input_line: 21.0,
-  // det-ok(style-exact): msgPlain's lines, 1.55 of the phone's body 15 (23.25), off the leading scale
-  words: @ui.text_style(size=Lg, leading=Exact(23.25), color=Fg),
+  words: message,
 }
 
 ///|
