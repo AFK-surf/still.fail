@@ -1608,8 +1608,8 @@ fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> In
 
 ///|
 /// The least a finger's target is across, each way: the system's (Android's 48 dp, Compose's
-/// minimumInteractiveComponentSize; iOS's 44 pt).
-fn finger_target() -> Double {
+/// minimumInteractiveComponentSize; iOS's 44 pt). For what a view reaches by hand itself (a drag area's own taps).
+pub fn finger_target() -> Double {
   if h_platform() == 1 {
     44.0
   } else {

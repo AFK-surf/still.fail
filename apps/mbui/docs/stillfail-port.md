@@ -877,7 +877,10 @@ RefCard, openRefSheet, sendUp):
   MediaStore's images and their times, read off the app's thread; ranked here as Attach.kt `latest` does: each by the
   latest of its times that can be believed, one in milliseconds taken as the seconds it means, one ahead of now left
   out), each its thumbnail as the gallery has it (Images.java loads a content:// source by loadThumbnail), 92 × 122 on
-  14 corners; a tap reads it whole (@hostapi.pick_photo) into the draft, up at once. Without leave to read the gallery
+  14 corners; a tap reads it whole (@hostapi.pick_photo) into the draft, up at once. Several go together: a tile's
+  ring in its top end corner chooses it (numbered in the order chosen; while some are chosen a tap anywhere on a tile
+  chooses it or not), the three tiles under the strip giving way to 添加 n 个, which reads them as one pick
+  (@ui.pick_photos) into the draft in that order. Without leave to read the gallery
   the last tile asks (显示最近照片: the system's dialog; asked and refused for good, the app's settings), with only the
   photos chosen for the app (Android 14 on) it chooses more (选择更多照片); read again as the sheet opens and as the
   system answers. The strip moves sideways under a finger and glides on once let go (a drag area: it is no list).

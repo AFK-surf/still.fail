@@ -1,5 +1,6 @@
 // ＋ pressed on a touch system (still.fail's Android app, chat/screens/Attach.kt): the library's panel, a sheet from the foot,
-// of the gallery's recent photos across its top (the camera first: recent.mbt), then 照片, 文件 and Station 文件. A tile
+// of the gallery's recent photos across its top (the camera first: recent.mbt), then 照片, 文件 and Station 文件 (添加 n 个
+// in their place while photos are chosen in the strip). A tile
 // picked asks the system (held by the host where it is big: writing_add_held), what it answers coming into the draft as
 // the composer is next drawn (take_in); Station 文件 puts up the shell's sheet of station files for the draft. On a
 // computer ＋ is the system's picker at once (composer.mbt attach).
@@ -40,7 +41,7 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
       ask(Camera)
     } else if i > 0 {
       close()
-      match recent_photo(i - 1).map(fn(photo) { @ui.pick_photo(photo.src) }) {
+      match recent_photo(i - 1).map(fn(photo) { @ui.pick_photos([photo.src]) }) {
         Some(Some(pick)) => composing.picking = Some((key, pick))
         _ => ()
       }
@@ -69,6 +70,14 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
     (@sfbase.station_files_asked.val)(src, key)
   }
   recent_strip(c, tapped)
+  // photos chosen in the strip: 添加 n 个 where the tiles were
+  let adding = recent_adding(c, fn(pick) {
+    close()
+    composing.picking = Some((key, pick))
+  })
+  if adding {
+    return
+  }
   c.box(style=attach_tiles, fn() {
     for item in [
       (photos, @sf.t("android-chat.attach.photos"), "photo"),
@@ -79,7 +88,7 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
       c.box(style=attach_tile, id~, fn() {
         @sf.icon(c, icon, size=attach_icon, color=p.text) |> ignore
         c.text(label, style=attach_words) |> ignore
-        // Attach.kt: clip(Smooth(14)).clickable
+        // (Attach.kt: clip(Smooth(14)).clickable; the ladder's block corner here)
         @motion.ripple(c, id, attach_corner)
       })
       |> ignore
@@ -94,14 +103,14 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
 let attach_tiles : @ui.Style = @ui.css("row w=Full pb=S4_5 gap=S2")
 
 ///|
-/// A tile: 70 high, its icon over its name, on a quiet ground, 14 round.
+/// A tile: 70 high, its icon over its name, on a quiet ground, a block's corner (the ladder's, as the strip's tiles).
 // kept across runs: a value (no field of it changes)
 let attach_tile : @ui.Style = @ui.style(
   w=@sf.grow,
   h=Fixed(attach_tile_h),
   px=S1,
   gap=S1_5,
-  radius=Xl1_5,
+  radius=@sf.row_radius,
   bg=Neutral,
   align=ACenter,
   justify=JCenter,
@@ -118,4 +127,4 @@ let attach_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
 let attach_icon : Double = 22.0
 
 ///|
-let attach_corner : Double = 14.0
+let attach_corner : Double = @sf.row_corner
