@@ -33,7 +33,7 @@ instead.
 |---|---|---|---|
 | `account_doc` | name (`me`, `login_sessions`, `admin/<list>`) | confirmed | cloud `/v1/me`, `/v1/auth/sessions`, `/v1/admin/*` |
 | `workspace` | id | confirmed | `/v1/workspaces/:id`, cloud events |
-| `station` | address, kind (`overview`, `footprint`, `usage`) | confirmed | `/overview`, `/footprint`, `/usage`, events |
+| `station` | address, kind (`overview`, `footprint`, `usage`, a drive's folder `drive\n<root>\n<path>`, what its link holds beyond the tables `memory\n<key>`) | confirmed | `/overview`, `/footprint`, `/usage`, `/drive/list`, events; its host's and connection's figures, screens, logins, jobs' logs (the 40 latest), `/resources`, `/drive/transfers` (station/memory.ts: written at most once a minute a key, read back as the app opens again) |
 | `slack_app` | station, connect | confirmed | `/connects/:id/slack-app` |
 | `list` | station, list (`chats`, `archived`, `sessions`, `threads`, `jobs`) | confirmed, rev | a list read at all (an empty one is not one never read); how often a station's chats changed |
 | `chat` | station, archived, id | ord, thread, session, client_key, last_active, pinned_at, unread, mine, running, tone, asks, desk | `/chats`, `/chats?archived=1`, `chat`/`chat-removed`/`read` events |

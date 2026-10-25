@@ -465,12 +465,18 @@ export class AccountDb {
     return this.#doc(K("st", station, kind), "SELECT json FROM station WHERE address = ? AND kind = ?", [station, kind]);
   }
 
-  putStationDoc(station: string, kind: string, value: J, confirmed: number | null, topic: Topic): void {
+  putStationDoc(station: string, kind: string, value: J, confirmed: number | null, topic: Topic | null): void {
     this.#putDoc(K("st", station, kind), value, "SELECT json FROM station WHERE address = ? AND kind = ?", [station, kind], "INSERT INTO station (address, kind, json, confirmed) VALUES (?, ?, ?, ?) ON CONFLICT (address, kind) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)", (json) => [station, kind, json, confirmed], topic);
   }
 
-  dropStationDoc(station: string, kind: string, topic: Topic): void {
+  dropStationDoc(station: string, kind: string, topic: Topic | null): void {
     this.#dropDoc(K("st", station, kind), "DELETE FROM station WHERE address = ? AND kind = ?", [station, kind], topic);
+  }
+
+  /// At most `most` of a station's documents whose kind starts with `prefix`, the latest confirmed: the others go.
+  boundStationDocs(station: string, prefix: string, most: number): void {
+    const kinds = this.sql.all("SELECT kind FROM station WHERE address = ? AND substr(kind, 1, ?) = ? ORDER BY confirmed DESC", [station, prefix.length, prefix]);
+    for (const [kind] of kinds.slice(most)) this.dropStationDoc(station, String(kind), null);
   }
 
   slackApp(station: string, connect: string): J {

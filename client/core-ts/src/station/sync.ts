@@ -30,13 +30,13 @@ import { IDEMPOTENCY_KEY, READS, Requests, httpError } from "./requests.ts";
 import { digest } from "../digest.ts";
 import { type Channel, Channels } from "../channels/channels.ts";
 import { ENTRIES, PAGE, TRANSCRIPT, TRANSCRIPT_PAGE, entriesOf, heldIn, transcriptOf } from "./channel-kinds.ts";
-import { HOST_KEY, HOST_SAVE_MS, type HistoryRead, type Link, Links, type LiveView } from "./link.ts";
+import { type HistoryRead, type Link, Links, type LiveView, logKey } from "./link.ts";
 import { readAll, type StationWire } from "./wire.ts";
 import * as logins from "./machine-logins.ts";
 import { Relays } from "./machine-logins.ts";
 import { Retold } from "./retold.ts";
 
-export { HOST_KEY, HOST_SAVE_MS, LINK_KEY, LONG_MISSES, MISSES, OFFLINE_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS, STREAM_QUIET_MS, Link } from "./link.ts";
+export { HOST_KEY, LINK_KEY, LONG_MISSES, MISSES, OFFLINE_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS, STREAM_QUIET_MS, Link } from "./link.ts";
 export type { EventsFor, LiveView } from "./link.ts";
 
 /// A burst of `thread` events becomes one read of each thread's summary.
@@ -191,10 +191,11 @@ export class StationsSync {
   /// swept as a reading of everything would.
   #goesOn(address: string, how: { away: boolean; restored: boolean }): void {
     if (how.away) this.#catchUpShown(address);
-    // Its screens are held in memory only: read again whenever the stream was not there to hear them change.
-    if (how.away || how.restored || this.screens(address) === undefined) this.#enqueue(address, "screens", Priority.background, this.#screens(address));
-    // Its logins are held in memory only: read once where this run has not yet.
-    if (logins.held(this.#links.get(address)).supported === null) this.#enqueue(address, "machineLogins", Priority.background, this.#machineLogins(address));
+    // Its screens and its logins are held in its link's memory, not its log of events (what was kept of them shows
+    // meanwhile): its screens read again whenever the stream was not there to hear them change, both once a run.
+    const memory = this.#links.get(address)?.memory;
+    if (how.away || how.restored || memory?.fresh("screens") !== true) this.#enqueue(address, "screens", Priority.background, this.#screens(address));
+    if (memory?.fresh(logins.HELD) !== true) this.#enqueue(address, "machineLogins", Priority.background, this.#machineLogins(address));
     if (how.restored) this.#historyStart(address);
   }
 
@@ -270,8 +271,9 @@ export class StationsSync {
     }
   }
 
-  /// The station's screens as it has them now (docs/remote-screens.md), in memory only: what it shows is as it is. A
-  /// station from before screens has none (404): it is held so, and said (`outdated`).
+  /// The station's screens as it has them now (docs/remote-screens.md), in its link's memory (kept: what was said last
+  /// shows as the app opens again, until they are read). A station from before screens has none (404): it is held so,
+  /// and said (`outdated`).
   #screens(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
@@ -300,11 +302,12 @@ export class StationsSync {
     return this.ask(address, "screens", this.#screens(address));
   }
 
-  /// A job's log as it is now (its `lines` last lines), once: its topic opened. The station's stream says how it grows
-  /// from then on (an older station's does not: its log is as it was when opened, docs/core-ts.md).
+  /// A job's log as it is now (its `lines` last lines), once a run: its topic opened (what was kept of it shows
+  /// meanwhile). The station's stream says how it grows from then on (an older station's does not: its log is as it was
+  /// when opened, docs/core-ts.md).
   readLog(address: string, job: string, lines: number): void {
-    const key = topicKey({ topic: "jobLog", station: address, job, lines });
-    if (this.#links.get(address)?.memory.has(key)) return;
+    const key = logKey(job, lines);
+    if (this.#links.get(address)?.memory.fresh(key)) return;
     this.#enqueue(
       address,
       `log/${job}/${lines}`,
@@ -315,9 +318,9 @@ export class StationsSync {
         const answer = yield* this.requests.call(link.addr, "GET", `/jobs/${encode(job)}/log?lines=${lines}`, null, { quiet: true });
         link.followsLogs = get(answer, "follows") === true;
         // What the stream said meanwhile is newer.
-        if (!link.memory.has(key)) {
+        if (!link.memory.fresh(key)) {
           link.memory.set(key, { text: get(answer, "text") ?? "", outputAt: get(answer, "outputAt") ?? null });
-          this.onChange(address, "log", key);
+          this.onChange(address, "log", topicKey({ topic: "jobLog", station: address, job, lines }));
         }
       }),
     );
@@ -355,7 +358,8 @@ export class StationsSync {
       if (typeof topic.limit === "number") params.push(`limit=${topic.limit}`);
       const answer = yield* Effect.result(this.requests.call(link.addr, "GET", `/search?${params.join("&")}`, null, { quiet: true }));
       if (answer._tag === "Success") {
-        link.memory.set(key, answer.success);
+        // (what a search found: asked again each time it is shown, not kept)
+        link.memory.hold(key, answer.success);
         this.onChange(address, "log", key);
       } else if (answer.failure.status !== undefined) {
         // Refused (a station from before search), or busy (its index starting: asked again as it is shown again).
@@ -488,8 +492,8 @@ export class StationsSync {
     });
   }
 
-  /// The station's logins (docs/remote-login.md), read whole: in memory, as its stream then tells them. A station from
-  /// before them answers 404: it has none (the page offers none).
+  /// The station's logins (docs/remote-login.md), read whole: in its link's memory, as its stream then tells them. A
+  /// station from before them answers 404: it has none (the page offers none).
   #machineLogins(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
@@ -848,9 +852,8 @@ export class StationsSync {
         const lines = u64(get(data, "lines"));
         const link = this.#links.get(address);
         if (id && lines !== null && link) {
-          const key = topicKey({ topic: "jobLog", station: address, job: id, lines });
-          link.memory.set(key, { text: get(data, "text") ?? "", outputAt: get(data, "outputAt") ?? null });
-          this.onChange(address, "log", key);
+          link.memory.set(logKey(id, lines), { text: get(data, "text") ?? "", outputAt: get(data, "outputAt") ?? null });
+          this.onChange(address, "log", topicKey({ topic: "jobLog", station: address, job: id, lines }));
         }
         return;
       }
@@ -862,11 +865,6 @@ export class StationsSync {
         if (link) {
           link.memory.set("host", data);
           this.onChange(address, "host");
-          const now = core.host.nowMs();
-          if (now - link.hostSaved >= HOST_SAVE_MS) {
-            link.hostSaved = now;
-            core.runner.fork(Effect.ignore(core.host.storageSet(`${HOST_KEY}/${address}`, new TextEncoder().encode(JSON.stringify(data)))));
-          }
         }
         return;
       }

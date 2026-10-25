@@ -38,6 +38,8 @@ const HELD = new Set(["workspace", "overview", "session", "chatRows", "sessions"
 
 /// What a folder of a station's drive is kept as among the station's documents (the `drive` topic).
 export const driveDoc = (root: string, path: string) => `drive\n${root}\n${path}`;
+/// What a station said beyond the tables (station/memory.ts) is kept among its documents as `memory\n<key>`.
+const MEMORY = "memory\n";
 /// Where a file of a drive was left (the `drivePlace` topic), as the device keeps it.
 const placeOf = (topic: Topic) => `${String(topic.station)}\n${String(topic.root)}\n${String(topic.path)}`;
 /// The most places of files kept: the oldest go.
@@ -778,6 +780,24 @@ export class Data {
     const db = this.of(station);
     if (db && db.draft(station, String(topic.chat)) !== undefined) db.putDraft(station, String(topic.chat), undefined);
     else if (soon) this.#tell(topic);
+  }
+
+  // ── what a station said beyond the tables (station/memory.ts), among its documents ──
+
+  stationMemory(station: string, key: string): unknown {
+    return this.of(station)?.stationDoc(station, `${MEMORY}${key}`);
+  }
+
+  /// `undefined`: none any more.
+  keepStationMemory(station: string, key: string, value: unknown): void {
+    const db = this.of(station);
+    if (!db) return;
+    if (value !== undefined) db.putStationDoc(station, `${MEMORY}${key}`, value, this.#host.nowMs(), null);
+    else if (db.stationDoc(station, `${MEMORY}${key}`) !== undefined) db.dropStationDoc(station, `${MEMORY}${key}`, null);
+  }
+
+  boundStationMemory(station: string, prefix: string, most: number): void {
+    this.of(station)?.boundStationDocs(station, `${MEMORY}${prefix}`, most);
   }
 
   // ── records by table and key: the account's own and the device's ──

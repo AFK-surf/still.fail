@@ -10,13 +10,14 @@ import type { Inner } from "../core.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { encode } from "../ops.ts";
-import type { Scoped } from "../runtime.ts";
 import { Kind, type SpanContext } from "../trace.ts";
-import { equal, get, isObject } from "../util.ts";
+import { laterSleep, type Scoped } from "../runtime.ts";
+import { equal, get, isObject, parseJson } from "../util.ts";
 import { GONE, NETWORK } from "../wake.ts";
 import { StationAddr } from "./addr.ts";
 import { TRANSCRIPT_PAGE } from "./channel-kinds.ts";
 import { Cursor } from "./cursor.ts";
+import { type Keeper, Memory } from "./memory.ts";
 import { FOLLOWS, RESUMED, type Requests } from "./requests.ts";
 import { SseParser } from "./sse.ts";
 import { replyHeader } from "./wire.ts";
@@ -36,10 +37,13 @@ export const MISSES = 3;
 /// dialled by every client about once a minute, some 1,600 dials a day for one such station.
 export const LONG_MISSES = 12;
 export const LINK_KEY = "link";
-/// Where a station's last host sample is kept (`host/<address>`), so its figures show from before it is reached again;
-/// written at most every HOST_SAVE_MS.
+/// Where cores before kept a station's last host sample (`host/<address>`): its memory keeps it now (memory.ts).
 export const HOST_KEY = "host";
-export const HOST_SAVE_MS = 60_000;
+/// A job's log as its station said it, its last `lines` lines (the `jobLog` topic), in the link's memory; the most kept
+/// of a station's (one opened since its job's).
+export const LOG_KEY = "jobLog\n";
+export const logKey = (job: string, lines: number) => `${LOG_KEY}${job}\n${lines}`;
+export const LOGS_KEPT = 40;
 /// A station's streams carry a keepalive every 25 s; one silent this long is on a link that is gone.
 export const STREAM_IDLE_MS = 40_000;
 /// A stream silent past one keepalive (and a little) may be on a link that is gone.
@@ -113,10 +117,9 @@ export class Link {
   followsRunning: boolean | null = null;
   /// What a read of a topic failed with while nothing is held of it.
   readonly errors = new Map<string, CoreError>();
-  /// Host samples and jobs' logs as they come (measurements and output shown while watched).
-  readonly memory = new Map<string, unknown>();
-  /// When the host sample was last written down (HOST_KEY).
-  hostSaved = 0;
+  /// What the station said that its pages show beyond the database's tables (its host's figures, its screens, its
+  /// logins, jobs' logs…), kept with them (memory.ts).
+  readonly memory: Memory;
   /// Whether the usage held is as the station has it: read since it last said its usage changed.
   usageCurrent = false;
   /// Whether the archived chats held are as the station has them: read since anything could have changed them.
@@ -129,10 +132,11 @@ export class Link {
   history: HistoryRead[] = [];
   readonly historyAsked = new Set<string>();
 
-  constructor(address: string, addr: StationAddr, scoped: Scoped) {
+  constructor(address: string, addr: StationAddr, scoped: Scoped, memory: Memory = new Memory()) {
     this.address = address;
     this.addr = addr;
     this.scoped = scoped;
+    this.memory = memory;
   }
 }
 
@@ -285,7 +289,15 @@ export class Links {
     } catch {
       return;
     }
-    const link = new Link(address, addr, core.runner.child());
+    const scoped = core.runner.child();
+    const keeper: Keeper = {
+      read: (key) => core.data.stationMemory(address, key),
+      write: (key, value) => core.data.keepStationMemory(address, key, value),
+      bound: (prefix, most) => core.data.boundStationMemory(address, prefix, most),
+      now: () => core.host.nowMs(),
+      later: (ms, run) => void core.runner.fork(Effect.andThen(laterSleep(ms), Effect.sync(run)), scoped),
+    };
+    const link = new Link(address, addr, scoped, new Memory(keeper, [[LOG_KEY, LOGS_KEPT]]));
     this.#links.set(address, link);
     // The last event it told a core before this one, written down with what it told: the first stream asks what came
     // after it, and nothing is read again when the station still has that (the app started again within the hour). Not
@@ -316,17 +328,21 @@ export class Links {
         ),
         link.scoped,
       );
-    // Its figures as last heard, until it says them anew.
+    // Its figures as cores before kept them, in the host's storage (a file of its own): moved into its memory once.
+    const told = this.#told;
     core.runner.fork(
-      Effect.map(Effect.orElseSucceed(core.host.storageGet(`${HOST_KEY}/${address}`), () => null), (bytes) => {
-        if (!bytes || link.memory.has("host")) return;
-        try {
-          link.memory.set("host", JSON.parse(new TextDecoder().decode(bytes)));
-        } catch {
-          return;
-        }
-        this.#told.changed(address, "host");
-      }),
+      Effect.ignore(
+        Effect.gen(function* () {
+          const bytes = yield* core.host.storageGet(`${HOST_KEY}/${address}`);
+          if (!bytes) return;
+          yield* core.host.storageDelete(`${HOST_KEY}/${address}`);
+          if (link.memory.has("host")) return;
+          const was = parseJson(bytes);
+          if (!isObject(was)) return;
+          link.memory.set("host", was);
+          told.changed(address, "host");
+        }),
+      ),
       link.scoped,
     );
     this.openEvents(address, false);

@@ -1,8 +1,9 @@
 // A station's logins to the command-line tools its agents use (docs/remote-login.md): what the core holds of them and
 // shows (the `machineLogins`, `machineLogin` and `machineLoginScreen` topics), and the loopback relay (`machineLogin.open`
-// on a host that can listen: the desktop app). Held in memory only, as the station says them: read when its stream opens
-// (GET /machine-logins; a station from before answers 404, and has none), told as they change (`machine-logins`), a
-// terminal's screen told while it is shown (`login-screen`, on the same stream). Nothing of it goes to the database.
+// on a host that can listen: the desktop app). Held in the link's memory as the station says them (kept, memory.ts:
+// there as the app opens again): read when its stream opens (GET /machine-logins; a station from before answers 404,
+// and has none), told as they change (`machine-logins`); a terminal's screen told while it is shown (`login-screen`, on
+// the same stream), in memory alone.
 //
 // The relay: a login whose browser comes back to a loopback port (gcloud, aws, az…) has this device listen on that port,
 // on loopback only, from the moment it is opened here; the first request with the login's path and state (and Host) goes
@@ -76,7 +77,8 @@ export function putScreen(link: Link, told: unknown): string | null {
   if (isObject(changed)) for (const [i, row] of Object.entries(changed)) if (typeof row === "string" && /^\d+$/.test(i)) rows[Number(i)] = row;
   for (let i = 0; i < rows.length; i++) rows[i] ??= "";
   const cursor = get(told, "cursor");
-  link.memory.set(key, {
+  // (a terminal as it is now, shown while it is watched: not kept)
+  link.memory.hold(key, {
     rows,
     cursorX: typeof get(cursor, "x") === "number" ? get(cursor, "x") : 0,
     cursorY: typeof get(cursor, "y") === "number" ? get(cursor, "y") : 0,
