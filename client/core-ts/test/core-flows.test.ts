@@ -821,6 +821,35 @@ test("a_sessions_model_control_says_what_changes_and_saves_it_on_the_station", a
   core.close();
 });
 
+test("a_sessions_account_is_picked_again_beside_auto_and_says_which", async () => {
+  const { host, core } = await choosing();
+  let picked = "p2";
+  stationReplies(host, (req) => (req.method === "POST" && req.url.endsWith("/sessions/k1/settings") ? { ok: true, profile: picked } : undefined));
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "session:k1" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  // On p1, with p2 able to take it: picked again beside 自动.
+  assert.equal(v(values, 1).repick, "重新分配");
+  // Kept to p1 in the panel, another depth too: the account gives way to the station's pick, the depth stays drafted.
+  await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "session:k1", profile: "p1", effort: "high" });
+  assert.deepEqual(await ask(host, core, ui, 3, "pick.repick", { station: "ws/st", of: "session:k1" }), { profile: "p2", said: "已改用 p2@x.com" });
+  assert.deepEqual(stationPosted(host, "/sessions/k1/settings"), [{ profile: null, repick: true }]);
+  apply(host, values);
+  assert.deepEqual([v(values, 1).draft.profile ?? null, v(values, 1).draft.effort], [null, "high"]);
+  // The station keeps it where it was: said so.
+  picked = "p1";
+  assert.equal((await ask(host, core, ui, 4, "pick.repick", { station: "ws/st", of: "session:k1" })).said, "仍使用 p1@x.com");
+  // A new chat's control has nothing to pick again.
+  subscribe(core, ui, 5, { topic: "pick", station: "ws/st", of: "new" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 5).repick ?? null, null);
+  await assert.rejects(ask(host, core, ui, 6, "pick.repick", { station: "ws/st", of: "new" }));
+  core.close();
+});
+
 test("a_chat_referred_to_goes_out_as_a_link_to_it", async () => {
   const { host, core } = await started();
   stationReplies(host, (req) => (req.method === "POST" && req.url.endsWith("/threads/7/messages") ? { n: 4 } : undefined));

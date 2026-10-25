@@ -877,10 +877,11 @@ let value_dotted : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 ///|
 /// A row of a list of choices, one of them `chosen` (a face, a place, a way to sign in): what it is given (`body`: its
 /// mark, its words; or `lead` before `label` with `tag` after it on its line and `note` under them, a page row's), and
-/// a check at its end where it is the one chosen (turning while `busy`); the whole row takes the press, lit under the
-/// pointer or a finger's press (narrow: a card's row; wide: the web's list row), not while `disabled` (its words
-/// faint) or busy. `ink`: its label's own (red for one that takes something away). Said to be `label`. True on the
-/// frame it is pressed; `c.lit(c.id(key))` says it is pointed at.
+/// `trail` (a button of its own, which takes its own press) before a check at its end where it is the one chosen
+/// (turning while `busy`); the rest of the row takes the press, lit under the pointer or a finger's press (narrow: a
+/// card's row; wide: the web's list row), not while `disabled` (its words faint) or busy. `ink`: its label's own (red
+/// for one that takes something away). Said to be `label`. True on the frame it is pressed; `c.lit(c.id(key))` says it
+/// is pointed at.
 pub fn choice_row(
   c : @ui.Ctx,
   key : String,
@@ -890,6 +891,7 @@ pub fn choice_row(
   note? : String = "",
   lead? : () -> Unit,
   tag? : () -> Unit,
+  trail? : () -> Unit,
   ink? : Int64,
   disabled? : Bool = false,
   busy? : Bool = false,
@@ -925,6 +927,10 @@ pub fn choice_row(
     |> ignore
   }
   let end = fn(size : Double) {
+    match trail {
+      Some(f) => f()
+      None => ()
+    }
     if busy {
       spinner(c, size~) |> ignore
     } else if chosen {

@@ -1983,6 +1983,7 @@ export const SHAPES: Record<string, Shape> = {
     ["who", "String", { doc: "The way to the accounts in the panel's foot: the one kept to, short, or 账号; amber when one gave way or the\nstation's pick runs low." }],
     ["whoLevel", opt("Level")],
     ["autoNote", "String", { doc: "The station's pick, said: who it is on now, or what it does." }],
+    ["repick", opt("String"), { default: true, doc: "Beside 自动, the words of what has the station pick a chat's account again now (`pick.repick`);\nnone where no other account could take it (not a chat's, or one account)." }],
     ["changed", "bool"],
     ["was", vec("String"), { doc: "Full screen (the phone's): the model, depth and account as they were and as they become; why the account\nmust change; the model and account picked in words; what the button says." }],
     ["becomes", vec("String")],

@@ -330,11 +330,15 @@ test("stopping, evicting, warming and changing a session", async () => {
 
     assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/settings`, { fast: "yes" }), [400, { error: en("station.admin.badFast") }]);
     assert.equal((await r.ask("POST", "/sessions/nope/settings", { model: "opus" }))[0], 400);
-    assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/settings`, { model: "opus", profile: "cc" }), [200, { ok: true }]);
+    assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/settings`, { model: "opus", profile: "cc" }), [200, { ok: true, profile: "cc" }]);
     const row = r.store.getSession(made.key)!;
     assert.deepEqual([row.model, row.profile, row.profilePinned], ["opus", "cc", true]);
-    assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/settings`, { profile: null }), [200, { ok: true }]);
+    assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/settings`, { profile: null }), [200, { ok: true, profile: "cc" }]);
     assert.equal(r.store.getSession(made.key)!.profilePinned, false);
+    // Kept to it again, then given back to the station to pick again.
+    await r.ask("POST", `/sessions/${made.key}/settings`, { profile: "cc" });
+    assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/settings`, { repick: true }), [200, { ok: true, profile: "cc" }]);
+    assert.deepEqual([r.store.getSession(made.key)!.profile, r.store.getSession(made.key)!.profilePinned], ["cc", false]);
   } finally {
     await r.close();
   }

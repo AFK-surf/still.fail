@@ -545,12 +545,15 @@ export const routes = (tools: Tools): Route[] => {
               if (effort !== undefined) change.effort = effort;
               // A profile's id keeps the session to it; null gives the choice back to the station.
               if (typeof i.profile === "string" || i.profile === null) change.profile = i.profile;
+              // Given back to the station and its account picked again now.
+              if (i.repick === true) change.repick = true;
               if ("fast" in i) {
                 if (i.fast !== null && typeof i.fast !== "boolean") throw new Refused(400, tr(r.lang, "station.admin.badFast"));
                 change.fast = i.fast;
               }
               await as(400, () => configure(a.hub, key, change, r.lang));
-              return ok({ ok: true });
+              // With the profile it runs on now (picked again: the one picked).
+              return ok({ ok: true, profile: a.hub.store.getSession(key)?.profile ?? null });
             }
           }
         }),

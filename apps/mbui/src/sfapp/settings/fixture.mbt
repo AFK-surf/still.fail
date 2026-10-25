@@ -2127,6 +2127,7 @@ fn fx_session_pick() -> Json {
     ("becomes", ["Opus 5.5", "high", "自动 · Claude 主账号"]),
     ("accountText", str("自动分配")),
     ("accountNote", str("Claude 主账号 · 5 小时窗口已用 62%")),
+    ("repick", str("重新分配")),
     // (RunnableProfile: its kind, its runtime, its allowance)
     (
       "accounts",

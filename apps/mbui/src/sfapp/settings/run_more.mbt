@@ -63,10 +63,35 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
       return
     }
     if list == "account" {
-      account_list(c, "run-session-accounts/" + key, items(v, "accounts"), runtime, text(draft, "profile"), fn(p) {
-        pick([("profile", match p { Some(id) => str(id); None => Json::null() })])
-        run_list.remove(of)
-      })
+      // beside 自动分配, a chat's: the station picks its account again now (`pick.repick`), which it took said
+      let repick = text(v, "repick")
+      let repicking = fn() {
+        let busy = is_doing(core, ["pick.repick"], [("station", station), ("of", of)])
+        if @sf.button(c, repick, key="run-session-repick", busy~) {
+          (core.call)("pick.repick", obj([("station", str(station)), ("of", str(of))]), fn(r) {
+            match r {
+              Ok(said) =>
+                match text(Some(said), "said") {
+                  "" => ()
+                  words => (core.say)(words)
+                }
+              Err(e) => (core.say)(fill("android-misc.act.failed", [("what", repick), ("error", error_text(e))]))
+            }
+          })
+        }
+      }
+      account_list(
+        c,
+        "run-session-accounts/" + key,
+        items(v, "accounts"),
+        runtime,
+        text(draft, "profile"),
+        fn(p) {
+          pick([("profile", match p { Some(id) => str(id); None => Json::null() })])
+          run_list.remove(of)
+        },
+        auto_trail?=if repick == "" { None } else { Some(repicking) },
+      )
       return
     }
     let group = fn(words : String) {
@@ -755,14 +780,22 @@ let chip_corner : Double = 18.0
 
 ///|
 /// Who runs the model picked (SettingParts.kt AccountList): what 自动分配 means, then 自动分配 (none picked: the
-/// station's pick) and each account it may be kept to, its provider's mark before it and its allowance after it,
-/// 18 from the sides. `pick` hears the account picked (None: 自动分配).
-fn account_list(c : @ui.Ctx, key : String, accounts : Array[Json], runtime : String, picked : String, pick : (String?) -> Unit) -> Unit {
+/// station's pick; `auto_trail` at its end) and each account it may be kept to, its provider's mark before it and its
+/// allowance after it, 18 from the sides. `pick` hears the account picked (None: 自动分配).
+fn account_list(
+  c : @ui.Ctx,
+  key : String,
+  accounts : Array[Json],
+  runtime : String,
+  picked : String,
+  pick : (String?) -> Unit,
+  auto_trail? : () -> Unit,
+) -> Unit {
   scroll_page(c, key, [
     fn() {
       c.box(style=account_list_room, fn() {
         c.box(style=account_note_room, fn() { c.text(tr("android-chat.run.account.note"), style=account_note_words) |> ignore }) |> ignore
-        if @sf.choice_row(c, key + "/auto", picked == "", tr("android-chat.run.account.auto")) {
+        if @sf.choice_row(c, key + "/auto", picked == "", tr("android-chat.run.account.auto"), trail?=auto_trail) {
           pick(None)
         }
         for a in accounts {

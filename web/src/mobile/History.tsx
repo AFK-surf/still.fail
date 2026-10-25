@@ -469,7 +469,12 @@ export function RunSettingsScreen() {
   const s = agent.session;
   const chosen = v.draft.profile ?? null;
   if (list === "model") return <div className={pagesCss.mScreen}>{bar}<ModelList models={v.options} runtime={s.runtime} picked={v.option ?? null} onPick={(m) => { pick.set({ model: m }); setList(null); }} /></div>;
-  if (list === "account") return <div className={pagesCss.mScreen}>{bar}<AccountList accounts={v.accounts} runtime={s.runtime} picked={chosen} onPick={(p) => { pick.set({ profile: p }); setList(null); }} /></div>;
+  // Beside 自动分配: its station picks its account again now, which it took said.
+  const repick = v.repick && pick.repick ? {
+    text: v.repick, busy: !!pick.repicking,
+    run: () => void pick.repick?.().then((r) => { if (r.said) app.toast(r.said); }, (e: unknown) => app.toast(e instanceof Error ? e.message : String(e))),
+  } : undefined;
+  if (list === "account") return <div className={pagesCss.mScreen}>{bar}<AccountList accounts={v.accounts} runtime={s.runtime} picked={chosen} onPick={(p) => { pick.set({ profile: p }); setList(null); }} repick={repick} /></div>;
   // Back at once, not waiting on the station (its button under way where it shows, doing); failed, a toast says why.
   const save = () => {
     app.pop();
@@ -576,12 +581,15 @@ export function ModelList({ models, runtime, picked, onPick }: { models: ModelOp
   );
 }
 
-/** Who can run the model picked: the station's pick, or one kept to, with its quota. */
-export function AccountList({ accounts, runtime, picked, onPick }: { accounts: RunnableProfile[]; runtime: string; picked: string | null; onPick: (p: string | null) => void }) {
+/** Who can run the model picked: the station's pick (`repick` over its end, a chat's), or one kept to, with its quota. */
+export function AccountList({ accounts, runtime, picked, onPick, repick }: { accounts: RunnableProfile[]; runtime: string; picked: string | null; onPick: (p: string | null) => void; repick?: { text: string; busy: boolean; run: () => void } | undefined }) {
+  const auto = <PickLine label={t("web-mobile.history.auto")} checked={picked === null} onClick={() => onPick(null)} />;
   return (
     <div className={`${pagesCss.mScroll} ${partsCss.mPadX18}`}>
       <p className={`${partsCss.mSmall} ${partsCss.mMuted} ${css.mAccountNote}`}>{t("web-mobile.history.accountNote")}</p>
-      <PickLine label={t("web-mobile.history.auto")} checked={picked === null} onClick={() => onPick(null)} />
+      {repick
+        ? <div className={css.mPickAuto}>{auto}<button type="button" className={css.mRepick} disabled={repick.busy} onClick={repick.run}>{repick.busy && <Spinner inline />}{repick.text}</button></div>
+        : auto}
       {/* An account its provider refuses says so (a red dot, 被停用) where its allowance would be. */}
       {accounts.map((p) => (
         <PickLine key={p.id} label={p.name} checked={picked === p.id} onClick={() => onPick(p.id)}
