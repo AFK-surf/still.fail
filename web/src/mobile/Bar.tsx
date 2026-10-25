@@ -15,7 +15,7 @@
 // - Choosing another bar, the panel closes like a window over a stack of bars: the stack slides down until the chosen
 //   bar is where the bar is, what is not chosen goes out at the glass's edges. Nothing fades.
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { Archive, Chart, Chats, Folder, Im, Ling, Plus, Quota, Zou, type IconProps } from "@stillfail/ui/icons.tsx";
 import { railLabel } from "../Rail.tsx";
 import { prefs, setPrefs, usePrefs } from "../prefs.ts";
@@ -139,11 +139,12 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
   const said = glyph.asleep ? status?.text ?? "" : chats?.glyph?.label ?? "";
   const stationsSaid = chats?.trouble ? t("web-mobile.home.stationTrouble", { said, trouble: chats.trouble.text }) : t("web-mobile.home.station", { said });
   const labelOf = (key: BarPlace) => (key === "stations" && said ? stationsSaid : railLabel(key));
-  const icon = (key: BarPlace, size = 28) => {
-    if (key === "stations") return <StationGlyph counts={glyph} size={size} />;
-    const I = ICONS[key]!;
-    return <I size={size} />;
-  };
+  // Spring frames do not redraw each icon (especially the station's animated SVG).
+  const icons = useMemo(() => ({
+    ...Object.fromEntries(Object.entries(ICONS).map(([key, I]) => [key, <I size={28} />])),
+    stations: <StationGlyph counts={glyph} size={28} />,
+  }) as Partial<Record<BarPlace, ReactNode>>, [glyph.online, glyph.dim, glyph.failing, glyph.working, glyph.asleep, glyph.connecting]);
+  const icon = (key: BarPlace) => icons[key];
 
   const wrap = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(0);
@@ -157,11 +158,13 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
     return () => o.disconnect();
   }, []);
 
-  // ---- springs, stepped by one frame loop; the bar is drawn again each frame one of them moves
+  // ---- springs, stepped by one frame loop; only the outline changing redraws the bar
   const s = useRef<{ o: Spring; k: Spring; held: Spring; x: Spring; y: Spring } | null>(null);
   s.current ??= { o: new Spring(0), k: new Spring(0), held: new Spring(0), x: new Spring(0), y: new Spring(0) };
   const sp = s.current;
   const [, tick] = useState(0);
+  const ball = useRef<HTMLDivElement>(null);
+  const drawBall = useRef<() => void>(() => {});
   const loop = useRef({ raf: 0, last: 0 });
   // What the panel's spring is to do once it is still (a bar being chosen: chosen). Done at once if cut short: left
   // undone, the bar would stay half switched.
@@ -173,10 +176,13 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
       const dt = Math.min(0.032, Math.max(0.001, (now - loop.current.last) / 1000));
       loop.current.last = now;
       const all = Object.values(sp);
+      // Only a changing outline/stack needs a React commit. The travelling ball owns its transform.
+      const reshaping = sp.o.moving || sp.k.moving;
       const instant = reducedMotion();
       for (const spring of all) if (instant) spring.jump(spring.target); else if (spring.moving) spring.step(dt);
       if (!sp.o.moving && panelDone.current) { const done = panelDone.current; panelDone.current = null; done(); }
-      tick((n) => n + 1);
+      drawBall.current();
+      if (reshaping) tick((n) => n + 1);
       loop.current.raf = all.some((spring) => spring.moving) ? requestAnimationFrame(frame) : 0;
     };
     loop.current.raf = requestAnimationFrame(frame);
@@ -379,14 +385,19 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
   const shape = w ? outline(w, 0, PANEL - clipTop, notch) : "";
   const slot = w ? (w - 2 * C0) / 3 : 0;
   const shadowMask = useId().replace(/[^\w-]/g, "");
-  const held = sp.held.value;
   const ballShown = ai >= 0 || finger !== null || ballOn !== null;
-  const bx = sp.x.value, by = sp.y.value;
-  // Stretched along its way by its speed (px a frame), its leading edge ahead; round as it stops.
-  const v = sp.x.velocity / 60;
-  const stretch = Math.min(36, Math.abs(v) * 1.6);
-  const ballW = BALL + stretch, ballH = BALL - Math.min(6, stretch * 0.2);
-  const ballLeft = bx - BALL / 2 - (v < 0 ? stretch : 0);
+  const ballStyle = () => {
+    const v = sp.x.velocity / 60;
+    const stretch = Math.min(36, Math.abs(v) * 1.6);
+    const width = BALL + stretch, height = BALL - Math.min(6, stretch * 0.2);
+    const left = sp.x.value - BALL / 2 - (v < 0 ? stretch : 0);
+    return {
+      width: `${width}px`, height: `${height}px`, borderRadius: `${height / 2}px`,
+      opacity: ballShown ? "1" : "0",
+      transform: `translate3d(${left}px, ${sp.y.value - height / 2}px, 0) scale(${(1 + 0.06 * sp.held.value) * (ballShown ? 1 : 0.6)})`,
+    };
+  };
+  drawBall.current = () => { if (ball.current) Object.assign(ball.current.style, ballStyle()); };
   const lit = cand ? (cand.set === cur ? cand.key : null) : place;
 
   return (
@@ -463,10 +474,7 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
             </div>
           )}
           {w > 0 && (
-            <div className={css.mBarBall} data-bar="ball" style={{
-              left: ballLeft, top: by - ballH / 2, width: ballW, height: ballH,
-              borderRadius: ballH / 2, opacity: ballShown ? 1 : 0, transform: `scale(${(1 + 0.06 * held) * (ballShown ? 1 : 0.6)})`,
-            }} />
+            <div ref={ball} className={css.mBarBall} data-bar="ball" style={ballStyle()} />
           )}
         </div>
       </div>

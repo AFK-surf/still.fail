@@ -109,6 +109,9 @@ function fresh(model: Virtual, gap: number, holds: boolean): Made {
 export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, items: Item[], options: {
   /** What floats over the pane's top, from the room before its first item (its padding). */
   cover?: (lead: number) => number;
+  /** Navigation rows may fold while the pane stays put. Commit their new window on the next frame,
+   * rather than mount more observed rows during ResizeObserver delivery (a loop error in WebKit). */
+  deferResize?: boolean;
   short?: boolean;
   /** Items left an end as the list's window moved along. */
   trimmed?: boolean;
@@ -117,7 +120,7 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
   /** A message just come at the end: followed from its top (a long one is read from its start). */
   arrived?: string | null;
 }): VirtualList {
-  const { short = false, trimmed = false, smooth = false, arrived = null } = options;
+  const { short = false, trimmed = false, smooth = false, arrived = null, deferResize = false } = options;
   const [, redraw] = useReducer((n: number) => n + 1, 0);
   const { model, gap } = made;
   const cover = useRef(options.cover);
@@ -273,6 +276,7 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
     for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.addEventListener(type, touched, { passive: true });
     // What of the gap each row's last told height took back (takenBack): a row's own changing is told from there.
     const taken = new WeakMap<HTMLElement, number>();
+    let resizeFrame = 0;
     const sizes = new ResizeObserver((entries) => {
       // A reader's scroll was heard before this in the frame: the pane anywhere else than it was put is the browser's
       // doing as it laid the page out (what left the list's end left the pane past its end). The model puts it back.
@@ -309,7 +313,9 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       // itself resized lays everything out anew, taken at once.
       if (!entries.some((e) => e.target === el) && performance.now() - made.born > OPENING_MS && model.mode.kind === "follow") model.glide(true);
       model.measured(heights);
-      self.sync(el);
+      if (deferResize) {
+        if (!resizeFrame) resizeFrame = requestAnimationFrame(() => { resizeFrame = 0; self.sync(el); });
+      } else self.sync(el);
     });
     sizes.observe(el);
     // A click in the pane, until two frames after it.
@@ -408,11 +414,12 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       el.removeEventListener("focusin", hold);
       el.removeEventListener("focusout", hold);
       document.removeEventListener("selectionchange", hold);
+      cancelAnimationFrame(resizeFrame);
       sizes.disconnect();
       rows.disconnect();
       for (const k of held) model.pin(k, false);
     };
-  }, [pane, made, model, self, gap]);
+  }, [pane, made, model, self, gap, deferResize]);
 
   return useMemo<VirtualList>(() => ({
     model,

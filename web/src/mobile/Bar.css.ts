@@ -71,7 +71,7 @@ export const mBarSetRow = style({ position: "absolute", left: "0", right: "0", h
 
 /** The selection: a frosted ball of 68 under the icons, over 令. */
 export const mBarBall = style([{
-  position: "absolute", zIndex: 5, pointerEvents: "none", transition: "opacity 200ms, transform 250ms",
+  position: "absolute", left: 0, top: 0, zIndex: 5, pointerEvents: "none", transition: "opacity 200ms",
   background: "color-mix(in srgb, #fff 42%, transparent)",
   WebkitBackdropFilter: "blur(14px) saturate(1.6)", backdropFilter: "blur(14px) saturate(1.6)",
   boxShadow: `${rim(0.5, 0.95, 0.55)}, 0 1px 8px rgb(55 53 45 / .2)`,

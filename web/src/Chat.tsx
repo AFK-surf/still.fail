@@ -1975,6 +1975,7 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, no
     if (quote) draft.quote(quote, offer.quotedFile);
     else input.current?.focus();
   });
+  const fitInput = useRef<(() => void) | null>(null);
   // Grow with the text up to its lines, then scroll; the frame is never resized by hand. Its width changing re-wraps
   // the text (or the placeholder), so it is measured again then; below the limit it never scrolls. Sized before it is
   // drawn (and before the composer's change of shape reads where things end up).
@@ -2023,6 +2024,7 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, no
       el.toggleAttribute("data-more-above", over && el.scrollTop > 1);
       el.toggleAttribute("data-more-below", over && el.scrollTop + el.clientHeight < el.scrollHeight - 1);
     };
+    fitInput.current = fit;
     fit();
     let width = el.clientWidth;
     const resize = new ResizeObserver(() => { if (el.clientWidth !== width) { width = el.clientWidth; fit(); } });
@@ -2035,8 +2037,10 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, no
     const scrolled = () => { edges(); over(); };
     el.addEventListener("scroll", scrolled);
     window.addEventListener("resize", fit);
-    return () => { resize.disconnect(); moved.disconnect(); window.removeEventListener("resize", fit); el.removeEventListener("scroll", scrolled); probe.remove(); };
-  }, [text, lines, layout]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { fitInput.current = null; resize.disconnect(); moved.disconnect(); window.removeEventListener("resize", fit); el.removeEventListener("scroll", scrolled); probe.remove(); };
+  }, [lines, layout]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Typing reuses the measure and its observers; only the text and the resulting size change.
+  useLayoutEffect(() => { fitInput.current?.(); }, [text]);
   const menu = reference && !locked && (
     <div className={refCss.refAnchor}>
       <ChatRefMenu query={reference.query} here={sessionKey} active={active} onPick={pickReference} found={(items) => { refItems.current = items; }} />

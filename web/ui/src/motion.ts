@@ -126,7 +126,7 @@ export function restingLoop(el: Element, frames: Keyframe[], { period, at = 0, d
     timer = setTimeout(() => {
       // With motion reduced, or not drawn (in a pane gone hidden: content-visibility), not played: hidden, it could not
       // go to the compositor, and the page would be drawn anew every frame of it for nothing.
-      if (reducedMotion() || el.checkVisibility?.() === false) return next();
+      if (document.hidden || reducedMotion() || el.checkVisibility?.({ visibilityProperty: true, opacityProperty: true, contentVisibilityAuto: true }) === false) return next();
       run = el.animate(frames, { duration });
       // Cut short (cancelled) it goes on all the same, till stopped.
       run.finished.then(next, next);
