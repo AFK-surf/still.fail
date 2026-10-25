@@ -199,3 +199,115 @@ let folder_crumb_here : @ui.TextStyle = @ui.text_style(weight=Medium, color=Fg, 
 
 ///|
 let folder_crumb_chevron : Double = 12.0
+
+// ── a station's folders pinned ──────────────────────────────────────────
+
+///|
+/// A station's drive with no folder to show (Roots; the phone's RootsPage): one page on every screen, made of the
+/// library's page parts (its frame laid out by its width: back over a large title, or its head). What it is for: which
+/// of the station's folders can be gone into, and what is wrong with one. 文件, the station's name under it; ⋯ 管理
+/// for one who may; what it holds in a line, then a row each (its name, where it is, or what is wrong with it in red);
+/// pressed, gone into; held or right clicked, for one who may: no longer pinned, asked first. Read, says so; none,
+/// says so (选择文件夹 for one who may); from before drives, says so. `n`: the frame it is drawn in (back, the room
+/// over and under it).
+pub fn roots_page(
+  c : @ui.Ctx,
+  src : Source,
+  ws : String,
+  st : DvStation?,
+  reading : Bool,
+  error : String?,
+  manage : Bool,
+  n : NarrowOf,
+  go : (DriveAt) -> Unit,
+) -> Unit {
+  let name = match st {
+    Some(s) => s.name
+    None => ""
+  }
+  let empty = fn(words : String, pick : DvStation?) {
+    @sf.empty(c, fn() {
+      c.text(words, style=roots_empty_words) |> ignore
+      match pick {
+        Some(s) =>
+          if @sf.button(c, @sf.t("web-pages.drive.pick"), key="files-roots/pick", tone=Primary) {
+            add_folder(src, ws, [s])
+          }
+        None => ()
+      }
+    })
+  }
+  let body = fn() {
+    match st {
+      _ if reading => @sf.waiting(c, count=6, error=error.unwrap_or(""))
+      None => empty(@sf.t("web-pages.workspace.noSuchStation"), None)
+      Some(s) if !s.overview => @sf.waiting(c, count=6)
+      Some(s) if !s.drive => empty(@sf.t("web-pages.drive.oldStation"), None)
+      Some(s) if s.roots.length() == 0 =>
+        empty(@sf.t(if manage { "web-pages.drive.noneManage" } else { "web-pages.drive.noneMember" }), if manage {
+          Some(s)
+        } else {
+          None
+        })
+      Some(s) => {
+        @sf.page_note(c, @sf.t("web-pages.drive.rootsCount", args=[("n", s.roots.length().to_string())]))
+        @sf.group(c, fn() {
+          for r in s.roots {
+            root_row(c, src, s, r, manage, go)
+          }
+        })
+      }
+    }
+  }
+  @sf.page(
+    c,
+    "files-roots/" + (match st { Some(s) => s.station; None => "" }),
+    @sf.t("web-pages.drive.title"),
+    [body],
+    n.back,
+    back?=n.frame.back,
+    top=n.frame.top,
+    foot=n.frame.foot,
+    lead=name,
+    actions?=match st {
+      Some(s) if manage && s.drive && s.roots.length() > 0 =>
+        Some(fn() {
+          if @sf.icon_button(c, "more", key="files-roots/manage", label=@sf.t("web-pages.drive.manage")) {
+            manage_roots(src, ws, s.station)
+          }
+        })
+      _ => None
+    },
+  )
+}
+
+///|
+/// A folder pinned (RootRow): its mark, its name, where it is (which disk, which folder: what finding it again turns
+/// on), what is wrong with it and what to do in red under that where it cannot be browsed now, a chevron; pressed, gone into; held or right clicked, for one who may, no longer pinned.
+fn root_row(c : @ui.Ctx, src : Source, s : DvStation, r : DvRoot, manage : Bool, go : (DriveAt) -> Unit) -> Unit {
+  let t = @sf.theme()
+  let key = "files-root/" + s.station + "/" + r.path
+  let id = c.id(key)
+  match c.menu_asked(id) {
+    Some((x, y)) if manage =>
+      @sf.menu(
+        [Some(@sf.menu_item_of(@sf.t("web-pages.drive.unshare"), icon="close", danger=true, fn() { ask_unpin(c, src, s, r) }))],
+        from=@sf.at_point(x, y),
+        title=r.name,
+      )
+    _ => ()
+  }
+  let trouble = match dv_trouble(r.state) {
+    Some((what, hint)) => what + " · " + hint
+    None => ""
+  }
+  if @sf.link_row(c, key, r.name, note=r.path, trouble~, lead=fn() {
+      @sf.icon(c, "folder", size=t.items.mark, color=t.p.muted) |> ignore
+    }) {
+    go({ station: s.station, root: Some(r.path), path: "" })
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let roots_empty_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, center=true)

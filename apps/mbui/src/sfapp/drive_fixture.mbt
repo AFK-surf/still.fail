@@ -16,6 +16,21 @@ let fix_home : String = "/Users/lin"
 let fix_docs : String = "/Users/lin/文档"
 
 ///|
+/// Studio's as a member sees it (drive-roots): its two folders pinned (备份盘 missing), nothing else browsed.
+fn fixture_station_member() -> Json {
+  {
+    "viewer": { "via": "mesh", "role": "member" },
+    "drive": {
+      "roots": [
+        { "path": fix_docs, "name": "文档", "state": "ok" },
+        { "path": "/Volumes/备份盘", "name": "备份盘", "state": "missing" },
+      ],
+      "transfers": true,
+    },
+  }
+}
+
+///|
 fn fixture_station_drive(up : Bool) -> Json {
   if up {
     {
@@ -415,6 +430,11 @@ pub fn open_drive_fixture(mode : String) -> Unit {
   let docs : DriveAt = { station: "ws1/st1", root: Some(fix_docs), path: "" }
   match mode {
     "files" => app.nav.push(Files)
+    // a station's folders pinned, as a member sees them (its drive's page with no folder asked; chat_fixture.mbt)
+    "drive-roots" => {
+      app.nav.push(Files)
+      app.nav.push(Drive({ ..docs, root: None }))
+    }
     "drive" | "drive-loading" | "drive-upload" | "drive-download" => {
       app.nav.push(Files)
       app.nav.push(Drive(docs))
