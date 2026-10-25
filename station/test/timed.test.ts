@@ -36,7 +36,7 @@ test("a statement run or an exec taking SLOW_MS or more is said, by its SQL and 
 test("who asked is said by the names of the functions past the wrappers and the store's own helpers", () => {
   const stack = [
     "Error",
-    "    at time (file:///s/timed.ts:1:1)",
+    "    at time2 (file:///s/main.js:1:1)",
     "    at StatementSync.<anonymous> (file:///s/timed.ts:2:2)",
     "    at Store.#all (file:///s/store.ts:3:3)",
     "    at Store.listSessions (file:///s/store.ts:4:4)",
