@@ -30,16 +30,16 @@ pub fn toast_said(message : String) -> String {
 }
 
 ///|
-/// A toast's look (toast.css.ts toast): 9 by 18 in, 20 round, the primary ink's ground, its words 13 in the ink on it,
-/// 560 wide at most, a floating shadow; coming in from 8 below and going as it fades.
-/// Its action (`action`'s words, "" none) at its end, its id `action_id` (the toaster's `<key>/<toast>/action`, so the
-/// focus on it holds the toast); whether it was pressed.
+/// A toast's look (toast.css.ts toast): its words 13 in the ink on the primary ink's ground (toast_r, toast_py,
+/// toast_px: a capsule while they fit one line), 560 wide at most, a floating shadow; coming in from 8 below and going
+/// as it fades. Its action (`action`'s words, "" none) a capsule in its end, concentric with it (toast_action_in from
+/// its top, foot and end), its id `action_id` (the toaster's `<key>/<toast>/action`, so the focus on it holds the
+/// toast); whether it was pressed.
 pub fn toast_look(c : @ui.Ctx, s : @kit.ToastState, action? : String = "", action_id? : Int = 0) -> Bool {
   let mut pressed = false
   let k = if s.t > 1.0 { 1.0 } else if s.t < 0.0 { 0.0 } else { s.t }
   c.box(
-    style=toast_box,
-    pady=toast_py,
+    style=if action == "" { toast_box } else { toast_acting_box },
     radius=toast_r,
     shadow=toast_shadow,
     shadow_y=toast_shadow_y,
@@ -48,15 +48,14 @@ pub fn toast_look(c : @ui.Ctx, s : @kit.ToastState, action? : String = "", actio
     tx=s.dx,
     ty=(1.0 - k) * toast_rise,
     fn() {
-      if action == "" {
-        c.text(s.toast.title, style=toast_words) |> ignore
-      } else {
-        c.box(style=toast_row, fn() {
-          c.text(s.toast.title, style=toast_words) |> ignore
+      c.box(style=toast_row, fn() {
+        // (its words as far from the toast's top and foot with a button beside them as without)
+        c.box(style=toast_words_box, fn() { c.text(s.toast.title, style=toast_words) |> ignore }) |> ignore
+        if action != "" {
           pressed = toast_button(c, action_id, action)
-        })
-        |> ignore
-      }
+        }
+      })
+      |> ignore
     },
   )
   |> ignore
@@ -64,8 +63,8 @@ pub fn toast_look(c : @ui.Ctx, s : @kit.ToastState, action? : String = "", actio
 }
 
 ///|
-/// A toast's button (toast.tsx ToastAction): its words in the toast's ink, bold, on a faint ground of it, 28 high and
-/// round; whether it was pressed.
+/// A toast's button (toast_look's): its words in the toast's ink, bold, on a faint ground of it, a capsule
+/// toast_action_h high; whether it was pressed.
 pub fn toast_button(c : @ui.Ctx, id : Int, words : String) -> Bool {
   let r = c.interact(id)
   let i = c.box(style=toast_action_box, id~, fn() { c.text(words, style=toast_action_words) |> ignore })
@@ -74,14 +73,22 @@ pub fn toast_button(c : @ui.Ctx, id : Int, words : String) -> Bool {
 }
 
 ///|
-/// A toast's words and its action beside them (toast_look's, the phone's).
+/// A toast's words and its action beside them, in the middle of its height.
 // kept across runs: a value (no field of it changes)
-pub let toast_row : @ui.Style = @ui.css("row gap=S3 align=ACenter")
+let toast_row : @ui.Style = @ui.css("row gap=S3 align=ACenter")
 
 ///|
+/// (its button's words toast_px from the toast's end, as its words are from its start)
 // kept across runs: a value (no field of it changes)
-let toast_action_box : @ui.Style = @ui.css(
-  "h=S7 px=S3 radius=Full align=ACenter justify=JCenter bg=A(OnPrimary, O15) hovered{bg=A(OnPrimary, O5)} pressed{bg=A(OnPrimary, O5)}",
+let toast_action_box : @ui.Style = @ui.style(
+  h=Fixed(toast_action_h),
+  px=room(toast_px - toast_action_in),
+  radius=Full,
+  align=ACenter,
+  justify=JCenter,
+  bg=A(OnPrimary, O15),
+  hovered=@ui.patch(bg=A(OnPrimary, O5)),
+  pressed=@ui.patch(bg=A(OnPrimary, O5)),
 )
 
 ///|
@@ -89,9 +96,24 @@ let toast_action_box : @ui.Style = @ui.css(
 let toast_action_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, leading=L5, color=OnPrimary, wrap=false)
 
 ///|
+/// (toast_action_in over and under all it holds, its words' own room the rest of toast_py)
 // kept across runs: a value (no field of it changes)
-let toast_box : @ui.Style = @ui.style(px=S4_5, bg=Primary, max_w=Fixed(toast_max))
+let toast_box : @ui.Style = @ui.style(
+  px=room(toast_px),
+  py=room(toast_action_in),
+  bg=Primary,
+  max_w=Fixed(toast_max),
+)
+
+///|
+/// With a button in its end: toast_action_in from it there, as over and under it.
+// kept across runs: a value (no field of it changes)
+let toast_acting_box : @ui.Style = toast_box.then(@ui.style(pr=room(toast_action_in)))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let toast_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=OnPrimary)
+let toast_words_box : @ui.Style = @ui.style(py=room(toast_py - toast_action_in))
+
+///|
+// kept across runs: a value (no field of it changes)
+let toast_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=Exact(toast_line), color=OnPrimary)

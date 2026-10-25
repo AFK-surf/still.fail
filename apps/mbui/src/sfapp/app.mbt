@@ -732,66 +732,32 @@ fn place_switch(c : @ui.Ctx) -> @motion.Anim {
 }
 
 ///|
-/// What a write said (Sheet.kt ToastHost), mbui's toast (@kit.toaster) in still.fail's look: over the foot, clear of
-/// the bar and the action standing over it (bar_room above it), in ink, 2.6 s (paused while the pointer is on it),
-/// coming in and going out; one said again is a new one.
+/// What a write said, mbui's toast (@kit.toaster) in the library's look (@sf.toast_look: what an unconfirmed write did
+/// said as not known), 2.6 s (paused while the pointer is on it), coming in and going out; one said again is a new
+/// one. Where the frame has it: the wide frame's 24 over the window's foot (the web's), the narrow one's over the
+/// foot, clear of the bar and the action standing over it (bar_room above it) and above the navigation bar the view
+/// reaches under (Sheet.kt's navigationBars padding).
 fn toast(c : @ui.Ctx) -> Unit {
-  let t = @sf.theme()
   let action = if app.toast != "" { app.toast_action } else { "" }
   let duration = if action != "" { toast_action_ms } else { toast_ms }
   // its action's button the toaster's (the focus on it holds the toast)
   let action_id = c.id("toast/t\{app.toast_n}/action")
+  let bottom = if @sfdesk.is_wide(c) { @sf.toast_bottom } else { bar_room + nav_foot() }
+  let said = if app.toast != "" { [@kit.toast("t\{app.toast_n}", @sf.toast_said(app.toast))] } else { [] }
+  let mut pressed = false
+  let r = @kit.toaster(c, "toast", said, duration~, bottom~, look=fn(c, s, _action, _close) {
+    let live = s.toast.id == "t\{app.toast_n}"
+    if @sf.toast_look(c, s, action=if live { action } else { "" }, action_id~) {
+      pressed = true
+    }
+  })
   // pressed: done, and the toast goes
-  let acted = fn() {
+  if pressed {
     let run = app.toast_run
     app.toast = ""
     app.toast_action = ""
     app.toast_run = fn() {  }
     run()
-  }
-  // the wide frame's the web's (the library's: @sf.toast_look, 24 over the window's foot, what an unconfirmed write
-  // did said as not known)
-  if @sfdesk.is_wide(c) {
-    let said = if app.toast != "" { [@kit.toast("t\{app.toast_n}", @sf.toast_said(app.toast))] } else { [] }
-    let mut pressed = false
-    let r = @kit.toaster(c, "toast", said, duration~, bottom=@sf.toast_bottom, look=fn(c, s, _action, _close) {
-      let live = s.toast.id == "t\{app.toast_n}"
-      if @sf.toast_look(c, s, action=if live { action } else { "" }, action_id~) {
-        pressed = true
-      }
-    })
-    if pressed {
-      acted()
-    } else if app.toast != "" && r.open.is_empty() {
-      app.toast = ""
-    }
-    return
-  }
-  let said = if app.toast != "" { [@kit.toast("t\{app.toast_n}", app.toast)] } else { [] }
-  // (above the navigation bar the view reaches under: Sheet.kt's navigationBars padding)
-  let foot = nav_foot()
-  let mut pressed = false
-  let r = @kit.toaster(c, "toast", said, duration~, bottom=bar_room + foot, look=fn(c, s, _action, _close) {
-    let k = if s.t > 1.0 { 1.0 } else if s.t < 0.0 { 0.0 } else { s.t }
-    let live = s.toast.id == "t\{app.toast_n}"
-    c.box(padx=16.0, pady=10.0, bg=t.p.text, radius=18.0, opacity=k, tx=s.dx, fn() {
-      let words = fn() { c.text(s.toast.title, size=t.t.ui, color=t.p.bg, line=20.0) |> ignore }
-      if live && action != "" {
-        c.box(style=@sf.toast_row, fn() {
-          words()
-          if @sf.toast_button(c, action_id, action) {
-            pressed = true
-          }
-        })
-        |> ignore
-      } else {
-        words()
-      }
-    })
-    |> ignore
-  })
-  if pressed {
-    acted()
   } else if app.toast != "" && r.open.is_empty() {
     app.toast = ""
   }

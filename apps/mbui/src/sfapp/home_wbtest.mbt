@@ -490,6 +490,41 @@ test "a toast with 撤销 stays its longer time; one without, its 2.6 s" {
 }
 
 ///|
+/// The toast saying `words` (with a button of `action`'s words, "" none) as it rests in tester `t`: its rect, its
+/// button's.
+fn rested_toast(t : @ui.Tester, words : String, action : String) -> ((Double, Double, Double, Double), (Double, Double, Double, Double)?) raise {
+  app.toast = words
+  app.toast_action = action
+  app.toast_n += 1
+  t.frame()
+  t.run_for(@kit.presence_in_ms)
+  let toast = match t.query(Status, label=words) {
+    Some(n) => n.rect
+    None => fail("no toast saying \{words}")
+  }
+  (toast, t.query(Button, label=action).map(fn(n) { n.rect }))
+}
+
+///|
+test "a toast is a capsule while its words fit a line; its 撤销 a capsule in its end concentric with it, every frame's" {
+  for wide in [false, true] {
+    let calls : Array[Made] = []
+    let t = if wide { wide_tester(calls) } else { wide_tester(calls, w=390.0, h=844.0, platform=2) }
+    let (bare, _) = rested_toast(t, "已复制", "")
+    assert_true((bare.3 - 2.0 * @sf.toast_r).abs() < 0.5, msg="\{wide} \{bare}")
+    t.run_for(@sf.toast_ms + @kit.presence_out_ms)
+    let ((x, y, w, h), button) = rested_toast(t, "已归档", "撤销")
+    let (bx, by, bw, bh) = button.unwrap()
+    // as high as one without; its button as far from its top, foot and end as its corner has a capsule that high
+    assert_true((h - 2.0 * @sf.toast_r).abs() < 0.5, msg="\{wide} \{h}")
+    let inset = @sf.capsule_in(@sf.toast_r, bh)
+    for gap in [by - y, y + h - (by + bh), x + w - (bx + bw)] {
+      assert_true((gap - inset).abs() < 0.5, msg="\{wide} \{gap} \{inset}")
+    }
+  }
+}
+
+///|
 test "wide: a chat archived from its row with a mouse says so with 撤销 too, which asks it back (archived false)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
