@@ -19,8 +19,12 @@
 //    file's sheet in its tile), in a capsule what stands at its ends concentric with them by their middles (a dot, a
 //    tab's ×; a capsule button by its end's).
 //
-// Rules 2 (siblings of a kind equally spaced), 5 (one column's things aligned) and 6 (gaps on the scale) are still.fail's
-// too, not measured yet.
+// 5. The blocks that show their edges (a ground, an edge, what lights up), half as wide as what they stand on at least,
+//    the outermost on it, stand on the edges most of them do, whatever boxes lay them out: one off them by less than
+//    a step of the scale (`gap_align_step`) juts out or falls short (a sheet's row past its others, a card short of
+//    the segmented choice over it).
+//
+// Rules 2 (siblings of a kind equally spaced) and 6 (gaps on the scale) are still.fail's too, not measured yet.
 
 ///|
 /// How thin a box is a line (a rule between rows, a progress bar's track), not a block with a ground.
@@ -514,5 +518,118 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
       out.push("rule 4: what \{self.named(gi)} holds stands \{l} in from its left, \{r} from its right")
     }
   }
+  // 5. one column's blocks aligned: the blocks that show their edges (a ground, an edge, what lights up) half as wide
+  // as what they stand on at least (its ground, the nearest; the layer's where none), whatever boxes lay them out (a
+  // page's head and its cards, a sheet's rows), stand on the same left and right edges as the most of them (no two
+  // alike: the widest's); one a little off them (more than the layout's rounding, less than a step of the scale) juts
+  // out or falls short
+  let groups : Map[Int, Array[Int]] = {}
+  // (a box grounded by a layer of its size under it, a card drawn so, is grounded as one with its own: by that ground)
+  let laid = self.layer_grounds()
+  let ground_of = fn(k : Int) -> Int? {
+    if self.nodes[k].grounded() {
+      Some(k)
+    } else {
+      laid.get(k)
+    }
+  }
+  for k in 0..<n {
+    let b = self.nodes[k]
+    if !whole[k] || b.kind != kind_box || b.squeeze_aside() || !(ground_of(k) is Some(_) || self.gap_lights(k)) {
+      continue
+    }
+    let mut q = b.parent
+    while q >= 0 && layer[q] == layer[k] && ground_of(q) is None {
+      q = self.nodes[q].parent
+    }
+    let on = if q >= 0 && layer[q] == layer[k] { q } else { layer[k] }
+    let w = if on >= 0 { self.nodes[on].fw } else { self.width }
+    if b.fw < w / 2.0 || dmin(b.fw, b.fh) < gap_line {
+      continue
+    }
+    // (a ground the colour of what it stands on, no edge round it, shows no edges: a head on the page's ground)
+    match (ground_of(k), if on >= 0 { ground_of(on) } else { None }) {
+      (Some(gk), Some(go)) if !self.gap_lights(k) => {
+        let a = self.nodes[gk]
+        if a.bg == self.nodes[go].bg && !(a.border_w > 0.0 && (a.border_c & 0xFFL) != 0L) {
+          continue
+        }
+      }
+      _ => ()
+    }
+    match groups.get(on) {
+      Some(list) => list.push(k)
+      None => groups[on] = [k]
+    }
+  }
+  for entry in groups {
+    let (on, all) = entry
+    // (what one of them holds is laid by it, not beside it: only the outermost)
+    let within = fn(i : Int, o : Int) {
+      let mut q = self.nodes[i].parent
+      while q >= 0 && q != o {
+        q = self.nodes[q].parent
+      }
+      q == o
+    }
+    let outer = all.filter(fn(k) { !all.iter().any(fn(o) { o != k && within(k, o) }) })
+    // (a band across all of it, edge to edge, a bar, is not in its column; nor one as wide as what it holds, far
+    // narrower than the column's widest (a bubble, a card hugging its words): only what the column lays out across)
+    let g = self.nodes[on]
+    let band = fn(k : Int) {
+      let b = self.nodes[k]
+      (b.x - g.x).abs() <= gap_slack && (b.x + b.fw - g.x - g.fw).abs() <= gap_slack
+    }
+    let mut widest = 0.0
+    for k in outer {
+      if !band(k) {
+        widest = dmax(widest, self.nodes[k].fw)
+      }
+    }
+    let blocks = outer.filter(fn(k) { !band(k) && self.nodes[k].fw >= widest - 2.0 * gap_align_step })
+    if blocks.length() < 2 {
+      continue
+    }
+    for side in [0, 1] {
+      let at = fn(k : Int) {
+        let b = self.nodes[k]
+        if side == 0 { b.x } else { b.x + b.fw }
+      }
+      let mut best = at(blocks[0])
+      let mut most = 0
+      for k in blocks {
+        let here = blocks.filter(fn(o) { (at(o) - at(k)).abs() <= gap_slack }).length()
+        if here > most {
+          most = here
+          best = at(k)
+        }
+      }
+      // (no two on one edge: the widest's, the one what is in the column is laid by)
+      if most < 2 {
+        let mut wide = blocks[0]
+        for k in blocks {
+          if self.nodes[k].fw > self.nodes[wide].fw {
+            wide = k
+          }
+        }
+        best = at(wide)
+      }
+      for k in blocks {
+        let d = at(k) - best
+        if d.abs() > gap_slack && d.abs() < gap_align_step {
+          let how = if (side == 0) == (d < 0.0) { "juts out" } else { "falls short" }
+          let which = if side == 0 { "left" } else { "right" }
+          out.push("rule 5: \{self.named(k)} \{how} \{d.abs()} at its \{which} of the others' edge, on \{self.named(on)}")
+        }
+      }
+    }
+  }
   out
 }
+
+///|
+/// How far apart two edges of a column are on purpose at least (an indent, a step of the scale): nearer, they were
+/// meant to be one.
+let gap_align_step : Double = 16.0
+
+
