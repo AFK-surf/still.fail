@@ -307,7 +307,6 @@ let en : Map[String, String] = {
   "web-main.decisions.title": "Decisions",
   "web-main.decisions.dismissWhat": "dismiss it",
   "web-main.attention.dismissNote": "Dismiss: remove from your to-do list and Decisions (options still work in the chat)",
-  "web-main.attention.dismissTrouble": "Dismiss: no longer listed here until this station trouble changes",
   "web-main.filter.chats.named": "Filter chats: {named}",
   "web-main.filter.all": "All",
   "web-main.chat.archiveNamed": "Archive \"{title}\"",

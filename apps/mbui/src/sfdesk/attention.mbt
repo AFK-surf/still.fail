@@ -1,12 +1,13 @@
-// What wants the viewer, beside the rail's bell or under 待处理 (ember web/src/Attention.tsx, Attention.css.ts): the
-// stations' trouble and the services left up long (with the bell), then each workspace's chats that want the viewer
-// (the core's `workspaceMarks`), each leading to its chat; one looked at stays listed, quiet, until it is answered or
-// let go here (忽略, `decision.dismiss`). A station's trouble is the same: looked at, it no longer lights the bell; let
-// go, it is no longer listed, both until the trouble changes (kept on this device).
+// What wants the viewer and they have not looked at yet, beside the rail's bell or under 待处理 (ember
+// web/src/Attention.tsx, Attention.css.ts): the stations' trouble and the services left up long (with the bell), then
+// each workspace's chats that came to want the viewer and were not read since (the core's `workspaceMarks` items),
+// each leading to its chat; one read is no longer here (its row and 奏 still say it), one let go here neither (忽略,
+// `decision.dismiss`). A station's trouble is the same: listed until the panel has shown it, then the Station's place
+// says it, until the trouble changes (kept on this device).
 
 ///|
 /// What the panel keeps: what was let go in it (忽略) until the core no longer lists it, by station and chat; the
-/// stations' trouble as looked at when it opened, as it shows it while open (None: closed).
+/// stations' trouble as looked at before it opened, as it shows it while open (None: closed).
 priv struct Attention {
   gone : Array[String]
   mut trouble_seen : String?
@@ -23,21 +24,21 @@ fn attention_reset() -> Unit {
 
 ///|
 /// 待处理's panel (Attention.tsx): beside the rail's bell, 10 past it (with no bell in the rail, under 待处理 under
-/// 新建对话, 6 under it), 300 wide. With the bell, the stations' trouble (looked at as it opens: no longer lighting the
-/// bell; 忽略: no longer listed, both until the trouble changes, kept on this device) and the services left up long
-/// first; then each workspace's chats that want the viewer (the one in view's first), 忽略 on the row pointed at
-/// (`decision.dismiss`); pressed, its chat; 全部决定 (奏) and 通知设置 at its foot.
+/// 新建对话, 6 under it), 300 wide. With the bell, the stations' trouble not looked at yet (looked at as it opens:
+/// listed while open, then no longer, until the trouble changes, kept on this device) and the services left up long
+/// first; then each workspace's chats that want the viewer, not read since (the one in view's first), 忽略 on the row
+/// pointed at (`decision.dismiss`); pressed, its chat; 全部决定 (奏) and 通知设置 at its foot.
 fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let close = fn() { wide.attention_open = false }
   let railed = rail_items(src, w.id).contains("attention")
   let trigger = c.id(if railed { "rail/attention" } else { "side/attention" })
   // its stations all reached again: a trouble later in the same words is new (said once the frame is built)
   c.after_build("attention/forget", fn() { trouble_forget(src, w) })
-  // looked at as it opens (kept at once), drawn as looked at once it closes: new while it is first read
+  // looked at as it opens (kept at once), no longer listed once it closes: listed while it is first read
   if wide.attention_open && attention.trouble_seen is None {
     attention.trouble_seen = Some(trouble_kept(src, w, "seen"))
     let now = station_trouble_words(src, w)
-    if railed && now != "" && now != trouble_kept(src, w, "gone") {
+    if railed && now != "" {
       c.tell("attention/seen", fn() { trouble_keep(src, w, "seen", Json::string(now)) })
     }
   } else if !wide.attention_open {
@@ -76,8 +77,8 @@ fn station_trouble_words(src : Source, w : Workspace) -> String {
 }
 
 ///|
-/// What this device did with the stations' trouble (`seen`, `gone`): the words it had then, "" none (the prefs'
-/// `trouble`, by `<workspace>\n<what>`).
+/// What this device did with the stations' trouble (`seen`; `gone` from before it was no longer listed once seen): the
+/// words it had then, "" none (the prefs' `trouble`, by `<workspace>\n<what>`).
 fn trouble_kept(src : Source, w : Workspace, what : String) -> String {
   match field(field((src.topic)("prefs", {}).value, "trouble"), w.id + "\n" + what) {
     Some(String(s)) => s
@@ -102,28 +103,26 @@ fn trouble_forget(src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// The stations' trouble listed in the bell (not let go), and whether it is new (not looked at): ("", false) none.
-fn bell_trouble(src : Source, w : Workspace) -> (String, Bool) {
+/// The stations' trouble listed in the bell: not looked at before (while the panel is open, before it opened); ""
+/// none.
+fn bell_trouble(src : Source, w : Workspace) -> String {
   let words = station_trouble_words(src, w)
-  if words == "" || words == trouble_kept(src, w, "gone") {
-    return ("", false)
-  }
   let seen = match attention.trouble_seen {
     Some(s) => s
     None => trouble_kept(src, w, "seen")
   }
-  (words, words != seen)
+  if words == seen {
+    ""
+  } else {
+    words
+  }
 }
 
 ///|
-/// Whether the rail's bell has its dot: some came since they last looked (the badge, less what was let go here), or,
-/// besides, the stations' trouble not looked at or services left up long (Attention.tsx `lit`).
+/// Whether the rail's bell has its dot: something in its panel, the chats (less what was let go here), the stations'
+/// trouble not looked at or services left up long (Attention.tsx `lit`).
 pub fn bell_lit(src : Source, w : Workspace) -> Bool {
-  let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value
-  let gone_fresh = attention_groups(src, w, false).fold(init=0, fn(n, g) {
-    n + g.2.filter(fn(i) { attention.gone.contains(attention_key(i)) && !flag(Some(i), "seen") }).length()
-  })
-  count(marks, "badge") - gone_fresh > 0 || bell_trouble(src, w).1 || long_jobs(src, w) > 0
+  attention_groups(src, w, true).length() > 0 || bell_trouble(src, w) != "" || long_jobs(src, w) > 0
 }
 
 ///|
@@ -135,20 +134,17 @@ fn attention_key(i : Json) -> String {
 }
 
 ///|
-/// Each workspace's chats that want the viewer, the one in view's first (the cards alone when the badge counts
-/// those), those let go here left out unless `all`: (workspace, its name, its chats).
+/// Each workspace's chats in 待处理 (the core's marks' items), the one in view's first, those let go here left out
+/// when `shown`: (workspace, its name, its chats).
 fn attention_groups(src : Source, w : Workspace, shown : Bool) -> Array[(String, String, Array[Json])] {
   let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value
-  let only = text(marks, "badgeCounts") == "decisions"
   let groups : Array[(String, String, Array[Json])] = []
   match field(marks, "workspaces") {
     Some(Object(by)) => {
       let order = by.keys().to_array()
       order.sort_by(fn(a, b) { if a == w.id { -1 } else if b == w.id { 1 } else { 0 } })
       for ws in order {
-        let list = items(by.get(ws), "items").filter(fn(i) {
-          (!only || text(Some(i), "kind") == "wait") && (!shown || !attention.gone.contains(attention_key(i)))
-        })
+        let list = items(by.get(ws), "items").filter(fn(i) { !shown || !attention.gone.contains(attention_key(i)) })
         if list.length() > 0 {
           groups.push((ws, text(Some(list[0]), "workspaceName"), list))
         }
@@ -163,7 +159,7 @@ fn attention_groups(src : Source, w : Workspace, shown : Bool) -> Array[(String,
 /// What 待处理's panel holds, read while it is open.
 fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close : () -> Unit) -> Unit {
   let groups = attention_groups(src, w, true)
-  let (trouble, trouble_new) = if railed { bell_trouble(src, w) } else { ("", false) }
+  let trouble = if railed { bell_trouble(src, w) } else { "" }
   let jobs = if railed { long_jobs(src, w) } else { 0 }
   let several = groups.length() > 1 || groups.iter().any(fn(g) { g.0 != w.id })
   if groups.length() == 0 && trouble == "" && jobs == 0 {
@@ -181,9 +177,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
   }
   if trouble != "" {
     group("Station", fn() {
-      attention_item(c, "attention/trouble", "alert", !trouble_new, trouble, "", @sf.t("web-main.attention.dismissTrouble"), Some(fn() {
-        c.tell("attention/gone", fn() { trouble_keep(src, w, "gone", Json::string(trouble)) })
-      }), fn() {
+      attention_item(c, "attention/trouble", "alert", trouble, "", "", None, fn() {
         close()
         rail_go(c, src, w, "stations")
       })
@@ -222,7 +216,6 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
           c,
           "attention/" + key,
           text(v, "kind"),
-          flag(v, "seen"),
           if title != "" { title } else { @sf.t("web-main.attention.untitled") },
           attention_line(v),
           @sf.t("web-main.attention.dismissNote"),
@@ -268,14 +261,12 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
 }
 
 ///|
-/// A row of 待处理's panel (Attention.css.ts item): its dot (amber waiting on the viewer, red gone wrong; a ring once
-/// looked at), its title (500 until looked at, then muted) and its line; 忽略 at its end while pointed at, when it can
-/// be let go (`note` its tip). Pressed, `go`.
+/// A row of 待处理's panel (Attention.css.ts item): its dot (amber waiting on the viewer, red gone wrong), its title
+/// (500) and its line; 忽略 at its end while pointed at, when it can be let go (`note` its tip). Pressed, `go`.
 fn attention_item(
   c : @ui.Ctx,
   key : String,
   kind : String,
-  seen : Bool,
   title : String,
   line : String,
   note : String,
@@ -293,10 +284,10 @@ fn attention_item(
   let b = c.box(style=if hover { att_item_on } else { att_item }, id~, fn() {
     // (its kind in words: role="img")
     let ink = if alert { @sf.theme().p.red } else { @sf.theme().p.warn_ink }
-    let dot = c.box(style=if seen { att_dot_seen } else { att_dot.then(@ui.style(bg=Data(ink))) }, fn() {  })
+    let dot = c.box(style=att_dot.then(@ui.style(bg=Data(ink))), fn() {  })
     c.semantics(dot, Image, label=@sf.t(if alert { "web-main.attention.alertOne" } else { "web-main.attention.waitOne" }))
     c.box(style=att_text, fn() {
-      c.text(title, style=if seen { att_title_seen } else { att_title }) |> ignore
+      c.text(title, style=att_title) |> ignore
       if line != "" {
         c.text(line, style=att_line) |> ignore
       }
@@ -363,13 +354,9 @@ let att_item : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, py=S1_5, gap=S2,
 let att_item_on : @ui.Style = att_item.then(@ui.css("bg=Hover"))
 
 ///|
-/// Its dot, 7 round, in the amber's ink (red gone wrong); once looked at, a ring 1.5 wide in the muted grey.
+/// Its dot, 7 round, in the amber's ink (red gone wrong).
 // kept across runs: a value (no field of it changes)
 let att_dot : @ui.Style = @ui.style(w=@sf.attention_dot, h=@sf.attention_dot, radius=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let att_dot_seen : @ui.Style = att_dot.then(@ui.css("bg=Clear border=B1_5 border_color=Muted"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -378,10 +365,6 @@ let att_text : @ui.Style = @ui.css("w=Full")
 ///|
 // kept across runs: a value (no field of it changes)
 let att_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, leading=L6, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let att_title_seen : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L6, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -64,7 +64,6 @@ let zh_wide : Map[String, String] = {
   "web-main.decisions.title": "奏",
   "web-main.decisions.dismissWhat": "不再提醒",
   "web-main.attention.dismissNote": "忽略：从待处理中移除（选项在对话中仍可使用）",
-  "web-main.attention.dismissTrouble": "忽略：不再列在这里，直到站点状况有变化",
   "web-main.filter.chats.named": "筛选会话：{named}",
   "web-main.filter.all": "全部",
   "web-main.chat.archiveNamed": "归档「{title}」",

@@ -507,13 +507,11 @@ let arch_empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, ce
 
 ///|
 /// 待处理 under 新建对话 where the rail has no bell (Attention.tsx AttentionEntry, not the rail's): the bell, its
-/// words, how many came since they were looked at (a small red count) or, all looked at, how many there are, quiet;
-/// pressed, the panel of them under it. Nothing while there is nothing.
+/// words, how many there are (a small red count, none read since they came); pressed, the panel of them under it.
+/// Nothing while there is nothing.
 fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
-  let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value
-  let all = todo_all(src, w)
-  let n = count(marks, "badge")
+  let n = todo_all(src, w)
   if !todo_shown(src, w) {
     return
   }
@@ -524,8 +522,6 @@ fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         c.box(style=todo_slot, fn() {
           if n > 0 {
             c.box(style=todo_count, fn() { c.text(n.to_string(), style=todo_count_words) |> ignore }) |> ignore
-          } else {
-            c.text(all.to_string(), style=todo_quiet) |> ignore
           }
         })
         |> ignore
@@ -555,22 +551,9 @@ let todo_count : @ui.Style = @ui.css("min_w=S4 h=S4 px=S1 align=ACenter justify=
 let todo_count_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=OnPrimary, wrap=false)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let todo_quiet : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
-
-///|
-/// How many want the person in every workspace (the core's marks' items).
+/// How many are in 待处理 in every workspace (the core's marks' items), less those let go in its panel.
 fn todo_all(src : Source, w : Workspace) -> Int {
-  let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value
-  let mut all = 0
-  match field(marks, "workspaces") {
-    Some(Object(by)) =>
-      for _, v in by {
-        all += items(Some(v), "items").length()
-      }
-    _ => ()
-  }
-  all
+  attention_groups(src, w, true).fold(init=0, fn(n, g) { n + g.2.length() })
 }
 
 ///|

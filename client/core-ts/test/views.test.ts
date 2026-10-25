@@ -552,11 +552,43 @@ test("a_rows_decision_is_its_line_and_mark_and_counts_for_the_workspace", async 
   assert.deepEqual([m.workspaces.ws.wait, m.workspaces.ws.alert, m.workspaces.ws.label], [2, 0, "2 个待你处理"]);
   // Of the lists the rail leads to: 我参与的 has the one of theirs waiting, 监控中 nothing.
   assert.deepEqual([m.workspaces.ws.tone, m.workspaces.ws.mineTone, m.workspaces.ws.watchingTone], ["wait", "wait", undefined]);
-  // The list under the badge is the cards waiting for them, no more; the badge counts those not looked at since.
-  assert.deepEqual([m.badge, m.badgeCounts, m.workspaces.ws.badge], [1, "attention", 1]);
-  assert.deepEqual(m.workspaces.ws.items.map((i: J) => [i.kind, i.session, i.seq, i.stationName, i.seen ?? false]), [["wait", "k1", 5, "studio", false], ["wait", "k3", 4, "studio", true]]);
+  // 待处理 and the badge are the same: the cards waiting for them not looked at since they came (k3 read: its row and 奏
+  // still say it).
+  assert.deepEqual([m.badge, m.workspaces.ws.badge], [1, 1]);
+  assert.deepEqual(m.workspaces.ws.items.map((i: J) => [i.kind, i.session, i.seq, i.stationName]), [["wait", "k1", 5, "studio"]]);
   assert.equal(m.workspaces.ws.items[0].text, "奏 · k1 要合吗？", "its row's line");
   assert.equal(m.workspaces.ws.items[0].what, "k1 要合吗？", "the same without its lead");
+});
+
+test("待处理_is_what_went_wrong_or_waits_not_looked_at_since_of_what_the_badge_counts", async () => {
+  const t = setup();
+  const marks = ui();
+  t.subscribe(1, { topic: "workspaceMarks" });
+  await t.readAll([[marks, 1]]);
+  t.set({ topic: "workspaces" }, [{ workspaces: [{ id: "ws" }] }]);
+  t.set(workspace(), oneStation());
+  t.set(prefs(), {});
+  t.set(link("ws/st"), { state: "online" });
+  const now = t.host.nowMs();
+  const failed = (id: string, at: number, unread: boolean): J => {
+    const r = row(id, at);
+    r.agents[0].lastTurn = { kind: "message", outcome: "failed", detail: "auth: 401", startedAt: 1, endedAt: 1 };
+    r.mine = true;
+    r.unread = unread;
+    return r;
+  };
+  const waits = deciding("k1", 7, 5, now - 3000, false);
+  waits.unread = true;
+  t.set(rows("ws/st"), [failed("new", now - 1000, true), failed("old", now - 2000, false), waits]);
+  await t.readAll([[marks, 1]]);
+  const listed = () => marks.value.workspaces.ws.items.map((i: J) => [i.kind, i.session]);
+  // the one gone wrong already looked at is its row's to say, not 待处理's
+  assert.deepEqual(listed(), [["alert", "new"], ["wait", "k1"]]);
+  assert.deepEqual([marks.value.workspaces.ws.alert, marks.value.badge], [2, 2]);
+  // the badge counting only the cards: 待处理 has only them
+  t.set(prefs(), { badgeKinds: { failed: false } });
+  await t.readAll([[marks, 1]]);
+  assert.deepEqual([listed(), marks.value.badge], [[["wait", "k1"]], 1]);
 });
 
 // A message that did not go was said only in its chat, below what the agent last said: the list showed the agent's

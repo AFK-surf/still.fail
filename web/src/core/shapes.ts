@@ -4294,7 +4294,7 @@ export interface MachineLoginsView {
 	logins: MachineLoginShown[];
 }
 
-/** A chat the badge counts (`WorkspaceMark.items`). */
+/** A chat in 待处理 (`WorkspaceMark.items`). */
 export interface MarkItem {
 	/** alert (an agent of a chat they started went wrong) | wait (a card or need waiting for them) */
 	kind: string;
@@ -4311,8 +4311,6 @@ export interface MarkItem {
 	what: string;
 	/** The waiting card's post (`decision.dismiss`), for `wait`. */
 	seq?: number;
-	/** Looked at since it came to want them: listed, not counted in the badge. */
-	seen?: boolean;
 	at: number;
 }
 
@@ -6134,7 +6132,11 @@ export interface WorkspaceMark {
 	 * default), and `unread` (all).
 	 */
 	badge?: number;
-	/** The chats `alert` and `wait` count, the failed first, the latest first within: what the badge is made of. */
+	/**
+	 * 待处理: the chats that came to want them (`alert`, `wait`) and that they have not looked at since, of the
+	 * kinds the badge counts (`badgeKinds` wait, failed); the failed first, the latest first within. One looked at is no
+	 * longer here: its row and 奏 still say it.
+	 */
 	items?: MarkItem[];
 	/** Chats they take part in whose agent waits for someone else (not counted). Absent for 0. */
 	elsewhere?: number;
@@ -6156,11 +6158,6 @@ export interface WorkspaceMarksView {
 	othersLabel?: string;
 	/** What the app's badge says (the Dock's): every workspace's `badge`. */
 	badge?: number;
-	/**
-	 * What the badge counts, as the prefs' `badge` has it: decisions | attention | all (with `badgeKinds`:
-	 * decisions when it counts only the cards, else attention).
-	 */
-	badgeCounts?: string;
 	/** What the badge counts, kind by kind: the prefs' `badgeKinds`, or as their `badge` says. */
 	badgeKinds?: BadgeKinds;
 }

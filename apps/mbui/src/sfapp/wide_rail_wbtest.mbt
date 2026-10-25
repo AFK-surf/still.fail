@@ -349,7 +349,7 @@ fn chats_in_trouble() -> Json {
 }
 
 ///|
-test "wide: with the bell in the rail, the stations' trouble is in 待处理's panel, not under the list: looked at as it opens (prefs.set trouble seen); 忽略 lets it go (prefs.set trouble gone)" {
+test "wide: with the bell in the rail, the stations' trouble is in 待处理's panel, not under the list, until it has been looked at: kept as it opens (prefs.set trouble seen), listed while open, not the next time" {
   let calls : Array[Made] = []
   let t = wide_with(calls, { "chats": chats_in_trouble() })
   t.frame()
@@ -361,13 +361,16 @@ test "wide: with the bell in the rail, the stations' trouble is in 待处理's p
   // 10 past the bell
   assert_true(x >= bx + bw + 10.0, msg=x.to_string())
   assert_eq(trouble_said(calls, "ws1\nseen"), Some(Json::string("MBA 连不上了")))
+  // nothing to let it go with: looked at, it goes by itself
   t.move(x, y)
   t.frame()
-  let (dx, dy) = t.find("忽略").unwrap()
-  t.tap(dx, dy)
+  assert_true(t.find("忽略") is None)
+  t.key(@ui.key_escape)
   t.frame()
-  assert_eq(trouble_said(calls, "ws1\ngone"), Some(Json::string("MBA 连不上了")))
-  assert_true(t.find("MBA 连不上了") is None, msg="let go")
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
+  t.frame()
+  assert_true(t.find("MBA 连不上了") is None, msg="looked at")
+  assert_true(t.find("暂无待处理") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
 }
 
 ///|
