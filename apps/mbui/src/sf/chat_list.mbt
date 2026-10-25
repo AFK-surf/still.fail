@@ -198,9 +198,10 @@ pub(all) struct Found {
   mark : @ui.Style
   icon : Double
   logo : Double
-  /// its words' column, its first line (two lines' first)
+  /// its words' column, its first line (two lines' first), the line under it where who and when are beside it
   column : @ui.Style
   first : @ui.Style
+  second : @ui.Style
   /// what it is, the words found (marked), where it is under it, its line with the words (marked), who and when
   title : @ui.TextStyle
   words : @ui.TextStyle
@@ -257,10 +258,11 @@ pub let mouse_found : Found = {
   logo: 18.0,
   column: @ui.style(w=grow, gap=S0_5),
   first: @ui.css("row w=Full gap=S2_5 align=ACenter"),
+  second: @ui.css("row w=Full gap=S2_5 align=ACenter"),
   title: @ui.text_style(size=Sm, color=Fg, wrap=false, w=grow),
   words: @ui.text_style(size=Sm, color=Fg, max_lines=1, w=Full),
-  under: @ui.text_style(size=Sm, color=Muted, wrap=false, w=Full),
-  under_words: @ui.text_style(size=Sm, color=Muted, max_lines=1, w=Full),
+  under: @ui.text_style(size=Sm, color=Muted, wrap=false, w=grow),
+  under_words: @ui.text_style(size=Sm, color=Muted, max_lines=1, w=grow),
   meta: @ui.text_style(size=Xs, color=Muted, wrap=false),
   link: @ui.text_style(size=Sm, color=Link, wrap=false, w=grow),
   head: @ui.css("w=Full px=S3 pt=S2_5 pb=S1"),
@@ -289,10 +291,11 @@ pub let touch_found : Found = {
   logo: 18.0,
   column: @ui.style(w=grow, justify=JCenter),
   first: @ui.style(row=true, w=Full, h=found_line_h, gap=S2, align=ACenter),
+  second: @ui.css("row w=Full h=S5 gap=S2 align=ACenter"),
   title: @ui.text_style(size=Lg, leading=L7, color=Fg, wrap=false, w=grow),
   words: @ui.text_style(size=Lg, leading=L7, color=Fg, max_lines=1, w=Full),
   under: @ui.text_style(size=Base, leading=L6, color=Muted, wrap=false, w=grow),
-  under_words: @ui.text_style(size=Base, leading=L6, color=Muted, max_lines=1, w=Full),
+  under_words: @ui.text_style(size=Base, leading=L6, color=Muted, max_lines=1, w=grow),
   meta: @ui.text_style(size=Xs, color=Muted, wrap=false),
   link: @ui.text_style(size=Base, color=Link, wrap=false, w=grow),
   head: @ui.css("w=Full px=S5 pt=S3_5 pb=S1_5"),

@@ -571,17 +571,33 @@ fn found_line(c : @ui.Ctx, key : String, id : Int, line : FindLine, chosen : Boo
       None => mark("chat")
     }
   }
-  // its words: the first line (`first`, with `meta` at its end), and under it `under` where there is one
+  // its words: the first line (`first`), and under it `under` where there is one; who, where and when (`meta`) at the
+  // first line's end where the line is wide enough to leave the words found theirs, else at the end of the line under
+  // it, beside where it is (by the line's width, as a file's row puts its size and time under its name)
+  let stacked = two && c.width < found_stack_below
   let words = fn(first : () -> Unit, meta : String, under : () -> Unit) {
+    let said = fn() {
+      if meta != "" {
+        c.text(meta, style=f.meta) |> ignore
+      }
+    }
     c.box(style=f.column, fn() {
       c.box(style=f.first, fn() {
         first()
-        if meta != "" {
-          c.text(meta, style=f.meta) |> ignore
+        if !stacked {
+          said()
         }
       })
       |> ignore
-      under()
+      if stacked {
+        c.box(style=f.second, fn() {
+          under()
+          said()
+        })
+        |> ignore
+      } else {
+        under()
+      }
     })
     |> ignore
   }
@@ -643,3 +659,8 @@ fn found_line(c : @ui.Ctx, key : String, id : Int, line : FindLine, chosen : Boo
   })
   |> ignore
 }
+
+///|
+/// Narrower than this, a line of two says who, where and when under its first line, beside where it is: its first line
+/// all the words found's (as a file's row puts its size and time under its name narrower than its row_stack_below).
+let found_stack_below : Double = 440.0
