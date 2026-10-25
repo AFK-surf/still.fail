@@ -283,13 +283,8 @@
       "src/sfdesk/files_nav.mbt": 1,
       "src/sfdesk/frame.mbt": 2,
       "src/sfdesk/resources.mbt": 1,
-      "src/sfpages/chat_mark.mbt": 1,
-      "src/sfpages/chat_row.mbt": 2,
       "src/sfpages/composer.mbt": 5,
-      "src/sfpages/relay.mbt": 1,
-      "src/sfpages/row_picture.mbt": 1,
-      "src/sfpages/sidebar.mbt": 5,
-      "src/sfpages/switcher.mbt": 2
+      "src/sfpages/relay.mbt": 1
     },
     "page-look": {
       "src/sfapp/settings/home.mbt": 2,

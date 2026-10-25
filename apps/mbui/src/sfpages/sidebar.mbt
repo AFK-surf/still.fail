@@ -55,21 +55,16 @@ pub fn filter_at(src : Source, w : Workspace) -> Int {
 }
 
 ///|
-/// How the track slides (Sidebar.css.ts navTrack: transform 240ms ease-out; mobile/Home.css.ts mHomePane: 240ms
-/// standard), by the hand: a mouse's the web's desktop, a finger's its phone's.
-pub let list_slide_ms : Double = 240.0
+/// How long the track slides (Sidebar.css.ts navTrack, mobile/Home.css.ts mHomePane: 240; its ease the theme's
+/// chats' list's).
+pub let list_slide_ms : Double = @sf.list_slide_ms
 
 ///|
 /// The chats' lists of workspace `w` in the box they are given, as `frame` says (ListsFrame).
 pub fn chats_lists(c : @ui.Ctx, src : Source, w : Workspace, frame : ListsFrame) -> Unit {
   rows_frame(c, src)
-  let finger = @sf.touch_system()
   let last = list_filters.length() + frame.others.length() - 1
-  let x = @motion.animate(c, "lists/" + w.id, frame.shown.to_double(), spec=@motion.tween(list_slide_ms, ease=if finger {
-    Standard
-  } else {
-    Out
-  }))
+  let x = @motion.animate(c, "lists/" + w.id, frame.shown.to_double(), spec=@sf.theme().chat_list.slide)
   // the others read once switching to them is in sight: as the filter's menu opens (what it would show is there by
   // the time one is picked)
   if @sf.presented_drawn_of(filter_menu_serial.val) {
@@ -204,7 +199,6 @@ fn day_lines(key : String, days : Array[ChatDay]) -> DayLines {
 /// One of the lists (ChatPane): its states (being read, failing, empty) and its days under the bar's room; `current`,
 /// the one shown (its rows the ones an archived chat's neighbour is looked for in).
 fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame : ListsFrame, current : Bool) -> Unit {
-  let finger = @sf.touch_system()
   let key = "chats/" + w.id + "/" + filter
   let pane = c.id(key + "/pane")
   let (view, error) = @sfbase.chats_of(src, w.id, filter)
@@ -215,9 +209,9 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
   // the lines over its days (its room under the bar, what the frame puts at its top, its states), then its days', then
   // its foot
   let lines : Array[Line] = [Top]
-  // a finger's search at the list's top, out of view until scrolled to (Home.kt top), while it has rows to look in;
-  // a mouse has ⌘K (a finger has no keys to press)
-  if finger {
+  // its search at its top where the screen has no keys for ⌘K (a touch device's: the theme's), out of view until
+  // scrolled to (Home.kt top), while it has rows to look in
+  if !@sf.theme().chat_list.keys {
     match view {
       Some({ note: Some({ empty: true, .. }), .. }) | None => ()
       Some(_) => lines.push(Part({ key: "search", draw: fn() { search_field(c) }, tucked: true }))
@@ -283,13 +277,13 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
   // the rows and days move as the list changes (listMotion.ts useListMotion: by their keys); only they count: the
   // first rows, after the list waited, come as they are
   let lid = @motion.list_keys(c, key, moving, liftable=fn(k) { !k.contains("\u{1}h/") })
-  let row_h = if finger { touch_row_h } else { mouse_row_h }
+  let l = @sf.theme().chat_list
   c.box(style=lists_fill, id=pane, fn() {
-    c.list(key, count, row_h, fn(i) {
+    c.list(key, count, l.row_h, fn(i) {
       let n = c.box(style=@sf.pane_line(), fn() {
         match line_at(i) {
-          Top => list_space(c, frame.top + (if finger { 0.0 } else { lists_top_in }))
-          Foot => list_space(c, frame.foot + (if finger { 0.0 } else { lists_foot_in }))
+          Top => list_space(c, frame.top + l.top_in)
+          Foot => list_space(c, frame.foot + l.foot_in)
           Part(p) => (p.draw)()
           Wait(note, error) => list_waiting(c, note, error)
           Empty(v) => list_empty(c, v, filter)
@@ -354,11 +348,8 @@ fn open_chat() -> ChatRef? {
 }
 
 ///|
-/// A chat's row's height with a mouse (Sidebar.css.ts navSession), the room over a list under its bar and at its foot
-/// (navScroll: 4, 12).
-let mouse_row_h : Double = 54.0
-
-///|
+/// The room over a list under its bar and at its foot with a computer's lists (navScroll: 4, 12; the decisions' pane's
+/// too).
 pub let lists_top_in : Double = 4.0
 
 ///|
@@ -414,7 +405,7 @@ pub fn row_moving(c : @ui.Ctx, lid : Int, list : String, key : String, i : Int) 
     c,
     i,
     list + "\u{1}" + key,
-    spec=if @sf.touch_system() { @motion.row_spring } else { @motion.move_spring },
+    spec=@sf.theme().chat_list.move,
     enter=@sf.row_grown_in,
     exit=@sf.leave,
   )
@@ -430,46 +421,22 @@ fn list_space(c : @ui.Ctx, h : Double) -> Unit {
 }
 
 ///|
-/// A day's heading (SidebarList.tsx NavSection): a mouse's 12 on 18, muted, 14 above and 4 under (Sidebar.css.ts
-/// navHeading); a finger's the phone's, 15 bold in ink, 20 in, 14 above and 6 under (SidebarList.css.ts
-/// phoneHeading, Parts.kt SectionHeader).
+/// A day's heading (SidebarList.tsx NavSection; its look the theme's chats' list's), in from the list's left as its
+/// rows are (`beside_rail`: as they are beside a rail).
 pub fn list_heading(c : @ui.Ctx, label : String, beside_rail? : Bool = false) -> Unit {
-  if @sf.touch_system() {
-    // (in from the list's left as its rows are, 2 less: a phone's 20 to its rows' 22, beside a rail 14 to 16)
-    c.box(style=if beside_rail { heading_beside_rail } else { heading_touch }, fn() {
-      c.text(label, style=heading_touch_words) |> ignore
-    })
-    |> ignore
-  } else {
-    c.box(style=heading_mouse, fn() { c.text(label, style=heading_mouse_words) |> ignore }) |> ignore
-  }
+  let l = @sf.theme().chat_list
+  c.box(style=if beside_rail { l.heading_beside_rail } else { l.heading }, fn() {
+    c.text(label, style=l.heading_words) |> ignore
+  })
+  |> ignore
 }
 
 ///|
-// kept across runs: a value (no field of it changes)
-let heading_mouse : @ui.Style = @ui.css("w=Full px=S2 pt=S3_5 pb=S1")
-
-///|
-// kept across runs: a value (no field of it changes)
-let heading_mouse_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L5, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let heading_touch : @ui.Style = @ui.css("w=Full px=S5 pt=S3_5 pb=S1_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let heading_beside_rail : @ui.Style = @ui.css("w=Full pl=S3_5 pr=S5 pt=S3_5 pb=S1_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let heading_touch_words : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, wrap=false)
-
-///|
 /// The list read the first time, or no rows to show while it waits on a station or cannot read one (the library's
-/// Waiting, Status.tsx: the rows to come breathing, what is wrong over them in red), dense with a mouse.
+/// Waiting, Status.tsx: the rows to come breathing, what is wrong over them in red), as many and as dense as the
+/// theme's chats' list has them.
 fn list_waiting(c : @ui.Ctx, note : ListNote?, error : String?) -> Unit {
-  let finger = @sf.touch_system()
+  let l = @sf.theme().chat_list
   let reading = match note {
     Some(n) => n.reading
     None => true
@@ -477,8 +444,8 @@ fn list_waiting(c : @ui.Ctx, note : ListNote?, error : String?) -> Unit {
   @sf.waiting(
     c,
     shape=Rows,
-    count=if !finger { 6 } else if reading { 7 } else { 4 },
-    dense=!finger,
+    count=if reading { l.waiting_rows } else { l.waiting_noted },
+    dense=l.waiting_dense,
     text=@sf.t("common.reading"),
     error=error.unwrap_or(""),
     note?=match note {

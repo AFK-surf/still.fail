@@ -132,17 +132,9 @@ pub fn state_line(
   alert? : Bool = false,
 ) -> Unit {
   let turn = lead == "decision" || lead == "need"
-  // (a finger's row's size: mobile/Home.css.ts mLast, 14 on 20)
-  let finger = @sf.touch_system()
-  let words = if alert {
-    if finger { state_alert_touch } else { state_alert }
-  } else if turn {
-    if finger { state_turn_touch } else { state_turn }
-  } else if finger {
-    state_quiet_touch
-  } else {
-    state_quiet
-  }
+  // (the row's size, the theme's lists': Sidebar.css.ts navSessionLast, mobile/Home.css.ts mLast)
+  let look = @sf.theme().chat_list
+  let words = if alert { look.state_alert } else if turn { look.state_turn } else { look.state_quiet }
   match lead {
     "need" | "done" | "wait" | "watch" => {
       let label = match lead {
@@ -172,8 +164,9 @@ pub fn state_line(
     }
     "decision" if lead_text != "" && text.has_prefix(lead_text) =>
       c.box(style=state_row, fn() {
-        // (bold with a finger, as the phone's: Home.kt StateLine; 600 with a mouse, ChatMark.css.ts)
-        c.text(lead_text, style=words.then(if finger { lead_word_touch } else { lead_word })) |> ignore
+        // (the theme's lists' lead word: bold on a touch device, as the phone's Home.kt StateLine; 600 on a computer,
+        // ChatMark.css.ts)
+        c.text(lead_text, style=words.then(look.state_lead)) |> ignore
         c.text(text.view(start_offset=lead_text.length()).to_owned(), style=words) |> ignore
       })
       |> ignore
@@ -288,33 +281,6 @@ fn lead_lit(f : Double) -> Double {
 ///|
 // kept across runs: a table, never written
 let lit_stops : Array[(Double, Double)] = [(0.0, 0.3), (0.1, 1.0), (0.32, 0.3), (1.0, 0.3)]
-
-///|
-/// A row's second line's words (Sidebar.css.ts navSessionLast: 12 on 18, as long as there is room): quiet, in ink
-/// when it is the viewer's turn, in red when a message did not go.
-// kept across runs: a value (no field of it changes)
-let state_quiet : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L5, wrap=false, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let state_turn : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, leading=L5, wrap=false, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let state_alert : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, leading=L5, wrap=false, w=Full)
-
-///|
-/// The same on a finger's row (mobile/Home.css.ts mLast: 14 on 20).
-// kept across runs: a value (no field of it changes)
-let state_quiet_touch : @ui.TextStyle = @ui.text_style(size=Base, color=Muted, leading=L6, wrap=false, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let state_turn_touch : @ui.TextStyle = @ui.text_style(size=Base, color=Fg, leading=L6, wrap=false, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let state_alert_touch : @ui.TextStyle = @ui.text_style(size=Base, color=Danger, leading=L6, wrap=false, w=Full)
 
 ///|
 /// The line led by an icon (leadLine): the icon's column, then what follows where the title starts (the head's gap,

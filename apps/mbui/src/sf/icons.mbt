@@ -29,6 +29,7 @@ fn init {
       bars: bars_drawn,
       round: wide_round,
       items: wide_items,
+      chat_list: mouse_chat_list,
     }
   })
 }

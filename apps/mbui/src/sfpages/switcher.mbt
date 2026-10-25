@@ -4,8 +4,8 @@
 // search.mbt). What a few words find in the workspace is the core's `search` (docs/search.md: its chats, the messages
 // that have them, what every station finds besides, each kind under its heading, a few of each; 查看更多 that kind
 // alone, 全部结果 back to all), and what can be done here by its name the core's `commands.find` of what the frame
-// offers. With nothing typed, the latest chats where the frame says so (⌘K), then what can be done. A finger's rows the
-// phone's, a mouse's the web desktop's (↑ / ↓ choose, Enter or a press opens).
+// offers. With nothing typed, the latest chats where the frame says so (⌘K), then what can be done. One line for all it
+// finds (its sizes the theme's: @sf.Found); where the screen has keys, ↑ / ↓ choose and Enter opens, a press anywhere.
 
 ///|
 /// What can be done here, as the frame offers it (Switcher.tsx Offered): a key's action it answers now, or one of its
@@ -416,7 +416,7 @@ pub fn finder_list(
   idle_chats? : Bool = false,
   most? : Double,
 ) -> Unit {
-  let finger = @sf.touch_system()
+  let f = @sf.theme().chat_list
   let query = finder.query.trim(chars=" \t\n\r\u{3000}").to_string()
   let typed = query != ""
   let commands = commands_of(c, src, query, offered)
@@ -434,7 +434,8 @@ pub fn finder_list(
   }
   finder.lines = lines
   finder.picks = picks
-  finder.chosen_shown = !finger
+  // (chosen by the keys where the screen has them: shown so, Enter opens it)
+  finder.chosen_shown = f.keys
   if finder.chosen >= picks.length() {
     finder.chosen = if picks.length() > 0 { picks.length() - 1 } else { 0 }
   }
@@ -458,12 +459,12 @@ pub fn finder_list(
     finder.to_top = false
     c.list_scroll_to(key, 0)
   }
-  // (several stations: an item found says which it is on, on a finger's row)
+  // (several stations: what is found says which it is on)
   let several = match (src.topic)("stations", { "scope": Json::string(w.id) }).value {
     Some(Array(a)) => a.length() > 1
     _ => false
   }
-  let est = lines.fold(init=0.0, fn(h, l) { h + finder_h(l, finger) })
+  let est = lines.fold(init=0.0, fn(h, l) { h + finder_h(l, f.found) })
   let h : @ui.Size = match most {
     Some(m) => Px(dmin(m, est))
     None => Fill(1.0)
@@ -471,7 +472,7 @@ pub fn finder_list(
   c.list(
     key,
     lines.length(),
-    if finger { touch_row_h } else { switcher_row_h },
+    f.found.row_h,
     fn(i) {
       let line = lines[i]
       let lk = "switcher/row/" + finder_key(line)
@@ -485,14 +486,11 @@ pub fn finder_list(
       if c.clicked(id) {
         finder_go(line, close)
       }
-      if !finger && c.lit(id) {
+      // (the pointer over a line chooses it, as the keys do)
+      if f.keys && c.lit(id) {
         finder.chosen = k
       }
-      if finger {
-        touch_line(c, src, lk, id, line, several, close)
-      } else {
-        mouse_line(c, lk, id, line, k == finder.chosen)
-      }
+      found_line(c, lk, id, line, f.keys && k == finder.chosen, several)
     },
     h~,
   )
@@ -521,480 +519,127 @@ fn finder_key(line : FindLine) -> String {
 }
 
 ///|
-/// A line's height, as the list first takes it: a mouse's heading 32, row 38, one of two lines 54; a finger's rows 66
-/// (50 for something found with no words of its own), its heading 41.
-fn finder_h(l : FindLine, finger : Bool) -> Double {
-  if finger {
-    return match l {
-      Head(_) => touch_head_h
-      Item(it) if it.text == "" => found_short_h
-      Back | More(_) | Note(_) | Wait(_, _) | Said(_) => touch_quiet_h
-      _ => touch_row_h
-    }
-  }
+/// A line's height, as the list first takes it (the theme's: one line, two, a heading, quiet words).
+fn finder_h(l : FindLine, f : @sf.Found) -> Double {
   match l {
-    Head(_) => switcher_head_h
-    Message(_) | Item(_) => switcher_row_said_h
-    Chat(ch) => if ch.found is Some(_) { switcher_row_said_h } else { switcher_row_h }
-    Note(_) | Wait(_, _) | Said(_) => switcher_row_said_h
-    _ => switcher_row_h
+    Head(_) => f.head_h
+    Message(_) => f.two_h
+    Item(it) => if it.text == "" { f.row_h } else { f.two_h }
+    Chat(ch) => if ch.found is Some(_) { f.two_h } else { f.row_h }
+    Note(_) | Wait(_, _) | Said(_) => f.quiet_h
+    _ => f.row_h
   }
 }
 
 ///|
-let switcher_row_h : Double = 38.0
-
-///|
-let switcher_row_said_h : Double = 54.0
-
-///|
-let switcher_head_h : Double = 32.0
-
-///|
-let touch_head_h : Double = 41.0
-
-///|
-let touch_quiet_h : Double = 44.0
-
-///|
-let found_short_h : Double = 50.0
-
-///|
-/// What is not chosen: a heading (a mouse's small and muted, a finger's the phone's section), none found, the stations
-/// still answering, what the core says.
+/// What is not chosen: a kind's heading, none found, the stations still answering, what the core says.
 fn quiet_line(c : @ui.Ctx, line : FindLine) -> Unit {
-  let finger = @sf.touch_system()
+  let f = @sf.theme().chat_list.found
   match line {
-    Head(words) =>
-      if finger {
-        list_heading(c, words)
-      } else {
-        c.box(style=switcher_head, fn() { c.text(words, style=switcher_head_words) |> ignore }) |> ignore
-      }
-    Note(words) =>
-      c.box(style=if finger { found_note_box } else { switcher_none_box }, fn() {
-        c.text(words, style=if finger { found_note_words } else { switcher_none }) |> ignore
-      })
-      |> ignore
+    Head(words) => c.box(style=f.head, fn() { c.text(words, style=f.head_words) |> ignore }) |> ignore
+    Note(words) => c.box(style=f.quiet, fn() { c.text(words, style=f.quiet_words) |> ignore }) |> ignore
     Wait(words, error) =>
-      c.box(style=if finger { if error { found_failing_box } else { found_wait_box } } else { switcher_note_box }, fn() {
-        @sf.wait_line(c, words, key="search", error~)
-      })
+      c.box(style=if error { f.wait_failing } else { f.wait }, fn() { @sf.wait_line(c, words, key="search", error~) })
       |> ignore
-    Said(words) =>
-      c.box(style=if finger { found_wait_box } else { switcher_note_box }, fn() {
-        c.text(words, style=if finger { found_said_words } else { switcher_note }) |> ignore
-      })
-      |> ignore
+    Said(words) => c.box(style=f.wait, fn() { c.text(words, style=f.said_words) |> ignore }) |> ignore
     _ => ()
   }
 }
 
 ///|
-/// A mouse's line (Finder's rows): a command its icon, its name, its keys; a chat its picture, its title, where and when
-/// (found by words its title shows late or not at all: that part first, its title under it); a message what it says
-/// with the words, its chat under it; something else (ItemRow) what it is, where and when, its line with the words;
-/// the chosen one lit.
-fn mouse_line(c : @ui.Ctx, key : String, id : Int, line : FindLine, chosen : Bool) -> Unit {
+/// A line of what was found (Finder's rows, SearchPage's): its mark, then what it is, or the words found in it (they
+/// bold, stroked under), with who, where and when at its end; where it is under that (its chat; an item's line with the
+/// words) where it says one. A chat its agent's maker, a message its chat's; a station its mark; something else its
+/// kind's icon; a command its icon, its keys at its end; 全部结果 and 查看更多 in the link's ink. `chosen`: by the keys,
+/// on the words' tint; pressed, rippled where a finger presses. `several`: more than one station, so where is said.
+fn found_line(c : @ui.Ctx, key : String, id : Int, line : FindLine, chosen : Bool, several : Bool) -> Unit {
   let t = @sf.theme()
-  let tall = match line {
-    Message(_) | Item(_) => true
+  let f = t.chat_list.found
+  let two = match line {
+    Message(_) => true
+    Item(it) => it.text != ""
     Chat(ch) => ch.found is Some(_)
     _ => false
   }
-  let row = if tall { switcher_row_said } else { switcher_row }
   let mark = fn(icon : String) {
-    c.box(style=switcher_picture, fn() { @sf.icon(c, icon, size=switcher_icon, color=t.p.muted) |> ignore })
-    |> ignore
+    c.box(style=f.mark, fn() { @sf.icon(c, icon, size=f.icon, color=t.p.muted) |> ignore }) |> ignore
   }
   // a chat's picture (ChatPicture): its first agent's maker's mark
   let picture = fn(item : ChatItem) {
     match item.agents.get(0) {
-      Some(a) =>
-        c.box(style=switcher_picture, fn() { @sf.maker_mark(c, a.maker, a.runtime, switcher_logo) |> ignore })
-        |> ignore
+      Some(a) => c.box(style=f.mark, fn() { @sf.maker_mark(c, a.maker, a.runtime, f.logo) |> ignore }) |> ignore
       None => mark("chat")
     }
   }
-  c.box(style=row, selected=chosen, id~, fn() {
+  // its words: the first line (`first`, with `meta` at its end), and under it `under` where there is one
+  let words = fn(first : () -> Unit, meta : String, under : () -> Unit) {
+    c.box(style=f.column, fn() {
+      c.box(style=f.first, fn() {
+        first()
+        if meta != "" {
+          c.text(meta, style=f.meta) |> ignore
+        }
+      })
+      |> ignore
+      under()
+    })
+    |> ignore
+  }
+  let at = fn(station : String) { if several { station } else { "" } }
+  c.box(style=if two { f.two } else { f.row }, selected=chosen, id~, fn() {
     match line {
       Back => {
         mark("chevron-left")
-        c.text(@sf.t("web-main.switcher.back"), style=switcher_title) |> ignore
+        c.text(@sf.t("web-main.switcher.back"), style=f.link) |> ignore
       }
       More(_) => {
         mark("more")
-        c.text(@sf.t("web-main.switcher.more"), style=switcher_title_muted) |> ignore
+        c.text(@sf.t("web-main.switcher.more"), style=f.link) |> ignore
       }
       Command(l, o) => {
         mark(o.icon)
-        c.text(l.label, style=switcher_title) |> ignore
-        if o.keys != "" {
-          c.text(o.keys, style=switcher_meta) |> ignore
-        }
+        words(fn() { c.text(l.label, style=f.title) |> ignore }, o.keys, fn() {  })
       }
       Chat(ch) => {
         picture(ch.item)
         let meta = @sf.join_meta([
           if ch.archived { @sf.t("web-main.switcher.archived") } else { "" },
-          ch.item.station_name,
+          at(ch.item.station_name),
           ch.item.ago,
         ])
         match ch.found {
           Some(found) =>
-            c.box(style=switcher_said, fn() {
-              c.box(style=switcher_said_head, fn() {
-                @sf.found_line(c, "sw/" + key, found, ch.marks, switcher_found_words, t.p.text)
-                c.text(meta, style=switcher_meta) |> ignore
-              })
-              |> ignore
-              c.text(ch.item.title, style=switcher_under) |> ignore
+            words(fn() { @sf.found_line(c, "sw/" + key, found, ch.marks, f.words, t.p.text) }, meta, fn() {
+              c.text(ch.item.title, style=f.under) |> ignore
             })
-            |> ignore
-          None => {
-            c.text(ch.item.title, style=switcher_title) |> ignore
-            c.text(meta, style=switcher_meta) |> ignore
-          }
+          None => words(fn() { c.text(ch.item.title, style=f.title) |> ignore }, meta, fn() {  })
         }
       }
       Message(m) => {
         picture(m.chat)
-        c.box(style=switcher_said, fn() {
-          c.box(style=switcher_said_head, fn() {
-            @sf.found_line(c, "sw/" + key, m.text, m.marks, switcher_found_words, t.p.text)
-            c.text(@sf.join_meta([m.by, m.ago]), style=switcher_meta) |> ignore
-          })
-          |> ignore
-          c.text(m.chat.title, style=switcher_under) |> ignore
+        words(fn() { @sf.found_line(c, "sw/" + key, m.text, m.marks, f.words, t.p.text) }, @sf.join_meta([m.by, m.ago]), fn() {
+          c.text(m.chat.title, style=f.under) |> ignore
         })
-        |> ignore
       }
       Item(it) => {
-        mark(if it.kind == "file" && it.dir { "folder" } else { @sf.kind_icon(it.kind) })
-        c.box(style=switcher_said, fn() {
-          c.box(style=switcher_said_head, fn() {
-            c.text(it.title, style=switcher_title) |> ignore
-            c.text(
-              @sf.join_meta([if it.kind != "station" { it.station_name } else { "" }, it.ago]),
-              style=switcher_meta,
-            )
-            |> ignore
+        if it.kind == "station" {
+          c.box(style=f.mark, fn() {
+            @sf.station_mark(c, it.station_emoji, it.station_icon, f.icon, t.p.muted, none="server")
           })
           |> ignore
+        } else {
+          mark(if it.kind == "file" && it.dir { "folder" } else { @sf.kind_icon(it.kind) })
+        }
+        let meta = @sf.join_meta([if it.kind != "station" { at(it.station_name) } else { "" }, it.ago])
+        words(fn() { c.text(it.title, style=f.title) |> ignore }, meta, fn() {
           if it.text != "" {
-            @sf.found_line(c, "sw/i/" + key, it.text, it.marks, switcher_under_words, t.p.text)
+            @sf.found_line(c, "sw/i/" + key, it.text, it.marks, f.under_words, t.p.text)
           }
         })
-        |> ignore
       }
       Head(_) | Note(_) | Wait(_, _) | Said(_) => ()
     }
+    @sf.row_ripple(c, id)
   })
   |> ignore
 }
-
-///|
-/// A finger's line (SearchPage's rows): a chat as the chats' list has it (found by words its title shows late or not
-/// at all: those first, its title under it, as a message is); a message what it says with the words, over its chat,
-/// who and when; something else its kind's icon, what it is, where (with several stations) and when, over its line with
-/// the words; a command its icon and its name; 全部结果 and 查看更多 in the accent. Rippled where pressed.
-fn touch_line(
-  c : @ui.Ctx,
-  src : Source,
-  key : String,
-  id : Int,
-  line : FindLine,
-  several : Bool,
-  close : () -> Unit,
-) -> Unit {
-  let t = @sf.theme()
-  match line {
-    Back =>
-      c.box(style=found_back_row, id~, fn() {
-        @sf.icon(c, "chevron-left", size=found_chevron, color=t.p.accent) |> ignore
-        c.text(@sf.t("android-chat.search.all"), style=found_link_words) |> ignore
-        @motion.ripple(c, id, 0.0)
-      })
-      |> ignore
-    More(_) =>
-      c.box(style=found_more_row, id~, fn() {
-        c.text(@sf.t("android-chat.search.more"), style=found_link_words) |> ignore
-        @motion.ripple(c, id, 0.0)
-      })
-      |> ignore
-    Chat(ch) =>
-      match ch.found {
-        Some(found) => {
-          let meta = @sf.join_meta([if ch.archived { @sf.t("android-chat.search.archived") } else { "" }, ch.item.ago])
-          hit_row(c, key, id, found, ch.marks, meta, ch.item.title)
-        }
-        // (the chats' list's row: pressed, its chat where the shell has it)
-        None => chat_row(c, src, ch.item, "agents", found=true, opened=fn(r) { close(); open_page(Chat(r)) }) |> ignore
-      }
-    Message(m) => hit_row(c, key, id, m.text, m.marks, @sf.join_meta([m.by, m.ago]), m.chat.title)
-    Item(it) =>
-      c.box(style=if it.text == "" { found_item_row_short } else { found_item_row }, id~, fn() {
-        c.box(style=found_icon_box, fn() {
-          if it.kind == "station" {
-            @sf.station_mark(c, it.station_emoji, it.station_icon, found_icon, t.p.muted, none="server")
-          } else {
-            @sf.icon(c, if it.kind == "file" && it.dir { "folder" } else { @sf.kind_icon(it.kind) }, size=found_icon, color=t.p.muted)
-            |> ignore
-          }
-        })
-        |> ignore
-        c.box(style=found_column, fn() {
-          c.box(style=found_line_22, fn() {
-            c.text(it.title, style=found_title) |> ignore
-            let meta = @sf.join_meta([if several && it.kind != "station" { it.station_name } else { "" }, it.ago])
-            if meta != "" {
-              c.text(meta, style=found_meta) |> ignore
-            }
-          })
-          |> ignore
-          if it.text != "" {
-            c.box(style=found_line_20, fn() {
-              @sf.found_line(c, "i/" + it.key, it.text, it.marks, found_item_words, t.p.text)
-            })
-            |> ignore
-          }
-        })
-        |> ignore
-        @motion.ripple(c, id, 0.0)
-      })
-      |> ignore
-    Command(l, o) =>
-      c.box(style=found_item_row_short, id~, fn() {
-        c.box(style=found_icon_box, fn() { @sf.icon(c, o.icon, size=found_icon, color=t.p.muted) |> ignore }) |> ignore
-        c.text(l.label, style=found_title) |> ignore
-        @motion.ripple(c, id, 0.0)
-      })
-      |> ignore
-    Head(_) | Note(_) | Wait(_, _) | Said(_) => ()
-  }
-}
-
-///|
-/// A message or a chat found by words (HitRow): what has them on its first line, the row's width (they bold, stroked
-/// under); where it is (its chat) under it, who and when beside that.
-fn hit_row(
-  c : @ui.Ctx,
-  key : String,
-  id : Int,
-  text : String,
-  marks : Array[(Int, Int)],
-  meta : String,
-  under : String,
-) -> Unit {
-  let t = @sf.theme()
-  c.box(style=found_hit_row, id~, fn() {
-    c.box(style=found_line_22, fn() { @sf.found_line(c, key, text, marks, found_hit_words, t.p.text) }) |> ignore
-    c.box(style=found_line_20, fn() {
-      c.text(under, style=found_under) |> ignore
-      if meta != "" {
-        c.text(meta, style=found_meta) |> ignore
-      }
-    })
-    |> ignore
-    @motion.ripple(c, id, 0.0)
-  })
-  |> ignore
-}
-
-// ── a mouse's look (Switcher.css.ts) ───────────────────────────────────
-
-///|
-/// A heading (12, muted, 12 in, 10 over and 4 under).
-// kept across runs: a value (no field of it changes)
-let switcher_head : @ui.Style = @ui.css("w=Full px=S3 pt=S2_5 pb=S1")
-
-///|
-// kept across runs: a value (no field of it changes)
-let switcher_head_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
-
-///|
-/// A row (Switcher.css.ts row): 38 high at least, 8 over and under and 12 in, its parts 10 apart, rounded as its panel's
-/// corner leaves for it (concentric), a row's of the ladder's where it is in none (laid out Small, in the lists' box);
-/// chosen, on the words' 7%.
-// kept across runs: a value (no field of it changes)
-let switcher_row : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  min_h=Fixed(switcher_row_h),
-  px=S3,
-  py=S2,
-  gap=S2_5,
-  align=ACenter,
-  radius=InnerOr(@sf.row_radius),
-  selected=@ui.patch(bg=Tint),
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-let switcher_row_said : @ui.Style = switcher_row.then(@ui.css("align=AStart"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let switcher_picture : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter")
-
-///|
-let switcher_icon : Double = 16.0
-
-///|
-let switcher_logo : Double = 18.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let switcher_title : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, w=@sf.grow)
-
-///|
-// kept across runs: a value (no field of it changes)
-let switcher_title_muted : @ui.TextStyle = switcher_title.then(@ui.text_style(color=Muted))
-
-///|
-// kept across runs: a value (no field of it changes)
-let switcher_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let switcher_said : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
-
-///|
-// kept across runs: a value (no field of it changes)
-let switcher_said_head : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let switcher_found_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, max_lines=1, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let switcher_under : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let switcher_under_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, max_lines=1, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let switcher_none_box : @ui.Style = @ui.css("w=Full px=S3 py=S3_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let switcher_none : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted)
-
-///|
-// kept across runs: a value (no field of it changes)
-let switcher_note_box : @ui.Style = @ui.css("w=Full px=S3 pt=S2 pb=S2_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let switcher_note : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
-
-// ── a finger's look (mobile/Home.css.ts mFound…, Search.kt) ─────────────
-
-///|
-/// 查看更多 (MoreRow): 22 in, 10 over and under.
-// kept across runs: a value (no field of it changes)
-let found_more_row : @ui.Style = @ui.style(w=Full, pl=@sf.found_start, pr=S4, pt=S2_5, pb=S2_5)
-
-///|
-// kept across runs: a value (no field of it changes)
-let found_link_words : @ui.TextStyle = @ui.text_style(size=Base, color=Link, wrap=false)
-
-///|
-/// 全部结果 (BackRow): 16 in, 10 over, 4 under; its chevron 4 before the words.
-// kept across runs: a value (no field of it changes)
-let found_back_row : @ui.Style = @ui.css("row w=Full pl=S4 pr=S4 pt=S2_5 pb=S1 gap=S1 align=ACenter")
-
-///|
-let found_chevron : Double = 16.0
-
-///|
-/// A line of quiet words (SearchNote): 22 in, 16 over and under.
-// kept across runs: a value (no field of it changes)
-let found_note_box : @ui.Style = @ui.style(w=Full, px=@sf.found_start, py=S4)
-
-///|
-// kept across runs: a value (no field of it changes)
-let found_note_words : @ui.TextStyle = @ui.text_style(size=Base, color=Muted, w=Full)
-
-///|
-/// The stations still answering (WaitLine: 22 in, 12 over and under), one that could not be searched (6).
-// kept across runs: a value (no field of it changes)
-let found_wait_box : @ui.Style = @ui.style(w=Full, px=@sf.found_start, py=S3)
-
-///|
-// kept across runs: a value (no field of it changes)
-let found_failing_box : @ui.Style = @ui.style(w=Full, px=@sf.found_start, py=S1_5)
-
-///|
-/// What the core says of the rest: 13 on 18.
-// kept across runs: a value (no field of it changes)
-let found_said_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Muted, w=Full)
-
-///|
-/// A message or a chat found by its words (HitRow): 66 high, 22 in on the left and 16 on the right.
-// kept across runs: a value (no field of it changes)
-let found_hit_row : @ui.Style = @ui.style(w=Full, h=@sf.found_row_h, pl=@sf.found_start, pr=S4, justify=JCenter)
-
-///|
-/// Something else found (ItemRow): 66 high with its line of words, 50 without; its icon 12 before what it is.
-// kept across runs: a value (no field of it changes)
-let found_item_row : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  h=@sf.found_row_h,
-  pl=@sf.found_start,
-  pr=S4,
-  gap=S3,
-  align=ACenter,
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-let found_item_row_short : @ui.Style = found_item_row.then(@ui.style(h=@sf.found_row_short_h))
-
-///|
-// kept across runs: a value (no field of it changes)
-let found_icon_box : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter")
-
-///|
-let found_icon : Double = 18.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let found_column : @ui.Style = @ui.style(w=@sf.grow, justify=JCenter)
-
-///|
-/// A row's lines: its first 22 high, the one under it 20; what is beside 8 apart.
-// kept across runs: a value (no field of it changes)
-let found_line_22 : @ui.Style = @ui.style(row=true, w=Full, h=@sf.found_line_h, gap=S2, align=ACenter)
-
-///|
-// kept across runs: a value (no field of it changes)
-let found_line_20 : @ui.Style = @ui.css("row w=Full h=S5 gap=S2 align=ACenter")
-
-///|
-/// A hit's line: 15 on 22, one line cut at its end; an item's: 14 on 20.
-// kept across runs: a value (no field of it changes)
-let found_hit_words : @ui.TextStyle = @ui.text_style(size=Lg, leading=L7, color=Fg, max_lines=1, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let found_item_words : @ui.TextStyle = @ui.text_style(size=Base, leading=L6, color=Muted, max_lines=1, w=Full)
-
-///|
-/// Under a hit: where it is (its chat), 14 on 20, muted, one line.
-// kept across runs: a value (no field of it changes)
-let found_under : @ui.TextStyle = @ui.text_style(size=Base, leading=L6, color=Muted, wrap=false, w=@sf.grow)
-
-///|
-/// Who and when, beside it: 12, muted.
-// kept across runs: a value (no field of it changes)
-let found_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
-
-///|
-/// An item's title: 15 on 22, one line.
-// kept across runs: a value (no field of it changes)
-let found_title : @ui.TextStyle = @ui.text_style(size=Lg, leading=L7, color=Fg, wrap=false, w=@sf.grow)

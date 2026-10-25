@@ -94,7 +94,14 @@ test "a row's people (sfpages' RowAside, a finger's 18): each 3 over the one bef
     "creator": { "id": "mo" },
   })
   let ground = 0x123456FFL
-  let t = @ui.Tester::new(fn(c) { c.box(fn() { @sfpages.row_aside(c, src, item, "people", ground) }) |> ignore }, platform=2)
+  // (a touch device's theme, as the app's frame begins it: its chats' list's faces)
+  let t = @ui.Tester::new(
+    fn(c) {
+      @sf.begin(c) |> ignore
+      c.box(fn() { @sfpages.row_aside(c, src, item, "people", ground) }) |> ignore
+    },
+    platform=2,
+  )
   let lin = drawn_in(t, @sf.avatar_color("lin"))
   let mo = drawn_in(t, @sf.avatar_color("mo"))
   let kai = drawn_in(t, @sf.avatar_color("kai"))
