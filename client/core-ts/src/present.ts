@@ -14,7 +14,7 @@ import { permissionsShown } from "./permissions.ts";
 import * as model from "./shapes/model.ts";
 import * as providers from "./shapes/providers.ts";
 import { arr as arrU, equal, get as getU, isObject, shaped, str, u64 } from "./util.ts";
-import { SHAPES } from "./shapes/schema.ts";
+import { SHAPES, TOPIC_SHAPES } from "./shapes/schema.ts";
 import { GROUPS as PROFILE_GROUPS, group as profileGroup, groupTitle as profileGroupTitle } from "./views/profiles.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -129,77 +129,11 @@ export function ticks(topic: Topic): boolean {
   return !NO_TICK.has(topic.topic);
 }
 
-/// Each topic's shape (present.rs `conform`); topics with none go as they are.
-const SHAPED: Record<string, Ty> = {
-  chats: "ChatsView",
-  chatSearch: "ChatSearchView",
-  search: "SearchView",
-  chat: "ChatView",
-  stations: { vec: "StationView" },
-  connects: "ConnectsView",
-  history: "HistoryView",
-  live: "Live",
-  overview: "Overview",
-  sessions: { vec: "Session" },
-  session: "SessionDetail",
-  threads: { vec: "ChatThread" },
-  host: "Host",
-  footprint: "FootprintView",
-  status: "StatusView",
-  connection: "ConnectionView",
-  notices: "NoticesView",
-  draft: "DraftView",
-  notify: "NotifyView",
-  archive: "ArchiveView",
-  newChat: "NewChatView",
-  shareIn: "ShareInView",
-  pick: "PickView",
-  chatJobs: "ChatJobsView",
-  chatLetters: "ChatLettersView",
-  imageNear: "ImageNear",
-  agentCard: "AgentCardView",
-  stationNet: { opt: "StationNet" },
-  longJobs: "LongJobsView",
-  profiles: "ProfilesView",
-  usage: "UsageView",
-  settings: "SettingsView",
-  job: "Job",
-  drive: "DriveFolder",
-  drivePlace: { opt: "DrivePlace" },
-  jobLog: "JobLogView",
-  machineLogins: "MachineLoginsView",
-  machineLogin: { opt: "MachineLoginShown" },
-  machineLoginScreen: { opt: "MachineLoginScreen" },
-  prefs: "PrefsView",
-  changelog: "ChangelogView",
-  connectFlow: "ConnectFlowView",
-  slackTokens: "SlackTokensView",
-  doing: "DoingView",
-  adbShare: "AdbShareView",
-  workspaceMarks: "WorkspaceMarksView",
-  decisions: "DecisionsView",
-  lock: "LockView",
-  lockDraft: "LockDraftView",
-  lockPrompts: "LockPromptsView",
-  vaults: "VaultsView",
-  vaultItems: "VaultItemsView",
-  driveTransfers: "DriveTransfersView",
-  driveBrowse: "DriveBrowseView",
-  filesTabs: { opt: "FilesTabsView" },
-  downloads: "DownloadsView",
-  vaultUses: "VaultUsesView",
-  joinable: "JoinableView",
-  memberships: "MembershipsView",
-  screens: "ScreensView",
-  screenCard: "ScreenCard",
-  adbCard: "AdbCard",
-};
-
 /// A topic's value through the shape the clients are generated from: what it does not declare is dropped, and a value
 /// it does not allow is an error naming the field.
 /// A topic's shape; undefined for one that goes out as it is.
 export function shapeOf(topic: Topic): Ty | undefined {
-  return SHAPED[topic.topic];
+  return TOPIC_SHAPES[topic.topic];
 }
 
 /// The shape of a list's items (`Vec<T>`, `Option<Vec<T>>`).
@@ -223,7 +157,7 @@ export function decorateItem(topic: Topic, item: unknown, c: Clock): unknown {
 }
 
 export function conformTopic(topic: Topic, value: unknown): { ok: unknown } | { error: string } {
-  const ty = SHAPED[topic.topic];
+  const ty = TOPIC_SHAPES[topic.topic];
   if (ty === undefined) return { ok: value };
   return conform(ty, value);
 }

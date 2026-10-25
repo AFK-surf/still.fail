@@ -480,5 +480,5 @@ let switch_button : @ui.Style = @ui.css(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let switch_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg, wrap=false)
+let switch_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg, wrap=false, w=Cut)
 

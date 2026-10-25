@@ -475,7 +475,8 @@ fn job_detail(c : @ui.Ctx, src : Source, station : String, job : Json?) -> Unit 
       c.text(text(job, "name"), style=job_detail_name) |> ignore
       c.text(text(job, "detail"), style=job_detail_state) |> ignore
       c.box(style=job_detail_grow, fn() {  }) |> ignore
-      c.box(style=job_detail_choice, fn() {
+      // (kept as it is: the name and the state are what is cut short, as the web's segmented, flex: none)
+      c.box(style=job_detail_choice, keep=true, fn() {
         let labels = [@sf.t("web-main.jobs.notices"), @sf.t("web-main.jobs.output")]
         let picked = @sf.segmented(c, "jobs-tab/show", labels, if jobs_own.output { 1 } else { 0 })
         jobs_own.output = picked == 1

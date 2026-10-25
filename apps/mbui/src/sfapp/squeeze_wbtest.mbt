@@ -42,8 +42,14 @@ fn test_window_corner(platform : Int) -> Double {
 
 ///|
 /// `mode` in window `win` (its name, size, platform and the size class its host says, "" none) in `lang`, a moment
-/// after it opens (what it opens with over), drawn: the corner and squeeze tests' (corners_wbtest.mbt).
-fn screen_in(mode : String, win : (String, Double, Double, Int, String), lang : String) -> @ui.Tester {
+/// after it opens (what it opens with over), drawn: the corner and squeeze tests' (corners_wbtest.mbt); with `said`, what
+/// people, agents and stations wrote in it at its longest (squeeze_said_wbtest.mbt).
+fn screen_in(
+  mode : String,
+  win : (String, Double, Double, Int, String),
+  lang : String,
+  said? : Bool = false,
+) -> @ui.Tester {
   let (_, w, h, platform, width) = win
   let src : Ref[Source?] = Ref(None)
   let t = @ui.Tester::new(
@@ -51,7 +57,9 @@ fn screen_in(mode : String, win : (String, Double, Double, Int, String), lang : 
       let s = match src.val {
         Some(s) => s
         None => {
+          // (`said`: what people, agents and stations wrote in it at its longest: squeeze_said_wbtest.mbt)
           let s = fixture_app(mode)
+          let s = if said { said_longest_source(s) } else { s }
           src.val = Some(s)
           s
         }

@@ -2,8 +2,12 @@
 // union told apart by a tag. conform.ts walks them; scripts/shapes.ts makes the clients' types of them.
 
 export type Ty = string | { opt: Ty } | { vec: Ty } | { map: Ty } | { tuple: Ty[] };
-/// `client`: the type the clients see where it is not the wire's (`I54`: a whole number a JS number holds).
-export type Field = { name: string; ty: Ty; default: boolean; skipNone: boolean; client?: Ty; doc?: string };
+/// `client`: the type the clients see where it is not the wire's (`I54`: a whole number a JS number holds). `said`: words
+/// someone outside the app wrote (a person, an agent, a station, a machine: a name, a title, a notice, a command, an
+/// error), or a line the core makes with them in it, shown as they are: any length, any lines. What shows them is
+/// checked with them at their longest (apps/mbui: the squeeze sweep's stretched pass, made of `said_paths`). Never a key
+/// other data names a thing by, nor Markdown the core reads.
+export type Field = { name: string; ty: Ty; default: boolean; skipNone: boolean; client?: Ty; doc?: string; said: boolean };
 /// `client: false`: a shape only the core uses (the clients get no type for it).
 type Common = { doc?: string; client: boolean };
 export type Shape =
@@ -11,7 +15,7 @@ export type Shape =
   | ({ kind: "enum"; values: string[]; default: string | null } & Common)
   | ({ kind: "tagged"; tag: string; content: string; variants: Record<string, Ty>; names: Record<string, string> } & Common);
 
-type FieldOptions = { default?: true; skipNone?: true; client?: Ty; doc?: string };
+type FieldOptions = { default?: true; skipNone?: true; client?: Ty; doc?: string; said?: true };
 type Options = { doc?: string; client?: false };
 
 export const opt = (ty: Ty): Ty => ({ opt: ty });
@@ -29,7 +33,7 @@ export function struct(fields: [string, Ty, FieldOptions?][], o: Options & { def
     default: o.default === true,
     client: o.client !== false,
     doc: o.doc,
-    fields: fields.map(([name, ty, f = {}]) => ({ name, ty, default: f.default === true, skipNone: isOpt(ty) && (o.keepNone !== true || f.skipNone === true), client: f.client, doc: f.doc })),
+    fields: fields.map(([name, ty, f = {}]) => ({ name, ty, default: f.default === true, skipNone: isOpt(ty) && (o.keepNone !== true || f.skipNone === true), client: f.client, doc: f.doc, said: f.said === true })),
   };
 }
 

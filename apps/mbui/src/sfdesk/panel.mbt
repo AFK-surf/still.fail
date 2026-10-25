@@ -236,9 +236,10 @@ let side_tab_mark_side : Double = 14.0
 let side_tab_mark : @ui.Style = @ui.css("w=S3_5 h=S3_5 align=ACenter justify=JCenter")
 
 ///|
-/// Its label: muted, 13; the one in front in the words' colour and 500.
+/// Its label: muted, 13; the one in front in the words' colour and 500. Cut short where the tabs have not the room
+/// (sideTab's min-width 0): a tab gives way, never runs past the bar.
 // kept across runs: a value (no field of it changes)
-pub let side_tab_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
+pub let side_tab_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
 
 ///|
 /// One behind, pointed at: its words in the words' colour.
@@ -247,7 +248,7 @@ let side_tab_words_lit : @ui.TextStyle = side_tab_words.then(@ui.text_style(colo
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let side_tab_front : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
+pub let side_tab_front : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false, w=Cut)
 
 ///|
 /// Its close (sideTabClose): 20 round, concentric in the tab's end; pointed at, the pointer's ground over the tab's.
