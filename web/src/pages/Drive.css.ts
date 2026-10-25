@@ -214,10 +214,13 @@ export const listHead = style({
 globalStyle(`${listHead} button`, { display: "inline-flex", alignItems: "center", gap: "4px", padding: "0", border: "0", background: "none", color: "inherit", font: "inherit", cursor: "pointer", textAlign: "left" });
 globalStyle(`${listHead} button:nth-of-type(n+2)`, { justifySelf: "end" });
 globalStyle(`${listHead} button:hover, ${listHead} button[data-on]`, { color: vars.text });
-// On the files' page, columns as tall as the window leaves them: each scrolls on its own.
-globalStyle(`${list}[data-view="columns"]`, { display: "block", height: "calc(100dvh - 150px)", minHeight: "240px" });
 globalStyle(`${list}[data-view="columns"] > ${columns}`, { height: "100%" });
 
 /** The list, and the preview beside it when it shows (DrivePane.tsx). */
 export const withPane = style({ display: "flex", alignItems: "flex-start", gap: "0", minWidth: "0" });
 globalStyle(`${withPane} > :first-child`, { flex: "1", minWidth: "0" });
+// On the files' page, columns as tall as the page leaves them under its head, each scrolling on its own: the page
+// itself has nothing to scroll, or a wheel over a column with no more to show would scroll it, every column with it.
+globalStyle(`${page}:has(> ${withPane} > ${list}[data-view="columns"])`, { display: "flex", flexDirection: "column", paddingBottom: "24px" });
+globalStyle(`${page} > ${withPane}:has(> ${list}[data-view="columns"])`, { flex: "1", minHeight: "120px", alignItems: "stretch" });
+globalStyle(`${list}[data-view="columns"]`, { display: "block", minHeight: "0" });
