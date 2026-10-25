@@ -1883,56 +1883,12 @@ pub fn local_station_act(action : String) -> Unit {
 }
 
 ///|
-/// Whether there is a dock here (@hostapi.dock_available). Under a Tester: as it is set (Tester::set_dock).
-pub fn dock_available() -> Bool {
-  match fake.val {
-    Some(f) => f.dock_on
-    None => @hostapi.dock_available()
-  }
-}
-
-///|
 /// The keys held down now (@hostapi.mods_held: mod_shift_key, mod_ctrl, mod_alt, mod_cmd). Under a Tester: as it holds
 /// them (Tester::hold_mods).
 pub fn mods_held() -> Int {
   match fake.val {
     Some(f) => f.mods
     None => @hostapi.mods_held()
-  }
-}
-
-///|
-/// A line to the dock (@hostapi.dock_send). Under a Tester: kept (Tester::dock_lines).
-pub fn dock_send(line : String) -> Unit {
-  match fake.val {
-    Some(f) => f.dock_lines.push(line)
-    None => @hostapi.dock_send(line)
-  }
-}
-
-///|
-/// The dock stopped (@hostapi.dock_stop).
-pub fn dock_stop() -> Unit {
-  match fake.val {
-    Some(f) => f.dock_stops = f.dock_stops + 1
-    None => @hostapi.dock_stop()
-  }
-}
-
-///|
-/// The dock's settings as kept on this device (@hostapi.dock_kept), and kept (dock_keep).
-pub fn dock_kept() -> String {
-  match fake.val {
-    Some(f) => f.dock_kept
-    None => @hostapi.dock_kept()
-  }
-}
-
-///|
-pub fn dock_keep(json : String) -> Unit {
-  match fake.val {
-    Some(f) => f.dock_kept = json
-    None => @hostapi.dock_keep(json)
   }
 }
 

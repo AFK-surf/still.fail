@@ -784,12 +784,6 @@ let zh_wide : Map[String, String] = {
   "web-pages.settings.nav.shortcuts": "快捷键",
   "web-pages.settings.nav.version": "版本",
   "web-pages.localStation.title": "本机 Station",
-  "desktop.dock.open": "打开",
-  "desktop.dock.read": "已读",
-  "desktop.dock.later": "稍后",
-  "desktop.dock.empty": "已全部查看",
-  "desktop.dock.waiting": "待处理",
-  "desktop.dock.hide": "隐藏浮窗",
   // a file opened over the window (viewer_bar.mbt, preview_desk.mbt; FilePreview.tsx)
   "web-main.preview.kind.image": "图片",
   "web-main.preview.kind.video": "视频",

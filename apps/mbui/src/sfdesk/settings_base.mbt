@@ -9,8 +9,6 @@ using @settings {
   confirm,
   connects_mine,
   decision_form,
-  dock_set,
-  dock_setting,
   doing_mark,
   error_text,
   failed_of,

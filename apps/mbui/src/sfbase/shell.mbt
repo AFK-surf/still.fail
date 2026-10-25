@@ -1,4 +1,4 @@
-// What the app's own doings (links opened, notifications, the dock, the system's say) ask of the pages drawn: what is
+// What the app's own doings (links opened, notifications, the system's say) ask of the pages drawn: what is
 // over them (sheets, menus) and how an invitation shows are theirs, said as they are drawn (src/sfapp pages_shell).
 
 ///|

@@ -1,9 +1,8 @@
 // What this client tells its person about their chats, and how (notify.ts, docs/notifications.md), laid out as a
-// phone's notification settings are: a preview that follows the settings, the ways it tells (a banner, the badge, the
-// desktop dock), and each kind of thing that happens with which of those it uses.
+// phone's notification settings are: a preview that follows the settings, the ways it tells (a banner, the badge), and
+// each kind of thing that happens with which of those it uses.
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import type { DockKinds, DockSettings } from "../core/client.ts";
 import type { BadgeKinds, Notice, NotifyKinds, NotifyView } from "../core/shapes.ts";
 import { core, useTopic } from "../core/react.ts";
 import { CAN_NOTIFY, requestPermission, setNotify, useNotifyState, type NotifyState } from "../notify.ts";
@@ -22,7 +21,6 @@ type Kind = "wait" | "failed" | "done" | "message";
 const KINDS_SHOWN: Kind[] = ["wait", "failed", "done", "message"];
 const NOTIFY_DEFAULT: NotifyKinds = { wait: true, failed: true, done: "away", message: true };
 const BADGE_DEFAULT: BadgeKinds = { on: true, wait: true, failed: true, done: false, message: false };
-const DOCK_DEFAULT: DockKinds = { wait: true, failed: true, done: true, message: true };
 const MAC_APP = !!window.stillfailDesktop && /Mac/.test(navigator.platform);
 /** The app's own icon, as the system shows it beside its notifications and in the Dock. */
 const ICON = BETA || window.stillfailDesktop?.beta ? "/icon-beta-192.png" : "/icon-192.png";
@@ -44,7 +42,6 @@ export function NotificationsPage({ back, workspace }: { back: string; workspace
             action={s.permission === "denied" ? t("web-pages.notifications.enable.open") : s.permission === "default" ? t("web-pages.notifications.enable.allow") : undefined}
             onChange={(on) => (s.permission === "denied" ? s.openSettings?.() : s.permission === "default" ? void requestPermission() : s.setBanner(on))} />}
           <Tile way="badge" on={s.badge.on} onChange={(on) => s.setBadge({ on })} />
-          {s.dock && <Tile way="dock" on={s.dock.on} onChange={(on) => s.setDock({ on })} />}
         </div>
       </Section>
       <Section title={t("web-pages.notifications.kinds.title")}>
@@ -58,7 +55,6 @@ export function NotificationsPage({ back, workspace }: { back: string; workspace
         <div className={pagesCss.card}>
           {window.stillfailDesktop && <SwitchRow title={t("web-pages.notifications.preview")} description={t("web-pages.notifications.previewNote")}
             checked={s.preview} disabled={s.state !== "on"} onChange={s.setPreview} />}
-          {s.dock && <SwitchRow title={t("web-pages.dock.peek")} description={t("web-pages.dock.peekNote")} checked={s.dock.peek} disabled={!s.dock.on} onChange={(peek) => s.setDock({ peek })} />}
           {MAC_APP && <p className={css.sound}>{t("web-pages.notifications.sound", { name: NAME })}</p>}
           {!window.stillfailDesktop && <p className={css.sound}>{t("web-pages.notifications.browserNote")}</p>}
         </div>
@@ -84,7 +80,6 @@ function useSettings(workspace: string) {
   useEffect(() => setPreviewNow(null), [notify?.preview]);
   const badgeKept = marks?.badgeKinds;
   useEffect(() => setBadgeNow(null), [badgeKept?.on, badgeKept?.wait, badgeKept?.failed, badgeKept?.done, badgeKept?.message]);
-  const dock = useDock();
 
   const k = kinds ?? notify?.kinds ?? NOTIFY_DEFAULT;
   const kept = badge ?? badgeKept ?? BADGE_DEFAULT;
@@ -103,7 +98,7 @@ function useSettings(workspace: string) {
     permission: notify?.permission ?? "unknown",
     /** The system's notification settings for the app, where the app can open them (not a browser's). */
     openSettings: window.stillfailDesktop?.notify?.settings ? () => { void window.stillfailDesktop?.notify?.settings?.(); } : null,
-    kinds: k, badge: b, dock: dock.settings,
+    kinds: k, badge: b,
     /** Whether a kind comes as a banner now. */
     banner: (kind: Kind) => state === "on" && (kind === "done" ? k.done !== "off" : k[kind] !== false),
     setBanner: (on: boolean) => {
@@ -123,30 +118,11 @@ function useSettings(workspace: string) {
       setBadgeNow({ ...b, ...patch });
       setPrefs({ badgeKinds: patch });
     },
-    setDock: dock.change,
   };
 }
 type Settings = ReturnType<typeof useSettings>;
 
-/** The desktop dock's settings (apps/desktop/src/dock.mts): only in a Mac app that can run it. */
-function useDock() {
-  const bridge = window.stillfailDesktop?.dock;
-  const [settings, setSettings] = useState<(DockSettings & { kinds: DockKinds }) | null>(null);
-  const toast = useToast();
-  const whole = (s: DockSettings | null) => s && { ...s, kinds: s.kinds ?? { ...DOCK_DEFAULT, done: s.unread, message: s.unread } };
-  useEffect(() => { void bridge?.get().then((s) => setSettings(whole(s)), () => setSettings(null)); }, [bridge]);
-  const change = (patch: Partial<Omit<DockSettings, "kinds">> & { kinds?: Partial<DockKinds> }) => {
-    if (!bridge || !settings) return;
-    const kinds = { ...settings.kinds, ...patch.kinds };
-    const next = { ...settings, ...patch, kinds, unread: kinds.done || kinds.message };
-    setSettings(next);
-    // `unread` too, for an app from before kinds.
-    bridge.set({ ...patch, kinds, unread: next.unread }).then((now) => { if (now) setSettings(whole(now)); }, (e: unknown) => { toast(t("web-pages.dock.failed", { error: failure(e) })); void bridge.get().then((s) => setSettings(whole(s))); });
-  };
-  return { settings: bridge ? settings : null, change };
-}
-
-export type Way = "banner" | "badge" | "dock";
+export type Way = "banner" | "badge";
 
 /** One way of telling, as a tile with a picture of it: pressed, on or off. `action`: the system has to allow it first,
  * the tile is the way to (its words on a button in it, the picture marked): pressed, it goes there. */
@@ -155,7 +131,7 @@ export function Tile({ way, on, onChange, busy, disabled, action }: { way: Way; 
     <button type="button" className={css.tile} aria-pressed={action ? undefined : on} data-on={(on && !action) || undefined} data-action={action ? true : undefined} disabled={busy || disabled} onClick={() => onChange(!on)}>
       <span className={css.tilePicture} aria-hidden="true">
         {action && <span className={css.picAlert}>!</span>}
-        {way === "banner" ? <span className={css.picBanner} /> : way === "badge" ? <span className={css.picApp}><span className={css.picBadge} /></span> : <><span className={css.picEdge} /><span className={css.picEdge} /></>}
+        {way === "banner" ? <span className={css.picBanner} /> : <span className={css.picApp}><span className={css.picBadge} /></span>}
       </span>
       <span className={css.tileName}>{t(`web-pages.notifications.ways.${way}`)}</span>
       {action ? <span className={css.tileAction}>{action}<ChevronRight size={14} aria-hidden="true" /></span>
@@ -169,7 +145,6 @@ function KindRow({ kind, s, open, onOpen }: { kind: Kind; s: Settings; open: boo
   const ways = [
     CAN_NOTIFY && s.banner(kind) ? (kind === "done" && s.kinds.done === "away" ? t("web-pages.notifications.sumBannerAway") : t("web-pages.notifications.ways.banner")) : null,
     s.badge.on && s.badge[kind] ? t("web-pages.notifications.ways.badge") : null,
-    s.dock?.on && s.dock.kinds[kind] ? t("web-pages.notifications.ways.dock") : null,
   ].filter(Boolean);
   const off = s.state !== "on";
   return (
@@ -195,7 +170,6 @@ function KindRow({ kind, s, open, onOpen }: { kind: Kind; s: Settings; open: boo
             <WayRow title={t("web-pages.notifications.ways.banner")} checked={s.kinds[kind] !== false} disabled={off} onChange={(v) => s.setKinds({ [kind]: v })} />
           ))}
           <WayRow title={t("web-pages.notifications.inBadge")} checked={s.badge[kind]} disabled={!s.badge.on} onChange={(v) => s.setBadge({ [kind]: v })} />
-          {s.dock && <WayRow title={t("web-pages.notifications.inDock")} checked={s.dock.kinds[kind]} disabled={!s.dock.on} onChange={(v) => s.setDock({ kinds: { [kind]: v } })} />}
         </div>
       )}
     </div>
@@ -219,14 +193,13 @@ const SAMPLE: Record<Kind, () => { title: string; body: string }> = {
 };
 
 /** A screen as the settings make it: the banner of `kind` (the latest one that came, else a sample), the app's badge
- * with what it counts now, the dock on the edge with the kinds it holds. */
+ * with what it counts now. */
 function Preview({ s, kind }: { s: Settings; kind: Kind }) {
   const latest = [...s.notices].reverse().find((n) => (n.kind === "block" ? "wait" : n.kind) === kind);
   const shown = latest ? { title: latest.title, body: latest.body } : SAMPLE[kind]();
   const body = s.preview ? shown.body : t(`web-pages.notifications.hidden.${kind}`);
   const banner = CAN_NOTIFY && s.banner(kind);
   const badge = s.badge.on && s.count > 0;
-  const docked = s.dock?.on ? KINDS_SHOWN.filter((k) => s.dock!.kinds[k]) : [];
   return (
     <div className={css.screen} aria-label={t("web-pages.notifications.previewLabel")} role="img">
       <div className={css.banner} data-off={!banner || undefined}>
@@ -236,11 +209,6 @@ function Preview({ s, kind }: { s: Settings; kind: Kind }) {
           <span className={css.bannerBody}>{body}</span>
         </span>
       </div>
-      {docked.length > 0 && (
-        <div className={css.edge}>
-          {docked.map((k) => <span key={k} className={css.edgeItem} data-kind={k}>{t(`web-pages.notifications.kinds.${k}`)}</span>)}
-        </div>
-      )}
       <div className={css.dockBar}>
         <span className={css.appIcon} />
         <span className={css.appIcon} />

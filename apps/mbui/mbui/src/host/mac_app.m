@@ -1026,100 +1026,11 @@ void mb_host_window_drag(void) {
   [w performWindowDragWithEvent:e];
 }
 
-// The desktop's dock (@hostapi.dock_send; apps/desktop/dock, docs/desktop-dock.md): the SwiftUI helper the desktop
-// app carries (Resources/dock/StillfailDock; MBUI_DOCK: one built elsewhere), on macOS 14 or later on Apple silicon.
-// Started by the first line sent, a JSON object a line on its stdin; what it says, a line each, posted on the "dock"
-// channel, and {"type":"gone"} when it ends. Its settings are kept here, as the desktop app keeps them in a file of
-// its own (@hostapi.dock_kept, dock_keep).
-static NSTask *dock_task = nil;
-static NSFileHandle *dock_in = nil;
-static NSString *dock_helper(void) {
-#if defined(__arm64__)
-  if (@available(macOS 14, *)) {
-    const char *own = getenv("MBUI_DOCK");
-    NSString *p = own ? @(own) : [NSBundle.mainBundle.resourcePath stringByAppendingPathComponent:@"dock/StillfailDock"];
-    return [NSFileManager.defaultManager isExecutableFileAtPath:p] ? p : nil;
-  }
-#endif
-  return nil;
-}
-int32_t mb_host_dock_available(void) { return dock_helper() ? 1 : 0; }
-
 // The keys held now (@hostapi.mods_held), as a key's are told: shift 1, control 2, option 4, command 8.
 int32_t mb_host_mods_held(void) {
   NSEventModifierFlags m = [NSEvent modifierFlags];
   return ((m & NSEventModifierFlagShift) ? 1 : 0) | ((m & NSEventModifierFlagControl) ? 2 : 0) |
          ((m & NSEventModifierFlagOption) ? 4 : 0) | ((m & NSEventModifierFlagCommand) ? 8 : 0);
-}
-static void dock_heard(NSData *line) {
-  if (!line.length) return;
-  // a chat opened from it: the app's window in front, as the desktop app's (app.focus)
-  NSString *s = [[NSString alloc] initWithData:line encoding:NSUTF8StringEncoding];
-  if ([s containsString:@"\"type\":\"open\""]) {
-    dispatch_async(dispatch_get_main_queue(), ^{ bring_back(); });
-  }
-  mb_post("dock", (const char *)line.bytes, line.length, NULL, 0);
-}
-static BOOL dock_spawn(void) {
-  NSString *path = dock_helper();
-  if (!path) return NO;
-  // (a write to a helper that has gone is an error, not the app's end)
-  signal(SIGPIPE, SIG_IGN);
-  NSTask *t = [NSTask new];
-  t.executableURL = [NSURL fileURLWithPath:path];
-  NSPipe *in = [NSPipe pipe], *out = [NSPipe pipe];
-  t.standardInput = in;
-  t.standardOutput = out;
-  t.standardError = [NSFileHandle fileHandleWithNullDevice];
-  NSMutableData *buf = [NSMutableData data];
-  out.fileHandleForReading.readabilityHandler = ^(NSFileHandle *h) {
-    NSData *d = h.availableData;
-    if (d.length == 0) {
-      h.readabilityHandler = nil;
-      return;
-    }
-    [buf appendData:d];
-    for (;;) {
-      NSRange nl = [buf rangeOfData:[NSData dataWithBytes:"\n" length:1] options:0 range:NSMakeRange(0, buf.length)];
-      if (nl.location == NSNotFound) break;
-      dock_heard([buf subdataWithRange:NSMakeRange(0, nl.location)]);
-      [buf replaceBytesInRange:NSMakeRange(0, nl.location + 1) withBytes:NULL length:0];
-    }
-  };
-  t.terminationHandler = ^(NSTask *task) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-      if (dock_task != task) return;
-      dock_task = nil;
-      dock_in = nil;
-      dock_heard([@"{\"type\":\"gone\"}" dataUsingEncoding:NSUTF8StringEncoding]);
-    });
-  };
-  NSError *e = nil;
-  if (![t launchAndReturnError:&e]) return NO;
-  dock_task = t;
-  dock_in = in.fileHandleForWriting;
-  return YES;
-}
-void mb_host_dock_send(moonbit_string_t line) {
-  if (!dock_task && !dock_spawn()) return;
-  NSData *d = [[mb_ns_from_string(line) stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding];
-  NSError *e = nil;
-  if (@available(macOS 10.15, *)) [dock_in writeData:d error:&e];
-}
-void mb_host_dock_stop(void) {
-  if (!dock_task) return;
-  NSTask *t = dock_task;
-  dock_task = nil;
-  [dock_in closeFile];
-  dock_in = nil;
-  [t terminate];
-}
-moonbit_string_t mb_host_dock_kept(void) {
-  NSString *s = [NSUserDefaults.standardUserDefaults stringForKey:@"fail.still.mbui.dock"];
-  return mb_string_from_ns(s ?: @"");
-}
-void mb_host_dock_keep(moonbit_string_t json) {
-  [NSUserDefaults.standardUserDefaults setObject:mb_ns_from_string(json) forKey:@"fail.still.mbui.dock"];
 }
 
 // This machine's station (@hostapi.local_station; apps/desktop/src/main.ts localStation, installed.ts): its data
@@ -1436,8 +1347,8 @@ void mb_host_set_cursor(int32_t kind) {
 
 // ---- The app's life on the Mac, and what the system says of it ----
 // As still.fail's desktop app is on macOS (Electron's): closing the window puts it away and the app goes on (its core,
-// its notifications, the Dock's badge, the dock's helper); the Dock's icon clicked, the app opened again, a
-// notification or the dock's helper opening a chat brings it back; ⌘Q (the menu bar's 退出) quits. A program run bare
+// its notifications, the Dock's badge); the Dock's icon clicked, the app opened again or a notification brings it back;
+// ⌘Q (the menu bar's 退出) quits. A program run bare
 // (not an app's bundle: a developer's run, a script's, a test's) ends as its window closes, as before. Said to the app
 // on the system's channel (hostapi's system.mbt): `shown` with how long it was away as the window comes back, and as
 // the Mac wakes from sleep (a clock that counts the sleep, as iOS's and Android's); `network` as the default network

@@ -571,8 +571,7 @@ pub using @sfbase {
   type NoticeHost,
   type NoticeState,
   type ReportingHost,
-  // what the app does whichever frame draws it (app_frame.mbt, shell.mbt, open_links.mbt, notices.mbt, dock.mbt,
-  // menu_bar.mbt)
+  // what the app does whichever frame draws it (app_frame.mbt, shell.mbt, open_links.mbt, notices.mbt, menu_bar.mbt)
   shell,
   type Shell,
   appearance,
@@ -586,7 +585,6 @@ pub using @sfbase {
   notices_frame,
   seq_of,
   trim_slash,
-  dock_frame,
   menu_bar,
   menu_bar_json,
   menu_zh,

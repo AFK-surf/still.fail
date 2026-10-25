@@ -24,7 +24,6 @@ import { contextMenu, type Action } from "./context-menu.mts";
 import { systemPermission } from "./notify-permission.ts";
 import { kept, localNetwork } from "./local-network.ts";
 import { LOCAL_NETWORK_SETTINGS } from "../../../station/src/mesh/lan.ts";
-import { Dock, dockHelper, dockKinds, type DockKinds, type DockSettings } from "./dock.mts";
 import { moveUserData } from "./moves.mts";
 import { attachWindowControls, loadSnapTarget } from "./window-controls.ts";
 import { exportOriginStorage, importOriginStorage, type OriginSnapshot } from "./origin-storage";
@@ -271,7 +270,6 @@ ipcMain.on("app:language", (event, lang: unknown) => {
   if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || (lang !== "zh" && lang !== "en") || lang === chosenLang) return;
   chosenLang = lang;
   if (app.isReady()) setMenu();
-  dock?.words();
 });
 
 // The app's own way to the core, for what it serves itself (previews): a client of the core as a page is, making calls.
@@ -291,7 +289,7 @@ function dropOwnLink(reason: string): void {
   own.port.close();
   own = null;
   // What it held goes on on a new link, once the core is back.
-  setTimeout(() => { followNotices(); followBadge(); dock?.follow(); }, 1000);
+  setTimeout(() => { followNotices(); followBadge(); }, 1000);
 }
 
 /** The app's own link to the core, opened when first needed. */
@@ -344,82 +342,6 @@ function coreBytes(name: string, params: unknown, bytes?: Uint8Array, onProgress
     signal?.addEventListener("abort", () => { if (link.waiting.has(id)) link.port.postMessage({ id, cancel: true }); }, { once: true });
   });
 }
-
-/** A topic of the core's held on the app's own link: its value each time it changes (deltas applied). Returns the letting go. */
-function coreSubscribe(topic: Record<string, unknown>, onValue: (value: unknown) => void): () => void {
-  const link = ownLink();
-  const id = link.next++;
-  link.topics.set(id, { value: undefined, onValue });
-  link.port.postMessage({ id, subscribe: topic });
-  return () => { if (own === link && link.topics.delete(id)) link.port.postMessage({ id, unsubscribe: true }); };
-}
-
-// The dock (dock.mts, docs/desktop-dock.md): on a Mac, the chats that want the person on the screen's edge, also with no
-// window open. Its settings (on: off until turned on, 2026-10-15; new ones peeking out and plain unread ones in it: on
-// unless turned off) are kept in userData/dock.json, set from the settings page (dock:set) or the app menu (on or off).
-const DOCK_FILE = () => join(app.getPath("userData"), "dock.json");
-const dockPath = dockHelper(resources);
-let dock: Dock | null = null;
-
-function dockWords(): Record<string, string> {
-  const words: Record<string, string> = {};
-  for (const name of ["open", "read", "later", "empty", "waiting", "hide"]) words[name] = t(`desktop.dock.${name}`);
-  words.locale = (chosenLang ?? langOf(app.getLocale())) === "zh" ? "zh-Hans" : "en";
-  return words;
-}
-
-function dockSettings(): DockSettings {
-  let kept: Partial<DockSettings> = {};
-  try { kept = JSON.parse(readFileSync(DOCK_FILE(), "utf8")) as Partial<DockSettings>; } catch { /* none kept: the defaults */ }
-  const kinds = dockKinds(kept);
-  return { on: kept.on === true, peek: kept.peek !== false, unread: kinds.done || kinds.message, kinds };
-}
-
-type DockChange = Omit<Partial<DockSettings>, "kinds"> & { kinds?: Partial<DockKinds> };
-
-function setDock(change: DockChange): DockSettings | null {
-  if (!dockPath) return null;
-  const now = dockSettings();
-  // A page from before kinds says only `unread`: both kinds of unread.
-  const kinds = { ...now.kinds, ...(change.unread !== undefined && !change.kinds ? { done: change.unread, message: change.unread } : {}), ...change.kinds };
-  const settings = { ...now, ...change, kinds, unread: kinds.done || kinds.message };
-  writeFileSync(DOCK_FILE(), JSON.stringify(settings));
-  if (settings.on) {
-    dock ??= new Dock(dockPath, {
-      subscribe: coreSubscribe,
-      call: (name, params) => coreCall(name, params),
-      open: (path) => { app.focus({ steal: true }); openPath(path); },
-      words: dockWords,
-      turnedOff: () => setDock({ on: false }),
-    });
-    dock.settings({ peek: settings.peek, kinds: settings.kinds });
-    dock.start();
-  } else {
-    dock?.stop();
-  }
-  setMenu();
-  return settings;
-}
-
-ipcMain.handle("dock:get", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) && dockPath ? dockSettings() : null);
-ipcMain.handle("dock:set", (event, change: unknown) => {
-  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof change !== "object" || change === null) return null;
-  const valid: DockChange = {};
-  for (const key of ["on", "peek", "unread"] as const) {
-    const v = (change as Record<string, unknown>)[key];
-    if (typeof v === "boolean") valid[key] = v;
-  }
-  const kinds = (change as Record<string, unknown>).kinds;
-  if (typeof kinds === "object" && kinds !== null) {
-    const given: Partial<DockKinds> = {};
-    for (const key of ["wait", "failed", "done", "message"] as const) {
-      const v = (kinds as Record<string, unknown>)[key];
-      if (typeof v === "boolean") given[key] = v;
-    }
-    valid.kinds = given;
-  }
-  return setDock(valid);
-});
 
 // Previews: a page asks for a station's port as a host of stillfail-preview:// (p<port>-<the station's hash>), puts that
 // host's /_ember/frame (FRAME below) in a frame, and every other request of the host comes here and goes to the station
@@ -970,7 +892,7 @@ async function checkFromMenu(): Promise<void> {
  */
 interface MenuState { keys: Record<string, string | null>; on: string[] }
 const menuStates = new Map<number, MenuState>();
-/** The app's window last in front (open): the one the menu bar's page items act in, not the dock's. */
+/** The app's window last in front (open): the one the menu bar's page items act in. */
 let front: BrowserWindow | null = null;
 /** The keys the menu bar was built with: other keys build it again, which can be done now only enables its items. */
 let menuKeys = "";
@@ -1044,7 +966,6 @@ function setMenu(): void {
       submenu: [
         { role: "about", label: t("desktop.menu.about", { app: app.name }) },
         { label: t("desktop.menu.checkUpdates"), click: () => void checkFromMenu() },
-        ...(dockPath ? [{ label: t("desktop.menu.dock"), type: "checkbox" as const, checked: dockSettings().on, click: () => setDock({ on: !dockSettings().on }) }] : []),
         { type: "separator" },
         { ...item("settings"), label: t("desktop.menu.settings") },
         { type: "separator" },
@@ -1792,7 +1713,6 @@ if (!app.requestSingleInstanceLock()) {
     try { notifyOn = JSON.parse(readFileSync(NOTIFY_FILE(), "utf8")).on !== false; } catch { /* on, as it starts */ }
     followNotices();
     followBadge();
-    if (dockSettings().on) setDock({});
     followSleep();
     followNetwork();
     try { setTray(); } catch (error) { diagnostics?.write("tray-error", { error }); }
@@ -1800,7 +1720,6 @@ if (!app.requestSingleInstanceLock()) {
   // The station stops with the app, its runtimes first; the app quits once it has.
   app.on("before-quit", (event) => {
     quitting = true;
-    dock?.stop();
     if (stationStopped) return;
     event.preventDefault();
     void stopStation().then(() => app.quit());

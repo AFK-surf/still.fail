@@ -223,10 +223,6 @@ pub fn Tester::new(
     local_fonts: "",
     families_given: {},
     unreadable_fonts: [],
-    dock_on: false,
-    dock_lines: [],
-    dock_stops: 0,
-    dock_kept: "",
     mods: 0,
     clipboard_secret: -1.0,
     clipboard_image: -1,
@@ -804,26 +800,9 @@ pub fn Tester::local_acts(self : Tester) -> Array[String] {
 }
 
 ///|
-/// Whether there is a dock here from now on (@ui.dock_available).
-pub fn Tester::set_dock(self : Tester, on : Bool) -> Unit {
-  self.fake.dock_on = on
-}
-
-///|
 /// The keys held down from now on (@ui.mods_held: @ui.mod_alt, mod_cmd…; 0 none).
 pub fn Tester::hold_mods(self : Tester, mods : Int) -> Unit {
   self.fake.mods = mods
-}
-
-///|
-/// The lines sent to the dock (@ui.dock_send), oldest first, and how often it was stopped.
-pub fn Tester::dock_lines(self : Tester) -> Array[String] {
-  self.fake.dock_lines
-}
-
-///|
-pub fn Tester::dock_stops(self : Tester) -> Int {
-  self.fake.dock_stops
 }
 
 ///|

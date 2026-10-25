@@ -274,20 +274,6 @@ const PARTS: Record<string, Part> = {
       engineAndroid(out);
     },
   },
-  // The desktop app's dock (apps/desktop/dock, docs/desktop-dock.md): a SwiftUI helper, built with the Xcode the Mac
-  // has (its SDK decides whether the glass is Liquid Glass: macOS 26's or later).
-  dock: {
-    files: () => ["StillfailDock"],
-    targets: ["darwin-arm64"],
-    inputs: ["apps/desktop/dock"],
-    recipe: () => ({ swift: DOCK_BUILD, sdk: "macOS 26" }),
-    build(_t, out) {
-      const dir = join(ROOT, "apps/desktop/dock");
-      const scratch = process.env.CARGO_TARGET_DIR ? join(process.env.CARGO_TARGET_DIR, "native", "dock") : join(dir, ".build");
-      run("swift", [...DOCK_BUILD, "--scratch-path", scratch], { cwd: dir });
-      copyFileSync(swiftProduct(scratch, "StillfailDock"), join(out, "StillfailDock"));
-    },
-  },
   // still.fail Helper (station/native/helper, docs/station-ts-native.md §4): the station's macOS app for what macOS
   // grants an app (the screen, docs/remote-screens.md), Swift built with the Mac's Xcode, put in its bundle with its
   // Info.plist and the desktop app's icon (its permission window and System Settings show it) and signed ad hoc (a
@@ -297,11 +283,11 @@ const PARTS: Record<string, Part> = {
     targets: ["darwin-arm64"],
     env: "STILLFAIL_HELPER",
     inputs: ["station/native/helper", "vendor/PermissionFlow", "vendor/serve-sim", HELPER_ICON],
-    recipe: () => ({ swift: DOCK_BUILD, app: HELPER_APP }),
+    recipe: () => ({ swift: SWIFT_BUILD, app: HELPER_APP }),
     build(_t, out) {
       const dir = join(ROOT, "station/native/helper");
       const scratch = process.env.CARGO_TARGET_DIR ? join(process.env.CARGO_TARGET_DIR, "native", "helper") : join(dir, ".build");
-      run("swift", [...DOCK_BUILD, "--scratch-path", scratch], { cwd: dir });
+      run("swift", [...SWIFT_BUILD, "--scratch-path", scratch], { cwd: dir });
       const app = join(out, HELPER_APP);
       mkdirSync(join(app, "Contents/MacOS"), { recursive: true });
       copyFileSync(swiftProduct(scratch, "stillfail-helper"), join(app, "Contents/MacOS/stillfail-helper"));
@@ -357,7 +343,7 @@ const RELAY: Record<string, { url: string; sha256: string }> = {
   "linux-x64": { url: RELAY_URL("x86_64-unknown-linux-musl"), sha256: "9a68108b824e4164ad2eec729cf0e8167e4cb50581cb745a242bace135df7614" },
   "linux-arm64": { url: RELAY_URL("aarch64-unknown-linux-musl"), sha256: "1b4261b6dd0d17ae9a7516aa6d122b296a77678bac174ce30262702c9f91cb00" },
 };
-const DOCK_BUILD = ["build", "-c", "release", "--arch", "arm64"];
+const SWIFT_BUILD = ["build", "-c", "release", "--arch", "arm64"];
 /// Where `swift build` put a release product: SwiftPM's own build system's place, or (Swift 6.4's swift-build) its
 /// `out/Products/Release`; the newer where a scratch path has both.
 const swiftProduct = (scratch: string, name: string) =>

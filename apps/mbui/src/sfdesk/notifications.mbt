@@ -1,9 +1,9 @@
 // 通知, one page in every frame, as the web's (ember web/src/pages/Notifications.tsx, Notifications.css.ts; laid out by its
 // width, page_look.mbt): what this device
 // tells its person about their chats, and how, laid out as a phone's notification settings are: a preview that follows
-// the settings (the banner of the kind looked at, the app's badge with what it counts, the dock on the screen's edge
-// with the kinds it holds), the ways it tells as tiles each with a picture of it, each kind of thing that happens with
-// which of those it uses (opened, each way on or off), and the rest. The phone's settings have a switch of their own
+// the settings (the banner of the kind looked at, the app's badge with what it counts), the ways it tells as tiles each
+// with a picture of it, each kind of thing that happens with which of those it uses (opened, each way on or off), and
+// the rest. The phone's settings have a switch of their own
 // (SettingsHome.kt's).
 
 // ---------------------------------------------------------------------------
@@ -141,7 +141,6 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
     Some(v) => v
     None => flag(notify, "on")
   }
-  let dock = @ui.dock_available()
   // the kind the preview shows: the one opened, else the first that comes as a banner
   let shown_kind = if kind_open.val != "" {
     kind_open.val
@@ -174,13 +173,6 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
         if way_tile(c, "notify-badge", "badge", badge_on) {
           c.after_build("notify-badge", fn() { set_badge_kind(core, "on", !badge_on) })
         }
-        // the desktop's dock (dock_settings.mbt), where this Mac app runs it
-        if dock {
-          let dock_on = dock_setting("on")
-          if way_tile(c, "notify-dock", "dock", dock_on) {
-            dock_set("on", !dock_on)
-          }
-        }
       })
       |> ignore
       if look == Narrow {
@@ -193,7 +185,7 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
       c.box(style=kinds_card, fn() {
         // (each its row, apart by its room: no line between)
         for kind in notify_kinds {
-          kind_row(c, core, here, notify, kind, on, dock)
+          kind_row(c, core, here, notify, kind, on)
         }
       })
       |> ignore
@@ -215,21 +207,6 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
           c.after_build("notify-preview", fn() {
             @settings.act(core, @sf.t("web-pages.notifications.preview"), "notify.set", obj([("preview", Json::boolean(now))]))
           })
-        }
-        // new ones peeking out of the dock, or only waiting at the edge
-        if dock {
-          let peek = dock_setting("peek")
-          let next = @sf.switch_row(
-            c,
-            "dock-peek",
-            @sf.t("web-pages.dock.peek"),
-            peek,
-            note=@sf.t("web-pages.dock.peekNote"),
-            disabled=!dock_setting("on"),
-          )
-          if next != peek {
-            dock_set("peek", next)
-          }
         }
         if @ui.platform() == 0 {
           c.text(@sf.t("web-pages.notifications.sound", args=[("name", "still.fail")]), style=sound_words) |> ignore
@@ -257,15 +234,11 @@ fn way_tile(c : @ui.Ctx, key : String, way : String, on : Bool, action? : String
     c.box(style=tile_picture, fn() {
       match way {
         "banner" => c.box(style=pic_banner, top=pic_in, right=pic_in, fn() {  }) |> ignore
-        "badge" =>
+        _ =>
           c.box(style=pic_app, bottom=pic_in, left=pic_app_left, fn() {
             c.box(style=pic_badge, top=pic_badge_top, right=pic_badge_right, fn() {  }) |> ignore
           })
           |> ignore
-        _ => {
-          c.box(style=pic_edge, right=0.0, top=pic_edge_top, fn() {  }) |> ignore
-          c.box(style=pic_edge, right=0.0, top=pic_edge_low, fn() {  }) |> ignore
-        }
       }
       // (a little under the middle)
       if action != "" {
@@ -296,7 +269,7 @@ fn way_tile(c : @ui.Ctx, key : String, way : String, on : Bool, action? : String
 ///|
 /// A kind of thing that happens (KindRow): its name and what it is, what tells of it in a line, a chevron turned down
 /// while open; opened, each way on or off (a done turn's banner: off, while away, always).
-fn kind_row(c : @ui.Ctx, core : Core, here : Here, notify : Json?, kind : String, on : Bool, dock : Bool) -> Unit {
+fn kind_row(c : @ui.Ctx, core : Core, here : Here, notify : Json?, kind : String, on : Bool) -> Unit {
   let t = @sf.theme()
   let banner = on && kind_banner(notify, kind)
   let ways : Array[String] = []
@@ -311,9 +284,6 @@ fn kind_row(c : @ui.Ctx, core : Core, here : Here, notify : Json?, kind : String
   }
   if badge_kind(core, here, "on") && badge_kind(core, here, kind) {
     ways.push(@sf.t("web-pages.notifications.ways.badge"))
-  }
-  if dock && dock_setting("on") && dock_setting(kind) {
-    ways.push(@sf.t("web-pages.notifications.ways.dock"))
   }
   let open = kind_open.val == kind
   let id = c.id("notify-kind/" + kind)
@@ -370,14 +340,6 @@ fn kind_row(c : @ui.Ctx, core : Core, here : Here, notify : Json?, kind : String
     ) {
       c.after_build("notify-badge/" + kind, fn() { set_badge_kind(core, kind, v) })
     })
-    // 显示在桌面浮窗: whether the dock holds it (off while the dock is)
-    if dock {
-      way_switch(c, "notify-dock/" + kind, @sf.t("web-pages.notifications.inDock"), dock_setting(kind), !dock_setting("on"), fn(
-        v,
-      ) {
-        dock_set(kind, v)
-      })
-    }
   })
   |> ignore
 }
@@ -397,8 +359,7 @@ fn way_switch(c : @ui.Ctx, key : String, title : String, now : Bool, off : Bool,
 
 ///|
 /// The preview (Preview): a small screen as the settings make it: the banner of `kind` (the latest one that came,
-/// else a sample) in its top right corner, the dock on its right edge with the kinds it holds, the app's icon in the
-/// Dock below with what its badge counts now.
+/// else a sample) in its top right corner, the app's icon in the Dock below with what its badge counts now.
 fn notify_preview(c : @ui.Ctx, core : Core, here : Here, notify : Json?, on : Bool, kind : String, w : Double) -> Unit {
   let t = @sf.theme()
   let latest = items((core.topic)("notices", { "workspace": str(here.workspace) }).value, "items")
@@ -420,11 +381,6 @@ fn notify_preview(c : @ui.Ctx, core : Core, here : Here, notify : Json?, on : Bo
     "badge",
   )
   let badge = badge_kind(core, here, "on") && count > 0
-  let docked = if @ui.dock_available() && dock_setting("on") {
-    notify_kinds.filter(fn(k) { dock_setting(k) })
-  } else {
-    []
-  }
   let b = c.box(style=screen, fn() {
     // (its ground the web's linear-gradient(150deg, blue-bg, accent-bg): the column's width by the screen's height)
     c.box(left=0.0, top=0.0, right=0.0, bottom=0.0, fn() {
@@ -446,23 +402,6 @@ fn notify_preview(c : @ui.Ctx, core : Core, here : Here, notify : Json?, on : Bo
           |> ignore
         })
         |> ignore
-      })
-      |> ignore
-    }
-    if docked.length() > 0 {
-      // half way down the right edge, a little under the middle: clear of the banner and of the screen's corner
-      c.box(style=edge_at, top=0.0, bottom=0.0, right=0.0, fn() {
-        for k in docked {
-          c.box(style=edge_item, fn() {
-            c.text(@sf.t("web-pages.notifications.kinds." + k), style=match k {
-              "failed" => edge_failed
-              "wait" => edge_wait
-              _ => edge_words
-            })
-            |> ignore
-          })
-          |> ignore
-        }
       })
       |> ignore
     }
@@ -594,28 +533,6 @@ let banner_body : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg
 let app_icon_box : @ui.Style = @ui.css("radius=Md clip")
 
 ///|
-/// The dock on the right edge (edge: its kinds 4 apart, at their end; its middle at 60% of the screen's height, 40
-/// under its own middle), each half a capsule against the edge (2, 10 and 12 in; the caption's 11).
-// kept across runs: a value (no field of it changes)
-let edge_at : @ui.Style = @ui.css("pt=S10 gap=S1 align=AEnd justify=JCenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let edge_item : @ui.Style = @ui.css("pl=S3 pr=S2_5 py=S0_5 radius=Full bg=Raised")
-
-///|
-// kept across runs: a value (no field of it changes)
-let edge_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let edge_failed : @ui.TextStyle = edge_words.then(@ui.text_style(color=Danger))
-
-///|
-// kept across runs: a value (no field of it changes)
-let edge_wait : @ui.TextStyle = edge_words.then(@ui.text_style(color=AccentText))
-
-///|
 /// The Dock (dockBar: 7 in, its icons 10 apart, on what floats at 70%; the others the line's grey, 8 round).
 // kept across runs: a value (no field of it changes)
 let dock_at : @ui.Style = @ui.css("row justify=JCenter")
@@ -682,7 +599,7 @@ let tile_action : @ui.Style = tile.then(@ui.css("border_color=A(Danger,O55)"))
 ///|
 /// A tile's picture (tilePicture: a screen drawn small, 72 by 46, 4 over its name, 8 round, the canvas on a line):
 /// a banner in its top right corner 5 in (38 by 11, 3 round), the app's icon at its foot (18, 5 round, the accent's,
-/// a red dot 9 at its corner), the dock's two slivers on its right edge (18 by 7).
+/// a red dot 9 at its corner).
 let tile_picture_w : Double = 72.0
 
 ///|
@@ -701,12 +618,6 @@ let pic_badge_top : Double = -4.0
 let pic_badge_right : Double = -5.0
 
 ///|
-let pic_edge_top : Double = 13.0
-
-///|
-let pic_edge_low : Double = 24.0
-
-///|
 let pic_banner_w : Double = 38.0
 
 ///|
@@ -717,9 +628,6 @@ let pic_app_side : Double = 18.0
 
 ///|
 let pic_badge_side : Double = 9.0
-
-///|
-let pic_edge_h : Double = 7.0
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -745,10 +653,6 @@ let pic_app : @ui.Style = @ui.style(w=Fixed(pic_app_side), h=Fixed(pic_app_side)
 ///|
 // kept across runs: a value (no field of it changes)
 let pic_badge : @ui.Style = @ui.style(w=Fixed(pic_badge_side), h=Fixed(pic_badge_side), radius=Full, bg=Danger)
-
-///|
-// kept across runs: a value (no field of it changes)
-let pic_edge : @ui.Style = @ui.style(w=Fixed(pic_app_side), h=Fixed(pic_edge_h), radius=Base, bg=Border)
 
 ///|
 /// The mark that the system has to allow it first (picAlert: 18 round, red, its "!" white, a little under the middle).
