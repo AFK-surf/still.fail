@@ -134,6 +134,24 @@ test "wide: the lit place pressed again folds its sidebar, shown a while (the po
 }
 
 ///|
+test "wide: the sidebar's edge let go a little past where the last frame drew it: there at once, nothing moving after" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  let edge = @sfdesk.rail_w + 240.0
+  let edge_at = fn() { t.query(Button, label="调整侧边栏宽度 · 收起侧边栏").unwrap().rect.0 }
+  t.hold_drag(edge, 400.0, edge + 60.0, 400.0)
+  assert_eq(edge_at(), @sfdesk.rail_w + 300.0 - @sfdesk.edge_half)
+  // let go 6 further on, before a frame drew it there (the hand ahead of what is drawn): the frame that sees it let
+  // go has the sidebar as wide as the hand left it, not moving the rest of the way after it (the block's move)
+  t.release(edge + 66.0, 400.0)
+  assert_eq(@sfdesk.wide.side_w, 306.0)
+  assert_eq(edge_at(), @sfdesk.rail_w + 306.0 - @sfdesk.edge_half)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(edge_at(), @sfdesk.rail_w + 306.0 - @sfdesk.edge_half)
+  assert_eq(sidebar_kept(calls, "ws1\nchats"), Some(Json::string("306")))
+}
+
+///|
 test "wide: ⌃2 goes to the second workspace (prefs.set workspace)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
