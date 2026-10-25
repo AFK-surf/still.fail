@@ -27,8 +27,9 @@ static int32_t last_count;
 static size_t last_cap;
 static double last_bg[3];
 // glass (src/ui/glass.mbt): the passes that blur what is under it (into the copy, 8 bits a channel, and into the rest,
-// 10), the copies they work in (level j is 1/2^j of the target, each as big as the target's at that level; tmp for a
-// Gaussian's first half), the GPU's time of the last frame done
+// 10), the copies they work in (level j is 1/2^j of the largest capture yet, the glass and the blur's margin round it,
+// not of the target: a composer's strip, not the window; tmp for a Gaussian's first half), the GPU's time of the last
+// frame done
 static id<MTLRenderPipelineState> ppipe, ppipe_deep;
 static id<MTLTexture> lv[4], ltmp;
 static int lv_w, lv_h;
@@ -391,6 +392,9 @@ static id<MTLTexture> level_tex(MTLPixelFormat format, int w, int h) {
   return [dev newTextureWithDescriptor:td];
 }
 
+// the blur kept in the levels is of the last capture while it is (kept_ok, below)
+static int kept_ok;
+
 static void ensure_levels(int w, int h) {
   if (lv_w >= w && lv_h >= h && lv[0]) return;
   lv_w = w > lv_w ? w : lv_w;
@@ -399,6 +403,7 @@ static void ensure_levels(int w, int h) {
     lv[j] = level_tex(j == 0 ? MTLPixelFormatBGRA8Unorm : MTLPixelFormatRGB10A2Unorm, (lv_w + (1 << j) - 1) >> j,
                       (lv_h + (1 << j) - 1) >> j);
   ltmp = level_tex(MTLPixelFormatRGB10A2Unorm, lv_w, lv_h);
+  kept_ok = 0;
 }
 
 // one pass of the blur: src into dst's top left (w × h); mode 1 halving, 2 a Gaussian of deviation sg along (dx, dy)
@@ -420,10 +425,15 @@ static void post_pass(id<MTLCommandBuffer> cb, id<MTLTexture> src, int sw, int s
   [e endEncoding];
 }
 
-// What the run [start, end) of glass sees, from target (tw × th pixels) into gtex and gu; 0 when none of it shows.
+// What a capture of glass is of, worked out before any of the GPU's work: its rectangle in the target's pixels, how
+// many times it is halved (k, at most 3) and the Gaussian left after (sg), and the glass's own numbers (gu's but map
+// and uvc, which follow from these and the level's size). Zeroed whole first, so two of the same compare the same.
+typedef struct { int px0, py0, w, h, k; float sg; GU g; } Grab;
+
+// The capture the run [start, end) of glass makes, of a target tw × th pixels; 0 when none of it shows.
 // Frosted glass of the same capture further on (glass.mbt shares_capture) is under it too.
-static int capture(id<MTLCommandBuffer> cb, id<MTLTexture> target, const float *f, int32_t start, int32_t end,
-                   int32_t count) {
+static int grab_of(Grab *m, const float *f, int32_t start, int32_t end, int32_t count, int tw, int th) {
+  memset(m, 0, sizeof *m);
   const float *a = f + start * MB_INST;
   float blur = a[7];
   int kind = (int)(a[5] + 0.5f);
@@ -438,8 +448,8 @@ static int capture(id<MTLCommandBuffer> cb, id<MTLTexture> target, const float *
     if (kind == 6) {
       bx0 = b[0] - a[23]; by0 = b[1] - a[23]; bx1 = b[0] + b[2] + a[23]; by1 = b[1] + b[3] + a[23];
       if (n < 8) {
-        for (int k = 0; k < 4; k++) gu.shape[n][k] = b[k];
-        gu.rad[n / 4][n % 4] = b[4];
+        for (int k = 0; k < 4; k++) m->g.shape[n][k] = b[k];
+        m->g.rad[n / 4][n % 4] = b[4];
         n++;
       }
     }
@@ -453,9 +463,8 @@ static int capture(id<MTLCommandBuffer> cb, id<MTLTexture> target, const float *
       x1 = fmaxf(x1, fminf(b[0] + b[2], b[18])); y1 = fmaxf(y1, fminf(b[1] + b[3], b[19]));
     }
   }
-  gu.misc[0] = (float)n;
-  gu.gb[0] = x0 - 2; gu.gb[1] = y0 - 2; gu.gb[2] = x1 + 2; gu.gb[3] = y1 + 2;
-  int tw = (int)target.width, th = (int)target.height;
+  m->g.misc[0] = (float)n;
+  m->g.gb[0] = x0 - 2; m->g.gb[1] = y0 - 2; m->g.gb[2] = x1 + 2; m->g.gb[3] = y1 + 2;
   float sc = (float)vscale;
   int px0 = (int)floorf((x0 - margin) * sc), py0 = (int)floorf((y0 - margin) * sc);
   int px1 = (int)ceilf((x1 + margin) * sc), py1 = (int)ceilf((y1 + margin) * sc);
@@ -464,38 +473,105 @@ static int capture(id<MTLCommandBuffer> cb, id<MTLTexture> target, const float *
   if (px1 > tw) px1 = tw;
   if (py1 > th) py1 = th;
   if (px1 <= px0 || py1 <= py0 || x1 <= x0 || y1 <= y0) return 0;
-  int w = px1 - px0, h = py1 - py0;
-  ensure_levels(tw, th);
-  id<MTLBlitCommandEncoder> bl = [cb blitCommandEncoder];
-  [bl copyFromTexture:target sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(px0, py0, 0)
-           sourceSize:MTLSizeMake(w, h, 1) toTexture:lv[0] destinationSlice:0 destinationLevel:0
-    destinationOrigin:MTLOriginMake(0, 0, 0)];
-  [bl endEncoding];
+  m->px0 = px0; m->py0 = py0; m->w = px1 - px0; m->h = py1 - py0;
   // down to where the deviation is 2 texels or more, at most 1/8
   float sp = blur * sc;
   int k = 0;
   while (k < 3 && sp / (float)(1 << (k + 1)) >= 2.0f) k++;
-  int lw[4] = {w}, lh[4] = {h};
-  for (int j = 1; j <= k; j++) {
-    lw[j] = (lw[j - 1] + 1) / 2;
-    lh[j] = (lh[j - 1] + 1) / 2;
-    post_pass(cb, lv[j - 1], lw[j - 1], lh[j - 1], lv[j], lw[j], lh[j], 1, 0, 0, 0);
-  }
   // what is left of the deviation once the halvings' and the last look's (bilinear) spread are taken out
   float sk = sp / (float)(1 << k);
   float pre = k > 0 ? 0.75f * (1.0f - powf(0.25f, (float)k)) / 3.0f + 1.0f / 6.0f : 0.0f;
-  float sg = sqrtf(fmaxf(sk * sk - pre, 0.0f));
-  if (sg > 0.3f) {
-    post_pass(cb, lv[k], lw[k], lh[k], ltmp, lw[k], lh[k], 2, sg, 1, 0);
-    post_pass(cb, ltmp, lw[k], lh[k], lv[k], lw[k], lh[k], 2, sg, 0, 1);
-  }
-  gtex = lv[k];
-  float W = (float)gtex.width, H = (float)gtex.height, d = (float)(1 << k);
-  gu.map[0] = sc / d / W; gu.map[1] = sc / d / H;
-  gu.map[2] = -(float)px0 / d / W; gu.map[3] = -(float)py0 / d / H;
-  gu.uvc[0] = 0.5f / W; gu.uvc[1] = 0.5f / H;
-  gu.uvc[2] = ((float)lw[k] - 0.5f) / W; gu.uvc[3] = ((float)lh[k] - 0.5f) / H;
+  m->k = k;
+  m->sg = sqrtf(fmaxf(sk * sk - pre, 0.0f));
   return 1;
+}
+
+// The size of a grab's level k (its passes write each level's top left)
+static void grab_levels(const Grab *m, int lw[4], int lh[4]) {
+  lw[0] = m->w; lh[0] = m->h;
+  for (int j = 1; j <= 3; j++) {
+    lw[j] = (lw[j - 1] + 1) / 2;
+    lh[j] = (lh[j - 1] + 1) / 2;
+  }
+}
+
+// What the glass shows of a grab blurred in the levels: gtex, and gu, its numbers with where in level k it is.
+static void show_blur(const Grab *m) {
+  int lw[4], lh[4];
+  grab_levels(m, lw, lh);
+  gu = m->g;
+  gtex = lv[m->k];
+  float sc = (float)vscale;
+  float W = (float)gtex.width, H = (float)gtex.height, d = (float)(1 << m->k);
+  gu.map[0] = sc / d / W; gu.map[1] = sc / d / H;
+  gu.map[2] = -(float)m->px0 / d / W; gu.map[3] = -(float)m->py0 / d / H;
+  gu.uvc[0] = 0.5f / W; gu.uvc[1] = 0.5f / H;
+  gu.uvc[2] = ((float)lw[m->k] - 0.5f) / W; gu.uvc[3] = ((float)lh[m->k] - 0.5f) / H;
+}
+
+// A grab of target blurred into the levels: what is drawn so far in its rectangle copied out, halved k times, the
+// Gaussian left (passes of their own, the target's pass ended before), then shown (show_blur).
+static void blur(id<MTLCommandBuffer> cb, id<MTLTexture> target, const Grab *m) {
+  ensure_levels(m->w, m->h);
+  id<MTLBlitCommandEncoder> bl = [cb blitCommandEncoder];
+  [bl copyFromTexture:target sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(m->px0, m->py0, 0)
+           sourceSize:MTLSizeMake(m->w, m->h, 1) toTexture:lv[0] destinationSlice:0 destinationLevel:0
+    destinationOrigin:MTLOriginMake(0, 0, 0)];
+  [bl endEncoding];
+  int lw[4], lh[4];
+  grab_levels(m, lw, lh);
+  int k = m->k;
+  for (int j = 1; j <= k; j++) post_pass(cb, lv[j - 1], lw[j - 1], lh[j - 1], lv[j], lw[j], lh[j], 1, 0, 0, 0);
+  if (m->sg > 0.3f) {
+    post_pass(cb, lv[k], lw[k], lh[k], ltmp, lw[k], lh[k], 2, m->sg, 1, 0);
+    post_pass(cb, ltmp, lw[k], lh[k], lv[k], lw[k], lh[k], 2, m->sg, 0, 1);
+  }
+  show_blur(m);
+}
+
+// The blur the levels hold, as long as no capture came after it (kept_ok): what it was of. What a capture copies is
+// what the frame drew before it (its instances up to the glass, the pieces of the frame's shapes they are drawn by,
+// the ground the frame cleared to) in the grab's rectangle of a target of that size: a frame that draws all that the
+// same under the same glass (a caret blinking in a composer over a chat at rest) shows the blur as it is, with no copy,
+// no passes, and its pass not broken in two. A stream drawn under it (its pictures change under the same instances)
+// is blurred anew each frame.
+static float *kept_under;
+static size_t kept_under_cap, kept_under_n;
+static Grab kept_grab;
+static double kept_key[6];
+
+// The floats a capture of the run at start is of, and their count: those before it and the shapes' pieces (from
+// seg_base on), 0 when a stream is among them.
+static size_t under_of(const float *f, int32_t start, int32_t count, int32_t pieces) {
+  for (int32_t i = 0; i < start; i++)
+    if (f[i * MB_INST + 20] > (float)MB_STREAM_TEX) return 0;
+  return (size_t)(start + (count - pieces)) * MB_INST;
+}
+
+static int same_under(const float *f, int32_t start, int32_t count, int32_t pieces, const Grab *m, const double key[6]) {
+  size_t n = under_of(f, start, count, pieces);
+  if (!kept_ok || n == 0 || n != kept_under_n || memcmp(&kept_grab, m, sizeof *m) != 0 || memcmp(kept_key, key, sizeof kept_key) != 0)
+    return 0;
+  size_t a = (size_t)start * MB_INST;
+  return memcmp(kept_under, f, a * sizeof(float)) == 0 &&
+         memcmp(kept_under + a, f + (size_t)pieces * MB_INST, (n - a) * sizeof(float)) == 0;
+}
+
+static void keep_under(const float *f, int32_t start, int32_t count, int32_t pieces, const Grab *m, const double key[6]) {
+  size_t n = under_of(f, start, count, pieces);
+  kept_ok = 0;
+  if (n == 0) return;
+  if (kept_under_cap < n) {
+    kept_under = realloc(kept_under, n * sizeof(float));
+    kept_under_cap = n;
+  }
+  size_t a = (size_t)start * MB_INST;
+  memcpy(kept_under, f, a * sizeof(float));
+  memcpy(kept_under + a, f + (size_t)pieces * MB_INST, (n - a) * sizeof(float));
+  kept_under_n = n;
+  kept_grab = *m;
+  memcpy(kept_key, key, sizeof kept_key);
+  kept_ok = 1;
 }
 
 // where the pieces of the frame's shapes start (src/ui/shape.mbt: the instances of kind 12 after every one drawn)
@@ -544,10 +620,22 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
     while (end < count && (int)f[end * MB_INST + 20] == tid && ((int)(f[end * MB_INST + 5] + 0.5f) == 9) == hole) end++;
     if (tid < 0) {
       if (tid != bound) {
-        [enc endEncoding];
-        shows = capture(cb, target, f, start, end, count);
+        Grab m;
+        shows = grab_of(&m, f, start, end, count, (int)target.width, (int)target.height);
+        double key[6] = {target.width, target.height, vscale, r, g, b};
+        if (shows && same_under(f, start, count, seg_base, &m, key)) {
+          // what it sees is what the levels hold: shown on in this pass
+          show_blur(&m);
+          [enc setVertexBytes:&gu length:sizeof gu atIndex:2];
+          [enc setFragmentBytes:&gu length:sizeof gu atIndex:2];
+          [enc setFragmentTexture:gtex atIndex:2];
+        } else if (shows) {
+          [enc endEncoding];
+          blur(cb, target, &m);
+          keep_under(f, start, count, seg_base, &m, key);
+          enc = begin_pass(cb, target, p, buf, 0, r, g, b);
+        }
         bound = tid;
-        enc = begin_pass(cb, target, p, buf, 0, r, g, b);
       }
       [enc setRenderPipelineState:p];
       // liquid: the group as one shape, drawn once
@@ -599,7 +687,73 @@ static id<MTLBuffer> upload(const double *inst, int32_t count, double r, double 
   return bufs[buf_i];
 }
 
+// The frame on the screen: its size as it was drawn (mb_render_set_size's), and whether it shows a stream (whose
+// pictures change under the same instances); its instances and ground are upload's copy (last_inst, last_bg).
+static double shown_w, shown_h, shown_scale;
+static int shown_ok, shown_streams;
+
+// Whether a frame is the one on the screen to the last number: then it draws nothing and takes no drawable (the app
+// builds a frame for what it waits on, as a clock's next second, that may show nothing new). Not one a layer presents
+// with its transaction (a resize's: mac_app.m drawWithWindow), which the window's change waits for.
+static int same_as_shown(const double *inst, int32_t count, double r, double g, double b) {
+  if (!shown_ok || shown_streams || mlayer.presentsWithTransaction || count != last_count) return 0;
+  if (vw != shown_w || vh != shown_h || vscale != shown_scale || r != last_bg[0] || g != last_bg[1] || b != last_bg[2]) return 0;
+  int32_t n = count * MB_INST;
+  for (int32_t i = 0; i < n; i++)
+    if ((float)inst[i] != last_inst[i]) return 0;
+  return 1;
+}
+
+// Idle, the GPU's memory of drawing given back. The driver keeps 30 to 50 MB of its own (the footprint's "owned
+// unmapped (graphics)") for as long as frames come, and frees it a second or two after the last; Core Animation keeps
+// the layer's drawables (three or four, each the window's size in pixels: 22 MB at 3024 × 1890), and the glass its
+// levels. trim_after_s after the last frame drawn, the drawables shrink to a pixel, which frees all but the one shown
+// (Core Animation shows it on), and the levels go; the next frame makes them again at full size (mb_render_set_size).
+static const double trim_after_s = 2.0;
+static double drawn_at;
+static int trim_armed, trimmed;
+
+static void trim_check(void);
+
+static void trim_in(double s) {
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(s * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    trim_check();
+  });
+}
+
+static void trim_check(void) {
+  double left = drawn_at + trim_after_s - CACurrentMediaTime();
+  if (left > 0.01) {
+    trim_in(left);
+    return;
+  }
+  trim_armed = 0;
+  if (trimmed || !mlayer) return;
+  // (nothing of the GPU's still in flight uses what goes)
+  for (int i = 0; i < 3; i++) dispatch_semaphore_wait(inflight, DISPATCH_TIME_FOREVER);
+  for (int i = 0; i < 3; i++) dispatch_semaphore_signal(inflight);
+  for (int j = 0; j < 4; j++) lv[j] = nil;
+  ltmp = nil;
+  gtex = nil;
+  lv_w = lv_h = 0;
+  kept_ok = 0;
+  [CATransaction begin];
+  [CATransaction setDisableActions:YES];
+  mlayer.drawableSize = CGSizeMake(1, 1);
+  [CATransaction commit];
+  trimmed = 1;
+}
+
+static void drawn_now(void) {
+  drawn_at = CACurrentMediaTime();
+  trimmed = 0;
+  if (trim_armed) return;
+  trim_armed = 1;
+  trim_in(trim_after_s);
+}
+
 void mb_render_present(const double *inst, int32_t count, double r, double g, double b) {
+  if (same_as_shown(inst, count, r, g, b)) return;
   dispatch_semaphore_wait(inflight, DISPATCH_TIME_FOREVER);
   id<MTLBuffer> buf = upload(inst, count, r, g, b);
   id<CAMetalDrawable> drawable = [mlayer nextDrawable];
@@ -610,6 +764,16 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
     last_gpu = (done.GPUEndTime - done.GPUStartTime) * 1000.0;
     dispatch_semaphore_signal(sem);
   }];
+  shown_ok = drawable != nil;
+  if (drawable) {
+    shown_w = vw;
+    shown_h = vh;
+    shown_scale = vscale;
+    shown_streams = 0;
+    const float *f = (const float *)buf.contents;
+    for (int32_t i = 0; i < count && !shown_streams; i++) shown_streams = f[i * MB_INST + 20] > (float)MB_STREAM_TEX;
+    drawn_now();
+  }
   // (a layer that presents with its transaction: shown with the window's change it was drawn for, mac_app.m
   // drawWithWindow; once its commands are scheduled, as Core Animation asks)
   if (drawable && mlayer.presentsWithTransaction) {

@@ -694,7 +694,8 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_resize(JNIEnv *env, jclass c, jint w
 // Glass (src/ui/glass.mbt): when the instances reach a run of glass (slot 20 negative: the capture it shares), what
 // is drawn so far under it (its rects with room for the blur round them) is copied out of the surface, halved down
 // to where the blur is a few texels wide (dual Kawase's downsample, at most 1/8), blurred there by a Gaussian of what
-// deviation is left, and drawn through. Level j is 1/2^j of the surface, [4] a Gaussian's first half. Level 0, the
+// deviation is left, and drawn through. Level j is 1/2^j of the largest capture yet (the glass and the blur's margin
+// round it, not the surface: a composer's strip, not the screen), [4] a Gaussian's first half. Level 0, the
 // copy, has 8 bits a channel as the surface has; what the passes write keeps 10 (RGB10_A2, in as many bytes): at 8 each
 // pass rounds the frost's slow slopes into flat steps, a texel of the last level 8 pixels wide on the screen (a blur
 // under 4 pixels, too narrow to halve, is written back into the copy: it leaves no slope that wide).
@@ -803,7 +804,7 @@ static int capture(const float *f, int32_t start, int32_t end, int32_t count) {
   if (pb1 > top) pb1 = top;
   if (px1 <= px0 || pb1 <= pb0 || x1 <= x0 || y1 <= y0) return 0;
   int w = px1 - px0, h = pb1 - pb0;
-  ensure_levels(fb_w, fb_h);
+  ensure_levels(w, h);
   glDisable(GL_BLEND);
   glBindFramebuffer(GL_READ_FRAMEBUFFER, target_fb);
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, lv[0].fb);

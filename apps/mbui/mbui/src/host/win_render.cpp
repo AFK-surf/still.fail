@@ -50,7 +50,8 @@ static IDCompositionVisual *droot, *dunder, *dcanvas;
 static ID3D11RasterizerState *raster;
 static int fb_w, fb_h;
 static double vw = 800, vh = 600, vscale = 1;
-// glass (src/ui/glass.mbt): its passes, their constants, the copies they work in (level j 1/2^j of the target, [4] a
+// glass (src/ui/glass.mbt): its passes, their constants, the copies they work in (level j 1/2^j of the largest
+// capture yet, the glass and the blur's margin round it, not of the target: a composer's strip, not the window; [4] a
 // Gaussian's first half), the glass's own constants, the blurred copy in view
 static ID3D11VertexShader *pvs;
 static ID3D11PixelShader *pps;
@@ -628,7 +629,7 @@ static int capture(ID3D11RenderTargetView *target, int pw, int ph, const float *
   if (py1 > ph) py1 = ph;
   if (px1 <= px0 || py1 <= py0 || x1 <= x0 || y1 <= y0) return 0;
   int w = px1 - px0, h = py1 - py0;
-  ensure_levels(pw, ph);
+  ensure_levels(w, h);
   ID3D11Resource *res = NULL;
   target->GetResource(&res);
   D3D11_BOX box = {(UINT)px0, (UINT)py0, 0, (UINT)px1, (UINT)py1, 1};
