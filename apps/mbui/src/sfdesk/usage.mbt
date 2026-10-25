@@ -269,7 +269,10 @@ fn usage_chart(c : @ui.Ctx, v : Json?) -> Unit {
         for d in daily {
           let dv = Some(d)
           c.box(style=ug_label_cell, fn() {
-            c.text(text(dv, "tick"), style=if text(dv, "day") == shown { ug_label_on } else { ug_label }) |> ignore
+            c.box(style=ug_label_room, fn() {
+              c.text(text(dv, "tick"), style=if text(dv, "day") == shown { ug_label_on } else { ug_label }) |> ignore
+            })
+            |> ignore
           })
           |> ignore
         }
@@ -648,7 +651,7 @@ let ug_base : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
 
 ///|
 /// Each day's name under its bar (labels: 6 under the plot, as far apart as the days), the one shown in the words' ink
-/// in 500.
+/// in 500; whole, past its day's width on either side when the days are narrow (30 of them on a phone: a date a week).
 // kept across runs: a value (no field of it changes)
 let ug_labels : @ui.Style = @ui.css("row w=Full pt=S1_5 pr=S6 gap=S1_5")
 
@@ -659,6 +662,11 @@ let ug_labels_many : @ui.Style = ug_labels.then(@ui.css("gap=S0_5"))
 ///|
 // kept across runs: a value (no field of it changes)
 let ug_label_cell : @ui.Style = @ui.css("w=Full align=ACenter")
+
+///|
+/// Room for a date as wide as the widest (今天, 10/31), centred on its day however narrow the day is.
+// kept across runs: a value (no field of it changes)
+let ug_label_room : @ui.Style = @ui.css("w=S12 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
