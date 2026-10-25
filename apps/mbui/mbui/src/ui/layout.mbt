@@ -133,7 +133,8 @@ fn leaf_size(
     let tl = n.text_layout(max_w)
     (if wm == Exactly || (wm == AtMost && n.wrap && soft_wrapped(tl.line_end, tl.shaped.cu)) { w } else { tl.w }, tl.h)
   } else if n.kind == kind_rich {
-    match n.rich_layout(max_w) {
+    // (on one line, as wide as it is, as Ctx::text's words: cut, where it is, as it is placed narrower)
+    match n.rich_layout(if n.wrap { max_w } else { 1.0e9 }) {
       Some(rl) => (if wm == Exactly || (wm == AtMost && n.wrap && soft_wrapped(rl.line_end, rl.cu)) { w } else { rl.w }, rl.h)
       None => (0.0, 0.0)
     }

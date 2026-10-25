@@ -2232,26 +2232,28 @@ fn fx_qr(n : Int) -> Json {
 }
 
 ///|
-/// A use, its figures and each said (ResourceUse).
-fn fx_use(cpu : Double, memory : Double, net : Double, cpu_text : String, memory_text : String, net_text : String) -> Json {
+/// A use, its figures and each said (ResourceUse): CPU, memory, the network's and the disk's rates.
+fn fx_use(cpu : Double, memory : Double, net : Double, disk : Double, texts : (String, String, String, String)) -> Json {
+  let (cpu_text, memory_text, net_text, disk_text) = texts
   obj([
     ("cpu", Json::number(cpu)),
     ("memory", Json::number(memory)),
     ("netIn", Json::number(net / 2.0)),
     ("netOut", Json::number(net / 2.0)),
     ("net", Json::number(net)),
-    ("diskRead", Json::number(0.0)),
+    ("diskRead", Json::number(disk)),
     ("diskWrite", Json::number(0.0)),
-    ("disk", Json::number(0.0)),
+    ("disk", Json::number(disk)),
     ("cpuText", str(cpu_text)),
     ("memoryText", str(memory_text)),
     ("netText", str(net_text)),
-    ("diskText", str("")),
+    ("diskText", str(disk_text)),
   ])
 }
 
 ///|
-/// What still.fail uses of Studio's machine now (ResourcesView): its totals, a chat's agent and the station, each with
+/// What still.fail uses of Studio's machine now (ResourcesView), as a busy Mac says it: its four totals with what is
+/// under each (the network and the disk both read), two chats' agents (one titled at length) and the station, each with
 /// its processes.
 fn fx_resources() -> Json {
   let process = fn(key : String, pid : Double, name : String, endable : Bool, u : Json) {
@@ -2260,20 +2262,22 @@ fn fx_resources() -> Json {
   let tile = fn(key : String, label : String, value : String, sub : String, points : Array[Double]) {
     obj([("key", str(key)), ("label", str(label)), ("value", str(value)), ("sub", str(sub)), ("points", Json::array(points.map(Json::number(_))))])
   }
-  let chat = fx_use(18.4, 412.0e6, 1.2e3, "18.4%", "412 MB", "1.2 KB/s")
-  let station = fx_use(2.1, 96.0e6, 0.4e3, "2.1%", "96 MB", "0.4 KB/s")
+  let chat = fx_use(25.9, 59.0e6, 0.0, 2.9e6, ("25.9%", "59 MB", "0 B/s", "2.9 MB/s"))
+  let notes = fx_use(14.1, 980.0e6, 0.0, 13.0e3, ("14.1%", "980 MB", "0 B/s", "13 KB/s"))
+  let station = fx_use(2.8, 363.0e6, 56.0e3, 0.0, ("2.8%", "363 MB", "56 KB/s", "0 B/s"))
   obj([
     ("wait", obj([("reading", Json::boolean(false)), ("text", str("")), ("failing", [])])),
     ("empty", Json::boolean(false)),
     ("net", Json::boolean(true)),
-    ("disk", Json::boolean(false)),
-    ("everyMs", Json::number(2000.0)),
+    ("disk", Json::boolean(true)),
+    ("everyMs", Json::number(5000.0)),
     (
       "tiles",
       [
-        tile("cpu", "CPU", "20.5%", "", [12.0, 18.0, 15.0, 22.0, 20.5]),
-        tile("memory", "内存", "508 MB", "", [480.0, 495.0, 500.0, 504.0, 508.0]),
-        tile("net", "网络", "1.6 KB/s", "", [0.8, 2.4, 1.1, 1.9, 1.6]),
+        tile("cpu", "CPU", "20.5%", "占 12 核的 2%", [12.0, 18.0, 15.0, 22.0, 20.5]),
+        tile("memory", "内存", "508 MB", "占 64 GB 的 1%", [480.0, 495.0, 500.0, 504.0, 508.0]),
+        tile("disk", "磁盘", "↓ 2.9 MB/s", "↑ 13 KB/s", [9.0, 1.0, 1.2, 0.9, 2.9]),
+        tile("net", "网络", "↓ 1.6 KB/s", "↑ 410 B/s", [0.8, 2.4, 1.1, 1.9, 1.6]),
       ],
     ),
     ("kinds", [obj([("key", str("chat")), ("label", str("对话"))]), obj([("key", str("station")), ("label", str("Station"))])]),
@@ -2292,10 +2296,21 @@ fn fx_resources() -> Json {
           (
             "processes",
             [
-              process("p1", 4211.0, "claude", false, fx_use(12.0, 300.0e6, 1.0e3, "12.0%", "300 MB", "1.0 KB/s")),
-              process("p2", 4290.0, "node", true, fx_use(6.4, 112.0e6, 0.2e3, "6.4%", "112 MB", "0.2 KB/s")),
+              process("p1", 4211.0, "claude", false, fx_use(12.0, 41.0e6, 0.0, 1.9e6, ("12.0%", "41 MB", "0 B/s", "1.9 MB/s"))),
+              process("p2", 4290.0, "node", true, fx_use(13.9, 18.0e6, 0.0, 1.0e6, ("13.9%", "18 MB", "0 B/s", "1.0 MB/s"))),
             ],
           ),
+        ]),
+        obj([
+          ("key", str("chat:c2")),
+          ("kind", str("chat")),
+          ("title", str("把发版日志按平台分开写清楚，再给每一条补上改前改后的截图")),
+          ("kindText", str("对话")),
+          ("chat", obj([("station", str("ws1/st1")), ("session", str("s2"))])),
+          ("station", str("ws1/st1")),
+          ("session", str("s2")),
+          ("use", notes),
+          ("processes", [process("p4", 5120.0, "claude", false, notes)]),
         ]),
         obj([
           ("key", str("station")),
@@ -2308,7 +2323,16 @@ fn fx_resources() -> Json {
         ]),
       ],
     ),
-    ("stations", [obj([("station", str("ws1/st1")), ("net", Json::boolean(true)), ("use", fx_use(20.5, 508.0e6, 1.6e3, "20.5%", "508 MB", "1.6 KB/s"))])]),
+    (
+      "stations",
+      [
+        obj([
+          ("station", str("ws1/st1")),
+          ("net", Json::boolean(true)),
+          ("use", fx_use(20.5, 508.0e6, 1.6e3, 2.9e6, ("20.5%", "508 MB", "1.6 KB/s", "2.9 MB/s"))),
+        ]),
+      ],
+    ),
     ("notes", []),
     ("basis", str("按 Activity Monitor 的口径：CPU 100% 是一个核")),
   ])

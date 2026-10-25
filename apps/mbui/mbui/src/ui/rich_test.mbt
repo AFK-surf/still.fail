@@ -157,6 +157,38 @@ test "max_lines: a paragraph cut after that many lines, the last ending in an el
 }
 
 ///|
+test "on one line: cut with an ellipsis where its column is narrower, as Ctx::text's words; whole again where it has the room" {
+  let w = Ref(60.0)
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.column(w=Px(w.val), fn() {
+        c.rich([@ui.plain("ab "), @ui.bold("cd"), @ui.plain(" ef gh ij kl mn op")], size=10.0, wrap=false) |> ignore
+        c.rich([@ui.plain("xy "), @ui.bold("zw")], size=10.0, wrap=false) |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+  )
+  let lines = t.lines_of("ab")
+  assert_eq(lines.length(), 1)
+  assert_true(lines[0].has_prefix("ab cd ef"))
+  assert_true(lines[0].has_suffix("…"))
+  match t.rich_of("ab") {
+    Some((rl, _, _)) => assert_true(rl.w <= 60.0, msg="\{rl.w} wide in 60")
+    None => fail("no ab")
+  }
+  // the bold run is where it was
+  assert_eq(t.run_rects("cd").length(), 1)
+  // what fits is not cut
+  assert_eq(t.lines_of("xy"), ["xy zw"])
+  // the column wide enough: all of it
+  w.val = 200.0
+  t.frame()
+  assert_eq(t.lines_of("ab"), ["ab cd ef gh ij kl mn op"])
+}
+
+///|
 test "the same words in runs whose ranges moved (as many runs): drawn in the runs as they are now" {
   let red = 0xFF0000FFL
   let ink = 0x000000FFL
