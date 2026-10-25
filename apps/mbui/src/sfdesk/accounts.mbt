@@ -1181,14 +1181,14 @@ fn model_checklist(c : @ui.Ctx, core : Core, address : String, p : Json?, head? 
     // the filter in its top corner, concentric with it (@sf.head_reach), the two back where the card's words stand)
     let filtered = all.length() > 10
     let reach = head && filtered
-    c.box(style=if reach { pf_pool_tools.then(@sf.head_reach(@sf.input_height)) } else { pf_pool_tools }, flow=true, fn() {
+    c.box(style=if reach { pf_pool_tools.then(@sf.head_reach(@sf.input_height())) } else { pf_pool_tools }, flow=true, fn() {
       if filtered {
         c.box(style=pf_pool_filter, fn() {
           @sf.input(c, "profile-filter/" + key, placeholder=@sf.t("web-pages.profiles.filter"), field=filter) |> ignore
         })
         |> ignore
       }
-      c.box(style=if reach { pf_pool_toggles.then(@sf.head_back(@sf.input_height)) } else { pf_pool_toggles }, fn() {
+      c.box(style=if reach { pf_pool_toggles.then(@sf.head_back(@sf.input_height())) } else { pf_pool_toggles }, fn() {
         if text_toggle(c, "profile-all/" + key, if q != "" { @sf.t("web-pages.profiles.selectFiltered") } else { @sf.t("web-pages.settings.members.all") }, busy) {
           let next = enabled.copy()
           for m in shown {
@@ -1291,7 +1291,7 @@ fn add_model(c : @ui.Ctx, core : Core, address : String, id : String, foot? : Bo
       f.set("")
     }
   }
-  c.box(style=if foot { pf_input_row.then(@sf.foot_reach(@sf.button_height(), start=@sf.input_height)) } else { pf_input_row }, fn() {
+  c.box(style=if foot { pf_input_row.then(@sf.foot_reach(@sf.button_height(), start=@sf.input_height())) } else { pf_input_row }, fn() {
     c.box(style=pf_input_grow, fn() {
       if @sf.input(c, "profile-add-model/" + address + "/" + id, placeholder=@sf.t("web-pages.profiles.addModelPlaceholder"), field=f).submitted {
         add()

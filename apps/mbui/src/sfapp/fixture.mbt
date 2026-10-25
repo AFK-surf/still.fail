@@ -624,7 +624,12 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
 fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -> Json? {
   let account : Json = { "sub": "u1", "email": "lin@example.com", "name": "林" }
   let value : Json? = match name {
-    "accounts" => if f.mode == "signin" { Some([]) } else { Some([account]) }
+    "accounts" =>
+      match f.mode {
+        "signin" => Some([])
+        "home-accounts" => Some([account, { "sub": "u2", "email": "lin@work.example", "name": "林" }])
+        _ => Some([account])
+      }
     // a chat's files downloaded (downloads_fixture.mbt)
     "downloads" => Some(fixture_downloads_topic())
     // what is written, as the core's composers keep it (compose_fixture.mbt): its files up at once

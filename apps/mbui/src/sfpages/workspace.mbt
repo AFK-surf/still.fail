@@ -501,11 +501,12 @@ fn new_workspace_body(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
   })
   if accounts.length() > 1 {
     @sf.field(c, @sf.t("web-pages.workspace.owner"), fn() {
-      new_ws.owner = @sf.select(
+      @sf.one_of(
         c,
         "new-ws/owner",
         owner,
         accounts.map(fn(a) { (text(Some(a), "sub"), text(Some(a), "email")) }),
+        fn(v) { new_ws.owner = v },
         label=@sf.t("web-pages.workspace.owner"),
       )
     })

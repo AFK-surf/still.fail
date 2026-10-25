@@ -775,7 +775,7 @@ fn cd_owner_dialog(core : Core, here : Here, station : String, cv : Json?) -> Un
       let people = items(workspace_view(core, here).value, "members")
       if people.length() > 0 {
         @sf.field(c, @sf.t("web-pages.connect.ownerLabel"), fn() {
-          owner.val = @sf.select(
+          @sf.select(
             c,
             key + "/select",
             owner.val,
@@ -784,6 +784,7 @@ fn cd_owner_dialog(core : Core, here : Here, station : String, cv : Json?) -> Un
               let mail = text(pv, "email")
               (mail, if text(pv, "name") != "" { @sf.t("web-pages.connect.person", args=[("name", text(pv, "name")), ("email", mail)]) } else { mail })
             }),
+            fn(v) { owner.val = v },
             label=@sf.t("web-pages.connect.ownerLabel"),
             w=cd_select_w,
           )

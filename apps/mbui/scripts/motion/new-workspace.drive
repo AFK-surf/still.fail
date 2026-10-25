@@ -1,0 +1,13 @@
+# A new workspace from the workspaces' list (sfpages workspace.mbt), two accounts signed in: named, its account picked
+# among them.
+timeout 20000
+until 新建 workspace
+wait 600
+tap 新建 workspace
+wait 900
+type 设计组
+wait 700
+tap lin@example.com
+wait 1200
+tap lin@work.example
+wait 1500

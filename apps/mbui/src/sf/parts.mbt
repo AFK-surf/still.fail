@@ -1751,13 +1751,15 @@ pub fn input(
   small? : Bool = false,
   field? : @ui.Field,
 ) -> @kit.Field {
-  @kit.text_field(c, key, placeholder~, secret~, disabled~, size=input_size, line=input_line, field?, look=fn(c, s, editor) {
+  // (its words the body's, as tall as the theme's controls: the web's on a computer, a finger's on a touch device)
+  let t = theme()
+  @kit.text_field(c, key, placeholder~, secret~, disabled~, size=t.t.body, line=t.t.body_line, field?, look=fn(c, s, editor) {
     let hot = s.hovered || s.focused
     c.box(
       id=s.id,
       style=match (small, hot) {
-        (false, false) => input_box
-        (false, true) => input_box_hot
+        (false, false) => input_box.then(control_height())
+        (false, true) => input_box_hot.then(control_height())
         (true, false) => input_box_small
         (true, true) => input_box_small_hot
       },
@@ -1765,6 +1767,12 @@ pub fn input(
     )
     |> ignore
   })
+}
+
+///|
+/// As tall as the theme's controls at least (Theme::control_h: a field's, a select's).
+fn control_height() -> @ui.Style {
+  @ui.style(min_h=Fixed(theme().control_h))
 }
 
 ///|
@@ -1827,13 +1835,15 @@ let input_size : Double = 14.0
 let input_line : Double = 20.0
 
 ///|
-/// A one-line field's height (input_box's min_h, S9), for what stands it concentric in a corner.
-pub let input_height : Double = 36.0
+/// A one-line field's height (the theme's controls': Theme::control_h), for what stands it concentric in a corner.
+pub fn input_height() -> Double {
+  theme().control_h
+}
 
 ///|
 // kept across runs: a value (no field of it changes)
 let input_box : @ui.Style = @ui.css(
-  #|row w=Full min_h=S9 px=S4 py=S1_5 radius=Full bg=Surface border=B1 border_color=Border align=ACenter
+  #|row w=Full px=S4 py=S1_5 radius=Full bg=Surface border=B1 border_color=Border align=ACenter
   #|disabled{opacity=O55}
 )
 
@@ -1853,59 +1863,60 @@ let input_box_small : @ui.Style = input_box.then(@ui.style(min_h=Fixed(menu_row_
 let input_box_small_hot : @ui.Style = input_box_small.then(@ui.css("border_color=FieldHover"))
 
 ///|
-/// A dropdown of choices (parts.tsx Select: mbui's, @kit.select: its options under it, the arrows, letters and Enter
-/// as a select's): a pill as a one-line field is (parts.css.ts select: 36 high at least, 16 in, a line of the strong
-/// grey, the field's hover grey under the pointer, on the canvas, its words 14 cut short, the placeholder subtle), a
-/// chevron at its end; its options a small panel's rows, the chosen checked at their end, `hints` quieter before it.
-/// `options`: each value and its words. What is chosen now.
+/// A choice among a few (parts.tsx Select): closed, a pill as a one-line field is (input_box: the theme's control
+/// height and body words), what is chosen in it cut short, the placeholder subtle, a chevron at its end; pressed (or
+/// Enter, Space), its options through the presenters (@sf.pick: beside it a menu's, the arrows, letters and Enter;
+/// a sheet of rows on a touch device), the chosen checked, `hints` a quieter note at an option's end. `options`: each
+/// value and its words; `choose` is given the one chosen.
 pub fn select(
   c : @ui.Ctx,
   key : String,
   value : String,
   options : Array[(String, String)],
+  choose : (String) -> Unit,
   placeholder? : String = "",
   label? : String = "",
   disabled? : Bool = false,
   w? : Double = select_w,
   hints? : Map[String, String] = {},
-) -> String {
+) -> Unit {
   let t = theme()
-  let items = options.map(fn(o) { @kit.item(o.0, label=o.1) })
-  @kit.select(c, key, value, items, placeholder~, w~, label~, disabled~, look=fn(c, s) {
-      c.box(style=if s.hovered || s.open || s.focus_shown { select_box_hot } else { select_box }, disabled=s.disabled, fn() {
-          c.text(s.text, style=if s.placeholder { select_placeholder } else { select_words }) |> ignore
-          icon(c, "chevron-down", size=select_chevron, color=t.p.muted) |> ignore
+  let id = c.id(key)
+  let words = match options.iter().find_first(fn(o) { o.0 == value }) {
+    Some(o) => o.1
+    None => ""
+  }
+  let hot = !disabled && (c.lit(id) || c.has_focus(id))
+  let b = c.box(
+    style=(if hot { select_box_hot } else { select_box }).then(control_height()).then(@ui.style(max_w=Fixed(w))),
+    id=if disabled { 0 } else { id },
+    disabled~,
+    fn() {
+      c.text(if words == "" { placeholder } else { words }, style=if words == "" {
+        select_placeholder
+      } else {
+        select_words
       })
       |> ignore
-    }, item_look=fn(c, s) {
-      c.box(
-        style=select_item,
-        min_h=menu_row_min,
-        radius=small_panel_inner(r_menu),
-        bg=if s.hot { t.p.hover } else { no_ground },
-        fn() {
-        c.text(s.entry.label, style=menu_words) |> ignore
-        c.spacer()
-        match hints.get(s.entry.value) {
-          Some(h) => c.text(h, style=select_hint) |> ignore
-          None => ()
-        }
-        c.box(style=menu_check, fn() {
-          if s.entry.kind is Choice(true) {
-            icon(c, "check", size=select_chevron, color=t.p.text) |> ignore
-          }
-        })
-        |> ignore
-        },
-      )
-      |> ignore
-    }).value
+      icon(c, "chevron-down", size=select_chevron, color=t.p.muted) |> ignore
+    },
+  )
+  c.semantics(b, Button, id~, label=if label == "" { words } else { label + ": " + words }, disabled~)
+  if !disabled && c.clicked(id) {
+    pick(
+      label,
+      options.map(fn(o) { choice(o.0, o.1, note=hints.get(o.0).unwrap_or("")) }),
+      value,
+      choose,
+      from=Of(id),
+    )
+  }
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
 let select_box : @ui.Style = @ui.css(
-  #|row w=Full min_h=S9 px=S4 py=S1_5 gap=S2 radius=Full bg=Surface border=B1 border_color=Border align=ACenter
+  #|row w=Full px=S4 py=S1_5 gap=S2 radius=Full bg=Surface border=B1 border_color=Border align=ACenter
   #|justify=JBetween disabled{opacity=O55}
 )
 
@@ -1930,6 +1941,66 @@ let select_item : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2 align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let select_hint : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+
+///|
+/// One of a few (a choice whose options need no sentence each: an account, a role): up to `one_of_listed_most` of
+/// them listed where it is, a row each (the screen's rows, Theme::rows: check_row's height and title, a row's corner,
+/// the hover's ground), the chosen checked at its end, a press choosing it at once (the arrows move among them, as a radio
+/// group's); more, a select (a pill, its options through the presenters). Listed or not is the number's, the same on
+/// every screen: two accounts read as clearly listed in a dialog as in a sheet, a press less than a select's two.
+/// `choose` is given the one chosen.
+pub fn one_of(
+  c : @ui.Ctx,
+  key : String,
+  value : String,
+  options : Array[(String, String)],
+  choose : (String) -> Unit,
+  label? : String = "",
+  placeholder? : String = "",
+  disabled? : Bool = false,
+) -> Unit {
+  if options.length() > one_of_listed_most {
+    select(c, key, value, options, choose, label~, placeholder~, disabled~)
+    return
+  }
+  let t = theme()
+  let rows = t.rows
+  let items = options.map(fn(o) { @kit.item(o.0, label=o.1) })
+  let r = @kit.radio_group(c, key, items, value, label~, disabled~, gap=0.0, look=fn(c, s) {
+    c.box(
+      style=(if s.hovered || s.pressed { one_of_row_hot } else { one_of_row }).then(@ui.style(min_h=rows.least)),
+      disabled=s.disabled,
+      fn() {
+        c.text(s.label, style=rows.title) |> ignore
+        if s.on {
+          icon(c, "check", size=one_of_check, color=t.p.accent) |> ignore
+        }
+      },
+    )
+    |> ignore
+  })
+  if r.value != value {
+    choose(r.value)
+  }
+}
+
+///|
+/// How many one_of lists where it is; more are a select's.
+let one_of_listed_most : Int = 5
+
+///|
+/// A row of one_of: as wide as where it is, 12 in, its words and its check apart, a row's corner (row_radius).
+// kept across runs: a value (no field of it changes)
+let one_of_row : @ui.Style = @ui.css("row w=Full px=S3 gap=S2 align=ACenter justify=JBetween disabled{opacity=O55}").then(
+  @ui.style(radius=row_radius),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let one_of_row_hot : @ui.Style = one_of_row.then(@ui.css("bg=Hover"))
+
+///|
+let one_of_check : Double = 16.0
 
 ///|
 /// Exclusive options that need a sentence each (parts.tsx Choices: mbui's radio group, @kit.radio_group): bordered
