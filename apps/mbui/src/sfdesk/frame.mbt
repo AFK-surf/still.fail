@@ -399,7 +399,7 @@ fn dock(
   let look = if apart {
     dock_apart.then(@ui.style(radius=@sf.corners_radius(tape_pane_corners(Side, false))))
   } else if bar {
-    dock_closed.then(@ui.style(radius=@sf.closed_bar_corner(closed_bar_in)))
+    dock_closed.then(@ui.style(radius=@sf.closed_bar_corner(closed_bar_in, rail_closed_ground_in)))
   } else {
     dock_open
   }

@@ -8,6 +8,8 @@ fn wide_tester(
   w? : Double = 1280.0,
   h? : Double = 800.0,
   platform? : Int = 0,
+  window_corner? : Double = 0.0,
+  window_inset? : Bool = false,
 ) -> @ui.Tester {
   reset()
   let base = fixture(mode)
@@ -21,7 +23,7 @@ fn wide_tester(
   if mode.has_prefix("chat") {
     open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~, window_corner~, window_inset~)
   t
 }
 

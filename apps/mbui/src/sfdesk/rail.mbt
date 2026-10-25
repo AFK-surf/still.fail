@@ -134,6 +134,12 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
   // Rail.css.ts rail, top: 56 wide, its places in its middle (9 from its edge; the sidebar reaches over its last 8, so
   // the rail is as wide as the rest), 9 under the last; its top row (41 under the window's buttons, else 5) 6 over its
   // first place; in the bar none, its first place 2 from the bar's top
+  // its grounds' corner: concentric with the corner they stand in, all one (open, its places where the bar's are)
+  rail_round.val = if wide.tape {
+    @sf.rail_ground_radius(@sf.tape_side_corners()[3], @sf.rail_in_tape() + rail_ground_in)
+  } else {
+    @sf.rail_ground_radius(@sf.closed_bar_round(closed_bar_in, rail_closed_ground_in), rail_closed_ground_in)
+  }
   let look = if bar {
     rail_closed
   } else if wide.tape {
@@ -222,8 +228,9 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
 }
 
 ///|
-/// The rail open and in the closed bar (Rail.css.ts rail): its places 9 in and 9 under the last, 6 apart (open, as
-/// wide as the rail less the 8 the sidebar reaches over); as narrow as the bar, 2 from its every edge.
+/// The rail open and in the closed bar (Rail.css.ts rail): its places 8 in and 8 under the last (@sf.rail_in: where they
+/// stand in the closed bar), 6 apart (open, as wide as the rail less the 8 the sidebar reaches over); as narrow as the
+/// bar, 2 from its every edge.
 // kept across runs: a value (no field of it changes)
 let rail_open : @ui.Style = @ui.style(
   w=Fixed(rail_shown_w),
@@ -239,6 +246,14 @@ let rail_open : @ui.Style = @ui.style(
 let rail_closed : @ui.Style = @ui.style(w=Fixed(rail_closed_w), h=Full, p=S0_5, gap=S1_5, align=AStart)
 
 ///|
+/// How far in from the closed bar's edges its places' grounds stand: its 2 (rail_closed), a place's 38 less its 30.
+let rail_closed_ground_in : Double = 2.0 + rail_ground_in
+
+///|
+/// How far in from a place's edges its ground stands (its 38 less its 30).
+let rail_ground_in : Double = (rail_item_side - rail_sq_side) / 2.0
+
+///|
 /// The rail open in a panel of the tape (laid out Medium): its places in the panel's corners concentric with it
 /// (@sf.rail_in_tape, as round as the panel is this frame), what it shows beside the sidebar as much wider.
 fn rail_open_tape() -> @ui.Style {
@@ -246,8 +261,8 @@ fn rail_open_tape() -> @ui.Style {
 }
 
 ///|
-/// The rail's inset open (rail_in: 9).
-let rail_in_px : Double = 9.0
+/// The rail's inset open (rail_in: 8).
+let rail_in_px : Double = 8.0
 
 ///|
 /// How much more of the rail shows on the tape (its places further in: rail_open_tape), the sidebar as much narrower.
@@ -333,12 +348,19 @@ let rail_item_side : Double = 38.0
 /// A ground of the rail (Rail.css.ts item's ground, workspaceItem, workspaceAdd): 30 round, on `ground`; `id` to press
 /// it; its node.
 fn rail_square(c : @ui.Ctx, ground : Int64, body : () -> Unit, id? : Int) -> Int {
-  c.box(style=rail_sq.then(@ui.style(bg=Data(ground))), id?, body)
+  c.box(style=rail_sq.then(@ui.style(bg=Data(ground), radius=rail_round.val)), id?, body)
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rail_sq : @ui.Style = @ui.style(w=Fixed(rail_sq_side), h=Fixed(rail_sq_side), radius=@sf.rail_corner, align=ACenter, justify=JCenter)
+let rail_sq : @ui.Style = @ui.style(w=Fixed(rail_sq_side), h=Fixed(rail_sq_side), align=ACenter, justify=JCenter)
+
+///|
+/// Its grounds' corner this frame, all one (@sf.rail_ground_radius): concentric with the closed bar's corner (open or
+/// folded: its places stand where they do in the bar), or on the tape the sidebar's panel's. Said by the rail as it
+/// is built.
+// kept across runs: said by the rail each build
+let rail_round : Ref[@ui.Radius] = Ref(Full)
 
 ///|
 let rail_sq_side : Double = 30.0
