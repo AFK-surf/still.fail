@@ -225,7 +225,8 @@ pub let nav_mark_side : Double = 16.0
 ///|
 /// A row of a list in a sidebar, a station's, a profile's, a folder's (SidebarList.tsx NavItem): the library's list
 /// row, laid out as a chat's (@sf.list_row): its `mark` beside its first line, its `title` (nav_title) with what is at
-/// that line's `end` (muted, never cut: the title gives way), then the `lines` under them (nav_line each); the pointer's
+/// that line's `end` (muted, never cut: the title gives way), then the `lines` under them (nav_line each; `keep_lines` of
+/// them always, empty where it says none: list_row `lines`); the pointer's
 /// ground on hover, the selected one's when it is the page in view; `more`, another row under it (nav_apart). True
 /// when pressed.
 pub fn nav_item(
@@ -236,6 +237,7 @@ pub fn nav_item(
   title : () -> Unit,
   end? : () -> Unit,
   lines? : () -> Unit,
+  keep_lines? : Int = 0,
   more? : Bool = false,
 ) -> Bool {
   let id = c.id(key)
@@ -261,6 +263,7 @@ pub fn nav_item(
           None => ()
         }
       },
+      lines=keep_lines,
     )
     |> ignore
   })

@@ -12,7 +12,9 @@
 /// chat's people and agents), `corner_w` wide, placed there by the corner rule: where its ground is rounded (a side
 /// column's), as far in from the row's end and foot as makes it concentric with the row's corner (the theme's
 /// `aside_end`), its room kept at the end of the lines under the first (across the whole screen, square, the caller
-/// says it in its lines). Its box, the one pressed.
+/// says it in its lines); `lines`: how many lines under its first it always has (list_row_line's), those `under` does
+/// not draw kept empty, so rows of a kind are as high whatever each says (a station's, up or away). Its box, the one
+/// pressed.
 pub fn list_row(
   c : @ui.Ctx,
   id : Int,
@@ -26,10 +28,21 @@ pub fn list_row(
   end_room? : Double = 0.0,
   corner? : () -> Unit,
   corner_w? : Double = 0.0,
+  lines? : Int = 0,
   after? : () -> Unit = fn() {  },
 ) -> Int {
   let l = theme().chat_list
   let line = @ui.style(h=Fixed(l.head_h))
+  // (the lines under its first: those it says, then empty ones up to `lines`)
+  let under = fn() {
+    let was = lines_drawn.val
+    lines_drawn.val = 0
+    under()
+    for _ in lines_drawn.val..<lines {
+      list_row_line(c, fn() {  })
+    }
+    lines_drawn.val = was
+  }
   c.box(style=(if high { l.row } else { l.item }).then(list_row_in(at)).then(@ui.style(bg=Data(ground))), id~, fn() {
     match mark {
       Some(m) => c.box(style=list_row_mark.then(line), m) |> ignore
@@ -111,8 +124,14 @@ let row_keys_gap : Double = 2.0
 /// A line under a row's first line (SidebarList.css.ts line): as high as a chat's second line, its parts beside each
 /// other.
 pub fn list_row_line(c : @ui.Ctx, body : () -> Unit) -> Unit {
+  lines_drawn.val += 1
   c.box(style=theme().chat_list.meta, body) |> ignore
 }
+
+///|
+/// How many lines under its first the row being drawn has drawn so far (list_row `lines`).
+// kept across runs: said again by every row as it draws its lines (list_row)
+let lines_drawn : Ref[Int] = Ref(0)
 
 ///|
 /// A row's mark's column (SidebarList.css.ts mark: 16 wide, as high as the first line, its mark in its middle).
