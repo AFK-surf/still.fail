@@ -82,7 +82,7 @@ fn with_rail_view(v : Json?) -> Json? {
 pub fn source() -> @sfapp.Source {
   {
     topic: fn(name, params) {
-      let s = @core.subscribe(name, params~)
+      let s = @core.subscribe(name, params~).followed()
       let value = if name == "prefs" { with_rail_view(s.value) } else { s.value }
       { value, error: s.error, version: s.version }
     },

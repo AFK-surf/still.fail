@@ -297,3 +297,37 @@ test "a core started anew is told again where the app's attention is (client.foc
   assert_true(sent[0].contains("client.focus"))
   assert_true(sent[0].contains("\"visible\":true"))
 }
+
+///|
+test "a subscription's changes are pushed: what read it in a computed follows each message for it, and its end" {
+  let (c, _) = recorder()
+  let s = c.subscribe("accounts")
+  let worked = Ref(0)
+  let seen = @signals.computed(fn(_) {
+    worked.val += 1
+    // (as an app's source reads a topic: core_topic)
+    let read = c.subscribe("accounts").followed()
+    match read.value {
+      Some(Array(a)) => a.length()
+      _ => -1
+    }
+  })
+  assert_eq(seen.get(), -1)
+  assert_eq(seen.get(), -1)
+  assert_eq(worked.val, 1)
+  // the core's first value: pushed on, worked out again once
+  assert_true(c.receive("{\"id\":1,\"value\":[]}"))
+  assert_eq(seen.get(), 0)
+  assert_eq(seen.get(), 0)
+  assert_eq(worked.val, 2)
+  // a delta
+  assert_true(c.receive("{\"id\":1,\"delta\":[{\"path\":[],\"append\":[1]}]}"))
+  assert_eq(seen.get(), 1)
+  assert_eq(worked.val, 3)
+  // let go: what read it reads it anew, from the subscription asked again
+  c.unsubscribe(s)
+  assert_eq(seen.get(), -1)
+  assert_eq(worked.val, 4)
+  assert_true(c.receive("{\"id\":2,\"value\":[7,8]}"))
+  assert_eq(seen.get(), 2)
+}

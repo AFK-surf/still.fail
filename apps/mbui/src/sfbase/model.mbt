@@ -235,6 +235,12 @@ pub fn chats_view_made(v : Json) -> ChatsView {
 ///|
 /// The chats' list as the core gives it: for chats_of alone (chats_read).
 fn chats_view(v : Json) -> ChatsView {
+  chats_view_by(v, chat_item)
+}
+
+///|
+/// The chats' list as the core gives it, each row read by `item` (chats_read's: read again only as it changed).
+fn chats_view_by(v : Json, item : (Json) -> ChatItem) -> ChatsView {
   let s = Some(v)
   let note = match field(s, "note") {
     Some(Object(_)) as n =>
@@ -249,7 +255,7 @@ fn chats_view(v : Json) -> ChatsView {
   {
     stations: items(s, "stations").length(),
     days: items(s, "days").map(fn(d) {
-      { label: text(Some(d), "label"), items: items(Some(d), "items").map(chat_item) }
+      { label: text(Some(d), "label"), items: items(Some(d), "items").map(item) }
     }),
     leading: match text(s, "leading") {
       "" => "agents"

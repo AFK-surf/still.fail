@@ -13,18 +13,56 @@ pub fn chats_of(src : Source, scope : String, filter : String) -> (ChatsView?, S
   if filter == "watching" {
     params["watching"] = Json::boolean(true)
   }
-  let (view, topic) = chats_read.read(src, params)
+  let (read, topic) = chats_read.read(src, params)
   let error = match topic.error {
     Some(e) => Some(text(Some(e), "message"))
     None => None
   }
-  (view, error)
+  (read.map(fn(r) { r.view }), error)
 }
 
 ///|
-/// The chats' list as the core's `chats` topic gives it.
+/// The chats' list as chats_read made it, and each row with the JSON it was read from (made_again).
+priv struct ChatsRead {
+  view : ChatsView
+  read : Array[(Json, ChatItem)]
+}
+
+///|
+/// The chats' list as the core's `chats` topic gives it: its rows read again only as they changed (one chat said
+/// something: its row read).
 // kept across runs: what it keeps is let go of by a run anew and by reset (derived.mbt)
-let chats_read : Derived[ChatsView] = Derived::new("chats", chats_view)
+let chats_read : Derived[ChatsRead] = Derived::new("chats", fn(v, was) {
+  let jsons : Array[Json] = []
+  for d in items(Some(v), "days") {
+    for j in items(Some(d), "items") {
+      jsons.push(j)
+    }
+  }
+  let read = made_again(
+    jsons,
+    match was {
+      Some(w) => w.read
+      None => []
+    },
+    chat_row_key,
+    chat_item,
+  )
+  // (each row's JSON to what was made of it, in the order the days hold them)
+  let at = Ref(0)
+  let view = chats_view_by(v, fn(_) {
+    let item = read[at.val].1
+    at.val += 1
+    item
+  })
+  { view, read }
+})
+
+///|
+/// A row's key in the list, as the core keys them (client/core-ts collections.ts: `station` and `id`).
+fn chat_row_key(r : Json) -> String {
+  text(Some(r), "station") + "\u{1}" + text(Some(r), "id")
+}
 
 ///|
 /// The list's filter in workspace `ws` (AppState.chatFilter): as chosen here, else as the prefs keep it.

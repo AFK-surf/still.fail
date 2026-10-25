@@ -526,6 +526,13 @@ pub fn chat_view_made(v : Json) -> ChatView {
 /// A chat's view as the core gives it, each of its messages read: for view_of_chat alone (chat_read), so no page
 /// works it out of the topic again, each frame.
 fn chat_view(v : Json) -> ChatView {
+  chat_view_of(v, items(Some(v), "messages").map(message_of))
+}
+
+///|
+/// A chat's view as the core gives it, its messages read already (`messages`: chat_read's, each read again only as it
+/// changed).
+fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
   let s = Some(v)
   let thread = field(s, "thread")
   {
@@ -534,7 +541,7 @@ fn chat_view(v : Json) -> ChatView {
     unread: number(thread, "unread"),
     people: items(s, "people").map(person_of),
     agents: items(s, "agents").map(agent_of),
-    messages: items(s, "messages").map(message_of),
+    messages,
     elsewhere: items(s, "elsewhere").map(elsewhere_of),
     more: flag(s, "more"),
     newer: flag(s, "newer"),

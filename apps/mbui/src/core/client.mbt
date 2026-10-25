@@ -1,12 +1,16 @@
 // One UI client of the still.fail core, over whatever carries the protocol's JSON (ember docs/client-core.md,
 // Protocol): `{id, call, params}` and `{id, subscribe, keyed}` out; `{id, ok|error}`, `{id, value}`, `{id, delta}`
 // and `{fatal}` in. Each subscription keeps its topic's current value, deltas applied (delta.mbt), and a version that
-// changes with every message for it, so a view can tell what changed since its last frame without comparing values.
+// changes with every message for it, so a view can tell what changed since its last frame without comparing values;
+// and a signal of its changes (mbui/signals) set as each comes, and as it ends: what reads the topic in a computed
+// follows it from here, the core's change pushed on to it, not looked for as it is read.
 // The client is the UI thread's: messages come to `receive` in order on it (native.mbt drains the engine's queue).
 
 ///|
 /// A subscription to a topic: `value` is its whole current value (None until the first, and after an error until the
 /// next value), `error` the core's error for it while it could not be read, `version` changes with each message.
+/// `changes` is set with each message too, and once more as it ends (unsubscribed, the client reset): what read it
+/// reads the topic again then, from the subscription asked anew.
 pub struct Sub {
   id : Int
   topic : Json
@@ -14,6 +18,20 @@ pub struct Sub {
   mut error : Json?
   mut version : Int
   priv key : String
+  changes : @signals.Signal[Int]
+}
+
+///|
+/// The subscription read: what reads it in a computed follows its changes (Sub.changes).
+pub fn Sub::followed(self : Sub) -> Sub {
+  self.changes.get() |> ignore
+  self
+}
+
+///|
+/// What reads it told it changed: a message for it, or its end (`ended`: -1, no version of its own).
+fn Sub::changed(self : Sub, ended? : Bool = false) -> Unit {
+  self.changes.set(if ended { -1 } else { self.version })
 }
 
 ///|
@@ -183,7 +201,7 @@ pub fn Client::subscribe(
     None => {
       let id = self.next_id
       self.next_id += 1
-      let s = { id, topic: t, value: None, error: None, version: 0, key }
+      let s = { id, topic: t, value: None, error: None, version: 0, key, changes: @signals.signal(0) }
       self.subs[id] = s
       self.by_key[key] = s
       self.ask(s)
@@ -216,6 +234,7 @@ pub fn Client::unsubscribe(self : Client, s : Sub) -> Unit {
     self.end_sub_wait(s.id)
     self.subs.remove(s.id)
     self.by_key.remove(s.key)
+    s.changed(ended=true)
     let m : Map[String, Json] = {
       "id": Json::number(s.id.to_double()),
       "unsubscribe": Json::boolean(true),
@@ -411,6 +430,7 @@ fn Client::take(self : Client, msg : Json) -> Unit {
       }
       s.version += 1
       self.version += 1
+      s.changed()
       self.end_sub_wait(id)
       self.draft_came(id)
     }
@@ -473,7 +493,12 @@ pub fn Client::restarted(self : Client) -> Unit {
 /// Everything forgotten, as a new client: no subscription, no call waiting, ids from 1 (a Replay attached to the
 /// app's client starts it so).
 pub fn Client::reset(self : Client) -> Unit {
+  // (what read them reads anew: their ends told)
+  let ended = self.subs.values().to_array()
   self.subs.clear()
+  for s in ended {
+    s.changed(ended=true)
+  }
   self.by_key.clear()
   self.calls.clear()
   self.progress.clear()

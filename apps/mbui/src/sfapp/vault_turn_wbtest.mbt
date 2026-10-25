@@ -86,7 +86,9 @@ fn vault_chat_src(vc : VaultChat, calls : Array[String]) -> Source {
             version: 1,
           }
         "prefs" => { value: Some(Json::object({ "workspace": Json::string("ws1") })), error: None, version: 1 }
-        "chat" => { value: Some(vault_chat_view(vc.status)), error: None, version: vc.version }
+        // (made up as it is read: followed by its version, as the core's by what it says)
+        "chat" =>
+          topic_as_read(name, params, { value: Some(vault_chat_view(vc.status)), error: None, version: vc.version })
         "vaults" => {
           vc.vaults_asked = true
           { value: None, error: None, version: 0 }

@@ -56,11 +56,12 @@ fn edited_core(
     ..base,
     topic: fn(name, params) {
       let t = (base.topic)(name, params)
-      match t.value {
-        // (a change the test makes is a new version of what the core says)
+      // (a change the test makes is a new version of what the core says: made up as it is read, followed by its
+      // version, as the core's by what it says)
+      topic_as_read(name, params, match t.value {
         Some(v) => { ..t, value: Some(edit(name, v)), version: t.version + epoch.val }
         None => t
-      }
+      })
     },
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })

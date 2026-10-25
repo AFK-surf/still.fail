@@ -120,7 +120,7 @@ fn fixture_downloads_call(f : Fixture, name : String, params : Json) -> Result[J
           }
         })
       }
-      f.version += 1
+      f.changed()
       Some(Ok({ "download": fix_download_shown(d) }))
     }
     "download.take" => {
@@ -132,13 +132,13 @@ fn fixture_downloads_call(f : Fixture, name : String, params : Json) -> Result[J
           taken = true
         }
       }
-      f.version += 1
+      f.changed()
       Some(Ok({ "taken": Json::boolean(taken) }))
     }
     "download.done" | "download.cancel" => {
       let id = text(p, "id")
       fix_downloads.retain(fn(d) { fix_download_id(d) != id })
-      f.version += 1
+      f.changed()
       Some(Ok({}))
     }
     "download.retry" => Some(Ok({}))

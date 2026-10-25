@@ -11,7 +11,9 @@ pub(all) struct Topic {
 
 ///|
 pub(all) struct Source {
-  /// the topic `name` with its params (the core's `subscribe`): the same each frame
+  /// the topic `name` with its params (the core's `subscribe`): the same each frame. Read in a computed (mbui/signals:
+  /// derived.mbt), followed: the computed is worked out again as the topic changes, a signal of its changes set as
+  /// they come (the core client's Sub.changes; a made-up core's own as its state changes)
   topic : (String, Map[String, Json]) -> Topic
   /// a call to the core; `done` gets its answer or its error
   call : (String, Json, (Result[Json, Json]) -> Unit) -> Unit

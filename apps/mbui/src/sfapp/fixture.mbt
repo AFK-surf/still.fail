@@ -117,7 +117,7 @@ fn fixture_queue_done(
       fn(r) {
         if r is Ok(_) {
           f.queue_gone[key] = true
-          f.version += 1
+          f.changed()
         }
         done(r)
       }
@@ -126,14 +126,14 @@ fn fixture_queue_done(
         if r is Ok(_) {
           f.queue_set_aside[key] = f.queue_set_aside.length() + 1
           kept_was({ "setAside": Json::string(key) })
-          f.version += 1
+          f.changed()
         }
         done(r)
       }
     "decision.show" =>
       fn(r) {
         kept_was({ "picked": Json::string(key) })
-        f.version += 1
+        f.changed()
         done(r)
       }
     _ => done
@@ -241,7 +241,7 @@ fn fixture_tabs_call(f : Fixture, name : String, params : Json) -> Result[Json, 
         (Some(Object(_) as next), Some(tabs)) => {
           f.chat_tabs[key] = next
           f.tabs_shown[key] = tabs
-          f.version += 1
+          f.changed()
         }
         _ => ()
       }
@@ -599,7 +599,18 @@ fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
 }
 
 ///|
+///|
+/// The made-up core changed: its version on by one, told to what follows its topics (@settings.fixture_changed), as
+/// the core's message for a subscription is (src/core Sub.changes).
+fn Fixture::changed(self : Fixture) -> Unit {
+  self.version += 1
+  @settings.fixture_changed()
+}
+
+///|
 fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topic {
+  // (read in a computed, followed as the made-up core changes: Fixture::changed)
+  @settings.fixture_followed()
   fix_tick(f)
   let value = fixture_topic_inner(f, name, params)
   // a station's network as the core gives it: how this device reaches it (`way`) in the list, its figures in the
@@ -812,7 +823,8 @@ pub fn round_trip(base : Source, ms : Double) -> Source {
     topic: fn(name, params) {
       let t = (base.topic)(name, params)
       let k = name + Json::object(params).stringify()
-      match read.get(k) {
+      // (its first value come late, as the clock goes: followed as it is read, @sfbase.topic_as_read)
+      @sfbase.topic_as_read(name, params, match read.get(k) {
         Some(true) => t
         Some(false) => { value: None, error: None, version: -1 }
         None => {
@@ -820,7 +832,7 @@ pub fn round_trip(base : Source, ms : Double) -> Source {
           fix_later(ms, fn() { read[k] = true })
           { value: None, error: None, version: -1 }
         }
-      }
+      })
     },
   }
 }
@@ -951,7 +963,7 @@ pub fn fixture(mode : String) -> Source {
         "chat.archive" => {
           let session = text(Some(params), "session")
           f.archived[session.view(start_offset=2).to_owned()] = true
-          f.version += 1
+          f.changed()
           done(Ok(Json::object({})))
         }
         // a visualization's widget kept nothing yet; what it keeps is taken (viz.mbt)
@@ -959,7 +971,7 @@ pub fn fixture(mode : String) -> Source {
         "widget.setState" => done(Ok(Json::object({})))
         "chat.older" => {
           f.older += 1
-          f.version += 1
+          f.changed()
           done(Ok(Json::object({})))
         }
         // a screen's preview's frame taken (chat-screens): the fixture sends no other
@@ -969,7 +981,7 @@ pub fn fixture(mode : String) -> Source {
         "decision.show" => done(Ok(Json::null()))
         "keys.set" => {
           let r = fixture_keys_set(f.keys, params)
-          f.version += 1
+          f.changed()
           done(Ok(r))
         }
         "prefs.set" => {
@@ -1009,7 +1021,7 @@ pub fn fixture(mode : String) -> Source {
               }
             _ => ()
           }
-          f.version += 1
+          f.changed()
           done(Ok(Json::object({})))
         }
         _ =>

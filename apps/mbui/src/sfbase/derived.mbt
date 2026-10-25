@@ -1,48 +1,17 @@
 // What the pages work out of the core's topics, worked out once: alien-signals' computed (mbui/signals, its
-// docs/signals.md). The app builds its view again each frame, so what a page works out as it builds is worked out again
-// each frame, however little changed. A page reads a field or two of a topic's value as it is; what it makes of the
-// whole of it (a chat's messages, the chats' list, a folder's entries, an agent's history, a job's output) is a computed
-// here, worked out again only as what it read changed: the topics it read (topic_read: each topic's version a signal,
-// as the core counts it) and the signals of the page's own it read (只看收发, the theme's ink). Kept while a frame reads
-// it: one no frame read since the last is let go.
-
-///|
-/// A topic as the computeds read it: its version (a signal), set each time the topic is read (topic_read).
-struct TopicCell {
-  version : @signals.Signal[Int]
-}
-
-///|
-/// The topics read, by their name and params; one nothing follows any more let go as a frame begins (kept_frame).
-// kept across runs: let go of by a run anew and by reset (kept_reset)
-let topic_cells : Map[String, TopicCell] = {}
-
-///|
-/// Topic `name` with `params` read (Source.topic: subscribed, as it is), its version told to what follows it. Read in
-/// a computed's getter, the computed follows the topic: worked out again once its version changed, read here again.
-pub fn topic_read(src : Source, name : String, params : Map[String, Json]) -> Topic {
-  kept_frame() |> ignore
-  let topic = (src.topic)(name, params)
-  let key = name + " " + Json::object(params).stringify()
-  let cell = match topic_cells.get(key) {
-    Some(c) => c
-    None => {
-      let c = { version: @signals.signal(topic.version, same=fn(a, b) { a == b }) }
-      topic_cells[key] = c
-      c
-    }
-  }
-  cell.version.set(topic.version)
-  cell.version.get() |> ignore
-  topic
-}
+// docs/signals.md), following the core's changes from the core on. Each subscription's changes are a signal the core
+// client sets as the core's message for it comes, and as it ends (src/core client.mbt Sub.changes); a topic read
+// (Source.topic) reads it, so what a computed reads of a topic it follows, wherever it reads it (in a computed it reads
+// in turn too). A page reads a field or two of a topic as it is; what it makes of the whole of it (a chat's messages,
+// the chats' list, a folder's entries, an agent's history, a job's output) is a computed here (Kept, Derived), worked
+// out again only as what it read changed, and then from what it made last: the core's deltas keep what they do not
+// touch (the same JSON), and what is made of that is kept as it was made (a chat's messages, the chats' rows: one row
+// changed, one row made). Kept while a frame reads it: one no frame read since the last is let go.
 
 ///|
 /// Computeds kept by a key each (a chat's view by its chat, a folder's entries by its folder): each a computed made of
-/// the getter its first read gave, read as a computed is (worked out again only as what it read changed), let go of
-/// (Computed::dispose) once a frame has gone by that did not read it. A topic's version is told as it is read
-/// (topic_read): where it reads a Kept, a page reads the topics its getter reads first (Derived::read does), so a
-/// topic changed since is seen as changed.
+/// the getter its first read gave (given what it made last, none the first time), read as a computed is (worked out
+/// again only as what it read changed), let go of (Computed::dispose) once a frame has gone by that did not read it.
 pub struct Kept[T] {
   priv kept : Map[String, KeptOne[T]]
   /// listed with what a frame's beginning goes over (kept_lists), once it keeps anything
@@ -61,13 +30,14 @@ pub fn[T] Kept::new() -> Kept[T] {
 }
 
 ///|
-/// What `getter` makes for `key`: worked out the first time, and again only once what it read changed since.
-pub fn[T] Kept::read(self : Kept[T], key : String, getter : () -> T) -> T {
+/// What `getter` makes for `key` (given what it made last): worked out the first time, and again only once what it
+/// read changed since.
+pub fn[T] Kept::read(self : Kept[T], key : String, getter : (T?) -> T) -> T {
   let frame = kept_frame()
   let one = match self.kept.get(key) {
     Some(k) => k
     None => {
-      let k = { value: @signals.computed(fn(_) { getter() }), read: frame }
+      let k = { value: @signals.computed(getter), read: frame }
       self.kept[key] = k
       if !self.listed {
         self.listed = true
@@ -138,8 +108,8 @@ priv struct KeptRun {
 let kept_run : KeptRun = { frame: -1, ctx: None }
 
 ///|
-/// This frame's number; its first read lets go of what no frame read since the last and of the topics nothing follows
-/// any more; a run anew (a Ctx of its own: another test's) of all of it.
+/// This frame's number; its first read lets go of what no frame read since the last, and of the made-up topics nothing
+/// follows any more; a run anew (a Ctx of its own: another test's) of all of it.
 fn kept_frame() -> Int {
   let c = @ui.current()
   let frame = c.frame_number()
@@ -156,13 +126,13 @@ fn kept_frame() -> Int {
       (l.sweep)(frame)
     }
     let gone = []
-    for key, cell in topic_cells {
-      if !cell.version.watched() {
+    for key, cell in made_up_cells {
+      if !cell.watched() {
         gone.push(key)
       }
     }
     for key in gone {
-      topic_cells.remove(key) |> ignore
+      made_up_cells.remove(key) |> ignore
     }
   }
   frame
@@ -174,31 +144,37 @@ fn kept_reset() -> Unit {
   for l in kept_lists {
     (l.clear)()
   }
-  topic_cells.clear()
+  made_up_cells.clear()
   kept_run.frame = -1
 }
 
 ///|
 /// What `work` makes of topic `name`'s value (Derived::read), by the topic's params: a Kept whose getter reads the
-/// topic, so worked out once for each of its versions.
+/// topic, so worked out again as it changes, given what it made of it last.
 pub struct Derived[T] {
   priv name : String
-  priv work : (Json) -> T
+  priv work : (Json, T?) -> T
   priv kept : Kept[T?]
 }
 
 ///|
-pub fn[T] Derived::new(name : String, work : (Json) -> T) -> Derived[T] {
+pub fn[T] Derived::new(name : String, work : (Json, T?) -> T) -> Derived[T] {
   { name, work, kept: Kept::new() }
 }
 
 ///|
-/// Topic `name` with `params` (topic_read), and what `work` makes of its value: None while it has none.
+/// Topic `name` with `params` (Source.topic), and what `work` makes of its value: None while it has none.
 pub fn[T] Derived::read(self : Derived[T], src : Source, params : Map[String, Json]) -> (T?, Topic) {
-  let topic = topic_read(src, self.name, params)
-  let value = self.kept.read(Json::object(params).stringify(), fn() {
-    match topic_read(src, self.name, params).value {
-      Some(v) => Some((self.work)(v))
+  let topic = (src.topic)(self.name, params)
+  let value = self.kept.read(Json::object(params).stringify(), fn(was) {
+    match (src.topic)(self.name, params).value {
+      Some(v) =>
+        Some(
+          (self.work)(v, match was {
+            Some(w) => w
+            None => None
+          }),
+        )
       None => None
     }
   })
@@ -213,4 +189,65 @@ pub fn[T] Derived::kept(self : Derived[T], params : Map[String, Json]) -> T? {
     Some(v) => v
     None => None
   }
+}
+
+///|
+/// `jsons` made (`make`) each, from what was made of them last (`was`: each with the JSON it was made of): one that is
+/// the same JSON as before (the core's deltas keep what they do not touch: src/core delta.mbt) taken as it was made,
+/// found where it was or by `key`; only what changed is made anew.
+pub fn[T] made_again(
+  jsons : Array[Json],
+  was : Array[(Json, T)],
+  key : (Json) -> String,
+  make : (Json) -> T,
+) -> Array[(Json, T)] {
+  let by : Ref[Map[String, (Json, T)]?] = Ref(None)
+  jsons.mapi(fn(i, j) {
+    match was.get(i) {
+      Some((pj, t)) if physical_equal(pj, j) => (pj, t)
+      _ => {
+        // (moved, or more came before it: found by its key)
+        let index = match by.val {
+          Some(m) => m
+          None => {
+            let m : Map[String, (Json, T)] = {}
+            for p in was {
+              m[key(p.0)] = p
+            }
+            by.val = Some(m)
+            m
+          }
+        }
+        match index.get(key(j)) {
+          Some((pj, t)) if physical_equal(pj, j) => (pj, t)
+          _ => (j, make(j))
+        }
+      }
+    }
+  })
+}
+
+///|
+/// The made-up topics followed, by their name and params (topic_as_read).
+// kept across runs: let go of by a run anew and by reset (kept_reset)
+let made_up_cells : Map[String, @signals.Signal[Int]] = {}
+
+///|
+/// A topic a made-up core works out as it is read (a test's, a tape's, a late answer's), followed by its version as
+/// read: what a computed made of it is worked out again once it is read changed. The core's own topics are followed by
+/// what the core says (Sub.changes); the fixture's by its own changes (fixture.mbt fix_changes).
+pub fn topic_as_read(name : String, params : Map[String, Json], topic : Topic) -> Topic {
+  kept_frame() |> ignore
+  let key = name + " " + Json::object(params).stringify()
+  let cell = match made_up_cells.get(key) {
+    Some(c) => c
+    None => {
+      let c = @signals.signal(topic.version)
+      made_up_cells[key] = c
+      c
+    }
+  }
+  cell.set(topic.version)
+  cell.get() |> ignore
+  topic
 }

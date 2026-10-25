@@ -147,12 +147,17 @@ settings page, each place, sign-in, the landing. There is no phone copy and desk
 - **What it works out of the core's data:** the view is built again each frame, so whatever a page works out as it
   builds is worked out again each frame. A field or two of a topic's value it reads as it is; what it makes of the whole
   of it (a chat's messages, the chats' list, a folder's entries, an agent's history, a job's output) is a computed
-  (mbui's `signals`: alien-signals, ported): sfbase's `Derived` (what a topic's value makes, once for each of its
-  versions) or a `Kept` of its own, whose getter reads the topics through `topic_read` (each topic's version a signal)
-  and whatever else it depends on as signals (只看收发, the theme's ink), and is worked out again only as one of them
-  changes. Never a loop over a topic in the frame (the user, 2026-10-26: 「不应该有个跟 preact signals 一样的机制来保证只
-  计算一次吗」「实现可以抄一下 alien-signals」). The chat's and the chats' list's converters are sfbase's own: a page has
-  their views only from `view_of_chat` and `chats_of`.
+  (mbui's `signals`: alien-signals, ported), sfbase's `Derived` (what a topic's value makes) or a `Kept` of its own,
+  whose getter reads topics (`src.topic`) and the page's own inputs as signals (只看收发, the theme's ink). The core's
+  changes are pushed all the way: each subscription's changes are a signal the core client sets as the core's message
+  comes (src/core `Sub.changes`), and reading a topic reads it, so a computed follows every topic it read, through
+  other computeds too, and is worked out again only as one changes. It is given what it made last: what the core's
+  deltas did not touch is the same JSON, and what was made of it is kept (`made_again`: a chat's messages, the chats'
+  rows), so one message come is one message read. A made-up core says its changes too (the fixture's
+  `@settings.fixture_changed`; a test's topic worked out as it is read, `topic_as_read`). Never a loop over a topic in
+  the frame (the user, 2026-10-26: 「不应该有个跟 preact signals 一样的机制来保证只计算一次吗」「实现可以抄一下
+  alien-signals」「让这套 signals 机制从 core 到 ui 能完整连上」). The chat's and the chats' list's converters are sfbase's
+  own: a page has their views only from `view_of_chat` and `chats_of`.
 - **Opening things:** it says what to open: a page (`Page`), or a detail of the chat (a history, a service, a
   visualization, jobs, letters, files). The shell decides where that goes. A page never pushes onto the stack or moves
   the tape itself.
