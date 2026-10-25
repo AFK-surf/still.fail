@@ -114,10 +114,10 @@ jobs:
           # (The Android app in Kotlin, apps/android, is frozen since 2026-10-23, as asked: no check of it runs, the mbui
           # app is the one developed.)
           # The beta Android app: mbui's in the Kotlin one's place (scripts/release.sh --beta android), released for a
-          # change to what apps/mbui's beta is made of (scripts/beta.sh APP_SRC: its code, mbui's, the client's, media's,
-          # vendor's), or to how it is released.
+          # change to what apps/mbui's beta is made of (scripts/beta.sh APP_SRC: its code, mbui's with its Android host's
+          # Java, the client's, media's, vendor's), or to how it is released.
           android_beta=false
-          if has '^(apps/mbui/(src|core|android|ios|engine)/|apps/mbui/mbui/src/|apps/mbui/(mbui/)?moon\.(mod|work)$|client/|media/|vendor/|scripts/(release\.sh|native\.ts)$|\.github/release\.sh$|apps/mbui/scripts/(beta|android|android-core|core)\.sh$)'; then android_beta=true; fi
+          if has '^(apps/mbui/(src|core|android|ios|engine)/|apps/mbui/mbui/(src|android)/|apps/mbui/(mbui/)?moon\.(mod|work)$|client/|media/|vendor/|scripts/(release\.sh|native\.ts)$|\.github/release\.sh$|apps/mbui/scripts/(beta|android|android-core|core)\.sh$)'; then android_beta=true; fi
           # The desktop app carries the core, a station and the web app. A change to the first two (its shell) is a new
           # app; to the web app alone, a web release the beta app takes without one (scripts/desktop-web.ts,
           # docs/desktop-web-updates.md): desktop=… and desktop_web=….
