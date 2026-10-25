@@ -1,14 +1,13 @@
 // What the pages read of sfbase, by their own names.
 using @sfbase {
   type FilePage, type PageMark, type Placed, type ServicePage, type Viewport, type StageHold, type Mark,
-  service_site, src_now, clamp_size, keep_folded, keep_size, mark_where, page_marks_frame, page_marks_leave,
+  service_site, src_now, clamp_size, keep_size, mark_where, page_marks_frame, page_marks_leave,
   page_marks_new, page_marks_new_page, page_marks_put, page_marks_remove, page_marks_toggle, service_ask,
   service_fetches, service_files, service_keep_cookie, service_key, service_left, service_marked, service_page_for,
   service_pages, service_redirect, service_serve, service_unanswered, size_digits, size_kept, size_max, size_min,
-  size_of, size_of_kept, stage_max_scale, stage_min_scale, stage_zoom, svc, svc_folded, svc_keep, svc_presets,
+  size_of, size_of_kept, stage_max_scale, stage_min_scale, stage_zoom, svc, svc_keep, svc_presets,
   svc_viewports, open_link_in, viz_load, viz_tr, mark_numbers, marking, marks_actions, marks_leave, marks_quotes,
   marks_redo, marks_start, marks_undo,
-  feel_hold,
   say,
   under_rest,
   dismiss_turn_ms,

@@ -318,7 +318,7 @@ test "marking: the edit key picks, a mark picked is boxed and pinned, put into t
 }
 
 ///|
-test "a sized page on its canvas: the ground dragged moves it, 适应 and a double tap fit it again" {
+test "a sized page on its canvas: the ground dragged moves it, 适应 (its sizes' panel) and a double tap fit it again" {
   let (t, _) = link_tester(mode="service-sized")
   t.frame()
   let site = site_id(t)
@@ -331,11 +331,13 @@ test "a sized page on its canvas: the ground dragged moves it, 适应 and a doub
   let (x1, y1, _, _) = view_rect(t, site).unwrap()
   assert_true(x1 < x0 - 40.0)
   assert_true(y1 > y0 + 20.0)
-  // (适应 itself, after the sizes: 自适应 says it too)
-  let (fx, fy) = t.find_last("适应").unwrap()
-  assert_true(t.rect_of("自适应").unwrap().0 < fx)
-  t.tap(fx, fy)
+  // 适应, among the sizes (the size key's): fitted again, the sizes gone
+  t.click(Button, label="页面尺寸")
   t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.click(Button, label="适应")
+  t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_eq(view_rect(t, site).unwrap().0, x0)
   // moved again, then two taps on the ground
   t.drag(362.0, 400.0, 302.0, 430.0)
