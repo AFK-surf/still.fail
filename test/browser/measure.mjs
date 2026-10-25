@@ -209,7 +209,9 @@ export function panels(mark = false) {
  * glass), is not asked, nor what is disabled, nor what dims the whole page, nor a ground cut out of one under it (a ring
  * round a dot, in the colour of a ground further down), nor a field (its words say it is one), nor a drawing of something
  * else ([data-depicts]: another system's screen). What loops (a placeholder's breath) is measured at its start, where it
- * is seen at its strongest.
+ * is seen at its strongest. What is on its way, or lies on what is (a scrollbar's thumb fading in, a mark over another
+ * fading out, a transition, an animation that ends), is not asked until all of it there is where it goes: half way it
+ * is neither what it was nor what it comes to, and what it comes to may be gone (the page removes what faded out).
  */
 export function contrast(mark = false) {
   const MARK = 1.25;
@@ -292,6 +294,8 @@ export function contrast(mark = false) {
   document.head.append(every);
   const loops = document.getAnimations().filter((a) => a.effect?.getTiming().iterations === Infinity).map((a) => ({ a, at: a.currentTime, running: a.playState === 'running' }));
   for (const l of loops) { l.a.pause(); l.a.currentTime = 0; }
+  // (what loops paused meanwhile: what still runs ends: on its way)
+  const moving = (el) => { for (let n = el; n; n = n.parentElement) if (n.getAnimations().some((a) => a.playState === 'running')) return true; return false; };
   let measured = 0;
   try {
     for (const el of document.querySelectorAll('body *')) {
@@ -310,7 +314,7 @@ export function contrast(mark = false) {
       if (!onScreen(x, y) || el.closest(':disabled, [aria-disabled="true"]')) continue;
       const stack = document.elementsFromPoint(x, y);
       const at = stack.indexOf(el);
-      if (at < 0 || covered(stack, at, el) || under(stack, at, el)) continue;
+      if (at < 0 || stack.slice(at).some(moving) || covered(stack, at, el) || under(stack, at, el)) continue;
       const g = ground(stack, at);
       if (!g) continue;
       // Seen by its ground or by its edge (a box to tick, white with a line round it), whichever stands further off what
