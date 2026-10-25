@@ -613,7 +613,14 @@ pub fn frame(
   // closed bar), its frosted bands' ground (the block's), the lists' marks on the rail (Rail.css.ts listMark: in as it
   // folds)
   // (with 更新 over it and no window's buttons, as on a phone's wide screen: their row, its room, not over the first row)
-  wide.brand_h = c.moved("--brand", if bar { 0.0 } else if inset || updating { side_top_inset } else { side_top_web })
+  // (on the tape 更新 is in the first row: update_in_row, no row of its own)
+  wide.brand_h = c.moved("--brand", if bar {
+    0.0
+  } else if inset || (updating && !wide.tape) {
+    side_top_inset
+  } else {
+    side_top_web
+  })
   // (on the tape the sidebar in a panel of its own: its bands on a floating panel's ground, as in the closed bar)
   wide.band = c.moved("--band", if bar || wide.tape { 1.0 } else { 0.0 })
   wide.mark = c.moved("--mark", if bar { 1.0 } else { 0.0 })
@@ -722,7 +729,7 @@ pub fn frame(
       |> ignore
     }
     tape_behind(c, Side, fn() { dock(c, src, w, all, bar, peek, s, col, top, foot, tape_x) })
-    if updating {
+    if updating && !(wide.tape && !bar) {
       update_button(c, src, bar, s, inset, top, tape_x)
     }
     if wide.tape {
