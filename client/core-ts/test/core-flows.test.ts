@@ -5,7 +5,9 @@ import assert from "node:assert/strict";
 import { Effect, Queue } from "effect";
 import { parseCall } from "../src/core/calls.ts";
 import { Loads } from "../src/preview-load.ts";
-import { HostWire } from "../src/station/wire.ts";
+import type { HttpRequest } from "../src/host.ts";
+import type { StationAddr } from "../src/station/addr.ts";
+import { HostWire, type RequestHead, type StationWire } from "../src/station/wire.ts";
 import { base64 } from "../src/util.ts";
 import { test } from "node:test";
 import { STORAGE_KEY } from "../src/accounts.ts";
@@ -887,6 +889,37 @@ test("the_chats_a_few_words_find_are_a_view_of_the_list", async () => {
   apply(host, values);
   assert.deepEqual(v(values, 1).items.map((i: J) => i.id), ["b"]);
   assert.equal(v(values, 1).items[0].station, "ws/st");
+  core.close();
+});
+
+test("the_at_menu_written_on_one_station_finds_the_chats_of_every_station_of_its_workspace_the_others_saying_so", async () => {
+  // `ws/st` (studio) and `ws/st2` (mini), both answering at the same origin: which one a request is for, as the wire says.
+  const AT = "x-test-station";
+  const wire = (host: FakeHost) => {
+    const inner = new HostWire(host);
+    return { request: (station: StationAddr, head: RequestHead, body: Uint8Array) => inner.request(station, { ...head, headers: [...head.headers, [AT, station.station]] }, body) } as StationWire;
+  };
+  const row = (id: string, title: string, at: number) => ({ id, session: id, thread: null, title, agents: [], last: null, unread: false, mine: true, lastActiveAt: at, connect: null, origin: null });
+  const { host, core } = await started(base(), 0, wire, (x) => {
+    x.cloud.also = { stations: [{ id: "st", name: "studio", online: true, last_seen: null }, { id: "st2", name: "mini", online: true, last_seen: null }] };
+    stationReplies(x.host, (req: HttpRequest) => {
+      const [path, query] = req.url.replace("https://stillfail.test/admin/api", "").split("?");
+      if (path !== "/chats" || (query ?? "").includes("archived")) return undefined;
+      return req.headers.some(([k, v]) => k === AT && v === "st2") ? [row("b", "部署 mini", 2)] : [row("a", "部署 studio", 3), row("c", "写在这里", 1)];
+    });
+  });
+  const ui = core.connect();
+  // As the composer asks, written in `c` on `ws/st`.
+  subscribe(core, ui, 1, { topic: "chatSearch", scope: "ws", query: "部署", station: "ws/st", exclude: "c", limit: 8, elsewhere: true });
+  subscribe(core, ui, 2, { topic: "chatSearch", scope: "ws", query: "", station: "ws/st", exclude: "c", limit: 8, elsewhere: true });
+  await host.settle();
+  await host.time.pass(500);
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  const shown = (n: number) => v(values, n).items.map((i: J) => [i.station, i.id, i.otherStation ?? false]);
+  assert.deepEqual(shown(1), [["ws/st", "a", false], ["ws/st2", "b", true]]);
+  assert.deepEqual(shown(2), [["ws/st", "a", false], ["ws/st2", "b", true]]);
   core.close();
 });
 

@@ -128,15 +128,16 @@ export function expand(data: Data, station: string, text: string): string {
   return out + rest;
 }
 
-/// What `query` finds among a `chats` view's rows.
+/// What `query` finds among a `chats` view's rows, on every station of theirs: written on `station`, those of the others
+/// say so (`otherStation`), as an agent reads a chat of any.
 export function search(chats: J, query: string, station: string | null | undefined, exclude: string | null | undefined, limit: number | null | undefined): J {
   const q = query.trim().toLowerCase();
   const has = (v: J) => typeof v === "string" && v.toLowerCase().includes(q);
   const rows = arr(get(chats, "days")).flatMap((d) => arr(get(d, "items")));
   const candidates = rows
     .filter((i) => get(i, "pending") !== true)
-    .filter((i) => station == null || get(i, "station") === station)
-    .filter((i) => exclude == null || ["id", "session"].every((f) => get(i, f) !== exclude));
+    .filter((i) => exclude == null || ["id", "session"].every((f) => get(i, f) !== exclude))
+    .map((i) => (station != null && get(i, "station") !== station ? { ...i, otherStation: true } : i));
   const titled = candidates.filter((i) => q === "" || has(get(i, "title")));
   const rest = candidates.filter(
     (i) =>

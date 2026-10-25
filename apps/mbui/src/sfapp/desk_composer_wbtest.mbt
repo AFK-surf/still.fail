@@ -177,6 +177,24 @@ test "desk composer: `@` and words offer the chats they find over it (ChatRefMen
 }
 
 ///|
+test "desk composer: the `@` menu offers the workspace's other stations' chats too, each with its station after its title; this one's with none" {
+  let calls : Array[Made] = []
+  let (t, _) = desk_composer_tester(calls)
+  desk_focus(t)
+  // written in Studio's (ws1/st1); 夜里的构建又失败了 is MBA's (ws1/st2)
+  t.type_text("@的")
+  t.frame()
+  let (there_x, there_y) = t.find_last("夜里的构建又失败了").unwrap()
+  let (tag_x, tag_y) = t.find_last("MBA").unwrap()
+  assert_true((tag_y - there_y).abs() < 2.0 && tag_x > there_x, msg="\{(tag_x, tag_y)} \{(there_x, there_y)}")
+  let (_, here_y) = t.find_last("首页的列表改成按天分组").unwrap()
+  match t.find_last("Studio") {
+    Some((_, y)) => assert_true((y - here_y).abs() >= 2.0, msg="no station on this station's own")
+    None => ()
+  }
+}
+
+///|
 test "desk composer: Escape closes the `@` menu for that `@`; the words stay, Enter sends them" {
   let calls : Array[Made] = []
   let (t, _) = desk_composer_tester(calls)

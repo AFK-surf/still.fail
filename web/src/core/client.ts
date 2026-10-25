@@ -75,8 +75,8 @@ export type Topic =
   // Notifications on this device: on or off, asked, whether to hold pushes, the notices to show now (`notice.claim`),
   // only a workspace's for a page in it.
   | { topic: "notify"; workspace?: string }
-  // The chats of a scope a few words find, titles first (only `station`'s, not `exclude`, `limit` at most): the
-  // composer's `@` menu and the switcher. A core from before it answers an error.
+  // The chats of a scope a few words find, titles first (not `exclude`, `limit` at most; written on `station`, the
+  // other stations' say so): the composer's `@` menu and the switcher. A core from before it answers an error.
   | { topic: "chatSearch"; scope: string; query: string; station?: string; exclude?: string; limit?: number; messages?: number }
   // What a few words find in a workspace, on the device and on every station (docs/search.md, views/search.ts): ⌘K and
   // the phone's search. With `kind`, that kind alone, more of it.

@@ -54,7 +54,8 @@ test("a_search_finds_titles_first_then_what_else_a_chat_says", () => {
   const chats = { days: [{ items: [item("1", "别的", "a", "修登录"), item("2", "登录页", "a", ""), pending] }, { items: [item("3", "登录", "b", ""), item("4", "登录 旧的", "a", "")] }] };
   const ids = (v: { items: { id: string }[] }) => v.items.map((i) => i.id);
   assert.deepEqual(ids(search(chats, " 登录 ", null, null, null)), ["2", "3", "4", "1"]);
-  assert.deepEqual(ids(search(chats, "", "a", "s2", 2)), ["1", "4"]);
+  // Written on `a`: every station's, `b`'s saying so.
+  assert.deepEqual(search(chats, "", "a", "s2", 3).items.map((i: { id: string; otherStation?: boolean }) => [i.id, i.otherStation ?? false]), [["1", false], ["3", true], ["4", false]]);
   assert.deepEqual(ids(search(chats, "STUDIO", null, null, null)), ["1", "2", "3", "4"]);
 });
 

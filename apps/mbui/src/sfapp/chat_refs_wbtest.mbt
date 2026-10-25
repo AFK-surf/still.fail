@@ -8,7 +8,7 @@ test "`@` and words: the chats they find over the composer; one picked goes in a
   t.tap_text("发消息")
   t.type_text("看 @首页")
   assert_true(t.find("引用对话") is Some(_))
-  // this station's chats with the words in their title, not the one written in
+  // the workspace's chats with the words in their title, not the one written in
   assert_true(t.find("首页的列表改成按天分组") is Some(_))
   t.tap_text("首页的列表改成按天分组")
   t.draw()
@@ -27,6 +27,28 @@ test "`@` and words: the chats they find over the composer; one picked goes in a
   t.draw()
   let (_, words, _, _) = t.ime()
   assert_eq(words, "看 ")
+}
+
+///|
+test "`@` and words: the workspace's other stations' chats too, each with its station's tag after its title; this one's with none" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  t.tap_text("发消息")
+  // written in a chat of Studio's (ws1/st1); 夜里的构建又失败了 is MBA's (ws1/st2)
+  t.type_text("@的")
+  let (there_x, there_y) = t.find_last("夜里的构建又失败了").unwrap()
+  let (tag_x, tag_y) = t.find_last("MBA").unwrap()
+  assert_true((tag_y - there_y).abs() < 2.0 && tag_x > there_x, msg="\{(tag_x, tag_y)} \{(there_x, there_y)}")
+  let (_, here_y) = t.find_last("首页的列表改成按天分组").unwrap()
+  match t.find_last("Studio") {
+    Some((_, y)) => assert_true((y - here_y).abs() >= 2.0, msg="no tag on this station's own")
+    None => ()
+  }
+  t.tap_text("夜里的构建又失败了")
+  t.draw()
+  let made = named(calls, "chat.ref")
+  assert_eq(made.length(), 1)
+  assert_eq(text(Some(made[0].params), "station"), "ws1/st2")
 }
 
 ///|

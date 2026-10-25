@@ -527,14 +527,18 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
         },
       ])
     "chatJobs" => Some({ "jobs": [] })
-    // the `@` menu's (chat_refs.mbt): this station's chats whose title has the words (not the one written in), then
-    // those of 个人 (fix_outside), saying whose
+    // the `@` menu's (chat_refs.mbt): the workspace's chats whose title has the words (not the one written in), those
+    // of another station than the one written on saying so, then those of 个人 (fix_outside), saying whose
     "chatSearch" => {
       let query = match params.get("query") {
         Some(String(q)) => q
         _ => ""
       }
       let exclude = match params.get("exclude") {
+        Some(String(x)) => x
+        _ => ""
+      }
+      let written_on = match params.get("station") {
         Some(String(x)) => x
         _ => ""
       }
@@ -554,11 +558,15 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
       for d in fixture_days(f) {
         for r in items(Some(d), "items") {
           let title = text(Some(r), "title")
-          if text(Some(r), "station") == "ws1/st1" &&
-            text(Some(r), "session") != exclude &&
-            title.contains(query) &&
-            out.length() < 8 {
-            out.push(r)
+          if text(Some(r), "session") != exclude && title.contains(query) && out.length() < 8 {
+            match r {
+              Object(m) if written_on != "" && text(Some(r), "station") != written_on => {
+                let m = m.copy()
+                m["otherStation"] = Json::boolean(true)
+                out.push(Json::object(m))
+              }
+              _ => out.push(r)
+            }
           }
         }
       }

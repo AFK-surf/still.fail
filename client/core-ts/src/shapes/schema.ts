@@ -2240,6 +2240,7 @@ export const SHAPES: Record<string, Shape> = {
     ["tone", opt("String"), { doc: "Its mark, the most urgent first: alert (an agent failed), wait (a card waits, not dismissed by the viewer; or an\nagent needs them: need_help), busy (at work), done (something unread). Absent for none." }],
     ["xshare", opt("RowShare"), { doc: "The other workspaces it is shared with (docs/chat-share.md). Absent when none, and from stations before sharing." }],
     ["outside", opt("String"), { doc: "Another workspace's chat, its name: the `@` menu's `elsewhere` lists them after the workspace's own. Absent for\nthe workspace's own." }],
+    ["otherStation", opt("bool"), { doc: "A chat of another of the workspace's stations than the one the `@` menu is written on (`chatSearch`\n`station`): its station's mark and name go after its title. Absent otherwise." }],
     ["archived", opt("bool"), { doc: "A chat a search found in its station's archive (`search`). Absent otherwise." }],
     ["foundText", opt("String"), { doc: "A chat a search found by words its title shows late or not at all: the part of it that has them, on one line\n(`search`: listed first, its title under it). Absent otherwise." }],
     ["foundMarks", opt(vec("TextMark")), { doc: "Where the words are in `foundText`." }],
