@@ -393,9 +393,10 @@ fn dock(
   let shown = !bar || peek || showing > 0.0
   // the sidebar beside the rail: open its own width and 8 more, reaching 8 into the rail's; the group's in the bar
   let side_w = if bar { s } else { s + side_into_rail }
-  // (a panel's corner the tape's, the closed bar's its own: each the window's less its 6 from it where it follows it)
+  // (a panel's corners the tape's sidebar's, the closed bar's its own: each in the window's the window's less its 6 from
+  // it where it follows it)
   let look = if apart {
-    dock_apart.then(@ui.style(radius=@sf.page_panel_corner()))
+    dock_apart.then(@ui.style(radius=@sf.corners_radius(tape_pane_corners(Side, false))))
   } else if bar {
     dock_closed.then(@ui.style(radius=@sf.closed_bar_corner(closed_bar_in)))
   } else {
@@ -512,9 +513,10 @@ pub fn frame(
   let own = !gated && !bare
   // laid out Medium, with a sidebar to show: the rail and the sidebar beside the page on the tape
   wide.tape = own && @sf.layout(c.width) is Medium
-  // the tape's panels' corner this frame: the ladder's pane corner, or the window's less their 6 from its edges where
-  // they follow it (a Mac's 16); what stands in their corners stands by it (@sf.tape_capsule_room)
-  @sf.tape_pane.val = @sf.window_follow(closed_bar_in, @sf.pane_corner)
+  // the tape's panels' corner this frame where they stand at the window's edge: the ladder's pane corner, or the
+  // window's less their 6 from its edges where they follow it (a Mac's 16); each panel's others the pane corner, and
+  // what stands in a corner stands by the one it is in (tape_pane_corners)
+  @sf.tape_edge.val = @sf.window_follow(closed_bar_in, @sf.pane_corner)
   // (off the tape, a phone's or a tablet's screen with less than a phone's width for the page beside it: folded
   // whatever was chosen)
   wide.crowded = own &&
@@ -651,14 +653,17 @@ pub fn frame(
       c.box(style=frame_tape, fn() {
         // a right click in it: what is picked copied (context_menu.mbt)
         context_page(c, page_id)
+        let page_corners = tape_pane_corners(Page, panel_of is Some(_))
         let pane = c.box(
-          style=page_apart.then(@ui.style(w=Fixed(main_w), h=Fixed(panel_h), radius=@sf.page_panel_corner())),
+          style=page_apart.then(
+            @ui.style(w=Fixed(main_w), h=Fixed(panel_h), radius=@sf.corners_radius(page_corners)),
+          ),
           left=col,
           top=panel_top,
           tx=tape_x,
           id=page_id,
           fn() {
-            @sf.pane_round.val = Some(@sf.tape_pane.val)
+            @sf.pane_round.val = Some(page_corners)
             page_in(panel_h)
             @sf.pane_round.val = None
           },
@@ -669,12 +674,18 @@ pub fn frame(
         match panel_of {
           Some(r) =>
             c.box(
-              style=page_apart.then(@ui.style(w=Fixed(panel_w), h=Fixed(panel_h), radius=@sf.page_panel_corner())),
+              style=page_apart.then(
+                @ui.style(
+                  w=Fixed(panel_w),
+                  h=Fixed(panel_h),
+                  radius=@sf.corners_radius(tape_pane_corners(Panel, true)),
+                ),
+              ),
               left=col + main_w + closed_bar_gap,
               top=panel_top,
               tx=tape_x,
               fn() {
-                @sf.pane_round.val = Some(@sf.tape_pane.val)
+                @sf.pane_round.val = Some(tape_pane_corners(Panel, true))
                 c.sized(panel_w, panel_h, fn() { tape_side(c, src, w, r) })
                 @sf.pane_round.val = None
               },
@@ -951,6 +962,7 @@ fn tape_veils(
       dmax(0.0, dmin(1.0, (x - own).abs() / span))
     }
   }
+  let side_open = panels.iter().any(fn(q) { q.0 == Panel })
   c.layer(fn() {
     for panel in panels {
       let (p, left, width) = panel
@@ -965,7 +977,12 @@ fn tape_veils(
         c.drag_on(id, axis=Horizontal)
       }
       let b = c.box(
-        style=@ui.style(w=Fixed(width), h=Fixed(h), radius=@sf.page_panel_corner(), bg=Data(@sf.alpha(t.p.overlay, tape_veil_share * k))),
+        style=@ui.style(
+          w=Fixed(width),
+          h=Fixed(h),
+          radius=@sf.corners_radius(tape_pane_corners(p, side_open)),
+          bg=Data(@sf.alpha(t.p.overlay, tape_veil_share * k)),
+        ),
         left~,
         top~,
         tx=x,
@@ -979,6 +996,18 @@ fn tape_veils(
     }
   })
   |> ignore
+}
+
+///|
+/// The corners of panel `p` on the tape (@sf.tape_corners): on the side it stands at the window's edge in use the
+/// window's less its 6 from it where they follow it, the others the ladder's pane corner. The sidebar's at the window's
+/// left, the side panel's at its right, the page's at its right with no side panel open after it (`panel`).
+fn tape_pane_corners(p : TapePane, panel : Bool) -> FixedArray[Double] {
+  match p {
+    Side => @sf.tape_side_corners()
+    Page => @sf.tape_corners(left=false, right=!panel)
+    Panel => @sf.tape_corners(left=false, right=true)
+  }
 }
 
 ///|
@@ -1007,7 +1036,7 @@ let tape_apart : Double = closed_bar_in + closed_bar_gap
 let frame_tape : @ui.Style = @ui.css("w=Full h=Full bg=Sidebar")
 
 ///|
-/// The page's panel on the tape: the page's ground, the tape's panels' corner (@sf.page_panel_corner), a line round it,
+/// The page's panel on the tape: the page's ground, its corners the tape's (tape_pane_corners), a line round it,
 /// what goes past its edges cut.
 // kept across runs: a value (no field of it changes)
 let page_apart : @ui.Style = @ui.css("bg=Bg border=B1 border_color=Line clip")

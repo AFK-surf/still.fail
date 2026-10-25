@@ -582,7 +582,8 @@ pub fn Theme::leading(self : Theme, l : Leading) -> Double? {
 
 ///|
 /// A corner in this theme (`Inner` and `Around` are worked out once laid out: 0 here; `InnerOr` its own here, the
-/// container's once laid out where it lies in a corner of one).
+/// container's once laid out where it lies in a corner of one; `Corners` the roundest of its four, each its own as a box
+/// is drawn: Radius::each).
 pub fn Theme::corner(self : Theme, r : Radius) -> Double {
   match r {
     Sharp | Inner | Around => 0.0
@@ -598,6 +599,23 @@ pub fn Theme::corner(self : Theme, r : Radius) -> Double {
     Xl4 => self.radii.xl4
     Full => 1.0e6
     Exact(v) => exact_ok(v, "Radius")
+    // (each its own: the roundest here, each in Ctx::box's corners)
+    Corners(a, b, c, d) =>
+      dmax(
+        dmax(exact_ok(a, "Radius"), exact_ok(b, "Radius")),
+        dmax(exact_ok(c, "Radius"), exact_ok(d, "Radius")),
+      )
+  }
+}
+
+///|
+/// The corners of `r` each its own (top left, top right, bottom right, bottom left), where they are not one: `Corners`,
+/// alone or as what `InnerOr` keeps.
+pub fn Radius::each(self : Radius) -> FixedArray[Double]? {
+  match self {
+    Corners(a, b, c, d) => Some(FixedArray::from_array([a, b, c, d]))
+    InnerOr(own) => own.each()
+    _ => None
   }
 }
 

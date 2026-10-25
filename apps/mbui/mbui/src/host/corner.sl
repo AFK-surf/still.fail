@@ -36,6 +36,11 @@ float mb_sd_corner(float2 p, float2 hs, float r, float s, float band) {
   float u = pow(1.0 + tn, 1.0 / n);
   return (hi * u - R) * (1.0 + tn) / (u * sqrt(1.0 + tn1 * tn1));
 }
+// Which of a box's corners' radii r (top left, top right, bottom right, bottom left: scene.mbt 36-39) p (from its
+// middle) is drawn by: the one of its quarter's corner.
+float mb_corner_of(float2 p, float4 r) {
+  return p.x < 0.0 ? (p.y < 0.0 ? r.x : r.w) : (p.y < 0.0 ? r.y : r.z);
+}
 // A box's own corners: r at most its shorter half, as smooth as its size has room for (band: mb_sd_corner's).
 float mb_sd_box(float2 p, float2 hs, float r, float band) {
   float room = min(hs.x, hs.y);

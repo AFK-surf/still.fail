@@ -322,6 +322,7 @@ fn Ctx::paint_image(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
   if self.paint_stream(i, n, alpha) {
     return
   }
+  let before = self.ninst
   match picture_at.get(i) {
     // drawn at a rect of its own (Ctx::picture)
     Some((x, y, w, h, max_px)) =>
@@ -349,6 +350,10 @@ fn Ctx::paint_image(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
         alpha,
         fade=n.fade,
       )
+  }
+  // (its corners each its own, where it was drawn)
+  if self.ninst > before {
+    self.corners_last(n)
   }
 }
 

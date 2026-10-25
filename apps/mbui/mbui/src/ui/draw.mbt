@@ -127,9 +127,10 @@ priv struct Drawn {
   mut bottom : Double
   /// drawn only as its top this tall (-1 whole)
   mut top : Double
-  /// its own ground (its colour, glass, shadow, border and corners) drawn in this box (x, y, w, h, corner) instead of
-  /// where it is laid out: a shape on its way to its new one (motion's reshape); None as laid out
-  mut ground : (Double, Double, Double, Double, Double)?
+  /// its own ground (its colour, glass, shadow, border and corners) drawn in this box (x, y, w, h, its corners: top
+  /// left, then round it) instead of where it is laid out: a shape on its way to its new one (motion's reshape); None
+  /// as laid out
+  mut ground : (Double, Double, Double, Double, (Double, Double, Double, Double))?
 }
 
 ///|
@@ -356,15 +357,24 @@ pub fn Ctx::draw_only(self : Ctx, i : Int) -> Unit {
 
 ///|
 /// Node `i`'s own ground (its colour, glass, shadow, border and corners) drawn in the box at `x`, `y`, `w` by `h`
-/// with corner `radius` (the window's, before its look), what it holds where it is laid out: a box on its way from the
-/// shape it had to its new one (motion's reshape). Tapped where it is laid out.
-pub fn Ctx::draw_ground(self : Ctx, i : Int, x : Double, y : Double, w : Double, h : Double, radius : Double) -> Unit {
-  self.drawn_of(i).ground = Some((x, y, w, h, radius))
+/// with corners `radii` (top left, then round it: node_radii's) (the window's, before its look), what it holds where
+/// it is laid out: a box on its way from the shape it had to its new one (motion's reshape). Tapped where it is laid
+/// out.
+pub fn Ctx::draw_ground(
+  self : Ctx,
+  i : Int,
+  x : Double,
+  y : Double,
+  w : Double,
+  h : Double,
+  radii : (Double, Double, Double, Double),
+) -> Unit {
+  self.drawn_of(i).ground = Some((x, y, w, h, radii))
 }
 
 ///|
 /// Where node `i`'s own ground is drawn this frame (draw_ground), if elsewhere than where it is laid out.
-fn Ctx::ground_of(self : Ctx, i : Int) -> (Double, Double, Double, Double, Double)? {
+fn Ctx::ground_of(self : Ctx, i : Int) -> (Double, Double, Double, Double, (Double, Double, Double, Double))? {
   match self.drawn_entry(i) {
     Some(e) => e.ground
     None => None
@@ -665,6 +675,9 @@ fn Ctx::transform_insts(
       a[b + 2] = a[b + 2] * sx
       a[b + 3] = a[b + 3] * sy
       a[b + 4] = a[b + 4] * sm
+      for j in 36..<40 {
+        a[b + j] = a[b + j] * sm
+      }
       // a glass's (kinds 5, 6: glass.mbt) are its saturation and blur, not a border and a shadow
       if a[b + 5] != 5.0 && a[b + 5] != 6.0 {
         a[b + 6] = a[b + 6] * sm
@@ -886,9 +899,17 @@ pub fn Ctx::node_rect(self : Ctx, i : Int) -> (Double, Double, Double, Double) {
 }
 
 ///|
-/// Node `i`'s corner as laid out (its radius, no more than half its height for a capsule's).
+/// Node `i`'s corner as laid out (its radius, no more than half its height for a capsule's; the roundest of its
+/// corners, where they are each their own: node_radii).
 pub fn Ctx::node_radius(self : Ctx, i : Int) -> Double {
   self.nodes[i].radius
+}
+
+///|
+/// Node `i`'s corners as laid out, each its own (top left, then round it; a capsule's no more than half its height).
+pub fn Ctx::node_radii(self : Ctx, i : Int) -> (Double, Double, Double, Double) {
+  let n = self.nodes[i]
+  (n.radius_at(0), n.radius_at(1), n.radius_at(2), n.radius_at(3))
 }
 
 ///|

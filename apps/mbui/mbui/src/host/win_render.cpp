@@ -69,7 +69,7 @@ static size_t last_cap;
 static float last_bg[3];
 
 // the numbers of an instance (src/ui/scene.mbt)
-#define MB_INST 36
+#define MB_INST 40
 
 static const char *shader_src =
     "cbuffer U : register(b0) { float2 vp; float scale; float pad; };\n"
@@ -79,17 +79,17 @@ static const char *shader_src =
     "Texture2D atlas : register(t0);\n"
     "Texture2D img : register(t1);\n"
     "Texture2D bd : register(t2);\n"
-    "// the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 9 fours each\n"
+    "// the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 10 fours each\n"
     "Buffer<float4> segs : register(t3);\n"
     "SamplerState samp : register(s0);\n"
     "struct VIn { float4 rect : INST0; float4 p : INST1; float4 color : INST2; float4 c2 : INST3;\n"
     "  float4 clip : INST4; float4 pd : INST5; float4 rc : INST6; float4 rs : INST7; float4 rot : INST8;\n"
-    "  uint vid : SV_VertexID; };\n"
+    "  float4 rr : INST9; uint vid : SV_VertexID; };\n"
     "struct VOut { float4 pos : SV_Position; float2 p : POS; float2 cp : CPOS;\n"
     "  nointerpolation float4 rect : INST0; nointerpolation float4 prm : INST1;\n"
     "  nointerpolation float4 color : INST2; nointerpolation float4 c2 : INST3;\n"
     "  nointerpolation float4 clip : INST4; nointerpolation float4 pd : INST5; nointerpolation float4 rc : INST6;\n"
-    "  nointerpolation float4 rs : INST7; };\n"
+    "  nointerpolation float4 rs : INST7; nointerpolation float4 rr : INST8; };\n"
     "VOut vmain(VIn I) {\n"
     "  uint vid = I.vid;\n"
     "  float2 corner = float2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0,\n"
@@ -107,13 +107,13 @@ static const char *shader_src =
     "    at = I.rot.yz + float2(c * d.x - s * d.y, s * d.x + c * d.y); }\n"
     "  VOut o;\n"
     "  o.pos = float4(at.x / vp.x * 2.0 - 1.0, 1.0 - at.y / vp.y * 2.0, 0.0, 1.0);\n"
-    "  o.p = pos; o.cp = I.rot.w > 0.5 ? at : pos; o.rect = I.rect; o.prm = I.p; o.color = I.color; o.c2 = I.c2; o.clip = I.clip; o.pd = I.pd; o.rc = I.rc; o.rs = I.rs;\n"
+    "  o.p = pos; o.cp = I.rot.w > 0.5 ? at : pos; o.rect = I.rect; o.prm = I.p; o.color = I.color; o.c2 = I.c2; o.clip = I.clip; o.pd = I.pd; o.rc = I.rc; o.rs = I.rs; o.rr = I.rr;\n"
     "  return o;\n"
     "}\n"
     MB_CORNER_SL
-    "float sd_rr(float2 p, float4 r, float rad) {\n"
+    "float sd_rr(float2 p, float4 r, float4 rad) {\n"
     "  float2 hs = r.zw * 0.5;\n"
-    "  return mb_sd_box(p - r.xy - hs, hs, rad, 1e9);\n"
+    "  return mb_sd_box(p - r.xy - hs, hs, mb_corner_of(p - r.xy - hs, rad), 1e9);\n"
     "}\n"
     "// a notch cut into the top edge (scene.mbt 21-23): a circle about the top's middle (pad.y below it, pad.z its radius),\n"
     "// met by the edge through fillets (pad.w): the rounded intersection with what is outside the circle\n"
@@ -134,7 +134,7 @@ static const char *shader_src =
     "  int n = int(gmisc.x + 0.5);\n"
     "  [loop] for (int i = 0; i < 8; i++) {\n"
     "    if (i >= n) break;\n"
-    "    d = smin_k(d, sd_rr(p, gshape[i], grad[i].x), k);\n"
+    "    d = smin_k(d, sd_rr(p, gshape[i], grad[i].xxxx), k);\n"
     "  }\n"
     "  return d;\n"
     "}\n"
@@ -162,7 +162,7 @@ static const char *shader_src =
     "    if (cover <= 0.0) discard;\n"
     "  } else if (cp.x < I.clip.x || cp.y < I.clip.y || cp.x > I.clip.z || cp.y > I.clip.w) discard;\n"
     "  int kind = int(I.prm.y + 0.5);\n"
-    "  if (kind == 9) { float2 hh = I.rect.zw * 0.5; float rr = min(I.prm.x, min(hh.x, hh.y)); float2 q = abs(p - I.rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; return (float4(0.0, 0.0, 0.0, 0.0)) * cover; }\n"
+    "  if (kind == 9) { float2 hh = I.rect.zw * 0.5; float rr = min(mb_corner_of(p - I.rect.xy - hh, I.rr), min(hh.x, hh.y)); float2 q = abs(p - I.rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; return (float4(0.0, 0.0, 0.0, 0.0)) * cover; }\n"
     "  float4 col = I.color;\n"
     "  if (kind == 11) {\n"
     "    // a band of a shape (src/ui/shape.mbt): c2.y of its pieces from c2.x; prm.x half its stroke's width (0: a fill,\n"
@@ -171,11 +171,11 @@ static const char *shader_src =
     "    float a;\n"
     "    if (I.prm.x > 0.0) {\n"
     "      float d = 1e9;\n"
-    "      for (int i = first; i < first + n; i++) d = min(d, mb_seg_dist(segs.Load((i / 6) * 9 + mb_seg_slot(i)), I.rect, p));\n"
+    "      for (int i = first; i < first + n; i++) d = min(d, mb_seg_dist(segs.Load((i / 6) * 10 + mb_seg_slot(i)), I.rect, p));\n"
     "      a = saturate(0.5 - (d - I.prm.x) * scale);\n"
     "    } else {\n"
     "      float4 w = float4(0.0, 0.0, 0.0, 0.0);\n"
-    "      for (int i = first; i < first + n; i++) w += mb_path_rows(segs.Load((i / 6) * 9 + mb_seg_slot(i)), I.rect, p, scale);\n"
+    "      for (int i = first; i < first + n; i++) w += mb_path_rows(segs.Load((i / 6) * 10 + mb_seg_slot(i)), I.rect, p, scale);\n"
     "      a = mb_path_cover(w, I.c2.z);\n"
     "    }\n"
     "    return (float4(col.rgb, 1.0) * col.a * a) * cover;\n"
@@ -238,7 +238,9 @@ static const char *shader_src =
     "  float2 c = I.rect.xy + hs;\n"
     "  // worked out as near the curve as its cover, its edge or its blur reaches\n"
     "  float band = 1.0 + 2.0 / scale + (kind == 2 ? max(I.prm.w, 0.5) : max(I.prm.z, 0.0));\n"
-    "  float d = mb_sd_box(p - c, hs, I.prm.x, band);\n"
+    "  // (its corner by p: rr, each its own)\n"
+    "  float rad = mb_corner_of(p - c, I.rr);\n"
+    "  float d = mb_sd_box(p - c, hs, rad, band);\n"
     "  if (kind == 0 || kind == 5) d = notch_cut(d, p, I.rect, I.pd);\n"
     "  if (kind == 4) {\n"
     "    float2 uv = I.c2.xy + saturate((p - I.rect.xy) / I.rect.zw) * I.c2.zw;\n"
@@ -246,10 +248,11 @@ static const char *shader_src =
     "  }\n"
     "  if (kind == 2) {\n"
     "    // as Core Animation's: the shape blurred, sigma its radius (corner.sl mb_shadow)\n"
-    "    float a = mb_shadow(p - c, hs, I.prm.x, max(I.prm.w, 0.25));\n"
+    "    float a = mb_shadow(p - c, hs, rad, max(I.prm.w, 0.25));\n"
     "    // glass's: only outside its box (c2.y above it)\n"
     "    if (I.c2.x > 0.5) {\n"
-    "      float db = mb_sd_box(p - c + float2(0.0, I.c2.y), hs, I.prm.x, band);\n"
+    "      float2 q = p - c + float2(0.0, I.c2.y);\n"
+    "      float db = mb_sd_box(q, hs, mb_corner_of(q, I.rr), band);\n"
     "      a *= saturate(0.5 + db * scale);\n"
     "    }\n"
     "    return (float4(col.rgb, 1.0) * col.a * a) * cover;\n"
@@ -264,8 +267,8 @@ static const char *shader_src =
     "    g3 = g3 * (1.0 - col.a) + col.rgb * col.a;\n"
     "    if (I.c2.x + I.c2.y + I.c2.z > 0.0) {\n"
     "      float edge = saturate(0.5 + (d + 0.5) * scale);\n"
-    "      float lit = saturate(0.5 + notch_cut(sd_rr(p - 0.5, I.rect, I.prm.x), p - 0.5, I.rect, I.pd) * scale);\n"
-    "      float back = saturate(0.5 + notch_cut(sd_rr(p + 0.5, I.rect, I.prm.x), p + 0.5, I.rect, I.pd) * scale);\n"
+    "      float lit = saturate(0.5 + notch_cut(sd_rr(p - 0.5, I.rect, I.rr), p - 0.5, I.rect, I.pd) * scale);\n"
+    "      float back = saturate(0.5 + notch_cut(sd_rr(p + 0.5, I.rect, I.rr), p + 0.5, I.rect, I.pd) * scale);\n"
     "      g3 = lerp(g3, float3(1.0, 1.0, 1.0), I.c2.x * edge);\n"
     "      g3 = lerp(g3, float3(1.0, 1.0, 1.0), I.c2.y * lit);\n"
     "      g3 = lerp(g3, float3(1.0, 1.0, 1.0), I.c2.z * back);\n"
@@ -430,12 +433,12 @@ static void make_pipeline(void) {
   ID3DBlob *vcode = compile("vmain", "vs_4_0"), *pcode = compile("fmain", "ps_4_0");
   dev->CreateVertexShader(vcode->GetBufferPointer(), vcode->GetBufferSize(), NULL, &vs);
   dev->CreatePixelShader(pcode->GetBufferPointer(), pcode->GetBufferSize(), NULL, &ps);
-  // the instance's nine float4s (scene.mbt): rect, p, color, c2, clip, pad, the clip's corners' radii, how smooth, how
-  // it is turned
-  D3D11_INPUT_ELEMENT_DESC el[9];
-  for (UINT i = 0; i < 9; i++)
+  // the instance's ten float4s (scene.mbt): rect, p, color, c2, clip, pad, the clip's corners' radii, how smooth, how
+  // it is turned, a box's corners' radii
+  D3D11_INPUT_ELEMENT_DESC el[10];
+  for (UINT i = 0; i < 10; i++)
     el[i] = {"INST", i, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, i * 16, D3D11_INPUT_PER_INSTANCE_DATA, 1};
-  dev->CreateInputLayout(el, 9, vcode->GetBufferPointer(), vcode->GetBufferSize(), &layout);
+  dev->CreateInputLayout(el, 10, vcode->GetBufferPointer(), vcode->GetBufferSize(), &layout);
   vcode->Release();
   pcode->Release();
   ID3DBlob *pv = compile("vpost", "vs_4_0", post_src), *pp = compile("fpost", "ps_4_0", post_src);
@@ -657,7 +660,7 @@ static int capture(ID3D11RenderTargetView *target, int pw, int ph, const float *
 }
 
 // The pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), for the pixel
-// shader to read (segs, t3): as they are, 9 fours an instance.
+// shader to read (segs, t3): as they are, 10 fours an instance.
 static ID3D11Buffer *segs_buf;
 static ID3D11ShaderResourceView *segs_srv;
 static size_t segs_cap;

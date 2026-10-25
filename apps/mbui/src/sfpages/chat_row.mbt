@@ -308,7 +308,7 @@ pub fn chat_row(
             if shows_time {
               c.text(item.ago, style=row_time) |> ignore
             } else {
-              row_aside(c, src, item, lead, face_ground)
+              row_aside(c, src, item, lead, face_ground, lift=if touch { 0.0 } else { mouse_aside_lift })
             }
           })
           |> ignore
@@ -382,6 +382,21 @@ let mouse_look : RowLook = {
   title_unread: @ui.text_style(size=Sm, weight=Medium, color=Fg, leading=L6, wrap=false, w=Full),
   last: @ui.text_style(size=Xs, color=Muted, leading=L5, wrap=false, w=Full),
 }
+
+///|
+/// How far over its second line's middle what stands at its end does (row_aside's `lift`) in a mouse's row: as far from
+/// the row's foot as from its end, its last face concentric with the row's foot corner when its ground shows (the
+/// ladder's row corner less a face's half, @sf.capsule_in: 10, as the row's 10 at its end), where its line's middle
+/// would have it 8 (7 in, the face 16 in the line's 18).
+let mouse_aside_lift : Double = @sf.capsule_in(@sf.row_corner, mouse_face_d) -
+  (mouse_row_in + (mouse_meta_h - mouse_face_d) / 2.0)
+
+///|
+/// A mouse's row's padding over its foot (py=@sf.row_in) and its second line's height (meta: S4_5).
+let mouse_row_in : Double = 7.0
+
+///|
+let mouse_meta_h : Double = 18.0
 
 ///|
 /// A finger's (mobile/Home.css.ts mChatRow: 66 high, 22 in on the left and 16 on the right, two lines in its middle;

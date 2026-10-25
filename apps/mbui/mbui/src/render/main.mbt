@@ -11,7 +11,7 @@
 
 ///|
 /// The numbers of an instance (src/ui/scene.mbt).
-let inst_size = 36
+let inst_size = 40
 
 ///|
 priv struct Dl {
@@ -25,7 +25,8 @@ priv struct Dl {
   images : Map[Int, (Int, String, Int)]
   carried : Map[Int, String]
   inst : Array[Array[String]]
-  /// the format's version (the head's): this renderer draws mbui-dl 5 (and 4, nothing turned; 3, its clips round)
+  /// the format's version (the head's): this renderer draws mbui-dl 6 (and 5, a box's corners one; 4, nothing turned;
+  /// 3, its clips round)
   mut version : Int
 }
 
@@ -100,8 +101,10 @@ fn parse(text : String) -> Dl {
       }
       "bytes" if t.length() >= 3 => dl.carried[num(t[1]).to_int()] = t[2]
       "mbui-dl" if t.length() >= 2 => dl.version = num(t[1]).to_int()
-      // i N0 … N35 (mbui-dl 4: N0 … N31, nothing turned; 3: N0 … N27, its clip's corners round)
-      "i" if t.length() == inst_size + 1 || t.length() == 33 || t.length() == 29 => dl.inst.push(t)
+      // i N0 … N39 (mbui-dl 5: N0 … N35, a box's corners one; 4: N0 … N31, nothing turned; 3: N0 … N27, its clip's
+      // corners round)
+      "i" if t.length() == inst_size + 1 || t.length() == 37 || t.length() == 33 || t.length() == 29 =>
+        dl.inst.push(t)
       _ => ()
     }
   }
@@ -121,8 +124,8 @@ fn main {
     return
   }
   let dl = parse(read_text(path))
-  if dl.version != 3 && dl.version != 4 && dl.version != 5 {
-    say("mbui-render: \{path}: mbui-dl \{dl.version}, not 3, 4 or 5 (scene.mbt's instances, \{inst_size} numbers each)")
+  if dl.version < 3 || dl.version > 6 {
+    say("mbui-render: \{path}: mbui-dl \{dl.version}, not 3 to 6 (scene.mbt's instances, \{inst_size} numbers each)")
     return
   }
   if dl.w <= 0.0 || dl.inst.is_empty() {
@@ -180,9 +183,15 @@ fn main {
   let inst = FixedArray::make(n * inst_size, 0.0)
   let mut resized = 0
   for k, t in dl.inst {
-    // (3's 28: how smooth its clip's corners are, 28-31, left 0: round; 4's 32: not turned, 32-35 left 0)
+    // (3's 28: how smooth its clip's corners are, 28-31, left 0: round; 4's 32: not turned, 32-35 left 0; 5's 36: a
+    // box's corners all its radius, 4)
     for j in 0..<(t.length() - 1) {
       inst[k * inst_size + j] = num(t[j + 1])
+    }
+    if t.length() - 1 < inst_size {
+      for j in 36..<40 {
+        inst[k * inst_size + j] = inst[k * inst_size + 4]
+      }
     }
     let kind = inst[k * inst_size + 5]
     if kind == 1.0 || kind == 3.0 || kind == 7.0 {

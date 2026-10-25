@@ -937,6 +937,19 @@ pub fn Ctx::box(
       None => None
     },
   ).unwrap_or(0.0)
+  // each corner its own (`Corners`); else all four `radius` (the node's look is not reset before a box sets it: none
+  // of a box's before it in this place kept)
+  n.radii = None
+  if radius is None {
+    match st.radius {
+      Some(r) =>
+        match r.each() {
+          Some(each) => n.set_radii(each)
+          None => ()
+        }
+      None => ()
+    }
+  }
   // a corner said `Inner` (and not said here): worked out once laid out (corners.mbt); `InnerOr`, its own till then
   if radius is None && st.radius is Some(Inner) {
     self.inners.push(i)

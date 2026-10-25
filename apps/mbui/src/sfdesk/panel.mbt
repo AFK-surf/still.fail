@@ -157,26 +157,43 @@ let side_rule_w : Double = 1.0
 pub let side_bar : @ui.Style = @ui.css("row w=Full h=S11 pl=S2 pr=S3 gap=S2 align=ACenter")
 
 ///|
-/// Its bar as a panel of its own on the tape (laid out Medium, its corner @sf.tape_pane): the first tab and the switch
-/// in its top corners as far in as makes them concentric with it (capsules: @sf.capsule_fit), its foot as before; where
-/// the panel is too square for that (it follows a round window), the bar as in the wide frame (side_bar).
+/// Its bar as a panel of its own on the tape (laid out Medium, its corners @sf.pane_round): the first tab in its top
+/// left corner and the switch in its top right each as far in as makes them concentric with the corner they are in
+/// (capsules: @sf.capsule_fit), its top by the first tab's, its foot as before; where its top left is too square for
+/// that, the bar as in the wide frame (side_bar); where its top right is (it follows a round window), the switch where
+/// it stands there.
 pub fn side_bar_tape() -> @ui.Style {
-  let corner = @sf.tape_pane.val
-  let at = @sf.capsule_in(corner, bar_button_side)
-  if !@sf.capsule_fits(corner, bar_button_side) || !@sf.capsule_fits(corner, @sf.side_tab_side) {
+  let (left, right) = match @sf.pane_round.val {
+    Some(k) => (k[0], k[1])
+    None => return side_bar
+  }
+  if !@sf.capsule_fits(left, @sf.side_tab_side) {
     return side_bar
+  }
+  // (the tab 30 high, the switch 32, both in the row's middle: the row's top where the tab's is concentric, less its
+  // half the switch is taller)
+  let tab_at = @sf.capsule_in(left, @sf.side_tab_side)
+  let at = tab_at - (bar_button_side - @sf.side_tab_side) / 2.0
+  let end = if @sf.capsule_fits(right, bar_button_side) && (@sf.capsule_in(right, bar_button_side) - at).abs() <= 0.5 {
+    at
+  } else {
+    side_bar_end
   }
   @ui.style(
     row=true,
     w=Full,
     pt=@sf.room_of(at),
     pb=S1_5,
-    pl=@sf.room_of(@sf.capsule_in(corner, @sf.side_tab_side)),
-    pr=@sf.room_of(at),
+    pl=@sf.room_of(tab_at),
+    pr=@sf.room_of(end),
     gap=S2,
     align=ACenter,
   )
 }
+
+///|
+/// The switch's room at the bar's end in the wide frame (side_bar: pr=S3).
+let side_bar_end : Double = 12.0
 
 ///|
 /// Its tabs (sideTabList), 2 apart.

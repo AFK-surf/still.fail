@@ -17,7 +17,7 @@
 
 ///|
 /// The numbers of an instance (src/ui/scene.mbt).
-let inst_size = 36
+let inst_size = 40
 
 ///|
 /// The film's frames a second.

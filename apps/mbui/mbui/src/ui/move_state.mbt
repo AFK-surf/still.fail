@@ -39,7 +39,8 @@ let move_props : Map[String, Array[Int]] = {
   "inset": [14, 15, 16, 17],
   "gap": [18],
   "background-color": [19],
-  "border-radius": [20],
+  // (each corner its own: top left, top right, bottom right, bottom left)
+  "border-radius": [20, 29, 30, 31],
   "border-width": [21],
   "border-color": [22],
   "box-shadow": [23, 24, 25],
@@ -49,13 +50,13 @@ let move_props : Map[String, Array[Int]] = {
 
 ///|
 /// How many numbers a box is shown as (move_props' indices), and where a size's kind is kept.
-let move_count : Int = 29
+let move_count : Int = 32
 
 ///|
-let move_w_kind : Int = 29
+let move_w_kind : Int = 32
 
 ///|
-let move_h_kind : Int = 30
+let move_h_kind : Int = 33
 
 ///|
 /// The properties that are colours (0xRRGGBBAA), mixed as the web's motion mixes them.
@@ -332,7 +333,10 @@ fn node_shown(n : Node) -> FixedArray[Double] {
   v[17] = n.at_b
   v[18] = n.gap
   v[19] = n.bg.to_double()
-  v[20] = n.radius
+  v[20] = n.radius_at(0)
+  v[29] = n.radius_at(1)
+  v[30] = n.radius_at(2)
+  v[31] = n.radius_at(3)
   v[21] = n.border_w
   v[22] = n.border_c.to_double()
   v[23] = n.shadow
@@ -379,7 +383,7 @@ fn node_show(n : Node, v : FixedArray[Double]) -> Unit {
   n.at_b = v[17]
   n.gap = v[18]
   n.bg = v[19].to_int64()
-  n.radius = v[20]
+  n.set_radii(FixedArray::from_array([v[20], v[29], v[30], v[31]]))
   n.border_w = v[21]
   n.border_c = v[22].to_int64()
   n.shadow = v[23]

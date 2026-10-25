@@ -1397,6 +1397,26 @@ pub fn Tester::drawn_rects(self : Tester) -> Array[(Double, Double, Double, Doub
 }
 
 ///|
+/// The same rectangles with their corners, each its own (top left, then round it: an instance's 36-39).
+pub fn Tester::drawn_rect_corners(
+  self : Tester,
+) -> Array[(Double, Double, Double, Double, Int64, (Double, Double, Double, Double))] {
+  let rs = self.drawn_rects()
+  let out = []
+  let c = g()
+  let mut j = 0
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    if c.inst[b + 5] == 0.0 {
+      let r = rs[j]
+      out.push((r.0, r.1, r.2, r.3, r.4, (c.inst[b + 36], c.inst[b + 37], c.inst[b + 38], c.inst[b + 39])))
+      j += 1
+    }
+  }
+  out
+}
+
+///|
 /// The shadows drawn in the last frame (a blurred shape, kind 2): (x, y, w, h, its corner, its blur, colour
 /// RRGGBBAA with its opacity applied).
 pub fn Tester::drawn_shadows(self : Tester) -> Array[(Double, Double, Double, Double, Double, Double, Int64)] {

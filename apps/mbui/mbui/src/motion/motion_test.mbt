@@ -1090,6 +1090,50 @@ test "a box changed in its place (no carry): what is new in it is in its place f
 }
 
 ///|
+/// The corners of the first plain rectangle of `color` the last frame drew, each its own (top left, then round it).
+fn drawn_corners(t : @ui.Tester, color : Int64) -> (Double, Double, Double, Double) {
+  let rs = t.drawn_rect_corners().filter(fn(r) { r.4 == color })
+  if rs.is_empty() {
+    (-1.0, -1.0, -1.0, -1.0)
+  } else {
+    rs[0].5
+  }
+}
+
+///|
+test "a box reshaped for its cause: each of its ground's corners goes its own way from the shape it had" {
+  let lines = Ref::new(1)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      // (one line: all four 10; two: its foot's corners each its own, as a composer's across a panel's foot)
+      let radius : @ui.Radius = if lines.val == 1 { Exact(10.0) } else { Corners(10.0, 10.0, 2.0, 18.0) }
+      let b = c.box(
+        style=@ui.style(radius~),
+        w=Px(100.0),
+        h=Px(20.0 * lines.val.to_double()),
+        bg=0xFF0000FFL,
+        fn() {  },
+      )
+      @motion.reshape(c, b, "box", by="\{lines.val} lines", spec=@motion.tween(reshape_ms, ease=Linear))
+    })
+    |> ignore
+  })
+  assert_eq(drawn_corners(t, 0xFF0000FFL), (10.0, 10.0, 10.0, 10.0))
+  lines.val = 2
+  t.frame()
+  assert_eq(drawn_corners(t, 0xFF0000FFL), (10.0, 10.0, 10.0, 10.0))
+  // midway: its top corners as they were, its foot's each on its way to its own, as far along as the other
+  t.run_for(reshape_midway_ms)
+  let (tl, tr, br, bl) = drawn_corners(t, 0xFF0000FFL)
+  assert_eq((tl, tr), (10.0, 10.0))
+  assert_true(br > 2.0 && br < 10.0 && bl > 10.0 && bl < 18.0, msg="\{(br, bl)}")
+  assert_true((10.0 - br - (bl - 10.0)).abs() < 0.001, msg="\{(br, bl)}")
+  t.run_for(@motion.layout_rest("box") - t.time())
+  assert_eq(drawn_corners(t, 0xFF0000FFL), (10.0, 10.0, 2.0, 18.0))
+  t.assert_idle()
+}
+
+///|
 test "a box resized by what holds it, its cause the same, has its ground its new shape at once" {
   let w = Ref::new(100.0)
   let t = @ui.Tester::new(fn(c) {

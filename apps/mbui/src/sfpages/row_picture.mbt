@@ -7,8 +7,16 @@
 /// mobile/Home.tsx): its agents' marks (a maker's once, `size` less 4 in a column 16 wide, 4 apart; past three, +N)
 /// and its people (round, each 3 over the one before with a pixel of the row's ground round it; who started it, of
 /// more than one, ringed in ink a pixel past that, over the others), those that lead first, 6 apart; the people only
-/// when they lead or someone other than the viewer is in it. `ground`: the row's ground, what is round each face.
-pub fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, ground : Int64) -> Unit {
+/// when they lead or someone other than the viewer is in it. `ground`: the row's ground, what is round each face;
+/// `lift`: how far over the line's middle they stand (in the row's foot corner, concentric with it: chat_row's).
+pub fn row_aside(
+  c : @ui.Ctx,
+  src : Source,
+  item : ChatItem,
+  lead : String,
+  ground : Int64,
+  lift? : Double = 0.0,
+) -> Unit {
   let groups = @sfbase.row_agent_groups(item)
   let people = item.people
   let with_people = people.length() > 0 && (lead == "people" || people.iter().any(fn(p) { !p.mine }))
@@ -68,7 +76,7 @@ pub fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, grou
     })
     |> ignore
   }
-  c.box(style=aside_row, fn() {
+  c.box(style=aside_row, ty=-lift, fn() {
     if lead == "people" {
       if with_people {
         faces()

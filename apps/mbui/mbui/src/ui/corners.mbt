@@ -59,9 +59,67 @@ fn Ctx::inner_row(self : Ctx, p : Int) -> Bool {
 }
 
 ///|
-/// The corner a node draws: its radius, at most half its shorter side.
+/// The corner a node draws: its radius, at most half its shorter side (the roundest of its corners, where they are each
+/// their own).
 fn Node::corner(self : Node) -> Double {
   dmin(self.radius, dmin(self.fw, self.fh) / 2.0)
+}
+
+///|
+/// Its corner `k` as drawn (0 top left, then round it: radius_at's), at most half its shorter side.
+fn Node::corner_at(self : Node, k : Int) -> Double {
+  dmin(self.radius_at(k), dmin(self.fw, self.fh) / 2.0)
+}
+
+///|
+/// The rounded container something lies in, as the corner rule sees it (Ctx::corner_container): its node, the node whose
+/// ground its corners are (its own, or one of its size laid under it as a layer), and whether it is the window (its
+/// corners the system's).
+priv struct Container {
+  node : Int
+  ground : Int
+  window : Bool
+}
+
+///|
+/// Corner `k` of container `ct` (0 top left, then round it): the window's the system's (@hostapi.window_corner), else
+/// its ground's, each corner its own.
+fn Ctx::container_r(self : Ctx, ct : Container, k : Int) -> Double {
+  if ct.window {
+    self.window_corner
+  } else {
+    self.nodes[ct.ground].corner_at(k)
+  }
+}
+
+///|
+/// The roundest of container `ct`'s corners.
+fn Ctx::container_most(self : Ctx, ct : Container) -> Double {
+  if ct.window {
+    self.window_corner
+  } else {
+    self.nodes[ct.ground].corner()
+  }
+}
+
+///|
+/// What the corners are called, 0 top left, then round it (scene.mbt's, an instance's 36-39).
+// kept across runs: a table, never written
+let corner_names : Array[String] = ["top left", "top right", "bottom right", "bottom left"]
+
+///|
+/// Whether corner `k` (0 top left, then round it) is on the left.
+fn corner_left(k : Int) -> Bool {
+  k == 0 || k == 3
+}
+
+///|
+/// How far box `b` stands from the two edges of `a` that meet at its corner `k` (0 top left, then round it): from its
+/// side, from its top or foot.
+fn corner_gaps(a : Node, b : Node, k : Int) -> (Double, Double) {
+  let dx = if corner_left(k) { b.x - a.x } else { a.x + a.fw - (b.x + b.fw) }
+  let dy = if k < 2 { b.y - a.y } else { a.y + a.fh - (b.y + b.fh) }
+  (dx, dy)
 }
 
 ///|
@@ -87,39 +145,59 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
     if !b.grounded() || b.layer {
       continue
     }
-    let (p, ra, ground) = match c.corner_container(i, grounds) {
+    let ct = match c.corner_container(i, grounds) {
       Some(found) => found
       None => continue
     }
-    if c.corner_exempt(i, p, ra, ground, pictures) {
+    let p = ct.node
+    if c.corner_exempt(i, p, c.container_most(ct), ct.ground, pictures) {
       continue
     }
     let a = c.nodes[p]
-    let rb = b.corner()
-    // a whole circle or a capsule (its corner half its shorter side: an avatar, a switch's knob, a dot, a ×) is round
-    // by what it is. One in the middle of the container along an axis (as far from its top as from its foot, or from
-    // its two sides) is set in a corner only where the container is round all along that axis (a capsule's end: a
-    // switch's knob in its track, a send button in a capsule field, a chip's dot): a card's trailing × in the middle of
-    // a card taller than its corners are round is in none. (Where it stands, not how it is laid out: one in the middle
-    // of a short row along a container's edge, a bar's button by a panel's corner, is in that corner.)
-    let round = rb >= dmin(b.fw, b.fh) / 2.0 - 0.5
     let l = b.x - a.x
     let t = b.y - a.y
     let r = a.x + a.fw - (b.x + b.fw)
     let d = a.y + a.fh - (b.y + b.fh)
-    if round {
-      if ((t - d).abs() <= 0.5 && ra < a.fh / 2.0 - 0.5) || ((l - r).abs() <= 0.5 && ra < a.fw / 2.0 - 0.5) {
-        continue
-      }
-      // a mark smaller than the gap it would leave round it standing concentric (the corner's radius less its own
-      // half: a status dot or ring leading a line of words) reads as a point, not as a shape the corner's arc runs
-      // beside: it stands where the words it leads do, not by the corner
-      let side = dmax(b.fw, b.fh)
-      if side < ra - side / 2.0 + 0.5 {
-        continue
+    // (where one of its corners lies in a container's corner off the ladder, one following the window's, it stands
+    // where that corner has it: its corners in the ladder's at that place concentric with them, and nothing more: a
+    // composer across a panel's foot, 6.5 in to follow its corner in the window's, 28.8 round in its other, 34)
+    let mut off_at : Double? = None
+    if ladder.length() > 0 {
+      for k in 0..<4 {
+        let ra = c.container_r(ct, k)
+        if !on_ladder(ladder, ra) {
+          match c.corner_inset_at(i, p, k, ra) {
+            Some(e) => off_at = Some(e)
+            None => ()
+          }
+        }
       }
     }
-    for k, (dx, dy) in [(l, t), (r, t), (l, d), (r, d)] {
+    // each corner by the container's corner it lies in, each its own (a panel's in the window's corners following
+    // them, the others standing alone)
+    for k in 0..<4 {
+      let ra = c.container_r(ct, k)
+      let rb = b.corner_at(k)
+      // a whole circle or a capsule (its corner half its shorter side: an avatar, a switch's knob, a dot, a ×) is round
+      // by what it is. One in the middle of the container along an axis (as far from its top as from its foot, or from
+      // its two sides) is set in a corner only where the container is round all along that axis (a capsule's end: a
+      // switch's knob in its track, a send button in a capsule field, a chip's dot): a card's trailing × in the middle
+      // of a card taller than its corners are round is in none. (Where it stands, not how it is laid out: one in the
+      // middle of a short row along a container's edge, a bar's button by a panel's corner, is in that corner.)
+      let round = rb >= dmin(b.fw, b.fh) / 2.0 - 0.5
+      if round {
+        if ((t - d).abs() <= 0.5 && ra < a.fh / 2.0 - 0.5) || ((l - r).abs() <= 0.5 && ra < a.fw / 2.0 - 0.5) {
+          continue
+        }
+        // a mark smaller than the gap it would leave round it standing concentric (the corner's radius less its own
+        // half: a status dot or ring leading a line of words) reads as a point, not as a shape the corner's arc runs
+        // beside: it stands where the words it leads do, not by the corner
+        let side = dmax(b.fw, b.fh)
+        if side < ra - side / 2.0 + 0.5 {
+          continue
+        }
+      }
+      let (dx, dy) = corner_gaps(a, b, k)
       if dx < -0.5 || dy < -0.5 || dx >= ra || dy >= ra || !nearest_corner(k, l, t, r, d) {
         continue
       }
@@ -142,7 +220,7 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       } else {
         (rb - concentric(ra, dmax(dx, dy))).abs() <= 0.5
       }
-      let corner = ["top left", "top right", "bottom left", "bottom right"][k]
+      let corner = corner_names[k]
       // none of the theme's ranges makes it concentric there (Theme::corner_fit: the container too square for it, or
       // too round, a window's corner among them): it stands as it would alone, and the rule asks nothing more of it
       if !in_step && !c.fit_there(ra, rb, round) {
@@ -170,13 +248,17 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
         let round_a = ra >= dmin(a.fw, a.fh) / 2.0 - 0.5
         // (not one round as it is because it lies in a corner of its own, concentric with it there: a panel in the
         // window's; nor the window, round as the system has it)
-        if !round_a && !on_ladder(ladder, ra) && !off_ladder.contains(p) && !c.follows_corner(p, ra, grounds) {
+        if !round_a && !on_ladder(ladder, ra) && !off_ladder.contains(p) && !c.follows_corner(p, k, ra, grounds) {
           off_ladder.add(p)
           out.push(
             "\{c.named(p)} (corner \{ra}): something lies in its \{corner}, and its corner is not one of the ladder's \{ladder}",
           )
         }
-        if !round && on_ladder(ladder, ra) && !on_ladder(ladder, rb) {
+        let placed_off = match off_at {
+          Some(e) => (e - dmax(dx, dy)).abs() <= 0.5
+          None => false
+        }
+        if !round && on_ladder(ladder, ra) && !on_ladder(ladder, rb) && !placed_off {
           out.push(
             "\{c.named(i)} (corner \{rb}) in the \{corner} of \{c.named(p)} (corner \{ra}): \{dx} from its edges, so a corner not one of the ladder's \{ladder} (\{ladder_in(ladder, ra)})",
           )
@@ -238,12 +320,12 @@ fn Ctx::fit_place(self : Ctx, ra : Double, d : Double) -> Double {
 }
 
 ///|
-/// Whether corner `k` (0 top left, 1 top right, 2 bottom left, 3 bottom right) of a container is one a box `l`, `t`,
-/// `r`, `d` from its left, top, right and foot edges lies in by where it stands: on the side of the container it is
-/// nearer (or in its middle), not the far one a short container brings within reach too (a copy key in a one-line
-/// block's top right corner, its foot's within the block's corner from it as well).
+/// Whether corner `k` (0 top left, then round it) of a container is one a box `l`, `t`, `r`, `d` from its left, top,
+/// right and foot edges lies in by where it stands: on the side of the container it is nearer (or in its middle), not
+/// the far one a short container brings within reach too (a copy key in a one-line block's top right corner, its
+/// foot's within the block's corner from it as well).
 fn nearest_corner(k : Int, l : Double, t : Double, r : Double, d : Double) -> Bool {
-  let side_ok = if k == 0 || k == 2 { l <= r + 0.5 } else { r <= l + 0.5 }
+  let side_ok = if corner_left(k) { l <= r + 0.5 } else { r <= l + 0.5 }
   let end_ok = if k < 2 { t <= d + 0.5 } else { d <= t + 0.5 }
   side_ok && end_ok
 }
@@ -453,11 +535,11 @@ fn Ctx::in_picture(self : Ctx, i : Int, pictures : Set[Int]) -> Bool {
 
 ///|
 /// The rounded container node `i` lies in, as the corner rule sees it: the nearest round it that shows (a ground, an
-/// edge, glass, or what it cuts) with a corner of 6 or more, its own or one laid under it as a layer of the same size
-/// (a composer's glass drawn beside what it holds: `grounds`, Ctx::layer_grounds). Its node, its corner, the node whose
-/// ground that corner is; None when there is none. Tester::corner_faults and `Inner` (corners_after_layout) both ask
+/// edge, glass, or what it cuts) with a corner of 6 or more (its roundest), its own or one laid under it as a layer of
+/// the same size (a composer's glass drawn beside what it holds: `grounds`, Ctx::layer_grounds). Its node, the node
+/// whose ground its corners are, whether it is the window; None when there is none. Tester::corner_faults and `Inner` (corners_after_layout) both ask
 /// this, so they measure against the same container.
-fn Ctx::corner_container(self : Ctx, i : Int, grounds : Map[Int, Int]) -> (Int, Double, Int)? {
+fn Ctx::corner_container(self : Ctx, i : Int, grounds : Map[Int, Int]) -> Container? {
   let mut p = self.nodes[i].parent
   let mut top = i
   while p >= 0 {
@@ -465,10 +547,10 @@ fn Ctx::corner_container(self : Ctx, i : Int, grounds : Map[Int, Int]) -> (Int, 
     if a.kind == kind_box &&
       a.corner() >= 6.0 &&
       (a.grounded() || a.glass is Some(_) || a.clip || a.pressed_row() || self.inner_row(p)) {
-      return Some((p, a.corner(), p))
+      return Some({ node: p, ground: p, window: false })
     }
     match grounds.get(p) {
-      Some(gi) if gi != i => return Some((p, self.nodes[gi].corner(), gi))
+      Some(gi) if gi != i => return Some({ node: p, ground: gi, window: false })
       _ => ()
     }
     top = p
@@ -476,7 +558,7 @@ fn Ctx::corner_container(self : Ctx, i : Int, grounds : Map[Int, Int]) -> (Int, 
   }
   // none rounded round it: the window, where the system rounds its corners (window_container)
   if top != i && self.window_container(top) {
-    return Some((top, self.window_corner, top))
+    return Some({ node: top, ground: top, window: true })
   }
   None
 }
@@ -516,33 +598,35 @@ fn Ctx::place_fits(self : Ctx, d : Double) -> Bool {
 }
 
 ///|
-/// Whether container `p` (corner `ra`) is round as it is because it lies in its own container's corner, concentric
-/// with it there (a panel 6 in from the window's corner, as round as the window's less that): its corner the
-/// outer one's, not one of the ladder's to keep. One past the window's side (a pane beside the one in use, which comes
-/// over whole into the window's side) by how far it stands from the window's top and foot, where it will be in its
-/// corners.
-fn Ctx::follows_corner(self : Ctx, p : Int, ra : Double, grounds : Map[Int, Int]) -> Bool {
+/// Whether container `p`'s corner `k` (`ra` round) is round as it is because it lies in its own container's corner,
+/// concentric with it there (a panel 6 in from the window's corner, as round as the window's less that): its corner
+/// the outer one's, not one of the ladder's to keep. One past the window's side there (a pane beside the one in use,
+/// which comes over whole into the window's side) by how far it stands from the window's top and foot, where it will
+/// be in that corner.
+fn Ctx::follows_corner(self : Ctx, p : Int, k : Int, ra : Double, grounds : Map[Int, Int]) -> Bool {
   if self.window_container(p) {
     return true
   }
   match self.corner_container(p, grounds) {
-    Some((q, rq, _)) =>
-      match self.corner_inset(p, q, rq) {
-        Some(d) => (ra - concentric(rq, d)).abs() <= 0.5
+    Some(ct) => {
+      let rq = self.container_r(ct, k)
+      match self.corner_inset_at(p, ct.node, k, rq) {
+        Some(e) => (ra - concentric(rq, e)).abs() <= 0.5
         None => {
-          let a = self.nodes[q]
+          let a = self.nodes[ct.node]
           let b = self.nodes[p]
+          let (dx, dy) = corner_gaps(a, b, k)
           let t = b.y - a.y
           let d = a.y + a.fh - (b.y + b.fh)
-          let past = b.x < a.x - 0.5 || b.x + b.fw > a.x + a.fw + 0.5
-          self.window_container(q) &&
-          past &&
+          ct.window &&
+          dx < -0.5 &&
           (t - d).abs() <= 0.5 &&
-          t >= -0.5 &&
-          t < rq &&
-          (ra - concentric(rq, t)).abs() <= 0.5
+          dy >= -0.5 &&
+          dy < rq &&
+          (ra - concentric(rq, dy)).abs() <= 0.5
         }
       }
+    }
     None => false
   }
 }
@@ -609,19 +693,22 @@ fn Ctx::corners_after_layout(self : Ctx) -> Unit {
 /// before it).
 fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int]) -> Unit {
   let n = self.nodes[i]
-  // (`InnerOr`: its own corner where it lies in no container's corner, as built)
-  let own = if self.inners_or.contains(i) { Some(n.radius) } else { None }
+  // (`InnerOr`: its own corners where they lie in no container's corner, as built)
+  let own = if self.inners_or.contains(i) { Some(n.radii_now()) } else { None }
   n.radius = 0.0
-  let (p, ra, _) = match self.corner_container(i, grounds) {
+  n.radii = None
+  let ct = match self.corner_container(i, grounds) {
     Some(found) => found
     None => {
       match own {
-        Some(r) => n.radius = r
+        Some(r) => n.set_radii(r)
         None => self.inner_faults.push("\{self.named(i)}: radius=Inner, in no rounded container")
       }
       return
     }
   }
+  let p = ct.node
+  let ra = self.container_most(ct)
   let a = self.nodes[p]
   let sides = [
     ("left", n.x - a.x),
@@ -641,7 +728,7 @@ fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int]) -> Unit
   })
   if near.is_empty() {
     match own {
-      Some(r) => n.radius = r
+      Some(r) => n.set_radii(r)
       None =>
         self.inner_faults.push(
           "\{self.named(i)}: radius=Inner, near none of the edges of \{self.named(p)} (corner \{ra})",
@@ -655,28 +742,47 @@ fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int]) -> Unit
     self.inner_faults.push(
       "\{self.named(i)}: radius=Inner, at different distances from the edges of \{self.named(p)} (corner \{ra}): \{said}",
     )
-    n.radius = own.unwrap_or(0.0)
+    match own {
+      Some(r) => n.set_radii(r)
+      None => ()
+    }
     return
   }
-  // (`InnerOr` round of its own and round there too, as a pill or a circle is in a corner as round as it: its own
-  // corner kept, the same box drawn the same; and its own where no place the theme's ranges let it stand makes a
-  // capsule of it concentric there (the container too square for it), or where it stands its corner would be one
-  // they do not let it have: it stands as alone, and corner_faults says where it would fit, if anywhere)
-  let k = concentric(ra, d)
+  // each corner by the container's corner there (a panel's in the window's corners following them, the others alone):
+  // concentric with it across `d`. `InnerOr` keeps its own where it lies in no corner of the container's (near the two
+  // edges that meet there, an edge it scrolls past counted near: a composer at a panel's foot, its top's corners its
+  // own), and where it is round of its own and round there too, as a pill or a circle is in a corner as round as it
+  // (its own corner kept, the same box drawn the same); and its own where no place the theme's ranges let it stand
+  // makes a capsule of it concentric there (the container too square for it), or where it stands its corner would be
+  // one they do not let it have: it stands as alone, and corner_faults says where it would fit, if anywhere; and, as
+  // corners_in_corners leaves it, its own where it is not round of its own and the corner it would have there would
+  // round it whole (a row 38 high 8 from a panel's side, the panel's 34 in reach of it as it scrolls): too small for
+  // that corner, it keeps its shape
   let half = dmin(n.fw, n.fh) / 2.0
-  n.radius = match own {
-    Some(r) if r >= half && k >= half => r
-    Some(r) if r >= half && !self.place_fits(ra - half) => r
-    Some(r) if !self.corner_fits(k) => r
-    _ => k
+  let rs = FixedArray::make(4, 0.0)
+  for k in 0..<4 {
+    let rk = self.container_r(ct, k)
+    let kk = concentric(rk, d)
+    let side = sides[if corner_left(k) { 0 } else { 2 }].1
+    let end = sides[if k < 2 { 1 } else { 3 }].1
+    let lies = (across || (side >= -inner_even && side < rk)) && (up_down || (end >= -inner_even && end < rk))
+    rs[k] = match own {
+      Some(r) if !lies => r[k]
+      Some(r) if r[k] >= half && kk >= half => r[k]
+      Some(r) if r[k] >= half && !self.place_fits(rk - half) => r[k]
+      Some(r) if r[k] < half - 0.5 && kk >= half - 0.5 => r[k]
+      Some(r) if !self.corner_fits(kk) => r[k]
+      _ => kk
+    }
   }
+  n.set_radii(rs)
 }
 
 ///|
 /// Every other box with a corner of its own (not `Inner`, `InnerOr` or `Around`: worked out before it), whose shape is
-/// not round by its size: the corner it is given is the one it has standing alone; lying in the corner of a rounded
-/// container (corner_container: near two of its edges that meet, nearer than the container's corner is round, as far
-/// from both), concentric with it, as corner_faults asks. So no page says it, and a box the window or what it holds
+/// not round by its size: the corner it is given is the one it has standing alone; each of its corners lying in the
+/// corner of a rounded container (corner_container: near two of its edges that meet, nearer than the container's
+/// corner there is round, as far from both), concentric with it, as corner_faults asks; the others its own. So no page says it, and a box the window or what it holds
 /// moves into a corner or out of one is right in both. In the order built, a container before what it holds. A capsule
 /// or a circle (its corner half its shorter side) is round by its shape: where it stands is what makes it concentric
 /// (ui-panels.md: 外圆角 = 距离 + 半高), which corner_faults checks; so is one too small for the corner it would have
@@ -702,69 +808,77 @@ fn Ctx::corners_in_corners(self : Ctx, grounds : Map[Int, Int]) -> Unit {
       b.radius < 0.5 ||
       b.fw <= 0.0 ||
       b.fh <= 0.0 ||
-      said.contains(i) ||
-      b.radius >= dmin(b.fw, b.fh) / 2.0 - 0.5 {
+      said.contains(i) {
       continue
     }
-    let (p, ra, ground) = match self.corner_container(i, grounds) {
+    let half = dmin(b.fw, b.fh) / 2.0
+    let ct = match self.corner_container(i, grounds) {
       Some(found) => found
       None => continue
     }
-    if self.corner_exempt(i, p, ra, ground, pictures) {
+    if self.corner_exempt(i, ct.node, self.container_most(ct), ct.ground, pictures) {
       continue
     }
-    // (not where that would round it whole: a box too small for the corner it would have keeps its shape, and stands
-    // where its shape is concentric, as a capsule would, or corner_faults says so; nor where it would be rounder or
-    // squarer than the theme lets what lies in a corner be, Theme::corner_fit: it stands as it would alone)
-    match self.corner_inset(i, p, ra) {
-      Some(d) if concentric(ra, d) < dmin(b.fw, b.fh) / 2.0 - 0.5 && self.corner_fits(concentric(ra, d)) =>
-        b.radius = concentric(ra, d)
-      _ => ()
+    // each corner by the container's corner it lies in (a panel's in the window's corners following them, the others
+    // its own). (Not where that would round it whole: a box too small for the corner it would have keeps its shape,
+    // and stands where its shape is concentric, as a capsule would, or corner_faults says so; nor a corner round by
+    // its shape, a capsule's end; nor where it would be rounder or squarer than the theme lets what lies in a corner
+    // be, Theme::corner_fit: it stands as it would alone)
+    let rs = b.radii_now()
+    let mut moved = false
+    for k in 0..<4 {
+      if rs[k] >= half - 0.5 {
+        continue
+      }
+      match self.corner_inset_at(i, ct.node, k, self.container_r(ct, k)) {
+        Some(d) => {
+          let kk = concentric(self.container_r(ct, k), d)
+          if kk < half - 0.5 && self.corner_fits(kk) {
+            rs[k] = kk
+            moved = true
+          }
+        }
+        None => ()
+      }
+    }
+    if moved {
+      b.set_radii(rs)
     }
   }
 }
 
 ///|
-/// How far box `i` stands from the two edges of each corner of container `p` (corner `ra`) it lies in (nearer to both
-/// than `ra`, not past either; not where a cut between them bounds it: cut_round_at), when that is the same for each
-/// and for both its edges; None when it lies in none, or not as far from each.
-fn Ctx::corner_inset(self : Ctx, i : Int, p : Int, ra : Double) -> Double? {
+/// How far box `i` stands from the two edges of container `p`'s corner `k` (`ra` round), where it lies in it (nearer
+/// to both than `ra`, not past either; not where a cut between them bounds it: cut_round_at) as far from both; None
+/// when it lies in none, or not as far from each.
+fn Ctx::corner_inset_at(self : Ctx, i : Int, p : Int, k : Int, ra : Double) -> Double? {
   let a = self.nodes[p]
   let b = self.nodes[i]
   let l = b.x - a.x
   let t = b.y - a.y
   let r = a.x + a.fw - (b.x + b.fw)
   let d = a.y + a.fh - (b.y + b.fh)
-  let mut found : Double? = None
-  for k, (dx, dy) in [(l, t), (r, t), (l, d), (r, d)] {
-    if dx < -0.5 ||
-      dy < -0.5 ||
-      dx >= ra ||
-      dy >= ra ||
-      !nearest_corner(k, l, t, r, d) ||
-      self.cut_round_at(i, p, k) ||
-      self.corner_cut_off(i, p, k) {
-      continue
-    }
-    if (dx - dy).abs() > 0.5 {
-      return None
-    }
-    let e = dmax(dx, dy)
-    match found {
-      Some(f) if (f - e).abs() > 0.5 => return None
-      _ => found = Some(e)
-    }
+  let (dx, dy) = corner_gaps(a, b, k)
+  if dx < -0.5 ||
+    dy < -0.5 ||
+    dx >= ra ||
+    dy >= ra ||
+    !nearest_corner(k, l, t, r, d) ||
+    self.cut_round_at(i, p, k) ||
+    self.corner_cut_off(i, p, k) ||
+    (dx - dy).abs() > 0.5 {
+    return None
   }
-  found
+  Some(dmax(dx, dy))
 }
 
 ///|
-/// Whether node `i`'s corner `k` (0 top left, 1 top right, 2 bottom left, 3 bottom right) is cut off by something
+/// Whether node `i`'s corner `k` (0 top left, then round it) is cut off by something
 /// between it and its container `p` that cuts what it holds (clip, or what scrolls sideways in it): past its edge, it
 /// does not show (a table wider than its column, scrolled sideways in it).
 fn Ctx::corner_cut_off(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
   let b = self.nodes[i]
-  let x = if k == 0 || k == 2 { b.x } else { b.x + b.fw }
+  let x = if corner_left(k) { b.x } else { b.x + b.fw }
   let y = if k < 2 { b.y } else { b.y + b.fh }
   let mut q = b.parent
   while q >= 0 && q != p {
@@ -779,7 +893,7 @@ fn Ctx::corner_cut_off(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
 }
 
 ///|
-/// Whether what shows at node `i`'s corner `k` (0 top left, 1 top right, 2 bottom left, 3 bottom right) is the curve of
+/// Whether what shows at node `i`'s corner `k` (0 top left, then round it) is the curve of
 /// a box between it and its container `p` (`p` included) that cuts what it holds with a rounded corner (clip, a corner of
 /// its own): the node's own corner there lies wholly outside the cut's curve (within half a pixel), so the cut's bounds
 /// it (a square corner flush along its edge, a capsule's fill as round as it). Both corners as drawn (smooth.mbt: each
@@ -787,7 +901,7 @@ fn Ctx::corner_cut_off(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
 /// one point inside the cut's curve and its own shows: checked as any other.
 fn Ctx::cut_round_at(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
   let b = self.nodes[i]
-  let rb = b.corner()
+  let rb = b.corner_at(k)
   let sb = smoothness(rb, dmin(b.fw, b.fh) / 2.0)
   let nb = 2.0 + (smooth_exponent - 2.0) * sb
   let big = rb * (1.0 + (smooth_scale - 1.0) * sb)
@@ -796,10 +910,10 @@ fn Ctx::cut_round_at(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
     let n = self.nodes[q]
     // (the window cuts what is drawn in it as a clip with its corner does)
     let window = q == p && self.window_container(q)
-    let r = if window { self.window_corner } else { n.corner() }
+    let r = if window { self.window_corner } else { n.corner_at(k) }
     if (n.clip || window) && r >= 0.5 {
       // the corner's own frame: the cut's corner at the origin, inward positive
-      let dx = if k == 0 || k == 2 { b.x - n.x } else { n.x + n.fw - (b.x + b.fw) }
+      let dx = if corner_left(k) { b.x - n.x } else { n.x + n.fw - (b.x + b.fw) }
       let dy = if k < 2 { b.y - n.y } else { n.y + n.fh - (b.y + b.fh) }
       let hx = n.fw / 2.0
       let hy = n.fh / 2.0
@@ -852,6 +966,7 @@ fn Ctx::arounds_after_layout(self : Ctx) -> Unit {
   for p in self.arounds {
     let a = self.nodes[p]
     a.radius = 0.0
+    a.radii = None
     // (corner index, the box, its distances from the corner's two edges)
     let mut best : (Int, Int, Double, Double)? = None
     let mut best_d = 1.0e9
@@ -868,11 +983,8 @@ fn Ctx::arounds_after_layout(self : Ctx) -> Unit {
       if !self.lies_in_bare(i, p) {
         continue
       }
-      let l = b.x - a.x
-      let t = b.y - a.y
-      let r = a.x + a.fw - (b.x + b.fw)
-      let d = a.y + a.fh - (b.y + b.fh)
-      for k, (dx, dy) in [(l, t), (r, t), (l, d), (r, d)] {
+      for k in 0..<4 {
+        let (dx, dy) = corner_gaps(a, b, k)
         if dx < -inner_even || dy < -inner_even {
           continue
         }
@@ -886,7 +998,7 @@ fn Ctx::arounds_after_layout(self : Ctx) -> Unit {
     match best {
       None => self.inner_faults.push("\{self.named(p)}: radius=Around, nothing with a corner in its corners")
       Some((k, i, dx, dy)) => {
-        let corner = ["top left", "top right", "bottom left", "bottom right"][k]
+        let corner = corner_names[k]
         if self.inners.contains(i) {
           self.inner_faults.push(
             "\{self.named(p)}: radius=Around round \{self.named(i)} in its \{corner}, whose corner is Inner: each worked out from the other",
@@ -900,7 +1012,7 @@ fn Ctx::arounds_after_layout(self : Ctx) -> Unit {
           continue
         }
         let b = self.nodes[i]
-        let rb = b.corner()
+        let rb = b.corner_at(k)
         let round = rb >= dmin(b.fw, b.fh) / 2.0 - 0.5
         a.radius = if round { dx + rb } else { concentric_out(rb, dx) }
       }

@@ -273,7 +273,7 @@ static int image_new(void) {
 // Renderer: the same instances and shader as Metal and WebGL2.
 
 // the numbers of an instance (src/ui/scene.mbt)
-#define MB_INST 36
+#define MB_INST 40
 
 static const char *VS =
     "#version 300 es\n"
@@ -286,11 +286,12 @@ static const char *VS =
     "layout(location=6) in vec4 a_rc;\n"
     "layout(location=7) in vec4 a_rs;\n"
     "layout(location=8) in vec4 a_rot;\n"
+    "layout(location=9) in vec4 a_rr;\n"
     "uniform vec2 u_vp;\n"
     "uniform vec4 u_gb;\n"
     "out vec2 v_pos; out vec2 v_cpos;\n"
     "flat out vec4 v_rect; flat out vec4 v_p; flat out vec4 v_color; flat out vec4 v_c2; flat out vec4 v_clip; flat out vec4 v_pad;\n"
-    "flat out vec4 v_rc; flat out vec4 v_rs;\n"
+    "flat out vec4 v_rc; flat out vec4 v_rs; flat out vec4 v_rr;\n"
     "void main() {\n"
     "  int vid = gl_VertexID;\n"
     "  vec2 corner = vec2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0, (vid == 2 || vid == 3 || vid == 5) ? 1.0 : 0.0);\n"
@@ -305,7 +306,7 @@ static const char *VS =
     "  vec2 at = pos;\n"
     "  if (a_rot.x != 0.0) { vec2 d = pos - a_rot.yz; float c = cos(a_rot.x), s = sin(a_rot.x); at = a_rot.yz + vec2(c * d.x - s * d.y, s * d.x + c * d.y); }\n"
     "  gl_Position = vec4(at.x / u_vp.x * 2.0 - 1.0, 1.0 - at.y / u_vp.y * 2.0, 0.0, 1.0);\n"
-    "  v_pos = pos; v_cpos = a_rot.w > 0.5 ? at : pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc; v_rs = a_rs;\n"
+    "  v_pos = pos; v_cpos = a_rot.w > 0.5 ? at : pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc; v_rs = a_rs; v_rr = a_rr;\n"
     "}\n";
 
 static const char *FS =
@@ -313,7 +314,7 @@ static const char *FS =
     "precision highp float;\n"
     "in vec2 v_pos; in vec2 v_cpos;\n"
     "flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip; flat in vec4 v_pad;\n"
-    "flat in vec4 v_rc; flat in vec4 v_rs;\n"
+    "flat in vec4 v_rc; flat in vec4 v_rs; flat in vec4 v_rr;\n"
     "uniform float u_scale;\n"
     "uniform sampler2D u_atlas;\n"
     "uniform sampler2D u_img;\n"
@@ -325,16 +326,16 @@ static const char *FS =
     "uniform vec4 u_shape[8];\n"
     "uniform vec4 u_rad[2];\n"
     "uniform int u_n;\n"
-    "// the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 2043 fours\n"
-    "// (227 instances) a row\n"
+    "// the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 2040 fours\n"
+    "// (204 instances) a row\n"
     "uniform highp sampler2D u_segs;\n"
     "out vec4 o;\n"
     "#define float2 vec2\n"
     "#define float4 vec4\n"
     MB_CORNER_SL
-    "float sd_rr(vec2 p, vec4 r, float rad) {\n"
+    "float sd_rr(vec2 p, vec4 r, vec4 rad) {\n"
     "  vec2 hs = r.zw * 0.5;\n"
-    "  return mb_sd_box(p - r.xy - hs, hs, rad, 1e9);\n"
+    "  return mb_sd_box(p - r.xy - hs, hs, mb_corner_of(p - r.xy - hs, rad), 1e9);\n"
     "}\n"
     "// a notch cut into the top edge (scene.mbt 21-23): a circle about the top's middle (pad.y below it, pad.z its radius),\n"
     "// met by the edge through fillets (pad.w): the rounded intersection with what is outside the circle\n"
@@ -354,7 +355,7 @@ static const char *FS =
     "  float d = 1e9;\n"
     "  for (int i = 0; i < 8; i++) {\n"
     "    if (i >= u_n) break;\n"
-    "    d = smin_k(d, sd_rr(p, u_shape[i], u_rad[i / 4][i % 4]), k);\n"
+    "    d = smin_k(d, sd_rr(p, u_shape[i], vec4(u_rad[i / 4][i % 4])), k);\n"
     "  }\n"
     "  return d;\n"
     "}\n"
@@ -375,7 +376,7 @@ static const char *FS =
     "// what it shows at p, as if uncut\n"
     "void shade(vec2 p) {\n"
     "  int kind = int(v_p.y + 0.5);\n"
-    "  if (kind == 9) { vec2 hh = v_rect.zw * 0.5; float rr = min(v_p.x, min(hh.x, hh.y)); vec2 q = abs(p - v_rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; o = vec4(0.0); return; }\n"
+    "  if (kind == 9) { vec2 hh = v_rect.zw * 0.5; float rr = min(mb_corner_of(p - v_rect.xy - hh, v_rr), min(hh.x, hh.y)); vec2 q = abs(p - v_rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; o = vec4(0.0); return; }\n"
     "  vec4 col = v_color;\n"
     "  if (kind == 11) {\n"
     "    // a band of a shape (src/ui/shape.mbt): c2.y of its pieces from c2.x; p.x half its stroke's width (0: a fill,\n"
@@ -384,11 +385,11 @@ static const char *FS =
     "    float a;\n"
     "    if (v_p.x > 0.0) {\n"
     "      float d = 1e9;\n"
-    "      for (int i = first; i < first + n; i++) { int t = (i / 6) * 9 + mb_seg_slot(i); d = min(d, mb_seg_dist(texelFetch(u_segs, ivec2(t % 2043, t / 2043), 0), v_rect, p)); }\n"
+    "      for (int i = first; i < first + n; i++) { int t = (i / 6) * 10 + mb_seg_slot(i); d = min(d, mb_seg_dist(texelFetch(u_segs, ivec2(t % 2040, t / 2040), 0), v_rect, p)); }\n"
     "      a = clamp(0.5 - (d - v_p.x) * u_scale, 0.0, 1.0);\n"
     "    } else {\n"
     "      vec4 w = vec4(0.0);\n"
-    "      for (int i = first; i < first + n; i++) { int t = (i / 6) * 9 + mb_seg_slot(i); w += mb_path_rows(texelFetch(u_segs, ivec2(t % 2043, t / 2043), 0), v_rect, p, u_scale); }\n"
+    "      for (int i = first; i < first + n; i++) { int t = (i / 6) * 10 + mb_seg_slot(i); w += mb_path_rows(texelFetch(u_segs, ivec2(t % 2040, t / 2040), 0), v_rect, p, u_scale); }\n"
     "      a = mb_path_cover(w, v_c2.z);\n"
     "    }\n"
     "    o = vec4(col.rgb, 1.0) * col.a * a;\n"
@@ -454,7 +455,9 @@ static const char *FS =
     "  vec2 c = v_rect.xy + hs;\n"
     "  // worked out as near the curve as its cover, its edge or its blur reaches\n"
     "  float band = 1.0 + 2.0 / u_scale + (kind == 2 ? max(v_p.w, 0.5) : max(v_p.z, 0.0));\n"
-    "  float d = mb_sd_box(p - c, hs, v_p.x, band);\n"
+    "  // (its corner by p: v_rr, each its own)\n"
+    "  float rad = mb_corner_of(p - c, v_rr);\n"
+    "  float d = mb_sd_box(p - c, hs, rad, band);\n"
     "  if (kind == 0 || kind == 5) d = notch_cut(d, p, v_rect, v_pad);\n"
     "  if (kind == 4) {\n"
     "    vec2 uv = v_c2.xy + clamp((p - v_rect.xy) / v_rect.zw, 0.0, 1.0) * v_c2.zw;\n"
@@ -463,10 +466,11 @@ static const char *FS =
     "  }\n"
     "  if (kind == 2) {\n"
     "    // as Core Animation's: the shape blurred, sigma its radius (corner.sl mb_shadow)\n"
-    "    float a = mb_shadow(p - c, hs, v_p.x, max(v_p.w, 0.25));\n"
+    "    float a = mb_shadow(p - c, hs, rad, max(v_p.w, 0.25));\n"
     "    // glass's: only outside its box (c2.y above it)\n"
     "    if (v_c2.x > 0.5) {\n"
-    "      float db = mb_sd_box(p - c + vec2(0.0, v_c2.y), hs, v_p.x, band);\n"
+    "      vec2 q = p - c + vec2(0.0, v_c2.y);\n"
+    "      float db = mb_sd_box(q, hs, mb_corner_of(q, v_rr), band);\n"
     "      a *= clamp(0.5 + db * u_scale, 0.0, 1.0);\n"
     "    }\n"
     "    o = vec4(col.rgb, 1.0) * col.a * a;\n"
@@ -481,8 +485,8 @@ static const char *FS =
     "    g3 = g3 * (1.0 - col.a) + col.rgb * col.a;\n"
     "    if (v_c2.x + v_c2.y + v_c2.z > 0.0) {\n"
     "      float edge = clamp(0.5 + (d + 0.5) * u_scale, 0.0, 1.0);\n"
-    "      float lit = clamp(0.5 + notch_cut(sd_rr(p - 0.5, v_rect, v_p.x), p - 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);\n"
-    "      float back = clamp(0.5 + notch_cut(sd_rr(p + 0.5, v_rect, v_p.x), p + 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);\n"
+    "      float lit = clamp(0.5 + notch_cut(sd_rr(p - 0.5, v_rect, v_rr), p - 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);\n"
+    "      float back = clamp(0.5 + notch_cut(sd_rr(p + 0.5, v_rect, v_rr), p + 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);\n"
     "      g3 = mix(g3, vec3(1.0), v_c2.x * edge);\n"
     "      g3 = mix(g3, vec3(1.0), v_c2.y * lit);\n"
     "      g3 = mix(g3, vec3(1.0), v_c2.z * back);\n"
@@ -563,8 +567,8 @@ static GLuint prog, vao, vbo, atlas, post;
 static GLint u_vp, u_scale, u_atlas, u_img, u_bd, u_map, u_uvc, u_gb, u_shape, u_rad, u_n, pu_src, pu_a, pu_b;
 static float *fbuf;
 // the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), for the shader
-// to read (u_segs): a float texture of SEGS_ROW fours a row (227 instances' 9), as many rows as they take
-#define SEGS_ROW 2043
+// to read (u_segs): a float texture of SEGS_ROW fours a row (204 instances' 10), as many rows as they take
+#define SEGS_ROW 2040
 static GLint u_segs;
 static GLuint segs_tex;
 static int segs_rows;
@@ -621,7 +625,7 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_surfaceCreated(JNIEnv *env, jclass c
   glBindVertexArray(vao);
   glGenBuffers(1, &vbo);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  for (int i = 0; i < 9; i++) {
+  for (int i = 0; i < 10; i++) {
     glEnableVertexAttribArray(i);
     glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, MB_INST * 4, (void *)(intptr_t)(i * 16));
     glVertexAttribDivisor(i, 1);
@@ -831,7 +835,7 @@ static void segs_upload(int32_t count) {
   int32_t d = count;
   while (d > 0 && (int)(fbuf[(d - 1) * MB_INST + 5] + 0.5f) == 12) d--;
   if (d == count) return;
-  int rows = (int)(((size_t)(count - d) * 9 + SEGS_ROW - 1) / SEGS_ROW);
+  int rows = (int)(((size_t)(count - d) * 10 + SEGS_ROW - 1) / SEGS_ROW);
   glActiveTexture(GL_TEXTURE3);
   if (!segs_tex || rows > segs_rows) {
     if (segs_tex) glDeleteTextures(1, &segs_tex);
@@ -900,7 +904,7 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
         main_state();
       }
       if (shows) {
-        for (int i = 0; i < 9; i++)
+        for (int i = 0; i < 10; i++)
           glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, MB_INST * 4, (void *)(intptr_t)(start * MB_INST * 4 + i * 16));
         // liquid: the group as one shape, drawn once
         glDrawArraysInstanced(GL_TRIANGLES, 0, 6, (int)(fbuf[start * MB_INST + 5] + 0.5f) == 6 ? 1 : end - start);
@@ -912,7 +916,7 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
     if (t) {  // 0: lost with the context, decoding again
       glActiveTexture(GL_TEXTURE1);
       glBindTexture(GL_TEXTURE_2D, t);
-      for (int i = 0; i < 9; i++)
+      for (int i = 0; i < 10; i++)
         glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, MB_INST * 4, (void *)(intptr_t)(start * MB_INST * 4 + i * 16));
       if (hole) glDisable(GL_BLEND);
       glDrawArraysInstanced(GL_TRIANGLES, 0, 6, end - start);

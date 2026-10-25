@@ -98,6 +98,12 @@ none of its edges, nearer one edge than another) and said so by `corner_faults`:
 stop. `InnerOr(own)`: the same, its own corner where it stands alone. `Around`: the other way, the container's corner
 round what lies in its corner.
 
+Each corner is its own (`Corners(tl, tr, br, bl)`, CSS's border-radius of four; every renderer draws a box's corner by
+the quarter it is in), and the rule works corner by corner: a box's corner lying in a container's corner is concentric
+with that corner, its others keep its own (an `Inner` one, with none of its own, follows the container's matching
+corner in all four). So a panel whose corners at the window's edge follow the window's and whose others stand alone
+holds what lies in each as that corner has it: a composer across its foot follows each foot corner, its top its own.
+
 A theme may say its corner ladder (`Theme::corner_ladder`, outermost first): the corners nested things are round by,
 each the next in at one inset. `corner_faults` then holds a rounded container with something in its corner, and a
 smooth box there, to its steps (a capsule or a circle round by its shape; a control's own parts hugging its edge and

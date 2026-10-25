@@ -15,7 +15,7 @@
   const U = {}, PU = {};
   let cssW = 0, cssH = 0, dpr = 1;
   // the numbers of an instance (src/ui/scene.mbt)
-  const INST = 36;
+  const INST = 40;
   let f32 = new Float32Array(INST * 4096);
   let pending = false;
   window.__logs = [];
@@ -142,11 +142,12 @@
   layout(location=6) in vec4 a_rc;
   layout(location=7) in vec4 a_rs;
   layout(location=8) in vec4 a_rot;
+  layout(location=9) in vec4 a_rr;
   uniform vec2 u_vp;
   uniform vec4 u_gb;
   out vec2 v_pos; out vec2 v_cpos;
   flat out vec4 v_rect; flat out vec4 v_p; flat out vec4 v_color; flat out vec4 v_c2; flat out vec4 v_clip; flat out vec4 v_pad;
-  flat out vec4 v_rc; flat out vec4 v_rs;
+  flat out vec4 v_rc; flat out vec4 v_rs; flat out vec4 v_rr;
   void main() {
     int vid = gl_VertexID;
     vec2 corner = vec2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0, (vid == 2 || vid == 3 || vid == 5) ? 1.0 : 0.0);
@@ -161,13 +162,13 @@
     vec2 at = pos;
     if (a_rot.x != 0.0) { vec2 d = pos - a_rot.yz; float c = cos(a_rot.x), s = sin(a_rot.x); at = a_rot.yz + vec2(c * d.x - s * d.y, s * d.x + c * d.y); }
     gl_Position = vec4(at.x / u_vp.x * 2.0 - 1.0, 1.0 - at.y / u_vp.y * 2.0, 0.0, 1.0);
-    v_pos = pos; v_cpos = a_rot.w > 0.5 ? at : pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc; v_rs = a_rs;
+    v_pos = pos; v_cpos = a_rot.w > 0.5 ? at : pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc; v_rs = a_rs; v_rr = a_rr;
   }`;
   const FS = `#version 300 es
   precision highp float;
   in vec2 v_pos; in vec2 v_cpos;
   flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip; flat in vec4 v_pad;
-  flat in vec4 v_rc; flat in vec4 v_rs;
+  flat in vec4 v_rc; flat in vec4 v_rs; flat in vec4 v_rr;
   uniform float u_scale;
   uniform sampler2D u_atlas;
   uniform sampler2D u_img;
@@ -179,8 +180,8 @@
   uniform vec4 u_shape[8];
   uniform vec4 u_rad[2];
   uniform int u_n;
-  // the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 2043 fours
-  // (227 instances) a row
+  // the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 2040 fours
+  // (204 instances) a row
   uniform highp sampler2D u_segs;
   out vec4 o;
   // corner.sl begin (scripts/chk corner-sl: not edited here)
@@ -223,6 +224,11 @@
     float tn = tn1 * t;
     float u = pow(1.0 + tn, 1.0 / n);
     return (hi * u - R) * (1.0 + tn) / (u * sqrt(1.0 + tn1 * tn1));
+  }
+  // Which of a box's corners' radii r (top left, top right, bottom right, bottom left: scene.mbt 36-39) p (from its
+  // middle) is drawn by: the one of its quarter's corner.
+  float mb_corner_of(float2 p, float4 r) {
+    return p.x < 0.0 ? (p.y < 0.0 ? r.x : r.w) : (p.y < 0.0 ? r.y : r.z);
   }
   // A box's own corners: r at most its shorter half, as smooth as its size has room for (band: mb_sd_corner's).
   float mb_sd_box(float2 p, float2 hs, float r, float band) {
@@ -308,9 +314,9 @@
     return float(m) / 64.0 - 63.0 / 128.0;
   }
   // corner.sl end
-  float sd_rr(vec2 p, vec4 r, float rad) {
+  float sd_rr(vec2 p, vec4 r, vec4 rad) {
     vec2 hs = r.zw * 0.5;
-    return mb_sd_box(p - r.xy - hs, hs, rad, 1e9);
+    return mb_sd_box(p - r.xy - hs, hs, mb_corner_of(p - r.xy - hs, rad), 1e9);
   }
   // a notch cut into the top edge (scene.mbt 21-23): a circle about the top's middle (pad.y below it, pad.z its
   // radius), met by the edge through fillets (pad.w): the rounded intersection with what is outside the circle
@@ -330,7 +336,7 @@
     float d = 1e9;
     for (int i = 0; i < 8; i++) {
       if (i >= u_n) break;
-      d = smin_k(d, sd_rr(p, u_shape[i], u_rad[i / 4][i % 4]), k);
+      d = smin_k(d, sd_rr(p, u_shape[i], vec4(u_rad[i / 4][i % 4])), k);
     }
     return d;
   }
@@ -351,7 +357,7 @@
   // what it shows at p, as if uncut
   void shade(vec2 p) {
     int kind = int(v_p.y + 0.5);
-    if (kind == 9) { vec2 hh = v_rect.zw * 0.5; float rr = min(v_p.x, min(hh.x, hh.y)); vec2 q = abs(p - v_rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; o = vec4(0.0); return; }
+    if (kind == 9) { vec2 hh = v_rect.zw * 0.5; float rr = min(mb_corner_of(p - v_rect.xy - hh, v_rr), min(hh.x, hh.y)); vec2 q = abs(p - v_rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; o = vec4(0.0); return; }
     vec4 col = v_color;
     if (kind == 11) {
       // a band of a shape (src/ui/shape.mbt): c2.y of its pieces from c2.x; p.x half its stroke's width (0: a fill,
@@ -360,11 +366,11 @@
       float a;
       if (v_p.x > 0.0) {
         float d = 1e9;
-        for (int i = first; i < first + n; i++) { int t = (i / 6) * 9 + mb_seg_slot(i); d = min(d, mb_seg_dist(texelFetch(u_segs, ivec2(t % 2043, t / 2043), 0), v_rect, p)); }
+        for (int i = first; i < first + n; i++) { int t = (i / 6) * 10 + mb_seg_slot(i); d = min(d, mb_seg_dist(texelFetch(u_segs, ivec2(t % 2040, t / 2040), 0), v_rect, p)); }
         a = clamp(0.5 - (d - v_p.x) * u_scale, 0.0, 1.0);
       } else {
         vec4 w = vec4(0.0);
-        for (int i = first; i < first + n; i++) { int t = (i / 6) * 9 + mb_seg_slot(i); w += mb_path_rows(texelFetch(u_segs, ivec2(t % 2043, t / 2043), 0), v_rect, p, u_scale); }
+        for (int i = first; i < first + n; i++) { int t = (i / 6) * 10 + mb_seg_slot(i); w += mb_path_rows(texelFetch(u_segs, ivec2(t % 2040, t / 2040), 0), v_rect, p, u_scale); }
         a = mb_path_cover(w, v_c2.z);
       }
       o = vec4(col.rgb, 1.0) * col.a * a;
@@ -430,7 +436,9 @@
     vec2 c = v_rect.xy + hs;
     // worked out as near the curve as its cover, its edge or its blur reaches
     float band = 1.0 + 2.0 / u_scale + (kind == 2 ? max(v_p.w, 0.5) : max(v_p.z, 0.0));
-    float d = mb_sd_box(p - c, hs, v_p.x, band);
+    // (its corner by p: v_rr, each its own)
+    float rad = mb_corner_of(p - c, v_rr);
+    float d = mb_sd_box(p - c, hs, rad, band);
     if (kind == 0 || kind == 5) d = notch_cut(d, p, v_rect, v_pad);
     if (kind == 4) {
       vec2 uv = v_c2.xy + clamp((p - v_rect.xy) / v_rect.zw, 0.0, 1.0) * v_c2.zw;
@@ -439,10 +447,11 @@
     }
     if (kind == 2) {
       // as Core Animation's: the shape blurred, sigma its radius (corner.sl mb_shadow)
-      float a = mb_shadow(p - c, hs, v_p.x, max(v_p.w, 0.25));
+      float a = mb_shadow(p - c, hs, rad, max(v_p.w, 0.25));
       // glass's: only outside its box (c2.y above it)
       if (v_c2.x > 0.5) {
-        float db = mb_sd_box(p - c + vec2(0.0, v_c2.y), hs, v_p.x, band);
+        vec2 q = p - c + vec2(0.0, v_c2.y);
+        float db = mb_sd_box(q, hs, mb_corner_of(q, v_rr), band);
         a *= clamp(0.5 + db * u_scale, 0.0, 1.0);
       }
       o = vec4(col.rgb, 1.0) * col.a * a;
@@ -457,8 +466,8 @@
       g3 = g3 * (1.0 - col.a) + col.rgb * col.a;
       if (v_c2.x + v_c2.y + v_c2.z > 0.0) {
         float edge = clamp(0.5 + (d + 0.5) * u_scale, 0.0, 1.0);
-        float lit = clamp(0.5 + notch_cut(sd_rr(p - 0.5, v_rect, v_p.x), p - 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);
-        float back = clamp(0.5 + notch_cut(sd_rr(p + 0.5, v_rect, v_p.x), p + 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);
+        float lit = clamp(0.5 + notch_cut(sd_rr(p - 0.5, v_rect, v_rr), p - 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);
+        float back = clamp(0.5 + notch_cut(sd_rr(p + 0.5, v_rect, v_rr), p + 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);
         g3 = mix(g3, vec3(1.0), v_c2.x * edge);
         g3 = mix(g3, vec3(1.0), v_c2.y * lit);
         g3 = mix(g3, vec3(1.0), v_c2.z * back);
@@ -558,9 +567,10 @@
     gl.bindVertexArray(vao);
     instBuf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < 10; i++) {
       const loc = i;
-      // instance layout: rect, p, color, c2, clip, pad, the clip's corners' radii, how smooth, how it is turned (vec4 each)
+      // instance layout: rect, p, color, c2, clip, pad, the clip's corners' radii, how smooth, how it is turned, a box's
+      // corners' radii (vec4 each)
       gl.enableVertexAttribArray(loc);
       gl.vertexAttribPointer(loc, 4, gl.FLOAT, false, INST * 4, i * 16);
       gl.vertexAttribDivisor(loc, 1);
@@ -716,14 +726,14 @@
   }
 
   // The pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), for the
-  // shader to read (u_segs): a float texture of SEGS_ROW fours a row (227 instances' 9), as many rows as they take.
-  const SEGS_ROW = 2043;
+  // shader to read (u_segs): a float texture of SEGS_ROW fours a row (204 instances' 10), as many rows as they take.
+  const SEGS_ROW = 2040;
   let segsTex = null, segsRows = 0;
   function segsUpload(n) {
     let d = n;
     while (d > 0 && Math.round(f32[(d - 1) * INST + 5]) === 12) d--;
     if (d === n) return;
-    const rows = Math.ceil((n - d) * 9 / SEGS_ROW);
+    const rows = Math.ceil((n - d) * 10 / SEGS_ROW);
     gl.activeTexture(gl.TEXTURE3);
     if (!segsTex || rows > segsRows) {
       if (segsTex) gl.deleteTexture(segsTex);
@@ -777,7 +787,7 @@
           mainState();
         }
         if (shows) {
-          for (let i = 0; i < 9; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
+          for (let i = 0; i < 10; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
           // liquid: the group as one shape, drawn once
           gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, Math.round(f32[start * INST + 5]) === 6 ? 1 : end - start);
         }
@@ -792,7 +802,7 @@
       }
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, im && im.tex ? im.tex : atlasTex);
-      for (let i = 0; i < 9; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
+      for (let i = 0; i < 10; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
       if (h) gl.disable(gl.BLEND);
       gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, end - start);
       if (h) gl.enable(gl.BLEND);

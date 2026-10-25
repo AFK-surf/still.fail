@@ -638,7 +638,7 @@ let composer_most : Double = 804.0
 ///|
 /// (In a panel of its own, as far in as makes its box concentric with the panel's foot corners: @sf.pane_foot_in.)
 pub fn composer_side() -> Double {
-  @sf.pane_foot_in(@sf.card_corner)
+  @sf.pane_foot_in()
 }
 
 ///|

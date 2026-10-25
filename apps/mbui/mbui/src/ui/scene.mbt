@@ -1,6 +1,7 @@
-// Painting: the laid-out tree becomes a flat list of instances (28 floats
+// Painting: the laid-out tree becomes a flat list of instances (40 floats
 // each) that every renderer draws with one shader:
-//   0-3 rect x y w h · 4 radius · 5 kind · 6 border width · 7 blur
+//   0-3 rect x y w h · 4 radius (a box's: the roundest of its corners,
+//   36-39) · 5 kind · 6 border width · 7 blur
 //   8-11 color rgba · 12-15 border color, or the glyph's atlas rect
 //   16-19 clip x0 y0 x1 y1 · 20 image id · 21-23 a notch in its top edge
 //   (kinds 0 and 5: its circle's middle below the top, its radius, its
@@ -13,7 +14,10 @@
 //   clockwise on the screen, about the point 33, 34; everything else above
 //   (its rect, its clip) as before it is turned, the renderers turning
 //   where it is drawn and nothing of how; 35 1: its clip is not turned
-//   (one from outside what turned: where it is drawn).
+//   (one from outside what turned: where it is drawn). · 36-39 a box's
+//   corners' radii (kinds 0, 2, 4, 5, 9: top left, top right, bottom right,
+//   bottom left, each as smooth as its rect has room for; all 4 where they
+//   are one).
 // kinds: 0 rounded rect, 1 glyph (alpha mask), 2 shadow (12 > 0: only
 // outside its box, which is 13 above it), 3 color glyph, 4 image (12-15 its
 // uv rect, 0-1), 5 frosted glass, 6 liquid glass, 7 a glyph in liquid glass
@@ -27,7 +31,7 @@
 // six to an instance, none drawn).
 
 ///|
-let inst_size = 36
+let inst_size = 40
 
 ///|
 fn Ctx::grow(self : Ctx) -> Unit {
@@ -116,14 +120,12 @@ fn push_clip_r(
 }
 
 ///|
-/// A node's clip pushed: its rect (`x`, `y`, `w`, `h`) rounded by `radius`, within the clip it is in.
-fn push_round_clip(
-  x : Double,
-  y : Double,
-  w : Double,
-  h : Double,
-  radius : Double,
-) -> Unit {
+/// Node `n`'s clip pushed: its rect, its corners rounded as it draws them (radius_at), within the clip it is in.
+fn push_round_clip(n : Node) -> Unit {
+  let x = n.x
+  let y = n.y
+  let w = n.fw
+  let h = n.fh
   let k = clip_top()
   let s = clip_stack
   let x0 = dmax(x, s[k])
@@ -133,13 +135,12 @@ fn push_round_clip(
   // as round, and as smooth, as its ground's corners are (the renderers cap a radius at half the shorter side, and
   // smooth it as far as the box has room for)
   let room = dmin(w, h) / 2.0
-  let r = dmax(dmin(radius, room), 0.0)
-  let sm = smoothness(r, room)
   // where a corner is both's, the rounder
   let corner = fn(j : Int, cx : Double, cy : Double, ox : Double, oy : Double) {
     let (pr, ps) = clip_corner_r(k, j, cx, cy)
+    let r = dmax(dmin(n.radius_at(j), room), 0.0)
     if r > 0.0 && cx == ox && cy == oy && r >= pr {
-      (r, sm)
+      (r, smoothness(r, room))
     } else {
       (pr, ps)
     }
@@ -275,7 +276,34 @@ fn Ctx::push_inst(
   a[b + 33] = 0.0
   a[b + 34] = 0.0
   a[b + 35] = 0.0
+  // its corners all `radius` (a box's each its own: corners_last)
+  a[b + 36] = radius
+  a[b + 37] = radius
+  a[b + 38] = radius
+  a[b + 39] = radius
   self.ninst = self.ninst + 1
+}
+
+///|
+/// The corners of node `n` (radius_at's) on the instance just emitted for it (its ground, its border, its shadow, its
+/// glass, its picture), where they are each their own: 36-39, and 4 the roundest.
+fn Ctx::corners_last(self : Ctx, n : Node) -> Unit {
+  match n.radii {
+    Some(r) => self.corners_last_each(r[0], r[1], r[2], r[3])
+    None => ()
+  }
+}
+
+///|
+/// The same with corners `r0` to `r3` (top left, then round it), the roundest its corner (4).
+fn Ctx::corners_last_each(self : Ctx, r0 : Double, r1 : Double, r2 : Double, r3 : Double) -> Unit {
+  let b = (self.ninst - 1) * inst_size
+  let a = self.inst
+  a[b + 4] = dmax(dmax(r0, r1), dmax(r2, r3))
+  a[b + 36] = r0
+  a[b + 37] = r1
+  a[b + 38] = r2
+  a[b + 39] = r3
 }
 
 ///|
@@ -472,15 +500,15 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     return
   }
   // its own ground drawn in another box (a shape on its way: draw_ground), what it holds where it is laid out
-  let laid = (n.x, n.y, n.fw, n.fh, n.radius)
+  let laid = (n.x, n.y, n.fw, n.fh, n.radius, n.radii)
   let ground = self.ground_of(i)
   match ground {
-    Some((gx, gy, gw, gh, gr)) => {
+    Some((gx, gy, gw, gh, (r0, r1, r2, r3))) => {
       n.x = gx
       n.y = gy
       n.fw = gw
       n.fh = gh
-      n.radius = gr
+      n.set_radii(FixedArray::from_array([r0, r1, r2, r3]))
     }
     None => ()
   }
@@ -507,6 +535,7 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       0.0,
       0.0,
     )
+    self.corners_last(n)
   }
   // its border over what it holds (drawn after it, below): the box's own edge, never covered by what is in it, as
   // CSS's border is outside what a box holds (here it takes no room); with nothing in it, with its ground
@@ -526,6 +555,7 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       alpha,
     )
     self.notch_last(n)
+    self.corners_last(n)
   }
   if ground is Some(_) {
     n.x = laid.0
@@ -533,6 +563,7 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     n.fw = laid.2
     n.fh = laid.3
     n.radius = laid.4
+    n.radii = laid.5
   }
   if n.hit && n.id != 0 {
     self.push_hit(n.id, dmax(n.x, cx0), dmax(n.y, cy0), dmin(n.x + n.fw, cx1), dmin(n.y + n.fh, cy1))
@@ -617,7 +648,7 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   }
   let clipped = n.clip
   if clipped {
-    push_round_clip(n.x, n.y, n.fw, n.fh, n.radius)
+    push_round_clip(n)
   }
   // its scroll bar, where what it holds scrolls past it (scroll_bar.mbt): drawn over what it holds, in its clip;
   // the bars of the boxes in its rows scrolled as one, along its foot
@@ -679,11 +710,18 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     pop_clip()
   }
   if border_over {
-    let (bx, by, bw, bh, br) = match ground {
-      Some(g) => g
-      None => (n.x, n.y, n.fw, n.fh, n.radius)
+    match ground {
+      // (round its ground drawn in another box: that box's corners, each its own)
+      Some((bx, by, bw, bh, (r0, r1, r2, r3))) => {
+        self.emit_rect(bx, by, bw, bh, dmax(dmax(r0, r1), dmax(r2, r3)), 0L, n.border_w, n.border_c, alpha)
+        self.notch_last(n)
+        self.corners_last_each(r0, r1, r2, r3)
+      }
+      None => {
+        self.emit_rect(n.x, n.y, n.fw, n.fh, n.radius, 0L, n.border_w, n.border_c, alpha)
+        self.notch_last(n)
+        self.corners_last(n)
+      }
     }
-    self.emit_rect(bx, by, bw, bh, br, 0L, n.border_w, n.border_c, alpha)
-    self.notch_last(n)
   }
 }
