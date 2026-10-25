@@ -128,8 +128,10 @@ nothing else gives way:
   its room (`Fill`, `Pct`) takes what it is given, and what it holds is squeezed in it where that is too little: a
   fault, which `Tester::squeeze_faults` says (two things drawn over each other, something cut off by what clips it or
   by the window, words cut down to nothing, words wrapped narrower than a word of them or four characters).
-- Words on one line are never laid wider than a column they are in, whatever its alignment: cut with an ellipsis
-  there. In a row they are as wide as they are, unless they say otherwise.
+- Words on one line, and what is said to be cut short (`w=Cut`), are never laid wider than a column they are in,
+  whatever its alignment: cut with an ellipsis there. A `max_w` said as well is that where the column has the room and
+  the column's where it has less (CSS's `min(100%, 560px)`). In a row they are as wide as they are, unless they say
+  otherwise.
 - What may give way says so, and how:
   - words cut short with an ellipsis: `w=Cut` (as wide as they are, cut where the row has less), `w=Fill` (what the
     row leaves, cut where that is less), `min_w` the least of them kept; in a row that leaves parts out (`drop`
