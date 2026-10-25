@@ -1153,6 +1153,14 @@ pub fn mix(a : Int64, share : Double, b : Int64) -> Int64 {
 /// title, Parts.kt:527), Xl2 17 (back, Parts.kt:491), Xl3 22 (a title, bold: Security.kt:473, NewChat.kt:183,
 /// Usage.kt:130, Workspaces.kt:191), Xl4 32 (a large title, Parts.kt:559).
 pub let text_scale : @ui.TextScale = {
+  // (the roles: each screen's own, Type's, set by ui_theme: text_roles)
+  caption: (11.0, 16.0),
+  meta: (12.0, 18.0),
+  ui: (13.0, 20.0),
+  body: (14.0, 22.0),
+  title: (16.0, 24.0),
+  heading: (22.0, 30.0),
+  display: (28.0, 36.0),
   xs3: (10.0, 14.0),
   xs2: (11.0, 15.4),
   xs: (12.0, 16.8),
@@ -1163,6 +1171,23 @@ pub let text_scale : @ui.TextScale = {
   xl2: (17.0, 23.8),
   xl3: (22.0, 30.8),
   xl4: (32.0, 44.8),
+}
+
+///|
+/// The scale with the type's roles this screen has (Type: the web's text-caption … text-display, web/ui
+/// tokens.css.ts; a phone's a size up), each on its own line: what a style says by a role (TextSize Caption …
+/// Display) is the same size the web's says by it.
+fn text_roles(t : Type) -> @ui.TextScale {
+  {
+    ..text_scale,
+    caption: (t.caption, t.caption_line),
+    meta: (t.meta, t.meta_line),
+    ui: (t.ui, t.ui_line),
+    body: (t.body, t.body_line),
+    title: (t.title, t.title_line),
+    heading: (t.heading, t.heading_line),
+    display: (t.display, t.heading_line),
+  }
 }
 
 ///|
@@ -1278,7 +1303,7 @@ pub fn ui_theme() -> @ui.Theme {
   // a link's ink as Android's C.link (Theme.kt): the accent's darker ink on paper, the accent itself in the dark
   {
     ..base,
-    text: text_scale,
+    text: text_roles(t.t),
     leading: leading_scale,
     radii,
     link: if t.dark { base.accent } else { base.accent_text },

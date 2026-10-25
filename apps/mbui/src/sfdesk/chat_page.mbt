@@ -774,7 +774,7 @@ let chat_title_part : Double = 0.42
 ///|
 /// A page's title in its bar (sidebar.css.ts pageBar h1: 14 in 600, on 20).
 // kept across runs: a value (no field of it changes)
-let chat_title_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, leading=L6, wrap=false, w=Cut)
+let chat_title_words : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Fg, leading=L6, wrap=false, w=Cut)
 
 ///|
 /// What is done in its bar, at its end, 2 apart (pageBarActions).
@@ -804,11 +804,11 @@ let chat_station_hot : @ui.Style = chat_station_tag.then(@ui.css("border_color=B
 
 ///|
 // kept across runs: a value (no field of it changes)
-let chat_station_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let chat_station_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let chat_station_words_hot : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let chat_station_words_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 /// A station's mark in the bar (12).
@@ -885,7 +885,7 @@ let people_letter_box : @ui.Style = @ui.css("w=S4 h=S4 radius=Full align=ACenter
 
 ///|
 // kept across runs: a value (no field of it changes)
-let people_letter : @ui.TextStyle = @ui.text_style(size=Xs2, weight=Semibold, color=Fg, wrap=false, leading=L3)
+let people_letter : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=Fg, wrap=false, leading=L3)
 
 ///|
 /// Their initial, upper case.
@@ -898,7 +898,7 @@ fn person_initial(name : String) -> String {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let people_more : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, wrap=false)
+let people_more : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -982,19 +982,19 @@ let info_fact_label : @ui.Style = @ui.css("w=S20")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let info_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false)
+let info_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let info_muted : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+let info_muted : @ui.TextStyle = @ui.text_style(size=Ui, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let info_quiet : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let info_quiet : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let info_end : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let info_end : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

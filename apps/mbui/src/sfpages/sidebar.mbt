@@ -530,7 +530,7 @@ let said_box : @ui.Style = @ui.css("w=Full px=S2_5 py=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let said_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, leading=L6)
+let said_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L6)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -542,19 +542,19 @@ let empty_box : @ui.Style = @ui.style(w=Full, px=@sf.empty_in, py=S5, gap=S2, al
 
 ///|
 // kept across runs: a value (no field of it changes)
-let empty_title : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Semibold, color=Fg, center=true, w=Full)
+let empty_title : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Fg, center=true, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let empty_note : @ui.TextStyle = @ui.text_style(size=Base, color=Muted, center=true, leading=L6, w=Full)
+let empty_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true, leading=L6, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let empty_words : @ui.TextStyle = @ui.text_style(size=Base, color=Muted)
+let empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let empty_link : @ui.TextStyle = @ui.text_style(size=Base, color=Link)
+let empty_link : @ui.TextStyle = @ui.text_style(size=Ui, color=Link)
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -231,9 +231,9 @@ fn bar_frame(
       // the title as long as there is room for it beside what follows it (weight(1f, fill = false): what follows is
       // measured first, as wide as it is, and the title has what is left), a few words of it at least: short of
       // that, what follows leaves the row as it says (chat_bar: its people, then its station's update)
-      let least = dmin(@ui.text_advance(title, size=16.0, weight=600), bar_title_least)
+      let least = dmin(@ui.text_advance(title, size=t.t.title, weight=600), bar_title_least)
       c.box(style=@ui.style(min_w=Fixed(least)), fn() {
-        c.text(title, size=16.0, weight=600, color=t.p.text, wrap=false, line=chat_title_line)
+        c.text(title, size=t.t.title, weight=600, color=t.p.text, wrap=false, line=chat_title_line)
         |> ignore
       })
       |> ignore
@@ -389,7 +389,7 @@ fn station_tag(c : @ui.Ctx, s : Station) -> Unit {
       if @sf.has_station_mark(s.emoji, s.icon) {
         @sf.station_mark(c, s.emoji, s.icon, 12.0, t.p.muted)
       }
-      c.box(fn() { c.text(s.name, size=12.0, color=t.p.muted, wrap=false, line=16.0) |> ignore })
+      c.box(fn() { c.text(s.name, size=t.t.caption, color=t.p.muted, wrap=false, line=16.0) |> ignore })
       |> ignore
     },
   )
@@ -535,7 +535,7 @@ fn agent_station_mark(c : @ui.Ctx, a : Agent, station : Station?) -> Unit {
               if @sf.has_station_mark(s.emoji, s.icon) {
                 @sf.station_mark(c, s.emoji, s.icon, mark_station(), t.p.muted)
               } else {
-                c.text(s.name, size=12.0, color=t.p.muted, wrap=false, line=said_line)
+                c.text(s.name, size=t.t.caption, color=t.p.muted, wrap=false, line=said_line)
                 |> ignore
               }
             })

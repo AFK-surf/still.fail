@@ -922,16 +922,16 @@ pub let msg_name_room : @ui.Style = @ui.style(max_w=@sf.name_max)
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let msg_name : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, leading=L5, color=AccentText, wrap=false)
+pub let msg_name : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, leading=L5, color=AccentText, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let msg_name_hot : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, leading=L5, color=Accent, wrap=false)
+let msg_name_hot : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, leading=L5, color=Accent, wrap=false)
 
 ///|
 /// A time (msgTime): 11, muted.
 // kept across runs: a value (no field of it changes)
-let msg_time : @ui.TextStyle = @ui.text_style(size=Xs2, leading=L5, color=Muted, wrap=false)
+let msg_time : @ui.TextStyle = @ui.text_style(size=Caption, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// The viewer's message (msgMine): at the column's end, 4 apart.
@@ -1037,11 +1037,11 @@ let notice_end : @ui.Style = @ui.css("row align=AEnd")
 ///|
 /// Its words (msgSystemBox markdown): 14 on 1.65, one line closed.
 // kept across runs: a value (no field of it changes)
-let notice_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L7, wrap=false)
+let notice_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let notice_words_open : @ui.TextStyle = @ui.text_style(size=Sm, leading=L7)
+let notice_words_open : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7)
 
 ///|
 /// The dot before its word (blockedDot in a notice): 6 each side, the pill's ink at 60%; the word (blockedAction),
@@ -1051,7 +1051,7 @@ let notice_dot_room : @ui.Style = @ui.css("px=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let notice_dot : @ui.TextStyle = @ui.text_style(size=Sm, leading=L7, color=A(Fg, O60), wrap=false)
+let notice_dot : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7, color=A(Fg, O60), wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1059,7 +1059,7 @@ let notice_dot_failed : @ui.TextStyle = notice_dot.then(@ui.text_style(color=A(D
 
 ///|
 // kept across runs: a value (no field of it changes)
-let notice_act : @ui.TextStyle = @ui.text_style(size=Sm, leading=L7, color=Fg, wrap=false)
+let notice_act : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1084,7 +1084,7 @@ let blocked_row_busy : @ui.Style = blocked_row.then(@ui.css("opacity=O60"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let blocked_words : @ui.TextStyle = @ui.text_style(size=Xs2, leading=L5, color=Muted)
+let blocked_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L5, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1092,12 +1092,12 @@ let blocked_words_stuck : @ui.TextStyle = blocked_words.then(@ui.text_style(colo
 
 ///|
 // kept across runs: a value (no field of it changes)
-let blocked_dot : @ui.TextStyle = @ui.text_style(size=Xs2, leading=L5, color=Muted, wrap=false)
+let blocked_dot : @ui.TextStyle = @ui.text_style(size=Caption, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// Installing (blockedAction): a word in the text's ink, 600, underlined under the pointer.
 // kept across runs: a value (no field of it changes)
-let blocked_act : @ui.TextStyle = @ui.text_style(size=Xs2, leading=L5, weight=Semibold, color=Fg, wrap=false)
+let blocked_act : @ui.TextStyle = @ui.text_style(size=Caption, leading=L5, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// A message's quote cards (quoteCards): one under another 4 apart, at its end when it is the viewer's.
@@ -1117,7 +1117,7 @@ let msg_route : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let route_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let route_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// The place (later.css.ts hPlace): its mark and its name, 12 in 500, 1 by 6 in, 6 round on the neutral ground; a
@@ -1131,7 +1131,7 @@ let route_place_hot : @ui.Style = route_place.then(@ui.css("bg=Hover"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let route_place_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Fg, leading=L5, wrap=false)
+let route_place_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg, leading=L5, wrap=false)
 
 ///|
 /// Sending it failed (Pill tone red).
@@ -1140,7 +1140,7 @@ let route_failed : @ui.Style = @ui.css("px=S1_5 py=SPx radius=Md bg=DangerBg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let route_failed_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=Danger, wrap=false)
+let route_failed_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Danger, wrap=false)
 
 ///|
 /// It failed (parts.css.ts failedMark, as a blocked line has it): 12 round, red, its "!" 8 in 600, white.
@@ -1149,4 +1149,4 @@ let failed_mark : @ui.Style = @ui.css("w=S3 h=S3 radius=Full bg=Danger align=ACe
 
 ///|
 // kept across runs: a value (no field of it changes)
-let failed_bang : @ui.TextStyle = @ui.text_style(size=Xs3, leading=L3, weight=Semibold, color=OnDanger, wrap=false)
+let failed_bang : @ui.TextStyle = @ui.text_style(size=Caption, leading=L3, weight=Semibold, color=OnDanger, wrap=false)

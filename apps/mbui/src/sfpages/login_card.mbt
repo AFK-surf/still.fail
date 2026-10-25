@@ -455,7 +455,7 @@ let lc_card_marked : @ui.Style = lc_card.then(@ui.css("bg=A(Accent,O10)"))
 ///|
 /// Ended (ended: Decisions.css.ts settledLine): 12 on 18 in the subtle ink; failed, red.
 // kept across runs: a value (no field of it changes)
-let lc_ended : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Subtle)
+let lc_ended : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -473,7 +473,7 @@ let lc_title_room : @ui.Style = @ui.css("w=Full px=S2_5 pt=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let lc_title : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, leading=L5)
+let lc_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, leading=L5)
 
 ///|
 /// 取消 (PanelIconButton): 24, round, its ground under the pointer.
@@ -491,7 +491,7 @@ let lc_said_last : @ui.Style = lc_said.then(@ui.css("pb=S2_5"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let lc_said_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted)
+let lc_said_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -504,7 +504,7 @@ let lc_code_room : @ui.Style = @ui.css("px=S2_5 py=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let lc_code : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Fg, wrap=false)
+let lc_code : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// A step's button (cardStep): the card's width, 32 high, 8 under what is above it, 12 in, its corner the card's less
@@ -539,7 +539,7 @@ let lc_more : @ui.Style = @ui.css("w=S8 h=S8 radius=Inner bg=A(Fg,O5) align=ACen
 
 ///|
 // kept across runs: a value (no field of it changes)
-let lc_step_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false)
+let lc_step_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -566,7 +566,7 @@ let lc_done_spin : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCen
 
 ///|
 // kept across runs: a value (no field of it changes)
-let lc_done_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=OnPrimary, wrap=false)
+let lc_done_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=OnPrimary, wrap=false)
 
 ///|
 /// The field's words (cardPasteInput): the ui's 13 on 20.

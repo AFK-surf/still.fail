@@ -439,7 +439,7 @@ let unread_rule : @ui.Style = @ui.style(w=@sf.grow, h=SPx, bg=A(Accent, O50))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let unread_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Accent, wrap=false)
+let unread_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Accent, wrap=false)
 
 ///|
 /// The pages coming (chatOlder: 4 over, 8 under; chatNewer: 8 over, 4 under), a chat with nothing yet (chatEmpty).
@@ -456,7 +456,7 @@ let empty_row : @ui.Style = @ui.css("w=Full py=S8 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let chat_empty_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted)
+let chat_empty_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Muted)
 
 ///|
 /// What did not go, its words and files at 55%.
@@ -478,7 +478,7 @@ let unsent_note : @ui.Style = @ui.css("row pr=S1_5 gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let unsent_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=false)
+let unsent_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Danger, wrap=false)
 
 ///|
 /// Its buttons (msgUnsentBtn): 2 by 6 in, 4 apart, 7 round; the hover ground under the pointer; at 55% when they may
@@ -496,11 +496,11 @@ let unsent_button_off : @ui.Style = unsent_button_box.then(@ui.css("opacity=O55"
 
 ///|
 // kept across runs: a value (no field of it changes)
-let unsent_label : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let unsent_label : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let unsent_label_hot : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let unsent_label_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 /// An activity's row (activityRow): its line and its stop 4 apart.
@@ -545,15 +545,15 @@ let now_room : @ui.Style = @ui.css("row")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let now_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false, w=Cut)
+let now_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let now_words_hot : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, w=Cut)
+let now_words_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let activity_clock : @ui.TextStyle = @ui.text_style(size=Sm, color=Subtle, wrap=false)
+let activity_clock : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
 /// Its stop (activityStop): 24 round in 6, the muted ink; the hover ground and the text's under the pointer.
