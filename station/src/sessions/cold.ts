@@ -37,12 +37,12 @@ export class ColdRooms implements ColdStorage {
     if (!row) return null;
     const dir = roomOf(this.dataDir(), row.workspace);
     if (dir === null || row.archivedAt === null || row.running || hub.processState(key) === "running") return null;
+    // The sessions in use alone (by their indexes): this is asked again and again as a session is packed.
     const shared = hub.store
-      .listSessions()
+      .sessionsInUse()
       .some(
         (s) =>
           s.key !== key &&
-          (s.archivedAt === null || s.running) &&
           [s.workspace, s.cwd ?? s.workspace].some((path) => {
             const cwd = canonical(path);
             return cwd !== null && within(cwd, dir);
@@ -55,14 +55,14 @@ export class ColdRooms implements ColdStorage {
   private hasJobs(key: string, dir: string): boolean {
     let jobs;
     try {
-      jobs = this.hub().store.listJobs(null);
+      // Those active (running, or a service waiting to start again), by their index: not every job ever run.
+      jobs = this.hub().store.jobsUp();
     } catch {
       return true;
     }
     return jobs.some((job) => {
-      const active = job.state === "running" || (job.port !== null && job.state === "exited");
       const cwd = canonical(job.cwd);
-      return active && (job.sessionKey === key || (cwd !== null && within(cwd, dir)));
+      return job.sessionKey === key || (cwd !== null && within(cwd, dir));
     });
   }
 
@@ -100,7 +100,7 @@ export class ColdRooms implements ColdStorage {
     if (
       packing &&
       id !== null &&
-      hub.store.listSessions().some((s) => s.key !== key && s.runtime === row.runtime && s.runtimeSessionId === id && (s.archivedAt === null || s.running))
+      hub.store.sessionsInUse().some((s) => s.key !== key && s.runtime === row.runtime && s.runtimeSessionId === id)
     )
       return [];
     const config = hub.config();

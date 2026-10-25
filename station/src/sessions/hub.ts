@@ -202,7 +202,7 @@ export class Hub {
   /// The sessions at work as the station starts are followed (live.ts `running`): once where their history is read
   /// is set (agents.ts), so none is read on the main thread.
   followRunning() {
-    for (const row of this.store.listSessions()) if (row.running) this.live.running(row.key, true);
+    for (const row of this.store.runningSessions()) this.live.running(row.key, true);
   }
 
   config(): HubConfig {
@@ -589,7 +589,7 @@ export class Hub {
   /// After a restart: resume cut-off turns (those not taken up with their runtime), then deliver whatever is still
   /// pending.
   recover() {
-    for (const row of this.store.listSessions().filter((s) => s.running)) {
+    for (const row of this.store.runningSessions()) {
       // Taken up from the previous station: its turn runs on.
       if (this.adopted.has(row.key) || !this.online(row)) continue;
       log.info("hub", "recovering a turn cut off by restart", { session: row.key });

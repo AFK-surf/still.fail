@@ -62,8 +62,10 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 -- The sessions shown (store.ts LIVE_SESSIONS): what the station's own periodic work goes over; the archived ones only grow.
 CREATE INDEX IF NOT EXISTS sessions_live ON sessions (last_active_at) WHERE archived_at IS NULL;
--- The sessions running (store.ts ANY_RUNNING).
+-- The sessions running (store.ts ANY_RUNNING, RUNNING_SESSIONS).
 CREATE INDEX IF NOT EXISTS sessions_running ON sessions (key) WHERE running = 1;
+-- The sessions someone started lately (store.ts modelsUsedBy: the models they chose, as a chat is opened for them).
+CREATE INDEX IF NOT EXISTS sessions_by_creator ON sessions (created_by, created_at);
 CREATE TABLE IF NOT EXISTS threads (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   surface TEXT NOT NULL,
@@ -90,6 +92,8 @@ CREATE TABLE IF NOT EXISTS thread_sessions (
   PRIMARY KEY (thread, session)
 );
 CREATE INDEX IF NOT EXISTS thread_sessions_session ON thread_sessions (session);
+-- The threads at an address on any surface (store.ts threadsAt: session_send to a thread by its channel and ts).
+CREATE INDEX IF NOT EXISTS threads_at ON threads (channel, thread_ts);
 CREATE TABLE IF NOT EXISTS entries (
   thread INTEGER NOT NULL,
   n INTEGER NOT NULL,
@@ -116,6 +120,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS entries_ts ON entries (thread, ts) WHERE ts IS
 -- primary key instead, going back over the whole thread for a message never edited: every message read had a long
 -- chat's every page read with it, 5 to 8 s on ccvm with its pages put out (2026-10-25).
 CREATE INDEX IF NOT EXISTS entries_edits ON entries (thread, target, n) WHERE target IS NOT NULL;
+-- A thread's cards and option posts (store.ts answersSince: the card each person's message since may answer, at each
+-- list of chats): the latest before a message found at once, not by going back over the thread to it.
+CREATE INDEX IF NOT EXISTS entries_cards ON entries (thread, n) WHERE card IS NOT NULL;
+CREATE INDEX IF NOT EXISTS entries_options ON entries (thread, n) WHERE options IS NOT NULL;
+-- The login cards (store.ts closeLoginCards, as a login ends): without it each read every entry of the station's.
+CREATE INDEX IF NOT EXISTS entries_login_cards ON entries (thread, n) WHERE card LIKE '%"login"%';
 CREATE TABLE IF NOT EXISTS deliveries (
   thread INTEGER NOT NULL,
   n INTEGER NOT NULL,
@@ -262,6 +272,8 @@ CREATE TABLE IF NOT EXISTS closed_cards (
   at INTEGER NOT NULL,
   PRIMARY KEY (thread, n)
 );
+-- The cards closed lately (store.ts answersSince, at each list of chats).
+CREATE INDEX IF NOT EXISTS closed_cards_at ON closed_cards (at);
 -- What the agents spent (store/usage.rs): one row per model call their runtimes recorded, read from the transcripts,
 -- with whom and what it was for as it was then. Kept when its session goes: it was spent all the same.
 CREATE TABLE IF NOT EXISTS usage (
