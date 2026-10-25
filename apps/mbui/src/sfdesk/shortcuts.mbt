@@ -7,6 +7,51 @@
 /// not changed here), quiet words beside each; the way to change them at its foot (the desktop app's).
 pub fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
+  let change = Ref(false)
+  let footer : (() -> Unit)? = if @settings.keys_changeable(prefs) {
+    Some(fn() {
+      if @sf.button(c, @sf.t("web-main.shortcuts.change"), key="keys-dialog/change", tone=Ghost) {
+        change.val = true
+      }
+    })
+  } else {
+    None
+  }
+  let d = @sf.dialog(
+    c,
+    "keys-dialog",
+    wide.keys_open,
+    @sf.t("web-main.shortcuts.title"),
+    close_label=@sf.t("common.close"),
+    footer?,
+    fn() {
+      c.box(style=keys_sheet, fn() {
+        for g in key_lines(prefs) {
+          c.box(style=keys_group, fn() {
+            c.box(style=keys_group_head, fn() { c.text(g.0, style=keys_group_title) |> ignore }) |> ignore
+            for k in g.1 {
+              c.box(style=keys_line, fn() {
+                c.text(k.0, style=keys_line_words) |> ignore
+                c.text(k.1, style=keys_line_keys) |> ignore
+              })
+              |> ignore
+            }
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+    },
+  )
+  wide.keys_open = d && !change.val
+  if change.val {
+    open_settings_at(@settings.Route::Shortcuts)
+  }
+}
+
+///|
+/// What ⌘/ lists, each place's shortcuts with their keys in words: worked out as it is drawn, not while it is closed.
+fn key_lines(prefs : Json?) -> Array[(String, Array[(String, String)])] {
   let (first_ws, last_ws) = @settings.workspace_keys(prefs)
   let groups = @settings.key_groups(prefs)
   groups.push((@sf.t("web-main.shortcuts.group.workspace"), [(@sf.t("web-main.shortcuts.switchWorkspace"), first_ws + " … " + last_ws)]))
@@ -31,46 +76,7 @@ pub fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
       ],
     ),
   )
-  let change = Ref(false)
-  let footer : (() -> Unit)? = if @settings.keys_changeable(prefs) {
-    Some(fn() {
-      if @sf.button(c, @sf.t("web-main.shortcuts.change"), key="keys-dialog/change", tone=Ghost) {
-        change.val = true
-      }
-    })
-  } else {
-    None
-  }
-  let d = @sf.dialog(
-    c,
-    "keys-dialog",
-    wide.keys_open,
-    @sf.t("web-main.shortcuts.title"),
-    close_label=@sf.t("common.close"),
-    footer?,
-    fn() {
-      c.box(style=keys_sheet, fn() {
-        for g in groups {
-          c.box(style=keys_group, fn() {
-            c.box(style=keys_group_head, fn() { c.text(g.0, style=keys_group_title) |> ignore }) |> ignore
-            for k in g.1 {
-              c.box(style=keys_line, fn() {
-                c.text(k.0, style=keys_line_words) |> ignore
-                c.text(k.1, style=keys_line_keys) |> ignore
-              })
-              |> ignore
-            }
-          })
-          |> ignore
-        }
-      })
-      |> ignore
-    },
-  )
-  wide.keys_open = d && !change.val
-  if change.val {
-    open_settings_at(@settings.Route::Shortcuts)
-  }
+  groups
 }
 
 ///|

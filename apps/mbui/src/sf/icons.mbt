@@ -11,12 +11,31 @@ let made : Map[String, Bool] = {}
 let shapes_made : Map[String, Array[@ui.Shape]] = {}
 
 ///|
+/// An icon or a picture as drawn: its shapes and the name its node says.
+struct DrawnShapes {
+  shapes : Array[@ui.Shape]
+  name : String
+}
+
+///|
+/// The icons drawn, by name, size and colour (`icon`): found by those, its name said once, not written out in words
+/// (a size and a colour in figures) for each icon on every frame.
+let icons_made : Map[(String, Double, Int64), DrawnShapes] = {}
+
+///|
+/// The pictures drawn, by key, width, scale and tint (picture.mbt draw_drawable), as icons_made.
+let pictures_made : Map[(String, Double, Double, Int64?), DrawnShapes] = {}
+
+///|
 /// Every Tester starts as the app does (mbui's on_reset): the images made here gone with its own, nothing waited on or
 /// copied, the theme the first frame's.
 fn init {
   @ui.on_reset(fn() {
     made.clear()
     shapes_made.clear()
+    icons_made.clear()
+    pictures_made.clear()
+    tiles_made.clear()
     copied_at.clear()
     dark_set.val = None
     current.val = {
@@ -55,19 +74,19 @@ pub fn has_icon(name : String) -> Bool {
 /// square in `color`.
 pub fn icon(c : @ui.Ctx, name : String, size? : Double = 16.0, color? : Int64) -> Int {
   let color = color.unwrap_or(theme().p.text)
-  let key = "icon/\{name}/\{size}/\{color}"
-  let shapes = match shapes_made.get(key) {
-    Some(s) => s
+  let drawn = match icons_made.get((name, size, color)) {
+    Some(d) => d
     None => {
-      let s = match icon_numbers(name) {
+      let shapes = match icon_numbers(name) {
         Some(d) => icon_shapes(d, size / 24.0, color)
         None => []
       }
-      shapes_made[key] = s
-      s
+      let d = { shapes, name: "sf/icon/\{name}/\{size}/\{color}" }
+      icons_made[(name, size, color)] = d
+      d
     }
   }
-  c.shapes(shapes, w=Px(size), h=Px(size), name="sf/" + key)
+  c.shapes(drawn.shapes, w=Px(size), h=Px(size), name=drawn.name)
 }
 
 ///|

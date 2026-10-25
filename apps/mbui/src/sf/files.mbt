@@ -13,7 +13,7 @@ pub fn file_tile(c : @ui.Ctx, name : String, dir? : Bool = false, progress? : Do
   if dir {
     c.box(style=tile_box, fn() {
       c.shapes(
-        [@ui.shape_of(@pixels.svg_path(tile_folder, c.scale), stroke=t.p.muted, width=tile_stroke)],
+        [@ui.shape_of(tile_outlines(tile_folder, c.scale), stroke=t.p.muted, width=tile_stroke)],
         w=Px(tile_w),
         h=Px(tile_h),
         name="file-tile",
@@ -34,7 +34,7 @@ pub fn file_tile(c : @ui.Ctx, name : String, dir? : Bool = false, progress? : Do
   }
   shapes.push(
     @ui.shape_of(
-      @pixels.svg_path(tile_outline + tile_fold + (if ext == "" { tile_lines } else { "" }), c.scale),
+      tile_outlines(if ext == "" { tile_sheet_lines } else { tile_sheet }, c.scale),
       stroke=t.p.muted,
       width=tile_stroke,
     ),
@@ -57,13 +57,31 @@ pub fn file_tile(c : @ui.Ctx, name : String, dir? : Bool = false, progress? : Do
 }
 
 ///|
+/// The outlines of a tile's drawing (its path data) at `scale`: cut once for each, not again on every frame each tile is
+/// drawn.
+fn tile_outlines(d : String, scale : Double) -> Array[(Array[Double], Bool)] {
+  match tiles_made.get((d, scale)) {
+    Some(o) => o
+    None => {
+      let o = @pixels.svg_path(d, scale)
+      tiles_made[(d, scale)] = o
+      o
+    }
+  }
+}
+
+///|
+/// The tiles' outlines cut so far, by their path data and scale (tile_outlines).
+let tiles_made : Map[(String, Double), Array[(Array[Double], Bool)]] = {}
+
+///|
 /// The sheet filled from its foot `part` of its height (FileTile's rect from y = 36 − 36 × part, cut to the sheet's
 /// outline): the outline's inside (a convex shape) cut below that line, in the sheet's points (its curves cut for
 /// `scale` pixels a point).
 pub fn file_tile_fill(scale : Double, part : Double, color : Int64) -> @ui.Shape {
   let share = if part < 0.0 { 0.0 } else if part > 1.0 { 1.0 } else { part }
   let from = tile_h * (1.0 - share)
-  let cut = @pixels.svg_path(tile_outline, scale).filter_map(fn(o) {
+  let cut = tile_outlines(tile_outline, scale).filter_map(fn(o) {
     let (pts, closed) = o
     let n = pts.length() / 2
     let out : Array[Double] = []
@@ -101,6 +119,13 @@ let tile_fold : String = "M19 1.75V6.5Q19 9 21.5 9H26.25"
 
 ///|
 let tile_lines : String = "M8.5 19H20.5M8.5 23.5H17"
+
+///|
+/// The sheet with its fold, as drawn with an extension on it; and with its two lines, without.
+let tile_sheet : String = tile_outline + tile_fold
+
+///|
+let tile_sheet_lines : String = tile_sheet + tile_lines
 
 ///|
 let tile_folder : String = "M2.75 8.5Q2.75 5.75 5.5 5.75H11.5L14.5 9H24.5Q27.25 9 27.25 11.75V28.5Q27.25 31.25 24.5 31.25H5.5Q2.75 31.25 2.75 28.5Z"
