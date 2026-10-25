@@ -5,6 +5,11 @@
 ///|
 struct FakeHost {
   mut time : Double
+  /// how late the frame drawn at `late_after` reached the screen, as said of it (Tester::frame_late, a run's LATE line):
+  /// what the first frame drawn after then says (frame `late_frame`, once it is drawn); every other frame's was on time
+  mut late : Double
+  mut late_after : Double
+  mut late_frame : Int
   /// the time of day (ms since 1970) at its clock's 0: what @ui.wall_ms says is it plus the clock (Tester::set_wall)
   mut wall : Double
   /// device pixels a point, as a host's window has them (2: a Retina screen; a recording host's, Tester::new(scale=))
@@ -306,6 +311,44 @@ fn h_utc_offset_min(at_ms : Double) -> Int {
     None => @hostapi.utc_offset_min(at_ms)
   }
 }
+
+///|
+/// How much later than its time the frame before this one reached the screen (@hostapi.frame_late): a Tester's as
+/// said for this frame (Tester::frame_late, a run's LATE line), else on time.
+fn h_frame_late() -> Double {
+  match fake.val {
+    Some(f) => {
+      let c = g()
+      if f.late_after < 0.0 || c.now <= f.late_after {
+        return 0.0
+      }
+      if f.late_frame < 0 {
+        f.late_frame = c.frame_no
+      }
+      if f.late_frame == c.frame_no {
+        f.late
+      } else {
+        f.late_after = -1.0
+        0.0
+      }
+    }
+    None => {
+      let late = @hostapi.frame_late()
+      // (kept on the tape, before the frame's DRAWHASH, for a Tester to draw the run again by: Tester::replay_frames)
+      if late > 0.0 && taping() && late_taped.val != g().frame_no {
+        late_taped.val = g().frame_no
+        tape_line("LATE \{late}")
+      }
+      late
+    }
+  }
+}
+
+///|
+/// The frame whose lateness was kept on the tape last (h_frame_late).
+// kept across runs: a real host's alone, its frames numbered on from one run to the next (a Tester's lateness is not
+// taped)
+let late_taped : Ref[Int] = Ref(-1)
 
 ///|
 /// When the input event being handled happened (the host's, else now).

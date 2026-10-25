@@ -296,6 +296,72 @@ test "a push whose end is a hair past one of the display's frames is run to its 
 }
 
 ///|
+/// How late a slide's first frame is to the screen in these tests: a frame two and a half of the display's long.
+let test_first_late_ms : Double = 40.0
+
+///|
+/// A first frame far later than a slide waits for (nav_late_most).
+let test_first_very_late_ms : Double = 500.0
+
+///|
+test "a page pushed whose first frame is late to the screen moves from where that frame drew it, at the display's pace" {
+  // the same push, its first frame on time
+  let on_time_nav = @ui.Nav::new(0)
+  let on_time = @ui.Tester::new(nav_view(on_time_nav))
+  on_time.tap_text("open 1")
+  let tapped = on_time.time()
+  on_time.run_for(@ui.nav_push_ms / 2.0)
+  let half = on_time.rect_of("title 1").unwrap().0
+  // its first frame (the tap's, the page built in it) 40 ms late to the screen, as the host says in the next
+  let nav = @ui.Nav::new(0)
+  let t = @ui.Tester::new(nav_view(nav))
+  t.tap_text("open 1")
+  assert_eq(t.time(), tapped)
+  t.frame_late(test_first_late_ms)
+  t.run_for(@ui.first_frame_ms)
+  // it has not moved yet: where its first frame drew it, at its start
+  assert_true(t.rect_of("title 1") is None || t.rect_of("title 1").unwrap().0 >= 390.0)
+  assert_eq(nav.rest(), tapped + test_first_late_ms + @ui.nav_push_ms)
+  // from then, as the one on time from its frame
+  t.run_for(tapped + test_first_late_ms + @ui.nav_push_ms / 2.0 - t.time())
+  // (to the last bits a start moved on rounds otherwise)
+  assert_true((t.rect_of("title 1").unwrap().0 - half).abs() < 1.0e-6)
+  t.run_for(nav.rest() - t.time())
+  assert_eq(t.rect_of("title 1").unwrap().0, 0.0)
+  t.assert_idle()
+}
+
+///|
+test "a page pushed whose first frame is very late to the screen waits nav_late_most at most" {
+  let nav = @ui.Nav::new(0)
+  let t = @ui.Tester::new(nav_view(nav))
+  t.tap_text("open 1")
+  let tapped = t.time()
+  t.frame_late(test_first_very_late_ms)
+  t.run_for(@ui.first_frame_ms)
+  assert_eq(nav.rest(), tapped + @ui.nav_late_most + @ui.nav_push_ms)
+  t.run_for(nav.rest() - t.time())
+  assert_eq(t.rect_of("title 1").unwrap().0, 0.0)
+  t.assert_idle()
+}
+
+///|
+test "a page gone back to whose first frame is late to the screen moves from where that frame drew it" {
+  let nav = @ui.Nav::new(0)
+  let t = @ui.Tester::new(nav_view(nav))
+  t.tap_text("open 1")
+  t.run_for(nav.rest() - t.time())
+  t.back()
+  let back = t.time()
+  t.frame_late(test_first_late_ms)
+  t.run_for(@ui.first_frame_ms)
+  assert_eq(nav.rest(), back + test_first_late_ms + @ui.nav_push_ms)
+  t.run_for(nav.rest() - t.time())
+  assert_eq(t.rect_of("title 0").unwrap().0, 0.0)
+  t.assert_idle()
+}
+
+///|
 /// The stack's view, its pushes waiting for what the page shows (`ready`) at most `most` ms.
 fn nav_wait_view(nav : @ui.Nav[Int], ready : Ref[Bool], most : Double) -> (@ui.Ctx) -> Unit {
   let page = nav_view(nav)

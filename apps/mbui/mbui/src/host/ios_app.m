@@ -103,6 +103,9 @@ static MBView *the_view;
 static const char *script;
 static void say(NSString *s);
 static int frames_drawn;
+// how much later than its time the frame before reached the screen (mb_host_frame_late), and that frame's time (the
+// display link's target it was drawn for; -1: none drawn since the link was paused)
+static double frame_late, last_target = -1;
 // How far the soft keyboard reaches over the view's foot past the safe area's, in points, where it is on the screen
 // now (its motion followed frame by frame: the controller's), and whether it is moving.
 static double ime_over(void);
@@ -180,6 +183,7 @@ static void run_script_step(int step);
 - (void)tick:(CADisplayLink *)l {
   if (!self.wantFrame) {
     l.paused = YES;
+    last_target = -1;
     return;
   }
   CGSize s = self.bounds.size;
@@ -194,14 +198,21 @@ static void run_script_step(int step);
   // while it moves, a frame each display frame
   double h = edge ? MAX(1, s.height - ime_over()) : s.height;
   if (edge && ime_moving()) self.wantFrame = YES;
+  // the frame before on the screen since the display's last refresh (the link's timestamp): past the time it was drawn
+  // for, it was late by as much (a frame that took longer than the display's frame to build)
+  frame_late = last_target >= 0 ? MAX(0, l.timestamp * 1000.0 - last_target) : 0;
   // the frame's time is the display's: when this frame will be on screen (the display link's target, on
   // CACurrentMediaTime's clock as the touches' times are), as Android's is its vsync's, not when it happens to be built
   mb_cb.frame(s.width, h, scale, l.targetTimestamp * 1000.0);
+  last_target = l.targetTimestamp * 1000.0;
   if (frames_drawn == 0)
     say([NSString stringWithFormat:@"ios: first frame %.0fx%.0f @%.0fx in %.0f ms", s.width, s.height, scale, mb_now_ms() - t0]);
   frames_drawn++;
   if (script) run_script_step(frames_drawn);
-  if (!self.wantFrame) l.paused = YES;
+  if (!self.wantFrame) {
+    l.paused = YES;
+    last_target = -1;
+  }
 }
 
 // ---- touch ----
@@ -918,6 +929,8 @@ int32_t mb_host_utc_offset_min(double at_ms) {
 }
 
 double mb_host_event_time(void) { return event_time; }
+
+double mb_host_frame_late(void) { return frame_late; }
 
 int32_t mb_host_platform(void) { return 1; }
 

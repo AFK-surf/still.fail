@@ -150,6 +150,16 @@ fn log_drawn(w : Double, h : Double, scale : Double, t : Double) -> Unit {
 }
 
 ///|
+/// The frame drawn last (those drawn at this moment) reached the screen `ms` later than its time, as a host says of a
+/// frame that took longer than the display's frame to build (@hostapi.frame_late), in the next frame drawn after this
+/// moment: a slide whose first frame that was moves on that much later (nav.mbt).
+pub fn Tester::frame_late(self : Tester, ms : Double) -> Unit {
+  self.fake.late = ms
+  self.fake.late_after = self.fake.time
+  self.fake.late_frame = -1
+}
+
+///|
 /// `n` frames, `ms` apart: each one's hash (`frame_hash`) as it was drawn.
 pub fn Tester::frames(self : Tester, n : Int, ms? : Double = 16.0) -> Array[Int64] {
   let out : Array[Int64] = []
@@ -254,6 +264,21 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
         replay_message(self.fake, line)
       }
       continue
+    }
+    // how late the host said the frame before was, said again for the frame it said it in (hostcall.mbt's
+    // h_frame_late): the next drawn
+    match line.find("LATE ") {
+      Some(i) =>
+        match num(line.view(start_offset=i + 5).to_owned()) {
+          Some(late) => {
+            self.fake.late = late
+            self.fake.late_after = self.fake.time
+            self.fake.late_frame = -1
+            continue
+          }
+          None => ()
+        }
+      None => ()
     }
     guard line.find("DRAWHASH ") is Some(i) else { continue }
     framed = true

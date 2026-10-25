@@ -1105,6 +1105,10 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_pointer(JNIEnv *env, jclass c, jint 
 
 double mb_host_event_time(void) { return event_time; }
 
+// (how late the frame before reached the screen: not told here yet, a frame's time its vsync's, the GL thread's own
+// queue after it)
+double mb_host_frame_late(void) { return 0; }
+
 int32_t mb_host_platform(void) { return 2; }
 
 JNIEXPORT void JNICALL Java_dev_mbui_Native_key(JNIEnv *env, jclass c, jint code, jint mods) {
