@@ -2,10 +2,10 @@
 # folder's page brought over, its rows and the preview beside them as wide as the page's panel allows.
 system {"size_class":{"width":"medium","height":"medium"}}
 timeout 20000
-until 发消息
+until 新建对话
 wait 600
 tap icon:folder
 wait 1200
-tapxy -80 420
+tapxy -24 420
 wait 1500
 exit

@@ -2,9 +2,9 @@
 # composer one line, then three: in the page panel's corners it follows the panel's corner (InnerOr), whatever it is.
 system {"size_class":{"width":"medium","height":"medium"}}
 timeout 20000
-until 发消息
+until 新建对话
 wait 600
-tapxy -80 420
+tapxy -24 420
 wait 900
 tap 发消息
 wait 300

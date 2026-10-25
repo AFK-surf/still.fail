@@ -44,6 +44,9 @@
 //   drag X Y DX DY [MS]         a finger down at X Y (negative: from the right, the bottom), moved by DX DY over MS
 //                               (300 by default), a move a frame, then lifted there
 //   dragon DX DY MS TEXT        the same from the lowest TEXT on screen, where the frame has it
+//   backswipe DX [MS] [right] [off]  the system's back gesture (Android's predictive back) from the left edge (right:
+//                               the right's), DX across over MS (300 by default), a step a frame, then gone through
+//                               (off: called off)
 //   shot NAME                   the window's picture, as the frame just drawn, as $MBUI_SHOT_DIR/NAME.png (where the host cannot,
 //                               "SHOT NAME" is logged and the run waits 1.5 s for whoever takes it: adb's screencap)
 //   noticed TEXT                one of the app's notifications (the system's, @hostapi.notice_show) holds TEXT in its
@@ -102,6 +105,13 @@ priv struct Driver {
   mut gdy : Double
   mut gt0 : Double
   mut gms : Double
+  // the system's back gesture under way (backswipe): how far across it goes, from which edge (1 the right), whether
+  // it is called off at the end, since when, over how long (0: none)
+  mut bdx : Double
+  mut bedge : Int
+  mut boff : Bool
+  mut bt0 : Double
+  mut bms : Double
   // when a shot the host cannot take was asked for (logged "SHOT NAME": whoever takes it has 1.5 s), -1 before
   mut shot_at : Double
   // answered, decoded, ready: how many waits on outside had ended as the last step that acted did (or the run began:
@@ -232,6 +242,11 @@ fn drive_start(script : String, dir : String, done_dir? : String = "") -> Unit {
     gdy: 0.0,
     gt0: 0.0,
     gms: 0.0,
+    bdx: 0.0,
+    bedge: 0,
+    boff: false,
+    bt0: 0.0,
+    bms: 0.0,
     shot_at: -1.0,
     mark: runtime().outside_ended(),
     shown_mark: 0,
@@ -648,6 +663,19 @@ fn drive_steps(c : Ctx) -> Unit {
     d.since = -1.0
     return
   }
+  if d.bms > 0.0 {
+    // the system's back gesture on its way: a step this frame, gone through (or called off) once all the way
+    let f = dmin((now - d.bt0) / d.bms, 1.0)
+    let x = if d.bedge == 1 { c.width - d.bdx * f } else { d.bdx * f }
+    on_back(1, x, f, d.bedge)
+    if f >= 1.0 {
+      on_back(if d.boff { 3 } else { 2 }, x, f, d.bedge)
+      d.bms = 0.0
+      d.at = d.at + 1
+      d.since = -1.0
+    }
+    return
+  }
   if d.gms > 0.0 {
     // a drag on its way: a move this frame, lifted once all the way
     let f = dmin((now - d.gt0) / d.gms, 1.0)
@@ -952,6 +980,25 @@ fn drive_steps(c : Ctx) -> Unit {
         h_log("DRIVE \{cmd} \{arg} from \{x.to_int()},\{y.to_int()}")
         tell_step(d.steps[d.at], Acted)
         on_pointer(0, x, y, 0)
+        return
+      }
+      "backswipe" => {
+        let words = arg.split(" ").map(fn(v) { v.to_string() }).to_array()
+        d.bdx = number(words[0])
+        d.bms = 300.0
+        d.bedge = 0
+        d.boff = false
+        for w in words[1:] {
+          match w {
+            "right" => d.bedge = 1
+            "off" => d.boff = true
+            _ => d.bms = dmax(number(w), 16.0)
+          }
+        }
+        d.bt0 = now
+        h_log("DRIVE backswipe \{arg}")
+        tell_step(d.steps[d.at], Acted)
+        on_back(0, if d.bedge == 1 { c.width } else { 0.0 }, 0.0, d.bedge)
         return
       }
       "type" => {

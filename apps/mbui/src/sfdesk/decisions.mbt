@@ -96,11 +96,12 @@ fn zou_row(c : @ui.Ctx, src : Source, w : Workspace, d : Json, on : Bool, more :
   let id = c.id(key)
   c.cursor(id, Hand)
   if c.clicked(id) {
-    // the one pressed shown from now on (the list as it is), on the 奏 page
+    // the one pressed shown from now on (the list as it is), on the 奏 page, on the tape brought over
     decision_show(src, w, d)
     if lit_place() != "decisions" {
       go_zou()
     }
+    show_page()
   }
   let question = match text(v, "question") {
     "" => text(v, "title")

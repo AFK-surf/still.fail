@@ -617,7 +617,7 @@ let en : Map[String, String] = {
   "web-mobile.profiles.addModelPlaceholder": "Add a model by name",
   "web-pages.profiles.addModelWhat": "add this model",
   "web-pages.profiles.adding": "Signed in, adding",
-  "web-pages.profiles.background": "Move running commands to the background on new messages",
+  "web-pages.profiles.background": "Background running commands on new messages",
   "web-pages.profiles.backgroundOff": "New messages wait until the running command or subagent finishes",
   "web-pages.profiles.backgroundOn": "While Claude Code waits on a command or subagent, a new message moves it to the background (like Ctrl+B). The agent reads the message immediately and handles the results when they finish.",
   "web-pages.profiles.checkedAt": "Checked {time}",

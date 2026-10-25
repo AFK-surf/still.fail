@@ -1,0 +1,20 @@
+# Laid out Medium on an opened fold's inner screen upright (MBUI_WIN=690x840 MBUI_FILM_PLATFORM=2), a finger: the
+# system's back gesture on the tape (sfdesk frame.mbt tape_back). The page brought over by a tap on what shows of it;
+# swiped back from the left edge and called off (the tape with the finger, then back where it was); swiped again and
+# gone through (on from there: the sidebar over); another chat chosen in the sidebar (the page over to show it);
+# swiped back from the right edge (the sidebar over again, the tape the same way).
+system {"size_class":{"width":"medium","height":"medium"}}
+timeout 20000
+until 新建对话
+wait 600
+tapxy -24 420
+wait 800
+backswipe 240 700 off
+wait 800
+backswipe 240 700
+wait 900
+tap 首页的列表改成按天分组
+wait 900
+backswipe 240 700 right
+wait 900
+exit

@@ -176,7 +176,8 @@ fn back_where() -> (() -> Unit)? {
 ///|
 /// Page `p` opened where the layout has it (the pane table, docs/architecture.md): on the wide frame the page pushed,
 /// a chat's detail asked as a page (its history, a service, a file) laid beside its chat by the frame (sfdesk's
-/// main_page); laid out Small on the phone's stack (a new chat risen from the foot).
+/// main_page), the page pane brought over on the tape to show it (sfdesk's show_page: also the chat already shown,
+/// chosen again); laid out Small on the phone's stack (a new chat risen from the foot).
 fn open_where(p : Page) -> Unit {
   if !@sfdesk.is_wide(@ui.current()) {
     stack_open(p)
@@ -188,6 +189,9 @@ fn open_where(p : Page) -> Unit {
     // the settings: their list the sidebar's, the page of its first row beside it
     Settings => @sfdesk.open_settings_at(@sfdesk.settings_landing)
     _ => app.nav.push(p)
+  }
+  if @sfdesk.shown_in_page(p) {
+    @sfdesk.show_page()
   }
 }
 

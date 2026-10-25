@@ -1143,8 +1143,10 @@ let quotes_column : @ui.Style = @ui.css("w=Full gap=S1_5")
 ///|
 /// The files waiting (composerFiles: wrapped, 6 apart, flush with the box's padding); its lines further apart by the
 /// reach of a ✕ above what it is hung on (@sf.with_corner_remove), so one on a later line keeps 6 from the line over it.
+/// Over the words, at the top of the box: their lines end short of its top right corner (@sf.composer_files_end), so
+/// the last of the first one never stands in it off its circle, however wide the box is.
 // kept across runs: a value (no field of it changes)
-let files_flow : @ui.Style = @ui.css("row w=Full gap=S1_5")
+let files_flow : @ui.Style = @ui.style(row=true, w=Full, gap=S1_5, pr=@sf.room_of(@sf.composer_files_end))
 
 ///|
 let files_lines : Double = @ui.Space::px(S1_5) + @sf.corner_remove_reach(@sf.message_file_corner)

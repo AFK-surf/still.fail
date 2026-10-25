@@ -321,6 +321,7 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
   c.cursor(id, Hand)
   if c.clicked(id) {
     archive_open(it)
+    show_page()
   }
   let on = match app.nav.top() {
     Chat(r) => r.station == station && r.session == session

@@ -1,17 +1,17 @@
 # Laid out Medium, the wide frame's tape (sfdesk frame.mbt): MBUI_WIN=690x840 MBUI_FILM_PLATFORM=2, an opened fold's
 # inner screen upright (its size classes medium both ways), a finger. The sidebar in use at first: a chat chosen in it
-# (it shows in the page beside it, the sidebar still in use), the page's edge tapped (it comes over, nothing under the
-# tap pressed), back (the sidebar over again), the page tapped again.
+# (the page comes over to show it), back (the sidebar over again), the page's edge tapped (it comes over, nothing under
+# the tap pressed), back.
 system {"size_class":{"width":"medium","height":"medium"}}
 timeout 20000
-until 发消息
+until 新建对话
 wait 1000
 tap 首页的列表改成按天分组
 wait 1300
-tapxy -80 420
-wait 1300
 back
 wait 1300
-tapxy -80 420
+tapxy -24 420
+wait 1300
+back
 wait 1300
 exit

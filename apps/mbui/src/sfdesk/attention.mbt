@@ -247,6 +247,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
             }
             app.nav.replace(Home)
             app.nav.push(Chat(chat))
+            show_page()
           },
         )
       }

@@ -56,7 +56,11 @@ pub fn files_nav(c : @ui.Ctx, src : Source, ws : String) -> Unit {
     if pins.length() > 0 {
       nav_action(c, "files/pin", @sf.t("web-pages.drive.addRoot"), Some(fn() { add_folder(src, ws, pins) }))
     }
-    files_places(c, src, ws, top=nav_top)
+    // (a folder chosen there in the page, on the tape brought over to show it)
+    files_places(c, src, ws, top=nav_top, go=fn(at) {
+      files_go(at)
+      show_page()
+    })
   })
   |> ignore
 }

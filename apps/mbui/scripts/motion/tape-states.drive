@@ -1,0 +1,14 @@
+# Laid out Medium on an opened fold's inner screen upright (MBUI_WIN=690x840 MBUI_FILM_PLATFORM=2), a finger: the tape
+# in each of its states, a second apart (sfdesk frame.mbt): the sidebar in use at first; the page brought over by a
+# tap on what shows of it; a chat's side panel opened (it comes over); back (the page over, the panel's edge showing).
+system {"size_class":{"width":"medium","height":"medium"}}
+timeout 20000
+until 新建对话
+wait 1000
+tapxy -24 420
+wait 1000
+tap icon:panel-open
+wait 1200
+back
+wait 1000
+exit

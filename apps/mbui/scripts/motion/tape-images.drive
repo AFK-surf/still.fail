@@ -2,9 +2,9 @@
 # over and scrolled up to its pictures: each in its message as on the wide frame (messages' image_reveal).
 system {"size_class":{"width":"medium","height":"medium"}}
 timeout 20000
-until 发消息
+until 新建对话
 wait 600
-tapxy -80 420
+tapxy -24 420
 wait 900
 wheel -900
 wait 1800
