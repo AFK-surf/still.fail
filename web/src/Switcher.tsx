@@ -19,7 +19,7 @@ import { ShortcutsDialog } from "./Shortcuts.tsx";
 import { RelayHost } from "./Relay.tsx";
 import { stationBase } from "./station.tsx";
 import { filesPath } from "./searchOpen.ts";
-import { ModelLogo, Time } from "./ui.tsx";
+import { Keys, ModelLogo, Time, capsOf } from "./ui.tsx";
 import { StationMark } from "./StationMark.tsx";
 import * as markCss from "./StationMark.css.ts";
 import * as css from "./Switcher.css.ts";
@@ -260,7 +260,7 @@ function Finder({ scope, settings, onClose, onCommand, escape }: { scope: string
               <div key={line.key} className={css.row} {...option(i)}>
                 <span className={`${css.picture} ${css.actionMark}`} aria-hidden="true"><command.icon size={16} /></span>
                 <span className={css.title}>{command.label}</span>
-                {command.keys && <span className={css.meta}>{command.keys}</span>}
+                {command.keys && <Keys caps={capsOf(command.keys)} />}
               </div>
             );
           }

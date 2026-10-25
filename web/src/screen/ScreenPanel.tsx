@@ -7,6 +7,7 @@ import { DropdownMenu, Popover } from "radix-ui";
 import type { ScreenScale, ScreenViewState, StationNet } from "../core/shapes.ts";
 import { Chat, Check, ChevronDown, ChevronRight, Close, Expand, External, Keyboard, Monitor, Shrink, Sliders, TextSize, Trash, Upload } from "@stillfail/ui/icons.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
+import { Keys } from "../ui.tsx";
 import { t } from "../i18n.ts";
 import type { DecodeStats, Quality } from "./frames.ts";
 import * as css from "./ScreenViewer.css.ts";
@@ -286,7 +287,7 @@ export function ControlCenter({ quality, onQuality, codec, onCodec, scale, onSca
                   {combos.map((c) => (
                     <DropdownMenu.Item key={c.keys} className={item} onSelect={() => onCombo(c)}>
                       <span className={css.menuWords}>{c.name}</span>
-                      <span className={css.menuKeys}>{c.keys.split(" ").map((k) => <kbd key={k}>{k}</kbd>)}</span>
+                      <Keys caps={c.keys.split(" ")} />
                     </DropdownMenu.Item>
                   ))}
                 </DropdownMenu.SubContent>
