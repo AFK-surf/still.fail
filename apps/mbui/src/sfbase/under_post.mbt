@@ -80,7 +80,8 @@ pub fn under_post(
     Some(l) => l
     None => if share <= 0.0 { return } else { @ui.look(alpha=0.0) }
   }
-  if h.moving() {
+  // (off where it goes: on its way, for the motion log)
+  if share != h.target() {
     @motion.log_frame(c, "under/" + key, "open=\{share} alpha=\{look.alpha} scale=\{look.sx}")
   }
   @motion.reveal(c, "under/" + key, share, fn() {

@@ -875,8 +875,8 @@ fn swipe_to_archive(
     }
     _ => ()
   }
-  // gone off: archived (the call once the row has gone); refused, it comes back
-  if going && off.get() <= -width + 0.5 && !off.running {
+  // gone off: archived (the call once the row has gone, as declared as it set off); refused, it comes back
+  if going && off.over() {
     rows.swiped_off.remove(key)
     archive_row(src, item, failed=fn() {
       unghost(false)

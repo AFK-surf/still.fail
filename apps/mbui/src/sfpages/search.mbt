@@ -292,7 +292,8 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double) -> Unit
   }
   let u = up.get()
   // gone back: the field is the list's again
-  if search.leaving && !up.moving() {
+  // (at the end its going back declared as it set out)
+  if search.leaving && up.over() {
     search_gone()
     return
   }

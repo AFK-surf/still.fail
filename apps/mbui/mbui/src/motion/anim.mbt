@@ -157,6 +157,15 @@ pub fn Anim::ends(self : Anim) -> Double {
 }
 
 ///|
+/// Whether the end it declared as it was told (`ends()`) has come, on the frames' clock: what waits for a motion (what
+/// is shown after it, a press it holds back, state let go once it is over) waits till then, from its cause, not for it
+/// to be seen still (docs/motion.md: no logic reads whether a motion runs). Never told: it has; told between frames,
+/// not before it starts; with motion reduced, as it was told.
+pub fn Anim::over(self : Anim) -> Bool {
+  (self.start < 0.0 && self.asked < 0) || @ui.current().now() >= self.ends()
+}
+
+///|
 /// Where it is this frame.
 pub fn Anim::get(self : Anim) -> Double {
   self.step(@ui.current())

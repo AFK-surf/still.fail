@@ -488,7 +488,8 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json], at : Int) -> Unit {
   // let go short: back where it rests
   if dui.going == 3 {
     let back = card_back(c)
-    if back.moving() {
+    // (till the end it declared as it set out)
+    if !back.over() {
       dui.drag = dui.going_from * (1.0 - back.get())
     } else {
       dui.going = 0
@@ -568,7 +569,8 @@ fn deck_out(c : @ui.Ctx, src : Source, width : Double, height : Double) -> Unit 
   }
   let t = @sf.theme()
   let a = card_out(c)
-  if !a.moving() {
+  // (gone at the end it declared as it set off)
+  if a.over() {
     dui.out = None
     return
   }

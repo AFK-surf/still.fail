@@ -120,10 +120,11 @@ pub fn pick_new(src : Source, ws : String, fill : Map[String, Json]) -> Unit {
 }
 
 ///|
-/// Whether chat `r` is the one a new chat just became, its scene still leaving over it.
+/// Whether chat `r` is the one a new chat just became, its scene still leaving over it (till the end declared as it
+/// set out).
 pub fn new_chat_leaving_of(c : @ui.Ctx, r : ChatRef) -> Bool {
   match fresh.became {
-    Some(b) => b == r && new_leave(c).moving()
+    Some(b) => b == r && !new_leave(c).over()
     None => false
   }
 }
@@ -133,7 +134,7 @@ pub fn new_chat_leaving_of(c : @ui.Ctx, r : ChatRef) -> Bool {
 /// core's own, its first view not read yet, nothing breathing over it (Chat.kt made).
 pub fn new_chat_made(c : @ui.Ctx, r : ChatRef) -> Bool {
   match fresh.became {
-    Some(b) if b == r => new_leave(c).moving() || flight_carried(r.station + ":" + r.session)
+    Some(b) if b == r => !new_leave(c).over() || flight_carried(r.station + ":" + r.session)
     _ => false
   }
 }

@@ -234,20 +234,11 @@
       "src/sfbase/viewer.mbt": 1
     },
     "motion-read": {
-      "src/sf/marked.mbt": 1,
-      "src/sfapp/bar.mbt": 3,
       "src/sfapp/composer.mbt": 1,
-      "src/sfapp/decisions.mbt": 2,
       "src/sfbase/chat_list.mbt": 1,
       "src/sfbase/emit.mbt": 3,
       "src/sfbase/flight.mbt": 1,
-      "src/sfbase/fresh.mbt": 2,
-      "src/sfbase/under_post.mbt": 1,
       "src/sfbase/viewer.mbt": 1,
-      "src/sfdesk/decision_page.mbt": 1,
-      "src/sfpages/chat_list.mbt": 3,
-      "src/sfpages/message_files.mbt": 1,
-      "src/sfpages/search.mbt": 1,
       "src/sfreplay/steps.mbt": 1
     }
   },

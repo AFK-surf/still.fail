@@ -733,9 +733,10 @@ fn BarModel::sample(self : BarModel) -> Unit {
   for _, g in self.tints {
     g.sample()
   }
-  // a bar chosen: landed, the stack is where the bar is, drawn as the bar will be; it goes in this same frame
+  // a bar chosen: landed (its panel's spring at the rest it declared as it set out, closed), the stack is where the
+  // bar is, drawn as the bar will be; it goes in this same frame
   match self.swap {
-    Some(_) if !self.o.moving() && self.o.x <= 0.0 => self.swap = None
+    Some(_) if now >= self.o.end() && self.o.to <= 0.0 => self.swap = None
     _ => ()
   }
 }
@@ -1215,7 +1216,7 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   }
   if m.swap is Some(_) {
     @motion.log_frame(c, "bar/swap", "value=\{m.o.x} to=\{m.o.to}")
-  } else if m.o.moving() {
+  } else if m.o.x != m.o.to {
     @motion.log_frame(c, "bar/panel", "value=\{m.o.x} to=\{m.o.to}")
   }
   if m.vis.value <= 0.0 && !shown {
@@ -1655,7 +1656,8 @@ fn bar_gesture(
     m.was_down = true
     m.y0 = py
     m.o0 = m.o.x
-    m.holds = multi && (m.o0 > 0.02 || (m.o.moving() && m.o.to > 0.0))
+    // (opening: short of the rest its spring declared as it set out, toward open)
+    m.holds = multi && (m.o0 > 0.02 || (bar_clock.now < m.o.end() && m.o.to > 0.0))
     m.from_open = m.holds
     m.open = m.o.to > 0.5
     if m.holds {
