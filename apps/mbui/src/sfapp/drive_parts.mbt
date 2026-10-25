@@ -76,7 +76,7 @@ fn dv_button(
       if busy {
         @sf.spinner(c, size=14.0, ring=@sf.alpha(ink, 0.3), arc=ink) |> ignore
       }
-      c.text(label, size=14.0, weight=600, color=ink, wrap=false) |> ignore
+      c.text(label, size=@sf.theme().t.ui, weight=600, color=ink, wrap=false) |> ignore
       // Controls.kt Button: clickable over its capsule
       if on {
         @motion.ripple(c, id, 19.0)
@@ -137,7 +137,7 @@ fn dv_sheet_frame(
         |> ignore
         if title != "" {
           c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, pb=10.0, align=ACenter, fn() {
-            c.text(title, size=17.0, weight=700, color=t.p.text, wrap=false) |> ignore
+            c.text(title, size=t.t.title, weight=700, color=t.p.text, wrap=false) |> ignore
             // what is said beside it (SheetHead's trailing: the contents' count and how far read)
             if trailing != "" {
               c.box(style=dv_sheet_trailing, fn() {
@@ -180,4 +180,4 @@ let dv_sheet_trailing : @ui.Style = @ui.style(w=@sf.grow, align=AEnd)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dv_sheet_trailing_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+let dv_sheet_trailing_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)

@@ -580,15 +580,15 @@ let banner_head : @ui.Style = @ui.css("row w=Full gap=S2 justify=JBetween")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let banner_title : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Bold, color=Fg, wrap=false)
+let banner_title : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Bold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let banner_muted : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let banner_muted : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let banner_body : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Fg, w=Full, max_lines=2)
+let banner_body : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, w=Full, max_lines=2)
 
 ///|
 /// The app's icon (22% round: Md on a 28 or 30 square).
@@ -607,7 +607,7 @@ let edge_item : @ui.Style = @ui.css("pl=S3 pr=S2_5 py=S0_5 radius=Full bg=Raised
 
 ///|
 // kept across runs: a value (no field of it changes)
-let edge_words : @ui.TextStyle = @ui.text_style(size=Xs2, leading=L4, color=Muted, wrap=false)
+let edge_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -649,7 +649,7 @@ let dock_badge : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dock_badge_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=OnPrimary, wrap=false)
+let dock_badge_words : @ui.TextStyle = @ui.text_style(size=Caption, color=OnPrimary, wrap=false)
 
 ///|
 /// The ways' tiles side by side, 10 apart, as wide as they share.
@@ -770,15 +770,15 @@ let pic_alert : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pic_alert_words : @ui.TextStyle = @ui.text_style(size=Xs2, weight=Semibold, color=OnPrimary, wrap=false)
+let pic_alert_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=OnPrimary, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tile_name : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Fg, wrap=false)
+let tile_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tile_state : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let tile_state : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// The way to allow it (tileAction: 4 over, 4 by 10 and 12 in, round, red; its words the meta's 12 in 500 white).
@@ -792,7 +792,7 @@ let tile_action_button : @ui.Style = @ui.css(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tile_action_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, color=OnPrimary, wrap=false)
+let tile_action_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=OnPrimary, wrap=false)
 
 ///|
 /// The kinds' card (card, kinds: 20 at the sides, 6 over and under), a line between them.
@@ -821,15 +821,15 @@ let kind_text : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let kind_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, w=Full)
+let kind_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let kind_note : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, w=Full)
+let kind_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let kind_sum : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let kind_sum : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// Its ways, opened (kindWays: 4 apart, 14 in and under, ending as far from the card's edge as from its side).
@@ -843,7 +843,7 @@ let way_row : @ui.Style = @ui.css("row w=Full min_h=S8 gap=S3 align=ACenter just
 
 ///|
 // kept across runs: a value (no field of it changes)
-let way_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, w=@sf.grow)
+let way_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=@sf.grow)
 
 ///|
 /// 其他's card (card: 20 in, its rows 14 apart); the sound's note (sound: the meta's 12 muted).
@@ -852,4 +852,4 @@ let more_card : @ui.Style = @ui.css("w=Full p=S5 gap=S3_5 radius=Xl3 bg=Card")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sound_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=Full)
+let sound_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)

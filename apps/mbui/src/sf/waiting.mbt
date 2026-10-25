@@ -93,7 +93,7 @@ pub fn wait_pill(c : @ui.Ctx, text : String, key? : String = "", error? : Bool =
 ///|
 /// WaitLine's words: 13/18 on every width (Waiting.kt: fontSize 13.sp, lineHeight 18.sp).
 // kept across runs: a value (no field of it changes)
-let wait_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5)
+let wait_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5)
 
 ///|
 /// A small part still on its way (WaitLine): a 12 spinner and grey words

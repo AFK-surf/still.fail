@@ -598,11 +598,11 @@ let column_note : @ui.Style = tree_note.then(@ui.css("pl=S2_5"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tree_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let tree_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tree_error : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, w=Full)
+let tree_error : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, w=Full)
 
 ///|
 /// The ways' track (Drive.css.ts views): 2 in, 2 apart, round, on the words' colour at 6%.

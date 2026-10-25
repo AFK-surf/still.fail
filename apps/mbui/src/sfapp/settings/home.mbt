@@ -403,12 +403,12 @@ let identity_row : @ui.Style = @ui.css("row w=Full gap=S3_5 align=ACenter")
 /// The name on the account's card and the workspace's: 16 bold on one line, its line the theme's (1.4em: 22.4), as
 /// Android's Text says none of its own.
 // kept across runs: a value (no field of it changes)
-let identity_name : @ui.TextStyle = @ui.text_style(size=Xl, weight=Bold, color=Fg, wrap=false, w=Full)
+let identity_name : @ui.TextStyle = @ui.text_style(size=Title, weight=Bold, color=Fg, wrap=false, w=Full)
 
 ///|
 /// The line under it: 13 in the muted, one line, the theme's line (18.2).
 // kept across runs: a value (no field of it changes)
-let identity_line : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false, w=Full)
+let identity_line : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Full)
 
 ///|
 /// The workspace's mark on its card (SettingsHome.kt WorkspaceTile), as the account's picture is on its own: a picture
@@ -493,7 +493,7 @@ pub fn build_version() -> String {
 /// on 19.5 in the muted.
 fn seg_note(c : @ui.Ctx, note : String) -> Unit {
   let t = @sf.theme()
-  c.box(w=Fill(1.0), pl=24.0, pr=24.0, pt=8.0, fn() { c.text(note, size=13.0, color=t.p.muted, w=Fill(1.0), line=19.5) |> ignore })
+  c.box(w=Fill(1.0), pl=24.0, pr=24.0, pt=8.0, fn() { c.text(note, size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=19.5) |> ignore })
   |> ignore
 }
 

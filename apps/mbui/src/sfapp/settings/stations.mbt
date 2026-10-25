@@ -82,8 +82,8 @@ fn station_card(c : @ui.Ctx, core : Core, st : Json) -> Unit {
         })
         |> ignore
         c.box(w=Fill(1.0), fn() {
-          c.text(text(s, "name"), size=16.0, weight=700, color=t.p.text, wrap=false, line=22.0) |> ignore
-          c.text(join([joined_mark(s), text(s, "summary")], " · "), size=13.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0)
+          c.text(text(s, "name"), size=t.t.title, weight=700, color=t.p.text, wrap=false, line=22.0) |> ignore
+          c.text(join([joined_mark(s), text(s, "summary")], " · "), size=t.t.meta, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0)
           |> ignore
         })
         |> ignore
@@ -116,7 +116,7 @@ fn reconnecting(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
   c.box(dir=Row, gap=5.0, align=ACenter, fn() {
     spinner(c, inline=true)
-    c.text(tr("common.reconnecting"), size=12.0, color=t.p.muted, wrap=false, line=16.0) |> ignore
+    c.text(tr("common.reconnecting"), size=t.t.caption, color=t.p.muted, wrap=false, line=16.0) |> ignore
   })
   |> ignore
 }
@@ -182,7 +182,7 @@ fn station_body(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
             }
             c.text(
               fill("android-settings.stations.silent", [("app", "still.fail")]),
-              size=13.0,
+              size=t.t.meta,
               color=t.p.muted,
               w=Fill(1.0),
               line=18.0,
@@ -312,10 +312,10 @@ fn net_line(c : @ui.Ctx, net : Json?) -> Unit {
     c.box(w=Fill(1.0), gap=2.0, fn() {
       // (short of room, how it is reached and what its latency is called are cut short; the figures are not)
       c.box(dir=Row, gap=8.0, align=ACenter, fn() {
-        c.text(text(n, "path"), size=13.0, color=t.p.muted, wrap=false, line=18.0, w=Cut) |> ignore
+        c.text(text(n, "path"), size=t.t.meta, color=t.p.muted, wrap=false, line=18.0, w=Cut) |> ignore
         match field(n, "loss") {
           Some(Object(_)) as l =>
-            c.text(text(l, "text"), size=13.0, weight=500, color=tone(l), wrap=false, line=18.0) |> ignore
+            c.text(text(l, "text"), size=@sf.theme().t.meta, weight=500, color=tone(l), wrap=false, line=18.0) |> ignore
           _ => ()
         }
       })
@@ -323,8 +323,8 @@ fn net_line(c : @ui.Ctx, net : Json?) -> Unit {
       match field(n, "rtt") {
         Some(Object(_)) as r =>
           c.box(dir=Row, align=ACenter, fn() {
-            c.text(tr("android-settings.stations.rtt"), size=13.0, color=t.p.muted, wrap=false, line=18.0, w=Cut) |> ignore
-            c.text(text(r, "text"), size=13.0, weight=500, color=tone(r), wrap=false, line=18.0) |> ignore
+            c.text(tr("android-settings.stations.rtt"), size=t.t.meta, color=t.p.muted, wrap=false, line=18.0, w=Cut) |> ignore
+            c.text(text(r, "text"), size=@sf.theme().t.meta, weight=500, color=tone(r), wrap=false, line=18.0) |> ignore
           })
           |> ignore
         _ => ()
@@ -334,16 +334,16 @@ fn net_line(c : @ui.Ctx, net : Json?) -> Unit {
     c.box(gap=2.0, fn() {
       for way in [("↑", "up", "upTotal"), ("↓", "down", "downTotal")] {
         c.box(dir=Row, align=ACenter, fn() {
-          c.text(way.0, size=13.0, color=t.p.muted, wrap=false, line=18.0) |> ignore
+          c.text(way.0, size=t.t.meta, color=t.p.muted, wrap=false, line=18.0) |> ignore
           // (5 before it, then 68 for it: Stations.kt padding(start = 5.dp).width(68.dp))
           c.box(w=Px(73.0), pl=5.0, fn() {
-            c.text(text(n, way.1), size=13.0, weight=500, color=t.p.text, wrap=false, line=18.0) |> ignore
+            c.text(text(n, way.1), size=t.t.meta, weight=500, color=t.p.text, wrap=false, line=18.0) |> ignore
           })
           |> ignore
           match opt_text(n, way.2) {
             Some(total) =>
               c.box(min_w=60.0, fn() {
-                c.text(fill("android-settings.stations.total", [("total", total)]), size=13.0, color=t.p.muted, wrap=false, line=18.0)
+                c.text(fill("android-settings.stations.total", [("total", total)]), size=t.t.meta, color=t.p.muted, wrap=false, line=18.0)
                 |> ignore
               })
               |> ignore
@@ -372,10 +372,10 @@ fn meter_dials(c : @ui.Ctx, meters : Array[Json]) -> Unit {
       let lit = ((100 - clamp(count(v, "left"))).to_double() / 10.0 + 0.5).floor().to_int()
       c.box(w=Fill(1.0), gap=2.0, fn() {
         c.box(dir=Row, align=AEnd, fn() {
-          c.text(text(v, "big"), size=28.0, weight=600, color=if low { tone } else { t.p.text }, wrap=false, line=32.0)
+          c.text(text(v, "big"), size=t.t.display, weight=600, color=if low { tone } else { t.p.text }, wrap=false, line=32.0)
           |> ignore
           c.box(pl=1.0, fn() {
-            c.text(text(v, "unit"), size=15.0, weight=500, color=t.p.muted, wrap=false, line=26.0) |> ignore
+            c.text(text(v, "unit"), size=t.t.ui, weight=500, color=t.p.muted, wrap=false, line=26.0) |> ignore
           })
           |> ignore
         })
@@ -386,13 +386,13 @@ fn meter_dials(c : @ui.Ctx, meters : Array[Json]) -> Unit {
           }
         })
         |> ignore
-        c.text(text(v, "title"), size=13.0, weight=500, color=t.p.text, wrap=false, line=18.0) |> ignore
+        c.text(text(v, "title"), size=t.t.meta, weight=500, color=t.p.text, wrap=false, line=18.0) |> ignore
         c.text(
           match text(v, "total") {
             "" => " "
             x => x
           },
-          size=12.0,
+          size=t.t.caption,
           color=t.p.muted,
           wrap=false,
           line=17.0,
@@ -462,7 +462,7 @@ let unread_running_w : Double = 120.0
 ///|
 /// A part's line where it has nothing to show (offline): 13 on 20, muted (Stations.kt StationDevice's, StationMachine's).
 // kept across runs: a value (no field of it changes)
-let part_note : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, leading=L5, w=Full)
+let part_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L5, w=Full)
 
 ///|
 /// The parts' choice under the bar (StationScreen's Seg): 12 in from the page's sides as its cards, 10 over the first.

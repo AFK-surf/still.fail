@@ -605,7 +605,7 @@ let vt_glyph : Double = 16.0
 ///|
 /// (state: first in its card, the body's size, 500, its icon 8 before it)
 // kept across runs: a value (no field of it changes)
-let vt_state : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, weight=Medium, color=Fg, w=Full)
+let vt_state : @ui.TextStyle = @ui.text_style(size=Body, leading=L7, weight=Medium, color=Fg, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -632,7 +632,7 @@ let vt_count : @ui.Style = @ui.css("px=S1_5 radius=Full bg=DangerBg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vt_count_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, color=Danger, wrap=false)
+let vt_count_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=Danger, wrap=false)
 
 ///|
 /// (requests: each one's card, 10 apart as the page's cards: pagesCss.card)
@@ -647,12 +647,12 @@ let vt_request : @ui.Style = @ui.css("w=Full")
 ///|
 /// (link: the accent's ink, the list's size)
 // kept across runs: a value (no field of it changes)
-let vt_link_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=AccentText, wrap=false)
+let vt_link_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=AccentText, wrap=false)
 
 ///|
 /// (warn: the amber, the meta's size)
 // kept across runs: a value (no field of it changes)
-let vt_warn : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Warn, wrap=false)
+let vt_warn : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Warn, wrap=false)
 
 ///|
 /// (rowIcon: 16 wide, the muted, at the name's line)
@@ -710,11 +710,11 @@ let vt_word_number : @ui.Style = @ui.css("w=S6 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vt_word_number_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=false)
+let vt_word_number_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vt_word_words : @ui.TextStyle = @ui.text_style(size=Base, color=Fg, wrap=false)
+let vt_word_words : @ui.TextStyle = @ui.text_style(size=Body, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

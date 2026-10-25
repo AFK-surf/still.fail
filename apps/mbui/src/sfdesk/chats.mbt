@@ -160,11 +160,11 @@ let side_said_box : @ui.Style = @ui.css("w=Full px=S2_5 py=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let side_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, leading=L6)
+let side_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L6)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let side_words_bad : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, leading=L6)
+let side_words_bad : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, leading=L6)
 
 ///|
 /// The list's filter (components.tsx MineFilter, compact): a circle 32 across, in the accent's ground while it narrows the

@@ -291,11 +291,11 @@ let acc_identity_narrow : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let acc_sub_narrow : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false, w=Cut)
+let acc_sub_narrow : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let acc_name_narrow : @ui.TextStyle = @ui.text_style(size=Xl, weight=Bold, color=Fg, wrap=false, w=Cut)
+let acc_name_narrow : @ui.TextStyle = @ui.text_style(size=Title, weight=Bold, color=Fg, wrap=false, w=Cut)
 
 ///|
 /// (the narrow page's foot: deleting, 16 over it)
@@ -321,7 +321,7 @@ let acc_identity_text : @ui.Style = @ui.style(w=@sf.grow, gap=S1_5)
 ///|
 /// (identityName: the heading's size, 600)
 // kept across runs: a value (no field of it changes)
-let acc_name : @ui.TextStyle = @ui.text_style(size=Xl3, leading=L8, weight=Semibold, color=Fg, wrap=false)
+let acc_name : @ui.TextStyle = @ui.text_style(size=Heading, leading=L8, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// (identitySub: its parts 14 apart, the list's words, muted)
@@ -330,4 +330,4 @@ let acc_sub : @ui.Style = @ui.css("row gap=S3_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let acc_sub_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let acc_sub_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)

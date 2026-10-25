@@ -261,17 +261,17 @@ let ask_what : @ui.Style = @ui.css("w=Full gap=S0_5")
 ///|
 /// Its title, 14 on 20 (the account after it quieter, its own run).
 // kept across runs: a value (no field of it changes)
-let ask_title : @ui.TextStyle = @ui.text_style(size=Base, leading=L5, color=Fg, w=Full)
+let ask_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, w=Full)
 
 ///|
 /// The command, one line of it, 12 and quiet.
 // kept across runs: a value (no field of it changes)
-let ask_command : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4_75, color=Muted, wrap=false, max_lines=1, w=Full)
+let ask_command : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4_75, color=Muted, wrap=false, max_lines=1, w=Full)
 
 ///|
 /// A line of what is out of the ordinary, or where there is no answer to give here: 12 and quiet.
 // kept across runs: a value (no field of it changes)
-let ask_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4_75, color=Muted, w=Full)
+let ask_note : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4_75, color=Muted, w=Full)
 
 ///|
 /// The answer's buttons, 10 apart (pages.css.ts cardFoot).
@@ -289,7 +289,7 @@ let ask_ended : @ui.Style = @ui.css("row gap=S2 align=ACenter pt=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ask_ended_words : @ui.TextStyle = @ui.text_style(size=Base, leading=L5, color=Muted)
+let ask_ended_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)
 
 ///|
 /// Its dot, 6 round: green once granted, else quiet.

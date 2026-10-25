@@ -559,7 +559,7 @@ let agent_card_name_room : @ui.Style = @ui.style(w=@sf.grow)
 ///|
 /// Its name: the card's words (13), 500, cut at its end.
 // kept across runs: a value (no field of it changes)
-let agent_card_name : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false)
+let agent_card_name : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 ///|
 /// Where it stands: 14 in, its dot (6, in its tone) at the first line's middle.
@@ -576,7 +576,7 @@ let agent_card_dot : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, w=Full, max_lines=3)
+let agent_card_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, w=Full, max_lines=3)
 
 ///|
 /// Its latest lines: 14 in, 2 apart, 12, muted; what it does now in the words' colour; each one line.
@@ -598,19 +598,19 @@ let agent_card_gone_box : @ui.Style = @ui.css("w=Full pl=S3_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_line : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let agent_card_line : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_now : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let agent_card_now : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_red : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=false)
+let agent_card_red : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_amber : @ui.TextStyle = @ui.text_style(size=Xs, color=Warn, wrap=false)
+let agent_card_amber : @ui.TextStyle = @ui.text_style(size=Meta, color=Warn, wrap=false)
 
 ///|
 /// The figures, side by side, 6 apart; each 7 by 9 in, 8 round, on the hover's ground: the figure 16 in 600 over its
@@ -638,19 +638,19 @@ let agent_card_tile_room : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_figure : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Fg, wrap=false)
+let agent_card_figure : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_figure_red : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Danger, wrap=false)
+let agent_card_figure_red : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Danger, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_figure_amber : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Warn, wrap=false)
+let agent_card_figure_amber : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Warn, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_tile_name : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, wrap=false)
+let agent_card_tile_name : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
 
 ///|
 /// What is left of its account, its windows 4 apart.
@@ -664,7 +664,7 @@ let agent_card_account : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_quiet : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let agent_card_quiet : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -684,4 +684,4 @@ let agent_card_stop_in : Double = @sf.capsule_in(@sf.r_menu, 24.0) - @sf.panel_p
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_stop_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Danger, wrap=false)
+let agent_card_stop_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Danger, wrap=false)

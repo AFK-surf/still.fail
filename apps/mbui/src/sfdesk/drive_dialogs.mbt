@@ -426,7 +426,7 @@ let root_text : @ui.Style = @ui.style(w=@sf.grow, gap=SPx, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let root_trouble_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Warn, wrap=false)
+let root_trouble_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Warn, wrap=false)
 
 ///|
 /// A row to pick (pickRow): 40 high at least, 6 by 10 in, 10 between, the field's corner; the list's ground under the
@@ -442,15 +442,15 @@ let pick_row_here : @ui.Style = pick_row.then(@ui.css("bg=ListGround"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pick_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false)
+let pick_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pick_name_here : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Fg, wrap=false)
+let pick_name_here : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pick_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let pick_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// The way (pickerPath): the trail, then the filter 200 wide, 12 apart, 10 over the folders, 36 high at least.
@@ -481,11 +481,11 @@ let crumb_box : @ui.Style = @ui.css("px=S1 py=S0_5 radius=Md")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let crumb_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let crumb_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let crumb_last : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, color=Fg, wrap=false)
+let crumb_last : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -524,7 +524,7 @@ let picker_list : @ui.Style = @ui.style(w=@sf.grow, h=Full, gap=S0_5, clip=true)
 ///|
 /// A part's heading (pickerHead): 4 by 8 in, small, muted.
 // kept across runs: a value (no field of it changes)
-let picker_head : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, wrap=false)
+let picker_head : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
 
 ///|
 /// A folder the station cannot read (pickerShut): its mark over what to do, in the middle.
@@ -533,4 +533,4 @@ let picker_shut : @ui.Style = @ui.css("w=Full h=Full px=S6 gap=S3 align=ACenter 
 
 ///|
 // kept across runs: a value (no field of it changes)
-let shut_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, center=true, w=Full)
+let shut_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true, w=Full)

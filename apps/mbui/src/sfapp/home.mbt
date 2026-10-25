@@ -192,7 +192,7 @@ fn nav_button(
 fn section_header(c : @ui.Ctx, label : String) -> Int {
   let t = @sf.theme()
   c.box(pl=20.0, pr=20.0, pt=14.0, pb=6.0, fn() {
-    c.text(label, size=15.0, weight=600, color=t.p.text, wrap=false, line=21.0)
+    c.text(label, size=t.t.ui, weight=600, color=t.p.text, wrap=false, line=21.0)
     |> ignore
   })
 }

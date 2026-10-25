@@ -112,7 +112,7 @@ let attach_tile_h : Double = 70.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let attach_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false)
+let attach_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
 
 ///|
 let attach_icon : Double = 22.0

@@ -103,7 +103,7 @@ let share_closing : Ref[Bool] = Ref(false)
 ///|
 /// 打开 still.fail, as a link's words (ShareSheet.kt SignInFirst: 15, semibold, the link's ink).
 // kept across runs: a value (no field of it changes)
-let open_app_words : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Link)
+let open_app_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Link)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -279,7 +279,7 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let rows = items(v, "items")
   c.box(dir=Row, w=Fill(1.0), padx=20.0, align=ACenter, fn() {
     c.box(w=Fill(1.0), pt=14.0, pb=4.0, fn() {
-      c.text(sh("android-misc.shareIn.to"), size=13.0, color=t.p.muted, wrap=false) |> ignore
+      c.text(sh("android-misc.shareIn.to"), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
     })
     |> ignore
     if share_in.searching || rows.length() >= searched_from {
@@ -294,7 +294,7 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       c.box(pt=14.0, pb=4.0, id~, fn() {
         c.text(
           if share_in.searching { sh("common.cancel") } else { sh("android-misc.shareIn.search") },
-          size=13.0,
+          size=t.t.meta,
           color=t.p.muted,
           wrap=false,
         )
@@ -438,7 +438,7 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   |> ignore
   if share_in.error != "" {
     c.box(w=Fill(1.0), padx=20.0, pb=16.0, fn() {
-      c.text(share_in.error, size=13.0, color=t.p.red) |> ignore
+      c.text(share_in.error, size=t.t.meta, color=t.p.red) |> ignore
     })
     |> ignore
   }
@@ -465,12 +465,12 @@ fn shared_head(c : @ui.Ctx, source : String, title : String?) -> Unit {
     |> ignore
     c.box(w=Fill(1.0), fn() {
       c.box(w=Fill(1.0), max_h=48.0, clip=true, fn() {
-        c.text(head, size=17.0, weight=700, color=t.p.text, line=24.0, w=Fill(1.0)) |> ignore
+        c.text(head, size=t.t.title, weight=700, color=t.p.text, line=24.0, w=Fill(1.0)) |> ignore
       })
       |> ignore
       if title is Some(_) {
         c.box(w=Fill(1.0), clip=true, fn() {
-          c.text(first, size=13.0, color=t.p.muted, wrap=false) |> ignore
+          c.text(first, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
         })
         |> ignore
       }
@@ -499,7 +499,7 @@ fn line_of(it : Json?) -> String {
 /// A line in the rows' place: why there are none, or what to do first.
 fn share_note(c : @ui.Ctx, words : String) -> Unit {
   c.box(w=Fill(1.0), padx=20.0, pady=12.0, fn() {
-    c.text(words, size=15.0, color=@sf.theme().p.muted) |> ignore
+    c.text(words, size=@sf.theme().t.body, color=@sf.theme().p.muted) |> ignore
   })
   |> ignore
 }
@@ -531,9 +531,9 @@ fn share_row(
       fn() {
         c.box(w=Px(16.0), align=ACenter, fn() { lead() }) |> ignore
         c.box(w=Fill(1.0), clip=true, fn() {
-          c.text(title, size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
+          c.text(title, size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
           if sub != "" {
-            c.text(sub, size=13.0, color=t.p.muted, wrap=false, line=18.0) |> ignore
+            c.text(sub, size=t.t.meta, color=t.p.muted, wrap=false, line=18.0) |> ignore
           }
         })
         |> ignore
@@ -712,16 +712,16 @@ fn shared_files_head(c : @ui.Ctx, files : Array[SharedFile], words : String, tit
     |> ignore
     c.box(w=Fill(1.0), fn() {
       c.box(w=Fill(1.0), clip=true, fn() {
-        c.text(head, size=17.0, weight=700, color=t.p.text, line=24.0, wrap=false) |> ignore
+        c.text(head, size=t.t.title, weight=700, color=t.p.text, line=24.0, wrap=false) |> ignore
       })
       |> ignore
       c.box(w=Fill(1.0), clip=true, fn() {
-        c.text(under, size=13.0, color=t.p.muted, wrap=false) |> ignore
+        c.text(under, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
       })
       |> ignore
       if said != "" {
         c.box(w=Fill(1.0), clip=true, fn() {
-          c.text(said, size=13.0, color=t.p.muted, wrap=false) |> ignore
+          c.text(said, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
         })
         |> ignore
       }

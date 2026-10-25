@@ -316,11 +316,11 @@ let vfr_head_tools : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vfr_head_name : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, wrap=false, w=Cut)
+let vfr_head_name : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vfr_head_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let vfr_head_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -338,7 +338,7 @@ let vfr_text_tool_wide : @ui.Style = vfr_text_tool_box.then(@ui.css("min_w=S12")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vfr_text_tool_words : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false)
+let vfr_text_tool_words : @ui.TextStyle = @ui.text_style(size=Meta, wrap=false)
 
 ///|
 /// The ways beside, 16 in from the window's sides (8 under 640), in the middle of its height.
@@ -376,12 +376,12 @@ let vfr_facts_name_box : @ui.Style = @ui.css("max_w=S96")
 ///|
 /// A file told of (fpNote): its name 14 in 600, what is said of it 13 and quiet, 14 between them (the note's gap).
 // kept across runs: a value (no field of it changes)
-let vfr_facts_name : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, center=true)
+let vfr_facts_name : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, color=Fg, center=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vfr_facts_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, center=true)
+let vfr_facts_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vfr_facts_failed : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, center=true)
+let vfr_facts_failed : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, center=true)

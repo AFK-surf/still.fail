@@ -157,7 +157,7 @@ let head_way : @ui.Style = @ui.style(w=@sf.grow, min_w=S0)
 ///|
 /// Its name (h1): 22, 600.
 // kept across runs: a value (no field of it changes)
-let head_title : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, wrap=false)
+let head_title : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// Why it was not read: its words, then 重试 in the link's ink, 12 apart.
@@ -310,4 +310,4 @@ fn root_row(c : @ui.Ctx, src : Source, s : DvStation, r : DvRoot, manage : Bool,
 
 ///|
 // kept across runs: a value (no field of it changes)
-let roots_empty_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, center=true)
+let roots_empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true)

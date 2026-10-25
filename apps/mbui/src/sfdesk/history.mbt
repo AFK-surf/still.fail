@@ -455,11 +455,11 @@ let wh_toggle_on : @ui.Style = @ui.css("row px=S1 py=S0_5 gap=S1 align=ACenter b
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wh_toggle_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let wh_toggle_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wh_toggle_hot : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let wh_toggle_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 /// 详情 (sessionDetails): 2 over, 16 at the sides, 14 under, 10 between; words 12, muted.
@@ -468,7 +468,7 @@ let wh_details_box : @ui.Style = @ui.css("w=Full px=S4 pt=S0_5 pb=S3_5 gap=S2_5"
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wh_quiet : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted)
+let wh_quiet : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 
 ///|
 /// The quiet line 4 nearer what is over it (sessionQuiet: outsetTop(4)).
@@ -478,11 +478,11 @@ let wh_quiet_box : @ui.Style = @ui.css("w=Full").then(@sf.outset_top(4.0))
 ///|
 /// What needs seeing to, in its tone (ChatPage.css.ts attention: 12; the disk amber, an account red).
 // kept across runs: a value (no field of it changes)
-let wh_amber : @ui.TextStyle = @ui.text_style(size=Xs, color=Warn, wrap=false)
+let wh_amber : @ui.TextStyle = @ui.text_style(size=Meta, color=Warn, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wh_red : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=false)
+let wh_red : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -498,20 +498,20 @@ let wh_line_words : @ui.Style = @ui.style(row=true, w=@sf.grow, align=ACenter, c
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wh_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false, w=Cut)
+let wh_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
 
 ///|
 /// The dot between a line's words and what is done at it, and a link at its end: kept whole.
 // kept across runs: a value (no field of it changes)
-let wh_dot : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let wh_dot : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wh_name : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let wh_name : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wh_file : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false, w=@sf.grow)
+let wh_file : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -519,7 +519,7 @@ let wh_link_box : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wh_link_hot : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let wh_link_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 /// The steps under the head: the rest of the panel.

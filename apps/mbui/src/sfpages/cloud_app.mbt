@@ -84,15 +84,15 @@ let landing_page : @ui.Style = @ui.css("w=Full h=Full px=S6 py=S10 gap=S3 align=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let landing_title : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Bold, color=Fg, center=true, w=Full)
+let landing_title : @ui.TextStyle = @ui.text_style(size=Heading, weight=Bold, color=Fg, center=true, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let landing_lead : @ui.TextStyle = @ui.text_style(size=Base, color=Muted, center=true, w=Full)
+let landing_lead : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let landing_error : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, w=Full)
+let landing_error : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, w=Full)
 
 ///|
 /// An invitation: a card of the ladder's on the surface, its words 20 in, its button under them in its foot corners
@@ -104,11 +104,11 @@ let invitation_row : @ui.Style = @ui.css("w=Full pt=S5 px=S5 gap=S3 radius=Xl3 b
 
 ///|
 // kept across runs: a value (no field of it changes)
-let invitation_name : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, w=Full)
+let invitation_name : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let invitation_who : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full)
+let invitation_who : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 /// The invite code's form: its field and 创建 workspace in a row, 8 apart, why it failed under them.

@@ -251,4 +251,4 @@ let sk_errors : @ui.Style = @ui.css("w=Full gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sk_error : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Danger, w=Full)
+let sk_error : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Danger, w=Full)

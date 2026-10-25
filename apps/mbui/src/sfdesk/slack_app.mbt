@@ -768,7 +768,7 @@ let sa_fold_line : @ui.Style = @ui.css("row py=S1_5 gap=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sa_fold_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Fg, wrap=false)
+let sa_fold_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -789,7 +789,7 @@ let sa_step_number : @ui.Style = @ui.css("w=S6 h=S6 radius=Full bg=Neutral align
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sa_step_number_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, color=Muted, wrap=false)
+let sa_step_number_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -811,7 +811,7 @@ let sa_blue : @ui.Style = @ui.css("row w=Full px=S3_5 py=S3 gap=S2_5 radius=Xl1_
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sa_blue_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, w=Full)
+let sa_blue_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=Full)
 
 ///|
 /// Its look (appLook: the avatar 136 and the rest, 16 apart; appLookMain: 8 apart; appColour: 8 apart, the swatch 28,
@@ -887,7 +887,7 @@ let sa_perm_head : @ui.Style = @ui.css("row w=Full pt=S2 gap=S2 align=ACenter ju
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sa_perm_title : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Semibold, color=Muted, wrap=false)
+let sa_perm_title : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Semibold, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -904,9 +904,9 @@ let sa_perm_label : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sa_perm_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Fg, wrap=false)
+let sa_perm_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, wrap=false)
 
 ///|
 /// What a fold's line says beside its title (the ui's 13 muted, in a line).
 // kept across runs: a value (no field of it changes)
-let sa_perms_said : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let sa_perms_said : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)

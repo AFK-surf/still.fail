@@ -848,7 +848,7 @@ pub fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit, ink? : 
   c.box(dir=Row, gap=4.0, align=ACenter, keep=true, fn() {
     if marking.error != "" {
       c.box(padx=6.0, max_w=140.0, clip=true, fn() {
-        c.text(marking.error, size=13.0, color=0xFF7B6BFFL, wrap=false) |> ignore
+        c.text(marking.error, size=@sf.theme().t.meta, color=0xFF7B6BFFL, wrap=false) |> ignore
       })
       |> ignore
     }
@@ -857,7 +857,7 @@ pub fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit, ink? : 
       marks_leave()
     }
     c.box(h=Px(32.0), padx=10.0, radius=picture_key, justify=JCenter, id=cancel, fn() {
-      c.text(pv("common.cancel"), size=13.0, color=ink, wrap=false) |> ignore
+      c.text(pv("common.cancel"), size=@sf.theme().t.meta, color=ink, wrap=false) |> ignore
     })
     |> ignore
     if picture_button(c, "marks/download", "download", ink, true, enabled=ready, said=pv("android-chat.marks.downloadMarked")) {
@@ -884,7 +884,7 @@ pub fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit, ink? : 
             @sf.icon(c, "send", size=12.0, color=0xFFFFFFFFL) |> ignore
             c.text(
               pv(if marking.busy { "android-chat.marks.making" } else { "android-chat.preview.put" }),
-              size=13.0,
+              size=@sf.theme().t.meta,
               weight=600,
               color=0xFFFFFFFFL,
               wrap=false,
@@ -1077,7 +1077,7 @@ pub fn note_box(c : @ui.Ctx, note : (Int, Int, String, Int64)) -> Unit {
   let box = c.box(w=Fill(1.0), pl=8.0, pr=8.0, pt=10.0, pb=8.0, gap=6.0, radius=note_box_corner, bg=note_ground, shadow=@sf.floating.sigma, shadow_y=@sf.floating.dy, shadow_color=@sf.floating.color, fn() {
     c.box(style=note_head, fn() {
       picture_pin(c, n, color, 16.0) |> ignore
-      c.text(what, size=13.0, line=18.0, color=note_muted, wrap=false) |> ignore
+      c.text(what, size=@sf.theme().t.meta, line=18.0, color=note_muted, wrap=false) |> ignore
     })
     |> ignore
     c.box(style=note_row, fn() {
@@ -1127,7 +1127,7 @@ pub fn note_card(c : @ui.Ctx, note : (Int, Int, String, Int64), id : Int) -> Uni
       note_first(c, note_said(mid), said == "")
     })
     |> ignore
-    c.text(what, size=12.0, line=17.0, color=note_muted, wrap=false) |> ignore
+    c.text(what, size=@sf.theme().t.caption, line=17.0, color=note_muted, wrap=false) |> ignore
   })
 }
 
@@ -1153,7 +1153,7 @@ fn note_tray_card(c : @ui.Ctx, id : Int, w : Double, body : () -> Unit) -> Unit 
 /// A tray card's first line: `words`, muted where `quiet` (only quoting), cut by its card where long.
 fn note_first(c : @ui.Ctx, words : String, quiet : Bool) -> Unit {
   c.box(w=Fill(1.0), clip=true, fn() {
-    c.text(words, size=14.0, line=20.0, color=if quiet { note_muted } else { note_ink }, wrap=false) |> ignore
+    c.text(words, size=@sf.theme().t.meta, line=20.0, color=if quiet { note_muted } else { note_ink }, wrap=false) |> ignore
   })
   |> ignore
 }

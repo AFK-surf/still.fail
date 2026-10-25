@@ -299,16 +299,16 @@ let place_grow : @ui.Style = @ui.style(w=@sf.grow, clip=true)
 ///|
 /// Its agents at work (StationPage.css.ts busy): the accent's words.
 // kept across runs: a value (no field of it changes)
-let place_busy : @ui.TextStyle = @ui.text_style(size=Xs, color=AccentText, wrap=false)
+let place_busy : @ui.TextStyle = @ui.text_style(size=Meta, color=AccentText, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let place_trouble : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=false)
+let place_trouble : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
 /// 使用此账号 (ProfilesNav MachineLoginRow): the accent's words.
 // kept across runs: a value (no field of it changes)
-let place_use : @ui.TextStyle = @ui.text_style(size=Xs, color=AccentText, wrap=false)
+let place_use : @ui.TextStyle = @ui.text_style(size=Meta, color=AccentText, wrap=false)
 
 ///|
 /// Up or away: the rail's dot (railCss.dot: 6).
@@ -430,8 +430,8 @@ let pl_first_row : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pl_first_name : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Fg, wrap=false, w=@sf.grow)
+let pl_first_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, wrap=false, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_muted_line : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let desk_muted_line : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)

@@ -89,7 +89,7 @@ fn service_bar(c : @ui.Ctx, title : String, station : String) -> Unit {
   let t = @sf.theme()
   let went = if station != "" {
     @sf.nav_bar(c, "service/back", svc("android-chat.preview.back"), title, top=status_top(), sub=fn() {
-      c.text(station, size=11.0, color=t.p.muted, wrap=false) |> ignore
+      c.text(station, size=t.t.caption, color=t.p.muted, wrap=false) |> ignore
     })
   } else {
     @sf.nav_bar(c, "service/back", svc("android-chat.preview.back"), title, top=status_top())

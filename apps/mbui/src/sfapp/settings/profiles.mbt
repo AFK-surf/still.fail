@@ -235,7 +235,7 @@ fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit
                 c.box(w=Fill(1.0), opacity=if usable { 1.0 } else { 0.55 }, fn() {
                   c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
                     presence_dot(c, if usable { tone_dot(text(p, "checkTone")) } else { "error" })
-                    c.text(text(p, "name"), size=15.0, color=t.p.text, wrap=false, w=@sf.line_left, line=21.0) |> ignore
+                    c.text(text(p, "name"), size=t.t.ui, color=t.p.text, wrap=false, w=@sf.line_left, line=21.0) |> ignore
                   })
                   |> ignore
                   let line = if !usable {
@@ -254,7 +254,7 @@ fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit
                       " · ",
                     )
                   }
-                  c.text(line, size=13.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0) |> ignore
+                  c.text(line, size=t.t.meta, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0) |> ignore
                   // its allowance a line of its own, so the name and where it is keep the row's width (Profiles.kt)
                   if usable && text(field(p, "quota"), "state") == "ok" && items(field(p, "quota"), "windows").length() > 0 {
                     // (in its row's corner, 12 in: the row's corner concentric round its own, @sf.fill_chip_corner)
@@ -304,7 +304,7 @@ fn profile_row(c : @ui.Ctx, core : Core, station : String, p : Json) -> Unit {
       c.box(w=Fill(1.0), fn() {
         c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
           presence_dot(c, tone_dot(text(pv, "checkTone")))
-          c.text(text(pv, "name"), size=15.0, color=t.p.text, wrap=false, w=@sf.line_left, line=21.0) |> ignore
+          c.text(text(pv, "name"), size=t.t.ui, color=t.p.text, wrap=false, w=@sf.line_left, line=21.0) |> ignore
         })
         |> ignore
         c.text(
@@ -323,7 +323,7 @@ fn profile_row(c : @ui.Ctx, core : Core, station : String, p : Json) -> Unit {
             ],
             " · ",
           ),
-          size=13.0,
+          size=t.t.meta,
           color=t.p.muted,
           wrap=false,
           w=Fill(1.0),
@@ -332,14 +332,14 @@ fn profile_row(c : @ui.Ctx, core : Core, station : String, p : Json) -> Unit {
         |> ignore
         match field(pv, "trouble") {
           Some(Object(_)) as tr_ => {
-            c.text(text(tr_, "title") + " · " + text(tr_, "detail"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0)
+            c.text(text(tr_, "title") + " · " + text(tr_, "detail"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0)
             |> ignore
-            c.text(tr("android-settings.profile.seeFix"), size=13.0, color=@sf.link_ink(), wrap=false, line=18.0) |> ignore
+            c.text(tr("android-settings.profile.seeFix"), size=@sf.theme().t.meta, color=@sf.link_ink(), wrap=false, line=18.0) |> ignore
           }
           _ => {
             let trouble = quota_trouble(field(pv, "quota"))
             if trouble != "" {
-              c.text(trouble, size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+              c.text(trouble, size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
             }
           }
         }
@@ -378,14 +378,14 @@ fn quota_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Arra
               presence_dot(c, if blocked { "error" } else { "offline" })
               c.text(
                 tr(if blocked { "android-settings.quota.blocked" } else { "android-settings.quota.unavailable" }),
-                size=15.0,
+                size=t.t.body,
                 color=t.p.text,
                 line=21.0,
               )
               |> ignore
             })
             |> ignore
-            c.text(trouble, size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+            c.text(trouble, size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
           })
           |> ignore
         })
@@ -419,7 +419,7 @@ fn quota_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Arra
         Some(credits) =>
           list_row(c, fn() {
             row_title(c, tr("android-settings.quota.credits"))
-            c.text(credits, size=13.0, color=t.p.muted, wrap=false) |> ignore
+            c.text(credits, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
           })
           |> ignore
         None => ()
@@ -481,10 +481,10 @@ fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
       let lit = (left.to_double() / 10.0 + 0.5).floor().to_int()
       c.box(min_w=96.0, gap=2.0, fn() {
         c.box(dir=Row, align=AEnd, fn() {
-          c.text(left.to_string(), size=28.0, weight=600, color=if low { tone } else { t.p.text }, wrap=false, line=32.0)
+          c.text(left.to_string(), size=t.t.display, weight=600, color=if low { tone } else { t.p.text }, wrap=false, line=32.0)
           |> ignore
           c.box(pl=1.0, fn() {
-            c.text("%", size=15.0, weight=500, color=t.p.muted, wrap=false, line=26.0) |> ignore
+            c.text("%", size=t.t.ui, weight=500, color=t.p.muted, wrap=false, line=26.0) |> ignore
           })
           |> ignore
         })
@@ -495,13 +495,13 @@ fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
           }
         })
         |> ignore
-        c.text(text(wv, "label"), size=13.0, weight=500, color=t.p.text, wrap=false, line=18.0) |> ignore
+        c.text(text(wv, "label"), size=t.t.meta, weight=500, color=t.p.text, wrap=false, line=18.0) |> ignore
         c.text(
           match text(wv, "refills") {
             "" => " "
             r => r
           },
-          size=12.0,
+          size=t.t.caption,
           color=t.p.muted,
           wrap=false,
           line=17.0,

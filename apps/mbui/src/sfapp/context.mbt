@@ -119,7 +119,7 @@ fn clear_context_sheet(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> 
 ///|
 /// A tile's name (AgentSheet.kt AgentTiles: 12/16, muted), and its name with its › side by side.
 // kept across runs: a value (no field of it changes)
-let tile_name : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, color=Muted, wrap=false)
+let tile_name : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -132,7 +132,7 @@ let clear_context_body : @ui.Style = @ui.css("w=Full px=S5 gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let clear_context_words : @ui.TextStyle = @ui.text_style(size=Base, leading=L5, color=Muted)
+let clear_context_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)

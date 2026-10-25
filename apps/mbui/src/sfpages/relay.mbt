@@ -322,7 +322,7 @@ let relay_group_head_box : @ui.Style = @ui.css("px=S2 py=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let relay_group_head : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let relay_group_head : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 /// The bots, 6 apart, wrapping (scopes).
@@ -344,7 +344,7 @@ let relay_scope_on : @ui.Style = relay_scope_box.then(@ui.css("bg=Fg"))
 ///|
 /// Its name (scopeName): muted, the text's pointed at, the canvas's on the text.
 // kept across runs: a value (no field of it changes)
-let relay_scope_name : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let relay_scope_name : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -373,7 +373,7 @@ let relay_grow : @ui.Style = @ui.style(w=@sf.grow)
 ///|
 /// Its name (placeName: the ui's size, cut short with an ellipsis), the accent's text picked.
 // kept across runs: a value (no field of it changes)
-let relay_place_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, max_lines=1)
+let relay_place_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, max_lines=1)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -382,7 +382,7 @@ let relay_place_name_on : @ui.TextStyle = relay_place_name.then(@ui.text_style(c
 ///|
 /// What relaying there does (placeNote: the meta's size, muted; the accent's text picked).
 // kept across runs: a value (no field of it changes)
-let relay_place_note : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let relay_place_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -395,7 +395,7 @@ let relay_more : @ui.Style = @ui.css("px=S2 py=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let relay_more_words : @ui.TextStyle = @ui.text_style(size=Xs, color=AccentText, wrap=false)
+let relay_more_words : @ui.TextStyle = @ui.text_style(size=Meta, color=AccentText, wrap=false)
 
 ///|
 /// Why none, why not read (empty, unread: 4 by 8 in, the meta's size, muted or red); why the places were not read at
@@ -405,15 +405,15 @@ let relay_note_box : @ui.Style = @ui.css("w=Full px=S2 py=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let relay_empty : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let relay_empty : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let relay_unread : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, w=Full)
+let relay_unread : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let relay_failed : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, w=Full)
+let relay_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, w=Full)
 
 ///|
 /// The note (noteField: its label over its field, 6 apart; noteLabel: the meta's size, muted).
@@ -422,7 +422,7 @@ let relay_note_field : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let relay_note_label : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let relay_note_label : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// Via: in line with the place's name (2 down, the row's 10 in, its mark's 16 and the 8 after it: 34), the meta's
@@ -437,7 +437,7 @@ let relay_via_indent : @ui.Style = @ui.css("w=S6")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let relay_via_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let relay_via_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -445,7 +445,7 @@ let relay_via_bot : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let relay_via_name : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let relay_via_name : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 /// A bot's kind's mark where it has no picture: on a 16 square.

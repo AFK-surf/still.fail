@@ -1904,7 +1904,7 @@ let player_pill : @ui.Style = @ui.css("row px=S3 py=S1_5 gap=S2 radius=Xl1_5 ali
 
 ///|
 // kept across runs: a value (no field of it changes)
-let player_pill_words : @ui.TextStyle = @ui.text_style(size=Sm, wrap=false)
+let player_pill_words : @ui.TextStyle = @ui.text_style(size=Ui, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1917,7 +1917,7 @@ let player_next_box : @ui.Style = @ui.style(w=Fixed(player_next_w), px=S5, py=S4
 
 ///|
 // kept across runs: a value (no field of it changes)
-let player_next_note : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false)
+let player_next_note : @ui.TextStyle = @ui.text_style(size=Meta, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1925,7 +1925,7 @@ let player_next_now : @ui.Style = @ui.css("w=Full h=S10 px=S4 radius=Xl align=AC
 
 ///|
 // kept across runs: a value (no field of it changes)
-let player_next_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, wrap=false)
+let player_next_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1946,11 +1946,11 @@ let phone_name_box : @ui.Style = @ui.style(w=grow, px=S1, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let phone_name_words : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, wrap=false)
+let phone_name_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let phone_index_words : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false)
+let phone_index_words : @ui.TextStyle = @ui.text_style(size=Meta, wrap=false)
 
 ///|
 /// A phone's controls: 8 round them, 720 wide at most, 6 in at the sides and foot and 8 over, their corner a card's (26:
@@ -1968,7 +1968,7 @@ let phone_time_box : @ui.Style = @ui.css("pl=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let phone_time_words : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false)
+let phone_time_words : @ui.TextStyle = @ui.text_style(size=Meta, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2011,7 +2011,7 @@ let desk_pointed : @ui.Style = @ui.style(w=Fixed(desk_pointed_w), h=S5, radius=M
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_pointed_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=OnVeil, wrap=false)
+let desk_pointed_words : @ui.TextStyle = @ui.text_style(size=Caption, color=OnVeil, wrap=false)
 
 ///|
 /// The sound's line: in twentieths, 72 wide.
@@ -2046,14 +2046,14 @@ let desk_play_cover : @ui.Style = @ui.css("w=Full h=Full px=S8 gap=S4 align=ACen
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_cover_name : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, center=true)
+let desk_cover_name : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, center=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
 let desk_play_middle : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 // kept across runs: a value (no field of it changes)
-let desk_play_note : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, center=true)
+let desk_play_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2073,7 +2073,7 @@ let desk_cue_box : @ui.Style = @ui.css("px=S2 py=S0_5 radius=Md bg=Veil")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_cue_words : @ui.TextStyle = @ui.text_style(size=Xl, color=OnVeil, center=true, leading=L7)
+let desk_cue_words : @ui.TextStyle = @ui.text_style(size=Title, color=OnVeil, center=true, leading=L7)
 
 ///|
 /// The controls: 16 off the window's foot, in the middle of what the list leaves.
@@ -2096,8 +2096,8 @@ let desk_list_row : @ui.Style = @ui.css("row w=Full min_h=S10 px=S2_5 py=S2 gap=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_list_words : @ui.TextStyle = @ui.text_style(size=Sm, wrap=false, narrow=@ui.text_patch(size=Lg))
+let desk_list_words : @ui.TextStyle = @ui.text_style(size=Ui, wrap=false, narrow=@ui.text_patch(size=Lg))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_list_now : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, wrap=false, narrow=@ui.text_patch(size=Lg))
+let desk_list_now : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, wrap=false, narrow=@ui.text_patch(size=Lg))

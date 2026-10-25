@@ -235,15 +235,15 @@ let ftransfers_chip_failed : @ui.Style = ftransfers_chip.then(@ui.css("bg=Danger
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfers_chip_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let ftransfers_chip_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfers_chip_going_words : @ui.TextStyle = @ui.text_style(size=Xs, color=AccentText, wrap=false)
+let ftransfers_chip_going_words : @ui.TextStyle = @ui.text_style(size=Meta, color=AccentText, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfers_chip_failed_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=false)
+let ftransfers_chip_failed_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
 /// A transfer (transfer: its mark 18, its words, its keys; 8 in, 8 apart, a line over it).
@@ -264,19 +264,19 @@ let ftransfer_title : @ui.Style = @ui.css("row gap=S1 clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfer_title_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Fg, wrap=false)
+let ftransfer_title_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfer_way : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let ftransfer_way : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfer_status : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let ftransfer_status : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfer_failed : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=false)
+let ftransfer_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -560,7 +560,7 @@ let ap_group : @ui.Style = @ui.css("w=Full pb=S7 gap=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ap_group_head : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, color=Muted, w=Full)
+let ap_group_head : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=Muted, w=Full)
 
 ///|
 /// Its tiles, three a row, 4 apart, their ground out to the column's sides (outset 12).
@@ -587,7 +587,7 @@ let ap_tile_mark : @ui.Style = @ui.css("w=S7 h=S7 radius=Base bg=Neutral align=A
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ap_tile_name : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, wrap=false)
+let ap_tile_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, wrap=false)
 
 ///|
 /// The two ways to connect (methods: side by side, 12 apart; method: 18 in, 6 apart, on paper, the hover's ground).

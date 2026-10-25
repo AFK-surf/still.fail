@@ -1575,11 +1575,11 @@ let head_time : @ui.Style = @ui.style(row=true, w=Fixed(time_w), gap=S1, align=A
 
 ///|
 // kept across runs: a value (no field of it changes)
-let head_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let head_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let head_words_on : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let head_words_on : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 /// Going up: how far it has got (a 2 high bar on the words at 10%, filled in the accent), its size.
@@ -1628,7 +1628,7 @@ let upload_words : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S3, align=ACe
 
 ///|
 // kept across runs: a value (no field of it changes)
-let upload_failed : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=false, w=Cut)
+let upload_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false, w=Cut)
 
 
 
@@ -1639,7 +1639,7 @@ let empty_box : @ui.Style = @ui.css("w=Full pt=S14 pb=S14 px=S6 gap=S3 align=ACe
 
 ///|
 // kept across runs: a value (no field of it changes)
-let empty_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, center=true)
+let empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true)
 
 ///|
 /// What is held over the list (drop): over all of it, its words and mark in the middle, the page's ground at 82%
@@ -1655,7 +1655,7 @@ let drop_room : @ui.Style = @ui.style(w=Full, h=Full, p=@sf.inset_room)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let drop_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false)
+let drop_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
 
 ///|
 /// What is done to the folder (actions): 6 apart.

@@ -245,7 +245,7 @@ let mem_narrow_none : @ui.Style = @ui.css("w=Full px=S3 pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mem_narrow_none_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Muted, w=Full)
+let mem_narrow_none_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -271,7 +271,7 @@ let mem_station_head : @ui.Style = @ui.css("w=Full pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mem_station_name : @ui.TextStyle = @ui.text_style(size=Xl, leading=L7, weight=Semibold, color=Fg, wrap=false)
+let mem_station_name : @ui.TextStyle = @ui.text_style(size=Title, leading=L7, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// (memoryRowTitle: its name and its tags in a line, 8 apart)
@@ -281,14 +281,14 @@ let mem_title_line : @ui.Style = @ui.css("row gap=S2 align=AEnd")
 ///|
 /// (memoryTag: the meta's size, subtle)
 // kept across runs: a value (no field of it changes)
-let mem_tag : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Subtle, wrap=false)
+let mem_tag : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false)
 
 ///|
 /// (memoryRowValue: the meta's size, muted)
 // kept across runs: a value (no field of it changes)
-let mem_tag_muted : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let mem_tag_muted : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// (memoryRowSub: the meta's size, muted, on one line cut short)
 // kept across runs: a value (no field of it changes)
-let mem_sub : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false, w=Full)
+let mem_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Full)

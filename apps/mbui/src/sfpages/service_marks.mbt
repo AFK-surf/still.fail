@@ -79,15 +79,15 @@ let mark_words_box : @ui.Style = @ui.css("row w=Full gap=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_count_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false, w=Cut)
+let mark_count_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_more_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false, w=Cut)
+let mark_more_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_error_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, wrap=false, w=Cut)
+let mark_error_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, wrap=false, w=Cut)
 
 ///|
 /// Its × (24 round, a 12 icon) and 添加到对话 (24 high, round, the ink's ground, 10 in, 5 apart; 12 medium, the
@@ -114,7 +114,7 @@ let mark_put_off : @ui.Style = mark_put_pill.then(@ui.css("bg=A(Fg,O40)"))
 ///|
 // kept across runs: a value (no field of it changes)
 let mark_put_words : @ui.TextStyle = @ui.text_style(
-  size=Xs,
+  size=Meta,
   weight=Medium,
   color=Card,
   wrap=false,
@@ -225,7 +225,7 @@ let mark_said : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_said_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let mark_said_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 /// The marks over the page, where it is drawn (Preview.kt MarksOver): each a box on its element, a numbered pin on its

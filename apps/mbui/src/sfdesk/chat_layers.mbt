@@ -127,7 +127,7 @@ let drop_hint_box : @ui.Style = @ui.css("w=Full h=Full gap=S4 align=ACenter just
 
 ///|
 // kept across runs: a value (no field of it changes)
-let drop_hint_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false)
+let drop_hint_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 ///|
 /// A folder's mark there, as large as a card's sheet.

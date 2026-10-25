@@ -180,7 +180,7 @@ let sv_wait : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sv_said_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, center=true)
+let sv_said_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true)
 
 ///|
 /// A web service asked as a page (a link's `?service=<job>`, OpenJobs' open): on the desktop its chat (the one of the

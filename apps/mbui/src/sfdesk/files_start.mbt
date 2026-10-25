@@ -146,4 +146,4 @@ fn files_station_in(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fs_empty_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, center=true)
+let fs_empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true)

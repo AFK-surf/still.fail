@@ -33,7 +33,7 @@ fn open_pick_station(title : String, stations : Array[Json], go : (String) -> Un
     let t = @sf.theme()
     sheet_head(c, title)
     c.box(w=Fill(1.0), padx=20.0, pady=6.0, fn() {
-      c.text(tr("android-settings.pickStation"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+      c.text(tr("android-settings.pickStation"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
     })
     |> ignore
     for s in stations {
@@ -81,7 +81,7 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : J
   [
     fn() {
       c.box(w=Fill(1.0), pl=inset + 12.0, pr=inset + 12.0, pt=8.0, pb=4.0, fn() {
-        c.text(tr("android-settings.machine.title"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+        c.text(tr("android-settings.machine.title"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
       })
       |> ignore
     },
@@ -97,10 +97,10 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : J
               provider_mark(c, rt, "subscription", 18.0, "")
               c.box(w=Fill(1.0), gap=2.0, fn() {
                 c.box(dir=Row, gap=6.0, align=ACenter, fn() {
-                  c.text(runtime_label(rt), size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
+                  c.text(runtime_label(rt), size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
                   let plan = text(lv, "planText")
                   if plan != "" {
-                    c.text(plan, size=13.0, color=t.p.muted, wrap=false) |> ignore
+                    c.text(plan, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
                   }
                 })
                 |> ignore
@@ -108,7 +108,7 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : J
                   c.box(w=Px(6.0), h=Px(6.0), radius=3.0, bg=if blocked { t.p.red } else { t.p.green }, fn() {  }) |> ignore
                   c.text(
                     tr(if blocked { "android-settings.quota.blocked" } else { "android-settings.machine.signedIn" }),
-                    size=12.0,
+                    size=t.t.caption,
                     color=if blocked { t.p.red } else { t.p.muted },
                     wrap=false,
                   )
@@ -119,7 +119,7 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : J
                       "" => tr("android-settings.machine.someone")
                       e => e
                     }),
-                    size=12.0,
+                    size=t.t.caption,
                     color=t.p.muted,
                     wrap=false,
                     w=Fill(1.0),
@@ -129,7 +129,7 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : J
                 |> ignore
                 let trouble = quota_trouble(field(lv, "quota"))
                 if trouble != "" {
-                  c.text(trouble, size=12.0, color=if blocked { t.p.red } else { t.p.muted }, w=Fill(1.0), line=17.0) |> ignore
+                  c.text(trouble, size=t.t.caption, color=if blocked { t.p.red } else { t.p.muted }, w=Fill(1.0), line=17.0) |> ignore
                 }
               })
               |> ignore

@@ -89,7 +89,7 @@ let keys_group_head : @ui.Style = @ui.css("w=Full pb=S1")
 ///|
 /// (groupTitle: 12, 500, muted)
 // kept across runs: a value (no field of it changes)
-let keys_group_title : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4_75, weight=Medium, color=Muted, wrap=false)
+let keys_group_title : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4_75, weight=Medium, color=Muted, wrap=false)
 
 ///|
 /// (line: what it does and its keys at the two ends, 16 apart, 4 over and under, the list's words)
@@ -98,12 +98,12 @@ let keys_line : @ui.Style = @ui.css("row w=Full py=S1 gap=S4 align=AEnd justify=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let keys_line_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Fg, wrap=false)
+let keys_line_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, wrap=false)
 
 ///|
 /// (keys: muted, their digits as wide as each other)
 // kept across runs: a value (no field of it changes)
-let keys_line_keys : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Muted, wrap=false)
+let keys_line_keys : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// An action's keys changed (`keys.set`: none, its own again; no action, every one's), what the core says of it
@@ -285,7 +285,7 @@ let keys_row_label : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let keys_row_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Fg, w=Full)
+let keys_row_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, w=Full)
 
 ///|
 /// Its keys (Shortcuts.css.ts record): 120 wide at least, 30 high, 12 in, the field's corner, the hover ground (the
@@ -318,7 +318,7 @@ let keys_record_on : @ui.Style = keys_record.then(@ui.css("bg=AccentBg"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let keys_record_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Fg, wrap=false)
+let keys_record_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -335,7 +335,7 @@ let keys_toggle_box : @ui.Style = @ui.css("px=S1 py=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let keys_toggle_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4_75, color=Muted, wrap=false)
+let keys_toggle_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4_75, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -347,6 +347,6 @@ let keys_reset_box : @ui.Style = @ui.css("px=S2 py=S1 radius=Base hovered{bg=Hov
 
 ///|
 // kept across runs: a value (no field of it changes)
-let keys_reset_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let keys_reset_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 

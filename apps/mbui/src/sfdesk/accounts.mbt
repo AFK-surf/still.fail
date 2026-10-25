@@ -1634,11 +1634,11 @@ fn add_model(c : @ui.Ctx, core : Core, address : String, id : String, foot? : Bo
 ///|
 /// Words on its cards, and the quieter ones (the ui's 13 on 24; muted).
 // kept across runs: a value (no field of it changes)
-let pf_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, w=Full)
+let pf_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_muted : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, w=Full)
+let pf_muted : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)
 
 ///|
 let pf_mark_glyph : Double = 26.0
@@ -1675,16 +1675,16 @@ let pf_name_line : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_name : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, wrap=false, w=Cut)
+let pf_name : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_sub : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, w=Full)
+let pf_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)
 
 ///|
 /// What its last check said, cut short where its line has less.
 // kept across runs: a value (no field of it changes)
-let pf_check_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false, w=Cut)
+let pf_check_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false, w=Cut)
 
 ///|
 /// What leaves its check's line first, short of room: when it was checked.
@@ -1692,7 +1692,7 @@ let pf_drop_checked : Int = 1
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_sub_quiet : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Subtle, wrap=false)
+let pf_sub_quiet : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Subtle, wrap=false)
 
 ///|
 /// Its state under its name (profileState: 8 apart).
@@ -1710,7 +1710,7 @@ let pf_tag : @ui.Style = @ui.css("row h=S4_5 px=S1 gap=SPx align=ACenter radius=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_tag_words : @ui.TextStyle = @ui.text_style(size=Xs2, leading=L4, weight=Medium, color=Muted, wrap=false)
+let pf_tag_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, weight=Medium, color=Muted, wrap=false)
 
 ///|
 /// A card's buttons at its foot (cardFoot).
@@ -1750,7 +1750,7 @@ let pf_device_code : @ui.Style = @ui.css("px=S3 py=S1_5 radius=Lg bg=Hover")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_device_code_words : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, wrap=false)
+let pf_device_code_words : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1779,7 +1779,7 @@ let pf_chip : @ui.Style = @ui.css("row px=S2_5 py=S1 gap=S1_5 align=ACenter radi
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_chip_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, wrap=false)
+let pf_chip_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, wrap=false)
 
 ///|
 /// The list to tick (modelPool): its tools (a filter, all, none), each series' head and its models.
@@ -1809,7 +1809,7 @@ let pf_series_head : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_series_name : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Fg, wrap=false)
+let pf_series_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1821,7 +1821,7 @@ let pf_pool_item : @ui.Style = @ui.css("row w=Full py=S1 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_gone : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let pf_gone : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1829,7 +1829,7 @@ let pf_toggle : @ui.Style = @ui.css("px=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_toggle_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, color=Muted, wrap=false)
+let pf_toggle_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

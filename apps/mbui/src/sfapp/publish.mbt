@@ -15,7 +15,7 @@ fn shown_publish(chat : Json?) -> Json? {
 ///|
 /// The words of a row in the chat's sheet (14, the ink, one line).
 // kept across runs: a value (no field of it changes)
-let publish_row_words : @ui.TextStyle = @ui.text_style(size=Base, color=Fg, wrap=false)
+let publish_row_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
 
 ///|
 /// A published link's line: when and by whom (13, muted, one line, taking what the row leaves).
@@ -100,7 +100,7 @@ let text_action_box : @ui.Style = @ui.css("px=S1 py=S0_5 radius=Md")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let text_action_words : @ui.TextStyle = @ui.text_style(size=Base, color=Link, wrap=false)
+let text_action_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Link, wrap=false)
 
 ///|
 /// Puts a link on the clipboard, saying so (Publish.kt copyLink).

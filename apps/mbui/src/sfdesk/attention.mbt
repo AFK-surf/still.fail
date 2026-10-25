@@ -354,7 +354,7 @@ let att_group_name : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1 pb=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let att_group_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L4_75, wrap=false)
+let att_group_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L4_75, wrap=false)
 
 ///|
 /// Nothing waiting (empty): 10 round, 13, muted.
@@ -363,7 +363,7 @@ let att_empty : @ui.Style = @ui.css("w=Full p=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let att_empty_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, leading=L6)
+let att_empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L6)
 
 ///|
 /// A row (item): 6 by 10 in, its dot and words 8 apart, its corner the panel's inner (--panel-in); pointed at, on the
@@ -390,15 +390,15 @@ let att_text : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let att_title : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, leading=L6, wrap=false)
+let att_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, leading=L6, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let att_title_seen : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, leading=L6, wrap=false)
+let att_title_seen : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L6, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let att_line : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L4_75, wrap=false)
+let att_line : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L4_75, wrap=false)
 
 ///|
 /// 忽略 (dismiss): a small pill, 1 by 6 in, 12, muted; in ink on the pointer's ground pointed at.
@@ -411,11 +411,11 @@ let att_dismiss_on : @ui.Style = @ui.css("px=S1_5 py=SPx radius=Full bg=Hover")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let att_dismiss_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L4_75, wrap=false)
+let att_dismiss_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L4_75, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let att_dismiss_on_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, leading=L4_75, wrap=false)
+let att_dismiss_on_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, leading=L4_75, wrap=false)
 
 ///|
 /// The foot (foot): its words 12 apart, 8 by 10 in and 4 under, 4 more over it.
@@ -424,11 +424,11 @@ let att_foot : @ui.Style = @ui.css("row w=Full gap=S3 px=S2_5 pt=S3 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let att_link : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L4_75, wrap=false)
+let att_link : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L4_75, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let att_link_on : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, leading=L4_75, wrap=false)
+let att_link_on : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, leading=L4_75, wrap=false)
 
 ///|
 /// A wanting chat's line without its lead (the core's `what`: 要你帮忙：, 出问题：, 奏 · taken off; the dot before it

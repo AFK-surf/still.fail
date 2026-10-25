@@ -188,7 +188,7 @@ pub let media_group : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let media_time_words : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false)
+pub let media_time_words : @ui.TextStyle = @ui.text_style(size=Meta, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -247,7 +247,7 @@ let media_rate_h : Double = 28.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let media_rate_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let media_rate_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

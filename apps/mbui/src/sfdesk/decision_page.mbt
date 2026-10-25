@@ -597,7 +597,7 @@ let zp_bar_chat_hot : @ui.Style = zp_bar_chat.then(@ui.css("bg=Hover"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zp_bar_chat_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Fg, wrap=false, w=Cut)
+let zp_bar_chat_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, wrap=false, w=Cut)
 
 ///|
 /// Its station (barStation): 12, subtle, its mark 12 before its name.
@@ -606,7 +606,7 @@ let zp_bar_station : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zp_bar_station_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=false)
+let zp_bar_station_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
 let zp_station_mark : Double = 12.0
@@ -634,7 +634,7 @@ let zp_button_off : @ui.Style = zp_button.then(@ui.css("opacity=O40"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zp_button_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let zp_button_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -679,7 +679,7 @@ let zp_foot_gap : Double = 12.0
 ///|
 /// Who is to decide (settledLine): 12 on 18, subtle.
 // kept across runs: a value (no field of it changes)
-let zp_assignee : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Subtle)
+let zp_assignee : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle)
 
 ///|
 /// The foot (foot): 8 over the composer, 16 under it, 32 in, the composer in the middle.
@@ -713,7 +713,7 @@ let zp_elsewhere_hot : @ui.Style = zp_elsewhere.then(@ui.css("bg=Hover"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zp_elsewhere_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false)
+let zp_elsewhere_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 ///|
 /// Nothing come yet and why (empty): in the middle, 13 muted.
@@ -722,7 +722,7 @@ let zp_empty : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter"
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zp_empty_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted)
+let zp_empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -770,11 +770,11 @@ let zi_face : Double = 72.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zi_title : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Fg, leading=L6, center=true)
+let zi_title : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Fg, leading=L6, center=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zi_note : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, leading=L5, center=true)
+let zi_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L5, center=true)
 
 ///|
 /// The day in numbers (stats, stat): 32 apart, each a figure (22 on 26, 600) over its words (12 on 16, subtle).
@@ -787,11 +787,11 @@ let zi_stat_box : @ui.Style = @ui.css("gap=S0_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zi_figure : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, wrap=false)
+let zi_figure : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zi_figure_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, color=Subtle, wrap=false)
+let zi_figure_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4, color=Subtle, wrap=false)
 
 ///|
 /// A section (section, sectionTitle): its rows 2 apart under its title (12 on 18, 500, subtle, 10 in).
@@ -800,7 +800,7 @@ let zi_section : @ui.Style = @ui.css("w=Full gap=SPx")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zi_section_title : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, leading=L5, color=Subtle)
+let zi_section_title : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, leading=L5, color=Subtle)
 
 ///|
 /// A row (row): 8 by 10 in, its mark 10 before its words, its ground under the pointer.
@@ -832,12 +832,12 @@ let zi_words : @ui.Style = @ui.style(w=@sf.grow, gap=SPx)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zi_main : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, leading=L5, color=Fg, wrap=false, w=Cut)
+let zi_main : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, leading=L5, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zi_meta : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Subtle, wrap=false, w=Cut)
+let zi_meta : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zi_when : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Subtle, wrap=false)
+let zi_when : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false)

@@ -377,7 +377,7 @@ let permission_state : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let permission_state_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, color=Muted, wrap=false)
+let permission_state_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

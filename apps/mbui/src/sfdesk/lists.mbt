@@ -143,11 +143,11 @@ let foot_trouble : @ui.Style = @ui.css("row w=Full min_h=S8 px=S2_5 gap=S2 align
 
 ///|
 // kept across runs: a value (no field of it changes)
-let foot_trouble_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, w=Full)
+let foot_trouble_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let foot_trouble_red : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, wrap=false, w=Full)
+let foot_trouble_red : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, wrap=false, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -159,7 +159,7 @@ let foot_chip_dot : @ui.Style = @ui.css("w=S1_5 h=S1_5 bg=Positive radius=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let foot_chip_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let foot_chip_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 /// An archive's line.
@@ -505,15 +505,15 @@ let arch_meta : @ui.Style = @ui.css("row w=Full h=S4_5 gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let arch_title : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, leading=L6, wrap=false, w=Full)
+let arch_title : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, leading=L6, wrap=false, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let arch_last : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L5, wrap=false, w=Full)
+let arch_last : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L5, wrap=false, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let arch_clock : @ui.TextStyle = @ui.text_style(size=Xs2, color=Subtle, leading=L5, wrap=false)
+let arch_clock : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, leading=L5, wrap=false)
 
 ///|
 /// The buttons, centred on the title line (Archive.css.ts actions: 5 down, 6 in, 2 apart).
@@ -530,11 +530,11 @@ let arch_empty : @ui.Style = @ui.css("w=Full h=Full px=S10 gap=S2 align=ACenter 
 
 ///|
 // kept across runs: a value (no field of it changes)
-let arch_empty_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg)
+let arch_empty_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let arch_empty_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, center=true, leading=L6)
+let arch_empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true, leading=L6)
 
 ///|
 /// 待处理 under 新建对话 where the rail has no bell (Attention.tsx AttentionEntry, not the rail's): the bell, its
@@ -583,11 +583,11 @@ let todo_count : @ui.Style = @ui.css("min_w=S4 h=S4 px=S1 align=ACenter justify=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let todo_count_words : @ui.TextStyle = @ui.text_style(size=Xs2, weight=Semibold, color=OnPrimary, wrap=false)
+let todo_count_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=OnPrimary, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let todo_quiet : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let todo_quiet : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// How many want the person in every workspace (the core's marks' items).

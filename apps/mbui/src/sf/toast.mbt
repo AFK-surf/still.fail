@@ -86,7 +86,7 @@ let toast_action_box : @ui.Style = @ui.css(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let toast_action_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, leading=L5, color=OnPrimary, wrap=false)
+let toast_action_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, leading=L5, color=OnPrimary, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -94,4 +94,4 @@ let toast_box : @ui.Style = @ui.style(px=S4_5, bg=Primary, max_w=Fixed(toast_max
 
 ///|
 // kept across runs: a value (no field of it changes)
-let toast_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=OnPrimary)
+let toast_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=OnPrimary)

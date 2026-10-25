@@ -762,7 +762,7 @@ let nc_manual_line : @ui.Style = @ui.css("row w=Full pt=S2 gap=S1 align=ACenter"
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nc_meta : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let nc_meta : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -797,7 +797,7 @@ let nc_scan_text : @ui.Style = @ui.style(w=@sf.grow, gap=S2_5, align=AStart)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nc_scan_bad : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Danger, w=Full)
+let nc_scan_bad : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Danger, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)

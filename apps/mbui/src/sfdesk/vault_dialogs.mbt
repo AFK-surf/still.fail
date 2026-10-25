@@ -332,4 +332,4 @@ let vd_agent : @ui.Style = @ui.css("w=Full gap=S2_5 pt=S1")
 ///|
 /// (warn: the amber, the meta's size, in lines)
 // kept across runs: a value (no field of it changes)
-let vt_warn_lines : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Warn, w=Full)
+let vt_warn_lines : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Warn, w=Full)

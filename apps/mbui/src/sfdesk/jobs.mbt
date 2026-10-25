@@ -655,11 +655,11 @@ let job_text : @ui.Style = @ui.style(w=@sf.grow, gap=SPx)
 ///|
 /// Its name (13, 500, on 20), what it is up to under it (12, muted), each a line.
 // kept across runs: a value (no field of it changes)
-let job_name : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, leading=L6, wrap=false)
+let job_name : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, leading=L6, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_meta_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let job_meta_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// What is at its end (jobEnd): 24 wide, at the middle of its two lines.
@@ -690,23 +690,23 @@ let job_notice_clock : @ui.Style = @ui.css("w=S11")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_notice_time : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=false)
+let job_notice_time : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_notice_time_ui : @ui.TextStyle = @ui.text_style(size=Sm, color=Subtle, wrap=false)
+let job_notice_time_ui : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_notice_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, w=@sf.grow)
+let job_notice_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_notice_words_ui : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, w=@sf.grow)
+let job_notice_words_ui : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_quiet_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let job_quiet_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 /// Its last output (jobLast): 10 over it, 2 apart; when (11, subtle), the line in mono, cut at its end.
@@ -715,11 +715,11 @@ let job_last_box : @ui.Style = @ui.css("w=Full pt=S2_5 gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_last_said : @ui.TextStyle = @ui.text_style(size=Xs2, color=Subtle, w=Full)
+let job_last_said : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_last_line : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, wrap=false, max_lines=1)
+let job_last_line : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false, max_lines=1)
 
 ///|
 /// Its actions (jobActions): 2 apart, 6 under what is over them, 8 out at their start; each 26 high, 8 in, its mark and
@@ -741,11 +741,11 @@ let job_action_style : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_action_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let job_action_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_action_hot : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let job_action_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 /// A group's head (jobsHead): 8 over, 12 in, 4 under; 12 in 500, muted; its note in 400, subtle, 6 after.
@@ -754,11 +754,11 @@ let jobs_head_box : @ui.Style = @ui.css("row w=Full pt=S2 px=S3 pb=S1 gap=S1_5 a
 
 ///|
 // kept across runs: a value (no field of it changes)
-let jobs_head_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Muted, wrap=false)
+let jobs_head_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let jobs_head_note : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=false)
+let jobs_head_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
 /// A group's rows, 4 apart; one after another 6 under it (the 任务 tab's).
@@ -786,7 +786,7 @@ let jobs_fold_body : @ui.Style = @ui.css("w=Full mb=S1 pt=S1 pr=S2 pb=S2 pl=S8 b
 ///|
 /// Nothing now (jobsQuiet): 8 over, 32 at its start, 13 muted.
 // kept across runs: a value (no field of it changes)
-let jobs_quiet : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full)
+let jobs_quiet : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 /// The popover's foot (jobsFoot): 6 under its groups, 4 apart; all of them a row 38 high, its words in the names'
@@ -809,11 +809,11 @@ let jobs_all : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let jobs_all_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+let jobs_all_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let jobs_all_hot : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false)
+let jobs_all_hot : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
 
 ///|
 /// Clearing what is over (jobsClear): 38 high, 12 in, its turning mark and words 6 apart, the pointer's ground on it;
@@ -843,11 +843,11 @@ let jobs_clear_inset : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let jobs_clear_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+let jobs_clear_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let jobs_clear_words_sm : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let jobs_clear_words_sm : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// None at all (jobsEmpty): 26 by 20 in, in the middle, 4 apart; its title 13 in 500.
@@ -856,11 +856,11 @@ let jobs_empty : @ui.Style = @ui.css("w=Full py=S6 px=S5 gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let jobs_empty_title : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false)
+let jobs_empty_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let jobs_empty_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted)
+let jobs_empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 
 ///|
 /// The 任务 tab (jobsTab): its list (4 over, 8 at the sides and under), the job picked under it.
@@ -888,11 +888,11 @@ let job_detail_head : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_detail_name : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Fg, wrap=false, w=Cut)
+let job_detail_name : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_detail_state : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false, w=Cut)
+let job_detail_state : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -914,7 +914,7 @@ let job_detail_command : @ui.Style = @ui.css("w=Full pt=S1 pb=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_command_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=Subtle, wrap=false, max_lines=1)
+let job_command_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, wrap=false, max_lines=1)
 
 ///|
 /// What it said (jobDetailNotices): the rest of it, 8 over, 10 at its end; its last output 8 over, 12 under.
@@ -932,8 +932,8 @@ let job_output_box : @ui.Style = @ui.style(w=Full, h=@sf.grow, mt=S1, mb=S2, pr=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_output_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=Fg, w=Full)
+let job_output_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Fg, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_output_none : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted)
+let job_output_none : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted)

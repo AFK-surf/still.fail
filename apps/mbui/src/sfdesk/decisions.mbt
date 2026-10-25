@@ -159,7 +159,7 @@ let zou_aside : @ui.Style = @ui.css("opacity=O55")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zou_question : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, leading=L6, max_lines=2, w=Full)
+let zou_question : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, leading=L6, max_lines=2, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -171,15 +171,15 @@ let zou_where : @ui.Style = @ui.css("row w=Full align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zou_meta_hug : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, leading=L5, wrap=false, w=Hug)
+let zou_meta_hug : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, leading=L5, wrap=false, w=Hug)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zou_meta_cut : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, leading=L5, wrap=false, w=Cut)
+let zou_meta_cut : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, leading=L5, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zou_time : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, leading=L5, wrap=false)
+let zou_time : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, leading=L5, wrap=false)
 
 ///|
 /// 待定 over the ones set aside (DecisionDesk.css.ts group: 14 10 4, 12 on 18, subtle).
@@ -188,7 +188,7 @@ let zou_group : @ui.Style = @ui.css("w=Full px=S2_5 pt=S3_5 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zou_group_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, leading=L5, wrap=false)
+let zou_group_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, leading=L5, wrap=false)
 
 ///|
 /// None waiting (emptyList: 20 by 10 in, 12 on 20, subtle).
@@ -197,4 +197,4 @@ let zou_empty : @ui.Style = @ui.css("w=Full px=S2_5 py=S5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zou_empty_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, leading=L6)
+let zou_empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, leading=L6)

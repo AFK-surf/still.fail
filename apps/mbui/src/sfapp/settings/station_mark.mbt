@@ -485,7 +485,7 @@ let mark_cell_none : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_emoji_words : @ui.TextStyle = @ui.text_style(size=Xl3, wrap=false)
+let mark_emoji_words : @ui.TextStyle = @ui.text_style(size=Heading, wrap=false)
 
 ///|
 let mark_glyph : Double = 24.0

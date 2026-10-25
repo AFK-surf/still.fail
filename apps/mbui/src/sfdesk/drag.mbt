@@ -748,7 +748,7 @@ let fdrag_says : @ui.Style = @ui.css("px=S1_5 py=SPx radius=Full bg=Accent")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fdrag_says_words : @ui.TextStyle = @ui.text_style(size=Xs2, weight=Semibold, color=OnPrimary, wrap=false)
+let fdrag_says_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=OnPrimary, wrap=false)
 
 ///|
 /// 个人收藏 while a folder dragged over it would be kept there (keep: ringed in the accent).
@@ -782,11 +782,11 @@ let fclash_values_column : @ui.Style = @ui.style(w=@sf.grow, gap=S1, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fclash_said : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let fclash_said : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fclash_value : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let fclash_value : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 
 ///|
@@ -795,9 +795,9 @@ let drag_icon : Double = 16.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let drag_chip_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let drag_chip_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 /// What the clash dialog says under its facts (a note, muted).
 // kept across runs: a value (no field of it changes)
-let clash_note : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let clash_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)

@@ -1062,7 +1062,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
               } else {
                 "复制"
               },
-              size=11.0,
+              size=theme().t.caption,
               color=w.muted,
               wrap=false,
             )
@@ -1086,7 +1086,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
           Some(ink) => core_ink(code, ink, t.dark)
           None => [@ui.span(code, mono=true)]
         },
-        size=12.0,
+        size=t.t.caption,
         line=if over { code_line_wide } else { 18.0 },
         wrap=false,
         color=t.p.text,

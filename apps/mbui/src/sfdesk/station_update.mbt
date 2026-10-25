@@ -154,11 +154,11 @@ let update_dot_trouble : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Dange
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_label : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=AccentText, wrap=false)
+let update_label : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=AccentText, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_label_trouble : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Danger, wrap=false)
+let update_label_trouble : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Danger, wrap=false)
 
 ///|
 /// Its head (head): its words 10 in and 10 down, 2 apart; its close in the corner, 8 after them.
@@ -176,19 +176,19 @@ let update_title : @ui.Style = @ui.css("row gap=S2 align=AEnd")
 ///|
 /// The name (13 in 500), its state (12, the accent's ink; red in trouble), the detail (12, muted).
 // kept across runs: a value (no field of it changes)
-let update_name : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false)
+let update_name : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_state : @ui.TextStyle = @ui.text_style(size=Xs, color=AccentText, wrap=false)
+let update_state : @ui.TextStyle = @ui.text_style(size=Meta, color=AccentText, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_state_trouble : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=false)
+let update_state_trouble : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_detail : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let update_detail : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 /// How far it is (bar): on the words' line, 10 in.
@@ -207,4 +207,4 @@ let update_versions_room : @ui.Style = @ui.style(w=@sf.grow, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_versions : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, wrap=false, max_lines=1)
+let update_versions : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false, max_lines=1)

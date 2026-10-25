@@ -278,8 +278,8 @@ fn ref_card(c : @ui.Ctx, key : String, r : DraftRef) -> Unit {
           @sf.icon(c, if r.dir && named { "folder" } else { "read" }, size=16.0, color=t.p.muted) |> ignore
         }
         c.box(w=Fill(1.0), fn() {
-          c.text(name, size=15.0, color=t.p.text, wrap=false, line=20.0) |> ignore
-          c.text(note, size=11.0, color=if failed is Some(_) && !named { t.p.red } else { t.p.muted }, wrap=false, line=16.0)
+          c.text(name, size=t.t.ui, color=t.p.text, wrap=false, line=20.0) |> ignore
+          c.text(note, size=t.t.caption, color=if failed is Some(_) && !named { t.p.red } else { t.p.muted }, wrap=false, line=16.0)
           |> ignore
         })
         |> ignore
@@ -325,12 +325,12 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
     },
     fn() {
       c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=14.0, fn() {
-        c.text(r.station_name + " · " + folder, size=13.0, color=t.p.muted, w=Fill(1.0)) |> ignore
+        c.text(r.station_name + " · " + folder, size=t.t.meta, color=t.p.muted, w=Fill(1.0)) |> ignore
       })
       |> ignore
       if !r.dir || zips {
         c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=14.0, gap=8.0, fn() {
-          c.text(tr("web-main.file.sendAs"), size=13.0, color=t.p.muted) |> ignore
+          c.text(tr("web-main.file.sendAs"), size=t.t.meta, color=t.p.muted) |> ignore
           let now = if r.mode == "path" { 0 } else { 1 }
           // the two halves of the sheet's width (Seg fill = true), inside the track's 2 each side
           let picked = @sf.segmented(
@@ -358,7 +358,7 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
       }
       c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=14.0, fn() {
         c.box(dir=Row, w=Fill(1.0), padx=14.0, pady=10.0, gap=12.0, radius=14.0, bg=t.p.chip, align=ACenter, id~, fn() {
-          c.text(tr("web-main.file.chatAsFiles"), size=14.0, weight=600, color=t.p.text, w=Fill(1.0)) |> ignore
+          c.text(tr("web-main.file.chatAsFiles"), size=t.t.ui, weight=600, color=t.p.text, w=Fill(1.0)) |> ignore
           // the settings' switch (PageParts.kt Switch)
           @settings.switch(c, "ref/chat-files", chat)
         })

@@ -99,7 +99,7 @@ let pair_column : @ui.Style = @ui.css("w=Full px=S5 gap=S3")
 ///|
 /// Whose device it is and what (14 in the muted: Security.kt:373).
 // kept across runs: a value (no field of it changes)
-let pair_body : @ui.TextStyle = @ui.text_style(size=Base, color=Muted, w=Full)
+let pair_body : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 /// Where it asks to be let in: 申请访问 (13 muted), each workspace's name under it (16 semibold), 4 apart.
@@ -108,11 +108,11 @@ let pair_places : @ui.Style = @ui.css("w=Full gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pair_places_head : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted)
+let pair_places_head : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pair_place : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Fg)
+let pair_place : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Fg)
 
 ///|
 /// 拒绝, as wide as the sheet, 4 under the note and 16 over the sheet's foot (Security.kt:381).

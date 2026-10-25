@@ -1853,11 +1853,11 @@ let narrow_title_box : @ui.Style = @ui.style(w=grow, align=ACenter, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let narrow_title_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, wrap=false, narrow=@ui.text_patch(size=Lg))
+let narrow_title_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, wrap=false, narrow=@ui.text_patch(size=Lg))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let narrow_title_small : @ui.TextStyle = @ui.text_style(size=Xs2, wrap=false, narrow=@ui.text_patch(size=Xs))
+let narrow_title_small : @ui.TextStyle = @ui.text_style(size=Caption, wrap=false, narrow=@ui.text_patch(size=Xs))
 
 ///|
 /// The foot (bottom): a card of the ladder's, what it holds the ladder's inset in (its chips in its corners concentric
@@ -1883,7 +1883,7 @@ let narrow_chip_past : Double = capsule_in(card_corner, 30.0) - corner_inset
 
 ///|
 // kept across runs: a value (no field of it changes)
-let narrow_chapter_words : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false, narrow=@ui.text_patch(size=Sm))
+let narrow_chapter_words : @ui.TextStyle = @ui.text_style(size=Meta, wrap=false, narrow=@ui.text_patch(size=Sm))
 
 ///|
 /// The track and how far (trackRow): the track 28 high, 7 in from its ends; how far 40 wide, 10 apart.
@@ -1900,7 +1900,7 @@ let narrow_percent_box : @ui.Style = @ui.css("w=S10 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let narrow_percent_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, wrap=false, narrow=@ui.text_patch(size=Sm))
+let narrow_percent_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, wrap=false, narrow=@ui.text_patch(size=Sm))
 
 ///|
 /// The tools (tools: three to a row, 4 apart): a tool 50 high, its icon over its name 3 apart.
@@ -1923,7 +1923,7 @@ let narrow_tool_h : Double = 50.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let narrow_tool_words : @ui.TextStyle = @ui.text_style(size=Xs2, wrap=false, narrow=@ui.text_patch(size=Xs))
+let narrow_tool_words : @ui.TextStyle = @ui.text_style(size=Caption, wrap=false, narrow=@ui.text_patch(size=Xs))
 
 ///|
 /// A heading's (Reader.css.ts piece p[data-heading]: 600, 1.2 of the text's size).
@@ -1979,7 +1979,7 @@ let reader_cut_row : @ui.Style = @ui.css("row w=Full pt=S8")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let reader_cut_words : @ui.TextStyle = @ui.text_style(size=Xs)
+let reader_cut_words : @ui.TextStyle = @ui.text_style(size=Meta)
 
 ///|
 /// The column's room above the text (the bar's 45 and 40) and under it (72), on a desktop.
@@ -2006,7 +2006,7 @@ let desk_note_box : @ui.Style = @ui.css("w=Full px=S6 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_note_words : @ui.TextStyle = @ui.text_style(size=Xs, center=true)
+let desk_note_words : @ui.TextStyle = @ui.text_style(size=Meta, center=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2180,7 +2180,7 @@ let desk_found_box : @ui.Style = @ui.css("row h=S10 pl=S3_5 pr=S1_25 gap=S1 alig
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_found_words : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false, narrow=@ui.text_patch(size=Sm))
+let desk_found_words : @ui.TextStyle = @ui.text_style(size=Meta, wrap=false, narrow=@ui.text_patch(size=Sm))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2228,11 +2228,11 @@ let desk_panel_head : @ui.Style = @ui.css("row w=Full pl=S4_5 pr=S3 pt=S3 pb=S1_
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let desk_panel_title : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, wrap=false)
+pub let desk_panel_title : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let desk_panel_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, narrow=@ui.text_patch(size=Sm))
+pub let desk_panel_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, narrow=@ui.text_patch(size=Sm))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2253,11 +2253,11 @@ let desk_row : @ui.Style = @ui.css("row w=Full px=S3 py=S2_5 gap=S2_5 align=ACen
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_row_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, wrap=false, narrow=@ui.text_patch(size=Lg))
+let desk_row_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, wrap=false, narrow=@ui.text_patch(size=Lg))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_row_now : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=AccentText, leading=L6, wrap=false, narrow=@ui.text_patch(size=Lg))
+let desk_row_now : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=AccentText, leading=L6, wrap=false, narrow=@ui.text_patch(size=Lg))
 
 ///|
 /// A chapter's number (chapterLine: its own 28, 11 and quiet).
@@ -2269,7 +2269,7 @@ let desk_chapter_n_w : Double = 24.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let desk_chapter_n_words : @ui.TextStyle = @ui.text_style(size=Xs2, wrap=false, narrow=@ui.text_patch(size=Xs))
+pub let desk_chapter_n_words : @ui.TextStyle = @ui.text_style(size=Caption, wrap=false, narrow=@ui.text_patch(size=Xs))
 
 ///|
 /// The field: 16 in from the panel's sides, 6 over and 8 under; 38 high, a pill, 16 in.
@@ -2289,7 +2289,7 @@ let desk_hit_row : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 radius=Xl hovered{b
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_hit_words : @ui.TextStyle = @ui.text_style(size=Sm, max_lines=2, narrow=@ui.text_patch(size=Lg))
+let desk_hit_words : @ui.TextStyle = @ui.text_style(size=Ui, max_lines=2, narrow=@ui.text_patch(size=Lg))
 
 ///|
 /// The layout (layout): 20 in, 4 over, 24 under; its blocks 10 apart, each its name over its control, 8 between.
@@ -2302,7 +2302,7 @@ let desk_layout_block : @ui.Style = @ui.css("w=Full gap=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_layout_label : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false, narrow=@ui.text_patch(size=Sm))
+let desk_layout_label : @ui.TextStyle = @ui.text_style(size=Meta, wrap=false, narrow=@ui.text_patch(size=Sm))
 
 ///|
 /// The papers (papers: five to a row, 8 apart): each a swatch 44 high, its corner the page's, its name under it.
@@ -2355,11 +2355,11 @@ let desk_swatch_on : @ui.Style = desk_swatch_off.then(@ui.css("border=B2"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_swatch_glyph : @ui.TextStyle = @ui.text_style(size=Xl, wrap=false)
+let desk_swatch_glyph : @ui.TextStyle = @ui.text_style(size=Title, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_swatch_name : @ui.TextStyle = @ui.text_style(size=Xs2, wrap=false, narrow=@ui.text_patch(size=Xs))
+let desk_swatch_name : @ui.TextStyle = @ui.text_style(size=Caption, wrap=false, narrow=@ui.text_patch(size=Xs))
 
 ///|
 /// The size's row (sizeRow): 40 high, 4 in, the page's corner; its keys 32 high, 44 wide at least, 10 in.
@@ -2374,11 +2374,11 @@ let desk_size_key_box : @ui.Style = @ui.css(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_size_key_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, wrap=false, narrow=@ui.text_patch(size=Lg))
+let desk_size_key_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, wrap=false, narrow=@ui.text_patch(size=Lg))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_size_value : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, wrap=false, narrow=@ui.text_patch(size=Lg))
+let desk_size_value : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, wrap=false, narrow=@ui.text_patch(size=Lg))
 
 ///|
 /// A slider's row (sliderRow): its name 48, the line, its value 48, 10 apart.
@@ -2395,4 +2395,4 @@ let desk_slider_value_box : @ui.Style = @ui.css("w=S12 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_slider_value : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, wrap=false, narrow=@ui.text_patch(size=Sm))
+let desk_slider_value : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, wrap=false, narrow=@ui.text_patch(size=Sm))

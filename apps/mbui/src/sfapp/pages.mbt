@@ -70,7 +70,7 @@ fn phone_menu_row(c : @ui.Ctx, label : String, icon~ : String, lit~ : Double, id
     bg=if lit > 0.0 { @sf.alpha(t.p.text, 0.06 * lit) } else { 0L },
     id~,
     fn() {
-      c.text(label, size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
+      c.text(label, size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
       if icon != "" {
         @sf.icon(c, icon, size=16.0, color=t.p.text) |> ignore
       } else {
@@ -100,7 +100,7 @@ fn menu_row_look(c : @ui.Ctx, s : @kit.MenuItemState, icon : String) -> Unit {
 fn sheet_label(c : @ui.Ctx, label : String) -> Unit {
   let t = @sf.theme()
   c.box(pl=20.0, pr=20.0, pt=6.0, pb=2.0, fn() {
-    c.text(label, size=13.0, color=t.p.muted, wrap=false) |> ignore
+    c.text(label, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
   })
   |> ignore
 }
@@ -135,9 +135,9 @@ fn pick_row(
           @sf.icon(c, icon, size=20.0, color=t.p.text) |> ignore
         }
         c.box(w=Fill(1.0), fn() {
-          c.text(label, size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
+          c.text(label, size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
           if sub != "" {
-            c.text(sub, size=12.0, color=t.p.muted, wrap=false, line=17.0) |> ignore
+            c.text(sub, size=t.t.caption, color=t.p.muted, wrap=false, line=17.0) |> ignore
           }
         })
         |> ignore

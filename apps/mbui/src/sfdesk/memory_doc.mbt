@@ -135,15 +135,15 @@ let md_when_box : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let md_when_head : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, color=Subtle, w=Full)
+let md_when_head : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=Subtle, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let md_when : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, w=Full)
+let md_when : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let md_conflict : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Warn, w=Full)
+let md_conflict : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Warn, w=Full)
 
 ///|
 /// The pages to pick between (memoryChips: 6 apart, wrapping; memoryChip: 30 high, 12 in, round, the card's ground, the
@@ -168,16 +168,16 @@ let md_chip_on : @ui.Style = md_chip.then(@ui.css("bg=Fg"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let md_chip_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Fg, wrap=false)
+let md_chip_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let md_chip_words_on : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Bg, wrap=false)
+let md_chip_words_on : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Bg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let md_chip_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let md_chip_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let md_chip_note_on : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Subtle, wrap=false)
+let md_chip_note_on : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false)

@@ -170,7 +170,7 @@ let seg_menu : @ui.Style = @ui.css("row w=Full h=Full px=S2_5 gap=S2 align=ACent
 
 ///|
 // kept across runs: a value (no field of it changes)
-let seg_menu_words : @ui.TextStyle = @ui.text_style(size=Base, color=Fg, w=Cut, wrap=false)
+let seg_menu_words : @ui.TextStyle = @ui.text_style(size=Body, color=Fg, w=Cut, wrap=false)
 
 ///|
 let seg_chevron : Double = 16.0

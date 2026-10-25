@@ -125,7 +125,7 @@ fn open_add_station(_core : Core, here : Here, known : Array[String], existing? 
             c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=10.0, fn() {
               c.text(
                 fill("android-settings.station.addNote", [("app", "still.fail")]),
-                size=14.0,
+                size=@sf.theme().t.meta,
                 color=@sf.theme().p.muted,
                 w=Fill(1.0),
                 line=20.0,
@@ -195,7 +195,7 @@ fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], load
       let blocks : Array[() -> Unit] = [
         fn() {
           c.box(w=Fill(1.0), padx=20.0, pb=10.0, fn() {
-            c.text(tr("web-pages.settings.stations.existingLead"), size=14.0, color=t.p.muted, w=Fill(1.0), line=20.0)
+            c.text(tr("web-pages.settings.stations.existingLead"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=20.0)
             |> ignore
           })
           |> ignore
@@ -207,7 +207,7 @@ fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], load
             if loading {
               wait_line(c, tr("common.reading"))
             } else {
-              c.text(tr("web-pages.settings.stations.existingNone"), size=14.0, color=t.p.muted, w=Fill(1.0), line=20.0)
+              c.text(tr("web-pages.settings.stations.existingNone"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=20.0)
               |> ignore
             }
           })
@@ -250,10 +250,10 @@ fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], load
       }
       blocks.push(fn() {
         c.box(w=Fill(1.0), padx=20.0, pt=10.0, gap=10.0, fn() {
-          c.text(tr("web-pages.settings.stations.softIsolation"), size=12.0, color=t.p.muted, w=Fill(1.0), line=17.0)
+          c.text(tr("web-pages.settings.stations.softIsolation"), size=t.t.caption, color=t.p.muted, w=Fill(1.0), line=17.0)
           |> ignore
           if adding.error != "" {
-            c.text(adding.error, size=13.0, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
+            c.text(adding.error, size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
           }
         })
         |> ignore
@@ -328,10 +328,10 @@ fn add_station_steps(
   c.box(w=Fill(1.0), gap=10.0, fn() {
     match (adding.made, joined) {
       (None, _) => {
-        c.text(label, size=13.0, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
+        c.text(label, size=t.t.meta, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
         let name = field_box(c, "station-name/" + adding.serial.to_string(), placeholder).trim(chars=" \t\n").to_owned()
         if adding.error != "" {
-          c.text(adding.error, size=13.0, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
+          c.text(adding.error, size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
         }
         c.box(dir=Row, w=Fill(1.0), pt=6.0, gap=8.0, justify=JEnd, fn() {
           if cancel && button(c, "add-cancel", tr("common.cancel"), false) {
@@ -358,7 +358,7 @@ fn add_station_steps(
       (Some(_), Some(s)) => {
         c.box(dir=Row, w=Fill(1.0), padx=12.0, pady=10.0, gap=8.0, radius=12.0, bg=@sf.alpha(t.p.green, 0.12), align=ACenter, fn() {
           @sf.icon(c, "check", size=16.0, color=t.p.green) |> ignore
-          c.text(fill("android-settings.station.joined", [("name", text(Some(s), "name"))]), size=14.0, color=t.p.green, w=Fill(1.0), line=20.0)
+          c.text(fill("android-settings.station.joined", [("name", text(Some(s), "name"))]), size=t.t.ui, color=t.p.green, w=Fill(1.0), line=20.0)
           |> ignore
         })
         |> ignore
@@ -370,9 +370,9 @@ fn add_station_steps(
         |> ignore
       }
       (Some((install, _)), None) => {
-        c.text(tr("android-settings.station.run"), size=14.0, color=t.p.text, w=Fill(1.0), line=20.0) |> ignore
+        c.text(tr("android-settings.station.run"), size=t.t.ui, color=t.p.text, w=Fill(1.0), line=20.0) |> ignore
         command_box(c, core, install)
-        c.text(fill("android-settings.station.runNote", [("app", "still.fail")]), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0)
+        c.text(fill("android-settings.station.runNote", [("app", "still.fail")]), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0)
         |> ignore
         wait_line(c, tr("android-settings.station.waiting"))
       }
@@ -444,9 +444,9 @@ fn first_station(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let w = workspace_view(core, here)
   c.box(w=Fill(1.0), pad=30.0, gap=10.0, align=ACenter, fn() {
     @sf.drawable(c, if t.dark { "illus_no_station_dark" } else { "illus_no_station" }, 240.0) |> ignore
-    c.text(tr("android-settings.station.first"), size=17.0, weight=600, color=t.p.text, center=true, w=Fill(1.0))
+    c.text(tr("android-settings.station.first"), size=t.t.title, weight=600, color=t.p.text, center=true, w=Fill(1.0))
     |> ignore
-    c.text(tr("android-settings.station.firstNote"), size=14.0, color=t.p.muted, center=true, w=Fill(1.0), line=20.0)
+    c.text(tr("android-settings.station.firstNote"), size=t.t.meta, color=t.p.muted, center=true, w=Fill(1.0), line=20.0)
     |> ignore
     c.box(w=Fill(1.0), pt=8.0, gap=12.0, fn() {
       match w.value {
@@ -462,7 +462,7 @@ fn first_station(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           )
         Some(_) if !(text(w.value, "role") == "owner" || text(w.value, "role") == "admin") =>
           c.box(w=Fill(1.0), padx=12.0, pady=10.0, radius=12.0, bg=@sf.alpha(warn, 0.12), fn() {
-            c.text(tr("android-settings.station.wait"), size=13.0, color=t.p.text, w=Fill(1.0), line=19.5) |> ignore
+            c.text(tr("android-settings.station.wait"), size=t.t.meta, color=t.p.text, w=Fill(1.0), line=19.5) |> ignore
           })
           |> ignore
         Some(_) => {

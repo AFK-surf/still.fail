@@ -445,7 +445,7 @@ let find_count_box : @ui.Style = @ui.css("px=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let find_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let find_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

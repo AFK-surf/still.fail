@@ -98,15 +98,15 @@ let invite_field : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 radius=Xl bg=Card b
 ///|
 /// What it says (14, muted), the account's label (13, semibold), why it failed (13, red).
 // kept across runs: a value (no field of it changes)
-let invite_lead : @ui.TextStyle = @ui.text_style(size=Base, color=Muted)
+let invite_lead : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let invite_label : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Fg)
+let invite_label : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let invite_error : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger)
+let invite_error : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger)
 
 ///|
 /// The invitation's sheet with no link yet: one to paste (Workspaces.kt openInviteLink): the landing's 用邀请链接加入.

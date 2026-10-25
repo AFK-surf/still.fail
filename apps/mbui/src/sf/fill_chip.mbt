@@ -76,7 +76,7 @@ let chip_mark_share : Double = 0.5
 ///|
 /// Its words: the caption's (11 on a computer, 12 on a touch device: the screen's type), 600, on a line of 16.
 // kept across runs: a value (no field of it changes)
-let chip_text : @ui.TextStyle = @ui.text_style(size=Xs2, weight=Semibold, leading=L4, wrap=false, narrow=@ui.text_patch(size=Xs))
+let chip_text : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, leading=L4, wrap=false, narrow=@ui.text_patch(size=Xs))
 
 ///|
 /// The chip: on the neutral ground, round by the ladder's small corner (fill_chip_corner), its words in its middle.

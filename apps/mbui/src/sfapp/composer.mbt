@@ -1492,7 +1492,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
         composer_bar(c, src, r, v, d, expanded, locked || held, locked || offline || held, fresh)
         match d.error {
           Some(e) =>
-            c.box(padx=6.0, fn() { c.text(e, size=12.0, color=t.p.red, line=16.0) |> ignore })
+            c.box(padx=6.0, fn() { c.text(e, size=t.t.caption, color=t.p.red, line=16.0) |> ignore })
             |> ignore
           None => ()
         }
@@ -1588,15 +1588,15 @@ let notice_line : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let notice_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+let notice_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let restore_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false)
+let restore_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let notice_failed : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger)
+let notice_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger)
 
 ///|
 /// What the composer says over its bar (Composer.kt ArchiveNotice, chatComposer's notices): an archived chat's, with its
@@ -1658,7 +1658,7 @@ fn composer_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, key : 
   }
   if v.offline {
     c.box(padx=8.0, pady=2.0, fn() {
-      c.text(v.offline_note.unwrap_or(tr("android-chat.composer.offline")), size=13.0, color=t.p.muted, line=18.0) |> ignore
+      c.text(v.offline_note.unwrap_or(tr("android-chat.composer.offline")), size=t.t.meta, color=t.p.muted, line=18.0) |> ignore
     })
     |> ignore
   }
@@ -1944,7 +1944,7 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
                   @ui.span(fill("android-chat.quote.who", [("name", q.author)]), weight=500, color=k.text),
                   @ui.span(q.text),
                 ],
-                size=13.0,
+                size=@sf.theme().t.meta,
                 color=k.muted,
                 line=19.5,
               )
@@ -2095,7 +2095,7 @@ let files_more_tile : @ui.Style = @ui.css("w=S14 h=S14 bg=Tint align=ACenter jus
 
 ///|
 // kept across runs: a value (no field of it changes)
-let files_more_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, wrap=false)
+let files_more_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// The sheet of all the draft's files: as they are in the row, in lines, 11 apart.
@@ -2248,7 +2248,7 @@ fn picture_face(c : @ui.Ctx, f : Pending, picture : String, id : Int, again? : I
                 if can {
                   @sf.icon(c, "retry", size=16.0, color=0xFFFFFFFFL) |> ignore
                 }
-                c.text(tr("android-chat.file.failed"), size=11.0, color=0xFFFFFFFFL, wrap=false) |> ignore
+                c.text(tr("android-chat.file.failed"), size=@sf.theme().t.caption, color=0xFFFFFFFFL, wrap=false) |> ignore
               } else {
                 @sf.spinner(c, ring=@sf.alpha(0xFFFFFFFFL, 0.3), arc=0xFFFFFFFFL) |> ignore
               }
@@ -2361,7 +2361,7 @@ fn pasted_card(
         let first = text(Some(info), "preview")
         c.text(
           if first == "" { tr("web-main.composer.pastedText") } else { first },
-          size=15.0,
+          size=t.t.ui,
           color=t.p.text,
           wrap=false,
           line=20.0,
@@ -2377,7 +2377,7 @@ fn pasted_card(
                 fill("web-main.composer.pasteAttachment", [("count", "\{number(Some(info), "characters").to_int()}")])
               }
           },
-          size=11.0,
+          size=t.t.caption,
           color=if f.error is Some(_) { t.p.red } else { t.p.muted },
           wrap=false,
           line=16.0,
@@ -2389,7 +2389,7 @@ fn pasted_card(
               tr(if can_retry { "web-main.composer.retryPaste" } else { "web-main.composer.expandPaste" }),
               // a link's ink (Composer.kt: C.link)
               style=@sf.link,
-              size=13.0,
+              size=@sf.theme().t.meta,
               wrap=false,
               line=18.0,
             )
@@ -2438,7 +2438,7 @@ fn file_tile(c : @ui.Ctx, f : Pending, remove : Int, again? : Int = 0, closable?
       @sf.icon(c, "read", size=16.0, color=t.p.muted) |> ignore
     }
     c.box(w=Fill(1.0), fn() {
-      c.text(f.name, size=15.0, color=t.p.text, wrap=false, line=20.0) |> ignore
+      c.text(f.name, size=t.t.ui, color=t.p.text, wrap=false, line=20.0) |> ignore
       c.text(
         match (f.error, link) {
           (Some(e), _) => e
@@ -2449,7 +2449,7 @@ fn file_tile(c : @ui.Ctx, f : Pending, remove : Int, again? : Int = 0, closable?
             }
           (None, None) => if busy { uploading_text(f) } else { @sf.file_size(f.size.to_double()) }
         },
-        size=11.0,
+        size=t.t.caption,
         color=if f.error is Some(_) { t.p.red } else { t.p.muted },
         wrap=false,
         line=16.0,
@@ -2587,7 +2587,7 @@ fn attach_sheet(
           id~,
           fn() {
             @sf.icon(c, icon, size=22.0, color=t.p.text) |> ignore
-            c.text(label, size=13.0, color=t.p.text, wrap=false, line=18.0) |> ignore
+            c.text(label, size=t.t.meta, color=t.p.text, wrap=false, line=18.0) |> ignore
             // Attach.kt: clip(Smooth(14)).clickable
             @motion.ripple(c, id, 14.0)
           },

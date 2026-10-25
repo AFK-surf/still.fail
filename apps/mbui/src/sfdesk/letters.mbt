@@ -130,15 +130,15 @@ let letters_grow : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let letters_row_title : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, leading=L6, wrap=false)
+let letters_row_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, leading=L6, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let letters_row_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let letters_row_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let letters_row_last : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false, w=Full)
+let letters_row_last : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Full)
 
 ///|
 /// One opened (lettersHead): back and its title 4 apart, 6 over and under, 6 in at its start, 12 at its end; its title
@@ -152,7 +152,7 @@ let letters_name_box : @ui.Style = @ui.style(row=true, w=@sf.grow, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let letters_name : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false)
+let letters_name : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 
 ///|
@@ -171,4 +171,4 @@ let letters_more : @ui.Style = @ui.css("row w=Full py=S1 justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let letters_none : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted)
+let letters_none : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)

@@ -894,7 +894,7 @@ let cd_identity_text : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cd_name : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, w=Full)
+let cd_name : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -902,7 +902,7 @@ let cd_sub : @ui.Style = @ui.css("row w=Full pt=S1_5 gap=S3_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cd_sub_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Muted, wrap=false)
+let cd_sub_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -927,7 +927,7 @@ let cd_amber : @ui.Style = @ui.css("w=Full px=S3_5 py=S3 radius=Xl1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cd_amber_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Warn, w=Full)
+let cd_amber_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Warn, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -943,7 +943,7 @@ let cd_effect_words : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cd_bullet : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, wrap=false)
+let cd_bullet : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, wrap=false)
 
 ///|
 /// A card's buttons at its end (pages.css.ts cardActions: 8 apart).
@@ -987,7 +987,7 @@ let cd_app_label_w : Double = 84.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cd_label_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Muted, wrap=false)
+let cd_label_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -995,11 +995,11 @@ let cd_run_text : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cd_card_foot : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=Full)
+let cd_card_foot : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cd_mono : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, w=Full)
+let cd_mono : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=Full)
 
 ///|
 /// textButton: underlined (here the muted ink, the words' under the pointer); inlineLink: the accent's ink.
@@ -1008,7 +1008,7 @@ let cd_text_button_box : @ui.Style = @ui.css("disabled{opacity=O55}")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cd_text_button_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let cd_text_button_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1020,7 +1020,7 @@ let cd_link_box : @ui.Style = @ui.css("")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cd_link_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=AccentText)
+let cd_link_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=AccentText)
 
 ///|
 /// 显示全部 (moreSessions: 8 under the list).
@@ -1043,10 +1043,10 @@ let cd_row_time : @ui.Style = @ui.css("min_w=S16 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cd_time_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let cd_time_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// What is wrong on its callout (the ui's 13, the words' ink).
 // kept across runs: a value (no field of it changes)
-let cd_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, w=Full)
+let cd_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=Full)
 
