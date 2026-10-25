@@ -9,7 +9,8 @@ final class Native {
     static native void start();
     static native void surfaceCreated();
     static native void resize(int w, int h);
-    static native boolean frame(float w, float h, float scale, double now);
+    /** A frame at `now`, the one before it `late` ms late to the screen (@hostapi.frame_late). */
+    static native boolean frame(float w, float h, float scale, double now, double late);
     /** The last frame drawn again as it was presented, the native views' pictures as they are now (android_host.c). */
     static native void redraw();
     static native void pointer(int kind, float x, float y, double time);
