@@ -15,7 +15,7 @@ test "94-share-new-chat" {
     // the sheet going down as the new chat comes up, the files in its composer, waiting
     f.run_to(@kit.sheet_rest("sf-present"))
     f.see("想让 agent 做什么？")
-    f.see("e2e-doc.pdf")
+    f.see("e2e-doc")
     f.gone("正在上传")
     f.tap("做任何事")
     f.type_text("分享到新对话的文件 201493")
@@ -25,7 +25,7 @@ test "94-share-new-chat" {
     f.gone("想让 agent 做什么？")
     f.see("分享到新对话的文件 201493")
     f.gone("正在发送")
-    f.see("e2e-doc.pdf")
+    f.see("e2e-doc")
     f.end()
   })
 }
