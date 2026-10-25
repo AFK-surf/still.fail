@@ -136,15 +136,15 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
     }
   }
   inspect(out.to_string(), content=(
-    #|settings narrow 95973:bbaab5f9
+    #|settings narrow 86239:93b2af5f
     #|station narrow 87621:c7f68220
-    #|me-reading narrow 13718:7e991f1e
+    #|me-reading narrow 13446:d82adcb5
     #|settings wide 156710:799bd386
     #|station wide 201214:6889c75a
     #|me-reading wide 149743:3fe1c478
-    #|settings-dark narrow 96080:2f7a29c0
+    #|settings-dark narrow 86364:72f5bc47
     #|station-dark narrow 87378:76d1a8f1
-    #|me-reading-dark narrow 13677:4bf2b3a6
+    #|me-reading-dark narrow 13405:6f002f35
     #|settings-dark wide 156386:5edc39cc
     #|station-dark wide 200814:cfe43754
     #|me-reading-dark wide 149486:ec4c58fd

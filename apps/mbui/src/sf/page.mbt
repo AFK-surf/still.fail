@@ -670,23 +670,30 @@ let in_list : Ref[Int] = Ref(0)
 let in_card : Ref[Int] = Ref(0)
 
 ///|
-/// A narrow row's ground, pressed where it goes (`goes`), by where it stands: in a card round, else square.
+/// A narrow row's ground, pressed where it goes (`goes`), by where it stands: in a card round, else square, across
+/// the page (what it holds on the page's line: as far in as the page's room, pg_room); as high as a row on this screen
+/// is at least (Theme.rows: a finger's 48, keyboard and mouse's 40).
 fn narrow_row(goes : Bool) -> @ui.Style {
-  match (goes, in_card.val > 0) {
+  let ground = match (goes, in_card.val > 0) {
     (true, true) => pg_row
     (false, true) => pg_said_row
     (true, false) => pg_row_square
     (false, false) => pg_said_row_square
   }
+  ground.then(@ui.style(min_h=theme().rows.least))
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pg_row_square : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter hovered{bg=Hover}").then(@ui.style(p=list_words_room))
+let pg_row_square : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter hovered{bg=Hover}").then(
+  @ui.style(px=room(pg_room_in), py=list_words_room),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pg_said_row_square : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter").then(@ui.style(p=list_words_room))
+let pg_said_row_square : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter").then(
+  @ui.style(px=room(pg_room_in), py=list_words_room),
+)
 
 ///|
 /// A card of words on the page (narrow: Card, 12 from the page's sides, 10 under it; wide: pages.css.ts card, at the
