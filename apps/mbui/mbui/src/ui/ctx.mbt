@@ -199,6 +199,8 @@ pub struct Ctx {
   mut frame_no : Int
   /// the system's size of words this frame (font_scale): every word's size and line times it, as Compose's sp
   mut font_scale : Double
+  /// how much smaller words are drawn where they are now (Ctx::words_smaller: 1 none), times the system's size
+  mut words_k : Double
   /// the build's number (frame_body's passes, over every frame, counted over the program: app.mbt builds_made): what is
   /// said of a build, said again by the next (motion's keyed nodes, by node: another pass's nodes are other nodes)
   mut build_no : Int
@@ -480,6 +482,7 @@ fn Ctx::new() -> Ctx {
     last_now: -1.0,
     frame_no: 0,
     font_scale: 1.0,
+    words_k: 1.0,
     build_no: 0,
     sideways_depth: 0,
     epoch: 0,

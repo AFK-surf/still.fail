@@ -60,11 +60,21 @@ pub fn sp_at(scale : Double, v : Double) -> Double {
 
 ///|
 /// What words of size `v` (or a line, a letter spacing said with them) are drawn at, at the system's size of words
-/// this frame (Ctx::text, rich and editor take sizes this way; what lays out round words measured by hand, too).
+/// this frame, made as much smaller as where they are drawn says (Ctx::words_smaller) (Ctx::text, rich and editor take
+/// sizes this way; what lays out round words measured by hand, too).
 pub fn Ctx::sp(self : Ctx, v : Double) -> Double {
-  if self.font_scale == 1.0 {
-    v
-  } else {
-    sp_at(self.font_scale, v)
-  }
+  let drawn = if self.font_scale == 1.0 { v } else { sp_at(self.font_scale, v) }
+  drawn * self.words_k
+}
+
+///|
+/// `body`, its words (and their lines, the letter spacing said with them) drawn `k` of the size they would be: a part
+/// whose words are made smaller alike to fit a room (a choice's options short of it, @sf.segmented), by what they
+/// measure there (Ctx::sp). Answers what `body` does.
+pub fn[T] Ctx::words_smaller(self : Ctx, k : Double, body : () -> T) -> T {
+  let was = self.words_k
+  self.words_k = was * k
+  let out = body()
+  self.words_k = was
+  out
 }
