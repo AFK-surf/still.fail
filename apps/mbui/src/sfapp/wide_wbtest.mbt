@@ -388,6 +388,103 @@ test "wide: the machine's own sessions offered under the composer as its station
 }
 
 ///|
+/// The fixture's app over its new chat as the core gives it station by station: on Studio, read whole, its frequent
+/// combinations and its machine's own session to go on with; on MBA none of them, but what is wrong for now and what it
+/// waits for.
+fn new_chat_by_station(h? : Double = 800.0) -> @ui.Tester {
+  reset()
+  let base = fixture("home")
+  let session = Json::object({
+    "id": Json::string("m1"),
+    "runtime": Json::string("claude"),
+    "title": Json::string("整理构建脚本"),
+    "meta": Json::string("Claude Code · 3 小时前"),
+  })
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      match (name, params) {
+        ("machineSessions.list", Object(p)) => {
+          let kept = if p.get("station") == Some(Json::string("ws1/st1")) { [session] } else { [] }
+          done(Ok(Json::object({ "sessions": Json::array(kept) })))
+        }
+        _ => (base.call)(name, params, done)
+      }
+    },
+    topic: fn(name, params) {
+      let t = (base.topic)(name, params)
+      match (name, t.value) {
+        ("newChat", Some(Object(v))) => {
+          let m = v.copy()
+          if text(v.get("station"), "id") == "st2" {
+            m["frequent"] = Json::array([])
+            m["spent"] = Json::string("Opus 5.5 的额度已用完，发出的消息会等它恢复")
+            m["problem"] = Json::string("MBA 上还没有选好要用的模型")
+          } else {
+            match v.get("station") {
+              Some(Object(o)) => {
+                let st = o.copy()
+                st["overview"] = Json::object({})
+                m["station"] = Json::object(st)
+              }
+              _ => ()
+            }
+          }
+          { ..t, value: Some(Json::object(m)) }
+        }
+        _ => t
+      }
+    },
+  }
+  @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h~, platform=0)
+}
+
+///|
+test "wide: a new chat's composer stays where it is as another station is picked, what is under it coming and going" {
+  let t = new_chat_by_station()
+  t.frame()
+  t.frame()
+  assert_true(app.nav.top() == NewChat)
+  let offer = "继续 Studio 终端中的会话"
+  assert_true(t.find(offer) is Some(_), msg="Studio's machine's session offered")
+  assert_true(t.find("Opus 5.5 · 高") is Some(_), msg="Studio's frequent combinations")
+  let (bx, by, _, _) = composer_glass(t)
+  let pick = fn(from : String, to : String) raise {
+    t.click(Button, label=from)
+    t.run_for(@kit.presence_in_ms)
+    t.click(Button, label=to)
+    t.run_for(@kit.presence_in_ms)
+  }
+  // MBA: no combinations nor session of its own; what is wrong for now and what it waits for in their place
+  pick("Studio", "MBA")
+  assert_true(t.find("MBA 上还没有选好要用的模型") is Some(_))
+  assert_true(t.find("Opus 5.5 的额度已用完，发出的消息会等它恢复") is Some(_))
+  assert_true(t.find("Opus 5.5 · 高") is None)
+  assert_true(t.find(offer) is None)
+  assert_at((bx, by), { let (x, y, _, _) = composer_glass(t); (x, y) })
+  // Studio again: as it was
+  pick("MBA", "Studio")
+  assert_true(t.find(offer) is Some(_))
+  assert_true(t.find("Opus 5.5 · 高") is Some(_))
+  assert_at((bx, by), { let (x, y, _, _) = composer_glass(t); (x, y) })
+}
+
+///|
+test "wide: in a window as short as it goes, what is under a new chat's composer stays in the window" {
+  let t = new_chat_by_station(h=560.0)
+  t.frame()
+  t.frame()
+  t.frame()
+  let (_, oy) = match t.find("继续 Studio 终端中的会话") {
+    Some(at) => at
+    None => fail("no offer")
+  }
+  assert_true(oy < 560.0 - 10.0, msg="the offer at \{oy}, under the window's foot")
+  let (_, ay) = t.find("想让 agent 做什么？").unwrap()
+  assert_true(ay > 0.0, msg="the scene's title at \{ay}, over the window's top")
+}
+
+///|
 /// The composer's ground as drawn now (the lowest glass in the pane, right of the sidebar): x, y, w, h.
 fn composer_glass(t : @ui.Tester) -> (Double, Double, Double, Double) raise {
   let mut best : (Double, Double, Double, Double)? = None
