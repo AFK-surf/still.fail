@@ -690,8 +690,8 @@ let side_title_row : @ui.Style = @ui.style(w=@sf.grow).then(@ui.css("row pl=S4 g
 let side_title_words : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, color=Fg, leading=L6, wrap=false, w=Cut)
 
 ///|
-/// A bar's icon button's side (@sf.icon_button, round: 32, a finger's 44: @sf.finger_side): a circle, so in a panel's corner
-/// it stands where it is concentric.
+/// A bar's icon button's side (@sf.icon_button, round: 32 on either hand, @sf.bar_key_side): a circle, so in a panel's
+/// corner it stands where it is concentric.
 fn bar_button_side() -> Double {
-  @sf.finger_side(32.0)
+  @sf.bar_key_side
 }

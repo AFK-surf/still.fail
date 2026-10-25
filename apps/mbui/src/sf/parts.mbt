@@ -158,8 +158,7 @@ pub fn icon_button(
   shortcut? : String = "",
 ) -> Bool {
   let t = theme()
-  // (a finger's: 44 at least, the icon in its middle)
-  let size = finger_side(size)
+  // (drawn its own size with a finger too: a finger reaches it from round it, mbui's finger_reach)
   let ink = ink.unwrap_or(t.p.text)
   let quiet = quiet.unwrap_or(t.p.muted)
   let id = c.id(if key == "" { "sf-ib/" + icon } else { key })
@@ -1795,7 +1794,7 @@ let dialog_head_end : Double = 2.0
 /// finger's 44, 12), the row as high as with a mouse's (its margins making up the rest, its middle no longer the
 /// title's; the user, 2026-10-25: 25 in, by the corner and not with it).
 fn dialog_close_at() -> @ui.Style {
-  let side = finger_side(dialog_close)
+  let side = dialog_close
   let d = capsule_in(dialog_r, side)
   let up = d - (dialog_pad + dialog_head_over)
   @ui.style(mt=room(up), mr=room(d - (dialog_pad + dialog_head_end)), mb=room(dialog_close - side - up))
