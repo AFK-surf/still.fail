@@ -1,7 +1,8 @@
 // Copies (and moves) into a station's drive (docs/drive.md "Copying between stations"): what the core holds of the
 // transfers a person asked, on every station of a workspace, and what they do about them. Each runs on the station the
 // files go to (station/src/drive/transfers.ts), whatever becomes of this device: the core only asks for it, and shows it
-// as its station says it. Held in memory, as the stations say them: read when a station's stream opens (GET
+// as its station says it. Held in each station's link's memory (kept, station/memory.ts: there as the app opens again),
+// as the stations say them: read when a station's stream opens (GET
 // /drive/transfers; a station from before answers 404, and has none), told as they change (`drive-transfers`).
 //
 // Topic:
@@ -33,12 +34,9 @@ type Of = Extract<Call, { kind: "driveTransfer" }>;
 /// What the core holds of one station's transfers: `supported` null until read, false for a station from before.
 type Held = { supported: boolean | null; transfers: J[] };
 
-const mem = new WeakMap<Inner, Map<string, Held>>();
-const heldOf = (inner: Inner) => {
-  let m = mem.get(inner);
-  if (!m) mem.set(inner, (m = new Map()));
-  return m;
-};
+const KEY = "driveTransfers";
+const heldAt = (inner: Inner, address: string) => inner.stations.link(address)?.memory.get(KEY) as Held | undefined;
+const hold = (inner: Inner, address: string, held: Held) => inner.stations.link(address)?.memory.set(KEY, held);
 
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
@@ -56,10 +54,10 @@ function invalidate(inner: Inner, ws: string): void {
 function put(inner: Inner, address: string, transfer: unknown): void {
   const id = str(get(transfer, "id"));
   if (id === null || !isObject(transfer)) return;
-  const held = heldOf(inner).get(address) ?? { supported: true, transfers: [] };
+  const held = heldAt(inner, address) ?? { supported: true, transfers: [] };
   const at = held.transfers.findIndex((x) => x.id === id);
   const transfers = at >= 0 ? held.transfers.map((x, i) => (i === at ? transfer : x)) : [transfer, ...held.transfers];
-  heldOf(inner).set(address, { supported: true, transfers });
+  hold(inner, address, { supported: true, transfers });
   invalidate(inner, ofAddress(address));
 }
 
@@ -71,8 +69,8 @@ function read(inner: Inner, address: string): Effect.Effect<void, CoreError> {
   return Effect.gen(function* () {
     if (!inner.stations.link(address) || !inner.stations.reachable(address)) return;
     const got = yield* Effect.result(ask(inner, address, "GET", "/drive/transfers"));
-    if (got._tag === "Success") heldOf(inner).set(address, { supported: true, transfers: arr(get(got.success, "transfers")).filter(isObject) });
-    else if (got.failure.status === 404) heldOf(inner).set(address, { supported: false, transfers: [] });
+    if (got._tag === "Success") hold(inner, address, { supported: true, transfers: arr(get(got.success, "transfers")).filter(isObject) });
+    else if (got.failure.status === 404) hold(inner, address, { supported: false, transfers: [] });
     else return;
     invalidate(inner, ofAddress(address));
   });
@@ -138,7 +136,7 @@ export function shown(x: J, address: string, names: Map<string, string>): J {
 export function transfersView(inner: Inner, ws: string): J {
   const stations = stationsOf(inner, ws);
   const names = new Map(stations.map((s) => [s.id, s.name]));
-  const held = stations.map((s) => [`${ws}/${s.id}`, heldOf(inner).get(`${ws}/${s.id}`)] as const);
+  const held = stations.map((s) => [`${ws}/${s.id}`, heldAt(inner, `${ws}/${s.id}`)] as const);
   const transfers = held.flatMap(([address, h]) => (h?.transfers ?? []).map((x) => shown(x, address, names))).sort((a, b) => b.createdAt - a.createdAt);
   return { supported: held.some(([, h]) => h?.supported === true), loaded: held.some(([, h]) => h !== undefined && h.supported !== null), transfers };
 }

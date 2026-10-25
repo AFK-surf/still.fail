@@ -356,7 +356,7 @@ chat 里 agent 的消息下面、奏里、station 页「登录」区里进行中
 **第一步**
 
 - station：`logins/` 模块（`script` 包的 PTY、`BROWSER` 和替身截网址、回环端口和设备码解析、回调转发和端口核对、超时取消）、接口和事件。实现：没有内置描述，任何登录命令走同一条路（用户后来定的）。
-- core：`machineLogins` topic、`machineLogin.start/cancel/paste/open/term/input` 调用（实现：只剩 `cancel` 和 `open`，起登录、答问题是 agent 的）；node host（桌面）加只听回环的监听，打开网址走现有的 `openExternal`。实现：topic 是 `machineLogins`（一台的全部）、`machineLogin`（一次）、`machineLoginScreen`（终端，代替 `term` 调用）；调用是 `machineLogin.start/cancel/input/paste`（station 操作）和 `machineLogin.open`（core 自己的：回环的先在本机听，再回要打开的网址；`here` 是这台 station 就在本机时不听）；监听是 `Host.listen`（只有 node host 有，`canRelay`），打开网址由页面 `window.open`，桌面 app 里会交给系统浏览器（`openExternal`）。全部只在内存里，不进 core 的数据库。
+- core：`machineLogins` topic、`machineLogin.start/cancel/paste/open/term/input` 调用（实现：只剩 `cancel` 和 `open`，起登录、答问题是 agent 的）；node host（桌面）加只听回环的监听，打开网址走现有的 `openExternal`。实现：topic 是 `machineLogins`（一台的全部）、`machineLogin`（一次）、`machineLoginScreen`（终端，代替 `term` 调用）；调用是 `machineLogin.start/cancel/input/paste`（station 操作）和 `machineLogin.open`（core 自己的：回环的先在本机听，再回要打开的网址；`here` 是这台 station 就在本机时不听）；监听是 `Host.listen`（只有 node host 有，`canRelay`），打开网址由页面 `window.open`，桌面 app 里会交给系统浏览器（`openExternal`）。登录列表随 station 的其他文档记在 core 的数据库里（station/memory.ts：重开 app 先显示上次的，连上后再读），终端画面只在内存里。
 - 桌面和网页：station 页「登录」区（只有做过的登录，没有就不显示）、登录卡片（回环转发只桌面有，网页先只有设备码、打开网址）。
 - agent：`login` 工具、`login` 卡片、登录结束的通知、instructions 和 migrations NOTE。
 - 验证：studio 上 dev cloud + 临时 station，临时 HOME，用 gh（设备码）、gcloud（回环 8085）、npm（只打开网址）各走通一次；回环转发（GET 和 form_post 的 POST、只听 `[::1]` 和只听 127.0.0.1 的两种）、端口被占、state 不对、命令已退出时的拒绝写确定性测试（假的登录命令 + 本机 HTTP 服务）。

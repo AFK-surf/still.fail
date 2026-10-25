@@ -261,7 +261,7 @@ export function screenPath(station: string, id: string): string {
   return `/w/${encode(addr.workspace)}/s/${encode(addr.station)}/screen/${encode(id)}`;
 }
 
-/// The `screens` topic's value: what is held (none while the station is not reached).
+/// The `screens` topic's value: what is held (none while the station is down: `online` false).
 export function screensView(inner: Inner, station: string, held: Held | undefined, online: boolean): J {
   const control = mayDrive(inner, station);
   if (held?.outdated) return { screens: [], outdated: true, control, known: true, note: t("core-views.screen.outdated") };

@@ -291,7 +291,7 @@ row) until the drive reaches protected folders through still.fail Helper.
 ### Clients
 
 The core (client/core-ts/src/screens.ts; docs/client-core.md, the `screens` topic and the `screen.*` calls) holds each
-station's list (read as its stream opens, then its `screens` events; in memory only) and opens views. A view's frames
+station's list (read as its stream opens, then its `screens` events; kept with the station's documents, station/memory.ts) and opens views. A view's frames
 go to the page as they come, their bytes beside the JSON rather than in it (the web's worker transfers them, the
 desktop's utility process posts them on the page's port, Android's engine hands them to Kotlin with `emitBytes`); the
 page decodes (WebCodecs or `createImageBitmap` on the web, which asks H.265 where WebCodecs plays it; MediaCodec or a

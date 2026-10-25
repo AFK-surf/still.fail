@@ -21,7 +21,7 @@ import type { StationsSync } from "./sync.ts";
 import type { LinkNet } from "./wire.ts";
 import { screenCard, screensChanged, screensView } from "../screens.ts";
 import { down, downWords } from "../views/views.ts";
-import type { Link } from "./link.ts";
+import { type Link, logKey } from "./link.ts";
 import * as logins from "./machine-logins.ts";
 import { laterSleep } from "../runtime.ts";
 
@@ -73,8 +73,9 @@ export class StationTopics implements Owner {
   readonly #samplers = new Map<string, Fiber.Fiber<void, never>>();
   /// Each station's connection sampler, while its `net` or `way` is started (which of the two are).
   readonly #sampling = new Map<string, { fiber: Fiber.Fiber<void, never>; by: Set<string> }>();
-  /// Each station's last reading (its `net`), and how it is reached by it (its `way`).
-  readonly #nets = new Map<string, unknown>();
+  /// The stations sampled this run (a reading of each is in its link's memory: its `net`), and how each is reached by
+  /// its reading (its `way`).
+  readonly #sampled = new Set<string>();
   readonly #ways = new Map<string, unknown>();
 
   constructor(core: Inner, sync: StationsSync) {
@@ -235,13 +236,15 @@ export class StationTopics implements Owner {
         return v === undefined ? undefined : { ok: v };
       }
       case "screens":
-        return { ok: screensView(this.#core, station, this.#sync.screens(station), link?.state.state === "online") };
+        // As the station said them last (kept: there as the app opens again, while it is reached anew); none while it
+        // is down.
+        return { ok: screensView(this.#core, station, this.#sync.screens(station), link !== undefined && !down(link.state)) };
       case "screenCard": {
         if (typeof topic.screen !== "string" || topic.screen === "") return { err: CoreError.invalid(t("core-misc.params.missing", { field: "screen" })) };
         return { ok: screenCard(this.#core, station, topic.screen, this.#sync.screens(station), link?.state.state === "online") };
       }
       case "jobLog": {
-        const v = link?.memory.get(topicKey(topic));
+        const v = link?.memory.get(logKey(topic.job as string, topic.lines as number));
         return v === undefined ? undefined : { ok: v };
       }
       case "stationResources":
@@ -250,8 +253,11 @@ export class StationTopics implements Owner {
         const v = link?.memory.get(topicKey(topic));
         return v === undefined ? undefined : { ok: v };
       }
-      case "net":
-        return this.#nets.has(station) ? { ok: this.#nets.get(station) } : undefined;
+      case "net": {
+        // As it was last sampled (this run, or before it: kept in the link's memory); null once sampled with none.
+        const v = link?.memory.get("net");
+        return v !== undefined ? { ok: v } : this.#sampled.has(station) ? { ok: null } : undefined;
+      }
       case "way":
         return this.#ways.has(station) ? { ok: this.#ways.get(station) } : undefined;
       case "live":
@@ -699,12 +705,14 @@ export class StationTopics implements Owner {
       const link = this.#sync.link(station);
       const reading = link ? (this.#sync.wire.net?.(link.addr) ?? null) : null;
       const now = core.host.nowMs();
+      const was = link?.memory.get("net") ?? null;
       let value: unknown = null;
       if (reading === null) {
-        // No connection now (coming back): how it went last is kept, the station's card saying it is reconnecting.
+        // No connection now (coming back, or the app just opened): how it went last is kept, the station's card saying
+        // it is reconnecting.
         last = null;
         samples = [];
-        value = this.#nets.get(station) ?? null;
+        value = was;
       } else {
         const since = last !== null && reading.rxBytes >= last[1].rxBytes && reading.txBytes >= last[1].txBytes ? last : null;
         if (since) {
@@ -716,8 +724,9 @@ export class StationTopics implements Owner {
         value = { path: reading.path, relay: reading.relay, rttMs: reading.rttMs, rxBytes: reading.rxBytes, txBytes: reading.txBytes, samples: [...samples], measured, todayRxBytes: reading.today?.[0] ?? null, todayTxBytes: reading.today?.[1] ?? null, lan: reading.lan ?? [] };
         last = [now, reading];
       }
-      if (!this.#nets.has(station) || !equal(this.#nets.get(station), value)) {
-        this.#nets.set(station, value);
+      if (!this.#sampled.has(station) || !equal(was, value)) {
+        this.#sampled.add(station);
+        if (link && value !== null) link.memory.set("net", value);
         core.store.invalidate(net);
       }
       // How it is reached: what changes seldom, apart from its figures.
@@ -727,7 +736,8 @@ export class StationTopics implements Owner {
         core.store.invalidate(way);
       }
     });
-    // A measurement shown on screen: sampled while it is shown, never kept. Not while the app is out of view: a phone
+    // A measurement shown on screen: sampled while it is shown, the last reading kept to show from as the app opens
+    // again (the station's card dimmed while it is reached anew). Not while the app is out of view: a phone
     // in a pocket samples nothing (it was most of what the core did there, 2026-10-19).
     const inView = Effect.suspend(() => core.attention?.attend.untilShown() ?? Effect.void);
     const fiber = core.runner.fork(Effect.forever(Effect.andThen(inView, Effect.andThen(sample, laterSleep(NET_EVERY_MS)))));
