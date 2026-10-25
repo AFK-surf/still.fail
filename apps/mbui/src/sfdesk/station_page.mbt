@@ -468,8 +468,8 @@ fn st_row_mark(c : @ui.Ctx, icon : String) -> Unit {
 let st_row_glyph : Double = 16.0
 
 ///|
-/// A profile of it (ProfileCard, as the Profile page lists it): its maker's mark, its name, its models and who uses
-/// it, its allowance, its check where not well; the whole of it its page.
+/// A profile of it (ProfileCard, as the Profile page lists it): its maker's mark, its name and its check where not
+/// well, its models and who uses it under them, its allowance under that; the whole of it its page.
 fn station_profile_row(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit {
   let used = items(p, "usedBy").length()
   let facts = [text(p, "modelsText")]
@@ -485,11 +485,13 @@ fn station_profile_row(c : @ui.Ctx, core : Core, address : String, p : Json?) ->
         c.box(style=st_profile_mark, fn() { @sf.maker_mark(c, text(p, "providerMark"), text(p, "runtime"), st_profile_glyph) |> ignore })
         |> ignore
       },
+      // (its allowance under what it is, a line of its own: as the profiles' page lists it)
+      below?=if text(field(p, "quota"), "state") == "ok" {
+        Some(fn() { @sf.quota_chips(c, field(p, "quota"), small=true) })
+      } else {
+        None
+      },
       tail=fn() {
-        let quota = field(p, "quota")
-        if text(quota, "state") == "ok" {
-          @sf.quota_chips(c, quota, small=true)
-        }
         if text(p, "checkTone") != "green" && text(p, "checkText") != "" {
           @sf.pill(
             c,

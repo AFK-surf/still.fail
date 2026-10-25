@@ -52,13 +52,14 @@ fn update_notice(src : Source, station : String, notice : Json?, action : String
 }
 
 ///|
-/// What its panel holds: its words in by a row's padding (the station's name and its state, or what is said; the
-/// detail under them), its close (or 不再提醒此版本 where it may be dismissed) in the top right corner; how far an
-/// update is while it goes; the versions and its one thing to do at the foot.
+/// What its panel holds: its words in by a row's padding (the station's name and its state, or what is said), its close
+/// (or 不再提醒此版本 where it may be dismissed) in the top right corner, the detail under them as wide as the
+/// words; how far an update is while it goes; the versions and its one thing to do at the foot.
 fn update_panel(c : @ui.Ctx, src : Source, station : String, notice : Json?) -> Unit {
   let on = [("station", station), ("id", "station")]
   let busy = core_doing(src, ["software.update"], on)
   let dismissible = flag(notice, "dismissible")
+  // (its detail under its head as wide as the panel's words: a line of its own, its close on the head's line)
   c.box(style=update_head, fn() {
     c.box(style=update_words, fn() {
       match text(notice, "station") {
@@ -72,10 +73,6 @@ fn update_panel(c : @ui.Ctx, src : Source, station : String, notice : Json?) -> 
             }
           })
           |> ignore
-      }
-      match text(notice, "detail") {
-        "" => ()
-        d => c.text(d, style=update_detail) |> ignore
       }
     })
     |> ignore
@@ -91,6 +88,10 @@ fn update_panel(c : @ui.Ctx, src : Source, station : String, notice : Json?) -> 
     }
   })
   |> ignore
+  match text(notice, "detail") {
+    "" => ()
+    d => c.box(style=update_detail_box, fn() { c.text(d, style=update_detail) |> ignore }) |> ignore
+  }
   if text(notice, "tone") == "busy" && text(notice, "station") != "" {
     c.box(style=update_bar, fn() {
       @sf.progress(c, "station-update/" + text(notice, "station"), match opt_number(notice, "percent") {
@@ -190,6 +191,11 @@ let update_state_trouble : @ui.TextStyle = @ui.text_style(size=Meta, color=Dange
 ///|
 // kept across runs: a value (no field of it changes)
 let update_detail : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
+
+///|
+/// The detail's room: under the head, as far in from either side as the head's words are from the panel's start.
+// kept across runs: a value (no field of it changes)
+let update_detail_box : @ui.Style = @ui.css("w=Full px=S2_5 pt=S0_5")
 
 ///|
 /// How far it is (bar): on the words' line, 10 in.

@@ -367,7 +367,7 @@ test "飞书: a new connect picks its platform first, Slack's and 飞书's said 
   let t = settings_tester("connects", mode="settings-new-connect-platform", shows="settings-new-connect-platform")
   assert_true(t.find("选择平台") is Some(_))
   assert_true(t.find("在 Slack 的频道和私信中使用") is Some(_))
-  assert_true(t.find("在飞书的群和私聊中使用，含国际版 Lark") is Some(_))
+  assert_true(t.find("在飞书的群和私聊中使用，含 Lark") is Some(_))
   assert_true(t.find("下一步") is Some(_))
   // no QR code before the bot is being made
   assert_true(t.find("在飞书中打开") is None)
@@ -483,7 +483,7 @@ test "settings: an offline station's picture and line centred across its card's 
   let t = stations_unread_net()
   // MBA's room: its load's 20 and 10 over its unseen line, the line's 38
   let room = unseen_lines(t)[1] - 30.0
-  let (_, said) = t.find("此机器已长时间未连接 still.fail").unwrap()
+  let (_, said) = t.find("长时间未连接").unwrap()
   assert_true((said - (room + 34.0)).abs() < 0.5, msg="the line's middle \{said}, the room's \{room + 34.0}")
 }
 
@@ -701,10 +701,10 @@ test "a subscription's page signed in: 重新登录 and the way by hand, rows of
 ///|
 test "a subscription's sign-in that failed: why, then 重新登录 with the way by hand beside it (Accounts.tsx SignIn)" {
   let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-login-failed")
-  shown_on_page(t, "也可以在服务器上手动登录")
+  shown_on_page(t, "在机器上手动登录")
   let (_, why_y) = t.find("上次登录失败：授权码已过期").unwrap()
   let (bx, by) = t.find("重新登录").unwrap()
-  let (mx, my) = t.find("也可以在服务器上手动登录").unwrap()
+  let (mx, my) = t.find("在机器上手动登录").unwrap()
   assert_true(by > why_y)
   assert_true((my - by).abs() < 2.0 && mx > bx)
 }

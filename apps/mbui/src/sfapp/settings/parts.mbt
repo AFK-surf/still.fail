@@ -951,7 +951,8 @@ let row_title_lines : @ui.TextStyle = @sf.body.then(@sf.full_words)
 ///|
 /// A row's title with a line under it, as wide as the row lets them; the title in lines where it is long, or cut to
 /// one (`wrap_title` false: where Android says maxLines = 1). `title_color`, `sub_color`: in place of the roles' (a
-/// warning's, worked out where it is called).
+/// warning's, worked out where it is called). `end`: what the row has at its end (a size, a chevron), on the title's
+/// line, the line under it then as wide as the row (a line of its own: @sf.row_lines).
 fn row_lines(
   c : @ui.Ctx,
   title : String,
@@ -960,20 +961,32 @@ fn row_lines(
   title_color? : Int64,
   wrap_title? : Bool = true,
   wrap_sub? : Bool = false,
+  end? : () -> Unit,
 ) -> Unit {
   c.box(style=@sf.full_width, fn() {
     // Connects.kt:231, Security.kt:191 (15sp)
-    c.text(
-      title,
-      style=match (wide.val, wrap_title) {
-        (true, true) => wide_row_title_lines
-        (true, false) => wide_row_title
-        (false, true) => row_title_lines
-        (false, false) => row_title_words
-      },
-      color?=title_color,
-    )
-    |> ignore
+    let title_words = fn() {
+      c.text(
+        title,
+        style=match (wide.val, wrap_title) {
+          (true, true) => wide_row_title_lines
+          (true, false) => wide_row_title
+          (false, true) => row_title_lines
+          (false, false) => row_title_words
+        },
+        color?=title_color,
+      )
+      |> ignore
+    }
+    match end {
+      Some(f) =>
+        c.box(style=row_head_line, fn() {
+          c.box(style=@sf.pg_row_words, title_words) |> ignore
+          f()
+        })
+        |> ignore
+      None => title_words()
+    }
     if sub != "" {
       // Connects.kt:232, Security.kt:192 (13sp)
       c.text(
@@ -991,6 +1004,11 @@ fn row_lines(
   })
   |> ignore
 }
+
+///|
+/// A row's title and what the row has at its end, 12 apart, across their middle.
+// kept across runs: a value (no field of it changes)
+let row_head_line : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
 
 ///|
 /// The line under a row's title: one, or in lines.

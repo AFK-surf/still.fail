@@ -161,7 +161,9 @@ fn software_list(c : @ui.Ctx, core : Core, station : String, updates : Array[Jso
     let busy = batch || is_doing(core, ["software.update"], [("station", station), ("id", id)])
     software_row(c, core, station, v, manager, busy, beta)
   }
-  c.box(style=sw_foot, fn() {
+  // (in lines: checking again after when it was last checked, under it where the line has not the room; why it failed
+  // a line of its own)
+  c.box(style=sw_foot, flow=true, line_gap=4.0, fn() {
     let checked = match field(Some(updates[0]), "checkedAt") {
       Some(Number(n, ..)) => Some(n)
       _ => None
@@ -175,7 +177,7 @@ fn software_list(c : @ui.Ctx, core : Core, station : String, updates : Array[Jso
     )
     |> ignore
     match software_failed.get(station) {
-      Some(f) => c.text(f, style=sw_failed) |> ignore
+      Some(f) => c.text(f, style=sw_failed_line) |> ignore
       None => ()
     }
     if checked is Some(_) {
@@ -229,14 +231,44 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
       }
     })
     |> ignore
-    c.box(style=sw_words, fn() {
-      c.box(style=sw_name_line, fn() {
+    // its name and what is newer with updating it on its first line; its version, why it cannot be updated and its
+    // own switches under them, as wide as its words (lines of their own)
+    @sf.row_lines(c, spaced=true, fn() {
+      c.box(style=sw_name_line.then(sw_name_grow), fn() {
         c.text(text(v, "name"), style=sw_name) |> ignore
         if text(v, "channel") == "beta" && !switches {
           c.box(style=sw_beta, fn() { c.text(@sf.t("web-main.versions.beta"), style=sw_beta_words) |> ignore }) |> ignore
         }
       })
       |> ignore
+      c.box(style=sw_rest, fn() {
+        if state == "updating" {
+          match field(v, "percent") {
+            Some(Number(p, ..)) => @sf.progress(c, "software/" + station + "/" + id, Some(p / 100.0), w=Px(sw_progress_w))
+            _ => ()
+          }
+          c.text(text(v, "updatingText"), style=sw_newer) |> ignore
+        } else if state == "failed" {
+          let fid = c.id("software-failed/" + station + "/" + id)
+          c.box(id=fid, fn() { c.text(text(v, "failedText"), style=sw_failed) |> ignore }) |> ignore
+          if text(v, "message") != "" {
+            @sf.tip(c, "software-failed-tip/" + station + "/" + id, fid, text(v, "message"))
+          }
+          button(@sf.t("common.retry"), false)
+        } else if !installed {
+          button(@sf.t("web-main.versions.install"), false)
+        } else if flag(v, "newer") && latest != "" {
+          c.text(latest, style=sw_newer) |> ignore
+          button(@sf.t("web-main.versions.update"), true)
+        } else if flag(v, "downgrade") && latest != "" {
+          c.text(latest, style=sw_newer) |> ignore
+          button(@sf.t("web-main.versions.backToStable"), false)
+        } else if text(v, "done") != "" {
+          c.text(text(v, "done"), style=sw_newer) |> ignore
+        }
+      })
+      |> ignore
+    }, fn() {
       let vid = c.id("software-version/" + station + "/" + id)
       c.box(id=vid, style=sw_version_box, fn() { c.text(text(v, "shownText"), style=sw_version) |> ignore }) |> ignore
       if text(v, "tipText") != "" {
@@ -276,34 +308,6 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
         |> ignore
       }
     })
-    |> ignore
-    c.box(style=sw_rest, fn() {
-      if state == "updating" {
-        match field(v, "percent") {
-          Some(Number(p, ..)) => @sf.progress(c, "software/" + station + "/" + id, Some(p / 100.0), w=Px(sw_progress_w))
-          _ => ()
-        }
-        c.text(text(v, "updatingText"), style=sw_newer) |> ignore
-      } else if state == "failed" {
-        let fid = c.id("software-failed/" + station + "/" + id)
-        c.box(id=fid, fn() { c.text(text(v, "failedText"), style=sw_failed) |> ignore }) |> ignore
-        if text(v, "message") != "" {
-          @sf.tip(c, "software-failed-tip/" + station + "/" + id, fid, text(v, "message"))
-        }
-        button(@sf.t("common.retry"), false)
-      } else if !installed {
-        button(@sf.t("web-main.versions.install"), false)
-      } else if flag(v, "newer") && latest != "" {
-        c.text(latest, style=sw_newer) |> ignore
-        button(@sf.t("web-main.versions.update"), true)
-      } else if flag(v, "downgrade") && latest != "" {
-        c.text(latest, style=sw_newer) |> ignore
-        button(@sf.t("web-main.versions.backToStable"), false)
-      } else if text(v, "done") != "" {
-        c.text(text(v, "done"), style=sw_newer) |> ignore
-      }
-    })
-    |> ignore
   })
 }
 
@@ -440,6 +444,11 @@ let sw_mark : @ui.Style = @ui.css("w=S9 h=S9 radius=Full bg=Neutral align=ACente
 let sw_name_line : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
+/// Its name taking what its first line leaves what is newer and updating it.
+// kept across runs: a value (no field of it changes)
+let sw_name_grow : @ui.Style = @ui.style(w=@sf.grow)
+
+///|
 // kept across runs: a value (no field of it changes)
 let sw_version_box : @ui.Style = @ui.css("row")
 
@@ -486,6 +495,11 @@ let sw_newer : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted
 let sw_failed : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Danger, wrap=false)
 
 ///|
+/// Why checking failed, in the foot: a line of its own, in lines where it is long.
+// kept across runs: a value (no field of it changes)
+let sw_failed_line : @ui.TextStyle = sw_failed.then(@ui.text_style(wrap=true, w=Full))
+
+///|
 /// When it was last checked, checking again beside it (cardFoot).
 // kept across runs: a value (no field of it changes)
 let sw_foot : @ui.Style = @ui.css("row w=Full px=S3 pt=S2 gap=S3 align=ACenter")
@@ -510,11 +524,6 @@ let sw_check_lit : @ui.TextStyle = sw_check_words.then(@ui.text_style(color=Fg))
 /// Logins under way, their cards 12 apart.
 // kept across runs: a value (no field of it changes)
 let lg_cards : @ui.Style = @ui.css("w=Full gap=S3 pb=S3")
-
-///|
-/// A piece of software's words: its name and its version, 2 apart; its name strong, on one line.
-// kept across runs: a value (no field of it changes)
-let sw_words : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)

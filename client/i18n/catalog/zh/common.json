@@ -45,7 +45,7 @@
   "common.reload": "重新加载",
   "common.folderOn": "{station} 上的文件夹：{path}",
   "common.telemetry.title": "发送使用统计和错误报告",
-  "common.telemetry.note": "帮助改进 {name}。不包含聊天内容。",
+  "common.telemetry.note": "不会包含你的聊天内容",
   "common.legal.terms": "服务条款",
   "common.legal.privacy": "隐私政策",
   "common.report.action": "上报",

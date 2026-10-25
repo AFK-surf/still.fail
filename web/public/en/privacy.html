@@ -47,7 +47,7 @@
 <li><strong>Push tokens</strong>: the tokens or push endpoints your devices or browsers register to receive notifications;</li>
 <li><strong>Issue reports</strong>: see section 3;</li>
 <li><strong>Network and log information</strong>: the IP address, request path, time and browser information (User-Agent) when you access the Service, recorded in Cloudflare's request logs; relay servers can see connections' IP addresses, node public keys and traffic volume. To prevent abuse, we rate-limit sign-ins using salted hashes of IP addresses and email addresses;</li>
-<li><strong>Usage statistics and error information</strong>: the web app and the Android app send PostHog action events, counts, durations, program errors and stack traces, and the web app also records session replays (all text, input and images on the page are masked at recording time). This data is tied to your account ID only, without your email address or name. <strong>You can turn off “Send usage statistics and error reports” in the app's settings</strong>; once it's off, that device sends nothing to PostHog. Clients, stations and servers also send request traces to Axiom, including account ID, session ID, request path and duration. <strong>These statistics and traces don't include chat text, file names, prompts, agent output or conversation titles.</strong> Traces are used to diagnose failures and performance problems and aren't affected by that switch. Station error logs are sent only if the station's user turns them on; they're off by default.</li>
+<li><strong>Usage statistics and error information</strong>: the web app and the Android app send PostHog action events, counts, durations, program errors and stack traces, and the web app also records session replays (all text, input and images on the page are masked at recording time). This data is tied to your account ID only, without your email address or name. <strong>You can turn off “Send usage and error reports” in the app's settings</strong>; once it's off, that device sends nothing to PostHog. Clients, stations and servers also send request traces to Axiom, including account ID, session ID, request path and duration. <strong>These statistics and traces don't include chat text, file names, prompts, agent output or conversation titles.</strong> Traces are used to diagnose failures and performance problems and aren't affected by that switch. Station error logs are sent only if the station's user turns them on; they're off by default.</li>
 </ul>
 <p>The still.fail website (still.fail) itself doesn't use analytics.</p>
 
@@ -102,7 +102,7 @@
 <ul>
 <li>Workspace owners can delete a workspace in the app;</li>
 <li><strong>Deleting your account</strong>: choose “Delete account” in the app's account settings. Your account information, sign-in sessions, push tokens and issue reports are deleted at once; workspaces with only you in them are deleted too; you're removed from the other workspaces you're in. If you're the only owner of a workspace that has other members, first make someone else an owner or delete that workspace. Deletion can't be undone;</li>
-<li>Turning off usage statistics: turn off “Send usage statistics and error reports” in the app's settings;</li>
+<li>Turning off usage statistics: turn off “Send usage and error reports” in the app's settings;</li>
 <li>For other requests, also email hi@still.fail. We'll reply within 15 working days.</li>
 </ul>
 <p>Your chat history and files are on your stations, where you can view, export and delete them directly.</p>

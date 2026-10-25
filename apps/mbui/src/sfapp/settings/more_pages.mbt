@@ -711,11 +711,13 @@ fn size_row(
 ) -> Bool {
   let t = @sf.theme()
   list_row(c, key~, piece?, fn() {
-    row_lines(c, title, sub)
-    c.text(size_words(size), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
-    if more {
-      chevron(c)
-    }
+    // its size and chevron by its title, what it holds under them as wide as the row
+    row_lines(c, title, sub, end=fn() {
+      c.text(size_words(size), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
+      if more {
+        chevron(c)
+      }
+    })
   })
 }
 
@@ -864,17 +866,19 @@ fn kept_file_row(c : @ui.Ctx, core : Core, station : String, f : Json, piece : (
     fill("android-settings.files.meta", [("size", size_words(bytes)), ("opened", since_words((core.now)(), number(fv, "opened")))])
   }
   list_row(c, key="", piece~, fn() {
-    row_lines(c, name, sub)
-    let id = c.id("kept-file/" + station + "/" + text(fv, "key") + "/" + name)
-    let b = c.box(style=kept_bin, id~, fn() {
-      @sf.icon(c, "trash", size=18.0, color=t.p.muted) |> ignore
-      // clip(CircleShape).clickable
-      @motion.ripple(c, id, 18.0)
+    // its bin by its name, how much and when under them as wide as the row
+    row_lines(c, name, sub, end=fn() {
+      let id = c.id("kept-file/" + station + "/" + text(fv, "key") + "/" + name)
+      let b = c.box(style=kept_bin, id~, fn() {
+        @sf.icon(c, "trash", size=18.0, color=t.p.muted) |> ignore
+        // clip(CircleShape).clickable
+        @motion.ripple(c, id, 18.0)
+      })
+      c.semantics(b, Button, id~, label=tr("android-settings.files.clear.action") + "「" + name + "」")
+      if hit(c, id) {
+        kept_file_clear(core, station, f)
+      }
     })
-    c.semantics(b, Button, id~, label=tr("android-settings.files.clear.action") + "「" + name + "」")
-    if hit(c, id) {
-      kept_file_clear(core, station, f)
-    }
   })
   |> ignore
 }

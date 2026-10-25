@@ -1,5 +1,5 @@
 // 关于 and 更新日志, one page each in every frame (ember web/src/pages/About.tsx, Changelog.tsx, Changelog.css.ts; the
-// narrow app's mobile/Settings.tsx AboutScreen, mobile/Changelog.tsx). 关于: this build and the way to a newer one,
+// narrow app's mobile/Settings.tsx AboutScreen, mobile/Changelog.tsx). 关于: this build, the way to a newer one,
 // what changed; whether this device sends usage statistics and error reports (not where nothing is sent); still.fail's
 // terms and privacy policy on its site. 更新日志: the core's `changelog`, a tab a part, by day, each change's lines
 // with their kind before them, its version, what is not out yet; opened, what the last update brought is read
@@ -16,7 +16,7 @@ fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   blocks.push(fn() {
     @sf.section(c, heads=false, @sf.t("web-pages.settings.nav.version"), fn() {
       @sf.group(c, fn() {
-        version_row(c, core)
+        version_rows(c, core)
         if @sf.link_row(c, "about/changelog", @sf.t("web-pages.settings.nav.changelog")) {
           (core.push)(Changelog)
         }
@@ -58,23 +58,42 @@ fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
 }
 
 ///|
-/// This build and the way to a newer one, one row on every screen: its name and version, what is under way under them
-/// (正在检查, 下载中 40%, 正在安装), and its button at its end: 更新到 <version> where a newer build is known (pressed,
-/// installed), else 检查更新 (still.fail cloud asked now); turning while anything is under way.
-fn version_row(c : @ui.Ctx, core : Core) -> Unit {
+/// This build and the way to a newer one, a row each on every screen. Its name and version, words of a length known,
+/// the row's alone. Then what can be done, said by the row's own words and done by pressing it: 更新到 <version> where
+/// a newer build is known (installed), else 检查更新 (still.fail cloud asked now); what is under way under them
+/// (正在检查, 下载中 40%, 正在安装: words of no length known, on a line of their own) and how far it has come while it
+/// downloads (Progress), else a spinner at the row's end; the row taking no press meanwhile. (A button at the row's end
+/// took what its words left: the name cut to 「still.fail…」 and 下载中 40% broken in two beside 更新到 0.1.5283 on
+/// a phone, 2026-10-26.)
+fn version_rows(c : @ui.Ctx, core : Core) -> Unit {
   let v = (core.version_now)()
-  let newer = v.newer != ""
-  @sf.link_row(c, "", "still.fail mbui " + build_version(), note=v.doing, goes=false, tail=fn() {
-    let label = if newer {
-      @sf.t("android-settings.version.update", args=[("version", v.newer)])
-    } else {
-      @sf.t("android-settings.version.check")
-    }
-    if @sf.button(c, label, key="version-app", tone=if newer { Primary } else { Plain }, busy=v.doing != "") {
-      (core.version_tap)()
-    }
-  })
-  |> ignore
+  @sf.link_row(c, "", "still.fail mbui " + build_version(), goes=false) |> ignore
+  let busy = v.doing != ""
+  let label = if v.newer != "" {
+    @sf.t("android-settings.version.update", args=[("version", v.newer)])
+  } else {
+    @sf.t("android-settings.version.check")
+  }
+  let pressed = @sf.link_row(
+    c,
+    "about/version",
+    label,
+    note=v.doing,
+    chevron=false,
+    goes=!busy,
+    below?=match v.part {
+      Some(p) if busy => Some(fn() { @sf.progress(c, "about/version/part", Some(p)) })
+      _ => None
+    },
+    tail=fn() {
+      if busy && v.part is None {
+        @sf.spinner(c, size=@sf.spinner_inline) |> ignore
+      }
+    },
+  )
+  if pressed {
+    (core.version_tap)()
+  }
 }
 
 ///|

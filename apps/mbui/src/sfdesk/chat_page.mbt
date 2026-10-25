@@ -573,9 +573,13 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
   let thread = field(chat, "thread")
   let th = opt_number(thread, "id")
   guard th is Some(id) else { return }
+  // (its labels in a column 80 wide, or as wide as the widest of them in this language: words of a length known,
+  // whole)
+  let labels = ["from", "started", "people", "created", "lastMessage"].map(fn(k) { @sf.t("web-pages.chat.info." + k) })
+  let label_w = labels.fold(init=info_label_w, fn(m, l) { dmax(m, c.words_across(l, info_muted).ceil()) })
   let fact = fn(label : String, value : () -> Unit) {
     c.box(style=info_fact, fn() {
-      c.box(style=info_fact_label, fn() { c.text(label, style=info_muted) |> ignore }) |> ignore
+      c.box(style=@ui.style(w=Fixed(label_w)), fn() { c.text(label, style=info_muted) |> ignore }) |> ignore
       value()
     })
     |> ignore
@@ -736,14 +740,24 @@ fn info_row(c : @ui.Ctx, key : String, icon : String, label : String, end : Stri
   c.cursor(id, Hand)
   let b = c.box(style=info_tool, id~, fn() {
     c.box(style=info_tool_icon, fn() { @sf.icon(c, icon, size=14.0, color=@sf.theme().p.muted) |> ignore }) |> ignore
-    c.box(style=info_grow, fn() { c.text(label, style=info_words) |> ignore }) |> ignore
-    if end != "" {
-      c.text(end, style=info_end) |> ignore
-    }
+    // (what it says of it at the line's end, under its words where the line has not the room: its words whole)
+    c.box(style=info_label_flow, flow=true, line_gap=0.0, fn() {
+      c.text(label, style=info_words) |> ignore
+      if end != "" {
+        c.text(end, style=info_end) |> ignore
+      }
+    })
+    |> ignore
   })
   c.semantics(b, Button, id~, label~)
   c.clicked(id)
 }
+
+///|
+/// A tool's words and what it says of it, at the line's two ends, 12 apart (one under the other where the line has
+/// not the room).
+// kept across runs: a value (no field of it changes)
+let info_label_flow : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S3, align=ACenter, justify=JBetween)
 
 ///|
 /// The bar (pageBar): 45 high, its line under it, its title's row and its buttons 16 apart.
@@ -1010,8 +1024,8 @@ let info_fact_h : Double = 28.0
 let info_fact : @ui.Style = @ui.style(row=true, w=Full, min_h=Fixed(info_fact_h), gap=S3, align=ACenter)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let info_fact_label : @ui.Style = @ui.css("w=S20")
+/// Its labels' column at least (the web's 80).
+let info_label_w : Double = 80.0
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1066,6 +1080,3 @@ let info_tool : @ui.Style = @ui.css("row w=Full min_h=S8 px=S2_5 gap=S2_5 align=
 // kept across runs: a value (no field of it changes)
 let info_tool_icon : @ui.Style = @ui.css("w=S3_5 align=ACenter")
 
-///|
-// kept across runs: a value (no field of it changes)
-let info_grow : @ui.Style = @ui.style(w=@sf.grow)

@@ -491,13 +491,16 @@ fn nc_made_steps(c : @ui.Ctx, core : Core, f : NcFlow, made : Json?) -> Unit {
 
 ///|
 /// A Feishu bot being made by scanning (useFeishuStep's scan step: FeishuConnect.css.ts scan): its QR code 196 (or, before
-/// it, a ring or Feishu's mark in its place), beside it where it stands (a ring while the connect is added, red where
-/// it failed), what went wrong, and while it waits how to scan it and the way to open it on this device.
+/// it, a ring or Feishu's mark in its place), beside it (narrow: under it) where it stands (a ring while the connect is
+/// added, red where it failed), what went wrong, and while it waits how to scan it and the way to open it on this
+/// device.
 fn nc_scan(c : @ui.Ctx, core : Core, fe : Json?) -> Unit {
   let r = field(fe, "registration")
   let waiting = text(r, "state") == "waiting"
   let failing = flag(fe, "failed") || opt_text(fe, "error") is Some(_)
-  c.box(style=nc_scan_box, fn() {
+  // (narrow, its words under the code: beside it they had a phone's leftover hundred points, three lines a sentence
+  // and the button cut off)
+  @sf.figure_words(c, fn() {
     match field(fe, "qr") {
       Some(Object(_)) as code => @sf.qr_code(c, code, nc_qr_size, @sf.t("web-pages.connect.feishu.qr"))
       _ =>
@@ -510,28 +513,25 @@ fn nc_scan(c : @ui.Ctx, core : Core, fe : Json?) -> Unit {
         })
         |> ignore
     }
-    c.box(style=nc_scan_text, fn() {
-      c.box(style=desk_said_line, fn() {
-        if flag(fe, "creating") || (text(r, "state") == "done" && opt_text(fe, "error") is None && opt_text(fe, "connect") is None) {
-          @sf.spinner(c, size=cd_icon) |> ignore
-        }
-        c.text(text(fe, "stateText"), style=if failing { nc_scan_bad } else { desk_words }) |> ignore
-      })
-      |> ignore
-      match opt_text(fe, "error") {
-        Some(e) => c.text(e, style=desk_note_bad) |> ignore
-        None => ()
+  }, fn() {
+    c.box(style=desk_said_line, fn() {
+      if flag(fe, "creating") || (text(r, "state") == "done" && opt_text(fe, "error") is None && opt_text(fe, "connect") is None) {
+        @sf.spinner(c, size=cd_icon) |> ignore
       }
-      if waiting {
-        c.text(@sf.t("web-pages.connect.feishu.scanHint"), style=desk_muted) |> ignore
-        if @sf.button(c, @sf.t("web-pages.connect.feishu.openInFeishu"), key="nc-feishu-open", icon="external") {
-          (core.open_link)(text(r, "url"))
-        }
-      }
+      c.text(text(fe, "stateText"), style=if failing { nc_scan_bad } else { desk_words }) |> ignore
     })
     |> ignore
+    match opt_text(fe, "error") {
+      Some(e) => c.text(e, style=desk_note_bad) |> ignore
+      None => ()
+    }
+    if waiting {
+      c.text(@sf.t("web-pages.connect.feishu.scanHint"), style=desk_muted) |> ignore
+      if @sf.button(c, @sf.t("web-pages.connect.feishu.openInFeishu"), key="nc-feishu-open", icon="external") {
+        (core.open_link)(text(r, "url"))
+      }
+    }
   })
-  |> ignore
 }
 
 ///|
@@ -782,18 +782,11 @@ let nc_team_icon_box : @ui.Style = @ui.css("w=S7 h=S7 radius=Full clip align=ACe
 let nc_owner_line : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
 
 ///|
-/// Scanning (scan: the code and its words 24 apart, 196 high at least; qrPlace: 196, the dialog's inner corner, on the
-/// neutral ground; scanText: 10 apart, the ui's 13; scanBad: red).
-// kept across runs: a value (no field of it changes)
-let nc_scan_box : @ui.Style = @ui.css("row w=Full gap=S6 align=ACenter")
-
-///|
+/// Scanning (scan: the code and its words, @sf.figure_words; qrPlace: 196, the dialog's inner corner, on the neutral
+/// ground; scanBad: red).
 // kept across runs: a value (no field of it changes)
 let nc_qr_place : @ui.Style = @ui.style(w=Fixed(nc_qr_size), h=Fixed(nc_qr_size)).then(@ui.css("radius=Xl bg=Neutral align=ACenter justify=JCenter"))
 
-///|
-// kept across runs: a value (no field of it changes)
-let nc_scan_text : @ui.Style = @ui.style(w=@sf.grow, gap=S2_5, align=AStart)
 
 ///|
 // kept across runs: a value (no field of it changes)

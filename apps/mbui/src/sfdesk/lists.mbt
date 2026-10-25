@@ -341,7 +341,7 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
       // (恢复 and 删除 over its first line's end)
       end_room=if over { @sf.row_keys_room(if flag(v, "deletable") { 2 } else { 1 }) } else { 0.0 },
       fn() {
-        c.text(title, style=l.title) |> ignore
+        @sf.name_words(c, title, l.title) |> ignore
         if @sf.has_station_mark(text(v, "stationEmoji"), text(v, "stationIcon")) {
           c.box(style=@sfpages.kind_slot, fn() {
             @sf.station_mark(c, text(v, "stationEmoji"), text(v, "stationIcon"), @sfpages.kind_mark, t.p.muted)
@@ -351,7 +351,7 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
       },
       fn() {
         c.box(style=l.meta, fn() {
-          c.text(text(v, "last"), style=l.last) |> ignore
+          @sf.name_words(c, text(v, "last"), l.last) |> ignore
           // (its clock while pointed at; always to a finger, which hovers over nothing)
           if @sf.pointed_or_finger(c, c.hovered(id)) {
             c.text(text(v, "clock"), style=arch_clock) |> ignore

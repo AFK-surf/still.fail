@@ -555,8 +555,9 @@ let ug_tile_label : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 let ug_tile_value : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false, w=Full)
 
 ///|
+/// What it is made of (tileSub), in lines where the tile is narrower than it: none of it cut.
 // kept across runs: a value (no field of it changes)
-let ug_tile_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false, w=Full)
+let ug_tile_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)

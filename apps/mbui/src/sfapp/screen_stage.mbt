@@ -260,8 +260,22 @@ fn drop_row(c : @ui.Ctx, s : ScreenSess, d : ScreenDropItem) -> Unit {
     }
     c.box(style=drop_icon_box, fn() { @sf.icon(c, icon, size=drop_icon, color=c.color(tone)) |> ignore })
     |> ignore
-    c.box(style=drop_words, fn() {
-      c.text(d.name, style=drop_name) |> ignore
+    // its name and its keys on its first line; where it is, what is done with it there, how far it has got or why it
+    // failed under them, as wide as its words (lines of their own)
+    @sf.row_lines(c, fn() {
+      c.box(style=drop_words, fn() { c.text(d.name, style=drop_name) |> ignore }) |> ignore
+      if d.state == "failed" && screen_row_key(c, "retry", "retry", tr("android-misc.drive.retry")) {
+        s.retry(d)
+      }
+      let close = if d.state == "done" || d.state == "failed" {
+        tr("common.close")
+      } else {
+        tr("common.cancel")
+      }
+      if screen_row_key(c, "dismiss", "close", close) {
+        s.dismiss(d)
+      }
+    }, fn() {
       match d.state {
         "done" => {
           c.text(d.path(), style=drop_path_words) |> ignore
@@ -315,18 +329,6 @@ fn drop_row(c : @ui.Ctx, s : ScreenSess, d : ScreenDropItem) -> Unit {
         }
       }
     })
-    |> ignore
-    if d.state == "failed" && screen_row_key(c, "retry", "retry", tr("android-misc.drive.retry")) {
-      s.retry(d)
-    }
-    let close = if d.state == "done" || d.state == "failed" {
-      tr("common.close")
-    } else {
-      tr("common.cancel")
-    }
-    if screen_row_key(c, "dismiss", "close", close) {
-      s.dismiss(d)
-    }
   })
   |> ignore
 }
@@ -346,7 +348,7 @@ fn screen_row_key(c : @ui.Ctx, key : String, icon : String, label : String) -> B
 /// A button that is not the main one (Controls.kt Button, primary false: the chip's ground, its words in the ink).
 fn soft_button(c : @ui.Ctx, key : String, label : String) -> Bool {
   let id = c.id(key)
-  let i = c.box(style=soft_button_box, id~, fn() { c.text(label, style=soft_button_words) |> ignore })
+  let i = c.box(style=soft_button_box, id~, keep=true, fn() { c.text(label, style=soft_button_words) |> ignore })
   c.semantics(i, Button, id~, label~, actions=[Activate])
   c.clicked(id)
 }

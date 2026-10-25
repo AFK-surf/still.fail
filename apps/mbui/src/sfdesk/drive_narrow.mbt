@@ -156,13 +156,15 @@ let chip_whole : Double = 100.0
 
 ///|
 /// The chip: 20 high, a capsule (at a row's end in its middle, round as it is there, by no corner of the row's), on the
-/// neutral ground, its fill the accent at 20%, its words 11 bold.
+/// neutral ground, its fill the accent at 20%, its words 11 bold. Its fill cut to the capsule by the track it is in,
+/// not by the chip: a chip cutting what it holds is one its row may take all the room of (its words cut to nothing
+/// beside a list's size and time, which leave the row first, 2026-10-26).
 // kept across runs: a value (no field of it changes)
-let chip_box : @ui.Style = @ui.css("h=S5 radius=Full bg=Neutral clip justify=JCenter")
+let chip_box : @ui.Style = @ui.css("h=S5 radius=Full bg=Neutral justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let chip_track : @ui.Style = @ui.css("row w=Full h=Full")
+let chip_track : @ui.Style = @ui.css("row w=Full h=Full radius=Full clip")
 
 ///|
 // kept across runs: a value (no field of it changes)

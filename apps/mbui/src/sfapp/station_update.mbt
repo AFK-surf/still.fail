@@ -152,6 +152,16 @@ let update_said : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color
 let update_detail : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full)
 
 ///|
+/// Its head and its detail, 1 apart (as its words were).
+// kept across runs: a value (no field of it changes)
+let update_head_lines : @ui.Style = @ui.css("w=Full gap=SPx")
+
+///|
+/// Its detail's room: under the head, as far in from either side as the head's words are from the popover's start.
+// kept across runs: a value (no field of it changes)
+let update_detail_box : @ui.Style = @ui.css("w=Full px=S2_5")
+
+///|
 /// The versions it goes between (11 on 16, the code face, muted, on one line).
 // kept across runs: a value (no field of it changes)
 let update_versions : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, leading=L4, wrap=false)
@@ -224,46 +234,50 @@ fn station_update_popover(c : @ui.Ctx, src : Source, station : String, notice : 
         })
         |> ignore
         c.box(style=update_pop, fn() {
-          c.box(style=update_head, fn() {
-            c.box(style=update_words, fn() {
-              match opt_text(notice, "station") {
-                Some(name) =>
-                  c.box(style=update_name_row, fn() {
-                    c.text(name, style=update_name) |> ignore
-                    match opt_text(notice, "label") {
-                      Some(l) => c.text(l, style=if trouble { update_label_trouble } else { update_label }) |> ignore
-                      None => ()
-                    }
-                  })
-                  |> ignore
-                None => c.text(text(notice, "text"), style=update_said) |> ignore
+          // its head and its detail under it as wide as its words (a line of its own: its close on the head's line)
+          c.box(style=update_head_lines, fn() {
+            c.box(style=update_head, fn() {
+              c.box(style=update_words, fn() {
+                match opt_text(notice, "station") {
+                  Some(name) =>
+                    c.box(style=update_name_row, fn() {
+                      c.text(name, style=update_name) |> ignore
+                      match opt_text(notice, "label") {
+                        Some(l) => c.text(l, style=if trouble { update_label_trouble } else { update_label }) |> ignore
+                        None => ()
+                      }
+                    })
+                    |> ignore
+                  None => c.text(text(notice, "text"), style=update_said) |> ignore
+                }
+              })
+              |> ignore
+              let close = c.id("station-update-close")
+              if c.clicked(close) {
+                update_notice(src, station, notice, if flag(notice, "dismissible") { "dismiss" } else { "close" })
               }
-              match opt_text(notice, "detail") {
-                Some(d) => c.text(d, style=update_detail) |> ignore
-                None => ()
-              }
+              c.box(
+                style=update_close,
+                id=close,
+                label=tr(
+                  if flag(notice, "dismissible") {
+                    "android-misc.stationUpdate.dismiss"
+                  } else {
+                    "android-misc.stationUpdate.collapse"
+                  },
+                ),
+                fn() {
+                  @sf.icon(c, "close", size=14.0, color=@sf.theme().p.muted) |> ignore
+                  @motion.ripple(c, close, 16.0)
+                },
+              )
+              |> ignore
             })
             |> ignore
-            let close = c.id("station-update-close")
-            if c.clicked(close) {
-              update_notice(src, station, notice, if flag(notice, "dismissible") { "dismiss" } else { "close" })
+            match opt_text(notice, "detail") {
+              Some(d) => c.box(style=update_detail_box, fn() { c.text(d, style=update_detail) |> ignore }) |> ignore
+              None => ()
             }
-            c.box(
-              style=update_close,
-              id=close,
-              label=tr(
-                if flag(notice, "dismissible") {
-                  "android-misc.stationUpdate.dismiss"
-                } else {
-                  "android-misc.stationUpdate.collapse"
-                },
-              ),
-              fn() {
-                @sf.icon(c, "close", size=14.0, color=@sf.theme().p.muted) |> ignore
-                @motion.ripple(c, close, 16.0)
-              },
-            )
-            |> ignore
           })
           |> ignore
           if text(notice, "tone") == "busy" && opt_text(notice, "station") is Some(_) {

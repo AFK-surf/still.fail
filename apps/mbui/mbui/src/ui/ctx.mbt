@@ -1257,6 +1257,23 @@ pub fn Ctx::text(
 }
 
 ///|
+/// How wide `s` is on one line in `style` in this frame, as Ctx::text lays it (the system's size of words, its weight,
+/// tracking and digits): a column of words of a length known made as wide as the widest of them (a table's labels),
+/// never cut.
+pub fn Ctx::words_across(self : Ctx, s : String, style : TextStyle) -> Double {
+  let st = self.text_patch(Some(style))
+  let (s_size, _) = self.text_sizes(st)
+  let size = self.sp(s_size.unwrap_or(15.0))
+  let weight = opt_weight(st.weight).unwrap_or(400)
+  let spacing = match st.tracking {
+    Some(t) => t.px(size)
+    None => 0.0
+  }
+  let tabular = st.tabular.unwrap_or(self.theme.tabular)
+  layout_text(s, size, weight, 1.0e9, false, spacing~, style=if tabular { @hostapi.style_tabular } else { 0 }).w
+}
+
+///|
 /// Words' style in this frame's states (dark, narrow).
 fn Ctx::text_patch(self : Ctx, style : TextStyle?) -> TextPatch {
   match style {

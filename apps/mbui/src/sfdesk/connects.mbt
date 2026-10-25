@@ -265,9 +265,10 @@ fn cn_row(c : @ui.Ctx, core : Core, look : Look, station : String, station_name 
     Wide =>
       c.box(style=desk_list_link, id=rid, fn() {
         cn_avatar(c, core, cv)
-        // (short of room, its name kept: its team leaves its line, where it runs and who made it the row)
-        c.box(style=cn_text, keep=true, fn() {
-          c.box(style=cn_title_line, fn() {
+        // its name and what is at its end on its first line, how it runs under them as wide as its words (a line of its
+        // own); short of room, its name kept: its team leaves its line, where it runs and who made it the row
+        @sf.row_lines(c, spaced=true, fn() {
+          c.box(style=cn_title_line.then(cn_title_grow), keep=true, fn() {
             c.text(text(cv, "name"), style=cn_title) |> ignore
             match opt_text(cv, "team") {
               Some(team) =>
@@ -280,32 +281,30 @@ fn cn_row(c : @ui.Ctx, core : Core, look : Look, station : String, station_name 
             }
           })
           |> ignore
-          c.text(how, style=cn_sub) |> ignore
-        })
-        |> ignore
-        c.box(style=cn_facts, drop=cn_drop_facts, fn() {
-          cn_station_tag(c, station_name, s)
-          cn_owner(c, core, field(cv, "createdBy"))
-        })
-        |> ignore
-        c.text(text(cv, "statusText"), style=cn_meta) |> ignore
-        doing_mark(c, is_doing(core, ["connect.delete"], on), failed_of(core, ["connect.delete"], on))
-        @sf.status_dot(c, text(cv, "presence"))
+          c.box(style=cn_facts, drop=cn_drop_facts, fn() {
+            cn_station_tag(c, station_name, s)
+            cn_owner(c, core, field(cv, "createdBy"))
+          })
+          |> ignore
+          c.text(text(cv, "statusText"), style=cn_meta) |> ignore
+          doing_mark(c, is_doing(core, ["connect.delete"], on), failed_of(core, ["connect.delete"], on))
+          @sf.status_dot(c, text(cv, "presence"))
+        }, fn() { c.text(how, style=cn_sub) |> ignore })
       })
     Narrow =>
       c.box(style=narrow_row, id=rid, fn() {
         cn_avatar(c, core, cv)
-        c.box(style=narrow_row_words, fn() {
-          c.text(text(cv, "name") + (match opt_text(cv, "team") { Some(team) => " · " + team; None => "" }), style=narrow_row_title) |> ignore
-          c.text(how, style=cn_narrow_sub) |> ignore
-        })
-        |> ignore
-        doing_mark(c, is_doing(core, ["connect.delete"], on), failed_of(core, ["connect.delete"], on))
-        c.box(style=cn_narrow_state, fn() {
-          @sf.status_dot(c, text(cv, "presence"))
-          c.text(text(cv, "statusText"), style=cn_meta) |> ignore
-        })
-        |> ignore
+        // its name, how it is on its first line; how it runs under them, a line of its own
+        @sf.row_lines(c, fn() {
+          @sf.name_words(c, text(cv, "name") + (match opt_text(cv, "team") { Some(team) => " · " + team; None => "" }), narrow_row_title)
+          |> ignore
+          doing_mark(c, is_doing(core, ["connect.delete"], on), failed_of(core, ["connect.delete"], on))
+          c.box(style=cn_narrow_state, fn() {
+            @sf.status_dot(c, text(cv, "presence"))
+            c.text(text(cv, "statusText"), style=cn_meta) |> ignore
+          })
+          |> ignore
+        }, fn() { c.text(how, style=cn_narrow_sub) |> ignore })
         finger_ripple(c, rid)
       })
   }
@@ -513,6 +512,11 @@ let cn_text : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 ///|
 // kept across runs: a value (no field of it changes)
 let cn_title_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
+
+///|
+/// Its name and team taking what its first line leaves what is at its end.
+// kept across runs: a value (no field of it changes)
+let cn_title_grow : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)

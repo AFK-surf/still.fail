@@ -136,19 +136,20 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
     }
   }
   inspect(out.to_string(), content=(
-    #|settings narrow 95989:41935822
-    #|station narrow 91525:2c9c495
-    #|me-reading narrow 13713:cc0d97c9
-    #|settings wide 156710:fad04f95
-    #|station wide 203772:b6b60173
-    #|me-reading wide 149743:59ac81b0
-    #|settings-dark narrow 96096:564022fd
-    #|station-dark narrow 91267:1ea50a57
-    #|me-reading-dark narrow 13672:c9966393
-    #|settings-dark wide 156386:c6e39801
-    #|station-dark wide 203365:eafeb799
-    #|me-reading-dark wide 149486:1d0311d9
+    #|settings narrow 95973:bbaab5f9
+    #|station narrow 88350:6adc0577
+    #|me-reading narrow 13718:7e991f1e
+    #|settings wide 156710:799bd386
+    #|station wide 201885:5da8ba1a
+    #|me-reading wide 149743:3fe1c478
+    #|settings-dark narrow 96080:2f7a29c0
+    #|station-dark narrow 88113:b85703e3
+    #|me-reading-dark narrow 13677:4bf2b3a6
+    #|settings-dark wide 156386:5edc39cc
+    #|station-dark wide 201491:a0fa3ce4
+    #|me-reading-dark wide 149486:ec4c58fd
     #|
+
 
 
 

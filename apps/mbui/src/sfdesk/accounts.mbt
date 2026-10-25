@@ -372,7 +372,9 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, address : String, station_name : St
           let shown = profile_edit.command == key
           if @sf.button(
               c,
-              if shown { @sf.t("web-pages.profiles.collapse") } else { @sf.t("web-pages.profiles.manual") },
+              // (the short words, the phone's: beside 登录 on a card's foot they fit a phone, the long ones ran past
+              // its edge)
+              if shown { @sf.t("web-pages.profiles.collapse") } else { @sf.t("android-settings.login.manualShort") },
               key="profile-manual/" + key,
               tone=Ghost,
             ) {
