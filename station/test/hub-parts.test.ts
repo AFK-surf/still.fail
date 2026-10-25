@@ -15,7 +15,7 @@ import { sizeOf } from "../src/sessions/image-size.ts";
 import { nextTsAt } from "../src/sessions/internal.ts";
 import { type Counted, HELD_AFTER_MS, type History, type LiveMessage, LiveHub, TranscriptTail, briefInput, inBrief } from "../src/sessions/live.ts";
 import { chainOf, entriesOf, lengthOf, stateOf } from "../src/read/transcripts.ts";
-import { prepare } from "../src/sessions/local-links.ts";
+import { prepare, prepareHere } from "../src/sessions/local-links.ts";
 import { formatSteps, linkedSession } from "../src/sessions/others.ts";
 import { availableEfforts, cheapToLeave, commonEfforts, pickProfile, serves, urgency } from "../src/sessions/pool.ts";
 import { spelling } from "../src/sessions/config.ts";
@@ -86,6 +86,28 @@ test("explicit files are reused, and missing or colliding files are refused", ()
   // A reference link to a local file is refused: it must be inline.
   assert.throws(() => prepare(`[report][r]\n\n[r]: ${file}`, [], dir), /must use inline Markdown/);
   rmSync(dir, { recursive: true, force: true });
+});
+
+test("a relative link names a file in the workspace, or one attached by its name; naming none, it is refused", () => {
+  for (const [how, prep] of [["as the station reads it", prepare], ["without the addon", prepareHere]] as const) {
+    const dir = temp();
+    mkdirSync(join(dir, "films"));
+    writeFileSync(join(dir, "films/新建对话-手机.mp4"), "film");
+    writeFileSync(join(dir, "report.pdf"), "report");
+    // A film in the workspace, as an absolute path would be: attached, the link naming it by its name.
+    const paths: string[] = [];
+    const out = prep("[手机](films/新建对话-手机.mp4)\n[网页](https://example.com/a) [节](#a) <a@b.co>", paths, dir);
+    assert.deepEqual(paths, [join(dir, "films/新建对话-手机.mp4")], how);
+    assert.equal(out, `[手机](${encodeURIComponent("新建对话-手机").replace(/-/g, "%2D")}%2Emp4)\n[网页](https://example.com/a) [节](#a) <a@b.co>`, how);
+    // One the message attaches with files, by its name: left as it is, the clients place it so.
+    const attached = [join(dir, "report.pdf")];
+    assert.equal(prep("[报告](report.pdf)", attached, dir), "[报告](report.pdf)", how);
+    assert.deepEqual(attached, [join(dir, "report.pdf")], how);
+    // Naming nothing a reader could open: refused before it is posted.
+    assert.throws(() => prep("[手机](films/missing.mp4)", [], dir), /names no file in the workspace/, how);
+    assert.throws(() => prep("[站点](www.example.com)", [], dir), /names no file in the workspace/, how);
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("files an app cannot upload stay in still.fail, and the post links there", () => {
