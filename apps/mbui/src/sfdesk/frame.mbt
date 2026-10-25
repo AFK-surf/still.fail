@@ -657,9 +657,9 @@ pub fn frame(
   let main_w = if !wide.tape {
     dmax(0.0, c.width - col)
   } else if panel_of is Some(_) {
-    dmax(0.0, c.width - 2.0 * (tape_shows + closed_bar_gap))
+    dmax(0.0, c.width - tape_shows_left() - tape_shows - 2.0 * closed_bar_gap)
   } else {
-    tape_one_beside(c.width)
+    tape_one_beside(c.width, tape_shows_left())
   }
   let at = tape_at(c.width, col, main_w, panel_w)
   // (the chat shown has its view: what its side panel shows is known)
@@ -892,8 +892,8 @@ pub fn frame(
               panel_top,
               panel_h,
               panel_w,
-              dmin(panel_min, tape_one_beside(c.width)),
-              tape_one_beside(c.width),
+              dmin(panel_min, tape_one_beside(c.width, tape_shows_left())),
+              tape_one_beside(c.width, tape_shows_left()),
               Left,
             ) {
             Dragging(x) | Dropped(x) => panel_own.width = Some(x)
@@ -977,11 +977,34 @@ pub fn wide_back() -> (() -> Unit)? {
 pub let tape_shows : Double = 56.0
 
 ///|
+/// What shows at the window's left of the panel beside the one in use (the sidebar's, the page in use; the page's, the
+/// side panel in use): tape_shows; where the window's buttons are in the app's top row (a Mac's, not full screen), as
+/// wide as holds them with as much room past them as before them from the window's edge (the strip's own edge is off
+/// it), so they stand on what is at the window's left, in use or a strip, never over the panel beside it (the user,
+/// 2026-10-26: 红绿灯没有一个空位可以放).
+pub fn tape_shows_left() -> Double {
+  if @ui.window_inset() {
+    dmax(tape_shows, window_buttons_in + window_buttons_w + window_buttons_in)
+  } else {
+    tape_shows
+  }
+}
+
+///|
+/// The window's buttons in the app's top row (mbui's mac_app.m: 16 from the window's left, centred on its 44, as far
+/// apart as the system has them): from 16, the three 54 across (each 14, 20 apart).
+let window_buttons_in : Double = 16.0
+
+///|
+let window_buttons_w : Double = 54.0
+
+///|
 /// How wide a panel is on the tape with one beside it, a window `width` wide: what the window leaves in use past what
-/// shows of the other (tape_shows, 8 from it) and 6 from the window's other edge. The page's without a side panel, the
-/// side panel's; the sidebar's at most.
-fn tape_one_beside(width : Double) -> Double {
-  dmax(0.0, width - tape_shows - closed_bar_gap - closed_bar_in)
+/// shows of the other (`shows`: at the window's left tape_shows_left, at its right tape_shows; 8 from it) and 6 from the
+/// window's other edge. The page's without a side panel and the side panel's (a strip at the window's left beside
+/// them), the sidebar's at most (the page's at the window's right).
+fn tape_one_beside(width : Double, shows : Double) -> Double {
+  dmax(0.0, width - shows - closed_bar_gap - closed_bar_in)
 }
 
 ///|
@@ -989,7 +1012,7 @@ fn tape_one_beside(width : Double) -> Double {
 /// needs: the user, 2026-10-26, the chats' list stretched across the window had no need to be), the page beside it
 /// showing what the window leaves; at most as wide as a panel with one beside it (tape_one_beside), less the rail's.
 fn tape_side_w(width : Double, own : Double) -> Double {
-  dmax(0.0, dmin(own, tape_one_beside(width) - rail_w - rail_tape_more()))
+  dmax(0.0, dmin(own, tape_one_beside(width, tape_shows) - rail_w - rail_tape_more()))
 }
 
 ///|
@@ -1003,10 +1026,10 @@ let tape_moves : Array[(String, Array[String])] = [
 ///|
 /// Where the tape is with each of its panels in use, a window `width` wide (`d`: where the page's panel starts on it,
 /// `page_w`, `panel_w`: the page's panel's width and the side panel's): the sidebar 6 in from the window's left (0); the
-/// page 8 past what shows of the sidebar (tape_shows); the side panel 6 in from the window's right, the page beside it
-/// showing what it leaves (all of the window but that strip, as it is at first: tape_panel_w).
+/// page 8 past what shows of the sidebar (tape_shows_left); the side panel 6 in from the window's right, the page beside
+/// it showing what it leaves (all of the window but that strip, as it is at first: tape_panel_w).
 fn tape_at(width : Double, d : Double, page_w : Double, panel_w : Double) -> (Double, Double, Double) {
-  (0.0, tape_shows + closed_bar_gap - d, width - closed_bar_in - (d + page_w + closed_bar_gap + panel_w))
+  (0.0, tape_shows_left() + closed_bar_gap - d, width - closed_bar_in - (d + page_w + closed_bar_gap + panel_w))
 }
 
 ///|
@@ -1014,7 +1037,7 @@ fn tape_at(width : Double, d : Double, page_w : Double, panel_w : Double) -> (Do
 /// frame's edge too: panel_own, kept while the app runs), the page beside it showing what it leaves; else as wide as
 /// the window leaves past a strip of the page (tape_one_beside). From panel_min to that.
 fn tape_panel_w(width : Double) -> Double {
-  let most = tape_one_beside(width)
+  let most = tape_one_beside(width, tape_shows_left())
   match panel_own.width {
     Some(w) => dmax(dmin(panel_min, most), dmin(w, most))
     None => most
@@ -1025,7 +1048,7 @@ fn tape_panel_w(width : Double) -> Double {
 /// The widest the sidebar is dragged to on the tape, a window `width` wide: a panel with a strip of the page beside it,
 /// less the rail's (tape_side_w), and the wide frame's most (side_max).
 fn tape_side_most(width : Double) -> Double {
-  dmax(side_min, dmin(side_max, tape_one_beside(width) - rail_w - rail_tape_more()))
+  dmax(side_min, dmin(side_max, tape_one_beside(width, tape_shows) - rail_w - rail_tape_more()))
 }
 
 ///|
