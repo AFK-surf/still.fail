@@ -150,8 +150,10 @@ fn usage_series_ink(series : Array[Json], i : Int) -> Int64 {
 }
 
 ///|
-/// Each day's cost as a bar on the scale's lines, split by who it was for (DaysChart): the day pointed at, else the
-/// one clicked, else the last says its numbers over them, and with several people what each spent that day under them.
+/// Each day's cost as a bar on the scale's lines, split by who it was for (DaysChart): the day under the finger, else
+/// the one pointed at, else the one picked, else the last says its numbers over them (the others' bars faded), and with
+/// several people what each spent that day under them. The days and their dates are one drag across: a finger slid
+/// over them shows the day under it as it goes, and the day it lets go on stays picked.
 fn usage_chart(c : @ui.Ctx, v : Json?) -> Unit {
   let t = @sf.theme()
   let daily = items(v, "daily")
@@ -164,14 +166,53 @@ fn usage_chart(c : @ui.Ctx, v : Json?) -> Unit {
       None => None
     }
   }
-  let day = match find(usage_pick.pointed) {
+  // the day nearest a finger's x, by the columns drawn last frame
+  let under = fn(x : Double) -> String {
+    let mut best = ""
+    let mut gap = 0.0
+    for d in daily {
+      let key = text(Some(d), "day")
+      match c.rect_of(c.id("usage-day/" + key)) {
+        Some((cx, _, cw, _)) => {
+          let g = (x - (cx + cw / 2.0)).abs()
+          if best == "" || g < gap {
+            best = key
+            gap = g
+          }
+        }
+        None => ()
+      }
+    }
+    best
+  }
+  let area = c.id("usage-days")
+  let mut finger = ""
+  match c.drag_of(area) {
+    Some(d) => {
+      let tapped = d.take_tap()
+      let ended = d.take_end()
+      if d.down || tapped || ended {
+        finger = under(d.x)
+      }
+      if (tapped || ended) && finger != "" {
+        usage_pick.day = finger
+      }
+    }
+    None => ()
+  }
+  let day = match find(finger) {
     Some(d) => Some(d)
     None =>
-      match find(usage_pick.day) {
+      match find(usage_pick.pointed) {
         Some(d) => Some(d)
-        None => daily.last()
+        None =>
+          match find(usage_pick.day) {
+            Some(d) => Some(d)
+            None => daily.last()
+          }
       }
   }
+  let shown = text(day, "day")
   let mut pointed = ""
   c.box(style=ug_chart, fn() {
     if day is Some(_) {
@@ -187,50 +228,53 @@ fn usage_chart(c : @ui.Ctx, v : Json?) -> Unit {
       })
       |> ignore
     }
-    c.box(style=ug_plot, fn() {
-      // the scale's lines across under the bars, each said at the right just over it
-      if top > 0.0 {
-        for k in items(v, "ticks") {
-          let y = @sf.usage_plot * (1.0 - number(Some(k), "value") / top)
-          c.layer(fn() { c.box(style=ug_tick, ty=y, fn() {  }) |> ignore }) |> ignore
-          c.layer(fn() {
-            c.box(style=ug_tick_line, ty=y - @sf.usage_tick_rise, fn() {
-              c.text(text(Some(k), "label"), style=ug_tick_words) |> ignore
+    c.drag_area(area, axis=Horizontal, w=Fill(1.0), fn() {
+      c.box(style=ug_plot, fn() {
+        // the scale's lines across under the bars, each said at the right just over it
+        if top > 0.0 {
+          for k in items(v, "ticks") {
+            let y = @sf.usage_plot * (1.0 - number(Some(k), "value") / top)
+            c.layer(fn() { c.box(style=ug_tick, ty=y, fn() {  }) |> ignore }) |> ignore
+            c.layer(fn() {
+              c.box(style=ug_tick_line, ty=y - @sf.usage_tick_rise, fn() {
+                c.text(text(Some(k), "label"), style=ug_tick_words) |> ignore
+              })
+              |> ignore
             })
             |> ignore
+          }
+        }
+        // a day: its whole column is what is clicked, its bar at its foot
+        c.box(style=if many { ug_days_many } else { ug_days }, fn() {
+          for d in daily {
+            let dv = Some(d)
+            let key = text(dv, "day")
+            let id = c.id("usage-day/" + key)
+            c.cursor(id, Hand)
+            if c.clicked(id) {
+              usage_pick.day = key
+            }
+            if c.lit(id) {
+              pointed = key
+            }
+            let b = c.box(style=ug_day, id~, fn() { usage_bar(c, dv, series, top, many, key == shown) })
+            c.semantics(b, Button, id~, label=text(dv, "label") + " " + text(dv, "costText"))
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+      c.box(style=ug_base, fn() {  }) |> ignore
+      c.box(style=if many { ug_labels_many } else { ug_labels }, fn() {
+        for d in daily {
+          let dv = Some(d)
+          c.box(style=ug_label_cell, fn() {
+            c.text(text(dv, "tick"), style=if text(dv, "day") == shown { ug_label_on } else { ug_label }) |> ignore
           })
           |> ignore
         }
-      }
-      // a day: its whole column is what is clicked, its bar at its foot
-      c.box(style=if many { ug_days_many } else { ug_days }, fn() {
-        for d in daily {
-          let dv = Some(d)
-          let key = text(dv, "day")
-          let id = c.id("usage-day/" + key)
-          c.cursor(id, Hand)
-          if c.clicked(id) {
-            usage_pick.day = key
-          }
-          if c.lit(id) {
-            pointed = key
-          }
-          let b = c.box(style=ug_day, id~, fn() { usage_bar(c, dv, series, top, many) })
-          c.semantics(b, Button, id~, label=text(dv, "label") + " " + text(dv, "costText"))
-        }
       })
       |> ignore
-    })
-    |> ignore
-    c.box(style=ug_base, fn() {  }) |> ignore
-    c.box(style=if many { ug_labels_many } else { ug_labels }, fn() {
-      for d in daily {
-        let dv = Some(d)
-        c.box(style=ug_label_cell, fn() {
-          c.text(text(dv, "tick"), style=if text(dv, "day") == text(day, "day") { ug_label_on } else { ug_label }) |> ignore
-        })
-        |> ignore
-      }
     })
     |> ignore
     // with several people: each of them, what they spent the day shown, its share of the day's under it
@@ -280,8 +324,8 @@ fn usage_chart(c : @ui.Ctx, v : Json?) -> Unit {
 ///|
 /// A day's bar (Bar), as high as its share of the scale's top, 16 wide at most (as wide as its day with many days):
 /// its people's parts one over another, the first at the foot, 1 apart, each round at its ends but the foot's, which
-/// stands square on the line (the foot's part a corner longer, cut there).
-fn usage_bar(c : @ui.Ctx, dv : Json?, series : Array[Json], top : Double, many : Bool) -> Unit {
+/// stands square on the line (the foot's part a corner longer, cut there). A day other than the one shown is faded.
+fn usage_bar(c : @ui.Ctx, dv : Json?, series : Array[Json], top : Double, many : Bool, on : Bool) -> Unit {
   let cost = number(dv, "cost")
   if top <= 0.0 || cost <= 0.0 {
     return
@@ -299,7 +343,8 @@ fn usage_bar(c : @ui.Ctx, dv : Json?, series : Array[Json], top : Double, many :
   let h = @sf.usage_plot * @cmp.minimum(1.0, cost / top)
   let r = if many { @sf.usage_part_r_many } else { @sf.usage_part_r }
   let room = @cmp.maximum(0.0, h - (parts.length() - 1).to_double())
-  c.box(style=(if many { ug_bar_many } else { ug_bar }).then(@ui.style(h=Fixed(h))), fn() {
+  let look = (if many { ug_bar_many } else { ug_bar }).then(@ui.style(h=Fixed(h)))
+  c.box(style=if on { look } else { look.then(ug_bar_off) }, fn() {
     c.box(style=ug_bar_parts.then(@ui.style(h=Fixed(h + r))), fn() {
       // the top first: the column is laid out from its top, the first person at the foot
       let mut j = parts.length() - 1
@@ -578,6 +623,11 @@ let ug_bar : @ui.Style = @ui.style(w=Full, max_w=@sf.usage_bar_max, clip=true)
 ///|
 // kept across runs: a value (no field of it changes)
 let ug_bar_many : @ui.Style = @ui.css("w=Full clip")
+
+///|
+/// A day's bar but the one shown: faded.
+// kept across runs: a value (no field of it changes)
+let ug_bar_off : @ui.Style = @ui.css("opacity=O40")
 
 ///|
 // kept across runs: a value (no field of it changes)

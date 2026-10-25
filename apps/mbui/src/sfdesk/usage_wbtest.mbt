@@ -44,6 +44,12 @@ fn usage_week(parts : Array[Array[Double]]) -> Json {
 }
 
 ///|
+/// Whether a drawn rect is in `ink`, faded or not (the days but the one shown are drawn faded).
+fn usage_inked(r : (Double, Double, Double, Double, Int64), ink : Int64) -> Bool {
+  r.4 >> 8 == ink >> 8
+}
+
+///|
 /// usage_chart over `v` in a card's width (282: a phone's 346 less the page's 12 and the card's 20 each side).
 fn days_tester(v : Json) -> @ui.Tester {
   usage_reset()
@@ -58,7 +64,7 @@ fn days_tester(v : Json) -> @ui.Tester {
 test "usage: each day's bar 16 wide in the middle of its day, over its date, on the days' foot, as high as its share of the top" {
   let costs = [20.0, 16.0, 48.0, 80.0, 32.0, 24.0, 8.0]
   let t = days_tester(usage_week(costs.map(fn(c) { [c] })))
-  let bars = t.drawn_rects().filter(fn(r) { r.4 == @sf.usage_series(0) && r.2 == 16.0 })
+  let bars = t.drawn_rects().filter(fn(r) { usage_inked(r, @sf.usage_series(0)) && r.2 == 16.0 })
   assert_eq(bars.length(), 7)
   // the most spent 120 high (80 of 100), its foot the days' (its part the corner longer, cut there)
   let (_, top3, _, _, _) = bars[3]
@@ -86,8 +92,8 @@ test "usage: each day's bar 16 wide in the middle of its day, over its date, on 
 test "usage: a day split by its people 1 apart, the first at the foot; each of them, what they spent that day, under the days" {
   let parts = [[12.0, 8.0], [10.0, 6.0], [30.0, 18.0], [40.0, 40.0], [20.0, 12.0], [16.0, 8.0], [6.0, 2.0]]
   let t = days_tester(usage_week(parts))
-  let ann = t.drawn_rects().filter(fn(r) { r.4 == @sf.usage_series(0) && r.2 == 16.0 })
-  let bo = t.drawn_rects().filter(fn(r) { r.4 == @sf.usage_series(1) && r.2 == 16.0 })
+  let ann = t.drawn_rects().filter(fn(r) { usage_inked(r, @sf.usage_series(0)) && r.2 == 16.0 })
+  let bo = t.drawn_rects().filter(fn(r) { usage_inked(r, @sf.usage_series(1)) && r.2 == 16.0 })
   assert_eq((ann.length(), bo.length()), (7, 7))
   // the most spent: Bo's part over Ann's, 1 apart; the two (and the gap) its 120
   let (_, ay, _, ah, _) = ann[3]
@@ -98,4 +104,34 @@ test "usage: a day split by its people 1 apart, the first at the foot; each of t
   // today's people under the days, each with what they spent
   assert_true(t.rect_of("Ann") is Some(_) && t.rect_of("$6") is Some(_))
   assert_true(t.rect_of("Bo") is Some(_) && t.rect_of("$2") is Some(_))
+}
+
+///|
+test "usage: a finger slid across the days shows the day under it as it goes; the day it lets go on stays, the others faded" {
+  let costs = [20.0, 16.0, 48.0, 80.0, 32.0, 24.0, 8.0]
+  let t = days_tester(usage_week(costs.map(fn(c) { [c] })))
+  let at = fn(label : String) -> (Double, Double) {
+    let (x, y, w, h) = t.rect_of(label).unwrap()
+    (x + w / 2.0, y + h / 2.0)
+  }
+  // pressed over 10/19's bar, above its date: that day said while the finger is on it
+  let (x2, y2) = at("10/19")
+  t.press_at(x2, y2 - 60.0)
+  assert_true(t.rect_of("$48") is Some(_))
+  // slid across to 10/21's date and let go there: it stays
+  let (x4, y4) = at("10/21")
+  t.drag(x2, y2 - 60.0, x4, y4)
+  assert_true(t.rect_of("$32") is Some(_) && t.rect_of("320 次调用") is Some(_))
+  t.draw()
+  assert_true(t.rect_of("$32") is Some(_))
+  // a tap on a date picks its day
+  let (x0, y0) = at("10/17")
+  t.tap(x0, y0)
+  t.draw()
+  assert_true(t.rect_of("$20") is Some(_) && t.rect_of("200 次调用") is Some(_))
+  // the day shown's bar in full, the others' faded
+  let bars = t.drawn_rects().filter(fn(r) { usage_inked(r, @sf.usage_series(0)) && r.2 == 16.0 })
+  assert_eq(bars.length(), 7)
+  assert_eq(bars.filter(fn(r) { r.4 == @sf.usage_series(0) }).length(), 1)
+  assert_eq(bars[0].4, @sf.usage_series(0))
 }
