@@ -7,8 +7,8 @@ import { t } from "./i18n.ts";
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 
 type Spec = {
-  /// Where it works: anywhere in the app, or in a chat.
-  group: "global" | "chat";
+  /// Where it works: anywhere in the app, in a chat, or in a folder of the files.
+  group: "global" | "chat" | "files";
   keys: string[];
   /// Only in the desktop app, where the browser takes no keys for itself.
   desktop?: string[];
@@ -37,9 +37,11 @@ export const ACTIONS: Record<string, Spec> = {
   "chat.find": { group: "chat", keys: ["Mod+F"], typing: "yes" },
   "chat.archive": { group: "chat", keys: ["Mod+Shift+E"], typing: "yes" },
   "panel.close": { group: "chat", keys: ["Escape"], typing: "yes" },
+  // the preview beside a folder's list, shown or not (as Finder's preview pane)
+  "files.preview": { group: "files", keys: ["Mod+Shift+P"], typing: "yes" },
 };
 
-const GROUPS = ["global", "chat"] as const;
+const GROUPS = ["global", "chat", "files"] as const;
 
 /// The modifiers in the order a binding has them. Mod is ⌘ on a Mac and Ctrl elsewhere; Ctrl is a key of its own only
 /// on a Mac.

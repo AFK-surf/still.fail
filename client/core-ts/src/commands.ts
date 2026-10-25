@@ -29,8 +29,15 @@ type Named = { group: Group; label: (o: Offer, t: Say) => string; words?: string
 /// only worth a key (back, forward, the chat above or below, the composer, the latest message).
 export const UNLISTED = new Set(["chat.switch", "panel.close", "nav.back", "nav.forward", "chat.prev", "chat.next", "composer.focus", "chat.latest"]);
 
+/// Whether a keymap's group is one of the list's parts (the files' keys work in a folder only: not listed).
+const listedGroup = (g: string): g is Group => (GROUPS as readonly string[]).includes(g);
+
 /// The keys' actions (keymap.ts), each in its part and named as the list of shortcuts names it, but those never listed.
-const actions = Object.fromEntries(Object.entries(ACTIONS).filter(([id]) => !UNLISTED.has(id)).map(([id, spec]): [string, Named] => [id, { group: spec.group, label: (_o, t) => t(`web-main.keymap.${id}`) }]));
+const actions = Object.fromEntries(
+  Object.entries(ACTIONS).flatMap(([id, spec]): [string, Named][] =>
+    UNLISTED.has(id) || !listedGroup(spec.group) ? [] : [[id, { group: spec.group, label: (_o, t) => t(`web-main.keymap.${id}`) }]],
+  ),
+);
 
 const NAMED: Record<string, Named> = {
   ...actions,

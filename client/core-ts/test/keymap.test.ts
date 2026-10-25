@@ -50,7 +50,7 @@ test("the_keymap_is_the_actions_own_keys_and_on_the_desktop_those_changed_there"
   assert.equal(of(km, "composer.focus").typing, "no");
   assert.equal(of(km, "chat.latest").typing, "empty");
   assert.equal(of(km, "chat.switch").name, t("web-main.keymap.chat.switch"));
-  assert.deepEqual(km.groups.map((g: J) => [g.group, g.name]), [["global", t("web-main.keymap.group.global")], ["chat", t("web-main.keymap.group.chat")]]);
+  assert.deepEqual(km.groups.map((g: J) => [g.group, g.name]), [["global", t("web-main.keymap.group.global")], ["chat", t("web-main.keymap.group.chat")], ["files", t("web-main.keymap.group.files")]]);
   assert.deepEqual([km.workspace[0], km.workspace[8]], ["Alt+1", "Alt+9"]);
   // The desktop app on a Mac: its own keys first; those changed, as said (one that is none left out); none: unset.
   km = view(desktop(true, { "chat.find": ["Mod+J", "Mod+Shift+J", "nope"], "chat.stop": [] })) as J;

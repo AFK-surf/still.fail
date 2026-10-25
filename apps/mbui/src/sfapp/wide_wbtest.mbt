@@ -1318,7 +1318,7 @@ test "wide: 文件's preview beside the list (⌘⇧P): the row chosen, its star
   t.click(Radio, label="列表")
   t.frame()
   assert_true(t.find("选中一个文件来预览") is None)
-  t.click(Button, label="显示预览 ⌘⇧P")
+  t.click(Button, label="显示预览")
   t.frame()
   assert_true(t.find("选中一个文件来预览") is Some(_), msg="nothing chosen yet")
   assert_true(
@@ -1363,7 +1363,7 @@ test "wide: 文件's preview beside the list (⌘⇧P): the row chosen, its star
   t.key(@ui.key_of_char('p'), mods=@ui.mod_cmd + @ui.mod_shift_key)
   t.frame()
   assert_true(t.find("双击打开文件夹") is None)
-  assert_true(t.query(Button, label="显示预览 ⌘⇧P") is Some(_))
+  assert_true(t.query(Button, label="显示预览") is Some(_))
 }
 
 ///|
