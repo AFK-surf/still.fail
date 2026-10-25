@@ -102,7 +102,8 @@ let now_share_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, col
 
 ///|
 /// The card to share of workspace `w`'s agents at work, opened by nothing (a dialog; a sheet to a finger): the picture
-/// (share_picture), 复制图片 under it.
+/// (share_picture), under it 复制图片, or on a phone (iOS, Android) 保存到相册: a phone keeps pictures in its photo
+/// album, where a post or a chat picks them from (2026-10-26 用户：「手机上能复制图片吗？」「是不是应该是下载」「保存」).
 pub fn share_card_open(src : Source, w : Workspace) -> Unit {
   @sf.panel(
     @sf.t("web-main.stations.shareCard"),
@@ -113,15 +114,34 @@ pub fn share_card_open(src : Source, w : Workspace) -> Unit {
     // (its title said as it is drawn, in the language then)
     live=fn() { (@sf.t("web-main.stations.shareCard"), "", "") },
     foot=fn(c, _) {
-      if @sf.button(c, @sf.t("desktop.contextMenu.copyImage"), key="share-card/copy", tone=Primary, icon="copy") {
+      let album = @ui.platform() == 1 || @ui.platform() == 2
+      let (label, icon) = if album {
+        (@sf.t("web-main.stations.saveToPhotos"), "download")
+      } else {
+        (@sf.t("desktop.contextMenu.copyImage"), "copy")
+      }
+      if @sf.button(c, label, key="share-card/copy", tone=Primary, icon~) {
         let picture = c.id(share_picture_key)
         // (once the frame's builds are over: the picture as the last frame drew it, read back by the host's renderer)
         c.tell("share-card/copy", fn() {
           match c.drawn_pixels(picture, inset=pic_copy_in) {
             @ui.PixelsRead(pw, ph, rgba) => {
-              @ui.clipboard_set_png(@pixels.png(pw, ph, unpremultiplied(rgba)), label="still.fail")
-              if !@ui.copy_shown() {
-                say(c, @sf.t("common.copied"))
+              let png = @pixels.png(pw, ph, unpremultiplied(rgba))
+              if album {
+                @sfbase.keep_bytes(
+                  c,
+                  "still.fail.png",
+                  "image/png",
+                  png,
+                  way=Photos,
+                  saved=@sf.t("web-main.stations.savedToPhotos"),
+                  failed=@sf.t("web-main.stations.saveToPhotosFailed"),
+                )
+              } else {
+                @ui.clipboard_set_png(png, label="still.fail")
+                if !@ui.copy_shown() {
+                  say(c, @sf.t("common.copied"))
+                }
               }
             }
             _ => say(c, @sf.t("web-main.stations.shareFailed"))

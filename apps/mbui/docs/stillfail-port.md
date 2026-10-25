@@ -847,8 +847,10 @@ FileKinds.kt download, drive/DriveScreen.kt saveToDownloads, saveZip, DriveFetch
   part at a time into a file of the host's temporary directory (never whole in memory), then moved where the person
   keeps files: Android's MediaStore Downloads (no permission asked; `Choose` the documents UI's ACTION_CREATE_DOCUMENT),
   macOS's ~/Downloads (`Choose` a save panel over the window), iOS's Files sheet either way, Windows' Downloads known
-  folder; MBUI_DOWNLOADS_DIR the downloads for scripted runs. How it went comes back a frame later (Keeping, KeptAt,
-  CalledOff, Failed).
+  folder; `Photos`, a picture into a phone's photo album (iOS Photos, asked once whether the app may add to it:
+  NSPhotoLibraryAddUsageDescription; Android's Pictures/<the app's name> through MediaStore, nothing asked), as
+  Downloads elsewhere; MBUI_DOWNLOADS_DIR the downloads for scripted runs. How it went comes back a frame later
+  (Keeping, KeptAt, CalledOff, Failed).
 - A drive's file 下载 (its sheet, or several chosen: 下载 n 个文件, each at once): 正在下载「名字」, read through the core
   a part at a time (`drive.read`) straight into the keep, how far on its row meanwhile (n% in the accent's filling box,
   DownloadChip, moving smoothly over 500 ms), then 已保存到「下载」 or 下载失败; 无法获取「名字」：… when the station could

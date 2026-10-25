@@ -37,6 +37,7 @@
     <string>UIInterfaceOrientationLandscapeLeft</string>
     <string>UIInterfaceOrientationLandscapeRight</string>
   </array>
+  <key>NSPhotoLibraryAddUsageDescription</key><string>A picture the app made, saved into Photos.</string>
   <key>NSPhotoLibraryUsageDescription</key><string>The gallery's recent photos, to pick from.</string>
   <key>NSCameraUsageDescription</key><string>A photo taken now, to pick.</string>
   <key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key><true/>

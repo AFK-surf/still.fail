@@ -20,6 +20,7 @@
 typedef NSView PView;
 typedef NSImage PImage;
 #else
+#import <Photos/Photos.h>
 #import <UIKit/UIKit.h>
 typedef UIView PView;
 typedef UIImage PImage;
@@ -1872,6 +1873,29 @@ static NSMutableSet *keep_sheets;
 }
 @end
 
+// A picture into Photos: the system asks once whether the app may add to it (NSPhotoLibraryAddUsageDescription), then
+// it is added from its part file; not allowed, or not a picture Photos takes: failed.
+static void keep_photos(MBKeep *k) {
+  NSURL *u = [NSURL fileURLWithPath:k.part];
+  void (^answer)(BOOL) = ^(BOOL ok) {
+    dispatch_async(dispatch_get_main_queue(), ^{ keep_answer(k, ok ? 1 : -1, ok ? @"Photos" : nil); });
+  };
+  [PHPhotoLibrary requestAuthorizationForAccessLevel:PHAccessLevelAddOnly handler:^(PHAuthorizationStatus st) {
+    if (st != PHAuthorizationStatusAuthorized && st != PHAuthorizationStatusLimited) {
+      vlog(@"keep %@: not allowed into Photos (%ld)", k.name, (long)st);
+      answer(NO);
+      return;
+    }
+    [PHPhotoLibrary.sharedPhotoLibrary
+        performChanges:^{ [PHAssetChangeRequest creationRequestForAssetFromImageAtFileURL:u]; }
+     completionHandler:^(BOOL ok, NSError *e) {
+       if (ok) vlog(@"keep %@: into Photos", k.name);
+       else vlog(@"keep %@ into Photos: %@", k.name, e.localizedDescription);
+       answer(ok);
+     }];
+  }];
+}
+
 static UIViewController *keep_top(void) {
   UIWindow *w = nil;
   for (UIScene *sc in UIApplication.sharedApplication.connectedScenes)
@@ -1969,6 +1993,10 @@ void mb_host_keep_finish(int32_t kid) {
   if (scripted) {
     NSString *p = keep_move_into(@(over), k);
     keep_answer(k, p ? 1 : -1, p);
+    return;
+  }
+  if (k.way == 3) {
+    keep_photos(k);
     return;
   }
   UIViewController *top = keep_top();

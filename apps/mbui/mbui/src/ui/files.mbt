@@ -288,6 +288,12 @@ pub fn Tester::kept(self : Tester) -> Array[(String, String, Bytes)] {
 }
 
 ///|
+/// The same, their names and how each was kept (where downloads go, where the person chose, the photo album).
+pub fn Tester::kept_ways(self : Tester) -> Array[(String, @hostapi.KeepWay)] {
+  self.fake.keeps.filter(fn(k) { k.finished >= 0 }).map(fn(k) { (k.name, k.way) })
+}
+
+///|
 /// The device's gallery being read (@hostapi.GalleryRead), waited on until its photos are taken.
 pub struct GalleryRead {
   priv host : @hostapi.GalleryRead

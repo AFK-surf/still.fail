@@ -24,9 +24,9 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Files the app has read kept on the phone (src/hostapi/keep.mbt): its bytes put a part at a time into a file of the
  * cache (keeping/), then, once all there, copied into Downloads through MediaStore, nothing asked, as still.fail's
- * Android app's download() does (FileKinds.kt: a file of its DriveCache copied there); or where the person chooses,
- * the documents UI's ACTION_CREATE_DOCUMENT. Copied off the main thread; MoonBit asks after each keep every frame
- * (android_host.c).
+ * Android app's download() does (FileKinds.kt: a file of its DriveCache copied there); a picture into the gallery's
+ * Pictures/<the app's name> the same way; or where the person chooses, the documents UI's ACTION_CREATE_DOCUMENT.
+ * Copied off the main thread; MoonBit asks after each keep every frame (android_host.c).
  */
 final class Keeps {
     /** A keep: 0 keeping, 1 kept, 2 called off, -1 failed; where it went; its part file while it comes. */
@@ -92,6 +92,8 @@ final class Keeps {
         close(k);
         if (k.way == 2) {
             Host.main.post(() -> choose(id, k));
+        } else if (k.way == 3) {
+            new Thread(() -> photos(k), "mbui-keep").start();
         } else {
             new Thread(() -> downloads(k), "mbui-keep").start();
         }
@@ -123,6 +125,37 @@ final class Keeps {
             String shown = nameOf(cr, uri, k.name);
             Host.log("keep: " + shown + " (" + k.size + " bytes) in Downloads");
             done(k, 1, "Download/" + shown);
+        } catch (Exception e) {
+            Host.log("keep " + k.name + ": " + e);
+            if (uri != null) try { cr.delete(uri, null, null); } catch (Exception ignored) { }
+            done(k, -1, "");
+        }
+    }
+
+    /**
+     * A picture into the gallery (MediaStore.Images, API 29+: no permission asked), in Pictures/ under the app's name,
+     * pending until whole; where it went said as Pictures/… and its name as MediaStore made it.
+     */
+    private static void photos(Keep k) {
+        Activity a = Host.activity;
+        ContentResolver cr = a.getContentResolver();
+        String dir = Environment.DIRECTORY_PICTURES + "/" + a.getApplicationInfo().loadLabel(a.getPackageManager());
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.Images.Media.DISPLAY_NAME, k.name);
+        values.put(MediaStore.Images.Media.MIME_TYPE, k.mime.startsWith("image/") ? k.mime : "image/png");
+        values.put(MediaStore.Images.Media.RELATIVE_PATH, dir);
+        values.put(MediaStore.Images.Media.IS_PENDING, 1);
+        Uri uri = null;
+        try {
+            uri = cr.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+            if (uri == null) throw new IOException("MediaStore made no entry");
+            copy(cr, uri, k);
+            ContentValues whole = new ContentValues();
+            whole.put(MediaStore.Images.Media.IS_PENDING, 0);
+            cr.update(uri, whole, null, null);
+            String shown = nameOf(cr, uri, k.name);
+            Host.log("keep: " + shown + " (" + k.size + " bytes) in " + dir);
+            done(k, 1, dir + "/" + shown);
         } catch (Exception e) {
             Host.log("keep " + k.name + ": " + e);
             if (uri != null) try { cr.delete(uri, null, null); } catch (Exception ignored) { }
