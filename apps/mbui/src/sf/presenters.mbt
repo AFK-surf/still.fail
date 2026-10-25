@@ -82,7 +82,8 @@ priv struct Presented {
   /// so or was said
   gone : () -> Unit
   mut ended : Bool
-  /// as a sheet, found taller than a sheet's most: that tall from then on, what it holds scrolling in it
+  /// as a sheet, found taller than a sheet's most: that tall from then on, what it holds scrolling in it; beside what
+  /// opened it, found taller than the room on its side: held to that room from then on (beside_panel)
   mut over : Bool
 }
 
@@ -206,6 +207,18 @@ pub fn panel_bleed() -> @ui.Style {
 ///|
 /// The room a panel leaves at its sides while its body is drawn (the presenters set it): what panel_bleed reaches across.
 let panel_sides_in : Ref[Double] = { val: 0.0 }
+
+///|
+/// Whether the panel whose body is drawn now is held shorter than what it holds (beside what opened it, to the room on
+/// its side; a sheet, to its most), its body scrolling in it as one: what would scroll in itself there (a list held to
+/// a height of its own) lays itself out whole instead, so that one scroll, not one in another, takes the wheel.
+pub fn panel_held() -> Bool {
+  panel_held_now.val
+}
+
+///|
+// kept across runs: said by the presenters while a panel's body is drawn
+let panel_held_now : Ref[Bool] = { val: false }
 
 ///|
 /// The one presented last (what `close_presented_of` is given to close it).
@@ -556,7 +569,7 @@ fn pick_popover(
     at?,
     label=title,
     modal=true,
-    look=fn(c, _, body) { small_panel(c, w=Px(chooser_menu_w), body) |> ignore },
+    look=fn(c, s, body) { beside_panel(c, p, s, w=Px(chooser_menu_w), body) },
     fn() {
       let found = {
         let f = input(c, key + "/search", placeholder=t("common.search"), small=true, field=p.line)
@@ -570,7 +583,7 @@ fn pick_popover(
       if found.is_empty() {
         c.box(style=panel_empty_at, fn() { c.text(t("common.noMatch"), style=panel_empty) |> ignore }) |> ignore
       }
-      c.capped(key + "/list", pick_list_most, fn() {
+      c.capped(key + "/list", pick_list_most, shrinks=true, fn() {
         for x in found {
           if menu_item(c, x.label, key=key + "/" + x.key, icon=x.icon, on=x.key == chosen, note=x.note, panel=x.icon != "") {
             done_with(c, p, fn() { choose(x.key) })
@@ -585,7 +598,8 @@ fn pick_popover(
 
 ///|
 /// A small panel beside what opened it (parts.tsx's: @sf.small_panel, PanelHead), what is at its foot in its foot
-/// corner (panel_corner_foot); as tall as `tall` of the window, what it holds takes what the foot leaves.
+/// corner (panel_corner_foot); as tall as `tall` of the window, what it holds takes what the foot leaves. Taller than
+/// the room on the side it went (beside_panel), what it holds scrolls between its title and its foot.
 fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool, Bool) {
   let (anchor, at) = anchor_of(c, p.from)
   let h : @ui.Size = if x.tall > 0.0 { Px(x.tall * wh_of(c)) } else { Auto }
@@ -600,7 +614,7 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
     label=x.title,
     modal=true,
     focus=x.focus,
-    look=fn(c, _, inner) { small_panel(c, w=Px(x.w), h~, inner) |> ignore },
+    look=fn(c, s, inner) { beside_panel(c, p, s, w=Px(x.w), h~, inner) },
     fn() {
       if x.title != "" {
         panel_head(c, x.title)
@@ -609,6 +623,14 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
       panel_sides_in.val = panel_pad
       if x.tall > 0.0 {
         c.box(style=panel_grows, fn() { (x.body)(c, close) }) |> ignore
+      } else if p.over {
+        // (scrolling out to the panel's sides, what it holds as far in as without: what reaches them still does)
+        c.capped(key + "/panel", wh_of(c), shrinks=true, mx=-panel_pad, padx=panel_pad, fn() {
+          panel_held_now.val = true
+          (x.body)(c, close)
+          panel_held_now.val = false
+        })
+        |> ignore
       } else {
         (x.body)(c, close)
       }
@@ -620,6 +642,26 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
     },
   )
   (r.value, p.open)
+}
+
+///|
+/// `p`'s small panel beside what opened it, given the side it went on and the room there (`s`): as tall as what it
+/// holds until it is found taller than that room (read back as it is laid out), then held to the room from then on
+/// (`p.over`, as a sheet is to its most), what scrolls in it (shrinking, a capped's) taking what is left, rather than
+/// running out of the window (Radix's Popper: its available height).
+fn beside_panel(
+  c : @ui.Ctx,
+  p : Presented,
+  s : @kit.PopState,
+  w~ : @ui.Size,
+  h? : @ui.Size = Auto,
+  body : () -> Unit,
+) -> Unit {
+  let id = c.id("sf-present/beside/\{p.serial}")
+  if !p.over && c.laid_size(id) is Some((_, laid)) && laid > s.room + 0.5 {
+    p.over = true
+  }
+  small_panel(c, w~, h~, max_h?=if p.over { Some(s.room) } else { None }, id~, body) |> ignore
 }
 
 ///|
@@ -985,7 +1027,11 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
       }
       if scrolls && x.tall <= 0.0 {
         c.box(style=sheet_grows, fn() {
-          c.capped(key + "/panel", wh_of(c), shrinks=true, fn() { c.box(style=room, body) |> ignore })
+          c.capped(key + "/panel", wh_of(c), shrinks=true, fn() {
+            panel_held_now.val = true
+            c.box(style=room, body) |> ignore
+            panel_held_now.val = false
+          })
           |> ignore
         })
         |> ignore

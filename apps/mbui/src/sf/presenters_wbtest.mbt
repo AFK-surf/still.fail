@@ -9,12 +9,13 @@ let phone : (Int, Double, Double) = (2, 390.0, 844.0)
 let desk : (Int, Double, Double) = (0, 1280.0, 800.0)
 
 ///|
-/// A page with one button, 打开, that opens what `open` presents (given what opened it), and the host over it.
-fn presenting_view(open : (Anchor) -> Unit) -> (@ui.Ctx) -> Unit {
+/// A page with one button, 打开 (at its foot with `low`, as a composer's choices are), that opens what `open` presents
+/// (given what opened it), and the host over it.
+fn presenting_view(open : (Anchor) -> Unit, low? : Bool = false) -> (@ui.Ctx) -> Unit {
   fn(c) {
     begin(c) |> ignore
     c.with_theme(ui_theme(), fn() {
-      c.box(w=Fill(1.0), h=Fill(1.0), pad=40.0, fn() {
+      c.box(w=Fill(1.0), h=Fill(1.0), pad=40.0, justify=if low { JEnd } else { JStart }, fn() {
         if button(c, "打开", key="open") {
           open(Of(c.id("open")))
         }
@@ -26,10 +27,10 @@ fn presenting_view(open : (Anchor) -> Unit) -> (@ui.Ctx) -> Unit {
 }
 
 ///|
-fn presenting_tester(at : (Int, Double, Double), open : (Anchor) -> Unit) -> @ui.Tester {
+fn presenting_tester(at : (Int, Double, Double), open : (Anchor) -> Unit, low? : Bool = false) -> @ui.Tester {
   presenters_reset()
   let (platform, w, h) = at
-  let t = @ui.Tester::new(presenting_view(open), w~, h~, platform~)
+  let t = @ui.Tester::new(presenting_view(open, low~), w~, h~, platform~)
   t.draw()
   t
 }
@@ -225,6 +226,92 @@ test "a panel with a mouse at Large: beside what opened it; a press outside clos
   t.tap(desk.1 - 40.0, desk.2 - 40.0)
   assert_true(!presenting())
   assert_eq(said, [])
+}
+
+///|
+/// A panel's body of `n` lines (第1行 … 第n行), saying in `held` whether it was drawn held short of them (panel_held).
+fn lines_body(n : Int, held : Ref[Bool]) -> (@ui.Ctx, () -> Unit) -> Unit {
+  fn(c, _) {
+    held.val = panel_held()
+    for i in 1..=n {
+      c.text("第\{i}行", style=paragraph) |> ignore
+    }
+  }
+}
+
+///|
+/// A panel's foot: 好的, which says so and closes it.
+fn ok_foot(said : Array[String]) -> (@ui.Ctx, () -> Unit) -> Unit {
+  fn(c, close) {
+    if button(c, "好的", key="ok", tone=Primary) {
+      said.push("ok")
+      close()
+    }
+  }
+}
+
+///|
+/// Where `words` are drawn now (their top and bottom, moved as what holds them scrolls), or a failure.
+fn drawn_span(t : @ui.Tester, words : String) -> (Double, Double) raise {
+  match t.words().iter().find_first(fn(w) { w.0 == words }) {
+    Some((_, _, y, _, h, _)) => (y, y + h)
+    None => fail("\{words} not drawn")
+  }
+}
+
+///|
+test "a panel with a mouse beside what opened it, as tall as what it holds where that fits: not held" {
+  let held = Ref(true)
+  let t = presenting_tester(desk, fn(from) { panel("面板", lines_body(3, held), from~, foot=ok_foot([])) })
+  open_it(t)
+  assert_eq(presented_how, [AsPopover])
+  assert_true(!held.val)
+  // its foot right under what it holds
+  let (_, last) = drawn_span(t, "第3行")
+  let (foot, _) = drawn_span(t, "好的")
+  assert_true(foot > last && foot < last + 60.0)
+}
+
+///|
+test "a panel with a mouse taller than the room beside what opened it: held to that room, its title and foot in the window, what it holds scrolled to" {
+  let said : Array[String] = []
+  let held = Ref(false)
+  let short = (0, 1280.0, 320.0)
+  let t = presenting_tester(short, fn(from) { panel("面板", lines_body(40, held), from~, foot=ok_foot(said)) })
+  let (_, by) = where_is(t, "打开")
+  open_it(t)
+  assert_eq(presented_how, [AsPopover])
+  // under the button (more room there than over it), all of it in the window
+  let (top, _) = drawn_span(t, "面板")
+  let (_, bottom) = drawn_span(t, "好的")
+  assert_true(top > by, msg="not under what opened it")
+  assert_true(bottom < short.2, msg="its foot out of the window")
+  assert_true(held.val, msg="what it holds not told it scrolls as one")
+  // its last line under the foot until what it holds is scrolled, then over it
+  let (foot, _) = drawn_span(t, "好的")
+  assert_true(drawn_span(t, "第40行").0 > foot)
+  let (lx, ly) = where_is(t, "第1行")
+  t.wheel(lx, ly, 2000.0)
+  assert_true(drawn_span(t, "第40行").1 < foot, msg="what it holds not scrolled to its end")
+  assert_true(drawn_span(t, "面板").0 == top, msg="its title scrolled with what it holds")
+  t.tap_text("好的")
+  assert_eq(said, ["ok"])
+  assert_true(!presenting())
+}
+
+///|
+test "a panel with a mouse opened at the window's foot, taller than the room over it: over it, held to that room, its title in the window" {
+  let held = Ref(false)
+  let short = (0, 1280.0, 360.0)
+  let t = presenting_tester(short, fn(from) { panel("面板", lines_body(40, held), from~, foot=ok_foot([])) }, low=true)
+  let (_, by) = where_is(t, "打开")
+  open_it(t)
+  // over the button, the side with the room: its title not run out of the window's top
+  let (top, _) = drawn_span(t, "面板")
+  let (_, bottom) = drawn_span(t, "好的")
+  assert_true(top > 0.0, msg="its title out of the window")
+  assert_true(bottom < by, msg="not over what opened it")
+  assert_true(held.val)
 }
 
 ///|

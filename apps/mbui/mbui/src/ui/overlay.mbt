@@ -568,6 +568,37 @@ pub fn Ctx::laid_out(self : Ctx, id : Int) -> (Double, Double, Double, Double)? 
 }
 
 ///|
+/// How tall content beside an anchor (x, y, w, h, in the window) on `side` can be, `offset` away and kept `padding`
+/// inside the window, as Ctx::place puts it (Radix's Popper: its available height): over or under it, from there to
+/// the window's edge; on its left or right, where it is moved along to stay in, the window's height. Never under 0.
+pub fn Ctx::room_beside(
+  self : Ctx,
+  anchor : (Double, Double, Double, Double),
+  side : Side,
+  offset? : Double = 4.0,
+  padding? : Double = 8.0,
+) -> Double {
+  dmax(self.room_on(anchor, side, offset, padding), 0.0)
+}
+
+///|
+/// Ctx::room_beside's, under 0 where the anchor is that near the window's edge (what Ctx::place weighs the sides by).
+fn Ctx::room_on(
+  self : Ctx,
+  anchor : (Double, Double, Double, Double),
+  side : Side,
+  offset : Double,
+  padding : Double,
+) -> Double {
+  let (_, ay, _, ah) = anchor
+  match side {
+    Top => ay - offset - padding
+    Bottom => self.height - (ay + ah) - offset - padding
+    Left | Right => self.height - 2.0 * padding
+  }
+}
+
+///|
 /// Where content `w` by `h` goes by an anchor (x, y, w, h, in the window), Radix's Popper: on `side`, `offset` away,
 /// lined up `along` it (moved `along_offset` further), kept `padding` inside the window (`flip`: to the other side when
 /// it does not fit on its own and fits better there; moved along the side to stay in). Its top left, and the side it
@@ -590,8 +621,7 @@ pub fn Ctx::place(
   // the room on each side
   let room = fn(s : Side) {
     match s {
-      Top => ay - offset - padding
-      Bottom => vh - (ay + ah) - offset - padding
+      Top | Bottom => self.room_on(anchor, s, offset, padding)
       Left => ax - offset - padding
       Right => vw - (ax + aw) - offset - padding
     }

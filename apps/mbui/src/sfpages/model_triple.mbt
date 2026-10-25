@@ -283,6 +283,8 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Uni
   let row_h = t.rows.pick
   // (three columns where they fit, as the web's panel beside its control has them; else the models and the rest)
   let three = c.width >= triple_three_w
+  // (the panel held short of all it holds, scrolling as one: its columns whole in that, none scrolling in itself)
+  let whole = @sf.panel_held()
   c.box(style=triple_columns, fn() {
     // the models: only their column scrolls (360 high at most), a row each for a series' name and for a model
     let rows : Array[() -> Unit] = []
@@ -313,10 +315,19 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Uni
     }
     let shown = if rest_rows > rows.length() { rest_rows } else { rows.length() }
     let tall = dmin(triple_list_h, shown.to_double() * (row_h + 1.0))
-    c.box(style=triple_models.then(@ui.style(h=Fixed(tall))), fn() {
-      c.list("triple/models", rows.length(), row_h + 1.0, fn(i) { (rows[i])() }) |> ignore
-    })
-    |> ignore
+    if whole {
+      c.box(style=triple_models, fn() {
+        for row in rows {
+          row()
+        }
+      })
+      |> ignore
+    } else {
+      c.box(style=triple_models.then(@ui.style(h=Fixed(tall))), fn() {
+        c.list("triple/models", rows.length(), row_h + 1.0, fn(i) { (rows[i])() }) |> ignore
+      })
+      |> ignore
+    }
     let runtime_column = fn() {
       triple_column_head(c, @sf.t("web-main.model.runtime"))
       for r in runtimes {
@@ -390,19 +401,23 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Uni
       }
     } else if rest {
       c.box(style=triple_rule_v, fn() {  }) |> ignore
-      c.box(style=triple_rest.then(@ui.style(max_h=Fixed(tall))), fn() {
-        c.list("triple/rest", 1, tall, fn(_) {
-          c.box(style=triple_column, fn() {
-            if runtimes.length() > 0 {
-              runtime_column()
-            }
-            effort_column()
-          })
-          |> ignore
+      let column = fn() {
+        c.box(style=triple_column, fn() {
+          if runtimes.length() > 0 {
+            runtime_column()
+          }
+          effort_column()
         })
         |> ignore
-      })
-      |> ignore
+      }
+      if whole {
+        c.box(style=triple_rest, column) |> ignore
+      } else {
+        c.box(style=triple_rest.then(@ui.style(max_h=Fixed(tall))), fn() {
+          c.list("triple/rest", 1, tall, fn(_) { column() }) |> ignore
+        })
+        |> ignore
+      }
     }
   })
   |> ignore
