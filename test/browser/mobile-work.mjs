@@ -22,9 +22,9 @@ import {setSidebarMode} from './src/station.tsx';
 import {useDoing} from './src/doing.ts';
 import {setPageRoot} from './src/brand.tsx';
 import {restingLoop} from '@stillfail/ui/motion.ts';
-let doing=[];
+let doing=[],noStations=false;
 const lists=new Map();
-extendDemo({call(name,params){if(name!=='chat.archive')return;window.archived=true;for(const list of lists.values())list.days=list.days.map(d=>({...d,items:d.items.filter(i=>i.session!==params.session)}));setTimeout(()=>demoCore.publish(),0);return null;},topic:t=>t.topic==='doing'?{doing}:undefined,then(t,v){
+extendDemo({call(name,params){if(name!=='chat.archive')return;window.archived=true;for(const list of lists.values())list.days=list.days.map(d=>({...d,items:d.items.filter(i=>i.session!==params.session)}));setTimeout(()=>demoCore.publish(),0);return null;},topic:t=>t.topic==='doing'?{doing}:t.topic==='stations'&&noStations?[]:undefined,then(t,v){
  if(t.topic!=='chats'||!v?.days?.[0]?.items?.length)return;
  const key=JSON.stringify(t);if(!lists.has(key)){const item=v.days[0].items[0];lists.set(key,{...v,days:[{...v.days[0],items:Array.from({length:1000},(_,i)=>({...item,id:'row-'+i,session:'row-'+i,title:'会话 '+i,archivable:i===0,watch:null}))}]});}return lists.get(key);
 }});
@@ -36,7 +36,7 @@ history.replaceState(null,'','/w/demo');
 const root=document.getElementById('app');setPageRoot(root);
 createRoot(root).render(<Tooltip.Provider><BrowserRouter><MobileShell entry={{id:'demo',name:'Test',account:ACCOUNT}} routes={routes} recent={()=>null}/></BrowserRouter></Tooltip.Provider>);
 createRoot(document.getElementById('probes')).render(<>{Array.from({length:120},(_,i)=><Probe key={i} id={String(i)}/>)}</>);
-Object.assign(window,{filter:f=>setSidebarMode('demo',f),operate:()=>{window.probeRenders=0;doing=[{call:'chat.pin',params:{session:'0'},stage:'running'}];demoCore.publish();},loop:restingLoop});
+Object.assign(window,{filter:f=>setSidebarMode('demo',f),operate:()=>{window.probeRenders=0;doing=[{call:'chat.pin',params:{session:'0'},stage:'running'}];demoCore.publish();},withoutStations:()=>{noStations=true;demoCore.publish();},loop:restingLoop});
 `, { flag: 'wx' });
   madeFixture = true;
   await writeFile(html, '<meta name="viewport" content="width=device-width, initial-scale=1"><div id="app"></div><div id="probes" style="display:none"></div><script type="module" src="/mobile-work-check.tsx"></script>', { flag: 'wx' });
@@ -129,6 +129,13 @@ Object.assign(window,{filter:f=>setSidebarMode('demo',f),operate:()=>{window.pro
     });
     assert.equal(played.hidden,0,`${engine}: hidden loops never start`);assert(played.visible>0);
     if(process.env.SHOTS){await mkdir(process.env.SHOTS,{recursive:true});await page.screenshot({path:`${process.env.SHOTS}/${engine}-home.png`});}
+    // Home's first-station page uses the same pull gesture without mounting a virtual list.
+    const homeClass=await page.locator('[data-home-pane=all]').evaluate(el=>el.classList[0]);
+    await page.evaluate(()=>window.withoutStations());
+    await page.locator('[data-home-pane=all]').waitFor({state:'detached'});
+    const firstStation=page.locator('.'+homeClass);
+    assert.equal(await firstStation.count(),1);
+    assert.equal(await firstStation.evaluate(el=>getComputedStyle(el).overscrollBehaviorY),'none',`${engine}: first-station Home must not add native bounce to the pull gesture`);
     assert.deepEqual(errors,[]);
     console.log(`PASS ${engine}: 1000-row home bounded, filter/page positions kept, effects suspended, 1/120 operation rows rendered, hidden loops stopped`);
     await page.close();await browser.close();browser=null;

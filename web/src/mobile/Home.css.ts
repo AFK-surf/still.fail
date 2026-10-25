@@ -25,6 +25,8 @@ export const mHomeSlide = style({
 });
 export const mHomePane = style({
   position: "absolute", inset: "0", display: "flex", flexDirection: "column", overflowY: "auto", overscrollBehavior: "contain",
+  // Pull-to-reload moves every Home pane, including FirstStation before there is a virtual list.
+  overscrollBehaviorY: "none",
   overflowAnchor: "none", vars: { "--list-gap": "0px" },
   padding: "calc(var(--m-top) + 58px) 0 calc(var(--m-foot) + 126px)",
 });

@@ -33,7 +33,7 @@ function List({name,kind}){
  {virtual.layout.rows.map((r,i)=><React.Fragment key={r.key}>{virtual.above(r,i===0)}<div data-vk={r.key} style={{height:r.key==='0'?height:50,flex:'none'}}>{name} {r.key}</div></React.Fragment>)}{virtual.after()}
  </div>;
 }
-function Pull(){const pull=usePullToReload(mHomePane);return <div {...pull.handlers}><div id='pull-mark' ref={pull.mark}/><div id='pull-pane' className={mHomePane} style={{position:'relative',height:200,overscrollBehaviorY:'none'}}>Pull</div></div>;}
+function Pull(){const pull=usePullToReload(mHomePane);return <div {...pull.handlers}><div id='pull-mark' ref={pull.mark}/><div id='pull-pane' className={mHomePane} style={{position:'relative',height:200}}>Pull</div></div>;}
 function App(){const [hidden,hide]=useState(false);window.hide=hide;return <>
  <List name='home' kind={mHomePane}/><List name='history' kind={mHSteps}/><List name='chat' kind={mMessages}/><List name='desktop' kind={historyBody}/>
  <List name='short' kind={mHomePane}/><List name='empty' kind={mHomePane}/>
@@ -76,6 +76,7 @@ window.follow=scrollToEnd;createRoot(document.getElementById('root')).render(<Ap
     },name);
     assert.deepEqual(result,{writes:0,behavior:'none'});
    }
+   assert.equal(await page.locator('#pull-pane').evaluate(el=>getComputedStyle(el).overscrollBehaviorY),'none','Home without a virtual list still gives the pull gesture sole ownership of its displacement');
    const touch=(type,y=100,count=1,x=100)=>page.evaluate(({type,y,count,x})=>{
     const el=document.getElementById('pull-pane'),event=new Event(type,{bubbles:true});
     Object.defineProperty(event,'touches',{value:Array.from({length:count},(_,identifier)=>({identifier,clientX:x,clientY:y,target:el}))});el.dispatchEvent(event);
