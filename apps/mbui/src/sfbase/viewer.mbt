@@ -1828,6 +1828,25 @@ pub fn Viewer::draw_flight(
 }
 
 ///|
+/// The picture's own menu, right clicked or held by a finger on it (where it is now: `at`), once the whole of it is
+/// here: 复制图片, as the bar's 复制 (a browser's on an image). Round it, none. What is under the viewer (the chat's
+/// picture it was opened from, with its 引用) is never asked: the viewer is over it.
+fn Viewer::picture_menu(self : Viewer, c : @ui.Ctx, stage : Int, at : (Double, Double, Double, Double)?) -> Unit {
+  match (c.menu_asked(stage), at, self.bytes) {
+    (Some((x, y)), Some((rx, ry, rw, rh)), Some(b)) if x >= rx && x < rx + rw && y >= ry && y < ry + rh => {
+      // held by a finger: the press is the menu's, felt
+      @sf.menu_held(c, "preview") |> ignore
+      let copy = fn() {
+        c.copy_image(b)
+        self.copied += 1
+      }
+      @sf.menu([Some(@sf.menu_item_of(@sf.t("desktop.contextMenu.copyImage"), copy, icon="copy"))], from=@sf.at_point(x, y))
+    }
+    _ => ()
+  }
+}
+
+///|
 /// An image fitted to the stage, to double-tap, pan and zoom (the wheel, the bar's − and +); until the whole of it
 /// comes, the chat's thumbnail (or its likeness) stands in its place.
 pub fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Unit {
@@ -1901,6 +1920,10 @@ pub fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int
     }
   } else {
     v.gestures(c, src, stage, z, before is Some(_), after is Some(_))
+    // (a finger still while another pinches holds nothing)
+    if c.second_pointer() is None && !v.pinched {
+      v.picture_menu(c, stage, rect())
+    }
   }
   // the strip: the one shown and those beside it, the stage's width and the gap apart (FilePreview.kt strip)
   let strip = @motion.anim(c, "preview/strip", 0.0, global=true)

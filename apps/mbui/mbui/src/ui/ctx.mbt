@@ -1362,13 +1362,22 @@ fn Ctx::point_at(self : Ctx, x : Double, y : Double) -> Unit {
   let k = hit_at(self.hit_ids, self.hit_rects, self.hit_clips, x, y)
   self.hover = if k >= 0 { self.hit_ids[k] } else { 0 }
   self.hover_in.clear()
+  self.holders(k, self.hover_in)
+}
+
+///|
+/// What holds the last frame's hit target `k` (its index; -1 none) as it was drawn, outermost first, into `into`:
+/// the targets it was drawn in (Ctx::hit_ends), itself left out. Not what only lies under it (a page under a layer
+/// over it, a list under what floats over it): that holds nothing of it.
+fn Ctx::holders(self : Ctx, k : Int, into : Array[Int]) -> Unit {
+  if k < 0 {
+    return
+  }
+  let me = self.hit_ids[k]
   for j in 0..<k {
     let id = self.hit_ids[j]
-    if j < self.hit_ends.length() &&
-      self.hit_ends[j] > k &&
-      id != self.hover &&
-      !self.hover_in.contains(id) {
-      self.hover_in.push(id)
+    if j < self.hit_ends.length() && self.hit_ends[j] > k && id != me && !into.contains(id) {
+      into.push(id)
     }
   }
 }

@@ -3,12 +3,13 @@
 // besideQuotes; Composer.kt DraftExtras).
 
 ///|
-/// The chat open at its end, then a row up at a time until the image `name` is drawn; where it is.
-fn image_in_chat(name : String) -> (@ui.Tester, Double, Double) {
+/// The chat open at its end (on `platform`'s screen: Android's, a finger), then a row up at a time until the image
+/// `name` is drawn; where it is.
+fn image_in_chat(name : String, platform? : Int = 2) -> (@ui.Tester, Double, Double) {
   reset()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform~)
   nav_rested(t)
   let mut tries = 0
   while t.locate("img:" + name).length() == 0 && tries < 12 {
@@ -68,4 +69,41 @@ test "an agent's image held: quoted, not a passage of its words picked; whose it
   assert_eq(d.quotes.length(), 1)
   assert_eq(text(Some(d.quotes[0]), "role"), "agent")
   assert_eq(text(Some(d.quotes[0]), "file"), "compare.png")
+}
+
+///|
+test "an image right clicked: its one menu, again on that menu still the one; in the preview over the chat, the picture's own, never the chat's 引用" {
+  // (macOS: a mouse, menus beside what opened them)
+  let (t, x, y) = image_in_chat("compare.png", platform=0)
+  // (引用 a press reaches: a menu's, not what lies under what is over it)
+  let quotes = fn() { t.reachable("引用").length() }
+  let before = quotes()
+  t.right_click(x, y)
+  assert_eq(quotes(), before + 1)
+  let menu = @sf.last_presented()
+  // on the menu, which opened over the image: the menu's, no second menu of the image's over it
+  t.right_click(x + 10.0, y + 10.0)
+  t.draw()
+  assert_eq(@sf.last_presented(), menu)
+  assert_true(@sf.presented_open_of(menu))
+  assert_eq(quotes(), before + 1)
+  // closed, and the image opened over the whole window
+  t.key(@ui.key_escape)
+  t.draw()
+  t.tap(x, y)
+  t.run_for(fly_open_ms)
+  assert_true(viewer.val is Some(_))
+  // where the chat's image is under it: never that image's menu (its 引用 into the draft the preview covers)
+  t.right_click(x, y)
+  assert_eq(quotes(), 0)
+  // (the picture's own, if it was on the picture there, closed)
+  if @sf.presenting() {
+    t.key(@ui.key_escape)
+    t.draw()
+  }
+  assert_true(viewer.val is Some(_))
+  // on its picture, in the middle: its own menu, 复制图片 (as its bar's 复制)
+  t.right_click(195.0, 422.0)
+  assert_true(t.reachable("复制图片").length() > 0)
+  assert_eq(quotes(), 0)
 }
