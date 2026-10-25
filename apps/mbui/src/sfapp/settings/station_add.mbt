@@ -81,11 +81,7 @@ pub fn place_action(core : Core, here : Here, place : String) -> (() -> Unit)? {
         if online.length() == 1 {
           go(text(Some(online[0]), "station"))
         } else {
-          open_pick_station(
-            tr("android-settings.profile.add"),
-            online,
-            go,
-          )
+          open_pick_station(online, go)
         }
       })
     }

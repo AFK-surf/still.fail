@@ -188,6 +188,8 @@ pub fn fixture_page(mode : String) -> String {
       up("", "settings/station/ws1/st1", 0)
     }
     "settings-stations-add" => up("add", "", 0)
+    // Profile's ＋ with more than one station online: which to add it on
+    "settings-profiles-pick" => up("pick-station", "", 0)
     "settings-stations-existing" => up("add-existing", "", 0)
     "settings-stations-command" => up("add-command", "", 0)
     "settings-first-station" => fx.none = true
@@ -297,6 +299,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile-quota" => "profile:ws1/st1#cx"
     "settings-profile-models" => "profile-models:ws1/st1#cx"
     "settings-me-reading" => "me"
+    "settings-profiles-pick" => "profiles"
     "settings-connect" => "connect:ws1/st1#k1"
     _ =>
       if m.has_prefix("settings-") {
@@ -1929,6 +1932,13 @@ fn fixture_sheet(core : Core, here : Here) -> Unit {
       open_mark_pick(core, text(s, "name"), text(s, "emoji"), text(s, "icon"), "", fn(_, _, _) {  })
     }
     "add-people" => open_add_people(core, here, workspace_view(core, here).value)
+    "pick-station" =>
+      open_pick_station(
+        [("ws1/st1", "Studio"), ("ws1/st3", "Mini1"), ("ws1/st4", "ccvm")].map(fn(s) {
+          obj([("station", str(s.0)), ("name", str(s.1)), ("online", Json::boolean(true))])
+        }),
+        fn(_) {  },
+      )
     "workspace-mark" => open_mark_pick(core, "星火工作室", "", "glyph:rocket:orange", "", fn(_, _, _) {  })
     "add" | "add-existing" | "add-command" => {
       open_add_station(core, here, ["st1", "st2"], existing=what == "add-existing")

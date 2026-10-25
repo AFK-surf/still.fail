@@ -6,11 +6,11 @@
 /// The agent's sheet over the fixture's chat, its station's row tapped: the station's card in its place.
 fn peek_from_agent(calls : Array[Made]) -> @ui.Tester raise {
   let t = decide_core(calls, "chat-agent")
-  assert_true(!@settings.sheet_up())
+  assert_true(!@sf.presenting())
   t.tap_text("Station")
   t.frame()
   assert_true(dui.sheet is None, msg="the agent's sheet went down")
-  assert_true(@settings.sheet_up(), msg="the station's card came up")
+  assert_true(@sf.presenting(), msg="the station's card came up")
   t
 }
 
@@ -40,7 +40,7 @@ test "an agent's station's card: 机器详情 opens the station's page, the card
   let calls : Array[Made] = []
   let t = peek_from_agent(calls)
   t.tap_text("机器详情")
-  assert_true(!@settings.sheet_up())
+  assert_true(!@sf.presenting())
   assert_true(app.nav.top() == Setting(@settings.Route::Station("ws1/st1")))
 }
 
@@ -49,7 +49,7 @@ test "an agent's station's card: 文件 opens its files" {
   let calls : Array[Made] = []
   let t = peek_from_agent(calls)
   t.tap_text("2 个文件夹")
-  assert_true(!@settings.sheet_up())
+  assert_true(!@sf.presenting())
   match app.nav.top() {
     Drive(at) => {
       assert_eq(at.station, "ws1/st1")

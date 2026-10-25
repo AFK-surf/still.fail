@@ -3,28 +3,45 @@
 // its page.
 
 ///|
-/// The card of the station at `address` (`ws/station`) over the page, half the window's height (SheetSpec(0.5f)).
+/// The card of the station at `address` (`ws/station`) over the page: the library's panel, titled its name (a sheet
+/// with touch short of Large, else a dialog), drawn with the frame's core as it is drawn (put up before a frame is,
+/// a fixture's, as well).
 pub fn open_station_peek(address : String) -> Unit {
-  open_sheet(peek_height, fn(c, core) { station_peek(c, core, address) })
+  @sf.panel(
+    "",
+    fn(c, close) {
+      match panels_core.val {
+        Some(core) => station_peek(c, core, address, close)
+        None => ()
+      }
+    },
+    from=Unanchored,
+    live=fn() { (peek_name(address), "", "") },
+  )
 }
 
 ///|
-/// The card's share of the window (Stations.kt openStationPeek: SheetSpec(0.5f)).
-let peek_height : Double = 0.5
+/// The station's name, as the workspace's stations say it once they are read.
+fn peek_name(address : String) -> String {
+  match panels_core.val {
+    Some(core) =>
+      match peek_station(core, address) {
+        Some(_) as s => text(s, "name")
+        None => station_name(address)
+      }
+    None => station_name(address)
+  }
+}
 
 ///|
-/// A station's mark in the card's head (17).
-let peek_mark : Double = 17.0
-
-///|
-/// The card's body: its words, then its rows, 10 apart, 24 over the sheet's foot.
+/// The card's body: its words, then its rows, 10 apart.
 // kept across runs: a value (no field of it changes)
-let peek_body : @ui.Style = @ui.css("w=Full pb=S6 gap=S2_5")
+let peek_body : @ui.Style = @ui.css("w=Full gap=S2_5")
 
 ///|
-/// Its words 20 in from the sheet's sides, 10 apart.
+/// Its words, 10 apart.
 // kept across runs: a value (no field of it changes)
-let peek_words : @ui.Style = @ui.css("w=Full px=S5 gap=S2_5")
+let peek_words : @ui.Style = @ui.css("w=Full gap=S2_5")
 
 ///|
 /// What it says of itself, and that it is offline (13 on 18, muted).
@@ -51,16 +68,8 @@ fn peek_station(core : Core, address : String) -> Json? {
 }
 
 ///|
-fn station_peek(c : @ui.Ctx, core : Core, address : String) -> Unit {
-  let t = @sf.theme()
+fn station_peek(c : @ui.Ctx, core : Core, address : String, close : () -> Unit) -> Unit {
   let s = peek_station(core, address)
-  let name = if s is Some(_) { text(s, "name") } else { station_name(address) }
-  let lead = if s is Some(_) && @sf.has_station_mark(text(s, "emoji"), text(s, "icon")) {
-    Some(fn() { station_mark(c, s, peek_mark, t.p.text) })
-  } else {
-    None
-  }
-  sheet_head(c, name, lead?)
   c.box(style=peek_body, fn() {
     if s is Some(_) {
       c.box(style=peek_words, fn() {
@@ -81,32 +90,31 @@ fn station_peek(c : @ui.Ctx, core : Core, address : String) -> Unit {
       })
       |> ignore
     }
-    list_card(c, fn() {
-      // its files (docs/drive.md), where it has a drive: a way there from where it is named
-      match field(field(s, "overview"), "drive") {
-        Some(Object(_)) as drive => {
-          let n = items(drive, "roots").length()
-          if go_row(
-              c,
-              "peek-drive",
-              tr("android-misc.drive.title"),
-              value=if n == 0 {
-                tr("android-misc.drive.row.none")
-              } else {
-                fill("android-misc.drive.roots.count", [("n", n.to_string())])
-              },
-            ) {
-            close_sheet()
-            (core.open_drive)(address)
-          }
+    // where to go on: the panel's rows, their grounds out across its sides, their words on its line
+    // its files (docs/drive.md), where it has a drive: a way there from where it is named
+    match field(field(s, "overview"), "drive") {
+      Some(Object(_)) as drive => {
+        let n = items(drive, "roots").length()
+        if @sf.link_row(
+            c,
+            "peek-drive",
+            tr("android-misc.drive.title"),
+            value=if n == 0 {
+              tr("android-misc.drive.row.none")
+            } else {
+              fill("android-misc.drive.roots.count", [("n", n.to_string())])
+            },
+          ) {
+          close()
+          (core.open_drive)(address)
         }
-        _ => ()
       }
-      if go_row(c, "peek-station", tr("android-chat.station.details")) {
-        close_sheet()
-        (core.push)(Station(address))
-      }
-    })
+      _ => ()
+    }
+    if @sf.link_row(c, "peek-station", tr("android-chat.station.details")) {
+      close()
+      (core.push)(Station(address))
+    }
   })
   |> ignore
 }

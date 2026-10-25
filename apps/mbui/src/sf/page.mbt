@@ -796,7 +796,7 @@ pub fn link_row(
   }
   let b = match look() {
     Narrow =>
-      c.box(style=if under { narrow_row(goes).then(row_top) } else { narrow_row(goes) }, id~, fn() {
+      c.box(style=(if under { narrow_row(goes).then(row_top) } else { narrow_row(goes) }).then(row_line(true)), id~, fn() {
         match lead {
           Some(f) => if under { row_lead(c, Narrow, f) } else { f() }
           None => ()
@@ -872,11 +872,11 @@ pub fn link_row(
         }
       })
     Wide =>
-      c.box(style=if under { (if goes { desk_list_link } else { wide_list_row }).then(row_top) } else if goes {
+      c.box(style=(if under { (if goes { desk_list_link } else { wide_list_row }).then(row_top) } else if goes {
         desk_list_link
       } else {
         wide_list_row
-      }, id~, fn() {
+      }).then(row_line(false)), id~, fn() {
         match lead {
           Some(f) => if under { row_lead(c, Wide, f) } else { f() }
           None => ()
@@ -1146,21 +1146,7 @@ pub fn choice_row(
       end(size)
     }
   }
-  // (in a panel's column, its ground reaching out across the room the panel leaves, its words on the column's line:
-  // row_reach; on a card, the card's own)
-  let reach = if in_card.val > 0 {
-    0.0
-  } else {
-    row_reach(if narrow { card_pad - corner_inset } else { desk_list_out })
-  }
-  // (in a small panel: a menu's row, at its padding, its words a row's padding in, concentric with it)
-  let line = if in_small_panel() {
-    panel_row_in()
-  } else if reach > 0.0 {
-    @ui.style(mx=room(-reach), px=room(reach))
-  } else {
-    no_reach
-  }
+  let line = row_line(narrow)
   let top = if under { row_top } else { no_reach }
   let b = if narrow {
     c.box(style=narrow_row(goes).then(line).then(top), id=if goes { id } else { 0 }, fn() {
@@ -1189,6 +1175,26 @@ pub fn choice_row(
 ///|
 // kept across runs: a value (no field of it changes)
 let no_reach : @ui.Style = @ui.css("")
+
+///|
+/// Where a row of a page's (link_row, choice_row, said_row, item_row) stands across: in a panel's column, its ground
+/// reaching out across the room the panel leaves, its words on the column's line (row_reach); in a small panel, a
+/// menu's row, at its padding, its words a row's padding in, concentric with it; on a card or a page, as its own.
+fn row_line(narrow : Bool) -> @ui.Style {
+  let reach = if in_card.val > 0 {
+    0.0
+  } else {
+    row_reach(if narrow { card_pad - corner_inset } else { desk_list_out })
+  }
+  if in_small_panel() {
+    panel_row_in()
+  } else if reach > 0.0 {
+    @ui.style(mx=room(-reach), px=room(reach))
+  } else {
+    no_reach
+  }
+}
+
 
 ///|
 /// A choice's label and what follows it on its line (a model's maker), 6 apart.
@@ -1255,7 +1261,7 @@ pub fn switch_row(
 /// pointer).
 pub fn said_row(c : @ui.Ctx, title : String, note : String, value? : () -> Unit) -> Unit {
   let narrow = look() == Narrow
-  c.box(style=if narrow { narrow_row(false) } else { wide_list_row }, fn() {
+  c.box(style=(if narrow { narrow_row(false) } else { wide_list_row }).then(row_line(narrow)), fn() {
     match value {
       // its title, and at its end, in the room the title leaves, a control (a model's picker) where a value is said
       Some(f) => {
@@ -1284,7 +1290,8 @@ let pg_row_end : @ui.Style = @ui.css("row justify=JEnd align=ACenter").then(@ui.
 /// A row of a group holding what it is given (a piece of software: its mark, its words, its button), going nowhere:
 /// narrow, a card's row (12 in, its corner concentric with the card's); wide, the web's list row.
 pub fn item_row(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=if look() == Narrow { narrow_row(false) } else { wide_list_row }, body) |> ignore
+  let narrow = look() == Narrow
+  c.box(style=(if narrow { narrow_row(false) } else { wide_list_row }).then(row_line(narrow)), body) |> ignore
 }
 
 ///|

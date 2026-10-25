@@ -1670,6 +1670,22 @@ test "page-old-part" {
 }
 
 ///|
+test "page-old-sheet" {
+  let cfg = Config::new(@rjson.parse("{\"pages\": {\"roots\": [\"src/pages\"], \"old_sheets\": [\"open_sheet\"]}}"))
+  // a page putting a sheet up in the old host; the host's own fn, the name not called and a test's not counted
+  found(
+    [
+      ("src/pages/row.mbt", "fn open_sheet(h : Double) -> Unit {\n  ignore(h)\n}\nfn v() -> Unit {\n  open_sheet(0.5)\n  let f = open_sheet\n}\n"),
+      ("src/pages/row_wbtest.mbt", "test \"t\" {\n  open_sheet(0.5)\n}\n"),
+    ],
+    "page-old-sheet",
+    1,
+    cfg~,
+  )
+  |> ignore
+}
+
+///|
 test "page-look" {
   let cfg = Config::new(
     @rjson.parse(

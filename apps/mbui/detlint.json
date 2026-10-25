@@ -119,6 +119,9 @@
       "wide_head",
       "quota_chips",
       "meter_chip"
+    ],
+    "old_sheets": [
+      "open_sheet"
     ]
   },
   "build_effect": {
@@ -187,7 +190,7 @@
       "src/sfapp/settings/memory.mbt": 19,
       "src/sfapp/settings/more_pages.mbt": 65,
       "src/sfapp/settings/parts.mbt": 8,
-      "src/sfapp/settings/profile_more.mbt": 25,
+      "src/sfapp/settings/profile_more.mbt": 20,
       "src/sfapp/settings/profile_new.mbt": 58,
       "src/sfapp/settings/profiles.mbt": 47,
       "src/sfapp/settings/run_more.mbt": 146,
@@ -238,7 +241,7 @@
       "src/sfapp/settings/memory.mbt": 11,
       "src/sfapp/settings/more_pages.mbt": 28,
       "src/sfapp/settings/parts.mbt": 16,
-      "src/sfapp/settings/profile_more.mbt": 13,
+      "src/sfapp/settings/profile_more.mbt": 11,
       "src/sfapp/settings/profile_new.mbt": 31,
       "src/sfapp/settings/profiles.mbt": 27,
       "src/sfapp/settings/run_more.mbt": 65,
@@ -322,7 +325,15 @@
     "motion-read": {
       "src/sfreplay/steps.mbt": 1
     },
-    "page-old-part": {}
+    "page-old-part": {},
+    "page-old-sheet": {
+      "src/sfapp/chat.mbt": 3,
+      "src/sfapp/context.mbt": 2,
+      "src/sfapp/settings/more_pages.mbt": 2,
+      "src/sfapp/settings/run_more.mbt": 3,
+      "src/sfapp/settings/station_add.mbt": 1,
+      "src/sfapp/sheets.mbt": 6
+    }
   },
   "excused": {
     "frame-request": {},
@@ -370,6 +381,7 @@
     "page-look": {},
     "follow-layout": {},
     "motion-read": {},
-    "page-old-part": {}
+    "page-old-part": {},
+    "page-old-sheet": {}
   }
 }
