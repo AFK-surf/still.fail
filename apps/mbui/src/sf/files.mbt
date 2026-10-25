@@ -509,12 +509,9 @@ let quote_box_composer : @ui.Style = quote_box.then(@ui.style(radius=InnerOr(rou
 pub let composer_inner : Double = row_corner
 
 ///|
-/// The composer's padding (the ladder's inset: its 32 buttons round in its corners, concentric) and its buttons across
-/// (composer.css.ts COMPOSER_BUTTON).
-pub let composer_pad : Double = capsule_in(card_corner, composer_button)
-
-///|
-pub let composer_button : Double = 32.0
+/// The composer's padding: the ladder's inset, so what stands in its corners has the ladder's next corner (a quote's,
+/// a file's; its round controls round there: the computer's 32 and the phone's 36 alike).
+pub let composer_pad : Double = corner_inset
 
 ///|
 /// quoteCardSource: 7 by 11 over the words (in the composer 9 over, 16 at its start, 34 at its end for its ✕).

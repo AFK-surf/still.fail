@@ -330,3 +330,45 @@ test "on a phone, a finger down outside the composer lets go of the keyboard onc
   t.draw()
   assert_true(!t.ctx().editor_focused(@sfpages.composer_field_key))
 }
+
+///|
+test "the room a list keeps for the composer opened with one line is as tall as it lays out (composer_open_room), on a computer and on a phone" {
+  for screen in [(@ui.Pointing::Mouse, 0), (@ui.Pointing::Finger, 2)] {
+    let (pointing, platform) = screen
+    let calls : Array[Made] = []
+    let (t, _) = desk_composer_tester(calls, pointing~, platform~)
+    t.draw()
+    t.tap(450.0, 500.0 - 16.0 - 22.0)
+    assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+    // (its box come to its opened shape)
+    let opened = t.rest_of("composer")
+    if opened > t.time() && opened < @double.infinity {
+      t.run_for(opened - t.time())
+    }
+    t.draw()
+    // (12 over the box and 16 under it, as a chat's foot has it)
+    assert_eq(@motion.measured(t.ctx(), "composer/content"), Some(@sfpages.composer_open_room() - 12.0 - 16.0))
+  }
+}
+
+///|
+test "on a phone a finger 4 off the send button, beside it or over it, sends: the button's reach over the composer's own (its field, its box)" {
+  for off in [(1.0, 0.0), (0.0, -1.0), (-1.0, 0.0)] {
+    let calls : Array[Made] = []
+    let (t, _) = desk_composer_tester(calls, pointing=Finger, platform=2)
+    t.draw()
+    t.tap(450.0, 500.0 - 16.0 - 22.0)
+    t.type_text("先看第三项")
+    t.frame()
+    let opened = t.rest_of("composer")
+    if opened > t.time() && opened < @double.infinity {
+      t.run_for(opened - t.time())
+    }
+    t.draw()
+    let (cx, cy) = t.locate("icon:arrow-up")[0]
+    let half = @sf.theme().round.side / 2.0
+    t.tap(cx + off.0 * (half + 4.0), cy + off.1 * (half + 4.0))
+    t.frame()
+    assert_eq(named(calls, "chat.send").length(), 1, msg="pressed \{off}")
+  }
+}

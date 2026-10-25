@@ -81,6 +81,18 @@ pub(all) struct Type {
   heading : Double
   heading_line : Double
   display : Double
+  /// what is typed (textInput: the phone's 16, as iOS zooms into less; the computer's 14), on its line
+  input : Double
+  input_line : Double
+}
+
+///|
+/// A round control standing in a field's capsule (the composer's ＋ and send: mPlus, mSend; attachBtn, sendBtn): how
+/// wide it shows and its glyph's size (a finger reaches it from round it as it reaches any target smaller than the
+/// system's least: @ui's finger_reach).
+pub(all) struct Round {
+  side : Double
+  glyph : Double
 }
 
 ///|
@@ -97,6 +109,8 @@ pub(all) struct Theme {
   control_h : Double
   /// what a page's bar of keys is on this screen (Bars)
   bars : Bars
+  /// the round controls standing in a field's capsule (Round)
+  round : Round
 }
 
 ///|
@@ -769,6 +783,8 @@ let wide_type : Type = {
   heading: 22.0,
   heading_line: 30.0,
   display: 28.0,
+  input: 14.0,
+  input_line: 21.0,
 }
 
 ///|
@@ -789,6 +805,23 @@ let narrow_type : Type = {
   ui_line: 22.0,
   body: 15.0,
   body_line: 22.0,
+  input: 16.0,
+  input_line: 21.0,
+}
+
+///|
+/// The computer's round controls (attachBtn, sendBtn: 32, the arrow 16).
+let wide_round : Round = { side: 32.0, glyph: 16.0 }
+
+///|
+/// The phone's (mPlus, mSend: 36, both glyphs 18).
+let narrow_round : Round = { side: 36.0, glyph: 18.0 }
+
+///|
+/// It: `side` round, what it shows in its middle.
+pub fn round_face() -> @ui.Style {
+  let r = theme().round
+  @ui.style(w=Fixed(r.side), h=Fixed(r.side), radius=InnerOr(Full), align=ACenter, justify=JCenter)
 }
 
 ///|
@@ -825,7 +858,16 @@ let dark_set : Ref[Bool?] = { val: None }
 
 ///|
 let current : Ref[Theme] = {
-  val: { dark: false, narrow: false, p: wide_light, t: wide_type, rows: wide_rows, control_h: wide_control_h, bars: bars_drawn },
+  val: {
+    dark: false,
+    narrow: false,
+    p: wide_light,
+    t: wide_type,
+    rows: wide_rows,
+    control_h: wide_control_h,
+    bars: bars_drawn,
+    round: wide_round,
+  },
 }
 
 ///|
@@ -921,6 +963,7 @@ pub fn begin(c : @ui.Ctx) -> Theme {
     rows: if narrow { narrow_rows } else { wide_rows },
     control_h: if narrow { narrow_control_h } else { wide_control_h },
     bars: bars_drawn,
+    round: if narrow { narrow_round } else { wide_round },
   }
   current.val
 }
@@ -1759,6 +1802,19 @@ pub fn rail_in_tape() -> Double {
 ///|
 pub fn rail_in_tape_room() -> @ui.Space {
   room(rail_in_tape())
+}
+
+///|
+/// How far past the composer's padding its round controls stand in its foot corners (a margin, below 0 where they are
+/// larger than its padding leaves room for: a phone's 36), concentric with its corner as round ones are (capsule_in).
+pub fn composer_round_off() -> @ui.Space {
+  room(composer_round_in() - composer_pad)
+}
+
+///|
+/// How far in from the composer's box its round controls stand in its foot corners (composer_round_off).
+pub fn composer_round_in() -> Double {
+  capsule_in(card_corner, theme().round.side)
 }
 
 ///|

@@ -477,49 +477,12 @@ pub fn open_drive_fixture(mode : String) -> Unit {
     // (chat-station-files: ＋'s Station 文件 put up as the app's source is made, fixture_station_files)
     // (chat-attach-row: put in before the draft's kept files are read, so it is the first of the files' row)
     "chat-station-ref" | "chat-attach-row" =>
-      draft_refs["ws1/st1:s-c1"] = [draft_ref("ws1/st1", "Studio", fix_docs, "发布清单.md", "发布清单.md", false, size=4210.0)]
-    // one sent as a file (staged on the chat's station: up), a folder as a zip still going; a card's sheet open
+      fix_draft_ref("ws1/st1:s-c1", "发布清单.md", false, 4210.0, "path", true)
+    // one sent as a file (up at the chat's station), a folder as a zip still going; a card's sheet open
+    // (open_fixture_src)
     "chat-station-file" | "chat-station-sheet" => {
-      let file = draft_ref("ws1/st1", "Studio", fix_docs, "发布清单.md", "发布清单.md", false, size=4210.0)
-      file.mode = "file"
-      file.up = Some({
-        id: 9001,
-        name: "发布清单.md",
-        size: 4210,
-        image: "",
-        width: 0,
-        height: 0,
-        pasted: None,
-        local: None,
-        done: Some({ "name": "发布清单.md", "path": "uploads/发布清单.md", "size": 4210 }),
-        sent: 4210,
-        error: None,
-        core_id: "",
-        retry: false,
-        retrying: false,
-      })
-      let folder = draft_ref("ws1/st1", "Studio", fix_docs, "设计稿", "设计稿", true)
-      folder.mode = "file"
-      folder.up = Some({
-        id: 9002,
-        name: "设计稿.zip",
-        size: 0,
-        image: "",
-        width: 0,
-        height: 0,
-        pasted: None,
-        local: None,
-        done: None,
-        sent: 0,
-        error: None,
-        core_id: "",
-        retry: false,
-        retrying: false,
-      })
-      draft_refs["ws1/st1:s-c1"] = [file, folder]
-      if mode == "chat-station-sheet" {
-        sfs.ref = Some(("ws1/st1:s-c1", file))
-      }
+      fix_draft_ref("ws1/st1:s-c1", "发布清单.md", false, 4210.0, "file", true)
+      fix_draft_ref("ws1/st1:s-c1", "设计稿", true, 0.0, "file", false)
     }
     // the player (play_fixture.mbt), a service's page (service_fixture.mbt)
     _ => {
@@ -528,4 +491,30 @@ pub fn open_drive_fixture(mode : String) -> Unit {
       open_share_fixture(mode)
     }
   }
+}
+
+///|
+/// Studio's 文档/`name` in draft `key` as ＋'s Station 文件 puts it there (writing_drop: composer.add, the file with
+/// where it is, `mode` how it goes: "path", named by it; "file", sent as one), up already (`done`, as the fixture's
+/// composer.add has it) or still going.
+fn fix_draft_ref(key : String, name : String, dir : Bool, size : Double, mode : String, done : Bool) -> Unit {
+  let path = fix_docs + "/" + name
+  let one : Map[String, Json] = {
+    "id": Json::string("ref-" + name),
+    "name": Json::string(name),
+    "size": Json::number(size),
+    "ref": {
+      "station": "ws1/st1",
+      "stationName": "Studio",
+      "path": Json::string(path),
+      "dir": Json::boolean(dir),
+      "mode": Json::string(mode),
+    },
+    "drive": { "station": "ws1/st1", "root": Json::string(fix_docs), "path": Json::string(name) },
+  }
+  if done {
+    one["sent"] = Json::number(size)
+    one["done"] = { "name": Json::string(name), "path": Json::string("uploads/" + name), "size": Json::number(size) }
+  }
+  fix_composers[key] = fix_composers.get(key).unwrap_or([]) + [Json::object(one)]
 }
