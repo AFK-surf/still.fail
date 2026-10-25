@@ -130,7 +130,8 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 
 ///|
 /// A station's row (StationRow): its mark and name, how it is at the end (@sfpages.station_state); while up, what is
-/// left of its CPU, memory and disk and how this device reaches it (@sfpages.station_figures).
+/// left of its CPU, memory and disk and how this device reaches it (@sfpages.station_figures); those two lines' room
+/// kept while it is away, every station's row as high.
 fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, more : Bool, pick : () -> Unit) -> Unit {
   let t = @sf.theme()
   if nav_item(
@@ -141,6 +142,7 @@ fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, more : Bool
       fn() { nav_title(c, text(s, "name")) },
       end=fn() { @sfpages.station_state(c, s) },
       lines=fn() { @sfpages.station_figures(c, src, s) },
+      keep_lines=2,
       more~,
     ) {
     pick()
