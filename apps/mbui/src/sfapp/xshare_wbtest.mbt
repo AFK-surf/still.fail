@@ -95,3 +95,26 @@ test "归档对话 from the sheet: a chat keeping watch is archived only once as
   t.tap(cx + cw + 40.0, cy + ch / 2.0)
   assert_eq(named(calls, "chat.archive").length(), 1)
 }
+
+///|
+test "分享给其他 workspace on a phone: its rows a finger's, 完成 across the sheet in a thumb's reach" {
+  let calls : Array[Made] = []
+  let t = sheet_core(calls)
+  t.tap_text("分享给其他 workspace")
+  t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  // (each row 48 at least: the next one's words that far under its words)
+  let (_, y1, _, _) = t.rect_of("日常").unwrap()
+  let (_, y2, _, _) = t.rect_of("开源").unwrap()
+  assert_true(y2 - y1 >= 48.0, msg="rows \{y2 - y1} apart")
+  // their names a phone's row title (its body's 15 on 21), as the phone's sheet had them; the switch's too
+  let (_, _, _, nh) = t.rect_of("日常").unwrap()
+  assert_true(nh >= 21.0, msg="a row's name \{nh} high")
+  let (_, _, _, sh) = t.rect_of("可发送消息").unwrap()
+  assert_true(sh >= 21.0, msg="the switch's title \{sh} high")
+  // 完成's ground: across the sheet, less its sides
+  let (x, y, w, h) = t.rect_of("完成").unwrap()
+  let (cx, cy) = (x + w / 2.0, y + h / 2.0)
+  let grounds = t.drawn_rects().filter(fn(r) { r.0 <= cx && cx <= r.0 + r.2 && r.1 <= cy && cy <= r.1 + r.3 && r.3 < 60.0 })
+  assert_true(grounds.iter().any(fn(r) { r.2 >= 390.0 - 2.0 * 24.0 }), msg="完成 not across the sheet: \{grounds}")
+}
