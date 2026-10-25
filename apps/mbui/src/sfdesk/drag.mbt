@@ -672,7 +672,8 @@ fn dv_kind_of(name : String) -> String {
 
 ///|
 /// A folder of the sidebar that takes a drop (FilesNav.tsx FolderDrop): its row, ringed while what it takes is over it,
-/// saying what a drop does; its corner the row's (`phone`: a finger's list's, square, as its rows are: nav_row).
+/// saying what a drop does; its corner the row's (the theme's chats' list's `side_drop`: a touch device's square, as its
+/// rows are).
 fn fdrag_side_row(
   c : @ui.Ctx,
   key : String,
@@ -681,16 +682,11 @@ fn fdrag_side_row(
   write : Bool,
   transfers : Bool,
   row : () -> Unit,
-  phone? : Bool = false,
 ) -> Unit {
   let id = c.id("files/drop/" + key)
   let lit = fdrag_target(c, id, "side/" + key, Some(into), name, write, transfers, 1, outside=false)
-  let look = match (phone, lit) {
-    (false, None) => fdrag_side
-    (false, Some(_)) => fdrag_side_on
-    (true, None) => fdrag_side_phone
-    (true, Some(_)) => fdrag_side_phone_on
-  }
+  let drop = @sf.theme().chat_list.side_drop
+  let look = if lit is Some(_) { drop.then(fdrag_side_on) } else { drop }
   c.box(style=look, id~, fn() {
     row()
     match lit {
@@ -737,21 +733,9 @@ let fdrag_ghost_chip : @ui.Style = @ui.css(
 )
 
 ///|
-/// A folder's row of the sidebar (drop: the nav row's corner), ringed in the accent on its ground while over it.
+/// What a drop over it would land in: ringed in the accent on its wash.
 // kept across runs: a value (no field of it changes)
-let fdrag_side : @ui.Style = @ui.css("w=Full radius=Xl")
-
-///|
-// kept across runs: a value (no field of it changes)
-let fdrag_side_on : @ui.Style = fdrag_side.then(@ui.css("bg=AccentBg border=B1 border_color=Accent"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let fdrag_side_phone : @ui.Style = @ui.css("w=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
-let fdrag_side_phone_on : @ui.Style = fdrag_side_phone.then(@ui.css("bg=AccentBg border=B1 border_color=Accent"))
+let fdrag_side_on : @ui.Style = @ui.css("bg=AccentBg border=B1 border_color=Accent")
 
 ///|
 // kept across runs: a value (no field of it changes)

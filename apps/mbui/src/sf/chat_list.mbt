@@ -46,7 +46,14 @@ pub(all) struct ChatList {
   /// device)
   top_in : Double
   foot_in : Double
-  /// a day's heading (navHeading; the phone's section header)
+  /// a sidebar's other lists (the files' places, the settings'): their box, a row (one of a list's items, its words
+  /// from the top), a row's words (the title's), where something goes while there is none, a folder that takes a drop
+  side_list : @ui.Style
+  side_row : @ui.Style
+  side_row_tall : @ui.Style
+  side_hint : @ui.Style
+  side_drop : @ui.Style
+  /// a day's heading, a sidebar list's (navHeading; the phone's section header)
   heading : @ui.Style
   /// beside a rail: in as its rows are there (a touch device's 14 to their 16)
   heading_beside_rail : @ui.Style
@@ -101,6 +108,13 @@ pub let mouse_chat_list : ChatList = {
   face_ring: @ui.css("w=S5 h=S5 radius=Full border=B1 border_color=Fg"),
   top_in: 4.0,
   foot_in: 12.0,
+  side_list: @ui.css("w=Full h=Full px=S2"),
+  side_row: @ui.css("row w=Full min_h=S8 px=S2_5 py=S1_5 gap=S2").then(@ui.style(radius=side_row_radius)),
+  side_row_tall: @ui.css("row w=Full min_h=S8 px=S2_5 gap=S2 align=AStart").then(
+    @ui.style(py=row_in, radius=side_row_radius),
+  ),
+  side_hint: @ui.css("row w=Full px=S2_5 py=S1_5 gap=S2 align=ACenter"),
+  side_drop: @ui.css("w=Full radius=Xl"),
   heading: @ui.css("w=Full px=S2 pt=S3_5 pb=S1"),
   heading_beside_rail: @ui.css("w=Full px=S2 pt=S3_5 pb=S1"),
   heading_words: @ui.text_style(size=Xs, color=Muted, leading=L5, wrap=false),
@@ -145,6 +159,12 @@ pub let touch_chat_list : ChatList = {
   face_ring: @ui.style(w=touch_face_ring, h=touch_face_ring, radius=Full, border=B1, border_color=Fg),
   top_in: 0.0,
   foot_in: 0.0,
+  // (as wide as their box, their rows in by their own, square: SidebarList.css.ts phone)
+  side_list: @ui.css("w=Full h=Full"),
+  side_row: @ui.css("row w=Full pr=S4 py=S2_5 gap=S2 align=ACenter").then(@ui.style(pl=phone_row_in)),
+  side_row_tall: @ui.css("row w=Full pr=S4 py=S2_5 gap=S2 align=ACenter").then(@ui.style(pl=phone_row_in)),
+  side_hint: @ui.css("row w=Full pr=S4 py=S2_5 gap=S2 align=ACenter").then(@ui.style(pl=phone_row_in)),
+  side_drop: @ui.css("w=Full"),
   heading: @ui.css("w=Full px=S5 pt=S3_5 pb=S1_5"),
   heading_beside_rail: @ui.css("w=Full pl=S3_5 pr=S5 pt=S3_5 pb=S1_5"),
   heading_words: @ui.text_style(size=Lg, weight=Semibold, color=Fg, wrap=false),

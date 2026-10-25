@@ -78,8 +78,9 @@ priv enum PlaceItem {
 ///|
 /// The files' places of workspace `ws` (FilesNav's list; the phone's 文件, Files.tsx, is the same list), in the box it
 /// is given, scrolling: the person's own folders kept at hand (个人收藏), every station with a drive (its places under
-/// it, opened), the folders the stations pin for everyone (团队共享). With a finger, its rows as a finger's list has them
-/// (a size up, the box's width: SidebarList.tsx NavPhone). `top`, `foot`: room kept at its ends for what is over it;
+/// it, opened), the folders the stations pin for everyone (团队共享). Its rows a sidebar list's on this screen (the
+/// theme's: a touch device's a finger's list's, a size up, the box's width). `top`, `foot`: room kept at its ends for
+/// what is over it;
 /// `go`: a folder opened (the side in front, by default).
 pub fn files_places(
   c : @ui.Ctx,
@@ -91,7 +92,6 @@ pub fn files_places(
 ) -> Unit {
   drag_frame(c, src, ws)
   let here = this_machine()
-  let phone = @sf.touch_system()
   // those with a drive, this machine's first, then as the workspace lists them
   let (known, error) = drive_stations(src, ws)
   let stations = known.unwrap_or([])
@@ -124,7 +124,7 @@ pub fn files_places(
     rows.append(pinned)
   }
   rows.push(PFoot(foot))
-  c.box(style=if phone { places_phone } else { nav_list }, fn() {
+  c.box(style=@sf.theme().chat_list.side_list, fn() {
     c.list("files/places/" + ws, rows.length(), place_est, fn(i) {
       match rows[i] {
         PTop(h) | PFoot(h) => c.box(style=@ui.style(h=Fixed(h)), fn() {  }) |> ignore
@@ -132,9 +132,9 @@ pub fn files_places(
         PReading => side_breathing(c)
         PNone =>
           c.box(style=nav_note, fn() { c.text(@sf.t("web-main.rail.filesNone"), style=nav_meta) |> ignore }) |> ignore
-        PFavorites => places_favorites(c, src, ws, views, phone, go)
-        PHeading(h) => nav_heading(c, h, phone~)
-        PStation(s) => station_row(c, src, s, s.station == here, dv_rights(src, ws, Some(s)).write, phone, go)
+        PFavorites => places_favorites(c, src, ws, views, go)
+        PHeading(h) => nav_heading(c, h)
+        PStation(s) => station_row(c, src, s, s.station == here, dv_rights(src, ws, Some(s)).write, go)
         PShared(s, r) => {
           let t = @sf.theme()
           let name = if r.name != "" { r.name } else { dv_name(r.path) }
@@ -146,14 +146,13 @@ pub fn files_places(
                 place_lit(s.station, r.path, ""),
                 fn() {
                   @sf.icon(c, "pin", size=nav_icon, color=t.p.muted) |> ignore
-                  nav_words(c, name, color?=if s.online { None } else { Some(t.p.muted) }, phone~)
+                  nav_words(c, name, color?=if s.online { None } else { Some(t.p.muted) })
                   c.text(s.name, style=nav_meta) |> ignore
                 },
-                phone~,
               ) {
               go(into)
             }
-          }, phone~)
+          })
         }
       }
     })
@@ -179,7 +178,6 @@ fn places_favorites(
   src : Source,
   ws : String,
   views : Array[DvStation],
-  phone : Bool,
   go : (DriveAt) -> Unit,
 ) -> Unit {
   let t = @sf.theme()
@@ -187,9 +185,9 @@ fn places_favorites(
   let kid = c.id("files/keep")
   let keeping = fdrag_target(c, kid, "keep", None, "", true, true, 0, outside=false) is Some(_)
   c.box(style=if keeping { keep_on } else { keep_off }, id=kid, fn() {
-    nav_heading(c, @sf.t("web-pages.files.favorites"), phone~)
+    nav_heading(c, @sf.t("web-pages.files.favorites"))
     if favs.length() == 0 {
-      c.box(style=if phone { nav_hint_phone } else { nav_hint }, fn() {
+      c.box(style=@sf.theme().chat_list.side_hint, fn() {
         @sf.icon(c, "star", size=nav_icon, color=t.p.subtle) |> ignore
         c.text(@sf.t("web-pages.files.favoritesHint"), style=nav_meta) |> ignore
       })
@@ -210,18 +208,17 @@ fn places_favorites(
                 place_lit(f.station, f.root, f.path),
                 fn() {
                   @sf.icon(c, "folder", size=nav_icon, color=t.p.muted) |> ignore
-                  nav_words(c, f.name, color?=if st.online { None } else { Some(t.p.muted) }, phone~)
+                  nav_words(c, f.name, color?=if st.online { None } else { Some(t.p.muted) })
                   c.text(st.name, style=nav_meta) |> ignore
                   let ub = c.box(style=unkeep, id=rid, fn() {
                     @sf.icon(c, "close", size=nav_icon, color=t.p.subtle) |> ignore
                   })
                   c.semantics(ub, Button, id=rid, label=@sf.t("web-pages.files.unfavorite", args=[("name", f.name)]))
                 },
-                phone~,
               ) {
               go(into)
             }
-          }, phone~)
+          })
         }
         None => ()
       }
@@ -239,7 +236,6 @@ fn station_row(
   s : DvStation,
   here : Bool,
   write : Bool,
-  phone : Bool,
   go : (DriveAt) -> Unit,
 ) -> Unit {
   let t = @sf.theme()
@@ -273,7 +269,7 @@ fn station_row(
             expanded=open,
           )
           @sf.station_icon(c, s.emoji, s.icon, nav_icon, t.p.muted, here~)
-          nav_words(c, s.name, color?=if s.online { None } else { Some(t.p.muted) }, phone~)
+          nav_words(c, s.name, color?=if s.online { None } else { Some(t.p.muted) })
           if here {
             c.box(style=here_chip, fn() { c.text(@sf.t("web-pages.files.thisMachine"), style=here_words) |> ignore })
             |> ignore
@@ -284,7 +280,6 @@ fn station_row(
             c.text(@sf.t("web-pages.stations.offline"), style=nav_meta) |> ignore
           }
         },
-        phone~,
       ) &&
       !c.clicked(did) {
       match start {
@@ -295,11 +290,11 @@ fn station_row(
   }
   c.box(style=station_item, fn() {
     match start {
-      Some(r) => fdrag_side_row(c, "station/" + s.station, { station: s.station, root: Some(r), path: "" }, s.name, write, s.transfers, row, phone~)
+      Some(r) => fdrag_side_row(c, "station/" + s.station, { station: s.station, root: Some(r), path: "" }, s.name, write, s.transfers, row)
       None => row()
     }
     if open {
-      station_places(c, src, s, write, phone, go)
+      station_places(c, src, s, write, go)
     }
   })
   |> ignore
@@ -313,7 +308,6 @@ fn station_places(
   src : Source,
   s : DvStation,
   write : Bool,
-  phone : Bool,
   go : (DriveAt) -> Unit,
 ) -> Unit {
   let t = @sf.theme()
@@ -353,13 +347,12 @@ fn station_places(
             place_lit(s.station, path, ""),
             fn() {
               @sf.icon(c, if disk { "disk" } else { "folder" }, size=nav_icon, color=t.p.muted) |> ignore
-              nav_words(c, name, color?=if s.online { None } else { Some(t.p.muted) }, phone~)
+              nav_words(c, name, color?=if s.online { None } else { Some(t.p.muted) })
             },
-            phone~,
           ) {
           go(into)
         }
-      }, phone~)
+      })
     }
   })
   |> ignore
@@ -403,17 +396,8 @@ let disk_full : Double = 0.9
 let nav_side : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
-// kept across runs: a value (no field of it changes)
-let nav_list : @ui.Style = @ui.css("w=Full h=Full px=S2")
-
-///|
 /// The list 4 under the band (Sidebar.css.ts navList).
 let nav_top : Double = 4.0
-
-///|
-/// With a finger, as wide as its box (SidebarList.css.ts phone: its rows in by their own).
-// kept across runs: a value (no field of it changes)
-let places_phone : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// A station's row and its places under it, one item of the list.
@@ -425,12 +409,6 @@ let station_item : @ui.Style = @ui.css("w=Full")
 let place_est : Double = 36.0
 
 ///|
-/// With a finger, where favourites go while there are none: as a row of a finger's list.
-// kept across runs: a value (no field of it changes)
-let nav_hint_phone : @ui.Style = @ui.css("row w=Full pr=S4 py=S2_5 gap=S2 align=ACenter").then(@ui.style(pl=@sf.phone_row_in))
-
-
-///|
 // kept across runs: a value (no field of it changes)
 let nav_trouble : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=false)
 
@@ -438,11 +416,6 @@ let nav_trouble : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=fal
 /// The list's words in place of rows (empty, reading), 8 by 10 in.
 // kept across runs: a value (no field of it changes)
 let nav_note : @ui.Style = @ui.css("w=Full px=S2_5 py=S2")
-
-///|
-/// Where favourites go while there are none (hint): a row of the list, its mark then its words, faint.
-// kept across runs: a value (no field of it changes)
-let nav_hint : @ui.Style = @ui.css("row w=Full px=S2_5 py=S1_5 gap=S2 align=ACenter")
 
 ///|
 /// 个人收藏 (keep): ringed while a folder dragged over it would be kept there.
