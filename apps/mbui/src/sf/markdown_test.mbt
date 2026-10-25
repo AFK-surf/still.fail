@@ -66,10 +66,10 @@ test "a table's cell of only the message's images: them side by side, 160 wide a
         @sf.markdown(
           c,
           "| 网页 | 手机网页 |\n|---|---|\n| ![](web%2Dfolded.png) | ![](phone.png) |\n",
-          cell_files=fn(name) {
+          files=fn(name) {
             // a wide one and a tall one
             let r = if name == "web-folded.png" { 2.0 } else { 0.5 }
-            Some((r, fn(w) { drawn.push((name, w)) }))
+            Some({ draw: fn() {  }, image: Some((r, fn(w) { drawn.push((name, w)) })) })
           },
         )
         |> ignore

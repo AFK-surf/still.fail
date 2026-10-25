@@ -124,6 +124,15 @@ pub fn image_box(a : Attachment, least : Double) -> (Double, Double, Bool) {
 }
 
 ///|
+/// An image's width over its height in the chat (its image_box's), as a table's cell draws it that wide (@sf.Placed's
+/// `image`); None for any other file.
+fn image_ratio(a : Attachment) -> Double? {
+  guard file_kind(a.name) == "image" else { return None }
+  let (w, h, _) = image_box(a, image_least)
+  Some(w / h)
+}
+
+///|
 /// An image's own proportions, as known before it loads: its size sent with it, else its ThumbHash's at the unknown
 /// box's height; None for one sent before sizes were kept.
 fn own_size(a : Attachment) -> (Double, Double)? {

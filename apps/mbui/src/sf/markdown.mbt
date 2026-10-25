@@ -12,7 +12,8 @@
 // another chat is a reference to it (Markdown.kt appendRef): `@` a little
 // lighter, then its words, in the accent. With `files`, a message's files
 // its text names (the core's `placed`) are drawn where it names them: a
-// paragraph of only a link to one, or its images, as the files themselves.
+// paragraph of only a link to one, or its images, as the files themselves;
+// a table's cell of only its images, them side by side.
 // With `screens`, its links to a station's screens (and 共享调试) are their
 // cards alone in a paragraph, their titles bare within a sentence.
 //
@@ -45,11 +46,8 @@ priv struct Md {
   on_link_hold : ((String, (Double, Double, Double, Double)) -> Unit)?
   /// a scope for ids: the n-th paragraph of the message
   mut n : Int
-  /// a placed file's drawing, by the file's name
-  files : (String) -> (() -> Unit)?
-  /// a placed image as a table's cell has it (Markdown.kt CellImageRow), by the file's name: its width over its height,
-  /// and its drawing in a box that wide (as tall as its proportion makes it)
-  cell_files : (String) -> (Double, (Double) -> Unit)?
+  /// a placed file, by the file's name
+  files : (String) -> Placed?
   /// a search's words, bold wherever they are in it (TextMark.kt markWeight)
   found : Array[String]
   /// a fenced block drawn another way than as code, by its language and its code (Markdown.kt: a ```mermaid one as a
@@ -311,6 +309,15 @@ pub(all) struct Screens {
 }
 
 ///|
+/// A file the message places (`files`): `draw` it on a line of its own; an image's width over its height and its
+/// drawing in a box that wide (as tall as its proportion makes it), as a table's cell has it beside others
+/// (Markdown.kt CellImageRow; None for any other file, named in a cell by its words).
+pub(all) struct Placed {
+  draw : () -> Unit
+  image : (Double, (Double) -> Unit)?
+}
+
+///|
 /// A paragraph of only a link with a card (Markdown.kt screenAlone): its
 /// address, and its words unless it is bare.
 fn screen_alone(xs : Array[MdInline]) -> (String, String?)? {
@@ -373,8 +380,7 @@ pub fn markdown(
   ink? : Int64 = 0L,
   on_link? : (String) -> Unit = fn(_) {  },
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
-  files? : (String) -> (() -> Unit)? = fn(_) { None },
-  cell_files? : (String) -> (Double, (Double) -> Unit)? = fn(_) { None },
+  files? : (String) -> Placed? = fn(_) { None },
   found? : Array[String] = [],
   code? : (String, String) -> (() -> Unit)? = fn(_, _) { None },
   screens? : Screens? = None,
@@ -390,7 +396,6 @@ pub fn markdown(
     on_link_hold,
     n: 0,
     files,
-    cell_files,
     found,
     code,
     screens,
@@ -470,7 +475,6 @@ pub fn markdown_part(
     on_link_hold: None,
     n: 0,
     files: fn(_) { None },
-    cell_files: fn(_) { None },
     found,
     code: fn(_, _) { None },
     screens: None,
@@ -672,8 +676,8 @@ fn Md::placed(
 ) -> Array[Piece]? {
   let file_of = fn(x : MdInline) -> (() -> Unit)? {
     match x {
-      Link(href, _) => (self.files)(file_name_of(href))
-      Image(src, _) => (self.files)(file_name_of(src))
+      Link(href, _) => (self.files)(file_name_of(href)).map(fn(p) { p.draw })
+      Image(src, _) => (self.files)(file_name_of(src)).map(fn(p) { p.draw })
       _ => None
     }
   }
@@ -1312,9 +1316,9 @@ fn Md::cell_images(self : Md, cell : Array[MdInline]) -> Array[(Double, (Double)
       Text(t) if t.trim(chars=" \n\t").to_string() == "" => ()
       SoftBreak | HardBreak => ()
       Image(src, _) =>
-        match (self.cell_files)(file_name_of(src)) {
-          Some((r, draw)) => out.push((dmax(dmin(r, 4.0), 0.25), draw))
-          None => return None
+        match (self.files)(file_name_of(src)) {
+          Some({ image: Some((r, draw)), .. }) => out.push((dmax(dmin(r, 4.0), 0.25), draw))
+          _ => return None
         }
       _ => return None
     }
