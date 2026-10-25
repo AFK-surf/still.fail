@@ -33,7 +33,8 @@ for t in ${TARGETS:-native}; do
   if [[ " ${PARTS:-app replay} " = *" app "* ]]; then
     # (the screens' tests in sfapp's own, screens_wbtest.mbt: a package of their own was a second program of the whole
     # app, compiled again on every change, 88 s of a branch's app part with sfapp's own 92, 2026-10-23)
-    pkgs="-p stillfail/sf -p stillfail/sfapp -p stillfail/sfapp/settings -p stillfail/gallery -p stillfail/player"
+    # (sfpages' own tests too: the pages moved there from sfapp brought theirs, run by nothing until 2026-10-25)
+    pkgs="-p stillfail/sf -p stillfail/sfpages -p stillfail/sfapp -p stillfail/sfapp/settings -p stillfail/gallery -p stillfail/player"
     # (with ThinLTO, MBC_LTO=thin: only the program of the whole app. What ThinLTO's tests are for is the code that
     # ships, built as it ships, inlined across its units; all of it is in sfapp's test, run with the whole app's tests.
     # The smaller programs are parts of the same code, each linked again with ThinLTO for its own few tests: five

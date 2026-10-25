@@ -36,11 +36,22 @@ test "recent photos: a time ahead of now is left out" {
 }
 
 ///|
-test "recent photos: the latest of its times ranks it" {
+test "recent photos: when it came into the gallery ranks it" {
   // taken long ago, put in the gallery a moment ago (synced down): as new as when it came
   let now = recent_now
   let photos = [photo(1, now - 10, now - 10, now - 86_400L * 900L), photo(2, now - 60, now - 60, now - 60)]
   assert_eq(ranked(photos), [1L, 2L])
+}
+
+///|
+test "recent photos: a picture just saved comes before those whose other times only say they are newer" {
+  let now = recent_now
+  // a screenshot of an hour ago whose time taken is written in the phone's time zone as if it were UTC (8 hours
+  // ahead), an old photo the gallery wrote to a moment ago, a picture another app saved a minute ago
+  let shot = photo(1, now - 3600, now - 3600, now + 7L * 3600L)
+  let touched = photo(2, now - 86_400L * 400L, now - 5, now - 86_400L * 400L)
+  let saved = photo(3, now - 60, now - 60, -1)
+  assert_eq(ranked([shot, touched, saved]), [3L, 1L, 2L])
 }
 
 ///|
