@@ -17,6 +17,8 @@ pub(all) struct ChatList {
   head : @ui.Style
   head_room : @ui.Style
   meta : @ui.Style
+  /// its title's line's height (a row's mark beside it: a sidebar list's item's)
+  head_h : Double
   /// its title (unread: heavier) and what was said last
   title : @ui.TextStyle
   title_unread : @ui.TextStyle
@@ -54,12 +56,13 @@ pub(all) struct ChatList {
   band_icon : Double
   band_h : Double
   band_words : @ui.TextStyle
-  /// a sidebar's other lists (the files' places, the settings'), in a side column (list_line Side): their box, a row
-  /// (one of a list's items, its words from the top), where something goes while there is none, a folder that takes a
-  /// drop
+  /// a row as high as what it holds (list_row: a station's, a folder's, a profile's, laid out as a chat's: its mark
+  /// beside its first line, its words from the top)
+  item : @ui.Style
+  /// a sidebar's other lists (the files' places, the settings'), in a side column (list_line Side): their box, a row of
+  /// one line, where something goes while there is none, a folder that takes a drop
   side_list : @ui.Style
   side_row : @ui.Style
-  side_row_tall : @ui.Style
   side_hint : @ui.Style
   side_drop : @ui.Style
   /// a day's heading, a sidebar list's (navHeading; the phone's section header): over and under it (how far in:
@@ -92,11 +95,14 @@ pub(all) struct ChatList {
 pub let mouse_chat_list : ChatList = {
   row_h: 54.0,
   row: @ui.style(row=true, w=Full, h=side_row_h, py=row_in, gap=S2, align=AStart),
+  // (SidebarList.css.ts item: 7 over and under, as a chat's row)
+  item: @ui.style(row=true, w=Full, min_h=S8, py=row_in, gap=S2, align=AStart),
   text: @ui.css("w=Full gap=S0_5"),
   text_settled: @ui.css("w=Full gap=S0_5 opacity=O45"),
   head: @ui.css("row w=Full h=S5 gap=S1_5 align=ACenter"),
   // (pointed at, room at its end for 归档: 24)
   head_room: @ui.css("row w=Full h=S5 pr=S6 gap=S1_5 align=ACenter"),
+  head_h: 20.0,
   meta: @ui.css("row w=Full h=S4_5 gap=S1_5 align=ACenter"),
   title: @ui.text_style(size=Ui, color=Fg, leading=L6, wrap=false, w=Full),
   title_unread: @ui.text_style(size=Ui, weight=Medium, color=Fg, leading=L6, wrap=false, w=Full),
@@ -125,9 +131,6 @@ pub let mouse_chat_list : ChatList = {
   band_words: @ui.text_style(size=Ui, color=Fg, leading=L6, wrap=false, w=Full),
   side_list: @ui.css("w=Full h=Full px=S2"),
   side_row: @ui.css("row w=Full min_h=S8 px=S2_5 py=S1_5 gap=S2").then(@ui.style(radius=side_row_radius)),
-  side_row_tall: @ui.css("row w=Full min_h=S8 px=S2_5 gap=S2 align=AStart").then(
-    @ui.style(py=row_in, radius=side_row_radius),
-  ),
   side_hint: @ui.css("row w=Full px=S2_5 py=S1_5 gap=S2 align=ACenter"),
   side_drop: @ui.css("w=Full radius=Xl"),
   heading: @ui.css("w=Full pt=S3_5 pb=S1"),
@@ -150,10 +153,13 @@ pub let mouse_chat_list : ChatList = {
 pub let touch_chat_list : ChatList = {
   row_h: touch_list_row_h,
   row: @ui.style(row=true, w=Full, h=Fixed(touch_list_row_h), gap=S1_5, align=ACenter),
+  // (SidebarList.css.ts phone: 10 over and under, its mark's column 8 from its words)
+  item: @ui.css("row w=Full py=S2_5 gap=S2 align=AStart"),
   text: @ui.css("w=Full justify=JCenter"),
   text_settled: @ui.css("w=Full justify=JCenter opacity=O45"),
   head: @ui.style(row=true, w=Full, h=Fixed(touch_title_h), gap=S2, align=ACenter),
   head_room: @ui.style(row=true, w=Full, h=Fixed(touch_title_h), gap=S2, align=ACenter),
+  head_h: touch_title_h,
   meta: @ui.css("row w=Full h=S5 gap=S2 align=ACenter"),
   title: @ui.text_style(size=Ui, color=Fg, leading=L7, wrap=false, w=Full),
   title_unread: @ui.text_style(size=Ui, weight=Semibold, color=Fg, leading=L7, wrap=false, w=Full),
@@ -184,9 +190,6 @@ pub let touch_chat_list : ChatList = {
   // (in a side column as a computer's are, their grounds in and rounded, a finger's height and words)
   side_list: @ui.style(w=Full, h=Full, px=room(touch_band_in)),
   side_row: @ui.css("row w=Full py=S2_5 gap=S2 align=ACenter").then(@ui.style(px=room(touch_band_pad), radius=side_row_radius)),
-  side_row_tall: @ui.css("row w=Full py=S2_5 gap=S2 align=ACenter").then(
-    @ui.style(px=room(touch_band_pad), radius=side_row_radius),
-  ),
   side_hint: @ui.css("row w=Full py=S2_5 gap=S2 align=ACenter").then(@ui.style(px=room(touch_band_pad))),
   side_drop: @ui.css("w=Full radius=Xl"),
   heading: @ui.css("w=Full pt=S3_5 pb=S1_5"),

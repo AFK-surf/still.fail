@@ -30,21 +30,14 @@ let side_top_web : Double = 8.0
 let side_full : @ui.Style = @ui.css("w=Full")
 
 ///|
-/// A row of a sidebar's list (Sidebar.css.ts navRow; a touch device's SidebarList.css.ts phone: the theme's chats'
-/// list's `side_row`): `tall`, a list's item, its words from the top; the pointer's ground on hover, the selected one's
-/// ground when it is the page in view. True on the frame after a press.
-pub fn nav_row(
-  c : @ui.Ctx,
-  key : String,
-  on : Bool,
-  body : () -> Unit,
-  tall? : Bool = false,
-  align? : @ui.Align = ACenter,
-) -> Bool {
+/// A row of one line of a sidebar's list (Sidebar.css.ts navRow; a touch device's SidebarList.css.ts phone: the theme's
+/// chats' list's `side_row`): the pointer's ground on hover, the selected one's ground when it is the page in view. True
+/// on the frame after a press.
+pub fn nav_row(c : @ui.Ctx, key : String, on : Bool, body : () -> Unit, align? : @ui.Align = ACenter) -> Bool {
   let l = @sf.theme().chat_list
   let id = c.id(key)
   c.cursor(id, Hand)
-  let look = if tall { l.side_row_tall } else { l.side_row.then(@ui.style(align~)) }
+  let look = l.side_row.then(@ui.style(align~))
   let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), on)
   c.box(style=look.then(@sf.finger_least_h()).then(@ui.style(bg=Data(ground))), id~, body) |> ignore
   c.clicked(id)
@@ -215,10 +208,10 @@ let side_scroll_est : Double = 600.0
 pub let nav_mark_side : Double = 16.0
 
 ///|
-/// A row of a list in a sidebar, a station's, a profile's, a folder's (SidebarList.tsx NavItem, laid out as a chat's
-/// row): its `mark` in a column 16 wide on its first line's middle, 8 before the rest; its `title` on a line of 20
-/// (nav_title) with what is at that line's `end` (12, muted, never cut: the title gives way); then the `lines` under
-/// them (nav_line each), 2 apart; 7 over and under. True when pressed.
+/// A row of a list in a sidebar, a station's, a profile's, a folder's (SidebarList.tsx NavItem): the library's list
+/// row, laid out as a chat's (@sf.list_row): its `mark` beside its first line, its `title` (nav_title) with what is at
+/// that line's `end` (muted, never cut: the title gives way), then the `lines` under them (nav_line each); the pointer's
+/// ground on hover, the selected one's when it is the page in view. True when pressed.
 pub fn nav_item(
   c : @ui.Ctx,
   key : String,
@@ -228,50 +221,46 @@ pub fn nav_item(
   end? : () -> Unit,
   lines? : () -> Unit,
 ) -> Bool {
-  nav_row(c, key, on, tall=true, fn() {
-    c.box(style=nav_item_mark, mark) |> ignore
-    c.box(style=nav_item_text, fn() {
-      c.box(style=nav_item_head, fn() {
-        title()
-        match end {
-          Some(e) => c.box(style=nav_item_end, e) |> ignore
-          None => ()
-        }
-      })
-      |> ignore
+  let id = c.id(key)
+  c.cursor(id, Hand)
+  let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), on)
+  @sf.list_row(
+    c,
+    id,
+    Side,
+    ground,
+    mark~,
+    fn() {
+      title()
+      match end {
+        Some(e) => c.box(style=nav_item_end, e) |> ignore
+        None => ()
+      }
+    },
+    fn() {
       match lines {
         Some(l) => l()
         None => ()
       }
-    })
-    |> ignore
-  })
+    },
+  )
+  |> ignore
+  c.clicked(id)
 }
 
 ///|
-/// A line under a row's title (SidebarList.css.ts line): 18 high at least, its parts 4 apart, centred.
+/// A line under a row's title (SidebarList.css.ts line: @sf.list_row_line).
 pub fn nav_line(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=nav_line_box, body) |> ignore
+  @sf.list_row_line(c, body)
 }
 
 ///|
-/// A row's title (SidebarList.css.ts title): 13 on 20, as long as there is room; `away`, what it is not there now:
-/// faint.
+/// A row's title (SidebarList.css.ts title: the theme's chats' list's, a chat's title's), as long as there is room;
+/// `away`, what it is not there now: faint.
 pub fn nav_title(c : @ui.Ctx, words : String, away? : Bool = false) -> Unit {
-  c.text(words, style=if away { nav_title_away } else { nav_title_look }) |> ignore
+  let look = @sf.theme().chat_list.title.then(nav_title_grow)
+  c.text(words, style=if away { look.then(nav_title_away) } else { look }) |> ignore
 }
-
-///|
-// kept across runs: a value (no field of it changes)
-let nav_item_mark : @ui.Style = @ui.css("w=S4 h=S5 align=ACenter justify=JCenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let nav_item_text : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
-
-///|
-// kept across runs: a value (no field of it changes)
-let nav_item_head : @ui.Style = @ui.css("row w=Full h=S5 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -279,17 +268,19 @@ let nav_item_end : @ui.Style = @ui.css("row gap=S1_25 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_line_box : @ui.Style = @ui.css("row w=Full min_h=S4_5 gap=S1 align=ACenter")
+let nav_title_grow : @ui.TextStyle = @ui.text_style(w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_title_look : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, leading=L6, wrap=false, w=@sf.grow)
+let nav_title_away : @ui.TextStyle = @ui.text_style(color=Muted)
+
+///|
+/// What a row says in a line under its title or at its end (SidebarList.css.ts line, end): a chat's second line's
+/// words (the theme's chats' list's), as long as they are.
+pub fn nav_meta() -> @ui.TextStyle {
+  @sf.theme().chat_list.last.then(nav_meta_hug)
+}
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_title_away : @ui.TextStyle = nav_title_look.then(@ui.text_style(color=Muted))
-
-///|
-/// What a row says in a line under its title or at its end (SidebarList.css.ts line, end): 12 on 18, muted.
-// kept across runs: a value (no field of it changes)
-pub let nav_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L5, wrap=false)
+let nav_meta_hug : @ui.TextStyle = @ui.text_style(w=Hug)

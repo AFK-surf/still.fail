@@ -131,7 +131,7 @@ pub fn files_places(
         PTrouble(e) => c.text(e, style=nav_trouble) |> ignore
         PReading => side_breathing(c)
         PNone =>
-          c.box(style=nav_note, fn() { c.text(@sf.t("web-main.rail.filesNone"), style=nav_meta) |> ignore }) |> ignore
+          c.box(style=nav_note, fn() { c.text(@sf.t("web-main.rail.filesNone"), style=nav_meta()) |> ignore }) |> ignore
         PFavorites => places_favorites(c, src, ws, views, go)
         PHeading(h) => nav_heading(c, h)
         PStation(s) => station_row(c, src, s, s.station == here, dv_rights(src, ws, Some(s)).write, go)
@@ -147,7 +147,7 @@ pub fn files_places(
                 fn() {
                   @sf.icon(c, "pin", size=nav_icon, color=t.p.muted) |> ignore
                   nav_words(c, name, color?=if s.online { None } else { Some(t.p.muted) })
-                  c.text(s.name, style=nav_meta) |> ignore
+                  c.text(s.name, style=nav_meta()) |> ignore
                 },
               ) {
               go(into)
@@ -189,7 +189,7 @@ fn places_favorites(
     if favs.length() == 0 {
       c.box(style=@sf.theme().chat_list.side_hint, fn() {
         @sf.icon(c, "star", size=nav_icon, color=t.p.subtle) |> ignore
-        c.text(@sf.t("web-pages.files.favoritesHint"), style=nav_meta) |> ignore
+        c.text(@sf.t("web-pages.files.favoritesHint"), style=nav_meta()) |> ignore
       })
       |> ignore
     }
@@ -209,7 +209,7 @@ fn places_favorites(
                 fn() {
                   @sf.icon(c, "folder", size=nav_icon, color=t.p.muted) |> ignore
                   nav_words(c, f.name, color?=if st.online { None } else { Some(t.p.muted) })
-                  c.text(st.name, style=nav_meta) |> ignore
+                  c.text(st.name, style=nav_meta()) |> ignore
                   let ub = c.box(style=unkeep, id=rid, fn() {
                     @sf.icon(c, "close", size=nav_icon, color=t.p.subtle) |> ignore
                   })
@@ -277,7 +277,7 @@ fn station_row(
           if s.online {
             disk_bar(c, s)
           } else {
-            c.text(@sf.t("web-pages.stations.offline"), style=nav_meta) |> ignore
+            c.text(@sf.t("web-pages.stations.offline"), style=nav_meta()) |> ignore
           }
         },
       ) &&
@@ -334,7 +334,7 @@ fn station_places(
     s.roots.map(fn(r) { (r.name, r.path, false) })
   }
   if s.anywhere && nav.places.get(s.station) is None {
-    c.box(style=nav_note, fn() { c.text(@sf.t("web-pages.files.reading"), style=nav_meta) |> ignore }) |> ignore
+    c.box(style=nav_note, fn() { c.text(@sf.t("web-pages.files.reading"), style=nav_meta()) |> ignore }) |> ignore
   }
   c.box(style=places_in, fn() {
     for p in places {
