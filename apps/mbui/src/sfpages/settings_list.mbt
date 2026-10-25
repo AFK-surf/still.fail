@@ -196,8 +196,8 @@ pub fn settings_parts(c : @ui.Ctx, core : Core, here : @settings.Here) -> Array[
       settings_row(Usage, "usage", "chart", @sf.t("android-settings.home.usage")),
     ],
   })
-  // this device's: what there is of it here (the bottom bar a phone's and a tablet's; the keys, this computer's
-  // station a computer's)
+  // this device's: what there is of it here (the bottom bar where the window has one, 2026-10-26: 「为啥中型屏会有这个
+  // 设置」; the keys, this computer's station a computer's)
   let prefs = (core.topic)("prefs", Map::new()).value
   let theme = match @settings.appearance(prefs) {
     "light" => @sf.t("android-settings.theme.light")
@@ -228,10 +228,10 @@ pub fn settings_parts(c : @ui.Ctx, core : Core, here : @settings.Here) -> Array[
       bad=refused,
     ),
   ]
-  let platform = @ui.platform()
-  if platform == 1 || platform == 2 {
+  if @sfbase.bars_shown(c) {
     device.push(settings_row(BarSettings, "bars", "view-columns", @sf.t("android-misc.bar.title"), value=@settings.bars_value(core)))
   }
+  let platform = @ui.platform()
   if platform == 0 || platform == 3 {
     device.push(settings_row(Shortcuts, "shortcuts", "command", @sf.t("web-pages.settings.nav.shortcuts")))
   }

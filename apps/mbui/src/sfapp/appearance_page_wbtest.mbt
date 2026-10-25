@@ -51,6 +51,30 @@ test "字体, at each width on either screen: the places' choice, a chat as they
 }
 
 ///|
+test "下方栏, at each width on either screen: what a bar's title has at its end on the title's line, in its middle" {
+  for case in one_page_cases {
+    let (w, platform, regular, _) = case
+    let t = one_page_tester(@settings.Route::BarSettings, w, platform~, regular~)
+    let at = "\{w} platform \{platform}"
+    // the middles of the words drawn so, top to bottom
+    let middles = fn(words : String) -> Array[Double] {
+      let m = t.words().filter(fn(x) { x.0 == words && x.5 > 0.5 }).map(fn(x) { x.2 + x.4 / 2.0 })
+      m.sort()
+      m
+    }
+    let (titles, deletes) = (middles("第 1 栏") + middles("第 2 栏"), middles("删除"))
+    let (current, make) = (middles("当前"), middles("设为当前"))
+    guard titles.length() == 2 && deletes.length() == 2 && current.length() == 1 && make.length() == 1 else {
+      fail("\{at}: \{titles} \{deletes} \{current} \{make}")
+    }
+    // 第 1 栏 with 当前 and 删除, 第 2 栏 with 设为当前 and 删除 (2026-10-26: 删除 4 over 当前 and the title)
+    for pair in [(titles[0], current[0]), (titles[0], deletes[0]), (titles[1], make[0]), (titles[1], deletes[1])] {
+      assert_true((pair.0 - pair.1).abs() < 0.5, msg="\{at}: \{pair}")
+    }
+  }
+}
+
+///|
 test "下方栏, at each width on either screen: its bars a card each, the one in view said, a new one to make" {
   for case in one_page_cases {
     let (w, platform, regular, _) = case

@@ -1,8 +1,9 @@
 // 下方栏, one page for every frame (web/src/mobile/BarSettings.tsx BarSettingsScreen; the web's desktop has no bottom
 // bar, so no page of it): this device's bottom bars, each a section of its own (its name, 当前 on the one in view,
 // 使用 and 删除 at its end) over a card of its places; a new one made under them. What the core keeps (`bars`) and the
-// page's state are the settings' (save_bars, bar_adding, bar_moves: let go of as the page is left). The bar is laid
-// out Small's; a wider frame shows the same page, to set what a phone-sized window shows.
+// page's state are the settings' (save_bars, bar_adding, bar_moves: let go of as the page is left). The bar is
+// Small's alone, so the settings' row of it is too (settings_list.mbt); the page is laid out at any width all the same
+// (one open as the screen grows wider stays).
 
 ///|
 /// The page (BarSettingsScreen), in the frame it is given: what the bars are for under its title; each bar; 新建一栏;
