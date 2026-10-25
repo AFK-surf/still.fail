@@ -797,6 +797,31 @@ void mb_host_set_app_state(void (*f)(int32_t)) { (void)f; }
 int32_t mb_host_system_dark(void) { return 0; }
 // Words as the app sizes them (@hostapi.font_scale): the system's text scale not read here yet.
 double mb_host_font_scale(void) { return 1.0; }
+// What the app was started to be used with (@hostapi.native_pointing): touch where the machine has a touch screen ready
+// and no mouse, or is in tablet mode (a convertible folded flat: SM_CONVERTIBLESLATEMODE 0); else keyboard and mouse.
+#ifndef SM_DIGITIZER
+#define SM_DIGITIZER 94
+#endif
+#ifndef SM_CONVERTIBLESLATEMODE
+#define SM_CONVERTIBLESLATEMODE 0x2003
+#endif
+#ifndef NID_INTEGRATED_TOUCH
+#define NID_INTEGRATED_TOUCH 0x01
+#endif
+#ifndef NID_EXTERNAL_TOUCH
+#define NID_EXTERNAL_TOUCH 0x02
+#endif
+#ifndef NID_READY
+#define NID_READY 0x80
+#endif
+int32_t mb_host_native_pointing(void) {
+  int digitizer = GetSystemMetrics(SM_DIGITIZER);
+  int touch = (digitizer & NID_READY) && (digitizer & (NID_INTEGRATED_TOUCH | NID_EXTERNAL_TOUCH));
+  if (!touch) return 2;
+  int mouse = GetSystemMetrics(SM_MOUSEPRESENT);
+  int slate = GetSystemMetrics(SM_CONVERTIBLESLATEMODE) == 0;
+  return (!mouse || slate) ? 1 : 2;
+}
 // The app's widgets for the system's accessibility (@hostapi.a11y_on, a11y_tree): not told here yet.
 int32_t mb_host_a11y_on(void) { return 0; }
 void mb_host_a11y_tree(moonbit_string_t s) { (void)s; }

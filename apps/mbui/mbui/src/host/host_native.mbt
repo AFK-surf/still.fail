@@ -160,6 +160,9 @@ extern "C" fn ffi_system_dark() -> Int = "mb_host_system_dark"
 extern "C" fn ffi_font_scale() -> Double = "mb_host_font_scale"
 
 ///|
+extern "C" fn ffi_native_pointing() -> Int = "mb_host_native_pointing"
+
+///|
 extern "C" fn ffi_a11y_on() -> Int = "mb_host_a11y_on"
 
 ///|
@@ -692,6 +695,11 @@ fn system_dark() -> Bool {
 ///|
 fn font_scale() -> Double {
   ffi_font_scale()
+}
+
+///|
+fn native_pointing() -> Int {
+  ffi_native_pointing()
 }
 
 ///|

@@ -4,6 +4,7 @@
 // it, as big, the native views' view (apple_views.m).
 #import <UIKit/UIKit.h>
 #import <UIKit/UIGestureRecognizerSubclass.h>
+#import <GameController/GameController.h>
 #import <Network/Network.h>
 #import <Photos/Photos.h>
 #import <PhotosUI/PhotosUI.h>
@@ -1208,6 +1209,14 @@ void mb_host_set_app_state(void (*f)(int32_t)) {
 // Whether the system is set to dark (@hostapi.system_dark): the screen's interface style.
 // Words as the app sizes them (@hostapi.font_scale): the system's own size of words not followed here yet.
 double mb_host_font_scale(void) { return 1.0; }
+// What the app was started to be used with (@hostapi.native_pointing): keyboard and mouse where a mouse or a trackpad is
+// connected as it starts (GCMouse: an iPad's Magic Keyboard, a mouse), else touch.
+int32_t mb_host_native_pointing(void) {
+  if (@available(iOS 14.0, *)) {
+    return GCMouse.mice.count > 0 ? 2 : 1;
+  }
+  return 1;
+}
 // The app's widgets for the system's accessibility (@hostapi.a11y_on, a11y_tree): not told here yet.
 int32_t mb_host_a11y_on(void) { return 0; }
 void mb_host_a11y_tree(moonbit_string_t s) { (void)s; }
