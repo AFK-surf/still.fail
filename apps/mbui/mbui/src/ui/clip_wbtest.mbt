@@ -106,29 +106,34 @@ test "a capsule's clip is round, not smooth; one with a little more room than it
 
 ///|
 /// How much of the pixel centred at `p` an instance `a` (a rect, kind 0) covers, as the renderers say (scene.mbt's
-/// shader): its own rounded rect's edge, times its clip's when that is rounded.
+/// shader): its own rounded rect's edge, times its clip's when that is rounded, times its outer clip's where it has one.
 fn covered(a : Array[Double], px : Double, py : Double, scale : Double) -> Double {
   let cover = fn(d : Double) { dclamp(0.5 - d * scale, 0.0, 1.0) }
   let own = cover(sd_box(px - (a[0] + a[2] / 2.0), py - (a[1] + a[3] / 2.0), a[2] / 2.0, a[3] / 2.0, a[4]))
-  if dmax(dmax(a[24], a[25]), dmax(a[26], a[27])) <= 0.0 {
-    return if px < a[16] || py < a[17] || px > a[18] || py > a[19] { 0.0 } else { own }
-  }
-  let hx = (a[18] - a[16]) / 2.0
-  let hy = (a[19] - a[17]) / 2.0
-  let mx = a[16] + hx
-  let my = a[17] + hy
-  let j = if px < mx {
-    if py < my {
-      0
-    } else {
-      3
+  // a clip: its rect at `k`, its corners' radii at `kr`, how smooth they are at `ks`
+  let cut = fn(k : Int, kr : Int, ks : Int) {
+    if dmax(dmax(a[kr], a[kr + 1]), dmax(a[kr + 2], a[kr + 3])) <= 0.0 {
+      return if px < a[k] || py < a[k + 1] || px > a[k + 2] || py > a[k + 3] { 0.0 } else { 1.0 }
     }
-  } else if py < my {
-    1
-  } else {
-    2
+    let hx = (a[k + 2] - a[k]) / 2.0
+    let hy = (a[k + 3] - a[k + 1]) / 2.0
+    let mx = a[k] + hx
+    let my = a[k + 1] + hy
+    let j = if px < mx {
+      if py < my {
+        0
+      } else {
+        3
+      }
+    } else if py < my {
+      1
+    } else {
+      2
+    }
+    cover(sd_corner(px - mx, py - my, hx, hy, dmin(a[kr + j], dmin(hx, hy)), a[ks + j]))
   }
-  own * cover(sd_corner(px - mx, py - my, hx, hy, dmin(a[24 + j], dmin(hx, hy)), a[28 + j]))
+  let outer = if dmax(dmax(a[44], a[45]), dmax(a[46], a[47])) > 0.0 { cut(40, 44, 48) } else { 1.0 }
+  own * cut(16, 24, 28) * outer
 }
 
 ///|
@@ -210,6 +215,75 @@ test "a rect clip inside a rounded one: its corners round where they are the rou
   assert_eq([a[24], a[25], a[26], a[27]], [0.0, 0.0, 12.0, 12.0])
   // as smooth as the card had room for (40 of it, for 12), not as the list's rect (60 high) would be
   assert_eq([a[28], a[29], a[30], a[31]], [0.0, 0.0, 1.0, 1.0])
+}
+
+///|
+test "a band sharing a rounded clip's corners with no room to draw them as long: cut by that clip, pixel by pixel" {
+  // a frame 80 square at (20, 20), rounded 12 (wholly smooth: 15 long) and cutting what it holds; in it a band 8 high
+  // across its top and one 6 high along its foot, each cutting a fill (a picture's likeness brushed off in steps), and
+  // one 40 high between them, room enough for a corner of its own
+  let blue = 0x0000FFFFL
+  let green = 0x00FF00FFL
+  let band = fn(c : Ctx, h : Double, color : Int64) {
+    c.box(w=Fill(1.0), h=Px(h), clip=true, fn() { c.box(w=Fill(1.0), h=Fill(1.0), bg=color, fn() { () }) |> ignore })
+    |> ignore
+  }
+  let t = Tester::new(
+    fn(c) {
+      c.box(pad=20.0, align=AStart, fn() {
+        c.box(w=Px(80.0), h=Px(80.0), radius=12.0, clip=true, fn() {
+          band(c, 8.0, red)
+          c.box(w=Fill(1.0), h=Fill(1.0), fn() { () }) |> ignore
+          band(c, 6.0, blue)
+        })
+        |> ignore
+        c.box(w=Px(80.0), h=Px(80.0), radius=12.0, clip=true, fn() { band(c, 40.0, green) }) |> ignore
+      })
+      |> ignore
+    },
+    w=200.0,
+    h=260.0,
+  )
+  t.draw()
+  let top = rect_of_color(red)
+  let foot = rect_of_color(blue)
+  // the frame whole, as their outer
+  for a in [top, foot] {
+    assert_eq([a[40], a[41], a[42], a[43]], [20.0, 20.0, 100.0, 100.0])
+    assert_eq([a[44], a[45], a[46], a[47]], [12.0, 12.0, 12.0, 12.0])
+  }
+  // one with room for the frame's corners draws them itself
+  let tall = rect_of_color(green)
+  assert_eq([tall[24], tall[25]], [12.0, 12.0])
+  assert_eq([tall[44], tall[45], tall[46], tall[47]], [0.0, 0.0, 0.0, 0.0])
+  // and each covers its corners as the frame's ground would: none of it past the frame's curve
+  let plain = Tester::new(
+    fn(c) {
+      c.box(pad=20.0, align=AStart, fn() { c.box(w=Px(80.0), h=Px(80.0), radius=12.0, bg=red, fn() { () }) |> ignore })
+      |> ignore
+    },
+    w=200.0,
+    h=120.0,
+  )
+  plain.draw()
+  let ground = rect_of_color(red)
+  let scale = 2.0
+  for part in [(top, 20.0, 8.0), (foot, 94.0, 6.0)] {
+    let (a, y0, h) = part
+    for x0 in [20.0, 85.0] {
+      for i in 0..<30 {
+        for j in 0..<(h * scale).to_int() {
+          let px = x0 + (i.to_double() + 0.5) / scale
+          let py = y0 + (j.to_double() + 0.5) / scale
+          let have = covered(a, px, py, scale)
+          let want = covered(ground, px, py, scale)
+          if have != want {
+            fail("(\{px}, \{py}): the band covers \{have}, the frame's ground \{want}")
+          }
+        }
+      }
+    }
+  }
 }
 
 ///|

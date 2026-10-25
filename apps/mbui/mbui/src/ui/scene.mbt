@@ -56,11 +56,13 @@ fn Ctx::grow(self : Ctx) -> Unit {
 /// Within other clips, the rule for where they meet: their rects' intersection, each of its corners as round as the
 /// clips whose corner it is (both's: the rounder), square where it is no clip's corner. So a rect inside a rounded
 /// clip (a list in a card, down to its foot) keeps the card's corners where they are its own, and a rounded clip in
-/// a rounded clip is right wherever the inner lies within the outer or shares its corners. Where one clip's edge cuts
-/// through another's rounded corner, not at its corner (an image's rounded frame scrolled into a pane's corner, its
-/// edge across the pane's curve), the intersection's corner there is square: so the level keeps that other clip too,
-/// whole (its outer: 12 numbers more, instances' 40-51), and what is painted in it is cut by both, exactly. One
-/// outer a level: the outermost such clip (a level whose clip has an outer passes it on, whatever it cuts itself),
+/// a rounded clip is right wherever the inner lies within the outer or shares its corners with room for them. Where
+/// one clip's edge cuts through another's rounded corner, not at its corner (an image's rounded frame scrolled into a
+/// pane's corner, its edge across the pane's curve), or shares the corner with too little room to draw it as long (a
+/// band across the frame's top, flatter there), the intersection's corner there is not its own: so the level keeps
+/// that other clip too, whole (its outer: 12 numbers more, instances' 40-51), and what is painted in it is cut by
+/// both, exactly. One outer a level: the outermost such clip (a level whose clip has an outer passes it on, whatever it
+/// cuts itself),
 /// so what is drawn never leaves a pane or a window's rounded corners; a clip between the two (a card in the pane,
 /// round the frame) keeps the old error where the frame cuts through its corner (a square corner there, at most
 /// (1 - π/4) r² of it); no stencil is kept.
@@ -168,7 +170,9 @@ fn clip_has_outer(k : Int) -> Bool {
 ///|
 /// Whether a clip of rect (x0 y0 x1 y1), its corners `r`, pushed in the clip at `k` cuts through one of that clip's
 /// rounded corners: reaches into the square that corner's curve lies in (as far as a smooth corner's curve goes in,
-/// smooth.mbt) other than by being that corner as round or rounder, its own corner there.
+/// smooth.mbt) other than by being that corner as round or rounder, its own corner there, with room for it (the
+/// renderers draw a corner no longer than half its rect's shorter side: one sharing that corner with less room, a band
+/// across a frame's top as a picture is brushed in, is flatter than the corner and would show past it).
 fn clip_cuts(k : Int, x0 : Double, y0 : Double, x1 : Double, y1 : Double, r : (Double, Double, Double, Double)) -> Bool {
   let s = clip_stack
   let own = [r.0, r.1, r.2, r.3]
@@ -188,10 +192,10 @@ fn clip_cuts(k : Int, x0 : Double, y0 : Double, x1 : Double, y1 : Double, r : (D
     if x1 <= zx0 || x0 >= zx1 || y1 <= zy0 || y0 >= zy1 {
       continue
     }
-    // its own corner there, the same corner, as round: the clip's curve within its own
+    // its own corner there, the same corner, as round and as long: the clip's curve within its own
     let ox = if left { x0 } else { x1 }
     let oy = if top { y0 } else { y1 }
-    if ox == cx && oy == cy && own[j] >= rr {
+    if ox == cx && oy == cy && own[j] >= rr && dmin(x1 - x0, y1 - y0) / 2.0 >= reach {
       continue
     }
     return true
