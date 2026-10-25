@@ -224,22 +224,32 @@ pub fn chip(
 let chip_inner : @ui.Style = @ui.css("radius=Inner")
 
 ///|
-/// How far an option's words stand in from its column's sides (segmentedOption: 0 12).
+/// How far an option's words stand in from its column's sides (segmentedOption: 0 12), and how little they may where
+/// the room is short (option_widths).
 let segmented_in : Double = 12.0
 
 ///|
-/// What a segmented track scrolls: its options in a line, 2 apart (segmented's --gap), each kept whole.
+let segmented_least : Double = 8.0
+
+///|
+/// How far its track's ground stands out round its options, and how far apart they are (segmented's --gap).
+let segmented_pad : Double = 3.0
+
+///|
+let segmented_gap : Double = 2.0
+
+///|
+/// Its options in a line, 2 apart.
 // kept across runs: a value (no field of it changes)
 let segmented_strip : @ui.Style = @ui.css("row gap=S0_5")
 
 ///|
-/// A choice of a few (Segmented; the kit's sliding toggle group): a quiet
-/// pill track, the chosen raised on the canvas and sliding to it; its options
-/// equal columns, as wide as the widest in the chosen weight with 12 either
-/// side (segmented, segmentedOption, segmentedSizer), `item_w` at least; its
-/// words never cut: where they need more room than there is, they scroll
-/// sideways in the track (as Seg's).
-/// Returns the chosen index.
+/// A choice of a few (Segmented; the kit's sliding toggle group): a quiet pill track, the chosen raised on the canvas
+/// and sliding to it; its options equal columns, as wide as the widest in the chosen weight with 12 either side
+/// (segmented, segmentedOption, segmentedSizer), `item_w` at least, the track never wider than where it is. Where those
+/// columns need more room than there is, the track takes what there is and its options share it as option_widths has
+/// them (as alike as their words let them, their sides narrower, else their words on more lines; cut short only where
+/// not even each one's longest word fits): nothing out of view, nothing scrolled. Returns the chosen index.
 pub fn segmented(
   c : @ui.Ctx,
   key : String,
@@ -252,29 +262,68 @@ pub fn segmented(
   let t = theme()
   let ink = ink.unwrap_or(t.p.text)
   let thumb = thumb.unwrap_or(t.p.canvas)
-  // as wide as the widest in the chosen weight (as wide unchosen as chosen: no column changes as the choice does)
-  let widest = labels.fold(init=0.0, fn(m, l) { dmax(m, @ui.text_advance(l, size=t.t.ui, weight=500)) })
-  let w = dmax(item_w, widest + 2.0 * segmented_in)
+  // its words as drawn (the system's size of words applied), in the chosen weight (as wide unchosen as chosen: no
+  // column changes as the choice does)
+  let size = c.sp(t.t.ui)
+  let words = labels.map(fn(l) { @ui.text_advance(l, size~, weight=500) })
+  let widest = words.fold(init=0.0, fn(m, w) { dmax(m, w) })
+  let col = dmax(item_w, widest + 2.0 * segmented_in)
+  let n = labels.length()
+  let gaps = segmented_gap * (n - 1).to_double()
+  let whole = col * n.to_double() + gaps + 2.0 * segmented_pad
+  // the room the track had as last laid out (cut to where it is: read back, built again in the frame it is laid out
+  // otherwise): less than its columns need, its options give way from them to what option_widths has them in it
+  // (their columns as wide where the room is, the track then laid out as wide as they need)
+  let track = c.id(key + "/track")
+  let squeezed = match c.laid_size(track) {
+    Some((w, _)) if w < whole - 0.5 =>
+      Some(
+        option_widths(
+          words,
+          labels.map(fn(l) { @ui.text_least(l, size~, weight=500) }),
+          w - 2.0 * segmented_pad - gaps,
+          segmented_in,
+          segmented_least,
+        ),
+      )
+    _ => None
+  }
+  // (cut short, its words on one line in its column are cut with an ellipsis as they are laid: words in a column)
+  let wraps = squeezed.map(fn(s) { s.1 }).unwrap_or(OneLine) == Wrapped
   let items = labels.mapi(fn(i, l) { @kit.item(i.to_string(), label=l) })
-  // (the group's id, as it takes it: its options' are its parts')
-  let group = c.id(key)
   let now = @kit.toggle_group(
     c,
     key,
     items,
     [chosen.to_string()],
     slide=true,
+    widths=match squeezed {
+      Some((widths, _)) => widths.map(fn(w) { (col, w) })
+      None => Array::make(n, (col, col))
+    },
     look=fn(c, s) {
-      c.box(w=Px(w), h=Px(30.0), align=ACenter, justify=JCenter, fn() {
-        c.text(
-          s.label,
-          size=t.t.ui,
-          weight=if s.on { 500 } else { 400 },
-          color=if s.on || s.hovered { ink } else { t.p.muted },
-          wrap=false,
-        )
-        |> ignore
-      })
+      c.box(
+        // (short of room: its words their least in from its sides; on more lines, as tall as they are and as far from
+        // its top and foot as the track's ground, in the middle of its item as tall as the tallest)
+        h=if wraps { Auto } else { Px(segmented_h) },
+        min_h=segmented_h,
+        padx?=squeezed.map(fn(_) { segmented_least }),
+        pady?=if wraps { Some(segmented_pad) } else { None },
+        align=ACenter,
+        justify=JCenter,
+        fn() {
+          c.text(
+            s.label,
+            size=t.t.ui,
+            weight=if s.on { 500 } else { 400 },
+            color=if s.on || s.hovered { ink } else { t.p.muted },
+            wrap=wraps,
+            center=wraps,
+            w?=if wraps { Some(Fill(1.0)) } else { None },
+          )
+          |> ignore
+        },
+      )
       |> ignore
     },
     thumb=fn(c, w, h) {
@@ -282,7 +331,7 @@ pub fn segmented(
         w=Px(w),
         h=Px(h),
         bg=thumb,
-        radius=15.0,
+        radius=segmented_corner,
         border=0.5,
         border_color=t.p.line,
         shadow=1.0,
@@ -293,14 +342,15 @@ pub fn segmented(
       |> ignore
     },
     ground=fn(c, _, items) {
-      // never wider than where it is; where its options need more, they scroll sideways in it, whole, the chosen one
-      // brought into view (as Seg's)
-      c.box(dir=Row, w=Cut, pad=3.0, bg=alpha(ink, 0.06), radius=18.0, fn() {
-        c.sideways(key, w=Cut, show=@kit.part_id(group, chosen), fn() {
-          c.box(style=segmented_strip, keep=true, items) |> ignore
-        })
-        |> ignore
-      })
+      c.box(
+        dir=Row,
+        w=Cut,
+        id=track,
+        pad=segmented_pad,
+        bg=alpha(ink, 0.06),
+        radius=segmented_corner + segmented_pad,
+        fn() { c.box(style=segmented_strip, items) |> ignore },
+      )
       |> ignore
     },
   ).value
@@ -310,6 +360,14 @@ pub fn segmented(
     _ => chosen
   }
 }
+
+///|
+/// An option's height on one line (segmentedOption: 30), and the thumb's corner, a pill's (the track's concentric
+/// round it).
+let segmented_h : Double = 30.0
+
+///|
+let segmented_corner : Double = 15.0
 
 ///|
 /// A line to type in, its frame (Controls.kt Field) as a look for mbui's field (@kit.text_field): 12 round, the card's
