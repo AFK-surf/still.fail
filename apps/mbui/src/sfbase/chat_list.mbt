@@ -280,6 +280,8 @@ pub fn entries_of(v : ChatView) -> Array[Entry] {
 }
 
 ///|
+/// Chat `r`'s view (chat_view), its list's entries and its topic's error: read again only as the core gives a new
+/// version, whoever asks for it in a frame (the page, its side panel, the frame round it).
 pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json?) {
   let topic = (src.topic)("chat", chat_params(r))
   let key = r.station + "\u{1}" + r.session

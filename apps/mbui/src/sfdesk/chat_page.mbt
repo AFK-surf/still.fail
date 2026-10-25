@@ -53,10 +53,7 @@ pub fn chat_find_open(c : @ui.Ctx, r : ChatRef) -> Unit {
 /// The chat `r` in the pane (ChatPage.tsx ChatScreen).
 fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   let chat = (src.topic)("chat", chat_params(r)).value
-  let view = match chat {
-    Some(v) => Some(chat_view(v))
-    None => None
-  }
+  let view = view_of_chat(src, r).0
   let key = chat_key(r)
   let list = chat_find_list(r)
   // ⌘F: the chat's own find; another chat's let go

@@ -516,6 +516,8 @@ pub(all) struct ChatTabs {
 }
 
 ///|
+/// A chat's view as the core gives it, each of its messages read. A chat's topic is read so only through view_of_chat,
+/// once for each of its versions: read so each frame, a chat with many messages read is slow to scroll.
 pub fn chat_view(v : Json) -> ChatView {
   let s = Some(v)
   let thread = field(s, "thread")
