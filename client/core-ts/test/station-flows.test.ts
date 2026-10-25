@@ -2445,6 +2445,38 @@ test("invalid_json_and_truncated_compression_fail_instead_of_becoming_empty_page
   } finally { core.close(); }
 });
 
+test("a_partial_chat_page_keeps_the_reading_window_and_retries_through_the_core_call", async () => {
+  const path = "GET /threads/7/entries?from=151&to=200";
+  const replies: J = {
+    ...base(),
+    "GET /threads": [threadView(7, 300, 100, 200)],
+    "GET /threads/7/entries?limit=50": { last: 300, entries: entries(251, 300) },
+    "GET /threads/7/entries?from=51&to=150": { last: 300, entries: entries(51, 150) },
+    [path]: { last: 300, entries: entries(151, 175) },
+  };
+  const s = await ui(replies);
+  try {
+    subscribe(s.core, s.ui, 1, thread7);
+    await s.read();
+    assert.deepEqual(windowOf(s.values), [51, 150, false]);
+    const newer = async (id: number) => {
+      call(s.core, s.ui, id, "chat.newer", { station: ST, thread: 7 });
+      await s.host.settle();
+      const answer = s.host.emitted.map(([, m]) => m as J).find(m => m.id === id && ("ok" in m || "error" in m));
+      assert.ok(answer, "the core answers the UI call");
+      await s.read();
+      return answer;
+    };
+    assert.equal((await newer(2)).error.code, "bad_response");
+    assert.deepEqual(windowOf(s.values), [51, 150, false], "a partial reply does not advance the visible window");
+    assert.equal(s.core.inner.data.logCount("entry", ST, "7", 151, 175), 25, "valid records from the failed page remain cached");
+    replies[path] = { last: 300, entries: entries(151, 200) };
+    assert.ok("ok" in await newer(3));
+    assert.deepEqual(windowOf(s.values), [51, 200, false]);
+    assert.deepEqual(nums(s.values), Array.from({ length: 150 }, (_, i) => i + 51), "retry fills the gap without losing or duplicating records");
+  } finally { s.core.close(); }
+});
+
 test("json_requests_time_out_on_silent_heads_or_bodies_and_release_their_scope", async () => {
   for (const stalled of ["head", "body"]) {
     let closed = 0;

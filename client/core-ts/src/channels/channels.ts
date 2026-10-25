@@ -277,7 +277,7 @@ export class Channels {
   }
 
   #incomplete(): Effect.Effect<never, CoreError> {
-    return Effect.fail(new CoreError("bad_response", t("core-logic.mesh.read_failed", { error: "Incomplete page" })));
+    return Effect.fail(new CoreError("bad_response", t("station.core.incompleteReply")));
   }
 
   /// Items `from ..= to` onto the device (a window moved there): read now, unless they are all held.

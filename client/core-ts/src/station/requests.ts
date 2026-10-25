@@ -187,7 +187,7 @@ export class Requests {
             if (came !== loaded) span.set("stillfail.body.decompressed", loaded);
             const parsed = json ? parseJson(bytes) : undefined;
             if (json && parsed === undefined && reply.status >= 200 && reply.status < 300 && reply.status !== 204 && reply.status !== 205) {
-              return yield* Effect.fail(new CoreError("bad_response", t("core-logic.mesh.read_failed", { error: "Invalid JSON" })));
+              return yield* Effect.fail(new CoreError("bad_response", t("station.core.invalidReply")));
             }
             if (reply.status >= 200 && reply.status < 300) this.onAnswered(station);
             return { status: reply.status, headers: reply.headers, body: bytes, ...(json ? { json: parsed } : {}) };

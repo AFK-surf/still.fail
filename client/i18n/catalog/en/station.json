@@ -161,6 +161,8 @@
   "station.core.localGone": "Local page no longer available",
   "station.core.noChat": "No such chat",
   "station.core.badBatch": "Incomplete response to a batched read from the station",
+  "station.core.incompleteReply": "Couldn't load all the records; try again",
+  "station.core.invalidReply": "Couldn't read the response; try again",
   "station.core.noMessageNumber": "Station reply lacks a message number",
   "station.core.noSoftwareId": "Software has no id",
   "station.core.offline": "Station unreachable",
