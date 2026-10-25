@@ -703,7 +703,9 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
       blocks.push(fn() { c.text(error.val, size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore })
     }
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-      scroll_page(c, key, blocks.map(fn(b) { fn() { @sf.sheet_column(c, fn() { c.box(style=sheet_block, b) |> ignore }) } }))
+      scroll_page(c, key, blocks.mapi(fn(i, b) {
+        fn() { @sf.sheet_column(c, fn() { c.box(style=if i == 0 { @sf.full_width } else { sheet_block }, b) |> ignore }) }
+      }))
     })
     |> ignore
   }, foot=fn(c, close) {
