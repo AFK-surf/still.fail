@@ -1672,10 +1672,11 @@ fn fit_flow(flow : Array[Node], room : Double, gap : Double, cb_w : Double, cb_h
       continue
     }
     let b = box_for(c, cb_w, cb_h)
-    // what may leave is there whole or not at all: as wide as what it holds; the rest at least their least, or what
-    // the row keeps of them (fit_need: words cut short keep some of them)
+    // what may leave is there whole or not at all, and what never gives way (shrink 0: kept as wide as what it holds)
+    // is never narrower: each as wide as what it holds; the rest at least their least, or what the row keeps of them
+    // (fit_need: words cut short keep some of them)
     let least = if known(b.min_w) { b.min_w } else { 0.0 }
-    let w = if c.style.drop != 0 {
+    let w = if c.style.drop != 0 || (c.style.shrink == 0.0 && !known(b.w)) {
       size_node(c, undef, undef, undef, undef, cb_w, cb_h, false)
     } else if known(b.w) {
       b.w

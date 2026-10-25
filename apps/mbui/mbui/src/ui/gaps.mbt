@@ -11,7 +11,8 @@
 //    lights at a time; a list across the whole screen, a card of options).
 // 3. Two blocks with grounds of their own beside each other in one box never meet (0 between them) or run over each
 //    other: they stand apart, or are one block. Lines (thinner than `gap_line`) are what parts things, not a block.
-// 4. What a box with a ground or an edge holds (words, a drawing) stands in from its edges, never touching one; and
+// 4. What a box with a ground or an edge holds (words, a drawing, a block with a ground: a chip) stands in from its
+//    edges, never touching one; and
 //    where it spans the box (in from both sides by less than a quarter of it), as far in from the left as from the
 //    right (its children's boxes) where they stand in one line (a row, a button, a chip: what a box with lines under lines holds stands as
 //    its column says).
@@ -72,15 +73,19 @@ fn Ctx::gap_drawn(self : Ctx, i : Int) -> (Double, Double, Double, Double) {
 }
 
 ///|
-/// Whether node `i` draws words or a drawing of its own (an icon), what rule 4 holds in from its box's edges.
+/// Whether node `i` draws words, a drawing of its own (an icon) or a block with a ground (a chip, a tag): what rule 4
+/// holds in from the edges of the box with a ground round it.
 fn Node::gap_content(self : Node) -> Bool {
   if self.fw <= 0.0 || self.fh <= 0.0 {
     return false
   }
   if self.kind == kind_text || self.kind == kind_rich {
     self.text != "" || self.rich is Some(_)
+  } else if self.kind == kind_box && self.grounded() {
+    // a block with a ground of its own in it (a chip, a tag), not a line parting things
+    dmin(self.fw, self.fh) >= gap_line
   } else {
-    self.kind == kind_box && !self.grounded() && (self.shapes.length() > 0 || self.lines.length() > 0)
+    self.kind == kind_box && (self.shapes.length() > 0 || self.lines.length() > 0)
   }
 }
 
@@ -323,6 +328,11 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
         break
       }
       if a.grounded() && dmin(a.fw, a.fh) >= 2.0 * gap_line {
+        // (a block of its own is held in it only as a part of what it holds, a chip, a tag: not a band across it, a
+        // pane, a card of a page's, what lies along its edges by what it is)
+        if c.kind == kind_box && c.grounded() && (c.fw >= a.fw * gap_spans || c.fh >= a.fh * gap_spans) {
+          break
+        }
         match held.get(q) {
           Some(list) => list.push(i)
           None => held[q] = [i]
