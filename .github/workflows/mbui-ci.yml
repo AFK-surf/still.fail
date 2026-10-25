@@ -44,6 +44,8 @@ jobs:
         run: bash scripts/logwait_test.sh
       - name: Check
         run: moon version --all && moon check --target native --output-json 2>&1 | scripts/chk errs
+      - name: "Check, the web's (the browser host, src/host's js files: what scripts/web.sh builds and scripts/textdiff.sh web needs)"
+        run: moon check --target js --output-json 2>&1 | scripts/chk errs
       - name: "Unicode text (UAX #29, #14, #9 against Unicode's own tests)"
         run: |
           set -o pipefail

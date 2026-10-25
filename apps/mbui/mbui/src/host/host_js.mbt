@@ -434,6 +434,12 @@ fn font_scale() -> Double {
 }
 
 ///|
+/// What the app was started to be used with (see host_native.mbt): a browser cannot tell (0: the platform's, @ui).
+fn native_pointing() -> Int {
+  0
+}
+
+///|
 fn a11y_on() -> Bool {
   false
 }
