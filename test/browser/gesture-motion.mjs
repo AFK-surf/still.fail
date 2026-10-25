@@ -34,7 +34,7 @@ const root=document.getElementById('app');root.style.cssText='position:fixed;ins
     const read=wrap.getBoundingClientRect.bind(wrap);wrap.getBoundingClientRect=()=>{window.rectReads++;return read();};wrap.setPointerCapture=()=>{};
    });
    const touch=(type,x,y)=>page.evaluate(({type,x,y})=>window.wrap.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerId:1,pointerType:'touch',buttons:type==='pointerup'?0:1,clientX:x,clientY:y})),{type,x,y});
-   const frames=async ms=>{for(let at=0;at<ms;at+=16)await page.clock.runFor(Math.min(16,ms-at));};
+   const frames=async ms=>{for(let at=0;at<ms;at+=16){await page.clock.runFor(Math.min(16,ms-at));if(process.env.VIDEO)await new Promise(resolve=>setTimeout(resolve,16));}};
    const x=tab.x+tab.width/2;
    await touch('pointerdown',x,tab.y+28);await touch('pointermove',x,tab.y-30);await frames(32);
    await page.evaluate(()=>{window.barRenders=0;window.rectReads=0;});
