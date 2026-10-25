@@ -3209,11 +3209,11 @@ let sign_in_many : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=f
 
 ///|
 /// A newer build offered (Home.kt's update key; one look wherever a frame puts it, the size of the keys beside it:
-/// `side` across, its mark `mark`): the download mark with an accent dot in its top right; while it is `busy` (asked
-/// again first, downloaded, installed), the mark with how far it has come under it, the library's progress bar as
-/// wide as the mark (`coming`, 0 to 1; None while not known: its piece sweeping), no words, as any transfer that has a
-/// size shows it; one that failed, its dot red, `why` its tip. Said to be `label` (下载中 42% while it comes). True on
-/// the frame it is pressed, not while it is busy.
+/// `side` across, its mark `mark`): the download mark in its middle, an accent dot in its top right; while it is `busy`
+/// (asked again first, downloaded, installed), the mark where it is and how far it has come round the key's edge
+/// (`coming`, 0 to 1, from its top; None while not known: the spinner's quarter turning there), no words; one that
+/// failed, its dot red, `why` its tip. Said to be `label` (下载中 42% while it comes). True on the frame it is
+/// pressed, not while it is busy.
 pub fn update_key(
   c : @ui.Ctx,
   key : String,
@@ -3234,10 +3234,8 @@ pub fn update_key(
     id~,
     fn() {
       if busy {
-        c.box(style=update_key_coming, fn() {
-          icon(c, "download", size=mark, color=t.p.text) |> ignore
-          progress(c, key + "/coming", coming, w=Px(mark))
-        })
+        icon(c, "download", size=mark, color=t.p.text) |> ignore
+        c.layer(fn() { update_key_ring(c, key, side, coming) })
         |> ignore
       } else {
         icon(c, "download", size=mark, color=t.p.text) |> ignore
@@ -3275,9 +3273,28 @@ let update_key_box : @ui.Style = @ui.css("radius=Full align=ACenter justify=JCen
 let update_key_hot : @ui.Style = update_key_box.then(@ui.css("bg=Hover"))
 
 ///|
-/// While it comes: the mark and its bar under it, 2 apart, the two in the key's middle.
-// kept across runs: a value (no field of it changes)
-let update_key_coming : @ui.Style = @ui.css("gap=S0_5 align=ACenter")
+/// How far an update has come, round the update key's edge (the spinner's ring, its line 2 wide on the key's edge, in
+/// line_strong): the accent from its top as far round as it has come, going to a part told anew as a progress bar's
+/// fill does; while that is not known, the spinner's quarter turning.
+fn update_key_ring(c : @ui.Ctx, key : String, side : Double, coming : Double?) -> Unit {
+  let t = theme()
+  let pi = 3.141592653589793
+  let mid = side / 2.0
+  let r = mid - spin_stroke / 2.0
+  let (from, sweep) = match coming {
+    Some(k) => {
+      let k = if k < 0.0 { 0.0 } else if k > 1.0 { 1.0 } else { k }
+      let shown = @motion.animate(c, key + "/coming", k, spec=@motion.tween(@kit.progress_ms, ease=Out))
+      (-0.5 * pi, shown * 2.0 * pi)
+    }
+    None => (-0.75 * pi + c.cycle(spinner_turn_ms) * 2.0 * pi, 0.5 * pi)
+  }
+  let lines = [@ui.line(@ui.arc(mid, mid, r, from=0.0, sweep=2.0 * pi), width=spin_stroke, color=t.p.line_strong)]
+  if sweep > 0.0 {
+    lines.push(@ui.line(@ui.arc(mid, mid, r, from~, sweep~), width=spin_stroke, color=t.p.accent))
+  }
+  c.lines(lines, w=Px(side), h=Px(side)) |> ignore
+}
 
 ///|
 /// Its dot: 3 in from the key's top right, 9 across on a ring of the page's ground 2 wide (Home.kt).

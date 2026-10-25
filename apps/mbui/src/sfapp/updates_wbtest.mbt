@@ -68,26 +68,57 @@ test "an update's download answered otherwise: its status in Updates.kt's words"
 }
 
 ///|
-test "the update key while an update comes, one look on every screen: its mark, how far a bar under it as wide as the mark, no words; how far not known, its piece sweeping; no press taken" {
+/// The update key's mark (its box, as laid out) and how far its accent goes round its edge (the length of its pieces of
+/// line in the accent), drawn `busy` (how far `coming`) at 34, its mark 20.
+fn update_key_drawn(busy : Bool, coming : Double?) -> ((Double, Double, Double, Double), Double, Double) raise {
   reset()
-  let coming : Ref[Double?] = Ref(Some(0.42))
   let t = @ui.Tester::new(
-    fn(c) { @sf.update_key(c, "k", 34.0, 20.0, "下载中 42%", "", coming.val, false, true) |> ignore },
+    fn(c) { @sf.update_key(c, "k", 34.0, 20.0, "下载中 42%", "", coming, false, busy) |> ignore },
     w=120.0,
     h=80.0,
   )
   t.run_for(@kit.progress_ms)
-  let accent = @sf.theme().p.accent
-  let bars = t.drawn_rects().filter(fn(r) { (r.3 - 3.0).abs() < 0.001 })
-  // the track as wide as the mark (20), 42% of it filled in the accent
-  assert_true(bars.any(fn(r) { (r.2 - 20.0).abs() < 0.001 && r.4 != accent }), msg="no track as wide as the mark")
-  assert_true(bars.any(fn(r) { (r.2 - 8.4).abs() < 0.01 && r.4 == accent }), msg="no fill 42% of it")
+  let mark = match t.shape_boxes().search_by(fn(b) { b.0.contains("icon/download") }) {
+    Some(i) => {
+      let b = t.shape_boxes()[i]
+      (b.1, b.2, b.3, b.4)
+    }
+    None => fail("no download mark")
+  }
+  let length = fn(ink : Int64) {
+    t
+    .drawn_lines()
+    .filter(fn(l) { l.5 == ink })
+    .fold(init=0.0, fn(sum, l) { sum + ((l.2 - l.0) * (l.2 - l.0) + (l.3 - l.1) * (l.3 - l.1)).sqrt() })
+  }
+  (mark, length(@sf.theme().p.accent), length(@sf.theme().p.line_strong))
+}
+
+///|
+test "the update key while an update comes, one look on every screen: its mark where it was, how far round its edge from the top, no words; how far not known, a quarter turning" {
+  let (idle, _, _) = update_key_drawn(false, None)
+  let (mark, accent, ring) = update_key_drawn(true, Some(0.42))
+  // the mark not moved a hair
+  assert_eq(mark, idle)
+  // round the key's edge (its line's middle 1 in: r 16): all of it in line_strong, 42% of it in the accent
+  let round = 2.0 * 3.141592653589793 * 16.0
+  assert_true((ring - round).abs() < 3.0, msg="the ring: \{ring} of \{round}")
+  assert_true((accent - 0.42 * round).abs() < 2.0, msg="how far: \{accent} of \{0.42 * round}")
+  // not known: the spinner's quarter
+  let (mark, accent, _) = update_key_drawn(true, None)
+  assert_eq(mark, idle)
+  assert_true((accent - 0.25 * round).abs() < 2.0, msg="turning: \{accent}")
+}
+
+///|
+test "the update key while an update comes: no words, no press" {
+  reset()
+  let t = @ui.Tester::new(
+    fn(c) { @sf.update_key(c, "k", 34.0, 20.0, "下载中 42%", "", Some(0.42), false, true) |> ignore },
+    w=120.0,
+    h=80.0,
+  )
+  t.run_for(@kit.progress_ms)
   assert_true(t.find("42%") is None)
   assert_true(t.query(Button, label="下载中 42%").unwrap().disabled, msg="takes no press while it comes")
-  // how far not known (asked again first, going on after the network came back, installed): a piece of it sweeping
-  coming.val = None
-  t.run_for(@kit.progress_ms)
-  let bars = t.drawn_rects().filter(fn(r) { (r.3 - 3.0).abs() < 0.001 })
-  assert_true(bars.any(fn(r) { (r.2 - 20.0).abs() < 0.001 && r.4 != accent }), msg="no track while not known")
-  assert_true(bars.any(fn(r) { r.4 == accent && r.2 < 20.0 }), msg="no piece sweeping")
 }
