@@ -1,6 +1,7 @@
 // A sheet from the bottom (not one of Radix's: Vaul's Drawer; still.fail's phone sheets, its Android Sheet.kt
 // SheetHost): whether it is open the view's. Modal: the page under it dimmed (its scrim in over 300 ms, CSS's ease),
-// out of the semantics tree and taking no press, Tab kept in it, the focus back where it was as it goes. It rises on a
+// out of the semantics tree and taking no press, Tab kept in it (no field given the focus as it opens: the keyboard
+// would come up over it), the focus back where it was as it goes. It rises on a
 // spring (critically damped, a third of a second) and sinks away on it. Its top (`drag_h` high: the grabber and the
 // head) drags it: a sheet with `detents` (shares of the window) settles at the one it is let go nearer, going on at
 // the finger's speed, and closes let go under `close_below`; a tap on its grabber goes to the other end; one without
@@ -207,7 +208,9 @@ pub fn sheet(
     s.was_open = false
     return { open: false, shown: false, dragged }
   }
-  let o = c.overlay(key, modal=true, scrim=@ui.alpha(scrim.unwrap_or(th.scrim), scrim_t), inert=!now, fn() {
+  // (Tab kept in it, but no field in it given the focus as it opens: a sheet is a touch screen's, where a field
+  // focused brings the keyboard up over what the sheet shows; one that asks for words gives its field the focus itself)
+  let o = c.overlay(key, modal=true, initial_focus=0, scrim=@ui.alpha(scrim.unwrap_or(th.scrim), scrim_t), inert=!now, fn() {
     let i = c.box(w=Fill(1.0), h=Px(hx), ty=total - hx + bx, fn() {
       look(c, { t: scrim_t, h: hx, below: bx }, fn() {
         // behind what it shows (its buttons take their taps), over the sheet (it takes the drags): what lies on it
