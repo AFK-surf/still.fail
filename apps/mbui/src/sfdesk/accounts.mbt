@@ -147,7 +147,7 @@ fn profile_view(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, s : Js
     }
   }
   // its head says who it is: no title over it
-  look_page(c, core, frame, "profile/" + address + "/" + id, text(p, "name"), blocks, head=fn() {
+  look_page(c, core, frame, "profile/" + address + "/" + id, text(p, "name"), blocks, small=@sf.t("android-misc.bar.place.profiles"), head=fn() {
     profile_head(c, core, here, address, p, entry)
   })
 }

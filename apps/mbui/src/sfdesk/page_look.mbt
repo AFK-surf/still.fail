@@ -15,7 +15,8 @@ fn look_of(c : @ui.Ctx) -> @sf.Look {
 
 ///|
 /// A page of the settings in the frame it is given (`frame`: back where there is somewhere to go back to, the room
-/// over and under it, a place's bar naming it): the library's page (@sf.page), back popping it.
+/// over and under it, a place's bar naming it): the library's page (@sf.page), back popping it; in a panel of its own
+/// on the tape, under a chat's bar there holding its title, back and what it does (pane_page.mbt).
 fn look_page(
   c : @ui.Ctx,
   core : Core,
@@ -29,23 +30,32 @@ fn look_page(
   head? : () -> Unit,
   small? : String = "",
 ) -> Unit {
-  @sf.page(
-    c,
-    key,
-    title,
-    content,
-    fn() { (core.pop)() },
-    back?=frame.back,
-    top=frame.top,
-    foot=frame.foot,
-    named=frame.named,
-    named_actions=fn(f) { @settings.root_bar_actions.val = Some(f) },
-    lead~,
-    about~,
-    actions?,
-    head?,
-    small~,
-  )
+  let on_back = fn() { (core.pop)() }
+  let page = fn(barred : Bool) {
+    @sf.page(
+      c,
+      key,
+      title,
+      content,
+      on_back,
+      back?=frame.back,
+      top=frame.top,
+      foot=frame.foot,
+      named=frame.named,
+      named_actions=fn(f) { @settings.root_bar_actions.val = Some(f) },
+      lead~,
+      about~,
+      actions?,
+      head?,
+      small~,
+      barred~,
+    )
+  }
+  if @sf.in_pane() {
+    pane_page(c, frame.back.map(fn(label) { (label, on_back) }), title, about~, small~, actions?, head?, fn() { page(true) })
+  } else {
+    page(false)
+  }
 }
 
 ///|
@@ -69,23 +79,20 @@ fn desk_page(
   foot? : Double = 0.0,
 ) -> Unit {
   let deep = deep || on_back is Some(_)
-  @sf.page_wide(
-    c,
-    key,
-    title,
-    content,
-    match on_back {
-      Some(f) => f
-      None => fn() { (core.pop)() }
-    },
-    back?=if deep { Some(back) } else { None },
-    top~,
-    foot~,
-    lead~,
-    about~,
-    actions?,
-    head?,
-  )
+  let go = match on_back {
+    Some(f) => f
+    None => fn() { (core.pop)() }
+  }
+  let back = if deep { Some(back) } else { None }
+  let page = fn(barred : Bool) {
+    @sf.page_wide(c, key, title, content, go, back?, top~, foot~, lead~, about~, actions?, head?, barred~)
+  }
+  // (in a panel of its own on the tape, under a chat's bar there: pane_page.mbt)
+  if @sf.in_pane() {
+    pane_page(c, back.map(fn(label) { (label, go) }), title, about~, actions?, head?, fn() { page(true) })
+  } else {
+    page(false)
+  }
 }
 
 // ── one arrangement's pieces, as pages still draw them ──────────────────

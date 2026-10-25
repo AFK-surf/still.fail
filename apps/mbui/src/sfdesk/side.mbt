@@ -62,6 +62,16 @@ pub fn nav_row(
 let nav_row_look : @ui.Style = @ui.css("row w=Full min_h=S8 px=S2_5 py=S1_5 gap=S2").then(@ui.style(radius=@sf.side_row_radius))
 
 ///|
+/// How high a row of the sidebar is (nav_row_look's 32; a finger's control on a touch device: @sf.finger_least_h).
+fn nav_row_h() -> Double {
+  if @sf.theme().narrow {
+    @sf.theme().control_h
+  } else {
+    32.0
+  }
+}
+
+///|
 // kept across runs: a value (no field of it changes)
 let nav_row_phone : @ui.Style = @ui.css("row w=Full pr=S4 py=S2_5 gap=S2 align=ACenter").then(@ui.style(pl=@sf.phone_row_in))
 

@@ -74,7 +74,7 @@ fn connect_detail(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : P
     blocks.push(fn() { slack_app_section(c, core, station, cv) })
   }
   blocks.push(fn() { cd_sessions(c, core, station, item) })
-  look_page(c, core, frame, "connect/" + station + "/" + id, text(cv, "name"), blocks, head=fn() {
+  look_page(c, core, frame, "connect/" + station + "/" + id, text(cv, "name"), blocks, small=@sf.t("android-misc.bar.place.connects"), head=fn() {
     cd_identity(c, core, here, station, text(item, "stationName"), cv)
   })
 }

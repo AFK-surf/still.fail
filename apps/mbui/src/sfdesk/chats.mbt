@@ -46,16 +46,13 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 let band_new_bar : @ui.Style = @ui.css("row w=Full pl=S2 pr=S1_5 pt=S1_5 pb=S1_5 gap=S1 align=ACenter")
 
 ///|
-/// In the sidebar's panel on the tape (laid out Medium, its corners @sf.tape_side_corners): the filter in its top right
-/// corner as far in as makes it concentric with it (a circle 32 across: @sf.capsule_fit_room), under the band's top row;
-/// where the corner is too square for that (it follows a round window), where it stands in the wide frame.
+/// In the sidebar's panel on the tape (laid out Medium, its corners @sf.tape_side_corners): the filter (a circle 32
+/// across) in its top right corner on the tape's line, concentric with it (@sf.line_end_in, band_new_tape_over), under
+/// the band's top row; where the corner is too square for that (it follows a round window), clear of it.
 fn band_new_tape() -> @ui.Style {
   let corner = @sf.tape_side_corners()[1].radius()
   nav_new.then(
-    @ui.style(
-      pr=@sf.capsule_fit_room(corner, filter_side, band_new_end),
-      pt=@sf.capsule_fit_room(corner, filter_side, side_top_web + band_new_top, less=side_top_web),
-    ),
+    @ui.style(pr=@sf.room_of(@sf.line_end_in(corner, band_new_end)), pt=@sf.room_of(band_new_top + band_new_tape_over())),
   )
 }
 
@@ -71,9 +68,25 @@ let band_new_top : Double = 6.0
 let filter_side : Double = 32.0
 
 ///|
-/// How much taller 新建对话's row is in a panel of the tape (band_new_tape over nav_new's 6).
+/// How much taller 新建对话's row is in a panel of the tape (band_new_tape over nav_new's 6): the filter, in the row's
+/// middle (as high as a row is: nav_row_h), its top where it is concentric with the panel's corner: the tape's one line
+/// (@sf.tape_bar_over), a page's bar's beside it.
 fn band_new_tape_over() -> Double {
-  @sf.capsule_fit(@sf.tape_side_corners()[1].radius(), filter_side, side_top_web + band_new_top) - side_top_web - band_new_top
+  let brand = side_top_h()
+  let lift = (nav_row_h() - filter_side) / 2.0
+  let alone = brand + band_new_top + lift
+  // (on the tape's line in the ladder's pane corner; under a taller top row, 更新's or the window's buttons', it can not
+  // stand so high: where it stands alone)
+  let at = if (@sf.tape_side_corners()[1].radius() - @sf.pane_corner).abs() <= 0.5 {
+    @sf.tape_line
+  } else {
+    alone
+  }
+  if at < brand + lift {
+    0.0
+  } else {
+    at - alone
+  }
 }
 
 ///|

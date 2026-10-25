@@ -455,10 +455,9 @@ fn near4(a : (Double, Double, Double, Double), b : (Double, Double, Double, Doub
 }
 
 ///|
-/// What shows in the top corners of the page's panel on the tape (the rightmost box as round as a pane, as wide as a
-/// page): its words, grounds and pictures nearer its top than its top corners are round and nearer its side than the
-/// corner on that side (not one across it, a bar's ground: cut by its corners as the panel is).
-fn shown_in_page_corners(t : @ui.Tester) -> Array[String] {
+/// The page's panel on the tape (the rightmost box as round as a pane, as wide as a page), and where the topmost words
+/// `words` in it stand from its left and top, and how big they are.
+fn words_in_page(t : @ui.Tester, words : String) -> (Double, Double, Double)? {
   let bs = t.boxes()
   let mut page : @ui.Laid? = None
   for b in bs {
@@ -466,37 +465,58 @@ fn shown_in_page_corners(t : @ui.Tester) -> Array[String] {
       page = Some(b)
     }
   }
-  guard page is Some(p) else { return ["no page panel"] }
-  let (tl, tr, _, _) = p.radii
-  let out = []
+  guard page is Some(p) else { return None }
+  let mut found : (Double, Double, Double)? = None
   for b in bs {
-    let words = (b.kind == "text" || b.kind == "rich") && b.words_w > 0.0
-    let shows = words || (b.w < p.w - 1.0 && (b.draws || (b.bg & 0xFFL) != 0L))
-    if shows &&
-      b.index != p.index &&
-      b.opacity > 0.0 &&
+    if (b.kind == "text" || b.kind == "rich") &&
+      b.text == words &&
       b.x >= p.x &&
       b.x < p.x + p.w &&
       b.y >= p.y &&
-      b.y < p.y + dmax(tl, tr) - 0.5 {
-      let left = b.x - p.x
-      let right = p.x + p.w - (b.x + (if words { b.words_w } else { b.w }))
-      if (b.y < p.y + tl - 0.5 && left < tl - 0.5) || (b.y < p.y + tr - 0.5 && right < tr - 0.5) {
-        let what = if words { "「\{b.text}」" } else { "a \{b.kind} \{b.w}×\{b.h}" }
-        out.push("\{what} \{left} from its left, \{right} from its right, \{b.y - p.y} under its top")
-      }
+      b.y < p.y + p.h &&
+      (found is None || b.y - p.y < found.unwrap().1) {
+      found = Some((b.x - p.x, b.y - p.y, b.font_size))
     }
   }
-  out
+  found
 }
 
 ///|
-test "on the tape a page laid out as a phone's starts its rows under its panel's top corners, as a phone's under its status bar" {
+/// The middle of the first words `words` drawn, across (their line's).
+fn words_middle(t : @ui.Tester, words : String) -> Double? {
+  for b in t.boxes() {
+    if (b.kind == "text" || b.kind == "rich") && b.text == words {
+      return Some(b.y + b.h / 2.0)
+    }
+  }
+  None
+}
+
+///|
+test "on the tape a page's head is a chat's bar: its title where a chat's stands, the sidebar's first row on its line" {
   // a finger's Medium (the panels' corners the ladder's 34) and a Mac's (those at the window's edge its 16's less 6)
   for win in [("touch", 600.0, 900.0, 2, "medium"), ("desk", 600.0, 760.0, 0, "")] {
-    for mode in ["settings-appearance", "settings-changelog", "settings-station", "settings-profile"] {
-      let wrong = shown_in_page_corners(screen_in(mode, win, "zh"))
-      assert_true(wrong.is_empty(), msg="\{win.0} \{mode}: \{wrong}")
+    let chat = screen_in("chat", win, "zh")
+    guard words_in_page(chat, "整理发布清单") is Some((cx, cy, cs)) else { fail("\{win.0}: no chat's title") }
+    // the sidebar's first row and the page's bar on the tape's one line (@sf.tape_bar_over)
+    match (words_middle(chat, "新建对话"), words_middle(chat, "整理发布清单")) {
+      (Some(a), Some(b)) => assert_true((a - b).abs() < 1.0, msg="\{win.0}: 新建对话's line \{a}, the chat's title's \{b}")
+      _ => fail("\{win.0}: no 新建对话 or chat's title")
+    }
+    for page in [
+      ("settings-appearance", "外观"),
+      ("settings-changelog", "更新日志"),
+      // (a head of its own its name: the bar says what it is of)
+      ("settings-station", "Station"),
+      ("settings-profile", "Profile"),
+    ] {
+      let t = screen_in(page.0, win, "zh")
+      guard words_in_page(t, page.1) is Some((x, y, size)) else { fail("\{win.0} \{page.0}: no title") }
+      assert_true(
+        (x - cx).abs() < 0.5 && (y - cy).abs() < 0.5 && size == cs,
+        msg="\{win.0} \{page.0}: its title at \{x}, \{y}, \{size}; a chat's at \{cx}, \{cy}, \{cs}",
+      )
+      assert_eq(t.corner_faults(), [])
     }
   }
 }
