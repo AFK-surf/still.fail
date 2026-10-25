@@ -599,7 +599,7 @@ fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
     rows.rename_field.set(item.title)
     c.focus_editor(key)
   }
-  c.box(style=rename_box.then(@ui.style(border_color=Data(@sf.theme().p.line_strong))), fn() {
+  c.box(style=rename_box().then(@ui.style(border_color=Data(@sf.theme().p.line_strong))), fn() {
     let res = c.editor(
       key,
       font_size=rename_size,
@@ -627,15 +627,27 @@ fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
 
 ///|
 /// The field in the title's place (Rename.css.ts titleInput): as wide as the row's head leaves, 24 high on the canvas,
-/// its words where the title's were (6 past them each side), 4 taller than the title's line without making the row
-/// taller; a 1 line round it in the strong grey, 6 round; the title's words (13 on 24).
-// kept across runs: a value (no field of it changes)
-let rename_box : @ui.Style = @sf.bleed_x(rename_bleed)
-  .then(@sf.in_line(rename_taller))
-  .then(@ui.css("w=Full h=S6 radius=Md bg=Bg border=B1 justify=JCenter"))
+/// its words where the title's were, 4 taller than the title's line without making the row taller; a 1 line round it in
+/// the strong grey; the title's words (13 on 24). In the row's top corners: a capsule (its shape its height's) standing
+/// where it is concentric with them (@sf.capsule_in: the row's 18 its distance and its half, 6), as far from the row's
+/// top as from its sides, its words back where the title's were; all four corners alike, not the row's followed in two
+/// and its own 6 in the others (the user, 2026-10-26).
+fn rename_box() -> @ui.Style {
+  let d = @sf.capsule_in(@sf.row_corner, rename_h)
+  let side = @sf.theme().chat_list.band_pad - d
+  let over = @sf.row_in_y - d
+  rename_look.then(
+    @ui.style(px=@sf.room_of(side), mx=@sf.room_of(-side), mt=@sf.room_of(-over), mb=@sf.room_of(over - rename_taller)),
+  )
+}
 
 ///|
-let rename_bleed : Double = 6.0
+// kept across runs: a value (no field of it changes)
+let rename_look : @ui.Style = @ui.css("w=Full h=S6 radius=Full bg=Bg border=B1 justify=JCenter")
+
+///|
+/// Its height (h=S6).
+let rename_h : Double = 24.0
 
 ///|
 let rename_taller : Double = 4.0
