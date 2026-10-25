@@ -40,7 +40,7 @@ node is built, so one style is a constant and right in light and dark, wide and 
 | token | names | values |
 |---|---|---|
 | `Space` (padding, gaps) | `S0` `SPx` `S0_5` `S1` `S1_25` `S1_5` … `S4` `S4_5` `S5` … `S12` `S14` `S16` `S20` … `S96` | Tailwind v3.4's: a step 4 px; v4's quarter steps where still.fail says them (5, 18) |
-| `Len` (sizes) | `Hug` (what it holds), `Cut` (what it holds, cut short where its row has less), `Full`, `Grow(k)`, `Pct(p)` (a share of the parent's room, CSS's `50%`), `Fixed(v)`, and every `Space` name | |
+| `Len` (sizes) | `Hug` (what it holds), `Cut` (what it holds, cut short where its row has less), `Full`, `Grow(k)`, `Pct(p)` (a share of the parent's room, CSS's `50%`), `Fixed(v)`, `Within(v)` (a least across only, `min_w`: `v` where the parent has the room, all of it where it has less, CSS's `min(100%, 320px)`), and every `Space` name | |
 | `Radius` | `Sharp` `Sm` `Base` `Md` `Lg` `Xl` `Xl1_5` `Xl2` `Xl3` `Xl4` `Full` (a pill) `Inner` | `Theme.radii` (Tailwind's by default; `Xl1_5` 14, `Xl4` 32) |
 | `TextSize` (size and line) | `Xs3` `Xs2` `Xs` `Sm` `Base` `Lg` `Xl` `Xl2` `Xl3` `Xl4` | `Theme.text` (Tailwind's by default; `Xs2` 11 on 16, `Xs3` 10 on 14) |
 | `Leading` (a line's height said apart from the size's) | `L3` `L4` `L4_75` `L5` … `L10`, `Font` (the font's own) | `Theme.leading` (Tailwind's leading-3 … leading-10 by default: 12, 16 … 40 px; `L4_75` 19) |

@@ -79,6 +79,8 @@ struct Node {
   mut min_h : Double
   mut max_h : Double
   mut min_w : Double
+  /// its `min_w` gives way to the parent's room (Len's `Within`: CSS's `min(100%, …)`)
+  mut min_w_within : Bool
   mut max_w : Double
   mut pad_l : Double
   mut pad_t : Double
@@ -283,6 +285,7 @@ fn Node::new() -> Node {
     min_h: 0.0,
     max_h: 1.0e9,
     min_w: 0.0,
+    min_w_within: false,
     max_w: 1.0e9,
     pad_l: 0.0,
     pad_t: 0.0,
@@ -455,6 +458,7 @@ fn Node::reset_look(self : Node) -> Unit {
   self.min_h = 0.0
   self.max_h = 1.0e9
   self.min_w = 0.0
+  self.min_w_within = false
   self.max_w = 1.0e9
   self.pad_l = 0.0
   self.pad_t = 0.0

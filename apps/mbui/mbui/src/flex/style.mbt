@@ -6,6 +6,9 @@ pub(all) enum Dim {
   Auto
   Pt(Double)
   Pct(Double)
+  /// points, or all of the reference length where that is less (CSS's `min(100%, 320px)`); the points where the
+  /// reference is not known
+  Within(Double)
 } derive(Eq)
 
 ///|
@@ -84,12 +87,16 @@ pub const LEN_PT : Int = 1
 pub const LEN_PCT : Int = 2
 
 ///|
+pub const LEN_WITHIN : Int = 3
+
+///|
 /// A Dim as a length's kind and number.
 fn dim_k(d : Dim) -> Int {
   match d {
     Auto => LEN_AUTO
     Pt(_) => LEN_PT
     Pct(_) => LEN_PCT
+    Within(_) => LEN_WITHIN
   }
 }
 
@@ -99,6 +106,7 @@ fn dim_v(d : Dim) -> Double {
     Auto => 0.0
     Pt(v) => v
     Pct(p) => p
+    Within(v) => v
   }
 }
 
@@ -109,15 +117,17 @@ fn dim_of(k : Int, v : Double) -> Dim {
     Pt(v)
   } else if k == LEN_PCT {
     Pct(v)
+  } else if k == LEN_WITHIN {
+    Within(v)
   } else {
     Auto
   }
 }
 
 ///|
-/// Style of a flex node. Each length is two fields of its own, its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number (its
-/// points or percent), set only with `set_<name>(Dim)` (the box sizing with `set_box_sizing`), which keeps a node's
-/// box while they are the same (`ver`); read with `get_<name>()`, or `<name>_kind()` and `<name>_value()`.
+/// Style of a flex node. Each length is two fields of its own, its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and
+/// number (its points or percent), set only with `set_<name>(Dim)` (the box sizing with `set_box_sizing`), which keeps
+/// a node's box while they are the same (`ver`); read with `get_<name>()`, or `<name>_kind()` and `<name>_value()`.
 pub(all) struct Style {
   mut display : Display
   mut position : PositionType
@@ -348,7 +358,7 @@ pub fn Style::set_basis(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::basis_kind(self : Style) -> Int {
   self.basis_k
 }
@@ -371,7 +381,7 @@ pub fn Style::set_width(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::width_kind(self : Style) -> Int {
   self.width_k
 }
@@ -394,7 +404,7 @@ pub fn Style::set_height(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::height_kind(self : Style) -> Int {
   self.height_k
 }
@@ -417,7 +427,7 @@ pub fn Style::set_min_width(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::min_width_kind(self : Style) -> Int {
   self.min_width_k
 }
@@ -440,7 +450,7 @@ pub fn Style::set_min_height(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::min_height_kind(self : Style) -> Int {
   self.min_height_k
 }
@@ -463,7 +473,7 @@ pub fn Style::set_max_width(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::max_width_kind(self : Style) -> Int {
   self.max_width_k
 }
@@ -486,7 +496,7 @@ pub fn Style::set_max_height(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::max_height_kind(self : Style) -> Int {
   self.max_height_k
 }
@@ -509,7 +519,7 @@ pub fn Style::set_margin_left(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::margin_left_kind(self : Style) -> Int {
   self.margin_left_k
 }
@@ -532,7 +542,7 @@ pub fn Style::set_margin_top(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::margin_top_kind(self : Style) -> Int {
   self.margin_top_k
 }
@@ -555,7 +565,7 @@ pub fn Style::set_margin_right(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::margin_right_kind(self : Style) -> Int {
   self.margin_right_k
 }
@@ -578,7 +588,7 @@ pub fn Style::set_margin_bottom(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::margin_bottom_kind(self : Style) -> Int {
   self.margin_bottom_k
 }
@@ -601,7 +611,7 @@ pub fn Style::set_padding_left(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::padding_left_kind(self : Style) -> Int {
   self.padding_left_k
 }
@@ -624,7 +634,7 @@ pub fn Style::set_padding_top(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::padding_top_kind(self : Style) -> Int {
   self.padding_top_k
 }
@@ -647,7 +657,7 @@ pub fn Style::set_padding_right(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::padding_right_kind(self : Style) -> Int {
   self.padding_right_k
 }
@@ -670,7 +680,7 @@ pub fn Style::set_padding_bottom(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::padding_bottom_kind(self : Style) -> Int {
   self.padding_bottom_k
 }
@@ -693,7 +703,7 @@ pub fn Style::set_border_left(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::border_left_kind(self : Style) -> Int {
   self.border_left_k
 }
@@ -716,7 +726,7 @@ pub fn Style::set_border_top(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::border_top_kind(self : Style) -> Int {
   self.border_top_k
 }
@@ -739,7 +749,7 @@ pub fn Style::set_border_right(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::border_right_kind(self : Style) -> Int {
   self.border_right_k
 }
@@ -762,7 +772,7 @@ pub fn Style::set_border_bottom(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::border_bottom_kind(self : Style) -> Int {
   self.border_bottom_k
 }
@@ -785,7 +795,7 @@ pub fn Style::set_inset_left(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::inset_left_kind(self : Style) -> Int {
   self.inset_left_k
 }
@@ -808,7 +818,7 @@ pub fn Style::set_inset_top(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::inset_top_kind(self : Style) -> Int {
   self.inset_top_k
 }
@@ -831,7 +841,7 @@ pub fn Style::set_inset_right(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::inset_right_kind(self : Style) -> Int {
   self.inset_right_k
 }
@@ -854,7 +864,7 @@ pub fn Style::set_inset_bottom(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::inset_bottom_kind(self : Style) -> Int {
   self.inset_bottom_k
 }
@@ -877,7 +887,7 @@ pub fn Style::set_gap_row(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::gap_row_kind(self : Style) -> Int {
   self.gap_row_k
 }
@@ -900,7 +910,7 @@ pub fn Style::set_gap_col(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
 pub fn Style::gap_col_kind(self : Style) -> Int {
   self.gap_col_k
 }

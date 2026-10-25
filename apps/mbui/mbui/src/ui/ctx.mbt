@@ -936,6 +936,7 @@ pub fn Ctx::box(
   n.at_r = right.unwrap_or(0.0 / 0.0)
   n.at_b = bottom.unwrap_or(0.0 / 0.0)
   n.min_w = first(min_w, opt_bound(st.min_w, 0.0)).unwrap_or(0.0)
+  n.min_w_within = min_w is None && st.min_w is Some(Within(_))
   n.max_w = first(max_w, opt_bound(st.max_w, 1.0e9)).unwrap_or(1.0e9)
   n.min_h = first(min_h, opt_bound(st.min_h, 0.0)).unwrap_or(0.0)
   n.max_h = first(max_h, opt_bound(st.max_h, 1.0e9)).unwrap_or(1.0e9)

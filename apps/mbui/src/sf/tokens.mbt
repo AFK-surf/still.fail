@@ -1613,7 +1613,13 @@ pub let tip_max : @ui.Len = Fixed(300.0)
 /// A login card's on a desktop's width (the web's MachineLogins.css.ts card): 360 at least where there is the room
 /// (min(100%, 360px)), and its corner its padding and its × pill's half (8 + 12: the web's card's 20, as a
 /// visualization's).
-pub let login_card_least : Double = 360.0
+pub let login_card_least : @ui.Len = Within(360.0)
+
+///|
+/// An agent's request about a vault item as its card in a chat (the web's VaultAsk.css.ts card): as wide as what it
+/// says, 320 at least where there is the room (min(100%, 320px)), 560 at most.
+// kept across runs: a value (no field of it changes)
+pub let ask_card_room : @ui.Style = @ui.css("w=Cut min_w=Within(320) max_w=Fixed(560)")
 
 ///|
 pub let login_card_corner : @ui.Radius = rounded(card_corner)

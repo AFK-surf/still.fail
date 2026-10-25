@@ -135,8 +135,9 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
 
 ///|
 /// An agent's request about a vault item, in place of its post's words (VaultAsk.tsx VaultAsk): what is asked as a card,
-/// its answer at its foot (VaultApproval.tsx VaultCard: the settings' vault_ask, the vault page's too); once decided,
-/// one line saying how it ended. Where nothing is answered (no core: a letter's), the card without its answer.
+/// as wide as what it says (320 at least where there is the room, 560 at most: VaultAsk.css.ts card), its answer at its
+/// foot (VaultApproval.tsx VaultCard: the settings' vault_ask, the vault page's too, which fills its page); once
+/// decided, one line saying how it ended. Where nothing is answered (no core: a letter's), the card without its answer.
 fn vault_ask_card(c : @ui.Ctx, here : MessageHere, card : Card, ask : VaultAsk) -> Unit {
   let asked : Asked = {
     name: ask.name,
@@ -150,19 +151,22 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, card : Card, ask : VaultAsk) 
     @settings.vault_outcome(c, asked, ask.status, ask.scope)
     return
   }
-  match here.core {
-    Some(core) =>
-      @settings.vault_ask(
-        c,
-        core,
-        workspace_of(here.station),
-        card.vault,
-        asked,
-        mine_to(here, card.assignee),
-        who=card.assignee_text,
-      )
-    None => @settings.vault_ask_words(c, asked)
-  }
+  c.box(style=@sf.ask_card_room, fn() {
+    match here.core {
+      Some(core) =>
+        @settings.vault_ask(
+          c,
+          core,
+          workspace_of(here.station),
+          card.vault,
+          asked,
+          mine_to(here, card.assignee),
+          who=card.assignee_text,
+        )
+      None => @settings.vault_ask_words(c, asked)
+    }
+  })
+  |> ignore
 }
 
 ///|

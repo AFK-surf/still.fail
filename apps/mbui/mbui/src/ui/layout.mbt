@@ -749,7 +749,8 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       }
   }
   let said_min = len(n.min_w)
-  if n.min_w > 0.0 {
+  // (a least that gives way to the parent's room is not what it needs: how much room that is, the layout knows)
+  if n.min_w > 0.0 && !n.min_w_within {
     least = dmax(least, said_min)
   }
   if n.max_w < 1.0e9 {
@@ -772,7 +773,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   } else {
     least
   }
-  if n.min_w > 0.0 {
+  if n.min_w > 0.0 && !n.min_w_within {
     fit_least = dmax(fit_least, said_min)
   }
   if n.max_w < 1.0e9 {
@@ -786,15 +787,26 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     ch = true
   }
   // in a row, sized by what it holds: never narrower than that needs (CSS's min-width: auto); else as said
+  let within = n.min_w > 0.0 && n.min_w_within
   let min_w = if in_row && !over && !at && (n.w is Auto || (n.w is Fill(_) && n.keep)) {
-    least
+    if within {
+      dmax(least, said_min)
+    } else {
+      least
+    }
   } else if n.min_w > 0.0 {
     said_min
   } else {
     0.0
   }
   let has_min_w = min_w > 0.0
-  if opt_differs(s.min_width_kind(), s.min_width_value(), has_min_w, min_w) {
+  // (said to give way to the parent's room: that much where the parent has it, all of the parent's where it has less)
+  if within {
+    if s.min_width_kind() != @flex.LEN_WITHIN || s.min_width_value() != min_w {
+      s.set_min_width(Within(min_w))
+      ch = true
+    }
+  } else if opt_differs(s.min_width_kind(), s.min_width_value(), has_min_w, min_w) {
     s.set_min_width(if has_min_w { Pt(min_w) } else { Auto })
     ch = true
   }

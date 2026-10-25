@@ -47,15 +47,8 @@ pub fn login_card(c : @ui.Ctx, core : Core, station : String, id : String, marke
     return
   }
   let all = (core.topic)("machineLogins", { "station": Json::string(station) }).value
-  // 360 at least where there is the room, else as wide as where it is (minWidth: min(100%, 360px)): what it holds never
-  // widens what it is in
-  let room = c.id("login-room/" + station + "/" + id)
-  let least = match c.laid_size(room) {
-    Some((w, _)) => dmin(@sf.login_card_least, w)
-    None => 0.0
-  }
-  c.box(style=lc_room, id=room, fn() {
-    c.box(style=(if marked { lc_card_marked } else { lc_card }).then(@ui.style(min_w=Fixed(least))), fn() {
+  c.box(style=lc_room, fn() {
+    c.box(style=if marked { lc_card_marked } else { lc_card }, fn() {
       if flag(all, "canLogin") {
         c.box(style=lc_head, fn() {
           c.box(style=lc_title_room, fn() { c.text(text(l, "title"), style=lc_title) |> ignore }) |> ignore
@@ -431,10 +424,12 @@ fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?) -> Unit {
 
 ///|
 /// The card (card): under the agent's message as a decision's options are, as wide as what it holds and at least 360
-/// where there is the room (login_card: no wider than where it is), 8 in all round, its parts 2 apart, on the ink at 5%; its corner its
-/// padding and its × pill's; the accent at 10% when it is the one a link pointed to.
+/// where there is the room (minWidth: min(100%, 360px)), never wider than where it is, 8 in all round, its parts 2
+/// apart, on the ink at 5%; its corner its padding and its × pill's; the accent at 10% when it is the one a link
+/// pointed to.
 // kept across runs: a value (no field of it changes)
 let lc_card : @ui.Style = @ui.style(
+  min_w=@sf.login_card_least,
   max_w=Full,
   p=@sf.inset_room,
   gap=S0_5,

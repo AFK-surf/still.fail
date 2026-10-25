@@ -66,6 +66,12 @@ fn resolve_of(k : Int, v : Double, base : Double) -> Double {
     v
   } else if k == LEN_PCT {
     pct(v, base)
+  } else if k == LEN_WITHIN {
+    if known(base) && base < v {
+      base
+    } else {
+      v
+    }
   } else {
     undef
   }
@@ -187,12 +193,12 @@ fn box_of(
     s.margin_right_k == LEN_PCT ||
     s.margin_top_k == LEN_PCT ||
     s.margin_bottom_k == LEN_PCT ||
-    s.width_k == LEN_PCT ||
-    s.min_width_k == LEN_PCT ||
-    s.max_width_k == LEN_PCT
-  let of_cb_h = s.height_k == LEN_PCT ||
-    s.min_height_k == LEN_PCT ||
-    s.max_height_k == LEN_PCT
+    s.width_k >= LEN_PCT ||
+    s.min_width_k >= LEN_PCT ||
+    s.max_width_k >= LEN_PCT
+  let of_cb_h = s.height_k >= LEN_PCT ||
+    s.min_height_k >= LEN_PCT ||
+    s.max_height_k >= LEN_PCT
   match into {
     Some(o) => {
       o.pad_l = pad_l
