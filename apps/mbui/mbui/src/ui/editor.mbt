@@ -872,6 +872,13 @@ pub fn Ctx::editor(
 pub let caret_blink_ms : Double = 530.0
 
 ///|
+/// How long a caret blinks after it last moved (a word typed, the caret moved, the field focused): then it stays shown
+/// and asks for no more frames, as GTK's stops after 10 s. A window left with a field focused draws nothing, and what
+/// drawing holds goes back: on macOS the driver's own 30 to 50 MB a second or two after the last frame, and the
+/// window's drawables (apple_render.m trim).
+pub let caret_blinks_for_ms : Double = 30000.0
+
+///|
 /// Android's: Compose's text field's, shown the first 500 ms of each second (TextFieldCursor.kt cursorAnimationSpec).
 pub let caret_blink_android_ms : Double = 500.0
 
@@ -1011,9 +1018,16 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     let since = self.now - st.blink0
     let blink = caret_blink()
     let phase = (since / blink).to_int()
-    self.wake_at_time(st.blink0 + (phase + 1).to_double() * blink, later=true)
+    // blinking till caret_blinks_for_ms, then shown at rest
+    let resting = since >= caret_blinks_for_ms
+    if !resting {
+      self.wake_at_time(
+        dmin(st.blink0 + (phase + 1).to_double() * blink, st.blink0 + caret_blinks_for_ms),
+        later=true,
+      )
+    }
     let coff = if ml > 0 { st.caret + st.msel_a } else { st.caret }
-    if phase % 2 == 0 {
+    if resting || phase % 2 == 0 {
       let (x, y, w, h) = st.caret_box(tl, n, coff)
       self.emit_rect(x, y, w, h, w / 2.0, st.caret_color, 0.0, 0L, alpha)
     }
