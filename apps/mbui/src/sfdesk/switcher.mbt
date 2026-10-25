@@ -118,7 +118,7 @@ pub fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         })
         |> ignore
         if switching.val {
-          @sfpages.finder_list(c, src, w, offered, close, idle_chats=true, most~)
+          @sfpages.finder_list(c, src, w, offered, close, idle_chats=true, most~, width=room - 2.0 * switcher_edge)
         }
       },
     )
