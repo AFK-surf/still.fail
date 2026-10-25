@@ -149,6 +149,23 @@ test "appearance: 深色 chosen, the app is drawn dark at once and the core keep
 }
 
 ///|
+test "appearance: 动画 减少 chosen, motion is reduced at once whatever the system says; 不减少, it is not" {
+  let t = settings_tester("appearance")
+  assert_false(@ui.reduced_motion())
+  t.tap_text("减少")
+  t.draw()
+  assert_true(@ui.reduced_motion())
+  // the system's own reduced: 不减少 holds motion all the same, 跟随系统 follows it
+  t.set_reduce_motion(true)
+  t.tap_text("不减少")
+  t.draw()
+  assert_false(@ui.reduced_motion())
+  t.tap_text("跟随系统")
+  t.draw()
+  t.set_reduce_motion(false)
+}
+
+///|
 test "a station renamed from its page's …: the new name is the station's" {
   let t = settings_tester("stations")
   assert_true(t.find("Studio") is Some(_))

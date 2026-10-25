@@ -13,6 +13,8 @@ priv struct Fixture {
   /// the theme chosen (the prefs' `appearance`): light unless the mode ends in -dark or MBUI_DARK=1, so that
   /// screenshots do not follow the machine's own
   mut appearance : String
+  /// motion chosen (the prefs' `motion`: reduce, full; "" the system's)
+  mut motion : String
   archived : Map[String, Bool]
   filters : Map[String, String]
   /// the faces chosen (the prefs' `fonts`), and those whose files the core has (fonts_fixture.mbt)
@@ -678,6 +680,7 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
         "chatTabs": Json::object(f.chat_tabs),
         "listFilter": Json::object(lf),
         "appearance": Json::string(f.appearance),
+        "motion": Json::string(f.motion),
         "fonts": fixture_fonts(f.fonts),
         "faces": fixture_faces(f.fonts),
         "keys": fixture_keys(f.keys),
@@ -821,6 +824,7 @@ pub fn fixture(mode : String) -> Source {
     } else {
       "light"
     },
+    motion: "",
     archived: {},
     filters: {},
     fonts: if mode == "settings-fonts-coming" { { "ui": "noto-sans-sc" } } else { {} },
@@ -962,6 +966,11 @@ pub fn fixture(mode : String) -> Source {
           }
           match field(Some(params), "appearance") {
             Some(String(a)) => f.appearance = a
+            _ => ()
+          }
+          match field(Some(params), "motion") {
+            Some(String(m)) => f.motion = m
+            Some(Null) => f.motion = ""
             _ => ()
           }
           match field(Some(params), "listFilter") {

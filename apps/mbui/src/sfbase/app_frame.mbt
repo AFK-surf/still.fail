@@ -10,6 +10,12 @@ pub fn appearance(src : Source, page_dark : Bool?) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
   // the words' language too, the core's (its `lang`: as chosen, else the device's), I18n.kt's follow
   @sf.set_language(if prefs is Some(_) { Some(text(prefs, "lang")) } else { None })
+  // motion as this device is set (the prefs' `motion`: reduce, full), else as the system's
+  @ui.set_motion_chosen(match text(prefs, "motion") {
+    "reduce" => Some(true)
+    "full" => Some(false)
+    _ => None
+  })
   let dark = @settings.dark(prefs, @ui.system_dark())
   @sf.set_dark(Some(dark))
   // (the host told once the prefs are read: not the system's first, then the one chosen)

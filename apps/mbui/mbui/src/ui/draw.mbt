@@ -1006,19 +1006,31 @@ pub fn Ctx::list_scrolled(self : Ctx, li : Int) -> Double {
 }
 
 ///|
-/// Whether motion is reduced (the host's setting, or MBUI_REDUCE_MOTION=1): every motion at its end at once.
+/// Whether motion is reduced (the app's own choice, else the host's setting; or MBUI_REDUCE_MOTION=1): every motion at
+/// its end at once.
 pub fn reduced_motion() -> Bool {
   if fake.val is Some(f) {
-    return f.reduce_motion || f.env.get("MBUI_REDUCE_MOTION") == Some("1")
+    return f.env.get("MBUI_REDUCE_MOTION") == Some("1") || motion_chosen.val.unwrap_or(f.reduce_motion)
   }
   if reduce_env.val < 0 {
     reduce_env.val = if @hostapi.env("MBUI_REDUCE_MOTION") == "1" { 1 } else { 0 }
   }
-  reduce_env.val == 1 || @hostapi.reduce_motion()
+  reduce_env.val == 1 || motion_chosen.val.unwrap_or_else(fn() { @hostapi.reduce_motion() })
 }
 
 ///|
 let reduce_env : Ref[Int] = { val: -1 }
+
+///|
+/// Motion as the app's own setting chooses it (Some(true): reduced, Some(false): not, whatever the system says), or
+/// None to follow the system's.
+pub fn set_motion_chosen(reduce : Bool?) -> Unit {
+  motion_chosen.val = reduce
+}
+
+///|
+// kept across runs: put back as the app reads its setting each frame (None until then)
+let motion_chosen : Ref[Bool?] = { val: None }
 
 ///|
 /// Motion reduced (the person's setting, or MBUI_REDUCE_MOTION=1): what moves is where it goes at once.
