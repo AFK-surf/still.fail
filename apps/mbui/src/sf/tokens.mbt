@@ -97,6 +97,8 @@ pub(all) struct Theme {
   control_h : Double
   /// what a page's bar of keys is on this screen (Bars)
   bars : Bars
+  /// what a list's item is on this screen (Items)
+  items : Items
 }
 
 ///|
@@ -127,6 +129,18 @@ pub(all) struct Rows {
   check_corner : Double
   switch_w : Double
   switch_h : Double
+}
+
+///|
+/// A list's item on the screen in force (a folder's entries, the folders pinned): how high it is at least, its name's
+/// words and what is said of it (its size, its time: muted), its kind's mark. A touch device's: a finger's (48; the
+/// phone's mRow: its name the body's 15 on 20, mMeta 12 on 16, the mark 22); a computer's: the web's Drive row (44, with
+/// room for its ⋯; its name 13, its meta 12, KindIcon 20).
+pub(all) struct Items {
+  least : Double
+  name : @ui.TextStyle
+  meta : @ui.TextStyle
+  mark : Double
 }
 
 // ---------------------------------------------------------------------------
@@ -783,6 +797,24 @@ let narrow_type : Type = {
 let bars_drawn : Bars = { key: 28.0, icon: 14.0, field: 30.0 }
 
 ///|
+// kept across runs: a value (no field of it changes)
+let wide_items : Items = {
+  least: 44.0,
+  name: @ui.text_style(size=Sm, color=Fg, wrap=false),
+  meta: @ui.text_style(size=Xs, color=Muted, wrap=false),
+  mark: 20.0,
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_items : Items = {
+  least: 48.0,
+  name: @ui.text_style(size=Lg, leading=L6, color=Fg, wrap=false),
+  meta: @ui.text_style(size=Xs, leading=L4, color=Muted, wrap=false),
+  mark: 22.0,
+}
+
+///|
 let wide_rows : Rows = {
   least: Fixed(40.0),
   title: @ui.text_style(size=Sm, leading=L6, color=Fg),
@@ -813,7 +845,7 @@ let dark_set : Ref[Bool?] = { val: None }
 
 ///|
 let current : Ref[Theme] = {
-  val: { dark: false, narrow: false, p: wide_light, t: wide_type, rows: wide_rows, control_h: wide_control_h, bars: bars_drawn },
+  val: { dark: false, narrow: false, p: wide_light, t: wide_type, rows: wide_rows, control_h: wide_control_h, bars: bars_drawn, items: wide_items },
 }
 
 ///|
@@ -909,6 +941,7 @@ pub fn begin(c : @ui.Ctx) -> Theme {
     rows: if narrow { narrow_rows } else { wide_rows },
     control_h: if narrow { narrow_control_h } else { wide_control_h },
     bars: bars_drawn,
+    items: if narrow { narrow_items } else { wide_items },
   }
   current.val
 }

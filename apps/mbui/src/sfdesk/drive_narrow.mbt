@@ -1,12 +1,7 @@
-// A station's drive laid out narrow, as the web's narrow app has it (ember web/src/mobile/Drive.tsx RootsPage,
-// RootRow, FolderPage, Crumbs, EntryRow, UploadRow, Empty; Drive.css.ts m*): the files' page and a folder's in a box
-// narrower than @sf.page_narrow_most, in whichever frame (the phone's stack, a tablet's pane), with either hand.
-// The bar: back where the frame has somewhere to go back to, the folder's name, read again, ＋ (put files up, a new
-// folder) and ⋯ (the order, hidden files, its path, 收藏, pin, 管理). Under it the way down from its root, what it holds
-// in a line, the files going up, its entries on a card: pressed, one opens as its entry says (a folder gone into, a
-// text read, a video played, a picture or code previewed, the rest saved); a long press or a right click gives what
-// can be done to it (the files' page's own: drive.mbt row_items). What is chosen, the order and the names a change
-// gives are the core's, as the wide page's are (browse.mbt).
+// A station's folders pinned laid out narrow, as the web's narrow app has them (ember web/src/mobile/Drive.tsx
+// RootsPage, RootRow, Empty; Drive.css.ts m*), in a box narrower than @sf.page_narrow_most, in whichever frame (the
+// phone's stack, a tablet's pane); and what a narrow page is given of its frame (NarrowOf), its bar, the rows on a
+// card. A folder's own page is one on every screen (drive_page.mbt).
 
 ///|
 /// What a narrow page is given of its frame and what it opens: the frame's (back's words, the room over and under),
@@ -21,113 +16,6 @@ pub(all) struct NarrowOf {
 /// The narrow app's frame where nothing is said of it (a pane beside a list: no back, no room over or under).
 pub fn narrow_bare() -> NarrowOf {
   { frame: { back: None, top: 0.0, foot: 0.0, named: false }, back: fn() {  } }
-}
-
-///|
-/// What a narrow folder's list holds, in order.
-priv enum NarrowItem {
-  NCrumbs
-  NFailed(String)
-  NStale(String)
-  NReading
-  NCount(String)
-  NUp(DvUpload, Bool, Bool)
-  NEmpty
-  NRow(DvEntry, Bool, Bool)
-  NFoot
-}
-
-///|
-/// The folder `f.at` laid out narrow (FolderPage).
-pub fn folder_narrow(c : @ui.Ctx, src : Source, f : FolderOf, n : NarrowOf) -> Unit {
-  let t = @sf.theme()
-  let at = f.at
-  let root = at.root.unwrap_or("")
-  let st = f.st
-  let write = f.rights.write
-  let (value, error) = drive_folder(src, at.station, root, at.path)
-  let entries = items(value, "entries").map(dv_entry)
-  if f.front {
-    keep_files_page(f.ws, at)
-  }
-  // the files picked to go up
-  dv_take_picked(src, at, entries)
-  let b_ref : Ref[Browse?] = Ref(None)
-  let open_row = fn(in_ : DriveAt, e : DvEntry) {
-    let near = match b_ref.val {
-      Some(b) => b.arranged(in_.path, entries).unwrap_or([e])
-      None => [e]
-    }
-    open_entry(c, src, "page", in_, e, near, fn(to) { (f.go)(to, false) })
-  }
-  let b = browse(c, src, f.key, "page", "list", at, write, {
-    open: open_row,
-    preview: open_row,
-    go: fn(p, replace) { (f.go)({ ..at, path: p }, replace) },
-    remove: fn(items) { remove_entries(c, src, st, items) },
-  })
-  b_ref.val = Some(b)
-  let name = folder_name(st, at)
-  let shown = b.arranged(at.path, entries)
-  let ups_here = ups.uploads.filter(fn(u) { u.station == at.station && u.root == root && u.dir == at.path })
-  let list : Array[NarrowItem] = []
-  if at.path != "" {
-    list.push(NCrumbs)
-  }
-  match (error, value) {
-    (Some(e), Some(_)) => list.push(NStale(e))
-    (Some(e), None) => list.push(NFailed(e))
-    (None, None) => list.push(NReading)
-    _ => ()
-  }
-  match (value, shown) {
-    (Some(_), Some(rows)) => {
-      let count = text(value, "countText") +
-        (if flag(value, "truncated") { " · " + @sf.t("web-pages.drive.truncated") } else { "" })
-      list.push(NCount(count))
-      for i, u in ups_here {
-        list.push(NUp(u, i == 0, i == ups_here.length() - 1))
-      }
-      if rows.length() == 0 && ups_here.length() == 0 {
-        list.push(NEmpty)
-      }
-      for i, e in rows {
-        list.push(NRow(e, i == 0, i == rows.length() - 1))
-      }
-    }
-    (Some(_), None) => list.push(NReading)
-    _ => ()
-  }
-  list.push(NFoot)
-  c.box(style=narrow_page, fn() {
-    if narrow_bar(c, n, name, fn() { narrow_folder_actions(c, src, f, b) }) {
-      (n.back)()
-    }
-    c.list("files/narrow/" + f.key + "/" + at.station + "/" + root + "/" + at.path, list.length(), narrow_row_est, fn(i) {
-      match list[i] {
-        NCrumbs => narrow_crumbs(c, f)
-        NStale(e) =>
-          narrow_retry(c, @sf.t("android-misc.drive.stale", args=[("error", e)]), narrow_stale_words, fn() {
-            refresh_folder(c, src, at)
-          })
-        NFailed(e) => narrow_retry(c, e, narrow_failed_words, fn() { refresh_folder(c, src, at) })
-        NReading => @sf.waiting(c, count=7)
-        NCount(s) => c.box(style=narrow_count_box, fn() { c.text(s, style=narrow_count_words) |> ignore }) |> ignore
-        NUp(u, first, last) => card_row(c, first, last, 0, fn() { narrow_upload_row(c, src, u) })
-        NEmpty =>
-          narrow_empty(c, @sf.t("web-pages.drive.emptyFolder"), if write {
-            Some((@sf.t("web-pages.drive.upload"), fn() { dv_upload(c, at) }))
-          } else {
-            None
-          })
-        NRow(e, first, last) => narrow_entry_row(c, src, f, b, e, first, last)
-        NFoot => c.box(style=@ui.style(w=Full, h=Fixed(narrow_list_foot + n.frame.foot)), fn() {  }) |> ignore
-      }
-    })
-    |> ignore
-  })
-  |> ignore
-  ignore(t)
 }
 
 ///|
@@ -154,132 +42,6 @@ fn narrow_bar(c : @ui.Ctx, n : NarrowOf, title : String, trailing : () -> Unit) 
 /// A round button of the bar (NavButton): 34 across, its icon 18 (`size`), what it is said to be.
 fn narrow_bar_button(c : @ui.Ctx, key : String, icon : String, label : String, size? : Double = narrow_bar_icon) -> Bool {
   @sf.icon_button(c, icon, key~, size=narrow_bar_button_w, icon_size=size, round=true, label~)
-}
-
-///|
-/// What the folder's bar does (FolderPage's trailing): read again (the spinner in its place while it is read), ＋ for
-/// one who may write (put files up, a new folder), ⋯ (the order and hidden files, as the wide list's own menu; its
-/// path; 收藏; pin, for one who browses every folder; 管理).
-fn narrow_folder_actions(c : @ui.Ctx, src : Source, f : FolderOf, b : Browse) -> Unit {
-  let at = f.at
-  let root = at.root.unwrap_or("")
-  let st = f.st
-  c.box(style=narrow_actions_row, fn() {
-    if refreshing(at) {
-      c.box(style=narrow_bar_spin, fn() { @sf.spinner(c) |> ignore }) |> ignore
-    } else if narrow_bar_button(c, "files/narrow/refresh", "refresh", @sf.t("web-pages.drive.refresh")) {
-      refresh_folder(c, src, at)
-    }
-    if f.rights.write &&
-      narrow_bar_button(c, "files/narrow/add", "plus", @sf.t("web-pages.drive.add"), size=narrow_bar_plus) {
-      @sf.menu(
-        [
-          Some(@sf.menu_item_of(@sf.t("web-pages.drive.upload"), icon="upload", fn() { dv_upload(c, at) })),
-          Some(@sf.menu_item_of(@sf.t("web-pages.drive.mkdir"), icon="folder-plus", fn() { ask_new_folder(c, src, at) })),
-        ],
-        from=Of(c.id("files/narrow/add")),
-        title=folder_name(st, at),
-        along=End,
-      )
-    }
-    if narrow_bar_button(c, "files/narrow/more", "more", @sf.t("web-main.menu.more")) {
-      let a = b.arrangement()
-      let here = dv_absolute(root, at.path)
-      let name = folder_name(st, at)
-      let kept = favorite_has(favorites(src, f.ws), at.station, root, at.path)
-      let pinned = st.roots.iter().any(fn(r) { r.path == here })
-      let items : Array[@sf.MenuItem?] = []
-      for by in ["name", "time", "size", "kind"] {
-        items.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.sortBy." + by), icon=if a.by == by { "check" } else { "" }, fn() {
-          b.arrange_as(c, src, by~, down=false)
-        })))
-      }
-      items.push(Some(@sf.menu_item_of(@sf.t(if a.hidden { "web-pages.drive.hideHidden" } else { "web-pages.drive.showHidden" }), fn() {
-        b.arrange_as(c, src, hidden=!a.hidden)
-      })))
-      items.push(None)
-      items.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.copyPath"), icon="copy", fn() { copy_path(c, here) })))
-      items.push(Some(@sf.menu_item_of(@sf.t(if kept { "web-pages.files.unfavorite" } else { "web-pages.files.favorite" }, args=[("name", name)]), icon="star", fn() {
-        if kept {
-          favorite_remove(src, f.ws, at.station, root, at.path)
-        } else {
-          favorite_add(src, f.ws, { station: at.station, root, path: at.path, name })
-        }
-      })))
-      if st.anywhere {
-        items.push(Some(@sf.menu_item_of(@sf.t(if pinned { "web-pages.drive.unpin" } else { "web-pages.drive.pin" }), icon="pin", fn() {
-          pin_folder(c, src, st, here, !pinned)
-        })))
-      }
-      match f.manage {
-        Some(m) if f.rights.manage || st.anywhere =>
-          items.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.manage"), icon="folder", m)))
-        _ => ()
-      }
-      @sf.menu(items, from=Of(c.id("files/narrow/more")), along=End)
-    }
-  })
-  |> ignore
-}
-
-///|
-/// A new folder in `at`, named as it is asked (newFolder: 新建文件夹, its name typed; refused in the core's words where
-/// it may not have it).
-pub fn ask_new_folder(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
-  let what = @sf.t("web-pages.drive.mkdirWhat")
-  @sf.ask(
-    @sf.t("web-pages.drive.mkdir"),
-    @sf.t("web-pages.drive.make"),
-    fn(name) {
-      dv_check_name(src, name, fn(problem) {
-        match problem {
-          Some(p) => say(c, @sf.t("web-main.act.failed", args=[("what", what), ("error", p)]))
-          None =>
-            (src.call)(
-              "drive.mkdir",
-              {
-                "station": Json::string(at.station),
-                "root": Json::string(at.root.unwrap_or("")),
-                "path": Json::string(dv_join(at.path, name)),
-              },
-              act_done(c, what),
-            )
-        }
-      })
-    },
-    placeholder=@sf.t("web-pages.drive.mkdirPlaceholder"),
-  )
-}
-
-///|
-/// A name changed as it is asked (EntrySheet's 重命名: its name in the field), the folder's row chosen under it once
-/// the station has it.
-pub fn ask_rename(c : @ui.Ctx, src : Source, b : Browse, in_ : DriveAt, e : DvEntry) -> Unit {
-  @sf.ask(
-    @sf.t("web-pages.drive.renameTitle"),
-    @sf.t("common.save"),
-    fn(name) { b.rename(c, src, in_.path, e, Some(name)) },
-    value=e.name,
-    placeholder=e.name,
-  )
-}
-
-///|
-/// Where the folder is under its root (Crumbs): the root, then each folder down to this one, each but the last a way
-/// to it (way_line: those between in its … where the line is short).
-fn narrow_crumbs(c : @ui.Ctx, f : FolderOf) -> Unit {
-  let at = f.at
-  let root = at.root.unwrap_or("")
-  let parts = at.path.split("/").filter(fn(p) { p != "" }).map(fn(p) { p.to_owned() }).to_array()
-  let levels : Array[(String, String)] = [(folder_name(f.st, { ..at, path: "" }), "")]
-  let mut so_far = ""
-  for p in parts {
-    so_far = dv_join(so_far, p)
-    levels.push((p, so_far))
-  }
-  way_line(c, "files/narrow/crumbs/" + at.station + "/" + root, levels.map(fn(l) { l.0 }), narrow_way(), fn(i) {
-    (f.go)({ ..at, path: levels[i].1 }, false)
-  })
 }
 
 ///|
@@ -326,60 +88,6 @@ fn narrow_empty(c : @ui.Ctx, words : String, action : (String, () -> Unit)?) -> 
 }
 
 ///|
-/// An entry (EntryRow): its kind's mark, its name, its size and time (a folder's time); a spinner while something is
-/// under way on it, a folder's chevron. Pressed, it opens; held (a finger) or right clicked (a mouse), what can be done
-/// to it, at the press.
-fn narrow_entry_row(c : @ui.Ctx, src : Source, f : FolderOf, b : Browse, e : DvEntry, first : Bool, last : Bool) -> Unit {
-  let t = @sf.theme()
-  let at = f.at
-  let path = dv_join(at.path, e.name)
-  let busy = entry_busy(src, at, e.name)
-  let id = c.id("files/narrow/row/" + at.station + "/" + at.root.unwrap_or("") + "/" + path)
-  if !busy {
-    c.cursor(id, Hand)
-    match c.menu_asked(id) {
-      Some((x, y)) => {
-        b.choose(c, src, at.path, e.name)
-        @sf.menu(row_items(c, src, f, b, at, e, favorites(src, f.ws), narrow=true), from=@sf.at_point(x, y), title=e.name)
-      }
-      None =>
-        if c.clicked(id) {
-          let near = b.arranged(at.path, items(drive_folder(src, at.station, at.root.unwrap_or(""), at.path).0, "entries").map(dv_entry)).unwrap_or([e])
-          open_entry(c, src, "page", at, e, near, fn(to) { (f.go)(to, false) })
-        }
-    }
-  }
-  card_row(c, first, last, if busy { 0 } else { id }, fn() {
-    let row = c.box(style=narrow_entry, fn() {
-      @sf.icon(c, dv_kind_icon(if e.dir { "folder" } else { e.kind }), size=narrow_kind_icon, color=t.p.muted) |> ignore
-      c.box(style=narrow_entry_words, fn() {
-        c.text(e.name, style=narrow_entry_name) |> ignore
-        let line = if e.dir { e.time_text } else { dv_words([e.size_text, e.time_text], " · ") }
-        if line != "" {
-          c.text(line, style=narrow_entry_meta) |> ignore
-        }
-      })
-      |> ignore
-      // how far it has come while the core downloads it (a folder's: its zip's, 0 while the station zips it)
-      let fetching = match download_of_drive(src, at.station, at.root.unwrap_or(""), path) {
-        Some(d) if flag(Some(d), "active") => Some((number(Some(d), "progress") * 100.0).floor().to_int())
-        _ => None
-      }
-      if busy {
-        @sf.spinner(c, size=narrow_spin) |> ignore
-      } else if fetching is Some(p) {
-        download_chip(c, at.station + "/" + path, p)
-      } else if e.kind == "text" || e.kind == "markdown" {
-        read_share(c, src, at.station, at.root.unwrap_or(""), path)
-      } else if e.dir {
-        @sf.icon(c, "chevron-right", size=narrow_chevron_icon, color=t.p.subtle) |> ignore
-      }
-    })
-    c.semantics(row, Button, id~, label=e.name)
-  })
-}
-
-///|
 /// How far a text has been read on this device, once opened (the core's `drivePlace`): its share, 读完 at its end.
 fn read_share(c : @ui.Ctx, src : Source, station : String, root : String, path : String) -> Unit {
   let place = (src.topic)("drivePlace", { "station": Json::string(station), "root": Json::string(root), "path": Json::string(path) }).value
@@ -392,7 +100,7 @@ fn read_share(c : @ui.Ctx, src : Source, station : String, root : String, path :
   if share < read_least {
     return
   }
-  c.text(if share >= read_whole { @sf.t("android-misc.drive.read.done") } else { "\{(share * 100.0).to_int()}%" }, style=narrow_entry_meta)
+  c.text(if share >= read_whole { @sf.t("android-misc.drive.read.done") } else { "\{(share * 100.0).to_int()}%" }, style=@sf.theme().items.meta)
   |> ignore
 }
 
@@ -460,71 +168,6 @@ let chip_words_box : @ui.Style = @ui.css("row px=S2 align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let chip_words : @ui.TextStyle = @ui.text_style(size=Xs2, weight=Semibold, color=Fg, wrap=false)
-
-///|
-/// A file going up (UploadRow): its name, how far it has got (a thin bar, sent of its size); its name taken there
-/// (替换, 保留两者), or why it failed (重试); × lets it go.
-fn narrow_upload_row(c : @ui.Ctx, src : Source, u : DvUpload) -> Unit {
-  let t = @sf.theme()
-  let k = "files/narrow/up/\{u.serial}"
-  c.box(style=narrow_upload, fn() {
-    @sf.icon(c, "upload", size=narrow_kind_icon, color=t.p.muted) |> ignore
-    c.box(style=narrow_entry_words, fn() {
-      c.text(u.name, style=narrow_entry_name) |> ignore
-      match u.state {
-        "taken" =>
-          c.box(style=narrow_upload_ask, fn() {
-            c.text(@sf.t("web-pages.drive.taken"), style=narrow_entry_meta.then(@ui.text_style(w=Cut))) |> ignore
-            let rid = c.id(k + "/replace")
-            let bid = c.id(k + "/both")
-            if c.clicked(rid) {
-              u.replace = true
-              u.state = "waiting"
-              dv_pump(src)
-            }
-            if c.clicked(bid) {
-              dv_keep_both(src, u)
-            }
-            c.box(style=narrow_answer, id=rid, fn() { c.text(@sf.t("web-pages.drive.replace"), style=narrow_answer_words) |> ignore })
-            |> ignore
-            c.box(style=narrow_answer, id=bid, fn() { c.text(@sf.t("web-pages.drive.keepBoth"), style=narrow_answer_words) |> ignore })
-            |> ignore
-          })
-          |> ignore
-        "failed" =>
-          c.text(@sf.t("web-pages.drive.uploadFailed", args=[("error", u.error)]), style=narrow_upload_failed) |> ignore
-        _ => {
-          let size = u.bytes.length()
-          c.text(
-            @sf.t("web-pages.drive.uploading", args=[("sent", @sf.file_size(u.sent.to_double())), ("size", @sf.file_size(size.to_double()))]),
-            style=narrow_entry_meta,
-          )
-          |> ignore
-          c.box(style=narrow_progress, fn() {
-            @sf.progress(c, if size > 0 { Some(u.sent.to_double() / size.to_double()) } else { None })
-          })
-          |> ignore
-        }
-      }
-    })
-    |> ignore
-    if u.state == "failed" &&
-      @sf.icon_button(c, "retry", key=k + "/retry", size=narrow_row_key, round=true, label=@sf.t("web-pages.drive.retry")) {
-      u.state = "waiting"
-      u.error = ""
-      u.sent = 0
-      dv_pump(src)
-    }
-    if @sf.icon_button(c, "close", key=k + "/cancel", size=narrow_row_key, round=true, label=@sf.t("common.cancel")) {
-      ups.uploads.retain(fn(x) { x.serial != u.serial })
-      if u.state == "going" {
-        ups.pumping = false
-        dv_pump(src)
-      }
-    }
-  })
-  |> ignore
-}
 
 ///|
 /// A station's drive with no folder to show (RootsPage): its folders pinned, each a row (what is wrong with one under
@@ -726,8 +369,6 @@ let narrow_bar_button_w : Double = 34.0
 ///|
 let narrow_bar_icon : Double = 18.0
 
-///|
-let narrow_bar_plus : Double = 20.0
 
 ///|
 /// The rows' marks (22), a folder's chevron (14), a crumb's (12), the empty folder's mark (40), a row's spinner (12), a
@@ -743,23 +384,37 @@ let narrow_crumb_chevron : Double = 12.0
 ///|
 let narrow_empty_icon : Double = 40.0
 
-///|
-let narrow_spin : Double = 12.0
 
-///|
-let narrow_row_key : Double = 34.0
 
 ///|
 // kept across runs: a value (no field of it changes)
 let narrow_page : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
+
+
+
+
 ///|
+/// Why it could not be read (mProblem): 20 in, 12 over and under, its 重试 in the link's ink.
 // kept across runs: a value (no field of it changes)
-let narrow_actions_row : @ui.Style = @ui.css("row align=ACenter")
+let narrow_problem : @ui.Style = @ui.css("row w=Full px=S5 py=S3 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let narrow_bar_spin : @ui.Style = @ui.css("w=S8 h=S8 align=ACenter justify=JCenter")
+let narrow_problem_words : @ui.Style = @ui.style(w=@sf.grow)
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_link : @ui.Style = @ui.css("p=S1 radius=Lg")
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_link_words : @ui.TextStyle = @ui.text_style(size=Base, color=Link, wrap=false)
+
+///|
+/// What could not be read (a station's folders): in red, as wide as the line.
+// kept across runs: a value (no field of it changes)
+let narrow_failed_words : @ui.TextStyle = @ui.text_style(size=Base, color=Danger, w=Full)
 
 ///|
 /// What it holds in a line (mCount): 28 in, 2 over, 8 under, the meta's words, muted.
@@ -787,30 +442,11 @@ let narrow_crumb_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wr
 // kept across runs: a value (no field of it changes)
 let narrow_crumb_here : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false)
 
-///|
-/// Why it could not be read (mProblem): 20 in, 12 over and under, its 重试 in the link's ink.
-// kept across runs: a value (no field of it changes)
-let narrow_problem : @ui.Style = @ui.css("row w=Full px=S5 py=S3 gap=S3 align=ACenter")
 
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_problem_words : @ui.Style = @ui.style(w=@sf.grow)
 
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_failed_words : @ui.TextStyle = @ui.text_style(size=Base, color=Danger, w=Full)
 
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_stale_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full)
 
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_link : @ui.Style = @ui.css("p=S1 radius=Lg")
 
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_link_words : @ui.TextStyle = @ui.text_style(size=Base, color=Link, wrap=false)
 
 ///|
 /// Nothing here (mEmpty): in the middle, 56 by 32 in, 12 apart.
@@ -847,32 +483,11 @@ let narrow_trouble : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, weight=
 // kept across runs: a value (no field of it changes)
 let narrow_trouble_hint : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, color=Muted, w=Full)
 
-///|
-/// A file going up (mRow, data-upload): its keys at its end (34 round).
-// kept across runs: a value (no field of it changes)
-let narrow_upload : @ui.Style = @ui.css("row w=Full pl=S2 py=S2_5 gap=S3 align=ACenter")
 
-///|
-/// Its name taken there (mUploadAsk): what is asked cut short, its two answers whole, 12 apart.
-// kept across runs: a value (no field of it changes)
-let narrow_upload_ask : @ui.Style = @ui.css("row gap=S3 align=ACenter")
 
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_answer : @ui.Style = @ui.css("row")
 
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_answer_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, weight=Semibold, color=Link, wrap=false)
 
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_upload_failed : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, color=Danger, w=Full)
 
-///|
-/// How far it has got (mProgress): 5 under the words.
-// kept across runs: a value (no field of it changes)
-let narrow_progress : @ui.Style = @ui.css("w=Full pt=S1_25")
 
 ///|
 /// A card's room in its box (ListCard: 12 from the box's sides, 10 under the last row).

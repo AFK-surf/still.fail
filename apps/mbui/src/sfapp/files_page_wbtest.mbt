@@ -28,10 +28,16 @@ test "文件's page narrow in every frame: what the folder holds in a line, its 
     let at = "\{w} \{platform}"
     let t = files_page_tester(w, h, platform)
     assert_true(t.find("2 个文件夹 · 7 个文件") is Some(_), msg=at)
-    // narrow: no ways to switch (分栏, 树形, 列表), no tabs
-    assert_true(t.query(Radio, label="分栏") is None, msg=at)
+    // narrow: no tabs; its ways those its room has (columns where two fit side by side: not a phone's)
+    if w < 400.0 {
+      assert_true(t.query(Radio, label="分栏") is None, msg=at)
+    }
     let (x, y) = rightmost(t, "设计稿")
     t.tap(x, y)
+    // (a mouse opens what it presses twice)
+    if platform == 0 {
+      t.tap(x, y)
+    }
     t.run_for(@ui.nav_push_ms)
     // (on a tablet's tape, a press on the panel not in use only brings it over: pressed again, it opens)
     if !(app.nav.top() is Drive({ path: "设计稿", .. })) {
@@ -147,11 +153,15 @@ test "Pin 文件夹 on a phone: which station, then the picker in a sheet from t
 }
 
 ///|
-test "a wide folder's rows: the ⋯ of a row under the pointer, its menu beside it through the presenters; a right click on a row, its menu alone (Escape closes it); where there is no row, the folder's" {
-  for platform in [0, 2] {
+test "a wide folder's rows: the ⋯ of a row under the pointer, its menu beside it through the presenters; a right click on a row, its menu alone (Escape closes it); where there is no row, the folder's; a touch device's, no ⋯ (held, their menu)" {
+  // (a touch device: none on a row, whatever the hand)
+  let touch = files_page_tester(1280.0, 800.0, 2)
+  let (_, ty) = rightmost(touch, "季度数据.csv")
+  assert_eq(touch.all(Button, label="更多操作").filter(fn(b) { b.rect.1 <= ty && b.rect.1 + b.rect.3 >= ty }).length(), 0)
+  for platform in [0] {
     let at = "\{platform}"
     let t = files_page_tester(1280.0, 800.0, platform)
-    // (with a mouse, the ⋯ shows under the pointer; to a finger, always)
+    // (with a mouse, the ⋯ shows under the pointer)
     let (x, y) = rightmost(t, "季度数据.csv")
     t.move(x, y)
     t.draw()
@@ -194,3 +204,43 @@ test "a wide folder's station button: the stations beside it, the one shown 当�
   assert_true(t.find("当前") is Some(_))
   assert_true(t.find("离线") is Some(_))
 }
+
+///|
+test "a phone's folder: its rows say what they are under their names, no ⋯ on them (held, their menu), a folder's ›; a computer's in columns, its ⋯ on hover" {
+  let t = files_page_tester(390.0, 844.0, 2)
+  // (the bar's ⋯ alone)
+  assert_eq(t.all(Button, label="更多操作").length(), 1)
+  assert_true(t.find("4 KB · 09:30") is Some(_))
+  // its ways: a tree and a list, not columns (two do not fit side by side)
+  assert_true(t.query(Radio, label="分栏") is None)
+  let m = files_page_tester(1280.0, 800.0, 0)
+  assert_true(m.query(Radio, label="分栏") is Some(_))
+}
+
+///|
+test "a phone's folder: a name changed in place, its row kept in view over the soft keyboard" {
+  let t = files_page_tester(390.0, 844.0, 2)
+  let (x, y) = t.find("首页截图.png").unwrap()
+  t.press_at(x, y)
+  t.run_for(@ui.long_press_ms)
+  t.release(x, y)
+  sheet_rested(t, "sf-present")
+  t.tap_text("重命名")
+  t.run_for(@kit.presence_out_ms)
+  // the keyboard up: the window laid out above it, as the host lays it out
+  t.set_ime_inset(keyboard_h)
+  t.resize(390.0, 844.0 - keyboard_h)
+  t.run_for(@ui.nav_push_ms)
+  match t.focused() {
+    Some(n) => {
+      let (_, fy, _, fh) = n.rect
+      assert_true(fy >= 0.0 && fy + fh <= 844.0 - keyboard_h, msg="\{n.rect}")
+      assert_true(n.value.has_prefix("首页截图"), msg=n.value)
+    }
+    None => fail("no field has the focus")
+  }
+}
+
+///|
+/// A phone's soft keyboard, about.
+let keyboard_h : Double = 340.0

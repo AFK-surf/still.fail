@@ -1023,12 +1023,13 @@ fn sheet_row(
   } else {
     th.p.text
   }
-  c.box(style=sheet_row_box, id=if disabled { 0 } else { id }, fn() {
+  // (a list's item on this screen: Theme.items, as a folder's entries are)
+  c.box(style=sheet_row_box.then(@ui.style(min_h=Fixed(th.items.least))), id=if disabled { 0 } else { id }, fn() {
     if icon != "" {
-      draw_icon(c, icon, sheet_row_icon, if danger { ink } else { th.p.muted })
+      draw_icon(c, icon, th.items.mark, if danger { ink } else { th.p.muted })
     }
     c.box(style=sheet_row_words_at, fn() {
-      c.text(label, style=sheet_row_words.then(@ui.text_style(color=Data(ink)))) |> ignore
+      c.text(label, style=th.items.name.then(sheet_row_words).then(@ui.text_style(color=Data(ink)))) |> ignore
       if note != "" {
         c.text(note, style=sheet_row_note) |> ignore
       }
@@ -1046,10 +1047,7 @@ fn sheet_row(
 }
 
 ///|
-/// A sheet's row's icon (22: NewChat.kt's station's) and its check (14).
-let sheet_row_icon : Double = 22.0
-
-///|
+/// A sheet's row's check (14).
 let sheet_row_check : Double = 14.0
 
 ///|
@@ -1091,7 +1089,7 @@ let sheet_row_words_at : @ui.Style = @ui.style(w=grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sheet_row_words : @ui.TextStyle = @ui.text_style(size=Lg, color=Fg, wrap=false)
+let sheet_row_words : @ui.TextStyle = @ui.text_style(wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
