@@ -196,6 +196,9 @@ struct Node {
   // what its row's fit keeps of it before a part of the row leaves (Ctx::box `drop`): its least, but words cut short
   // keep four of their size, and what holds them so (layout.mbt cut_kept_ems)
   mut fit_least : Double
+  // the least it comes to as a last resort in a row that has not the room for every least (flex's last_resort): its
+  // least, but words on one line that say not how they give at none of them, and what holds them so
+  mut soft_least : Double
   // a row that goes on in lines when what it holds does not fit (Ctx::box `flow`: Compose's FlowRow), what it holds
   // as wide as it is
   mut flow : Bool
@@ -359,6 +362,7 @@ fn Node::new() -> Node {
     drop: 0,
     least: 0.0,
     fit_least: 0.0,
+    soft_least: 0.0,
     flow: false,
     line_gap: -1.0,
     label: "",

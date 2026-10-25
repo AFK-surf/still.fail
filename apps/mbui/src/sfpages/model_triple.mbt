@@ -32,9 +32,9 @@ fn triple_reset() -> Unit {
 }
 
 ///|
-/// What is left of a row after its words (a check at its end).
+/// What is at a row's end (its check, what goes with it): the rest of the row after its words, at its end.
 // kept across runs: a value (no field of it changes)
-let triple_grow : @ui.Style = @ui.style(w=@sf.grow)
+let triple_end : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1_5, align=ACenter, justify=JEnd)
 
 ///|
 /// An effort as it is said (low → 低); one the words do not know, as it is spelled, its first letter up.
@@ -550,14 +550,18 @@ fn triple_option(c : @ui.Ctx, key : String, label : String, on : Bool, body : ()
   c.cursor(id, Hand)
   let b = c.box(style=(if on { triple_option_on } else { triple_option_style }).then(@ui.style(min_h=Fixed(t.rows.pick))), id~, fn() {
     body()
-    c.box(style=triple_grow, fn() {  }) |> ignore
-    match trail {
-      Some(f) => f()
-      None => ()
-    }
-    if on {
-      @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
-    }
+    // what is at its end, at the end: the room left (no spacer of its own, whose gap took a gap's room from the
+    // words), never less than it needs
+    c.box(style=triple_end, keep=true, fn() {
+      match trail {
+        Some(f) => f()
+        None => ()
+      }
+      if on {
+        @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
+      }
+    })
+    |> ignore
   })
   c.semantics(b, Button, id~, label~)
   c.clicked(id)

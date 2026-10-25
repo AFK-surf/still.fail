@@ -610,7 +610,7 @@ fn size_uncached(
     }
   }
   if known(w) {
-    w = clamp_size(w, b.min_w, b.max_w)
+    w = clamp_size(w, soft_floor(node.style, b.min_w), b.max_w)
   }
   if known(h) {
     h = clamp_size(h, b.min_h, b.max_h)
@@ -690,7 +690,7 @@ fn size_uncached(
 /// item side by side in its pool's `f` (item k's at k * ITEM): read pass
 /// after pass over the items, they are kept together, not as an object
 /// each, which its node and box would also be reached through.
-const ITEM : Int = 25
+const ITEM : Int = 26
 
 ///|
 const BASIS : Int = 0
@@ -716,6 +716,10 @@ const CROSS_POS : Int = 6
 
 ///|
 const MIN_MAIN : Int = 7
+
+///|
+/// the least it comes to as a last resort along a row (Style's soft_min; NaN: none)
+const SOFT_MIN : Int = 25
 
 ///|
 const MAX_MAIN : Int = 8
@@ -1134,6 +1138,7 @@ fn layout_flex(
       let min_main = if row { cb.min_w } else { cb.min_h }
       let max_main = if row { cb.max_w } else { cb.max_h }
       f.unsafe_set(i + MIN_MAIN, min_main)
+      f.unsafe_set(i + SOFT_MIN, if row && !(s.fits && cs.drop != 0) { cs.soft_min } else { undef })
       f.unsafe_set(i + MAX_MAIN, max_main)
       f.unsafe_set(i + MIN_CROSS, if row { cb.min_h } else { cb.min_w })
       f.unsafe_set(i + MAX_CROSS, if row { cb.max_h } else { cb.max_w })
@@ -1272,6 +1277,9 @@ fn layout_flex(
       }
       if known(space) {
         resolve_flexible(pool, ln.start, ln.end, items_hyp, space - gaps)
+        if row && !wrap {
+          last_resort(pool, ln.start, ln.end, space - gaps)
+        }
       } else {
         for k in ln.start..<ln.end {
           f.unsafe_set(k * ITEM + MAIN, f.unsafe_get(k * ITEM + HYP))
@@ -1589,7 +1597,7 @@ fn layout_flex(
         // this compute, nothing kept for a compute that reuses), without
         // the calls
         let ib = item_box(n)
-        let w = clamp_size(iw, ib.min_w, ib.max_w)
+        let w = clamp_size(iw, soft_floor(n.style, ib.min_w), ib.max_w)
         let h = clamp_size(ih, ib.min_h, ib.max_h)
         let ipbw = ib.pbw()
         let ipbh = ib.pbh()
@@ -1945,6 +1953,80 @@ fn resolve_flexible(
   if left {
     for k in a..<b {
       f.unsafe_set(k * ITEM + MAIN, f.unsafe_get(k * ITEM + TARGET))
+    }
+  }
+}
+
+///|
+/// The least width a node takes when it is given one: its min-width, or less down to its least as a last resort
+/// (Style's soft_min), which only a row's last_resort gives it.
+fn soft_floor(s : Style, min_w : Double) -> Double {
+  if known(s.soft_min) && (!known(min_w) || s.soft_min < min_w) {
+    s.soft_min
+  } else {
+    min_w
+  }
+}
+
+///|
+/// Not CSS's: a row's items `a` until `b` still wider than `space` once resolve_flexible has given them their sizes
+/// (what never gives way kept at its min-width): those with a least of their own as a last resort (SOFT_MIN, below
+/// their size: words on one line that say not how they give, what holds them) come down to it, the widest first, all
+/// to one width where that is enough (each no less than its least), so that the row is no wider than its room; where
+/// they cannot make it so, none (what never gives way runs past it: a fault the squeeze check says). Never one wider
+/// than it was.
+fn last_resort(pool : Pool, a : Int, b : Int, space : Double) -> Unit {
+  let f = pool.f
+  let mut used = 0.0
+  let mut room = 0.0
+  let mut widest = 0.0
+  for k in a..<b {
+    let i = k * ITEM
+    let main = f.unsafe_get(i + MAIN)
+    used = used + main + f.unsafe_get(i + MARGIN_MAIN)
+    let lo = f.unsafe_get(i + SOFT_MIN)
+    if known(lo) && lo < main {
+      room = room + (main - lo)
+      widest = fmax(widest, main)
+    }
+  }
+  // (none cut in vain: where all of them at their least still leave the row wider than its room, what never gives
+  // way is what runs past it, and they stay as they are)
+  let over = used - space
+  if over <= 0.01 || room < over - 0.01 {
+    return
+  }
+  // what comes down at a width `cap`: each above it to it, no lower than its least
+  let given = fn(cap : Double) {
+    let mut g = 0.0
+    for k in a..<b {
+      let i = k * ITEM
+      let main = f.unsafe_get(i + MAIN)
+      let lo = f.unsafe_get(i + SOFT_MIN)
+      if known(lo) && lo < main && main > cap {
+        g = g + main - fmax(cap, lo)
+      }
+    }
+    g
+  }
+  // the widest the items may be, halved towards it
+  let mut lo = 0.0
+  let mut hi = widest
+  for _ in 0..<60 {
+    let mid = (lo + hi) / 2.0
+    if given(mid) > over {
+      lo = mid
+    } else {
+      hi = mid
+    }
+  }
+  let cap = hi
+  for k in a..<b {
+    let i = k * ITEM
+    let main = f.unsafe_get(i + MAIN)
+    let lo = f.unsafe_get(i + SOFT_MIN)
+    if known(lo) && lo < main && main > cap {
+      f.unsafe_set(i + MAIN, fmax(cap, lo))
     }
   }
 }

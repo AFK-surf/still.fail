@@ -191,7 +191,7 @@ test "one_line: a line break with the spaces round it one space, none at the end
 }
 
 ///|
-test "words on one line hold their row alike, plain or in runs: as wide as they are, what is beside them gives way" {
+test "words on one line hold their row alike, plain or in runs: as wide as they are while there is room, cut as a last resort" {
   let ids : Map[Bool, Int] = {}
   let t = Tester::new(
     fn(c) {
@@ -219,8 +219,10 @@ test "words on one line hold their row alike, plain or in runs: as wide as they 
   t.draw()
   let (_, _, plain_w, _, _) = laid_box(ids[false])
   let (_, _, rich_w, _, _) = laid_box(ids[true])
-  assert_true(plain_w > 100.0, msg="\{plain_w}")
+  // (longer than the row: all of it theirs, what is beside them nothing, they cut to it)
+  assert_eq(plain_w, 100.0)
   assert_eq(rich_w, plain_w)
+  assert_true(laid_words("words much").least > 100.0)
 }
 
 ///|
@@ -245,4 +247,118 @@ test "squeeze_faults: words on one line cut to nothing, plain or in runs" {
   let faults = t.squeeze_faults()
   assert_eq(faults.length(), 2, msg=faults.join("\n"))
   assert_true(faults.iter().all(fn(f) { f.contains("cut to 0 characters") }), msg=faults.join("\n"))
+}
+
+///|
+/// The node of the first words that start with `s`, as the last frame laid them out.
+fn laid_words(s : String) -> Node {
+  let c = g()
+  for i in 0..<c.count {
+    let n = c.nodes[i]
+    if (n.kind == kind_text || n.kind == kind_rich) && n.text.has_prefix(s) {
+      return n
+    }
+  }
+  abort("no words \{s}")
+}
+
+///|
+test "a row without the room for every least cuts the words that say not how they give as a last resort, the widest first" {
+  let t = Tester::new(
+    fn(c) {
+      c.box(dir=Row, w=Px(200.0), h=Px(20.0), gap=4.0, fn() {
+        c.text("Station", size=10.0, wrap=false) |> ignore
+        c.text("words written by someone else, much longer than the row has room for", size=10.0, wrap=false)
+        |> ignore
+        c.box(w=Px(20.0), h=Px(20.0), fn() {  }) |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=100.0,
+  )
+  t.draw()
+  let label = laid_words("Station")
+  let long = laid_words("words written")
+  // the short one whole, the long one cut to what is left, what never gives way kept
+  assert_eq(label.fw, label.text_layout(1.0e9).w)
+  assert_true(long.fw < long.least, msg="\{long.fw} of \{long.least}")
+  assert_true(long.x + long.fw + 4.0 + 20.0 <= 200.0 + 0.5, msg="\{long.x} + \{long.fw}")
+  match long.tl {
+    Some(tl) => assert_true(tl.w <= long.fw + 0.5, msg="drawn \{tl.w} in \{long.fw}")
+    None => fail("not laid out")
+  }
+  // nothing over another, nothing past the row: nothing squeezed
+  assert_true(t.squeeze_faults().is_empty(), msg=t.squeeze_faults().join("\n"))
+}
+
+///|
+test "a last resort brings the widest down first, to one width, each in what holds it" {
+  let t = Tester::new(
+    fn(c) {
+      c.box(dir=Row, w=Px(200.0), h=Px(20.0), fn() {
+        c.box(dir=Row, gap=2.0, fn() {
+          c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
+          c.text("first words, long enough to need cutting here", size=10.0, wrap=false) |> ignore
+        })
+        |> ignore
+        c.text("second words, as long as they need to be cut too", size=10.0, wrap=false) |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=100.0,
+  )
+  t.draw()
+  let first = laid_words("first words")
+  let second = laid_words("second words")
+  let holder = g().nodes[first.parent]
+  // the two at one width (the first's with its mark), the row no wider than its room, nothing over another
+  assert_true((holder.fw - second.fw).abs() < 1.0, msg="\{holder.fw} and \{second.fw}")
+  assert_true(second.x + second.fw <= 200.0 + 0.5, msg="\{second.x} + \{second.fw}")
+  assert_true(first.x + first.fw <= holder.x + holder.fw + 0.5, msg="\{first.x} + \{first.fw} in \{holder.fw}")
+  assert_true(t.squeeze_faults().is_empty(), msg=t.squeeze_faults().join("\n"))
+}
+
+///|
+test "a last resort never cuts a control: what is pressed keeps its words whole, the words beside it give" {
+  let ids = Ref(0)
+  let t = Tester::new(
+    fn(c) {
+      let b = c.id("button")
+      ids.val = b
+      c.box(dir=Row, w=Px(120.0), h=Px(20.0), gap=4.0, fn() {
+        c.text("words written by someone else, longer than the row", size=10.0, wrap=false) |> ignore
+        c.box(dir=Row, id=b, padx=6.0, fn() { c.text("Cancel", size=10.0, wrap=false) |> ignore }) |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=100.0,
+  )
+  t.draw()
+  let label = laid_words("Cancel")
+  assert_eq(label.fw, label.text_layout(1.0e9).w)
+  let (bx, _, bw, _, _) = laid_box(ids.val)
+  assert_true(bx + bw <= 120.0 + 0.5, msg="\{bx} + \{bw}")
+  assert_true(laid_words("words written").fw < laid_words("words written").least)
+  assert_true(t.squeeze_faults().is_empty(), msg=t.squeeze_faults().join("\n"))
+}
+
+///|
+test "a last resort cuts none in vain: where what never gives way is wider than the row, the words stay whole" {
+  let t = Tester::new(
+    fn(c) {
+      c.box(dir=Row, w=Px(100.0), h=Px(20.0), fn() {
+        c.text("Size", size=10.0, wrap=false) |> ignore
+        c.box(w=Px(120.0), h=Px(20.0), fn() {  }) |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=100.0,
+  )
+  t.draw()
+  let label = laid_words("Size")
+  assert_eq(label.fw, label.text_layout(1.0e9).w)
 }

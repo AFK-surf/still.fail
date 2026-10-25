@@ -149,6 +149,15 @@ nothing else gives way:
     `Ctx::left_out(id)` says what a row left out, for its ⋯ to offer instead (read back: the frame is built again
     when it changes as it is laid out). The library's `@sf.tools_row` is a row of tools whose ⋯ does that;
   - what is cut or scrolled by its own box: `clip`, `sideways`.
+- A row that has not the room for every least even so (a page that said not how something gives, words longer than
+  anyone thought) does not run past its room: as a last resort (flex's `soft_min`, `last_resort`) words on one line in
+  it that say not how they give, and what holds them, come down, the widest first, all to one width where that is
+  enough, cut with an ellipsis; what never gives way (an icon, a box of a said width, a control: what is pressed, a
+  button, a chip) stays as it is. None is cut in vain: where that would not make the row fit, they stay whole. The worst a row
+  shows is words cut short, never one thing over another. So words a row holds as wide as they are stay whole while
+  there is room and are cut only when nothing else can give, the longest first (a station's name after a chat's title
+  cut short): what is to give first says so (`w=Cut`, `drop`). What still is a fault: words cut to nothing, what never
+  gives way running past its room.
 
 ## Corners linked
 
