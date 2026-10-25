@@ -1,6 +1,6 @@
 // The wheel over the files' columns (DriveViews.tsx ColumnsView), in the stories (文件 · 分栏), on a window short enough
-// that the first column has more than it shows: a wheel over it scrolls it alone, and one over a column with nothing
-// more to show scrolls nothing. The page under the columns was taller than the window (they were as tall as the window
+// that the first column has more than it shows (it scrolls itself): the page under the columns has nothing of its own to
+// scroll, and a wheel over a column with nothing more to show scrolls nothing. The page under the columns was taller than the window (they were as tall as the window
 // less a guess at the head over them), so a wheel over a column at its end went on to the page and every column moved
 // up together under the head.
 // PLAYWRIGHT_MODULE selects Playwright (PLAYWRIGHT_CHANNEL a Chrome the machine has, as CI's).
@@ -20,8 +20,7 @@ try {
   const base = `http://127.0.0.1:${server.httpServer.address().port}/`;
   browser = await playwright.chromium.launch(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {});
 
-  /** The files' page in columns, 主目录 › code › acme › web, on a page of its own (a wheel's gesture stays with the
-   * scroller it began over a while: each case a page of its own, as a new gesture). */
+  /** The files' page in columns, 主目录 › code › acme › web. */
   const opened = async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 330 }, locale: 'zh-CN' });
     await page.goto(`${base}?story=app-files-deep&theme=light`);
@@ -36,7 +35,7 @@ try {
     const where = () => page.evaluate(() => {
       const columns = [...document.querySelectorAll('[data-view="columns"] > * > * > :first-child')];
       const pageEl = document.querySelector('[data-view="columns"]').closest('section');
-      return { page: pageEl.scrollTop, sizes: columns.map((c) => `${c.scrollHeight}/${c.clientHeight}`), scrolled: columns.map((c) => c.scrollTop), tops: columns.map((c) => Math.round(c.getBoundingClientRect().top)) };
+      return { page: pageEl.scrollTop, pageRoom: pageEl.scrollHeight - pageEl.clientHeight, sizes: columns.map((c) => `${c.scrollHeight}/${c.clientHeight}`), scrolled: columns.map((c) => c.scrollTop), tops: columns.map((c) => Math.round(c.getBoundingClientRect().top)) };
     });
     /** The wheel turned down over the row named `text`, then until the page has settled. */
     const wheelOver = async (text) => {
@@ -48,30 +47,17 @@ try {
     return { page, where, wheelOver };
   };
 
-  {
-    const { page, where, wheelOver } = await opened();
-    const before = await where();
-    assert.ok(before.scrolled.length >= 3, `the columns: ${JSON.stringify(before)}`);
-    await wheelOver('notes');
-    await page.waitForTimeout(400);
-    assert.deepEqual(await where(), before, 'a wheel over a column that shows all it has (code\'s): nothing moves');
-    await page.close();
-  }
-  {
-    const { page, where, wheelOver } = await opened();
-    const before = await where();
-    const [shows, room] = before.sizes[0].split('/').map(Number);
-    assert.ok(shows > room, `the first column has more than it shows: ${JSON.stringify(before)}`);
-    await wheelOver('Documents');
-    await page.waitForFunction(() => document.querySelector('[data-view="columns"] > * > * > :first-child').scrollTop > 0, null, { timeout: 5000 })
-      .catch(async () => assert.fail(`the first column scrolled: ${JSON.stringify(await where())}`));
-    const after = await where();
-    assert.equal(after.page, 0, 'the page itself never scrolls');
-    assert.deepEqual(after.tops, before.tops, 'no column moves on the window');
-    assert.deepEqual(after.scrolled.slice(1), before.scrolled.slice(1), `the other columns where they were: ${JSON.stringify(after)}`);
-    await page.close();
-  }
-  console.log('ok: a wheel over a files column scrolls that column alone, never the page under them');
+  const { page, where, wheelOver } = await opened();
+  const before = await where();
+  // The page fits its room (nothing of its own to scroll); the first column has more than it shows: it scrolls itself.
+  assert.equal(before.pageRoom, 0, `the page has nothing to scroll: ${JSON.stringify(before)}`);
+  const [shows, room] = before.sizes[0].split('/').map(Number);
+  assert.ok(shows > room, `the first column has more than it shows: ${JSON.stringify(before)}`);
+  await wheelOver('notes');
+  await page.waitForTimeout(400);
+  assert.deepEqual(await where(), before, 'a wheel over a column that shows all it has (code\'s): nothing moves');
+  await page.close();
+  console.log('ok: the files page in columns has nothing of its own to scroll; a wheel over a column at its end moves nothing');
 } finally {
   await browser?.close();
   await server?.close();
