@@ -69,10 +69,11 @@ priv struct SheetKept {
   mut held : Double
   /// how much of its scrim shows (0 … 1), fading in and out over sheet_scrim_ms
   fade : @motion.Anim
-  /// open last frame; drawn (until it has sunk away); the height it was asked for last
+  /// open last frame; drawn (until it has sunk away); the height it was asked for last; the frame it was opened in
   mut was_open : Bool
   mut shown : Bool
   mut asked : Double
+  mut opened : Int
 }
 
 ///|
@@ -110,6 +111,7 @@ pub fn sheet(
         was_open: false,
         shown: false,
         asked: -1.0,
+        opened: -1,
       }
       kit.val.sheets[id] = s
       s
@@ -117,7 +119,8 @@ pub fn sheet(
   }
   let mut now = open
   let mut dragged : SheetDrag? = None
-  // opened: from below at its height; asked another height while open: there on the spring
+  // opened: from below at its height; asked another height while open (what it holds laid out another height, the
+  // window another): that height at once, as it is laid out (placed by its size, not chased to it)
   if open && !s.was_open {
     if !s.shown || s.below.value_at(c) > 1.0 {
       s.h.put(target)
@@ -130,8 +133,16 @@ pub fn sheet(
     s.fade.animate(1.0, scrim_fade())
     s.shown = true
     s.asked = target
+    s.opened = c.frame_number()
   } else if open && target != s.asked {
-    s.h.go_at(c, target)
+    if s.opened == c.frame_number() {
+      // (opened this frame, its height known only as this frame lays out what it holds: from below at that)
+      s.h.put(target)
+      s.below.put(target)
+      s.below.go_at(c, 0.0)
+    } else if s.held < 0.0 {
+      s.h.put(target)
+    }
     s.asked = target
   }
   if !s.shown {

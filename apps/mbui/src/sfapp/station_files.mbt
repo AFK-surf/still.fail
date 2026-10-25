@@ -310,11 +310,12 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
     Some(i) if i > 0 => r.path.view(end_offset=i).to_owned()
     _ => r.path
   }
-  let rows = if !r.dir || zips { 2 } else { 1 }
   dv_sheet_frame(
     c,
     r.name,
-    dv_fit(rows) + 30.0,
+    // (before what it holds is first laid out: built again at once, as tall as it is)
+    c.height * 0.5,
+    fit=true,
     closing~,
     reader=true,
     close=fn() { sfs.ref_closing = true },

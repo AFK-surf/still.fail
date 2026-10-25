@@ -268,12 +268,13 @@ fn sheet_foot(c : @ui.Ctx) -> Unit {
 
 ///|
 /// A sheet from the bottom (Sheet.kt SheetHost, mbui's @kit.sheet): the scrim (black at 28%) closing it when tapped;
-/// the sheet `tall` high (its share of the screen), or with `fit` as tall as what it shows (measured as it is laid
-/// out: `tall` until it is), at most nearly all of the screen (@sf.sheet_most, as the library's presenters), what is
-/// more scrolling in it; its top corners 26 round, frosted over the page and the scrim (@sf.sheet_look); it rises and
-/// sinks on the sheet's spring, drawn only as it goes (a tap meanwhile is what is under it's), and goes on it to the
-/// height what it shows asks for as that changes. The decisions' sheets are one sheet: one asked in place of another
-/// goes to its height.
+/// the sheet `tall` high (its share of the screen), or with `fit` as tall as what it shows as this frame lays it out
+/// (read back: laid out another height, the frame is built again; `tall` before it is first laid out), at most nearly
+/// all of the screen (@sf.sheet_most, as the library's presenters), what is more scrolling in it; its top corners 26
+/// round, frosted over the page and the scrim (@sf.sheet_look); it rises and sinks on the sheet's spring, drawn only as
+/// it goes (a tap meanwhile is what is under it's), and is as tall as what it shows asks for as that changes, at once
+/// (placed by its size, not chased: docs/motion.md). The decisions' sheets are one sheet: one asked in place of another
+/// is its height.
 fn sheet_frame(
   c : @ui.Ctx,
   key : String,
@@ -283,10 +284,16 @@ fn sheet_frame(
   draggable? : Bool = false,
 ) -> Unit {
   let leaving = dui.sheet is None
-  let fit_key = "sheet-fit/" + key
-  let grab_key = fit_key + "/grab"
-  let h = match (fit, @motion.measured(c, fit_key)) {
-    (true, Some(m)) => @motion.measured(c, grab_key).unwrap_or(0.0) + m + nav_foot()
+  let fit_id = c.id("sheet-fit/" + key)
+  let grab_id = c.id("sheet-fit/" + key + "/grab")
+  let height_of = fn(id : Int) {
+    match c.laid_size(id) {
+      Some((_, h)) => Some(h)
+      None => None
+    }
+  }
+  let h = match (fit, height_of(fit_id)) {
+    (true, Some(m)) => height_of(grab_id).unwrap_or(0.0) + m + nav_foot()
     _ => tall
   }
   let r = @kit.sheet(
@@ -300,15 +307,13 @@ fn sheet_frame(
     look=@sf.sheet_look(),
     fn() {
       if fit {
-        // the grabber, then what it shows laid out at what it needs (both kept for the next frame's height), in the
+        // the grabber, then what it shows laid out at what it needs (both read back for the sheet's height), in the
         // room left over the navigation bar: all of it, or past the most it scrolls (Sheet.kt: the content's
         // Column(weight(1f).verticalScroll))
-        let grab = c.box(style=sheet_fitted, fn() { @sf.sheet_grab(c) })
-        @motion.measure(c, grab, grab_key)
+        c.box(style=sheet_fitted, id=grab_id, taps=false, fn() { @sf.sheet_grab(c) }) |> ignore
         c.box(style=sheet_scrolled, fn() {
           c.list("sheet-scroll/" + key, 1, tall, fn(_) {
-            let shown = c.box(style=sheet_fitted, fn() { body() })
-            @motion.measure(c, shown, fit_key)
+            c.box(style=sheet_fitted, id=fit_id, taps=false, fn() { body() }) |> ignore
           })
           |> ignore
         })
