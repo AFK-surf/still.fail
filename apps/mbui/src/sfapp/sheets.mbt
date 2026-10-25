@@ -752,7 +752,7 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
                   if @sf.has_station_mark(st.emoji, st.icon) {
                     @sf.station_mark(c, st.emoji, st.icon, 15.0, t.p.text)
                   }
-                  c.text(st.name, size=t.t.ui, color=t.p.text, wrap=false) |> ignore
+                  c.text(st.name, size=t.t.ui, color=t.p.text, wrap=false, w=Cut) |> ignore
                 })
                 |> ignore
                 chevron(c)

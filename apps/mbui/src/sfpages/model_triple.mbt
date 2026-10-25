@@ -152,8 +152,9 @@ pub fn model_triple(
         }
       }
       // (within the room it has, the most it can say: what matters least left out first, as the web's DROPS: who
-      // runs it by name, then who runs it, then the runtime, then how hard it thinks; the model never)
-      c.text(name, style=words) |> ignore
+      // runs it by name, then who runs it, then the runtime, then how hard it thinks; the model never: its name cut
+      // short once all of them have gone)
+      c.text(name, style=if small { triple_name_xs } else { triple_name }, keep=true) |> ignore
       if !flag(v, "runtimeFixed") && items(vo, "runtimes").length() > 1 {
         c.box(style=triple_part, drop=triple_drop_runtime, fn() {
           c.text("·", style=muted) |> ignore
@@ -526,7 +527,7 @@ fn triple_model_row(c : @ui.Ctx, src : Source, station : String, of : String, v 
           if text(fs, "icon") != "" || text(fs, "emoji") != "" {
             @sf.station_mark(c, text(fs, "emoji"), text(fs, "icon"), 14.0, t.p.muted)
           } else {
-            c.text(text(fs, "name"), style=triple_note) |> ignore
+            c.text(text(fs, "name"), style=triple_note_cut) |> ignore
           }
         _ => ()
       }
@@ -957,6 +958,15 @@ let triple_small_on : @ui.Style = @ui.css("row h=S7 px=S2 gap=S1_5 align=ACenter
 ///|
 // kept across runs: a value (no field of it changes)
 pub let triple_words_xs : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
+
+///|
+/// The model's name in the control: its words, cut short once all that may leave the control's row has left.
+// kept across runs: a value (no field of it changes)
+let triple_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Cut)
+
+///|
+// kept across runs: a value (no field of it changes)
+let triple_name_xs : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)

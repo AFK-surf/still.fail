@@ -7,6 +7,8 @@
 #   SIZES="touch600 desk600 phone320"     which windows (touchW: a tablet's, a finger, medium in width under 840 and
 #                                         expanded from there; deskW: a Mac's; phoneW)
 #   LANGS="zh en"                         in which of the app's languages
+#   MBUI_SAID=1                           what people, agents and stations wrote at its longest (src/sfapp/fixture_said.mbt:
+#                                         the stretched pass of squeeze_said_wbtest.mbt), into out/squeeze-said
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
@@ -14,8 +16,9 @@ FF=$(command -v ffmpeg || echo /opt/homebrew/bin/ffmpeg)
 APP=sffilm MODE=release bash scripts/mac.sh build >/dev/null || exit 1
 EXE=./_build/native/release/build/stillfail/sffilm/sffilm.exe
 MODES=${*:-${SQUEEZE_MODES:-home chat newchat files drive settings-home settings-station settings-profiles}}
-mkdir -p out/squeeze
-: > out/squeeze/faults.txt
+OUT=out/squeeze; [ "${MBUI_SAID:-}" = 1 ] && OUT=out/squeeze-said
+mkdir -p $OUT
+: > $OUT/faults.txt
 for size in ${SIZES:-touch600 desk600 phone320}; do
   w=${size//[a-z]/}
   case $size in
@@ -25,7 +28,7 @@ for size in ${SIZES:-touch600 desk600 phone320}; do
     *) h=760; platform=0; system='' ;;
   esac
   for lang in ${LANGS:-zh en}; do
-    dir="out/squeeze/$size-$lang"
+    dir="$OUT/$size-$lang"
     mkdir -p "$dir"
     for mode in $MODES; do
       script="$dir/$mode.drive"
@@ -33,9 +36,9 @@ for size in ${SIZES:-touch600 desk600 phone320}; do
       film="$dir/$mode.mp4"
       MBUI_LOCALE=$lang MBUI_FIXTURE=$mode MBUI_WIN=${w}x$h MBUI_FILM_PLATFORM=$platform MBUI_FILM_SCALE=2 \
         MBUI_FILM="$PWD/$film" MBUI_FILM_DRIVE="$PWD/$script" "$EXE" 2>&1 | grep 'DRIVE SQUEEZE' \
-        | sed "s|^.*DRIVE SQUEEZE |$size-$lang $mode: |" >> out/squeeze/faults.txt
+        | sed "s|^.*DRIVE SQUEEZE |$size-$lang $mode: |" >> $OUT/faults.txt
       "$FF" -loglevel error -y -sseof -0.05 -i "$film" -frames:v 1 "$dir/$mode.png" && rm -f "$film" "$film.textrec"
     done
   done
 done
-echo "squeeze: $(wc -l < out/squeeze/faults.txt) faults, out/squeeze/faults.txt"
+echo "squeeze: $(wc -l < $OUT/faults.txt) faults, $OUT/faults.txt"

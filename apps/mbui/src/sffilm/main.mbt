@@ -2,7 +2,8 @@
 // the dark theme) in a Tester of this Mac's text and pictures, a scripted run over them (MBUI_FILM_DRIVE: one of
 // scripts/motion's), each frame drawn offscreen and written into MBUI_FILM, an MP4. No window: scripts/film.sh.
 // MBUI_CORE_MS: the made-up core answers each call and gives each topic's first value that many ms late, as a phone's
-// core does a round trip later (what shows meanwhile filmed too); by default at once.
+// core does a round trip later (what shows meanwhile filmed too); by default at once. MBUI_SAID=1: what people, agents
+// and stations wrote at its longest (sfapp's fixture_said.mbt: scripts/squeeze.sh's MBUI_SAID).
 
 ///|
 fn main {
@@ -26,6 +27,8 @@ fn main {
           @sfapp.fixture_update(@film.arg("MBUI_UPDATE"))
         }
         let s = if late > 0.0 { @sfapp.round_trip(s, late) } else { s }
+        // MBUI_SAID=1: what people, agents and stations wrote at its longest (sfapp's fixture_said.mbt)
+        let s = if @film.arg("MBUI_SAID") == "1" { @sfapp.said_longest_source(s) } else { s }
         if dark {
           @sf.set_dark(Some(true))
         }

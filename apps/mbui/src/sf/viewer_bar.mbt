@@ -278,7 +278,7 @@ let viewer_back_box : @ui.Style = @ui.css("row h=S8 pl=S1 pr=S2_5 gap=S0_5 align
 ///|
 /// Words in the bar: the way back's and the name 13 on 20 (the name in 600), what is said of it 11 on 16.
 // kept across runs: a value (no field of it changes)
-let viewer_back_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, wrap=false)
+let viewer_back_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -29,12 +29,13 @@ let nav_bar_inner : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_title_column : @ui.Style = @ui.style(pl=nav_title_clear, pr=nav_title_clear, align=ACenter)
+let nav_title_column : @ui.Style = @ui.style(w=Cut, pl=nav_title_clear, pr=nav_title_clear, align=ACenter)
 
 ///|
-/// The title's first line and back and what is at the end: one 32 line, each in its middle.
+/// The title's first line and back and what is at the end: one 32 line, each in its middle. The title and the line
+/// under it as wide as they are, cut short where the bar has less (mNavbar's ellipsis): never past the 84 clear.
 // kept across runs: a value (no field of it changes)
-let nav_line : @ui.Style = @ui.css("h=S8 justify=JCenter clip")
+let nav_line : @ui.Style = @ui.css("w=Cut h=S8 justify=JCenter clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -42,7 +43,7 @@ let nav_title_words : @ui.TextStyle = @ui.text_style(size=Title, leading=Font, w
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_sub_row : @ui.Style = @ui.style(row=true, gap=nav_sub_gap, align=ACenter)
+let nav_sub_row : @ui.Style = @ui.style(row=true, w=Cut, gap=nav_sub_gap, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)

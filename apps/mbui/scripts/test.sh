@@ -97,7 +97,9 @@ for t in ${TARGETS:-native}; do
     # the one file was the run's longest, 39 s on Studio beside the pages' 34, 2026-10-25; on CI's four cores the app
     # part's run went from 44 s to 67 with it. squeeze's screens measured in corners' sweep, on the frames it opens
     # (all of them among its own): squeeze's 32 s process on CI, the same screens opened again, gone, 2026-10-25)
-    sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:2)
+    # (the squeeze sweep again with what people wrote at its longest, squeeze_said_wbtest.mbt: every screen once more,
+    # a process of its own)
+    sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:2 src/sfapp/squeeze_said_wbtest.mbt:1)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
     for w in "${sweeps[@]}"; do
