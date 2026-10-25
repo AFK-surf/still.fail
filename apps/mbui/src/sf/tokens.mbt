@@ -1074,10 +1074,13 @@ pub fn with_ground(c : @ui.Ctx, bg : Int64, body : () -> Unit) -> Unit {
 
 ///|
 /// The ground of a panel behind the one in use (the tape's): the page's a step darker, what is on it as it is
-/// (pengxiao, 2026-10-25: which one is in use told apart, the words of the others as readable).
-pub fn behind_ground() -> Int64 {
+/// (pengxiao, 2026-10-25: which one is in use told apart, the words of the others as readable); `k` of the way there.
+pub fn behind_ground(k? : Double = 1.0) -> Int64 {
   let t = current.val
-  over(t.p.bg, if t.dark { behind_dark } else { behind_light })
+  let veil = if t.dark { behind_dark } else { behind_light }
+  // (`k` of the way there: as a panel goes behind or comes in front with the tape's move)
+  let a = ((veil & 0xFFL).to_double() * k).round().to_int64()
+  over(t.p.bg, (veil & 0xFFFFFF00L) | a)
 }
 
 ///|
