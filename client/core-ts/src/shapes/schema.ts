@@ -1575,7 +1575,7 @@ export const SHAPES: Record<string, Shape> = {
     ["lastUse", opt("VaultUse"), { doc: "The last time an agent used it." }],
     ["kindText", "String", { default: true, doc: "Its kind in a word (Token, SSH 密钥, 登录); \"\" unknown." }],
     ["agentText", "String", { said: true, default: true, doc: "Whether agents may ask for it and how (允许 agent 申请 · 代理 · api.github.com), or 仅自己可见." }],
-    ["lineText", "String", { said: true, default: true, doc: "Its second line in a list: when an agent last used it, else `agentText`." }],
+    ["lineText", "String", { said: true, default: true, doc: "Its line in a list: how an agent gets it (or that it is only the person's), when and in which chat it was last used." }],
     ["howText", "String", { said: true, default: true, doc: "How agents are given it, a line each way joined by 、 (代理 · 限 api.github.com)." }],
     ["lastsText", "String", { default: true, doc: "Its longest grant in words: its own, or 跟随默认 · its vault's." }],
     ["shut", vec("VaultField"), { default: true, doc: "Its fields before it is opened: what each is called over dots." }],

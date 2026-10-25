@@ -14,6 +14,12 @@ export const mWords = style({
 globalStyle(`${mWords} li`, { display: "flex", alignItems: "baseline", gap: "6px", minWidth: "0" });
 export const mWordN = style({ minWidth: "1.4em", textAlign: "right", fontSize: vars.textCaption, color: "var(--m-subtle)", fontVariantNumeric: "tabular-nums" });
 
+/** 全部密钥's field, over its card and as wide (its room: parts.css.ts mListCard). */
+export const mFind = style({ display: "flex", padding: "4px 12px 10px" });
+/** 全部密钥's row's line: all of what is worth knowing of it, on as many lines as it takes (as the app's notes are). */
+export const mLine = style({ display: "block", fontSize: vars.textMeta, color: "var(--m-muted)", overflowWrap: "anywhere" });
+/** What is wrong with an account, under its row's line. */
+export const mBad = style({ display: "block", fontSize: vars.textMeta, color: "var(--m-red)" });
 /** A request waiting: its card (the wide screen's, VaultAsk.tsx AskCard), in the page's room as its list cards are. */
 export const mRequest = style({ display: "grid", margin: "0 12px 10px" });
 export const mChoices = style({ padding: "0 12px" });
@@ -25,6 +31,8 @@ globalStyle(`${mFacts} dd`, { margin: "0", overflowWrap: "anywhere" });
 
 /** An item's kind, before its name: as wide as the icon, quiet. */
 export const mIcon = style({ display: "grid", placeItems: "center", width: "18px", flex: "none", color: "var(--m-subtle)" });
+/** A row's mark where lines follow its name (全部密钥's): by its name's line, not the middle of them all. */
+export const mMark = style([mIcon, { alignSelf: "flex-start", marginTop: "3px" }]);
 
 /** A sheet's body: a column of labels and fields, its buttons last. */
 export const mSheetBody = style({ display: "flex", flexDirection: "column", gap: "8px", padding: "4px 20px 24px", overflowY: "auto", flex: "1", minHeight: "0" });

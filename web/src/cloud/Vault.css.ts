@@ -47,6 +47,10 @@ export const row = style({ display: "flex", alignItems: "center", gap: "12px", f
 export const rowText = style({ flex: "1", minWidth: "0", display: "flex", alignItems: "baseline", gap: "6px 10px", flexWrap: "wrap" });
 export const rowName = style({ fontWeight: "500", color: vars.text, fontSize: vars.textUi });
 export const rowMeta = style({ color: vars.muted, fontSize: vars.textMeta });
+/** What is wrong with an account, under its row's words. */
+export const bad = style({ color: vars.red, fontSize: vars.textMeta });
+/** 全部密钥's field, over its list as far as the page's other blocks are apart. */
+export const find = style({ display: "grid", marginBottom: "14px" });
 export const warn = style({ color: vars.amber, fontSize: vars.textMeta });
 /** A row that goes somewhere: its chevron, quiet, at its end. */
 export const chevron = style({ flex: "none", color: vars.subtle });

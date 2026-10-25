@@ -255,6 +255,7 @@
   "core-views.vault.private": "仅自己可见",
   "core-views.vault.agent_may": "允许 agent 申请",
   "core-views.vault.used": "{when}使用",
+  "core-views.vault.usedIn": "{when}在「{chat}」用过",
   "core-views.vault.lasts.once": "仅一次",
   "core-views.vault.lasts.hour": "1 小时",
   "core-views.vault.lasts.chat": "直到对话归档",

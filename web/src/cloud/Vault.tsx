@@ -7,21 +7,20 @@
 // the core's (`vaults`, `vaultItems`, `vault.*`; ../vault.ts): this only draws.
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
-import { ChevronRight, Copy, Devices, Eye, Key, Plus, Server, ShieldCheck, User } from "@stillfail/ui/icons.tsx";
+import { ChevronDown, ChevronRight, ChevronUp, Copy, Devices, Eye, Key, Plus, Server, ShieldCheck, User } from "@stillfail/ui/icons.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing } from "../doing.ts";
-import { BackLink, Button, Confirm, Dialog, Field, IconButton, Menu, MobileBack, Section, Segmented, SwitchRow, Spinner, Waiting } from "../ui.tsx";
+import { BackLink, Button, Confirm, Dialog, Field, IconButton, Menu, MobileBack, ProviderLogo, Section, Segmented, SwitchRow, Spinner, Waiting } from "../ui.tsx";
 import { useProfiles, useStations } from "../api.ts";
 import { profilePath } from "../ProfilesNav.tsx";
-import { profileGroups } from "./settings.tsx";
 import { addProfilePath } from "../pages/AddProfile.tsx";
 import { AddKinds } from "../VaultAdd.tsx";
 import { stationBase } from "../station.tsx";
 import { VaultActions } from "../VaultApproval.tsx";
 import { AskCard } from "../VaultAsk.tsx";
 import {
-  ITEM_SECTIONS, KINDS, LASTS, SCOPES, scopeOf, blankForm, copySecret, itemPath, lastsChoice, lastsName, formOf, formProblem, kindName, masked, modeName, modesOf, putOf, useForm,
-  useVaultCall, useVaultItems, useVaults, type Form, type Kind, type Mode, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView,
+  KINDS, LASTS, SCOPES, scopeOf, blankForm, copySecret, itemPath, lastsChoice, lastsName, formOf, formProblem, kindName, masked, modeName, modesOf, putOf, useForm,
+  useVaultCall, useVaultItems, useVaults, useVaultsItems, type Form, type Kind, type Mode, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView,
 } from "../vault.ts";
 import { t } from "../i18n.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
@@ -191,25 +190,110 @@ function Library({ entry, view }: { entry: WorkspaceEntry; view: VaultsView }) {
   );
 }
 
-/** 全部密钥: the profiles' accounts kept in the library (each leading to its profile) and each vault's secrets (each
- * leading to its page), a section a kind (a vault this device has no key to, the names it is told); adding to it. */
+/** 全部密钥, as a password manager's list (the user, 2026-10-26: a section a kind of one row each was 「信息密度极低，找也
+ * 找不到有意义的东西」; apps/mbui sfdesk vault.mbt vault_all): a field to find one by any of its words; then every one on
+ * one list, a row each: its mark (the profile's service, a secret's kind), its name, and under it its kind and what is
+ * worth knowing of it (an account's station and what is wrong with it; a secret's way to an agent and its last
+ * use, the core's lineText), each leading to its page: each vault's secrets (a vault this device has no key to, the
+ * names it is told, going nowhere), locked, a row of those it does not name; then the profiles' accounts on a list of
+ * their own, folded under a row naming them (seen on the profiles' pages first: the user, 2026-10-26), open where
+ * what is looked for is among them. Adding to it. */
 function All({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view: VaultsView; adding: boolean; onAdded(): void }) {
   const navigate = useNavigate();
+  const run = useVaultCall();
   const plain = view.plain === true;
   const mine = view.vaults.find((v) => v.mine);
   const [editing, setEditing] = useState<Kind | null>(null);
+  const [find, setFind] = useState("");
+  // (the profiles' accounts folded at the foot: seen on the profiles' pages first)
+  const [opened, setOpened] = useState(false);
   const stations = useStations(entry.id).value ?? [];
   const online = stations.filter((s) => s.online);
   const profiles = useProfiles(entry.id).value;
+  const lists = useVaultsItems(entry.id, view.vaults.map((v) => v.id));
   const many = view.vaults.length > 1;
+  const q = find.trim().toLowerCase();
+  const shows = (...words: (string | null | undefined)[]) => q === "" || words.some((w) => (w ?? "").toLowerCase().includes(q));
+  const accounts = (profiles?.items ?? []).filter((e) => shows(e.profile.name, e.groupTitle, e.where));
+  const secrets = view.vaults.flatMap((v, i) => (lists[i]?.items ?? []).filter((row) => row.name && shows(row.name, row.kindText, row.lineText, row.howText)).map((row) => ({ v, row })));
+  const unnamed = view.vaults.flatMap((v, i) => {
+    const hidden = (lists[i]?.items ?? []).filter((row) => !row.name);
+    return hidden.length > 0 ? [{ v, hidden }] : [];
+  });
+  const reading = !profiles || lists.some((l) => !l);
+  const open = opened || q !== "";
+  // (a row's line: what is said of it, those words that are not empty, a dot between)
+  const said = (...words: (string | null | undefined)[]) => words.filter((w) => w).join(" · ");
   return (
     <>
-      <ProfileAccounts entry={entry} />
-      {/* Nothing of its own yet says so only where the page lists nothing else (the profiles' accounts above). */}
-      {view.vaults.map((v) => (plain || v.keyed
-        ? <LibraryVault key={v.id} entry={entry} v={v} many={many} quiet={(profiles?.items.length ?? 0) > 0} />
-        : <VaultSection key={v.id} entry={entry} v={v} readOnly />))}
-      {view.vaults.length === 0 && (profiles?.items.length ?? 0) === 0 && <p className={css.note}>{t("web-pages.vault.empty")}</p>}
+      <div className={css.find}>
+        <input className={controlsCss.input} type="search" value={find} onChange={(e) => setFind(e.target.value)} placeholder={t("web-pages.vault.find")} aria-label={t("web-pages.vault.find")} />
+      </div>
+      {secrets.length + unnamed.length > 0 && (
+        <ul className={pagesCss.list}>
+          {secrets.map(({ v, row }) => {
+            const keyed = plain || v.keyed;
+            const body = <>
+              <span className={css.rowIcon}><KindIcon kind={row.kind ?? undefined} /></span>
+              <span className={pagesCss.listRowText}>
+                <span className={pagesCss.listRowTitle}>{row.name}</span>
+                {/* (its kind, its vault where there are more than one; the core's: how an agent gets it, when and where it was
+                    last used) */}
+                <span className={css.rowMeta}>{said(row.kindText, many ? v.name : null, keyed ? row.lineText : row.agentText)}</span>
+              </span>
+            </>;
+            return (
+              <li key={`${v.id}/${row.id}`}>
+                {keyed ? <Link className={`${pagesCss.listRow} ${css.rowButton}`} to={itemPath(entry.id, v.id, row.id)}>{body}<ChevronRight size={14} className={css.chevron} /></Link>
+                  : <div className={pagesCss.listRow}>{body}</div>}
+              </li>
+            );
+          })}
+          {/* (unlocked by opening one of them: the vault's key kept a while, every name shown) */}
+          {unnamed.map(({ v, hidden }) => (
+            <li key={`${v.id}/hidden`}>
+              {plain || v.keyed
+                ? <button type="button" className={`${pagesCss.listRow} ${css.rowButton}`} onClick={() => void run("vault.open", { workspace: entry.id, item: hidden[0]!.id }, t("web-pages.vault.unlockWhat"))}>
+                    <span className={css.rowIcon} />
+                    <span className={pagesCss.listRowTitle}>{t("web-pages.vault.hidden", { n: hidden.length })}</span>
+                    <span className={css.link}>{t("web-pages.vault.unlock")}</span>
+                  </button>
+                : <div className={pagesCss.listRow}><span className={css.rowIcon} /><span className={css.rowMeta}>{t("web-pages.vault.hidden", { n: hidden.length })}</span></div>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {/* The accounts, folded under a row naming them (open where what is looked for is among them). */}
+      {accounts.length > 0 && (
+        <ul className={pagesCss.list}>
+          <li>
+            <button type="button" className={`${pagesCss.listRow} ${css.rowButton}`} aria-expanded={open} disabled={q !== ""} onClick={() => setOpened(!opened)}>
+              <span className={css.rowIcon} />
+              <span className={pagesCss.listRowText}>
+                <span className={pagesCss.listRowTitle}>{t("web-pages.vault.accounts")}</span>
+                {!open && <span className={css.rowMeta}>{accounts.map((e) => e.profile.name).join("、")}</span>}
+              </span>
+              {open ? <ChevronUp size={14} className={css.chevron} /> : <ChevronDown size={14} className={css.chevron} />}
+            </button>
+          </li>
+          {open && accounts.map((e) => (
+            <li key={e.key}>
+              <Link className={`${pagesCss.listRow} ${css.rowButton}`} to={profilePath(e)}>
+                <span className={css.rowIcon}><ProviderLogo runtime={e.profile.runtime} kind={e.profile.access.kind} mark={e.profile.providerMark} size={16} /></span>
+                <span className={pagesCss.listRowText}>
+                  <span className={pagesCss.listRowTitle}>{e.profile.name}</span>
+                  <span className={css.rowMeta}>{said(e.groupTitle, e.where)}</span>
+                  {e.profile.checkTone === "red" && <span className={css.bad}>{e.profile.checkText}</span>}
+                </span>
+                <ChevronRight size={14} className={css.chevron} />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      {reading ? <Waiting count={3} dense />
+        : q !== "" && accounts.length + secrets.length === 0 ? <p className={css.note}>{t("web-pages.vault.noMatch", { q: find.trim() })}</p>
+        : (profiles?.items.length ?? 0) + secrets.length + unnamed.length === 0 && <p className={css.note}>{t("web-pages.vault.empty")}</p>}
       <Dialog open={adding} onClose={onAdded} title={t("web-pages.vault.addKind.title")}>
         <AddKinds secrets={mine !== undefined} plain={plain} onPick={(k) => {
           onAdded();
@@ -361,80 +445,6 @@ function DeleteVault({ entry, v, many }: { entry: WorkspaceEntry; v: VaultRow; m
         description={v.items > 0 ? t("web-pages.vault.deleteVaultBody", { n: v.items }) : t("web-pages.vault.deleteVaultEmpty")}
         onConfirm={() => { setAsking(false); void run("vault.delete", { workspace: entry.id, vault: v.id }, t("web-pages.vault.deleteWhat"), t("web-pages.vault.deleted")); }} />
     </li>
-  );
-}
-
-/** The profiles' accounts the library keeps (a subscription's sign-in, a model's key), a section a kind as the profiles
- * list them (the kind in its title, not again on each row): each one's name, and where it is; it leads to its profile,
- * whose page is where it is set. */
-function ProfileAccounts({ entry }: { entry: WorkspaceEntry }) {
-  const profiles = useProfiles(entry.id).value;
-  if (!profiles) return null;
-  return (
-    <>
-      {profileGroups(profiles.items).map((g) => (
-        <Section key={g[0]!.group} title={g[0]!.groupTitle}>
-          <ul className={pagesCss.list}>
-            {g.map((e) => (
-              <li key={e.key}>
-                <Link className={`${pagesCss.listRow} ${css.rowButton}`} to={profilePath(e)}>
-                  <span className={pagesCss.listRowText}>
-                    <span className={pagesCss.listRowTitle}>{e.profile.name}</span>
-                    {e.where && <span className={css.rowMeta}>{e.where}</span>}
-                  </span>
-                  <ChevronRight size={14} className={css.chevron} />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      ))}
-    </>
-  );
-}
-
-/** A vault's secrets, a section a kind (the vault's name after it where there are more than one): each one's name and
- * when an agent last used it, leading to its page; locked, a row of those it does not name, unlocking them. */
-function LibraryVault({ entry, v, many, quiet }: { entry: WorkspaceEntry; v: VaultRow; many: boolean; quiet: boolean }) {
-  const items = useVaultItems(entry.id, v.id);
-  const run = useVaultCall();
-  if (!items) return <Waiting count={3} dense />;
-  const hidden = items.items.filter((i) => !i.name);
-  const unlock = () => { if (hidden[0]) void run("vault.open", { workspace: entry.id, item: hidden[0].id }, t("web-pages.vault.unlockWhat")); };
-  return (
-    <>
-      {ITEM_SECTIONS.map((kind) => {
-        const rows = items.items.filter((i) => i.name && i.kind === kind);
-        if (rows.length === 0) return null;
-        return (
-          <Section key={kind} title={many ? `${kindName(kind)} · ${v.name}` : kindName(kind)}>
-            <ul className={pagesCss.list}>
-              {rows.map((row) => (
-                <li key={row.id}>
-                  <Link className={`${pagesCss.listRow} ${css.rowButton}`} to={itemPath(entry.id, v.id, row.id)}>
-                    <span className={pagesCss.listRowText}>
-                      <span className={pagesCss.listRowTitle}>{row.name}</span>
-                      <span className={css.rowMeta}>{row.lineText}</span>
-                    </span>
-                    <ChevronRight size={14} className={css.chevron} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </Section>
-        );
-      })}
-      {/* A row of the page's list (its words on the sections' line), not a loose button. */}
-      {hidden.length > 0 && (
-        <ul className={pagesCss.list}>
-          <li><button type="button" className={`${pagesCss.listRow} ${css.rowButton}`} onClick={unlock}>
-            <span className={pagesCss.listRowTitle}>{t("web-pages.vault.hidden", { n: hidden.length })}</span>
-            <span className={css.link}>{t("web-pages.vault.unlock")}</span>
-          </button></li>
-        </ul>
-      )}
-      {items.items.length === 0 && !quiet && <p className={css.note}>{t("web-pages.vault.empty")}</p>}
-    </>
   );
 }
 

@@ -306,6 +306,7 @@
   "core-views.vault.private": "Only for you",
   "core-views.vault.agent_may": "Agents may ask",
   "core-views.vault.used": "Used {when}",
+  "core-views.vault.usedIn": "Used {when} in “{chat}”",
   "core-views.vault.lasts.once": "One use",
   "core-views.vault.lasts.hour": "1 hour",
   "core-views.vault.lasts.chat": "Until the chat is archived",

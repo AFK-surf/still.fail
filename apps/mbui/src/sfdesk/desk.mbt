@@ -47,6 +47,7 @@ pub fn reset() -> Unit {
   font_setting_reset()
   changelog_reset()
   vault_item_reset()
+  vault_reset()
   memory_doc_reset()
   add_profile_reset()
   station_cards_reset()

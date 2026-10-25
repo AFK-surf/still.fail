@@ -727,7 +727,7 @@ test("the plain library: no security mode, items kept on the station as they are
   // What the pages say of it, the core's: its kind, how agents may ask for it and get it, its longest grant; opened, its
   // fields as its page shows them; the library's at the settings' row.
   assert.deepEqual(shown().items.map((i: any) => [i.kindText, i.agentText, i.lineText, i.howText, i.lastsText]), [
-    ["Token", "允许 agent 申请 · 代理 · api.github.com", "允许 agent 申请 · 代理 · api.github.com", "代理 · 限 api.github.com", "跟随默认 · 直到对话归档"],
+    ["Token", "允许 agent 申请 · 代理 · api.github.com", "代理 · api.github.com · GH_TOKEN", "代理 · 限 api.github.com", "跟随默认 · 直到对话归档"],
   ]);
   const opened = await r.ask("vault.open", { item: put.id });
   assert.deepEqual([opened.kindText, opened.shown], ["Token", [{ key: "value", label: "值", value: "ghp_x", secret: true, mono: true }]]);
@@ -753,9 +753,9 @@ test("the plain library: no security mode, items kept on the station as they are
   r.take();
   assert.deepEqual(used().uses.map((u: any) => [u.chatTitle, u.command, u.station, typeof u.at.ago]), [["修 CI", "gh pr list", "st", "string"]]);
   assert.equal(shown().items[0].lastUse.command, "gh pr list");
-  // used: its line says when, its use how
+  // used: its line says when and in which chat, its use how
   assert.equal(used().uses[0].howText, "gh pr list · 代理");
-  assert.match(shown().items[0].lineText, /使用$/);
+  assert.match(shown().items[0].lineText, /^代理 · api\.github\.com · GH_TOKEN · .+在「修 CI」用过$/);
 
   // Security mode on: the vault is the library; what was plain is counted, kept from new writes, and moved.
   r.putLock();

@@ -127,9 +127,9 @@ fn group_by(list : Array[Json]) -> Array[(String, String, Array[Json])] {
 }
 
 ///|
-/// A kind of account's mark, before its section's title (Profiles.kt GroupMark): its vendor's for a subscription, a
-/// key for keys.
-fn group_mark(c : @ui.Ctx, group : String) -> Unit {
+/// A kind of account's mark, before its section's title (Profiles.kt GroupMark), and before an account's row of 全部密钥:
+/// its vendor's for a subscription, a key for keys.
+pub fn group_mark(c : @ui.Ctx, group : String) -> Unit {
   match group {
     "key" => @sf.icon(c, "key", size=16.0, color=@sf.theme().p.text) |> ignore
     // signed in to an account: its provider's

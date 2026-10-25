@@ -751,8 +751,8 @@ pub fn page_note(c : @ui.Ctx, words : String, bad? : Bool = false) -> Unit {
 /// what is wrong, in red under that), what it says at its end (`value`, in the link's ink where `value_lit`, in red
 /// where `value_bad`, a red dot before it where `value_dot`: something there is not right though nothing is wrong to
 /// say), its title `strong` where it names who or what the row is, in red where it takes something away (`danger`:
-/// 注销账号), and a chevron (none where not `chevron`: what it does is done here), or an arrow out where it goes `out`
-/// of the app; `lead` before its words (a mark, a dot), `tail` after what it says (a pill, a spinner); going nowhere
+/// 注销账号), and a chevron (none where not `chevron`: what it does is done here; down where it `folds` what follows
+/// it, up while that is open), or an arrow out where it goes `out` of the app; `lead` before its words (a mark, a dot), `tail` after what it says (a pill, a spinner); going nowhere
 /// where not `goes` (a value said); `below` under its note (its allowance's chips). Its note, what is wrong and what is
 /// below are lines of their own as wide as its words, what it says, its tail and its chevron on its first line beside
 /// its title (row_top). True on the frame it is pressed.
@@ -768,6 +768,7 @@ pub fn link_row(
   danger? : Bool = false,
   out? : Bool = false,
   chevron? : Bool = true,
+  folds? : Bool,
   note? : String = "",
   lacks? : Bool = false,
   trouble? : String = "",
@@ -790,7 +791,12 @@ pub fn link_row(
   if goes {
     c.cursor(id, Hand)
   }
-  let mark = if out { "arrow-up-right" } else { "chevron-right" }
+  let mark = match (out, folds) {
+    (true, _) => "arrow-up-right"
+    (false, Some(true)) => "chevron-up"
+    (false, Some(false)) => "chevron-down"
+    (false, None) => "chevron-right"
+  }
   // (lines under its first: its note, what is wrong and what is `below` them, as wide as its words, its end on its
   // first line)
   let under = note != "" || trouble != "" || below is Some(_)
