@@ -113,8 +113,9 @@ fn changelog_reset() -> Unit {
 }
 
 ///|
-/// 更新日志 (ChangelogPage; the narrow app's ChangelogScreen): the core's `changelog`, a tab a part, by day (narrow: each
-/// day's changes on a card); opened, what the last update brought is read (`changelog.seen`).
+/// 更新日志 (ChangelogPage; the narrow app's ChangelogScreen): the core's `changelog`, a tab a part (the choice only where
+/// there is more than one), by day (narrow: each day's changes on a card); opened, what the last update brought is read
+/// (`changelog.seen`).
 fn changelog_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let topic = (core.topic)("changelog", Map([]))
@@ -134,7 +135,7 @@ fn changelog_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
     None => 0
   }
   let blocks : Array[() -> Unit] = []
-  if tabs.length() > 0 {
+  if tabs.length() > 1 {
     blocks.push(fn() {
       let labels = tabs.map(fn(x) { text(Some(x), "label") })
       // (each part 120 wide at least, a wide page's)

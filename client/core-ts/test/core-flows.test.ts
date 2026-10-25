@@ -1534,6 +1534,28 @@ test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen
   core.close();
 });
 
+test("the_changelog_whose_every_change_is_every_parts_is_one_list", async () => {
+  // The stable channel's: a release an entry, each every part's; a tab a part would show the same in each.
+  const host = new FakeHost();
+  const now = Math.round(host.nowMs() / 1000);
+  const every = ["android", "cloud", "desktop", "station", "web"];
+  const entry = (version: number, text: string) => ({ version, commit: "", at: now, text: [text], fixes: [], parts: every });
+  host.onFetch((req) => req.url.endsWith("/v1/changelog")
+    ? jsonResponse(200, { entries: [entry(1330, "修复：列表跳动"), entry(1300, "新功能：更早的")], released: { android: 1330, desktop: 1330, station: 1330, web: 1330 } })
+    : jsonResponse(404, {}));
+  const core = await Core.create(host, { clock: host.time.clock, sample: 0 });
+  const ui = core.connect();
+  await ask(host, core, ui, 1, "client.device", { app: "desktop", build: "0.1.1330" });
+  subscribe(core, ui, 2, { topic: "changelog" });
+  await host.settle();
+  const values = new Map();
+  answersOf(host, values);
+  const tabs = v(values, 2).tabs;
+  assert.deepEqual(tabs.map((x: J) => x.part), ["desktop"]);
+  assert.deepEqual(tabs[0].days.flatMap((d: J) => d.entries.map((e: J) => e.text[0])), ["修复：列表跳动", "新功能：更早的"]);
+  core.close();
+});
+
 test("a_newer_build_says_what_it_brings_this_app_the_changelog_read_again_when_it_came_after", async () => {
   const host = new FakeHost();
   const now = Math.round(host.nowMs() / 1000);

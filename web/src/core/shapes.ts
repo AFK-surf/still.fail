@@ -810,8 +810,9 @@ export interface ChangelogTab {
 /**
  * What changed in still.fail, as this app shows it (the `changelog` topic; client/core-ts/src/changelog.ts): `app`
  * (web, desktop or android) and its `build` (0.1.<n>: n), absent before its host says; the changes in a tab a part,
- * this app's first, by day, newest first; what this app got since the changelog was last shown here (`news`, until
- * `changelog.seen`); `loading` while first read, `error` when it could not be and none was kept.
+ * this app's first (this app's alone where each would list the same: the stable channel's), by day, newest first; what
+ * this app got since the changelog was last shown here (`news`, until `changelog.seen`); `loading` while first read,
+ * `error` when it could not be and none was kept.
  */
 export interface ChangelogView {
 	app?: string;

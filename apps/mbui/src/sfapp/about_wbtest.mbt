@@ -4,16 +4,17 @@
 ///|
 /// The app over the settings' fixture `w` wide, pointed at as `platform` says (2 a phone's finger, 0 a Mac's mouse;
 /// `regular`: a tablet's size classes), the settings' `route` opened under settings; `mode`: the fixture's (a settings
-/// one).
+/// one), as `over` has it.
 fn one_page_tester(
   route : @settings.Route,
   w : Double,
   platform? : Int = 0,
   regular? : Bool = false,
   mode? : String = "settings",
+  over? : (Source) -> Source = fn(s) { s },
 ) -> @ui.Tester raise {
   reset()
-  let src = fixture(mode)
+  let src = over(fixture(mode))
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=900.0, platform~)
   if regular {
     let log = t.drive("system {\"size_class\":{\"width\":\"regular\",\"height\":\"regular\"}}\n")
@@ -156,6 +157,41 @@ test "更新日志, at each width and with either hand: the build, a tab a part,
     tap_in_page(t, "Station")
     t.draw()
     assert_true(t.find("暂无更新记录") is Some(_), msg=at)
+  }
+}
+
+///|
+/// The fixture with the changelog's first tab alone (as the core gives it where each part's would be the same).
+fn changelog_one_tab(base : Source) -> Source {
+  {
+    ..base,
+    topic: fn(name, params) {
+      let v = (base.topic)(name, params)
+      match v.value {
+        Some(Object(o)) if name == "changelog" =>
+          match o.get("tabs") {
+            Some(Array([first, ..])) => {
+              let one = o.copy()
+              one["tabs"] = Json::array([first])
+              { ..v, value: Some(Json::object(one)) }
+            }
+            _ => v
+          }
+        _ => v
+      }
+    },
+  }
+}
+
+///|
+test "更新日志 with one tab (the stable channel's, each part's the same), at each width and with either hand: its changes, no choice over them" {
+  for case in one_page_cases {
+    let (w, platform, regular, _) = case
+    let t = one_page_tester(@settings.Route::Changelog, w, platform~, regular~, over=changelog_one_tab)
+    let at = "\{w} platform \{platform}"
+    assert_true(t.find("10 月 19 日") is Some(_), msg=at)
+    assert_true(t.find("0.1.1288") is Some(_), msg=at)
+    assert_true(t.find("此 app") is None, msg=at)
   }
 }
 

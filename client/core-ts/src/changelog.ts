@@ -1,5 +1,6 @@
 // What changed in still.fail, for people (changelog.rs; the `changelog` topic, docs/changelog.md): still.fail cloud's
-// changelog with what each part has out on this app's channel, one tab a part (this app's first), by day, newest first;
+// changelog with what each part has out on this app's channel, one tab a part (this app's first; this app's alone where
+// they would all be the same, as the stable channel's are: a release an entry, each every part's), by day, newest first;
 // and what this app got since it
 // was last shown here (`news`, until `changelog.seen`). Kept on the device (table `changelog`). The sync reads it as
 // the core starts and each time still.fail cloud's events socket opens (rule 6: never because it is shown); `app.update`
@@ -178,6 +179,9 @@ export class Changelog implements Owner {
         else tab.days.push({ label, entries: [shown] });
       }
     }
-    return { app, build, tabs, news: news.length > 0 ? { build: build !== null ? `0.1.${build}` : null, entries: news } : null, loading: false };
+    // A tab a part only where they part what is said: where each would list the same changes, this app's alone.
+    const listed = tabs.map((tab) => tab.days.flatMap((d) => d.entries.map((e: J) => e.version)).join(","));
+    const parted = listed.every((l) => l === listed[0]) ? tabs.slice(0, 1) : tabs;
+    return { app, build, tabs: parted, news: news.length > 0 ? { build: build !== null ? `0.1.${build}` : null, entries: news } : null, loading: false };
   }
 }
