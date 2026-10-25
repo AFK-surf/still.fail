@@ -160,6 +160,7 @@ export class WakingHost implements Host {
   readonly secureDelete?: Host["secureDelete"];
   readonly secureAsk?: Host["secureAsk"];
   readonly savedRead?: Host["savedRead"];
+  readonly unzstd?: Host["unzstd"];
 
   constructor(inner: Host, wakes: Wakes) {
     this.inner = inner;
@@ -179,6 +180,8 @@ export class WakingHost implements Host {
     if (inner.secureAsk) this.secureAsk = (reason) => inner.secureAsk!(reason);
     // A file the app saved on the device, read back: the device's too.
     if (inner.savedRead) this.savedRead = (at, start, end) => inner.savedRead!(at, start, end);
+    // A reply taken apart: on the device, as it comes.
+    if (inner.unzstd) this.unzstd = () => inner.unzstd!();
   }
 
   /// Where a value is kept as a file: the device's, at once.

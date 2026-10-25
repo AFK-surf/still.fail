@@ -4,7 +4,7 @@
 # pieces from the checkout and runs a headless smoke test. See core/README.md.
 #   scripts/core.sh deps | shell [TARGET] | hermes [apple] | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET]
 #                   | smoke [build|run] | listen | exit | sealed | collate | login-test | vectors | sizes | clean | all
-#                   | chat-open | md-parse
+#                   | chat-open | md-parse | zstd-read
 # EMBER: the still.fail checkout (default: this one, scripts/env.sh); out/core/ gets everything built.
 # TARGET: a Rust target (default aarch64-apple-darwin; aarch64-apple-ios, aarch64-apple-ios-sim for iOS).
 set -e
@@ -347,6 +347,37 @@ writeFileSync(f, transformSync(readFileSync(f, 'utf8'), { babelrc: false, config
   $OUT/hermes/bin/hermes $o/run.hbc
 }
 
+# A station's JSON replies taken apart in Hermes as the core takes them apart (client/core-ts/bench/zstd-read.ts: fzstd,
+# a piece at a time), compressed as a station compresses them (station/src/mesh/compress.ts: zstd at a reply's level and
+# at a background batch's), bundled as the core is: plain bytes a second, by Hermes and by V8 beside it.
+zstd_read() {
+  have_deps
+  hermes_apple || return 1
+  local o=$OUT/zstd-read
+  mkdir -p $o
+  (cd $CORE_TS && node --input-type=module -e '
+import { replies } from "./bench/replies.ts";
+import { writeFileSync } from "node:fs";
+import { constants, zstdCompressSync } from "node:zlib";
+const entries = replies().map((text, i) => ({ seq: i + 1, ts: String(1790000000 + i), author_kind: "agent", author: "s-bench", text }));
+const plain = Buffer.from(JSON.stringify({ entries }));
+const packed = [3, 9].map((level) => ({ level, plain: plain.length, b64: zstdCompressSync(plain, { params: { [constants.ZSTD_c_compressionLevel]: level } }).toString("base64") }));
+writeFileSync(process.argv[1], "var PACKED = " + JSON.stringify(packed) + ";\n");' $o/packed.js) || return 1
+  NODE_PATH=$CORE_TS/node_modules $CORE_TS/node_modules/.bin/esbuild $CORE_TS/bench/zstd-read.ts --bundle --format=iife --platform=neutral \
+    --main-fields=module,main --target=es2020 --minify --legal-comments=none --resolve-extensions=.ts,.js,.mjs --log-level=warning --outfile=$o/bench.js || return 1
+  (cd $CORE_TS && node --input-type=module -e "
+import { readFileSync, writeFileSync } from 'node:fs';
+import { transformSync } from '@babel/core';
+const f = process.argv[1];
+writeFileSync(f, transformSync(readFileSync(f, 'utf8'), { babelrc: false, configFile: false, compact: true, plugins: ['@babel/plugin-transform-classes'] }).code);" $o/bench.js) || return 1
+  cat $o/packed.js $o/bench.js > $o/run.js
+  "$(hermesc)" -emit-binary -O -block-scoping -out $o/run.hbc $o/run.js 2>&1 | grep -a "error:" && return 1
+  echo "hermes:"
+  $OUT/hermes/bin/hermes $o/run.hbc
+  echo "v8:"
+  node -e 'globalThis.print = console.log; (0, eval)(require("fs").readFileSync(process.argv[1], "utf8"))' $o/run.js
+}
+
 # listen.* (apple_core.mm on apple_listen.m) with core/listen-test.js (as bytecode) in the core's place: core/listen_test.m.
 listen_test() {
   core_program listen_test || return 1
@@ -455,6 +486,7 @@ case "${1:-all}" in
   listen) listen_test ;;
   chat-open) chat_open ;;
   md-parse) md_parse ;;
+  zstd-read) zstd_read ;;
   exit) exit_test ;;
   collate) collate_test ;;
   sealed) sealed_test ;;
@@ -469,5 +501,5 @@ case "${1:-all}" in
   sizes) sizes ;;
   clean) rm -rf "$CARGO_TARGET_DIR"; echo "removed $CARGO_TARGET_DIR (out/core kept)" ;;
   all) deps; shell; smoke_build; smoke_run; sizes ;;
-  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes [apple] | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | apple-native [TARGET] | smoke [build|run] | listen | exit | collate | login-test | vectors | sizes | chat-open | md-parse | clean | all"; exit 2 ;;
+  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes [apple] | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | apple-native [TARGET] | smoke [build|run] | listen | exit | collate | login-test | vectors | sizes | chat-open | md-parse | zstd-read | clean | all"; exit 2 ;;
 esac

@@ -83,6 +83,42 @@ enum Handle {
     /// A connection that closed, let go (its state, its streams), with what the core may still ask of it.
     Gone { remote: String, reason: Value, stats: Value },
     IStream(Arc<Halves>),
+    /// A zstd stream being taken apart (`zstd.open`).
+    Unzstd(Arc<Mutex<Unzstd>>),
+}
+
+/// A zstd stream being taken apart, a piece at a time as the core is given them: libzstd's streaming decoder (frames
+/// one after another, a piece cut anywhere), and whether what it took so far ended a frame.
+struct Unzstd {
+    decoder: zstd::stream::raw::Decoder<'static>,
+    whole: bool,
+}
+
+impl Unzstd {
+    fn new() -> Result<Unzstd, String> {
+        Ok(Unzstd { decoder: zstd::stream::raw::Decoder::new().map_err(err)?, whole: true })
+    }
+
+    /// `input` taken apart: all it makes, nothing held back.
+    fn take(&mut self, input: &[u8]) -> Result<Vec<u8>, String> {
+        use zstd::stream::raw::{InBuffer, Operation, OutBuffer};
+        let mut out = Vec::new();
+        let mut src = InBuffer::around(input);
+        let mut buf = vec![0u8; 128 * 1024];
+        loop {
+            let mut dst = OutBuffer::around(&mut buf[..]);
+            let hint = self.decoder.run(&mut src, &mut dst).map_err(err)?;
+            let made = dst.pos();
+            out.extend_from_slice(&buf[..made]);
+            // (0: a frame ended and all of it is out; said only of what took something, an empty piece says nothing)
+            if made > 0 || src.pos() > 0 {
+                self.whole = hint == 0;
+            }
+            if src.pos() >= input.len() && made < buf.len() {
+                return Ok(out);
+            }
+        }
+    }
 }
 
 type Job = Box<dyn FnOnce() + Send>;
@@ -252,6 +288,7 @@ impl Handle {
             Handle::Conn(_) => "conn",
             Handle::Gone { .. } => "gone",
             Handle::IStream(_) => "stream",
+            Handle::Unzstd(_) => "unzstd",
         }
     }
 }
@@ -392,7 +429,15 @@ impl Inner {
                     None => Answer::json(json!({ "end": true })),
                 })
             }
-            "stream.close" | "ws.close" | "tcp.close" => {
+            "zstd.open" => Ok(Answer::json(json!({ "id": self.keep(Handle::Unzstd(Arc::new(Mutex::new(Unzstd::new()?)))) }))),
+            "zstd.push" => {
+                let Handle::Unzstd(z) = self.handle(id_of(&a)?)? else { return Err("not a zstd stream".into()) };
+                let input = bytes.unwrap_or_default();
+                let mut z = z.lock().unwrap();
+                let out = z.take(&input)?;
+                Ok(Answer::bytes(json!({ "whole": z.whole }), out))
+            }
+            "stream.close" | "ws.close" | "tcp.close" | "zstd.close" => {
                 // Dropping the response, the socket's sender (its task ends) or the halves closes it.
                 self.drop_handle(id_of(&a)?);
                 Ok(Answer::json(json!({})))
@@ -1101,6 +1146,56 @@ mod tests {
         assert!(dir.path().join("core.db").exists());
         let out = shell.call_sync("conn.remoteId", br#"{"id":999}"#);
         assert_eq!(String::from_utf8(out).unwrap(), r#"{"error":"no handle 999"}"#);
+    }
+
+    #[test]
+    fn takes_zstd_apart_a_piece_at_a_time() {
+        let dir = TempDir::new();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        // A reply as a station compresses it (two frames, as a stream flushed twice sends them, and a JSON reply),
+        // given in pieces cut anywhere.
+        let first: Vec<u8> = (0..40_000).map(|i| format!("{{\"seq\":{i}}},")).collect::<String>().into_bytes();
+        let second = b"{\"entries\":[]}".to_vec();
+        let mut packed = zstd::stream::encode_all(&first[..], 3).unwrap();
+        packed.extend(zstd::stream::encode_all(&second[..], 9).unwrap());
+        shell.call(9001, "zstd.open".into(), b"{}", None);
+        let id = serde_json::from_str::<Value>(&answer(9001).0).unwrap()["id"].as_u64().unwrap();
+        let mut made = Vec::new();
+        let mut call = 9002;
+        let mut whole = Vec::new();
+        for piece in packed.chunks(7_001) {
+            shell.call(call, "zstd.push".into(), format!(r#"{{"id":{id}}}"#).as_bytes(), Some(piece.to_vec()));
+            let (json, error, bytes) = answer(call);
+            assert_eq!(error, "");
+            made.extend(bytes.unwrap_or_default());
+            whole.push(serde_json::from_str::<Value>(&json).unwrap()["whole"] == json!(true));
+            call += 1;
+        }
+        let mut both = first.clone();
+        both.extend(&second);
+        assert_eq!(made, both);
+        // mid frame, not whole; at the end, whole
+        assert!(!whole[0]);
+        assert!(whole[whole.len() - 1]);
+        shell.call(call, "zstd.close".into(), format!(r#"{{"id":{id}}}"#).as_bytes(), None);
+        assert_eq!(answer(call).1, "");
+        // gone once closed
+        shell.call(call + 1, "zstd.push".into(), format!(r#"{{"id":{id}}}"#).as_bytes(), Some(vec![0]));
+        assert_eq!(answer(call + 1).1, format!("no handle {id}"));
+        // cut short: what came is given, and it is not whole
+        let cut = zstd::stream::encode_all(&first[..], 3).unwrap();
+        shell.call(call + 2, "zstd.open".into(), b"{}", None);
+        let id = serde_json::from_str::<Value>(&answer(call + 2).0).unwrap()["id"].as_u64().unwrap();
+        shell.call(call + 3, "zstd.push".into(), format!(r#"{{"id":{id}}}"#).as_bytes(), Some(cut[..cut.len() - 1].to_vec()));
+        let (json, error, bytes) = answer(call + 3);
+        assert_eq!(error, "");
+        assert!(first.starts_with(&bytes.unwrap_or_default()));
+        assert_eq!(serde_json::from_str::<Value>(&json).unwrap()["whole"], json!(false));
+        // and what is not zstd fails
+        shell.call(call + 4, "zstd.open".into(), b"{}", None);
+        let id = serde_json::from_str::<Value>(&answer(call + 4).0).unwrap()["id"].as_u64().unwrap();
+        shell.call(call + 5, "zstd.push".into(), format!(r#"{{"id":{id}}}"#).as_bytes(), Some(b"not zstd at all".to_vec()));
+        assert_ne!(answer(call + 5).1, "");
     }
 
     #[test]

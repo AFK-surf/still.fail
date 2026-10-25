@@ -6,7 +6,7 @@ import { Decompress } from "fzstd";
 import type { Inner } from "../core.ts";
 import { CoreError, HostError, asCoreError } from "../error.ts";
 import { FileSource } from "../file-source.ts";
-import type { Pull } from "../host.ts";
+import type { Host, Pull, Unzstd } from "../host.ts";
 import { current, t } from "../i18n.ts";
 import { encode } from "../ops.ts";
 import { stationWhat } from "../status.ts";
@@ -66,10 +66,21 @@ const empty = new Uint8Array();
 /// How often a part on its way says how much of it has come (a part is 4 MB).
 const PART_STEP = 64 * 1024;
 
-/// A reply's body as the station wrote it: decompressed as it comes when it came compressed (fzstd, the same on every
-/// host), each piece as soon as it is whole (an event stream's, event by event).
-function plain(reply: WireReply, partial = true): Pull<Uint8Array> {
-  if (replyHeader(reply, "content-encoding") !== ZSTD) return reply.body;
+/// A reply's body as the station wrote it: decompressed as it comes when it came compressed, each piece as soon as it
+/// is whole (an event stream's, event by event); by the host where it has a way of its own (a native app's shell:
+/// Host.unzstd, for as long as the scope is open), else here (fzstd, the same on every host).
+function plain(host: Host, reply: WireReply, partial = true): Effect.Effect<Pull<Uint8Array>, never, Scope.Scope> {
+  if (replyHeader(reply, "content-encoding") !== ZSTD) return Effect.succeed(reply.body);
+  if (!host.unzstd) return Effect.succeed(plainHere(reply, partial));
+  // (a shell from before it: here)
+  return Effect.orElseSucceed(
+    Effect.map(host.unzstd(), (z) => plainBy(z, reply, partial)),
+    () => plainHere(reply, partial),
+  );
+}
+
+/// What the station wrote, taken apart here (fzstd).
+function plainHere(reply: WireReply, partial: boolean): Pull<Uint8Array> {
   const out: Uint8Array[] = [];
   const decompress = new Decompress((data) => {
     if (data.length > 0) out.push(data);
@@ -88,6 +99,29 @@ function plain(reply: WireReply, partial = true): Pull<Uint8Array> {
         if (ended && partial) continue;
         return yield* Effect.fail(new HostError(t("core-logic.mesh.read_failed", { error: (error as Error).message })));
       }
+    }
+  });
+  return { take };
+}
+
+/// What the station wrote, taken apart by the host (`z`), a piece at a time as it comes.
+function plainBy(z: Unzstd, reply: WireReply, partial: boolean): Pull<Uint8Array> {
+  let ended = false;
+  let whole = true;
+  const take: Effect.Effect<Uint8Array | null, HostError> = Effect.gen(function* () {
+    for (;;) {
+      if (ended) return null;
+      const chunk = yield* reply.body.take;
+      if (chunk === null) {
+        ended = true;
+        // Live streams can end between flushed blocks; a finite JSON reply must end its frame.
+        if (!whole && !partial) return yield* Effect.fail(new HostError(t("core-logic.mesh.read_failed", { error: "zstd: the last frame was cut short" })));
+        return null;
+      }
+      if (chunk.length === 0) continue;
+      const made = yield* z.push(chunk);
+      whole = made.whole;
+      if (made.bytes.length > 0) return made.bytes;
     }
   });
   return { take };
@@ -176,7 +210,7 @@ export class Requests {
               held.length = 0;
               heldBytes = 0;
             };
-            const bytes = yield* readAll(plain(counted, !json), (chunk) => {
+            const bytes = yield* readAll(yield* plain(this.#core.host, counted, !json), (chunk) => {
               loaded += chunk.length;
               if (heard && loaded - told >= PART_STEP) heard((told = loaded));
               if (give) {
@@ -245,14 +279,14 @@ export class Requests {
       answered(span, reply);
       span.end();
       if (reply.status < 200 || reply.status >= 300) {
-        const bytes = yield* Effect.orElseSucceed(readAll(plain(reply)), () => empty);
+        const bytes = yield* Effect.orElseSucceed(readAll(yield* plain(this.#core.host, reply)), () => empty);
         const data = parseJson(bytes);
         return yield* Effect.fail(httpError(reply.status, data === undefined ? {} : data));
       }
       // What comes on it is no longer waited on, only counted (as it came over the link: `came`), and decompressed.
       const came = { bytes: 0 };
       const body = { take: Effect.tap(reply.body.take, (chunk) => Effect.sync(() => chunk && (status.received(null, chunk.length), (came.bytes += chunk.length)))) };
-      return { ...reply, body: plain({ ...reply, body }), came };
+      return { ...reply, body: yield* plain(this.#core.host, { ...reply, body }), came };
     });
   }
 
@@ -351,7 +385,7 @@ export class Requests {
             let loaded = 0;
             let told = 0;
             const counted = { ...reply, body: { take: Effect.tap(reply.body.take, (chunk) => Effect.sync(() => chunk && waiting.received(chunk.length))) } };
-            const bytes = yield* readAll(plain(counted), (chunk) => {
+            const bytes = yield* readAll(yield* plain(this.#core.host, counted), (chunk) => {
               loaded += chunk.length;
               if (loaded - told >= step) {
                 progress(loaded, total);

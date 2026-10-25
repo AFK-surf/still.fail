@@ -29,6 +29,8 @@
 //     Or held whole by the app and handed over with the call, its bytes beside it (`blob: {hostBytes: [start,
 //     length], type, sha256}`: mbui's app, whose picked files are read whole), read from those as it goes up
 //   reset {} — the connections kept for requests are taken for gone
+//   zstd.open {} → {id}; zstd.push {id} + bytes → {whole} + what they make; zstd.close {id} — a station's reply taken
+//     apart in the shell (libzstd), not in JS (Host.unzstd)
 //   iroh.bind {relayUrls, lookup, relayOnly, alpns: [hex]} + key → {id}; iroh.connect {id, addr, additional: [hex]} +
 //     alpn → {id}; iroh.accept {id} → {id, alpn: hex} (the next connection coming, its handshake done; {end} once the
 //     endpoint is gone); iroh.networkChange {id}; iroh.close {id}
@@ -50,7 +52,7 @@ import { FileSource } from "../file-source.ts";
 import type { CoreModule } from "../module.ts";
 import { HostError } from "../error.ts";
 import type { CloseReason, Iroh, IrohAddr, IrohConnection, IrohEndpoint, IrohPath, IrohStream } from "../iroh.ts";
-import { SOCKET_PING, SOCKET_PING_MS, type DbRange, type Host, type HttpRequest, type HttpResponse, type LoopbackRequest, type Pull, type Sql, type SqlRow, type SqlValue, type StreamResponse, type TcpConnection, type SqlError, sqlError } from "../host.ts";
+import { SOCKET_PING, SOCKET_PING_MS, type DbRange, type Host, type HttpRequest, type HttpResponse, type LoopbackRequest, type Pull, type Sql, type SqlRow, type SqlValue, type StreamResponse, type TcpConnection, type SqlError, type Unzstd, sqlError } from "../host.ts";
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { t } from "../i18n.ts";
 import { service } from "../trace.ts";
@@ -185,6 +187,18 @@ export class BridgeHost implements Host {
       const head = opened.json as J;
       return { status: head.status, headers: head.headers, body: pullBytes(bridge, "stream.read", head.id) };
     });
+  }
+
+  /// A zstd stream taken apart by the shell, off the core's thread (zstd.open, zstd.push, zstd.close as the scope ends).
+  unzstd(): Effect.Effect<Unzstd, HostError, Scope.Scope> {
+    const bridge = this.#bridge;
+    return Effect.map(
+      Effect.acquireRelease(bridge.call("zstd.open", {}), (a) => Effect.ignore(bridge.call("zstd.close", { id: (a.json as J).id }))),
+      (a): Unzstd => {
+        const id = (a.json as J).id as number;
+        return { push: (piece) => Effect.map(bridge.call("zstd.push", { id }, piece), (r) => ({ bytes: r.bytes ?? new Uint8Array(0), whole: (r.json as J)?.whole === true })) };
+      },
+    );
   }
 
   websocket(url: string, protocols: string[]): Effect.Effect<Pull<string>, HostError, Scope.Scope> {
