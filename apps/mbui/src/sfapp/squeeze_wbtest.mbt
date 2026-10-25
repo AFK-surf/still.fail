@@ -19,7 +19,7 @@ let squeeze_modes : Array[String] = [
   "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "chat-jobs-side", "chat-letters-side",
   "chat-find", "chat-model-pop", "chat-login", "chat-update", "chat-working", "chat-station-files", "chat-preview-image",
   "chat-preview-code", "newchat", "newchat-station", "newchat-model", "newchat-profiles", "place", "files",
-  "files-columns", "files-list", "files-preview", "files-transfers", "files-tree", "drive", "drive-sub",
+  "files-columns", "files-list", "files-preview", "files-transfers", "files-tree", "drive", "drive-roots", "drive-sub",
   "drive-upload", "drive-empty", "reader", "decisions", "decisions-text", "history", "history-details",
   "switcher", "keys-dialog", "search", "home-jobs", "service", "settings-home", "settings-appearance", "settings-me",
   "settings-workspace", "settings-security", "settings-vault", "settings-vault-item", "settings-stations",

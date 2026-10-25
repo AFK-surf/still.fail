@@ -139,110 +139,11 @@ fn files_station_in(
         Some(narrow),
       )
     }
-    (_, _, Narrow) => roots_narrow(c, src, w.id, st, known is None, error, manage, narrow, go)
-    _ => {
-      desk_page(
-        c,
-        core,
-        "files-roots/" + at.station,
-        @sf.t("web-pages.drive.title"),
-        [fn() { files_roots(c, src, w.id, st, known is None, error, manage) }],
-        lead=match st {
-          Some(s) => s.name
-          None => ""
-        },
-      )
-    }
+    // (its folders pinned: one page, laid out by its own width)
+    _ => roots_page(c, src, w.id, st, known is None, error, manage, narrow, go)
   }
-}
-
-///|
-/// A station's folders pinned (Roots): while read, their shapes (why not, if it failed); from before drives, says so;
-/// none, says so (Pin 文件夹 for one who may); else a row each.
-fn files_roots(c : @ui.Ctx, src : Source, ws : String, st : DvStation?, reading : Bool, error : String?, manage : Bool) -> Unit {
-  match st {
-    _ if reading => @sf.waiting(c, count=6, error=error.unwrap_or(""))
-    None => @sf.empty(c, fn() { c.text(@sf.t("web-pages.workspace.noSuchStation"), style=fs_empty_words) |> ignore })
-    Some(s) if !s.overview => @sf.waiting(c, count=6)
-    Some(s) if !s.drive =>
-      @sf.empty(c, fn() { c.text(@sf.t("web-pages.drive.oldStation"), style=fs_empty_words) |> ignore })
-    Some(s) if s.roots.length() == 0 =>
-      @sf.empty(c, fn() {
-        c.text(@sf.t(if manage { "web-pages.drive.noneManage" } else { "web-pages.drive.noneMember" }), style=fs_empty_words)
-        |> ignore
-        if manage && @sf.button(c, @sf.t("web-pages.drive.pick"), key="files-roots/pick", tone=Primary) {
-          add_folder(src, ws, [s])
-        }
-      })
-    Some(s) =>
-      c.box(style=fs_list, fn() {
-        for r in s.roots {
-          files_root_row(c, s, r)
-        }
-      })
-      |> ignore
-  }
-}
-
-///|
-/// A folder pinned (RootRow): its mark, its name, what is wrong with it under it (and what to do), a chevron; pressed,
-/// it opens among the tabs.
-fn files_root_row(c : @ui.Ctx, s : DvStation, r : DvRoot) -> Unit {
-  let t = @sf.theme()
-  let id = c.id("files-root/" + s.station + "/" + r.path)
-  c.cursor(id, Hand)
-  if c.clicked(id) {
-    c.tell("files-root", fn() { files_go({ station: s.station, root: Some(r.path), path: "" }) })
-  }
-  let b = c.box(style=if c.lit(id) { fs_row_hot } else { fs_row }, id~, fn() {
-    @sf.icon(c, "folder", size=fs_icon, color=t.p.muted) |> ignore
-    c.box(style=fs_row_words, fn() {
-      c.text(r.name, style=fs_row_name) |> ignore
-      match dv_trouble(r.state) {
-        Some((what, hint)) =>
-          c.rich([@ui.span(what, weight=600), @ui.span(" · " + hint)], style=fs_row_trouble) |> ignore
-        None => ()
-      }
-    })
-    |> ignore
-    @sf.icon(c, "chevron-right", size=fs_chevron, color=t.p.muted) |> ignore
-  })
-  c.semantics(b, Button, id~, label=r.name)
-  @sf.tip(c, "files-root-tip/" + r.path, id, r.path)
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
 let fs_empty_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, center=true)
-
-///|
-/// The folders pinned (Drive.css.ts list, row): a row each, 10 by 12 in, its mark 12 before its name, its ground under
-/// the pointer.
-// kept across runs: a value (no field of it changes)
-let fs_list : @ui.Style = @ui.css("w=Full gap=SPx")
-
-///|
-// kept across runs: a value (no field of it changes)
-let fs_row : @ui.Style = @ui.css("row w=Full px=S3 py=S2_5 gap=S3 radius=Lg align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let fs_row_hot : @ui.Style = fs_row.then(@ui.css("bg=Hover"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let fs_row_words : @ui.Style = @ui.style(w=@sf.grow, gap=SPx)
-
-///|
-// kept across runs: a value (no field of it changes)
-let fs_row_name : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false, w=Cut)
-
-///|
-// kept across runs: a value (no field of it changes)
-let fs_row_trouble : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger)
-
-///|
-let fs_icon : Double = 20.0
-
-///|
-let fs_chevron : Double = 16.0

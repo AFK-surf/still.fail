@@ -401,6 +401,11 @@ test "drive" {
 }
 
 ///|
+test "drive-roots" {
+  check("drive-roots", @ui.nav_push_ms)
+}
+
+///|
 test "drive-sub" {
   check("drive-sub", @ui.nav_push_ms)
 }

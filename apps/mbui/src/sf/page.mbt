@@ -681,7 +681,7 @@ pub fn page_note(c : @ui.Ctx, words : String, bad? : Bool = false) -> Unit {
 }
 
 ///|
-/// A row that goes somewhere: its title (and `note` under it), what it says at its end (`value`, in the link's ink
+/// A row that goes somewhere: its title (and `note` under it, in red where `note_bad`), what it says at its end (`value`, in the link's ink
 /// where `value_lit`), and a chevron (none where not `chevron`: what it does is done here), or an arrow out where it
 /// goes `out` of the app; `lead` before its words (a mark, a dot), `tail` after what it says (a pill, a spinner);
 /// going nowhere where not `goes` (a value said). True on the frame it is pressed.
@@ -694,11 +694,14 @@ pub fn link_row(
   out? : Bool = false,
   chevron? : Bool = true,
   note? : String = "",
+  note_bad? : Bool = false,
   lead? : () -> Unit,
   tail? : () -> Unit,
   goes? : Bool = true,
 ) -> Bool {
   let th = theme()
+  // (what is wrong said in its note: in red)
+  let narrow_note = if note_bad { pg_link_note.then(bad) } else { pg_link_note }
   let id = if goes { c.id(key) } else { 0 }
   if goes {
     c.cursor(id, Hand)
@@ -722,7 +725,7 @@ pub fn link_row(
         } else if value == "" {
           c.box(style=pg_row_words, fn() {
             c.text(title, style=pg_row_title) |> ignore
-            c.text(note, style=pg_link_note) |> ignore
+            c.text(note, style=narrow_note) |> ignore
           })
           |> ignore
         } else {
@@ -734,7 +737,7 @@ pub fn link_row(
               said()
             })
             |> ignore
-            c.text(note, style=pg_link_note) |> ignore
+            c.text(note, style=narrow_note) |> ignore
           })
           |> ignore
         }
@@ -758,7 +761,7 @@ pub fn link_row(
         c.box(style=desk_list_text, fn() {
           c.text(title, style=desk_list_title) |> ignore
           if note != "" {
-            c.text(note, style=wide_list_note) |> ignore
+            c.text(note, style=if note_bad { wide_list_note.then(bad) } else { wide_list_note }) |> ignore
           }
         })
         |> ignore

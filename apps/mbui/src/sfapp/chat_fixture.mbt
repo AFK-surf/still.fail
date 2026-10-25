@@ -510,7 +510,8 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
             "downTotal": "212 MB",
             "upTotal": "9.6 MB",
           },
-          "overview": fixture_station_overview(),
+          // (drive-roots: a member's, who browses only the folders it pins)
+          "overview": if f.mode == "drive-roots" { fixture_station_member() } else { fixture_station_overview() },
         },
         {
           "station": "ws1/st2",
