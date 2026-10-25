@@ -20,8 +20,11 @@ test "wide: 分享给其他 workspace from the chat's info: a dialog lists the w
   t.frame()
   t.frame()
   t.tap_text("分享给其他 workspace")
-  // (the dialog coming, @kit.dialog_in: its rows there to tick half way in)
-  t.run_for(@kit.dialog_ms / 2.0)
+  // (the dialog come in, @kit.dialog_in, and still: the corner rule holds every frame drawn so, its tick rows' boxes
+  // clear of their corners)
+  t.run_for(@kit.dialog_ms)
+  t.frame()
+  assert_eq(t.corner_faults(), [])
   assert_true(t.find("日常") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("开源") is Some(_))
   let (dx, dy, dw, dh) = t.query(Button, label="完成").unwrap().rect
