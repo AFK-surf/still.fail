@@ -47,6 +47,12 @@ extern "js" fn js_text_key(text : String, size : Double, weight : Int, style : I
 extern "js" fn js_glyph(key : Int, out : FixedArray[Double]) -> Unit =
   #|(k, o) => globalThis.__mbhost.glyph(k, o)
 
+extern "js" fn js_glyph_put(key : Int, x : Int, y : Int) -> Unit =
+  #|(k, x, y) => globalThis.__mbhost.glyphPut(k, x, y)
+
+extern "js" fn js_atlas_size(colour : Bool) -> Int =
+  #|(c) => globalThis.__mbhost.atlasSize(c)
+
 extern "js" fn js_atlas_generation() -> Int =
   #|() => globalThis.__mbhost.atlasGeneration()
 
@@ -222,6 +228,16 @@ fn text_key(text : String, size : Double, weight : Int, style : Int) -> Int {
 ///|
 fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
   js_glyph(key, out)
+}
+
+///|
+fn glyph_put(key : Int, x : Int, y : Int) -> Unit {
+  js_glyph_put(key, x, y)
+}
+
+///|
+fn atlas_size(colour : Bool) -> Int {
+  js_atlas_size(colour)
 }
 
 ///|

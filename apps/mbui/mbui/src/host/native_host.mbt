@@ -156,6 +156,16 @@ impl @hostapi.Host for Native with glyph(_, key, out) {
 }
 
 ///|
+impl @hostapi.Host for Native with glyph_put(_, key, x, y) {
+  glyph_put(key, x, y)
+}
+
+///|
+impl @hostapi.Host for Native with atlas_size(_, colour) {
+  atlas_size(colour)
+}
+
+///|
 impl @hostapi.Host for Native with glyphs_ahead(_, keys, n) {
   glyphs_ahead(keys, n)
 }

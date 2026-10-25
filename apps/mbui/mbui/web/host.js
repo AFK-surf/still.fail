@@ -1268,7 +1268,9 @@
   const advCache = new Map();
   const keys = new Map();
   const entries = [];
-  let packX = 0, packY = 0, packH = 0, generation = 0;
+  let generation = 0;
+  // the glyph drawn last (H.glyph), its picture until it is put in the atlas (H.glyphPut)
+  let held = null;
   const rc = document.createElement('canvas');
   const rctx = rc.getContext('2d', { willReadFrequently: true });
   // the faces given (faceAdd, style.mbt), loaded: each a family of its own ahead of the place's own
@@ -1292,8 +1294,7 @@
   // what was shaped and drawn before a face changed, forgotten (MoonBit drops its glyphs as the generation moves on)
   const facesChanged = () => {
     advCache.clear();
-    for (const e of entries) e.done = false;
-    packX = packY = packH = 0;
+    held = null;
     generation++;
   };
   // a face's file (a URL), for a weight (0: variable, all of them): drawn in once the page has loaded it
@@ -1344,7 +1345,7 @@
     let key = keys.get(kk);
     if (key === undefined) {
       key = entries.length;
-      entries.push({ c, size, weight, style, done: false });
+      entries.push({ c, size, weight, style });
       keys.set(kk, key);
     }
     return key;
@@ -1418,9 +1419,13 @@
   };
 
   H.atlasGeneration = () => generation;
+  // (one atlas: colour glyphs in it with the others)
+  H.atlasSize = (colour) => colour ? 0 : ATLAS;
 
-  function rasterize(e) {
-    e.done = true;
+  // `e` drawn in white, a pixel round its bounds: its box (in `e`) and its picture, held for H.glyphPut (where it
+  // goes in the atlas is MoonBit's: hostapi's atlas.mbt)
+  function rasterize(e, key) {
+    held = null;
     const sc = dpr;
     mctx.font = font(e.size, e.weight, e.style);
     const m = mctx.measureText(e.c);
@@ -1434,13 +1439,6 @@
     const pw = l + r + 2 * pad, ph = a + d + 2 * pad;
     e.w = 0;
     if (pw <= 2 || ph <= 2 || pw > 512 || ph > 512) return;
-    if (packX + pw + 1 > ATLAS) { packX = 0; packY += packH + 1; packH = 0; }
-    if (packY + ph + 1 > ATLAS) {
-      for (const x of entries) x.done = false;
-      e.done = true;
-      packX = packY = packH = 0;
-      generation++;
-    }
     rc.width = pw;
     rc.height = ph;
     rctx.clearRect(0, 0, pw, ph);
@@ -1455,11 +1453,7 @@
     for (let i = 0; i < img.data.length && !color; i += 4) {
       if (img.data[i + 3] > 64 && Math.min(img.data[i], img.data[i + 1], img.data[i + 2]) < 224) color = 1;
     }
-    gl.bindTexture(gl.TEXTURE_2D, atlasTex);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, packX, packY, pw, ph, gl.RGBA, gl.UNSIGNED_BYTE, img);
-    e.u = packX;
-    e.v = packY;
+    held = { key, img, pw, ph };
     e.w = pw / sc;
     e.h = ph / sc;
     e.ox = -(l + pad) / sc;
@@ -1469,16 +1463,23 @@
     }
     e.oy = -(a + pad) / sc;
     e.color = color;
-    packX += pw + 1;
-    packH = Math.max(packH, ph);
   }
 
   H.glyph = (key, out) => {
     const e = entries[key];
     if (!e) { for (let i = 0; i < 8; i++) out[i] = 0; return; }
-    if (!e.done) rasterize(e);
-    out[0] = e.u || 0; out[1] = e.v || 0; out[2] = e.w || 0; out[3] = e.h || 0;
+    rasterize(e, key);
+    out[0] = 0; out[1] = 0; out[2] = e.w || 0; out[3] = e.h || 0;
     out[4] = e.ox || 0; out[5] = e.oy || 0; out[6] = e.color || 0;
+  };
+
+  // the glyph drawn last put in the atlas, its top left at x, y
+  H.glyphPut = (key, x, y) => {
+    if (!held || held.key !== key) return;
+    gl.bindTexture(gl.TEXTURE_2D, atlasTex);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, x, y, held.pw, held.ph, gl.RGBA, gl.UNSIGNED_BYTE, held.img);
+    held = null;
   };
 
   // ---- the platform's own text drawing (textref_js.mbt, src/textdiff) ----

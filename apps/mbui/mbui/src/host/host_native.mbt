@@ -49,6 +49,10 @@ extern "C" fn ffi_text_key(
 #borrow(out)
 extern "C" fn ffi_glyph(key : Int, out : FixedArray[Double]) -> Unit = "mb_host_glyph"
 
+extern "C" fn ffi_glyph_put(key : Int, x : Int, y : Int) -> Unit = "mb_host_glyph_put"
+
+extern "C" fn ffi_atlas_size(colour : Int) -> Int = "mb_host_atlas_size"
+
 #borrow(keys)
 extern "C" fn ffi_glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit = "mb_host_glyphs_ahead"
 
@@ -461,6 +465,16 @@ fn text_key(text : String, size : Double, weight : Int, style : Int) -> Int {
 ///|
 fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
   ffi_glyph(key, out)
+}
+
+///|
+fn glyph_put(key : Int, x : Int, y : Int) -> Unit {
+  ffi_glyph_put(key, x, y)
+}
+
+///|
+fn atlas_size(colour : Bool) -> Int {
+  ffi_atlas_size(if colour { 1 } else { 0 })
 }
 
 ///|

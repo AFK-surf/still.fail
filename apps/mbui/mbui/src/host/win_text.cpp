@@ -27,8 +27,7 @@ typedef struct {
   double size;
   int weight;
   int style;  // 1 italic, 2 the code face
-  int done;
-  double u, v, w, h, ox, oy;
+  double w, h, ox, oy;
   int color;
 } glyph_entry;
 
@@ -47,8 +46,10 @@ static WCHAR *pool;
 static size_t pool_len, pool_cap;
 static int *table;  // open addressing: entry index + 1, 0 is empty
 static size_t table_cap;
-static int pack_x, pack_y, pack_h;
 static int generation;
+// the glyph drawn last (mb_host_glyph), its picture until it is put in the atlas (mb_host_glyph_put)
+static int held_key = -1, held_w, held_h;
+static uint8_t *held_px;
 static struct { double size; int weight; int style; IDWriteTextFormat *f; } formats[32];
 static int n_formats;
 
@@ -445,7 +446,7 @@ static int intern(const WCHAR *s, int len, double size, int weight, int style) {
   }
   memcpy(pool + pool_len, s, (size_t)len * sizeof(WCHAR));
   int id = n_entries++;
-  entries[id] = {(int)pool_len, len, size, weight, style, 0, 0, 0, 0, 0, 0, 0, 0};
+  entries[id] = {(int)pool_len, len, size, weight, style, 0, 0, 0, 0, 0};
   pool_len += len;
   if ((size_t)n_entries * 2 > table_cap) {
     free(table);
@@ -505,9 +506,11 @@ extern "C" int32_t mb_host_text_key(moonbit_string_t text, double size, int32_t 
 
 extern "C" int32_t mb_host_atlas_generation(void) { return generation; }
 
+// (one atlas: colour glyphs in it with the others)
+extern "C" int32_t mb_host_atlas_size(int32_t colour) { return colour ? 0 : mb_atlas_size; }
+
+// What was drawn before is drawn again: MoonBit drops its glyphs as the generation moves on.
 static void reset_atlas(void) {
-  for (int i = 0; i < n_entries; i++) entries[i].done = 0;
-  pack_x = pack_y = pack_h = 0;
   generation++;
 }
 
@@ -586,9 +589,14 @@ static void ensure_target(void) {
   rt_scale = text_scale;
 }
 
+// Glyph `key` drawn in white, a pixel round its bounds: its box (in its entry) and its picture, held for
+// mb_host_glyph_put (where it goes in the atlas is MoonBit's: hostapi's atlas.mbt).
 static void rasterize(int key) {
   glyph_entry *e = &entries[key];
-  e->done = 1;
+  free(held_px);
+  held_px = NULL;
+  held_key = -1;
+  e->w = e->h = 0;
   IDWriteTextLayout *l = make_layout(pool + e->off, e->len, e->size, e->weight, e->style);
   double sc = text_scale;
   ColorProbe probe;
@@ -626,16 +634,6 @@ static void rasterize(int key) {
     l->Release();
     return;
   }
-  if (pack_x + pw + 1 > mb_atlas_size) {
-    pack_x = 0;
-    pack_y += pack_h + 1;
-    pack_h = 0;
-  }
-  if (pack_y + ph + 1 > mb_atlas_size) {
-    // full: start over; MoonBit drops its glyph cache when the generation changes
-    reset_atlas();
-    e->done = 1;
-  }
   ensure_target();
   rt->BeginDraw();
   rt->Clear(D2D1::ColorF(0, 0, 0, 0));
@@ -665,18 +663,16 @@ static void rasterize(int key) {
     lock->Release();
     // a color font's glyph drawn in the text's colour (Segoe UI Emoji's flags are letters): a mask after all
     color = color == 2;
-    mb_atlas_upload(pack_x, pack_y, pw, ph, px);
-    free(px);
+    held_key = key;
+    held_w = pw;
+    held_h = ph;
+    held_px = px;
   }
-  e->u = pack_x;
-  e->v = pack_y;
   e->w = pw / sc;
   e->h = ph / sc;
   e->ox = x0;
   e->oy = y0 - (nl ? lm.baseline : 0);
   e->color = color;
-  pack_x += pw + 1;
-  if (ph > pack_h) pack_h = ph;
   l->Release();
 }
 
@@ -691,15 +687,24 @@ extern "C" void mb_host_glyph(int32_t key, double *out) {
     for (int i = 0; i < 7; i++) out[i] = 0;
     return;
   }
-  if (!entries[key].done) rasterize(key);
+  rasterize(key);
   glyph_entry *e = &entries[key];
-  out[0] = e->u;
-  out[1] = e->v;
+  out[0] = 0;
+  out[1] = 0;
   out[2] = e->w;
   out[3] = e->h;
   out[4] = e->ox;
   out[5] = e->oy;
   out[6] = e->color;
+}
+
+// The glyph drawn last put in the atlas, its top left at x, y.
+extern "C" void mb_host_glyph_put(int32_t key, int32_t x, int32_t y) {
+  if (key != held_key || !held_px) return;
+  mb_atlas_upload(x, y, held_w, held_h, held_px);
+  free(held_px);
+  held_px = NULL;
+  held_key = -1;
 }
 
 // ---------------------------------------------------------------------------

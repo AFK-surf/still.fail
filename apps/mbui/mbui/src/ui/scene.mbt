@@ -475,7 +475,7 @@ fn Ctx::emit_text(
     if top > cy1 || top + tl.line_h < cy0 {
       continue
     }
-    let g = glyph(key)
+    let g = glyph(key, sc)
     if g.gw <= 0.0 {
       continue
     }

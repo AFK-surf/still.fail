@@ -36,6 +36,8 @@ struct Shaped {
   mut lay_line : Double
   mut lay_trim : Bool
   mut lay_wrap : Bool
+  // the last frame it was asked for in (shapes_thin)
+  mut used : Int
 }
 
 ///|
@@ -64,6 +66,9 @@ struct Glyph {
   ox : Double
   oy : Double
   color : Bool
+  // its plot in the atlas (@hostapi.Atlas; -1: nothing to draw), and whether that is colour glyphs' own
+  plot : Int
+  in_colour : Bool
 }
 
 ///|
@@ -85,9 +90,16 @@ struct TextCache {
   // on whole pixels
   metrics : Map[Int64, (Double, Double, Double, Double, Double, Bool)]
   glyphs : Map[Int, Glyph]
+  // where they are in the host's atlas, and in colour glyphs' own (made as the first is asked for, at the size the
+  // host's has; colour glyphs' none where the host keeps them with the others)
+  mut atlas : @hostapi.Atlas?
+  mut colour_atlas : @hostapi.Atlas?
   // the glyphs of what was shaped in this frame that it has not drawn yet, for the host to draw ahead (glyphs_ahead)
   fresh : Array[Int]
   mut generation : Int
+  // the frame being drawn, and the last that let go of what was shaped longest ago (shapes_thin)
+  mut frame : Int
+  mut thinned : Int
   buf : FixedArray[Double]
   gbuf : FixedArray[Double]
 }
@@ -98,28 +110,49 @@ let text_cache : TextCache = {
   shaped: 0,
   metrics: Map::new(),
   glyphs: Map::new(),
+  atlas: None,
+  colour_atlas: None,
   fresh: [],
   generation: -1,
+  frame: 0,
+  thinned: -1,
   buf: FixedArray::make(4 * 8192, 0.0),
   gbuf: FixedArray::make(8, 0.0),
 }
 
 ///|
-fn check_atlas() -> Unit {
+/// A frame begins: what it shapes and draws from the atlas is kept through it. What the host drew and measured
+/// before, forgotten where it is gone (@hostapi.atlas_generation).
+fn text_frame() -> Unit {
+  text_cache.frame = text_cache.frame + 1
+  for a in [text_cache.atlas, text_cache.colour_atlas] {
+    match a {
+      Some(a) => a.next_frame()
+      None => ()
+    }
+  }
   let g = h_atlas_generation()
   if g != text_cache.generation {
-    // (a host moves it on as its atlas starts over, and as a face it was given is here: a page's, loaded later than
-    // asked; what was measured in the face before is forgotten with the glyphs)
+    // (a host moves it on as its faces or its scale change, a face it was given is here (a page's, loaded later than
+    // asked), its atlas is lost: what was measured in the face before is forgotten with the glyphs)
     let first = text_cache.generation < 0
     text_cache.generation = g
-    text_cache.glyphs.clear()
-    text_cache.fresh.clear()
+    glyphs_forget()
     if !first {
       clear_shapes()
       text_cache.fonts.clear()
       text_cache.metrics.clear()
     }
   }
+}
+
+///|
+/// Every glyph forgotten, and where it was in the atlas: drawn again as it is next asked for.
+fn glyphs_forget() -> Unit {
+  text_cache.glyphs.clear()
+  text_cache.fresh.clear()
+  text_cache.atlas = None
+  text_cache.colour_atlas = None
 }
 
 ///|
@@ -290,6 +323,48 @@ fn font_shapes(size : Double, weight : Int, style : Int, spacing : Double) -> Ma
 }
 
 ///|
+/// The most strings kept shaped: past it, what was asked for longest ago is let go (shapes_thin).
+let shapes_most : Int = 6000
+
+///|
+/// The half of what is shaped that was asked for longest ago let go, never what this frame asked for: shaped again if
+/// it is asked for again. (Every shape let go at once, a frame shaped again everything on the screen.)
+fn shapes_thin() -> Unit {
+  if text_cache.thinned == text_cache.frame {
+    return
+  }
+  text_cache.thinned = text_cache.frame
+  let used = []
+  for f in text_cache.fonts {
+    for _, s in f.map {
+      used.push(s.used)
+    }
+  }
+  if used.is_empty() {
+    return
+  }
+  used.sort()
+  let cut = used[used.length() / 2]
+  let mut kept = 0
+  for f in text_cache.fonts {
+    let gone = []
+    for t, s in f.map {
+      if s.used < cut || (s.used == cut && cut < text_cache.frame) {
+        gone.push(t)
+        // (a shape and its last layout refer to each other: clear_shapes)
+        s.lay = None
+      } else {
+        kept = kept + 1
+      }
+    }
+    for t in gone {
+      f.map.remove(t)
+    }
+  }
+  text_cache.shaped = kept
+}
+
+///|
 fn clear_shapes() -> Unit {
   for f in text_cache.fonts {
     // a shape and its last layout refer to each other (reference counts
@@ -330,10 +405,13 @@ fn shape(text : String, size : Double, weight : Int, style? : Int = 0, spacing? 
   }
   let shapes = font_shapes(size, weight, style, spacing)
   match shapes.get(text) {
-    Some(s) => s
+    Some(s) => {
+      s.used = text_cache.frame
+      s
+    }
     None => {
-      if text_cache.shaped > 6000 {
-        clear_shapes()
+      if text_cache.shaped > shapes_most {
+        shapes_thin()
       }
       let out = text_cache.buf
       let m = if text.length() == 0 {
@@ -506,6 +584,7 @@ fn shape(text : String, size : Double, weight : Int, style? : Int = 0, spacing? 
         lay_line: 0.0,
         lay_trim: false,
         lay_wrap: false,
+        used: text_cache.frame,
       }
       shapes[text] = s
       text_cache.shaped = text_cache.shaped + 1
@@ -699,23 +778,98 @@ fn glyphs_ahead() -> Unit {
 }
 
 ///|
-fn glyph(key : Int) -> Glyph {
+/// A glyph with nothing to draw (nothing in it, too large for the atlas, or no room in it for now).
+// kept across runs: a value (no field of it changes)
+let no_glyph : Glyph = {
+  u: 0.0,
+  v: 0.0,
+  gw: 0.0,
+  gh: 0.0,
+  ox: 0.0,
+  oy: 0.0,
+  color: false,
+  plot: -1,
+  in_colour: false,
+}
+
+///|
+/// The glyphs in the atlas by their places ("u v", as an instance has them): their keys.
+fn glyph_keys() -> Map[String, Int] {
+  let at : Map[String, Int] = {}
+  text_cache.glyphs.each(fn(key, g) { if g.plot >= 0 { at["\{g.u} \{g.v}"] = key } })
+  at
+}
+
+///|
+/// The host's atlas a glyph goes in as its glyphs are placed in it: colour glyphs' own (`colour`, where the host keeps
+/// one), else the words'; how far across past its place in it the glyph is said (@hostapi.colour_atlas_u).
+fn atlas_for(colour : Bool) -> (@hostapi.Atlas, Int) {
+  if colour {
+    let a = match text_cache.colour_atlas {
+      Some(a) => a
+      None => {
+        let a = @hostapi.Atlas::new(h_atlas_size(true))
+        text_cache.colour_atlas = Some(a)
+        a
+      }
+    }
+    if a.sized() {
+      return (a, @hostapi.colour_atlas_u)
+    }
+  }
+  match text_cache.atlas {
+    Some(a) => (a, 0)
+    None => {
+      let a = @hostapi.Atlas::new(h_atlas_size(false))
+      text_cache.atlas = Some(a)
+      (a, 0)
+    }
+  }
+}
+
+///|
+/// Glyph `key` as it is drawn at `sc` pixels a point: where it is in the atlas, drawn from in this frame. One not in it
+/// is drawn by the host and put there (its pixels its size at `sc`), in place of the glyphs drawn from longest ago where
+/// it is full (@hostapi.Atlas); with no room while this frame is drawn, it is not drawn in it (asked for again by the
+/// next).
+fn glyph(key : Int, sc : Double) -> Glyph {
   match text_cache.glyphs.get(key) {
-    Some(g) => g
+    Some(g) => {
+      if g.plot >= 0 {
+        atlas_for(g.in_colour).0.drawn(g.plot)
+      }
+      g
+    }
     None => {
       let o = text_cache.gbuf
       h_glyph(key, o)
-      let g = {
-        u: o[0],
-        v: o[1],
-        gw: o[2],
-        gh: o[3],
-        ox: o[4],
-        oy: o[5],
-        color: o[6] > 0.5,
+      let color = o[6] > 0.5
+      let (a, across) = atlas_for(color)
+      let w = (o[2] * sc).round().to_int()
+      let h = (o[3] * sc).round().to_int()
+      if !a.holds(w, h) {
+        text_cache.glyphs[key] = no_glyph
+        return no_glyph
       }
-      text_cache.glyphs[key] = g
-      g
+      match a.place(key, w, h, fn(k) { text_cache.glyphs.remove(k) }) {
+        Some((plot, x, y)) => {
+          h_glyph_put(key, x + across, y)
+          let g = {
+            u: (x + across).to_double(),
+            v: y.to_double(),
+            gw: o[2],
+            gh: o[3],
+            ox: o[4],
+            oy: o[5],
+            color,
+            plot,
+            in_colour: across > 0,
+          }
+          text_cache.glyphs[key] = g
+          g
+        }
+        None => no_glyph
+      }
     }
   }
 }

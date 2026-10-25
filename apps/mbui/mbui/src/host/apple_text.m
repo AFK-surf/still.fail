@@ -1,7 +1,8 @@
 // Text with Core Text: shaping into grapheme clusters with their advances,
-// and rasterizing each cluster into an atlas when it is first drawn (drawn
-// ahead, off the frames' thread, where it was shaped a frame before): the
-// words' (their cover, a byte a texel) or colour glyphs' (RGBA).
+// and rasterizing each cluster as it is asked for (drawn ahead, off the
+// frames' thread, where it was shaped a frame before), put where MoonBit says
+// (hostapi's atlas.mbt) in an atlas: the words' (their cover, a byte a texel)
+// or colour glyphs' (RGBA).
 #import "apple.h"
 #import <CoreGraphics/CoreGraphics.h>
 #import <ImageIO/ImageIO.h>
@@ -14,8 +15,7 @@ typedef struct {
   double size;
   int weight;
   int style;  // 1 slanted, 2 the code face
-  int done;
-  double u, v, w, h, ox, oy;
+  double w, h, ox, oy;
   int color;
   // where the shaper put the cluster's glyph in its line, past where it starts on its own (a CJK bracket after
   // another, set half a width closer)
@@ -27,13 +27,6 @@ static NSMutableArray<NSString *> *texts;
 static glyph_entry *entries;
 static int n_entries, cap_entries;
 static NSMutableDictionary<NSString *, id> *fonts;
-// Where each atlas (apple.h: the words', colour glyphs') has room: glyphs in rows left to right, each row as tall as
-// its tallest; the atlas as tall as it is now (grown twice as tall as a row would not fit, up to `most`: then started
-// over), the place the next goes, its row's height.
-typedef struct {
-  int h, most, x, y, row;
-} packer;
-static packer packs[2] = {{MB_ATLAS_W, 4 * MB_ATLAS_W, 0, 0, 0}, {MB_ATLAS_W / 4, MB_ATLAS_W, 0, 0, 0}};
 static int generation;
 
 moonbit_string_t mb_string_from_ns(NSString *s) {
@@ -142,8 +135,6 @@ static void faces_changed(void) {
   [fonts removeAllObjects];
   ahead_forget();
   last_size = -1;
-  for (int i = 0; i < n_entries; i++) entries[i].done = 0;
-  for (int c = 0; c < 2; c++) packs[c].x = packs[c].y = packs[c].row = 0;
   generation++;
 }
 
@@ -328,7 +319,7 @@ static int intern_at(NSString *cluster, double size, int weight, int style, doub
     entries = realloc(entries, sizeof(glyph_entry) * cap_entries);
   }
   int id_ = n_entries++;
-  entries[id_] = (glyph_entry){size, weight, style, 0, 0, 0, 0, 0, 0, 0, 0, dx};
+  entries[id_] = (glyph_entry){size, weight, style, 0, 0, 0, 0, 0, dx};
   [texts addObject:cluster];
   keys[k] = @(id_);
   return id_;
@@ -605,6 +596,9 @@ int32_t mb_host_shape(moonbit_string_t text, double size, int32_t weight, int32_
 
 int32_t mb_host_atlas_generation(void) { return generation; }
 
+// The side of the words' atlas, or of colour glyphs' (apple.h).
+int32_t mb_host_atlas_size(int32_t colour) { return colour ? MB_ATLAS_COLOR_SIDE : MB_ATLAS_SIDE; }
+
 // A cluster's picture: drawn in white at `sc` pixels a point, a pixel of room round it (no pixels: nothing to draw),
 // on whichever thread draws it, from its font alone; where it is from the pen (b, points, on whole pixels), whether it
 // is drawn from a colour font, and where Core Text put its glyphs in its line on their own (iso: for a cluster set
@@ -702,51 +696,34 @@ static MBDrawn *draw_cluster(NSString *cluster, CTFontRef f, int style, BOOL clo
   return d;
 }
 
-// The glyph of `key` put in its atlas (the words', or colour glyphs') from its picture (drawn at mb_text_scale).
+// the glyph drawn last (mb_host_glyph), its picture until it is put in its atlas (mb_host_glyph_put)
+static int held_key = -1;
+static MBDrawn *held;
+
+// The glyph of `key` from its picture (drawn at mb_text_scale): its box, and the picture held for mb_host_glyph_put
+// (where it goes in its atlas is MoonBit's: hostapi's atlas.mbt).
 static void place(int key, MBDrawn *d) {
   glyph_entry *e = &entries[key];
-  e->done = 1;
+  held = nil;
+  held_key = -1;
+  e->w = e->h = 0;
   if (!d.px) return;
+  held = d;
+  held_key = key;
   double sc = mb_text_scale;
-  int pw = d.pw, ph = d.ph, c = d.color;
-  packer *p = &packs[c];
-  if (p->x + pw + 1 > MB_ATLAS_W) {
-    p->x = 0;
-    p->y += p->row + 1;
-    p->row = 0;
-  }
-  // (taller as it fills: started over only past its most, every glyph in it drawn again then; the other's kept)
-  while (p->y + ph + 1 > p->h && p->h < p->most) {
-    p->h = MIN(p->h * 2, p->most);
-    mb_atlas_grow(c, p->h);
-  }
-  if (p->y + ph + 1 > p->h) {
-    // full: start over; MoonBit drops its glyph cache when the generation changes
-    for (int i = 0; i < n_entries; i++)
-      if (entries[i].color == c) entries[i].done = 0;
-    e->done = 1;
-    p->x = p->y = p->row = 0;
-    generation++;
-  }
-  mb_atlas_upload(c, p->x, p->y, pw, ph, d.px);
   CGRect b = d.b;
-  e->u = p->x + (c ? MB_ATLAS_COLOR_U : 0);
-  e->v = p->y;
-  e->w = pw / sc;
-  e->h = ph / sc;
+  e->w = d.pw / sc;
+  e->h = d.ph / sc;
   e->ox = b.origin.x;
   // moved by as much as its glyphs sit further right in the line than they do on their own
   if (e->dx != 0) e->ox += e->dx - (isnan(d.iso) ? 0 : d.iso);
   e->oy = -(b.origin.y + b.size.height);
-  e->color = c;
-  p->x += pw + 1;
-  if (ph > p->row) p->row = ph;
+  e->color = d.color;
 }
 
 // ---- drawing ahead: the glyphs a frame shaped and did not draw (text.mbt glyphs_ahead), drawn on a queue of their
-// own, as Android's MBText draws them on a thread of its own; each placed in the atlas as it is first asked for, in
-// the order asked (the same places as without), from what was drawn ahead: waited for while the queue draws it, drawn
-// here when the queue has not begun it ----
+// own, as Android's MBText draws them on a thread of its own; each taken as it is first asked for, from what was
+// drawn ahead: waited for while the queue draws it, drawn here when the queue has not begun it ----
 
 enum { AHEAD_ASKED, AHEAD_DRAWING, AHEAD_DRAWN, AHEAD_GONE };
 
@@ -831,7 +808,7 @@ void mb_host_glyphs_ahead(int32_t *keys, int32_t n) {
     NSMutableArray<MBAhead *> *asked = nil;
     for (int32_t i = 0; i < n; i++) {
       int k = keys[i];
-      if (k < 0 || k >= n_entries || entries[k].done || ahead_of[@(k)]) continue;
+      if (k < 0 || k >= n_entries || ahead_of[@(k)]) continue;
       if (ahead_order.count >= AHEAD_MOST && !drop_oldest_drawn()) break;
       glyph_entry *e = &entries[k];
       MBAhead *a = [MBAhead new];
@@ -887,16 +864,26 @@ void mb_host_glyph(int32_t key, double *out) {
       for (int i = 0; i < 7; i++) out[i] = 0;
       return;
     }
-    if (!entries[key].done) rasterize(key);
+    rasterize(key);
     glyph_entry *e = &entries[key];
-    out[0] = e->u;
-    out[1] = e->v;
+    out[0] = 0;
+    out[1] = 0;
     out[2] = e->w;
     out[3] = e->h;
     out[4] = e->ox;
     out[5] = e->oy;
     out[6] = e->color;
   }
+}
+
+// The glyph drawn last put in its atlas, its top left at x, y: a colour glyph's MB_ATLAS_COLOR_U across past its
+// place in theirs (apple.h).
+void mb_host_glyph_put(int32_t key, int32_t x, int32_t y) {
+  int colour = x >= MB_ATLAS_COLOR_U;
+  if (key != held_key || !held.px || colour != held.color) return;
+  mb_atlas_upload(colour, x - (colour ? MB_ATLAS_COLOR_U : 0), y, held.pw, held.ph, held.px);
+  held = nil;
+  held_key = -1;
 }
 
 // ---------------------------------------------------------------------------

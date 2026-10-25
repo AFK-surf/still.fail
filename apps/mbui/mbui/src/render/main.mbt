@@ -137,9 +137,11 @@ fn main {
     return
   }
   init_offscreen(dl.w, dl.h, dl.scale)
-  // each glyph made again: its atlas place here, by the list's
+  // each glyph made again: its atlas place here (placed as an app places it: @hostapi.Atlas), by the list's
   let shaped = FixedArray::make(4096, 0.0)
   let g = FixedArray::make(8, 0.0)
+  let atlas = @hostapi.Atlas::new(@hostapi.atlas_size(false))
+  let colour_atlas = @hostapi.Atlas::new(@hostapi.atlas_size(true))
   let places : Map[Int, (Double, Double, Double, Double)] = {}
   let mut unknown = 0
   dl.glyphs.each(fn(no, gl) {
@@ -158,7 +160,21 @@ fn main {
       unknown = unknown + 1
     } else {
       @hostapi.glyph(key, g)
-      places[no] = (g[0], g[1], g[2] * dl.scale, g[3] * dl.scale)
+      let (gw, gh) = (g[2] * dl.scale, g[3] * dl.scale)
+      // (in colour glyphs' own atlas where the host keeps one: text.mbt atlas_for; one frame's glyphs, none let go for
+      // another)
+      let (a, across) = if g[6] > 0.5 && colour_atlas.sized() {
+        (colour_atlas, @hostapi.colour_atlas_u)
+      } else {
+        (atlas, 0)
+      }
+      match a.place(key, gw.round().to_int(), gh.round().to_int(), fn(_) {  }) {
+        Some((_, x, y)) => {
+          @hostapi.glyph_put(key, x + across, y)
+          places[no] = ((x + across).to_double(), y.to_double(), gw, gh)
+        }
+        None => if gw > 0.0 && gh > 0.0 { unknown = unknown + 1 }
+      }
     }
   })
   // each image decoded again

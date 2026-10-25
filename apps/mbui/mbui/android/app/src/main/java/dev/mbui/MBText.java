@@ -26,23 +26,19 @@ import java.util.LinkedHashSet;
 /**
  * Text with Android's own engine: grapheme clusters and their advances
  * (with kerning, from Paint.getTextRunAdvances), and each cluster rasterized
- * into the shared RGBA atlas the first time it is drawn. Called on the GL
- * thread only, but for the drawing ahead (ahead): the glyphs shaped and not
- * drawn yet, drawn on a thread of their own and placed when they are first
- * asked for; what was placed in a frame uploaded once, a row of the atlas at a
- * time, before the frame is drawn (flush).
+ * as it is asked for, put in the shared RGBA atlas where MoonBit says (its
+ * atlas.mbt: what goes where, and what makes room). Called on the GL thread
+ * only, but for the drawing ahead (ahead): the glyphs shaped and not drawn
+ * yet, drawn on a thread of their own and taken when they are first asked
+ * for; what was put in a frame uploaded once, a row of the atlas at a time,
+ * before the frame is drawn (flush).
  */
 final class MBText {
-    static final int ATLAS = 2048;
-
     static final class Entry {
         final String text;
         final float size;
         final int weight;
         final int style;  // 1 italic, 2 the code face
-        boolean done;
-        double u, v, w, h, ox, oy;
-        int color;
         // drawn ahead (under `lock`): NONE, ASKED (in `asked`), DRAWING (by the thread ahead), DRAWN (`drawn`); the
         // scale and the faces it is to be drawn at
         int ahead;
@@ -84,17 +80,20 @@ final class MBText {
     static final ArrayList<Entry> entries = new ArrayList<>();
     static final HashMap<Long, Paint> paints = new HashMap<>();
     static final ArrayList<Placed> placed = new ArrayList<>();
-    static int packX, packY, packH, generation;
+    static int generation;
+    // the glyph drawn last (glyph), its picture until it is put in the atlas (glyphPut)
+    static int heldKey = -1;
+    static Bitmap held;
     // moves on as the faces change: what was drawn in them before is drawn again
     static int faces;
     static float[] adv = new float[1024];
     static char[] chars = new char[1024];
     static final BreakIterator graphemes = BreakIterator.getCharacterInstance();
 
+    /** What was drawn before is gone (a new surface, its atlas empty; the faces or the scale changed): drawn again as it is asked for. */
     static void reset() {
-        for (Entry e : entries) e.done = false;
-        packX = packY = packH = 0;
         generation++;
+        dropHeld();
         dropPlaced();
     }
 
@@ -376,20 +375,42 @@ final class MBText {
         return false;
     }
 
+    /**
+     * Glyph `key` drawn (ahead, else here), its picture held for glyphPut: in `out` 0, 0 (where it goes is MoonBit's),
+     * its size in points (0: nothing to draw), where its top left is from the pen, whether it is in colours of its own.
+     */
     static void glyph(int key, double[] out) {
-        if (key < 0 || key >= entries.size()) {
-            for (int i = 0; i < 7; i++) out[i] = 0;
-            return;
-        }
+        for (int i = 0; i < 7; i++) out[i] = 0;
+        dropHeld();
+        if (key < 0 || key >= entries.size()) return;
         Entry e = entries.get(key);
-        if (!e.done) place(e);
-        out[0] = e.u;
-        out[1] = e.v;
-        out[2] = e.w;
-        out[3] = e.h;
-        out[4] = e.ox;
-        out[5] = e.oy;
-        out[6] = e.color;
+        float sc = density();
+        Drawn d = drawnAhead(e, sc);
+        if (d == null) d = draw(e, sc, paint(e.size * sc, e.weight, e.style), faces);
+        if (d.bmp == null) return;
+        int pad = 1;
+        heldKey = key;
+        held = d.bmp;
+        out[2] = d.bmp.getWidth() / sc;
+        out[3] = d.bmp.getHeight() / sc;
+        out[4] = (d.b.left - pad) / sc;
+        out[5] = (d.b.top - pad) / sc;
+        out[6] = d.color;
+    }
+
+    /** The glyph drawn last put in the atlas, its top left at x, y: uploaded with the frame's others (flush). */
+    static void glyphPut(int key, int x, int y) {
+        if (key != heldKey || held == null) return;
+        placed.add(new Placed(held, x, y));
+        held = null;
+        heldKey = -1;
+    }
+
+    /** The glyph drawn last, not put in the atlas, let go. */
+    static void dropHeld() {
+        if (held != null) held.recycle();
+        held = null;
+        heldKey = -1;
     }
 
     /** `e` drawn in white a pixel round its bounds, at `sc` pixels a point with `p` (its font at that size): on either thread. */
@@ -410,44 +431,11 @@ final class MBText {
         return d;
     }
 
-    /** `e` put in the atlas: drawn ahead, else here; its picture uploaded with the frame's others (flush). */
-    static void place(Entry e) {
-        e.done = true;
-        e.w = 0;
-        float sc = density();
-        Drawn d = drawnAhead(e, sc);
-        if (d == null) d = draw(e, sc, paint(e.size * sc, e.weight, e.style), faces);
-        if (d.bmp == null) return;
-        int pad = 1;
-        int pw = d.bmp.getWidth(), ph = d.bmp.getHeight();
-        if (packX + pw + 1 > ATLAS) {
-            packX = 0;
-            packY += packH + 1;
-            packH = 0;
-        }
-        if (packY + ph + 1 > ATLAS) {
-            for (Entry x : entries) x.done = false;
-            e.done = true;
-            packX = packY = packH = 0;
-            generation++;
-            dropPlaced();
-        }
-        placed.add(new Placed(d.bmp, packX, packY));
-        e.color = d.color;
-        e.u = packX;
-        e.v = packY;
-        e.w = pw / sc;
-        e.h = ph / sc;
-        e.ox = (d.b.left - pad) / sc;
-        e.oy = (d.b.top - pad) / sc;
-        packX += pw + 1;
-        packH = Math.max(packH, ph);
-    }
-
     /**
-     * The glyphs placed since the last frame was drawn, into the atlas before this one is: those of a row of it in
-     * one upload (they lie side by side, right of what the row had), not one each. Its texture bound as it was
-     * bound for each glyph before, on the unit active.
+     * The glyphs put since the last frame was drawn, into the atlas before this one is: those put one after another
+     * on a shelf of it in one upload (side by side, a pixel apart, right of what the shelf had), not one each; one put
+     * anywhere else (another shelf, another plot) starts another. Its texture bound as it was bound for each glyph
+     * before, on the unit active.
      */
     static void flush() {
         int n = placed.size();
@@ -456,10 +444,10 @@ final class MBText {
         int i = 0;
         while (i < n) {
             Placed first = placed.get(i);
-            int j = i, right = 0, h = 0;
-            while (j < n && placed.get(j).y == first.y) {
+            int j = i, right = first.x - 1, h = 0;
+            while (j < n && placed.get(j).y == first.y && placed.get(j).x == right + 1) {
                 Placed g = placed.get(j);
-                right = Math.max(right, g.x + g.bmp.getWidth());
+                right = g.x + g.bmp.getWidth();
                 h = Math.max(h, g.bmp.getHeight());
                 j++;
             }
@@ -481,7 +469,7 @@ final class MBText {
         placed.clear();
     }
 
-    /** What was placed and not uploaded, let go: the atlas started over. */
+    /** What was put and not uploaded, let go: the atlas is gone (reset). */
     static void dropPlaced() {
         for (Placed g : placed) g.bmp.recycle();
         placed.clear();
@@ -508,7 +496,7 @@ final class MBText {
                 int k = ks[i];
                 if (k < 0 || k >= entries.size()) continue;
                 Entry e = entries.get(k);
-                if (e.done || e.ahead != NONE) continue;
+                if (e.ahead != NONE) continue;
                 if (aheadCount >= AHEAD_MOST && !dropOldestDrawn()) break;
                 e.ahead = ASKED;
                 e.askScale = sc;

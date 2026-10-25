@@ -1038,7 +1038,7 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
     if top > cy1 || top + lay.line_h[l] < cy0 {
       continue
     }
-    let g = glyph(key)
+    let g = glyph(key, sc)
     if g.gw <= 0.0 {
       continue
     }
