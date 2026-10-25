@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
-import { CARD_BEFORE, CLOSED_SINCE, type InWorkspace, JOBS_RUNNING, LETTER_SQL, OPTIONS_BEFORE, SAID_SINCE, SESSION_JOBS, SESSION_OF_RUNTIME, PEOPLE_AT, type Letter, isLetter, liveShare, sees, toChatShare, withLetter } from "../store/rows.ts";
+import { CARD_BEFORE, CC_THREADS_SQL, CLOSED_SINCE, type InWorkspace, JOBS_RUNNING, LETTER_SQL, OPTIONS_BEFORE, SAID_SINCE, SESSION_JOBS, SESSION_OF_RUNTIME, PEOPLE_AT, type Letter, isLetter, liveShare, sees, toChatShare, withLetter } from "../store/rows.ts";
 
 export type Json = any;
 
@@ -395,6 +395,12 @@ export function getThread(s: Store, id: number): ThreadRow | null {
 /// The threads a session is in, the one it joined last first (store.rs session_threads).
 export function sessionThreads(s: Store, session: string): ThreadRow[] {
   return all(s, "SELECT t.* FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ? ORDER BY ts.joined_at DESC, ts.rowid DESC", session).map(toThread);
+}
+
+/// The threads a still.fail chat can copy people's messages to (rows.ts CC_THREADS_SQL), with the connect posting
+/// in each.
+export function ccThreads(s: Store, thread: number): { thread: ThreadRow; connect: string }[] {
+  return all(s, CC_THREADS_SQL, thread).map((r) => ({ thread: toThread(r), connect: r.connect }));
 }
 
 export function threadSessions(s: Store, thread: number): Membership[] {

@@ -18,7 +18,7 @@ import { scopeOf, stationBase, usePerson, useStation } from "./station.tsx";
 import { chatOfLink } from "./chatRefs.ts";
 import { pastedRefs } from "../../client/core-ts/src/refLinks.ts";
 import { Hover, PathSession } from "./Peeks.tsx";
-import { Avatar, Button, Dialog, ElsewhereLogo, ICON, ModelLogo, Pill, Progress, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
+import { Avatar, Button, Chooser, ChooserItem, Dialog, ElsewhereLogo, ICON, ModelLogo, Pill, Progress, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { chatPage } from "./chatPage.ts";
 import { Prose, withBareLinks } from "./Prose.tsx";
@@ -43,7 +43,7 @@ import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
-import type { ChatAsk, ChatSentElsewhere, DownloadShown, NoticeShown, RuntimeInstall } from "./core/shapes.ts";
+import type { ChatAsk, ChatCcTo, ChatSentElsewhere, DownloadShown, NoticeShown, RuntimeInstall } from "./core/shapes.ts";
 import * as partsCss from "@stillfail/ui/parts.css.ts";
 import * as historyCss from "./History.css.ts";
 import * as css from "./Chat.css.ts";
@@ -165,8 +165,38 @@ function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session:
       {chat.offline && <p className={css.offlineNotice} role="status">{<StationInWords station={station.address} text={chat.offlineNote ?? (station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline"))} />}</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
       <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper}
+        toolbar={chat.cc?.length && id !== null ? <CcChooser station={station.address} thread={id} to={chat.cc} /> : undefined}
         locked={!!chat.archived} offline={chat.offline} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} />
     </section>
+  );
+}
+
+/**
+ * In a chat whose agents are in Slack or Feishu threads: which of them what is sent is copied to too (`chat.cc`), each
+ * thread's bot saying there who wrote it on still.fail. None until ticked; kept for the chat while the app runs. On one
+ * line (nothing written) the composer only says where it goes, quietly (each mark and place, by send); opened to write,
+ * its row has 抄送 (and where, once ticked), opening a menu of the threads to tick: several stay open to tick in turn,
+ * one closes once ticked.
+ */
+function CcChooser({ station, thread, to }: { station: string; thread: number; to: ChatCcTo[] }) {
+  const call = useCall();
+  const act = useAct();
+  const on = to.filter((o) => o.on);
+  const where = (o: ChatCcTo) => <span key={o.thread} className={css.ccPlace}><ElsewhereLogo kind={o.via} size={14} />{o.place}</span>;
+  return (
+    <>
+      {on.length > 0 && <span className={css.ccState} title={t("web-main.composer.ccOn", { place: on.map((o) => o.place).join("、") })}>{on.map(where)}</span>}
+      <span className={css.ccSwitch}>
+        <Chooser side="top" label={<>{t("web-main.composer.ccLabel")}{on.map(where)}</>}>
+          {to.map((o) => (
+            <ChooserItem key={o.thread} checked={o.on} stays={to.length > 1} checkEnd
+              onSelect={() => act(call("chat.cc", { station, thread, to: o.thread, on: !o.on }), t("web-main.composer.cc", { place: o.place }))}>
+              <ElsewhereLogo kind={o.via} size={14} />{o.place}
+            </ChooserItem>
+          ))}
+        </Chooser>
+      </span>
+    </>
   );
 }
 

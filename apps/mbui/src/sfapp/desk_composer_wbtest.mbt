@@ -66,6 +66,7 @@ fn default_spec(f : ComposerFor) -> @sfpages.ComposerSpec {
     session: "",
     placeholder: "发消息",
     toolbar: None,
+    note: [],
     roomy: false,
     locked: false,
     offline: false,
@@ -419,4 +420,55 @@ test "on a phone a finger 4 off the send button, beside it or over it, sends: th
     t.frame()
     assert_eq(named(calls, "chat.send").length(), 1, msg="pressed \{off}")
   }
+}
+
+///|
+test "desk composer: 抄送 opens a menu of the chat's Slack and Feishu threads; several stay open to tick, ticked ones said beside 抄送 (chat.cc)" {
+  reset()
+  let calls : Array[Made] = []
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let on = Ref(false)
+  let t = @ui.Tester::new(
+    fn(c) {
+      @sf.set_words(fill)
+      let _ = @sf.begin(c)
+      let ws : Workspace = { id: "ws1", name: "Acme", emoji: "", icon: "", email: "" }
+      let v = chat_view({
+        "title": "整理发布清单",
+        "thread": { "id": 7 },
+        "cc": [
+          { "thread": 21, "place": "#still-fail", "via": "slack", "on": Json::boolean(on.val) },
+          { "thread": 22, "place": "产品讨论", "via": "feishu", "on": false },
+        ],
+      })
+      @sfpages.chat_composer(c, src, ws, r, Some(v))
+      @sf.presented(c)
+    },
+    w=900.0,
+    h=500.0,
+    pointing=Mouse,
+  )
+  t.draw()
+  let cc = @sf.t("web-main.composer.ccLabel")
+  t.click(Button, label=cc)
+  t.click(MenuItemCheckbox, label="#still-fail")
+  on.val = true
+  t.draw()
+  // still open: the other can be ticked next
+  t.click(MenuItemCheckbox, label="产品讨论")
+  let asked = calls.filter(fn(m) { m.name == "chat.cc" }).map(fn(m) { m.params })
+  assert_eq(asked, [
+    { "station": "ws1/st1", "thread": 7, "to": 21, "on": true },
+    { "station": "ws1/st1", "thread": 7, "to": 22, "on": true },
+  ])
+  // what is ticked is said beside 抄送
+  assert_true(t.find("#still-fail") is Some(_), msg=t.words().map(fn(x) { x.0 }).join("|"))
 }

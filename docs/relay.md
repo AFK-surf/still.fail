@@ -25,9 +25,24 @@
 4. 告诉 agent（站点通知）：新的会话地址，请它用 `chat_post` 发一段摘要（在聊什么、定了什么、还有什么没定），让那里的人不用翻记录就能接上；接到已有 thread 时先读那里之前的消息。
 5. agent 在那里的第一条 `chat_post`（不带文件和卡片）不另发回复，由站点接在第 1 条后面（Slack `chat.update`，飞书改卡片），频道里那条顶层消息就带着摘要，不用点开 thread 也能看到。接上去超出一条消息的长度（Slack 3500 字，飞书一张卡片）、改不成功，或站点在 agent 发之前重启过，就照常作为回复发。之后的都是回复。
 
+## 抄送
+
+接力过的对话（或者 agent 本来就在 Slack、飞书的会话里），之后人在 still.fail 里接着发的话，Slack、飞书那边的人看不到：still.fail 的对话和那边的会话是两个对话，agent 在哪边被问就在哪边答。要让那边的人也看到，就在输入框里勾「抄送」（`chat.cc`）。
+
+- 能抄送到哪：对话的 agent 所在的每个 Slack、飞书会话，最近有人说话的在前，最多 20 个（`CC_THREADS_SQL`，`station/src/store/rows.ts`）。一个都没有，就没有抄送。
+- 勾上的每个会话，发出去的每条消息站点照常记进 still.fail 的对话、交给 agent，同时让那个会话的 bot 在那边发一条「某人 在 still.fail 说：」加原话，带上附件（`station/src/sessions/cc.ts`）。bot 不冒充人：Slack 的 `chat:write.customize` 能换名字和头像，但不用（左子健，2026-10-25）。
+- 那边那条记成站点的话，不交给 agent：它已经从 still.fail 的对话里收到了。agent 的回答还是在 still.fail 的对话里。
+- 没发出去（bot 不在频道里、权限不够），站点在 still.fail 的对话里说一句为什么，消息本身照常发出。
+- 默认都不勾。勾了就一直勾着（这个对话、这台设备、这次运行里：core 的 `Views.ccOn`），不用每条都勾。Slack 自己的「同时发送到 #频道」是每发一条就复位的，这里不这样，因为在这里接着聊是连续的。
+- 样子（左子健，2026-10-25：没输入时只显示状态，展开了才能操作）：
+  - 输入框收起（一行，没写字）：勾了的会话以「平台 logo + #频道」灰字显示在发送按钮旁边，不能点；一个没勾就什么都不显示。
+  - 展开写字：底下那排是一个胶囊「抄送」，勾了的跟在后面（logo + #频道），hover 有底色，点开浮窗菜单列出能抄送到的会话（logo + #频道，勾选），多选：不止一个时浮窗留着可以接着勾，只有一个时勾完就关。
+  - 网页和桌面版：`web/src/Chat.tsx` CcChooser；mbui：`apps/mbui/src/sfpages/composer.mbt` cc_chooser；手机网页：＋ 菜单里每个会话一项「抄送到 #频道」，勾了时输入框提示「发消息，抄送 #频道」。
+
 ## 接口
 
 - `GET /threads/:id/relay`：`{connects: [{id, kind: slack|feishu|lark, name, team, botImage, preferred, places: [{id, name, kind: channel|topics|group, private?, used?}], error?}]}`，`used` 是最近一次接力到那里的时间（毫秒），每个连接的 places 按上面的顺序排。读不出某个连接的频道时，那一组带 `error`，其余照给。
 - `POST /threads/:id/relay`：`{connect, channel, note?}` 或 `{link, connect?, note?}`，答 `{thread, to, place, link}`。
-- core 的操作：`chat.relayPlaces {thread}`、`chat.relay {thread, connect?, channel?, link?, note?}`；挑选框列什么、怎么排（上面的规则）由 core 的 `chat.relayView` 算（`client/core-ts/src/relay-pick.ts`），网页、手机、桌面都用它。
+- `GET /threads/:id` 里 still.fail 对话的 `cc`：`[{thread, surface, channel, threadTs, channelName}]`，可以抄送到的会话；没有就不给。`POST /threads/:id/messages` 带 `cc: [thread id…]`：发出后抄送到其中属于这个对话的那些（不等它）。
+- core 的操作：`chat.relayPlaces {thread}`、`chat.relay {thread, connect?, channel?, link?, note?}`、`chat.cc {thread, to, on}`（chat 视图的 `cc: [{thread, place, via, on}]`）；挑选框列什么、怎么排（上面的规则）由 core 的 `chat.relayView` 算（`client/core-ts/src/relay-pick.ts`），网页、手机、桌面都用它。
 - 平台的部分在 `ChatSurface` 上：`places()`、`begin(channel, message)`、`edit(thread, ts, message)`、`threadOf(link)`、`permalink(thread)`；Slack 和飞书各自实现，再加平台只要实现这几个。

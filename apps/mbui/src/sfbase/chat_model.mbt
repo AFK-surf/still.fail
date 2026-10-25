@@ -488,6 +488,20 @@ pub(all) struct ChatView {
   me : String
   /// its side panel's tabs, as the core keeps them for it on this device (`tabs`, client/core-ts/src/chat-tabs.ts)
   tabs : ChatTabs
+  /// its agents' Slack and Feishu threads, the one said in last first: what is sent from here is copied to those
+  /// ticked (`cc`, `chat.cc`); empty when they are in none
+  cc : Array[ChatCcTo]
+}
+
+///|
+/// A thread a chat's messages can be copied to (the chat view's `cc`, docs/relay.md "抄送"): its id (`chat.cc`'s `to`),
+/// where it is (#channel, 私信, the Feishu group), its platform for its mark ("slack" or "feishu"), and whether it is
+/// ticked.
+pub(all) struct ChatCcTo {
+  thread : Double
+  place : String
+  via : String
+  on : Bool
 }
 
 ///|
@@ -556,6 +570,10 @@ pub fn chat_view(v : Json) -> ChatView {
       shown: opt_text(field(s, "tabs"), "shown"),
       auto: flag(field(s, "tabs"), "auto"),
     },
+    cc: items(s, "cc").map(fn(o) {
+      let o = Some(o)
+      { thread: number(o, "thread"), place: text(o, "place"), via: text(o, "via"), on: flag(o, "on") }
+    }),
   }
 }
 

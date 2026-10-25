@@ -482,9 +482,27 @@ export const avatarFlying = style({
 export const composerChoices = style({
   display: "flex", alignItems: "center", gap: "4px", flex: "1 1 auto", minWidth: "0", marginRight: "auto",
   selectors: {
-    [`${composerBox}:not([data-multiline]) &`]: { order: "1" },
+    // On one line (a chat's composer, its 抄送 there): before send, at its own width, the words taking the rest.
+    [`${composerBox}:not([data-multiline]) &`]: { flex: "none", marginRight: "0" },
   },
 });
+/** Where what is sent is copied, said (Chat.tsx CcChooser): on one line only, while some thread is ticked; nothing to press. */
+export const ccState = style({
+  display: "inline-flex", alignItems: "center", gap: "8px", padding: "0 8px", whiteSpace: "nowrap",
+  fontSize: vars.textMeta, color: vars.muted,
+  selectors: {
+    [`${composerBox}[data-multiline] &`]: { display: "none" },
+  },
+});
+/** Its chooser (Chat.tsx CcChooser): in the row under the words once the composer is opened to write. */
+export const ccSwitch = style({
+  display: "contents",
+  selectors: {
+    [`${composerBox}:not([data-multiline]) &`]: { display: "none" },
+  },
+});
+/** A thread it is copied to: its platform's mark and its place. */
+export const ccPlace = style({ display: "inline-flex", alignItems: "center", gap: "4px" });
 export const msgFlash = style({});
 export const quoteCards = style({
   selectors: {

@@ -48,7 +48,7 @@ import { softwareDemo } from "./software.ts";
 import { lockDemo } from "./lock.ts";
 import { feishuConnectDemo, feishuFlowDemo } from "./feishu.ts";
 import { relaysDemo } from "./relays.ts";
-import { relayDemo, TWO_BOTS } from "./relay.ts";
+import { ccDemo, relayDemo, TWO_BOTS } from "./relay.ts";
 import { Console } from "../src/admin/console.tsx";
 import { ACCOUNT } from "../src/demo/station.ts";
 import { ModelTriple } from "../src/ModelTriple.tsx";
@@ -822,6 +822,12 @@ export const stories: Story[] = [
   { id: "app-chat-side-tab-close", group: "应用", title: "对话 · 侧栏标签的 × 悬停", app: true, demo: letters, steps: [{ click: '[aria-label$="的执行历史"]' }, { click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }, { hover: '[class*="sideTabWrap"]:first-child [class*="sideTabClose"]' }] },
   { id: "app-chat-side-front-close", group: "应用", title: "对话 · 侧栏当前标签的 × 悬停", app: true, demo: letters, steps: [{ click: '[aria-label$="的执行历史"]' }, { click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }, { hover: '[class*="sideTabWrap"]:last-child [class*="sideTabClose"]' }] },
   { id: "app-chat-relay", group: "应用", title: "对话 · 接力到频道", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }] },
+  { id: "app-chat-cc", group: "应用", title: "对话 · 抄送", app: true, demo: ccDemo() },
+  { id: "app-chat-cc-on", group: "应用", title: "对话 · 抄送 · 勾了一个", app: true, demo: ccDemo([21]) },
+  { id: "app-chat-cc-open", group: "应用", title: "对话 · 抄送 · 写字时", app: true, demo: ccDemo(), steps: [{ click: "textarea" }] },
+  { id: "app-chat-cc-open-on", group: "应用", title: "对话 · 抄送 · 写字时勾了一个", app: true, demo: ccDemo([21]), steps: [{ click: "textarea" }] },
+  { id: "app-chat-cc-menu", group: "应用", title: "对话 · 抄送 · 选到哪", app: true, demo: ccDemo([21]), steps: [{ click: "textarea" }, { click: "text=抄送" }] },
+  { id: "phone-chat-cc-on", group: "手机", title: "对话 · 抄送 · 勾了一个", app: true, phone: true, demo: ccDemo([21]) },
   { id: "app-chat-relay-picked", group: "应用", title: "对话 · 接力到频道 · 选中一个", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { text: "#cue-dev" }] },
   { id: "app-chat-relay-all", group: "应用", title: "对话 · 接力到频道 · 显示全部", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { text: "显示全部 10 个" }] },
   { id: "app-chat-relay-bot", group: "应用", title: "对话 · 接力到频道 · 换一个 bot", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { click: '[aria-label="用哪个 bot"] button:nth-child(2)' }] },

@@ -485,6 +485,48 @@ test("an_iphone_app_is_a_phone_named_by_its_model_and_its_messages_say_it", asyn
   core.close();
 });
 
+test("a_chat_whose_agent_is_in_slack_threads_copies_what_is_sent_to_those_ticked", async () => {
+  const { host, core } = await started({
+    ...base(),
+    "GET /threads": [{ ...threadView(7, 0), cc: [
+      { thread: 21, surface: "slack:T1", channel: "C1", threadTs: "1.0", channelName: "still-fail" },
+      { thread: 22, surface: "feishu:fs", channel: "oc_1", threadTs: "2.0", channelName: "产品讨论" },
+    ] }],
+    "GET /threads/7/entries?limit=50": { first: 1, last: 0, entries: [] },
+  });
+  stationReplies(host, (req) => (req.method === "POST" && req.url.endsWith("/threads/7/messages") ? { n: 1 } : undefined));
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
+  await host.settle();
+  apply(host, values);
+  // None ticked until ticked: a message goes to the chat alone.
+  assert.deepEqual(v(values, 1).cc, [
+    { thread: 21, place: "#still-fail", via: "slack", on: false },
+    { thread: 22, place: "产品讨论", via: "feishu", on: false },
+  ]);
+  call(core, ui, 2, "chat.send", { station: "ws/st", thread: 7, text: "here" });
+  await host.settle();
+  assert.equal(posted(host)[0].cc, undefined);
+  // Both ticked: the chat says so, and what is sent goes to both.
+  call(core, ui, 3, "chat.cc", { station: "ws/st", thread: 7, to: 21, on: true });
+  call(core, ui, 4, "chat.cc", { station: "ws/st", thread: 7, to: 22, on: true });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).cc.map((o: J) => o.on), [true, true]);
+  call(core, ui, 5, "chat.send", { station: "ws/st", thread: 7, text: "there too" });
+  await host.settle();
+  assert.deepEqual(posted(host)[1].cc, [21, 22]);
+  // One unticked.
+  call(core, ui, 6, "chat.cc", { station: "ws/st", thread: 7, to: 21, on: false });
+  call(core, ui, 7, "chat.send", { station: "ws/st", thread: 7, text: "to feishu" });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).cc.map((o: J) => o.on), [false, true]);
+  assert.deepEqual(posted(host)[2].cc, [22]);
+  core.close();
+});
+
 test("the_device_says_what_it_is_once_and_the_core_decides_what_follows", async () => {
   const { host, core } = await started();
   stationReplies(host, (req) => (req.method === "POST" && req.url.endsWith("/threads/7/messages") ? { n: 4 } : undefined));

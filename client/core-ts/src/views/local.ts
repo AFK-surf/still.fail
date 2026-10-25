@@ -721,5 +721,6 @@ export class Local {
 export function sentAs(entry: J): J {
   const message: J = { text: entry.text ?? null, attachments: entry.attachments ?? null, quotes: entry.quotes ?? null };
   if (typeof entry.client === "string") message.client = entry.client;
+  if (Array.isArray(entry.cc) && entry.cc.length > 0) message.cc = entry.cc;
   return message;
 }

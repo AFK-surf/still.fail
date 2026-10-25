@@ -28,6 +28,7 @@ import {
   say,
 } from "../../sessions/lifecycle.ts";
 import { relay, relayPlaces } from "../../sessions/relay.ts";
+import { cc } from "../../sessions/cc.ts";
 import { shown } from "../../jobs/jobs.ts";
 import { withLock, workspaceFile } from "../../sessions/archive.ts";
 import { roomOf } from "../../sessions/footprint.ts";
@@ -592,6 +593,10 @@ export const routes = (tools: Tools): Route[] => {
           const client = typeof i.client === "string" ? chars([...i.client.trim()].filter((c) => !/\p{Cc}/u.test(c)).join(""), 80) : "";
           const kept = await keep(files, thumbsDir(a.hub.config().dataDir));
           const n = say(a.hub, t.id, r.viewer.email, said, kept, quotes, client === "" ? null : client);
+          // Copied to the Slack and Feishu threads of the chat its sender picked (docs/relay.md "抄送"): after the answer,
+          // not waited on.
+          const ccTo = Array.isArray(i.cc) ? i.cc.filter((x: unknown): x is number => typeof x === "number") : [];
+          if (ccTo.length > 0) void cc(a.hub, t.id, r.viewer.name.trim() || r.viewer.email, said, kept, ccTo);
           // Answering from the decisions page means the question was read, even without opening its chat. Stop at that
           // card: later messages may not have been seen.
           if (answeredCard !== null) s.setRead(r.viewer.email, t.id, answeredCard);

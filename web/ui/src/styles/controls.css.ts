@@ -127,6 +127,8 @@ export const chooser = style({
 export const chooserMenu = style({});
 export const chooserItem = style({ display: "flex", alignItems: "center", gap: "6px" });
 export const chooserCheck = style({});
+/** A check at its row's end (ChooserItem `checkEnd`): pushed there. */
+export const chooserCheckEnd = style({ marginLeft: "auto" });
 export const chooserChevron = style({});
 globalStyle(chooserCheck, { width: "14px", display: "inline-grid", placeItems: "center", flex: "none" });
 globalStyle(chooserMenu, { maxHeight: "360px", overflowY: "auto", minWidth: "220px" });

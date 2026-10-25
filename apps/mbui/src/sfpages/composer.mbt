@@ -18,6 +18,9 @@ pub(all) struct ComposerSpec {
   session : String
   placeholder : String
   toolbar : (() -> Unit)?
+  /// what it says before send on one line, nothing written (where a chat's messages are copied: each thread's mark,
+  /// "slack" or "feishu", and its place): nothing to press; empty nothing
+  note : Array[(String, String)]
   roomy : Bool
   locked : Bool
   offline : Bool
@@ -52,6 +55,8 @@ priv struct Composing {
   /// the composer's own)
   mut outside : Bool
   mut menu_up : Bool
+  /// its 抄送 menu open (cc_chooser)
+  mut cc_open : Bool
   /// the cursor asked into it as it is next drawn, on any screen (composer_take_focus)
   mut wanted : Bool
 }
@@ -81,6 +86,7 @@ let composing : Composing = {
   restore_errors: {},
   outside: false,
   menu_up: false,
+  cc_open: false,
   wanted: false,
 }
 
@@ -102,6 +108,7 @@ fn composing_reset() -> Unit {
   composing.restore_errors.clear()
   composing.outside = false
   composing.menu_up = false
+  composing.cc_open = false
   composing.wanted = false
 }
 
@@ -237,6 +244,9 @@ pub fn composer(
       } else {
         plus = attach(c, src, spec, w, no_files)
         words = composer_text(c, src, ws, spec, w, cap, multiline, submit)
+        if spec.note.length() > 0 {
+          c.box(style=cc_note_box, fn() { cc_places(c, spec.note) }) |> ignore
+        }
         send_i = send_button(c, ready, w.starting, submit)
       }
     },
@@ -1237,7 +1247,14 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
     } else {
       "web-main.composer.placeholder"
     }),
-    toolbar: None,
+    toolbar: match v {
+      Some({ cc, thread: Some(thread), .. }) if cc.length() > 0 => Some(fn() { cc_chooser(c, src, r, thread, cc) })
+      _ => None
+    },
+    note: match v {
+      Some(v) => v.cc.filter(fn(o) { o.on }).map(fn(o) { (o.via, o.place) })
+      None => []
+    },
     roomy: false,
     locked: match v {
       Some(v) => v.archived
@@ -1276,6 +1293,94 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
   })
   @motion.measure(c, foot, "composer/foot")
 }
+
+///|
+/// In a chat whose agents are in Slack or Feishu threads: which of them what is sent is copied to too (Chat.tsx
+/// CcChooser, `chat.cc`), each thread's bot saying there who wrote it on still.fail. In the row under the words once the
+/// composer is opened to write (on one line it only says where: `note`): 抄送, and each thread ticked (its mark and
+/// place), a chooser's look (@sf.chooser), opening a menu of the threads to tick, each ticked one's check at its end:
+/// several stay open to tick in turn, one closes once ticked. None until ticked.
+fn cc_chooser(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, to : Array[@sfbase.ChatCcTo]) -> Unit {
+  let p = @sf.theme().p
+  let id = c.id("composer/cc")
+  let open = if c.clicked(id) { !composing.cc_open } else { composing.cc_open }
+  let lit = c.lit(id) || open
+  let on = to.filter(fn(o) { o.on }).map(fn(o) { (o.via, o.place) })
+  let label = @sf.t("web-main.composer.ccLabel")
+  let b = c.box(style=cc_trigger, selected=open, id~, fn() {
+    c.text(label, style=if lit { cc_words_lit } else { cc_words }) |> ignore
+    cc_places(c, on)
+    @sf.icon(c, "chevron-down", size=12.0, color=if lit { p.text } else { p.muted }) |> ignore
+  })
+  c.semantics(b, Button, id~, label=([label] + on.map(fn(o) { o.1 })).join(" "), expanded=open)
+  let entries = to.map(fn(o) { @kit.menu_check(o.thread.to_string(), o.on, label=o.place) })
+  // each ticked one's check at its row's end (左子健)
+  let m = @sf.dropdown(c, "composer/cc/menu", open, id, entries, {}, @sf.chooser_menu_w, side=Top, row_end=fn(c, s) {
+    if s.entry.kind is Check(true) {
+      @sf.icon(c, "check", size=14.0, color=p.text) |> ignore
+    }
+  })
+  composing.cc_open = m.open
+  match m.chosen {
+    Some(v) =>
+      match to.search_by(fn(o) { o.thread.to_string() == v }) {
+        Some(i) => {
+          let o = to[i]
+          let params : Json = {
+            "station": Json::string(r.station),
+            "thread": Json::number(thread),
+            "to": Json::number(o.thread),
+            "on": Json::boolean(!o.on),
+          }
+          c.tell("composer/cc", fn() { (src.call)("chat.cc", params, fn(_) {  }) })
+          // one: done once ticked; several: open to tick the next
+          composing.cc_open = to.length() > 1
+        }
+        None => ()
+      }
+    None => ()
+  }
+}
+
+///|
+/// Where what is sent is copied: each thread's platform mark and place.
+fn cc_places(c : @ui.Ctx, on : Array[(String, String)]) -> Unit {
+  for o in on {
+    c.box(style=cc_place, fn() {
+      cc_mark(c, o.0)
+      c.text(o.1, style=cc_words) |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let cc_trigger : @ui.Style = @ui.css(
+  #|row h=S7 px=S2 gap=S1_5 radius=Lg align=ACenter hovered{bg=Hover} selected{bg=Hover}
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let cc_place : @ui.Style = @ui.css("row gap=S1 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let cc_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, wrap=false, color=Muted)
+
+///|
+// kept across runs: a value (no field of it changes)
+let cc_words_lit : @ui.TextStyle = cc_words.then(@ui.text_style(color=Fg))
+
+///|
+/// The mark of the platform it is copied to (the web's ElsewhereLogo): Feishu's for Feishu, else Slack's, 14.
+fn cc_mark(c : @ui.Ctx, via : String) -> Unit {
+  (if via == "feishu" { @sf.feishu_mark(c, 14.0) } else { @sf.slack_mark(c, 14.0) }) |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let cc_note_box : @ui.Style = @ui.css("row px=S2 gap=S2 align=ACenter")
 
 ///|
 /// What is said over a chat's composer (Chat.tsx ChatShown, ArchiveNotice, offlineNotice): an archived chat's, with

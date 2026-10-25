@@ -1464,6 +1464,21 @@ export interface ChatAsk {
 	text: string;
 }
 
+/** A thread a chat's messages can be copied to (docs/relay.md "抄送"). */
+export interface ChatCcTo {
+	/** The thread's id: `chat.cc`'s `to`. */
+	thread: number;
+	/** Where it is: #channel, 私信, the Feishu group. */
+	place: string;
+	/** Its platform, for its mark: "slack" or "feishu". */
+	via: string;
+	/**
+	 * Ticked: what is sent from here is copied there too, the station's bot saying there who wrote it on still.fail,
+	 * and what. Off until ticked, for as long as the app runs.
+	 */
+	on: boolean;
+}
+
 /** An agent of a sidebar row, with what its mark shows. */
 export interface RowAgent {
 	key: string;
@@ -2325,6 +2340,11 @@ export interface ChatView {
 	slackUrl?: string;
 	/** A Feishu (Lark) chat's link in Feishu. */
 	feishuUrl?: string;
+	/**
+	 * Its agents' Slack and Feishu threads, the one said in last first: what is sent from here can be copied to
+	 * those ticked (`chat.cc`). Empty in a chat whose agents are in none, and from a core before it.
+	 */
+	cc?: ChatCcTo[];
 	people: Person[];
 	agents: ChatAgent[];
 	messages: ChatMessage[];
