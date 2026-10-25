@@ -32,16 +32,19 @@ TO=${HANDOFF_TO:-}
 N=${HANDOFF_BUILD:-999999}
 DATA="$HOME/Library/Application Support/$NAME"
 U=$A/out/handoff
-SRV= OLD= NEW= KC= WATCH=
+SRV= OLD= NEW= KC= WATCH= TAIL=
 
-# The part with windows, run with the screen (on_screen, below): the feeds served, the old app opened and told to
-# update, what took its place looked at. Each step waits for its own event, never a time: the server's port said, the
-# old app's DevTools listening and its page made, the update offered (its check's answer), the old app's end, the
-# system's word that an app opened at the old one's place (NSWorkspace), the first file the new one writes in the apps'
-# data. What it started is stopped as it ends.
+# The part with windows, run with the screen (on_screen, below): the feeds served, the old app opened as the Finder
+# opens it (LaunchServices: then it is its own responsible process, as an installed app is, and macOS's App Management
+# lets it change an app of its own team; opened by this script, the station running it would answer for it, and the
+# updater, unable to write, asks for an administrator in a dialog nobody answers) and told to update, what took its
+# place looked at. Each step waits for its own event, never a time: the server's port said, the system's word that
+# an app opened at the old one's place and that it quit (NSWorkspace), the old app's DevTools listening and its page
+# made, the update offered (its check's answer), the first file the new one writes in the apps' data. What it started
+# is stopped as it ends.
 opened() {
-  # (the old app killed outright, by its place here: told to quit, it waits for its core and station to stop first)
-  trap 'set +e; pkill -9 -f "$U/app/$NAME.app/Contents/" 2> /dev/null; [ -z "$NEW" ] || kill "$NEW" 2> /dev/null; [ -z "$SRV" ] || kill "$SRV" 2> /dev/null; [ -z "$WATCH" ] || kill "$WATCH" 2> /dev/null' EXIT
+  # (the apps killed outright, by their place here: told to quit, the old one waits for its core and station first)
+  trap 'set +e; pkill -9 -f "$U/app/$NAME.app/Contents/" 2> /dev/null; [ -z "$SRV" ] || kill "$SRV" 2> /dev/null; [ -z "$WATCH" ] || kill "$WATCH" 2> /dev/null; [ -z "$TAIL" ] || kill "$TAIL" 2> /dev/null' EXIT
   # served (ranges too), its port said once it listens
   mkfifo "$U/port"
   node -e '
@@ -61,20 +64,23 @@ s.listen(0, "127.0.0.1", () => console.log(s.address().port));' "$U/feed" > "$U/
   SRV=$!
   read -r PORT < "$U/port"
 
-  # what the system says: an app opened at the old one's place (its pid; not the old app itself, opened below), then the
-  # first file written in the apps' data (Application Support: the old app's, or one of the new one's own) after it
+  # what the system says of the app at the old one's place: each app opened there (its pid, its program) and the
+  # first to quit; once one opens after that, the first file written in the apps' data (Application Support: the old
+  # app's, or a place of the new one's own)
   cat > "$U/watch.swift" << 'SWIFT'
 import AppKit
 let app = URL(fileURLWithPath: CommandLine.arguments[1]).standardizedFileURL
-let old = pid_t(CommandLine.arguments[2])!
-let support = CommandLine.arguments[3]
-let mine = Array(CommandLine.arguments.dropFirst(4))
+let support = CommandLine.arguments[2]
+let mine = Array(CommandLine.arguments.dropFirst(3))
 var stream: FSEventStreamRef?
-NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { n in
+let center = NSWorkspace.shared.notificationCenter
+func here(_ n: Notification) -> NSRunningApplication? {
   guard let a = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-    a.bundleURL?.standardizedFileURL == app, a.processIdentifier != old, stream == nil else { return }
-  print("opened \(a.processIdentifier) \(a.executableURL?.lastPathComponent ?? "?")")
-  fflush(stdout)
+    a.bundleURL?.standardizedFileURL == app else { return nil }
+  return a
+}
+var quit = false
+func watchWrites() {
   var ctx = FSEventStreamContext()
   let written: FSEventStreamCallback = { _, _, _, paths, _, _ in
     for p in (unsafeBitCast(paths, to: NSArray.self) as? [String]) ?? [] where mine.contains(where: { p.hasPrefix($0 + "/") }) {
@@ -88,29 +94,49 @@ NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didLaunch
   FSEventStreamSetDispatchQueue(stream!, .main)
   FSEventStreamStart(stream!)
 }
+center.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { n in
+  guard let a = here(n) else { return }
+  print("opened \(a.processIdentifier) \(a.executableURL?.lastPathComponent ?? "?")")
+  fflush(stdout)
+  // (what the one opened after the old one quit writes: not the old one's core finishing as it goes)
+  if quit && stream == nil { watchWrites() }
+}
+center.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { n in
+  guard let a = here(n), !quit else { return }
+  quit = true
+  print("quit \(a.processIdentifier)")
+  fflush(stdout)
+}
 print("watching")
 fflush(stdout)
 RunLoop.main.run()
 SWIFT
-  # the old app opened against them, told to update as its 更新 does (over its DevTools, once they listen)
-  mkfifo "$U/old"
-  STILLFAIL_CLOUD_ORIGIN=http://127.0.0.1:$PORT "$OLD_APP/Contents/MacOS/$NAME" --remote-debugging-port=0 --use-mock-keychain -ApplePersistenceIgnoreState YES \
-    > "$U/old.log" 2> "$U/old" &
-  OLD=$!
-  exec 4< "$U/old"
-  while read -r line <&4; do
-    echo "$line" >> "$U/old.log"
-    case $line in "DevTools listening on "*) DEVTOOLS=${line#DevTools listening on }; break ;; esac
-  done
-  [ -n "${DEVTOOLS:-}" ] || { echo "handoff: the old app opened no DevTools" >&2; exit 1; }
-  (cat <&4 >> "$U/old.log") &
   mkfifo "$U/watch"
-  swift "$U/watch.swift" "$OLD_APP" "$OLD" "$HOME/Library/Application Support" "$DATA" "$HOME/Library/Application Support/$ID" > "$U/watch" &
+  swift "$U/watch.swift" "$OLD_APP" "$HOME/Library/Application Support" "$DATA" "$HOME/Library/Application Support/$ID" > "$U/watch" &
   WATCH=$!
   exec 3< "$U/watch"
   read -r said <&3
   [ "$said" = watching ] || { echo "handoff: the watch said $said" >&2; exit 1; }
 
+  # the old app opened against them as the Finder opens it, told to update as its 更新 does (over its DevTools, once
+  # they listen: what it says goes to old.log, followed)
+  : > "$U/old.log"
+  open -n --env STILLFAIL_CLOUD_ORIGIN=http://127.0.0.1:$PORT --stdout "$U/old.log" --stderr "$U/old.log" "$OLD_APP" \
+    --args --remote-debugging-port=0 --use-mock-keychain -ApplePersistenceIgnoreState YES
+  read -r said <&3
+  case $said in opened\ *) ;; *) echo "handoff: the watch said $said" >&2; exit 1 ;; esac
+  OLD=$(echo "$said" | cut -d' ' -f2)
+  mkfifo "$U/said"
+  tail -n +1 -f "$U/old.log" > "$U/said" &
+  TAIL=$!
+  exec 4< "$U/said"
+  while read -r line <&4; do
+    case $line in "DevTools listening on "*) DEVTOOLS=${line#DevTools listening on }; break ;; esac
+  done
+  kill "$TAIL" 2> /dev/null || true
+  wait "$TAIL" 2> /dev/null || true
+  TAIL=
+  [ -n "${DEVTOOLS:-}" ] || { echo "handoff: the old app opened no DevTools" >&2; exit 1; }
   node -e '
 const [browser, version] = process.argv.slice(1);
 const ws = new WebSocket(browser);
@@ -146,8 +172,8 @@ ws.addEventListener("message", async (m) => {
 ws.addEventListener("open", () => send("Target.setDiscoverTargets", { discover: true }));' "$DEVTOOLS" "0.1.$N"
 
   # it quits for the update; Squirrel.Mac's ShipIt puts the new one in its place and opens it
-  wait "$OLD" || true
-  OLD=
+  read -r said <&3
+  [ "$said" = "quit $OLD" ] || { echo "handoff: the watch said $said" >&2; exit 1; }
   echo "handoff: the old app quit"
   read -r said <&3
   case $said in opened\ *) ;; *) echo "handoff: the watch said $said" >&2; exit 1 ;; esac
