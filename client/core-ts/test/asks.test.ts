@@ -5,6 +5,7 @@ import { Effect } from "effect";
 import { Accounts } from "../src/accounts.ts";
 import { Asks, PICTURE_RETRY_MS, PICTURES_KEPT, buddies, devCloud, linkTarget } from "../src/asks.ts";
 import { parseAsk } from "../src/asks-parse.ts";
+import { setOwnApp, setTestChannel } from "../src/brand.ts";
 import { HostError } from "../src/error.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { FakeHost, jsonResponse } from "../src/testing.ts";
@@ -182,6 +183,8 @@ test("a_beta_app_takes_its_builds_from_the_beta_feed", async () => {
   let accounts = await run(Accounts.load(host));
   assert.equal(((await run(asks.run({ kind: "appUpdate", platform: "android", version: 1100, now: false }, accounts))) as J).versionCode, 1200);
   assert.ok(host.requests.every((r) => !r.url.includes("/beta/")));
+  // (youdid.wtf: still.fail's own app on the test channel, as the core says it from its host at the start)
+  setTestChannel(true);
   host = new FakeHost();
   host.isBeta = true;
   host.onFetch(feeds);
@@ -192,6 +195,17 @@ test("a_beta_app_takes_its_builds_from_the_beta_feed", async () => {
   assert.equal(await run(asks.run({ kind: "appUpdate", platform: "android", version: 1250, now: true }, accounts)), null);
   assert.ok(host.requests.every((r) => r.url.endsWith("/android/beta/latest.json")));
   assert.equal(host.requests.length, 2);
+  // An app of its own on the test channel (still.fail mbui): its feed as it names it.
+  setOwnApp(false);
+  host = new FakeHost();
+  host.isBeta = true;
+  host.onFetch((req) => (req.url === "https://stillfail.test/releases/android/mbui/latest.json" ? jsonResponse(200, { ...release(1260), file: "android/mbui/stillfail-1260.apk" }) : jsonResponse(404, {})));
+  asks = new Asks(host, nothing);
+  accounts = await run(Accounts.load(host));
+  assert.equal(((await run(asks.run({ kind: "appUpdate", platform: "android/mbui", version: 1100, now: false }, accounts))) as J).versionCode, 1260);
+  assert.ok(host.requests.every((r) => r.url.endsWith("/android/mbui/latest.json")));
+  setOwnApp(true);
+  setTestChannel(false);
 });
 
 test("the_calls_are_known_by_name", () => {

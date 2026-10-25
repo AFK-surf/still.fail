@@ -88,7 +88,8 @@ export interface Host {
   cloudOrigin(): string;
   /// A beta app: its calls to still.fail cloud say so.
   beta(): boolean;
-  /// On the test channel (youdid.wtf): what the core says names the product so. A beta app is.
+  /// On the test channel (youdid.wtf): what the core says names the product so, in still.fail's own app (brand.ts). A
+  /// beta app is.
   testChannel(): boolean;
 
   fetch(request: HttpRequest): Effect.Effect<HttpResponse, HostError>;

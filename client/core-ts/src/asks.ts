@@ -5,6 +5,7 @@ import buddiesList from "../../../web/public/avatars/index.json" with { type: "j
 import { encodeComponent } from "./accounts.ts";
 import type { AccountSessions } from "./account-provider.ts";
 import type { Ask } from "./asks-parse.ts";
+import * as brand from "./brand.ts";
 import { conform } from "./conform.ts";
 import { CoreError } from "./error.ts";
 import { header, type Host } from "./host.ts";
@@ -63,7 +64,8 @@ export class Asks {
       case "linkParse":
         return Effect.succeed(linkTarget(ask.url, this.#host.cloudOrigin()));
       case "appUpdate":
-        return this.update(ask.platform, ask.version, ask.now, this.#host.beta());
+        // (youdid.wtf's builds are its platform's beta feed; an app of its own on the test channel names its feed whole)
+        return this.update(ask.platform, ask.version, ask.now, brand.testApp());
       case "picture":
         return Effect.map(this.picture(ask.url), ([kind, bytes]) => new Beside({ type: kind }, bytes));
       case "buddies":
@@ -82,8 +84,9 @@ export class Asks {
     }
   }
 
-  /// The newest build of `platform`'s feed when newer than `version`, with what it brings this app (`news`: the
-  /// changelog's lines for it after `version`; the app's home offers a build only with some).
+  /// The newest build of `platform`'s feed (its beta feed, `<platform>/beta`, where `beta`) when newer than `version`,
+  /// with what it brings this app (`news`: the changelog's lines for it after `version`; the app's home offers a build
+  /// only with some).
   update(platform: string, version: number, now: boolean, beta: boolean): Effect.Effect<J, CoreError> {
     return Effect.flatMap(this.#newest(platform, version, now, beta), (release) =>
       release === null ? Effect.succeed(null) : Effect.map(this.#brings(platform, version, release.versionCode), (news) => ({ ...release, news })),

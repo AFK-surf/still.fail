@@ -11,6 +11,7 @@ import { HostWire, type RequestHead, type StationWire } from "../src/station/wir
 import { base64 } from "../src/util.ts";
 import { test } from "node:test";
 import { STORAGE_KEY } from "../src/accounts.ts";
+import { name as brandName } from "../src/brand.ts";
 import { Core } from "../src/core.ts";
 const STATION = (station: string) => ({ station });
 import { FakeHost, jsonResponse } from "../src/testing.ts";
@@ -170,6 +171,45 @@ test("a_beta_app_says_so_and_an_account_not_let_in_is_blocked", async () => {
   await host.settle();
   const answer = host.takeEmitted().map(([, m]) => m as J).find((m) => m.id === 2 && "ok" in m);
   assert.equal(answer?.ok.versionCode, 1250);
+  core.close();
+});
+
+test("an_app_of_its_own_on_the_test_channel_reads_its_changelog_is_named_still_fail_and_takes_its_own_feed", async () => {
+  // still.fail mbui: a build of every commit, the test channel's, but not youdid.wtf
+  const host = new FakeHost();
+  host.isBeta = true;
+  const now = Math.round(host.nowMs() / 1000);
+  const entry = (version: number, parts: string[], text: string) => ({ version, commit: "c", at: now, text: [text], fixes: [], parts });
+  host.onFetch((req) => {
+    const path = req.url.replace("https://stillfail.test", "");
+    const beta = req.headers.some(([k, val]) => k === "x-stillfail-channel" && val === "beta");
+    // The test channel's changelog a commit an entry, each its parts'; the stable channel's a release an entry, every part's.
+    if (path === "/v1/changelog" && beta) return jsonResponse(200, { entries: [entry(1330, ["android"], "修复：安卓的"), entry(1325, ["station"], "修复：station 的")], released: { android: 1330, station: 1325 } });
+    if (path === "/v1/changelog") return jsonResponse(200, { entries: [entry(1300, ["android", "desktop", "web", "station", "cloud"], "修复：一次发布的")], released: { android: 1300, station: 1300 } });
+    if (path === "/releases/android/mbui/latest.json") return jsonResponse(200, { versionCode: 1330, versionName: "0.1.1330", file: "android/mbui/stillfail-1330.apk", sha256: "ab", size: 9 });
+    return jsonResponse(404, {});
+  });
+  let core = await Core.create(host, { clock: host.time.clock, sample: 0 });
+  const ui = core.connect();
+  await ask(host, core, ui, 1, "client.device", { app: "android", build: "0.1.1320", client: "still.fail mbui" });
+  subscribe(core, ui, 2, { topic: "changelog" });
+  await host.settle();
+  const values = new Map();
+  answersOf(host, values);
+  // Each part's tab its own changes.
+  assert.deepEqual(v(values, 2).tabs.map((x: J) => [x.part, x.days.flatMap((d: J) => d.entries.map((e: J) => e.text[0]))]), [
+    ["android", ["修复：安卓的"]], ["desktop", []], ["web", []], ["station", ["修复：station 的"]], ["cloud", []],
+  ]);
+  assert.equal(brandName(), "still.fail");
+  // Its newer builds from its own feed as it names it, not that feed's beta.
+  const newer = await ask(host, core, ui, 3, "app.update", { platform: "android/mbui", versionCode: 1320 });
+  assert.equal(newer.versionCode, 1330);
+  assert.ok(host.requests.every((r) => !r.url.includes("/mbui/beta/")));
+  // Started again: named so before the device says what it is.
+  await run(core.inner.data.written);
+  core.close();
+  core = await Core.create(host, { clock: host.time.clock, sample: 0 });
+  assert.equal(brandName(), "still.fail");
   core.close();
 });
 

@@ -30,9 +30,10 @@ N=${MBUI_BUILD:-$(git -C "$EMBER" rev-list --count HEAD 2>/dev/null || echo 1)}
 # beside still.fail's desktop app (fail.still.mbui, its feed mac/mbui); stable and beta still.fail's desktop app itself,
 # to take its place: Electron's ids, names and links (apps/desktop/package.json, build.sh), so that app's updater takes
 # it and it keeps that app's data, sign-in and sealed keys where they were (src/sfcore/apple_engine.m, src/host/
-# apple_core.mm electron_sealed); their feed mac (the beta's core asks mac/beta, as still.fail's beta builds do).
+# apple_core.mm electron_sealed); their feed mac (the beta's core asks mac/beta, as still.fail's beta builds do). The
+# beta's core and still.fail mbui's are a beta's (MBUI_BETA): builds of every commit, the test channel's.
 case "${MBUI_VARIANT:-mbui}" in
-  mbui) ID=fail.still.mbui NAME="still.fail mbui" FEED=mac/mbui OWN= BETA= SCHEMES=() ZIP_NAME=stillfail-mbui ;;
+  mbui) ID=fail.still.mbui NAME="still.fail mbui" FEED=mac/mbui OWN= BETA=1 SCHEMES=() ZIP_NAME=stillfail-mbui ;;
   stable) ID=fail.still.desktop NAME=still.fail FEED=mac OWN=1 BETA= SCHEMES=(stillfail ember) ZIP_NAME=stillfail ;;
   beta) ID=fail.still.desktop.beta NAME=youdid.wtf FEED=mac OWN=1 BETA=1 SCHEMES=(stillfail-beta) ZIP_NAME=stillfail-beta ;;
   *) echo "mac-app.sh: MBUI_VARIANT is mbui, stable or beta, not $MBUI_VARIANT" >&2; exit 1 ;;
@@ -123,8 +124,8 @@ put NSSupportsAutomaticGraphicsSwitching -bool YES
 put NSLocalNetworkUsageDescription -string "$NAME connects straight to your stations on the local network when it can."
 # where its newer builds come from (src/stillfail main: MBUI_UPDATE_FEED; the host installs them: mac_app.m Updates),
 # the feed beta.sh mac publishes; built in still.fail's desktop app's place, still.fail's own (the device named as that
-# app named it: src/sfcore/signin.mbt MBUI_OWN), the beta's core its beta's (MBUI_BETA). The system gives these to the
-# app opened from the Finder, the Dock or `open`.
+# app named it: src/sfcore/signin.mbt MBUI_OWN), a core on the test channel a beta's (MBUI_BETA). The system gives these
+# to the app opened from the Finder, the Dock or `open`.
 plutil -insert LSEnvironment -dictionary "$PLIST"
 put LSEnvironment.MBUI_UPDATE_FEED -string "$FEED"
 [ -z "$OWN" ] || put LSEnvironment.MBUI_OWN -string 1
