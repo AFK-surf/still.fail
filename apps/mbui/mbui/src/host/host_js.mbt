@@ -183,6 +183,12 @@ fn event_time() -> Double {
 }
 
 ///|
+/// How late the frame before reached the screen: a browser's are not told (@hostapi.frame_late).
+fn frame_late() -> Double {
+  0.0
+}
+
+///|
 /// The system: 0 macOS, 1 iOS, 2 Android, 3 Windows, 4 a browser.
 fn platform() -> Int {
   4

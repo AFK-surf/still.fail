@@ -601,6 +601,9 @@ int32_t mb_host_utc_offset_min(double at_ms) {
 
 double mb_host_event_time(void) { return -1; }
 
+// (how late the frame before reached the screen: not told here)
+double mb_host_frame_late(void) { return 0; }
+
 int32_t mb_host_platform(void) { return 3; }
 
 void mb_host_request_frame(void) { want_frame = 1; }

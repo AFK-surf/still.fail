@@ -12,6 +12,12 @@
 // (.25, .46, .45, .94) over what is left of 280 ms (120 at least), else it
 // comes back in 200 ms.
 //
+// A page brought in (pushed, risen, gone back to) is built whole in the frame its slide starts in, which may take longer
+// than the display's frame (its words shaped, its rows laid out for the first time): its slide's clock does not run
+// while that frame is late to the screen (the host says how late: @hostapi.frame_late), up to nav_late_most, so it
+// moves from where that frame drew it at the display's pace, no step skipped, the wait before it moves instead
+// (UIKit's and Android's transitions build the page before they start too).
+//
 // While a page slides in, the one it covers takes no press (drawn only, as UIKit's and Android's transitions keep
 // touches from the page underneath): a press where its button still shows goes to the page coming, or to nothing;
 // going back, the page leaving takes none.
@@ -100,6 +106,10 @@ struct Nav[P] {
   mut wait_from : Double
   mut waited : Bool
   mut held_most : Double
+  // a slide bringing a page in, its start moved on by how late its first frame reached the screen: whether it is still
+  // to be, and that frame's time (-1: not drawn yet)
+  mut waits_late : Bool
+  mut late_at : Double
   // drawn flat (Ctx::nav_flat): the page drawn there last (in frame `flat_frame`), and the page put on top since,
   // waited for (Nav::shows_when, asked in frame `flat_asked`) from `flat_from`, `flat_most` ms at most
   mut flat_shown : NavPage[P]?
@@ -142,6 +152,8 @@ pub fn[P] Nav::new(
     wait_from: -1.0,
     waited: false,
     held_most: 0.0,
+    waits_late: false,
+    late_at: -1.0,
     flat_shown: None,
     flat_frame: -1,
     flat_ready: fn() { true },
@@ -183,7 +195,14 @@ pub fn[P] Nav::offset(self : Nav[P]) -> Double {
 }
 
 ///|
-fn[P] Nav::go(self : Nav[P], mode : Int, p1 : Double, dur : Double, curve : Ease) -> Unit {
+fn[P] Nav::go(
+  self : Nav[P],
+  mode : Int,
+  p1 : Double,
+  dur : Double,
+  curve : Ease,
+  brings? : Bool = false,
+) -> Unit {
   wake()
   self.mode = mode
   self.p0 = self.p
@@ -195,6 +214,9 @@ fn[P] Nav::go(self : Nav[P], mode : Int, p1 : Double, dur : Double, curve : Ease
   self.t0 = if in_frame.val { g().now } else { -1.0 }
   self.wait_from = -1.0
   self.waited = false
+  // (a page brought in: its start moved on by how late its first frame is to the screen)
+  self.waits_late = brings
+  self.late_at = -1.0
   // said once, as it sets out: frames until it is there
   self.asked = g().frame_no
   g().moving(self.mover, self as &Moving, what="a stack's slide")
@@ -277,6 +299,11 @@ pub let nav_let_go_min_ms : Double = 120.0
 let nav_held : Double = -2.0
 
 ///|
+/// The most a slide bringing a page in waits for its first frame to reach the screen (still.fail's LOCAL_MS, as long
+/// as a page opening waits for what it shows): later than that, it moves on from its time.
+pub let nav_late_most : Double = 100.0
+
+///|
 /// The page just pushed slides in once it has what it shows (`ready`, asked while it waits: the core has answered for it), `most` ms at most
 /// after it was pushed (still.fail's App.kt: a page opening waits LOCAL_MS for what the core has on the device, never
 /// for a station), not first as its loading look swapped for it a frame or two later: till then nothing moves, the
@@ -301,6 +328,8 @@ pub fn[P] Nav::comes_when(self : Nav[P], ready : () -> Bool, most : Double) -> U
     self.waited = true
     if self.t0 == nav_held {
       self.t0 = c.now
+      // (its first frame this one, the page built with what it shows)
+      self.late_at = -1.0
       c.moving(self.mover, self as &Moving, what="a stack's slide")
     }
     return
@@ -327,7 +356,7 @@ pub fn[P] Nav::push(self : Nav[P], page : P) -> Unit {
   self.settle()
   self.pages.push(nav_page(page))
   self.p = 1.0
-  self.go(1, 0.0, nav_push_ms, Standard)
+  self.go(1, 0.0, nav_push_ms, Standard, brings=true)
 }
 
 ///|
@@ -339,7 +368,7 @@ pub fn[P] Nav::rise(self : Nav[P], page : P) -> Unit {
   e.rise = true
   self.pages.push(e)
   self.p = 1.0
-  self.go(1, 0.0, nav_rise_ms, Arrive)
+  self.go(1, 0.0, nav_rise_ms, Arrive, brings=true)
 }
 
 ///|
@@ -373,8 +402,8 @@ pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
   self.leaving = self.pages.pop()
   self.topped()
   match self.leaving {
-    Some(e) if e.rise => self.go(2, 1.0, nav_rise_ms, Arrive)
-    _ => self.go(2, 1.0, nav_push_ms, Standard)
+    Some(e) if e.rise => self.go(2, 1.0, nav_rise_ms, Arrive, brings=true)
+    _ => self.go(2, 1.0, nav_push_ms, Standard, brings=true)
   }
   true
 }
@@ -479,7 +508,26 @@ pub fn[P] Ctx::nav(
     }
     // (over at the end it says, t0 + dur, to the bit: (t0 + dur - t0) / dur can fall short of 1 by a rounding, and a
     // frame drawn at the very end it declared would leave it a hair short of it, still sliding)
-    let t = if nav.dur <= 0.0 || self.now >= nav.t0 + nav.dur { 1.0 } else { (self.now - nav.t0) / nav.dur }
+    // a page brought in: its first frame drawn from where it starts (any built again at its moment with it); the next
+    // told how late that one was to the screen
+    if nav.waits_late {
+      if nav.late_at < 0.0 {
+        nav.late_at = self.now
+      } else if self.now > nav.late_at {
+        nav.waits_late = false
+        let late = dmin(h_frame_late(), nav_late_most)
+        if late > 0.0 {
+          nav.t0 = nav.t0 + late
+          self.moving(nav.mover, nav as &Moving, what="a stack's slide")
+        }
+      }
+    }
+    // (from where it starts until its start: a start moved on by how late its first frame was)
+    let t = if nav.dur <= 0.0 || self.now >= nav.t0 + nav.dur {
+      1.0
+    } else {
+      dmax((self.now - nav.t0) / nav.dur, 0.0)
+    }
     nav.p = nav.p0 + (nav.p1 - nav.p0) * nav.curve.at(dmin(t, 1.0))
     if t >= 1.0 {
       nav.settle()

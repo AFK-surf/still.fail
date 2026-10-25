@@ -40,6 +40,16 @@ right: the state is the control's alone and means one thing.
   page sliding in, the tape), it goes with it, as part of it.
 - Content swapped: another chat in the same pane, a page's data read again. A whole page never crossfades.
 
+## A page's first frame comes before its motion
+
+A page brought in (kind 5: pushed, risen, gone back to) is built whole in the frame its slide starts in: its words
+shaped and its rows laid out for the first time, which can take longer than the display's frame. That frame draws it
+where it starts; the display says how late it reached the screen (the host's `frame_late`), and the slide's clock
+starts that much later (at most `nav_late_most`, 100 ms, as long as a page waits for what it shows). The wait comes
+before the page moves, not as a skipped step in the middle of its slide (UIKit's and Android's transitions build the
+page before they start too). The cause is still the push; its moment moved on by what the display said, an input as
+a touch's time is, kept on a run's tape (`LATE`) and given again to a Tester.
+
 ## Three rules
 
 1. **No motion from a layout's difference.** A place or a size moves only when its cause says so, from the frame of

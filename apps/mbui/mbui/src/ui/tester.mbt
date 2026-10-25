@@ -199,6 +199,9 @@ pub fn Tester::new(
 ) -> Tester {
   let f = {
     time,
+    late: 0.0,
+    late_after: -1.0,
+    late_frame: -1,
     wall: tester_wall - time,
     scale,
     wants: false,

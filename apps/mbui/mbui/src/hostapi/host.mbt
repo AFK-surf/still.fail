@@ -33,6 +33,7 @@ pub(open) trait Host {
   wall_ms(Self) -> Double = _
   utc_offset_min(Self, Double) -> Int = _
   event_time(Self) -> Double = _
+  frame_late(Self) -> Double = _
   platform(Self) -> Int = _
   request_frame(Self) -> Unit = _
   wake_after(Self, Double) -> Unit = _
@@ -298,6 +299,11 @@ impl Host with utc_offset_min(_, _) {
 ///|
 impl Host with event_time(_) {
   -1.0
+}
+
+///|
+impl Host with frame_late(_) {
+  0.0
 }
 
 ///|
@@ -1266,6 +1272,14 @@ pub fn utc_offset_min(at_ms : Double) -> Int {
 /// are handled together); negative when the host doesn't say.
 pub fn event_time() -> Double {
   current.val.event_time()
+}
+
+///|
+/// How much later than its time (the moment it was drawn for: the frame's `t`) the frame before this one reached the
+/// screen, in ms: 0 on time, as a host says where it cannot tell (a Tester's, a browser's), and where frames are not
+/// drawn one after the other (the first after a pause).
+pub fn frame_late() -> Double {
+  current.val.frame_late()
 }
 
 ///|

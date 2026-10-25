@@ -135,6 +135,10 @@ static void drop_post(NSString *json) {
 // What the menu bar's editing items can do (@hostapi.edit_can: text_menu_* bits), -1 till the app first says.
 static int32_t edit_can_now = -1;
 
+// how much later than its time the frame before reached the screen (mb_host_frame_late), and when the display link's
+// last frame began (-1: none since the link was paused, or a frame drawn with the window's change between)
+static double frame_late, last_tick = -1;
+
 @implementation MBView
 
 - (instancetype)initWithFrame:(NSRect)f {
@@ -278,6 +282,7 @@ static double record_t0 = -1;
   [self drawFrame];
   l.presentsWithTransaction = NO;
   self.drawnWithWindowAt = CACurrentMediaTime();
+  last_tick = -1;
 }
 
 static int frames_drawn;
@@ -344,12 +349,21 @@ static void pump(void) {
   if (CACurrentMediaTime() - self.drawnWithWindowAt < l.targetTimestamp - l.timestamp) return;
   if (!self.wantFrame) {
     l.paused = YES;
+    last_tick = -1;
     return;
   }
+  // a frame's time is when it begins (drawFrame): one begun more than the display's frame after the one before, that
+  // one was late by as much (it took longer than the display's frame to build); a settled or recorded run's never is
+  double begins = mb_now_ms(), period = (l.targetTimestamp - l.timestamp) * 1000.0;
+  frame_late = last_tick >= 0 && !settle && !record_dir ? MAX(0, begins - last_tick - period) : 0;
+  last_tick = begins;
   [self drawFrame];
   frames_drawn++;
   if (script) run_script_step(frames_drawn);
-  if (!self.wantFrame) l.paused = YES;
+  if (!self.wantFrame) {
+    l.paused = YES;
+    last_tick = -1;
+  }
 }
 
 // ---- pointer ----
@@ -1773,6 +1787,8 @@ void mb_host_outside(int32_t kind, int32_t id, int32_t state) {
 }
 
 double mb_host_event_time(void) { return event_time; }
+
+double mb_host_frame_late(void) { return frame_late; }
 
 int32_t mb_host_platform(void) { return 0; }
 

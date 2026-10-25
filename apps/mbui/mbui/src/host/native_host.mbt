@@ -121,6 +121,11 @@ impl @hostapi.Host for Native with event_time(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with frame_late(_) {
+  frame_late()
+}
+
+///|
 impl @hostapi.Host for Native with platform(_) {
   platform()
 }
