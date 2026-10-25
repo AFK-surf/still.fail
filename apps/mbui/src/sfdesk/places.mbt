@@ -138,51 +138,18 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// A station's row (StationRow): its mark and name, how it is at the end (its agents at work, or when it was last seen
-/// away); while up, a line of what is left of its CPU, memory and disk in small boxes (never onto another: as short as
-/// the line needs, @sf.meter_chips), and a line of how this device reaches it (the core's `stationNet`, there only while
-/// this device holds a connection of its own to it: 未连接 while it does not). Each line kept whatever comes and goes in
-/// it, so a row is as high whichever station is open and whether this device is connected to it.
+/// A station's row (StationRow): its mark and name, how it is at the end (@sfpages.station_state); while up, what is
+/// left of its CPU, memory and disk and how this device reaches it (@sfpages.station_figures).
 fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, more : Bool, pick : () -> Unit) -> Unit {
   let t = @sf.theme()
-  let address = text(s, "station")
-  let online = flag(s, "online")
-  let meters = if online { items(field(s, "host"), "meters") } else { [] }
-  let net = if online { (src.topic)("stationNet", { "station": Json::string(address) }).value } else { None }
-  let running = number(field(field(s, "overview"), "counts"), "running")
   if nav_item(
       c,
-      "stations/" + address,
+      "stations/" + text(s, "station"),
       on,
       fn() { @sf.station_icon(c, text(s, "emoji"), text(s, "icon"), nav_mark_side, t.p.text) },
       fn() { nav_title(c, text(s, "name")) },
-      end=fn() {
-        c.box(style=if online { place_dot_on } else { place_dot_off }, fn() {  }) |> ignore
-        if !online {
-          c.text(text(s, "summary"), style=nav_meta()) |> ignore
-        } else if running > 0.0 {
-          let busy = @sf.t("web-pages.stations.page.runningShort", args=[("n", running.to_int().to_string())])
-          c.text(busy, style=nav_meta().then(place_busy))
-          |> ignore
-        }
-      },
-      // while up, its two lines always there, what is in them as it comes
-      lines=fn() {
-        if online {
-          nav_line(c, fn() { @sf.meter_chips(c, meters, brief=true) })
-          nav_line(c, fn() {
-            let words = match net {
-              Some(Object(_)) =>
-                match text(field(net, "rtt"), "text") {
-                  "" => text(net, "path")
-                  rtt => text(net, "path") + " · " + rtt
-                }
-              _ => @sf.t("web-pages.stations.netNone")
-            }
-            c.text(words, style=nav_meta()) |> ignore
-          })
-        }
-      },
+      end=fn() { @sfpages.station_state(c, s) },
+      lines=fn() { @sfpages.station_figures(c, src, s) },
       more~,
     ) {
     pick()
@@ -321,11 +288,6 @@ let place_side : @ui.Style = @ui.css("w=Full h=Full")
 let place_grow : @ui.Style = @ui.style(w=@sf.grow, clip=true)
 
 ///|
-/// Its agents at work (StationPage.css.ts busy): the accent's words.
-// kept across runs: a value (no field of it changes)
-let place_busy : @ui.TextStyle = @ui.text_style(color=AccentText)
-
-///|
 /// What is wrong, in its tone (ProfilesNav.css.ts trouble): amber, red, or muted (neutral).
 fn trouble_ink(tone : String) -> @ui.TextStyle {
   match tone {
@@ -356,15 +318,6 @@ let place_fill : @ui.TextStyle = @ui.text_style(w=Cut)
 /// 使用此账号 (ProfilesNav MachineLoginRow): the accent's words.
 // kept across runs: a value (no field of it changes)
 let place_use : @ui.TextStyle = @ui.text_style(color=AccentText)
-
-///|
-/// Up or away: the rail's dot (railCss.dot: 6).
-// kept across runs: a value (no field of it changes)
-let place_dot_on : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Positive")
-
-///|
-// kept across runs: a value (no field of it changes)
-let place_dot_off : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Faint")
 
 ///|
 /// No station picked: while they are read, said so; none in the workspace, the first to add (its scene, 添加 station).

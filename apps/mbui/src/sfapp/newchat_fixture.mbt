@@ -36,6 +36,9 @@ let new_fix : NewFix = {
 }
 
 ///|
+/// A station a new chat can start on, as the core's `newChat` lists it (StationView): what it is, its agents at work
+/// (`overview`) and what is left of its machine (`host`); how this device reaches it is the `stationNet` view's (the
+/// made-up stations' `net`: Studio's, none of MBA's).
 fn fix_station(id : String) -> Json {
   match id {
     "st2" =>
@@ -44,8 +47,16 @@ fn fix_station(id : String) -> Json {
         "id": "st2",
         "name": "MBA",
         "icon": "glyph:laptop",
-        "summary": "在线 · 空闲",
+        "summary": "空闲 · Apple M4 · 16 GB · macOS 27.0.1",
         "online": true,
+        "host": {
+          "meters": [
+            fix_meter("CPU", 91, "ok", "91", "%"),
+            fix_meter("内存", 9, "red", "1.4", "GB"),
+            fix_meter("磁盘", 12, "amber", "28", "GB"),
+          ],
+        },
+        "overview": { "counts": { "running": 0 } },
         "models": [],
         "runtimes": [],
       }
@@ -55,11 +66,32 @@ fn fix_station(id : String) -> Json {
         "id": "st1",
         "name": "Studio",
         "icon": "glyph:desktop",
-        "summary": "在线 · 2 个 agent 在工作",
+        "summary": "2 个 agent 正在运行 · Apple M2 Max · 64 GB · macOS 27.0.1",
         "online": true,
+        "host": {
+          "meters": [
+            fix_meter("CPU", 72, "ok", "72", "%"),
+            fix_meter("内存", 18, "amber", "11.5", "GB"),
+            fix_meter("磁盘", 41, "ok", "380", "GB"),
+          ],
+        },
+        "overview": { "counts": { "running": 2 } },
         "models": [],
         "runtimes": [],
       }
+  }
+}
+
+///|
+/// A meter of a station's machine (Meter), what is left of it `left` percent, `big` its figure in `unit`.
+fn fix_meter(short : String, left : Int, level : String, big : String, unit : String) -> Json {
+  {
+    "short": Json::string(short),
+    "left": Json::number(left.to_double()),
+    "level": Json::string(level),
+    "remaining": Json::string(if unit == "%" { "空闲 " + big + "%" } else { "剩 " + big + " G" }),
+    "big": Json::string(big),
+    "unit": Json::string(unit),
   }
 }
 
