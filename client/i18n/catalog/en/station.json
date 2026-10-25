@@ -289,6 +289,7 @@
   "station.quota.chatgptNoWindows": "ChatGPT returned no usage limits",
   "station.quota.grokNoWindows": "SuperGrok returned no usage limits",
   "station.quota.kimiNoWindows": "Kimi Code returned no usage limits",
+  "station.quota.kimiNone": "Kimi Code doesn't report usage limits for this account",
   "station.quota.envUnsupported": "Can't check limits for custom env accounts",
   "station.quota.noCredit": "No resets left",
   "station.quota.nothingToReset": "Nothing to reset now",

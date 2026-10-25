@@ -634,8 +634,8 @@ export function ProfileAccountSettings({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-/** A profile of the workspace's list: on its page's station; one shared that cannot be used now (its subscription's
- * station away) dimmed, and said why. */
+/** A profile of the workspace's list: on its page's station; how it is as the core says it; one shared that cannot be
+ * used now (its subscription's station away) dimmed. */
 function WorkspaceProfileRow({ entry, workspace }: { entry: WorkspaceProfile; workspace: string }) {
   const state = useDoingState(["profile.delete", "profile.share", "profile.move"], { station: entry.station, id: entry.profile.id });
   const uses = [entry.where, entry.profile.usedBy.length ? t("web-pages.settings.profiles.usedBy", { n: entry.profile.usedBy.length }) : ""].filter(Boolean).join(" · ");
@@ -643,8 +643,7 @@ function WorkspaceProfileRow({ entry, workspace }: { entry: WorkspaceProfile; wo
   const to = hosts(entry).length > 1 ? accountPath(workspace, entry.key) : `${stationBase(entry.station)}/settings/accounts/${encodeURIComponent(entry.profile.id)}`;
   return (
     <div className={entry.usable ? undefined : css.profileAway}>
-      <ProfileCard profile={entry.profile} to={to} uses={uses}
-        state={entry.usable ? undefined : <Pill tone="red">{t("web-pages.settings.profiles.hostAway", { station: entry.hostName })}</Pill>}
+      <ProfileCard profile={entry.profile} to={to} uses={uses} state={entry.state ?? null}
         action={state.running || state.error !== undefined ? <DoingShown state={state} label={t("web-main.activity.busy")} /> : undefined} />
     </div>
   );

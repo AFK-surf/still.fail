@@ -230,10 +230,11 @@ export function profiles() {
   // The subscription as the station shows it (station.json's, refused by Anthropic: subscription() above).
   const p = overview().profiles[0] as typeof data.overview.profiles[number] & ReturnType<typeof subscription>;
   return {
-    loading: false, wait: { reading: false, failing: [], empty: false },
+    loading: false, wait: { reading: false, failing: [], empty: false }, attention: 1,
     items: [{
       key: `${STATION}/${p.id}`, group: "claude", groupTitle: "Claude 订阅", station: STATION, stationId: "local", stationName: "Studio",
-      profile: p, shared: false, host: "local", hostName: "Studio", hostOnline: true, usable: true, where: "仅在 Studio",
+      // (stopped by its provider: in its check's words, needing a look)
+      profile: p, shared: false, host: "local", hostName: "Studio", hostOnline: true, usable: true, state: { text: p.checkText, tone: p.checkTone }, look: true, where: "仅在 Studio",
       stations: [], editable: true, canShare: true,
       members: [{ station: STATION, stationId: "local", stationName: "Studio", online: true, profileId: p.id, role: "own", about: "自己登录", usable: true, checkText: p.checkText, checkTone: p.checkTone, usedBy: 1 }],
     }],

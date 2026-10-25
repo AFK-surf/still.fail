@@ -471,6 +471,7 @@
   "core-views.profiles.group.key": "API keys",
   "core-views.profiles.signedIn": "Signed in on {station}",
   "core-views.profiles.allowed": "Only for {stations}",
+  "core-views.profiles.away": "{station} offline",
   "core-views.profiles.on": "On {stations}",
   "core-views.profiles.borrows": "Borrowed from {station}",
   "core-views.profiles.copyOf": "Shared copy from {station}",

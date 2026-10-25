@@ -46,7 +46,8 @@ fn places_reset() -> Unit {
 let place_across : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
-/// The page picked in a place (the stations' or the profiles' list), by place; none: the first.
+/// The page picked in a place (the stations' or the profiles' list), by place; none: the first (of the profiles, the
+/// first that needs a look).
 fn place_route(src : Source, w : Workspace, place : String) -> @settings.Route? {
   match place_pick.get(place) {
     Some(r) => Some(r)
@@ -57,11 +58,11 @@ fn place_route(src : Source, w : Workspace, place : String) -> @settings.Route? 
             Some(s) => Some(Route::Station(text(Some(s), "station")))
             None => None
           }
-        "profiles" =>
-          match items((src.topic)("profiles", { "scope": Json::string(w.id) }).value, "items").get(0) {
-            Some(e) => Some(profile_route(Some(e)))
-            None => None
-          }
+        // (the first that needs a look, else the first: what its settings' row counts is what shows)
+        "profiles" => {
+          let list = items((src.topic)("profiles", { "scope": Json::string(w.id) }).value, "items")
+          list.get(list.search_by(fn(e) { flag(Some(e), "look") }).or(0)).map(fn(e) { profile_route(Some(e)) })
+        }
         _ => None
       }
   }
@@ -179,15 +180,10 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         let p = field(e, "profile")
         let route = profile_route(e)
         let usable = flag(e, "usable")
-        // only what is wrong in colour (ProfilesNav.tsx ProfileRow): one nobody can use now (red), one whose check did
-        // not pass (in its tone)
-        let (trouble, tone) = if !usable {
-          (@sf.t("web-pages.settings.profiles.hostAway", args=[("station", text(e, "hostName"))]), "red")
-        } else if text(p, "checkTone") != "green" {
-          (text(p, "checkText"), text(p, "checkTone"))
-        } else {
-          ("", "")
-        }
+        // how it is where that is not simply fine, as the core says it, in its tone (ProfilesNav.tsx ProfileRow): what
+        // needs a look in colour
+        let trouble = text(field(e, "state"), "text")
+        let tone = text(field(e, "state"), "tone")
         // where it is and who uses it
         let used = items(p, "usedBy").length()
         let facts = [

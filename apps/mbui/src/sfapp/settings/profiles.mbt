@@ -186,15 +186,18 @@ fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit
             let ev = Some(e)
             let p = field(ev, "profile")
             let usable = flag(ev, "usable")
+            // how it is as the core says it (its dot in its tone, green where it says nothing); what needs a look said
+            // in its line
+            let state = field(ev, "state")
             if list_row(c, key="ws-profile/" + text(ev, "key"), fn() {
                 c.box(w=Fill(1.0), opacity=if usable { 1.0 } else { 0.55 }, fn() {
                   c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
-                    presence_dot(c, if usable { tone_dot(text(p, "checkTone")) } else { "error" })
+                    presence_dot(c, tone_dot(if state is Some(Object(_)) { text(state, "tone") } else { "green" }))
                     c.text(text(p, "name"), size=t.t.ui, color=t.p.text, wrap=false, w=@sf.line_left, line=21.0) |> ignore
                   })
                   |> ignore
-                  let line = if !usable {
-                    fill("web-pages.settings.profiles.hostAway", [("station", text(ev, "hostName"))])
+                  let line = if flag(ev, "look") {
+                    text(state, "text")
                   } else if text(ev, "where") != "" {
                     text(ev, "where")
                   } else {

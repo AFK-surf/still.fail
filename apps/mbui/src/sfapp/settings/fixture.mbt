@@ -1591,6 +1591,18 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
       )
     "profiles" => {
       let list = fx_profiles().map(fn(p) {
+        // how it is, as the core says it (views/profiles.ts stateOf): its trouble, in its check's words where the check
+        // did not pass
+        let pv = Some(p)
+        let look = field(pv, "trouble") is Some(Object(_))
+        let green = text(pv, "checkTone") == "green"
+        let state = if look && green {
+          obj([("text", str(text(field(pv, "trouble"), "title"))), ("tone", str("amber"))])
+        } else if green {
+          Json::null()
+        } else {
+          obj([("text", str(text(pv, "checkText"))), ("tone", str(text(pv, "checkTone")))])
+        }
         obj([
           ("key", str("ws1/st1/" + text(Some(p), "id"))),
           ("group", str(text(Some(p), "group"))),
@@ -1604,6 +1616,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("hostName", str("Studio")),
           ("hostOnline", Json::boolean(true)),
           ("usable", Json::boolean(true)),
+          ("state", state),
+          ("look", Json::boolean(look)),
           ("where", str("只在 Studio")),
           (
             "stations",
@@ -1622,7 +1636,14 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("canShare", Json::boolean(true)),
         ])
       })
-      Some(obj([("items", Json::array(list)), ("wait", obj([("reading", Json::boolean(false)), ("failing", []), ("empty", Json::boolean(false))]))]))
+      let attention = list.filter(fn(e) { flag(Some(e), "look") }).length()
+      Some(
+        obj([
+          ("items", Json::array(list)),
+          ("attention", Json::number(attention.to_double())),
+          ("wait", obj([("reading", Json::boolean(false)), ("failing", []), ("empty", Json::boolean(false))])),
+        ]),
+      )
     }
     "usage" =>
       Some(

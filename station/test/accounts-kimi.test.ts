@@ -9,7 +9,7 @@ import { checkConfig } from "../src/accounts/check.ts";
 import { KIMI_TOKEN_FILE, readKimi, writeKimi } from "../src/accounts/kimi.ts";
 import { LoginManager, type LoginState } from "../src/accounts/login.ts";
 import { URLS } from "../src/accounts/profiles.ts";
-import { kimiWindows } from "../src/accounts/quota.ts";
+import { checkQuota, kimiWindows } from "../src/accounts/quota.ts";
 import { keyFile, profileEnv, profileRuntimes } from "../src/agents/profiles.ts";
 import { ConfigFile } from "../src/ops/config.ts";
 import { fingerprint } from "../src/sessions/decision.ts";
@@ -173,4 +173,24 @@ test("Kimi Code's usage answer is its windows: the shorter ones, then the week",
     { label: "每周", usedPercent: 20, resetsAt: Date.parse("2026-10-28T00:00:00Z"), minutes: 7 * 24 * 60 },
   ]);
   assert.deepEqual(kimiWindows({ usage: { used: 5, limit: 0 } }), []);
+});
+
+test("Kimi Code saying no allowance at all has none to show; one it says and cannot be read is unavailable", async () => {
+  let body: unknown = {};
+  const p = await provider(() => ({ status: 200, body }));
+  const kc = { id: "kc", home: "/h", access: { kind: "api-provider", provider: "kimi-code", key: "sk-kimi" } } as never;
+  const ask = async () => {
+    const q = await checkQuota(kc, {}, undefined, { ...URLS, kimiApi: p.base }, "zh");
+    return [q.state, q.detail];
+  };
+  try {
+    // (an account it tells nothing of, as it answers one today: `{}`)
+    assert.deepEqual(await ask(), ["unsupported", "Kimi Code 未提供此账号的额度信息"]);
+    body = { usage: { used: "a lot" } };
+    assert.deepEqual(await ask(), ["unavailable", "Kimi Code 没有返回额度信息"]);
+    body = { usage: { limit: "100", remaining: "80" } };
+    assert.deepEqual(await ask(), ["ok", null]);
+  } finally {
+    await p.close();
+  }
 });

@@ -83,6 +83,7 @@ export function workspaceProfiles(stations: J[]): J {
     if (allow !== null) parts.push(t("core-views.profiles.allowed", { stations: allow.map(name).join(t("core-views.list_separator")) }));
     const host = share ? String(share.host) : String(s.id);
     const kind = group(p);
+    const usable = members.some((m) => m.usable);
     items.push({
       key,
       group: kind,
@@ -96,7 +97,8 @@ export function workspaceProfiles(stations: J[]): J {
       hostName: name(host),
       hostOnline: byId.get(host)?.online === true,
       // Usable where any of its copies is.
-      usable: members.some((m) => m.usable),
+      usable,
+      ...stateOf(usable, name(host), p),
       where: parts.join(" · "),
       allow,
       stations: stations.map(
@@ -107,12 +109,23 @@ export function workspaceProfiles(stations: J[]): J {
       members,
     });
   }
-  // By kind of account; in each, what needs a look first (one nobody can use now, one whose check failed), then by name.
-  const look = (e: J) => !e.usable || e.profile.checkTone === "red";
+  // By kind of account; in each, what needs a look first, then by name.
   // Not localeCompare: Hermes on Android asks Java for it, which the app does not carry (it aborts the app).
   const byName = (a: J, b: J) => (String(a.profile.name) < String(b.profile.name) ? -1 : String(a.profile.name) > String(b.profile.name) ? 1 : 0);
-  items.sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group) || Number(look(b)) - Number(look(a)) || byName(a, b));
-  return { items, wait: waitNote(waiting, [], items.length === 0) };
+  items.sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group) || Number(b.look) - Number(a.look) || byName(a, b));
+  return { items, attention: items.filter((e) => e.look).length, wait: waitNote(waiting, [], items.length === 0) };
+}
+
+/// How an account is, where that is not simply fine, as its row says it (`state`: its words and their tone), and whether
+/// it needs a look (`look`: counted where its list is entered, first in its kind, in colour): nobody can use it now (its
+/// host away, red); else its trouble (present.ts profileTrouble: stopped by its provider, its check failed or wants a
+/// sign-in, its allowance not read), in its check's words where the check did not pass, else the trouble's; else a check
+/// not made (未检查, neutral), which needs none.
+function stateOf(usable: boolean, hostName: string, p: J): { state: J; look: boolean } {
+  if (!usable) return { state: { text: t("core-views.profiles.away", { station: hostName }), tone: "red" }, look: true };
+  const green = p.checkTone === "green";
+  if (isObject(p.trouble)) return { state: green ? { text: String(p.trouble.title ?? ""), tone: "amber" } : { text: String(p.checkText ?? ""), tone: String(p.checkTone) }, look: true };
+  return { state: green || !p.checkText ? null : { text: String(p.checkText), tone: String(p.checkTone ?? "neutral") }, look: false };
 }
 
 /// One station's copy of an account: what it is there and how it is doing.
