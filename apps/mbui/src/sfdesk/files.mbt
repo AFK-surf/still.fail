@@ -410,9 +410,9 @@ let station_dots : Array[@ui.Style] = ([Accent, Link, Positive, Warn, Danger, Mu
 })
 
 ///|
-/// The tab's sides, side by side, apart by their room (no line between).
+/// The tab's sides, side by side, apart by their own padding (no line between).
 // kept across runs: a value (no field of it changes)
-let panes_row : @ui.Style = @ui.css("row w=Full h=Full gap=S4")
+let panes_row : @ui.Style = @ui.css("row w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
