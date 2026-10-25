@@ -226,7 +226,7 @@ pub fn model_triple(
 
 ///|
 /// The panel: the filter across its top (more than 8 models), the models by series and what goes with the one picked
-/// (its runtimes, how hard it thinks, how fast) side by side, apart by their room: three columns where the panel is wide
+/// (its runtimes, how hard it thinks, how fast) side by side, a line between: three columns where the panel is wide
 /// enough for them, else the models and the rest under one another beside them; what borrowing would do under them.
 fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Unit {
   let v = (src.topic)("pick", pick_params(station, of)).value
@@ -380,12 +380,15 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Uni
     let rest = runtimes.length() > 0 || efforts.length() > 0 || fast
     if three {
       if runtimes.length() > 0 {
+        c.box(style=triple_rule_v, fn() {  }) |> ignore
         c.box(style=triple_column, runtime_column) |> ignore
       }
       if efforts.length() > 0 || fast {
+        c.box(style=triple_rule_v, fn() {  }) |> ignore
         c.box(style=triple_efforts, effort_column) |> ignore
       }
     } else if rest {
+      c.box(style=triple_rule_v, fn() {  }) |> ignore
       let column = fn() {
         c.box(style=triple_column, fn() {
           if runtimes.length() > 0 {
@@ -415,6 +418,9 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Uni
     })
     |> ignore
   }
+  // (the line over its foot across the whole panel, out past its padding to its edges: 2026-10-25 用户「分割线边上不要
+  // 留空」)
+  c.box(style=triple_rule_h.then(@sf.panel_bleed()), fn() {  }) |> ignore
 }
 
 ///|
@@ -770,9 +776,19 @@ let triple_head : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color
 let triple_search : @ui.Style = @ui.css("w=Full pb=S2")
 
 ///|
-/// Its columns side by side, set apart by their room (no line between: only a menu's parts are set apart by one).
+/// The lines between its columns, and over its foot (a panel of columns, as the web's: kept, 2026-10-25 用户「这两个的
+/// 分割线可以保留」).
 // kept across runs: a value (no field of it changes)
-let triple_columns : @ui.Style = @ui.css("row w=Full gap=S3")
+pub let triple_rule_h : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
+
+///|
+// kept across runs: a value (no field of it changes)
+let triple_rule_v : @ui.Style = @ui.css("w=SPx h=Full bg=Line")
+
+///|
+/// Its columns side by side, a line between (4 either side of it).
+// kept across runs: a value (no field of it changes)
+let triple_columns : @ui.Style = @ui.css("row w=Full gap=S1")
 
 ///|
 /// The models' column: what the others leave of the panel (200 at least, the web's).

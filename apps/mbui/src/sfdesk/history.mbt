@@ -100,6 +100,8 @@ fn history_head(c : @ui.Ctx, src : Source, station : String, key : String, a : J
   |> ignore
   if !history_own.shut {
     wh_details(c, src, station, key, a)
+    // (its details set apart from its steps by a line across the panel: kept, 2026-10-25 用户「这两个的分割线可以保留」)
+    c.box(style=@sfpages.triple_rule_h, fn() {  }) |> ignore
   }
 }
 
