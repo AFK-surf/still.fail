@@ -588,6 +588,14 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
     last_gpu = (done.GPUEndTime - done.GPUStartTime) * 1000.0;
     dispatch_semaphore_signal(sem);
   }];
+  // (a layer that presents with its transaction: shown with the window's change it was drawn for, mac_app.m
+  // drawWithWindow; once its commands are scheduled, as Core Animation asks)
+  if (drawable && mlayer.presentsWithTransaction) {
+    [cb commit];
+    [cb waitUntilScheduled];
+    [drawable present];
+    return;
+  }
   if (drawable) [cb presentDrawable:drawable];
   [cb commit];
 }

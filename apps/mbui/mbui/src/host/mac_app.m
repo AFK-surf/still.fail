@@ -209,7 +209,7 @@ static void drop_post(NSString *json) {
 
 - (void)setFrameSize:(NSSize)s {
   [super setFrameSize:s];
-  [self requestFrame];
+  [self drawWithWindow];
 }
 
 - (void)viewDidChangeBackingProperties {
@@ -253,6 +253,23 @@ static double record_t0 = -1;
   in_app_frame = YES;
   mb_cb.frame(s.width, s.height, scale, settle ? settle_clock : mb_now_ms());
   in_app_frame = NO;
+}
+
+// A frame drawn now and shown with the change of the window's that called for it (its size: a resize, going in and out
+// of full screen), in the same Core Animation transaction, not at the display link's next tick. The system's move of
+// the window shows what the window has as it changes: drawn later, it showed the last frame (the full screen layout
+// on the way out of it, stretched) and the window's own layout came once it was back, a jump after the move. Not in a
+// settled or recorded run (their frames are their clock's), nor in the app's own frame (a size it set), nor before the
+// window is shown: a frame asked for, as before.
+- (void)drawWithWindow {
+  if (settle || record_dir || in_app_frame || !self.window.visible) {
+    [self requestFrame];
+    return;
+  }
+  CAMetalLayer *l = (CAMetalLayer *)self.layer;
+  l.presentsWithTransaction = YES;
+  [self drawFrame];
+  l.presentsWithTransaction = NO;
 }
 
 static int frames_drawn;
