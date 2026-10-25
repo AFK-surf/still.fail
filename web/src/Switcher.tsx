@@ -13,13 +13,13 @@ import { jumpTo } from "./jumpTo.ts";
 import { Mark, useAppUpdate } from "./brand.tsx";
 import { commands, useCommands, type Command } from "./commands.ts";
 import { webUpdates } from "./core/webUpdates.ts";
-import { Archive, ArrowLeft, Command as CommandIcon, Compose, Download, File, Folder, More, PanelOpen, Refresh, Server, Settings, Stop, Thread, User, Web, type IconProps } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowDown, ArrowLeft, ArrowRight, ChevronDown, ChevronUp, Close, Command as CommandIcon, Compose, Download, Edit, File, Folder, Keyboard, More, PanelOpen, Refresh, Search, Server, Settings, Stop, Thread, User, Web, type IconProps } from "@stillfail/ui/icons.tsx";
 import { availableActions, runAction, shortcutOf, useShortcut, type Action } from "./keymap.ts";
 import { ShortcutsDialog } from "./Shortcuts.tsx";
 import { RelayHost } from "./Relay.tsx";
 import { stationBase } from "./station.tsx";
 import { filesPath } from "./searchOpen.ts";
-import { ModelLogo, Time } from "./ui.tsx";
+import { Keys, ModelLogo, Time, capsOf } from "./ui.tsx";
 import { StationMark } from "./StationMark.tsx";
 import * as markCss from "./StationMark.css.ts";
 import * as css from "./Switcher.css.ts";
@@ -105,8 +105,10 @@ type Offered = Command & { keys?: string | null };
 type Listed = { id: string; group: string; heading: string; label: string; icon: ComponentType<IconProps>; keys?: string | null; run(): void };
 
 const ACTION_ICON: Partial<Record<Action, ComponentType<IconProps>>> = {
-  "chat.new": Compose, "settings": Settings, "shortcuts": CommandIcon, "sidebar.toggle": PanelOpen,
-  "composer.file": File, "chat.stop": Stop, "chat.history": Thread, "chat.jobs": Web, "chat.archive": Archive,
+  "chat.new": Compose, "settings": Settings, "shortcuts": Keyboard, "sidebar.toggle": PanelOpen,
+  "chat.prev": ChevronUp, "chat.next": ChevronDown, "nav.back": ArrowLeft, "nav.forward": ArrowRight,
+  "composer.focus": Edit, "composer.file": File, "chat.stop": Stop, "chat.history": Thread, "chat.jobs": Web,
+  "chat.latest": ArrowDown, "chat.find": Search, "chat.archive": Archive, "panel.close": Close,
 };
 
 /** What can be done now: the keys' actions the page answers (which of them are worth listing is the core's), and what it offers. */
@@ -227,7 +229,9 @@ function Finder({ scope, settings, onClose, onCommand, escape }: { scope: string
   const note = typed ? [view?.wait?.text, view?.note].filter((w): w is string => !!w).join(" · ") : "";
   return (
     <>
-      <input className={css.search} autoFocus placeholder={t("web-main.switcher.search")} aria-label={t("web-main.switcher.search")} value={query} spellCheck={false}
+      <label className={css.searchBar}>
+        <Search size={18} className={css.searchMark} aria-hidden="true" />
+        <input className={css.search} autoFocus placeholder={t("web-main.switcher.search")} aria-label={t("web-main.switcher.search")} value={query} spellCheck={false}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {
           if (e.nativeEvent.isComposing) return;
@@ -235,6 +239,7 @@ function Finder({ scope, settings, onClose, onCommand, escape }: { scope: string
           if (step) { e.preventDefault(); setAt((a) => Math.max(0, Math.min(found.length - 1, a + step))); }
           else if (e.key === "Enter") { e.preventDefault(); go(found[at]); }
         }} />
+      </label>
       <div className={css.results} ref={list} role="listbox" aria-label={t("web-main.chat.label")}>
         {search.error && !view && <p className={css.none}>{t("web-main.switcher.update", { app: NAME })}</p>}
         {view && found.length === 0 && !view.wait?.reading && <p className={css.none}>{query ? t("web-main.switcher.noMatch") : t("web-main.switcher.none")}</p>}
@@ -260,7 +265,7 @@ function Finder({ scope, settings, onClose, onCommand, escape }: { scope: string
               <div key={line.key} className={css.row} {...option(i)}>
                 <span className={`${css.picture} ${css.actionMark}`} aria-hidden="true"><command.icon size={16} /></span>
                 <span className={css.title}>{command.label}</span>
-                {command.keys && <span className={css.meta}>{command.keys}</span>}
+                {command.keys && <Keys caps={capsOf(command.keys)} />}
               </div>
             );
           }
@@ -316,6 +321,11 @@ function Finder({ scope, settings, onClose, onCommand, escape }: { scope: string
           );
         })}
         {note && <p className={css.note}>{note}</p>}
+      </div>
+      <div className={css.foot} aria-hidden="true">
+        <span className={css.hint}><Keys caps={["↑", "↓"]} />{t("web-main.switcher.hint.move")}</span>
+        <span className={css.hint}><Keys caps={["↩"]} />{t("web-main.switcher.hint.open")}</span>
+        <span className={css.hint}><Keys caps={["Esc"]} />{t("web-main.switcher.hint.close")}</span>
       </div>
     </>
   );

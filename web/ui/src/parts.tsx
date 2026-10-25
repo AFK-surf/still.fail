@@ -62,6 +62,16 @@ function TipKeys({ action }: { action: Shortcut }) {
   return keys ? <span className={partsCss.tipKeys}>{keys}</span> : null;
 }
 
+/** A binding as shown (⌘⇧H, Ctrl+Shift+H) split into its keys: each mark of a Mac's modifiers one, the rest by its +s. */
+export function capsOf(label: string): string[] {
+  return label.match(/[⌃⌥⇧⌘]|[^⌃⌥⇧⌘+]+/g) ?? [];
+}
+
+/** Keys that do something, each as a cap. */
+export function Keys({ caps, className }: { caps: string[]; className?: string }) {
+  return <span className={className ? `${partsCss.keys} ${className}` : partsCss.keys}>{caps.map((k, i) => <kbd key={i} className={partsCss.cap}>{k}</kbd>)}</span>;
+}
+
 /**
  * A tip over a control; with a `shortcut`, the keys that do the same follow what it says. The only way anything here
  * explains itself on hover: no native `title`. With no label it never opens, but keeps its place in the tree.

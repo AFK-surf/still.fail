@@ -232,13 +232,6 @@ export const menuWords = style({ flex: "1", minWidth: "0", whiteSpace: "nowrap" 
 /** What a row says at its end: the size chosen, a size's bounds. */
 export const menuEnd = style({ color: vars.muted, fontSize: vars.textMeta, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" });
 export const menuCheck = style({ display: "inline-grid", placeItems: "center", width: "16px", flex: "none" });
-/** A combo's keys, as keycaps. */
-export const menuKeys = style({ display: "flex", gap: "3px", flex: "none" });
-globalStyle(`${menuKeys} > kbd`, {
-  display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "20px", height: "20px", padding: "0 5px", boxSizing: "border-box",
-  border: `1px solid color-mix(in srgb, ${vars.text} 18%, transparent)`, borderBottomWidth: "2px", borderRadius: "4px",
-  fontFamily: "inherit", fontSize: vars.textCaption, fontWeight: "500", lineHeight: "1", color: vars.muted,
-});
 
 // ── a simulator's buttons, with a mouse ──
 
