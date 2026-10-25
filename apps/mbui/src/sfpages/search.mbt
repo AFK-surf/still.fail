@@ -202,8 +202,8 @@ let search_bar_row : @ui.Style = @ui.css("row w=Full pl=S4 pr=S4 pt=S2 pb=S2 gap
 let search_slot : @ui.Style = @ui.style(w=@sf.grow, h=@sf.search_field_h)
 
 ///|
-/// The field (Search.kt SearchField, SearchPage's): 38 high, a capsule of the ink at 6%, 12 in, its icon 8 before
-/// the words.
+/// The field (Search.kt SearchField, SearchPage's): a capsule of the ink at 6%, its icon 8 before the words; at the
+/// list's top as high and as far in as the theme's band (38, 12).
 // kept across runs: a value (no field of it changes)
 let search_field_box : @ui.Style = @ui.style(
   row=true,
@@ -217,13 +217,14 @@ let search_field_box : @ui.Style = @ui.style(
 )
 
 ///|
-/// The field at the list's top: 16 either side, 6 under it.
+/// The field at the list's top: as far in at its sides as the theme's band (16 on a touch device), 6 under it.
 // kept across runs: a value (no field of it changes)
 let search_field_line : @ui.Style = @ui.css("w=Full pl=S4 pr=S4 pb=S1_5")
 
 ///|
+/// Its words: the band's, muted (what to do in it, not yet done).
 // kept across runs: a value (no field of it changes)
-let search_field_words : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, wrap=false)
+let search_field_words : @ui.TextStyle = @ui.text_style(color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -252,10 +253,12 @@ fn search_field(c : @ui.Ctx) -> Unit {
       None => ()
     }
   }
-  c.box(style=search_field_line, fn() {
-    let f = c.box(style=search_field_box, id~, fn() {
-      @sf.icon(c, "search", size=17.0, color=t.p.muted) |> ignore
-      c.text(@sf.t("android-chat.search.field"), style=search_field_words) |> ignore
+  // (on one line with what stands over the list, 新建对话 beside a rail: the theme's band's room, mark, height, words)
+  let band = t.chat_list
+  c.box(style=search_field_line.then(@ui.style(px=@sf.room_of(band.band_in))), fn() {
+    let f = c.box(style=search_field_box.then(@ui.style(h=Fixed(band.band_h), px=@sf.room_of(band.band_pad))), id~, fn() {
+      @sf.icon(c, "search", size=band.band_icon, color=t.p.muted) |> ignore
+      c.text(@sf.t("android-chat.search.field"), style=band.band_words.then(search_field_words)) |> ignore
     })
     if search.open {
       c.look(f, { ..@ui.still_look, alpha: 0.0 })

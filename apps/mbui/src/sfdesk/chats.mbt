@@ -14,15 +14,13 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     // in the closed bar, what stands in its top right corner (the filter) 6 from its top and side, the band ending 6
     // under it (Sidebar.css.ts navNew, closed)
     let in_bar = wide.in_bar
-    c.box(style=if in_bar { band_new_bar } else if wide.tape { band_new_tape() } else { nav_new }, fn() {
+    c.box(style=if in_bar { band_new_bar } else if wide.tape { band_new_tape() } else { nav_new() }, fn() {
       let is_new = app.nav.top() is NewChat
       c.box(style=side_full, fn() {
-        // (on the tape over the search's field: its ground's edge on the field's, its icon and words on the field's)
-        let over = if wide.tape { tape_new_over_search } else { 0.0 }
+        // (on one line with the search's field under it: its ground's edge, its mark and its words the band's)
         if band_row(c, "side/new", is_new, fn() {
-            c.box(tx=-compose_in + over, fn() { @sf.icon(c, "compose", size=side_icon, color=t.p.muted) |> ignore })
-            |> ignore
-            c.box(style=side_full, tx=over, fn() { band_words(c, @sf.t("web-main.sidebar.newChat")) }) |> ignore
+            band_mark(c, "compose", t.p.muted)
+            band_words(c, @sf.t("web-main.sidebar.newChat"))
           }) {
           new_chat()
         }
@@ -58,9 +56,8 @@ let band_new_bar : @ui.Style = @ui.css("row w=Full pl=S2 pr=S1_5 pt=S1_5 pb=S1_5
 /// the band's top row; where the corner is too square for that (it follows a round window), clear of it.
 fn band_new_tape() -> @ui.Style {
   let corner = @sf.tape_side_corners()[1].radius()
-  nav_new.then(
+  nav_new().then(
     @ui.style(
-      pl=S4,
       pr=@sf.room_of(@sf.line_end_in(corner, band_new_end)),
       pt=@sf.room_of(band_new_top + band_new_tape_over()),
     ),
@@ -71,7 +68,7 @@ fn band_new_tape() -> @ui.Style {
 /// How far under the top of the tape's sidebar the middle of its first row is (新建对话's, band_new_tape): the rail's
 /// first place beside it stands on that line.
 fn tape_first_row_mid() -> Double {
-  side_top_h() + band_new_top + band_new_tape_over() + nav_row_h() / 2.0
+  side_top_h() + band_new_top + band_new_tape_over() + band_row_h() / 2.0
 }
 
 ///|
@@ -87,11 +84,11 @@ let filter_side : Double = 32.0
 
 ///|
 /// How much taller 新建对话's row is in a panel of the tape (band_new_tape over nav_new's 6): the filter, in the row's
-/// middle (as high as a row is: nav_row_h), its top where it is concentric with the panel's corner: the tape's one line
+/// middle (as high as a band's row is: band_row_h), its top where it is concentric with the panel's corner: the tape's one line
 /// (@sf.tape_bar_over), a page's bar's beside it.
 fn band_new_tape_over() -> Double {
   let brand = side_top_h()
-  let lift = (nav_row_h() - filter_side) / 2.0
+  let lift = (band_row_h() - filter_side) / 2.0
   let alone = brand + band_new_top + lift
   // (on the tape's line in the ladder's pane corner; under a taller top row, 更新's or the window's buttons', it can not
   // stand so high: where it stands alone)
@@ -108,17 +105,8 @@ fn band_new_tape_over() -> Double {
 }
 
 ///|
-/// A row's icon (16), 新建对话's a pixel in (Sidebar.css.ts navCompose: aligned with the 14px check under it).
+/// A row's icon (16).
 let side_icon : Double = 16.0
-
-///|
-let compose_in : Double = 1.0
-
-///|
-/// On the tape 新建对话 stands over the search's field, as a ground the same (pengxiao, 2026-10-25: their edges, lit and
-/// not, out of line): its ground 16 in as the field's (band_new_tape), and its icon and words drawn on as far as the
-/// field's are (its 12 in and a 17 icon, to the row's 10 and 16).
-let tape_new_over_search : Double = 3.0
 
 ///|
 /// A new chat (新建对话, ⌘N): where the shell has it (beside the list on the wide frame, risen on the stack), the cursor in
