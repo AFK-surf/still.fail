@@ -52,17 +52,12 @@ fn job_dot(c : @ui.Ctx, tone : String) -> Unit {
   })
   // restarting: breathing to .35 and back (jobBreathe)
   if tone == "restart" {
-    let f = c.cycle(job_breath_ms)
-    let p = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
-    c.look(n, @ui.look(alpha=1.0 - 0.65 * p))
+    c.look(n, @ui.look(alpha=@sf.breath(c, low=0.35)))
   }
 }
 
 ///|
-/// How long a restarting service's dot breathes, and an alive job's breath out (jobBreathe 1.4 s, jobLive 2.4 s).
-let job_breath_ms : Double = 1400.0
-
-///|
+/// How long an alive job's breath out takes (jobLive 2.4 s).
 let job_live_ms : Double = 2400.0
 
 ///|

@@ -296,7 +296,7 @@ test "snap: in range, on the step from min" {
 ///|
 test "progress: its value as a percentage and its range; not known, neither, and its band a cycle said (frames while shown)" {
   let v : Ref[Double?] = Ref(Some(30.0))
-  let t = @ui.Tester::new(fn(c) { progress(c, v.val, max=60.0, label="Upload") })
+  let t = @ui.Tester::new(fn(c) { progress(c, "upload", v.val, max=60.0, label="Upload") })
   let p = t.get(@ui.ProgressBar, label="Upload")
   assert_eq(p.value, "50%")
   assert_eq(p.range, Some((0.0, 60.0, 30.0)))
@@ -307,6 +307,24 @@ test "progress: its value as a percentage and its range; not known, neither, and
   assert_true(t.ctx().wants_frame)
   assert_eq(t.cycles().length(), 1)
   t.assert_idle()
+}
+
+///|
+test "progress: told a value anew, it goes there over progress_ms from where it showed (there at once the first time); its value said at once" {
+  let v : Ref[Double?] = Ref(Some(30.0))
+  let shown : Ref[Double?] = Ref(None)
+  let t = @ui.Tester::new(fn(c) {
+    progress(c, "upload", v.val, max=60.0, label="Upload", look=fn(_, s) { shown.val = s.t })
+  })
+  assert_eq(shown.val, Some(0.5))
+  v.val = Some(60.0)
+  t.draw()
+  assert_eq(t.get(@ui.ProgressBar, label="Upload").value, "100%")
+  t.run_for(progress_ms / 2.0)
+  let half = shown.val.unwrap()
+  assert_true(half > 0.5 && half < 1.0, msg="\{half}")
+  t.run_for(progress_ms)
+  assert_eq(shown.val, Some(1.0))
 }
 
 ///|

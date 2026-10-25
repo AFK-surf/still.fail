@@ -362,7 +362,7 @@ fn view_for(key : String) -> PlayerView {
         moves: None,
         fulled: false,
         // (a film edge to edge in its stage, enlarged as players do: no margin round it)
-        zoom: @kit.Zoom::new(margin=fn(_) { 0.0 }, enlarge=true, glide_ms=player_zoom_glide_ms),
+        zoom: @kit.Zoom::new(margin=fn(_) { 0.0 }, enlarge=true),
         grabbing: false,
         grab_at: 0,
         held: -1.0,
@@ -1801,9 +1801,6 @@ let player_pinch_rate : Double = 0.01
 
 ///|
 let player_wheel_rate : Double = 0.002
-
-///|
-let player_zoom_glide_ms : Double = 260.0
 
 ///|
 /// Without the file's own frames, a step is a 60th of a second; how far past a time a frame may start and still be the

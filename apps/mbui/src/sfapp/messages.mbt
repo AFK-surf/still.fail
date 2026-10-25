@@ -1098,7 +1098,7 @@ fn file_item(
             c.text(if flag(dl, "active") { text(dl, "statusText") } else { a.name }, size=12.0, color=0xFFFFFFFFL, wrap=false)
             |> ignore
             if flag(dl, "active") {
-              c.box(style=video_coming_bar, fn() { @sf.progress(c, Some(number(dl, "progress"))) }) |> ignore
+              c.box(style=video_coming_bar, fn() { @sf.progress(c, "video/" + a.path, Some(number(dl, "progress"))) }) |> ignore
             }
           })
           |> ignore

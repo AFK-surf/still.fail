@@ -9,9 +9,12 @@ pub(all) struct ProgressState {
 }
 
 ///|
-/// A progress bar at `value` of `max` (None: not known), `w` wide, named `label` for the semantics tree.
+/// `key`'s progress bar at `value` of `max` (None: not known), `w` wide, named `label` for the semantics tree. Where it
+/// is shown goes to a value told anew over progress_ms on the ease-out, from where it was shown (there at once the
+/// first time).
 pub fn progress(
   c : @ui.Ctx,
+  key : String,
   value : Double?,
   max? : Double = 100.0,
   w? : @ui.Size = Fill(1.0),
@@ -24,13 +27,22 @@ pub fn progress(
   }
   // (a band runs while it is not known: the look's cycle, Ctx::cycle; motion reduced, it stands where the look puts
   // it)
-  let i = c.box(w~, fn() { look(c, { t, }) })
+  let shown = match t {
+    Some(k) => Some(animate(c, key + "/progress", k, transition=@motion.tween(progress_ms, ease=Out)))
+    None => None
+  }
+  let i = c.box(w~, fn() { look(c, { t: shown }) })
   match (value, t) {
     (Some(v), Some(k)) =>
       c.semantics(i, ProgressBar, label~, value="\{(k * 100.0).round().to_int()}%", range=(0.0, max, v))
     _ => c.semantics(i, ProgressBar, label~)
   }
 }
+
+///|
+/// How long a progress bar's fill takes to a value told anew (still.fail's: waiting.css.ts progress, its width 200 ms
+/// on the ease-out).
+pub let progress_ms : Double = 200.0
 
 ///|
 /// A progress bar's look (still.fail's): `h` high on `track` (18% of the fill), filled in `fill` (the theme's accent);

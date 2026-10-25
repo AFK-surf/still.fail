@@ -107,7 +107,7 @@ pub fn chat_list(
               // pushed down by a row that came in over it (its cause: the newest that came over it), it glides there;
               // what else moves it (the page before come in above, words sent flying in, its own message out of its
               // avatar, which comes back to where it now is) puts it there at once
-              @motion.layout(c, ri, mk, spec=@motion.spring(stiffness=300.0, threshold=1.0), by=way)
+              @motion.layout(c, ri, mk, spec=@sf.move_spring, by=way)
               c.look(ri, @ui.look(alpha=p * fade, scale=0.5 + 0.5 * p, ox=(side + 9.0) / c.width, oy=0.5))
             })
           }
@@ -145,7 +145,7 @@ pub fn chat_list(
               // what was sent from here not in the chat yet, pushed down by a row that came in over it (out of a picture,
               // or simply: its cause, the newest that came over it): it glides there, as an agent's activity does
               None if e is Out(_) =>
-                @motion.layout(c, ri, mk, spec=@motion.spring(stiffness=300.0, threshold=1.0), by=makes_way(lf, keys[i]))
+                @motion.layout(c, ri, mk, spec=@sf.move_spring, by=makes_way(lf, keys[i]))
               _ => ()
             }
             // what leaves the chat from the outbox fades, not what was sent from here and is now the core's

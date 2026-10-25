@@ -4,9 +4,9 @@
 // ways of waiting.
 
 ///|
-/// A hover's or a press's ground coming and going over --dur.
+/// A hover's or a press's ground coming and going over --dur on the ease-out (dur_ms).
 fn ease_to(c : @ui.Ctx, key : String, on : Bool) -> Double {
-  c.spring(key, if on { 1.0 } else { 0.0 }, stiffness=900.0, damping=60.0)
+  @motion.animate(c, key, if on { 1.0 } else { 0.0 }, spec=@motion.tween(dur_ms, ease=Out))
 }
 
 ///|
@@ -2395,13 +2395,13 @@ let panel_icon_box : @ui.Style = @ui.css(
 /// copied and a check for a moment (`copied` its name then, `copy` before).
 pub fn copy_command(c : @ui.Ctx, key : String, text : String, copy~ : String, copied~ : String) -> Unit {
   let id = c.id(key + "/copy")
-  let just = c.within(id, command_copied_ms)
+  let just = c.within(id, copied_ms)
   c.box(style=command_box, bg=theme().p.paper, fn() {
     c.box(style=command_words_at, fn() { c.text(text, style=command_words) |> ignore }) |> ignore
     if icon_button(c, if just { "check" } else { "copy" }, key=key + "/copy", label=if just { copied } else { copy }) {
       @ui.clipboard_set(text)
       c.mark(id)
-      c.wake_in(command_copied_ms, later=true)
+      c.wake_in(copied_ms, later=true)
     }
   })
   |> ignore

@@ -34,7 +34,7 @@ missing here is ported from the web's file (its structure, its states, its value
 | `strokes.ts` | `stroke.mbt` | |
 | `fileSize.ts` | `file_size.mbt` | |
 | `shortcuts.ts` | `shortcuts.mbt` | |
-| `motion.ts`, `styles/keyframes.css.ts`, `styles/still.ts` | `motion.mbt` (EASE_OUT, ENTER, LEAVE, MOVE, GLIDE_*, LOCAL_MS), mbui's `@motion` and `Ctx::move_state` (moveState); kit's `pop_in` (popKeyframes), `tip_in`, `dialog_in` | |
+| `motion.ts`, `styles/keyframes.css.ts`, `styles/still.ts` | `motion.mbt` (EASE_OUT, ENTER, LEAVE, MOVE, GLIDE_*, LOCAL_MS; --dur, copied, woken and resting, the breath), mbui's `@motion` and `Ctx::move_state` (moveState); kit's `pop_in` (popKeyframes), `tip_in`, `dialog_in` | |
 | `toast.tsx`, `toast.css.ts` | `toast.mbt` (`toast_look`, `toast_said`, `toast_ms`) over mbui's `@kit.toaster` | the desktop's toast; the phone keeps its own (the web's ToastTo) |
 | `i18n.ts` | `i18n.mbt` | `t`: the catalog's words as the app says them (`set_words`, its `fill`, told as it starts) |
 | `viewer/ViewerBar.tsx`, `ViewerBar.css.ts` | `viewer_bar.mbt` | the bar, its tools, download; `BarOnScroll` (useBarOnScroll) |

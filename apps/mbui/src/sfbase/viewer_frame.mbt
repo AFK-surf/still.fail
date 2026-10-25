@@ -197,7 +197,7 @@ pub fn vf_tools(vw : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json?) -> Un
       // 复制: the whole picture on the clipboard, a check a moment after (FilePreview.tsx CopyImage)
       match v.bytes {
         Some(b) => {
-          let shown = v.copied > 0 && !@kit.after(c, "preview/copied/\{v.copied}", true, vf_copied_ms)
+          let shown = v.copied > 0 && !@kit.after(c, "preview/copied/\{v.copied}", true, @sf.copied_ms)
           if @sf.viewer_tool(c, "preview/copy", if shown { "check" } else { "copy" }, @sf.t(if shown { "common.copied" } else { "common.copy" }), ink) {
             c.copy_image(b)
             v.copied += 1
@@ -307,10 +307,6 @@ pub fn vf_coming(vw : Viewer, c : @ui.Ctx) -> Unit {
     None => @sf.wait_line(c, @sf.t("common.opening"), key="preview")
   }
 }
-
-///|
-/// A copy's check shown this long (CopyImage: 1.6 s).
-let vf_copied_ms : Double = 1600.0
 
 ///|
 /// 预览 / 源码 in the bar (FilePreview.css.ts: the Segmented 120 wide, less its 2 in).

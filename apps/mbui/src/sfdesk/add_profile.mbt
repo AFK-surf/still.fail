@@ -435,7 +435,7 @@ fn install_step(c : @ui.Ctx, core : Core, station : String, install : Json?) -> 
     })
     |> ignore
     if text(install, "state") == "installing" {
-      @sf.progress(c, if has(install, "percent") && !(field(install, "percent") is Some(Null)) { Some(number(install, "percent") / 100.0) } else { None })
+      @sf.progress(c, "add-profile/install", if has(install, "percent") && !(field(install, "percent") is Some(Null)) { Some(number(install, "percent") / 100.0) } else { None })
     }
     match opt_text(install, "action") {
       Some(action) =>

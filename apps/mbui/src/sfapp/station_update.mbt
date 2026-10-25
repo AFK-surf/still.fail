@@ -258,7 +258,7 @@ fn station_update_popover(c : @ui.Ctx, src : Source, station : String, notice : 
           |> ignore
           if text(notice, "tone") == "busy" && opt_text(notice, "station") is Some(_) {
             c.box(style=update_progress_room, fn() {
-              @sf.progress(c, opt_number(notice, "percent").map(fn(p) { p / 100.0 }))
+              @sf.progress(c, "station-update/" + text(notice, "station"), opt_number(notice, "percent").map(fn(p) { p / 100.0 }))
             })
             |> ignore
           }

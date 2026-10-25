@@ -505,10 +505,6 @@ pub let fly_close_ms : Double = 280.0
 pub let pv_fade_ms : Double = 140.0
 
 ///|
-/// A zoom gliding to where it was told.
-pub let zoom_glide_ms : Double = 260.0
-
-///|
 /// Two taps within this long are a double tap.
 pub let double_tap_ms : Double = 300.0
 
@@ -593,9 +589,9 @@ pub fn new_viewer(station : String, key : String, a : Attachment, drive : DriveF
     rest_len: -1.0,
     rest_n: 0,
     rests: true,
-    zoom: @kit.Zoom::new(glide_ms=zoom_glide_ms),
+    zoom: @kit.Zoom::new(),
     // (a film edge to edge, enlarged, as the player puts it: what it flies to and from)
-    vzoom: @kit.Zoom::new(margin=fn(_) { 0.0 }, enlarge=true, glide_ms=zoom_glide_ms),
+    vzoom: @kit.Zoom::new(margin=fn(_) { 0.0 }, enlarge=true),
     source: false,
     page: None,
     pdf: None,
@@ -1608,7 +1604,8 @@ pub fn file_progress(c : @ui.Ctx, got : (Double, Double?), sent : Double, said? 
       }
       (None, None) => c.text(pv("common.reading"), style=file_progress_words) |> ignore
     }
-    @sf.progress(c, part)
+    // (one file a viewer has coming at a time)
+    @sf.progress(c, "viewer/file", part)
   })
   |> ignore
 }
@@ -2068,7 +2065,7 @@ pub fn Viewer::read_near(self : Viewer, src : Source, before : Viewer?, after : 
 /// Where a picture of (nw, nh) shows fitted on a stage of (bw, bh) (the viewer's fit: a margin round it, never
 /// enlarged).
 pub fn fitted_rect(nw : Double, nh : Double, bw : Double, bh : Double) -> (Double, Double, Double, Double)? {
-  let z = @kit.Zoom::new(glide_ms=zoom_glide_ms)
+  let z = @kit.Zoom::new()
   z.boxed(bw, bh)
   z.natural(nw, nh)
   z.rect()

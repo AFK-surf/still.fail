@@ -313,7 +313,7 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
     c.box(style=sw_rest, fn() {
       if state == "updating" {
         match field(v, "percent") {
-          Some(Number(p, ..)) => @sf.progress(c, Some(p / 100.0), w=Px(sw_progress_w))
+          Some(Number(p, ..)) => @sf.progress(c, "software/" + station + "/" + id, Some(p / 100.0), w=Px(sw_progress_w))
           _ => ()
         }
         c.text(text(v, "updatingText"), style=sw_newer) |> ignore

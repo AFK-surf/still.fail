@@ -78,13 +78,13 @@ test "desk: ⌘ and the wheel (or a pinch) zoom round the pointer, the wheel alo
   assert_true((z.scale - @dmath.exp(0.4) * @dmath.exp(0.1)).abs() < 0.01, msg="\{z.scale}")
   // 0 fitted again, + a quarter more (its glide run), 1 as it is
   t.key(@ui.key_of_char('0'))
-  t.run_for(zoom_glide_ms)
+  t.run_for(@kit.zoom_glide_ms)
   assert_true((z.scale - 1.0).abs() < 0.001, msg="\{z.scale}")
   t.key(@ui.key_of_char('='))
-  t.run_for(zoom_glide_ms)
+  t.run_for(@kit.zoom_glide_ms)
   assert_true((z.scale - 1.25).abs() < 0.01, msg="\{z.scale}")
   t.key(@ui.key_of_char('1'))
-  t.run_for(zoom_glide_ms)
+  t.run_for(@kit.zoom_glide_ms)
   assert_true((z.scale - 1.0).abs() < 0.01, msg="\{z.scale}")
 }
 

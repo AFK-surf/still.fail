@@ -93,7 +93,7 @@ fn update_panel(c : @ui.Ctx, src : Source, station : String, notice : Json?) -> 
   |> ignore
   if text(notice, "tone") == "busy" && text(notice, "station") != "" {
     c.box(style=update_bar, fn() {
-      @sf.progress(c, match opt_number(notice, "percent") {
+      @sf.progress(c, "station-update/" + text(notice, "station"), match opt_number(notice, "percent") {
         Some(p) => Some(p / 100.0)
         None => None
       })

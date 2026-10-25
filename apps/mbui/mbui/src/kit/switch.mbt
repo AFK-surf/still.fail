@@ -1,5 +1,5 @@
 // A switch (Radix's Switch): on or off, the value the view's. A tap, a click, Space or Enter with the focus, the
-// Activate action turn it; it reports what it became (the view keeps it, or not). Its knob slides by a spring.
+// Activate action turn it; it reports what it became (the view keeps it, or not). Its knob slides over switch_ms.
 
 ///|
 /// What a switch's look is given: on, how far its knob is across (0 off … 1 on, moving), pointed at, held, focus
@@ -97,12 +97,17 @@ pub fn switch_look_of(
 pub let switch_look : (@ui.Ctx, SwitchState) -> Unit = switch_look_of()
 
 ///|
-/// How far the switch `key`'s knob is across this frame (0 off … 1 on): sliding by a spring to the side `on` puts it,
-/// from where it is; at that side at once the first time. A switch's look drawn without `switch` (a row around it
-/// takes the tap) moves by it as `switch`'s does.
+/// How far the switch `key`'s knob is across this frame (0 off … 1 on): sliding over switch_ms on the ease-out to the
+/// side `on` puts it, from where it is; at that side at once the first time. A switch's look drawn without `switch` (a
+/// row around it takes the tap) moves by it as `switch`'s does.
 pub fn switch_knob(c : @ui.Ctx, key : String, on : Bool) -> Double {
-  animate(c, key + "/knob", if on { 1.0 } else { 0.0 })
+  animate(c, key + "/knob", if on { 1.0 } else { 0.0 }, transition=@motion.tween(switch_ms, ease=Out))
 }
+
+///|
+/// How long a switch's knob takes to its side (still.fail's: parts.css.ts switchThumb, --dur on the ease-out), its
+/// track's colour with it.
+pub let switch_ms : Double = 140.0
 
 ///|
 /// When the switch `key`'s knob is at rest after a turn (the frames' clock; -1: it is, +inf: told, not started).

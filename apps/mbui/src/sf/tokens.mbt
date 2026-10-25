@@ -615,10 +615,6 @@ pub let r_menu : Double = card_corner
 pub let r_option : Double = 12.0
 
 ///|
-/// --dur, for hovers and small changes.
-pub let dur_ms : Double = 140.0
-
-///|
 /// Where a desktop's window, which no system classes, goes from one layout to the next (layout): the widths at which
 /// Android's WindowSizeClass goes from compact to medium and from medium to expanded, so a window as wide is laid out
 /// alike whatever the system.
@@ -1640,9 +1636,6 @@ pub let panel_icon_size : Double = 16.0
 
 ///|
 pub let chooser_chevron : Double = 12.0
-
-///|
-pub let command_copied_ms : Double = 1600.0
 
 ///|
 /// A menu's item at least (controls.css.ts menuItem: 34 high): 32, a capsule its panel's padding in from its corner,

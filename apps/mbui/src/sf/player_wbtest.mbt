@@ -207,7 +207,7 @@ test "a phone's: a finger along the film moves through the time, the player sent
 test "a phone's song: its mark and name in the middle, on the page's colours, the controls staying" {
   let t = player_tester(true, "曲.mp3", [], [], [], kind="audio")
   t.draw()
-  t.run_for(@kit.media_rest_ms + @kit.media_shown_ms)
+  t.run_for(@kit.media_rest_ms + @kit.media_sleep_ms)
   assert_true(t.find("0:00 / 0:10") is Some(_))
   assert_true(t.find_last("曲.mp3") is Some(_))
 }
