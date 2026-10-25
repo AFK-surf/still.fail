@@ -259,14 +259,14 @@ fn history_row(
   c.box(style=if marked { h_item_marked } else { h_item }, fn() {
     match field(item, "turn") {
       Some(Object(_)) as turn =>
-        // when it began and what it did, a line on to the edge (hTurn)
+        // when it began and what it did (hTurn), a heading: no line on to the edge (only a menu's parts are set apart
+        // by one)
         c.box(style=h_turn, fn() {
           let said = match text(turn, "time") {
             "" => text(turn, "text")
             time => time + " · " + text(turn, "text")
           }
           c.text(said, style=h_turn_words) |> ignore
-          c.box(style=h_turn_line, fn() {  }) |> ignore
         })
         |> ignore
       _ => ()
@@ -1166,10 +1166,6 @@ let h_turn : @ui.Style = @ui.css("row w=Full pt=S2 gap=S2 align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let h_turn_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let h_turn_line : @ui.Style = @ui.style(w=@sf.grow, min_w=S6, h=SPx, bg=Line)
 
 ///|
 /// An item's events (hMain), 10 apart.

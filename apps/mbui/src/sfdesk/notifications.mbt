@@ -191,10 +191,8 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
   blocks.push(fn() {
     @sf.section(c, @sf.t("web-pages.notifications.kinds.title"), heads=true, fn() {
       c.box(style=kinds_card, fn() {
-        for i, kind in notify_kinds {
-          if i > 0 {
-            c.box(style=kind_rule, fn() {  }) |> ignore
-          }
+        // (each its row, apart by its room: no line between)
+        for kind in notify_kinds {
           kind_row(c, core, here, notify, kind, on, dock)
         }
       })
@@ -795,19 +793,13 @@ let tile_action_button : @ui.Style = @ui.css(
 let tile_action_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=OnPrimary, wrap=false)
 
 ///|
-/// The kinds' card (card, kinds: 20 at the sides, 6 over and under), a line between them.
+/// The kinds' card (card, kinds: 20 at the sides, 6 over and under), its rows apart by their room.
 let kind_chevron : Double = 16.0
-
-///|
-let rule_w : Double = 1.0
 
 ///|
 // kept across runs: a value (no field of it changes)
 let kinds_card : @ui.Style = @ui.css("w=Full px=S5 py=S1_5 radius=Xl3 bg=Card")
 
-///|
-// kept across runs: a value (no field of it changes)
-let kind_rule : @ui.Style = @ui.style(w=Full, h=Fixed(rule_w), bg=Line)
 
 ///|
 /// A kind's head (kindHead: 12 over and under, 12 apart; its words the ui's 13, what it is muted 2 under; what tells of

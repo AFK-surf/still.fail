@@ -147,7 +147,6 @@ pub fn drive_pane(
   on_copy_path : (String) -> Unit,
   below? : Bool = false,
 ) -> Unit {
-  c.box(style=if below { fpane_rule_below } else { fpane_rule }, fn() {  }) |> ignore
   c.box(style=if below { fpane_below } else { fpane_box }, fn() {
     match shown {
       Nothing => c.box(style=fpane_none_at, fn() { c.text(@sf.t("web-pages.files.previewNone"), style=fpane_none) |> ignore }) |> ignore
@@ -337,15 +336,6 @@ let fpane_box : @ui.Style = @ui.style(w=Fixed(fpane_w), h=Full, p=S3, gap=S3)
 ///|
 // kept across runs: a value (no field of it changes)
 let fpane_none_at : @ui.Style = @ui.css("w=Full py=S6")
-
-///|
-/// The line between it and the list (its left edge's; under a list, its top's).
-// kept across runs: a value (no field of it changes)
-let fpane_rule : @ui.Style = @ui.css("w=SPx h=Full bg=Line")
-
-///|
-// kept across runs: a value (no field of it changes)
-let fpane_rule_below : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)

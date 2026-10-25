@@ -100,7 +100,6 @@ fn history_head(c : @ui.Ctx, src : Source, station : String, key : String, a : J
   |> ignore
   if !history_own.shut {
     wh_details(c, src, station, key, a)
-    c.box(style=@sfpages.triple_rule_h, fn() {  }) |> ignore
   }
 }
 

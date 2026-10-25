@@ -2147,14 +2147,11 @@ pub fn choices(
             |> ignore
           })
           |> ignore
-          // (parts.css.ts choiceExtra: 14 in at its sides, under a line, 12 over and 14 under what it holds)
+          // (parts.css.ts choiceExtra: 14 in at its sides, 12 over and 14 under what it holds; no line over it: only
+          // a menu's parts are set apart by one, docs/ui-panels.md)
           match extra.bind(fn(f) { f(v) }) {
             Some(f) if s.on =>
-              c.box(style=choice_extra, fn() {
-                c.box(style=choice_rule, fn() {  }) |> ignore
-                c.box(style=choice_extra_in, f) |> ignore
-              })
-              |> ignore
+              c.box(style=choice_extra, fn() { c.box(style=choice_extra_in, f) |> ignore }) |> ignore
             _ => ()
           }
       })
@@ -2185,10 +2182,6 @@ let choice_hit : @ui.Style = @ui.css("row w=Full px=S3_5 py=S3 gap=S3 align=ACen
 ///|
 // kept across runs: a value (no field of it changes)
 let choice_extra : @ui.Style = @ui.css("w=Full px=S3_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let choice_rule : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)

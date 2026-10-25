@@ -160,12 +160,12 @@ pub fn files_shell(
       } else {
         c.box(style=tabs_none, fn() {  }) |> ignore
       }
-      // what can be done to the folder in front, then the tabs' own after a line
+      // what can be done to the folder in front, then the tabs' own, a little apart
       match folder_of(tab.front, here) {
         Some(f) => folder_actions(c, src, f)
         None => ()
       }
-      c.box(style=bar_line, fn() {  }) |> ignore
+      c.box(style=bar_apart, fn() {  }) |> ignore
       transfers_button(c, src, ws, files_go)
       let lit = @sf.theme().p.accent
       if @sf.icon_button(
@@ -183,14 +183,10 @@ pub fn files_shell(
       }
     })
     |> ignore
-    c.box(style=bar_rule, fn() {  }) |> ignore
     // the tab shown: a side each, split the one in front lined at its top
     c.box(style=panes_row, fn() {
       for i in 0..<tab.panes.length() {
         let front = i == tab.front
-        if i > 0 {
-          c.box(style=pane_rule, fn() {  }) |> ignore
-        }
         // (each side's ids its own: the same folder can be on both)
         c.scope(i, fn() {
           pane_frame(c, src, folder_of(i, pane_at(tab, i)), "page/\{i}", split_on, front, fn() {
@@ -250,9 +246,6 @@ fn tab_row(
         c.semantics(close, Button, id=cid, label=@sf.t("web-pages.files.closeTab"))
         c.box(style=tab_parts, fn() {
           for i, p in panes {
-            if i > 0 {
-              c.box(style=tab_split, fn() {  }) |> ignore
-            }
             let tone = stations.search_by(fn(s) { s.station == p.station }).unwrap_or(0) % station_dots.length()
             c.box(style=station_dots[tone], fn() {  }) |> ignore
             let (folder, station) = pane_parts(p, stations)
@@ -352,18 +345,15 @@ fn bar_box_tape() -> @ui.Style {
 let bar_h : Double = 44.0
 
 ///|
-// kept across runs: a value (no field of it changes)
-let bar_rule : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
-
-///|
 /// Room for what the bar starts with when there is one tab (tabsNone).
 // kept across runs: a value (no field of it changes)
 let tabs_none : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
-/// Between what is done to the folder and the tabs' own buttons: a short line, 16 high (barFolder's).
+/// Between what is done to the folder and the tabs' own buttons: a little room more (no line: only a menu's parts are
+/// set apart by one).
 // kept across runs: a value (no field of it changes)
-let bar_line : @ui.Style = @ui.css("w=SPx h=S4 bg=Line")
+let bar_apart : @ui.Style = @ui.css("w=S2")
 
 ///|
 /// The tabs' groove (tabs): capsules in a capsule, 2 apart, on the words' colour at 6%.
@@ -402,10 +392,6 @@ let tab_parts : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1_5, align=ACen
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tab_split : @ui.Style = @ui.css("w=SPx h=S2_5 bg=Line")
-
-///|
-// kept across runs: a value (no field of it changes)
 let tab_folder : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
@@ -424,13 +410,9 @@ let station_dots : Array[@ui.Style] = ([Accent, Link, Positive, Warn, Danger, Mu
 })
 
 ///|
-/// The tab's sides, side by side, a line between.
+/// The tab's sides, side by side, apart by their own padding (no line between).
 // kept across runs: a value (no field of it changes)
 let panes_row : @ui.Style = @ui.css("row w=Full h=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pane_rule : @ui.Style = @ui.css("w=SPx h=Full bg=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)

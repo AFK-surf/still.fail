@@ -1286,7 +1286,6 @@ fn desk_play_list(
     c.box(style=desk_panel_top(), fn() {  }) |> ignore
     c.box(style=desk_panel_row, fn() {
       c.box(style=desk_panel_room, fn() {  }) |> ignore
-      c.box(style=desk_panel_rule.then(@ui.style(bg=Data(line))), fn() {  }) |> ignore
       c.box(style=desk_panel_box.then(@ui.style(bg=Data(ground))), id=c.id(key + "/list-panel"), fn() {
         c.box(style=desk_list_head, fn() {
           c.text(t("web-pages.drive.player.list"), style=desk_panel_title.then(@ui.text_style(color=Data(words)))) |> ignore
