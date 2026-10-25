@@ -226,14 +226,18 @@ test "a phone turned sideways for a film: the layout it had (the player the whol
 }
 
 ///|
-/// A finger down at (`x`, `y`) dragged across by `by`, 10 at a time, 50 ms apart (slowly: no fling); `up`: let go at
+/// How far apart a slow drag's moves come (ms): 10 px each, 200 px/s, well short of a fling.
+let slow_drag_ms : Double = 50.0
+
+///|
+/// A finger down at (`x`, `y`) dragged across by `by`, 10 at a time, slow_drag_ms apart (no fling); `up`: let go at
 /// the end.
 fn drag_slowly(t : @ui.Tester, x : Double, y : Double, by : Double, up? : Bool = true) -> Unit {
   t.press_at(x, y)
   let steps = (by.abs() / 10.0).ceil().to_int()
   let step = by / steps.to_double()
   for i in 1..=steps {
-    t.run_for(50.0)
+    t.run_for(slow_drag_ms)
     t.move(x + step * i.to_double(), y)
   }
   if up {
