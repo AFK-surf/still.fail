@@ -37,8 +37,8 @@ pub fn in_room(
   mx? : Double = 0.0,
 ) -> Bool {
   let (key, view, whole, tall, held) = room_of(c, s, key, most)
-  let what = fn() { c.box(id=whole, taps=false, w=Fill(1.0), padx~, gap~, body) |> ignore }
-  c.box(id=view, taps=false, w=Fill(1.0), mx~, fn() {
+  let what = fn() { c.box(style=room_across, id=whole, taps=false, padx~, gap~, body) |> ignore }
+  c.box(style=room_across, id=view, taps=false, mx~, fn() {
     if held {
       c.capped(key, tall, what) |> ignore
     } else {
@@ -334,6 +334,11 @@ fn grown_from(shows : @ui.Look, went : @ui.Side, along : @ui.Along) -> @ui.Look 
   }
   { ..shows, ox, oy }
 }
+
+///|
+/// in_room's boxes: across the panel.
+// kept across runs: a value (no field of it changes)
+let room_across : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// Whether what panel `s` holds would scroll in in_room with the same `key` and `most` (asked before it is drawn: what
