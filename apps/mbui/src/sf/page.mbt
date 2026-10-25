@@ -891,7 +891,14 @@ pub fn choice_row(
   } else {
     row_reach(if narrow { card_pad - corner_inset } else { desk_list_out })
   }
-  let line = if reach > 0.0 { @ui.style(mx=room(-reach), px=room(reach)) } else { no_reach }
+  // (in a small panel: a menu's row, at its padding, its words a row's padding in, concentric with it)
+  let line = if in_small_panel() {
+    panel_row_in()
+  } else if reach > 0.0 {
+    @ui.style(mx=room(-reach), px=room(reach))
+  } else {
+    no_reach
+  }
   let b = if narrow {
     c.box(style=narrow_row(goes).then(line), id=if goes { id } else { 0 }, fn() {
       match body {

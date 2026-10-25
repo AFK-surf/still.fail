@@ -37,8 +37,7 @@ fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       } else {
         list[:open_jobs_shown].to_array()
       }
-      c.box(style=open_jobs_group, fn() {
-        c.box(style=open_jobs_head_box, fn() { c.text(text(gv, "head"), style=open_jobs_head) |> ignore }) |> ignore
+      @sf.panel_group(c, label=text(gv, "head"), fn() {
         for j in shown {
           open_job(c, src, Some(j))
         }
@@ -55,7 +54,6 @@ fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           c.semantics(b, Button, id~, label~)
         }
       })
-      |> ignore
     }
   })
   |> ignore
@@ -164,23 +162,9 @@ let open_jobs_pop_most : Double = 420.0
 let open_job_stop_icon : Double = 14.0
 
 ///|
-/// The groups, 8 apart, 6 over what follows (openJobs).
+/// The groups (openJobs), each a small panel's group (@sf.panel_group: its heading's room over it).
 // kept across runs: a value (no field of it changes)
-let open_jobs_box : @ui.Style = @ui.css("w=Full gap=S2 mb=S1_5")
-
-///|
-/// A group: its heading over its rows, 2 apart (openJobsGroup).
-// kept across runs: a value (no field of it changes)
-let open_jobs_group : @ui.Style = @ui.css("w=Full gap=SPx")
-
-///|
-/// Its heading (openJobsHead): 2 by 10 in, the meta's size, muted.
-// kept across runs: a value (no field of it changes)
-let open_jobs_head_box : @ui.Style = @ui.css("w=Full px=S2_5 py=S0_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let open_jobs_head : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
+let open_jobs_box : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// A job (openJob): what its stop stands over.
@@ -188,9 +172,9 @@ let open_jobs_head : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap
 let open_job_box : @ui.Style = @ui.css("w=Full")
 
 ///|
-/// Its row (openJobRow): 5 by 10 in, its parts 10 apart, the nav's corner, the hover grey pointed at.
+/// Its row (openJobRow): 5 by 10 in, its parts 10 apart, concentric with the panel, the hover grey pointed at.
 // kept across runs: a value (no field of it changes)
-let open_job_row : @ui.Style = @ui.css("row w=Full px=S2_5 py=S1_25 gap=S2_5 radius=Xl align=ACenter hovered{bg=Hover}")
+let open_job_row : @ui.Style = @ui.css("row w=Full px=S2_5 py=S1_25 gap=S2_5 radius=Inner align=ACenter hovered{bg=Hover}")
 
 ///|
 /// The dot, in the 16 column the icons of the rows under it take (openJobMark).
@@ -236,9 +220,9 @@ let open_job_stop : @ui.Style = @ui.css("w=S6 h=S6 radius=Xl align=ACenter justi
 let open_job_stop_lit : @ui.Style = open_job_stop.then(@ui.css("bg=Hover"))
 
 ///|
-/// 还有 N 个 (openJobsMore: 3 by 10 in, the meta's size, muted, the text's pointed at).
+/// 还有 N 个 (openJobsMore: the meta's size, muted, the text's pointed at), its words where a row's are.
 // kept across runs: a value (no field of it changes)
-let open_jobs_more : @ui.Style = @ui.css("px=S2_5 py=S0_5")
+let open_jobs_more : @ui.Style = @ui.style(px=S2_5, py=@sf.room_of(@sf.menu_row_over))
 
 ///|
 // kept across runs: a value (no field of it changes)

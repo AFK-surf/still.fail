@@ -109,6 +109,16 @@ pub fn menu_heading_look(c : @ui.Ctx, label : String) -> Unit {
 }
 
 ///|
+/// A line between parts of a menu, as mbui draws one: the words' colour faintly (in dark the panel is lighter than the
+/// page: its line a groove), 6 over and under it, 4 in.
+pub fn menu_rule_look(c : @ui.Ctx) -> Unit {
+  c.box(pady=6.0, padx=4.0, fn() {
+    c.box(h=Px(1.0), w=Fill(1.0), bg=@ui.alpha(c.theme().fg, 0.12), fn() {  }) |> ignore
+  })
+  |> ignore
+}
+
+///|
 /// The panel of menu `key` (built in its layer): by `anchor` (a rectangle in the window) on its `side`, `offset`
 /// away (by its size last frame), named `label`; a submenu's when `depth` > 0; a listbox (a select's) when `listbox`.
 fn menu_panel(
@@ -127,6 +137,7 @@ fn menu_panel(
   look : (@ui.Ctx, Double, () -> Unit) -> Unit,
   item_look : (@ui.Ctx, MenuItemState) -> Unit,
   heading_look? : (@ui.Ctx, String) -> Unit = menu_heading_look,
+  rule_look? : (@ui.Ctx) -> Unit = menu_rule_look,
 ) -> PanelOut {
   let pid = c.id(key + "/panel")
   let ids = entries.mapi(fn(k, _) { part_id(pid, k) })
@@ -183,12 +194,7 @@ fn menu_panel(
         c.roving(key + "/items", orientation=Vertical, wrap=false, fn() {
           for n, e in entries {
             match e.kind {
-              // a line of the words' colour faintly (in dark the panel is lighter than the page: its line a groove)
-              Rule =>
-                c.box(pady=6.0, padx=4.0, fn() {
-                  c.box(h=Px(1.0), w=Fill(1.0), bg=@ui.alpha(c.theme().fg, 0.12), fn() {  }) |> ignore
-                })
-                |> ignore
+              Rule => rule_look(c)
               Heading => heading_look(c, e.label)
               _ => {
                 let iid = ids[n]
@@ -255,6 +261,7 @@ fn menu_panel(
                         look,
                         item_look,
                         heading_look~,
+                        rule_look~,
                       )
                     })
                     if out.chosen is Some(_) {
@@ -382,6 +389,7 @@ pub fn dropdown_menu(
   look? : (@ui.Ctx, Double, () -> Unit) -> Unit = menu_look,
   item_look? : (@ui.Ctx, MenuItemState) -> Unit = menu_item_look,
   heading_look? : (@ui.Ctx, String) -> Unit = menu_heading_look,
+  rule_look? : (@ui.Ctx) -> Unit = menu_rule_look,
   at? : (Double, Double, Double, Double),
   scrim? : Int64 = 0L,
   enter? : @motion.Trans = pop_in,
@@ -419,6 +427,7 @@ pub fn dropdown_menu(
         look,
         item_look,
         heading_look~,
+        rule_look~,
       )
       chosen = out.chosen
     })

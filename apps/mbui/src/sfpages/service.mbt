@@ -583,7 +583,7 @@ fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
         }
         close()
       }
-      c.box(style=size_option.then(@ui.style(min_h=r.least)), id~, fn() {
+      c.box(style=size_option.then(@sf.panel_row_in()).then(@ui.style(min_h=r.least)), id~, fn() {
         c.box(style=@ui.style(w=Fixed(r.check), align=ACenter), fn() {
           if checked {
             @sf.icon(c, "check", size=size_check_icon, color=t.p.accent) |> ignore
@@ -646,10 +646,11 @@ fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
 }
 
 ///|
-/// The sizes' room (10 in; under them the presenter's foot); a size's row: 10 in, its check's column, 8 apart, concentric with the panel;
-/// its name a row's title (500 chosen), its note a row's note (Rows); the check 16.
+/// The sizes' room (under them the presenter's foot); a size's row: at the panel's rows' edge, its check's column on
+/// its words' line (@sf.panel_row_in), 8 apart, concentric with the panel; its name a row's title (500 chosen), its
+/// note a row's note (Rows); the check 16.
 // kept across runs: a value (no field of it changes)
-let sizes_room : @ui.Style = @ui.css("w=Full px=S2_5")
+let sizes_room : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -864,7 +865,8 @@ fn load_list(c : @ui.Ctx, src : Source, station : String, port : Int) -> Unit {
       row(Some(r))
     }
   }
-  c.box(w=Fill(1.0), padx=20.0, fn() {
+  // (its words on the panel's words' line wherever it is drawn)
+  c.box(style=@sf.panel_words_in(), w=Fill(1.0), fn() {
     c.text(svc("android-chat.load.note"), size=t.t.caption, color=t.p.muted) |> ignore
     c.box(w=Fill(1.0), pt=12.0, fn() {
       if number(v, "total") <= 0.0 {

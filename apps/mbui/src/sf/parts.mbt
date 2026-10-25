@@ -780,22 +780,24 @@ pub fn panel_ground() -> Int64 {
 }
 
 ///|
-/// A menu's item (controls.css.ts menuItem), as mbui's menus draw it: 34 high at least, 7 by 10 in, its icon (14,
-/// muted) and words (13), 8 apart; the pointer's or the keyboard's ground on it; one not to be chosen now (its entry
-/// disabled: never lit) in the subtle ink (menuItem[data-disabled]). In a menu of choices (`chooser`, parts.tsx
-/// ChooserItem) a column 14 wide before the words instead, the one chosen checked in it, 6 apart.
+/// A menu's item (controls.css.ts menuItem), as mbui's menus draw it: 32 high at least, 6 by 10 in, its words (13)
+/// after a column 14 wide (`lead`: the menu's items have one, so all their words are on one line) of its icon (muted)
+/// or, one of a choice (parts.tsx ChooserItem), its check where it is the one chosen, `gap` from its words; the
+/// pointer's or the keyboard's ground on it; one not to be chosen now (its entry disabled: never lit) in the subtle
+/// ink (menuItem[data-disabled]).
 pub fn menu_row(
   c : @ui.Ctx,
   s : @kit.MenuItemState,
   icon_name : String,
-  chooser : Bool,
+  lead : Bool,
+  gap : Double,
   end : ((@ui.Ctx, @kit.MenuItemState) -> Unit)?,
   danger? : Bool = false,
 ) -> Unit {
   let t = theme()
-  let checked = match s.entry.kind {
-    Choice(true) | Check(true) => true
-    _ => false
+  let (choice, checked) = match s.entry.kind {
+    Choice(on) | Check(on) => (true, on)
+    _ => (false, false)
   }
   let off = s.entry.disabled
   c.box(
@@ -804,23 +806,26 @@ pub fn menu_row(
     min_h=menu_row_min,
     padx=text_in,
     pady=menu_row_over,
-    gap=if chooser { chooser_gap } else { menu_gap },
+    gap~,
     align=ACenter,
     radius=small_panel_inner(r_menu),
     bg=if s.hot { t.p.hover } else { 0L },
     fn() {
-      if chooser {
+      if lead {
         c.box(style=menu_check, fn() {
-          if checked {
-            icon(c, "check", size=14.0, color=t.p.text) |> ignore
+          if choice {
+            if checked {
+              icon(c, "check", size=14.0, color=t.p.text) |> ignore
+            }
+          } else if icon_name == "zou" {
+            // 奏 its word (Rail.css.ts zouSmall)
+            c.text("奏", style=menu_zou) |> ignore
+          } else if icon_name != "" {
+            icon(c, icon_name, size=14.0, color=if danger { if off { t.p.subtle } else { t.p.red } } else { t.p.muted })
+            |> ignore
           }
         })
         |> ignore
-      } else if icon_name == "zou" {
-        // 奏 its word (Rail.css.ts zouSmall)
-        c.text("奏", style=menu_zou) |> ignore
-      } else if icon_name != "" {
-        icon(c, icon_name, size=14.0, color=if danger { if off { t.p.subtle } else { t.p.red } } else { t.p.muted }) |> ignore
       }
       // (a danger's in red, its icon with it: menuItem[data-danger])
       c.text(s.entry.label, style=if off { menu_words_off } else if danger { menu_words_danger } else { menu_words }) |> ignore
@@ -838,14 +843,16 @@ pub fn menu_row(
 }
 
 ///|
-/// Between an item's icon and its words (menuItem), its check's column and its words (chooserItem).
+/// Between an item's icon and its words (menuItem), its check's column and its words in a menu of choices alone
+/// (chooserItem).
 let menu_gap : Double = 8.0
 
 ///|
 let chooser_gap : Double = 6.0
 
 ///|
-/// A chooser's check's column (controls.css.ts chooserCheck): 14 wide, the check in its middle.
+/// The column before a menu item's words (controls.css.ts chooserCheck, a menuItem's svg): 14 wide, its icon or check in
+/// its middle.
 // kept across runs: a value (no field of it changes)
 let menu_check : @ui.Style = @ui.css("w=S3_5 align=ACenter")
 
@@ -863,7 +870,9 @@ let menu_words_danger : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, le
 let menu_words_off : @ui.TextStyle = @ui.text_style(size=Ui, color=Subtle, leading=L5, wrap=false)
 
 ///|
-/// A heading among a menu's items (controls.css.ts menuLabel): 6 over, 4 under, 10 in; 12, muted.
+/// A heading among a menu's items (controls.css.ts menuLabel): its words as far in as a row's (text_in) and as far
+/// under what is over it as a row's are (menu_row_over: at the panel's top, where its first item's words would be), 4
+/// over the items it heads; 12, muted.
 // kept across runs: a value (no field of it changes)
 let menu_heading : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1_5 pb=S1")
 
@@ -896,8 +905,12 @@ pub fn dropdown(
   row_end? : (@ui.Ctx, @kit.MenuItemState) -> Unit,
   danger? : Array[String] = [],
 ) -> @kit.Menu {
-  // (a menu of choices: each chosen or not, checked before its words)
-  let chooser = entries.iter().any(fn(e) { e.kind is Choice(_) })
+  // (a column before every item's words where one has an icon or is one of a choice, so all their words are on one
+  // line; a menu of choices alone, each chosen or not, its check 6 from its words)
+  let choice = fn(e : @kit.Entry) { e.kind is Choice(_) || e.kind is Check(_) }
+  let iconed = entries.iter().any(fn(e) { !choice(e) && icons.get(e.value).unwrap_or("") != "" })
+  let lead = iconed || entries.iter().any(choice)
+  let gap = if lead && !iconed { chooser_gap } else { menu_gap }
   @kit.dropdown_menu(
     c,
     key,
@@ -911,22 +924,38 @@ pub fn dropdown(
     at?,
     look=fn(c, w, body) { small_panel(c, min_w=w, body) |> ignore },
     item_look=fn(c, s) {
-      menu_row(c, s, icons.get(s.entry.value).unwrap_or(""), chooser, row_end, danger=danger.contains(s.entry.value))
+      menu_row(c, s, icons.get(s.entry.value).unwrap_or(""), lead, gap, row_end, danger=danger.contains(s.entry.value))
     },
     heading_look=fn(c, label) {
       c.box(style=menu_heading, fn() { c.text(label, style=menu_heading_words) |> ignore }) |> ignore
     },
+    rule_look=menu_rule,
   )
 }
 
 ///|
+/// A line between parts of a small panel (controls.css.ts menuSep): the words' ink faintly (in dark the panel is
+/// lighter than the page: its line a groove), 1 high, 6 over and under it, as wide as its rows' grounds (at the
+/// panel's padding), so a row pointed at beside it ends where it does.
+pub fn menu_rule(c : @ui.Ctx) -> Unit {
+  c.box(style=menu_rule_at, fn() { c.box(style=rule_line.then(@ui.style(bg=Data(rule_ink(c)))), fn() {  }) |> ignore })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let menu_rule_at : @ui.Style = @ui.css("w=Full py=S1_5")
+
+///|
 /// What a menu holds (parts.tsx MenuItem): its words, its icon, in red (`danger`: what cannot be undone), not to be
-/// chosen now (`disabled`); what choosing it does.
+/// chosen now (`disabled`), one of a choice (`chosen`: whether it is the one chosen; a menu with one is a menu of
+/// choices, each checked or not in a column before its words: parts.tsx ChooserItem); what choosing it does.
 pub(all) struct MenuItem {
   label : String
   icon : String
   danger : Bool
   disabled : Bool
+  chosen : Bool?
   select : () -> Unit
 }
 
@@ -937,8 +966,9 @@ pub fn menu_item_of(
   icon? : String = "",
   danger? : Bool = false,
   disabled? : Bool = false,
+  chosen? : Bool,
 ) -> MenuItem {
-  { label, icon, danger, disabled, select }
+  { label, icon, danger, disabled, chosen, select }
 }
 
 ///|
@@ -980,7 +1010,12 @@ fn menu_items(
       None => entries.push(@kit.menu_separator())
       Some(item) => {
         let v = i.to_string()
-        entries.push(@kit.menu_item(v, label=item.label, disabled=item.disabled))
+        entries.push(
+          match item.chosen {
+            Some(on) => @kit.menu_radio(v, on, label=item.label, disabled=item.disabled)
+            None => @kit.menu_item(v, label=item.label, disabled=item.disabled)
+          },
+        )
         if item.icon != "" {
           icons[v] = item.icon
         }
@@ -2282,8 +2317,8 @@ let confirm_foot : @ui.Style = @ui.css("row w=Full justify=JEnd align=ACenter ga
 // PanelIconButton; parts.css.ts: inside a small panel, @sf.small_panel, its rows @sf.menu_item(panel=true))
 
 ///|
-/// A small panel's head (PanelHead): its title (13, 600) and `note` under it (12, muted), in by a row's padding, 6 over
-/// and 4 under.
+/// A small panel's head (PanelHead): its title (13, 600) and `note` under it (12, muted), in by a row's padding, as far
+/// under the panel's top as a menu's first item's words (menu_row_over), 4 over what follows.
 pub fn panel_head(c : @ui.Ctx, title : String, note? : String = "") -> Unit {
   c.box(style=panel_head_box, fn() {
     c.text(title, style=panel_title) |> ignore
@@ -2295,7 +2330,8 @@ pub fn panel_head(c : @ui.Ctx, title : String, note? : String = "") -> Unit {
 }
 
 ///|
-/// A group of a small panel's rows (PanelGroup) under a small `label` (12, muted), 2 apart.
+/// A group of a small panel's rows (PanelGroup) under a small `label` (12, muted: in by a row's padding, as far under
+/// what is over it as a row's words, 2 over its rows), 2 apart.
 pub fn panel_group(c : @ui.Ctx, body : () -> Unit, label? : String = "") -> Unit {
   c.box(style=panel_group_box, fn() {
     if label != "" {

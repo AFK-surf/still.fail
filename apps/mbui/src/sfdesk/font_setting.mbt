@@ -419,9 +419,10 @@ let local_list_most : Double = 320.0
 let local_most : Int = 400
 
 ///|
-/// (localSearch: its icon and field 8 apart, a line under it, 4 over and 8 under)
+/// (localSearch: its icon and field 8 apart, a line under it, 8 over it; its words as far under the panel's top as a
+/// menu's first item's)
 // kept across runs: a value (no field of it changes)
-let local_search : @ui.Style = @ui.css("row w=Full gap=S2 px=S2_5 pt=S1 pb=S2 align=ACenter")
+let local_search : @ui.Style = @ui.css("row w=Full gap=S2 px=S2_5 pt=S1_5 pb=S2 align=ACenter")
 
 ///|
 /// (its line: the words' colour faintly, 6 over the list)
@@ -438,7 +439,7 @@ let local_search_field : @ui.Style = @ui.style(w=@sf.grow)
 ///|
 /// (localRow: a menu's item, the chosen on the hover ground, its check at its end)
 // kept across runs: a value (no field of it changes)
-let local_row : @ui.Style = @ui.css("row w=Full min_h=S8 px=S2_5 gap=S2 radius=Xl align=ACenter")
+let local_row : @ui.Style = @ui.css("row w=Full min_h=S8 px=S2_5 gap=S2 radius=Inner align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

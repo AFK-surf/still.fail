@@ -28,11 +28,14 @@ fn ref_panel_body(c : @ui.Ctx, src : Source, key : String, station : String, id 
     Some(i) if i > 0 => path.view(end_offset=i).to_owned()
     _ => path
   }
-  c.text(text(r, "stationName") + " · " + folder, style=ref_where) |> ignore
+  // (its words on the panel's words' line, wherever it is drawn)
+  c.box(style=@sf.panel_words_in(), fn() { c.text(text(r, "stationName") + " · " + folder, style=ref_where) |> ignore })
+  |> ignore
   // how it goes: a folder only zipped on the chat's own station
   if !dir || text(r, "station") == station {
     c.box(style=ref_block, fn() {
-      c.text(@sf.t("web-main.file.sendAs"), style=ref_label) |> ignore
+      c.box(style=@sf.panel_words_in(), fn() { c.text(@sf.t("web-main.file.sendAs"), style=ref_label) |> ignore })
+      |> ignore
       let now = if text(r, "mode") == "file" { 1 } else { 0 }
       let picked = @sf.segmented(c, "composer/ref/mode", [
         @sf.t("web-main.file.modePath"),

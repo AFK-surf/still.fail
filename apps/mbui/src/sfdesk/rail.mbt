@@ -765,13 +765,13 @@ fn rail_menu_add(c : @ui.Ctx, place : String, label : String, hot : Bool) -> Boo
 }
 
 ///|
-/// A ＋ in the rail's menu: 24 round, at its row's end, its icon 14.
+/// A ＋ in the rail's menu: 24 round, in its row's end (@sf.menu_row_end), its icon 14.
 // kept across runs: a value (no field of it changes)
-let rail_menu_plus : @ui.Style = @ui.css("w=S6 h=S6 radius=Full align=ACenter justify=JCenter")
+let rail_menu_plus : @ui.Style = @ui.css("w=S6 h=S6 radius=Full align=ACenter justify=JCenter").then(@sf.menu_row_end)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rail_menu_plus_on : @ui.Style = @ui.css("w=S6 h=S6 radius=Full align=ACenter justify=JCenter bg=Hover")
+let rail_menu_plus_on : @ui.Style = rail_menu_plus.then(@ui.css("bg=Hover"))
 
 ///|
 let rail_menu_plus_icon : Double = 14.0
@@ -883,11 +883,7 @@ fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     at=(0.0, rail_menu_clear, rail_w, 0.0),
     look=@sf.beside_look(Px(rail_adder_w), inner=adder_body),
     fn() {
-      c.box(style=adder_head, fn() {
-        c.text(@sf.t("web-main.rail.customize"), style=adder_title) |> ignore
-        c.text(@sf.t("web-main.rail.customizeLead"), style=adder_lead) |> ignore
-      })
-      |> ignore
+      @sf.panel_head(c, @sf.t("web-main.rail.customize"), note=@sf.t("web-main.rail.customizeLead"))
       // (by kind, as the core groups them: railView's `groups`)
       let kinds = items(rail_view(src), "groups").map(fn(g) {
         (text(Some(g), "label"), words_in(items(Some(g), "places")))
@@ -899,8 +895,7 @@ fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           continue
         }
         none = false
-        c.box(style=adder_kind, fn() {
-          c.box(style=adder_group, fn() { c.text(k.0, style=adder_label) |> ignore }) |> ignore
+        @sf.panel_group(c, label=k.0, fn() {
           for i in hidden {
             if adder_row(c, i, rail_label(src, i)) {
               let next = kept.copy()
@@ -909,10 +904,9 @@ fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             }
           }
         })
-        |> ignore
       }
       if none {
-        c.box(style=adder_group, fn() { c.text(@sf.t("web-main.rail.allIn"), style=adder_lead) |> ignore }) |> ignore
+        @sf.panel_note(c, @sf.t("web-main.rail.allIn"))
       }
     },
   )
@@ -939,11 +933,6 @@ fn adder_row(c : @ui.Ctx, place : String, label : String) -> Bool {
     end="plus",
   )
 }
-
-///|
-/// A kind's label and its rows, 2 apart (parts.css.ts panelGroup).
-// kept across runs: a value (no field of it changes)
-let adder_kind : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 /// The adder's panel: 248 wide, 8 past the rail (Rail.css.ts adder).
@@ -988,30 +977,9 @@ let rail_remove_at : @ui.Style = @ui.css("w=Full")
 let rail_remove : @ui.Style = @ui.css("w=S4_5 h=S4_5 align=ACenter justify=JCenter bg=Fg radius=Full")
 
 ///|
-// kept across runs: a value (no field of it changes)
-let adder_head : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1_5 pb=S1 gap=S0_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let adder_group : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1_5 pb=S0_5")
-
-///|
 /// The adder's head and its kinds 8 apart (Rail.css.ts adder: a grid, gap 8).
 // kept across runs: a value (no field of it changes)
 let adder_body : @ui.Style = @ui.css("w=Full gap=S2")
-
-///|
-// kept across runs: a value (no field of it changes)
-let adder_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, leading=L6)
-
-///|
-// kept across runs: a value (no field of it changes)
-let adder_lead : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L5)
-
-///|
-/// A kind's label in the adder (parts.css.ts panelLabel: 12, muted, on the page's line, 1.55 of it).
-// kept across runs: a value (no field of it changes)
-let adder_label : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L4_75)
 
 ///|
 /// The rail in the closed bar (Rail.css.ts rail, closed): as narrow as the bar, its places 2 from its every edge.

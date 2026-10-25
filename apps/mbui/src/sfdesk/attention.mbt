@@ -170,14 +170,13 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
     c.box(style=att_empty, fn() { c.text(@sf.t("web-main.attention.empty"), style=att_empty_words) |> ignore }) |> ignore
   }
   let mut first = true
+  // (a small panel's groups: a named one its name's room over it, one with none 6 under the one before)
   let group = fn(name : String, body : () -> Unit) {
-    c.box(style=if first { att_group } else { att_group_next }, fn() {
-      if name != "" {
-        c.box(style=att_group_name, fn() { c.text(name, style=att_group_words) |> ignore }) |> ignore
-      }
-      body()
-    })
-    |> ignore
+    if name == "" && !first {
+      c.box(style=att_group_next, fn() { @sf.panel_group(c, body) }) |> ignore
+    } else {
+      @sf.panel_group(c, label=name, body)
+    }
     first = false
   }
   if trouble != "" {
@@ -335,26 +334,13 @@ fn attention_link(c : @ui.Ctx, key : String, label : String) -> Bool {
 
 
 ///|
-/// The panel's rows 2 apart (Attention.css.ts panel); a group's 1, the next group 6 further (group + group).
+/// The panel's groups 2 apart (Attention.css.ts panel); one with no name 6 further (group + group).
 // kept across runs: a value (no field of it changes)
 let att_list : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let att_group : @ui.Style = @ui.css("w=Full gap=SPx")
-
-///|
-// kept across runs: a value (no field of it changes)
-let att_group_next : @ui.Style = @ui.css("w=Full gap=SPx pt=S1_5")
-
-///|
-/// A group's name (groupName): 4 above, 2 under, 10 in; 12, muted.
-// kept across runs: a value (no field of it changes)
-let att_group_name : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1 pb=S0_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let att_group_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L4_75, wrap=false)
+let att_group_next : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
 /// Nothing waiting (empty): 10 round, 13, muted.

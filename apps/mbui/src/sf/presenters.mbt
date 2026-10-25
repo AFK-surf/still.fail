@@ -225,10 +225,12 @@ let panel_held_now : Ref[Bool] = { val: false }
 /// it holds as far in from its sides as a sheet's words are (sheet_panel_sides), its rows' grounds reaching out across
 /// that room, their words on the column's line, as in a sheet the presenters lay out.
 pub fn sheet_column(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  let was = panel_sides_in.val
+  let (was, rows_were) = (panel_sides_in.val, rows_out.val)
   panel_sides_in.val = sheet_panel_sides
+  rows_out.val = sheet_panel_sides
   c.box(style=sheet_column_box, body) |> ignore
   panel_sides_in.val = was
+  rows_out.val = rows_were
 }
 
 ///|
@@ -237,9 +239,10 @@ let sheet_column_box : @ui.Style = @ui.css("w=Full px=S5")
 
 ///|
 /// How far a row's ground reaches out of the column it stands in, its words on the column's line: as far as its own
-/// words are in from its ground (`own`), no further than the room the panel leaves at its sides (none outside a panel).
+/// words are in from its ground (`own`), no further than the room the panel leaves at its sides (none outside a panel;
+/// none beside what opened it, where the panel's padding is where its rows' grounds stand: rows_out).
 fn row_reach(own : Double) -> Double {
-  dmin(panel_sides_in.val, own)
+  dmin(rows_out.val, own)
 }
 
 ///|
@@ -247,6 +250,49 @@ fn row_reach(own : Double) -> Double {
 /// room there), for what it holds to keep within (@kit.in_room).
 // kept across runs: said by the presenters' looks as each is drawn, before what it holds
 let beside_given : Ref[@kit.PopState] = { val: { side: Bottom, room: 1.0e9, panel: 0 } }
+
+///|
+/// The room at a panel's sides its rows' grounds reach out across while its body is drawn: a sheet's (its column's
+/// sides), none in a small panel (its rows at its padding, as a menu's are).
+let rows_out : Ref[Double] = { val: 0.0 }
+
+///|
+/// Whether the panel whose body is drawn now is a small panel beside what opened it (a popover's): its rows stand as
+/// a menu's do, at its padding, their words a row's padding in (text_in), concentric with it.
+pub fn in_small_panel() -> Bool {
+  small_panel_now.val
+}
+
+///|
+// kept across runs: said by the presenters while a panel's body is drawn
+let small_panel_now : Ref[Bool] = { val: false }
+
+///|
+/// How far in from the column a panel's body stands in its words go (each block of them, a row's), so they stand on
+/// the panel's words' line wherever it is drawn: a row's padding in a small panel (its column at its padding: text_in),
+/// what a sheet's rows leave of its words' 20 in a sheet a press opened (sheet_held: its column at its rows'), none
+/// where the column is at the words' line already (a sheet opened by nothing) or outside a panel.
+pub fn panel_words_in() -> @ui.Style {
+  @ui.style(px=room(words_in_now.val))
+}
+
+///|
+/// A row of a panel's body, its words so (panel_words_in), concentric with a small panel where it is in one.
+pub fn panel_row_in() -> @ui.Style {
+  if small_panel_now.val {
+    small_panel_row_in
+  } else {
+    panel_words_in()
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let small_panel_row_in : @ui.Style = @ui.style(px=room(text_in), radius=Inner)
+
+///|
+// kept across runs: said by the presenters while a panel's body is drawn
+let words_in_now : Ref[Double] = { val: 0.0 }
 
 ///|
 /// The one presented last (what `close_presented_of` is given to close it).
@@ -511,7 +557,12 @@ fn menu_popover(
       None => entries.push(@kit.menu_separator())
       Some(item) => {
         let v = i.to_string()
-        entries.push(@kit.menu_item(v, label=item.label, disabled=item.disabled))
+        entries.push(
+          match item.chosen {
+            Some(on) => @kit.menu_radio(v, on, label=item.label, disabled=item.disabled)
+            None => @kit.menu_item(v, label=item.label, disabled=item.disabled)
+          },
+        )
         if item.icon != "" {
           icons[v] = item.icon
         }
@@ -656,8 +707,11 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
       if x.title != "" {
         panel_head(c, x.title)
       }
-      // (small_panel's pad round it: what reaches its sides on purpose goes out past that, panel_bleed)
+      // (small_panel's pad round it: what reaches its sides on purpose goes out past that, panel_bleed; its rows stand
+      // at it)
       panel_sides_in.val = panel_pad
+      small_panel_now.val = true
+      words_in_now.val = text_in
       if x.tall > 0.0 {
         c.box(style=panel_grows, fn() { (x.body)(c, close) }) |> ignore
       } else {
@@ -669,6 +723,8 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
         panel_held_now.val = false
       }
       panel_sides_in.val = 0.0
+      small_panel_now.val = false
+      words_in_now.val = 0.0
       match x.foot {
         Some(f) => c.box(style=panel_foot_at.then(panel_corner_foot()), fn() { f(c, close) }) |> ignore
         None => ()
@@ -951,7 +1007,15 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
           match x {
             None => c.box(style=sheet_rule, fn() {  }) |> ignore
             Some(item) =>
-              if sheet_row(c, key + "/" + i.to_string(), item.label, icon=item.icon, danger=item.danger, disabled=item.disabled) {
+              if sheet_row(
+                  c,
+                  key + "/" + i.to_string(),
+                  item.label,
+                  icon=item.icon,
+                  on=item.chosen == Some(true),
+                  danger=item.danger,
+                  disabled=item.disabled,
+                ) {
                 done_with(c, p, item.select)
               }
           }
@@ -1036,8 +1100,12 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
       let body = fn() {
         // (filling its share, it lays out its own sides)
         panel_sides_in.val = if x.tall > 0.0 { 0.0 } else if pressed { sheet_row_sides } else { sheet_panel_sides }
+        rows_out.val = panel_sides_in.val
+        words_in_now.val = if x.tall <= 0.0 && pressed { sheet_panel_sides - sheet_row_sides } else { 0.0 }
         (x.body)(c, close)
         panel_sides_in.val = 0.0
+        rows_out.val = 0.0
+        words_in_now.val = 0.0
       }
       if scrolls && x.tall <= 0.0 {
         c.box(style=sheet_grows, fn() {
