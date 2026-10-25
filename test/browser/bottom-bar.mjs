@@ -82,27 +82,32 @@ createRoot(root).render(<DemoApp phone />);
     return (r.top - g.top) / 56;
   });
   const c0 = await tab('对话').boundingBox(), px = c0.x + c0.width / 2, top = c0.y;
-  const fingerTo = async (y) => { await touch('touchMove', px, y); await page.waitForTimeout(16); };
+  // Advance every animation frame: a loaded browser may deliver too few real frames before a wall-clock sleep ends.
+  // The held panel must reach and keep its target regardless of how quickly this machine draws those frames.
+  await page.clock.install();
+  await page.clock.pauseAt(await page.evaluate(() => Date.now()));
+  const fingerTo = async (y) => { await touch('touchMove', px, y); await page.clock.runFor(16); };
   await touch('touchStart', px, top + 28);
   for (let k = 1; k <= 8; k++) await fingerTo(top + 28 - (28 + 30) * k / 8); // 30 over the bar's top: over the line
-  await page.waitForTimeout(700);
+  await page.clock.runFor(700);
   const up1 = await openness();
-  await page.waitForTimeout(300);
+  await page.clock.runFor(300);
   assert.ok(up1 > 0.95 && Math.abs(await openness() - up1) < 0.01, `over the line, held: open, and stays (${up1.toFixed(2)})`);
   for (let k = 1; k <= 6; k++) await fingerTo(top - 30 + 30 * k / 6); // back down to the bar's top: under the line
-  await page.waitForTimeout(700);
+  await page.clock.runFor(700);
   const down1 = await openness();
   assert.ok(down1 < 0.2, `back under the line, still held: closed but for the lean (${down1.toFixed(2)})`);
   await touch('touchEnd');
-  await page.waitForTimeout(700);
+  await page.clock.runFor(700);
   assert.ok(await openness() < 0.02, 'let go under the line: closed');
   await touch('touchStart', px, top + 28);
   for (let k = 1; k <= 8; k++) await fingerTo(top + 28 - 58 * k / 8);
   await touch('touchEnd');
-  await page.waitForTimeout(900);
+  await page.clock.runFor(900);
   assert.ok(await openness() > 0.97 && await page.locator('[data-bar=scrim]').count(), 'let go over the line: open');
   await page.touchscreen.tap(195, 120);
-  await page.waitForTimeout(900);
+  await page.clock.runFor(900);
+  await page.clock.resume();
 
   // The list scrolled a little (on a shorter screen, for the demo's few chats to run past it), to be found so again.
   await page.setViewportSize({ width: 390, height: 520 });
