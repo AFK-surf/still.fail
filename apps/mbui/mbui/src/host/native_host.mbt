@@ -66,33 +66,8 @@ impl @hostapi.Host for Native with local_station_act(_, a) {
 }
 
 ///|
-impl @hostapi.Host for Native with dock_available(_) {
-  dock_available()
-}
-
-///|
 impl @hostapi.Host for Native with mods_held(_) {
   mods_held()
-}
-
-///|
-impl @hostapi.Host for Native with dock_send(_, l) {
-  dock_send(l)
-}
-
-///|
-impl @hostapi.Host for Native with dock_stop(_) {
-  dock_stop()
-}
-
-///|
-impl @hostapi.Host for Native with dock_kept(_) {
-  dock_kept()
-}
-
-///|
-impl @hostapi.Host for Native with dock_keep(_, j) {
-  dock_keep(j)
 }
 
 ///|

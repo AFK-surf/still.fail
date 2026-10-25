@@ -319,33 +319,8 @@ impl @hostapi.Host for FakeHost with local_station_act(_, a0) {
 }
 
 ///|
-impl @hostapi.Host for FakeHost with dock_available(_) {
-  dock_available()
-}
-
-///|
 impl @hostapi.Host for FakeHost with mods_held(_) {
   mods_held()
-}
-
-///|
-impl @hostapi.Host for FakeHost with dock_send(_, a0) {
-  dock_send(a0)
-}
-
-///|
-impl @hostapi.Host for FakeHost with dock_stop(_) {
-  dock_stop()
-}
-
-///|
-impl @hostapi.Host for FakeHost with dock_kept(_) {
-  dock_kept()
-}
-
-///|
-impl @hostapi.Host for FakeHost with dock_keep(_, a0) {
-  dock_keep(a0)
 }
 
 ///|

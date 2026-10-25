@@ -22,11 +22,6 @@ pub(open) trait Host {
   menu_setup(Self, String) -> Unit = _
   local_station(Self) -> String = _
   local_station_act(Self, String) -> Unit = _
-  dock_available(Self) -> Bool = _
-  dock_send(Self, String) -> Unit = _
-  dock_stop(Self) -> Unit = _
-  dock_kept(Self) -> String = _
-  dock_keep(Self, String) -> Unit = _
   mods_held(Self) -> Int = _
   run(Self, String, FuncRef[(Double, Double, Double, Double) -> Unit], FuncRef[(Int, Double, Double, Int) -> Unit], FuncRef[(Double, Double, Double, Double, Int) -> Unit], FuncRef[(Int, Int) -> Unit], FuncRef[(Int, String, Int, Int) -> Unit]) -> Unit = _
   now(Self) -> Double = _
@@ -248,33 +243,8 @@ impl Host with local_station_act(_, _) {
 }
 
 ///|
-impl Host with dock_available(_) {
-  false
-}
-
-///|
 impl Host with mods_held(_) {
   0
-}
-
-///|
-impl Host with dock_send(_, _) {
-  ()
-}
-
-///|
-impl Host with dock_stop(_) {
-  ()
-}
-
-///|
-impl Host with dock_kept(_) {
-  ""
-}
-
-///|
-impl Host with dock_keep(_, _) {
-  ()
 }
 
 ///|
@@ -1201,45 +1171,11 @@ pub fn local_station_act(action : String) -> Unit {
 }
 
 ///|
-/// Whether there is a dock here (macOS: the desktop's SwiftUI helper, apps/desktop/dock, on macOS 14 or later).
-pub fn dock_available() -> Bool {
-  current.val.dock_available()
-}
-
-///|
 /// The keys held down now that change what a press or a drag does (shift 1, control 2, option/alt 4, command 8: as a
 /// key's own modifiers are told): what a drag let go does by them (Finder's ⌥ a copy). None where there is no keyboard.
 pub fn mods_held() -> Int {
   current.val.mods_held()
 }
-
-///|
-/// A line to the dock (one JSON object; the first starts it): what it says comes back a line each on channel
-/// `dock_channel`, {"type":"gone"} once it has ended.
-pub fn dock_send(line : String) -> Unit {
-  current.val.dock_send(line)
-}
-
-///|
-/// The dock stopped.
-pub fn dock_stop() -> Unit {
-  current.val.dock_stop()
-}
-
-///|
-/// The dock's settings as kept on this device (JSON; "" none), and kept.
-pub fn dock_kept() -> String {
-  current.val.dock_kept()
-}
-
-///|
-pub fn dock_keep(json : String) -> Unit {
-  current.val.dock_keep(json)
-}
-
-///|
-/// Where what the dock says comes (@ui.on_message).
-pub let dock_channel : String = "dock"
 
 ///|
 pub fn run(

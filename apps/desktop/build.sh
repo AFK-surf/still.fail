@@ -11,9 +11,8 @@
 # as build/notify-permission.node, the web app (`pnpm run build:cloud`, dist/cloud-web) as build/web, a station (the
 # station in TypeScript with its Node and native parts: scripts/station-bundle.sh) as build/station, the app's own code
 # as build/app, then electron-builder puts them together.
-# The native parts (the mesh and notify-permission addons, the station's launcher and runner, the web's iroh, the
-# dock) are prebuilt (scripts/native.ts): no Rust or Swift is compiled here unless one of them changed and is not
-# published yet.
+# The native parts (the mesh and notify-permission addons, the station's launcher and runner, the web's iroh) are
+# prebuilt (scripts/native.ts): no Rust is compiled here unless one of them changed and is not published yet.
 # SKIP_WEB=1 takes dist/cloud-web as it is. SKIP_STATION=1 leaves the station out (the app then runs none). DEV=1 stops
 # at build/: no packing, no signing, for Electron's own app to run as it is (dev.sh).
 # UNSIGNED=1 makes either channel's package without the maintainer's signing certificate, for local testing.
@@ -24,7 +23,7 @@
 # in the history>, each release's higher than the one before it.
 # --win (or WIN=1) builds it for Windows x64 instead, from the Mac: an NSIS installer (out/stillfail-<version>-x64-win.exe,
 # its blockmap and the feed stillfail.yml; with --beta stillfail-beta-…-win.exe and stillfail-beta.yml), not signed
-# yet. It carries Windows' station (station-bundle.sh win32-x64), run on its Electron as on the Mac; no dock.
+# yet. It carries Windows' station (station-bundle.sh win32-x64), run on its Electron as on the Mac.
 # --beta (or BETA=1) builds the beta app instead: 「youdid.wtf」 (fail.still.desktop.beta), beside the released one, with
 # its own userData and link scheme (stillfail-beta://), its core saying it is a beta app and its updates on the
 # stillfail-beta channel (main.ts BETA): out/mac-arm64/youdid.wtf.app, zipped as stillfail-beta-<version>-arm64-mac.zip
@@ -51,8 +50,6 @@ mesh=$(node "$root/scripts/native.ts" file mesh "$target")
 [ -z "$win" ] || controls=$(node "$root/scripts/native.ts" file window-controls win32-x64)
 # Whether the system lets the app notify (src/notify-permission.ts): macOS's and Windows'.
 notify=$(node "$root/scripts/native.ts" file notify-permission "$target")
-# The dock (docs/desktop-dock.md), SwiftUI: prebuilt too, built only when its sources changed. macOS's only.
-[ -n "$win" ] || dock=$(node "$root/scripts/native.ts" file dock darwin-arm64)
 (cd "$root/client/core-ts" && pnpm install --frozen-lockfile --silent)
 # The web app carries PostHog when its key is at hand (docs/telemetry.md), as the cloud's does.
 deploy="$HOME/stillfail-deploy"; [ -d "$deploy" ] || deploy="$HOME/ember-deploy"
@@ -71,7 +68,6 @@ fi
 [ -z "${SKIP_STATION:-}" ] || cp "$mesh" "$here/build/mesh.node"
 [ -z "$win" ] || cp "$controls" "$here/build/window-controls.node"
 cp "$notify" "$here/build/notify-permission.node"
-mkdir -p "$here/build/dock" && [ -n "$win" ] || cp "$dock" "$here/build/dock/StillfailDock"
 rsync -a "$root/dist/cloud-web/" "$here/build/web/"
 cd "$here"
 # electron-builder packs the Electron that electron's install script fetches (pnpm may have skipped it).

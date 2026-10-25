@@ -387,8 +387,6 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       c.after_build("links", fn() { links_frame(src, w) })
       // the number on the app's icon (app_frame.mbt)
       badge_frame(c, src, w)
-      // the desktop's dock (dock.mbt): every workspace's chats that want the person, on the screen's edge
-      dock_frame(c, src, all)
       // a link the system opened the app with, told once: what the core says of it shown by the frame after (Ctx::tell)
       if !link_later.is_empty() {
         c.tell("links-given", fn() { links_given(src) })

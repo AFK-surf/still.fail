@@ -1,14 +1,14 @@
 // The notifications page (Notifications.tsx): the preview screen, the ways of telling as tiles, the kinds as rows that
 // open to their ways.
 import { style } from "@vanilla-extract/css";
-import { centredY, surfaceCorner } from "@stillfail/ui/styles/align.ts";
+import { surfaceCorner } from "@stillfail/ui/styles/align.ts";
 import { cardLook } from "../styles/pages.css.ts";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { litOver } from "@stillfail/ui/styles/lit.ts";
 
 export const muted = style({ color: vars.muted });
 
-// The preview: a small screen with the banner in its top right corner, the dock on its right edge, the app's icon below.
+// The preview: a small screen with the banner in its top right corner, the app's icon below.
 /** How far the banner stands from the screen's edges, and its corner: the screen's is the two (concentric). */
 const BANNER_IN = 12;
 const BANNER_CORNER = 16;
@@ -30,13 +30,6 @@ export const bannerIcon = style({ flex: "none", width: "28px", height: "28px", b
 export const bannerText = style({ flex: "1", minWidth: "0", display: "grid", gap: "2px", fontSize: vars.textMeta, lineHeight: vars.leadingMeta });
 export const bannerHead = style({ display: "flex", gap: "8px", justifyContent: "space-between", minWidth: "0" });
 export const bannerBody = style({ overflow: "hidden", display: "-webkit-box", WebkitLineClamp: "2", WebkitBoxOrient: "vertical" });
-// Half way down the right edge: clear of the banner above and of the screen's corner below.
-export const edge = style({ position: "absolute", right: "0", ...centredY, top: "60%", display: "grid", gap: "4px", justifyItems: "end" });
-export const edgeItem = style({
-  padding: "2px 10px 2px 12px", borderRadius: "999px 0 0 999px", background: vars.raised, color: vars.muted, // own corner: half a capsule, against the edge
-  fontSize: vars.textCaption, lineHeight: vars.leadingCaption,
-  selectors: { "&[data-kind=failed]": { color: vars.red }, "&[data-kind=wait]": { color: vars.accentText } },
-});
 export const dockBar = style({
   position: "absolute", bottom: "10px", left: "50%", transform: "translateX(-50%)",
   display: "flex", gap: "10px", padding: "7px", borderRadius: surfaceCorner(7, 8), cornerShape: vars.cornerShape,
@@ -83,10 +76,6 @@ const shape = { position: "absolute", display: "block", background: vars.lineStr
 export const picBanner = style({ ...shape, top: "5px", right: "5px", width: "38px", height: "11px", borderRadius: "3px" });
 export const picApp = style({ ...shape, bottom: "5px", left: "26px", width: "18px", height: "18px", borderRadius: "5px", background: vars.accent }); // own corner: the app's icon, drawn small
 export const picBadge = style({ position: "absolute", top: "-4px", right: "-5px", width: "9px", height: "9px", borderRadius: "50%", background: vars.red });
-export const picEdge = style({
-  ...shape, right: "0", width: "18px", height: "7px", borderRadius: "4px 0 0 4px",
-  selectors: { "&:first-child": { top: "13px" }, "&:last-child": { top: "24px" } },
-});
 export const tileName = style({ fontWeight: "500" });
 export const tileState = style({ color: vars.muted, fontSize: vars.textMeta });
 

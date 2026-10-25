@@ -1,8 +1,7 @@
 #!/bin/bash
 # still.fail mbui on macOS as an app: out/mac/still.fail mbui.app (fail.still.mbui; arm64, as still.fail's desktop app
 # ships), its zip beside it. The app is APP=stillfail's release build (scripts/mac.sh) with what it carries: the core's
-# bytecode (Resources/core.hbc, which the core host finds in the app: src/host/apple_core.mm), the desktop's dock
-# (Resources/dock/StillfailDock, the desktop app's helper) and Hermes
+# bytecode (Resources/core.hbc, which the core host finds in the app: src/host/apple_core.mm) and Hermes
 # (Frameworks/hermes.framework, React Native 0.81.4's, as Android's; scripts/core.sh hermes-apple), its icon
 # (scripts/mac-icon.swift), an Info.plist of its own. Signed with MAC_SIGN_IDENTITY (CI: still.fail's, imported by
 # .github/mac_signing.py), else ad hoc; checked with codesign's strict verify. Signed with a Developer ID, it is
@@ -60,7 +59,6 @@ sign() {
   local how=(--timestamp=none)
   case "${MAC_SIGN_IDENTITY:-}" in "Developer ID Application:"*) how=(--options runtime --timestamp) ;; esac
   codesign --force --sign "${MAC_SIGN_IDENTITY:--}" "${how[@]}" "$APPDIR/Contents/Frameworks/hermes.framework"
-  codesign --force --sign "${MAC_SIGN_IDENTITY:--}" "${how[@]}" "$APPDIR/Contents/Resources/dock/StillfailDock"
   codesign --force --sign "${MAC_SIGN_IDENTITY:--}" "${how[@]}" "$APPDIR"
   codesign --verify --deep --strict --verbose=2 "$APPDIR" 2>&1 | sed 's/^/codesign: /'
   codesign -dvv "$APPDIR" 2>&1 | grep -E '^(Identifier|Authority|TeamIdentifier|Signature|Format)=' | sed 's/^/codesign: /'
@@ -99,11 +97,6 @@ cp "$BIN" "$APPDIR/Contents/MacOS/$EXE"
 install_name_tool -delete_rpath @executable_path/../../../../../../out/core/hermes/Library/Frameworks/macosx "$APPDIR/Contents/MacOS/$EXE"
 ditto out/core/hermes/Library/Frameworks/macosx/hermes.framework "$APPDIR/Contents/Frameworks/hermes.framework"
 cp out/core/core.hbc "$APPDIR/Contents/Resources/core.hbc"
-# the desktop's dock (apps/desktop/dock, docs/desktop-dock.md): the desktop app's SwiftUI helper, prebuilt (scripts/native.ts
-# dock: fetched, never built here), started by the app's host (src/host/mac_app.m dock_spawn)
-DOCK=$(node "$EMBER/scripts/native.ts" fetch dock darwin-arm64 > /dev/null && node "$EMBER/scripts/native.ts" file dock darwin-arm64)
-mkdir -p "$APPDIR/Contents/Resources/dock"
-cp "$DOCK" "$APPDIR/Contents/Resources/dock/StillfailDock"
 cp "$ICON" "$APPDIR/Contents/Resources/AppIcon.icns"
 # the oldest macOS the program runs on, as it was linked: the one asked for
 MINOS=$(otool -l "$BIN" | awk '/LC_BUILD_VERSION/ { b = 1 } b && $1 == "minos" { print $2; exit }')
@@ -148,7 +141,6 @@ plutil -lint "$PLIST" > /dev/null
 
 # ad hoc for now: `sign` after (still.fail's identity in CI)
 codesign --force --sign - --timestamp=none "$APPDIR/Contents/Frameworks/hermes.framework"
-codesign --force --sign - --timestamp=none "$APPDIR/Contents/Resources/dock/StillfailDock"
 codesign --force --sign - --timestamp=none "$APPDIR"
 echo "mac-app.sh: $NAME.app 0.1.$N in $(secs $t0) s: the app and the core's parts $(python3 -c "print(f'{$t2-$t0:.1f}')") s," \
   "the bundle $(secs $t2) s"

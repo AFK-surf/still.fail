@@ -1057,35 +1057,9 @@ fn local_station_act(a : String) -> Unit {
 }
 
 ///|
-/// (no dock in a browser)
-fn dock_available() -> Bool {
-  false
-}
-
-///|
 /// (the keys held are not read here)
 fn mods_held() -> Int {
   0
-}
-
-///|
-fn dock_send(l : String) -> Unit {
-  ignore(l)
-}
-
-///|
-fn dock_stop() -> Unit {
-  ()
-}
-
-///|
-fn dock_kept() -> String {
-  ""
-}
-
-///|
-fn dock_keep(j : String) -> Unit {
-  ignore(j)
 }
 
 ///|

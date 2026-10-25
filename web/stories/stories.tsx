@@ -996,8 +996,8 @@ export const stories: Story[] = [
   {
     id: "settings-notifications-refused", group: "设置", title: "通知 · 系统没允许",
     render: () => stage(<div style={{ display: "grid", gap: 10, padding: 32, maxWidth: 720 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-        <Tile way="banner" on={false} action="在系统设置中开启" onChange={noop} /><Tile way="badge" on onChange={noop} /><Tile way="dock" on onChange={noop} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+        <Tile way="banner" on={false} action="在系统设置中开启" onChange={noop} /><Tile way="badge" on onChange={noop} />
       </div>
     </div>),
   },
@@ -1007,7 +1007,7 @@ export const stories: Story[] = [
     id: "settings-permissions-states", group: "设置", title: "权限 · 各种状态",
     render: () => stage(<div style={{ display: "grid", gap: 10, padding: 32, maxWidth: 720 }}>
       {(["granted", "default", "denied", "unknown"] as const).map((state) => (
-        <PermissionRow key={state} icon={Bell} name="通知" purpose="需要你决定、出错或有人发消息时显示横幅" without="未授权时：无法显示横幅，红点和桌面浮窗不受影响"
+        <PermissionRow key={state} icon={Bell} name="通知" purpose="需要你决定、出错或有人发消息时显示横幅" without="未授权时：无法显示横幅，红点不受影响"
           where="系统设置 → 通知 → still.fail → 允许通知" state={state} onAllow={noop} onOpen={noop} />
       ))}
     </div>),

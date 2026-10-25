@@ -202,7 +202,7 @@ One shell. It arranges the same panes in every tier:
   - the stack's motion, the tape and the columns;
   - back, the bars, the rail and the window's inset;
   - the presenters' host, toasts and the keys (⌘K, ⌘/, the core's keymap);
-  - the app-level things: signing in, links, notifications, the dock and the menu bar (sfbase).
+  - the app-level things: signing in, links, notifications and the menu bar (sfbase).
 
 ## The packages
 

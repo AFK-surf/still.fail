@@ -162,7 +162,7 @@ let zh : Map[String, String] = {
   "web-pages.permissions.lead": "{name} 在此设备上所需的系统权限；在系统设置中更改后，此处会立即更新",
   "web-pages.permissions.notify.name": "通知",
   "web-pages.permissions.notify.purpose": "需要你决定、出错或有人发消息时显示横幅",
-  "web-pages.permissions.notify.without": "未授权时：无法显示横幅，红点和桌面浮窗不受影响",
+  "web-pages.permissions.notify.without": "未授权时：无法显示横幅，红点不受影响",
   "web-pages.permissions.open": "打开系统设置",
   "web-pages.permissions.state.default": "尚未请求",
   "web-pages.permissions.state.denied": "未允许",
@@ -1554,10 +1554,6 @@ let zh : Map[String, String] = {
   "desktop.local.byHand": "此 station 为手动启动，此处只能停止",
   "desktop.local.noService": "本机没有单独安装的 station",
   "android-misc.localStation.lead": "这台 Mac 上单独安装或手动启动的 station 在这里管理：启动、停止、重启，打开日志和数据。加入哪个 workspace 在各 workspace 的 Station 设置中设定。",
-  "web-pages.notifications.ways.dock": "桌面浮窗",
-  "web-pages.notifications.inDock": "显示在桌面浮窗",
-  "web-pages.dock.peek": "新内容从屏幕边缘探出",
-  "web-pages.dock.peekNote": "桌面浮窗：查看后才收起；关闭后仅在鼠标移到右边缘时显示",
 }
 
 ///|

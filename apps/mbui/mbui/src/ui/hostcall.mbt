@@ -82,11 +82,6 @@ struct FakeHost {
   families_given : Map[Int, String]
   /// the font files (by where they are) its host could not read as a font (Tester::set_unreadable_font)
   unreadable_fonts : Array[String]
-  /// the dock: whether there is one, the lines sent to it, whether it was stopped, its settings as kept
-  mut dock_on : Bool
-  dock_lines : Array[String]
-  mut dock_stops : Int
-  mut dock_kept : String
   /// the keys held down as the test says (Tester::hold_mods)
   mut mods : Int
   /// the URLs handed to the system (Ctx::open_url), oldest first

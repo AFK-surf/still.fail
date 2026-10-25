@@ -264,10 +264,9 @@ pub fn reset() -> Unit {
   notices_reset()
   faces_reset()
   bars_picked.val = None
-  // what the app does whichever frame draws it (app_frame.mbt, open_links.mbt, dock.mbt, menu_bar.mbt, shell.mbt)
+  // what the app does whichever frame draws it (app_frame.mbt, open_links.mbt, menu_bar.mbt, shell.mbt)
   app_frame_reset()
   links_reset()
-  dock_reset()
   menu_bar_given.val = ""
   shell.val = bare_shell()
 }
