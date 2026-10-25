@@ -37,8 +37,8 @@ type Picture = Deferred.Deferred<[string, Uint8Array], CoreError>;
 /// not had yet.
 type Kept = { kept: [string, number][]; standIn: Record<string, string> };
 
-/// What build `to` brings an app at build `from`: the changelog's lines for it (Changelog.brings).
-export type Brings = (app: string, from: number, to: number) => Effect.Effect<string[]>;
+/// What build `to` brings this app at build `from`: the changelog's lines for it (Changelog.brings).
+export type Brings = (from: number, to: number) => Effect.Effect<string[]>;
 
 export class Asks {
   readonly #host: Host;
@@ -89,7 +89,7 @@ export class Asks {
   /// only with some).
   update(platform: string, version: number, now: boolean, beta: boolean): Effect.Effect<J, CoreError> {
     return Effect.flatMap(this.#newest(platform, version, now, beta), (release) =>
-      release === null ? Effect.succeed(null) : Effect.map(this.#brings(platform, version, release.versionCode), (news) => ({ ...release, news })),
+      release === null ? Effect.succeed(null) : Effect.map(this.#brings(version, release.versionCode), (news) => ({ ...release, news })),
     );
   }
 

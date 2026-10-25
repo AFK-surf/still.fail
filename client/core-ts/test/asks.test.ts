@@ -137,12 +137,12 @@ test("an_account_whose_picture_changed_shows_its_last_one_until_the_new_one_is_h
 test("a_newer_build_comes_with_what_it_brings_the_app", async () => {
   const host = new FakeHost();
   host.onFetch(() => jsonResponse(200, { versionCode: 1200, versionName: "0.1.1200", file: "android/stillfail-1200.apk", sha256: "ab", size: 9 }));
-  const asked: [string, number, number][] = [];
-  const asks = new Asks(host, (app, from, to) => Effect.sync(() => (asked.push([app, from, to]), from < 1150 ? ["修复：一件事"] : [])));
+  const asked: [number, number][] = [];
+  const asks = new Asks(host, (from, to) => Effect.sync(() => (asked.push([from, to]), from < 1150 ? ["修复：一件事"] : [])));
   assert.deepEqual((await run(asks.update("android", 1100, false, false))).news, ["修复：一件事"]);
   assert.deepEqual((await run(asks.update("android", 1150, false, false))).news, []);
   assert.equal(await run(asks.update("android", 1200, false, false)), null);
-  assert.deepEqual(asked, [["android", 1100, 1200], ["android", 1150, 1200]]);
+  assert.deepEqual(asked, [[1100, 1200], [1150, 1200]]);
 });
 
 test("an_explicit_update_gets_the_newest_build_or_fails_instead_of_using_the_cached_one", async () => {

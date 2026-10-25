@@ -1565,11 +1565,12 @@ test("a_newer_build_says_what_it_brings_this_app_the_changelog_read_again_when_i
   host.onFetch((req) => {
     const path = req.url.replace("https://stillfail.test", "");
     if (path === "/v1/changelog") return jsonResponse(200, { entries, released: { android: out, web: out, station: 1320, desktop: 1322 } });
-    if (path === "/releases/android/latest.json") return jsonResponse(200, { versionCode: out, versionName: `0.1.${out}`, file: `android/stillfail-${out}.apk`, sha256: "ab", size: 9 });
+    if (path === "/releases/android/latest.json" || path === "/releases/android/mbui/latest.json") return jsonResponse(200, { versionCode: out, versionName: `0.1.${out}`, file: `android/stillfail-${out}.apk`, sha256: "ab", size: 9 });
     return jsonResponse(404, {});
   });
   const core = await Core.create(host, { clock: host.time.clock, sample: 0 });
   const ui = core.connect();
+  await ask(host, core, ui, 9, "client.device", { app: "android", build: "0.1.1320" });
   await host.settle();
   const reads = () => host.requests.filter((r) => r.url.endsWith("/v1/changelog")).length;
   // From 1320, 1335 brings Android one line (the station's and the desktop's are not the app's).
@@ -1585,6 +1586,9 @@ test("a_newer_build_says_what_it_brings_this_app_the_changelog_read_again_when_i
   newer = await ask(host, core, ui, 3, "app.update", { platform: "android", versionCode: 1330, now: true });
   assert.deepEqual([newer.versionCode, newer.news], [1340, ["新功能：新的"]]);
   assert.equal(reads(), 2);
+  // What a build brings is this app's, whatever its feed is named (still.fail mbui's: android/mbui).
+  newer = await ask(host, core, ui, 4, "app.update", { platform: "android/mbui", versionCode: 1330, now: true });
+  assert.deepEqual([newer.versionCode, newer.news], [1340, ["新功能：新的"]]);
   core.close();
 });
 

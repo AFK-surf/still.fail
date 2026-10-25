@@ -254,7 +254,7 @@ export class Core {
       inner.choose = installChoose(inner);
       installShareIn(inner);
       inner.forms = installForms(inner);
-      const asks = new Asks(inner.host, (app, from, to) => inner.changelog.brings(app, from, to));
+      const asks = new Asks(inner.host, (from, to) => inner.changelog.brings(from, to));
       asks.follow(inner.accounts);
       inner.adb = new Adb({
         host: inner.host,
