@@ -90,18 +90,20 @@ export function SkillShare({ skill, station, changed }: { skill: SkillFile; stat
 /** A row of the list that opens a page: its name (and whose), a line under it, how much is in it. */
 function MemoryRow({ to, title, sub, value, tags }: { to: string; title: string; sub?: string | undefined; value?: string | undefined; tags?: React.ReactNode }) {
   return (
-    <Link className={`${pagesCss.listRow} ${css.memoryRow}`} to={to}>
-      <span className={pagesCss.listRowText}>
-        <span className={css.memoryRowTitle}><span className={pagesCss.listRowTitle}>{title}</span>{tags}</span>
-        {sub && <span className={css.memoryRowSub}>{sub}</span>}
-      </span>
-      {value && <span className={css.memoryRowValue}>{value}</span>}
-      <ChevronRight size={14} className={css.memoryChevron} />
-    </Link>
+    <li>
+      <Link className={`${pagesCss.listRow} ${css.memoryRow}`} to={to}>
+        <span className={pagesCss.listRowText}>
+          <span className={css.memoryRowTitle}><span className={pagesCss.listRowTitle}>{title}</span>{tags}</span>
+          {sub && <span className={css.memoryRowSub}>{sub}</span>}
+        </span>
+        {value && <span className={css.memoryRowValue}>{value}</span>}
+        <ChevronRight size={14} className={css.memoryChevron} />
+      </Link>
+    </li>
   );
 }
 
-/** A station's memory as a list (on the settings' memory page): the global memory by its parts, the projects', the
+/** A station's memory as lists (on its settings' page), each a card: the global memory by its parts, the projects', the
  * other skills, and the station's own folded in a row. `to` makes a page's address under this station's. */
 export function MemoryView({ station, to }: { station: string; to: (page: string) => string }) {
   const { memory, error } = useMemory(station);
@@ -116,25 +118,29 @@ export function MemoryView({ station, to }: { station: string; to: (page: string
     <>
       <Section title={t("web-main.memory.global")} description={[MEMORY_TEXT.global, memory.global.size].filter(Boolean).join(" · ")}>
         {sections.length === 0 ? <p className={`${shellCss.muted} ${css.memoryNone}`}>{t("web-main.memory.empty")}</p>
-          : sections.map((p, i) => <MemoryRow key={i} to={to(`global?at=${i}`)} title={p.title} value={p.note} />)}
+          : <ul className={pagesCss.list}>{sections.map((p, i) => <MemoryRow key={i} to={to(`global?at=${i}`)} title={p.title} value={p.note} />)}</ul>}
       </Section>
       <Section title={t("web-main.memory.projects")} description={MEMORY_TEXT.projects}>
-        {projects.length === 0 ? <p className={`${shellCss.muted} ${css.memoryNone}`}>{MEMORY_TEXT.none}</p> : projects.map(skillRow)}
+        {projects.length === 0 ? <p className={`${shellCss.muted} ${css.memoryNone}`}>{MEMORY_TEXT.none}</p> : <ul className={pagesCss.list}>{projects.map(skillRow)}</ul>}
       </Section>
       {skills.length + builtin.length > 0 && (
         <Section title={t("web-main.memory.others")}>
-          {skills.map(skillRow)}
-          {builtin.length > 0 && (
-            <button type="button" className={`${pagesCss.listRow} ${css.memoryRow}`} onClick={() => setBuiltinOpen(!builtinOpen)} aria-expanded={builtinOpen}>
-              <span className={pagesCss.listRowText}>
-                <span className={pagesCss.listRowTitle}>{t("web-main.memory.builtin")}</span>
-                {!builtinOpen && <span className={css.memoryRowSub}>{builtin.map((s) => s.name).join(t("web-main.list.separator"))}</span>}
-              </span>
-              <span className={css.memoryRowValue}>{t("web-main.memory.count", { n: builtin.length })}</span>
-              {builtinOpen ? <ChevronDown size={14} className={css.memoryChevron} /> : <ChevronRight size={14} className={css.memoryChevron} />}
-            </button>
-          )}
-          {builtinOpen && builtin.map(skillRow)}
+          <ul className={pagesCss.list}>
+            {skills.map(skillRow)}
+            {builtin.length > 0 && (
+              <li>
+                <button type="button" className={`${pagesCss.listRow} ${css.memoryRow}`} onClick={() => setBuiltinOpen(!builtinOpen)} aria-expanded={builtinOpen}>
+                  <span className={pagesCss.listRowText}>
+                    <span className={pagesCss.listRowTitle}>{t("web-main.memory.builtin")}</span>
+                    {!builtinOpen && <span className={css.memoryRowSub}>{builtin.map((s) => s.name).join(t("web-main.list.separator"))}</span>}
+                  </span>
+                  <span className={css.memoryRowValue}>{t("web-main.memory.count", { n: builtin.length })}</span>
+                  {builtinOpen ? <ChevronDown size={14} className={css.memoryChevron} /> : <ChevronRight size={14} className={css.memoryChevron} />}
+                </button>
+              </li>
+            )}
+            {builtinOpen && builtin.map(skillRow)}
+          </ul>
         </Section>
       )}
     </>

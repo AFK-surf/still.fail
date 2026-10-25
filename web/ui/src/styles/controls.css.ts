@@ -94,6 +94,8 @@ export const menuItem = style({
     "&[data-danger]": { color: vars.red },
   },
 });
+/** The chosen one of a menu's choices: a check at its row's end. */
+export const menuCheck = style({ display: "inline-flex", flex: "none", width: "14px", marginLeft: "auto" });
 // A tint of the text rather than the page's line: in dark the panel is lighter than the page, and the line would read
 // as a dark groove on it.
 export const menuSep = style({ height: "1px", margin: "6px 4px", background: `color-mix(in srgb, ${vars.text} 12%, transparent)` });

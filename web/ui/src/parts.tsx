@@ -294,7 +294,8 @@ export function Confirm({ open, title, description, action, onConfirm, onClose, 
   );
 }
 
-export interface MenuItem { label: string; icon?: IconType; danger?: boolean; disabled?: boolean | undefined; onSelect(): void }
+/** A menu's item. `checked`: one of a choice's (a member's role), the one now chosen with a check at its end. */
+export interface MenuItem { label: string; icon?: IconType; danger?: boolean; disabled?: boolean | undefined; checked?: boolean; onSelect(): void }
 
 /**
  * A small panel's parts (docs/ui-panels.md), for what is put in styles/controls.css.ts `popover`: its head (a title, a
@@ -353,6 +354,7 @@ export function Menu({ label = t("web-main.menu.more"), items, trigger }: { labe
               disabled={item.disabled ?? false} onSelect={item.onSelect}>
               {item.icon && <item.icon {...ICON} />}
               {item.label}
+              {item.checked !== undefined && <span className={controlsCss.menuCheck}>{item.checked && <Check {...ICON} size={14} />}</span>}
             </DropdownMenu.Item>
           ))}
         </DropdownMenu.Content>

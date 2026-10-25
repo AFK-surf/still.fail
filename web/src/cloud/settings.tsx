@@ -8,9 +8,9 @@ import { CHANGEABLE } from "../keymap.ts";
 import { CAN_NOTIFY } from "../notify.ts";
 import { HAS_VERSION } from "../pages/AppVersion.tsx";
 import { HAS_LOCAL_STATION } from "../pages/LocalStation.tsx";
-import { Archive, ArrowLeft, Bell, Boxes, Brain, Key, Chart, Check, ChevronRight, Edit, Folder, Im, Info, LogOut, Monitor, Plus, Quota, Refresh, Server, Settings, ShieldCheck, Sliders, Sparks, Command, Trash, User, UserPlus, Users, type IconProps } from "@stillfail/ui/icons.tsx";
+import { useSettingsList } from "../settingsList.tsx";
+import { Archive, ArrowLeft, Bell, Boxes, Brain, Key, Chart, Check, ChevronRight, Edit, Folder, Im, Info, Monitor, Plus, Quota, Refresh, Server, ShieldCheck, Sliders, Sparks, Command, Trash, User, UserPlus, Users, type IconProps } from "@stillfail/ui/icons.tsx";
 import { SecurityNotice } from "./Security.tsx";
-import { VaultWaiting } from "./Vault.tsx";
 import { useCommands } from "../commands.ts";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { Link, Navigate, NavLink, useNavigate, useParams, useSearchParams } from "react-router";
@@ -20,7 +20,7 @@ import { MarkPick } from "./MarkPick.tsx";
 import { WorkspaceMark } from "../WorkspaceMark.tsx";
 import type { JoinableView, WorkspaceProfile } from "../core/shapes.ts";
 import { MarkOrLetter } from "../StationMark.tsx";
-import { StationNamedAt } from "../StationNamed.tsx";
+import { StationNamed, StationNamedAt } from "../StationNamed.tsx";
 import { ConnectList } from "../pages/Connects.tsx";
 import { ACCESS, RUNTIME_LABEL } from "../format.ts";
 import { stamp } from "../api.ts";
@@ -37,11 +37,11 @@ import { addProfilePath } from "../pages/AddProfile.tsx";
 import { profilePath, useProfilesSidebar } from "../ProfilesNav.tsx";
 import { useCall, useTopic } from "../core/react.ts";
 import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
-import { About, BackLink, Button, Choices, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Segmented, Select, StatusDot, Time, Spinner, Waiting, WaitLine, WaitMore } from "../ui.tsx";
-import { useDeleteAccount, useSignOut, type Account } from "./accounts.ts";
+import { About, BackLink, Button, Choices, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Menu, MobileBack, Pill, type MenuItem, ProviderLogo, RuntimeTags, Section, Segmented, Select, StatusDot, Time, Spinner, Waiting, WaitLine, WaitMore } from "../ui.tsx";
+import { useAccounts, useDeleteAccount, useSignIn, useSignOut, type Account } from "./accounts.ts";
 import { useLastChat } from "../lastChat.ts";
 import { parseEmails, useSlackPeople } from "./adding.ts";
-import { cloud, errorText, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type Role, type WorkspaceView } from "./api.ts";
+import { cloud, errorText, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type MemberView, type Role, type WorkspaceView } from "./api.ts";
 import { Avatar } from "./gate.tsx";
 import { DoingMark, DoingShown, useDoingState } from "../DoingMark.tsx";
 import { useDoing } from "../doing.ts";
@@ -49,8 +49,6 @@ import { track } from "../telemetry.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import { JoinThisMac, PC, useJoinThisMac } from "./thisMac.tsx";
 import * as nav from "../Sidebar.css.ts";
-import { useRailItems, type RailItem } from "../Rail.tsx";
-import * as railCss from "../Rail.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
@@ -58,6 +56,7 @@ import * as additionsCss from "../styles/additions.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./settings.css.ts";
 import * as accountsCss from "../pages/Accounts.css.ts";
+import * as memoryCss from "../Memory.css.ts";
 
 import { NAME } from "../channel.ts";
 import { StationArchiving } from "../pages/Archiving.tsx";
@@ -132,26 +131,31 @@ export function useSettingsCommands(entry: WorkspaceEntry): void {
   ]);
 }
 
-/** The sidebar while in settings. */
+/**
+ * The sidebar while in settings: back to the chats, then the settings' list (settingsList.tsx: the same rows in the
+ * same groups as the narrow screen's settings page), a heading's room between two groups with none, each row its icon,
+ * its name and how things stand at its end (in red where something waits).
+ */
 export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
   const base = `/w/${entry.id}/settings`;
   const some = (useStations(entry.id).value?.length ?? 0) > 0;
   const back = useLastChat(entry.id, `/w/${entry.id}`) ?? `/w/${entry.id}`;
-  const pages = settingsPages(entry, some);
-  const railed = useRailItems();
-  const heading = { client: t("web-pages.settings.nav.client"), station: "Station", cloud: "Cloud" };
+  const parts = useSettingsList(entry, false);
   return (
     <div className={nav.navScroll}>
       <NavLink className={nav.navRow} to={back} end><ArrowLeft {...ICON} />{some ? t("web-pages.settings.nav.backToChats") : t("common.back")}</NavLink>
-      {(["client", "station", "cloud"] as const).map((group) => (
-        <Fragment key={group}>
-          <div className={nav.navHeading}>{heading[group]}</div>
-          {pages.filter((p) => p.group === group).map((p) => (
-            // In the rail, a place is not among the settings (there is no rail on a narrow screen: there it is).
-            <NavLink key={p.path} className={railed.includes(p.path as RailItem) ? `${nav.navRow} ${railCss.narrowOnly}` : nav.navRow} to={`${base}/${p.path}`}>
-              {p.path === "account" ? <Avatar account={entry.account} size={18} /> : <p.icon {...ICON} />}
-              {group === "cloud" ? <span className={nav.navText}>{p.label}</span> : p.label}
-              {p.path === "vault" && <VaultWaiting workspace={entry.id} />}
+      {parts.map((part, k) => (
+        <Fragment key={k}>
+          {part.heading ? <div className={nav.navHeading}>{part.heading}</div> : <div className={css.navApart} />}
+          {part.rows.map((row) => (
+            <NavLink key={row.key} className={nav.navRow} to={`${base}/${row.path}`}>
+              <row.icon {...ICON} />
+              <span className={`${nav.navText} ${css.navTitle}`}>{row.title}</span>
+              {row.value && (
+                <span className={row.bad ? `${css.navValue} ${css.navValueBad}` : css.navValue}>
+                  {row.dot && <StatusDot state="error" />}{row.value}
+                </span>
+              )}
             </NavLink>
           ))}
         </Fragment>
@@ -173,26 +177,56 @@ export function Page({ title, lead, back, backLabel, actions, children, entry }:
 
 // ── account ─────────────────────────────────────────────────────────────
 
+/**
+ * 账号, as the narrow screen's (mobile/Me.tsx) and the app's: the same on every width (the user, 2026-10-26: 「设置感觉
+ * 很乱」; it was four sections and two cards wide). The accounts on this device on one card, the one in view first with
+ * who it is (its picture, name, email and how it signs in) and signing out of it, the others each signed out of by
+ * itself, another added; where it is signed in; deleting it in red at the foot. Signing out and deleting asked first.
+ */
 export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
   const account = entry.account;
   const toast = useToast();
+  const accounts = useAccounts() ?? [account];
+  const others = accounts.filter((a) => a.sub !== account.sub);
   // Where the account is signed in: a topic of the core, read again after a revoke.
   const devices = useTopic<LoginSession[]>({ topic: "loginSessions", account: account.sub });
   const navigate = useNavigate();
   const [signingOut, setSigningOut] = useState(false);
   const signOut = useSignOut();
+  const signIn = useSignIn();
   const [deleting, setDeleting] = useState(false);
   const remove = useDeleteAccount();
+  const how = t(/^(em|pw)-/.test(account.sub) ? "web-pages.settings.account.email" : "web-pages.settings.account.google");
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={`/w/${entry.id}/settings`} label={t("web-pages.settings.title")} />
-      <header className={pagesCss.identity}>
-        <Avatar account={account} size={52} />
-        <div className={pagesCss.identityText}>
-          <h1 className={pagesCss.identityName}>{account.name || account.email}</h1>
-          <p className={pagesCss.identitySub}><span>{account.email}</span><span>{t(/^(em|pw)-/.test(account.sub) ? "web-pages.settings.account.email" : "web-pages.settings.account.google")}</span></p>
-        </div>
-      </header>
+      <header className={pagesCss.pageHead}><div><h1>{t("web-mobile.me.title")}</h1></div></header>
+      <ul className={pagesCss.list}>
+        <li className={pagesCss.listRow}>
+          <Avatar account={account} size={46} />
+          <span className={pagesCss.listRowText}>
+            <span className={`${pagesCss.listRowTitle} ${css.accountName}`}>{account.name || account.email}</span>
+            <span className={shellCss.muted}>{account.email} · {how}</span>
+          </span>
+          <Button variant="ghost" onClick={() => setSigningOut(true)}>{others.length > 0 ? t("web-mobile.me.signOutOne") : t("web-mobile.me.signOut")}</Button>
+        </li>
+        {others.map((a) => (
+          <li key={a.sub} className={pagesCss.listRow}>
+            <span className={pagesCss.listRowTitle}>{a.email}</span>
+            <Button variant="ghost" busy={signOut.busy(a.sub)} onClick={() => void signOut.signOut(a.sub).then((out) => { if (out) toast(t("web-mobile.me.signedOut", { email: a.email })); })}>{t("web-mobile.me.signOutOne")}</Button>
+          </li>
+        ))}
+        <li>
+          <button type="button" className={pagesCss.listRow} disabled={signIn.busy} onClick={() => void signIn.signIn()}>
+            <span className={pagesCss.listRowTitle}>{t("web-mobile.me.addAccount")}</span>{signIn.busy && <Spinner inline />}
+          </button>
+        </li>
+      </ul>
+      {/* Away at once (to another account's workspace while one stays: Landing); signing out goes on by itself, a failure
+          said by toast (useSignOut). */}
+      <Confirm open={signingOut} onClose={() => setSigningOut(false)}
+        onConfirm={() => { setSigningOut(false); navigate("/", { state: { signingOut: account.sub } }); void signOut.signOut(account.sub).then((out) => { if (out) toast(t("web-pages.settings.account.signedOut", { email: account.email })); }); }}
+        title={t("web-pages.settings.account.signOutConfirm", { email: account.email })} action={t("web-pages.settings.account.signOutAction")} description={t("web-pages.settings.account.signOutConfirmBody")} />
       <Section title={t("web-pages.settings.account.sessions")} description={t("web-pages.settings.account.sessionsLead", { name: NAME })}>
         {!devices.value ? devices.error ? <p className={controlsCss.fieldError}>{t("web-pages.settings.account.sessionsFailed", { error: devices.error.message })}</p> : <Waiting count={3} /> : (
           <ul className={pagesCss.list}>
@@ -208,23 +242,14 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
           </ul>
         )}
       </Section>
-      <Section title={t("web-pages.settings.account.signOut")}>
-        <div className={`${pagesCss.card} ${pagesCss.cardRow}`}>
-          <div className={pagesCss.cardRowText}><strong>{t("web-pages.settings.account.signOutHere", { email: account.email })}</strong><span className={shellCss.muted}>{t("web-pages.settings.account.signOutHereBody")}</span></div>
-          <Button icon={LogOut} onClick={() => setSigningOut(true)}>{t("web-pages.settings.account.signOutAction")}</Button>
-        </div>
-      </Section>
-      {/* Away at once (to another account's workspace while one stays: Landing); signing out goes on by itself, a failure
-          said by toast (useSignOut). */}
-      <Confirm open={signingOut} onClose={() => setSigningOut(false)}
-        onConfirm={() => { setSigningOut(false); navigate("/", { state: { signingOut: account.sub } }); void signOut.signOut(account.sub).then((out) => { if (out) toast(t("web-pages.settings.account.signedOut", { email: account.email })); }); }}
-        title={t("web-pages.settings.account.signOutConfirm", { email: account.email })} action={t("web-pages.settings.account.signOutAction")} description={t("web-pages.settings.account.signOutConfirmBody")} />
-      <Section title={t("web-pages.settings.account.delete")}>
-        <div className={`${pagesCss.card} ${pagesCss.cardRow}`}>
-          <div className={pagesCss.cardRowText}><strong>{t("web-pages.settings.account.deleteHere", { email: account.email })}</strong><span className={shellCss.muted}>{t("web-pages.settings.account.deleteHereBody", { name: NAME })}</span></div>
-          <Button variant="danger" icon={Trash} onClick={() => setDeleting(true)}>{t("web-pages.settings.account.deleteAction")}</Button>
-        </div>
-      </Section>
+      {/* deleting it, in red at the foot (Me.tsx) */}
+      <ul className={pagesCss.list}>
+        <li>
+          <button type="button" className={pagesCss.listRow} onClick={() => setDeleting(true)}>
+            <span className={`${pagesCss.listRowTitle} ${css.accountDelete}`}>{t("web-pages.settings.account.delete")}</span>
+          </button>
+        </li>
+      </ul>
       {/* Asked again, the dialog turning until still.fail cloud has it (it may refuse: the only owner of a workspace others
           are in, said by toast); then away as after signing out, the account gone from here. */}
       <Confirm open={deleting} busy={remove.busy(account.sub)} onClose={() => setDeleting(false)}
@@ -260,20 +285,23 @@ export function useWorkspace(entry: WorkspaceEntry): { view: WorkspaceView | und
 }
 
 /**
- * The workspace in one page. At its head its mark (a square, picked there by its managers; its letter till then) and its
- * name (a title they rename where it is, Enter or leaving it keeps it), who the viewer is there and how many it holds;
- * then its people, its relays, and leaving or deleting it (at the end, away from the rest).
+ * The workspace's page, as the narrow screen's (mobile/WorkspacePage.tsx) and the app's: the same on every width (the
+ * user, 2026-10-26: 「设置感觉很乱」; it was a head of its own, sections and rows on the page's ground). Its name as the
+ * title, who the viewer is there and how many it holds under it, 添加成员 at its end (its managers'); its name and its
+ * mark on a card, renamed and picked by its managers; its people in one list (those in it, those added who have not
+ * signed in, the invitations out), each pressed by a manager for what can be done about them; its relays; leaving or
+ * deleting it in red at its foot, asked first.
  */
 export function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
   const { view, manager } = useWorkspace(entry);
   const account = entry.account;
   const navigate = useNavigate();
   const toast = useToast();
-  const [name, setName] = useState("");
-  useEffect(() => { if (view) setName(view.name); }, [view?.name]);
+  const [renaming, setRenaming] = useState(false);
   const rename = useAction((to: string) => cloud.renameWorkspace(account.sub, entry.id, to), () => toast(t("web-pages.settings.workspace.renamed")));
-  // Its mark shows at once, the square turning until the cloud has it.
+  // Its mark shows at once, the row's mark turning until the cloud has it.
   const mark = useAction((m: Mark) => cloud.setWorkspaceMark(account.sub, entry.id, m));
+  const [inviting, setInviting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const leave = useAction(() => cloud.removeMember(account.sub, entry.id, account.sub), () => toast(t("web-pages.settings.workspace.left")));
@@ -286,45 +314,61 @@ export function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
       </div>
     );
   }
-  const keep = () => { const to = name.trim(); if (!to) setName(view.name); else if (to !== view.name && !rename.busy) rename.run(to); };
   const shown = rename.busy ? rename.arg! : view.name;
-  const nameField = (
-    <input className={css.titleField} value={name} maxLength={80} disabled={!manager} aria-label={t("web-pages.settings.workspace.nameLabel")}
-      onChange={(e) => setName(e.target.value)} onBlur={keep}
-      onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) e.currentTarget.blur(); if (e.key === "Escape") { setName(view.name); e.currentTarget.blur(); } }} />
-  );
   const failed = rename.error ? t("web-pages.settings.workspace.renameFailed", { error: rename.error.message }) : mark.error ? t("web-pages.settings.workspace.markFailed", { error: mark.error.message }) : null;
-  const facts = [t("web-pages.settings.workspace.youAreShort", { role: ROLE_LABEL[view.role], email: account.email }), t("web-pages.settings.members.count", { n: view.members.length }), t("web-pages.settings.workspace.stationsCount", { n: view.stations.length })];
+  const lead = t("web-mobile.workspace.lead", { role: ROLE_LABEL[view.role], members: t("web-mobile.settings.members", { n: view.members.length }), stations: t("web-mobile.workspaces.stations", { n: view.stations.length }) });
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={`/w/${entry.id}/settings`} label={t("web-pages.settings.title")} />
       <SecurityNotice entry={entry} />
-      <header className={css.workspaceHead}>
-        <MarkPick emoji={mark.busy ? mark.arg!.emoji : view.emoji} icon={mark.busy ? mark.arg!.icon : view.icon} name={view.name} editable={manager} busy={mark.busy} large
-          empty={<WorkspaceMark w={{ name: shown }} />} onPick={(m) => { if (!same(m, view.emoji, view.icon)) void mark.run(m); }} />
-        <div className={pagesCss.identityText}>
-          {nameField}
-          <p className={css.workspaceFacts}>{facts.map((f) => <span key={f}>{f}</span>)}</p>
-        </div>
+      <header className={pagesCss.pageHead}>
+        <div><h1>{shown}</h1><p className={css.workspaceLead}>{lead}</p></div>
+        {manager && <Button icon={UserPlus} onClick={() => setInviting(true)}>{t("web-pages.settings.members.add")}</Button>}
       </header>
+      <ul className={pagesCss.list}>
+        <li>
+          {manager ? (
+            <button type="button" className={pagesCss.listRow} onClick={() => setRenaming(true)}>
+              <span className={pagesCss.listRowTitle}>{t("web-pages.settings.workspace.name")}</span>
+              <span className={css.rowValue}>{shown}</span>
+              {rename.busy ? <Spinner inline /> : <ChevronRight size={14} className={css.rowChevron} />}
+            </button>
+          ) : (
+            <div className={pagesCss.listRow}>
+              <span className={pagesCss.listRowTitle}>{t("web-pages.settings.workspace.name")}</span>
+              <span className={css.rowValue}>{shown}</span>
+            </div>
+          )}
+        </li>
+        {manager && (
+          <li>
+            <MarkPick emoji={mark.busy ? mark.arg!.emoji : view.emoji} icon={mark.busy ? mark.arg!.icon : view.icon} name={view.name} editable busy={mark.busy}
+              row={{ label: <span className={pagesCss.listRowTitle}>{t("web-mobile.stations.emoji")}</span>, className: pagesCss.listRow, end: <ChevronRight size={14} className={css.rowChevron} /> }} empty={<WorkspaceMark w={{ name: shown }} size={20} />}
+              onPick={(m) => { if (!same(m, view.emoji, view.icon)) void mark.run(m); }} />
+          </li>
+        )}
+      </ul>
       {failed && <p className={controlsCss.fieldError} role="alert">{failed}</p>}
       <Members view={view} account={account} manager={manager} />
       <Relays view={view} account={account} manager={manager} />
-      <Section title={t("web-pages.settings.workspace.leaveDelete")}>
-        {/* Rows of their own, each asked again before it is done: leaving, and (the owner) deleting. */}
-        <div className={css.dangerList}>
-          <div className={pagesCss.cardRow}>
-            <div className={pagesCss.cardRowText}><strong>{t("web-pages.settings.workspace.leave")}</strong><span className={shellCss.muted}>{t("web-pages.settings.workspace.leaveBody")}</span></div>
-            <Button variant="danger" icon={LogOut} onClick={() => setLeaving(true)}>{t("web-pages.settings.workspace.leaveAction")}</Button>
-          </div>
-          {view.role === "owner" && (
-            <div className={pagesCss.cardRow}>
-              <div className={pagesCss.cardRowText}><strong>{t("web-pages.settings.workspace.delete")}</strong><span className={shellCss.muted}>{t("web-pages.settings.workspace.deleteBody", { name: NAME })}</span></div>
-              <Button variant="danger" icon={Trash} onClick={() => setDeleting(true)}>{t("common.delete")}</Button>
-            </div>
-          )}
-        </div>
-      </Section>
+      {/* leaving or deleting it, in red at the foot, each asked again */}
+      <ul className={pagesCss.list}>
+        <li>
+          <button type="button" className={pagesCss.listRow} onClick={() => setLeaving(true)}>
+            <span className={`${pagesCss.listRowTitle} ${css.accountDelete}`}>{t("web-pages.settings.workspace.leave")}</span>
+          </button>
+        </li>
+        {view.role === "owner" && (
+          <li>
+            <button type="button" className={pagesCss.listRow} onClick={() => setDeleting(true)}>
+              <span className={`${pagesCss.listRowTitle} ${css.accountDelete}`}>{t("web-pages.settings.workspace.delete")}</span>
+            </button>
+          </li>
+        )}
+      </ul>
+      {renaming && <RenameDialog title={t("web-pages.settings.workspace.nameLabel")} label={t("web-pages.settings.workspace.name")} name={view.name} onClose={() => setRenaming(false)}
+        onRename={(to) => { setRenaming(false); if (to !== view.name && !rename.busy) void rename.run(to); }} />}
+      {inviting && <AddDialog view={view} account={account} onClose={() => setInviting(false)} />}
       {/* Away at once (to another workspace: Landing): it goes on by itself, a failure said by toast. */}
       <Confirm open={leaving} onClose={() => setLeaving(false)} onConfirm={() => { setLeaving(false); navigate("/", { state: { left: entry.id } }); void leave.run(); }}
         title={t("web-pages.settings.workspace.leaveConfirm", { name: view.name })} action={t("web-pages.settings.workspace.leaveAction")} description={t("web-pages.settings.workspace.leaveConfirmBody")} />
@@ -348,30 +392,64 @@ export function StationsSettings({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-/** Each station's agents' memory: global and projects', where its sessions run; each part opens on a page below. */
+/**
+ * 记忆, as the narrow screen's (mobile/Memory.tsx MemoriesScreen) and the app's: the same on every width (the user,
+ * 2026-10-26: 「设置感觉很乱」; it had every station's memory on the one page, a third level of headings). A row for each
+ * station opening its memory below, one offline saying so: memory is kept on each station, not shared between them.
+ */
 export function MemorySettings({ entry }: { entry: WorkspaceEntry }) {
   const listed = useStations(entry.id).value;
   if (listed?.length === 0) return <Navigate to={`/w/${entry.id}/settings/stations`} replace />;
-  const stations = listed ?? [];
   return (
     <Page title={t("web-pages.settings.memory.title")} lead={t("web-pages.settings.memory.lead")} back={`/w/${entry.id}/settings`}>
-      {stations.map((s) => (
-        <div key={s.id} className={css.memoryStation}>
-          {stations.length > 1 && <h2 className={css.memoryStationName}>{s.name}</h2>}
-          {s.online ? <MemoryView station={s.station} to={(page) => `/w/${entry.id}/settings/memory/${s.id}/${page}`} /> : <p className={shellCss.muted}>{t("web-pages.settings.memory.offline")}</p>}
-        </div>
-      ))}
+      {!listed ? <Waiting shape="cards" count={1} text={t("common.readingStations")} /> : (
+        <ul className={pagesCss.list}>
+          {listed.map((s) => (
+            <li key={s.id}>
+              {s.online ? (
+                <Link className={`${pagesCss.listRow} ${memoryCss.memoryRow}`} to={`/w/${entry.id}/settings/memory/${s.id}`}>
+                  <span className={pagesCss.listRowTitle}><StationNamed emoji={s.emoji} icon={s.icon} name={s.name} size={16} /></span>
+                  <span className={memoryCss.memoryRowValue}>{t("web-mobile.memory.both")}</span>
+                  <ChevronRight size={14} className={memoryCss.memoryChevron} />
+                </Link>
+              ) : (
+                <div className={pagesCss.listRow}>
+                  <span className={pagesCss.listRowText}>
+                    <span className={pagesCss.listRowTitle}><StationNamed emoji={s.emoji} icon={s.icon} name={s.name} size={16} /></span>
+                    <span className={shellCss.muted}>{t("web-pages.settings.memory.offline")}</span>
+                  </span>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </Page>
   );
 }
 
-/** A page of a station's memory (settings/memory/:station/global?at= or /skill/:name?file=), back to the list. */
+/** A station's memory (settings/memory/:station), under its name: the global memory by its parts, the projects', the
+ * other skills, each opening on a page below (../Memory.tsx MemoryView). */
+export function MemoryStationSettings({ entry }: { entry: WorkspaceEntry }) {
+  const { station: id } = useParams();
+  const listed = useStations(entry.id).value;
+  const view = listed?.find((s) => s.id === id);
+  if (listed && !view) return <Navigate to={`/w/${entry.id}/settings/memory`} replace />;
+  return (
+    <Page title={view?.name ?? ""} back={`/w/${entry.id}/settings/memory`} backLabel={t("web-pages.settings.memory.title")}>
+      {!view ? <Waiting count={5} /> : view.online ? <MemoryView station={view.station} to={(page) => `/w/${entry.id}/settings/memory/${view.id}/${page}`} />
+        : <p className={shellCss.muted}>{t("web-pages.settings.memory.offline")}</p>}
+    </Page>
+  );
+}
+
+/** A page of a station's memory (settings/memory/:station/global?at= or /skill/:name?file=), back to the station's. */
 export function MemoryDocSettings({ entry }: { entry: WorkspaceEntry }) {
   const { station: id, name } = useParams();
   const [params, setParams] = useSearchParams();
   const view = useStations(entry.id).value?.find((s) => s.id === id);
   return (
-    <Page title={name ?? t("web-main.memory.global")} back={`/w/${entry.id}/settings/memory`} backLabel={t("web-pages.settings.memory.title")}>
+    <Page title={name ?? t("web-main.memory.global")} back={`/w/${entry.id}/settings/memory/${id}`} backLabel={view?.name ?? t("web-pages.settings.memory.title")}>
       {view ? <MemoryDoc station={view.station} name={name ?? null} at={Number(params.get("at") ?? 0)} file={params.get("file") ?? ""}
         pick={(key, value) => setParams({ [key]: String(value) }, { replace: true })} /> : <Waiting count={4} />}
     </Page>
@@ -613,7 +691,7 @@ export function useStationEdits(view: WorkspaceView | undefined, account: Accoun
     <>
       {mark.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.stations.emoji.failed", { name: stations.find((s) => s.id === mark.arg?.id)?.name ?? "station", error: mark.error.message })}</p>}
       {rename.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.settings.stations.renameFailed", { name: stations.find((s) => s.id === rename.arg?.id)?.name ?? "station", error: rename.error.message })}</p>}
-      {naming && <RenameStationDialog station={naming} onClose={() => setNaming(null)} onRename={(name) => { if (name !== naming.name) void rename.run({ id: naming.id, name }); setNaming(null); }} />}
+      {naming && <RenameDialog title={t("web-pages.settings.stations.rename")} label={t("web-pages.settings.stations.namePrompt")} name={naming.name} onClose={() => setNaming(null)} onRename={(name) => { if (name !== naming.name) void rename.run({ id: naming.id, name }); setNaming(null); }} />}
       <Confirm open={removing !== null} onClose={() => setRemoving(null)} onConfirm={() => { if (removing) void remove.run(removing); setRemoving(null); }}
         title={t("web-pages.settings.stations.removeConfirm", { name: removing?.name ?? "" })} action={t("web-pages.settings.stations.removeAction")}
         description={t("web-pages.settings.stations.removeConfirmBody", { name: NAME })} />
@@ -645,14 +723,15 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
   );
 }
 
-function RenameStationDialog({ station, onClose, onRename }: { station: StationView; onClose(): void; onRename(name: string): void }) {
-  const [name, setName] = useState(station.name);
+/** A name changed in a dialog (a station's, the workspace's): Enter or 保存 keeps it, the field's words chosen at first. */
+function RenameDialog({ title, label, name: first, onClose, onRename }: { title: string; label: string; name: string; onClose(): void; onRename(name: string): void }) {
+  const [name, setName] = useState(first);
   const save = () => { if (name.trim()) onRename(name.trim()); };
   return (
-    <Dialog open onClose={onClose} title={t("web-pages.settings.stations.rename")}
+    <Dialog open onClose={onClose} title={title}
       footer={<><Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button><Button variant="primary" disabled={!name.trim()} onClick={save}>{t("common.save")}</Button></>}>
-      <Field label={t("web-pages.settings.stations.namePrompt")} htmlFor="station-name">
-        <input id="station-name" className={controlsCss.input} value={name} autoFocus onFocus={(e) => e.target.select()} onChange={(e) => setName(e.target.value)} maxLength={80}
+      <Field label={label} htmlFor="rename-name">
+        <input id="rename-name" className={controlsCss.input} value={name} autoFocus onFocus={(e) => e.target.select()} onChange={(e) => setName(e.target.value)} maxLength={80}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) save(); }} />
       </Field>
     </Dialog>
@@ -858,24 +937,23 @@ const relayLabel = (url: string) => url.replace(/^https?:\/\//, "");
  */
 function Relays({ view, account, manager }: { view: WorkspaceView; account: Account; manager: boolean }) {
   const relays = view.relays ?? [];
-  // The field to add one is opened by the section's button (none: nothing but the words of what they are).
+  // The field to add one is opened by the card's last row.
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState("");
   const set = useAction((next: string[]) => cloud.setRelays(account.sub, view.id, next), (_r, next) => { if (next.length > relays.length) { setAdding(""); setOpen(false); } });
   const add = () => { const url = adding.trim(); if (url) void set.run([...relays, url]); };
   if (!manager && relays.length === 0) return null;
   return (
-    <Section title={<>{t("web-pages.settings.relays.title")}{relays.length > 0 && <span className={css.titleCount}>{relays.length}</span>}</>} description={t("web-pages.settings.relays.lead", { name: NAME })}
-      actions={manager && !open && <Button icon={Plus} onClick={() => setOpen(true)}>{t("web-pages.settings.relays.add")}</Button>}>
-      {(relays.length > 0 || open) && (
-        <div className={pagesCss.card}>
-          {relays.map((url) => (
-            <div key={url} className={pagesCss.cardRow}>
-              <span className={pagesCss.cardRowText}><strong>{relayLabel(url)}</strong></span>
-              {manager && <Button variant="ghost" busy={set.busy && !set.arg?.includes(url)} disabled={set.busy} onClick={() => set.run(relays.filter((u) => u !== url))}>{t("web-pages.settings.relays.remove")}</Button>}
-            </div>
-          ))}
-          {open && (
+    <Section title={t("web-pages.settings.relays.title")} description={t("web-pages.settings.relays.lead", { name: NAME })}>
+      <ul className={pagesCss.list}>
+        {relays.map((url) => (
+          <li key={url} className={pagesCss.listRow}>
+            <span className={pagesCss.listRowTitle}>{relayLabel(url)}</span>
+            {manager && <Button variant="ghost" busy={set.busy && !set.arg?.includes(url)} disabled={set.busy} onClick={() => set.run(relays.filter((u) => u !== url))}>{t("web-pages.settings.relays.remove")}</Button>}
+          </li>
+        ))}
+        {manager && (open ? (
+          <li className={css.rowField}>
             <Field label={t("web-pages.settings.relays.add")} htmlFor="ws-relay" hint={t("web-pages.settings.relays.hint")} error={set.error ? set.error.message : undefined}>
               <div className={additionsCss.inputRow}>
                 <input id="ws-relay" className={controlsCss.input} value={adding} autoFocus placeholder="https://relay.example.com" inputMode="url" autoComplete="off" spellCheck={false}
@@ -884,84 +962,90 @@ function Relays({ view, account, manager }: { view: WorkspaceView; account: Acco
                 <Button variant="primary" disabled={!adding.trim() || set.busy} busy={set.busy && (set.arg?.length ?? 0) > relays.length} onClick={add}>{t("web-pages.settings.relays.addAction")}</Button>
               </div>
             </Field>
-          )}
-        </div>
-      )}
+          </li>
+        ) : (
+          <li>
+            <button type="button" className={pagesCss.listRow} onClick={() => setOpen(true)}>
+              <span className={pagesCss.listRowTitle}>{t("web-pages.settings.relays.add")}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
     </Section>
   );
 }
 
+/**
+ * The workspace's people in one list card: those in it (their role at the row's end; pressed by a manager, what can be
+ * done about them: their role by the owner, moving them out, asked first), then those added who have not signed in and
+ * the invitations out (each taken back at its end), which is which on each row's second line.
+ */
 function Members({ view, account, manager }: { view: WorkspaceView; account: Account; manager: boolean }) {
   const toast = useToast();
-  const [inviting, setInviting] = useState(false);
   const setRole = useAction(({ sub, role }: { sub: string; role: Role }) => cloud.setRole(account.sub, view.id, sub, role), () => toast(t("web-pages.settings.members.roleChanged")));
   const remove = useAction((sub: string) => cloud.removeMember(account.sub, view.id, sub), () => toast(t("web-pages.settings.members.removed")));
   const revoke = useAction((id: string) => cloud.revokeInvitation(account.sub, view.id, id));
   const unadd = useAction((email: string) => cloud.removeAdded(account.sub, view.id, email));
+  const [removing, setRemoving] = useState<MemberView | null>(null);
+  const waiting = manager ? view.added.length + view.invitations.length : 0;
+  const count = waiting ? t("web-mobile.settings.membersWaiting", { n: view.members.length, waiting }) : t("web-mobile.settings.members", { n: view.members.length });
   return (
-    <Section title={<>{t("web-pages.settings.workspace.members")}<span className={css.titleCount}>{view.members.length}</span></>} actions={manager && <Button icon={UserPlus} onClick={() => setInviting(true)}>{t("web-pages.settings.members.add")}</Button>}>
+    <Section title={t("web-pages.settings.workspace.members")} description={count}>
       <ul className={pagesCss.list}>
-        {view.members.map((m) => (
-          <li key={m.sub} className={pagesCss.listRow}>
-            <Avatar account={m} size={28} />
+        {view.members.map((m) => {
+          const role = setRole.busy && setRole.arg?.sub === m.sub ? setRole.arg.role : m.role;
+          const body = (
+            <>
+              <Avatar account={m} size={28} />
+              <span className={pagesCss.listRowText}>
+                <span className={pagesCss.listRowTitle}>{m.name || m.email}{m.sub === account.sub && <span className={additionsCss.choiceBadge}>{t("web-pages.settings.members.you")}</span>}</span>
+                <span className={shellCss.muted}>{m.email}</span>
+              </span>
+              {/* Its role or its removal on the way, wherever asked; failed: a red mark a few seconds, why on hover. */}
+              <DoingMark calls={["workspace.setRole", "workspace.removeMember"]} on={{ account: account.sub, workspace: view.id, member: m.sub }}
+                label={remove.busy && remove.arg === m.sub ? t("web-pages.settings.members.removing") : t("web-pages.settings.members.changingRole")} />
+              <span className={css.rowValue}>{ROLE_LABEL[role]}</span>
+            </>
+          );
+          const can = manager && m.sub !== account.sub && (m.role !== "owner" || view.role === "owner") && !(remove.busy && remove.arg === m.sub);
+          if (!can) return <li key={m.sub} className={pagesCss.listRow}>{body}</li>;
+          const roles: (MenuItem | "separator")[] = view.role === "owner"
+            ? [...(["owner", "admin", "member"] as Role[]).map((r) => ({ label: ROLE_LABEL[r], checked: role === r, disabled: setRole.busy && setRole.arg?.sub === m.sub, onSelect: () => { if (r !== m.role) setRole.run({ sub: m.sub, role: r }); } })), "separator"]
+            : [];
+          return (
+            <li key={m.sub}>
+              <Menu label={m.name || m.email} trigger={<button type="button" className={pagesCss.listRow}>{body}</button>}
+                items={[...roles, { label: t("web-pages.settings.members.remove"), icon: Trash, danger: true, onSelect: () => setRemoving(m) }]} />
+            </li>
+          );
+        })}
+        {manager && view.added.map((a) => (
+          <li key={a.email} className={pagesCss.listRow}>
+            <Avatar account={{ name: "", email: a.email, picture: "" }} size={28} />
             <span className={pagesCss.listRowText}>
-              <span className={pagesCss.listRowTitle}>{m.name || m.email}{m.sub === account.sub && <span className={additionsCss.choiceBadge}>{t("web-pages.settings.members.you")}</span>}</span>
-              <span className={shellCss.muted}>{m.email}</span>
+              <span className={pagesCss.listRowTitle}>{a.email}</span>
+              <span className={shellCss.muted}>{t("web-mobile.workspace.addedNote", { role: ROLE_LABEL[a.role] })}</span>
             </span>
-            {view.role === "owner" && m.sub !== account.sub ? (
-              <div className={css.roleSelect}>
-                <Select value={setRole.busy && setRole.arg?.sub === m.sub ? setRole.arg.role : m.role} disabled={setRole.busy && setRole.arg?.sub === m.sub}
-                  onChange={(role) => setRole.run({ sub: m.sub, role: role as Role })} label={t("web-pages.settings.members.role")}
-                  options={(["owner", "admin", "member"] as Role[]).map((r) => ({ value: r, label: ROLE_LABEL[r] }))} />
-              </div>
-            ) : <Pill>{ROLE_LABEL[m.role]}</Pill>}
-            {/* Its role or its removal on the way, wherever asked; failed: a red mark a few seconds, why on hover. */}
-            <DoingMark calls={["workspace.setRole", "workspace.removeMember"]} on={{ account: account.sub, workspace: view.id, member: m.sub }}
-              label={remove.busy && remove.arg === m.sub ? t("web-pages.settings.members.removing") : t("web-pages.settings.members.changingRole")} />
-            {manager && m.sub !== account.sub && (m.role !== "owner" || view.role === "owner") && !(remove.busy && remove.arg === m.sub) && (
-              <Menu items={[{ label: t("web-pages.settings.members.remove"), icon: Trash, danger: true, onSelect: () => { if (window.confirm(t("web-pages.settings.members.removeConfirm", { email: m.email, name: view.name }))) remove.run(m.sub); } }]} />
-            )}
+            <Button variant="ghost" busy={unadd.busy && unadd.arg === a.email} onClick={() => unadd.run(a.email)}>{t("web-pages.settings.members.unadd")}</Button>
+          </li>
+        ))}
+        {manager && view.invitations.map((i) => (
+          <li key={i.id} className={pagesCss.listRow}>
+            <Avatar account={{ name: "", email: i.email ?? "?", picture: "" }} size={28} />
+            <span className={pagesCss.listRowText}>
+              <span className={pagesCss.listRowTitle}>{i.email ?? t("web-pages.settings.members.anyone")}</span>
+              <span className={shellCss.muted}>{t("web-mobile.workspace.inviteNote", { role: ROLE_LABEL[i.role], until: stamp(i, "expires_at")?.until ?? "" })}</span>
+            </span>
+            <Button variant="ghost" busy={revoke.busy && revoke.arg === i.id} onClick={() => revoke.run(i.id)}>{t("web-pages.settings.members.revoke")}</Button>
           </li>
         ))}
       </ul>
       {(setRole.error || remove.error) && <p className={controlsCss.fieldError} role="alert">{(setRole.error ?? remove.error)!.message}</p>}
       {unadd.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.settings.members.unaddFailed", { email: unadd.arg ?? "", error: unadd.error.message })}</p>}
-      {manager && view.added.length > 0 && (
-        <>
-          <div className={css.memberGroup}><strong>{t("web-pages.settings.members.added")}</strong><span className={shellCss.muted}>{t("web-pages.settings.members.addedNote", { n: view.added.length, name: NAME })}</span></div>
-          <ul className={pagesCss.list}>
-            {view.added.map((a) => (
-              <li key={a.email} className={pagesCss.listRow}>
-                <Avatar account={{ name: "", email: a.email, picture: "" }} size={28} />
-                <span className={pagesCss.listRowText}>
-                  <span className={pagesCss.listRowTitle}>{a.email}</span>
-                  <span className={shellCss.muted}>{ROLE_LABEL[a.role]}</span>
-                </span>
-                <Button variant="ghost" busy={unadd.busy && unadd.arg === a.email} onClick={() => unadd.run(a.email)}>{t("web-pages.settings.members.unadd")}</Button>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-      {manager && view.invitations.length > 0 && (
-        <>
-          <div className={css.memberGroup}><strong>{t("web-pages.settings.members.invitations")}</strong><span className={shellCss.muted}>{t("web-pages.settings.members.invitationsCount", { n: view.invitations.length })}</span></div>
-          <ul className={pagesCss.list}>
-            {view.invitations.map((i) => (
-              <li key={i.id} className={pagesCss.listRow}>
-                <Avatar account={{ name: "", email: i.email ?? "?", picture: "" }} size={28} />
-                <span className={pagesCss.listRowText}>
-                  <span className={pagesCss.listRowTitle}>{i.email ?? t("web-pages.settings.members.anyone")}</span>
-                  <span className={shellCss.muted}>{t("web-pages.settings.members.invitationNote", { role: ROLE_LABEL[i.role], until: stamp(i, "expires_at")?.until ?? "" })}</span>
-                </span>
-                <Button variant="ghost" busy={revoke.busy && revoke.arg === i.id} onClick={() => revoke.run(i.id)}>{t("web-pages.settings.members.revoke")}</Button>
-              </li>
-            ))}
-          </ul>
-          {revoke.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.settings.members.revokeFailed", { error: revoke.error.message })}</p>}
-        </>
-      )}
-      {inviting && <AddDialog view={view} account={account} onClose={() => setInviting(false)} />}
+      {revoke.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.settings.members.revokeFailed", { error: revoke.error.message })}</p>}
+      <Confirm open={removing !== null} onClose={() => setRemoving(null)} onConfirm={() => { if (removing) remove.run(removing.sub); setRemoving(null); }}
+        title={t("web-pages.settings.members.removeConfirm", { email: removing?.email ?? "", name: view.name })} action={t("web-mobile.workspace.removeMemberAction")}
+        description={t("web-mobile.workspace.removeMemberText")} />
     </Section>
   );
 }

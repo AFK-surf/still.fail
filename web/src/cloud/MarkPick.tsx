@@ -14,11 +14,13 @@ import * as css from "./MarkPick.css.ts";
 const bare = (emoji: string) => emoji.replace(/️/g, "");
 
 /**
- * `large`: the square heading a page (the workspace's): as large as a title's line and a half, filled; with none, `empty`
- * (its letter) shows in it, and anyone sees it.
+ * `large`: the square heading a page (a station's): as large as a title's line and a half, filled; with none, `empty`
+ * (its letter) shows in it, and anyone sees it. `row`: a row of a list card that opens the panel (the workspace's 图标),
+ * its words (`label`) and the mark at its end (`empty`, its letter, with none), then `end` (a chevron).
  */
-export function MarkPick({ emoji, icon, name, editable, busy, large, empty, onPick }: {
-  emoji: string | null | undefined; icon: string | null | undefined; name: string; editable: boolean; busy?: boolean; large?: boolean; empty?: ReactNode; onPick(mark: Mark): void;
+export function MarkPick({ emoji, icon, name, editable, busy, large, empty, row, onPick }: {
+  emoji: string | null | undefined; icon: string | null | undefined; name: string; editable: boolean; busy?: boolean; large?: boolean; empty?: ReactNode;
+  row?: { label: ReactNode; className: string; end?: ReactNode }; onPick(mark: Mark): void;
 }) {
   const [open, setOpen] = useState(false);
   const set = !!emoji || !!icon;
@@ -31,9 +33,17 @@ export function MarkPick({ emoji, icon, name, editable, busy, large, empty, onPi
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
-        <button type="button" className={large ? css.large : css.slot} data-set={set ? "" : undefined} data-picture={isPicture(icon) || undefined} disabled={busy} aria-label={t("web-pages.stations.emoji.label", { name })}>
-          {face}
-        </button>
+        {row ? (
+          <button type="button" className={row.className} disabled={busy}>
+            {row.label}
+            <span className={css.rowMark} aria-label={t("web-pages.stations.emoji.label", { name })}>{set ? <StationMark emoji={emoji} icon={icon} size={isPicture(icon) ? 28 : 20} /> : empty}</span>
+            {row.end}
+          </button>
+        ) : (
+          <button type="button" className={large ? css.large : css.slot} data-set={set ? "" : undefined} data-picture={isPicture(icon) || undefined} disabled={busy} aria-label={t("web-pages.stations.emoji.label", { name })}>
+            {face}
+          </button>
+        )}
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content className={`${controlsCss.popover} ${css.pick}`} align="start" sideOffset={6} collisionPadding={8}>

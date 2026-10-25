@@ -601,7 +601,6 @@
   "web-mobile.workspace.here": "Current",
   "web-mobile.workspace.inviteNote": "{role} · Invited · Expires {until}",
   "web-mobile.workspace.lead": "{role} · {members} · {stations}",
-  "web-mobile.workspace.leadManager": "{role} · {members} · {stations} · Tap name to rename",
   "web-mobile.workspace.leave": "Leave workspace",
   "web-mobile.workspace.leaveAction": "Leave",
   "web-mobile.workspace.leaveAsk": "Leave \"{name}\"?",

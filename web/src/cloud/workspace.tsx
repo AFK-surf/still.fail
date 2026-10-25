@@ -50,7 +50,7 @@ import { NavAction, NavList, NavItem, NavSection, NavTop } from "../SidebarList.
 import { SecurityOpen, SecurityPrompt, SecuritySettings, SecurityWaiting, useLock } from "./Security.tsx";
 import { VaultSettings } from "./Vault.tsx";
 import { VaultItemPage } from "./VaultItem.tsx";
-import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, StationArchivingSettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, JoinExistingLink, MemoryDocSettings, MemorySettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
+import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, StationArchivingSettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, JoinExistingLink, MemoryDocSettings, MemorySettings, MemoryStationSettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, scopeOf, StationContext, stationBase, useSidebarMode, useStationList, type Station } from "../station.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Select, Tip, Spinner, Waiting } from "../ui.tsx";
@@ -161,7 +161,8 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
           <ComposerDock>
           <Routes>
             <Route index element={<WorkspaceHome id={entry.id} stations={known && stations} />} />
-            <Route path="settings" element={<Navigate to="appearance" replace />} />
+            {/* The settings come to their list's first row's page, the account's (settingsList.tsx). */}
+            <Route path="settings" element={<Navigate to="account" replace />} />
             <Route path="settings/appearance" element={<AppearancePage back={`/w/${entry.id}/settings`} />} />
             {/* A phone's page of the fonts (mobile/Fonts.tsx): the wide screen has them on 外观. */}
             <Route path="settings/appearance/fonts" element={<AppearancePage back={`/w/${entry.id}/settings`} />} />
@@ -193,6 +194,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
             <Route path="settings/profiles" element={<RuntimeSettings entry={entry} />} />
             <Route path="settings/profiles/account/:key" element={<ProfileAccountSettings entry={entry} />} />
             <Route path="settings/memory" element={<MemorySettings entry={entry} />} />
+            <Route path="settings/memory/:station" element={<MemoryStationSettings entry={entry} />} />
             <Route path="settings/memory/:station/global" element={<MemoryDocSettings entry={entry} />} />
             <Route path="settings/memory/:station/skill/:name" element={<MemoryDocSettings entry={entry} />} />
             <Route path="settings/usage/prices" element={<UsagePricesSettings entry={entry} />} />

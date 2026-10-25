@@ -2,8 +2,9 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { litOver } from "@stillfail/ui/styles/lit.ts";
 import { buddyHopKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
-import { list, pageNarrow } from "./styles/pages.css.ts";
+import { CARD_PAD, LIST_PAD, ROW_CORNER, list, listCardLook, listRow, pageNarrow } from "./styles/pages.css.ts";
 import { newChat } from "./NewChat.css.ts";
+import { profileCard } from "./ProfileCard.css.ts";
 import { pageBar as onePageBar } from "./styles/sidebar.css.ts";
 import { bar as filesBar } from "./pages/Files.css.ts";
 import { neg, outset } from "@stillfail/ui/styles/align.ts";
@@ -100,6 +101,17 @@ globalStyle(list, { listStyle: "none", marginBlock: "0", ...outset(12), padding:
 /** A list right in a narrow page (not in a section): in the page's column like everything else there, its rows' grounds
  * out past it by their padding. Its own margin above would take the column's centring away (it comes later). */
 globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "none", marginLeft: `max(${neg(12)}, calc(50% - 392px))`, marginRight: `max(${neg(12)}, calc(50% - 392px))` });
+/**
+ * On a settings page a list is a list card, on every width as the narrow screen's and the app's are (docs/ui-panels.md
+ * 页面卡片, 列表卡; the user, 2026-10-26: 「设置感觉很乱」, a wide page's rows were on the page or on cards for no reason):
+ * at the column's edges as the page's other cards, its rows' grounds LIST_PAD in, their words CARD_PAD in, their corners
+ * concentric with its. Here, after the two above, so it wins over them.
+ */
+globalStyle(`${pageNarrow} ${list}`, { ...listCardLook, padding: LIST_PAD, marginInline: "0" });
+// One right in the page is a block of its own, as far from what follows as a section (page.css.ts section).
+globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "760px", marginLeft: "auto", marginRight: "auto", marginBottom: "28px" });
+// Its rows: a list's own and a profile's (ProfileCard.tsx, a row of a list but where it stands alone).
+globalStyle(`${pageNarrow} ${list} :is(${listRow}, ${profileCard})`, { borderRadius: ROW_CORNER, paddingInline: `${CARD_PAD - LIST_PAD}px` });
 globalStyle(`${sidebarBuddy}[data-pose="hop"] img`, { animation: `${buddyHopKeyframes} 380ms ${vars.easeOut}` });
 /** The buddy unmoving (rest and push breathe and strain in their SVG, which goes by the system's setting): shown in its
  *  place with motion reduced. */

@@ -1,17 +1,12 @@
-// Settings on a narrow screen, one page from the gear on Home (as the Android app has it, apps/android/…/screens/
-// SettingsHome.kt): who is signed in and the workspace in view, each a card; then the workspace's in small groups (who
-// may do what; its stations and what they run; its agents), then this device's (how it looks, its bar, its language,
-// whether it notifies), then 关于 (what changed, whether it sends usage statistics, still.fail's terms and privacy
-// policy). Each row has its icon, and says how things stand at its end, what is wrong in red, so the page is worth a
-// look before anything is opened.
-import { useState, type ReactNode } from "react";
+// Settings on a narrow screen, one page from the gear on Home: the settings' list (settingsList.tsx), as the wide
+// screen's sidebar and the app have it (docs/ui-panels.md 设置的目录): who is signed in and the workspace in view, each a
+// card; then the workspace's in small groups, then this device's (how it looks, whether it notifies, its bar), then 关于.
+// Each row has its icon, and says how things stand at its end, what is wrong in red, so the page is worth a look
+// before anything is opened.
+import { Fragment, useState, type ReactNode } from "react";
 import { useDoing } from "../doing.ts";
-import { useStations, useConnects } from "../api.ts";
 import { useWorkspace } from "../cloud/api.ts";
-import { ROLE_LABEL } from "../cloud/settings.tsx";
-import { useLock } from "../cloud/Security.tsx";
-import { useVaults } from "../vault.ts";
-import { Archive, ArrowUpRight, Bell, Brain, Chart, Check, ChevronRight, Im, Info, Key, Quota, Refresh, Server, ShieldCheck, Sliders, ViewColumns, Web, type IconProps } from "@stillfail/ui/icons.tsx";
+import { ArrowUpRight, Bell, ChevronRight, Refresh, type IconProps } from "@stillfail/ui/icons.tsx";
 import type { ComponentType } from "react";
 import { WorkspaceMark, marked } from "../WorkspaceMark.tsx";
 import { isPicture } from "../StationMark.tsx";
@@ -38,6 +33,7 @@ import * as partsCss from "./styles/parts.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import * as connectsCss from "./Connects.css.ts";
 import * as css from "./Settings.css.ts";
+import { useSettingsList, type SettingsRow } from "../settingsList.tsx";
 
 export function themes(): [Appearance, string][] {
   return [["system", t("web-mobile.settings.appearance.system")], ["light", t("web-mobile.settings.appearance.light")], ["dark", t("web-mobile.settings.appearance.dark")]];
@@ -70,80 +66,51 @@ export function SettingsScreen() {
   const app = useApp();
   const me = app.entry.account;
   const view = useWorkspace(app.entry.id).value;
-  const stations = useStations(app.entry.id).value;
-  const connects = useConnects(app.entry.id).value;
-  const [appearance] = useAppearance();
-  const build = useChangelog().value?.build;
-  const manager = view?.role === "owner" || view?.role === "admin";
-  const waiting = view ? view.added.length + view.invitations.length : 0;
-  const online = stations?.filter((s) => s.online).length ?? 0;
-  const troubled = stations?.some((s) => !s.online) ?? false;
-  const failing = connects?.items.filter((i) => i.connect.presence === "error").length ?? 0;
-  const profiles = stations?.flatMap((s) => s.overview?.profiles ?? []) ?? [];
-  const short = profiles.filter((p) => p.trouble != null).length;
-  const language = usePrefs((p) => p.language) ?? null;
   const bars = useBars();
-  const lock = useLock(app.entry.id);
-  // (what the core says of it at the row's end)
-  const vaults = useVaults(app.entry.id);
-  const vault = vaults ? { text: vaults.statusText ?? "", bad: vaults.statusBad === true } : undefined;
-  const at = (path: string) => () => app.push(app.at(path));
+  const barsSaid = bars.sets.length > 1 ? t("web-mobile.bar.count", { n: bars.sets.length }) : bars.sets[0]!.map((k) => railLabel(k as BarPlace)).join("、");
+  // the settings' list, as the wide screen's sidebar has it (settingsList.tsx)
+  const parts = useSettingsList(app.entry, true, barsSaid);
+  const at = (path: string) => () => app.push(app.at(`/settings/${path}`));
   const under = app.under();
+  const row = (r: SettingsRow) => r.key === "notifications"
+    // (this browser's notifications switched where they are: no page of their own on a phone's browser)
+    ? <Notify key={r.key} />
+    : <GoRow key={r.key} icon={r.icon} title={r.title} bad={r.bad ?? false} value={r.value !== undefined ? <>{r.dot && <Presence state="error" />}{r.value}</> : undefined} onClick={at(r.path)} />;
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       {/* Back to the place it was opened from (the gear of each place's head). */}
       <TopBack label={under && under !== "chats" ? railLabel(under) : t("web-mobile.nav.chats")} onBack={app.pop} />
       <LargeTitle small="" big={t("web-mobile.settings.title")} />
-      <Card onClick={at("/settings/account")}>
-        <span className={css.mMe}>
-          <Avatar id={me.email} name={me.name || me.email} size={46} picture={me.picture} />
-          <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><b>{me.name || me.email}</b><span className={listsCss.mRowNote}>{me.email}</span></span>
-          <ChevronRight size={14} className={partsCss.mSubtle} />
-        </span>
-      </Card>
-      {/* The workspace as the account is: its mark, its name, the viewer's role in it and its people. */}
-      <Card onClick={at("/settings/workspace")}>
-        <span className={css.mMe}>
-          <span className={css.mWorkspace} data-marked={(view && marked(view)) || undefined} data-picture={(view && isPicture(view.icon)) || undefined}>
-            <WorkspaceMark w={view ?? app.entry} size={26} picture={46} />
-          </span>
-          <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-            <b>{view?.name ?? app.entry.name}</b>
-            <span className={listsCss.mRowNote}>{[view ? ROLE_LABEL[view.role] : null, view ? (manager && waiting ? t("web-mobile.settings.membersWaiting", { n: view.members.length, waiting }) : t("web-mobile.settings.members", { n: view.members.length })) : null].filter(Boolean).join(" · ")}</span>
-          </span>
-          <ChevronRight size={14} className={partsCss.mSubtle} />
-        </span>
-      </Card>
-      {/* Who may do what: security mode, where the workspace has it, and the vault. */}
-      <ListCard>
-        {lock?.available && <GoRow icon={ShieldCheck} title={t("web-pages.security.title")} bad={lock.attention > 0} value={lock.locked ? (lock.attention > 0 ? t("web-mobile.settings.securityWaiting", { n: lock.attention }) : t("web-mobile.settings.securityOn")) : t("web-mobile.settings.securityOff")} onClick={at("/settings/security")} />}
-        <GoRow icon={Key} title={t("web-pages.vault.title")} bad={vault?.bad ?? false} value={vault?.text} onClick={at("/settings/vault")} />
-      </ListCard>
-      {/* Its stations and what they run: the chats' ways in and the agents' accounts. */}
-      <ListCard>
-        <GoRow icon={Server} title="Station" value={stations ? <>{troubled && <Presence state="error" />}{t("web-mobile.settings.stationsOnline", { online, n: stations.length })}</> : undefined} onClick={at("/settings/stations")} />
-        <GoRow icon={Im} title={t("web-mobile.settings.connects")} bad={failing > 0} value={connects ? (failing ? t("web-mobile.settings.connectsFailing", { n: failing }) : t("web-mobile.settings.connectsCount", { n: connects.items.length })) : undefined} onClick={at("/settings/connects")} />
-        <GoRow icon={Quota} title="Profile" bad={short > 0} value={stations ? (short ? t("web-mobile.settings.profilesShort", { n: short }) : t("web-mobile.settings.profilesCount", { n: profiles.length })) : undefined} onClick={at("/settings/profiles")} />
-      </ListCard>
-      {/* Its agents: when their chats are archived, what they decide by themselves, what they remember, what they used. */}
-      <ListCard>
-        <GoRow icon={Archive} title={t("web-pages.archiving.title")} onClick={at("/settings/archive")} />
-        <GoRow icon={Check} title={t("web-pages.automaticDecisions.title")} onClick={at("/settings/automatic-decisions")} />
-        <GoRow icon={Brain} title={t("web-mobile.settings.memory")} onClick={at("/settings/memory")} />
-        <GoRow icon={Chart} title={t("web-mobile.settings.usage")} onClick={at("/settings/usage")} />
-      </ListCard>
-      <SectionHeader title={t("web-mobile.settings.device")} start={24} />
-      <ListCard>
-        <GoRow icon={Sliders} title={t("web-mobile.settings.appearance.title")} value={themes().find(([v]) => v === appearance)?.[1]} onClick={at("/settings/appearance")} />
-        <GoRow icon={ViewColumns} title={t("web-mobile.bar.title")} value={bars.sets.length > 1 ? t("web-mobile.bar.count", { n: bars.sets.length }) : bars.sets[0]!.map((k) => railLabel(k as BarPlace)).join("、")} onClick={at("/settings/bar")} />
-        <GoRow icon={Web} title={t("common.language")} value={languages().find(([v]) => v === language)?.[1]} onClick={at("/settings/language")} />
-        <Notify />
-        {/* An app on the home screen has no browser round it to reload the page: here it can. */}
-        {standalone() && <ListRow onClick={() => reload("button")}><RowIcon icon={Refresh} /><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("common.reload")}</span></ListRow>}
-      </ListCard>
-      <ListCard>
-        <GoRow icon={Info} title={t("web-pages.settings.nav.about")} value={build != null ? `0.1.${build}` : undefined} onClick={at("/settings/about")} />
-      </ListCard>
+      {parts.map((part, k) => {
+        // who is signed in and the workspace in view: a card each, as large as who and where they are
+        if (part.rows.some((r) => r.who)) {
+          return part.rows.map((r) => (
+            <Card key={r.key} onClick={at(r.path)}>
+              <span className={css.mMe}>
+                {r.who === "person"
+                  ? <Avatar id={me.email} name={me.name || me.email} size={46} picture={me.picture} />
+                  : (
+                    <span className={css.mWorkspace} data-marked={(view && marked(view)) || undefined} data-picture={(view && isPicture(view.icon)) || undefined}>
+                      <WorkspaceMark w={view ?? app.entry} size={26} picture={46} />
+                    </span>
+                  )}
+                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><b>{r.title}</b>{r.line && <span className={listsCss.mRowNote}>{r.line}</span>}</span>
+                <ChevronRight size={14} className={partsCss.mSubtle} />
+              </span>
+            </Card>
+          ));
+        }
+        return (
+          <Fragment key={k}>
+            {part.heading && <SectionHeader title={part.heading} start={24} />}
+            <ListCard>
+              {part.rows.map(row)}
+              {/* An app on the home screen has no browser round it to reload the page: here it can. */}
+              {part.heading && standalone() && <ListRow onClick={() => reload("button")}><RowIcon icon={Refresh} /><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("common.reload")}</span></ListRow>}
+            </ListCard>
+          </Fragment>
+        );
+      })}
       <div style={{ height: 30 }} />
     </div>
   );
@@ -228,11 +195,13 @@ function Telemetry() {
   );
 }
 
-/** How this device shows still.fail: its theme, its motion and its fonts (the wide screen's 外观 page has the same). */
+/** How this device shows still.fail: its theme, its fonts, its motion and its language (the wide screen's 外观 page has
+ *  the same). */
 export function AppearanceScreen() {
   const app = useApp();
   const [appearance, setAppearance] = useAppearance();
   const [motion, setMotion] = useMotionSetting();
+  const language = usePrefs((p) => p.language) ?? null;
   const motions = [["system", t("web-pages.appearance.motion.system")], ["reduce", t("web-pages.appearance.motion.reduce")], ["full", t("web-pages.appearance.motion.full")]] as const;
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
@@ -251,6 +220,12 @@ export function AppearanceScreen() {
           onSelect={(i) => setMotion(motions[i]![0])} height={34} fill />
       </div>
       <div className={css.mSegNote}>{t("web-pages.appearance.motion.description")}</div>
+      {/* the language still.fail speaks here, as the wide screen's 外观 and the app's have it */}
+      <SectionHeader title={t("common.language")} start={24} />
+      <div style={{ padding: "0 12px" }}>
+        <Seg options={languages().map(([, label]) => label)} selected={Math.max(0, languages().findIndex(([v]) => v === language))}
+          onSelect={(i) => setPrefs({ language: languages()[i]![0] })} height={34} fill />
+      </div>
       <div style={{ height: 30 }} />
     </div>
   );

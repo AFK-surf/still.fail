@@ -568,7 +568,6 @@
   "web-mobile.workspace.here": "当前",
   "web-mobile.workspace.inviteNote": "{role} · 邀请 · {until}过期",
   "web-mobile.workspace.lead": "你是{role} · {members} · {stations}",
-  "web-mobile.workspace.leadManager": "你是{role} · {members} · {stations} · 点击名称可重命名",
   "web-mobile.workspace.leave": "退出此 workspace",
   "web-mobile.workspace.leaveAction": "退出",
   "web-mobile.workspace.leaveAsk": "退出「{name}」？",
