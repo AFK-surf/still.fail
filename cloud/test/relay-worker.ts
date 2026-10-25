@@ -3,6 +3,7 @@
 import { DurableObject } from "cloudflare:workers";
 import worker, { RelayBudget as ProductionRelayBudget } from "../src/relay-worker";
 import { clock, nowSeconds } from "../src/auth";
+import { LIMITS } from "../src/limits";
 export default worker;
 
 declare const TEST_NOW_MS: number | null;
@@ -17,8 +18,8 @@ export class RelayBudget extends ProductionRelayBudget {
       day: Math.floor(now / 86400),
       at: now,
       connects: 0,
-      bytes: kind === "bytes" ? 5 * 1024 * 1024 * 1024 : 0,
-      frames: kind === "frames" ? 20_000_000 : 0,
+      bytes: kind === "bytes" ? LIMITS.bytesPerDay : 0,
+      frames: kind === "frames" ? LIMITS.framesPerDay : 0,
     };
     this.ctx.storage.kv.put("quota", this.quota);
   }
