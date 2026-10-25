@@ -11,6 +11,8 @@
 // Reads: a row asked for by key is kept (by identity, frozen) until it is written; a station's list a view shows (its
 // chats, sessions, threads, jobs) is loaded by one indexed query the first time it is asked for and from then on kept
 // current by the writer, row by row, until no topic reads it. Nothing is loaded at start.
+import { lowerBound, upperBound } from "../ordered.ts";
+import { LogIndex, LogIndices } from "./log-index.ts";
 import { Deferred, Effect, type Fiber, Queue } from "effect";
 import type { Sql, SqlRow, SqlValue } from "../host.ts";
 import { SqlError, sqlError } from "../host.ts";
@@ -248,6 +250,7 @@ export class AccountDb {
   #waiting: Deferred.Deferred<void>[] = [];
   readonly #cache = new Cache(4096);
   readonly #logCache = new Cache(8192);
+  readonly #logIndices = new LogIndices();
   readonly #lists = new Map<string, Collection>();
   #closed = false;
   /// Told after each burst is written, with what it changed.
@@ -349,6 +352,7 @@ export class AccountDb {
       // What was read is not what is kept any more.
       this.#cache.clear();
       this.#logCache.clear();
+      this.#logIndices.clear();
       this.#lists.clear();
       const again = [...this.#unwritten, ...precious];
       this.#unwritten = [];
@@ -412,6 +416,7 @@ export class AccountDb {
   }
 
   #tellLog(table: string, station: string, id: string): void {
+    this.#logIndices.delete(K(table, station, id));
     this.#changes.logs.set(K(table, station, id), [table, station, id]);
     if (table === "slack") this.#slackNames.delete(station);
   }
@@ -1401,15 +1406,35 @@ export class AccountDb {
   // ── a thread's entries and a session's transcript ──
 
   /// The numbers of a log's items held, in order.
-  logNumbers(table: "entry" | "transcript", station: string, id: string): number[] {
+  logNumbers(table: "entry" | "transcript", station: string, id: string): readonly number[] {
+    const cacheKey = K(table, station, id);
+    const hit = this.#logIndices.get(cacheKey);
+    if (hit) return hit.numbers;
     const [key, col] = table === "entry" ? ["thread", "n"] : ["session", "i"];
-    return this.sql.all(`SELECT ${col} FROM ${table} WHERE station = ? AND ${key} = ? ORDER BY ${col}`, [station, table === "entry" ? Number(id) : id]).map((r) => r[0] as number);
+    const numbers = this.sql.all(`SELECT ${col} FROM ${table} WHERE station = ? AND ${key} = ? ORDER BY ${col}`, [station, table === "entry" ? Number(id) : id]).map((r) => r[0] as number);
+    this.#logIndices.set(cacheKey, new LogIndex(numbers));
+    return numbers;
   }
 
   /// A log's items `from ..= to` held, by number.
   logRange(table: "entry" | "transcript", station: string, id: string, from: number, to: number): Map<number, J> {
     const [key, col] = table === "entry" ? ["thread", "n"] : ["session", "i"];
     const out = new Map<number, J>();
+    const index = this.#logIndices.get(K(table, station, id));
+    if (index) {
+      const numbers = index.numbers;
+      const first = lowerBound(numbers, from);
+      const end = upperBound(numbers, to);
+      for (let i = first; i < end; i++) {
+        const n = numbers[i]!;
+        const item = this.#logCache.get(K(table, station, id, n));
+        if (item === undefined) break;
+        out.set(n, item);
+      }
+      // A hot window is already parsed: do not copy its JSON strings out of SQLite on every view update.
+      if (out.size === Math.max(0, end - first)) return out;
+      out.clear();
+    }
     const rows = this.sql.all(`SELECT ${col}, json FROM ${table} WHERE station = ? AND ${key} = ? AND ${col} BETWEEN ? AND ? ORDER BY ${col}`, [station, table === "entry" ? Number(id) : id, from, to]);
     for (const r of rows) {
       const n = r[0] as number;
@@ -1429,6 +1454,8 @@ export class AccountDb {
 
   /// The highest and lowest numbers a log holds, and how many (null when it holds none).
   logSpan(table: "entry" | "transcript", station: string, id: string): { min: number; max: number; count: number } | null {
+    const index = this.#logIndices.get(K(table, station, id));
+    if (index) return index.span;
     const [key, col] = table === "entry" ? ["thread", "n"] : ["session", "i"];
     const r = this.sql.all(`SELECT min(${col}), max(${col}), count(*) FROM ${table} WHERE station = ? AND ${key} = ?`, [station, table === "entry" ? Number(id) : id])[0];
     return r && r[2] !== 0 ? { min: r[0] as number, max: r[1] as number, count: r[2] as number } : null;
@@ -1436,6 +1463,8 @@ export class AccountDb {
 
   /// How many of `from ..= to` a log holds.
   logCount(table: "entry" | "transcript", station: string, id: string, from: number, to: number): number {
+    const index = this.#logIndices.get(K(table, station, id));
+    if (index) return index.count(from, to);
     const [key, col] = table === "entry" ? ["thread", "n"] : ["session", "i"];
     return (this.sql.all(`SELECT count(*) FROM ${table} WHERE station = ? AND ${key} = ? AND ${col} BETWEEN ? AND ?`, [station, table === "entry" ? Number(id) : id, from, to])[0]?.[0] as number) ?? 0;
   }
@@ -1445,6 +1474,10 @@ export class AccountDb {
   putLog(table: "entry" | "transcript", station: string, id: string, items: [number, J][], cutAfter: number | null = null, keep = false): void {
     if (items.length === 0 && cutAfter === null) return;
     this.#write(() => {
+      const cacheKey = K(table, station, id);
+      const index = this.#logIndices.get(cacheKey);
+      // A failed SQL write must never leave a cached index of a different transaction state.
+      this.#logIndices.delete(cacheKey);
       const [key, col] = table === "entry" ? ["thread", "n"] : ["session", "i"];
       const k: SqlValue = table === "entry" ? Number(id) : id;
       let changed = false;
@@ -1479,6 +1512,10 @@ export class AccountDb {
         if (said) this.#tellLog("slack", station, id);
       }
       if (changed) this.#tellLog(table, station, id);
+      if (index) {
+        index.put(written.map(([n]) => n), cutAfter);
+        this.#logIndices.set(cacheKey, index);
+      }
     });
   }
 
@@ -1769,6 +1806,7 @@ export class AccountDb {
       for (const key of [...this.#evicted]) if (key.split("\u0001")[1] === station) this.#evicted.delete(key);
       this.#cache.clear();
       this.#logCache.clear();
+      this.#logIndices.clear();
       for (const key of [...this.#lists.keys()]) if (key.endsWith(`\u0001${station}`)) this.#lists.delete(key);
       for (const topic of ["overview", "footprint", "stationUsage", "chatRows", "archivedRows", "sessions", "threads", "jobs"]) this.#tell({ topic, station });
     });

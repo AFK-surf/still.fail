@@ -157,7 +157,13 @@ Topics read what they show by query, when they go out; nothing is loaded at star
 - The workspace marks read only the rows that ask something or are unread (`tone`/`asks`); the 奏 page only the rows
   it lists (`desk`); the station sync the rows at work (`running`).
 - A chat's page reads its window of entries by range (`entry` between two `n`), a transcript its latest page; a gap is
-  found from the numbers held.
+  found from the numbers held. Hot logs keep a sorted in-memory number index (`db/log-index.ts`), updated as records
+  are written: appends add only the new numbers, backfills merge, rewrites truncate. Span/count reads use that index,
+  and the highest hole is found by binary search (`channels/fill.ts`), rather than copying and walking the entire
+  history on each message. A window whose parsed records are all cached also skips reading their JSON from SQLite.
+  The indices are disposable and bounded by 128 logs and 1,000,000 numbers per account, least recently used first;
+  a miss reads SQLite. Log removal and transaction rollback invalidate them with the record caches. Callers treat
+  the numbers as read-only; the index can update them as a write arrives.
 - Notices hear the rows a write changed, before and after (a station's first rows are where they start from).
 
 Startup answers the first view from the database before any network: the accounts' databases are opened, the

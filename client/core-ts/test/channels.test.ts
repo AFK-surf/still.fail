@@ -105,7 +105,7 @@ function world() {
     else if (q.has("after")) from = Number(q.get("after")) + 1;
     else if (q.has("before")) [from, to] = [Math.max(1, Number(q.get("before")) - PAGE), Number(q.get("before")) - 1];
     else [from, to] = [Number(q.get("from")), Math.min(last, Number(q.get("to")))];
-    return { last, items: run(from, to).map((n) => [n, item(id, n)] as [number, unknown]) };
+    return { last, items: run(from, Math.min(to, last)).map((n) => [n, item(id, n)] as [number, unknown]) };
   };
 
   // The device: the items it holds by number, how far each channel is known to go, and those let go for room.
@@ -540,4 +540,20 @@ test("whatever_the_push_drops_doubles_or_delays_a_channel_ends_whole_once_anythi
     // And nothing was read that was held: no read asks what came after the last item, or a stretch held whole.
     assert.ok(w.asked.length <= LAST, `${w.asked.length} reads. ${told}`);
   }
+});
+
+// A valid HTTP/JSON response is not proof that the requested records arrived.
+test("an_incomplete_page_fails_without_losing_the_cache_and_can_be_retried", async () => {
+  const w = world();
+  const c = log("short");
+  w.there.set(c.id, 12);
+  w.tell(c, 1, 2, 3);
+  const result = await Effect.runPromise(Effect.result(w.channels.range(c, 10, 15, { quiet: false })));
+  assert.equal(result._tag === "Failure" && result.failure.code, "bad_response");
+  assert.deepEqual(w.numbers(c), [1, 2, 3, 10, 11, 12], "keep both the prior and partial records");
+  w.there.set(c.id, 15);
+  await Effect.runPromise(w.channels.range(c, 10, 15, { quiet: false }));
+  assert.deepEqual(w.numbers(c), [1, 2, 3, ...run(10, 15)]);
+  const older = await Effect.runPromise(Effect.result(w.channels.older(c, 20, { quiet: false })));
+  assert.equal(older._tag === "Failure" && older.failure.code, "bad_response", "an empty older page must release the UI into retry");
 });

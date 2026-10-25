@@ -16,7 +16,8 @@
 // (a `Kind`), where its items are held (`Held`), how its station is asked (`Reach`), and how urgent each asking is.
 // Which read comes next is fill.ts, from the numbers held and how far the channel goes alone.
 import { Deferred, Effect } from "effect";
-import type { CoreError } from "../error.ts";
+import { CoreError } from "../error.ts";
+import { t } from "../i18n.ts";
 import { Priority } from "../sync/scheduler.ts";
 import type { SpanContext } from "../trace.ts";
 import * as fill from "./fill.ts";
@@ -52,7 +53,7 @@ export type Channel = { readonly kind: Kind; readonly station: string; readonly 
 /// Where channels' items are held, and how far each is known to go.
 export type Held = {
   /// The numbers held of a channel, in order; the lowest and highest of them (null: none); how many of `from ..= to`.
-  numbers(channel: Channel): number[];
+  numbers(channel: Channel): readonly number[];
   span(channel: Channel): { min: number; max: number } | null;
   count(channel: Channel, from: number, to: number): number;
   /// Items into a channel, by number, in place of those held under the same numbers. `cutAfter`: nothing past it is
@@ -270,15 +271,21 @@ export class Channels {
     return Effect.suspend(() => {
       const from = Math.max(c.kind.first, before - c.kind.page);
       if (before <= c.kind.first || this.#held.count(c, from, before - 1) === before - from) return Effect.void;
-      return Effect.asVoid(this.read(c, { before }, options));
+      return Effect.flatMap(this.read(c, { before }, options), () =>
+        this.#held.count(c, before - 1, before - 1) === 1 ? Effect.void : this.#incomplete());
     });
+  }
+
+  #incomplete(): Effect.Effect<never, CoreError> {
+    return Effect.fail(new CoreError("bad_response", t("station.core.incompleteReply")));
   }
 
   /// Items `from ..= to` onto the device (a window moved there): read now, unless they are all held.
   range(c: Channel, from: number, to: number, options: { quiet: boolean; ctx?: SpanContext | null }): Effect.Effect<void, CoreError> {
     return Effect.suspend(() => {
       if (to < from || this.#held.count(c, from, to) === to - from + 1) return Effect.void;
-      return Effect.asVoid(this.read(c, { from, to }, options));
+      return Effect.flatMap(this.read(c, { from, to }, options), () =>
+        this.#held.count(c, from, to) === to - from + 1 ? Effect.void : this.#incomplete());
     });
   }
 }

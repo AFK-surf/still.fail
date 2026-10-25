@@ -161,6 +161,8 @@
   "station.core.localGone": "本机页面已停止提供",
   "station.core.noChat": "对话不存在",
   "station.core.badBatch": "station 批量读取的回复不完整",
+  "station.core.incompleteReply": "收到的记录不完整，请重试",
+  "station.core.invalidReply": "收到的内容无法读取，请重试",
   "station.core.noMessageNumber": "station 的回复里没有消息序号",
   "station.core.noSoftwareId": "软件缺少标识",
   "station.core.offline": "无法连接 station",

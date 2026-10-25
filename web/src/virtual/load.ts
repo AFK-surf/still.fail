@@ -20,7 +20,7 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
     // opposite edge revealed by paging waits for a scroll unless the page fits.
     let initial = latest.current.can;
     let asked: number | string | undefined;
-    let busy: { at: number | string; answered: boolean } | null = null;
+    let busy: { at: number | string; answered: boolean; items: number } | null = null;
     let top = model.layout().scrollTop;
     let moved = false;
     let latency = 250;
@@ -30,10 +30,14 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
       if (!live || now.virtual.model !== model || !now.virtual.committed()) return;
       if (busy) {
         if (!busy.answered || now.at === busy.at) return;
+        const unchanged = model.itemsVersion === busy.items;
         busy = null;
+        // A page of letters/edits can advance records without adding a row.
+        // Continue looking even when the existing conversation is taller than the pane.
+        initial ||= unchanged;
         // Restoring an anchor after a page is not an approach to an edge.
         moved = false;
-        if (!model.fits) return;
+        if (!model.fits && !unchanged) return;
       }
       // A scroll can replace the visible rows. Keep that approach until those rows
       // are measured and committed; its notification may precede the commit.
@@ -47,7 +51,7 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
       setFailed(false);
       initial = false;
       asked = now.at;
-      const request: { at: number | string; answered: boolean } = { at: now.at, answered: false };
+      const request = { at: now.at, answered: false, items: model.itemsVersion };
       busy = request;
       const started = performance.now();
       void now.load().then(() => {

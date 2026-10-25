@@ -1132,7 +1132,7 @@ export class Data {
 
   // ── logs: a thread's entries, a session's transcript ──
 
-  logNumbers(table: "entry" | "transcript", station: string, id: string): number[] {
+  logNumbers(table: "entry" | "transcript", station: string, id: string): readonly number[] {
     return this.of(station)?.logNumbers(table, station, id) ?? [];
   }
 

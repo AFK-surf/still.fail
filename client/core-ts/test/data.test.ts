@@ -29,6 +29,7 @@ const overview = (station: string): Topic => ({ topic: "overview", station });
 class Counted implements Sql {
   readonly inner: NodeSql;
   statements: string[] = [];
+  reads: string[] = [];
   /// What fails, by the start of its SQL (a full disk).
   failing: ((sql: string) => SqlError | null) | null = null;
   constructor(inner: NodeSql) {
@@ -49,6 +50,7 @@ class Counted implements Sql {
     return this.inner.run(sql, params);
   }
   all(sql: string, params?: readonly SqlValue[]): SqlRow[] {
+    this.reads.push(sql);
     return this.inner.all(sql, params);
   }
   close(): void {}
@@ -945,4 +947,101 @@ test("the_slack_people_a_stations_agents_heard_from_are_named_by_their_slack_id_
   await flush();
   assert.deepEqual(data.slackNames("w/a"), [["U9", "Mia"]]);
   runner.shutdown();
+});
+
+
+test("a_hot_logs_number_index_tracks_appends_holes_and_truncation_without_rescanning_sql", async () => {
+  const { data, open, db, runner } = fresh();
+  await open();
+  try {
+    const ns = (items: number[]): [number, unknown][] => items.map(n => [n, { n }]);
+    data.putItems("transcript", "w/a", "large", ns(Array.from({ length: 5000 }, (_, i) => i + 100)));
+    await flush();
+    data.logNumbers("transcript", "w/a", "large");
+    db().reads = [];
+    for (let i = 5100; i < 5200; i++) {
+      data.putItems("transcript", "w/a", "large", ns([i]));
+      assert.equal(data.logSpan("transcript", "w/a", "large")?.max, i);
+      assert.equal(data.logNumbers("transcript", "w/a", "large").length, i - 99);
+      assert.equal(data.logCount("transcript", "w/a", "large", 5100, i), i - 5099);
+    }
+    assert.equal(db().reads.filter(q => q.startsWith("SELECT i FROM transcript") || q.includes("SELECT min(i)") || q.includes("SELECT count(*) FROM transcript")).length, 0, "metadata reads use the index, even after each append");
+    data.putItems("transcript", "w/a", "large", ns([98, 96, 98, 99]));
+    assert.deepEqual(data.logNumbers("transcript", "w/a", "large").slice(0, 5), [96, 98, 99, 100, 101]);
+    assert.equal(data.logCount("transcript", "w/a", "large", 96, 100), 4);
+    data.putItems("transcript", "w/a", "large", ns([97, 100]), 100);
+    assert.deepEqual(data.logNumbers("transcript", "w/a", "large"), [96, 97, 98, 99, 100]);
+    assert.equal(data.logCount("transcript", "w/a", "large", 100, 96), 0);
+    data.forgetLog("transcript", "w/a", "large");
+    assert.deepEqual(data.logNumbers("transcript", "w/a", "large"), []);
+    assert.equal(data.logSpan("transcript", "w/a", "large"), null);
+    data.putItems("transcript", "w/a", "large", ns([0, 1]));
+    assert.deepEqual(data.logNumbers("transcript", "w/a", "large"), [0, 1]);
+  } finally { runner.shutdown(); }
+});
+
+test("a_rolled_back_log_burst_drops_the_incrementally_updated_index", async () => {
+  const { data, open, db, runner } = fresh();
+  await open();
+  try {
+    data.putItems("entry", "w/a", "7", [[1, { n: 1 }]]);
+    await flush();
+    data.logNumbers("entry", "w/a", "7");
+    let fail = true;
+    db().failing = q => {
+      if (q !== "COMMIT" || !fail) return null;
+      fail = false;
+      return new SqlError("database or disk is full", "full");
+    };
+    data.putItems("entry", "w/a", "7", [[2, { n: 2 }]]);
+    assert.deepEqual(data.logNumbers("entry", "w/a", "7"), [1, 2], "reads see the current transaction");
+    await flush();
+    assert.deepEqual(data.logNumbers("entry", "w/a", "7"), [1], "rollback removes the uncommitted number");
+    assert.deepEqual(data.logSpan("entry", "w/a", "7"), { min: 1, max: 1, count: 1 });
+    data.putItems("entry", "w/a", "7", [[3, { n: 3 }]]);
+    assert.deepEqual(data.logNumbers("entry", "w/a", "7"), [1, 3]);
+  } finally { runner.shutdown(); }
+});
+
+
+test("a_cached_window_reuses_payloads_without_reading_their_json_again_and_tracks_edits", async () => {
+  const { data, open, db, runner } = fresh();
+  await open();
+  try {
+    data.putItems("entry", "w/a", "7", [[1, { n: 1, text: "before" }], [3, { n: 3, text: "other" }]]);
+    data.logNumbers("entry", "w/a", "7");
+    const first = data.logRange("entry", "w/a", "7", 1, 3);
+    db().reads = [];
+    const again = data.logRange("entry", "w/a", "7", 1, 3);
+    assert.deepEqual([...again.keys()], [1, 3], "the known hole stays a hole");
+    assert.equal(again.get(1), first.get(1), "parsed records keep their identity");
+    assert.equal(db().reads.length, 0, "no payload or metadata query for the cached window");
+    data.putItems("entry", "w/a", "7", [[1, { n: 1, text: "after" }], [2, { n: 2, text: "hole filled" }]]);
+    assert.deepEqual([...data.logRange("entry", "w/a", "7", 1, 3).values()], [{ n: 1, text: "after" }, { n: 2, text: "hole filled" }, { n: 3, text: "other" }]);
+    data.forgetLog("entry", "w/a", "7");
+    assert.equal(data.logRange("entry", "w/a", "7", 1, 3).size, 0);
+  } finally { runner.shutdown(); }
+});
+
+test("log_removal_paths_invalidate_their_number_indices_and_payload_windows", async () => {
+  for (const action of ["evict", "chat", "station"]) {
+    const { data, open, runner } = fresh();
+    await open();
+    try {
+      data.putThread("w/a", { id: 7, sessions: [{ session: "k1" }] });
+      data.putItems("entry", "w/a", "7", [[1, { n: 1 }]]);
+      data.putItems("transcript", "w/a", "k1", [[0, { text: "held" }]]);
+      data.logNumbers("entry", "w/a", "7"); data.logRange("entry", "w/a", "7", 1, 1);
+      data.logNumbers("transcript", "w/a", "k1"); data.logRange("transcript", "w/a", "k1", 0, 0);
+      if (action === "evict") {
+        data.of("w/a")!.evict("entry", "w/a", "7");
+        data.of("w/a")!.evict("transcript", "w/a", "k1");
+      } else if (action === "chat") data.forgetChat("w/a", 7);
+      else data.of("w/a")!.forgetStation("w/a");
+      assert.deepEqual(data.logNumbers("entry", "w/a", "7"), [], action);
+      assert.deepEqual(data.logNumbers("transcript", "w/a", "k1"), [], action);
+      assert.equal(data.logRange("entry", "w/a", "7", 1, 1).size, 0, action);
+      assert.equal(data.logRange("transcript", "w/a", "k1", 0, 0).size, 0, action);
+    } finally { runner.shutdown(); }
+  }
 });
