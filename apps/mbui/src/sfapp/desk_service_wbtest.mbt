@@ -22,9 +22,24 @@ test "desk: a web service asked as a page is its chat with the service beside it
   // its page's size on a computer: the bar's button, its choices in a panel beside it (ViewportSize.tsx), no toolbar
   // under the page as a touch device has
   assert_true(t.find("自适应") is None, msg="no toolbar under the page")
+  let had = t.ctx().focused_id()
   t.click(Button, label="页面尺寸")
   t.frame()
   assert_true(t.find("自适应") is Some(_), msg="its sizes")
+  // as the web's (ViewportSize.tsx: the focus not taken as it opens: where it was, the composer's), all of them in the
+  // panel's room
+  assert_eq(t.ctx().focused_id(), had)
+  assert_eq(t.squeeze_faults(), [])
+  t.key(@ui.key_escape)
+  t.frame()
+  // marking it: what to do said in the address's place beside its keys (Marks.tsx mode), all of it in the tab's room
+  t.click(Button, label="标注")
+  t.frame()
+  assert_true(t.find("点选页面上的元素") is Some(_), msg="what to do")
+  // (four of its characters at least: what is beside it gives way first)
+  let (_, _, said_w, _) = t.rect_of("点选页面上的元素").unwrap()
+  assert_true(said_w >= 4.0 * 13.0, msg="what to do, \{said_w} wide")
+  assert_eq(t.squeeze_faults(), [])
   assert_true(service_pages.contains(service_key("ws1/st1", "j-web")), msg="its page open")
   t.site_says("{\"req\":1,\"method\":\"GET\",\"path\":\"/\",\"headers\":[[\"Accept\",\"text/html\"]],\"page\":true}")
   t.frame()

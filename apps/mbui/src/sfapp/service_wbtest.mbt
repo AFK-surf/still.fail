@@ -127,3 +127,17 @@ test "a size chosen and the toolbar folded: kept on the device (prefs), read as 
   let d = service_page_for("ws1/st1", "j-d", prefs=Some(prefs))
   assert_true(d.viewport is None)
 }
+
+///|
+test "the resources' ring pressed on a phone: their list in a sheet as tall as they are, not a share of the window" {
+  let t = service_tester("service")
+  t.frame()
+  t.click(Button, label="资源加载 75% · 3/4")
+  t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(t.find("/app.css") is Some(_), msg="its rows")
+  // the last of them where the sheet ends: under it only the sheet's own foot (its padding, the home bar's room)
+  let (_, y, _, h) = t.rect_of("/api/builds").unwrap()
+  assert_true(844.0 - (y + h) < 80.0, msg="room left under the list: \{844.0 - (y + h)}")
+  assert_eq(t.squeeze_faults(), [])
+}

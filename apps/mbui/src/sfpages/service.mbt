@@ -116,15 +116,26 @@ fn service_page_bar(
     c.focus_editor(field_key)
   }
   c.box(dir=Row, w=Fill(1.0), pl=14.0, pr=10.0, pt=4.0, pb=6.0, gap=2.0, align=ACenter, fn() {
-    if bar_icon(c, "service/go-back", "arrow-left", can_back, @sf.t("web-main.keymap.nav.back")) {
-      site.go_back()
-    }
-    if bar_icon(c, "service/go-forward", "arrow-right", can_forward, @sf.t("web-main.keymap.nav.forward")) {
-      site.go_forward()
-    }
-    if bar_icon(c, "service/reload", "refresh", true, @sf.t("web-main.preview.reload")) {
-      site.reload()
-    }
+    // (short of room, as marking's words want four characters at least: back and forward leave the bar first, then
+    // reload; never the address's place)
+    c.box(drop=bar_drop_nav, fn() {
+      if bar_icon(c, "service/go-back", "arrow-left", can_back, @sf.t("web-main.keymap.nav.back")) {
+        site.go_back()
+      }
+    })
+    |> ignore
+    c.box(drop=bar_drop_nav, fn() {
+      if bar_icon(c, "service/go-forward", "arrow-right", can_forward, @sf.t("web-main.keymap.nav.forward")) {
+        site.go_forward()
+      }
+    })
+    |> ignore
+    c.box(drop=bar_drop_reload, fn() {
+      if bar_icon(c, "service/reload", "refresh", true, @sf.t("web-main.preview.reload")) {
+        site.reload()
+      }
+    })
+    |> ignore
     // how far the page's resources came (PreviewLoad.kt): a ring, red with one failed; tapped, each of them (a
     // visualization's page has none: it is served from here)
     let load = if fixed {
@@ -149,7 +160,7 @@ fn service_page_bar(
     }
     let markable = p.session != ""
     if markable && (p.marks.marking || p.marks.marks.length() > 0) {
-      c.box(style=mark_mode_place, fn() { page_mark_mode(c, src, p, site) }) |> ignore
+      c.box(style=mark_mode_place, keep=true, fn() { page_mark_mode(c, src, p, site) }) |> ignore
     } else {
     c.box(w=Fill(1.0), padx=4.0, fn() {
       c.box(
@@ -239,6 +250,13 @@ fn service_page_bar(
   })
   |> ignore
 }
+
+///|
+/// What of the page's bar leaves it first where it is short of room: back and forward, then reload.
+let bar_drop_nav : Int = 1
+
+///|
+let bar_drop_reload : Int = 2
 
 ///|
 /// `390 × 844` (自动 for no height).
@@ -750,9 +768,13 @@ fn preset_of(v : Viewport?) -> String? {
 }
 
 ///|
-/// All the sizes in a sheet (the toolbar's 自定义, Preview.kt openViewportSheet): as big as the preview, the presets.
+/// All the sizes (ViewportSize.tsx's panel): as big as the preview, the presets, 自定义. As the web has them by the
+/// screen (its panel's data-touch): on a touch device the toolbar's 自定义's sheet, rows 48 high; on a computer the
+/// bar's 页面尺寸's panel, rows 34 high, the check 16 wide, 8 apart; their words the theme's ui, their notes its meta
+/// (a touch device's a size up).
 fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
   let t = @sf.theme()
+  let touch = @sf.touch_system()
   let p = service_pages.get(key)
   let current = match p {
     Some(x) => x.viewport
@@ -775,24 +797,31 @@ fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
       c.box(
         dir=Row,
         w=Fill(1.0),
-        h=Px(48.0),
+        h=Px(if touch { size_row_touch } else { size_row }),
         radius=12.0,
         padx=10.0,
-        gap=10.0,
+        gap=if touch { size_gap_touch } else { size_gap },
         align=ACenter,
         id~,
         fn() {
-          c.box(w=Px(18.0), align=ACenter, fn() {
+          c.box(w=Px(if touch { size_check_touch } else { size_check }), align=ACenter, fn() {
             if checked {
               @sf.icon(c, "check", size=16.0, color=t.p.accent) |> ignore
             }
           })
           |> ignore
           c.box(w=Fill(1.0), fn() {
-            c.text(name, size=15.0, weight=if checked { 500 } else { 400 }, color=t.p.text, wrap=false) |> ignore
+            c.text(
+              name,
+              size=t.t.ui,
+              weight=if checked { 500 } else { 400 },
+              color=t.p.text,
+              wrap=false,
+            )
+            |> ignore
           })
           |> ignore
-          c.text(note, size=13.0, color=t.p.muted, wrap=false) |> ignore
+          c.text(note, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
           // the row clickable over its clip
           @motion.ripple(c, id, 12.0)
         },
@@ -811,12 +840,34 @@ fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
     }
     c.box(style=custom_gap, fn() {  }) |> ignore
     match p {
-      Some(x) => custom_size(c, x, key)
+      Some(x) => custom_size(c, x, key, touch)
       None => ()
     }
   })
   |> ignore
 }
+
+///|
+let size_row_touch : Double = 48.0
+
+///|
+let size_row : Double = 34.0
+
+///|
+let size_gap_touch : Double = 10.0
+
+///|
+let size_gap : Double = 8.0
+
+///|
+let size_check_touch : Double = 18.0
+
+///|
+let size_check : Double = 16.0
+
+///|
+/// The turn key's icon on a computer (ViewportSize.tsx: 15).
+let custom_turn_icon : Double = 15.0
 
 ///|
 /// 自定义's row (Preview.kt CustomSize): 10 under the sizes, 10 in, 8 apart; its name 15 in the ink; its fields 72 ×
@@ -830,6 +881,21 @@ let custom_gap : @ui.Style = @ui.css("h=S2_5")
 let custom_row : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2 align=ACenter")
 
 ///|
+/// On a computer (ViewportSize.css.ts row): its name where the sizes' names are (10 in, past a column the check's 16
+/// wide, 8 on), 36 high at least, 8 apart.
+// kept across runs: a value (no field of it changes)
+let custom_row_dense : @ui.Style = @ui.css("row w=Full pl=S2_5 pr=S1 min_h=S9 gap=S2 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let custom_check_col : @ui.Style = @ui.css("w=S4")
+
+///|
+/// Its fields and the × between them 4 apart (ViewportSize.css.ts fields).
+// kept across runs: a value (no field of it changes)
+let custom_fields_dense : @ui.Style = @ui.css("row gap=S1 align=ACenter")
+
+///|
 // kept across runs: a value (no field of it changes)
 let custom_name : @ui.Style = @ui.css("w=Full")
 
@@ -839,11 +905,29 @@ let custom_words : @ui.TextStyle = @ui.text_style(size=Lg, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
+let custom_words_dense : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
 let custom_field : @ui.Style = @ui.style(w=@sf.custom_field_w, h=S9, radius=@sf.custom_field_r, bg=Faint, px=S2_5, justify=JCenter)
+
+///|
+/// On a computer (ViewportSize.css.ts field): 52 × 28, 6 in, in 13; its × 12 in the subtle grey, 4 from them; the
+/// turn key 24 round.
+// kept across runs: a value (no field of it changes)
+let custom_field_dense : @ui.Style = custom_field.then(@ui.style(w=@sf.custom_field_dense_w, h=S7, px=S1_5))
 
 ///|
 // kept across runs: a value (no field of it changes)
 let custom_by : @ui.TextStyle = @ui.text_style(size=Base, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let custom_by_dense : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let custom_turn_dense : @ui.Style = @ui.css("w=S6 h=S6 radius=Full align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -852,7 +936,7 @@ let tool_faint : @ui.Style = tool_off.then(@ui.css("opacity=O35"))
 ///|
 /// Any size, typed (Preview.kt CustomSize): the width, and the height (empty: as high as the preview leaves it), each
 /// put once its field is let go of or done; turned by the button. 72 × 36 fields on the chip's ground.
-fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
+fn custom_size(c : @ui.Ctx, p : ServicePage, key : String, touch : Bool) -> Unit {
   let t = @sf.theme()
   let wk = "service/custom-w"
   let hk = "service/custom-h"
@@ -897,13 +981,20 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
     commit()
   }
   p.custom_typing = typing
-  c.box(style=custom_row, fn() {
-    c.box(style=custom_name, fn() { c.text(svc("android-chat.preview.custom"), style=custom_words) |> ignore }) |> ignore
+  c.box(style=if touch { custom_row } else { custom_row_dense }, fn() {
+    // (on a computer its name where the sizes' names are: past a column as wide as their check)
+    if !touch {
+      c.box(style=custom_check_col, fn() {  }) |> ignore
+    }
+    c.box(style=custom_name, fn() {
+      c.text(svc("android-chat.preview.custom"), style=if touch { custom_words } else { custom_words_dense }) |> ignore
+    })
+    |> ignore
     let field = fn(k : String, f : @ui.Field, hint : String) {
-      c.box(style=custom_field, fn() {
+      c.box(style=if touch { custom_field } else { custom_field_dense }, fn() {
         let r = c.editor(
           k,
-          font_size=15.0,
+          font_size=t.t.ui,
           max_lines=1,
           plain=true,
           ime_action=@hostapi.ime_action_number,
@@ -927,9 +1018,16 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
       })
       |> ignore
     }
-    field(wk, p.custom_w, svc("android-chat.preview.width"))
-    c.text("×", style=custom_by) |> ignore
-    field(hk, p.custom_h, svc("android-chat.preview.auto"))
+    let fields = fn() {
+      field(wk, p.custom_w, svc("android-chat.preview.width"))
+      c.text("×", style=if touch { custom_by } else { custom_by_dense }) |> ignore
+      field(hk, p.custom_h, svc("android-chat.preview.auto"))
+    }
+    if touch {
+      fields()
+    } else {
+      c.box(style=custom_fields_dense, fields) |> ignore
+    }
     let turnable = match p.viewport {
       Some(v) => v.height is Some(_)
       None => false
@@ -946,8 +1044,9 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
         _ => ()
       }
     }
-    c.box(style=if turnable { tool_off } else { tool_faint }, id=if turnable { turn } else { 0 }, fn() {
-      @sf.icon(c, "landscape", size=tool_icon, color=t.p.text) |> ignore
+    let key_style = if touch { tool_off } else { custom_turn_dense }
+    c.box(style=if turnable { key_style } else { key_style.then(@ui.css("opacity=O35")) }, id=if turnable { turn } else { 0 }, fn() {
+      @sf.icon(c, "landscape", size=if touch { tool_icon } else { custom_turn_icon }, color=t.p.text) |> ignore
     })
     |> ignore
   })
@@ -955,57 +1054,77 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
 }
 
 ///|
-/// How the page's resources came, each of them (PreviewLoad.kt PreviewLoadDetails).
+/// How the page's resources came, each of them (PreviewLoad.tsx's list): as tall as they are; on a computer scrolled
+/// past the web's most (Preview.css.ts loadList: min(320px, 55vh)), on a touch device the sheet's to scroll once they
+/// are taller than it may be.
 fn load_list(c : @ui.Ctx, src : Source, station : String, port : Int) -> Unit {
   let t = @sf.theme()
   let v = (src.topic)("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).value
   let all = items(v, "resources")
-  c.box(w=Fill(1.0), h=Fill(1.0), padx=20.0, fn() {
+  let row = fn(rr : Json?) {
+    let failed = text(rr, "error") != "" || number(rr, "status") >= 400.0
+    let color = if failed { t.p.red } else { t.p.muted }
+    let ended = field(rr, "ended") is Some(Number(_, ..))
+    c.box(w=Fill(1.0), pt=6.0, pb=6.0, fn() {
+      c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, fn() {
+        c.box(w=Fill(1.0), fn() { c.text(text(rr, "path"), size=13.0, color~, max_lines=1) |> ignore }) |> ignore
+        c.text(
+          if !ended {
+            svc("common.reading")
+          } else if text(rr, "error") != "" {
+            svc("android-chat.load.failed")
+          } else {
+            number(rr, "status").to_int().to_string()
+          },
+          size=12.0,
+          color~,
+          wrap=false,
+        )
+        |> ignore
+        if ended {
+          let ms = dmax(0.0, number(rr, "ended") - number(rr, "since")).to_int64()
+          c.text("\{ms} ms", size=12.0, color~, wrap=false) |> ignore
+        }
+      })
+      |> ignore
+      if text(rr, "error") != "" {
+        c.text(text(rr, "error"), size=12.0, color~) |> ignore
+      }
+    })
+    |> ignore
+  }
+  let rows = fn() {
+    for r in all {
+      row(Some(r))
+    }
+  }
+  c.box(w=Fill(1.0), padx=20.0, pb=load_list_foot, fn() {
     c.text(svc("android-chat.load.note"), size=12.0, color=t.p.muted) |> ignore
-    c.box(w=Fill(1.0), h=Fill(1.0), pt=12.0, fn() {
+    c.box(w=Fill(1.0), pt=12.0, fn() {
       if number(v, "total") <= 0.0 {
         c.text(svc("android-chat.load.waiting"), size=13.0, color=t.p.muted) |> ignore
       }
-      // (scrolled where they do not all fit)
-      c.list("service/load", all.length(), 30.0, fn(i) {
-        let rr = Some(all[i])
-        let failed = text(rr, "error") != "" || number(rr, "status") >= 400.0
-        let color = if failed { t.p.red } else { t.p.muted }
-        let ended = field(rr, "ended") is Some(Number(_, ..))
-        c.box(w=Fill(1.0), pt=6.0, pb=6.0, fn() {
-          c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, fn() {
-            c.box(w=Fill(1.0), fn() { c.text(text(rr, "path"), size=13.0, color~, max_lines=1) |> ignore }) |> ignore
-            c.text(
-              if !ended {
-                svc("common.reading")
-              } else if text(rr, "error") != "" {
-                svc("android-chat.load.failed")
-              } else {
-                number(rr, "status").to_int().to_string()
-              },
-              size=12.0,
-              color~,
-              wrap=false,
-            )
-            |> ignore
-            if ended {
-              let ms = dmax(0.0, number(rr, "ended") - number(rr, "since")).to_int64()
-              c.text("\{ms} ms", size=12.0, color~, wrap=false) |> ignore
-            }
-          })
-          |> ignore
-          if text(rr, "error") != "" {
-            c.text(text(rr, "error"), size=12.0, color~) |> ignore
-          }
-        })
-        |> ignore
-      })
-      |> ignore
+      if @sf.touch_system() {
+        rows()
+      } else {
+        c.capped("service/load", dmin(load_list_most, load_list_share * c.window_size().1), rows) |> ignore
+      }
     })
     |> ignore
   })
   |> ignore
 }
+
+///|
+/// The resources' list on a computer at most: 320, 55% of the window where that is less.
+let load_list_most : Double = 320.0
+
+///|
+let load_list_share : Double = 0.55
+
+///|
+/// Under the list, as under the sizes (page_sizes: 24).
+let load_list_foot : Double = 24.0
 
 ///|
 fn load_label(v : Json?) -> String {
@@ -1050,16 +1169,13 @@ fn service_load_panel(src : Source, station : String, port : Int, from : @sf.Anc
   let words = fn() {
     load_label((src.topic)("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).value)
   }
-  @sf.panel(words(), fn(c, _) { load_list(c, src, station, port) }, from~, live=fn() { (words(), "", "") }, tall=service_panel_tall)
+  @sf.panel(words(), fn(c, _) { load_list(c, src, station, port) }, from~, live=fn() { (words(), "", "") })
 }
 
 ///|
 /// The page's sizes (ViewportSize.tsx's choices: 自适应, a phone's to a desktop's, 自定义 typed, turned), beside what
 /// opened them; one chosen, they go.
 pub fn service_sizes_panel(key : String, from : @sf.Anchor) -> Unit {
-  @sf.panel(svc("android-chat.preview.size.title"), fn(c, close) { page_sizes(c, key, close) }, from~)
+  @sf.panel(svc("android-chat.preview.size.title"), fn(c, close) { page_sizes(c, key, close) }, from~, focus=false)
 }
 
-///|
-/// How much of the window the resources' list fills (the phone's sheet: 0.62 of it).
-let service_panel_tall : Double = 0.62
