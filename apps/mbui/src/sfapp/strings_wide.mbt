@@ -1025,6 +1025,7 @@ let zh_wide : Map[String, String] = {
   "web-main.chat.waitingAgent": "等待 agent 接收",
   "web-main.decisions.answerWhat": "回复「{option}」",
   "web-main.file.noPreview": "暂时无法预览",
+  "web-main.file.loadAgain": "加载失败，点按重试",
   "web-main.file.play": "播放 {name}",
   "web-main.file.view": "查看 {name}",
   "web-main.chat.you": "你",

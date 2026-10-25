@@ -292,6 +292,7 @@
   "web-main.draft.uploadFailed": "Upload failed",
   "web-main.file.cancelDownload": "Cancel download",
   "web-main.file.noPreview": "Preview unavailable",
+  "web-main.file.loadAgain": "Couldn't load. Tap to retry",
   "web-main.file.play": "Play {name}",
   "web-main.file.remove": "Remove {name}",
   "web-main.file.pathOn": "Path on {station}",

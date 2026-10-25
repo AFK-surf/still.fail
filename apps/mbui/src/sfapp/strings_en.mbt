@@ -1267,6 +1267,7 @@ let en : Map[String, String] = {
   "web-main.chat.waitingAgent": "Waiting for agent",
   "web-main.decisions.answerWhat": "reply \"{option}\"",
   "web-main.file.noPreview": "Preview unavailable",
+  "web-main.file.loadAgain": "Couldn't load. Tap to retry",
   "web-main.file.play": "Play {name}",
   "web-main.file.view": "View {name}",
   "web-main.chat.you": "You",
