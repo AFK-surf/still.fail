@@ -222,10 +222,12 @@ fn new_narrow(
     c.spacer()
     let foot = c.box(style=new_foot, fn() {
       // a band of glass from over the choices to the page's foot (mNewFoot, glassFoot), the composer on it: what the
-      // scene has under it frosted all over, not seen between the choices, nor pressed through it; as the page becomes
-      // the chat, over the choices alone (the composer there is the chat's, under it, not to be frosted)
+      // scene has under it frosted all over, not seen between the choices, nor pressed through it; what is on it as far
+      // under its top as the composer is from the page's foot and sides; as the page becomes the chat, over the choices
+      // alone (the composer there is the chat's, under it, not to be frosted)
       let band = c.id("new/band")
-      c.box(style=new_band.then(@ui.style(pb=if going { S0 } else { under })), glass=@sf.glass_foot(), id=band, fn() {
+      let band_room = @ui.style(pt=under, pb=if going { S0 } else { under })
+      c.box(style=new_band.then(band_room), glass=@sf.glass_foot(), id=band, fn() {
         if !going {
           new_notices(c, v, station, width)
         }
@@ -1020,14 +1022,14 @@ let new_problem_box : @ui.Style = @ui.css("w=Full pt=S1_5")
 let new_foot : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
-/// The band (mNewFoot, mNewBottom): 8 over the choices; its corners square but where it lies in a panel's.
+/// The band (mNewFoot, mNewBottom): its corners square but where it lies in a panel's.
 // kept across runs: a value (no field of it changes)
-let new_band : @ui.Style = @ui.css("w=Full pt=S2 align=ACenter radius=InnerOr(Sharp)")
+let new_band : @ui.Style = @ui.css("w=Full align=ACenter radius=InnerOr(Sharp)")
 
 ///|
-/// The choices narrow (mChoosers: 6 apart, 6 over and under, 2 in).
+/// The choices narrow (mChoosers: 6 apart, 6 over the composer, 2 in).
 // kept across runs: a value (no field of it changes)
-let new_choosers_row : @ui.Style = @ui.css("row w=Full px=S0_5 py=S1_5 gap=S1_5 align=ACenter")
+let new_choosers_row : @ui.Style = @ui.css("row w=Full px=S0_5 pb=S1_5 gap=S1_5 align=ACenter")
 
 ///|
 /// A glass choice (mChooser): 30 high, 12 in, 6 between its parts, a capsule.
