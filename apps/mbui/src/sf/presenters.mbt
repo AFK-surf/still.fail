@@ -665,7 +665,7 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
         // still does; told so as it is drawn, panel_held)
         let k = key + "/panel"
         panel_held_now.val = @kit.held_in_room(c, beside_given.val, key=k)
-        @kit.in_room(c, beside_given.val, key=k, mx=-panel_pad, padx=panel_pad, fn() { (x.body)(c, close) }) |> ignore
+        @kit.in_room(c, beside_given.val, key=k, reach=held_reach(), style=held_in(), fn() { (x.body)(c, close) }) |> ignore
         panel_held_now.val = false
       }
       panel_sides_in.val = 0.0

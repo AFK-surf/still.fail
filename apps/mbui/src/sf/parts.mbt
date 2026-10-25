@@ -476,7 +476,7 @@ pub fn beside_look(
 /// What a small panel beside what opened it (`s`, as its look is given it) holds, kept within the room it has
 /// (beside_look's), in `inner` where said.
 pub fn within_room(c : @ui.Ctx, s : @kit.PopState, body : () -> Unit, inner? : @ui.Style, most? : Double = 1.0e9) -> Unit {
-  @kit.in_room(c, s, most~, mx=-panel_pad, padx=panel_pad, fn() {
+  @kit.in_room(c, s, most~, reach=held_reach(), style=held_in(), fn() {
     match inner {
       Some(st) => c.box(style=st, body) |> ignore
       None => body()
