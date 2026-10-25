@@ -106,9 +106,9 @@ export function cost(g: UsageGroup): number | null {
 }
 
 /// A session's calls as counted, added up by model (store `usageOfSession`), put together for its execution details:
-/// the tokens as the live usage counts them (input with what was read from and written to the cache) and what they
-/// would cost, those of a model without a price apart.
-export function sessionUsage(groups: UsageGroup[]) {
+/// the tokens as a chat shows them (input with what was read from and written to the cache) and what they would cost,
+/// those of a model without a price apart.
+export function sessionUsage(groups: UsageGroup[]): Counted {
   const out = { modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, cost: 0, unpricedCalls: 0 };
   for (const g of groups) {
     out.modelCalls += g.calls;
@@ -120,6 +120,31 @@ export function sessionUsage(groups: UsageGroup[]) {
     else out.cost += c;
   }
   return out;
+}
+
+/// A session's calls added up (`sessionUsage`).
+export type Counted = { modelCalls: number; inputTokens: number; cachedTokens: number; outputTokens: number; cost: number; unpricedCalls: number };
+
+/// What a session's calls used, as its chat shows it while it works and at rest (the clients' TranscriptUsage): its
+/// calls as the usage counter recorded them, added up, with what they would cost (`sessionUsage`: the same count as the
+/// usage page's), and of its last main-thread call the model, the context it left and the model's window, where told.
+export type SessionUsage = Counted & { model: string | null; contextTokens?: number; contextWindow: number | null };
+
+/// A session's usage before a call of it is recorded.
+export const noUsage = (): SessionUsage => ({ modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, cost: 0, unpricedCalls: 0, model: null, contextWindow: null });
+
+/// What usage reads of a session's calls (store.ts `usageOfSession`, `lastContexts`).
+type SessionCalls = {
+  usageOfSession(session: string): UsageGroup[];
+  lastContexts(session: string, limit: number): { model: string | null; context: number | null; window: number | null }[];
+};
+
+/// A session's usage now (SessionUsage), from what is recorded of its calls; none before one is.
+export function usageNow(s: SessionCalls, key: string): SessionUsage | null {
+  const counted = sessionUsage(s.usageOfSession(key));
+  if (counted.modelCalls === 0) return null;
+  const last = s.lastContexts(key, 1)[0];
+  return { ...counted, model: last?.model ?? null, ...(last?.context != null ? { contextTokens: last.context } : {}), contextWindow: last?.window ?? null };
 }
 
 /// Usage::summary: every day's calls from `from` until `to`, by thread, person, profile and model (UsageRow).

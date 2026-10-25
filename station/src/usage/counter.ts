@@ -4,9 +4,11 @@
 // them the first time (what was spent before the station counted), then those of the sessions that ran since.
 //
 // Pushed rather than polled (the Rust reads every minute): a read when the counter starts, one shortly after a turn
-// ends (the store's session changes say so), and a slow safety read for anything missed (a long turn's calls so far).
-// Reads never overlap. The reading itself must not hold the main thread: files are read asynchronously in chunks cut
-// at whole lines, each chunk parsed and recorded on its own, with the event loop let through between chunks.
+// ends (the store's session changes say so), one of a session alone shortly after its transcript grew while it works
+// (the live view says so: what a chat shows it spent goes on with each call), and a slow safety read for anything
+// missed. Reads never overlap. The reading itself must not hold the main thread: files are read asynchronously in
+// chunks cut at whole lines, each chunk parsed and recorded on its own, with the event loop let through between chunks.
+// What is recorded is the one count of what was spent: a chat's usage and the usage page are both added up from it.
 // The prices (what a call costs) are the usage page's: src/read/usage.ts.
 import { Clock, Effect, Fiber, Queue } from "effect";
 import { liveClock } from "../ops/fibers.ts";
@@ -24,7 +26,8 @@ export const SKEW_MS = 5_000;
 /// A later read takes the sessions with a turn running or ended this long before the last read began (the Rust's
 /// EVERY, the margin it reads them again with).
 const MARGIN_MS = 60_000;
-/// How long after a turn ends its transcript is read (its last lines written, other turns ending with it).
+/// How long after a turn ends, or a session at work wrote more, its transcript is read (its last lines written, other
+/// turns ending with it, a burst of writes gathered).
 export const SETTLE_MS = 2_000;
 /// How often everything that ran is read anyway, for what no turn's end told.
 export const SAFETY_MS = 10 * 60_000;
@@ -48,9 +51,9 @@ export type UsageCounterOptions = {
 
 // ── reading transcripts ──
 
-/// What reading a transcript carries from line to line and from read to read: the model it last named (Codex) and
-/// its session's id (Codex's first line).
-export type CallState = { model: string | null; codexId: string | null };
+/// What reading a transcript carries from line to line and from read to read: the model it last named (Codex), its
+/// session's id (Codex's first line), and the model's window as last told (dsh's request/context, before its calls).
+export type CallState = { model: string | null; codexId: string | null; window?: number | null };
 
 const get = (v: unknown, k: string): unknown =>
   v !== null && typeof v === "object" && !Array.isArray(v) && Object.hasOwn(v, k) ? (v as Record<string, unknown>)[k] : undefined;
@@ -58,7 +61,11 @@ const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 /// serde_json's as_i64, or 0.
 const n = (v: unknown): number => (typeof v === "number" && Number.isInteger(v) ? v : 0);
 
-/// calls_of: a transcript's lines read into calls; `state` carries the model and Codex id on.
+/// A count a turn's line tells apart (its context, the model's window): none when it says none.
+const told = (v: unknown): number | null => (n(v) > 0 ? n(v) : null);
+
+/// calls_of: a transcript's lines read into calls; `state` carries the model, Codex id and window on. The only place what
+/// the agents spent is read from their transcripts: a chat's usage and the usage page are both what it records.
 export function callsOf(runtime: Runtime, text: string, subagent: boolean, state: CallState): UsageCall[] {
   const out: UsageCall[] = [];
   const atIndex = new Map<string, number>();
@@ -67,7 +74,7 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
     // Most lines are something else: only those that may hold usage are parsed.
     const wanted =
       runtime === "claude" ? line.includes('"usage"')
-      : runtime === "dsh" ? line.startsWith('{"type":"assistant/message"') && line.includes('"usage"')
+      : runtime === "dsh" ? (line.startsWith('{"type":"assistant/message"') && line.includes('"usage"')) || line.startsWith('{"type":"request/context"')
       : runtime === "grok" ? line.startsWith('{"type":"stillfail/usage"')
       : runtime === "cursor" || runtime === "devin" || runtime === "hermes" ? line.includes('"type":"usage"')
       : line.includes("token_count") || line.includes("turn_context") || line.includes("session_meta");
@@ -89,11 +96,12 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
       out.push({
         id: `grok:${id}`, at: typeof time === "number" ? time : 0, model: str(get(r, "model")), subagent, fast: false,
         input: n(get(usage, "input")), cacheRead: n(get(usage, "cacheRead")), cacheWrite: n(get(usage, "cacheWrite")), cacheWriteLong: 0,
-        output: n(get(usage, "output")),
+        output: n(get(usage, "output")), calls: Math.max(1, n(get(usage, "calls"))), context: told(get(r, "context")), window: told(get(r, "window")),
       });
     } else if (runtime === "cursor" || runtime === "devin" || runtime === "hermes") {
       // What the station's driver kept of each Cursor turn (agents/cursor-bridge.mjs): the SDK's counts, input apart
-      // from the cache's; of each Devin turn the same (agents/devin.ts).
+      // from the cache's, the whole run's (no context); of each Devin turn the same (agents/devin.ts), with how many
+      // calls it made, the context it ended with and the model's window where Devin said them.
       const usage = get(r, "usage");
       const id = str(get(r, "run"));
       if (str(get(r, "type")) !== "usage" || usage === undefined || usage === null || id === null) continue;
@@ -101,20 +109,25 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
       out.push({
         id: `${runtime}:${id}`, at: typeof time === "number" ? time : 0, model: str(get(r, "model")), subagent, fast: false,
         input: n(get(usage, "inputTokens")), cacheRead: n(get(usage, "cacheReadTokens")), cacheWrite: n(get(usage, "cacheWriteTokens")), cacheWriteLong: 0,
-        output: n(get(usage, "outputTokens")),
+        output: n(get(usage, "outputTokens")), calls: Math.max(1, n(get(r, "calls"))), context: told(get(r, "context")), window: told(get(r, "window")),
       });
     } else if (runtime === "dsh") {
-      // dsh's counts are apart: input is what was not cached.
+      // dsh's counts are apart: input is what was not cached. The model's window comes before a request's calls.
       const data = get(r, "data");
+      if (str(get(r, "type")) === "request/context") {
+        state.window = told(get(data, "contextWindow")) ?? state.window ?? null;
+        continue;
+      }
       const usage = get(data, "usage");
       const message = get(data, "message");
       const id = str(get(message, "id"));
       if (usage === undefined || usage === null || id === null) continue;
       const time = get(r, "time");
+      const [input, cacheRead, cacheWrite] = [n(get(usage, "inputTokens")), n(get(usage, "cacheReadTokens")), n(get(usage, "cacheWriteTokens"))];
       out.push({
         id: `dsh:${id}`, at: typeof time === "number" ? time : 0, model: str(get(get(message, "source"), "model")), subagent, fast: false,
-        input: n(get(usage, "inputTokens")), cacheRead: n(get(usage, "cacheReadTokens")), cacheWrite: n(get(usage, "cacheWriteTokens")), cacheWriteLong: 0,
-        output: n(get(usage, "outputTokens")),
+        input, cacheRead, cacheWrite, cacheWriteLong: 0, output: n(get(usage, "outputTokens")), calls: 1,
+        context: subagent ? null : input + cacheRead + cacheWrite, window: state.window ?? null,
       });
     } else if (runtime === "claude") {
       if (str(get(r, "type")) !== "assistant") continue;
@@ -130,10 +143,13 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
       const long = split === undefined ? 0 : n(get(split, "ephemeral_1h_input_tokens"));
       const five = split === undefined ? null : n(get(split, "ephemeral_5m_input_tokens"));
       const short = five !== null && five + long === written ? five : written - long;
+      const side = subagent || get(r, "isSidechain") === true;
+      const input = n(get(usage, "input_tokens"));
+      const cacheRead = n(get(usage, "cache_read_input_tokens"));
+      // The main thread's prompt is its context; a subagent's is its own.
       const call: UsageCall = {
-        id, at, model: name, subagent: subagent || get(r, "isSidechain") === true, fast: get(usage, "speed") === "fast",
-        input: n(get(usage, "input_tokens")), cacheRead: n(get(usage, "cache_read_input_tokens")), cacheWrite: short,
-        cacheWriteLong: long, output: n(get(usage, "output_tokens")),
+        id, at, model: name, subagent: side, fast: get(usage, "speed") === "fast", input, cacheRead, cacheWrite: short,
+        cacheWriteLong: long, output: n(get(usage, "output_tokens")), calls: 1, context: side ? null : input + cacheRead + written, window: null,
       };
       // One response is written as several lines (a block each), each with its usage: counted once, at its fullest.
       const i = atIndex.get(id);
@@ -151,14 +167,16 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
         const info = get(p, "info");
         const last = info === undefined || info === null ? undefined : get(info, "last_token_usage");
         if (last === undefined || last === null) continue;
-        // Token counts are told again with rate limits; the running total tells a call from its repeat.
+        // Token counts are told again with rate limits; the running total tells a call from its repeat. Codex's input
+        // has what was cached in it.
         const totals = get(info, "total_token_usage");
         const total = totals === undefined ? at : n(get(totals, "total_tokens"));
-        const cached = n(get(last, "cached_input_tokens"));
+        const sent = n(get(last, "input_tokens"));
+        const cached = Math.min(n(get(last, "cached_input_tokens")), sent);
         out.push({
           id: `codex:${state.codexId ?? ""}:${total}`, at, model: state.model, subagent, fast: false,
-          input: Math.max(n(get(last, "input_tokens")) - cached, 0), cacheRead: cached, cacheWrite: 0, cacheWriteLong: 0,
-          output: n(get(last, "output_tokens")),
+          input: sent - cached, cacheRead: cached, cacheWrite: 0, cacheWriteLong: 0, output: n(get(last, "output_tokens")), calls: 1,
+          context: subagent ? null : sent, window: told(get(info, "model_context_window")),
         });
       }
     }
@@ -437,8 +455,8 @@ export class UsageCounter {
   #ended = new Map<string, number>();
   #startedAt = 0;
   #wake = Effect.runSync(Queue.dropping<void>(1));
-  /// Asked to read though no turn ended (`soon`).
-  #asked = false;
+  /// Sessions at work whose transcripts grew, to be read alone though no turn ended (`soon`).
+  #asked = new Set<string>();
   #fiber: Fiber.Fiber<void> | null = null;
   #unsubscribe: (() => void) | null = null;
   #abort = new AbortController();
@@ -481,6 +499,12 @@ export class UsageCounter {
       me.#changed.clear();
       return ended;
     });
+    // The sessions asked of alone.
+    const readAsked = Effect.promise(() => {
+      const only = new Set(me.#asked);
+      me.#asked.clear();
+      return me.#readLogged(only);
+    });
     const loop = Effect.gen(function* () {
       yield* readNow;
       let due = (yield* Clock.currentTimeMillis) + me.#safetyMs;
@@ -492,9 +516,13 @@ export class UsageCounter {
         if (woken) {
           yield* Effect.sleep(me.#settleMs);
           yield* Queue.clear(me.#wake);
-          if (!(yield* turnEnded) && !me.#asked && (yield* Clock.currentTimeMillis) < due) continue;
+          if (!(yield* turnEnded) && (yield* Clock.currentTimeMillis) < due) {
+            if (me.#asked.size > 0) yield* readAsked;
+            continue;
+          }
         }
-        me.#asked = false;
+        // Those at work are among those read.
+        me.#asked.clear();
         yield* readNow;
         due = (yield* Clock.currentTimeMillis) + me.#safetyMs;
       }
@@ -502,9 +530,9 @@ export class UsageCounter {
     this.#fiber = Effect.runFork(loop.pipe(Effect.provideService(Clock.Clock, this.#clock)));
   }
 
-  /// Reads shortly, though no turn ended: a session someone watches as it works (live.ts).
-  soon(): void {
-    this.#asked = true;
+  /// Reads `key`'s transcripts shortly, though no turn ended: a session at work wrote more (live.ts).
+  soon(key: string): void {
+    this.#asked.add(key);
     Queue.offerUnsafe(this.#wake, undefined);
   }
 
@@ -523,34 +551,35 @@ export class UsageCounter {
     return this.#first || this.#last === 0;
   }
 
-  async #readLogged(): Promise<void> {
+  async #readLogged(only?: ReadonlySet<string>): Promise<void> {
     try {
-      await this.read();
+      await this.read(only);
     } catch (e) {
       if (!(e instanceof Stopped)) log.warn("usage", "usage not read", { error: (e as Error).message });
     }
   }
 
-  /// One read: the transcripts of every session the first time, then of those that ran since the last. How many calls
-  /// were new. Reads queue behind one another.
-  read(): Promise<number> {
-    const next = this.#reading.catch(() => {}).then(() => this.#read());
+  /// One read: the transcripts of every session the first time, then of those that ran since the last; `only`: of those
+  /// sessions alone (it says nothing of when the last read was). How many calls were new. Reads queue behind one another.
+  read(only?: ReadonlySet<string>): Promise<number> {
+    const next = this.#reading.catch(() => {}).then(() => this.#read(only ?? null));
     this.#reading = next;
     return next;
   }
 
-  async #read(): Promise<number> {
+  async #read(only: ReadonlySet<string> | null): Promise<number> {
     const started = this.#clock.currentTimeMillisUnsafe();
     const last = this.#last;
-    this.#first = last === 0;
+    if (only === null) this.#first = last === 0;
     const store = this.#store;
-    const wanted: Set<string> | null = last === 0 ? null : new Set(store.usageActiveSessions(last - MARGIN_MS));
+    const wanted: Set<string> | null = only !== null ? new Set(only) : last === 0 ? null : new Set(store.usageActiveSessions(last - MARGIN_MS));
     // Every session the first time; then those that ran since, by their rows (a read comes every few seconds while
     // agents work: not every session ever).
     const sessions: SessionRow[] = wanted === null ? store.listSessions() : [...wanted].flatMap((key) => store.getSession(key) ?? []);
     // What was read of each transcript: as the store has it the first time, then as this counter wrote it (it alone does).
     const known = (this.#files ??= store.usageFiles());
     const config = this.#config();
+    const homes = config.profiles.map((p) => p.home);
     let added = 0;
     this.#counted.clear();
     // Claude Code: each session's project directory (named after where it runs), in the shared transcripts and in any
@@ -602,8 +631,22 @@ export class UsageCounter {
       }
     }
     // Codex: its transcripts are kept by date, so each new one is matched to a session by its id, or by where it ran.
+    // Read of a few sessions alone (every few seconds while they work), not every one is walked: those of their
+    // runtime sessions, as read before or found by their ids.
     const found: string[] = [];
-    for (const root of codexRoots) await rolloutsIn(root, found);
+    if (only === null) for (const root of codexRoots) await rolloutsIn(root, found);
+    else {
+      const ids = sessions.filter((s) => s.runtime === "codex").flatMap((s) => store.runtimeSessions(s.key));
+      if (ids.length > 0) {
+        const readOf = new Map<string, string>();
+        for (const [path, file] of known) if (file.session !== null && wanted!.has(file.session)) readOf.set(basename(path), path);
+        for (const id of ids) {
+          const had = [...readOf].find(([name]) => name.endsWith(`${id}.jsonl`))?.[1];
+          const path = had ?? transcriptPaths("codex", config.dataDir, homes, [id]).paths[0];
+          if (path !== undefined) found.push(path);
+        }
+      }
+    }
     const rollouts = [...new Set(found)];
     if (rollouts.length > 0) {
       // A new one is matched among the sessions read, then (it may be one that ran before the last read) among every
@@ -645,7 +688,6 @@ export class UsageCounter {
     // DeepSeek Harness: each runtime session's own file, found as its history finds it (dsh.ts); Grok Build: what the
     // station kept of its turns beside each one's transcript (grok.ts); Cursor and Devin: their transcripts, the
     // station's own (cursor.ts, devin.ts).
-    const homes = config.profiles.map((p) => p.home);
     for (const s of sessions) {
       if ((s.runtime !== "dsh" && s.runtime !== "grok" && s.runtime !== "cursor" && s.runtime !== "devin" && s.runtime !== "hermes") || (wanted !== null && !wanted.has(s.key))) continue;
       const runtime = s.runtime;
@@ -659,10 +701,12 @@ export class UsageCounter {
         added += await this.#readFile(path, runtime, false, s, readBefore(path, runtime));
       }
     }
-    this.#last = started;
-    this.#first = false;
+    if (only === null) {
+      this.#last = started;
+      this.#first = false;
+    }
     if (added > 0) {
-      if (last === 0) log.info("usage", "usage read from every transcript", { calls: added, ms: this.#clock.currentTimeMillisUnsafe() - started });
+      if (last === 0 && only === null) log.info("usage", "usage read from every transcript", { calls: added, ms: this.#clock.currentTimeMillisUnsafe() - started });
       store.usageChanged([...this.#counted]);
     }
     return added;

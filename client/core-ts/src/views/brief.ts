@@ -97,10 +97,11 @@ type Meter = { percent: number; text: string; level: Level };
 const CONTEXT_AMBER = 80;
 const CONTEXT_RED = 95;
 
-/// What a session's calls used as known now (the station's read/tail.ts TranscriptUsage): while it works, as its
-/// station's stream tells each call (`live`); at rest, as its summary says it, which the device holds of every session
-/// (the station's count, told again as that of its last turn comes in after it ended); either where the other says none
-/// (a station from before says it in no summary, and on its stream only of a session named there). None before a call.
+/// What a session's calls used as known now (the station's read/usage.ts SessionUsage: its calls as its usage counter
+/// recorded them, the usage page's count too): while it works, as its station's stream tells it as more are recorded
+/// (`live`); at rest, as its summary says it, which the device holds of every session (told again as the count of its
+/// last turn comes in after it ended); either where the other says none (a station from before says it in no summary,
+/// and on its stream only of a session named there). None before a call.
 export function usageNow(session: unknown, live: unknown): J {
   const told = get(live, "usage");
   const said = get(session, "usage");

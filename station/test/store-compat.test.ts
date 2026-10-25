@@ -43,13 +43,17 @@ function shape(path: string): string[] {
 
 /// Columns the TS station adds to tables the Rust station made (schema.ts), by table: a station's in several workspaces
 /// (docs/multi-workspace.md). A table's latest first: each is taken off the end of its table's SQL in turn.
-const ADDED: [string, string][] = [["sessions", "ws"], ["archive_policy", "ws"], ["entries", "letter"], ["entries", "runtime"], ["jobs", "size"], ["jobs", "screen"], ["jobs", "queued"]];
+const ADDED: [string, string][] = [
+  ["sessions", "ws"], ["archive_policy", "ws"], ["entries", "letter"], ["entries", "runtime"], ["jobs", "size"], ["jobs", "screen"], ["jobs", "queued"],
+  ["usage", "context_window"], ["usage", "context"], ["usage", "calls"],
+];
 /// What those columns bring with them: an index of its own (letters; the sessions counted by connect and workspace; the
 /// threads' homes), and the `merged` view saying the column (letters).
 const ADDED_INDEXES = ["entries_letters", "sessions_by_connect", "threads_home", "threads_own"];
 const MERGED_ADDS = [", m.letter"];
 /// Tables the TS station makes as it opens (schema.ts `addUsageTotals`, `addUsageCompactions`): each with its columns,
-/// and the indexes and triggers that keep it (named after it).
+/// and the indexes and triggers that keep it (named after it), which it makes anew as what they read changes
+/// (`addUsageColumns`).
 const MADE = ["usage_totals", "usage_compactions", "thread_state", "thread_people", "session_first"];
 const made = (l: string) => MADE.some((t) => l.startsWith(`table ${t}:`) || l.startsWith(`  ${t}.`) || l.startsWith(`trigger ${t}_`) || l.startsWith(`index ${t}_`));
 
@@ -76,14 +80,15 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
     // Besides the columns the TS station adds on open itself (schema.ts `add*Columns`), as later ones are: a table's SQL
     // then says them after its last column (at its end, or before its PRIMARY KEY), and each is a column line of its own.
     const plain = (l: string) => {
-      const columns = ADDED.reduce((t, [table, column]) => (t.startsWith(`table ${table}:`) ? t.replace(new RegExp(`, ${column} [A-Z]+(?=\\)$|,\\s*PRIMARY KEY)`), "") : t), l);
+      const columns = ADDED.reduce((t, [table, column]) => (t.startsWith(`table ${table}:`) ? t.replace(new RegExp(`, ${column} [A-Z][A-Z0-9 ]*(?=\\)$|,\\s*PRIMARY KEY)`), "") : t), l);
       return columns.startsWith("view merged:") ? MERGED_ADDS.reduce((t, add) => t.replace(add, ""), columns) : columns;
     };
     const mine = (l: string) => ADDED.some(([table, column]) => l.startsWith(`  ${table}.${column} `)) || ADDED_INDEXES.some((index) => l.startsWith(`index ${index}:`));
     const was = before.map(plain);
     // Ignore only newly added columns; columns already present must still survive opening.
     const now = opened.filter((l) => !mine(l) || before.includes(l)).map(plain);
-    assert.deepEqual(was.filter((l) => !now.includes(l)), [], "nothing changed or gone");
+    // (The triggers of the TS station's own tables aside: it makes them anew.)
+    assert.deepEqual(was.filter((l) => !now.includes(l) && !(made(l) && l.startsWith("trigger "))), [], "nothing changed or gone");
     const added = now.filter((l) => !was.includes(l) && !made(l));
     for (const line of added) {
       const name = /^(?:table|index) (\w+):/.exec(line)?.[1] ?? /^  (\w+)\./.exec(line)?.[1];

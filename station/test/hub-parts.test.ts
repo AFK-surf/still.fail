@@ -15,7 +15,8 @@ import { hubConfig } from "../src/sessions/config.ts";
 import { completionQuestion, parse, request } from "../src/sessions/decision.ts";
 import { sizeOf } from "../src/sessions/image-size.ts";
 import { nextTsAt } from "../src/sessions/internal.ts";
-import { type Counted, HELD_AFTER_MS, type History, type LiveMessage, LiveHub, TranscriptTail, briefInput, inBrief } from "../src/sessions/live.ts";
+import { HELD_AFTER_MS, type History, type LiveMessage, LiveHub, briefInput, inBrief } from "../src/sessions/live.ts";
+import type { SessionUsage } from "../src/read/usage.ts";
 import { chainOf, entriesOf, lengthOf, stateOf } from "../src/read/transcripts.ts";
 import { prepare, prepareHere } from "../src/sessions/local-links.ts";
 import { formatSteps, linkedSession } from "../src/sessions/others.ts";
@@ -198,46 +199,23 @@ test("steps are numbered and cut", () => {
 
 const line = (text: string, id: string) => `${JSON.stringify({ type: "assistant", timestamp: "2026-09-26T00:00:00Z", message: { id, content: [{ type: "text", text }], usage: { input_tokens: 10, output_tokens: 2 } } })}\n`;
 
-test("a transcript's usage says its context now", () => {
-  const dir = temp();
-  const claude = join(dir, "c.jsonl");
-  const call = (id: string, usage: object, more: object = {}) => `${JSON.stringify({ type: "assistant", ...more, message: { id, model: "claude-opus-5-5", content: [], usage } })}\n`;
-  writeFileSync(claude,
-    call("m1", { input_tokens: 10, cache_read_input_tokens: 0, cache_creation_input_tokens: 1000, output_tokens: 5 }) +
-    // A response's later line counts its output at its fullest.
-    call("m1", { input_tokens: 10, cache_read_input_tokens: 0, cache_creation_input_tokens: 1000, output_tokens: 100 }) +
-    call("m2", { input_tokens: 20, cache_read_input_tokens: 1000, cache_creation_input_tokens: 200, output_tokens: 50 }) +
-    // A subagent's prompt is not the session's context.
-    call("m3", { input_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, output_tokens: 10 }, { isSidechain: true }));
-  const tail = new TranscriptTail("claude", claude);
-  tail.read();
-  assert.deepEqual([tail.usage.modelCalls, tail.usage.outputTokens, tail.usage.contextTokens, tail.usage.cost], [3, 160, 1220, undefined]);
-  const codex = join(dir, "x.jsonl");
-  const count = (total: number, input: number) => `${JSON.stringify({ type: "event_msg", payload: { type: "token_count", info: { total_token_usage: { total_tokens: total }, last_token_usage: { input_tokens: input, cached_input_tokens: 1000, output_tokens: 10 }, model_context_window: 258000 } } })}\n`;
-  writeFileSync(codex, `${JSON.stringify({ type: "turn_context", payload: { model: "gpt-6-sol" } })}\n` + count(2000, 1500) + count(2000, 1500) + count(5000, 3000));
-  const x = new TranscriptTail("codex", codex);
-  x.read();
-  assert.deepEqual([x.usage.modelCalls, x.usage.contextTokens, x.usage.contextWindow], [2, 3000, 258000], "a repeated count is one call");
-  rmSync(dir, { recursive: true, force: true });
-});
-
-test("a watched session's usage is the counter's count once it has one, told again when it counts more", async () => {
+test("a watched session's usage is what the counter recorded, told again as it records more; what its transcript gains, the counter is asked to count", async () => {
   const dir = temp();
   const path = join(dir, "t.jsonl");
   writeFileSync(path, line("one", "m1"));
   const time = testClock();
   const hub = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
-  let counted: Counted | null = null;
-  let asked = 0;
-  hub.countWith({ of: () => counted, ask: () => void asked++ });
+  let counted: SessionUsage | null = null;
+  const asked: string[] = [];
+  hub.countWith({ of: () => counted, ask: (key) => void asked.push(key) });
   const got: any[] = [];
   hub.subscribe("s", 0, null, (m) => void got.push(m));
-  assert.deepEqual([got[0].usage.modelCalls, got[0].usage.cost], [1, undefined], "not counted yet: the transcript's");
-  counted = { modelCalls: 4, inputTokens: 900, cachedTokens: 800, outputTokens: 40, cost: 1.5, unpricedCalls: 0 };
+  assert.deepEqual([got[0].usage.modelCalls, got[0].usage.cost], [0, 0], "none recorded yet: none, though its transcript has a call");
+  counted = { modelCalls: 4, inputTokens: 900, cachedTokens: 800, outputTokens: 40, cost: 1.5, unpricedCalls: 0, model: "m", contextTokens: 10, contextWindow: null };
   got.length = 0;
   hub.usageCounted();
   assert.equal(got.length, 1);
-  assert.deepEqual([got[0].entries, got[0].start, got[0].usage.modelCalls, got[0].usage.cost, got[0].usage.contextTokens], [[], 1, 4, 1.5, 10]);
+  assert.deepEqual([got[0].entries, got[0].start, got[0].usage], [[], 1, counted]);
   hub.usageCounted();
   assert.equal(got.length, 1, "told only when it changed");
   appendFileSync(path, line("two", "m2"));
@@ -245,7 +223,8 @@ test("a watched session's usage is the counter's count once it has one, told aga
   await settle();
   await time.adjust(40);
   await settle();
-  assert.equal(asked, 1, "working on: the counter is asked to count");
+  assert.deepEqual(asked, ["s"], "working on: the counter is asked to count it");
+  assert.deepEqual([got.at(-1).entries.map((e: any) => e.text), got.at(-1).usage], [["two"], counted], "what it gained, with what was recorded so far");
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -264,7 +243,6 @@ test("a watcher gets what it lacks, the steps in flight, then new entries as the
   const id = hub.subscribe("s", 1, null, (m) => void got.push(m));
   assert.equal(got[0]!.type, "timeline");
   assert.deepEqual((got[0] as any).entries.map((e: any) => e.text), ["two"]);
-  assert.equal((got[0] as any).usage.modelCalls, 2);
   assert.equal(got[1]!.type, "steps");
   assert.equal((got[1] as any).steps[0].step, "text", "what a step is, not what it wrote");
   got.length = 0;
@@ -483,8 +461,6 @@ test("a session gone on in a new runtime session: its history reads on from the 
   await settle();
   const told = () => got.flatMap((m) => (m.type === "timeline" ? m.entries.map((e, i) => `${m.start + i}:${e.text}`) : []));
   assert.deepEqual(told(), ["0:one", "1:two", "2:three", "3:four"]);
-  const last = got.filter((m): m is Extract<LiveMessage, { type: "timeline" }> => m.type === "timeline").at(-1)!;
-  assert.equal(last.usage.modelCalls, 4, "the usage of both");
   assert.deepEqual(hub.before("s", 10, 10)![1].map((e) => e.text), ["one", "two", "three", "four"]);
   hub.close();
   rmSync(dir, { recursive: true, force: true });

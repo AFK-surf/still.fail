@@ -31,7 +31,6 @@ test("a transcript longer than a piece is read a piece at a time, as one read fr
   const [start, entries] = tail.read();
   assert.equal(start, 0);
   assert.deepEqual(entries.map((e) => e.text), readTimeline("claude", path).map((e) => e.text));
-  assert.equal(tail.usage.modelCalls, lines.filter((l) => l.includes('"usage"')).length);
   // Written on: only what came, numbered on; a line half written waits.
   const half = said("later", "mz");
   appendFileSync(path, half.slice(0, 20));
@@ -254,10 +253,6 @@ test("where a reading stands goes to another thread: a tail made from it reads o
   const [start, entries] = here.read();
   assert.deepEqual([start, entries.map((e) => e.text)], [2, ["three", "four"]]);
   assert.deepEqual([here.keeps, here.length, here.entries.length], [false, 4, 0]);
-  // Its usage as a read from the start counts it.
-  const whole = new TranscriptTail("claude", path);
-  whole.read();
-  assert.deepEqual(here.usage, whole.usage);
   rmSync(dir, { recursive: true, force: true });
 });
 

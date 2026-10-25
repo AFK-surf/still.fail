@@ -80,7 +80,7 @@ export { COMPACTED_FROM };
 /// How near a session's context is to where its model is compacted (compactionPoints) to be about to be.
 const NEAR_COMPACTION = 0.75;
 
-type ContextCall = { turn: string | null; profile: string | null; model: string | null; context: number };
+type ContextCall = { turn: string | null; profile: string | null; model: string | null; context: number | null };
 
 /// Whether a session loses little by going on afresh on another account, by its last main-thread calls (oldest first)
 /// and where each model is compacted on this station: its runtime compacted its context in its last two turns (what
@@ -89,11 +89,12 @@ export function cheapToLeave(calls: ContextCall[], points: Map<string, number>):
   const last = calls.at(-1);
   if (!last) return false;
   const point = last.model === null ? undefined : points.get(last.model);
-  if (point !== undefined && last.context >= point * NEAR_COMPACTION) return true;
+  if (point !== undefined && last.context !== null && last.context >= point * NEAR_COMPACTION) return true;
   const turns = [...new Set(calls.map((c) => c.turn))].slice(-2);
   return calls.some((c, i) => {
     const before = calls[i - 1];
-    return before !== undefined && turns.includes(c.turn) && before.context >= COMPACTED_FROM && c.context * 2 < before.context && c.profile === before.profile && c.model === before.model;
+    if (before === undefined || before.context === null || c.context === null) return false;
+    return turns.includes(c.turn) && before.context >= COMPACTED_FROM && c.context * 2 < before.context && c.profile === before.profile && c.model === before.model;
   });
 }
 

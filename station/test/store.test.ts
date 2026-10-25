@@ -950,7 +950,7 @@ test("usage: where a model's context was compacted is kept as calls are recorded
   let store = open(path);
   session(store, "a");
   const call = (id: string, at: number, sent: number, model = "m", subagent = false) =>
-    [{ id, at, model, subagent, fast: false, input: sent, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1 }, { turn: null, person: null, thread: null, profile: "cc" }] as const;
+    [{ id, at, model, subagent, fast: false, input: sent, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: subagent ? null : sent, window: null }, { turn: null, person: null, thread: null, profile: "cc" }] as const;
   store.recordUsage("/t.jsonl", { session: "a", offset: 1, model: "m" }, "claude", [
     call("c1", 1000, 120_000),
     call("s1", 1500, 5_000, "m", true), // a sub-agent's: not the session's context
@@ -973,7 +973,7 @@ test("usage: a call is recorded once, its output grown; turns tell whom they wer
   const store = memory();
   session(store, "a");
   store.startTurnFor("t1", "a", "input", { profile: "cc", person: "me@x", thread: 3 });
-  const call = { id: "c1", at: 1000, model: "m", subagent: false, fast: true, input: 1, cacheRead: 2, cacheWrite: 3, cacheWriteLong: 4, output: 5 };
+  const call = { id: "c1", at: 1000, model: "m", subagent: false, fast: true, input: 1, cacheRead: 2, cacheWrite: 3, cacheWriteLong: 4, output: 5, calls: 1, context: 10, window: null };
   const of = { turn: "t1", person: "me@x", thread: 3, profile: "cc" };
   assert.equal(store.recordUsage("/t.jsonl", { session: "a", offset: 10, model: "m" }, "claude", [[call, of]]), 1);
   assert.equal(store.recordUsage("/t.jsonl", { session: "a", offset: 20, model: "m" }, "claude", [[{ ...call, output: 9 }, of]]), 0);
@@ -992,7 +992,7 @@ test("usage: a call is recorded once, its output grown; turns tell whom they wer
 test("usage: a session's calls added up by the database, those from before the totals and those an older station records too", () => {
   const path = join(tempdir(), "usage.db");
   const of = { turn: null, person: null, thread: null, profile: null };
-  const call = (id: string, model: string | null, output: number) => ({ id, at: 1000, model, subagent: false, fast: false, input: 1, cacheRead: 2, cacheWrite: 3, cacheWriteLong: 4, output });
+  const call = (id: string, model: string | null, output: number) => ({ id, at: 1000, model, subagent: false, fast: false, input: 1, cacheRead: 2, cacheWrite: 3, cacheWriteLong: 4, output, calls: 1, context: 10, window: null });
   const first = open(path);
   session(first, "a");
   first.recordUsage("/a.jsonl", { session: "a", offset: 1, model: "m" }, "claude", [[call("c1", "m", 5), of], [call("c2", null, 1), of]]);
@@ -1012,6 +1012,38 @@ test("usage: a session's calls added up by the database, those from before the t
     [["claude", null, 1, 1, 2, 3, 4, 1], ["claude", "m", 3, 3, 6, 9, 12, 18]],
   );
   assert.deepEqual(store.usageOfSession("b"), []);
+});
+
+test("usage: a row is the calls it says, and a database from before says each was one, with the context it sent", () => {
+  const path = join(tempdir(), "usage.db");
+  const of = { turn: null, person: null, thread: null, profile: "cc" };
+  const call = (id: string, at: number, input: number, more: object = {}) =>
+    [{ id, at, model: "m", subagent: false, fast: false, input, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: input, window: null, ...more }, of] as const;
+  let store = open(path);
+  session(store, "a");
+  store.recordUsage("/a.jsonl", { session: "a", offset: 1, model: "m" }, "claude", [call("c1", 1000, 120_000), call("s1", 1500, 7, { subagent: true, context: null })] as never);
+  store.close();
+  // As a station from before the columns kept it: its triggers too.
+  const before = new DatabaseSync(path);
+  before.exec(`DROP TRIGGER usage_totals_add; DROP TRIGGER usage_totals_drop; DROP TRIGGER usage_compactions_add;
+    ALTER TABLE usage DROP COLUMN calls; ALTER TABLE usage DROP COLUMN context; ALTER TABLE usage DROP COLUMN context_window;
+    CREATE TRIGGER usage_totals_add AFTER INSERT ON usage BEGIN
+      INSERT INTO usage_totals VALUES (NEW.session, NEW.runtime, COALESCE(NEW.model, ''), NEW.fast, 1, NEW.input, NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)
+      ON CONFLICT (session, runtime, model, fast) DO UPDATE SET calls = calls + 1, input = input + excluded.input;
+    END;
+    CREATE TRIGGER usage_totals_drop AFTER DELETE ON usage BEGIN UPDATE usage_totals SET calls = calls - 1 WHERE session = OLD.session; END;
+    CREATE TRIGGER usage_compactions_add AFTER INSERT ON usage BEGIN SELECT 1; END;`);
+  before.close();
+  store = open(path);
+  // Each call from before is one, its context what it sent (a subagent's none), as before.
+  assert.deepEqual(store.lastContexts("a", 5).map((c) => [c.context, c.window]), [[120_000, null]]);
+  // A turn told at once is its calls; the context it ended with is what it says, compacted from the one before.
+  store.recordUsage("/a.jsonl", { session: "a", offset: 2, model: "m" }, "claude", [call("c2", 2000, 300_000, { calls: 3, context: 20_000, window: 200_000 })] as never);
+  assert.deepEqual(store.usageOfSession("a").map((g) => [g.calls, g.input]), [[5, 420_007]]);
+  assert.deepEqual(store.usageGroups(0, 3000, 0).reduce((n, g) => n + g.calls, 0), 5);
+  assert.deepEqual(store.lastContexts("a", 1).map((c) => [c.context, c.window]), [[20_000, 200_000]]);
+  assert.deepEqual([...store.compactionPoints(0)], [["m", 120_000]]);
+  store.close();
 });
 
 test("a session's usage as its summary says it: kept as told, a change told as the session's only once it rests", () => {

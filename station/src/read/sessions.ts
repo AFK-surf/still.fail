@@ -172,8 +172,8 @@ function summaryWith(s: Store, key: string, l: Lists): Json {
   // the latest knows what it missed. None until the station has read it at work since it began to say so.
   const length = l.lengths.get(key);
   if (length !== undefined) v.transcriptLength = length;
-  // What its calls used (read/tail.ts TranscriptUsage): what its live view tells while it works, kept as it changes and
-  // counted since, so a device knows it of one at rest. None before a call.
+  // What its calls used (read/usage.ts SessionUsage): as the usage counter recorded them, kept as more are, so a device
+  // knows it of one at rest. None before a call.
   const usage = l.usages.get(key);
   if (usage !== undefined) v.usage = usage;
   return v;

@@ -48,7 +48,7 @@ import { EventLog, KEPT_MS, type Kept } from "./event-log.ts";
 const PING_MS = 25_000;
 const HOST_MS = 10_000;
 /// What the agents spent is told at most this often (the first change at once, the last at the end of the while): it
-/// changes with every model call, some 15 s apart while agents work, and each telling has a page showing usage, and every
+/// changes with every model call, some seconds apart while agents work, and each telling has a page showing usage, and every
 /// client from before it is read only so, read all of it again (some 200 KB).
 const USAGE_EVERY_MS = 60_000;
 /// A stream's answer when it was told first what came after `since` (the client then reads nothing again).

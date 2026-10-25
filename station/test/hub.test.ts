@@ -1563,7 +1563,7 @@ test("a session leaves an account whose five hours are nearly full for one with 
   let call = 0;
   const calls = (session: string, profile: string, each: [string, number][]) =>
     r.store.recordUsage(`/t/${session}`, { session, offset: call, model: "m" }, "claude", each.map(([turn, context]) => [
-      { id: `c${call++}`, at: now + call, model: "m", subagent: false, fast: false, input: 0, cacheRead: context, cacheWrite: 0, cacheWriteLong: 0, output: 1 },
+      { id: `c${call++}`, at: now + call, model: "m", subagent: false, fast: false, input: 0, cacheRead: context, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context, window: null },
       { turn, person: null, thread: null, profile },
     ]));
   await done();

@@ -9,25 +9,22 @@ import type { Clock } from "effect";
 import { existsSync, type FSWatcher, watch } from "node:fs";
 import type { LiveEvent } from "../agents/runtime.ts";
 import { Fibers } from "../ops/fibers.ts";
-import { ChainTail, type TailState, type TranscriptUsage } from "../read/tail.ts";
+import { ChainTail, type TailState } from "../read/tail.ts";
 import { type TimelineEntry, brief } from "../read/transcript.ts";
+import { type SessionUsage, noUsage } from "../read/usage.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
 
-export { ChainTail, TranscriptTail, type TranscriptUsage } from "../read/tail.ts";
+export { ChainTail, TranscriptTail } from "../read/tail.ts";
 
 type Phase = Extract<LiveEvent, { kind: "phase" }>["phase"];
 
 /// A step in flight: what it is, not what it has written so far.
 export type LiveStep = { id: string; step: "text" | "thinking" | "tool"; tool?: string; subagent?: boolean; parent?: string; input: string; startedAt: number };
 
-/// A session's calls as the usage counter counted them (read/usage.ts `sessionUsage`).
-export type Counted = { modelCalls: number; inputTokens: number; cachedTokens: number; outputTokens: number; cost: number; unpricedCalls: number };
-
-
 export type LiveMessage =
   | { type: "steps"; steps: LiveStep[]; phase: { phase: Phase; elapsedMs: number } | null }
   | { type: "step"; event: LiveEvent }
-  | { type: "timeline"; start: number; entries: TimelineEntry[]; usage: TranscriptUsage }
+  | { type: "timeline"; start: number; entries: TimelineEntry[]; usage: SessionUsage }
   /// How fast the model is writing now (≈ tokens a second, from bytes), at most once a second; 0 once it stops.
   | { type: "rate"; tokensPerSecond: number }
   | { type: "clear" };
@@ -48,8 +45,6 @@ const SAYING = ["description", "command", "cmd", "file_path", "path", "pattern",
 const RATE_EVERY_MS = 1_000;
 const RATE_WINDOW_MS = 2_000;
 const RATE_FIRST_MS = 500;
-/// While a watched session works, the usage counter is asked to count it at most this often (it counts once a turn ends).
-const ASK_MS = 15_000;
 /// How long a session is still followed once its turn is over (`running`): a person who answers within it is answered
 /// without its transcript read again from the start.
 export const HELD_AFTER_MS = 2 * 60_000;
@@ -110,9 +105,9 @@ export class LiveHub {
   private nextId = 0;
   /// Where a session's transcript is, once its runtime has started one.
   private locate: Locate;
-  /// The usage counter's count of a session, and asking it to count soon (agents.ts, once it runs).
-  private count: { of: (key: string) => Counted | null; ask: () => void } | null = null;
-  private askedAt = Number.NEGATIVE_INFINITY;
+  /// What the usage counter recorded of a session's calls (usage/module.ts `usageNow`), and asking it to count what a
+  /// session at work wrote since (agents.ts, once it runs).
+  private count: { of: (key: string) => SessionUsage | null; ask: (key: string) => void } | null = null;
   /// Each watched session's usage as last told.
   private told = new Map<string, string>();
   /// The sessions at work, followed by the station itself (`running`): what each says goes to `heldTold`, whoever
@@ -123,8 +118,6 @@ export class LiveHub {
   heldTold: ((key: string, message: LiveMessage) => void) | null = null;
   /// Where each watched transcript's length goes as it changes (the store: its session's summary says it).
   lengths: ((key: string, n: number) => void) | null = null;
-  /// Where each watched session's usage goes as it changes (the store: its session's summary says it).
-  usages: ((key: string, usage: TranscriptUsage) => void) | null = null;
   private lengthTold = new Map<string, number>();
   /// Where a transcript's past is read (agents.ts: the readers); none (tests): here, and kept in memory.
   history: History | null = null;
@@ -134,24 +127,19 @@ export class LiveHub {
     this.time = new Fibers("live", clock);
   }
 
-  countWith(count: { of: (key: string) => Counted | null; ask: () => void }) {
+  countWith(count: { of: (key: string) => SessionUsage | null; ask: (key: string) => void }) {
     this.count = count;
   }
 
-  /// A session's usage: what its transcripts say here, its calls as the usage counter counted them once it has (the
-  /// same as the usage page: its subagents' too, and their cost).
-  private usageOf(key: string, tail: ChainTail): TranscriptUsage {
-    let counted: Counted | null = null;
+  /// A session's usage: its calls as the usage counter recorded them, the one count of them (the usage page's too). The
+  /// live view counts none itself: what a transcript gains, the counter is asked to count (`soon`).
+  private usageOf(key: string): SessionUsage {
+    let usage: SessionUsage | null = null;
     try {
-      counted = this.count?.of(key) ?? null;
+      usage = this.count?.of(key) ?? null;
     } catch {}
-    const usage = counted !== null && counted.modelCalls > 0 ? { ...tail.usage, ...counted } : tail.usage;
-    const json = JSON.stringify(usage);
-    if (this.told.get(key) === json) return usage;
-    this.told.set(key, json);
-    try {
-      this.usages?.(key, usage);
-    } catch {}
+    usage ??= noUsage();
+    this.told.set(key, JSON.stringify(usage));
     return usage;
   }
 
@@ -160,7 +148,7 @@ export class LiveHub {
     for (const [key, watched] of this.watched) {
       if (watched.tail === null) continue;
       const before = this.told.get(key);
-      const usage = this.usageOf(key, watched.tail);
+      const usage = this.usageOf(key);
       if (JSON.stringify(usage) !== before) this.emit(key, { type: "timeline", start: watched.tail.length, entries: [], usage });
     }
   }
@@ -280,7 +268,7 @@ export class LiveHub {
   now(key: string): LiveMessage[] {
     const out: LiveMessage[] = [];
     const tail = this.watched.get(key)?.tail ?? null;
-    if (tail !== null) out.push({ type: "timeline", start: tail.length, entries: [], usage: this.usageOf(key, tail) });
+    if (tail !== null) out.push({ type: "timeline", start: tail.length, entries: [], usage: this.usageOf(key) });
     out.push(this.stepsNow(key));
     return out;
   }
@@ -292,7 +280,14 @@ export class LiveHub {
     if (watched.behind) this.follow(watched, key);
     const [start, entries] = watched.tail.read();
     this.noteLength(key, watched.tail);
-    if (entries.length > 0) this.emit(key, { type: "timeline", start, entries, usage: this.usageOf(key, watched.tail) });
+    this.gained(key, start, entries);
+  }
+
+  /// What a watched transcript gained, told; the usage counter is asked to count it (what it spent comes after).
+  private gained(key: string, start: number, entries: TimelineEntry[]) {
+    if (entries.length === 0) return;
+    this.emit(key, { type: "timeline", start, entries, usage: this.usageOf(key) });
+    this.count?.ask(key);
   }
 
   /// A watched transcript's length, kept where its summary reads it, as it changes.
@@ -336,7 +331,7 @@ export class LiveHub {
     // A watcher that has more than the transcript (it was written anew) is told where it ends.
     const len = tail.length;
     const start = Math.max(Math.min(from, len), last === null ? 0 : Math.max(0, len - last));
-    const usage = this.usageOf(key, tail);
+    const usage = this.usageOf(key);
     if (start >= len || tail.keeps) return joined([{ type: "timeline", start, entries: tail.keeps ? tail.entries.slice(start) : [], usage }, this.stepsNow(key)], false);
     void this.past(key, start, len, sub.brief).then(
       (entries) => joined([{ type: "timeline", start, entries, usage }, this.stepsNow(key)], true),
@@ -405,7 +400,7 @@ export class LiveHub {
     }
     // What the transcript left has is read first: its entries come before the new one's.
     const [start, entries] = watched.tail.read();
-    if (entries.length > 0) this.emit(key, { type: "timeline", start, entries, usage: this.usageOf(key, watched.tail) });
+    this.gained(key, start, entries);
     // The new one is usually not written yet: it is looked for on each read until it is.
     watched.behind = true;
     this.follow(watched, key);
@@ -560,12 +555,8 @@ export class LiveHub {
       if (now.behind) this.follow(now, key);
       const [start, entries] = now.tail.read();
       this.noteLength(key, now.tail);
-      if (entries.length > 0 || fresh) this.emit(key, { type: "timeline", start, entries, usage: this.usageOf(key, now.tail) });
-      // Working on: the counter counts what it has written so far, now and then.
-      if (entries.length > 0 && this.count !== null && this.time.now() - this.askedAt >= ASK_MS) {
-        this.askedAt = this.time.now();
-        this.count.ask();
-      }
+      if (entries.length > 0) this.gained(key, start, entries);
+      else if (fresh) this.emit(key, { type: "timeline", start, entries, usage: this.usageOf(key) });
     });
   }
 }

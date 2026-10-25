@@ -2,7 +2,7 @@
 // new chats, uploads, messages, archiving, deleting, stopping, a session's settings, jobs. A real store in a temporary
 // data directory, the real readers over it, a hub with runtimes scripted in-process (test/hub-fakes.ts).
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, basename } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -23,6 +23,8 @@ import { chatRows, chats } from "../src/read/views.ts";
 import { isDeepStrictEqual } from "node:util";
 import { fileAway } from "./archived-before.ts";
 import { FakeDriver, settle } from "./hub-fakes.ts";
+import { UsageCounter, claudeProject } from "../src/usage/counter.ts";
+import { keepCounted } from "../src/usage/module.ts";
 
 const viewer = { sub: "u", email: "a@x", name: "A", role: "member", workspace: "w", device: "d" };
 const en = (key: string, args: Record<string, unknown> = {}) => tr("en", key, args);
@@ -599,28 +601,38 @@ test("a session at work: the station follows it, its summary says how long its t
   }
 });
 
-test("a session's summary says what its calls used as its live view told it, so a device knows it of one at rest", async () => {
+test("a session's summary says what its calls used as the usage counter recorded them, so a device knows it of one at rest", async () => {
   const r = rig();
+  const counter = new UsageCounter({ store: r.store, config: () => ({ dataDir: r.data, profiles: [{ home: join(r.data, "homes", "cc") }] }) });
+  const stop = keepCounted(r.store, r.hub.live, counter);
   try {
     const [, made] = await r.ask("POST", "/sessions", { runtime: "claude", title: "a" });
     const key = made.key;
-    const dir = join(r.data, "homes", "cc", "projects", "p");
+    const dir = join(r.data, "homes", "cc", "projects", claudeProject(r.store.getSession(key)!.workspace));
     mkdirSync(dir, { recursive: true });
     const said = (id: string, input: number) =>
-      `${JSON.stringify({ type: "assistant", timestamp: "2026-10-24T00:00:00Z", message: { id, model: "claude-opus-5-5", content: [{ type: "text", text: id }], usage: { input_tokens: input, cache_read_input_tokens: 100, output_tokens: 7 } } })}\n`;
+      `${JSON.stringify({ type: "assistant", timestamp: new Date(r.store.now() + 1000).toISOString(), message: { id, model: "claude-opus-5-5", content: [{ type: "text", text: id }], usage: { input_tokens: input, cache_read_input_tokens: 100, output_tokens: 7 } } })}\n`;
     writeFileSync(join(dir, "rs1.jsonl"), said("m1", 1) + said("m2", 2));
     r.store.ranIn(key, "rs1", "cc");
     r.store.setRuntimeSessionId(key, "rs1");
-    writeFileSync(join(r.data, "config.json"), JSON.stringify({ profiles: [{ id: "cc", runtime: "claude", home: join(r.data, "homes", "cc") }] }));
     const summary = async () => (await r.ask("GET", `/sessions/${encodeURIComponent(key)}`))[1].session;
     assert.equal((await summary()).usage, undefined, "no call read yet: not said");
-    r.store.setRunning(key, true);
+    await counter.read();
     const usage = (await summary()).usage;
     assert.deepEqual([usage.modelCalls, usage.inputTokens, usage.cachedTokens, usage.outputTokens, usage.contextTokens, usage.model], [2, 203, 200, 14, 102, "claude-opus-5-5"]);
+    assert.ok(usage.cost > 0, "and what it would cost, as the usage page has it");
+    // At work: what it writes is read for it alone, and its summary says it.
+    r.store.setRunning(key, true);
+    appendFileSync(join(dir, "rs1.jsonl"), said("m3", 3));
+    await counter.read(new Set([key]));
+    const working = (await summary()).usage;
+    assert.deepEqual([working.modelCalls, working.contextTokens], [3, 103]);
     r.store.setRunning(key, false);
     const listed = (await r.ask("GET", "/sessions"))[1].find((s: any) => s.key === key);
-    assert.deepEqual(listed.usage, usage, "the list says it as the session does");
+    assert.deepEqual(listed.usage, working, "the list says it as the session does");
   } finally {
+    stop();
+    await counter.stop();
     await r.close();
   }
 });

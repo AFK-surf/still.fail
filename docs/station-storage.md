@@ -212,12 +212,18 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   How many entries each transcript has is kept as it is read
   (`transcript_lengths`), and its session's summary says it
   (`transcriptLength`). So is what its calls used (`session_usage`, the
-  summary's `usage`): as the live view tells it, then as the usage counter
-  counts each session anew over what the live view last said of the rest (its
-  model, its context; before it said any, its last call's). The counted part
-  is read from `usage_totals`, which the database keeps added up per session,
-  runtime, model and speed as calls are recorded (triggers on `usage`): a few
-  rows each time it is told, not every call the session made. A change of a
+  summary's `usage`), and what its stream tells of them: both as the usage
+  counter recorded them (`usage`, the one record of what was spent; the usage
+  page adds up the same rows), never counted from the transcript apart. What
+  the transcript of a session at work gains, the counter is asked to read for
+  that session alone a moment later (`usage/counter.ts` `soon`), so the count
+  goes on with each call. The calls are read from `usage_totals`, which the
+  database keeps added up per session, runtime, model and speed as calls are
+  recorded (triggers on `usage`, each row the `calls` it is: a runtime that
+  tells a turn's counts at once says how many it made): a few rows each time it
+  is told, not every call the session made; the model, the context it carries
+  on with and the model's window are those of its last main-thread call
+  (`usage.context`, `context_window`). A change of a
   session at rest (its last turn's count comes in after it ended) is told as
   the session's; one at work is on its stream. A client from before follows a session by name, on
   `/events?live=<key>&from=N&last=200` (entries from index N, no more than the

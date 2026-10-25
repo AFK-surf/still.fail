@@ -18,12 +18,8 @@ import { type Mark, type TailState, TranscriptTail, recordOf } from "./tail.ts";
 import { READING, type ReadState, type TimelineEntry, brief, storage, timelineOf, utf8 } from "./transcript.ts";
 
 /// The transcripts whose reading is kept in memory, the most recently read last (a reader's heap is small: one's reading
-/// keeps the ids of its responses, a MB for a long one).
+/// keeps its marks).
 const KEPT = 16;
-
-/// What of the ids a reading counted usage by is kept on disk: those of the last responses, as a response's lines are
-/// written one after another (read/tail.ts `seen`, `totals`).
-const KEPT_IDS = 64;
 
 /// A transcript's reading: where it stands (the entries before it counted, none kept) and its marks.
 export type Marked = { reading: number; state: TailState; marks: Mark[] };
@@ -68,10 +64,9 @@ function markedOf(runtime: RuntimeKind, path: string, dir: string | null): Marke
     try {
       mkdirSync(dir, { recursive: true });
       const file = fileOf(dir, path);
-      const state = { ...now.state, seen: now.state.seen.slice(-KEPT_IDS), totals: now.state.totals.slice(-KEPT_IDS) };
       // Its own: two readers may write the same one.
       const tmp = `${file}.${process.pid}.${threadId}.tmp`;
-      writeFileSync(tmp, JSON.stringify({ ...now, state }));
+      writeFileSync(tmp, JSON.stringify(now));
       renameSync(tmp, file);
     } catch {}
   }
