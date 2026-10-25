@@ -4,18 +4,19 @@
 //
 // 1. What lights up under the hand (a box whose look asks Ctx::lit, or is drawn selected, a shape a ground shows in)
 //    stands apart from the next one that does, by the theme's `lit_apart` at least (the web's sidebar rows, `& + &`
-//    2): two lit grounds side by side read as one block. Measured between their boxes, in the same layer, where they share a column or a row;
-//    what holds others that light up as wide or as tall as it (a list, a rail) is where they are, not one of them.
+//    2): two lit grounds side by side read as one block. Measured between their boxes, in the same layer, where they
+//    share a column or a row; what holds others that light up as wide or as tall as it (a list, a rail) is where they
+//    are, not one of them.
 //    Not held to it: the parts of one control (in a ground of their own that hugs them: a segmented choice's
 //    options), and things where nothing stays lit (no ground shown with no hand on them in what holds them: one
 //    lights at a time; a list across the whole screen, a card of options).
 // 3. Two blocks with grounds of their own beside each other in one box never meet (0 between them) or run over each
 //    other: they stand apart, or are one block. Lines (thinner than `gap_line`) are what parts things, not a block.
 // 4. What a box with a ground or an edge holds (words, a drawing, a block with a ground: a chip) stands in from its
-//    edges, never touching one; and
-//    where it spans the box (in from both sides by less than a quarter of it), as far in from the left as from the
-//    right (its children's boxes) where they stand in one line (a row, a button, a chip: what a box with lines under lines holds stands as
-//    its column says).
+//    edges, never touching one; and where it spans the box (in from both sides by less than a quarter of it), as far
+//    in from the left as from the right where it stands in one line (a row, a button, a chip: what a box with lines
+//    under lines holds stands as its column says): each end by its box, a drawing larger than an icon by its ink (a
+//    file's sheet in its tile), in a capsule what stands at its ends no wider than it is high by their middles.
 //
 // Rules 2 (siblings of a kind equally spaced), 5 (one column's things aligned) and 6 (gaps on the scale) are still.fail's
 // too, not measured yet.
@@ -69,6 +70,73 @@ fn Ctx::gap_drawn(self : Ctx, i : Int) -> (Double, Double, Double, Double) {
       (b.x + off, b.y, b.x + off + tl.w, b.y + b.fh)
     }
     _ => (b.x, b.y, b.x + b.fw, b.y + b.fh)
+  }
+}
+
+///|
+/// How large an icon's box is at most (one 16 or 20 in its room): its box its ink, drawn on its grid.
+let gap_icon_most : Double = 24.0
+
+///|
+/// Where node `i` draws across where it is a drawing larger than an icon (gap_ink), None otherwise.
+fn Ctx::gap_ink_large(self : Ctx, i : Int) -> (Double, Double)? {
+  if i < 0 || dmax(self.nodes[i].fw, self.nodes[i].fh) <= gap_icon_most {
+    return None
+  }
+  self.gap_ink(i)
+}
+
+///|
+/// Where what node `i` holds draws across (x0, x1): its drawings' ink (their outlines' points, a stroke's half width
+/// round them), its grounds, its pictures; None where it holds words (their room the layout's, not their ink's) or
+/// draws nothing.
+fn Ctx::gap_ink(self : Ctx, i : Int) -> (Double, Double)? {
+  if i < 0 {
+    return None
+  }
+  let mut x0 = 1.0e9
+  let mut x1 = -1.0e9
+  let todo = [i]
+  while todo.pop() is Some(k) {
+    let n = self.nodes[k]
+    if n.opacity <= 0.01 || n.layer {
+      continue
+    }
+    if (n.kind == kind_text || n.kind == kind_rich) && (n.text != "" || n.rich is Some(_)) {
+      return None
+    }
+    if n.grounded() || n.kind == kind_image {
+      x0 = dmin(x0, n.x)
+      x1 = dmax(x1, n.x + n.fw)
+    }
+    for sh in n.shapes {
+      let half = if sh.stroke != 0L { sh.width / 2.0 } else { 0.0 }
+      for o in sh.outlines {
+        let pts = o.0
+        let mut j = 0
+        while j + 1 < pts.length() {
+          x0 = dmin(x0, n.x + pts[j] - half)
+          x1 = dmax(x1, n.x + pts[j] + half)
+          j += 2
+        }
+      }
+    }
+    for ln in n.lines {
+      for pt in ln.points {
+        x0 = dmin(x0, n.x + pt.0 - ln.width / 2.0)
+        x1 = dmax(x1, n.x + pt.0 + ln.width / 2.0)
+      }
+    }
+    let mut ch = n.first
+    while ch >= 0 {
+      todo.push(ch)
+      ch = self.nodes[ch].next
+    }
+  }
+  if x0 < x1 {
+    Some((x0, x1))
+  } else {
+    None
   }
 }
 
@@ -390,17 +458,44 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
     // says, words in the middle of a segment, an icon in its button's room)
     let mut bx0 = 1.0e9
     let mut bx1 = -1.0e9
+    let mut first = -1
+    let mut last = -1
     let mut k = gb.first
     while k >= 0 {
       let ch = self.nodes[k]
       if whole[k] && layer[k] == layer[gi] && ch.fw > 0.0 && ch.fh > 0.0 {
+        if ch.x < bx0 {
+          first = k
+        }
+        if ch.x + ch.fw > bx1 {
+          last = k
+        }
         bx0 = dmin(bx0, ch.x)
         bx1 = dmax(bx1, ch.x + ch.fw)
       }
       k = ch.next
     }
-    let l = bx0 - gb.x
-    let r = gb.x + gb.fw - bx1
+    // (in a capsule what stands at its ends no wider than it is high stands in their middles, concentric with them: as
+    // far from both, its middle: a tab's mark and its ×, each its own size)
+    let capsule = gb.corner() >= gb.fh / 2.0 - gap_slack
+    let small = fn(i : Int) { i >= 0 && self.nodes[i].fw <= gb.fh + gap_slack }
+    // (else each end where its box is; a drawing larger than an icon where it draws, not the room round it (a file's
+    // sheet drawn 2.75 in its tile): an icon's box is its ink, drawn on its grid)
+    let (l, r) = if capsule && small(first) && small(last) {
+      let a = self.nodes[first]
+      let b = self.nodes[last]
+      (a.x + a.fw / 2.0 - gb.x, gb.x + gb.fw - (b.x + b.fw / 2.0))
+    } else {
+      let x0 = match self.gap_ink_large(first) {
+        Some((ix0, _)) => ix0
+        None => bx0
+      }
+      let x1 = match self.gap_ink_large(last) {
+        Some((_, ix1)) => ix1
+        None => bx1
+      }
+      (x0 - gb.x, gb.x + gb.fw - x1)
+    }
     let one_line = y1 - y0 <= tallest + gap_slack
     if bx0 < bx1 && one_line && l < gb.fw / 4.0 && r < gb.fw / 4.0 && (l - r).abs() > 2.0 * gap_slack {
       out.push("rule 4: what \{self.named(gi)} holds stands \{l} in from its left, \{r} from its right")
