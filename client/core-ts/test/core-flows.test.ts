@@ -14,7 +14,7 @@ const STATION = (station: string) => ({ station });
 import { FakeHost, jsonResponse } from "../src/testing.ts";
 import { account, apply, call, nowS, readsOf, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
-import { Status, base, overview, session, started, stationHost, stationReplies, threadView } from "./station-fixture.ts";
+import { Status, base, entry, overview, session, started, stationHost, stationReplies, threadView } from "./station-fixture.ts";
 import { apply as applyOps } from "../src/delta.ts";
 import { conform } from "../src/conform.ts";
 import { CoreError } from "../src/error.ts";
@@ -1122,6 +1122,57 @@ test("a_chat_made_here_is_a_new_chat_all_along_until_it_is_named", async () => {
   titles.push(v(values, 1).title, v(values, 4).title);
   // by its thread and by the key it was asked for with, before what is sent to it and after: the same
   assert.deepEqual(titles, ["新对话", "新对话", "新对话", "新对话"]);
+  core.close();
+});
+
+test("a_new_chats_lists_read_before_its_agent_began_and_come_after_it_was_told_at_work_keep_it_at_work", async () => {
+  // What a new chat changes is read again as its first message goes: the station as it was then, its agent not at work
+  // yet. On a slow link that came after the station told the agent at work, and had it at rest again: no activity, no
+  // mark, for the whole of its turn (2026-10-25). What was told after a read was asked is no older than what it brings.
+  const made = { ...threadView(9, 0), createdBy: "a@x.com", sessions: [{ thread: 9, session: "ember:c-1", connect: "ember", joinedAt: 1 }] };
+  const atRest = session("ember:c-1");
+  const working = { ...atRest, process: "running", running: true, turns: 1, lastTurn: { id: "t1", kind: "input", startedAt: 5, endedAt: null } };
+  const row = (id: string, session: string, thread: number, agents: J[]) => ({ id, session, thread, title: "新对话", agents, last: null, unread: false, mine: true, lastActiveAt: thread, connect: null, origin: null });
+  const answers: J = { ...base(), "GET /chats": [row("7", "k1", 7, [])] };
+  const s = await started(answers);
+  const { host, core } = s;
+  // The station as it is at each moment: what a read is answered with is what it had as it was asked.
+  const now = (agent: J) => {
+    answers["GET /sessions"] = [session("k1"), agent];
+    answers["GET /sessions/ember%3Ac-1"] = { session: agent, threads: [], turns: agent.lastTurn ? [agent.lastTurn] : [], jobs: [] };
+    answers["GET /chats"] = [row("7", "k1", 7, []), row("9", "ember:c-1", 9, [agent])];
+  };
+  answers["GET /threads/9"] = { ...made, last: 1 };
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (req.method === "POST" && path === "/sessions") return { key: "ember:c-1", thread: made };
+    if (req.method === "POST" && path === "/threads/9/messages") return { n: 1 };
+    return undefined;
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chats", scope: "ws" });
+  await host.settle();
+  // A slow link: the lists, asked as the chat is made, come long after.
+  const release = [host.hold("/admin/api/changed/sessions"), host.hold("/admin/api/changed/chats")];
+  now(atRest);
+  const key = String((await ask(host, core, ui, 2, "chat.create", { station: "ws/st", runtime: "claude", model: "opus" })).key);
+  call(core, ui, 3, "chat.send", { station: "ws/st", session: key, text: "修一下登录" });
+  await host.settle();
+  s.push("thread", { id: 9, entries: [{ ...entry(1, "修一下登录"), thread: 9 }] });
+  // Its agent begins: the station tells it, and has it so from now.
+  now(working);
+  s.push("session", working);
+  s.push("chat", row("9", "ember:c-1", 9, [working]));
+  await host.settle();
+  subscribe(core, ui, 4, { topic: "chat", station: "ws/st", thread: 9 });
+  await host.settle();
+  // The lists come, as the station had them before it began.
+  for (const r of release) r();
+  await host.settle();
+  apply(host, values);
+  const item = v(values, 1).days.flatMap((d: J) => d.items).find((i: J) => i.id === "9");
+  assert.deepEqual([v(values, 4).agents[0].status, item?.state], ["running", "run"]);
   core.close();
 });
 
