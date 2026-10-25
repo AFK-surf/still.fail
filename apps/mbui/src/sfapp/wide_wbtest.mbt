@@ -932,6 +932,36 @@ test "wide: Station and Profile a list of their own beside their page; 连接 an
 }
 
 ///|
+test "wide: to 连接 or 用量 the block closes holding the sidebar it had, as wide, never the chats' list; from there a place's own opens" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  app.nav.replace(Place("stations"))
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(t.find("添加 station") is Some(_))
+  let s = @sfdesk.wide.side_w
+  t.click(Button, label="用量")
+  // halfway closed: the stations' list as it was
+  t.run_for(@sfdesk.side_move_ms / 2.0)
+  assert_true(t.find("添加 station") is Some(_), msg="the stations' list as it closes")
+  assert_true(t.find("新建对话") is None, msg="not the chats' list")
+  assert_eq(@sfdesk.wide.side_w, s)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(t.find("添加 station") is None && t.find("新建对话") is None)
+  // on to 连接: closed, nothing in it drawn
+  t.click(Button, label="连接")
+  t.run_for(@sfdesk.side_move_ms / 2.0)
+  assert_true(t.find("添加 station") is None && t.find("新建对话") is None)
+  t.run_for(@sfdesk.side_move_ms)
+  // to Profile: its own list as it opens, from its first frame
+  t.click(Button, label="Profile")
+  t.frame()
+  assert_true(t.find("添加 Profile") is Some(_), msg="the profiles' list as it opens")
+  assert_true(t.find("添加 station") is None && t.find("新建对话") is None)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(t.find("添加 Profile") is Some(_))
+}
+
+///|
 test "wide: 文件 as the web's Finder: 个人收藏, each station, 团队共享 in the sidebar; a row chosen by a click, opened by a double click; the bar's ways and 收藏" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)

@@ -6,13 +6,15 @@
 // list; opened, the newest of them is open beside it, or with none what the archive is.
 
 ///|
-/// The sidebar `width` wide (its 8 at the left over the rail's empty side): the chats' lists (奏 and 已归档 among them)
-/// for the chats' places; the files' (files_nav.mbt); a place's own (the app's: the settings', the stations', the profiles').
+/// The sidebar `width` wide (its 8 at the left over the rail's empty side), the one the block holds (side_place): the
+/// chats' lists (奏 and 已归档 among them) for the chats' places; the files' (files_nav.mbt); a place's own (the app's:
+/// the settings', the stations', the profiles').
 fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
-  match lit_place() {
+  match side_place() {
     "files" => files_nav(c, src, w.id)
     "settings" => settings_side(c, src, w)
-    "stations" | "profiles" => place_sidebar(c, src, w)
+    "stations" => stations_side(c, src, w)
+    "profiles" => profiles_side(c, src, w)
     _ => lists_side(c, src, w, width)
   }
 }
