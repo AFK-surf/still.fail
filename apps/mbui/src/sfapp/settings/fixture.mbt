@@ -445,7 +445,8 @@ fn fx_profiles() -> Array[Json] {
     ])),
     fx_profile("cx", "ChatGPT 团队", "subscription", "green", "可用", "chatgpt", "ChatGPT 订阅", fx_cx_more()),
     fx_profile("k2", "备用 key", "anthropic-api", "red", "没能使用", "key", "API key", [
-      ("trouble", obj([("title", str("key 已失效")), ("detail", str("服务商拒绝了这个 key")), ("next", str("")), ("action", str("key")), ("label", str(""))])),
+      // (as the core says it: present.ts issue, trouble.key_next, trouble.key_label)
+      ("trouble", obj([("title", str("key 已失效")), ("detail", str("服务商拒绝了这个 key")), ("next", str("核对服务商的 key 是否有效、余额和权限是否足够；可以更换 key，保存后会自动检查")), ("action", str("key")), ("label", str("更换 key"))])),
       ("quota", obj([("state", str("unsupported")), ("windows", []), ("checkedAt", Json::number(0.0))])),
       ("usedBy", []),
     ]),
