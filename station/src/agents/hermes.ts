@@ -7,13 +7,14 @@ import { log } from "../ops/log.ts";
 import { peerHttpBase } from "../tools/http.ts";
 import { LiveFromAcp, chars, type AcpLiveState } from "./live.ts";
 import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
+import { fileCredentials } from "./no-keychain.ts";
 import { expandRoute, profileEnv, profileModel } from "./profiles.ts";
 import { TOOL_SERVERS, cleanEnv, unreachable, uuid, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 
 type Json = any;
 
 // Hermes resolves providers from this profile's HERMES_HOME and explicit environment.
-const SCRUBBED = ["HERMES_HOME", "HERMES_CONFIG_FILE", "OPENAI_API_KEY", "OPENAI_BASE_URL", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY", "DEEPSEEK_API_KEY"];
+const SCRUBBED = ["HERMES_HOME", "HERMES_CONFIG_FILE", "HERMES_PROFILE", "HERMES_CONFIG", "HERMES_CONFIG_PATH", "HERMES_ENV", "HERMES_ENV_PATH", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_TOKEN", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "OPENAI_BASE_URL", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY", "DEEPSEEK_API_KEY"];
 export const hermesHome = (home: string) => join(home, "hermes");
 export const SESSIONS = "sessions";
 const INIT = "init";
@@ -81,6 +82,11 @@ const mcpServers = (url: string, token: string) => [{ type: "http", name: "still
 export function hermesEnv(options: OpenOptions): Record<string, string> {
   const env = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(options.profile, "hermes"), options.route) };
   env.HERMES_HOME = hermesHome(options.profile.home);
+  // Hermes treats a borrowed Claude/Codex login as a configured provider. Keep those readers inside this profile,
+  // unless the profile explicitly names a credential directory, and never borrow macOS's shared Claude login.
+  env.CLAUDE_CONFIG_DIR ??= join(env.HERMES_HOME, "claude");
+  env.CODEX_HOME ??= join(env.HERMES_HOME, "codex");
+  fileCredentials(env);
   env.STILLFAIL_PEER_HTTP = peerHttpBase(options.mcpUrl);
   return env;
 }

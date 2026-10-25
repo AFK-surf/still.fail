@@ -73,6 +73,8 @@ test('handover preserves partial transcript and completes the running turn once'
 test('configuration stays within its profile and rejects unsafe session IDs', async () => {
   const { options, driver } = setup();
   assert.equal(hermesEnv(options).HERMES_HOME, join(options.profile.home, 'hermes'));
+  assert.equal(hermesEnv(options).CLAUDE_CONFIG_DIR, join(options.profile.home, 'hermes', 'claude'));
+  assert.equal(hermesEnv(options).CODEX_HOME, join(options.profile.home, 'hermes', 'codex'));
   assert.deepEqual(accessKinds('hermes'), ['env']);
   assert.ok(CHAT_CREATE.inputSchema.properties.runtime.enum.includes('hermes'));
   await assert.rejects(driver.open({ ...options, resume: '../escape' }, () => {}), /invalid Hermes session id/);
