@@ -10,6 +10,13 @@ fn ref_panel(src : Source, w : Writing, station : String, id : String, name : St
 }
 
 ///|
+/// The panel of file `id` in draft `key` (`<station>:<chat>`) put up from no card (a screen's fixture: a sheet on a
+/// phone, as from its card).
+pub fn ref_panel_put(src : Source, key : String, station : String, id : String, name : String) -> Unit {
+  @sf.panel(name, fn(c, _) { ref_panel_body(c, src, key, station, id) }, from=Unanchored)
+}
+
+///|
 fn ref_panel_body(c : @ui.Ctx, src : Source, key : String, station : String, id : String) -> Unit {
   let w = @sfbase.writing(src, key)
   guard w.files.iter().find_first(fn(f) { text(Some(f), "id") == id }) is Some(f) else { return }

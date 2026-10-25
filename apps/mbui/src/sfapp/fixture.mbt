@@ -1152,10 +1152,13 @@ pub fn fixture_app(mode : String) -> Source {
 
 ///|
 /// What the mode opens over the app once its source is made (what is put up reading through it), as open_fixture_mode
-/// opens its pages: ＋'s Station 文件 (chat-station-files).
+/// opens its pages: ＋'s Station 文件 (chat-station-files); a station's file's card pressed, its panel (chat-station-sheet).
 pub fn open_fixture_src(mode : String, src : Source) -> Unit {
   if mode == "chat-station-files" {
     fixture_station_files(src)
+  }
+  if mode == "chat-station-sheet" {
+    @sfpages.ref_panel_put(src, "ws1/st1:s-c1", "ws1/st1", "ref-发布清单.md", "发布清单.md")
   }
 }
 

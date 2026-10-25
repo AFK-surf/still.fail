@@ -452,7 +452,11 @@ test "chat-station-files" {
 
 ///|
 test "chat-station-ref" {
-  check("chat-station-ref", @ui.nav_push_ms)
+  let t = screen("chat-station-ref", @ui.nav_push_ms)
+  screen_check(t, "chat-station-ref")
+  // the station's file in the draft its card in the composer: its name, the station it is on and how it goes
+  assert_true(t.locate("=发布清单").length() > 0, msg="no card of the draft's station file in the composer")
+  assert_true(t.locate("=Studio · 路径").length() > 0, msg="the card says not where the file is and how it goes")
 }
 
 ///|
@@ -462,7 +466,10 @@ test "chat-station-file" {
 
 ///|
 test "chat-station-sheet" {
-  check("chat-station-sheet", @ui.nav_push_ms)
+  let t = screen("chat-station-sheet", @ui.nav_push_ms)
+  screen_check(t, "chat-station-sheet")
+  // its card's panel up: how it goes
+  assert_true(t.locate("=发送方式").length() > 0, msg="no panel of the station's file")
 }
 
 // The 奏 page, a chat's history; a chat's sheets over the chat pushed (shots.sh DECIDE)
