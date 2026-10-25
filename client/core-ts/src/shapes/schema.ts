@@ -2672,10 +2672,10 @@ export const SHAPES: Record<string, Shape> = {
     ["live", "bool", { doc: "The command still runs." }],
   ], { doc: "A login's terminal as its station keeps it (the `machineLoginScreen` topic), in memory only." }),
   Outgoing: struct([
-    ["uploads", opt(vec("ComposerFile")), { doc: "Attachments still uploading in the background before delivery." }],
+    ["uploads", opt(vec("ComposerFile")), { doc: "Its files still going up before it goes, but its images: each drawn as a card saying how far. Absent\nwhen there are none." }],
     ["id", "String"],
     ["text", "String"],
-    ["attachments", vec("Attachment")],
+    ["attachments", vec("Attachment"), { doc: "Its files as its message will draw them, an image still going up among them already (its `upload`; its\n`path` `upload:<id>` until it is up, no station having it yet)." }],
     ["quotes", vec("Quote")],
     ["createdAt", "i64", { client: "I54" }],
     ["state", "String"],
@@ -2685,7 +2685,7 @@ export const SHAPES: Record<string, Shape> = {
     ["time", opt(map("Stamp")), { doc: "Its times in words, by field (`createdAt`, `lastActiveAt`, …)." }],
     ["followed", opt("bool"), { doc: "Another sent soon after it: as a message's `followed` (sending, it says so under the last only)." }],
     ["joined", opt("bool"), { doc: "Sent soon after the viewer's message or outgoing one before it: as a message's `joined`." }],
-    ["waits", opt("String"), { doc: "Sending, why it has not reached the station yet (its station is updating), in words: under it in place of\n正在发送. Absent otherwise." }],
+    ["waits", opt("String"), { doc: "Sending, why it has not reached the station yet (its station is updating, its files still going up), in\nwords: under it in place of 正在发送. Absent otherwise." }],
   ], { doc: "A message sent from here that the chat does not show yet: sending, sent (the station has it as `seq`; its entry not here\nyet) or failed." }),
   Person: struct([
     ["id", "String"],

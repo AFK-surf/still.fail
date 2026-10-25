@@ -1101,17 +1101,37 @@ let error_box : @ui.Style = @ui.css("w=Full px=S8 pt=S1 pb=S2_5")
 let composer_error_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Danger, leading=L5)
 
 ///|
-/// The files of a draft that are up, flying as it is sent, each from its tile (ChatHost.kt sending): from where its
-/// card or its picture is (its box's, keyed composer/file/<id>).
+/// The files of a draft still going up as it is sent (composer.ts take's `uploads`: neither up nor failed, nor a link
+/// or a file named by its path, which go as words).
+fn going_files(w : Writing) -> Array[Json] {
+  w.files.filter(fn(f) {
+    let v = Some(f)
+    field(v, "done") is None &&
+    text(v, "error") == "" &&
+    field(v, "link") is None &&
+    text(field(v, "ref"), "mode") != "path"
+  })
+}
+
+///|
+/// The files of a draft that are up, and its images still going up (drawn where they land from their pictures here:
+/// sent_local), flying as it is sent, each from its tile (ChatHost.kt sending): from where its card or its picture is
+/// (its box's, keyed composer/file/<id>).
 fn flying_files(c : @ui.Ctx, w : Writing) -> Array[FlyingFile] {
+  let going = going_files(w).map(fn(f) { text(Some(f), "id") })
   w.files.filter_map(fn(f) {
     let v = Some(f)
     let id = text(v, "id")
-    match (field(v, "done"), c.rect_of(c.id("composer/file/" + id))) {
-      (Some(done), Some(from)) if text(Some(done), "path") != "" => {
+    let path = match field(v, "done") {
+      Some(done) => text(Some(done), "path")
+      None if going.contains(id) && file_kind(text(v, "name")) == "image" => @sfbase.upload_path(id)
+      None => ""
+    }
+    match c.rect_of(c.id("composer/file/" + id)) {
+      Some(from) if path != "" => {
         let picture = writing_pictures.get(id).unwrap_or("")
         Some({
-          path: text(Some(done), "path"),
+          path,
           from,
           picture,
           face: fn() {
@@ -1140,7 +1160,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   let words = w.text.trim(chars=" \n\t").to_string()
   let up = w.files.filter_map(fn(f) { field(Some(f), "done") })
   let rk = r.station + "\u{1}" + r.session
-  let row = sent_local(rk, Some(v), words, up)
+  let row = sent_local(rk, Some(v), words, up, going=going_files(w))
   // its words take off from the field as they are (before it is emptied), its room held till they let go of it
   let room = @motion.measured(c, "composer/foot").unwrap_or(0.0)
   // its files that are up fly too, each from its tile (ChatHost.kt sending)

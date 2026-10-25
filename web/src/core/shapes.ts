@@ -2246,10 +2246,17 @@ export interface ComposerFile {
  * yet) or failed.
  */
 export interface Outgoing {
-	/** Attachments still uploading in the background before delivery. */
+	/**
+	 * Its files still going up before it goes, but its images: each drawn as a card saying how far. Absent
+	 * when there are none.
+	 */
 	uploads?: ComposerFile[];
 	id: string;
 	text: string;
+	/**
+	 * Its files as its message will draw them, an image still going up among them already (its `upload`; its
+	 * `path` `upload:<id>` until it is up, no station having it yet).
+	 */
 	attachments: Attachment[];
 	quotes: Quote[];
 	createdAt: number;
@@ -2268,8 +2275,8 @@ export interface Outgoing {
 	/** Sent soon after the viewer's message or outgoing one before it: as a message's `joined`. */
 	joined?: boolean;
 	/**
-	 * Sending, why it has not reached the station yet (its station is updating), in words: under it in place of
-	 * 正在发送. Absent otherwise.
+	 * Sending, why it has not reached the station yet (its station is updating, its files still going up), in
+	 * words: under it in place of 正在发送. Absent otherwise.
 	 */
 	waits?: string;
 }

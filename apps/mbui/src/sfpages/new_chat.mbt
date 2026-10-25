@@ -790,6 +790,7 @@ fn new_send(
   }
   let words = d.text.trim(chars=" \n\t").to_string()
   let up = d.files.filter_map(fn(f) { field(Some(f), "done") })
+  let going = going_files(d)
   // (its words where they were typed while the chat is made, its files where their tiles were: carried)
   @sfbase.flight_carry_start(
     c,
@@ -841,7 +842,7 @@ fn new_send(
             // what the page was (新对话) until someone names it, as the core calls it
             let r : ChatRef = { station, session: key, title: @sf.t("web-main.newChat.title"), station_name: name }
             let rk = station + "\u{1}" + key
-            @sfbase.flight_carry_into(d.key, station + ":" + key, rk, sent_local(rk, None, words, up))
+            @sfbase.flight_carry_into(d.key, station + ":" + key, rk, sent_local(rk, None, words, up, going~))
             // what is written meanwhile goes on in the chat's draft (dock.tsx carryTo)
             @sfbase.writing_carry(src, d.key, station + ":" + key)
             fresh.scene = v

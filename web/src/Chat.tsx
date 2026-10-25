@@ -354,17 +354,6 @@ function ToLatest({ station, thread, waiting, onClick }: { station: string; thre
 
 const SENDING_SHOWS_MS = 800;
 
-/**
- * What is sent from here, its images still going up among its files: each in its place and shape at once, drawn from
- * this device (as its message is, once up: `Attachment.upload`), not a card that turns into a picture later.
- */
-function upImages(o: Outgoing): Outgoing {
-  const going = o.uploads?.filter((f) => isImage(f.name)) ?? [];
-  if (!going.length) return o;
-  const shown = going.map((f): Attachment => ({ name: f.name, path: uploadImageKey(f.id), size: f.size, upload: f.id, ...(f.width && f.height ? { width: f.width, height: f.height } : {}) }));
-  return { ...o, attachments: [...(o.attachments ?? []), ...shown] };
-}
-
 /** A message sent from here that the chat does not show yet: on its way, or failed with a way to send it again or drop it. */
 function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: boolean }) {
   const sending = useChatSend();
@@ -383,8 +372,9 @@ function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: 
   const [delay] = useState(() => `${Math.max(0, showsAt - Date.now())}ms`);
   return (
     <MineMessage data-vk={`o:${o.id}`} data-author={t("web-main.chat.you")} data-role="person" data-enter data-unsent={o.state === "failed" || undefined} data-joined={o.joined || undefined}>
-      <MineWords message={upImages(o)} />
-      {o.uploads?.filter((f) => !isImage(f.name)).map((f) => <FileCard key={f.id} file={f} pending={o.state !== "failed"} sent={f.sent} error={o.state === "failed" ? o.error ?? null : null} />)}
+      {/* (its images still going up among its files already, drawn from this device: the core's) */}
+      <MineWords message={o} />
+      {o.uploads?.map((f) => <FileCard key={f.id} file={f} pending={o.state !== "failed"} sent={f.sent} error={o.state === "failed" ? o.error ?? null : null} />)}
       {o.state === "failed"
         // Not sent: said briefly, why in its tip; sending it again or dropping it right beside.
         ? <div className={css.msgUnsent}>
@@ -412,7 +402,7 @@ function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: 
         : o.followed ? null
         // The station took it: sent, its time under it as its message has it, until its message takes its place.
         : o.state === "sent" ? <Time className={conversationCss.msgTime} stamp={o.time?.createdAt} />
-        : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><Spinner inline />{o.uploads?.length ? t("common.uploading") : o.waits ?? t("web-main.chat.sending")}</span>}
+        : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><Spinner inline />{o.waits ?? t("web-main.chat.sending")}</span>}
     </MineMessage>
   );
 }

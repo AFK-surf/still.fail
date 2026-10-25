@@ -1536,6 +1536,39 @@ test("a_sent_message_shows_until_the_chat_has_it", async () => {
   assert.equal(views.local.outboxGet("ws/b", 1, other), undefined);
 });
 
+// An image sent before it was up showed as a file card that turned into its picture once up (mbui, 2026-10-26): it is
+// among the message's files from the first, in its shape, named by its upload; any other file going up stays a card.
+test("an_image_sent_while_going_up_is_among_its_messages_files_at_once", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  t.set(threads("ws/a"), [thread(7, [], t.host.nowMs())]);
+  t.set(pageOf("ws/a", 7), page(5, ["早"], null));
+  await t.read(u, 1);
+  const up = { name: "a.txt", path: "/w/uploads/a.txt", size: 2 };
+  const id = t.views.outboxAdd("ws/a", 7, { text: "看看", attachments: [up], quotes: [], uploads: [
+    { id: "u1", name: "shot.PNG", size: 300, width: 1200, height: 800, sent: 100 },
+    { id: "u2", name: "notes.pdf", size: 50, sent: 10 },
+  ] });
+  await t.read(u, 1);
+  let [o] = u.value.outbox;
+  assert.deepEqual(o.attachments, [up, { name: "shot.PNG", path: "upload:u1", size: 300, width: 1200, height: 800, upload: "u1" }]);
+  assert.deepEqual(o.uploads.map((f: J) => [f.id, f.sent]), [["u2", 10]]);
+  assert.equal(o.waits, "正在上传");
+  // Up: the station's file in its place, still drawn from here (its upload); nothing left going up.
+  t.views.local.outboxUploaded("ws/a", 7, id, [{ name: "shot.PNG", path: "/w/uploads/shot.png", size: 300, width: 1200, height: 800 }, { name: "notes.pdf", path: "/w/uploads/notes.pdf", size: 50 }]);
+  await t.read(u, 1);
+  [o] = u.value.outbox;
+  assert.deepEqual(o.attachments.map((f: J) => [f.path, f.upload]), [["/w/uploads/a.txt", undefined], ["/w/uploads/shot.png", "u1"], ["/w/uploads/notes.pdf", "u2"]]);
+  assert.deepEqual([o.uploads, o.waits], [undefined, undefined]);
+  // Failed, it says so, not that it is going up.
+  const failed = t.views.outboxAdd("ws/a", 7, { text: "再看", attachments: [], quotes: [], uploads: [{ id: "u3", name: "b.jpg", size: 9 }] });
+  t.views.local.outboxState("ws/a", 7, failed, "连不上");
+  await t.read(u, 1);
+  const f = u.value.outbox.find((m: J) => m.id === failed);
+  assert.deepEqual([f.attachments.map((a: J) => a.path), f.uploads, f.waits], [["upload:u3"], undefined, undefined]);
+});
+
 // The UIs keep an outgoing message's id past the core that gave it (a restarted core, the page still up): the Android
 // chat's list crashed on two rows keyed o:out-1 when a new core counted from 1 again (2026-10).
 test("a_message_sent_after_the_core_restarts_is_named_apart_from_one_sent_before", () => {

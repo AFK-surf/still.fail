@@ -64,16 +64,52 @@ fn sent_before(v : ChatView) -> Map[String, Bool] {
 }
 
 ///|
+/// Where a message's image still going up is (its upload's id): no station has it yet (the core's views.ts goingUp).
+pub fn upload_path(id : String) -> String {
+  "upload:" + id
+}
+
+///|
+/// The files still going up with words sent from here (each its id, name, size and an image's size: the uploads of
+/// `composer.take`), as their row draws them until the core's has them (views.ts goingUp): an image among the
+/// message's files, named by its upload; any other a card saying how far (name, size, sent).
+fn going_up(going : Array[Json]) -> (Array[Json], Array[(String, Int, Int)]) {
+  let images : Array[Json] = []
+  let cards : Array[(String, Int, Int)] = []
+  for u in going {
+    let s = Some(u)
+    if preview_kind(text(s, "name")).0 == Some(KImage) {
+      let a : Map[String, Json] = {
+        "name": Json::string(text(s, "name")),
+        "path": Json::string(upload_path(text(s, "id"))),
+        "size": Json::number(number(s, "size")),
+        "upload": Json::string(text(s, "id")),
+      }
+      if number(s, "width") > 0.0 && number(s, "height") > 0.0 {
+        a["width"] = Json::number(number(s, "width"))
+        a["height"] = Json::number(number(s, "height"))
+      }
+      images.push(Json::object(a))
+    } else {
+      cards.push((text(s, "name"), number(s, "size").to_int(), number(s, "sent").to_int()))
+    }
+  }
+  (images, cards)
+}
+
+///|
 /// Words sent from chat `rk` (its station and session; `v` its view, None for one just made) are in its list now,
-/// before the core has them (LocalSent). Its key, for what flies there (flight.mbt).
-pub fn sent_local(rk : String, v : ChatView?, words : String, files : Array[Json]) -> String {
+/// before the core has them (LocalSent), with its files up (`files`) and those still going up (`going`: going_up). Its
+/// key, for what flies there (flight.mbt).
+pub fn sent_local(rk : String, v : ChatView?, words : String, files : Array[Json], going? : Array[Json] = []) -> String {
   local_sent_n.val += 1
   let id = "local:\{local_sent_n.val}"
+  let (images, cards) = going_up(going)
   sending_of(rk).push({
     row: {
       id,
       text: words,
-      attachments: files.map(attachment_of),
+      attachments: (files + images).map(attachment_of),
       quotes: [],
       state: "sending",
       error: "",
@@ -81,8 +117,8 @@ pub fn sent_local(rk : String, v : ChatView?, words : String, files : Array[Json
       followed: false,
       seq: -1.0,
       time: None,
-      waits: "",
-      uploads: [],
+      waits: if going.length() > 0 { @sf.t("common.uploading") } else { "" },
+      uploads: cards,
       created_at: @ui.current().now,
       final: false,
     },
