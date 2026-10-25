@@ -406,8 +406,8 @@ fn pickable(l : FindLine) -> Bool {
 /// The search's list in the box it is given, for workspace `w`: what the words in the field find and what of `offered`
 /// can be done by them; with nothing typed the latest chats where `idle_chats`. `most`: as tall as its lines up to so
 /// much (⌘K's panel), else the box's height. `close`: what the frame does as a line opens (⌘K closes; the phone's page
-/// stays under the chat). ↑ / ↓ choose a line. `width`: how wide the box its lines are laid in is (what a line goes by
-/// to say who, where and when under its words: found_stacked). `at`: where its list stands (a panel's, ⌘K's, as a side column's; the
+/// stays under the chat). ↑ / ↓ choose a line; a line says who, where and when under its words where the box it is
+/// drawn into is narrow (found_stacked). `at`: where its list stands (a panel's, ⌘K's, as a side column's; the
 /// phone's search across the whole screen), its lines in and rounded so.
 pub fn finder_list(
   c : @ui.Ctx,
@@ -417,7 +417,6 @@ pub fn finder_list(
   close : () -> Unit,
   idle_chats? : Bool = false,
   most? : Double,
-  width~ : Double,
   at? : @sf.ListAt = Side,
 ) -> Unit {
   let f = @sf.theme().chat_list
@@ -468,7 +467,7 @@ pub fn finder_list(
     Some(Array(a)) => a.length() > 1
     _ => false
   }
-  let stacked = found_stacked(width)
+  let stacked = found_stacked(c.width)
   let est = lines.fold(init=0.0, fn(h, l) { h + finder_h(l, f.found, stacked) })
   let h : @ui.Size = match most {
     Some(m) => Px(dmin(m, est))

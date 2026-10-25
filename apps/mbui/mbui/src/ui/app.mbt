@@ -164,6 +164,8 @@ let frame_hook : Ref[(() -> Unit)?] = Ref::new(None)
 fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Double {
   c.width = w
   c.height = h
+  c.window_w = w
+  c.window_h = h
   // the theme set for this width (a phone's when narrower than its bound: Ctx::set_theme)
   c.pick_theme()
   if scale != c.scale {

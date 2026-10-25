@@ -21,6 +21,7 @@ fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
 /// The chats' sidebar `width` wide: the band over the lists (sfpages' chats_lists: 全部, 我参与的, 监控中, then 奏 and
 /// 已归档 on its track).
 fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
+  ignore(width)
   let mode = list_mode(src, w)
   if mode != 4 {
     archive_side.landed = false
@@ -46,7 +47,7 @@ fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit 
         c.look(f, { ..@ui.still_look, alpha: 1.0 - away })
       }
     }
-    @sfpages.chats_search(c, src, w, side_top_h(), Side, width)
+    @sfpages.chats_search(c, src, w, side_top_h(), Side)
   })
   |> ignore
 }

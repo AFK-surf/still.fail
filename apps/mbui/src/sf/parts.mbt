@@ -1611,7 +1611,7 @@ pub fn dialog(
     open,
     title,
     description~,
-    w=dmin(w, c.width - dialog_margin),
+    w=dmin(w, c.window_size().0 - dialog_margin),
     close_label="",
     look=fn(c, s, inner) {
       c.box(
@@ -2185,7 +2185,7 @@ pub fn confirm_dialog(
     open,
     title,
     description~,
-    w=dmin(confirm_w, c.width - dialog_margin),
+    w=dmin(confirm_w, c.window_size().0 - dialog_margin),
     outside=false,
     close_label="",
     look=fn(c, s, inner) {

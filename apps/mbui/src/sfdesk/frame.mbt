@@ -207,9 +207,10 @@ fn wide_reset() -> Unit {
 }
 
 ///|
-/// Whether a window this wide is drawn as this frame: laid out Medium or Large (@sf.layout).
+/// Whether the window is drawn as this frame: laid out Medium or Large (@sf.layout), by the window's width (not the
+/// box being built's: asked from within the sidebar too).
 pub fn is_wide(c : @ui.Ctx) -> Bool {
-  !(@sf.layout(c.width) is Small)
+  !(@sf.layout(c.window_size().0) is Small)
 }
 
 ///|
@@ -432,7 +433,8 @@ fn dock(
             if shown && s > 0.0 {
               // (in the bar: what the web's sidebar does there, at once, as the bar starts out)
               wide.in_bar = side_folded()
-              sidebar(c, src, w, side_w)
+              // (what is in it as wide as it: a part that asks how wide its box is is told the sidebar's)
+              c.sized(side_w, c.height, fn() { sidebar(c, src, w, side_w) })
               wide.in_bar = false
             }
           })
