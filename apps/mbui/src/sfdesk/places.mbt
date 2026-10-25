@@ -166,7 +166,7 @@ fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, pick : () -
         if meters.length() > 0 {
           c.box(style=place_meters, flow=true, line_gap=4.0, fn() {
             for m in meters {
-              @settings.meter_chip(c, Some(m), brief=true)
+              @sf.meter_chip(c, Some(m), brief=true)
             }
           })
           |> ignore
@@ -216,13 +216,26 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         let p = field(e, "profile")
         let route = profile_route(e)
         let usable = flag(e, "usable")
-        let trouble = if !usable {
-          @sf.t("web-pages.settings.profiles.hostAway", args=[("station", text(e, "hostName"))])
+        // only what is wrong in colour (ProfilesNav.tsx ProfileRow): one nobody can use now (red), one whose check did
+        // not pass (in its tone)
+        let (trouble, tone) = if !usable {
+          (@sf.t("web-pages.settings.profiles.hostAway", args=[("station", text(e, "hostName"))]), "red")
         } else if text(p, "checkTone") != "green" {
-          text(p, "checkText")
+          (text(p, "checkText"), text(p, "checkTone"))
         } else {
-          ""
+          ("", "")
         }
+        // where it is and who uses it
+        let used = items(p, "usedBy").length()
+        let facts = [
+          text(e, "where"),
+          if used > 0 {
+            @sf.t("web-pages.settings.profiles.usedBy", args=[("n", used.to_string())])
+          } else {
+            ""
+          },
+        ].filter(fn(x) { x != "" })
+        let facts = facts.join(" · ")
         if nav_item(
             c,
             "profiles/" + text(e, "key"),
@@ -232,13 +245,21 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             lines=fn() {
               nav_line(c, fn() {
                 if trouble != "" {
-                  c.text(trouble, style=nav_meta().then(place_trouble)) |> ignore
+                  c.text(trouble, style=nav_meta().then(trouble_ink(tone))) |> ignore
                 }
+                // what is left of its allowance has the line to itself (a key's balance where its provider says
+                // one); else where it is and who uses it, cut where the row runs out
                 let quota = field(p, "quota")
-                if text(quota, "state") == "ok" && items(quota, "windows").length() > 0 {
-                  @settings.quota_chips(c, quota, small=true, gap=4.0)
-                } else if trouble == "" {
-                  c.text(text(e, "where"), style=nav_meta()) |> ignore
+                let ok = text(quota, "state") == "ok"
+                if ok && items(quota, "windows").length() > 0 {
+                  @sf.quota_chips(c, quota, small=true, gap=4.0)
+                } else if ok && text(quota, "creditsText") != "" {
+                  c.text(text(quota, "creditsText"), style=nav_meta()) |> ignore
+                } else {
+                  if trouble != "" && facts != "" {
+                    c.text("·", style=nav_meta()) |> ignore
+                  }
+                  c.text(facts, style=nav_meta().then(place_fill)) |> ignore
                 }
               })
             },
@@ -303,8 +324,31 @@ let place_grow : @ui.Style = @ui.style(w=@sf.grow, clip=true)
 let place_busy : @ui.TextStyle = @ui.text_style(color=AccentText)
 
 ///|
+/// What is wrong, in its tone (ProfilesNav.css.ts trouble): amber, red, or muted (neutral).
+fn trouble_ink(tone : String) -> @ui.TextStyle {
+  match tone {
+    "red" => place_trouble_red
+    "neutral" => place_trouble_neutral
+    _ => place_trouble_amber
+  }
+}
+
+///|
 // kept across runs: a value (no field of it changes)
-let place_trouble : @ui.TextStyle = @ui.text_style(color=Danger)
+let place_trouble_red : @ui.TextStyle = @ui.text_style(color=Danger)
+
+///|
+// kept across runs: a value (no field of it changes)
+let place_trouble_amber : @ui.TextStyle = @ui.text_style(color=Warn)
+
+///|
+// kept across runs: a value (no field of it changes)
+let place_trouble_neutral : @ui.TextStyle = @ui.text_style(color=Muted)
+
+///|
+/// The words that give way first (SidebarList.css.ts fill).
+// kept across runs: a value (no field of it changes)
+let place_fill : @ui.TextStyle = @ui.text_style(w=Cut)
 
 ///|
 /// 使用此账号 (ProfilesNav MachineLoginRow): the accent's words.

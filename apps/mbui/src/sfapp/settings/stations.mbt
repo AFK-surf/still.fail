@@ -143,7 +143,7 @@ fn station_body(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
         c.box(style=seen(peek_meters, host is Some(_), faded), fn() {
           for m in items(host, "meters") {
             if text(Some(m), "level") != "ok" {
-              meter_chip(c, Some(m))
+              @sf.meter_chip(c, Some(m))
             }
           }
         })
@@ -253,19 +253,6 @@ fn clamp(n : Int) -> Int {
 }
 
 ///|
-/// A machine's CPU, memory or disk (components.tsx MeterChip): its mark and what is left, filled as far as is used;
-/// `brief`, the figure alone with its unit's first letter, small (a station's row).
-pub fn meter_chip(c : @ui.Ctx, m : Json?, brief? : Bool = false) -> Unit {
-  let unit = text(m, "unit")
-  let words = if brief && text(m, "big") != "" {
-    text(m, "big") + (if unit == "%" || unit == "" { unit } else { unit.view(end_offset=1).to_string() })
-  } else {
-    text(m, "remaining")
-  }
-  @sf.fill_chip(c, 100 - clamp(count(m, "left")), text(m, "level"), text(m, "short"), words, small=brief)
-}
-
-///|
 /// A machine's CPU, memory and disk (components.tsx MeterChips), each a chip (MeterChip) with what it is in its tip;
 /// `alerts`: only those running low. 8 apart.
 pub fn meter_chips(c : @ui.Ctx, key : String, meters : Array[Json], alerts? : Bool = false) -> Unit {
@@ -277,7 +264,7 @@ pub fn meter_chips(c : @ui.Ctx, key : String, meters : Array[Json], alerts? : Bo
       }
       let id = c.id(key + "/meter/" + text(mv, "label"))
       c.box(id~, taps=false, fn() {
-        meter_chip(c, mv)
+        @sf.meter_chip(c, mv)
       })
       |> ignore
       let note = text(mv, "note")

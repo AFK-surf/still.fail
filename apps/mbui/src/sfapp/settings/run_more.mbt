@@ -776,7 +776,7 @@ fn account_list(c : @ui.Ctx, key : String, accounts : Array[Json], runtime : Str
               "",
               picked == id,
               leading=fn() { provider_mark(c, if own == "" { runtime } else { own }, text(av, "kind"), 18.0, text(av, "mark")) },
-              trailing=fn() { quota_chips(c, field(av, "quota")) },
+              trailing=fn() { @sf.quota_chips(c, field(av, "quota")) },
             ) {
             pick(Some(id))
           }

@@ -488,7 +488,7 @@ fn station_profile_row(c : @ui.Ctx, core : Core, address : String, p : Json?) ->
       tail=fn() {
         let quota = field(p, "quota")
         if text(quota, "state") == "ok" {
-          @settings.quota_chips(c, quota, small=true)
+          @sf.quota_chips(c, quota, small=true)
         }
         if text(p, "checkTone") != "green" && text(p, "checkText") != "" {
           @sf.pill(
