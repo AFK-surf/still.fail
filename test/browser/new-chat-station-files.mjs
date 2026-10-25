@@ -1,6 +1,6 @@
-// A new chat's one draft, its station picked anew: its words stay, and its files go up again to the station picked; the
-// real useDraft against a core keeping each draft's versions on its own (as client/core-ts/src/composer.ts does). No
-// hosted station.
+// A new chat's one draft, its station picked anew: its words and its file stay as they are, and it is taken to the
+// station it goes to (where the core sends a new chat's files up: composer.ts); the real useDraft against a core keeping
+// each draft's versions on its own. No hosted station.
 import assert from 'node:assert/strict';
 import { writeFile, rm } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -23,7 +23,9 @@ const blank = () => ({text:'',files:[] as any[],quotes:[],rev:0,version:0,ready:
 const drafts = new Map<string, any>();
 const listeners = new Map<string, Set<any>>();
 const sent:any[] = [];
+const takes:any[] = [];
 (window as any).sent = sent;
+(window as any).takes = takes;
 const of = (key:string) => { if (!drafts.has(key)) drafts.set(key, blank()); return drafts.get(key); };
 // Each draft counts its own versions, as the core's do.
 const emit = (key:string) => { const v = of(key); drafts.set(key, {...v, version: v.version + 1}); listeners.get(key)?.forEach((f:any) => f({...drafts.get(key)})); };
@@ -45,7 +47,7 @@ setCore({
     if (name === 'composer.add') return { version: set(key, {files: [...of(key).files, ...p.files.map(({blob, ...f}:any) => ({...f, done: {name: f.name, path: '/' + p.station + '/uploads/' + f.name, size: f.size}}))]}) };
     if (name === 'composer.remove') return { version: set(key, {files: of(key).files.filter((f:any) => f.id !== p.id)}) };
     if (name === 'composer.error') return { version: set(key, {error: p.error}) };
-    if (name === 'composer.take') return { version: set(key, {text: '', files: [], quotes: [], rev: of(key).rev + 1}) };
+    if (name === 'composer.take') { takes.push(p.station); return { version: set(key, {text: '', files: [], quotes: [], rev: of(key).rev + 1}) }; }
     if (name.startsWith('composer.')) return { version: set(key, {}) };
     if (name === 'chat.send') { sent.push(p); return new Promise(() => {}); }
     return {};
@@ -76,19 +78,18 @@ createRoot(document.getElementById('root')!).render(<MemoryRouter><ToastProvider
   await settle();
   for (const words of ['这', '这是', '这是什么', '这是什么东西']) { await page.evaluate((w) => window.draft.setText(w), words); await settle(); }
   assert.equal(await page.locator('[data-files]').textContent(), 'shot.png@/ws/mini/uploads/shot.png');
-  // The chooser moved to pengx17: the words stay, the file goes up there again.
+  // The chooser moved to pengx17: the words and the file stay, nothing added again.
   await page.evaluate(() => window.toStation('ws/pengx17'));
   await settle();
   assert.equal(await page.locator('[data-text]').textContent(), '这是什么东西', 'the words stay');
-  assert.equal(await page.locator('[data-files]').textContent(), 'shot.png@/ws/pengx17/uploads/shot.png', 'up again on pengx17');
+  assert.equal(await page.locator('[data-files]').textContent(), 'shot.png@/ws/mini/uploads/shot.png', 'the file as it was');
   await page.evaluate(() => { window.draft.send(async () => 7); });
   await page.waitForFunction(() => window.sent.length === 1);
   const message = await page.evaluate(() => window.sent[0]);
   assert.equal(message.text, '这是什么东西');
-  assert.deepEqual(message.attachments.map((a) => a.path), ['/ws/pengx17/uploads/shot.png'], "pengx17's own, none of mini's");
-  assert.deepEqual(message.uploads ?? [], []);
+  assert.deepEqual(await page.evaluate(() => window.takes), ['ws/pengx17'], 'taken to the station it goes to');
   assert.deepEqual(errors, []);
-  console.log("PASS: a new chat's station picked anew keeps its words, and its file goes up again to the station picked");
+  console.log("PASS: a new chat's station picked anew keeps its words and its file, and it is taken to the station picked");
 } finally {
   await browser?.close();
   await server?.close();

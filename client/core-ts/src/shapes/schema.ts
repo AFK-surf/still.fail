@@ -1272,10 +1272,11 @@ export const SHAPES: Record<string, Shape> = {
     ["height", opt("i64"), { client: opt("I54") }],
     ["done", opt("Attachment"), { doc: "Up: as the station keeps it (in no chat until a message takes it)." }],
     ["error", opt("String"), { said: true }],
+    ["waits", opt("bool"), { doc: "A new chat's, not gone up: it goes up with its message, to the station the message goes to." }],
     ["pasted", opt("PastedInfo")],
     ["ref", opt("ComposerRef"), { doc: "Dragged in from where it is (a station's files, or Finder on a machine that is a station)." }],
     ["link", opt("ComposerLink"), { doc: "A link shared into the chat (docs/share-in.md): drawn as a file is, sent as words after what is written\n(its title on a line, then the link); nothing goes up. Removed as a file is (`composer.remove`)." }],
-  ], { doc: "A file in what is being written: going up, up, or failed; or a link." }),
+  ], { doc: "A file in what is being written: waiting to go with its message (a new chat's), going up, up, or failed; or a link." }),
   ComposerLink: struct([
     ["url", "String"],
     ["title", opt("String"), { said: true, doc: "What the app that shared it called it." }],

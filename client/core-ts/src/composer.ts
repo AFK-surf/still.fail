@@ -1,9 +1,10 @@
 // What is being written in a chat, as the core keeps it (the `composer` topic, by the draft's key: `<station>:<chat>`,
 // `new:<workspace>` the workspace's new chat, whichever station it is to run on, `decision:…` a reply to one): its
-// words, the passages quoted, the files going up to the station (the core uploads them, and says how far), whether it
-// can be sent, and what went wrong. Each chat has its own while the page shows another; what is in it is kept on the
-// device as the chat's draft (the `draft` topic), and read back from there the first time it is asked for. The pages
-// only draw it and say what was done.
+// words, the passages quoted, the files going up to the station (the core uploads them, and says how far; a new
+// chat's wait here and go up with its first message, to the station it goes to), whether it can be sent, and what went
+// wrong. Each chat has its own while the page shows another; what is in it is kept on the device as the chat's draft
+// (the `draft` topic), and read back from there the first time it is asked for. The pages only draw it and say what was
+// done.
 //
 // The words are typed in the page, which has them at once: what it sends (`composer.text`) comes back in the topic's
 // `text` without the page taking it again; the core's own words for it (read back, taken to send, put back, carried
@@ -30,12 +31,13 @@ type J = any;
 /// file that says it goes with it (`ComposerFile.quote`).
 export type ComposerQuote = { id: string; author: string; text: string; comment: string; ts?: string; role?: string };
 
-/// A file in what is written: going up (`sent` of `size`), up (`done`, as the station keeps it) or failed (`error`).
-/// `pasted`: long words pasted, kept as a file (what the page says of them). `ref`: one dragged in from where it is.
+/// A file in what is written: going up (`sent` of `size`), up (`done`, as the station keeps it) or failed (`error`);
+/// a new chat's waiting (`waits`) to go up with its message, to the station the message goes to (`take`). `pasted`:
+/// long words pasted, kept as a file (what the page says of them). `ref`: one dragged in from where it is.
 /// `link`: a link shared into the chat (share-in.ts), drawn as a file is and sent as words: nothing goes up.
 /// `quote`: the quote it is the picture of (an image of a message quoted, a mark's screenshot): shown in its card, not
 /// among the files, and out of the draft with it; the message names it in that quote (`file`).
-export type ComposerFile = { id: string; name: string; size: number; sent?: number; width?: number; height?: number; done: J | null; error: string | null; pasted?: J; ref?: ComposerRef; link?: ComposerLink; quote?: string };
+export type ComposerFile = { id: string; name: string; size: number; sent?: number; width?: number; height?: number; done: J | null; error: string | null; waits?: true; pasted?: J; ref?: ComposerRef; link?: ComposerLink; quote?: string };
 
 /// A link in what is written, as a file is: where it goes, what the app that shared it called it, and its site.
 export type ComposerLink = { url: string; title?: string; site?: string };
@@ -64,6 +66,12 @@ function upOnce(files: ComposerFile[]): J[] {
 
 /// Nothing of it goes up: named by its path, or a link.
 const named = (f: ComposerFile) => f.ref?.mode === "path" || f.link !== undefined;
+
+/// A new chat's draft: where it runs is known only as its first message goes, so its files wait for that.
+const fresh = (key: string) => key.startsWith("new:");
+
+/// Not waiting any more: going up.
+const going = ({ waits: _, ...f }: ComposerFile): ComposerFile => f;
 
 /// A file or folder dragged in from where it is (a station's files, or Finder on a machine that is a station): named by
 /// its path (`mode: "path"`: the message says which station has it and where, nothing goes up), or sent (`file`: it goes
@@ -144,8 +152,8 @@ export class Composers {
   #uploads = new Map<string, { station: string; file: FileIn | null; done: Deferred.Deferred<J, CoreError>; error: boolean }>();
   /// Files named by their path, kept to send up should they be switched to files (`mode`), by id.
   #held = new Map<string, { station: string; file: FileIn }>();
-  /// A new chat's files as they were handed over, by id, until they leave its draft: its station may be changed under
-  /// them, and its message takes each up again from here to the station it goes to (`take`).
+  /// A new chat's files as they were handed over, by id, until they leave its draft: each goes up from here to the
+  /// station its message goes to (`take`), again should that change once it has (the draft put back).
   #sources = new Map<string, FileIn>();
   /// Images' sizes as read here, by upload id, until the upload is let go: a message the page sent before it heard of
   /// one is given it all the same (`sizeOf`).
@@ -161,7 +169,7 @@ export class Composers {
   /// The topic's value: what is written in `key`, read from the chat's draft the first time.
   value(key: string): unknown {
     const s = this.#state(key);
-    const uploading = s.files.some((f) => !f.done && !f.error && !named(f));
+    const uploading = s.files.some((f) => !f.done && !f.error && !f.waits && !named(f));
     const ready = (s.text.trim() !== "" || s.files.some((f) => !f.error) || s.quotes.length > 0) && !s.starting && !s.files.some((f) => f.pasted && f.error);
     // Nothing said for what is not (yet): a file not up has no `done`, one not failed no `error`.
     const shown = ({ done, error, quote: _, ...f }: ComposerFile) => ({ ...f, ...(done !== null ? { done } : {}), ...(error !== null ? { error } : {}) });
@@ -268,6 +276,12 @@ export class Composers {
     s.text = typeof kept.text === "string" ? kept.text : "";
     if (s.text) s.rev = 1;
     s.files = (Array.isArray(kept.files) ? kept.files : []).filter(isObject).map((f: J) => ({ id: localId("kept"), name: String(f.name ?? ""), size: Number(f.size ?? 0), done: f, error: null }));
+    // A new chat's waiting, by the id its bytes are kept on the device under (`#wait`).
+    for (const w of Array.isArray(kept.waiting) ? kept.waiting : []) {
+      if (!isObject(w) || typeof w.id !== "string") continue;
+      const size = typeof w.width === "number" && typeof w.height === "number" ? { width: w.width, height: w.height } : {};
+      s.files.push({ id: w.id, name: String(w.name ?? ""), size: Number(w.size ?? 0), ...size, done: null, error: null, waits: true, ...(isObject(w.pasted) ? { pasted: w.pasted } : {}) });
+    }
     s.quotes = (Array.isArray(kept.quotes) ? kept.quotes : []).filter(isObject).map((q: J) => {
       const quote = quoteOf(q, localId("kept"));
       // Its picture: the file it names, each quote its own (the same image quoted twice is a file each).
@@ -285,7 +299,8 @@ export class Composers {
 
   #draft(s: State) {
     const links = s.files.flatMap((f) => (f.link ? [f.link] : []));
-    return { text: s.text, quotes: s.quotes.map((q) => sentQuote(q, s.files)), files: upOnce(s.files), ...(links.length ? { links } : {}), ...(s.id ? { id: s.id } : {}) };
+    const waiting = s.files.filter((f) => f.waits).map(({ id, name, size, width, height, pasted }) => ({ id, name, size, ...(width && height ? { width, height } : {}), ...(pasted ? { pasted } : {}) }));
+    return { text: s.text, quotes: s.quotes.map((q) => sentQuote(q, s.files)), files: upOnce(s.files), ...(waiting.length ? { waiting } : {}), ...(links.length ? { links } : {}), ...(s.id ? { id: s.id } : {}) };
   }
 
   /// The draft's name, given the first time it is asked for (`State.id`): the core's, as its other names are (random:
@@ -305,7 +320,7 @@ export class Composers {
     if (!at || s.db !== this.#db(key)) return;
     const topic = { topic: "draft", station: at[0], chat: at[1] };
     const draft = this.#draft(s);
-    if (!draft.text.trim() && draft.quotes.length === 0 && draft.files.length === 0 && !draft.links) this.#inner.data.forgetTopic(topic);
+    if (!draft.text.trim() && draft.quotes.length === 0 && draft.files.length === 0 && !draft.waiting && !draft.links) this.#inner.data.forgetTopic(topic);
     else if (immediate) this.#inner.data.set(topic, draft, false);
     else this.#inner.data.setSoon(topic, draft);
   }
@@ -320,7 +335,7 @@ export class Composers {
     const s = this.#state(draftKey(station, chat));
     this.#id(s);
     const draft = this.#draft(s);
-    if (!draft.text.trim() && draft.quotes.length === 0 && draft.files.length === 0) draft.text = "";
+    if (!draft.text.trim() && draft.quotes.length === 0 && draft.files.length === 0 && !draft.waiting) draft.text = "";
     return draft;
   }
 
@@ -449,11 +464,15 @@ export class Composers {
   }
 
   /// Files picked, pasted or dropped: each goes up to `station` at once, and waits there in no chat until a message
-  /// takes it. Too big, it says so and does not go.
+  /// takes it; a new chat's waits here, to go up with its message (`#wait`). Too big, it says so and does not go.
   add(key: string, station: string, files: FileIn[]): number {
     const s = this.#state(key);
-    for (const f of files) {
-      if (key.startsWith("new:")) this.#sources.set(f.id, f);
+    for (let f of files) {
+      if (fresh(key)) {
+        // (one of a station's drive: of the one it was dragged from, whichever the message goes to)
+        if (f.drive && f.drive.station === undefined) f = { ...f, drive: { ...f.drive, station } };
+        this.#sources.set(f.id, f);
+      }
       const ref = f.ref ? { ...f.ref, mode: f.ref.dir && !zippable(f, station) ? "path" as const : f.ref.mode } : undefined;
       if (ref?.mode === "path") {
         // Named by its path: nothing goes up unless it is switched to a file.
@@ -463,26 +482,31 @@ export class Composers {
       }
       const tooBig = f.size > MAX_FILE;
       const quote = f.quote !== undefined && s.quotes.some((q) => q.id === f.quote) ? { quote: f.quote } : {};
-      s.files = [...s.files, { id: f.id, name: f.name, size: f.size, done: null, error: tooBig ? t("core-misc.composer.too_big") : null, ...(f.pasted ? { pasted: f.pasted } : {}), ...(ref ? { ref } : {}), ...quote }];
-      if (!tooBig) this.#upload(key, station, f);
-      else if (f.blob instanceof FileSource) f.blob.close();
+      const waits = !tooBig && fresh(key) ? { waits: true as const } : {};
+      s.files = [...s.files, { id: f.id, name: f.name, size: f.size, done: null, error: tooBig ? t("core-misc.composer.too_big") : null, ...waits, ...(f.pasted ? { pasted: f.pasted } : {}), ...(ref ? { ref } : {}), ...quote }];
+      if (tooBig) { if (f.blob instanceof FileSource) f.blob.close(); }
+      else if (fresh(key)) this.#wait(f);
+      else this.#upload(key, station, f);
     }
     return this.#changed(key, s);
   }
 
   /// A file dragged in, named by its path or sent: switched to a file, it goes up (once: back to a path and to a file
-  /// again, what went up is taken).
+  /// again, what went up is taken); a new chat's waits to go with its message.
   mode(key: string, id: string, mode: "path" | "file"): number {
     const s = this.#state(key);
     const f = s.files.find((x) => x.id === id);
     const held = this.#held.get(id);
     if (!f?.ref || f.ref.mode === mode || (mode === "file" && f.ref.dir && !(held && zippable(held.file, held.station)))) return s.version;
     const ref = { ...f.ref, mode };
-    s.files = s.files.map((x) => (x.id === id ? { ...x, ref } : x));
+    s.files = s.files.map((x) => (x.id === id ? (mode === "path" ? going({ ...x, ref }) : { ...x, ref }) : x));
     if (mode === "file" && !this.#uploads.has(id)) {
       if (!held) s.files = s.files.map((x) => (x.id === id ? { ...x, error: t("core-misc.composer.upload_missing", { name: x.name }) } : x));
       else if (f.size > MAX_FILE) s.files = s.files.map((x) => (x.id === id ? { ...x, error: t("core-misc.composer.too_big") } : x));
-      else this.#upload(key, held.station, held.file);
+      else if (fresh(key)) {
+        s.files = s.files.map((x) => (x.id === id ? { ...x, waits: true } : x));
+        this.#wait(this.#sources.get(id) ?? held.file);
+      } else this.#upload(key, held.station, held.file);
     }
     return this.#changed(key, s);
   }
@@ -518,16 +542,7 @@ export class Composers {
     const id = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
     // Gone up again to another station since (a new chat's, `take`): what this one does says nothing of the file.
     const replaced = () => this.#uploads.has(f.id) && this.#uploads.get(f.id) !== upload;
-    const change = (patch: Partial<ComposerFile>) => {
-      if (replaced()) return;
-      for (const [k, s] of this.#all) {
-        if (s.db !== this.#db(k)) continue;
-        if (s.taken?.files.some((x) => x.id === f.id)) s.taken.files = s.taken.files.map((x) => x.id === f.id ? { ...x, ...patch } : x);
-        if (!s.files.some((x) => x.id === f.id)) continue;
-        s.files = s.files.map((x) => (x.id === f.id ? { ...x, ...patch } : x));
-        this.#changed(k, s, true, false);
-      }
-    };
+    const change = (patch: Partial<ComposerFile>) => { if (!replaced()) this.#patch(f.id, patch); };
     // How far it has gone: in the composer, and in a message sent before it is up (one sent later starts from here). Said
     // as the bytes go, a step at a time (a big file's at most some 200 times: a waiting message is kept on each).
     const step = Math.max(SENT_STEP, Math.ceil(f.size / 200));
@@ -556,44 +571,17 @@ export class Composers {
       );
       return;
     }
-    // What its bytes say first (a few of them, at once: imageSize.ts); an image is decoded only when they do not say,
-    // and only where this can (Hermes cannot). The desktop's and the phone's cores have the file as a FileSource
-    // (file-port.ts, the host's), read a part at a time: the same way here.
-    const decoded = (b: Blob | FileSource) => typeof createImageBitmap === "function" && b.type.startsWith("image/")
-      ? (isBlob(b) ? Promise.resolve(b) : Promise.all(Array.from({ length: Math.ceil(b.size / PART) }, (_, i) => b.slice(i * PART, (i + 1) * PART).arrayBuffer()))
-        .then((parts) => new Blob(parts, { type: b.type })))
-        .then((whole) => createImageBitmap(whole)).then((m) => { const s = { width: m.width, height: m.height }; m.close(); return s; })
-      : null;
-    const shown = (b: Blob | FileSource) => shownSize((start, end) => b.slice(start, end).arrayBuffer().then((part) => new Uint8Array(part)), b.size);
     // A file from here kept whole on the device, with what it is, read through beside its going up (not as it goes: the
     // app ended part way up, what had gone was all there was, and its message failed all the same, pengxiao
     // 2026-10-25): its message goes on from it should the app end before it is sent (`fromKept`). Kept already when it
     // is that; no more once it is up or let go.
     const noted = { station, name: f.name, size: f.size, type: f.blob?.type ?? "" };
     const keeping = f.blob !== undefined && f.kept !== true && f.size > 0 && f.size <= KEEP_OUTBOX_MOST;
-    if (keeping) {
-      const source = f.blob!;
-      const going = () => this.#uploads.get(f.id) === upload && upload.file !== null;
-      inner.runner.fork(Effect.gen(function* () {
-        yield* inner.driveKept.noteUpload(f.id, noted);
-        for (let at = 0; at < f.size && going(); at += PART) {
-          const bytes = yield* Effect.orElseSucceed(Effect.tryPromise({ try: () => source.slice(at, at + PART).arrayBuffer(), catch: asCoreError }), () => null);
-          if (bytes === null || !going()) return;
-          yield* inner.driveKept.keep(outboxKeptId(f.id), "outbox", 0, f.size, noted.type, at, new Uint8Array(bytes));
-        }
-      }));
-    }
+    if (keeping) this.#keepWhole(f, noted, () => this.#uploads.get(f.id) === upload && upload.file !== null);
     const kept = keeping || f.kept === true;
-    const sizing: Promise<{ width: number; height: number } | null> = (isBlob(blob) || blob instanceof FileSource) && (blob.type.startsWith("image/") || blob.type.startsWith("video/"))
-      ? shown(blob).then((s) => s ?? decoded(blob)).then((s) => {
-        if (s) {
-          if (this.#uploads.get(f.id) === upload) this.#sizes.set(f.id, s);
-          change(s);
-          inner.views.local.uploadChanged(f.id, s);
-        }
-        return s;
-      }, () => null)
-      : Promise.resolve(null);
+    // (read once: a new chat's was as it was added)
+    const sizing: Promise<{ width: number; height: number } | null> = this.#sizes.has(f.id) ? Promise.resolve(this.#sizes.get(f.id)!)
+      : (isBlob(blob) || blob instanceof FileSource) ? this.#measure(f.id, blob) : Promise.resolve(null);
     const run = Effect.gen(function* () {
       const addr = yield* Effect.try({ try: () => StationAddr.parse(station), catch: asCoreError });
       let have = 0;
@@ -656,11 +644,75 @@ export class Composers {
     void key;
   }
 
-  /// Outgoing messages hold file ids, independently of the composer or the page that submitted them.
-  /// After a core restart the source Blob is gone: fail visibly rather than sending an incomplete message.
+  /// What is said of a file, in whichever composer it is in by then (and in what was taken of it, to be put back).
+  #patch(id: string, patch: Partial<ComposerFile>): void {
+    for (const [k, s] of this.#all) {
+      if (s.db !== this.#db(k)) continue;
+      if (s.taken?.files.some((x) => x.id === id)) s.taken.files = s.taken.files.map((x) => x.id === id ? { ...x, ...patch } : x);
+      if (!s.files.some((x) => x.id === id)) continue;
+      s.files = s.files.map((x) => (x.id === id ? { ...x, ...patch } : x));
+      this.#changed(k, s, true, false);
+    }
+  }
+
+  /// An image's or a film's size, read from what its bytes say first (a few of them, at once: imageSize.ts), decoded
+  /// only when they do not say, and only where this can (Hermes cannot): every page holds its place from the first (the
+  /// outbox's row too, before it is up, even when it was sent before its size was read), and it travels with the file.
+  /// The desktop's and the phone's cores have the file as a FileSource (file-port.ts, the host's), read a part at a time:
+  /// the same way here.
+  #measure(id: string, b: Blob | FileSource): Promise<{ width: number; height: number } | null> {
+    if (!b.type.startsWith("image/") && !b.type.startsWith("video/")) return Promise.resolve(null);
+    const decoded = () => typeof createImageBitmap === "function" && b.type.startsWith("image/")
+      ? (isBlob(b) ? Promise.resolve(b) : Promise.all(Array.from({ length: Math.ceil(b.size / PART) }, (_, i) => b.slice(i * PART, (i + 1) * PART).arrayBuffer()))
+        .then((parts) => new Blob(parts, { type: b.type })))
+        .then((whole) => createImageBitmap(whole)).then((m) => { const s = { width: m.width, height: m.height }; m.close(); return s; })
+      : null;
+    return shownSize((start, end) => b.slice(start, end).arrayBuffer().then((part) => new Uint8Array(part)), b.size).then((s) => s ?? decoded()).then((s) => {
+      // (not for one let go meanwhile)
+      if (s && (this.#uploads.has(id) || this.#sources.has(id))) {
+        this.#sizes.set(id, s);
+        this.#patch(id, s);
+        this.#inner.views.local.uploadChanged(id, s);
+      }
+      return s;
+    }, () => null);
+  }
+
+  /// A file's bytes kept whole on the device, a part at a time while `still`, with what it is (`noted`): what its
+  /// message goes up from should the app end first (`#fromKept`).
+  #keepWhole(f: FileIn, noted: { station: string; name: string; size: number; type: string }, still: () => boolean): void {
+    const inner = this.#inner;
+    const source = f.blob!;
+    inner.runner.fork(Effect.gen(function* () {
+      yield* inner.driveKept.noteUpload(f.id, noted);
+      for (let at = 0; at < f.size && still(); at += PART) {
+        const bytes = yield* Effect.orElseSucceed(Effect.tryPromise({ try: () => source.slice(at, at + PART).arrayBuffer(), catch: asCoreError }), () => null);
+        if (bytes === null || !still()) return;
+        yield* inner.driveKept.keep(outboxKeptId(f.id), "outbox", 0, f.size, noted.type, at, new Uint8Array(bytes));
+      }
+    }));
+  }
+
+  /// A new chat's file waiting for its message: kept whole on the device while it is in the draft, for no station yet
+  /// (its draft comes back with it should the app end; one too big to keep is added again), its size read.
+  #wait(f: FileIn): void {
+    const blob = f.blob;
+    if (!blob) return;
+    if (f.size > 0 && f.size <= KEEP_OUTBOX_MOST) this.#keepWhole(f, { station: "", name: f.name, size: f.size, type: blob.type }, () => this.#sources.get(f.id)?.blob === blob);
+    void this.#measure(f.id, blob);
+  }
+
+  /// Outgoing messages hold file ids, independently of the composer or the page that submitted them: one a new chat's
+  /// draft holds still goes up now, to the message's station. After a core restart the source Blob is gone: fail visibly
+  /// rather than sending an incomplete message.
   uploaded(station: string, files: { id: string; name: string }[], retry = false): Effect.Effect<J[], CoreError> {
     return Effect.forEach(files, (f) => Effect.suspend(() => {
       let upload = this.#uploads.get(f.id);
+      const source = this.#sources.get(f.id);
+      if (!upload && source) {
+        this.#upload("", station, { ...source, kept: true });
+        upload = this.#uploads.get(f.id)!;
+      }
       if (!upload || upload.station !== station) return this.#fromKept(station, f);
       if (retry && upload.error && upload.file) {
         this.#upload("", station, upload.file);
@@ -677,8 +729,9 @@ export class Composers {
     const missing = new CoreError("upload", t("core-misc.composer.upload_missing", { name: f.name }));
     return Effect.gen({ self: this }, function* () {
       const noted = yield* inner.driveKept.uploadNoted(f.id);
-      if (!isObject(noted) || noted.station !== station || typeof noted.size !== "number") return yield* Effect.fail(missing);
-      if (noted.done !== undefined && noted.done !== null) return noted.done as J;
+      // (a new chat's kept as it waited: for whichever station its message goes to)
+      if (!isObject(noted) || (noted.station !== station && noted.station !== "") || typeof noted.size !== "number") return yield* Effect.fail(missing);
+      if (noted.done !== undefined && noted.done !== null && noted.station === station) return noted.done as J;
       const id = outboxKeptId(f.id);
       const size = noted.size;
       const type = typeof noted.type === "string" ? noted.type : "";
@@ -729,11 +782,11 @@ export class Composers {
   /// What is written, taken to be sent (the words trimmed), the composer left empty; `restore` puts it back. Its files
   /// as they are at this moment, each one way: up, as the station keeps it (`attachments`), or still going up
   /// (`uploads`: its message waits for it). The page sends them as said here, not as it last drew them: one up in
-  /// between went as both, and twice. `station`, the one the message goes to: a new chat's file that went up to another
-  /// (its station changed under it) goes up there again, and is one still going up.
+  /// between went as both, and twice. `station`, the one the message goes to: a new chat's files go up there now, each a
+  /// file still going up.
   take(key: string, station: string | null = null): { text: string; attachments: J[]; quotes: J[]; uploads: { id: string; name: string; size: number }[]; version: number } {
     const s = this.#state(key);
-    if (station !== null) s.files = s.files.map((f) => this.#again(f, station));
+    if (station !== null) s.files = s.files.map((f) => this.#toward(f, station));
     const taken = { text: s.text, quotes: s.quotes, files: s.files, id: this.#id(s) };
     s.taken = taken;
     // what is written next is another draft
@@ -759,17 +812,21 @@ export class Composers {
     };
   }
 
-  /// A new chat's file up, or going up, to another station than `station`: sent up there again from what it was read
-  /// from (one of the first station's drive, read from there).
-  #again(f: ComposerFile, station: string): ComposerFile {
+  /// A new chat's file as its message goes to `station`: one waiting goes up there now (after a restart, from its bytes
+  /// kept here); one up, or going up, to another (its station changed as the draft was put back) up there again.
+  #toward(f: ComposerFile, station: string): ComposerFile {
+    if (named(f)) return f;
     const kept = this.#sources.get(f.id);
+    if (f.waits) {
+      if (kept) this.#upload("", station, { ...kept, kept: true });
+      else this.#inner.runner.fork(Effect.ignore(this.#fromKept(station, f)));
+      return going(f);
+    }
     const upload = this.#uploads.get(f.id);
-    if (!kept || !upload || upload.station === station || named(f)) return f;
-    const source = kept.drive && kept.drive.station === undefined ? { ...kept, drive: { ...kept.drive, station: upload.station } } : kept;
-    this.#sources.set(f.id, source);
-    this.#upload("", station, source);
-    const { sent: _, ...going } = f;
-    return { ...going, done: null, error: null };
+    if (!kept || !upload || upload.station === station) return f;
+    this.#upload("", station, { ...kept, kept: true });
+    const { sent: _, ...rest } = f;
+    return { ...rest, done: null, error: null };
   }
 
   /// What was taken comes back (a chat that could not be made, a message never sent), saying why; with `unlessWritten`,

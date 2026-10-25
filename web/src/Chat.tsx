@@ -35,7 +35,7 @@ import type { Align, Item } from "./virtual/model.ts";
 import { animate, arrive, EASE_OUT, ENTER, follower, glider, motionMs, moveState, type AnimationPlaybackControls, type Follower } from "@stillfail/ui/motion.ts";
 import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
-import { DraftKey, MAX_FILE, offerToDraft, pathWords, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
+import { DraftKey, goingUp, MAX_FILE, offerToDraft, pathWords, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
 import { carriesDrive, droppedFrom, droppedFromFinder, droppedOf, useDropOver } from "./drive/drag.ts";
 import { useLanding } from "./drive/flight.ts";
 import { useThisMachine } from "./thisMachine.ts";
@@ -2181,7 +2181,7 @@ function RefCard({ file: f, draft, onRemove, onTap }: { file: Pending; draft: Dr
   const ref = f.ref!;
   const station = useStation();
   const asFile = ref.mode === "file";
-  const pending = asFile && !f.done && !f.error;
+  const pending = asFile && goingUp(f);
   const going = f.sent !== undefined && f.size > 0
     ? t("web-main.file.uploadingPart", { percent: Math.floor((f.sent / f.size) * 100), size: fileSize(f.size) })
     : t("common.uploading");
@@ -2270,9 +2270,9 @@ function PendingFile({ file: f, onRemove, onRestore, onRetry }: { file: Pending;
   const shown: Attachment = { name: f.name, path: `draft:${f.id}`, size: f.size };
   if (f.pasted) {
     // Cut short (a failure said at length), all of it on hover.
-    const meta = f.error ?? (!f.done ? t("common.uploading") : t("web-main.composer.pasteAttachment", { count: f.pasted.characters.toLocaleString("en-US") }));
+    const meta = f.error ?? (goingUp(f) ? t("common.uploading") : t("web-main.composer.pasteAttachment", { count: f.pasted.characters.toLocaleString("en-US") }));
     return <><span className={css.fileCard} data-card="" data-error={f.error ? true : undefined}>
-      <FileTile name={f.name} progress={!f.done && !f.error ? (f.sent ?? 0) / Math.max(1, f.size) : undefined} error={!!f.error} />
+      <FileTile name={f.name} progress={goingUp(f) ? (f.sent ?? 0) / Math.max(1, f.size) : undefined} error={!!f.error} />
       <span className={css.fileCardText}>
         <button type="button" className={css.pasteCardTitle} onClick={(e) => { e.stopPropagation(); setOpen(true); }}>{f.pasted.preview || t("web-main.composer.pastedText")}</button>
         <Tip label={meta} cut><span className={`${css.fileCardMeta} ${css.pasteCardMeta}`}>{meta}</span></Tip>
@@ -2291,11 +2291,11 @@ function PendingFile({ file: f, onRemove, onRestore, onRetry }: { file: Pending;
         <img src={f.preview} alt={f.name} />
       </button>
       {f.image && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey="" file={shown} local={{ blob: f.image, url: f.preview }} />}
-      {!f.done && !f.error && <span className={css.composerThumbBusy}><Spinner /></span>}
+      {goingUp(f) && <span className={css.composerThumbBusy}><Spinner /></span>}
       {f.error && onRetry && <button type="button" className={css.composerThumbRetry} aria-label={t("web-main.composer.retryUpload")} onClick={(e) => { e.stopPropagation(); onRetry(); }}><Retry size={18} /></button>}
       {onRemove && <button type="button" className={css.composerThumbRemove} aria-label={t("web-main.file.remove", { name: f.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
     </span></Tip>
-  ) : <FileCard file={f.done ?? f} pending={!f.done && !f.error} sent={f.sent} error={f.error} onRetry={onRetry} {...(onRemove ? { onRemove } : {})} />;
+  ) : <FileCard file={f.done ?? f} pending={goingUp(f)} sent={f.sent} error={f.error} onRetry={onRetry} {...(onRemove ? { onRemove } : {})} />;
 }
 
 /** An agent in this chat that is at work: who it is, and what it does now. */

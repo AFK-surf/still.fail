@@ -10,8 +10,8 @@
 //   the composer roomy with the choices in the row under its words (the station's chooser, the model control:
 //   model_triple.mbt), what differs by the station and its picks under it, moving nothing over it.
 // The composer is the pages' (composer.mbt), its draft the workspace's new chat's (`new:<workspace>`), whichever
-// station it is to run on: its files go up to that one, the core sending one picked before up again as it is taken
-// to go (`composer.take {station}`). The first message
+// station it is to run on: its files wait, and go up to that one as the first message is taken to go
+// (`composer.take {station}`), the message waiting for them. The first message
 // makes the chat (`newChat.create`, made once a page, anew when the picks changed: useEnsureChat) and goes to it
 // (`chat.send` by its key); the page becomes the chat in place, its first words carried where they were typed till
 // their row is in the chat's list (flight.mbt), what is written meanwhile going on into the chat's draft

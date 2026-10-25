@@ -725,7 +725,8 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
   let name = text(v, "name")
   let error = text(v, "error")
   let done = field(v, "done")
-  let pending = done is None && error == ""
+  // (a new chat's waits for its message: nothing going up yet)
+  let pending = done is None && error == "" && field(v, "waits") is None
   match writing_pictures.get(id) {
     Some(picture) => composer_picture(c, src, w, key, id, name, picture, pending, error)
     None => {
