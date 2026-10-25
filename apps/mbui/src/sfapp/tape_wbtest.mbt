@@ -641,18 +641,58 @@ test "on the tape the sidebar's rows stand 16 in from its left, as from its righ
 }
 
 ///|
-test "on the tape 新建对话 is in line with the chats' rows under it: its icon over their marks, its words where their titles start" {
+test "on the tape the rail's first place stands on the line of the sidebar's first row, 新建对话's" {
   let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":36,\"bottom\":24,\"left\":0,\"right\":0}}")
+  t.run_for(@sfdesk.side_move_ms)
+  let (_, by, _, bh) = said_at(t, "待处理").unwrap()
+  let (_, ny, _, nh) = said_at(t, "新建对话").unwrap()
+  assert_true((by + bh / 2.0 - (ny + nh / 2.0)).abs() <= 0.5, msg="待处理's middle \{by + bh / 2.0}, 新建对话's \{ny + nh / 2.0}")
+}
+
+///|
+test "on the tape 新建对话 lit stands over the search's field: its ground's edge, its icon and its words on the field's" {
+  let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
+  @sfdesk.new_chat()
+  t.run_for(@sfdesk.side_move_ms)
+  t.tap(30.0, 400.0)
+  t.run_for(@sfdesk.side_move_ms)
+  let (sx, _, _, _) = said_at(t, "搜索全部内容").unwrap()
+  let (nx, _, _, _) = said_at(t, "新建对话").unwrap()
+  assert_eq(nx, sx)
   let (wx, _, _, _) = t.rect_of("新建对话").unwrap()
-  let (tx, _, _, _) = t.rect_of("首页的列表改成按天分组").unwrap()
-  assert_eq(wx, tx)
-  // the icon's middle and the row's mark's (its status dot, 10 across) within a point
-  let marks = t.boxes().filter(fn(b) { b.label == "工作中" && b.w == 10.0 })
-  let icons = t.boxes().filter(fn(b) { b.w == 16.0 && b.h == 16.0 && b.y < 100.0 && b.x > 60.0 && b.x < 90.0 })
-  assert_true(marks.length() > 0 && icons.length() > 0, msg="marks \{marks.length()}, icons \{icons.length()}")
-  let mc = marks[0].x + marks[0].w / 2.0
-  let ic = icons[0].x + icons[0].w / 2.0
-  assert_true((mc - ic).abs() <= 1.0, msg="mark's middle \{mc}, icon's \{ic}")
+  let (px, _, _, _) = t.rect_of("搜索全部内容").unwrap()
+  assert_eq(wx, px)
+}
+
+///|
+test "新建对话 pressed on a touch device: the cursor in the new chat's composer, its keyboard up" {
+  let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
+  let (before, _, _, _) = t.ime()
+  assert_false(before)
+  t.tap_text("新建对话")
+  t.run_for(@sfdesk.side_move_ms)
+  let (after, _, _, _) = t.ime()
+  assert_true(after)
+}
+
+
+///|
+test "on the tape 更新 is in the sidebar's first row before the filter, as large as it: the sidebar where it is without one" {
+  let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":36,\"bottom\":24,\"left\":0,\"right\":0}}")
+  t.run_for(@sfdesk.side_move_ms)
+  let (_, ny, _, _) = t.rect_of("新建对话").unwrap()
+  update.available = Some({ "versionName": "0.1.9999" })
+  t.run_for(@sfdesk.side_move_ms)
+  let (_, ny2, _, _) = t.rect_of("新建对话").unwrap()
+  assert_eq(ny2, ny)
+  let (ux, uy, uw, uh) = said_at(t, "更新").unwrap()
+  let (fx, fy, _, fh) = said_at(t, "筛选会话：全部").unwrap()
+  assert_eq(uh, fh)
+  assert_eq(uy, fy)
+  assert_true(ux + uw <= fx, msg="更新 to \{ux + uw}, the filter from \{fx}")
+  update.available = None
 }
 
 ///|

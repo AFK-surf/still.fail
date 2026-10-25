@@ -47,6 +47,15 @@ priv struct Composing {
   /// the composer's own)
   mut outside : Bool
   mut menu_up : Bool
+  /// the cursor asked into it as it is next drawn, on any screen (composer_take_focus)
+  mut wanted : Bool
+}
+
+///|
+/// The cursor into the composer as it is next drawn, on a touch device too (its keyboard up): what opened it is for
+/// writing (新建对话: pengxiao, 2026-10-25).
+pub fn composer_take_focus() -> Unit {
+  composing.wanted = true
 }
 
 ///|
@@ -64,6 +73,7 @@ let composing : Composing = {
   restore_errors: {},
   outside: false,
   menu_up: false,
+  wanted: false,
 }
 
 ///|
@@ -81,6 +91,7 @@ fn composing_reset() -> Unit {
   composing.restore_errors.clear()
   composing.outside = false
   composing.menu_up = false
+  composing.wanted = false
 }
 
 ///|
@@ -117,6 +128,18 @@ pub fn composer(
   if whose != composing.draft {
     composing.draft = whose
     if !@sf.touch_system() && !c.field_focused() {
+      c.focus_editor(composer_field_key)
+    }
+  }
+  // asked for (a new chat: composer_take_focus), on a touch device too, its keyboard up
+  // (asked again till it is found held as a frame begins: the page it was asked from let go of as the new one comes,
+  // its field's focus with it, nav.mbt forget)
+  if composing.wanted && !spec.locked {
+    if c.editor_focused(composer_field_key) {
+      composing.wanted = false
+    } else {
+      // (the press that asked for it, lifted outside it, not taken for one letting go of the keyboard)
+      composing.outside = false
       c.focus_editor(composer_field_key)
     }
   }

@@ -158,7 +158,8 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
   } else if inset {
     rail_top_inset + rail_gap
   } else if wide.tape {
-    @sf.rail_in_tape()
+    // (and its first place's middle on the line of the sidebar's first row beside it, 新建对话's: pengxiao, 2026-10-25)
+    dmax(@sf.rail_in_tape(), tape_first_row_mid() - rail_item_side / 2.0)
   } else {
     rail_top_web + rail_gap
   }

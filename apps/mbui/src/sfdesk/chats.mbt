@@ -17,17 +17,21 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     c.box(style=if in_bar { band_new_bar } else if wide.tape { band_new_tape() } else { nav_new }, fn() {
       let is_new = app.nav.top() is NewChat
       c.box(style=side_full, fn() {
-        // (on the tape over a finger's rows 16 in: its icon over their marks, its words where their titles start)
-        let (icon_back, words_back) = if wide.tape { (tape_new_icon_back, tape_new_words_back) } else { (0.0, 0.0) }
+        // (on the tape over the search's field: its ground's edge on the field's, its icon and words on the field's)
+        let over = if wide.tape { tape_new_over_search } else { 0.0 }
         if nav_row(c, "side/new", is_new, fn() {
-            c.box(tx=-compose_in - icon_back, fn() { @sf.icon(c, "compose", size=side_icon, color=t.p.muted) |> ignore })
+            c.box(tx=-compose_in + over, fn() { @sf.icon(c, "compose", size=side_icon, color=t.p.muted) |> ignore })
             |> ignore
-            c.box(style=side_full, tx=-words_back, fn() { nav_words(c, @sf.t("web-main.sidebar.newChat")) }) |> ignore
+            c.box(style=side_full, tx=over, fn() { nav_words(c, @sf.t("web-main.sidebar.newChat")) }) |> ignore
           }) {
           new_chat()
         }
       })
       |> ignore
+      // (on the tape 更新 here, before the filter: brand.mbt update_in_row)
+      if wide.tape && !in_bar && update_shown() {
+        update_in_row(c, src)
+      }
       match view {
         // (lit while it narrows the chats or another list is shown: 奏, 已归档)
         Some(v) if v.stations > 0 => filter_button(c, src, w, filter, list_place(list_mode(src, w)), list_mode(src, w) != 0, in_bar)
@@ -55,8 +59,19 @@ let band_new_bar : @ui.Style = @ui.css("row w=Full pl=S2 pr=S1_5 pt=S1_5 pb=S1_5
 fn band_new_tape() -> @ui.Style {
   let corner = @sf.tape_side_corners()[1].radius()
   nav_new.then(
-    @ui.style(pr=@sf.room_of(@sf.line_end_in(corner, band_new_end)), pt=@sf.room_of(band_new_top + band_new_tape_over())),
+    @ui.style(
+      pl=S4,
+      pr=@sf.room_of(@sf.line_end_in(corner, band_new_end)),
+      pt=@sf.room_of(band_new_top + band_new_tape_over()),
+    ),
   )
+}
+
+///|
+/// How far under the top of the tape's sidebar the middle of its first row is (新建对话's, band_new_tape): the rail's
+/// first place beside it stands on that line.
+fn tape_first_row_mid() -> Double {
+  side_top_h() + band_new_top + band_new_tape_over() + nav_row_h() / 2.0
 }
 
 ///|
@@ -100,20 +115,20 @@ let side_icon : Double = 16.0
 let compose_in : Double = 1.0
 
 ///|
-/// On the tape, how far 新建对话's icon and words are drawn back from where its row lays them (its 8 and 10 in, the
-/// icon 16 and 8 to its words) to stand over the chats' rows beside the rail (16 in, a mark's 10 and 8 to the title):
-/// the icon's middle over a mark's, the words where a title starts (pengxiao, 2026-10-25: 新建对话 not in line).
-let tape_new_icon_back : Double = 4.0
+/// On the tape 新建对话 stands over the search's field, as a ground the same (pengxiao, 2026-10-25: their edges, lit and
+/// not, out of line): its ground 16 in as the field's (band_new_tape), and its icon and words drawn on as far as the
+/// field's are (its 12 in and a 17 icon, to the row's 10 and 16).
+let tape_new_over_search : Double = 3.0
 
 ///|
-let tape_new_words_back : Double = 8.0
-
-///|
-/// A new chat (新建对话, ⌘N): where the shell has it (beside the list on the wide frame, risen on the stack). On the tape
+/// A new chat (新建对话, ⌘N): where the shell has it (beside the list on the wide frame, risen on the stack), the cursor in
+/// its composer on any screen (its keyboard up on a touch device: composer_take_focus). On the tape
 /// its page comes over: a new chat is opened to be written in (pengxiao, 2026-10-25: opened from the sidebar in use,
 /// it showed beside it with the sidebar still in use).
 pub fn new_chat() -> Unit {
   open_page(NewChat)
+  // what it is opened for: the cursor in its words, its keyboard up on a touch device
+  @sfpages.composer_take_focus()
   if wide.tape {
     wide.tape_ask = Some(Page)
   }
