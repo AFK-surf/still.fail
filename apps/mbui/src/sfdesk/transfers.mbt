@@ -130,7 +130,6 @@ fn transfer_row(c : @ui.Ctx, src : Source, x : Json, go : (DriveAt) -> Unit) -> 
   let call = fn(name : String) {
     (src.call)(name, { "station": Json::string(station), "id": Json::string(tid) }, act_done(c, @sf.t("web-pages.files.transferWhat")))
   }
-  c.box(style=transfer_rule, fn() {  }) |> ignore
   c.box(style=ftransfer_row, fn() {
     let (mark, ink) = match state {
       "done" => ("check", t.p.green)
@@ -183,7 +182,6 @@ fn download_row(c : @ui.Ctx, src : Source, d : Json) -> Unit {
   let j = Some(d)
   let failed = text(j, "state") == "failed"
   let did = text(j, "id")
-  c.box(style=transfer_rule, fn() {  }) |> ignore
   c.box(style=ftransfer_row, fn() {
     c.box(style=ftransfer_mark, fn() {
       @sf.icon(c, if failed { "retry" } else { "download" }, size=transfer_icon, color=if failed { t.p.red } else { t.p.muted })
@@ -246,8 +244,8 @@ let ftransfers_chip_going_words : @ui.TextStyle = @ui.text_style(size=Meta, colo
 let ftransfers_chip_failed_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
-/// A transfer (transfer: its mark 18, its words, its keys; 8 apart, a line over it): what it holds as far in as a
-/// small panel's words (a row's padding in from the panel's), 8 over and under.
+/// A transfer (transfer: its mark 18, its words, its keys; 8 apart): what it holds as far in as a small panel's words
+/// (a row's padding in from the panel's), 8 over and under; set apart by that room alone, no line between.
 // kept across runs: a value (no field of it changes)
 let ftransfer_row : @ui.Style = @ui.css("row w=Full px=S2_5 py=S2 gap=S2 align=AStart")
 
@@ -290,9 +288,5 @@ let ftransfer_actions : @ui.Style = @ui.css("row gap=SPx align=ACenter")
 
 
 ///|
-/// A row's mark (14), and the line over each row of the list.
+/// A row's mark (14).
 let transfer_icon : Double = 14.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let transfer_rule : @ui.Style = @ui.css("w=Full h=SPx bg=Line")

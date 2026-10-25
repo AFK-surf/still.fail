@@ -221,11 +221,7 @@ fn net_panel(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     })
     |> ignore
     let group = fn(rows : () -> Unit) {
-      c.box(style=net_group_box, fn() {
-        c.box(style=net_rule, fn() {  }) |> ignore
-        c.box(style=net_rows, rows) |> ignore
-      })
-      |> ignore
+      c.box(style=net_group_box, fn() { c.box(style=net_rows, rows) |> ignore }) |> ignore
     }
     let row = fn(name : String, value : String, level : String) {
       c.box(style=net_row_box, fn() {

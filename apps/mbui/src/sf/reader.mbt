@@ -1083,7 +1083,6 @@ fn desk_panel(
     c.box(style=desk_panel_top(), fn() {  }) |> ignore
     c.box(style=desk_panel_row, fn() {
       c.box(style=desk_panel_room, fn() {  }) |> ignore
-      c.box(style=desk_panel_rule.then(@ui.style(bg=Data(p.line))), fn() {  }) |> ignore
       c.box(style=desk_panel_box.then(@ui.style(bg=Data(p.ground))), id=c.id("reader/panel"), fn() {
         c.box(style=desk_panel_head, fn() {
           let title = match r.panel {
@@ -2208,10 +2207,6 @@ pub let desk_panel_row : @ui.Style = @ui.style(row=true, w=Full, h=grow)
 ///|
 // kept across runs: a value (no field of it changes)
 pub let desk_panel_room : @ui.Style = @ui.style(w=grow, h=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-pub let desk_panel_rule : @ui.Style = @ui.css("w=SPx h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)

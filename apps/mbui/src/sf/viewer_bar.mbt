@@ -92,8 +92,6 @@ pub fn viewer_bar(
       |> ignore
     })
     |> ignore
-    c.box(style=viewer_bar_rule.then(@ui.style(bg=Data(alpha(ink.line, viewer_line_share)))), fn() {  })
-    |> ignore
   })
   c.look(node, @ui.look(alpha=1.0 - gone, dy=-(viewer_bar_h + top) * gone))
   went
@@ -227,9 +225,6 @@ pub let viewer_bar_blur : Double = 20.0
 pub let viewer_bar_saturation : Double = 1.4
 
 ///|
-let viewer_line_share : Double = 0.7
-
-///|
 /// What the middle leaves its sides at least: the way back's and the tools' room either side (as the grid's equal
 /// sides keep it in the middle).
 let viewer_bar_sides : Double = 320.0
@@ -252,9 +247,12 @@ let viewer_buttons_w : Double = 72.0
 let viewer_bar_box : @ui.Style = @ui.css("w=Full")
 
 ///|
-/// Its row: 44 of its 45 (the line under it the last), 12 in, 16 between its three parts.
+/// Its row: all its 45 (no line under it: its glass sets it apart from what goes under it), 12 in, 16 between its
+/// three parts.
 // kept across runs: a value (no field of it changes)
-let viewer_bar_row : @ui.Style = @ui.css("row w=Full h=S11 px=S3 gap=S4 align=ACenter")
+let viewer_bar_row : @ui.Style = @ui.css("row w=Full px=S3 gap=S4 align=ACenter").then(
+  @ui.style(h=Fixed(viewer_bar_h)),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -271,10 +269,6 @@ let viewer_bar_end : @ui.Style = @ui.style(row=true, w=grow, gap=S0_5, align=ACe
 ///|
 // kept across runs: a value (no field of it changes)
 let viewer_bar_middle : @ui.Style = @ui.css("align=ACenter clip")
-
-///|
-// kept across runs: a value (no field of it changes)
-let viewer_bar_rule : @ui.Style = @ui.css("w=Full h=SPx")
 
 ///|
 /// The way back (ViewerBar.css.ts back): 32 high, 4 before the chevron and 10 after the words, the page's corner.

@@ -534,11 +534,10 @@ fn rs_flat(c : @ui.Ctx, core : Core, address : String, groups : Array[Json], col
 }
 
 ///|
-/// A row of the table (tr), the line under it (cell's border-bottom).
+/// A row of the table (tr), set apart from the next by its room (no line under it: only a menu's parts are set apart
+/// by one).
 fn rs_line(c : @ui.Ctx, style : @ui.Style, id : Int, body : () -> Unit) -> Int {
-  let b = c.box(style~, id~, body)
-  c.box(style=rs_rule, fn() {  }) |> ignore
-  b
+  c.box(style~, id~, body)
 }
 
 ///|
@@ -725,10 +724,6 @@ let rs_table : @ui.Style = @ui.css("w=Full")
 // kept across runs: a value (no field of it changes)
 let rs_row : @ui.Style = @ui.css("row w=Full align=ACenter")
 
-///|
-/// The line under a row.
-// kept across runs: a value (no field of it changes)
-let rs_rule : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
 
 ///|
 /// The heads' row; stacked, only the figures' heads and the end's room, at the row's end over them.

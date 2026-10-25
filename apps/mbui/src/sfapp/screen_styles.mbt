@@ -520,13 +520,10 @@ let net_head_box : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
 let net_head_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, wrap=false, tabular=true)
 
 ///|
-/// A group of its figures: a hairline over it (the ink at 10%), 10 under that, a row each 4 apart.
+/// A group of its figures, a row each 4 apart: set apart from the one before by its room (6 more than the panel's 10
+/// between its parts), no line over it (only a menu's parts are set apart by one).
 // kept across runs: a value (no field of it changes)
-let net_group_box : @ui.Style = @ui.css("w=Full gap=S2_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let net_rule : @ui.Style = @ui.css("w=Full h=SPx bg=A(Fg,O10)")
+let net_group_box : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -207,28 +207,13 @@ fn local_face_row(c : @ui.Ctx, core : Core, place : String, chosen : String) -> 
     label=@sf.t("web-pages.appearance.fonts.local"),
     look=@sf.beside_look(Px(local_panel_w)),
     fn() {
-      // its field to find one (localSearch)
+      // its field to find one (localSearch): a small panel's search, as a pick's, its ground setting it apart from
+      // the list (no line under it: only a menu's parts are set apart by one)
       c.box(style=local_search, fn() {
-        @sf.icon(c, "search", size=font_check, color=t.p.subtle) |> ignore
-        c.box(style=local_search_field, fn() {
-          ignore(
-            c.editor(
-              "fonts/local/find",
-              field=local_filter,
-              placeholder=@sf.t("web-pages.appearance.fonts.searchLocal"),
-              font_size=13.0,
-              max_lines=1,
-              plain=true,
-              color=t.p.text,
-              placeholder_color=t.p.subtle,
-              caret_color=t.p.accent,
-            ),
-          )
-        })
+        @sf.input(c, "fonts/local/find", placeholder=@sf.t("web-pages.appearance.fonts.searchLocal"), small=true, field=local_filter)
         |> ignore
       })
       |> ignore
-      c.box(style=local_rule, fn() {  }) |> ignore
       let find = local_filter.text().trim(chars=" ").to_lower()
       let shown = local_families().filter(fn(f) { find == "" || f.to_lower().contains(find) })
       let list = if shown.length() > local_most { shown[:local_most].to_array() } else { shown }
@@ -419,27 +404,16 @@ let local_list_most : Double = 320.0
 let local_most : Int = 400
 
 ///|
-/// (localSearch: its icon and field 8 apart, a line under it, 8 over it; its words as far under the panel's top as a
-/// menu's first item's)
+/// (localSearch: the field at the panel's padding, its rows 6 under it)
 // kept across runs: a value (no field of it changes)
-let local_search : @ui.Style = @ui.css("row w=Full gap=S2 px=S2_5 pt=S1_5 pb=S2 align=ACenter")
-
-///|
-/// (its line: the words' colour faintly, 6 over the list)
-// kept across runs: a value (no field of it changes)
-let local_rule : @ui.Style = @ui.style(w=Full, h=Fixed(local_rule_h), mb=S1_5, bg=Line)
-
-///|
-let local_rule_h : Double = 1.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let local_search_field : @ui.Style = @ui.style(w=@sf.grow)
+let local_search : @ui.Style = @ui.css("w=Full pb=S1_5")
 
 ///|
 /// (localRow: a menu's item, the chosen on the hover ground, its check at its end)
 // kept across runs: a value (no field of it changes)
-let local_row : @ui.Style = @ui.css("row w=Full min_h=S8 px=S2_5 gap=S2 radius=Inner align=ACenter")
+let local_row : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2 radius=Inner align=ACenter").then(
+  @ui.style(min_h=Fixed(@sf.menu_row_min)),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
