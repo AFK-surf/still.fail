@@ -147,7 +147,8 @@ fn push_clip_r(
 }
 
 ///|
-/// No clip pushed, nor any outer: what is painted till it is popped is over everything (an editor's handles).
+/// No clip pushed, nor any outer: what is painted till it is popped is cut by nothing (an editor's handles, which are
+/// also put after everything else painted: Ctx::paint_top).
 fn push_unclipped() -> Unit {
   for v in [-1.0e9, -1.0e9, 1.0e9, 1.0e9] {
     clip_stack.push(v)
@@ -571,8 +572,17 @@ fn Ctx::paint_held(self : Ctx, n : Node, alpha : Double) -> Unit {
 /// Node `i` drawn, and what it holds: a hit target of its own holds the targets drawn in it (Ctx::hit_ends: what
 /// holds the one under the pointer is pointed at too, Ctx::hovered).
 fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
+  // a layer (overlay.mbt): what is over everything under it (Ctx::paint_top) stays under it, and what is so in it is
+  // put over the rest of it
+  let layer = self.nodes[i].portal
+  if layer {
+    self.raise_tops()
+  }
   let h0 = self.next_hit_ids.length()
   self.paint_node(i, alpha_in)
+  if layer {
+    self.raise_tops()
+  }
   let id = self.nodes[i].id
   // (its own target the first it drew, if it took presses: none drawn before it)
   if id != 0 && self.next_hit_ids.length() > h0 + 1 && self.next_hit_ids[h0] == id {

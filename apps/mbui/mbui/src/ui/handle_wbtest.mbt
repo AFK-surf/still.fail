@@ -124,3 +124,82 @@ test "Android: the caret's handle hangs from the middle of the caret's foot, at 
     assert_eq(st.handle_y, a[1] + a[3])
   }
 }
+
+///|
+test "Android: the caret's handle over what is painted after its field (a button where it hangs)" {
+  let field = Field::new()
+  field.set("hello world")
+  let t = Tester::new(
+    fn(c) {
+      c.box(w=Fill(1.0), fn() {
+        c.editor("field", font_size=16.0, plain=true, field~) |> ignore
+        // under the field, where its handle hangs: painted after it
+        c.box(w=Px(300.0), h=Px(60.0), bg=red, fn() {  }) |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=200.0,
+    platform=2,
+  )
+  t.tap(60.0, 8.0)
+  t.draw()
+  assert_true(g().editors.get(g().focus).unwrap().handle_on)
+  let all = insts()
+  let mut button = -1
+  let mut handle = -1
+  for k, a in all {
+    if a[5] == 0.0 && a[8] == 1.0 && a[2] == 300.0 {
+      button = k
+    }
+    if handle < 0 && a[5] == 0.0 && a[8] == 10.0 / 255.0 && a[2] == 2.0 * handle_r {
+      handle = k
+    }
+  }
+  assert_true(button >= 0 && handle >= 0)
+  assert_true(handle > button)
+}
+
+///|
+test "Android: the caret's handle under a layer opened over its field" {
+  let field = Field::new()
+  field.set("hello world")
+  let over = Ref(false)
+  let t = Tester::new(
+    fn(c) {
+      c.box(w=Fill(1.0), fn() {
+        c.editor("field", font_size=16.0, plain=true, field~) |> ignore
+        c.box(w=Px(300.0), h=Px(60.0), bg=red, fn() {  }) |> ignore
+      })
+      |> ignore
+      if over.val {
+        // (no focus of its own: the field keeps it, and its handle)
+        c.overlay("over", fn() { c.box(w=Px(300.0), h=Px(200.0), bg=0x0000FFFFL, fn() {  }) |> ignore })
+        |> ignore
+      }
+    },
+    w=300.0,
+    h=200.0,
+    platform=2,
+  )
+  t.tap(60.0, 8.0)
+  over.val = true
+  t.draw()
+  assert_true(g().editors.get(g().focus).unwrap().handle_on)
+  let mut button = -1
+  let mut handle = -1
+  let mut layer = -1
+  for k, a in insts() {
+    if a[5] == 0.0 && a[8] == 1.0 && a[2] == 300.0 {
+      button = k
+    }
+    if handle < 0 && a[5] == 0.0 && a[8] == 10.0 / 255.0 && a[2] == 2.0 * handle_r {
+      handle = k
+    }
+    if a[5] == 0.0 && a[10] == 1.0 && a[3] == 200.0 {
+      layer = k
+    }
+  }
+  assert_true(button >= 0 && handle >= 0 && layer >= 0)
+  assert_true(button < handle && handle < layer)
+}

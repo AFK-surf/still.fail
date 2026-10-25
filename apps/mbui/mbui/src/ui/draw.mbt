@@ -148,6 +148,12 @@ priv struct DrawState {
   mut mode : Int
   mut overlaying : Bool
   overlay : Array[(Int, Double)]
+  /// what is painted over everything of its layer wherever it is painted (an editor's handles: on Android windows of
+  /// their own over the app's window, a dialog's over them), as this frame's instances [from, to): put after the rest
+  /// of its layer (the page, or one of overlay.mbt's) once that is painted (Ctx::raise_tops), so that nothing of it
+  /// painted after them covers them, and a layer opened over them does; drawn where they were painted (what holds them
+  /// moved them with its look, as what it holds)
+  tops : Array[(Int, Int)]
   /// by node: the build something in it was last drawn moved in (Ctx::draw_carries)
   carry : Array[Int]
 }
@@ -163,6 +169,7 @@ let dr : DrawState = {
   mode: 0,
   overlaying: false,
   overlay: [],
+  tops: [],
   carry: [],
 }
 
@@ -216,6 +223,7 @@ fn reset_drawing() -> Unit {
   dr.mode = 0
   dr.overlaying = false
   dr.overlay.clear()
+  dr.tops.clear()
   dr.carry.clear()
   list_counts.clear()
   for f in reset_hooks {
@@ -828,6 +836,44 @@ fn Ctx::paint_overlays(self : Ctx) -> Unit {
   }
   dr.mode = 0
   dr.overlaying = false
+}
+
+///|
+/// What was painted since instance `from` said to be over everything (DrawState's `tops`); not where only what is
+/// tapped is painted (what is painted so is dropped).
+fn Ctx::paint_top(self : Ctx, from : Int) -> Unit {
+  if dr.mode != mode_hits && self.ninst > from {
+    dr.tops.push((from, self.ninst))
+  }
+}
+
+///|
+/// Once a layer is painted (Ctx::paint; the page: app.mbt): what is over everything in it (`tops`) moved after all
+/// the rest painted so far, each as it was painted and in the order it was, the rest closed up in its order.
+fn Ctx::raise_tops(self : Ctx) -> Unit {
+  if dr.tops.is_empty() {
+    return
+  }
+  let a = self.inst
+  let raised : Array[Double] = []
+  for r in dr.tops {
+    for q in (r.0 * inst_size)..<(r.1 * inst_size) {
+      raised.push(a[q])
+    }
+  }
+  let mut to = dr.tops[0].0 * inst_size
+  for k, r in dr.tops {
+    let end = if k + 1 < dr.tops.length() { dr.tops[k + 1].0 } else { self.ninst }
+    for q in (r.1 * inst_size)..<(end * inst_size) {
+      a[to] = a[q]
+      to = to + 1
+    }
+  }
+  for v in raised {
+    a[to] = v
+    to = to + 1
+  }
+  dr.tops.clear()
 }
 
 ///|
