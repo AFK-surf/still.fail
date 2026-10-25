@@ -46,7 +46,7 @@ import { agentHomePaths, workspaceAgentHome } from "./agent-home.ts";
 import { carrySubagents, startsAfresh, toldCleared } from "./afresh.ts";
 import { serves } from "./pool.ts";
 import { settled } from "./opened.ts";
-import { imageSize } from "./image-size.ts";
+import { shownSize } from "./image-size.ts";
 
 type Json = any;
 
@@ -543,7 +543,7 @@ export class Hub {
         const path = join(dir, `${iso(this.now()).slice(0, 19).replace(/[:.]/g, "-")}-${file.id}-${safe}`);
         writeFileSync(path, bytes);
         const attachment: Attachment = { name: file.name, path, size: bytes.length };
-        const size = /\.(png|jpe?g|gif|webp)$/i.test(file.name) ? imageSize(path) : null;
+        const size = shownSize(path);
         if (size) [attachment.width, attachment.height] = size;
         attachments.push(attachment);
       } catch (error) {

@@ -51,7 +51,7 @@ pub fn message_files(
           // (as wide as laid out for it: a card does not give way to the picture beside it)
           let item = c.box(style=@ui.style(w=Fixed(widths[i])), fn() { file_item(c, src, here, list[i], widths[i], by~) })
           match flight_here(here) {
-            Some(f) => flight_landing(c, f, item, list[i].path)
+            Some(f) => flight_landing(c, f, item, list[i].path, share=landing_share(list[i]))
             None => ()
           }
         }
@@ -110,13 +110,9 @@ pub fn file_kind(name : String) -> String {
 /// ThumbHash's) within 360×300, a tiny one drawn to 40 on its longer side; a strip thinner than `least` letterboxed in
 /// a box that thick; 240×160 for one sent before sizes were kept. (width, height, letterboxed)
 pub fn image_box(a : Attachment, least : Double) -> (Double, Double, Bool) {
-  let (w, h) = if a.width > 0.0 && a.height > 0.0 {
-    (a.width, a.height)
-  } else {
-    match thumb_ratio(a.thumbhash) {
-      Some(r) => ((box_unknown_h * r).round(), box_unknown_h)
-      None => return (box_unknown_w, box_unknown_h, false)
-    }
+  let (w, h) = match own_size(a) {
+    Some(s) => s
+    None => return (box_unknown_w, box_unknown_h, false)
   }
   let scale = dmin(dmin(dmax(1.0, box_tiny / dmax(w, h)), box_most_w / w), box_most_h / h)
   let width = w * scale
@@ -125,6 +121,41 @@ pub fn image_box(a : Attachment, least : Double) -> (Double, Double, Bool) {
     return (width.round(), height.round(), false)
   }
   (dmax(least, width).round(), dmax(least, height).round(), true)
+}
+
+///|
+/// An image's own proportions, as known before it loads: its size sent with it, else its ThumbHash's at the unknown
+/// box's height; None for one sent before sizes were kept.
+fn own_size(a : Attachment) -> (Double, Double)? {
+  if a.width > 0.0 && a.height > 0.0 {
+    Some((a.width, a.height))
+  } else {
+    thumb_ratio(a.thumbhash).map(fn(r) { ((box_unknown_h * r).round(), box_unknown_h) })
+  }
+}
+
+///|
+/// The share of its box's width and height a picture takes in it (image_box's, `least` thick): all of it, or a
+/// letterboxed one's, its own proportions fitted inside, centred (imageBox.ts letterbox).
+pub fn picture_share(a : Attachment, least : Double) -> (Double, Double) {
+  let (bw, bh, letterbox) = image_box(a, least)
+  match own_size(a) {
+    Some((w, h)) if letterbox => {
+      let k = dmin(bw / w, bh / h)
+      (w * k / bw, h * k / bh)
+    }
+    _ => (1.0, 1.0)
+  }
+}
+
+///|
+/// Where in its box a file sent from here lands (flight.mbt): an image's or a video's picture, its share of it.
+fn landing_share(a : Attachment) -> (Double, Double) {
+  match file_kind(a.name) {
+    "image" => picture_share(a, image_least)
+    "video" => picture_share(a, video_least)
+    _ => (1.0, 1.0)
+  }
 }
 
 ///|
@@ -174,7 +205,23 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     let draft = here.station + ":" + here.session
     fn() { quote_file_into(draft, author, ts, role, file) }
   }))
-  let fit : @ui.Fit = if letterbox { FitContain } else { FitCover }
+  // the picture covering the whole box; a letterboxed one's covering its own proportions centred in it, all it and
+  // what it waits on take, the box's corners cutting it only where it reaches them (imageBox.ts letterbox)
+  let (sw, sh) = picture_share(a, image_least)
+  let (pw, ph) = (w * sw, h * sh)
+  let corner = if letterbox { 0.0 } else { @sf.message_file_corner }
+  let picture = fn() {
+    if key != "" && sent is None {
+      image_reveal(c, key, pw, ph, FitCover, a.thumbhash, radius=corner)
+    } else if key != "" {
+      c.image(key, w=Px(pw), h=Px(ph), fit=FitCover, radius=corner, bg=0L, fade=false) |> ignore
+    } else {
+      match @gallery.thumbhash_image(a.thumbhash) {
+        Some(likeness) => c.image(likeness, w=Px(pw), h=Px(ph), fit=FitCover, bg=0L, fade=false) |> ignore
+        None => ()
+      }
+    }
+  }
   let b = c.box(style=image_box_style(w, h, key != "" && key != "!" || letterbox), id=open, fn() {
     if key == "!" {
       c.box(style=no_preview_box, fn() {
@@ -182,15 +229,11 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
         c.text(@sf.t("web-main.file.noPreview"), style=no_preview_words) |> ignore
       })
       |> ignore
-    } else if key != "" && sent is None {
-      image_reveal(c, key, w, h, fit, a.thumbhash)
-    } else if key != "" {
-      c.image(key, w=Px(w), h=Px(h), fit~, radius=@sf.message_file_corner, bg=0L, fade=false) |> ignore
+    } else if letterbox {
+      c.box(style=letterbox_room, fn() { c.box(style=@ui.style(w=Fixed(pw), h=Fixed(ph)), picture) |> ignore })
+      |> ignore
     } else {
-      match @gallery.thumbhash_image(a.thumbhash) {
-        Some(likeness) => c.image(likeness, w=Px(w), h=Px(h), fit=FitCover, bg=0L, fade=false) |> ignore
-        None => ()
-      }
+      picture()
     }
   })
   c.look(b, @ui.look(alpha=thumb_shows(thumb)))
@@ -291,7 +334,15 @@ fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment) -> U
 /// likeness, the ThumbHash sent with it, else the neutral ground); once it is, brushed in from its top (an edge half its
 /// height deep going down it), blurred to sharp and from 1.04 its size to its own (1100 ms, the ease out), what it
 /// waited on fading out behind it (300 ms, from 800). One already decoded as it is first shown comes as it is.
-pub fn image_reveal(c : @ui.Ctx, key : String, w : Double, h : Double, fit : @ui.Fit, hash : String) -> Unit {
+pub fn image_reveal(
+  c : @ui.Ctx,
+  key : String,
+  w : Double,
+  h : Double,
+  fit : @ui.Fit,
+  hash : String,
+  radius? : Double = @sf.message_file_corner,
+) -> Unit {
   // (decoded at the size it is drawn at: Ctx::image's)
   let px = dmin(dmax(w, h) * c.scale, image_px_most)
   let ready = c.image_ready(key, px)
@@ -315,7 +366,7 @@ pub fn image_reveal(c : @ui.Ctx, key : String, w : Double, h : Double, fit : @ui
     None => 1.0
   }
   let e = @ui.Out.at(p)
-  let img = c.image(key, w=Px(w), h=Px(h), fit~, radius=@sf.message_file_corner, bg=0L, fade=false)
+  let img = c.image(key, w=Px(w), h=Px(h), fit~, radius~, bg=0L, fade=false)
   if p >= 1.0 {
     return
   }
@@ -475,6 +526,11 @@ let image_frame : @ui.Style = @ui.style(radius=@sf.message_file_radius, clip=tru
 ///|
 // kept across runs: a value (no field of it changes)
 let image_frame_waiting : @ui.Style = image_frame.then(@ui.css("bg=Neutral"))
+
+///|
+/// Where a letterboxed picture is (msgImage[data-letterbox]): in its box's middle.
+// kept across runs: a value (no field of it changes)
+let letterbox_room : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 ///|
 /// One that cannot be had (msgImageUnavailable): its mark over 无法预览, muted, in its middle.
