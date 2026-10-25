@@ -247,6 +247,7 @@ static int nimgs, img_cap;
 static GLuint stream_tex(int id);
 static void streams_lost(JNIEnv *env);
 static GLuint view_tex(int id);
+static void view_parts_in(int tid, int32_t start, int32_t end);
 static void views_lost(JNIEnv *env);
 
 static GLuint image_tex(int id) {
@@ -398,7 +399,7 @@ static const char *FS =
     "void shade(vec2 p) {\n"
     "  int kind = int(v_p.y + 0.5);\n"
     "  // where a native view shows: its picture (NativeViews.Picture), the part of it c2 says, cut to its corners\n"
-    "  if (kind == 9) { vec2 hh = v_rect.zw * 0.5; float rr = min(mb_corner_of(p - v_rect.xy - hh, v_rr), min(hh.x, hh.y)); vec2 q = abs(p - v_rect.xy - hh) - hh + rr; float a = clamp(0.5 - (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr) * u_scale, 0.0, 1.0); if (a <= 0.0) discard; o = texture(u_img, v_c2.xy + clamp((p - v_rect.xy) / v_rect.zw, 0.0, 1.0) * v_c2.zw) * a; return; }\n"
+    "  if (kind == 9) { vec2 hh = v_rect.zw * 0.5; float rr = min(mb_corner_of(p - v_rect.xy - hh, v_rr), min(hh.x, hh.y)); vec2 q = abs(p - v_rect.xy - hh) - hh + rr; float a = clamp(0.5 - (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr) * u_scale, 0.0, 1.0); if (a <= 0.0) discard; vec2 uv = v_c2.xy + clamp((p - v_rect.xy) / v_rect.zw, 0.0, 1.0) * v_c2.zw; if (uv.y < 0.0 || uv.y > 1.0) discard; o = texture(u_img, uv) * a; return; }\n"
     "  vec4 col = v_color;\n"
     "  if (kind == 11) {\n"
     "    // a band of a shape (src/ui/shape.mbt): c2.y of its pieces from c2.x; p.x half its stroke's width (0: a fill,\n"
@@ -975,6 +976,7 @@ static void draw_kept(void) {
     }
     GLuint t = tid ? image_tex(tid) : atlas;
     if (t) {  // 0: lost with the context, decoding again; a stream's or a view's with no picture yet
+      if (tid > MB_VIEW_TEX) view_parts_in(tid, start, end);
       glActiveTexture(GL_TEXTURE1);
       glBindTexture(GL_TEXTURE_2D, t);
       for (int i = 0; i < MB_INST / 4; i++)
@@ -1824,9 +1826,41 @@ void mb_host_pick_end(int32_t id) {
 // MB_VIEW_TEX + its id: present). Called on the GL thread; NativeViews moves to the main thread what must run there.
 
 static GLuint *view_texs;  // by id
+// the part of its content each one's picture is, by id: its top and its height, of the content's (0 1: all of it)
+static float *view_parts;
 static int view_cap;
 
 static GLuint view_tex(int id) { return id > 0 && id < view_cap ? view_texs[id] : 0; }
+
+// room for view `id`'s (id > 0)
+static void views_hold(int id) {
+  if (id < view_cap) return;
+  int cap = view_cap ? view_cap : 16;
+  while (cap <= id) cap *= 2;
+  view_texs = realloc(view_texs, (size_t)cap * sizeof *view_texs);
+  memset(view_texs + view_cap, 0, (size_t)(cap - view_cap) * sizeof *view_texs);
+  view_parts = realloc(view_parts, (size_t)cap * 2 * sizeof *view_parts);
+  for (int i = view_cap; i < cap; i++) {
+    view_parts[i * 2] = 0.0f;
+    view_parts[i * 2 + 1] = 1.0f;
+  }
+  view_cap = cap;
+}
+
+// The run of instances [start, end) showing view picture `tid` (MB_VIEW_TEX + its id), in the buffer bound: where its
+// picture is a part of its content (a tall page's, NativeViews.Page), each one's c2 (the part of the content where it
+// shows) made the part of the picture there; the shader draws nothing where that is outside the picture.
+static void view_parts_in(int tid, int32_t start, int32_t end) {
+  int id = tid - MB_VIEW_TEX;
+  if (id <= 0 || id >= view_cap) return;
+  float top = view_parts[id * 2], height = view_parts[id * 2 + 1];
+  if ((top == 0.0f && height == 1.0f) || height <= 0.0f) return;
+  for (int32_t i = start; i < end; i++) {
+    const float *c2 = fbuf + (size_t)i * MB_INST + 12;
+    float in[4] = {c2[0], (c2[1] - top) / height, c2[2], c2[3] / height};
+    glBufferSubData(GL_ARRAY_BUFFER, (GLintptr)(((size_t)i * MB_INST + 12) * sizeof(float)), sizeof in, in);
+  }
+}
 
 static void views_lost(JNIEnv *env) {
   for (int i = 0; i < view_cap; i++) view_texs[i] = 0;
@@ -1839,14 +1873,15 @@ static void views_lost(JNIEnv *env) {
 
 JNIEXPORT void JNICALL Java_dev_mbui_NativeViews_texture(JNIEnv *env, jclass c, jint id, jint tex) {
   if (id <= 0) return;
-  if (id >= view_cap) {
-    int cap = view_cap ? view_cap : 16;
-    while (cap <= id) cap *= 2;
-    view_texs = realloc(view_texs, (size_t)cap * sizeof *view_texs);
-    memset(view_texs + view_cap, 0, (size_t)(cap - view_cap) * sizeof *view_texs);
-    view_cap = cap;
-  }
+  views_hold(id);
   view_texs[id] = (GLuint)tex;
+}
+
+JNIEXPORT void JNICALL Java_dev_mbui_NativeViews_part(JNIEnv *env, jclass c, jint id, jfloat top, jfloat height) {
+  if (id <= 0) return;
+  views_hold(id);
+  view_parts[id * 2] = top;
+  view_parts[id * 2 + 1] = height;
 }
 
 static jbyteArray jbytes(JNIEnv *env, moonbit_bytes_t data) {

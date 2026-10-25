@@ -12,7 +12,7 @@
 //     chk logwait …               waits for a log's line, a process's end, a path's going (logwait.mbt)
 //     chk lines PNG               a renderer's lines drawn as they are (pictures.mbt)
 //     chk shapes PNG              a renderer's shapes drawn as they are (pictures.mbt)
-//     chk views-round LOG PNG     Android's round page pictured (pictures.mbt)
+//     chk views-round LOG PNG     Android's round page and tall page pictured (pictures.mbt)
 //     chk views LOG HOST          a native view put where it was told (contracts.mbt)
 //     chk site LOG HOST           a site's page and a page speaking with the app, step by step (contracts.mbt)
 //     chk cache-prune [--dry-run] the Actions caches a newer one of the same kind replaced, deleted (cache_prune.mbt)

@@ -18,7 +18,8 @@
 #   scripts/host_contract.sh HOST views         a native view placed between pixels (kitdemo's MBUI_VIEWCHECK,
 #        src/kitdemo/gallery/viewcheck.mbt): where the host put it (its VIEWAT line, device pixels) is where the app told it
 #        to (VIEWTOLD), on whole device pixels, and as round, or it fails; on Android the round page pictured too, its
-#        four corners the canvas's ground outside the round and the page inside
+#        four corners the canvas's ground outside the round and the page inside, and a page far taller than a picture
+#        of it can be, the part of it seen where it is seen
 #   scripts/host_contract.sh HOST site          a site's page and a page speaking with the app (kitdemo's MBUI_SITECHECK,
 #        src/kitdemo/gallery/sitecheck.mbt): a script and its answer, the host's cookies (where it keeps them), an event
 #        stream's events as they are sent, the page grabbed; each step begun by the page's last, the run ending itself
@@ -358,6 +359,10 @@ case $CMD in
       "$PY" scripts/android_end.py --adb "$ADB" --app dev.mbui.demo --file round.log \
         --uid $(EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh uid) \
         --end "VIEWDRAWN 2\b|FATAL EXCEPTION|Fatal signal"
+      # (and the tall page's, the part of it seen: one it could not picture says so instead)
+      "$PY" scripts/android_end.py --adb "$ADB" --app dev.mbui.demo --file round.log \
+        --uid $(EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh uid) \
+        --end "VIEWDRAWN 3\b|view 3: its picture not drawn|FATAL EXCEPTION|Fatal signal"
       EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh shown && $ADB exec-out screencap -p > $O/views-round.png
       $ADB exec-out run-as dev.mbui.demo cat files/round.log > $O/views-round.log
       $ADB shell am force-stop dev.mbui.demo
