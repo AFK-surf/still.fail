@@ -30,7 +30,7 @@ fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit 
   let band = band_h(src, w)
   let t = @sf.theme()
   let frame : @sfpages.ListsFrame = {
-    ..@sfpages.bare_lists(band, 0.0, side_top_h(), if side_folded() || wide.tape { closed_ground() } else { t.p.sidebar }, mode),
+    ..@sfpages.bare_lists(band, 0.0, side_top_h(), if side_folded() || wide.tape { apart_ground() } else { t.p.sidebar }, mode),
     others: [fn() { decisions_pane(c, src, w) }, fn() { archive_pane(c, src, w) }],
   }
   // under a finger's search (sfpages' search.mbt): the band and the foot away with the lists, the search over them
@@ -71,7 +71,7 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   }
   c.box(style=foot_fill, fn() {
     // (on the sidebar's own ground, whole, as the band over the lists: lists_band)
-    let band = c.box(style=foot_band.then(@ui.style(bg=Data(@sf.mix(closed_ground(), wide.band, t.p.sidebar)))), fn() {
+    let band = c.box(style=foot_band.then(@ui.style(bg=Data(@sf.mix(apart_ground(), wide.band, t.p.sidebar)))), fn() {
       match trouble {
         Some(Object(_)) => {
           let go = c.id("side/station-trouble")

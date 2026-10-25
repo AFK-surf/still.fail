@@ -1,5 +1,5 @@
 // The layout by the screen alone (@sf.layout), and laid out Medium the wide frame's tape (sfdesk's frame.mbt): the
-// rail and the sidebar beside the page, the one in use whole, what shows of the other veiled; a press there brings it
+// rail and the sidebar beside the page, the one in use whole, what shows of the other untinted; a press there brings it
 // over and goes to nothing it holds, a drag across there brings it with the finger.
 
 ///|
@@ -91,7 +91,7 @@ fn page_over(t : @ui.Tester, w : Double) -> Unit {
 }
 
 ///|
-test "on the tape the sidebar at first, the page beside it veiled: a click there brings it over, nothing under it pressed" {
+test "on the tape the sidebar at first, the page showing beside it: a click there brings it over, nothing under it pressed" {
   let t = tape_chat(0, 720.0, 800.0)
   assert_true(@sfdesk.wide.tape)
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
