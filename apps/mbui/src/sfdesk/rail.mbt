@@ -91,19 +91,34 @@ pub fn lit_place() -> String {
 }
 
 ///|
+/// The place whose sidebar the block holds (what it draws, the width of its group), the archive's list its own
+/// ("archive", list_place's): the lit place's; in a place with none of its own (place_bare), the one it had, which the
+/// block closes holding (the web's WorkspaceShell `kept`), not the chats' list it would fall to: nothing opens the
+/// sidebar there. The frame keeps it as it is built (wide.side_place).
+pub fn side_place() -> String {
+  let lit = lit_place()
+  if place_bare(lit) {
+    wide.side_place
+  } else if lit == "chats" && app.nav.pages().contains(Archived) {
+    "archive"
+  } else {
+    lit
+  }
+}
+
+///|
 /// Which of the lists is shown (the sidebar's mode, station.tsx useSidebarMode): 全部 0, 我参与的 1, 监控中 2 (the
 /// filter), 奏 3, 已归档 4.
 pub fn list_mode(src : Source, w : Workspace) -> Int {
-  if app.nav.pages().contains(Archived) {
-    4
-  } else if lit_place() == "decisions" {
-    3
-  } else {
-    match filter_of(src, w.id) {
-      "mine" => 1
-      "watching" => 2
-      _ => 0
-    }
+  match side_place() {
+    "archive" => 4
+    "decisions" => 3
+    _ =>
+      match filter_of(src, w.id) {
+        "mine" => 1
+        "watching" => 2
+        _ => 0
+      }
   }
 }
 

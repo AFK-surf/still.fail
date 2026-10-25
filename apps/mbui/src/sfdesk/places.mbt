@@ -31,15 +31,6 @@ fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
 }
 
 ///|
-/// A place's sidebar, the stations' or the profiles'.
-fn place_sidebar(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  match lit_place() {
-    "stations" => stations_side(c, src, w)
-    _ => profiles_side(c, src, w)
-  }
-}
-
-///|
 /// The page picked in a place with a list of its own (Station's, Profile's), by place; none: the first.
 // kept across runs: said by a row pressed; places_reset empties it
 let place_pick : Map[String, Route] = {}
