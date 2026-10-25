@@ -63,6 +63,12 @@ pub fn film(
       "mouse" => Some(@ui.Pointing::Mouse)
       _ => None
     },
+    // (a keyboard at hand: MBUI_KEYBOARD, 1 or 0, as one plugged in or not; else the platform's)
+    keyboard?=match arg("MBUI_KEYBOARD") {
+      "1" => Some(true)
+      "0" => Some(false)
+      _ => None
+    },
     // (the app's words in the language the film says: MBUI_LOCALE, as a device's)
     env=[("MBUI_TEXT_RECORD", "1"), ("MBUI_LOCALE", arg("MBUI_LOCALE"))],
     live={ host, turn: fn() { spin(1.0) } },
@@ -162,7 +168,7 @@ pub fn run(view : (@ui.Ctx) -> Unit) -> Unit {
   let drive = arg("MBUI_FILM_DRIVE")
   if out == "" || drive == "" {
     say(
-      "film: MBUI_FILM=<out.mp4> MBUI_FILM_DRIVE=<script> [MBUI_WIN=390x844] [MBUI_FILM_SCALE=2] [MBUI_FILM_PLATFORM=0] [MBUI_DARK=1] [MBUI_FILM_INSET=1] [MBUI_FILM_FRAMES=3000]",
+      "film: MBUI_FILM=<out.mp4> MBUI_FILM_DRIVE=<script> [MBUI_WIN=390x844] [MBUI_FILM_SCALE=2] [MBUI_FILM_PLATFORM=0] [MBUI_KEYBOARD=1] [MBUI_DARK=1] [MBUI_FILM_INSET=1] [MBUI_FILM_FRAMES=3000]",
     )
     exit(2)
     return

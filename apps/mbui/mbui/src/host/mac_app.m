@@ -1877,6 +1877,8 @@ static void tell_state(void) {
 double mb_host_font_scale(void) { return 1.0; }
 // What the app was started to be used with (@hostapi.native_pointing): a Mac's keyboard and mouse.
 int32_t mb_host_native_pointing(void) { return 2; }
+// Whether a keyboard is at hand (@hostapi.keyboard): a Mac's, always.
+int32_t mb_host_keyboard(void) { return 1; }
 // The app's widgets for the system's accessibility (@hostapi.a11y_on, a11y_tree): not told here yet.
 int32_t mb_host_a11y_on(void) { return 0; }
 void mb_host_a11y_tree(moonbit_string_t s) { (void)s; }

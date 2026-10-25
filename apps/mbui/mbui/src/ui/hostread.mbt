@@ -142,6 +142,31 @@ fn platform_pointing(platform : Int) -> Pointing {
 }
 
 ///|
+/// Whether a keyboard is at hand now, part of the current input as pointing is: what says an action's keys (a tip, a
+/// menu's row) says them while one is, from the moment one is plugged in to the moment it is taken away; never what
+/// is shown otherwise, where or how big. A Tester's `keyboard` (by default its system's); else, where a program plays
+/// another system (set_platform), that system's; else the host's as it is asked (@hostapi.keyboard: a Mac's and a
+/// PC's always, a phone's or a tablet's while one is connected), its system's where it cannot tell.
+pub fn keyboard() -> Bool {
+  match fake.val {
+    Some(f) => f.keyboard
+    None if said_platform.val >= 0 => platform_keyboard(said_platform.val)
+    None =>
+      match @hostapi.keyboard() {
+        1 => true
+        0 => false
+        _ => platform_keyboard(platform())
+      }
+  }
+}
+
+///|
+/// A system's keyboard where nothing tells otherwise: a desktop's, at hand; a phone's or a tablet's (iOS, Android), not.
+fn platform_keyboard(platform : Int) -> Bool {
+  !(platform == 1 || platform == 2)
+}
+
+///|
 /// Whether the system is set to dark (a Tester's `dark`).
 pub fn system_dark() -> Bool {
   match fake.val {

@@ -163,6 +163,9 @@ extern "C" fn ffi_font_scale() -> Double = "mb_host_font_scale"
 extern "C" fn ffi_native_pointing() -> Int = "mb_host_native_pointing"
 
 ///|
+extern "C" fn ffi_keyboard() -> Int = "mb_host_keyboard"
+
+///|
 extern "C" fn ffi_a11y_on() -> Int = "mb_host_a11y_on"
 
 ///|
@@ -658,6 +661,11 @@ fn font_scale() -> Double {
 ///|
 fn native_pointing() -> Int {
   ffi_native_pointing()
+}
+
+///|
+fn keyboard() -> Int {
+  ffi_keyboard()
 }
 
 ///|

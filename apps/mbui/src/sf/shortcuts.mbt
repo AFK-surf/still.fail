@@ -13,9 +13,11 @@ pub fn set_shortcuts(keys : (String) -> String) -> Unit {
 }
 
 ///|
-/// The keys that do `action`, as the app says them ("" none: shortcutKeys).
+/// The keys that do `action`, as the app says them ("" none: shortcutKeys); none while no keyboard is at hand
+/// (@ui.keyboard, the current input's: a phone's or a tablet's until one is plugged in), so a tip or a menu's row
+/// says keys only where they can be pressed, from the moment a keyboard comes to the moment it goes.
 pub fn shortcut_keys(action : String) -> String {
-  if action == "" {
+  if action == "" || !@ui.keyboard() {
     ""
   } else {
     (shortcut_keys_of.val)(action)

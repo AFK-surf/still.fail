@@ -154,7 +154,8 @@ fn leaked_state() -> Array[String] {
 /// 1 iOS, 2 Android: how lists scroll). `pointing`: what the person points with (@ui.pointing), by default the
 /// system's (a finger on iOS and Android): a run told on one system and replayed as it was (its core told that
 /// system) by the hand it was made with. `native`: what the app was started to be used with (@ui.native_pointing), by
-/// default its system's (the hand of the moment, `pointing`, changes none of it). `seed`: the order the runtime's ready
+/// default its system's (the hand of the moment, `pointing`, changes none of it). `keyboard`: a keyboard at hand
+/// (@ui.keyboard), by default its system's (a desktop's yes, a phone's or a tablet's no). `seed`: the order the runtime's ready
 /// fibers run in is drawn from it (fx.mbt; without, the order they became ready).
 /// `text`: a real host's text as it kept it (MBUI_TEXT_RECORD's lines, textrec.mbt): its metrics, shaping and glyphs
 /// in place of the fake host's. `scale`: device pixels a point. `time`: the clock before the first frame (drawn 16 ms
@@ -186,6 +187,7 @@ pub fn Tester::new(
   platform? : Int = 0,
   pointing? : Pointing,
   native? : Pointing,
+  keyboard? : Bool,
   seed? : Int,
   text? : String,
   scale? : Double = 2.0,
@@ -233,6 +235,7 @@ pub fn Tester::new(
       None => platform_pointing(platform)
     },
     native: native.unwrap_or(platform_pointing(platform)),
+    keyboard: keyboard.unwrap_or(platform_keyboard(platform)),
     reduce_transparency: false,
     reduce_motion: false,
     logs: [],
@@ -1330,6 +1333,12 @@ pub fn Tester::release(self : Tester, x : Double, y : Double) -> Unit {
 pub fn Tester::press_at(self : Tester, x : Double, y : Double) -> Unit {
   finger(0, x, y)
   self.draw()
+}
+
+///|
+/// A keyboard plugged in from now on, or taken away (@ui.keyboard).
+pub fn Tester::set_keyboard(self : Tester, on : Bool) -> Unit {
+  self.fake.keyboard = on
 }
 
 ///|
