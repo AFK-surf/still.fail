@@ -222,24 +222,6 @@ fn home_filter_go(src : Source, w : Workspace, f : String) -> Unit {
 }
 
 ///|
-/// Each hold's press as last felt (`what` held: a message's words picked, a link's menu, a page's bar folded): once a
-/// press, whichever of a frame's builds saw it.
-let felt_holds : Map[String, Int] = {}
-
-///|
-/// Felt as the hold `what` takes the press it is (MessagePick.kt, Links.kt, Preview.kt: HapticFeedbackType.LongPress),
-/// once.
-fn feel_hold(c : @ui.Ctx, what : String) -> Unit {
-  let at = c.press().frame
-  c.after_build("haptic/hold/" + what, fn() {
-    if felt_holds.get(what) != Some(at) {
-      felt_holds[what] = at
-      @ui.haptic(LongPress)
-    }
-  })
-}
-
-///|
 /// A page read the first time (the library's Waiting: @sf.waiting, its rows): rows to come breathing, what is wrong
 /// over them in red (the shapes then still); what it waits on said only to a screen reader while it reads.
 fn waiting(c : @ui.Ctx, n : Int, note : ListNote?, error : String?) -> Unit {

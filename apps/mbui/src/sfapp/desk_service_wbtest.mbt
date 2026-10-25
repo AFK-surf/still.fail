@@ -19,6 +19,12 @@ test "desk: a web service asked as a page is its chat with the service beside it
   assert_eq(side_now(r), (["service:j-web"], "service:j-web"))
   t.run_for(@sfdesk.side_in_ms)
   assert_true(t.query(Button, label="刷新") is Some(_), msg="its bar")
+  // its page's size on a computer: the bar's button, its choices in a panel beside it (ViewportSize.tsx), no toolbar
+  // under the page as a touch device has
+  assert_true(t.find("自适应") is None, msg="no toolbar under the page")
+  t.click(Button, label="页面尺寸")
+  t.frame()
+  assert_true(t.find("自适应") is Some(_), msg="its sizes")
   assert_true(service_pages.contains(service_key("ws1/st1", "j-web")), msg="its page open")
   t.site_says("{\"req\":1,\"method\":\"GET\",\"path\":\"/\",\"headers\":[[\"Accept\",\"text/html\"]],\"page\":true}")
   t.frame()

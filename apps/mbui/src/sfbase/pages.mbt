@@ -192,6 +192,7 @@ pub fn reset() -> Unit {
   app.held_long = false
   app.toast = ""
   left_pages.clear()
+  felt_holds.clear()
   // the drive's files going up and being fetched (drive_upload.mbt, drive_keep.mbt)
   ups_reset()
   dv_fetches.clear()
@@ -259,3 +260,20 @@ pub fn reset() -> Unit {
   shell.val = bare_shell()
 }
 
+///|
+/// Each hold's press as last felt (`what` held: a message's words picked, a link's menu, a page's bar folded): once a
+/// press, whichever of a frame's builds saw it.
+let felt_holds : Map[String, Int] = {}
+
+///|
+/// Felt as the hold `what` takes the press it is (MessagePick.kt, Links.kt, Preview.kt: HapticFeedbackType.LongPress),
+/// once.
+pub fn feel_hold(c : @ui.Ctx, what : String) -> Unit {
+  let at = c.press().frame
+  c.after_build("haptic/hold/" + what, fn() {
+    if felt_holds.get(what) != Some(at) {
+      felt_holds[what] = at
+      @ui.haptic(LongPress)
+    }
+  })
+}
