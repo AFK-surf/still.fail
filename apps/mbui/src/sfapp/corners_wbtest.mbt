@@ -40,7 +40,7 @@ let corner_modes : Array[String] = [
   "chat-station-ref", "chat-station-sheet", "chat-tabs-side", "chat-update", "chat-viz", "chat-working", "decisions", "decisions-idle", "decisions-text", "archived",
   "history", "history-details", "drive", "drive-roots", "drive-download", "drive-empty", "drive-loading", "drive-sub", "drive-upload",
   "files", "files-clash", "files-columns", "files-list", "files-preview", "files-split", "files-transfers",
-  "files-tree", "reader", "reader-bars", "reader-contents", "reader-layout", "reader-md", "newchat", "newchat-files",
+  "files-tree", "place-stations", "place-profiles", "reader", "reader-bars", "reader-contents", "reader-layout", "reader-md", "newchat", "newchat-files",
   "newchat-model", "newchat-profiles", "newchat-reading", "newchat-station", "player-audio", "player-ended",
   "player-opening", "player-video", "service", "service-restart", "service-sized", "service-stopped", "share-in",
   "share-in-files", "share-in-stations", "lock-checking", "lock-code", "lock-failed", "lock-finding", "lock-nocode",
