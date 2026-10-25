@@ -236,6 +236,25 @@ fn fix_new_chat(f : Fixture) -> Json {
       "frequent": [],
     }
   }
+  // its station with no profile open here: what to add first (newchat-noprofile)
+  if f.mode == "newchat-noprofile" {
+    return {
+      "kept": Json::string(n.station),
+      "stations": [fix_station("st1"), fix_station("st2")],
+      "any": true,
+      "station": fix_station(n.station),
+      "blocked": "profile",
+      "model": Json::null(),
+      "runtime": "",
+      "effort": "",
+      "efforts": [],
+      "accounts": [],
+      "pickAccount": false,
+      "waiting": false,
+      "pick": Json::null(),
+      "frequent": [],
+    }
+  }
   // its station's profiles not read yet (newchat-profiles)
   if f.mode == "newchat-profiles" {
     return {

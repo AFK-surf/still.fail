@@ -17,6 +17,7 @@ let drawables : Array[String] = [
   "maker_azure", "maker_groq", "maker_together", "maker_fireworks", "maker_cerebras", "maker_huggingface", "maker_nvidia",
   "maker_baseten", "maker_dsh", "maker_cursor", "maker_devin", "maker_hermes", "slack", "feishu", "stillfail_mark", "stillfail_mark_dark",
   "illus_sign_in", "illus_sign_in_dark", "illus_new_chat", "illus_new_chat_dark", "illus_no_station", "illus_no_station_dark",
+  "illus_no_profile", "illus_no_profile_dark",
   // the stations' pages (src/sfapp/settings/stations.mbt): the buddy's faces, a station asleep
   "buddy_idle", "buddy_idle_dark", "buddy_working", "buddy_working_dark", "buddy_offline", "buddy_offline_dark", "illus_station_offline",
   "illus_station_offline_dark",
