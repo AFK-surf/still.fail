@@ -632,6 +632,18 @@ fn decision_face(
     }),
   )
   let here = { station, session, view }
+  // its messages as their chat draws them (sfpages' rows, as the desktop's 奏 page has them), out of its list: what
+  // they ask is answered at the card's foot
+  let rows_here : @sfpages.MessageHere = {
+    station,
+    session,
+    view,
+    go: None,
+    inline: c.width <= @sfpages.chat_narrow_w,
+    gutter: 0.0,
+    list: None,
+    core: None,
+  }
   let options = match choices_of(card, "options") {
     Some(o) if o.length() > 0 => o
     _ => choices_of(v, "options").unwrap_or([])
@@ -668,7 +680,7 @@ fn decision_face(
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       let rows : Array[() -> Unit] = []
       for m in view.messages {
-        rows.push(fn() { said(c, src, here, m, [], decide=false) })
+        rows.push(fn() { @sfpages.message_row(c, src, rows_here, m) })
       }
       rows.push(fn() {
         match kind {

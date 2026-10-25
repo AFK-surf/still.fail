@@ -103,13 +103,12 @@ test "a video in the chat: the station's still of it (its poster) on the black, 
     owner: "s-c1",
     upload: "",
   }
-  let here : Here = { station: "ws1/st1", session: "s-c1", view: chat_view(Json::object({})) }
-  let t = @ui.Tester::new(fn(c) { file_item(c, src, here, a, 300.0) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { chat_file(c, src, a) }, w=390.0, h=844.0)
   t.draw()
   t.run_for(@ui.image_fade_ms)
   assert_eq(asked[0], "ws1/st1 s-c1 演示录屏.mp4")
   // 16:9 in 300 wide (image_box: 360 × 203 at most), covering its box
-  let (bw, bh, _) = image_box(a, 96.0)
+  let (bw, bh, _) = @sfpages.image_box(a, @sfpages.video_least)
   let h = bh * 300.0 / bw
   assert_true(
     t.drawn_images().iter().any(fn(i) { (i[2] - 300.0).abs() < 0.5 && (i[3] - h).abs() < 0.5 }),
@@ -237,10 +236,9 @@ fn video_in_chat() -> @ui.Tester {
     owner: "s-c1",
     upload: "",
   }
-  let here : Here = { station: "ws1/st1", session: "s-c1", view: chat_view(Json::object({})) }
   let t = @ui.Tester::new(
     fn(c) {
-      file_item(c, src, here, a, 300.0)
+      chat_file(c, src, a)
       preview(c, src)
     },
     w=390.0,
@@ -346,8 +344,7 @@ fn posterless(size : Double) -> @ui.Tester {
     owner: "s-c1",
     upload: "",
   }
-  let here : Here = { station: "ws1/st1", session: "s-c1", view: chat_view(Json::object({})) }
-  let t = @ui.Tester::new(fn(c) { file_item(c, src, here, a, 300.0) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { chat_file(c, src, a) }, w=390.0, h=844.0)
   t.draw()
   t
 }
@@ -783,4 +780,20 @@ test "a desktop's video opened over its chat has the keys: Space plays it each t
   t.key(@ui.key_space)
   assert_false(t.ctx().field_focused())
   assert_eq(played(), before + 2)
+}
+
+///|
+/// A chat's file `a` as its message draws it (sfpages' message_files), in a column 300 wide.
+fn chat_file(c : @ui.Ctx, src : Source, a : Attachment) -> Unit {
+  let here : @sfpages.MessageHere = {
+    station: "ws1/st1",
+    session: "s-c1",
+    view: chat_view(Json::object({})),
+    go: None,
+    inline: true,
+    gutter: 0.0,
+    list: None,
+    core: None,
+  }
+  c.box(style=@ui.style(w=Fixed(300.0)), fn() { @sfpages.message_files(c, src, here, [a], false) }) |> ignore
 }
