@@ -3,6 +3,7 @@
 // pages), taken in here by name.
 
 pub using @sfbase {
+  feel_hold,
   shared_into,
   station_files_asked,
   files_into,

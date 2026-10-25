@@ -42,7 +42,7 @@ test "the sizes' bar held still half a second: folded away, felt once (Preview.k
   t.frame()
   let (x, y) = t.find("自适应").unwrap()
   t.press_at(x, y)
-  t.run_for(svc_fold_hold_ms + 100.0)
+  t.run_for(@sfpages.svc_fold_hold_ms + 100.0)
   t.release(x, y)
   assert_eq(svc_folded.val, Some(true))
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])

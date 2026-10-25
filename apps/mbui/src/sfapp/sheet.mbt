@@ -11,10 +11,6 @@ priv enum SheetKind {
   PickStation(String)
   /// what a new chat runs on (NewChat.kt openRunPicker): 66%; its accounts' list in place of it while `accounts`
   RunPicker(String)
-  /// how a service's page's resources came (PreviewLoad.kt): its station and port, 62%
-  LoadOf(String, Int)
-  /// a service's page's sizes (Preview.kt openViewportSheet), by the service's key: 62%
-  PageSizes(String)
   /// what another app shares in, to a chat (ShareSheet.kt): 72%, draggable
   ShareSheet
   /// what an invitation's link leads to, before it is accepted (Workspaces.kt InviteLinkSheet): half the screen
@@ -27,7 +23,6 @@ fn sheet_spec(kind : SheetKind) -> (Double, Bool) {
   match kind {
     PickStation(_) => (0.5, false)
     RunPicker(_) => (0.66, false)
-    LoadOf(_, _) | PageSizes(_) => (0.62, false)
     ShareSheet => (0.72, true)
     InviteLink => (0.5, false)
     NoSheet => (0.5, false)
@@ -35,12 +30,11 @@ fn sheet_spec(kind : SheetKind) -> (Double, Bool) {
 }
 
 ///|
-/// A kind's title (Sheet.kt SheetHead), its panel's; "" for one that draws its own head (the run picker's, a page's
-/// load, what is shared, an invitation).
+/// A kind's title (Sheet.kt SheetHead), its panel's; "" for one that draws its own head (the run picker's, what is
+/// shared, an invitation).
 fn sheet_title(kind : SheetKind) -> String {
   match kind {
     PickStation(_) => tr("android-chat.new.station.pick")
-    PageSizes(_) => svc("android-chat.preview.size.title")
     _ => ""
   }
 }

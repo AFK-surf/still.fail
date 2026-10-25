@@ -30,7 +30,6 @@ fn init {
 fn reset() -> Unit {
   @sf.set_language(None)
   files_cornered.val = false
-  felt_holds.clear()
   image_quoted_at.val = -1
   bar_glyph.val = None
   bar_stations_said.val = ""
@@ -132,7 +131,6 @@ fn reset() -> Unit {
   boxed_n.val = 0
   run_picker_opened.val = false
   run_picker_saving.val = false
-  svc_hold.val = -1.0
   // the composer: its ids counted from the start, what waits for it
   next_pending.val = 1
   quote_fields.clear()
@@ -492,8 +490,6 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         match kind {
           PickStation(scope) => pick_station_sheet(c, src, scope)
           RunPicker(station) => run_picker_sheet(c, src, station)
-          LoadOf(station, port) => load_sheet(c, src, station, port)
-          PageSizes(key) => page_sizes_sheet(c, key)
           ShareSheet => share_in_sheet(c, src, w)
           InviteLink => invite_sheet(c, src)
           NoSheet => ()
