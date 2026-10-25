@@ -573,7 +573,7 @@ pub fn frame(
   // the window leaves past what shows of the sidebar with the page in use and of the side panel after it, else 6 in
   // from the window's edge; which is in use and how far the tape is moved
   let peek_w = tape_peek(c.width)
-  let panel_of = if wide.tape { side_open_for(src, app.nav.top()) } else { None }
+  let panel_of = if wide.tape { side_open_for(src, w, app.nav.top()) } else { None }
   let panel_w = match panel_of {
     Some(_) => tape_side_width(c.width, peek_w, closed_bar_in + closed_bar_gap)
     None => 0.0
@@ -689,7 +689,7 @@ pub fn frame(
         // page, a keyboard making it shorter, move none of it (it goes with the page, at once)
         @motion.scope(c, pane, bottom=true)
         match panel_of {
-          Some(r) =>
+          Some(side) =>
             tape_behind(c, Panel, fn() { c.box(
               style=page_apart.then(
                 @ui.style(
@@ -703,7 +703,7 @@ pub fn frame(
               tx=tape_x,
               fn() {
                 @sf.pane_round.val = Some(@sf.corner_radii(tape_pane_corners(Panel, true)))
-                c.sized(panel_w, panel_h, fn() { tape_side(c, src, w, r) })
+                c.sized(panel_w, panel_h, fn() { tape_side(c, src, w, side) })
                 @sf.pane_round.val = None
               },
             ) })
@@ -835,7 +835,7 @@ fn tape_x_of(at : (Double, Double, Double), p : TapePane) -> Double {
 /// over: the side panel as it opens beside the chat it was closed for, the page again as it closes — and how far the
 /// tape is moved where its move has got to. 0 off the tape. `panel`: the chat whose side panel is open (tape_side);
 /// `at`: tape_at's.
-fn tape_frame(c : @ui.Ctx, panel : ChatRef?, at : (Double, Double, Double), known : Bool) -> Double {
+fn tape_frame(c : @ui.Ctx, panel : SideOf?, at : (Double, Double, Double), known : Bool) -> Double {
   if !wide.tape {
     wide.tape_ask = None
     wide.tape_chat = ""
@@ -889,7 +889,7 @@ fn tape_frame(c : @ui.Ctx, panel : ChatRef?, at : (Double, Double, Double), know
     _ => ""
   }
   let open = match panel {
-    Some(r) => chat_key(r)
+    Some(side) => side.key()
     None => ""
   }
   if wide.tape_ask is None {
