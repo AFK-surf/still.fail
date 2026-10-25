@@ -1,9 +1,6 @@
-// Settings from the gear (app/screens/SettingsHome.kt SettingsScreen): who is signed in and the workspace in view, each
-// a card; then the workspace's in small groups (security and the vault; its stations, connects and profiles; its
-// agents' automatic decisions, memory and usage), then this device's (how it looks, its bar, its notifications, what it
-// keeps), then 关于 (AboutScreen: this build, the changelog, the reports, the terms). Each row has its icon, and says how
-// things stand at its end, what is wrong in red. And how this device shows still.fail (AppearanceScreen), and the
-// account (Me.kt).
+// The settings' pages from the gear, by route, and what this device chose of how still.fail shows (AppearanceScreen):
+// its theme, its prefs as chosen here a moment ago. The settings' list itself (the gear's page on a small screen, the
+// sidebar beside these pages on a wider one) is sfpages' (settings_list.mbt), drawn by the frame's setting_route.
 
 ///|
 /// A page of the settings, by its route: call for the page the app's stack shows. `root`: a place of the bottom
@@ -57,7 +54,6 @@ let wide_heading : (Double, Double) = (14.0, 22.0)
 ///|
 fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
   match route {
-    Home => settings_home(c, core, here)
     Stations => stations_page(c, core, here)
     Profiles(only) => profiles_page(c, core, here, only)
     MemoryDoc(a, skill, at) => memory_doc_page(c, core, a, skill, at)
@@ -69,23 +65,15 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     AutoPolicy(s) => policy_page(c, core, here, s)
     KeptFiles => kept_page(c, core)
     KeptChat(s, thread) => kept_chat_page(c, core, s, thread)
-    // one page for every frame (src/sfdesk about.mbt), drawn by the frame's setting_route
-    Appearance | Fonts | BarSettings | Changelog | About | Memories | Memory(_) | AutoDecisions | UsagePrices(_) | Usage | PickModels(_, _) | ProfileModels(_, _) | Me | Workspace | Security | SecurityOpen | Vault | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) => ()
+    // one page for every frame (src/sfdesk about.mbt; the list, sfpages' settings_list.mbt), drawn by the frame's
+    // setting_route
+    Home | Appearance | Fonts | BarSettings | Changelog | About | Memories | Memory(_) | AutoDecisions | UsagePrices(_) | Usage | PickModels(_, _) | ProfileModels(_, _) | Me | Workspace | Security | SecurityOpen | Vault | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) => ()
     LocalStation => local_station_page(c, core)
     // the desktop's own, drawn by its frame (src/sfdesk)
     Shortcuts | Notifications | Permissions | Archiving | StationArchiving(_) => ()
     RunSettings(s, key) => run_settings_page(c, core, s, key)
   }
 }
-
-///|
-/// The themes to choose (SettingsHome.kt themes): the system's, light, dark.
-// kept across runs: a table, never written
-let themes : Array[(String, String)] = [
-  ("system", "android-settings.theme.system"),
-  ("light", "android-settings.theme.light"),
-  ("dark", "android-settings.theme.dark"),
-]
 
 ///|
 /// What was chosen here before the core's prefs say it (prefs.set on its way): by the pref's name.
@@ -157,284 +145,6 @@ pub fn dark(prefs : Json?, system_dark : Bool) -> Bool {
 }
 
 ///|
-/// Settings (SettingsScreen).
-fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  let w = workspace_view(core, here)
-  let v = w.value
-  let stations = stations_of(core, here).value
-  let connects = (core.topic)("connects", { "scope": str(here.workspace), "mine": Json::boolean(false) }).value
-  let lock = (core.topic)("lock", { "workspace": str(here.workspace) }).value
-  let vaults = (core.topic)("vaults", { "workspace": str(here.workspace) }).value
-  let st = match stations {
-    Some(Array(a)) => Some(a)
-    _ => None
-  }
-  let manager = text(v, "role") == "owner" || text(v, "role") == "admin"
-  let members = items(v, "members").length()
-  let waiting = items(v, "added").length() + items(v, "invitations").length()
-  let me_name = if here.person != "" { here.person } else { here.email }
-  let people = match v {
-    Some(_) =>
-      if manager && waiting > 0 {
-        fill("android-settings.members.waiting", [("n", members.to_string()), ("waiting", waiting.to_string())])
-      } else {
-        fill("android-settings.members.count", [("n", members.to_string())])
-      }
-    None => ""
-  }
-  scroll_page(c, "home", [
-    fn() { top_back(c, core, tr("android-settings.home.back")) },
-    fn() { large_title(c, tr("android-settings.title")) },
-    fn() {
-      if identity_card(
-          c,
-          "me-card",
-          fn() { avatar(c, core, here.email, me_name, @sf.identity_mark, picture=here.picture) },
-          me_name,
-          here.email,
-        ) {
-        (core.push)(Me)
-      }
-    },
-    // the workspace as the account is (SettingsHome.kt): its mark, its name, the viewer's role in it and its people
-    fn() {
-      let name = match v {
-        Some(_) => text(v, "name")
-        None => here.name
-      }
-      let line = match v {
-        Some(_) => role_label(text(v, "role")) + " · " + people
-        None => ""
-      }
-      if identity_card(c, "workspace-card", fn() { workspace_tile(c, name, text(v, "emoji"), text(v, "icon")) }, name, line) {
-        (core.push)(Workspace)
-      }
-    },
-    // who may do what: security mode, where the workspace has it, and the vault. Each row there from the first frame,
-    // its words once the core has said them: a row put in only then pushed the page under it down a row while it was
-    // looked at (security mode's taken out only where the core says there is none, still.fail's always has it)
-    fn() {
-      list_card(c, fn() {
-        if lock is None || flag(lock, "available") {
-          let attention = count(lock, "attention")
-          let said = if lock is None {
-            ""
-          } else if !flag(lock, "locked") {
-            tr("web-mobile.settings.securityOff")
-          } else if attention > 0 {
-            fill("web-mobile.settings.securityWaiting", [("n", attention.to_string())])
-          } else {
-            tr("web-mobile.settings.securityOn")
-          }
-          if go_row(c, "go-security", tr("web-pages.security.title"), value=said, bad=attention > 0, icon="shield-check") {
-            (core.push)(Security)
-          }
-        }
-        // the vault's row (Vault.kt VaultSettingsRow): what waits, else how many items, else off (the core's words)
-        let said = text(vaults, "statusText")
-        let n = if flag(vaults, "statusBad") { 1 } else { 0 }
-        if go_row(c, "go-vault", tr("android-settings.vault.title"), value=said, bad=n > 0, icon="key") {
-          (core.push)(Vault)
-        }
-      })
-    },
-    // its stations and what they run: the chats' ways in and the agents' accounts
-    fn() {
-      list_card(c, fn() {
-        let (online, troubled, profiles, short) = match st {
-          Some(a) => {
-            let mut on = 0
-            let mut p = 0
-            let mut sh = 0
-            for x in a {
-              if flag(Some(x), "online") {
-                on += 1
-              }
-              for pr in items(field(Some(x), "overview"), "profiles") {
-                p += 1
-                if has(Some(pr), "trouble") {
-                  sh += 1
-                }
-              }
-            }
-            (on, on < a.length(), p, sh)
-          }
-          None => (0, false, 0, 0)
-        }
-        let st_value = match st {
-          Some(a) => fill("android-settings.home.online", [("online", online.to_string()), ("total", a.length().to_string())])
-          None => ""
-        }
-        if go_row(c, "go-stations", "Station", value=st_value, dot=troubled, icon="server") {
-          (core.push)(Stations)
-        }
-        let mut failing = 0
-        for x in items(connects, "items") {
-          if text(field(Some(x), "connect"), "presence") == "error" {
-            failing += 1
-          }
-        }
-        let cn_value = match connects {
-          Some(_) =>
-            if failing > 0 {
-              fill("android-settings.home.failing", [("n", failing.to_string())])
-            } else {
-              fill("android-settings.count", [("n", items(connects, "items").length().to_string())])
-            }
-          None => ""
-        }
-        if go_row(c, "go-connects", tr("android-settings.connects.title"), value=cn_value, bad=failing > 0, icon="im") {
-          (core.push)(Connects(""))
-        }
-        let pr_value = match st {
-          Some(_) =>
-            if short > 0 {
-              fill("android-settings.home.short", [("n", short.to_string())])
-            } else {
-              fill("android-settings.count", [("n", profiles.to_string())])
-            }
-          None => ""
-        }
-        if go_row(c, "go-profiles", "Profile", value=pr_value, bad=short > 0, icon="quota") {
-          (core.push)(Profiles(""))
-        }
-      })
-    },
-    // its agents: what they decide by themselves, what they remember, what they used
-    fn() {
-      list_card(c, fn() {
-        if go_row(c, "go-decisions", tr("web-pages.automaticDecisions.title"), icon="check") {
-          (core.push)(AutoDecisions)
-        }
-        if go_row(c, "go-memory", tr("android-settings.memory"), icon="brain") {
-          (core.push)(Memories)
-        }
-        if go_row(c, "go-usage", tr("android-settings.home.usage"), icon="chart") {
-          (core.push)(Usage)
-        }
-      })
-    },
-    fn() { section_header(c, tr("android-settings.home.device"), start=S6) },
-    fn() {
-      list_card(c, fn() {
-        let theme = appearance((core.topic)("prefs", Map::new()).value)
-        let mut said = ""
-        for th in themes {
-          if th.0 == theme {
-            said = tr(th.1)
-          }
-        }
-        if go_row(c, "go-appearance", tr("android-settings.appearance.title"), value=said, icon="sliders") {
-          (core.push)(Appearance)
-        }
-        // this device's bottom bars: none on a wide screen (SettingsHome.kt: !LocalWide)
-        if go_row(c, "go-bars", tr("android-misc.bar.title"), value=bars_value(core), icon="view-columns") {
-          (core.push)(BarSettings)
-        }
-        // notifications on this device, local notices and pushes alike (SettingsHome.kt Notify): as the core's
-        // `notify` says, or as switched while `notify.set` is out (a spinner, not switched again meanwhile); its
-        // switch says whether, no note under it
-        let notify = (core.topic)("notify", Map::new()).value
-        let pending = is_doing(core, ["notify.set"], []) || notify_switched.val is Some(_)
-        let on = match notify_switched.val {
-          Some(v) => v
-          None => notify is None || flag(notify, "on")
-        }
-        if list_row(c, key=if pending { "" } else { "notify" }, fn() {
-          row_icon(c, "bell")
-          row_title(c, tr("android-settings.notify.title"))
-          if pending {
-            spinner(c)
-          }
-          switch(c, "notify", on)
-        }) {
-          use_notify(core, !on)
-        }
-        // what this device keeps, in all (SettingsHome.kt: KeptFiles.read's total), once the core has said
-        kept_read(c, core)
-        let kept_value = match kept.chats {
-          Some(chats) => size_words(chats.fold(init=0.0, fn(s, x) { s + number(Some(x), "bytes") }))
-          None => ""
-        }
-        if go_row(c, "go-files", tr("android-settings.files.title"), value=kept_value, icon="disk") {
-          (core.push)(KeptFiles)
-        }
-      })
-    },
-    // 关于 (SettingsHome.kt AboutRow): this build, or the newer one there is
-    fn() {
-      list_card(c, fn() {
-        let v = (core.version_now)()
-        let value = if v.newer != "" && v.doing == "" {
-          @sf.t("android-settings.version.update", args=[("version", v.newer)])
-        } else {
-          build_version()
-        }
-        if go_row(c, "go-about", tr("web-pages.settings.nav.about"), value~, icon="info") {
-          (core.push)(About)
-        }
-      })
-    },
-    fn() { gap(c, 30.0) },
-  ])
-}
-
-///|
-/// The account's card and the workspace's (SettingsHome.kt): what it is by (`lead`: a picture, a mark), its name, a line
-/// under it, a chevron; tapped, true the frame after.
-fn identity_card(c : @ui.Ctx, key : String, lead : () -> Unit, name : String, line : String) -> Bool {
-  card(c, key~, fn() {
-    c.box(style=identity_row, fn() {
-      lead()
-      c.box(style=@sf.full_width, fn() {
-        c.text(name, style=identity_name) |> ignore
-        if line != "" {
-          c.text(line, style=identity_line) |> ignore
-        }
-      })
-      |> ignore
-      chevron(c)
-    })
-    |> ignore
-  })
-}
-
-///|
-/// A card's row (SettingsHome.kt): what it is by, its words, its chevron, 14 apart, centred across it.
-// kept across runs: a value (no field of it changes)
-let identity_row : @ui.Style = @ui.css("row w=Full gap=S3_5 align=ACenter")
-
-///|
-/// The name on the account's card and the workspace's: 16 bold on one line, its line the theme's (1.4em: 22.4), as
-/// Android's Text says none of its own.
-// kept across runs: a value (no field of it changes)
-let identity_name : @ui.TextStyle = @ui.text_style(size=Title, weight=Bold, color=Fg, wrap=false, w=Full)
-
-///|
-/// The line under it: 13 in the muted, one line, the theme's line (18.2).
-// kept across runs: a value (no field of it changes)
-let identity_line : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Full)
-
-///|
-/// The workspace's mark on its card (SettingsHome.kt WorkspaceTile), as the account's picture is on its own: a picture
-/// put up fills the square; one of still.fail's icons or an emoji on the chips' ground; else its first letter, muted,
-/// as the web's rail has it.
-fn workspace_tile(c : @ui.Ctx, name : String, emoji : String, icon : String) -> Unit {
-  let t = @sf.theme()
-  let picture = icon.has_prefix("https://") || icon.has_prefix("http://") || icon.has_prefix("data:image/")
-  c.box(style=@sf.workspace_tile.then(@ui.style(bg=Data(if picture { t.p.card } else { t.p.chip }))), fn() {
-    if picture {
-      @sf.station_mark(c, emoji, icon, @sf.identity_mark, t.p.text)
-    } else if @sf.has_station_mark(emoji, icon) {
-      @sf.station_mark(c, emoji, icon, @sf.workspace_tile_mark, t.p.text)
-    } else {
-      c.text(@sf.initial(name), style=@sf.workspace_letter) |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
 /// still.fail's terms or privacy policy on the web (SettingsHome.kt Legal; the app speaks Chinese: no /en).
 pub fn legal_url(page : String) -> String {
   "https://still.fail/" + page
@@ -492,13 +202,3 @@ pub fn build_version() -> String {
     "0.1"
   }
 }
-
-///|
-/// The words under a switch (SettingsHome.kt's notes under a Seg; Fonts.kt's under the faces): 24 in, 8 under it, 13
-/// on 19.5 in the muted.
-fn seg_note(c : @ui.Ctx, note : String) -> Unit {
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), pl=24.0, pr=24.0, pt=8.0, fn() { c.text(note, size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=19.5) |> ignore })
-  |> ignore
-}
-

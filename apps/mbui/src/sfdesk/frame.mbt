@@ -1207,8 +1207,8 @@ fn main_page(
     }
     // the chats' list is the sidebar's: nothing open (yet), the page's ground
     Home => ()
-    // settings' own home is its first page (the web goes to 外观)
-    Settings => setting_page(c, src, w, Route::Appearance)
+    // the settings come to beside their list: its first row's page (settings_frame.mbt settings_landing)
+    Settings => setting_page(c, src, w, settings_landing)
     Setting(r) => setting_page(c, src, w, r)
     // a place of the rail's other than the chats': its page, under its title
     Place(p) => place_page(c, src, w, p)

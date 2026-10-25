@@ -47,7 +47,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (Appearance | Fonts | BarSettings | About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _))) {
+  if !(route is (Home | Appearance | Fonts | BarSettings | About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _))) {
     return false
   }
   let core = settings_core(src, w)
@@ -55,6 +55,12 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
   @settings.frame(core, here)
   settings_fixture(src, core)
   match route {
+    // the settings' list as a page of its own (a small screen's: sfpages' settings_list.mbt), a row pressed its page
+    // pushed
+    Home =>
+      look_page(c, core, frame, "home", @sf.t("android-settings.title"), @sfpages.settings_blocks(c, core, here, fn(r) {
+        (core.push)(r)
+      }))
     Appearance => appearance_page(c, core, frame)
     Fonts => fonts_page(c, core, frame)
     BarSettings => bars_page(c, core, frame)
@@ -135,58 +141,19 @@ fn settings_reset() -> Unit {
 }
 
 ///|
-/// The settings' sidebar: back to the chats, then its pages by where they act (this device, the stations, the cloud);
-/// those in the rail (Station, Profile, 连接, 用量) are reached there.
+/// The settings' sidebar: back to the chats, then the settings' list (sfpages' settings_list.mbt: the same rows in the
+/// same groups as a small screen's settings page), the row of the page beside it lit; a row pressed, its page beside
+/// it, in place of the one there.
 fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
-  let here = match app.nav.top() {
-    // (a page under one of them: that one lit)
-    Setting(Route::StationArchiving(_)) => Some(Route::Archiving)
-    Setting(Route::SecurityOpen) => Some(Route::Security)
-    Setting(Route::AutoCompletion) | Setting(Route::AutoPolicy(_)) =>
-      Some(Route::AutoDecisions)
-    Setting(r) => Some(r)
-    Settings => Some(Route::Appearance)
-    Archived => Some(Route::Archive)
+  let lit = match app.nav.top() {
+    Setting(r) => Some(@sfpages.settings_row_of(r))
+    // (the settings come to: their first row's page, settings_landing)
+    Settings => Some(settings_landing)
     _ => None
   }
-  let rails = rail_items(src, w.id)
-  let here_of = @settings.here_of(settings_core(src, w), w.id, w.name)
-  // its lines, a heading over each part and a row a page, so a row knows whether another row is under it
-  let lines : Array[SettingsLine] = [
-    Part(@sf.t("web-pages.settings.nav.client")),
-    PageRow(Route::Appearance, "appearance", "sliders", @sf.t("web-pages.settings.nav.appearance")),
-    PageRow(Route::Notifications, "notifications", "bell", @sf.t("web-pages.settings.nav.notifications")),
-    PageRow(Route::Permissions, "permissions", "key", @sf.t("web-pages.settings.nav.permissions")),
-    PageRow(Route::Changelog, "changelog", "sparks", @sf.t("web-pages.settings.nav.changelog")),
-    PageRow(Route::About, "about", "info", @sf.t("web-pages.settings.nav.about")),
-    // the desktop's own (cloud/settings.tsx: the client's part)
-    PageRow(Route::Shortcuts, "shortcuts", "command", @sf.t("web-pages.settings.nav.shortcuts")),
-  ]
-  if @ui.platform() == 0 {
-    lines.push(PageRow(Route::LocalStation, "local-station", "monitor", @sf.t("web-pages.localStation.title")))
-  }
-  lines.push(Part("Station"))
-  if !rails.contains("stations") {
-    lines.push(PageRow(Route::Stations, "stations", "server", "Station"))
-  }
-  if !rails.contains("connects") {
-    lines.push(PageRow(Route::Connects(""), "connects", "im", @sf.t("web-pages.settings.nav.connects")))
-  }
-  if !rails.contains("profiles") {
-    lines.push(PageRow(Route::Profiles(""), "profiles", "quota", "Profile"))
-  }
-  lines.push(PageRow(Route::Archiving, "archive", "archive", @sf.t("web-pages.archiving.title")))
-  lines.push(PageRow(Route::AutoDecisions, "automatic-decisions", "check", @sf.t("web-pages.automaticDecisions.title")))
-  lines.push(PageRow(Route::Memories, "memory", "brain", @sf.t("web-pages.settings.nav.memory")))
-  if !rails.contains("usage") {
-    lines.push(PageRow(Route::Usage, "usage", "chart", @sf.t("web-pages.settings.nav.usage")))
-  }
-  lines.push(Part("Cloud"))
-  lines.push(PageRow(Route::Workspace, "workspace", "users", "Workspace · " + w.name))
-  lines.push(PageRow(Route::Security, "security", "shield-check", @sf.t("web-pages.security.title")))
-  lines.push(PageRow(Route::Vault, "vault", "key", @sf.t("web-pages.vault.title")))
-  lines.push(PageRow(Route::Me, "account", "user", if here_of.email != "" { here_of.email } else { w.email }))
+  let core = settings_core(src, w)
+  let here = @settings.here_of(core, w.id, w.name)
   c.box(style=settings_side_fill, fn() {
     side_top(c)
     side_scroll(c, "settings-nav", fn() {
@@ -204,42 +171,26 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         }
         wide.landed = ""
       }
-      for i, line in lines {
-        match line {
-          Part(label) => @sf.list_heading(c, label, Side)
-          PageRow(r, key, icon, label) => {
-            let more = i + 1 < lines.length() && lines[i + 1] is PageRow(_)
-            if nav_row(
-                c,
-                "settings-nav/" + key,
-                here == Some(r),
-                fn() {
-                  @sf.icon(c, icon, size=settings_nav_icon, color=t.p.muted) |> ignore
-                  nav_words(c, label)
-                },
-                more~,
-              ) {
-              while app.nav.depth() > 1 {
-                if !app.nav.pop() {
-                  break
-                }
-              }
-              app.nav.push(Setting(r))
-            }
+      // (the way back is the frame's, not one of the list's rows: a group's room between them)
+      @sf.list_apart(c)
+      @sfpages.settings_side_rows(c, core, here, lit, fn(r) {
+        while app.nav.depth() > 1 {
+          if !app.nav.pop() {
+            break
           }
         }
-      }
+        app.nav.push(Setting(r))
+      })
     })
   })
   |> ignore
 }
 
 ///|
-/// A line of the settings' sidebar: a heading over a part, or a page's row (its route, key, icon and words).
-priv enum SettingsLine {
-  Part(String)
-  PageRow(@settings.Route, String, String, String)
-}
+/// The page the settings come to beside their list on a medium or large screen (the stack's root, the gear pressed):
+/// the list's first row's, the account's, as a list's page is the one first in it.
+// kept across runs: a value (no field of it changes)
+pub let settings_landing : Route = Route::Me
 
 ///|
 let settings_nav_icon : Double = 16.0

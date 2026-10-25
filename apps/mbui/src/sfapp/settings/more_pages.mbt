@@ -559,7 +559,7 @@ pub let all_places : Array[String] = ["chats", "decisions", "files", "stations",
 
 ///|
 /// What settings' row says of the bars (barsValue): how many, or the one bar's places.
-fn bars_value(core : Core) -> String {
+pub fn bars_value(core : Core) -> String {
   let (sets, _) = (core.bars)()
   if sets.length() > 1 {
     fill("android-misc.bar.count", [("n", sets.length().to_string())])
@@ -642,6 +642,17 @@ fn kept_read(c : @ui.Ctx, core : Core) -> Unit {
       }
     })
   })
+}
+
+///|
+/// What 本机缓存's row in the settings' list says (SettingsHome.kt: KeptFiles.read's total): the chats' kept data in
+/// all, once the core has said it ("" until then).
+pub fn kept_said(c : @ui.Ctx, core : Core) -> String {
+  kept_read(c, core)
+  match kept.chats {
+    Some(chats) => size_words(chats.fold(init=0.0, fn(s, x) { s + number(Some(x), "bytes") }))
+    None => ""
+  }
 }
 
 ///|

@@ -1,6 +1,7 @@
 // 65-wide-places (e2e/traces/wide-places.trace: 1280 × 800): the rail's places: 文件 (the sidebar the stations'
-// folders, the test station's home read through the core), the chats again, settings (the sidebar its list, 外观 its
-// first page): 深色 there turns the app dark at once (prefs.set appearance dark), 跟随系统 back (appearance system).
+// folders, the test station's home read through the core), the chats again, settings (the sidebar its list, the
+// account's page beside it), 外观 picked in it: 深色 there turns the app dark at once (prefs.set appearance dark),
+// 跟随系统 back (appearance system).
 
 ///|
 test "65-wide-places" {
@@ -13,6 +14,7 @@ test "65-wide-places" {
     f.see("新建对话")
     f.tap("icon:settings")
     f.see("返回会话")
+    f.tap("=外观")
     f.see("跟随系统")
     f.tap("=深色")
     assert_true(@sf.theme().dark)

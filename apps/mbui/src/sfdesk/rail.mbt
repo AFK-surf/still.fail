@@ -809,9 +809,11 @@ fn rail_icon(place : String) -> String {
 }
 
 ///|
-/// Settings from the rail's gear (or ⌘,): its first page, 外观, the sidebar its list.
+/// Settings from the rail's gear (or ⌘,): their list, where the shell opens it (sfapp's open_where: beside it on a
+/// medium or large screen the page of its first row, settings_landing; on a small one the list's own page).
 pub fn open_settings() -> Unit {
-  open_settings_at(@settings.Route::Appearance)
+  app.menu = false
+  open_page(Settings)
 }
 
 ///|

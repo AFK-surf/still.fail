@@ -183,6 +183,8 @@ fn open_where(p : Page) -> Unit {
   match p {
     Chat(r) => open_chat_beside(r)
     NewChat => new_chat_beside()
+    // the settings: their list the sidebar's, the page of its first row beside it
+    Settings => @sfdesk.open_settings_at(@sfdesk.settings_landing)
     _ => app.nav.push(p)
   }
 }

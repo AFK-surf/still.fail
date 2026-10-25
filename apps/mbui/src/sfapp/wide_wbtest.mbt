@@ -201,36 +201,37 @@ test "wide: the 奏 page's decision answered by an option (decision.answer), set
 }
 
 ///|
-test "wide: settings from the rail's gear, its list in the sidebar; back to the chats" {
+test "wide: settings from the rail's gear, its list in the sidebar, its first row's page (the account's) beside it; back to the chats" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   t.key(@ui.key_of_char(','), mods=@ui.mod_cmd)
   assert_true(t.find("返回会话") is Some(_))
-  assert_true(t.find("跟随系统") is Some(_))
+  assert_true(app.nav.top() == Setting(@settings.Route::Me))
+  assert_true(t.find("已登录的设备") is Some(_))
   t.tap_text("返回会话")
   assert_true(t.find("新建对话") is Some(_))
 }
 
 ///|
-test "wide: settings' sidebar taller than a short window scrolls to its last rows (Cloud's), which open their pages" {
+test "wide: settings' sidebar taller than a short window scrolls to its last rows (this device's), which open their pages" {
   let calls : Array[Made] = []
   let h = 430.0
   let t = wide_tester(calls, h~)
   t.key(@ui.key_of_char(','), mods=@ui.mod_cmd)
   t.run_for(@ui.nav_push_ms)
-  let below = match t.rect_of("Workspace · ") {
+  let below = match t.rect_of("本机缓存") {
     Some((_, y, _, _)) => y
-    None => fail("no Workspace row")
+    None => fail("no 本机缓存 row")
   }
   assert_true(below > h, msg="under the window's foot at first: \{below}")
   let (x, _) = t.find("返回会话").unwrap()
   t.wheel(x, h / 2.0, 3000.0)
   t.run_for(@ui.nav_push_ms)
-  let (_, y, _, rh) = t.rect_of("Workspace · ").unwrap()
+  let (_, y, _, rh) = t.rect_of("本机缓存").unwrap()
   assert_true(y + rh <= h, msg="scrolled into the window: \{y}")
-  t.tap_text("Workspace · ")
+  t.tap_text("本机缓存")
   t.run_for(@ui.nav_push_ms)
-  assert_true(app.nav.top() == Setting(@settings.Route::Workspace))
+  assert_true(app.nav.top() == Setting(@settings.Route::KeptFiles))
 }
 
 ///|
@@ -788,7 +789,7 @@ test "wide: settings' pages as the web's: 通知 (提醒方式, each kind), 权�
   let t = wide_tester(calls)
   t.key(@ui.key_of_char(','), mods=@ui.mod_cmd)
   // the sidebar has them all
-  for label in ["权限", "更新日志", "关于", "自动决策"] {
+  for label in ["通知", "归档", "自动决策", "本机缓存", "关于"] {
     assert_true(t.find(label) is Some(_), msg=label)
   }
   app.nav.push(Setting(@settings.Route::Notifications))
@@ -1646,8 +1647,11 @@ test "wide: a connect's page: back to the connects, who it is and how it is, how
   assert_eq(put.length(), 1)
   assert_eq(text(field(Some(put[0].params), "input"), "mode"), "single-session")
   assert_true(t.find("更改会话方式") is None, msg="closed as it goes")
-  // back: the connects
-  t.click(Link, label="连接")
+  // back: the connects (the page's back, over its head: the settings' list beside it has 连接 too)
+  let links = t.all(Link, label="连接")
+  links.sort_by(fn(a, b) { b.rect.0.compare(a.rect.0) })
+  let (bx, by, bw, bh) = links[0].rect
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
   t.run_for(@ui.nav_push_ms)
   assert_true(t.query(Button, label="添加连接") is Some(_), msg="the list again")
 }
