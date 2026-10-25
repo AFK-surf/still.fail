@@ -203,6 +203,9 @@ fn new_body(
             new_composer(c, src, w, v, address, name, false, Some(fn() { new_tools(c, src, w, v, station) }))
           })
         })
+        // over what is under it on the page (the web's dock, over the page): going between its places, it passes over
+        // what is there
+        c.put_over(place)
         // (how tall it is, kept clear as the page leaves: new_chat_after)
         @motion.measure(c, place, "new/composer")
       }
