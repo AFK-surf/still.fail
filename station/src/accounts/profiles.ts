@@ -299,11 +299,17 @@ export function devinEmailIn(text: string): string | null {
 /// its Devin home), none before.
 export function devinEmail(home: string): string | null {
   try {
-    const email = JSON.parse(readFileSync(join(home, "devin", "account.json"), "utf8"))?.email;
-    return typeof email === "string" && email !== "" ? email : null;
+    return devinNotedIn(readFileSync(devinAccountFile(home), "utf8"));
   } catch {
     return null;
   }
+}
+
+/// Where `devinEmail` reads it, and what it says there.
+export const devinAccountFile = (home: string) => join(home, "devin", "account.json");
+export function devinNotedIn(text: string): string | null {
+  const email = JSON.parse(text)?.email;
+  return typeof email === "string" && email !== "" ? email : null;
 }
 
 /// Whose Cursor account a profile signed in to, as its sign-in kept it (accounts/cursor.ts).
@@ -320,12 +326,20 @@ export function grokModels(text: string): string[] {
 /// Whose account Grok Build is signed in with, as its auth.json says (agents/grok.ts: its home is the profile's grok/).
 export function grokEmail(home: string): string | null {
   try {
-    const auth: Json = JSON.parse(readFileSync(join(home, "grok", "auth.json"), "utf8"));
-    for (const entry of Object.values(auth ?? {})) {
-      const email = (entry as Json)?.email;
-      if (typeof email === "string" && email !== "") return email;
-    }
-  } catch {}
+    return grokEmailIn(readFileSync(grokAuthFile(home), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+/// Where `grokEmail` reads it, and what it says there.
+export const grokAuthFile = (home: string) => join(home, "grok", "auth.json");
+export function grokEmailIn(text: string): string | null {
+  const auth: Json = JSON.parse(text);
+  for (const entry of Object.values(auth ?? {})) {
+    const email = (entry as Json)?.email;
+    if (typeof email === "string" && email !== "") return email;
+  }
   return null;
 }
 

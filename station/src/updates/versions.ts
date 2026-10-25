@@ -20,13 +20,19 @@ export function channelOfId(id: string): Channel | null {
 export const feed = (channel: Channel, origin: string) => `${origin}/releases/${channel === "stable" ? "station" : "station-beta"}.json`;
 
 /// The channel the release in `app` came from, as its installer wrote it (CHANNEL); null from an installer before that.
+/// Read once a process when it says one: the release is the process's own (an update is another process), and the
+/// overview asks it each time it is made.
 export function releaseChannel(app: string): Channel | null {
+  const known = releases.get(app);
+  if (known !== undefined) return known;
+  let channel: Channel | null = null;
   try {
-    return channelOfId(readFileSync(join(app, "CHANNEL"), "utf8"));
-  } catch {
-    return null;
-  }
+    channel = channelOfId(readFileSync(join(app, "CHANNEL"), "utf8"));
+  } catch {}
+  if (channel !== null) releases.set(app, channel);
+  return channel;
 }
+const releases = new Map<string, Channel>();
 
 /// The channel a station is updated on: as its config says (`updateChannel`), else as its release came (an install from
 /// before there were channels: stable).
