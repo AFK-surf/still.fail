@@ -1139,11 +1139,19 @@ fn composer_hold(draft : String, room : Double, ms : Double) -> Unit {
 
 ///|
 /// How much room draft `draft`'s composer takes at its page's foot (what the list leaves free under its last row): as
-/// tall as its place (chat_composer: its box, what it says under it, its margins), or as it was when words were sent
-/// from it until they let go of it (composer_hold).
+/// tall as its place (chat_composer: its box, what it says under it, its margins), at least as tall as that opened with
+/// one line, or as it was when words were sent from it until they let go of it (composer_hold).
 pub fn composer_room(c : @ui.Ctx, draft : String) -> Double {
   // (not laid out yet: a capsule's)
-  let now = @motion.measured(c, "composer/foot").unwrap_or(capsule_room)
+  let foot = @motion.measured(c, "composer/foot").unwrap_or(capsule_room)
+  // never less than it takes opened with one line where it is (its box that tall, what is round it as it is: the web's
+  // --composer-room, max(the composer's height, an opened one-line composer's)): opened or let go, a capsule or a box,
+  // the list keeps its words where they are; only a line more, a file, a quote, what is said over it move them
+  let least = match @motion.measured(c, "composer/content") {
+    Some(box) => foot - box + composer_open_box
+    None => composer_open_room
+  }
+  let now = dmax(foot, least)
   let held = @motion.anim(c, "composer/held/" + draft, 0.0, global=true).get()
   let share = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true).get()
   if held > now {
@@ -1325,7 +1333,11 @@ let capsule_room : Double = 32.0 + 2.0 * 8.0 + 12.0 + 16.0
 /// The room a chat's composer takes opened with one line at its pane's foot (its box 12 in, the line under 8, its
 /// buttons' row 10 under it; 12 over and 16 under the box): what a list that keeps its words in place as the composer
 /// closes keeps clear at least (ChatHost.kt roomForList).
-pub let composer_open_room : Double = 12.0 + (8.0 + text_line) + 10.0 + 32.0 + 12.0 + 12.0 + 16.0
+pub let composer_open_room : Double = composer_open_box + 12.0 + 16.0
+
+///|
+/// Its box opened with one line (composer_open_room without what is over and under it).
+let composer_open_box : Double = 12.0 + (8.0 + text_line) + 10.0 + 32.0 + 12.0
 
 ///|
 // kept across runs: a value (no field of it changes)
