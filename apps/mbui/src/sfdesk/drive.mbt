@@ -621,6 +621,7 @@ fn row_items(
   let root = in_.root.unwrap_or("")
   let st = f.st
   let write = f.rights.write
+  // (each with its icon: the words of every item on one line)
   let out : Array[@sf.MenuItem?] = []
   let item = fn(label : String, icon : String, act : () -> Unit) { out.push(Some(@sf.menu_item_of(label, icon~, act))) }
   if all.length() > 1 {
@@ -652,7 +653,7 @@ fn row_items(
   }
   let full = dv_join(in_.path, e.name)
   let abs = dv_absolute(root, full)
-  item(@sf.t("web-pages.drive.open"), "", fn() {
+  item(@sf.t("web-pages.drive.open"), "eye", fn() {
     open_entry(c, src, "page", in_, e, [e], fn(to) { (f.go)(to, false) })
   })
   if !e.dir {
@@ -664,8 +665,8 @@ fn row_items(
   item(@sf.t("web-pages.drive.copyPath"), "copy", fn() { copy_path(c, abs) })
   match f.open_in {
     Some(open) if e.dir => {
-      item(@sf.t("web-pages.files.openInTab"), "", fn() { open({ ..in_, path: full }, false) })
-      item(@sf.t("web-pages.files.openBeside"), "", fn() { open({ ..in_, path: full }, true) })
+      item(@sf.t("web-pages.files.openInTab"), "plus", fn() { open({ ..in_, path: full }, false) })
+      item(@sf.t("web-pages.files.openBeside"), "view-columns", fn() { open({ ..in_, path: full }, true) })
     }
     _ => ()
   }
