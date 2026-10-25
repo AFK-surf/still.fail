@@ -100,8 +100,11 @@ frame around them), and the **presenters**:
 
 And **a page's parts**: its frame (back and title, or a head of its own: a mark, a name, what it is, what it does),
 sections, groups of rows, rows (to another page, a value, a switch, a pick), cards, notes, choices, buttons and
-fields. Each lays itself out by the width of the box it is drawn in (the anatomy above) and takes its sizes from the
-theme, so a page made of them is right in any box on either screen. There is one of each, and none draws one screen's
+fields. Each is laid out as the page it is in is (the anatomy above): the page's frame decides that once, by the
+page's width, and its parts take it from there. A part never measures its own box for it (a section in a 380 column
+of a wide page is a wide page's section, and a computer's 480 dialog is no narrow page: what a presenter holds is laid
+out as the presenter says), and a page never passes it to them. Each takes its sizes from the theme. So a page made of
+them is right in any box on either screen. There is one of each, and none draws one screen's
 or one width's look alone: a page cannot reach for a wrong one. (Today they are two sets: sfdesk's `page_look.mbt`
 `look_*` know both widths; the library's `@sf.section`, `@sf.switch_row` and the desk's card know only the web's
 desktop, and a page made of them is the desktop's on a phone (#1675's Profile, #1599's station, #1576's connect). They
