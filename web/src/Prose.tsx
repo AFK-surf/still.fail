@@ -70,12 +70,12 @@ export function Code({ text, language, ink }: { text: string; language?: string 
 }
 
 /** Plain text is present even far offscreen: browser find, selection, and copying still see the whole block.
- * Highlight each group once, close to the viewport. Never replace text nodes while a selection touches the block. */
+ * Highlight each group once, close to the viewport. Keep it coloured as text arrives, so an unchanged line's text
+ * nodes (and the reader's selection) survive. Defer newly coloured nodes while a selection touches the block. */
 function LongCode({ text, ink }: { text: string; ink: string }) {
   const chunks = useMemo(() => codeChunks(text, ink), [text, ink]);
   const root = useRef<HTMLSpanElement>(null);
-  const [painted, setPainted] = useState<{ chunks: typeof chunks; indices: Set<number> }>(() => ({ chunks, indices: new Set() }));
-  const indices = painted.chunks === chunks ? painted.indices : new Set<number>();
+  const [painted, setPainted] = useState(() => new Set<number>());
   useEffect(() => {
     const el = root.current;
     if (!el) return;
@@ -86,7 +86,7 @@ function LongCode({ text, ink }: { text: string; ink: string }) {
       if (!waiting.size) return;
       const add = [...waiting];
       waiting.clear();
-      setPainted(old => ({ chunks, indices: new Set([...(old.chunks === chunks ? old.indices : []), ...add]) }));
+      setPainted(old => add.every(i => old.has(i)) ? old : new Set([...old, ...add]));
     };
     if (typeof IntersectionObserver === "undefined") {
       chunks.forEach((_, i) => waiting.add(i));
@@ -104,7 +104,7 @@ function LongCode({ text, ink }: { text: string; ink: string }) {
     document.addEventListener("selectionchange", apply);
     return () => { observer.disconnect(); document.removeEventListener("selectionchange", apply); };
   }, [chunks]);
-  return <span ref={root}>{chunks.map((chunk, i) => <CodePart key={i} chunk={chunk} index={i} painted={indices.has(i)} />)}</span>;
+  return <span ref={root}>{chunks.map((chunk, i) => <CodePart key={i} chunk={chunk} index={i} painted={painted.has(i)} />)}</span>;
 }
 const CodePart = memo(function CodePart({ chunk, index, painted }: { chunk: ReturnType<typeof codeChunks>[number]; index: number; painted: boolean }) {
   return <span data-code-chunk={index}>{painted

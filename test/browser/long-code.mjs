@@ -15,9 +15,12 @@ import './src/demo/mount.tsx';
 import { Code } from './src/Prose.tsx';
 import { markdown } from './src/styles/conversation.css.ts';
 import { ink } from '../client/core-ts/src/highlight.ts';
-const source = Array.from({length: 1600}, (_, i) => 'const value' + i + ' = "你好 👋"; // line ' + i + '\n').join('');
+let source = Array.from({length: 1600}, (_, i) => 'const value' + i + ' = "你好 👋"; // line ' + i + '\n').join('');
 Object.assign(window, {source});
-createRoot(document.getElementById('app')!).render(<div className={markdown} style={{width: 370, margin: 10}}><Code text={source} language="typescript" ink={ink(source, 'typescript')} /></div>);
+const root = createRoot(document.getElementById('app')!);
+const draw = () => root.render(<div className={markdown} style={{width: 370, margin: 10}}><Code text={source} language="typescript" ink={ink(source, 'typescript')} /></div>);
+window.append = () => { source += '// the next streamed line\n'; window.source = source; draw(); };
+draw();
 `, { flag: 'wx' }); madeFixture = true;
   await writeFile(html, '<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><div id="app"></div><script type="module" src="/long-code-check.tsx"></script>', { flag: 'wx' }); madeHtml = true;
   server = await createServer({ configFile: fileURLToPath(new URL('../../web/vite.demo.config.ts', import.meta.url)), root: fileURLToPath(new URL('../../web', import.meta.url)), server: { host: '127.0.0.1', port: 0, hmr: false } });
@@ -41,6 +44,23 @@ createRoot(document.getElementById('app')!).render(<div className={markdown} sty
       }));
       const before = await stats();
       assert(before.text); assert(before.chunks > 30); assert(before.painted < before.chunks / 4);
+      // An arriving line changes the source and ink, but not the reader's selection in an earlier line.
+      await page.evaluate(() => {
+        const walker = document.createTreeWalker(document.querySelector('pre code'), NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) {
+          const at = node.textContent.indexOf('value0');
+          if (at < 0) continue;
+          const range = document.createRange(); range.setStart(node, at); range.setEnd(node, at + 6);
+          getSelection().removeAllRanges(); getSelection().addRange(range);
+          break;
+        }
+        window.append();
+      });
+      await page.waitForFunction(() => document.querySelector('pre code').textContent === window.source);
+      assert.equal(await page.evaluate(() => getSelection().toString()), 'value0', 'streamed code preserves selection in unchanged text');
+      await page.evaluate(() => getSelection().removeAllRanges());
+      const appended = await stats();
       await page.getByRole('button').click();
       assert.equal(await page.evaluate(() => window.copied === window.source), true, 'copy button includes offscreen code');
       // Select all before a far chunk enters view. Its plain text nodes must not be replaced under the selection.
@@ -64,7 +84,7 @@ createRoot(document.getElementById('app')!).render(<div className={markdown} sty
       }), true, 'browser find reaches code whose highlighting was deferred');
       await page.evaluate(() => getSelection().removeAllRanges());
       const after = await stats();
-      assert(after.text); assert(Math.abs(after.height - before.height) < 1, 'highlighting changes no geometry');
+      assert(after.text); assert(Math.abs(after.height - appended.height) < 1, 'highlighting changes no geometry');
       if (process.env.SHOTS) {
         await mkdir(process.env.SHOTS, {recursive:true});
         await page.screenshot({path:`${process.env.SHOTS}/long-code-${engine}.png`});
