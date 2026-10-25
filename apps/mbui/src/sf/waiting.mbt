@@ -133,6 +133,10 @@ pub fn progress(c : @ui.Ctx, part : Double?, w? : @ui.Size = Fill(1.0), color? :
 let spin_stroke : Double = 2.0
 
 ///|
+/// How long the spinner takes to turn once (styles/spinner.css.ts: 0.8s).
+pub let spinner_turn_ms : Double = 800.0
+
+///|
 /// The spinner (styles/spinner.css.ts, Waiting.kt Spinner): a ring of line_strong, a quarter of it in the accent,
 /// turning in 0.8s; 14, or 12 in a line of small text. `sweep` (of a turn) and `period` for other rings that turn (a
 /// chat's mark at work: three quarters, 1.2s). Its lines drawn as they are every frame (mbui's Ctx::lines), only where
@@ -143,7 +147,7 @@ pub fn spinner(
   ring? : Int64,
   arc? : Int64,
   sweep? : Double = 0.25,
-  period? : Double = 800.0,
+  period? : Double = spinner_turn_ms,
 ) -> Int {
   let t = theme()
   let ring = ring.unwrap_or(t.p.line_strong)

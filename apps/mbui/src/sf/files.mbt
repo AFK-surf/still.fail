@@ -181,13 +181,18 @@ pub(all) struct FileCardDone {
 /// the hover ground under the pointer. `key` names it. Pasted words kept as a file (Chat.tsx PendingFile's pasted
 /// card): `title` in place of its name (what they begin with), `meta` in place of its size (how many characters), their
 /// own ✕'s `remove_label`, `restore` its ✎ putting them back as words. A message's file the core downloads: its ✕ and ↻
-/// said as calling that off and asking it again (`remove_label`, `retry_label`).
+/// said as calling that off and asking it again (`remove_label`, `retry_label`). `dir`: a folder's (file_tile).
+/// `named`: a file named where it is and not going (a station's file sent as its path: Chat.css.ts fileCard[data-named]),
+/// its card no ground, its edge dashed in the strong line. Going up and how far not known yet (`pending`, no `sent`),
+/// a spinner where its sheet is: what goes on is seen to (an empty sheet that stays so looks stuck).
 pub fn file_card(
   c : @ui.Ctx,
   key : String,
   name : String,
   size : Double,
   path? : String = "",
+  dir? : Bool = false,
+  named? : Bool = false,
   pending? : Bool = false,
   sent? : Double? = None,
   error? : String = "",
@@ -235,38 +240,48 @@ pub fn file_card(
   } else {
     download.map(fn(d) { d.0 })
   }
-  let b = c.box(style=if open && c.hovered(id) { card_box_hot } else { card_box }, id~, fn() {
-    file_tile(c, name, progress~, error=error != "")
-    c.box(style=card_words, fn() {
-      if title != "" {
-        c.box(style=name_row, fn() { c.box(style=name_stem, fn() { c.text(title, style=card_name) |> ignore }) |> ignore })
-        |> ignore
+  let ground = if named { card_named } else { card_box }
+  let b = c.box(
+    style=if open && c.hovered(id) { ground.then(card_hot) } else { ground },
+    border_color?=if named { Some(theme().p.line_strong) } else { None },
+    id~,
+    fn() {
+      if pending && sent is None {
+        c.box(style=tile_going, fn() { spinner(c, size=tile_going_spinner) |> ignore }) |> ignore
       } else {
-        file_name(c, name)
+        file_tile(c, name, dir~, progress~, error=error != "")
       }
-      c.text(meta, style=if error != "" { card_failed } else { card_meta }) |> ignore
-    })
-    |> ignore
-    if retry {
-      let label = if retry_label != "" { retry_label } else { t("web-main.composer.retryUpload") }
-      card_button(c, again, "refresh", label)
-      tip(c, key + "/retry-tip", again, label)
-    }
-    if restore {
-      card_button(c, back, "edit", t("web-main.composer.expandPaste"))
-      tip(c, key + "/restore-tip", back, t("web-main.composer.expandPaste"))
-    }
-    if remove {
-      card_button(c, x, "close", if remove_label != "" {
-        remove_label
-      } else {
-        t("web-main.file.remove", args=[("name", name)])
+      c.box(style=card_words, fn() {
+        if title != "" {
+          c.box(style=name_row, fn() { c.box(style=name_stem, fn() { c.text(title, style=card_name) |> ignore }) |> ignore })
+          |> ignore
+        } else {
+          file_name(c, name)
+        }
+        c.text(meta, style=if error != "" { card_failed } else { card_meta }) |> ignore
       })
-    }
-    if slot {
-      c.box(style=card_slot, fn() {  }) |> ignore
-    }
-  })
+      |> ignore
+      if retry {
+        let label = if retry_label != "" { retry_label } else { t("web-main.composer.retryUpload") }
+        card_button(c, again, "refresh", label)
+        tip(c, key + "/retry-tip", again, label)
+      }
+      if restore {
+        card_button(c, back, "edit", t("web-main.composer.expandPaste"))
+        tip(c, key + "/restore-tip", back, t("web-main.composer.expandPaste"))
+      }
+      if remove {
+        card_button(c, x, "close", if remove_label != "" {
+          remove_label
+        } else {
+          t("web-main.file.remove", args=[("name", name)])
+        })
+      }
+      if slot {
+        c.box(style=card_slot, fn() {  }) |> ignore
+      }
+    },
+  )
   c.semantics(b, Group, id~, label=if title != "" { title } else { name })
   // (pasted words: all of what is said of them, a failure at length)
   tip(c, key + "/tip", id, if path != "" { path } else if title != "" { meta } else { name })
@@ -334,7 +349,20 @@ let card_box : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let card_box_hot : @ui.Style = card_box.then(@ui.css("bg=Hover"))
+let card_hot : @ui.Style = @ui.css("bg=Hover")
+
+///|
+/// A named file's card (fileCard[data-named]: no ground, 1px dashed in --line-strong, given as it is drawn).
+// kept across runs: a value (no field of it changes)
+let card_named : @ui.Style = card_box.then(@ui.css("bg=Clear border=B1 dashed"))
+
+///|
+/// Where the sheet is while what goes up says not how far (the old phone's going card: a 16 spinner).
+// kept across runs: a value (no field of it changes)
+let tile_going : @ui.Style = tile_box.then(@ui.css("align=ACenter justify=JCenter"))
+
+///|
+let tile_going_spinner : Double = 16.0
 
 ///|
 // kept across runs: a value (no field of it changes)

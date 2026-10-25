@@ -653,7 +653,7 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
       c.box(style=@ui.style(w=Fixed(dmin(@sf.file_card_w, c.width))), fn() {
         let ref_ = field(v, "ref")
         let said = match ref_ {
-          // named by its path: its station and that it goes as a path
+          // named by its path: its station and that it goes as a path, its card the named one's (RefCard)
           Some(Object(_)) if text(ref_, "mode") != "file" =>
             @sf.file_card(
               c,
@@ -661,7 +661,9 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
               name,
               number(v, "size"),
               path=text(ref_, "path"),
-              error=text(ref_, "stationName") + " · " + @sf.t("web-main.file.modePath"),
+              dir=field(ref_, "dir") is Some(True),
+              named=true,
+              meta=text(ref_, "stationName") + " · " + @sf.t("web-main.file.modePath"),
               open=true,
               remove=true,
             )
@@ -722,11 +724,12 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
             }
             { ..card, retried: false }
           }
+          // (a station's folder going as the file: the zip it goes as, RefCard's `${name}.zip`)
           _ =>
             @sf.file_card(
               c,
               key,
-              name,
+              if field(ref_, "dir") is Some(True) { name + ".zip" } else { name },
               number(done, "size") + (if done is None { number(v, "size") } else { 0.0 }),
               path=text(done, "path"),
               pending~,

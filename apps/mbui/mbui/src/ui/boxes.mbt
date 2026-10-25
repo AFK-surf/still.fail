@@ -6,9 +6,9 @@
 /// A node as the last frame drew it. `x`, `y`: its top left as drawn (moved by its looks and its ancestors':
 /// Ctx::drawn_at), `w`, `h` its size as laid out; `cut`: what of it shows inside the boxes that clip it (x, y, w, h;
 /// w or h 0 when none does). `opacity`: its and its ancestors' opacities and looks' alphas, multiplied. `bg`, `border_c`,
-/// `color`: RGBA. `font_size`, `weight`, `color`: its words' (0 for a box). `name`: Ctx::box's `name`; `label`: its
-/// `label`, else what Ctx::semantics calls it (a screen reader's name, the web's aria-label); `moves`: the
-/// name a move_state moves it by (the web's moveState's selector): either a name of the web's it stands for. `words_w`:
+/// `color`: RGBA; `dashed`: its border drawn as dashes. `font_size`, `weight`, `color`: its words' (0 for a box).
+/// `name`: Ctx::box's `name`; `label`: its `label`, else what Ctx::semantics calls it (a screen reader's name, the
+/// web's aria-label); `moves`: the name a move_state moves it by (the web's moveState's selector): either a name of the web's it stands for. `words_w`:
 /// how wide its words are drawn, its widest line (0 for a box); `hit`: it takes the presses on its room; `draws`: it
 /// draws a picture of its own (an image, shapes or lines over its ground: an icon, a mark); `glass`: its ground is made
 /// of what is under it (glass.mbt).
@@ -36,6 +36,7 @@ pub(all) struct Laid {
   bg : Int64
   border_w : Double
   border_c : Int64
+  dashed : Bool
   font_size : Double
   weight : Int
   color : Int64
@@ -139,6 +140,7 @@ pub fn Tester::boxes(self : Tester) -> Array[Laid] {
       bg: n.bg,
       border_w: n.border_w,
       border_c: n.border_c,
+      dashed: n.dashed,
       font_size: if words { n.font_size } else { 0.0 },
       weight: if words { n.weight } else { 0 },
       color: if words { n.color } else { 0L },

@@ -633,12 +633,15 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       n.fh,
       n.radius,
       n.bg,
-      if border_over { 0.0 } else { n.border_w },
+      if border_over || n.dashed { 0.0 } else { n.border_w },
       n.border_c,
       alpha,
     )
     self.notch_last(n)
     self.corners_last(n)
+    if n.dashed && n.border_w > 0.0 && !border_over {
+      self.emit_dashes(n.x, n.y, n.fw, n.fh, n.radius, n.border_w, n.border_c, alpha)
+    }
   }
   if ground is Some(_) {
     n.x = laid.0
@@ -792,7 +795,13 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   if clipped {
     pop_clip()
   }
-  if border_over {
+  if border_over && n.dashed {
+    match ground {
+      Some((bx, by, bw, bh, (r0, r1, r2, r3))) =>
+        self.emit_dashes(bx, by, bw, bh, dmax(dmax(r0, r1), dmax(r2, r3)), n.border_w, n.border_c, alpha)
+      None => self.emit_dashes(n.x, n.y, n.fw, n.fh, n.radius, n.border_w, n.border_c, alpha)
+    }
+  } else if border_over {
     match ground {
       // (round its ground drawn in another box: that box's corners, each its own)
       Some((bx, by, bw, bh, (r0, r1, r2, r3))) => {

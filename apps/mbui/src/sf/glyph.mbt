@@ -227,60 +227,12 @@ fn standard_at(t : Double) -> Double {
 /// A rounded frame `w` by `h` (its corner `r`) drawn as dashes `line` wide in `color` (CSS's `dashed`: a dash three of
 /// its widths, a gap two, spread to come round evenly), its line's middle on the frame; what stands by it is under.
 pub fn dashed_frame(c : @ui.Ctx, w : Double, h : Double, r : Double, line : Double, color : Int64) -> Int {
-  let pi = @math.PI
-  let straight_w = w - 2.0 * r
-  let straight_h = h - 2.0 * r
-  let arc = pi * r / 2.0
-  let whole = 2.0 * (straight_w + straight_h) + 4.0 * arc
-  let period = 5.0 * line
-  let n = dmax(1.0, (whole / period).round())
-  let step = whole / n
-  let dash = step * 3.0 / 5.0
-  // a point `s` along it, clockwise from its top's start
-  let at = fn(s : Double) -> (Double, Double) {
-    let mut s = s
-    let corner = fn(cx : Double, cy : Double, from : Double, k : Double) {
-      let a = from + k * pi / 2.0
-      (cx + r * @dmath.cos(a), cy + r * @dmath.sin(a))
-    }
-    if s < straight_w {
-      return (r + s, 0.0)
-    }
-    s = s - straight_w
-    if s < arc {
-      return corner(w - r, r, -pi / 2.0, s / arc)
-    }
-    s = s - arc
-    if s < straight_h {
-      return (w, r + s)
-    }
-    s = s - straight_h
-    if s < arc {
-      return corner(w - r, h - r, 0.0, s / arc)
-    }
-    s = s - arc
-    if s < straight_w {
-      return (w - r - s, h)
-    }
-    s = s - straight_w
-    if s < arc {
-      return corner(r, h - r, pi / 2.0, s / arc)
-    }
-    s = s - arc
-    if s < straight_h {
-      return (0.0, h - r - s)
-    }
-    s = s - straight_h
-    corner(r, r, pi, dmin(1.0, s / arc))
-  }
   let path = StringBuilder()
-  for k in 0..<n.to_int() {
-    let from = k.to_double() * step
-    let pieces = dmax(1.0, (dash / 0.75).ceil()).to_int()
-    for i in 0..=pieces {
-      let (x, y) = at(from + dash * i.to_double() / pieces.to_double())
+  for o in @ui.dashed_outlines(w, h, r, line) {
+    let pts = o.0
+    for i in 0..<(pts.length() / 2) {
       path.write_string(if i == 0 { " M" } else { " L" })
-      path.write_string("\{num(x + line / 2.0)} \{num(y + line / 2.0)}")
+      path.write_string("\{num(pts[2 * i] + line / 2.0)} \{num(pts[2 * i + 1] + line / 2.0)}")
     }
   }
   let d : @pixels.Vector = {
