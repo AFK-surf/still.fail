@@ -877,15 +877,17 @@ pub fn lifted(c : @ui.Ctx, list : Int, key : String) -> Double {
 ///|
 /// Something shown or hidden as `shown` says (Motion's AnimatePresence, Compose's AnimatedVisibility): coming by
 /// `enter`, going by `exit` (by default the way it came), turned back mid-way from where it is. Its look while it
-/// shows (for @ui.Ctx::look), None once it has gone (then it need not be built). The first time it is as it is,
-/// without motion. While it goes it is only drawn: build it under `leaving`. `start_at`: when what changed it happened
-/// (the frames' clock), its motion from then rather than from this frame.
+/// shows (for @ui.Ctx::look), None once it has gone (then it need not be built). The first time it is asked it is as
+/// it is, without motion, unless `initial` (Motion's: shown then, it comes in by `enter` as it would later: a panel
+/// opened by what it is asked for the first time). While it goes it is only drawn: build it under `leaving`.
+/// `start_at`: when what changed it happened (the frames' clock), its motion from then rather than from this frame.
 pub fn presence(
   c : @ui.Ctx,
   key : String,
   shown : Bool,
   enter? : Trans = trans(fade=0.0),
   exit? : Trans,
+  initial? : Bool = false,
   start_at? : Double,
 ) -> @ui.Look? {
   let out = match exit {
@@ -893,8 +895,9 @@ pub fn presence(
     None => enter
   }
   let to = if shown { 1.0 } else { 0.0 }
-  let f = anim(c, key + "\u{1}fade", to)
-  let m = anim(c, key + "\u{1}move", to)
+  let from = if initial { 0.0 } else { to }
+  let f = anim(c, key + "\u{1}fade", from)
+  let m = anim(c, key + "\u{1}move", from)
   let t = if shown { enter } else { out }
   match start_at {
     Some(at) => {

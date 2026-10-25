@@ -1,7 +1,9 @@
 // A card over what the pointer rests on, as the web's (ember web/src/Peeks.tsx Hover, Hover.css.ts card, cardTile):
 // opened once the pointer has rested on it 320 ms, closed 120 ms after it has left both it and the card; under it and
 // at its start, 6 away, kept in the window; a small panel (the popover's: 6 in, what it holds 10 in more), 320 wide
-// (`tile`: as wide as what it holds, 220 at least); it grows out of its edge from .96 as it comes. And an agent's card
+// (`tile`: as wide as what it holds, 220 at least); it grows out of its edge from .96 and clear over 160 ms as it comes,
+// and goes to .97 and clear over 90 ms (Hover.css.ts enter, exit: a card the pointer left, not one put away by a
+// press, so not at once as a menu goes). And an agent's card
 // (AgentCard.tsx, AgentCard.css.ts), the same over its picture beside its messages and over its mark in the chat's bar.
 
 ///|
@@ -26,19 +28,13 @@ pub fn hover(
     side=Bottom,
     along=Start,
     offset=hover_offset,
-    look=fn(c, st, body) {
-      let card = c.box(style=if tile { hover_tile } else { hover_card }, fn() {
+    enter=hover_in,
+    exit=hover_out,
+    look=fn(c, _, body) {
+      c.box(style=if tile { hover_tile } else { hover_card }, fn() {
         @sf.small_panel(c, w=Fill(1.0), fn() { c.box(style=hover_inner, body) |> ignore }) |> ignore
       })
-      // (growing out of the edge it is on, from .96 of its size: Hover.css.ts enter)
-      if st.t < 1.0 {
-        let oy = match st.side {
-          Top => 1.0
-          _ => 0.0
-        }
-        let t = if st.t > 0.0 { st.t } else { 0.0 }
-        c.look(card, @ui.look(scale=hover_from + (1.0 - hover_from) * t, ox=0.0, oy~))
-      }
+      |> ignore
     },
     body,
   )
@@ -55,7 +51,12 @@ pub let hover_close_ms : Double = 120.0
 let hover_offset : Double = 6.0
 
 ///|
-let hover_from : Double = 0.96
+// kept across runs: a value (no field of it changes)
+let hover_in : @motion.Trans = @motion.trans(fade=0.0, scale=0.96, spec=@motion.tween(160.0, ease=Out))
+
+///|
+// kept across runs: a value (no field of it changes)
+let hover_out : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, spec=@motion.tween(90.0, ease=Bezier(0.42, 0.0, 1.0, 1.0)))
 
 ///|
 /// Its width: 320; a tile's as wide as it holds, 220 at least.

@@ -79,8 +79,7 @@ pub fn select(
   }
   let i = c.box(id=if disabled { 0 } else { id }, w=Px(w), fn() { look(c, st) })
   c.semantics(i, Combobox, id~, label~, value=shown, expanded=open, disabled~, actions=pick(disabled, [], [Activate]))
-  let p = presence(c, key, open, enter=@motion.tween(120.0, ease=Out), exit=@motion.tween(80.0, ease=LeaveFade))
-  if p.built {
+  if @motion.presence(c, "\u{2}pop/" + key, open, initial=true, enter=pop_in, exit=pop_out) is Some(shows) {
     let entries = options.map(fn(o) { menu_radio(o.value, o.value == now, label=o.label, disabled=o.disabled) })
     let pid = c.id(key + "/list/panel")
     let at = match options.search_by(fn(o) { o.value == now }) {
@@ -88,7 +87,7 @@ pub fn select(
       None => -1
     }
     let mut chosen : String? = None
-    let o = c.overlay(key + "/list", modal=true, anchor=id, initial_focus=at, inert=p.leaving(), fn() {
+    let o = c.overlay(key + "/list", modal=true, anchor=id, initial_focus=at, inert=!open, fn() {
       let out = menu_panel(
         c,
         key + "/list",
@@ -97,7 +96,7 @@ pub fn select(
         Bottom,
         Start,
         4.0,
-        p.t,
+        shows,
         label,
         0,
         true,
@@ -293,7 +292,7 @@ pub fn navigation_menu(
       Some(body) => {
         let k = open
         let o = c.overlay(key + "/content", anchor=tids[k], initial_focus=pick(c.focus_shown(tids[k]), -1, 0), fn() {
-          beside(c, key + "/content", tids[k], Bottom, Start, 6.0, 1.0, Region, items[k].label, look, body)
+          beside(c, key + "/content", tids[k], Bottom, Start, 6.0, @ui.still_look, Region, items[k].label, look, body)
         })
         if o.dismissed is Some(_) {
           open = -1
