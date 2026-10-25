@@ -49,6 +49,52 @@ test "wide: ⌘\\ folds the sidebar to the rail's bar of its own; the pointer on
 }
 
 ///|
+/// The ground (30, Rail.css.ts item's) of the rail's place at `rect` (its 38 to press): its box as laid out.
+fn rail_ground_at(t : @ui.Tester, rect : (Double, Double, Double, Double)) -> @ui.Laid {
+  let (x, y, w, h) = rect
+  t
+  .boxes()
+  .iter()
+  .find_first(fn(b) {
+    b.kind != "text" && b.w == 30.0 && b.h == 30.0 && b.x >= x && b.y >= y && b.x + b.w <= x + w && b.y + b.h <= y + h
+  })
+  .unwrap()
+}
+
+///|
+test "wide on a Mac: the closed bar, shown a while, one corner all round, the window's less its 6; its places' grounds one corner, concentric with it" {
+  let calls : Array[Made] = []
+  // (a Mac's window: its corners 16, its buttons in the app's top row)
+  let t = wide_tester(calls, window_corner=16.0, window_inset=true)
+  t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
+  t.run_for(@sfdesk.side_move_ms)
+  let follow = @ui.concentric(16.0, @sfdesk.closed_bar_in)
+  // folded, and shown a while: no corner of the bar a pane's 34 (each frame held to the corner rule: corners_held)
+  for peek in [false, true] {
+    let gear = t.query(Button, label=@sf.t("web-pages.settings.title")).unwrap().rect
+    if peek {
+      t.move(gear.0 + gear.2 / 2.0, gear.1 + gear.3 / 2.0)
+      t.run_for(@sfdesk.side_move_ms)
+      assert_true(t.find("新建对话") is Some(_), msg="shown a while")
+    }
+    let bar = t
+      .boxes()
+      .iter()
+      .find_first(fn(b) { b.x == @sfdesk.closed_bar_in && b.radius > 0.0 && b.h > 400.0 && b.bg != 0L })
+      .unwrap()
+    assert_eq(bar.radii, (follow, follow, follow, follow))
+    // the settings' ground at the bar's foot, 6 from its left and its foot, concentric with the bar's corner there
+    // (6.4), all round alike; a place's in the middle the same, one layer, one corner
+    let inner = @ui.concentric(follow, 6.0)
+    let g = rail_ground_at(t, gear)
+    assert_eq(g.radii, (inner, inner, inner, inner))
+    let files = rail_ground_at(t, t.query(Button, label="文件").unwrap().rect)
+    assert_eq(files.radii, (inner, inner, inner, inner))
+    assert_eq(t.corner_faults(), [])
+  }
+}
+
+///|
 test "wide: the lit place pressed again folds its sidebar, shown a while (the pointer is on the rail); its width dragged is kept" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)

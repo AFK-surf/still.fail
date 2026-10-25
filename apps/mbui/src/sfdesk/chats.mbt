@@ -190,5 +190,5 @@ let filter_box : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justif
 
 ///|
 // kept across runs: a value (no field of it changes)
-let filter_box_bar : @ui.Style = @ui.style(w=S8, h=S8, radius=@sf.rail_corner, align=ACenter, justify=JCenter)
+let filter_box_bar : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter")
 

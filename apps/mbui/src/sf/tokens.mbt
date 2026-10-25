@@ -1695,16 +1695,25 @@ pub let mark_halo : @ui.Color = A(mark_red, O25)
 pub let mark_yellow : Int64 = 0xF2B01EFFL
 
 ///|
-/// The rail's places 9 from its edges open, in its 56's middle (Rail.css.ts rail: 9 under the last, its 38s 9 in).
-pub let rail_in : @ui.Space = room(9.0)
+/// The rail's places 8 from its edges open (Rail.css.ts rail: 9 under the last, its 38s 9 in; here where they stand in
+/// the closed bar, 6 + its 2, so folding moves none and their grounds, 12 in, are concentric with a Mac window's corner
+/// as the bar's are through it: rail_ground_radius).
+pub let rail_in : @ui.Space = room(8.0)
 
 ///|
 /// The same as the sidebar's panel on the tape (laid out Medium, its left corners tape_side_corners'): the places in
 /// its left corners (a 38 to press, its ground 30 round in its middle) as far in as makes their grounds concentric with
-/// them, else 9 as open (rail_in).
+/// them; where the corner is too square for a circle (it follows a Mac window's), as far in as makes a ground's corner
+/// there concentric with it (box_fit: the grounds boxes as round, rail_ground_radius); else 9 as open.
 pub fn rail_in_tape() -> Double {
   let ground_in = (38.0 - rail_ground_side) / 2.0
-  capsule_fit(tape_side_corners()[3], rail_ground_side, 9.0 + ground_in) - ground_in
+  let corner = tape_side_corners()[3]
+  let d = capsule_in(corner, rail_ground_side)
+  if place_fits(d) {
+    d - ground_in
+  } else {
+    box_fit(corner, 9.0 + ground_in, 0.0).0 - ground_in
+  }
 }
 
 ///|
@@ -1738,7 +1747,17 @@ pub fn panel_corner_foot() -> @ui.Style {
 pub let rail_ground_side : Double = 30.0
 
 ///|
-pub let rail_corner : @ui.Radius = Full
+/// Its corner, all its places' grounds one (one layer, one corner: the web's 9 each), `ground_in` from the edges of the
+/// rail's corner `corner` (the closed bar's, the tape's sidebar panel's): concentric with it, a box's corner; where that
+/// is as round as the ground's half, a circle (a corner round enough for one: a pane's 34, 19 in; a bar's 21, 6 in).
+pub fn rail_ground_radius(corner : Double, ground_in : Double) -> @ui.Radius {
+  let k = @ui.concentric(corner, ground_in)
+  if k >= rail_ground_side / 2.0 - 0.5 {
+    Full
+  } else {
+    rounded(k)
+  }
+}
 
 ///|
 /// A small panel's corner (a menu's, a popover's: r_menu) as a style's, for one drawn by a style of its own.
@@ -1761,13 +1780,20 @@ pub let ref_item_min_h : @ui.Len = Fixed(38.0)
 
 
 ///|
-/// The closed bar's corners, `edge` from the window's left, top and foot: its left ones the window's less that where
-/// they follow it (window_follow), else a pane's, the ladder's outermost; its right ones, in no corner of the window's,
-/// a pane's (as narrow as the rail, a capsule's end by that: its places' grounds 6 in round with its ends; shown a while
-/// as wide as the sidebar, a panel's corner).
-pub fn closed_bar_corner(edge : Double) -> @ui.Radius {
-  let l = window_follow(edge, pane_corner)
-  Corners(l, pane_corner, pane_corner, l)
+/// The closed bar's corner, `edge` from the window's left, top and foot, its places' grounds `ground_in` from its edges:
+/// all four one, a strip along the window's edge (laid out Large; not one of the Medium tape's panes side by side, whose
+/// corners at the window's edge alone follow it: tape_corners): the window's less `edge` where it follows it
+/// (window_follow), else as round as makes its places' grounds concentric with it (as narrow as the rail, a capsule's
+/// end by that; shown a while as wide as the sidebar, no rounder: not a pane's 34). Where it follows the window, too
+/// square for a ground's circle, its grounds are boxes as round as makes them concentric with it (rail_ground_radius).
+pub fn closed_bar_corner(edge : Double, ground_in : Double) -> @ui.Radius {
+  rounded(closed_bar_round(edge, ground_in))
+}
+
+///|
+/// The same as a number.
+pub fn closed_bar_round(edge : Double, ground_in : Double) -> Double {
+  window_follow(edge, ground_in + rail_ground_side / 2.0)
 }
 
 

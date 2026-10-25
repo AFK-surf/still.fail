@@ -602,11 +602,26 @@ fn Ctx::place_fits(self : Ctx, d : Double) -> Bool {
 /// concentric with it there (a panel 6 in from the window's corner, as round as the window's less that): its corner
 /// the outer one's, not one of the ladder's to keep. One past the window's side there (a pane beside the one in use,
 /// which comes over whole into the window's side) by how far it stands from the window's top and foot, where it will
-/// be in that corner.
+/// be in that corner. One whose corners are all one, one of them following the window's so, takes it whole: a strip
+/// along the window's edge (still.fail's closed bar), not panes side by side, each corner its own.
 fn Ctx::follows_corner(self : Ctx, p : Int, k : Int, ra : Double, grounds : Map[Int, Int]) -> Bool {
   if self.window_container(p) {
     return true
   }
+  if self.nodes[p].radii is None {
+    for j in 0..<4 {
+      if j != k && self.follows_at(p, j, ra, grounds) {
+        return true
+      }
+    }
+  }
+  self.follows_at(p, k, ra, grounds)
+}
+
+///|
+/// Whether container `p`'s corner `k` (`ra` round) lies in its own container's corner, concentric with it there, or
+/// will (follows_corner).
+fn Ctx::follows_at(self : Ctx, p : Int, k : Int, ra : Double, grounds : Map[Int, Int]) -> Bool {
   match self.corner_container(p, grounds) {
     Some(ct) => {
       let rq = self.container_r(ct, k)
