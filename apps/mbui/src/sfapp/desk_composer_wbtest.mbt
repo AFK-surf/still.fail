@@ -184,14 +184,9 @@ test "desk composer: the `@` menu offers the workspace's other stations' chats t
   // written in Studio's (ws1/st1); 夜里的构建又失败了 is MBA's (ws1/st2)
   t.type_text("@的")
   t.frame()
-  let (there_x, there_y) = t.find_last("夜里的构建又失败了").unwrap()
-  let (tag_x, tag_y) = t.find_last("MBA").unwrap()
-  assert_true((tag_y - there_y).abs() < 2.0 && tag_x > there_x, msg="\{(tag_x, tag_y)} \{(there_x, there_y)}")
-  let (_, here_y) = t.find_last("首页的列表改成按天分组").unwrap()
-  match t.find_last("Studio") {
-    Some((_, y)) => assert_true((y - here_y).abs() >= 2.0, msg="no station on this station's own")
-    None => ()
-  }
+  // (then when it was last active)
+  assert_true(after_on_its_row(t, "夜里的构建又失败了") == ["MBA", "15 分钟前"], msg=about_its_row(t, "夜里的构建又失败了"))
+  assert_true(after_on_its_row(t, "首页的列表改成按天分组") == ["8 分钟前"], msg=about_its_row(t, "首页的列表改成按天分组"))
 }
 
 ///|

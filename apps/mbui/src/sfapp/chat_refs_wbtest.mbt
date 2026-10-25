@@ -36,19 +36,33 @@ test "`@` and words: the workspace's other stations' chats too, each with its st
   t.tap_text("发消息")
   // written in a chat of Studio's (ws1/st1); 夜里的构建又失败了 is MBA's (ws1/st2)
   t.type_text("@的")
-  let (there_x, there_y) = t.find_last("夜里的构建又失败了").unwrap()
-  let (tag_x, tag_y) = t.find_last("MBA").unwrap()
-  assert_true((tag_y - there_y).abs() < 2.0 && tag_x > there_x, msg="\{(tag_x, tag_y)} \{(there_x, there_y)}")
-  let (_, here_y) = t.find_last("首页的列表改成按天分组").unwrap()
-  match t.find_last("Studio") {
-    Some((_, y)) => assert_true((y - here_y).abs() >= 2.0, msg="no tag on this station's own")
-    None => ()
-  }
+  // (then when it was last active)
+  assert_true(after_on_its_row(t, "夜里的构建又失败了") == ["MBA", "15 分钟前"], msg=about_its_row(t, "夜里的构建又失败了"))
+  assert_true(after_on_its_row(t, "首页的列表改成按天分组") == ["8 分钟前"], msg=about_its_row(t, "首页的列表改成按天分组"))
   t.tap_text("夜里的构建又失败了")
   t.draw()
   let made = named(calls, "chat.ref")
   assert_eq(made.length(), 1)
   assert_eq(text(Some(made[0].params), "station"), "ws1/st2")
+}
+
+///|
+/// The words drawn after the title `title` on its row (centred on its line, right of where it starts), left to right.
+fn after_on_its_row(t : @ui.Tester, title : String) -> Array[String] {
+  let words = t.words()
+  guard words.iter().find_first(fn(w) { w.0 == title }) is Some((_, x, y, _, h, _)) else { return ["(no \{title})"] }
+  let mid = y + h / 2.0
+  let after = words.filter(fn(o) { o.0 != title && o.1 > x && (o.2 + o.4 / 2.0 - mid).abs() < 1.0 })
+  after.sort_by(fn(a, b) { a.1.compare(b.1) })
+  after.map(fn(o) { o.0 })
+}
+
+///|
+/// What is drawn about the title `title`'s line (within 16 of it), with where, for a failure to say.
+fn about_its_row(t : @ui.Tester, title : String) -> String {
+  let words = t.words()
+  guard words.iter().find_first(fn(w) { w.0 == title }) is Some((_, _, y, _, h, _)) else { return "(no \{title})" }
+  words.filter(fn(o) { (o.2 + o.4 / 2.0 - (y + h / 2.0)).abs() < 16.0 }).map(fn(o) { "\{o.0}@\{o.1},\{o.2} \{o.3}x\{o.4} a\{o.5}" }).join(" | ")
 }
 
 ///|
