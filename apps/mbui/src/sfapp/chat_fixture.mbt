@@ -725,7 +725,7 @@ fn fix_tick(f : Fixture) -> Unit {
     for d in due {
       d()
     }
-    f.version += 1
+    f.changed()
   }
 }
 
@@ -917,7 +917,7 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
       fix_serial.val += 1
       let id = "out\{fix_serial.val}"
       fix_chat(session).outbox.push(outgoing_json(id, params, "sending", ""))
-      f.version += 1
+      f.changed()
       fix_later(fix_deliver_ms, fn() { fix_deliver(session, id) })
       Some(Ok(Json::object({})))
     }
@@ -936,14 +936,14 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
       }
       fc.outbox.retain(fn(o) { text(Some(o), "id") != id })
       fc.outbox.push(outgoing_json(id, was, "retried", ""))
-      f.version += 1
+      f.changed()
       fix_later(fix_deliver_ms, fn() { fix_deliver(session, id) })
       Some(Ok(Json::object({})))
     }
     "chat.discard" => {
       let id = text(p, "id")
       fix_chat(session).outbox.retain(fn(o) { text(Some(o), "id") != id })
-      f.version += 1
+      f.changed()
       Some(Ok(Json::object({})))
     }
     "draft.get" => {
@@ -996,13 +996,13 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
         list.push(Json::object(kept))
       }
       fix_composers[key] = list
-      f.version += 1
+      f.changed()
       Some(Ok(Json::object({})))
     }
     "composer.remove" => {
       let key = text(p, "key")
       fix_composers[key] = fix_composers.get(key).unwrap_or([]).filter(fn(x) { text(Some(x), "id") != text(p, "id") })
-      f.version += 1
+      f.changed()
       Some(Ok(Json::object({})))
     }
     "composer.retry" => Some(Ok(Json::object({})))
@@ -1284,18 +1284,18 @@ fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Json, 
       }
       fix_decided[seq] = decided_json(label)
       fix_replied[seq] = label
-      f.version += 1
+      f.changed()
       Some(Ok(Json::object({})))
     }
     "decision.dismiss" => {
       fix_decided[seq] = { "resolved": false, "dismissed": true }
-      f.version += 1
+      f.changed()
       Some(Ok(Json::object({})))
     }
     // chat-vault's request decided: how it went on its card at once, as the core puts it
     "vault.approve" | "vault.deny" if text(p, "request") == "r-ux7" => {
       fix_vault.val = if name == "vault.approve" { "granted" } else { "denied" }
-      f.version += 1
+      f.changed()
       Some(Ok(Json::object({})))
     }
     _ => None

@@ -122,7 +122,7 @@ fn fix_compose_call(f : Fixture, name : String, params : Json) -> Result[Json, J
   let w = fix_write(f, key)
   let changed = fn() {
     w.version += 1
-    f.version += 1
+    f.changed()
     Some(Ok(Json::object({ "version": Json::number(w.version.to_double()) })))
   }
   match name {
@@ -206,7 +206,7 @@ fn fix_compose_call(f : Fixture, name : String, params : Json) -> Result[Json, J
       w.error = ""
       fix_composers[key] = []
       w.version += 1
-      f.version += 1
+      f.changed()
       Some(
         Ok({
           "text": Json::string(taken),

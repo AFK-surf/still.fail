@@ -157,6 +157,33 @@ pub fn fixture_version() -> Int {
 }
 
 ///|
+/// The made-up settings changed: their version on by one, told to what follows the made-up core's topics.
+fn fx_changed() -> Unit {
+  fx.version += 1
+  fixture_changed()
+}
+
+///|
+/// The made-up core's changes (the app's fixture's and its settings'), told to what follows its topics as they happen,
+/// as the core client tells a subscription's (src/core Sub.changes): fixture_changed with each, fixture_followed as a
+/// topic of it is read.
+// kept across runs: a count of changes; a run anew reads its topics anew
+let fixture_changes : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+/// The made-up core changed (the app's fixture, its settings, its browsing): what read its topics in a computed is
+/// worked out again.
+pub fn fixture_changed() -> Unit {
+  fixture_changes.set(@signals.untracked(fn() { fixture_changes.get() }) + 1)
+}
+
+///|
+/// A topic of the made-up core read: what reads it in a computed follows its changes (fixture_changed).
+pub fn fixture_followed() -> Unit {
+  fixture_changes.get() |> ignore
+}
+
+///|
 /// How the new device's prompt went (`lockPrompt.deny` "deny", `lockPrompt.hide` "hide"; "" while it is up).
 pub fn fixture_pair_ended() -> String {
   fx.pair_ended
@@ -1730,12 +1757,12 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
         Some(_) => fx.marks[text(p, "station")] = text(p, "icon")
         None => fx.names[text(p, "station")] = text(p, "name")
       }
-      fx.version += 1
+      fx_changed()
       Some(Ok(obj([])))
     }
     "chat.archive" if field(p, "archived") is Some(False) => {
       fx.restored[text(p, "session")] = true
-      fx.version += 1
+      fx_changed()
       Some(Ok(obj([])))
     }
     // still.fail's buddies a Slack app can wear (the core's own list, web/public/avatars/index.json: three of it)
@@ -1752,14 +1779,14 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
     // lin's secrets from before security mode encrypted into their vault
     "vault.migrate" => {
       fx.plain_left = 0
-      fx.version += 1
+      fx_changed()
       Some(Ok(obj([])))
     }
     // the new device turned away, or its prompt closed: no longer shown
     "lockPrompt.deny" | "lockPrompt.hide" => {
       fx.pairing = false
       fx.pair_ended = if name == "lockPrompt.deny" { "deny" } else { "hide" }
-      fx.version += 1
+      fx_changed()
       Some(Ok(obj([])))
     }
     // a skill shared with the workspace's other stations, or no longer
@@ -1824,7 +1851,7 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       )
     "software.auto" => {
       fx.auto = flag(p, "on")
-      fx.version += 1
+      fx_changed()
       Some(Ok(obj([])))
     }
     "software.check" | "software.update" | "software.channel" | "search.setPersonal" | "permissions.request" =>
@@ -1834,17 +1861,17 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
     // the subscription's sign-in begun: as settings-profile-login has it, waiting on the code
     "profile.login" => {
       fx.login = "needs_code"
-      fx.version += 1
+      fx_changed()
       Some(Ok(obj([])))
     }
     "profile.resetQuota" => {
       fx.resets_used += 1
-      fx.version += 1
+      fx_changed()
       Some(Ok(obj([])))
     }
     "profile.addModel" => {
       fx.models_added.push(text(p, "model"))
-      fx.version += 1
+      fx_changed()
       Some(Ok(obj([])))
     }
     // the drafts' forms (a new profile's, a new connect's, the decisions' and the archive policy's), opened and edited

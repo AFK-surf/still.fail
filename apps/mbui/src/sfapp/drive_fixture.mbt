@@ -250,7 +250,7 @@ fn fixture_drive_call(f : Fixture, name : String, params : Json) -> Result[Json,
   match name {
     "drive.transfer" => {
       fix_transfer(params)
-      f.version += 1
+      f.changed()
       Some(Ok(Json::object({})))
     }
     "drive.rename" => {
@@ -269,19 +269,19 @@ fn fixture_drive_call(f : Fixture, name : String, params : Json) -> Result[Json,
           }
         }
       }
-      f.version += 1
+      f.changed()
       Some(Ok(Json::object({})))
     }
     "drive.remove" => {
       let path = text(p, "path")
       fix_folder(root, dv_parent(path)).retain(fn(e) { text(Some(e), "name") != dv_name(path) })
-      f.version += 1
+      f.changed()
       Some(Ok(Json::object({})))
     }
     "drive.mkdir" => {
       let path = text(p, "path")
       fix_folder(root, dv_parent(path)).insert(0, fix_entry(dv_name(path), true, 0, "刚刚"))
-      f.version += 1
+      f.changed()
       Some(Ok(Json::object({})))
     }
     "drive.upload.part" => {
@@ -293,7 +293,7 @@ fn fixture_drive_call(f : Fixture, name : String, params : Json) -> Result[Json,
       let total = number(p, "total").to_int()
       list.retain(fn(e) { text(Some(e), "name") != dv_name(path) })
       list.push(fix_entry(dv_name(path), false, total, "刚刚"))
-      f.version += 1
+      f.changed()
       Some(Ok({ "have": Json::number(total.to_double()), "entry": { "name": Json::string(dv_name(path)) } }))
     }
     "drive.place" => {
@@ -302,7 +302,7 @@ fn fixture_drive_call(f : Fixture, name : String, params : Json) -> Result[Json,
         "of": Json::number(number(p, "of")),
         "changed": 1,
       }
-      f.version += 1
+      f.changed()
       Some(Ok(Json::object({})))
     }
     "drive.refresh" | "drive.setRoots" => Some(Ok(Json::object({})))

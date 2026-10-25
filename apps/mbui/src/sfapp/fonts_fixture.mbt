@@ -113,7 +113,7 @@ fn fixture_fonts_call(f : Fixture, name : String, params : Json, done : (Result[
     "fonts.fetch" => {
       if f.mode != "settings-fonts-coming" {
         f.fonts_fetched[text(Some(params), "id")] = true
-        f.version += 1
+        f.changed()
         done(Ok(Json::null()))
       }
       true

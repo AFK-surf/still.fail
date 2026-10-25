@@ -91,7 +91,7 @@ priv enum StepsRow {
 /// Agent `key`'s history on `station`: its steps under its head (history.mbt agent_history).
 pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) -> Unit {
   let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
-  let h = @sfbase.topic_read(src, "history", params).value
+  let h = (src.topic)("history", params).value
   if !(h is Some(Object(_))) || (flag(h, "empty") && !flag(h, "loaded")) {
     c.box(style=steps_waiting, fn() {
       @sf.waiting(c, count=6, text=match text(h, "edge") {
@@ -135,8 +135,8 @@ pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) 
       }
     None => ()
   }
-  let (all, rows) = steps_rows.read(lkey, fn() {
-    let h = @sfbase.topic_read(src, "history", params).value
+  let (all, rows) = steps_rows.read(lkey, fn(_) {
+    let h = (src.topic)("history", params).value
     steps_rows_of(h, items(h, "items"), steps_own.only_io.get())
   })
   let first = match all.get(0) {

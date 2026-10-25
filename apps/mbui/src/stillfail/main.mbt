@@ -11,7 +11,8 @@ let dumped : Map[String, Int] = {}
 
 ///|
 fn core_topic(name : String, params : Map[String, Json]) -> @sfapp.Topic {
-  let s = @core.subscribe(name, params~)
+  // (read in a computed, followed: Sub.changes)
+  let s = @core.subscribe(name, params~).followed()
   if dump {
     let key = name + " " + Json::object(params).stringify()
     if dumped.get(key) != Some(s.version) {

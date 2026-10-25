@@ -112,7 +112,8 @@ fn tape_source(tape : Tape, at : () -> Double) -> Source {
       // (a topic first answered while it recorded, as late as Android's app heard it: a chat opened from the list,
       // its value a moment after the tap)
       match tape.events.iter().find_first(fn(e) { field(Some(e), "answered") == Some(want) }) {
-        Some(e) if number(Some(e), "t") > now => return { value: None, error: None, version: 0 }
+        Some(e) if number(Some(e), "t") > now =>
+          return @sfbase.topic_as_read(name, params, { value: None, error: None, version: 0 })
         _ => ()
       }
       for t in tape.topics {
@@ -130,9 +131,10 @@ fn tape_source(tape : Tape, at : () -> Double) -> Source {
       }
       // (the device's prefs, which Android's tapes kept none of: a new device's, as the core has them from the start)
       if name == "prefs" && value is None {
-        return { value: Some(Json::object(Map::new())), error: None, version: 1 }
+        return @sfbase.topic_as_read(name, params, { value: Some(Json::object(Map::new())), error: None, version: 1 })
       }
-      { value, error: None, version }
+      // (its values as the tape set them by now, the clock going: followed as it is read)
+      @sfbase.topic_as_read(name, params, { value, error: None, version })
     },
     call: fn(name, params, done) {
       // answered as the core's answer comes: an event from outside, here at once

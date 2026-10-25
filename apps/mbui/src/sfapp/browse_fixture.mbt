@@ -26,6 +26,7 @@ let fix_browse : FixBrowse = { state: Json::null(), id: 0, prefs: {}, shown: {},
 fn fix_browse_changed() -> Unit {
   fix_browse.shown.clear()
   fix_browse.changes += 1
+  @settings.fixture_changed()
 }
 
 ///|
@@ -239,7 +240,7 @@ fn fixture_browse_call(f : Fixture, name : String, params : Json) -> Result[Json
     _ => return None
   }
   let r = fix_browse_do(Some(f), f.mode, name, params)
-  f.version += 1
+  f.changed()
   Some(r)
 }
 

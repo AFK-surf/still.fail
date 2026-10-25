@@ -61,6 +61,13 @@ that changed meanwhile is read as a page shows it again).
 Topics are keyed collections (`src/collections.ts`): a change to a record
 recomputes only the items that read it, and a subscription that says `keyed`
 gets per-key insert/update/remove/move ops (docs/core-ts.md, 按 key 的增量).
+The mbui app follows those changes the rest of the way: its client
+(`apps/mbui/src/core/client.mbt`) applies the ops keeping what they do not touch
+(the same object), and sets each subscription's signal (`Sub.changes`, mbui's
+`signals`: alien-signals ported) as the core's message for it comes; reading a
+topic reads that signal, so what the pages work out of a topic is a computed that
+follows it, read again only as it changes, and then item by item: what was made
+of an unchanged item is kept (`apps/mbui/src/sfbase/derived.mbt`).
 
 ## Host
 

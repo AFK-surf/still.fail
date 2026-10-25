@@ -281,7 +281,7 @@ pub fn entries_of(v : ChatView) -> Array[Entry] {
 pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json?) {
   let (read, topic) = chat_read.read(src, chat_params(r))
   match (read, topic.value) {
-    (Some((view, list)), Some(Object(_))) => (Some(view), list, topic.error)
+    (Some(c), Some(Object(_))) => (Some(c.view), c.list, topic.error)
     _ => (None, [], topic.error)
   }
 }
@@ -291,18 +291,44 @@ pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json
 /// whose page was never drawn, or is left, asks nothing of the core for it).
 pub fn chat_kept(r : ChatRef) -> ChatView? {
   match chat_read.kept(chat_params(r)) {
-    Some((view, _)) => Some(view)
+    Some(c) => Some(c.view)
     None => None
   }
 }
 
 ///|
-/// A chat's view and its list's entries, as the core's `chat` topic gives them.
+/// A chat as chat_read made it: its view, its list's entries, and each message with the JSON it was read from (the
+/// next version's same JSON, a message that did not change, not read again: made_again).
+priv struct ChatRead {
+  view : ChatView
+  list : Array[Entry]
+  read : Array[(Json, Message)]
+}
+
+///|
+/// A chat's view and its list's entries, as the core's `chat` topic gives them: its messages read again only as they
+/// changed (one came: that one read).
 // kept across runs: what it keeps is let go of by a run anew and by reset (derived.mbt)
-let chat_read : Derived[(ChatView, Array[Entry])] = Derived::new("chat", fn(v) {
-  let view = chat_view(v)
-  (view, entries_of(view))
+let chat_read : Derived[ChatRead] = Derived::new("chat", fn(v, was) {
+  let read = made_again(
+    items(Some(v), "messages"),
+    match was {
+      Some(w) => w.read
+      None => []
+    },
+    message_key,
+    message_of,
+  )
+  let view = chat_view_of(v, read.map(fn(p) { p.1 }))
+  { view, list: entries_of(view), read }
 })
+
+///|
+/// A message's key in its chat, as the core keys them (client/core-ts collections.ts: `seq` and `outgoing`).
+fn message_key(m : Json) -> String {
+  let s = Some(m)
+  number(s, "seq").to_string() + "\u{1}" + text(s, "outgoing")
+}
 
 ///|
 /// An activity whose agent's turn ended stays this long, then fades (`linger_out_ms`), then is gone.

@@ -300,11 +300,12 @@ test "Home: the first rows, after the list waited, come as they are and a tap on
   let src = {
     ..src,
     topic: fn(name, params) {
-      if name == "chats" && waiting.val {
+      // (made up as it is read: followed by its version, as the core's by what it says)
+      topic_as_read(name, params, if name == "chats" && waiting.val {
         { value: None, error: None, version: 0 }
       } else {
         (src.topic)(name, params)
-      }
+      })
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)

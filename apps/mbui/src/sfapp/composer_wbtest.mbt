@@ -71,7 +71,9 @@ fn fake_core(
     // the draft's files in the core's composer, as the test moves them on (`ups`: going_up, upped)
     topic: fn(name, params) {
       ignore(ups)
-      over(name, (base.topic)(name, params))
+      // (what the test makes over the made-up core's, made up as it is read: followed by its version, as the core's
+      // by what it says)
+      topic_as_read(name, params, over(name, (base.topic)(name, params)))
     },
     now: fn() { now },
     read_only,

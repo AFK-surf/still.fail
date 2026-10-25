@@ -77,7 +77,9 @@ pub fn dv_entries(src : Source, station : String, root : String, path : String) 
 ///|
 /// A folder's entries as the core's `drive` topic gives them.
 // kept across runs: what it keeps is let go of by a run anew and by reset (derived.mbt)
-let dv_entries_read : Derived[Array[DvEntry]] = Derived::new("drive", fn(v) { items(Some(v), "entries").map(dv_entry) })
+let dv_entries_read : Derived[Array[DvEntry]] = Derived::new("drive", fn(v, _) {
+  items(Some(v), "entries").map(dv_entry)
+})
 
 ///|
 pub fn dv_entry(v : Json) -> DvEntry {

@@ -61,11 +61,12 @@ fn held_core(
         Some(String(s)) => s.has_prefix("new:")
         _ => false
       }
-      if name == "chat" && made && unread.val {
+      // (made up as it is read: followed by its version, as the core's by what it says)
+      topic_as_read(name, params, if name == "chat" && made && unread.val {
         { value: None, error: None, version: 0 }
       } else {
         t
-      }
+      })
     },
   }
   @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~)

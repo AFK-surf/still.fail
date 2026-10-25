@@ -6,4 +6,5 @@ import {
   "mbui/pixels",
   "stillfail/sf",
   "moonbitlang/core/json",
+  "mbui/signals",
 }

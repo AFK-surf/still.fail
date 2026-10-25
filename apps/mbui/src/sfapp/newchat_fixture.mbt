@@ -459,7 +459,7 @@ fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Json, J
         n.effort = s
         n.d_effort = s
       })
-      f.version += 1
+      f.changed()
       Some(Ok(Json::object({})))
     }
     "pick.set" => {
@@ -476,14 +476,14 @@ fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Json, J
       take("runtime", fn(s) { n.d_runtime = s })
       take("effort", fn(s) { n.d_effort = s })
       take("profile", fn(s) { n.d_profile = s })
-      f.version += 1
+      f.changed()
       Some(Ok(Json::object({})))
     }
     "pick.save" => {
       n.model = n.d_model
       n.runtime = n.d_runtime
       n.effort = n.d_effort
-      f.version += 1
+      f.changed()
       Some(Ok(Json::object({})))
     }
     "newChat.create" => {
