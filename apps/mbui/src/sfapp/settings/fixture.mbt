@@ -182,7 +182,6 @@ pub fn fixture_page(mode : String) -> String {
     "settings-stations-existing" => up("add-existing", "", 0)
     "settings-stations-command" => up("add-command", "", 0)
     "settings-first-station" => fx.none = true
-    "settings-profile-menu" => up("profile-menu", "", 0)
     "settings-profile-lower" => up("", "settings/profile/ws1/st1/cc", 2)
     // ChatGPT 团队's models on their page (many, a filter, one to name by hand)
     "settings-profile-models" => up("", "settings/profile-models/ws1/st1/cx", 0)
@@ -1903,10 +1902,6 @@ fn fixture_sheet(core : Core, here : Here) -> Unit {
     "mark" => {
       let s = Some(fx_station("ws1/st1"))
       open_mark_pick(core, text(s, "name"), text(s, "emoji"), text(s, "icon"), "", fn(_, _, _) {  })
-    }
-    "profile-menu" => {
-      let p = fx_profiles()[0]
-      open_profile_menu(core, "ws1/st1", Some(p))
     }
     "add-people" => open_add_people(core, here, workspace_view(core, here).value)
     "workspace-mark" => open_mark_pick(core, "星火工作室", "", "glyph:rocket:orange", "", fn(_, _, _) {  })

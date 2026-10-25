@@ -38,11 +38,6 @@ let profile_edit : ProfileEdit = { choosing: "", command: "", replacing: "", env
 let profile_fields : Map[String, @ui.Field] = {}
 
 ///|
-/// Whether a profile's models are being chosen ("" none: its page's own, by station and id), and the ⋯ open.
-// kept across runs: said by the page's presses; profile_page_reset puts it back
-let profile_menu_open : Ref[String] = Ref("")
-
-///|
 fn profile_page_reset() -> Unit {
   profile_edit.choosing = ""
   profile_edit.command = ""
@@ -51,7 +46,6 @@ fn profile_page_reset() -> Unit {
   profile_edit.env_of = ""
   profile_edit.env_made = 0
   profile_fields.clear()
-  profile_menu_open.val = ""
 }
 
 ///|
@@ -68,29 +62,36 @@ fn profile_field(key : String) -> @ui.Field {
 }
 
 ///|
-/// A profile's page (AccountPage), by its station and id: a wait until the station's overview is read; one gone,
-/// that it is not found.
-fn profile_page(c : @ui.Ctx, core : Core, here : Here, address : String, id : String) -> Unit {
+/// A profile's page (AccountPage), by its station and id, one in every frame (the Small stack's, the wide frame's
+/// pane, the profiles' place): a wait until the station's overview is read; one gone, that it is not found.
+fn profile_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address : String, id : String) -> Unit {
+  let look = look_of(c)
   let s = @settings.station_of(core, here, address)
   let o = field(s, "overview")
-  let back = "Profile"
+  let key = "profile/" + address + "/" + id
   guard o is Some(Object(_)) else {
-    desk_page(c, core, "profile/" + address + "/" + id, back, back~, [
-      fn() { @sf.waiting(c, shape=Cards, note={ reading: true, text: @sf.t("web-pages.profiles.loading"), failing: [] }) },
+    look_page(c, core, frame, look, key, "Profile", [
+      fn() {
+        cn_gutter(c, look, fn() {
+          @sf.waiting(c, shape=Cards, note={ reading: true, text: @sf.t("web-pages.profiles.loading"), failing: [] })
+        })
+      },
     ])
   }
   match items(o, "profiles").search_by(fn(p) { text(Some(p), "id") == id }) {
-    Some(i) => profile_view(c, core, here, s, o, Some(items(o, "profiles")[i]))
+    Some(i) => profile_view(c, core, here, frame, look, s, o, Some(items(o, "profiles")[i]))
     None =>
-      desk_page(c, core, "profile/" + address + "/" + id, back, back~, [
-        fn() { c.text(@sf.t("web-pages.profiles.notFound", args=[("id", id)]), style=desk_muted) |> ignore },
+      look_page(c, core, frame, look, key, "Profile", [
+        fn() {
+          cn_gutter(c, look, fn() { c.text(@sf.t("web-pages.profiles.notFound", args=[("id", id)]), style=desk_muted) |> ignore })
+        },
       ])
   }
 }
 
 ///|
 /// The page (AccountView).
-fn profile_view(c : @ui.Ctx, core : Core, here : Here, s : Json?, o : Json?, p : Json?) -> Unit {
+fn profile_view(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, look : Look, s : Json?, o : Json?, p : Json?) -> Unit {
   let address = text(s, "station")
   let id = text(p, "id")
   let access = field(p, "access")
@@ -145,9 +146,11 @@ fn profile_view(c : @ui.Ctx, core : Core, here : Here, s : Json?, o : Json?, p :
       blocks.push(fn() { profile_env(c, core, address, p) })
     }
   }
-  desk_page(c, core, "profile/" + address + "/" + id, text(p, "name"), back="Profile", head=fn() {
-      profile_head(c, core, here, address, p, entry)
-    }, blocks)
+  // its head says who it is: no title over it (AccountView's identity); each part in the page's room as its cards
+  let parts = blocks.map(fn(b) { fn() { cn_gutter(c, look, b) } })
+  look_page(c, core, frame, look, "profile/" + address + "/" + id, text(p, "name"), parts, head=fn() {
+    profile_head(c, core, here, address, p, entry)
+  })
 }
 
 ///|
@@ -282,23 +285,16 @@ fn runtime_tag(r : String) -> String {
 fn profile_menu(c : @ui.Ctx, core : Core, here : Here, address : String, p : Json?) -> Unit {
   let t = @sf.theme()
   let id = text(p, "id")
-  let key = address + "/" + id
   let machine = flag(p, "machine")
-  let mid = c.id("profile-more/" + key)
+  let mid = c.id("profile-more/" + address + "/" + id)
   c.cursor(mid, Hand)
-  let open = profile_menu_open.val == key
-  if c.clicked(mid) {
-    profile_menu_open.val = if open { "" } else { key }
-  }
   let b = c.box(style=st_more, id=mid, fn() { @sf.icon(c, "more", size=st_more_icon, color=t.p.muted) |> ignore })
-  c.semantics(b, Button, id=mid, label=@sf.t("common.more"), expanded=open)
-  let item = if machine { @sf.t("web-pages.profiles.disable") } else { @sf.t("web-pages.profiles.delete") }
-  let m = @sf.dropdown(c, "profile-menu/" + key, open, mid, [@kit.menu_item("remove", label=item)], { "remove": "trash" }, @sf.menu_w, along=End)
-  if open && !m.open {
-    profile_menu_open.val = ""
+  c.semantics(b, Button, id=mid, label=@sf.t("common.more"))
+  if !c.clicked(mid) {
+    return
   }
-  if m.chosen is Some(_) {
-    profile_menu_open.val = ""
+  let item = if machine { @sf.t("web-pages.profiles.disable") } else { @sf.t("web-pages.profiles.delete") }
+  let remove = fn() {
     let (title, words) = if machine {
       (
         @sf.t("web-pages.profiles.disableConfirm", args=[("name", text(p, "name"))]),
@@ -320,6 +316,7 @@ fn profile_menu(c : @ui.Ctx, core : Core, here : Here, address : String, p : Jso
       )
     })
   }
+  @sf.menu([Some(@sf.menu_item_of(item, icon="trash", danger=true, remove))], from=Of(mid), along=End)
   ignore(here)
 }
 
