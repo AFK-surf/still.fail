@@ -282,8 +282,8 @@ pub fn roots_page(
 }
 
 ///|
-/// A folder pinned (RootRow): its mark, its name, where it is (what is wrong with it and what to do, in red, where it
-/// cannot be browsed now), a chevron; pressed, gone into; held or right clicked, for one who may, no longer pinned.
+/// A folder pinned (RootRow): its mark, its name, where it is (which disk, which folder: what finding it again turns
+/// on), what is wrong with it and what to do in red under that where it cannot be browsed now, a chevron; pressed, gone into; held or right clicked, for one who may, no longer pinned.
 fn root_row(c : @ui.Ctx, src : Source, s : DvStation, r : DvRoot, manage : Bool, go : (DriveAt) -> Unit) -> Unit {
   let t = @sf.theme()
   let key = "files-root/" + s.station + "/" + r.path
@@ -297,11 +297,11 @@ fn root_row(c : @ui.Ctx, src : Source, s : DvStation, r : DvRoot, manage : Bool,
       )
     _ => ()
   }
-  let (note, bad) = match dv_trouble(r.state) {
-    Some((what, hint)) => (what + " · " + hint, true)
-    None => (r.path, false)
+  let trouble = match dv_trouble(r.state) {
+    Some((what, hint)) => what + " · " + hint
+    None => ""
   }
-  if @sf.link_row(c, key, r.name, note~, note_bad=bad, lead=fn() {
+  if @sf.link_row(c, key, r.name, note=r.path, trouble~, lead=fn() {
       @sf.icon(c, "folder", size=t.items.mark, color=t.p.muted) |> ignore
     }) {
     go({ station: s.station, root: Some(r.path), path: "" })
