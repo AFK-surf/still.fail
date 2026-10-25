@@ -107,6 +107,9 @@ pub(all) struct Theme {
   /// how round what lies in a container's corner may be, and how far from its edges, to be concentric with it
   /// (CornerFit); None: any, as concentric asks
   corner_fit : CornerFit?
+  /// how far apart two things that light up under the hand stand at least (the spacing rules, gaps.mbt: the web's
+  /// sidebar rows 2); 0: not held
+  lit_apart : Double
   /// the height of a line of words that say none, a size of words (1.4: CSS's `line-height: 1.4`, still.fail's
   /// apps'); 0: the host's own (its system's, about 1.42)
   text_line : Double
@@ -262,6 +265,7 @@ pub fn Theme::light() -> Theme {
     radii: RadiusScale::tailwind(),
     corner_ladder: [],
     corner_fit: None,
+    lit_apart: 0.0,
     tabular: false,
   }
 }
@@ -416,6 +420,7 @@ pub fn Theme::ios_light() -> Theme {
     radii: RadiusScale::tailwind(),
     corner_ladder: [],
     corner_fit: None,
+    lit_apart: 0.0,
     tabular: false,
   }
 }
@@ -682,6 +687,9 @@ pub fn Ctx::with_theme(self : Ctx, t : Theme, body : () -> Unit) -> Unit {
   }
   if t.corner_fit is Some(_) {
     self.corner_fit = t.corner_fit
+  }
+  if t.lit_apart > 0.0 {
+    self.lit_apart = t.lit_apart
   }
   body()
   self.theme = saved

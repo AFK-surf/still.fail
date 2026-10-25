@@ -198,6 +198,11 @@ pub let small_corner : Double = @ui.concentric(row_corner, corner_inset)
 pub let corner_ladder : Array[Double] = [pane_corner, card_corner, row_corner, small_corner]
 
 ///|
+/// How far apart two things that light up under the hand stand at least (Theme::lit_apart, the spacing rules): the
+/// web's sidebar rows (Sidebar.css.ts navRow, `& + &` 2 over the one before), so two lit grounds never read as one.
+pub let lit_apart : Double = 2.0
+
+///|
 /// What the corner rule may make of what lies in a container's corner to be concentric with it (docs/ui-panels.md 圆角
 /// 阶梯, 适应范围; the theme's Theme::corner_fit): a corner 6 at least (squarer reads as square) and the ladder's
 /// outermost at most, standing 4 to 16 from the container's edges. The outermost container is the window, its corner
@@ -1336,6 +1341,7 @@ pub fn ui_theme() -> @ui.Theme {
     text_line: 1.4,
     corner_ladder,
     corner_fit: Some(corner_fit),
+    lit_apart,
     // the app's own words with digits all one width, as the web's root (`font-variant-numeric: tabular-nums`): a
     // percentage, a time running, a count keep their width as they change; what people wrote keeps the font's own
     tabular: true,

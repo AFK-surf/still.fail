@@ -328,7 +328,7 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
   // (always to a finger, which hovers over nothing: Archive.css.ts actions `hover: none`)
   let over = @sf.pointed_or_finger(c.lit(id) || c.lit(back) || c.lit(drop) || busy)
   let l = @sf.theme().chat_list
-  c.box(style=if more { l.more } else { @sfpages.row_last }, fn() {
+  c.box(style=if more { @sf.list_more(Side) } else { @sfpages.row_last }, fn() {
     // (the library's list row, a chat's as high as its rows are: @sf.list_row)
     @sf.list_row(
       c,

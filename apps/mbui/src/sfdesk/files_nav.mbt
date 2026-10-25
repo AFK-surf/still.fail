@@ -134,7 +134,10 @@ pub fn files_places(
           c.box(style=nav_note, fn() { c.text(@sf.t("web-main.rail.filesNone"), style=nav_meta()) |> ignore }) |> ignore
         PFavorites => places_favorites(c, src, ws, views, go)
         PHeading(h) => @sf.list_heading(c, h, Side)
-        PStation(s) => station_row(c, src, s, s.station == here, dv_rights(src, ws, Some(s)).write, go)
+        PStation(s) => {
+          let more = i + 1 < rows.length() && rows[i + 1] is PStation(_)
+          station_row(c, src, s, s.station == here, dv_rights(src, ws, Some(s)).write, more, go)
+        }
         PShared(s, r) => {
           let t = @sf.theme()
           let name = if r.name != "" { r.name } else { dv_name(r.path) }
@@ -149,6 +152,7 @@ pub fn files_places(
                   nav_words(c, name, color?=if s.online { None } else { Some(t.p.muted) })
                   c.text(s.name, style=nav_meta()) |> ignore
                 },
+                more=i + 1 < rows.length() && rows[i + 1] is PShared(_),
               ) {
               go(into)
             }
@@ -193,7 +197,7 @@ fn places_favorites(
       })
       |> ignore
     }
-    for f in favs {
+    for k, f in favs {
       match views.iter().find_first(fn(x) { x.station == f.station }) {
         Some(st) => {
           let place = f.station + "/" + f.root + "/" + f.path
@@ -215,6 +219,7 @@ fn places_favorites(
                   })
                   c.semantics(ub, Button, id=rid, label=@sf.t("web-pages.files.unfavorite", args=[("name", f.name)]))
                 },
+                more=k + 1 < favs.length(),
               ) {
               go(into)
             }
@@ -236,6 +241,7 @@ fn station_row(
   s : DvStation,
   here : Bool,
   write : Bool,
+  more : Bool,
   go : (DriveAt) -> Unit,
 ) -> Unit {
   let t = @sf.theme()
@@ -249,6 +255,9 @@ fn station_row(
   }
   let open = nav.open.contains(s.station)
   let start = drive_start(s)
+  // (its places' rows under it while opened)
+  let under = open &&
+    (if s.anywhere { nav.places.get(s.station).unwrap_or([]).length() > 0 } else { s.roots.length() > 0 })
   let row = fn() {
     if nav_row(
         c,
@@ -280,6 +289,7 @@ fn station_row(
             c.text(@sf.t("web-pages.stations.offline"), style=nav_meta()) |> ignore
           }
         },
+        more=under,
       ) &&
       !c.clicked(did) {
       match start {
@@ -288,16 +298,18 @@ fn station_row(
       }
     }
   }
-  c.box(style=station_item, fn() {
-    match start {
-      Some(r) => fdrag_side_row(c, "station/" + s.station, { station: s.station, root: Some(r), path: "" }, s.name, write, s.transfers, row)
-      None => row()
-    }
-    if open {
-      station_places(c, src, s, write, go)
-    }
+  nav_apart(c, more, fn() {
+    c.box(style=station_item, fn() {
+      match start {
+        Some(r) => fdrag_side_row(c, "station/" + s.station, { station: s.station, root: Some(r), path: "" }, s.name, write, s.transfers, row)
+        None => row()
+      }
+      if open {
+        station_places(c, src, s, write, go)
+      }
+    })
+    |> ignore
   })
-  |> ignore
 }
 
 ///|
@@ -337,7 +349,7 @@ fn station_places(
     c.box(style=nav_note, fn() { c.text(@sf.t("web-pages.files.reading"), style=nav_meta()) |> ignore }) |> ignore
   }
   c.box(style=places_in, fn() {
-    for p in places {
+    for k, p in places {
       let (name, path, disk) = p
       let into : DriveAt = { station: s.station, root: Some(path), path: "" }
       fdrag_side_row(c, "place/" + s.station + "/" + path, into, name, write, s.transfers, fn() {
@@ -349,6 +361,7 @@ fn station_places(
               @sf.icon(c, if disk { "disk" } else { "folder" }, size=nav_icon, color=t.p.muted) |> ignore
               nav_words(c, name, color?=if s.online { None } else { Some(t.p.muted) })
             },
+            more=k + 1 < places.length(),
           ) {
           go(into)
         }

@@ -125,11 +125,12 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     side_top(c)
     nav_action(c, "stations/add", @sf.t("web-pages.settings.stations.add"), @settings.place_action(core, here, "stations"))
     side_scroll(c, "stations-nav/" + w.id, fn() {
-      for s in stations_listed(src, w) {
+      let listed = stations_listed(src, w)
+      for i, s in listed {
         let s = Some(s)
         let address = text(s, "station")
         let on = picked == Some(Route::Station(address))
-        station_side_row(c, src, s, on, fn() { place_pick["stations"] = Route::Station(address) })
+        station_side_row(c, src, s, on, i + 1 < listed.length(), fn() { place_pick["stations"] = Route::Station(address) })
       }
     })
   })
@@ -139,7 +140,7 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 ///|
 /// A station's row (StationRow): its mark and name, how it is at the end (its agents at work, or when it was last seen
 /// away); while up, what is left of its CPU, memory and disk in small boxes, and how this device reaches it.
-fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, pick : () -> Unit) -> Unit {
+fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, more : Bool, pick : () -> Unit) -> Unit {
   let t = @sf.theme()
   let address = text(s, "station")
   let online = flag(s, "online")
@@ -186,6 +187,7 @@ fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, pick : () -
           _ => ()
         }
       },
+      more~,
     ) {
     pick()
   }
@@ -207,8 +209,10 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     nav_action(c, "profiles/add", @sf.t("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"))
     side_scroll(c, "profiles-nav/" + w.id, fn() {
       let mut group = ""
-      for e in list {
+      for i, e in list {
         let e = Some(e)
+        // (another row under it: the next of its group)
+        let more = i + 1 < list.length() && text(Some(list[i + 1]), "group") == text(e, "group")
         if text(e, "group") != group {
           group = text(e, "group")
           @sf.list_heading(c, text(e, "groupTitle"), Side)
@@ -263,6 +267,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
                 }
               })
             },
+            more~,
           ) {
           place_pick["profiles"] = route
         }
@@ -281,7 +286,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           continue
         }
         @sf.list_heading(c, @sf.t("web-pages.profiles.machineSignedIn", args=[("station", text(s, "name"))]), Side)
-        for l in offers {
+        for j, l in offers {
           let l = Some(l)
           if nav_item(
               c,
@@ -295,6 +300,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
                   c.text(@sf.t("android-settings.machine.use"), style=nav_meta().then(place_use)) |> ignore
                 })
               },
+              more=j + 1 < offers.length(),
             ) {
             app.nav.push(Setting(Route::NewProfile(station)))
           }

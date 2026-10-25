@@ -31,17 +31,40 @@ let side_full : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// A row of one line of a sidebar's list (Sidebar.css.ts navRow; touch's SidebarList.css.ts phone: the theme's
-/// chats' list's `side_row`): the pointer's ground on hover, the selected one's ground when it is the page in view. True
-/// on the frame after a press.
-pub fn nav_row(c : @ui.Ctx, key : String, on : Bool, body : () -> Unit, align? : @ui.Align = ACenter) -> Bool {
+/// chats' list's `side_row`): the pointer's ground on hover, the selected one's ground when it is the page in view;
+/// `more`, another row under it (nav_apart). True on the frame after a press.
+pub fn nav_row(
+  c : @ui.Ctx,
+  key : String,
+  on : Bool,
+  body : () -> Unit,
+  align? : @ui.Align = ACenter,
+  more? : Bool = false,
+) -> Bool {
   let l = @sf.theme().chat_list
   let id = c.id(key)
   c.cursor(id, Hand)
   let look = l.side_row.then(@ui.style(align~))
   let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), on)
-  c.box(style=look.then(@sf.finger_least_h()).then(@ui.style(bg=Data(ground))), id~, body) |> ignore
+  nav_apart(c, more, fn() {
+    c.box(style=look.then(@sf.finger_least_h()).then(@ui.style(bg=Data(ground))), id~, body) |> ignore
+  })
   c.clicked(id)
 }
+
+///|
+/// A sidebar's row `row` with another row under it (`more`): the room between two things that light up under it
+/// (Sidebar.css.ts navRow `& + &`: 2 over the one after; @sf.list_more), so the row
+/// pointed at and the page in view never touch and read as one block. The last of a run, a heading under it, as it
+/// is: the heading's room is its own.
+fn nav_apart(c : @ui.Ctx, more : Bool, row : () -> Unit) -> Unit {
+  if more {
+    c.box(style=@sf.list_more(Side), row) |> ignore
+  } else {
+    row()
+  }
+}
+
 
 ///|
 /// An action in a sidebar's band over its list (新建对话, Pin 文件夹, 待处理: Sidebar.css.ts navNew's row): not one of the
@@ -203,7 +226,8 @@ pub let nav_mark_side : Double = 16.0
 /// A row of a list in a sidebar, a station's, a profile's, a folder's (SidebarList.tsx NavItem): the library's list
 /// row, laid out as a chat's (@sf.list_row): its `mark` beside its first line, its `title` (nav_title) with what is at
 /// that line's `end` (muted, never cut: the title gives way), then the `lines` under them (nav_line each); the pointer's
-/// ground on hover, the selected one's when it is the page in view. True when pressed.
+/// ground on hover, the selected one's when it is the page in view; `more`, another row under it (nav_apart). True
+/// when pressed.
 pub fn nav_item(
   c : @ui.Ctx,
   key : String,
@@ -212,31 +236,34 @@ pub fn nav_item(
   title : () -> Unit,
   end? : () -> Unit,
   lines? : () -> Unit,
+  more? : Bool = false,
 ) -> Bool {
   let id = c.id(key)
   c.cursor(id, Hand)
   let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), on)
-  @sf.list_row(
-    c,
-    id,
-    Side,
-    ground,
-    mark~,
-    fn() {
-      title()
-      match end {
-        Some(e) => c.box(style=nav_item_end, e) |> ignore
-        None => ()
-      }
-    },
-    fn() {
-      match lines {
-        Some(l) => l()
-        None => ()
-      }
-    },
-  )
-  |> ignore
+  nav_apart(c, more, fn() {
+    @sf.list_row(
+      c,
+      id,
+      Side,
+      ground,
+      mark~,
+      fn() {
+        title()
+        match end {
+          Some(e) => c.box(style=nav_item_end, e) |> ignore
+          None => ()
+        }
+      },
+      fn() {
+        match lines {
+          Some(l) => l()
+          None => ()
+        }
+      },
+    )
+    |> ignore
+  })
   c.clicked(id)
 }
 

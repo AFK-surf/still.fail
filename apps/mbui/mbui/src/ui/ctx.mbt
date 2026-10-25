@@ -430,6 +430,10 @@ pub struct Ctx {
   // what the corner rule may make of what lies in a container's corner (Theme::corner_fit), and how round the system
   // draws the window's corners this frame (window_corner: the outermost container, corners.mbt)
   mut corner_fit : CornerFit?
+  // the ids whose look asked this frame whether the hand is on them (Ctx::lit) or were drawn selected: what lights
+  // up, and how far apart such things stand (Theme::lit_apart): the spacing rules' (gaps.mbt)
+  lit_asked : Set[Int]
+  mut lit_apart : Double
   mut window_corner : Double
   mut direction : Direction
   // what the widgets built this frame say they are (semantics.mbt), and how deep in a part hidden from it the view
@@ -637,6 +641,8 @@ fn Ctx::new() -> Ctx {
     arounds: [],
     corner_ladder: [],
     corner_fit: None,
+    lit_asked: Set::new(),
+    lit_apart: 0.0,
     window_corner: 0.0,
     inner_faults: [],
     direction: Ltr,
@@ -855,6 +861,9 @@ pub fn Ctx::box(
 ) -> Int {
   let i = self.alloc_part(kind_box, false, false)
   let n = self.nodes[i]
+  if selected && id != 0 {
+    self.lit_asked.add(id)
+  }
   // the style's look in this node's states, the tokens looked up in the theme in force
   let st : Patch = match style {
     None => no_patch
@@ -1316,6 +1325,9 @@ pub fn Ctx::hovered(self : Ctx, id : Int) -> Bool {
 /// pressing it, itself (the web's `:hover` with a fine pointer, `:active` with a coarse one). What a style's `hovered`
 /// patch and a widget's hovered look go by.
 pub fn Ctx::lit(self : Ctx, id : Int) -> Bool {
+  if id != 0 {
+    self.lit_asked.add(id)
+  }
   match pointing() {
     Mouse => self.hovered(id)
     Finger => self.pressed(id)

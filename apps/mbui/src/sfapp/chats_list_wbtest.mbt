@@ -16,7 +16,7 @@ fn lists_tester(calls : Array[Made], w : Double, platform : Int, regular : Bool)
 }
 
 ///|
-test "the chats' lists at each width and with either hand: its days and rows; a finger's 66 high, a mouse's 54 and 2 apart" {
+test "the chats' lists at each width and with either hand: its days and rows; a finger's 66 high, a mouse's 54, 2 apart but a finger's across a phone" {
   for case in one_page_cases {
     let (w, platform, regular, _) = case
     let calls : Array[Made] = []
@@ -25,7 +25,8 @@ test "the chats' lists at each width and with either hand: its days and rows; a 
     assert_true(t.find("今天") is Some(_), msg=at)
     let (_, y1) = t.find("整理发布清单").unwrap()
     let (_, y2) = t.find("首页的列表改成按天分组").unwrap()
-    let step = if platform == 2 { @sfpages.touch_row_h } else { 56.0 }
+    // (in a side column 2 apart with either hand, @sf.list_more; across a phone's screen a finger's flush)
+    let step = if platform != 2 { 56.0 } else if regular { @sfpages.touch_row_h + 2.0 } else { @sfpages.touch_row_h }
     assert_true((y2 - y1 - step).abs() < 0.5, msg="\{at}: \{y2 - y1}")
     // the last thing said, who said it at the line's end, in every tier
     assert_true(t.find("正在核对第三项：安装包的签名") is Some(_), msg=at)

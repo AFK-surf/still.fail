@@ -72,12 +72,16 @@ let corner_modes : Array[String] = [
 /// `lang`'s screens in every window, each against its bars: the corners' and, the squeeze's ones, the squeeze's.
 fn corners_check(lang : String) -> Unit raise {
   let wrong : Array[String] = []
+  let gaps : Array[String] = []
   for win in corner_windows {
     let squeezed = squeeze_windows.contains(win.0)
     for mode in corner_modes {
       let at = "\{win.0}-\{lang} \{mode}"
       let t = screen_in(mode, win, lang)
       let faults = t.corner_faults()
+      for f in t.gap_faults() {
+        gaps.push("\{at}: \{f}")
+      }
       let known = corners_everywhere_known.get(at).unwrap_or(0)
       if faults.length() != known {
         wrong.push(
@@ -97,6 +101,10 @@ fn corners_check(lang : String) -> Unit raise {
         }
       }
     }
+  }
+  match gaps_wrong(lang, gaps) {
+    Some(w) => wrong.push(w)
+    None => ()
   }
   if wrong.length() > 0 {
     fail(wrong.join("\n"))
