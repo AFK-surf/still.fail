@@ -26,8 +26,12 @@ export const mNewSpent = style({
   margin: "0 12px", padding: "8px 12px", borderRadius: `calc(12px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "color-mix(in srgb, var(--m-warn) 12%, var(--m-bg))", fontSize: vars.textMeta,
 });
+/**
+ * The choices and the composer on the band: as far under its top as the composer is in from its sides (10: 4, then
+ * the choices' own 6 over them, room for their shadows where they scroll).
+ */
 export const mNewBottom = style({
-  display: "flex", flexDirection: "column", gap: "4px", flex: "none", padding: "8px 10px 0",
+  display: "flex", flexDirection: "column", gap: "4px", flex: "none", padding: "4px 10px 0",
 });
 export const mChoosers = style({
   display: "flex", gap: "6px", overflowX: "auto", padding: "6px 2px", scrollbarWidth: "none",
