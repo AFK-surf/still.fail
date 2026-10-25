@@ -326,9 +326,9 @@ test("vault calls: set up, a vault of one's own, an item written, opened, unlock
   assert.equal(cert.recovery, recoveryPair(fromWords(setup.words)).pub);
   const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
   assert.equal(vaults().setUp, true);
-  // A vault: keyed for this device and the recovery words; unlocked here as it is made.
-  const made = await r.ask("vault.create", { name: "Personal" });
-  const v = r.st.vaults.get(made.id)!;
+  // The person's own vault, made as their first device is set up: keyed for this device and the recovery words;
+  // unlocked here as it is made.
+  const v = r.st.vaults.get(setup.made)!;
   assert.deepEqual([v.owner, v.members, v.seq, v.keys.length], ["s1", ["s1"], 0, 1]);
   assert.ok(signedOk(v, TAG.vault));
   const vaultKey = openSeal(recoveryPair(fromWords(setup.words)).priv, v.recovery!, keyContext("ws", v.id, 0));
@@ -382,8 +382,7 @@ test("what the system said no with is said in the person's words: no screen lock
 test("vault calls: another device keyed in by the owner, a device keyed back in by the recovery words", async () => {
   const r = await rig();
   r.putLock();
-  const { words } = await r.ask("vault.setup", {});
-  const { id } = await r.ask("vault.create", { name: "Personal" });
+  const { words, made: id } = await r.ask("vault.setup", {});
   // The phone sets itself up: its certificate comes as the station tells it.
   const phoneBox = fill(7);
   const phoneCert = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(phoneBox), at: 2000 }, TAG.box, r.phone);
@@ -404,7 +403,7 @@ test("vault calls: another device keyed in by the owner, a device keyed back in 
   r.host.secure.delete(BOX_KEY);
   r.host.storage.delete(BOX_PUB);
   const again = await r.ask("vault.setup", {});
-  assert.equal(again.words, null);
+  assert.deepEqual([again.words, again.made, r.st.vaults.size], [null, null, 1], "no second vault made: its key is given");
   await r.host.time.pass(100);
   assert.equal(vaults().vaults[0].keyed, false);
   await r.ask("vault.lock", {});
@@ -420,8 +419,7 @@ test("vault calls: another device keyed in by the owner, a device keyed back in 
 test("vault calls: an agent's request approved (sealed to its keeper, signed) or turned down", async () => {
   const r = await rig();
   r.putLock();
-  await r.ask("vault.setup", {});
-  const { id } = await r.ask("vault.create", { name: "Personal" });
+  const { made: id } = await r.ask("vault.setup", {});
   const put = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } }, listing: { name: "gh", kind: "token", modes: ["proxy"], hosts: ["api.github.com"] } });
   const keeper = fill(5);
   const request = (rid: string): Request => ({ id: rid, ws: "ws", vault: id, item: put.id, session: "k1", chat: "7", mode: "proxy", reason: "list PRs", hosts: ["api.github.com"], box: boxPublic(keeper), at: 1, status: "pending" });
@@ -492,10 +490,9 @@ test("a chat's card of an agent's request comes answered with its post, from the
   // while its request is not held here.
   assert.deepEqual(asks(), [["r_1", "approve", "chat", null], ["r_s", "setUp", null, null]]);
   // Set up: the chat's cards say so with no one asking.
-  await r.ask("vault.setup", {});
+  const { made: id } = await r.ask("vault.setup", {});
   assert.deepEqual(asks(), [["r_1", "approve", "chat", null], ["r_s", "approve", null, null]]);
   // Its request held, its item given an hour at most: the hour.
-  const { id } = await r.ask("vault.create", { name: "Personal" });
   const put = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } }, listing: { name: "gh", kind: "token", modes: ["proxy"], hosts: ["api.github.com"], lasts: "hour" } });
   const request: Request = { id: "r_1", ws: "ws", vault: id, item: put.id, session: "k1", chat: "7", mode: "proxy", reason: "list PRs", hosts: ["api.github.com"], box: boxPublic(fill(5)), at: 1, status: "pending" };
   r.st.requests.push(request);
@@ -516,7 +513,7 @@ test("a chat's card of an agent's request comes answered with its post, from the
   w.core.close();
 });
 
-test("vault calls: a secret an agent asks to keep, opened with this device's box key, written into a vault of one's own (made when none), then told", async () => {
+test("vault calls: a secret an agent asks to keep, opened with this device's box key, written into a vault of one's own, then told", async () => {
   const r = await rig();
   r.putLock();
   await r.ask("vault.setup", {});
@@ -535,7 +532,7 @@ test("vault calls: a secret an agent asks to keep, opened with this device's box
   await r.host.time.pass(500);
   r.take();
   assert.deepEqual(vaults().requests.map((q: any) => [q.id, q.itemName, q.save]), [["r_s", "UniFi UX7", { kind: "login", username: "zzj" }]]);
-  assert.deepEqual(vaults().vaults, [], "none of one's own yet");
+  assert.equal(vaults().vaults.length, 1, "one's own, made as this device was set up");
 
   const asked = r.host.secureAsked.length;
   const kept = await r.ask("vault.approve", { request: "r_s", scope: "once" });
@@ -567,12 +564,59 @@ test("vault calls: a secret an agent asks to keep, opened with this device's box
   r.core.close();
 });
 
+test("one vault of one's own: a device set up later makes none, and is given its key as soon as one of the owner's devices that has it unseals it", async () => {
+  const r = await rig();
+  r.putLock();
+  const { made: id } = await r.ask("vault.setup", {});
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  // The phone sets itself up: no key to the vault yet.
+  const phoneBox = fill(7);
+  const phoneCert = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(phoneBox), at: 2000 }, TAG.box, r.phone);
+  r.st.boxes.set(r.phone.hex, phoneCert);
+  r.push("vault-box", phoneCert);
+  await r.host.time.pass(100);
+  assert.equal(vaults().vaults[0].missing, 1);
+  // Its key in hand here as the person writes into it (unsealed when it was made): the phone given its key with it,
+  // the person asked nothing more.
+  const asked = r.host.secureAsked.length;
+  await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } } });
+  await r.host.time.pass(500);
+  r.take();
+  assert.equal(r.host.secureAsked.length, asked);
+  const v1 = r.st.vaults.get(id)!;
+  assert.ok(signedOk(v1, TAG.vault));
+  assert.equal(v1.seq, 1);
+  assert.equal(openSeal(phoneBox, v1.keys.find((k) => k.cert.device === r.phone.hex)!.wrapped, keyContext("ws", id, 0)).length, 32);
+  assert.equal(vaults().vaults[0].missing, 0);
+
+  // This device installed anew: set up again, no key to the vault and no second one made; a secret to keep approved
+  // here is refused (before the person is asked) till a device that has the key gives it.
+  r.host.secure.delete(BOX_KEY);
+  r.host.storage.delete(BOX_PUB);
+  await r.ask("vault.lock", {});
+  const again = await r.ask("vault.setup", {});
+  assert.deepEqual([again.made, r.st.vaults.size], [null, 1]);
+  const box = r.st.boxes.get("ab".repeat(32))!.box;
+  const rid = "r_k";
+  const save: Request = {
+    id: rid, ws: "ws", vault: "", item: "i_01JAKEEP000000000000000NEW", session: "k1", chat: "7", mode: "env", reason: "keep it", box: boxPublic(fill(9)), at: 1, status: "pending", owner: "a@x.com",
+    save: { kind: "token", name: "Axiom", modes: ["env"], hosts: [] },
+    sealed: [{ device: "ab".repeat(32), box, secret: sealWith(box, utf8(JSON.stringify({ value: "xaat" })), saveContext("ws", rid), fill(6)) }],
+  };
+  r.st.requests.push(save);
+  r.push("vault-request", save);
+  await r.host.time.pass(500);
+  const before = r.host.secureAsked.length;
+  await fails(r.ask("vault.approve", { request: rid, scope: "once" }), "vault_no_key");
+  assert.deepEqual([r.host.secureAsked.length, r.st.vaults.size, r.st.items.has(save.item)], [before, 1, false]);
+  r.core.close();
+});
+
 test("a vault made on one station is copied to the workspace's others, so an agent on any of them may ask for its secrets", async () => {
   const r = await rig(false, true);
   r.putLock();
-  await r.ask("vault.setup", {});
+  const { made: id } = await r.ask("vault.setup", {});
   const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
-  const { id } = await r.ask("vault.create", { name: "Personal", station: "st" });
   const put = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "Slack", fields: { value: "xoxp-1" } }, listing: { name: "slack", kind: "token", modes: ["proxy"], hosts: ["slack.com"] } });
   await r.host.time.pass(1000);
   r.take();
@@ -677,7 +721,6 @@ test("the plain library: no security mode, items kept on the station as they are
   r.putLock();
   r.st.plainLock.on = true;
   await r.ask("vault.setup", {});
-  await r.ask("vault.create", { name: "Personal" });
   assert.equal(vaults().plain, undefined);
   assert.equal(vaults().plainLeft, 1);
   await fails(r.ask("vault.putItem", { vault: "plain", plain: { kind: "token", name: "x", fields: { value: "y" } } }), "vault_locked");
@@ -692,9 +735,8 @@ test("the plain library: no security mode, items kept on the station as they are
 test("turning the lock off: the person's own secrets opened first, then written into the plain library once it is off", async () => {
   const r = await rig();
   r.putLock();
-  await r.ask("vault.setup", {});
-  const made = await r.ask("vault.create", { name: "Personal" });
-  await r.ask("vault.putItem", { vault: made.id, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } }, listing: { name: "GitHub", kind: "token", modes: ["proxy"], hosts: ["api.github.com"] } });
+  const { made } = await r.ask("vault.setup", {});
+  await r.ask("vault.putItem", { vault: made, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } }, listing: { name: "GitHub", kind: "token", modes: ["proxy"], hosts: ["api.github.com"] } });
   await r.ask("vault.lock", {});
   // The cloud keeps the chain: the entries posted are taken into it.
   stationReplies(r.host, (req) => {

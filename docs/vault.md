@@ -64,6 +64,7 @@ chat EMBER/1792240320.234000。凭据都放在「密钥」这一个库里；库�
 - **设备箱钥匙**：不改锁。每台 app 设备给自己的箱钥匙出一张「箱钥匙证书」，用锁里自己的 `sign_key` 签名，跟着库一起存（格式见「实现约定」）。验证的人拿锁里这台设备的 `sign_key` 验，所以 station 和 cloud 塞不进自己的箱钥匙。网页版设备没有 `sign_key`，也就没有箱钥匙。
 - **存放**：安卓放 Android Keystore（有 StrongBox 就用），要求生物识别或屏幕锁解锁；macOS 放钥匙串，用 Touch ID 解锁；Windows/Linux 用 Electron `safeStorage`。现在锁的签名钥匙（`lock-signer`）是 app 数据目录里的普通文件，`workspace-lock.md` 的「还没做」里已经记着要挪进钥匙串，这件事和箱钥匙一起做。
 - **不用主密码**：1Password 用「主密码 + Secret Key」，因为它的新设备要能自己登录、不依赖旧设备。still.fail 加新设备本来就要旧设备核对短码（`lock.confirm`），确认的同时把库钥匙包给新设备的箱钥匙就行，不用多记一个密码。所有设备都丢了，就用恢复码。
+- **一人一个自己的库，新设备拿钥匙不另建**（2026-10-26，chat EMBER/1792949811.536000：一个人因此有了三个库，两个空的）：`setup` 发完证书后重读各 station，这个人一个自己的库都没有时才顺手建「个人」库（回 `made`），界面不再自己调 `create`。之后设置的设备没有那个库的钥匙，由已有钥匙的设备给：owner 的设备只要手上有库钥匙（解开或还在 5 分钟里），就把钥匙封给成员新设置、还没有钥匙的设备，签一个新版本（`#give`），不用人去点；「设备」一栏的「授权新设备」只用在那之后还没解开过的时候。没钥匙的设备批准存入时，这个人已经有自己的库就回 `vault_no_key`（在问指纹之前），不另建一个。
 - **passkey**：passkey 有 PRF 扩展时，可以多包一份库钥匙给 PRF 派生出的钥匙，用来在新设备上恢复。先不做，等锁的 passkey 签名做完再加。
 - **算法**：只用 Node 自带 `node:crypto` 也有的几样（station 不加依赖，core 用 `@noble/*`）：X25519、HKDF-SHA256、ChaCha20-Poly1305（96 位随机 nonce）、Ed25519/P-256 验签。附加数据里写清 `ws/vault/item/version/epoch`，一条密文挪不到别处冒充。
 
@@ -130,7 +131,7 @@ chat EMBER/1792782824.926000（「当然是 agent 申请添加我来审批」）
   - 不加锁：`vault` 是 `plain`。
   - 两种都把原值留在 station 内存里直到有结果（重启就忘，agent 重新申请）：不加锁的批准时由 station 写进明文库；加锁的在他之后才设置的设备发布箱钥匙证书时（`PUT vault/boxes`）补封给那台设备，申请重新推送。
 - **卡片**：options 卡片「存入密钥库 / 拒绝」，assignee 是发起人，`vault` 字段多 `save: {kind, username?}`；客户端据此画成「想存入」而不是「想使用」，批准行是「存入 / 拒绝」。他在这个 workspace 里还没开启密钥库（加锁但这台设备没设置、或者一个库都没有）时，卡片上是「开启密钥库」，进「密钥」页走原来的开启流程（抄恢复码），回来再存入。
-- **批准**：`vault.approve {request}`（scope 不用）。加锁：用这台设备的箱钥匙打开给它的那份（过一次生物识别），选库（申请指定的、这台设备有钥匙的优先，其次自己的，没有就建一个「个人」库），用请求里的 `item` 写第 0 版（已经写过就不再写），把副本送到提出申请的 station，再 `POST vault/saves {request, vault}`；station 核对那个库里确有这个条目、名字对得上，记为 granted。不加锁：`POST vault/plain/saves {request}`，station 用内存里的值写进明文库、推 `vault-plain`。拒绝和别的申请一样走 `vault/denials`、`vault/plain/denials`（存入的申请由发起人决定，不看库成员）。
+- **批准**：`vault.approve {request}`（scope 不用）。加锁：用这台设备的箱钥匙打开给它的那份（过一次生物识别），选库（申请指定的、这台设备有钥匙的优先，其次自己的；自己的库都没有才建一个「个人」库，有但这台设备还没钥匙就回 `vault_no_key`），用请求里的 `item` 写第 0 版（已经写过就不再写），把副本送到提出申请的 station，再 `POST vault/saves {request, vault}`；station 核对那个库里确有这个条目、名字对得上，记为 granted。不加锁：`POST vault/plain/saves {request}`，station 用内存里的值写进明文库、推 `vault-plain`。拒绝和别的申请一样走 `vault/denials`、`vault/plain/denials`（存入的申请由发起人决定，不看库成员）。
 - **之后**：存进去的条目和人自己加的一样，agent 用时照样 `secret_use` → 卡片 → `secret_run`。存入的申请不算条目的使用记录（`uses` 里不列）。
 - **主动提**：内置 skill `stillfail-vault`，agent 的指令里也有一句：要读密码管理器、人贴了凭据、自己建了 key、写的脚本要登录某处时，先提议存进库再用；他的库没开启时照样调 `secret_save`，卡片会请他开启。`secret_list` 会说他的库开没开。
 
@@ -265,7 +266,7 @@ core → station（走现有的 admin/工作区路由，按锁认出设备和成
 - 推送（事件流，和其他数据一样，断线续传）：`vault`（一版库，发给它的成员）、`vault-gone` `{id}`（被移出库的人）、`vault-item`（一版条目，发给库的成员）、`vault-box`（证书，发给 workspace 的人）、`vault-request`（申请，状态变了也发，发给库的成员）。
 - 旧 station 回 404，core 记成这台不能放库（`vaults` topic 的 `refused`）。
 
-core 的调用（`vault.<名字> {workspace, …}`，`client/core-ts/src/views/vault.ts`）：`setup`（建箱钥匙、发证书；第一次回 24 个词，只回这一次）、`create {name, station?}`、`addDevice {vault, device?}`（owner 把库钥匙封给成员新设置的设备）、`putItem {vault, id?, plain, listing?}`、`deleteItem {vault, item}`、`open {item}`、`recover {words}`（用恢复码把这台设备加回自己的库）、`approve {request, scope}`（`once`/`hour` 授权一小时，`chat` 到对话归档、最长 30 天；超出生效 `lasts` 的回 `vault_scope`）、`setLasts {vault, lasts}`（默认最长授权：加锁库由 owner 签一个新版本，明文库发给存着它的 station）、`deny {request}`、`lock`。网页 host 没有 `secure*`，这些调用都回 `vault_unavailable`。这一期只有个人库：加人（`members` 变多）的调用还没做，格式和 station 已经支持。
+core 的调用（`vault.<名字> {workspace, …}`，`client/core-ts/src/views/vault.ts`）：`setup`（建箱钥匙、发证书；第一次回 24 个词，只回这一次；这个人还没有自己的库就建「个人」库，回 `made`）、`create {name, station?}`、`addDevice {vault, device?}`（owner 把库钥匙封给成员新设置的设备；owner 的设备手上有库钥匙时也会自己做）、`putItem {vault, id?, plain, listing?}`、`deleteItem {vault, item}`、`open {item}`、`recover {words}`（用恢复码把这台设备加回自己的库）、`approve {request, scope}`（`once`/`hour` 授权一小时，`chat` 到对话归档、最长 30 天；超出生效 `lasts` 的回 `vault_scope`）、`setLasts {vault, lasts}`（默认最长授权：加锁库由 owner 签一个新版本，明文库发给存着它的 station）、`deny {request}`、`lock`。网页 host 没有 `secure*`，这些调用都回 `vault_unavailable`。这一期只有个人库：加人（`members` 变多）的调用还没做，格式和 station 已经支持。
 
 agent → station（MCP 工具，在 `stillfail` 服务器里）：
 

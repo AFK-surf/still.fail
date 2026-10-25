@@ -56,7 +56,7 @@ export function VaultSettings({ entry }: { entry: WorkspaceEntry }) {
         {library && <Button variant="ghost" icon={Plus} onClick={() => setAdding(true)}>{t("web-pages.vault.add")}</Button>}
       </header>
       {!view ? <Waiting shape="cards" count={2} />
-        : words ? <Words entry={entry} view={view} words={words} onDone={() => setWords(null)} />
+        : words ? <Words words={words} onDone={() => setWords(null)} />
         : view.plain === true ? <Library entry={entry} view={view} adding={adding} onAdded={() => setAdding(false)} />
         : !view.available ? <ReadOnly entry={entry} view={view} />
         : !view.locked ? <Gate entry={entry} title={t("web-pages.vault.needsLock")} why={t("web-pages.vault.needsLockWhy")} />
@@ -82,12 +82,10 @@ function Gate({ entry, title, why }: { entry: WorkspaceEntry; title: string; why
 function SetUp({ entry, onWords }: { entry: WorkspaceEntry; onWords(words: string[]): void }) {
   const run = useVaultCall();
   const settingUp = useDoing("vault.setup", { workspace: entry.id });
-  const creating = useDoing("vault.create", { workspace: entry.id });
+  // (the person's own vault made with it when they have none) The first device sets the words; one set up after takes
+  // the person's (none shown): straight on.
   const setUp = () => void run<{ words: string | null }>("vault.setup", { workspace: entry.id }, t("web-pages.vault.setUpWhat")).then((r) => {
-    if (!r) return;
-    // The first device sets the words; one set up after takes the person's (none shown): straight on.
-    if (r.words) onWords(r.words.trim().split(/\s+/));
-    else void run("vault.create", { workspace: entry.id, name: t("web-pages.vault.personal") }, t("web-pages.vault.createWhat"));
+    if (r?.words) onWords(r.words.trim().split(/\s+/));
   });
   return (
     <div className={pagesCss.card}>
@@ -97,7 +95,7 @@ function SetUp({ entry, onWords }: { entry: WorkspaceEntry; onWords(words: strin
         <Point icon={ShieldCheck} title={t("web-pages.vault.point.proxy")} how={t("web-pages.vault.point.proxyHow")} />
         <Point icon={Server} title={t("web-pages.vault.point.zero")} how={t("web-pages.vault.point.zeroHow")} />
       </div>
-      <div className={css.actions}><Button variant="primary" busy={settingUp || creating} onClick={setUp}>{t("web-pages.vault.setUp")}</Button></div>
+      <div className={css.actions}><Button variant="primary" busy={settingUp} onClick={setUp}>{t("web-pages.vault.setUp")}</Button></div>
     </div>
   );
 }
@@ -108,13 +106,7 @@ function Point({ icon: Icon, title, how }: { icon: typeof Key; title: string; ho
 
 /** The 24 words, numbered in three columns, the once they are shown; written down, the person's vault is made (if
  * they have none). */
-function Words({ entry, view, words, onDone }: { entry: WorkspaceEntry; view: VaultsView; words: string[]; onDone(): void }) {
-  const run = useVaultCall();
-  const creating = useDoing("vault.create", { workspace: entry.id });
-  const done = () => {
-    if (view.vaults.some((v) => v.mine)) return onDone();
-    void run("vault.create", { workspace: entry.id, name: t("web-pages.vault.personal") }, t("web-pages.vault.createWhat")).then(() => onDone());
-  };
+function Words({ words, onDone }: { words: string[]; onDone(): void }) {
   return (
     <div className={pagesCss.card}>
       <div className={css.state}>{t("web-pages.vault.words.title")}</div>
@@ -123,7 +115,7 @@ function Words({ entry, view, words, onDone }: { entry: WorkspaceEntry; view: Va
       <div className={css.actions}>
         <span className={css.note}>{t("web-pages.vault.words.once")}</span>
         <span className={css.grow} />
-        <Button variant="primary" busy={creating} onClick={done}>{t("web-pages.vault.words.done")}</Button>
+        <Button variant="primary" onClick={onDone}>{t("web-pages.vault.words.done")}</Button>
       </div>
     </div>
   );
@@ -189,7 +181,7 @@ function Library({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view
       {view.vaults.map((v) => <LibraryVault key={v.id} entry={entry} v={v} plain={plain} many={view.vaults.length > 1} quiet={(profiles?.items.length ?? 0) > 0} />)}
       {!plain && view.vaults.length > 0 && (
         <Section title={t("web-pages.vault.devices")}>
-          <div className={pagesCss.card}><div className={css.rows}>{view.vaults.map((v) => <DevicesRow key={v.id} entry={entry} v={v} many={view.vaults.length > 1} />)}</div></div>
+          <div className={pagesCss.card}><div className={css.rows}>{view.vaults.map((v) => <DevicesRow key={v.id} entry={entry} v={v} />)}</div></div>
         </Section>
       )}
       <Dialog open={adding} onClose={onAdded} title={t("web-pages.vault.addKind.title")}>
@@ -404,15 +396,17 @@ function ItemRow({ entry, row, readOnly, onOpen }: { entry: WorkspaceEntry; row:
     : <button type="button" className={`${pagesCss.listRow} ${css.rowButton}`} disabled={opening} onClick={onOpen}>{body}</button>}</li>;
 }
 
-/** A vault's devices: how many hold its key; members' new ones its owner gives it to. */
-function DevicesRow({ entry, v, many }: { entry: WorkspaceEntry; v: VaultRow; many: boolean }) {
+/** A vault's devices: its name, how many hold its key or, where some have none yet, how many; members' new ones its
+ * owner gives it to (done by itself as the owner's device next has the key in hand). */
+function DevicesRow({ entry, v }: { entry: WorkspaceEntry; v: VaultRow }) {
   const run = useVaultCall();
   const adding = useDoing("vault.addDevice", { workspace: entry.id, vault: v.id });
   return (
     <div className={css.row}>
       <div className={css.rowText}>
-        <span>{many ? `${v.name} · ` : ""}{t("web-pages.vault.devicesHold", { n: v.devices })}</span>
-        {v.missing > 0 && <span className={css.warn}>{t("web-pages.vault.missing", { n: v.missing })}</span>}
+        <span>{v.name}</span>
+        {v.missing > 0 ? <span className={css.warn}>{t("web-pages.vault.missing", { n: v.missing })}</span>
+          : <span className={css.rowMeta}>{t("web-pages.vault.devicesHold", { n: v.devices })}</span>}
       </div>
       {v.missing > 0 && v.mine && v.keyed && <Button variant="ghost" busy={adding}
         onClick={() => void run("vault.addDevice", { workspace: entry.id, vault: v.id }, t("web-pages.vault.addDeviceWhat"), t("web-pages.vault.addedDevice"))}>{t("web-pages.vault.addDevice")}</Button>}

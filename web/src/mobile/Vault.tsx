@@ -40,19 +40,14 @@ export function VaultScreen() {
   const creating = useDoing("vault.create", { workspace: ws });
   // The recovery words, the once the core gives them (`vault.setup`): shown until they are written down.
   const [words, setWords] = useState<string[] | null>(null);
+  // (the person's own vault made with it when they have none; offered on its own when that did not take)
   const create = () => run("vault.create", { workspace: ws, name: t("web-pages.vault.personal") }, t("web-pages.vault.createWhat"));
   const setUp = () => void run<{ words: string | null }>("vault.setup", { workspace: ws }, t("web-pages.vault.setUpWhat")).then((r) => {
-    if (!r) return;
-    if (r.words) setWords(r.words.trim().split(/\s+/));
-    else void create();
+    if (r?.words) setWords(r.words.trim().split(/\s+/));
   });
-  const written = () => {
-    if (view?.vaults.some((v) => v.mine)) return setWords(null);
-    void create().then(() => setWords(null));
-  };
   const ready = !!view && !words && (view.plain === true || (view.available && view.locked && view.canSign && view.setUp));
   const foot = !view ? null
-    : words ? <Button primary busy={creating} label={t("web-pages.vault.words.done")} onClick={written} />
+    : words ? <Button primary label={t("web-pages.vault.words.done")} onClick={() => setWords(null)} />
     : view.available && view.locked && view.canSign && (!view.setUp || view.vaults.length === 0)
       ? <Button primary busy={settingUp || creating} label={t("web-pages.vault.setUp")} onClick={view.setUp ? () => void create() : setUp} />
     : null;
@@ -143,7 +138,7 @@ function Vaults({ view }: { view: VaultsView }) {
       {view.vaults.map((v) => (plain || v.keyed ? <LibraryVault key={v.id} v={v} plain={plain} /> : <VaultItems key={v.id} v={v} />))}
       {!plain && view.vaults.length > 0 && <>
         <SectionHeader title={t("web-pages.vault.devices")} start={24} />
-        <ListCard>{view.vaults.map((v) => <Devices key={v.id} v={v} many={view.vaults.length > 1} />)}</ListCard>
+        <ListCard>{view.vaults.map((v) => <Devices key={v.id} v={v} />)}</ListCard>
       </>}
     </>
   );
@@ -222,8 +217,9 @@ function ItemRow({ row, onOpen }: { row: VaultItemRow; onOpen: (() => void) | un
   );
 }
 
-/** A vault's devices: how many hold its key; members' new ones its owner gives it to. */
-function Devices({ v, many }: { v: VaultRow; many: boolean }) {
+/** A vault's devices: its name, how many hold its key or, where some have none yet, how many; members' new ones its
+ * owner gives it to (done by itself as the owner's device next has the key in hand). */
+function Devices({ v }: { v: VaultRow }) {
   const app = useApp();
   const run = useVaultCall();
   const adding = useDoing("vault.addDevice", { workspace: app.entry.id, vault: v.id });
@@ -231,8 +227,9 @@ function Devices({ v, many }: { v: VaultRow; many: boolean }) {
   return (
     <ListRow onClick={can && !adding ? () => void run("vault.addDevice", { workspace: app.entry.id, vault: v.id }, t("web-pages.vault.addDeviceWhat"), t("web-pages.vault.addedDevice")) : undefined}>
       <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-        <span className={listsCss.mRowTitle}>{many ? `${v.name} · ` : ""}{t("web-pages.vault.devicesHold", { n: v.devices })}</span>
-        {v.missing > 0 && <span className={securityCss.mWarn}>{t("web-pages.vault.missing", { n: v.missing })}</span>}
+        <span className={listsCss.mRowTitle}>{v.name}</span>
+        {v.missing > 0 ? <span className={securityCss.mWarn}>{t("web-pages.vault.missing", { n: v.missing })}</span>
+          : <span className={listsCss.mRowNote}>{t("web-pages.vault.devicesHold", { n: v.devices })}</span>}
       </span>
       {adding ? <Spinner inline /> : can && <span className={partsCss.mAccent}>{t("web-pages.vault.addDevice")}</span>}
     </ListRow>

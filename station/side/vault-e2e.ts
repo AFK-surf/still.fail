@@ -237,10 +237,9 @@ async function main() {
   await until(async () => owner.call("lock.open", { workspace: ws }).catch((e) => (console.log("  open:", e.message), null)), "lock.open", 30);
   await until(async () => JSON.parse(readFileSync(join(A.data, "mesh/lock.json"), "utf8")).entries.length > 0, "station pinned");
 
-  say("the vault: set up, a vault of alice's on the station, a token open to agents for localhost only");
+  say("the vault: set up (alice's own vault made with it, on the station), a token open to agents for localhost only");
   const setup = await until(async () => owner.call("vault.setup", { workspace: ws }).catch((e) => (console.log("  setup:", e.code, e.message), null)), "vault.setup", 50);
-  const made = await owner.call("vault.create", { workspace: ws, name: "个人", station: A.id });
-  const vaultId = made.id ?? made.vault ?? made;
+  const vaultId = setup.made;
   const put = await owner.call("vault.putItem", {
     workspace: ws, vault: vaultId,
     plain: { kind: "token", name: "Test host", fields: { value: TOKEN }, domains: [], notes: "" },
