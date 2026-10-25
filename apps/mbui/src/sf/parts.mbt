@@ -2804,20 +2804,19 @@ pub fn resize_handle(
 // A card of options (SettingParts.kt DecisionOptions; Decisions.css.ts options, choice)
 
 ///|
-/// How far in the card of options' rows stand (the ladder's inset: round by its next step, 18, in the card's corners),
-/// how far a row's number stands in it (concentric with the row: its corner less the disc's half), its disc's size.
+/// How far in the card of options' rows stand (the ladder's inset: round by its next step, 18, in the card's corners).
 let options_card_pad : Double = corner_inset
 
 ///|
-let options_row_pad : Double = 7.0
+/// An option's row's corner (the ladder's next step in from the card's).
+let option_row_corner : Double = 18.0
 
 ///|
-let option_disc : Double = 22.0
-
-///|
-/// An option's measures: its number's disc and how far in it stands (7 from the row's top and side, 22 across); its
-/// label's size and line, its detail's. The wide frame's as the web's (Decisions.css.ts choice: a 20 disc 8 in, 13 on
-/// 20 over 12 on 18).
+/// An option's measures, the theme's for the screen (decided once: docs/architecture.md): its number's disc a list
+/// item's mark, as far in from the row's top and side as makes it concentric with the row (its corner less the disc's
+/// half); its label in the controls' words, what it leads to in the meta's. A computer's as the web's
+/// (Decisions.css.ts choice: a 20 disc 8 in, 13 on 20 over 12 on 18); a phone's or a tablet's a size up (a 22 disc 7
+/// in, 15 on 22 over 13 on 18).
 priv struct OptionType {
   disc : Double
   pad_in : Double
@@ -2828,11 +2827,16 @@ priv struct OptionType {
 }
 
 ///|
-fn option_type(wide : Bool) -> OptionType {
-  if wide {
-    { disc: 20.0, pad_in: 8.0, label: 13.0, label_line: 20.0, detail: 12.0, detail_line: 18.0 }
-  } else {
-    { disc: option_disc, pad_in: options_row_pad, label: 15.0, label_line: 21.0, detail: 13.0, detail_line: 18.0 }
+fn option_type() -> OptionType {
+  let t = theme()
+  let disc = t.items.mark
+  {
+    disc,
+    pad_in: option_row_corner - disc / 2.0,
+    label: t.t.ui,
+    label_line: t.t.ui_line,
+    detail: t.t.meta,
+    detail_line: t.t.meta_line,
   }
 }
 
@@ -2866,9 +2870,9 @@ let options_card_radius : Double = card_corner
 /// A card of options (SettingParts.kt DecisionOptions): each a row to be pressed (its ground under the finger the
 /// ladder's inset in from the card's edge, rounded 18), its number in a disc (the one recommended in the accent), its label and what it
 /// leads to (`options`: each its label, its detail, whether recommended); half there when not `enabled`, a spinner on
-/// the one being answered (`busy`, none pressed meanwhile; `chosen` stays whole). The wide frame's as the web's (`wide`:
-/// as wide as what it says, `room` at most, on the text at 5%, its row's ground under the pointer). The option
-/// tapped, on the frame after.
+/// the one being answered (`busy`, none pressed meanwhile; `chosen` stays whole); its measures the theme's for the
+/// screen (option_type). Under a post as the web's (`wide`: as wide as what it says, `room` at most, on the text at
+/// 5%); its row's ground under the pointer. The option tapped, on the frame after.
 pub fn options_card(
   c : @ui.Ctx,
   key : String,
@@ -2882,7 +2886,7 @@ pub fn options_card(
   let t = theme()
   let free = enabled && busy is None
   let mut picked : Int? = None
-  let ot = option_type(wide)
+  let ot = option_type()
   // (in the wide frame as wide as what it says and 460 at least, on the text at 5%: Decisions.css.ts options)
   c.box(w=Fill(1.0), align=if wide { AStart } else { AStretch }, fn() {
     c.box(w=options_w(options, ot, wide, room), radius=options_card_radius, bg=if wide { alpha(t.p.text, 0.05) } else { t.p.chip }, pad=options_card_pad, fn() {
@@ -2907,7 +2911,7 @@ pub fn options_card(
           pb=ot.pad_in,
           gap=12.0,
           align=AStart,
-          radius=18.0,
+          radius=option_row_corner,
           bg=if hot { t.p.hover } else { 0L },
           opacity=if enabled || chosen == Some(i) { 1.0 } else { 0.5 },
           id~,
@@ -2942,7 +2946,7 @@ pub fn options_card(
             }
             // SettingParts.kt options: clickable while free, its ripple in the ink (ripple(color = C.ink))
             if free {
-              @motion.ripple(c, id, 18.0, ink=alpha(t.p.text, 0.1))
+              @motion.ripple(c, id, option_row_corner, ink=alpha(t.p.text, 0.1))
             }
           },
         )
