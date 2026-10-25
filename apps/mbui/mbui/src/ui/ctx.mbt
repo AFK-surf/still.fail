@@ -442,6 +442,9 @@ pub struct Ctx {
   mut lit_apart : Double
   // what is shown only while lit (Ctx::lit_shown) shown everywhere at once: a test's (Tester::lit_all_faults)
   mut lit_all : Bool
+  // every id lit by the hand at once (Ctx::lit, and Ctx::hovered where the pointing is a mouse's): a test's, to hold
+  // that the hand changes looks alone (Tester::hand_moves)
+  mut lit_every : Bool
   mut window_corner : Double
   mut direction : Direction
   // what the widgets built this frame say they are (semantics.mbt), and how deep in a part hidden from it the view
@@ -654,6 +657,7 @@ fn Ctx::new() -> Ctx {
     hand_chooses: Set::new(),
     lit_apart: 0.0,
     lit_all: false,
+    lit_every: false,
     window_corner: 0.0,
     inner_faults: [],
     direction: Ltr,
@@ -1382,7 +1386,7 @@ pub fn Ctx::set_clear(self : Ctx, color : Int64) -> Unit {
 /// tab's ×, a row's buttons pointed at, the tab and the row are still pointed at (the web's `:hover`, which holds for
 /// what holds it). For what only a resting pointer is shown; a look that answers the hand on it is Ctx::lit.
 pub fn Ctx::hovered(self : Ctx, id : Int) -> Bool {
-  self.hover == id || (id != 0 && self.hover_in.contains(id))
+  self.hover == id || (id != 0 && (self.hover_in.contains(id) || (self.lit_every && pointing() is Mouse)))
 }
 
 ///|
@@ -1435,6 +1439,9 @@ pub fn Ctx::hand_on(self : Ctx, id : Int) -> Bool {
 ///|
 /// Whether the hand is on `id`: a mouse's pointer resting on it or on what is in it, a finger pressing it.
 fn Ctx::hand_at(self : Ctx, id : Int) -> Bool {
+  if self.lit_every && id != 0 {
+    return true
+  }
   match pointing() {
     Mouse => self.hovered(id)
     Finger => self.pressed(id)

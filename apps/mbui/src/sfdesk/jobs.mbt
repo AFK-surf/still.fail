@@ -822,7 +822,7 @@ let jobs_all_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap
 
 ///|
 // kept across runs: a value (no field of it changes)
-let jobs_all_hot : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
+let jobs_all_hot : @ui.TextStyle = jobs_all_words.then(@ui.text_style(color=Fg))
 
 ///|
 /// Clearing what is over (jobsClear): 38 high, 12 in, its turning mark and words 6 apart, the pointer's ground on it;

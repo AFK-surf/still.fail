@@ -499,7 +499,7 @@ fn one_line(c : @ui.Ctx, key : String, lead : () -> Unit, line : String, tone : 
     }
     if open {
       c.box(style=h_grow, fn() {  }) |> ignore
-      c.text(@sf.t("web-main.fold"), style=if hot { h_one_hot } else { h_one_fold }) |> ignore
+      c.text(@sf.t("web-main.fold"), style=if hot { h_one_fold_hot } else { h_one_fold }) |> ignore
     }
   })
   |> ignore
@@ -1326,7 +1326,7 @@ let h_one_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Mu
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_one_hot : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, wrap=false, w=Cut)
+let h_one_hot : @ui.TextStyle = h_one_words.then(@ui.text_style(color=Fg))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1335,6 +1335,10 @@ let h_one_red : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Dang
 ///|
 // kept across runs: a value (no field of it changes)
 let h_one_fold : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_one_fold_hot : @ui.TextStyle = h_one_fold.then(@ui.text_style(color=Fg))
 
 ///|
 // kept across runs: a value (no field of it changes)

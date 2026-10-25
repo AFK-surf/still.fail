@@ -701,13 +701,14 @@ let rail_plus_size : Double = 16.0
 let rail_ws_mark : Double = 18.0
 
 ///|
-/// A workspace's letter (Rail.css.ts workspaceItem: textUi, 600), muted unless it is the one in view or pointed at.
+/// A workspace's letter (Rail.css.ts workspaceItem: textUi, 600), muted unless it is the one in view or pointed at:
+/// its ink alone, the letter as big in each.
 // kept across runs: a value (no field of it changes)
-let rail_letter : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Muted, wrap=false)
+let rail_letter : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rail_letter_on : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, wrap=false)
+let rail_letter_on : @ui.TextStyle = rail_letter.then(@ui.text_style(color=Fg))
 
 ///|
 /// The workspaces' column: 4 in from the rail's 38 (its squares where the places' grounds are), 4 above and under, 6

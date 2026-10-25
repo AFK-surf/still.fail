@@ -165,6 +165,7 @@
 做法，一处定好，各页不再自己写：
 
 - mbui：`Ctx::hovered`/`Ctx::lit` 对指针下面那个和画在它外面的每一个带 id 的都成立（按画的时候的嵌套，`Ctx::hit_ends`；盖在上面但不在它里面的不算）；样式里 `hovered`、`pressed` 的底色盖在下面那层底（自己的、`selected` 的）上面，不替换（`Style::resolve`、`Patch::lit_by`；两层半透明合成一层半透明，`@ui.over`）。当前那个不亮由页面给它不带 `hovered` 的样式（侧栏标签 `side_tab_in_front`）。
+- 悬停、按下不改任何东西的大小和位置（2026-10-26 用户：「这玩意儿 hover 会变大」「好像是 hover 让高度变化了」）：指着时换的字样式写成平时那份加颜色（`rest.then(@ui.text_style(color=Fg))`），不另写一份（另写的字号、行高会和平时的对不上：任务浮窗底下的「全部 · 在侧栏查看」平时小字、指着变正文字号）；只在指着时才出来的东西（行末的「忽略」、⋯）放在那一行原有的地方里，比行的字高的底色用 `@sf.bleed_y` 伸出去、不占高度。`corners_wbtest` 每个画面都把所有能按的一起点亮、指着才出来的全部显示，再和什么都没指着的同一刻比（`Tester::hand_moves`）：能按的东西大小、位置变了，或者字的字号、粗细、行高变了，就失败。
 - 网页：CSS 的 `:hover` 本来就对外面的成立；没有自己底色的用 `background: vars.hover`，有自己底色的用 `styles/lit.ts` 的 `litOver`（墨用 `background-image` 盖在它的底上）；当前那个靠它更具体的 `background` 盖过悬停（侧栏标签 `:has(selected)`）。阅读器用它自己的字色做墨（`Reader.css.ts` 的 `ink`）。`scripts/check.sh`「one light for the pointer」拦新加的悬停自带颜色、滤镜（确实要的在同一行写 `own hover:` 和原因）。
 
 ## 放不下的时候
