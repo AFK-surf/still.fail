@@ -1117,6 +1117,10 @@ pub let custom_field_w : @ui.Len = Fixed(72.0)
 ///|
 pub let custom_field_r : @ui.Radius = Exact(10.0)
 
+///|
+/// The same field on a computer (ViewportSize.css.ts field: 52 wide).
+pub let custom_field_dense_w : @ui.Len = Fixed(52.0)
+
 // ---------------------------------------------------------------------------
 // A station's screen, seen and driven (Android app/remote/ScreenViewer.kt): its sizes off the steps, as Android says
 // them.

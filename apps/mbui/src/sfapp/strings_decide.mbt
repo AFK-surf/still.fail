@@ -5,6 +5,9 @@
 // kept across runs: a table, never written
 let zh_decide : Map[String, String] = {
   "android-chat.agent.account": "账号",
+  "web-main.annotate.mark": "标注",
+  "web-main.annotate.pageTip": "标注页面元素并发送给 agent",
+  "web-main.annotate.stopPicking": "停止点选（Esc）",
   "web-pages.chat.compact": "压缩上下文",
   "web-pages.chat.clear": "清空上下文",
   "web-pages.chat.clearConfirm": "清空此 agent 的上下文？",

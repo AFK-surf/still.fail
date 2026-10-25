@@ -4,16 +4,18 @@
 
 ///|
 /// The bar's edit key (Preview.kt BarIcon(Icons.Edit, pressed)): 28 round, a 14 icon; picking, the accent's 14% under
-/// it and its icon in the accent's ink.
+/// it and its icon in the accent's ink. Named 标注 for a screen reader, what it does said on hover (Marks.tsx: 停止点选
+/// while picking).
 fn page_mark_key(c : @ui.Ctx, on : Bool) -> Bool {
   let t = @sf.theme()
   let id = c.id("service/mark")
-  c.box(style=if on { mark_key_on } else { mark_key }, id~, fn() {
+  let b = c.box(style=if on { mark_key_on } else { mark_key }, id~, fn() {
     @sf.icon(c, "edit", size=bar_icon_size, color=if on { t.p.accent_text } else { t.p.text }) |> ignore
     // Preview.kt BarKey: clip(CircleShape).clickable
     @motion.ripple(c, id, 14.0)
   })
-  |> ignore
+  c.semantics(b, Button, id~, label=@sf.t("web-main.annotate.mark"))
+  @sf.tip(c, "service/mark/tip", id, @sf.t(if on { "web-main.annotate.stopPicking" } else { "web-main.annotate.pageTip" }))
   c.clicked(id)
 }
 
@@ -48,7 +50,6 @@ let mark_mode_bar : @ui.Style = @ui.style(
   pr=@sf.mark_bar_end,
   gap=S2,
   align=ACenter,
-  clip=true,
 )
 
 ///|
@@ -70,21 +71,23 @@ let mark_dot : @ui.Style = @ui.style(w=@sf.dot_size, h=@sf.dot_size, radius=Full
 let mark_dot_on : @ui.Style = mark_dot.then(@ui.css("bg=Accent"))
 
 ///|
-/// What it says: how many (or what to do), 13 medium in the ink; 可继续点选 muted; why it failed in red; all on one line.
+/// What it says: how many (or what to do), 13 medium in the ink; 可继续点选 muted; why it failed in red; all on one line,
+/// in what the bar leaves, cut short with an ellipsis where that is less (Marks.css.ts modeText: flex 1, min-width 0),
+/// four of its characters kept (what is beside it in the page's bar gives way first: service.mbt bar_drop_nav).
 // kept across runs: a value (no field of it changes)
-let mark_words_box : @ui.Style = @ui.css("row w=Full gap=S2 clip")
+let mark_words_box : @ui.Style = @ui.css("row w=Full gap=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_count_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false)
+let mark_count_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_more_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+let mark_more_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_error_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, wrap=false)
+let mark_error_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, wrap=false, w=Cut)
 
 ///|
 /// Its × (24 round, a 12 icon) and 添加到对话 (24 high, round, the ink's ground, 10 in, 5 apart; 12 medium, the
@@ -130,12 +133,12 @@ fn page_mark_mode(c : @ui.Ctx, src : Source, p : ServicePage, site : @ui.NativeV
   let m = p.marks
   let n = m.marks.length()
   let busy = m.shot is Some(_)
-  c.box(style=mark_mode_bar, fn() {
+  c.box(style=mark_mode_bar, keep=true, fn() {
     c.box(style=if m.marking { mark_dot_ring } else { mark_dot_box }, fn() {
       c.box(style=if m.marking { mark_dot_on } else { mark_dot }, fn() {  }) |> ignore
     })
     |> ignore
-    c.box(style=mark_words_box, fn() {
+    c.box(style=mark_words_box, keep=true, fn() {
       if m.error != "" {
         c.text(m.error, style=mark_error_words) |> ignore
       } else {

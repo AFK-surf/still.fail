@@ -65,6 +65,7 @@ priv struct PanelOf {
   live : (() -> (String, String, String))?
   tall : Double
   grows : Bool
+  focus : Bool
 }
 
 ///|
@@ -159,7 +160,9 @@ pub fn pick(title : String, choices : Array[Choice], chosen : String, choose : (
 /// what it is about as they are now, a wizard's). `gone`: what is let go of as it closes unsaid (back, Escape, a press
 /// outside, its close button), not by what `close` was given to. `tall`: what it holds fills the room it is given, this
 /// share of the window (as a sheet that tall, beside what opened it at most that tall; 0: as tall as what it holds);
-/// `grows`: a long list's, a sheet of it is dragged between half and nearly all of the window.
+/// `grows`: a long list's, a sheet of it is dragged between half and nearly all of the window. Not `focus`: beside what
+/// opened it, the focus stays where it is as it opens, not on its first field (Radix's onOpenAutoFocus prevented: the
+/// web's page sizes).
 pub fn panel(
   title : String,
   body : (@ui.Ctx, () -> Unit) -> Unit,
@@ -172,8 +175,9 @@ pub fn panel(
   gone? : () -> Unit = fn() {  },
   tall? : Double = 0.0,
   grows? : Bool = false,
+  focus? : Bool = true,
 ) -> Unit {
-  present(Panel({ title, description, body, foot, w, wide, live, tall, grows }), from, gone~)
+  present(Panel({ title, description, body, foot, w, wide, live, tall, grows, focus }), from, gone~)
 }
 
 ///|
@@ -330,7 +334,7 @@ fn draw_presented(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
     Menu(items, title, along) => menu_popover(c, key, p, items, title, along)
     Pick(title, choices, chosen, choose) => pick_popover(c, key, p, title, choices, chosen, choose)
     Panel(x) if p.from == Unanchored => panel_centred(c, key, p, x)
-    Panel(x) => panel_popover(c, key, p, x.title, x.body, x.w, x.tall)
+    Panel(x) => panel_popover(c, key, p, x.title, x.body, x.w, x.tall, x.focus)
     Confirm(title, words, action, danger, run) => confirm_centred(c, key, p, title, words, action, danger, run)
     Ask(title, value, placeholder, action, hint, secret, run) =>
       ask_centred(c, key, p, title, value, placeholder, action, hint, secret, run)
@@ -534,6 +538,7 @@ fn panel_popover(
   body : (@ui.Ctx, () -> Unit) -> Unit,
   w : Double,
   tall : Double,
+  focus : Bool,
 ) -> (Bool, Bool) {
   let (anchor, at) = anchor_of(c, p.from)
   let h : @ui.Size = if tall > 0.0 { Px(tall * wh_of(c)) } else { Auto }
@@ -546,6 +551,7 @@ fn panel_popover(
     at?,
     label=title,
     modal=true,
+    focus~,
     look=fn(c, _, inner) { small_panel(c, w=Px(w), h~, inner) |> ignore },
     fn() {
       if title != "" {
