@@ -524,19 +524,38 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
   // alike: the widest's); one a little off them (more than the layout's rounding, less than a step of the scale) juts
   // out or falls short
   let groups : Map[Int, Array[Int]] = {}
+  // (a box grounded by a layer of its size under it, a card drawn so, is grounded as one with its own: by that ground)
+  let laid = self.layer_grounds()
+  let ground_of = fn(k : Int) -> Int? {
+    if self.nodes[k].grounded() {
+      Some(k)
+    } else {
+      laid.get(k)
+    }
+  }
   for k in 0..<n {
     let b = self.nodes[k]
-    if !whole[k] || b.kind != kind_box || !(b.grounded() || self.gap_lights(k)) || b.squeeze_aside() {
+    if !whole[k] || b.kind != kind_box || b.squeeze_aside() || !(ground_of(k) is Some(_) || self.gap_lights(k)) {
       continue
     }
     let mut q = b.parent
-    while q >= 0 && layer[q] == layer[k] && !self.nodes[q].grounded() {
+    while q >= 0 && layer[q] == layer[k] && ground_of(q) is None {
       q = self.nodes[q].parent
     }
     let on = if q >= 0 && layer[q] == layer[k] { q } else { layer[k] }
     let w = if on >= 0 { self.nodes[on].fw } else { self.width }
     if b.fw < w / 2.0 || dmin(b.fw, b.fh) < gap_line {
       continue
+    }
+    // (a ground the colour of what it stands on, no edge round it, shows no edges: a head on the page's ground)
+    match (ground_of(k), if on >= 0 { ground_of(on) } else { None }) {
+      (Some(gk), Some(go)) if !self.gap_lights(k) => {
+        let a = self.nodes[gk]
+        if a.bg == self.nodes[go].bg && !(a.border_w > 0.0 && (a.border_c & 0xFFL) != 0L) {
+          continue
+        }
+      }
+      _ => ()
     }
     match groups.get(on) {
       Some(list) => list.push(k)
