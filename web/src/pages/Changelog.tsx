@@ -1,6 +1,7 @@
 // What changed in still.fail (../changelog.ts), on a wide screen: the settings' 更新日志 page, a tab a part (this
-// app's first), by day, each change with where it is and whether this app has it; and, at the sidebar's foot, what
-// the last update brought, until the page is opened or it is put away. The phone's are ../mobile/Changelog.tsx.
+// app's first; no choice where the core gives one), by day, each change with where it is and whether this app has it;
+// and, at the sidebar's foot, what the last update brought, until the page is opened or it is put away. The phone's are
+// ../mobile/Changelog.tsx.
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { useChangelog, useChangelogSeen } from "../changelog.ts";
@@ -32,7 +33,7 @@ export function ChangelogPage({ back }: { back: string }) {
           {view?.build != null && <p className={shellCss.muted}>{t("web-pages.changelog.build", { build: view.build })}</p>}
         </div>
       </header>
-      {tab && <div className={css.tabsRow}><Segmented className={css.tabs} label={t("web-pages.settings.nav.changelog")} value={tab.part}
+      {tab && view!.tabs.length > 1 && <div className={css.tabsRow}><Segmented className={css.tabs} label={t("web-pages.settings.nav.changelog")} value={tab.part}
         onChange={setPart} options={view!.tabs.map((x) => ({ value: x.part, label: x.label }))} /></div>}
       {!view || view.loading ? <Waiting count={5} />
         : view.error ? <p className={controlsCss.fieldError}>{view.error}</p>

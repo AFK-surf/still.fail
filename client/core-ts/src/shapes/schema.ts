@@ -1323,7 +1323,7 @@ export const SHAPES: Record<string, Shape> = {
     ["news", opt("ChangelogNews")],
     ["loading", "bool", { default: true }],
     ["error", opt("String")],
-  ], { doc: "What changed in still.fail, as this app shows it (the `changelog` topic; client/core-ts/src/changelog.ts): `app`\n(web, desktop or android) and its `build` (0.1.<n>: n), absent before its host says; the changes in a tab a part,\nthis app's first, by day, newest first; what this app got since the changelog was last shown here (`news`, until\n`changelog.seen`); `loading` while first read, `error` when it could not be and none was kept." }),
+  ], { doc: "What changed in still.fail, as this app shows it (the `changelog` topic; client/core-ts/src/changelog.ts): `app`\n(web, desktop or android) and its `build` (0.1.<n>: n), absent before its host says; the changes in a tab a part,\nthis app's first (this app's alone where each would list the same: the stable channel's), by day, newest first; what\nthis app got since the changelog was last shown here (`news`, until `changelog.seen`); `loading` while first read,\n`error` when it could not be and none was kept." }),
   ChangelogTab: struct([
     ["part", "String"],
     ["label", "String"],

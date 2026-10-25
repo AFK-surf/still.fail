@@ -1,7 +1,7 @@
 // What changed in still.fail (../changelog.ts) on a narrow screen, as the Android app has it (apps/android/…/screens/
-// Changelog.kt): the settings' 更新日志 page, a tab a part (this app's first), by day on cards, each change with where
-// it is and whether this app has it; and at the top of the list, what the last update brought, until the page is
-// opened or it is put away. The wide screen's are ../pages/Changelog.tsx.
+// Changelog.kt): the settings' 更新日志 page, a tab a part (this app's first; no choice where the core gives one), by
+// day on cards, each change with where it is and whether this app has it; and at the top of the list, what the last
+// update brought, until the page is opened or it is put away. The wide screen's are ../pages/Changelog.tsx.
 import { useEffect, useState } from "react";
 import { useChangelog, useChangelogSeen } from "../changelog.ts";
 import { Close, Sparks } from "@stillfail/ui/icons.tsx";
@@ -28,7 +28,7 @@ export function ChangelogScreen() {
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} />
       <LargeTitle small={view?.build != null ? t("web-mobile.changelog.build", { version: `0.1.${view.build}` }) : ""} big={t("web-mobile.settings.changelog")} />
-      {tab && <div className={css.mTabs}><Seg options={tabs.map((x) => x.label)} selected={at} onSelect={(i) => setPart(tabs[i]!.part)} height={34} fill /></div>}
+      {tabs.length > 1 && <div className={css.mTabs}><Seg options={tabs.map((x) => x.label)} selected={at} onSelect={(i) => setPart(tabs[i]!.part)} height={34} fill /></div>}
       {!view || view.loading ? <Waiting shape="cards" count={3} />
         : view.error ? <p className={css.mNote} data-error>{view.error}</p>
         : !tab || tab.days.length === 0 ? <p className={css.mNote}>{t("web-mobile.changelog.empty")}</p>
