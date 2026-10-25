@@ -65,6 +65,34 @@ final class Host {
         return 1;
     }
 
+    /** Whether a keyboard is at hand now (@hostapi.keyboard): a physical keyboard of letters among the input devices (1;
+     * not the on-screen one), else 0. Asked as what says keys is drawn; a frame asked for as a device comes or goes, so
+     * they are said, or not, at once. */
+    static int keyboard() {
+        watchDevices();
+        for (int id : InputDevice.getDeviceIds()) {
+            InputDevice d = InputDevice.getDevice(id);
+            if (d == null || d.isVirtual()) continue;
+            if (d.supportsSource(InputDevice.SOURCE_KEYBOARD) && d.getKeyboardType() == InputDevice.KEYBOARD_TYPE_ALPHABETIC) return 1;
+        }
+        return 0;
+    }
+
+    private static boolean watching;
+
+    /** A frame asked for as an input device comes, goes or changes (InputManager's listener, on the main thread). */
+    private static void watchDevices() {
+        if (watching || view == null) return;
+        watching = true;
+        android.hardware.input.InputManager im = view.getContext().getSystemService(android.hardware.input.InputManager.class);
+        if (im == null) return;
+        main.post(() -> im.registerInputDeviceListener(new android.hardware.input.InputManager.InputDeviceListener() {
+            @Override public void onInputDeviceAdded(int id) { requestFrame(); }
+            @Override public void onInputDeviceRemoved(int id) { requestFrame(); }
+            @Override public void onInputDeviceChanged(int id) { requestFrame(); }
+        }, main));
+    }
+
     /** Whether a service reads the screen (@hostapi.a11y_on; A11y.on). */
     static boolean a11yOn() {
         return A11y.on();

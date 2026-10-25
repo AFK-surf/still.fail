@@ -36,3 +36,18 @@ test "host reads: the window's buttons in the app's top row push the sidebar dow
   let (_, y2) = t.find("新建对话").unwrap()
   assert_eq(y2, y0)
 }
+
+///|
+test "host reads: an action's keys said only while a keyboard is at hand: a phone's when one is plugged in, at once" {
+  // (Android: none until one is plugged in, none again once it is taken away; macOS ⌘, Windows Ctrl+)
+  let t = reads_tester(platform=2)
+  assert_eq(@sf.shortcut_keys("composer.file"), "")
+  t.set_keyboard(true)
+  assert_true(@sf.shortcut_keys("composer.file") != "")
+  t.set_keyboard(false)
+  assert_eq(@sf.shortcut_keys("composer.file"), "")
+  let _ = reads_tester(platform=0)
+  assert_true(@sf.shortcut_keys("composer.file").contains("⌘"))
+  let _ = reads_tester(platform=3)
+  assert_true(@sf.shortcut_keys("composer.file").contains("Ctrl"))
+}

@@ -69,6 +69,7 @@ pub(open) trait Host {
   system_dark(Self) -> Bool = _
   font_scale(Self) -> Double = _
   native_pointing(Self) -> Int = _
+  keyboard(Self) -> Int = _
   a11y_on(Self) -> Bool = _
   a11y_tree(Self, String) -> Unit = _
   set_dark(Self, Bool) -> Unit = _
@@ -485,6 +486,11 @@ impl Host with system_dark(_) {
 ///|
 impl Host with native_pointing(_) {
   0
+}
+
+///|
+impl Host with keyboard(_) {
+  -1
 }
 
 ///|
@@ -1569,6 +1575,14 @@ pub fn font_scale() -> Double {
 /// mouse or a touchpad: DeX, ChromeOS; Windows otherwise), 0 where it cannot tell (the platform's then: @ui).
 pub fn native_pointing() -> Int {
   current.val.native_pointing()
+}
+
+///|
+/// Whether a keyboard is at hand now, as the host can tell it as it is asked (it asks for a frame as one comes or
+/// goes): 1 yes (macOS and Windows always; Android with a physical keyboard of letters among its input devices, iOS and
+/// iPadOS with one connected: GCKeyboard), 0 no, -1 where it cannot tell (the platform's then: @ui).
+pub fn keyboard() -> Int {
+  current.val.keyboard()
 }
 
 ///|

@@ -440,6 +440,12 @@ fn native_pointing() -> Int {
 }
 
 ///|
+/// Whether a keyboard is at hand (see host_native.mbt): a browser cannot tell (-1: the platform's, @ui).
+fn keyboard() -> Int {
+  -1
+}
+
+///|
 fn a11y_on() -> Bool {
   false
 }

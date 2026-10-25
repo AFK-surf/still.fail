@@ -1217,6 +1217,25 @@ int32_t mb_host_native_pointing(void) {
   }
   return 1;
 }
+// Whether a keyboard is at hand (@hostapi.keyboard): one connected now (GCKeyboard: a Magic Keyboard, a Bluetooth one);
+// a frame asked for as one connects or goes, so what says its keys says them at once.
+int32_t mb_host_keyboard(void) {
+  if (@available(iOS 14.0, *)) {
+    static int watching;
+    if (!watching) {
+      watching = 1;
+      for (NSNotificationName n in @[ GCKeyboardDidConnectNotification, GCKeyboardDidDisconnectNotification ]) {
+        [NSNotificationCenter.defaultCenter addObserverForName:n object:nil queue:NSOperationQueue.mainQueue
+                                                    usingBlock:^(NSNotification *note) {
+                                                      (void)note;
+                                                      mb_host_request_frame();
+                                                    }];
+      }
+    }
+    return GCKeyboard.coalescedKeyboard != nil ? 1 : 0;
+  }
+  return -1;
+}
 // The app's widgets for the system's accessibility (@hostapi.a11y_on, a11y_tree): not told here yet.
 int32_t mb_host_a11y_on(void) { return 0; }
 void mb_host_a11y_tree(moonbit_string_t s) { (void)s; }

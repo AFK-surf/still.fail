@@ -40,6 +40,8 @@ struct FakeHost {
   pointing : Pointing
   // what the app was started to be used with (Tester::new's `native`: by default its system's)
   native : Pointing
+  // a keyboard at hand (Tester::new's `keyboard`, by default its system's: a desktop's; Tester::set_keyboard)
+  mut keyboard : Bool
   // the system asks for less transparency (glass drawn solid)
   mut reduce_transparency : Bool
   // the person's setting for motion: reduced (Tester::set_reduce_motion; or the environment's MBUI_REDUCE_MOTION=1)

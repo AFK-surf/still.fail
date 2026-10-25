@@ -822,6 +822,8 @@ int32_t mb_host_native_pointing(void) {
   int slate = GetSystemMetrics(SM_CONVERTIBLESLATEMODE) == 0;
   return (!mouse || slate) ? 1 : 2;
 }
+// Whether a keyboard is at hand (@hostapi.keyboard): a Windows PC's, always.
+int32_t mb_host_keyboard(void) { return 1; }
 // The app's widgets for the system's accessibility (@hostapi.a11y_on, a11y_tree): not told here yet.
 int32_t mb_host_a11y_on(void) { return 0; }
 void mb_host_a11y_tree(moonbit_string_t s) { (void)s; }

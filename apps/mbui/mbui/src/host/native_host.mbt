@@ -301,6 +301,11 @@ impl @hostapi.Host for Native with native_pointing(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with keyboard(_) {
+  keyboard()
+}
+
+///|
 impl @hostapi.Host for Native with a11y_on(_) {
   a11y_on()
 }
