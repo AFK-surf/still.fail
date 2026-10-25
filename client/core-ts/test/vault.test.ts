@@ -332,7 +332,7 @@ test("vault calls: set up, a vault of one's own, an item written, opened, unlock
   assert.deepEqual([v.owner, v.members, v.seq, v.keys.length], ["s1", ["s1"], 0, 1]);
   assert.ok(signedOk(v, TAG.vault));
   const vaultKey = openSeal(recoveryPair(fromWords(setup.words)).priv, v.recovery!, keyContext("ws", v.id, 0));
-  assert.equal(vaults().vaults[0].name, "Personal");
+  assert.equal(vaults().vaults[0].name, t("core-misc.vault.personal"), "named in the person's words");
   assert.equal(vaults().vaults[0].open, true);
   assert.equal(vaults().vaults[0].keyed, true);
   // An item: its name in the ciphertext, the listing what agents see.
