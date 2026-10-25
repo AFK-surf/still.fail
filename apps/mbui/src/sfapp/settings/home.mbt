@@ -25,7 +25,8 @@ pub fn page(
       route_page(c, core, here, route)
     })
   } else {
-    route_page(c, core, here, route)
+    // (laid out by its width, as a page of the library's is: the library's parts in it read it, @sf.look)
+    @sf.with_look(@sf.look_for(c.width), fn() { route_page(c, core, here, route) })
   }
 }
 

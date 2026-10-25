@@ -3,12 +3,8 @@
 // and held while a finger is on the list; a chat to open once it is listed (MBUI_OPEN_CHAT).
 
 ///|
-/// The views read, by topic: the version they were read at.
-let read_views : Map[String, (Int, ChatsView)] = {}
-
-///|
-/// The chats of workspace `scope` in list `filter` (all, mine, watching) as the core's view says them, read once for
-/// each version of it; what went wrong reading it.
+/// The chats of workspace `scope` in list `filter` (all, mine, watching) as the core's view says them, worked out once
+/// for each version of it; what went wrong reading it.
 pub fn chats_of(src : Source, scope : String, filter : String) -> (ChatsView?, String?) {
   let params : Map[String, Json] = {
     "scope": Json::string(scope),
@@ -17,26 +13,18 @@ pub fn chats_of(src : Source, scope : String, filter : String) -> (ChatsView?, S
   if filter == "watching" {
     params["watching"] = Json::boolean(true)
   }
-  let topic = (src.topic)("chats", params)
+  let (view, topic) = chats_read.read(src, params)
   let error = match topic.error {
     Some(e) => Some(text(Some(e), "message"))
     None => None
   }
-  match topic.value {
-    Some(v) => {
-      let key = scope + "/" + filter
-      match read_views.get(key) {
-        Some((version, view)) if version == topic.version => (Some(view), error)
-        _ => {
-          let view = chats_view(v)
-          read_views[key] = (topic.version, view)
-          (Some(view), error)
-        }
-      }
-    }
-    None => (None, error)
-  }
+  (view, error)
 }
+
+///|
+/// The chats' list as the core's `chats` topic gives it.
+// kept across runs: what it keeps is let go of by a run anew and by reset (derived.mbt)
+let chats_read : Derived[ChatsView] = Derived::new("chats", chats_view)
 
 ///|
 /// The list's filter in workspace `ws` (AppState.chatFilter): as chosen here, else as the prefs keep it.

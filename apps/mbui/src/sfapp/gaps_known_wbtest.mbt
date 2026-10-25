@@ -14,8 +14,8 @@ let gaps_known : Map[String, Int] = {
   "en rule 1": 0,
   "en rule 3": 0,
   "en rule 4": 92,
-  "zh rule 5": 3,
-  "en rule 5": 6,
+  "zh rule 5": 1,
+  "en rule 5": 4,
 }
 
 ///|

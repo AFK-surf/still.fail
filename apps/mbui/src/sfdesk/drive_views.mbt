@@ -182,7 +182,7 @@ fn tree_lines(src : Source, s : Shown, at : DriveAt, depth : Int, out : Array[Li
     None => ()
   }
   let entries = match value {
-    Some(v) => s.b.arranged(at.path, items(Some(v), "entries").map(dv_entry))
+    Some(_) => s.b.arranged(at.path, @sfbase.dv_entries(src, at.station, root, at.path).unwrap_or([]))
     None => None
   }
   match entries {
@@ -224,8 +224,8 @@ pub fn rows_view(
     let root = at.root.unwrap_or("")
     let (value, _) = drive_folder(src, at.station, root, at.path)
     match value {
-      Some(v) =>
-        match s.b.arranged(at.path, items(Some(v), "entries").map(dv_entry)) {
+      Some(_) =>
+        match s.b.arranged(at.path, @sfbase.dv_entries(src, at.station, root, at.path).unwrap_or([])) {
           Some(list) =>
             for e in list {
               lines.push(Row(at, e, 0, None))
@@ -445,7 +445,7 @@ fn column(
   let root = at.root.unwrap_or("")
   let (value, error) = drive_folder(src, at.station, root, at.path)
   let entries = match value {
-    Some(v) => s.b.arranged(at.path, items(Some(v), "entries").map(dv_entry))
+    Some(_) => s.b.arranged(at.path, @sfbase.dv_entries(src, at.station, root, at.path).unwrap_or([]))
     None => None
   }
   let ckey = "files/column/" + s.b.key + "/" + at.station + "/" + root + "/" + at.path

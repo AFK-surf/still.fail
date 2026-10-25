@@ -144,8 +144,16 @@ pub fn browse_where(
 ///|
 /// The place's topic as it stands.
 pub fn browse_topic(src : Source, where_ : Map[String, Json]) -> BrowseView? {
-  browse_view_of((src.topic)("driveBrowse", where_).value)
+  match browse_read.read(src, where_).0 {
+    Some(v) => v
+    None => None
+  }
 }
+
+///|
+/// How a place browses as the core's `driveBrowse` topic gives it, worked out once for each version of it.
+// kept across runs: what it keeps is let go of by a run anew and by reset (derived.mbt)
+let browse_read : Derived[BrowseView?] = Derived::new("driveBrowse", fn(v) { browse_view_of(Some(v)) })
 
 ///|
 /// A folder's entries in the order the core shows them (`names`), hidden ones as it says; None while it has not said

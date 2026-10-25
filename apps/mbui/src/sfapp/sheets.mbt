@@ -1386,11 +1386,8 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
         |> ignore
       }
     } else {
-      let log = (src.topic)("jobLog", {
-        "station": Json::string(r.station),
-        "job": Json::string(id),
-        "lines": Json::number(300.0),
-      })
+      // in a terminal's colours where the core says them (its `runs`: Jobs.kt termText), else as words
+      let output = job_output_lines(src, r.station, id, 300.0, t.p.text, t.dark)
       c.box(
         w=Fill(1.0),
         h=Fill(1.0),
@@ -1399,18 +1396,12 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
         bg=@sf.alpha(t.p.text, 0.05),
         clip=true,
         fn() {
-          match log.value {
-            Some(Object(_)) as v => {
-              let words = match text(v, "text") {
-                "" => tr("android-misc.jobs.noOutput")
-                s => s
-              }
-              // in a terminal's colours where the core says them (its `runs`: Jobs.kt termText), else as words
-              let runs = items(v, "runs")
-              let styled = if runs.length() > 0 { Some(term_lines(runs, t.p.text, t.dark)) } else { None }
-              let lines = match styled {
-                Some(ls) => Array::make(ls.length(), "")
-                None => words.split("\n").map(fn(l) { l.to_owned() }).to_array()
+          match output {
+            Some(written) => {
+              let lines = if written.is_empty() {
+                [[@ui.span(tr("android-misc.jobs.noOutput"), mono=true)]]
+              } else {
+                written
               }
               c.list(
                 "job-log/" + id,
@@ -1423,11 +1414,7 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
                     } else {
                       0.0
                     }, fn() {
-                    let line = match styled {
-                      Some(ls) => ls[i]
-                      None => [@ui.span(lines[i], mono=true)]
-                    }
-                    c.rich(line, size=t.t.caption, line=17.0, color=t.p.text, w=Fill(1.0)) |> ignore
+                    c.rich(lines[i], size=t.t.caption, line=17.0, color=t.p.text, w=Fill(1.0)) |> ignore
                   })
                   |> ignore
                 },

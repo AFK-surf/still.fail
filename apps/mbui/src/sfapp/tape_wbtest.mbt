@@ -184,6 +184,26 @@ test "on the tape back brings the sidebar over from the chat, and with the sideb
 }
 
 ///|
+test "off the tape to 用量, the sidebar's panel closes to the bar holding the settings' list, never the chats'; back to the settings, theirs as it opens" {
+  let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
+  tap_said(t, "设置")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("返回会话") is Some(_))
+  tap_said(t, "用量")
+  t.run_for(@sfdesk.side_move_ms / 2.0)
+  assert_false(@sfdesk.wide.tape)
+  assert_true(t.find("返回会话") is Some(_), msg="the settings' list as it closes")
+  assert_true(t.find("新建对话") is None, msg="not the chats' list")
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(t.find("返回会话") is None && t.find("新建对话") is None)
+  tap_said(t, "设置")
+  t.frame()
+  assert_true(@sfdesk.wide.tape)
+  assert_true(t.find("返回会话") is Some(_), msg="the settings' list as it opens")
+  assert_true(t.find("新建对话") is None)
+}
+
+///|
 test "on the tape a finger dragging across the one in use moves no tape: the tape stays where it is" {
   let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
   page_over(t, 690.0)

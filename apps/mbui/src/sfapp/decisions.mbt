@@ -623,7 +623,7 @@ fn decision_face(
     Some(m) => messages.push(m)
     None => ()
   }
-  let view = chat_view(
+  let view = chat_view_made(
     Json::object({
       "title": Json::string(text(v, "title")),
       "messages": Json::array(messages),

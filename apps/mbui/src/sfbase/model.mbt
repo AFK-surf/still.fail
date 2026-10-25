@@ -225,7 +225,15 @@ pub fn chat_item(v : Json) -> ChatItem {
 }
 
 ///|
-pub fn chats_view(v : Json) -> ChatsView {
+/// The chats' list made here, not read from the core's `chats` topic (a test's). The topic is read through chats_of,
+/// worked out once for each version of it.
+pub fn chats_view_made(v : Json) -> ChatsView {
+  chats_view(v)
+}
+
+///|
+/// The chats' list as the core gives it: for chats_of alone (chats_read).
+fn chats_view(v : Json) -> ChatsView {
   let s = Some(v)
   let note = match field(s, "note") {
     Some(Object(_)) as n =>

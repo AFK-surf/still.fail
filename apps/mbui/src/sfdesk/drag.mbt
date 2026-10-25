@@ -364,7 +364,7 @@ fn fdrag_transfer(
     return true
   }
   let entries = match drive_folder(src, into.station, into_root, into.path) {
-    (Some(v), _) => items(Some(v), "entries").map(dv_entry)
+    (Some(_), _) => @sfbase.dv_entries(src, into.station, into_root, into.path).unwrap_or([])
     // (one that cannot be read: no names there to ask about)
     (None, Some(_)) => []
     (None, None) => return false

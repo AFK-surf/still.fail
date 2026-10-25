@@ -6,20 +6,10 @@
 // computer ＋ is the system's picker at once (composer.mbt attach).
 
 ///|
-/// The panel up for draft `key` (its id: @sf.last_presented, 0 none), read again as it opens.
-// kept across runs: put back by attach_reset
-let attach_up : Ref[Int] = Ref(0)
-
-///|
-fn attach_reset() -> Unit {
-  attach_up.val = 0
-}
-
-///|
-/// ＋'s panel for draft `key`, opened by ＋ (`plus`).
+/// ＋'s panel for draft `key`, opened by ＋ (`plus`): the gallery's recent photos read again as it opens.
 fn attach_open(plus : Int, src : Source, key : String) -> Unit {
-  @sf.panel("", fn(c, close) { attach_body(c, src, key, close) }, from=Of(plus), gone=fn() { attach_up.val = 0 })
-  attach_up.val = @sf.last_presented()
+  @sf.panel("", fn(c, close) { attach_body(c, src, key, close) }, from=Of(plus))
+  recent_opened()
 }
 
 ///|
@@ -34,8 +24,8 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
         say(c, @sf.t(if kind == Camera { "android-chat.composer.noCamera" } else { "android-chat.composer.noFiles" }))
     }
   }
-  // the gallery's recent photos, read again as the panel opens
-  recent_frame(src, attach_up.val > 0)
+  // the gallery's recent photos, read as the panel opened (attach_open), taken once read
+  recent_frame(src)
   let tapped = fn(i : Int) {
     if i == 0 {
       ask(Camera)

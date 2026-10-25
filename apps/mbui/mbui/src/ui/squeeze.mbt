@@ -1,10 +1,10 @@
 // What the last frame laid out in less room than it needs, as it shows (Tester::squeeze_faults): two things side by
 // side drawn over each other, something cut off by the window's edge, words cut down to nothing or wrapped a letter
-// or two a line. Room runs short by
-// design in three ways only, none of them a fault: words cut short with an ellipsis (keeping some of them), what a
-// row says may go left out of it (Ctx::box `drop`, into its ⋯ where it has one), what scrolls or is cut by its own box
-// (a list, a scroll, `sideways`, `clip`). What overlaps on purpose says so: a margin below 0 (faces in a stack), a
-// layer, something put where it is said.
+// or two a line, a field's placeholder cut down to nothing. Room runs short by design in four ways only, none of them
+// a fault: words said a shorter way (Ctx::text's, a field's placeholder's: `shorter`), words cut short with an
+// ellipsis (keeping some of them), what a row says may go left out of it (Ctx::box `drop`, into its ⋯ where it has
+// one), what scrolls or is cut by its own box (a list, a scroll, `sideways`, `clip`). What overlaps on purpose says
+// so: a margin below 0 (faces in a stack), a layer, something put where it is said.
 
 ///|
 /// How far two things may run into each other, or past the window, and still be apart: the layout's rounding.
@@ -23,7 +23,8 @@ let squeeze_wrap_ems : Double = 4.0
 /// Where the last frame shows something squeezed (see the file's head), a line each: two things beside each other in
 /// a box drawn over each other (by how far), the outermost box that runs past the window's edge, words cut down to
 /// less than `squeeze_kept_chars` characters before their ellipsis, words wrapped narrower than a word of them (broken
-/// inside it) or than `squeeze_wrap_ems` of their size.
+/// inside it) or than `squeeze_wrap_ems` of their size, a field's placeholder cut so (said its shortest way: Ctx::editor
+/// `shorter`).
 pub fn Tester::squeeze_faults(self : Tester) -> Array[String] {
   ignore(self)
   g().squeeze_faults()
@@ -121,6 +122,14 @@ fn Ctx::squeeze_faults(self : Ctx) -> Array[String] {
         out.push("\{self.named(i)}: its words cut to \{kept} characters (they need \{need.round()})")
       _ => ()
     }
+    // a field's placeholder cut down to nothing, said its shortest way (Node::hint_shown)
+    if b.kind == kind_editor {
+      match self.editors.get(b.id).bind(st => b.hint_kept(st.line)) {
+        Some((kept, need)) if kept < squeeze_kept_chars =>
+          out.push("\{self.named(i)}: its placeholder cut to \{kept} characters (it needs \{need.round()})")
+        _ => ()
+      }
+    }
     // words wrapped narrower than they break: a word broken inside it, a letter or two a line
     if b.kind == kind_text && b.wrap && b.fw > 0.0 && b.text != "" {
       let need = b.squeeze_wrap_w()
@@ -190,18 +199,42 @@ fn Ctx::squeeze_faults(self : Ctx) -> Array[String] {
 
 ///|
 /// Words on one line cut short with an ellipsis (Ctx::text's, Ctx::rich's): how many characters of them show before it,
-/// and how wide all of them are; None where they are not cut.
+/// and how wide all of them are (said their shortest way: Ctx::text `shorter`); None where they are not cut.
 fn Node::squeeze_kept(self : Node) -> (Int, Double)? {
   if !self.one_line_words() || self.fw <= 0.0 {
     return None
   }
   // (the ellipsis is the last of what shows)
   match (self.tl, self.full, self.rcut, self.rl) {
-    (Some(shown), Some(full), _, _) if self.kind == kind_text && full.w > self.fw + squeeze_slack =>
-      Some((shown.shaped.starts.length() - 1, full.w))
+    (Some(shown), Some(_), _, _) if self.kind == kind_text => {
+      let need = self.one_line_least_w()
+      if need > self.fw + squeeze_slack {
+        Some((shown.shaped.starts.length() - 1, need))
+      } else {
+        None
+      }
+    }
     (_, _, Some(_), Some(shown)) if self.kind == kind_rich => Some((shown.starts.length() - 1, self.rl_whole))
     _ => None
   }
+}
+
+///|
+/// A field's placeholder cut short with an ellipsis, laid out in its `line` (Node::hint_shown): how many characters of
+/// it show before it, and how wide it is said its shortest way; None where it is not cut, or the field has none.
+fn Node::hint_kept(self : Node, line : Double) -> (Int, Double)? {
+  if self.text == "" || self.fw <= 0.0 {
+    return None
+  }
+  let shortest = match self.shorter {
+    [.., last] => last
+    [] => self.text
+  }
+  let need = self.hint_lay(line)(shortest).w
+  if need <= self.fw - self.pad_l - self.pad_r + squeeze_slack {
+    return None
+  }
+  Some((self.hint_shown(line).shaped.starts.length() - 1, need))
 }
 
 ///|

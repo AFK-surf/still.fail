@@ -1111,8 +1111,16 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
 }
 
 ///|
-/// The first row's chat's draft as each composer mode has it (none in any other).
+/// The first row's chat's draft as each composer mode has it (none in any other); a new chat's with a picture and words
+/// (newchat-attach: scripts/motion/send-newchat-picture.drive).
 fn seeded_draft(mode : String, key : String) -> Json {
+  if mode == "newchat-attach" && key.has_prefix("new:") {
+    return {
+      "text": "照着这张截图把第二屏改一下",
+      "quotes": [],
+      "files": [file("compare.png", 1600, 900, 402000)],
+    }
+  }
   if key != "ws1/st1:s-c1" {
     return Json::null()
   }
@@ -1123,8 +1131,9 @@ fn seeded_draft(mode : String, key : String) -> Json {
         "quotes": [],
         "files": [],
       }
-    // chat-attach-row: a station's file before them (drive_fixture.mbt), the row wider than the capsule
-    "chat-attach" | "chat-attach-row" =>
+    // chat-attach-row: a station's file before them (drive_fixture.mbt), the row wider than the capsule;
+    // chat-attach-pic: its picture's tile drawn from the picture, as one picked here is (seeded_pictures)
+    "chat-attach" | "chat-attach-row" | "chat-attach-pic" =>
       {
         "text": "截图和构建日志都在这里，帮我看看第二屏",
         "quotes": [],

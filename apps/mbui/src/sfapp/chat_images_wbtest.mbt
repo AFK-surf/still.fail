@@ -40,7 +40,7 @@ fn image_tester(images : @sfbase.ChatImages, asked : Ref[Int], answer : (Int) ->
       let here : @sfpages.MessageHere = {
         station: "ws1/st1",
         session: "s-c1",
-        view: chat_view(Json::object({})),
+        view: chat_view_made(Json::object({})),
         go: None,
         inline: true,
         gutter: 0.0,

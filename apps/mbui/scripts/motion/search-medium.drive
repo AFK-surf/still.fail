@@ -1,0 +1,10 @@
+# The search in a Medium window's sidebar (MBUI_FIXTURE=home MBUI_FILM_PLATFORM=2 MBUI_WIN=800x880 MBUI_LOCALE=en-US):
+# its list pulled down to the field, the field tapped, coming up as Cancel comes in beside it, where all of
+# "Search everything" does not fit: said its shorter way (search.mbt search_field_shorter), the same all the way up.
+timeout 20000
+until 整理发布清单
+wait 600
+wheelat -300 整理发布清单
+wait 900
+tap Search everything
+wait 1200

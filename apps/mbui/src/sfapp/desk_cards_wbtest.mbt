@@ -82,7 +82,7 @@ test "desk: an agent's request to use a secret is its card in place of its words
       let here : @sfpages.MessageHere = {
         station: "ws1/st1",
         session: "s-c1",
-        view: chat_view(viewer),
+        view: chat_view_made(viewer),
         go: None,
         inline: false,
         gutter: 0.0,

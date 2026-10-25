@@ -141,18 +141,20 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
 }
 
 ///|
-/// The viewer's own message (MineMessage, MineWords): at the column's end, what it quotes, its words in their bubble,
-/// its files; under it, unless their next message soon after says it under that one (`followed`), the runtime it waits
-/// for (BlockedLine), that its agents have yet to take it, or its time.
+/// The viewer's own message (MineMessage, MineWords): at the column's end, in the order the composer held them as they
+/// were written (what it quotes, its files, its words: composer.mbt composer_extras over its field), so that sending
+/// them moves each straight up to its place, none across another (the web has its files under its words); under it,
+/// unless their next message soon after says it under that one (`followed`), the runtime it waits for (BlockedLine),
+/// that its agents have yet to take it, or its time.
 fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> Unit {
   c.box(style=mine_column, fn() {
     quotes(c, src, here, m.quotes, m.attachments, mine=true)
+    message_files(c, src, here, beside_quotes(m.quotes, m.attachments), true, by=Some((@sf.t("web-main.chat.you"), "person", m.ts)))
     if m.text != "" {
       picking(here, c, m.ts, @sf.t("web-main.chat.you"), "person", m.text, fn() {
         mine_bubble(c, here, m.text, "m:" + m.ts, found=marked_of(here, m.ts))
       }, fill=false)
     }
-    message_files(c, src, here, beside_quotes(m.quotes, m.attachments), true, by=Some((@sf.t("web-main.chat.you"), "person", m.ts)))
     if !m.followed {
       match m.blocked {
         Some(b) if b.state != "installed" => blocked_line(c, src, here.station, "m:" + m.ts, b)

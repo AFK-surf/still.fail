@@ -23,9 +23,9 @@ pub fn news_of(src : Source) -> Json? {
 }
 
 ///|
-/// Its room in the list: 12 from the sides, 4 over it, 10 under.
+/// Its room in the list: 4 over it, 10 under; its sides those of what stands over the list (changelog_news).
 // kept across runs: a value (no field of it changes)
-let news_room : @ui.Style = @ui.css("w=Full px=S3 pt=S1 pb=S2_5")
+let news_room : @ui.Style = @ui.css("w=Full pt=S1 pb=S2_5")
 
 ///|
 /// The card (a card's corner of the ladder's, its × in its top right corner concentric with it: news_close_place), on
@@ -90,7 +90,8 @@ pub fn changelog_news(c : @ui.Ctx, src : Source) -> Unit {
       }
     }
   }
-  c.box(style=news_room, fn() {
+  // (on the line of what stands over the list, as the search's field above it: the theme's band_in from its sides)
+  c.box(style=news_room.then(@ui.style(px=@sf.room_of(t.chat_list.band_in))), fn() {
     c.box(style=news_card, fn() {
       let open = c.id("changelog-news")
       if c.clicked(open) {

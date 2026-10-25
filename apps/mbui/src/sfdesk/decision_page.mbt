@@ -174,7 +174,7 @@ fn zou_card(c : @ui.Ctx, src : Source, w : Workspace, core : Core, x : Json, liv
     Some(m) => messages.push(m)
     None => ()
   }
-  let cv = chat_view(
+  let cv = chat_view_made(
     Json::object({
       "title": Json::string(text(v, "title")),
       "messages": Json::array(messages),

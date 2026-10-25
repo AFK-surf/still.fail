@@ -34,8 +34,8 @@ fn desk_composer_tester(
       let ws : Workspace = { id: "ws1", name: "Acme", emoji: "", icon: "", email: "" }
       c.box(style=@ui.css("w=Full h=Full p=S4 justify=JEnd"), fn() {
         @sfpages.composer(c, src, ws, spec_of({ station: r.station, key: "ws1/st1:s-c1" }), fn(w) {
-          match (src.topic)("chat", chat_params(r)).value {
-            Some(v) => @sfpages.send_in_chat(c, src, r, chat_view(v), w)
+          match view_of_chat(src, r).0 {
+            Some(v) => @sfpages.send_in_chat(c, src, r, v, w)
             None => ()
           }
         })
@@ -438,6 +438,50 @@ test "a phone's ＋: the sheet of what can go in (Attach.kt); 照片 asks the sy
 }
 
 ///|
+test "a phone's ＋ opened again shows the gallery as it is then: a screenshot taken since it was last up comes first in its strip" {
+  let calls : Array[Made] = []
+  let (t, _) = desk_composer_tester(calls, pointing=Finger, platform=2)
+  let shot = fn(id : Int64, added : Int64) -> @hostapi.GalleryPhoto {
+    { id, src: "content://media/external/images/media/\{id}", added, modified: added, taken: -1L, video: false }
+  }
+  let earlier = shot(1L, 1_792_200_000L)
+  let taken = shot(2L, 1_792_200_060L)
+  for p in [earlier, taken] {
+    t.add_image(p.src, 1080, 2400)
+  }
+  t.gallery([earlier])
+  t.draw()
+  t.click(Button, label=@sf.t("web-main.composer.attach"))
+  // (the gallery read, its photos' pictures decoded and faded in)
+  t.run_for(@ui.image_fade_ms)
+  assert_eq(strip_photos(t), [earlier.src])
+  // put away by one of its tiles (照片, the system's picker called off), as a photo or the camera puts it away too
+  t.picks([])
+  let (x, y) = t.locate("=照片")[0]
+  t.tap(x, y)
+  t.draw()
+  // a screenshot taken meanwhile, ＋ again
+  t.gallery([earlier, taken])
+  t.click(Button, label=@sf.t("web-main.composer.attach"))
+  t.run_for(@ui.image_fade_ms)
+  assert_eq(strip_photos(t), [taken.src, earlier.src])
+}
+
+///|
+/// The gallery's photos ＋'s strip draws, in its order (the draw list's images, as first drawn).
+fn strip_photos(t : @ui.Tester) -> Array[String] {
+  let out = []
+  for line in t.drawlist().split("\n") {
+    // image N PX "SOURCE"
+    let parts = line.split("\"").to_array()
+    if line.has_prefix("image ") && parts.length() >= 2 && parts[1].has_prefix("content://") {
+      out.push(parts[1].to_string())
+    }
+  }
+  out
+}
+
+///|
 test "on a phone, a finger down outside the composer lets go of the keyboard once lifted (Keyboard.kt letsGoOfKeyboard)" {
   let calls : Array[Made] = []
   let (t, _) = desk_composer_tester(calls, pointing=Finger, platform=2)
@@ -514,7 +558,7 @@ test "desk composer: 抄送 opens a menu of the chat's Slack and Feishu threads;
       @sf.set_words(fill)
       let _ = @sf.begin(c)
       let ws : Workspace = { id: "ws1", name: "Acme", emoji: "", icon: "", email: "" }
-      let v = chat_view({
+      let v = chat_view_made({
         "title": "整理发布清单",
         "thread": { "id": 7 },
         "cc": [

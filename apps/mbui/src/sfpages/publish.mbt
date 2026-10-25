@@ -157,7 +157,7 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
                   session: r.session,
                   view: match @sfbase.view_of_chat(src, r).0 {
                     Some(v) => v
-                    None => @sfbase.chat_view(Json::null())
+                    None => @sfbase.chat_view_made(Json::null())
                   },
                   go: None,
                   inline: true,

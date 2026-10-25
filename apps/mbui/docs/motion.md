@@ -126,6 +126,9 @@ of them. Their numbers are the web's at the same place (paths from the repositor
   24.75, not the web's 16 on 21, which is there so that iOS's browser does not zoom into a field), and the viewer's
   bubble is as wide as the composer sets them, not the web's 78% of the column and 560 at most; the web flies a copy
   of the message from the size they were typed at instead, their lines jumping as it takes them.
+- The same for what goes with them: the viewer's message has its files over its words, as the composer holds them
+  (the web has them under), so that each goes straight up to its place, a picture never across the words; and a new
+  chat's composer is held as a chat's is while its first words and files are in it (the web lets it go at once).
 
 ## The way there
 

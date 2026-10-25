@@ -41,6 +41,8 @@ pub(all) struct Wide {
   mut crowded : Bool
   mut peek_next : Bool
   mut peek_top : Page?
+  /// the place whose sidebar the block holds as it was last built (side_place: kept through a place with none)
+  mut side_place : String
   /// the sidebar shown (its workspace and group) and how it was kept (prefs `sidebars`)
   mut side_key : String
   mut kept_w : Double
@@ -114,6 +116,7 @@ pub let wide : Wide = {
   crowded: false,
   peek_next: false,
   peek_top: None,
+  side_place: "chats",
   side_key: "",
   kept_w: 0.0,
   kept_folded: false,
@@ -176,6 +179,7 @@ fn wide_reset() -> Unit {
   wide.crowded = false
   wide.peek_next = false
   wide.peek_top = None
+  wide.side_place = "chats"
   wide.side_key = ""
   wide.kept_w = 0.0
   wide.kept_folded = false
@@ -525,8 +529,9 @@ pub fn frame(
   // a device waiting to be confirmed in the workspace's safe mode: beside the rail (the workspaces, settings) only
   // what it waits on, no chats' list (its stations refuse it), unless a settings page is open
   let gated = lit_place() != "settings" && @settings.lock_waiting(settings_core(src, w), w.id)
-  // (连接 and 用量: a page across the pane, no sidebar)
+  // (连接 and 用量: a page across the pane, no sidebar; the block closes holding the one it had: side_place)
   let bare = place_bare(lit_place())
+  wide.side_place = side_place()
   // the sidebar of this place and workspace, as it was left
   side_follow(c, src, w.id)
   let own = !gated && !bare
@@ -1281,17 +1286,17 @@ fn main_page(
 }
 
 ///|
-/// Which sidebar the place shows (Rail.tsx SidebarGroup), each its own width and folded or not: the files', the
+/// Which sidebar the block holds (Rail.tsx SidebarGroup), each its own width and folded or not: the files', the
 /// profiles' and the stations' when in the rail, the chats' for the chats' places and the others in the rail, else the
-/// settings'.
+/// settings'; in a place with none of its own, the one it had (side_place: it closes as wide as it was).
 fn side_group(src : Source, ws : String) -> String {
-  let place = lit_place()
+  let place = side_place()
   let railed = rail_items(src, ws)
   match place {
     "files" => "files"
     "profiles" if railed.contains("profiles") => "profiles"
     "stations" if railed.contains("stations") => "stations"
-    "chats" | "decisions" => "chats"
+    "chats" | "decisions" | "archive" => "chats"
     p if railed.contains(p) => "chats"
     _ => "settings"
   }

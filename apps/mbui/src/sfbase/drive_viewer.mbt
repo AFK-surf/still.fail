@@ -11,8 +11,7 @@ pub fn drive_viewer_file(c : @ui.Ctx, src : Source, at : DriveAt) -> @sf.ViewerF
   let root = at.root.unwrap_or("")
   let dir = dv_parent(at.path)
   let name = dv_name(at.path)
-  let folder = (src.topic)("drive", drive_params(at.station, root, dir)).value
-  let entry = items(folder, "entries").map(dv_entry).iter().find_first(fn(e) { e.name == name && !e.dir })
+  let entry = dv_entries(src, at.station, root, dir).unwrap_or([]).iter().find_first(fn(e) { e.name == name && !e.dir })
   let (by_kind, by_name, _) = preview_kind(name)
   let listed = entry.map(fn(e) { (e.mtime, e.size) })
   {
@@ -208,7 +207,7 @@ pub fn drive_player(c : @ui.Ctx, src : Source, at : DriveAt, back : () -> Unit, 
   let root = at.root.unwrap_or("")
   let dir = dv_parent(at.path)
   let file = drive_viewer_file(c, src, at)
-  let entries = items((src.topic)("drive", drive_params(at.station, root, dir)).value, "entries").map(dv_entry)
+  let entries = dv_entries(src, at.station, root, dir).unwrap_or([])
   let siblings : Array[@sf.ViewerEntry] = entries.map(fn(e) {
     { name: e.name, size: e.size, mtime: e.mtime, mime: e.mime, kind: e.kind, dir: e.dir }
   })

@@ -17,7 +17,6 @@ pub fn reset() -> Unit {
   composing_reset()
   triple_reset()
   recent_reset()
-  attach_reset()
   chat_rows_reset()
   sidebar_reset()
   finder_reset()

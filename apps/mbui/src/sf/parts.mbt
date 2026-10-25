@@ -1889,12 +1889,13 @@ let field_hint : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Mut
 /// A line to type in (controls.css.ts input, a one-line one: a pill as the buttons beside it are, 36 high at least,
 /// 16 in, a line of the strong grey, the field's hover grey pointed at or written in, on the canvas, its words 14, the
 /// placeholder subtle): mbui's field (@kit.text_field), its editor `key`'s; `field`: what it holds, the view's own;
-/// `small`: 32 high (a small panel's, as its rows: input_box_small). What is in it now, and whether Enter was pressed
-/// in it.
+/// `small`: 32 high (a small panel's, as its rows: input_box_small); `shorter`: other ways to say the placeholder where
+/// the field has less room (Ctx::editor's). What is in it now, and whether Enter was pressed in it.
 pub fn input(
   c : @ui.Ctx,
   key : String,
   placeholder? : String = "",
+  shorter? : Array[String] = [],
   secret? : Bool = false,
   disabled? : Bool = false,
   small? : Bool = false,
@@ -1902,7 +1903,7 @@ pub fn input(
 ) -> @kit.Field {
   // (its words the body's, as tall as the theme's controls: the web's with keyboard and mouse, a finger's with touch)
   let t = theme()
-  @kit.text_field(c, key, placeholder~, secret~, disabled~, size=t.t.body, line=t.t.body_line, field?, look=fn(c, s, editor) {
+  @kit.text_field(c, key, placeholder~, shorter~, secret~, disabled~, size=t.t.body, line=t.t.body_line, field?, look=fn(c, s, editor) {
     let hot = s.hovered || s.focused
     c.box(
       id=s.id,

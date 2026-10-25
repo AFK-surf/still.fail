@@ -788,7 +788,7 @@ fn chat_file(c : @ui.Ctx, src : Source, a : Attachment) -> Unit {
   let here : @sfpages.MessageHere = {
     station: "ws1/st1",
     session: "s-c1",
-    view: chat_view(Json::object({})),
+    view: chat_view_made(Json::object({})),
     go: None,
     inline: true,
     gutter: 0.0,
