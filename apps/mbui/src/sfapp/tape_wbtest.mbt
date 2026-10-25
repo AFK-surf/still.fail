@@ -326,9 +326,9 @@ test "on the tape the composer is drawn with its page as the page moves, never a
 }
 
 ///|
-/// The composer's box as drawn (the glass round its field) and its send button (the last grounded round 32 in it):
-/// their corners.
-fn composer_corners(t : @ui.Tester) -> (Double, Double)? {
+/// The composer's box as drawn (the glass round its field) and its send button (the last grounded round control in
+/// it, the theme's): their corners.
+fn composer_corners(t : @ui.Tester) -> (Double, Double, Double)? {
   let bs = t.boxes()
   guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
   let ed = bs[e]
@@ -339,14 +339,15 @@ fn composer_corners(t : @ui.Tester) -> (Double, Double)? {
     }
   }
   guard box is Some(k) else { return None }
+  let side = @sf.theme().round.side
   let mut send = 0.0
   for b in bs {
-    if b.w == 32.0 && b.h == 32.0 && b.bg != 0L && b.x >= k.x && b.x + b.w <= k.x + k.w && b.y >= k.y &&
+    if b.w == side && b.h == side && b.bg != 0L && b.x >= k.x && b.x + b.w <= k.x + k.w && b.y >= k.y &&
       b.y + b.h <= k.y + k.h {
-      send = dmin(b.radius, 16.0)
+      send = dmin(b.radius, side / 2.0)
     }
   }
-  Some((dmin(k.radius, k.h / 2.0), send))
+  Some((dmin(k.radius, k.h / 2.0), send, k.h))
 }
 
 ///|
@@ -358,20 +359,22 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   assert_eq(@sf.tape_edge.val, @sf.pane_corner)
   let panel = @sf.pane_corner
   // one line: a capsule the ladder's inset in, as round as the panel's corner less that (its half), its buttons round
-  // in its ends
-  guard composer_corners(t) is Some((k, s)) else { fail("no composer") }
+  // in its ends; the screen's buttons (a touch screen's larger), the same shape
+  let side = @sf.theme().round.side
+  guard composer_corners(t) is Some((k, s, h)) else { fail("no composer") }
   assert_eq(k, panel - @sfpages.composer_side())
-  assert_eq(s, 16.0)
+  assert_eq(k, h / 2.0)
+  assert_eq(s, side / 2.0)
   assert_eq(t.corner_faults(), [])
   // lines more: the box concentric with the panel, the send button with the box, 12 in
   t.tap_text("发消息")
   t.type_text("第一行\n第二行\n第三行")
   t.run_for(@sfpages.morph_ms)
-  guard composer_corners(t) is Some((k, s)) else { fail("no composer") }
+  guard composer_corners(t) is Some((k, s, _)) else { fail("no composer") }
   // (the ladder's: the panel's corner a step in, a card's; its buttons round in its corners, the inset in)
   assert_eq(k, @ui.concentric(panel, @sfpages.composer_side()))
   assert_eq(k, @sf.card_corner)
-  assert_eq(s, 16.0)
+  assert_eq(s, side / 2.0)
   assert_eq(t.corner_faults(), [])
 }
 

@@ -403,8 +403,8 @@ fn composer_text(
       composer_field_key,
       placeholder=if hint != "" { hint } else { spec.placeholder },
       words=true,
-      font_size=text_size,
-      line=text_line,
+      font_size=@sf.theme().t.input,
+      line=@sf.theme().t.input_line,
       trim=true,
       max_lines=text_lines(c),
       plain=true,
@@ -501,13 +501,17 @@ fn attach(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files 
     }
   }
   ignore(spec)
-  let b = c.box(style=if hot { round_button_hot } else { round_button }, id~, fn() {
-    @sf.icon(c, "plus", size=plus_icon, color=if no_files {
-      @sf.alpha(p.text, faint)
-    } else if hot {
-      p.text
-    } else {
-      p.muted
+  // (a finger's reach round it, the theme's: @sf.round_reach)
+  let b = c.box(style=@sf.round_reach(), id~, fn() {
+    c.box(style=if hot { @sf.round_face().then(round_hot) } else { @sf.round_face() }, fn() {
+      @sf.icon(c, "plus", size=plus_icon, color=if no_files {
+        @sf.alpha(p.text, faint)
+      } else if hot {
+        p.text
+      } else {
+        p.muted
+      })
+      |> ignore
     })
     |> ignore
   })
@@ -545,12 +549,15 @@ fn send_button(c : @ui.Ctx, ready : Bool, starting : Bool, submit : () -> Unit) 
   } else {
     @sf.over(p.raised, @sf.alpha(p.text, send_off))
   }
-  let b = c.box(style=round_button.then(@ui.style(bg=Data(ground))), id~, fn() {
-    if starting {
-      @sf.spinner(c, size=send_icon) |> ignore
-    } else {
-      @sf.icon(c, "arrow-up", size=send_icon, color=if ready { p.canvas } else { p.raised }) |> ignore
-    }
+  let b = c.box(style=@sf.round_reach(), id~, fn() {
+    c.box(style=@sf.round_face().then(@ui.style(bg=Data(ground))), fn() {
+      if starting {
+        @sf.spinner(c, size=@sf.theme().round.glyph) |> ignore
+      } else {
+        @sf.icon(c, "arrow-up", size=@sf.theme().round.glyph, color=if ready { p.canvas } else { p.raised }) |> ignore
+      }
+    })
+    |> ignore
   })
   c.semantics(b, Button, id~, label=@sf.t("web-main.composer.send"), disabled=!ready)
   b
@@ -591,8 +598,8 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
             let res = c.editor(
               key,
               placeholder=@sf.t("web-main.quote.commentPlaceholder"),
-              font_size=comment_size,
-              line=comment_line,
+              font_size=@sf.theme().t.ui,
+              line=@sf.theme().t.ui_line,
               max_lines=1,
               plain=true,
               color=@sf.theme().p.text,
@@ -782,7 +789,7 @@ fn composer_picture(
     c.box(style=if error != "" { thumb_failed } else { thumb_box }, id=thumb, fn() {
       c.image(picture, w=Px(thumb_side), h=Px(thumb_side), fit=FitCover) |> ignore
       if pending {
-        c.layer(fn() { c.box(style=thumb_veil, fn() { @sf.spinner(c, size=send_icon) |> ignore }) |> ignore })
+        c.layer(fn() { c.box(style=thumb_veil, fn() { @sf.spinner(c, size=@sf.theme().round.glyph) |> ignore }) |> ignore })
         |> ignore
       }
       if error != "" {
@@ -868,13 +875,7 @@ pub let page_move_ms : Double = 340.0
 let warm_every_ms : Double = 60000.0
 
 ///|
-/// The words' size and line (composerText: 14 on 1.5), the most it grows to (480, or 40% of the window).
-pub let text_size : Double = 14.0
-
-///|
-pub let text_line : Double = 21.0
-
-///|
+/// The words' size and line are the theme's (Type.input: the screen's), the most it grows to (480, or 40% of the window).
 let text_most : Double = 480.0
 
 ///|
@@ -883,7 +884,7 @@ let text_window_share : Double = 0.4
 ///|
 /// How many lines the field grows to before it scrolls.
 fn text_lines(c : @ui.Ctx) -> Int {
-  let n = (dmin(text_most, c.height * text_window_share) / text_line).to_int()
+  let n = (dmin(text_most, c.height * text_window_share) / @sf.theme().t.input_line).to_int()
   if n < 1 {
     1
   } else {
@@ -892,18 +893,10 @@ fn text_lines(c : @ui.Ctx) -> Int {
 }
 
 ///|
-/// What is said about a quote: 13 on 20 (quoteCardInput: the ui's size).
-let comment_size : Double = 13.0
 
 ///|
-let comment_line : Double = 20.0
-
-///|
-/// ＋'s and send's icons (Plus 18, ArrowUp 16), a picture's ↻ (18) and ✕ (12).
+/// ＋'s icon (Plus 18; send's is the theme's round glyph), a picture's ↻ (18) and ✕ (12).
 let plus_icon : Double = 18.0
-
-///|
-let send_icon : Double = 16.0
 
 ///|
 let retry_icon : Double = 18.0
@@ -999,13 +992,10 @@ let choices : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1, align=ACenter)
 let tools_gap : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
-/// ＋ and send: 32 round, centred; in the box's corners concentric with them (the box in a panel's, less round).
+/// ＋ pointed at: the hover's ground (round as the theme's round controls are: @sf.round_face).
 // kept across runs: a value (no field of it changes)
-let round_button : @ui.Style = @ui.css("w=S8 h=S8 radius=InnerOr(Full) align=ACenter justify=JCenter")
+let round_hot : @ui.Style = @ui.css("bg=Hover")
 
-///|
-// kept across runs: a value (no field of it changes)
-let round_button_hot : @ui.Style = round_button.then(@ui.css("bg=Hover"))
 
 ///|
 /// The quotes waiting, 6 apart.
@@ -1121,8 +1111,8 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
     flying,
     field=composer_field_key,
     hold=fn(ms) { composer_hold(w.key, room, ms) },
-    font=text_size,
-    line=text_line,
+    font=@sf.theme().t.input,
+    line=@sf.theme().t.input_line,
     desk=true,
   )
   // the chat's list to its end, where the row is (gliding there while nothing flies to it)
@@ -1178,13 +1168,13 @@ fn composer_hold(draft : String, room : Double, ms : Double) -> Unit {
 /// one line, or as it was when words were sent from it until they let go of it (composer_hold).
 pub fn composer_room(c : @ui.Ctx, draft : String) -> Double {
   // (not laid out yet: a capsule's)
-  let foot = @motion.measured(c, "composer/foot").unwrap_or(capsule_room)
+  let foot = @motion.measured(c, "composer/foot").unwrap_or(capsule_room())
   // never less than it takes opened with one line where it is (its box that tall, what is round it as it is: the web's
   // --composer-room, max(the composer's height, an opened one-line composer's)): opened or let go, a capsule or a box,
   // the list keeps its words where they are; only a line more, a file, a quote, what is said over it move them
   let least = match @motion.measured(c, "composer/content") {
-    Some(box) => foot - box + composer_open_box
-    None => composer_open_room
+    Some(box) => foot - box + composer_open_box()
+    None => composer_open_room()
   }
   let now = dmax(foot, least)
   let held = @motion.anim(c, "composer/held/" + draft, 0.0, global=true).get()
@@ -1369,18 +1359,26 @@ let composer_notice_button : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg)
 let composer_notice_failed : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger)
 
 ///|
-/// A chat's composer's place while it is a capsule: its buttons (32) 8 in, 12 over it and 16 under it.
-let capsule_room : Double = 32.0 + 2.0 * 8.0 + 12.0 + 16.0
+/// A chat's composer's place while it is a capsule: its buttons (the theme's round controls) 8 in, 12 over it and 16
+/// under it.
+fn capsule_room() -> Double {
+  @sf.theme().round.side + 2.0 * 8.0 + 12.0 + 16.0
+}
 
 ///|
 /// The room a chat's composer takes opened with one line at its pane's foot (its box 12 in, the line under 8, its
 /// buttons' row 10 under it; 12 over and 16 under the box): what a list that keeps its words in place as the composer
 /// closes keeps clear at least (ChatHost.kt roomForList).
-pub let composer_open_room : Double = composer_open_box + 12.0 + 16.0
+pub fn composer_open_room() -> Double {
+  composer_open_box() + 12.0 + 16.0
+}
 
 ///|
 /// Its box opened with one line (composer_open_room without what is over and under it).
-let composer_open_box : Double = 12.0 + (8.0 + text_line) + 10.0 + 32.0 + 12.0
+fn composer_open_box() -> Double {
+  let t = @sf.theme()
+  12.0 + (8.0 + t.t.input_line) + 10.0 + t.round.side + 12.0
+}
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -81,6 +81,18 @@ pub(all) struct Type {
   heading : Double
   heading_line : Double
   display : Double
+  /// what is typed (textInput: the phone's 16, as iOS zooms into less; the computer's 14), on its line
+  input : Double
+  input_line : Double
+}
+
+///|
+/// A round control standing in a field's capsule (the composer's ＋ and send: mPlus, mSend; attachBtn, sendBtn): how
+/// wide it shows, how far round it a press takes it (a finger's: 44 at least), its glyph's size.
+pub(all) struct Round {
+  side : Double
+  reach : Double
+  glyph : Double
 }
 
 ///|
@@ -97,6 +109,8 @@ pub(all) struct Theme {
   control_h : Double
   /// what a page's bar of keys is on this screen (Bars)
   bars : Bars
+  /// the round controls standing in a field's capsule (Round)
+  round : Round
 }
 
 ///|
@@ -757,6 +771,8 @@ let wide_type : Type = {
   heading: 22.0,
   heading_line: 30.0,
   display: 28.0,
+  input: 14.0,
+  input_line: 21.0,
 }
 
 ///|
@@ -777,6 +793,37 @@ let narrow_type : Type = {
   ui_line: 22.0,
   body: 15.0,
   body_line: 22.0,
+  input: 16.0,
+  input_line: 21.0,
+}
+
+///|
+/// The computer's round controls (attachBtn, sendBtn: 32, the arrow 16), pressed where they show.
+let wide_round : Round = { side: 32.0, reach: 32.0, glyph: 16.0 }
+
+///|
+/// The phone's (mPlus, mSend: 36, both glyphs 18), a finger's reach 44 round them.
+let narrow_round : Round = { side: 36.0, reach: 44.0, glyph: 18.0 }
+
+///|
+/// A round control's press: `reach` across, over its own `side` (what it takes of the layout: past it by a margin
+/// below 0 each way), what shows in its middle.
+pub fn round_reach() -> @ui.Style {
+  let r = theme().round
+  @ui.style(
+    w=Fixed(r.reach),
+    h=Fixed(r.reach),
+    m=room(-(r.reach - r.side) / 2.0),
+    align=ACenter,
+    justify=JCenter,
+  )
+}
+
+///|
+/// What shows of it: `side` round.
+pub fn round_face() -> @ui.Style {
+  let r = theme().round
+  @ui.style(w=Fixed(r.side), h=Fixed(r.side), radius=InnerOr(Full), align=ACenter, justify=JCenter)
 }
 
 ///|
@@ -813,7 +860,16 @@ let dark_set : Ref[Bool?] = { val: None }
 
 ///|
 let current : Ref[Theme] = {
-  val: { dark: false, narrow: false, p: wide_light, t: wide_type, rows: wide_rows, control_h: wide_control_h, bars: bars_drawn },
+  val: {
+    dark: false,
+    narrow: false,
+    p: wide_light,
+    t: wide_type,
+    rows: wide_rows,
+    control_h: wide_control_h,
+    bars: bars_drawn,
+    round: wide_round,
+  },
 }
 
 ///|
@@ -909,6 +965,7 @@ pub fn begin(c : @ui.Ctx) -> Theme {
     rows: if narrow { narrow_rows } else { wide_rows },
     control_h: if narrow { narrow_control_h } else { wide_control_h },
     bars: bars_drawn,
+    round: if narrow { narrow_round } else { wide_round },
   }
   current.val
 }
