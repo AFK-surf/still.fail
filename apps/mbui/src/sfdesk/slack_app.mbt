@@ -504,13 +504,22 @@ fn app_fields(c : @ui.Ctx, core : Core, d : SaDraft, sections : Array[Json], fre
       Some(v) => v
       None => t.p.neutral_bg
     }
+    // (what it says on the colour chosen: a near black or white, whichever reads on it; the muted grey on none)
+    let ink = match @sf.hex_color(d.color) {
+      Some(v) => @ui.ink_on(v, [0x24272BFFL, 0xFFFFFFFFL])
+      None => t.p.muted
+    }
     let ab = c.box(style=sa_avatar.then(@ui.style(bg=Data(ground))), id=aid, fn() {
       if d.shown != "" {
         c.image(d.shown, w=Fill(1.0), h=Fill(1.0), fit=FitCover, bg=0L, fade=false) |> ignore
       } else {
         c.box(style=sa_avatar_empty, fn() {
-          @sf.icon(c, "image-upload", size=sa_upload_icon, color=t.p.muted) |> ignore
-          c.text(@sf.t(if fresh { "web-pages.slackApp.uploadShort" } else { "web-pages.slackApp.keep" }), style=desk_note) |> ignore
+          @sf.icon(c, "image-upload", size=sa_upload_icon, color=ink) |> ignore
+          c.text(
+            @sf.t(if fresh { "web-pages.slackApp.uploadShort" } else { "web-pages.slackApp.keep" }),
+            style=desk_note.then(@ui.text_style(color=Data(ink))),
+          )
+          |> ignore
         })
         |> ignore
       }

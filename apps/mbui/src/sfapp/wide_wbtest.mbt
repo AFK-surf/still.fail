@@ -583,7 +583,8 @@ fn first_words_glyph(t : @ui.Tester) -> (Double, Double) raise {
 /// Whether the composer's hint is drawn: glyphs in its ground in the hint's ink.
 fn hint_drawn(t : @ui.Tester) -> Bool raise {
   let (gx, gy, gw, gh) = composer_glass(t)
-  t.drawn_glyphs().iter().any(fn(g) { g.0 > gx && g.0 < gx + gw && g.1 > gy && g.1 < gy + gh && g.2 == @sf.theme().p.subtle })
+  // (on the field's line, the glass's upper half, as the words typed are: the choices under it are in the same grey)
+  t.drawn_glyphs().iter().any(fn(g) { g.0 > gx && g.0 < gx + gw && g.1 > gy && g.1 < gy + gh / 2.0 && g.2 == @sf.theme().p.subtle })
 }
 
 ///|

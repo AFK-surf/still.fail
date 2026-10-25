@@ -2103,13 +2103,13 @@ let paper_white_ground : Int64 = 0xF5F3EFFFL
 let paper_light_ink : Int64 = 0x24272BFFL
 
 ///|
-let paper_light_muted : Int64 = 0x7A7D83FFL
+let paper_light_muted : Int64 = 0x62656BFFL
 
 ///|
 let paper_light_line : Int64 = 0xE7E3DCFFL
 
 ///|
-let paper_light_accent : Int64 = 0xE5704AFFL
+let paper_light_accent : Int64 = 0xCC5A34FFL
 
 ///|
 let paper_light_raised : Int64 = 0xFFFFFFFFL
@@ -2151,7 +2151,7 @@ let paper_night_raised : Int64 = 0x2A2C31FFL
 let paper_night_line : Int64 = 0x34353AFFL
 
 ///|
-let paper_night_accent : Int64 = 0xEF7A55FFL
+let paper_night_accent : Int64 = 0xE8734FFFL
 
 ///|
 // kept across runs: a value (no field of it changes)

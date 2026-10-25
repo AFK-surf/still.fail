@@ -24,9 +24,9 @@ let papers : Array[Paper] = [
     name: "白",
     bg: 0xF5F3EFFFL,
     ink: 0x24272BFFL,
-    muted: 0x7A7D83FFL,
+    muted: 0x62656BFFL,
     line: 0xE7E3DCFFL,
-    accent: 0xE5704AFFL,
+    accent: 0xCC5A34FFL,
     raised: 0xFFFFFFFFL,
   },
   // the phone's green as a tint of its page
@@ -34,7 +34,7 @@ let papers : Array[Paper] = [
     name: "护眼",
     bg: 0xDBE6DCFFL,
     ink: 0x24302AFFL,
-    muted: 0x7A7D83FFL,
+    muted: 0x62656BFFL,
     line: 0xE7E3DCFFL,
     accent: 0x2F8F5BFFL,
     raised: 0xF3F8F5FFL,
@@ -44,9 +44,9 @@ let papers : Array[Paper] = [
     name: "浅灰",
     bg: 0xEAE9E7FFL,
     ink: 0x24272BFFL,
-    muted: 0x7A7D83FFL,
+    muted: 0x62656BFFL,
     line: 0xE7E3DCFFL,
-    accent: 0xE5704AFFL,
+    accent: 0xCC5A34FFL,
     raised: 0xFFFFFFFFL,
   },
 ]
@@ -59,7 +59,7 @@ let night : Paper = {
   ink: 0xD3D3D4FFL,
   muted: 0x9A9DA3FFL,
   line: 0x34353AFFL,
-  accent: 0xEF7A55FFL,
+  accent: 0xE8734FFFL,
   raised: 0x2A2C31FFL,
 }
 

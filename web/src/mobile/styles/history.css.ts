@@ -11,7 +11,7 @@ export const mPill = style({
       color: "var(--m-accent-ink)", background: "color-mix(in srgb, var(--m-accent-ink) 12%, transparent)",
     },
     "&[data-tone=\"green\"]": { color: "var(--m-green)", background: "color-mix(in srgb, var(--m-green) 12%, transparent)" },
-    "&[data-tone=\"amber\"]": { color: "var(--m-warn)", background: "color-mix(in srgb, var(--m-warn) 14%, transparent)" },
+    "&[data-tone=\"amber\"]": { color: "var(--m-warn-ink)", background: "color-mix(in srgb, var(--m-warn) 14%, transparent)" },
     "&[data-tone=\"neutral\"]": { color: "var(--m-muted)", background: "var(--m-chip)" },
   },
 });

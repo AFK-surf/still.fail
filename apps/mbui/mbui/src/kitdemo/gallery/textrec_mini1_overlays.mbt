@@ -157,4 +157,4 @@ let run_mini1_overlays : String =
   #|TEXTREC {"g":100,"r":[1089,0,9,11,-1,-9,0]}
   #|TEXTREC {"g":108,"r":[1099,0,9,11,-1,-10,0]}
   #|ENV {"motion":0,"glass":0,"dark":1,"inset":0}
-  #|DRAWHASH 1 0 960 720 1 -8210977145628929193 1
+  #|DRAWHASH 1 0 960 720 1 1064151082613171909 1

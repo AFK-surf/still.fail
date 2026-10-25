@@ -29,7 +29,9 @@ export const btnGhost = style({ borderColor: "transparent", background: "transpa
 // Here, after btn, as the other variants: in ui.css.ts (which cascades before this file) btn's colour won over them.
 export const btnDanger = style({ color: vars.red });
 export const btnDangerSolid = style({
-  background: vars.red, borderColor: vars.red, color: "#fff",
+  // (what is said on it in the primary's: white on the light theme's deep red, the page's ink on the dark one's light
+  // red, white on which was 2.5:1)
+  background: vars.red, borderColor: vars.red, color: vars.onPrimary,
   selectors: {
     // A solid ground pointed at: a step towards the page, as the primary's (docs/ui-panels.md 悬停).
     "&:hover:not(:disabled)": { background: `color-mix(in srgb, ${vars.red} 85%, ${vars.canvas})` },

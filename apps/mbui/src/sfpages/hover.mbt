@@ -620,7 +620,7 @@ let agent_card_red : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wra
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_amber : @ui.TextStyle = @ui.text_style(size=Meta, color=Warn, wrap=false)
+let agent_card_amber : @ui.TextStyle = @ui.text_style(size=Meta, color=WarnInk, wrap=false)
 
 ///|
 /// The figures, side by side, 6 apart; each 7 by 9 in, 8 round, on the hover's ground: the figure 16 in 600 over its
@@ -657,7 +657,7 @@ let agent_card_figure_red : @ui.TextStyle = @ui.text_style(size=Title, weight=Se
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_figure_amber : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Warn, wrap=false)
+let agent_card_figure_amber : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=WarnInk, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

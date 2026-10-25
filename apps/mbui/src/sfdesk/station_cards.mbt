@@ -88,7 +88,7 @@ fn figure(c : @ui.Ctx, f : Json?) -> Unit {
   c.text(
     text(f, "text"),
     style=match text(f, "level") {
-      "amber" => nt_figure.then(@ui.text_style(color=Warn))
+      "amber" => nt_figure.then(@ui.text_style(color=WarnInk))
       "red" => nt_figure.then(@ui.text_style(color=Danger))
       _ => nt_figure
     },

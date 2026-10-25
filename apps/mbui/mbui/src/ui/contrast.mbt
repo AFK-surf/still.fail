@@ -1,24 +1,47 @@
 // Contrast, measured: what a frame draws to be seen stands off what it is drawn on far enough to be seen (still.fail's
-// docs/ui-panels.md「对比度」). What is drawn with nothing in it, its ground or (where that does not show) its edge alone
-// saying what it is: a gauge's cell, a bar's track, a line (Ctx::lines too), a placeholder's block, a sheet's grip: at
-// least `contrast_mark_least`, WCAG 2's ratio. A ground under words, a picture or an icon is not asked: what is in it
-// carries it. Each is measured where it is drawn, against what the frame drew under it there (its instances before
-// it, as the renderers lay them: fills, and glass's tint over what it frosts); what lies on a picture, a video or
-// another app's view, or is covered by what is drawn after it (a dialog's scrim, a bar's glass over a list), is not
-// asked, nor a picture drawn of something else (Role Image: another system's screen, a code to scan). (Words and icons,
-// against WCAG's AA, are to come: until then not asked here.)
+// docs/ui-panels.md「对比度」). Words as WCAG 2's AA asks: 4.5:1, 3:1 where they are large (24 and up, or 18.66 and up
+// in bold); an icon (Ctx::shapes) 3:1, as its non-text contrast asks of what is understood by its shape. What is drawn
+// with nothing in it, its ground or (where that does not show) its edge alone saying what it is: a gauge's cell, a
+// bar's track, a line (Ctx::lines too), a placeholder's block, a sheet's grip: at least `contrast_mark_least`, WCAG
+// 2's ratio. A ground under words, a picture or an icon is not asked: what is in it carries it. Each is measured where
+// it is drawn, against what the frame drew under it there (its instances before it, as the renderers lay them: fills,
+// and glass's tint over what it frosts); what lies on a picture, a video or another app's view, or is covered by what
+// is drawn after it (a dialog's scrim, a bar's glass over a list), is not asked, nor a picture drawn of something else
+// (Role Image: another system's screen, a code to scan), nor what is in a widget said disabled (WCAG asks nothing of
+// what cannot be used).
 
 ///|
 /// Which node drew each instance of a frame, kept only while a test asks (Tester::contrast_faults): `owner[k]`
-/// instance k's (-1 none known), `painting` the node being painted.
+/// instance k's (-1 none known), `painting` the node being painted; `own_colours` the nodes said to draw in their own
+/// colours (Ctx::own_colours).
 priv struct InstOwners {
   mut on : Bool
   mut painting : Int
   owner : Array[Int]
+  own_colours : Set[Int]
 }
 
 ///|
-let inst_owners : InstOwners = { on: false, painting: -1, owner: [] }
+let inst_owners : InstOwners = { on: false, painting: -1, owner: [], own_colours: Set::new() }
+
+///|
+/// The frame's contrast asked again from nothing: no instance's owner known, no node said in its own colours.
+fn inst_owners_clear() -> Unit {
+  inst_owners.painting = -1
+  inst_owners.owner.clear()
+  inst_owners.own_colours.clear()
+}
+
+///|
+/// Node `node` (as Ctx::box or Ctx::shapes returns it) draws a picture in its own colours, a maker's mark, a logo, an
+/// illustration: its colours are its owner's, as a picture's are, and the contrast rule asks nothing of them (WCAG asks
+/// nothing of a logo).
+pub fn Ctx::own_colours(self : Ctx, node : Int) -> Unit {
+  ignore(self)
+  if inst_owners.on {
+    inst_owners.own_colours.add(node)
+  }
+}
 
 ///|
 /// Instance `k` drawn by the node being painted.
@@ -73,6 +96,24 @@ fn inst_owners_raised(tops : Array[(Int, Int)], count : Int) -> Unit {
 pub let contrast_mark_least : Double = 1.25
 
 ///|
+/// The least words stand off their ground: WCAG 2's AA, 3:1 large (24 and up, 18.66 and up bold), 4.5:1 else.
+pub fn contrast_words_least(size : Double, weight : Int) -> Double {
+  if size >= 24.0 || (size >= 18.66 && weight >= 700) {
+    3.0
+  } else {
+    4.5
+  }
+}
+
+///|
+/// The least an icon stands off its ground: WCAG 2's non-text contrast.
+pub let contrast_icon_least : Double = 3.0
+
+///|
+/// The most an icon is across: a shape drawn larger is a drawing or an outline (a card's dashed edge), held as a line.
+let icon_most : Double = 48.0
+
+///|
 /// A colour's red, green and blue, 0 to 1.
 priv struct Rgb {
   r : Double
@@ -105,6 +146,35 @@ fn contrast_of(a : Rgb, b : Rgb) -> Double {
   let la = a.luminance()
   let lb = b.luminance()
   (dmax(la, lb) + 0.05) / (dmin(la, lb) + 0.05)
+}
+
+///|
+/// A colour as the theme writes it (0xRRGGBBAA), its red, green and blue.
+fn rgb_of(v : Int64) -> Rgb {
+  {
+    r: ((v >> 24) & 0xFFL).to_double() / 255.0,
+    g: ((v >> 16) & 0xFFL).to_double() / 255.0,
+    b: ((v >> 8) & 0xFFL).to_double() / 255.0,
+  }
+}
+
+///|
+/// WCAG 2's contrast ratio of two opaque colours as the theme writes them (0xRRGGBBAA), 1 to 21.
+pub fn contrast_ratio(a : Int64, b : Int64) -> Double {
+  contrast_of(rgb_of(a), rgb_of(b))
+}
+
+///|
+/// Of `inks`, the one that stands furthest off `ground` (opaque, 0xRRGGBBAA): what is said on a colour a person chose
+/// (an app's picture's ground) reads on whatever they chose.
+pub fn ink_on(ground : Int64, inks : Array[Int64]) -> Int64 {
+  let mut best = inks[0]
+  for i in inks {
+    if contrast_ratio(i, ground) > contrast_ratio(best, ground) {
+      best = i
+    }
+  }
+  best
 }
 
 ///|
@@ -173,12 +243,19 @@ fn in_inst(a : FixedArray[Double], b : Int, px : Double, py : Double) -> Bool {
 }
 
 ///|
-/// How instance `j` lies over (`px`, `py`) as a ground: 0 not, 1 a colour (its fill, glass's tint) at an opacity, 2 a
-/// picture, a video or another app's view, its colours not known here.
-fn ground_kind(a : FixedArray[Double], j : Int, px : Double, py : Double) -> (Int, Double) {
+/// How instance `j` lies over (`px`, `py`) as a ground: 0 not, 1 a colour (its fill, glass's tint, a shape's filled
+/// band: a badge's disc under its glyph, not `own`'s own) at an opacity, 2 a picture, a video or another app's view, its
+/// colours not known here.
+fn ground_kind(a : FixedArray[Double], j : Int, px : Double, py : Double, own? : Int = -1) -> (Int, Double) {
   let b = j * inst_size
   let kind = a[b + 5]
-  if kind == 0.0 {
+  if kind == 11.0 {
+    if a[b + 4] == 0.0 && a[b + 11] > 0.002 && in_inst(a, b, px, py) && inst_owner(j) != own {
+      (1, a[b + 11])
+    } else {
+      (0, 0.0)
+    }
+  } else if kind == 0.0 {
     let o = a[b + 11]
     if o > 0.002 && in_inst(a, b, px, py) {
       (1, o)
@@ -208,11 +285,12 @@ fn ground_kind(a : FixedArray[Double], j : Int, px : Double, py : Double) -> (In
 /// (or on one, with nothing whole over it).
 fn Ctx::ground_under(self : Ctx, k : Int, px : Double, py : Double) -> (Rgb, Array[Rgb])? {
   let a = self.inst
+  let own = inst_owner(k)
   // the last whole colour under it there, then what is laid over that
   let mut from = -1
   let mut j = k - 1
   while j >= 0 {
-    let (kind, o) = ground_kind(a, j, px, py)
+    let (kind, o) = ground_kind(a, j, px, py, own~)
     if kind == 2 {
       return None
     }
@@ -235,13 +313,40 @@ fn Ctx::ground_under(self : Ctx, k : Int, px : Double, py : Double) -> (Rgb, Arr
   }
   let beneath = [out]
   for q in (from + 1)..<k {
-    let (kind, o) = ground_kind(a, q, px, py)
+    let (kind, o) = ground_kind(a, q, px, py, own~)
     if kind == 1 {
       out = Rgb::laid(out, inst_rgb(a, q * inst_size), o)
       beneath.push(out)
     }
   }
   Some((out, beneath))
+}
+
+///|
+/// Whether instance `k` (a filled shape) is in the colour of a ground drawn whole by a node holding something (words, a
+/// picture), touching it: a piece of that ground (a popover's arrow, a bubble's tail), not a mark of its own.
+fn Ctx::ground_piece(self : Ctx, k : Int, holding : Array[Bool]) -> Bool {
+  let a = self.inst
+  let b = k * inst_size
+  let ink = inst_rgb(a, b)
+  for j in 0..<self.ninst {
+    let q = j * inst_size
+    let o = inst_owner(j)
+    if j == k || a[q + 5] != 0.0 || a[q + 11] < 0.999 || o < 0 || o >= self.count || !holding[o] {
+      continue
+    }
+    if !same_rgb(inst_rgb(a, q), ink) {
+      continue
+    }
+    // (their rects within a pixel of each other)
+    if a[b] <= a[q] + a[q + 2] + 1.0 &&
+      a[q] <= a[b] + a[b + 2] + 1.0 &&
+      a[b + 1] <= a[q + 1] + a[q + 3] + 1.0 &&
+      a[q + 1] <= a[b + 1] + a[b + 3] + 1.0 {
+      return true
+    }
+  }
+  false
 }
 
 ///|
@@ -375,14 +480,25 @@ fn Ctx::contrast_where(self : Ctx, i : Int) -> String {
 ///|
 /// Where the frame Tester::contrast_faults drew stands too faint off what it lies on (see the file's head), each once:
 /// what it is and where, its colour as drawn on its ground, the ratio and the least. `marks`: the least for what has
-/// nothing in it. A line (Ctx::lines) is measured at its strongest piece, as it is seen by that (a spinner's spokes
-/// fading behind the one it is at). What is drawn in the colour of a ground under it, deeper than the one it lies on,
-/// is a cut through to that ground (round a dot over a picture, in the sidebar's colour), not a mark of its own.
+/// nothing in it. Words are measured at their faintest letter; a line (Ctx::lines) or an icon at its strongest piece,
+/// as it is seen by that (a spinner's spokes fading behind the one it is at). What is drawn in the colour of a ground
+/// under it, deeper than the one it lies on, is a cut through to that ground (round a dot over a picture, in the
+/// sidebar's colour), not a mark of its own.
 fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
   let a = self.inst
   let pictures = self.pictures()
+  for n in inst_owners.own_colours {
+    pictures.add(n)
+  }
+  let disabled : Set[Int] = Set::new()
+  for s in self.sems {
+    if s.disabled {
+      disabled.add(s.node)
+    }
+  }
   let holding = self.holding()
-  // each node's line at its strongest piece: (ratio, what is said where it is under the least)
+  // each node's words at their faintest letter, a line's or an icon's pieces at their strongest: (ratio, what is said
+  // where it is under the least)
   let lines : Map[Int, (Double, String)] = Map::new()
   let order : Array[Int] = []
   let out : Array[String] = []
@@ -401,7 +517,9 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
     let n = self.nodes[o]
     let b = k * inst_size
     let kind = a[b + 5]
-    let is_line = kind == 10.0
+    let is_words = kind == 1.0 &&
+      (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor)
+    let is_line = kind == 10.0 || kind == 11.0 || is_words
     if !(is_line || (kind == 0.0 && n.kind == kind_box && !n.blocks)) {
       continue
     }
@@ -412,7 +530,13 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
       px > self.window_w ||
       py > self.window_h ||
       !in_inst_clip(a, b, px, py) ||
-      self.in_picture(o, pictures) {
+      self.in_picture(o, pictures) ||
+      (kind != 0.0 && self.in_picture(o, disabled)) {
+      continue
+    }
+    // (a filled shape in the colour of a ground with words in it, touching it: that ground's piece, as a popover's arrow
+    // is the popover's)
+    if kind == 11.0 && a[b + 4] == 0.0 && self.ground_piece(k, holding) {
       continue
     }
     if is_line {
@@ -425,18 +549,30 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
       }
       let ink = inst_rgb(a, b)
       let shown = Rgb::laid(ground, ink, a[b + 11])
-      // (a cut through to a ground under it, or that ground's own colour)
-      if same_rgb(shown, ground) || (a[b + 11] >= 0.999 && beneath.iter().any(fn(u) { same_rgb(u, ink) })) {
+      // (a cut through to a ground under it, or that ground's own colour; words are never that)
+      if !is_words &&
+        (same_rgb(shown, ground) || (a[b + 11] >= 0.999 && beneath.iter().any(fn(u) { same_rgb(u, ink) }))) {
         continue
       }
       let r = contrast_of(shown, ground)
-      let said = if r < marks - 0.005 {
-        "line\{self.contrast_where(o)}: \{shown.hex()} on \{ground.hex()} \{ratio_said(r)}:1, under \{marks}"
+      let (what, least) = if is_words {
+        let text = if n.text.length() > 24 { n.text.unsafe_substring(start=0, end=24) + "…" } else { n.text }
+        (
+          "words \"\{text.replace_all(old="\n", new=" ")}\" \{n.font_size}/\{n.weight}",
+          contrast_words_least(n.font_size, n.weight),
+        )
+      } else if kind == 11.0 && n.fw <= icon_most && n.fh <= icon_most {
+        ("icon", contrast_icon_least)
+      } else {
+        ("line", marks)
+      }
+      let said = if r < least - 0.005 {
+        "\{what}\{self.contrast_where(o)}: \{shown.hex()} on \{ground.hex()} \{ratio_said(r)}:1, under \{least}"
       } else {
         ""
       }
       match lines.get(o) {
-        Some((had, _)) if had >= r => ()
+        Some((had, _)) if (is_words && had <= r) || (!is_words && had >= r) => ()
         Some(_) => lines[o] = (r, said)
         None => {
           lines[o] = (r, said)
@@ -500,8 +636,7 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
 pub fn Tester::contrast_faults(self : Tester, marks? : Double = contrast_mark_least) -> Array[String] {
   let c = g()
   inst_owners.on = true
-  inst_owners.owner.clear()
-  inst_owners.painting = -1
+  inst_owners_clear()
   self.frame()
   inst_owners.on = false
   c.contrast_faults_drawn(marks)

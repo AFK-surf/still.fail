@@ -56,11 +56,11 @@ export const mAgentTileButton = style({
 export const mAgentTileName = style({ display: "flex", alignItems: "center", gap: "2px", minWidth: "0" });
 globalStyle(`${mAgentTileName} > span`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 globalStyle(`${mAgentTileName} > svg`, { flex: "none" });
-globalStyle(`${mAgentTile}[data-level=amber] b`, { color: "var(--m-warn)" });
+globalStyle(`${mAgentTile}[data-level=amber] b`, { color: "var(--m-warn-ink)" });
 globalStyle(`${mAgentTile}[data-level=red] b`, { color: "var(--m-red)" });
 /** What is wrong, a line each in its level's colour. */
 export const mAgentNotes = style({ display: "flex", flexDirection: "column", gap: "2px", marginTop: "10px", fontSize: vars.textMeta });
-globalStyle(`${mAgentNotes} > span[data-level=amber]`, { color: "var(--m-warn)" });
+globalStyle(`${mAgentNotes} > span[data-level=amber]`, { color: "var(--m-warn-ink)" });
 globalStyle(`${mAgentNotes} > span[data-level=red]`, { color: "var(--m-red)" });
 /** Where its rows lead: its account, its history, its jobs. */
 export const mAgentRows = style({ marginTop: "12px" });

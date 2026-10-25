@@ -195,8 +195,6 @@ export const rowAside = style({
 // One column, as wide as the row leaves it: an auto one grows to a long title's whole length, and the row with it.
 export const navSessionText = style({
   display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 2, minWidth: 0, flex: 1,
-  // All its pieces of work done or dropped (the core's `settled`): the row stays, faded.
-  selectors: { [`${navSession}[data-settled] &`]: { opacity: 0.45 } },
 });
 export const navSessionHead = style({
   display: "flex", alignItems: "center", gap: 6, minWidth: 0, height: 20, lineHeight: "20px",
@@ -208,7 +206,10 @@ export const navSessionTitle = style({
   flex: 1, ...ellipsis,
   selectors: {
     [`${navSession}[data-unread] &`]: { fontWeight: 500, color: vars.text },
-    [`${navSession}[data-offline] &`]: { opacity: 0.5 },
+    // All its pieces of work done or dropped (the core's `settled`), or its station offline: the row stays, its title
+    // stepped back to the muted grey. Not faded: at half its ink it was 2.7:1, too faint to read for a row that still
+    // opens (docs/ui-panels.md 对比度).
+    [`${navSession}:is([data-settled], [data-offline]) &`]: { color: vars.muted },
   },
 });
 export const navSessionMeta = style({
@@ -219,7 +220,6 @@ export const navSessionMeta = style({
   height: 18, lineHeight: "18px",
   // A state line's icon in the mark's column: what follows starts where the title does, the head's gap on.
   vars: { "--lead-gap": "6px" },
-  selectors: { [`${navSession}[data-offline] &`]: { opacity: 0.5 } },
 });
 export const navSessionLast = style({
   flex: 1, ...ellipsis, fontSize: vars.textMeta, color: vars.muted,

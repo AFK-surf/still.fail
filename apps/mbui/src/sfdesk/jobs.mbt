@@ -65,12 +65,12 @@ let job_live_ms : Double = 2400.0
 let job_halo_out : Double = 4.0
 
 ///|
-/// The line under a job's name (metaOf): its state's word in its dot's colour, what it said in the words', the rest
-/// muted.
+/// The line under a job's name (metaOf): its state's word in its dot's colour's ink (green's, amber's, red: the dot's
+/// green read 3.5 to 1), what it said in the words', the rest muted.
 fn job_meta(c : @ui.Ctx, job : Json?) -> Unit {
   let t = @sf.theme()
   let word = match text(job, "tone") {
-    "up" | "live" => t.p.green
+    "up" | "live" => t.p.green_ink
     "restart" => t.p.warn_ink
     "fail" => t.p.red
     _ => 0L
@@ -111,10 +111,10 @@ fn job_row(
     (false, true) => job_row_static_inset
   }
   let b = c.box(style~, selected~, id~, fn() {
-    c.box(style=if off { job_row_off } else { job_row_on }, fn() {
+    c.box(style=job_row_on, fn() {
       c.box(style=job_dot_room, fn() { job_dot(c, text(job, "tone")) }) |> ignore
       c.box(style=job_text, fn() {
-        c.text(text(job, "name"), style=job_name) |> ignore
+        c.text(text(job, "name"), style=if off { job_name_off } else { job_name }) |> ignore
         job_meta(c, job)
       })
       |> ignore
@@ -627,13 +627,10 @@ let job_row_static : @ui.Style = @ui.css("row w=Full py=S1_5 pl=S3 pr=S2 gap=S3 
 let job_row_static_inset : @ui.Style = @ui.css("row w=Full py=S1_5 px=S2_5 gap=S3 align=AStart radius=Inner")
 
 ///|
-/// Its dot and words, faded while it is over (data-off: .55).
+/// Its dot and words; over, its name stepped back to the muted grey (data-off), not faded (at 55% its words were 2.3 to
+/// 1: docs/ui-panels.md 对比度).
 // kept across runs: a value (no field of it changes)
 let job_row_on : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S3, align=AStart)
-
-///|
-// kept across runs: a value (no field of it changes)
-let job_row_off : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S3, align=AStart, opacity=O55)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -643,6 +640,10 @@ let job_text : @ui.Style = @ui.style(w=@sf.grow, gap=SPx)
 /// Its name (13, 500, on 20), what it is up to under it (12, muted), each a line.
 // kept across runs: a value (no field of it changes)
 let job_name : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, leading=L6, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let job_name_off : @ui.TextStyle = job_name.then(@ui.text_style(color=Muted))
 
 ///|
 // kept across runs: a value (no field of it changes)

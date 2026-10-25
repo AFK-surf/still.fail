@@ -535,6 +535,7 @@ fn Css::color(self : Css) -> Color {
     "Link" => Link
     "ShadowC" => ShadowC
     "Warn" => Warn
+    "WarnInk" => WarnInk
     "Tint" => Tint
     "TintStrong" => TintStrong
     "Floating" => Floating

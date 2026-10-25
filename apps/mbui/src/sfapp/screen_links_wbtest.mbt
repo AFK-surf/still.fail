@@ -160,7 +160,7 @@ test "共享调试's phone in the accent while this phone's adb is shared there,
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("共享中 · 剩余 58 分钟") is Some(_))
   // (the phone's accent, sf's narrow palette: tokens.mbt)
-  let accent = 0xE5704AFFL
+  let accent = 0xCC5A34FFL
   assert_true(shapes_named(t, "sf/icon/phone/24/").has_suffix("/\{accent}"))
 }
 

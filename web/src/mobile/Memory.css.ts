@@ -23,4 +23,5 @@ export const mMemoryChip = style({
     "&[data-on]": { background: "var(--m-ink)", color: "var(--m-bg) !important", fontWeight: "600" },
   },
 });
-globalStyle(`${mMemoryChip} span`, { fontWeight: "400", opacity: "0.6" });
+// (its count lighter in weight, in the chip's own colour: at 60% it was 3.8:1, docs/ui-panels.md 对比度)
+globalStyle(`${mMemoryChip} span`, { fontWeight: "400" });

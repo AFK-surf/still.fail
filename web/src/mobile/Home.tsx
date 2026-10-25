@@ -18,7 +18,7 @@ import { setSidebarMode, stationBase, useChatFilter, type ChatFilter } from "../
 import { useApp, useOpenPage } from "./app.tsx";
 import { FailedMark, FilterMenu, Illustration, SectionHeader, SlackMark, ticked } from "./parts.tsx";
 import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
-import { ChatMark, chatTone, jumpFromLine, stateLine, WaitingText } from "../ChatMark.tsx";
+import { ChatMark, chatTone, jumpFromLine, rowLead, stateLine, WaitingText } from "../ChatMark.tsx";
 import * as chatMarkCss from "../ChatMark.css.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
 import { RowAside } from "../RowPicture.tsx";
@@ -501,7 +501,7 @@ const ChatRow = memo(function ChatRow({ item, lead }: { item: ChatItem; lead: "a
       <span className={css.mChatLine2}>
         {/* Where it stands, when the core has words for it (奏 · …, 要你帮忙：…, 做完了), instead. */}
         <span className={css.mChatLast}>{stateLine(item)
-          ? <span className={css.mLast}><WaitingText slot alert={item.unsent === true} text={stateLine(item)!} lead={item.stateLead} leadText={item.stateLeadText} rest={item.stateRest} className={css.mLastText} /></span>
+          ? <span className={css.mLast}><WaitingText slot alert={item.unsent === true} text={stateLine(item)!} lead={rowLead(item)} leadText={item.stateLeadText} rest={item.stateRest} className={css.mLastText} /></span>
           : item.last && <LastMessage item={item} />}</span>
         <RowAside item={item} lead={lead} size={18} className={css.mRowAside} />
         <span className={css.mChatTime} data-shown={held || undefined}>{item.time?.lastActiveAt?.ago ?? ""}</span>

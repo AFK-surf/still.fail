@@ -121,7 +121,7 @@ let outside_hash : @ui.TextStyle = @ui.text_style(size=Ui, color=A(Accent, O70),
 
 ///|
 // kept across runs: a value (no field of it changes)
-let outside_title : @ui.TextStyle = @ui.text_style(size=Ui, color=Accent, wrap=false)
+let outside_title : @ui.TextStyle = @ui.text_style(size=Ui, color=AccentText, wrap=false)
 
 ///|
 /// Whose it is (refChipStation): a pill 4 after it, 1 by 6 in, the meta size, muted, on the hover's ground.

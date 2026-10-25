@@ -352,7 +352,8 @@ let ended_why : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=A(On
 
 ///|
 /// 重新打开 (Controls.kt Button at 34 high, 16 in, 12 more under the words): the ink with the page's colour on it in
-/// the dark theme, the chip with the ink on it in the light one.
+/// the dark theme, a solid light grey with the ink on it in the light one (on the screen's dark veil, not the page: the
+/// neutral ground, the ink at an opacity, came out as dark as the veil, 1.2 to 1 under its words).
 // kept across runs: a value (no field of it changes)
 let again_solid : @ui.Style = @ui.style(
   h=@sf.row_key,
@@ -365,7 +366,7 @@ let again_solid : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let again_soft : @ui.Style = again_solid.then(@ui.css("bg=Neutral"))
+let again_soft : @ui.Style = again_solid.then(@ui.css("bg=Faint"))
 
 ///|
 // kept across runs: a value (no field of it changes)

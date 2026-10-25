@@ -1,10 +1,10 @@
 ///|
 test "a person's colour as Android's avatarColor picks it: Java's hashCode of their id lowered, floorMod" {
   // "a": 97, the second
-  assert_eq(avatar_color("a"), 0x2F8F5BFFL)
+  assert_eq(avatar_color("a"), 0x248753FFL)
   assert_eq(avatar_color("A"), avatar_color("a"))
   // Java's int wraps to -2147483648 here: floorMod 6 is 4, the fifth
-  assert_eq(avatar_color("polygenelubricants"), 0x3F8C99FFL)
+  assert_eq(avatar_color("polygenelubricants"), 0x32818DFFL)
 }
 
 ///|

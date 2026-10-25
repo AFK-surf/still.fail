@@ -253,5 +253,13 @@ grip: a box holding no words, picture or icon, nor under any drawn after it) sta
 not, measured on the frame as drawn (the colour under it worked out from what was drawn before it there; loops at their
 start). A ground under words carries none of this: its words carry it. So that one colour is seen on whatever it lies
 on (the page, a card, a menu), the theme's `line` and `neutral` are the ink at an opacity, not an opaque grey: an opaque
-grey stands a step off the one ground it was chosen on and none off another. Words' and icons' contrast (WCAG's AA) are
-not checked yet.
+grey stands a step off the one ground it was chosen on and none off another.
+
+Words and icons are held to WCAG's AA by the same check: words 4.5:1 (3:1 at 24 and up, or 18.66 and up bold:
+`contrast_words_least`), measured at their faintest letter; an icon (Ctx::shapes, 48 across at most) 3:1
+(`contrast_icon_least`), at its strongest piece; a larger shape is a drawing or an outline, held as a line. Not asked:
+what is in a widget said disabled (`Ctx::semantics` `disabled`: a button that cannot be pressed says so, it is not only
+faded), what lies on a picture, what is said to be a picture (Role Image), and what draws in its own colours
+(`Ctx::own_colours`: a maker's mark, an illustration). The theme gives an ink for each colour words come in: `accent_text`
+for the accent's (the accent itself a fill's and a mark's), `warn_ink` (`WarnInk`) for warn's; `@ui.ink_on` picks the
+ink that reads on a colour a person chose.

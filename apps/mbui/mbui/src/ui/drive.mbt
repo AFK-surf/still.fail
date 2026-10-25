@@ -1204,8 +1204,7 @@ fn drive_steps(c : Ctx) -> Unit {
           next()
         } else {
           inst_owners.on = true
-          inst_owners.owner.clear()
-          inst_owners.painting = -1
+          inst_owners_clear()
           c.owe_next()
           return
         }

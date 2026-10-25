@@ -37,7 +37,7 @@ export const mAvatar = style({
 /** What was asked failed a moment ago (FailedMark): a small red round "!", tapped to say why. */
 export const mFailed = style({
   display: "inline-grid", placeItems: "center", flex: "none", alignSelf: "center", boxSizing: "border-box", borderRadius: "50%",
-  background: "var(--m-red)", color: "#fff", fontWeight: "600", lineHeight: "1", cursor: "pointer",
+  background: "var(--m-red)", color: "var(--m-on-red)", fontWeight: "600", lineHeight: "1", cursor: "pointer",
 });
 /** A segmented choice: a track that tints what it sits on, and a thumb that slides to the chosen option. */
 export const mSeg = style({
@@ -89,8 +89,8 @@ export const mSegThumb = style({
 export const mNavBack = style({
   display: "inline-flex", flexWrap: "wrap", alignItems: "center", alignContent: "flex-start", height: "32px", maxWidth: "100%", overflow: "hidden",
   gap: "8px 0", padding: "4px 6px 4px 0", border: "0", background: "none", boxSizing: "border-box",
-  borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, color: "var(--m-accent) !important",
-  fontSize: `${vars.textTitle} !important`, lineHeight: "24px",
+  borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, // own corner: the app's back button's (nav_back_box)
+  color: "var(--m-accent-ink) !important", fontSize: `${vars.textTitle} !important`, lineHeight: "24px",
   cursor: "pointer",
 });
 export const mNavBackWord = style({ whiteSpace: "nowrap" });
@@ -161,7 +161,7 @@ export const mPickRow = style({
 });
 /** A done row's check, and what it says under its name. */
 export const mPickDone = style({ color: "var(--m-green)", flex: "none" });
-globalStyle(`${mPickRow}[data-done] small`, { color: "var(--m-green)" });
+globalStyle(`${mPickRow}[data-done] small`, { color: "var(--m-green-ink)" });
 export const mPickText = style({ flex: "1", minWidth: "0", display: "flex", flexDirection: "column" });
 /** A row with notes at its end: its lines and the notes in two columns, each note on the baseline of its line. */
 export const mPickGrid = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", columnGap: "12px", alignItems: "baseline" });

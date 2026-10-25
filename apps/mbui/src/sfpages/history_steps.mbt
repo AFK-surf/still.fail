@@ -1024,7 +1024,7 @@ fn tool_part(c : @ui.Ctx, key : String, part : Json?) -> Unit {
                 fn() {
                   let ink = match mark {
                     "-" => @sf.theme().p.red
-                    "+" => @sf.theme().p.green
+                    "+" => @sf.theme().p.green_ink
                     _ => @sf.theme().p.subtle
                   }
                   if mark == "-" || mark == "+" {

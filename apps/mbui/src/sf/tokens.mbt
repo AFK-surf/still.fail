@@ -735,14 +735,14 @@ let wide_light : Palette = {
   sidebar: 0xF6F5F1FFL,
   list: 0xFBFAF9FFL,
   text: 0x24272BFFL,
-  muted: 0x646970FFL,
-  subtle: 0x73787DFFL,
+  muted: 0x565B62FFL,
+  subtle: 0x565B62FFL,
   line: 0x322D2424L,
   line_strong: 0xC1C4C9FFL,
   hover: 0x26211711L,
   selected: 0xEBE7E1FFL,
   paper: 0xF6F2EAFFL,
-  accent: 0xEF6A3CFFL,
+  accent: 0xDC5929FFL,
   accent_text: 0xA23203FFL,
   accent_bg: 0xFFEFE6FFL,
   green: 0x006A3FFFL,
@@ -777,20 +777,20 @@ let wide_dark : Palette = {
   sidebar: 0x19191BFFL,
   list: 0x1C1D20FFL,
   text: 0xE9E9EAFFL,
-  muted: 0xA3A5A9FFL,
-  subtle: 0x8C8F94FFL,
+  muted: 0xA8AAAEFFL,
+  subtle: 0xA8AAAEFFL,
   line: 0xE9E9EA19L,
   line_strong: 0x3D3F44FFL,
   hover: 0xFFFFFF0DL,
   selected: 0x323338FFL,
   paper: 0x26272BFFL,
-  accent: 0xF57E4DFFL,
+  accent: 0xE97342FFL,
   accent_text: 0xFC9B6FFFL,
   accent_bg: 0x43251AFFL,
   green: 0x68C894FFL,
   green_ink: 0x68C894FFL,
   warn_ink: 0xE6B55DFFL,
-  red: 0xF68482FFL,
+  red: 0xFB8987FFL,
   red_bg: 0x442322FFL,
   green_bg: 0x1B3426FFL,
   blue_bg: 0x1F2E47FFL,
@@ -820,16 +820,16 @@ let narrow_light : Palette = {
   raised: 0xFFFFFFFFL,
   text: 0x24272BFFL,
   // the greys and the red Android's (Theme.kt Light), what the app on a phone matches, not the narrow web's
-  muted: 0x626469FFL,
-  subtle: 0x7C7E81FFL,
+  muted: 0x585A5FFFL,
+  subtle: 0x585A5FFFL,
   line: 0x322D2424L,
-  accent: 0xE5704AFFL,
-  accent_text: 0xB9471FFFL,
+  accent: 0xCC5A34FFL,
+  accent_text: 0xAC3B10FFL,
   accent_bg: 0xFBE6DCFFL,
   green: 0x2F8F5BFFL,
-  green_ink: 0x287A4DFFL,
-  warn_ink: 0x98691EFFL,
-  red: 0xBF3E2CFFL,
+  green_ink: 0x196E42FFL,
+  warn_ink: 0x855700FFL,
+  red: 0xB1301FFFL,
   // its placeholders in its bubbles' grey, a step darker than the page
   neutral_bg: 0x322D2413L,
   card: 0xFFFFFFFFL,
@@ -850,17 +850,17 @@ let narrow_dark : Palette = {
   canvas: 0x26272BFFL,
   raised: 0x2A2C31FFL,
   text: 0xECECEDFFL,
-  muted: 0x9A9DA3FFL,
+  muted: 0xB8BBC1FFL,
   // Android's (Theme.kt Dark)
-  subtle: 0x84888FFFL,
+  subtle: 0xB8BBC1FFL,
   line: 0xECECED1FL,
-  accent: 0xEF7A55FFL,
+  accent: 0xE8734FFFL,
   accent_text: 0xF6A383FFL,
   accent_bg: 0x4A2F25FFL,
   green: 0x5CC08AFFL,
   green_ink: 0x5CC08AFFL,
-  warn_ink: 0xD9962BFFL,
-  red: 0xEB6B58FFL,
+  warn_ink: 0xDC992FFFL,
+  red: 0xFF816CFFL,
   neutral_bg: 0xECECED1BL,
   card: 0x26272BFFL,
   chip: 0x313237FFL,
@@ -1131,14 +1131,10 @@ pub fn begin(c : @ui.Ctx) -> Theme {
 }
 
 ///|
-/// A link's ink (Android's C.link, Theme.kt): the accent's darker ink on paper, the accent itself in the dark.
+/// A link's ink: the accent's ink (its darker one on paper, its lighter one in the dark), which reads in words; the
+/// accent itself in the dark was 4.3 to 1 on a raised ground (docs/ui-panels.md 对比度).
 pub fn link_ink() -> Int64 {
-  let t = theme()
-  if t.dark {
-    t.p.accent
-  } else {
-    t.p.accent_text
-  }
+  theme().p.accent_text
 }
 
 ///|
@@ -1380,13 +1376,14 @@ pub fn ui_theme() -> @ui.Theme {
     (true, false) => @ui.Theme::narrow_light()
     (true, true) => @ui.Theme::narrow_dark()
   }
-  // a link's ink as Android's C.link (Theme.kt): the accent's darker ink on paper, the accent itself in the dark
+  // a link's ink: the accent's ink (the darker one on paper, the lighter in the dark), which reads in words; the
+  // accent itself in the dark was 4.3 to 1 on a raised ground (docs/ui-panels.md 对比度)
   {
     ..base,
     text: text_roles(t.t),
     leading: leading_scale,
     radii,
-    link: if t.dark { base.accent } else { base.accent_text },
+    link: base.accent_text,
     // on a phone the greys Android's (Theme.kt C.muted, C.subtle: the narrow palette's), not mbui's own narrow theme's
     // lighter ones: what a style's Muted and Subtle say there
     muted: if t.narrow { t.p.muted } else { base.muted },
@@ -1453,7 +1450,8 @@ pub let share_paper : Int64 = 0xF6F1E9FFL
 pub let share_ink : Int64 = 0x24272BFFL
 
 ///|
-pub let share_dim : Int64 = 0x24272B99L
+/// (thinned to 68%: 4.9 to 1 on the paper, 5.2 on a white card; at 60% it was 3.9: docs/ui-panels.md 对比度)
+pub let share_dim : Int64 = 0x24272BADL
 
 ///|
 pub let share_card : Int64 = 0xFFFFFFFFL
@@ -1465,7 +1463,7 @@ pub let share_bar : Int64 = 0x24272B2EL
 ///|
 /// The rings of the subscriptions' weekly quota, one a kind, in this order: still.fail's orange, a green, a blue.
 // kept across runs: a table, never written
-pub let share_rings : Array[Int64] = [0xE5704AFFL, 0x1FA77AFFL, 0x4F74E8FFL]
+pub let share_rings : Array[Int64] = [0xCC5A34FFL, 0x1FA77AFFL, 0x4F74E8FFL]
 
 ///|
 /// A ring's turn past its first (@sf.rings: a share past 1): this much of the turn before's colour, the rest black,
@@ -1473,7 +1471,13 @@ pub let share_rings : Array[Int64] = [0xE5704AFFL, 0x1FA77AFFL, 0x4F74E8FFL]
 pub let ring_turn_keep : Double = 0.82
 
 ///|
-pub let share_orange : Int64 = 0xE5704AFFL
+/// (the light theme's accent: 3.7 to 1 on the paper, as large as the first ring's share is said in it)
+pub let share_orange : Int64 = 0xCC5A34FFL
+
+///|
+/// Words in still.fail's orange at the size of words (its name's .fail, today's date): the light theme's accent's ink,
+/// 5.5 to 1 on the paper (the orange itself 3.7: docs/ui-panels.md 对比度).
+pub let share_orange_ink : Int64 = 0xAC3B10FFL
 
 ///|
 pub let share_glow_peach : Int64 = 0xF6B38E8CL

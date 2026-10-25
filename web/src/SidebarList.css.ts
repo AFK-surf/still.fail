@@ -26,7 +26,8 @@ export const text = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr
 export const head = style({ display: "flex", alignItems: "center", gap: 8, height: 20, minWidth: 0 });
 export const title = style({
   flex: 1, ...ellipsis,
-  selectors: { [`${item}[data-away] &`]: { opacity: 0.5 } },
+  // (a station away: its name stepped back to the muted grey, not faded to half: 2.1:1, docs/ui-panels.md 对比度)
+  selectors: { [`${item}[data-away] &`]: { color: vars.muted } },
 });
 /** At the first line's end: short, and never cut (the title gives way). */
 export const end = style({

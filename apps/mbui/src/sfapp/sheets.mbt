@@ -936,7 +936,7 @@ fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = 
             name,
             match text(context, "level") {
               "red" => t.p.red
-              "amber" => 0xD9962BFFL
+              "amber" => t.p.warn_ink
               _ => t.p.text
             },
             entry,
@@ -961,7 +961,7 @@ fn agent_notes(c : @ui.Ctx, card : Json?, top : Double) -> Unit {
       c.text(
         text(Some(n), "text"),
         size=t.t.meta,
-        color=if text(Some(n), "level") == "amber" { 0xD9962BFFL } else { t.p.red },
+        color=if text(Some(n), "level") == "amber" { t.p.warn_ink } else { t.p.red },
         line=18.0,
       )
       |> ignore
@@ -1002,14 +1002,20 @@ fn job_dot(c : @ui.Ctx, tone : String) -> Unit {
 }
 
 ///|
-/// The line under a job's name (metaOf): its state's word in its dot's colour, what it said in the ink.
+/// The line under a job's name (metaOf): its state's word in its dot's colour's ink (green's, amber's, red: the dot's
+/// green read 3.2 to 1), what it said in the ink.
 fn job_meta(c : @ui.Ctx, job : Json?, size : Double) -> Unit {
   let t = @sf.theme()
-  let tint = job_tint(text(job, "tone"))
+  let word = match text(job, "tone") {
+    "up" | "live" => t.p.green_ink
+    "restart" => t.p.warn_ink
+    "fail" => t.p.red
+    _ => 0L
+  }
   let runs = items(job, "meta").map(fn(p) {
     let pv = Some(p)
     match text(pv, "kind") {
-      "word" => @ui.span(text(pv, "text"), color=tint.unwrap_or(0L))
+      "word" => @ui.span(text(pv, "text"), color=word)
       "notice" => @ui.span(text(pv, "text"), color=t.p.text)
       _ => @ui.span(text(pv, "text"))
     }
@@ -1018,7 +1024,8 @@ fn job_meta(c : @ui.Ctx, job : Json?, size : Double) -> Unit {
 }
 
 ///|
-/// A job's row (JobInfoRow): its dot on its name's line, what it is up to under it; over ones faded.
+/// A job's row (JobInfoRow): its dot on its name's line, what it is up to under it; an over one's name stepped back to
+/// the muted grey, not faded (at 55% its words were 2.3 to 1: docs/ui-panels.md 对比度).
 fn job_row(c : @ui.Ctx, key : String, job : Json?) -> Bool {
   let t = @sf.theme()
   let off = job_tint(text(job, "tone")) is None
@@ -1026,10 +1033,10 @@ fn job_row(c : @ui.Ctx, key : String, job : Json?) -> Bool {
     c,
     key,
     fn() {
-      c.box(pt=job_dot_over, opacity=if off { 0.55 } else { 1.0 }, fn() { job_dot(c, text(job, "tone")) })
-      |> ignore
-      c.box(w=Fill(1.0), gap=1.0, opacity=if off { 0.55 } else { 1.0 }, fn() {
-        c.text(text(job, "name"), size=t.t.ui, weight=500, color=t.p.text, wrap=false) |> ignore
+      c.box(pt=job_dot_over, fn() { job_dot(c, text(job, "tone")) }) |> ignore
+      c.box(w=Fill(1.0), gap=1.0, fn() {
+        c.text(text(job, "name"), size=t.t.ui, weight=500, color=if off { t.p.muted } else { t.p.text }, wrap=false)
+        |> ignore
         job_meta(c, job, 12.5)
       })
       |> ignore
@@ -1692,7 +1699,7 @@ fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
             dui.letters_open = ""
           }
           c.box(style=letters_back, id=back, fn() {
-            @sf.icon(c, "chevron-left", size=20.0, color=@sf.theme().p.accent) |> ignore
+            @sf.icon(c, "chevron-left", size=20.0, color=@sf.theme().p.accent_text) |> ignore
           })
           |> ignore
           let name = c.id("letters/chat")

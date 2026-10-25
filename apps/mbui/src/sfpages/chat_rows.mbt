@@ -37,7 +37,7 @@ fn chat_empty(c : @ui.Ctx) -> Unit {
 fn outbox_row(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Unit {
   let failed = o.state == "failed"
   c.box(style=mine_column, fn() {
-    c.box(style=if failed { outbox_words_unsent } else { outbox_words }, fn() {
+    c.box(style=outbox_words, fn() {
       quotes(c, src, here, o.quotes, o.attachments, mine=true)
       message_files(c, src, here, beside_quotes(o.quotes, o.attachments), true)
       for i, u in o.uploads {
@@ -204,7 +204,7 @@ fn unsent_button(
     Some(why) => @sf.tip(c, key, b, why)
     None => ()
   }
-  c.semantics(b, Button, id~, label~)
+  c.semantics(b, Button, id~, label~, disabled=!enabled)
   enabled && c.clicked(id)
 }
 
@@ -435,7 +435,7 @@ let unread_rule : @ui.Style = @ui.style(w=@sf.grow, h=SPx, bg=A(Accent, O50))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let unread_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Accent, wrap=false)
+let unread_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=AccentText, wrap=false)
 
 ///|
 /// The pages coming (chatOlder: 4 over, 8 under; chatNewer: 8 over, 4 under), a chat with nothing yet (chatEmpty).
@@ -455,13 +455,10 @@ let empty_row : @ui.Style = @ui.css("w=Full py=S8 align=ACenter")
 let chat_empty_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Muted)
 
 ///|
-/// What did not go, its words and files at 55%.
+/// What was sent from here, its words and files; what did not go as they are, not faded (at 55% its words were 3.4 to 1:
+/// docs/ui-panels.md 对比度), the red under it saying so.
 // kept across runs: a value (no field of it changes)
 let outbox_words : @ui.Style = @ui.css("w=Full gap=S1 align=AEnd")
-
-///|
-// kept across runs: a value (no field of it changes)
-let outbox_words_unsent : @ui.Style = outbox_words.then(@ui.css("opacity=O55"))
 
 ///|
 /// Under it (msgUnsent): 4 under, at the column's end, 2 apart; its note 6 before the buttons.

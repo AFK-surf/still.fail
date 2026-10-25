@@ -86,7 +86,7 @@ pub let large_title : @ui.TextStyle = @ui.text_style(
 pub let bad : @ui.TextStyle = @ui.text_style(color=Danger)
 
 ///|
-pub let lacking : @ui.TextStyle = @ui.text_style(color=Warn)
+pub let lacking : @ui.TextStyle = @ui.text_style(color=WarnInk)
 
 ///|
 pub let quiet : @ui.TextStyle = @ui.text_style(color=Muted)
@@ -98,7 +98,8 @@ pub let strong : @ui.TextStyle = @ui.text_style(weight=Semibold)
 pub let one_line : @ui.TextStyle = @ui.text_style(wrap=false)
 
 ///|
-pub let accent : @ui.TextStyle = @ui.text_style(color=Accent)
+/// Words in the accent: its ink (AccentText), which reads on the page; the accent itself is a mark's, a fill's.
+pub let accent : @ui.TextStyle = @ui.text_style(color=AccentText)
 
 ///|
 /// A link's words (Theme.kt C.link: the accent's darker ink on paper, the accent in the dark: ui_theme's `link`).

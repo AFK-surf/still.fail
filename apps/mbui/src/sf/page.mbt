@@ -2190,7 +2190,7 @@ let head_warn_red : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Da
 
 ///|
 // kept across runs: a value (no field of it changes)
-let head_warn_amber : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Warn, w=Full)
+let head_warn_amber : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=WarnInk, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)

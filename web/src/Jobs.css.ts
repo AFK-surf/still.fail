@@ -35,7 +35,6 @@ export const jobRow = style({
     "&:hover": { background: vars.hover },
     "&[data-selected]": { background: vars.selected },
     "&[data-static]": { cursor: "default" },
-    "&[data-off]": { opacity: ".55" },
   },
 });
 export const jobFold = style({});
@@ -43,6 +42,9 @@ export const jobText = style({ flex: "1", minWidth: "0", display: "flex", flexDi
 export const jobName = style({
   fontSize: vars.textUi, fontWeight: "500", lineHeight: "20px", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap",
+  // Over (data-off): its name stepped back to the muted grey, not the row faded (at 55% its words were 2.3:1,
+  // docs/ui-panels.md 对比度).
+  selectors: { [`${jobRow}[data-off] &`]: { color: vars.muted } },
 });
 export const jobMeta = style({
   fontSize: vars.textMeta, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",

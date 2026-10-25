@@ -141,7 +141,7 @@ let md_when : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted,
 
 ///|
 // kept across runs: a value (no field of it changes)
-let md_conflict : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Warn, w=Full)
+let md_conflict : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=WarnInk, w=Full)
 
 ///|
 /// The pages to pick between (memoryChips: 6 apart, wrapping; memoryChip: 30 high, 12 in, round, the card's ground, the

@@ -29,7 +29,8 @@ export const bareLink = style({ color: vars.blue });
 
 /** A message the agent sent: a plain card so its content (code, tables, chips) keeps its own colours. */
 /** Code blocks: a quiet frame, the language and a copy button above, highlighting in the page's own tones. */
-/** Code: a quiet tinted block, no frame; language and copy sit in the corner and come forward on hover. */
+/** Code: a quiet tinted block, no frame; language and copy sit in the corner, whole (faded until hovered, their words
+ * were 2.2:1: docs/ui-panels.md 对比度). */
 export const codeBlock = style({
   position: "relative", margin: "0 0 8px", border: "0", borderRadius: `calc(12px * ${vars.cornerScale})`,
   background: `color-mix(in srgb, ${vars.text} 4%, ${vars.canvas})`, overflow: "hidden",
@@ -38,14 +39,9 @@ export const codeBlock = style({
 export const codeBar = style({
   display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${vars.line}`,
   position: "absolute", top: "4px", right: "4px", height: "24px", padding: "0", border: "0", gap: "2px",
-  opacity: ".55", transition: `opacity ${vars.dur} ${vars.easeOut}`,
-  selectors: {
-    [`${codeBlock}:hover &`]: { opacity: "1" },
-    "&:focus-within": { opacity: "1" },
-  },
   "@media": {
     // A finger has no hover to bring the corner forward: the language and copy get a row of their own, over the code.
-    "(pointer: coarse)": { position: "static", justifyContent: "flex-end", padding: "4px 4px 0", opacity: "1" },
+    "(pointer: coarse)": { position: "static", justifyContent: "flex-end", padding: "4px 4px 0" },
   },
 });
 export const codeLang = style({
@@ -83,23 +79,25 @@ globalStyle(`${markdown} ${codeBlock} ${codePre}`, {
   margin: "0", padding: "10px 12px", borderRadius: "0", background: "none", fontSize: vars.textMeta, lineHeight: "1.55",
 });
 /** Code's colours by what each piece is (the letters of the core's `ink`, client/core-ts/src/highlight.ts SCOPES):
- * vitesse-light's, and vitesse-dark's on a dark page, as Shiki gave them. */
+ * vitesse-light's, and vitesse-dark's on a dark page, as Shiki gave them, each made to read on a code block's ground
+ * (4.5:1: its hue kept, its lightness moved the least; quotes as the words they hold, not faded; docs/ui-panels.md 对比度,
+ * apps/mbui/src/sf/ink.mbt the same). */
 const INK: Record<string, [light: string, dark: string]> = {
   a: ["#393A34", "#DBD7CAEE"], // text
-  b: ["#A0ADA0", "#758575DD"], // comment
-  c: ["#999999", "#666666"], // punctuation
-  d: ["#B56959", "#C98A7D"], // string
-  e: ["#B5695977", "#C98A7D77"], // a string's quotes
-  f: ["#2F798A", "#4C9A91"], // number
-  g: ["#1E754F", "#4D9375"], // keyword, constant.language, a tag
-  h: ["#AB5959", "#CB7676"], // storage, keyword.operator, null
-  i: ["#59873A", "#80A665"], // function
-  j: ["#B07D48", "#BD976A"], // variable
-  k: ["#A65E2B", "#C99076"], // constant, this, an option
-  l: ["#2E8F82", "#5DA994"], // type
-  m: ["#998418", "#B8A965"], // property, support
-  n: ["#99841877", "#B8A96577"], // a property's quotes
-  o: ["#22863A", "#85E89D"], // a diff's line added
+  b: ["#667266", "#869786"], // comment
+  c: ["#6F6F6F", "#939393"], // punctuation
+  d: ["#A55B4B", "#C98A7D"], // string
+  e: ["#A55B4B", "#C98A7D"], // a string's quotes
+  f: ["#2E7889", "#52A096"], // number
+  g: ["#1E754F", "#5AA081"], // keyword, constant.language, a tag
+  h: ["#A95757", "#D07B7A"], // storage, keyword.operator, null
+  i: ["#4E7B2E", "#80A665"], // function
+  j: ["#96652F", "#BD976A"], // variable
+  k: ["#A55D2A", "#C99076"], // constant, this, an option
+  l: ["#137D71", "#5DA994"], // type
+  m: ["#836E00", "#B8A965"], // property, support
+  n: ["#836E00", "#B8A965"], // a property's quotes
+  o: ["#198034", "#85E89D"], // a diff's line added
   p: ["#B31D28", "#FDAEB7"], // a diff's line removed
   q: ["#6F42C1", "#B392F0"], // a hunk's range
 };

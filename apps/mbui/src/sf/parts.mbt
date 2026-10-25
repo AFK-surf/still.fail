@@ -58,7 +58,8 @@ pub fn button(
   let (ground, line, ink) = if t.narrow {
     match tone {
       Primary => (p.text, p.text, p.bg)
-      DangerSolid => (p.red, p.red, 0xFFFFFFFFL)
+      // (white on the light theme's deep red, the page's ink on the dark one's light red: white was 2.4 to 1 there)
+      DangerSolid => (p.red, p.red, if t.dark { p.bg } else { 0xFFFFFFFFL })
       Danger => (p.chip, p.chip, p.red)
       Ghost => (alpha(p.hover, h), 0L, p.text)
       GhostDanger => (alpha(p.hover, h), 0L, p.red)
@@ -73,7 +74,7 @@ pub fn button(
       // a solid ground pointed at: a step towards the page, as the primary's (docs/ui-panels.md 悬停)
       DangerSolid => {
         let g = mix(mix(p.red, 0.85, p.canvas), h, p.red)
-        (g, g, 0xFFFFFFFFL)
+        (g, g, p.on_primary)
       }
       Ghost => (alpha(p.hover, h), 0L, p.text)
       GhostDanger => (alpha(p.hover, h), 0L, p.red)
@@ -85,7 +86,7 @@ pub fn button(
   let solid = tone == Primary || tone == DangerSolid
   // (at a sheet's foot, in a thumb's reach: its share of the foot's width, the presenters')
   let w = if w is Auto && foot_fills.val { @ui.Fill(1.0) } else { w }
-  c.box(
+  let b = c.box(
     style=reach.unwrap_or(@ui.style()),
     dir=Row,
     w~,
@@ -122,7 +123,9 @@ pub fn button(
       |> ignore
     },
   )
-  |> ignore
+  // (said a button whether it takes presses or not: one that cannot is said disabled, not left out of the tree, and its
+  // faded words are asked no contrast)
+  c.semantics(b, Button, id=if live { id } else { 0 }, label~, disabled=!live)
   live && c.clicked(id)
 }
 

@@ -103,7 +103,7 @@ export const blockedAction = style({
   },
 });
 // In a notice (one with none of the viewer's messages waiting for it): apart from its words, in the pill's colour.
-globalStyle(`${msgSystemBox} ${blockedDot}`, { margin: "0 6px", color: "inherit", opacity: ".6" });
+globalStyle(`${msgSystemBox} ${blockedDot}`, { margin: "0 6px", color: "inherit" });
 globalStyle(`${msgSystemBox} ${blockedAction}`, { color: "inherit", textDecoration: "underline", textUnderlineOffset: "3px" });
 /** What went wrong in a notice about a profile: a link to that profile's page, in the pill's own colour, underlined. */
 export const msgSystemLink = style({ textDecoration: "underline", textUnderlineOffset: "3px" });

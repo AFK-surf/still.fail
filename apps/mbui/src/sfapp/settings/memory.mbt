@@ -193,7 +193,8 @@ fn doc_chips(
       c.text(words, size=t.t.meta, weight=if on { 600 } else { 400 }, color=if on { t.p.bg } else { t.p.text }, wrap=false)
       |> ignore
       if much != "" {
-        c.text("  " + much, size=t.t.meta, color=@sf.alpha(if on { t.p.bg } else { t.p.text }, 0.6), wrap=false) |> ignore
+        // (its size in the chip's own colour: at 60% it was 3.8 to 1, docs/ui-panels.md 对比度)
+        c.text("  " + much, size=t.t.meta, color=if on { t.p.bg } else { t.p.text }, wrap=false) |> ignore
       }
     })
     |> ignore

@@ -80,7 +80,7 @@ export function ModelMark({ maker, runtime, size = 36, state, around = "var(--m-
 
 // ── people ─────────────────────────────────────────────────────────────
 
-const AVATAR = ["#5B7BB2", "#2F8F5B", "#B9471F", "#8A6BB0", "#3F8C99", "#B0842F"];
+const AVATAR = ["#5877AE", "#248753", "#B9471F", "#8768AD", "#32818D", "#9A6F11"];
 
 /** Java's String.hashCode, as Android picks an avatar's colour, so a person has the same colour on both. */
 function javaHash(text: string): number {

@@ -37,8 +37,7 @@ fn reset_globals() -> Unit {
   corners_hold.val = true
   text_runs.on = false
   inst_owners.on = false
-  inst_owners.painting = -1
-  inst_owners.owner.clear()
+  inst_owners_clear()
   text_runs.runs.clear()
   desk_reset()
   tester_size.val = None

@@ -1,6 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
 import { btnDangerSolid, btnPrimary } from "@stillfail/ui/styles/controls.css.ts";
 
 export const page = style({
@@ -23,9 +22,6 @@ export const identityText = style({ flex: "1", minWidth: "0" });
 export const identityName = style({
   display: "flex", alignItems: "center", gap: "4px", margin: "0", fontSize: vars.textHeading, lineHeight: "34px", fontWeight: "600",
 });
-// Its name's buttons (an edit's pencil) stand back until the name is pointed at.
-globalStyle(`${identityName} ${iconBtn}`, { opacity: ".55" });
-globalStyle(`${identityName}:hover ${iconBtn}`, { opacity: "1" });
 export const identitySub = style({
   display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px 14px", margin: "6px 0 0", color: vars.muted,
   fontSize: vars.textUi, lineHeight: "20px",

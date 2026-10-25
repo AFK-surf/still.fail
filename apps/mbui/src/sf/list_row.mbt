@@ -7,7 +7,7 @@
 /// Row `id` of a list standing `at`, on `ground` (lit, pressed or pointed at: the caller's): `mark` beside its first
 /// line where it has one (a station's, a profile's), its first line (`head`: its title and what is at its end), the lines
 /// under it (`under`), then `after` over it all (a ripple). `high`: as high as a chat's row always is (the theme's
-/// `row`), else as what it holds (`item`); `faded`: its words faded (a chat settled); `end_room`: room kept at its
+/// `row`), else as what it holds (`item`); `end_room`: room kept at its
 /// first line's end (for what a caller lays over it there: 归档); `corner`: what stands in its foot's end corner (a
 /// chat's people and agents), `corner_w` wide, placed there by the corner rule: where its ground is rounded (a side
 /// column's), as far in from the row's end and foot as makes it concentric with the row's corner (the theme's
@@ -24,7 +24,6 @@ pub fn list_row(
   under : () -> Unit,
   mark? : () -> Unit,
   high? : Bool = false,
-  faded? : Bool = false,
   end_room? : Double = 0.0,
   corner? : () -> Unit,
   corner_w? : Double = 0.0,
@@ -48,7 +47,7 @@ pub fn list_row(
       Some(m) => c.box(style=list_row_mark.then(line), m) |> ignore
       None => ()
     }
-    c.box(style=if faded { l.text_settled } else { l.text }, fn() {
+    c.box(style=l.text, fn() {
       c.box(style=if end_room > 0.0 { l.head.then(@ui.style(pr=room(end_room))) } else { l.head }, head) |> ignore
       match (corner, at) {
         // (the room what stands in the corner keeps at the end of the lines under the first)

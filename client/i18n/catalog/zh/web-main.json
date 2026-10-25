@@ -172,6 +172,7 @@
   "web-main.chatMark.busy": "工作中",
   "web-main.chatMark.done": "已完成，有新消息",
   "web-main.chatMark.other": "等待他人",
+  "web-main.chatMark.settled": "推荐归档",
   "web-main.chatMark.wait": "等待你处理",
   "web-main.chatRef.noMatch": "没有标题匹配的对话",
   "web-main.chatRef.none": "此 station 上没有其他对话",

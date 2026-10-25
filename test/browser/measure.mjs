@@ -201,20 +201,21 @@ export function panels(mark = false) {
 
 /**
  * Contrast (docs/ui-panels.md「对比度」): what the page draws stands off what it is drawn on far enough to be seen, as
- * mbui's Tester::contrast_faults asks of the app (its contrast.mbt). What is drawn with nothing in it, its ground or,
- * where that does not show, its edge alone saying what it is (a gauge's cell, a track, a line, a placeholder's block, a
- * grip), at least 1.25:1 (WCAG 2's ratio). A ground under words, a picture or an icon is not asked: what is in it
+ * mbui's Tester::contrast_faults asks of the app (its contrast.mbt). Words as WCAG 2's AA asks: 4.5:1, 3:1 large (24px
+ * and up, 18.66px and up bold); an icon (an svg) 3:1, its non-text contrast. What is drawn with nothing in it, its
+ * ground or, where that does not show, its edge alone saying what it is (a gauge's cell, a track, a line, a
+ * placeholder's block, a grip), at least 1.25:1 (WCAG 2's ratio). A ground under words, a picture or an icon is not asked: what is in it
  * carries it. Each where it is drawn, against what the browser stacks under it there (each ground as faint as what it
  * is in has made it); what lies on a picture or a video, or under something drawn over it (a dialog's scrim, a bar's
  * glass), is not asked, nor what is disabled, nor what dims the whole page, nor a ground cut out of one under it (a ring
  * round a dot, in the colour of a ground further down), nor a field (its words say it is one), nor a drawing of something
- * else ([data-depicts]: another system's screen). What loops (a placeholder's breath) is measured at its start, where it
+ * else in its own colours ([data-depicts]: another system's screen, a maker's logo). What loops (a placeholder's breath) is measured at its start, where it
  * is seen at its strongest. What is on its way, or lies on what is (a scrollbar's thumb fading in, a mark over another
  * fading out, a transition, an animation that ends), is not asked until all of it there is where it goes: half way it
  * is neither what it was nor what it comes to, and what it comes to may be gone (the page removes what faded out).
  */
 export function contrast(mark = false) {
-  const MARK = 1.25;
+  const WORDS = 4.5, LARGE = 3, ICON = 3, MARK = 1.25;
   const say = (el, why) => { wrong.push(why); if (mark) el.setAttribute('data-off', why); };
   const wrong = [];
   const px = (v) => parseFloat(v) || 0;
@@ -297,12 +298,72 @@ export function contrast(mark = false) {
   // (what loops paused meanwhile: what still runs ends: on its way)
   const moving = (el) => { for (let n = el; n; n = n.parentElement) if (n.getAnimations().some((a) => a.playState === 'running')) return true; return false; };
   let measured = 0;
+  const off = ':disabled, [aria-disabled="true"]';
   try {
+    // Words: each run of them, at its first line's middle, on what is under them there (their own ground too).
+    const texts = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const range = document.createRange();
+    const said = new Set();
+    for (let t; (t = texts.nextNode());) {
+      const el = t.parentElement;
+      if (!el || !t.data.trim() || said.has(el)) continue;
+      const cs = getComputedStyle(el);
+      if (cs.visibility !== 'visible' || el.closest(`${off}, [data-depicts]`)) continue;
+      range.selectNodeContents(t);
+      const r = [...range.getClientRects()].find((q) => q.width > 1 && q.height > 1);
+      if (!r) continue;
+      const x = r.left + r.width / 2, y = r.top + r.height / 2;
+      if (!onScreen(x, y)) continue;
+      const stack = document.elementsFromPoint(x, y);
+      const at = stack.indexOf(el);
+      if (at < 0 || stack.slice(at).some(moving) || covered(stack, at, el)) continue;
+      const g = ground(stack, at - 1);
+      const [r0, g0, b0, a0] = rgba(cs.color);
+      // (words faded out whole, a hidden copy's, are not drawn)
+      if (!g || a0 * faint(el) <= 0.002) continue;
+      said.add(el);
+      measured++;
+      const shown = laid(g.c, [r0, g0, b0], a0 * faint(el));
+      const size = px(cs.fontSize), large = size >= 24 || (size >= 18.66 && Number(cs.fontWeight) >= 700);
+      const least = large ? LARGE : WORDS, k = ratio(shown, g.c);
+      if (k < least - 0.005) say(el, `${name(el)}: words "${t.data.trim().slice(0, 24)}" ${size}px ${hex(shown)} on ${hex(g.c)}: ${k.toFixed(2)}:1, under ${least}`);
+    }
     for (const el of document.querySelectorAll('body *')) {
       const cs = getComputedStyle(el);
       if (cs.visibility !== 'visible' || cs.display === 'none' || el.closest('[data-depicts]')) continue;
       const b = el.getBoundingClientRect();
       if (b.width < 1 || b.height < 1) continue;
+      // An icon: its strokes' colour, or its fill's, on what is under it (its own ground too).
+      if (el.tagName.toLowerCase() === 'svg' && !el.parentElement?.closest('svg')) {
+        const x = b.left + b.width / 2, y = b.top + b.height / 2;
+        if (!onScreen(x, y) || el.closest(`${off}, [data-depicts]`)) continue;
+        const stack = document.elementsFromPoint(x, y);
+        const at = stack.findIndex((u) => u === el || el.contains(u));
+        const own = stack.indexOf(el) >= 0 ? stack.indexOf(el) : at;
+        if (at < 0 || stack.slice(at).some(moving) || covered(stack, own, el)) continue;
+        const g = ground(stack, own - 1);
+        if (!g || faint(el) <= 0.002) continue;
+        // (its parts' strokes and fills, each as drawn: seen by its strongest; a part in the ground's own colour is cut
+        // out of it, no ink)
+        let best = null;
+        for (const part of el.querySelectorAll('path, circle, ellipse, rect, line, polyline, polygon, text, use')) {
+          const ps = getComputedStyle(part);
+          if (ps.display === 'none' || ps.visibility !== 'visible') continue;
+          for (const [ink, o] of [[ps.stroke, px(ps.strokeWidth) > 0 ? Number(ps.strokeOpacity) : 0], [ps.fill, Number(ps.fillOpacity)]]) {
+            if (!ink || ink === 'none' || o <= 0) continue;
+            const [r0, g0, b0, a0] = rgba(ink);
+            if (a0 * o <= 0.002) continue;
+            const shown = laid(g.c, [r0, g0, b0], a0 * o * Number(ps.opacity) * faint(el));
+            if (same(shown, g.c)) continue;
+            const k = ratio(shown, g.c);
+            if (!best || k > best.k) best = { k, shown };
+          }
+        }
+        if (!best) continue;
+        measured++;
+        if (best.k < ICON - 0.005) say(el, `${name(el.parentElement ?? el)}: icon ${Math.round(b.width)}x${Math.round(b.height)} ${hex(best.shown)} on ${hex(g.c)}: ${best.k.toFixed(2)}:1, under ${ICON}`);
+        continue;
+      }
       if (el.closest('svg')) continue;
       // What dims the whole page (a dialog's scrim) is no mark, nor a blot blurred to no edge (a picture's colours drifting
       // while it comes).

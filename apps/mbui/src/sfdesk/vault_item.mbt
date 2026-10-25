@@ -276,7 +276,7 @@ let vi_mark_glyph : Double = 24.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vi_risk_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Warn, w=Full)
+let vi_risk_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=WarnInk, w=Full)
 
 ///|
 /// Its fields (fields: 14 apart; a field its name over its line, 4 apart).

@@ -347,7 +347,7 @@ fn net_line(c : @ui.Ctx, net : Json?) -> Unit {
   let tone = fn(f : Json?) {
     match text(f, "level") {
       "red" => t.p.red
-      "amber" => warn
+      "amber" => t.p.warn_ink
       _ => t.p.text
     }
   }

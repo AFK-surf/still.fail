@@ -184,7 +184,7 @@ fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     c.box(style=pic_head, fn() {
       @sf.drawable(c, "stillfail_mark", pic_mark) |> ignore
       c.box(style=pic_grow, fn() {
-        c.rich([@ui.span("still"), @ui.span(".fail", color=@sf.share_orange)], style=pic_brand) |> ignore
+        c.rich([@ui.span("still"), @ui.span(".fail", color=@sf.share_orange_ink)], style=pic_brand) |> ignore
       })
       |> ignore
       c.text(text(fleet, "at"), style=pic_at) |> ignore
@@ -510,7 +510,7 @@ let pic_day_label : @ui.TextStyle = @ui.text_style(size=Caption, color=Data(@sf.
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pic_day_today : @ui.TextStyle = @ui.text_style(size=Caption, weight=Bold, color=Data(@sf.share_orange), wrap=false)
+let pic_day_today : @ui.TextStyle = @ui.text_style(size=Caption, weight=Bold, color=Data(@sf.share_orange_ink), wrap=false)
 
 ///|
 /// The chats at work now: a dot, their number in words, where they are.

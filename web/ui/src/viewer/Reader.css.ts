@@ -12,7 +12,7 @@ const inkOver = { backgroundImage: `linear-gradient(${ink}, ${ink})` };
  * The papers, of still.fail's own grounds: the phone's warm page and its night (mobile/styles/root.css.ts), the desktop's
  * white canvas. Each sets the reader's ink, the bars' raised ground and the accent on it.
  */
-const light = { "--r-ink": "#24272B", "--r-muted": "#7A7D83", "--r-line": "#E7E3DC", "--r-accent": "#E5704A" };
+const light = { "--r-ink": "#24272B", "--r-muted": "#62656B", "--r-line": "#E7E3DC", "--r-accent": "#CC5A34" };
 /** The papers, of still.fail's grounds: white the phone's warm page, 护眼 its green as a tint of it, 浅灰 its ink as one,
  *  night its dark page; the bars on each the raised ground over it. */
 export const PAPER_BG = {
@@ -25,7 +25,7 @@ const PAPER = {
   white: { ...light, "--r-bg": PAPER_BG.white, "--r-raised": "#FFFFFF" },
   green: { ...light, "--r-ink": "#24302A", "--r-bg": PAPER_BG.green, "--r-raised": "color-mix(in srgb, #2F8F5B 6%, #FFFFFF)", "--r-accent": "#2F8F5B" },
   grey: { ...light, "--r-bg": PAPER_BG.grey, "--r-raised": "#FFFFFF" },
-  night: { "--r-bg": PAPER_BG.night, "--r-ink": "color-mix(in srgb, #ECECED 88%, #1B1C1F)", "--r-muted": "#9A9DA3", "--r-raised": "#2A2C31", "--r-line": "#34353A", "--r-accent": "#EF7A55" },
+  night: { "--r-bg": PAPER_BG.night, "--r-ink": "color-mix(in srgb, #ECECED 88%, #1B1C1F)", "--r-muted": "#9A9DA3", "--r-raised": "#2A2C31", "--r-line": "#34353A", "--r-accent": "#E8734F" },
 };
 
 export const reader = style({

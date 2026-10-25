@@ -297,7 +297,7 @@ let place_trouble_red : @ui.TextStyle = @ui.text_style(color=Danger)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let place_trouble_amber : @ui.TextStyle = @ui.text_style(color=Warn)
+let place_trouble_amber : @ui.TextStyle = @ui.text_style(color=WarnInk)
 
 ///|
 // kept across runs: a value (no field of it changes)
