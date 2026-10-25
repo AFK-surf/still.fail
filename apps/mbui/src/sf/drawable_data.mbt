@@ -554,6 +554,23 @@ let drawables : Map[String, @pixels.Vector] = {
       },
     ],
   },
+  "maker_hermes": {
+    w: 24.0,
+    h: 24.0,
+    layers: [
+      {
+        d: "M6,4v16M18,4v16M6,12h12",
+        fill: 0x00000000L,
+        stroke: 0x000000FFL,
+        width: 2.0,
+        even_odd: false,
+        sx: 1.0,
+        sy: 1.0,
+        tx: 0.0,
+        ty: 0.0,
+      },
+    ],
+  },
   "slack": {
     w: 54.0,
     h: 54.0,

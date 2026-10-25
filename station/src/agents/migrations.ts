@@ -78,6 +78,7 @@ export const NOTES: [number, string][] = [
   [71, "In a still.fail chat a Markdown link or image with a relative path (`[film](films/a.mp4)`) now names a file in your workspace and attaches it, as an absolute path does; one naming no file there (nor a file you attach with files, by its name) is refused before posting. Before, a relative link went out as it was, a link no one could open: if you posted files so, post them again."],
   [72, "A chat begun in a direct message (Slack or Feishu) is private to the people in it: other chats' agents cannot list, read or search it, nor read its channel with slack_api or feishu_api, and the still.fail app shows it to them alone; the chats it opens are private to them too and only on this station. In such a chat, do not carry what is said there into chats others see unless its people ask you to."],
   [73, "When the station's disk runs low, archived chats' workspaces are emptied before their week is up, the longest archived first (the files sent in each chat stay): push or move elsewhere what must outlive a chat before it ends."],
+  [74, "Hermes Agent is available on stations with Hermes 0.21.7 or newer, its ACP and MCP dependencies installed, and a configured Hermes profile: chat_create takes runtime \"hermes\". Its provider and model are configured in that profile's Hermes home or explicit variables; incoming messages wait for its current turn to end."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

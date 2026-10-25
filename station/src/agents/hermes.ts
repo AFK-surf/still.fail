@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { peerHttpBase } from "../tools/http.ts";
-import { LiveFromAcp, acpCall, chars, type AcpLiveState } from "./live.ts";
+import { LiveFromAcp, chars, type AcpLiveState } from "./live.ts";
 import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
 import { expandRoute, profileEnv, profileModel } from "./profiles.ts";
 import { TOOL_SERVERS, cleanEnv, unreachable, uuid, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
@@ -19,6 +19,13 @@ export const SESSIONS = "sessions";
 const INIT = "init";
 const OPEN = "open";
 const PROMPT = "prompt:";
+
+/// Hermes' ACP title is `<tool_name>: <argument preview>` (acp_adapter/tools.py). The live and transcript readers
+/// need the tool's name, notably to recognise chat_post; its arguments remain in rawInput, not in the name.
+function hermesUpdate(update: Json): Json {
+  if (update?.sessionUpdate !== "tool_call" || typeof update.title !== "string") return update;
+  return { ...update, title: update.title.split(": ", 1)[0] };
+}
 
 /// What failed a turn, from what Hermes said of it.
 export function classifyFailure(text: string): FailureReason {
@@ -92,7 +99,7 @@ export class HermesDriver implements AgentDriver {
     return "hermes";
   }
 
-  async open(options: OpenOptions, events: (event: RuntimeEvent) => void): Promise<AgentSession> {
+  async open(options: OpenOptions, events: (event: RuntimeEvent) => void): Promise<HermesSession> {
     if (options.resume !== undefined && !/^[a-zA-Z0-9_-]+$/.test(options.resume)) throw new Error("invalid Hermes session id");
     const home = options.profile.home;
     const sessions = join(hermesHome(home), SESSIONS);
@@ -108,19 +115,23 @@ export class HermesDriver implements AgentDriver {
     session.attach(await AgentProcess.start(this.data, runnerId("hermes", options.key), this.command, ["acp"], hermesEnv(options), options.cwd, session.processOptions(`hermes ${options.key}`)));
     this.live.add(session);
     try {
-      await session.request(INIT, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "still.fail", version: "1" } });
+      const initialized = await session.request(INIT, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "still.fail", version: "1" } });
+      // Older ACP adapters omit completion updates for tools invoked through Hermes' discovery bridge.
+      // That loses their results and disconnection signals; require the adapter that reports both ends of a call.
+      const version = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(initialized.result?.agentInfo?.version ?? "");
+      if (!version || (+version[1] === 0 && (+version[2] < 21 || (+version[2] === 21 && +version[3] < 7)))) {
+        throw new Error("Hermes Agent 需要 0.21.7 或更新版本；请先更新 Hermes，再重试。");
+      }
       const servers = mcpServers(options.mcpUrl, options.mcpToken);
       const opening = { cwd: options.cwd, mcpServers: servers };
       if (options.resume !== undefined) {
         session.named(options.resume);
-        const loaded = await session.request(OPEN, "session/load", { sessionId: options.resume, ...opening });
-        
+        await session.request(OPEN, "session/load", { sessionId: options.resume, ...opening });
       } else {
         const opened = await session.request(OPEN, "session/new", opening);
         const id = opened?.result?.sessionId;
         if (typeof id !== "string" || id === "") throw new Error("Hermes named no session");
         session.named(id);
-        
         session.keep({ type: "session", id, cwd: options.cwd });
       }
       session.opened();
@@ -132,7 +143,7 @@ export class HermesDriver implements AgentDriver {
     return session;
   }
 
-  async adopt(options: OpenOptions, snapshot: unknown | null, events: (event: RuntimeEvent) => void): Promise<AgentSession> {
+  async adopt(options: OpenOptions, snapshot: unknown | null, events: (event: RuntimeEvent) => void): Promise<HermesSession> {
     const handed = snapshot as HermesSnapshot | null;
     const id = handed?.runner ?? runnerId("hermes", options.key);
     const info = findRunner(this.data, id);
@@ -161,8 +172,9 @@ export class HermesDriver implements AgentDriver {
           if (typeof message.result?.sessionId === "string") sessionId = message.result.sessionId;
         } else if (open && message.method === "session/update" && message.params?.sessionId === sessionId && turnStep(message.params?.update)) {
           turn.busy = true;
-          live.feed(message.params?.update);
-          partial.push(message.params?.update);
+          const update = hermesUpdate(message.params?.update);
+          live.feed(update);
+          partial.push(update);
         } else if (typeof message.id === "string" && message.id.startsWith(PROMPT)) {
           turn.busy = false;
           live.ended();
@@ -214,8 +226,6 @@ export class HermesSession implements AgentSession {
   private events: (event: RuntimeEvent) => void;
   /// Requests of ours waiting for their answer (not prompts: their answer ends the turn).
   private waiting = new Map<string, { resolve: (message: Json) => void; reject: (error: Error) => void }>();
-  /// Its calls to the station's tools not answered yet.
-  private calls = new Set<string>();
   /// Where the transcript is kept (the shared sessions).
   private sessions: string;
   /// The selected Hermes model, null when using its configured default.
@@ -323,10 +333,11 @@ export class HermesSession implements AgentSession {
     if (message.method === "session/update") {
       // Another session's (a subagent's) steps are not shown; nor the past session/load says again.
       if (this.loading || message.params?.sessionId !== this.sessionId) return;
-      const update = message.params?.update;
+      const update = hermesUpdate(message.params?.update);
+      // Read the open call before transcribe removes a completed one; this same map survives handover and crash.
+      const lost = this.toolsLost(update);
       this.transcribe(update);
       for (const event of this.live.feed(update)) this.events({ type: "live", event });
-      const lost = this.toolsLost(update);
       if (lost !== null) this.events({ type: "toolsLost", why: lost });
       return;
     }
@@ -366,6 +377,7 @@ export class HermesSession implements AgentSession {
     this.turn.aborting = false;
     this.owner = null;
     this.keepSaid();
+    this.open.clear();
     this.keep({ type: "end", status: outcome.kind === "completed" ? "finished" : outcome.kind === "aborted" ? "cancelled" : "error", ...(outcome.kind === "failed" ? { error: { message: outcome.message } } : {}) });
     for (const event of this.live.ended()) this.events({ type: "live", event });
     this.events({ type: "turnEnded", outcome });
@@ -388,8 +400,7 @@ export class HermesSession implements AgentSession {
       if (callId === null) return;
       this.keepSaid();
       if (kind === "tool_call" && !this.open.has(callId)) {
-        const [name, input] = acpCall(String(update.title ?? ""), update.rawInput ?? null);
-        this.open.set(callId, { name, input });
+        this.open.set(callId, { name: String(update.title ?? ""), input: update.rawInput ?? null });
       }
       const call = this.open.get(callId);
       if (call && (update.status === "completed" || update.status === "failed")) {
@@ -411,16 +422,13 @@ export class HermesSession implements AgentSession {
   /// What an update says of the station's tools being out of reach (null: nothing): a call to one of them failed as
   /// unreachable.
   private toolsLost(update: Json): string | null {
-    const kind = update?.sessionUpdate;
     const callId = typeof update?.toolCallId === "string" ? update.toolCallId : undefined;
     if (callId === undefined) return null;
-    const named = String(update.title ?? "");
-    if (kind === "tool_call" && TOOL_SERVERS.some((s) => named.startsWith(`mcp__${s}__`))) this.calls.add(callId);
-    if ((kind === "tool_call" || kind === "tool_call_update") && update.status === "failed" && this.calls.delete(callId)) {
+    const named = this.open.get(callId)?.name ?? String(update.title ?? "");
+    if (update.status === "failed" && TOOL_SERVERS.some((s) => named.startsWith(`mcp__${s}__`))) {
       const text = (Array.isArray(update.content) ? update.content : []).map((c: Json) => c?.content?.text ?? c?.text ?? "").join("\n");
       if (unreachable(text) || /failed to connect to mcp server/i.test(text)) return chars(text, 300);
     }
-    if (update.status === "completed") this.calls.delete(callId);
     return null;
   }
 

@@ -1,10 +1,10 @@
 # Hermes Agent as a runtime
 
-Hermes Agent runs through `hermes acp` (ACP JSON-RPC over stdio), one process per still.fail session. The driver is `station/src/agents/hermes.ts`. Tested against Hermes **0.21.3**, including a real ACP session, a call through the supplied HTTP MCP server, and loading the persisted session after restarting the process. Protocol reference: [Hermes ACP host integration](https://hermes-agent.nousresearch.com/docs/user-guide/features/acp).
+Hermes Agent runs through `hermes acp` (ACP JSON-RPC over stdio), one process per still.fail session. The driver is `station/src/agents/hermes.ts`. Requires Hermes **0.21.7** or newer ([v0.21.7](https://github.com/NousResearch/hermes-agent/tree/v0.21.7)). Older adapters omit completion updates for some tools reached through discovery, losing results in history; the driver rejects these versions before starting a session. Protocol reference: [Hermes ACP host integration](https://hermes-agent.nousresearch.com/docs/user-guide/features/acp).
 
 ## Setup
 
-Install Hermes and its ACP dependency on the station, following Hermes' installation instructions; `hermes acp --check` must pass. The station detects `hermes` on its PATH. Hermes manages its installation and updates; the station does not run an npm or Codex installer for it.
+Install Hermes with both its ACP and MCP dependencies on the station, following Hermes' installation instructions; for the v0.21.7 uv checkout, use `uv sync --frozen --extra acp --extra mcp --python 3.14`. `hermes acp --check` checks ACP, but the separate MCP dependency is also required for station tools. The station detects `hermes` on its PATH. Hermes manages its installation and updates; the station does not run an npm or Codex installer for it.
 
 In Accounts → Add account → Custom variables, choose **Hermes Agent**. It is offered only by stations that advertise this runtime. Use an `env` profile. A minimal profile in the station's `config.json` is:
 
@@ -25,7 +25,7 @@ The model ID is an example; use one your configured provider offers. Configure H
 - Initialize ACP, then `session/new` or `session/load`, with the session's working directory and the still.fail HTTP MCP server. Its bearer token is supplied as an HTTP header, never embedded in the prompt.
 - If a model is selected, wait for `session/set_model` to succeed before accepting a turn. Leave it unset to use Hermes' default.
 - Each `session/prompt` contains the station's instructions as an explicit context block followed by the incoming message. ACP has no portable system-prompt parameter; these are prompt context, not a replacement for Hermes' system prompt. The context names the station's shared memory and skills; shared skills are also linked into the profile's Hermes home. Nothing is written into the user's project.
-- Text, thoughts and tool calls stream through `session/update`. The prompt's response ends the turn. `session/cancel` interrupts it. Messages arriving during a turn stay queued in still.fail: Hermes versions differ in how concurrent prompts redirect or queue work.
+- Text, thoughts and tool calls stream through `session/update`. Hermes adds an argument preview to a tool's display title; the driver separates it from the tool name so live views and history recognise station tools. The prompt's response ends the turn. `session/cancel` interrupts it. Messages arriving during a turn stay queued in still.fail: Hermes versions differ in how concurrent prompts redirect or queue work.
 - Permission requests select `allow_once` only, matching the station's unattended agent execution without creating permanent Hermes allowlist entries. Unsupported client requests return a protocol error rather than hanging.
 - Runners preserve running processes across station handover. Snapshots keep partial text and unfinished tools. Crash adoption reconstructs them from acknowledged ACP output. Loading a native session ignores the history replay so it is not recorded twice.
 
@@ -38,4 +38,4 @@ node scripts/native.ts run runner mesh archive-rs -- node --test station/test/he
 node scripts/native.ts run runner -- node station/test/hermes-smoke.ts
 ```
 
-The first runs a strict fake ACP peer under the real runner, covering tools, model selection, instructions, cancellation, failure classification, resumption, handover and crash adoption. The second requires an installed Hermes with ACP and uses a temporary isolated Hermes home, a local deterministic OpenAI-compatible server and a local MCP endpoint. It checks real Hermes tool execution and native resume without calling a paid model or using an existing account.
+The first runs a strict fake ACP peer under the real runner, covering tools, model selection, instructions, cancellation, failure classification, resumption, handover and crash adoption, including a pending station tool that disconnects during recovery. The second requires an installed Hermes with ACP and MCP and uses a temporary isolated Hermes home, a local deterministic OpenAI-compatible server and a local MCP endpoint. It checks authenticated tool execution, two completed turns, the previous messages in a resumed model request, and readable history without duplicates. It does not call a paid model or use an existing account.

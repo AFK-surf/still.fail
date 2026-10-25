@@ -69,6 +69,7 @@ pub fn provider_mark(c : @ui.Ctx, runtime : String, kind : String, size : Double
       "grok" => "xai"
       "cursor" => "cursor"
       "devin" => "devin"
+      "hermes" => "hermes"
       _ => "openai"
     }
   }

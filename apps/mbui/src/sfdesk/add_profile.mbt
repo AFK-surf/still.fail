@@ -247,8 +247,8 @@ fn provider_group(c : @ui.Ctx, g : Json?, pick : (String) -> Unit) -> Unit {
                 @settings.provider_mark(
                   c,
                   match text(pv, "runtime") {
-                    "codex" | "dsh" | "grok" | "cursor" | "devin" as rt => rt
-                    _ => "claude"
+                    "" => "claude"
+                    rt => rt
                   },
                   match text(pv, "kind") {
                     "" => "api-provider"
