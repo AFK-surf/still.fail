@@ -50,7 +50,7 @@ let band_new_bar : @ui.Style = @ui.css("row w=Full pl=S2 pr=S1_5 pt=S1_5 pb=S1_5
 /// corner as far in as makes it concentric with it (a circle 32 across: @sf.capsule_fit_room), under the band's top row;
 /// where the corner is too square for that (it follows a round window), where it stands in the wide frame.
 fn band_new_tape() -> @ui.Style {
-  let corner = @sf.tape_side_corners()[1]
+  let corner = @sf.tape_side_corners()[1].radius()
   nav_new.then(
     @ui.style(
       pr=@sf.capsule_fit_room(corner, filter_side, band_new_end),
@@ -73,7 +73,7 @@ let filter_side : Double = 32.0
 ///|
 /// How much taller 新建对话's row is in a panel of the tape (band_new_tape over nav_new's 6).
 fn band_new_tape_over() -> Double {
-  @sf.capsule_fit(@sf.tape_side_corners()[1], filter_side, side_top_web + band_new_top) - side_top_web - band_new_top
+  @sf.capsule_fit(@sf.tape_side_corners()[1].radius(), filter_side, side_top_web + band_new_top) - side_top_web - band_new_top
 }
 
 ///|

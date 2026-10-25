@@ -144,6 +144,24 @@ nothing else gives way:
     when it changes as it is laid out). The library's `@sf.tools_row` is a row of tools whose ⋯ does that;
   - what is cut or scrolled by its own box: `clip`, `sideways`.
 
+## Corners linked
+
+A corner says where its radius comes from (`CornerOf`, ui/corner_of.mbt), not a number worked out where it is used:
+
+- the roots: `Window`, the window's corner as the system draws it now (`@hostapi.window_corner`: 0 square, maximized,
+  filling the screen), and `Own(r)`, a number of its own (a theme's ladder);
+- every other corner `Follow(from, inset, alone)`: `from` followed `inset` in from its edges, concentric with it where
+  the theme's ranges let a corner be so round and stand so far in (`Theme::corner_fit`), else `alone`, as round as it
+  is standing alone.
+
+A box takes one as its radius (`Radius::Linked`, each corner its own with `Radius::LinkedEach`); its radius is read
+each frame, so the window's corner changing (maximized, another system) changes the whole chain. Where a linked box
+lies in its container's corner, the corner rule (corners.mbt `corner_faults`) holds it to its link: as far in from the
+container's edges as its link's inset, and the container's corner there the one it follows. So a panel and what is
+drawn in it can not drift apart: still.fail's tape panels and closed bar follow the window, the rail's grounds follow
+the bar or the panel they stand in (src/sf/tokens.mbt `window_follow`, `tape_corners`, `closed_bar_of`,
+`rail_ground_radius`).
+
 ## The three rules
 
 1. In one `style(…)` each property is said once. Padding from the finer to the coarser: `pl` `pr` `pt` `pb` over

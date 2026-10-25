@@ -212,6 +212,21 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       if c.cut_round_at(i, p, k) {
         continue
       }
+      // linked (Radius::Linked, corner_of.mbt) and following what it is linked to: held to its link, as far in from
+      // the container's edges as the link says, the container's corner there the one it follows
+      match b.links {
+        Some(ls) =>
+          match (ls[k].inset(), ls[k].source()) {
+            (Some(e), Some(src)) if (dx - e).abs() > 0.5 || (dy - e).abs() > 0.5 || (ra - src).abs() > 0.5 => {
+              out.push(
+                "\{c.named(i)} (corner \{rb}) in the \{corner_names[k]} of \{c.named(p)} (corner \{ra}): linked to follow a corner \{src} round from \{e} in, it stands \{dx} and \{dy} from its edges",
+              )
+              continue
+            }
+            _ => ()
+          }
+        None => ()
+      }
       let even = (dx - dy).abs() <= 0.5
       // a round one at a corner: it is the container whose corner follows it (ui-panels.md: 外圆角 = 距离 + 半高), the
       // fault the container's when it does not
@@ -247,8 +262,13 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
         ra > ladder[ladder.length() - 1] + 0.5 {
         let round_a = ra >= dmin(a.fw, a.fh) / 2.0 - 0.5
         // (not one round as it is because it lies in a corner of its own, concentric with it there: a panel in the
-        // window's; nor the window, round as the system has it)
-        if !round_a && !on_ladder(ladder, ra) && !off_ladder.contains(p) && !c.follows_corner(p, k, ra, grounds) {
+        // window's; nor the window, round as the system has it; nor one whose corners are linked, round as what they
+        // come from has them: a strip along the window's edge, the window's less its inset all round)
+        if !round_a &&
+          !on_ladder(ladder, ra) &&
+          !off_ladder.contains(p) &&
+          !c.follows_corner(p, k, ra, grounds) &&
+          c.nodes[ct.ground].links is None {
           off_ladder.add(p)
           out.push(
             "\{c.named(p)} (corner \{ra}): something lies in its \{corner}, and its corner is not one of the ladder's \{ladder}",
@@ -602,26 +622,11 @@ fn Ctx::place_fits(self : Ctx, d : Double) -> Bool {
 /// concentric with it there (a panel 6 in from the window's corner, as round as the window's less that): its corner
 /// the outer one's, not one of the ladder's to keep. One past the window's side there (a pane beside the one in use,
 /// which comes over whole into the window's side) by how far it stands from the window's top and foot, where it will
-/// be in that corner. One whose corners are all one, one of them following the window's so, takes it whole: a strip
-/// along the window's edge (still.fail's closed bar), not panes side by side, each corner its own.
+/// be in that corner.
 fn Ctx::follows_corner(self : Ctx, p : Int, k : Int, ra : Double, grounds : Map[Int, Int]) -> Bool {
   if self.window_container(p) {
     return true
   }
-  if self.nodes[p].radii is None {
-    for j in 0..<4 {
-      if j != k && self.follows_at(p, j, ra, grounds) {
-        return true
-      }
-    }
-  }
-  self.follows_at(p, k, ra, grounds)
-}
-
-///|
-/// Whether container `p`'s corner `k` (`ra` round) lies in its own container's corner, concentric with it there, or
-/// will (follows_corner).
-fn Ctx::follows_at(self : Ctx, p : Int, k : Int, ra : Double, grounds : Map[Int, Int]) -> Bool {
   match self.corner_container(p, grounds) {
     Some(ct) => {
       let rq = self.container_r(ct, k)
@@ -818,12 +823,14 @@ fn Ctx::corners_in_corners(self : Ctx, grounds : Map[Int, Int]) -> Unit {
       continue
     }
     let b = self.nodes[i]
+    // (nor one linked: its corners come from where its links say, and the rule holds it to them, corner_faults)
     if b.kind != kind_box ||
       b.layer ||
       b.radius < 0.5 ||
       b.fw <= 0.0 ||
       b.fh <= 0.0 ||
-      said.contains(i) {
+      said.contains(i) ||
+      b.links is Some(_) {
       continue
     }
     let half = dmin(b.fw, b.fh) / 2.0

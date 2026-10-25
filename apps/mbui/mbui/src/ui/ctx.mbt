@@ -955,13 +955,17 @@ pub fn Ctx::box(
   // each corner its own (`Corners`); else all four `radius` (the node's look is not reset before a box sets it: none
   // of a box's before it in this place kept)
   n.radii = None
+  n.links = None
   if radius is None {
     match st.radius {
-      Some(r) =>
+      Some(r) => {
         match r.each() {
           Some(each) => n.set_radii(each)
           None => ()
         }
+        // (where they come from, for the corner rule to hold it to: corner_faults)
+        n.links = r.links()
+      }
       None => ()
     }
   }

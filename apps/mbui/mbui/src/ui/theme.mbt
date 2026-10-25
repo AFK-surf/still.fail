@@ -605,6 +605,9 @@ pub fn Theme::corner(self : Theme, r : Radius) -> Double {
         dmax(exact_ok(a, "Radius"), exact_ok(b, "Radius")),
         dmax(exact_ok(c, "Radius"), exact_ok(d, "Radius")),
       )
+    // (where it comes from, now: corner_of.mbt)
+    Linked(c) => c.radius()
+    LinkedEach(a, b, c, d) => dmax(dmax(a.radius(), b.radius()), dmax(c.radius(), d.radius()))
   }
 }
 
@@ -614,7 +617,20 @@ pub fn Theme::corner(self : Theme, r : Radius) -> Double {
 pub fn Radius::each(self : Radius) -> FixedArray[Double]? {
   match self {
     Corners(a, b, c, d) => Some(FixedArray::from_array([a, b, c, d]))
+    LinkedEach(a, b, c, d) => Some(FixedArray::from_array([a.radius(), b.radius(), c.radius(), d.radius()]))
     InnerOr(own) => own.each()
+    _ => None
+  }
+}
+
+///|
+/// Where the corners of `r` come from, each (top left, then round it), where they are linked: `Linked`, `LinkedEach`,
+/// or what `InnerOr` keeps; None where they are not.
+pub fn Radius::links(self : Radius) -> FixedArray[CornerOf]? {
+  match self {
+    Linked(c) => Some(FixedArray::make(4, c))
+    LinkedEach(a, b, c, d) => Some(FixedArray::from_array([a, b, c, d]))
+    InnerOr(own) => own.links()
     _ => None
   }
 }

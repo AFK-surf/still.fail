@@ -196,46 +196,49 @@ fn place_fits(d : Double) -> Bool {
 }
 
 ///|
-/// The corner of what stands `edge` from the window's edges in its corners (the tape's panels, the closed bar):
-/// concentric with the window's (@ui.window_corner) where that is a corner corner_fit lets it have (a Mac's 16, 6 in:
-/// 11.2), else `alone` (a square window, Windows 11's 8: too square for it).
-pub fn window_follow(edge : Double, alone : Double) -> Double {
-  let w = @ui.window_corner()
-  let k = @ui.concentric(w, edge)
-  if w >= 6.0 && edge < w && corner_fits(k) && place_fits(edge) {
-    k
-  } else {
-    alone
-  }
+/// How far from the window's edges what stands along them does (the tape's panels, the closed bar: shell.css.ts dock's
+/// 6).
+pub let window_in : Double = 6.0
+
+///|
+/// The corner of what stands `window_in` from the window's edges in its corners (the tape's panels where they stand at
+/// its edge, the closed bar), linked to the window's (@ui.CornerOf: the window's less that where corner_fit lets it be
+/// so, a Mac's 16: 11.2), else `alone` (a square window, Windows 11's 8: too square for it).
+pub fn window_follow(alone : Double) -> @ui.CornerOf {
+  Follow(Window, window_in, alone)
 }
 
 ///|
-/// The corner of the tape's panels (laid out Medium) where they stand at the window's edge, 6 from it: the window's
-/// less that where they follow it (window_follow: a Mac's 16, 11.2), else the ladder's pane corner, as they stand
-/// alone. Said by the frame as it lays the tape out (tape_corners: a panel's other corners the pane corner).
-// kept across runs: said by the frame each build
-pub let tape_edge : Ref[Double] = Ref(pane_corner)
+/// The corner of the tape's panels (laid out Medium) where they stand at the window's edge, linked to the window's,
+/// else the ladder's pane corner, as they stand alone (tape_corners: a panel's other corners the pane corner).
+pub let tape_edge : @ui.CornerOf = window_follow(pane_corner)
 
 ///|
-/// A panel of the tape's corners (top left, top right, bottom right, bottom left), each the one it is in: on the side
-/// it stands at the window's edge when it is in use (`left`: the sidebar's; `right`: the side panel's, the page's with
-/// none open beside it) the window's less its 6 from it where they follow it (tape_edge); the others, never in the
-/// window's corners, the ladder's pane corner. Whether the panel is in use now or on its way over: where it will be.
-pub fn tape_corners(left~ : Bool, right~ : Bool) -> FixedArray[Double] {
-  let l = if left { tape_edge.val } else { pane_corner }
-  let r = if right { tape_edge.val } else { pane_corner }
+/// A panel of the tape's corners (top left, top right, bottom right, bottom left), each linked to the one it is in: on
+/// the side it stands at the window's edge when it is in use (`left`: the sidebar's; `right`: the side panel's, the
+/// page's with none open beside it) the window's (tape_edge); the others, never in the window's corners, the ladder's
+/// pane corner. Whether the panel is in use now or on its way over: where it will be.
+pub fn tape_corners(left~ : Bool, right~ : Bool) -> FixedArray[@ui.CornerOf] {
+  let l = if left { tape_edge } else { Own(pane_corner) }
+  let r = if right { tape_edge } else { Own(pane_corner) }
   [l, r, r, l]
 }
 
 ///|
-/// Corners `k` (top left, then round it) as a style's corner, each its own.
-pub fn corners_radius(k : FixedArray[Double]) -> @ui.Radius {
-  Corners(k[0], k[1], k[2], k[3])
+/// Corners `k` (top left, then round it) as a style's corner, each linked to where it comes from.
+pub fn corners_radius(k : FixedArray[@ui.CornerOf]) -> @ui.Radius {
+  LinkedEach(k[0], k[1], k[2], k[3])
+}
+
+///|
+/// Corners `k`'s radii now (top left, then round it).
+pub fn corner_radii(k : FixedArray[@ui.CornerOf]) -> FixedArray[Double] {
+  k.map(fn(c) { c.radius() })
 }
 
 ///|
 /// The sidebar's panel on the tape: at the window's left edge in use.
-pub fn tape_side_corners() -> FixedArray[Double] {
+pub fn tape_side_corners() -> FixedArray[@ui.CornerOf] {
   tape_corners(left=true, right=false)
 }
 
@@ -1790,7 +1793,7 @@ pub let rail_in : @ui.Space = room(8.0)
 /// there concentric with it (box_fit: the grounds boxes as round, rail_ground_radius); else 9 as open.
 pub fn rail_in_tape() -> Double {
   let ground_in = (38.0 - rail_ground_side) / 2.0
-  let corner = tape_side_corners()[3]
+  let corner = tape_side_corners()[3].radius()
   let d = capsule_in(corner, rail_ground_side)
   if place_fits(d) {
     d - ground_in
@@ -1844,14 +1847,15 @@ pub let rail_ground_side : Double = 30.0
 
 ///|
 /// Its corner, all its places' grounds one (one layer, one corner: the web's 9 each), `ground_in` from the edges of the
-/// rail's corner `corner` (the closed bar's, the tape's sidebar panel's): concentric with it, a box's corner; where that
+/// rail's corner `corner` (the closed bar's, the tape's sidebar panel's): linked to it, concentric with it; where that
 /// is as round as the ground's half, a circle (a corner round enough for one: a pane's 34, 19 in; a bar's 21, 6 in).
-pub fn rail_ground_radius(corner : Double, ground_in : Double) -> @ui.Radius {
-  let k = @ui.concentric(corner, ground_in)
-  if k >= rail_ground_side / 2.0 - 0.5 {
+pub fn rail_ground_radius(corner : @ui.CornerOf, ground_in : Double, alone? : Double = small_corner) -> @ui.Radius {
+  let link : @ui.CornerOf = Follow(corner, ground_in, alone)
+  // (as round as its half or rounder there, a circle: a corner round enough for one)
+  if link.radius() >= rail_ground_side / 2.0 - 0.5 {
     Full
   } else {
-    rounded(k)
+    Linked(link)
   }
 }
 
@@ -1876,20 +1880,20 @@ pub let ref_item_min_h : @ui.Len = Fixed(38.0)
 
 
 ///|
-/// The closed bar's corner, `edge` from the window's left, top and foot, its places' grounds `ground_in` from its edges:
-/// all four one, a strip along the window's edge (laid out Large; not one of the Medium tape's panes side by side, whose
-/// corners at the window's edge alone follow it: tape_corners): the window's less `edge` where it follows it
-/// (window_follow), else as round as makes its places' grounds concentric with it (as narrow as the rail, a capsule's
+/// The closed bar's corner, `window_in` from the window's left, top and foot, its places' grounds `ground_in` from its
+/// edges: all four one, a strip along the window's edge (laid out Large; not one of the Medium tape's panes side by
+/// side, whose corners at the window's edge alone follow it: tape_corners): linked to the window's (window_follow),
+/// else as round as makes its places' grounds concentric with it (as narrow as the rail, a capsule's
 /// end by that; shown a while as wide as the sidebar, no rounder: not a pane's 34). Where it follows the window, too
 /// square for a ground's circle, its grounds are boxes as round as makes them concentric with it (rail_ground_radius).
-pub fn closed_bar_corner(edge : Double, ground_in : Double) -> @ui.Radius {
-  rounded(closed_bar_round(edge, ground_in))
+pub fn closed_bar_corner(ground_in : Double) -> @ui.Radius {
+  Linked(closed_bar_of(ground_in))
 }
 
 ///|
-/// The same as a number.
-pub fn closed_bar_round(edge : Double, ground_in : Double) -> Double {
-  window_follow(edge, ground_in + rail_ground_side / 2.0)
+/// The same as a link.
+pub fn closed_bar_of(ground_in : Double) -> @ui.CornerOf {
+  window_follow(ground_in + rail_ground_side / 2.0)
 }
 
 
