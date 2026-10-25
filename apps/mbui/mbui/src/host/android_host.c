@@ -1081,8 +1081,12 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_start(JNIEnv *env, jclass c) {
   mbui_main(1, argv);  // runs MoonBit's main, which registers the callbacks
 }
 
+// how late the frame before reached the screen, as MBView said with this one (mb_host_frame_late)
+static double frame_late;
+
 JNIEXPORT jboolean JNICALL Java_dev_mbui_Native_frame(JNIEnv *env, jclass c, jfloat w, jfloat h,
-                                                     jfloat scale, jdouble now) {
+                                                     jfloat scale, jdouble now, jdouble late) {
+  frame_late = late;
   cur_w = w;
   cur_h = h;
   cur_scale = scale;
@@ -1105,9 +1109,7 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_pointer(JNIEnv *env, jclass c, jint 
 
 double mb_host_event_time(void) { return event_time; }
 
-// (how late the frame before reached the screen: not told here yet, a frame's time its vsync's, the GL thread's own
-// queue after it)
-double mb_host_frame_late(void) { return 0; }
+double mb_host_frame_late(void) { return frame_late; }
 
 int32_t mb_host_platform(void) { return 2; }
 

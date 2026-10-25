@@ -106,6 +106,10 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     }
 
     private double lastFrame;
+    // the frame before's vsync (0: none, or it had none), and whether it asked for this one as it ended (this one's vsync
+    // then the first after its work was done)
+    private long lastVsync;
+    private boolean askedAtEnd;
 
     // A picture at a declared moment (Host.shotAt, --ei shot_at MS: scripts/shots.sh android): the run's frames are on
     // a clock of their own, 1/60 s a frame from 0, as a stable run's on macOS (mac_app.m) and the browser's
@@ -122,7 +126,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     private void shotFrame(float w, float h) {
         double t = shotClock;
         takeBacks(Long.MAX_VALUE);
-        Native.frame(w, h, density, t);
+        Native.frame(w, h, density, t, 0);
         // (a run to a moment: the native views' frames put where they show at once)
         NativeViews.framed(false);
         Script.frameDrawn();
@@ -197,6 +201,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         if (pictured && !app) {
             Native.redraw();
             NativeViews.framed(false);
+            askedAtEnd = false;
             return;
         }
         long began = System.nanoTime();
@@ -205,9 +210,20 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         double now = v != 0 ? v / 1e6 : began / 1e6;
         if (now < lastFrame) now = lastFrame;
         lastFrame = now;
+        // how late the frame before reached the screen (@hostapi.frame_late): asked for as it ended, this one's vsync is
+        // the first after its work was done, so the display's frames that passed past the one it was drawn for are how
+        // late it was, on the vsyncs' grid; 0 where it was asked for otherwise (its vsync perhaps one during that work),
+        // or either has no vsync
+        double late = 0;
+        if (v != 0 && lastVsync != 0 && askedAtEnd) {
+            long frames = Math.round((double) (v - lastVsync) / framePeriod);
+            if (frames > 1) late = (frames - 1) * framePeriod / 1e6;
+        }
+        lastVsync = v;
         // the system's back said before this frame's vsync (back(), below); what was said after it, the next frame's
         boolean later = takeBacks(v != 0 ? v : began);
-        boolean more = Native.frame(w, h, density, now);
+        boolean more = Native.frame(w, h, density, now, late);
+        askedAtEnd = more || later;
         if (more || later) wantFrame();
         // (the native views moved in it: their frames follow once they rest)
         NativeViews.framed(more || later);
