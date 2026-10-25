@@ -452,3 +452,18 @@ test("an_address_of_the_readers_own_and_its_protocol_are_asked_and_decide_what_i
   assert.throws(() => flows.change(topic, 2, "edit", {}));
   assert.throws(() => flows.change(topic, 1, "edit", { provider: "nope" }));
 });
+
+test("Hermes variables are offered only on stations that support Hermes", () => {
+  const { s, flows, topic } = flow();
+  flows.change(topic, 1, "open", {});
+  s.set(overview, { ok: { apiProviders: [], updates: [{ id: "hermes", name: "Hermes Agent", installed: true }] } });
+  const local = flows.value(topic).groups.find((g: J) => g.id === "local").providers;
+  assert.ok(local.some((p: J) => p.id === "env-hermes"));
+  flows.change(topic, 1, "edit", { provider: "env-hermes" });
+  assert.equal(flows.value(topic).usesLine, "添加后可用于：Hermes Agent");
+  assert.deepEqual(flows.begin(topic, 1), { runtime: "hermes", access: { kind: "env" } });
+  flows.finish(topic, 1, null);
+  s.set(overview, { ok: { apiProviders: [], updates: [] } });
+  flows.change(topic, 1, "edit", { back: true });
+  assert.ok(!flows.value(topic).groups.find((g: J) => g.id === "local").providers.some((p: J) => p.id === "env-hermes"));
+});

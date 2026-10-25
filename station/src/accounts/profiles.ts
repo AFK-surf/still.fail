@@ -80,6 +80,7 @@ export const URLS: Urls = {
 
 /// The access kinds each runtime can use.
 export function accessKinds(runtime: Runtime): AccessKind[] {
+  if (runtime === "hermes") return ["env"];
   if (runtime === "claude") return ["subscription", "opencode-go", "anthropic-api", "api-provider", "env"];
   // DeepSeek Harness has no subscription to sign in to here: an account of its own is set up by variables.
   if (runtime === "dsh") return ["opencode-go", "anthropic-api", "api-provider", "env"];

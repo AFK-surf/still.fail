@@ -136,6 +136,7 @@ export function Splash({ label, now = false, children }: { label?: string; now?:
  * repository (MIT); xAI's the maker mark Grok's models have (public/models/xai.svg); Devin's from devin.ai's favicon.
  */
 export function RuntimeLogo({ runtime, size = 16 }: { runtime: RuntimeKind; size?: number }) {
+  if (runtime === "hermes") return <svg width={size} height={size} viewBox="0 0 24 24" role="img" aria-label="Hermes Agent"><path fill="none" stroke="currentColor" strokeWidth="2" d="M6 4v16M18 4v16M6 12h12" /></svg>;
   if (runtime === "devin") return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-label="Devin" role="img" className={css.runtimeLogo}><path fill="currentColor" d="M1.984 8.248V3.495C1.984 3.287 2.096 3.093 2.277 2.989L6.391 0.613C6.572 0.509 6.795 0.509 6.976 0.613L11.091 2.989C11.272 3.093 11.383 3.287 11.383 3.495V5.923C11.402 6.729 11.828 7.507 12.578 7.94C13.327 8.373 14.214 8.353 14.922 7.965L17.024 6.752C17.205 6.647 17.428 6.647 17.609 6.752L21.723 9.128C21.904 9.232 22.016 9.425 22.016 9.634V14.385C22.016 14.594 21.904 14.787 21.723 14.892L17.609 17.268C17.428 17.372 17.205 17.372 17.024 17.268L14.939 16.064C14.228 15.667 13.334 15.643 12.578 16.08C11.828 16.513 11.402 17.291 11.384 18.097V20.524C11.384 20.733 11.272 20.926 11.091 21.03L6.976 23.406C6.795 23.51 6.573 23.51 6.392 23.406L2.277 21.03C2.096 20.926 1.984 20.733 1.984 20.524V15.772C1.984 15.563 2.096 15.37 2.277 15.266L6.392 12.89C6.573 12.786 6.795 12.786 6.976 12.89L9.083 14.106C9.79 14.491 10.674 14.51 11.422 14.078C12.178 13.642 12.605 12.855 12.617 12.042C12.598 11.235 12.172 10.374 11.422 9.941C10.673 9.508 9.786 9.528 9.078 9.915L6.967 11.142C6.785 11.247 6.561 11.247 6.379 11.141L2.275 8.754C2.095 8.649 1.984 8.456 1.984 8.248Z" /></svg>
   );
@@ -184,7 +185,7 @@ export function ProviderLogo({ runtime, kind, mark, size = 16 }: { runtime: Runt
 }
 
 /** A runtime's name, short, for the tags after a profile's name. */
-const RUNTIME_TAG: Record<RuntimeKind, string> = { claude: "CC", codex: "Codex", dsh: "DSH", grok: "GROK", cursor: "Cursor", devin: "Devin" };
+const RUNTIME_TAG: Record<RuntimeKind, string> = { claude: "CC", codex: "Codex", dsh: "DSH", grok: "GROK", cursor: "Cursor", devin: "Devin", hermes: "Hermes" };
 
 /** The runtimes a profile runs, as small marks after its name (CC for Claude Code, Codex, DSH for DeepSeek Harness, GROK for Grok Build, Cursor, Devin), and 自动决策 where it serves the automatic decisions. */
 export function RuntimeTags({ runtimes, decision = false }: { runtimes: RuntimeKind[]; decision?: boolean | undefined }) {

@@ -6,12 +6,12 @@
 import { startEnv } from "../ops/agent-env.ts";
 
 /// The runtimes a station runs, in the order they are offered.
-export type RuntimeKind = "claude" | "codex" | "dsh" | "grok" | "cursor" | "devin";
-export const RUNTIME_KINDS: RuntimeKind[] = ["claude", "codex", "dsh", "grok", "cursor", "devin"];
+export type RuntimeKind = "claude" | "codex" | "dsh" | "grok" | "cursor" | "devin" | "hermes";
+export const RUNTIME_KINDS: RuntimeKind[] = ["claude", "codex", "dsh", "grok", "cursor", "devin", "hermes"];
 /// A runtime as stored or sent (a name of one of them), none for anything else.
 export const runtimeKind = (v: unknown): RuntimeKind | undefined => (RUNTIME_KINDS as unknown[]).includes(v) ? (v as RuntimeKind) : undefined;
 /// How a runtime is named to people.
-export const runtimeLabel = (r: RuntimeKind) => (r === "claude" ? "Claude Code" : r === "codex" ? "Codex" : r === "dsh" ? "DeepSeek Harness" : r === "grok" ? "Grok Build" : r === "cursor" ? "Cursor" : "Devin");
+export const runtimeLabel = (r: RuntimeKind) => (r === "claude" ? "Claude Code" : r === "codex" ? "Codex" : r === "dsh" ? "DeepSeek Harness" : r === "grok" ? "Grok Build" : r === "cursor" ? "Cursor" : r === "hermes" ? "Hermes Agent" : "Devin");
 
 export type FailureReason = "auth" | "refused" | "rate_limit" | "model" | "exited" | "other";
 

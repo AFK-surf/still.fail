@@ -140,7 +140,7 @@ test("reported_levels_aliases_empty_and_legacy", () => {
 
 test("deepseek_harness_is_named_thinks_at_its_own_levels_and_runs_on_any_endpoint", () => {
   assert.deepEqual(["claude", "codex", "dsh"].map(f.runtimeLabel), ["Claude Code", "Codex", "DeepSeek Harness"]);
-  assert.deepEqual(f.RUNTIMES, ["claude", "codex", "dsh", "grok", "cursor", "devin"]);
+  assert.deepEqual(f.RUNTIMES, ["claude", "codex", "dsh", "grok", "cursor", "devin", "hermes"]);
   assert.deepEqual(fallback("dsh"), ["low", "medium", "high", "max"]);
   assert.deepEqual(available("dsh", "deepseek-v4", { codex: { "deepseek-v4": ["low"] } }), fallback("dsh"));
   const runs = (id: string, endpoint: string | null = null, protocol: string | null = null) => {
@@ -169,7 +169,7 @@ test("grok_build_is_named_thinks_up_to_max_and_runs_on_xais_own_api_alone", () =
 
 test("cursor_is_named_last_sets_no_effort_and_runs_on_no_providers_key", () => {
   assert.equal(f.runtimeLabel("cursor"), "Cursor");
-  assert.deepEqual(f.RUNTIMES, ["claude", "codex", "dsh", "grok", "cursor", "devin"]);
+  assert.deepEqual(f.RUNTIMES, ["claude", "codex", "dsh", "grok", "cursor", "devin", "hermes"]);
   assert.deepEqual([f.efforts("cursor"), fallback("cursor")], [[], []]);
   assert.deepEqual(available("cursor", "composer-2", { codex: { "composer-2": ["low"] } }), []);
   assert.deepEqual(f.makerOf("composer-2"), ["cursor", "Cursor"]);
@@ -180,7 +180,7 @@ test("cursor_is_named_last_sets_no_effort_and_runs_on_no_providers_key", () => {
 
 test("devin_is_named_after_cursor_its_models_at_their_own_thinking_levels_on_no_providers_key", () => {
   assert.equal(f.runtimeLabel("devin"), "Devin");
-  assert.equal(f.RUNTIMES.at(-1), "devin");
+  assert.equal(f.RUNTIMES[f.RUNTIMES.indexOf("cursor") + 1], "devin");
   assert.deepEqual(fallback("devin"), ["low", "medium", "high", "xhigh", "max"]);
   assert.deepEqual(available("devin", "swe-2", { devin: { "swe-2": ["medium", "high", "max"] } }), ["medium", "high", "max"]);
   assert.deepEqual(available("devin", "kimi-k2-6", { devin: { "kimi-k2-6": [] } }), []);
@@ -199,4 +199,9 @@ test("fills_and_counts", () => {
   assert.equal(fromLocale("en-GB"), "en");
   assert.equal(fromLocale(""), "zh");
   assert.equal(tr("en", "no.such.key"), "no.such.key");
+});
+
+ test("hermes uses its configured reasoning and has its own runtime label", () => {
+  assert.equal(f.runtimeLabel("hermes"), "Hermes Agent");
+  assert.deepEqual(fallback("hermes"), []);
 });
