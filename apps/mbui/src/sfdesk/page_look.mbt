@@ -202,10 +202,3 @@ pub fn back_label(p : Page) -> String {
 fn waiting_cards(c : @ui.Ctx, count? : Int = 3, error? : String = "", failing? : Array[String] = []) -> Unit {
   @sf.waiting(c, shape=Cards, count~, error~, note={ reading: failing.length() == 0, text: "", failing })
 }
-
-///|
-/// Blocks of the settings' own pieces (sfapp/settings), which lay out their sides as the settings' pages do: out across
-/// a narrow page's room (@sf.page_bleed).
-fn own_sides(c : @ui.Ctx, blocks : Array[() -> Unit]) -> Array[() -> Unit] {
-  blocks.map(fn(b) { fn() { c.box(style=@sf.page_bleed(), b) |> ignore } })
-}

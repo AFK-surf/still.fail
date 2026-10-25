@@ -1,6 +1,11 @@
-// 外观's 字体 on the desktop (ember web/src/FontSetting.tsx, FontSetting.css.ts): the places' switch (界面 / 正文 /
-// 代码), the faces of the place in view as tiles, this machine's own faces in a list, and a chat as they set it. What is
-// chosen is the device's (`prefs.set {fonts}`), fetched by the app as the phone's fonts page's are.
+// 字体, one setting for every frame (web/src/FontSetting.tsx, mobile/Fonts.tsx FontScreen, the Android app's Fonts.kt):
+// a face chosen for each of three places (界面, 正文, 代码) and the chat they make seen as it is chosen. What it is for is
+// one thing on every screen, so it is one design: the place in view by a choice of three; a chat as the faces set it
+// right under that, where the eye is as a face is chosen; the place's faces in a group, each row its name and a line
+// of it drawn in itself (how far it has come, what failed, its size before it is here, at its end; the chosen one
+// checked). A row pointed at is tried in the chat first (where there is a pointer: c.lit). This machine's own faces
+// (where the host lists them: a computer's) are one row more, opening a list of them to find one in. What is chosen
+// is the device's (`prefs.set {fonts}`). Its page (fonts_page) and 外观's wide section (appearance.mbt) hold it.
 
 ///|
 fn font_setting_reset() -> Unit {
@@ -11,94 +16,20 @@ fn font_setting_reset() -> Unit {
 }
 
 ///|
-/// A chat as the faces set it (FontSetting.tsx Preview: a settings card, 20 in, as wide as the setting): their message
-/// in its bubble, an agent's under its name and when, its words the body's 14. `ui_face`, `text_face`: the host faces
-/// tried in it (0: as the app is set now).
-fn font_setting_preview(c : @ui.Ctx, ui_face : Int, text_face : Int) -> Unit {
-  c.box(style=font_preview_card, fn() {
-    c.box(style=fp_column, fn() {
-      c.box(style=fp_mine_room, fn() {
-        c.box(style=fp_bubble, fn() {
-          c.rich([@ui.span(@sf.t("web-pages.appearance.fonts.sampleMine"))], key="fonts/sample-mine", style=@sf.body, words=true, face=text_face)
-          |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
-      c.box(style=fp_agent, fn() {
-        c.box(style=fp_who_line, fn() {
-          c.rich([@ui.span("Claude")], key="fonts/sample-who", style=fp_who_words, face=ui_face) |> ignore
-          c.rich([@ui.span(@sf.t("web-pages.appearance.fonts.sampleTime"))], key="fonts/sample-time", style=fp_time_words, face=ui_face)
-          |> ignore
-        })
-        |> ignore
-        @sf.markdown(
-          c,
-          @sf.t("web-pages.appearance.fonts.sampleText") + "\n\n" + fp_sample_code + "\n\n" + @sf.t("web-pages.appearance.fonts.sampleAfter"),
-          key="fonts/sample",
-          size=@sf.text_scale.base.0,
-        )
-        |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let fp_sample_code : String = "```ts\nform.onsubmit = (e) => {\n  e.preventDefault(); // 0O 1lI\n};\n```"
-
-///|
-/// The preview's two messages 12 apart: theirs at the end in a bubble (18 round on the page's ground, 14 by 10 in), the
-/// agent's name (14 semibold in the accent's ink) and when (12 subtle) over its words, 4 apart.
-// kept across runs: a value (no field of it changes)
-let fp_column : @ui.Style = @ui.css("w=Full gap=S3")
-
-///|
-// kept across runs: a value (no field of it changes)
-let fp_mine_room : @ui.Style = @ui.css("w=Full align=AEnd").then(@ui.style(pl=@sf.corner_clear_room))
-
-///|
-// kept across runs: a value (no field of it changes)
-let fp_bubble : @ui.Style = @ui.css("radius=Xl2 bg=Bg px=S3_5 py=S2_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let fp_agent : @ui.Style = @ui.css("w=Full pr=S2_5 gap=S1")
-
-///|
-// kept across runs: a value (no field of it changes)
-let fp_who_line : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let fp_who_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=AccentText)
-
-///|
-// kept across runs: a value (no field of it changes)
-let fp_time_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle)
-
-
-///|
-/// The face pointed at in the wide frame's tiles, tried in the preview before it is chosen ("" none; "\u{1}" the place's
-/// own).
+/// The face pointed at in the faces' rows, tried in the chat before it is chosen ("" none; "\u{1}" the place's own).
 let fonts_trying : Ref[String] = Ref("")
 
 ///|
-/// 外观's 字体 in the wide frame (FontSetting.tsx FontSetting): the places' switch (界面 / 正文 / 代码), the faces of the
-/// place in view as tiles (默认 or 跟随界面 first), each `Aa 字` and its name drawn in itself, the chosen one ringed and
-/// checked; under them a chat as the faces set it, a tile pointed at tried in it first.
-fn font_setting(c : @ui.Ctx, core : Core) -> Unit {
-  let t = @sf.theme()
+/// 字体's setting, a block at a time: the places' choice, the chat as their faces set it, the faces of the place in
+/// view.
+fn fonts_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
   let prefs = (core.topic)("prefs", Map::new()).value
   let chosen_of = fn(place : String) { text(field(prefs, "fonts"), place) }
   let all = items(field(prefs, "faces"), "list")
   let files_state = (core.topic)("fonts", Map::new()).value
   let place = @settings.font_places[@settings.fonts_at.val]
   let chosen = chosen_of(place)
+  // each face shown in itself: its host face (its preview's), by its place in the list
   let shown_in = fn(id : String) {
     let mut face = 0
     for i, f in all {
@@ -108,7 +39,10 @@ fn font_setting(c : @ui.Ctx, core : Core) -> Unit {
     }
     face
   }
+  // the place's own: code's JetBrains Mono, the others' the app's words'
   let own = if place == "code" { (core.own_code_face)() } else { 0 }
+  // as chosen, each place in its face as far as it is here: one whole is the app's already (0: as the app's words
+  // are), one coming in its preview
   let as_chosen = fn(p : String) {
     let id = chosen_of(p)
     if id == "" || (core.face_here)(id) {
@@ -117,215 +51,135 @@ fn font_setting(c : @ui.Ctx, core : Core) -> Unit {
       shown_in(id)
     }
   }
-  // what the preview shows: each place as chosen, the one pointed at tried in its place
-  let tried = fonts_trying.val
-  let try_face = if tried == "\u{1}" {
-    Some(own)
-  } else if tried.has_prefix(local_prefix) {
-    Some(local_tried(tried.unsafe_substring(start=local_prefix.length(), end=tried.length())))
-  } else if tried != "" {
-    Some(match shown_in(tried) {
-      0 => own
-      f => f
-    })
-  } else {
-    None
-  }
-  let ui_face = match (place, try_face) {
-    ("ui", Some(f)) => f
-    _ => as_chosen("ui")
-  }
-  let text_face = match (place, try_face) {
-    ("text", Some(f)) => f
-    ("ui", Some(f)) if chosen_of("text") == "" => f
-    _ => if chosen_of("text") == "" { ui_face } else { as_chosen("text") }
-  }
-  fonts_trying.val = ""
-  c.box(style=fonts_wide_setting, fn() {
-    let picked = @sf.segmented(c, "fonts/place", @settings.font_places.map(fn(p) { @sf.t("web-pages.appearance.fonts." + p) }), @settings.fonts_at.val)
-    if picked != @settings.fonts_at.val {
-      @settings.fonts_at.val = picked
-    }
-    // (on as many lines as they take: FontSetting.css.ts tiles' auto-fill)
-    c.box(style=font_tiles, flow=true, fn() {
-      let tile = fn(key : String, id : String, name : String, face : Int, status : String) {
-        let tid = c.id("fonts/tile/" + place + "/" + key)
-        c.cursor(tid, Hand)
-        if c.lit(tid) {
-          fonts_trying.val = if id == "" { "\u{1}" } else { id }
-        }
-        if c.clicked(tid) {
-          @settings.set_font(core, place, if id == "" { None } else { Some(id) })
-        }
-        let on = chosen == id
-        let b = c.box(style=if on { font_tile_on } else { font_tile }, id=tid, fn() {
-          c.rich([@ui.span(@sf.t("web-pages.appearance.fonts.glyph"))], key="fonts/tile-glyph/" + key, style=font_tile_glyph, face~)
-          |> ignore
-          c.rich([@ui.span(if status != "" { status } else { name })], key="fonts/tile-name/" + key, style=if on {
-            font_tile_name_on
-          } else {
-            font_tile_name
-          }, face~)
-          |> ignore
-          if on {
-            c.layer(fn() {
-              c.box(style=font_tile_check_place, fn() { @sf.icon(c, "check", size=font_check, color=t.p.accent) |> ignore })
-              |> ignore
-            })
-            |> ignore
-          }
-        })
-        c.semantics(b, Button, id=tid, label=name)
+  [
+    fn() {
+      let picked = @sf.page_choice(
+        c,
+        "fonts/place",
+        @settings.font_places.map(fn(p) { @sf.t("web-pages.appearance.fonts." + p) }),
+        @settings.fonts_at.val,
+      )
+      if picked != @settings.fonts_at.val {
+        @settings.fonts_at.val = picked
       }
-      let none = if place == "text" { "web-pages.appearance.fonts.followUi" } else { "web-pages.appearance.fonts.default" }
-      tile("none", "", @sf.t(none), own, "")
-      for f in all {
-        let fv = Some(f)
-        if flag(fv, "mono") != (place == "code") {
-          continue
-        }
-        let id = text(fv, "id")
-        let status = match field(field(files_state, "fetching"), id) {
-          Some(Number(p, ..)) => @sf.t("android-settings.fonts.downloading", args=[("percent", (p * 100.0).to_int().to_string())])
-          _ =>
-            match text(field(files_state, "failed"), id) {
-              "" => ""
-              why => @sf.t("android-settings.fonts.failed", args=[("error", why)])
-            }
-        }
-        let face = match shown_in(id) {
+    },
+    fn() {
+      // each place as chosen, the face pointed at (last frame's) tried in its place
+      let tried = fonts_trying.val
+      let try_face = if tried == "\u{1}" {
+        Some(own)
+      } else if tried.has_prefix(local_prefix) {
+        Some(local_tried(tried.unsafe_substring(start=local_prefix.length(), end=tried.length())))
+      } else if tried != "" {
+        Some(match shown_in(tried) {
           0 => own
-          x => x
+          f => f
+        })
+      } else {
+        None
+      }
+      let ui_face = match (place, try_face) {
+        ("ui", Some(f)) => f
+        _ => as_chosen("ui")
+      }
+      let text_face = match (place, try_face) {
+        ("text", Some(f)) => f
+        ("ui", Some(f)) if chosen_of("text") == "" => f
+        _ => if chosen_of("text") == "" { ui_face } else { as_chosen("text") }
+      }
+      font_preview(c, ui_face, text_face)
+    },
+    fn() {
+      fonts_trying.val = ""
+      @sf.group(c, fn() {
+        let none = if place == "text" { "web-pages.appearance.fonts.followUi" } else { "web-pages.appearance.fonts.default" }
+        face_row(c, core, place, "none", "", @sf.t(none), own, chosen == "", "", false)
+        for f in all {
+          let fv = Some(f)
+          if flag(fv, "mono") != (place == "code") {
+            continue
+          }
+          let id = text(fv, "id")
+          let fetching = field(field(files_state, "fetching"), id)
+          let failed = text(field(files_state, "failed"), id)
+          let damaged = (core.face_failed)(id)
+          let (status, bad) = match fetching {
+            Some(Number(p, ..)) =>
+              (@sf.t("android-settings.fonts.downloading", args=[("percent", (p * 100.0).to_int().to_string())]), false)
+            _ =>
+              if failed != "" {
+                (@sf.t("android-settings.fonts.failed", args=[("error", failed)]), true)
+              } else if damaged != "" {
+                (@sf.t("android-settings.fonts.failed", args=[("error", damaged)]), true)
+              } else if (core.face_here)(id) {
+                ("", false)
+              } else {
+                (face_size(number(fv, "bytes")), false)
+              }
+          }
+          // not shown in itself (its preview not here): in the place's own
+          let face = match shown_in(id) {
+            0 => own
+            x => x
+          }
+          face_row(c, core, place, id, id, text(fv, "name"), face, chosen == id, status, bad)
         }
-        tile(id, id, text(fv, "name"), face, status)
-      }
-      // a face of this machine's own, where the host lists them (the desktop's)
-      if @ui.local_font_families() != "" {
-        local_tile(c, core, place, chosen)
-      }
-    })
+        // a face of this machine's own, where the host lists them (a computer's)
+        if @ui.local_font_families() != "" {
+          local_face_row(c, core, place, chosen)
+        }
+      })
+    },
+  ]
+}
+
+///|
+/// A face of the place (FaceRow, the web's tile): its name and a line of it, each drawn in itself (`face`, a host face:
+/// 0 the app's words'); at its end how it stands (`bad` in red), the check where it is the one chosen (`on`); pointed
+/// at, tried in the chat; pressed, chosen (`id` "": the place's own).
+fn face_row(
+  c : @ui.Ctx,
+  core : Core,
+  place : String,
+  key : String,
+  id : String,
+  name : String,
+  face : Int,
+  on : Bool,
+  status : String,
+  bad : Bool,
+) -> Unit {
+  let rkey = "fonts/face/" + place + "/" + key
+  if c.lit(c.id(rkey)) {
+    fonts_trying.val = if id == "" { "\u{1}" } else { id }
+  }
+  if @sf.choice_row(c, rkey, on, name, fn() { face_words(c, rkey, name, face, status, bad) }) {
+    @settings.set_font(core, place, if id == "" { None } else { Some(id) })
+  }
+}
+
+///|
+/// A face's name over a line of it, each drawn in `face`; how it stands at their end.
+fn face_words(c : @ui.Ctx, key : String, name : String, face : Int, status : String, bad : Bool) -> Unit {
+  c.box(style=face_lines, fn() {
+    c.rich([@ui.span(name)], key=key + "/name", style=face_name_words, face~) |> ignore
+    c.rich([@ui.span(@sf.t("web-pages.appearance.fonts.sampleRow"))], key=key + "/sample", style=face_sample_words, face~)
     |> ignore
-    font_setting_preview(c, ui_face, text_face)
   })
   |> ignore
-}
-
-///|
-/// A tile's check (14), in its corner.
-let font_check : Double = 14.0
-
-///|
-/// The setting (setting: 14 apart, 640 wide at most): the switch as wide as its words, the tiles across, the preview.
-// kept across runs: a value (no field of it changes)
-let fonts_wide_setting : @ui.Style = @ui.style(w=Full, max_w=Fixed(font_setting_most), gap=S3_5, align=AStart)
-
-///|
-let font_setting_most : Double = 640.0
-
-///|
-/// The tiles (tiles: 96 wide at least, 10 apart; tile: 96 high, 12 by 10 in, the card's corner and ground, ringed 1.5 in
-/// the accent when chosen).
-// kept across runs: a value (no field of it changes)
-let font_tiles : @ui.Style = @ui.css("row w=Full gap=S2_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let font_tile : @ui.Style = @ui.style(
-  w=Fixed(font_tile_w),
-  h=S24,
-  px=S2_5,
-  py=S3,
-  gap=S1_5,
-  align=ACenter,
-  justify=JCenter,
-  radius=Xl3,
-  bg=Card,
-  hovered=@ui.patch(bg=Tint),
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-let font_tile_on : @ui.Style = font_tile.then(@ui.css("border=B1 border_color=Accent"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let font_tile_glyph : @ui.TextStyle = @ui.text_style(size=Xl4, color=Fg, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let font_tile_name : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false, max_lines=1)
-
-///|
-// kept across runs: a value (no field of it changes)
-let font_tile_name_on : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false, max_lines=1)
-
-///|
-// kept across runs: a value (no field of it changes)
-let font_tile_check_place : @ui.Style = @ui.css("w=Full h=Full p=S2_5 align=AEnd")
-
-///|
-/// A tile as wide as six to the setting's width are, 10 apart (tiles: auto-fill, 96 at least).
-let font_tile_w : Double = (font_setting_most - 50.0) / 6.0
-
-///|
-/// The wide frame's preview (preview: a settings card, its words 20 in, as wide as the setting): their bubble in its
-/// top right corner the ladder's inset in (a block of the ladder's, tall enough not to be a capsule), the agent's words
-/// 20 in.
-// kept across runs: a value (no field of it changes)
-let font_preview_card : @ui.Style = @ui.css("w=Full pt=S2_5 pr=S2_5 pl=S5 pb=S5 radius=Xl3 bg=Card")
-
-///|
-/// What a face of this machine's own is said as in the prefs' `fonts` (client/core-ts/src/fonts.ts LOCAL).
-let local_prefix : String = "local:"
-
-///|
-/// The host face a family of this machine's is tried in (the preview, as a row of the list is pointed at), and the
-/// family it holds now ("" none).
-let local_try_face : Int = 14
-
-///|
-// kept across runs: said by local_tried; font_setting_reset empties it
-let local_try_given : Ref[String] = Ref("")
-
-///|
-/// Whether 本机字体's list is open, and what is typed to find one in it.
-// kept across runs: said by the tile and the list; font_setting_reset puts them back
-let local_open : Ref[Bool] = Ref(false)
-
-///|
-// kept across runs: said by the list's field; font_setting_reset empties it
-let local_filter : @ui.Field = @ui.Field::new()
-
-///|
-/// The host face family `family` of this machine's is tried in (given to it once); 0 where the host has none of it.
-fn local_tried(family : String) -> Int {
-  if local_try_given.val != family {
-    @ui.face_clear(local_try_face)
-    local_try_given.val = if @ui.face_add_family(local_try_face, family) { family } else { "" }
-  }
-  if local_try_given.val == family {
-    local_try_face
-  } else {
-    0
+  if status != "" {
+    c.box(style=face_status_room, fn() {
+      c.text(status, style=if bad { face_status_words.then(@sf.bad) } else { face_status_words }) |> ignore
+    })
+    |> ignore
   }
 }
 
 ///|
-/// The families installed here (the host's: @ui.local_font_families), in its order.
-fn local_families() -> Array[String] {
-  let parsed = @json.parse(@ui.local_font_families()) catch { _ => Json::null() }
-  // in the host's order: its person's language's (local_font_families)
-  match parsed {
-    Array(a) => a.filter_map(fn(x) { if x is String(s) { Some(s) } else { None } })
-    _ => []
-  }
-}
-
-///|
-/// 本机字体 (FontSetting.tsx LocalTile): a tile, the family chosen's name in itself where one is (else 本机字体 under
-/// "…"); pressed, a list of the families installed here under it, a field to find one, each pointed at tried in the
-/// preview, one chosen as the place's face (`local:<family>`).
-fn local_tile(c : @ui.Ctx, core : Core, place : String, chosen : String) -> Unit {
+/// 本机字体 (FontSetting.tsx LocalTile): a row, the family chosen's name in itself where one is (else 本机字体);
+/// pressed, a list of the families installed here under it, a field to find one, each pointed at tried in the chat,
+/// one chosen as the place's face (`local:<family>`).
+fn local_face_row(c : @ui.Ctx, core : Core, place : String, chosen : String) -> Unit {
   let t = @sf.theme()
   let picked = if chosen.has_prefix(local_prefix) {
     chosen.unsafe_substring(start=local_prefix.length(), end=chosen.length())
@@ -334,30 +188,15 @@ fn local_tile(c : @ui.Ctx, core : Core, place : String, chosen : String) -> Unit
   }
   // the place's own host face holds it once chosen (faces.mbt): its words drawn in it
   let face = if picked != "" { @settings.font_places.search(place).unwrap_or(0) + 1 } else { 0 }
-  let tid = c.id("fonts/tile/" + place + "/local")
-  c.cursor(tid, Hand)
-  if c.clicked(tid) {
+  let rkey = "fonts/face/" + place + "/local"
+  let tid = c.id(rkey)
+  let name = if picked != "" { picked } else { @sf.t("web-pages.appearance.fonts.local") }
+  if @sf.choice_row(c, rkey, picked != "", @sf.t("web-pages.appearance.fonts.local"), fn() {
+      face_words(c, rkey, name, face, "", false)
+    }) {
     local_open.val = !local_open.val
     local_filter.set("")
   }
-  let on = picked != ""
-  let b = c.box(style=if on { font_tile_on } else { font_tile }, id=tid, fn() {
-    c.rich([@ui.span(if on { @sf.t("web-pages.appearance.fonts.glyph") } else { "…" })], key="fonts/tile-glyph/local", style=font_tile_glyph, face~)
-    |> ignore
-    c.rich([@ui.span(if on { picked } else { @sf.t("web-pages.appearance.fonts.local") })], key="fonts/tile-name/local", style=if on {
-      font_tile_name_on
-    } else {
-      font_tile_name
-    }, face~)
-    |> ignore
-    if on {
-      c.layer(fn() {
-        c.box(style=font_tile_check_place, fn() { @sf.icon(c, "check", size=font_check, color=t.p.accent) |> ignore }) |> ignore
-      })
-      |> ignore
-    }
-  })
-  c.semantics(b, Button, id=tid, label=@sf.t("web-pages.appearance.fonts.local"), expanded=local_open.val)
   let p = @kit.popover(
     c,
     "fonts/local",
@@ -425,6 +264,151 @@ fn local_tile(c : @ui.Ctx, core : Core, place : String, chosen : String) -> Unit
 }
 
 ///|
+/// A chat as the faces set it (FontSetting.tsx Preview, Fonts.kt FontPreview): their message in its bubble, an agent's
+/// under its name and when, its words as a chat's are (@sfpages.body_size), on a card of the page; their bubble in its
+/// top right corner the ladder's inset in (a block of the ladder's, tall enough not to be a capsule), the agent's words
+/// 20 in. `ui_face`, `text_face`: the host faces tried in it (0: as the app is set now).
+fn font_preview(c : @ui.Ctx, ui_face : Int, text_face : Int) -> Unit {
+  @sf.page_card(c, fn() {
+    c.box(style=fp_column, fn() {
+      c.box(style=fp_mine_room, fn() {
+        c.box(style=fp_bubble, fn() {
+          c.rich([@ui.span(@sf.t("web-pages.appearance.fonts.sampleMine"))], key="fonts/sample-mine", style=@sf.body, words=true, face=text_face)
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+      c.box(style=fp_agent, fn() {
+        c.box(style=fp_who_line, fn() {
+          c.rich([@ui.span("Claude")], key="fonts/sample-who", style=fp_who_words, face=ui_face) |> ignore
+          c.rich([@ui.span(@sf.t("web-pages.appearance.fonts.sampleTime"))], key="fonts/sample-time", style=fp_time_words, face=ui_face)
+          |> ignore
+        })
+        |> ignore
+        @sf.markdown(
+          c,
+          @sf.t("web-pages.appearance.fonts.sampleText") + "\n\n" + fp_sample_code + "\n\n" + @sf.t("web-pages.appearance.fonts.sampleAfter"),
+          key="fonts/sample",
+          size=@sfpages.body_size,
+        )
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let fp_sample_code : String = "```ts\nform.onsubmit = (e) => {\n  e.preventDefault(); // 0O 1lI\n};\n```"
+
+///|
+/// The preview's two messages 12 apart: theirs at the end in a bubble (18 round on the page's ground, 14 by 10 in), out
+/// of the card's other top corner; the agent's name (14 semibold in the accent's ink) and when (12 subtle) over its
+/// words, 4 apart.
+// kept across runs: a value (no field of it changes)
+let fp_column : @ui.Style = @ui.css("w=Full gap=S3")
+
+///|
+// kept across runs: a value (no field of it changes)
+let fp_mine_room : @ui.Style = @ui.css("w=Full align=AEnd").then(@ui.style(pl=@sf.corner_clear_room))
+
+///|
+// kept across runs: a value (no field of it changes)
+let fp_bubble : @ui.Style = @ui.css("radius=Xl2 bg=Bg px=S3_5 py=S2_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let fp_agent : @ui.Style = @ui.css("w=Full gap=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let fp_who_line : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let fp_who_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=AccentText)
+
+///|
+// kept across runs: a value (no field of it changes)
+let fp_time_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle)
+
+///|
+/// A face's name over a line of it, 2 apart, each on one line: the body's in the ink, the small's in the muted.
+// kept across runs: a value (no field of it changes)
+let face_lines : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let face_name_words : @ui.TextStyle = @ui.text_style(size=Xl, color=Fg, w=Full, max_lines=1)
+
+///|
+// kept across runs: a value (no field of it changes)
+let face_sample_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full, max_lines=1)
+
+///|
+/// How a face stands, at its row's end: 140 wide at most, the small's subtle on one line.
+// kept across runs: a value (no field of it changes)
+let face_status_room : @ui.Style = @ui.style(max_w=@sf.face_status_most)
+
+///|
+// kept across runs: a value (no field of it changes)
+let face_status_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=false)
+
+///|
+/// What a face of this machine's own is said as in the prefs' `fonts` (client/core-ts/src/fonts.ts LOCAL).
+let local_prefix : String = "local:"
+
+///|
+/// The host face a family of this machine's is tried in (the preview, as a row of the list is pointed at), and the
+/// family it holds now ("" none).
+let local_try_face : Int = 14
+
+///|
+// kept across runs: said by local_tried; font_setting_reset empties it
+let local_try_given : Ref[String] = Ref("")
+
+///|
+/// Whether 本机字体's list is open, and what is typed to find one in it.
+// kept across runs: said by the tile and the list; font_setting_reset puts them back
+let local_open : Ref[Bool] = Ref(false)
+
+///|
+// kept across runs: said by the list's field; font_setting_reset empties it
+let local_filter : @ui.Field = @ui.Field::new()
+
+///|
+/// The host face family `family` of this machine's is tried in (given to it once); 0 where the host has none of it.
+fn local_tried(family : String) -> Int {
+  if local_try_given.val != family {
+    @ui.face_clear(local_try_face)
+    local_try_given.val = if @ui.face_add_family(local_try_face, family) { family } else { "" }
+  }
+  if local_try_given.val == family {
+    local_try_face
+  } else {
+    0
+  }
+}
+
+///|
+/// The families installed here (the host's: @ui.local_font_families), in its order.
+fn local_families() -> Array[String] {
+  let parsed = @json.parse(@ui.local_font_families()) catch { _ => Json::null() }
+  // in the host's order: its person's language's (local_font_families)
+  match parsed {
+    Array(a) => a.filter_map(fn(x) { if x is String(s) { Some(s) } else { None } })
+    _ => []
+  }
+}
+
+///|
+/// The marks in the list of this machine's faces (its field's, the chosen one's check): 14.
+let font_check : Double = 14.0
+
+///|
 /// The list (localPanel: 300 wide; localList: 320 high at most; the first 400 found).
 let local_panel_w : Double = 300.0
 
@@ -472,3 +456,25 @@ let local_note_box : @ui.Style = @ui.css("w=Full px=S2_5 py=S2")
 ///|
 // kept across runs: a value (no field of it changes)
 let local_note : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, w=Full)
+
+///|
+/// A face's size to fetch, in thousands as the fonts' own pages say it (kB, MB, GB: Android's
+/// Formatter.formatShortFileSize), no decimals from 10 up, one below.
+fn face_size(bytes : Double) -> String {
+  let mut v = bytes
+  let mut unit = "B"
+  for u in ["kB", "MB", "GB"] {
+    if v <= 900.0 {
+      break
+    }
+    v = v / 1000.0
+    unit = u
+  }
+  let n = if unit == "B" || v >= 10.0 {
+    v.round().to_int().to_string()
+  } else {
+    let tenths = (v * 10.0).round().to_int()
+    "\{tenths / 10}.\{tenths % 10}"
+  }
+  n + " " + unit
+}

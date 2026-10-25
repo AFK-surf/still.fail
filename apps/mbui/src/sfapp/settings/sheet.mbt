@@ -87,7 +87,7 @@ pub fn overlay(c : @ui.Ctx, core : Core) -> Unit {
     fn() {
       c.scope(sheet.serial, fn() {
         @sf.sheet_grab(c)
-        c.box(w=Fill(1.0), h=Fill(1.0), fn() { draw(c, core) }) |> ignore
+        @sf.sheet_laid(fn() { c.box(w=Fill(1.0), h=Fill(1.0), fn() { draw(c, core) }) |> ignore })
       })
     },
   )

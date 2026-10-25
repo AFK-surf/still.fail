@@ -86,3 +86,7 @@ pub let update_raised : Raised = raised(12.0, ambient=0.08, spot=0.08)
 pub fn Raised::cast(self : Raised) -> @ui.Shadow {
   Cast(self.sigma, self.dy, self.color)
 }
+
+///|
+/// What a finger holds and moves along its row (a place on a bottom bar's card): lifted 6, black at 14% both.
+pub let held_raised : Raised = raised(6.0, ambient=0.14, spot=0.14)

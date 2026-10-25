@@ -72,11 +72,11 @@ test "styles: how many values of each kind the app's screens use" {
     counts.write_string(k.0 + " " + values.length().to_string() + "\n")
   }
   inspect(counts.to_string(), content=(
-    #|text 36
+    #|text 32
     #|weight 4
     #|space 25
     #|radius 22
-    #|color 107
+    #|color 103
     #|
 
 

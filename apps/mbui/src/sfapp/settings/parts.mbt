@@ -1119,21 +1119,6 @@ fn tone_dot(tone : String) -> String {
 }
 
 ///|
-/// A segmented choice (the library's Seg, @sf.seg): in the wide frame the web's pill (controls.css.ts seg).
-fn seg(
-  c : @ui.Ctx,
-  key : String,
-  options : Array[String],
-  selected : Int,
-  fill? : Bool = false,
-  height? : Double = 30.0,
-  radius? : Double = 10.0,
-  compact? : Bool = false,
-) -> Int {
-  @sf.seg(c, key, options, selected, fill~, height~, radius~, pill=wide.val, compact~)
-}
-
-///|
 /// A person's picture (Parts.kt Avatar): theirs once it is here, else their initial on their colour.
 pub fn avatar(c : @ui.Ctx, core : Core, id : String, name : String, size : Double, picture? : String = "") -> Unit {
   @sf.avatar(c, id, name, if picture == "" { "" } else { (core.picture)(picture, c.page_stint()) }, size)
