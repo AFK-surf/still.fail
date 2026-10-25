@@ -116,6 +116,8 @@ struct FakeHost {
   mut notice_reply : Bool?
   mut notice_asks : Int
   mut notice_due : (Bool, Int)?
+  /// how often the system's settings of the app's notifications were opened (notice_settings)
+  mut notice_settings : Int
   /// the PDFs opened, by their ids: their bytes' name and length (what their kept answers are by)
   pdfs : Map[Int, (String, Int)]
   /// what the system's pickers give (Tester::picks), what was asked of them (files.mbt), the files kept on the device

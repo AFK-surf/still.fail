@@ -267,6 +267,7 @@ pub fn Tester::new(
     notice_perm: "granted",
     notice_reply: Some(true),
     notice_asks: 0,
+    notice_settings: 0,
     notice_due: None,
     pdfs: {},
     picks: [],

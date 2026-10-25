@@ -3,10 +3,17 @@
 
 ///|
 /// The app over the settings' fixture `w` wide, pointed at as `platform` says (2 a phone's finger, 0 a Mac's mouse;
-/// `regular`: a tablet's size classes), the settings' `route` opened under settings.
-fn one_page_tester(route : @settings.Route, w : Double, platform? : Int = 0, regular? : Bool = false) -> @ui.Tester raise {
+/// `regular`: a tablet's size classes), the settings' `route` opened under settings; `mode`: the fixture's (a settings
+/// one).
+fn one_page_tester(
+  route : @settings.Route,
+  w : Double,
+  platform? : Int = 0,
+  regular? : Bool = false,
+  mode? : String = "settings",
+) -> @ui.Tester raise {
   reset()
-  let src = fixture("settings")
+  let src = fixture(mode)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=900.0, platform~)
   if regular {
     let log = t.drive("system {\"size_class\":{\"width\":\"regular\",\"height\":\"regular\"}}\n")

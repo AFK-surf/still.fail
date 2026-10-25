@@ -161,7 +161,7 @@ let build_effect_calls : Array[String] = [
   "@hostapi.share", "@hostapi.open_url", "@hostapi.notice_show", "@hostapi.set_sideways",
   "@hostapi.set_dark", "@hostapi.update_install", "@hostapi.push_token", "@hostapi.gallery_ask",
   "@hostapi.exit", "@hostapi.keep", "@hostapi.save_file", "@hostapi.clipboard_set", "@ui.share",
-  "@ui.open_url", "@ui.notice_show", "@ui.notice_ask", "@ui.keep", "@ui.keep_bytes", "@ui.clipboard_set",
+  "@ui.open_url", "@ui.notice_show", "@ui.notice_ask", "@ui.notice_settings", "@hostapi.notice_settings", "@ui.keep", "@ui.keep_bytes", "@ui.clipboard_set",
   "@ui.save_file", "@ui.pick", "@ui.set_sideways", "@ui.exit", "@ui.clipboard_set_png", "@ui.clipboard_read",
   "@ui.keep_awake", "@ui.haptic", "@hostapi.clip_set_text", "@hostapi.clip_set_png", "@hostapi.clip_read",
   "@hostapi.keep_awake", "@hostapi.haptic", "@ui.native_call", "@hostapi.native_call",

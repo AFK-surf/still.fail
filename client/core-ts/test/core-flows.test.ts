@@ -1098,6 +1098,29 @@ test("notifications_are_on_until_turned_off_and_kept_so_with_no_pushes", async (
   again.close();
 });
 
+test("a_push_registration_says_what_this_device_shows_and_is_given_again_as_that_changes", async () => {
+  const { host, core } = await started();
+  const posted: J[] = [];
+  stationReplies(host, (req) => {
+    if (req.method !== "POST" || !req.url.endsWith("/v1/push")) return undefined;
+    posted.push(JSON.parse(new TextDecoder().decode(req.body ?? new Uint8Array())));
+    return {};
+  });
+  const ui = core.connect();
+  call(core, ui, 1, "push.register", { kind: "fcm", token: "t" });
+  await host.settle();
+  assert.deepEqual(posted.map((p) => [p.token, p.preview, p.kinds]), [["t", true, { wait: true, failed: true, done: "away", message: true }]]);
+  // Its preview off, people's messages off: given again saying so (the cloud makes its pushes so), not waited on.
+  call(core, ui, 2, "notify.set", { preview: false, kinds: { message: false } });
+  await host.settle();
+  assert.deepEqual(posted.slice(1).map((p) => [p.token, p.preview, p.kinds.message, p.kinds.failed]), [["t", false, false, true]]);
+  // Said again as it was: nothing given.
+  call(core, ui, 3, "notify.set", { preview: false });
+  await host.settle();
+  assert.equal(posted.length, 2);
+  core.close();
+});
+
 /// What came out: subscription values (deltas applied) into `values`, and the calls' answers (core/tests.rs `answers`).
 function answersOf(host: FakeHost, values: Map<number, unknown>): Map<number, { ok: J } | { err: string }> {
   const out = new Map<number, { ok: J } | { err: string }>();

@@ -13,7 +13,7 @@
 <nav><a class="home" href="/">still.fail</a><a href="/en/terms">Terms</a><a href="/en/trademark">Trademarks</a><a href="/privacy" lang="zh-CN">中文</a></nav>
 
 <h1>Privacy policy</h1>
-<p class="meta">Effective: October 19, 2026</p>
+<p class="meta">Effective: October 26, 2026</p>
 <p class="note">This is a translation for convenience. If it differs from the <a href="/privacy">Chinese version</a>, the Chinese version governs.</p>
 
 <p>This policy explains what personal information the still.fail hosted service collects, how it's used, who it's shared with, how long it's kept, and what rights you have. Please read it carefully, especially the parts in bold.</p>
@@ -34,7 +34,7 @@
 <p>still.fail's agents run on your own stations. Your devices connect directly to your stations with end-to-end encryption; when a direct connection isn't possible, traffic is forwarded through a relay server, which only passes on encrypted data and can't see the content. <strong>Our servers don't store your chat content, attachments or files.</strong></p>
 <p>There are two exceptions, where content passes through or is stored with us:</p>
 <ul>
-<li><strong>Push notifications</strong>: to show notifications on your devices, your station sends the chat title, the sender's name and the first 140 characters of the message through our servers to Google's Firebase Cloud Messaging (Android) or your browser's push service (web). We only forward this text; we don't store it;</li>
+<li><strong>Push notifications</strong>: to show notifications on your devices, your station sends the chat title, the sender's name and the first 140 characters of the message through our servers to Google's Firebase Cloud Messaging (Android) or your browser's push service (web). We only forward this text; we don't store it. On a device where you turn off “Show content in notifications”, its notifications only say what happened (such as “New message”), and the message's text is not forwarded;</li>
 <li><strong>Issue reports</strong>: issue reports that you or the agents on your station choose to submit (title, description, context and logs) are stored on our servers so we can investigate.</li>
 </ul>
 <p>Publicly shared chats are also stored on the publisher's station; visitors' browsers read them directly from the station over an encrypted connection. The key after the <code>#</code> in a share link is never sent to our servers.</p>
@@ -44,7 +44,7 @@
 <li><strong>Account information</strong>: if you sign in with Google, your Google account ID, email address, name and avatar URL; if you sign in with an email code, your email address. We also keep when your account was created and last active, and its plan, eligibility and ban status;</li>
 <li><strong>Sign-in sessions and devices</strong>: device or client names, when sessions were created and when they expire, and when devices were first and last online;</li>
 <li><strong>Workspace information</strong>: workspace names, members and roles, invitations (including invitees' email addresses), invite codes, and the names, icons, versions and online times of stations that have joined;</li>
-<li><strong>Push tokens</strong>: the tokens or push endpoints your devices or browsers register to receive notifications;</li>
+<li><strong>Push tokens</strong>: the tokens or push endpoints your devices or browsers register to receive notifications, with that device's notification settings (its language, which kinds of notifications it shows, whether it shows their content);</li>
 <li><strong>Issue reports</strong>: see section 3;</li>
 <li><strong>Network and log information</strong>: the IP address, request path, time and browser information (User-Agent) when you access the Service, recorded in Cloudflare's request logs; relay servers can see connections' IP addresses, node public keys and traffic volume. To prevent abuse, we rate-limit sign-ins using salted hashes of IP addresses and email addresses;</li>
 <li><strong>Usage statistics and error information</strong>: the web app and the Android app send PostHog action events, counts, durations, program errors and stack traces, and the web app also records session replays (all text, input and images on the page are masked at recording time). This data is tied to your account ID only, without your email address or name. <strong>You can turn off “Send usage and error reports” in the app's settings</strong>; once it's off, that device sends nothing to PostHog. Clients, stations and servers also send request traces to Axiom, including account ID, session ID, request path and duration. <strong>These statistics and traces don't include chat text, file names, prompts, agent output or conversation titles.</strong> Traces are used to diagnose failures and performance problems and aren't affected by that switch. Station error logs are sent only if the station's user turns them on; they're off by default.</li>

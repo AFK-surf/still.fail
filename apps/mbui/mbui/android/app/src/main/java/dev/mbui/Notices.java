@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.service.notification.StatusBarNotification;
 
 /**
@@ -96,7 +97,10 @@ public final class Notices {
         m.cancel(tag, ID);
     }
 
-    /** 0: what the system allows (1 granted, 2 denied, 3 off and maybe never asked); 1: ask (1 asked); 2: the answer, once. */
+    /**
+     * 0: what the system allows (1 granted, 2 denied, 3 off and maybe never asked); 1: ask (1 asked); 2: the answer,
+     * once; 3: the system's page of the app's notifications opened (1), where they are allowed again once refused.
+     */
     static int state(int what) {
         Context c = context();
         switch (what) {
@@ -116,6 +120,22 @@ public final class Notices {
                 int r = answer;
                 answer = -1;
                 return r;
+            }
+            case 3: {
+                MainActivity a = Host.activity;
+                if (a == null) return 0;
+                Intent i = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(Settings.EXTRA_APP_PACKAGE, a.getPackageName());
+                Host.main.post(() -> {
+                    try {
+                        a.startActivity(i);
+                    } catch (android.content.ActivityNotFoundException e) {
+                        // (a system without that page: the app's own)
+                        a.startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                android.net.Uri.fromParts("package", a.getPackageName(), null)));
+                    }
+                });
+                return 1;
             }
             default:
                 return 0;

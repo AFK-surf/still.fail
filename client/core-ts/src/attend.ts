@@ -101,6 +101,11 @@ export class Attend {
     return this.#settings.on;
   }
 
+  /// What this device shows of notices, as its push registration says it (the cloud makes a push to it so).
+  shows(): { kinds: Kinds; preview: boolean } {
+    return { kinds: { ...this.#settings.kinds }, preview: this.#settings.preview };
+  }
+
   /// The `notify` topic: the settings, whether this device should hold a push registration, what to show now.
   value(workspace: string | null): J {
     const now = this.#host.nowMs();

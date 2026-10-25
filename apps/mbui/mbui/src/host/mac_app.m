@@ -2396,7 +2396,8 @@ void mb_host_notice_cancel(moonbit_string_t tag) {
 }
 
 // 0: what the system allows (1 granted, 2 denied, 3 not asked, 0 not known: always so for a bare executable);
-// 1: ask it (1 when asked: not asked before); 2: its answer to the ask, once (1, 0; -1 none yet).
+// 1: ask it (1 when asked: not asked before); 2: its answer to the ask, once (1, 0; -1 none yet); 3: System Settings'
+// Notifications opened (1).
 int32_t mb_host_notice_state(int32_t what) {
   if (what == 0) return notice_allowed;
   if (what == 2) {
@@ -2404,6 +2405,11 @@ int32_t mb_host_notice_state(int32_t what) {
     if (a >= 0) notice_answered = -1;
     return a;
   }
+  if (what == 3) {
+    NSURL *u = [NSURL URLWithString:@"x-apple.systempreferences:com.apple.preference.notifications"];
+    return [NSWorkspace.sharedWorkspace openURL:u] ? 1 : 0;
+  }
+  if (what != 1) return 0;
   if (!notice_system() || notice_allowed != 3) return 0;
   UNAuthorizationOptions o = UNAuthorizationOptionAlert | UNAuthorizationOptionSound | UNAuthorizationOptionBadge;
   [[UNUserNotificationCenter currentNotificationCenter] requestAuthorizationWithOptions:o
