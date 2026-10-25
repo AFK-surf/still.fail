@@ -2159,11 +2159,12 @@ pub fn dialog_corner_foot(pad : Double) -> @ui.Style {
 }
 
 ///|
-/// Where a small panel's buttons stand in its foot corner (the theme's button: a capsule): as far from its foot and its
-/// side as makes the last concentric with its corner (r_menu), the row reaching past its padding (panel_pad) to there.
+/// Where a small panel's buttons stand in its foot corners (the theme's button: a capsule): as far from its foot and its
+/// sides as makes the last, and what stands at the foot's start (the model panel's account), concentric with its corner
+/// (r_menu), the row reaching past its padding (panel_pad) to there at both ends.
 pub fn panel_corner_foot() -> @ui.Style {
   let at = room(capsule_in(r_menu, button_height()) - panel_pad)
-  @ui.style(mr=at, mb=at)
+  @ui.style(ml=at, mr=at, mb=at)
 }
 
 ///|
