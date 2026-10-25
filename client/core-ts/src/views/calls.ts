@@ -292,7 +292,10 @@ export class ViewCalls {
     handlers.chatDiscard = (_inner, call) => {
       const c = call as Of<"chatDiscard">;
       return Effect.sync(() => {
+        const uploads = local.outboxGet(c.station, c.thread, c.id)?.uploads;
         local.outboxRemove(c.station, c.thread, c.id);
+        // its files no longer going up for it, nor kept
+        if (uploads?.length) inner.composers.release(uploads);
         return null;
       });
     };
@@ -312,11 +315,11 @@ export class ViewCalls {
         return Effect.fail(CoreError.invalid(t("core-misc.call.no_chat")));
       });
     };
-    handlers.chatDiscardIn = (_inner, call) => {
+    handlers.chatDiscardIn = (_inner, call, progress, at, ctx) => {
       const c = call as Of<"chatDiscardIn">;
       return Effect.suspend((): Effect.Effect<unknown, CoreError> => {
         const pending = local.pendingThread(c.station, c.session);
-        if (typeof pending === "number") local.outboxRemove(c.station, pending, c.id);
+        if (typeof pending === "number") return handlers.chatDiscard!(inner, { kind: "chatDiscard", station: c.station, thread: pending, id: c.id }, progress, at, ctx);
         else if (pending === null) local.pendingDiscard(c.session, c.id);
         else if (local.firstWaits(c.station, c.session)) local.firstDiscard(c.station, c.session, c.id);
         else return Effect.fail(CoreError.invalid(t("core-misc.call.no_chat")));

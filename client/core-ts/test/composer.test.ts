@@ -824,3 +824,89 @@ test("a_file_dragged_in_is_named_by_its_path_until_switched_to_a_file_which_then
   assert.deepEqual([taken.attachments.map((f: J) => f.path), taken.files], [["/data/uploads/a.mp4", "/data/uploads/proj.zip"], ["a", "d"]]);
   t.core.close();
 });
+
+// The app ended while a message's file went up (Android's system ends it in the background): the file's bytes were kept
+// on the device as they went, so the message goes on from them as the app starts again, not failed for a source the
+// new core never had.
+test("a_message_whose_file_was_going_up_as_the_app_ended_is_sent_from_the_bytes_kept_as_it_went", async () => {
+  const t = await queuedUpload();
+  t.send(501);
+  await t.settle();
+  assert.equal(t.tries(), 1);
+  assert.equal(t.posted.length, 0);
+  await t.host.time.pass(SOON_MS + 50);
+  await t.host.settle();
+  await Effect.runPromise(t.core.inner.data.written);
+  t.core.close();
+  t.host.takeEmitted();
+  const again = await Core.create(t.host, { clock: t.host.time.clock, sample: 0, wire: () => new HostWire(t.host) });
+  try {
+    const went: string[] = [];
+    (again.inner.stations.requests as J).uploadPart = (_addr: unknown, q: J, bytes: Uint8Array) => {
+      // (asked by its hash first whether the station has it: not)
+      if (q.sha256 !== undefined) return Effect.succeed({ have: 0 });
+      went.push(new TextDecoder().decode(bytes));
+      return Effect.succeed({ have: bytes.length, file: { name: q.name, size: bytes.length, path: "/u/again.txt" } });
+    };
+    const posted: J[] = [];
+    (again.inner.stations as J).post = (_station: string, thread: number, message: J) => Effect.sync(() => { posted.push({ thread, ...message }); return posted.length; });
+    const ui = again.connect();
+    const entry = again.inner.views.local.outbox("ws/st", 7)[0];
+    assert.equal(entry.text, "with file");
+    call(again, ui, 601, "chat.retry", { station: "ws/st", thread: 7, id: entry.id });
+    await t.host.settle();
+    await t.host.time.pass(60);
+    await t.host.settle();
+    assert.deepEqual(went, ["abc"]);
+    assert.equal(posted.length, 1);
+    assert.deepEqual(posted[0].attachments, [{ name: "slow.txt", size: 3, path: "/u/again.txt" }]);
+    // sent: nothing of it kept any more
+    assert.equal(await Effect.runPromise(again.inner.driveKept.uploadNoted("slow")), null);
+    assert.equal(await Effect.runPromise(again.inner.driveKept.has("outbox\nslow")), false);
+  } finally { again.close(); }
+});
+
+// Its file was up before the app ended, its message not yet sent: what its station said of the file is kept, and the
+// message is sent with it, the file not sent again.
+test("a_message_whose_file_was_up_as_the_app_ended_is_sent_without_sending_the_file_again", async () => {
+  const t = await queuedUpload();
+  (t.core.inner.stations as J).post = () => Effect.fail(new CoreError("mesh", "down"));
+  t.send(501);
+  t.finish();
+  await t.settle();
+  await t.host.time.pass(SOON_MS + 50);
+  await t.host.settle();
+  await Effect.runPromise(t.core.inner.data.written);
+  // (the file's bytes let go once it was up)
+  assert.equal(await Effect.runPromise(t.core.inner.driveKept.has("outbox\nslow")), false);
+  t.core.close();
+  t.host.takeEmitted();
+  const again = await Core.create(t.host, { clock: t.host.time.clock, sample: 0, wire: () => new HostWire(t.host) });
+  try {
+    let tries = 0;
+    (again.inner.stations.requests as J).uploadPart = () => { tries++; return Effect.fail(new CoreError("upload", "not again")); };
+    const posted: J[] = [];
+    (again.inner.stations as J).post = (_station: string, thread: number, message: J) => Effect.sync(() => { posted.push({ thread, ...message }); return posted.length; });
+    const ui = again.connect();
+    const entry = again.inner.views.local.outbox("ws/st", 7)[0];
+    call(again, ui, 601, "chat.retry", { station: "ws/st", thread: 7, id: entry.id });
+    await t.host.settle();
+    await t.host.time.pass(60);
+    await t.host.settle();
+    assert.equal(tries, 0);
+    assert.equal(posted.length, 1);
+    assert.deepEqual(posted[0].attachments, [t.saved]);
+  } finally { again.close(); }
+});
+
+test("discarding_a_message_lets_go_of_its_files_kept_bytes", async () => {
+  const t = await queuedUpload();
+  t.send(501);
+  await t.settle();
+  assert.equal(await Effect.runPromise(t.core.inner.driveKept.has("outbox\nslow")), true);
+  call(t.core, t.ui, 502, "chat.discard", { station: "ws/st", thread: 7, id: t.local.outbox("ws/st", 7)[0].id });
+  await t.settle();
+  assert.equal(await Effect.runPromise(t.core.inner.driveKept.uploadNoted("slow")), null);
+  assert.equal(await Effect.runPromise(t.core.inner.driveKept.has("outbox\nslow")), false);
+  t.core.close();
+});
