@@ -52,29 +52,35 @@ pub fn recent_access() -> @hostapi.GalleryAccess {
 }
 
 ///|
-/// The ids of the `n` photos latest at `now` (seconds), newest first (Attach.kt latest): each by the latest of its times
-/// that can be believed, a time in milliseconds taken as the seconds it means and one still ahead of now (by more than a
-/// day) left out; the gallery's own order (its id) between photos of the same time.
+/// How far ahead of now a time of the gallery's may be and still be believed (seconds): the phone's clock set back a
+/// little since it was written.
+let recent_ahead : Int64 = 60L
+
+///|
+/// The `n` photos latest into the gallery at `now` (seconds), newest first: each by when it came into it (added: the
+/// gallery's own stamp as it took it in), not by when it was taken or its file last written, which the camera, other
+/// apps and the gallery itself write as they will (a time zone's hours ahead, a file touched again long after) and
+/// which put whatever says it is newer ahead of a picture just saved. A time in milliseconds is taken as the seconds it
+/// means, one ahead of now is not believed (then the later believable of the other two ranks it); the gallery's own
+/// order (its id) between photos of the same time.
 fn latest_photos(photos : Array[@hostapi.GalleryPhoto], now : Int64, n : Int) -> Array[@hostapi.GalleryPhoto] {
   let believed = fn(t : Int64) -> Int64 {
     let s = if t > 100_000_000_000L { t / 1000L } else { t }
-    if s >= 1L && s <= now + 86_400L {
+    if s >= 1L && s <= now + recent_ahead {
       s
     } else {
       0L
     }
   }
   let ranked = photos.map(fn(p) {
-    let mut at = believed(p.added)
-    let m = believed(p.modified)
-    if m > at {
-      at = m
+    let added = believed(p.added)
+    if added > 0L {
+      (p, added)
+    } else {
+      let m = believed(p.modified)
+      let k = believed(p.taken)
+      (p, if m > k { m } else { k })
     }
-    let k = believed(p.taken)
-    if k > at {
-      at = k
-    }
-    (p, at)
   })
   ranked.sort_by(fn(a, b) {
     if a.1 != b.1 {
