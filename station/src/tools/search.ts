@@ -18,9 +18,8 @@ const KINDS = ["chat", "message", "history", "job", "skill", "memory", "profile"
 
 export type SearchDeps = {
   search: Search;
-  /// The workspace a session's chat is in (null: the station's home one), whether that is the station's home one, and
-  /// whom its chat is private to (what it may find of private chats: store/rows.ts `opensTo`).
-  workspaceOf(session: string): { workspace: string; home: boolean; reader: string[] | null } | null;
+  /// The workspace a session's chat is in (null: the station's home one) and whether that is the station's home one.
+  workspaceOf(session: string): { workspace: string; home: boolean } | null;
   /// A chat's link (`…/o/<workspace>/<station>/<key>`), the one to give people.
   link(session: string): string | undefined;
   /// The other stations of the workspace, by id and name.

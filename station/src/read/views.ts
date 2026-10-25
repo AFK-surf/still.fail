@@ -13,7 +13,7 @@ import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { Viewer } from "../mesh/credential.ts";
 import { type Lang, tr as translate } from "../ops/i18n.ts";
-import { sees, seesChat } from "../store/rows.ts";
+import { sees } from "../store/rows.ts";
 import * as store from "./store.ts";
 
 export { makeStore, openStore } from "./store.ts";
@@ -388,7 +388,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
     scope === null
       ? store.listSessions(s)
       : [...scope.sessions].flatMap((key) => store.getSession(s, key) ?? []).sort((a, b) => b.lastActiveAt - a.lastActiveAt)
-  ).filter((x) => seesChat(viewer, x));
+  ).filter((x) => sees(viewer, x.ws));
   const shown = new Map(sessions.filter((x) => (x.archivedAt !== null) === archived).map((x) => [x.key, x]));
   const order = sessions.filter((x) => (x.archivedAt !== null) === archived && (scope === null || scope.rows.has(x.key))).map((x) => x.key);
   // In the archive, a chat of its own shows its agents whatever they are doing elsewhere.

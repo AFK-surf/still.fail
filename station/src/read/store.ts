@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
-import { CARD_BEFORE, CLOSED_SINCE, type InWorkspace, JOBS_RUNNING, LETTER_SQL, OPTIONS_BEFORE, SAID_SINCE, SESSION_JOBS, SESSION_OF_RUNTIME, PEOPLE_AT, type Letter, isLetter, liveShare, privateToOf, sees, seesChat, seesMembers, toChatShare, withLetter } from "../store/rows.ts";
+import { CARD_BEFORE, CLOSED_SINCE, type InWorkspace, JOBS_RUNNING, LETTER_SQL, OPTIONS_BEFORE, SAID_SINCE, SESSION_JOBS, SESSION_OF_RUNTIME, PEOPLE_AT, type Letter, isLetter, liveShare, sees, toChatShare, withLetter } from "../store/rows.ts";
 
 export type Json = any;
 
@@ -37,8 +37,6 @@ export type SessionRow = {
   lastActiveAt: number; archivedAt: number | null; archivedBy: string | null; shownAt: number | null;
   /// Which of the station's workspaces its chat is in (store/rows.ts): null is the home one. Not for the pages.
   ws: string | null;
-  /// Whom its chat is private to (store/rows.ts): null, no one. Not for the pages.
-  privateTo: string[] | null;
 };
 
 export type ThreadRow = {
@@ -179,7 +177,7 @@ function toSession(r: Json): SessionRow {
     fast: r.fast === null || r.fast === undefined ? null : r.fast !== 0, runtimeSessionId: r.runtime_session_id,
     workspace: r.workspace, cwd: r.cwd ?? null, running: r.running === 1, createdAt: r.created_at,
     lastActiveAt: r.last_active_at, archivedAt: r.archived_at, archivedBy: r.archived_by, shownAt: r.shown_at,
-    ws: r.ws ?? null, privateTo: privateToOf(r.private_to),
+    ws: r.ws ?? null,
   };
 }
 
@@ -325,19 +323,24 @@ export function getSession(s: Store, key: string): SessionRow | null {
   return r ? toSession(r) : null;
 }
 
-/// Which sessions `viewer` sees (docs/multi-workspace.md, docs/private-chats.md): those whose chat is in their workspace
-/// (one not there: the home one's) and not private to others. A read made for no one (null) sees every one.
+/// Which sessions `viewer` sees (docs/multi-workspace.md): those whose chat is in their workspace (one not there: the
+/// home one's). A read made for no one (null) sees every one.
 export function seenBy(s: Store, viewer: InWorkspace | null | undefined): (key: string) => boolean {
   if (!viewer) return () => true;
   // `*`: a database from before has no `ws` (every chat its home workspace's).
-  const rows = new Map<string, { ws: string | null; privateTo: string[] | null }>(all(s, "SELECT * FROM sessions").map((r) => [r.key, { ws: r.ws ?? null, privateTo: privateToOf(r.private_to) }]));
-  return (key) => seesChat(viewer, rows.get(key) ?? { ws: null });
+  const ws = new Map<string, string | null>(all(s, "SELECT * FROM sessions").map((r) => [r.key, r.ws ?? null]));
+  return (key) => sees(viewer, ws.get(key) ?? null);
 }
 
-/// Whether `viewer` sees a thread (store/rows.ts `seesMembers`).
+/// Whether `viewer` sees a thread: one of its sessions is in their workspace (a thread with none: the home one's).
 export function seesThread(s: Store, viewer: InWorkspace | null | undefined, thread: number): boolean {
   if (!viewer) return true;
-  return seesMembers(viewer, threadSessions(s, thread).map((m) => getSession(s, m.session)));
+  const members = threadSessions(s, thread);
+  if (members.length === 0) return sees(viewer, null);
+  return members.some((m) => {
+    const row = getSession(s, m.session);
+    return row !== null && sees(viewer, row.ws);
+  });
 }
 
 /// Every session, most recently active first.

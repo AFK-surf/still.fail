@@ -16,7 +16,6 @@ import { agentHomeOf, memory } from "../read/memory.ts";
 import { runtimeKind } from "../agents/runtime.ts";
 import { STILLFAIL_SURFACE } from "../read/store.ts";
 import { type Asker, type Doc, type Hit, has, hitOf, sees } from "./match.ts";
-import { privateToAll } from "../store/rows.ts";
 
 /// The workspace documents of nothing in particular are in (`ws` null: the station's home one).
 type Ws = string | null;
@@ -29,12 +28,12 @@ const firstChars = (text: string, n: number) => (text.length <= n ? text : Array
 
 /// A thread's chat: the workspace it is in (its home session's, else its first one's; none: the home one) and its key in
 /// the station's list (as /chats has it: its first agent's session key).
-export function chatOf(s: Store, thread: number): { ws: Ws; chat: string | null; sessions: SessionRow[]; to: string[] | null } {
+export function chatOf(s: Store, thread: number): { ws: Ws; chat: string | null; sessions: SessionRow[] } {
   const members = store.threadSessions(s, thread);
   const row = store.getThread(s, thread);
   const sessions = members.map((m) => store.getSession(s, m.session)).filter((x): x is SessionRow => x !== null);
   const home = sessions.find((x) => x.key === row?.home) ?? sessions[0] ?? null;
-  return { ws: home?.ws ?? null, chat: sessions[0]?.key ?? null, sessions, to: privateToAll(sessions) };
+  return { ws: home?.ws ?? null, chat: sessions[0]?.key ?? null, sessions };
 }
 
 /// The words a chat is called by, as lists name it: its title, else what its agent called it, else the first thing said.
@@ -48,7 +47,7 @@ function titleOf(row: store.ThreadRow, first: string | null): string {
 export function threadDocs(s: Store, id: number): Doc[] {
   const row = store.getThread(s, id);
   if (row === null) return [];
-  const { ws, chat, sessions, to } = chatOf(s, id);
+  const { ws, chat, sessions } = chatOf(s, id);
   // Filed away (its entries in its archive file), or archived as people see it (by hand, or idle): out of the lists.
   const filed = store.isArchived(s, id);
   const archived = filed || row.hiddenAt !== null || (sessions.length > 0 && sessions.every((x) => x.archivedAt !== null));
@@ -59,7 +58,7 @@ export function threadDocs(s: Store, id: number): Doc[] {
   const ref = { thread: id, chat, surface, archived, ...(row.channel ? { channel: row.channel } : {}) };
   const docs: Doc[] = [];
   docs.push({
-    key: `c:${id}`, kind: "chat", ws, to, title,
+    key: `c:${id}`, kind: "chat", ws, title,
     body: [...sessions.map((x) => x.title ?? ""), ...sessions.map((x) => x.model ?? "")].filter((w) => w !== "").join("\n"),
     at: lastAt ?? row.createdAt ?? null, ref,
   });
@@ -68,7 +67,7 @@ export function threadDocs(s: Store, id: number): Doc[] {
     const files = m.attachments.map((a: any) => (typeof a?.name === "string" ? a.name : "")).filter((n: string) => n !== "");
     if (text.trim() === "" && files.length === 0) continue;
     docs.push({
-      key: `m:${id}:${m.n}`, kind: "message", ws, to, title: "",
+      key: `m:${id}:${m.n}`, kind: "message", ws, title: "",
       body: files.length > 0 ? `${text}\n${files.join("\n")}` : text,
       at: m.createdAt ?? null,
       ref: { thread: id, seq: m.n, chat, chatTitle: title, surface, archived, authorKind: m.authorKind, author: m.author, ...(m.agentIdentity ? { agentIdentity: m.agentIdentity } : {}) },
@@ -236,7 +235,7 @@ export async function historyHits(s: Store, profiles: Profiles, words: string[],
   const want = options.offset + options.limit + 1;
   const until = options.now() + options.ms;
   const found: Hit[] = [];
-  const sessions = store.listSessions(s).filter((x) => sees({ ws: x.ws, to: x.privateTo }, asker));
+  const sessions = store.listSessions(s).filter((x) => sees({ ws: x.ws }, asker));
   let looked = 0;
   for (const session of sessions) {
     if (found.length >= want) break;
@@ -269,7 +268,7 @@ export async function historyHits(s: Store, profiles: Profiles, words: string[],
     for (const { i, e, text } of latest.reverse()) {
       const at = e.at === null ? null : Date.parse(e.at);
       found.push(hitOf({
-        key: `h:${session.key}:${i}`, kind: "history", ws: session.ws, to: session.privateTo, title: "", body: text,
+        key: `h:${session.key}:${i}`, kind: "history", ws: session.ws, title: "", body: text,
         at: at !== null && Number.isFinite(at) ? at : null,
         ref: { session: session.key, index: i, entry: e.kind, ...(e.tool ? { tool: e.tool } : {}), chat: session.key, chatTitle, ...(thread ? { thread: thread.id } : {}) },
       }, words));
@@ -288,7 +287,7 @@ export function jobDocs(s: Store, key: string): Doc[] {
   const jobs = store.listJobs(s, key);
   const thread = session ? (store.sessionThreads(s, key).find((t) => t.surface === STILLFAIL_SURFACE) ?? null) : null;
   return jobs.map((j) => ({
-    key: `j:${j.id}`, kind: "job", ws: session?.ws ?? null, to: session?.privateTo ?? null, title: j.name,
+    key: `j:${j.id}`, kind: "job", ws: session?.ws ?? null, title: j.name,
     body: [j.command, j.cwd ?? "", j.port !== null && j.port !== undefined ? `:${j.port}` : ""].filter((w) => w !== "").join("\n"),
     at: j.startedAt ?? null,
     ref: { job: j.id, session: key, chat: key, state: j.state, ...(j.port !== null && j.port !== undefined ? { port: j.port } : {}), ...(thread ? { thread: thread.id } : {}) },

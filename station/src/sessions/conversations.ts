@@ -8,7 +8,7 @@ import { PlaceRefused } from "../ops/places.ts";
 import { formatHistory, parseThreadAddress, threadAddress } from "../agents/instructions.ts";
 import { log } from "../ops/log.ts";
 import { iso } from "../read/transcript.ts";
-import { type Attachment, STILLFAIL_SURFACE, type SessionThread, type ThreadRow, opensTo } from "../store/store.ts";
+import { type Attachment, STILLFAIL_SURFACE, type SessionThread, type ThreadRow } from "../store/store.ts";
 import type { DeclaredState } from "./actor.ts";
 import {
   type Args,
@@ -383,16 +383,6 @@ export async function threadHistory(hub: Hub, key: string, thread: ThreadRow, co
   return formatHistory(messages, thread.surface, threadAddress(thread.channel, thread.threadTs), key, names);
 }
 
-/// Refuses session `key` a platform call (slack_api, feishu_api) that names one of `channels` of `surface` a direct
-/// message of other people than those who see what it reads is in (docs/private-chats.md).
-export function platformReadable(hub: Hub, key: string, surface: string, channels: string[]) {
-  const reader = hub.store.getSession(key)?.privateTo ?? null;
-  for (const channel of new Set(channels)) {
-    const to = hub.store.channelPrivateTo(surface, channel);
-    if (!opensTo(reader, to)) throw new Error(`${channel} is a direct message, private to the people in it: it cannot be read from a chat others can see`);
-  }
-}
-
 /// slack_api: a Slack Web API call from session `key`, as the bot of `via` (else the session's own connect). Writes keep
 /// to the threads rule: not in a thread another session of the same bot takes part in; one it writes in becomes its own.
 export async function slackApi(hub: Hub, key: string, method: string, params: Record<string, Json>, via: string | null): Promise<string> {
@@ -405,8 +395,6 @@ export async function slackApi(hub: Hub, key: string, method: string, params: Re
   const textOf = (name: string): string | null => (typeof params[name] === "string" ? params[name] : null);
   const channel = textOf("channel") ?? textOf("channel_id");
   const surface = hub.surface(connect);
-  // Not a direct message of other people (docs/private-chats.md).
-  if (channel !== null) platformReadable(hub, key, surface, [channel]);
   // A write lands in a thread: the one named, the one its message is in, or (a new message) the one it starts.
   const write = WRITES.some((w) => method.startsWith(w));
   const named = textOf("thread_ts");

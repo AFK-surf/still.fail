@@ -23,7 +23,7 @@ import {
   type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type Published, type ProcessRow, type ProfileStatus,
   type Quote, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
   type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
-  byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, privateToAll, privateToOf, quote, takeChars, toEntry, toJob, toMembership,
+  byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
   LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addListState, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addUsageTotals, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
@@ -309,12 +309,12 @@ export class Store {
   insertSession(s: NewSession): void {
     this.#with((changes) => {
       this.#run(
-        `INSERT INTO sessions (key, connect, scope, title, created_by, runtime, profile, profile_pinned, model, effort, workspace, cwd, runtime_session_id, token, created_at, last_active_at, told_notes, fast, ws, private_to)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sessions (key, connect, scope, title, created_by, runtime, profile, profile_pinned, model, effort, workspace, cwd, runtime_session_id, token, created_at, last_active_at, told_notes, fast, ws)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         s.key, s.connect, s.scope ?? "thread", s.title ?? null, s.createdBy ?? null, s.runtime, s.profile, flag(s.profilePinned ?? false),
         s.model ?? null, s.effort ?? null, s.workspace, s.cwd ?? null, s.runtimeSessionId ?? null, s.token, s.createdAt, s.lastActiveAt,
         // A new session begins with today's instructions: no note is news to it.
-        latestNote(), optFlag(s.fast), s.ws ?? null, s.privateTo === null || s.privateTo === undefined ? null : JSON.stringify(s.privateTo),
+        latestNote(), optFlag(s.fast), s.ws ?? null,
       );
       changes.push({ type: "session", key: s.key });
     });
@@ -739,16 +739,6 @@ export class Store {
   threadAt(surface: string, channel: string, threadTs: string): ThreadRow | null {
     const r = this.#one("SELECT * FROM threads WHERE surface = ? AND channel = ? AND thread_ts = ?", surface, channel, threadTs);
     return r ? toThread(r) : null;
-  }
-
-  /// Whom a platform's channel is private to (a direct message's, docs/private-chats.md): those all the private
-  /// sessions of its threads are private to; null when none of them is private.
-  channelPrivateTo(surface: string, channel: string): string[] | null {
-    const rows = this.#all(
-      "SELECT DISTINCT s.private_to FROM threads t JOIN thread_sessions ts ON ts.thread = t.id JOIN sessions s ON s.key = ts.session WHERE t.surface = ? AND t.channel = ? AND s.private_to IS NOT NULL",
-      surface, channel,
-    );
-    return privateToAll(rows.map((r) => ({ ws: null, privateTo: privateToOf(r.private_to) })));
   }
 
   /// The threads at CHANNEL/THREAD_TS on any surface (an agent names a conversation without its surface).
