@@ -243,12 +243,14 @@ pub fn file_card(
   } else {
     download.map(fn(d) { d.0 })
   }
-  let ground = if named {
+  let ground = if named && composer {
+    card_named.then(card_waiting)
+  } else if named {
     card_named
   } else if composer && open {
-    card_composer_open
+    card_composer.then(composer_card()).then(card_open)
   } else if composer {
-    card_composer
+    card_composer.then(composer_card())
   } else {
     card_box
   }
@@ -429,20 +431,39 @@ let card_hot : @ui.Style = @ui.css("bg=Hover")
 let card_named : @ui.Style = card_box.then(@ui.css("bg=Clear border=B1 dashed"))
 
 ///|
-/// What waits in the composer (a file's card, a quote), off its frosted ground, which a card's neutral one is lost on
-/// (the user, 2026-10-16: 附件有点难以分辨): on the page's own ground, a step up in the dark (the text at 10% over what
-/// floats), a faint shadow under it (Chat.css.ts `composerFiles fileCard, composerQuote quoteCard`). One named by its
-/// path keeps card_named's: no ground, outlined.
-// kept across runs: a value (no field of it changes)
-pub let composer_card : @ui.Style = @ui.css("bg=Bg shadow=Sm dark{bg=Over(Raised, A(Fg, O10))}")
+/// What waits in the composer (a file's card, a quote) stands off its frosted ground by its own ground alone, no shadow
+/// (the user, 2026-10-16: 附件有点难以分辨; 2026-10-25: 背景色好分辨就行了，不用这么深阴影): on a computer, whose composer
+/// is greyer than its page, the page's own (Chat.css.ts `composerFiles fileCard, composerQuote quoteCard`); on a touch
+/// device, whose capsule is whiter than its paper, the neutral one; in the dark a step up (the text at 10% over what
+/// floats). One named by its path keeps card_named's: no ground, outlined.
+pub fn composer_card() -> @ui.Style {
+  if theme().narrow {
+    composer_card_narrow
+  } else {
+    composer_card_wide
+  }
+}
 
 ///|
 // kept across runs: a value (no field of it changes)
-let card_composer : @ui.Style = card_box.then(composer_card)
+let composer_card_wide : @ui.Style = @ui.css("bg=Bg dark{bg=Over(Raised, A(Fg, O10))}")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let card_composer_open : @ui.Style = card_composer.then(@ui.css("hovered{bg=Hover}"))
+let composer_card_narrow : @ui.Style = @ui.css("bg=Neutral dark{bg=Over(Raised, A(Fg, O10))}")
+
+///|
+/// A file's card waiting in the composer: as tall as a picture's tile beside it (56), its words on its middle.
+// kept across runs: a value (no field of it changes)
+let card_waiting : @ui.Style = @ui.css("h=S14")
+
+///|
+// kept across runs: a value (no field of it changes)
+let card_composer : @ui.Style = card_box.then(card_waiting)
+
+///|
+// kept across runs: a value (no field of it changes)
+let card_open : @ui.Style = @ui.css("hovered{bg=Hover}")
 
 ///|
 /// Where the sheet is while what goes up says not how far (the old phone's going card: a 16 spinner).
@@ -550,7 +571,7 @@ pub fn quote_card(
     tip(c, key + "/pin-tip", source, words)
   }
   let hot = jump && c.lit(source)
-  c.box(style=if composer { quote_box_composer } else { quote_box }, fn() {
+  c.box(style=if composer { quote_box_composer.then(composer_card()) } else { quote_box }, fn() {
     // (a pin in its top corner: there the ladder's inset from both its edges, concentric with it)
     let source_look = match (composer, pin != "") {
       (true, false) => quote_source_composer
@@ -618,7 +639,7 @@ let quote_corner : Double = row_corner
 
 ///|
 // kept across runs: a value (no field of it changes)
-let quote_box_composer : @ui.Style = quote_box.then(@ui.style(radius=InnerOr(rounded(composer_inner)))).then(composer_card)
+let quote_box_composer : @ui.Style = quote_box.then(@ui.style(radius=InnerOr(rounded(composer_inner))))
 
 ///|
 /// What sits in the composer's corners is rounded concentric with it, the ladder's next step in.
