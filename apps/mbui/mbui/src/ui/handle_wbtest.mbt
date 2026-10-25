@@ -68,3 +68,58 @@ test "Android: a tap on the field that has the focus says it to the host again (
   t.tap(40.0, 10.0)
   assert_true(fake.val.unwrap().ime_told > told)
 }
+
+///|
+/// A field with no frame of its own (as the composer's: its words start at its edge), 20 in from the window's left,
+/// filling the rest of it.
+fn plain_tester(field : Field, platform? : Int = 0) -> Tester {
+  Tester::new(
+    fn(c) {
+      c.box(pl=20.0, w=Fill(1.0), fn() { c.editor("field", font_size=16.0, plain=true, field~) |> ignore })
+      |> ignore
+    },
+    w=300.0,
+    h=200.0,
+    platform~,
+  )
+}
+
+///|
+/// The caret drawn last frame (its rect's instance: the rect in its colour as wide as it, not its handle's).
+fn caret_drawn() -> Array[Double] raise {
+  let blue = 0x0A.to_double() / 255.0
+  match insts().filter(fn(a) { a[5] == 0.0 && a[8] == blue && a[2] == caret_w }) {
+    [.., a] => a
+    [] => fail("no caret drawn")
+  }
+}
+
+///|
+test "the caret at the start of a field with no frame of its own: whole in the field, round" {
+  for platform in [0, 2] {
+    let field = Field::new()
+    let t = plain_tester(field, platform~)
+    t.tap(40.0, 8.0)
+    t.draw()
+    let a = caret_drawn()
+    assert_true(a[0] >= 20.0)
+    assert_true(a[0] + a[2] <= 300.0)
+    assert_eq(a[4], a[2] / 2.0)
+  }
+}
+
+///|
+test "Android: the caret's handle hangs from the middle of the caret's foot, at a line's start too" {
+  let field = Field::new()
+  field.set("hello world")
+  let t = plain_tester(field, platform=2)
+  for x in [21.0, 60.0] {
+    t.tap(x, 8.0)
+    t.draw()
+    let st = g().editors.get(g().focus).unwrap()
+    assert_true(st.handle_on)
+    let a = caret_drawn()
+    assert_eq(st.handle_x, a[0] + a[2] / 2.0)
+    assert_eq(st.handle_y, a[1] + a[3])
+  }
+}
