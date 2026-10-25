@@ -8,12 +8,13 @@ import { HermesDriver } from "../src/agents/hermes.ts";
 import { isPosting, transcriptPath } from "../src/read/transcript.ts";
 import type { OpenOptions, RuntimeEvent, TurnOutcome } from "../src/agents/runtime.ts";
 
-const data = mkdtempSync(join(tmpdir(), "hm-real-"));
+const data = mkdtempSync(process.platform === "win32" ? join(tmpdir(), "hm-real-") : "/tmp/hm-real-");
 const home = join(data, "profile");
 mkdirSync(join(home, "hermes"), { recursive: true });
 let turn = 1;
 let requests = 0;
 let restored = false;
+let lastTools: string[] = [];
 const posts: string[] = [];
 const violations: string[] = [];
 const json = (res: any, body: any) => { res.setHeader("Content-Type", "application/json"); res.end(JSON.stringify(body)); };
@@ -43,6 +44,7 @@ const server = createServer(async (req, res) => {
   requests++;
   if (turn === 2 && body.messages?.some((m: any) => m.role === "assistant" && m.content === "Hermes turn 1 complete")) restored = true;
   const tools: string[] = body.tools?.map((t: any) => t.function?.name) ?? [];
+  lastTools = tools;
   const direct = tools.find(name => name.endsWith("chat_post"));
   // Hermes may expose MCP tools through its discovery bridge. Use the name that a real search returned.
   const discovered = (body.messages ?? []).flatMap((m: any) => {
@@ -69,7 +71,7 @@ const server = createServer(async (req, res) => {
 });
 await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
 const port = (server.address() as any).port;
-writeFileSync(join(home, "hermes", "config.yaml"), `model:\n  default: smoke-model\n  provider: custom\n  base_url: http://127.0.0.1:${port}/v1\n  stream: false\nagent:\n  max_turns: 4\nmemory:\n  memory_enabled: false\n  user_profile_enabled: false\n`);
+writeFileSync(join(home, "hermes", "config.yaml"), `model:\n  default: smoke-model\n  provider: openai-api\n  api_mode: chat_completions\n  base_url: http://127.0.0.1:${port}/v1\n  stream: false\nagent:\n  max_turns: 4\nmemory:\n  memory_enabled: false\n  user_profile_enabled: false\n`);
 const options: OpenOptions = {
   key: "real-smoke", profile: { id: "hm", runtime: "hermes", home, access: { kind: "env" }, env: { OPENAI_API_KEY: "local-test-placeholder", OPENAI_BASE_URL: `http://127.0.0.1:${port}/v1`, HERMES_TELEMETRY_ENABLED: "false" } },
   cwd: data, instructions: "Use the stillfail chat_post tool to send the answer.", mcpToken: "smoke-token", mcpUrl: `http://127.0.0.1:${port}/mcp`, route: "smoke",
@@ -88,11 +90,18 @@ async function completed(done: Promise<TurnOutcome>) {
   } finally { clearTimeout(timer); }
 }
 try {
+  const catalog = await driver.models(options.profile);
+  const selected = catalog.find(m => m.includes("smoke-model"));
+  assert.ok(selected, `configured model missing from Hermes catalog: ${JSON.stringify(catalog)}`);
+  assert.equal(requests, 0, "model discovery must not start a model turn");
+  assert.deepEqual(posts, [], "model discovery receives no station MCP tools");
+  options.model = selected;
+  console.log(`Hermes model catalog and selection: ${selected}`);
   const first = completion();
   const session = await driver.open(options, first.event);
   await session.prompt("Post the first result with chat_post.");
   await completed(first.done);
-  assert.deepEqual(posts, ["Hermes turn 1 reply"]);
+  assert.deepEqual(posts, ["Hermes turn 1 reply"], JSON.stringify({ requests, violations, tools: lastTools }));
   const id = session.id();
   await session.dispose();
   turn = 2;

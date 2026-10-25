@@ -505,5 +505,7 @@
   "station.relay.untitled": "Untitled chat",
   "station.relay.pick": "Pick the connect and channel to relay to",
   "station.relay.threadIn": "a thread in {place}",
-  "station.updates.hermesExternal": "Install Hermes 0.21.7 or newer with its ACP and MCP extras and configure its provider on this machine; manage updates with Hermes."
+  "station.updates.hermesExternal": "Install Hermes 0.21.7 or newer with its ACP and MCP extras and configure its provider on this machine; manage updates with Hermes.",
+  "station.profile.hermesModelsEmpty": "Hermes returned no models. Configure the provider in this profile’s Hermes home, then check again, or add a model by name.",
+  "station.profile.hermesModelsFailed": "Could not read Hermes models: {error}. Configure the provider in this profile’s Hermes home, then check again; a model can also be added by name."
 }

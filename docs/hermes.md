@@ -20,6 +20,12 @@ In Accounts → Add account → Custom variables, choose **Hermes Agent**. It is
 
 The model ID is an example; use one your configured provider offers. Configure Hermes in `<absolute profile home>/hermes`, which is the process's `HERMES_HOME`: its `config.yaml`, `.env`, provider login and native `state.db` belong there. For an interactive setup use `HERMES_HOME=<absolute profile home>/hermes hermes model` through the station's login flow. Explicit profile variables can also supply Hermes' provider settings. The machine's usual `~/.hermes` credentials are not copied into the profile. Hermes' own reasoning configuration applies; still.fail does not offer unsupported effort controls or claim to have verified an `env` profile's credentials.
 
+## Model selection and older clients
+
+The station reads Hermes' `session/new` model inventory when a Hermes profile is checked (including on startup and after it is added). This probe uses that profile's home and explicit environment, supplies no station MCP server, sends no prompt, and closes the process after reading the catalog. The profile page lists these IDs for selection. Environment profiles also allow adding a model by name; selecting or adding one enables it for new chats. A failed probe keeps the last model list and existing selections and explains that the profile's provider configuration needs checking. A newly created, unconfigured Hermes home cannot inherit the machine's credentials silently.
+
+Clients advertise their runtime vocabulary with the `stillfail-runtimes` request header. Requests without it retain the pre-Hermes vocabulary. The station filters unsupported profile/session metadata in the overview, lists, incremental refreshes, batch answers and live/replayed events; opening an unsupported session's execution detail returns an update-required error. Conversation text is kept, and an unknown agent is never relabelled as Claude or Codex. Old clients can continue using the station's supported runtimes; selecting Hermes requires an updated client. The response projection happens after idempotency caching, independently for each requesting client.
+
 ## Sessions and tools
 
 - Initialize ACP, then `session/new` or `session/load`, with the session's working directory and the still.fail HTTP MCP server. Its bearer token is supplied as an HTTP header, never embedded in the prompt.

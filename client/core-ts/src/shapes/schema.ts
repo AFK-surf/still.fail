@@ -604,7 +604,7 @@ export const SHAPES: Record<string, Shape> = {
     ["usesText", "String", { default: true, doc: "What it can do, in words (Claude Code · Codex · DeepSeek Harness · 自动决策)." }],
     ["providerName", opt("String"), { doc: "The provider of a key from the list of API providers, and the mark of its maker (none: the generic one)." }],
     ["providerMark", opt("String")],
-    ["canAddModel", "bool", { default: true, doc: "A model can be named by hand (a key on a listed provider: not every one lists its models)." }],
+    ["canAddModel", "bool", { default: true, doc: "A model can be named by hand (an environment profile, or a key on a listed provider: not every one lists its models)." }],
     ["decisionOnly", "bool", { default: true, doc: "A provider that only answers the automatic decisions (Jev): its models are the ones its decision probe found." }],
     ["decisionModels", vec("String"), { default: true }],
     ["decisionText", opt("String"), { doc: "Where the decision probe is, in words (what it found, or why it found none)." }],

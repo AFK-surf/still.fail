@@ -183,6 +183,7 @@ export const AgentsLive = (control: Control) =>
       // In sandboxes a subscription's login stays here: each process there is lent a short-lived one, as a borrowed
       // subscription's is (agents/sandbox.ts).
       const lentToSandbox = (p: any) => !borrowed(p) && p?.access?.kind === "subscription" && sandboxed(data);
+      const hermes = new HermesDriver({ data });
       const codex = new CodexDriver({
         data,
         currentProfile: (id) => settings().profiles.find((p) => p.id === id),
@@ -223,7 +224,7 @@ export const AgentsLive = (control: Control) =>
           new GrokDriver({ data }),
           new CursorDriver({ data }),
           new DevinDriver({ data }),
-          new HermesDriver({ data }),
+          hermes,
         ],
         mcpUrl: () => door?.url ?? "",
         internal: new InternalChat(),
@@ -418,7 +419,7 @@ export const AgentsLive = (control: Control) =>
         return cloud.state?.peers.find((x) => x?.id === host)?.name ?? host ?? null;
       };
       const accounts: Accounts = makeAccounts({
-        data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, following: () => events.inUse() || hub.anyRunning(), checkOnStart: true,
+        data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, hermes: () => hermes, following: () => events.inUse() || hub.anyRunning(), checkOnStart: true,
         workspaces: () => hub.workspaces(),
         shared: { status: (p) => sharing!.status(p), view: (p) => sharing?.profileView(p) ?? null, hostName },
       });

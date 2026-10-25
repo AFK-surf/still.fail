@@ -8,7 +8,7 @@ import { peerHttpBase } from "../tools/http.ts";
 import { LiveFromAcp, chars, type AcpLiveState } from "./live.ts";
 import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
 import { expandRoute, profileEnv, profileModel } from "./profiles.ts";
-import { TOOL_SERVERS, cleanEnv, unreachable, uuid, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
+import { TOOL_SERVERS, cleanEnv, unreachable, uuid, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 
 type Json = any;
 
@@ -99,7 +99,19 @@ export class HermesDriver implements AgentDriver {
     return "hermes";
   }
 
-  async open(options: OpenOptions, events: (event: RuntimeEvent) => void): Promise<HermesSession> {
+  async models(profile: Profile): Promise<string[]> {
+    mkdirSync(profile.home, { recursive: true });
+    const session = await this.start({ key: `models-${profile.id}-${uuid()}`, profile, cwd: profile.home,
+      instructions: "", mcpToken: "", mcpUrl: "", route: "model-discovery" }, () => {}, true);
+    try { return session.availableModels; }
+    finally { await session.dispose(); }
+  }
+
+  open(options: OpenOptions, events: (event: RuntimeEvent) => void): Promise<HermesSession> {
+    return this.start(options, events, false);
+  }
+
+  private async start(options: OpenOptions, events: (event: RuntimeEvent) => void, discovery: boolean): Promise<HermesSession> {
     if (options.resume !== undefined && !/^[a-zA-Z0-9_-]+$/.test(options.resume)) throw new Error("invalid Hermes session id");
     const home = options.profile.home;
     const sessions = join(hermesHome(home), SESSIONS);
@@ -108,7 +120,7 @@ export class HermesDriver implements AgentDriver {
       // Not one the station kept: failing here lets the caller start fresh.
       throw new Error(`no Hermes session ${options.resume}`);
     }
-    const model = options.model ?? profileModel(options.profile);
+    const model = discovery ? undefined : options.model ?? profileModel(options.profile);
     const session = new HermesSession(this, "", { busy: false, aborting: false, closed: false }, new LiveFromAcp(), events, sessions, model ?? null);
     session.toolsUrl = options.mcpUrl;
     session.instructions = options.instructions;
@@ -122,7 +134,7 @@ export class HermesDriver implements AgentDriver {
       if (!version || (+version[1] === 0 && (+version[2] < 21 || (+version[2] === 21 && +version[3] < 7)))) {
         throw new Error("Hermes Agent 需要 0.21.7 或更新版本；请先更新 Hermes，再重试。");
       }
-      const servers = mcpServers(options.mcpUrl, options.mcpToken);
+      const servers = discovery ? [] : mcpServers(options.mcpUrl, options.mcpToken);
       const opening = { cwd: options.cwd, mcpServers: servers };
       if (options.resume !== undefined) {
         session.named(options.resume);
@@ -132,7 +144,12 @@ export class HermesDriver implements AgentDriver {
         const id = opened?.result?.sessionId;
         if (typeof id !== "string" || id === "") throw new Error("Hermes named no session");
         session.named(id);
-        session.keep({ type: "session", id, cwd: options.cwd });
+        const catalog = opened?.result?.models;
+        session.availableModels = [...new Set([
+          ...(Array.isArray(catalog?.availableModels) ? catalog.availableModels.map((m: Json) => m?.modelId) : []),
+          catalog?.currentModelId,
+        ].filter((m): m is string => typeof m === "string" && m.trim() !== ""))];
+        if (!discovery) session.keep({ type: "session", id, cwd: options.cwd });
       }
       session.opened();
       if (model !== undefined) await session.request(`model:${uuid()}`, "session/set_model", { sessionId: session.id(), modelId: model });
@@ -240,6 +257,7 @@ export class HermesSession implements AgentSession {
   private open = new Map<string, { name: string; input: Json }>();
   toolsUrl: string | null = null;
   instructions = "";
+  availableModels: string[] = [];
 
   constructor(driver: HermesDriver, sessionId: string, turn: Turn, live: LiveFromAcp, events: (event: RuntimeEvent) => void, sessions: string, model: string | null) {
     this.driver = driver;

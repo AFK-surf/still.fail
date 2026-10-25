@@ -774,7 +774,7 @@ export function profile(p: J): J {
   const pid = str(get(o.access, "provider"));
   const src = pid !== undefined ? providers.find(pid) : null;
   const decisionOnly = src !== null && !!src.decision && !src.chat && !src.responses && !src.anthropic;
-  o.canAddModel = get(o.access, "kind") === "api-provider" && !decisionOnly;
+  o.canAddModel = (get(o.access, "kind") === "api-provider" && !decisionOnly) || get(o.access, "kind") === "env";
   if (decisionOnly) {
     const f = get(o.check, "decision") ?? null;
     o.decisionOnly = true;

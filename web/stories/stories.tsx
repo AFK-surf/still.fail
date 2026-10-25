@@ -132,6 +132,31 @@ const addModel: DemoExtension = {
     return { ...o, profiles: o.profiles.map((p) => ({ ...p, canAddModel: true })) };
   },
 };
+/** Hermes' ACP catalog on an environment profile, before any model is enabled. */
+const hermesModels: DemoExtension = {
+  then: (t, value) => {
+    if (!value || typeof value !== "object") return undefined;
+    const shown = (p: Record<string, unknown>) => ({
+      ...p, name: "Hermes Agent", runtime: "hermes", runtimes: ["hermes"], machine: false,
+      access: { kind: "env" }, model: null, models: [], quota: null, login: null, env: [],
+      canAddModel: true, available: ["openai-api:smoke-model", "openrouter:anthropic/claude-sonnet-4.6"],
+      names: {"openai-api:smoke-model":"openai-api:smoke-model", "openrouter:anthropic/claude-sonnet-4.6":"Sonnet 4.6"},
+      makers: {}, series: [{name:"Sonnet",models:["openrouter:anthropic/claude-sonnet-4.6"]},{name:"其他",models:["openai-api:smoke-model"]}],
+      modelsText: "已启用 0 / 2 个模型", modelsReading: false, checkText: "可用", checkTone: "green", checkLine: "2 个模型", trouble: null,
+      kindText: "自定义环境变量", providerName: null, loginCommand: "",
+      home: "/Users/lin/.stillfail/homes/hermes", check: { state: "ok", detail: "可用，2 个模型", checkedAt: Date.now(), models: ["openai-api:smoke-model", "openrouter:anthropic/claude-sonnet-4.6"] },
+    });
+    if (t.topic === "overview") {
+      const o = value as {profiles: Record<string,unknown>[]};
+      return {...o, profiles: o.profiles.map(shown)};
+    }
+    if (t.topic === "profiles") {
+      const o = value as {items: Record<string,unknown>[]};
+      return {...o, items: o.items.map(e => ({...e, group: "key", groupTitle: "其他", profile: shown(e.profile as Record<string,unknown>)}))};
+    }
+    return undefined;
+  },
+};
 /** The demo's profile as an OpenCode Go one on an OpenCode account (accounts/console.ts): signed in, or being signed in
  *  again (`signingIn`: the device code is up). */
 const openCode = (signingIn: boolean): DemoExtension => ({
@@ -838,6 +863,7 @@ export const stories: Story[] = [
   { id: "app-profile-workspaces", group: "应用", title: "Profile · 也给加入的 workspace 用", app: true, demo: profileFor(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-workspaces-on", group: "应用", title: "Profile · 已开放给加入的 workspace", app: true, demo: profileFor(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-add-model", group: "应用", title: "Profile · 按名称添加模型", app: true, demo: addModel, steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-hermes-models", group: "应用", title: "Hermes · 读取模型和按名称添加", app: true, demo: hermesModels, steps: [{ click: '[aria-label="Profile"]' }, { text: "Hermes Agent" }] },
   { id: "app-profile-opencode", group: "应用", title: "Profile · OpenCode Go 账号登录", app: true, demo: openCode(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-opencode-signing-in", group: "应用", title: "Profile · OpenCode Go 重新登录（设备码）", app: true, demo: openCode(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-kimi-signing-in", group: "应用", title: "Profile · Kimi Code 重新登录（设备码）", app: true, demo: kimiCode, steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },

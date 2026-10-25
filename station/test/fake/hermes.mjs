@@ -26,7 +26,7 @@ for await (const line of createInterface({ input: process.stdin })) {
   else if (m.method === 'session/new') {
     sessionId = randomUUID();
     writeFileSync(join(process.env.HERMES_HOME, sessionId), 'session');
-    reply(m.id, { sessionId });
+    reply(m.id, { sessionId, models: { currentModelId: 'openrouter:default', availableModels: [{modelId:'openrouter:test'}, {modelId:'openrouter:default'}, {modelId:'openrouter:test'}] } });
   } else if (m.method === 'session/load') {
     sessionId = p.sessionId;
     if (!existsSync(join(process.env.HERMES_HOME, sessionId))) say({ id: m.id, error: { code: -32602, message: 'session not found' } });

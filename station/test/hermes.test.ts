@@ -117,3 +117,13 @@ for (const recovery of ['none', 'handover', 'crash']) test(`station tool names a
   assert.equal(call.status, 'error');
   await session.dispose();
 });
+
+test('model discovery reads ACP inventory without a turn, MCP credentials or transcript', async () => {
+  const { options, driver, dump } = setup();
+  const models = await driver.models(options.profile);
+  assert.deepEqual(models, ['openrouter:test', 'openrouter:default']);
+  const calls = readFileSync(dump + '.rpc', 'utf8').trim().split('\n').map(s=>JSON.parse(s));
+  assert.deepEqual(calls.find(c=>c.method==='session/new').params.mcpServers, []);
+  assert.equal(calls.some(c=>c.method==='session/prompt' || c.method==='session/set_model'), false);
+  assert.equal(readFileSync(dump, 'utf8').includes(options.mcpToken), false);
+});
