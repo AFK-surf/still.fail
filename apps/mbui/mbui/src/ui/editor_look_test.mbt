@@ -164,3 +164,30 @@ test "panic: one Field given to the same key's editors in two scopes (a list's r
   )
   t.frame()
 }
+
+///|
+test "a focused field's caret blinks till caret_blinks_for_ms after it last moved, then rests shown and asks nothing" {
+  let field = @ui.Field::new()
+  let t = @ui.Tester::new(
+    fn(c) { c.editor("field", field~, font_size=10.0) |> ignore },
+    w=300.0,
+    h=100.0,
+  )
+  t.tap(50.0, 20.0)
+  t.type_text("hi")
+  t.draw()
+  // shown as it was typed, hidden half a blink later, its next change waited for
+  let shown = t.frame_hash()
+  t.run_for(@ui.caret_blink_ms * 1.5)
+  assert_true(t.frame_hash() != shown)
+  assert_true(t.next_wake() is Some(_))
+  // past caret_blinks_for_ms: shown, and nothing more to wait for
+  t.run_for(@ui.caret_blinks_for_ms)
+  assert_eq(t.frame_hash(), shown)
+  assert_true(t.next_wake() is None, msg=t.rest_why())
+  // a letter typed: it blinks again
+  t.type_text("!")
+  t.draw()
+  assert_true(t.next_wake() is Some(_))
+  assert_eq(field.text(), "hi!")
+}
