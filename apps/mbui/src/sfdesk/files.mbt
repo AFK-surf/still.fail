@@ -125,7 +125,9 @@ pub fn files_shell(
   } else if c.key_pressed(@ui.key_of_char('g'), mods=@ui.mod_cmd + @ui.mod_shift_key) {
     go_to_open()
   }
-  // a side's folder, as the folder's own parts take it (drive.mbt); a folder opened in a new tab or on the other side
+  // a side's folder, as the folder's own parts take it (drive.mbt), in its side's room; a folder opened in a new tab
+  // or on the other side
+  let side_room = if split_on { room / 2.0 - body_in_half } else { room - body_in }
   let folder_of = fn(i : Int, p : DriveAt) -> FolderOf? {
     match stations.iter().find_first(fn(x) { x.station == p.station }) {
       Some(st) =>
@@ -136,7 +138,7 @@ pub fn files_shell(
           rights: dv_rights(src, ws, Some(st)),
           at: p,
           front: i == tab.front,
-          room: 0.0,
+          room: side_room,
           go: fn(to, _) { files_go(to) },
           open_in: Some(fn(to, beside) { show(if beside { "besides" } else { "open" }, Some(to), None, None) }),
           go_to: Some(go_to_open),
@@ -191,7 +193,7 @@ pub fn files_shell(
         }
         // (each side's ids its own: the same folder can be on both)
         c.scope(i, fn() {
-          pane_frame(c, src, folder_of(i, pane_at(tab, i)), "page/\{i}", split_on, front, room, fn() {
+          pane_frame(c, src, folder_of(i, pane_at(tab, i)), "page/\{i}", split_on, front, fn() {
             if !front {
               show("front", None, None, Some(i))
             }
@@ -278,7 +280,6 @@ fn pane_frame(
   key : String,
   split_on : Bool,
   front : Bool,
-  room : Double,
   front_it : () -> Unit,
 ) -> Unit {
   c.box(style=if split_on { side_half } else { side_one }, fn() {
@@ -293,8 +294,6 @@ fn pane_frame(
         return
       }
     }
-    folder_head(c, src, f, split_on, front_it)
-    let room = if split_on { room / 2.0 - body_in_half } else { room - body_in }
     c.box(style=if split_on { body_half } else { body_one }, fn() {
       let pid = c.id("files/side/" + key)
       // a press going down in it (a tap down and up between two frames too), before what it presses takes it
@@ -305,7 +304,7 @@ fn pane_frame(
           _ => ()
         }
       }
-      c.box(style=side_one, id=pid, fn() { folder_view(c, src, { ..f, room, }) }) |> ignore
+      c.box(style=side_one, id=pid, fn() { folder_page(c, src, f, None, front_it~) }) |> ignore
     })
     |> ignore
   })

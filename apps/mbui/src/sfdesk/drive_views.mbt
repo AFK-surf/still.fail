@@ -75,6 +75,30 @@ pub fn drive_view(src : Source, place : String) -> String {
 }
 
 ///|
+/// The ways a folder can be shown in a list's room `room` across: columns where two fit side by side (where one
+/// alone does, they are a list that says it is columns), a tree and a list wherever (a tree opens folders in place, a
+/// list does not: as narrow as a phone they differ still).
+pub fn views_for(room : Double) -> Array[String] {
+  if room >= 2.0 * (column_w + column_gap) {
+    ["columns", "tree", "list"]
+  } else {
+    ["tree", "list"]
+  }
+}
+
+///|
+/// How `place` shows a folder in a list's room `room` across: the way last chosen there where that room can have it,
+/// else a list (what was chosen kept: wider, it is back).
+pub fn view_in(src : Source, place : String, room : Double) -> String {
+  let v = drive_view(src, place)
+  if views_for(room).contains(v) {
+    v
+  } else {
+    "list"
+  }
+}
+
+///|
 /// Another way chosen for `place` (`prefs.set {driveViews: {place}}`).
 pub fn set_drive_view(src : Source, place : String, v : String) -> Unit {
   let o : Map[String, Json] = {}
@@ -83,17 +107,22 @@ pub fn set_drive_view(src : Source, place : String, v : String) -> Unit {
 }
 
 ///|
-/// The three ways, side by side (ViewSwitch): icons in a quiet track, the one shown raised, each its tip.
-pub fn view_switch(c : @ui.Ctx, key : String, value : String, on_change : (String) -> Unit) -> Unit {
+/// The ways the room has (`ways`: views_for's), side by side (ViewSwitch): icons in a quiet track, the one shown
+/// raised, each its tip.
+pub fn view_switch(c : @ui.Ctx, key : String, value : String, on_change : (String) -> Unit, ways? : Array[String] = views_all) -> Unit {
   let t = @sf.theme()
   let b = c.box(style=views_track, fn() {
-    for w in [("columns", "view-columns"), ("tree", "view-tree"), ("list", "list")] {
+    for w in view_icons {
       let (v, icon) = w
+      if !ways.contains(v) {
+        continue
+      }
       let label = @sf.t("web-pages.drive.view." + v)
       let id = c.id(key + "/" + v)
       c.cursor(id, Hand)
       let on = value == v
-      if c.clicked(id) && !on {
+      // (the one shown chosen again is kept as chosen: shown where the room has not what was chosen before)
+      if c.clicked(id) {
         on_change(v)
       }
       let hot = c.lit(id)
@@ -106,6 +135,15 @@ pub fn view_switch(c : @ui.Ctx, key : String, value : String, on_change : (Strin
   })
   c.semantics(b, RadioGroup, label=@sf.t("web-pages.drive.view.label"))
 }
+
+///|
+/// Every way, and each one's icon.
+// kept across runs: a value (no field of it changes)
+let views_all : Array[String] = ["columns", "tree", "list"]
+
+///|
+// kept across runs: a value (no field of it changes)
+pub let view_icons : Array[(String, String)] = [("columns", "view-columns"), ("tree", "view-tree"), ("list", "list")]
 
 // ── a list, a tree ──
 
@@ -164,7 +202,9 @@ fn tree_lines(src : Source, s : Shown, at : DriveAt, depth : Int, out : Array[Li
 
 ///|
 /// The rows of a list or a tree (`tree`: folders opened in place), in a list of their own (`key`: by where it is shown
-/// and how, so each folder keeps how far it was scrolled): `head` over them, `empty` where the folder has nothing.
+/// and how, so each folder keeps how far it was scrolled): `head` over them, `empty` where the folder has nothing,
+/// `foot` the room under the last. The row whose name is being changed is kept in view (the soft keyboard up, the
+/// list shorter: it comes up over it).
 pub fn rows_view(
   c : @ui.Ctx,
   src : Source,
@@ -175,6 +215,7 @@ pub fn rows_view(
   compact? : Bool = false,
   head? : () -> Unit,
   empty? : () -> Unit,
+  foot? : Double = 0.0,
 ) -> Unit {
   let lines : Array[Line] = []
   if tree {
@@ -195,8 +236,12 @@ pub fn rows_view(
     }
   }
   let extra = if head is Some(_) { 1 } else { 0 }
-  // a row asked into view (a key moved to it): as near as it needs to come
-  match s.b.take_show() {
+  // a row asked into view (a key moved to it), or the one being named: as near as it needs to come
+  let want = match s.b.take_show() {
+    Some(w) => Some(w)
+    None => s.b.renaming()
+  }
+  match want {
     Some(want) =>
       for i, l in lines {
         match l {
@@ -213,8 +258,13 @@ pub fn rows_view(
       }
     None => ()
   }
-  let n = lines.length() + extra + (if lines.is_empty() && empty is Some(_) { 1 } else { 0 })
-  c.list(key, n, if compact { row_compact_est } else { row_est }, fn(i) {
+  let empty_n = if lines.is_empty() && empty is Some(_) { 1 } else { 0 }
+  let n = lines.length() + extra + empty_n
+  @sf.rows_list(c, key, n + 1, if compact { row_compact_est } else { row_est }, fn(i) {
+    if i == n {
+      c.box(style=@ui.style(w=Full, h=Fixed(rows_foot + foot)), fn() {  }) |> ignore
+      return
+    }
     if i < extra {
       match head {
         Some(h) => h()
@@ -222,23 +272,32 @@ pub fn rows_view(
       }
       return
     }
-    match lines.get(i - extra) {
+    let at_line = i - extra
+    let first = at_line == 0
+    let last = at_line == lines.length() - 1
+    match lines.get(at_line) {
       Some(Row(a, e, depth, open)) =>
-        drive_row(c, src, a, e, (s.row_of)(a, e), s, compact~, depth?=if tree { Some(depth) } else { None }, expanded?=open, on_toggle=fn() {
-          s.b.toggle(c, src, dv_join(a.path, e.name))
+        @sf.group_row(c, first, last, fn() {
+          drive_row(c, src, a, e, (s.row_of)(a, e), s, compact~, depth?=if tree { Some(depth) } else { None }, expanded?=open, on_toggle=fn() {
+            s.b.toggle(c, src, dv_join(a.path, e.name))
+          })
         })
       Some(Note(words, error, depth)) =>
-        c.box(style=tree_note, fn() {
-          c.box(style=@ui.style(w=Fixed(tree_note_in + tree_step * depth.to_double())), fn() {  }) |> ignore
-          c.text(words, style=if error { tree_error } else { tree_words }) |> ignore
+        @sf.group_row(c, first, last, fn() {
+          c.box(style=tree_note, fn() {
+            c.box(style=@ui.style(w=Fixed(tree_note_in + tree_step * depth.to_double())), fn() {  }) |> ignore
+            c.text(words, style=if error { tree_error } else { tree_words }) |> ignore
+          })
+          |> ignore
         })
-        |> ignore
       Some(Reading(depth)) =>
-        c.box(style=tree_note, fn() {
-          c.box(style=@ui.style(w=Fixed(tree_note_in + tree_step * depth.to_double())), fn() {  }) |> ignore
-          @sf.wait_line(c, "")
+        @sf.group_row(c, first, last, fn() {
+          c.box(style=tree_note, fn() {
+            c.box(style=@ui.style(w=Fixed(tree_note_in + tree_step * depth.to_double())), fn() {  }) |> ignore
+            @sf.wait_line(c, "")
+          })
+          |> ignore
         })
-        |> ignore
       None =>
         match empty {
           Some(f) => f()
@@ -248,6 +307,10 @@ pub fn rows_view(
   })
   |> ignore
 }
+
+///|
+/// Under the last row (the phone's contentPadding: 30), over the frame's room.
+let rows_foot : Double = 30.0
 
 ///|
 fn dmax_int(a : Int, b : Int) -> Int {
@@ -421,7 +484,7 @@ fn column(
             }
           None => ()
         }
-        c.list(lkey, list.length(), row_compact_est, fn(i) {
+        @sf.rows_list(c, lkey, list.length(), row_compact_est, fn(i) {
           let e = list[i]
           drive_row(c, src, at, e, (s.row_of)(at, e), s, compact=true, column=true, along=next == Some(e.name))
         })

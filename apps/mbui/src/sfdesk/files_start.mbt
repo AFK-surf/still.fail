@@ -61,10 +61,10 @@ fn files_home(c : @ui.Ctx, src : Source, w : Workspace, core : Core, room : Doub
 
 ///|
 /// A station's files at `at` (DrivePage), in whichever frame: a folder where there is one to show (the one asked, else
-/// the one folder pinned, else the home for a member who browses every folder), else its folders pinned (Roots). Laid
-/// out by its own width: wide, the files' page (its tabs, the folder's head, its ways); narrow, the narrow app's page
-/// (drive_narrow.mbt) in the frame it is given (`narrow`: back, the room over and under it). `go`: a folder shown in
-/// place of this one (the side in front, by default).
+/// the one folder pinned, else the home for a member who browses every folder), else its folders pinned (Roots). The
+/// folder is its page (drive_page.mbt), one on every screen; what holds it by the room: wide, the files' page's tabs
+/// (files.mbt), whose bar holds what can be done to it; narrow, its own bar in the frame it is given (`narrow`: back,
+/// the room over and under it). `go`: a folder shown in place of this one (the side in front, by default).
 pub fn files_station(
   c : @ui.Ctx,
   src : Source,
@@ -89,6 +89,29 @@ pub fn files_station(
   }
   let look = look_of(c)
   let manage = st is Some(s) && pin_stations(src, w.id).iter().any(fn(p) { p.station == s.station })
+  // (the page's arrangement said once, here, for what draws it: wide, the tabs' sides; narrow, its own frame)
+  @sf.with_look(look, fn() { files_station_in(c, src, w, core, at, room, narrow, go, st, root, look, manage, known, error, stations) })
+}
+
+///|
+/// files_station's page in its arrangement.
+fn files_station_in(
+  c : @ui.Ctx,
+  src : Source,
+  w : Workspace,
+  core : Core,
+  at : DriveAt,
+  room : Double,
+  narrow : NarrowOf,
+  go : (DriveAt) -> Unit,
+  st : DvStation?,
+  root : String?,
+  look : @sf.Look,
+  manage : Bool,
+  known : Array[DvStation]?,
+  error : String?,
+  stations : Array[DvStation],
+) -> Unit {
   match (st, root, look) {
     (Some(s), Some(r), Wide) if s.drive => {
       let (dk, _) = drive_stations(src, w.id)
@@ -96,8 +119,7 @@ pub fn files_station(
     }
     (Some(s), Some(r), Narrow) if s.drive => {
       let here : DriveAt = { station: at.station, root: Some(r), path: at.path }
-      // (its arrangement said for what draws it, its rows on their card)
-      @sf.with_look(look, fn() { folder_narrow(
+      folder_page(
         c,
         src,
         {
@@ -114,10 +136,10 @@ pub fn files_station(
           go_to: None,
           manage: Some(fn() { manage_roots(src, w.id, s.station) }),
         },
-        narrow,
-      ) })
+        Some(narrow),
+      )
     }
-    (_, _, Narrow) => @sf.with_look(look, fn() { roots_narrow(c, src, w.id, st, known is None, error, manage, narrow, go) })
+    (_, _, Narrow) => roots_narrow(c, src, w.id, st, known is None, error, manage, narrow, go)
     _ => {
       desk_page(
         c,

@@ -77,10 +77,16 @@ fn drive_reset() -> Unit {
 /// `items` presented as row `key`'s menu (@sf.menu `from`), the row marked while it is drawn; what it offers kept as
 /// the row's are each frame it is built (drive_row_menu_now: what is chosen, as the core says it, may come after it
 /// opened, as the web's menu renders its items from what is chosen).
-fn drive_row_menu(key : String, items : Array[@sf.MenuItem?], from : @sf.Anchor, along? : @ui.Along = Start) -> Unit {
+fn drive_row_menu(
+  key : String,
+  items : Array[@sf.MenuItem?],
+  from : @sf.Anchor,
+  along? : @ui.Along = Start,
+  title? : String = "",
+) -> Unit {
   held.menu_items.clear()
   held.menu_items.push_iter(items.iter())
-  @sf.menu(held.menu_items, from~, along~)
+  @sf.menu(held.menu_items, from~, along~, title~)
   held.menu_row = key
   held.menu_serial = @sf.last_presented()
 }
@@ -362,15 +368,17 @@ fn entry_busy(src : Source, at : DriveAt, name : String) -> Bool {
 }
 
 ///|
-/// The folder's own (FolderView): a folder of a station in the way the page shows it, the files going up into it over
-/// its rows, its preview beside it (⌘⇧P); what is dropped where no folder of it takes it goes into it. Its keys
-/// while it is in front: the rows' (the core's), ⌘U puts files up, ⌘⇧N a new folder, ⌘⇧P the preview.
-pub fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf) -> Unit {
+/// The folder's own (FolderView): a folder of a station in the way its room has it shown (views_for), `head` over its
+/// rows (in their list, scrolled with them; over the columns, which scroll each their own), the files going up into
+/// it, its preview beside it (⌘⇧P) where the room has it; `foot` the frame's room under the last row. What is dropped
+/// where no folder of it takes it goes into it. Its keys while it is in front: the rows' (the core's), ⌘U puts files
+/// up, ⌘⇧N a new folder, ⌘⇧P the preview.
+fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : () -> Unit, foot~ : Double) -> Unit {
   let at = f.at
   let root = at.root.unwrap_or("")
   let st = f.st
   let write = f.rights.write
-  let view = drive_view(src, "page")
+  let view = view_in(src, "page", list_room(src, f.room))
   let (value, error) = drive_folder(src, at.station, root, at.path)
   let entries = items(value, "entries").map(dv_entry)
   let sname = st.name
@@ -418,7 +426,8 @@ pub fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf) -> Unit {
     write,
     transfers: st.transfers,
   }
-  let previewing = preview_shown(src, "page")
+  // (the preview beside the list where its room has both)
+  let previewing = preview_shown(src, "page") && pane_fits(f.room)
   if f.front && !c.field_focused() {
     b.keys(c, src)
     if write && c.shortcut('u') {
@@ -456,39 +465,37 @@ pub fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf) -> Unit {
   }
   // (short of room for the list beside the preview, the preview gives way: the list keeps a few names' width)
   let pane_slot = c.id("files/pane-slot/" + f.key)
-  let pane_shown = previewing && !c.left_out(pane_slot)
   c.box(style=with_pane, fn() {
     let lid = c.id("files/list/" + f.key)
     let lit = drag_target(c, lid, "pane/" + f.key + "/" + at.station + "/" + root + "/" + at.path, at, name, shown, 0)
     c.box(style=list_box, id=lid, fn() {
       if view == "columns" {
         // (columns stay while the folder opened is read: each column says its own reading or trouble)
-        for u in ups_here {
-          upload_row(c, src, u)
-        }
+        head()
+        uploads_here(c, src, ups_here)
         columns_view(
           c,
           src,
           { ..at, path: "" },
           at.path,
           shown,
-          f.room - (if pane_shown { pane_w + 1.0 } else { 0.0 }),
+          list_room(src, f.room),
           empty?=if ups_here.is_empty() { Some(empty) } else { Some(fn() {  }) },
         )
       } else {
         match (value, error) {
-          (None, Some(e)) =>
-            c.box(style=problem_box, fn() {
-              c.text(e, style=problem_words) |> ignore
-              if @sf.button(c, @sf.t("web-pages.drive.retry"), key="files/retry/" + f.key, tone=Ghost, icon="retry") {
-                refresh_folder(c, src, at)
-              }
-            })
-            |> ignore
-          (None, None) => @sf.waiting(c, count=8)
+          // (why it was not read: the head's, with its 重试)
+          (None, Some(_)) => head()
+          (None, None) => {
+            head()
+            @sf.waiting(c, count=8)
+          }
           (Some(_), _) =>
             match b.arranged(at.path, entries) {
-              None => @sf.waiting(c, count=8)
+              None => {
+                head()
+                @sf.waiting(c, count=8)
+              }
               Some(list) =>
                 rows_view(
                   c,
@@ -497,11 +504,12 @@ pub fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf) -> Unit {
                   at,
                   shown,
                   view == "tree",
+                  foot~,
                   head=fn() {
-                    for u in ups_here {
-                      upload_row(c, src, u)
-                    }
-                    if view == "list" && list.length() > 0 {
+                    head()
+                    uploads_here(c, src, ups_here)
+                    // (its columns' heads where its rows have their columns: not where they say it under the name)
+                    if view == "list" && list.length() > 0 && f.room >= row_stack_below {
                       list_head(c, b.arrangement(), fn(by) {
                         let a = b.arrangement()
                         if by == a.by {
@@ -599,8 +607,7 @@ pub fn folder_name(st : DvStation, at : DriveAt) -> String {
 }
 
 ///|
-/// A row's menu (FolderView itemsIn): about what is chosen when it is among it and more than it, else about it alone;
-/// `narrow`, as the narrow app's sheet has it (EntrySheet: a press opens it, a name is asked for).
+/// A row's menu (FolderView itemsIn): about what is chosen when it is among it and more than it, else about it alone.
 fn row_items(
   c : @ui.Ctx,
   src : Source,
@@ -609,7 +616,6 @@ fn row_items(
   in_ : DriveAt,
   e : DvEntry,
   favs : Array[Favorite],
-  narrow? : Bool = false,
 ) -> Array[@sf.MenuItem?] {
   let all = b.chosen_with(src, in_.path, e)
   let root = in_.root.unwrap_or("")
@@ -646,12 +652,9 @@ fn row_items(
   }
   let full = dv_join(in_.path, e.name)
   let abs = dv_absolute(root, full)
-  // (narrow, a press opens it: what is offered is what else can be done, EntrySheet's)
-  if !narrow {
-    item(@sf.t("web-pages.drive.open"), "", fn() {
-      open_entry(c, src, "page", in_, e, [e], fn(to) { (f.go)(to, false) })
-    })
-  }
+  item(@sf.t("web-pages.drive.open"), "", fn() {
+    open_entry(c, src, "page", in_, e, [e], fn(to) { (f.go)(to, false) })
+  })
   if !e.dir {
     item(@sf.t("web-pages.drive.download"), "download", fn() { save_entry(c, src, in_, e) })
     item(@sf.t("android-misc.drive.share"), "external", fn() { share_entry(c, src, in_, e) })
@@ -678,14 +681,8 @@ fn row_items(
     })
   }
   if write {
-    // (narrow, asked for: wide, changed in place)
-    item(@sf.t("web-pages.drive.rename"), "edit", fn() {
-      if narrow {
-        ask_rename(c, src, b, in_, e)
-      } else {
-        b.start_rename(c, src, in_.path, e)
-      }
-    })
+    // (changed in place, wherever: the row kept in view over the soft keyboard: rows_view)
+    item(@sf.t("web-pages.drive.rename"), "edit", fn() { b.start_rename(c, src, in_.path, e) })
     out.push(
       Some(
         @sf.menu_item_of(
@@ -701,14 +698,16 @@ fn row_items(
 }
 
 ///|
-/// What can be done to the folder (FolderView's actions), for the files' page's bar while it is in front: its three
-/// ways, the preview, put up and a new folder (who may write), read again (turning while it is read), 收藏 (lit while
-/// it is kept), pin (for one who browses every folder: lit while pinned), its ⋯ (复制路径, 前往文件夹, 管理).
-pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf) -> Unit {
+/// What can be done to the folder (FolderView's actions), for the bar it is shown under (the files' page's while it
+/// is in front, or its own): the ways its room has, the preview, put up and a new folder (who may write), read again
+/// (turning while it is read), 收藏 (lit while it is kept), pin (for one who browses every folder: lit while pinned),
+/// its ⋯ (复制路径, 前往文件夹, 管理). Short of room they go into the ⋯, what is needed least first.
+pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf, style? : @ui.Style = actions_row) -> Unit {
   let at = f.at
   let root = at.root.unwrap_or("")
   let st = f.st
-  let view = drive_view(src, "page")
+  let ways = views_for(list_room(src, f.room))
+  let view = view_in(src, "page", list_room(src, f.room))
   let previewing = preview_shown(src, "page")
   let here = dv_absolute(root, at.path)
   let name = folder_name(st, at)
@@ -724,25 +723,29 @@ pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf) -> Unit {
   let on = fn(yes : Bool) -> Int64? { if yes { Some(lit) } else { None } }
   let tools : Array[@sf.Tool] = [
     // (short of room, what is needed least goes into the ⋯ first: reading it again, pinning it, 收藏, the preview,
-    // a new folder, uploading; the way it is shown last, the other two ways offered there)
+    // the way it is shown (the others offered there), a new folder; putting files up last)
     @sf.tool_of(
       "view",
-      fn() { view_switch(c, "files/view", view, fn(v) { set_drive_view(src, "page", v) }) },
+      fn() { view_switch(c, "files/view", view, fn(v) { set_drive_view(src, "page", v) }, ways~) },
       drop=folder_drop_view,
-      instead=[("columns", "view-columns"), ("tree", "view-tree"), ("list", "list")]
-        .filter(fn(w) { w.0 != view })
+      instead=view_icons
+        .filter(fn(w) { w.0 != view && ways.contains(w.0) })
         .map(fn(w) { @sf.menu_item_of(@sf.t("web-pages.drive.view." + w.0), fn() { set_drive_view(src, "page", w.0) }, icon=w.1) }),
     ),
-    @sf.tool_button(
-      c,
-      "files/preview",
-      if previewing { "panel-close" } else { "panel-open" },
-      @sf.t(if previewing { "web-pages.files.hidePreview" } else { "web-pages.files.showPreview" }),
-      on_press=fn() { set_preview_shown(src, "page", !previewing) },
-      drop=folder_drop_preview,
-      lit?=on(previewing),
-    ),
   ]
+  if pane_fits(f.room) {
+    tools.push(
+      @sf.tool_button(
+        c,
+        "files/preview",
+        if previewing { "panel-close" } else { "panel-open" },
+        @sf.t(if previewing { "web-pages.files.hidePreview" } else { "web-pages.files.showPreview" }),
+        on_press=fn() { set_preview_shown(src, "page", !previewing) },
+        drop=folder_drop_preview,
+        lit?=on(previewing),
+      ),
+    )
+  }
   if f.rights.write {
     tools.push(@sf.tool_button(c, "files/upload", "upload", @sf.t("web-pages.drive.upload"), on_press=fn() { dv_upload(c, at) }, drop=folder_drop_upload))
     tools.push(
@@ -790,7 +793,20 @@ pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf) -> Unit {
       ),
     )
   }
-  let more : Array[@sf.MenuItem?] = [Some(@sf.menu_item_of(@sf.t("web-pages.drive.copyPath"), icon="copy", fn() { copy_path(c, here) }))]
+  // its ⋯: the order and hidden files (where its rows have no heads to sort by, and no right click: a finger's), then
+  // its path, a folder by its path, 管理
+  let a = b.arrangement()
+  let more : Array[@sf.MenuItem?] = []
+  for by in ["name", "time", "size", "kind"] {
+    more.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.sortBy." + by), icon=if a.by == by { "check" } else { "" }, fn() {
+      b.arrange_as(c, src, by~, down=false)
+    })))
+  }
+  more.push(Some(@sf.menu_item_of(@sf.t(if a.hidden { "web-pages.drive.hideHidden" } else { "web-pages.drive.showHidden" }), fn() {
+    b.arrange_as(c, src, hidden=!a.hidden)
+  })))
+  more.push(None)
+  more.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.copyPath"), icon="copy", fn() { copy_path(c, here) })))
   match f.go_to {
     Some(g) => more.push(Some(@sf.menu_item_of(@sf.t("web-pages.files.goTo"), icon="search", g)))
     None => ()
@@ -800,11 +816,11 @@ pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf) -> Unit {
       more.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.manage"), icon="folder", m)))
     _ => ()
   }
-  @sf.tools_row(c, "files/more", tools, more~, label=@sf.t("web-main.menu.more"), style=actions_row)
+  @sf.tools_row(c, "files/more", tools, more~, label=@sf.t("web-main.menu.more"), style~)
 }
 
 ///|
-/// The order a folder's actions go into its ⋯ in, short of room (refreshing first, the way it is shown last).
+/// The order a folder's actions go into its ⋯ in, short of room (refreshing first, putting files up last).
 let folder_drop_refresh : Int = 1
 
 ///|
@@ -817,13 +833,13 @@ let folder_drop_favorite : Int = 3
 let folder_drop_preview : Int = 4
 
 ///|
-let folder_drop_mkdir : Int = 5
+let folder_drop_view : Int = 5
 
 ///|
-let folder_drop_upload : Int = 6
+let folder_drop_mkdir : Int = 6
 
 ///|
-let folder_drop_view : Int = 7
+let folder_drop_upload : Int = 7
 
 ///|
 /// A row of a folder's list, as the files' page and a chat's 文件 tab draw it (DriveRow): its mark, name, size and time
@@ -854,6 +870,8 @@ pub fn drive_row(
   let more = c.id(key + "/menu/more")
   let busy = entry_busy(src, at, e.name)
   let live = !busy && !row.renaming
+  // (a touch device: no ⋯, a hold its menu, a folder's › saying a press goes in; a computer: its ⋯ under the pointer)
+  let held_more = @sf.more_held()
   if live {
     c.cursor(id, Hand)
     if c.pressed(id) {
@@ -873,7 +891,8 @@ pub fn drive_row(
       Some((x, y)) => {
         held.row_frame = c.frame_number()
         (row.menu)()
-        drive_row_menu(key, (row.items)(), @sf.at_point(x, y))
+        // (had by holding it, its menu says what it is of: a sheet over the row it was held on)
+        drive_row_menu(key, (row.items)(), @sf.at_point(x, y), title=if held_more { e.name } else { "" })
       }
       None => ()
     }
@@ -913,7 +932,11 @@ pub fn drive_row(
     Some(d) => tree_step * d.to_double()
     None => tree_none
   }
-  let inner = if compact && tree {
+  // its sizes the screen's (Theme.items); short of room for its size's and time's columns, what it is goes under its
+  // name (a phone's mMeta), by the row's own width
+  let items = t.items
+  let stacked = !compact && !column && c.width < row_stack_below
+  let inner = (if compact && tree {
     row_tree_compact
   } else if tree {
     row_tree
@@ -921,6 +944,10 @@ pub fn drive_row(
     row_compact
   } else {
     row_style
+  }).then(@ui.style(min_h=Fixed(if compact { items.least - compact_less } else { items.least })))
+  let fetching = match download_of_drive(src, at.station, root, full) {
+    Some(d) if flag(Some(d), "active") => Some((number(Some(d), "progress") * 100.0).floor().to_int())
+    _ => None
   }
   c.box(style=entry_room, fn() {
     let box = c.box(style=if busy { ground.then(entry_busy_look) } else { ground }, id~, fn() {
@@ -936,36 +963,72 @@ pub fn drive_row(
           })
           |> ignore
         }
-        @sf.icon(c, dv_kind_icon(if e.dir { "folder" } else { e.kind }), size=if compact { kind_compact } else { kind_icon }, color=t.p.muted)
+        @sf.icon(c, dv_kind_icon(if e.dir { "folder" } else { e.kind }), size=if compact { items.mark - compact_less_mark } else { items.mark }, color=t.p.muted)
         |> ignore
+        let name_words = items.name.then(row_name)
+        let size = if e.dir || column { "" } else { e.size_text }
         if row.renaming {
           name_field(c, key + "/name", s.b, e, row)
         } else if compact {
-          c.text(e.name, style=row_name) |> ignore
+          c.text(e.name, style=name_words) |> ignore
+        } else if stacked {
+          // its name, what it is under it (a folder's time; a file's size · time)
+          c.box(style=name_stack, fn() {
+            c.text(e.name, style=name_words) |> ignore
+            let line = if e.dir { e.time_text } else { dv_words([size, e.time_text], " · ") }
+            if line != "" {
+              c.text(line, style=items.meta) |> ignore
+            }
+          })
+          |> ignore
         } else {
           // (short of room, the name keeps a few words: the size goes first, then the time, as the heads do)
-          c.box(style=name_cell, fn() { c.text(e.name, style=row_name) |> ignore }) |> ignore
+          c.box(style=name_cell, fn() { c.text(e.name, style=name_words) |> ignore }) |> ignore
         }
-        let size = if e.dir || column { "" } else { e.size_text }
         if compact {
-          if size != "" {
-            c.text(size, style=row_meta) |> ignore
+          // (how far it has come down, in words: a compact row has no room for the chip in its corner)
+          match fetching {
+            Some(p) => c.text("\{p}%", style=items.meta) |> ignore
+            None => if size != "" { c.text(size, style=items.meta) |> ignore }
           }
           c.box(style=end_compact, fn() {  }) |> ignore
-        } else {
-          c.box(style=size_cell, drop=list_drop_size, fn() { c.text(size, style=row_meta) |> ignore }) |> ignore
-          c.box(style=time_cell, drop=list_drop_time, fn() { c.text(e.time_text, style=row_meta) |> ignore }) |> ignore
+        } else if !stacked {
+          c.box(style=size_cell, drop=list_drop_size, fn() { c.text(size, style=items.meta) |> ignore }) |> ignore
+          c.box(style=time_cell, drop=list_drop_time, fn() { c.text(e.time_text, style=items.meta) |> ignore }) |> ignore
+        }
+        if stacked || held_more {
+          // what is at its end in the flow: something under way, how far it has come down, how far it was read, a
+          // folder's ›
+          c.box(style=end_flow, fn() {
+            if busy {
+              @sf.spinner(c) |> ignore
+            } else if fetching is Some(p) && !compact {
+              download_chip(c, at.station + "/" + full, p)
+            } else if e.kind == "text" || e.kind == "markdown" {
+              read_share(c, src, at.station, root, full)
+            } else if e.dir && held_more {
+              @sf.icon(c, "chevron-right", size=finger_chevron, color=t.p.subtle) |> ignore
+            }
+          })
+          |> ignore
+        }
+        if !held_more && !compact {
           c.box(style=end_cell, fn() {  }) |> ignore
         }
       })
       |> ignore
-      // at its end: › on the folder open beside (columns), the ⋯ on hover, always to a finger (Drive.css.ts more,
-      // next: `hover: none`; a spinner while something is under way)
+      // at its end, a mouse's: › on the folder open beside (columns), the ⋯ on hover (Drive.css.ts more, next; a
+      // spinner while something is under way)
       c.layer(fn() {
+        if held_more {
+          return
+        }
         c.box(style=more_place, fn() {
-          let shown = @sf.pointed_or_finger(over || open)
-          if busy {
+          let shown = over || open
+          if busy && !stacked {
             @sf.spinner(c) |> ignore
+          } else if busy {
+            ()
           } else if shown || !(column && e.dir && along) {
             // (there whether shown or not, clear while not: the hand changes no box)
             c.box(style=if shown { more_shown } else { more_clear }, fn() {
@@ -991,6 +1054,10 @@ pub fn drive_row(
         |> ignore
       })
       |> ignore
+      // (a finger's press ripples)
+      if live {
+        @sf.press_ripple(c, id, @sf.row_corner)
+      }
     })
     c.semantics(box, Button, id~, label=e.name, selected=row.chosen, expanded?=if tree && e.dir { Some(expanded == Some(true)) } else { None })
   })
@@ -1077,89 +1144,163 @@ pub fn list_head(c : @ui.Ctx, a : Arrangement, on_sort : (String) -> Unit) -> Un
 
 ///|
 /// A file going up into the folder shown (UploadRow): its mark, its name, how far (a thin bar, sent of its size); its
-/// name taken there (替换, 保留两者), or why it failed (重试); × lets it go.
+/// name taken there (替换, 保留两者), or why it failed (重试); × lets it go. Wide, how far beside its name; narrower than
+/// its columns need (row_stack_below), under it, as a list's row says what it is.
 pub fn upload_row(c : @ui.Ctx, src : Source, u : DvUpload) -> Unit {
   let t = @sf.theme()
+  let items = t.items
   let k = "files/up/\{u.serial}"
+  let stacked = c.width < row_stack_below
+  let size = u.bytes.length()
+  let part = if size > 0 { dmin(u.sent.to_double() / size.to_double(), all) } else { none }
+  let how_far = @sf.t("web-pages.drive.uploading", args=[("sent", @sf.file_size(u.sent.to_double())), ("size", @sf.file_size(size.to_double()))])
+  let replace = fn() {
+    u.replace = true
+    u.state = "waiting"
+    dv_pump(src)
+  }
+  let keys = fn() {
+    if u.state == "failed" && @sf.icon_button(c, "retry", key=k + "/retry", label=@sf.t("web-pages.drive.retry")) {
+      u.state = "waiting"
+      u.error = ""
+      u.sent = 0
+      dv_pump(src)
+    }
+    if @sf.icon_button(c, "close", key=k + "/cancel", label=@sf.t("common.cancel")) {
+      ups.uploads.retain(fn(x) { x.serial != u.serial })
+      if u.state == "going" {
+        ups.pumping = false
+        dv_pump(src)
+      }
+    }
+  }
   c.box(style=entry_room, fn() {
     c.box(style=entry_plain, fn() {
-      c.box(style=row_style, fn() {
-        @sf.icon(c, "upload", size=kind_icon, color=t.p.muted) |> ignore
-        // (its name, and beside it how far, what is asked or why it failed: under the name where the row has not the room
-        // for both, as the phone's row has it; its name keeps a few words, what is asked its two answers alone)
-        c.box(style=upload_words, flow=true, line_gap=0.0, fn() {
-          c.box(style=upload_name, fn() { c.text(u.name, style=row_name) |> ignore }) |> ignore
-          match u.state {
-            "taken" =>
-              c.box(style=upload_ask, fn() {
-                c.box(drop=upload_drop_note, fn() { c.text(@sf.t("web-pages.drive.taken"), style=row_meta) |> ignore })
-                |> ignore
-                if @sf.button(c, @sf.t("web-pages.drive.replace"), key=k + "/replace", tone=Ghost) {
-                  u.replace = true
-                  u.state = "waiting"
-                  dv_pump(src)
-                }
-                if @sf.button(c, @sf.t("web-pages.drive.keepBoth"), key=k + "/both", tone=Ghost) {
-                  dv_keep_both(src, u)
-                }
-              })
-              |> ignore
-            "failed" =>
-              c.box(style=upload_why, fn() {
-                c.text(@sf.t("web-pages.drive.uploadFailed", args=[("error", u.error)]), style=upload_failed) |> ignore
-              })
-              |> ignore
-            _ => {
-              let size = u.bytes.length()
-              let part = if size > 0 { dmin(u.sent.to_double() / size.to_double(), all) } else { none }
-              let rest = all - part
-              c.box(style=progress_cell, keep=true, fn() {
-                c.box(style=progress_track, fn() {
-                  c.box(style=progress_done.then(@ui.style(w=Grow(part))), fn() {  }) |> ignore
-                  c.box(style=@ui.style(w=Grow(rest)), fn() {  }) |> ignore
+      c.box(style=row_style.then(@ui.style(min_h=Fixed(items.least))), fn() {
+        @sf.icon(c, "upload", size=items.mark, color=t.p.muted) |> ignore
+        if stacked {
+          // its name, and under it how far, what is asked (its answers in the link's ink) or why it failed
+          c.box(style=name_stack, fn() {
+            c.text(u.name, style=items.name.then(row_name)) |> ignore
+            match u.state {
+              "taken" =>
+                c.box(style=upload_ask_line, fn() {
+                  c.text(@sf.t("web-pages.drive.taken"), style=items.meta.then(upload_cut)) |> ignore
+                  upload_answer(c, k + "/replace", @sf.t("web-pages.drive.replace"), replace)
+                  upload_answer(c, k + "/both", @sf.t("web-pages.drive.keepBoth"), fn() { dv_keep_both(src, u) })
                 })
                 |> ignore
-                // (short of room, how much has gone up leaves whole, its bar kept)
-                c.box(drop=upload_drop_sent, fn() {
-                  c.text(
-                    @sf.t("web-pages.drive.uploading", args=[("sent", @sf.file_size(u.sent.to_double())), ("size", @sf.file_size(size.to_double()))]),
-                    style=row_meta,
-                  )
+              "failed" =>
+                c.text(@sf.t("web-pages.drive.uploadFailed", args=[("error", u.error)]), style=items.meta.then(upload_failed_under))
+                |> ignore
+              _ => {
+                c.text(how_far, style=items.meta) |> ignore
+                c.box(style=upload_bar_under, fn() { @sf.progress(c, k, if size > 0 { Some(part) } else { None }) }) |> ignore
+              }
+            }
+          })
+          |> ignore
+          c.box(style=upload_keys, fn() { keys() }) |> ignore
+        } else {
+          // (its name, and beside it how far, what is asked or why it failed: its name keeps a few words, what is
+          // asked its two answers alone)
+          c.box(style=upload_words, flow=true, line_gap=0.0, fn() {
+            c.box(style=upload_name, fn() { c.text(u.name, style=items.name.then(row_name)) |> ignore }) |> ignore
+            match u.state {
+              "taken" =>
+                c.box(style=upload_ask, fn() {
+                  c.box(drop=upload_drop_note, fn() { c.text(@sf.t("web-pages.drive.taken"), style=items.meta) |> ignore })
                   |> ignore
+                  if @sf.button(c, @sf.t("web-pages.drive.replace"), key=k + "/replace", tone=Ghost) {
+                    replace()
+                  }
+                  if @sf.button(c, @sf.t("web-pages.drive.keepBoth"), key=k + "/both", tone=Ghost) {
+                    dv_keep_both(src, u)
+                  }
                 })
                 |> ignore
-              })
-              |> ignore
+              "failed" =>
+                c.box(style=upload_why, fn() {
+                  c.text(@sf.t("web-pages.drive.uploadFailed", args=[("error", u.error)]), style=upload_failed) |> ignore
+                })
+                |> ignore
+              _ => {
+                let rest = all - part
+                c.box(style=progress_cell, keep=true, fn() {
+                  c.box(style=progress_track, fn() {
+                    c.box(style=progress_done.then(@ui.style(w=Grow(part))), fn() {  }) |> ignore
+                    c.box(style=@ui.style(w=Grow(rest)), fn() {  }) |> ignore
+                  })
+                  |> ignore
+                  // (short of room, how much has gone up leaves whole, its bar kept)
+                  c.box(drop=upload_drop_sent, fn() { c.text(how_far, style=items.meta) |> ignore }) |> ignore
+                })
+                |> ignore
+              }
             }
-          }
-        })
-        |> ignore
-        c.box(style=end_cell, fn() {  }) |> ignore
+          })
+          |> ignore
+          c.box(style=end_cell, fn() {  }) |> ignore
+        }
       })
       |> ignore
-      c.layer(fn() {
-        c.box(style=more_place, fn() {
-          if u.state == "failed" && @sf.icon_button(c, "retry", key=k + "/retry", label=@sf.t("web-pages.drive.retry")) {
-            u.state = "waiting"
-            u.error = ""
-            u.sent = 0
-            dv_pump(src)
-          }
-          if @sf.icon_button(c, "close", key=k + "/cancel", label=@sf.t("common.cancel")) {
-            ups.uploads.retain(fn(x) { x.serial != u.serial })
-            if u.state == "going" {
-              ups.pumping = false
-              dv_pump(src)
-            }
-          }
-        })
-        |> ignore
-      })
-      |> ignore
+      if !stacked {
+        c.layer(fn() { c.box(style=more_place, fn() { keys() }) |> ignore }) |> ignore
+      }
     })
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// An answer to what is asked of a file going up, under its name: its words in the link's ink, 600.
+fn upload_answer(c : @ui.Ctx, key : String, words : String, act : () -> Unit) -> Unit {
+  let id = c.id(key)
+  if c.clicked(id) {
+    act()
+  }
+  c.cursor(id, Hand)
+  let b = c.box(style=upload_answer_box, id~, fn() { c.text(words, style=@sf.theme().items.meta.then(upload_answer_words)) |> ignore })
+  c.semantics(b, Button, id~, label=words)
+}
+
+///|
+/// Under its name (mUploadAsk, mProgress): what is asked cut short, its answers whole, 12 apart; the bar 5 under the
+/// words; why it failed in red, as long as it needs; its keys after it, 4 apart.
+// kept across runs: a value (no field of it changes)
+let upload_ask_line : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let upload_cut : @ui.TextStyle = @ui.text_style(wrap=false, w=Cut)
+
+///|
+// kept across runs: a value (no field of it changes)
+let upload_answer_box : @ui.Style = @ui.css("row py=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let upload_answer_words : @ui.TextStyle = @ui.text_style(weight=Semibold, color=Link, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let upload_bar_under : @ui.Style = @ui.css("w=Full pt=S1_25")
+
+///|
+// kept across runs: a value (no field of it changes)
+let upload_failed_under : @ui.TextStyle = @ui.text_style(color=Danger, wrap=true, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let upload_keys : @ui.Style = @ui.css("row gap=S1 align=ACenter")
+
+///|
+/// The files going up into the folder shown, together as its rows are (@sf.group_row).
+fn uploads_here(c : @ui.Ctx, src : Source, ups_here : Array[DvUpload]) -> Unit {
+  for i, u in ups_here {
+    @sf.group_row(c, i == 0, i == ups_here.length() - 1, fn() { upload_row(c, src, u) })
+  }
 }
 
 ///|
@@ -1182,14 +1323,18 @@ pub fn folder_empty(c : @ui.Ctx, words : String, upload : (() -> Unit)?) -> Unit
 fn drop_over(c : @ui.Ctx, lit : String, name : String) -> Unit {
   let t = @sf.theme()
   c.layer(fn() {
-    c.box(style=drop_box, fn() {
-      @sf.icon(c, if lit == "upload" { "upload" } else { "move" }, size=drop_icon, color=t.p.text) |> ignore
-      let key = match lit {
-        "copy" => "web-pages.files.copyHere"
-        "move" => "web-pages.files.moveHere"
-        _ => "web-pages.drive.dropHere"
-      }
-      c.text(@sf.t(key, args=[("name", name)]), style=drop_words) |> ignore
+    // (10 in from the list's edges, the ladder's inset: what it holds goes on round it, square)
+    c.box(style=drop_room, fn() {
+      c.box(style=drop_box, fn() {
+        @sf.icon(c, if lit == "upload" { "upload" } else { "move" }, size=drop_icon, color=t.p.text) |> ignore
+        let key = match lit {
+          "copy" => "web-pages.files.copyHere"
+          "move" => "web-pages.files.moveHere"
+          _ => "web-pages.drive.dropHere"
+        }
+        c.text(@sf.t(key, args=[("name", name)]), style=drop_words) |> ignore
+      })
+      |> ignore
     })
     |> ignore
   })
@@ -1201,12 +1346,39 @@ fn drop_over(c : @ui.Ctx, lit : String, name : String) -> Unit {
 pub let pane_w : Double = 300.0
 
 ///|
-/// A row's marks (KindIcon 20; compact 18), a tree's disclosure's chevron (12), the ⋯ (32; compact 24), the empty
-/// folder's mark (36), what is dropped's (22), the heads' chevron (10).
-let kind_icon : Double = 20.0
+/// Whether a folder's room `room` across has the preview beside its list: where the page is laid out wide, the list
+/// keeping what is left (a narrow page's whole width is its list's).
+fn pane_fits(room : Double) -> Bool {
+  room >= @sf.page_narrow_most
+}
 
 ///|
-let kind_compact : Double = 18.0
+/// What a folder's list has across in its room `room`: what the preview beside it leaves, where it is shown.
+fn list_room(src : Source, room : Double) -> Double {
+  if preview_shown(src, "page") && pane_fits(room) {
+    room - pane_w - 1.0
+  } else {
+    room
+  }
+}
+
+///|
+/// A compact row (a column's, a chat's 文件 tab's) 8 less high than the screen's, its mark 2 less (KindIcon 20, compact
+/// 18); a tree's disclosure's chevron (12), the ⋯ (32; compact 24), the empty folder's mark (36), what is dropped's
+/// (22), the heads' chevron (10); a folder's › to a finger (14).
+let compact_less : Double = 8.0
+
+///|
+let compact_less_mark : Double = 2.0
+
+///|
+let finger_chevron : Double = 14.0
+
+///|
+/// Narrower than this, a row says what it is under its name (its size's and time's columns would leave its name too
+/// little).
+let row_stack_below : Double = 440.0
+
 
 ///|
 let disclosure_icon : Double = 12.0
@@ -1247,9 +1419,10 @@ let none : Double = 0.0
 let with_pane : @ui.Style = @ui.css("row w=Full h=Full")
 
 ///|
-/// The entries (list): rows 2 apart, its corner the card's.
+/// The entries (list): rows 2 apart, on the page's ground (no corner of its own: its head's station button and its rows
+/// stand in none; what is held over it is rounded itself).
 // kept across runs: a value (no field of it changes)
-let list_box : @ui.Style = @ui.style(w=@sf.grow, min_w=S56, h=Full, radius=Xl2, clip=true)
+let list_box : @ui.Style = @ui.style(w=@sf.grow, min_w=S56, h=Full, clip=true)
 
 ///|
 /// The preview beside the list goes first, short of room (the list keeps its least, 224).
@@ -1288,15 +1461,15 @@ let entry_drop : @ui.Style = entry_plain.then(@ui.css("bg=AccentBg border=B1 bor
 let entry_busy_look : @ui.Style = @ui.css("opacity=O60")
 
 ///|
-/// A row (row): 44 high at least, 8 by 12 in, its parts 12 apart: its mark (20), its name, its size (96) and time
-/// (104) at their end, room for its ⋯ (36).
+/// A row (row): as high as the screen's items at least, 8 by 12 in, its parts 12 apart: its mark, its name, its size
+/// (96) and time (104) at their end, room for its ⋯ (36).
 // kept across runs: a value (no field of it changes)
-let row_style : @ui.Style = @ui.css("row w=Full min_h=S11 px=S3 py=S2 gap=S3 align=ACenter")
+let row_style : @ui.Style = @ui.css("row w=Full px=S3 py=S2 gap=S3 align=ACenter")
 
 ///|
-/// A chat's 文件 tab's and a column's (compact): 36 high, 6 by 10 in, 10 apart, the size alone, room for its ⋯ (28).
+/// A chat's 文件 tab's and a column's (compact): 8 less high, 6 by 10 in, 10 apart, the size alone, room for its ⋯ (28).
 // kept across runs: a value (no field of it changes)
-let row_compact : @ui.Style = @ui.css("row w=Full min_h=S9 px=S2_5 py=S1_5 gap=S2_5 align=ACenter")
+let row_compact : @ui.Style = @ui.css("row w=Full px=S2_5 py=S1_5 gap=S2_5 align=ACenter")
 
 ///|
 /// In a tree: 8 apart, its disclosure (12) before its mark, in by its depth.
@@ -1313,11 +1486,18 @@ let disclosure_box : @ui.Style = @ui.css("w=S3 h=S3 align=ACenter justify=JCente
 
 ///|
 // kept across runs: a value (no field of it changes)
-let row_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, w=@sf.grow)
+let row_name : @ui.TextStyle = @ui.text_style(wrap=false, w=@sf.grow)
 
 ///|
+/// Its name with what it is under it, in what is left of its row.
 // kept across runs: a value (no field of it changes)
-let row_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let name_stack : @ui.Style = @ui.style(w=@sf.grow, min_w=S16)
+
+///|
+/// What is at its end in its flow (a finger's, or under the name): 8 before it.
+// kept across runs: a value (no field of it changes)
+let end_flow : @ui.Style = @ui.css("row pl=S2 align=ACenter")
+
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1448,14 +1628,7 @@ let upload_words : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S3, align=ACe
 // kept across runs: a value (no field of it changes)
 let upload_failed : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=false, w=Cut)
 
-///|
-/// Why the folder could not be read, and 重试 (problem: 12 in, 10 apart).
-// kept across runs: a value (no field of it changes)
-let problem_box : @ui.Style = @ui.css("w=Full p=S3 gap=S2_5 align=AStart")
 
-///|
-// kept across runs: a value (no field of it changes)
-let problem_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, w=Full)
 
 ///|
 /// Nothing in it (empty): in the middle, 56 by 24 in, 12 apart, muted.
@@ -1476,84 +1649,13 @@ let drop_box : @ui.Style = @ui.css(
 
 ///|
 // kept across runs: a value (no field of it changes)
+let drop_room : @ui.Style = @ui.style(w=Full, h=Full, p=@sf.inset_room)
+
+///|
+// kept across runs: a value (no field of it changes)
 let drop_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false)
 
 ///|
 /// What is done to the folder (actions): 6 apart.
 // kept across runs: a value (no field of it changes)
 let actions_row : @ui.Style = @ui.css("row gap=S1_5 align=ACenter justify=JEnd")
-
-///|
-/// A folder's page's head (Drive.tsx FolderView's pageHead): its trail (its station's button, then the way down to it:
-/// its root, then each folder above it), its name (h1), its station and what it holds. `split`: a side of a split tab,
-/// in less; `front_it`: what is pressed in a side puts it in front first.
-pub fn folder_head(c : @ui.Ctx, src : Source, f : FolderOf, split : Bool, front_it : () -> Unit) -> Unit {
-  let t = @sf.theme()
-  let at = f.at
-  let root = at.root.unwrap_or("")
-  let stations = dv_stations(src, f.ws).0.unwrap_or([])
-  let topic = (src.topic)("drive", { "station": Json::string(at.station), "root": Json::string(root), "path": Json::string(at.path) })
-  let (name, _) = pane_parts(at, stations)
-  c.box(style=if split { head_half } else { head_one }, fn() {
-    c.box(style=head_trail, fn() {
-      station_switch(c, src, f, front_it)
-      let parts : Array[String] = if at.path == "" { [] } else { at.path.split("/").map(fn(p) { p.to_string() }).collect() }
-      let (root_name, _) = pane_parts({ ..at, path: "" }, stations)
-      let crumbs : Array[(String, String)] = if at.path == "" { [] } else { [(root_name, "")] }
-      let mut so_far = ""
-      for i in 0..<(parts.length() - 1) {
-        so_far = dv_join(so_far, parts[i])
-        crumbs.push((parts[i], so_far))
-      }
-      for x in crumbs {
-        let (word, path) = x
-        @sf.icon(c, "chevron-right", size=trail_chevron, color=t.p.subtle) |> ignore
-        let cid = c.id("files/crumb/" + at.station + "/" + root + "/" + path)
-        c.cursor(cid, Hand)
-        if c.clicked(cid) {
-          front_it()
-          (f.go)({ station: at.station, root: Some(root), path }, false)
-        }
-        c.box(style=head_crumb, id=cid, fn() { c.text(word, style=head_meta) |> ignore }) |> ignore
-      }
-    })
-    |> ignore
-    c.text(name, style=head_title) |> ignore
-    match text(topic.value, "countText") {
-      "" => ()
-      count => c.text(f.st.name + " · " + count, style=head_meta) |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
-/// The trail's chevrons (16).
-let trail_chevron : Double = 16.0
-
-///|
-/// The head (pageHead): 12 over and under, 6 between its lines; in from its side as the page is (40; split, 24).
-// kept across runs: a value (no field of it changes)
-let head_one : @ui.Style = @ui.css("w=Full px=S10 pt=S3 pb=S3 gap=S1_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let head_half : @ui.Style = @ui.css("w=Full px=S6 pt=S3 pb=S3 gap=S1_5")
-
-///|
-/// Its trail (crumbs): 4 between.
-// kept across runs: a value (no field of it changes)
-let head_trail : @ui.Style = @ui.css("row gap=S1 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let head_crumb : @ui.Style = @ui.css("px=S0_5 radius=Sm hovered{bg=Hover}")
-
-///|
-// kept across runs: a value (no field of it changes)
-let head_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
-
-///|
-/// Its name (h1): 22, 600.
-// kept across runs: a value (no field of it changes)
-let head_title : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, wrap=false)
