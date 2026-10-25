@@ -112,7 +112,7 @@ One shell. It arranges the same panes in every tier:
   | Tier | Arrangement | Back | Places |
   |---|---|---|---|
   | Small | One stack. The list is the root, a page is pushed onto it, a detail is pushed onto that. | A swipe from the edge (finger); the back key or ⌘[ (mouse) | The bottom bar, on a place's root |
-  | Medium | The tape: list, page and detail are separate panels, one active. A press on another only brings it over; nothing drags it; the list never folds by itself. | A full-window layer (a screen, the viewer) first; then detail → page; page → list when the stack holds only the chat, else a pop | The rail |
+  | Medium | The tape: list, page and detail are separate panels, one active. A press on what shows of another brings it over; dragged across there it comes with the finger (2026-10-25), a drag on the one in use is that one's own; the list never folds by itself. | A full-window layer (a screen, the viewer) first; then detail → page; page → list when the stack holds only the chat, else a pop | The rail |
   | Large | Columns: the rail and the list, the page, the detail. | The web's (⌘[, the chat's neighbours) | The rail |
 
 - **One model:** `app.nav` stays the one model of where the person is. One table in the shell says, for each `Page`,
