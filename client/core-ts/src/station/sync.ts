@@ -30,7 +30,7 @@ import { IDEMPOTENCY_KEY, READS, Requests, httpError } from "./requests.ts";
 import { digest } from "../digest.ts";
 import { type Channel, Channels } from "../channels/channels.ts";
 import { ENTRIES, PAGE, TRANSCRIPT, TRANSCRIPT_PAGE, entriesOf, heldIn, transcriptOf } from "./channel-kinds.ts";
-import { type HistoryRead, type Link, Links, type LiveView, logKey } from "./link.ts";
+import { type HistoryRead, type Link, Links, type LiveView, MEMORY, logKey } from "./link.ts";
 import { readAll, type StationWire } from "./wire.ts";
 import * as logins from "./machine-logins.ts";
 import { Relays } from "./machine-logins.ts";
@@ -300,6 +300,30 @@ export class StationsSync {
   /// The station's screens read now, for a person waiting on them (a view of one opened before they were known).
   readScreens(address: string): Effect.Effect<void, CoreError> {
     return this.ask(address, "screens", this.#screens(address));
+  }
+
+  /// The agents' memory on the station (GET /memory, the `memory` topic), read as a page shows it: each time, as agents
+  /// write it while they work and nothing on the stream says so; what was read last (kept in the link's memory) shows
+  /// meanwhile. Not read, why: once nothing is held.
+  memoryShown(address: string): void {
+    this.#enqueue(address, "memory", Priority.shown, this.#memory(address));
+  }
+
+  #memory(address: string): Effect.Effect<void, CoreError> {
+    const key = topicKey({ topic: "memory", station: address });
+    return Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link || !this.reachable(address)) return;
+      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", "/memory", null, { quiet: true }));
+      if (answer._tag === "Success") {
+        link.errors.delete(key);
+        link.memory.set(MEMORY, answer.success);
+        this.onChange(address, "log", key);
+      } else if (answer.failure.status !== undefined && !link.memory.has(MEMORY)) {
+        link.errors.set(key, answer.failure);
+        this.onChange(address, "errors", key);
+      }
+    });
   }
 
   /// A job's log as it is now (its `lines` last lines), once a run: its topic opened (what was kept of it shows
@@ -1195,6 +1219,10 @@ export class StationsSync {
           break;
         case "job":
           if (get(answer, "id") !== undefined && get(answer, "state") !== undefined) this.onJob(address, answer);
+          break;
+        // What the agents' memory says of it changed (a skill shared or no longer): read again where it is shown or held.
+        case "memory":
+          if (this.#core.store.inUse({ topic: "memory", station: address }) || this.#links.get(address)?.memory.has(MEMORY)) reads.push(["memory", this.#memory(address)]);
           break;
         case "identity":
           read("overview", { topic: "overview", station: address }, "/overview");

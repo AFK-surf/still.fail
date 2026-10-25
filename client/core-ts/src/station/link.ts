@@ -44,6 +44,8 @@ export const HOST_KEY = "host";
 export const LOG_KEY = "jobLog\n";
 export const logKey = (job: string, lines: number) => `${LOG_KEY}${job}\n${lines}`;
 export const LOGS_KEPT = 40;
+/// The agents' memory on the station as it answered GET /memory last (the `memory` topic), in the link's memory.
+export const MEMORY = "agentMemory";
 /// A station's streams carry a keepalive every 25 s; one silent this long is on a link that is gone.
 export const STREAM_IDLE_MS = 40_000;
 /// A stream silent past one keepalive (and a little) may be on a link that is gone.

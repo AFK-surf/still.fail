@@ -20,6 +20,8 @@ export type Effect =
   | { kind: "footprint" }
   | { kind: "slack" }
   | { kind: "job" }
+  /// The agents' memory (the `memory` topic): read again.
+  | { kind: "memory" }
   | { kind: "identity" }
   /// Folders of the station's drive under `root` (paths relative to it): read again where held or shown.
   | { kind: "drive"; root: string; paths: string[] }
@@ -466,7 +468,7 @@ function stationOp(name: string, params: unknown): Request | null {
     case "profile.move":
       return op("POST", () => `/profiles/${p.at("id")}/move`, { station: p.word("to") ?? "" }, OVERVIEW);
     case "skill.share":
-      return op("POST", () => `/skills/${p.at("name")}/share`, { on: p.bool("on"), allow: p.has("allow") ? p.v.allow : null }, NONE);
+      return op("POST", () => `/skills/${p.at("name")}/share`, { on: p.bool("on"), allow: p.has("allow") ? p.v.allow : null }, { kind: "memory" });
     case "profile.resetQuota":
       return op("POST", () => `/profiles/${p.at("id")}/reset-quota`, null, OVERVIEW);
     case "profile.quota":

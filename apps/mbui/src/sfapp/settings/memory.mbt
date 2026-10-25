@@ -1,52 +1,28 @@
-// The agents' memory on a station (settings/Memory.kt; `memory.get` on the station, read as its page opens): the global
-// memory by its parts, each project's memory (a skill whose description says when it applies), the station's other
-// skills (the built-in ones folded), each opening a page of its own to read, Markdown; the memory of every station a
-// row each from settings (MemoriesScreen). A skill of the station's own is shared with the workspace's other stations,
-// or no longer, from its page (ShareRow: `skill.share`).
+// The agents' memory on a station (settings/Memory.kt; the core's `memory` topic: read each time one of its pages shows
+// it, what was read last shown meanwhile, the app opened again too): the global memory by its parts, each project's
+// memory (a skill whose description says when it applies), the station's other skills (the built-in ones folded), each
+// opening a page of its own to read, Markdown; the memory of every station a row each from settings (MemoriesScreen). A
+// skill of the station's own is shared with the workspace's other stations, or no longer, from its page (ShareRow:
+// `skill.share`, the core reading the memory again once it has).
 
 ///|
-/// The last memory read of each station (Memory.kt kept), so a page opened from the list has it at once; whether it
-/// was asked for since its page came; why it could not be read.
+/// A station's memory as the core holds it, and why it could not be read while it holds none.
 pub(all) struct MemoryRead {
-  mut value : Json?
-  mut error : String
-  mut asked : Bool
+  value : Json?
+  error : String
 }
 
 ///|
-let memories : Map[String, MemoryRead] = Map::new()
-
-///|
-/// A station's memory, asked for once each time one of its pages comes (it changes as agents write it, not while it is
-/// looked at).
-pub fn memory_of(c : @ui.Ctx, core : Core, address : String) -> MemoryRead {
-  let m = match memories.get(address) {
-    Some(m) => m
-    None => {
-      let m = { value: None, error: "", asked: false }
-      memories[address] = m
-      m
-    }
+/// A station's memory (the `memory` topic).
+pub fn memory_of(core : Core, address : String) -> MemoryRead {
+  let topic = (core.topic)("memory", { "station": str(address) })
+  {
+    value: topic.value,
+    error: match topic.error {
+      Some(e) => error_text(e)
+      None => ""
+    },
   }
-  // (asked once the frame's builds are over, once: each build asks while it is not)
-  if !m.asked {
-    c.after_build("memory/" + address, fn() {
-      if m.asked {
-        return
-      }
-      m.asked = true
-      (core.call)("memory.get", obj([("station", str(address))]), fn(r) {
-      match r {
-        Ok(v) => {
-          m.value = Some(v)
-          m.error = ""
-        }
-        Err(e) => m.error = error_text(e)
-      }
-    })
-    })
-  }
-  m
 }
 
 ///|
@@ -93,7 +69,7 @@ let doc_picked : Map[String, Int] = Map::new()
 /// files (`skill`), or the global memory a part at a time (from `at`); the parts as pills across the top.
 fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, at : Int) -> Unit {
   let t = @sf.theme()
-  let read = memory_of(c, core, address)
+  let read = memory_of(core, address)
   let m = read.value
   let k = if skill == "" {
     None
@@ -164,7 +140,7 @@ fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, a
             })
             |> ignore
             if !flag(kv, "builtin") && text(field(kv, "share"), "role") != "user" {
-              skill_share_row(c, core, address, kv, read)
+              skill_share_row(c, core, address, kv)
             }
           })
           |> ignore
@@ -319,8 +295,8 @@ let skill_conflicts_words : @ui.TextStyle = @ui.text_style(size=Caption, w=Full)
 
 ///|
 /// Whether a skill of this station's is shared with the workspace's other stations (MemoryDocScreen's ShareRow): a tap
-/// switches it (`skill.share`), its memory read again once it has; and the edits two made at once.
-fn skill_share_row(c : @ui.Ctx, core : Core, address : String, kv : Json?, read : MemoryRead) -> Unit {
+/// switches it (`skill.share`), its memory read again once it has (the core's); and the edits two made at once.
+fn skill_share_row(c : @ui.Ctx, core : Core, address : String, kv : Json?) -> Unit {
   let t = @sf.theme()
   let name = text(kv, "name")
   let on_what = [("station", address), ("name", name)]
@@ -345,7 +321,6 @@ fn skill_share_row(c : @ui.Ctx, core : Core, address : String, kv : Json?, read 
         tr("web-main.memory.share.switch"),
         "skill.share",
         obj([("station", str(address)), ("name", str(name)), ("on", Json::boolean(!on))]),
-        then=fn(_) { read.asked = false },
       )
     }
   })
