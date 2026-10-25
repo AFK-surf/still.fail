@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./tokens.css.ts";
 import { litOver } from "./lit.ts";
-import { panel } from "./glass.ts";
+import { panel, panelGround } from "./glass.ts";
 import { popKeyframes } from "./keyframes.css.ts";
 import { command, field } from "../parts.css.ts";
 import { spinner } from "./spinner.css.ts";
@@ -73,6 +73,8 @@ export const popover = style({
   boxShadow: `0 12px 32px ${vars.shadow}`, transformOrigin: "var(--radix-popper-transform-origin, top)",
   animation: `${popKeyframes} 140ms ${vars.easeOut}`, cornerShape: vars.cornerShape,
 });
+// What stands on it is ringed in its ground (`--ring`: an agent's badge, a station's dot), not the page's.
+globalStyle(popover, { vars: { "--ring": panelGround } });
 /**
  * A small panel of words (a card): each block in it stands in by a row's padding (TEXT_IN), and as much above the first
  * and under the last: its words as far from every edge (PANEL_PAD + TEXT_IN), on the line a list's rows' words are. What
