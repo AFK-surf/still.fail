@@ -107,14 +107,17 @@ both ways (`__native.emitBytes`, `__stillfail.receiveBytes`). On a phone, a 4 MB
 string and read back took longer than it took to come over the network.
 
 The composer's `composer.add` hands selected files to the core, which owns
-their upload and reports progress through the `composer` topic. On the web,
+their upload and reports progress through the `composer` topic. A new chat's
+(`new:<workspace>`) wait (`waits`), kept on the device, and go up as its first
+message is taken (`composer.take {station}`), to the station it goes to. On the web,
 the worker receives a structured-cloned Blob. Electron cannot carry that DOM
 object into its Node utility process: its channel adapter (`src/hosts/file-port.ts`)
 keeps the Blob in the page and sends a descriptor, restored to a `FileSource`
 before the core reads the call. The core pulls at most one 4 MB part at a time
 per upload; the adapter carries those bytes as ArrayBuffers on the same port.
-It releases the page's file on success or removal, keeps failed uploads' sources
-for the outbox's retry, and fails outstanding reads when the port closes.
+It releases the page's file on success or removal (a new chat's once it leaves
+the draft), keeps failed uploads' sources for the outbox's retry, and fails
+outstanding reads when the port closes.
 Only local file IO lives in this adapter: draft state,
 station requests, progress, errors and sending stay in the shared core.
 Android does the same through its engine (`src/hosts/bridge.ts`): the app holds

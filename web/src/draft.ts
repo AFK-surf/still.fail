@@ -20,7 +20,7 @@ export const MAX_FILE = 1024 * 1024 * 1024;
 
 /** A file on its way to the station: uploading (`sent`: how much of it the station has), uploaded, or failed.
  * `preview`: an image's local picture, until it leaves the draft. */
-export interface Pending { id: string; name: string; size: number; sent?: number; width?: number; height?: number; done: Attachment | null; error: string | null; preview?: string; image?: Blob; pasted?: PastedInfo; pastedFile?: File; ref?: ComposerRef; link?: ComposerLink }
+export interface Pending { id: string; name: string; size: number; sent?: number; width?: number; height?: number; done: Attachment | null; error: string | null; waits?: boolean; preview?: string; image?: Blob; pasted?: PastedInfo; pastedFile?: File; ref?: ComposerRef; link?: ComposerLink }
 
 /** A file or folder dragged in from where it is: which station has it and where (`ref`), and how to send it should it be
  * switched to a file: where it is in that station's drive, or the file itself (one from Finder). */
@@ -30,6 +30,9 @@ export interface Dropped { name: string; size: number; ref: Omit<ComposerRef, "m
 export const pathWords = (ref: ComposerRef) => t(ref.dir ? "common.folderOn" : "common.pathOn", { station: ref.stationName, path: ref.path });
 /** What a link of the draft goes as (the core's words for it, composer.ts `linkWords`): its title on a line, then where it goes. */
 export const linkWords = (link: ComposerLink) => (link.title ? `${link.title}\n${link.url}` : link.url);
+/** A file of the draft on its way to its station: neither up nor failed, nor a new chat's waiting for its message. */
+export const goingUp = (f: Pick<Pending, "done" | "error" | "waits">) => !f.done && !f.error && !f.waits;
+
 /** Whether a file of the draft goes as words (named by its path, or a link shared in), not as a file. */
 const named = (f: { ref?: ComposerRef | undefined; link?: ComposerLink | undefined }) => f.ref?.mode === "path" || f.link !== undefined;
 
@@ -128,21 +131,12 @@ export const NO_KEY = "new:";
 /** What the page has of each file besides what the core says: its picture, the file itself (sent again, shown whole). */
 const local = new Map<string, Pick<Pending, "preview" | "image" | "pastedFile">>();
 
-/** The station each file picked or pasted here went up to, and the file itself: one that went to another station than
- * the message goes to (its path there means nothing to this one) goes up again before it is sent. */
-const wentTo = new Map<string, { station: string; file: File }>();
-// Also remember the origin of restored attachments whose local File is no longer available.
-const fileStations = new Map<string, string>();
-
 let nextId = 1;
 
 /** Each file shown, the quotes' pictures too, as `change` makes it. */
 const eachFile = (s: Shown, change: (f: ComposerFile) => ComposerFile): Shown => ({
   ...s, files: s.files.map(change), quotes: s.quotes.map((q) => (q.own ? { ...q, own: change(q.own) } : q)),
 });
-
-/** The quote file `id` is the picture of, if it is one's. */
-const ownerOf = (s: Shown, id: string) => s.quotes.find((q) => q.own?.id === id)?.id;
 
 /** What the composer shows of the core's (`ComposerView`), as the page has it now. */
 interface Shown { quotes: ComposerQuote[]; files: ComposerFile[]; focus: string | null; starting: boolean; error: string | null }
@@ -182,45 +176,31 @@ export function useDraft({ key: given, station, carry }: {
   now.current = { key, text, shown, view };
 
   // Another chat (or the first key, or the chat a new one made): what is written goes where it belongs, in the core.
-  // The same draft, its files to go to another station (a new chat's, to run elsewhere): it is the same message.
+  // (A new chat's files wait for its first message, whichever station it is to run on: the core sends them up to the
+  // one the message goes to.)
   const here = station ?? contextStation;
-  const was = useRef({ key, here });
+  const was = useRef(key);
   useLayoutEffect(() => {
     const before = was.current;
-    if (before.key === key && before.here === here) return;
-    was.current = { key, here };
-    if (before.key === key) {
-      // Each file picked here goes up there again from the file itself, with a fresh id: a late answer from the
-      // station before cannot replace it. One kept from before has no file here: known by the station it was on. A
-      // quote's picture goes up again as its picture.
-      const shownNow = now.current.shown;
-      for (const f of [...shownNow.files, ...shownNow.quotes.flatMap((q) => (q.own ? [q.own] : []))]) {
-        if (named(f)) continue;
-        if (!fileStations.has(f.id)) fileStations.set(f.id, before.here);
-        const source = wentTo.get(f.id);
-        if (!source || source.station === here) continue;
-        remove(f.id);
-        add([source.file], f.pasted as PastedInfo | undefined, ownerOf(shownNow, f.id));
-      }
-      return;
-    }
+    if (before === key) return;
+    was.current = key;
     // Each key counts its own versions: what was answered for the one before says nothing of this one's (counted on from
     // it, this one's were all older until it had been written to as much, and the one before's files stayed shown).
     seenRev.current = -1;
     acked.current = 0;
     if (carry && carry.current === key) {
       carry.current = null;
-      void act("carry", { key: before.key, to: key });
+      void act("carry", { key: before, to: key });
       return;
     }
-    if (before.key === NO_KEY) {
+    if (before === NO_KEY) {
       // The first key: what was written before it goes on into it; with nothing written, its own draft comes back.
       const { text: written, shown: s } = now.current;
-      if (written || s.files.length || s.quotes.length) { void act("carry", { key: before.key, to: key }); return; }
+      if (written || s.files.length || s.quotes.length) { void act("carry", { key: before, to: key }); return; }
     }
     // Shown as the core has it (at once when it has it already), else empty until it says.
     adopt(now.current.view, true);
-  }, [key, here]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** The core's value shown, unless the page has done something it has not answered yet. */
   const adopted = useRef<ComposerView | undefined>(undefined);
@@ -274,11 +254,7 @@ export function useDraft({ key: given, station, carry }: {
       return { id, name: file.name, size: file.size, blob: file, ...(pasted ? { pasted } : {}), ...(quote ? { quote } : {}) };
     });
     const ids = new Set(files.map((f) => f.id));
-    for (const f of files) {
-      wentTo.set(f.id, { station: here, file: f.blob });
-      fileStations.set(f.id, here);
-    }
-    const added = files.map((f): ComposerFile => ({ id: f.id, name: f.name, size: f.size, ...(f.size > MAX_FILE ? { error: t("web-main.draft.tooBig") } : {}), ...(pasted ? { pasted } : {}) }));
+    const added = files.map((f): ComposerFile => ({ id: f.id, name: f.name, size: f.size, ...(f.size > MAX_FILE ? { error: t("web-main.draft.tooBig") } : key.startsWith("new:") ? { waits: true } : {}), ...(pasted ? { pasted } : {}) }));
     void act("add", { station: here, files }, (s) => (quote
       ? { ...s, quotes: s.quotes.map((q) => (q.id === quote && added[0] ? { ...q, own: added[0] } : q)) }
       : { ...s, files: [...s.files, ...added] })).then((answer) => {
@@ -305,8 +281,6 @@ export function useDraft({ key: given, station, carry }: {
     const l = local.get(id);
     if (l?.preview) URL.revokeObjectURL(l.preview);
     local.delete(id);
-    wentTo.delete(id);
-    fileStations.delete(id);
   };
   const remove = (id: string) => {
     forget(id);
@@ -351,7 +325,7 @@ export function useDraft({ key: given, station, carry }: {
   const quotes: DraftQuote[] = shown.quotes.map(({ own, ...q }) => ({ ...q, ...(own ? { own: asPending(own) } : {}) }));
   // What goes with the message: its files and its quotes' pictures (the same image quoted twice, once).
   const going = [...files, ...quotes.flatMap((q) => (q.own ? [q.own] : []))].filter((f, i, all) => !f.done || all.findIndex((g) => g.done?.path === f.done!.path) === i);
-  const uploading = going.some((f) => !f.done && !f.error && !named(f));
+  const uploading = going.some((f) => goingUp(f) && !named(f));
   const ready = (Boolean(text.trim()) || going.some((f) => !f.error) || quotes.length > 0) && !shown.starting && !files.some((f) => f.pasted && f.error);
 
   const back = useRef<{ text: string; shown: Shown } | null>(null);
@@ -359,7 +333,8 @@ export function useDraft({ key: given, station, carry }: {
     back.current = { text, shown };
     const taken = { text: text.trim(), files: going, quotes: quotes.map(({ own, ...q }) => ({ ...q, ...(own ? { file: own.done?.name ?? own.name } : {}) })) };
     setTextState("");
-    void act("take", {}, () => ({ ...NOTHING }));
+    // (to its station: a new chat's files go up now)
+    void act("take", { station: here }, () => ({ ...NOTHING }));
     return taken;
   };
   const restore = (error: string | null = null, unlessWritten = false) => {
@@ -370,24 +345,6 @@ export function useDraft({ key: given, station, carry }: {
   };
   const send: Draft["send"] = async (open, { first = false, onSending } = {}) => {
     const from = key;
-    // A file that went up to another station than this one (picked before the chat's station was changed): not sent
-    // from there, which this one would refuse; it goes up here again and the message waits to be sent once more.
-    const unavailable = going.filter((f) => !named(f) && fileStations.has(f.id) && fileStations.get(f.id) !== here && !wentTo.has(f.id));
-    if (unavailable.length) {
-      setError(t("web-main.draft.selectAgain", { names: unavailable.map((f) => f.name).join(", ") }));
-      return null;
-    }
-    const astray = going.filter((f) => !named(f) && !f.error && wentTo.has(f.id) && wentTo.get(f.id)!.station !== here);
-    if (astray.length) {
-      for (const f of astray) {
-        const { file } = wentTo.get(f.id)!;
-        const of = ownerOf(shown, f.id);
-        remove(f.id);
-        add([file], f.pasted, of);
-      }
-      setError(t("web-main.draft.otherStation", { names: astray.map((f) => f.name).join(", ") }));
-      return null;
-    }
     // Its images' pictures stay here until the station's are read: one still going up by its upload's id, as its outbox
     // row and then its message draw it.
     for (const f of going) {
@@ -422,8 +379,6 @@ export function useDraft({ key: given, station, carry }: {
         const l = local.get(f.id);
         if (l?.preview) URL.revokeObjectURL(l.preview);
         local.delete(f.id);
-        wentTo.delete(f.id);
-        fileStations.delete(f.id);
       }
     };
     const at = performance.now();

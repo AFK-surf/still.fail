@@ -2224,7 +2224,7 @@ export interface ComposerLink {
 	site?: string;
 }
 
-/** A file in what is being written: going up, up, or failed; or a link. */
+/** A file in what is being written: waiting to go with its message (a new chat's), going up, up, or failed; or a link. */
 export interface ComposerFile {
 	/** The page's id for it (`composer.add`). */
 	id: string;
@@ -2241,6 +2241,8 @@ export interface ComposerFile {
 	/** Up: as the station keeps it (in no chat until a message takes it). */
 	done?: Attachment;
 	error?: string;
+	/** A new chat's, not gone up: it goes up with its message, to the station the message goes to. */
+	waits?: boolean;
 	pasted?: PastedInfo;
 	/** Dragged in from where it is (a station's files, or Finder on a machine that is a station). */
 	ref?: ComposerRef;

@@ -236,6 +236,7 @@ pub fn writing_add(
     Some(p) => shown["pasted"] = p
     None => ()
   }
+  shown_waiting(w, shown)
   writing_act(
     src,
     w,
@@ -288,6 +289,7 @@ pub fn writing_add_held(src : Source, w : Writing, station : String, f : @hostap
     "name": Json::string(f.name),
     "size": Json::number(f.size),
   }
+  shown_waiting(w, shown)
   writing_act(
     src,
     w,
@@ -295,6 +297,15 @@ pub fn writing_add_held(src : Source, w : Writing, station : String, f : @hostap
     { "station": Json::string(station), "files": Json::array([Json::object(one)]) },
     show=fn(w) { w.files = w.files + [Json::object(shown)] },
   )
+}
+
+///|
+/// A file as the page shows it until the core has it: a new chat's waits for its message, nothing going up yet
+/// (composer.ts `waits`).
+fn shown_waiting(w : Writing, shown : Map[String, Json]) -> Unit {
+  if w.key.has_prefix("new:") {
+    shown["waits"] = Json::boolean(true)
+  }
 }
 
 ///|
@@ -443,7 +454,7 @@ pub fn writing_starting(src : Source, w : Writing, on : Bool) -> Unit {
 /// What is written taken away to be sent (`composer.take`): the draft empty at once; `done` gets what the core took,
 /// as it goes (its words with the links and the paths named after them, the files that are up, the quotes, those still
 /// going up), sent as it says: its files as they were when it took them, not as this page last drew them. `station`:
-/// the one it goes to, where a file that went up to another (a new chat's, its station changed) goes up again.
+/// the one it goes to, where a new chat's files go up now.
 pub fn writing_take(src : Source, w : Writing, station? : String = "", done : (Json?) -> Unit) -> Unit {
   w.taken = Some((w.text, w.quotes, w.files))
   let params : Map[String, Json] = {}

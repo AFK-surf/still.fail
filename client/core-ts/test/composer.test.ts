@@ -328,7 +328,7 @@ test("a_new_chats_draft_kept_by_the_station_it_was_to_start_on_comes_back_as_the
   t.core.close();
 });
 
-test("a_new_chats_file_goes_up_again_to_the_station_its_message_goes_to_and_is_let_go_once_it_leaves", async () => {
+test("a_new_chats_files_wait_for_its_message_and_go_up_to_the_station_it_goes_to_let_go_once_they_leave", async () => {
   const t = await setup();
   const parts: string[] = [];
   (t.core.inner.stations.requests as J).uploadPart = (addr: J, q: J, bytes: Uint8Array) => {
@@ -338,21 +338,51 @@ test("a_new_chats_file_goes_up_again_to_the_station_its_message_goes_to_and_is_l
   let released = 0;
   const picked = new FileSource(3, "", () => Promise.resolve(new Uint8Array([1, 2, 3]).buffer), () => { released++; });
   await t.watch(1, "new:ws");
-  // One file picked while it was to run on st, one after it was changed to other.
+  // One file picked while it was to run on st, one after it was changed to other: neither goes up yet.
   await t.ask("add", { key: "new:ws", station: "ws/st", files: [{ id: "f1", name: "a.bin", size: 3, blob: picked }] });
   await t.ask("add", { key: "new:ws", station: "ws/other", files: [{ id: "f2", name: "b.bin", size: 1, blob: new Blob(["b"]) }] });
-  assert.deepEqual(v(t.values, 1).files.map((f: J) => f.done.path), ["/st/a.bin", "/other/b.bin"]);
-  // Up, but kept to go again while it is in a new chat's draft.
-  assert.equal(released, 0);
+  assert.deepEqual(v(t.values, 1).files.map((f: J) => [f.id, f.waits, f.done]), [["f1", true, undefined], ["f2", true, undefined]]);
+  assert.deepEqual([v(t.values, 1).uploading, v(t.values, 1).ready, parts, released], [false, true, [], 0]);
+  // Sent to other: both go up there, the message waiting for them.
   call(t.core, t.ui, 900, "composer.take", { key: "new:ws", station: "ws/other" });
   await t.host.settle();
   const taken = answers(t.host.takeEmitted(), 900)?.ok as J;
-  assert.deepEqual([taken.attachments.map((a: J) => a.path), taken.uploads.map((u: J) => u.id)], [["/other/b.bin"], ["f1"]]);
-  assert.deepEqual(parts, ["st a.bin", "other b.bin", "other a.bin"]);
-  assert.equal((await Effect.runPromise(t.core.inner.composers.uploaded("ws/other", [{ id: "f1", name: "a.bin" }])))[0].path, "/other/a.bin");
-  t.core.inner.composers.release([{ id: "f1" }]);
+  assert.deepEqual([taken.attachments, taken.uploads.map((u: J) => u.id)], [[], ["f1", "f2"]]);
+  const up = await Effect.runPromise(t.core.inner.composers.uploaded("ws/other", taken.uploads));
+  assert.deepEqual([up.map((a: J) => a.path), parts], [["/other/a.bin", "/other/b.bin"], ["other a.bin", "other b.bin"]]);
+  // Read from until it leaves the draft (its message sent), let go then.
+  assert.equal(released, 0);
+  t.core.inner.composers.release(taken.uploads);
   assert.equal(released, 1);
   t.core.close();
+});
+
+test("a_new_chats_file_waiting_as_the_app_ended_comes_back_with_its_draft_and_goes_up_with_its_message", async () => {
+  const t = await setup();
+  await t.watch(1, "new:ws");
+  await t.ask("text", { key: "new:ws", text: "看这个" });
+  await t.ask("add", { key: "new:ws", station: "ws/st", files: [{ id: "f1", name: "a.txt", size: 3, blob: new Blob(["abc"]) }] });
+  await t.host.time.pass(SOON_MS + 50);
+  await t.host.settle();
+  await Effect.runPromise(t.core.inner.data.written);
+  t.core.close();
+  t.host.takeEmitted();
+  const again = await Core.create(t.host, { clock: t.host.time.clock, sample: 0, wire: () => new HostWire(t.host) });
+  try {
+    const went: string[] = [];
+    (again.inner.stations.requests as J).uploadPart = (addr: J, q: J, bytes: Uint8Array) => {
+      // (asked by its hash first whether the station has it: not)
+      if (q.sha256 !== undefined) return Effect.succeed({ have: 0 });
+      went.push(`${addr.station} ${new TextDecoder().decode(bytes)}`);
+      return Effect.succeed({ have: bytes.length, file: { name: q.name, size: bytes.length, path: "/u/a.txt" } });
+    };
+    const restored = again.inner.composers.value("new:ws") as J;
+    assert.deepEqual([restored.text, restored.files.map((f: J) => [f.id, f.name, f.waits])], ["看这个", [["f1", "a.txt", true]]]);
+    const taken = again.inner.composers.take("new:ws", "ws/other");
+    assert.deepEqual(taken.uploads.map((u) => u.id), ["f1"]);
+    const up = await Effect.runPromise(again.inner.composers.uploaded("ws/other", taken.uploads));
+    assert.deepEqual([up[0].path, went], ["/u/a.txt", ["other abc"]]);
+  } finally { again.close(); }
 });
 
 test("a_made_chats_pending_draft_survives_restart_and_stays_cleared_after_sending", async () => {
