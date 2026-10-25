@@ -376,12 +376,11 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
                 if r != text(ov2, "rubric") {
                   call("edit", [("option", str(okey)), ("rubric", str(r))], fn(_) {  })
                 }
-                let i = seg(
+                let i = @sf.segmented(
                   c,
                   "policy-archive/" + serial,
                   [tr("web-pages.archivePolicy.archive"), tr("web-pages.archivePolicy.keep")],
                   if flag(ov2, "archive") { 0 } else { 1 },
-                  fill=true,
                 )
                 if (i == 0) != flag(ov2, "archive") {
                   call("edit", [("option", str(okey)), ("archive", Json::boolean(i == 0))], fn(_) {  })
@@ -551,12 +550,12 @@ fn decisions_left(core : Core, route : Route) -> Unit {
 
 ///|
 /// How many places a bar holds (BAR_SIZE).
-let bar_size : Int = 4
+pub let bar_size : Int = 4
 
 ///|
 /// Every place, in the picker's order (Places.kt PLACES).
 // kept across runs: a table of constants, never written
-let all_places : Array[String] = ["chats", "decisions", "files", "stations", "profiles", "connects", "usage", "archive"]
+pub let all_places : Array[String] = ["chats", "decisions", "files", "stations", "profiles", "connects", "usage", "archive"]
 
 ///|
 /// What settings' row says of the bars (barsValue): how many, or the one bar's places.
@@ -571,7 +570,7 @@ fn bars_value(core : Core) -> String {
 
 ///|
 /// The bars kept whole (BarSettings.kt save): an empty one dropped, the one in view still the same bar after it.
-fn save_bars(core : Core, sets : Array[Array[String]], current : Int) -> Unit {
+pub fn save_bars(core : Core, sets : Array[Array[String]], current : Int) -> Unit {
   let mut cur = current
   let kept : Array[Array[String]] = []
   for i, s in sets {
@@ -589,297 +588,14 @@ fn save_bars(core : Core, sets : Array[Array[String]], current : Int) -> Unit {
 }
 
 ///|
-/// A bar just made on the page, empty until a place is added (the core keeps no empty bar).
-let bar_adding : Ref[Bool] = Ref(false)
+/// A bar just made on 下方栏's page (sfdesk bars.mbt), empty until a place is added (the core keeps no empty bar): let
+/// go of as the page is left.
+pub let bar_adding : Ref[Bool] = Ref(false)
 
 ///|
-/// 下方栏 (BarSettingsScreen): this device's bottom bars, each a card of its places (a place taken out with the "−" at its
-/// corner, one added from a sheet of them all, one held and moved sideways to change its order); a bar made the one in
-/// view, deleted, or a new one made. A block at a time; the page and its frame are sfdesk's bars.mbt (one page for every
-/// frame).
-pub fn bars_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
-  let t = @sf.theme()
-  let (made, cur) = (core.bars)()
-  let sets : Array[Array[String]] = made.copy()
-  if bar_adding.val {
-    sets.push([])
-  }
-  let pick_for = fn(i : Int) {
-    open_bar_pick(core, i, fn(place) {
-      let (now, ncur) = (core.bars)()
-      if i >= now.length() {
-        bar_adding.val = false
-        save_bars(core, now + [[place]], ncur)
-      } else {
-        save_bars(core, now.mapi(fn(n, s) { if n == i && !s.contains(place) && s.length() < bar_size { s + [place] } else { s } }), ncur)
-      }
-    })
-  }
-  let blocks : Array[() -> Unit] = [fn() { page_note(c, tr("android-misc.bar.note")) }]
-  for i, set in sets {
-    let is_made = i < made.length()
-    blocks.push(fn() {
-      c.box(dir=Row, w=Fill(1.0), pl=24.0, pr=24.0, pt=16.0, pb=6.0, align=ACenter, fn() {
-        c.text(fill("android-misc.bar.set", [("n", (i + 1).to_string())]), size=13.0, weight=600, color=t.p.text, wrap=false) |> ignore
-        if is_made && i == cur {
-          c.box(pl=8.0, fn() {
-            c.box(padx=7.0, pady=1.0, radius=9.0, bg=t.p.accent_bg, fn() {
-              c.text(tr("android-misc.bar.current"), size=11.0, weight=600, color=@sf.link_ink(), wrap=false) |> ignore
-            })
-            |> ignore
-          })
-          |> ignore
-        }
-        c.spacer()
-        if is_made && i != cur && tap_text(c, "bar-use/" + i.to_string(), tr("android-misc.bar.use"), size=13.0, room=true) {
-          save_bars(core, made, i)
-        }
-        if sets.length() > 1 {
-          c.box(pl=10.0, fn() {
-            if tap_text(
-                c,
-                "bar-delete/" + i.to_string(),
-                tr("android-misc.bar.delete"),
-                color=t.p.red,
-                size=13.0,
-                said=fill("android-misc.bar.deleteNamed", [("n", (i + 1).to_string())]),
-                room=true,
-              ) {
-              if !is_made {
-                bar_adding.val = false
-              } else {
-                let left : Array[Array[String]] = []
-                for n, x in made {
-                  if n != i {
-                    left.push(x)
-                  }
-                }
-                save_bars(core, left, if cur > i || cur >= left.length() { if cur - 1 < 0 { 0 } else { cur - 1 } } else { cur })
-              }
-            }
-          })
-          |> ignore
-        }
-      })
-      |> ignore
-    })
-    blocks.push(fn() { bar_card(c, core, i, set, made.length() == 1 && set.length() == 1, fn() { pick_for(i) }) })
-  }
-  blocks.push(fn() {
-    c.box(w=Fill(1.0), pt=14.0, fn() {
-      list_card(c, fn() {
-        if list_row(c, key="bar-new", fn() {
-            @sf.icon(c, "plus", size=20.0, color=t.p.accent) |> ignore
-            row_title(c, tr("android-misc.bar.new"), color=@sf.link_ink())
-          }) {
-          bar_adding.val = true
-          pick_for(made.length())
-        }
-      })
-    })
-    |> ignore
-  })
-  blocks.push(fn() { page_note(c, tr(if made.length() > 1 { "android-misc.bar.foot.many" } else { "android-misc.bar.foot.one" })) })
-  blocks
-}
-
-///|
-/// How far a place held is moved along its bar (BarCard's `dx`: the finger's way past the slop), by its bar and its
-/// name, while a finger has it.
-let bar_moves : Map[String, Double] = {}
-
-///|
-/// A place held and moved sideways (BarCard): lifted 8% over the card's ground, 14 round, raised (shadow(6), black at
-/// 14% both).
-// kept across runs: a value (no field of it changes)
-let place_lifted : @sf.Raised = @sf.raised(6.0, ambient=0.14, spot=0.14)
-
-///|
-/// A place on its bar as it lies.
-// kept across runs: a value (no field of it changes)
-let place_slot : @ui.Style = @ui.css("")
-
-///|
-/// A place held: on the card's ground, raised (place_lifted).
-// kept across runs: a value (no field of it changes)
-let place_held : @ui.Style = @ui.style(bg=Card, shadow=place_lifted.cast())
-
-///|
-/// A bar's card (BarCard): its places in four slots, each its icon over its name with a "−" at its corner (none on the
-/// last place of the only bar), one held and moved sideways put where it is let go (by how many slots it went), a
-/// screen reader's step moving it one along; with room left, a slot that adds one.
-fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool, add : () -> Unit) -> Unit {
-  let t = @sf.theme()
-  // BarSettingsScreen's onMove: the place at `j` put at `to`
-  let move = fn(j : Int, to : Int) {
-    let (now, ncur) = (core.bars)()
-    if to != j && i < now.length() && j < now[i].length() && to >= 0 && to < now[i].length() {
-      let moved = now[i].copy()
-      let p = moved.remove(j)
-      moved.insert(to, p)
-      save_bars(core, now.mapi(fn(n, s) { if n == i { moved } else { s } }), ncur)
-    }
-  }
-  c.box(w=Fill(1.0), pl=12.0, pr=12.0, pb=10.0, fn() {
-    // 6 in (BarCard: padding(6))
-    c.box(dir=Row, w=Fill(1.0), pad=6.0, radius=20.0, bg=t.p.card, fn() {
-      for j, key in set {
-        let id = c.id("bar-slot/" + i.to_string() + "/" + key)
-        let held = i.to_string() + "/" + key
-        // the finger's (detectHorizontalDragGestures): lifted once it goes sideways past the slop, following it; let go,
-        // put by how many slots it went (a slot's width, Row's quarter)
-        c.drag_on(id, axis=Horizontal)
-        let lifted = match c.drag_of(id) {
-          Some(d) => {
-            let (dx, _) = d.take_move()
-            if d.down && d.moving {
-              bar_moves[held] = bar_moves.get(held).unwrap_or(0.0) + dx
-            }
-            if d.take_end() {
-              let went = bar_moves.get(held).unwrap_or(0.0)
-              bar_moves.remove(held)
-              match c.rect_of(id) {
-                Some((_, _, w, _)) if w > 0.0 => {
-                  let to = j + (went / w).round().to_int()
-                  move(j, if to < 0 { 0 } else if to >= set.length() { set.length() - 1 } else { to })
-                }
-                _ => ()
-              }
-            } else if !d.down {
-              bar_moves.remove(held)
-            }
-            d.down && d.moving
-          }
-          None => false
-        }
-        // a screen reader's (BarSettings.kt's actions 左移, 右移): one slot along
-        if c.action_asked(id, Decrement) && j > 0 {
-          move(j, j - 1)
-        }
-        if c.action_asked(id, Increment) && j < set.length() - 1 {
-          move(j, j + 1)
-        }
-        // the slot, and its "−" over it beside (not inside) what the finger holds: a press on the "−" is its own
-        // (14 round: Smooth(concentric(20, 6)), the card's corner 6 in)
-        let slot = c.box(
-          style=if lifted { place_held } else { place_slot },
-          w=Fill(1.0),
-          radius=14.0,
-          fn() {
-            let face = c.box(w=Fill(1.0), pt=12.0, pb=10.0, align=ACenter, id~, fn() {
-              c.box(gap=6.0, align=ACenter, fn() {
-                c.box(h=Px(30.0), justify=JCenter, fn() { (core.place_icon)(c, key, t.p.text) }) |> ignore
-                c.text(tr("android-misc.bar.place." + key), size=12.0, color=t.p.muted, wrap=false) |> ignore
-              })
-              |> ignore
-            })
-            c.semantics(face, Group, id~, label=tr("android-misc.bar.place." + key), actions=[Decrement, Increment])
-            if !only {
-              c.layer(align=ACenter, fn() {
-                let rid = c.id("bar-remove/" + i.to_string() + "/" + key)
-                if hit(c, rid) {
-                  let (now, ncur) = (core.bars)()
-                  save_bars(core, now.mapi(fn(n, s) { if n == i { s.filter(fn(p) { p != key }) } else { s } }), ncur)
-                }
-                // at the icon's top right: 8 over the top of what the slot holds, 12 under the slot's own top
-                // (BarSettings.kt: TopCenter of the slot's padded content, offset 16, -8)
-                let said = fill("android-misc.bar.remove", [("name", tr("android-misc.bar.place." + key))])
-                let minus = c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=t.p.chip, tx=16.0, ty=4.0, align=ACenter, justify=JCenter, id=rid, label=said, fn() {
-                  @sf.icon(c, "minus", size=12.0, color=t.p.muted) |> ignore
-                })
-                c.semantics(minus, Button, id=rid, label=said)
-              })
-              |> ignore
-            }
-          },
-        )
-        // held: where the finger has it, 8% bigger, over the other places (graphicsLayer, zIndex(2f))
-        if lifted {
-          c.look(slot, @ui.look(dx=bar_moves.get(held).unwrap_or(0.0), scale=1.08))
-          c.put_over(slot)
-        }
-      }
-      if set.length() < bar_size {
-        let aid = c.id("bar-add/" + i.to_string())
-        if hit(c, aid) {
-          add()
-        }
-        c.box(w=Fill(1.0), pt=12.0, pb=10.0, radius=16.0, align=ACenter, id=aid, fn() {
-          c.box(gap=6.0, align=ACenter, fn() {
-            // its ring held to the 30 it is in (BarSettings.kt asks 44 of a Box(size(30)): Compose's `size` takes the
-            // constraints it is given)
-            c.box(w=Px(30.0), h=Px(30.0), radius=15.0, border=1.5, border_color=t.p.line, align=ACenter, justify=JCenter, fn() {
-              @sf.icon(c, "plus", size=22.0, color=t.p.subtle) |> ignore
-            })
-            |> ignore
-            c.text(tr("android-misc.bar.add"), size=12.0, color=t.p.subtle, wrap=false) |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
-      }
-      for _ in 0..<(bar_size - set.length() - 1) {
-        c.box(w=Fill(1.0), fn() {  }) |> ignore
-      }
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-
-///|
-/// The places to add to bar `i` (openPick): all of them, those in it already greyed (已在这一栏), none when it is full.
-fn open_bar_pick(_core : Core, i : Int, picked : (String) -> Unit) -> Unit {
-  open_sheet(0.6, fn(c, core) {
-    let t = @sf.theme()
-    let (now, _) = (core.bars)()
-    let set = now.get(i).unwrap_or([])
-    let full = set.length() >= bar_size
-    c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, pb=10.0, align=ACenter, fn() {
-      c.text(fill("android-misc.bar.pick.title", [("n", (i + 1).to_string())]), size=17.0, weight=700, color=t.p.text, wrap=false, w=Fill(1.0), line=24.0)
-      |> ignore
-      c.text(
-        if full {
-          tr("android-misc.bar.pick.full")
-        } else {
-          fill("android-misc.bar.pick.left", [("n", (bar_size - set.length()).to_string())])
-        },
-        size=13.0,
-        color=t.p.muted,
-        wrap=false,
-      )
-      |> ignore
-    })
-    |> ignore
-    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-      scroll_page(c, "bar-pick/" + i.to_string(), [
-        fn() {
-          for key in all_places {
-            let there = set.contains(key)
-            if pick_row(
-                c,
-                "bar-pick/" + key,
-                tr("android-misc.bar.place." + key),
-                sub=if there { tr("android-misc.bar.pick.there") } else { "" },
-                enabled=!there && !full,
-                mark=fn() {
-                  c.box(w=Px(28.0), h=Px(28.0), align=ACenter, justify=JCenter, opacity=if there || full { 0.4 } else { 1.0 }, fn() {
-                    (core.place_icon)(c, key, t.p.text)
-                  })
-                  |> ignore
-                },
-              ) {
-              close_sheet()
-              picked(key)
-            }
-          }
-        },
-      ])
-    })
-    |> ignore
-  })
-}
+/// How far a place held on 下方栏's page is moved along its bar (BarCard's `dx`: the finger's way past the slop), by
+/// its bar and its name, while a finger has it.
+pub let bar_moves : Map[String, Double] = {}
 
 // ---------------------------------------------------------------------------
 // 存储空间 (what this device keeps)

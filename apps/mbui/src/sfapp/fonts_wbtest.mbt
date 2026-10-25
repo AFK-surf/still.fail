@@ -25,7 +25,7 @@ test "外观's 字体 row: the faces at a glance, opening the page: the places, 
   // each shown in itself: its preview given to a face of its own
   assert_true(@ui.face_given(preview_faces_from))
   // code's: the code faces, 默认 in the app's own (JetBrains Mono)
-  t.tap_text("代码")
+  tap_place(t, "代码")
   t.draw()
   assert_true(t.find("Fira Code") is Some(_))
   assert_true(t.find("91 kB") is Some(_))
@@ -36,7 +36,7 @@ test "外观's 字体 row: the faces at a glance, opening the page: the places, 
 ///|
 test "a face picked: kept as the device's, fetched, unzipped and checked, and what people write set in it; 跟随界面 puts it back" {
   let t = settings_tester("fonts")
-  t.tap_text("正文")
+  tap_place(t, "正文")
   t.draw()
   assert_true(t.find("跟随界面") is Some(_))
   assert_false(@ui.face_given(@hostapi.face_text))
@@ -140,4 +140,11 @@ test "a face's file the host cannot read where it is: had through the core inste
   assert_eq(asked.val, 2)
   assert_true(face_here("lxgw-wenkai"))
   assert_true(@ui.face_given(@hostapi.face_text))
+}
+
+///|
+/// The places' choice's `place` tapped (its words drawn after what the page is for, which names them too).
+fn tap_place(t : @ui.Tester, place : String) -> Unit {
+  let (x, y) = t.find_last(place).unwrap()
+  t.tap(x, y)
 }

@@ -1,5 +1,6 @@
 // A segmented choice as the web's narrow pages have it (web/src/mobile/parts.tsx Seg; Android's Parts.kt Seg): mbui's
-// sliding toggle group in Seg's look. The wide pages' pill is `segmented` (parts.mbt), the web's controls' Segmented.
+// sliding toggle group in Seg's look. Not a part of its own: `segmented` (parts.mbt) draws it on a narrow page, the
+// web's Segmented on a wide one.
 
 ///|
 /// A segmented choice (Seg): mbui's sliding toggle group (@kit.toggle_group: the arrows move along it, a screen reader
@@ -11,7 +12,7 @@
 /// `pill`: the web's wide pill
 /// (controls.css.ts seg: options as wide as their words, 105 at least, `compact` as wide as their words alone; 36
 /// high). Answers the one chosen (a tap's, this frame).
-pub fn seg(
+fn seg(
   c : @ui.Ctx,
   key : String,
   options : Array[String],

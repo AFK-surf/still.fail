@@ -284,7 +284,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-prices" => "prices:7"
     "settings-run" | "settings-run-models" | "settings-run-accounts" => "run:ws1/st1#s-c1"
     "settings-add-people" | "settings-workspace-mark" => "workspace"
-    "settings-local-fonts" => "appearance"
+    "settings-local-fonts" => "fonts"
     "settings-security-confirm" | "settings-security-join" | "settings-security-off" => "security"
     "settings-notify-off" | "settings-lock-prompt" => "home"
     "settings-station" => "station:ws1/st1"

@@ -817,6 +817,36 @@ pub fn link_row(
 }
 
 ///|
+/// A row of a list of choices, one of them `chosen` (a face, a place): what it is given (`body`: its mark, its words),
+/// and a check at its end where it is the one chosen; the whole row takes the press, lit under the pointer or a
+/// finger's press (narrow: a card's row; wide: the web's list row). Said to be `label`. True on the frame it is
+/// pressed; `c.lit(c.id(key))` says it is pointed at.
+pub fn choice_row(c : @ui.Ctx, key : String, chosen : Bool, label : String, body : () -> Unit) -> Bool {
+  let th = theme()
+  let id = c.id(key)
+  c.cursor(id, Hand)
+  let b = match look() {
+    Narrow =>
+      c.box(style=narrow_row(true), id~, fn() {
+        body()
+        if chosen {
+          icon(c, "check", size=pg_chevron, color=th.p.accent) |> ignore
+        }
+        row_ripple(c, id)
+      })
+    Wide =>
+      c.box(style=desk_list_link, id~, fn() {
+        body()
+        if chosen {
+          icon(c, "check", size=desk_chevron, color=th.p.accent) |> ignore
+        }
+      })
+  }
+  c.semantics(b, Button, id~, label~, selected=chosen)
+  c.clicked(id)
+}
+
+///|
 /// A row that turns something on or off (parts.tsx SwitchRow): its title, `note` quieter under it, the switch at its
 /// end; narrow, the whole row takes the press; wide, the switch and its words (16 apart). `busy`: what it set is on its
 /// way (not turned again meanwhile). Answers whether it is on now.
@@ -943,11 +973,19 @@ pub fn card_foot(c : @ui.Ctx, body : () -> Unit, at_end? : Bool = false) -> Unit
 
 ///|
 /// What a part does, at its heading's end (wide: the web's quiet button with its mark; narrow: SectionHeader's
-/// trailing words in the link's ink, room round them for a finger), a spinner in its place while it is `busy`. True on
-/// the frame it is pressed.
-pub fn action(c : @ui.Ctx, key : String, label : String, icon? : String = "", busy? : Bool = false, disabled? : Bool = false) -> Bool {
+/// trailing words in the link's ink, room round them for a finger), a spinner in its place while it is `busy`; `bad`:
+/// one that takes something away (删除), in the red. True on the frame it is pressed.
+pub fn action(
+  c : @ui.Ctx,
+  key : String,
+  label : String,
+  icon? : String = "",
+  busy? : Bool = false,
+  disabled? : Bool = false,
+  bad? : Bool = false,
+) -> Bool {
   match look() {
-    Wide => button(c, label, key~, tone=Ghost, icon~, busy~, disabled~)
+    Wide => button(c, label, key~, tone=if bad { GhostDanger } else { Ghost }, icon~, busy~, disabled~)
     Narrow => {
       if busy {
         spinner(c, size=spinner_inline) |> ignore
@@ -955,7 +993,7 @@ pub fn action(c : @ui.Ctx, key : String, label : String, icon? : String = "", bu
       }
       let id = if disabled { 0 } else { c.id(key) }
       let b = c.box(style=pg_action, id~, fn() {
-        c.text(label, style=pg_action_words) |> ignore
+        c.text(label, style=if bad { pg_action_bad } else { pg_action_words }) |> ignore
         if id != 0 {
           press_ripple(c, id, row_corner)
         }
@@ -1622,6 +1660,10 @@ let pg_action : @ui.Style = @ui.css("p=S1 radius=Lg")
 ///|
 // kept across runs: a value (no field of it changes)
 let pg_action_words : @ui.TextStyle = @ui.text_style(size=Base, color=Link, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pg_action_bad : @ui.TextStyle = pg_action_words.then(bad)
 
 ///|
 /// A finger's target (44 at least) and its mark in it.

@@ -1315,7 +1315,7 @@ test "wide: the workspace's page as the web's: its mark and name at its head, wh
 }
 
 ///|
-test "wide: 外观's faces chosen in the page itself (FontSetting): the places' switch, a tile each, the chosen one checked; picked, kept as the device's; 拖入 chat 的文件's switch" {
+test "wide: 字体's faces a row each under the places' choice, the chosen one checked; picked, kept as the device's; 外观's 拖入 chat 的文件's switch" {
   reset()
   let src = fixture("settings")
   let calls : Array[Made] = []
@@ -1328,7 +1328,7 @@ test "wide: 外观's faces chosen in the page itself (FontSetting): the places' 
   }
   // (tall enough for the whole page: 拖入 chat 的文件 at its end in view)
   let t = @ui.Tester::new(fn(c) { view(c, src2) }, w=1280.0, h=1600.0, platform=0)
-  open_setting("appearance")
+  open_setting("fonts")
   t.draw()
   t.run_for(@ui.nav_push_ms)
   for label in ["默认", "Inter", "思源黑体"] {
@@ -1343,6 +1343,9 @@ test "wide: 外观's faces chosen in the page itself (FontSetting): the places' 
   t.tap(x, y)
   t.frame()
   assert_true(t.query(Button, label="JetBrains Mono") is Some(_))
+  open_setting("appearance")
+  t.draw()
+  t.run_for(@ui.nav_push_ms)
   assert_true(t.find("拖入 chat 的文件") is Some(_))
   assert_true(t.find("发文件") is Some(_))
 }
@@ -1787,11 +1790,14 @@ test "wide: 文件's rows as the core says them (driveBrowse, drive.browse): a p
 }
 
 ///|
-test "wide: 外观's 本机字体 lists the families installed here; one chosen is the place's face, the host's family" {
+test "wide: 字体's 本机字体 lists the families installed here; one chosen is the place's face, the host's family" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   t.set_local_fonts("[\"Menlo\",\"Avenir Next\",\"Helvetica\"]")
-  app.nav.replace(Setting(@settings.Route::Appearance))
+  app.nav.replace(Setting(@settings.Route::Fonts))
+  t.run_for(@ui.nav_push_ms)
+  // (本机字体 the faces' last row, under the chat they set: the page scrolled to it)
+  t.wheel(900.0, 400.0, 400.0)
   t.run_for(@ui.nav_push_ms)
   t.click(Button, label="本机字体")
   t.frame()

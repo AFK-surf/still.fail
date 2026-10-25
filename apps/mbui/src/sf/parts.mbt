@@ -658,6 +658,13 @@ let sheet_grab_outer : @ui.Style = @ui.css("w=Full pt=S2 pb=S1")
 let sheet_grab_inner : @ui.Style = @ui.css("w=Full py=S1 align=ACenter")
 
 ///|
+/// What a sheet holds (`body`), laid out as a sheet is on any screen: narrow, as the presenters lay theirs out (its
+/// parts read it: look).
+pub fn sheet_laid(body : () -> Unit) -> Unit {
+  with_look(Narrow, body)
+}
+
+///|
 /// The grabber at a sheet's top (Sheet.kt SheetGrab): 38 × 5 in the line's colour, 12 above it and 8 under.
 pub fn sheet_grab(c : @ui.Ctx) -> Unit {
   let grabber = sheet_grabber.then(@ui.style(bg=Data(theme().p.line)))

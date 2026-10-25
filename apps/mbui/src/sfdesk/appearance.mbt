@@ -1,8 +1,8 @@
 // 外观, one page for every frame (web/src/pages/Appearance.tsx and mobile/Settings.tsx AppearanceScreen): how this
 // device shows still.fail, a section each: 主题, 字体, 动画, 语言; on a computer the files dragged into a chat too, and
 // laid out wide the rail changed in place (as the web's, `wideOnly`). Each choice is the core's prefs (`prefs.set`),
-// shown at once. Laid out narrow, the faces are a row that opens 字体's page (FontRow); wide, chosen here
-// (font_setting.mbt, FontSetting.tsx). When a done chat is offered to archive is 归档's (archiving.mbt), as the web's.
+// shown at once. The faces are a row that opens 字体's page (FontRow; font_setting.mbt), on every screen. When a
+// done chat is offered to archive is 归档's (archiving.mbt), as the web's.
 
 ///|
 /// The page (AppearancePage, AppearanceScreen), in the frame it is given.
@@ -37,23 +37,17 @@ fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
         )
       })
     },
+    // (12 under the theme's switch, the faces' row on a card of its own: SettingsHome.kt, mobile FontRow; a chat as
+    // they set it and their list are a page's own, on every screen)
     fn() {
-      match look {
-        Wide =>
-          section(@sf.t("web-pages.appearance.fonts.title"), @sf.t("web-pages.appearance.fonts.description"), false, fn() {
-            font_setting(c, core)
-          })
-        // (12 under the theme's switch, the faces' row on a card of its own: SettingsHome.kt, mobile FontRow)
-        Narrow =>
-          c.box(style=appearance_fonts_room, fn() {
-            @sf.group(c, fn() {
-              if @sf.link_row(c, "appearance/fonts", @sf.t("web-pages.appearance.fonts.title"), value=fonts_said(prefs)) {
-                (core.push)(Fonts)
-              }
-            })
-          })
-          |> ignore
-      }
+      c.box(style=appearance_fonts_room, fn() {
+        @sf.group(c, fn() {
+          if @sf.link_row(c, "appearance/fonts", @sf.t("web-pages.appearance.fonts.title"), value=fonts_said(prefs)) {
+            (core.push)(Fonts)
+          }
+        })
+      })
+      |> ignore
     },
     fn() {
       section(@sf.t("web-pages.appearance.motion.title"), @sf.t("web-pages.appearance.motion.description"), true, fn() {
@@ -122,19 +116,10 @@ let appearance_line : @ui.Style = @ui.css("row w=Full align=ACenter")
 let appearance_fonts_room : @ui.Style = @ui.css("w=Full pt=S3")
 
 ///|
-/// 字体's page, one for every frame (mobile/Fonts.tsx FontScreen, opened from 外观's row): laid out narrow the places'
-/// switch, a chat as their faces set it, the faces of the place in view a row each (@settings.fonts_blocks); wide the
-/// desktop's own way to choose them (FontSetting), as 外观 shows it wide.
+/// 字体's page, one for every frame (mobile/Fonts.tsx FontScreen, opened from 外观's row narrow): what it is for under
+/// its title, the setting (font_setting.mbt).
 fn fonts_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
-  let look = look_of(c)
-  let blocks = match look {
-    Narrow => own_sides(c, @settings.fonts_blocks(c, core))
-    Wide => [fn() { font_setting(c, core) }]
-  }
-  // (wide, what it is for under its title, as 外观's section says it; narrow, under the faces)
-  look_page(c, core, frame, "fonts", @sf.t("web-pages.appearance.fonts.title"), blocks, lead=if look == Wide {
-    @sf.t("web-pages.appearance.fonts.description")
-  } else {
-    ""
-  })
+  look_page(c, core, frame, "fonts", @sf.t("web-pages.appearance.fonts.title"), fonts_blocks(c, core), lead=@sf.t(
+    "web-pages.appearance.fonts.description",
+  ))
 }

@@ -106,14 +106,11 @@ fn open_add_station(_core : Core, here : Here, known : Array[String], existing? 
     // the choice stays at the top; only what is under it scrolls
     if offered && adding.made is None {
       c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=10.0, fn() {
-        let i = seg(
+        let i = @sf.segmented(
           c,
           "add-kind",
           [tr("web-pages.settings.stations.kindNew"), tr("web-pages.settings.stations.kindExisting")],
           if adding.existing { 1 } else { 0 },
-          fill=true,
-          height=34.0,
-          radius=17.0,
         )
         adding.existing = i == 1
       })
