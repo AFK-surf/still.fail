@@ -9,7 +9,7 @@
 pub(all) struct ChatList {
   /// a row's height as the list first takes it (navSession 54, mChatRow 66)
   row_h : Double
-  /// the row: its box, its words' column (settled: at 45%), its title's line (with room for 归档 at its end where a
+  /// the row (how far in its words are and whether its ground is rounded: where its list stands, list_row_in): its box, its words' column (settled: at 45%), its title's line (with room for 归档 at its end where a
   /// pointer shows it), its second line
   row : @ui.Style
   text : @ui.Style
@@ -21,13 +21,12 @@ pub(all) struct ChatList {
   title : @ui.TextStyle
   title_unread : @ui.TextStyle
   last : @ui.TextStyle
-  /// a row beside a rail: a touch device's as far in from its list's left as from its right
-  beside_rail : @ui.Style
   /// a row with another under it (2 between on a computer, none on a touch device)
   more : @ui.Style
-  /// how far over its second line's middle what stands at its end does (concentric with a computer's row's foot
-  /// corner)
+  /// in a side column, where its ground is rounded (list_row_in): how far over its second line's middle what stands at
+  /// its end does, and how far in from the row's end it is, so its last face is concentric with the row's foot corner
   aside_lift : Double
+  aside_end : Double
   /// its second line from where its chat stands (chat_mark's state line): quiet, the viewer's turn, a message that did
   /// not go; a card's lead word
   state_quiet : @ui.TextStyle
@@ -55,17 +54,19 @@ pub(all) struct ChatList {
   band_icon : Double
   band_h : Double
   band_words : @ui.TextStyle
-  /// a sidebar's other lists (the files' places, the settings'): their box, a row (one of a list's items, its words
-  /// from the top), a row's words (the title's), where something goes while there is none, a folder that takes a drop
+  /// a sidebar's other lists (the files' places, the settings'), in a side column (list_line Side): their box, a row
+  /// (one of a list's items, its words from the top), where something goes while there is none, a folder that takes a
+  /// drop
   side_list : @ui.Style
   side_row : @ui.Style
   side_row_tall : @ui.Style
   side_hint : @ui.Style
   side_drop : @ui.Style
-  /// a day's heading, a sidebar list's (navHeading; the phone's section header)
+  /// a day's heading, a sidebar list's (navHeading; the phone's section header): over and under it (how far in:
+  /// where its list stands, list_heading_in), and in a side column how far in from the line its rows stand on (a
+  /// computer's 8; a touch device's its rows' words')
   heading : @ui.Style
-  /// beside a rail: in as its rows are there (a touch device's 14 to their 16)
-  heading_beside_rail : @ui.Style
+  heading_in : Double
   heading_words : @ui.TextStyle
   /// read the first time: how many rows breathe while it reads, and while what it waits on says so; dense (a
   /// computer's)
@@ -90,7 +91,7 @@ pub(all) struct ChatList {
 // kept across runs: a value (no field of it changes)
 pub let mouse_chat_list : ChatList = {
   row_h: 54.0,
-  row: @ui.style(row=true, w=Full, h=side_row_h, px=S2_5, py=row_in, gap=S2, align=AStart, radius=side_row_radius),
+  row: @ui.style(row=true, w=Full, h=side_row_h, py=row_in, gap=S2, align=AStart),
   text: @ui.css("w=Full gap=S0_5"),
   text_settled: @ui.css("w=Full gap=S0_5 opacity=O45"),
   head: @ui.css("row w=Full h=S5 gap=S1_5 align=ACenter"),
@@ -100,11 +101,11 @@ pub let mouse_chat_list : ChatList = {
   title: @ui.text_style(size=Ui, color=Fg, leading=L6, wrap=false, w=Full),
   title_unread: @ui.text_style(size=Ui, weight=Medium, color=Fg, leading=L6, wrap=false, w=Full),
   last: @ui.text_style(size=Meta, color=Muted, leading=L5, wrap=false, w=Full),
-  beside_rail: @ui.css(""),
   more: @ui.css("w=Full pb=S0_5"),
   // (as far from the row's foot as from its end: its last face concentric with the row's foot corner when its ground
   // shows, where its line's middle would have it 8: 7 in, the face 16 in the line's 18)
   aside_lift: capsule_in(row_corner, mouse_face_d) - (mouse_row_in + (mouse_meta_h - mouse_face_d) / 2.0),
+  aside_end: capsule_in(row_corner, mouse_face_d),
   state_quiet: @ui.text_style(size=Meta, color=Muted, leading=L5, wrap=false, w=Full),
   state_turn: @ui.text_style(size=Meta, color=Fg, leading=L5, wrap=false, w=Full),
   state_alert: @ui.text_style(size=Meta, color=Danger, leading=L5, wrap=false, w=Full),
@@ -117,8 +118,8 @@ pub let mouse_chat_list : ChatList = {
   face_ring: @ui.css("w=S5 h=S5 radius=Full border=B1 border_color=Fg"),
   top_in: 4.0,
   foot_in: 12.0,
-  band_in: 8.0,
-  band_pad: 10.0,
+  band_in: mouse_band_in,
+  band_pad: mouse_band_pad,
   band_icon: 16.0,
   band_h: 32.0,
   band_words: @ui.text_style(size=Sm, color=Fg, leading=L6, wrap=false, w=Full),
@@ -129,8 +130,8 @@ pub let mouse_chat_list : ChatList = {
   ),
   side_hint: @ui.css("row w=Full px=S2_5 py=S1_5 gap=S2 align=ACenter"),
   side_drop: @ui.css("w=Full radius=Xl"),
-  heading: @ui.css("w=Full px=S2 pt=S3_5 pb=S1"),
-  heading_beside_rail: @ui.css("w=Full px=S2 pt=S3_5 pb=S1"),
+  heading: @ui.css("w=Full pt=S3_5 pb=S1"),
+  heading_in: 8.0,
   heading_words: @ui.text_style(size=Meta, color=Muted, leading=L5, wrap=false),
   waiting_rows: 6,
   waiting_noted: 6,
@@ -148,7 +149,7 @@ pub let mouse_chat_list : ChatList = {
 // kept across runs: a value (no field of it changes)
 pub let touch_chat_list : ChatList = {
   row_h: touch_list_row_h,
-  row: @ui.style(row=true, w=Full, h=Fixed(touch_list_row_h), pl=phone_row_in, pr=S4, gap=S1_5, align=ACenter),
+  row: @ui.style(row=true, w=Full, h=Fixed(touch_list_row_h), gap=S1_5, align=ACenter),
   text: @ui.css("w=Full justify=JCenter"),
   text_settled: @ui.css("w=Full justify=JCenter opacity=O45"),
   head: @ui.style(row=true, w=Full, h=Fixed(touch_title_h), gap=S2, align=ACenter),
@@ -157,35 +158,39 @@ pub let touch_chat_list : ChatList = {
   title: @ui.text_style(size=Ui, color=Fg, leading=L7, wrap=false, w=Full),
   title_unread: @ui.text_style(size=Ui, weight=Semibold, color=Fg, leading=L7, wrap=false, w=Full),
   last: @ui.text_style(size=Meta, color=Muted, leading=L6, wrap=false, w=Full),
-  beside_rail: @ui.css("pl=S4"),
   more: full_width,
-  aside_lift: 0.0,
+  // (a face's foot over the row's: its two lines in its middle, the face in the second's)
+  aside_lift: capsule_in(row_corner, touch_face_d) -
+  ((touch_list_row_h - touch_title_h - touch_meta_h) / 2.0 + (touch_meta_h - touch_face_d) / 2.0),
+  aside_end: capsule_in(row_corner, touch_face_d),
   state_quiet: @ui.text_style(size=Meta, color=Muted, leading=L6, wrap=false, w=Full),
   state_turn: @ui.text_style(size=Meta, color=Fg, leading=L6, wrap=false, w=Full),
   state_alert: @ui.text_style(size=Meta, color=Danger, leading=L6, wrap=false, w=Full),
   // (bold, as the phone's: Home.kt StateLine)
   state_lead: @ui.text_style(weight=Bold, w=Hug),
   agent_mark: 14.0,
-  face_d: 18.0,
+  face_d: touch_face_d,
   face: @ui.css("w=S4_5 h=S4_5"),
   face_after: @ui.style(w=touch_face_step, h=S4_5),
   face_ground: @ui.css("w=S5 h=S5 radius=Full"),
   face_ring: @ui.style(w=touch_face_ring, h=touch_face_ring, radius=Full, border=B1, border_color=Fg),
   top_in: 0.0,
   foot_in: 0.0,
-  band_in: 16.0,
-  band_pad: 12.0,
+  band_in: touch_band_in,
+  band_pad: touch_band_pad,
   band_icon: 17.0,
   band_h: 38.0,
   band_words: @ui.text_style(size=Lg, color=Fg, wrap=false, w=Full),
-  // (as wide as their box, their rows in by their own, square: SidebarList.css.ts phone)
-  side_list: @ui.css("w=Full h=Full"),
-  side_row: @ui.css("row w=Full pr=S4 py=S2_5 gap=S2 align=ACenter").then(@ui.style(pl=phone_row_in)),
-  side_row_tall: @ui.css("row w=Full pr=S4 py=S2_5 gap=S2 align=ACenter").then(@ui.style(pl=phone_row_in)),
-  side_hint: @ui.css("row w=Full pr=S4 py=S2_5 gap=S2 align=ACenter").then(@ui.style(pl=phone_row_in)),
-  side_drop: @ui.css("w=Full"),
-  heading: @ui.css("w=Full px=S5 pt=S3_5 pb=S1_5"),
-  heading_beside_rail: @ui.css("w=Full pl=S3_5 pr=S5 pt=S3_5 pb=S1_5"),
+  // (in a side column as a computer's are, their grounds in and rounded, a finger's height and words)
+  side_list: @ui.style(w=Full, h=Full, px=room(touch_band_in)),
+  side_row: @ui.css("row w=Full py=S2_5 gap=S2 align=ACenter").then(@ui.style(px=room(touch_band_pad), radius=side_row_radius)),
+  side_row_tall: @ui.css("row w=Full py=S2_5 gap=S2 align=ACenter").then(
+    @ui.style(px=room(touch_band_pad), radius=side_row_radius),
+  ),
+  side_hint: @ui.css("row w=Full py=S2_5 gap=S2 align=ACenter").then(@ui.style(px=room(touch_band_pad))),
+  side_drop: @ui.css("w=Full radius=Xl"),
+  heading: @ui.css("w=Full pt=S3_5 pb=S1_5"),
+  heading_in: touch_band_pad,
   heading_words: @ui.text_style(size=Body, weight=Semibold, color=Fg, wrap=false),
   waiting_rows: 7,
   waiting_noted: 4,
@@ -197,11 +202,82 @@ pub let touch_chat_list : ChatList = {
 }
 
 ///|
+/// What stands over a sidebar's list: how far in its ground is and its words from it (band_in, band_pad).
+let mouse_band_in : Double = 8.0
+
+///|
+let mouse_band_pad : Double = 10.0
+
+///|
+let touch_band_in : Double = 16.0
+
+///|
+let touch_band_pad : Double = 12.0
+
+///|
+/// Where a list stands: in a side column beside a page (the wide frame's sidebar, on the tape or a computer's), or
+/// across the whole screen (a phone's home). How far in its rows are and whether their grounds are rounded follow it,
+/// not the screen's kind (asked, 2026-10-25: a touch device's square rows, lit, in a tape's sidebar beside 新建对话's
+/// round ground).
+pub(all) enum ListAt {
+  Side
+  Whole
+} derive(Eq)
+
+///|
+/// Where a list's lines stand (Sidebar.css.ts navScroll): in a side column as far in from its sides as what stands
+/// over the list (band_in: 新建对话's ground, the search's field), clear of its edge; across the whole screen, a row's
+/// ground its whole width.
+pub fn list_line(at : ListAt) -> @ui.Style {
+  match at {
+    Side => @ui.style(w=Full, px=room(theme().chat_list.band_in))
+    Whole => full_width
+  }
+}
+
+///|
+/// How far in a chat row's words are from its ground, and its ground's corner: in a side column its words as
+/// 新建对话's (band_pad), what stands at its end concentric with its foot corner (aside_end), rounded as a sidebar's
+/// row; across the whole screen as the phone's (mChatRow: 22 at the left, 16 at the right), square.
+pub fn list_row_in(at : ListAt) -> @ui.Style {
+  let l = theme().chat_list
+  match at {
+    Side => @ui.style(pl=room(l.band_pad), pr=room(l.aside_end), radius=side_row_radius)
+    Whole => whole_row_in
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let whole_row_in : @ui.Style = @ui.style(pl=phone_row_in, pr=S4)
+
+///|
+/// How far in a list's heading is: in a side column the theme's (heading_in, from the list's line); across the whole
+/// screen the phone's section header's (20).
+pub fn list_heading_in(at : ListAt) -> @ui.Style {
+  match at {
+    Side => @ui.style(px=room(theme().chat_list.heading_in))
+    Whole => whole_heading_in
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let whole_heading_in : @ui.Style = @ui.css("px=S5")
+
+///|
 /// A touch device's chat row's height and its title's line (mobile/Home.css.ts mChatRow, mChatLine1).
 pub let touch_list_row_h : Double = 66.0
 
 ///|
 let touch_title_h : Double = 22.0
+
+///|
+/// A touch device's chat row's second line (meta: S5) and a face at its end.
+let touch_meta_h : Double = 20.0
+
+///|
+let touch_face_d : Double = 18.0
 
 ///|
 /// How long the lists' track slides (navTrack, mHomePane: 240).

@@ -92,7 +92,7 @@ fn band_row_h() -> Double {
 /// chats' list's heading).
 pub fn nav_heading(c : @ui.Ctx, label : String) -> Unit {
   let l = @sf.theme().chat_list
-  c.box(style=l.heading, fn() { c.text(label, style=l.heading_words) |> ignore }) |> ignore
+  c.box(style=l.heading.then(@sf.list_heading_in(Side)), fn() { c.text(label, style=l.heading_words) |> ignore }) |> ignore
 }
 
 ///|
@@ -186,9 +186,15 @@ pub fn nav_new() -> @ui.Style {
 let nav_new_look : @ui.Style = @ui.css("row w=Full pt=S1_5 pb=S0_5 gap=S1 align=ACenter")
 
 ///|
-/// The list under a sidebar's band (Sidebar.css.ts navScroll): 8 in at its sides, 4 under the band.
+/// The list under a sidebar's band (Sidebar.css.ts navScroll): in at its sides as the theme's sidebar's lists are, 4
+/// under the band.
+pub fn side_list() -> @ui.Style {
+  @sf.theme().chat_list.side_list.then(side_list_top)
+}
+
+///|
 // kept across runs: a value (no field of it changes)
-pub let side_list : @ui.Style = @ui.css("w=Full h=Full px=S2 pt=S1")
+let side_list_top : @ui.Style = @ui.css("pt=S1")
 
 ///|
 /// A row's mark's side (SidebarList.css.ts mark, the action's icon: ICON's 16).

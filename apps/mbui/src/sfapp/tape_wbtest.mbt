@@ -626,12 +626,13 @@ test "on the tape a panel's ground goes behind or comes in front with the tape's
 }
 
 ///|
-test "on the tape the sidebar's rows stand 16 in from its left, as from its right; a phone's 22 from the screen's edge" {
+test "on the tape the sidebar's rows stand in a side column's line, their words as 新建对话's; a phone's 22 from the screen's edge" {
   let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
-  // the sidebar's panel 6 from the window's edge, its list from 8 into the rail inside its line (1): a row's words
-  // without a mark before them 16 in from there
+  // the sidebar's panel 6 from the window's edge, its list from 8 into the rail inside its line (1): a row's ground
+  // as far in as 新建对话's (band_in), its words without a mark before them as far from it (band_pad)
+  let l = @sf.theme().chat_list
   let (x, _, _, _) = t.rect_of("Slack 里问的报销流程").unwrap()
-  assert_eq(x, @sfdesk.closed_bar_in + @sfdesk.rail_w - 8.0 + 1.0 + 16.0)
+  assert_eq(x, @sfdesk.closed_bar_in + @sfdesk.rail_w - 8.0 + 1.0 + l.band_in + l.band_pad)
   let p = tape_chat(2, 390.0, 844.0, width="compact", height="medium")
   p.run_for(@ui.nav_push_ms)
   p.back()
