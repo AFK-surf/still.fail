@@ -4,7 +4,8 @@ import fs, { existsSync, mkdtempSync, readdirSync, realpathSync, writeFileSync }
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { WAITED_MS, longestWaits, timeFiles } from "../src/ops/file-waits.ts";
+import { timeFiles } from "../src/ops/file-waits.ts";
+import { WAITED_MS, longestWaits } from "../src/ops/waits.ts";
 
 test("every synchronous call of node:fs is timed, named imports' too; those waiting WAITED_MS or more by the call and who made it, never its path", () => {
   const dir = mkdtempSync(join(tmpdir(), "file-waits-"));

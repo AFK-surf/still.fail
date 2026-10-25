@@ -48,7 +48,9 @@ import { FeishuLive } from "./feishu/module.ts";
 import { PROVIDERS, type Provider } from "./cloud/provider.ts";
 import { wall } from "./ops/fibers.ts";
 import { answerHeapRequests, heapCommand } from "./ops/heap.ts";
-import { longestWaits, timeFiles } from "./ops/file-waits.ts";
+import { timeFiles } from "./ops/file-waits.ts";
+import { longestWaits } from "./ops/waits.ts";
+import { takeQueries } from "./store/timed.ts";
 import { platform } from "./platform/index.ts";
 import { keepRunnerIn } from "./platform/processes.ts";
 
@@ -190,8 +192,9 @@ function run() {
     // The main thread held (a query of seconds, a long parse): said as it is let go, with how long. Every device's
     // requests wait meanwhile; the slow queries say what held it (store/timed.ts). With no slow query, what the
     // process did meanwhile says whether it worked (`cpuMs`, all its threads'), collected its garbage (`gcMs`, this
-    // thread's, and the longest pause), waited on pages of its memory read back from the disk (`pageFaults`) or on
-    // files (`filesMs`, its synchronous calls of node:fs: ops/file-waits.ts, the longest by who made them).
+    // thread's, and the longest pause), waited on pages of its memory read back from the disk (`pageFaults`), on files
+    // (`filesMs`, its synchronous calls of node:fs: ops/file-waits.ts) or on its statements (`queriesMs`, all of them,
+    // none slow: store/timed.ts); the longest of each by who made them.
     const files = timeFiles();
     const held = monitorEventLoopDelay({ resolution: 50 });
     held.enable();
@@ -209,10 +212,12 @@ function run() {
       const used = process.cpuUsage(cpu);
       const faulted = process.resourceUsage().majorPageFault;
       const waited = files.take();
+      const queried = takeQueries();
       if (ms >= HELD_MS) {
         log.warn("station", "the main thread was held", {
           ms: Math.round(ms), cpuMs: Math.round((used.user + used.system) / 1000), gcMs: Math.round(gc.ms), gcLongestMs: Math.round(gc.longest), pageFaults: faulted - faults,
           filesMs: Math.round(waited.ms), files: waited.calls, ...(waited.by.size > 0 ? { waitedOn: longestWaits(waited) } : {}),
+          queriesMs: Math.round(queried.ms), queries: queried.calls, ...(queried.by.size > 0 ? { queriedBy: longestWaits(queried) } : {}),
         });
       }
       held.reset();

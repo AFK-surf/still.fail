@@ -2,7 +2,8 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { SLOW_MS, askedBy, shortSql, timed } from "../src/store/timed.ts";
+import { WAITED_MS, askedBy } from "../src/ops/waits.ts";
+import { SLOW_MS, shortSql, takeQueries, timed } from "../src/store/timed.ts";
 
 test("a statement run or an exec taking SLOW_MS or more is said, by its SQL and who asked it alone; a quicker one is not", () => {
   const said: [string, number, number | null][] = [];
@@ -30,6 +31,25 @@ test("a statement run or an exec taking SLOW_MS or more is said, by its SQL and 
   assert.ok(by[1]!.startsWith("listEvery"), by[1]);
   // What is not a run is as it was.
   assert.equal(db.prepare("SELECT 1 AS one").sourceSQL, "SELECT 1 AS one");
+  db.close();
+});
+
+test("every statement's time is put down, those of WAITED_MS or more by who asked them, for the held line", () => {
+  let takes = 0;
+  let at = 0;
+  const db = timed(new DatabaseSync(":memory:"), () => {}, () => (at += takes));
+  takeQueries();
+  takes = 1;
+  db.exec("CREATE TABLE t (a TEXT)");
+  takes = WAITED_MS;
+  const readEach = () => db.prepare("SELECT a FROM t").all();
+  readEach();
+  readEach();
+  const queried = takeQueries();
+  assert.deepEqual([queried.ms, queried.calls], [1 + 2 * WAITED_MS, 3]);
+  assert.deepEqual([...queried.by.keys()].map((k) => k.split(" < ")[0]), ["readEach"]);
+  assert.equal(queried.by.values().next().value!.calls, 2);
+  assert.deepEqual(takeQueries(), { ms: 0, calls: 0, by: new Map() }, "taken: from nothing again");
   db.close();
 });
 
