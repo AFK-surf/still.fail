@@ -57,7 +57,7 @@ pub fn chat_list(
   let side = if narrow { row_side_narrow } else { row_side(c) }
   // the sides are only margin where the pictures are inline; wider, the margin holds them
   let gutter = if narrow { side } else { 0.0 }
-  let list_box = c.box(style=chat_list_box, ty=lf.carry.unwrap_or(0.0), fn() {
+  let list_box = c.box(style=chat_list_box, fn() {
     c.list(
       key,
       n,
@@ -222,9 +222,10 @@ pub fn chat_list(
     // the picture flying out of an activity to its message and back, over the list
     emit_flyer(c, rk, em, v, src, r)
   })
-  // (a new chat's first words' row laid out in this build: where the list is to start from is measured now)
-  if lf.carry is None {
-    c.look(list_box, @ui.look(alpha=0.0))
+  // a new chat's list comes up out of the composer with its first words: drawn below its place by how far they have
+  // to go, from where this frame lays their row out (flight.mbt flight_carry_shift)
+  if flight_carried(lf.draft) {
+    @motion.placed(c, list_box, fn() { @ui.look(dy=flight_carry_shift(c, lf.draft)) })
   }
 }
 
@@ -394,13 +395,10 @@ let find_around : Ref[Double] = Ref(-1.0)
 /// The picture flying out of an activity to its message and back (useEmissions): the agent's, ringed, where emit.mbt
 /// has it, drawn only.
 fn emit_flyer(c : @ui.Ctx, rk : String, em : Emits, v : ChatView, src : Source, r : ChatRef) -> Unit {
-  let (x, y, sx, sy) = match emit_flight(c, rk, em, v.agents.map(fn(a) { a.key })) {
-    Some(f) => f
-    None => return
-  }
+  // (one flies from its activity's fold on, till it is home)
   let a = match em.current {
-    Some(t) => v.agents.iter().find_first(fn(a) { a.key == t.agent })
-    None => None
+    Some(t) if t.pose != @sfbase.Pose::Fold => v.agents.iter().find_first(fn(a) { a.key == t.agent })
+    _ => return
   }
   let (maker, runtime, waiting) = match a {
     Some(a) => (a.maker, a.runtime, a.wait is Some(_))
@@ -412,7 +410,15 @@ fn emit_flyer(c : @ui.Ctx, rk : String, em : Emits, v : ChatView, src : Source, 
       agent_avatar(c, src, here, "flyer", maker, runtime, "", "")
       c.layer(fn() { work_ring(c, waiting) }) |> ignore
     })
-    c.look(b, @ui.look(dx=x - ring_room, dy=y - ring_room, sx~, sy~))
+    // where it is between its activity and where the message goes as this frame lays them out (emit_flight), not
+    // where the frame before had them: it goes with the list as that glides
+    let agents = v.agents.map(fn(a) { a.key })
+    @motion.placed(c, b, fn() {
+      match emit_flight(c, rk, em, agents) {
+        Some((x, y, sx, sy)) => @ui.look(dx=x - ring_room, dy=y - ring_room, sx~, sy~)
+        None => @ui.look(alpha=0.0)
+      }
+    })
     c.draw_only(b)
   })
   |> ignore

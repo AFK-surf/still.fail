@@ -54,12 +54,9 @@ pub(all) struct SendFlight {
   mut placed_frame : Int
   way : @motion.Anim
   /// a new chat's first words: the list comes up with them (flight_carry_start). Where what they go to is to start
-  /// from (their bubble's corner, or the first file's tile without words); how far the list is drawn off its place in
-  /// this build, and was in the one before (what was measured then was off by)
+  /// from (their bubble's corner, or the first file's tile without words)
   carried : Bool
   from_top : Double
-  mut shift : Double
-  mut shift_was : Double
 }
 
 ///|
@@ -146,8 +143,6 @@ pub fn flight_start(
         way: @motion.Anim::new(0.0),
         carried: false,
         from_top: y - 8.0,
-        shift: 0.0,
-        shift_was: 0.0,
       })
       hold(flight_wait_ms)
       // a turn among what changes the list's height, till they have landed: what comes after them waits for it, they
@@ -207,8 +202,6 @@ pub fn flight_carry_start(
         way: @motion.Anim::new(0.0),
         carried: true,
         from_top,
-        shift: 0.0,
-        shift_was: 0.0,
       })
     }
     None => ()
@@ -254,26 +247,17 @@ pub fn flight_carry_gone(from : String) -> Unit {
 
 ///|
 /// How far the list of chat `chat` is drawn below its place while a new chat's first words carry it up out of the
-/// composer (ChatHost.kt Flight.shift): from where they were typed to where their row has them, less as they go; None
-/// the build their row is first laid out (where it is not known yet: the list is not drawn then).
-pub fn flight_carry_shift(c : @ui.Ctx, chat : String) -> Double? {
+/// composer (ChatHost.kt Flight.shift): from where they were typed to where their row has them, less as they go; 0
+/// none. Where their row is is where this frame lays it out: read once it is laid out (@motion.placed), the list
+/// drawn up by it in the same frame, never a frame behind.
+pub fn flight_carry_shift(c : @ui.Ctx, chat : String) -> Double {
   match flight_of(chat) {
-    Some(f) if f.carried && f.placed => {
-      // (where its row was measured the build before, off its place by what the list was drawn off then; nothing of
-      // it measured after all, where it is)
-      let shift = if c.frame_number() <= f.placed_frame {
-        None
-      } else {
-        match @motion.measured_rect(c, flight_carry_anchor(f)) {
-          Some((_, y, _, _)) => Some((f.from_top - (y - f.shift)) * (1.0 - flight_carry_e(f)))
-          None => Some(0.0)
-        }
+    Some(f) if f.carried && f.placed =>
+      match @motion.measured_rect(c, flight_carry_anchor(f)) {
+        Some((_, y, _, _)) => (f.from_top - y) * (1.0 - flight_carry_e(f))
+        None => 0.0
       }
-      f.shift_was = f.shift
-      f.shift = shift.unwrap_or(0.0)
-      shift
-    }
-    _ => Some(0.0)
+    _ => 0.0
   }
 }
 
@@ -552,11 +536,9 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
         None
       }
       match landing {
-        Some((ex, ey, ew, eh)) if ff.picture != "" => {
+        Some((_, _, ew, eh)) if ff.picture != "" => {
           let across = flight_across_of(c, f)
           let up = flight_up_of(c, f)
-          // (a new chat's: where its list is drawn now, not where it was measured)
-          let ey = ey + f.shift - f.shift_was
           let w = fw + (ew - fw) * up
           let h = fh + (eh - fh) * up
           let r = flight_tile_corner + (flight_file_corner - flight_tile_corner) * up
@@ -564,7 +546,18 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
           let pic = c.box(style=@ui.style(w=Fixed(w), h=Fixed(h)), fn() {
             c.image(ff.picture, w=Px(w), h=Px(h), fit=FitCover, radius=r, bg=@sf.theme().p.neutral_bg) |> ignore
           })
-          c.look(pic, @ui.look(dx=fx + (ex - fx) * across, dy=fy + (ey - fy) * up))
+          // between its tile and its place as this frame lays it out, a new chat's list drawn up with it
+          // (flight_carry_shift): with the list as it moves, not a frame behind
+          let to = "flight/to/" + ff.path
+          @motion.placed(c, pic, fn() {
+            match @motion.measured_rect(c, to) {
+              Some((ex, ey, _, _)) => {
+                let ey = ey + flight_carry_shift(c, chat)
+                @ui.look(dx=fx + (ex - fx) * across, dy=fy + (ey - fy) * up)
+              }
+              None => @ui.look(alpha=0.0)
+            }
+          })
         }
         // a card on its way is the message's own, carried (flight_landing)
         Some(_) => ()

@@ -1235,17 +1235,14 @@ pub fn list_frame(
   }
   rd.head = head
   rd.head_at = head_at
-  // a new chat's list comes up out of the composer with its first words (flight.mbt flight_carry_shift); not drawn
-  // the build their row is first laid out, where it is not known yet
-  let carry = flight_carry_shift(c, draft)
-  { key, rk: ek, rd, em, turns, list, keys, flight, glides, carry }
+  { key, rk: ek, rd, em, turns, list, keys, flight, glides, draft }
 }
 
 ///|
 /// A chat's list as list_frame made it this frame (its key, its chat's key, what the page keeps of it, its messages
 /// out of avatars, its turns, its rows and their keys, the words sent flying to it, whether what comes at its end
-/// glides, how far it is drawn below its place as a new chat's first words carry it up: None the build their row is
-/// first laid out, the list not seen then).
+/// glides, and the composer's draft words sent fly from (a new chat's first words carry its list up out of it:
+/// flight.mbt flight_carry_shift).
 pub(all) struct ListFrame {
   key : String
   rk : String
@@ -1256,7 +1253,7 @@ pub(all) struct ListFrame {
   keys : Array[String]
   flight : SendFlight?
   glides : Bool
-  carry : Double?
+  draft : String
 }
 
 ///|

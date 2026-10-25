@@ -111,6 +111,8 @@ priv struct Moving {
   /// reshape: it goes from where it was with what it holds (laid out for another place: the web's morph), what is new
   /// in it carried on its ground
   mut carry : Bool
+  /// how it is drawn, worked out once this frame is laid out (placed)
+  mut placed : (() -> @ui.Look)?
 }
 
 ///|
@@ -425,6 +427,7 @@ fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
     fly: None,
     reshape: false,
     carry: false,
+    placed: None,
   }
   mo.stamp[i] = build
   mo.at[i] = mo.entries.length()
@@ -568,6 +571,17 @@ pub fn fly(
 pub fn scope(c : @ui.Ctx, i : Int, bottom? : Bool = false) -> Unit {
   let e = moving_of(c, i)
   e.scope = if bottom { 2 } else { 1 }
+}
+
+///|
+/// Node `i` drawn by `at`, worked out once this frame is laid out: what `at` reads of where things are (measured,
+/// measured_rect) is where this frame has them then, not where the frame before did. For what is drawn where real
+/// things are while they move (a picture flying between rows of a list that glides meanwhile, a list drawn up behind
+/// what carries it): it goes with them in the same frame, never a frame behind. Over its own look. Only drawn so:
+/// tapped where it is laid out.
+pub fn placed(c : @ui.Ctx, i : Int, at : () -> @ui.Look) -> Unit {
+  let e = moving_of(c, i)
+  e.placed = Some(at)
 }
 
 ///|
@@ -1340,6 +1354,13 @@ fn after_layout(c : @ui.Ctx) -> Unit {
       @ui.log(
         "MOTION \{c.now()} \{e.name} x=\{nx + look.dx} y=\{ny + look.dy} w=\{nw * look.sx} h=\{nh * look.sy} alpha=\{look.alpha} dx=\{look.dx} dy=\{look.dy} scale=\{look.sx} fy=\{flip_dy}",
       )
+    }
+  }
+  // what is drawn where things are this frame (placed): once every place this frame lays out is kept
+  for e in mo.entries {
+    match e.placed {
+      Some(at) => c.set_look(e.node, c.look_of(e.node).then(at()))
+      None => ()
     }
   }
   forget_recs(c)
