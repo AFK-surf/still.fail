@@ -157,13 +157,13 @@ test "context menu: opened at the pointer by a right click, at its press by a lo
   })
   t.right_click(100.0, 120.0)
   // come in (its panel grows in from where it opened)
-  t.run_for(menu_in_ms)
+  t.run_for(pop_ms)
   let (x, y, _, _) = t.get(@ui.Menu, label="Edit").rect
   assert_true(x >= 100.0 && x < 110.0 && y >= 120.0 && y < 130.0)
   t.click(@ui.MenuItem, label="Paste")
   assert_eq(chosen.val, Some("paste"))
-  // drawn while it goes out, gone once it has
-  t.run_for(menu_out_ms)
+  // gone at once
+  t.draw()
   assert_true(t.query(@ui.Menu) is None)
   // a finger held still
   t.touch(0, 50.0, 200.0)

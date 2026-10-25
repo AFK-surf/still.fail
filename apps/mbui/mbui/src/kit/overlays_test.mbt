@@ -109,6 +109,30 @@ test "popover: beside its trigger, the focus in it; its trigger toggles it, a pr
 }
 
 ///|
+test "popover: it comes from 97% and clear, the first time it opens too; it goes at once" {
+  let open = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    let tr = button(c, "Filters", key="filters")
+    if tr.clicked {
+      open.val = !open.val
+    }
+    open.val = popover(c, "pop", open.val, tr.id, label="Filters", fn() { c.text("Unread only") |> ignore }).value
+  })
+  t.click(@ui.Button, label="Filters")
+  // half way in (pop_ms on the ease-out): smaller and fainter than it is
+  t.run_for(pop_ms / 2.0)
+  let (sx, sy, alpha) = t.look_of("Unread only").unwrap()
+  assert_true(sx > 0.97 && sx < 1.0 && sy == sx, msg="\{sx} \{sy}")
+  assert_true(alpha > 0.0 && alpha < 1.0, msg="\{alpha}")
+  t.run_for(pop_ms)
+  assert_eq(t.look_of("Unread only"), Some((1.0, 1.0, 1.0)))
+  // closed by its trigger: gone in the frame it closes
+  t.click(@ui.Button, label="Filters")
+  assert_false(open.val)
+  assert_true(t.find("Unread only") is None)
+}
+
+///|
 test "popover: not taking the focus, it stays where it was (a field typed in keeps it), Escape still closes it" {
   let open = Ref(false)
   let t = @ui.Tester::new(fn(c) {

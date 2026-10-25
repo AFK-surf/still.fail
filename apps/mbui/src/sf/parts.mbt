@@ -732,16 +732,6 @@ pub fn panel_ground() -> Int64 {
 }
 
 ///|
-/// How a small panel comes (controls.css.ts popover's popKeyframes): from 97% and clear to itself over 140 ms
-/// (--ease-out), from its top; it goes at once, as the web's does.
-// kept across runs: a value (no field of it changes)
-pub let pop_in : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, ox=0.5, oy=0.0, spec=@motion.tween(140.0, ease=Out))
-
-///|
-// kept across runs: a value (no field of it changes)
-pub let pop_out : @motion.Trans = @motion.trans(spec=@motion.tween(0.0))
-
-///|
 /// A menu's item (controls.css.ts menuItem), as mbui's menus draw it: 34 high at least, 7 by 10 in, its icon (14,
 /// muted) and words (13), 8 apart; the pointer's or the keyboard's ground on it. In a menu of choices (`chooser`,
 /// parts.tsx ChooserItem) a column 14 wide before the words instead, the one chosen checked in it, 6 apart.
@@ -865,8 +855,6 @@ pub fn dropdown(
     offset~,
     min_w=w,
     at?,
-    enter=pop_in,
-    exit=pop_out,
     look=fn(c, w, body) { small_panel(c, min_w=w, body) |> ignore },
     item_look=fn(c, s) {
       menu_row(c, s, icons.get(s.entry.value).unwrap_or(""), chooser, row_end, danger=danger.contains(s.entry.value))

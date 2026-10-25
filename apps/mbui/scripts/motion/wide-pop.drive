@@ -1,0 +1,21 @@
+# What comes by its trigger on a computer (docs/motion.md, kind 2): a chat's row right-clicked, its menu growing out
+# of the pointer; 接力到频道…, the menu gone at once and the dialog coming; Escape, the dialog gone at once. Then a new
+# chat's model (its chip in the composer), its popover growing out of the chip; Escape. MBUI_WIN=1280x800 over the
+# made-up chat.
+timeout 20000
+until 整理发布清单
+wait 400
+rightclick 整理发布清单
+wait 600
+tap 接力到频道…
+wait 900
+key escape
+wait 600
+tap 新建对话
+until 新对话
+wait 900
+tapxy 620 490
+wait 900
+key escape
+wait 700
+exit

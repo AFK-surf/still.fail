@@ -430,7 +430,7 @@ fn menu_popover(
     At(_, _, 0.0, 0.0) => 0.0
     _ => 6.0
   }
-  // (it goes at once as the web's does, pop_out: gone as it closes)
+  // (it goes at once as the web's does, @kit.pop_out: gone as it closes)
   let m = dropdown(c, key, p.open, trigger, entries, icons, menu_w, along~, offset~, at?, danger~)
   match m.chosen {
     Some(v) => {
@@ -697,9 +697,9 @@ fn let_go(c : @ui.Ctx, p : Presented, key : String) -> Bool {
 }
 
 ///|
-/// Whether a dialog by `key` is still drawn (coming, there, or going: @kit.dialog's presence, its own key).
+/// Whether a dialog by `key` is still drawn (coming or there: @kit.dialog_drawn).
 fn dialog_built(c : @ui.Ctx, key : String, open : Bool) -> Bool {
-  @kit.presence(c, key, open).built
+  @kit.dialog_drawn(c, key, open)
 }
 
 ///|

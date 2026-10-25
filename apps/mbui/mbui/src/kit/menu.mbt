@@ -7,13 +7,6 @@
 // (nothing lit) until a key or the pointer moves it.
 
 ///|
-/// How long a menu's panel takes to come in (ms), and to go out (a dropdown's and a context menu's): a tween each.
-pub let menu_in_ms : Double = 120.0
-
-///|
-pub let menu_out_ms : Double = 80.0
-
-///|
 /// What an entry of a menu is: an item that does something, one turned on or off (a checkbox item), one of a choice
 /// (a radio item: on or not), a line between parts, words heading a part, a submenu's item.
 pub(all) enum EntryKind {
@@ -126,14 +119,13 @@ fn menu_panel(
   side : @ui.Side,
   along : @ui.Along,
   offset : Double,
-  t : Double,
+  shows : @ui.Look,
   label : String,
   depth : Int,
   listbox : Bool,
   min_w : Double,
   look : (@ui.Ctx, Double, () -> Unit) -> Unit,
   item_look : (@ui.Ctx, MenuItemState) -> Unit,
-  motion? : @ui.Look,
   heading_look? : (@ui.Ctx, String) -> Unit = menu_heading_look,
 ) -> PanelOut {
   let pid = c.id(key + "/panel")
@@ -180,9 +172,8 @@ fn menu_panel(
     typeahead(c, pid, entries, ids, live)
   }
   let (ww, wh) = c.window_size()
-  let k = if t > 1.0 { 1.0 } else if t < 0.0 { 0.0 } else { t }
   c.focusable(pid, keys=0)
-  let i = c.box(id=pid, opacity=dmax(k, 0.003), max_h=wh - 16.0, max_w=ww - 16.0, fn() {
+  let i = c.box(id=pid, max_h=wh - 16.0, max_w=ww - 16.0, fn() {
     look(c, min_w, fn() {
       c.roving(key + "/items", orientation=Vertical, wrap=false, fn() {
         for n, e in entries {
@@ -251,7 +242,7 @@ fn menu_panel(
                       if c.rtl() { Left } else { Right },
                       Start,
                       -4.0,
-                      1.0,
+                      @ui.still_look,
                       e.label,
                       depth + 1,
                       false,
@@ -277,17 +268,15 @@ fn menu_panel(
       })
     })
   })
-  // by its trigger, by its size as laid out (its first frame too)
+  // by its trigger, by its size as laid out (its first frame too), growing out of the side it went on (as laid out
+  // last frame; its first, the side asked for)
+  let went = went_side(c, pid, anchor, side, along, offset)
   c.place_by_size(i, fn(pw, ph) {
     let (x, y, _) = c.place(anchor, pw, ph, side~, along~, offset~)
-    (x, y - (1.0 - k) * 4.0)
+    (x, y)
   })
   c.semantics(i, if listbox { Listbox } else { Menu }, id=pid, label~)
-  // the app's own coming and going (a scale, a fade: Motion's), in place of the default's
-  match motion {
-    Some(l) => c.look(i, l)
-    None => ()
-  }
+  c.look(i, grown_from(shows, went, along))
   kit.val.subs[pid] = sub
   { chosen, back }
 }
@@ -373,8 +362,8 @@ fn imax(a : Int, b : Int) -> Int {
 /// `key`'s dropdown menu (Radix's DropdownMenu, see the file's head), `open` or not, of `entries`, by the trigger
 /// `trigger` (its id: the view's button, which opens it; `at`: by this rectangle instead); Down on the trigger opens
 /// it too, and the keyboard's opening focuses its first item. `scrim`: the page under it dimmed so (in and out over 200
-/// ms); `enter` and `exit`: its own coming and going (Motion's transitions: a scale from a corner, a fade) in place of
-/// the default's. Whether it is open now, and what was chosen.
+/// ms); it comes by `enter` and goes by `exit` (still.fail's small panel's by default: popover.mbt pop_in, pop_out).
+/// Whether it is open now, and what was chosen.
 pub fn dropdown_menu(
   c : @ui.Ctx,
   key : String,
@@ -391,8 +380,8 @@ pub fn dropdown_menu(
   heading_look? : (@ui.Ctx, String) -> Unit = menu_heading_look,
   at? : (Double, Double, Double, Double),
   scrim? : Int64 = 0L,
-  enter? : @motion.Trans,
-  exit? : @motion.Trans,
+  enter? : @motion.Trans = pop_in,
+  exit? : @motion.Trans = pop_out,
 ) -> Menu {
   install()
   let mut now = open
@@ -401,25 +390,15 @@ pub fn dropdown_menu(
   }
   let by_key = c.focus_shown(trigger)
   let pid = c.id(key + "/panel")
-  let p = presence(c, key, now, enter=@motion.tween(menu_in_ms, ease=Out), exit=@motion.tween(menu_out_ms, ease=LeaveFade))
-  // the app's own motion: Motion's presence (its look on the panel) decides how long it is drawn
-  let moved = match enter {
-    Some(e) => Some(@motion.presence(c, key + "/motion", now, enter=e, exit?=exit))
-    None => None
-  }
-  let shown = match moved {
-    Some(m) => m is Some(_)
-    None => p.built
-  }
+  let moved = @motion.presence(c, "\u{2}pop/" + key, now, initial=true, enter~, exit~)
+  let shown = moved is Some(_)
   // the scrim, if any, in and out over 200 ms: the layer stays until both the panel and it have gone (Android's
   // MenuHost), fading together
   let dim = if scrim != 0L { animate(c, key + "/scrim", if now { 1.0 } else { 0.0 }, transition=@motion.tween(200.0)) } else { 0.0 }
   let mut chosen = None
   if shown || dim > 0.0 {
     let o = c.overlay(key, modal=true, anchor=trigger, scrim=faded(scrim, dim), initial_focus=pick(by_key, first_item(c, key, entries), pid), inert=!now, fn() {
-      if !shown {
-        return
-      }
+      guard moved is Some(shows) else { return }
       let out = menu_panel(
         c,
         key,
@@ -428,7 +407,7 @@ pub fn dropdown_menu(
         side,
         along,
         offset,
-        if moved is Some(_) { 1.0 } else { p.t },
+        shows,
         label,
         0,
         false,
@@ -436,10 +415,6 @@ pub fn dropdown_menu(
         look,
         item_look,
         heading_look~,
-        motion?=match moved {
-          Some(m) => m
-          None => None
-        },
       )
       chosen = out.chosen
     })
@@ -481,12 +456,11 @@ pub fn context_menu(
       }
   }
   let (ax, ay) = kit.val.at.get(id).unwrap_or((0.0, 0.0))
-  let p = presence(c, key, now, enter=@motion.tween(menu_in_ms, ease=Out), exit=@motion.tween(menu_out_ms, ease=LeaveFade))
   let mut chosen = None
-  if p.built {
+  if @motion.presence(c, "\u{2}pop/" + key, now, initial=true, enter=pop_in, exit=pop_out) is Some(shows) {
     let pid = c.id(key + "/panel")
-    let o = c.overlay(key, modal=true, initial_focus=pid, inert=p.leaving(), fn() {
-      let out = menu_panel(c, key, entries, (ax, ay, 0.0, 0.0), Bottom, Start, 2.0, p.t, label, 0, false, min_w, look, item_look)
+    let o = c.overlay(key, modal=true, initial_focus=pid, inert=!now, fn() {
+      let out = menu_panel(c, key, entries, (ax, ay, 0.0, 0.0), Bottom, Start, 2.0, shows, label, 0, false, min_w, look, item_look)
       chosen = out.chosen
     })
     if o.dismissed is Some(_) || chosen is Some(_) {
@@ -566,7 +540,7 @@ pub fn menubar(
         Bottom,
         Start,
         4.0,
-        1.0,
+        @ui.still_look,
         menus[k].0,
         0,
         false,

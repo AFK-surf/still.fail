@@ -3,13 +3,18 @@
 ///|
 /// The app over the settings' fixture, a page of them open (by its name, @settings.route_of); `shows`: a fixture mode
 /// of the settings' (MBUI_FIXTURE=settings-…) whose page this is, as it sets its fixture up (a step of a flow).
-fn settings_tester(page : String, mode? : String = "settings", shows? : String = "") -> @ui.Tester {
+fn settings_tester(
+  page : String,
+  mode? : String = "settings",
+  shows? : String = "",
+  platform? : Int = 0,
+) -> @ui.Tester {
   reset()
   if shows != "" {
     @settings.fixture_page(shows) |> ignore
   }
   let src = fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform~)
   open_setting(page)
   // the pages opened slide in from the frame that takes them
   t.draw()
@@ -164,7 +169,8 @@ test "a station renamed from its page's …: the new name is the station's" {
 
 ///|
 test "a sheet asking goes down on the sheet's spring, only drawn: its 保存 tapped meanwhile renames nothing" {
-  let t = settings_tester("profile:ws1/st1#cx")
+  // (a touch device's: a computer's asks in a dialog, gone at once as it closes)
+  let t = settings_tester("profile:ws1/st1#cx", platform=2)
   let name = "ChatGPT 团队"
   assert_true(t.find(name) is Some(_))
   // its rename (the head's ✎): the name asked in the presenters' sheet (src/sfdesk accounts.mbt profile_head)

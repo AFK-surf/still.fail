@@ -3,17 +3,51 @@
 // taking no press, Tab kept in it, the focus moved into it as it opens and back to what had it (its trigger) as it
 // goes (Ctx::overlay). Escape, the system's back, a press outside it and its close button close a dialog. An alert
 // dialog asks before something that cannot be undone: a press outside does not close it, and it opens with the focus
-// on its cancel button, so that Enter does not do it. Both come in and go out by `presence`.
+// on its cancel button, so that Enter does not do it. Both come in by `dialog_in`, the page under them dimmed by
+// `ground_in`, and go at once (@motion.presence).
 
 ///|
-/// What a dialog's look is given: its title and description, how far in it is (0 … 1), how wide it is, whether a
-/// close button lies over its corner.
+/// What a dialog's look is given: its title and description, how wide it is, whether a close button lies over its
+/// corner.
 pub(all) struct DialogState {
   title : String
   description : String
-  t : Double
   w : Double
   closes : Bool
+}
+
+///|
+/// How a dialog comes (still.fail's: parts.css.ts dialog, dialogInKeyframes): from 98% of its size, a little low and
+/// clear, to itself over 200 ms on the ease-out; the page under it dimmed over 180 ms (parts.css.ts overlay). Both go
+/// at once, as the web's (unmounted) do.
+// kept across runs: a value (no field of it changes)
+pub let dialog_in : @motion.Trans = @motion.trans(fade=0.0, scale=0.98, dy=6.0, spec=@motion.tween(dialog_ms, ease=Out))
+
+///|
+pub let dialog_ms : Double = 200.0
+
+///|
+// kept across runs: a value (no field of it changes)
+pub let ground_in : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.tween(180.0, ease=Out))
+
+///|
+/// `key`'s dialog as it shows now, `open` or not (coming or there; none once it has gone): its panel's look and how
+/// much of its ground (the dimmed page) shows.
+fn dialog_shows(c : @ui.Ctx, key : String, open : Bool) -> (@ui.Look, Double)? {
+  guard @motion.presence(c, "\u{2}dialog/" + key, open, initial=true, enter=dialog_in, exit=pop_out) is Some(shows) else {
+    return None
+  }
+  let ground = match @motion.presence(c, "\u{2}dialog-ground/" + key, open, initial=true, enter=ground_in, exit=pop_out) {
+    Some(l) => l.alpha
+    None => 0.0
+  }
+  Some((shows, ground))
+}
+
+///|
+/// Whether `key`'s dialog (or alert dialog), `open` or not, is drawn now.
+pub fn dialog_drawn(c : @ui.Ctx, key : String, open : Bool) -> Bool {
+  dialog_shows(c, key, open) is Some(_)
 }
 
 ///|
@@ -40,12 +74,11 @@ pub fn dialog(
   look? : (@ui.Ctx, DialogState, () -> Unit) -> Unit = dialog_look,
   body : () -> Unit,
 ) -> @ui.Changed[Bool] {
-  let p = presence(c, key, open)
   let mut now = open
-  if p.built {
-    let st = { title, description, t: p.t, w, closes: close_label != "" }
-    let o = c.overlay(key, modal~, outside~, scrim=pick(modal, faded(c.theme().scrim, p.t), 0L), inert=p.leaving(), fn() {
-      centered(c, key, p.t, Dialog, title, description, modal, fn() {
+  if dialog_shows(c, key, open) is Some((shows, ground)) {
+    let st = { title, description, w, closes: close_label != "" }
+    let o = c.overlay(key, modal~, outside~, scrim=pick(modal, faded(c.theme().scrim, ground), 0L), inert=!open, fn() {
+      centered(c, key, shows, Dialog, title, description, modal, fn() {
         look(c, st, fn() {
           body()
           if close_label != "" && close_button(c, key + "/close", close_label, inset=26.0, size=32.0) {
@@ -78,21 +111,20 @@ pub fn alert_dialog(
   look? : (@ui.Ctx, DialogState, () -> Unit) -> Unit = dialog_look,
   body? : () -> Unit = fn() {  },
 ) -> Alert {
-  let p = presence(c, key, open)
   let mut now = open
   let mut confirmed = false
-  if p.built {
-    let st = { title, description, t: p.t, w, closes: false }
+  if dialog_shows(c, key, open) is Some((shows, ground)) {
+    let st = { title, description, w, closes: false }
     let cancel_id = c.id(key + "/cancel")
     let o = c.overlay(
       key,
       modal=true,
       outside=false,
-      scrim=faded(c.theme().scrim, p.t),
+      scrim=faded(c.theme().scrim, ground),
       initial_focus=cancel_id,
-      inert=p.leaving(),
+      inert=!open,
       fn() {
-        centered(c, key, p.t, AlertDialog, title, description, true, fn() {
+        centered(c, key, shows, AlertDialog, title, description, true, fn() {
           look(c, st, fn() {
             body()
             c.box(dir=Row, gap=8.0, justify=JEnd, fn() {
@@ -117,12 +149,12 @@ pub fn alert_dialog(
 }
 
 ///|
-/// The panel of layer `key` in the middle of the window (by its size as it is laid out), coming up from 8 below as it
-/// comes in, named for the semantics tree.
+/// The panel of layer `key` in the middle of the window (by its size as it is laid out), drawn as `shows` (its coming),
+/// named for the semantics tree.
 fn centered(
   c : @ui.Ctx,
   key : String,
-  t : Double,
+  shows : @ui.Look,
   role : @ui.Role,
   title : String,
   description : String,
@@ -131,17 +163,11 @@ fn centered(
 ) -> Unit {
   let pid = c.id(key + "/panel")
   let (ww, wh) = c.window_size()
-  let k = if t > 1.0 { 1.0 } else if t < 0.0 { 0.0 } else { t }
-  let i = c.box(
-    id=pid,
-    // never quite nothing: what is not drawn is not where anything is
-    opacity=dmax(k, 0.003),
-    max_w=ww - 32.0,
-    body,
-  )
+  let i = c.box(id=pid, max_w=ww - 32.0, body)
   // in the middle by its size as laid out (its first frame too)
-  c.place_by_size(i, fn(pw, ph) { ((ww - pw) / 2.0, (wh - ph) / 2.0 + (1.0 - k) * 8.0) })
+  c.place_by_size(i, fn(pw, ph) { ((ww - pw) / 2.0, (wh - ph) / 2.0) })
   c.semantics(i, role, label=title, description~, modal~)
+  c.look(i, shows)
 }
 
 ///|

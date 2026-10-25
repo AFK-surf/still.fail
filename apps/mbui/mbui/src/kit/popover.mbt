@@ -5,22 +5,40 @@
 // Tooltip: words about its trigger, shown once the pointer has rested on it or at once when the keyboard's focus comes
 // to it; shut by a press on the trigger and by Escape until the pointer leaves; one shown soon after another closed
 // skips the wait; to a finger, which rests on nothing, shown as it is held on the trigger, as Android's tooltips are).
-// They come in from their side by `presence`.
+// They come in growing out of the side of what they hang on (@motion.presence: `pop_in`, a tooltip `tip_in`) and go at
+// once (`pop_out`), as still.fail's small panels do.
 
 ///|
-/// What a popover's, a hover card's or a tooltip's look is given: the side of its trigger it went on, how far in it
-/// is (0 … 1).
+/// What a popover's, a hover card's or a tooltip's look is given: the side of its trigger it went on.
 pub(all) struct PopState {
   side : @ui.Side
-  t : Double
 }
+
+///|
+/// How a small panel by its trigger comes (still.fail's: controls.css.ts popover, popKeyframes): from 97% of its size
+/// and clear to itself over 140 ms on the ease-out, growing out of the side of what it hangs on; it goes at once, as
+/// the web's (unmounted) does. A popover's, a menu's, a select's, a hover card's by default.
+// kept across runs: a value (no field of it changes)
+pub let pop_in : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, spec=@motion.tween(pop_ms, ease=Out))
+
+///|
+pub let pop_ms : Double = 140.0
+
+///|
+// kept across runs: a value (no field of it changes)
+pub let pop_out : @motion.Trans = @motion.trans(spec=@motion.Snap(0.0))
+
+///|
+/// How a tooltip comes (parts.css.ts tooltip: fadeKeyframes, 120 ms on the ease-out); it goes at once.
+// kept across runs: a value (no field of it changes)
+pub let tip_in : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.tween(120.0, ease=Out))
 
 ///|
 /// `key`'s popover (see the file's head), `open` or not, by the trigger `anchor` (its id; or by the rectangle `at`, a
 /// Radix Popover.Anchor apart from its trigger), on its `side` (lined up `along` it, `offset` away), named `label` for
 /// the semantics tree; `modal`: the page under it takes no press and Tab stays in it; not `focus`: the focus stays
 /// where it is as it opens (Radix's onOpenAutoFocus prevented: what a field offers as it is typed in, the field keeping
-/// the keys). Whether it is open now.
+/// the keys). It comes by `enter` and goes by `exit`. Whether it is open now.
 pub fn popover(
   c : @ui.Ctx,
   key : String,
@@ -34,13 +52,14 @@ pub fn popover(
   focus? : Bool = true,
   look? : (@ui.Ctx, PopState, () -> Unit) -> Unit = popover_look,
   at? : (Double, Double, Double, Double),
+  enter? : @motion.Trans = pop_in,
+  exit? : @motion.Trans = pop_out,
   body : () -> Unit,
 ) -> @ui.Changed[Bool] {
-  let p = presence(c, key, open)
   let mut now = open
-  if p.built {
-    let o = c.overlay(key, modal~, anchor~, initial_focus=if focus { -1 } else { 0 }, inert=p.leaving(), fn() {
-      beside(c, key, anchor, side, along, offset, p.t, Dialog, label, look, body, at?)
+  if @motion.presence(c, "\u{2}pop/" + key, open, initial=true, enter~, exit~) is Some(shows) {
+    let o = c.overlay(key, modal~, anchor~, initial_focus=if focus { -1 } else { 0 }, inert=!open, fn() {
+      beside(c, key, anchor, side, along, offset, shows, Dialog, label, look, body, at?)
     })
     if o.dismissed is Some(_) {
       now = false
@@ -73,6 +92,8 @@ pub fn hover_card(
   offset? : Double = 6.0,
   tap? : Bool = false,
   look? : (@ui.Ctx, PopState, () -> Unit) -> Unit = popover_look,
+  enter? : @motion.Trans = pop_in,
+  exit? : @motion.Trans = pop_out,
   body : () -> Unit,
 ) -> Bool {
   install()
@@ -93,10 +114,9 @@ pub fn hover_card(
       }
     }
   }
-  let p = presence(c, key, open)
-  if p.built {
-    let o = c.overlay(key, anchor=trigger, initial_focus=0, inert=p.leaving(), fn() {
-      beside(c, key, trigger, side, along, offset, p.t, Group, "", look, body)
+  if @motion.presence(c, "\u{2}pop/" + key, open, initial=true, enter~, exit~) is Some(shows) {
+    let o = c.overlay(key, anchor=trigger, initial_focus=0, inert=!open, fn() {
+      beside(c, key, trigger, side, along, offset, shows, Group, "", look, body)
     })
     if o.dismissed is Some(_) {
       open = false
@@ -178,10 +198,9 @@ pub fn tooltip(
   let soon = c.within(tip_closed, skip)
   let rested = after(c, key + "/in", hovered, if soon { 0.0 } else { delay })
   let mut open = shown || held || (!shut && (focused || rested || (was && hovered)))
-  let p = presence(c, key, open, enter=@motion.tween(100.0, ease=Out))
-  if p.built {
-    let o = c.overlay(key, anchor=trigger, outside=false, initial_focus=0, inert=p.leaving(), fn() {
-      beside(c, key, trigger, side, along, offset, p.t, Tooltip, text, fn(c, s, _) { look(c, s, text) }, fn() {  }, at?=at)
+  if @motion.presence(c, "\u{2}pop/" + key, open, initial=true, enter=tip_in, exit=pop_out) is Some(shows) {
+    let o = c.overlay(key, anchor=trigger, outside=false, initial_focus=0, inert=!open, fn() {
+      beside(c, key, trigger, side, along, offset, shows, Tooltip, text, fn(c, s, _) { look(c, s, text) }, fn() {  }, at?=at)
     })
     if o.dismissed is Some(_) {
       kit.val.shut[id] = true
@@ -209,8 +228,8 @@ fn pointer_in(c : @ui.Ctx, id : Int) -> Bool {
 }
 
 ///|
-/// Layer `key`'s content by the trigger `anchor` (Ctx::place, by its size as it is laid out), coming in from its side,
-/// named for the semantics tree.
+/// Layer `key`'s content by the trigger `anchor` (Ctx::place, by its size as it is laid out), drawn as `shows` (its
+/// coming and going) growing out of the side it went on, named for the semantics tree.
 fn beside(
   c : @ui.Ctx,
   key : String,
@@ -218,7 +237,7 @@ fn beside(
   side : @ui.Side,
   along : @ui.Along,
   offset : Double,
-  t : Double,
+  shows : @ui.Look,
   role : @ui.Role,
   label : String,
   look : (@ui.Ctx, PopState, () -> Unit) -> Unit,
@@ -230,26 +249,49 @@ fn beside(
     Some(r) => r
     None => c.rect_of(anchor).unwrap_or((0.0, 0.0, 0.0, 0.0))
   }
-  // the side it went on as laid out last frame (its first: the side asked for); its place is worked out as it is laid
-  // out, from its size then
-  let went = match c.rect_of(pid) {
+  let went = went_side(c, pid, ar, side, along, offset)
+  let i = c.box(id=pid, fn() { look(c, { side: went }, body) })
+  c.place_by_size(i, fn(pw, ph) {
+    let (x, y, _) = c.place(ar, pw, ph, side~, along~, offset~)
+    (x, y)
+  })
+  c.semantics(i, role, label~)
+  c.look(i, grown_from(shows, went, along))
+}
+
+///|
+/// The side of `ar` that panel `pid` went on as laid out last frame (its first: `side`, asked for); its place is worked
+/// out as it is laid out, from its size then.
+fn went_side(
+  c : @ui.Ctx,
+  pid : Int,
+  ar : (Double, Double, Double, Double),
+  side : @ui.Side,
+  along : @ui.Along,
+  offset : Double,
+) -> @ui.Side {
+  match c.rect_of(pid) {
     Some((_, _, w, h)) if w > 0.0 => c.place(ar, w, h, side~, along~, offset~).2
     _ => side
   }
-  let k = if t > 1.0 { 1.0 } else if t < 0.0 { 0.0 } else { t }
-  let i = c.box(id=pid, opacity=dmax(k, 0.003), fn() { look(c, { side: went, t }, body) })
-  c.place_by_size(i, fn(pw, ph) {
-    let (x, y, went) = c.place(ar, pw, ph, side~, along~, offset~)
-    // from 4 towards its trigger
-    let back = (1.0 - k) * 4.0
-    match went {
-      Top => (x, y + back)
-      Bottom => (x, y - back)
-      Left => (x + back, y)
-      Right => (x - back, y)
-    }
-  })
-  c.semantics(i, role, label~)
+}
+
+///|
+/// `shows` growing out of the edge of what hangs on side `went` of its trigger, where it lines up `along` it (Radix's
+/// transform origin).
+fn grown_from(shows : @ui.Look, went : @ui.Side, along : @ui.Along) -> @ui.Look {
+  let across = match along {
+    Start => 0.0
+    Middle => 0.5
+    End => 1.0
+  }
+  let (ox, oy) = match went {
+    Bottom => (across, 0.0)
+    Top => (across, 1.0)
+    Right => (0.0, across)
+    Left => (1.0, across)
+  }
+  { ..shows, ox, oy }
 }
 
 ///|

@@ -62,10 +62,11 @@ numbers are the web's at the same place (paths from the repository's root), not 
 |---|---|---|---|
 | 1 | let go, small: a row, a card | spring 0.28 s, no bounce | `MOVE`, web/ui/src/motion.ts:26 |
 | 1 | let go, large: a sheet, the pictures' strip | spring 0.32 s, no bounce | web/src/mobile/app.tsx:526 (a sheet), web/src/FilePreview.tsx:743 (`SLIDE`) |
-| 2 | by its trigger: a menu, a popover, a picker, the `@` menu, the switcher, a hover's card | in 140 ms ease-out, from 0.97 and clear; out at once | web/ui/src/styles/controls.css.ts:71 (`popKeyframes`) |
-| 2 | a tip | in 120 ms ease-out, a fade | web/ui/src/parts.css.ts:336 |
+| 2 | by its trigger: a menu, a popover, a picker, a select, the `@` menu, the switcher | in 140 ms ease-out, from 0.97 and clear, growing out of its trigger's side; out at once (`@kit.pop_in`, `pop_out`) | web/ui/src/styles/controls.css.ts:71 (`popKeyframes`) |
+| 2 | a hover's card: the pointer rested on, left | in 160 ms ease-out from 0.96 and clear; out 90 ms ease-in to 0.97 and clear | web/src/Hover.css.ts:10-22 |
+| 2 | a tip | in 120 ms ease-out, a fade; out at once (`@kit.tip_in`) | web/ui/src/parts.css.ts:336 |
 | 2 | a sheet | up 380 ms `--m-ease`, down 300 ms; its scrim to 0.28 over 300 ms | web/src/mobile/app.css.ts:82-97 |
-| 2 | a dialog | 200 ms ease-out; its ground's fade 180 ms | web/ui/src/parts.css.ts:180, 193 |
+| 2 | a dialog | in 200 ms ease-out from 0.98, a little low, and clear; its ground's fade 180 ms; out at once (`@kit.dialog_in`, `ground_in`) | web/ui/src/parts.css.ts:180, 193 |
 | 2 | a row of a list, a message | in 220 ms ease-out, up from 6 below; out 200 ms, a copy shrinking to 0.9 | `ENTER`, `LEAVE`, web/ui/src/motion.ts:19-22 |
 | 2 | a bar | in 380 ms `--m-ease`, out 300 ms | web/src/mobile/Bar.css.ts:17 |
 | 2 | a toast | in 200 ms ease-out, out 150 ms | web/ui/src/toast.css.ts:16-18 |
@@ -96,8 +97,6 @@ there), old and new side by side:
 - Words sent on a phone fly 600 ms (Android's ChatHost.kt), on a computer 520 ms.
 - The composer going to another page: 340 ms (web/src/styles/global.css.ts:257, the view transition) against a layout
   switched's 380 ms.
-- A menu has two comings in mbui (`@sf.pop_in` 140 ms over kit's presence 120 / 80 ms); a popover kit's 150 / 100 ms,
-  a dialog kit's 150 / 100 ms, where the web has 140, 200 / 180.
 - Pointed at: buttons ease on a spring (k 900, sf/parts.mbt), the sidebar's rows over 140 ms.
 - A switch on `spring()`, the web's thumb over 240 ms; a known progress moves over 200 ms on the web
   (web/ui/src/waiting.css.ts:61), mbui's band jumps.
@@ -154,7 +153,11 @@ list's turns, words flying, everything in the hand). Each step below is a PR; a 
 7. **Presets.** `src/sf/motion.mbt` holds the table above; every motion uses a preset. The copies in sfapp that
    nothing calls are gone (#1714). One curve enum, `@ui.Ease`, played as Compose plays a cubic-bezier, for a page
    pushed, a state moved, a scrollbar and every tween, a curve said by its name wherever it is one (a card's, the
-   bar's); one sheet spring, kit's sheet's taken from `@motion.sheet_spring`.
+   bar's); one sheet spring, kit's sheet's taken from `@motion.sheet_spring` (#1718). What comes by its trigger is
+   kit's, by the presets above: a popover, a menu, a select, a context menu growing out of its trigger's side, a tip
+   fading in, a dialog and its ground; each gone at once as it is put away, not faded out (a hover's card, which the
+   pointer leaves, excepted). Each comes in the first time it is shown too (`@motion.presence`'s `initial`): the
+   presenters' menus, made anew each time they open, had come in at once.
 8. **The page crossfade** between a new chat and a chat on a computer (sfdesk/switch.mbt). Done: the new chat's scene
    leaves by its own way up (as one become its chat does), what comes in is there at once, the composer moves between
    their places.

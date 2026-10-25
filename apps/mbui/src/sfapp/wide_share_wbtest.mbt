@@ -20,7 +20,8 @@ test "wide: 分享给其他 workspace from the chat's info: a dialog lists the w
   t.frame()
   t.frame()
   t.tap_text("分享给其他 workspace")
-  t.frame()
+  // (the dialog coming, @kit.dialog_in: its rows there to tick half way in)
+  t.run_for(@kit.dialog_ms / 2.0)
   assert_true(t.find("日常") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("开源") is Some(_))
   let (dx, dy, dw, dh) = t.query(Button, label="完成").unwrap().rect
@@ -29,7 +30,7 @@ test "wide: 分享给其他 workspace from the chat's info: a dialog lists the w
   let sent = named(calls, "chat.xshare")
   assert_eq(sent.length(), 1)
   assert_eq(field(Some(sent[0].params), "to"), Some(Json::array([Json::string("ws3")])))
-  // (the dialog goes as a presenter does: gone once its going is over)
-  t.run_for(@kit.presence_out_ms)
+  // (the dialog goes as a presenter does: at once)
+  t.frame()
   assert_true(t.find("日常") is None, msg="the dialog gone")
 }
