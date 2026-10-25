@@ -1121,6 +1121,7 @@
   "web-pages.stations.total": "{total} total",
   "web-pages.stations.ways": "Latency per route (ping round trip)",
   "web-pages.stations.wayNone": "unreachable",
+  "web-pages.stations.netNone": "Not connected",
   "web-pages.stations.wayCurrent": "in use",
   "web-pages.stations.page.parts": "Show",
   "web-pages.stations.page.part.overview": "Overview",

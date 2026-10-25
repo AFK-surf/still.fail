@@ -345,6 +345,7 @@ let en : Map[String, String] = {
   "web-pages.settings.profiles.hostAway": "{station} offline",
   "web-pages.settings.stations.add": "Add station",
   "web-pages.stations.page.runningShort": "{n} running",
+  "web-pages.stations.netNone": "Not connected",
   "web-pages.automaticDecisions.title": "Automatic decisions",
   "web-pages.settings.nav.about": "About",
   "web-pages.settings.nav.changelog": "Changelog",

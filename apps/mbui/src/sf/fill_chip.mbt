@@ -36,6 +36,8 @@ pub fn fill_chip(
   mark : String,
   words : String,
   small? : Bool = false,
+  drop? : Int = 0,
+  keep? : Bool = false,
 ) -> Unit {
   let t = theme()
   let tone = level_color(level)
@@ -45,7 +47,7 @@ pub fn fill_chip(
   let rest = 100 - fill
   let mark_ink = mix(t.p.text, chip_mark_share, t.p.muted)
   // (its fill a plain rectangle the chip's clip cuts along its corners; its end square where it stops)
-  c.box(style=if small { chip_box_small } else { chip_box }, fn() {
+  c.box(style=if small { chip_box_small } else { chip_box }, drop~, keep~, fn() {
     if fill > 0 {
       c.layer(fn() {
         c.box(style=chip_fill_row, fn() {
