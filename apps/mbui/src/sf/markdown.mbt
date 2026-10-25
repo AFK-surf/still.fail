@@ -16,10 +16,15 @@
 // With `screens`, its links to a station's screens (and 共享调试) are their
 // cards alone in a paragraph, their titles bare within a sentence.
 //
-// Spacing is the web's: each block keeps the margins a browser gives it,
-// and two blocks next to each other are as far apart as the larger of the
-// margins between them; the first's top and the last's bottom are the
-// message's own.
+// Spacing is the web's: each block keeps the margins `.markdown` gives it
+// (a paragraph none above and 8 below, ui.css.ts; a heading 14 and 6; a
+// list, a code block, a table, a quote 8 below), and two blocks next to each
+// other are as far apart as the larger of the margins between them; the
+// first's top and the last's bottom are the message's own.
+
+///|
+/// What a paragraph keeps below it (ui.css.ts `.markdown p`: margin 0 0 8px), on every screen.
+let paragraph_after : Double = 8.0
 
 ///|
 /// A block with the margins the web gives it.
@@ -486,9 +491,9 @@ pub fn markdown_part(
     }
   }
   let pieces = md.pieces(blocks, false)
-  // after another part: as far below it as after a paragraph (whose bottom margin is its size), the larger of the two
+  // after another part: as far below it as after a paragraph, the larger of the two
   if apart && pieces.length() > 0 {
-    pieces.insert(0, { top: 0.0, bottom: md.size, draw: fn() {  } })
+    pieces.insert(0, { top: 0.0, bottom: paragraph_after, draw: fn() {  } })
   }
   md.column("sf-md-part/" + key, pieces) |> ignore
 }
@@ -536,7 +541,8 @@ fn Md::piece(self : Md, b : MdBlock, tight : Bool, task : Bool?) -> Array[Piece]
   let c = self.c
   match b {
     Paragraph(xs) => {
-      let m = if tight { 0.0 } else { s }
+      // (none in a tight list's item: its words alone)
+      let (top, bottom) = if tight { (0.0, 0.0) } else { (0.0, paragraph_after) }
       let ink = self.ink
       // one that is only a link to a screen is its card (Markdown.kt paragraph)
       match (self.screens, task) {
@@ -547,9 +553,9 @@ fn Md::piece(self : Md, b : MdBlock, tight : Bool, task : Bool?) -> Array[Piece]
           }
         _ => ()
       }
-      match self.placed(xs, m, task) {
+      match self.placed(xs, top, bottom, task) {
         Some(ps) => ps
-        None => [{ top: m, bottom: m, draw: fn() { self.words(xs, s, 0, ink, task) } }]
+        None => [{ top, bottom, draw: fn() { self.words(xs, s, 0, ink, task) } }]
       }
     }
     Heading(level, xs) if self.document && level <= 3 => {
@@ -660,7 +666,8 @@ fn Md::piece(self : Md, b : MdBlock, tight : Bool, task : Bool?) -> Array[Piece]
 fn Md::placed(
   self : Md,
   xs : Array[MdInline],
-  margin : Double,
+  top : Double,
+  bottom : Double,
   task : Bool?,
 ) -> Array[Piece]? {
   let file_of = fn(x : MdInline) -> (() -> Unit)? {
@@ -705,7 +712,7 @@ fn Md::placed(
         }
       }) {
       let box = if out.length() == 0 { task } else { None }
-      out.push({ top: margin, bottom: margin, draw: fn() { self.words(nodes, s, 0, ink, box) } })
+      out.push({ top, bottom, draw: fn() { self.words(nodes, s, 0, ink, box) } })
     }
     run = []
   }
@@ -715,8 +722,8 @@ fn Md::placed(
         flush()
         let c = self.c
         out.push({
-          top: margin,
-          bottom: margin,
+          top,
+          bottom,
           draw: fn() { c.box(pady=8.0, fn() { draw() }) |> ignore },
         })
       }

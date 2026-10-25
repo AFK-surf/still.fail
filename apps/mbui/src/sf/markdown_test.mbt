@@ -34,11 +34,14 @@ test "a message's Markdown: its blocks, their margins collapsed, links and copy"
   // the heading first, its top margin dropped
   let (_, hy, _, _) = t.rect_of("今天的进度").unwrap()
   assert_eq(hy, 16.0)
-  // the paragraph 14 below the heading's bottom (the larger margin: the
-  // paragraph's own, its size 15)
+  // the paragraph 6 below the heading's bottom: the heading's margin under it, a paragraph none above (the web's
+  // .markdown h2 14 0 6, p 0 0 8, on every screen)
   let (_, hy2, _, hh) = t.rect_of("今天的进度").unwrap()
-  let (_, py, _, _) = t.rect_of("改好了").unwrap()
-  assert_eq(py - (hy2 + hh), 15.0)
+  let (_, py, _, ph) = t.rect_of("改好了").unwrap()
+  assert_eq(py - (hy2 + hh), 6.0)
+  // the list 8 below the paragraph: the paragraph's margin under it, a list none above
+  let (_, ly, _, _) = t.rect_of("第一项").unwrap()
+  assert_eq(ly - (py + ph), 8.0)
   // a tight list's items follow each other with no gap
   let (_, y1, _, h1) = t.rect_of("第一项").unwrap()
   let (_, y2, _, _) = t.rect_of("第二项").unwrap()
