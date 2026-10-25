@@ -101,20 +101,8 @@ fn changelog_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   if tabs.length() > 0 {
     blocks.push(fn() {
       let labels = tabs.map(fn(x) { text(Some(x), "label") })
-      let chosen = match look {
-        // as wide as the page, each part an equal share (Seg fill, 34 high)
-        Narrow => {
-          let mut i = at
-          c.box(style=cl_narrow_tabs, fn() { i = @sf.seg(c, "changelog/tabs", labels, at, fill=true, height=cl_narrow_tab_h) })
-          |> ignore
-          i
-        }
-        Wide => {
-          let mut i = at
-          c.box(style=cl_tabs_row, fn() { i = @sf.segmented(c, "changelog/tabs", labels, at, item_w=cl_tab_w) }) |> ignore
-          i
-        }
-      }
+      // (each part 120 wide at least, a wide page's)
+      let chosen = @sf.page_choice(c, "changelog/tabs", labels, at, item_w=cl_tab_w)
       if chosen != at {
         changelog_part.val = text(Some(tabs[chosen]), "part")
       }
@@ -270,11 +258,6 @@ fn change_item(c : @ui.Ctx, e : Json?) -> Unit {
 // ── styles (Changelog.css.ts) ───────────────────────────────────────────
 
 ///|
-/// A tab a part, under the title (tabsRow: 8 over what follows; tabs: 360 wide at least).
-// kept across runs: a value (no field of it changes)
-let cl_tabs_row : @ui.Style = @ui.css("row w=Full pb=S2")
-
-///|
 let cl_tab_w : Double = 120.0
 
 ///|
@@ -343,14 +326,6 @@ let cl_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w
 let cl_note_new : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=AccentText, w=@sf.grow)
 
 // ── the narrow page's (mobile/Changelog.css.ts) ─────────────────────────
-
-///|
-/// The parts' tabs (mTabs: 16 in, 4 over, 2 under).
-// kept across runs: a value (no field of it changes)
-let cl_narrow_tabs : @ui.Style = @ui.css("w=Full px=S4 pt=S1 pb=S0_5")
-
-///|
-let cl_narrow_tab_h : Double = 34.0
 
 ///|
 /// What is said in place of the changes (mNote: 24 by 8 in).

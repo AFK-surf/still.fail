@@ -298,7 +298,7 @@
     "page-look": {
       "src/sfapp/settings/home.mbt": 2,
       "src/sfapp/settings/parts.mbt": 2,
-      "src/sfdesk/about.mbt": 12,
+      "src/sfdesk/about.mbt": 10,
       "src/sfdesk/account.mbt": 36,
       "src/sfdesk/accounts.mbt": 7,
       "src/sfdesk/add_profile.mbt": 19,
@@ -320,7 +320,7 @@
       "src/sfdesk/security.mbt": 37,
       "src/sfdesk/shortcuts.mbt": 5,
       "src/sfdesk/slack_app.mbt": 6,
-      "src/sfdesk/usage.mbt": 18,
+      "src/sfdesk/usage.mbt": 14,
       "src/sfdesk/vault.mbt": 28,
       "src/sfdesk/vault_dialogs.mbt": 11,
       "src/sfdesk/vault_item.mbt": 10,

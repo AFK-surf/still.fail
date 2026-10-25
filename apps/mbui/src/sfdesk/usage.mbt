@@ -64,10 +64,7 @@ fn usage_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit 
     actions=fn() {
       let at = if days == 30 { 1 } else { 0 }
       let labels = usage_days_choices.map(fn(n) { @sf.t("web-main.usage.days", args=[("n", n.to_string())]) })
-      let picked = match look {
-        Narrow => @sf.seg(c, "usage-days", labels, at)
-        Wide => @sf.segmented(c, "usage-days", labels, at)
-      }
+      let picked = @sf.segmented(c, "usage-days", labels, at)
       if picked != at {
         usage_pick.days = usage_days_choices[picked]
         usage_pick.day = ""
@@ -96,11 +93,11 @@ fn usage_body(c : @ui.Ctx, core : Core, look : Look, v : Json?) -> Unit {
       match look {
         Narrow => {
           c.box(style=ug_narrow_card, fn() { usage_chart(c, v) }) |> ignore
-          c.box(style=ug_narrow_card, fn() { usage_rankings(c, core, look, v) }) |> ignore
+          c.box(style=ug_narrow_card, fn() { usage_rankings(c, core, v) }) |> ignore
         }
         Wide => {
           usage_chart(c, v)
-          usage_rankings(c, core, look, v)
+          usage_rankings(c, core, v)
         }
       }
     }
@@ -331,7 +328,7 @@ fn usage_bar(c : @ui.Ctx, dv : Json?, series : Array[Json], top : Double, many :
 ///|
 /// The lists, one at a time (Rankings): which, at their head (the people's first), then the most spent first, the
 /// first 8 until all are asked for (Ranking).
-fn usage_rankings(c : @ui.Ctx, core : Core, look : Look, v : Json?) -> Unit {
+fn usage_rankings(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
   let lists = items(v, "lists")
   if lists.length() == 0 {
     return
@@ -343,11 +340,8 @@ fn usage_rankings(c : @ui.Ctx, core : Core, look : Look, v : Json?) -> Unit {
   c.box(style=ug_rankings, fn() {
     c.box(style=ug_list_head, fn() {
       let titles = lists.map(fn(l) { text(Some(l), "title") })
-      // (narrow: as wide as the card, each an equal share)
-      let picked = match look {
-        Narrow => @sf.seg(c, "usage-lists", titles, at, fill=true)
-        Wide => @sf.segmented(c, "usage-lists", titles, at, item_w=ug_list_pick_w)
-      }
+      // (narrow: as wide as the card, each an equal share; wide: each as wide as ug_list_pick_w at least)
+      let picked = @sf.segmented(c, "usage-lists", titles, at, item_w=ug_list_pick_w)
       if picked != at {
         usage_pick.list = text(Some(lists[picked]), "key")
         usage_pick.all = false

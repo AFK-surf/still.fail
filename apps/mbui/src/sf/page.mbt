@@ -653,16 +653,14 @@ pub fn page_card(c : @ui.Ctx, body : () -> Unit, footed? : Bool = false) -> Unit
 }
 
 ///|
-/// A choice of a few (narrow: Seg as wide as the page less 12 each side, 34 high; wide: the web's Segmented at the
-/// column's start). Answers the one chosen (a press's, this frame).
-pub fn page_choice(c : @ui.Ctx, key : String, labels : Array[String], at : Int) -> Int {
+/// A choice of a few (`segmented`: narrow, as wide as the page less 12 each side; wide, at the column's start, each
+/// option `item_w` wide at least). Answers the one chosen (a press's, this frame).
+pub fn page_choice(c : @ui.Ctx, key : String, labels : Array[String], at : Int, item_w? : Double = 0.0) -> Int {
   let mut picked = at
-  match look() {
-    Narrow =>
-      c.box(style=pg_choice_box, fn() { picked = seg(c, key, labels, at, fill=true, height=pg_choice_h) })
-      |> ignore
-    Wide => c.box(style=desk_choice_row, fn() { picked = segmented(c, key, labels, at) }) |> ignore
-  }
+  c.box(style=if look() is Narrow { pg_choice_box } else { desk_choice_row }, fn() {
+    picked = segmented(c, key, labels, at, item_w~)
+  })
+  |> ignore
   picked
 }
 
