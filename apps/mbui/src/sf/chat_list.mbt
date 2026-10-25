@@ -25,9 +25,8 @@ pub(all) struct ChatList {
   /// a row with another under it across the whole screen (2 between with keyboard and mouse, none with touch; in a
   /// side column: list_more)
   more : @ui.Style
-  /// in a side column, where its ground is rounded (list_row_in): how far over its second line's middle what stands at
-  /// its end does, and how far in from the row's end it is, so its last face is concentric with the row's foot corner
-  aside_lift : Double
+  /// in a side column, where its ground is rounded (list_row_in): how far in from the row's end and foot what stands in
+  /// its foot's end corner is (list_row `corner`: a chat's people), concentric with the row's corner
   aside_end : Double
   /// its second line from where its chat stands (chat_mark's state line): quiet, the viewer's turn, a message that did
   /// not go; a card's lead word
@@ -108,8 +107,7 @@ pub let mouse_chat_list : ChatList = {
   last: @ui.text_style(size=Meta, color=Muted, leading=L5, wrap=false, w=Full),
   more: @ui.css("w=Full pb=S0_5"),
   // (as far from the row's foot as from its end: its last face concentric with the row's foot corner when its ground
-  // shows, where its line's middle would have it 8: 7 in, the face 16 in the line's 18)
-  aside_lift: capsule_in(row_corner, mouse_face_d) - (mouse_row_in + (mouse_meta_h - mouse_face_d) / 2.0),
+  // shows)
   aside_end: capsule_in(row_corner, mouse_face_d),
   state_quiet: @ui.text_style(size=Meta, color=Muted, leading=L5, wrap=false, w=Full),
   state_turn: @ui.text_style(size=Meta, color=Fg, leading=L5, wrap=false, w=Full),
@@ -163,9 +161,6 @@ pub let touch_chat_list : ChatList = {
   title_unread: @ui.text_style(size=Ui, weight=Semibold, color=Fg, leading=L7, wrap=false, w=Full),
   last: @ui.text_style(size=Meta, color=Muted, leading=L6, wrap=false, w=Full),
   more: full_width,
-  // (a face's foot over the row's: its two lines in its middle, the face in the second's)
-  aside_lift: capsule_in(row_corner, touch_face_d) -
-  ((touch_list_row_h - touch_title_h - touch_meta_h) / 2.0 + (touch_meta_h - touch_face_d) / 2.0),
   aside_end: capsule_in(row_corner, touch_face_d),
   state_quiet: @ui.text_style(size=Meta, color=Muted, leading=L6, wrap=false, w=Full),
   state_turn: @ui.text_style(size=Meta, color=Fg, leading=L6, wrap=false, w=Full),
@@ -247,12 +242,13 @@ pub fn list_line_in(at : ListAt) -> Double {
 
 ///|
 /// How far in a chat row's words are from its ground, and its ground's corner: in a side column its words as
-/// 新建对话's (band_pad), what stands at its end concentric with its foot corner (aside_end), rounded as a sidebar's
-/// row; across the whole screen as the phone's (mChatRow: 22 at the left, 16 at the right), square.
+/// 新建对话's (band_pad) from both sides (navSession: a navRow's 10 either side; what stands in its foot's end corner
+/// placed there by itself: list_row `corner`), rounded as a sidebar's row; across the whole screen as the phone's
+/// (mChatRow: 22 at the left, 16 at the right), square.
 pub fn list_row_in(at : ListAt) -> @ui.Style {
   let l = theme().chat_list
   match at {
-    Side => @ui.style(pl=room(l.band_pad), pr=room(l.aside_end), radius=side_row_radius)
+    Side => @ui.style(px=room(l.band_pad), radius=side_row_radius)
     Whole => whole_row_in
   }
 }

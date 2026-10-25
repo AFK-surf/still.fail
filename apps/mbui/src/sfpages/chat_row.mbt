@@ -218,6 +218,9 @@ pub fn chat_row(
     }
     // (what shows of it over the list's: what its faces' rings are cut in)
     let face_ground = @sf.over(list_ground, ground)
+    // (in a side column who is in it stands in the row's foot's end corner, placed there by the corner rule; across
+    // the whole screen at its second line's end; the row pointed at says when instead)
+    let cornered = at == Side && !shows_time && row_aside_shows(item, lead)
     c.box(style=if more { @sf.list_more(at) } else { row_last }, tx~, fn() {
       // (the library's list row, a chat's as high as its row always is: @sf.list_row)
       @sf.list_row(
@@ -229,6 +232,8 @@ pub fn chat_row(
         faded=item.settled,
         // (归档 over its first line's end: Sidebar.css.ts rowArchive, 24)
         end_room=if archive_key { row_archive_room } else { 0.0 },
+        corner?=if cornered { Some(fn() { row_aside(c, src, item, lead, face_ground) }) } else { None },
+        corner_w=if cornered { row_aside_w(c, item, lead) } else { 0.0 },
         fn() {
             let tone = @sfbase.row_tone(item)
             if tone != "" {
@@ -314,9 +319,8 @@ pub fn chat_row(
             }
             if shows_time {
               c.text(item.ago, style=row_time) |> ignore
-            } else {
-              // (concentric with the row's foot corner where its ground is rounded: a side column's)
-              row_aside(c, src, item, lead, face_ground, lift=if at == Side { look.aside_lift } else { 0.0 })
+            } else if at == Whole {
+              row_aside(c, src, item, lead, face_ground)
             }
           })
           |> ignore
