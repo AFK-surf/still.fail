@@ -419,9 +419,9 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, address : String, station_name : St
 /// alone); while it is checked or added, said so.
 /// `key`: whose steps they are; `send`: a code pasted back sent, then `sent` (its field emptied); `sending` while it is.
 /// Where its job says the station has a browser of its own (`browser`), the same page there (`in_station`: the
-/// station's name, whether it is being opened, and what opens it given what it is called), under the page's button:
-/// its tab's view opened here, gone back from as the sign-in ends; Claude's comes back to its command there, with no
-/// code to paste.
+/// station's name, whether it is being opened, and what opens it given what it is called), seldom used: in a ⋯ after
+/// the page's button (docs/ui-panels.md: what is used least goes into the row's ⋯). Its tab's view opens here, gone
+/// back from as the sign-in ends; Claude's comes back to its command there, with no code to paste.
 fn login_steps(
   c : @ui.Ctx,
   core : Core,
@@ -434,14 +434,14 @@ fn login_steps(
 ) -> Unit {
   let state = text(job, "state")
   let url = text(job, "url")
-  // its page open in the station's browser: that is where it goes on (回到 … 的浏览器, the solid one)
-  let there = text(job, "screen") != ""
-  let station_step = fn() {
+  // the same page in the station's browser (回到 … while its tab is open), in a ⋯ after the page's button
+  let station_more = fn() {
     match in_station {
       Some((name, busy, open)) if flag(job, "browser") => {
-        let label = @sf.t(if there { "common.login.backToStation" } else { "common.login.openInStation" }, args=[("station", name)])
-        if @sf.button(c, label, key="profile-station/" + key, tone=if there { Primary } else { Plain }, busy~) {
-          open(label)
+        let label = @sf.t(if text(job, "screen") != "" { "common.login.backToStation" } else { "common.login.openInStation" }, args=[("station", name)])
+        let mkey = "profile-station/" + key
+        if @sf.icon_button(c, "more", key=mkey, label=@sf.t("common.login.otherWays"), disabled=busy) {
+          @sf.menu([Some(@sf.menu_item_of(label, fn() { open(label) }))], from=Of(c.id(mkey)))
         }
       }
       _ => ()
@@ -466,10 +466,13 @@ fn login_steps(
           style=pf_words,
         )
         |> ignore
-        if @sf.button(c, @sf.t("web-pages.profiles.openAuth"), key="profile-auth/" + key, tone=if there { Plain } else { Primary }, icon="external") {
-          (core.open_link)(url)
-        }
-        station_step()
+        c.box(style=pf_step_buttons, fn() {
+          if @sf.button(c, @sf.t("web-pages.profiles.openAuth"), key="profile-auth/" + key, tone=Primary, icon="external") {
+            (core.open_link)(url)
+          }
+          station_more()
+        })
+        |> ignore
       })
       |> ignore
       c.box(style=pf_step, fn() {
@@ -515,26 +518,29 @@ fn login_steps(
           |> ignore
         }
         let copied = profile_edit.command == "copied/" + key
-        if @sf.button(
-            c,
-            if filled {
-              @sf.t("web-pages.profiles.openAuth")
-            } else if copied {
-              @sf.t("web-pages.profiles.copiedReopen")
-            } else {
-              @sf.t("web-pages.profiles.copyOpen")
-            },
-            key="profile-device/" + key,
-            tone=if there { Plain } else { Primary },
-            icon="external",
-          ) {
-          if !filled {
-            @ui.clipboard_set(code)
-            profile_edit.command = "copied/" + key
+        c.box(style=pf_step_buttons, fn() {
+          if @sf.button(
+              c,
+              if filled {
+                @sf.t("web-pages.profiles.openAuth")
+              } else if copied {
+                @sf.t("web-pages.profiles.copiedReopen")
+              } else {
+                @sf.t("web-pages.profiles.copyOpen")
+              },
+              key="profile-device/" + key,
+              tone=Primary,
+              icon="external",
+            ) {
+            if !filled {
+              @ui.clipboard_set(code)
+              profile_edit.command = "copied/" + key
+            }
+            (core.open_link)(url)
           }
-          (core.open_link)(url)
-        }
-        station_step()
+          station_more()
+        })
+        |> ignore
         c.text(
           if code == "" {
             @sf.t("web-pages.profiles.deviceCodeNoteCursor")
@@ -1718,6 +1724,11 @@ let pf_wait_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 /// A sign-in's step (steps: its words over what is done in it).
 // kept across runs: a value (no field of it changes)
 let pf_step : @ui.Style = @ui.css("w=Full gap=S2 align=AStart")
+
+///|
+/// A step's page button, and the ⋯ after it of the other way of opening it (the station's browser).
+// kept across runs: a value (no field of it changes)
+let pf_step_buttons : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

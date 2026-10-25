@@ -1010,19 +1010,32 @@ function InstallStep({ install }: { install: RuntimeInstall }) {
 }
 
 /** What the person does in the browser for a sign-in under way: open the page and paste the code back (Claude, Devin), copy the code and open the page (Codex), or only open the page and confirm there (Cursor). Where its job says the
- * station has a browser of its own (`browser`), the same page there under the page's button (`inStation`: what asks the
- * station to open it): its tab's view opened here (screen/InStation.tsx); Claude's comes back to its command there, with
- * no code to paste. */
+ * station has a browser of its own (`browser`), the same page there (`inStation`: what asks the station to open it),
+ * seldom used: in a ⋯ after the page's button (docs/ui-panels.md: what is used least goes into the row's ⋯). Its tab's
+ * view opens here (screen/InStation.tsx); Claude's comes back to its command there, with no code to paste. */
 function LoginSteps({ job, provider, send, inStation }: {
   job: LoginJob | null | undefined; provider: string; send: (code: string) => Promise<unknown>; inStation?: { ask(): Promise<unknown>; busy: boolean } | undefined;
 }) {
   const app = useApp();
   const station = useStation();
   const open = useInStation(station.address);
-  // Its page open in the station's browser: that is where it goes on (回到 … 的浏览器, the solid one).
-  const there = job?.screen !== undefined;
-  const label = t(there ? "common.login.backToStation" : "common.login.openInStation", { station: station.name });
-  const stationStep = inStation && job?.browser ? <Button label={label} primary={there} busy={inStation.busy} onClick={() => open(inStation.ask, label)} /> : null;
+  // The same page in the station's browser (回到 … while its tab is open), in a ⋯ after the page's button.
+  const label = t(job?.screen !== undefined ? "common.login.backToStation" : "common.login.openInStation", { station: station.name });
+  const otherWays = t("common.login.otherWays");
+  const stationStep = inStation && job?.browser ? (
+    <button type="button" className={css.mStepMore} aria-label={otherWays} disabled={inStation.busy}
+      onClick={() => app.sheet({ height: 0.25, content: () => (
+        <>
+          <SheetGrab />
+          <SheetHead title={otherWays} />
+          <div className={sheetsCss.mSheetScroll}>
+            <PickRow label={label} onClick={() => { app.sheet(null); open(inStation.ask, label); }} />
+          </div>
+        </>
+      ) })}>
+      <More size={18} />
+    </button>
+  ) : null;
   const [code, setCode] = useState("");
   const operation = useAction(send, () => setCode(""));
   const busy = operation.busy;
@@ -1037,8 +1050,10 @@ function LoginSteps({ job, provider, send, inStation }: {
     return (
       <>
         <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.profiles.cursorNote")}</p>
-        <Button label={t("web-mobile.profiles.openAuth")} primary={!there} onClick={() => void window.open(job.url!, "_blank", "noopener")} />
-        {stationStep}
+        <span className={css.mStepButtons}>
+          <Button label={t("web-mobile.profiles.openAuth")} primary onClick={() => void window.open(job.url!, "_blank", "noopener")} />
+          {stationStep}
+        </span>
       </>
     );
   }
@@ -1048,9 +1063,11 @@ function LoginSteps({ job, provider, send, inStation }: {
         <span className={css.mDeviceCode}>{job.userCode}</span>
         <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{provider === "OpenCode" ? t("web-mobile.profiles.opencodeNote") : provider === "Kimi" ? t("web-mobile.profiles.kimiNote") : provider === "Grok" ? t("web-mobile.profiles.grokNote") : t("web-mobile.profiles.codexNote", { name: NAME })}</p>
         {/* OpenCode's and Kimi's pages have the code in their address: only compared there, not copied. */}
-        <Button label={filled ? t("web-mobile.profiles.openAuth") : copied ? t("web-mobile.profiles.reopen") : t("web-mobile.profiles.copyOpen")} primary={!there}
-          onClick={() => { if (filled) return void window.open(job.url!, "_blank", "noopener"); void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => app.toast(t("web-mobile.profiles.copyCodeFailed"))).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
-        {stationStep}
+        <span className={css.mStepButtons}>
+          <Button label={filled ? t("web-mobile.profiles.openAuth") : copied ? t("web-mobile.profiles.reopen") : t("web-mobile.profiles.copyOpen")} primary
+            onClick={() => { if (filled) return void window.open(job.url!, "_blank", "noopener"); void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => app.toast(t("web-mobile.profiles.copyCodeFailed"))).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
+          {stationStep}
+        </span>
       </>
     );
   }
@@ -1060,7 +1077,7 @@ function LoginSteps({ job, provider, send, inStation }: {
     return (
       <>
         <p className={css.mStep}><span className={css.mStepN}>1</span>{provider === "Devin" ? t("web-mobile.profiles.step1ShortDevin", { name: NAME }) : t("web-mobile.profiles.step1Short", { name: NAME })}</p>
-        <span className={css.mStepBody}><Button label={t("web-mobile.profiles.openAuth")} primary={!code.trim() && !there} onClick={() => void window.open(job.url!, "_blank", "noopener")} />{stationStep}</span>
+        <span className={`${css.mStepBody} ${css.mStepButtons}`}><Button label={t("web-mobile.profiles.openAuth")} primary={!code.trim()} onClick={() => void window.open(job.url!, "_blank", "noopener")} />{stationStep}</span>
         <p className={css.mStep}><span className={css.mStepN}>2</span>{t("web-mobile.profiles.step2Short")}</p>
         {error && <p className={partsCss.mError}>{error}</p>}
         <div className={css.mCodeRow}>

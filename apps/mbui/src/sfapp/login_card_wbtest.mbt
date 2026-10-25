@@ -101,7 +101,7 @@ test "a device login: its code large, 复制并打开 copies it and opens its pa
 
 
 ///|
-test "a login the station's own browser can do: 在 Studio 的浏览器中打开 under its step (machineLogin.browser) opens its tab's view, gone back from once the login ends" {
+test "a login the station's own browser can do: seldom used, in the ⋯ by the step's button; chosen (machineLogin.browser), its tab's view opens, gone back from once the login ends" {
   let calls : Array[Made] = []
   let t = with_logins(
     login_core(
@@ -115,7 +115,12 @@ test "a login the station's own browser can do: 在 Studio 的浏览器中打开
       answer=fn(name) { if name == "machineLogin.browser" { { "screen": "browser:T1" } } else { Json::object({}) } },
     ),
   )
+  assert_true(t.find("在 Studio 的浏览器中打开") is None, msg="not a button of its own")
+  t.click(Button, label="其他方式")
+  assert_true(@sf.presenting())
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   t.tap_text("在 Studio 的浏览器中打开")
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   let asked = named(calls, "machineLogin.browser")
   assert_eq(asked.length(), 1)
   assert_eq(text(Some(asked[0].params), "id"), "login-1")
@@ -126,7 +131,7 @@ test "a login the station's own browser can do: 在 Studio 的浏览器中打开
 }
 
 ///|
-test "a device that cannot take a loopback's callback: the station's browser is its step; a station with none, said so" {
+test "a device that cannot take a loopback's callback: the station's browser is its step, no ⋯; a station with none, said so" {
   let calls : Array[Made] = []
   let page = "https://login.microsoftonline.com/x"
   let t = with_logins(
@@ -137,7 +142,30 @@ test "a device that cannot take a loopback's callback: the station's browser is 
     ),
   )
   assert_true(t.find("在 Studio 的浏览器中打开") is Some(_))
+  assert_true(t.query(Button, label="其他方式") is None)
   assert_true(t.find("这一步要在桌面或安卓 app 里完成") is None)
   let none = with_logins(login_core(calls, login_of([("step", "loopback"), ("url", Json::string(page))]), relay=false))
   assert_true(none.find("这一步要在桌面或安卓 app 里完成") is Some(_))
+}
+
+///|
+test "this device's port taken just now: the station's browser is the step, this device's again in its ⋯" {
+  let calls : Array[Made] = []
+  let t = with_logins(
+    login_core(
+      calls,
+      login_of([
+        ("step", "loopback"),
+        ("url", "https://accounts.google.com/o/oauth2/auth"),
+        ("relayText", "本机 8085 端口被占用"),
+        ("browser", true),
+        ("browserText", "在 Studio 的浏览器中打开"),
+      ]),
+    ),
+  )
+  assert_true(t.find("本机 8085 端口被占用") is Some(_))
+  assert_true(t.find("在 Studio 的浏览器中打开") is Some(_))
+  t.click(Button, label="其他方式")
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(t.find("在浏览器里登录") is Some(_))
 }

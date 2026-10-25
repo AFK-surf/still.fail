@@ -3,9 +3,9 @@
 // there (Cursor). Each step's button solid until it is pressed (LoginCards.kt StepButton), the code's field with 完成 in
 // its end once a code is in (CodeField); the last of them in the card's foot corners, so all of them capsules a
 // settings button high, reaching past the card's words to its foot's inset (parts.mbt Foot's Capsule: foot_across),
-// 完成 a capsule concentric in the field's end. Under the page's button, where the station has a browser of its own, the
-// same page opened there (its tab's view opened here, gone back from as the sign-in ends): Claude's comes back to its
-// command there, with no code to paste.
+// 完成 a capsule concentric in the field's end. Where the station has a browser of its own, the same page opened there
+// (its tab's view opened here, gone back from as the sign-in ends; Claude's comes back to its command there, with no
+// code to paste), seldom used: in a ⋯ at the end of the page's button.
 
 ///|
 /// A step's button (StepButton): the card's foot's width, 8 under what is over it, a settings button high, solid (the
@@ -68,11 +68,19 @@ let code_finish_h : Double = 30.0
 let code_finish_words : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Bg, wrap=false)
 
 ///|
-/// A step's button: true on the frame after it was pressed.
-fn step_button_of(c : @ui.Ctx, key : String, label : String, solid : Bool, external? : Bool = false) -> Bool {
+/// A step's button: true on the frame after it was pressed. `more`: other ways of doing the step, seldom used, in a ⋯
+/// at its end (docs/ui-panels.md: what is used least goes into the row's ⋯): a round one as high, on the grey.
+fn step_button_of(
+  c : @ui.Ctx,
+  key : String,
+  label : String,
+  solid : Bool,
+  external? : Bool = false,
+  more? : Array[(String, () -> Unit)] = [],
+) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  c.box(style=step_room, fn() {
+  c.box(style=if more.is_empty() { step_room } else { step_room_row }, fn() {
     c.box(style=if solid { step_button_solid } else { step_button }, id~, fn() {
       c.text(label, style=if solid { step_words_solid } else { step_words }) |> ignore
       if external {
@@ -82,10 +90,30 @@ fn step_button_of(c : @ui.Ctx, key : String, label : String, solid : Bool, exter
       @motion.ripple(c, id, settings_button_h / 2.0, ink=@sf.alpha(if solid { t.p.bg } else { t.p.text }, 0.1))
     })
     |> ignore
+    if !more.is_empty() {
+      let mid = c.id(key + "/more")
+      let b = c.box(style=step_more, id=mid, fn() {
+        @sf.icon(c, "more", size=step_icon, color=t.p.text) |> ignore
+        @motion.ripple(c, mid, settings_button_h / 2.0, ink=@sf.alpha(t.p.text, 0.1))
+      })
+      c.semantics(b, Button, id=mid, label=@sf.t("common.login.otherWays"))
+      if c.clicked(mid) {
+        @sf.menu(more.map(fn(w) { Some(@sf.menu_item_of(w.0, w.1)) }), from=Of(mid), along=End)
+      }
+    }
   })
   |> ignore
   c.clicked(id)
 }
+
+///|
+/// A step's button with its ⋯ (step_button_of's `more`): side by side, 6 apart.
+// kept across runs: a value (no field of it changes)
+let step_room_row : @ui.Style = step_room.then(@ui.css("row gap=S1_5 align=ACenter"))
+
+///|
+// kept across runs: a value (no field of it changes)
+let step_more : @ui.Style = @ui.css("radius=Full bg=Tint align=ACenter justify=JCenter").then(@ui.style(w=Fixed(settings_button_h), h=Fixed(settings_button_h)))
 
 ///|
 /// ↗ after a step's words (16).
@@ -116,20 +144,14 @@ fn login_steps(
   let state = text(job, "state")
   let url = text(job, "url")
   let user_code = text(job, "userCode")
-  // its page open in the station's browser: that is where it goes on
-  let there = text(job, "screen") != ""
   let copied = login_state.copied.get(k).unwrap_or(false)
-  // the same page in the station's browser, under the page's button: solid while its tab is open
-  let station_step = fn() {
-    match in_station {
-      Some((name, open)) if flag(job, "browser") => {
-        let label = fill(if there { "common.login.backToStation" } else { "common.login.openInStation" }, [("station", name)])
-        if step_button_of(c, "login-station", label, there) {
-          open(label)
-        }
-      }
-      _ => ()
+  // the same page in the station's browser (回到 … while its tab is open), in the ⋯ of the page's button
+  let elsewhere = match in_station {
+    Some((name, open)) if flag(job, "browser") => {
+      let label = fill(if text(job, "screen") != "" { "common.login.backToStation" } else { "common.login.openInStation" }, [("station", name)])
+      [(label, fn() { open(label) })]
     }
+    _ => []
   }
   if job is None || state == "starting" {
     wait_line(c, fill("android-settings.login.making", [("provider", provider)]))
@@ -140,11 +162,10 @@ fn login_steps(
   } else if state == "needs_approval" && url != "" && user_code == "" {
     // no code: the page only asks to confirm (Cursor's)
     c.text(tr("android-settings.login.cursorNote"), style=step_note) |> ignore
-    if step_button_of(c, "login-open", tr("android-settings.login.openPage"), !copied && !there, external=true) {
+    if step_button_of(c, "login-open", tr("android-settings.login.openPage"), !copied, external=true, more=elsewhere) {
       login_state.copied[k] = true
       (core.open_link)(url)
     }
-    station_step()
   } else if state == "needs_approval" && url != "" {
     c.box(style=code_box, fn() {
       mono(c, user_code, size=device_code_size, line=device_code_line)
@@ -174,8 +195,9 @@ fn login_steps(
             "android-settings.login.copyOpen"
           },
         ),
-        !copied && !there,
+        !copied,
         external=filled,
+        more=elsewhere,
       ) {
       if !filled {
         c.copy_text(user_code)
@@ -183,7 +205,6 @@ fn login_steps(
       login_state.copied[k] = true
       (core.open_link)(url)
     }
-    station_step()
   } else if state == "needs_code" && url != "" {
     // what to do said once, then its two steps in the order they are done, the next one solid: its page, then the
     // code it gives in the field (完成 in its end)
@@ -197,11 +218,10 @@ fn login_steps(
     let key = "login-code/" + k
     let field = field_of(key)
     let typed = field.text().trim(chars=" \n").to_owned() != ""
-    if step_button_of(c, "login-open", tr("android-settings.login.openPage"), !copied && !typed && !there, external=true) {
+    if step_button_of(c, "login-open", tr("android-settings.login.openPage"), !copied && !typed, external=true, more=elsewhere) {
       login_state.copied[k] = true
       (core.open_link)(url)
     }
-    station_step()
     c.box(style=code_field_room, fn() {
       c.box(style=code_field, fn() {
         let mut code = ""
