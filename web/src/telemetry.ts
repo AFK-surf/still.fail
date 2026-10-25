@@ -120,7 +120,7 @@ const IDS: Record<string, string> = { w: ":workspace", s: ":station", chats: ":t
 /** The words the app's routes are made of: any other segment is an id, a name or a key (a profile's holds an email,
  *  a skill's a customer's name), sent as `:id`. */
 const WORDS = new Set([
-  "about", "account", "accounts", "adb", "add", "admin", "agents", "appearance", "archive", "auth", "automatic-decisions",
+  "about", "account", "accounts", "adb", "add", "admin", "agents", "all", "appearance", "archive", "auth", "automatic-decisions",
   "bar", "bots", "callback", "changelog", "chats", "codes", "completion", "connects", "decisions", "feedback", "files",
   "fonts", "footprint", "general", "global", "history", "installed", "invite", "language", "leave", "local-station",
   "login", "members", "memory", "messages", "models", "new", "notifications", "o", "open", "overview", "permissions",

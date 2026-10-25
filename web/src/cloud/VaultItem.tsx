@@ -1,4 +1,4 @@
-// A secret's page (设置 › 密钥 › it), as a profile's is (pages/Accounts.tsx): what it is and where it is kept, in a library not locked that it is not encrypted and the way to
+// A secret's page (设置 › 密钥 › 全部密钥 › it), as a profile's is (pages/Accounts.tsx): what it is and where it is kept, in a library not locked that it is not encrypted and the way to
 // lock it (docs/vault.md 不加锁的库), its content masked until shown, how agents may use it, and when they did (the
 // station's record of it: the core's `vaultUses`).
 import { useState } from "react";
@@ -28,7 +28,7 @@ export function VaultItemPage({ entry }: { entry: WorkspaceEntry }) {
   const opening = useDoing("vault.open", { workspace: entry.id, item });
   const v = view?.vaults.find((x) => x.id === vault);
   const row = items?.items.find((i) => i.id === item);
-  const back = <BackLink to={`/w/${entry.id}/settings/vault`} label={t("web-pages.vault.title")} />;
+  const back = <BackLink to={`/w/${entry.id}/settings/vault/all`} label={t("web-pages.vault.all")} />;
   if (!view || !items) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>{back}<Waiting shape="cards" count={2} /></div>;
   if (!v || !row) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>{back}<p className={css.note}>{t("web-pages.vault.empty")}</p></div>;
   const plain = view.plain === true;

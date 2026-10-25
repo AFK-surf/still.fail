@@ -1,14 +1,16 @@
-// 设置 › 密钥 on the wide screen (and the desktop app): the workspace's vault as this device sees it (docs/vault.md).
-// What it is waiting for first (security mode on, this device confirmed in it, the vault turned on here: the recovery
-// words shown that once), then the requests waiting on the viewer, each vault's items, and the devices holding its key.
-// An item opens in a dialog (its fields masked, shown or copied), and is edited in another. A web page only lists the
-// names it is told. All of it is the core's (`vaults`, `vaultItems`, `vault.*`; ../vault.ts): this only draws.
+// 设置 › 密钥 and 全部密钥 under it on the wide screen (and the desktop app): the workspace's vault as this device sees it
+// (docs/vault.md), the app's pages' structure (apps/mbui sfdesk vault.mbt). What it is waiting for first (security mode
+// on, this device confirmed in it, the vault turned on here: the recovery words shown that once), on either; then on 密钥
+// the requests waiting on the viewer, a row to 全部密钥, how it keeps its secrets (a row each on one list card), deleting
+// the vault at the foot; on 全部密钥 the profiles' accounts and each vault's items, a section a kind, and adding. An
+// item opens on a page of its own, and is edited in a dialog. A web page only lists the names it is told. All of it is
+// the core's (`vaults`, `vaultItems`, `vault.*`; ../vault.ts): this only draws.
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
-import { Copy, Devices, Eye, Key, Plus, Server, ShieldCheck, Trash, User } from "@stillfail/ui/icons.tsx";
+import { ChevronRight, Copy, Devices, Eye, Key, Plus, Server, ShieldCheck, User } from "@stillfail/ui/icons.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing } from "../doing.ts";
-import { Button, Choices, Confirm, Dialog, Field, IconButton, Menu, MobileBack, ProviderLogo, Section, Segmented, SwitchRow, Spinner, Waiting } from "../ui.tsx";
+import { BackLink, Button, Confirm, Dialog, Field, IconButton, Menu, MobileBack, Section, Segmented, SwitchRow, Spinner, Waiting } from "../ui.tsx";
 import { useProfiles, useStations } from "../api.ts";
 import { profilePath } from "../ProfilesNav.tsx";
 import { profileGroups } from "./settings.tsx";
@@ -18,7 +20,7 @@ import { stationBase } from "../station.tsx";
 import { VaultActions } from "../VaultApproval.tsx";
 import { AskCard } from "../VaultAsk.tsx";
 import {
-  ITEM_SECTIONS, KINDS, LASTS, SCOPES, blankForm, copySecret, itemPath, lastsChoice, lastsName, formOf, formProblem, kindName, masked, modeName, modesOf, putOf, useForm,
+  ITEM_SECTIONS, KINDS, LASTS, SCOPES, scopeOf, blankForm, copySecret, itemPath, lastsChoice, lastsName, formOf, formProblem, kindName, masked, modeName, modesOf, putOf, useForm,
   useVaultCall, useVaultItems, useVaults, type Form, type Kind, type Mode, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView,
 } from "../vault.ts";
 import { t } from "../i18n.ts";
@@ -34,37 +36,52 @@ export function KindIcon({ kind, size = 16 }: { kind: string | undefined; size?:
   return <Icon size={size} strokeWidth={1.6} />;
 }
 
-/** In the settings' sidebar, after 密钥: how many requests wait on the viewer (nothing when none). */
-export function VaultWaiting({ workspace }: { workspace: string }) {
-  const n = useVaults(workspace)?.requests.length ?? 0;
-  return n > 0 ? <span className={css.navCount} aria-label={t("web-pages.vault.waitingCount", { n })}>{n}</span> : null;
-}
-
 /** 设置 › 密钥. */
 export function VaultSettings({ entry }: { entry: WorkspaceEntry }) {
-  const view = useVaults(entry.id);
-  // The recovery words, the once the core gives them (`vault.setup`): shown until they are written down.
-  const [words, setWords] = useState<string[] | null>(null);
-  const [adding, setAdding] = useState(false);
-  // The library as it is used (not locked, or locked and set up here): what it holds, and adding to it.
-  const library = !!view && !words && (view.plain === true || (view.available && view.locked && view.canSign && view.setUp));
+  const { view, first } = useFirst(entry);
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={`/w/${entry.id}/settings`} label={t("web-pages.settings.title")} />
       <header className={pagesCss.pageHead}>
         <div><h1>{t("web-pages.vault.title")}</h1><p className={css.sub}>{t("web-pages.vault.lead")}</p></div>
-        {library && <Button variant="ghost" icon={Plus} onClick={() => setAdding(true)}>{t("web-pages.vault.add")}</Button>}
       </header>
-      {!view ? <Waiting shape="cards" count={2} />
-        : words ? <Words words={words} onDone={() => setWords(null)} />
-        : view.plain === true ? <Library entry={entry} view={view} adding={adding} onAdded={() => setAdding(false)} />
-        : !view.available ? <ReadOnly entry={entry} view={view} />
-        : !view.locked ? <Gate entry={entry} title={t("web-pages.vault.needsLock")} why={t("web-pages.vault.needsLockWhy")} />
-        : !view.canSign ? <Gate entry={entry} title={t("web-pages.vault.notSigner")} why={t("web-pages.vault.notSignerWhy")} />
-        : !view.setUp ? <SetUp entry={entry} onWords={setWords} />
-        : <Library entry={entry} view={view} adding={adding} onAdded={() => setAdding(false)} />}
+      {first ?? <Library entry={entry} view={view!} />}
     </div>
   );
+}
+
+/** 设置 › 密钥 › 全部密钥: what the library keeps, 添加 at its head; what has to come first, as on 密钥. */
+export function VaultAll({ entry }: { entry: WorkspaceEntry }) {
+  const { view, first } = useFirst(entry);
+  const [adding, setAdding] = useState(false);
+  return (
+    <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
+      <BackLink to={`/w/${entry.id}/settings/vault`} label={t("web-pages.vault.title")} />
+      <header className={pagesCss.pageHead}>
+        <div><h1>{t("web-pages.vault.all")}</h1></div>
+        {!first && <Button variant="ghost" icon={Plus} onClick={() => setAdding(true)}>{t("web-pages.vault.add")}</Button>}
+      </header>
+      {first ?? <All entry={entry} view={view!} adding={adding} onAdded={() => setAdding(false)} />}
+    </div>
+  );
+}
+
+/** What 密钥 and 全部密钥 show before the library: waiting for the core; the recovery words to write down; a web page's
+ * names; what has to come first. `first` null where the library is there to be used (in plain text on the station, or
+ * locked, signed and set up here). */
+function useFirst(entry: WorkspaceEntry): { view: VaultsView | undefined; first: ReactNode | null } {
+  const view = useVaults(entry.id);
+  // The recovery words, the once the core gives them (`vault.setup`): shown until they are written down.
+  const [words, setWords] = useState<string[] | null>(null);
+  const first = !view ? <Waiting shape="cards" count={2} />
+    : words ? <Words words={words} onDone={() => setWords(null)} />
+    : view.plain === true ? null
+    : !view.available ? <ReadOnly entry={entry} view={view} />
+    : !view.locked ? <Gate entry={entry} title={t("web-pages.vault.needsLock")} why={t("web-pages.vault.needsLockWhy")} />
+    : !view.canSign ? <Gate entry={entry} title={t("web-pages.vault.notSigner")} why={t("web-pages.vault.notSignerWhy")} />
+    : !view.setUp ? <SetUp entry={entry} onWords={setWords} />
+    : null;
+  return { view, first };
 }
 
 /** What the vault waits for before anything else (security mode; this device in it): said, with the way there. */
@@ -135,19 +152,15 @@ function ReadOnly({ entry, view }: { entry: WorkspaceEntry; view: VaultsView }) 
   );
 }
 
-/** The library (docs/vault.md 一个库): what waits on the viewer, whether it is locked, the profiles' accounts kept in it
- * (each leading to its profile), each vault's secrets a section a kind (each leading to its page), the devices. */
-function Library({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view: VaultsView; adding: boolean; onAdded(): void }) {
+/** The library (docs/vault.md 一个库), as the app's page (apps/mbui sfdesk vault.mbt): the requests waiting on the
+ * viewer, each one's card as in its chat; a row to 全部密钥; how it keeps its secrets, a row each on one list card;
+ * deleting the person's vault in red at the foot. */
+function Library({ entry, view }: { entry: WorkspaceEntry; view: VaultsView }) {
   const run = useVaultCall();
-  const navigate = useNavigate();
   const creating = useDoing("vault.create", { workspace: entry.id });
-  const locking = useDoing("vault.lock", { workspace: entry.id });
   const plain = view.plain === true;
   const mine = view.vaults.find((v) => v.mine);
-  const [editing, setEditing] = useState<Kind | null>(null);
-  const stations = useStations(entry.id).value ?? [];
-  const online = stations.filter((s) => s.online);
-  const profiles = useProfiles(entry.id).value;
+  const many = view.vaults.length > 1;
   return (
     <>
       {view.requests.length > 0 && (
@@ -155,21 +168,6 @@ function Library({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view
           <div className={css.requests}>{view.requests.map((r) => <Request key={r.id} entry={entry} r={r} />)}</div>
         </Section>
       )}
-      <div className={`${pagesCss.card} ${css.lead}`}>
-        <div className={css.state}><ShieldCheck size={16} strokeWidth={1.6} /><span className={plain ? css.riskTitle : undefined}>{plain ? t("web-pages.vault.lib.plain") : t("web-pages.vault.lib.sealed")}</span></div>
-        <p className={css.sub}>{plain ? t("web-pages.vault.lib.plainLong") : t("web-pages.vault.lib.sealedWhy")}</p>
-        {plain && <div className={css.actions}><Link to={`/w/${entry.id}/settings/security`}><Button variant="primary">{t("web-pages.vault.lib.turnOn")}</Button></Link></div>}
-        {/* Unlocked here a while: said with the library's state, and locked again at once from there. */}
-        {!plain && view.vaults.some((v) => v.open) && (
-          <div className={css.actions}>
-            <span className={css.rowMeta}>{t("web-pages.vault.opened")}</span>
-            <Button variant="ghost" busy={locking} onClick={() => void run("vault.lock", { workspace: entry.id }, t("web-pages.vault.lockNow"))}>{t("web-pages.vault.lockNow")}</Button>
-          </div>
-        )}
-      </div>
-      {mine && <Lasts entry={entry} v={mine} />}
-      {!plain && (view.plainLeft ?? 0) > 0 && <Migrate entry={entry} n={view.plainLeft!} />}
-      <ProfileAccounts entry={entry} />
       {view.vaults.length === 0 && !plain && (
         <div className={pagesCss.card}>
           <p className={css.sub}>{t("web-pages.vault.none")}</p>
@@ -177,13 +175,41 @@ function Library({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view
             onClick={() => void run("vault.create", { workspace: entry.id, name: t("web-pages.vault.personal") }, t("web-pages.vault.createWhat"))}>{t("web-pages.vault.setUp")}</Button></div>
         </div>
       )}
+      {!plain && view.vaults.filter((v) => !v.keyed).map((v) => <NoKey key={v.id} entry={entry} v={v} />)}
+      <ul className={pagesCss.list}>
+        <li>
+          <Link className={`${pagesCss.listRow} ${css.rowButton}`} to={`/w/${entry.id}/settings/vault/all`}>
+            <span className={pagesCss.listRowTitle}>{t("web-pages.vault.all")}</span>
+            <span className={css.grow} />
+            <ChevronRight size={14} className={css.chevron} />
+          </Link>
+        </li>
+      </ul>
+      <Kept entry={entry} view={view} />
+      {!plain && mine && <ul className={pagesCss.list}>{view.vaults.filter((v) => v.mine).map((v) => <DeleteVault key={v.id} entry={entry} v={v} many={many} />)}</ul>}
+    </>
+  );
+}
+
+/** 全部密钥: the profiles' accounts kept in the library (each leading to its profile) and each vault's secrets (each
+ * leading to its page), a section a kind (a vault this device has no key to, the names it is told); adding to it. */
+function All({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view: VaultsView; adding: boolean; onAdded(): void }) {
+  const navigate = useNavigate();
+  const plain = view.plain === true;
+  const mine = view.vaults.find((v) => v.mine);
+  const [editing, setEditing] = useState<Kind | null>(null);
+  const stations = useStations(entry.id).value ?? [];
+  const online = stations.filter((s) => s.online);
+  const profiles = useProfiles(entry.id).value;
+  const many = view.vaults.length > 1;
+  return (
+    <>
+      <ProfileAccounts entry={entry} />
       {/* Nothing of its own yet says so only where the page lists nothing else (the profiles' accounts above). */}
-      {view.vaults.map((v) => <LibraryVault key={v.id} entry={entry} v={v} plain={plain} many={view.vaults.length > 1} quiet={(profiles?.items.length ?? 0) > 0} />)}
-      {!plain && view.vaults.length > 0 && (
-        <Section title={t("web-pages.vault.vaults")}>
-          <div className={pagesCss.card}><div className={css.rows}>{view.vaults.map((v) => <DevicesRow key={v.id} entry={entry} v={v} />)}</div></div>
-        </Section>
-      )}
+      {view.vaults.map((v) => (plain || v.keyed
+        ? <LibraryVault key={v.id} entry={entry} v={v} many={many} quiet={(profiles?.items.length ?? 0) > 0} />
+        : <VaultSection key={v.id} entry={entry} v={v} readOnly />))}
+      {view.vaults.length === 0 && (profiles?.items.length ?? 0) === 0 && <p className={css.note}>{t("web-pages.vault.empty")}</p>}
       <Dialog open={adding} onClose={onAdded} title={t("web-pages.vault.addKind.title")}>
         <AddKinds secrets={mine !== undefined} plain={plain} onPick={(k) => {
           onAdded();
@@ -197,40 +223,150 @@ function Library({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view
   );
 }
 
-/** The longest an agent's request for the person's secrets is approved for, where a secret does not say its own. */
-function Lasts({ entry, v }: { entry: WorkspaceEntry; v: VaultRow }) {
-  const run = useVaultCall();
-  const setting = useDoing("vault.setLasts", { workspace: entry.id, vault: v.id });
-  const set = (lasts: string) => void run("vault.setLasts", { workspace: entry.id, vault: v.id, lasts }, t("web-pages.vault.lasts.what"));
+/** A request waiting on the viewer (to use an item, or to keep one): its card, as in its chat, and a way to that chat. */
+function Request({ entry, r }: { entry: WorkspaceEntry; r: VaultRequest }) {
+  const go = useNavigate();
+  const chat = r.station ? `${stationBase(`${entry.id}/${r.station}`)}/chats/${encodeURIComponent(r.session)}` : null;
   return (
-    <div className={`${pagesCss.card} ${css.lead}`}>
-      <div className={css.state}>{t("web-pages.vault.lasts.title")}</div>
-      <p className={css.sub}>{t("web-pages.vault.lasts.note")}</p>
-      <Choices label={t("web-pages.vault.lasts.title")} value={v.lasts ?? "chat"} onChange={set}
-        options={SCOPES.map((s) => ({ value: s, title: lastsName(s), description: t(`web-pages.vault.lasts.${s}Detail`), disabled: setting }))} />
-    </div>
+    <AskCard fill ask={{ name: r.itemName ?? r.item, mode: r.mode, command: r.command, save: r.save }}>
+      <VaultActions workspace={entry.id} id={r.id} extra={chat && <Button variant="ghost" onClick={() => go(chat)}>{t("web-pages.vault.openChat")}</Button>} />
+    </AskCard>
   );
 }
 
-/** Security mode on, what the plain library still holds from before: moved into the person's vault, encrypted. */
-function Migrate({ entry, n }: { entry: WorkspaceEntry; n: number }) {
+/** A vault this device has no key to, under its name: that it has none, and the recovery words typed where they can
+ * give it one. */
+function NoKey({ entry, v }: { entry: WorkspaceEntry; v: VaultRow }) {
+  const [recovering, setRecovering] = useState(false);
+  return (
+    <Section title={v.name}>
+      <div className={pagesCss.card}>
+        <div className={css.state}>{t("web-pages.vault.notKeyed")}</div>
+        <p className={css.sub}>{t("web-pages.vault.notKeyedWhy")}</p>
+        {v.recoverable && v.mine && <div className={css.actions}><Button variant="primary" onClick={() => setRecovering(true)}>{t("web-pages.vault.recover")}</Button></div>}
+      </div>
+      {recovering && <Recover entry={entry} onClose={() => setRecovering(false)} />}
+    </Section>
+  );
+}
+
+/** How the library keeps its secrets, a row each on one list card (as a page's own settings stand first): encrypted, or
+ * in plain text on the station (the way to security mode at its end), unlocked here a while (locked again from its
+ * end); those still in plain text from before (encrypted from its end); the longest an approval lasts (picked from a
+ * menu, each with what it means); the devices holding each vault's key (given to new ones from its end). A row that
+ * does something does it pressed, saying what at its end (ActionRow); what is not as it should be said in amber. */
+function Kept({ entry, view }: { entry: WorkspaceEntry; view: VaultsView }) {
   const run = useVaultCall();
   const toast = useToast();
+  const navigate = useNavigate();
+  const locking = useDoing("vault.lock", { workspace: entry.id });
   const moving = useDoing("vault.migrate", { workspace: entry.id });
-  const go = () => void run<{ moved: number; left: number }>("vault.migrate", { workspace: entry.id }, t("web-pages.vault.migrate.what")).then((r) => {
+  const plain = view.plain === true;
+  const open = view.vaults.some((v) => v.open);
+  const left = view.plainLeft ?? 0;
+  const mine = view.vaults.find((v) => v.mine);
+  const migrate = () => void run<{ moved: number; left: number }>("vault.migrate", { workspace: entry.id }, t("web-pages.vault.migrate.what")).then((r) => {
     if (r) toast(r.left > 0 ? t("web-pages.vault.migrate.partly", { n: r.moved, left: r.left }) : t("web-pages.vault.migrate.done", { n: r.moved }));
   });
   return (
-    <div className={`${pagesCss.card} ${css.lead}`}>
-      <div className={css.state}><span className={css.riskTitle}>{t("web-pages.vault.migrate.title", { n })}</span></div>
-      <p className={css.sub}>{t("web-pages.vault.migrate.body")}</p>
-      <div className={css.actions}><Button variant="primary" busy={moving} onClick={go}>{t("web-pages.vault.migrate.go")}</Button></div>
-    </div>
+    <ul className={pagesCss.list}>
+      {plain ? <ActionRow title={t("web-pages.vault.lib.plain")} note={t("web-pages.vault.lib.plainWhy")} warn
+          action={t("web-pages.vault.lib.turnOn")} onPress={() => navigate(`/w/${entry.id}/settings/security`)} />
+        : open ? <ActionRow title={t("web-pages.vault.lib.sealed")} note={t("web-pages.vault.opened")} action={t("web-pages.vault.lockNow")} busy={locking}
+          onPress={() => void run("vault.lock", { workspace: entry.id }, t("web-pages.vault.lockNow"))} />
+        : <li className={pagesCss.listRow}><RowWords title={t("web-pages.vault.lib.sealed")} note={t("web-pages.vault.lib.sealedWhy")} /></li>}
+      {!plain && left > 0 && <ActionRow title={t("web-pages.vault.migrate.title", { n: left })} note={t("web-pages.vault.migrate.body")} warn
+        action={t("web-pages.vault.migrate.go")} busy={moving} onPress={migrate} />}
+      {mine && <LastsRow entry={entry} v={mine} />}
+      {!plain && view.vaults.map((v) => <DevicesRow key={v.id} entry={entry} v={v} many={view.vaults.length > 1} />)}
+    </ul>
+  );
+}
+
+/** A row that does one thing (as 解锁's: LibraryVault): pressed anywhere, it does it; what it does, in the link's ink,
+ * at its end (a spinner while it is done). */
+function ActionRow({ title, note, warn = false, action, busy = false, onPress }: { title: string; note: string; warn?: boolean; action: string; busy?: boolean; onPress(): void }) {
+  return (
+    <li>
+      <button type="button" className={`${pagesCss.listRow} ${css.rowButton}`} disabled={busy} onClick={onPress}>
+        <RowWords title={title} note={note} warn={warn} />
+        {busy ? <Spinner inline /> : <span className={css.link}>{action}</span>}
+      </button>
+    </li>
+  );
+}
+
+/** A row's words: what it is, how it stands under it (in amber where it is not as it should be). */
+function RowWords({ title, note, warn = false }: { title: string; note: string; warn?: boolean }) {
+  return (
+    <span className={pagesCss.listRowText}>
+      <span className={pagesCss.listRowTitle}>{title}</span>
+      <span className={warn ? css.warn : css.rowMeta}>{note}</span>
+    </span>
+  );
+}
+
+/** The longest an agent's request for the person's secrets is approved for, where a secret does not say its own: the
+ * one now under it; pressed, the choices, each with what it means. */
+function LastsRow({ entry, v }: { entry: WorkspaceEntry; v: VaultRow }) {
+  const run = useVaultCall();
+  const setting = useDoing("vault.setLasts", { workspace: entry.id, vault: v.id });
+  const now = scopeOf(v.lasts);
+  return (
+    <li>
+      <Menu label={t("web-pages.vault.lasts.title")}
+        trigger={<button type="button" className={pagesCss.listRow} disabled={setting}>
+          <RowWords title={t("web-pages.vault.lasts.title")} note={lastsName(now)} />
+          {setting ? <Spinner inline /> : <ChevronRight size={14} className={css.chevron} />}
+        </button>}
+        items={SCOPES.map((s) => ({
+          label: lastsName(s), note: t(`web-pages.vault.lasts.${s}Detail`), checked: s === now,
+          onSelect: () => { if (s !== now) void run("vault.setLasts", { workspace: entry.id, vault: v.id, lasts: s }, t("web-pages.vault.lasts.what")); },
+        }))} />
+    </li>
+  );
+}
+
+/** The devices holding a vault's key (its name where there are more than one): how many; where some new ones have none
+ * yet, how many, in amber, given it from its end by its owner's device holding it (done by itself as the owner's
+ * device next has the key in hand). */
+function DevicesRow({ entry, v, many }: { entry: WorkspaceEntry; v: VaultRow; many: boolean }) {
+  const run = useVaultCall();
+  const adding = useDoing("vault.addDevice", { workspace: entry.id, vault: v.id });
+  const title = many ? v.name : t("web-pages.security.devices");
+  if (v.missing > 0 && v.mine && v.keyed) {
+    return <ActionRow title={title} note={t("web-pages.vault.missing", { n: v.missing })} warn action={t("web-pages.vault.addDevice")} busy={adding}
+      onPress={() => void run("vault.addDevice", { workspace: entry.id, vault: v.id }, t("web-pages.vault.addDeviceWhat"), t("web-pages.vault.addedDevice"))} />;
+  }
+  return (
+    <li className={pagesCss.listRow}>
+      <RowWords title={title} warn={v.missing > 0} note={v.missing > 0 ? t("web-pages.vault.missing", { n: v.missing }) : t("web-pages.vault.devicesHold", { n: v.devices })} />
+    </li>
+  );
+}
+
+/** Deleting a vault of the person's own (its name after where there are more than one), in red: asked first, saying
+ * what goes with it. */
+function DeleteVault({ entry, v, many }: { entry: WorkspaceEntry; v: VaultRow; many: boolean }) {
+  const run = useVaultCall();
+  const deleting = useDoing("vault.delete", { workspace: entry.id, vault: v.id });
+  const [asking, setAsking] = useState(false);
+  return (
+    <li>
+      <button type="button" className={pagesCss.listRow} disabled={deleting} onClick={() => setAsking(true)}>
+        <span className={`${pagesCss.listRowTitle} ${css.danger}`}>{t("web-pages.vault.deleteVault")}{many ? ` · ${v.name}` : ""}</span>
+        {deleting && <Spinner inline />}
+      </button>
+      <Confirm open={asking} onClose={() => setAsking(false)} title={t("web-pages.vault.deleteTitle", { name: v.name })} action={t("common.delete")}
+        description={v.items > 0 ? t("web-pages.vault.deleteVaultBody", { n: v.items }) : t("web-pages.vault.deleteVaultEmpty")}
+        onConfirm={() => { setAsking(false); void run("vault.delete", { workspace: entry.id, vault: v.id }, t("web-pages.vault.deleteWhat"), t("web-pages.vault.deleted")); }} />
+    </li>
   );
 }
 
 /** The profiles' accounts the library keeps (a subscription's sign-in, a model's key), a section a kind as the profiles
- * list them: each one's name, and where it is; it leads to its profile, whose page is where it is set. */
+ * list them (the kind in its title, not again on each row): each one's name, and where it is; it leads to its profile,
+ * whose page is where it is set. */
 function ProfileAccounts({ entry }: { entry: WorkspaceEntry }) {
   const profiles = useProfiles(entry.id).value;
   if (!profiles) return null;
@@ -242,11 +378,11 @@ function ProfileAccounts({ entry }: { entry: WorkspaceEntry }) {
             {g.map((e) => (
               <li key={e.key}>
                 <Link className={`${pagesCss.listRow} ${css.rowButton}`} to={profilePath(e)}>
-                  <span className={css.rowIcon}><ProviderLogo runtime={e.profile.runtime} kind={e.profile.access.kind} mark={e.profile.providerMark} size={16} /></span>
                   <span className={pagesCss.listRowText}>
                     <span className={pagesCss.listRowTitle}>{e.profile.name}</span>
-                    <span className={css.rowMeta}>{["Profile", e.where].filter(Boolean).join(" · ")}</span>
+                    {e.where && <span className={css.rowMeta}>{e.where}</span>}
                   </span>
+                  <ChevronRight size={14} className={css.chevron} />
                 </Link>
               </li>
             ))}
@@ -257,24 +393,11 @@ function ProfileAccounts({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-/** A vault's secrets, a section a kind: each one's name and when an agent last used it (in a library not locked, that
- * it is not encrypted, first); locked, those it does not name, and unlocking. */
-function LibraryVault({ entry, v, plain, many, quiet }: { entry: WorkspaceEntry; v: VaultRow; plain: boolean; many: boolean; quiet: boolean }) {
+/** A vault's secrets, a section a kind (the vault's name after it where there are more than one): each one's name and
+ * when an agent last used it, leading to its page; locked, a row of those it does not name, unlocking them. */
+function LibraryVault({ entry, v, many, quiet }: { entry: WorkspaceEntry; v: VaultRow; many: boolean; quiet: boolean }) {
   const items = useVaultItems(entry.id, v.id);
   const run = useVaultCall();
-  const [recovering, setRecovering] = useState(false);
-  if (!plain && !v.keyed) {
-    return (
-      <Section title={v.name}>
-        <div className={pagesCss.card}>
-          <div className={css.state}>{t("web-pages.vault.notKeyed")}</div>
-          <p className={css.sub}>{t("web-pages.vault.notKeyedWhy")}</p>
-          {v.recoverable && v.mine && <div className={css.actions}><Button variant="primary" onClick={() => setRecovering(true)}>{t("web-pages.vault.recover")}</Button></div>}
-        </div>
-        {recovering && <Recover entry={entry} onClose={() => setRecovering(false)} />}
-      </Section>
-    );
-  }
   if (!items) return <Waiting count={3} dense />;
   const hidden = items.items.filter((i) => !i.name);
   const unlock = () => { if (hidden[0]) void run("vault.open", { workspace: entry.id, item: hidden[0].id }, t("web-pages.vault.unlockWhat")); };
@@ -289,11 +412,11 @@ function LibraryVault({ entry, v, plain, many, quiet }: { entry: WorkspaceEntry;
               {rows.map((row) => (
                 <li key={row.id}>
                   <Link className={`${pagesCss.listRow} ${css.rowButton}`} to={itemPath(entry.id, v.id, row.id)}>
-                    <span className={css.rowIcon}><KindIcon kind={row.kind} /></span>
                     <span className={pagesCss.listRowText}>
                       <span className={pagesCss.listRowTitle}>{row.name}</span>
-                      <span className={css.rowMeta}>{plain && <><span className={css.riskTitle}>{t("web-pages.vault.risk.row")}</span> · </>}{row.lineText}</span>
+                      <span className={css.rowMeta}>{row.lineText}</span>
                     </span>
+                    <ChevronRight size={14} className={css.chevron} />
                   </Link>
                 </li>
               ))}
@@ -305,24 +428,13 @@ function LibraryVault({ entry, v, plain, many, quiet }: { entry: WorkspaceEntry;
       {hidden.length > 0 && (
         <ul className={pagesCss.list}>
           <li><button type="button" className={`${pagesCss.listRow} ${css.rowButton}`} onClick={unlock}>
-            <span className={`${pagesCss.listRowText} ${css.rowMeta}`}>{t("web-pages.vault.hidden", { n: hidden.length })}</span>
+            <span className={pagesCss.listRowTitle}>{t("web-pages.vault.hidden", { n: hidden.length })}</span>
             <span className={css.link}>{t("web-pages.vault.unlock")}</span>
           </button></li>
         </ul>
       )}
       {items.items.length === 0 && !quiet && <p className={css.note}>{t("web-pages.vault.empty")}</p>}
     </>
-  );
-}
-
-/** A request waiting on the viewer (to use an item, or to keep one): its card, as in its chat, and a way to that chat. */
-function Request({ entry, r }: { entry: WorkspaceEntry; r: VaultRequest }) {
-  const go = useNavigate();
-  const chat = r.station ? `${stationBase(`${entry.id}/${r.station}`)}/chats/${encodeURIComponent(r.session)}` : null;
-  return (
-    <AskCard fill ask={{ name: r.itemName ?? r.item, mode: r.mode, command: r.command, save: r.save }}>
-      <VaultActions workspace={entry.id} id={r.id} extra={chat && <Button variant="ghost" onClick={() => go(chat)}>{t("web-pages.vault.openChat")}</Button>} />
-    </AskCard>
   );
 }
 
@@ -394,31 +506,6 @@ function ItemRow({ entry, row, readOnly, onOpen }: { entry: WorkspaceEntry; row:
   </>;
   return <li>{readOnly ? <div className={pagesCss.listRow}>{body}</div>
     : <button type="button" className={`${pagesCss.listRow} ${css.rowButton}`} disabled={opening} onClick={onOpen}>{body}</button>}</li>;
-}
-
-/** A vault: its name, how many devices hold its key or, where some have none yet, how many; members' new ones its
- * owner gives it to (done by itself as the owner's device next has the key in hand); its owner's ⋯ deletes it, asked
- * first. */
-function DevicesRow({ entry, v }: { entry: WorkspaceEntry; v: VaultRow }) {
-  const run = useVaultCall();
-  const adding = useDoing("vault.addDevice", { workspace: entry.id, vault: v.id });
-  const deleting = useDoing("vault.delete", { workspace: entry.id, vault: v.id });
-  const [asking, setAsking] = useState(false);
-  return (
-    <div className={css.row}>
-      <div className={css.rowText}>
-        <span>{v.name}</span>
-        {v.missing > 0 ? <span className={css.warn}>{t("web-pages.vault.missing", { n: v.missing })}</span>
-          : <span className={css.rowMeta}>{t("web-pages.vault.devicesHold", { n: v.devices })}</span>}
-      </div>
-      {v.missing > 0 && v.mine && v.keyed && <Button variant="ghost" busy={adding}
-        onClick={() => void run("vault.addDevice", { workspace: entry.id, vault: v.id }, t("web-pages.vault.addDeviceWhat"), t("web-pages.vault.addedDevice"))}>{t("web-pages.vault.addDevice")}</Button>}
-      {deleting ? <Spinner inline /> : v.mine && <Menu items={[{ label: t("web-pages.vault.deleteVault"), icon: Trash, danger: true, onSelect: () => setAsking(true) }]} />}
-      <Confirm open={asking} onClose={() => setAsking(false)} title={t("web-pages.vault.deleteTitle", { name: v.name })} action={t("common.delete")}
-        description={v.items > 0 ? t("web-pages.vault.deleteVaultBody", { n: v.items }) : t("web-pages.vault.deleteVaultEmpty")}
-        onConfirm={() => { setAsking(false); void run("vault.delete", { workspace: entry.id, vault: v.id }, t("web-pages.vault.deleteWhat"), t("web-pages.vault.deleted")); }} />
-    </div>
-  );
 }
 
 /** An item opened: its fields (masked; shown, copied), how agents may ask for it, and editing it. */

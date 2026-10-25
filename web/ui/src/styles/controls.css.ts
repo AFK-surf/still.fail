@@ -98,6 +98,9 @@ export const menuItem = style({
 });
 /** The chosen one of a menu's choices: a check at its row's end. */
 export const menuCheck = style({ display: "inline-flex", flex: "none", width: "14px", marginLeft: "auto" });
+/** What a choice of a menu means, quieter, at its row's end before its check (a pointer's pick: the app's @sf.pick). */
+export const menuNote = style({ marginLeft: "auto", paddingLeft: "16px", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "nowrap" });
+globalStyle(`${menuNote} + ${menuCheck}`, { marginLeft: "0" });
 // A tint of the text rather than the page's line: in dark the panel is lighter than the page, and the line would read
 // as a dark groove on it.
 export const menuSep = style({ height: "1px", margin: "6px 4px", background: `color-mix(in srgb, ${vars.text} 12%, transparent)` });

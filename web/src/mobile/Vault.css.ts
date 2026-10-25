@@ -14,8 +14,8 @@ export const mWords = style({
 globalStyle(`${mWords} li`, { display: "flex", alignItems: "baseline", gap: "6px", minWidth: "0" });
 export const mWordN = style({ minWidth: "1.4em", textAlign: "right", fontSize: vars.textCaption, color: "var(--m-subtle)", fontVariantNumeric: "tabular-nums" });
 
-/** A request waiting: its card, then its approval's rows on the page under it. */
-export const mRequest = style({ display: "grid", marginBottom: "12px" });
+/** A request waiting: its card (the wide screen's, VaultAsk.tsx AskCard), in the page's room as its list cards are. */
+export const mRequest = style({ display: "grid", margin: "0 12px 10px" });
 export const mChoices = style({ padding: "0 12px" });
 globalStyle(`${mChoices} > div`, { width: "100%", minWidth: "0", marginTop: "0" });
 globalStyle(`${mChoices} > p`, { padding: "0 4px" });

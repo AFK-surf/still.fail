@@ -135,6 +135,8 @@ pub(all) enum Route {
   NewProfile(String)
   /// an account on several stations (ProfileAccountScreen), by its key in the workspace's profiles
   ProfileAccount(String)
+  /// 全部密钥: what the vault keeps (VaultItemsScreen)
+  VaultItems
   /// a secret's page (VaultItemScreen): its vault, its id
   VaultItem(String, String)
   /// the automatic decisions (AutomaticDecisionsScreen), the completion rule's page, a station's archive policy
@@ -604,7 +606,7 @@ pub fn reset() -> Unit {
 
 ///|
 /// A page by its name, for opening one from the start (MBUI_FIXTURE=settings-<name>, a scripted run): home, me,
-/// appearance, fonts, workspace, security, vault, stations, station:<address>, profiles, connects, memories, memory:<address>,
+/// appearance, fonts, workspace, security, vault, vault-items, stations, station:<address>, profiles, connects, memories, memory:<address>,
 /// usage, archive.
 pub fn route_of(name : String) -> Route? {
   match name {
@@ -616,6 +618,7 @@ pub fn route_of(name : String) -> Route? {
     "security" => Some(Security)
     "security-open" => Some(SecurityOpen)
     "vault" => Some(Vault)
+    "vault-items" => Some(VaultItems)
     "stations" => Some(Stations)
     "profiles" => Some(Profiles(""))
     "connects" => Some(Connects(""))

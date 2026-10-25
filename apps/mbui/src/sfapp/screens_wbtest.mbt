@@ -213,6 +213,11 @@ test "settings-vault" {
 }
 
 ///|
+test "settings-vault-items" {
+  check("settings-vault-items", @ui.nav_push_ms)
+}
+
+///|
 test "settings-stations" {
   check("settings-stations", @ui.nav_push_ms)
 }

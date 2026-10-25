@@ -1711,7 +1711,7 @@
     "one": "{n} secret is not encrypted",
     "other": "{n} secrets are not encrypted"
   },
-  "web-pages.vault.migrate.body": "Secrets saved before security mode was turned on are still stored in plain text on the station. Encrypting moves them into your vault and deletes the plain text from the station.",
+  "web-pages.vault.migrate.body": "Secrets saved before security mode was turned on are still stored in plain text on the station",
   "web-pages.vault.migrate.go": "Encrypt",
   "web-pages.vault.migrate.what": "encrypt secrets",
   "web-pages.vault.migrate.done": {
@@ -1735,10 +1735,6 @@
   "web-pages.vault.count": {
     "one": "{n} item",
     "other": "{n} items"
-  },
-  "web-pages.vault.waitingCount": {
-    "one": "{n} waiting for you",
-    "other": "{n} waiting for you"
   },
   "web-pages.vault.appOnly": "View and approve in the client",
   "web-pages.vault.appOnlyWhy": "The web app shows names only and cannot decrypt",
@@ -1764,6 +1760,7 @@
   "web-pages.vault.personal": "Personal",
   "web-pages.vault.createWhat": "make your vault",
   "web-pages.vault.requests": "Waiting for you",
+  "web-pages.vault.all": "All secrets",
   "web-pages.vault.reason": "Why",
   "web-pages.vault.command": "Command",
   "web-pages.vault.how": "How",

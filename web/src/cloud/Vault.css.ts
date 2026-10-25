@@ -27,8 +27,6 @@ export const words = style({
 export const word = style({ display: "flex", alignItems: "baseline", gap: "10px", color: vars.text });
 export const wordN = style({ minWidth: "1.6em", textAlign: "right", fontSize: vars.textMeta, color: vars.subtle, fontVariantNumeric: "tabular-nums" });
 
-/** The settings' sidebar row's: requests waiting, at its end. */
-export const navCount = style({ marginLeft: "auto", fontSize: vars.textMeta, color: vars.red, fontWeight: "500", fontVariantNumeric: "tabular-nums" });
 export const count = style({ fontSize: vars.textMeta, padding: "0 7px", borderRadius: "999px", background: vars.redBg, color: vars.red, fontWeight: "500" });
 /** The requests waiting: each one's card (VaultAsk.tsx AskCard), as in its chat; the cards space themselves (pagesCss.card). */
 export const requests = style({ display: "grid" });
@@ -50,6 +48,10 @@ export const rowText = style({ flex: "1", minWidth: "0", display: "flex", alignI
 export const rowName = style({ fontWeight: "500", color: vars.text, fontSize: vars.textUi });
 export const rowMeta = style({ color: vars.muted, fontSize: vars.textMeta });
 export const warn = style({ color: vars.amber, fontSize: vars.textMeta });
+/** A row that goes somewhere: its chevron, quiet, at its end. */
+export const chevron = style({ flex: "none", color: vars.subtle });
+/** Deleting the vault, in red (settings.css.ts accountDelete). */
+export const danger = style({ color: vars.red });
 /** An item's kind, before its name: as wide as the icon, quiet. */
 export const rowIcon = style({ display: "grid", placeItems: "center", width: "16px", flex: "none", color: vars.muted, alignSelf: "flex-start", marginTop: "2px" });
 /** A list's row that opens something: a button, drawn as the row. */

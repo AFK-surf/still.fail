@@ -314,7 +314,7 @@
       "src/sfdesk/shortcuts.mbt": 5,
       "src/sfdesk/slack_app.mbt": 6,
       "src/sfdesk/usage.mbt": 12,
-      "src/sfdesk/vault.mbt": 28,
+      "src/sfdesk/vault.mbt": 5,
       "src/sfdesk/vault_dialogs.mbt": 11,
       "src/sfdesk/vault_item.mbt": 10,
       "src/sfdesk/workspace.mbt": 14
