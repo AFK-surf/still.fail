@@ -45,6 +45,7 @@
   "station.screen.failed": "无法打开画面：{said}",
   "station.screen.captureOff": "这台 Mac 尚未允许 {app} 录制屏幕。",
   "station.screen.controlOff": "这台 Mac 尚未允许 {app} 进行操作（辅助功能），只能查看，无法操作。",
+  "station.screen.bothOff": "此 Mac 尚未允许 {app} 录制屏幕和进行操作。",
   "station.screen.asking": "那台 Mac 上已弹出授权窗口：请在其中点击「允许」，将 {app} 拖入系统设置的列表，然后重新打开画面。",
   "station.screen.toAsk": "打开画面时，那台 Mac 上会弹出授权窗口。",
   "station.helper.window.title": "允许 still.fail 查看和操作这台 Mac",

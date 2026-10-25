@@ -34,11 +34,13 @@ export function accessShown(access: ScreenAccess | undefined, lang: Lang): Acces
     access.unsupported === "platform" ? tr(lang, "station.screen.unsupported")
     : access.unsupported === "helper" ? tr(lang, "station.screen.noHelper")
     : [
-        !access.capture ? tr(lang, "station.screen.captureOff", named) : "",
-        !access.control ? tr(lang, "station.screen.controlOff", named) : "",
+        // Neither: it cannot be viewed either, so not "viewed but not controlled".
+        !access.capture && !access.control ? tr(lang, "station.screen.bothOff", named)
+        : !access.capture ? tr(lang, "station.screen.captureOff", named)
+        : tr(lang, "station.screen.controlOff", named),
         // Where it is granted: the window on the machine, up now or once the screen is opened.
         tr(lang, access.asking ? "station.screen.asking" : "station.screen.toAsk", named),
-      ].filter(Boolean).join(" ");
+      ].join(" ");
   return { capture: access.capture, control: access.control, message, ...(access.app ? { app: access.app } : {}), ...(access.path ? { path: access.path } : {}), ...(access.asking ? { asking: true } : {}) };
 }
 

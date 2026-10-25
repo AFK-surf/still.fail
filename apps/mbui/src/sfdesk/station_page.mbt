@@ -346,13 +346,10 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
                     c,
                     "station-screen/" + address + "/" + text(sv, "id"),
                     text(sv, "title"),
+                    // what it lacks says so in its line (the core's: what cannot be done now)
                     note=text(sv, "line"),
+                    lacks~,
                     lead=fn() { st_row_mark(c, if text(sv, "kind") == "browser" { "web" } else { "monitor" }) },
-                    tail=fn() {
-                      if lacks {
-                        @sf.pill(c, @sf.t("web-pages.stations.permissions.missing"), tone=Amber)
-                      }
-                    },
                   ) {
                   @sfbase.open_page(Screen({ station: address, screen: text(sv, "id"), title: text(sv, "title"), until_gone: false }))
                 }

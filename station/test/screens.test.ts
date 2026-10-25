@@ -490,7 +490,7 @@ test("what a view cannot be: answered with a status and why, in the asker's lang
   const said = await body(refused);
   assert.equal(
     said.error,
-    "This Mac hasn't let still.fail Helper record its screen yet. This Mac hasn't allowed still.fail Helper to control it yet (Accessibility), so the screen can be viewed but not controlled. A permission window is open on that Mac: click Allow there, drag still.fail Helper into the list in System Settings, then open the screen again.",
+    "This Mac hasn't let still.fail Helper record its screen or control it yet. A permission window is open on that Mac: click Allow there, drag still.fail Helper into the list in System Settings, then open the screen again.",
   );
   assert.deepEqual(said.access, { capture: false, control: false, message: said.error, app: "still.fail Helper", path: "/x/still.fail Helper.app", asking: true });
   source.refuse = new Error("tab crashed");

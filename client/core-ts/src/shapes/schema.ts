@@ -1637,7 +1637,7 @@ export const SHAPES: Record<string, Shape> = {
     ["peek", "bool", { default: true, doc: "It can be previewed (`screen.view` with `peek`): a tab of the station's browser; none from a station before previews." }],
     ["closable", "bool", { default: true, doc: "The viewer may close it (`screen.close`): a tab of the station's browser, for a member who may drive it; none from a station before it." }],
     ["chat", opt("ScreenChat"), { doc: "The chat that opened it (an agent's tab), when it is one of the viewer's chats of the station." }],
-    ["line", "String", { doc: "What the core says of it under its title: what it is, its size, the chat that opened it, who is on it (core)." }],
+    ["line", "String", { doc: "What the core says of it under its title: what it is, its size, the chat that opened it, who is on it; or, while its\nstation lacks a grant for it, what cannot be done now (core)." }],
     ["link", "String", { doc: "Its page in the app: `/w/<workspace>/s/<station>/screen/<id>` (the id encoded), as the agents' links name it." }],
   ], { doc: "A screen of a station a person can see and drive (docs/remote-screens.md)." }),
   ScreenChat: struct([

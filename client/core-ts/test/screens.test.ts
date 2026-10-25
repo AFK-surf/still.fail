@@ -233,6 +233,17 @@ each("a_stations_screens_are_listed_and_kept_as_its_events_say", async (seed) =>
   const after = values.get(1) as J;
   assert.equal(after.screens.length, 1);
   assert.equal(after.screens[0].line, "桌面 · 3024×1964 · Bob、Carol 等 1 人 正在查看");
+  // A grant missing: its row says what cannot be done now, in a line; the station's message (where to grant it) is
+  // its view's.
+  const message = "这台 Mac 尚未允许 still.fail Helper 录制屏幕。打开画面时，那台 Mac 上会弹出授权窗口。";
+  for (const [capture, control, line] of [[true, false, "当前不可用：远程控制屏幕"], [false, false, "当前不可用：远程查看屏幕、远程控制屏幕"]] as const) {
+    push("screens", { screens: [{ ...SCREENS.screens[0], access: { capture, control, message, app: "still.fail Helper" } }] });
+    await host.settle();
+    apply(host, values);
+    const lacks = (values.get(1) as J).screens[0];
+    assert.equal(lacks.line, line);
+    assert.equal(lacks.access.message, message);
+  }
   core.close();
 });
 

@@ -20,6 +20,11 @@ function desktopPath(station: string): string {
   return `/w/${encode(addr.workspace)}/s/${encode(addr.station)}/screen/desktop`;
 }
 
+/// What is unavailable now for want of the grants `ids`, in a line (the page's note; a screen's row in its list).
+export function unavailable(ids: string[]): string {
+  return t("core-views.permissions.unavailable", { features: ids.map((id) => t(`core-views.permissions.${id}.feature`)).join(t("core-views.screen.and")) });
+}
+
 /// The overview's `permissions` (`{grants: [{grant, state}], asking, screen, request}`) as the page shows it; undefined
 /// when the station said none.
 export function permissionsShown(v: unknown, station: string): J | undefined {
@@ -44,7 +49,7 @@ export function permissionsShown(v: unknown, station: string): J | undefined {
   const missing = grants.filter((g: J) => !g.granted);
   return {
     grants,
-    ...(missing.length > 0 ? { note: t("core-views.permissions.unavailable", { features: missing.map((g: J) => t(`core-views.permissions.${g.id}.feature`)).join(t("core-views.screen.and")) }) } : {}),
+    ...(missing.length > 0 ? { note: unavailable(missing.map((g: J) => g.id)) } : {}),
     ...(screen ? { screen: desktopPath(station) } : {}),
     canRequest: v.request === true,
   };
