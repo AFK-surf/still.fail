@@ -114,6 +114,8 @@ pub(all) struct Theme {
   bars : Bars
   /// the round controls standing in a field's capsule (Round)
   round : Round
+  /// what a list's item is on this screen (Items)
+  items : Items
 }
 
 ///|
@@ -146,6 +148,18 @@ pub(all) struct Rows {
   check_corner : Double
   switch_w : Double
   switch_h : Double
+}
+
+///|
+/// A list's item on the screen in force (a folder's entries, the folders pinned): how high it is at least, its name's
+/// words and what is said of it (its size, its time: muted), its kind's mark. A touch device's: a finger's (48; the
+/// phone's mRow: its name the body's 15 on 20, mMeta 12 on 16, the mark 22); a computer's: the web's Drive row (44, with
+/// room for its ⋯; its name 13, its meta 12, KindIcon 20).
+pub(all) struct Items {
+  least : Double
+  name : @ui.TextStyle
+  meta : @ui.TextStyle
+  mark : Double
 }
 
 // ---------------------------------------------------------------------------
@@ -875,6 +889,24 @@ pub fn round_face() -> @ui.Style {
 let bars_drawn : Bars = { key: 28.0, icon: 14.0, field: 30.0 }
 
 ///|
+// kept across runs: a value (no field of it changes)
+let wide_items : Items = {
+  least: 44.0,
+  name: @ui.text_style(size=Sm, color=Fg, wrap=false),
+  meta: @ui.text_style(size=Xs, color=Muted, wrap=false),
+  mark: 20.0,
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_items : Items = {
+  least: 48.0,
+  name: @ui.text_style(size=Lg, leading=L6, color=Fg, wrap=false),
+  meta: @ui.text_style(size=Xs, leading=L4, color=Muted, wrap=false),
+  mark: 22.0,
+}
+
+///|
 let wide_rows : Rows = {
   least: Fixed(40.0),
   pick: menu_row_min,
@@ -916,6 +948,7 @@ let current : Ref[Theme] = {
     control_h: wide_control_h,
     bars: bars_drawn,
     round: wide_round,
+    items: wide_items,
   },
 }
 
@@ -1013,6 +1046,7 @@ pub fn begin(c : @ui.Ctx) -> Theme {
     control_h: if narrow { narrow_control_h } else { wide_control_h },
     bars: bars_drawn,
     round: if narrow { narrow_round } else { wide_round },
+    items: if narrow { narrow_items } else { wide_items },
   }
   current.val
 }
@@ -1138,11 +1172,12 @@ pub let message_line : @ui.Leading = Exact(24.75)
 pub let list_card_radius : @ui.Radius = surface(list_pad, row_corner).radius()
 
 ///|
-/// A drive's card (its corner 16, DriveScreen.kt) and a row's ground at its ends: concentric in it, list_pad in.
-pub let drive_card_corner : Double = card_corner
+/// A long list's card, drawn a row at a time (page.mbt group_row: the card's corner), and a row's ground at its ends:
+/// concentric in it, list_pad in.
+pub let group_corner : Double = card_corner
 
 ///|
-pub let drive_row_end_radius : @ui.Radius = rounded(inner_corner(drive_card_corner, list_pad))
+pub let group_row_end_radius : @ui.Radius = rounded(inner_corner(group_corner, list_pad))
 
 ///|
 /// A card with a Seg (rounded 10) in its top corners: concentric with it (Usage.kt:204 concentricOut(10, CARD_PAD)):
