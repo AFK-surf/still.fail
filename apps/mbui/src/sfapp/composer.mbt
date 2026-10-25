@@ -1813,7 +1813,7 @@ fn composer_bar(
         if flight_hint_away(c, d.key) {
           hint.snap(0.0)
         } else {
-          hint.follow(1.0, @motion.tween(200.0, ease=Arrive))
+          hint.follow(1.0, @motion.tween(@sf.hint_back_ms, ease=Arrive))
         }
         // what the input did since the last frame: a mark backspaced whole, a chat's link pasted (chat_refs.mbt)
         @sfbase.refs_edits(c, src, d.key, d.field, r.station, locked)

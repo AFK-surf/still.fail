@@ -35,8 +35,15 @@ fn assert_at(was : (Double, Double), now : (Double, Double)) -> Unit raise {
 
 ///|
 /// Home over the made-up chats with the core's answers to `newChat.create` and `chat.send` kept (`held`, by name: what
-/// gives each), and the chat made unread while `unread` says: as a phone's core gives them, a round trip later.
-fn held_core(held : Map[String, () -> Unit], unread : Ref[Bool]) -> @ui.Tester {
+/// gives each), and the chat made unread while `unread` says: as a phone's core gives them, a round trip later. In a
+/// phone's window, or `w` by `h` on `platform`.
+fn held_core(
+  held : Map[String, () -> Unit],
+  unread : Ref[Bool],
+  w? : Double = 390.0,
+  h? : Double = 844.0,
+  platform? : Int = 2,
+) -> @ui.Tester {
   reset()
   let base = fixture("home")
   let src : Source = {
@@ -61,7 +68,7 @@ fn held_core(held : Map[String, () -> Unit], unread : Ref[Bool]) -> @ui.Tester {
       }
     },
   }
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~)
 }
 
 ///|

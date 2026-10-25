@@ -95,6 +95,7 @@ of them. Their numbers are the web's at the same place (paths from the repositor
 | 3 | a layout switched: the sidebar, a side panel, the tape | 380 ms ease-out (`@sf.move_state_ms`) | `moveState`, web/ui/src/motion.ts:287 |
 | 3 | rows making way, the agent's line among them | spring 0.28 s (`@sf.move_spring`) | `MOVE`, web/src/listMotion.ts |
 | 4 | words sent | 520 ms on the flight's curve (0.6, 0, 0.2, 1) | web/src/madeChat.ts:329-331 (sfbase/flight.mbt) |
+| 4 | the composer's hint under words sent: gone at once, back once they are out of its field | 200 ms on the arrival's curve (`@sf.hint_back_ms`) | web/src/madeChat.css.ts:19-20 |
 | 4 | a picture into the viewer and back | 320 ms `--m-ease`; back 280 ms | none on the web, which fades it in over 140 ms (web/src/FilePreview.css.ts); Android's FilePreview.kt (sfbase/viewer.mbt) |
 | 5 | pushed, popped | 300 ms `--m-standard`; swiped back and let go, 200 ms | web/src/mobile/app.css.ts:16, 22-30 |
 | 5 | risen | 380 ms `--m-ease` | web/src/mobile/app.css.ts:32 |

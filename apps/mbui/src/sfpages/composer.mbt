@@ -41,6 +41,11 @@ priv struct Composing {
   mut roomy_before : Bool?
   mut draft_before : String
   mut frame : Int
+  /// the page's choices in its row as it was last drawn, as the frame before left them, and those of the page it came
+  /// from that this one has not, while they leave (a new chat's, gone to its chat)
+  mut toolbar : (() -> Unit)?
+  mut toolbar_before : (() -> Unit)?
+  mut toolbar_leaving : (() -> Unit)?
   restoring : Map[String, Bool]
   restore_errors : Map[String, String]
   /// a finger went down outside it (keyboard_let_go); its `@` menu up over it as it was last drawn (a press in it is
@@ -69,6 +74,9 @@ let composing : Composing = {
   roomy_before: None,
   draft_before: "",
   frame: -1,
+  toolbar: None,
+  toolbar_before: None,
+  toolbar_leaving: None,
   restoring: {},
   restore_errors: {},
   outside: false,
@@ -85,6 +93,9 @@ fn composing_reset() -> Unit {
   composing.roomy = None
   composing.draft = ""
   composing.roomy_before = None
+  composing.toolbar = None
+  composing.toolbar_before = None
+  composing.toolbar_leaving = None
   composing.draft_before = ""
   composing.frame = -1
   composing.restoring.clear()
@@ -124,6 +135,7 @@ pub fn composer(
     composing.frame = c.frame_number()
     composing.roomy_before = composing.roomy
     composing.draft_before = composing.draft
+    composing.toolbar_before = composing.toolbar
   }
   if whose != composing.draft {
     composing.draft = whose
@@ -178,6 +190,22 @@ pub fn composer(
   }
   // dragged over: marked (the 文件 tab's rows; files from the computer the page takes)
   let dragging = !no_files && (@sfbase.drag_carried.val)() is Some(_) && c.lit(cap)
+  // laid out for another page than the frame before (a new chat's roomy in the page, a chat's at its foot: dock.tsx)
+  let moved = match composing.roomy_before {
+    Some(was) => was != spec.roomy
+    None => false
+  }
+  // gone to a page with no choices in its row from one with them (a new chat become its chat, or left for one): they
+  // leave as the new chat's other parts by the composer do (madeChat.ts: fading where they are, @sfbase.new_fade),
+  // carried with the row as it goes, drawn only; till the end that fade declared
+  if moved {
+    composing.toolbar_leaving = if spec.toolbar is None { composing.toolbar_before } else { None }
+  }
+  let fade = @sfbase.new_fade(c)
+  if fade.over() {
+    composing.toolbar_leaving = None
+  }
+  composing.toolbar = spec.toolbar
   // its parts (what goes with it from where it showed as it changes shape: morph.ts's PARTS), as this build has them
   let mut plus = -1
   let mut words = -1
@@ -194,9 +222,14 @@ pub fn composer(
         words = composer_text(c, src, ws, spec, w, cap, multiline, submit)
         c.box(style=tools_row(), fn() {
           plus = attach(c, src, spec, w, no_files)
-          match spec.toolbar {
-            Some(f) => chosen = c.box(style=choices, f)
-            None => c.box(style=tools_gap, fn() {  }) |> ignore
+          match (spec.toolbar, composing.toolbar_leaving) {
+            (Some(f), _) => chosen = c.box(style=choices, f)
+            (None, Some(f)) => {
+              chosen = c.box(style=choices, fn() { c.hidden_from_semantics(f) })
+              c.look(chosen, @ui.look(alpha=1.0 - fade.get()))
+              c.draw_only(chosen)
+            }
+            (None, None) => c.box(style=tools_gap, fn() {  }) |> ignore
           }
           send_i = send_button(c, ready, w.starting, submit)
         })
@@ -214,13 +247,9 @@ pub fn composer(
   // what it says under it): laid out as it ends at once, its ground going from the shape it had to this one, its parts
   // from where they showed to their places; laid out for the other page (a new chat's in the page, a chat's at its
   // foot: dock.tsx), the same from where it was there, one composer changing, and what it holds there that it did not
-  // here (a new chat's choices) carried on its ground (morph.ts morph). Moved by nothing of these (the window, the
-  // sidebar, a keyboard), or another chat's on the same page (what it holds swapped, not changed), it is where it is
-  // laid out at once (docs/motion.md)
-  let moved = match composing.roomy_before {
-    Some(was) => was != spec.roomy
-    None => false
-  }
+  // here (a new chat's choices) carried on its ground (morph.ts morph), what it held there and does not here leaving
+  // on it. Moved by nothing of these (the window, the sidebar, a keyboard), or another chat's on the same page (what it
+  // holds swapped, not changed), it is where it is laid out at once (docs/motion.md)
   composing.roomy = Some(spec.roomy)
   let holds = if whose != composing.draft_before && !moved {
     ""
@@ -418,6 +447,14 @@ fn composer_text(
   let p = @sf.theme().p
   let prefs = (src.topic)("prefs", {}).value
   let hint = space_hint(c, prefs, spec.locked)
+  // words sent leave the field emptied: its hint gone while they are still over it, back once they are out of it
+  // (madeChat.ts data-made-hint, flight.mbt)
+  let hint_in = @motion.anim(c, "composer/hint", 1.0)
+  if @sfbase.flight_hint_away(c, w.key) {
+    hint_in.snap(0.0)
+  } else {
+    hint_in.follow(1.0, @motion.tween(@sf.hint_back_ms, ease=Arrive))
+  }
   let no_files = spec.locked || spec.offline
   // what the field was given since the last frame, as the core reads it (a mark taken whole, a chat's link pasted)
   @sfbase.refs_edits(c, src, w.key, w.field, spec.station, spec.locked)
@@ -432,7 +469,7 @@ fn composer_text(
       max_lines=text_lines(c),
       plain=true,
       color=p.text,
-      placeholder_color=p.subtle,
+      placeholder_color=@sf.alpha(p.subtle, hint_in.get()),
       caret_color=p.accent,
       enter_sends=@sf.native_input() is Mouse,
       // (the `@` menu open: ↑ / ↓ choose in it, Enter and Tab pick)

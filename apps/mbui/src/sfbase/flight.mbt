@@ -456,21 +456,20 @@ pub fn flight_waiting(c : @ui.Ctx, chat : String) -> Unit {
   match flight_of(chat) {
     Some(f) if !f.placed || f.placed_frame == c.frame_number() => {
       let l = c.layer(fn() {
-        // (the field's room where it was: laid out there, what is in it moved from its corner)
-        c.box(style=@ui.style(h=Fixed(f.field_y)), fn() {  }) |> ignore
-        c.box(style=flight_line, fn() {
-          c.box(style=@ui.style(w=Fixed(f.field_x)), fn() {  }) |> ignore
-          c.box(style=@ui.style(w=Fixed(f.field_w), h=Fixed(f.field_h), clip=true), fn() {
-            let words = c.box(style=@sf.full_width, fn() {
-              // as the field had them: in the face chosen for what people write (ChatHost.kt SendTextFaced)
-              c.rich([@ui.span(f.text)], key="flight/words", size=f.font, color=t.p.text, line=f.line, trim=true, w=Fill(1.0), words=true)
-              |> ignore
-            })
-            c.look(words, @ui.look(dx=f.from_x - f.field_x, dy=f.from_y - f.field_y))
+        // the field's room where it was in the window, what is in it moved from its corner: moved from where it is
+        // laid out (its layer's corner, wherever the page is in the window: a pane beside the sidebar)
+        let room = c.box(style=@ui.style(w=Fixed(f.field_w), h=Fixed(f.field_h), clip=true), fn() {
+          let words = c.box(style=@sf.full_width, fn() {
+            // as the field had them: in the face chosen for what people write (ChatHost.kt SendTextFaced)
+            c.rich([@ui.span(f.text)], key="flight/words", size=f.font, color=t.p.text, line=f.line, trim=true, w=Fill(1.0), words=true)
+            |> ignore
           })
-          |> ignore
+          c.look(words, @ui.look(dx=f.from_x - f.field_x, dy=f.from_y - f.field_y))
         })
-        |> ignore
+        @motion.placed(c, room, fn() {
+          let (x, y, _, _) = c.node_rect(room)
+          @ui.look(dx=f.field_x - x, dy=f.field_y - y)
+        })
       })
       // drawn only (ChatHost.kt FlightLayer draws it): not the message, which is not in the list yet
       c.draw_only(l)
@@ -606,8 +605,3 @@ pub fn flight_landing(c : @ui.Ctx, f : SendFlight, i : Int, path : String, share
   }
   @motion.fly(c, i, fx, fy, scale=s0, px=flight_across_of(c, f), py=up, ps=up)
 }
-
-///|
-/// A row over the window (where the field's room is laid out).
-// kept across runs: a value (no field of it changes)
-let flight_line : @ui.Style = @ui.css("row")

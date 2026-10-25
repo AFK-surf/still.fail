@@ -48,6 +48,11 @@ pub let shape_ms : Double = 260.0
 pub let composer_page_ms : Double = 340.0
 
 ///|
+/// The composer's hint, gone at once as words sent leave its field, back once they are out of it (madeChat.css.ts:
+/// the placeholder's colour over 200 ms on cubic-bezier(.2, .8, .2, 1), the arrival's curve).
+pub let hint_back_ms : Double = 200.0
+
+///|
 /// How what makes way for a small service moves (MOVE): a spring of 0.28 s, no bounce, so a goal that moves on is
 /// followed, not started again.
 // kept across runs: a value (no field of it changes)
