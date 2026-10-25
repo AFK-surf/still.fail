@@ -165,7 +165,7 @@ fn edge_view(width : Ref[Double], said : Array[Resized]) -> (@ui.Ctx) -> Unit {
 }
 
 ///|
-test "a column's edge: 7 wide, 4 past the column; dragged past 3, the width from where it was pressed, 160 to 640" {
+test "a column's edge: 7 wide, 4 past the column; dragged past the slop, the width from where it was pressed, 160 to 640" {
   let width = Ref(240.0)
   let said : Array[Resized] = []
   let t = @ui.Tester::new(edge_view(width, said), w=1280.0, h=800.0)

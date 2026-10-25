@@ -342,9 +342,16 @@ fn Ctx::desk_frame_end(self : Ctx) -> Unit {
 }
 
 ///|
-/// The shape for what is under the pointer (or held: what is dragged keeps its shape), told the host when it changes.
+/// The shape for what is under the pointer (or held: what is dragged keeps its shape, a drag area's as well once the
+/// press is its drag, pressed no more), told the host when it changes.
 fn Ctx::show_cursor(self : Ctx) -> Unit {
-  let target = if self.down && self.active != 0 { self.active } else { self.hover }
+  let target = if self.down && self.active != 0 {
+    self.active
+  } else if self.down && self.dragging && drags.contains(self.drag_scroll) {
+    self.drag_scroll
+  } else {
+    self.hover
+  }
   let kind = match desk.cursors.get(target) {
     Some(k) => k
     None =>

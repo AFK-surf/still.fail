@@ -139,6 +139,85 @@ test "on the tape the page or the side panel in use has the window but a strip o
 }
 
 ///|
+/// The middle of the edge said as `label` (tape_edge: in the gap beside the page and what it takes past it).
+fn edge_middle(t : @ui.Tester, label : String) -> (Double, Double) raise {
+  guard said_at(t, label) is Some((x, y, w, h)) else { fail("no \{label}") }
+  (x + w / 2.0, y + h / 2.0)
+}
+
+///|
+test "on the tape the edge beside the page, the sidebar's or the side panel's in use, dragged: its width as it goes, the page the rest" {
+  for platform in [2, 0] {
+    let room = if platform == 2 { "medium" } else { "" }
+    let at = "platform \{platform}"
+    let t = tape_chat(platform, 720.0, 840.0, width=room, height=room)
+    // the sidebar in use, its own 240: held a while first (a finger's hold on an edge is to drag it, no long press:
+    // no words of it), then dragged 60 wider, the page beside it as much further on as it goes; let go, the width kept
+    let page_at = fn() raise { said_at(t, "收起侧边栏").unwrap().0 }
+    let before = page_at()
+    let (ex, ey) = edge_middle(t, "调整侧边栏宽度")
+    t.press_at(ex, ey)
+    t.run_for(@ui.long_press_ms * 2.0)
+    for i in 1..=6 {
+      t.move(ex + 10.0 * i.to_double(), ey)
+      t.run_for(slow_drag_ms)
+    }
+    assert_eq(@sfdesk.wide.side_w, 300.0, msg=at)
+    assert_eq(page_at(), before + 60.0, msg=at)
+    assert_true(t.find("调整侧边栏宽度") is None, msg=at)
+    t.release(ex + 60.0, ey)
+    t.frame()
+    assert_eq(@sfdesk.wide.side_w, 300.0, msg=at)
+    assert_eq(page_at(), before + 60.0, msg=at)
+    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side, msg=at)
+    // the page in use: no edge (the page as wide as the window leaves past the strips)
+    page_over(t, 720.0)
+    assert_true(said_at(t, "调整侧边栏宽度") is None, msg=at)
+    // the side panel in use, as wide as the window leaves past a strip of the page at first: dragged 200 narrower over
+    // a second, the page beside it showing as much more as it goes
+    tap_said(t, "打开侧栏")
+    t.run_for(@sfdesk.side_move_ms)
+    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel, msg=at)
+    let page_end = fn() raise { covered(t, "收起侧边栏").unwrap().1 }
+    let shown = page_end()
+    let (px, py) = edge_middle(t, "调整侧栏宽度")
+    drag_slowly(t, px, py, 200.0, up=false)
+    assert_eq(page_end(), shown + 200.0, msg=at)
+    t.release(px + 200.0, py)
+    t.frame()
+    assert_eq(page_end(), shown + 200.0, msg=at)
+    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel, msg=at)
+  }
+}
+
+///|
+test "on the tape the edge beside the page pressed where it lies over the page: the page comes over; in the gap twice, its own width again" {
+  for platform in [2, 0] {
+    let room = if platform == 2 { "medium" } else { "" }
+    let at = "platform \{platform}"
+    let t = tape_chat(platform, 720.0, 840.0, width=room, height=room)
+    let page_from = fn() raise { covered(t, "收起侧边栏").unwrap().0 }
+    let (ex, ey) = edge_middle(t, "调整侧边栏宽度")
+    drag_slowly(t, ex, ey, 60.0)
+    t.frame()
+    assert_eq(@sfdesk.wide.side_w, 300.0, msg=at)
+    // in the gap before the page: pressed once, nothing; twice, its own width, the sidebar still in use
+    let gap = page_from() - 4.0
+    t.tap(gap, ey)
+    t.frame()
+    assert_eq(@sfdesk.wide.side_w, 300.0, msg=at)
+    t.tap(gap, ey)
+    t.frame()
+    assert_eq(@sfdesk.wide.side_w, 240.0, msg=at)
+    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side, msg=at)
+    // just past the gap, on what shows of the page (the edge there as well): the page comes over
+    t.tap(page_from() + 1.0, ey)
+    t.run_for(@sfdesk.side_move_ms)
+    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page, msg=at)
+  }
+}
+
+///|
 test "on the tape the sidebar at first, the page showing beside it: a click there brings it over, nothing under it pressed" {
   let t = tape_chat(0, 720.0, 800.0)
   assert_true(@sfdesk.wide.tape)
