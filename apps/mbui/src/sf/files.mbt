@@ -176,7 +176,8 @@ pub(all) struct FileCardDone {
 /// A file as a card (FileCard; later.css.ts fileCard): its sheet, its name over its size (or how far it has gone up,
 /// `pending`, `sent` of it; or what the core's `download` says while it comes down, its share filling the sheet; or why
 /// it failed, `error`, in red), 236 wide at most, 8 by 10 in and 7 at the sheet's side, rounded as the sheet stands in
-/// (13), on the neutral ground; its path (or its name) its tip. `remove` and `retry` its own ✕ and ↻ at its end, `slot`
+/// (13), on the neutral ground; its path (or its name) its tip. `remove` and `retry` its own ✕ and ↻ at its end (in a
+/// message; what waits in the composer has its ✕ on its corner: with_corner_remove), `slot`
 /// room there for a button laid over it (a message's). `open`: pressing it opens the file (a message's: fileCardOpen),
 /// the hover ground under the pointer. `key` names it. Pasted words kept as a file (Chat.tsx PendingFile's pasted
 /// card): `title` in place of its name (what they begin with), `meta` in place of its size (how many characters), their
@@ -290,6 +291,66 @@ pub fn file_card(
   let restored = restore && c.clicked(back)
   { removed, retried, restored, opened: open && !removed && !retried && !restored && c.clicked(id) }
 }
+
+///|
+/// What waits to go with a message (a composer's picture, a file's card), `w` wide and rounded `corner`, with its ✕
+/// hung on its top right corner (docs/ui-panels.md: the user, 2026-10-17, on the corner, not in it): 20 round, solid
+/// (the ink's, the page's ✕ on it: part of it is on the ground round it), its centre on the corner's curve where it
+/// turns 45° (on_corner), reaching past the top as far as past the right edge; the room for that kept at its end, so
+/// what comes next stands the row's gap past it. `key` names it (its ✕ `key/remove`), `label` what a screen reader
+/// calls its ✕. Whether its ✕ was pressed.
+pub fn with_corner_remove(
+  c : @ui.Ctx,
+  key : String,
+  label : String,
+  w : Double,
+  corner : Double,
+  body : () -> Unit,
+) -> Bool {
+  let x = c.id(key + "/remove")
+  let reach = corner_remove_reach(corner)
+  c.box(style=@ui.style(w=Fixed(w + reach)), fn() {
+    c.box(style=@ui.style(w=Fixed(w)), body) |> ignore
+    c.layer(fn() {
+      c.box(style=corner_remove_at, fn() {
+        let b = c.box(style=corner_remove_box, id=x, ty=-reach, fn() {
+          icon(c, "close", size=card_close_icon, color=theme().p.canvas) |> ignore
+        })
+        c.cursor(x, Hand)
+        c.semantics(b, Button, id=x, label~)
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+  c.clicked(x)
+}
+
+///|
+/// How far the ✕ of what waits to go reaches past its top and its right edge, its corner `corner` (with_corner_remove):
+/// the room a row of them keeps between its lines.
+pub fn corner_remove_reach(corner : Double) -> Double {
+  on_corner(corner, corner_remove_side)
+}
+
+///|
+let corner_remove_side : Double = 20.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let corner_remove_at : @ui.Style = @ui.css("w=Full align=AEnd")
+
+///|
+// kept across runs: a value (no field of it changes)
+let corner_remove_box : @ui.Style = @ui.style(
+  w=Fixed(corner_remove_side),
+  h=Fixed(corner_remove_side),
+  radius=Full,
+  bg=Fg,
+  align=ACenter,
+  justify=JCenter,
+)
 
 ///|
 /// A card's own button at its end (fileCardRemove): 22 round, nothing under it but under the pointer (the hover

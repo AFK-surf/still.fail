@@ -672,8 +672,8 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
     Some(picture) => composer_picture(c, src, w, key, id, name, picture, pending, error)
     None => {
       // as wide as a card is (236), however little the row has: a card hugging its words in a row that wraps had none
-      // left for them (its words squeezed to …)
-      c.box(style=@ui.style(w=Fixed(dmin(@sf.file_card_w, c.width))), fn() {
+      // left for them (its words squeezed to …); its ✕ hung on its corner, as a picture's (@sf.with_corner_remove)
+      let removed = @sf.with_corner_remove(c, key, remove_label(v, name), dmin(@sf.file_card_w, c.width), @sf.message_file_corner, fn() {
         let ref_ = field(v, "ref")
         let said = match ref_ {
           // named by its path: its station and that it goes as a path, its card the named one's (RefCard)
@@ -688,7 +688,6 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
               named=true,
               meta=text(ref_, "stationName") + " · " + @sf.t("web-main.file.modePath"),
               open=true,
-              remove=true,
             )
           // a link shared in (share-in.ts): its title and its site, drawn as a file is; tapped, it opens (Composer.kt
           // LinkCard); sent as words, nothing going up
@@ -706,7 +705,6 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
                 t => t
               },
               meta=text(l, "site"),
-              remove=true,
             )
             if card.opened {
               c.tell("composer/link/" + id, fn() { open_link(url) })
@@ -730,8 +728,6 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
                 first => first
               },
               meta=@sf.t("web-main.composer.pasteAttachment", args=[("count", @sf.grouped(number(info, "characters")))]),
-              remove=true,
-              remove_label=@sf.t("web-main.composer.removePaste"),
               retry=error != "",
               restore=can_restore,
             )
@@ -763,7 +759,6 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
               error~,
               // (a station's file going as the file: how it goes, pressed)
               open=ref_ is Some(Object(_)),
-              remove=true,
               retry=error != "" && field(v, "pasted") is None,
             )
         }
@@ -771,22 +766,34 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
         if said.opened && field(v, "ref") is Some(Object(_)) {
           c.tell(key + "/ref", fn() { ref_panel(src, w, spec.station, id, name, c.id(key)) })
         }
-        if said.removed {
-          writing_remove(src, w, id)
-        }
         if said.retried {
           writing_retry(src, w, id)
         }
-          })
-      |> ignore
+      })
+      if removed {
+        writing_remove(src, w, id)
+      }
     }
   }
   ignore(spec)
 }
 
 ///|
+/// What a waiting file's ✕ is called: pasted words' their own, a link's or a file's by its name.
+fn remove_label(v : Json?, name : String) -> String {
+  if field(v, "pasted") is Some(Object(_)) {
+    @sf.t("web-main.composer.removePaste")
+  } else {
+    match field(v, "link") {
+      Some(Object(_)) as l => @sf.t("web-main.file.remove", args=[("name", text(l, "url"))])
+      _ => @sf.t("web-main.file.remove", args=[("name", name)])
+    }
+  }
+}
+
+///|
 /// A picture waiting (composerThumb): its own picture from here, a turning ring over it while it goes up, red-edged
-/// when it failed (↻ over it); its ✕ at its corner; its name its tip.
+/// when it failed (↻ over it); its ✕ on its corner (@sf.with_corner_remove); its name its tip.
 fn composer_picture(
   c : @ui.Ctx,
   src : Source,
@@ -799,12 +806,11 @@ fn composer_picture(
   error : String,
 ) -> Unit {
   let thumb = c.id(key)
-  let x = c.id(key + "/remove")
   let again = c.id(key + "/retry")
   @sf.tip(c, key + "/tip", thumb, if error != "" { error } else { name })
-  // (its picture's box, built in what keeps room at its end for its remove's reach)
+  // (its picture's box, its ✕ hung on its corner as every waiting file's)
   let tile = Ref(-1)
-  c.box(style=thumb_room, fn() {
+  let removed = @sf.with_corner_remove(c, key, @sf.t("web-main.file.remove", args=[("name", name)]), thumb_side, thumb_corner, fn() {
     tile.val = c.box(style=if error != "" { thumb_failed } else { thumb_box }, id=thumb, fn() {
       c.image(picture, w=Px(thumb_side), h=Px(thumb_side), fit=FitCover) |> ignore
       if pending {
@@ -819,22 +825,8 @@ fn composer_picture(
         |> ignore
       }
     })
-    // its remove hung over its top right corner, its centre on the corner's curve, solid (part of it is on the box's
-    // ground), on every screen: on the corner, not in it, no corner of its own to keep (docs/ui-panels.md)
-    c.layer(fn() {
-      c.box(style=thumb_x_at, fn() {
-        let b = c.box(style=thumb_x, id=x, ty=-thumb_x_reach, fn() {
-          @sf.icon(c, "close", size=thumb_x_icon, color=@sf.theme().p.canvas) |> ignore
-        })
-        c.semantics(b, Button, id=x, label=@sf.t("web-main.file.remove", args=[("name", name)]))
-      })
-      |> ignore
-    })
-    |> ignore
   })
-  |> ignore
-  c.cursor(x, Hand)
-  if c.clicked(x) {
+  if removed {
     writing_remove(src, w, id)
   }
   if error != "" {
@@ -913,14 +905,11 @@ fn text_lines(c : @ui.Ctx) -> Int {
 ///|
 
 ///|
-/// ＋'s icon (Plus 18; send's is the theme's round glyph), a picture's ↻ (18) and ✕ (12).
+/// ＋'s icon (Plus 18; send's is the theme's round glyph) and a picture's ↻ (18).
 let plus_icon : Double = 18.0
 
 ///|
 let retry_icon : Double = 18.0
-
-///|
-let thumb_x_icon : Double = 12.0
 
 ///|
 /// What is faint where it cannot be pressed (attachBtn :disabled: .4); send not ready: the text at 18% over the box's
@@ -1030,12 +1019,12 @@ let quotes_column : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
 /// The files waiting (composerFiles: wrapped, 6 apart, flush with the box's padding); its lines further apart by the
-/// reach of a picture's ✕ above its tile, so one on a later line keeps 6 from the line over it.
+/// reach of a ✕ above what it is hung on (@sf.with_corner_remove), so one on a later line keeps 6 from the line over it.
 // kept across runs: a value (no field of it changes)
 let files_flow : @ui.Style = @ui.css("row w=Full gap=S1_5")
 
 ///|
-let files_lines : Double = @ui.Space::px(S1_5) + thumb_x_reach
+let files_lines : Double = @ui.Space::px(S1_5) + @sf.corner_remove_reach(@sf.message_file_corner)
 
 ///|
 /// A picture waiting: 56 square, the files' corner (MESSAGE_FILE_CORNER), clipped; failed, edged red.
@@ -1050,36 +1039,6 @@ let thumb_failed : @ui.Style = thumb_box.then(@ui.css("border=B2 border_color=Da
 /// Over a picture going up or failed: the ink's veil, what it says in its middle.
 // kept across runs: a value (no field of it changes)
 let thumb_veil : @ui.Style = @ui.css("w=Full h=Full bg=Veil align=ACenter justify=JCenter")
-
-///|
-/// A picture's ✕: 20 round over its top right corner, its centre on the corner's curve where it turns 45° (the user,
-/// 2026-10-17: on the corner, not in it), reaching as far past its top as past its right edge; solid, the ink's with the
-/// page's ✕ on it, as part of it is on the box's ground.
-let thumb_x_side : Double = 20.0
-
-///|
-let thumb_x_reach : Double = @sf.on_corner(thumb_corner, thumb_x_side)
-
-///|
-/// What holds a picture and its ✕: the room for the ✕'s reach at its end, the gap after it the row's (Composer.kt's
-/// `6.dp + PictureRemoveOut`), never over what comes next; the ✕ at its top right, lifted by its reach.
-// kept across runs: a value (no field of it changes)
-let thumb_room : @ui.Style = @ui.style(w=Fixed(thumb_side + thumb_x_reach))
-
-///|
-// kept across runs: a value (no field of it changes)
-let thumb_x_at : @ui.Style = @ui.css("w=Full align=AEnd")
-
-///|
-// kept across runs: a value (no field of it changes)
-let thumb_x : @ui.Style = @ui.style(
-  w=Fixed(thumb_x_side),
-  h=Fixed(thumb_x_side),
-  radius=Full,
-  bg=Fg,
-  align=ACenter,
-  justify=JCenter,
-)
 
 ///|
 /// What went wrong (chatError: under the box, 32 in, 10 under it; fieldError's red).
