@@ -47,7 +47,7 @@ fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit 
         c.look(f, { ..@ui.still_look, alpha: 1.0 - away })
       }
     }
-    @sfpages.chats_search(c, src, w, side_top_h())
+    @sfpages.chats_search(c, src, w, side_top_h(), Side)
   })
   |> ignore
 }

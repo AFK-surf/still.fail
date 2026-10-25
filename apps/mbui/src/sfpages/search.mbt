@@ -177,7 +177,7 @@ fn search_gone() -> Unit {
 /// gives it over that page, `inset` from its top; nothing while there is none.
 pub fn search_over(c : @ui.Ctx, src : Source, w : Workspace, inset : Double) -> Unit {
   if search.over {
-    search_page(c, src, w, inset)
+    search_page(c, src, w, inset, Whole)
   }
 }
 
@@ -235,7 +235,7 @@ let search_grow : @ui.Style = @ui.style(w=@sf.grow)
 let search_cancel : @ui.TextStyle = @ui.text_style(size=Xl, color=Link, wrap=false)
 
 ///|
-/// What the words find, under the field: its lines where a pane's are (pane_line), the rest of its height.
+/// What the words find, under the field: its lines where its list's are (@sf.list_line), the rest of its height.
 // kept across runs: a value (no field of it changes)
 let search_list_box : @ui.Style = @ui.style(w=Full, h=@sf.grow)
 
@@ -277,8 +277,8 @@ fn search_field(c : @ui.Ctx, at : @sf.ListAt) -> Unit {
 // ── the page ───────────────────────────────────────────────────────────
 
 ///|
-/// The search over Home (Search.kt SearchPage), while it is open.
-fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double) -> Unit {
+/// The search over Home (Search.kt SearchPage), while it is open, over lists that stand `at` (its lines stand so).
+fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @sf.ListAt) -> Unit {
   if !search.open {
     return
   }
@@ -374,8 +374,8 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double) -> Unit
       })
       |> ignore
       // what the words find (sfpages' finder): a row opened, its page over this one, back to it
-      let lb = c.box(style=search_list_box.then(@sf.pane_line()), fn() {
-        finder_list(c, src, w, search.offered, close, idle_chats=search.summoned)
+      let lb = c.box(style=search_list_box.then(@sf.list_line(at)), fn() {
+        finder_list(c, src, w, search.offered, close, idle_chats=search.summoned, at~)
       })
       c.look(lb, { ..@ui.still_look, alpha: u })
     })
