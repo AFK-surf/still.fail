@@ -19,7 +19,7 @@ fn init {
     shapes_made.clear()
     copied_at.clear()
     dark_set.val = None
-    current.val = { dark: false, narrow: false, p: wide_light, t: wide_type }
+    current.val = { dark: false, narrow: false, p: wide_light, t: wide_type, rows: wide_rows }
   })
 }
 

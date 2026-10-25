@@ -921,7 +921,14 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
         c.box(style=room, fn() { (x.body)(c, close) }) |> ignore
       }
       match x.foot {
-        Some(f) => c.box(style=sheet_foot_at, fn() { f(c, close) }) |> ignore
+        Some(f) =>
+          c.box(style=sheet_foot_at, fn() {
+            // its buttons across it, each its share (in a thumb's reach)
+            foot_fills.val = true
+            f(c, close)
+            foot_fills.val = false
+          })
+          |> ignore
         None => ()
       }
     }
@@ -1109,7 +1116,7 @@ let sheet_lead : @ui.TextStyle = @ui.text_style(size=Base, leading=L6, color=Mut
 let sheet_hint : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted)
 
 ///|
-/// A panel's buttons in a sheet (its foot): 20 in, at its end, 8 apart, 24 under.
+/// A panel's buttons in a sheet (its foot): 20 in, across it (each its share: parts.mbt foot_fills), 8 apart, 24 under.
 // kept across runs: a value (no field of it changes)
 let sheet_foot_at : @ui.Style = @ui.css("row w=Full px=S5 pb=S6 gap=S2 justify=JEnd")
 

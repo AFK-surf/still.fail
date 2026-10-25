@@ -81,28 +81,12 @@ fn xshare_body(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
       let ws = text(Some(p), "workspace")
       let name = text(Some(p), "name")
       let on = xsharing.ticked.contains(ws)
-      let set = fn(now : Bool) {
-        if now {
-          xsharing.ticked[ws] = true
-        } else {
+      if @sf.check_row(c, "xshare/" + ws, name, on) != on {
+        if on {
           xsharing.ticked.remove(ws)
+        } else {
+          xsharing.ticked[ws] = true
         }
-      }
-      // (the row a label round its box: pressed anywhere, ticked or not)
-      let id = c.id("xshare/row/" + ws)
-      c.cursor(id, Hand)
-      let mut ticked = false
-      c.box(style=xshare_row_box, id~, fn() {
-        let now = @kit.checkbox(c, "xshare/" + ws, if on { On } else { Off }, label=name).value
-        if (now == On) != on {
-          ticked = true
-          set(now == On)
-        }
-        c.text(name, style=xshare_row_title) |> ignore
-      })
-      |> ignore
-      if !ticked && c.clicked(id) {
-        set(!on)
       }
     }
   })
@@ -121,27 +105,13 @@ fn xshare_body(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
 }
 
 ///|
-/// The workspaces (shareList: out past the panel's words by a row's room, 12, its rows as wide), 2 apart; a row (a
-/// list's row, pages.css.ts listRow): 52 high at least, 12 by 10 in, its box 12 before its name, a row's corner, the
-/// hover grey pointed at.
+/// The workspaces (shareList: out past the panel's words by a row's room, 12, its rows as wide), 2 apart, each a tick
+/// row (@sf.check_row: its room the screen's).
 let xshare_list_out : Double = 12.0
 
 ///|
 // kept across runs: a value (no field of it changes)
 let xshare_list : @ui.Style = @sf.outset(xshare_list_out).then(@ui.css("gap=S0_5"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let xshare_row_box : @ui.Style = @ui.css("row w=Full px=S3 py=S2_5 gap=S3 align=ACenter hovered{bg=Hover}").then(
-  @ui.style(min_h=Fixed(xshare_row_least), radius=@sf.row_radius),
-)
-
-///|
-let xshare_row_least : Double = 52.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let xshare_row_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Fg, wrap=false)
 
 ///|
 /// The write switch, 8 under the workspaces (shareWrite).

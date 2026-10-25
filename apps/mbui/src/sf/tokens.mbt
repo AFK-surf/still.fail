@@ -90,6 +90,22 @@ pub(all) struct Theme {
   narrow : Bool
   p : Palette
   t : Type
+  /// what a row is on this screen (Rows)
+  rows : Rows
+}
+
+///|
+/// A row's roles on the screen in force (docs/architecture.md, the same on every screen and what differs): how high it
+/// is at least, its title's words, a tick's box and a switch in it. A touch device's: a finger's (48; the phone's
+/// mRowTitle, its body's 15 (the scale's Lg, on 21); a box 22, a switch 44 by 26, its mSwitch); a computer's: a list row's (40; the web's
+/// SwitchRow title, 13 on 24; a box 18, a switch 36 by 22).
+pub(all) struct Rows {
+  least : @ui.Len
+  title : @ui.TextStyle
+  check : Double
+  check_corner : Double
+  switch_w : Double
+  switch_h : Double
 }
 
 // ---------------------------------------------------------------------------
@@ -735,11 +751,31 @@ let narrow_type : Type = {
 }
 
 ///|
+let wide_rows : Rows = {
+  least: Fixed(40.0),
+  title: @ui.text_style(size=Sm, leading=L6, color=Fg),
+  check: 18.0,
+  check_corner: 6.0,
+  switch_w: 36.0,
+  switch_h: 22.0,
+}
+
+///|
+let narrow_rows : Rows = {
+  least: Fixed(48.0),
+  title: @ui.text_style(size=Lg, color=Fg),
+  check: 22.0,
+  check_corner: 7.0,
+  switch_w: 44.0,
+  switch_h: 26.0,
+}
+
+///|
 let dark_set : Ref[Bool?] = { val: None }
 
 ///|
 let current : Ref[Theme] = {
-  val: { dark: false, narrow: false, p: wide_light, t: wide_type },
+  val: { dark: false, narrow: false, p: wide_light, t: wide_type, rows: wide_rows },
 }
 
 ///|
@@ -827,7 +863,13 @@ pub fn begin(c : @ui.Ctx) -> Theme {
     (true, false) => narrow_light
     (true, true) => narrow_dark
   }
-  current.val = { dark, narrow, p, t: if narrow { narrow_type } else { wide_type } }
+  current.val = {
+    dark,
+    narrow,
+    p,
+    t: if narrow { narrow_type } else { wide_type },
+    rows: if narrow { narrow_rows } else { wide_rows },
+  }
   current.val
 }
 

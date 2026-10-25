@@ -77,6 +77,8 @@ pub fn button(
   }
   let height = button_height()
   let solid = tone == Primary || tone == DangerSolid
+  // (at a sheet's foot, in a thumb's reach: its share of the foot's width, the presenters')
+  let w = if w is Auto && foot_fills.val { @ui.Fill(1.0) } else { w }
   c.box(
     style=reach.unwrap_or(@ui.style()),
     dir=Row,
@@ -117,6 +119,11 @@ pub fn button(
   |> ignore
   live && c.clicked(id)
 }
+
+///|
+/// Whether a button laid out now is at a sheet's foot (the presenters' sheet_body says so while it draws one): each
+/// of its buttons as wide as the others, across the sheet (the phone's sheets' primary button, Button in mPad).
+let foot_fills : Ref[Bool] = { val: false }
 
 ///|
 /// A button's height in the theme in force: the phone's 38 on a narrow, else button_h.
@@ -1124,8 +1131,20 @@ let about_box : @ui.Style = @ui.css("w=S5 h=S5 radius=Full align=ACenter justify
 /// by 16, its thumb 12.
 fn switch_look_for(small : Bool) -> (@ui.Ctx, @kit.SwitchState) -> Unit {
   let t = theme()
-  let (w, h) = if small { (switch_small_w, switch_small_h) } else { (switch_w, switch_h) }
+  let (w, h) = switch_size(small)
   @kit.switch_look_of(w~, h~, inset=switch_in, on_color=t.p.accent, off_color=t.p.line_strong, knob=0xFFFFFFFFL)
+}
+
+///|
+/// A switch's size by the screen, the theme's rows' (Rows: a finger's 44 by 26 on a touch device, the web's 36 by 22 on
+/// a computer); small, 26 by 16.
+fn switch_size(small : Bool) -> (Double, Double) {
+  if small {
+    (switch_small_w, switch_small_h)
+  } else {
+    let r = theme().rows
+    (r.switch_w, r.switch_h)
+  }
 }
 
 ///|
@@ -1161,7 +1180,7 @@ let switch_at : @ui.Style = @ui.css("justify=JCenter align=AStart")
 /// A switch drawn in a row that takes the tap itself (the row turns it): its look alone, its thumb sliding as a
 /// switch's does (`@kit.switch_knob` by `key`).
 pub fn switch_look(c : @ui.Ctx, key : String, on : Bool, small? : Bool = false) -> Unit {
-  let (w, h) = if small { (switch_small_w, switch_small_h) } else { (switch_w, switch_h) }
+  let (w, h) = switch_size(small)
   switch_look_for(small)(c, {
     on,
     t: @kit.switch_knob(c, key, on),
@@ -1189,7 +1208,7 @@ pub fn switch_row(
   let mut now = on
   c.box(style=switch_row_box, fn() {
     c.box(style=switch_row_words, id=if disabled || busy { 0 } else { id }, fn() {
-      c.text(title, style=switch_row_title) |> ignore
+      c.text(title, style=theme().rows.title) |> ignore
       if note != "" {
         c.text(note, style=switch_row_note) |> ignore
       }
@@ -1206,16 +1225,58 @@ pub fn switch_row(
 }
 
 ///|
+/// One of several to tick (a list a choice of some of: ChatPage.tsx ShareDialog's rows, the phone's PickRow): its box,
+/// then what it is (`note` quieter under it), the whole row pressed to tick it or not, its ground lit under the hand. Its
+/// room, its words and its box the theme's rows' (Rows: a finger's on a touch device, a list row's on a computer). What
+/// it is now.
+pub fn check_row(c : @ui.Ctx, key : String, label : String, on : Bool, note? : String = "", disabled? : Bool = false) -> Bool {
+  let id = c.id(key + "/row")
+  if !disabled {
+    c.cursor(id, Hand)
+  }
+  let mut now = on
+  let mut ticked = false
+  let r = theme().rows
+  c.box(style=check_row_box.then(@ui.style(min_h=r.least)), id=if disabled { 0 } else { id }, fn() {
+    let look = @kit.checkbox_look_of(size=r.check, radius=r.check_corner)
+    let v = @kit.checkbox(c, key, if on { On } else { Off }, label~, disabled~, look~).value
+    if (v == On) != on {
+      ticked = true
+      now = v == On
+    }
+    // (its words as a setting row's: what is left of the row)
+    c.box(style=switch_row_words, fn() {
+      c.text(label, style=r.title) |> ignore
+      if note != "" {
+        c.text(note, style=switch_row_note) |> ignore
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+  if !ticked && !disabled && c.clicked(id) {
+    !on
+  } else {
+    now
+  }
+}
+
+///|
+/// A tick row's room (check_row): 12 by 10 in, its box 12 before its words, a row's corner, the hover grey under the
+/// hand; as high at least, its words and its box as the theme's rows (Rows).
+// kept across runs: a value (no field of it changes)
+let check_row_box : @ui.Style = @ui.css("row w=Full px=S3 py=S2_5 gap=S3 align=ACenter hovered{bg=Hover} pressed{bg=Hover}").then(
+  @ui.style(radius=row_radius),
+)
+
+
+///|
 // kept across runs: a value (no field of it changes)
 let switch_row_box : @ui.Style = @ui.css("row w=Full align=ACenter gap=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
 let switch_row_words : @ui.Style = @ui.css("w=Grow(1.0) gap=S0_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let switch_row_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)
