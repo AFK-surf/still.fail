@@ -83,6 +83,17 @@ the one in `LICENSE`, with the copyright line given here.
 - From: https://github.com/egoist/mygo
 - Licence: MIT. Copyright (c) 2026 MyGo contributors.
 
+## alien-signals and its conformance suite
+
+- What: `src/signals/` (`system.mbt`, `signals.mbt`), a line-for-line MoonBit
+  port of alien-signals 3.2.1's `src/system.ts` and `src/index.ts`; its own
+  tests (`tests/effect.spec.ts`, `effectScope.spec.ts`, `trigger.spec.ts`) in
+  `src/signals/effect_wbtest.mbt`, and cases of the conformance suite it runs
+  (reactive-framework-test-suite 0.0.2) in `src/signals/conformance_*_wbtest.mbt`.
+- From: https://github.com/stackblitz/alien-signals and
+  https://github.com/johnsoncodehk/reactive-framework-test-suite
+- Licence: MIT. Copyright (c) 2024-present Johnson Chu.
+
 ## Gradle wrapper
 
 - What: `android/gradlew` and `android/gradle/wrapper/gradle-wrapper.jar`.

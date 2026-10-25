@@ -9,6 +9,7 @@ import {
   "mbui/motion",
   "mbui/pixels",
   "mbui/dmath",
+  "mbui/signals",
   "stillfail/sf",
   "stillfail/gallery",
   "stillfail/sfapp/settings",

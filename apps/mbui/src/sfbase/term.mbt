@@ -88,8 +88,8 @@ pub fn term_lines(runs : Array[Json], ink : Int64, dark : Bool) -> Array[Array[@
 ///|
 /// Job `job`'s output on `station`, its last `lines` lines as the core's `jobLog` topic gives them, a line at a time:
 /// in a terminal's colours where the core says them (its `runs`: term_lines, on `ink`, `dark` or not), else as words;
-/// worked out once for each version of it and each ink. None while it has not been read; none where the job wrote
-/// nothing.
+/// worked out once for each version of it and each ink (a computed: derived.mbt). None while it has not been read; none
+/// where the job wrote nothing.
 pub fn job_output_lines(
   src : Source,
   station : String,
@@ -103,27 +103,34 @@ pub fn job_output_lines(
     "job": Json::string(job),
     "lines": Json::number(lines),
   }
-  let topic = (src.topic)("jobLog", params)
-  match topic.value {
-    Some(Object(_)) as v =>
-      Some(
-        job_outputs.get(Json::object(params).stringify(), "\{topic.version} \{ink} \{dark}", fn() {
-          let words = text(v, "text")
-          let runs = items(v, "runs")
-          if words == "" {
-            []
-          } else if runs.length() > 0 {
-            term_lines(runs, ink, dark)
-          } else {
-            words.split("\n").map(fn(l) { [@ui.span(l.to_owned(), mono=true)] }).to_array()
-          }
-        }),
-      )
-    _ => None
-  }
+  guard topic_read(src, "jobLog", params).value is Some(Object(_)) else { return None }
+  job_ink.set(ink)
+  job_dark.set(dark)
+  Some(
+    job_outputs.read(Json::object(params).stringify(), fn() {
+      let v = topic_read(src, "jobLog", params).value
+      let words = text(v, "text")
+      let runs = items(v, "runs")
+      if words == "" {
+        []
+      } else if runs.length() > 0 {
+        term_lines(runs, job_ink.get(), job_dark.get())
+      } else {
+        words.split("\n").map(fn(l) { [@ui.span(l.to_owned(), mono=true)] }).to_array()
+      }
+    }),
+  )
 }
 
 ///|
-/// Each job's output as its lines' runs (job_output_lines).
+/// Each job's output as its lines' runs (job_output_lines), and the ink they were coloured on.
 // kept across runs: what it keeps is let go of by a run anew and by reset (derived.mbt)
-let job_outputs : Memo[Array[Array[@ui.Run]]] = Memo::new()
+let job_outputs : Kept[Array[Array[@ui.Run]]] = Kept::new()
+
+///|
+// kept across runs: a page's ink, set each time an output is read (the same ink tells nothing)
+let job_ink : @signals.Signal[Int64] = @signals.signal(0L, same=fn(a, b) { a == b })
+
+///|
+// kept across runs: as job_ink
+let job_dark : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })

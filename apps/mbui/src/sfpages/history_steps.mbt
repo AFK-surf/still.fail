@@ -21,8 +21,8 @@ priv struct StepsOwn {
   focus : Map[String, Int]
   mut marked : (String, String)
   went : Map[String, Bool]
-  /// 只看收发, for every history (as the web keeps it)
-  mut only_io : Bool
+  /// 只看收发, for every history (as the web keeps it): a signal, what each history's rows are worked out by
+  only_io : @signals.Signal[Bool]
 }
 
 ///|
@@ -34,7 +34,7 @@ let steps_own : StepsOwn = {
   focus: {},
   marked: ("", ""),
   went: {},
-  only_io: false,
+  only_io: @signals.signal(false, same=fn(a, b) { a == b }),
 }
 
 ///|
@@ -46,19 +46,19 @@ fn steps_reset() -> Unit {
   steps_own.focus.clear()
   steps_own.marked = ("", "")
   steps_own.went.clear()
-  steps_own.only_io = false
+  steps_own.only_io.set(false)
 }
 
 ///|
 /// Whether a history shows only what came in and went out (History.tsx onlyIo: what the core calls `work` left out).
 pub fn history_only_io() -> Bool {
-  steps_own.only_io
+  steps_own.only_io.get()
 }
 
 ///|
 /// 只看收发 turned on or off.
 pub fn history_only_io_flip() -> Unit {
-  steps_own.only_io = !steps_own.only_io
+  steps_own.only_io.set(!steps_own.only_io.get())
 }
 
 ///|
@@ -91,8 +91,7 @@ priv enum StepsRow {
 /// Agent `key`'s history on `station`: its steps under its head (history.mbt agent_history).
 pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) -> Unit {
   let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
-  let topic = (src.topic)("history", params)
-  let h = topic.value
+  let h = @sfbase.topic_read(src, "history", params).value
   if !(h is Some(Object(_))) || (flag(h, "empty") && !flag(h, "loaded")) {
     c.box(style=steps_waiting, fn() {
       @sf.waiting(c, count=6, text=match text(h, "edge") {
@@ -118,8 +117,8 @@ pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) 
     Some(e) =>
       match loaded.search_by(fn(i) { entries_of(Some(i)).map(fn(x) { x.0 <= e && e <= x.1 }).unwrap_or(false) }) {
         Some(at) => {
-          if steps_own.only_io && flag(loaded.get(at), "work") {
-            steps_own.only_io = false
+          if steps_own.only_io.get() && flag(loaded.get(at), "work") {
+            steps_own.only_io.set(false)
           }
           steps_own.focus.remove(fk)
           steps_own.went[lkey] = true
@@ -136,8 +135,10 @@ pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) 
       }
     None => ()
   }
-  let io = history_only_io()
-  let (all, rows) = steps_rows.get(lkey, "\{topic.version} \{io}", fn() { steps_rows_of(h, loaded, io) })
+  let (all, rows) = steps_rows.read(lkey, fn() {
+    let h = @sfbase.topic_read(src, "history", params).value
+    steps_rows_of(h, items(h, "items"), steps_own.only_io.get())
+  })
   let first = match all.get(0) {
     Some(i) => text(Some(i), "key")
     None => ""
@@ -248,9 +249,10 @@ fn steps_rows_of(h : Json?, loaded : Array[Json], io : Bool) -> (Array[Json], Ar
 }
 
 ///|
-/// Each history's rows, by its list's key: worked out again as its topic changes or 只看收发 is turned (steps_rows_of).
+/// Each history's rows, by its list's key: worked out again as its topic changes or 只看收发 is turned (steps_rows_of,
+/// a computed: sfbase derived.mbt).
 // kept across runs: what it keeps is let go of by a run anew and by reset (sfbase derived.mbt)
-let steps_rows : @sfbase.Memo[(Array[Json], Array[StepsRow])] = @sfbase.Memo::new()
+let steps_rows : @sfbase.Kept[(Array[Json], Array[StepsRow])] = @sfbase.Kept::new()
 
 ///|
 /// About how tall a row stands before it is laid out.
