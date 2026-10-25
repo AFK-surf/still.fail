@@ -273,6 +273,18 @@ pub fn pane_top_right() -> Double? {
 }
 
 ///|
+/// How far under the top of the panel of its own the view is built in (pane_round) a page laid out as a phone's starts
+/// its rows (its back, its large title, a head of its own: 10 to 16 in from its sides, less than the panel's top
+/// corners are round): the rounder top corner's height, the rows under it as clear of the corners as of the sides, as
+/// a phone's page starts under its status bar, clear of the screen's round corners. None in a window's whole: 0.
+pub fn pane_head_room() -> Double {
+  match pane_round.val {
+    Some(k) => dmax(k[0], k[1])
+    None => 0.0
+  }
+}
+
+///|
 /// Whether the page being built is in a panel of its own (pane_round): what stands in its corners stands concentric
 /// with the panel's.
 pub fn in_pane() -> Bool {
