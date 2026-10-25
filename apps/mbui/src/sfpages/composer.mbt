@@ -169,7 +169,7 @@ pub fn composer(
       if multiline {
         composer_extras(c, src, spec, w)
         words = composer_text(c, src, ws, spec, w, cap, multiline, submit)
-        c.box(style=tools_row, fn() {
+        c.box(style=tools_row(), fn() {
           plus = attach(c, src, spec, w, no_files)
           match spec.toolbar {
             Some(f) => chosen = c.box(style=choices, f)
@@ -978,9 +978,17 @@ let text_shut : @ui.Style = @ui.style(w=@sf.grow, pr=S2, py=S1_25)
 let text_open : @ui.Style = @ui.css("w=Full px=S2 pt=S2")
 
 ///|
-/// Its row under the text (composerToolbar, multiline: space-between, 4 apart).
+/// Its row under the text (composerToolbar, multiline: space-between, 4 apart), its ＋ and send round in the box's foot
+/// corners: as far in as makes them concentric with it (外圆角 = 距离 + 半高: the computer's 32 the padding in, the
+/// phone's 36 less), what stands over them (a quote, a file) the ladder's inset in.
+fn tools_row() -> @ui.Style {
+  let off = @sf.composer_round_off()
+  tools_row_base.then(@ui.style(mx=off, mb=off))
+}
+
+///|
 // kept across runs: a value (no field of it changes)
-let tools_row : @ui.Style = @ui.css("row w=Full gap=S1 align=ACenter")
+let tools_row_base : @ui.Style = @ui.css("row w=Full gap=S1 align=ACenter")
 
 ///|
 /// The page's choices (composerChoices: in what is left of the row, at its start).
@@ -1374,10 +1382,11 @@ pub fn composer_open_room() -> Double {
 }
 
 ///|
-/// Its box opened with one line (composer_open_room without what is over and under it).
+/// Its box opened with one line (composer_open_room without what is over and under it; its buttons' row as far from
+/// its foot as makes them concentric with its corner, @sf.composer_round_in).
 fn composer_open_box() -> Double {
   let t = @sf.theme()
-  12.0 + (8.0 + t.t.input_line) + 10.0 + t.round.side + 12.0
+  12.0 + (8.0 + t.t.input_line) + 10.0 + t.round.side + @sf.composer_round_in()
 }
 
 ///|

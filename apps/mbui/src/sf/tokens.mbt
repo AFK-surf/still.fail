@@ -1807,6 +1807,19 @@ pub fn rail_in_tape_room() -> @ui.Space {
 }
 
 ///|
+/// How far past the composer's padding its round controls stand in its foot corners (a margin, below 0 where they are
+/// larger than its padding leaves room for: a phone's 36), concentric with its corner as round ones are (capsule_in).
+pub fn composer_round_off() -> @ui.Space {
+  room(composer_round_in() - composer_pad)
+}
+
+///|
+/// How far in from the composer's box its round controls stand in its foot corners (composer_round_off).
+pub fn composer_round_in() -> Double {
+  capsule_in(card_corner, theme().round.side)
+}
+
+///|
 /// The composer's padding as a style's (composer_pad).
 pub let composer_pad_room : @ui.Space = room(composer_pad)
 
