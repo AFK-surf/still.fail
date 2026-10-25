@@ -1,5 +1,5 @@
 # 设置 on the desktop (sfdesk settings_frame.mbt, the web's cloud/settings.tsx): MBUI_WIN=1280x800 over the made-up
-# chat. ⌘, then each page of the sidebar ported from the web's, a still of each: 通知, 权限, 快捷键, 版本, 归档, 自动决策,
+# chat. ⌘, then each page of the sidebar ported from the web's, a still of each: 通知, 权限, 快捷键, 关于, 归档, 自动决策,
 # 记忆, Workspace, 安全, 密钥, the account; then 连接.
 timeout 40000
 until 发消息
@@ -12,7 +12,7 @@ tap 权限
 wait 900
 tap 快捷键
 wait 900
-tap 版本
+tap 关于
 wait 900
 tap 归档
 wait 900

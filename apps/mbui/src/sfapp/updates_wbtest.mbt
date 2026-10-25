@@ -31,13 +31,13 @@ fn updates_tester(r : Json, asked : Array[String]) -> @ui.Tester {
 }
 
 ///|
-test "a newer build that brings something: Home's download key; the settings' row says 更新到 its version" {
+test "a newer build that brings something: Home's download key; 关于's row offers it by its version" {
   let asked = []
   let t = updates_tester(release(["列表滑得更顺"]), asked)
   t.frame()
   assert_eq(asked, ["1 false"])
   assert_true(update.available is Some(_))
-  assert_eq(update_row_words(), ("更新到 0.1.1", true))
+  assert_eq((update_stands().doing, update_stands().newer), ("", "0.1.1"))
   // (not idle yet: a spinner turns for ever (sf/icons.mbt), till mbui#25)
 }
 
@@ -45,7 +45,7 @@ test "a newer build that brings something: Home's download key; the settings' ro
 test "none newer: the row offers to check, and asked now says 已是最新" {
   let asked = []
   let _ = updates_tester(Json::null(), asked)
-  assert_eq(update_row_words(), ("检查更新", false))
+  assert_eq((update_stands().doing, update_stands().newer), ("", ""))
   let said = []
   update_check(fixture("home"), true, done=fn(w) { said.push(w) })
   assert_eq(said, ["已是最新"])

@@ -1,5 +1,5 @@
-# 权限 and 版本 on the desktop (sfdesk permissions.mbt, local_station.mbt; the web's Permissions.tsx, AppVersion.tsx):
-# MBUI_WIN=1280x800 over the made-up chat. ⌘, then 权限, then 版本.
+# 权限 and 关于 on the desktop (sfdesk permissions.mbt, about.mbt; the web's Permissions.tsx, About.tsx): MBUI_WIN=1280x800
+# over the made-up chat. ⌘, then 权限, then 关于.
 timeout 30000
 until 发消息
 wait 600
@@ -7,6 +7,6 @@ key cmd+,
 wait 1000
 tap 权限
 wait 1500
-tap 版本
+tap 关于
 wait 1500
 exit

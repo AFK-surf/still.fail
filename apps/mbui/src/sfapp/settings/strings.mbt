@@ -1517,8 +1517,6 @@ let zh : Map[String, String] = {
   "web-main.shortcuts.title": "快捷键",
   "web-main.shortcuts.unset": "未设置",
   "web-pages.settings.nav.version": "版本",
-  "web-pages.version.title": "{name} 桌面版",
-  "web-pages.version.lead": "启动时及每 4 小时自动检查，有新版本时侧栏顶部会显示「更新」",
   "web-pages.localStation.title": "本机 Station",
   "web-pages.localStation.lead": "这台 Mac 上的 station，无论是 {name} app 自带的还是单独安装的，都在这里管理。加入哪个 workspace 在各 workspace 的 Station 设置中设定。",
   "web-pages.localStation.leadPc": "这台电脑上的 station，无论是 {name} app 自带的还是单独安装的，都在这里管理。加入哪个 workspace 在各 workspace 的 Station 设置中设定。",

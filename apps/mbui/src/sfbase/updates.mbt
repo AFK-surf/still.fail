@@ -1,7 +1,7 @@
 // The app keeping itself current, for both frames (ember apps/android app/Updates.kt, Install.kt; the desktop app's
 // appUpdate): a newer build is asked of the update source the app is given (`set_update_source`), and one found is
 // downloaded, checked against its sha256 and handed to the host's installer (@ui.update_install), which puts it in
-// place of this one. Asked at the start; the settings' version row offers it (update_row_words, below), the phone's
+// place of this one. Asked at the start; 关于's version row offers it (update_stands, below), the phone's
 // Home (sfapp updates.mbt) and the desktop's 更新 over the sidebar's top (sfdesk brand.mbt). Hosts that do not update
 // themselves (a version code of 0) never ask.
 //
@@ -227,24 +227,20 @@ pub fn update_first(src : Source) -> Unit {
 }
 
 ///|
-/// The settings' version row's words at its end (SettingsHome.kt Version), and whether they are the accent's: how an
-/// update goes, 正在检查, 更新到 <version>, or 检查更新.
-pub fn update_row_words() -> (String, Bool) {
+/// How this build's update stands, as 关于's version row says it (SettingsHome.kt Version): what is under way (how an
+/// update goes; 正在检查 while the person's check is) and the newer build known.
+pub fn update_stands() -> @settings.VersionNow {
   let progress = update_progress()
-  if progress != "" {
-    return (progress, false)
+  let doing = if progress == "" && update.checking { @sf.t("android-settings.version.checking") } else { progress }
+  let newer = match update.available {
+    Some(v) => text(Some(v), "versionName")
+    None => ""
   }
-  if update.checking {
-    return (@sf.t("android-settings.version.checking"), false)
-  }
-  match update.available {
-    Some(v) => (@sf.t("android-settings.version.update", args=[("version", text(Some(v), "versionName"))]), true)
-    None => (@sf.t("android-settings.version.check"), false)
-  }
+  { doing, newer }
 }
 
 ///|
-/// The version row tapped: with a newer build known, installed; with none, still.fail cloud asked now.
+/// The version row's button pressed: with a newer build known, installed; with none, still.fail cloud asked now.
 pub fn update_row_tapped(src : Source) -> Unit {
   if update.checking || update.installing || update_busy() {
     return
@@ -262,12 +258,12 @@ pub fn update_row_tapped(src : Source) -> Unit {
 }
 
 ///|
-/// 检查更新 chosen in the menu bar (menu_bar.mbt), as the desktop app's checkFromMenu: the settings' 版本 page
-/// opened, where how it goes is shown and a newer build is offered (更新到 …), and still.fail cloud asked now unless
-/// one is known already (what it says, 已是最新 or why it failed, said as the row's tap says it).
+/// 检查更新 chosen in the menu bar (menu_bar.mbt), as the desktop app's checkFromMenu: the settings' 关于 opened, where
+/// how it goes is shown and a newer build is offered (更新到 …), and still.fail cloud asked now unless one is known
+/// already (what it says, 已是最新 or why it failed, said as the row's button says it).
 pub fn update_from_menu(src : Source) -> Unit {
-  if !(app.nav.top() is Setting(@settings.Route::Version)) {
-    open_setting("version")
+  if !(app.nav.top() is Setting(@settings.Route::About)) {
+    open_setting("about")
   }
   if update.available is None {
     update_row_tapped(src)

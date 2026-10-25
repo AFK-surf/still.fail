@@ -214,7 +214,7 @@ test "wide: settings from the rail's gear, its list in the sidebar; back to the 
 ///|
 test "wide: settings' sidebar taller than a short window scrolls to its last rows (Cloud's), which open their pages" {
   let calls : Array[Made] = []
-  let h = 480.0
+  let h = 430.0
   let t = wide_tester(calls, h~)
   t.key(@ui.key_of_char(','), mods=@ui.mod_cmd)
   t.run_for(@ui.nav_push_ms)
@@ -935,7 +935,7 @@ test "wide: 通知's 红点 beside the banner (prefs.set badgeKinds), each kind'
 }
 
 ///|
-test "wide: 快捷键 changed by pressing new ones (keys.set), and the new keys do it; 版本 its own page" {
+test "wide: 快捷键 changed by pressing new ones (keys.set), and the new keys do it; 检查更新 from the menu bar opens 关于" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   app.nav.replace(Setting(@settings.Route::Shortcuts))
@@ -957,11 +957,14 @@ test "wide: 快捷键 changed by pressing new ones (keys.set), and the new keys 
   t.key(@ui.key_of_char('j'), mods=@ui.mod_cmd)
   t.frame()
   assert_true(@sfdesk.switcher_open(), msg="⌘J opens it now")
-  // 版本
+  // 检查更新 from the menu bar: 关于, where this build's row says how it goes (no page of its own: 版本 was the
+  // desktop's once)
   t.key(@ui.key_escape)
-  app.nav.replace(Setting(@settings.Route::Version))
+  t.post(@hostapi.system_channel, "{\"menu\":\"update.check\"}")
+  t.frame()
   t.run_for(@ui.nav_push_ms)
-  assert_true(t.find("still.fail 桌面版") is Some(_))
+  assert_true(app.nav.top() == Setting(@settings.Route::About))
+  assert_true(t.find("still.fail mbui 0.1") is Some(_))
 }
 
 ///|

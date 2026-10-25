@@ -182,7 +182,6 @@ pub fn back_label(p : Page) -> String {
     Settings | Setting(Route::Home) => @sf.t("android-settings.title")
     Setting(Route::About) => @sf.t("web-pages.settings.nav.about")
     Setting(Route::Permissions) => @sf.t("web-pages.settings.nav.permissions")
-    Setting(Route::Version) => @sf.t("web-pages.settings.nav.version")
     Setting(Route::Memories) => @sf.t("web-pages.settings.memory.title")
     Setting(Route::AutoDecisions) => @sf.t("web-pages.automaticDecisions.title")
     Setting(Route::Archiving) => @sf.t("web-pages.archiving.title")

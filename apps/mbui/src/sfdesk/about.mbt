@@ -12,14 +12,11 @@
 fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let blocks : Array[() -> Unit] = []
-  // this build (its name and version, and the way to a newer one: pressed, installed or asked now), and what changed
+  // this build, and what changed
   blocks.push(fn() {
     @sf.section(c, heads=false, @sf.t("web-pages.settings.nav.version"), fn() {
       @sf.group(c, fn() {
-        let (words, newer) = (core.version_words)()
-        if @sf.link_row(c, "about/version", "still.fail mbui " + build_version(), value=words, value_lit=newer, chevron=false) {
-          (core.version_tap)()
-        }
+        version_row(c, core)
         if @sf.link_row(c, "about/changelog", @sf.t("web-pages.settings.nav.changelog")) {
           (core.push)(Changelog)
         }
@@ -58,6 +55,26 @@ fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
     })
   })
   look_page(c, core, frame, "about", @sf.t("web-pages.settings.nav.about"), blocks)
+}
+
+///|
+/// This build and the way to a newer one, one row on every screen: its name and version, what is under way under them
+/// (正在检查, 下载中 40%, 正在安装), and its button at its end: 更新到 <version> where a newer build is known (pressed,
+/// installed), else 检查更新 (still.fail cloud asked now); turning while anything is under way.
+fn version_row(c : @ui.Ctx, core : Core) -> Unit {
+  let v = (core.version_now)()
+  let newer = v.newer != ""
+  @sf.link_row(c, "", "still.fail mbui " + build_version(), note=v.doing, goes=false, tail=fn() {
+    let label = if newer {
+      @sf.t("android-settings.version.update", args=[("version", v.newer)])
+    } else {
+      @sf.t("android-settings.version.check")
+    }
+    if @sf.button(c, label, key="version-app", tone=if newer { Primary } else { Plain }, busy=v.doing != "") {
+      (core.version_tap)()
+    }
+  })
+  |> ignore
 }
 
 ///|
