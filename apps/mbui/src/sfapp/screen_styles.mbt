@@ -551,3 +551,34 @@ let net_name_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=f
 ///|
 // kept across runs: a value (no field of it changes)
 let net_value_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, tabular=true)
+
+// ── 控制中心 (screen_panel.mbt) ───────────────────────────────────────────
+
+///|
+/// A choice of it (画质, 缩放): a segmented row in by a panel row's padding.
+// kept across runs: a value (no field of it changes)
+let center_choice : @ui.Style = @ui.css("w=Full px=S2_5 py=S1")
+
+///|
+/// The combos' tiles: rows of three, 8 apart, in by a panel row's padding.
+// kept across runs: a value (no field of it changes)
+let tiles_box : @ui.Style = @ui.css("w=Full px=S2_5 py=S1 gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tiles_row : @ui.Style = @ui.css("row w=Full gap=S2")
+
+///|
+/// A tile: its icon over its name, on the ink at 6% (8% pressed), 64 high, its corner 12.
+// kept across runs: a value (no field of it changes)
+let tile_box : @ui.Style = @ui.style(w=@sf.grow).then(
+  @ui.css("h=S16 gap=S1_5 radius=Xl bg=Tint align=ACenter justify=JCenter pressed{bg=TintStrong}"),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tile_gap : @ui.Style = @ui.style(w=@sf.grow).then(@ui.css("h=S16"))
+
+///|
+// kept across runs: a value (no field of it changes)
+let tile_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)

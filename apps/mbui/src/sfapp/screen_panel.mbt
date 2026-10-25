@@ -13,33 +13,34 @@ priv struct Combo {
   key : String
   code : String
   mods : Int
+  icon : String
 }
 
 ///|
 /// The combos worth sending to a station's system (its host's `os`, in words: macOS 26.6.2, Windows 11 Pro…; the web's
 /// combosFor): a Mac's for a Mac, else Windows'.
 fn combos_for(os : String) -> Array[Combo] {
-  let c = fn(name : String, keys : String, key : String, code : String, mods : Int) -> Combo {
-    { name: tr(name), keys, key, code, mods }
+  let c = fn(name : String, keys : String, key : String, code : String, mods : Int, icon : String) -> Combo {
+    { name: tr(name), keys, key, code, mods, icon }
   }
   let low = os.to_lower()
   if low.has_prefix("mac") || low.has_prefix("darwin") {
     [
-      c("web-pages.screen.combo.switchApp", "⌘ Tab", "Tab", "Tab", mod_meta),
-      c("web-pages.screen.combo.spotlight", "⌘ Space", " ", "Space", mod_meta),
-      c("web-pages.screen.combo.missionControl", "⌃ ↑", "ArrowUp", "ArrowUp", mod_ctrl),
-      c("web-pages.screen.combo.forceQuit", "⌘ ⌥ Esc", "Escape", "Escape", mod_meta | mod_alt),
-      c("web-pages.screen.combo.quit", "⌘ Q", "q", "KeyQ", mod_meta),
-      c("web-pages.screen.combo.screenshot", "⌘ ⇧ 4", "4", "Digit4", mod_meta | mod_shift),
+      c("web-pages.screen.combo.switchApp", "⌘ Tab", "Tab", "Tab", mod_meta, "view-columns"),
+      c("web-pages.screen.combo.spotlight", "⌘ Space", " ", "Space", mod_meta, "search"),
+      c("web-pages.screen.combo.missionControl", "⌃ ↑", "ArrowUp", "ArrowUp", mod_ctrl, "boxes"),
+      c("web-pages.screen.combo.forceQuit", "⌘ ⌥ Esc", "Escape", "Escape", mod_meta | mod_alt, "stop"),
+      c("web-pages.screen.combo.quit", "⌘ Q", "q", "KeyQ", mod_meta, "close"),
+      c("web-pages.screen.combo.screenshot", "⌘ ⇧ 4", "4", "Digit4", mod_meta | mod_shift, "camera"),
     ]
   } else {
     [
-      c("web-pages.screen.combo.start", "Win", "Meta", "MetaLeft", 0),
-      c("web-pages.screen.combo.switchWindow", "Alt Tab", "Tab", "Tab", mod_alt),
-      c("web-pages.screen.combo.desktop", "Win D", "d", "KeyD", mod_meta),
-      c("web-pages.screen.combo.taskManager", "Ctrl Shift Esc", "Escape", "Escape", mod_ctrl | mod_shift),
-      c("web-pages.screen.combo.close", "Alt F4", "F4", "F4", mod_alt),
-      c("web-pages.screen.combo.snip", "Win Shift S", "s", "KeyS", mod_meta | mod_shift),
+      c("web-pages.screen.combo.start", "Win", "Meta", "MetaLeft", 0, "boxes"),
+      c("web-pages.screen.combo.switchWindow", "Alt Tab", "Tab", "Tab", mod_alt, "view-columns"),
+      c("web-pages.screen.combo.desktop", "Win D", "d", "KeyD", mod_meta, "monitor"),
+      c("web-pages.screen.combo.taskManager", "Ctrl Shift Esc", "Escape", "Escape", mod_ctrl | mod_shift, "chart"),
+      c("web-pages.screen.combo.close", "Alt F4", "F4", "F4", mod_alt, "close"),
+      c("web-pages.screen.combo.snip", "Win Shift S", "s", "KeyS", mod_meta | mod_shift, "camera"),
     ]
   }
 }
@@ -344,8 +345,9 @@ fn center_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, close : () -> Unit) 
 }
 
 ///|
-/// What 控制中心 holds: how the view goes (live: its round trip, pressed its figures), 画质, 缩放 (where the station
-/// changes it), 组合键 (while driving: its list opened from its row), then sending files, 全屏, and 断开.
+/// What 控制中心 holds, the most used first (as UU 远程's control bar has it): the combos as tiles (while driving: their
+/// names, a tap sends their keys), how the view goes (live: its round trip, pressed its figures), 画质 and 缩放 (where
+/// the station changes it) a row each, then sending files, 全屏, and 断开.
 fn center_panel(
   c : @ui.Ctx,
   s : ScreenSess,
@@ -355,6 +357,11 @@ fn center_panel(
   done : () -> Unit,
 ) -> Unit {
   let src = s.src
+  if s.driving() {
+    @sf.panel_group(c, label=tr("web-pages.screen.combos"), fn() {
+      combo_tiles(c, s, combos_for(screen_os(src, s.station)), done)
+    })
+  }
   if s.phase() == "live" {
     @sf.panel_group(c, fn() {
       let rtt = text(field(screen_net(s), "rtt"), "text")
@@ -374,63 +381,39 @@ fn center_panel(
   }
   let quality = screen_quality(src)
   @sf.panel_group(c, label=tr("web-pages.screen.quality"), fn() {
-    for q in screen_qualities {
-      if @sf.menu_item(
-          c,
-          tr("web-pages.screen.quality." + q.1),
-          key="screen-quality/" + q.1,
-          panel=true,
-          end=if quality == q.0 { "check" } else { "" },
-          on=quality == q.0,
-          note=tr("web-pages.screen.qualityHint." + q.1),
-        ) &&
-        quality != q.0 {
-        prefs_chosen(c, s, "screenQuality", q.0)
+    let now = screen_qualities.search_by(fn(q) { q.0 == quality }).unwrap_or(0)
+    c.box(style=center_choice, fn() {
+      let chosen = @sf.segmented(
+        c,
+        "screen-quality",
+        screen_qualities.map(fn(q) { tr("web-pages.screen.quality." + q.1) }),
+        now,
+      )
+      if chosen != now {
+        prefs_chosen(c, s, "screenQuality", screen_qualities[chosen].0)
       }
-    }
+    })
+    |> ignore
+    @sf.panel_note(c, tr("web-pages.screen.qualityHint." + screen_qualities[now].1))
   })
   match s.scale() {
     Some((percent, recommended, steps)) =>
       @sf.panel_group(c, label=tr("web-pages.screen.scale"), fn() {
-        for p in steps {
-          let words = if p == recommended {
-            fill("web-pages.screen.scaleRecommended", [("percent", "\{p}")])
-          } else {
-            "\{p}%"
-          }
-          if @sf.menu_item(
-              c,
-              words,
-              key="screen-scale/\{p}",
-              panel=true,
-              end=if p == percent { "check" } else { "" },
-              on=p == percent,
-            ) &&
-            p != percent {
+        let now = steps.search(percent).unwrap_or(-1)
+        c.box(style=center_choice, fn() {
+          let chosen = @sf.segmented(c, "screen-scale", steps.map(fn(p) { "\{p}%" }), now)
+          if chosen != now && chosen >= 0 {
+            let p = steps[chosen]
             let n = c.frame_number()
             c.tell("screen-scale/" + s.view + "/\{n}", fn() {
               s.input(src, Json::object({ "t": Json::string("scale"), "percent": Json::number(p.to_double()) }))
             })
           }
-        }
+        })
+        |> ignore
+        @sf.panel_note(c, fill("web-pages.screen.scaleRecommended", [("percent", "\{recommended}")]))
       })
     None => ()
-  }
-  // (组合键 one row, its list opened beside: 控制中心 stays short enough to see whole on a phone)
-  if s.driving() {
-    @sf.panel_group(c, fn() {
-      if @sf.menu_item(
-          c,
-          tr("web-pages.screen.combos"),
-          key="screen-center-combos",
-          panel=true,
-          icon="keyboard",
-          end="chevron-right",
-        ) {
-        done()
-        combos_open(s, from)
-      }
-    })
   }
   @sf.panel_group(c, fn() {
     if s.drops_to() is Some(_) &&
@@ -453,22 +436,37 @@ fn center_panel(
 }
 
 ///|
-/// 组合键: the keys worth sending to the screen's system, a row each with its keys; one chosen is sent and it closes.
-fn combos_open(s : ScreenSess, from : @sf.Anchor) -> Unit {
-  @sf.panel(
-    tr("web-pages.screen.combos"),
-    fn(c, done) {
-      for k in combos_for(screen_os(s.src, s.station)) {
-        if @sf.menu_item(c, k.name, key="screen-combo/" + k.keys, panel=true, note=k.keys) {
-          let n = c.frame_number()
-          c.tell("screen-combo/" + s.view + "/\{n}", fn() { stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, k.mods) })
-          done()
+/// The combos as tiles, three to a row: an icon over its name (what it does, not its keys: a phone has no keys to press
+/// for it), a tap sending its keys down and up, and 控制中心 closing.
+fn combo_tiles(c : @ui.Ctx, s : ScreenSess, combos : Array[Combo], done : () -> Unit) -> Unit {
+  let rows = (combos.length() + 2) / 3
+  c.box(style=tiles_box, fn() {
+    for r in 0..<rows {
+      c.box(style=tiles_row, fn() {
+        for i in (r * 3)..<(r * 3 + 3) {
+          if i >= combos.length() {
+            // (the row's last tiles as wide as the others)
+            c.box(style=tile_gap, fn() {  }) |> ignore
+            continue
+          }
+          let k = combos[i]
+          let id = c.id("screen-combo/" + k.keys)
+          let t = c.box(style=tile_box, id~, fn() {
+            @sf.icon(c, k.icon, size=round_icon, color=c.color(Fg)) |> ignore
+            c.text(k.name, style=tile_words) |> ignore
+          })
+          c.semantics(t, Button, id~, label=k.name, actions=[Activate])
+          if c.clicked(id) {
+            let n = c.frame_number()
+            c.tell("screen-combo/" + s.view + "/\{n}", fn() { stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, k.mods) })
+            done()
+          }
         }
-      }
-    },
-    from~,
-    focus=false,
-  )
+      })
+      |> ignore
+    }
+  })
+  |> ignore
 }
 
 ///|

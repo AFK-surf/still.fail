@@ -14,6 +14,11 @@ fn open_center(r : ScreenRig) -> Unit {
 fn shut(r : ScreenRig) -> Unit {
   r.t.press("Escape")
   r.t.run_for(@kit.presence_out_ms + @sf.later_ms)
+  // (a segmented choice's thumb gone on its spring to the one chosen: run to its rest)
+  let rest = r.t.rest_of("spring")
+  if rest > r.t.time() {
+    r.t.run_for(rest - r.t.time())
+  }
 }
 
 ///|
@@ -22,7 +27,7 @@ test "画质 chosen in 控制中心 is kept on the device and the view asked aga
   r.live()
   open_center(r)
   assert_true(r.t.find(tr("web-pages.screen.quality")) is Some(_))
-  assert_true(r.t.find("720p") is Some(_))
+  assert_true(r.t.find(tr("web-pages.screen.qualityHint.auto")) is Some(_))
   r.t.tap_text(tr("web-pages.screen.quality.smooth"))
   r.t.draw()
   let set = r.told("prefs.set").filter(fn(p) { field(Some(p), "screenQuality") is Some(_) })
@@ -34,6 +39,7 @@ test "画质 chosen in 控制中心 is kept on the device and the view asked aga
   assert_eq(r.cancelled, [1])
   assert_eq(number(Some(asked[1]), "maxWidth"), 1280.0)
   assert_eq(number(Some(asked[1]), "maxHeight"), 720.0)
+  assert_true(r.t.find("720p") is Some(_))
   // back to 自动: the device's screen again
   r.t.tap_text(tr("web-pages.screen.quality.auto"))
   r.t.draw()
@@ -61,14 +67,12 @@ test "a 画质 kept on the device is asked for as the view opens" {
 }
 
 ///|
-test "组合键 while driving: a Windows station's, each sent down and up with its modifiers; none while only looking" {
+test "组合键 while driving: a Windows station's, tiles at 控制中心's top, each sent down and up with its modifiers; none while only looking" {
   let r = screen_rig()
   r.live()
   open_center(r)
-  // one row in 控制中心, its list opened from it
-  assert_true(r.t.find(tr("web-pages.screen.combo.taskManager")) is None)
-  r.t.tap_text(tr("web-pages.screen.combos"))
-  r.t.run_for(@kit.presence_out_ms + @sf.later_ms)
+  // tiles at its top, by their names alone: no keys to read
+  assert_true(r.t.find("Ctrl Shift Esc") is None)
   r.t.tap_text(tr("web-pages.screen.combo.taskManager"))
   r.t.draw()
   let ins = r.inputs()
@@ -80,7 +84,7 @@ test "组合键 while driving: a Windows station's, each sent down and up with i
   // chosen, 控制中心 closes
   r.t.run_for(@sf.later_ms)
   assert_true(r.t.find(tr("web-pages.screen.combos")) is None)
-  // only looking: no keys to send
+  // only looking: no keys to send (nor the keys row)
   r.state("live", control=false)
   open_center(r)
   assert_true(r.t.find(tr("web-pages.screen.combos")) is None)
