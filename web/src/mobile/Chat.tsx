@@ -1,3 +1,4 @@
+import { outsideScroll, scrollToEnd } from "../scrollBounds.ts";
 import { pickAttachment } from "../pickAttachment.ts";
 import { StationUpdate } from "../StationUpdate.tsx";
 // An item's page on a narrow screen: its chat's messages (none before its agent has a chat), the composer, and each
@@ -695,11 +696,11 @@ function JobOutput({ station, job }: { station: string; job: Job }) {
   const atEnd = useRef(true);
   useEffect(() => {
     const el = box.current;
-    if (el && atEnd.current) el.scrollTop = el.scrollHeight;
+    if (el && atEnd.current) scrollToEnd(el);
   }, [log?.text]);
   if (log === null) return <WaitLine />;
   return (
-    <pre ref={box} className={css.mJobOutput} onScroll={(e) => { const el = e.currentTarget; atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
+    <pre ref={box} className={css.mJobOutput} onScroll={(e) => { const el = e.currentTarget; if (outsideScroll(el)) return; atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
       {log.text ? <TermText text={log.text} runs={log.runs} /> : t("web-mobile.chat.noOutput")}
     </pre>
   );

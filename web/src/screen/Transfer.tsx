@@ -3,6 +3,7 @@
 // paste here set on the screen's clipboard and pasted there (`screen.clipboard`), and files dropped on the screen (or
 // picked) put on its machine with the drive's upload, where it says (`drop`): how each goes, where it went, its path to
 // paste there and the machine's file manager to show it in.
+import { scrollToEnd } from "../scrollBounds.ts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { core } from "../core/react.ts";
 import type { ScreenDrop } from "../core/shapes.ts";
@@ -107,7 +108,7 @@ export function SendsPanel({ drop, going, sent, onPastePath, onReveal, onClose }
   const list = useRef<HTMLDivElement>(null);
   const count = going.length + sent.length;
   // The newest in sight.
-  useEffect(() => { list.current?.scrollTo({ top: list.current.scrollHeight }); }, [count]);
+  useEffect(() => { if (list.current) scrollToEnd(list.current); }, [count]);
   return (
     <div className={css.sends} role="region" aria-label={t("web-pages.screen.sends")}>
       <div className={`${css.sendsHead} ${panelEdge}`}>

@@ -143,6 +143,7 @@ export const jobDetailCommand = style({
 });
 export const jobDetailNotices = style({ flex: "1", minHeight: "0", overflowY: "auto", padding: "8px 10px 0 0" });
 export const jobOutput = style({
+  overscrollBehaviorY: "none",
   flex: "1", minHeight: "0", margin: "4px 0 8px", paddingRight: "8px", overflow: "auto",
   font: `11.5px/1.6 ${vars.fontMono}`, color: vars.text, whiteSpace: "pre-wrap", overflowWrap: "anywhere",
 });

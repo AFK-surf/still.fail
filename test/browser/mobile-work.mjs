@@ -55,6 +55,30 @@ Object.assign(window,{filter:f=>setSidebarMode('demo',f),operate:()=>{window.pro
     const height=await page.locator('[data-home-pane=all]').evaluate(e=>e.scrollHeight);
     assert.equal(await page.locator('[data-home-pane=all]').evaluate(e=>e.scrollTop),0,`${engine}: home opens below its header, at the very top`);
     assert(height>66000,`${engine}: the whole list still takes its room`);
+    phase='edges';
+    for (const edge of ['top','bottom']) {
+      const report=await page.locator('[data-home-pane=all]').evaluate(async(el,edge)=>{
+        el.scrollTop=edge==='top'?0:el.scrollHeight;
+        await new Promise(r=>setTimeout(r,300));
+        let proto=el,descriptor;
+        while(proto&&!descriptor){descriptor=Object.getOwnPropertyDescriptor(proto,'scrollTop');proto=Object.getPrototypeOf(proto);}
+        const writes=[];
+        let outside=null;
+        Object.defineProperty(el,'scrollTop',{configurable:true,get:()=>outside??descriptor.get.call(el),set:v=>{writes.push(v);descriptor.set.call(el,v);}});
+        try {
+          for(const amount of [12,40,24]){
+            outside=edge==='top'?-amount:el.scrollHeight-el.clientHeight+amount;
+            el.dispatchEvent(new Event('scroll'));
+            await new Promise(r=>setTimeout(r,70));
+          }
+          await new Promise(r=>setTimeout(r,200));
+          return {writes,behavior:getComputedStyle(el).overscrollBehaviorY};
+        }finally{delete el.scrollTop;el.dispatchEvent(new Event('scroll'));}
+      },edge);
+      assert.deepEqual(report.writes,[],`${engine}: ${edge} rubber-band positions must never be corrected by script`);
+      assert.equal(report.behavior,'none',`${engine}: virtual Home disables competing native bounce`);
+    }
+    await page.locator('[data-home-pane=all]').evaluate(el=>{el.scrollTop=0;});await page.waitForTimeout(300);
     await page.evaluate(()=>window.operate());await page.waitForTimeout(100);
     assert.equal(await page.evaluate(()=>window.probeRenders),1,`${engine}: only the affected operation subscriber renders`);
     phase='archive';
