@@ -381,3 +381,43 @@ test "dropdown menu: put by a rectangle, its own motion and a scrim; gone once i
   assert_true(t.find("One") is None)
   t.assert_idle()
 }
+
+///|
+/// Where `words` are drawn now (their top and bottom, moved as what holds them scrolls), or a failure.
+fn words_span(t : @ui.Tester, words : String) -> (Double, Double) raise {
+  match t.words().iter().find_first(fn(w) { w.0 == words }) {
+    Some((_, _, y, _, h, _)) => (y, y + h)
+    None => fail("\{words} not drawn")
+  }
+}
+
+///|
+test "dropdown menu: taller than the room on either side of its trigger, within the room over it, its items scrolled to" {
+  let open = Ref(true)
+  let entries = Array::makei(40, fn(i) { menu_item("i\{i}", label="Item \{i + 1}") })
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(w=Fill(1.0), h=Fill(1.0), pad=40.0, justify=JEnd, fn() {
+        let tr = button(c, "More", key="more")
+        if tr.clicked {
+          open.val = !open.val
+        }
+        open.val = dropdown_menu(c, "menu", open.val, tr.id, entries, label="More").open
+      })
+      |> ignore
+    },
+    w=600.0,
+    h=400.0,
+  )
+  t.run_for(presence_in_ms)
+  let (trigger, _) = words_span(t, "More")
+  // over its trigger, the side with the room, its first item in the window
+  let (first, _) = words_span(t, "Item 1")
+  assert_true(first > 0.0, msg="its first item out of the window")
+  assert_true(words_span(t, "Item 40").0 > trigger, msg="its last item not past what it shows")
+  // its last item reached by the wheel, above its trigger
+  let (x, y) = t.find("Item 1").unwrap()
+  t.wheel(x, y, 5000.0)
+  assert_true(words_span(t, "Item 40").1 < trigger, msg="its items not scrolled to their end")
+  assert_true(open.val)
+}

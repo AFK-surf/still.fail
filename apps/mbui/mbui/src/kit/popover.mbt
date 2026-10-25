@@ -9,12 +9,43 @@
 // back into it, a little quicker (`pop_out`).
 
 ///|
-/// What a popover's, a hover card's or a tooltip's look is given: the side of its trigger it went on, and how tall it
-/// can be there (Ctx::room_beside, Radix's --radix-popper-available-height): a look taller than that holds itself to
-/// it, what it holds scrolling, or it runs out of the window.
+/// What a popover's, a hover card's or a tooltip's look is given: the side of its trigger it went on, how tall it can be
+/// there (Ctx::room_beside, Radix's --radix-popper-available-height) and the panel's box (its size read back): what it
+/// holds is kept within that room by in_room, or it runs out of the window.
 pub(all) struct PopState {
   side : @ui.Side
   room : Double
+  panel : Int
+}
+
+///|
+/// What panel `s` holds (`body`, as its look is given it), kept within the room the panel has where it went (Radix's
+/// content at its available height, its overflow auto): as it is while the panel fits, and while it is no taller than
+/// `most` (what a list scrolls past); else scrolling in a box as tall as that room leaves it once the rest of the panel
+/// (its padding, its lines, what stands over and under this) is taken off, each read back as it is laid out. `gap`
+/// between what it holds, `padx` in from its sides, which reach `mx` out (below 0: across the panel's padding, so that
+/// what it holds scrolls to the panel's sides). `key`: its scroll's (by default the panel's). Whether it scrolls so.
+pub fn in_room(
+  c : @ui.Ctx,
+  s : PopState,
+  body : () -> Unit,
+  key? : String = "",
+  most? : Double = 1.0e9,
+  gap? : Double = 0.0,
+  padx? : Double = 0.0,
+  mx? : Double = 0.0,
+) -> Bool {
+  let (key, view, whole, tall, held) = room_of(c, s, key, most)
+  let what = fn() { c.box(id=whole, taps=false, w=Fill(1.0), padx~, gap~, body) |> ignore }
+  c.box(id=view, taps=false, w=Fill(1.0), mx~, fn() {
+    if held {
+      c.capped(key, tall, what) |> ignore
+    } else {
+      what()
+    }
+  })
+  |> ignore
+  held
 }
 
 ///|
@@ -259,7 +290,7 @@ fn beside(
   }
   let went = went_side(c, pid, ar, side, along, offset)
   let room = c.room_beside(ar, went, offset~)
-  let i = c.box(id=pid, fn() { look(c, { side: went, room }, body) })
+  let i = c.box(id=pid, fn() { look(c, { side: went, room, panel: pid }, body) })
   c.place_by_size(i, fn(pw, ph) {
     let (x, y, _) = c.place(ar, pw, ph, side~, along~, offset~)
     (x, y)
@@ -305,14 +336,41 @@ fn grown_from(shows : @ui.Look, went : @ui.Side, along : @ui.Along) -> @ui.Look 
 }
 
 ///|
+/// Whether what panel `s` holds would scroll in in_room with the same `key` and `most` (asked before it is drawn: what
+/// it holds lays itself out by it).
+pub fn held_in_room(c : @ui.Ctx, s : PopState, key? : String = "", most? : Double = 1.0e9) -> Bool {
+  room_of(c, s, key, most).4
+}
+
+///|
+/// in_room's key, its two boxes (the room it is given, what it holds whole), how tall it may be, and whether it scrolls.
+fn room_of(c : @ui.Ctx, s : PopState, key : String, most : Double) -> (String, Int, Int, Double, Bool) {
+  let key = if key == "" { "\u{2}room/\{s.panel}" } else { key }
+  let view = c.id(key + "/view")
+  let whole = c.id(key + "/whole")
+  // (the rest of the panel: what it is laid out taller than this)
+  let rest = match (c.laid_size(s.panel), c.laid_size(view)) {
+    (Some((_, ph)), Some((_, vh))) => dmax(ph - vh, 0.0)
+    _ => 0.0
+  }
+  let tall = dmax(dmin(most, s.room - rest), 0.0)
+  // (what it holds laid out whole either way, scrolling or not: by its own height)
+  let held = match c.laid_size(whole) {
+    Some((_, h)) => h > tall + 0.5
+    None => false
+  }
+  (key, view, whole, tall, held)
+}
+
+///|
 /// A popover's (and a hover card's) look by its sizes (still.fail's small panels): the theme's surface, its large
-/// corner, `pad` in (a panel's 6 and a row's 10: its words where a menu's rows put theirs), a line round it, a shadow.
+/// corner, `pad` in (a panel's 6 and a row's 10: its words where a menu's rows put theirs), a line round it, a shadow;
+/// what it holds within the room it has (in_room).
 pub fn popover_look_of(pad? : Double = 16.0, gap? : Double = 8.0) -> (@ui.Ctx, PopState, () -> Unit) -> Unit {
-  fn(c, _, body) {
+  fn(c, s, body) {
     let t = c.theme()
     c.box(
       pad~,
-      gap~,
       bg=t.surface,
       radius=t.radius_lg,
       border=1.0,
@@ -320,7 +378,7 @@ pub fn popover_look_of(pad? : Double = 16.0, gap? : Double = 8.0) -> (@ui.Ctx, P
       shadow=32.0,
       shadow_color=t.shadow,
       shadow_y=12.0,
-      body,
+      fn() { in_room(c, s, body, gap~) |> ignore },
     )
     |> ignore
   }

@@ -30,9 +30,9 @@ pub fn hover(
     offset=hover_offset,
     enter=hover_in,
     exit=hover_out,
-    look=fn(c, _, body) {
+    look=fn(c, s, body) {
       c.box(style=if tile { hover_tile } else { hover_card }, fn() {
-        @sf.small_panel(c, w=Fill(1.0), fn() { c.box(style=hover_inner, body) |> ignore }) |> ignore
+        @sf.small_panel(c, w=Fill(1.0), fn() { @sf.within_room(c, s, body, inner=hover_inner) }) |> ignore
       })
       |> ignore
     },

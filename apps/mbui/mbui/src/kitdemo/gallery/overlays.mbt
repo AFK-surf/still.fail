@@ -72,7 +72,7 @@ fn overlays(c : @ui.Ctx) -> Unit {
   })
   section(c, "Popover, hover card and tooltip", fn() {
     c.box(dir=Row, gap=12.0, align=AStart, fn() {
-      @kit.popover_look(c, { side: Bottom, room: c.height }, fn() {
+      @kit.popover_look(c, { side: Bottom, room: c.height, panel: c.id("g-pop-filters") }, fn() {
         c.text("Filters", size=t.font_sm, weight=600, wrap=false) |> ignore
         c.box(dir=Row, gap=8.0, align=ACenter, fn() {
           @kit.checkbox(c, "g-unread", On, label="Unread") |> ignore
@@ -80,7 +80,7 @@ fn overlays(c : @ui.Ctx) -> Unit {
         })
         |> ignore
       })
-      @kit.popover_look(c, { side: Bottom, room: c.height }, fn() {
+      @kit.popover_look(c, { side: Bottom, room: c.height, panel: c.id("g-pop-ada") }, fn() {
         c.box(dir=Row, gap=10.0, align=ACenter, fn() {
           @kit.avatar(c, "", "Ada Lovelace", size=36.0)
           c.box(gap=2.0, fn() {
@@ -92,7 +92,7 @@ fn overlays(c : @ui.Ctx) -> Unit {
         |> ignore
       })
       c.box(gap=6.0, align=ACenter, fn() {
-        @kit.tooltip_look(c, { side: Top, room: c.height }, "Bold (⌘B)")
+        @kit.tooltip_look(c, { side: Top, room: c.height, panel: c.id("g-tip-bold") }, "Bold (⌘B)")
         @kit.button(c, "B", key="g-bold", variant=Outline) |> ignore
       })
       |> ignore

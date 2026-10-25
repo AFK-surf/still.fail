@@ -432,15 +432,12 @@ let field_frame : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 radius=Xl bg=Card bo
 /// A small panel's ground (controls.css.ts popover): the canvas (the raised
 /// grey in dark), a line round it, its shadow; padded panel_pad, its corner
 /// the menu's. `min_w`: as wide as what it holds, at least that (a menu's,
-/// controls.css.ts menuList); `max_h`: no taller than that (the room beside
-/// what opened it); `id`: what its size is read back by.
+/// controls.css.ts menuList).
 pub fn small_panel(
   c : @ui.Ctx,
   w? : @ui.Size = Auto,
   h? : @ui.Size = Auto,
   min_w? : Double,
-  max_h? : Double,
-  id? : Int = 0,
   body : () -> Unit,
 ) -> Int {
   let t = theme()
@@ -448,9 +445,6 @@ pub fn small_panel(
     w~,
     h~,
     min_w?,
-    max_h?,
-    id~,
-    taps=false,
     pad=panel_pad,
     bg=panel_ground(),
     radius=r_menu,
@@ -462,6 +456,33 @@ pub fn small_panel(
     clip=true,
     body,
   )
+}
+
+///|
+/// A small panel's look beside what opened it (@kit.popover's, @kit.hover_card's), `w` wide: what it holds kept within
+/// the room the panel has on the side it went (@kit.in_room: scrolling out to its sides where that is short, and past
+/// `most`), in `inner` where said (its own room round what it holds and between).
+pub fn beside_look(
+  w : @ui.Size,
+  inner? : @ui.Style,
+  most? : Double = 1.0e9,
+) -> (@ui.Ctx, @kit.PopState, () -> Unit) -> Unit {
+  fn(c, s, body) {
+    small_panel(c, w~, fn() { within_room(c, s, body, inner?, most~) }) |> ignore
+  }
+}
+
+///|
+/// What a small panel beside what opened it (`s`, as its look is given it) holds, kept within the room it has
+/// (beside_look's), in `inner` where said.
+pub fn within_room(c : @ui.Ctx, s : @kit.PopState, body : () -> Unit, inner? : @ui.Style, most? : Double = 1.0e9) -> Unit {
+  @kit.in_room(c, s, most~, mx=-panel_pad, padx=panel_pad, fn() {
+    match inner {
+      Some(st) => c.box(style=st, body) |> ignore
+      None => body()
+    }
+  })
+  |> ignore
 }
 
 ///|
