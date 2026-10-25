@@ -45,10 +45,13 @@ fn ref_panel_body(c : @ui.Ctx, src : Source, key : String, station : String, id 
     |> ignore
   }
   let chat = drops_as_files(src, key)
+  // (this chat's say, a row as the page's rows are: on its card where narrow)
   c.box(style=ref_block, fn() {
-    if @sf.switch_row(c, "composer/ref/chat-files", @sf.t("web-main.file.chatAsFiles"), chat) != chat {
-      set_drops_as_files(src, key, !chat)
-    }
+    @sf.group(c, fn() {
+      if @sf.switch_row(c, "composer/ref/chat-files", @sf.t("web-main.file.chatAsFiles"), chat) != chat {
+        set_drops_as_files(src, key, !chat)
+      }
+    })
   })
   |> ignore
 }

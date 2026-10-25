@@ -473,7 +473,15 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     s.set_basis(if basis0 { Pt(0.0) } else { Auto })
     ch = true
   }
-  let als : @flex.Align = if stretch { Stretch } else { Auto }
+  // (cut short, never grown: in a column that stretches what it holds, at its start as wide as what it holds; in one
+  // that centres or ends them, placed as it places them)
+  let als : @flex.Align = if stretch {
+    Stretch
+  } else if in_col && n.w is Cut && n.parent >= 0 && self.nodes[n.parent].align is AStretch {
+    FlexStart
+  } else {
+    Auto
+  }
   if s.align_self != als {
     s.align_self = als
     ch = true

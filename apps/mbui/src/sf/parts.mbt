@@ -269,6 +269,11 @@ pub fn segmented(
   ink? : Int64,
   thumb? : Int64,
 ) -> Int {
+  // (a narrow page's: as wide as where it is, each option an equal share, Seg's look (seg.mbt); a wide page's: the
+  // web's Segmented, as wide as its options, its track round them alone)
+  if look() is Narrow {
+    return seg(c, key, labels, chosen, fill=true, height=segmented_narrow_h)
+  }
   let t = theme()
   let ink = ink.unwrap_or(t.p.text)
   let thumb = thumb.unwrap_or(t.p.canvas)
@@ -397,6 +402,10 @@ let segmented_chevron : Double = 16.0
 /// An option's height on one line (segmentedOption: 30), and the thumb's corner, a pill's (the track's concentric
 /// round it).
 let segmented_h : Double = 30.0
+
+///|
+/// A narrow page's (Seg filling, as the web's narrow pages' mSeg): 34 high.
+let segmented_narrow_h : Double = 34.0
 
 ///|
 let segmented_corner : Double = 15.0
