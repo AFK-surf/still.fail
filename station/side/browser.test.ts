@@ -201,3 +201,55 @@ test("a tab's clipboard, for a person driving it: what the page copies is heard,
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("a login's page in the station's Chrome: a tab of the station's own, laid out for a phone while a view with its stage drives it, as it was once that ends, closed when asked", { skip: binary === undefined && "no Chrome here" }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "side-browser-fit-"));
+  const screens = makeScreens();
+  const browser = new StationBrowser({ dir, chrome: chromeHost({ dir, headless: true }), screens });
+  // A page laid out by its width, as a sign-in page is: narrow, its column alone.
+  const page = `<title>sign in</title><meta name=viewport content="width=device-width,initial-scale=1"><style>#w{display:none}@media (max-width:500px){#w{display:block}}</style><body><div id=w>narrow</div>`;
+  const server = createServer((_, res) => res.writeHead(200, { "content-type": "text/html" }).end(page));
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  let agent: Cdp | null = null;
+  try {
+    // The station opens it (the browser started for it): among the screens once it is given, nobody's.
+    const id = await browser.openTab(`http://127.0.0.1:${(server.address() as AddressInfo).port}/`);
+    const tab = screens.get(`browser:${id}`);
+    assert.ok(tab, "a screen by the time it is given");
+    assert.equal(tab.openedBy?.(), undefined);
+    // What the page itself says of its width, read on a connection of its own (as an agent's).
+    agent = await connectCdp(browser.status().ws!);
+    const { sessionId } = await agent.send("Target.attachToTarget", { targetId: id, flatten: true });
+    const evaluate = async (expression: string) => (await agent!.send("Runtime.evaluate", { expression, returnByValue: true }, sessionId)).result?.value;
+    await until(async () => (await evaluate("document.readyState")) === "complete", "the page loads");
+    const wide = await evaluate("innerWidth");
+    assert.ok(wide > 500, `a desktop's window: ${wide}`);
+    // A phone drives it: laid out for its stage, cast as large as the phone shows it.
+    const view = await tab.open({ maxWidth: 1920, maxHeight: 1080, codecs: ["jpeg"], fit: { width: 390, height: 700, scale: 3 } });
+    const frame = await until(async () => {
+      const f = await view.next();
+      return f && jpegSize(f.data)?.width === 780 ? f : null;
+    }, "a frame of the phone's size");
+    assert.deepEqual(jpegSize(frame.data), { width: 780, height: 1400 });
+    assert.deepEqual([await evaluate("innerWidth"), await evaluate("getComputedStyle(w).display")], [390, "block"]);
+    // A tap lands where the phone shows it.
+    await evaluate("window.tapped = null; addEventListener('mousedown', (e) => (window.tapped = [e.clientX, e.clientY])); true");
+    await view.input({ t: "pointer", kind: "down", x: 0.5, y: 0.5, buttons: 1 });
+    await view.input({ t: "pointer", kind: "up", x: 0.5, y: 0.5, buttons: 0 });
+    assert.deepEqual(await evaluate("window.tapped"), [195, 350]);
+    // The view ends: the page as it was, for whoever looks next.
+    view.close();
+    await until(async () => (await evaluate("innerWidth")) === wide, "laid out as before");
+    assert.equal(await evaluate("getComputedStyle(w).display"), "none");
+    // The login ends: its tab is closed, and leaves the screens.
+    await browser.closeTab(id);
+    await until(() => !screens.get(`browser:${id}`), "the tab gone");
+    assert.equal(browser.hasTab(id), false);
+  } finally {
+    agent?.close();
+    await browser.stop().catch(() => {});
+    await browser.close();
+    server.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
