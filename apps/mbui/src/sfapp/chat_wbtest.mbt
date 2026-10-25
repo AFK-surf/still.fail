@@ -70,6 +70,23 @@ test "the viewer's words on the right, everyone else's under their name" {
 }
 
 ///|
+test "what the viewer quotes is over their bubble at the right, no wider than the bubble may be" {
+  let t = chat_tester("chat")
+  t.move(195.0, 400.0)
+  t.wheel(195.0, 400.0, -500.0)
+  // (the agent's words it quotes are in the chat too: the card's are after whose they are)
+  let quote = t.words().filter(fn(w) { w.0.has_prefix("Claude") && w.0.contains("其余的行按估计的高度占位") })
+  assert_eq(quote.length(), 1)
+  let (_, qx, _, qw, _, _) = quote[0]
+  let (bx, _, bw, _) = t.rect_of("这里的高度是怎么估的？").unwrap()
+  // the card's words in from its start (11, its mark and 4 after it): the card starts no further left than 78% of
+  // the column from its right edge, as the bubble under it, and both end there
+  assert_true(qx - 26.0 >= 390.0 - 16.0 - 390.0 * 0.78 - 0.5)
+  assert_true(qx + qw <= 390.0 - 16.0 - 11.0 + 0.5)
+  assert_true(bx + bw > 390.0 - 16.0 - 24.0)
+}
+
+///|
 test "near the top the page before comes in, and what is in view stays where it is" {
   let t = chat_tester("chat")
   t.move(195.0, 400.0)
