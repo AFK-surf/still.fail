@@ -2,10 +2,13 @@
 // where things stand apart from each other and from the edges of what holds them. Each fault a line saying its rule,
 // the boxes (Ctx::named) and by how much:
 //
-// 1. What lights up under the hand (a box whose look asks Ctx::lit, or is drawn selected) stands apart from the next
-//    one that does, by the theme's `lit_apart` at least (the web's sidebar rows, `& + &` 2): two lit grounds side by
-//    side read as one block. Measured between their boxes, in the same layer, where they share a column or a row;
+// 1. What lights up under the hand (a box whose look asks Ctx::lit, or is drawn selected, a shape a ground shows in)
+//    stands apart from the next one that does, by the theme's `lit_apart` at least (the web's sidebar rows, `& + &`
+//    2): two lit grounds side by side read as one block. Measured between their boxes, in the same layer, where they share a column or a row;
 //    what holds others that light up as wide or as tall as it (a list, a rail) is where they are, not one of them.
+//    Not held to it: the parts of one control (in a ground of their own that hugs them: a segmented choice's
+//    options), and things where nothing stays lit (no ground shown with no hand on them in what holds them: one
+//    lights at a time; a list across the whole screen, a card of options).
 // 3. Two blocks with grounds of their own beside each other in one box never meet (0 between them) or run over each
 //    other: they stand apart, or are one block. Lines (thinner than `gap_line`) are what parts things, not a block.
 // 4. What a box with a ground or an edge holds (words, a drawing) stands in from its edges, never touching one; and
@@ -26,6 +29,10 @@ let gap_line : Double = 3.0
 let gap_lit_least : Double = 16.0
 
 ///|
+/// How far in round the parts of one control its ground may stand (a segmented choice's track, 2 round its options).
+let gap_part_in : Double = 4.0
+
+///|
 /// How much of what holds it a thing that lights up spans, across or down, for that to be where such things stand (a
 /// list's rows its width), not one of them (a row's buttons).
 let gap_spans : Double = 0.8
@@ -42,10 +49,12 @@ pub fn Tester::gap_faults(self : Tester) -> Array[String] {
 }
 
 ///|
-/// What a box laid out `n` says it lights up as: it asked whether the hand is on it (Ctx::lit), or is drawn selected.
+/// Whether box `i` lights up as a ground: it asked whether the hand is on it (Ctx::lit), or is drawn selected, and it is
+/// a shape a ground shows in, a ground now or its corners said while it has none (a row's, a button's). What the hand
+/// changes otherwise (a timeline's track grown under the pointer, an icon's ink) lights no block.
 fn Ctx::gap_lights(self : Ctx, i : Int) -> Bool {
   let b = self.nodes[i]
-  b.kind == kind_box && b.id != 0 && self.lit_asked.contains(b.id)
+  b.kind == kind_box && b.id != 0 && self.lit_asked.contains(b.id) && (b.grounded() || b.radius > 0.0)
 }
 
 ///|
@@ -167,10 +176,65 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
       dmin(self.nodes[o].fw, self.nodes[o].fh) >= gap_lit_least &&
       !lit.iter().any(fn(i) { i != o && layer[i] == layer[o] && holds(o, i) })
     })
+    // (the parts of one control: what lights up in a ground that is theirs alone, as large as they are with its few in
+    // round them, a segmented choice's options in its track: one thing, its parts edge to edge on purpose, what is
+    // chosen shown by its thumb)
+    let ground_of : Map[Int, Int] = {}
+    let parts : Map[Int, (Double, Double, Double, Double)] = {}
+    for i in lit {
+      let mut q = self.nodes[i].parent
+      while q >= 0 && layer[q] == layer[i] && !self.nodes[q].grounded() {
+        q = self.nodes[q].parent
+      }
+      if q >= 0 && layer[q] == layer[i] {
+        ground_of[i] = q
+        let b = self.nodes[i]
+        parts[q] = match parts.get(q) {
+          Some((x0, y0, x1, y1)) => (dmin(x0, b.x), dmin(y0, b.y), dmax(x1, b.x + b.fw), dmax(y1, b.y + b.fh))
+          None => (b.x, b.y, b.x + b.fw, b.y + b.fh)
+        }
+      }
+    }
+    let one_control = fn(a : Int, b : Int) {
+      match (ground_of.get(a), ground_of.get(b)) {
+        (Some(ga), Some(gb)) if ga == gb =>
+          match parts.get(ga) {
+            Some((x0, y0, x1, y1)) => {
+              let g = self.nodes[ga]
+              x0 - g.x <= gap_part_in &&
+              y0 - g.y <= gap_part_in &&
+              g.x + g.fw - x1 <= gap_part_in &&
+              g.y + g.fh - y1 <= gap_part_in
+            }
+            None => false
+          }
+        _ => false
+      }
+    }
+    // (where nothing stays lit, one lights at a time, pressed or pointed at, and never reads as one block with
+    // another: two count where one of them, or another that lights up in what holds them both, shows its ground with
+    // no hand on it (the frame is drawn with none): kept lit, the page in view's row, the one chosen. A list across
+    // the whole screen opens what is pressed over itself and keeps none (the app's ListAt's Whole: a phone's chats); a
+    // card of options shows the one chosen otherwise)
+    let within = fn(i : Int, o : Int) {
+      let mut q = i
+      while q >= 0 && q != o {
+        q = self.nodes[q].parent
+      }
+      q == o
+    }
+    let kept = lit.filter(fn(i) { self.nodes[i].grounded() })
+    let some_kept = fn(a : Int, b : Int) {
+      let mut o = self.nodes[a].parent
+      while o >= 0 && !within(b, o) {
+        o = self.nodes[o].parent
+      }
+      o >= 0 && kept.iter().any(fn(k) { within(k, o) })
+    }
     for x in 0..<lit.length() {
       for y in (x + 1)..<lit.length() {
         let (a, b) = (lit[x], lit[y])
-        if layer[a] != layer[b] {
+        if layer[a] != layer[b] || one_control(a, b) || !some_kept(a, b) {
           continue
         }
         match gap_between(rect(a), rect(b)) {
