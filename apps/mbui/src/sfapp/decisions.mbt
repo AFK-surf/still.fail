@@ -64,7 +64,7 @@ fn decisions_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // set aside last (client/core-ts decisions.ts)
   let shown = items(view, "items")
   // the bar's 奏 at the stack's root: a place's top bar, room at its foot for the bar (slice 7's); else pushed
-  let place = app.nav.depth() == 1
+  let place = app.nav.under() is None
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
     if place {
       place_top_bar(c, "decisions")

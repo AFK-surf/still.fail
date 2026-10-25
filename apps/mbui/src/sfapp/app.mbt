@@ -551,8 +551,10 @@ fn page_view(
   invited : Bool,
   page : Page,
 ) -> Unit {
-  // a place switched to on the bar comes in from the side the ball goes to, fading in (220 ms; 180 from no side)
-  let root = app.nav.depth() == 1
+  // a place switched to on the bar comes in from the side the ball goes to, fading in (220 ms; 180 from no side); the
+  // page at the stack's root is so with a page sliding in over it or back off it too (where it stands, not how deep
+  // the stack is: Nav::under), its place's top bar kept
+  let root = app.nav.under() is None
   let e = if root { place_switch(c).get() } else { 1.0 }
   if root {
     bar_built(c, page)
@@ -577,7 +579,7 @@ fn page_view(
         NewChat => new_chat_page(c, src, w)
         Place(p) => place_page(c, src, w, p)
         // 文件: a place of the bar at the stack's root, else a page pushed
-        Files => files_page(c, src, w, place=app.nav.depth() == 1)
+        Files => files_page(c, src, w, place=root)
         Drive(at) => drive_page(c, src, w, at)
         DriveRead(at) => reader_page(c, src, at)
         DrivePlay(at) => play_page(c, src, at)
@@ -654,13 +656,8 @@ fn go_place(c : @ui.Ctx, place : String, sets : Array[Array[String]], cur : Int)
 /// A page of the settings, over the workspace in view, in the stack's frame: back to the page under it, under the status
 /// bar, over the navigation bar. One not merged yet: the phone's copy (src/sfapp/settings).
 fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, r : @settings.Route) -> Unit {
-  let pages = app.nav.pages()
   let frame : PageFrame = {
-    back: if pages.length() >= 2 {
-      Some(@sfdesk.back_label(pages[pages.length() - 2]))
-    } else {
-      None
-    },
+    back: app.nav.under().map(@sfdesk.back_label),
     top: status_top(),
     foot: nav_foot(),
     named: false,

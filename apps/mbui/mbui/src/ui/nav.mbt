@@ -32,6 +32,9 @@
 struct NavPage[P] {
   serial : Int
   mut page : P
+  // the page under it as it was put on the stack (none: the root); only the top changes, so it stays so while it is
+  // there
+  under : P?
   // it rose from the bottom (Nav::rise): it goes back down the same way
   mut rise : Bool
   // its time on top: a number of its own each time it is put there (pushed, or come back to as the one over it went),
@@ -46,9 +49,9 @@ struct NavPage[P] {
 let nav_serial : Ref[Int] = { val: 0 }
 
 ///|
-fn[P] nav_page(page : P) -> NavPage[P] {
+fn[P] nav_page(page : P, under : P?) -> NavPage[P] {
   nav_serial.val = nav_serial.val + 1
-  { serial: nav_serial.val, page, rise: false, stint: next_stint() }
+  { serial: nav_serial.val, page, under, rise: false, stint: next_stint() }
 }
 
 ///|
@@ -119,6 +122,8 @@ struct Nav[P] {
   mut flat_asked : Int
   mut flat_for : Int
   mut flat_from : Double
+  // the page being built (Ctx::nav, Ctx::nav_flat), what Nav::under answers for
+  mut built : NavPage[P]?
 }
 
 ///|
@@ -132,7 +137,7 @@ pub fn[P] Nav::new(
   from_left? : (P) -> Bool = fn(_) { false },
 ) -> Nav[P] {
   {
-    pages: [nav_page(root)],
+    pages: [nav_page(root, None)],
     mode: 0,
     leaving: None,
     gone: [],
@@ -161,6 +166,7 @@ pub fn[P] Nav::new(
     flat_asked: -1,
     flat_for: -1,
     flat_from: -1.0,
+    built: None,
   }
 }
 
@@ -180,6 +186,18 @@ pub fn[P] Nav::depth(self : Nav[P]) -> Int {
 /// The pages, bottom to top.
 pub fn[P] Nav::pages(self : Nav[P]) -> Array[P] {
   self.pages.map(fn(e) { e.page })
+}
+
+///|
+/// The page under the one being built (Ctx::nav, Ctx::nav_flat: the top, the one under it as a page slides over it
+/// or away, one leaving, one kept shown while the next is waited for), none under the root; outside them, the top's.
+/// What a page asks of where it stands (whether it is the root, where its back goes), never the stack's depth or the
+/// page under its top: those are the top's, and a root under a page coming in is still the root.
+pub fn[P] Nav::under(self : Nav[P]) -> P? {
+  match self.built {
+    Some(e) => e.under
+    None => self.pages[self.pages.length() - 1].under
+  }
 }
 
 ///|
@@ -354,7 +372,7 @@ pub fn[P] Nav::shows_when(self : Nav[P], ready : () -> Bool, most : Double) -> U
 /// Pushes `page`: it slides in over the one on top.
 pub fn[P] Nav::push(self : Nav[P], page : P) -> Unit {
   self.settle()
-  self.pages.push(nav_page(page))
+  self.pages.push(nav_page(page, Some(self.top())))
   self.p = 1.0
   self.go(1, 0.0, nav_push_ms, Standard, brings=true)
 }
@@ -364,7 +382,7 @@ pub fn[P] Nav::push(self : Nav[P], page : P) -> Unit {
 /// (.2, .8, .2, 1)); back, it sinks down the same way (swiped back, it goes down with the finger).
 pub fn[P] Nav::rise(self : Nav[P], page : P) -> Unit {
   self.settle()
-  let e = nav_page(page)
+  let e = nav_page(page, Some(self.top()))
   e.rise = true
   self.pages.push(e)
   self.p = 1.0
@@ -416,7 +434,7 @@ pub fn[P] Nav::replace(self : Nav[P], page : P) -> Unit {
     Some(e) => self.gone.push(e)
     None => ()
   }
-  self.pages.push(nav_page(page))
+  self.pages.push(nav_page(page, self.pages.last().map(fn(e) { e.page })))
   wake()
 }
 
@@ -565,7 +583,7 @@ pub fn[P] Ctx::nav(
   let i = self.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
     // (pushed: the page it covers takes nothing from the moment it is pushed)
     match under {
-      Some(e) => self.nav_layer(e, if rising { 0.0 } else { way * (p - 1.0) }, 0.0, bg, page, inert=nav.mode == 1)
+      Some(e) => self.nav_layer(nav, e, if rising { 0.0 } else { way * (p - 1.0) }, 0.0, bg, page, inert=nav.mode == 1)
       None => ()
     }
     // what the top page takes back for (a sheet, a menu, a step of its own, a stack in it) goes back before the stack
@@ -573,7 +591,7 @@ pub fn[P] Ctx::nav(
     self.back_next = None
     self.back_node_next = -1
     // (going back: the page leaving takes nothing)
-    self.nav_layer(top, if rising { 0.0 } else { way * p }, if rising { p * self.height } else { 0.0 }, bg, page, inert=leaving)
+    self.nav_layer(nav, top, if rising { 0.0 } else { way * p }, if rising { p * self.height } else { 0.0 }, bg, page, inert=leaving)
   })
   if self.back_next is Some(_) && !leaving {
     ()
@@ -613,6 +631,7 @@ pub fn Ctx::took_back(self : Ctx, body : () -> Unit) -> Bool {
 ///|
 fn[P] Ctx::nav_layer(
   self : Ctx,
+  nav : Nav[P],
   e : NavPage[P],
   slide : Double,
   drop : Double,
@@ -625,7 +644,7 @@ fn[P] Ctx::nav_layer(
     let saved_stint = self.stint
     self.owner = e.serial
     self.stint = e.stint
-    self.scope(e.serial, fn() { page(e.page) })
+    nav.built_by(e, fn() { self.scope(e.serial, fn() { page(e.page) }) })
     self.owner = saved
     self.stint = saved_stint
   })
@@ -634,6 +653,15 @@ fn[P] Ctx::nav_layer(
   if inert {
     self.draw_only(i)
   }
+}
+
+///|
+/// `body` building page `e` of the stack (what Nav::under answers for), within whatever page of another is being built.
+fn[P] Nav::built_by(self : Nav[P], e : NavPage[P], body : () -> Unit) -> Unit {
+  let saved = self.built
+  self.built = Some(e)
+  body()
+  self.built = saved
 }
 
 ///|
@@ -786,7 +814,7 @@ pub fn[P] Ctx::nav_flat(self : Ctx, nav : Nav[P], page : (P) -> Unit, bg? : Int6
     let saved_stint = self.stint
     self.owner = drawn.serial
     self.stint = drawn.stint
-    self.scope(drawn.serial, fn() { page(drawn.page) })
+    nav.built_by(drawn, fn() { self.scope(drawn.serial, fn() { page(drawn.page) }) })
     self.owner = saved
     self.stint = saved_stint
   })

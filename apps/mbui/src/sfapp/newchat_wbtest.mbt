@@ -24,6 +24,47 @@ test "the bar: 文件 tapped is its page in place of the chats', back is the cha
 }
 
 ///|
+/// Where the words `title` are drawn in the top bar's band, the rightmost (a page's own title, the page beside it to its
+/// left).
+fn bar_title_x(t : @ui.Tester, title : String) -> Double {
+  t
+  .words()
+  .fold(init=-1.0e9, fn(a, w) { if w.0 == title && w.2 < status_top() + top_bar_h() && w.1 > a { w.1 } else { a } })
+}
+
+///|
+/// The words drawn in the top bar's band from `from` on, as (words, x − from, y): the page's there, not the one beside
+/// it to its left.
+fn bar_words(t : @ui.Tester, from : Double) -> Array[(String, Double, Double)] {
+  t
+  .words()
+  .filter(fn(w) { w.2 < status_top() + top_bar_h() && w.1 >= from - 0.5 })
+  .map(fn(w) { (w.0, (w.1 - from).round(), w.2.round()) })
+}
+
+///|
+test "文件 and 奏 at the bar's top, their gear tapped: as 设置 comes in beside them they keep their place's top bar, no back on it" {
+  for place in ["files", "decisions"] {
+    let title = place_label(place)
+    let t = tester("home")
+    @sfbase.go_place(place) |> ignore
+    t.run_for(switch_side_ms)
+    let rest_x = bar_title_x(t, title)
+    let at_rest = bar_words(t, 0.0)
+    let gear = t.locate("icon:settings")
+    assert_eq(gear.length(), 1, msg=place)
+    t.tap(gear[0].0, gear[0].1)
+    assert_true(app.nav.top() == Settings, msg=place)
+    // halfway through 设置's slide in from the left: the place's page going out to the right beside it is drawn as it
+    // was at rest, moved (the stack two deep, it is still its root: its gear, not a way back to 设置)
+    t.run_for(@ui.nav_push_ms / 2.0)
+    let from = bar_title_x(t, title) - rest_x
+    assert_true(from > 0.0, msg=place)
+    assert_eq(bar_words(t, from), at_rest, msg=place)
+  }
+}
+
+///|
 test "the bar: drawn up, the panel of the other bar; let go on its first place, that bar and 奏" {
   let t = tester("home")
   let (xs, y) = bar_places_at()
