@@ -9,6 +9,7 @@ import type { OpenOptions, RuntimeEvent } from "../src/agents/runtime.ts";
 import { transcriptPath, readTimeline, isPosting } from "../src/read/transcript.ts";
 import { CHAT_CREATE } from "../src/tools/chat.ts";
 import { accessKinds } from "../src/accounts/profiles.ts";
+import { readAgentEnvFrom } from "../src/ops/agent-env.ts";
 const data = mkdtempSync(process.platform === "win32" ? join(tmpdir(), "hm-") : "/tmp/hm-");
 const drivers: HermesDriver[] = [];
 after(async () => { await Promise.all(drivers.map((d) => d.shutdown())); rmSync(data, { recursive: true, force: true }); });
@@ -81,6 +82,27 @@ test('configuration stays within its profile and rejects unsafe session IDs', as
   await assert.rejects(driver.open({ ...options, model: 'bad' }, () => {}), /unknown model/);
   await assert.rejects(driver.open({ ...options, profile: { ...options.profile, env: { ...options.profile.env as Record<string, string>, FAKE_HERMES_VERSION: '0.21.3' } } }, () => {}), /0\.21\.7/);
   assert.equal(outcomeOf({ error: { message: '429 rate limit' } }).kind, 'failed');
+});
+
+test('provider discovery inherits transport settings but only explicit profile credentials', (t) => {
+  const { options } = setup();
+  // A new provider or a custom key_env must not silently become a configured account in every profile.
+  const machine = { XAI_API_KEY: 'machine-only', CUSTOM_PROVIDER_CREDENTIAL: 'custom-machine-only', HERMES_CONFIG_FILE: '/machine/config.yaml' };
+  const saved = Object.fromEntries(Object.keys(machine).map(key => [key, process.env[key]]));
+  Object.assign(process.env, machine);
+  readAgentEnvFrom(() => ({ agentEnv: { MINIMAX_API_KEY: 'station-only', HTTPS_PROXY: 'http://proxy.test:8080', NO_PROXY: 'private.test' } }));
+  t.after(() => {
+    for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+    readAgentEnvFrom(() => null);
+  });
+  const isolated = hermesEnv(options);
+  for (const key of [...Object.keys(machine), 'MINIMAX_API_KEY']) assert.equal(isolated[key], undefined, `${key} belongs to another account`);
+  assert.equal(isolated.HTTPS_PROXY, 'http://proxy.test:8080');
+  assert.match(isolated.NO_PROXY, /127\.0\.0\.1/);
+  assert.ok(isolated.PATH);
+  const explicit = hermesEnv({ ...options, profile: { ...options.profile, env: { XAI_API_KEY: 'profile-only', CUSTOM_PROVIDER_CREDENTIAL: 'custom-profile-only' } } });
+  assert.equal(explicit.XAI_API_KEY, 'profile-only');
+  assert.equal(explicit.CUSTOM_PROVIDER_CREDENTIAL, 'custom-profile-only');
 });
 
 test('crash adoption reconstructs partial text without duplicating completed steps', async () => {

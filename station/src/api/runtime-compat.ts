@@ -7,6 +7,7 @@ export { runtimeView } from "../read/runtime-view.ts";
 import type { Ty } from "../../../client/core-ts/src/shapes/dsl.ts";
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
 import { error, type Answer, type Request } from "./request.ts";
+import { tr } from "../ops/i18n.ts";
 
 export const RUNTIMES_HEADER = "stillfail-runtimes";
 const LEGACY = ["claude", "codex", "dsh", "grok", "cursor", "devin"];
@@ -100,7 +101,7 @@ export function runtimeCompatible(r: Request, answer: Answer): Answer {
   else if (account && object(raw)) {
     view = "overview" in raw ? { ...raw, overview: runtimeView("Overview", raw.overview, supported) } : runtimeView("Overview", raw, supported);
   } else view = runtimeView(type!, raw, supported);
-  if (view === OMIT) return error(426, r.lang === "zh" ? "此对话的 agent 需要更新客户端后查看。" : "Update this client to view this agent session.");
+  if (view === OMIT) return error(426, tr(r.lang, "station.admin.updateClientForRuntime"));
   const headers = { ...answer.headers }; delete headers["content-length"];
   return { ...answer, headers, body: Buffer.from(JSON.stringify(view)) };
 }

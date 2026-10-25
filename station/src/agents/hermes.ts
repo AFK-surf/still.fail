@@ -13,8 +13,15 @@ import { TOOL_SERVERS, cleanEnv, unreachable, uuid, type AgentDriver, type Agent
 
 type Json = any;
 
-// Hermes resolves providers from this profile's HERMES_HOME and explicit environment.
-const SCRUBBED = ["HERMES_HOME", "HERMES_CONFIG_FILE", "HERMES_PROFILE", "HERMES_CONFIG", "HERMES_CONFIG_PATH", "HERMES_ENV", "HERMES_ENV_PATH", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_TOKEN", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "OPENAI_BASE_URL", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY", "DEEPSEEK_API_KEY"];
+// Hermes can load any provider, including plugins and arbitrary key_env names. Inherit the machine's execution
+// and network settings, not an ever-growing blacklist of provider credentials. Model settings come from the
+// profile's home or explicit variables; those variables can also opt tools into any other environment they need.
+const INHERITED = new Set([
+  "PATH", "PATHEXT", "HOME", "USERPROFILE", "USER", "LOGNAME", "SHELL", "SYSTEMROOT", "WINDIR", "COMSPEC",
+  "TEMP", "TMP", "TMPDIR", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "LANG", "LANGUAGE", "TZ", "TERM",
+  "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE",
+  "CURL_CA_BUNDLE", "NODE_EXTRA_CA_CERTS", "SSH_AUTH_SOCK",
+]);
 export const hermesHome = (home: string) => join(home, "hermes");
 export const SESSIONS = "sessions";
 const INIT = "init";
@@ -80,7 +87,8 @@ const rpc = (id: string, method: string, params: Json) => JSON.stringify({ jsonr
 const mcpServers = (url: string, token: string) => [{ type: "http", name: "stillfail", url, headers: [{ name: "Authorization", value: `Bearer ${token}` }] }];
 
 export function hermesEnv(options: OpenOptions): Record<string, string> {
-  const env = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(options.profile, "hermes"), options.route) };
+  const inherited = Object.fromEntries(Object.entries(cleanEnv([])).filter(([key]) => INHERITED.has(key.toUpperCase()) || /^LC_[A-Z_]+$/i.test(key)));
+  const env = { ...inherited, ...expandRoute(profileEnv(options.profile, "hermes"), options.route) };
   env.HERMES_HOME = hermesHome(options.profile.home);
   // Hermes treats a borrowed Claude/Codex login as a configured provider. Keep those readers inside this profile,
   // unless the profile explicitly names a credential directory, and never borrow macOS's shared Claude login.
