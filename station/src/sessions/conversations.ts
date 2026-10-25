@@ -29,7 +29,7 @@ import {
   slackWithFiles,
   stateArg,
 } from "./args.ts";
-import { callApi } from "./chat.ts";
+import { type ChatSurface, callApi } from "./chat.ts";
 import type { Hub } from "./hub.ts";
 import { shownSize } from "./image-size.ts";
 import { dir as thumbsDir, keep } from "../drive/thumbs.ts";
@@ -257,19 +257,25 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   const files = await keep(paths.length === 0 ? [] : await attach(hub, key, paths), thumbsDir(hub.config().dataDir));
   const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
   let posted: string;
-  if (slack) {
-    try {
-      posted = await chat.post(here, text, files, card);
-      text = placeFigures(text, files);
-    } catch (error) {
-      if (!String((error as Error).message).includes("missing_scope")) throw error;
-      const [sent, kept] = slackWithFiles(text, files, link());
-      posted = await chat.post(here, sent, []);
-      text = kept;
-    }
-  } else posted = await chat.post(here, text, files, card);
+  // A chat's first post where it was relayed goes into the station's first message there (relay.ts).
+  const opening = card === null && files.length === 0 ? await intoOpening(hub, key, chat, thread.thread, text) : null;
+  let n: number;
+  if (opening !== null) [posted, n] = opening;
+  else {
+    if (slack) {
+      try {
+        posted = await chat.post(here, text, files, card);
+        text = placeFigures(text, files);
+      } catch (error) {
+        if (!String((error as Error).message).includes("missing_scope")) throw error;
+        const [sent, kept] = slackWithFiles(text, files, link());
+        posted = await chat.post(here, sent, []);
+        text = kept;
+      }
+    } else posted = await chat.post(here, text, files, card);
+    [n] = store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: key, text, attachments: files, declared: kind ? declaredStr(kind) : null, card });
+  }
   const offered = card !== null ? cardSaid(card) : "";
-  const [n] = store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: key, text, attachments: files, declared: kind ? declaredStr(kind) : null, card });
   hub.shared(thread.thread.id, n, key, text);
   const actor = actorOf(hub, key);
   await actor?.postedNow();
@@ -285,8 +291,28 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
     await actor?.declare(kind);
   }
   const titled = typeof args.title === "string" ? nameChat(hub, thread.thread, args.title) : "";
-  const place = threadAddress(thread.thread.channel, thread.thread.threadTs);
+  const place = threadAddress(thread.thread.channel, thread.thread.threadTs) + (opening !== null ? ` (added to the station's first message there, ts ${posted})` : "");
   return kind !== null ? `Posted to ${place}, and recorded state ${saidAs(kind)}.${titled}${offered}` : `Posted to ${place}.${titled}${offered}`;
+}
+
+/// The agent's first post in a conversation its chat was relayed to (hub.openings): added under the station's first
+/// message there, which is what people see without opening the thread. That message's ts and number, or null where it
+/// is posted as a reply: not the first post, not the relaying agent's, too long to go into one message, or not changed.
+async function intoOpening(hub: Hub, key: string, chat: ChatSurface, thread: ThreadRow, text: string): Promise<[string, number] | null> {
+  const pending = hub.openings.get(thread.id);
+  if (pending === undefined || pending.session !== key) return null;
+  hub.openings.delete(thread.id);
+  const opening = hub.store.messageAt(thread.id, pending.ts);
+  if (opening === null || chat.edit === undefined) return null;
+  const whole = `${opening.text}\n\n${text}`;
+  try {
+    if (!(await chat.edit({ channel: thread.channel, threadTs: thread.threadTs }, pending.ts, whole))) return null;
+  } catch (error) {
+    log.warn("hub", "a relayed chat's first post did not go into the station's first message", { thread: thread.id, error: (error as Error).message });
+    return null;
+  }
+  hub.store.editMessage(thread.surface, thread.channel, thread.threadTs, pending.ts, whole);
+  return [pending.ts, opening.n];
 }
 
 /// What a state recorded with chat_state is about: the message `about` names (by its ts, in one of the session's

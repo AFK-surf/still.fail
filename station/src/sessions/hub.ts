@@ -150,6 +150,9 @@ export class Hub {
   readonly clientKeysMade = new Map<string, [string, number]>();
   /// Titles agents gave chats someone has open, waiting until they leave (titles.ts), by thread.
   readonly titles = new Map<number, string>();
+  /// Conversations a chat was relayed to whose agent has not posted there yet, by thread: the session and the station's
+  /// first message there, which that post goes into (relay.ts). Kept in memory: after a restart it is a reply.
+  readonly openings = new Map<number, { session: string; ts: string }>();
   /// One message at a time per thread: Slack sends a mention twice (app_mention and message), and both would make its
   /// session.
   readonly gates = new Map<string, { tail: Promise<void>; waiting: number }>();
