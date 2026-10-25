@@ -31,6 +31,7 @@ import { withDrive } from "../drive-browse.ts";
 import { near, placeFiles } from "../placed.ts";
 import { archive } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
+import { askAnswers } from "./vault.ts";
 import * as marks from "./marks.ts";
 import { usageView } from "./usage.ts";
 import { resourcesView } from "./resources.ts";
@@ -409,7 +410,20 @@ export type ViewsEnv = {
   homeName?: (workspace: string, id: string) => string | null;
   /// A topic a view watches shown again (its owner asked to bring it up to date, store.ts `resume`).
   resume?: (topic: Topic) => void;
+  /// How agents' requests about vault items are answered on this device, from the vault as the core holds it
+  /// (views/vault.ts askAnswers): each `{answer, lasts?}`, in the order asked.
+  vaultAnswers?: (workspace: string, asks: VaultAskOf[]) => J[];
 };
+
+/// An agent's request about a vault item a card names (`card.vault`), and whether it is one to keep a secret.
+export type VaultAskOf = { request: string; save: boolean };
+
+/// The request card `card` names and says what it asks (`vaultAsk`); null for any other.
+function vaultAskOf(card: J): VaultAskOf | null {
+  const request = typeof get(card, "vault") === "string" ? (card.vault as string) : null;
+  const ask = get(card, "vaultAsk");
+  return request === null || request === "" || !isObject(ask) ? null : { request, save: get(ask, "save") !== undefined };
+}
 
 /// The views' environment in a core.
 export function envOf(core: Inner): ViewsEnv {
@@ -432,6 +446,7 @@ export function envOf(core: Inner): ViewsEnv {
     xshareAsked: (station, session) => xshare.asked(core, station, session),
     revoking: (station, id) => publish.revoking(core, station, id),
     homeName: (workspace, id) => memberships.homeName(core, workspace, id),
+    vaultAnswers: (workspace, asks) => askAnswers(core, workspace, asks),
     relayName: (host) => {
       for (const account of core.accounts.list()) {
         const names = get(core.data.record("me", account.sub), "relay_names");
@@ -465,6 +480,10 @@ export class Views implements Owner {
   readonly #loading = new Set<string>();
   /// Since when each station up has had no host reading (by address): unanswered that long, it is said to be silent.
   readonly #hostless = new Map<string, number>();
+  /// The live views that show agents' requests about vault items (a chat's cards, the 奏 page's), by the view: the
+  /// requests, each in its workspace, and how they were answered here when it was made (`#vaultCard`), so that a change
+  /// of the vault shows it again only where it changes what the cards say (`vaultChanged`).
+  readonly #vaultShown = new Map<string, { topic: Topic; asks: { ws: string; ask: VaultAskOf }[]; said: string }>();
 
   constructor(core: ViewsEnv) {
     this.#core = core;
@@ -515,7 +534,67 @@ export class Views implements Owner {
     }
     const live = this.#views.get(key);
     this.#views.delete(key);
+    this.#vaultShown.delete(key);
     for (const w of live?.watches.values() ?? []) w.drop();
+  }
+
+  // ── agents' requests about vault items, on their cards ──
+
+  /// The vault of workspace `ws` (null: any) changed as this core holds it (views/vault.ts): the views whose cards it
+  /// answers otherwise now made again.
+  vaultChanged(ws: string | null): void {
+    for (const shown of [...this.#vaultShown.values()]) {
+      if (ws !== null && !shown.asks.some((a) => a.ws === ws)) continue;
+      const said = this.#vaultSaid(shown.asks);
+      if (said === shown.said) continue;
+      shown.said = said;
+      this.#core.store.invalidate(shown.topic);
+    }
+  }
+
+  #vaultSaid(asks: { ws: string; ask: VaultAskOf }[]): string {
+    return JSON.stringify(asks.map((a) => this.#core.vaultAnswers?.(a.ws, [a.ask])[0] ?? null));
+  }
+
+  /// Card `card` of a message in workspace `ws` as the clients draw it, an agent's request about a vault item it names
+  /// answered: how it is answered on this device (`vaultAsk.answer`, `lasts`: the vault as the core holds it, so the
+  /// card is whole with its message and no client asks for more), and, decided here, how it went before its station
+  /// says so (`status`, `scope`). Any other card as it is.
+  #vaultCard(card: J, ws: string): J {
+    const one = vaultAskOf(card);
+    if (one === null) return card;
+    const shown: J = { ...card.vaultAsk, ...(this.#core.vaultAnswers?.(ws, [one])[0] ?? {}) };
+    const done = this.local.vaultOutcome(one.request);
+    if (done !== undefined && shown.status === undefined) {
+      shown.status = done.status;
+      if (done.scope !== undefined) shown.scope = done.scope;
+    }
+    return { ...card, vaultAsk: shown };
+  }
+
+  /// The vault requests view `view` shows on `cards` (each in its workspace): kept while it shows any.
+  #vaultSeen(view: Topic, cards: [string, J][]): void {
+    const key = topicKey(view);
+    const asks = cards.flatMap(([ws, card]) => {
+      const ask = vaultAskOf(card);
+      return ask === null ? [] : [{ ws, ask }];
+    });
+    if (asks.length === 0 || !this.#views.has(key)) this.#vaultShown.delete(key);
+    else this.#vaultShown.set(key, { topic: view, asks, said: this.#vaultSaid(asks) });
+  }
+
+  /// A chat's view (`out`) with its messages' vault cards answered (`#vaultCard`).
+  #vaultCards<V extends Value | undefined>(view: Topic, out: V): V {
+    if (out === undefined || !("ok" in out) || !isObject(out.ok) || !Array.isArray(out.ok.messages)) {
+      this.#vaultSeen(view, []);
+      return out;
+    }
+    const ws = ofAddress(String(view.station ?? ""));
+    const cards = (out.ok.messages as J[]).flatMap((m): [string, J][] => (isObject(m) && vaultAskOf(get(m, "card")) !== null ? [[ws, m.card]] : []));
+    this.#vaultSeen(view, cards);
+    if (cards.length === 0) return out;
+    const messages = (out.ok.messages as J[]).map((m) => (isObject(m) && vaultAskOf(get(m, "card")) !== null ? { ...m, card: this.#vaultCard(m.card, ws) } : m));
+    return { ...out, ok: { ...(out.ok as J), messages } } as V;
   }
 
   #live(): Topic[] {
@@ -546,6 +625,11 @@ export class Views implements Owner {
       case "letGo":
         this.#invalidate((v) => v.topic === "decisions");
         return;
+      case "vault": {
+        const showing = [...this.#vaultShown.values()].filter((s) => s.asks.some((a) => a.ask.request === change.request)).map((s) => topicKey(s.topic));
+        this.#invalidate((v) => v.topic === "decisions" || showing.includes(topicKey(v)));
+        return;
+      }
       case "changing":
         this.#invalidate((v) => ["chats", "chatSearch", "search", "archive", "workspaceMarks", "decisions"].includes(v.topic) || (v.topic === "chat" && v.station === change.station));
         return;
@@ -955,7 +1039,7 @@ export class Views implements Owner {
         const draw = <V extends Value | undefined>(out: V) => {
           const thread = out !== undefined && "ok" in out ? u64(get(get(out.ok, "thread"), "id")) : null;
           const of = thread !== null ? `t:${thread}` : typeof view.thread === "number" ? `t:${view.thread}` : `s:${String(view.session ?? "")}`;
-          return drawn(out, (path) => this.local.uploadOf(station, path), this.#core.data.mdStore(station, of));
+          return this.#vaultCards(view, drawn(out, (path) => this.local.uploadOf(station, path), this.#core.data.mdStore(station, of)));
         };
         if (typeof view.thread === "number") return draw(this.#chat(station, view.thread));
         const session = typeof view.session === "string" ? view.session : null;
@@ -988,8 +1072,11 @@ export class Views implements Owner {
         return archive(this, this.local, view.scope as string, this.#core.host, typeof view.q === "string" ? view.q : "", typeof view.limit === "number" ? view.limit : 0);
       case "workspaceMarks":
         return marks.marks(this, this.local, typeof view.workspace === "string" ? view.workspace : null);
-      case "decisions":
-        return this.#decisions(view.workspace as string);
+      case "decisions": {
+        const out = this.#decisions(view.workspace as string);
+        this.#vaultSeen(view, out !== undefined && "ok" in out ? arr(get(out.ok, "items")).map((i): [string, J] => [ofAddress(str(i.station) ?? ""), i.card]) : []);
+        return out;
+      }
       case "chatJobs": {
         const chat = this.value({ topic: "chat", station: view.station, thread: view.thread ?? null, session: view.session ?? null });
         if (chat === undefined || !("ok" in chat)) return chat;
@@ -1941,8 +2028,9 @@ export class Views implements Owner {
         if (thread === null || seq === null) continue;
         // Answered, let go or its vault request decided from here: gone at once (back if that could not be done).
         if (this.local.answered(s.address, thread, seq) || this.local.lettingGo(s.address, thread, seq)) continue;
-        const card = decisions.labelAssignee(decisions.cardShown(d.card), me, members_, row.creator);
-        if (typeof card.vault === "string" && this.local.decidedVault(card.vault)) continue;
+        const shownCard = decisions.labelAssignee(decisions.cardShown(d.card), me, members_, row.creator);
+        if (typeof shownCard.vault === "string" && this.local.decidedVault(shownCard.vault)) continue;
+        const card = this.#vaultCard(shownCard, ofAddress(s.address));
         const agents = arr(row.agents).map((a) => ({ session: present.session(a) }));
         const shown = (m: J): J => ({ ...shownMessage(m, agents, me, slackUsers, members_, [], row.creator), waiting: false });
         const options = card.options ?? [];

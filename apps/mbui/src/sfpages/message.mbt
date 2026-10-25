@@ -438,7 +438,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
   // an agent's request about a vault item: its card in place of the words, answered on it (decision.mbt)
   match m.card {
     Some({ ask: Some(ask), .. } as card) => {
-      vault_ask_card(c, here, card, ask)
+      vault_ask_card(c, here, m, card, ask)
       return
     }
     _ => ()

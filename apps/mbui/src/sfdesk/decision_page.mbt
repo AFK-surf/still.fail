@@ -256,7 +256,16 @@ fn zou_picks(c : @ui.Ctx, src : Source, core : Core, here : MessageHere, x : Jso
   let card = field(v, "card")
   let vault = text(card, "vault")
   if vault != "" {
-    @settings.vault_actions(c, core, workspace_of(here.station), vault, mine_to(here, text(card, "assignee")))
+    let ws = workspace_of(here.station)
+    let mine = mine_to(here, text(card, "assignee"))
+    match field(card, "vaultAsk") {
+      // (as the core said it with the card, from the vault it holds)
+      Some(Object(_)) as ask => {
+        let answer = @settings.card_answer(text(ask, "answer"), text(ask, "lasts"), mine)
+        @settings.vault_foot(c, core, ws, vault, answer, field(ask, "save") is Some(_))
+      }
+      _ => @settings.vault_actions(c, core, ws, vault, mine)
+    }
     return
   }
   match kind {
