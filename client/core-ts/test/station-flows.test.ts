@@ -2,7 +2,8 @@
 // read into records by its sync, and its topics read only those; docs/core-ts.md). The Rust tests drove the station
 // module with a fake wire and sink; these drive a core over the host's fetch (station-fixture.ts).
 import assert from "node:assert/strict";
-import { zstdCompressSync } from "node:zlib";
+import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
+import { Decompress } from "fzstd";
 import { test } from "node:test";
 import { Effect, Queue } from "effect";
 import { dbName } from "../src/data.ts";
@@ -2443,6 +2444,64 @@ test("invalid_json_and_truncated_compression_fail_instead_of_becoming_empty_page
     response = { status: 204, headers: [], body: new Uint8Array() };
     assert.deepEqual(await run(call()), {}, "intentional no-content replies remain valid");
   } finally { core.close(); }
+});
+
+/// A host that takes zstd apart itself (Host.unzstd: a native app's shell, libzstd), stood in for by fzstd: what each
+/// piece makes, whole once all it took decompresses; how often one was opened, closed and pushed to.
+function hostUnzstd(host: FakeHost) {
+  const counts = { opened: 0, closed: 0, pushes: 0 };
+  Object.assign(host, {
+    unzstd: () =>
+      Effect.acquireRelease(
+        Effect.sync(() => {
+          counts.opened++;
+          const took: Uint8Array[] = [];
+          const made: Uint8Array[] = [];
+          const d = new Decompress((data) => made.push(data));
+          return {
+            push: (piece: Uint8Array) =>
+              Effect.sync(() => {
+                counts.pushes++;
+                took.push(piece);
+                d.push(piece);
+                let whole = true;
+                try {
+                  zstdDecompressSync(concat(took));
+                } catch {
+                  whole = false;
+                }
+                return { bytes: concat(made.splice(0)), whole };
+              }),
+          };
+        }),
+        () => Effect.sync(() => void counts.closed++),
+      ),
+  });
+  return counts;
+}
+
+test("a_host_that_takes_zstd_apart_itself_is_given_every_compressed_reply_and_a_cut_one_still_fails", async () => {
+  let counts = { opened: 0, closed: 0, pushes: 0 };
+  const { core, host } = await started(base(), 0, undefined, (s) => (counts = hostUnzstd(s.host)));
+  const path = "/threads/7/entries?from=4&to=5";
+  const call = () => core.inner.stations.requests.call(remote(), "GET", path, null);
+  const encoded = zstdCompressSync(Buffer.from(JSON.stringify({ entries: entries(4, 5) })));
+  let response = { status: 200, headers: [["content-encoding", "zstd"]] as [string, string][], body: new Uint8Array(encoded) };
+  stationReplies(host, (req) => (req.url.endsWith(path) ? new Raw(response) : undefined));
+  try {
+    // (what the core read as it started, its stream among it, went through the host's)
+    assert.ok(counts.pushes > 0, JSON.stringify(counts));
+    const was = { ...counts };
+    assert.deepEqual(await run(call()), { entries: entries(4, 5) });
+    assert.ok(counts.pushes > was.pushes);
+    response = { status: 200, headers: [["content-encoding", "zstd"]], body: encoded.subarray(0, encoded.length - 1) };
+    await failure(call());
+    // each let go once what read it is done, whole or failed
+    assert.equal(counts.opened - was.opened, 2);
+    assert.equal(counts.closed - was.closed, 2);
+  } finally {
+    core.close();
+  }
 });
 
 test("a_partial_chat_page_keeps_the_reading_window_and_retries_through_the_core_call", async () => {

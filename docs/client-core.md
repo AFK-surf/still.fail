@@ -39,8 +39,12 @@ and still.fail cloud push what changes (events, sockets); nothing is read again
 on a timer. Every request to a station but a preview's asks its answer
 compressed (`accept-encoding: zstd`; an event stream flushed event by event and
 compressed against its last megabyte, station/src/mesh/compress.ts), and it is
-decompressed as it comes (fzstd, the same on every host: the browser and
-Hermes have no zstd of their own); a station from before sends it as it is.
+decompressed as it comes; a station from before sends it as it is. The native
+apps' shell takes it apart (libzstd, `zstd.*`: `Host.unzstd`), off the core's
+thread: Hermes has no JIT, and fzstd in it made some 10 MB a second of what it
+decompresses on an M2 Max, a tenth of V8's (`apps/mbui/scripts/core.sh
+zstd-read`), slower again on a phone holding back its clock. The browser,
+with no zstd of its own, uses fzstd.
 A station's history — every chat's entries (the latest chats first, a page of
 each in turn), each listed session's detail where its turns changed and the
 latest page of its transcript — is brought onto the device in the background

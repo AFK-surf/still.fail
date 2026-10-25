@@ -30,6 +30,10 @@ export function header(response: { headers: [string, string][] }, name: string):
 /// The next piece of what streams: null once it ended.
 export type Pull<A> = { readonly take: Effect.Effect<A | null, HostError> };
 
+/// A zstd stream being taken apart (Host.unzstd): each piece pushed in turn, what it makes; `whole`, whether what
+/// it took so far ends a frame (a reply that must end with one: checked after its last piece).
+export type Unzstd = { push(piece: Uint8Array): Effect.Effect<{ bytes: Uint8Array; whole: boolean }, HostError> };
+
 /// A response whose body arrives in chunks.
 export type StreamResponse = { status: number; headers: [string, string][]; body: Pull<Uint8Array> };
 
@@ -98,6 +102,12 @@ export interface Host {
   /// case and accents aside, numbers by value; 中文 by pinyin): each one's place, equal ones the same. None, or null for
   /// what the system cannot: the core orders them by hand (drive-browse.ts).
   collate?(names: readonly string[]): number[] | null;
+
+  /// A zstd stream taken apart by the host, open while the scope is, where it has a way of its own (a native app's
+  /// shell: libzstd). None: the core's own, fzstd, in JS, which Hermes (no JIT) runs at some 10 MB of what it makes a
+  /// second on an M2 Max, a tenth of V8's and far under native (bench/zstd-read.ts): what a station sends, compressed,
+  /// is taken apart on the core's thread, slower again on a phone holding back its clock.
+  unzstd?(): Effect.Effect<Unzstd, HostError, Scope.Scope>;
 
   /// Small persistent values by key: accounts, the device key, preferences.
   storageGet(key: string): Effect.Effect<Uint8Array | null, HostError>;

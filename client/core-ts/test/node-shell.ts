@@ -1,6 +1,9 @@
 // The bridge's shell in JavaScript (hosts/bridge.ts), over Node and the station's addon: what the Android app's shell
 // (apps/android/core: Hermes in C++, its IO in Rust) does, here to test the JS end of the bridge in Node.
+import { zstdDecompressSync } from "node:zlib";
+import { Decompress } from "fzstd";
 import { hex, sha256 } from "../src/util.ts";
+import { concat } from "../src/station/wire.ts";
 import { Effect, Exit, Scope } from "effect";
 import { loadAddon } from "../src/hosts/node-iroh.ts";
 import { NodeHost } from "../src/hosts/node.ts";
@@ -74,6 +77,30 @@ export class NodeShell implements Native {
         if (it) await Effect.runPromise(Scope.close(it.scope, Exit.void));
         return done({});
       }
+      // A station's reply taken apart as the Rust shell takes it apart (libzstd): here by fzstd, whole once all it took
+      // decompresses.
+      case "zstd.open": {
+        const z: J = { took: [], made: [] };
+        z.d = new Decompress((data) => z.made.push(data));
+        return done({ id: this.#keep(z) });
+      }
+      case "zstd.push": {
+        const z = this.#handles.get(a.id);
+        if (!z) throw new Error(`no handle ${a.id}`);
+        const piece = bytes ?? new Uint8Array(0);
+        z.took.push(piece);
+        z.d.push(piece);
+        let whole = true;
+        try {
+          zstdDecompressSync(concat(z.took));
+        } catch {
+          whole = false;
+        }
+        return done({ whole }, concat(z.made.splice(0)));
+      }
+      case "zstd.close":
+        this.#handles.delete(a.id);
+        return done({});
       case "ws.open": {
         const { value, scope } = await this.#scoped(h.websocket(a.url, a.protocols));
         return done({ id: this.#keep({ pull: value, scope }) });
