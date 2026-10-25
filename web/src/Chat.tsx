@@ -261,15 +261,16 @@ export function ChatRows({ chat, rows, to }: { chat: ChatView; rows: ReturnType<
   const thread = chat.offline || chat.archived ? null : chat.thread?.id ?? null;
   const locked = chat.offline || !!chat.archived;
   // What each item is: only those the list makes (virtual/list.tsx) are drawn.
+  const visible = new Set(virtual.layout.rows.map((r) => r.key));
   const drawn = new Map<string, () => ReactNode>();
-  const sent = (list: ChatSentElsewhere[] | undefined) => { for (const s of list ?? []) drawn.set(`e:${s.key}`, () => <SentElsewhere key={`e:${s.key}`} sent={s} />); };
+  const sent = (list: ChatSentElsewhere[] | undefined) => { for (const s of list ?? []) if (visible.has(`e:${s.key}`)) drawn.set(`e:${s.key}`, () => <SentElsewhere key={`e:${s.key}`} sent={s} />); };
   drawn.set("older", () => <div key="older" data-vk="older" className={css.chatOlder}>
     {olderPage.failed ? <button type="button" className={css.msgUnsentBtn} onClick={olderPage.retry} aria-label={t("common.retry")}><Retry size={16} />{t("common.retry")}</button> : <Spinner />}
   </div>);
   drawn.set("line", () => <div key="line" data-vk="line" className={css.chatUnreadLine} data-unread-line role="separator"><span>{t("web-main.chat.unreadLine")}</span></div>);
   sent(chat.elsewhere);
   for (const m of messages) {
-    drawn.set(`m:${m.seq}`, () => {
+    if (visible.has(`m:${m.seq}`)) drawn.set(`m:${m.seq}`, () => {
       const { enter, emitted, caught } = rowOf(m);
       return <MessageRow key={`m:${m.seq}`} message={m} enter={enter} emitted={emitted} caught={caught} thread={thread} />;
     });
@@ -500,7 +501,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   // after a reload): the message at the top of the pane and where its top is, or none at its end. A core from before
   // `chat.place` does not know it.
   const seqOf = useRef(new Map<string, number>());
-  seqOf.current = new Map(messages.map((m) => [m.ts, m.seq]));
+  seqOf.current = useMemo(() => new Map(messages.map((m) => [m.ts, m.seq])), [messages]);
   const leave = (ts: string | null, offset: number | null) => {
     const seq = ts === null ? null : seqOf.current.get(ts);
     if (id !== null && seq !== undefined) void sending.place(id, seq, seq === null ? null : offset).catch(() => undefined);
@@ -545,7 +546,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   for (const o of chat.outbox) sentHere.current.add(o.text);
   // Only what is said while the chat shows comes in, and an activity only for an agent seen starting meanwhile: the
   // core decides both (attend.ts: `said`, `started`); the rest is there at once.
-  const said = new Set(messages.filter((m) => m.said).map((m) => m.seq));
+  const said = useMemo(() => new Set(messages.filter((m) => m.said).map((m) => m.seq)), [messages]);
   const saidHere = (seq: number) => said.has(seq);
   // Only an agent that has taken a message and runs is at work: until then the message itself says it waits.
   const atWork: AgentAtWork[] = chat.agents.filter((a) => a.status === "running").map(({ session, since, wait }) => (
@@ -560,6 +561,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   const { older: canOlder, newer: canNewer } = usePagingEdges(emptyWindow, !!chat.more, short, place);
 
   // The list's items, in order: each a row of its own.
+  const heights = useMemo(() => new Map(messages.map((m) => [m.seq, tallOf(m)])), [messages]);
   const items: Item[] = [];
   if (canOlder) items.push({ key: "older", estimate: 30, place: false });
   for (const s of chat.elsewhere ?? []) items.push({ key: `e:${s.key}`, estimate: 64 });
@@ -567,7 +569,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
     if (m.seq === divider) items.push({ key: "line", estimate: 20 });
     // One waiting to come out of its avatar takes no room, not even the gap before it (the list measures it so): known,
     // not guessed, so that nothing below it moves for a guess and back for the fact.
-    items.push(emissions.stateOf(m.seq) === "held" ? { key: `m:${m.seq}`, estimate: 0, exact: -gap } : { key: `m:${m.seq}`, estimate: tallOf(m) });
+    items.push(emissions.stateOf(m.seq) === "held" ? { key: `m:${m.seq}`, estimate: 0, exact: -gap } : { key: `m:${m.seq}`, estimate: heights.get(m.seq)! });
     for (const s of m.elsewhere ?? []) items.push({ key: `e:${s.key}`, estimate: 64 });
   }
   if (canNewer) items.push({ key: "newer", estimate: 30, place: false });

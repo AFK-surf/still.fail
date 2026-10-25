@@ -508,3 +508,33 @@ test("virtual_following_goes_once_to_where_what_closes_leaves_it_and_keeps_follo
   // What the activity below went along with: the closing, all of it.
   assert.equal(v.closedBefore("m:30"), 60);
 });
+
+test("virtual_scroll_prediction_is_independent_of_event_frequency_and_limits_row_churn", () => {
+  const run = (hz: number) => {
+    const v = new Virtual({ gap: 0, overscan: 400, boost: 2400 });
+    v.setViewport(800, 390);
+    v.widen();
+    v.setItems(Array.from({ length: 1000 }, (_, i) => ({ key: String(i), estimate: 100, exact: 100 })));
+    v.goto("100", "start");
+    let previous = "", changed = 0;
+    for (let i = 1; i <= hz; i++) {
+      v.scrolled(10000 + 3000 * i / hz, i * 1000 / hz);
+      const layout = v.layout();
+      const keys = layout.rows.map(r => r.key).join(",");
+      if (keys !== previous) changed++;
+      previous = keys;
+      const start = layout.rows[0]!.index * 100;
+      const end = (layout.rows.at(-1)!.index + 1) * 100;
+      assert(start <= v.where && end >= v.where + 800, "no uncovered viewport between window steps");
+    }
+    assert(changed < 40, `render window changes ${changed} times, less than once per 60 Hz frame`);
+    assert.equal(v.loadAhead("top", 500), 800, "no speculative load behind the reader");
+    assert(Math.abs(v.loadAhead("bottom", 500) - 1800) < 0.01);
+    assert.equal(v.loadAhead("bottom", 5000), 2400, "prefetch is capped at three panes");
+    const keys = v.layout().rows.map(r => r.key);
+    v.rested();
+    assert.equal(v.loadAhead("bottom", 500), 800, "stale speed does not prefetch at rest");
+    return keys;
+  };
+  assert.deepEqual(run(60), run(120));
+});

@@ -23,6 +23,7 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
     let busy: { at: number | string; answered: boolean } | null = null;
     let top = model.layout().scrollTop;
     let moved = false;
+    let latency = 250;
     const check = (scrolled = false) => {
       moved ||= scrolled;
       const now = latest.current;
@@ -40,14 +41,16 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
       moved = false;
       if (!now.can || now.at === undefined || asked === now.at) return;
       if (!initial && !approached && !model.fits) return;
-      if (model.paneHeight <= 0 || (edge === "top" ? model.toStart : model.toEnd) > model.paneHeight) return;
+      if (model.paneHeight <= 0 || (edge === "top" ? model.toStart : model.toEnd) > model.loadAhead(edge, latency)) return;
       setFailed(false);
       initial = false;
       asked = now.at;
       const request: { at: number | string; answered: boolean } = { at: now.at, answered: false };
       busy = request;
+      const started = performance.now();
       void now.load().then(() => {
         if (!live || busy !== request) return;
+        latency = Math.min(2000, Math.max(0, performance.now() - started)) * 0.5 + latency * 0.5;
         request.answered = true;
         check();
       }, () => {
