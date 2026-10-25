@@ -371,8 +371,14 @@ fn Ctx::push_inst(
 /// The corners of node `n` (radius_at's) on the instance just emitted for it (its ground, its border, its shadow, its
 /// glass, its picture), where they are each their own: 36-39, and 4 the roundest.
 fn Ctx::corners_last(self : Ctx, n : Node) -> Unit {
+  self.corners_on(self.ninst - 1, n)
+}
+
+///|
+/// The same on instance `k`.
+fn Ctx::corners_on(self : Ctx, k : Int, n : Node) -> Unit {
   match n.radii {
-    Some(r) => self.corners_last_each(r[0], r[1], r[2], r[3])
+    Some(r) => self.corners_each(k, r[0], r[1], r[2], r[3])
     None => ()
   }
 }
@@ -380,7 +386,12 @@ fn Ctx::corners_last(self : Ctx, n : Node) -> Unit {
 ///|
 /// The same with corners `r0` to `r3` (top left, then round it), the roundest its corner (4).
 fn Ctx::corners_last_each(self : Ctx, r0 : Double, r1 : Double, r2 : Double, r3 : Double) -> Unit {
-  let b = (self.ninst - 1) * inst_size
+  self.corners_each(self.ninst - 1, r0, r1, r2, r3)
+}
+
+///|
+fn Ctx::corners_each(self : Ctx, k : Int, r0 : Double, r1 : Double, r2 : Double, r3 : Double) -> Unit {
+  let b = k * inst_size
   let a = self.inst
   a[b + 4] = dmax(dmax(r0, r1), dmax(r2, r3))
   a[b + 36] = r0
@@ -625,14 +636,16 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   let border_over = n.border_w > 0.0 &&
     n.first >= 0 &&
     (n.kind == kind_box || n.kind == kind_list || n.kind == kind_scroll)
-  if (n.bg & 0xFFL) != 0L || (n.border_w > 0.0 && !border_over) {
+  // (a picture's is what shows until it is in, drawn with it: paint_image)
+  let bg = if n.kind == kind_image { 0L } else { n.bg }
+  if (bg & 0xFFL) != 0L || (n.border_w > 0.0 && !border_over) {
     self.emit_rect(
       n.x,
       n.y,
       n.fw,
       n.fh,
       n.radius,
-      n.bg,
+      bg,
       if border_over || n.dashed { 0.0 } else { n.border_w },
       n.border_c,
       alpha,
