@@ -77,10 +77,10 @@ window.follow=scrollToEnd;createRoot(document.getElementById('root')).render(<Ap
     assert.deepEqual(result,{writes:0,behavior:'none'});
    }
    assert.equal(await page.locator('#pull-pane').evaluate(el=>getComputedStyle(el).overscrollBehaviorY),'none','Home without a virtual list still gives the pull gesture sole ownership of its displacement');
-   const touch=(type,y=100,count=1,x=100)=>page.evaluate(({type,y,count,x})=>{
+   const touch=async(type,y=100,count=1,x=100)=>{await page.evaluate(({type,y,count,x})=>{
     const el=document.getElementById('pull-pane'),event=new Event(type,{bubbles:true});
     Object.defineProperty(event,'touches',{value:Array.from({length:count},(_,identifier)=>({identifier,clientX:x,clientY:y,target:el}))});el.dispatchEvent(event);
-   },{type,y,count,x});
+   },{type,y,count,x});await page.evaluate(()=>new Promise(requestAnimationFrame));};
    await touch('touchstart');await touch('touchmove',160);
    assert.equal(await page.locator('#pull-pane').evaluate(e=>e.style.translate),'0px 30px');
    await page.locator('#pull-pane').evaluate(el=>Object.defineProperty(el,'scrollTop',{configurable:true,get:()=>-20}));

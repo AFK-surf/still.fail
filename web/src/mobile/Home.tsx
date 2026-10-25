@@ -1,6 +1,7 @@
 // Home is the `chats` view as the Android app lists it (apps/android/…/screens/Home.kt): one kind of item, newest first
 // and grouped by day. A fixed head (settings · workspace · the filter · stations) and the new-chat button floating
 // at the bottom. The lists (all, mine, watching) are followed at once, side by side: switching slides from one to another with nothing to wait for.
+import { useFrameDraw } from "./gesture.ts";
 import { StationMark } from "../StationMark.tsx";
 import { Activity, memo, useCallback, useMemo, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motionValue } from "motion";
@@ -529,6 +530,7 @@ function SwipeArchive({ item, busy, onDrag, children }: { item: ChatItem; busy: 
   const slide = useRef<HTMLDivElement>(null);
   const under = useRef<HTMLDivElement>(null);
   const [x] = useState(() => motionValue(0));
+  const fingers = useFrameDraw<number>(value => x.set(value));
   const run = useRef<AnimationPlaybackControls | null>(null);
   const go = useRef<{ id: number; x: number; y: number; dragging: boolean; last: { x: number; t: number }[] } | null>(null);
   const swiped = useRef(false);
@@ -562,6 +564,8 @@ function SwipeArchive({ item, busy, onDrag, children }: { item: ChatItem; busy: 
   const end = (e: ReactPointerEvent<HTMLDivElement>, cancelled: boolean) => {
     const g = go.current;
     if (!g || g.id !== e.pointerId) return;
+    if (!cancelled && g.dragging) fingers.set(Math.min(0, e.clientX - g.x));
+    fingers.flush();
     go.current = null;
     const el = frame.current;
     if (!g.dragging || !el) return;
@@ -577,6 +581,7 @@ function SwipeArchive({ item, busy, onDrag, children }: { item: ChatItem; busy: 
     <div ref={frame} className={css.mChatRowWrap}
       onPointerDown={(e) => {
         if (e.pointerType === "mouse") return;
+        fingers.cancel();
         swiped.current = false;
         go.current = { id: e.pointerId, x: e.clientX, y: e.clientY, dragging: false, last: [{ x: e.clientX, t: e.timeStamp }] };
       }}
@@ -598,7 +603,7 @@ function SwipeArchive({ item, busy, onDrag, children }: { item: ChatItem; busy: 
         // Its speed over the last 80 ms.
         while (g.last.length > 2 && e.timeStamp - g.last[0]!.t > 80) g.last.shift();
         // Only to the left: to the right it stays where it is.
-        x.set(dx < 0 ? dx : 0);
+        fingers.set(dx < 0 ? dx : 0);
       }}
       onPointerUp={(e) => end(e, false)} onPointerCancel={(e) => end(e, true)}
       onClickCapture={(e) => { if (swiped.current) { swiped.current = false; e.preventDefault(); e.stopPropagation(); } }}>
