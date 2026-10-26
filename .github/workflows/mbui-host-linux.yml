@@ -33,7 +33,7 @@ on:
 jobs:
   contracts:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: apps/mbui/mbui

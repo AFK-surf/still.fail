@@ -20,6 +20,8 @@
 static char family_ui[128] = "sans-serif";
 static const char *MONO = "monospace";  // the code face (style & 2)
 static const char *SERIF = "serif";     // the serif face (style & 4): Noto Serif CJK SC's Latin and Han
+// the words' and the code's faces as fontconfig names them for Latin (latin_family)
+static char face_ui[128], face_mono[128];
 static const int MAX_PX = 1024;         // largest cluster picture, in pixels a side
 
 typedef struct {
@@ -48,10 +50,33 @@ static uint8_t *held_px;
 void mb_text_set_family(const char *family) {
   if (!family || !*family || strlen(family) >= sizeof family_ui) return;
   strcpy(family_ui, family);
+  face_ui[0] = 0;
   generation++;
 }
 
+// The family fontconfig gives `name` (an alias: sans-serif, monospace, GTK's "Sans"; or a family installed) for Latin
+// words: the face the words are set in, Han then falling back by the context's language (zh-cn) to the simplified
+// Chinese faces. Asked as the context asks, with zh-cn, sans-serif would be a CJK face, its Latin and its taller lines
+// setting every word.
+static void latin_family(const char *name, char *out, size_t cap) {
+  snprintf(out, cap, "%s", name);
+  FcPattern *p = FcNameParse((const FcChar8 *)name);
+  if (!p) return;
+  FcPatternAddString(p, FC_LANG, (const FcChar8 *)"en");
+  FcConfigSubstitute(NULL, p, FcMatchPattern);
+  FcDefaultSubstitute(p);
+  FcResult r;
+  FcPattern *m = FcFontMatch(NULL, p, &r);
+  FcChar8 *f = NULL;
+  if (m && FcPatternGetString(m, FC_FAMILY, 0, &f) == FcResultMatch && strlen((const char *)f) < cap)
+    snprintf(out, cap, "%s", (const char *)f);
+  if (m) FcPatternDestroy(m);
+  FcPatternDestroy(p);
+}
+
 static void init(void) {
+  if (!face_ui[0]) latin_family(family_ui, face_ui, sizeof face_ui);
+  if (!face_mono[0]) latin_family(MONO, face_mono, sizeof face_mono);
   if (ctx) return;
   fontmap = pango_cairo_font_map_new();
   ctx = pango_font_map_create_context(fontmap);
@@ -240,7 +265,7 @@ moonbit_string_t mb_host_local_font_families(void) {
 static PangoFontDescription *desc_for(double size, int weight, int style) {
   int face = face_id(style);
   PangoFontDescription *d = pango_font_description_new();
-  const char *family = face ? faces[face].family : (style & 2) ? MONO : (style & 4) ? SERIF : family_ui;
+  const char *family = face ? faces[face].family : (style & 2) ? face_mono : (style & 4) ? SERIF : face_ui;
   pango_font_description_set_family(d, family);
   pango_font_description_set_weight(d, (PangoWeight)weight);
   pango_font_description_set_style(d, (style & 1) ? PANGO_STYLE_ITALIC : PANGO_STYLE_NORMAL);
