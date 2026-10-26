@@ -1000,6 +1000,7 @@ export class Hub {
       runOn: (key, holding) => this.accounts.runOn(key, holding),
       spend: (key, ranOn) => this.accounts.spend(key, ranOn),
       refillsAt: (key) => this.accounts.refillsAt(key),
+      recheck: (profile) => this.accounts.recheck(profile),
       mcpUrl: () => (typeof this.options.mcpUrl === "string" ? this.options.mcpUrl : this.options.mcpUrl()),
       toSandbox: async (key) => {
         const data = this.config().dataDir;

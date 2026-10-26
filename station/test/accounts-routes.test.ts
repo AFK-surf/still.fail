@@ -27,7 +27,7 @@ const member = viewer("dev@example.com", "member");
 
 type Rig = Awaited<ReturnType<typeof rig>>;
 
-async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; resetQuota?: AccountsDeps["resetQuota"]; hermes?: AccountsDeps["hermes"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; clock?: Clock.Clock; workspaces?: string[]; shared?: AccountsDeps["shared"]; urls?: AccountsDeps["urls"] } = {}) {
+async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; readQuota?: AccountsDeps["quota"]; resetQuota?: AccountsDeps["resetQuota"]; hermes?: AccountsDeps["hermes"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; clock?: Clock.Clock; workspaces?: string[]; shared?: AccountsDeps["shared"]; urls?: AccountsDeps["urls"] } = {}) {
   const data = o.data ?? temp("routes");
   const path = join(data, "config.json");
   if (!existsSync(path)) {
@@ -56,12 +56,14 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
     machine: o.machine ?? null,
     checkOnStart: false,
     check: o.check ?? (async () => ({ state: "ok", detail: "fake", models: [], checkedAt: Date.now() })),
-    quota: quota
-      ? async () => {
-          quota.n++;
-          return { state: "ok", windows: [{ label: "5 小时", usedPercent: 12, resetsAt: null }], detail: null, checkedAt: Date.now() };
-        }
-      : null,
+    quota:
+      o.readQuota ??
+      (quota
+        ? async () => {
+            quota.n++;
+            return { state: "ok", windows: [{ label: "5 小时", usedPercent: 12, resetsAt: null }], detail: null, checkedAt: Date.now() };
+          }
+        : null),
     resetQuota: o.resetQuota ?? null,
     hermes: o.hermes,
     discover: o.discover ?? (async (profile) => ({ state: "unsupported", detail: "", model: null, provider: null, models: [], fingerprint: fingerprint(profile) })),
@@ -349,6 +351,31 @@ describe("the accounts routes", { concurrency: true }, () => {
     const again = await rig({ data, store: Store.open(db, null) });
     assert.deepEqual(again.profile("cc")!.models, ["claude-opus-4-6", "claude-opus-5-5"]);
     await again.close();
+  });
+
+  test("a login its allowance's reading finds over is checked again, once, and the check says to sign in", async () => {
+    let over = false;
+    let checks = 0;
+    const t = await rig({
+      check: async () => {
+        checks++;
+        return over ? { state: "login", detail: "over", models: null, checkedAt: Date.now() } : { state: "ok", detail: "fake", models: [], checkedAt: Date.now() };
+      },
+      readQuota: async () => (over ? { state: "unavailable", windows: [], detail: "over", checkedAt: 0, signedOut: true } : { state: "ok", windows: [], detail: null, checkedAt: 0 }),
+    });
+    await t.call("POST", "/profiles/cc/check");
+    await t.call("POST", "/profiles/cc/quota");
+    assert.equal(checks, 1);
+    over = true;
+    await t.call("POST", "/profiles/cc/quota");
+    await until(() => t.accounts.health("cc").check?.state === "login", "checked again");
+    assert.equal(checks, 2);
+    assert.ok(!("signedOut" in t.view("cc")!.quota), "not kept");
+    // Said already: reading it again does not check it again.
+    await t.call("POST", "/profiles/cc/quota");
+    await settle();
+    assert.equal(checks, 2);
+    await t.close();
   });
 
   test("profile checks and quotas are kept so a restart shows them at once", async () => {

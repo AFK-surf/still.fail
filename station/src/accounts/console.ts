@@ -33,10 +33,12 @@ export type DeviceAnswer = { pending: true; slowDown: boolean } | { token: Token
 
 export type Token = { access: string; refresh: string; expiresInMs: number; org: string | null };
 
-/// The Console turned a refresh token down: the sign-in is over (signed out there, or spent elsewhere).
+/// A sign-in that can no longer be renewed (the Console's, Kimi's, Claude Code's: oauth.ts): its refresh token turned
+/// down (`status`), or none kept (null). It is over (signed out there, or spent elsewhere): its check says to sign in
+/// again.
 export class RenewRefused extends Error {
-  readonly status: number;
-  constructor(status: number, message: string) {
+  readonly status: number | null;
+  constructor(status: number | null, message: string) {
     super(message);
     this.status = status;
   }

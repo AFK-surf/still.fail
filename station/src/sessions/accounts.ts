@@ -41,6 +41,8 @@ export type AccountsDeps = {
 export class Accounts {
   private deps: AccountsDeps;
   private health: (id: string) => ProfileHealth = () => ({});
+  private checkAgain: (id: string) => Promise<unknown> = async () => {};
+  private rechecking = new Map<string, Promise<void>>();
   private picked = new Map<string, number>();
   /// Profiles a turn ran into the allowance of, and when: passed over until their allowance is read again, or for
   /// SPENT_FOR_MS when it is not.
@@ -55,6 +57,26 @@ export class Accounts {
   /// Lets the pool see profiles' checks and allowances.
   setHealth(health: (id: string) => ProfileHealth) {
     this.health = health;
+  }
+
+  /// Lets the pool have a profile checked again (accounts/index.ts `check`).
+  setRecheck(recheck: (id: string) => Promise<unknown>) {
+    this.checkAgain = recheck;
+  }
+
+  /// Profile `id` checked again, a runtime on it having failed to sign in (once at a time): one whose login is over is
+  /// passed over from then on, and a session left to the station goes on on another (`runOn`).
+  recheck(id: string): Promise<void> {
+    const busy = this.rechecking.get(id);
+    if (busy) return busy;
+    const run = this.checkAgain(id)
+      .then(
+        () => {},
+        () => {},
+      )
+      .finally(() => this.rechecking.delete(id));
+    this.rechecking.set(id, run);
+    return run;
   }
 
   healthOf(id: string): ProfileHealth {

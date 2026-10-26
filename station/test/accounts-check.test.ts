@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { checkProfile, URLS } from "../src/accounts/profiles.ts";
+import { RenewRefused } from "../src/accounts/console.ts";
 import { hubConfig } from "../src/sessions/config.ts";
 import { byDecisionPriority, discover, resolvedModel } from "../src/sessions/decision.ts";
 import { machine, provider, sameAs, temp } from "./accounts-fakes.ts";
@@ -64,6 +65,35 @@ test("a subscription is checked by its runtime's own status command, in the prof
   await p.close();
   const env = await checkProfile({ ...base, kind: "env" });
   assert.equal(env.state, "unknown");
+});
+
+test("a Claude login kept but no longer renewable is one to sign in again; one not renewed for now is tried as it is", async () => {
+  const m = machine({ claude: `echo '{"loggedIn":true,"email":"a@x.com","subscriptionType":"max"}'` });
+  const home = join(m.home, "profile");
+  mkdirSync(home);
+  const login = (oauth: object) => writeFileSync(join(home, ".credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "tok", ...oauth } }));
+  let renewal = 400;
+  const p = await provider((asked) => {
+    if (asked.method === "POST") return { status: renewal, body: { error: "invalid_grant" } };
+    return asked.headers.authorization === "Bearer tok" ? { status: 200, body: { data: [{ id: "claude-opus-5-5" }] } } : { status: 401, body: {} };
+  });
+  const urls = { ...URLS, anthropic: p.base, claudeToken: p.base };
+  const checked = async () => {
+    const c = await checkProfile({ ...base, kind: "subscription", home, env: m.env, urls });
+    return [c.state, c.detail, c.models];
+  };
+  // `auth status` says it is signed in: run out with nothing to renew it with, or its refresh token refused, it is not.
+  login({ expiresAt: 1 });
+  assert.deepEqual(await checked(), ["login", "Claude 登录已过期且无法续期，请重新登录", null]);
+  login({ expiresAt: 1, refreshToken: "spent" });
+  assert.deepEqual(await checked(), ["login", "Claude 登录续期被拒绝（400），请重新登录", null]);
+  // The provider unable to renew it now says nothing of the login: the token kept is tried.
+  renewal = 503;
+  assert.equal((await checked())[0], "ok");
+  // The machine's login, the same.
+  const machineCheck = await checkProfile({ ...base, kind: "subscription", home, env: m.env, machine: true, machineToken: () => Promise.reject(new RenewRefused(401, "over")), urls });
+  assert.deepEqual([machineCheck.state, machineCheck.detail], ["login", "over"]);
+  await p.close();
 });
 
 // ── what a profile can decide with ──

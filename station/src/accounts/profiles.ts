@@ -12,8 +12,8 @@ import { type AccessKind, OPENCODE, profileRuntimes, type Runtime, type Via } fr
 import { type Endpoints, endpoints, find, type Source } from "../agents/providers.ts";
 import type { Capability } from "../sessions/decision.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
-import { claudeToken as tokenOf } from "./oauth.ts";
-import { CONSOLE } from "./console.ts";
+import { claudeOAuthToken, claudeToken as tokenOf } from "./oauth.ts";
+import { CONSOLE, RenewRefused } from "./console.ts";
 import { CURSOR, type CursorUrls, cursorMe, cursorModels, readCursor } from "./cursor.ts";
 import { devinCatalog, devinData } from "../agents/devin.ts";
 import { platform } from "../platform/index.ts";
@@ -48,6 +48,8 @@ export type ProfileQuota = {
   resetCount?: number;
   detail: string | null;
   checkedAt: number;
+  /// Asked with a login that turned out to be over (oauth.ts RenewRefused): its profile is checked again. Not kept.
+  signedOut?: boolean;
 };
 
 /// Where the providers are: the real ones unless a test says otherwise.
@@ -179,6 +181,8 @@ export async function checkProfile(o: CheckOptions): Promise<ProfileCheck> {
   try {
     return await checkInner(o, lang);
   } catch (e) {
+    // A login that can no longer be renewed (oauth.ts) is over: signed in again.
+    if (e instanceof RenewRefused) return check("login", e.message, null);
     return check("failed", tr(lang, "station.profile.checkError", { error: (e as Error).message }), null);
   }
 }
@@ -230,7 +234,7 @@ async function checkInner(o: CheckOptions, lang: Lang): Promise<ProfileCheck> {
     const status: Json = JSON.parse(output.stdout);
     if (status?.loggedIn !== true) return check("login", t("station.profile.signedOut"), null);
     // What the subscription runs, as Anthropic lists it for the account's own token.
-    const token = machineToken ?? tokenOf(o.home);
+    const token = machineToken ?? (await profileToken(o, urls, lang));
     const models = token === undefined ? null : await claudeModels(urls, token);
     const detail = [t("station.profile.signedIn"), typeof status.email === "string" ? status.email : "", typeof status.subscriptionType === "string" ? status.subscriptionType : ""].filter((s) => s !== "");
     return check("ok", detail.join(t("station.list.comma")), models);
@@ -345,6 +349,18 @@ export function grokEmailIn(text: string): string | null {
 }
 
 /// The models a Claude subscription's OAuth token may use; null when Anthropic does not say.
+/// A Claude profile's token as it signs in now, renewed first when due (oauth.ts): `auth status` says only that a login
+/// is kept, and one that can no longer be renewed throws (RenewRefused: to sign in again). One not renewed now for
+/// another reason (the provider, the network) is the one kept.
+async function profileToken(o: CheckOptions, urls: Urls, lang: Lang): Promise<string | undefined> {
+  try {
+    return (await claudeOAuthToken(o.env, o.home, null, urls.claudeToken, lang))[0];
+  } catch (e) {
+    if (e instanceof RenewRefused) throw e;
+    return tokenOf(o.home);
+  }
+}
+
 async function claudeModels(urls: Urls, token: string): Promise<string[] | null> {
   try {
     const response = await get(`${urls.anthropic}/v1/models?limit=100`, { authorization: `Bearer ${token}`, "anthropic-version": "2023-06-01", "anthropic-beta": "oauth-2025-04-20" });

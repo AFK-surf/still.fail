@@ -1,7 +1,8 @@
 // Renewing a Claude login without sending a prompt (the Rust station's claude_oauth.rs): under Claude Code's own locks (its
 // current one in the config directory and its legacy one beside it), read again once locked, and saved back where it
 // was (the keychain for the machine's login on macOS, else the file), never as a copy. Used for the machine profile's
-// token (the Claude driver's `machineToken`) and for reading a subscription's allowance.
+// token (the Claude driver's `machineToken`), for checking a profile and for reading a subscription's allowance. A login
+// that can no longer be renewed (none to renew it with, or its refresh token refused) is over: RenewRefused.
 import { execFile, spawn } from "node:child_process";
 import { closeSync, fstatSync, mkdirSync, openSync, readFileSync, realpathSync, rmdirSync, statSync, futimesSync } from "node:fs";
 import { join } from "node:path";
@@ -11,6 +12,7 @@ import { wall } from "../ops/fibers.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { platform } from "../platform/index.ts";
 import { profileFetch } from "../ops/agent-env.ts";
+import { RenewRefused } from "./console.ts";
 
 type Json = any;
 
@@ -159,7 +161,7 @@ async function renew(env: Env, home: string, machine: boolean, rejected: string 
   if (usable(credentials, rejected, lang, margin)) return access(credentials, lang);
   const oauth = credentials.data?.claudeAiOauth ?? {};
   const refresh = oauth.refreshToken;
-  if (typeof refresh !== "string" || refresh === "") throw new Error(t("station.claudeAuth.expiredNoRefresh"));
+  if (typeof refresh !== "string" || refresh === "") throw new RenewRefused(null, t("station.claudeAuth.expiredNoRefresh"));
   const body: Json = { grant_type: "refresh_token", refresh_token: refresh, client_id: typeof oauth.clientId === "string" && oauth.clientId !== "" ? oauth.clientId : CLIENT_ID };
   if (Array.isArray(oauth.scopes)) {
     const scopes = oauth.scopes.filter((s: unknown) => typeof s === "string");
@@ -176,7 +178,8 @@ async function renew(env: Env, home: string, machine: boolean, rejected: string 
     const latest = await read(env, home, machine, lang);
     if (usable(latest, rejected, lang)) return access(latest, lang);
     const status = response.status;
-    throw new Error(t(status === 400 || status === 401 ? "station.claudeAuth.refreshRefused" : "station.claudeAuth.refreshUnavailable", { status }));
+    if (status === 400 || status === 401) throw new RenewRefused(status, t("station.claudeAuth.refreshRefused", { status }));
+    throw new Error(t("station.claudeAuth.refreshUnavailable", { status }));
   }
   let answer: Json;
   try {
