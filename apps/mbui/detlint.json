@@ -340,7 +340,6 @@
       "src/sfdesk/memory_doc.mbt": 5,
       "src/sfdesk/new_connect.mbt": 11,
       "src/sfdesk/places.mbt": 2,
-      "src/sfdesk/security.mbt": 36,
       "src/sfdesk/slack_app.mbt": 6,
       "src/sfdesk/vault.mbt": 5,
       "src/sfdesk/vault_dialogs.mbt": 11,
@@ -352,6 +351,7 @@
       "src/sfpages/memory.mbt": 10,
       "src/sfpages/notifications.mbt": 5,
       "src/sfpages/permissions.mbt": 40,
+      "src/sfpages/security.mbt": 33,
       "src/sfpages/shortcuts.mbt": 5,
       "src/sfpages/usage.mbt": 10,
       "src/sfpages/workspace_page.mbt": 12

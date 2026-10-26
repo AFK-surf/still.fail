@@ -104,3 +104,26 @@ pub fn waiting_rows(c : @ui.Ctx, wait : Json?, count? : Int = 3) -> Unit {
   let failing = failing_of(wait)
   @sf.waiting(c, shape=Rows, count~, note={ reading: failing.length() == 0, text: "", failing })
 }
+
+///|
+/// How many dialogs were put up (a dialog's fields' keys, new each time it opens).
+// kept across runs: counted by open_dialog; reset puts it back
+pub let desk_dialogs : Ref[Int] = Ref(0)
+
+///|
+/// Puts up a dialog over the page (parts.tsx Dialog: the library's panel opened by nothing, @sf.panel): its title,
+/// what it is about, what it holds, its buttons at its foot, each given what closes it; `wide`, 640 wide; `live`: its
+/// title, its step's count and what it is about as they are now (a wizard's); `gone`: what is let go of as it closes
+/// by its ✕, Esc or a press outside.
+pub fn open_dialog(
+  title : String,
+  body : (@ui.Ctx, () -> Unit) -> Unit,
+  foot : (@ui.Ctx, () -> Unit) -> Unit,
+  description? : String = "",
+  wide? : Bool = false,
+  live? : () -> (String, String, String),
+  gone? : () -> Unit = fn() {  },
+) -> Unit {
+  desk_dialogs.val += 1
+  @sf.panel(title, body, from=Unanchored, description~, foot~, wide~, live?, gone~)
+}

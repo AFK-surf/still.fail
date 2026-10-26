@@ -115,3 +115,16 @@ fn presented_in(t : @ui.Tester) -> Unit {
   let rest = @kit.sheet_rest("sf-present")
   t.run_for(if rest > t.time() { rest - t.time() } else { @ui.nav_push_ms })
 }
+
+///|
+/// Down the page (the wheel over the page, at its right, beside any list) till `words` are in view.
+fn scrolled_to(t : @ui.Tester, w : Double, words : String) -> Unit {
+  let x = w - 120.0
+  t.move(x, 450.0)
+  for _ in 0..<12 {
+    match t.find(words) {
+      Some((_, y)) if y < 800.0 => break
+      _ => t.wheel(x, 450.0, 300.0)
+    }
+  }
+}

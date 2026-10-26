@@ -8,7 +8,7 @@
 
 ///|
 /// 安全 (SecuritySettings, SecurityScreen).
-fn security_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
+pub fn security_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let topic = (core.topic)("lock", { "workspace": str(here.workspace) })
   let lock = topic.value
@@ -102,7 +102,7 @@ fn sec_point(c : @ui.Ctx, icon : String, words : String, rest : String) -> Unit 
 fn sec_group(c : @ui.Ctx, look : Look, body : () -> Unit) -> Unit {
   match look {
     Narrow => @sf.group(c, body)
-    Wide => c.box(style=desk_card, fn() { c.box(style=sec_rows, body) |> ignore }) |> ignore
+    Wide => c.box(style=@sf.desk_card, fn() { c.box(style=sec_rows, body) |> ignore }) |> ignore
   }
 }
 
@@ -123,7 +123,7 @@ fn sec_line(
 ) -> Unit {
   match look {
     Narrow =>
-      c.box(style=if indent { sec_narrow_row_in } else { narrow_said_row }, fn() {
+      c.box(style=if indent { sec_narrow_row_in } else { @sf.pg_said_row }, fn() {
         match mark {
           Some(f) => f()
           None => ()
@@ -140,7 +140,7 @@ fn sec_line(
           }
         }, fn() {
           if note != "" {
-            c.text(note, style=if warn { sec_narrow_warn } else { narrow_link_note }) |> ignore
+            c.text(note, style=if warn { sec_narrow_warn } else { @sf.pg_link_note }) |> ignore
           }
         })
       })
@@ -248,7 +248,7 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
           style=sec_state,
         )
         |> ignore
-        @sfpages.pair_steps(c, core, ws, in_card=true)
+        pair_steps(c, core, ws, in_card=true)
       })
     })
   }
@@ -265,7 +265,7 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
               note=text(rv, "deviceText") + " · " + stamp(rv, "created_at", "ago"),
               drops=true,
               end=fn() {
-                c.box(style=sec_code, fn() { mono(c, text(rv, "code"), style=sec_code_words) }) |> ignore
+                c.box(style=sec_code, fn() { @settings.mono(c, text(rv, "code"), style=sec_code_words) }) |> ignore
                 if signs && sec_do(c, look, "request/" + text(rv, "device"), @sf.t("web-pages.security.check"), primary=true) {
                   confirm_dialog(core, ws, r)
                 }
@@ -336,11 +336,11 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
           |> ignore
         // at the foot, in red, on a card of its own (Security.tsx's mobile On)
         Narrow =>
-          c.box(style=@sfpages.acc_narrow_foot, fn() {
+          c.box(style=acc_narrow_foot, fn() {
             @sf.group(c, fn() {
               let id = c.id("lock-off")
               let b = c.box(style=narrow_row, id=if off { 0 } else { id }, fn() {
-                c.text(@sf.t("web-pages.security.turnOff"), style=@sfpages.acc_delete_words) |> ignore
+                c.text(@sf.t("web-pages.security.turnOff"), style=acc_delete_words) |> ignore
                 if off {
                   @settings.spinner(c)
                 }
@@ -361,7 +361,7 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
 
 ///|
 /// A section whose title says how many it holds (narrow: after its title, quieter; wide: the accent's count beside it).
-fn sec_section(c : @ui.Ctx, look : Look, title : String, count~ : Int, body : () -> Unit) -> Unit {
+pub fn sec_section(c : @ui.Ctx, look : Look, title : String, count~ : Int, body : () -> Unit) -> Unit {
   match look {
     Narrow => {
       @sf.heading(c, title + " · " + count.to_string())
@@ -454,7 +454,7 @@ fn sec_station_row(c : @ui.Ctx, core : Core, look : Look, ws : String, sv : Json
 ///|
 /// 开启安全模式 (SecurityOpen, SecurityOpenScreen; the core's `lockDraft`): its members, the devices and stations it
 /// would sign (each ticked in or out: `lock.toggle`), then 签名并开启 (`lock.open`); back to 安全 once it is on.
-fn security_open_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
+pub fn security_open_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let ws = here.workspace
   let topic = (core.topic)("lockDraft", { "workspace": str(ws) })
@@ -576,7 +576,7 @@ fn sec_check_line(c : @ui.Ctx, look : Look, key : String, title : String, note :
 ///|
 /// A waiting device, confirmed once its code is the one on its screen (Security.tsx ConfirmDevice): who and what it
 /// is, its code large, 拒绝 and 确认; gone once answered on another device.
-fn confirm_dialog(core : Core, ws : String, r : Json) -> Unit {
+pub fn confirm_dialog(core : Core, ws : String, r : Json) -> Unit {
   let rv = Some(r)
   let device = text(rv, "device")
   let code = text(rv, "code")
@@ -592,7 +592,7 @@ fn confirm_dialog(core : Core, ws : String, r : Json) -> Unit {
       if lock is Some(_) && !items(lock, "requests").iter().any(fn(x) { text(Some(x), "device") == device }) {
         shut()
       }
-      c.box(style=sec_big_code_box, fn() { mono(c, code, style=sec_big_code, center=true) }) |> ignore
+      c.box(style=sec_big_code_box, fn() { @settings.mono(c, code, style=sec_big_code, center=true) }) |> ignore
       let says = if text(rv, "kind") == "web" {
         "web-pages.security.confirmWeb"
       } else {
@@ -622,7 +622,7 @@ fn confirm_dialog(core : Core, ws : String, r : Json) -> Unit {
 
 ///|
 /// A station of the workspace not in the lock, taken in once its owner says it is theirs (Security.tsx's join dialog).
-fn join_dialog(core : Core, ws : String, station : String, name : String) -> Unit {
+pub fn join_dialog(core : Core, ws : String, station : String, name : String) -> Unit {
   @sf.confirm(
     @sf.t("web-pages.security.joinTitle", args=[("name", name)]),
     @sf.t("web-pages.security.joinBody"),
@@ -643,7 +643,7 @@ fn join_dialog(core : Core, ws : String, station : String, name : String) -> Uni
 ///|
 /// 关闭安全模式？ (Security.tsx TurnOff): what turning it off gives up, a line each, and the workspace's name typed
 /// before it can go (`lock.disable`, Enter too); written in as it opens.
-fn turn_off_dialog(core : Core, ws : String, name : String) -> Unit {
+pub fn turn_off_dialog(core : Core, ws : String, name : String) -> Unit {
   let key = "lock-off/" + (desk_dialogs.val + 1).to_string()
   let named = fn() { field_of(key).text().trim(chars=" \t\n").to_owned() == name.trim(chars=" \t\n").to_owned() }
   let typed_in = Ref(false)
@@ -731,7 +731,7 @@ let sec_row_least : Double = 30.0
 ///|
 /// The state's card, first on the page, as far from what follows as a section is (lead: a card, 28 under it).
 // kept across runs: a value (no field of it changes)
-let sec_lead : @ui.Style = desk_card.then(@ui.css("mb=S7"))
+let sec_lead : @ui.Style = @sf.desk_card.then(@ui.css("mb=S7"))
 
 ///|
 /// The state (state: the body's 14 in 500; its meta the ui's 13 muted).
@@ -888,7 +888,7 @@ let sec_narrow_row_in : @ui.Style = @ui.css("row w=Full pl=S6 pr=S3 py=S2_5 gap=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_narrow_warn : @ui.TextStyle = narrow_link_note.then(@ui.text_style(color=WarnInk))
+let sec_narrow_warn : @ui.TextStyle = @sf.pg_link_note.then(@ui.text_style(color=WarnInk))
 
 ///|
 // kept across runs: a value (no field of it changes)

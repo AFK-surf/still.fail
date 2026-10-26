@@ -79,8 +79,8 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     Shortcuts => @sfpages.shortcuts_page(c, core, frame)
     Me => @sfpages.me_page(c, core, here, frame)
     Workspace => @sfpages.workspace_page(c, core, here, frame)
-    Security => security_page(c, core, here, frame)
-    SecurityOpen => security_open_page(c, core, here, frame)
+    Security => @sfpages.security_page(c, core, here, frame)
+    SecurityOpen => @sfpages.security_open_page(c, core, here, frame)
     Vault => vault_page(c, core, here, frame)
     VaultItems => vault_items_page(c, core, here, frame)
     VaultItem(v, item) => vault_item_page(c, core, here, frame, v, item)
@@ -130,7 +130,6 @@ fn settings_fixture(src : Source, core : Core) -> Unit {
 /// What the settings pages here keep put back as the app begins anew.
 fn settings_reset() -> Unit {
   mine_filter_open.clear()
-  desk_dialogs.val = 0
   fx_policy_up.val = ""
   local_menu.val = false
   settings_deep.val = false

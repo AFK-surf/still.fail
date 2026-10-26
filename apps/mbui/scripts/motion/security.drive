@@ -1,4 +1,4 @@
-# 安全 (sfdesk security.mbt, one page in every frame): MBUI_FIXTURE=settings-security, a phone's window or a desktop's;
+# 安全 (sfpages security.mbt, one page in every frame): MBUI_FIXTURE=settings-security, a phone's window or a desktop's;
 # the page, then down it to its people, stations and turning it off.
 timeout 20000
 until 482 917

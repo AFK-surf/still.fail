@@ -185,6 +185,8 @@ pub fn dmin(a : Double, b : Double) -> Double {
 ///|
 using @settings {
   binding_of,
+  field_of,
+  lock_call,
   ask,
   avatar,
   confirm,
