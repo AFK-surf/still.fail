@@ -63,7 +63,8 @@ fn completion_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       body.push(fn() {
         match topic.error {
           Some(e) => c.text(error_text(e), style=desk_note) |> ignore
-          None => @sf.wait_line(c, @sf.t("common.readingStations"))
+          // (read the first time: rows' shapes where the stations' will be, AutomaticDecisions.tsx's Waiting, 2)
+          None => @sf.group_waiting(c, count=2, text=@sf.t("common.readingStations"))
         }
       })
   }

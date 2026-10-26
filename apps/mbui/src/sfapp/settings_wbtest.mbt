@@ -405,6 +405,46 @@ test "settings: the account's page has the accounts on this device on its one ca
 }
 
 ///|
+/// The card drawn under the box at `rect` (the smallest of the card's ground holding it), as (x, y, w, h).
+fn card_under(t : @ui.Tester, rect : (Double, Double, Double, Double)) -> (Double, Double, Double, Double)? {
+  let (x, y, w, h) = rect
+  let card = @sf.ui_theme().card
+  let mut best : (Double, Double, Double, Double)? = None
+  for r in t.drawn_rects() {
+    let (rx, ry, rw, rh, color) = r
+    if color == card && rx <= x && ry <= y && rx + rw >= x + w && ry + rh >= y + h {
+      match best {
+        Some((_, _, bw, bh)) if bw * bh <= rw * rh => ()
+        _ => best = Some((rx, ry, rw, rh))
+      }
+    }
+  }
+  best
+}
+
+///|
+test "settings: where the account is signed in, read the first time, is rows' shapes where its card's rows will be, no words" {
+  // (2026-10-26, 「这个 loading 很怪」: a wait's line stood in its place, at the card's edge, 注销账号's card right
+  // under it)
+  let read = settings_tester("me")
+  let (_, read_delete, _, _) = read.rect_of("注销账号").unwrap()
+  let (read_x, read_y, read_w, read_h) = card_under(read, read.rect_of("Pixel 9 · still.fail").unwrap()).unwrap()
+  let t = settings_tester("me", mode="settings-me-reading")
+  t.run_for(@sf.later_ms)
+  assert_true(t.find("正在读取") is None)
+  let shapes = t.get(Status, label="正在读取").rect
+  let (x, y, w, h) = shapes
+  // in from where the card's edges will be as far as its rows are, on no card's ground (with nothing in it, too faint
+  // on the page)
+  let pad = @sf.list_pad
+  assert_eq((x - pad, y - pad, w + 2.0 * pad), (read_x, read_y, read_w))
+  assert_true(card_under(t, shapes) is None)
+  // 注销账号's card as far under them as under the card once read
+  let (_, delete, _, _) = t.rect_of("注销账号").unwrap()
+  assert_eq(delete - (y + h + pad), read_delete - (read_y + read_h))
+}
+
+///|
 /// A row of a settings card, at most (its two lines and its 12 above and below).
 let row_h : Double = 64.0
 
