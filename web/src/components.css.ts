@@ -10,7 +10,6 @@ export const mineFilterBtn = style({
   selectors: {
     "&:hover": { background: vars.hover, color: vars.text },
     "&[data-state=\"open\"]": { background: vars.hover, color: vars.text },
-    "&[data-on]": { color: vars.accentText, background: vars.accentBg },
   },
 });
 export const mineFilterWide = style({});
