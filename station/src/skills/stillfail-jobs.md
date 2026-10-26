@@ -75,7 +75,12 @@ The screen (windows, GUI tests, simulators, emulators, screenshots of what is on
 the command that uses it as `stillfail-job screen <command>…`: it waits while another task has the screen, has it while
 that command runs, and gives it back when it ends, so the builds and tests around it run beside the other tasks. A
 script that knows it opens windows may do this itself (mbui's do). `screen: true` at prepare has the screen for the
-whole task instead: only for a task that uses it from start to end. What draws offscreen needs neither.
+whole task instead: only for a task that uses it from start to end. What draws offscreen needs neither. The screen is
+for work done in minutes: a window you put up for a person and leave there (a virtual machine to try, a simulator,
+an app to look at) is `stillfail-job show <command>…`, which waits for the screen to be free, puts the window up and
+holds nothing however long it stays. While a person uses the machine (its input not idle), no task is given the
+screen; waiting, you are told who has it (`queue.holder`, and the line `stillfail-job screen` prints). A command that
+holds the screen long while others wait has its agent told.
 
 Memory: nothing is stopped for using much. When something you run (a task, a job, a command in your own shell) uses
 more than an eighth of the machine's memory, or the memory comes under pressure, you are told; stop or shrink it if

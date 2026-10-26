@@ -567,6 +567,7 @@ export const windows: Platform = {
   descendants: async () => [],
   // What is left of the memory says its pressure; the processes are not read (the watch over them is macOS's and Linux's).
   memoryPressure: async () => pressureOfAvailable(freemem(), totalmem()),
+  inputIdleMs: async () => null,
   processTable: async () => null,
   cwds: async () => new Map(),
   async listening(pids, port) {

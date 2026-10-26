@@ -183,6 +183,10 @@ export type Platform = {
   /// What the system says of its memory: macOS's own pressure level; elsewhere how much is still available
   /// (pressureOfAvailable). None when it cannot be read.
   memoryPressure(): Promise<"normal" | "high" | "critical" | null>;
+  /// How long the machine's input (keyboard, pointer, what a screen's viewer sends) has been idle, in ms: a person at it
+  /// or working it through still.fail (the station's queue gives the screen to no task meanwhile, jobs/admit.ts). None
+  /// where it is not read.
+  inputIdleMs(): Promise<number | null>;
   /// Every process: its parent, group, program and memory in bytes (resident; its footprint on macOS when `exact`,
   /// which takes longer to read but counts what is compressed or swapped out). None where it is not read (Windows).
   processTable(exact: boolean): Promise<ProcessInfo[] | null>;

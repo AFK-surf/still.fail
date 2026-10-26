@@ -19,6 +19,13 @@
 // whole tasks having it, one that had drawn its pictures in 40 s held it minutes more for its tests, the others with
 // pictures to take waited 20 minutes and more in line, the CPUs a third busy, 2026-10-25).
 //
+// The screen is a machine's work's, done in minutes: a window put up for a person and left there (a virtual machine
+// to try, a simulator to look at) is no claim on it (`stillfail-job show <command>`: it waits for the screen to be
+// free, opens, and holds nothing; a Mac VM held the screen 23 hours as a claim, every task with pictures to take in
+// line behind it, 2026-10-27). And while a person uses the screen (the machine's input not idle: someone at it, or
+// working it through still.fail), it is theirs: nothing more is given it, so no window comes up under their hand; what
+// holds it goes on.
+//
 // A task started with others running is told how many CPUs are free (STILLFAIL_CPUS, and the build tools' own
 // variables when its environment has none of them), so a build does not take every core for itself.
 import type { Ticks } from "../read/host.ts";
@@ -38,8 +45,15 @@ export const RAMP_MS = 2 * LOOK_MS;
 export type Waiting = { id: string; session: string; screen: boolean; queuedAt: number };
 export type Started = { id: string; screen: boolean };
 
-/// Why a task waits, for its agent (station_task's answer).
-export type Why = "memory" | "busy" | "screen";
+/// Why a task waits, for its agent (station_task's answer): the screen another task's, or a person's.
+export type Why = "memory" | "busy" | "screen" | "person";
+
+/// The machine's input idle less than this: a person is at it (or works it through still.fail).
+export const PERSON_IDLE_MS = 60_000;
+
+/// A command that has held the screen this long while another waits for it: its agent is told (once), the screen
+/// being for work done in minutes, a window left up for a person `stillfail-job show`'s.
+export const HELD_LONG_MS = 10 * 60_000;
 
 /// The CPUs' ticks noted at each look, for how busy they have been over the last BUSY_SPAN_MS.
 export class Busy {
@@ -64,11 +78,12 @@ export class Busy {
   }
 }
 
-export type Room = { busy: number | null; pressure: Pressure | null };
+export type Room = { busy: number | null; pressure: Pressure | null; person?: boolean };
 
 /// A command's claim on the screen (`stillfail-job screen`): its job, the process that asked (the command's shell),
-/// when it first asked (the store's clock, as a task's queuedAt), and whether it has the screen now.
-export type Claim = { job: string; pid: number; at: number; held: boolean };
+/// when it first asked (the store's clock, as a task's queuedAt), whether it has the screen now, and since when (the
+/// store's clock; none for one that does not, or one an earlier station gave it: then when it asked).
+export type Claim = { job: string; pid: number; at: number; held: boolean; since?: number };
 
 /// What the claims say to the queue: whether one holds the screen, and when the first still waiting asked.
 export type Claims = { held: boolean; asked: number | null };
@@ -78,16 +93,23 @@ export const claimsOf = (claims: readonly Claim[]): Claims => ({
   asked: claims.find((c) => !c.held)?.at ?? null,
 });
 
-/// The claims with the screen given out: to the first waiting while no task has it, and at once to a job's that has it
-/// already (`screenJobs`: those running that use it throughout; or a command of its own holds it), so a command inside
-/// another, or inside a task that has the screen throughout, does not wait for itself.
-export function served(claims: readonly Claim[], screenJobs: ReadonlySet<string>): Claim[] {
+/// The claims with the screen given out (`now`: since when): to the first waiting while no task has it and no person
+/// uses it (`person`), and at once to a job's that has it already (`screenJobs`: those running that use it
+/// throughout; or a command of its own holds it), so a command inside another, or inside a task that has the screen
+/// throughout, does not wait for itself.
+export function served(claims: readonly Claim[], screenJobs: ReadonlySet<string>, now: number, person = false): Claim[] {
   const having = new Set([...screenJobs, ...claims.filter((c) => c.held).map((c) => c.job)]);
   return claims.map((c) => {
-    if (c.held || (having.size > 0 && !having.has(c.job))) return c;
+    if (c.held || (having.size > 0 && !having.has(c.job)) || (person && !having.has(c.job))) return c;
     having.add(c.job);
-    return { ...c, held: true };
+    return { ...c, held: true, since: now };
   });
+}
+
+/// The claims that have held the screen HELD_LONG_MS or more while another waits for it (none while none waits).
+export function overstaying(claims: readonly Claim[], now: number): Claim[] {
+  if (!claims.some((c) => !c.held)) return [];
+  return claims.filter((c) => c.held && now - (c.since ?? c.at) >= HELD_LONG_MS);
 }
 
 /// The task to start now, if any, and else why the first waiting waits.
@@ -102,10 +124,11 @@ export function pick(
 ): { start: Waiting } | { wait: Why } | null {
   if (waiting.length === 0) return null;
   if (room.pressure === "high" || room.pressure === "critical") return { wait: "memory" };
-  // (the screen another task's, or asked for by a command before this task came)
+  // (the screen another task's, a person's, or asked for by a command before this task came)
   const screenBusy = running.some((r) => r.screen) || claims.held;
-  const able = waiting.filter((w) => !(w.screen && (screenBusy || (claims.asked !== null && claims.asked <= w.queuedAt))));
-  if (able.length === 0) return { wait: "screen" };
+  const person = room.person === true;
+  const able = waiting.filter((w) => !(w.screen && (screenBusy || person || (claims.asked !== null && claims.asked <= w.queuedAt))));
+  if (able.length === 0) return { wait: !screenBusy && person ? "person" : "screen" };
   if (running.length > 0) {
     if (lastStart !== null && now - lastStart < RAMP_MS) return { wait: "busy" };
     if (room.busy === null || room.busy >= BUSY_MAX) return { wait: "busy" };
