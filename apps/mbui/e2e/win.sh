@@ -32,6 +32,12 @@ OUT=$ROOT/out/e2e/windows
 rm -rf "$OUT" && mkdir -p "$OUT/shots"
 CORE=$OUT/core
 w() { cygpath -w "$1"; }
+# The run's release key handed to Windows programs as it is: a key (base64) may start with /, which Git Bash takes for
+# a path and rewrites, in what a Windows program is given, as a Windows one (C:/Program Files/Git/…): one run in 64 had
+# the desktop app refuse a release signed by it (a key "/p67Mm…="). Checked: a value that starts with / reaches one so.
+export MSYS2_ENV_CONV_EXCL="STILLFAIL_RELEASE_KEYS${MSYS2_ENV_CONV_EXCL:+;$MSYS2_ENV_CONV_EXCL}"
+[ "$(STILLFAIL_RELEASE_KEYS=/k node -e 'process.stdout.write(process.env.STILLFAIL_RELEASE_KEYS)')" = /k ] ||
+  { echo "$(basename "$0"): Git Bash rewrites STILLFAIL_RELEASE_KEYS for Windows programs (MSYS2_ENV_CONV_EXCL not taken)" >&2; exit 1; }
 
 RELAY_PORT=$((PORT - 47))
 WORK=$OUT/work
