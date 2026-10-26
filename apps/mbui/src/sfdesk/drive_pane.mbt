@@ -274,7 +274,6 @@ fn fpane_body(c : @ui.Ctx, e : DvEntry, way : String, open : () -> Unit, room~ :
       }
     _ => {
       let id = c.id("files/preview/mark")
-      c.cursor(id, Hand)
       if c.clicked(id) {
         open()
       }

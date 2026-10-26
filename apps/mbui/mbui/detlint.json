@@ -197,7 +197,8 @@
     },
     "page-old-part": {},
     "page-old-sheet": {},
-    "corners-each": {}
+    "corners-each": {},
+    "cursor-hand": {}
   },
   "excused": {
     "frame-request": {},
@@ -243,6 +244,7 @@
     "motion-read": {},
     "page-old-part": {},
     "page-old-sheet": {},
-    "corners-each": {}
+    "corners-each": {},
+    "cursor-hand": {}
   }
 }

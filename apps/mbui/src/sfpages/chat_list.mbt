@@ -310,7 +310,7 @@ fn to_latest(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, shown : Bool,
   let coming = core_doing(src, ["chat.latest"], on)
   let count = if v.newer && v.unread > 0.0 { Some(v.unread.to_int()) } else { None }
   let id = c.id("chat-jump")
-  if c.clicked(id) && shown && !coming {
+  if shown && !coming && c.clicked(id) {
     if !v.newer {
       c.list_to_end(list_key(r))
     } else {
@@ -327,9 +327,6 @@ fn to_latest(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, shown : Bool,
         None => ()
       }
     }
-  }
-  if !coming {
-    c.cursor(id, Hand)
   }
   @sf.tip(c, "chat-jump", id, @sf.t("web-main.chat.toLatest"), shortcut="chat.latest")
   c.layer(fn() {
@@ -375,8 +372,7 @@ fn to_ask(
     None => return shown
   }
   let id = c.id("chat-ask")
-  c.cursor(id, Hand)
-  if c.clicked(id) && shown {
+  if shown && c.clicked(id) {
     let k = chat_key(r)
     let turn = ask_turns.get(k).unwrap_or(0)
     @sfbase.go_to(r, asks[turn % asks.length()])

@@ -318,7 +318,6 @@ fn publish_file(c : @ui.Ctx, src : Source, here : MessageHere, f : Json, room : 
   }
   // (pressed anywhere, ticked or not: FileToggle is a label round the file and its box)
   let id = c.id("publish/file/" + k)
-  c.cursor(id, Hand)
   let mut ticked = false
   let card = c.box(style=publish_file_box.then(@ui.style(w=Fixed(w))), fn() {
     message_files(c, src, here, [a], false)

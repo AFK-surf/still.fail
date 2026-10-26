@@ -1451,7 +1451,11 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     d.quotes.length() > 0 ||
     refs_of(d.key).length() > 0
   let cap = capsule_id(c)
-  if c.clicked(cap) && !locked {
+  // (a press on it is its field's: the I-beam over it)
+  if !locked {
+    c.cursor(cap, IBeam)
+  }
+  if !locked && c.clicked(cap) {
     c.focus_editor(field_key)
   }
   // the capsule changes shape in one motion (Composer.kt Morph, web morph.ts): drawn from the height it was to the one
@@ -1615,7 +1619,7 @@ fn composer_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, key : 
   if v.archived {
     let restore = c.id("composer/restore")
     let busy = cui.doing.contains("restore")
-    if c.clicked(restore) && !busy && !v.offline {
+    if !busy && !v.offline && c.clicked(restore) {
       if src.read_only {
         say(c, read_only_words)
       } else {
@@ -1701,7 +1705,7 @@ fn composer_bar(
   let plus = c.id("composer/plus")
   let send = c.id("composer/send")
   // ＋: its sheet (the camera, the photos, the files)
-  if c.clicked(plus) && !no_files && (v is Some(_) || fresh is Some(_)) {
+  if !no_files && (v is Some(_) || fresh is Some(_)) && c.clicked(plus) {
     cui.attach = true
     c.blur()
     attach_open(plus)
@@ -1738,7 +1742,6 @@ fn composer_bar(
   // its tip with its keys (Chat.tsx ComposerTools, Chat.css.ts attachBtn)
   let mouse = @sf.native_input() is Mouse
   if mouse && !no_files {
-    c.cursor(plus, Hand)
     @sf.tip(c, "composer/plus", plus, tr("web-main.composer.attach"), shortcut="composer.file")
   }
   let plus_hot = mouse && !no_files && c.lit(plus)
@@ -1774,9 +1777,6 @@ fn composer_bar(
     let ground = if t.narrow { t.p.canvas } else { t.p.raised }
     // (its ink a step lighter under a mouse's pointer, in any layout: Chat.css.ts sendBtn, the text at 82%)
     let hot = mouse && ready && c.lit(send)
-    if mouse && ready {
-      c.cursor(send, Hand)
-    }
     let b = c.box(
       w=Px(k.button),
       h=Px(k.button),

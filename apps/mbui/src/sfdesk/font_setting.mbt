@@ -224,7 +224,6 @@ fn local_face_row(c : @ui.Ctx, core : Core, place : String, chosen : String) -> 
         c.capped("fonts/local/list", local_list_most, fn() {
           for f in list {
             let rid = c.id("fonts/local/" + f)
-            c.cursor(rid, Hand)
             if c.lit(rid) {
               fonts_trying.val = local_prefix + f
             }

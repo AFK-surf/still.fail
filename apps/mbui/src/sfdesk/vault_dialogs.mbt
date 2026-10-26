@@ -19,7 +19,6 @@ fn vault_add_dialog(core : Core, here : Here) -> Unit {
     c.box(style=vd_kinds, fn() {
       for k in kinds {
         let id = c.id("vault-add/" + k)
-        c.cursor(id, Hand)
         if hit(c, id) {
           shut()
           if k == "profile" {

@@ -281,7 +281,6 @@ fn attention_item(
 ) -> Unit {
   let id = c.id(key)
   let drop = c.id(key + "/dismiss")
-  c.cursor(id, Hand)
   if c.clicked(id) {
     go()
   }
@@ -302,7 +301,6 @@ fn attention_item(
     match dismiss {
       // (always to a finger, which hovers over nothing)
       Some(d) if @sf.pointed_or_finger(c, hover) => {
-        c.cursor(drop, Hand)
         if c.clicked(drop) {
           d()
         }
@@ -324,7 +322,6 @@ fn attention_item(
 /// Words to press at 待处理's foot, quiet, in ink pointed at.
 fn attention_link(c : @ui.Ctx, key : String, label : String) -> Bool {
   let id = c.id(key)
-  c.cursor(id, Hand)
   let b = c.box(id~, fn() { c.text(label, style=if c.lit(id) { att_link_on } else { att_link }) |> ignore })
   c.semantics(b, Link, id~, label~)
   c.clicked(id)

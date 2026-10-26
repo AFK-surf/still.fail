@@ -368,7 +368,6 @@ fn chat_title(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?) -> Unit {
 fn chat_station(c : @ui.Ctx, station : String, s : Station?) -> Unit {
   guard s is Some(s) else { return }
   let id = c.id("bar-station")
-  c.cursor(id, Hand)
   if c.clicked(id) {
     @settings.open_station_peek(station, from=Of(id))
   }
@@ -447,7 +446,6 @@ fn people_stack(c : @ui.Ctx, src : Source, key : String, people : Array[Person],
 /// on (its mark, or its name kept short), how the station is reached a dot on the tile's corner.
 fn agent_tile(c : @ui.Ctx, src : Source, r : ChatRef, a : Agent, marked : Bool, station : Station?) -> Unit {
   let id = c.id("bar-agent/" + a.key)
-  c.cursor(id, Hand)
   if c.clicked(id) {
     side_toggle(src, r, a.key)
   }
@@ -751,7 +749,6 @@ fn info_time(c : @ui.Ctx, key : String, stamp : Json?) -> Unit {
 /// it. True on the frame after a press.
 fn info_row(c : @ui.Ctx, key : String, icon : String, label : String, end : String) -> Bool {
   let id = c.id(key)
-  c.cursor(id, Hand)
   let b = c.box(style=info_tool, id~, fn() {
     c.box(style=info_tool_icon, fn() { @sf.icon(c, icon, size=14.0, color=@sf.theme().p.muted) |> ignore }) |> ignore
     // (what it says of it at the line's end, under its words where the line has not the room: its words whole)

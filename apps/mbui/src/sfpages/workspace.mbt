@@ -639,7 +639,6 @@ pub fn workspace_squares(c : @ui.Ctx, src : Source, w : Workspace, all : Array[W
   }
   c.box(style=rail_ws_list, id=area, fn() {
     // the ＋
-    c.cursor(add, Hand)
     if c.clicked(add) {
       ws_menu.val = !open
     }
@@ -661,8 +660,7 @@ pub fn workspace_squares(c : @ui.Ctx, src : Source, w : Workspace, all : Array[W
     @sf.tip(c, "rail/ws-add-tip", add, @sf.t("web-main.rail.addWorkspace"), side=Right)
     for x in all {
       let id = c.id("rail/ws/" + x.id)
-      c.cursor(id, Hand)
-      if c.clicked(id) && x.id != w.id {
+      if x.id != w.id && c.clicked(id) {
         switch_to(x)
       }
       let on = x.id == w.id

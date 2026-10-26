@@ -595,7 +595,6 @@ fn clash_body(c : @ui.Ctx) -> Unit {
       let left = a.clashes.filter(fn(x) { !a.answers.contains(x.name) })
       if left.length() > 1 {
         let id = c.id("files-clash/all")
-        c.cursor(id, Hand)
         if c.clicked(id) {
           a.all = !a.all
         }

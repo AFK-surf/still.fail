@@ -233,11 +233,9 @@ fn tab_row(
       let on = x.id == tabs.current
       let id = c.id("files/tab/" + x.id)
       let cid = c.id("files/tab-close/" + x.id)
-      c.cursor(id, Hand)
-      c.cursor(cid, Hand)
       if c.clicked(cid) {
         show("close", x.id)
-      } else if c.clicked(id) && !on {
+      } else if !on && c.clicked(id) {
         show("show", x.id)
       }
       // (its ✕ always to a finger, which hovers over nothing)

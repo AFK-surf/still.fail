@@ -103,7 +103,6 @@ pub fn wide_head(
   c.box(style=if deep { wide_head_deep } else { wide_head_top }, pl=side, pr=side, fn() {
     if deep {
       let id = c.id("settings-back")
-      c.cursor(id, Hand)
       c.box(style=wide_back, id~, fn() {
         @sf.icon(c, "chevron-left", size=14.0, color=t.p.muted) |> ignore
         c.text(back, size=t.t.meta, color=if c.lit(id) { t.p.text } else { t.p.muted }, wrap=false) |> ignore

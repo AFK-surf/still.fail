@@ -280,7 +280,6 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
   c.box(style=ftab_head, fn() {
     c.box(style=ftab_trail_box, fn() {
       let sid = c.id("files-tab/places")
-      c.cursor(sid, Hand)
       if c.clicked(sid) {
         ftab.places[ws] = None
       }
@@ -290,7 +289,6 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
         let (name, abs) = step
         @sf.icon(c, "chevron-right", size=ftab_chevron, color=t.p.muted) |> ignore
         let id = c.id("files-tab/step/" + abs)
-        c.cursor(id, Hand)
         if c.clicked(id) {
           go_to(abs)
         }
@@ -400,6 +398,8 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
     transfers: false,
   }
   let lid = c.id("files-tab/list")
+  // (a ground round its rows: a press there chooses none)
+  c.cursor(lid, Arrow)
   c.box(style=ftab_list, id=lid, fn() {
     {
       let (value, error) = drive_folder(src, at.station, root, at.path)

@@ -224,7 +224,6 @@ fn keys_row(c : @ui.Ctx, core : Core, a : Json) -> Unit {
       c.after_build("keys-reset/" + action, fn() { set_keys(core, Some(action), Json::null()) })
     }
     let id = c.id("keys/" + action)
-    c.cursor(id, Hand)
     c.focusable(id)
     let none = strings(av, "keys").length() == 0
     c.box(
@@ -253,7 +252,6 @@ fn keys_row(c : @ui.Ctx, core : Core, a : Json) -> Unit {
 /// A quiet word to press (controls.css.ts textToggle): 12 muted, the words' colour pointed at. Whether it was pressed.
 fn keys_toggle(c : @ui.Ctx, key : String, words : String) -> Bool {
   let id = c.id(key)
-  c.cursor(id, Hand)
   c.focusable(id)
   c.box(id~, style=keys_toggle_box, fn() {
     c.text(words, style=if c.lit(id) { keys_toggle_hot } else { keys_toggle_words }) |> ignore

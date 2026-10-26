@@ -93,7 +93,6 @@ fn zou_bar(c : @ui.Ctx, src : Source, d : Json?) -> Unit {
         Some(x) => {
           let v = Some(x)
           let open = c.id("zou/chat")
-          c.cursor(open, Hand)
           if c.clicked(open) {
             zou_open(x)
           }
@@ -146,7 +145,6 @@ fn zou_bar(c : @ui.Ctx, src : Source, d : Json?) -> Unit {
 /// faint while it cannot be pressed. True as it is pressed.
 fn zou_bar_button(c : @ui.Ctx, key : String, label : String, on : Bool) -> Bool {
   let id = if on { c.id(key) } else { 0 }
-  c.cursor(id, Hand)
   let hot = on && c.lit(id)
   let b = c.box(style=if !on { zp_button_off } else if hot { zp_button_hot } else { zp_button }, id~, fn() {
     c.text(label, style=if hot { zp_button_words_hot } else { zp_button_words }) |> ignore
@@ -297,7 +295,6 @@ fn zou_picks(c : @ui.Ctx, src : Source, core : Core, here : MessageHere, x : Jso
     }
     _ => {
       let go = if live { c.id("zou/elsewhere") } else { 0 }
-      c.cursor(go, Hand)
       if go != 0 && c.clicked(go) {
         zou_open(x)
       }
@@ -564,7 +561,6 @@ fn zi_row(
   open : () -> Unit,
 ) -> Unit {
   let id = c.id(key)
-  c.cursor(id, Hand)
   if c.clicked(id) {
     c.tell(key, open)
   }

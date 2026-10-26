@@ -250,7 +250,6 @@ fn cn_add(
 fn cn_row(c : @ui.Ctx, core : Core, look : Look, station : String, station_name : String, s : Json?, cv : Json?) -> Unit {
   let id = text(cv, "id")
   let rid = c.id("connect/" + station + "/" + id)
-  c.cursor(rid, Hand)
   if hit(c, rid) {
     (core.push)(Connect(station, id))
   }
@@ -436,7 +435,6 @@ fn cn_waiting_app(c : @ui.Ctx, src : Source, core : Core, here : Here, look : Lo
     // dropped from under ⋯ (its menu), asked again first; it stays in Slack
     if online && !dropping {
       let mid = c.id("waiting-more/" + app_id)
-      c.cursor(mid, Hand)
       if c.clicked(mid) {
         @sf.menu([Some(@sf.menu_item_of(@sf.t("web-pages.connects.removeHere"), drop, danger=true))], from=Of(mid), along=End)
       }

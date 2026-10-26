@@ -43,7 +43,6 @@ pub fn nav_row(
 ) -> Bool {
   let l = @sf.theme().chat_list
   let id = c.id(key)
-  c.cursor(id, Hand)
   let look = l.side_row.then(@ui.style(align~))
   let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), on)
   nav_apart(c, more, fn() {
@@ -74,7 +73,6 @@ fn nav_apart(c : @ui.Ctx, more : Bool, row : () -> Unit) -> Unit {
 pub fn band_row(c : @ui.Ctx, key : String, on : Bool, body : () -> Unit) -> Bool {
   let l = @sf.theme().chat_list
   let id = c.id(key)
-  c.cursor(id, Hand)
   let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), on)
   let look = band_row_look.then(@ui.style(min_h=Fixed(l.band_h), px=@sf.room_of(l.band_pad), bg=Data(ground)))
   c.box(style=look, id~, body) |> ignore
@@ -241,7 +239,6 @@ pub fn nav_item(
   more? : Bool = false,
 ) -> Bool {
   let id = c.id(key)
-  c.cursor(id, Hand)
   let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), on)
   nav_apart(c, more, fn() {
     @sf.list_row(

@@ -119,7 +119,6 @@ pub fn view_switch(c : @ui.Ctx, key : String, value : String, on_change : (Strin
       }
       let label = @sf.t("web-pages.drive.view." + v)
       let id = c.id(key + "/" + v)
-      c.cursor(id, Hand)
       let on = value == v
       // (the one shown chosen again is kept as chosen: shown where the room has not what was chosen before)
       if c.clicked(id) {
@@ -450,6 +449,8 @@ fn column(
   }
   let ckey = "files/column/" + s.b.key + "/" + at.station + "/" + root + "/" + at.path
   let cid = c.id(ckey)
+  // (a ground round its rows: a press there chooses none)
+  c.cursor(cid, Arrow)
   let lit = match (s.drop_on)(at) {
     Some(into) => drag_target(c, cid, ckey, into, dv_name(dv_absolute(root, at.path)), s, 1)
     None => None

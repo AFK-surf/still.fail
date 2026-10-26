@@ -77,7 +77,6 @@ pub fn add_folder(src : Source, ws : String, stations : Array[DvStation]) -> Uni
           c.box(style=roots_list.then(list), fn() {
             for s in stations {
               let id = c.id("drive/which/" + s.station)
-              c.cursor(id, Hand)
               if c.clicked(id) {
                 close()
                 picker_open(src, ws, s.station)
@@ -296,7 +295,6 @@ fn picker(c : @ui.Ctx, src : Source, station : String) -> Unit {
   let wanted = dialogs.filter.text().trim(chars=" ").to_owned()
   let row = fn(name : String, p : String, unreadable : Bool, disk : Bool, here : Bool) {
     let id = c.id("drive/picker/row/" + p)
-    c.cursor(id, Hand)
     if c.clicked(id) {
       picker_go(c, src, station, Some(p))
     }

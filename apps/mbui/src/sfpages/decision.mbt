@@ -314,9 +314,6 @@ fn ask_dismiss(
   let shown = asking && mine
   let at = if !asking { asked_at } else { own_at }
   let id = c.id("ask-dismiss/" + m.ts)
-  if shown {
-    c.cursor(id, Hand)
-  }
   if shown && c.clicked(id) {
     dismissed[k] = true
     c.tell("ask-dismiss/" + m.ts, fn() {

@@ -67,7 +67,6 @@ fn station_update_control(c : @ui.Ctx, src : Source, station : String, notice : 
   }
   let trouble = update_trouble(notice)
   let id = c.id("station-update")
-  c.cursor(id, Hand)
   if c.clicked(id) {
     update_notice(src, station, notice, if flag(notice, "open") { "close" } else { "open" })
   }

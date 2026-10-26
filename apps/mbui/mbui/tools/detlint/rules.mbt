@@ -7,7 +7,7 @@ let rule_names : Array[String] = [
   "retired-api", "app-clock", "wall-clock", "engine-math", "poll", "host-read", "builtin-hash",
   "hash-order", "globals", "style-literal", "box-loose", "style-exact", "style-text", "build-effect",
   "unsettled-ok", "host-delay", "library-import", "reset-wire", "page-hand", "page-screen", "page-look", "follow-layout",
-  "motion-read", "page-old-part", "page-old-sheet", "corners-each",
+  "motion-read", "page-old-part", "page-old-sheet", "corners-each", "cursor-hand",
 ]
 
 ///|
@@ -49,6 +49,7 @@ let rule_words : Map[String, String] = {
   "follow-layout": "a motion follows what the layout measured (a node's size or place, the window's, the keyboard's): what changed it is not its cause; tell the motion at its cause, with what it moves for (@motion.layout's `by`), and what its container does to it is no motion of its own (the app's docs/motion.md)",
   "motion-read": "the app reads whether a motion runs (moving()): what is shown, what takes a press, when state is let go follow from the cause and the motion's declared end (ends()); what only draws by it says so on its line (det-ok)",
   "corners-each": "a box's corners said not all alike (Corners, LinkedEach): only a design's, each looked at and kept, never what came by the way (the user, 2026-10-26: 每个四边圆角不一致的都应该手动确认是否 by design); say why where it is said and list it in the app's docs/ui-panels.md (四角不一致的), then raise its count: mbui itself never works corners out unlike each other",
+  "cursor-hand": "the pointer's hand said over something (Ctx::cursor(…, Hand)): what takes presses shows it by itself (its click read: Ctx::clicked, a part's Response; its press taken without it said, Ctx::takes_presses: a slider), and nothing else does; what takes presses as a ground (a stage, the room round a list's rows) says Arrow",
   "host-delay": "a host does something a fixed time later (postDelayed, dispatch_after, SetTimer, setTimeout): do it on the event it waits for (a callback, a listener, the system's word); a time the app asked for (its wake) says so on its line (det-ok)",
 }
 

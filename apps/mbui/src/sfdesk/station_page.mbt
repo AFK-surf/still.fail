@@ -93,7 +93,6 @@ fn station_head(c : @ui.Ctx, core : Core, here : Here, s : Json?, manager : Bool
       // its mark: its managers pick it, by what it is called (图标)
       let mid = c.id("station-mark/" + address)
       if manager {
-        c.cursor(mid, Hand)
         if hit(c, mid) {
           open_mark_pick(core, name, text(s, "emoji"), text(s, "icon"), @sf.t("android-settings.station.emojiWhat"), fn(
             emoji,

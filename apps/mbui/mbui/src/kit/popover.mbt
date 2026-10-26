@@ -228,7 +228,7 @@ pub fn tooltip(
   }
   let held = kit.val.held_tips.contains(id)
   // pressed, or Escape: shut until the pointer and the focus have left it
-  if c.pressed(trigger) || c.clicked(trigger) {
+  if c.watch_press(trigger) {
     kit.val.shut[id] = true
   }
   if !hovered && !focused {

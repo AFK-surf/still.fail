@@ -66,7 +66,6 @@ fn history_head(c : @ui.Ctx, src : Source, station : String, key : String, a : J
     |> ignore
     c.box(style=wh_tools, fn() {
       let io = c.id("history/only-io")
-      c.cursor(io, Hand)
       if c.clicked(io) {
         @sfpages.history_only_io_flip()
       }
@@ -79,7 +78,6 @@ fn history_head(c : @ui.Ctx, src : Source, station : String, key : String, a : J
       c.semantics(b, Button, id=io, label=@sf.t("web-main.history.onlyIo"))
       @sf.tip(c, "history/only-io-tip", io, @sf.t("web-main.history.onlyIoTip"))
       let more = c.id("history/details")
-      c.cursor(more, Hand)
       if c.clicked(more) {
         history_own.shut = !history_own.shut
       }
@@ -404,7 +402,6 @@ fn wh_line(c : @ui.Ctx, mark : () -> Unit, words : () -> Unit, end : () -> Unit)
 /// A link of the details (detailLink): its words, underlined on hover. True on the frame after a press.
 fn wh_link(c : @ui.Ctx, key : String, words : String) -> Bool {
   let id = c.id(key)
-  c.cursor(id, Hand)
   let b = c.box(id~, style=wh_link_box, fn() {
     c.text(words, style=if c.lit(id) { wh_link_hot } else { wh_dot }) |> ignore
   })

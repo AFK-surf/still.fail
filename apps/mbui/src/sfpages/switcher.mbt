@@ -486,7 +486,6 @@ pub fn finder_list(
         return
       }
       let id = c.id(lk)
-      c.cursor(id, Hand)
       if c.clicked(id) {
         finder_go(line, close)
       }

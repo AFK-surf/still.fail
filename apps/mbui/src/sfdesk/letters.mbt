@@ -47,7 +47,6 @@ fn letters_tab(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, thread : Do
             let cv = Some(ch)
             let ck = text(cv, "key")
             let id = c.id("letters/row/" + ck)
-            c.cursor(id, Hand)
             if c.clicked(id) {
               letters_opened[key] = ck
             }
@@ -81,7 +80,6 @@ fn letters_tab(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, thread : Do
             c.text(title, style=letters_name) |> ignore
           } else {
             let nid = c.id("letters/name")
-            c.cursor(nid, Hand)
             if c.clicked(nid) {
               c.tell("letters/name", fn() { open_link(to) })
             }

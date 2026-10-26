@@ -196,7 +196,11 @@ pub fn composer(
   }
   outside_dialog(c, src, w.key)
   let cap = c.id("composer/cap")
-  if c.clicked(cap) && !spec.locked {
+  // (a press on it is its field's: the I-beam over it)
+  if !spec.locked {
+    c.cursor(cap, IBeam)
+  }
+  if !spec.locked && c.clicked(cap) {
     c.focus_editor(composer_field_key)
   }
   // dragged over: marked (the 文件 tab's rows; files from the computer the page takes)
@@ -579,7 +583,6 @@ fn attach(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files 
   let id = c.id("composer/plus")
   let hot = !no_files && c.lit(id)
   if !no_files {
-    c.cursor(id, Hand)
     @sf.tip(c, "composer/plus", id, @sf.t("web-main.composer.attach"), shortcut="composer.file")
     // on a touch system the phone's sheet of what can go in (attach.mbt), with keyboard and mouse the system's picker at once
     if c.clicked(id) {
@@ -623,7 +626,6 @@ fn send_button(c : @ui.Ctx, ready : Bool, starting : Bool, submit : () -> Unit) 
   let id = c.id("composer/send")
   let hot = ready && c.lit(id)
   if ready {
-    c.cursor(id, Hand)
     if c.clicked(id) {
       submit()
     }
@@ -975,7 +977,6 @@ fn composer_picture(
     writing_remove(src, w, id)
   }
   if error != "" {
-    c.cursor(again, Hand)
     if c.clicked(again) {
       writing_retry(src, w, id)
     }
@@ -996,7 +997,6 @@ fn composer_picture(
       }
       // the viewer's id of it (its station, no session, its path), its tile kept for it to fly from
       let seen = station + "//" + a.path
-      c.cursor(thumb, Hand)
       if c.clicked(thumb) {
         @sfbase.keep_read(seen, bytes)
         @sfbase.open_preview(station, "", a)
@@ -1572,8 +1572,7 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
     let restore = c.id("composer/restore")
     let busy = composing.restoring.contains(key)
     if !busy && !v.offline {
-      c.cursor(restore, Hand)
-      if c.clicked(restore) && !src.read_only {
+      if !src.read_only && c.clicked(restore) {
         composing.restoring[key] = true
         composing.restore_errors.remove(key)
         let p : Map[String, Json] = {

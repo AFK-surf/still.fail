@@ -123,7 +123,6 @@ fn usage_tile_pair(c : @ui.Ctx, core : Core, tiles : Array[Json], from : Int) ->
     let prices = i == 0
     let id = if prices { c.id("usage-prices") } else { 0 }
     if prices {
-      c.cursor(id, Hand)
       if c.clicked(id) {
         (core.push)(UsagePrices(usage_pick.days))
       }
@@ -251,7 +250,6 @@ fn usage_chart(c : @ui.Ctx, v : Json?) -> Unit {
             let dv = Some(d)
             let key = text(dv, "day")
             let id = c.id("usage-day/" + key)
-            c.cursor(id, Hand)
             if c.clicked(id) {
               usage_pick.day = key
             }
@@ -400,7 +398,6 @@ fn usage_rankings(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
       }
       if all_items.length() > ug_first {
         let id = c.id("usage-all")
-        c.cursor(id, Hand)
         if c.clicked(id) {
           usage_pick.all = !usage_pick.all
         }
@@ -438,7 +435,6 @@ fn usage_row(c : @ui.Ctx, core : Core, it : Json, rank : Int, kind : String) -> 
   let opens = kind == "chats" && chat is Some(Object(_))
   let id = if opens { c.id("usage-item/" + kind + "/" + text(iv, "key")) } else { 0 }
   if opens {
-    c.cursor(id, Hand)
     if c.clicked(id) {
       (core.open_chat)(text(chat, "station"), text(chat, "session"), text(iv, "title"))
     }

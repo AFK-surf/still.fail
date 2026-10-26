@@ -155,7 +155,6 @@ fn ref_menu_body(
   for i, x in chats {
     let item = @sfbase.chat_item(x)
     let id = c.id("composer/ref/" + item.station + "\t" + item.id)
-    c.cursor(id, Hand)
     if c.clicked(id) {
       pick(x)
     }

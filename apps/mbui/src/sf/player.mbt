@@ -673,7 +673,6 @@ fn ended_card(c : @ui.Ctx, v : PlayerView, p : @kit.Media, f : @kit.MediaFrame, 
       c.box(style=player_next_box.then(@ui.style(bg=Data(ink.ground))), fn() {
         c.text(t("android-misc.drive.player.ended"), style=player_next_note.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
         let id = c.id(key + "/now")
-        c.cursor(id, Hand)
         if c.clicked(id) {
           go_now()
         }
@@ -685,7 +684,6 @@ fn ended_card(c : @ui.Ctx, v : PlayerView, p : @kit.Media, f : @kit.MediaFrame, 
         let after = t("web-pages.drive.player.nextIn", args=[("n", left.to_string())])
         c.text(after, style=player_next_note.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
         let cancel = c.id(key + "/off")
-        c.cursor(cancel, Hand)
         if c.clicked(cancel) {
           v.ended_off = other
         }
@@ -749,7 +747,6 @@ fn player_waits(c : @ui.Ctx, p : @kit.Media, f : @kit.MediaFrame, ink : MediaInk
             c.text(t("web-pages.drive.player.failed", args=[("error", "")]), style=player_pill_words.then(@ui.text_style(color=Data(ink.text))))
             |> ignore
             let id = c.id(p.key() + "/retry")
-            c.cursor(id, Hand)
             if c.clicked(id) {
               p.retry()
             }
@@ -964,7 +961,6 @@ fn desk_player(
     // finger's tap shows or hides the controls, its double tap nudges or plays (Media::stage, the phone's)
     let stage = c.id(key + "/desk-stage")
     @ui.capture(c, stage)
-    c.cursor(stage, Hand)
     if finger {
       p.stage(c, stage, c.width - panel)
     } else if picture && mac && c.double_clicked(stage) {
@@ -1191,8 +1187,9 @@ fn desk_volume(c : @ui.Ctx, p : @kit.Media, on : Bool, ink : MediaInk) -> Unit {
       p.wake()
     }
     let id = c.id(key + "/volume")
+    // (pressed along it, not clicked: it takes presses all the same)
     if on {
-      c.cursor(id, Hand)
+      c.takes_presses(id)
     }
     // pressed along it: as loud as where (told the player once the frame's builds are over)
     match c.rect_of(id) {
@@ -1230,9 +1227,6 @@ fn desk_play_timeline(c : @ui.Ctx, p : @kit.Media, s : @kit.MediaStatus, fr : Fr
   let part = fn(ms : Double) { if dur <= 0.0 { desk_none } else { dmin(desk_whole, dmax(desk_none, ms / dur)) } }
   let shown = part(p.scrubbing().unwrap_or(s.position))
   let came = part(s.buffered)
-  if on {
-    c.cursor(id, Hand)
-  }
   c.box(style=media_timeline_box, id=if on { id } else { 0 }, fn() {
     c.box(style=media_track.then(@ui.style(bg=Data(alpha(ink.text, media_track_share)))), fn() {
       c.layer(fn() { media_share_bar(c, came, alpha(ink.text, media_came_share)) }) |> ignore
@@ -1302,8 +1296,7 @@ fn desk_play_list(
           c.list(key + "/list", list.length(), desk_row_h, fn(i) {
             let id = c.id(key + "/list/\{i}")
             let now = i == index
-            c.cursor(id, Hand)
-            if c.clicked(id) && !now {
+            if !now && c.clicked(id) {
               go(list[i])
             }
             let hot = c.lit(id) || c.pressed(id)
@@ -1378,6 +1371,8 @@ fn phone_player(
   }
   let stage = c.id(key + "/stage")
   @ui.capture(c, stage)
+  // (a ground: a tap shows or hides the controls)
+  c.cursor(stage, Arrow)
   phone_gestures(c, v, p, s, fr, stage, picture, back)
   c.box(style=player_fill.then(@ui.style(bg=Data(ink.stage))), fn() {
     // the picture where its zoom puts it, a drag down taking it down with the finger

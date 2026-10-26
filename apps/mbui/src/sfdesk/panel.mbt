@@ -620,12 +620,10 @@ fn side_tab_mark_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : 
 fn side_tab_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : String, front : Bool) -> Unit {
   let t = @sf.theme()
   let id = c.id("side/tab/" + tab)
-  c.cursor(id, Hand)
   if c.clicked(id) {
     side_change(src, r, "front", Some(tab))
   }
   let close = c.id("side/tab-close/" + tab)
-  c.cursor(close, Hand)
   if c.clicked(close) {
     side_change(src, r, "close", Some(tab))
   }

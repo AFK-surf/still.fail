@@ -108,7 +108,6 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
       }
       // its menu (⋯)
       let mid = c.id("local/menu")
-      c.cursor(mid, Hand)
       let open = local_menu.val
       if c.clicked(mid) {
         local_menu.val = !open

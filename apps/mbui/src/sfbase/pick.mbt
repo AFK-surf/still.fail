@@ -70,7 +70,8 @@ pub fn pickable(
 ) -> Unit {
   let key = "pick/" + ts
   let id = c.id(key)
-  // a tap on it: the keyboard goes (not a long press: Keyboard.kt letsGoOfKeyboard)
+  // a tap on it: the keyboard goes (not a long press: Keyboard.kt letsGoOfKeyboard); a ground, its words the I-beam's
+  c.cursor(id, Arrow)
   let press = c.press()
   if c.clicked(id) && !press.long {
     c.blur()
@@ -316,7 +317,6 @@ fn pick_pop(c : @ui.Ctx, quote : (String, String, String, String) -> Unit) -> Un
     pk.ts = ""
     return
   }
-  c.cursor(pop, Hand)
   // (pressed, what is picked stays picked: it is what is quoted)
   c.keeps_selection(pop)
   // (where the layer it is in starts in the window, as this frame lays it out: what is picked is said in the window's)

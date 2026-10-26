@@ -4,8 +4,10 @@
 // with no pointer (iOS, Android) never send what these read.
 
 ///|
-/// The pointer's shape over something (Ctx::cursor): the arrow, a hand (what is pressed), the text's I-beam, a
-/// resizing edge's (sideways, up and down), an open hand (what is dragged).
+/// The pointer's shape over something: the arrow, a hand (what takes presses), the text's I-beam, a resizing edge's
+/// (sideways, up and down), an open hand (what is dragged). What it is over says it (Ctx::show_cursor): a field the
+/// I-beam, what takes presses the hand, words picked with the pointer the I-beam; what is none of those as it is
+/// (an edge, what a press on goes to a field) is said so (Ctx::cursor).
 pub(all) enum Cursor {
   Arrow
   Hand
@@ -177,6 +179,10 @@ priv struct Desk {
   /// the pointer's shape by target, as this frame's build says, and as the last one's said
   next_cursors : Map[Int, Int]
   mut cursors : Map[Int, Int]
+  /// the targets that take presses (their click read, Ctx::clicked; or said, Ctx::takes_presses), as this frame's
+  /// build says, and as the last one's said
+  next_takers : Set[Int]
+  mut takers : Set[Int]
   /// the shape the host shows
   mut shown : Int
   /// targets that drag the window (Ctx::window_drag), this frame's and the last one's
@@ -241,6 +247,8 @@ let desk : Desk = {
   keys: [],
   next_cursors: {},
   cursors: {},
+  next_takers: Set::new(),
+  takers: Set::new(),
   shown: 0,
   next_drags: [],
   drags: [],
@@ -266,6 +274,8 @@ fn desk_reset() -> Unit {
   desk.keys.clear()
   desk.next_cursors.clear()
   desk.cursors.clear()
+  desk.next_takers.clear()
+  desk.takers.clear()
   desk.shown = 0
   desk.next_drags.clear()
   desk.drags.clear()
@@ -309,6 +319,7 @@ fn desk_frame_start() -> Unit {
 /// begin from none.
 fn desk_build_start() -> Unit {
   desk.next_cursors.clear()
+  desk.next_takers.clear()
   desk.next_drags.clear()
   desk.next_keeps.clear()
   desk.next_mouse_drags = true
@@ -323,6 +334,9 @@ fn Ctx::desk_frame_end(self : Ctx) -> Unit {
   let cs = desk.cursors
   desk.cursors = desk.next_cursors.copy()
   cs.clear()
+  let ts = desk.takers
+  desk.takers = desk.next_takers.copy()
+  ts.clear()
   desk.drags = desk.next_drags.copy()
   desk.keeps = desk.next_keeps.copy()
   desk.mouse_drags = desk.next_mouse_drags
@@ -342,21 +356,26 @@ fn Ctx::desk_frame_end(self : Ctx) -> Unit {
 }
 
 ///|
-/// The shape for what is under the pointer (or held: what is dragged keeps its shape, a drag area's as well once the
-/// press is its drag, pressed no more), told the host when it changes.
+/// The shape for what is under the pointer, told the host when it changes: the one said for it (Ctx::cursor); else a
+/// field's I-beam; the hand over what takes presses (a button, a row, a link in words: Ctx::takes_presses), unless
+/// said to be the arrow (a ground: a stage, the room round a list's rows); the I-beam over words picked with the
+/// pointer; else the arrow. Held, the shape it was pressed with stays (a slider's thumb dragged off its line, words
+/// picked across a link: what reads its click while it is not held reads none then), a drag area's its own once the
+/// press is its drag, pressed no more.
 fn Ctx::show_cursor(self : Ctx) -> Unit {
-  let target = if self.down && self.active != 0 {
-    self.active
-  } else if self.down && self.dragging && drags.contains(self.drag_scroll) {
-    self.drag_scroll
-  } else {
-    self.hover
+  let area = self.down && self.dragging && drags.contains(self.drag_scroll)
+  if self.down && !area {
+    return
   }
-  let kind = match desk.cursors.get(target) {
-    Some(k) => k
-    None =>
+  let target = if area { self.drag_scroll } else { self.hover }
+  let said = desk.cursors.get(target)
+  let kind = match said {
+    Some(k) if k != Cursor::Arrow.code() => k
+    _ =>
       if target != 0 && self.editors.contains(target) {
         Cursor::IBeam.code()
+      } else if said is None && target != 0 && desk.takers.contains(target) {
+        Cursor::Hand.code()
       } else if sel_at(self.px, self.py) is Some(_) {
         // words that are picked with the pointer
         Cursor::IBeam.code()
@@ -371,12 +390,26 @@ fn Ctx::show_cursor(self : Ctx) -> Unit {
 }
 
 ///|
-/// The pointer is `cursor` over `id` (a target: a box with an id). Said each frame it is drawn; a field shows the
-/// I-beam without being told.
+/// The pointer is `cursor` over `id` (a target: a box with an id), said each frame it is drawn, where what it is does
+/// not say it (Ctx::show_cursor): a resizing edge's, the I-beam over what a press on gives a field the focus (a
+/// composer's capsule round its field). `Arrow`: what takes presses there is a ground, not a control (a stage a click
+/// shows the bars on, the room round a list's rows a click there chooses none in): no hand over it, words picked with
+/// the pointer in it the I-beam still. A field shows the I-beam, what takes presses the hand, without being told.
 pub fn Ctx::cursor(self : Ctx, id : Int, cursor : Cursor) -> Unit {
   ignore(self)
   if id != 0 {
     desk.next_cursors[id] = cursor.code()
+  }
+}
+
+///|
+/// `id` takes presses, said as it is built: the pointer's hand over it (Ctx::show_cursor). What reads its click
+/// (Ctx::clicked, a part's Response) says so by that; what takes its press without its click (a slider set where it
+/// is pressed, Ctx::pressed alone) says it here.
+pub fn Ctx::takes_presses(self : Ctx, id : Int) -> Unit {
+  ignore(self)
+  if id != 0 {
+    desk.next_takers.add(id)
   }
 }
 

@@ -330,7 +330,8 @@
       "src/sfapp/chat.mbt": 3,
       "src/sfapp/sheets.mbt": 5
     },
-    "corners-each": {}
+    "corners-each": {},
+    "cursor-hand": {}
   },
   "excused": {
     "frame-request": {},
@@ -383,6 +384,7 @@
     "corners-each": {
       "src/sf/tokens.mbt": 1,
       "src/sfdesk/drive_views.mbt": 1
-    }
+    },
+    "cursor-hand": {}
   }
 }

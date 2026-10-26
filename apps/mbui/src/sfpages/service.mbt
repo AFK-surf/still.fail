@@ -104,9 +104,12 @@ fn service_page_bar(
     p.logged_path = at
     @ui.log("service: at \{at}")
   }
-  // a tap anywhere on the address types there
+  // a tap anywhere on the address types there (the I-beam over it)
   let pill = c.id("service/address")
-  if c.clicked(pill) && !editing && !fixed {
+  if !fixed {
+    c.cursor(pill, IBeam)
+  }
+  if !editing && !fixed && c.clicked(pill) {
     c.focus_editor(field_key)
   }
   @sf.page_bar(c, fn() {
@@ -307,6 +310,8 @@ fn service_stage(
   let t = @sf.theme()
   let ground = @sf.mix(t.p.chip, 0.55, t.p.card)
   let stage = c.id("service/stage")
+  // (the page's: a press on it is the page's, no control of ours)
+  c.cursor(stage, Arrow)
   // who takes a finger on the page: all its own fitted; a sized page's two fingers the canvas's, all of it while it is
   // moved by a finger
   let touch = match p.viewport {

@@ -109,9 +109,6 @@ pub fn model_triple(
   let saving = doing(dkey)
   let id = c.id("triple/" + me)
   let can = options.length() > 0 && !saving
-  if can {
-    c.cursor(id, Hand)
-  }
   let open = triple.open == me
   if can && !open && (c.clicked(id) || triple.asked == me) {
     triple.asked = ""
@@ -457,7 +454,6 @@ fn triple_runs_who(c : @ui.Ctx, src : Source, station : String, of : String, v :
   let t = @sf.theme()
   let draft = field(v, "draft")
   let who = c.id("triple/who")
-  c.cursor(who, Hand)
   if c.clicked(who) {
     @sf.panel(
       @sf.t("web-main.model.account"),
@@ -605,7 +601,6 @@ fn triple_option(
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  c.cursor(id, Hand)
   // (across its column, as wide as its words need at least: what the column needs, the panel's columns laid out by it)
   let b = c.box(style=(if on { triple_option_on } else { triple_option_style }).then(@ui.style(min_h=Fixed(t.rows.pick))), id~, keep=true, fn() {
     body()
@@ -784,9 +779,6 @@ fn wide_confirm(
 /// words, else quiet with the ground on hover; not pressed while `on` is false. True on the frame after a press.
 fn small_button(c : @ui.Ctx, key : String, words : String, primary : Bool, on : Bool) -> Bool {
   let id = c.id(key)
-  if on {
-    c.cursor(id, Hand)
-  }
   let b = c.box(
     style=match (primary, on) {
       (true, true) => small_primary

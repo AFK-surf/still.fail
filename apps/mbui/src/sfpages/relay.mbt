@@ -156,7 +156,6 @@ fn relay_places(c : @ui.Ctx, view : Json?) -> Unit {
     let total = number(view, "total").to_int()
     if recent && total > rows.length() {
       let id = c.id("relay/all")
-      c.cursor(id, Hand)
       if c.clicked(id) {
         relaying.all = true
       }
@@ -190,7 +189,6 @@ fn relay_list(c : @ui.Ctx, body : () -> Unit) -> Unit {
 /// it where `change`); picked (`on`), on the accent's ground. True on the frame after a press.
 fn relay_place(c : @ui.Ctx, key : String, kind : String, name : String, note : String?, on : Bool, change : Bool) -> Bool {
   let id = c.id(key)
-  c.cursor(id, Hand)
   let b = c.box(style=if on { relay_place_on } else { relay_place_box }, id~, fn() {
     relay_mark(c, kind)
     c.text(name, style=if on { relay_place_name_on } else { relay_place_name }) |> ignore
@@ -245,7 +243,6 @@ fn relay_avatar(c : @ui.Ctx, src : Source, conn : Json) -> Unit {
 /// press.
 fn relay_scope(c : @ui.Ctx, src : Source, bot : String, label : String, on : Bool) -> Bool {
   let id = c.id("relay/bot/" + bot)
-  c.cursor(id, Hand)
   let lit = !on && c.lit(id)
   let b = c.box(style=if on { relay_scope_on } else { relay_scope_box }, id~, fn() {
     match relay_connect(bot) {

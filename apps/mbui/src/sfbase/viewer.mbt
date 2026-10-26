@@ -1252,6 +1252,8 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
   c.overlay("preview-layer", modal=true, escape=false, outside=false, initial_focus=0, inert=v.closing, fn() {
     c.layer(fn() {
       let stage = c.id("preview/stage")
+      // (a ground: a click round the picture closes it, the bars come and go on a tap)
+      c.cursor(stage, Arrow)
       if !media {
         @ui.capture(c, stage)
       }

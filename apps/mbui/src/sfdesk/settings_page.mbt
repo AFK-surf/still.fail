@@ -80,7 +80,6 @@ let desk_choice_row : @ui.Style = @ui.css("row w=Full")
 fn mine_filter(c : @ui.Ctx, key : String, of : String, mine : Bool, set : (Bool) -> Unit) -> Unit {
   let t = @sf.theme()
   let id = c.id(key)
-  c.cursor(id, Hand)
   let open = mine_filter_open.get(key).unwrap_or(false)
   if c.clicked(id) {
     mine_filter_open[key] = !open

@@ -496,7 +496,6 @@ fn app_fields(c : @ui.Ctx, core : Core, d : SaDraft, sections : Array[Json], fre
   c.box(style=sa_look, fn() {
     // its avatar (appAvatar: 136, the settings' corner, on the neutral ground behind its colour): pressed, a picture
     let aid = c.id(d.key + "/avatar")
-    c.cursor(aid, Hand)
     if hit(c, aid) {
       upload()
     }
@@ -586,7 +585,6 @@ fn sa_avatar_picker(c : @ui.Ctx, d : SaDraft, all : Array[@sf.AppAvatar], width 
     c.box(style=sa_picker_row, flow=true, line_gap=gap, fn() {
       for a in all {
         let tid = c.id(d.key + "/avatar/" + a.id)
-        c.cursor(tid, Hand)
         if hit(c, tid) {
           pick(a)
         }
@@ -633,7 +631,6 @@ fn sa_permissions(c : @ui.Ctx, d : SaDraft, sections : Array[Json]) -> Unit {
   c.box(style=sa_perms, fn() {
     c.box(style=sa_perms_line, fn() {
       let pid = c.id(d.key + "/perms")
-      c.cursor(pid, Hand)
       if hit(c, pid) {
         d.perms = !d.perms
       }

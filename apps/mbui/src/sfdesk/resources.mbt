@@ -320,7 +320,6 @@ fn rs_heads(
     }
     for k, col in columns {
       let id = c.id("resources-by/" + address + "/" + col.0)
-      c.cursor(id, Hand)
       if c.clicked(id) {
         shown.by = col.0
       }
@@ -383,7 +382,6 @@ fn rs_title(c : @ui.Ctx, core : Core, key : String, g : Json?, style : @ui.TextS
   let session = if thread != "" { thread } else { text(chat, "session") }
   if chat is Some(Object(_)) && session != "" {
     let id = c.id("resources-chat/" + key)
-    c.cursor(id, Hand)
     if c.clicked(id) {
       (core.open_chat)(text(chat, "station"), session, text(g, "title"))
     }
@@ -429,7 +427,6 @@ fn rs_grouped(c : @ui.Ctx, core : Core, address : String, groups : Array[Json], 
       let key = text(gv, "key")
       let on = shown.open.get(key).unwrap_or(false)
       let id = c.id("resources-group/" + address + "/" + key)
-      c.cursor(id, Hand)
       if c.clicked(id) {
         if on {
           shown.open.remove(key)
@@ -614,7 +611,6 @@ fn station_uses(c : @ui.Ctx, address : String, uv : Json?) -> Unit {
   let t = @sf.theme()
   let u = field(uv, "use")
   let id = c.id("station-uses/" + address)
-  c.cursor(id, Hand)
   if c.clicked(id) {
     @settings.station_parts[address] = "processes"
   }

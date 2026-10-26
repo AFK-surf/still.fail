@@ -94,7 +94,6 @@ fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, a
       c.box(style=md_chips, flow=true, fn() {
         for n, p in pages {
           let id = c.id(key + "/chip/" + n.to_string())
-          c.cursor(id, Hand)
           if c.clicked(id) {
             doc_at[key] = n
           }

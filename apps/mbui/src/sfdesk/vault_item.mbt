@@ -173,7 +173,6 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, vau
                     let station = text(uv, "station")
                     if station != "" {
                       let id = c.id(key + "/use/" + i.to_string())
-                      c.cursor(id, Hand)
                       if c.clicked(id) {
                         (core.open_chat)(ws + "/" + station, text(uv, "session"), chat)
                       }

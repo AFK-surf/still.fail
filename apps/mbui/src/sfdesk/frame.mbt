@@ -1456,7 +1456,6 @@ fn tape_covers(
         fn() {  },
       )
       if id != 0 {
-        c.cursor(id, Hand)
         c.semantics(b, Button, id~, label=tape_words(p))
       }
     }

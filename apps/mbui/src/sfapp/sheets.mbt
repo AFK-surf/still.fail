@@ -815,7 +815,7 @@ fn stop_button(c : @ui.Ctx, src : Source, station : String, key : String) -> Uni
   let skey = "stop/" + station + "/" + key
   let busy = doing(skey)
   let id = c.id("agent/stop")
-  if c.clicked(id) && !busy {
+  if !busy && c.clicked(id) {
     act(
       src,
       tr("android-chat.agent.stop"),
@@ -914,7 +914,7 @@ fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = 
     )
     |> ignore
     match open {
-      Some(o) => if c.clicked(id) && !o.busy { (o.open)() }
+      Some(o) => if !o.busy && c.clicked(id) { (o.open)() }
       None => ()
     }
   }
@@ -1404,7 +1404,7 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
       let skey = "job-stop/" + r.station + "/" + id
       let busy = doing(skey)
       let sid = c.id("job/stop")
-      if c.clicked(sid) && !busy {
+      if !busy && c.clicked(sid) {
         act(
           src,
           fill("android-misc.jobs.stopWhat", [("name", text(j, "name"))]),
@@ -1504,7 +1504,7 @@ fn open_job_row(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
   let id = text(job, "id")
   let chat = field(job, "chat")
   let row = c.id("open-job/" + station + "/" + id)
-  if c.clicked(row) && chat is Some(Object(_)) {
+  if chat is Some(Object(_)) && c.clicked(row) {
     app.nav.push(Chat({ station, session: text(chat, "id"), title: text(chat, "title"), station_name: "" }))
     // a service: its page over its chat (OpenJobs.kt OpenRow)
     if flag(job, "service") {
@@ -1513,7 +1513,7 @@ fn open_job_row(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
   }
   let skey = "job-stop/" + station + "/" + id
   let stop = c.id("open-job-stop/" + station + "/" + id)
-  if c.clicked(stop) && !doing(skey) {
+  if !doing(skey) && c.clicked(stop) {
     act(
       src,
       fill("android-misc.jobs.stopWhat", [("name", text(job, "name"))]),

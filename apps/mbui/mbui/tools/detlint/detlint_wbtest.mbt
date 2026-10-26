@@ -1708,6 +1708,20 @@ test "corners-each" {
 }
 
 ///|
+test "cursor-hand" {
+  // the hand said over something, as it is and in a branch; another shape and a test's not counted
+  found(
+    [
+      ("src/pages/row.mbt", "fn v(c : Ctx, id : Int, f : Bool) -> Unit {\n  c.cursor(id, Hand)\n  c.cursor(id, ResizeX)\n  c.cursor(id, if f { @ui.Hand } else { Arrow })\n}\n"),
+      ("src/pages/row_wbtest.mbt", "test \"t\" {\n  c.cursor(id, Hand)\n}\n"),
+    ],
+    "cursor-hand",
+    2,
+  )
+  |> ignore
+}
+
+///|
 test "page-look" {
   let cfg = Config::new(
     @rjson.parse(

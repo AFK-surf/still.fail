@@ -179,7 +179,6 @@ fn memory_row(
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  c.cursor(id, Hand)
   let narrow = look == Narrow
   let b = c.box(style=if narrow { narrow_row } else { desk_list_link }, id~, fn() {
     c.box(style=desk_list_text, fn() {

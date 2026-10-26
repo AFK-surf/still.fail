@@ -403,9 +403,6 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
 fn find_button(c : @ui.Ctx, key : String, icon : String, label : String, on : Bool) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  if on {
-    c.cursor(id, Hand)
-  }
   let b = c.box(style=if on { find_button_style } else { find_button_off }, id~, fn() {
     @sf.icon(c, icon, size=16.0, color=t.p.text) |> ignore
   })
