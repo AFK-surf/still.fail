@@ -42,6 +42,11 @@ static void go_back(void) {
 @end
 
 static MBView *the_view;
+// the app's widgets for VoiceOver (below: mb_host_a11y_tree): the view's children, the one under a point, the one
+// focused
+static NSArray *a11y_children_of_view(void);
+static id a11y_hit(NSPoint screen);
+static id a11y_focused_element(void);
 static void notice_start(void);  // the system's notifications (below), before the app runs
 static int bench_mode;
 // The desktop window as the app asks for it (@hostapi.window_setup): its first size and its least, and whether its
@@ -185,6 +190,14 @@ static double frame_late, last_tick = -1;
 
 - (BOOL)isFlipped { return YES; }
 - (BOOL)acceptsFirstResponder { return YES; }
+
+// The app's widgets for VoiceOver and whatever reads the screen: elements under the view (mb_host_a11y_tree), the
+// view only what holds them
+- (BOOL)isAccessibilityElement { return NO; }
+- (NSAccessibilityRole)accessibilityRole { return NSAccessibilityGroupRole; }
+- (NSArray *)accessibilityChildren { return a11y_children_of_view(); }
+- (id)accessibilityHitTest:(NSPoint)p { return a11y_hit(p) ?: self; }
+- (id)accessibilityFocusedUIElement { return a11y_focused_element() ?: self; }
 
 // Every press on the canvas is the app's, in the system's title bar too (an inset window's: AppKit lays it out 44 high
 // over the app's top row, MBWindow): the app says where its top row moves the window and what a double click there does
@@ -1922,9 +1935,308 @@ double mb_host_font_scale(void) { return 1.0; }
 int32_t mb_host_native_pointing(void) { return 2; }
 // Whether a keyboard is at hand (@hostapi.keyboard): a Mac's, always.
 int32_t mb_host_keyboard(void) { return 1; }
-// The app's widgets for the system's accessibility (@hostapi.a11y_on, a11y_tree): not told here yet.
-int32_t mb_host_a11y_on(void) { return 0; }
-void mb_host_a11y_tree(moonbit_string_t s) { (void)s; }
+// ---- the app's widgets for VoiceOver ----
+// As Android's A11y.java and Windows' win_a11y.cpp give them: an element of each node the app last said (a11y.mbt's
+// lines, @hostapi.a11y_tree), kept by its number from frame to frame (one whose node is gone is no element), under the
+// view; its role by the node's, its label, value, help, state and frame on the screen. What is asked of it (press, a
+// step up or down, words put in a field, focus, cancel) goes to the app on @hostapi.a11y_channel for its next frame.
+// The app tells its widgets once something asked the view for them (VoiceOver, Voice Control, Accessibility
+// Inspector); that first ask asks for a frame. As they change, the layout, the focus, a title or a value is said
+// changed. MBUI_A11Y_SELFCHECK=1 (host_contract.sh mac a11y): the view's elements walked as VoiceOver walks them once
+// told, each said ("A11Y node <role> <label>"), words put in the field named "A11YCHECK field" and the button named
+// "A11YCHECK press" pressed through them.
+
+@interface MBA11yNode : NSObject
+@property(nonatomic) int nid, parent, widget;
+@property(nonatomic, copy) NSString *role, *flags, *label, *value, *help, *actions;
+@property(nonatomic) NSRect rect;
+@property(nonatomic) BOOL range;
+@property(nonatomic) double low, at, high;
+@property(nonatomic, strong) NSMutableArray<NSNumber *> *kids;
+@end
+@implementation MBA11yNode
+@end
+
+@interface MBA11yElement : NSAccessibilityElement
+@property(nonatomic) int nid;
+@end
+
+static NSMutableDictionary<NSNumber *, MBA11yNode *> *a11y_nodes;
+static NSArray<NSNumber *> *a11y_tops;
+static NSMutableDictionary<NSNumber *, MBA11yElement *> *a11y_elements;
+static int a11y_focus;
+static BOOL a11y_asked, a11y_selfcheck_done;
+
+static MBA11yElement *a11y_element(int nid) {
+  if (!a11y_nodes[@(nid)]) return nil;
+  if (!a11y_elements) a11y_elements = [NSMutableDictionary dictionary];
+  MBA11yElement *e = a11y_elements[@(nid)];
+  if (!e) {
+    e = [MBA11yElement new];
+    e.nid = nid;
+    a11y_elements[@(nid)] = e;
+  }
+  return e;
+}
+
+static NSArray *a11y_elements_of(NSArray<NSNumber *> *ids) {
+  NSMutableArray *out = [NSMutableArray arrayWithCapacity:ids.count];
+  for (NSNumber *n in ids) {
+    MBA11yElement *e = a11y_element(n.intValue);
+    if (e) [out addObject:e];
+  }
+  return out;
+}
+
+static NSArray *a11y_children_of_view(void) {
+  if (!a11y_asked) {
+    a11y_asked = YES;
+    [the_view requestFrame];
+  }
+  return a11y_elements_of(a11y_tops ?: @[]);
+}
+
+static id a11y_hit(NSPoint screen) {
+  if (!the_view.window) return nil;
+  NSPoint p = [the_view convertPoint:[the_view.window convertPointFromScreen:screen] fromView:nil];
+  int best = 0;
+  double area = -1;
+  for (MBA11yNode *n in a11y_nodes.allValues) {
+    if (!NSPointInRect(p, n.rect)) continue;
+    double a = n.rect.size.width * n.rect.size.height;
+    if (area < 0 || a < area) area = a, best = n.nid;
+  }
+  return best ? a11y_element(best) : nil;
+}
+
+static id a11y_focused_element(void) { return a11y_focus ? a11y_element(a11y_focus) : nil; }
+
+// what is asked of the node's widget, posted to the app (`text`: the words a set_text puts in it)
+static void a11y_ask(MBA11yNode *n, NSString *action, NSString *text) {
+  if (!n || !n.widget) return;
+  NSMutableDictionary *m = [@{@"id" : @(n.widget), @"action" : action} mutableCopy];
+  if (text) m[@"text"] = text;
+  NSData *json = [NSJSONSerialization dataWithJSONObject:m options:0 error:nil];
+  if (json) mb_post("a11y", (const char *)json.bytes, json.length, NULL, 0);
+}
+
+static BOOL a11y_has(NSString *letters, unichar c) {
+  return [letters rangeOfString:[NSString stringWithCharacters:&c length:1]].location != NSNotFound;
+}
+
+@implementation MBA11yElement
+- (MBA11yNode *)node {
+  return a11y_nodes[@(self.nid)];
+}
+- (BOOL)isAccessibilityElement {
+  return self.node != nil;
+}
+- (NSAccessibilityRole)accessibilityRole {
+  static NSDictionary<NSString *, NSString *> *roles;
+  if (!roles)
+    roles = @{
+      @"Text" : NSAccessibilityStaticTextRole, @"Status" : NSAccessibilityStaticTextRole,
+      @"Option" : NSAccessibilityStaticTextRole, @"Heading" : @"AXHeading",
+      @"Button" : NSAccessibilityButtonRole, @"Link" : NSAccessibilityLinkRole,
+      @"Checkbox" : NSAccessibilityCheckBoxRole, @"Switch" : NSAccessibilityCheckBoxRole,
+      @"Radio" : NSAccessibilityRadioButtonRole, @"Tab" : NSAccessibilityRadioButtonRole,
+      @"Slider" : NSAccessibilitySliderRole, @"ProgressBar" : NSAccessibilityProgressIndicatorRole,
+      @"TabList" : NSAccessibilityTabGroupRole, @"Tooltip" : NSAccessibilityHelpTagRole,
+      @"Menu" : NSAccessibilityMenuRole, @"MenuBar" : NSAccessibilityMenuBarRole,
+      @"MenuItem" : NSAccessibilityMenuItemRole, @"MenuItemCheckbox" : NSAccessibilityMenuItemRole,
+      @"MenuItemRadio" : NSAccessibilityMenuItemRole, @"Listbox" : NSAccessibilityListRole,
+      @"Combobox" : NSAccessibilityComboBoxRole, @"Toolbar" : NSAccessibilityToolbarRole,
+      @"Image" : NSAccessibilityImageRole, @"TextField" : NSAccessibilityTextFieldRole,
+      @"ScrollArea" : NSAccessibilityScrollAreaRole,
+    };
+  return roles[self.node.role] ?: NSAccessibilityGroupRole;
+}
+- (NSAccessibilitySubrole)accessibilitySubrole {
+  NSString *r = self.node.role;
+  if ([r isEqualToString:@"Switch"]) return NSAccessibilitySwitchSubrole;
+  if ([r isEqualToString:@"Tab"]) return NSAccessibilityTabButtonSubrole;
+  if ([r isEqualToString:@"Dialog"] || [r isEqualToString:@"AlertDialog"]) return NSAccessibilityDialogSubrole;
+  return nil;
+}
+- (NSString *)accessibilityLabel {
+  MBA11yNode *n = self.node;
+  // (static text says its words as its value)
+  if (!n || [self.accessibilityRole isEqualToString:NSAccessibilityStaticTextRole]) return nil;
+  return n.label.length ? n.label : nil;
+}
+- (id)accessibilityValue {
+  MBA11yNode *n = self.node;
+  if (!n) return nil;
+  if (a11y_has(n.flags, 'c')) return @(a11y_has(n.flags, 'C') ? 1 : a11y_has(n.flags, 'M') ? 2 : 0);
+  if ([n.role isEqualToString:@"Radio"] || [n.role isEqualToString:@"Tab"]) return @(a11y_has(n.flags, 's') ? 1 : 0);
+  if (n.range) return @(n.at);
+  if ([self.accessibilityRole isEqualToString:NSAccessibilityStaticTextRole]) return n.label.length ? n.label : n.value;
+  return n.value.length ? n.value : nil;
+}
+- (id)accessibilityMinValue {
+  return self.node.range ? @(self.node.low) : nil;
+}
+- (id)accessibilityMaxValue {
+  return self.node.range ? @(self.node.high) : nil;
+}
+- (NSString *)accessibilityHelp {
+  NSString *h = self.node.help;
+  return h.length ? h : nil;
+}
+- (BOOL)isAccessibilityEnabled {
+  return !a11y_has(self.node.flags, 'd');
+}
+- (BOOL)isAccessibilityFocused {
+  return a11y_has(self.node.flags, 'f');
+}
+- (BOOL)isAccessibilitySelected {
+  return a11y_has(self.node.flags, 's');
+}
+- (BOOL)isAccessibilityExpanded {
+  return a11y_has(self.node.flags, 'E');
+}
+- (NSRect)accessibilityFrame {
+  MBA11yNode *n = self.node;
+  if (!n || !the_view.window) return NSZeroRect;
+  return [the_view.window convertRectToScreen:[the_view convertRect:n.rect toView:nil]];
+}
+- (id)accessibilityParent {
+  MBA11yNode *n = self.node;
+  return n && n.parent ? (a11y_element(n.parent) ?: (id)the_view) : (id)the_view;
+}
+- (NSArray *)accessibilityChildren {
+  return a11y_elements_of(self.node.kids ?: @[]);
+}
+// what may be asked of it: what its node takes
+- (BOOL)isAccessibilitySelectorAllowed:(SEL)sel {
+  MBA11yNode *n = self.node;
+  if (!n) return NO;
+  if (sel == @selector(accessibilityPerformPress)) return a11y_has(n.actions, 'a');
+  if (sel == @selector(accessibilityPerformIncrement)) return a11y_has(n.actions, 'i');
+  if (sel == @selector(accessibilityPerformDecrement)) return a11y_has(n.actions, 'd');
+  if (sel == @selector(accessibilityPerformCancel)) return a11y_has(n.actions, 'x');
+  if (sel == @selector(setAccessibilityValue:)) return a11y_has(n.actions, 't');
+  if (sel == @selector(setAccessibilityFocused:)) return a11y_has(n.actions, 'f');
+  if (sel == @selector(setAccessibilityExpanded:)) return a11y_has(n.actions, 'e') || a11y_has(n.actions, 'c');
+  return [super isAccessibilitySelectorAllowed:sel];
+}
+- (BOOL)accessibilityPerformPress {
+  if (!a11y_has(self.node.actions, 'a')) return NO;
+  a11y_ask(self.node, @"activate", nil);
+  return YES;
+}
+- (BOOL)accessibilityPerformIncrement {
+  if (!a11y_has(self.node.actions, 'i')) return NO;
+  a11y_ask(self.node, @"increment", nil);
+  return YES;
+}
+- (BOOL)accessibilityPerformDecrement {
+  if (!a11y_has(self.node.actions, 'd')) return NO;
+  a11y_ask(self.node, @"decrement", nil);
+  return YES;
+}
+- (BOOL)accessibilityPerformCancel {
+  if (!a11y_has(self.node.actions, 'x')) return NO;
+  a11y_ask(self.node, @"dismiss", nil);
+  return YES;
+}
+- (void)setAccessibilityValue:(id)v {
+  if (a11y_has(self.node.actions, 't') && [v isKindOfClass:NSString.class]) a11y_ask(self.node, @"set_text", v);
+}
+- (void)setAccessibilityFocused:(BOOL)f {
+  if (f && a11y_has(self.node.actions, 'f')) a11y_ask(self.node, @"focus", nil);
+}
+- (void)setAccessibilityExpanded:(BOOL)e {
+  MBA11yNode *n = self.node;
+  if (e == a11y_has(n.flags, 'E')) return;
+  a11y_ask(n, e ? (a11y_has(n.actions, 'e') ? @"expand" : @"activate") : (a11y_has(n.actions, 'c') ? @"collapse" : @"activate"), nil);
+}
+@end
+
+// MBUI_A11Y_SELFCHECK (see above): the elements as VoiceOver walks them, and the field and the button used through them
+static void a11y_walk(NSArray *els, int depth, MBA11yElement **field, MBA11yElement **button) {
+  for (MBA11yElement *e in els) {
+    NSString *name = e.accessibilityLabel ?: ([e.accessibilityValue isKindOfClass:NSString.class] ? e.accessibilityValue : @"");
+    printf("A11Y node %s %s\n", e.accessibilityRole.UTF8String, name.UTF8String);
+    if ([e.node.label isEqualToString:@"A11YCHECK field"]) *field = e;
+    if ([e.node.label isEqualToString:@"A11YCHECK press"]) *button = e;
+    a11y_walk(e.accessibilityChildren, depth + 1, field, button);
+  }
+}
+static void a11y_selfcheck(void) {
+  MBA11yElement *field = nil, *button = nil;
+  a11y_walk(the_view.accessibilityChildren, 0, &field, &button);
+  if (!field || !button) return;
+  a11y_selfcheck_done = YES;
+  printf("A11Y field %s settable %d\n", field.accessibilityRole.UTF8String,
+         [field isAccessibilitySelectorAllowed:@selector(setAccessibilityValue:)]);
+  fflush(stdout);
+  [field setAccessibilityValue:@"written by a reader"];
+  [button accessibilityPerformPress];
+}
+
+// Whether something reads the widgets out (@hostapi.a11y_on): something asked the view for them (a self-check's run:
+// asked from the start, as VoiceOver asks the view)
+int32_t mb_host_a11y_on(void) {
+  if (!a11y_asked && getenv("MBUI_A11Y_SELFCHECK")) (void)a11y_children_of_view();
+  return a11y_asked ? 1 : 0;
+}
+
+// What the widgets are now (@hostapi.a11y_tree): the nodes made anew, what reads them told what changed
+void mb_host_a11y_tree(moonbit_string_t s) {
+  NSString *all = mb_ns_from_string(s);
+  NSMutableDictionary<NSNumber *, MBA11yNode *> *next = [NSMutableDictionary dictionary];
+  NSMutableArray<NSNumber *> *order = [NSMutableArray array], *tops = [NSMutableArray array];
+  for (NSString *line in [all componentsSeparatedByString:@"\n"]) {
+    NSArray<NSString *> *f = [line componentsSeparatedByString:@"\x1f"];
+    if (f.count < 16) continue;
+    MBA11yNode *n = [MBA11yNode new];
+    n.nid = f[0].intValue, n.parent = f[1].intValue, n.widget = f[2].intValue;
+    n.role = f[3], n.flags = f[4];
+    n.rect = NSMakeRect(f[5].doubleValue, f[6].doubleValue, f[7].doubleValue, f[8].doubleValue);
+    n.label = f[9], n.value = f[10], n.help = f[11];
+    n.range = f[13].length > 0;
+    n.low = f[12].doubleValue, n.at = f[13].doubleValue, n.high = f[14].doubleValue;
+    n.actions = f[15];
+    n.kids = [NSMutableArray array];
+    if (!n.nid || next[@(n.nid)]) continue;
+    next[@(n.nid)] = n;
+    [order addObject:@(n.nid)];
+  }
+  int focus = 0;
+  for (NSNumber *k in order) {
+    MBA11yNode *n = next[k];
+    MBA11yNode *p = n.parent ? next[@(n.parent)] : nil;
+    if (p) [p.kids addObject:k];
+    else n.parent = 0, [tops addObject:k];
+    if (a11y_has(n.flags, 'f')) focus = n.nid;
+  }
+  NSDictionary<NSNumber *, MBA11yNode *> *old = a11y_nodes;
+  BOOL shape = ![tops isEqualToArray:a11y_tops ?: @[]] || next.count != old.count;
+  for (NSNumber *k in order) {
+    MBA11yNode *n = next[k], *o = old[k];
+    if (!o || o.parent != n.parent || ![o.kids isEqualToArray:n.kids]) shape = YES;
+  }
+  a11y_nodes = next;
+  a11y_tops = tops;
+  for (NSNumber *k in a11y_elements.allKeys)
+    if (!next[k]) [a11y_elements removeObjectForKey:k];
+  if (a11y_asked) {
+    for (NSNumber *k in a11y_elements) {
+      MBA11yNode *n = next[k], *o = old[k];
+      if (!o) continue;
+      if (![o.label isEqualToString:n.label]) NSAccessibilityPostNotification(a11y_elements[k], NSAccessibilityTitleChangedNotification);
+      if (![o.value isEqualToString:n.value] || ![o.flags isEqualToString:n.flags] || o.at != n.at)
+        NSAccessibilityPostNotification(a11y_elements[k], NSAccessibilityValueChangedNotification);
+    }
+    if (shape) NSAccessibilityPostNotification(the_view, NSAccessibilityLayoutChangedNotification);
+    if (focus != a11y_focus && focus) NSAccessibilityPostNotification(a11y_element(focus), NSAccessibilityFocusedUIElementChangedNotification);
+  }
+  a11y_focus = focus;
+  if (getenv("MBUI_A11Y_SELFCHECK") && !a11y_selfcheck_done) dispatch_async(dispatch_get_main_queue(), ^{
+      a11y_selfcheck();
+    });
+}
 
 int32_t mb_host_system_dark(void) {
   NSAppearanceName n = [NSApp.effectiveAppearance
