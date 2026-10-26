@@ -15,13 +15,13 @@ import { mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { peerHttpBase } from "../tools/http.ts";
 import { LiveFromDsh, chars, type DshLiveState } from "./live.ts";
-import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
+import { type Events, OwnProcessDriver, OwnProcessSession, type TurnState, parseLine } from "./own-process.ts";
 import { DSH_KEY, dshRoute, expandRoute, profileEnv, profileModel, type DshRoute } from "./profiles.ts";
-import { TOOL_SERVERS, cleanEnv, unreachable, uuid, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
+import type { RunnerInfo } from "./runner.ts";
+import { cleanEnv, failureOf, stationTool, unreachable, uuid, type FailureReason, type OpenOptions, type TurnOutcome } from "./runtime.ts";
 
 type Json = any;
 type Env = Record<string, string | undefined>;
@@ -42,8 +42,6 @@ export const BRIDGE = fileURLToPath(new URL("./dsh-bridge.mjs", import.meta.url)
 
 /// The id of the request that opens the session; the others carry their own.
 const OPEN = "open";
-/// How long dsh has to load and answer `open`: one whose driver plugin failed to load would never answer.
-const OPEN_MS = 120_000;
 /// Where the patch's header for the station's tools reads the session's token.
 const MCP_TOKEN_VAR = "STILLFAIL_MCP_TOKEN";
 /// The patch value that reads the token there when dsh loads it (a YAML tag JSON cannot say: written in by `patchText`).
@@ -127,14 +125,8 @@ export function sessionDir(home: string, sessionId: string): string | null {
 }
 
 /// What failed a turn, from dsh's error (its code first: AUTH, RATE_LIMIT, QUOTA, UNKNOWN_MODEL, …).
-export function classifyFailure(code: string, text: string): FailureReason {
-  const lower = `${code} ${text}`.toLowerCase();
-  const words = lower.split(/[^\p{L}\p{N}_]+/u);
-  const word = (w: string) => words.includes(w);
-  if (["auth", "missing_credential", "invalid_credential"].some(word) || word("401") || word("403") || ["invalid credential", "api key", "unauthorized"].some((s) => lower.includes(s))) return "auth";
-  if (["rate_limit", "quota"].some(word) || word("429") || ["rate limit", "overloaded", "insufficient balance"].some((s) => lower.includes(s))) return "rate_limit";
-  return "model";
-}
+export const classifyFailure = (code: string, text: string): FailureReason =>
+  failureOf(`${code} ${text}`, { authCodes: ["auth", "missing_credential", "invalid_credential"], limit: ["insufficient balance"] });
 
 /// How a turn/end's reason ends the turn.
 export function outcomeOf(reason: Json): TurnOutcome {
@@ -149,7 +141,7 @@ export function outcomeOf(reason: Json): TurnOutcome {
 }
 
 /// The turn as its handled lines leave it. `prompted`: a turn of ours is asked for and has not started yet.
-export type Turn = { busy: boolean; prompted: boolean; aborting: boolean; closed: boolean };
+export type Turn = TurnState & { prompted: boolean };
 
 /// A session as a next station takes it up.
 export type DshSnapshot = { runtime: "dsh"; id: string; runner: string; turn: { busy: boolean; prompted: boolean; aborting: boolean }; tools: string | null; live: DshLiveState };
@@ -164,23 +156,12 @@ export type DshDriverOptions = {
   bridge?: string;
 };
 
-const parse = (line: string): Json | undefined => {
-  try {
-    return JSON.parse(line);
-  } catch {
-    debug("agents::dsh", "dsh non-json line", { line: line.slice(0, 500) });
-    return undefined;
-  }
-};
-
-export class DshDriver implements AgentDriver {
-  private readonly data: string;
+export class DshDriver extends OwnProcessDriver<DshSession> {
   private readonly command: string;
   private readonly bridge: string;
-  private live = new Set<DshSession>();
 
   constructor(options: DshDriverOptions) {
-    this.data = options.data;
+    super(options.data);
     this.command = options.command ?? "dsh";
     this.bridge = options.bridge ?? BRIDGE;
   }
@@ -189,7 +170,7 @@ export class DshDriver implements AgentDriver {
     return "dsh";
   }
 
-  async open(options: OpenOptions, events: (event: RuntimeEvent) => void): Promise<AgentSession> {
+  async open(options: OpenOptions, events: Events): Promise<DshSession> {
     const home = options.profile.home;
     mkdirSync(home, { recursive: true });
     if (options.resume !== undefined && sessionDir(home, options.resume) === null) {
@@ -218,17 +199,13 @@ export class DshDriver implements AgentDriver {
 
     const session = new DshSession(this, "", { busy: false, prompted: false, aborting: false, closed: false }, new LiveFromDsh(), events);
     session.toolsUrl = options.mcpUrl;
-    session.attach(await AgentProcess.start(this.data, runnerId("dsh", options.key), this.command, args, env, options.cwd, session.processOptions(`dsh ${options.key}`)));
-    this.live.add(session);
+    await this.start(session, options, this.command, args, env);
     try {
-      const cancel = wall.after(OPEN_MS, () => session.fail(OPEN, new Error("dsh did not open the session (its driver plugin did not load?)")));
-      const opened = await session
-        .request(OPEN, "open", {
-          cwd: options.cwd,
-          ...(options.resume !== undefined ? { resume: options.resume } : {}),
-          ...(setup.provider !== undefined ? { provider: setup.provider, model: setup.model } : {}),
-        })
-        .finally(cancel);
+      const opened = await session.request(OPEN, "open", {
+        cwd: options.cwd,
+        ...(options.resume !== undefined ? { resume: options.resume } : {}),
+        ...(setup.provider !== undefined ? { provider: setup.provider, model: setup.model } : {}),
+      }, "dsh did not open the session (its driver plugin did not load?)");
       if (typeof opened?.session !== "string" || opened.session === "") throw new Error("dsh named no session");
       session.named(opened.session);
     } catch (error) {
@@ -238,103 +215,46 @@ export class DshDriver implements AgentDriver {
     return session;
   }
 
-  async adopt(options: OpenOptions, snapshot: unknown | null, events: (event: RuntimeEvent) => void): Promise<AgentSession> {
-    const handed = snapshot as DshSnapshot | null;
-    const id = handed?.runner ?? runnerId("dsh", options.key);
-    const info = findRunner(this.data, id);
-    if (!info) throw new Error(`no runner keeps dsh for ${options.key}`);
-    let session: DshSession;
-    if (handed) {
-      log.info("agents::dsh", "taking up a dsh process handed over", { session: handed.id, pgid: info.pgid, busy: handed.turn.busy });
-      session = new DshSession(this, handed.id, { ...handed.turn, closed: false }, new LiveFromDsh(handed.live), events);
-      session.toolsUrl = handed.tools;
-    } else {
-      // The previous station crashed: what it had handled is read again, silently, to know the session and where the
-      // turn stands; the rest comes as it would have.
-      const at = await ackedOffset(info, outFile(this.data, id));
-      const turn: Turn = { busy: false, prompted: false, aborting: false, closed: false };
-      const live = new LiveFromDsh();
-      let sessionId = options.resume ?? "";
-      for (const line of linesBefore(outFile(this.data, id), at)) {
-        const message = parse(line);
-        if (message === undefined) continue;
-        if (message.id === OPEN && typeof message.session === "string") sessionId = message.session;
-        if (message.ev === "event" && message.type === "turn/start") turn.busy = true;
-        if (message.ev === "event" && message.type === "turn/end") turn.busy = false;
-        live.feed(message);
-      }
-      log.info("agents::dsh", "taking up a dsh process after a crash", { session: sessionId, pgid: info.pgid, busy: turn.busy, from: at });
-      session = new DshSession(this, sessionId, turn, live, events);
-      session.toolsUrl = options.mcpUrl;
-      // A turn is running that this station did not start.
-      if (turn.busy) events({ type: "turnStarted" });
-    }
-    session.attach(AgentProcess.adopt(info, session.processOptions(`dsh ${options.key}`)));
-    this.live.add(session);
+  protected handedOver(_options: OpenOptions, handed: DshSnapshot, _info: RunnerInfo, events: Events) {
+    const session = new DshSession(this, handed.id, { ...handed.turn, closed: false }, new LiveFromDsh(handed.live), events);
+    session.toolsUrl = handed.tools;
     return session;
   }
 
-  forget(session: DshSession) {
-    this.live.delete(session);
-  }
-
-  async shutdown() {
-    const live = [...this.live];
-    this.live.clear();
-    await Promise.all(live.map((s) => s.dispose()));
-  }
-
-  detach() {
-    for (const session of this.live) session.detach();
-    this.live.clear();
+  /// What the station before had handled says the session and where its turn stands.
+  protected crashed(options: OpenOptions, lines: Iterable<string>, _info: RunnerInfo, events: Events) {
+    const turn: Turn = { busy: false, prompted: false, aborting: false, closed: false };
+    const live = new LiveFromDsh();
+    let sessionId = options.resume ?? "";
+    for (const line of lines) {
+      const message = parseLine("dsh", line);
+      if (message === undefined) continue;
+      if (message.id === OPEN && typeof message.session === "string") sessionId = message.session;
+      if (message.ev === "event" && message.type === "turn/start") turn.busy = true;
+      if (message.ev === "event" && message.type === "turn/end") turn.busy = false;
+      live.feed(message);
+    }
+    const session = new DshSession(this, sessionId, turn, live, events);
+    session.toolsUrl = options.mcpUrl;
+    return session;
   }
 }
 
-export class DshSession implements AgentSession {
-  private proc!: AgentProcess;
-  private driver: DshDriver;
-  private sessionId: string;
-  private turn: Turn;
+export class DshSession extends OwnProcessSession<Turn> {
   private live: LiveFromDsh;
-  private events: (event: RuntimeEvent) => void;
-  /// Requests of ours waiting for their answer.
-  private waiting = new Map<string, { resolve: (message: Json) => void; reject: (error: Error) => void }>();
   /// Its calls to the station's tools not answered yet.
   private calls = new Set<string>();
-  toolsUrl: string | null = null;
 
-  constructor(driver: DshDriver, sessionId: string, turn: Turn, live: LiveFromDsh, events: (event: RuntimeEvent) => void) {
-    this.driver = driver;
-    this.sessionId = sessionId;
-    this.turn = turn;
+  constructor(driver: DshDriver, sessionId: string, turn: Turn, live: LiveFromDsh, events: Events) {
+    super(driver, sessionId, turn, events);
     this.live = live;
-    this.events = events;
-  }
-
-  named(id: string) {
-    this.sessionId = id;
-  }
-
-  attach(proc: AgentProcess) {
-    this.proc = proc;
   }
 
   /// A request whose answer is waited for: an error answer rejects.
-  request(id: string, op: string, params: Json): Promise<Json> {
-    return new Promise((resolve, reject) => {
-      this.waiting.set(id, {
-        resolve: (message) => (typeof message?.error === "string" ? reject(new Error(`dsh ${op}: ${message.error}`)) : resolve(message)),
-        reject,
-      });
-      this.proc.write(JSON.stringify({ id, op, ...params }));
-    });
-  }
-
-  /// Gives up on a request waited for.
-  fail(id: string, error: Error) {
-    const waiting = this.waiting.get(id);
-    this.waiting.delete(id);
-    waiting?.reject(error);
+  request(id: string, op: string, params: Json, late?: string): Promise<Json> {
+    const answer = this.waiting.wait(id, (m) => (typeof m?.error === "string" ? new Error(`dsh ${op}: ${m.error}`) : null), late);
+    this.proc.write(JSON.stringify({ id, op, ...params }));
+    return answer;
   }
 
   /// A request sent without waiting for its answer (one refused is logged).
@@ -342,49 +262,34 @@ export class DshSession implements AgentSession {
     this.proc.write(JSON.stringify({ id: `${op}:${uuid()}`, op, ...params }));
   }
 
-  processOptions(label: string) {
-    return {
-      label,
-      line: (line: string) => {
-        const message = parse(line);
-        if (message === undefined) return;
-        this.onMessage(message);
-      },
-      exit: (said: string, stderr: string) => {
-        this.turn.closed = true;
-        const why = stderr === "" ? "" : `: ${stderr}`;
-        for (const w of this.waiting.values()) w.reject(new Error(`dsh exited (${said})${why}`));
-        this.waiting.clear();
-        const busy = this.busy();
-        this.turn.busy = false;
-        this.turn.prompted = false;
-        if (busy) {
-          this.emitLive(this.live.ended());
-          this.events({ type: "turnEnded", outcome: { kind: "failed", reason: "exited", message: `dsh exited (${said}) during the turn${why}` } });
-        }
-        this.events({ type: "closed", why: `dsh exited (${said})${why}` });
-        this.driver.forget(this);
-      },
-    };
+  busy() {
+    return this.turn.busy || this.turn.prompted;
+  }
+
+  protected idle() {
+    this.turn.busy = false;
+    this.turn.prompted = false;
+  }
+
+  protected cutShort() {
+    this.emitLive(this.live.ended());
   }
 
   private emitLive(events: ReturnType<LiveFromDsh["feed"]>) {
     for (const event of events) this.events({ type: "live", event });
   }
 
-  private onMessage(message: Json) {
+  protected heard(line: string) {
+    const message = parseLine("dsh", line);
+    if (message === undefined) return;
     if (message.ev === undefined) {
-      const waiting = typeof message.id === "string" ? this.waiting.get(message.id) : undefined;
-      if (waiting) {
-        this.waiting.delete(message.id);
-        waiting.resolve(message);
-      } else if (typeof message.error === "string") {
-        log.warn("agents::dsh", "dsh refused a request", { session: this.sessionId, request: String(message.id), error: message.error });
-        // A prompt refused starts no turn: it ends here.
-        if (String(message.id).startsWith("prompt:") && this.turn.prompted) {
-          this.turn.prompted = false;
-          this.events({ type: "turnEnded", outcome: { kind: "failed", reason: "other", message: chars(message.error, 1000) } });
-        }
+      if (this.waiting.answer(message.id, message)) return;
+      if (typeof message.error !== "string") return;
+      log.warn("agents::dsh", "dsh refused a request", { session: this.sessionId, request: String(message.id), error: message.error });
+      // A prompt refused starts no turn: it ends here.
+      if (String(message.id).startsWith("prompt:") && this.turn.prompted) {
+        this.turn.prompted = false;
+        this.events({ type: "turnEnded", outcome: { kind: "failed", reason: "other", message: chars(message.error, 1000) } });
       }
       return;
     }
@@ -410,7 +315,7 @@ export class DshSession implements AgentSession {
   private toolsLost(message: Json): string | null {
     if (message.ev !== "event") return null;
     const data = message.data ?? {};
-    if (message.type === "tool/call" && typeof data.callId === "string" && TOOL_SERVERS.some((s) => String(data.name ?? "").startsWith(`mcp__${s}__`))) this.calls.add(data.callId);
+    if (message.type === "tool/call" && typeof data.callId === "string" && stationTool(String(data.name ?? ""))) this.calls.add(data.callId);
     if (message.type !== "tool/result") return null;
     const result = data.message ?? {};
     if (!this.calls.delete(String(result.toolCallId ?? "")) || result.isError !== true) return null;
@@ -418,21 +323,8 @@ export class DshSession implements AgentSession {
     return unreachable(text) ? chars(text, 300) : null;
   }
 
-  id() {
-    return this.sessionId;
-  }
-
-  mcpUrl() {
-    return this.toolsUrl;
-  }
-
-  busy() {
-    return this.turn.busy || this.turn.prompted;
-  }
-
   async prompt(text: string) {
-    if (this.turn.closed) throw new Error("dsh session is closed");
-    if (this.busy()) throw new Error("a turn is already running");
+    this.startable();
     this.turn.prompted = true;
     this.emitLive(this.live.prompted());
     this.send("prompt", { text });
@@ -445,26 +337,14 @@ export class DshSession implements AgentSession {
     return true;
   }
 
-  /// dsh reads what was put in the turn once the call it waits on ends; a call cannot be moved to the background.
-  async backgroundTools() {}
-
   async abort() {
     if (this.turn.closed || !this.busy() || this.turn.aborting) return;
     this.turn.aborting = true;
     this.send("cancel");
   }
 
-  async dispose() {
-    this.driver.forget(this);
-    this.turn.closed = true;
-    for (const w of this.waiting.values()) w.reject(new Error("dsh session is closed"));
-    this.waiting.clear();
-    await this.proc.kill(5000);
-  }
-
   snapshot(): DshSnapshot {
-    this.proc.freeze();
-    this.turn.closed = true;
+    this.handOver();
     return {
       runtime: "dsh",
       id: this.sessionId,
@@ -473,11 +353,5 @@ export class DshSession implements AgentSession {
       tools: this.toolsUrl,
       live: this.live.state(),
     };
-  }
-
-  detach() {
-    this.turn.closed = true;
-    this.driver.forget(this);
-    this.proc.detach();
   }
 }

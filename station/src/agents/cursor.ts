@@ -16,18 +16,16 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { wall } from "../ops/fibers.ts";
 import { linkSync } from "../ops/links.ts";
 import { log } from "../ops/log.ts";
 import { peerHttpBase } from "../tools/http.ts";
 import { LiveFromCursor, chars, type CursorLiveState } from "./live.ts";
-import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
+import { type Events, OwnProcessDriver, OwnProcessSession, type TurnState, parseLine } from "./own-process.ts";
 import { expandRoute, profileEnv, profileModel } from "./profiles.ts";
-import { CommandMissing } from "./runner.ts";
-import { TOOL_SERVERS, cleanEnv, unreachable, uuid, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
+import { CommandMissing, type RunnerInfo } from "./runner.ts";
+import { TOOL_SERVERS, cleanEnv, failureOf, unreachable, uuid, type FailureReason, type OpenOptions, type TurnOutcome } from "./runtime.ts";
 
 type Json = any;
-type Env = Record<string, string | undefined>;
 
 /// Inherited variables that would let a session use another account than its profile's.
 const SCRUBBED = ["CURSOR_API_KEY", "CURSOR_AUTH_TOKEN", "CURSOR_BACKEND_URL", "CURSOR_WEBSITE_URL", "STILLFAIL_CURSOR_SDK", "STILLFAIL_CURSOR_HOME"];
@@ -48,8 +46,6 @@ export const SDK_HOME = "home";
 const OPEN = "open";
 const PROMPT = "prompt:";
 const STEER = "steer:";
-/// How long the SDK has to load and open the agent.
-const OPEN_MS = 120_000;
 
 /// Where the station keeps Cursor's SDK: npm installs it there (`-g --prefix`, updates/updates.ts), apart from the
 /// machine's own global packages, so it is found by a look at the disk, not by asking npm.
@@ -112,14 +108,7 @@ export function rulesFolder(home: string, key: string, instructions: string): st
 }
 
 /// What failed a turn, from the SDK's error (its code first).
-export function classifyFailure(code: string, text: string): FailureReason {
-  const lower = `${code} ${text}`.toLowerCase();
-  const words = lower.split(/[^\p{L}\p{N}_]+/u);
-  const word = (w: string) => words.includes(w);
-  if (["unauthenticated", "unauthorized", "permission_denied"].some(word) || word("401") || word("403") || ["api key", "authentication", "not logged in", "sign in"].some((s) => lower.includes(s))) return "auth";
-  if (["resource_exhausted", "rate_limit"].some(word) || word("429") || ["rate limit", "usage limit", "quota", "too many requests"].some((s) => lower.includes(s))) return "rate_limit";
-  return "model";
-}
+export const classifyFailure = (code: string, text: string): FailureReason => failureOf(`${code} ${text}`);
 
 /// How a run's end ends the turn.
 export function outcomeOf(end: Json): TurnOutcome {
@@ -128,9 +117,6 @@ export function outcomeOf(end: Json): TurnOutcome {
   const message = typeof end?.error?.message === "string" ? end.error.message : `the run ended ${String(end?.status ?? "without saying how")}`;
   return { kind: "failed", reason: classifyFailure(String(end?.error?.code ?? ""), message), message: chars(message, 1000) };
 }
-
-/// The turn as its handled lines leave it. `prompted`: a turn of ours is asked for and has not started yet.
-export type Turn = { busy: boolean; aborting: boolean; closed: boolean };
 
 /// A session as a next station takes it up.
 export type CursorSnapshot = { runtime: "cursor"; id: string; runner: string; turn: { busy: boolean; aborting: boolean }; tools: string | null; live: CursorLiveState; model: string | null };
@@ -145,24 +131,13 @@ export type CursorDriverOptions = {
   sdk?: string;
 };
 
-const parse = (line: string): Json | undefined => {
-  try {
-    return JSON.parse(line);
-  } catch {
-    debug("agents::cursor", "cursor non-json line", { line: line.slice(0, 500) });
-    return undefined;
-  }
-};
-
-export class CursorDriver implements AgentDriver {
-  private readonly data: string;
+export class CursorDriver extends OwnProcessDriver<CursorSession> {
   private readonly node: string;
   private readonly bridge: string;
   private readonly sdk: string | undefined;
-  private live = new Set<CursorSession>();
 
   constructor(options: CursorDriverOptions) {
-    this.data = options.data;
+    super(options.data);
     this.node = options.node ?? process.execPath;
     this.bridge = options.bridge ?? BRIDGE;
     this.sdk = options.sdk;
@@ -184,7 +159,7 @@ export class CursorDriver implements AgentDriver {
     return env;
   }
 
-  async open(options: OpenOptions, events: (event: RuntimeEvent) => void): Promise<AgentSession> {
+  async open(options: OpenOptions, events: Events): Promise<CursorSession> {
     const home = options.profile.home;
     const sessions = join(cursorHome(home), SESSIONS);
     mkdirSync(sessions, { recursive: true });
@@ -199,20 +174,16 @@ export class CursorDriver implements AgentDriver {
     const rules = rulesFolder(home, options.key, options.instructions);
     const session = new CursorSession(this, "", { busy: false, aborting: false, closed: false }, new LiveFromCursor(), events, model);
     session.toolsUrl = options.mcpUrl;
-    session.attach(await AgentProcess.start(this.data, runnerId("cursor", options.key), this.node, [this.bridge], this.env(options, sdk), options.cwd, session.processOptions(`cursor ${options.key}`)));
-    this.live.add(session);
+    await this.start(session, options, this.node, [this.bridge], this.env(options, sdk));
     try {
-      const cancel = wall.after(OPEN_MS, () => session.fail(OPEN, new Error("Cursor's SDK did not open the agent in time")));
-      const opened = await session
-        .request(OPEN, "open", {
-          cwd: options.cwd,
-          ...(options.resume !== undefined ? { resume: options.resume } : {}),
-          ...(model !== null ? { model } : {}),
-          mcpUrl: options.mcpUrl,
-          rules,
-          sessions,
-        })
-        .finally(cancel);
+      const opened = await session.request(OPEN, "open", {
+        cwd: options.cwd,
+        ...(options.resume !== undefined ? { resume: options.resume } : {}),
+        ...(model !== null ? { model } : {}),
+        mcpUrl: options.mcpUrl,
+        rules,
+        sessions,
+      }, "Cursor's SDK did not open the agent in time");
       if (typeof opened?.session !== "string" || opened.session === "") throw new Error("Cursor's SDK named no agent");
       session.named(opened.session);
     } catch (error) {
@@ -222,142 +193,66 @@ export class CursorDriver implements AgentDriver {
     return session;
   }
 
-  async adopt(options: OpenOptions, snapshot: unknown | null, events: (event: RuntimeEvent) => void): Promise<AgentSession> {
-    const handed = snapshot as CursorSnapshot | null;
-    const id = handed?.runner ?? runnerId("cursor", options.key);
-    const info = findRunner(this.data, id);
-    if (!info) throw new Error(`no runner keeps cursor for ${options.key}`);
-    let session: CursorSession;
-    if (handed) {
-      log.info("agents::cursor", "taking up a cursor process handed over", { session: handed.id, pgid: info.pgid, busy: handed.turn.busy });
-      session = new CursorSession(this, handed.id, { ...handed.turn, closed: false }, new LiveFromCursor(handed.live), events, handed.model);
-      session.toolsUrl = handed.tools;
-    } else {
-      // The previous station crashed: what it had handled is read again, silently, to know the session and where the
-      // turn stands; the rest comes as it would have.
-      const at = await ackedOffset(info, outFile(this.data, id));
-      const turn: Turn = { busy: false, aborting: false, closed: false };
-      const live = new LiveFromCursor();
-      let sessionId = options.resume ?? "";
-      for (const line of linesBefore(outFile(this.data, id), at)) {
-        const message = parse(line);
-        if (message === undefined) continue;
-        if (message.id === OPEN && typeof message.session === "string") sessionId = message.session;
-        if (message.ev === "message") {
-          turn.busy = true;
-          live.feed(message.message);
-        } else if (message.ev === "end") {
-          turn.busy = false;
-          live.ended();
-        }
-      }
-      log.info("agents::cursor", "taking up a cursor process after a crash", { session: sessionId, pgid: info.pgid, busy: turn.busy, from: at });
-      session = new CursorSession(this, sessionId, turn, live, events, options.model ?? profileModel(options.profile) ?? null);
-      session.toolsUrl = options.mcpUrl;
-      // A turn is running that this station did not start.
-      if (turn.busy) events({ type: "turnStarted" });
-    }
-    session.attach(AgentProcess.adopt(info, session.processOptions(`cursor ${options.key}`)));
-    this.live.add(session);
+  protected handedOver(_options: OpenOptions, handed: CursorSnapshot, _info: RunnerInfo, events: Events) {
+    const session = new CursorSession(this, handed.id, { ...handed.turn, closed: false }, new LiveFromCursor(handed.live), events, handed.model);
+    session.toolsUrl = handed.tools;
     return session;
   }
 
-  forget(session: CursorSession) {
-    this.live.delete(session);
-  }
-
-  async shutdown() {
-    const live = [...this.live];
-    this.live.clear();
-    await Promise.all(live.map((s) => s.dispose()));
-  }
-
-  detach() {
-    for (const session of this.live) session.detach();
-    this.live.clear();
+  /// What the station before had handled says the session and where its turn stands.
+  protected crashed(options: OpenOptions, lines: Iterable<string>, _info: RunnerInfo, events: Events) {
+    const turn: TurnState = { busy: false, aborting: false, closed: false };
+    const live = new LiveFromCursor();
+    let sessionId = options.resume ?? "";
+    for (const line of lines) {
+      const message = parseLine("cursor", line);
+      if (message === undefined) continue;
+      if (message.id === OPEN && typeof message.session === "string") sessionId = message.session;
+      if (message.ev === "message") {
+        turn.busy = true;
+        live.feed(message.message);
+      } else if (message.ev === "end") {
+        turn.busy = false;
+        live.ended();
+      }
+    }
+    const session = new CursorSession(this, sessionId, turn, live, events, options.model ?? profileModel(options.profile) ?? null);
+    session.toolsUrl = options.mcpUrl;
+    return session;
   }
 }
 
-export class CursorSession implements AgentSession {
-  private proc!: AgentProcess;
-  private driver: CursorDriver;
-  private sessionId: string;
-  private turn: Turn;
+export class CursorSession extends OwnProcessSession {
   private live: LiveFromCursor;
-  private events: (event: RuntimeEvent) => void;
-  /// Requests of ours waiting for their answer.
-  private waiting = new Map<string, { resolve: (message: Json) => void; reject: (error: Error) => void }>();
   /// Its calls to the station's tools not answered yet.
   private calls = new Set<string>();
   /// The model its next turn runs on (null: the agent's).
   private model: string | null;
-  toolsUrl: string | null = null;
 
-  constructor(driver: CursorDriver, sessionId: string, turn: Turn, live: LiveFromCursor, events: (event: RuntimeEvent) => void, model: string | null) {
-    this.driver = driver;
-    this.sessionId = sessionId;
-    this.turn = turn;
+  constructor(driver: CursorDriver, sessionId: string, turn: TurnState, live: LiveFromCursor, events: Events, model: string | null) {
+    super(driver, sessionId, turn, events);
     this.live = live;
-    this.events = events;
     this.model = model;
   }
 
-  named(id: string) {
-    this.sessionId = id;
-  }
-
-  attach(proc: AgentProcess) {
-    this.proc = proc;
-  }
-
   /// A request whose answer is waited for: an error answer rejects.
-  request(id: string, op: string, params: Json): Promise<Json> {
-    return new Promise((resolve, reject) => {
-      this.waiting.set(id, {
-        resolve: (message) => (typeof message?.error === "string" ? reject(new Error(`cursor ${op}: ${message.error}`)) : resolve(message)),
-        reject,
-      });
-      this.proc.write(JSON.stringify({ id, op, ...params }));
-    });
+  request(id: string, op: string, params: Json, late?: string): Promise<Json> {
+    const answer = this.waiting.wait(id, (m) => (typeof m?.error === "string" ? new Error(`cursor ${op}: ${m.error}`) : null), late);
+    this.proc.write(JSON.stringify({ id, op, ...params }));
+    return answer;
   }
 
-  /// Gives up on a request waited for.
-  fail(id: string, error: Error) {
-    const waiting = this.waiting.get(id);
-    this.waiting.delete(id);
-    waiting?.reject(error);
-  }
-
-  processOptions(label: string) {
-    return {
-      label,
-      line: (line: string) => {
-        const message = parse(line);
-        if (message === undefined) return;
-        this.onMessage(message);
-      },
-      exit: (said: string, stderr: string) => {
-        this.turn.closed = true;
-        const why = stderr === "" ? "" : `: ${stderr}`;
-        for (const w of this.waiting.values()) w.reject(new Error(`cursor exited (${said})${why}`));
-        this.waiting.clear();
-        const busy = this.turn.busy;
-        this.turn.busy = false;
-        if (busy) {
-          this.emitLive(this.live.ended());
-          this.events({ type: "turnEnded", outcome: { kind: "failed", reason: "exited", message: `cursor exited (${said}) during the turn${why}` } });
-        }
-        this.events({ type: "closed", why: `cursor exited (${said})${why}` });
-        this.driver.forget(this);
-      },
-    };
+  protected cutShort() {
+    this.emitLive(this.live.ended());
   }
 
   private emitLive(events: ReturnType<LiveFromCursor["feed"]>) {
     for (const event of events) this.events({ type: "live", event });
   }
 
-  private onMessage(message: Json) {
+  protected heard(line: string) {
+    const message = parseLine("cursor", line);
+    if (message === undefined) return;
     if (message.ev === "message") {
       // A turn running that this station did not see start (taken up after a crash just as it was given).
       if (!this.turn.busy) {
@@ -379,12 +274,7 @@ export class CursorSession implements AgentSession {
       this.events({ type: "turnEnded", outcome });
       return;
     }
-    const waiting = typeof message.id === "string" ? this.waiting.get(message.id) : undefined;
-    if (waiting) {
-      this.waiting.delete(message.id);
-      waiting.resolve(message);
-      return;
-    }
+    if (this.waiting.answer(message.id, message)) return;
     if (typeof message.error !== "string") return;
     log.warn("agents::cursor", "cursor refused a request", { session: this.sessionId, request: String(message.id), error: message.error });
     // A prompt refused (the SDK could not start the run: no key, a model it does not have) starts no turn: it ends here.
@@ -407,21 +297,8 @@ export class CursorSession implements AgentSession {
     return unreachable(text) ? chars(text, 300) : null;
   }
 
-  id() {
-    return this.sessionId;
-  }
-
-  mcpUrl() {
-    return this.toolsUrl;
-  }
-
-  busy() {
-    return this.turn.busy;
-  }
-
   async prompt(text: string) {
-    if (this.turn.closed) throw new Error("cursor session is closed");
-    if (this.turn.busy) throw new Error("a turn is already running");
+    this.startable();
     this.turn.busy = true;
     this.emitLive(this.live.prompted());
     this.proc.write(JSON.stringify({ id: `${PROMPT}${uuid()}`, op: "prompt", text, ...(this.model !== null ? { model: this.model } : {}) }));
@@ -440,9 +317,6 @@ export class CursorSession implements AgentSession {
     }
   }
 
-  /// The SDK moves a running command to the background itself when a message is steered in.
-  async backgroundTools() {}
-
   /// Between turns, another model is the next prompt's (the SDK takes one per run): no new process.
   retune(options: OpenOptions) {
     if (this.turn.closed || this.turn.busy || this.sessionId === "") return false;
@@ -458,23 +332,8 @@ export class CursorSession implements AgentSession {
     this.proc.write(JSON.stringify({ id: `cancel:${uuid()}`, op: "cancel" }));
   }
 
-  async dispose() {
-    this.driver.forget(this);
-    this.turn.closed = true;
-    for (const w of this.waiting.values()) w.reject(new Error("cursor session is closed"));
-    this.waiting.clear();
-    await this.proc.kill(5000);
-  }
-
   snapshot(): CursorSnapshot {
-    this.proc.freeze();
-    this.turn.closed = true;
+    this.handOver();
     return { runtime: "cursor", id: this.sessionId, runner: this.proc.info.id, turn: { busy: this.turn.busy, aborting: this.turn.aborting }, tools: this.toolsUrl, live: this.live.state(), model: this.model };
-  }
-
-  detach() {
-    this.turn.closed = true;
-    this.driver.forget(this);
-    this.proc.detach();
   }
 }
