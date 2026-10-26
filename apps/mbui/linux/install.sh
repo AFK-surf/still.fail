@@ -21,12 +21,15 @@ mkdir -p "$app.new"
 cp "$from/stillfail" "$from"/lib*.so* "$from/core.hbc" "$from/VERSION" "$app.new/"
 rm -rf "$app" && mv "$app.new" "$app"
 cp "$from/icon.png" "$data/icons/hicolor/512x512/apps/$id.png"
+# its machine's builds' feed (x64's linux/mbui, arm64's linux-arm64/mbui: apps/mbui/scripts/beta.sh linux)
+feed=linux/mbui
+case $(uname -m) in aarch64 | arm64) feed=linux-arm64/mbui ;; esac
 cat > "$data/applications/$id.desktop" <<ENTRY
 [Desktop Entry]
 Type=Application
 Name=still.fail mbui
 Comment=still.fail, the app written in mbui
-Exec=env MBUI_APP_ID=$id "MBUI_APP_NAME=still.fail mbui" MBUI_UPDATE_FEED=linux/mbui MBUI_BETA=1 "$app/stillfail"
+Exec=env MBUI_APP_ID=$id "MBUI_APP_NAME=still.fail mbui" MBUI_UPDATE_FEED=$feed MBUI_BETA=1 "$app/stillfail"
 Icon=$id
 Terminal=false
 Categories=Network;Chat;Development;

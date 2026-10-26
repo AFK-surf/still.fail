@@ -103,8 +103,9 @@ const APP_FILES: [RegExp, string][] = [
   [/^win\/mbui\/latest\.json$/, "application/json"],
   [/^win\/stillfail-mbui-[0-9]+-x64-win\.exe$/, "application/vnd.microsoft.portable-executable"],
   [/^win\/stillfail-mbui-[0-9]+-x64-win\.zip$/, "application/zip"],
-  // and its Linux app (apps/mbui/scripts/beta.sh linux: the program with its engine, shell and core.hbc, and its installer)
-  [/^linux\/mbui\/latest\.json$/, "application/json"],
+  // and its Linux app (apps/mbui/scripts/beta.sh linux: the program with its engine, shell and core.hbc, and its installer),
+  // each machine's builds a feed of their own (x64's linux/mbui, arm64's linux-arm64/mbui)
+  [/^linux(-arm64)?\/mbui\/latest\.json$/, "application/json"],
   [/^linux\/stillfail-mbui-[0-9]+-(x64|arm64)-linux\.tar\.gz$/, "application/gzip"],
   // The faces the apps offer beside the system's (scripts/fonts.py, docs/fonts.md): a page's stylesheet and its woff2
   // slices, the Android app's gzipped files; each version in a folder of its own, never changed.

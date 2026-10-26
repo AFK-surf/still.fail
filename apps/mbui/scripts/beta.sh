@@ -20,12 +20,13 @@
 #                                        win/mbui/latest.json
 #   apps/mbui/scripts/beta.sh linux      the Linux app (scripts/linux.sh's build, its engine, shell and core.hbc beside it),
 #                                        with its icon and linux/install.sh, in still.fail-mbui/, into $RELEASE_DIR as
-#                                        linux/stillfail-mbui-<n>-<x64|arm64>-linux.tar.gz and linux/mbui/latest.json
-#   apps/mbui/scripts/beta.sh changed android|mac|win|linux
+#                                        linux/stillfail-mbui-<n>-<x64|arm64>-linux.tar.gz and its machine's feed: x64's
+#                                        linux/mbui/latest.json, arm64's linux-arm64/mbui/latest.json (its part, below)
+#   apps/mbui/scripts/beta.sh changed android|mac|win|linux|linux-arm64
 #                                        yes when what the app is made of (APP_SRC: its code, not its tests, docs,
 #                                        scripts or CI) changed since the build that feed names now (or it has none),
 #                                        else no: main's push makes and puts a package only then
-#   apps/mbui/scripts/beta.sh publish android|mac|win|linux
+#   apps/mbui/scripts/beta.sh publish android|mac|win|linux|linux-arm64
 #                                        what `build` or `mac` made put (scripts/release-put.sh), fetched back from where
 #                                        it is served and checked (size, SHA-256), then its feed: https://app.still.fail/
 #                                        releases/latest/android-mbui (mac-mbui) is the newest from then on
@@ -274,17 +275,20 @@ linux() {
   icon=$A/linux/AppIcon-$(sha256sum "$A/scripts/mac-icon.swift" | cut -c1-12).png
   [ -f "$icon" ] || { echo "beta: no $icon (scripts/mac-icon.swift changed: swift scripts/mac-icon.swift --png $icon, on a Mac)" >&2; exit 1; }
   arch=$(uname -m | sed 's/x86_64/x64/; s/aarch64/arm64/')
+  # (each machine's its own feed, so an app is offered only its own machine's builds: x64's the part linux, as it was)
+  local part=linux
+  [ "$arch" = x64 ] || part=linux-$arch
   stage=$C/linux-stage/still.fail-mbui
   rm -rf "$C/linux-stage" && mkdir -p "$stage"
   cp "$dir/stillfail.exe" "$stage/stillfail"
   cp "$dir"/lib*.so* "$dir/core.hbc" "$A/linux/install.sh" "$stage/"
   cp "$icon" "$stage/icon.png"
   echo "0.1.$n" > "$stage/VERSION"
-  rm -rf "$RELEASE_DIR/linux" && mkdir -p "$RELEASE_DIR/linux/linux"
+  rm -rf "$RELEASE_DIR/$part" && mkdir -p "$RELEASE_DIR/$part/linux"
   name=linux/stillfail-mbui-$n-$arch-linux.tar.gz
-  tgz=$RELEASE_DIR/linux/$name
+  tgz=$RELEASE_DIR/$part/$name
   tar -C "$C/linux-stage" -czf "$tgz" still.fail-mbui
-  feed linux "$n" "$name" "$tgz"
+  feed "$part" "$n" "$name" "$tgz"
   summary "- Linux app 0.1.$n ($arch): $(wc -c < "$tgz" | tr -d ' ') bytes, tarred in $(secs $t0) s"
 }
 
