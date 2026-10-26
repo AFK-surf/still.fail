@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/system_properties.h>
 #include <time.h>
 #include <zlib.h>
 #include "moonbit.h"
@@ -887,7 +888,10 @@ int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
   return r;
 }
 
-// MainActivity sets the intent's `env` extras as the process's environment before the app starts.
+// MainActivity sets the intent's `env` extras as the process's environment before the app starts. A release build
+// takes no intent's on a phone (MainActivity.testHooks): the frame probe's switches (MBUI_PROBE, MBUI_PROBE_DAMAGE:
+// app.mbt's slow_probe, on the log) are read from a debug property besides, `debug.mbui.probe` and the like, which only
+// adb sets (`adb shell setprop debug.mbui.probe 1`, the app started anew): how fast a phone draws, asked of that phone.
 moonbit_string_t mb_host_env(moonbit_string_t name) {
   int n = Moonbit_array_length(name);
   char k[256];
@@ -895,6 +899,15 @@ moonbit_string_t mb_host_env(moonbit_string_t name) {
   for (int i = 0; i < n; i++) k[i] = name[i] < 128 ? (char)name[i] : '?';
   k[n] = 0;
   const unsigned char *v = (const unsigned char *)getenv(k);
+  char prop[PROP_VALUE_MAX];
+  if (!v && strncmp(k, "MBUI_PROBE", 10) == 0) {
+    char pn[64] = "debug.mbui.";
+    size_t at = strlen(pn);
+    for (const char *c = k + 5; *c && at + 1 < sizeof pn; c++)
+      pn[at++] = (*c >= 'A' && *c <= 'Z') ? (char)(*c - 'A' + 'a') : *c;
+    pn[at] = 0;
+    if (__system_property_get(pn, prop) > 0) v = (const unsigned char *)prop;
+  }
   if (!v) return moonbit_make_string_raw(0);
   // UTF-8 to UTF-16
   size_t len = strlen((const char *)v);
