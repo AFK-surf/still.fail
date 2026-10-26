@@ -39,6 +39,45 @@ test "look: the same letters in the same places, ranges of them in their own col
 }
 
 ///|
+test "look: what the input method composes drawn as it is at the caret, the look's of the words the app holds kept" {
+  let field = @ui.Field::new()
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.editor(
+        "field",
+        field~,
+        font_size=10.0,
+        color=0x000000FFL,
+        look=fn(s) {
+          // (as a composer's marks are known: of the words the app holds, nothing of others)
+          if s != field.text() {
+            return (s, [])
+          }
+          let spans : Array[(Int, Int, Int64)] = []
+          match s.find("ab") {
+            Some(k) => spans.push((k, k + 2, 0xFF0000FFL))
+            None => ()
+          }
+          (s, spans)
+        },
+      )
+      |> ignore
+    },
+    w=300.0,
+    h=100.0,
+  )
+  t.tap(50.0, 20.0)
+  field.set("xab", caret=1)
+  t.frame()
+  // composing before "ab": it among the words drawn, "ab" in red still, after it
+  t.compose("zz")
+  assert_eq(field.text(), "xab")
+  let glyphs = t.drawn_glyphs()
+  glyphs.sort_by(fn(a, b) { a.0.compare(b.0) })
+  assert_eq(glyphs.map(fn(g) { g.2 }), [0x000000FFL, 0x000000FFL, 0x000000FFL, 0xFF0000FFL, 0xFF0000FFL])
+}
+
+///|
 /// Long enough for a tap's frames to be over (a few frames' time): what the tests wait for their field to be at rest.
 let rest_ms : Double = 100.0
 

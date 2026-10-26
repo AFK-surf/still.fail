@@ -52,12 +52,30 @@ fn EditorState::look_of(self : EditorState, d : String) -> (String, Array[(Int, 
 }
 
 ///|
+/// What its look makes of its words and what is being composed: the look's of the words the app holds (`text`, the
+/// only ones it knows of: a composer's marks), the composition put in at the caret as it is, in the field's own colour,
+/// the ranges after it moved along (one it is within grown over it).
+fn EditorState::look_shown(self : EditorState) -> (String, Array[(Int, Int, Int64)]) {
+  let (o, spans) = self.look_of(self.text)
+  let ml = self.marked.length()
+  if ml == 0 {
+    return (o, spans)
+  }
+  let at = self.caret
+  let moved = spans.map(fn(r) {
+    let (a, b, k) = r
+    (if a >= at { a + ml } else { a }, if b > at { b + ml } else { b }, k)
+  })
+  (sub(o, 0, at) + self.marked + sub(o, at, o.length()), moved)
+}
+
+///|
 /// What it shows: its words (with what is being composed), each a dot where they are a secret (as many UTF-16 units,
 /// so the caret's and the selection's places are the same).
 fn EditorState::shown(self : EditorState) -> String {
   let d = self.display()
   if !self.secret {
-    return self.look_of(d).0
+    return self.look_shown().0
   }
   let b = StringBuilder()
   for _ in 0..<d.length() {
@@ -1004,7 +1022,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   if st.text.length() == 0 && ml == 0 && n.text.length() > 0 {
     self.emit_text(n.hint_shown(st.line), st.ox, st.oy, st.ph_color, alpha)
   } else {
-    let spans = if st.secret { [] } else { st.look_of(st.display()).1 }
+    let spans = if st.secret { [] } else { st.look_shown().1 }
     self.emit_text(tl, st.ox, st.oy, st.color, alpha, spans~)
   }
   // composition underline
