@@ -1,19 +1,18 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { litOver } from "@stillfail/ui/styles/lit.ts";
-import { buddyHopKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { CARD_PAD, LIST_PAD, ROW_CORNER, list, listCardLook, listRow, pageNarrow } from "./styles/pages.css.ts";
 import { newChat } from "./NewChat.css.ts";
 import { profileCard } from "./ProfileCard.css.ts";
 import { pageBar as onePageBar } from "./styles/sidebar.css.ts";
 import { bar as filesBar } from "./pages/Files.css.ts";
 import { neg, outset } from "@stillfail/ui/styles/align.ts";
-import { STILL } from "@stillfail/ui/styles/still.ts";
 
 // A page's bar, and the files page's over its tabs (Files.tsx), which is in the same place.
 const pageBar = `:is(${onePageBar}, ${filesBar})`;
 
-export const brandLockup = style({ display: "block" });
+/** The wordmark where it shows on every width (a phone's sidebar). */
+export const brandBlock = style({ display: "block" });
 export const illus = style({
   display: "block", maxWidth: "100%", height: "auto",
   selectors: {
@@ -27,19 +26,7 @@ export const illus = style({
     },
   },
 });
-export const sidebarBuddy = style({
-  selectors: {
-    "[data-sidebar=\"closed\"] &": { left: "14px" },
-    "[data-desktop] &": { top: "8px" },
-    "[data-desktop=\"inset\"]:not([data-fullscreen])[data-sidebar=\"closed\"] &": { left: "84px" },
-  },
-  "@media": {
-    "(max-width: 700px)": {
-      display: "none",
-    },
-  },
-});
-/** 更新 beside the buddy (the desktop app): left of it on the open sidebar's edge, right of it at rest by the window's buttons. */
+/** 更新 at the sidebar's top (the desktop app): by the open sidebar's edge, closed by the window's buttons. */
 export const sidebarUpdate = style({
   position: "fixed", zIndex: "40", top: "18px", left: "calc(var(--sidebar-w, 240px) - 36px)",
   transform: "translateX(-100%)", height: "22px", padding: "0 9px", border: "0", borderRadius: "999px",
@@ -112,10 +99,3 @@ globalStyle(`${pageNarrow} ${list}`, { ...listCardLook, padding: LIST_PAD, margi
 globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "760px", marginLeft: "auto", marginRight: "auto", marginBottom: "28px" });
 // Its rows: a list's own and a profile's (ProfileCard.tsx, a row of a list but where it stands alone).
 globalStyle(`${pageNarrow} ${list} :is(${listRow}, ${profileCard})`, { borderRadius: ROW_CORNER, paddingInline: `${CARD_PAD - LIST_PAD}px` });
-globalStyle(`${sidebarBuddy}[data-pose="hop"] img`, { animation: `${buddyHopKeyframes} 380ms ${vars.easeOut}` });
-/** The buddy unmoving (rest and push breathe and strain in their SVG, which goes by the system's setting): shown in its
- *  place with motion reduced. */
-export const buddyStill = style({});
-globalStyle(`${sidebarBuddy} ${buddyStill}`, { display: "none" });
-globalStyle(`${STILL} ${sidebarBuddy} img:not(${buddyStill})`, { display: "none" });
-globalStyle(`${STILL} ${sidebarBuddy} ${buddyStill}`, { display: "block" });

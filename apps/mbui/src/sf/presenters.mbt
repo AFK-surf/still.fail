@@ -368,6 +368,51 @@ pub fn panel_list(
 }
 
 ///|
+/// What a panel's body holds that is seen whole, never scrolled through nor cut: a picture to share (sfpages'
+/// stations_now.mbt), laid out `most` wide (the room's width where that is less) by `draw` (given the id its box takes,
+/// answering the box: Ctx::box's node) and shown as large as the room the panel gives it lets it, never larger than it
+/// is, at the top of that room in its middle. In a panel a share of the window caps (`tall`) it says how tall it is, as
+/// a list says its rows (measured_body), so the panel is as tall as all of it while the window has the room and no
+/// taller; past that it is drawn smaller (a look over its layout: what it is laid out as stays as it is, its words in
+/// their places). Put where it is in the room out of its flow, so the room is as large as the panel gives it, not as
+/// what it holds (which would hold it as large as the picture, never smaller). `id`: a box over it as large as it is
+/// drawn (what is read back of it: Ctx::drawn_pixels).
+pub fn whole_fitted(c : @ui.Ctx, key : String, id : Int, most : Double, draw : (Int) -> Int) -> Unit {
+  let room_id = c.id(key + "/room")
+  let whole_id = c.id(key + "/whole")
+  let (rw, rh) = c.laid_size(room_id).unwrap_or((most, 0.0))
+  let w = dmin(most, rw)
+  let h = match c.laid_size(whole_id) {
+    Some((_, h)) => h
+    None => 0.0
+  }
+  if lists_said_now.val && h > 0.0 {
+    lists_now.push((room_id, h))
+  }
+  let k = if h > 0.0 && rh > 0.0 { dmin(1.0, rh / h) } else { 1.0 }
+  c.box(style=whole_room, id=room_id, taps=false, fn() {
+    // (as wide as it is laid out, in the room's middle, drawn smaller from its top's middle)
+    let at = c.box(style=whole_box.then(@ui.style(w=Fixed(w))), left=(rw - w) / 2.0, top=0.0, taps=false, fn() {
+      draw(whole_id) |> ignore
+    })
+    c.look(at, @ui.look(scale=k, ox=0.5, oy=0.0))
+    // (over it, as large as it is drawn)
+    c.box(style=whole_box.then(@ui.style(w=Fixed(w * k), h=Fixed(h * k))), id~, left=(rw - w * k) / 2.0, top=0.0, fn() {  })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// The room a fitted picture is given: what the panel leaves.
+// kept across runs: a value (no field of it changes)
+let whole_room : @ui.Style = @ui.style(w=Full, h=grow)
+
+///|
+// kept across runs: a value (no field of it changes)
+let whole_box : @ui.Style = @ui.css("")
+
+///|
 /// Whether the panel whose body is drawn now is as tall as what it holds (a dialog: its body scrolls in itself), so
 /// what would scroll in a room of its own (a page's list) lays itself out whole instead.
 pub fn panel_whole() -> Bool {
@@ -1056,6 +1101,11 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
         let h = match capped_want(c, p.serial, id) {
           Some(want) => dmin(want, share)
           None => share
+        }
+        // (no taller than the dialog shows besides its title and buttons: all of it in view, not scrolled)
+        let h = match dialog_body_most(c, key, id) {
+          Some(most) => dmin(h, most)
+          None => h
         }
         measured_body(c, p.serial, id, @ui.style(w=Full, h=Fixed(h)), fn() { draw_panel_body(x, c, close, keyed=p) })
       } else {

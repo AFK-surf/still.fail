@@ -15,8 +15,8 @@ export MBUI_IOS_SHARE_PLIST=$A/ios/Share-Info.plist
 # the build's number as Android's versionCode (main's commits: git rev-list --count HEAD), where this is a checkout;
 # MBUI_IOS_BUILD says it otherwise
 if [ -z "${MBUI_IOS_BUILD:-}" ] && n=$(git -C "$A" rev-list --count HEAD 2>/dev/null); then export MBUI_IOS_BUILD=$n; fi
-# the asset catalog: the icon (Android's launcher icon, as macOS's: scripts/mac-icon.swift, made once for each version
-# of its script) and the launch screen's ground (Paper: the page's paper, light and dark, as Android's windowBackground
+# the asset catalog: the icon (Android's launcher icon, as macOS's: scripts/mac-icon.swift, still.fail mbui's, made once
+# for each version of its script) and the launch screen's ground (Paper: the page's paper, light and dark, as Android's windowBackground
 # is, so opening does not flash white or black)
 if [ "${1:-build}" = build ]; then
   export MBUI_IOS_ASSETS=$A/out/ios-assets-$(cat "$D/mac-icon.swift" "$0" | shasum -a 256 | cut -c1-12)/Assets.xcassets

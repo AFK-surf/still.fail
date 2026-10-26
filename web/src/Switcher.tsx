@@ -49,7 +49,7 @@ export const GlobalShortcuts = memo(function GlobalShortcuts({ scope, newChat, s
 
 /**
  * Updating what runs here: the page to a newer build of it (as the sidebar's foot offers), the desktop app to its newer
- * build (as 更新 beside the buddy does), or looking for one now (its version page, looking as it opens).
+ * build (as 更新 at the sidebar's top does), or looking for one now (its version page, looking as it opens).
  */
 function useUpdateCommands(settings: string): Command[] {
   const navigate = useGo();

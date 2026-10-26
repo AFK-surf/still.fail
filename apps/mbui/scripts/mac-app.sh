@@ -3,9 +3,9 @@
 # ships), its zip beside it. The app is APP=stillfail's release build (scripts/mac.sh) with what it carries: the core's
 # bytecode (Resources/core.hbc, which the core host finds in the app: src/host/apple_core.mm) and Hermes
 # (Frameworks/hermes.framework, React Native 0.81.4's, as Android's; scripts/core.sh hermes-apple), its icon
-# (scripts/mac-icon.swift), an Info.plist of its own. Signed with MAC_SIGN_IDENTITY (CI: still.fail's, imported by
-# .github/mac_signing.py), else ad hoc; checked with codesign's strict verify. Signed with a Developer ID, it is
-# notarized before it is zipped (mac_signing.py notarize): Gatekeeper lets it open downloaded. Its ticket is not
+# (scripts/mac-icon.swift, its variant's), an Info.plist of its own. Signed with MAC_SIGN_IDENTITY (CI: still.fail's,
+# imported by .github/mac_signing.py), else ad hoc; checked with codesign's strict verify. Signed with a Developer ID,
+# it is notarized before it is zipped (mac_signing.py notarize): Gatekeeper lets it open downloaded. Its ticket is not
 # stapled: stapling fetches it from Apple's CloudKit, whose connection from CI's Mac dropped in most of main's runs
 # (Error 68, the app notarized), and nothing needs it there: a download is opened online (Gatekeeper asks Apple for the
 # ticket then), and the app's own updates are not quarantined.
@@ -92,9 +92,10 @@ fi
 BIN=$A/_build/native/release/build/stillfail/stillfail/stillfail.exe
 t2=$(now)
 
-# the icon, made once for each version of its script
-ICON=$OUT/AppIcon-$(shasum -a 256 "$D/mac-icon.swift" | cut -c1-12).icns
-[ -f "$ICON" ] || swift "$D/mac-icon.swift" "$ICON" > /dev/null
+# the icon, the app's own (still.fail's, youdid.wtf's, still.fail mbui's), made once for each version of its script
+VARIANT=${MBUI_VARIANT:-mbui}
+ICON=$OUT/AppIcon-$(shasum -a 256 "$D/mac-icon.swift" | cut -c1-12)-$VARIANT.icns
+[ -f "$ICON" ] || swift "$D/mac-icon.swift" "$VARIANT" "$ICON" > /dev/null
 
 rm -rf "$APPDIR" "$ZIP"
 mkdir -p "$APPDIR/Contents/MacOS" "$APPDIR/Contents/Resources" "$APPDIR/Contents/Frameworks"

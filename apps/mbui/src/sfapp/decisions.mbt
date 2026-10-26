@@ -137,9 +137,6 @@ fn decisions_idle(c : @ui.Ctx, view : Json?, top : Double) -> Unit {
         for f in items(field(view, "wait"), "failing") {
           c.box(pb=8.0, fn() { @sf.wait_pill(c, text(Some(f), "text"), error=true) }) |> ignore
         }
-        if @sf.has_drawable("buddy_idle") {
-          @sf.drawable(c, if t.dark { "buddy_idle_dark" } else { "buddy_idle" }, 72.0) |> ignore
-        }
         c.box(pt=8.0, fn() {
           c.text(tr("android-misc.decisions.idle.title"), size=t.t.title, weight=600, color=t.p.text, wrap=false)
           |> ignore

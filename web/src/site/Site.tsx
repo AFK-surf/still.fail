@@ -25,16 +25,6 @@ const WINDOWS = `https://app.still.fail/releases/latest/${BETA ? "win-beta" : "w
 const ANDROID = `https://app.still.fail/releases/latest/${BETA ? "android-beta" : "android"}`;
 const INSTALL = "curl -fsSL https://app.still.fail/install.sh | sh -s -- <token>";
 
-/** A picture of web/public and its -dark twin: the one for the page's theme shows (site.css.ts), with no script. */
-function Themed({ name, className, alt = "", life }: { name: string; className?: string; alt?: string; life?: string }) {
-  return (
-    <>
-      <span className={css.lightOnly}><img className={className} src={`/${name}.svg`} alt={alt} data-life={life} /></span>
-      <span className={css.darkOnly}><img className={className} src={`/${name}-dark.svg`} alt={alt} data-life={life} /></span>
-    </>
-  );
-}
-
 /** A link as a button; with `then`, its words roll up on hover and those take their place (site.css.ts). */
 export function Button({ href, kind, large, then, children, className }: { href: string; kind: "primary" | "ghost"; large?: boolean; then?: string; children: ReactNode; className?: string }) {
   return (
@@ -100,7 +90,7 @@ function Page({ mountDemo, demo }: DemoProps) {
     <div className={css.page}>
       <nav className={css.nav}>
         <div className={`${css.wrap} ${css.navRow}`}>
-          <a href={lang === "en" ? "/en/" : "/"} className={css.brand} aria-label={NAME.head + NAME.tail}><Themed name="mark" className={css.logo} /><span>{NAME.head}<span className={css.brandTail}>{NAME.tail}</span></span></a>
+          <a href={lang === "en" ? "/en/" : "/"} className={css.brand} aria-label={NAME.head + NAME.tail}><span>{NAME.head}<span className={css.brandDot}>.</span>{NAME.tail.slice(1)}</span></a>
           {/* The apps, for the device the page is on (data-platform, set before the first paint by site/index.html): on
               Android the app itself; on a computer a card under the word, with the Mac's, Windows' and a code to scan for Android. */}
           <a className={`${css.navLink} ${css.forAndroid}`} href={ANDROID}>{say.download}</a>

@@ -284,7 +284,8 @@ export function OneComputer(props: DemoProps) {
     <>
       <header className={css.sameHero}>
         <div className={css.wrap}>
-          <h1 className={css.sameTitle}>{say.title}</h1>
+          {/* Its full stop still.fail's dot, as in the name and the mark. */}
+          <h1 className={css.sameTitle}>{say.title.replace(/\.$/, "")}<span className={css.titleDot}>.</span></h1>
           <div className={css.sameActions}><Button href={APP} kind="primary" large>{say.start}</Button></div>
         </div>
       </header>

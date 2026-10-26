@@ -3,7 +3,6 @@
 // an agent at work or waiting) and what was answered today (core decisions.ts `today`). Each opens its chat.
 import type { DecisionsView } from "./core/shapes.ts";
 import { stationBase } from "./station.tsx";
-import { IdleFace } from "./brand.tsx";
 import * as css from "./DecisionsIdle.css.ts";
 import { t } from "./i18n.ts";
 
@@ -17,7 +16,6 @@ export function DecisionsIdle({ view, onOpen }: { view: DecisionsView; onOpen: (
     <div className={css.idle}>
       <div className={css.column}>
         <div className={css.head}>
-          <IdleFace size={72} />
           <h2 className={css.title}>{t("web-main.decisions.idle.title")}</h2>
           <p className={css.note}>{t("web-main.decisions.idle.note")}</p>
           {today && (

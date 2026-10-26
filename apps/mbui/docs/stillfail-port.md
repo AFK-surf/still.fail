@@ -725,7 +725,7 @@ the menu from a button):
 - 密钥 (the vault): what has to come first, then the requests waiting on the viewer (允许一次 / 一小时内 / 拒绝:
   `vault.approve`, `vault.deny`), whether the library is locked, the profiles' accounts, each vault's items by kind,
   the devices holding the keys.
-- Station: a card each (the buddy's face, its mark and name, what of its load runs low, its network; offline asleep);
+- Station: a card each (its mark and name, what of its load runs low, its network; offline asleep);
   a station's page (its machine's dials, network and details, or that it is offline with 重试: `client.wake`; what runs
   on it, its drive's folders opening the drive's page), its "…" for owners and admins: 重命名 (`workspace.renameStation`), taking it out (`workspace.removeStation`).
 - Profile: the workspace's list by kind (the core's `profiles`), a station's; a profile's page: its check, its

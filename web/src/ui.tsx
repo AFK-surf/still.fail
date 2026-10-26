@@ -111,7 +111,7 @@ export function FeishuLogo({ size = 16 }: { size?: number; strokeWidth?: number 
 const SPLASH_STUCK_MS = 10_000;
 
 /**
- * The app starting (or waiting for what every page needs): the buddy, floating. What it waits for is said only when
+ * The app starting (or waiting for what every page needs): the mark. What it waits for is said only when
  * it takes a while (after a second), or at once when `now` (a failure); standing too long, it offers a reload.
  */
 export function Splash({ label, now = false, children }: { label?: string; now?: boolean; children?: ReactNode }) {

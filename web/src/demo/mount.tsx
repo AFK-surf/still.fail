@@ -38,7 +38,7 @@ import { openOf } from "../../../client/core-ts/src/search-open.ts";
 import { Browsing, CALLS as BROWSE_CALLS, withDrive } from "../../../client/core-ts/src/drive-browse.ts";
 import { collate } from "../../../client/core-ts/src/hosts/collate.ts";
 
-/** The demo's box; the app is drawn in a box of its own inside it (the buddy goes beside it: setPageRoot). */
+/** The demo's box; the app is drawn in a box of its own inside it (what it puts on the page goes beside it: setPageRoot). */
 let root: HTMLElement;
 /** The visitor has clicked in the demo: from then on it is theirs (the story stops moving between chats). */
 let touched = false;

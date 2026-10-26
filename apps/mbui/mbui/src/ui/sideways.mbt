@@ -261,6 +261,13 @@ fn Ctx::sideways_scrolled(self : Ctx, st : Sideways) -> Unit {
 }
 
 ///|
+/// The id of the box Ctx::capped makes for `key`: where it is laid out, how tall it shows (Ctx::laid_size), read by
+/// what holds it (a dialog: how tall its body shows besides its title and buttons).
+pub fn Ctx::capped_id(self : Ctx, key : String) -> Int {
+  self.id("\u{1}capped\u{1}" + key)
+}
+
+///|
 /// A box at most `max_h` tall whose content, when taller, scrolls up and down inside it (see the file's head); `key`
 /// keeps where it is scrolled to. `shrinks`: in a column, shorter still when the column has less room left (CSS's
 /// flex-shrink on what scrolls: a dialog's body when the dialog would be taller than its maximum). `mx`: its sides that
@@ -279,7 +286,7 @@ pub fn Ctx::capped(
   mx? : Double = 0.0,
   body : () -> Unit,
 ) -> Int {
-  let id = self.id("\u{1}capped\u{1}" + key)
+  let id = self.capped_id(key)
   let st = self.scroll_state(id, true)
   st.theme = self.theme
   st.built_frame = self.frame_no

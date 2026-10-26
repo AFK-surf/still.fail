@@ -1,8 +1,10 @@
-// still.fail mbui's macOS, iOS, Windows and Linux icons (the Android app's launcher icon, android/app/src/main/res:
-// still.fail's face under a crescent, on violet): drawn into the shape of a macOS app icon and made an .icns, the
-// iPhone's square (the system rounds it) as the 1024-pixel PNG of an asset catalog's app icon (scripts/ios.sh),
-// Windows' .ico, or Linux's 512-pixel PNG (its desktop entry's icon, in Windows' shape).
-//   swift apps/mbui/scripts/mac-icon.swift OUT.icns
+// still.fail's macOS, iOS, Windows and Linux icons (the Android app's launcher icon, android/app/src/main/res:
+// still.fail's mark, s. in Inter Bold, on its app's colour; design/brand): drawn into the shape of a macOS app icon and
+// made an .icns, the iPhone's square (the system rounds it) as the 1024-pixel PNG of an asset catalog's app icon
+// (scripts/ios.sh), Windows' .ico, or Linux's 512-pixel PNG (its desktop entry's icon, in Windows' shape). Which app's:
+// VARIANT, as mac-app.sh's MBUI_VARIANT (mbui by default: still.fail mbui's violet; stable still.fail's paper, beta
+// youdid.wtf's night).
+//   swift apps/mbui/scripts/mac-icon.swift [VARIANT] OUT.icns
 //   swift apps/mbui/scripts/mac-icon.swift --ios OUT.png
 //   swift apps/mbui/scripts/mac-icon.swift --ico OUT.ico
 //   swift apps/mbui/scripts/mac-icon.swift --png OUT.png
@@ -15,14 +17,66 @@
 import AppKit
 import Foundation
 
-let mode = CommandLine.arguments.count > 2 ? CommandLine.arguments[1] : ""
-let ios = mode == "--ios", ico = mode == "--ico" || mode == "--png", png = mode == "--png"
-let out = mode != "" ? CommandLine.arguments[2] : CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "AppIcon.icns"
+let args = Array(CommandLine.arguments.dropFirst())
+let ios = args.contains("--ios"), png = args.contains("--png"), ico = args.contains("--ico") || png
+let rest = args.filter { !$0.hasPrefix("--") }
+let out = rest.last ?? "AppIcon.icns"
+let variant = rest.count > 1 ? rest[0] : "mbui"
 // where the square is on the 1024 grid, and its corners' radius
 let (edge, side, radius): (CGFloat, CGFloat, CGFloat) = ios ? (0, 1024, 0) : ico ? (32, 960, 192) : (100, 824, 185)
-let violet = NSColor(srgbRed: 0x5B / 255.0, green: 0x4F / 255.0, blue: 0xD6 / 255.0, alpha: 1)
-let moon = NSColor(srgbRed: 0xFF / 255.0, green: 0xD6 / 255.0, blue: 0x6B / 255.0, alpha: 1)
-let cheeks = NSColor(srgbRed: 0xB7 / 255.0, green: 0xB0 / 255.0, blue: 0xF2 / 255.0, alpha: 1)
+
+func rgb(_ hex: Int) -> NSColor {
+  NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
+}
+// the app's tile, its s and its dot (android/app/src/<variant>/res/values/launcher.xml's)
+let colours: [String: (NSColor, NSColor, NSColor)] = [
+  "mbui": (rgb(0x5B4FD6), rgb(0xFFFFFF), rgb(0xFFD66B)),
+  "stable": (rgb(0xFAFAF9), rgb(0x18181B), rgb(0xE5704A)),
+  "beta": (rgb(0x111114), rgb(0xFAFAFA), rgb(0xE5704A)),
+]
+guard let palette = colours[variant] else {
+  FileHandle.standardError.write("mac-icon.swift: VARIANT is mbui, stable or beta, not \(variant)\n".data(using: .utf8)!)
+  exit(1)
+}
+let (ground, ink, dotColour) = palette
+
+// brand: made by design/brand/make.py
+let sPath = "M47.41 69.84C44.94 69.84 42.76 69.49 40.85 68.78C38.94 68.07 37.39 67.05 36.19 65.71C34.98 64.36 34.2 62.75 33.84 60.85L41.52 59.53C41.92 60.96 42.62 62.03 43.62 62.74C44.63 63.46 45.97 63.81 47.66 63.81C49.22 63.81 50.46 63.51 51.37 62.91C52.29 62.31 52.74 61.56 52.74 60.64C52.74 59.83 52.42 59.18 51.77 58.66C51.12 58.15 50.12 57.76 48.77 57.48L43.49 56.39C40.53 55.78 38.32 54.75 36.85 53.3C35.39 51.85 34.66 49.97 34.66 47.67C34.66 45.71 35.19 44.02 36.27 42.6C37.34 41.18 38.84 40.08 40.77 39.31C42.7 38.54 44.95 38.16 47.54 38.16C49.97 38.16 52.07 38.5 53.85 39.17C55.62 39.84 57.05 40.78 58.15 42C59.24 43.23 59.98 44.67 60.35 46.35L53.05 47.63C52.72 46.58 52.12 45.73 51.24 45.06C50.35 44.4 49.16 44.07 47.67 44.07C46.31 44.07 45.18 44.35 44.26 44.92C43.35 45.49 42.89 46.24 42.89 47.18C42.89 47.95 43.18 48.6 43.77 49.13C44.37 49.67 45.39 50.08 46.83 50.39L52.35 51.48C55.32 52.08 57.53 53.07 58.98 54.43C60.43 55.8 61.15 57.58 61.15 59.78C61.15 61.79 60.57 63.55 59.39 65.06C58.22 66.57 56.6 67.74 54.54 68.58C52.47 69.42 50.1 69.84 47.41 69.84Z"
+let dot = (x: 70.9 as CGFloat, y: 65.05 as CGFloat, r: 4.76 as CGFloat)
+// brand end
+
+/// An SVG path of M, L, C and Z (absolute, as make.py writes them), its points through `p`.
+func shape(_ d: String, _ p: (CGFloat, CGFloat) -> NSPoint) -> NSBezierPath {
+  let path = NSBezierPath()
+  var op: Character = " ", nums: [CGFloat] = [], number = ""
+  func take() {
+    if let v = Double(number) { nums.append(CGFloat(v)) }
+    number = ""
+  }
+  func draw() {
+    switch op {
+    case "M": path.move(to: p(nums[0], nums[1]))
+    case "L": path.line(to: p(nums[0], nums[1]))
+    case "C": path.curve(to: p(nums[4], nums[5]), controlPoint1: p(nums[0], nums[1]), controlPoint2: p(nums[2], nums[3]))
+    case "Z": path.close()
+    default: break
+    }
+    nums = []
+  }
+  for ch in d {
+    if ch.isLetter {
+      take(); draw(); op = ch
+    } else if ch == " " || ch == "," {
+      take()
+    } else if ch == "-" && !number.isEmpty {
+      take(); number = "-"
+    } else {
+      number.append(ch)
+    }
+  }
+  take(); draw()
+  return path
+}
 
 func render(_ size: Int) -> Data {
   let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: size, pixelsHigh: size, bitsPerSample: 8,
@@ -34,34 +88,33 @@ func render(_ size: Int) -> Data {
   // the viewport's (x, y), y down, to the icon's points, y up
   func p(_ x: CGFloat, _ y: CGFloat) -> NSPoint { NSPoint(x: (edge + (x - 18) * side / 72) * k, y: (1024 - (edge + (y - 18) * side / 72)) * k) }
   func len(_ v: CGFloat) -> CGFloat { v * side / 72 * k }
-  func circle(_ x: CGFloat, _ y: CGFloat, _ r: CGFloat) -> NSBezierPath {
-    let c = p(x, y)
-    return NSBezierPath(ovalIn: NSRect(x: c.x - len(r), y: c.y - len(r), width: 2 * len(r), height: 2 * len(r)))
-  }
   // the square, its corners as macOS's (about 22.5% of its side)
   let square = NSBezierPath(roundedRect: NSRect(x: edge * k, y: edge * k, width: side * k, height: side * k),
                             xRadius: radius * k, yRadius: radius * k)
-  violet.setFill()
-  square.fill()
-  // the crescent: the circle (54, 31) r 8.5 less the circle (58.5, 27.5) r 7.5
+  // on macOS's grid its shadow under it (Apple's template's: 28% black, 10 down, 12 soft); the paper's tile edged
+  // faintly, as it would be lost on a light Dock or taskbar
   NSGraphicsContext.saveGraphicsState()
-  circle(54, 31, 8.5).addClip()
-  moon.setFill()
-  circle(54, 31, 8.5).fill()
-  violet.setFill()
-  circle(58.5, 27.5, 7.5).fill()
-  NSGraphicsContext.restoreGraphicsState()
-  // the eyes
-  NSColor.white.setFill()
-  circle(40.8, 52.2, 4.51).fill()
-  circle(67.2, 52.2, 4.51).fill()
-  // the cheeks: capsules 5.87 high
-  cheeks.setFill()
-  for x0 in [26.99, 70.19] as [CGFloat] {
-    let a = p(x0, 73.19)
-    NSBezierPath(roundedRect: NSRect(x: a.x, y: a.y, width: len(10.82), height: len(5.87)),
-                 xRadius: len(2.93), yRadius: len(2.93)).fill()
+  if !ios && !ico {
+    let shadow = NSShadow()
+    shadow.shadowOffset = NSSize(width: 0, height: -10 * k)
+    shadow.shadowBlurRadius = 24 * k
+    shadow.shadowColor = NSColor(white: 0, alpha: 0.28)
+    shadow.set()
   }
+  ground.setFill()
+  square.fill()
+  NSGraphicsContext.restoreGraphicsState()
+  if variant == "stable" && !ios {
+    NSColor(white: 0, alpha: 0.06).setStroke()
+    square.lineWidth = k
+    square.stroke()
+  }
+  // the s, and its dot
+  ink.setFill()
+  shape(sPath, p).fill()
+  let c = p(dot.x, dot.y)
+  dotColour.setFill()
+  NSBezierPath(ovalIn: NSRect(x: c.x - len(dot.r), y: c.y - len(dot.r), width: 2 * len(dot.r), height: 2 * len(dot.r))).fill()
   NSGraphicsContext.restoreGraphicsState()
   return rep.representation(using: .png, properties: [:])!
 }

@@ -9,7 +9,7 @@
 // <meta name="stillfail-beta" content="<PUBLIC_ORIGIN>">, by which the page knows it is the test channel and where the
 // stable one is (web/src/cloud/beta.tsx); what the files call the product before any script runs (the title, the
 // link previews' tags, the manifest's names) says the test channel's name instead, and its icons are the beta apps'
-// face (dark, white eyes; design/app-icon/face-beta.svg) under the same paths.
+// (s. on night; design/brand/icon-beta.svg) under the same paths.
 import { betaOrigin, publicOrigins } from "./compat.ts";
 
 export type WebEnv = { ASSETS: Fetcher; PUBLIC_ORIGIN: string; PUBLIC_ORIGIN_ALIASES?: string; BETA_ORIGIN?: string };
@@ -29,7 +29,7 @@ const NOINDEX = "noindex, nofollow";
 /** The test channel's name (still.fail's dual), as the page has it (web/src/channel.ts). */
 const BETA_NAME = "youdid.wtf";
 
-/** The icons the test channel serves at the stable one's paths (web/public): the beta apps' face. */
+/** The icons the test channel serves at the stable one's paths (web/public): the beta apps'. */
 export const BETA_ICONS: Record<string, string> = {
   "/favicon.svg": "/favicon-beta.svg",
   "/favicon-32.png": "/favicon-beta-32.png",
