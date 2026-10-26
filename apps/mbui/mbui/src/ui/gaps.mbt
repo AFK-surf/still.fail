@@ -209,13 +209,12 @@ fn gap_between(
 }
 
 ///|
-fn Ctx::gap_faults(self : Ctx) -> Array[String] {
-  let out : Array[String] = []
+/// Whether each node of the frame just built shows whole, and the layer it is in. A node's parent comes before it in
+/// the pool. Shown whole: drawn, not moved off its place, in the window and in what cuts it (a row scrolled half under
+/// a list's edge is measured nowhere). Its layer: a layer, a page of a pager, one put where it is said, over the whole
+/// window: what lies over another on purpose.
+fn Ctx::shown_whole(self : Ctx) -> (Array[Bool], Array[Int]) {
   let n = self.count
-  let pictures = self.pictures()
-  // (a node's parent comes before it in the pool) whether each shows whole: drawn, not moved off its place, in the
-  // window and in what cuts it (a row scrolled half under a list's edge is measured nowhere); the layer it is in (a
-  // layer, a page of a pager, one put where it is said, over the whole window: what lies over another on purpose)
   let whole = Array::make(n, false)
   let layer = Array::make(n, -1)
   for i in 0..<n {
@@ -243,6 +242,15 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
       layer[i] = if aside { i } else { layer[p] }
     }
   }
+  (whole, layer)
+}
+
+///|
+fn Ctx::gap_faults(self : Ctx) -> Array[String] {
+  let out : Array[String] = []
+  let n = self.count
+  let pictures = self.pictures()
+  let (whole, layer) = self.shown_whole()
   let rect = fn(i : Int) {
     let b = self.nodes[i]
     (b.x, b.y, b.x + b.fw, b.y + b.fh)

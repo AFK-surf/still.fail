@@ -306,6 +306,10 @@ one way in) names it until the last step.
     how it answers differs.
   - The platform also says the tier with touch and the core's `client.device`, and a replay recorded on one
     platform keeps it.
+- **A press's room** (rules 1 and 2): on every screen the corner rule opens, in each window, what always shows and
+  takes presses has 44×44 to be pressed in, no two such rooms overlapping, and what shows only under a resting
+  pointer stands on what opens a menu on a hold (mbui's `rooms.mbt`, Tester::room_faults, hover_only_faults); each
+  rule's faults kept to their bars in sfapp's `rooms_known_wbtest.mbt`, only falling.
 - **The screenshots** (`screens.sh`) cover the three tiers.
 - **Replays** recorded at one tier keep their traces. A flow that only one tier has (the bottom bar, the tape) is that
   tier's.
