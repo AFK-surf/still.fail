@@ -83,7 +83,7 @@ fn bars_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   blocks.push(fn() {
     @sf.page_note(c, @sf.t(if made.length() > 1 { "android-misc.bar.foot.many" } else { "android-misc.bar.foot.one" }))
   })
-  look_page(c, core, frame, "bars", @sf.t("android-misc.bar.title"), blocks, lead=@sf.t("android-misc.bar.note"), small=@sf.t(
+  @sf.page(c, on_back=core.pop, frame~, "bars", @sf.t("android-misc.bar.title"), blocks, lead=@sf.t("android-misc.bar.note"), small=@sf.t(
     "android-misc.bar.small",
   ))
 }

@@ -52,7 +52,7 @@ fn usage_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit 
       })
     (None, None) => body.push(fn() { @sf.waiting(c, shape=Cards) })
   }
-  look_page(c, core, frame, "usage/" + days.to_string(),
+  @sf.page(c, on_back=core.pop, frame~, "usage/" + days.to_string(),
     @sf.t("web-pages.settings.usage.title"),
     about=@sf.t("web-pages.settings.usage.lead"),
     actions=fn() {
@@ -881,7 +881,7 @@ fn usage_prices_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, d
       }
     }
   }
-  look_page(c, core, frame, "usage-prices/" + days.to_string(),
+  @sf.page(c, on_back=core.pop, frame~, "usage-prices/" + days.to_string(),
     @sf.t("web-pages.settings.prices.title"),
     lead=@sf.t("web-pages.settings.prices.lead"),
     blocks,

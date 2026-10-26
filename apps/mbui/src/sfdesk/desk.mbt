@@ -10,6 +10,8 @@ fn init {
   @sfbase.drag_carried.val = dragged
   @sfbase.neighbour_go.val = neighbour
   @sfbase.neighbour_held.val = switcher_open
+  // the bar over a page in a panel of its own on the tape (the library's page asks it)
+  @sf.pane_bar.val = Some(pane_page)
 }
 
 ///|

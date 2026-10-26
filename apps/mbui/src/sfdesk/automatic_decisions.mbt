@@ -8,7 +8,7 @@
 fn decisions_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let said = (core.topic)("settings", { "scope": Json::string(here.workspace) }).value
-  look_page(c, core, frame, "auto-decisions", @sf.t("web-pages.automaticDecisions.title"), about=@sf.t("web-pages.automaticDecisions.choosePoint"), [
+  @sf.page(c, on_back=core.pop, frame~, "auto-decisions", @sf.t("web-pages.automaticDecisions.title"), about=@sf.t("web-pages.automaticDecisions.choosePoint"), [
     fn() {
       @sf.group(c, fn() {
         if @sf.link_row(c, "auto-completion",

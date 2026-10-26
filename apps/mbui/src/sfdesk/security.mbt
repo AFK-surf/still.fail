@@ -29,7 +29,7 @@ fn security_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Un
     Some(_) if flag(lock, "locked") => blocks.append(lock_on(c, core, here, look, lock))
     Some(_) => blocks.append(lock_off(c, core, look, lock))
   }
-  look_page(c, core, frame, "security", @sf.t("web-pages.security.title"), blocks, lead=@sf.t("web-pages.security.lead"))
+  @sf.page(c, on_back=core.pop, frame~, "security", @sf.t("web-pages.security.title"), blocks, lead=@sf.t("web-pages.security.lead"))
 }
 
 ///|
@@ -553,7 +553,7 @@ fn security_open_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) 
       |> ignore
     })
   }
-  look_page(c, core, frame, "security-open",
+  @sf.page(c, on_back=core.pop, frame~, "security-open",
     @sf.t("web-pages.security.openTitle"),
     blocks,
     lead=@sf.t("web-pages.security.openLead"),

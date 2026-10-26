@@ -540,7 +540,7 @@ pub fn reset() -> Unit {
   frame_core.val = None
   at_root.val = false
   root_top.val = 0.0
-  root_bar_actions.val = None
+  @sf.named_actions.val = None
   wide.val = false
   status_top.val = 0.0
   nav_foot.val = 0.0

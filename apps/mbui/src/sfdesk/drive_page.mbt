@@ -263,15 +263,13 @@ pub fn roots_page(
     "files-roots/" + (match st { Some(s) => s.station; None => "" }),
     @sf.t("web-pages.drive.title"),
     [body],
-    n.back,
-    back?=n.frame.back,
-    top=n.frame.top,
-    foot=n.frame.foot,
+    on_back=n.back,
+    frame=n.frame,
     lead=name,
     actions?=match st {
       Some(s) if manage && s.drive && s.roots.length() > 0 =>
         Some(fn() {
-          if @sf.icon_button(c, "more", key="files-roots/manage", label=@sf.t("web-pages.drive.manage")) {
+          if @sf.icon_button(c, "more", key="files-roots/manage", round=true, label=@sf.t("web-pages.drive.manage")) {
             manage_roots(src, ws, s.station)
           }
         })

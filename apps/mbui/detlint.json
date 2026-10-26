@@ -66,7 +66,6 @@
       "src/sfpages"
     ],
     "frames": [
-      "src/sfdesk/page_look.mbt",
       "src/sfdesk/settings_page.mbt"
     ],
     "one_look": [

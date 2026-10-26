@@ -71,14 +71,14 @@ fn profile_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, addres
   let o = field(s, "overview")
   let key = "profile/" + address + "/" + id
   guard o is Some(Object(_)) else {
-    look_page(c, core, frame, key, "Profile", [
+    @sf.page(c, on_back=core.pop, frame~, key, "Profile", [
       fn() { @sf.waiting(c, shape=Cards, note={ reading: true, text: @sf.t("web-pages.profiles.loading"), failing: [] }) },
     ])
   }
   match items(o, "profiles").search_by(fn(p) { text(Some(p), "id") == id }) {
     Some(i) => profile_view(c, core, here, frame, s, o, Some(items(o, "profiles")[i]))
     None =>
-      look_page(c, core, frame, key, "Profile", [
+      @sf.page(c, on_back=core.pop, frame~, key, "Profile", [
         fn() { @sf.page_note(c, @sf.t("web-pages.profiles.notFound", args=[("id", id)])) },
       ])
   }
@@ -147,7 +147,7 @@ fn profile_view(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, s : Js
     }
   }
   // its head says who it is: no title over it
-  look_page(c, core, frame, "profile/" + address + "/" + id, text(p, "name"), blocks, small=@sf.t("android-misc.bar.place.profiles"), head=fn() {
+  @sf.page(c, on_back=core.pop, frame~, "profile/" + address + "/" + id, text(p, "name"), blocks, small=@sf.t("android-misc.bar.place.profiles"), head=fn() {
     profile_head(c, core, here, address, p, entry)
   })
 }
@@ -1877,12 +1877,12 @@ fn pick_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, ad
   let key = "pick-models/" + address + "/" + id
   let title = @sf.t("web-pages.profiles.pickModels.title")
   guard o is Some(Object(_)) else {
-    look_page(c, core, frame, key, title, [
+    @sf.page(c, on_back=core.pop, frame~, key, title, [
       fn() { @sf.waiting(c, shape=Cards, note={ reading: true, text: @sf.t("web-pages.profiles.loading"), failing: [] }) },
     ])
   }
   guard items(o, "profiles").search_by(fn(p) { text(Some(p), "id") == id }) is Some(i) else {
-    look_page(c, core, frame, key, title, [
+    @sf.page(c, on_back=core.pop, frame~, key, title, [
       fn() { @sf.page_note(c, @sf.t("web-pages.profiles.notFound", args=[("id", id)])) },
     ])
   }
@@ -1937,7 +1937,7 @@ fn pick_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, ad
   if look == Narrow {
     blocks.insert(0, fn() { c.box(style=pf_pick_foot, buttons) |> ignore })
   }
-  look_page(c, core, frame, key,
+  @sf.page(c, on_back=core.pop, frame~, key,
     title,
     lead=@sf.t("web-pages.profiles.pickModels.lead", args=[("name", text(p, "name"))]),
     actions?=if look == Wide { Some(fn() { c.box(style=pf_pick_actions, buttons) |> ignore }) } else { None },
@@ -1956,7 +1956,7 @@ fn profile_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame,
   let key = "profile-models/" + address + "/" + id
   let title = @sf.t("web-pages.profiles.models")
   guard items(o, "profiles").search_by(fn(p) { text(Some(p), "id") == id }) is Some(i) else {
-    look_page(c, core, frame, key, title, [
+    @sf.page(c, on_back=core.pop, frame~, key, title, [
       fn() {
         if o is Some(Object(_)) {
           @sf.page_note(c, @sf.t("web-pages.profiles.notFound", args=[("id", id)]))
@@ -1968,7 +1968,7 @@ fn profile_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame,
   }
   let p = Some(items(o, "profiles")[i])
   let ticked = items(p, "models").length()
-  look_page(c, core, frame, key,
+  @sf.page(c, on_back=core.pop, frame~, key,
     title,
     lead=if ticked > 0 { @sf.t("android-settings.profile.pickModels.selected", args=[("n", ticked.to_string())]) } else { "" },
     // read again (its models as the provider lists them now), at its title's end

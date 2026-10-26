@@ -156,7 +156,7 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
   let blocks : Array[() -> Unit] = []
   if notify is None {
     blocks.push(fn() { waiting_cards(c) })
-    look_page(c, core, frame, "notify", @sf.t("web-pages.settings.nav.notifications"), blocks)
+    @sf.page(c, on_back=core.pop, frame~, "notify", @sf.t("web-pages.settings.nav.notifications"), blocks)
     return
   }
   let permission = text(notify, "permission")
@@ -242,7 +242,7 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
       |> ignore
     })
   })
-  look_page(c, core, frame, "notify", @sf.t("web-pages.settings.nav.notifications"), blocks)
+  @sf.page(c, on_back=core.pop, frame~, "notify", @sf.t("web-pages.settings.nav.notifications"), blocks)
 }
 
 ///|

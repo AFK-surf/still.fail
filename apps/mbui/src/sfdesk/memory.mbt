@@ -38,7 +38,7 @@ fn memories_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Un
       })
     },
   ]
-  look_page(c, core, frame, "memories", @sf.t("web-pages.settings.memory.title"), body, lead=@sf.t("android-misc.memory.note"))
+  @sf.page(c, on_back=core.pop, frame~, "memories", @sf.t("web-pages.settings.memory.title"), body, lead=@sf.t("android-misc.memory.note"))
 }
 
 ///|
@@ -55,7 +55,7 @@ fn memory_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address
       name = text(Some(s), "name")
     }
   }
-  look_page(c, core, frame, "memory/" + address, name, about=@sf.t("web-pages.settings.memory.lead"), [
+  @sf.page(c, on_back=core.pop, frame~, "memory/" + address, name, about=@sf.t("web-pages.settings.memory.lead"), [
     fn() { memory_view(c, core, look, address, station_names(stations)) },
   ])
 }

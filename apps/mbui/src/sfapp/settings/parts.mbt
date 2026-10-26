@@ -312,11 +312,6 @@ fn top_room() -> Double {
 }
 
 ///|
-/// The actions of the place's top page just drawn under the app's top bar, which that bar holds at its end
-/// (PlacePage.kt: TopGlassBar's `actions`, 用量's days, 连接's filter) and takes from here once drawn.
-pub let root_bar_actions : Ref[(() -> Unit)?] = Ref(None)
-
-///|
 /// What the back of a pushed place's page says (PlacePage.kt underLabel): the chats or settings, else `or_else`.
 fn under_label(core : Core, or_else : String) -> String {
   match (core.under)() {
@@ -375,7 +370,7 @@ fn place_page(
     match (actions, primary) {
       // (at the root its actions in the app's top bar over it; in the wide frame, which has no such bar, at the end of
       // a row of their own over what it shows; its primary one is the bar's notch's)
-      (Some(a), _) if under_bar => root_bar_actions.val = Some(a)
+      (Some(a), _) if under_bar => @sf.named_actions.val = Some(a)
       (Some(a), _) if at_root.val => c.box(style=root_actions, fn() { a() }) |> ignore
       (None, _) if at_root.val => ()
       (None, None) => nav_bar(c, core, under_label(core, back), title)
