@@ -76,12 +76,14 @@ export type Call =
   /// `keep` with the file's `size` as its message says: what is read kept on the device, with its chat, and what is
   /// kept answered (drive-kept.ts `chat`); without a size, nothing kept.
   | { kind: "stationFile"; station: string; key: string; name: string; thumb: boolean; progress: boolean; keep: number | null }
-  | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number; progress: boolean; stream: boolean; keep: number | null }
+  /// `quiet`: the core's own (fill.ts), in the background: not waited on, and nothing a viewer let go.
+  | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number; progress: boolean; stream: boolean; keep: number | null; quiet?: boolean }
   | { kind: "stationPoster"; station: string; key: string; name: string }
   | { kind: "fileOpen"; station: string; key: string; path: string }
   /// `keep`: what is read kept on the device and what is kept answered (drive-kept.ts), the file as its folder said it
   /// is (`mtime`, `size`; neither said, nothing kept).
-  | { kind: "driveRead"; station: string; root: string; path: string; offset: number; length: number; progress: boolean; stream: boolean; keep: KeepKind | null; mtime: number | null; size: number | null }
+  /// `quiet`: as a chat's file's part's.
+  | { kind: "driveRead"; station: string; root: string; path: string; offset: number; length: number; progress: boolean; stream: boolean; keep: KeepKind | null; mtime: number | null; size: number | null; quiet?: boolean }
   | { kind: "driveUploadPart"; station: string; root: string; path: string; id: string; offset: number; total: number; replace: boolean; bytes: Uint8Array }
   | { kind: "driveRefresh"; station: string; root: string; path: string }
   /// A login's page to open (docs/remote-login.md): a loopback login's callback listened for here first, unless the

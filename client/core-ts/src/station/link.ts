@@ -372,6 +372,7 @@ export class Links {
     if (state === "online" && was !== "online") {
       this.#core.viewCalls?.stationBack(address);
       this.#core.downloads?.stationBack(address);
+      this.#core.fill?.stationBack(address);
     }
   }
 

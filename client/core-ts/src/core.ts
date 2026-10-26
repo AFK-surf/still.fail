@@ -28,7 +28,7 @@ import * as prefs from "./prefs.ts";
 import { Beside, parseClientMessage, type ClientId, type ClientMessage, type CoreMessage, type RequestId } from "./protocol.ts";
 import { laterSleep, Runner } from "./runtime.ts";
 import { stationId } from "./station/addr.ts";
-import { Status } from "./status.ts";
+import { Status, Waited } from "./status.ts";
 import { Store } from "./store.ts";
 import { CloudSync } from "./sync/cloud.ts";
 import { Priority, Scheduler } from "./sync/scheduler.ts";
@@ -67,6 +67,7 @@ import * as vaultCalls from "./views/vault.ts";
 import * as transferCalls from "./views/transfers.ts";
 import * as browseCalls from "./views/browse.ts";
 import * as downloads from "./views/downloads.ts";
+import * as fill from "./fill.ts";
 import { get, isObject } from "./util.ts";
 import { type CoreModule, type ModuleCall, installModules } from "./module.ts";
 
@@ -112,6 +113,8 @@ export class Inner {
   workspaces!: Workspaces;
   /// What the device waits on: still.fail cloud, its sockets, the relay for no station.
   status!: Status;
+  /// The requests waited on now, every workspace's and the device's (status.ts).
+  waited!: Waited;
   /// Files of the stations' drives kept on this device once read, for an app that asks (drive-kept.ts).
   driveKept!: DriveKept;
   wakes!: Wakes;
@@ -133,6 +136,8 @@ export class Inner {
   viewCalls!: ViewCalls;
   /// This device's downloads of chats' files (views/downloads.ts).
   downloads!: downloads.Downloads;
+  /// What was opened and let go, brought whole after everything else (fill.ts).
+  fill!: fill.Fill;
   router!: Router;
   /// The calls of the app's modules, by full name (module.ts), and the modules' names (their topics are `<name>.…`).
   moduleCalls = new Map<string, ModuleCall<any>>();
@@ -172,10 +177,11 @@ export class Core {
       brand.setTestChannel(inner.host.testChannel());
       fonts.setOrigin(inner.host.cloudOrigin());
       inner.tracer = new Tracer(inner.host, inner.runner, options.sample ?? SAMPLE);
-      inner.status = new Status(inner.host, inner.runner);
+      inner.waited = new Waited(() => inner.host.nowMs());
+      inner.status = new Status(inner.host, inner.runner, inner.waited);
       inner.provider = yield* (options.account ?? stillfailAccountProvider)({ host: inner.host, tracer: inner.tracer, status: inner.status });
       inner.accounts = inner.provider.accounts;
-      inner.workspaces = new Workspaces(inner.host, inner.runner);
+      inner.workspaces = new Workspaces(inner.host, inner.runner, inner.waited);
       inner.store = new Store(inner.host, inner.runner);
       const store = inner.store;
       // Each signed-in account's database, opened before any network: the first view is answered from it.
@@ -247,6 +253,7 @@ export class Core {
       transferCalls.install(inner);
       browseCalls.install(inner);
       downloads.install(inner);
+      fill.install(inner);
       inner.attention = new Attention(inner, yield* Attend.load(inner.host));
       inner.router.owners.push(inner.attention);
       inner.router.after = (topic, value) => inner.attention.attended(topic, value);
@@ -333,6 +340,7 @@ export class Core {
       // What was on its way when the core last stopped goes on.
       inner.viewCalls.resume();
       inner.downloads.resume();
+      inner.fill.start();
       // What changed in still.fail: read now, and again each time an account's events socket opens.
       inner.scheduler.enqueue("cloud", "changelog", Priority.background, inner.changelog.read());
       inner.cloudSync.onOpen = () => inner.scheduler.enqueue("cloud", "changelog", Priority.background, inner.changelog.read());

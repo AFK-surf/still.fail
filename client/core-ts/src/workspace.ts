@@ -4,7 +4,7 @@
 // is kept by account.
 import type { Host } from "./host.ts";
 import type { Runner } from "./runtime.ts";
-import { Status, type NameOf } from "./status.ts";
+import { Status, type NameOf, type Waited } from "./status.ts";
 
 /// The workspace a station's address (`"<workspace>/<station>"`) is in.
 export function ofAddress(address: string): string {
@@ -43,13 +43,16 @@ export class Workspace {
 export class Workspaces {
   readonly #host: Host;
   readonly #runner: Runner;
+  readonly #waited: Waited | null;
   readonly #all = new Map<string, Workspace>();
   #statusChanged: ((id: string) => void) | null = null;
   #names: NameOf | null = null;
 
-  constructor(host: Host, runner: Runner) {
+  /// `waited`: the device's count every workspace's requests are counted in.
+  constructor(host: Host, runner: Runner, waited: Waited | null = null) {
     this.#host = host;
     this.#runner = runner;
+    this.#waited = waited;
   }
 
   /// What a workspace's status changing calls, and the names its status says.
@@ -73,7 +76,7 @@ export class Workspaces {
   of(id: string): Workspace {
     let w = this.#all.get(id);
     if (w) return w;
-    w = new Workspace(id, new Status(this.#host, this.#runner));
+    w = new Workspace(id, new Status(this.#host, this.#runner, this.#waited));
     this.#wire(w);
     this.#all.set(id, w);
     return w;

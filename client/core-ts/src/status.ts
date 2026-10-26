@@ -2,7 +2,7 @@
 // stations and to still.fail cloud, connections being opened, still.fail cloud's events sockets that are down, and how
 // fast bytes come in. Only what has taken a while (SLOW_MS) or is down is worth a word. Each workspace has its own
 // waits; the device's are apart. While anything is waited on, the topic is computed again each second.
-import { Effect } from "effect";
+import { Deferred, Effect } from "effect";
 import * as brand from "./brand.ts";
 import { said } from "./format.ts";
 import type { Host } from "./host.ts";
@@ -36,6 +36,60 @@ export type Take = "all" | { for: string[] };
 type Wait = { place: Place; what: string; connecting: boolean; since: number; bytes: number };
 type Down = { since: number; retryAt: number; message: string; tries: number };
 
+/// The requests waited on now across all of the device's waits, every workspace's (not connections being opened): what
+/// is brought only while nothing else is (fill.ts) yields to them.
+export class Waited {
+  readonly #now: () => number;
+  #n = 0;
+  /// When the last ended (none yet: long ago).
+  #endedAt = Number.NEGATIVE_INFINITY;
+  #begun: Deferred.Deferred<void> | null = null;
+  #ended: Deferred.Deferred<void> | null = null;
+
+  constructor(now: () => number) {
+    this.#now = now;
+  }
+
+  /// How many are under way.
+  get count(): number {
+    return this.#n;
+  }
+
+  begin(): void {
+    this.#n++;
+    const begun = this.#begun;
+    this.#begun = null;
+    if (begun) Deferred.doneUnsafe(begun, Effect.void);
+  }
+
+  end(): void {
+    this.#n--;
+    if (this.#n > 0) return;
+    this.#endedAt = this.#now();
+    const ended = this.#ended;
+    this.#ended = null;
+    if (ended) Deferred.doneUnsafe(ended, Effect.void);
+  }
+
+  /// Once the next one begins.
+  begun(): Effect.Effect<void> {
+    return Effect.suspend(() => Deferred.await((this.#begun ??= Deferred.makeUnsafe<void>())));
+  }
+
+  /// Once none is under way and none has been for `ms`.
+  idle(ms: number): Effect.Effect<void> {
+    const self = this;
+    return Effect.gen(function* () {
+      for (;;) {
+        if (self.#n > 0) yield* Deferred.await((self.#ended ??= Deferred.makeUnsafe<void>()));
+        const left = self.#endedAt + ms - self.#now();
+        if (self.#n === 0 && left <= 0) return;
+        if (self.#n === 0) yield* Effect.raceFirst(Effect.sleep(left), self.begun());
+      }
+    });
+  }
+}
+
 /// A wait under way; `end` it (it ends once, whichever way).
 export class Waiting {
   readonly #status: Status;
@@ -59,6 +113,7 @@ export class Waiting {
 export class Status {
   readonly #host: Host;
   readonly #runner: Runner;
+  readonly #waited: Waited | null;
   #next = 0;
   readonly #waits = new Map<number, Wait>();
   #received: [number, number][] = [];
@@ -71,9 +126,11 @@ export class Status {
   /// Added to the host's clock: tests move time on.
   skew = 0;
 
-  constructor(host: Host, runner: Runner) {
+  /// `waited`: the device's count its requests are counted in.
+  constructor(host: Host, runner: Runner, waited: Waited | null = null) {
     this.#host = host;
     this.#runner = runner;
+    this.#waited = waited;
   }
 
   onChange(changed: () => void): void {
@@ -107,6 +164,7 @@ export class Status {
   begin(place: Place, what: string, connecting: boolean): Waiting {
     const id = ++this.#next;
     this.#waits.set(id, { place, what, connecting, since: this.now(), bytes: 0 });
+    if (!connecting) this.#waited?.begin();
     this.#tick();
     return new Waiting(this, id);
   }
@@ -125,6 +183,7 @@ export class Status {
   end(id: number): void {
     const w = this.#waits.get(id);
     this.#waits.delete(id);
+    if (w && !w.connecting) this.#waited?.end();
     if (w && this.now() - w.since >= SLOW_MS) this.changed();
   }
 
