@@ -596,8 +596,8 @@ fn fix_preview() -> Json {
   {
     "upto": 9,
     "title": "部署登录页",
-    // as the chat's page draws them: the viewer's own, an agent's words and its request about a vault item (a card),
-    // someone else's with its files (where the preview's `files` have them)
+    // as the chat's page draws them: the viewer's own, an agent's words and its request about a vault item (allowed:
+    // how it ended), someone else's with its files (where the preview's `files` have them)
     "list": [
       msg(4, "person", by_person("林"), "帮我把登录页部署到预发，token 是 [已隐藏]", "", {
         "mine": true,
@@ -614,6 +614,9 @@ fn fix_preview() -> Json {
             "mode": "proxy",
             "hosts": ["api.axiom.co"],
             "command": "curl -s https://api.axiom.co/v1/datasets/_apl -H \"Authorization: Bearer $AXIOM_TOKEN\"",
+            // (allowed since: the chat says how it ended)
+            "status": "granted",
+            "scope": "chat",
           },
         },
         "time": ago("9 分钟前"),

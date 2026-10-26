@@ -383,12 +383,16 @@ let publish_column : @ui.Style = @ui.style(w=Full, max_w=Fixed(publish_page_w))
 // kept across runs: a value (no field of it changes)
 let publish_paper : @ui.Style = @ui.style(
   w=Full,
-  pl=@sf.room_of(32.0 + @sf.message_avatar_reach),
+  pl=@sf.room_of(publish_paper_in + @sf.message_avatar_reach),
   pr=S8,
   py=S8,
   gap=S4,
   bg=Bg,
 )
+
+///|
+/// How far in from its sides what it holds is (S8's 32).
+let publish_paper_in : Double = 32.0
 
 ///|
 /// Narrow, its words as far in as the chat's list has them there (16: chat_list.mbt row_side_narrow).

@@ -1,7 +1,7 @@
 // A chat shared as a picture for the stories (../src/Publish.tsx): the demo chat's info offering 分享图片, and what the
 // picture would hold as the core says it (`chat.publishPreview`, client/core-ts/src/views/publish.ts): the chat's own
 // messages as its list draws them (the visitor's in their bubble, an agent's words, its request about a vault item as
-// its card, someone's files to tick), what was hidden in one said under it.
+// it ended, someone's files to tick), what was hidden in one said under it.
 import type { DemoExtension } from "../src/demo/mount.tsx";
 import type { ChatMessage, ChatView, PublishFile, PublishMessage, PublishPreview } from "../src/core/shapes.ts";
 import { LIN, SAFARI_KEY, stamp } from "../src/demo/fixtures.ts";
@@ -26,7 +26,7 @@ function preview(): PublishPreview {
     said(6, 10, { authorKind: "agent", author: AGENT.agent, by: AGENT, text: deployed, md: markdown(deployed) }),
     said(7, 9, {
       authorKind: "agent", author: AGENT.agent, by: AGENT, text: "申请使用「Axiom 查询 token」：查登录页的错误日志",
-      card: { type: "options", vault: "r-axiom", vaultAsk: { name: "Axiom 查询 token", reason: "查登录页的错误日志", mode: "proxy", hosts: ["api.axiom.co"], command: "curl -s https://api.axiom.co/v1/datasets/_apl -H \"Authorization: Bearer $AXIOM_TOKEN\"" } },
+      card: { type: "options", vault: "r-axiom", vaultAsk: { name: "Axiom 查询 token", reason: "查登录页的错误日志", mode: "proxy", hosts: ["api.axiom.co"], command: "curl -s https://api.axiom.co/v1/datasets/_apl -H \"Authorization: Bearer $AXIOM_TOKEN\"", status: "granted", scope: "chat" } },
     }),
     // (by their picture, as the core gives a member's)
     said(9, 8, { authorKind: "person", author: LIN.id, by: { name: LIN.name, ...(LIN.shown.picture ? { picture: LIN.shown.picture } : {}) }, text: "截图和慢查询记录都附上了", attachments: sent }),

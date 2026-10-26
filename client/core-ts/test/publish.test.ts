@@ -201,8 +201,10 @@ test("a_previews_messages_are_the_chats_as_its_page_draws_them_cards_and_the_vie
       { kind: "message", n: 4, at: 4, ts: "t4", thread: 7, authorKind: "agent", author: "s-1", authorModel: "claude-opus-4-1", authorRuntime: "claude", text: "申请使用「Axiom」", attachments: [], quotes: [],
         card: { type: "options", options: [], vault: { request: "r1", name: "Axiom", mode: "proxy", hosts: ["api.axiom.co"], command: "curl -H \"Authorization: Bearer [已隐藏]\"" } } },
       { kind: "message", n: 5, at: 5, ts: "t5", thread: 7, authorKind: "agent", author: "s-1", text: "**好了**", attachments: [], quotes: [] },
-      // An edit of the agent's words since: as the chat shows it.
+      // An edit of the agent's words since, and its request's card restated with how it ended: as the chat shows them.
       { kind: "edit", n: 6, target: 5, at: 6, thread: 7, authorKind: "agent", author: "s-1", text: "**都好了**", attachments: [], quotes: [] },
+      { kind: "edit", n: 7, target: 4, at: 7, thread: 7, authorKind: "agent", author: "s-1", text: "申请使用「Axiom」", attachments: [], quotes: [],
+        card: { type: "options", options: [], vault: { request: "r1", name: "Axiom", mode: "proxy", hosts: ["api.axiom.co"], command: "curl -H \"Authorization: Bearer [已隐藏]\"", outcome: { status: "granted", scope: "chat" } } } },
     ];
     return {
       upto: 5, title: "部署",
@@ -228,6 +230,7 @@ test("a_previews_messages_are_the_chats_as_its_page_draws_them_cards_and_the_vie
     [5, false, "agent", null, "**都好了**"],
   ]);
   assert.ok(list[2].md, "read as Markdown");
+  assert.deepEqual([list[1].card.vaultAsk.status, list[1].card.vaultAsk.scope], ["granted", "chat"], "how it ended, as the chat says it");
   assert.ok(list[0].time.createdAt.ago, "its time in words");
   assert.equal(answered.hidden, 2);
 

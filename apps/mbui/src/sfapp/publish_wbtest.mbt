@@ -73,9 +73,9 @@ test "分享图片: the page shows the picture as it would be, 取消 and 保存
   assert_true(t.find("截图、日志和构建缓存都附上了") is Some(_))
   assert_true(t.find("已隐藏 1 处") is Some(_))
   // its messages as the chat's list draws them: the viewer's own at its end, in its bubble; an agent's request about a
-  // vault item as its card (what it asks for, not the words its post has for where there is no card)
+  // vault item as the chat says it (allowed: how it ended), not the words its post has for where there is no card
   assert_true(picture_mine_at_end(t), msg=t.words().map(fn(w) { w.0 }).join("|"))
-  assert_true(t.find("Axiom 查询 token") is Some(_))
+  assert_true(t.find("已允许使用「Axiom 查询 token」") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("申请使用「Axiom 查询 token」：查登录页的错误日志") is None)
   // the log and the cache left out: tapped, each is unticked (nothing opens); brought up from under the screen's foot
   // (a file's card says its name's stem and its extension apart, as the chat's)
