@@ -1175,9 +1175,10 @@ let new_offer_box : @ui.Style = @ui.css("w=Full pt=S2 align=ACenter")
 let new_offer_under : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
-/// spentNotice: the amber's 12% under 13's words, 8 by 12 in, 10 round, 8 under it.
+/// spentNotice: the amber's 12% under 13's words, 8 by 12 in, the 常用 chips' corner (Xl: the web's rField, 12), 8 under
+/// it. Lg, 8, the scale's next step down, drew the bar tighter than the chips right under it.
 // kept across runs: a value (no field of it changes)
-let new_notice_box : @ui.Style = @ui.css("px=S3 py=S2 mb=S2 radius=Lg bg=A(Warn,O10)")
+let new_notice_box : @ui.Style = @ui.css("px=S3 py=S2 mb=S2 radius=Xl bg=A(Warn,O10)")
 
 ///|
 // kept across runs: a value (no field of it changes)
