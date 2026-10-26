@@ -1,11 +1,11 @@
-// The workspace's page, one in every frame (src/sfdesk workspace.mbt): at a width of each tier, with a finger and with
-// a mouse; its people, its relays, leaving it asked first.
+// The workspace's page (workspace_page.mbt) alone, at each width, with a finger and with a mouse: its people, its
+// relays, leaving it asked first; a person pressed on a phone.
 
 ///|
 test "the workspace, at each width and with either hand: its name, its people and those waiting, leaving it asked first" {
-  for case in one_page_cases {
-    let (w, platform, regular, _) = case
-    let t = one_page_tester(@settings.Route::Workspace, w, platform~, regular~)
+  for case in page_cases {
+    let (w, platform) = case
+    let t = setting_tester(Workspace, w, platform~)
     let at = "\{w} platform \{platform}"
     assert_true(t.find("星火工作室") is Some(_), msg=at)
     assert_true(t.find("lin@example.com") is Some(_), msg=at)
@@ -15,7 +15,7 @@ test "the workspace, at each width and with either hand: its name, its people an
 
 ///|
 test "the workspace on a phone: a person pressed, what can be done about them in a sheet; moving them out asked first" {
-  let t = one_page_tester(@settings.Route::Workspace, 390.0, platform=2)
+  let t = setting_tester(Workspace, 390.0, platform=2)
   assert_false(@sf.presenting())
   t.tap_text("ana@example.com")
   t.frame()

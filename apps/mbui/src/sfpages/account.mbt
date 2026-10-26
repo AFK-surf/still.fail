@@ -7,7 +7,7 @@
 
 ///|
 /// 账号 (AccountSettings, MeScreen).
-fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
+pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let name = if here.person != "" { here.person } else { here.email }
   let how = if here.sub.has_prefix("em-") || here.sub.has_prefix("pw-") {
@@ -140,7 +140,7 @@ fn acc_devices(c : @ui.Ctx, core : Core, look : Look, here : Here) -> Unit {
       let id = text(dv, "id")
       let current = flag(dv, "current")
       // its name, 当前 or 退出 on its first line; when it signed in and until when under them, a line of its own
-      c.box(style=if narrow { narrow_said_row } else { desk_list_row }, fn() {
+      c.box(style=if narrow { @sf.pg_said_row } else { desk_list_row }, fn() {
         @sf.row_lines(c, spaced=true, fn() {
           c.box(style=desk_named.then(acc_device_head), fn() {
             c.text(
@@ -196,9 +196,9 @@ let acc_picture : Double = @sf.identity_mark
 
 ///|
 // kept across runs: a value (no field of it changes)
-let acc_delete_words : @ui.TextStyle = @sf.body.then(@sf.bad)
+pub let acc_delete_words : @ui.TextStyle = @sf.body.then(@sf.bad)
 
 ///|
 /// (a narrow page's foot: what takes something away, 16 over it)
 // kept across runs: a value (no field of it changes)
-let acc_narrow_foot : @ui.Style = @ui.css("w=Full pt=S4")
+pub let acc_narrow_foot : @ui.Style = @ui.css("w=Full pt=S4")

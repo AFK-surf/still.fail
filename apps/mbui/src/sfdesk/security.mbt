@@ -336,11 +336,11 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
           |> ignore
         // at the foot, in red, on a card of its own (Security.tsx's mobile On)
         Narrow =>
-          c.box(style=acc_narrow_foot, fn() {
+          c.box(style=@sfpages.acc_narrow_foot, fn() {
             @sf.group(c, fn() {
               let id = c.id("lock-off")
               let b = c.box(style=narrow_row, id=if off { 0 } else { id }, fn() {
-                c.text(@sf.t("web-pages.security.turnOff"), style=acc_delete_words) |> ignore
+                c.text(@sf.t("web-pages.security.turnOff"), style=@sfpages.acc_delete_words) |> ignore
                 if off {
                   @settings.spinner(c)
                 }

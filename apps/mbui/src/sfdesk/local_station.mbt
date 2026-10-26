@@ -112,7 +112,7 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
       if c.clicked(mid) {
         local_menu.val = !open
       }
-      let b = c.box(style=ls_more, id=mid, fn() { @sf.icon(c, "more", size=ws_more_icon, color=t.p.muted) |> ignore })
+      let b = c.box(style=ls_more, id=mid, fn() { @sf.icon(c, "more", size=@sfpages.ws_more_icon, color=t.p.muted) |> ignore })
       c.semantics(b, Button, id=mid, label=@sf.t("web-main.menu.more"), expanded=open)
       let entries : Array[@kit.Entry] = []
       if running {

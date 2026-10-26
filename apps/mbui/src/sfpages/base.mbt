@@ -185,6 +185,17 @@ pub fn dmin(a : Double, b : Double) -> Double {
 ///|
 using @settings {
   binding_of,
+  ask,
+  avatar,
+  confirm,
+  doing_mark,
+  failed_of,
+  open_add_people,
+  open_mark_pick,
+  role_label,
+  stamp,
+  workspace_view,
+  you,
   builtin_open,
   failing_of,
   memory_chevron,
