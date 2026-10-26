@@ -175,21 +175,11 @@ fn outside_came() -> Unit {
 let parts_on : Ref[Bool] = Ref(true)
 
 ///|
-/// Whether a list's rows are kept too (kept_rows.mbt): not on a host's frames, until what a row's build and paint say
-/// of the frame is kept for it all in one place (a frame's record taken and given again by its range, as GPUI's
-/// `reuse_paint`), not each registry by hand (the user, 2026-10-26: what it left out, a motion's place, a box's size,
-/// moved what was drawn); a Tester keeping parts keeps them, so what keeps them stays held to drawing what building
-/// does.
-// kept across runs: set by each Tester (keep_parts)
-let rows_kept_on : Ref[Bool] = Ref(false)
-
-///|
 /// Parts kept as a host keeps them (Ctx::kept_part), from now on, or not (every frame built whole: a Tester's own); a
-/// list's rows with them (rows_kept_on).
+/// list's rows with them (kept_rows.mbt).
 pub fn Tester::keep_parts(self : Tester, on : Bool) -> Unit {
   ignore(self)
   parts_on.val = on
-  rows_kept_on.val = on
 }
 
 ///|

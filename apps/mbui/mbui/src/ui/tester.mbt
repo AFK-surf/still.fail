@@ -340,7 +340,6 @@ pub fn Tester::new(
   // (every frame built whole: what a test reads of a frame's nodes reads all of it; a test of the parts kept says so,
   // Tester::keep_parts)
   parts_on.val = false
-  rows_kept_on.val = false
   drawn_again_on.val = true
   said_log.on = false
   said_log.built.reset()
