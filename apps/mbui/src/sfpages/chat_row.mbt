@@ -269,7 +269,7 @@ pub fn chat_row(
             match (item.offline, item.reconnecting) {
               (Some(why), _) | (None, Some(why)) => {
                 let b = c.box(style=kind_slot, id=away, fn() {
-                  @sf.icon(c, "unplug", size=kind_mark, color=t.p.subtle) |> ignore
+                  @sf.icon(c, "unplug", size=kind_glyph, color=t.p.subtle) |> ignore
                 })
                 c.semantics(b, Image, id=away, label=why)
                 @sf.tip(c, "row/away-tip/" + key, away, why)
@@ -286,7 +286,7 @@ pub fn chat_row(
             // the same column at every row's end whatever marks come before it
             if @sf.has_station_mark(item.station_emoji, item.station_icon) && !renaming {
               let b = c.box(style=kind_slot, id=kind, fn() {
-                @sf.station_mark(c, item.station_emoji, item.station_icon, kind_mark, if offline {
+                @sf.station_mark(c, item.station_emoji, item.station_icon, kind_mark_of(item.station_icon), if offline {
                   t.p.subtle
                 } else {
                   t.p.muted
@@ -445,6 +445,23 @@ pub let kind_slot : @ui.Style = @ui.css("w=S4 align=ACenter")
 
 ///|
 pub let kind_mark : Double = 12.0
+
+///|
+/// The size a station's mark `icon` is drawn at in that column: a glyph (`glyph:`, and the line icons such as
+/// unplugged) is drawn in a 24 grid with room of its own round it (2.5 a side), so at the column's 16 its lines span
+/// 12.7, as wide as a logo, an emoji or a picture filling `kind_mark`; drawn at 12 it read smaller than the marks
+/// under it and off their line.
+pub fn kind_mark_of(icon : String) -> Double {
+  if icon.has_prefix("glyph:") {
+    kind_glyph
+  } else {
+    kind_mark
+  }
+}
+
+///|
+/// A line icon in that column (kind_mark_of): the column's width.
+let kind_glyph : Double = 16.0
 
 ///|
 /// A row's icons (16).
