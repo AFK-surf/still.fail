@@ -470,3 +470,36 @@ test "a list's rows read out as they are dragged and flung: kept, read out as bu
     }
   }
 }
+
+///|
+test "a list's row drawn again keeps what its build read of the layout: built again, it reads it at once" {
+  let mark = @signals.signal(0)
+  let read : Array[Bool] = []
+  let view = fn(c : Ctx) {
+    c.list("reads", 30, 50.0, fn(i) {
+      let words = c.id("words")
+      if i == 3 {
+        // (what it shows sized by what its words took as laid out: none the first frame)
+        let laid = c.laid_size(words)
+        read.push(laid is Some(_))
+        ignore(mark.get())
+      }
+      c.box(h=Px(50.0), padx=10.0, dir=Row, fn() {
+        c.box(id=words, fn() { c.text("row \{i}", size=12.0) |> ignore }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+  let t = Tester::new(view, w=320.0, h=420.0, platform=2)
+  t.keep_parts(true)
+  t.draw()
+  t.frame()
+  t.frame()
+  t.frame()
+  assert_true(t.rows_kept() > 0, msg="\{t.rows_kept()}")
+  read.clear()
+  mark.set(1)
+  t.frame()
+  assert_eq(read, [true])
+}

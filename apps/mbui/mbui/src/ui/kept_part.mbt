@@ -77,6 +77,26 @@ priv struct KeptPart {
   mut lit : Bool
   /// a list's row kept (kept_rows.mbt): what more it keeps; None a part's
   mut row : RowKept?
+  /// what its build read of the layout (readback.mbt), kept for it while it is drawn again (KeptReads)
+  reads : KeptReads
+}
+
+///|
+/// What a part's or a row's build read of the layout (Ctx::laid_rect, laid_size, shown_across, left_out), by the box's
+/// id, and how its build's frame laid that out: while it is drawn again (its build not run, its boxes not laid out), the
+/// layout keeps them as they were, a row's moved with it, so that its next build reads what its last read, not a box
+/// let go of (none: laid out by a guess, then again once read back, the frame between drawn from the guess).
+priv struct KeptReads {
+  laid : Map[Int, (Double, Double, Double, Double)?]
+  shown : Map[Int, (String, (Double, Double)?)]
+  left : Map[Int, Bool]
+}
+
+///|
+fn KeptReads::clear(self : KeptReads) -> Unit {
+  self.laid.clear()
+  self.shown.clear()
+  self.left.clear()
 }
 
 ///|
@@ -354,6 +374,7 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
 /// changes or it is invalidated).
 fn kept_new(id : Int) -> KeptPart {
   let body_now : Ref[() -> Unit] = Ref(fn() {  })
+  let reads : KeptReads = { laid: {}, shown: {}, left: {} }
   {
     id,
     insts: FixedArray::make(0, 0.0),
@@ -365,6 +386,7 @@ fn kept_new(id : Int) -> KeptPart {
     tracker: @signals.computed(fn(_) {
       let c = g()
       let (layers, back) = (c.layers.length(), c.back_next)
+      reads.clear()
       (body_now.val)()
       // (a layer it opened, back it took: laid over the window and taken anew each frame, apart from what it draws)
       if c.layers.length() != layers || !physical_equal(c.back_next, back) {
@@ -398,6 +420,7 @@ fn kept_new(id : Int) -> KeptPart {
     from: (0, 0, 0),
     lit: false,
     row: None,
+    reads,
   }
 }
 
@@ -912,4 +935,136 @@ fn Ctx::part_targets_again(self : Ctx, st : KeptPart) -> Unit {
   for t in st.sels {
     selectable_painted(t.base, t.at, t.lay, t.text, t.ox, t.oy, t.x0, t.y0, t.x1, t.y1)
   }
+}
+
+///|
+/// The kept parts and rows what is built now is in: a row's own, and the part it is in (what a part holds is its rows'
+/// too, drawn again with it).
+fn kept_reading() -> Array[KeptReads] {
+  let out = []
+  if part_now.row != 0 {
+    match kept_rows.get(part_now.row) {
+      Some(st) => out.push(st.reads)
+      None => ()
+    }
+  }
+  if part_now.part != 0 {
+    match kept_parts.get(part_now.part) {
+      Some(st) => out.push(st.reads)
+      None => ()
+    }
+  }
+  out
+}
+
+///|
+/// Box `id` read as laid out (Ctx::laid_rect, laid_size) by what is built now.
+fn kept_read_laid(id : Int) -> Unit {
+  for r in kept_reading() {
+    if !r.laid.contains(id) {
+      r.laid[id] = None
+    }
+  }
+}
+
+///|
+/// What box `id` shows across read (Ctx::shown_across, by the name `but`) by what is built now.
+fn kept_read_shown(id : Int, but : String) -> Unit {
+  for r in kept_reading() {
+    if !r.shown.contains(id) {
+      r.shown[id] = (but, None)
+    }
+  }
+}
+
+///|
+/// Whether box `id` was left out read (Ctx::left_out) by what is built now.
+fn kept_read_left(id : Int) -> Unit {
+  for r in kept_reading() {
+    if !r.left.contains(id) {
+      r.left[id] = false
+    }
+  }
+}
+
+///|
+/// Each part and row kept that this frame shows: its reads, how far down from where its build laid them out it is
+/// (a row drawn again: its dy), and whether it was drawn again (its build not run) or built.
+fn Ctx::kept_shown(self : Ctx, f : (KeptReads, Double, Bool) -> Unit) -> Unit {
+  for _, st in kept_parts {
+    if st.shown == self.frame_no {
+      f(st.reads, 0.0, st.again && st.built != self.frame_no)
+    }
+  }
+  for _, st in kept_rows {
+    match st.row {
+      Some(rk) if st.shown == self.frame_no => f(st.reads, rk.dy, rk.kept)
+      _ => ()
+    }
+  }
+}
+
+///|
+/// Before what was not read this frame is let go (reads_after_layout): what the builds of the parts and rows drawn
+/// again read, kept as their builds' frames laid it out, a row's moved with it.
+fn Ctx::kept_reads_again(self : Ctx) -> Unit {
+  self.kept_shown(fn(r, dy, again) {
+    if !again {
+      return
+    }
+    for id, rect in r.laid {
+      self.laid_watch[id] = self.frame_no
+      match rect {
+        Some((x, y, w, h)) => self.laid_rects[id] = (x, y + dy, w, h)
+        None => ()
+      }
+    }
+    for id, s in r.shown {
+      self.shown_watch[id] = (self.frame_no, s.0)
+      match s.1 {
+        Some(span) => self.shown_spans[id] = span
+        None => ()
+      }
+    }
+  })
+}
+
+///|
+/// Once what was read is laid out anew (reads_after_layout): how this frame laid out what the parts and rows built in
+/// it read, taken for them.
+fn Ctx::kept_reads_taken(self : Ctx) -> Unit {
+  self.kept_shown(fn(r, _, again) {
+    if again {
+      return
+    }
+    let laid = r.laid.keys().collect()
+    for id in laid {
+      r.laid[id] = self.laid_rects.get(id)
+    }
+    let shown = r.shown.keys().collect()
+    for id in shown {
+      match r.shown.get(id) {
+        Some((but, _)) => r.shown[id] = (but, self.shown_spans.get(id))
+        None => ()
+      }
+    }
+  })
+}
+
+///|
+/// As what rows left out is said anew (left_out_after_layout): what the parts and rows drawn again had left out kept
+/// left out; what those built in this frame read of it, taken for them.
+fn Ctx::kept_left(self : Ctx) -> Unit {
+  self.kept_shown(fn(r, _, again) {
+    let ids = r.left.keys().collect()
+    for id in ids {
+      if again {
+        if r.left.get(id) == Some(true) {
+          self.left_ids[id] = true
+        }
+      } else {
+        r.left[id] = self.left_ids.contains(id)
+      }
+    }
+  })
 }
