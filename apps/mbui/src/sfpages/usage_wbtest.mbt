@@ -135,3 +135,36 @@ test "usage: a finger slid across the days shows the day under it as it goes; th
   assert_eq(bars.filter(fn(r) { r.4 == @sf.usage_series(0) }).length(), 1)
   assert_eq(bars[0].4, @sf.usage_series(0))
 }
+
+///|
+test "用量, at each width and with either hand: the totals, a day's numbers, the lists; 30 天 picked" {
+  for case in page_cases {
+    let (w, platform) = case
+    let t = setting_tester(Usage, w, platform~)
+    let at = "\{w} platform \{platform}"
+    assert_true(t.find("$118") is Some(_), msg=at)
+    assert_true(t.find("今天") is Some(_), msg=at)
+    // the lists, the people's first (the web's): who spent what share
+    assert_true(t.find("68%") is Some(_), msg=at)
+    t.tap_text("30 天")
+    t.draw()
+    assert_true(t.find("$486") is Some(_), msg=at)
+    // 30 days: a date a week under the bars (the core's `tick`), today's among them
+    assert_true(t.find("10/23") is Some(_), msg=at)
+    assert_true(t.find("10/24") is None, msg=at)
+  }
+}
+
+///|
+test "价目表, at each width and with either hand: each station's card, its note, its models and rates; none said where it has none" {
+  for case in page_cases {
+    let (w, platform) = case
+    let t = setting_tester(UsagePrices(7), w, platform~)
+    let at = "\{w} platform \{platform}"
+    assert_true(t.find("价目表") is Some(_), msg=at)
+    assert_true(t.find("每百万 token 的美元价格") is Some(_), msg=at)
+    assert_true(t.find("Opus 5.5") is Some(_), msg=at)
+    assert_true(t.find("$25") is Some(_), msg=at)
+    assert_true(t.find("读不到它的价格表") is Some(_), msg=at)
+  }
+}

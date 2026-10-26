@@ -43,4 +43,5 @@ pub fn reset() -> Unit {
   changelog_reset()
   font_setting_reset()
   notify_page_reset()
+  usage_reset()
 }

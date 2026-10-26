@@ -1,27 +1,5 @@
-// 自动决策 (web/src/AutomaticDecisions.tsx; the narrow app's mobile/AutomaticDecisions.tsx): the decision points, each
-// a row to its page, one page in every frame (page_look.mbt); the desktop's completion rule's page, a row for each
-// station with its rule's controls at its end.
-
-///|
-/// 自动决策 (AutomaticDecisions; the narrow app's AutomaticDecisionsScreen): the point a decision is made at (the
-/// completion of a turn), what it does, how many stations have it on (the core's `settings`), a row to its page.
-fn decisions_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
-  let look = look_of(c)
-  let said = (core.topic)("settings", { "scope": Json::string(here.workspace) }).value
-  @sf.page(c, on_back=core.pop, frame~, "auto-decisions", @sf.t("web-pages.automaticDecisions.title"), about=@sf.t("web-pages.automaticDecisions.choosePoint"), [
-    fn() {
-      @sf.group(c, fn() {
-        if @sf.link_row(c, "auto-completion",
-            @sf.t("web-pages.automaticDecisions.completion"),
-            note=@sf.t(if look == Narrow { "web-pages.automaticDecisions.completionShort" } else { "web-pages.automaticDecisions.completionNote" }),
-            value=text(said, "decisionsText"),
-          ) {
-          (core.push)(AutoCompletion)
-        }
-      })
-    },
-  ])
-}
+// 自动决策's completion rule's page as the desktop has it (web/src/AutomaticDecisions.tsx): a row for each station with
+// its rule's controls at its end. 自动决策 itself is one page in every frame (src/sfpages automatic_decisions.mbt).
 
 ///|
 /// The completion rule's page (AutomaticDecisionCompletion): a row for each station, its rule's controls where it can

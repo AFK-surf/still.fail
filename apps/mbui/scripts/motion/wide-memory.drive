@@ -1,4 +1,4 @@
-# 记忆 on the desktop (sfdesk memory.mbt; the web's Memory.tsx MemoryView): MBUI_WIN=1280x800 over the made-up chat.
+# 记忆 on the desktop (sfpages memory.mbt; the web's Memory.tsx MemoryView): MBUI_WIN=1280x800 over the made-up chat.
 # ⌘, then 记忆: every station's memory on the page.
 timeout 30000
 until 发消息

@@ -37,7 +37,7 @@ let usage_days_choices : Array[Int] = [7, 30]
 ///|
 /// 用量 (UsageSettings): its head (what it counts by a mark beside its title), the days at its end and 分享卡片 once
 /// something was spent; the view once read, a wait till then, what went wrong.
-fn usage_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
+pub fn usage_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let days = usage_pick.days
   let topic = (core.topic)("usage", { "scope": str(here.workspace), "days": Json::number(days.to_double()) })
@@ -829,7 +829,7 @@ let ug_empty : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted
 /// its name, what its prices are, and a table of its models and their rates (as a message's table is drawn); none, said.
 /// The prices are each station's, through the core; no table of the app's own. One page in every frame (the narrow app's
 /// UsagePricesScreen too), laid out by its width (page_look.mbt): narrow, each station's card 12 from the page's sides.
-fn usage_prices_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, days : Int) -> Unit {
+pub fn usage_prices_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, days : Int) -> Unit {
   let look = look_of(c)
   let topic = (core.topic)("usage", { "scope": str(here.workspace), "days": Json::number(days.to_double()) })
   let v = topic.value
@@ -852,7 +852,7 @@ fn usage_prices_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, d
       let wait = field(v, "wait")
       // none yet while stations are still read (each failure said), else none to show
       if tables.length() == 0 && (flag(wait, "reading") || failing_of(wait).length() > 0) {
-        blocks.push(fn() { desk_waiting_rows(c, wait, count=2) })
+        blocks.push(fn() { waiting_rows(c, wait, count=2) })
       } else if tables.length() == 0 {
         blocks.push(fn() { up_said(c, look, @sf.t("web-main.usage.noPrices")) })
       }
@@ -906,7 +906,7 @@ let up_table_across : @ui.Style = @ui.css("w=Full").then(@sf.block_across).then(
 /// What a page says in place of what it lists (none: muted; narrow, 24 in as a page's note is).
 fn up_said(c : @ui.Ctx, look : Look, words : String) -> Unit {
   match look {
-    Narrow => c.box(style=narrow_lead_box, fn() { c.text(words, style=narrow_lead) |> ignore }) |> ignore
+    Narrow => c.box(style=@sf.pg_lead_box, fn() { c.text(words, style=@sf.pg_lead) |> ignore }) |> ignore
     Wide => c.text(words, style=desk_muted) |> ignore
   }
 }

@@ -185,6 +185,12 @@ pub fn dmin(a : Double, b : Double) -> Double {
 ///|
 using @settings {
   binding_of,
+  builtin_open,
+  failing_of,
+  memory_chevron,
+  memory_of,
+  sections_of,
+  skill_tag,
   build_version,
   error_text,
   has,

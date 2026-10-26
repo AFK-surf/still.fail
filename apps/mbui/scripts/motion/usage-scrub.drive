@@ -1,4 +1,4 @@
-# 用量's days slid across by a finger (sfdesk usage.mbt usage_chart): MBUI_FIXTURE=settings-usage, a phone's window.
+# 用量's days slid across by a finger (sfpages usage.mbt usage_chart): MBUI_FIXTURE=settings-usage, a phone's window.
 # From today leftwards across the week, let go on a day; from 10/2 rightwards; a date tapped; 30 天, slid across again.
 timeout 20000
 until $118
