@@ -98,6 +98,9 @@ struct ListState {
   // the layer it was built in (Ctx::overlay, 0 the page): its rows, built as it is laid out, are of it as what is built
   // beside the list is (the keys they read, the focus they take)
   mut layer : Int
+  // the part kept it was built in (Ctx::kept_part, 0 none): what its rows, built as it is laid out, ask of time is
+  // the part's
+  mut part : Int
 }
 
 ///|
@@ -1577,6 +1580,7 @@ pub fn Ctx::built_from_changed(self : Ctx, what : String, loc~ : SourceLoc) -> U
 /// between frames is.
 fn Ctx::owe_frame(self : Ctx) -> Unit {
   self.wants_frame = true
+  part_live()
   h_request_frame()
 }
 
@@ -1586,6 +1590,7 @@ fn Ctx::owe_frame(self : Ctx) -> Unit {
 /// (owe_start); building this one again would not take it.
 fn Ctx::owe_next(self : Ctx) -> Unit {
   self.wants_frame = true
+  part_live()
   h_request_frame()
 }
 
@@ -1593,6 +1598,7 @@ fn Ctx::owe_next(self : Ctx) -> Unit {
 #callsite(autofill(loc))
 pub fn Ctx::request_frame(self : Ctx, loc~ : SourceLoc) -> Unit {
   self.wants_frame = true
+  part_live()
   // asked between frames (a host's callback, a timer's): the frame's own asking (on_frame's end) is past, so the
   // host is told now, else nothing comes (the next frame's start clears wants_frame)
   if !in_frame.val {
@@ -1878,6 +1884,7 @@ pub fn Ctx::spring_rest(self : Ctx, key : String) -> Double {
 
 ///|
 fn Ctx::wake_at_time(self : Ctx, t : Double, later? : Bool = false) -> Unit {
+  part_wake(t, later)
   if self.wake_at < 0.0 || t < self.wake_at {
     self.wake_at = t
   }

@@ -436,6 +436,8 @@ pub fn Ctx::stream(
 ) -> Int {
   let i = self.image("", w~, h~, fit~, radius~, bg=0L, fade=false)
   stream_nodes[i] = (s, at)
+  // (its frames come as they are decoded: a part kept builds it each frame, kept_part.mbt)
+  part_live()
   i
 }
 

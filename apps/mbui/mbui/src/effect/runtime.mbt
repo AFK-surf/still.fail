@@ -172,7 +172,8 @@ pub struct Runtime {
   defects : Array[String]
   /// What the run said (`trace`), each line with its time.
   log : Array[String]
-  /// Task resumptions so far.
+  /// Task resumptions and timers fired so far: what the run did of its own (a frame begun after it moved on builds
+  /// what it left anew: mbui's still.mbt).
   mut steps : Int
   /// What it waits on from outside (outside.mbt): by ticket, what it is and since when.
   priv awaited : Map[Int, (String, Int64)]
@@ -587,6 +588,7 @@ fn Runtime::fire_until(self : Runtime, until : Int64) -> Unit {
       ignore(self.timers.pop())
       if t.live {
         t.live = false
+        self.steps += 1
         (t.fire)()
       } else {
         self.dead -= 1

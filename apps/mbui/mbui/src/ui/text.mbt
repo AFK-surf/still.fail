@@ -837,6 +837,7 @@ fn glyph(key : Int, sc : Double) -> Glyph {
     Some(g) => {
       if g.plot >= 0 {
         atlas_for(g.in_colour).0.drawn(g.plot)
+        part_plot(g.in_colour, g.plot)
       }
       g
     }
@@ -866,6 +867,7 @@ fn glyph(key : Int, sc : Double) -> Glyph {
             in_colour: across > 0,
           }
           text_cache.glyphs[key] = g
+          part_plot(g.in_colour, plot)
           g
         }
         None => no_glyph

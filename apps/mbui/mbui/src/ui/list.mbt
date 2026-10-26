@@ -382,6 +382,7 @@ pub fn Ctx::list(
         theme: self.theme,
         direction: self.direction,
         layer: self.layer_cur,
+        part: 0,
       }
       self.lists[id] = s
       self.own(id)
@@ -404,6 +405,7 @@ pub fn Ctx::list(
   st.theme = self.theme
   st.direction = self.direction
   st.layer = self.layer_cur
+  st.part = part_now.part
   // shown again (not built the frame before): what of it still moves says so again
   let back = st.built >= 0 && st.built < self.frame_no - 1
   // (built again in the same frame: its motion stepped once a frame, at the first)
@@ -461,7 +463,8 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   let r = self.alloc(kind_box)
   self.nodes[r].item = k
   let row = st.row
-  self.with_parent(r, fn() { self.scope(k, fn() { row(k) }) })
+  // (in a part kept: what the row asks of time is the part's, kept_part.mbt)
+  part_rows(st.part, fn() { self.with_parent(r, fn() { self.scope(k, fn() { row(k) }) }) })
   self.id_seed = saved_seed
   self.cur = saved_cur
   self.owner = saved_owner

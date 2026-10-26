@@ -641,6 +641,8 @@ pub fn Ctx::native(
   let n = self.nodes[i]
   n.kind = kind_native
   native_nodes[i] = (v, content, dmax(radius, 0.0))
+  // (a view of the system's, placed where it is each frame: a part kept builds it each frame, kept_part.mbt)
+  part_live()
   i
 }
 

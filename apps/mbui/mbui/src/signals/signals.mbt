@@ -524,6 +524,12 @@ pub fn[T] Signal::watched(self : Signal[T]) -> Bool {
 }
 
 ///|
+/// Whether anything reads the computed (a computed, an effect): what follows it keeps it.
+pub fn[T] Computed::watched(self : Computed[T]) -> Bool {
+  self.node.subs is Some(_)
+}
+
+///|
 /// What `f` makes, nothing it reads followed by what is reading now.
 pub fn[T] untracked(f : () -> T) -> T {
   let prev_sub = set_active_sub(None)

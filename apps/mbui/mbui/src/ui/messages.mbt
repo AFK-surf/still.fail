@@ -129,6 +129,7 @@ fn take_messages() -> Unit {
 
 ///|
 fn hand_on(channel : String, json : String, bytes : Bytes?) -> Unit {
+  outside_came()
   if taping() {
     tape_line("MSG " + message_line(channel, json, bytes))
   }

@@ -60,11 +60,12 @@ pub fn[T] Kept::peek(self : Kept[T], key : String) -> T? {
 }
 
 ///|
-/// Those no frame read since the last (neither `frame` nor the one before) let go.
+/// Those no frame read since the last (neither `frame` nor the one before) let go, but what something follows (a part
+/// kept as it was drawn reads it no more each frame, and holds it: mbui's Ctx::kept_part).
 fn[T] Kept::sweep(self : Kept[T], frame : Int) -> Unit {
   let gone = []
   for key, k in self.kept {
-    if k.read != frame && k.read != frame - 1 {
+    if k.read != frame && k.read != frame - 1 && !k.value.watched() {
       gone.push(key)
     }
   }

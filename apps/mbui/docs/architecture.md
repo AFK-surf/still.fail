@@ -204,6 +204,12 @@ One shell. It arranges the same panes in every tier:
   | Medium | The tape: list, page and detail are separate panels, one active: the page or the detail as wide as the window leaves past a strip of each beside it (`tape_shows`, 56: 2026-10-26), the list its own width, the page beside it showing the rest; the edge between the list or the detail in use and the page dragged, its width (`tape_edge`). A press on what shows of another brings it over; dragged across there it comes with the finger (2026-10-25), a drag on the one in use is that one's own; what is chosen to be shown in the page (a list's row, a search's, ⌘K's, a link's) brings the page over (`show_page`); the list never folds by itself. | A full-window layer (a screen, the viewer) first; then detail → page; a page opened from the page (pushed over it: `Nav::push_over`) taken off, sliding as a phone's; the page chosen from the list → list; another place's list → the chats'. Both follow the system's back gesture as it goes (the page's stack `Ctx::nav_flat(stacks=)`, the tape `Ctx::follow_back`), as a phone's page does | The rail |
   | Large | Columns: the rail and the list, the page, the detail. | The web's (⌘[, the chat's neighbours) | The rail |
 
+- **What is not in use is not built again:** on the tape the panels behind the one in use are kept as they were
+  drawn (mbui's `Ctx::kept_part`, as Zed's GPUI keeps a cached view): a frame in which nothing that changes them came
+  (a list scrolled in the panel in use, by a finger or a wheel, flung on) draws them again from their last build, none
+  of them built, laid out or painted. The core's data they read (followed as signals), any event from outside the
+  hand on another panel (a press, a key, a message, a timer), their size, place and ground, a motion of their own, a
+  press held or a wheel turned on them builds them anew.
 - **One model:** `app.nav` stays the one model of where the person is. One table in the shell says, for each `Page`,
   which pane it is.
 - **What a page is given:** its box (width and height) and its insets (where its bar's back goes, the room under it:

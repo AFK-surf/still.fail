@@ -24,6 +24,12 @@ let inputs_since : Ref[Bool] = Ref::new(false)
 ///|
 fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -> Unit {
   input_came()
+  // (a pointer moved, gone out of the window, a wheel turned: the hand on mbui's own, what it is over; else the app's
+  // to take, an event from outside for a part kept: kept_part.mbt)
+  let moved = kind == "pointer" && (args[0] == 1.0 || args[0] == 7.0)
+  if !(moved || (kind == "wheel" && !part_under(args[0], args[1]))) {
+    outside_came()
+  }
   if taping() {
     let m : Map[String, Json] = {
       "k": Json::string(kind),

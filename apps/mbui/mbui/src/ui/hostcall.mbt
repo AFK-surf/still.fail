@@ -973,6 +973,7 @@ let views_told : Map[Int, Bool] = Map::new()
 /// The host's event: what it did for the app is done (`state`: 1 done, -1 failed), or (a view, 0) it waits on the
 /// app now: the bytes a player reads, a site's answer. Until the app answers, the host does nothing for it.
 fn on_outside(kind : Int, id : Int, state : Int) -> Unit {
+  outside_came()
   if kind == outside_update {
     // (how it goes changed: held while the host works at it)
     if state == 0 {

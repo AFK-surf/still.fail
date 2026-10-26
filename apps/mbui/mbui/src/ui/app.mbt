@@ -214,6 +214,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   take_messages()
   // the runtime's fibers run up to this frame's time (fx.mbt): the view reads what they left
   fx_frame_start(c)
+  // the parts kept (kept_part.mbt): another run's forgotten, what the runtime did since the last frame an event from outside
+  parts_frame_start(c)
   // what is said to move, handed this frame's time, before the view reads where it is (motion_data.mbt)
   c.movers_sample()
   // what the boxes moved by a move_state were shown as in the last frame: where a move set out now starts (move_state.mbt)
@@ -281,6 +283,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
       break
     }
   }
+  // the parts kept that this frame did not show let go (kept_part.mbt)
+  parts_frame_end(c)
   // what the last build said to tell outside, told now, once (Ctx::after_build)
   let tells = c.tells.copy()
   c.tells.clear()

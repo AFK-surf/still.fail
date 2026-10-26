@@ -14,7 +14,8 @@ own source, not from what the port seems to want.
 - Added for what keeps computeds of its own (still.fail's sfbase `Kept`, `Derived`): `Computed::peek` (what it made
   last, not worked out again), `Computed::dispose` (it lets go of what it read, as alien-signals' `unwatched` does
   with a computed nothing reads any more: under reference counting a computed left linked to a signal would never be
-  let go), `Signal::watched`, `untracked`.
+  let go), `Signal::watched`, `Computed::watched` (a part kept as it was drawn, `Ctx::kept_part`, follows what its
+  build read: what follows a computed keeps it), `untracked`.
 
 ## Tests
 

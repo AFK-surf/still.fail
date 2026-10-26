@@ -330,6 +330,9 @@ pub fn Tester::new(
   @hostapi.set_host(f)
   reset_globals()
   corners_hold.val = corners_held
+  // (every frame built whole: what a test reads of a frame's nodes reads all of it; a test of the parts kept says so,
+  // Tester::keep_parts)
+  parts_on.val = false
   // (after the globals are put back: what came from outside before the run's first frame, posted here, would be lost
   // with them, and the first frame drawn without it: the system's bars round an edge-to-edge window)
   if run is Some(r) {
@@ -644,7 +647,7 @@ pub let input_step_ms : Double = 1000.0 / 60.0
 ///|
 pub fn Tester::wheel(self : Tester, x : Double, y : Double, dy : Double) -> Unit {
   finger_wheel(x, y, 0.0, dy, 0)
-  self.draw()
+  self.drawn_now()
 }
 
 ///|
@@ -687,6 +690,12 @@ pub fn Tester::find(self : Tester, s : String) -> (Double, Double)? {
       n.text.contains(s) {
       return Some((n.x + n.fw / 2.0, n.y + n.fh / 2.0))
     }
+    // (a part kept, drawn again: the words its build drew, kept_part.mbt)
+    for w in c.kept_words_at(i) {
+      if w.text.contains(s) {
+        return Some((w.x + w.w / 2.0, w.y + w.h / 2.0))
+      }
+    }
   }
   None
 }
@@ -709,6 +718,11 @@ pub fn Tester::find_last(self : Tester, s : String) -> (Double, Double)? {
     if (n.kind == kind_text || n.kind == kind_editor || n.kind == kind_rich) &&
       n.text.contains(s) {
       found.val = Some((n.x + n.fw / 2.0, n.y + n.fh / 2.0))
+    }
+    for w in c.kept_words_at(i) {
+      if w.text.contains(s) {
+        found.val = Some((w.x + w.w / 2.0, w.y + w.h / 2.0))
+      }
     }
     let mut k = n.first
     while k >= 0 {
@@ -1019,6 +1033,9 @@ pub fn Tester::words(self : Tester) -> Array[(String, Double, Double, Double, Do
       }
       out.push((n.text, x, y, n.fw, n.fh, alpha))
     }
+    for w in c.kept_words_at(i) {
+      out.push((w.text, w.drawn_x, w.drawn_y, w.w, w.h, w.alpha))
+    }
   }
   out
 }
@@ -1032,6 +1049,11 @@ pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Do
     if (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor) &&
       n.text.contains(s) {
       return Some((n.x, n.y, n.fw, n.fh))
+    }
+    for w in c.kept_words_at(i) {
+      if w.text.contains(s) {
+        return Some((w.x, w.y, w.w, w.h))
+      }
     }
   }
   None
@@ -1089,7 +1111,7 @@ pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
 /// The pointer moved to (x, y), no button down.
 pub fn Tester::move(self : Tester, x : Double, y : Double) -> Unit {
   finger(1, x, y)
-  self.draw()
+  self.drawn_now()
 }
 
 ///|
@@ -1768,14 +1790,14 @@ pub fn Tester::leave(self : Tester) -> Unit {
 /// notch (eased in over the next frames). One frame drawn, not settled.
 pub fn Tester::wheel_phase(self : Tester, x : Double, y : Double, dy : Double, phase : Int) -> Unit {
   finger_wheel(x, y, 0.0, dy, phase)
-  self.draw()
+  self.drawn_now()
 }
 
 ///|
 /// The wheel turned both ways (`dx`, `dy`) at (x, y) with `mods` held (wheel_mod_*: ⌘ to zoom a picture, a pinch).
 pub fn Tester::wheel_with(self : Tester, x : Double, y : Double, dx : Double, dy : Double, mods : Int) -> Unit {
   finger_wheel(x, y, dx, dy, mods * 16)
-  self.draw()
+  self.drawn_now()
 }
 
 ///|
