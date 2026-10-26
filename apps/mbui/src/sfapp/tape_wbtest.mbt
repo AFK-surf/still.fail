@@ -1160,3 +1160,22 @@ test "on the tape the gear's settings: their list in use, its first row's page s
 ///|
 /// 本机 Station's words where this machine has none (the Tester's host says none).
 let local_none : String = "本机没有单独安装的 station"
+
+///|
+test "on the tape any settings page come to, from their list's row and from a page of theirs a level further in, is the one in use, whole in the window" {
+  let t = tape_settings(600.0, fn() { open_page(Settings) })
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  // a row of their list: 记忆, brought over
+  t.click(Link, label="记忆")
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(settings_page_whole(t, "全局记忆 · 项目记忆", 600.0), msg="\{@sfdesk.wide.tape_at} \{t.rect_of("全局记忆 · 项目记忆")}")
+  // a level further in from the page in use: a station's memory, then one of its pages
+  t.tap_text("Studio")
+  t.run_for(@ui.nav_push_ms)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(settings_page_whole(t, "发布流程", 600.0), msg="\{@sfdesk.wide.tape_at} \{t.rect_of("发布流程")}")
+  t.tap_text("发布流程")
+  t.run_for(@ui.nav_push_ms)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(settings_page_whole(t, "checklist", 600.0), msg="\{@sfdesk.wide.tape_at} \{t.rect_of("checklist")}")
+}
