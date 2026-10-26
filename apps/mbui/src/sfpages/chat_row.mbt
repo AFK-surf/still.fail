@@ -124,8 +124,8 @@ pub fn chat_row(
   let finger = !@sf.pointer_rests()
   let key = @sfbase.row_name(item)
   let id = c.id("row/" + key)
-  // what in it has a tip of its own (the state line's icon, the station's mark, the unplugged one): pressed or pointed
-  // at, the row is
+  // what in it has a tip of its own (the state line's icon, the station's mark, the unplugged one) and its state line:
+  // parts of it, only pointed at (Ctx::box's `points`), a press on them the row's
   let slot = c.id("row/lead/" + key)
   let kind = c.id("row/kind/" + key)
   let away = c.id("row/away/" + key)
@@ -156,7 +156,7 @@ pub fn chat_row(
   // held by a finger a while: its time shows (mobile/Home.tsx `held`)
   let held = finger && !found && @kit.after(c, "row-hold/" + key, pressed && row_held.val.0 == id, hold_ms)
   let menu_on = row_menu_open(item)
-  if parts.iter().any(fn(p) { c.clicked(p) }) && !renaming {
+  if c.clicked(id) && !renaming {
     let long = row_held.val.0 == id && row_held.val.1
     row_held.val = (0, false)
     if long {
@@ -170,7 +170,7 @@ pub fn chat_row(
           // pressed on its state line while the core says which message that is about, nothing in it unread: its chat
           // goes there as it opens (ChatMark.tsx jumpFromLine)
           match item.state_about {
-            Some(seq) if (c.clicked(line) || c.clicked(slot)) && !item.unread && item.thread is Some(_) =>
+            Some(seq) if c.clicked_on(id, line) && !item.unread && item.thread is Some(_) =>
               @sfbase.go_to(r, seq)
             _ => ()
           }
@@ -268,7 +268,7 @@ pub fn chat_row(
             // from elsewhere (Slack) says so
             match (item.offline, item.reconnecting) {
               (Some(why), _) | (None, Some(why)) => {
-                let b = c.box(style=kind_slot, id=away, fn() {
+                let b = c.box(style=kind_slot, id=away, taps=false, points=true, fn() {
                   @sf.icon(c, "unplug", size=kind_glyph, color=t.p.subtle) |> ignore
                 })
                 c.semantics(b, Image, id=away, label=why)
@@ -277,7 +277,7 @@ pub fn chat_row(
               _ =>
                 if item.connect {
                   let said = if item.origin_text != "" { item.origin_text } else { "Slack" }
-                  let b = c.box(style=kind_slot, id=away, fn() { @sf.slack_mark(c, kind_mark) |> ignore })
+                  let b = c.box(style=kind_slot, id=away, taps=false, points=true, fn() { @sf.slack_mark(c, kind_mark) |> ignore })
                   c.semantics(b, Image, id=away, label=said)
                   @sf.tip(c, "row/away-tip/" + key, away, said)
                 }
@@ -285,7 +285,7 @@ pub fn chat_row(
             // the station it runs on, by its mark (the core gives one only with several stations): last, so it stands in
             // the same column at every row's end whatever marks come before it
             if @sf.has_station_mark(item.station_emoji, item.station_icon) && !renaming {
-              let b = c.box(style=kind_slot, id=kind, fn() {
+              let b = c.box(style=kind_slot, id=kind, taps=false, points=true, fn() {
                 @sf.station_mark(c, item.station_emoji, item.station_icon, kind_mark_of(item.station_icon), if offline {
                   t.p.subtle
                 } else {
@@ -304,7 +304,7 @@ pub fn chat_row(
             }
             match state {
               Some(s) =>
-                c.box(style=state_box, id=line, fn() {
+                c.box(style=state_box, id=line, taps=false, points=true, fn() {
                   state_line(
                     c,
                     "row/state/" + key,

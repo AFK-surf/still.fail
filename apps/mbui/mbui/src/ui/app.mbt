@@ -282,6 +282,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     // actions since the last frame)
     c.clicked.clear()
     c.double_clicked.clear()
+    c.click_at = None
     c.tapped = None
     desk.keys.clear()
     desk.menus.clear()
@@ -942,6 +943,7 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
     let target = hit_in(c.hit_ids, c.hit_rects, x, y)
     if c.active != 0 && target == c.active && !c.dragging {
       c.clicked.push(c.active)
+      c.click_at = Some((x, y))
       // the second of two (Ctx::double_clicked): on the same, soon enough and near enough; then none is first
       let (was, at, ax, ay) = c.last_click
       if was == c.active && t - at <= double_click_ms && (x - ax).abs() <= double_click_slop &&

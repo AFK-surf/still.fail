@@ -288,6 +288,9 @@ pub struct Ctx {
   /// (Ctx::double_clicked); the last click (its id, when, where), for the next to be the second of two
   double_clicked : Array[Int]
   mut last_click : (Int, Double, Double, Double)
+  /// where the pointer let go of the last click since the last frame (none: a key's, a reader's Activate), for where in
+  /// what was clicked it was (Ctx::clicked_on)
+  mut click_at : (Double, Double)?
   /// how many presses in a row the last one was (NSEvent's clickCount: 2 a double click's second), and how many, when
   /// and where, for the next to count on from
   mut clicks : Int
@@ -588,6 +591,7 @@ fn Ctx::new() -> Ctx {
     clicked: [],
     double_clicked: [],
     last_click: (0, 0.0, 0.0, 0.0),
+    click_at: None,
     clicks: 0,
     press_run: (0, -1.0e9, 0.0, 0.0),
     drag_scroll: 0,
@@ -1420,6 +1424,20 @@ pub let double_click_slop : Double = 4.0
 pub fn Ctx::clicked(self : Ctx, id : Int) -> Bool {
   self.takes_presses(id)
   self.click_seen(id)
+}
+
+///|
+/// Whether `id` was clicked since the last frame on `part`, a box in it only pointed at (Ctx::box's `points`: a press
+/// on it is `id`'s): where in it the pointer let go, for what a click there does more (a chat's row opens at the message
+/// its state line is about). A key's click or a reader's Activate is on none of its parts.
+pub fn Ctx::clicked_on(self : Ctx, id : Int, part : Int) -> Bool {
+  if !self.clicked(id) {
+    return false
+  }
+  match (self.click_at, self.rect_of(part)) {
+    (Some((x, y)), Some((px, py, pw, ph))) => x >= px && x < px + pw && y >= py && y < py + ph
+    _ => false
+  }
 }
 
 ///|
