@@ -7,6 +7,14 @@
 // Tester: Tester::hold_files, Tester::drop_files.
 
 ///|
+/// Whether files can be dragged in from outside and let go on the window here: the hosts that say so (macOS's and
+/// Windows': `mbui.drop`), what a setting of how they are taken is shown for.
+pub fn takes_drops() -> Bool {
+  let p = platform()
+  p == 0 || p == 3
+}
+
+///|
 /// Where files from outside are held over the window now, and the drops not taken yet (where each was let go, its pick).
 priv struct Dropping {
   mut held : (Double, Double)?

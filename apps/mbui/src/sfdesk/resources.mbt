@@ -542,8 +542,9 @@ fn rs_line(c : @ui.Ctx, style : @ui.Style, id : Int, body : () -> Unit) -> Int {
 fn rs_end(c : @ui.Ctx, core : Core, address : String, pv : Json?, gv : Json?, row : Int) -> Unit {
   c.box(style=rs_end_cell, fn() {
     let key = "resources-end/" + address + "/" + text(pv, "key")
-    // seen as its row is pointed at or it is reached by the keys (end: opacity 0 till then); on a touch screen, always
-    let seen = (@sf.native_input() is Finger) || c.hovered(row) || c.lit(c.id(key))
+    // seen as its row is pointed at or it is reached by the keys (end: opacity 0 till then), always to a finger: what a
+    // pointer over a thing shows (@sf.pointed_or_finger)
+    let seen = @sf.pointed_or_finger(c, c.hovered(row) || c.lit(c.id(key)))
     if flag(pv, "endable") && seen {
       let name = text(pv, "name")
       if @sf.icon_button(

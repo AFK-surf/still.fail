@@ -38,6 +38,21 @@ pub fn soft_keyboard() -> Bool {
 }
 
 ///|
+/// Whether Enter in a box of lines sends what is in it (⇧Enter a new line), as where the keyboard is at hand (the web's
+/// `hover: hover`), or is a new line, as on the screen's keyboard (its send is the page's button): the native input's.
+pub fn enter_sends() -> Bool {
+  !soft_keyboard()
+}
+
+///|
+/// Whether what is attached is picked from a sheet of what the device holds (its photos, its camera, its files: touch's,
+/// a phone's or a tablet's attach sheet) rather than the system's file picker at once (keyboard and mouse's): the native
+/// input's.
+pub fn attach_from_sheet() -> Bool {
+  native_input() is Finger
+}
+
+///|
 /// How far an edge standing in a gap `gap` wide between two panels (the tape's, sfdesk's tape_edge) takes presses past
 /// the gap, into the panel it sizes and into the one beside it: with touch none of its own (a row there is swiped
 /// across) and edge_finger_reach of the other, the gap and that as wide as a finger aims at a thing that thin; with
