@@ -1484,6 +1484,8 @@ fn tape_covers(
       let id = if p == wide.tape_at { 0 } else { c.id("tape/" + p.to_string()) }
       if id != 0 {
         c.drag_on(id, axis=Horizontal)
+        // (a finger held on it picks the words under it, as it brings it over: tape_frame)
+        c.holds_through(id)
       }
       let b = c.box(
         style=@ui.style(

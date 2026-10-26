@@ -56,12 +56,14 @@ pub fn Pick::of(self : Pick, key : String) -> Bool {
 }
 
 ///|
-/// A finger held on `key`'s words (`holding`: down in them and still, as the view tells), a long press's time from
-/// when it went down, picks the word under where it went down (Ctx::press), widened from it as the finger slides on;
-/// it picks once a press. True on the frame it picks: the press is the pick's from then (the view takes it,
-/// Ctx::take_press, and says so to the hand).
-pub fn Pick::hold(self : Pick, c : @ui.Ctx, key : String, holding : Bool) -> Bool {
+/// A finger held on `key`'s words in box `id`, a long press's time from when it went down, picks the word under where
+/// it went down (Ctx::press), widened from it as the finger slides on; it picks once a press. Held: the press went
+/// down in the box as drawn (Ctx::press_within: not under what lies over it, a layer over the page) and is still there,
+/// and the view lets it (`may`: no handle of its held, say). True on the frame it picks: the press is the pick's from
+/// then (the view takes it, Ctx::take_press, and says so to the hand).
+pub fn Pick::hold(self : Pick, c : @ui.Ctx, key : String, id : Int, may? : Bool = true) -> Bool {
   let press = c.press()
+  let holding = may && press.down && !press.moved && c.press_within(id)
   // (asked each frame, so that a press let go starts again from nothing; a frame asked for when it will have)
   let held = after(c, key + "/hold", holding && self.press != press.frame, @ui.long_press_ms)
   if !held {

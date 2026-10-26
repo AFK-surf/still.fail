@@ -7,9 +7,11 @@ test "held still on words: the word under the finger is picked; sliding on widen
   let t = @ui.Tester::new(
     fn(c) {
       // (words a box's rich paragraphs hold: Ctx::words)
-      let box = c.box(fn() { c.rich([@ui.plain("alpha beta gamma delta")], wrap=false) |> ignore })
+      let id = c.id("w")
+      c.takes_presses(id)
+      let box = c.box(id~, fn() { c.rich([@ui.plain("alpha beta gamma delta")], wrap=false) |> ignore })
       c.words(box, "w", a=p.a, b=p.b, color=0x3B82F640L)
-      if p.hold(c, "w", c.press().down) {
+      if p.hold(c, "w", id) {
         c.take_press()
       }
       p.slide(c)

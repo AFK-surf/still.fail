@@ -1749,18 +1749,32 @@ pub fn Viewer::draw_flight(
 
 ///|
 /// The picture's own menu, right clicked or held by a finger on it (where it is now: `at`), once the whole of it is
-/// here: 复制图片, as the bar's 复制 (a browser's on an image). Round it, none. What is under the viewer (the chat's
+/// here: 复制图片, as the bar's 复制 (a browser's on an image); on a phone, where nothing is pasted, 保存到相册
+/// (@sf.picture_out_way, as a picture made here). Round it, none. What is under the viewer (the chat's
 /// picture it was opened from, with its 引用) is never asked: the viewer is over it.
 fn Viewer::picture_menu(self : Viewer, c : @ui.Ctx, stage : Int, at : (Double, Double, Double, Double)?) -> Unit {
   match (c.menu_asked(stage), at, self.bytes) {
     (Some((x, y)), Some((rx, ry, rw, rh)), Some(b)) if x >= rx && x < rx + rw && y >= ry && y < ry + rh => {
       // held by a finger: the press is the menu's, felt
       @sf.menu_held(c, "preview") |> ignore
-      let copy = fn() {
-        c.copy_image(b)
-        self.copied += 1
+      let (label, glyph) = @sf.picture_out_way()
+      let out = fn() {
+        if @sf.picture_to_album() {
+          keep_bytes(
+            c,
+            self.name,
+            self.mime,
+            b,
+            way=Photos,
+            saved=@sf.t("web-main.stations.savedToPhotos"),
+            failed=@sf.t("web-main.stations.saveToPhotosFailed"),
+          )
+        } else {
+          c.copy_image(b)
+          self.copied += 1
+        }
       }
-      @sf.menu([Some(@sf.menu_item_of(@sf.t("desktop.contextMenu.copyImage"), copy, icon="copy"))], from=@sf.at_point(x, y))
+      @sf.menu([Some(@sf.menu_item_of(label, out, icon=glyph))], from=@sf.at_point(x, y))
     }
     _ => ()
   }

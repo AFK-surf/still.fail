@@ -701,6 +701,7 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
     c.press_mods = mods
     c.down = true
     c.active = target
+    c.press_on_at(target, x, y)
     c.press_x = x
     c.press_y = y
     c.press_at = t

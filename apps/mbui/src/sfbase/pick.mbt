@@ -76,11 +76,7 @@ pub fn pickable(
   if c.clicked(id) && !press.long {
     c.blur()
   }
-  let down = press.down
-  let pressed_in = match c.rect_of(id) {
-    Some((x, y, w, h)) => press.x >= x && press.x < x + w && press.y >= y && press.y < y + h
-    None => false
-  }
+  let pressed_in = press.down && c.press_within(id)
   // built first: a link held in it is the link's menu (its hold told while building), not a pick
   let box = c.box(style=if fill { pick_fill } else { pick_own }, id~, fn() {
     marks(id)
@@ -90,7 +86,7 @@ pub fn pickable(
   // ask), or what is marked in it asks
   if pk.ts == ts {
     c.words(box, key, a=pk.sel.a, b=pk.sel.b, color=@sf.alpha(@sf.theme().p.accent, 0.26))
-  } else if (down && pressed_in) || keep {
+  } else if pressed_in || keep {
     c.words(box, key)
   }
   // a mouse picks words as a browser's selection (Ctx::selectable): what of this message it holds is told the pill,
@@ -111,15 +107,13 @@ pub fn pickable(
     return
   }
   let mine = pk.ts == ts
-  // the press went down in it and holds still: a long press's time on, the word under the finger picked
-  let holding = down &&
-    pressed_in &&
-    !press.moved &&
-    pk.sel.handle == 0 &&
+  // held still on it a long press's time (the library's: where the press went down, as drawn), the word under the finger
+  // picked; not while a handle or the passage it widens is held
+  let may = pk.sel.handle == 0 &&
     !(mine && pk.sel.widening) &&
     pk.taken_at != press.frame &&
     words.trim(chars=" \n\t") != ""
-  if pk.sel.hold(c, key, holding) {
+  if pk.sel.hold(c, key, id, may~) {
     pk.ts = ts
     pk.author = author
     pk.role = role
