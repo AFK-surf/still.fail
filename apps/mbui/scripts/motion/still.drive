@@ -1,0 +1,3 @@
+# The page as it opens, held a moment (a fixture's state pictured as it is).
+timeout 20000
+wait 1500

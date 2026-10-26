@@ -1,6 +1,7 @@
 // Made-up decisions, an execution history, an agent's card, jobs, for the app with no core (fixture.mbt; slice 8's
 // screenshots). MBUI_FIXTURE: "decisions" (the 奏 page with an options card in front), "decisions-text" (a text card),
-// "decisions-idle" (none left: the day so far), "history" (an agent's steps, a few opened), "history-details", the chat
+// "decisions-idle" (none left: the day so far), "history" (an agent's steps, a few opened), "history-reading" (the
+// steps not read yet: their bones), "history-details", the chat
 // with a sheet open over it: "chat-info", "chat-publish", "chat-agent", "chat-agent-unsaid" (an agent's card that knows
 // no figure of it, as a station from before tells none of an agent at rest), "chat-peek" (its station's card), "chat-jobs",
 // "chat-job"; "chat-letters-many" (their sheet, more chats written with than it holds at its share: its list
@@ -19,7 +20,7 @@
 /// Whether `mode` is one of this slice's.
 pub fn decide_mode(mode : String) -> Bool {
   [
-    "decisions", "decisions-text", "decisions-idle", "history", "history-details",
+    "decisions", "decisions-text", "decisions-idle", "history", "history-reading", "history-details",
     "chat-info", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
     "chat-letters-info", "chat-letters", "chat-letters-many", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
     "chat-jobs-side", "chat-history-side", "chat-tabs-side", "chat-model-pop", "chat-find", "chat-agent-card",
@@ -494,6 +495,7 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
         None
       }
     "decisions" => Some(Some(fix_decisions(f.mode)))
+    "history" if f.mode == "history-reading" => Some(None)
     "history" => Some(Some(fix_history()))
     "agentCard" if f.mode == "chat-agent-unsaid" =>
       Some(

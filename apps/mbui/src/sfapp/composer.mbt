@@ -2603,7 +2603,8 @@ fn attach_sheet(
     if adding {
       return
     }
-    c.box(dir=Row, w=Fill(1.0), pb=18.0, gap=8.0, fn() {
+    let corner = @sfpages.attach_block_corner()
+    c.box(dir=Row, w=Fill(1.0), pb=@sfpages.attach_foot(), gap=8.0, fn() {
       for item in [
         (photos, tr("android-chat.attach.photos"), "photo"),
         (files, tr("android-chat.attach.files"), "file"),
@@ -2615,7 +2616,7 @@ fn attach_sheet(
           h=Px(70.0),
           padx=4.0,
           gap=6.0,
-          radius=@sf.row_corner,
+          radius=corner,
           bg=t.p.chip,
           align=ACenter,
           justify=JCenter,
@@ -2623,8 +2624,8 @@ fn attach_sheet(
           fn() {
             @sf.icon(c, icon, size=22.0, color=t.p.text) |> ignore
             c.text(label, size=t.t.meta, color=t.p.text, wrap=false, line=18.0) |> ignore
-            // (Attach.kt: clip(Smooth(14)).clickable; the ladder's block corner here, as the strip's tiles)
-            @motion.ripple(c, id, @sf.row_corner)
+            // (Attach.kt: clip(Smooth(14)).clickable; as round as the strip's tiles: attach_block_corner)
+            @motion.ripple(c, id, corner)
           },
         )
         |> ignore
@@ -2661,7 +2662,9 @@ fn attach_reset() -> Unit {
 /// ＋'s sheet put up by ＋ (`plus`): the library's panel, with a finger the phone's sheet from the foot (the grabber, the
 /// recent photos, the three tiles), with a mouse beside ＋; closed by its scrim, back or a press outside.
 fn attach_open(plus : Int) -> Unit {
-  @sf.panel("", fn(c, _) { (attach_drawer.val)(c) }, from=Of(plus), gone=fn() { cui.attach = false })
+  @sf.panel("", fn(c, _) { (attach_drawer.val)(c) }, from=Of(plus), w=@sfpages.attach_w, gone=fn() {
+    cui.attach = false
+  })
   attach_shown.val = @sf.last_presented()
   // the gallery's recent photos read again as it opens
   @sfpages.recent_opened()
