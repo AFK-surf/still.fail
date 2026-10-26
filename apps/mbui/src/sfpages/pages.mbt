@@ -40,4 +40,7 @@ pub fn reset() -> Unit {
   workspace_reset()
   outside_reset()
   new_chat_reset()
+  changelog_reset()
+  font_setting_reset()
+  notify_page_reset()
 }

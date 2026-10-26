@@ -23,6 +23,9 @@ pub(all) struct Shell {
   /// what was chosen in a list (a row of a place's list, a pick) shown where the layout has the page: on the tape the
   /// page brought over (show_chosen)
   show : () -> Unit
+  /// the rail changed where it is (自定义侧边条, Rail.tsx editing), where the layout has a rail beside the pages; none
+  /// where it has none
+  edit_rail : () -> Unit
 }
 
 ///|
@@ -38,6 +41,7 @@ pub fn bare_shell() -> Shell {
     detail: fn(_, _, _) {  },
     back: stack_back,
     show: fn() {  },
+    edit_rail: fn() {  },
   }
 }
 
@@ -56,6 +60,12 @@ fn stack_back() -> (() -> Unit)? {
 /// chose is the page's (on the tape the page comes over to show it; beside the list or pushed, nothing more).
 pub fn show_chosen() -> Unit {
   (shell.val.show)()
+}
+
+///|
+/// The rail changed where it is, as 外观's 自定义侧边条 asks (Shell's `edit_rail`): where the layout has no rail, nothing.
+pub fn edit_rail() -> Unit {
+  (shell.val.edit_rail)()
 }
 
 ///|

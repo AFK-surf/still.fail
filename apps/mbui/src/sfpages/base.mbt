@@ -183,4 +183,27 @@ pub fn dmin(a : Double, b : Double) -> Double {
 }
 
 ///|
-using @settings {type Core, type Asked}
+using @settings {
+  binding_of,
+  build_version,
+  error_text,
+  has,
+  hit,
+  is_doing,
+  join,
+  key_actions,
+  keys_recording,
+  notify_switched,
+  obj,
+  pref,
+  set_pref,
+  spinner,
+  station_of,
+  str,
+  strings,
+  tap_text,
+  use_notify,
+  type Core,
+  type Asked,
+  type Here,
+}

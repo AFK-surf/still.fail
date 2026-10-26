@@ -66,7 +66,8 @@
       "src/sfpages"
     ],
     "frames": [
-      "src/sfdesk/settings_page.mbt"
+      "src/sfdesk/settings_page.mbt",
+      "src/sfpages/settings_page.mbt"
     ],
     "one_look": [
       "Narrow",
@@ -327,11 +328,9 @@
     "page-look": {
       "src/sfapp/settings/home.mbt": 2,
       "src/sfapp/settings/parts.mbt": 2,
-      "src/sfdesk/about.mbt": 10,
       "src/sfdesk/account.mbt": 7,
       "src/sfdesk/accounts.mbt": 7,
       "src/sfdesk/add_profile.mbt": 19,
-      "src/sfdesk/appearance.mbt": 6,
       "src/sfdesk/automatic_decisions.mbt": 15,
       "src/sfdesk/connect.mbt": 2,
       "src/sfdesk/connects.mbt": 30,
@@ -342,17 +341,19 @@
       "src/sfdesk/memory.mbt": 11,
       "src/sfdesk/memory_doc.mbt": 5,
       "src/sfdesk/new_connect.mbt": 11,
-      "src/sfdesk/notifications.mbt": 5,
-      "src/sfdesk/permissions.mbt": 40,
       "src/sfdesk/places.mbt": 2,
       "src/sfdesk/security.mbt": 36,
-      "src/sfdesk/shortcuts.mbt": 5,
       "src/sfdesk/slack_app.mbt": 6,
       "src/sfdesk/usage.mbt": 12,
       "src/sfdesk/vault.mbt": 5,
       "src/sfdesk/vault_dialogs.mbt": 11,
       "src/sfdesk/vault_item.mbt": 10,
-      "src/sfdesk/workspace.mbt": 14
+      "src/sfdesk/workspace.mbt": 14,
+      "src/sfpages/about.mbt": 10,
+      "src/sfpages/appearance.mbt": 6,
+      "src/sfpages/notifications.mbt": 5,
+      "src/sfpages/permissions.mbt": 40,
+      "src/sfpages/shortcuts.mbt": 5
     },
     "follow-layout": {
       "src/sfbase/viewer.mbt": 1
@@ -381,7 +382,6 @@
       "src/sfbase/bars.mbt": 1,
       "src/sfbase/viewer_frame.mbt": 1,
       "src/sfbase/viewer_layout.mbt": 2,
-      "src/sfdesk/appearance.mbt": 1,
       "src/sfdesk/chat_page.mbt": 1,
       "src/sfdesk/chat_talk.mbt": 1,
       "src/sfdesk/lists.mbt": 14,

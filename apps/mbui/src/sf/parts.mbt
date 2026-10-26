@@ -1374,14 +1374,16 @@ fn wide_switch_row(
   note? : String = "",
   disabled? : Bool = false,
   busy? : Bool = false,
+  title_style? : @ui.TextStyle = theme().rows.title,
+  note_style? : @ui.TextStyle = theme().rows.note,
 ) -> Bool {
   let id = c.id(key + "/words")
   let mut now = on
   c.box(style=switch_row_box, fn() {
     c.box(style=switch_row_words, id=if disabled || busy { 0 } else { id }, fn() {
-      c.text(title, style=theme().rows.title) |> ignore
+      c.text(title, style=title_style) |> ignore
       if note != "" {
-        c.text(note, style=theme().rows.note) |> ignore
+        c.text(note, style=note_style) |> ignore
       }
     })
     |> ignore

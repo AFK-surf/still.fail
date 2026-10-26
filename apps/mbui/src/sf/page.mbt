@@ -816,11 +816,22 @@ let pg_said_row_square : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter").
 /// `footed`: its buttons last (card_foot), its foot as far in as makes them concentric with its corners.
 pub fn page_card(c : @ui.Ctx, body : () -> Unit, footed? : Bool = false) -> Unit {
   let card = if footed { desk_card.then(foot_pad(button_height())) } else { desk_card }
+  let words = fn() {
+    in_words.val += 1
+    body()
+    in_words.val -= 1
+  }
   match look() {
-    Narrow => c.box(style=pg_card_room, fn() { c.box(style=card, body) |> ignore }) |> ignore
-    Wide => wide_alone(c, fn() { c.box(style=card, body) |> ignore })
+    Narrow => c.box(style=pg_card_room, fn() { c.box(style=card, words) |> ignore }) |> ignore
+    Wide => wide_alone(c, fn() { c.box(style=card, words) |> ignore })
   }
 }
+
+///|
+/// How many cards of words (page_card) what is drawn now stands in: a switch's row there is words beside their switch,
+/// no ground of its own (one would stand square, 20 in from the card's corner), on a narrow page as on a wide one.
+// kept across runs: counted up and down round what a card draws (0 between them)
+let in_words : Ref[Int] = Ref(0)
 
 ///|
 /// A choice of a few (`segmented`: narrow, as wide as the page less 12 each side; wide, at the column's start, each
@@ -1355,7 +1366,8 @@ let choice_label_line : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
 ///|
 /// A row that turns something on or off (parts.tsx SwitchRow): its title, `note` quieter under it, the switch at its
 /// end across their middle (a round control stays out of the row's corners: docs/ui-panels.md 放不下的时候); narrow,
-/// the whole row takes the press; wide, the switch and its words (16 apart). `busy`: what it set is on its
+/// the whole row takes the press; wide, and on a card of words (page_card) at any width, the switch and its words (16
+/// apart). `busy`: what it set is on its
 /// way (not turned again meanwhile). Answers whether it is on now.
 pub fn switch_row(
   c : @ui.Ctx,
@@ -1367,6 +1379,9 @@ pub fn switch_row(
   busy? : Bool = false,
 ) -> Bool {
   match look() {
+    // (on a narrow page in the words of its narrow rows)
+    Narrow if in_words.val > 0 && in_card.val == 0 =>
+      wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=pg_switch_title, note_style=meta.then(full_words))
     Wide =>
       if in_list.val > 0 {
         let mut now = on

@@ -9,7 +9,7 @@
 ///|
 /// 权限 (PermissionsPage): what the system lets still.fail do on this device, each with what it is for and whether it
 /// is given; not given, what goes without it and the way to give it.
-fn permissions_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
+pub fn permissions_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let notify = (core.topic)("notify", Map::new()).value
   let state = match text(notify, "permission") {
@@ -119,7 +119,7 @@ fn permission_row(
 ///|
 /// 归档 (ArchivingPage, ArchivingScreen): whether a done chat suggests archiving it (this device's `archiveHint`), what
 /// that means and, where some or no station reviews, the way to 自动决策; then each station's own archiving, a row each.
-fn archiving_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
+pub fn archiving_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let hint_now = match pref(core, "archiveHint") {
     "off" | "reviewed" => pref(core, "archiveHint")
@@ -245,7 +245,7 @@ fn archiving_row(c : @ui.Ctx, core : Core, look : Look, s : Json?) -> Unit {
 ///|
 /// A station's own archiving (StationArchivingForm): its review (on or off, the way to it), how it archives, after how
 /// long idle, and Slack's; only its managers change it (`canEdit`).
-fn station_archiving_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, station : String) -> Unit {
+pub fn station_archiving_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, station : String) -> Unit {
   let look = look_of(c)
   let s = station_of(core, here, station)
   let view = if flag(s, "online") { field(field(s, "overview"), "archiving") } else { None }
@@ -357,7 +357,7 @@ fn station_archiving_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFra
 
 ///|
 /// A link in a note's words (12).
-let link_size : Double = 12.0
+pub let link_size : Double = 12.0
 
 
 ///|
