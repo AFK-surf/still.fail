@@ -36,8 +36,11 @@ struct FakeHost {
   mut back_on : Bool
   // the system it plays (as @hostapi.platform: 0 macOS, 1 iOS, 2 Android)
   platform : Int
-  // what the person points with (Tester::new's `pointing`: by default its system's)
-  pointing : Pointing
+  // what the person points with (Tester::new's `pointing`: by default its system's; as the host says its events came,
+  // where it does: Tester::host_says_finger)
+  mut pointing : Pointing
+  // what the host says the pointer's events come from (@hostapi.event_finger: 1 a finger, 0 a mouse, -1 not said)
+  mut event_finger : Int
   // what the app was started to be used with (Tester::new's `native`: by default its system's)
   native : Pointing
   // a keyboard at hand (Tester::new's `keyboard`, by default its system's: a desktop's; Tester::set_keyboard)
@@ -363,6 +366,16 @@ fn h_frame_late() -> Double {
 // kept across runs: a real host's alone, its frames numbered on from one run to the next (a Tester's lateness is not
 // taped)
 let late_taped : Ref[Int] = Ref(-1)
+
+///|
+/// What the pointer's event being handled came from, as the host says (@hostapi.event_finger; the fake host's:
+/// Tester::host_says_finger): 1 a finger, 0 a mouse or a pen, -1 not said.
+fn h_event_finger() -> Int {
+  match fake.val {
+    Some(f) => f.event_finger
+    None => @hostapi.event_finger()
+  }
+}
 
 ///|
 /// When the input event being handled happened (the host's, else now).

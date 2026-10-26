@@ -183,6 +183,12 @@ fn event_time() -> Double {
 }
 
 ///|
+/// What the pointer's event came from (@hostapi.event_finger): a page's host does not say.
+fn event_finger() -> Int {
+  -1
+}
+
+///|
 /// How late the frame before reached the screen: a browser's are not told (@hostapi.frame_late).
 fn frame_late() -> Double {
   0.0

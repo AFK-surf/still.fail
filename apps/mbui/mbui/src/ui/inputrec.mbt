@@ -68,7 +68,10 @@ fn replay_input(f : FakeHost, line : String) -> Unit {
   let frame_time = f.time
   f.time = t
   match m.get("k") {
-    Some(String("pointer")) => pointer_in(n(0).to_int(), n(1), n(2), n(3).to_int(), n(4).to_int())
+    Some(String("pointer")) => {
+      let by = if a.length() > 5 { n(5).to_int() } else { -1 }
+      pointer_in(n(0).to_int(), n(1), n(2), n(3).to_int(), n(4).to_int(), by~)
+    }
     Some(String("wheel")) => on_wheel(n(0), n(1), n(2), n(3), n(4).to_int())
     Some(String("key")) => on_key(n(0).to_int(), n(1).to_int())
     Some(String("text")) => {

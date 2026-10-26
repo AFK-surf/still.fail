@@ -239,6 +239,7 @@ pub fn Tester::new(
       Some(p) => p
       None => platform_pointing(platform)
     },
+    event_finger: -1,
     native: native.unwrap_or(platform_pointing(platform)),
     keyboard: keyboard.unwrap_or(platform_keyboard(platform)),
     reduce_transparency: false,
@@ -608,6 +609,18 @@ pub fn Tester::resize(self : Tester, w : Double, h : Double) -> Unit {
   self.w = w
   self.h = h
   self.draw()
+}
+
+///|
+/// What the fake host says the pointer's events come from from here on, as a machine with a touch screen beside a
+/// mouse does (Windows': @hostapi.event_finger): Some(true) a finger, Some(false) a mouse; None not said (its
+/// system's hand). The hand of the moment (@ui.pointing) is what the last event said.
+pub fn Tester::host_says_finger(self : Tester, finger : Bool?) -> Unit {
+  self.fake.event_finger = match finger {
+    Some(true) => 1
+    Some(false) => 0
+    None => -1
+  }
 }
 
 ///|

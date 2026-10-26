@@ -344,12 +344,70 @@ static void char_in(WCHAR c) {
 
 // ---- the window ----
 
-static void pointer(int kind, LPARAM lp) {
-  mb_cb.pointer(kind, GET_X_LPARAM(lp) / scale, GET_Y_LPARAM(lp) / scale, 0);
+// What the pointer's event being handled came from (@hostapi.event_finger): 1 a finger, 0 a mouse or a pen (or a
+// finger the system made a mouse of: over a web view), -1 none being handled
+static int event_by = -1;
+int32_t mb_host_event_finger(void) { return event_by; }
+
+static void pointer_by(int by, int kind, double x, double y, int button) {
+  event_by = by;
+  mb_cb.pointer(kind, x, y, button);
+  event_by = -1;
 }
 
+static void pointer(int kind, LPARAM lp) { pointer_by(0, kind, GET_X_LPARAM(lp) / scale, GET_Y_LPARAM(lp) / scale, 0); }
+
 static void pointer_button(int kind, LPARAM lp, int button) {
-  mb_cb.pointer(kind, GET_X_LPARAM(lp) / scale, GET_Y_LPARAM(lp) / scale, button);
+  pointer_by(0, kind, GET_X_LPARAM(lp) / scale, GET_Y_LPARAM(lp) / scale, button);
+}
+
+// A touch screen's fingers (WM_POINTER*), as the app's fingers: the first down the pointer's (0 down, 1 moved, 2 up,
+// 3 called off), a second the pinch's (4 down, 5 moved, 6 one of the two lifted, the one left the first's from then
+// on), others taken but not told; not a mouse the system makes of them (its press and hold a right click, its drag a
+// selection). A finger that goes down on a web view is left to the system, its mouse the page's (mb_views_input).
+static UINT32 touch_taken[10];  // the fingers down that this window takes (0: a free place)
+static UINT32 touch_first, touch_second;
+static int touch_at(UINT32 id) {
+  for (int i = 0; i < 10; i++)
+    if (touch_taken[i] == id) return i;
+  return -1;
+}
+// 1: taken (the system makes no mouse of it)
+static int touch(HWND h, UINT msg, WPARAM wp) {
+  UINT32 id = GET_POINTERID_WPARAM(wp);
+  POINTER_INPUT_TYPE type;
+  POINTER_INFO info;
+  if (!id || !GetPointerType(id, &type) || type != PT_TOUCH || !GetPointerInfo(id, &info)) return 0;
+  POINT p = info.ptPixelLocation;
+  ScreenToClient(h, &p);
+  double x = p.x / scale, y = p.y / scale;
+  int at = touch_at(id), kind = -1;
+  if (msg == WM_POINTERDOWN) {
+    if (at < 0) {
+      if (!touch_first && mb_views_pass_through(x, y)) return 0;
+      int free = touch_at(0);
+      if (free < 0) return 0;
+      touch_taken[free] = id;
+    }
+    if (!touch_first) {
+      touch_first = id, kind = 0;
+      SetFocus(h);
+    } else if (!touch_second && id != touch_first) {
+      touch_second = id, kind = 4;
+    }
+  } else {
+    if (at < 0) return 0;
+    if (msg == WM_POINTERUPDATE) {
+      kind = id == touch_first ? 1 : id == touch_second ? 5 : -1;
+    } else {  // WM_POINTERUP, WM_POINTERCAPTURECHANGED
+      touch_taken[at] = 0;
+      if (id == touch_second) touch_second = 0, kind = 6;
+      else if (id == touch_first && touch_second) touch_first = touch_second, touch_second = 0, kind = 6;
+      else if (id == touch_first) touch_first = 0, kind = msg == WM_POINTERUP && !IS_POINTER_CANCELED_WPARAM(wp) ? 2 : 3;
+    }
+  }
+  if (kind >= 0) pointer_by(1, kind, x, y, 0);
+  return 1;
 }
 
 static LPCWSTR cursor_name(int kind) {
@@ -515,6 +573,12 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
       want_frame = 1;
       return 0;
     }
+    case WM_POINTERDOWN:
+    case WM_POINTERUPDATE:
+    case WM_POINTERUP:
+    case WM_POINTERCAPTURECHANGED:
+      if (touch(h, msg, wp)) return 0;
+      break;
     case WM_LBUTTONDOWN: SetCapture(h); SetFocus(h); pointer(0, lp); return 0;
     case WM_MOUSEMOVE:
       if (!tracking_leave) {
@@ -525,7 +589,7 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
       return 0;
     case WM_MOUSELEAVE:
       tracking_leave = 0;
-      mb_cb.pointer(7, -1, -1, 0);
+      pointer_by(0, 7, -1, -1, 0);
       return 0;
     case WM_RBUTTONDOWN: SetFocus(h); right_down = 1; pointer_button(0, lp, 2); return 0;
     case WM_RBUTTONUP:

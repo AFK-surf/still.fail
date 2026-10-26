@@ -1741,6 +1741,9 @@ void mb_host_outside(int32_t kind, int32_t id, int32_t state) {
 
 double mb_host_event_time(void) { return event_time; }
 
+// What a pointer's event came from (@hostapi.event_finger): not said (a Mac's pointer).
+int32_t mb_host_event_finger(void) { return -1; }
+
 double mb_host_frame_late(void) { return frame_late; }
 
 int32_t mb_host_platform(void) { return 0; }
