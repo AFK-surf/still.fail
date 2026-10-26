@@ -1162,6 +1162,35 @@ test "build-effect" {
 }
 
 ///|
+test "after-build-input: what an input took told by after_build, not what every build works out alike, nor by tell" {
+  let files = [
+    (
+      "src/app/view.mbt",
+      (
+        #|
+        #|fn view(c : @ui.Ctx, src : Source, on : Bool) -> Unit {
+        #|  c.after_build("seen", fn() { (src.call)("seen", Json::null(), fn(_) {  }) })
+        #|  if c.clicked(7) {
+        #|    c.after_build("send", fn() { (src.call)("send", Json::null(), fn(_) {  }) })
+        #|  }
+        #|  if switch_row(c, "on", on) != on {
+        #|    c.after_build("switch", fn() { (src.call)("switch", Json::null(), fn(_) {  }) })
+        #|  }
+        #|  if button(c, "go") {
+        #|    c.tell("go", fn() { (src.call)("go", Json::null(), fn(_) {  }) })
+        #|  }
+        #|}
+        #|
+      ),
+    ),
+  ]
+  let got = found(files, "after-build-input", 2)
+  got.sort_by(fn(a, b) { a.line.compare(b.line) })
+  // under the click and under the switch used; not what every build says, nor what tell tells
+  assert_eq(got.map(fn(f) { f.line }), [5, 8])
+}
+
+///|
 test "build-effect: inputs it knows by shape" {
   let files = [
     (

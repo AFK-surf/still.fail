@@ -13,7 +13,7 @@ let a11y_check_field : @ui.Field = @ui.Field::new()
 pub fn a11y_check_run(c : @ui.Ctx) -> Unit {
   c.editor("a11y-field", placeholder="A11YCHECK field", field=a11y_check_field) |> ignore
   if @kit.button(c, "A11YCHECK press", key="a11y-press").clicked {
-    c.after_build("a11y-check", fn() {
+    c.tell("a11y-check", fn() {
       @hostapi.log("A11YCHECK activated \{a11y_check_field.text()}")
       @hostapi.exit(0)
     })

@@ -329,6 +329,14 @@ fn Eff::exempt(self : Eff, f : MbtFile, k : Int) -> Bool {
       }
     }
   }
+  self.under_input(f, k)
+}
+
+///|
+/// Whether the token at k stands under an input the frame takes (what its enclosing conditions read: a click, a
+/// widget asked whether it was used, a choice compared with what is kept, a press let go): what one build alone sees.
+fn Eff::under_input(self : Eff, f : MbtFile, k : Int) -> Bool {
+  let toks = f.toks
   let it = f.item_of[k]
   let (values, pressed_fields) = if it >= 0 {
     self.item_shapes(f, f.items[it])
@@ -525,6 +533,14 @@ fn lint_build_effects(files : Array[MbtFile], cfg : Config, out : Array[Finding]
     }
     for k in more {
       helpers[k] = ()
+    }
+  }
+  // what an input took told by after_build: the last build's alone, and a build after the one that took it sees it not
+  for f in app {
+    for c in f.calls {
+      if c.kind == "method" && c.name == "after_build" && !c.is_def && eff.under_input(f, c.at) {
+        out.push(finding("after-build-input", f.rel, f.toks[c.at].line, f.line_text(c.at)))
+      }
     }
   }
   for x in fns {

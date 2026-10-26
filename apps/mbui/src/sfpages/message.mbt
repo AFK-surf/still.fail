@@ -867,7 +867,7 @@ fn elsewhere_route(c : @ui.Ctx, key : String, s : Elsewhere) -> Unit {
   let place = if url != "" { c.id("msg-place/" + key) } else { 0 }
   if place != 0 {
     if c.clicked(place) {
-      c.after_build("msg-place/" + key, fn() { @ui.open_url(url) |> ignore })
+      c.tell("msg-place/" + key, fn() { @ui.open_url(url) |> ignore })
     }
   }
   c.box(style=msg_route, fn() {

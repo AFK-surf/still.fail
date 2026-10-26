@@ -197,7 +197,7 @@ pub fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> 
         if @ui.badge_shown() {
           let badge_on = badge_kind(core, here, "on")
           if way_tile(c, "notify-badge", "badge", badge_on) {
-            c.after_build("notify-badge", fn() { set_badge_kind(core, "on", !badge_on) })
+            c.tell("notify-badge", fn() { set_badge_kind(core, "on", !badge_on) })
           }
         }
       })
@@ -350,7 +350,7 @@ fn kind_row(c : @ui.Ctx, core : Core, here : Here, notify : Json?, kind : String
         )
         if picked != at && on {
           // (told once the frame's builds are over)
-          c.after_build("notify-done", fn() { set_kind(core, "done", str(choices[picked])) })
+          c.tell("notify-done", fn() { set_kind(core, "done", str(choices[picked])) })
         }
       })
       |> ignore

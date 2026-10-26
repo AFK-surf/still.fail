@@ -313,6 +313,7 @@
     },
     "style-text": {},
     "build-effect": {},
+    "after-build-input": {},
     "unsettled-ok": {},
     "host-delay": {},
     "library-import": {},
@@ -427,6 +428,7 @@
     "build-effect": {
       "src/sfbase/drive_upload.mbt": 1
     },
+    "after-build-input": {},
     "unsettled-ok": {},
     "host-delay": {},
     "library-import": {},

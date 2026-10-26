@@ -73,7 +73,7 @@ pub fn shortcuts_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       }
       let reset_all = fn() {
         if keys_toggle(c, "keys-reset-all", @sf.t("web-main.shortcuts.resetAll")) {
-          c.after_build("keys-reset-all", fn() { set_keys(core, None, Json::null()) })
+          c.tell("keys-reset-all", fn() { set_keys(core, None, Json::null()) })
         }
       }
       match look {
@@ -112,7 +112,7 @@ fn shortcut_row(c : @ui.Ctx, core : Core, a : Json) -> Unit {
   c.box(style=shortcut_row_box, fn() {
     c.box(style=keys_row_label, fn() { c.text(text(av, "name"), style=keys_row_words) |> ignore }) |> ignore
     if flag(av, "changed") && keys_toggle(c, "keys-reset/" + action, @sf.t("web-main.shortcuts.reset")) {
-      c.after_build("keys-reset/" + action, fn() { set_keys(core, Some(action), Json::null()) })
+      c.tell("keys-reset/" + action, fn() { set_keys(core, Some(action), Json::null()) })
     }
     let id = c.id("keys/" + action)
     c.focusable(id)

@@ -6,7 +6,7 @@ let rule_names : Array[String] = [
   "host-import", "frame-wait", "at-rest-wait", "frame-count", "literal-time", "stable-mode",
   "retired-api", "app-clock", "wall-clock", "engine-math", "poll", "host-read", "builtin-hash",
   "hash-order", "globals", "style-literal", "box-loose", "style-exact", "style-text", "build-effect",
-  "unsettled-ok", "host-delay", "library-import", "reset-wire", "page-hand", "page-screen", "page-look", "follow-layout",
+  "after-build-input", "unsettled-ok", "host-delay", "library-import", "reset-wire", "page-hand", "page-screen", "page-look", "follow-layout",
   "motion-read", "page-old-part", "page-old-sheet", "corners-each", "cursor-hand", "tier-outside-shell", "fixture-import",
 ]
 
@@ -45,7 +45,8 @@ let rule_words : Map[String, String] = {
   "box-loose": "a box or words said by their loose look (pad=, bg=, size=…): say it as a named style (style=)",
   "style-exact": "a value off the theme's scale (Exact(…)), in a token file too: only goes down",
   "style-text": "a named style (a top-level let, a .then(…) of one) said as a call whose properties are all tokens and numbers: moonc makes each @ui.style(…) call ~5-10 KB of C run as the app starts; write it as its text, @ui.css(\"…\") (printed after `write:`). @ui.style(…) is for a style naming a variable or worked out, and inside functions (docs/style.md)",
-  "build-effect": "a view tells outside while it builds (a core's call, a host's effect): a frame is built again while what it read changes, and a build let go of tells all the same; say it in Ctx::after_build (once the frame's builds are over, as the last says it), or in the event's own handler",
+  "build-effect": "a view tells outside while it builds (a core's call, a host's effect): a frame is built again while what it read changes, and a build let go of tells all the same; say what every build works out alike in Ctx::after_build (once the frame's builds are over, as the last says it), what an input took in Ctx::tell (once, whichever build took it), or in the event's own handler",
+  "after-build-input": "what an input took (a click, a row or a switch used, a choice made) told by Ctx::after_build: that is the frame's last build's alone, and a build after the one that took the input sees it not, so a frame built again (a layout read back, what it read changed) loses it; tell it with Ctx::tell (once the builds are over, whichever build took it), or do it at once",
   "unsettled-ok": "a test leaves out its end's idle check (unsettled_ok=…: what still moves or asks, until it says its end): counted so the ones left only go",
   "library-import": "a package of the app's component library (detlint.json `library`) imports what is not the framework's nor said to be its own (the app's pages, its core, a station's, the cloud's): what it needs of the app, the app gives it as it starts (a function it sets: @sf.set_shortcuts)",
   "follow-layout": "a motion follows what the layout measured (a node's size or place, the window's, the keyboard's): what changed it is not its cause; tell the motion at its cause, with what it moves for (@motion.layout's `by`), and what its container does to it is no motion of its own (the app's docs/motion.md)",
