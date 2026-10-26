@@ -285,7 +285,7 @@ let viewer_bar_box : @ui.Style = @ui.css("w=Full")
 /// three parts (its end's room viewer_bar's).
 // kept across runs: a value (no field of it changes)
 let viewer_bar_row : @ui.Style = @ui.css("row w=Full pl=S3 gap=S4 align=ACenter").then(
-  @ui.style(h=Fixed(viewer_bar_h), pb=room(viewer_bar_h - bar_keys_top() * 2.0 - bar_key_side)),
+  @ui.style(h=Fixed(viewer_bar_h), pb=room(hairline_h)),
 )
 
 ///|
