@@ -12,7 +12,8 @@
 # Chromium's remote debugging). Then its updater must have taken it: the .sig checked, the desktop app quit, mbui's
 # installer run (--updated /S --force-run), mbui's app put in the desktop app's folder under the desktop app's
 # program's name (Electron's files gone, the uninstall entry the desktop app's installer made at mbui's version) and
-# opened, and writing its core's files in the desktop app's data (%APPDATA%\<its name>\core), not a place of its own.
+# opened; opened again (as the Start menu opens it), its core's files in the desktop app's data (%APPDATA%\<its
+# name>\core, as its core says), not a place of its own, its core on the desktop app's channel.
 # HANDOFF_TO=<installer>: mbui's as released instead (signed by the release key, its .sig beside it), taken as it is.
 # Says what it checked in out/handoff/result.txt; fails if one does not hold. What it made is taken away after. It
 # refuses to run where the desktop app has data (a person's).
@@ -53,10 +54,10 @@ ps_paths() {  # the paths of the processes named $1 that run
 entry() {
   powershell.exe -NoProfile -Command "\$q = [char]34; Get-ChildItem HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall | ForEach-Object { \$p = Get-ItemProperty \$_.PSPath; \$n = [string]\$p.DisplayName; if ((\$n -like '$NAME *' -or \$n -eq '$NAME') -and \$_.PSChildName -ne 'fail.still.mbui') { \$l = [string]\$p.InstallLocation; \$u = [string]\$p.UninstallString; if (-not \$l -and \$u.StartsWith(\$q)) { \$l = Split-Path \$u.Substring(1, \$u.IndexOf(\$q, 1) - 1) }; '{0}|{1}|{2}' -f \$_.PSChildName, \$l, \$p.DisplayVersion } }" | tr -d '\r' | head -1
 }
-SRV= TEE= QUIT=
+SRV= TEE= QUIT= NEW=
 done_with() {
   set +e
-  for p in $SRV $TEE $QUIT; do kill "$p" 2> /dev/null; done
+  for p in $SRV $TEE $QUIT $NEW; do kill "$p" 2> /dev/null; done
   taskkill //F //IM "$NAME.exe" > /dev/null 2>&1
   local dir=${INTO:-}
   if [ -n "$dir" ] && [ -f "$dir/Uninstall $NAME.exe" ]; then
@@ -193,18 +194,28 @@ check "the uninstall entry the desktop app's installer made taken over ($KEY2: $
   '[ "$KEY2" = "$KEY" ] && [ "$NOW" = 0.1.$N ] && [ "$(cygpath -u "$INTO2")" = "$INTO" ]'
 opened=$(ps_paths "$NAME")
 check "opened from there ($opened)" 'case "$opened" in *"$(w "$INTO")\\$NAME.exe"*) true ;; *) false ;; esac'
-# what it makes first, its core's, in the desktop app's data (src/host/win_core.c), not a place of its own: its core's
-# folder there made or written in after the desktop app ended (one signed out kept no core there; the files the two
-# cores share, it may only read)
-written() { find "$DATA/core" -newer "$U/quit" 2> /dev/null | head -1; }
-node "$ROOT/scripts/waitfor.mjs" --deadline 60 --what "what mbui's core makes in the desktop app's data" \
-  --watch "$(w "$DATA")" --check "find '$DATA/core' -newer '$U/quit' 2>/dev/null | grep -q ." > /dev/null
-check "its core's own in the desktop app's data ($(written))" '[ -n "$(written)" ]'
+# where its core keeps its files: the desktop app's data, not a place of its own (src/host/win_core.c). Its core says
+# so as it starts, on the app's output, which the one the installer opened gives nobody; and what it writes there is no
+# sign of it (one signed out may write nothing: what it would, the desktop app's core wrote already). So that one
+# ended, and the app opened again from there as the Start menu opens it (no test's MBUI_* given), its output read.
+taskkill //F //IM "$NAME.exe" > /dev/null 2>&1
+powershell.exe -NoProfile -Command "Wait-Process -Name '$NAME' -Timeout 30 -ErrorAction SilentlyContinue"
+: > "$U/new.log"
+env -u MBUI_CORE_DATA -u MBUI_OWN -u MBUI_APP_ID -u MBUI_APP_NAME \
+  node "$ROOT/scripts/waitfor.mjs" --tee "$(w "$U/new.log")" --line '^\[core\] started' --mark "$(w "$U/core-said")" -- \
+  "$(w "$INTO/$NAME.exe")" > /dev/null 2>&1 &
+NEW=$!
+node "$ROOT/scripts/waitfor.mjs" --deadline 60 --what "mbui's core's start" --exists "$(w "$U/core-said")" > /dev/null
+said=$(sed -n 's/.*, its files in \(.*\), cloud .*/\1/p' "$U/core-said" 2> /dev/null | tr -d '\r')
+check "its core's files in the desktop app's data (${said:-not said})" '[ "$said" = "$(w "$DATA")\\core" ]'
+check "its core on the $VARIANT channel, as the desktop app's" \
+  'case "$(cat "$U/core-said" 2> /dev/null)" in *" (beta)"*) [ $VARIANT = beta ] ;; *) [ $VARIANT = stable ] ;; esac'
 check "none in a place of its own (%LOCALAPPDATA%\\$ID\\core)" '[ ! -d "$LOCAL/$ID/core" ]'
 echo "handoff: $fails failed" | tee -a "$U/result.txt"
 [ $fails = 0 ] || {
   echo "== the desktop app's log"; tail -40 "$U/old.log"; echo "== mbui's installer's"; cat "$U/setup.log" 2>/dev/null
+  echo "== mbui's app's, opened again"; grep -av '^\[core trace\]' "$U/new.log" 2>/dev/null | tail -30
   echo "== the desktop app's data, and mbui's places (as it ended: $(ls -l --full-time "$U/quit" 2>/dev/null | awk '{print $7}'))"
-  ls -la --full-time "$DATA" "$DATA/core" "$LOCAL/$ID" "$LOCAL/fail.still.mbui" 2>&1 | head -60
+  ls -la --full-time "$DATA" "$DATA/core" "$LOCAL/$ID" "$LOCAL/$ID/core" 2>&1 | head -60
 }
 [ $fails = 0 ]
