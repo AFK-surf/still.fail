@@ -8,7 +8,11 @@
 // the row in the list again, where it is drawn the same. Nothing fades in or out to cover a change. The phone is a
 // device from the start, the phone's app running in it, small; it comes to the front at the end while the computer
 // steps back, both seen all along. On a narrow screen the window is the phone's app itself, and the devices its cards.
+//
+// The apps are the scene's while it puts them together, and the visitor's once it has: the window's once its rows are
+// home, the phone's once it is in front. Till then they take no input, so that nothing changes under what flies.
 import { useEffect, useRef } from "react";
+import type { MountedDemo } from "../demo/mount.tsx";
 import * as css from "./site.css.ts";
 import { APP, Button, Demo, type DemoProps } from "./Site.tsx";
 import { useSay, useSiteLang } from "./words.ts";
@@ -137,6 +141,7 @@ export function OneComputer(props: DemoProps) {
   const phoneScreen = useRef<HTMLIFrameElement>(null);
   const lines = useRef<SVGGElement>(null);
   const air = useRef<HTMLDivElement>(null);
+  const demo = useRef<MountedDemo>(null);
 
   useEffect(() => {
     const el = scene.current, space = room.current, outer = win.current, inner = screen.current, hand = phone.current, wires = lines.current;
@@ -216,6 +221,13 @@ export function OneComputer(props: DemoProps) {
       const tx = lerp(0, -size.w * 0.14, front) + (w.w * w.k * (1 - back)) / 2, ty = (w.h * w.k * (1 - back)) / 2 + lerp(below, 0, rise);
       outer.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
       drawn = s;
+      // The window's app is the visitor's while its rows are home. Played back out of that, the scene takes it again:
+      // as it opened, if the visitor has used it, and its rows read again, so that what flies out is what it shows.
+      const home = landing === 1;
+      if (outer.inert === home) {
+        outer.inert = !home;
+        if (!home) { demo.current?.reopen(); leave(); }
+      }
       if (rows.length === 0 && !read()) { asked = requestAnimationFrame(draw); return; }
       const inRoom = (b: Box): Box => ({ x: w.x + tx + b.x * s, y: w.y + ty + b.y * s, w: b.w * s, h: b.h * s });
 
@@ -246,6 +258,7 @@ export function OneComputer(props: DemoProps) {
         const p2 = { x: size.w / 2 + size.w * 0.16, y: size.h / 2, s: full };
         const p = i === 0 ? { x: lerp(p0.x, p1.x, t), y: lerp(p0.y, p1.y, t), s: lerp(p0.s, p1.s, t) } : { x: lerp(p1.x, p2.x, front), y: lerp(p1.y, p2.y, front), s: lerp(p1.s, p2.s, front) };
         hand.style.transform = `translate(${p.x - (HAND.w * p.s) / 2}px, ${p.y - (HAND.h * p.s) / 2}px) scale(${p.s})`;
+        if (hand.inert !== front < 1) hand.inert = front < 1;
         phoneAt = { x: p.x - (HAND.w * p.s) / 2, y: p.y - (HAND.h * p.s) / 2, w: HAND.w * p.s, h: HAND.h * p.s };
       }
 
@@ -295,18 +308,18 @@ export function OneComputer(props: DemoProps) {
           <div className={css.oneRoom} ref={room}>
             <svg className={css.oneWires} aria-hidden><g ref={lines}>{Array.from({ length: pairs }, (_, i) => <path key={i} />)}</g></svg>
             <div className={css.oneLift}>
-              <div className={css.oneWindow} ref={win}>
+              <div className={css.oneWindow} ref={win} inert>
                 {/* Its shell: a laptop's edge and base (a phone's edge on a narrow screen), under the screen. */}
                 <div className={css.oneEdge} />
                 <div className={css.oneBase} />
                 <div className={css.oneKeysInWindow} />
                 <div className={css.oneScreen} ref={screen}>
-                  <Demo v="1" start="stations" className={css.oneDemo} {...(props.mountDemo ? { mount: props.mountDemo } : {})} {...(props.demo ? { frame: props.demo } : {})} />
+                  <Demo v="1" start="stations" className={css.oneDemo} held={demo} {...(props.mountDemo ? { mount: props.mountDemo } : {})} {...(props.demo ? { frame: props.demo } : {})} />
                 </div>
                 <div className={css.oneIslandInWindow} />
               </div>
             </div>
-            <div className={css.onePhone} ref={phone} style={{ width: HAND.w, height: HAND.h, padding: SHELL.edge }}>
+            <div className={css.onePhone} ref={phone} style={{ width: HAND.w, height: HAND.h, padding: SHELL.edge }} inert>
               <i className={css.oneKeys} />
               <i className={css.oneIsland} />
               <iframe className={css.onePhoneScreen} ref={phoneScreen} width={PHONE.w} height={PHONE.h} title={say.phoneTitle} tabIndex={-1} />
