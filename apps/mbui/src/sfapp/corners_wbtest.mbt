@@ -75,6 +75,7 @@ fn corners_check(lang : String) -> Unit raise {
   let wrong : Array[String] = []
   let gaps : Array[String] = []
   let moves : Array[String] = []
+  let rooms : Array[String] = []
   for win in corner_windows {
     let squeezed = squeeze_windows.contains(win.0)
     for mode in corner_modes {
@@ -88,6 +89,13 @@ fn corners_check(lang : String) -> Unit raise {
       // light theme, once: contrast_wbtest.mbt)
       let squeeze = if squeezed { squeeze_wrong(at, t.squeeze_faults()) } else { None }
       if lang == "zh" {
+        // (and a press's room, at rest and with what shows only under the hand shown: rooms_known_wbtest.mbt)
+        for f in t.room_faults() {
+          rooms.push("\{at}: \{f}")
+        }
+        for f in t.hover_only_faults() {
+          rooms.push("\{at}: \{f}")
+        }
         match contrast_wrong("\{win.0}-light \{mode}", t.contrast_faults()) {
           Some(w) => wrong.push(w)
           None => ()
@@ -121,6 +129,12 @@ fn corners_check(lang : String) -> Unit raise {
       if squeeze is Some(w) {
         wrong.push(w)
       }
+    }
+  }
+  if lang == "zh" {
+    match rooms_wrong(rooms) {
+      Some(w) => wrong.push(w)
+      None => ()
     }
   }
   match gaps_wrong(lang, gaps) {
