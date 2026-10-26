@@ -7,8 +7,7 @@
 // Every fault is printed (`at: rule n: …`) when a count is off its bar.
 
 ///|
-/// The faults each rule still has, in each language: they only fall (rule 6's nine the phone's 归档策略 options, their
-/// name and what it means 3 apart, on three screens; rule 4's two more with files-add-folder swept, its
+/// The faults each rule still has, in each language: they only fall (rule 4's two more with files-add-folder swept, its
 /// files' bar a phone's and a tablet's as the drive's other screens have it).
 let gaps_known : Map[String, Int] = {
   "zh rule 1": 0,
@@ -21,8 +20,8 @@ let gaps_known : Map[String, Int] = {
   "en rule 4": 94,
   "zh rule 5": 1,
   "en rule 5": 1,
-  "zh rule 6": 9,
-  "en rule 6": 9,
+  "zh rule 6": 0,
+  "en rule 6": 0,
   "zh rule 7": 0,
   "en rule 7": 0,
 }

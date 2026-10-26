@@ -475,13 +475,11 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
         list_card(c, fn() {
           for o in items(policy, "options").filter(fn(x) { flag(Some(x), "archive") == archive }) {
             let ov = Some(o)
+            // (its name, what it means under it: a row's two lines, as the settings' rows lay them; how many at its end)
             if list_row(c, key=if busy { "" } else { "policy-option/" + text(ov, "id") }, fn() {
-                c.box(w=Fill(1.0), gap=3.0, fn() {
-                  c.text(text(ov, "name"), size=t.t.body, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
-                  c.text(text(ov, "rubric"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+                row_lines(c, text(ov, "name"), text(ov, "rubric"), wrap_sub=true, end=fn() {
+                  c.text(count(ov, "count").to_string(), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
                 })
-                |> ignore
-                c.text(count(ov, "count").to_string(), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
               }) {
               open_one(text(ov, "id"), ov)
             }
