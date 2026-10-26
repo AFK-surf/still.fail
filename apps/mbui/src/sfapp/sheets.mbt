@@ -81,19 +81,6 @@ fn model_mark_big(c : @ui.Ctx, maker : String, runtime : String, size : Double, 
   |> ignore
 }
 
-///|
-/// A sheet's side margin (Android ChatInfo.kt, AgentSheet.kt: padding(start = 18.dp, end = 18.dp)).
-let sheet_side : Double = 18.0
-
-///|
-/// What is under a fitted sheet's last card. Android: its column's padding(bottom = …) (ChatInfo.kt 30.dp,
-/// AgentSheet.kt 24.dp), the sheet then made taller by the navigation bar (Sheet.kt: fit + foot, foot
-/// WindowInsets.navigationBars). mbui draws inside the system bars (its Android host's view is set in by them,
-/// MainActivity's onApplyWindowInsets), so that part is outside what it draws: the padding alone.
-let chat_info_foot : Double = 30.0
-
-///|
-let agent_sheet_foot : Double = 24.0
 
 ///|
 /// A row of an info card, its ground under the finger: a row of the ladder's.
@@ -322,8 +309,7 @@ fn agent_status(c : @ui.Ctx, src : Source, a : Json?) -> Unit {
 /// many take part and when it was last written in; its agents, each where it stands (a tap opens its card); then what
 /// can be done with it: what its agents and other chats' wrote each other, pin it, copy its link, its sharing, archive
 /// it. As tall as what it shows.
-fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
-  ignore(w)
+fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) -> Unit {
   let t = @sf.theme()
   let chat = (src.topic)("chat", chat_params(r)).value
   let (view, _, _) = view_of_chat(src, r)
@@ -336,267 +322,275 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
   let slack = text(chat, "slackUrl")
   let feishu = text(chat, "feishuUrl")
   let xshare = field(chat, "xshare")
-  sheet_frame(c, "info", c.height * 0.55, fit=true, fn() {
-    let (archived, offline) = match view {
-      Some(v) => (v.archived, v.offline)
-      None => (false, false)
-    }
-    // archived or offline it is only read: no name to change, nothing to archive
-    let open = view is Some(_) && !archived && !offline
-    let thread = field(chat, "thread")
-    let link = if view is Some(_) { chat_link(r.station, r.session) } else { "" }
-    let title = text(chat, "title")
-    c.box(w=Fill(1.0), pl=sheet_side, pr=sheet_side, pb=chat_info_foot, fn() {
-      c.box(dir=Row, w=Fill(1.0), pt=4.0, gap=12.0, align=AStart, fn() {
-        c.box(w=Fill(1.0), max_h=48.0, clip=true, fn() {
-          c.text(title, size=t.t.title, weight=700, color=t.p.text, line=24.0) |> ignore
-        })
-        |> ignore
-        if open {
-          let id = c.id("info/rename")
-          if c.clicked(id) {
-            open_rename(src, r, opt_number(thread, "id"), title, from=Of(id))
-          }
-          c.box(
-            w=Px(32.0),
-            h=Px(32.0),
-            radius=16.0,
-            bg=@sf.alpha(t.p.text, 0.05),
-            align=ACenter,
-            justify=JCenter,
-            id~,
-            fn() {
-              @sf.icon(c, "edit", size=16.0, color=t.p.text) |> ignore
-              // ChatInfo.kt: clip(CircleShape).clickable
-              @motion.ripple(c, id, 16.0)
-            },
-          )
-          |> ignore
-        }
+  let (archived, offline) = match view {
+    Some(v) => (v.archived, v.offline)
+    None => (false, false)
+  }
+  // archived or offline it is only read: no name to change, nothing to archive
+  let open = view is Some(_) && !archived && !offline
+  let thread = field(chat, "thread")
+  let link = if view is Some(_) { chat_link(r.station, r.session) } else { "" }
+  let title = text(chat, "title")
+  c.box(w=Fill(1.0), fn() {
+    // (clear of an untitled dialog's close button over its end: @sf.untitled_clear)
+    c.box(style=@sf.untitled_clear(), dir=Row, w=Fill(1.0), pt=4.0, gap=12.0, align=AStart, fn() {
+      c.box(w=Fill(1.0), max_h=48.0, clip=true, fn() {
+        c.text(title, size=t.t.title, weight=700, color=t.p.text, line=24.0) |> ignore
       })
       |> ignore
-      // who started it and when, how many take part, when it was last written in: what there is of them, in a line
-      let facts : Array[String] = []
-      match text(chat, "place") {
-        "" => ()
-        p => facts.push(fill("android-chat.info.from.slack", [("place", p)]))
-      }
-      let creator = match field(thread, "creator") {
-        Some(Object(_)) as cr =>
-          match text(field(cr, "shown"), "display") {
-            "" => text(cr, "name")
-            d => d
-          }
-        _ => ""
-      }
-      let created = text(field(field(thread, "time"), "createdAt"), "ago")
-      if creator != "" && created != "" {
-        facts.push(fill("android-chat.info.startedAt", [("name", creator), ("ago", created)]))
-      } else if creator != "" {
-        facts.push(creator)
-      } else if created != "" {
-        facts.push(created)
-      }
-      let people = match view {
-        Some(v) => v.people
-        None => []
-      }
-      if people.length() > 1 {
-        facts.push(fill("android-chat.info.people.count", [("n", people.length().to_string())]))
-      }
-      match text(field(field(field(thread, "lastMessage"), "time"), "createdAt"), "ago") {
-        "" => ()
-        ago => facts.push(fill("android-chat.info.latestAt", [("ago", ago)]))
-      }
-      c.box(dir=Row, w=Fill(1.0), pt=6.0, pb=16.0, gap=8.0, align=ACenter, fn() {
-        if people.length() > 0 {
-          let shown = if people.length() > 5 { people[:5].to_array() } else { people }
-          c.box(w=Px(19.0 + 14.0 * (shown.length() - 1).to_double()), fn() {
-            // ringed in the sheet's ground (ChatInfo.kt: C.surface)
-            people_stack(c, src, shown, 16.0, ring=t.p.card)
-          })
-          |> ignore
+      if open {
+        let id = c.id("info/rename")
+        if c.clicked(id) {
+          open_rename(src, r, opt_number(thread, "id"), title, from=Of(id))
         }
-        c.box(w=Fill(1.0), fn() {
-          // (in as many lines as they take: words of no length known, none of them cut)
-          c.text(facts.join(" · "), size=t.t.meta, color=t.p.muted, w=Fill(1.0)) |> ignore
-        })
+        c.box(
+          w=Px(32.0),
+          h=Px(32.0),
+          radius=16.0,
+          bg=@sf.alpha(t.p.text, 0.05),
+          align=ACenter,
+          justify=JCenter,
+          id~,
+          fn() {
+            @sf.icon(c, "edit", size=16.0, color=t.p.text) |> ignore
+            // ChatInfo.kt: clip(CircleShape).clickable
+            @motion.ripple(c, id, 16.0)
+          },
+        )
         |> ignore
-      })
-      |> ignore
-      if agents.length() > 0 {
-        info_list(c, fn() {
-          for a in agents {
-            let av = Some(a)
-            let s = field(av, "session")
-            let key = text(s, "key")
-            if info_row(c, "info/agent/" + key, fn() {
-                // (as tall as its two lines: in the card's corners as far from its top as from its foot)
-                model_mark_big(
-                  c,
-                  text(field(s, "maker"), "id"),
-                  text(s, "runtime"),
-                  info_tile,
-                  state_of_badge(text(av, "badge")),
-                  @sf.over(t.p.bg, @sf.alpha(t.p.card, 0.8)),
-                )
-                // its name, how it is, and its allowance under them, each a line of its own (beside its name the
-                // allowance took the name's room, or left the row where it had not the room: the allowance gone)
-                c.box(w=Fill(1.0), keep=true, fn() {
-                  c.text(text(s, "agentText"), style=info_agent_name, keep=true) |> ignore
-                  let since = agent_since(c, src, av)
-                  let line = if since == "" {
-                    text(s, "statusText")
-                  } else {
-                    text(s, "statusText") + " · " + since
-                  }
-                  c.text(line, style=info_agent_line, keep=true) |> ignore
-                  allowance_line(c, match field(field(av, "account"), "quota") {
-                    Some(_) as q => q
-                    None => field(field(av, "profile"), "quota")
-                  })
-                })
-                |> ignore
-                chevron(c)
-              }, tile=true) {
-              open_sheet(c, AgentOf(r, key))
-            }
-          }
-        })
-        c.box(h=Px(10.0), fn() {  }) |> ignore
-      }
-      let letters = number(chat, "letters")
-      if open || link != "" || letters > 0.0 || slack != "" || xshare is Some(_) {
-        info_list(c, fn() {
-          // what its agents and other chats' wrote each other, not in the chat: their own sheet (Letters.kt)
-          match opt_number(thread, "id") {
-            Some(th) if letters > 0.0 =>
-              if info_row(c, "info/letters", fn() {
-                  @sf.icon(c, "chats", size=16.0, color=t.p.text) |> ignore
-                  c.box(style=@sf.full_width, fn() { c.text(tr("web-main.letters.title"), style=info_words) |> ignore })
-                  |> ignore
-                  c.text(fill("web-main.letters.count", [("n", letters.to_int().to_string())]), style=letters_meta) |> ignore
-                  chevron(c)
-                }) {
-                open_letters(c, r, th)
-              }
-            _ => ()
-          }
-          // a station from before pins says nothing of them: its chats are not pinned from here
-          match pinned {
-            Some(p) if open => {
-              let pkey = "pin/" + r.station + "/" + r.session
-              let busy = doing(pkey)
-              if info_row(c, if busy { "" } else { "info/pin" }, fn() {
-                  @sf.icon(c, "pin", size=16.0, color=t.p.text) |> ignore
-                  c.box(w=Fill(1.0), fn() {
-                    c.text(
-                      tr(if p { "android-chat.unpin" } else { "android-chat.info.pinTop" }),
-                      size=t.t.ui,
-                      color=t.p.text,
-                      wrap=false,
-                    )
-                    |> ignore
-                  })
-                  |> ignore
-                  if busy {
-                    @sf.spinner(c, size=12.0) |> ignore
-                  }
-                }) {
-                act(
-                  src,
-                  tr(if p { "android-chat.unpin.verb" } else { "android-chat.pin.verb" }),
-                  pkey,
-                  "chat.pin",
-                  {
-                    "station": Json::string(r.station),
-                    "session": Json::string(r.session),
-                    "pinned": Json::boolean(!p),
-                  },
-                )
-              }
-            }
-            _ => ()
-          }
-          if link != "" &&
-            info_row(c, "info/link", fn() {
-              @sf.icon(c, "copy", size=16.0, color=t.p.text) |> ignore
-              c.box(w=Fill(1.0), fn() {
-                c.text(tr("web-main.chat.copyLink"), size=t.t.ui, color=t.p.text, wrap=false) |> ignore
-              })
-              |> ignore
-            }) {
-            copy_chat_link(c, title, link)
-          }
-          // relayed to a channel (docs/relay.md, Relay.kt): a chat with an agent to go on there
-          match opt_number(thread, "id") {
-            Some(th) if open && agents.length() > 0 =>
-              if info_row(c, "info/relay", fn() {
-                  @sf.icon(c, "arrow-up-right", size=16.0, color=t.p.text) |> ignore
-                  c.box(style=@sf.full_width, fn() { c.text(tr("web-main.relay.action"), style=info_words) |> ignore })
-                  |> ignore
-                  chevron(c)
-                }) {
-                // (the chat's sheet put down, the picking up in its place)
-                close_sheet(c)
-                @sfpages.open_relay(src, r, th, from=Unanchored)
-              }
-            _ => ()
-          }
-          match xshare {
-            Some(Object(_)) => xshare_row(c, src, r, opt_number(thread, "id"), xshare)
-            _ => ()
-          }
-          // where it came from, opened there (the system's app for its link)
-          if slack != "" &&
-            info_row(c, "info/slack", fn() {
-              @sf.slack_mark(c, 16.0) |> ignore
-              c.box(style=@sf.full_width, fn() { c.text(tr("android-chat.info.slack.open"), style=info_words) |> ignore })
-              |> ignore
-              chevron(c)
-            }) {
-            open_outside(slack)
-          }
-          if feishu != "" &&
-            info_row(c, "info/feishu", fn() {
-              @sf.feishu_mark(c, 16.0) |> ignore
-              c.box(style=@sf.full_width, fn() { c.text(tr("web-mobile.chat.openFeishu"), style=info_words) |> ignore })
-              |> ignore
-              chevron(c)
-            }) {
-            open_outside(feishu)
-          }
-          // into the archive, back to the list at once
-          if open &&
-            info_row(c, "info/archive", fn() {
-              @sf.icon(c, "archive", size=16.0, color=t.p.text) |> ignore
-              c.box(w=Fill(1.0), fn() {
-                c.text(tr("android-chat.info.archive"), size=t.t.ui, color=t.p.text, wrap=false) |> ignore
-              })
-              |> ignore
-            }) {
-            // a chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words)
-            match (view, text(field(chat, "watch"), "ask")) {
-              (Some(v), "") => archive_chat(src, r, v)
-              (Some(v), ask) => {
-                close_sheet(c)
-                @sf.confirm(fill("android-chat.archive.ask", [("title", title)]), ask, tr("android-chat.archive"), fn() {
-                  archive_chat(src, r, v)
-                })
-              }
-              (None, _) => ()
-            }
-          }
-        })
-      }
-      // making it public, a card of its own (publish.mbt)
-      match shown_publish(chat) {
-        Some(_) as p => publish_list(c, src, r, number(thread, "id"), p)
-        None => ()
       }
     })
     |> ignore
+    // who started it and when, how many take part, when it was last written in: what there is of them, in a line
+    let facts : Array[String] = []
+    match text(chat, "place") {
+      "" => ()
+      p => facts.push(fill("android-chat.info.from.slack", [("place", p)]))
+    }
+    let creator = match field(thread, "creator") {
+      Some(Object(_)) as cr =>
+        match text(field(cr, "shown"), "display") {
+          "" => text(cr, "name")
+          d => d
+        }
+      _ => ""
+    }
+    let created = text(field(field(thread, "time"), "createdAt"), "ago")
+    if creator != "" && created != "" {
+      facts.push(fill("android-chat.info.startedAt", [("name", creator), ("ago", created)]))
+    } else if creator != "" {
+      facts.push(creator)
+    } else if created != "" {
+      facts.push(created)
+    }
+    let people = match view {
+      Some(v) => v.people
+      None => []
+    }
+    if people.length() > 1 {
+      facts.push(fill("android-chat.info.people.count", [("n", people.length().to_string())]))
+    }
+    match text(field(field(field(thread, "lastMessage"), "time"), "createdAt"), "ago") {
+      "" => ()
+      ago => facts.push(fill("android-chat.info.latestAt", [("ago", ago)]))
+    }
+    c.box(dir=Row, w=Fill(1.0), pt=6.0, pb=16.0, gap=8.0, align=ACenter, fn() {
+      if people.length() > 0 {
+        let shown = if people.length() > 5 { people[:5].to_array() } else { people }
+        c.box(w=Px(19.0 + 14.0 * (shown.length() - 1).to_double()), fn() {
+          // ringed in the sheet's ground (ChatInfo.kt: C.surface)
+          people_stack(c, src, shown, 16.0, ring=t.p.card)
+        })
+        |> ignore
+      }
+      c.box(w=Fill(1.0), fn() {
+        // (in as many lines as they take: words of no length known, none of them cut)
+        c.text(facts.join(" · "), size=t.t.meta, color=t.p.muted, w=Fill(1.0)) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+    if agents.length() > 0 {
+      info_list(c, fn() {
+        for a in agents {
+          let av = Some(a)
+          let s = field(av, "session")
+          let key = text(s, "key")
+          if info_row(c, "info/agent/" + key, fn() {
+              // (as tall as its two lines: in the card's corners as far from its top as from its foot)
+              model_mark_big(
+                c,
+                text(field(s, "maker"), "id"),
+                text(s, "runtime"),
+                info_tile,
+                state_of_badge(text(av, "badge")),
+                @sf.over(t.p.bg, @sf.alpha(t.p.card, 0.8)),
+              )
+              // its name, how it is, and its allowance under them, each a line of its own (beside its name the
+              // allowance took the name's room, or left the row where it had not the room: the allowance gone)
+              c.box(w=Fill(1.0), keep=true, fn() {
+                c.text(text(s, "agentText"), style=info_agent_name, keep=true) |> ignore
+                let since = agent_since(c, src, av)
+                let line = if since == "" {
+                  text(s, "statusText")
+                } else {
+                  text(s, "statusText") + " · " + since
+                }
+                c.text(line, style=info_agent_line, keep=true) |> ignore
+                allowance_line(c, match field(field(av, "account"), "quota") {
+                  Some(_) as q => q
+                  None => field(field(av, "profile"), "quota")
+                })
+              })
+              |> ignore
+              chevron(c)
+            }, tile=true) {
+            close()
+            open_agent(src, r, key)
+          }
+        }
+      })
+      c.box(h=Px(10.0), fn() {  }) |> ignore
+    }
+    let letters = number(chat, "letters")
+    if open || link != "" || letters > 0.0 || slack != "" || xshare is Some(_) {
+      info_list(c, fn() {
+        // what its agents and other chats' wrote each other, not in the chat: their own sheet (Letters.kt)
+        match opt_number(thread, "id") {
+          Some(th) if letters > 0.0 =>
+            if info_row(c, "info/letters", fn() {
+                @sf.icon(c, "chats", size=16.0, color=t.p.text) |> ignore
+                c.box(style=@sf.full_width, fn() { c.text(tr("web-main.letters.title"), style=info_words) |> ignore })
+                |> ignore
+                c.text(fill("web-main.letters.count", [("n", letters.to_int().to_string())]), style=letters_meta) |> ignore
+                chevron(c)
+              }) {
+              close()
+                open_letters(src, r, th)
+            }
+          _ => ()
+        }
+        // a station from before pins says nothing of them: its chats are not pinned from here
+        match pinned {
+          Some(p) if open => {
+            let pkey = "pin/" + r.station + "/" + r.session
+            let busy = doing(pkey)
+            if info_row(c, if busy { "" } else { "info/pin" }, fn() {
+                @sf.icon(c, "pin", size=16.0, color=t.p.text) |> ignore
+                c.box(w=Fill(1.0), fn() {
+                  c.text(
+                    tr(if p { "android-chat.unpin" } else { "android-chat.info.pinTop" }),
+                    size=t.t.ui,
+                    color=t.p.text,
+                    wrap=false,
+                  )
+                  |> ignore
+                })
+                |> ignore
+                if busy {
+                  @sf.spinner(c, size=12.0) |> ignore
+                }
+              }) {
+              act(
+                src,
+                tr(if p { "android-chat.unpin.verb" } else { "android-chat.pin.verb" }),
+                pkey,
+                "chat.pin",
+                {
+                  "station": Json::string(r.station),
+                  "session": Json::string(r.session),
+                  "pinned": Json::boolean(!p),
+                },
+              )
+            }
+          }
+          _ => ()
+        }
+        if link != "" &&
+          info_row(c, "info/link", fn() {
+            @sf.icon(c, "copy", size=16.0, color=t.p.text) |> ignore
+            c.box(w=Fill(1.0), fn() {
+              c.text(tr("web-main.chat.copyLink"), size=t.t.ui, color=t.p.text, wrap=false) |> ignore
+            })
+            |> ignore
+          }) {
+          copy_chat_link(c, title, link)
+        }
+        // relayed to a channel (docs/relay.md, Relay.kt): a chat with an agent to go on there
+        match opt_number(thread, "id") {
+          Some(th) if open && agents.length() > 0 =>
+            if info_row(c, "info/relay", fn() {
+                @sf.icon(c, "arrow-up-right", size=16.0, color=t.p.text) |> ignore
+                c.box(style=@sf.full_width, fn() { c.text(tr("web-main.relay.action"), style=info_words) |> ignore })
+                |> ignore
+                chevron(c)
+              }) {
+              // (the chat's sheet put down, the picking up in its place)
+              close()
+              @sfpages.open_relay(src, r, th, from=Unanchored)
+            }
+          _ => ()
+        }
+        match xshare {
+          Some(Object(_)) => xshare_row(c, src, r, opt_number(thread, "id"), xshare, close)
+          _ => ()
+        }
+        // where it came from, opened there (the system's app for its link)
+        if slack != "" &&
+          info_row(c, "info/slack", fn() {
+            @sf.slack_mark(c, 16.0) |> ignore
+            c.box(style=@sf.full_width, fn() { c.text(tr("android-chat.info.slack.open"), style=info_words) |> ignore })
+            |> ignore
+            chevron(c)
+          }) {
+          open_outside(slack)
+        }
+        if feishu != "" &&
+          info_row(c, "info/feishu", fn() {
+            @sf.feishu_mark(c, 16.0) |> ignore
+            c.box(style=@sf.full_width, fn() { c.text(tr("web-mobile.chat.openFeishu"), style=info_words) |> ignore })
+            |> ignore
+            chevron(c)
+          }) {
+          open_outside(feishu)
+        }
+        // into the archive, back to the list at once
+        if open &&
+          info_row(c, "info/archive", fn() {
+            @sf.icon(c, "archive", size=16.0, color=t.p.text) |> ignore
+            c.box(w=Fill(1.0), fn() {
+              c.text(tr("android-chat.info.archive"), size=t.t.ui, color=t.p.text, wrap=false) |> ignore
+            })
+            |> ignore
+          }) {
+          // a chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words)
+          match (view, text(field(chat, "watch"), "ask")) {
+            (Some(v), "") => archive_chat(src, r, v)
+            (Some(v), ask) => {
+              close()
+              @sf.confirm(fill("android-chat.archive.ask", [("title", title)]), ask, tr("android-chat.archive"), fn() {
+                archive_chat(src, r, v)
+              })
+            }
+            (None, _) => ()
+          }
+        }
+      })
+    }
+    // making it public, a card of its own (publish.mbt)
+    match shown_publish(chat) {
+      Some(_) as p => publish_list(c, src, r, number(thread, "id"), p, close)
+      None => ()
+    }
   })
+  |> ignore
+}
+
+///|
+/// The chat's own sheet (chat_info_body) from "…": the library's panel, as tall as what it shows, its head its own (its
+/// name with ✎ beside it).
+fn open_info(src : Source, r : ChatRef) -> Unit {
+  @sf.panel("", from=Unanchored, fn(c, close) { chat_info_body(c, src, r, close) })
 }
 
 ///|
@@ -632,126 +626,132 @@ fn open_rename(src : Source, r : ChatRef, thread : Double?, was : String, from~ 
 /// An agent of the chat in brief (AgentSheet.kt openAgent): what it runs and where it stands (with a stop while it
 /// works), its latest lines, the figures that say most, then where to go on: the station it runs on, its account, its
 /// history, its jobs; and its context by hand (context.mbt).
-fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : String) -> Unit {
+fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -> Unit) -> Unit {
   let t = @sf.theme()
   let chat = (src.topic)("chat", chat_params(r)).value
   let a = agent_json(chat, key)
   let card = (src.topic)("agentCard", { "station": Json::string(r.station), "key": Json::string(key) }).value
   let jobs = items(a, "jobs")
-  let stations = stations_of((src.topic)("stations", { "scope": Json::string(w.id) }).value)
+  let stations = stations_of((src.topic)("stations", { "scope": Json::string(workspace_of(r.station)) }).value)
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
-  sheet_frame(c, "agent", c.height * 0.55, fit=true, fn() {
-    let s = field(a, "session")
-    let status = text(a, "status")
-    c.box(w=Fill(1.0), pl=sheet_side, pr=sheet_side, pb=agent_sheet_foot, fn() {
-      c.box(dir=Row, w=Fill(1.0), pt=4.0, gap=12.0, align=ACenter, fn() {
-        model_mark_big(
-          c,
-          text(field(s, "maker"), "id"),
-          text(s, "runtime"),
-          40.0,
-          state_of_badge(text(a, "badge")),
-          @sf.over(t.p.bg, @sf.alpha(t.p.card, 0.8)),
-        )
-        c.box(w=Fill(1.0), gap=1.0, fn() {
-          c.text(text(s, "agentText"), size=t.t.title, weight=700, color=t.p.text, wrap=false) |> ignore
-          agent_status(c, src, a)
-        })
-        |> ignore
-        if status == "running" || status == "queued" {
-          stop_button(c, src, r.station, key)
-        }
+  let s = field(a, "session")
+  let status = text(a, "status")
+  c.box(w=Fill(1.0), fn() {
+    c.box(style=@sf.untitled_clear(), dir=Row, w=Fill(1.0), pt=4.0, gap=12.0, align=ACenter, fn() {
+      model_mark_big(
+        c,
+        text(field(s, "maker"), "id"),
+        text(s, "runtime"),
+        40.0,
+        state_of_badge(text(a, "badge")),
+        @sf.over(t.p.bg, @sf.alpha(t.p.card, 0.8)),
+      )
+      c.box(w=Fill(1.0), gap=1.0, fn() {
+        c.text(text(s, "agentText"), size=t.t.title, weight=700, color=t.p.text, wrap=false) |> ignore
+        agent_status(c, src, a)
       })
       |> ignore
-      agent_lines(c, card)
-      let entry = context_entry(c, src, r, key, s)
-      agent_tiles(c, card, 14.0, entry~)
-      agent_notes(c, card, 10.0)
-      c.box(h=Px(12.0), fn() {  }) |> ignore
-      info_list(c, fn() {
-        match station {
-          Some(st) =>
-            if info_row(c, "agent/station", fn() {
-                c.text(tr("android-chat.agent.station"), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
-                c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
-                  if @sf.has_station_mark(st.emoji, st.icon) {
-                    @sf.station_mark(c, st.emoji, st.icon, 15.0, t.p.text)
-                  }
-                  c.text(st.name, size=t.t.ui, color=t.p.text, wrap=false, w=Cut) |> ignore
-                })
-                |> ignore
-                chevron(c)
-              }) {
-              // the station's card in place of this one
-              close_sheet(c)
-              @settings.open_station_peek(r.station, from=Unanchored)
-            }
-          None => ()
-        }
-        let account = match field(a, "account") {
-          Some(Object(_)) as acc => acc
-          _ => field(a, "profile")
-        }
-        let name = text(account, "name")
-        let value = if name == "" {
-          tr("android-chat.agent.account.none")
-        } else if flag(s, "profilePinned") {
-          name
-        } else {
-          fill("android-chat.agent.account.auto", [("name", name)])
-        }
-        // changing how it runs is a page of its own (History.kt RunSettingsScreen)
-        if agent_row(c, "agent/account", tr("android-chat.agent.account"), value, fn() {  }, under=fn() {
-            allowance_line(c, field(account, "quota"))
-          }) {
-          close_sheet(c)
-          app.nav.push(Setting(@settings.Route::RunSettings(r.station, key)))
-        }
-        if agent_row(
-            c,
-            "agent/history",
-            tr("android-chat.agent.history"),
-            match text(card, "work") {
-              "" => tr("android-chat.agent.history.none")
-              w => w
-            },
-            fn() {  },
-          ) {
-          close_sheet(c)
-          app.nav.push(History(r, key, None))
-        }
-        // what can be done to its context, where no figure of it is known to be its tile (a station from before tells
-        // none of an agent at rest)
-        match entry {
-          Some(e) if !(field(card, "context") is Some(Object(_))) =>
-            if agent_row(c, "agent/context", tr("android-chat.agent.context"), "", fn() {
-                if e.busy || e.failed {
-                  @settings.doing_mark(c, e.busy, if e.failed { Some("") } else { None })
-                }
-              }) &&
-              !e.busy {
-              (e.open)()
-            }
-          _ => ()
-        }
-        if jobs.length() > 0 &&
-          agent_row(
-            c,
-            "agent/jobs",
-            tr("android-chat.agent.jobs"),
-            match text(card, "jobs") {
-              "" => tr("android-chat.agent.jobs.idle")
-              j => j
-            },
-            fn() {  },
-          ) {
-          dui.jobs_all = false
-          open_sheet(c, JobsOf(r))
-        }
-      })
+      if status == "running" || status == "queued" {
+        stop_button(c, src, r.station, key)
+      }
     })
     |> ignore
+    agent_lines(c, card)
+    let entry = context_entry(c, src, r, key, s)
+    agent_tiles(c, card, 14.0, entry~)
+    agent_notes(c, card, 10.0)
+    c.box(h=Px(12.0), fn() {  }) |> ignore
+    info_list(c, fn() {
+      match station {
+        Some(st) =>
+          if info_row(c, "agent/station", fn() {
+              c.text(tr("android-chat.agent.station"), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
+              c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
+                if @sf.has_station_mark(st.emoji, st.icon) {
+                  @sf.station_mark(c, st.emoji, st.icon, 15.0, t.p.text)
+                }
+                c.text(st.name, size=t.t.ui, color=t.p.text, wrap=false, w=Cut) |> ignore
+              })
+              |> ignore
+              chevron(c)
+            }) {
+            // the station's card in place of this one
+            close()
+            @settings.open_station_peek(r.station, from=Unanchored)
+          }
+        None => ()
+      }
+      let account = match field(a, "account") {
+        Some(Object(_)) as acc => acc
+        _ => field(a, "profile")
+      }
+      let name = text(account, "name")
+      let value = if name == "" {
+        tr("android-chat.agent.account.none")
+      } else if flag(s, "profilePinned") {
+        name
+      } else {
+        fill("android-chat.agent.account.auto", [("name", name)])
+      }
+      // changing how it runs is a page of its own (History.kt RunSettingsScreen)
+      if agent_row(c, "agent/account", tr("android-chat.agent.account"), value, fn() {  }, under=fn() {
+          allowance_line(c, field(account, "quota"))
+        }) {
+        close()
+        app.nav.push(Setting(@settings.Route::RunSettings(r.station, key)))
+      }
+      if agent_row(
+          c,
+          "agent/history",
+          tr("android-chat.agent.history"),
+          match text(card, "work") {
+            "" => tr("android-chat.agent.history.none")
+            w => w
+          },
+          fn() {  },
+        ) {
+        close()
+        app.nav.push(History(r, key, None))
+      }
+      // what can be done to its context, where no figure of it is known to be its tile (a station from before tells
+      // none of an agent at rest)
+      match entry {
+        Some(e) if !(field(card, "context") is Some(Object(_))) =>
+          if agent_row(c, "agent/context", tr("android-chat.agent.context"), "", fn() {
+              if e.busy || e.failed {
+                @settings.doing_mark(c, e.busy, if e.failed { Some("") } else { None })
+              }
+            }) &&
+            !e.busy {
+            (e.open)()
+          }
+        _ => ()
+      }
+      if jobs.length() > 0 &&
+        agent_row(
+          c,
+          "agent/jobs",
+          tr("android-chat.agent.jobs"),
+          match text(card, "jobs") {
+            "" => tr("android-chat.agent.jobs.idle")
+            j => j
+          },
+          fn() {  },
+        ) {
+        dui.jobs_all = false
+        close()
+        open_chat_jobs(src, r)
+      }
+    })
   })
+  |> ignore
+}
+
+///|
+/// An agent's card (agent_body): the library's panel, as tall as what it shows, its head its own (its mark, name and
+/// where it stands).
+fn open_agent(src : Source, r : ChatRef, key : String) -> Unit {
+  @sf.panel("", from=Unanchored, fn(c, close) { agent_body(c, src, r, key, close) })
 }
 
 ///|
@@ -1061,9 +1061,11 @@ fn group_label(c : @ui.Ctx, label : String) -> Unit {
 /// or being started again opens its page (service.mbt), one that did not start (or is over) and any job its sheet.
 fn job_groups(
   c : @ui.Ctx,
+  src : Source,
   r : ChatRef,
   view : Json?,
   jobs : Array[Json],
+  close : () -> Unit,
   pick? : ((String) -> Unit)? = None,
 ) -> Unit {
   let services = jobs.filter(fn(j) { flag(Some(j), "service") })
@@ -1083,11 +1085,12 @@ fn job_groups(
           if pick is Some(f) && tone != "up" && tone != "restart" {
             f(id)
           } else if tone == "up" || tone == "restart" {
-            close_sheet(c)
+            close()
             app.nav.push(Service(r.station, id))
           } else {
             dui.job_tab = 1
-            open_sheet(c, JobOf(r, id))
+            close()
+            open_job(src, r, id)
           }
         }
       }
@@ -1102,7 +1105,10 @@ fn job_groups(
           dui.job_tab = 0
           match pick {
             Some(f) => f(id)
-            None => open_sheet(c, JobOf(r, id))
+            None => {
+              close()
+              open_job(src, r, id)
+            }
           }
         }
       }
@@ -1113,99 +1119,98 @@ fn job_groups(
 ///|
 /// What matters now of the chat's services and jobs (Jobs.kt openJobs), from the bar's button: the rest a tap away,
 /// the ended cleared.
-fn jobs_sheet(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
+fn jobs_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) -> Unit {
   let t = @sf.theme()
   let topic = (src.topic)("chatJobs", chat_params(r))
-  sheet_frame(c, "jobs", c.height * 0.62, draggable=true, fn() {
-    sheet_head(c, tr("android-misc.jobs.title"))
-    let view = match topic.value {
-      Some(Object(_)) as v => v
-      _ => {
-        waiting_rows(c, 3, topic.error)
-        return
-      }
+  let view = match topic.value {
+    Some(Object(_)) as v => v
+    _ => {
+      waiting_rows(c, 3, topic.error)
+      return
     }
-    let jobs = items(view, "jobs")
-    let shown = if dui.jobs_all { jobs } else { jobs.filter(fn(j) { flag(Some(j), "current") }) }
-    let clear_key = "clear/" + r.station
-    let rows : Array[() -> Unit] = []
-    if jobs.length() == 0 {
-      rows.push(fn() {
-        c.box(padx=2.0, pady=12.0, gap=4.0, fn() {
-          c.text(tr("android-misc.jobs.none"), size=t.t.ui, weight=600, color=t.p.text) |> ignore
-          c.text(tr("android-misc.jobs.none.text"), size=t.t.meta, color=t.p.muted) |> ignore
-        })
-        |> ignore
+  }
+  let jobs = items(view, "jobs")
+  let shown = if dui.jobs_all { jobs } else { jobs.filter(fn(j) { flag(Some(j), "current") }) }
+  let clear_key = "clear/" + r.station
+  let rows : Array[() -> Unit] = []
+  if jobs.length() == 0 {
+    rows.push(fn() {
+      c.box(padx=2.0, pady=12.0, gap=4.0, fn() {
+        c.text(tr("android-misc.jobs.none"), size=t.t.ui, weight=600, color=t.p.text) |> ignore
+        c.text(tr("android-misc.jobs.none.text"), size=t.t.meta, color=t.p.muted) |> ignore
       })
-    }
-    if jobs.length() > 0 && shown.length() == 0 {
-      rows.push(fn() {
-        c.box(padx=20.0, pady=8.0, fn() {
-          c.text(tr("android-misc.jobs.noneNow"), size=t.t.meta, color=t.p.muted) |> ignore
-        })
-        |> ignore
+      |> ignore
+    })
+  }
+  if jobs.length() > 0 && shown.length() == 0 {
+    rows.push(fn() {
+      c.box(padx=20.0, pady=8.0, fn() {
+        c.text(tr("android-misc.jobs.noneNow"), size=t.t.meta, color=t.p.muted) |> ignore
       })
-    }
-    rows.push(fn() { job_groups(c, r, view, shown) })
-    if jobs.length().to_double() > number(view, "current") {
-      rows.push(fn() {
-        if sheet_link(c, "jobs/all", fn() {
-            if dui.jobs_all {
-              c.text(tr("android-misc.jobs.onlyNow"), size=@sf.theme().t.ui, color=@sf.link_ink(), wrap=false) |> ignore
-            } else {
-              c.text(text(view, "allText"), size=@sf.theme().t.ui, color=@sf.link_ink(), wrap=false) |> ignore
-              c.text(text(view, "hiddenText"), size=t.t.caption, color=t.p.muted) |> ignore
-            }
-          }) {
-          dui.jobs_all = !dui.jobs_all
-        }
-      })
-    }
-    if number(view, "ended") > 0.0 {
-      rows.push(fn() {
-        if sheet_link(c, "jobs/clear", fn() {
-            c.box(dir=Row, gap=6.0, align=ACenter, fn() {
-              c.text(text(view, "clearText"), size=@sf.theme().t.ui, color=@sf.link_ink(), wrap=false) |> ignore
-              if doing(clear_key) {
-                @sf.spinner(c, size=12.0) |> ignore
-              }
-            })
-            |> ignore
-          }) &&
-          !doing(clear_key) {
-          for session in items(view, "clear") {
-            match session {
-              String(s) =>
-                act(
-                  src,
-                  tr("android-misc.jobs.clearWhat"),
-                  clear_key,
-                  "job.clearEnded",
-                  { "station": Json::string(r.station), "session": Json::string(s) },
-                )
-              _ => ()
-            }
-          }
-        }
-      })
-    }
-    c.list(
-      "jobs-sheet/" + r.station + "/" + r.session,
-      rows.length() + 1,
-      60.0,
-      fn(i) {
-        c.box(w=Fill(1.0), pl=18.0, pr=18.0, fn() {
-          if i < rows.length() {
-            (rows[i])()
+      |> ignore
+    })
+  }
+  rows.push(fn() { job_groups(c, src, r, view, shown, close) })
+  if jobs.length().to_double() > number(view, "current") {
+    rows.push(fn() {
+      if sheet_link(c, "jobs/all", fn() {
+          if dui.jobs_all {
+            c.text(tr("android-misc.jobs.onlyNow"), size=@sf.theme().t.ui, color=@sf.link_ink(), wrap=false) |> ignore
           } else {
-            c.box(h=Px(30.0), fn() {  }) |> ignore
+            c.text(text(view, "allText"), size=@sf.theme().t.ui, color=@sf.link_ink(), wrap=false) |> ignore
+            c.text(text(view, "hiddenText"), size=t.t.caption, color=t.p.muted) |> ignore
           }
-        })
-        |> ignore
-      },
-    )
-    |> ignore
-  })
+        }) {
+        dui.jobs_all = !dui.jobs_all
+      }
+    })
+  }
+  if number(view, "ended") > 0.0 {
+    rows.push(fn() {
+      if sheet_link(c, "jobs/clear", fn() {
+          c.box(dir=Row, gap=6.0, align=ACenter, fn() {
+            c.text(text(view, "clearText"), size=@sf.theme().t.ui, color=@sf.link_ink(), wrap=false) |> ignore
+            if doing(clear_key) {
+              @sf.spinner(c, size=12.0) |> ignore
+            }
+          })
+          |> ignore
+        }) &&
+        !doing(clear_key) {
+        for session in items(view, "clear") {
+          match session {
+            String(s) =>
+              act(
+                src,
+                tr("android-misc.jobs.clearWhat"),
+                clear_key,
+                "job.clearEnded",
+                { "station": Json::string(r.station), "session": Json::string(s) },
+              )
+            _ => ()
+          }
+        }
+      }
+    })
+  }
+  // (its rows on the panel's words' line as the list builds them, as tall as they come to up to the panel's share:
+  // @sf.panel_list)
+  // (no room of its own under its last: the panel's foot is under it)
+  @sf.panel_list(
+    c,
+    "jobs-sheet/" + r.station + "/" + r.session,
+    rows.length(),
+    60.0,
+    fn(i) { c.box(style=@sf.panel_words_in(), w=Fill(1.0), fn() { (rows[i])() }) |> ignore },
+  )
+  |> ignore
+}
+
+///|
+/// The chat's services and jobs (jobs_body): the library's panel, 62% of the window, dragged between half and nearly
+/// all of it.
+fn open_chat_jobs(src : Source, r : ChatRef) -> Unit {
+  @sf.panel(tr("android-misc.jobs.title"), from=Unanchored, tall=0.62, grows=true, fn(c, close) { jobs_body(c, src, r, close) })
 }
 
 ///|
@@ -1255,41 +1260,56 @@ fn waiting_rows(c : @ui.Ctx, n : Int, error : Json?) -> Unit {
 ///|
 /// A job, from the chat's sheet (Jobs.kt openJob, JobBody): its name and how it stands, what it said or its output as it
 /// grows (a service has only its output), stopped from here while it runs.
-fn job_sheet(c : @ui.Ctx, src : Source, r : ChatRef, id : String) -> Unit {
+fn job_body(c : @ui.Ctx, src : Source, r : ChatRef, id : String, close : () -> Unit) -> Unit {
   let t = @sf.theme()
   let topic = (src.topic)("chatJobs", chat_params(r))
   let job = items(topic.value, "jobs").iter().find_first(fn(j) { text(Some(j), "id") == id })
-  sheet_frame(c, "job", c.height * 0.8, draggable=true, fn() {
-    let j = match job {
-      Some(j) => Some(j)
-      None => {
-        sheet_head(c, tr("android-misc.jobs.job"))
-        c.box(padx=18.0, fn() {
-          c.text(
-            if topic.value is Some(_) { tr("android-misc.jobs.gone") } else { tr("common.reading") },
-            size=t.t.meta,
-            color=t.p.muted,
-          )
-          |> ignore
-        })
+  let j = match job {
+    Some(j) => Some(j)
+    None => {
+      c.box(style=@sf.panel_words_in(), fn() {
+        c.text(
+          if topic.value is Some(_) { tr("android-misc.jobs.gone") } else { tr("common.reading") },
+          size=t.t.meta,
+          color=t.p.muted,
+        )
         |> ignore
-        return
-      }
+      })
+      |> ignore
+      return
     }
-    job_detail(c, src, r, id, j)
-  })
+  }
+  job_detail(c, src, r, id, j)
+}
+
+///|
+/// A job (job_body): the library's panel, most of the window, dragged between half and nearly all of it; titled 任务
+/// while it is not there (read, or gone), its own head (its dot and name) once it is.
+fn open_job(src : Source, r : ChatRef, id : String) -> Unit {
+  let missing = fn() {
+    !items((src.topic)("chatJobs", chat_params(r)).value, "jobs").iter().any(fn(j) { text(Some(j), "id") == id })
+  }
+  @sf.panel(
+    "",
+    from=Unanchored,
+    tall=0.8,
+    grows=true,
+    live=fn() { (if missing() { tr("android-misc.jobs.job") } else { "" }, "", "") },
+    fn(c, close) { job_body(c, src, r, id, close) },
+  )
 }
 
 ///|
 /// A job, what it is, said and wrote (Jobs.kt openJob's body): its dot, name and line, its command, then what it said
-/// or its output (a service's output alone), and stopping it while it runs. In its sheet on a phone, in the side
-/// panel's 任务 tab beside a chat in the wide frame (wide_panel.mbt).
+/// or its output (a service's output alone), and stopping it while it runs. In its panel (open_job), on its words' line
+/// (the wide frame's 任务 tab has its own: sfdesk's jobs.mbt).
 fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) -> Unit {
   let t = @sf.theme()
   let service = flag(j, "service")
   let tab = if service { 1 } else { dui.job_tab }
   let running = text(j, "state") == "running"
-  c.box(dir=Row, w=Fill(1.0), pl=22.0, pr=22.0, pt=4.0, pb=14.0, gap=12.0, align=AStart, fn() {
+  // (on its panel's words' line, clear of an untitled dialog's close button)
+  c.box(style=@sf.panel_words_in().then(@sf.untitled_clear()), dir=Row, w=Fill(1.0), pt=4.0, pb=14.0, gap=12.0, align=AStart, fn() {
     c.box(pt=8.0, fn() { job_dot(c, text(j, "tone")) }) |> ignore
     c.box(w=Fill(1.0), fn() {
       c.text(text(j, "name"), size=t.t.title, weight=600, color=t.p.text) |> ignore
@@ -1298,7 +1318,7 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
     |> ignore
   })
   |> ignore
-  c.box(w=Fill(1.0), h=Fill(1.0), pl=18.0, pr=18.0, pb=24.0, gap=14.0, fn() {
+  c.box(style=@sf.panel_words_in(), w=Fill(1.0), h=Fill(1.0), pb=24.0, gap=14.0, fn() {
     let command = text(j, "command")
     if command.trim(chars=" \n").to_string() != "" {
       c.rich([@ui.span(command, mono=true)], size=t.t.caption, line=17.0, color=t.p.muted, w=Fill(1.0)) |> ignore
@@ -1576,11 +1596,14 @@ fn open_outside(url : String) -> Unit {
 }
 
 ///|
-/// Opens the chat's letters' sheet at its list; its letters held (the core's `chatLetters`) until the chat is left.
-fn open_letters(c : @ui.Ctx, r : ChatRef, thread : Double) -> Unit {
+/// Opens the chat's letters at their list (the library's panel, most of the window tall, dragged between half and nearly
+/// all of it); its letters held (the core's `chatLetters`) until the chat is left.
+fn open_letters(src : Source, r : ChatRef, thread : Double) -> Unit {
   dui.letters_open = ""
   dui.letters_held[r.station + "\u{1}" + r.session] = thread
-  open_sheet(c, LettersOf(r, thread))
+  @sf.panel(tr("web-main.letters.title"), from=Unanchored, tall=0.8, grows=true, fn(c, _) {
+    letters_body(c, src, r, thread)
+  })
 }
 
 ///|
@@ -1593,7 +1616,7 @@ fn letters_params(r : ChatRef, thread : Double) -> Map[String, Json] {
 /// A chat written with, its row in the letters' sheet (Letters.kt): 18 in, 10 over and under, its two lines 2 apart;
 /// pressed a shade.
 // kept across runs: a value (no field of it changes)
-let letters_row : @ui.Style = @ui.css("w=Full px=S4_5 py=S2_5 gap=S0_5 pressed{bg=Hover}")
+let letters_row : @ui.Style = @ui.css("w=Full py=S2_5 gap=S0_5 pressed{bg=Hover}")
 
 ///|
 /// Its first line: its title as wide as there is room, how many and when at its end, 8 apart.
@@ -1606,27 +1629,39 @@ let letters_row_head : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 let letters_grow : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
-/// A chat's title (15, medium) and what is said in brief of it (13, muted), each on a line.
+/// A chat's title (15, medium, cut short before how many and when) and what is said in brief of it (13, muted), each on
+/// a line.
 // kept across runs: a value (no field of it changes)
-let letters_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
+let letters_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
 let letters_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
+/// The last letter in brief, on one line cut short where the row is narrower than it (a dialog's).
+// kept across runs: a value (no field of it changes)
+let letters_last : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
+
+///|
 /// None: said 18 in, 12 over and under, 15 muted.
 // kept across runs: a value (no field of it changes)
-let letters_none_box : @ui.Style = @ui.css("px=S4_5 py=S3")
+let letters_none_box : @ui.Style = @ui.css("py=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
 let letters_none : @ui.TextStyle = @ui.text_style(size=Body, color=Muted)
 
 ///|
-/// One opened, its head: back (a round 36, pressed a shade), then its title; 6 in at the start, 18 at the end.
+/// One opened, its head: back (a round 36, pressed a shade, its chevron on the panel's words' line: letters_back_in),
+/// then its title.
 // kept across runs: a value (no field of it changes)
-let letters_head : @ui.Style = @ui.css("row w=Full pl=S1_5 pr=S4_5 pb=S1_5 gap=S1 align=ACenter")
+let letters_head : @ui.Style = @ui.css("row w=Full pb=S1_5 gap=S1 align=ACenter")
+
+///|
+/// How far its back's chevron is in from its round ground's start (its 36's middle less half the chevron's 16), the
+/// ground standing that far out of the panel's words' line.
+let letters_back_in : Double = 10.0
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1635,29 +1670,13 @@ let letters_back : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter just
 ///|
 /// A letter, as the chat draws a message: 14 in, 20 under the one before.
 // kept across runs: a value (no field of it changes)
-let letters_said : @ui.Style = @ui.css("w=Full px=S3_5 pt=S1 pb=S4")
+let letters_said : @ui.Style = @ui.css("w=Full pt=S1 pb=S4")
 
 ///|
 /// Older ones on their way: a spinner, 8 under the last.
 // kept across runs: a value (no field of it changes)
 let letters_more : @ui.Style = @ui.css("w=Full pt=S2 align=ACenter")
 
-///|
-/// Room under the last row, over the sheet's foot (Letters.kt bottom = 30).
-// kept across runs: a value (no field of it changes)
-let letters_foot : @ui.Style = @ui.css("h=S8")
-
-///|
-/// What the chat's agents and other chats' wrote each other, not said in it (Letters.kt openLetters): the chats it
-/// wrote with, a row each, the last written with first (its title, how many and when, the last letter in brief under
-/// them); one opened, back to the list and its title (which opens that chat), then its letters both ways in the order
-/// written, each drawn as the chat draws a message (Chat.kt SaidAlone).
-fn letters_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
-  sheet_frame(c, "letters", c.height * 0.8, draggable=true, fn() {
-    sheet_head(c, tr("web-main.letters.title"))
-    letters_body(c, src, r, thread)
-  })
-}
 
 ///|
 /// What the letters' sheet holds below its head, and the wide frame's agent 往来 tab (wide_panel.mbt): the list of the
@@ -1682,7 +1701,7 @@ fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
   let rows : Array[() -> Unit] = []
   if chats.length() == 0 {
     rows.push(fn() {
-      c.box(style=letters_none_box, fn() { c.text(tr("web-main.letters.none"), style=letters_none) |> ignore })
+      c.box(style=letters_none_box.then(@sf.panel_words_in()), fn() { c.text(tr("web-main.letters.none"), style=letters_none) |> ignore })
       |> ignore
     })
   }
@@ -1693,7 +1712,7 @@ fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
       let link = text(ch, "link")
       rows.push(fn() {
         // back to the list, and its title (which opens that chat)
-        c.box(style=letters_head, fn() {
+        c.box(style=letters_head.then(@sf.panel_words_out_by(letters_back_in)), fn() {
           let back = c.id("letters/back")
           if c.clicked(back) {
             dui.letters_open = ""
@@ -1723,7 +1742,7 @@ fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
       }
       for m in items(ch, "letters") {
         let message = message_of(m)
-        rows.push(fn() { c.box(style=letters_said, fn() { @sfpages.message_row(c, src, here, message) }) |> ignore })
+        rows.push(fn() { c.box(style=letters_said.then(@sf.panel_words_in()), fn() { @sfpages.message_row(c, src, here, message) }) |> ignore })
       }
     }
     _ =>
@@ -1736,7 +1755,7 @@ fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
           if c.clicked(id) {
             dui.letters_open = key
           }
-          c.box(style=letters_row, id~, fn() {
+          c.box(style=letters_row.then(@sf.panel_row_reach()), id~, fn() {
             c.box(style=letters_row_head, fn() {
               c.box(style=letters_grow, fn() { c.text(text(ch, "title"), style=letters_title) |> ignore }) |> ignore
               let n = fill("web-main.letters.count", [("n", items(ch, "letters").length().to_string())])
@@ -1744,7 +1763,7 @@ fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
               c.text(if ago == "" { n } else { n + " · " + ago }, style=letters_meta) |> ignore
             })
             |> ignore
-            c.text(text(ch, "last"), style=letters_meta) |> ignore
+            c.text(text(ch, "last"), style=letters_last) |> ignore
           })
           |> ignore
         })
@@ -1754,17 +1773,12 @@ fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
   if !whole {
     rows.push(fn() { c.box(style=letters_more, fn() { @sf.spinner(c, size=16.0) |> ignore }) |> ignore })
   }
-  c.list(
-    "letters-sheet/" + r.station + "/" + r.session + "/" + dui.letters_open,
-    rows.length() + 1,
-    60.0,
-    fn(i) {
-      if i < rows.length() {
-        (rows[i])()
-      } else {
-        c.box(style=letters_foot, fn() {  }) |> ignore
-      }
-    },
-  )
+  // (its rows on the panel's line as the list builds them: @sf.panel_list)
+  // (no room of its own under its last: the panel's foot is under it)
+  @sf.panel_list(c, "letters-sheet/" + r.station + "/" + r.session + "/" + dui.letters_open, rows.length(), 60.0, fn(
+    i,
+  ) {
+    (rows[i])()
+  })
   |> ignore
 }

@@ -1258,9 +1258,17 @@ pub fn open_fixture_mode(mode : String) -> Unit {
 pub fn fixture_app(mode : String) -> Source {
   reset()
   let src = fixture(mode)
+  open_fixture_over(mode, src)
+  src
+}
+
+///|
+/// What `mode` opens over the app, over `src` (its own, or a test's made of it): its pages (open_fixture_mode), then
+/// what is put up reading through `src` (open_fixture_src). The one way a mode is opened: sffix's, the films', the
+/// screens' and the tests' alike.
+pub fn open_fixture_over(mode : String, src : Source) -> Unit {
   open_fixture_mode(mode)
   open_fixture_src(mode, src)
-  src
 }
 
 ///|
@@ -1269,6 +1277,8 @@ pub fn fixture_app(mode : String) -> Source {
 /// the files' Pin 文件夹 with no one station in view, which station first (files-add-folder: its rows' grounds under the
 /// pointer, the last in the dialog's foot corners); the card to share of the agents at work (share-card).
 pub fn open_fixture_src(mode : String, src : Source) -> Unit {
+  // slice 8's panels over the chat (decide_fixture.mbt)
+  open_decide_panels(mode, src)
   if mode == "files-add-folder" {
     @sfdesk.add_folder(src, "ws1", @sfdesk.pin_stations(src, "ws1"))
   }

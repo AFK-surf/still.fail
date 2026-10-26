@@ -10,7 +10,7 @@ test "89-run-settings" {
     f.see("=studio")
     f.tap("icon:more")
     // the chat's own sheet (decide.mbt's)
-    f.run_to(@kit.sheet_rest("decide-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     // the agent's part of the same sheet
     // (its first row's: under it, the public links' and the sharing's have one too)
     f.tap("icon:chevron-right", top=true)

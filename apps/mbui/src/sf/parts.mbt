@@ -1749,6 +1749,25 @@ pub fn dialog(
         fn() {
         // (its title and what it says on the line of its words: a panel's dialog's are a row's padding in, words_in_now)
         let words_at = @ui.style(pl=room(words_in_now.val))
+        // untitled (what it holds has a head of its own: a chat's sheet, an agent's card): no row of its own, its close
+        // button in its top right corner, concentric with it, over what it holds (which keeps clear of it:
+        // untitled_clear)
+        let untitled = s.title == "" && step == ""
+        if untitled && close_label != "" {
+          c.layer(fn() {
+            c.box(style=dialog_close_row, fn() {
+              c.box(style=dialog_close_corner(), fn() {
+                if icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=close_label) {
+                  closed.val = true
+                }
+              })
+              |> ignore
+            })
+            |> ignore
+          })
+          |> ignore
+        }
+        if !untitled {
         c.box(style=dialog_head.then(words_at), fn() {
           // a step's count beside the title (Connect.css.ts dialogStep: the ui's 13 in 400 muted, 8 after it)
           if step != "" {
@@ -1770,6 +1789,7 @@ pub fn dialog(
           }
         })
         |> ignore
+        }
         if s.description != "" {
           c.box(style=dialog_lead_at.then(words_at), fn() { c.text(s.description, style=dialog_lead) |> ignore }) |> ignore
         }
@@ -1781,12 +1801,16 @@ pub fn dialog(
           // (holding nothing this time, none of its room: its title and what it says straight over its buttons)
           // (what it holds `column_in` in from its padding: a panel's dialog's, on its words' line)
           let column = @ui.style(px=room(column_in))
-          c.box(style=(if footer is None { dialog_body_end } else { dialog_body }).then(column), gone_empty=true, fn() {
-            // (its rows told they are in a dialog: dialog_rows)
-            let was = in_dialog.val
+          // (untitled: from its padding's top, its head its own)
+          let top = if untitled { dialog_untitled_top } else { no_style }
+          c.box(style=(if footer is None { dialog_body_end } else { dialog_body }).then(column).then(top), gone_empty=true, fn() {
+            // (its rows told they are in a dialog: dialog_rows; untitled, its close button over its corner)
+            let (was, clear_was) = (in_dialog.val, untitled_clear_now.val)
             in_dialog.val = true
+            untitled_clear_now.val = if untitled && close_label != "" { dialog_close_clear() } else { 0.0 }
             inner()
             in_dialog.val = was
+            untitled_clear_now.val = clear_was
           })
           |> ignore
         })
@@ -1835,6 +1859,41 @@ let dialog_head_over : Double = 1.0
 
 ///|
 let dialog_head_end : Double = 2.0
+
+///|
+/// An untitled dialog's close button (dialog): in its top right corner as far in as makes it concentric with it
+/// (capsule_in), from its outer edges (a layer is laid over the whole of the box, its padding too).
+fn dialog_close_corner() -> @ui.Style {
+  let d = capsule_in(dialog_r, dialog_close)
+  @ui.style(mt=room(d), mr=room(d))
+}
+
+///|
+/// The row an untitled dialog's close button stands at the end of (over what it holds).
+// kept across runs: a value (no field of it changes)
+let dialog_close_row : @ui.Style = @ui.css("row w=Full justify=JEnd")
+
+///|
+/// How far from its padding's end the first row of an untitled dialog keeps clear of its close button (and 8 more).
+fn dialog_close_clear() -> Double {
+  capsule_in(dialog_r, dialog_close) - dialog_pad + dialog_close + 8.0
+}
+
+///|
+/// What the first row of what an untitled dialog holds keeps clear of at its end, its close button over it (0 elsewhere).
+// kept across runs: said by dialog round what an untitled one holds
+let untitled_clear_now : Ref[Double] = { val: 0.0 }
+
+///|
+/// The room a head of its own keeps at its end in an untitled dialog, its close button over it there (none elsewhere).
+pub fn untitled_clear() -> @ui.Style {
+  @ui.style(pr=room(untitled_clear_now.val))
+}
+
+///|
+/// An untitled dialog's body from its padding's top (no title over it to stand 18 under).
+// kept across runs: a value (no field of it changes)
+let dialog_untitled_top : @ui.Style = @ui.css("pt=S0")
 
 ///|
 /// Where its close button stands at its title's row's end: in its top right corner as far in as makes it concentric

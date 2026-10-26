@@ -449,7 +449,7 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
             })
           }
           let k = "machine-said/" + text(sv, "id")
-          c.list(k, blocks.length(), 120.0, stick_end=true, fn(i) { (blocks[i])() }) |> ignore
+          @sf.panel_list(c, k, blocks.length(), 120.0, stick_end=true, fn(i) { (blocks[i])() }) |> ignore
         }
       }
     })

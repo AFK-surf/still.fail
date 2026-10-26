@@ -6,10 +6,10 @@
 /// The agent's sheet over the fixture's chat, its station's row tapped: the station's card in its place.
 fn peek_from_agent(calls : Array[Made]) -> @ui.Tester raise {
   let t = decide_core(calls, "chat-agent")
-  assert_true(!@sf.presenting())
+  assert_true(t.find("历史") is Some(_), msg="the agent's card")
   t.tap_text("Station")
-  t.frame()
-  assert_true(dui.sheet is None, msg="the agent's sheet went down")
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(t.find("历史") is None, msg="the agent's card went down")
   assert_true(@sf.presenting(), msg="the station's card came up")
   t
 }
@@ -76,7 +76,7 @@ test "an agent's account: how it runs, the agent's sheet gone" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-agent")
   t.tap_text("账号")
-  assert_true(dui.sheet is None)
+  assert_true(!@sf.presenting(), msg="the agent's card went down")
   assert_true(app.nav.top() == Setting(@settings.Route::RunSettings("ws1/st1", "s-c1")))
 }
 

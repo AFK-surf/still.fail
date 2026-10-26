@@ -11,14 +11,14 @@ test "27-pin" {
     f.see("发消息")
     f.tap("icon:more")
     // the chat's sheet risen
-    f.run_to(@kit.sheet_rest("decide-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.see("=固定到列表顶部")
     f.tap("=固定到列表顶部")
     f.see("=取消固定")
     f.tap("=取消固定")
     f.see("=固定到列表顶部")
     // the sheet at its height again
-    f.run_to(@kit.sheet_rest("decide-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     // the bottom bar at its end
     f.run_to(@sfapp.bar_rest())
     // the test chat ended all done: the bar's 归档 comes in meanwhile, to the end it sets out

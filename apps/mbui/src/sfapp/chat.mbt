@@ -292,7 +292,7 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
           // each opens its card (AgentSheet.kt)
           let id = c.id("bar-agent/" + a.key)
           if c.clicked(id) {
-            open_sheet(c, AgentOf(r, a.key))
+            open_agent(src, r, a.key)
           }
           c.box(id~, fn() {
             if i == 0 {
@@ -330,7 +330,7 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
           c.box(fn() {
             if nav_button(c, "web", 20.0, key="chat-jobs") {
               dui.jobs_all = false
-              open_sheet(c, JobsOf(r))
+              open_chat_jobs(src, r)
             }
             if alarm == "fail" || alarm == "restart" {
               c.layer(align=AEnd, fn() {
@@ -356,7 +356,7 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
         }
       },
       v.thread is Some(_),
-      on_more=fn() { open_sheet(c, Info(r)) },
+      on_more=fn() { open_info(src, r) },
     )
   })
   // over what runs under it: the scroll bar there keeps clear of it

@@ -21,7 +21,7 @@ test "47-service-page" {
     f.see_n(2, "网页开好了 201409")
     // the chat's jobs: its sheet raised
     f.tap("icon:web")
-    f.run_to(@kit.sheet_rest("decide-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.see("服务")
     // the service: its page pushed, the site view loading it
     f.tap("在线")

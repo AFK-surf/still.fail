@@ -927,6 +927,9 @@ pub(all) struct ListInfo {
   below : Double
   /// the view's height (what of the rows shows at once)
   height : Double
+  /// its rows laid end to end: those built at their height, the rest at its estimate (what it would be as tall as,
+  /// shown whole)
+  content : Double
   /// gliding to its end (list_to_end)
   gliding : Bool
   /// a row followed from its top (Ctx::list_follow_from), not let go by the reader since
@@ -1016,6 +1019,7 @@ fn Ctx::list_info_of(self : Ctx, id : Int) -> ListInfo? {
         at_end: st.at_end,
         below: st.below,
         height: st.vp_h,
+        content: st.above(st.heights.length()),
         gliding: st.glide,
         following_row: st.follow_item >= 0,
         rest: st.own_rest(),
