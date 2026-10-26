@@ -9,7 +9,8 @@
 ///|
 /// The faults each rule still has, in each language: they only fall (rule 4's two more with files-add-folder swept, its
 /// files' bar a phone's and a tablet's as the drive's other screens have it; seven fewer with a chat shared as a
-/// picture under the bar a file opened has, no more a pill of its own holding a button).
+/// picture under the bar a file opened has, no more a pill of its own holding a button; rule 5's last with an agent's
+/// picture in its line on the messages' pictures' edge).
 let gaps_known : Map[String, Int] = {
   "zh rule 1": 0,
   "zh rule 2": 0,
@@ -19,8 +20,8 @@ let gaps_known : Map[String, Int] = {
   "en rule 2": 0,
   "en rule 3": 0,
   "en rule 4": 87,
-  "zh rule 5": 1,
-  "en rule 5": 1,
+  "zh rule 5": 0,
+  "en rule 5": 0,
   "zh rule 6": 0,
   "en rule 6": 0,
   "zh rule 7": 0,

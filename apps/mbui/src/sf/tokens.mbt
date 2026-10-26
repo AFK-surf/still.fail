@@ -2452,15 +2452,6 @@ pub let message_avatar_down : @ui.Space = room(3.0)
 pub let message_head_in : @ui.Space = room(25.0)
 
 ///|
-/// An agent's activity line out in the margin with the messages' pictures (align.ts columns.activity: its 24 picture
-/// and the 11 beside it, 35 before the words).
-pub let activity_out : @ui.Space = room(-35.0)
-
-///|
-/// Narrow (columns.activityNarrow): 9 out into the list's 16.
-pub let activity_out_narrow : @ui.Space = room(-9.0)
-
-///|
 /// What says a chat is archived or its station down, over its composer (Chat.css.ts offlineNotice: 760 at most, 64
 /// less than the pane).
 pub let notice_w : @ui.Len = Fixed(760.0)

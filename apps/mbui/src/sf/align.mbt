@@ -161,9 +161,6 @@ pub(all) struct Columns {
   avatar : Double
   /// on a narrow screen, in its 6 padding: 3 out
   avatar_narrow : Double
-  /// an agent's activity line: its 24 avatar and the 11 beside it, out in the list's padding
-  activity : Double
-  activity_narrow : Double
   /// where a message went or came from, under an inline head: from the row's start (its avatar's 14 and 11 after)
   route : Double
   /// the sidebar's rows: their padding, which a part at a row's end reaches into (the count under the menu button)
@@ -176,8 +173,6 @@ pub let columns : Columns = {
   model_control: 11.0,
   avatar: 29.0,
   avatar_narrow: 3.0,
-  activity: 35.0,
-  activity_narrow: 9.0,
   route: 25.0,
   nav_row: 10.0,
 }

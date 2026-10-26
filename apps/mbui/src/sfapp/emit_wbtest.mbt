@@ -56,6 +56,32 @@ test "an answer said while its agent's activity shows waits, then comes out of i
 }
 
 ///|
+/// As the flying avatar lands on the answer (Spit): where the agent's picture is in its line and where the answer's is
+/// (their left edges, in the window).
+fn landing_faces(t : @ui.Tester) -> (Double, Double) raise {
+  let rk = "ws1/st1\u{1}s-c1"
+  let em = emits_of(rk)
+  guard em.current is Some(turn) && turn.pose == Spit else {
+    fail("not landing: \{em.current.map(fn(c) { c.pose })}")
+  }
+  let face = @motion.measured_rect(t.ctx(), "emit-avatar/" + rk + "/" + turn.agent).unwrap()
+  let lands = @motion.measured_rect(t.ctx(), "emit-landing/" + rk + "/" + seq_s(turn.seq)).unwrap()
+  (face.0, lands.0)
+}
+
+///|
+test "an agent's picture in its line is where its answer's is, at the row's start: the flying one lands with no step aside" {
+  let clock = Ref::new(0.0)
+  let t = emit_core(clock)
+  clock.val = clock.val + fix_answer_ms
+  t.draw()
+  t.run_for(Pose::Fold.ms() + Pose::Float.ms() + Pose::Spit.ms() / 2.0)
+  let (face, lands) = landing_faces(t)
+  assert_true((face - lands).abs() < 0.5, msg="\{face} \{lands}")
+  emit_restore()
+}
+
+///|
 test "with the reader scrolled up (not watched), an answer just appears" {
   let clock = Ref::new(0.0)
   let t = emit_core(clock)

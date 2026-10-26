@@ -2,6 +2,27 @@
 // drawn where emit.mbt has it in the window, not off by where the chat stands in it.
 
 ///|
+test "wide: an agent's picture in its line is where its answer's is, out in the margin: the flying one lands with no step aside" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  let clock = Ref::new(0.0)
+  fix_clock.val = Some(fn() { clock.val })
+  t.run_for(history_fade_ms)
+  t.tap_text("发消息")
+  t.type_text("看一下列表")
+  tap_send(t)
+  clock.val = clock.val + fix_deliver_ms
+  t.draw()
+  t.run_for(fix_answer_ms)
+  clock.val = clock.val + fix_answer_ms
+  t.draw()
+  t.run_for(Pose::Fold.ms() + Pose::Float.ms() + Pose::Spit.ms() / 2.0)
+  let (face, lands) = landing_faces(t)
+  assert_true((face - lands).abs() < 0.5, msg="\{face} \{lands}")
+  fix_clock.val = None
+}
+
+///|
 test "wide: the avatar an answer comes out of is drawn where it flies in the window, the chat beside the sidebar" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
