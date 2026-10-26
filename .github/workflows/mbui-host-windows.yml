@@ -11,6 +11,7 @@ on:
       - "apps/mbui/mbui/src/kitdemo/gallery/viewcheck.mbt"
       - "apps/mbui/mbui/src/host/win_*"
       - "apps/mbui/mbui/src/host/win.h"
+      - "apps/mbui/mbui/src/host/mini_json.h"
       - "apps/mbui/mbui/src/host/done_watch.h"
       - "apps/mbui/mbui/src/ui/drive.mbt"
       - "apps/mbui/mbui/scripts/done_runner.py"

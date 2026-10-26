@@ -29,6 +29,9 @@
 #        (kitdemo's MBUI_UPDATECHECK, src/kitdemo/gallery/updatecheck.mbt), one signed otherwise refused (below)
 #   scripts/host_contract.sh mac links          a link of a scheme the app's Info.plist names, opened while it runs, said to the app
 #        (kitdemo's MBUI_LINKCHECK, src/kitdemo/gallery/linkcheck.mbt)
+#   scripts/host_contract.sh linux links        (a session bus: dbus-run-session's) the app started with a link of its
+#        schemes, said to it; started again with one while it runs, handed over to the one running (once for its
+#        person: src/host/linux_life.h), which says it
 #   scripts/host_contract.sh ios free|done      (iOS) before the runs: the simulator not in another's use (booted with an
 #        app of its running: this fails, saying so); after them: shut down again when these runs booted it
 #
@@ -511,6 +514,37 @@ s.listen(0, "127.0.0.1", () => console.log(s.address().port));' "$U" > "$U/port"
     rm -rf "$HOME/Library/Caches/dev.mbui.kitdemo.update"
     echo "update contract (mac): refused one signed otherwise; put 2 in 1's place and opened it" ;;
   links)
+    if [ "$H" = linux ]; then
+      # (Linux) the app as its desktop entry runs it, an identity (MBUI_APP_ID) and schemes of its own (MBUI_SCHEMES),
+      # a link of them its argument (the entry's %u): started with one, it says it and ends; then started without, and
+      # again with one while it runs: the second hands it to the first (GApplication's, on the session bus) and ends,
+      # the first says it.
+      U=$PWD/$O/links
+      rm -rf "$U"
+      mkdir -p "$U"
+      EXE=./out/linux/mod/_build/native/release/build/kitdemo/kitdemo.exe
+      LINK="mbui-kitdemo-links://o/ws1/st1/chat1?service=web"
+      export MBUI_APP_ID=dev.mbui.kitdemo.links MBUI_SCHEMES=mbui-kitdemo-links MBUI_BENCH=-1 MBUI_WIN=480x320 MBUI_LINKCHECK=1
+      # (each run but the second ends itself: `timeout` only bounds one that hangs)
+      ok=1
+      timeout 60 $EXE "$LINK" > "$U/started.log" 2>&1 || ok=0
+      grep -aqF "LINKCHECK link $LINK" "$U/started.log" || ok=0
+      if [ $ok = 1 ]; then
+        $EXE > "$U/links.log" 2>&1 &
+        pid=$!
+        scripts/chk logwait --log "$U/links.log" --line "LINKCHECK ready" --pid $pid --deadline 60 > /dev/null || ok=0
+        [ $ok = 0 ] || timeout 60 $EXE "$LINK" > "$U/again.log" 2>&1 || ok=0
+        [ $ok = 0 ] || grep -aq "handed to it with a link" "$U/again.log" || ok=0
+        [ $ok = 0 ] || scripts/chk logwait --log "$U/links.log" --line "LINKCHECK link" --pid $pid --deadline 60 > /dev/null || ok=0
+        kill $pid 2> /dev/null || true
+      fi
+      for f in started links again; do [ ! -f "$U/$f.log" ] || grep -a "LINKCHECK\|^linux: " "$U/$f.log" | sed "s/^/$f: /"; done
+      if [ $ok = 0 ] || ! grep -aqF "LINKCHECK link $LINK" "$U/links.log"; then
+        echo "links contract (linux): started with $LINK, or again with it while it ran, the app did not say it"; exit 1
+      fi
+      echo "links contract (linux): started with a link of its own scheme, and handed one by itself started again: the app said both"
+      exit 0
+    fi
     # (macOS) a link the app is opened with (kitdemo's MBUI_LINKCHECK, src/kitdemo/gallery/linkcheck.mbt; mac_app.m
     # application:openURLs:, as still.fail's desktop app takes stillfail://o/…): kitdemo bundled as an app whose
     # Info.plist names a scheme of its own (mbui-kitdemo-links), known to Launch Services for the run (lsregister) and

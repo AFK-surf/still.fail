@@ -1,7 +1,8 @@
-// The links' contract (scripts/host_contract.sh mac links): on a real host, the app a bundle whose Info.plist names a
-// scheme of its own, MBUI_LINKCHECK=1: `LINKCHECK ready` on the log once it has drawn, then the first link the system
-// opens it with (the host's `link` on the system channel: mac_app.m application:openURLs:) as `LINKCHECK link <url>`,
-// and the run's end.
+// The links' contract (scripts/host_contract.sh mac links, linux links): on a real host, the app a bundle whose
+// Info.plist names a scheme of its own (Linux: a program with an identity and schemes of its own, MBUI_APP_ID and
+// MBUI_SCHEMES), MBUI_LINKCHECK=1: `LINKCHECK ready` on the log once it has drawn, then the first link the system opens
+// it with (the host's `link` on the system channel: mac_app.m application:openURLs:, linux_life.h) as
+// `LINKCHECK link <url>`, and the run's end.
 
 ///|
 let link_check_ready : Ref[Bool] = Ref(false)
