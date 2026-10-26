@@ -10,6 +10,7 @@
 #   MBUI_WIN_CORE=0 scripts/win.sh build   the app alone, the engine and the shell put beside it
 #   scripts/win.sh core                    the core's bytecode (out/core/core.hbc)
 #   scripts/win.sh put                     the core's bytecode, the engine and the shell put beside the app
+#   scripts/win.sh collate                 the host's order of names (src/host/win_collate.h) checked
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 export APP=${APP:-stillfail}
@@ -29,9 +30,18 @@ put() {
   [ "${1:-}" != core ] || cp "$A/out/core/core.hbc" "$dir/" || return 1
   ls -la "$dir"
 }
+# collate: the order of names the core asks of the host (src/host/win_collate.h), checked by core/collate_test_win.c
+collate() {
+  local out=$A/out/collate
+  mkdir -p "$out"
+  (cd "$A" && cl.exe -nologo -O2 -W3 -Isrc/host core/collate_test_win.c -Fe"$(cygpath -w "$out/collate_test_win.exe")" \
+    -Fo"$(cygpath -w "$out/")" > "$out/build.log") || { cat "$out/build.log"; return 1; }
+  "$out/collate_test_win.exe"
+}
 case "${1:-build}" in
   core) core; exit $? ;;
   put) put core; exit $? ;;
+  collate) collate; exit $? ;;
 esac
 if [ "$APP" = stillfail ] && [ "${1:-build}" = build ] && [ "${MBUI_WIN_CORE:-1}" != 0 ]; then
   core || exit 1

@@ -15,6 +15,8 @@
 //   listen.* (a login's loopback listener, mbui's win_listen.c): listen.open {port, host} -> {id, port};
 //     listen.next {id} -> {request, method, path, headers} + the body, or {end: true}; listen.respond {id, request,
 //     status, headers} + the body -> {}; listen.close {id} -> {}.
+//   text.collate {names} -> {value: [place, …]}, at once (engine.h app_sync): the order people read names in, the
+//     system's (win_collate.h: 中文 by pinyin).
 // The app's files are under %LOCALAPPDATA%\fail.still.mbui\core ($MBUI_CORE_DATA instead), its own, never the desktop
 // app's. MB_CORE_TRACE=1 says what the core says (its first 300 bytes) and the app's calls on stderr; MB_CORE_DEBUG=1
 // the core's debug lines; MBUI_SECURE_TEST=1 round-trips secure.* once as the core starts (SECURE_TEST … on stderr).
@@ -33,6 +35,7 @@
 // file names mbui where the module's checkout has it, which win.sh's copy of the module does not
 #include <listen_api.h>
 #include "engine.h"
+#include "win_collate.h"
 
 #pragma comment(lib, "crypt32.lib")
 #pragma comment(lib, "shell32.lib")
@@ -579,6 +582,14 @@ static void on_app_call(void *ctx, uint64_t id, const char *op, const char *json
   free(j);
 }
 
+// A call only the app answers at once (engine.h app_sync): text.collate, the system's order of names; anything else
+// the shell's (NULL).
+static char *on_app_sync(void *ctx, const char *op, const char *json, size_t len) {
+  (void)ctx;
+  if (strcmp(op, "text.collate") != 0) return NULL;
+  return win_collate_answer(json, len, NULL);
+}
+
 static void on_log(void *ctx, int level, const char *text, size_t len) {
   (void)ctx;
   static int debug = -1;
@@ -665,7 +676,7 @@ void mb_core_start(const char *data_dir, const char *cloud_origin, int beta, mb_
     say_fatal(why);
     return;
   }
-  sf_engine_host host = {NULL, on_say, on_app_call, on_log};
+  sf_engine_host host = {NULL, on_say, on_app_call, on_log, NULL, on_app_sync};
   sf_engine *e = sf_engine_start(script, len, "core.hbc", data_dir, cloud_origin, beta, "windows", &host);
   free(script);
   if (!e) {
