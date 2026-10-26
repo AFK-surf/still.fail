@@ -1,8 +1,9 @@
 // A step that reaches past the demo (Slack, a model's account, signing in, another machine, still.fail cloud's members)
-// cannot be done in it: the demo says so over itself, and offers the real still.fail instance (station.ts NeedsReal, mount.tsx).
+// cannot be done in it: the demo says so as the app asks anything (Confirm, over whatever the app has open), and offers
+// the real still.fail instance (station.ts NeedsReal, mount.tsx).
 import { useSyncExternalStore } from "react";
-import { createPortal } from "react-dom";
-import * as css from "./real.css.ts";
+import { t } from "../i18n.ts";
+import { Confirm } from "../ui.tsx";
 
 const APP = "https://app.still.fail";
 
@@ -20,19 +21,8 @@ export function askForReal(): void {
 
 export function RealStillFail() {
   const shown = useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, () => open, () => false);
-  if (!shown) return null;
-  // On the page itself, over whatever the app has open (its dialogs are on the page too, and hold the pointer).
-  return createPortal(
-    <div className={css.veil} data-real-stillfail="" onClick={(e) => { if (e.target === e.currentTarget) set(false); }}>
-      <div className={css.card} role="dialog" aria-modal="true" aria-labelledby="real-stillfail-title">
-        <img className={css.mark} src="/mark-dark.svg" alt="" />
-        <h2 id="real-stillfail-title" className={css.title}>这一步要在真实的 still.fail 里做</h2>
-        <div className={css.actions}>
-          <button type="button" className={css.button} onClick={() => set(false)}>知道了</button>
-          <a className={css.button} data-primary="" href={APP}>打开 still.fail</a>
-        </div>
-      </div>
-    </div>,
-    document.body,
+  return (
+    <Confirm open={shown} title={t("web-main.demoReal.title")} action={t("web-main.demoReal.open")} tone="primary"
+      cancel={t("web-main.demoReal.dismiss")} onConfirm={() => location.assign(APP)} onClose={() => set(false)} />
   );
 }

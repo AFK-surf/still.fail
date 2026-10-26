@@ -273,8 +273,10 @@ export function Dialog({ open, title, description, onClose, children, footer, wi
 
 /** Asks before something that cannot be undone. `action` names what happens, e.g. "删除连接". */
 /** Asks before something that cannot be undone. `error`: why it did not work, said where it was asked (it stays open). */
-export function Confirm({ open, title, description, action, onConfirm, onClose, busy, error }:
-  { open: boolean; title: ReactNode; description: ReactNode; action: string; onConfirm(): void; onClose(): void; busy?: boolean | undefined; error?: string | null | undefined }) {
+/** `tone` "primary": what is asked is no harm (the demo's 打开 still.fail), its action solid but not red; `cancel`: what
+ * turning it down is called, where 取消 says it wrongly (知道了). No `description`: the title says it all. */
+export function Confirm({ open, title, description, action, onConfirm, onClose, busy, error, tone = "danger", cancel }:
+  { open: boolean; title: ReactNode; description?: ReactNode; action: string; onConfirm(): void; onClose(): void; busy?: boolean | undefined; error?: string | null | undefined; tone?: "danger" | "primary"; cancel?: string }) {
   useBackClose(open, onClose);
   return (
     <RAlert.Root open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
@@ -282,11 +284,11 @@ export function Confirm({ open, title, description, action, onConfirm, onClose, 
         <RAlert.Overlay className={partsCss.overlay} />
         <RAlert.Content className={`${partsCss.dialog} ${partsCss.dialogAlert}`}>
           <RAlert.Title className={partsCss.dialogTitle}>{title}</RAlert.Title>
-          <RAlert.Description className={partsCss.dialogLead}>{description}</RAlert.Description>
+          {description ? <RAlert.Description className={partsCss.dialogLead}>{description}</RAlert.Description> : <RAlert.Description className={partsCss.srOnly}>{title}</RAlert.Description>}
           {error && <p className={partsCss.dialogError} role="alert">{error}</p>}
           <div className={partsCss.dialogFoot}>
-            <RAlert.Cancel asChild><Button variant="ghost">{t("common.cancel")}</Button></RAlert.Cancel>
-            <Button variant="danger-solid" busy={busy ?? false} onClick={onConfirm}>{action}</Button>
+            <RAlert.Cancel asChild><Button variant="ghost">{cancel ?? t("common.cancel")}</Button></RAlert.Cancel>
+            <Button variant={tone === "danger" ? "danger-solid" : "primary"} busy={busy ?? false} onClick={onConfirm}>{action}</Button>
           </div>
         </RAlert.Content>
       </RAlert.Portal>
