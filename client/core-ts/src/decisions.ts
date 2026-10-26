@@ -93,11 +93,11 @@ function vaultAsk(v: J): J | null {
   if (status !== null) out.status = status;
   const scope = trimmed(get(get(v, "outcome"), "scope"));
   if (scope !== null) out.scope = scope;
-  // A request to keep a secret (secret_save): what kind, the account it is for.
+  // A request to keep a secret (secret_save): what kind, the account it is for, whether the person types it in.
   const kind = trimmed(get(get(v, "save"), "kind"));
   if (kind !== null) {
     const username = trimmed(get(get(v, "save"), "username"));
-    out.save = { kind, ...(username !== null ? { username } : {}) };
+    out.save = { kind, ...(username !== null ? { username } : {}), ...(get(get(v, "save"), "typed") === true ? { typed: true } : {}) };
   }
   return out;
 }

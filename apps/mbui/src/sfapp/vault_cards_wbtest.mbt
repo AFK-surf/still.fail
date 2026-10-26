@@ -80,12 +80,13 @@ test "密钥: 默认最长授权 a row over the profiles' keys, the one now unde
 
 ///|
 /// A post of an agent asking to use GitHub token in its chat at ws1/st1, its card in place of its words (sfpages'
-/// message row; `save`: to keep a password for zzj; `status`: how it ended), answered here as the core says with it
-/// (`answer`, `lasts`: its vaultAsk's).
+/// message row; `save`: to keep a password for zzj; `typed`: to keep one of that kind the person types in, OpenCode Go;
+/// `status`: how it ended), answered here as the core says with it (`answer`, `lasts`: its vaultAsk's).
 fn ask_card(
   c : @ui.Ctx,
   src : Source,
   save? : Bool = false,
+  typed? : String = "",
   status? : String = "",
   mode? : String = "proxy",
   assignee? : String = "",
@@ -94,11 +95,13 @@ fn ask_card(
 ) -> Unit {
   let viewer = Json::object({ "me": Json::object({ "email": Json::string("me@x.com") }) })
   let ask : Map[String, Json] = {
-    "name": Json::string(if save { "UniFi UX7" } else { "GitHub token" }),
+    "name": Json::string(if typed != "" { "OpenCode Go" } else if save { "UniFi UX7" } else { "GitHub token" }),
     "mode": Json::string(mode),
     "answer": Json::string(answer),
   }
-  if save {
+  if typed != "" {
+    ask["save"] = Json::object({ "kind": Json::string(typed), "typed": Json::boolean(true) })
+  } else if save {
     ask["save"] = Json::object({ "kind": Json::string("login"), "username": Json::string("zzj") })
   } else {
     ask["command"] = Json::string("gh run rerun 1846 --failed")
@@ -220,6 +223,48 @@ test "a request to keep a secret: 存入 or 不存, kept as once; its kind and a
 }
 
 ///|
+test "a secret the person types in: its field over 存入, which waits for something in it; what was typed goes with the approval, never shown" {
+  reset()
+  let calls = []
+  let src = vault_src(["r1"], true, calls, save=true)
+  let t = @ui.Tester::new(fn(c) { ask_card(c, src, typed="token") }, w=390.0, h=844.0, platform=2)
+  t.draw()
+  for w in ["存入Token「OpenCode Go」", "粘贴 Token", "不存"] {
+    assert_true(t.find(w) is Some(_), msg=w)
+  }
+  // (the button: the last words with 存入 in them, the title says it too)
+  let (x, y) = t.find_last("存入").unwrap()
+  t.tap(x, y)
+  t.draw()
+  assert_eq(calls, [], msg="nothing in it, nothing approved")
+  t.tap_text("粘贴 Token")
+  t.type_text("sk-go-1")
+  t.frame()
+  assert_true(t.find("sk-go-1") is None, msg="drawn as dots")
+  t.tap(x, y)
+  t.draw()
+  assert_eq(calls, ["vault.approve {\"workspace\":\"ws1\",\"request\":\"r1\",\"scope\":\"once\",\"typed\":{\"secret\":\"sk-go-1\"}}"])
+}
+
+///|
+test "a login the person types in, the agent naming no account: 用户名 over its password; Enter in the password approves" {
+  reset()
+  let calls = []
+  let src = vault_src(["r1"], true, calls, save=true)
+  let t = @ui.Tester::new(fn(c) { ask_card(c, src, typed="login") }, w=390.0, h=844.0, platform=2)
+  t.draw()
+  t.tap_text("用户名")
+  t.type_text("admin")
+  // (the password's field: the last words with 密码 in them, the title says it too)
+  let (x, y) = t.find_last("密码").unwrap()
+  t.tap(x, y)
+  t.type_text("pw 1")
+  t.enter()
+  t.draw()
+  assert_eq(calls, ["vault.approve {\"workspace\":\"ws1\",\"request\":\"r1\",\"scope\":\"once\",\"typed\":{\"secret\":\"pw 1\",\"username\":\"admin\"}}"])
+}
+
+///|
 test "a request to keep a secret while the vault is not on here: 开启密钥库 to its page, nothing approved" {
   reset()
   let calls = []
@@ -265,7 +310,7 @@ test "the vault's page's request where it is not this device's to answer, or dec
 /// The vault page's card of request r1 in ws1, from the vaults topic.
 fn vault_ask(c : @ui.Ctx, src : Source) -> Unit {
   let w : Workspace = { id: "ws1", name: "", emoji: "", icon: "", email: "" }
-  let asked : @settings.Asked = { name: "GitHub token", mode: "proxy", command: "", save_kind: "", username: "", station: "" }
+  let asked : @settings.Asked = { name: "GitHub token", mode: "proxy", command: "", save_kind: "", username: "", typed: false, station: "" }
   c.box(w=Fill(1.0), fn() { @settings.vault_ask(c, settings_core(src, w), "ws1", "r1", asked, true) }) |> ignore
 }
 

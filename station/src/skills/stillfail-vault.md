@@ -1,6 +1,6 @@
 ---
 name: stillfail-vault
-description: Keep and use credentials through the person's still.fail vault (secret_save, secret_use, secret_run). Read it when a password, token, API key or SSH key turns up or is needed (an item read with op or bw, a token a person pastes, a key you created, a script that logs in somewhere): what to offer, how to keep it without seeing it, and what to do when their vault is not turned on.
+description: Keep and use credentials through the person's still.fail vault (secret_save, secret_use, secret_run). Read it when a password, token, API key or SSH key turns up or is needed (an item read with op or bw, a token a person pastes, a key you created, one only the person has, a script that logs in somewhere): what to offer, how to keep it without seeing it, how to ask them to type one in, and what to do when their vault is not turned on.
 ---
 
 # Credentials through the still.fail vault
@@ -17,7 +17,9 @@ As soon as you see a credential will be needed more than once, before using it a
   (1Password's approval on a station's screen);
 - a person pastes or tells you a token, password or key: keep it rather than leave it to be pasted again;
 - you created one (a deploy token, an API key from a console you signed in to);
-- a script you write logs in somewhere (a router, a dashboard, an API).
+- a script you write logs in somewhere (a router, a dashboard, an API);
+- you need one nobody gave you and you cannot read (an API key from a console only they sign in to): ask them to type it
+  in on the card (below), not to add it in the vault page themselves or paste it in the chat.
 
 Say it in a line (我把 UX7 的密码存进你的密钥库，以后用它在卡片上批准就行，不用再点 1Password) and call
 `secret_save`: its card is the question, so ask nothing separately.
@@ -28,12 +30,15 @@ station's profiles), or anything the person said not to keep.
 ## Keeping one
 
 - `secret_list` first: what is kept already (by name), and whether their vault is on. Do not keep a second copy.
-- `secret_save {name, kind, reason, command | value, username?, modes?, hosts?, env?}`:
+- `secret_save {name, kind, reason, command | value | neither, username?, modes?, hosts?, env?}`:
   - `command` prints the secret and nothing else; it runs here, in your workspace, and you never see what it prints:
     `op read 'op://Personal/Ui/password'`, `op item get <id> --fields password --reveal`, `bw get password <id>`. Its
     approval (1Password's) is asked once. Where the password manager is signed in on another station (1Password's
     desktop app on a Mac), give `station`: the command runs there, in this chat's directory (where station_task runs).
   - `value` only for one you already hold (a token you made or were given).
+  - Neither, for one you do not have: the card has a field the person types or pastes it in (a login's account too,
+    when you give no `username`), kept as they approve it and never shown to you. Say in `reason` where they get it
+    (OpenCode 控制台 → API Keys), and give `hosts` and `env` as for any.
   - `kind`: `token` (an API key, a bearer token), `login` (a password, with `username`), `ssh_key` (a private key, with
     `public_key` if known).
   - How agents get it later: `proxy` with `hosts` for an HTTP API that takes it in a header (`Authorization: Bearer`,

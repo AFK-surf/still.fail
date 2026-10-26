@@ -11,7 +11,7 @@
 //
 // A secret an agent asked to keep (secret_save, docs/vault.md agent 存入), approved: POST vault/saves `{request, vault}`
 // once the viewer's app wrote it into their vault (and brought its copy here), POST vault/plain/saves `{request}` to
-// write it into their plain library here. Turned down: vault/denials or vault/plain/denials, as any request.
+// write it into their plain library here (`{request, fields}`: one they typed in on its card). Turned down: vault/denials or vault/plain/denials, as any request.
 import type { LockState } from "../../cloud/lock.ts";
 import type { Deny, Grant } from "../../vault/crypto.ts";
 import { type PlainItem, type PlainStore, plainOk, shown } from "../../vault/plain.ts";

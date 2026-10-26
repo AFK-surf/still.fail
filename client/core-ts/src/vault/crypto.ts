@@ -51,7 +51,8 @@ export type Request = {
   /// Its fields, sealed by the station that asked to each of the person's devices set up (`saveContext`).
   sealed?: { device: string; box: string; secret: string }[];
 };
-export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string };
+/// `typed`: its secret is what the person types in on its card (nothing sealed: the app writes what was typed).
+export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string; typed?: true };
 export type Grant = { v: 1; ws: string; request: string; vault: string; item: string; mode: Mode; hosts: string[]; scope: Scope; exp: number; secret: string; at: number; sig: Sig };
 export type Deny = { v: 1; ws: string; request: string; at: number; sig: Sig };
 

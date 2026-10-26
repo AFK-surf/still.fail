@@ -65,6 +65,12 @@ export const input = style({
 /** A one-line field is a pill, as the buttons beside it are; a textarea keeps --r-field (its lines in a pill would not sit right). */
 globalStyle(`input${input}`, { borderRadius: "999px", paddingLeft: "16px", paddingRight: "16px", cornerShape: "round" });
 /**
+ * A field on a card's ground in a chat (a key typed in for an agent's request, as a login's code is: MachineLogins.css.ts
+ * cardPaste), with `input`: solid, the canvas with no line of its own; pointed at or written in, the field's hover grey
+ * round it as any field's.
+ */
+export const inputSolid = style({ borderColor: vars.canvas });
+/**
  * Every small panel (docs/ui-panels.md): menus, selects, popovers, hover cards, the station's cards. One ground, padded
  * PANEL_PAD (6) as far as what has a ground of its own (rows, buttons) stands from its edge, its corner what sits in it
  * (`--panel-in`) and that together. A panel of words (`panelCard`) gives them room of their own; a list's rows carry theirs.

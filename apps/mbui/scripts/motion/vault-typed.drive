@@ -1,0 +1,13 @@
+# chat-vault-typed's request for a token the person types in (sfpages decision.mbt vault_ask_card, settings
+# vault_ask.mbt vault_foot): its field over 存入 (which waits for something in it), typed in as dots, 存入, then
+# 已存入Token「OpenCode Go」 in its place.
+timeout 20000
+until 粘贴 Token
+wait 800
+tap 粘贴 Token
+wait 300
+type sk-go-4f1e9a7c
+wait 900
+tap =存入
+until 已存入
+wait 1200

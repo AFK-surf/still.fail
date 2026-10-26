@@ -25,3 +25,7 @@ export const dot = style({
   width: "6px", height: "6px", borderRadius: "50%", flex: "none", background: vars.subtle,
   selectors: { "&[data-tone=granted]": { background: vars.green } },
 });
+/** What the person types in for a secret theirs to type (VaultApproval.tsx): its fields, 8 apart, the card's width. */
+export const typed = style({ display: "grid", gap: "8px", minWidth: "0" });
+/** A private key's lines, in the code's letters. */
+export const typedKey = style({ fontFamily: vars.fontMono, fontSize: vars.textMeta, resize: "vertical" });

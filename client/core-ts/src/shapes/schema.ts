@@ -276,6 +276,7 @@ export const SHAPES: Record<string, Shape> = {
   VaultSave: struct([
     ["kind", "String", { doc: "token | login | ssh_key" }],
     ["username", opt("String"), { said: true, doc: "A login's account name." }],
+    ["typed", opt("bool"), { doc: "The secret is the person's to type in on the card (the agent has none): a field for it (and a login's\naccount, when `username` is absent) over the answer, `vault.approve` with `typed`." }],
   ], { doc: "What an agent asks to keep in the person's vault (secret_save, docs/vault.md agent 存入): approving it writes it into their\nvault (`vault.approve`, turning it on first where it is not)." }),
   DecisionOption: struct([
     ["label", "String", { said: true }],

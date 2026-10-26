@@ -29,8 +29,10 @@
 //   deleteItem {vault, item}      an item deleted
 //   open {item}                   an item's plaintext (asks the person, unless its vault is unlocked)
 //   recover {words}               this device keyed into one's vaults by the recovery words
-//   approve {request, scope}      an agent's request granted: the item sealed to it, signed; a request to keep a
-//                                 secret (secret_save) approved: written into one's vault (`scope` unused)
+//   approve {request, scope, typed?}  an agent's request granted: the item sealed to it, signed; a request to keep a
+//                                 secret (secret_save) approved: written into one's vault (`scope` unused); one the
+//                                 person types in, with what they typed (`typed: {secret, username?}`, an object: never
+//                                 kept among what is `doing`)
 //   setLasts {vault, lasts}       the longest grant of the vault's items that say none (its owner signs; the plain
 //                                 library's told to each station keeping it)
 //   deny {request}                turned down, signed
@@ -53,7 +55,7 @@ import { Priority } from "../sync/scheduler.ts";
 import type { SpanContext } from "../trace.ts";
 import { get, isObject, utf8 } from "../util.ts";
 import {
-  type BoxCert, type Deny, type Grant, type Item, type Listing, type Plain, type Request, type Scope, type Vault,
+  type BoxCert, type Deny, type Grant, type Item, type Listing, type Plain, type Request, type Save, type Scope, type Vault,
   SCOPES, TAG, allows, boxPublic, decrypt, encryptWith, fromWords, grantContext, itemContext, keyContext, openSeal, recoveryPair, saveContext, sealWith, sign, signedOk, toWords,
 } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
@@ -531,8 +533,8 @@ export function vaultsView(inner: Inner, ws: string): J {
     id: r.id, vault: r.vault, vaultName, item: r.item, itemName, lasts,
     session: r.session, chat: r.chat, station: h.asked[r.id] ?? null, mode: r.mode, reason: r.reason, command: r.command ?? null, hosts: r.hosts ?? [], at: r.at,
     howText: howText(r.mode, r.hosts ?? []),
-    // A secret an agent asks to keep: what kind, and the account it is for.
-    ...(r.save ? { save: { kind: r.save.kind, ...(r.save.username ? { username: r.save.username } : {}) } } : {}),
+    // A secret an agent asks to keep: what kind, the account it is for, whether the person types it in.
+    ...(r.save ? { save: { kind: r.save.kind, ...(r.save.username ? { username: r.save.username } : {}), ...(r.save.typed ? { typed: true } : {}) } } : {}),
   });
   const personal = t("core-misc.vault.personal");
   // No security mode: the plain library, one vault on the station keeping most of its items (or the first keeping one).
@@ -715,7 +717,7 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
     case "recover":
       return v.recover(p("words"));
     case "approve":
-      return v.approve(p("request"), (str(c.params.scope) ?? "once") as Scope);
+      return v.approve(p("request"), (str(c.params.scope) ?? "once") as Scope, c.params.typed);
     case "deny":
       return v.deny(p("request"));
     case "setLasts":
@@ -742,6 +744,18 @@ function listingOf(v: unknown): Listing | undefined {
   const modes = arr(v.modes).filter((m) => MODES.includes(m));
   const lasts = SCOPES.find((s) => s === v.lasts);
   return { name: v.name, kind: v.kind as Listing["kind"], modes, hosts: arr(v.hosts).filter((x) => typeof x === "string"), ...(typeof v.env === "string" ? { env: v.env } : {}), ...(lasts ? { lasts } : {}) };
+}
+
+/// What the person typed in for a secret an agent asked to keep (`typed: {secret, username?}`), as the item's fields:
+/// as the vault's editor writes them (a token's trimmed, a private key's ending in its line, a password as typed; a
+/// login's account the agent's, else the one typed); undefined when there is no secret in it.
+function typedFields(s: Save, typed: unknown): Record<string, string> | undefined {
+  const secret = isObject(typed) && typeof typed.secret === "string" ? typed.secret : "";
+  if (secret.trim() === "") return undefined;
+  if (s.kind === "token") return { value: secret.trim() };
+  if (s.kind === "ssh_key") return { private_key: secret.trim() + "\n", ...(s.public_key ? { public_key: s.public_key } : {}) };
+  const username = s.username ?? (isObject(typed) && typeof typed.username === "string" ? typed.username.trim() : "");
+  return { ...(username ? { username } : {}), password: secret };
 }
 
 class Vaults {
@@ -1156,15 +1170,16 @@ class Vaults {
   }
 
   /// An agent's request granted: the item's plaintext sealed to the keeper's key for this request, signed by this
-  /// device (the person asked each time, whether the vault is unlocked or not).
-  approve(id: string, scope: Scope): Effect.Effect<unknown, CoreError> {
+  /// device (the person asked each time, whether the vault is unlocked or not). One to keep a secret: kept, with what
+  /// the person `typed` where it is theirs to type in.
+  approve(id: string, scope: Scope, typed?: unknown): Effect.Effect<unknown, CoreError> {
     const self = this;
     return Effect.gen(function* () {
       const inner = self.#inner;
       if (!["once", "hour", "chat"].includes(scope)) return yield* Effect.fail(CoreError.invalid("scope: once, hour or chat"));
       // The plain library's: its owner says so, nothing to open or sign (the station holds the value).
       const asked = yield* self.#request(id);
-      if (asked.r.save) return yield* self.#keepSaved(asked.r, asked.station);
+      if (asked.r.save) return yield* self.#keepSaved(asked.r, asked.station, typed);
       if (asked.r.vault === PLAIN) {
         const { r, station } = asked;
         const h = held(inner, self.ws);
@@ -1196,36 +1211,40 @@ class Vaults {
     });
   }
 
-  /// A secret an agent asked to keep, approved. The plain library's is written by the station that asked. A vault's is
-  /// opened with this device's box key (that station sealed it to the person's devices set up), written under the
-  /// request's item id into one of their vaults this device holds a key to (the one asked for first, their own next; a
-  /// new one only when they have none of their own: one this device has no key to yet, refused), its copy brought to
-  /// that station, which is then told where it went, with the grant that lets the asking chat use it. Either way the
-  /// chat that asked may use it at once.
-  #keepSaved(r: Request, station: string): Effect.Effect<unknown, CoreError> {
+  /// A secret an agent asked to keep, approved. The plain library's is written by the station that asked (with what the
+  /// person typed in, where it was theirs to). A vault's is opened with this device's box key (that station sealed it to
+  /// the person's devices set up), or is what they typed in, written under the request's item id into one of their
+  /// vaults this device holds a key to (the one asked for first, their own next; a new one only when they have none of
+  /// their own: one this device has no key to yet, refused), its copy brought to that station, which is then told where
+  /// it went, with the grant that lets the asking chat use it. Either way the chat that asked may use it at once.
+  #keepSaved(r: Request, station: string, typed: unknown): Effect.Effect<unknown, CoreError> {
     const self = this;
     return Effect.gen(function* () {
       const inner = self.#inner;
       const s = r.save!;
+      const given = s.typed ? typedFields(s, typed) : null;
+      if (given === undefined) return yield* fail("vault_typed_empty", t("core-misc.vault.typedEmpty"));
       if (r.vault === PLAIN) {
-        yield* self.#station(station, "POST", "/vault/plain/saves", { request: r.id });
+        yield* self.#station(station, "POST", "/vault/plain/saves", { request: r.id, ...(given ? { fields: given } : {}) });
         self.#settled(r.id, { status: "granted" });
         return { request: r.id, item: r.item };
       }
       const { lock, signer, self: who } = yield* self.#ready();
+      // The box key it is kept with: the one the station sealed it to here, or (typed in) this device's the lock vouches.
       const sealed = (r.sealed ?? []).find((x) => x.device === who.device);
-      if (!sealed) return yield* fail("vault_no_key", t("core-misc.vault.notSealedHere"));
-      const keyedHere = (v: Vault) => trusted(lock, v) && v.members.includes(who.sub) && v.keys.some((k) => k.cert.device === who.device && k.cert.box === sealed.box);
+      const box = given ? certs(inner, self.ws, lock).find((c) => c.device === who.device)?.box : sealed?.box;
+      if (box === undefined) return yield* (given ? fail("vault_not_set_up", t("core-misc.vault.notSetUp")) : fail("vault_no_key", t("core-misc.vault.notSealedHere")));
+      const keyedHere = (v: Vault) => trusted(lock, v) && v.members.includes(who.sub) && v.keys.some((k) => k.cert.device === who.device && k.cert.box === box);
       const h = held(inner, self.ws);
       const theirs = Object.values(h.vaults).filter(keyedHere).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : 1));
       const chosen = (h.vaults[r.vault] && keyedHere(h.vaults[r.vault]!) ? h.vaults[r.vault] : undefined) ?? theirs.find((x) => x.owner === who.sub) ?? theirs[0];
       // Their own vault this device has no key to yet: given it by a device that has (not a second one made here).
       if (!chosen && Object.values(h.vaults).some((v) => !v.deleted && trusted(lock, v) && v.owner === who.sub)) return yield* fail("vault_no_key", t("core-misc.vault.noKey"));
       const priv = yield* self.#boxKey(t("core-misc.vault.reason.save", { name: s.name }));
-      if (boxPublic(priv) !== sealed.box) return yield* fail("vault_no_key", t("core-misc.vault.notSealedHere"));
+      if (boxPublic(priv) !== box) return yield* fail("vault_no_key", t(given ? "core-misc.vault.noKey" : "core-misc.vault.notSealedHere"));
       const body = yield* Effect.try({
         try: () => {
-          const fields = JSON.parse(new TextDecoder().decode(openSeal(priv, sealed.secret, saveContext(self.ws, r.id))));
+          const fields = given ?? JSON.parse(new TextDecoder().decode(openSeal(priv, sealed!.secret, saveContext(self.ws, r.id))));
           return {
             plain: plainOf({ kind: s.kind, name: s.name, fields, domains: [], notes: "" }),
             listing: listingOf({ name: s.name, kind: s.kind, modes: s.modes, hosts: s.hosts, ...(s.env ? { env: s.env } : {}) }),

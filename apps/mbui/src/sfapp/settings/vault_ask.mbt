@@ -5,19 +5,50 @@
 // foot: the answer most give as the one solid button (允许 / 存入), the other beside it (拒绝 / 不存), how long a use is
 // allowed a choice beside them that starts at the longest the item is given for (`vault.approve`, `vault.deny`). Only
 // the viewer's own request can be answered, and only in an app keeping keys; elsewhere a line says whose it is or where
-// it is approved. A secret to keep while the vault is not on on this device: 开启密钥库, to the vault's page.
+// it is approved. A secret to keep while the vault is not on on this device: 开启密钥库, to the vault's page. One the
+// person types in (the agent has none): its field over the answer (a login's account too, where the agent named none),
+// 存入 once something is in it, Enter as 存入; what was typed goes only with `vault.approve`, and is let go once it went.
 
 ///|
 /// What a request's card says (VaultAsk.tsx Asked): the item's name, how it would be given (`mode`), the command it is
-/// for; one to keep a secret, what it is (`save_kind`: login, token, ssh_key) and its account; another station of the
-/// workspace its commands run on, by name (empty: the chat's).
+/// for; one to keep a secret, what it is (`save_kind`: login, token, ssh_key), its account, and whether the person
+/// types it in (`typed`); another station of the workspace its commands run on, by name (empty: the chat's).
 pub(all) struct Asked {
   name : String
   mode : String
   command : String
   save_kind : String
   username : String
+  typed : Bool
   station : String
+}
+
+///|
+/// A secret to keep that the person types in here (`save.typed`: the agent has none): its kind, and the account the
+/// agent named (empty: a login's is asked for too).
+pub(all) struct Typed {
+  kind : String
+  username : String
+}
+
+///|
+/// The secret to type in of request `save` (its `save`), or None where it is not the person's to type.
+pub fn typed_of(save : Json?) -> Typed? {
+  if flag(save, "typed") {
+    Some({ kind: text(save, "kind"), username: text(save, "username") })
+  } else {
+    None
+  }
+}
+
+///|
+/// The secret to type in of what is asked, or None.
+fn Asked::typed_in(self : Asked) -> Typed? {
+  if self.typed {
+    Some({ kind: self.save_kind, username: self.username })
+  } else {
+    None
+  }
 }
 
 ///|
@@ -34,10 +65,30 @@ let vault_picked : Map[String, String] = {}
 let vault_pending : Map[String, Bool] = {}
 
 ///|
+/// What the person types in for each request whose secret is theirs to type, by request and field (`/secret`,
+/// `/username`): kept only till it went with `vault.approve`; put back by `reset`.
+let vault_typed : Map[String, @ui.Field] = {}
+
+///|
 fn vault_ask_reset() -> Unit {
   vault_menu.val = ""
   vault_picked.clear()
   vault_pending.clear()
+  vault_typed.clear()
+}
+
+///|
+/// The field typed in for `request`'s `part` (kept across frames).
+fn typed_field(request : String, part : String) -> @ui.Field {
+  let key = request + part
+  match vault_typed.get(key) {
+    Some(f) => f
+    None => {
+      let f = @ui.Field::new()
+      vault_typed[key] = f
+      f
+    }
+  }
 }
 
 ///|
@@ -74,15 +125,16 @@ pub fn card_answer(answer : String, lasts : String, mine : Bool, who? : String? 
 
 ///|
 /// How request `request` in workspace `ws` is answered here, from the vaults topic (the vault page's, which lists the
-/// requests from it; a card from before its station said what it asks): None while the topic has not come.
-fn topic_answer(core : Core, ws : String, request : String, mine : Bool, who : String?) -> (Answer, Bool)? {
+/// requests from it; a card from before its station said what it asks), whether it is one to keep and its secret to type
+/// in: None while the topic has not come.
+fn topic_answer(core : Core, ws : String, request : String, mine : Bool, who : String?) -> (Answer, Bool, Typed?)? {
   let view = vaults_of(core, ws)
   if view is None {
     return None
   }
   // a web page keeps no keys (the plain library's, without security mode, are approved anywhere)
   if !flag(view, "available") && !flag(view, "plain") {
-    return Some((Elsewhere, false))
+    return Some((Elsewhere, false, None))
   }
   let row = items(view, "requests").iter().find_first(fn(r) { text(Some(r), "id") == request })
   if !mine || (row is None && !vault_pending.contains(request)) {
@@ -93,14 +145,16 @@ fn topic_answer(core : Core, ws : String, request : String, mine : Bool, who : S
           _ => Decided
         },
         false,
+        None,
       ),
     )
   }
   let save = field(row, "save") is Some(_)
+  let typed = typed_of(field(row, "save"))
   if save && !flag(view, "plain") && !flag(view, "setUp") {
-    Some((SetUp, save))
+    Some((SetUp, save, typed))
   } else {
-    Some((Approve(text(row, "lasts")), save))
+    Some((Approve(text(row, "lasts")), save, typed))
   }
 }
 
@@ -128,7 +182,7 @@ pub fn vault_ask(
       }
     }
     match answer {
-      Some((a, save)) => vault_foot(c, core, ws, request, a, save, extra~, foot=a is (Approve(_) | SetUp))
+      Some((a, save, _)) => vault_foot(c, core, ws, request, a, save, typed=ask.typed_in(), extra~, foot=a is (Approve(_) | SetUp))
       None => ()
     }
   })
@@ -141,7 +195,7 @@ pub fn vault_ask(
 pub fn vault_card(c : @ui.Ctx, core : Core, ws : String, request : String, ask : Asked, answer : Answer) -> Unit {
   @sf.card(c, fn() {
     vault_asked(c, ask)
-    vault_foot(c, core, ws, request, answer, ask.save_kind != "", foot=answer is (Approve(_) | SetUp))
+    vault_foot(c, core, ws, request, answer, ask.save_kind != "", typed=ask.typed_in(), foot=answer is (Approve(_) | SetUp))
   })
   |> ignore
 }
@@ -224,14 +278,15 @@ pub fn vault_outcome(c : @ui.Ctx, ask : Asked, status : String, scope : String) 
 /// is no answer to give here (`who`: whose it is); nothing while the topic has not come.
 pub fn vault_actions(c : @ui.Ctx, core : Core, ws : String, request : String, mine : Bool, who? : String? = None) -> Unit {
   match topic_answer(core, ws, request, mine, who) {
-    Some((a, save)) => vault_foot(c, core, ws, request, a, save)
+    Some((a, save, typed)) => vault_foot(c, core, ws, request, a, save, typed~)
     None => ()
   }
 }
 
 ///|
-/// The answer to request `request` in workspace `ws` as `answer` says (`save`: one to keep a secret): the buttons
-/// (`foot`: last on its card, in the card's foot corners: @sf.foot_reach), or a line where there is none to give here.
+/// The answer to request `request` in workspace `ws` as `answer` says (`save`: one to keep a secret; `typed`: its secret
+/// the person's to type in, its field over them): the buttons (`foot`: last on its card, in the card's foot corners:
+/// @sf.foot_reach), or a line where there is none to give here.
 /// `extra`: after the buttons (the vault page's 打开对话). Tapped, the button turns till what it did shows: its card saying how it went
 /// (the core says so at once), or the request gone from the vault page.
 pub fn vault_foot(
@@ -241,6 +296,7 @@ pub fn vault_foot(
   request : String,
   answer : Answer,
   save : Bool,
+  typed? : Typed? = None,
   extra? : (() -> Unit)? = None,
   foot? : Bool = false,
 ) -> Unit {
@@ -279,12 +335,55 @@ pub fn vault_foot(
     }
     vault_pending[request] = yes
     (core.call)(call, params, fn(r) {
-      // (gone through, it stays turning till what it did shows: the core says how it went on the card first)
-      if r is Err(e) {
-        vault_pending.remove(request)
-        (core.say)(fill("android-misc.act.failed", [("what", what), ("error", error_text(e))]))
+      // (gone through, it stays turning till what it did shows: the core says how it went on the card first; what was
+      // typed in for it let go)
+      match r {
+        Err(e) => {
+          vault_pending.remove(request)
+          (core.say)(fill("android-misc.act.failed", [("what", what), ("error", error_text(e))]))
+        }
+        Ok(_) => {
+          vault_typed.remove(request + "/secret")
+          vault_typed.remove(request + "/username")
+        }
       }
     })
+  }
+  // a secret the person types in: its field over the buttons (a login's account first, where the agent named none),
+  // its ends where theirs are on a page card (last on it: out in its foot corners)
+  let mut secret = ""
+  let mut username = ""
+  let mut entered = false
+  match (answer, typed) {
+    (Approve(_), Some(ty)) =>
+      c.box(style=if foot { ask_typed.then(@sf.over_foot_reach(@sf.button_height())) } else { ask_typed }, fn() {
+        if ty.kind == "login" && ty.username == "" {
+          let words = tr("android-settings.vault.ask.typed.username")
+          username = @sf.input(c, "vault/" + request + "/username", placeholder=words, disabled=under, solid=true, field=typed_field(request, "/username")).text
+        }
+        let words = tr("android-settings.vault.ask.typed." + ty.kind)
+        if ty.kind == "ssh_key" {
+          secret = @sf.textarea(c, "vault/" + request + "/secret", rows=4, placeholder=words, solid=true, field=typed_field(request, "/secret"))
+        } else {
+          let f = @sf.input(c, "vault/" + request + "/secret", placeholder=words, secret=true, disabled=under, solid=true, field=typed_field(request, "/secret"))
+          secret = f.text
+          entered = f.submitted
+        }
+      })
+      |> ignore
+    _ => ()
+  }
+  let empty = typed is Some(_) && secret.trim(chars=" \n\t").to_string() == ""
+  // (what goes with the approval: an object, never kept among what the core is doing)
+  let given : Json? = match typed {
+    Some(_) => {
+      let words : Array[(String, Json)] = [("secret", str(secret))]
+      if username.trim(chars=" ").to_string() != "" {
+        words.push(("username", str(username)))
+      }
+      Some(obj(words))
+    }
+    None => None
   }
   // (on a second line what has not the room on the first; last on a page card, its buttons in its foot corners)
   c.box(style=if foot { ask_foot.then(@sf.foot_reach(@sf.button_height())) } else { ask_foot }, flow=true, line_gap=ask_foot_lines, fn() {
@@ -295,9 +394,15 @@ pub fn vault_foot(
       }
     } else {
       let yes = if save { "android-settings.vault.act.save" } else { "android-settings.vault.act.allow" }
-      if @sf.button(c, tr(yes), key="vault/" + request + "/yes", tone=Primary, busy=busy(true), disabled=under) {
+      let pressed = @sf.button(c, tr(yes), key="vault/" + request + "/yes", tone=Primary, busy=busy(true), disabled=under || empty)
+      if pressed || (entered && !under && !empty) {
         let what = tr(if save { "android-settings.vault.act.saveWhat" } else { "android-settings.vault.act.allowWhat" })
-        act(true, "vault.approve", what, obj([("workspace", str(ws)), ("request", str(request)), ("scope", str(if save { "once" } else { scope }))]))
+        let params : Array[(String, Json)] = [("workspace", str(ws)), ("request", str(request)), ("scope", str(if save { "once" } else { scope }))]
+        if given is Some(g) {
+          params.push(("typed", g))
+        }
+        // (told once the frame's builds are over: Enter in the field is seen by the build it came to)
+        c.tell("vault/" + request + "/approve", fn() { act(true, "vault.approve", what, obj(params)) })
       }
     }
     let no = if save { "android-settings.vault.act.dontSave" } else { "android-settings.vault.act.deny" }
@@ -353,6 +458,11 @@ let ask_command : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4_75, co
 /// A line of what is out of the ordinary, or where there is no answer to give here: 12 and quiet.
 // kept across runs: a value (no field of it changes)
 let ask_note : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4_75, color=Muted, w=Full)
+
+///|
+/// What the person types in, over the answer: its fields 8 apart, the card's width (VaultAsk.css.ts typed).
+// kept across runs: a value (no field of it changes)
+let ask_typed : @ui.Style = @ui.css("w=Full gap=S2")
 
 ///|
 /// The answer's buttons, 10 apart (pages.css.ts cardFoot).
