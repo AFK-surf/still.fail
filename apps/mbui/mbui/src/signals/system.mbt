@@ -5,7 +5,9 @@
 // called here by name: the system is made once (createReactiveSystem), not a value passed round.
 
 ///|
-/// A node of the graph (ReactiveNode): a signal, a computed, an effect, a scope or a trigger's reader, by `kind`.
+/// A node of the graph (ReactiveNode): a signal, a computed, an effect, a scope or a trigger's reader, by `kind`, and
+/// what index.ts's node of that kind holds besides the graph's fields (a signal's values, a computed's getter and value,
+/// an effect's fn), its `own`, as one object: a signal and a computed are their node.
 pub struct ReactiveNode {
   priv mut deps : Link?
   priv mut deps_tail : Link?
@@ -13,21 +15,37 @@ pub struct ReactiveNode {
   priv mut subs_tail : Link?
   priv mut flags : Int
   priv kind : NodeKind
+  /// a signal's SignalState, a computed's ComputedState, an effect's fn (`no_own` for a scope's and a trigger's)
+  priv own : Own
+  /// a signal's or a computed's update of its own (updateSignal, updateComputed): one function a type of value, not a
+  /// closure a node
+  priv update : ((ReactiveNode) -> Bool)?
   /// an effect's cleanup, as its fn returned it (EffectNode.cleanup)
   priv mut cleanup : (() -> Unit)?
 }
 
 ///|
-/// What a node is (the fields index.ts tells them apart by: `getter`, `currentValue`, `fn`): a signal's and a
-/// computed's update (updateSignal, updateComputed, over the value of their own), an effect's fn, a scope, a trigger's
-/// reader (neither: as a scope, index.ts's last case).
+/// What a node is (the fields index.ts tells them apart by: `getter`, `currentValue`, `fn`): a signal, a computed, an
+/// effect, a scope, a trigger's reader (neither: as a scope, index.ts's last case).
 enum NodeKind {
-  SignalNode((ReactiveNode) -> Bool)
-  ComputedNode((ReactiveNode) -> Bool)
-  EffectNode(() -> (() -> Unit)?)
+  SignalNode
+  ComputedNode
+  EffectNode
   ScopeNode
   TriggerNode
 }
+
+///|
+/// A node's own (its SignalState[T], ComputedState[T] or fn) with its type left out, the node being the same for every
+/// type of value: what knows the type (Signal[T], Computed[T], the update the node was made with) says it back
+/// (signals.mbt's `coerce`). Made only as `no_own`; a reference, as what it stands for is.
+priv struct Own {
+  own : Own?
+}
+
+///|
+/// The own of a node that has none (a scope, a trigger's reader).
+let no_own : Own = { own: None }
 
 ///|
 /// An edge: `sub` read `dep` (Link), in `dep`'s subs and `sub`'s deps both; `version` the cycle it was read in.
@@ -42,10 +60,14 @@ struct Link {
 }
 
 ///|
-priv struct Stack[T] {
-  value : T
-  prev : Stack[T]?
-}
+/// The frames checkDirty and propagate stack up as they go down (index.ts's Stack, a list of them): an array each,
+/// kept, where index.ts makes a frame an object, under reference counting a malloc and a free a level. A call works
+/// above where it found its array's end and leaves it there (what checkDirty updates may check again, inside).
+let check_frames : Array[Link] = []
+
+///|
+/// (propagate's frames that would hold no link, which it would only step over, left out)
+let propagate_frames : Array[Link] = []
 
 ///|
 /// ReactiveFlags.
@@ -70,8 +92,13 @@ pub const DIRTY : Int = 16
 pub const PENDING : Int = 32
 
 ///|
-fn ReactiveNode::new(flags : Int, kind : NodeKind) -> ReactiveNode {
-  { deps: None, deps_tail: None, subs: None, subs_tail: None, flags, kind, cleanup: None }
+fn ReactiveNode::new(
+  flags : Int,
+  kind : NodeKind,
+  own? : Own = no_own,
+  update? : (ReactiveNode) -> Bool,
+) -> ReactiveNode {
+  { deps: None, deps_tail: None, subs: None, subs_tail: None, flags, kind, own, update, cleanup: None }
 }
 
 ///|
@@ -147,7 +174,7 @@ fn unlink(link : Link, sub : ReactiveNode) -> Link? {
 fn propagate(start : Link, inner_write : Bool) -> Unit {
   let mut link = start
   let mut next = link.next_sub
-  let mut stack : Stack[Link?]? = None
+  let base = propagate_frames.length()
   while true {
     let sub = link.sub
     let mut flags = sub.flags
@@ -175,7 +202,9 @@ fn propagate(start : Link, inner_write : Bool) -> Unit {
           link = sub_subs
           let next_sub = sub_subs.next_sub
           if next_sub is Some(_) {
-            stack = Some({ value: next, prev: stack })
+            if next is Some(n) {
+              propagate_frames.push(n)
+            }
             next = next_sub
           }
           continue
@@ -191,25 +220,10 @@ fn propagate(start : Link, inner_write : Bool) -> Unit {
       }
       None => ()
     }
-    let mut resumed = false
-    while true {
-      match stack {
-        Some(s) => {
-          stack = s.prev
-          match s.value {
-            Some(l) => {
-              link = l
-              next = l.next_sub
-              resumed = true
-              break
-            }
-            None => ()
-          }
-        }
-        None => break
-      }
-    }
-    if resumed {
+    if propagate_frames.length() > base {
+      let l = propagate_frames.pop().unwrap()
+      link = l
+      next = l.next_sub
       continue
     }
     break
@@ -220,7 +234,6 @@ fn propagate(start : Link, inner_write : Bool) -> Unit {
 fn check_dirty(start : Link, start_sub : ReactiveNode) -> Bool {
   let mut link = start
   let mut sub = start_sub
-  let mut stack : Stack[Link]? = None
   let mut check_depth = 0
   let mut dirty = false
   while true {
@@ -239,7 +252,7 @@ fn check_dirty(start : Link, start_sub : ReactiveNode) -> Bool {
         dirty = true
       }
     } else if (flags & (MUTABLE | PENDING)) == (MUTABLE | PENDING) {
-      stack = Some({ value: link, prev: stack })
+      check_frames.push(link)
       link = dep.deps.unwrap()
       sub = dep
       check_depth += 1
@@ -257,9 +270,7 @@ fn check_dirty(start : Link, start_sub : ReactiveNode) -> Bool {
     let mut to_top = false
     while check_depth > 0 {
       check_depth -= 1
-      let s = stack.unwrap()
-      link = s.value
-      stack = s.prev
+      link = check_frames.pop().unwrap()
       if dirty {
         let subs = sub.subs
         if update(sub) {

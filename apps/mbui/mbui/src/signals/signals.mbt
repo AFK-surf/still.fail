@@ -1,11 +1,13 @@
 // alien-signals' signals, computeds and effects (https://github.com/stackblitz/alien-signals 3.2.1, src/index.ts;
 // MIT, Copyright (c) 2024-present Johnson Chu), ported line for line over system.mbt's graph. What differs is
-// MoonBit's: a signal and a computed are values with `get` and `set` rather than functions bound to their node; an
-// effect's cleanup is said by which of `effect` and `effect_cleanup` makes it; nothing throws, so nothing is put back
-// in a `finally`; and "the same value" is `same` (physical_equal by default: index.ts's `!==`, but for strings, which it
-// compares by their words: say `same=fn(a, b) { a == b }` where that matters). Added for what keeps its own computeds
-// (docs/signals.md): Computed::peek, Computed::dispose, Signal::watched, untracked; and for what holds what another
-// computed builds after it ran: Computed::reading, Computed::lend; Computed::invalidate.
+// MoonBit's: a signal and a computed are their node with `get` and `set` rather than functions bound to it, what
+// index.ts's node of their kind holds besides the graph's fields kept in the node's `own` (system.mbt) as the type its
+// signal or computed says (`coerce`); an effect's cleanup is said by which of `effect` and `effect_cleanup` makes it;
+// nothing throws, so nothing is put back in a `finally`; and "the same value" is `same` (physical_equal without one:
+// index.ts's `!==`, but for strings, which it compares by their words: say `same=fn(a, b) { a == b }` where that
+// matters). Added for what keeps its own computeds (docs/signals.md): Computed::peek, Computed::dispose,
+// Signal::watched, untracked; and for what holds what another computed builds after it ran: Computed::reading,
+// Computed::lend; Computed::invalidate.
 
 ///|
 /// A parent (an effect or a scope) whose deps include at least one effect of its own (HasChildEffect): what it runs
@@ -37,41 +39,68 @@ let run : Run = {
 }
 
 ///|
-/// A signal (SignalNode): its value and the one set (pendingValue), what is the same as what.
-pub struct Signal[T] {
-  priv node : ReactiveNode
-  priv state : SignalState[T]
-}
+/// A signal (SignalNode): its node, whose own is a SignalState[T].
+struct Signal[T](ReactiveNode)
 
 ///|
-struct SignalState[T] {
+/// A signal's own: its value and the one set (pendingValue), what is the same as what (physical_equal without one).
+priv struct SignalState[T] {
   mut current : T
   mut pending : T
-  same : (T, T) -> Bool
+  same : ((T, T) -> Bool)?
 }
 
 ///|
-/// A computed (ComputedNode): its getter, given the value it made last (none the first time), and that value.
-pub struct Computed[T] {
-  priv node : ReactiveNode
-  priv state : ComputedState[T]
-}
+/// A computed (ComputedNode): its node, whose own is a ComputedState[T].
+struct Computed[T](ReactiveNode)
 
 ///|
-struct ComputedState[T] {
+/// A computed's own: its getter, given the value it made last (none the first time), and that value.
+priv struct ComputedState[T] {
   mut value : T?
   getter : (T?) -> T
-  same : (T, T) -> Bool
+  same : ((T, T) -> Bool)?
+}
+
+///|
+/// The same reference as another type: a node's own to and from what it is (the SignalState[_], ComputedState[_] or
+/// fn the node was made with, as its Signal[_], Computed[_], update or kind says).
+fn[A, B] coerce(a : A) -> B = "%identity"
+
+///|
+/// Whether `a` is `b` as `same` says, physical_equal (index.ts's `===`) without one.
+fn[T] same_as(same : ((T, T) -> Bool)?, a : T, b : T) -> Bool {
+  match same {
+    None => physical_equal(a, b)
+    Some(f) => f(a, b)
+  }
+}
+
+///|
+/// A signal's update (updateSignal) for its node to call, one function for every signal of `T` (`_state` says which).
+fn[T] signal_update(_state : SignalState[T]) -> (ReactiveNode) -> Bool {
+  fn(n) {
+    let own : SignalState[T] = coerce(n.own)
+    update_signal(n, own)
+  }
+}
+
+///|
+/// A computed's update (updateComputed) for its node to call, one function for every computed of `T`.
+fn[T] computed_update(_state : ComputedState[T]) -> (ReactiveNode) -> Bool {
+  fn(n) {
+    let own : ComputedState[T] = coerce(n.own)
+    update_computed(n, own)
+  }
 }
 
 // ── system.mbt's callbacks (createReactiveSystem's update, notify, unwatched) ─────────────────────────────
 
 ///|
 fn update(node : ReactiveNode) -> Bool {
-  match node.kind {
-    ComputedNode(u) => u(node)
-    SignalNode(u) => u(node)
-    _ => {
+  match node.update {
+    Some(u) => u(node)
+    None => {
       node.flags = MUTABLE
       true
     }
@@ -84,7 +113,12 @@ fn notify(first : ReactiveNode) -> Unit {
   let mut insert_index = run.queued_length
   let mut first_inserted = insert_index
   while true {
-    queued_put(insert_index, Some(effect))
+    // (queued[insertIndex++] = effect, the array grown as index.ts's is by its index)
+    if insert_index < run.queued.length() {
+      run.queued[insert_index] = Some(effect)
+    } else {
+      run.queued.push(Some(effect))
+    }
     insert_index += 1
     effect.flags = effect.flags & WATCHING.lnot()
     match effect.subs {
@@ -109,26 +143,16 @@ fn notify(first : ReactiveNode) -> Unit {
 }
 
 ///|
-/// queued[i] = e, the array grown as index.ts's is by its index.
-fn queued_put(i : Int, e : ReactiveNode?) -> Unit {
-  if i < run.queued.length() {
-    run.queued[i] = e
-  } else {
-    run.queued.push(e)
-  }
-}
-
-///|
 fn unwatched(node : ReactiveNode) -> Unit {
   match node.kind {
-    ComputedNode(_) =>
+    ComputedNode =>
       if node.deps_tail is Some(_) {
         node.flags = MUTABLE | DIRTY
         dispose_all_deps_in_reverse(node)
       }
     // (nothing for signals: always mutable, never dirty until their pending value changes)
-    SignalNode(_) => ()
-    EffectNode(_) => effect_oper(node)
+    SignalNode => ()
+    EffectNode => effect_oper(node)
     ScopeNode | TriggerNode => effect_scope_oper(node)
   }
 }
@@ -137,7 +161,7 @@ fn unwatched(node : ReactiveNode) -> Unit {
 /// Whether `dep` is neither a computed nor a signal (`!('getter' in dep) && !('currentValue' in dep)`).
 fn effect_like(dep : ReactiveNode) -> Bool {
   match dep.kind {
-    ComputedNode(_) | SignalNode(_) => false
+    ComputedNode | SignalNode => false
     _ => true
   }
 }
@@ -177,16 +201,30 @@ pub fn end_batch() -> Unit {
 
 ///|
 /// A signal holding `initial`.
-pub fn[T] signal(initial : T, same? : (T, T) -> Bool = physical_equal) -> Signal[T] {
-  let state = { current: initial, pending: initial, same }
-  { node: ReactiveNode::new(MUTABLE, SignalNode(fn(n) { update_signal(n, state) })), state }
+pub fn[T] signal(initial : T, same? : (T, T) -> Bool) -> Signal[T] {
+  let state : SignalState[T] = { current: initial, pending: initial, same }
+  Signal(
+    ReactiveNode::new(
+      MUTABLE,
+      SignalNode,
+      own=coerce(state),
+      update=signal_update(state),
+    ),
+  )
 }
 
 ///|
 /// A computed: `getter` worked out (given what it made last) as it is read after what it read changed.
-pub fn[T] computed(getter : (T?) -> T, same? : (T, T) -> Bool = physical_equal) -> Computed[T] {
-  let state = { value: None, getter, same }
-  { node: ReactiveNode::new(NONE, ComputedNode(fn(n) { update_computed(n, state) })), state }
+pub fn[T] computed(getter : (T?) -> T, same? : (T, T) -> Bool) -> Computed[T] {
+  let state : ComputedState[T] = { value: None, getter, same }
+  Computed(
+    ReactiveNode::new(
+      NONE,
+      ComputedNode,
+      own=coerce(state),
+      update=computed_update(state),
+    ),
+  )
 }
 
 ///|
@@ -206,7 +244,7 @@ pub fn effect_cleanup(f : () -> (() -> Unit)) -> () -> Unit {
 
 ///|
 fn effect_of(f : () -> (() -> Unit)?) -> () -> Unit {
-  let e = ReactiveNode::new(WATCHING | RECURSED_CHECK, EffectNode(f))
+  let e = ReactiveNode::new(WATCHING | RECURSED_CHECK, EffectNode, own=coerce(f))
   let prev_sub = set_active_sub(Some(e))
   match prev_sub {
     Some(p) => {
@@ -300,7 +338,7 @@ fn[T] update_computed(c : ReactiveNode, state : ComputedState[T]) -> Bool {
   c.flags = c.flags & RECURSED_CHECK.lnot()
   purge_deps(c)
   match old_value {
-    Some(old) => !(state.same)(old, value)
+    Some(old) => !same_as(state.same, old, value)
     None => true
   }
 }
@@ -310,7 +348,7 @@ fn[T] update_signal(s : ReactiveNode, state : SignalState[T]) -> Bool {
   s.flags = MUTABLE
   let was = state.current
   state.current = state.pending
-  !(state.same)(was, state.current)
+  !same_as(state.same, was, state.current)
 }
 
 ///|
@@ -343,9 +381,9 @@ fn run_effect(e : ReactiveNode) -> Unit {
     let prev_sub = set_active_sub(Some(e))
     run.cycle += 1
     run.run_depth += 1
-    match e.kind {
-      EffectNode(f) => e.cleanup = f()
-      _ => ()
+    if e.kind is EffectNode {
+      let f : () -> (() -> Unit)? = coerce(e.own)
+      e.cleanup = f()
     }
     run.run_depth -= 1
     run.active_sub = prev_sub
@@ -371,7 +409,8 @@ fn flush() -> Unit {
 ///|
 /// The computed's value, worked out again first if what it read changed since (computedOper).
 pub fn[T] Computed::get(self : Computed[T]) -> T {
-  let node = self.node
+  let node = self.0
+  let state : ComputedState[T] = coerce(node.own)
   let flags = node.flags
   let stale = if (flags & DIRTY) != 0 {
     true
@@ -386,7 +425,7 @@ pub fn[T] Computed::get(self : Computed[T]) -> T {
     false
   }
   if stale {
-    if update(node) {
+    if update_computed(node, state) {
       match node.subs {
         Some(subs) => shallow_propagate(subs)
         None => ()
@@ -395,44 +434,39 @@ pub fn[T] Computed::get(self : Computed[T]) -> T {
   } else if flags == 0 {
     node.flags = MUTABLE | RECURSED_CHECK
     let prev_sub = set_active_sub(Some(node))
-    self.state.value = Some((self.state.getter)(None))
+    state.value = Some((state.getter)(None))
     run.active_sub = prev_sub
     node.flags = node.flags & RECURSED_CHECK.lnot()
   }
-  match run.active_sub {
-    Some(sub) => link(node, sub, run.cycle)
-    None => ()
-  }
-  self.state.value.unwrap()
+  track(node)
+  state.value.unwrap()
 }
 
 ///|
 /// The signal's value (signalOper read): what was set, once it is read after.
 pub fn[T] Signal::get(self : Signal[T]) -> T {
-  let node = self.node
+  let node = self.0
+  let state : SignalState[T] = coerce(node.own)
   if (node.flags & DIRTY) != 0 {
-    if update_signal(node, self.state) {
+    if update_signal(node, state) {
       match node.subs {
         Some(subs) => shallow_propagate(subs)
         None => ()
       }
     }
   }
-  match run.active_sub {
-    Some(sub) => link(node, sub, run.cycle)
-    None => ()
-  }
-  self.state.current
+  track(node)
+  state.current
 }
 
 ///|
 /// The signal set (signalOper write): what follows it told, unless it is the same as what was set.
 pub fn[T] Signal::set(self : Signal[T], value : T) -> Unit {
-  let state = self.state
-  let changed = !(state.same)(state.pending, value)
+  let state : SignalState[T] = coerce(self.0.own)
+  let changed = !same_as(state.same, state.pending, value)
   state.pending = value
   if changed {
-    let node = self.node
+    let node = self.0
     node.flags = MUTABLE | DIRTY
     match node.subs {
       Some(subs) => {
@@ -443,6 +477,37 @@ pub fn[T] Signal::set(self : Signal[T], value : T) -> Unit {
       }
       None => ()
     }
+  }
+}
+
+///|
+/// What is reading now reads `dep` (`link(dep, activeSub, cycle)`, as computedOper and signalOper say it). Link's two
+/// first checks, one of which holds for nearly every read (`dep` read just before; read next where it was read last
+/// time), are made here, on the fields as they are and before anything is called: a reference bound to a name and
+/// passed on is counted, under reference counting, and these looks then cost a count each.
+fn track(dep : ReactiveNode) -> Unit {
+  match run.active_sub {
+    Some(sub) => {
+      if sub.deps_tail is Some(p) && physical_equal(p.dep, dep) {
+        return
+      }
+      match sub.deps_tail {
+        Some(p) =>
+          if p.next_dep is Some(n) && physical_equal(n.dep, dep) {
+            n.version = run.cycle
+            sub.deps_tail = p.next_dep
+            return
+          }
+        None =>
+          if sub.deps is Some(n) && physical_equal(n.dep, dep) {
+            n.version = run.cycle
+            sub.deps_tail = sub.deps
+            return
+          }
+      }
+      link(dep, sub, run.cycle)
+    }
+    None => ()
   }
 }
 
@@ -508,26 +573,27 @@ fn purge_deps(sub : ReactiveNode) -> Unit {
 ///|
 /// What the computed made last, not worked out again (none before it was first read).
 pub fn[T] Computed::peek(self : Computed[T]) -> T? {
-  self.state.value
+  let state : ComputedState[T] = coerce(self.0.own)
+  state.value
 }
 
 ///|
 /// The computed let go of what it read (as unwatched does with a computed nothing reads any more): what it read no
 /// longer holds it, and it is worked out anew if it is read again.
 pub fn[T] Computed::dispose(self : Computed[T]) -> Unit {
-  unwatched(self.node)
+  unwatched(self.0)
 }
 
 ///|
 /// Whether anything reads the signal (a computed, an effect).
 pub fn[T] Signal::watched(self : Signal[T]) -> Bool {
-  self.node.subs is Some(_)
+  self.0.subs is Some(_)
 }
 
 ///|
 /// Whether anything reads the computed (a computed, an effect): what follows it keeps it.
 pub fn[T] Computed::watched(self : Computed[T]) -> Bool {
-  self.node.subs is Some(_)
+  self.0.subs is Some(_)
 }
 
 ///|
@@ -543,7 +609,7 @@ pub fn[T] untracked(f : () -> T) -> T {
 /// The computed worked out again as it is next read, whatever it read (what reads it told, as a signal set tells it):
 /// for one built again for what is no signal (a part kept, Ctx::kept_part: its key, the pointer over it).
 pub fn[T] Computed::invalidate(self : Computed[T]) -> Unit {
-  let node = self.node
+  let node = self.0
   node.flags = node.flags | DIRTY
   match node.subs {
     Some(subs) => {
@@ -561,7 +627,7 @@ pub fn[T] Computed::invalidate(self : Computed[T]) -> Unit {
 /// is built for it after it ran (a list's rows, laid out after the part they are in was built). Let go as the
 /// computed's run reads anew, as what it read is.
 pub fn[T, U] Computed::reading(self : Computed[T], f : () -> U) -> U {
-  let prev_sub = set_active_sub(Some(self.node))
+  let prev_sub = set_active_sub(Some(self.0))
   let v = f()
   run.active_sub = prev_sub
   v
@@ -571,11 +637,11 @@ pub fn[T, U] Computed::reading(self : Computed[T], f : () -> U) -> U {
 /// What the computed read read by `to` as well, as though `to`'s run had read it after what it read (as
 /// Computed::reading: a row's build, run by a computed of its own, read for the part it is in).
 pub fn[T, U] Computed::lend(self : Computed[T], to : Computed[U]) -> Unit {
-  let mut l = self.node.deps
+  let mut l = self.0.deps
   while true {
     match l {
       Some(d) => {
-        link(d.dep, to.node, run.cycle)
+        link(d.dep, to.0, run.cycle)
         l = d.next_dep
       }
       None => break
