@@ -1062,6 +1062,10 @@ export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
     case "linkPreview":
       if (isObject(v) && typeof v.updatedAt === "number" && v.updatedAt > 0) value = { ...v, time: { updatedAt: stamp(v.updatedAt, c) } };
       break;
+    // A file's card: when it was last written, in words.
+    case "filePeek":
+      if (isObject(v) && typeof v.mtime === "number" && v.mtime > 0) value = { ...v, time: { mtime: stamp(v.mtime, c) } };
+      break;
   }
   const own = DECORATORS[topic.topic];
   if (own) value = own(value, c);

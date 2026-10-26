@@ -21,7 +21,7 @@ import type { StationsSync } from "./sync.ts";
 import type { LinkNet } from "./wire.ts";
 import { screenCard, screensChanged, screensView } from "../screens.ts";
 import { down, downWords } from "../views/views.ts";
-import { type Link, MEMORY, linkPreviewKey, logKey } from "./link.ts";
+import { type Link, MEMORY, filePeekKey, linkPreviewKey, logKey } from "./link.ts";
 import * as logins from "./machine-logins.ts";
 import { laterSleep } from "../runtime.ts";
 import * as looks from "../looks.ts";
@@ -41,7 +41,7 @@ export function packetsSince(was: LinkNet["packets"], now: LinkNet["packets"]): 
   return { sent: now.sent - was.sent, lost: now.lost - was.lost };
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "linkPreview"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "linkPreview", "filePeek"]);
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
@@ -203,6 +203,8 @@ export class StationTopics implements Owner {
     // What a web link in a message is: read each time its card shows (a pull request's state moves), what was read
     // last shown meanwhile.
     if (topic.topic === "linkPreview") this.#sync.linkPreviewShown(station, topic.url as string);
+    // What a file a message names is: read each time its card shows (it is written as agents work), the same.
+    if (topic.topic === "filePeek") this.#sync.filePeekShown(station, topic.key as string, topic.path as string, typeof topic.line === "number" ? topic.line : null);
   }
 
   stop(topic: Topic): void {
@@ -300,10 +302,14 @@ export class StationTopics implements Owner {
         if (link && down(link.state)) return { err: new CoreError("offline", downWords(link.state, this.#core.views.stationName(station))) };
         return error ? { err: error } : undefined;
       }
-      case "linkPreview": {
+      case "linkPreview":
+      case "filePeek": {
         // As the station said it last (kept: there as the app opens again; its times in words: present.ts); nothing read
         // yet, as `memory`.
-        const v = link?.memory.get(linkPreviewKey(topic.url as string));
+        const kept = topic.topic === "linkPreview"
+          ? linkPreviewKey(topic.url as string)
+          : filePeekKey(topic.key as string, topic.path as string, typeof topic.line === "number" ? topic.line : null);
+        const v = link?.memory.get(kept);
         if (v !== undefined) return { ok: v };
         if (link && down(link.state)) return { err: new CoreError("offline", downWords(link.state, this.#core.views.stationName(station))) };
         return error ? { err: error } : undefined;

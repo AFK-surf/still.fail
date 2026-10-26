@@ -57,6 +57,8 @@ priv struct Md {
   code : (String, String) -> (() -> Unit)?
   /// links to screens and 共享调试 as a chat draws them
   screens : Screens?
+  /// the files its paths name are a session's (an agent's message): drawn as chips that tell of them (path_link)
+  paths : Bool
   /// the lines' height over the words' size (0: Markdown.kt's 1.65)
   line : Double
   /// the words in the serif face (a reader's layout; code stays in the code face)
@@ -157,6 +159,69 @@ fn blocks_of(text : String, tree : Json?) -> Array[MdBlock] {
   if tree is Some(Array(_)) { core_parsed[text] = true }
   b
 }
+
+///|
+/// A file a message names by its path, as its chip's link carries it: the path and the line it points at (path_of_link
+/// reads it back); no address anything opens.
+pub fn path_link(path : String, line : Int?) -> String {
+  path_scheme +
+  (match line {
+    Some(n) => n.to_string()
+    None => ""
+  }) +
+  ":" +
+  path
+}
+
+///|
+/// The path and the line a file's chip's link (path_link) carries; None for any other link.
+pub fn path_of_link(href : String) -> (String, Int?)? {
+  guard href.has_prefix(path_scheme) else { return None }
+  let rest = href.view(start_offset=path_scheme.length()).to_owned()
+  guard rest.find(":") is Some(i) else { return None }
+  let mut line : Int? = None
+  for ch in rest.view(end_offset=i) {
+    guard ch >= '0' && ch <= '9' else { return None }
+    line = Some(line.unwrap_or(0) * 10 + (ch.to_int() - '0'.to_int()))
+  }
+  Some((rest.view(start_offset=i + 1).to_owned(), line))
+}
+
+///|
+let path_scheme : String = "stillfail-path:"
+
+///|
+/// A file's chip in words (Hover.css.ts fileChip): its path as the core shortened it, and the line it points at, in the
+/// code face at .88 of the words, on a quiet ground 6 round and 6 either side; the words' own colour, its link a file's
+/// (path_link).
+fn file_chip_run(path : String, line : Int?, shown : String) -> @ui.Run {
+  let words = (if shown != "" { shown } else { path }) +
+    (match line {
+      Some(n) => ":" + n.to_string()
+      None => ""
+    })
+  let t = theme()
+  @ui.span(
+    words,
+    mono=true,
+    scale=file_chip_scale,
+    color=t.p.text,
+    bg=alpha(t.p.muted, file_chip_share),
+    ground=Some(file_chip_ground),
+    link=path_link(path, line),
+  )
+}
+
+///|
+let file_chip_scale : Double = 0.88
+
+///|
+let file_chip_share : Double = 0.13
+
+///|
+/// Its ground, in ems of its words: 6 either side and 6 round at a body's 15 (.88 of it, 13.2), 20 high.
+// kept across runs: a value (no field of it changes)
+let file_chip_ground : @ui.Ground = { room: 6.0 / 13.2, height: 20.0 / 13.2, corner: 6.0 / 13.2, after: 0.0 }
 
 ///|
 /// A link to a chat's page (Markdown.kt isChatLink): …/chats/<key>, or
@@ -390,6 +455,7 @@ pub fn markdown(
   screens? : Screens? = None,
   document? : Bool = false,
   bleed? : Double = 0.0,
+  paths? : Bool = false,
 ) -> Int {
   let t = theme()
   let md = {
@@ -404,6 +470,7 @@ pub fn markdown(
     found,
     code,
     screens,
+    paths,
     line: 0.0,
     serif: false,
     document,
@@ -484,6 +551,7 @@ pub fn markdown_part(
     found,
     code: fn(_, _) { None },
     screens: None,
+    paths: false,
     line,
     serif,
     document,
@@ -910,7 +978,7 @@ fn Md::words(
   }
   // bold for a heading's 700; a table's head's 500 (medium) is the paragraph's own weight
   // (a chat's mention in the accent's ink, which reads in words; the accent itself was 2.5 to 1 on the page)
-  runs_of(xs, runs, weight >= 600, false, false, "", p.accent_text, titles)
+  runs_of(xs, runs, weight >= 600, false, false, "", p.accent_text, titles, self.paths)
   self.n = self.n + 1
   let runs = found_weight(runs, self.found)
   c.rich(
@@ -954,6 +1022,7 @@ fn runs_of(
   link : String,
   accent : Int64,
   titles : Map[String, String],
+  paths : Bool,
 ) -> Unit {
   for x in xs {
     match x {
@@ -973,9 +1042,13 @@ fn runs_of(
             link=if link == "" && is_web_address(s) { s } else { link },
           ),
         )
-      Emph(c) => runs_of(c, out, bold, true, strike, link, accent, titles)
-      Strong(c) => runs_of(c, out, true, italic, strike, link, accent, titles)
-      Strike(c) => runs_of(c, out, bold, italic, true, link, accent, titles)
+      // a file named by its path, in an agent's words and not within a link: its chip (Peeks.tsx FileRef), its card
+      // over it (the message's on_link_shown); else its words as code
+      FileRef(_, path, line, shown) if paths && link == "" => out.push(file_chip_run(path, line, shown))
+      FileRef(s, _, _, _) => out.push(@ui.span(s, code=true, bold~, italic~, strike~, link~))
+      Emph(c) => runs_of(c, out, bold, true, strike, link, accent, titles, paths)
+      Strong(c) => runs_of(c, out, true, italic, strike, link, accent, titles, paths)
+      Strike(c) => runs_of(c, out, bold, italic, true, link, accent, titles, paths)
       // a bare link to a screen or a station's 共享调试: its title, leading where it does
       Link(href, c) if link == "" && titles.get(href) is Some(title) && is_bare_link(md_plain(c), href) =>
         out.push(@ui.span(title, bold~, italic~, strike~, link=href))
@@ -985,7 +1058,7 @@ fn runs_of(
         out.push(@ui.span("@", bold~, italic~, strike~, link=href, color=accent))
         out.push(@ui.span(md_plain(c), bold~, italic~, strike~, link=href, color=accent))
       }
-      Link(href, c) => runs_of(c, out, bold, italic, strike, href, accent, titles)
+      Link(href, c) => runs_of(c, out, bold, italic, strike, href, accent, titles, paths)
       Image(src, alt) => {
         // its file's name, as read (`web%2Dfolded.png` is web-folded.png: Markdown.kt fileNameOf)
         let words = if alt != "" { alt } else { file_name_of(src) }

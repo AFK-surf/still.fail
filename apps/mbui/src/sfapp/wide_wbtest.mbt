@@ -1971,6 +1971,27 @@ test "wide: a pull request's link in a message has its card as GitHub says it: i
 }
 
 ///|
+test "wide: a file an agent names by its path is a chip in its words, its card a few of its lines while the pointer rests on it, its path to copy (FileRef)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat-peeks")
+  t.run_for(history_fade_ms)
+  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
+  // its chip: its path and the line it names, as the core shortened it
+  let (x, y) = peek_words_at(t, "src/list/place.mbt:12")
+  assert_eq(t.locate("self.anchor = self.anchor + n").length(), 0)
+  t.move(x, y)
+  t.run_for(@sfpages.hover_open_ms * 2.0)
+  // its card: its name and line, its whole path (home as ~), its lines round the one named
+  assert_eq(word("place.mbt:12").length(), 1, msg="its name and line")
+  assert_true(t.locate("~/shop/src/list/place.mbt").length() >= 1, msg="its whole path")
+  assert_true(t.locate("self.anchor = self.anchor + n").length() >= 1, msg="its lines")
+  // its path copied from its foot
+  t.tap_text("复制路径")
+  t.frame()
+  assert_eq(t.clipboard(), "/Users/lin/shop/src/list/place.mbt")
+}
+
+///|
 test "wide: a reference to a chat in a message has the chat's card while the pointer rests on it, as the list has it (RefPreview)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat-peeks")

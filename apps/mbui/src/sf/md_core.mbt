@@ -5,6 +5,9 @@
 priv enum MdInline {
   Text(String)
   Code(String)
+  /// an inline code naming a file (the tree's `path`): its words as written, its path, the line it points at, a chip's
+  /// words (paths.ts)
+  FileRef(String, String, Int?, String)
   Formula(String, Json)
   Emph(Array[MdInline])
   Strong(Array[MdInline])
@@ -39,7 +42,7 @@ fn md_plain(xs : Array[MdInline]) -> String {
   let out = StringBuilder()
   for x in xs {
     match x {
-      Text(s) | Code(s) | Formula(s, _) | Image(_, s) => out.write_string(s)
+      Text(s) | Code(s) | FileRef(s, _, _, _) | Formula(s, _) | Image(_, s) => out.write_string(s)
       Emph(c) | Strong(c) | Strike(c) | Link(_, c) => out.write_string(md_plain(c))
       SoftBreak | HardBreak => out.write_string(" ")
     }
@@ -75,6 +78,10 @@ fn core_inlines(nodes : Array[Json], text : String) -> Array[MdInline] {
       "code" => {
         let source = words("content")
         if math_field(a,"math") == Json::boolean(true) { out.push(Formula(source,math_field(a,"drawing"))) }
+        else if words("path") != "" {
+          let line = match math_field(a,"line") { Number(n,..) => Some(n.to_int()); _ => None }
+          out.push(FileRef(source, words("path"), line, words("shown")))
+        }
         else { out.push(Code(source)) }
       }
       "b" => out.push(Strong(core_inlines(kids,text)))

@@ -8,11 +8,28 @@
 
 ///|
 /// A link a message's words draw (`id`: its words' own, @ui's rich text `on_link_shown`; `words`: what they say of it)
-/// in a chat of station `station`: its card over it while the pointer rests on it, a chat's (chat_peek) or a web
-/// link's.
-pub fn link_peek(c : @ui.Ctx, src : Source, station : String, href : String, words : String, id : Int) -> Unit {
+/// in a chat of station `station`: its card over it while the pointer rests on it, a file's its message's agent
+/// `agent` names (file_peek), a chat's (chat_peek) or a web link's.
+pub fn link_peek(
+  c : @ui.Ctx,
+  src : Source,
+  station : String,
+  href : String,
+  words : String,
+  id : Int,
+  agent? : String = "",
+) -> Unit {
   if station == "" {
     return
+  }
+  match @sf.path_of_link(href) {
+    Some((path, line)) => {
+      if agent != "" {
+        file_peek(c, src, station, agent, path, line, id)
+      }
+      return
+    }
+    None => ()
   }
   if @sf.is_chat_link(href) {
     chat_peek(c, src, station, href, id)
@@ -360,6 +377,249 @@ fn card_bars(c : @ui.Ctx) -> Unit {
   |> ignore
 }
 
+// ── a file's (Peeks.tsx FileRef, FileCard) ─────────────────────────────
+
+///|
+/// A file the session `session`'s message names by its path (its chip: @sf.path_link), on station `station`: its card
+/// over its chip while the pointer rests on it, read as the pointer comes onto it; a finger taps the chip for it.
+fn file_peek(
+  c : @ui.Ctx,
+  src : Source,
+  station : String,
+  session : String,
+  path : String,
+  line : Int?,
+  id : Int,
+) -> Unit {
+  let params = file_peek_params(station, session, path, line)
+  if c.hovered(id) {
+    ignore((src.topic)("filePeek", params))
+  }
+  hover(c, "file-peek/" + id.to_string(), id, tap=true, fn() { file_card(c, src, params, path) }) |> ignore
+}
+
+///|
+fn file_peek_params(station : String, session : String, path : String, line : Int?) -> Map[String, Json] {
+  let p : Map[String, Json] = {
+    "station": Json::string(station),
+    "key": Json::string(session),
+    "path": Json::string(path),
+  }
+  match line {
+    Some(n) => p["line"] = Json::number(n.to_double())
+    None => ()
+  }
+  p
+}
+
+///|
+/// The card (FileCard), as the core reads the file (the `filePeek` topic): its head (its mark, name and when it was
+/// written, its whole path under them); a few of its lines, numbered, the one named marked; an image's picture; a
+/// directory's first entries; and its foot: how big it is (or how many entries), and its path to copy. Why not, read
+/// and refused; bars while it is read.
+fn file_card(c : @ui.Ctx, src : Source, params : Map[String, Json], path : String) -> Unit {
+  let read = (src.topic)("filePeek", params)
+  let v = match read.value {
+    Some(Object(_)) as v => v
+    _ => None
+  }
+  guard v is Some(_) else {
+    match read.error {
+      None => card_bars(c)
+      Some(e) =>
+        c.box(style=peek_rich, fn() {
+          let name = base_of(path)
+          file_head(c, name, path.has_suffix("/"), path, "")
+          c.text(text(Some(e), "message"), style=peek_note) |> ignore
+          file_foot(c, path, "")
+        })
+        |> ignore
+    }
+    return
+  }
+  let kind = text(v, "kind")
+  let dir = kind == "dir"
+  let lines = field(v, "lines")
+  let at = match field(lines, "at") {
+    Some(Number(n, ..)) => Some(n.to_int())
+    _ => None
+  }
+  c.box(style=peek_rich, fn() {
+    let name = text(v, "name") +
+      (match at {
+        Some(n) => ":" + n.to_string()
+        None => ""
+      })
+    file_head(c, name, dir, text(v, "path"), text(field(field(v, "time"), "mtime"), "ago"))
+    match kind {
+      "text" if items(lines, "text").length() > 0 => file_lines(c, lines, at)
+      "image" =>
+        match @sf.data_image("data:" + text(field(v, "image"), "type") + ";base64," + text(field(v, "image"), "data")) {
+          "" => ()
+          key => c.image(key, w=Fill(1.0), h=Px(peek_file_image_h), radius=peek_file_image_r, bg=@sf.theme().p.hover, fit=FitContain) |> ignore
+        }
+      "dir" if items(v, "entries").length() > 0 => file_entries(c, items(v, "entries"))
+      _ => ()
+    }
+    let what = if dir {
+      @sf.t("web-main.preview.items", args=[("count", count(v, "count").to_string())])
+    } else {
+      let size = @sf.file_size(match field(v, "size") {
+        Some(Number(n, ..)) => n
+        _ => 0.0
+      })
+      if kind == "binary" {
+        size + " · " + @sf.t("web-main.preview.binary")
+      } else {
+        size
+      }
+    }
+    file_foot(c, text(v, "path"), what)
+  })
+  |> ignore
+}
+
+///|
+/// The last part of a path (a directory's without its `/`).
+fn base_of(path : String) -> String {
+  let parts = path.split("/").filter(fn(x) { x != "" }).to_array()
+  match parts.last() {
+    Some(x) => x.to_owned()
+    None => path
+  }
+}
+
+///|
+/// Its head (FileHead): its mark (14, muted) 6 from its name (one line, 500; a directory's ending in `/`) and when it
+/// was written (muted, at the end); its whole path under them in the code face (caption, muted), wrapped anywhere.
+fn file_head(c : @ui.Ctx, name : String, dir : Bool, path : String, ago : String) -> Unit {
+  let p = @sf.theme().p
+  c.box(style=peek_file_head, fn() {
+    c.box(style=peek_chat_title, fn() {
+      @sf.icon(c, if dir { "folder" } else { "file" }, size=peek_file_icon, color=p.muted) |> ignore
+      c.box(style=peek_ref, fn() { c.text(if dir { name + "/" } else { name }, style=peek_title) |> ignore }) |> ignore
+      if ago != "" {
+        c.text(ago, style=peek_meta_words) |> ignore
+      }
+    })
+    |> ignore
+    mono(c, shown_path(path), peek_file_path)
+  })
+  |> ignore
+}
+
+///|
+/// A path as it is shown: a home directory (/Users/<name>, /home/<name>) as `~` (paths.ts shownPath).
+fn shown_path(path : String) -> String {
+  for home in ["/Users/", "/home/"] {
+    if path.has_prefix(home) {
+      let rest = path.view(start_offset=home.length()).to_owned()
+      return match rest.find("/") {
+        Some(i) => "~" + rest.view(start_offset=i).to_owned()
+        None => "~"
+      }
+    }
+  }
+  path
+}
+
+///|
+/// Its lines (lines): numbered (34 wide, muted, to their right 8 before the line), the one named on the accent's pale
+/// ground, each one line; in the code face at the caption's size on the hover's ground, 8 round.
+fn file_lines(c : @ui.Ctx, lines : Json?, at : Int?) -> Unit {
+  let start = count(lines, "start")
+  c.box(style=peek_file_lines, fn() {
+    for k, l in items(lines, "text") {
+      let n = start + k
+      let marked = at == Some(n)
+      c.box(style=if marked { peek_file_line_at } else { peek_file_line }, fn() {
+        c.box(style=peek_file_line_no, fn() { mono(c, n.to_string(), peek_file_no) }) |> ignore
+        c.box(style=peek_ref, fn() {
+          mono(
+            c,
+            match l {
+              String(t) if t != "" => t
+              _ => " "
+            },
+            peek_file_code,
+          )
+        })
+        |> ignore
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// A directory's first entries (entries), two to a row, each its mark and its name, on the hover's ground.
+fn file_entries(c : @ui.Ctx, entries : Array[Json]) -> Unit {
+  let p = @sf.theme().p
+  c.box(style=peek_file_entries, fn() {
+    let mut k = 0
+    while k < entries.length() {
+      let pair = entries[k:if k + 2 < entries.length() { k + 2 } else { entries.length() }]
+      c.box(style=peek_file_entry_row, fn() {
+        for e in pair {
+          let name = match e {
+            String(t) => t
+            _ => ""
+          }
+          let dir = name.has_suffix("/")
+          c.box(style=peek_file_entry, fn() {
+            @sf.icon(c, if dir { "folder" } else { "file" }, size=peek_file_entry_icon, color=p.muted) |> ignore
+            c.box(style=peek_ref, fn() {
+              mono(c, if dir { name.view(end_offset=name.length() - 1).to_owned() } else { name }, peek_file_code)
+            })
+            |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+      k = k + 2
+    }
+  })
+  |> ignore
+}
+
+///|
+/// Its foot (fileFoot): what it is in words (muted), and its path to copy (复制路径, saying 已复制 a moment) in the card's
+/// bottom end corner, concentric with it.
+fn file_foot(c : @ui.Ctx, path : String, what : String) -> Unit {
+  c.box(style=peek_file_foot, fn() {
+    c.box(style=peek_ref, fn() { c.text(what, style=peek_meta_words) |> ignore }) |> ignore
+    let key = "file-peek/copy/" + path
+    // (saying so a moment once copied: code_block's copied)
+    let said = copied_paths.contains(path) &&
+      (if @kit.after(c, key + "/said", true, @sf.copied_ms) {
+        copied_paths.remove(path)
+        false
+      } else {
+        true
+      })
+    if @sf.panel_button(c, key, @sf.t(if said { "common.copied" } else { "web-main.preview.copyPath" }), tone=Quiet) {
+      c.copy_text(path)
+      // pressed again while it says so: its time starts again
+      @kit.after(c, key + "/said", false, @sf.copied_ms) |> ignore
+      copied_paths.add(path)
+    }
+  })
+  |> ignore
+}
+
+///|
+/// Words in the code face (the web's `fontFamily: mono`), as `style` says them otherwise.
+fn mono(c : @ui.Ctx, words : String, style : @ui.TextStyle) -> Unit {
+  c.rich([@ui.span(words, mono=true)], style~) |> ignore
+}
+
+///|
+/// The paths copied from a card a moment ago (saying so: 已复制).
+// kept across runs: a moment's words, gone as the moment is
+let copied_paths : Set[String] = Set::new()
+
 // ── a chat's (ChatRef.tsx RefPreview) ───────────────────────────────────
 
 ///|
@@ -668,6 +928,85 @@ let peek_excerpt : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, w=Full, max
 /// What a card says when it has nothing to show (note): muted.
 // kept across runs: a value (no field of it changes)
 let peek_note : @ui.TextStyle = @ui.text_style(size=Ui, color=Muted, w=Full)
+
+///|
+/// A file's head: its title's line over its path, 2 apart.
+// kept across runs: a value (no field of it changes)
+let peek_file_head : @ui.Style = @ui.css("w=Full gap=S0_5")
+
+///|
+let peek_file_icon : Double = 14.0
+
+///|
+/// Its path: the caption's size, muted, wrapped anywhere.
+// kept across runs: a value (no field of it changes)
+let peek_file_path : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full)
+
+///|
+/// Its lines: on the hover's ground, 8 round, 6 over and under them.
+// kept across runs: a value (no field of it changes)
+let peek_file_lines : @ui.Style = @ui.css("w=Full py=S1_5 radius=Sm bg=Hover clip=true")
+
+///|
+/// A line: its number and its words, 8 from its end; the one named on the accent's pale ground.
+// kept across runs: a value (no field of it changes)
+let peek_file_line : @ui.Style = @ui.css("row w=Full pr=S2 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let peek_file_line_at : @ui.Style = @ui.css("row w=Full pr=S2 align=ACenter bg=AccentBg")
+
+///|
+/// Its number: 34 wide (8 of it after it), to its right.
+// kept across runs: a value (no field of it changes)
+let peek_file_line_no : @ui.Style = @ui.css("pr=S2 align=AEnd").then(@ui.style(w=Fixed(peek_file_no_w)))
+
+///|
+let peek_file_no_w : Double = 34.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let peek_file_no : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
+
+///|
+/// A line's words, an entry's name: the caption's size, one line, cut.
+// kept across runs: a value (no field of it changes)
+let peek_file_code : @ui.TextStyle = @ui.text_style(size=Caption, color=Fg, wrap=false, w=Cut)
+
+///|
+/// An image's picture: as wide as the card, 180 high at most, contained, 8 round.
+let peek_file_image_h : Double = 180.0
+
+///|
+let peek_file_image_r : Double = 8.0
+
+///|
+/// A directory's entries: two to a row, 12 apart, 2 between rows, 6 by 8 in, on the hover's ground, 8 round.
+// kept across runs: a value (no field of it changes)
+let peek_file_entries : @ui.Style = @ui.css("w=Full gap=S0_5 py=S1_5 px=S2 radius=Sm bg=Hover")
+
+///|
+// kept across runs: a value (no field of it changes)
+let peek_file_entry_row : @ui.Style = @ui.css("row w=Full gap=S3")
+
+///|
+/// An entry: its mark (12, muted) 5 from its name.
+// kept across runs: a value (no field of it changes)
+let peek_file_entry : @ui.Style = @ui.css("row gap=S1_25 align=ACenter clip=true").then(@ui.style(w=@sf.grow))
+
+///|
+let peek_file_entry_icon : Double = 12.0
+
+///|
+/// Its foot: what it is in words and its path to copy, in the card's bottom end corner as far from both its edges as
+/// makes it concentric with it (@sf.capsule_in: the button 24 high), out past the panel's padding and the card's words'.
+// kept across runs: a value (no field of it changes)
+let peek_file_foot : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter").then(
+  @ui.style(mb=@sf.room_of(peek_button_in), mr=@sf.room_of(peek_button_in)),
+)
+
+///|
+let peek_button_in : Double = @sf.capsule_in(@sf.r_menu, 24.0) - @sf.panel_pad - @sf.text_in
 
 ///|
 /// The bars while it is read: a line each, their shares of the card (meta 45%, title 85%, detail 60%); the first and

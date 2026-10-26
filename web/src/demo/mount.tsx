@@ -147,6 +147,8 @@ function demoValueOf(topic: Topic): unknown {
     case "memory": return station.op("memory.get");
     // (the demo reaches no page: nothing to show of a link but where it goes)
     case "linkPreview": return { kind: "none" };
+    // (nor a machine's files: as its station's op, it needs a real one)
+    case "filePeek": return station.op("file.peek");
     case "drivePlace": return null;
     case "driveBrowse": return browsing.view(topic);
     case "filesTabs": return browsing.tabsView(topic.workspace);

@@ -398,9 +398,10 @@ pub fn person_words(
 
 ///|
 /// What a message's links show while they are pointed at, the chat's station reading them (peeks.mbt): a web link's
-/// card.
-fn link_peeks(c : @ui.Ctx, src : Source, here : MessageHere) -> ((String, String, Int) -> Unit)? {
-  Some(fn(href, words, id) { link_peek(c, src, here.station, href, words, id) })
+/// card, a chat's; and where `agent` (the agent that wrote it) says whose working directory its paths are read in, a
+/// file's.
+fn link_peeks(c : @ui.Ctx, src : Source, here : MessageHere, agent? : String = "") -> ((String, String, Int) -> Unit)? {
+  Some(fn(href, words, id) { link_peek(c, src, here.station, href, words, id, agent~) })
 }
 
 ///|
@@ -498,11 +499,15 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
         match placed.get(@sf.file_name_of(h)) {
           Some(a) if is_viz(a.name) => viz_open_full(a.name, here.station, owner_of(here, a), a.path, here.session, linked=true)
           Some(a) => open_file(here, a)
+          // (a file its path names: its card is what it opens, as the chip is tapped)
+          None if @sf.path_of_link(h) is Some(_) => ()
           None => open_link(h)
         }
       },
-      on_link_hold=Some(fn(href, _) { link_held(c, href) }),
-      on_link_shown=link_peeks(c, src, here),
+      on_link_hold=Some(fn(href, _) { if @sf.path_of_link(href) is None { link_held(c, href) } }),
+      on_link_shown=link_peeks(c, src, here, agent=m.by.agent),
+      // the files its paths name are its agent's (Chat.tsx ProseWithFiles' PathSession): their chips
+      paths=m.by.agent != "",
       files=fn(name) {
         match placed.get(name) {
           Some(a) if is_viz(a.name) =>

@@ -13,8 +13,9 @@
 //   blocks  p · ["h", […], {depth}] · ["pre", {code, lang?, ink?}] (`code` words as a run is; `ink`: its colours,
 //           highlight.ts) · quote · ["list", [li…], {ordered?, start?}] · ["li", […], {checked?}] (a tight list's item
 //           holds its words, a loose one's its paragraphs) · ["table", [tr…], {align}] · tr · th · td · hr
-//   inline  b · i · s · ["code", {content}] (words as a run is) · ["a", […], {href, title?}] · ["img", {src, alt?,
-//           title?}] · br
+//   inline  b · i · s · ["code", {content, path?, line?, shown?}] (words as a run is; `path` where it names a file, a
+//           run too, `line` the line it points at, `shown` a chip's words where they are not its path's: paths.ts) ·
+//           ["a", […], {href, title?, path?, line?, shown?}] · ["img", {src, alt?, title?}] · br
 // Math uses the existing pre/code nodes with `math: true`: $$ or \[ blocks and \( inline spans. Other clients can still
 // show the TeX as code. Escaped dollars and dollars inside code keep Markdown's usual meaning.
 // Raw HTML is left out, as the web left it out. An address is as written: a client keeps what it may open.
@@ -22,6 +23,7 @@ import { bareLinks } from "./bareLinks.ts";
 import { ink } from "./highlight.ts";
 import { mathDrawing } from "./math.ts";
 import { type MdWords, wordsOf } from "./mdWords.ts";
+import { pathAttrs } from "./paths.ts";
 import { type Node, read } from "./mdRead.ts";
 
 export type MdNode = MdWords | [kind: string] | [kind: string, children: MdNode[]] | [kind: string, attributes: Record<string, unknown>] | [kind: string, children: MdNode[], attributes: Record<string, unknown>];
@@ -32,7 +34,7 @@ export type MdStore = { has(key: string): boolean; get(key: string): string | nu
 
 /// How the trees kept are read: another number whenever what `parse` makes of a text changes (a test holds it to the
 /// trees of a set of texts: markdown.test.ts), so a tree kept by a core before is read afresh, not shown.
-export const MD_READING = 2;
+export const MD_READING = 3;
 
 /// A text's key among the trees kept: the reading, its length and two FNV-1a hashes of it (64 bits).
 export function mdKey(text: string): string {
@@ -217,8 +219,9 @@ function inline(n: Node, cx: Cx): MdNode[] {
       return [["i", inlines(n.children ?? [], cx)]];
     case "delete":
       return [["s", inlines(n.children ?? [], cx)]];
+    // (one naming a file: its path, a run of the text as its words are, the line it points at, a chip's words: paths.ts)
     case "inlineCode":
-      return [["code", { content: run(n.value ?? "", n, cx) }]];
+      return [["code", { content: run(n.value ?? "", n, cx), ...pathAttrs(n.value ?? "", (path) => run(path, n, cx)) }]];
     case "inlineMath":
       return [["code", { content: run(n.value ?? "", n, cx), math: true, drawing: mathDrawing(n.value ?? "", false) }]];
     case "break":
@@ -240,9 +243,20 @@ function inline(n: Node, cx: Cx): MdNode[] {
   }
 }
 
+/// A link; one to a file by its path (no scheme: `src/a.ts`, `./notes.md#L3`) says that file as an inline code naming it
+/// does (paths.ts).
 function link(href: string, title: string | null | undefined, children: MdNode[]): MdNode {
-  return ["a", children, title ? { href, title } : { href }];
+  const file = /^[a-z][\w+.-]*:/i.test(href) ? {} : pathAttrs(decoded(href), (path) => path);
+  return ["a", children, { href, ...(title ? { title } : {}), ...file }];
 }
+
+const decoded = (s: string): string => {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+};
 
 function image(src: string, alt: string | null | undefined, title: string | null | undefined): MdNode {
   const attrs: Record<string, unknown> = { src };

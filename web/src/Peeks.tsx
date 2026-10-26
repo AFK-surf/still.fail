@@ -3,21 +3,20 @@
 // directory's entries), each as a small card (Hover.css.ts, Cue's card language). Read from the station as soon as
 // its link is pointed at (`link.preview`, `file.peek`), and kept: shown at once when opened again, and read again
 // behind it once a minute old. A file's chip opens the file itself over the window (`file.open`, FilePreview).
-import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactElement, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactElement, type ReactNode } from "react";
 import { HoverCard } from "radix-ui";
-import { stationApi, useStationCall } from "./api.ts";
 import { core, prime, useTopic } from "./core/react.ts";
 import type { Attachment } from "./core/shapes.ts";
 import { FilePreview, fileSize, type LocalFile } from "./FilePreview.tsx";
 import { Check, Copy, File as FileIcon, Folder, Web } from "@stillfail/ui/icons.tsx";
-import { lang, t } from "./i18n.ts";
+import { t } from "./i18n.ts";
 import { useStation } from "./station.tsx";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import * as css from "./Hover.css.ts";
 import * as waitingCss from "@stillfail/ui/waiting.css.ts";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
 import { PanelButton } from "./ui.tsx";
-import { pathIn } from "./paths.ts";
+import { chipPath, pathIn, shownPath } from "./paths.ts";
 import { useThisMachineAddress } from "./thisMachine.ts";
 
 export { pathIn };
@@ -66,76 +65,6 @@ export function CardSkeleton() {
   );
 }
 
-/** When, in words, relative while it is recent ("3 小时前"), else the day. */
-export function ago(at: number | null | undefined): string | null {
-  if (at == null) return null;
-  const rtf = new Intl.RelativeTimeFormat(lang() === "zh" ? "zh-CN" : "en", { numeric: "auto" });
-  const s = Math.round((at - Date.now()) / 1000);
-  const a = Math.abs(s);
-  if (a < 60) return rtf.format(s, "second");
-  if (a < 3600) return rtf.format(Math.round(s / 60), "minute");
-  if (a < 86400) return rtf.format(Math.round(s / 3600), "hour");
-  if (a < 7 * 86400) return rtf.format(Math.round(s / 86400), "day");
-  return new Date(at).toLocaleDateString(lang() === "zh" ? "zh-CN" : "en", { year: new Date(at).getFullYear() === new Date().getFullYear() ? undefined : "numeric", month: "short", day: "numeric" });
-}
-
-// ---- what is read, kept (stale while it is read again) ----
-
-type Read<T> = { state: "loading" } | { state: "ready"; value: T } | { state: "error"; message: string };
-/**
- * What cards read, by what they read, the latest 300: what was read shows at once, every time; once it is a minute
- * old (a pull request's state moves, a file changes) it is read again behind it and the card follows. A failed read
- * is tried again the next time.
- */
-type Entry = { value?: unknown; has: boolean; error?: string | undefined; at: number; reading: boolean; version: number };
-const entries = new Map<string, Entry>();
-const watchers = new Map<string, Set<() => void>>();
-const FRESH_MS = 60 * 1000;
-
-function changed(key: string, e: Entry) {
-  e.version++;
-  for (const w of watchers.get(key) ?? []) w();
-}
-
-/** Reads `key` (with `read`) unless it is read already, or was within the minute (a failure: within a few seconds). */
-export function warm(key: string, read: () => Promise<unknown>): void {
-  let e = entries.get(key);
-  if (e && (e.reading || Date.now() - e.at < (e.error !== undefined && !e.has ? 3000 : FRESH_MS))) return;
-  if (!e) {
-    e = { has: false, at: 0, reading: false, version: 0 };
-    entries.set(key, e);
-    while (entries.size > 300) entries.delete(entries.keys().next().value!);
-  }
-  const entry = e;
-  entry.reading = true;
-  read().then(
-    (value) => { entry.value = value; entry.has = true; entry.error = undefined; },
-    (err: unknown) => { entry.error = failure(err); },
-  ).finally(() => { entry.at = Date.now(); entry.reading = false; changed(key, entry); });
-}
-
-/** Follows what is kept of `key`, reading nothing. */
-function useEntry(key: string): Entry | undefined {
-  useSyncExternalStore(
-    useCallback((on: () => void) => {
-      let set = watchers.get(key);
-      if (!set) watchers.set(key, (set = new Set()));
-      set.add(on);
-      return () => { set.delete(on); if (set.size === 0) watchers.delete(key); };
-    }, [key]),
-    () => entries.get(key)?.version ?? -1,
-  );
-  return entries.get(key);
-}
-
-function useRead<T>(key: string, read: () => Promise<T>): Read<T> {
-  const e = useEntry(key);
-  useEffect(() => warm(key, read), [key]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (e?.has) return { state: "ready", value: e.value as T };
-  if (e?.error !== undefined && !e.reading) return { state: "error", message: e.error };
-  return { state: "loading" };
-}
-
 // ---- web links ----
 
 type Person = { login: string; avatar?: string };
@@ -174,7 +103,6 @@ export function LinkHover({ href, label, children }: { href: string; label: stri
   return <Hover tile={!RICH.test(href)} warm={() => prime({ topic: "linkPreview", station: station.address, url: href })} content={<LinkCard href={href} label={label} />}>{children}</Hover>;
 }
 
-const peekKey = (station: string, session: string, path: string, line: number | null) => `peek ${station} ${session} ${path} ${line ?? ""}`;
 
 function LinkCard({ href, label }: { href: string; label: string }) {
   const station = useStation();
@@ -297,13 +225,18 @@ function GitHubMark({ size }: { size: number }) {
  */
 export const PathSession = createContext<{ key: string; station?: string } | null>(null);
 
+/** What a file a message names is, as the core reads it (the `filePeek` topic), its last change in words. */
 type Peek = {
   path: string; name: string; size: number; mtime: number; type: string;
   kind: "text" | "image" | "binary" | "dir";
   lines?: { start: number; text: string[]; at?: number };
   image?: { type: string; data: string };
   entries?: string[]; count?: number;
+  time?: { mtime?: { ago: string } };
 };
+/** The `filePeek` topic of a file named in a session's message. */
+const peekTopic = (station: string, session: string, path: string, line: number | null) =>
+  ({ topic: "filePeek", station, key: session, path, ...(line !== null ? { line } : {}) }) as const;
 type Opened = { name: string; path: string; type: string; size: number };
 
 /**
@@ -316,18 +249,15 @@ export function FileRef({ path, line, children, words }: { path: string; line: n
   const session = owner?.key ?? null;
   const here = useStation().address;
   const station = { address: owner?.station ?? here };
-  const api = stationApi(useStationCall(station.address));
   const toast = useToast();
   const local = useOnThisMachine(station.address);
-  const key = peekKey(station.address, session ?? "", path, line);
-  const kept = useEntry(key);
-  const peeked = kept?.has ? (kept.value as Peek) : null;
+  const topic = session === null ? null : peekTopic(station.address, session, path, line);
   const [opened, setOpened] = useState<{ file: Attachment; local: LocalFile } | null>(null);
   useEffect(() => () => { if (opened) URL.revokeObjectURL(opened.local.url); }, [opened]);
   const name = path.replace(/\/$/, "").split("/").at(-1) || path;
-  const peek = () => { if (session !== null) warm(key, () => api.filePeek<Peek>(session, path, line)); };
+  const peek = () => { if (topic) prime(topic); };
   // A name with no extension is as often a directory's as a file's: read at once, so the chip is drawn as what it is.
-  useEffect(() => { if (!path.endsWith("/") && !/\.[A-Za-z0-9]{1,10}$/.test(name)) peek(); }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  const peeked = useTopic<Peek | null>(!path.endsWith("/") && !/\.[A-Za-z0-9]{1,10}$/.test(name) ? topic : null).value ?? null;
   if (session === null) return <code>{children}</code>;
   const dir = path.endsWith("/") || peeked?.kind === "dir";
   const whole = typeof children === "string" ? children.trim() : `${path}${line !== null ? `:${line}` : ""}`;
@@ -356,20 +286,6 @@ export function FileRef({ path, line, children, words }: { path: string; line: n
       {opened && <FilePreview open onClose={() => setOpened(null)} sessionKey={session} file={opened.file} local={opened.local} />}
     </>
   );
-}
-
-/** A path as it is shown: a home directory (/Users/<name>, /home/<name>) as `~`. */
-function shownPath(path: string): string {
-  return path.replace(/^\/(?:Users|home)\/[^/]+(?=\/|$)/, "~");
-}
-
-/** A path as a chip shows it, as the message wrote it (shownPath): a long one cut in its middle, its first two parts and last two kept. */
-function chipPath(path: string): string {
-  const short = shownPath(path);
-  const slash = short.endsWith("/") ? "/" : "";
-  const parts = short.replace(/\/$/, "").split("/");
-  if (short.length <= 48 || parts.length <= 5) return short;
-  return `${parts.slice(0, 2).join("/")}/…/${parts.slice(-2).join("/")}${slash}`;
 }
 
 /** Whether `address` is the station of the machine the page is on (the desktop app's): its files can be shown in Finder. */
@@ -426,14 +342,13 @@ if (typeof document !== "undefined") {
 }
 
 function FileCard({ session, station, path, line, local }: { session: string; station: string; path: string; line: number | null; local: boolean }) {
-  const api = stationApi(useStationCall(station));
-  const read = useRead<Peek>(peekKey(station, session, path, line), () => api.filePeek<Peek>(session, path, line));
-  if (read.state === "loading") return <CardSkeleton />;
-  if (read.state === "error") return (
+  const read = useTopic<Peek | null>(peekTopic(station, session, path, line));
+  if (read.value == null && read.error === null) return <CardSkeleton />;
+  if (read.value == null) return (
     <>
       <div className={css.rich}>
         <FileHead name={path.replace(/\/$/, "").split("/").at(-1) || path} dir={path.endsWith("/")} path={path} />
-        <p className={css.note}>{read.message}</p>
+        <p className={css.note}>{read.error?.message}</p>
       </div>
       <div className={`${css.fileFoot} ${panelEdge}`}><PathActions path={path} local={local} /></div>
     </>
@@ -443,7 +358,7 @@ function FileCard({ session, station, path, line, local }: { session: string; st
   return (
     <>
       <div className={css.rich}>
-        <FileHead name={`${p.name}${p.lines?.at ? `:${p.lines.at}` : ""}`} dir={dir} path={p.path} time={ago(p.mtime)} />
+        <FileHead name={`${p.name}${p.lines?.at ? `:${p.lines.at}` : ""}`} dir={dir} path={p.path} time={p.time?.mtime?.ago ?? null} />
         {p.kind === "text" && p.lines && p.lines.text.length > 0 && (
           <pre className={css.lines}>
             {p.lines.text.map((l, i) => {

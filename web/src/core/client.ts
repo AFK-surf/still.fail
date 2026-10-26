@@ -35,6 +35,8 @@ export type Topic =
   | { topic: "memory"; station: string }
   // What a web link in a message is, read as its card shows (what was read last shows meanwhile).
   | { topic: "linkPreview"; station: string; url: string }
+  // What a file a message names is, read as its card shows (what was read last shows meanwhile).
+  | { topic: "filePeek"; station: string; key: string; path: string; line?: number }
   | { topic: "threads"; station: string }
   | { topic: "slackApp"; station: string; connect: string }
   // A station's background jobs still up, each with the chat it is in.

@@ -57,3 +57,29 @@ test("a_link_is_read_as_its_card_shows_and_shows_as_last_read_after_a_restart", 
   assert.equal(v(again, 1).state, "merged");
   core.close();
 });
+
+test("a_file_a_message_names_is_read_under_its_session_as_its_card_shows_and_kept", async () => {
+  const PEEK = `GET /sessions/s-1/peek?path=${encodeURIComponent("src/a.ts")}&line=12`;
+  const peek = (text: string) => ({ path: "/w/src/a.ts", name: "a.ts", size: 120, mtime: 1, type: "text/plain", kind: "text", lines: { start: 9, text: [text], at: 12 } });
+  const said: Record<string, unknown> = { ...base(), [PEEK]: peek("const a = 1;") };
+  const { core, host } = await started(said);
+  const reads = () => host.requests.flatMap(readsOf).filter((u) => u.includes("/admin/api/sessions/s-1/peek?")).length;
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  const topic = { topic: "filePeek", station: S, key: "s-1", path: "src/a.ts", line: 12 };
+  subscribe(core, ui, 1, topic);
+  await host.time.pass(500, 10);
+  apply(host, values);
+  assert.equal(reads(), 1);
+  assert.deepEqual(v(values, 1).lines.text, ["const a = 1;"]);
+  assert.equal(typeof v(values, 1).time.mtime.ago, "string", "when it was written, in words");
+  // Shown again: read again (it was written meanwhile).
+  said[PEEK] = peek("const a = 2;");
+  core.receive(ui, { kind: "unsubscribe", id: 1, unsubscribe: true });
+  subscribe(core, ui, 2, topic);
+  await host.time.pass(500, 10);
+  apply(host, values);
+  assert.equal(reads(), 2);
+  assert.deepEqual(v(values, 2).lines.text, ["const a = 2;"]);
+  core.close();
+});
