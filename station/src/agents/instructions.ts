@@ -143,8 +143,10 @@ export function parseThreadAddress(value: string): [string, string] | null {
 const escapeAttr = (value: string) => value.replaceAll("&", "&amp;").replaceAll('"', "&quot;");
 
 /// A message's words as the agent reads them: quotes (which message, whose, the file of it quoted, the passage as a
-/// blockquote, then the comment), then the words, then the files as paths.
+/// blockquote, then the comment), then the words, then the files as paths (not a quoted message's file: the agent had
+/// it with that message, and is only pointed back at it).
 export function messageForAgent(m: MessageRow): string {
+  const again = new Set<string>();
   const parts = m.quotes.map((q) => {
     let whose: string;
     if (q.role === "agent") whose = "your own earlier message";
@@ -157,9 +159,13 @@ export function messageForAgent(m: MessageRow): string {
     } else if (q.role === "image") whose = `an image marked in the chat (${q.author}), its number pinned on the marked image attached`;
     else whose = `a message from ${q.author}`;
     let which = q.ts !== null && q.ts !== undefined ? `${whose} ${q.ts} in this conversation` : whose;
-    // A file of that message quoted (an image held in the chat): the message carries it again, as it is there.
+    // A file of that message quoted (an image or a video held in the chat): the message carries it again for the chat to
+    // show, the agent only where it is.
     const quoted = q.file && q.role !== "page" && q.role !== "image" ? m.attachments.find((a) => a.name === q.file) : undefined;
-    if (quoted) which += `, its file ${quoted.path}`;
+    if (quoted) {
+      which += `, its file ${quoted.path} (sent with that message, not again)`;
+      again.add(quoted.path);
+    }
     const passage = q.text.split("\n").map((l) => `> ${l}`);
     const comment = q.comment === "" ? "" : `\nTheir comment on it: ${q.comment}`;
     return `[Quote] From ${which}:\n${passage.join("\n")}${comment}`;
@@ -167,7 +173,8 @@ export function messageForAgent(m: MessageRow): string {
   parts.push(m.text);
   const pasted = m.attachments.filter(a => /^pasted-text-[0-9a-f-]{36}\.txt$/.test(a.name));
   if (pasted.length) parts.push(`The user pasted text into the composer; its full contents are in these text attachments. Read them as part of the user's message:\n${pasted.map(a => `- ${a.path}`).join("\n")}`);
-  if (m.attachments.length > 0) parts.push(`Attached files:\n${m.attachments.map((a) => `- ${a.path} (${a.name}, ${a.size} bytes)`).join("\n")}`);
+  const attached = m.attachments.filter((a) => !again.has(a.path));
+  if (attached.length > 0) parts.push(`Attached files:\n${attached.map((a) => `- ${a.path} (${a.name}, ${a.size} bytes)`).join("\n")}`);
   return parts.filter((p) => p !== "").join("\n\n");
 }
 
