@@ -50,4 +50,6 @@ pub fn reset() -> Unit {
   mine_filter_open.clear()
   connect_reset()
   new_connect_reset()
+  station_cards_reset()
+  station_page_reset()
 }

@@ -294,6 +294,8 @@ using @sf {
 
 ///|
 using @sfpages {
+  figure,
+  quota_dials,
   pf_card_foot,
   pf_head,
   pf_identity,

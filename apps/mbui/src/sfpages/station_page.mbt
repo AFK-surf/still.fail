@@ -26,7 +26,7 @@ let station_part_names : Array[String] = ["overview", "processes", "settings", "
 /// A station's page (StationSettings, StationScreen), by its address: a wait until the stations are read; one gone,
 /// its list. Its parts each as wide as the page's column (narrow, 12 from its sides, as its cards are); its head, with
 /// its name, first (narrow: in place of the large title).
-fn station_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address : String) -> Unit {
+pub fn station_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address : String) -> Unit {
   let topic = @settings.stations_of(core, here)
   let manager = { let r = role_of(core, here); r == "owner" || r == "admin" }
   let back = "Station"

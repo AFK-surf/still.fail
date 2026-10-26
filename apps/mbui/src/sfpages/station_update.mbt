@@ -6,7 +6,7 @@
 
 ///|
 /// The control (StationUpdate's trigger) for station `station`'s `notice`, and its panel while the core says it is open.
-fn station_update(c : @ui.Ctx, src : Source, station : String, notice : Json?) -> Unit {
+pub fn station_update(c : @ui.Ctx, src : Source, station : String, notice : Json?) -> Unit {
   guard notice is Some(Object(_)) else { return }
   let trouble = text(notice, "tone") == "trouble"
   let open = flag(notice, "open")
