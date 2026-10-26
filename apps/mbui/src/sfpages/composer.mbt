@@ -626,7 +626,8 @@ pub fn pick_files(w : Writing) -> Unit {
 
 ///|
 /// Send (sendBtn): 32 round, the text's ink with the canvas's arrow while it can go (a step lighter pointed at), the
-/// ink faint over the box's ground while not; a turning ring while a new chat is made for it.
+/// ink faint over the box's ground while not, going from one to the other as a control answers (a button's background
+/// over --dur: sent, it fades to faint); a turning ring while a new chat is made for it.
 fn send_button(c : @ui.Ctx, ready : Bool, starting : Bool, submit : () -> Unit) -> Int {
   let p = @sf.theme().p
   let id = c.id("composer/send")
@@ -637,18 +638,15 @@ fn send_button(c : @ui.Ctx, ready : Bool, starting : Bool, submit : () -> Unit) 
     }
   }
   @sf.tip(c, "composer/send", id, @sf.t("web-main.composer.send"))
-  let ground = if hot {
-    @sf.mix(p.text, send_hot, p.canvas)
-  } else if ready {
-    p.text
-  } else {
-    @sf.over(p.raised, @sf.alpha(p.text, send_off))
-  }
+  let able = @sf.ease_to(c, "composer/send/able", ready)
+  let lit = @sf.ease_to(c, "composer/send/lit", hot)
+  let on = @sf.mix(@sf.mix(p.text, send_hot, p.canvas), lit, p.text)
+  let ground = @sf.mix(on, able, @sf.over(p.raised, @sf.alpha(p.text, send_off)))
   let b = c.box(style=@sf.round_face().then(@ui.style(bg=Data(ground))), id~, fn() {
     if starting {
       @sf.spinner(c, size=@sf.theme().round.glyph) |> ignore
     } else {
-      @sf.icon(c, "arrow-up", size=@sf.theme().round.glyph, color=if ready { p.canvas } else { p.raised }) |> ignore
+      @sf.icon(c, "arrow-up", size=@sf.theme().round.glyph, color=@sf.mix(p.canvas, able, p.raised)) |> ignore
     }
   })
   c.semantics(b, Button, id~, label=@sf.t("web-main.composer.send"), disabled=!ready)
