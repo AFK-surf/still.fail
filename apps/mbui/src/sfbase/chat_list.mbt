@@ -44,6 +44,9 @@ pub(all) struct Reading {
   /// put in place once (the unread line, where it was opened, or the end)
   mut placed : Bool
   mut put : Bool
+  /// the unread line shown: put at once it is (it may come after the chat opened, what came while the app was away
+  /// read from the station after it)
+  mut lined : Bool
   /// the first message when the page before was asked for (once per page)
   mut asked : Double
   mut asked_newer : Double
@@ -177,6 +180,7 @@ pub fn reading_of(key : String) -> Reading {
         head_at: -1,
         placed: false,
         put: false,
+        lined: false,
         asked: -1.0,
         asked_newer: -1.0,
         told: "",
@@ -1415,6 +1419,7 @@ pub fn list_after(
         }
       }
       put_now = line >= 0 || was >= 0 || at >= 0
+      rd.lined = line >= 0
       if line >= 0 {
         c.list_scroll_to(key, line, offset=-(top + lead))
       } else if was >= 0 {
@@ -1428,11 +1433,28 @@ pub fn list_after(
         })
       }
     }
+    // the unread line come after the list was put in place (what came while the app was away, read after the chat
+    // opened: the list was put at its end at once as it came): put there, as it is at a chat opened with it, while the
+    // reader is still at the end (Chat.tsx `lined`); not over a message asked to be gone to
+    let gk = r.station + "\u{1}" + r.session
+    if rd.put && !put_now && !rd.lined {
+      let line = list.search_by(fn(e) { e is Line })
+      if line is Some(i) {
+        rd.lined = true
+        let following = match c.list_info_as(key, follows) {
+          Some(f) => f.at_end || f.gliding || f.following_row
+          None => false
+        }
+        if following && !go_tos.contains(gk) {
+          put_now = true
+          c.list_scroll_to(key, i, offset=-(top + lead))
+        }
+      }
+    }
     // opened at a message (a notification's), once the list is in place (the build after it was put there, in the same
     // frame): there, its top under the bar,
     // flashing; the pages before brought in until it is (none left, or it is gone: where the chat opened). Chat.kt
     // LaunchedEffect(host.goTo)
-    let gk = r.station + "\u{1}" + r.session
     match go_tos.get(gk) {
       Some(target) if rd.placed && !put_now => {
         let mut at = -1

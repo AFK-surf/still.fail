@@ -489,6 +489,34 @@ test "a message said just after the chat opened comes in with the list gliding a
 }
 
 ///|
+test "what was said while the app was away, brought after its chat opened at its end: read from its unread line" {
+  reset()
+  let clock : Ref[Double] = { val: 0.0 }
+  fix_clock.val = Some(fn() { clock.val })
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.nav_push_ms)
+  // a moment on, three come at once, more than a screen of them, said before it opened: caught up on, the unread line
+  // over the first (the core's, attend.ts)
+  let first = "这份清单在每次发布前过一遍"
+  fix_later(said_soon_ms, fn() {
+    let fc = fix_chat("s-c1")
+    fc.sent.push(msg(150, "person", by_person("安娜"), fixture_markdown(), "刚刚", { "ts": Json::string("ana150") }))
+    fc.sent.push(msg(151, "person", by_person("安娜"), long_reply, "刚刚", { "ts": Json::string("ana151") }))
+    fc.sent.push(msg(152, "person", by_person("安娜"), long_reply, "刚刚", { "ts": Json::string("ana152") }))
+    fc.line.val = 150
+  })
+  clock.val = said_soon_ms
+  t.draw()
+  t.run_for(@ui.nav_push_ms)
+  // the first of them from its top, under the line: not the list at the end of the newest
+  guard t.drawn_of(first) is Some((_, y)) else { fail("the first of what came is not in view") }
+  assert_true(y > bar_foot() && y < 844.0 / 2.0, msg="the first of what came, from its top: at \{y}")
+  fix_clock.val = None
+}
+
+///|
 test "a login card in a chat on a phone: as tall as what it holds, the next message right under it" {
   let t = chat_tester("chat-login")
   t.frame()

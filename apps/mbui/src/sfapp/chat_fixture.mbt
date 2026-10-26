@@ -649,6 +649,9 @@ priv struct FixChat {
   outbox : Array[Json]
   /// its agent at work on what was sent (its activity shows), since when (ms)
   mut working : Double
+  /// the unread line as the core puts it (attend.ts): over the first of what was said before the chat was opened and
+  /// came after (the app away meanwhile), by its seq; -1 none
+  line : Ref[Int]
 }
 
 ///|
@@ -663,7 +666,7 @@ fn fix_chat(session : String) -> FixChat {
   match fix_chats.get(session) {
     Some(f) => f
     None => {
-      let f = { sent: [], outbox: [], working: -1.0 }
+      let f = { sent: [], outbox: [], working: -1.0, line: { val: -1 } }
       fix_chats[session] = f
       f
     }
@@ -775,6 +778,9 @@ fn with_sent(base : Json, session : String) -> Json {
   match (fix_chats.get(session), base) {
     (Some(fc), Object(m)) if fc.sent.length() > 0 || fc.outbox.length() > 0 || fc.working >= 0.0 => {
       let o = m.copy()
+      if fc.line.val >= 0 {
+        o["unreadLine"] = Json::number(fc.line.val.to_double())
+      }
       let all = match m.get("messages") {
         Some(Array(a)) => a.copy()
         _ => []
