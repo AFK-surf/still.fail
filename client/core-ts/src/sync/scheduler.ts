@@ -9,6 +9,8 @@ import type { Runner, Scoped } from "../runtime.ts";
 
 /// How urgent a task is: higher goes first.
 export const Priority = {
+  /// What was opened and let go, brought whole all the same (fill.ts): after everything else.
+  idle: -10,
   /// Kept current in the background.
   background: 0,
   /// What a UI shows only once opened (an execution history's step whole, `history.detail`): never pushed, and after

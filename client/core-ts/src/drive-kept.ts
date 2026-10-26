@@ -252,6 +252,46 @@ export class DriveKept {
     });
   }
 
+  /// The files of `kinds` a part of which is kept and not all, the most lately read first, each with where the first
+  /// of it not kept is (`at`, `length` bytes on from there): those whose rest fits in what their kind keeps beside all
+  /// else kept of it (bringing it would not push out another, nor then itself), and none being written now.
+  unfinished(kinds: readonly KeepKind[]): Effect.Effect<{ id: string; kind: KeepKind; mtime: number; size: number; at: number; length: number }[]> {
+    return Effect.map(this.#db(), (sql) => {
+      if (sql === null) return [];
+      const found: { id: string; kind: KeepKind; mtime: number; size: number; at: number; length: number; used: number }[] = [];
+      for (const kind of kinds) {
+        const rows = sql.all("SELECT k.id, k.mtime, k.size, k.used FROM kept k WHERE k.kind = ?", [kind]);
+        const parts = new Map<string, [number, number][]>();
+        for (const r of sql.all("SELECT p.id, p.at, p.length FROM part p JOIN kept k ON k.id = p.id WHERE k.kind = ? ORDER BY p.id, p.at", [kind])) {
+          const id = String(r[0]);
+          let of = parts.get(id);
+          if (of === undefined) parts.set(id, (of = []));
+          of.push([Number(r[1]), Number(r[2])]);
+        }
+        let total = 0;
+        for (const of of parts.values()) for (const [, length] of of) total += length;
+        for (const r of rows) {
+          const [id, mtime, size, used] = [String(r[0]), Number(r[1]), Number(r[2]), Number(r[3])];
+          const of = parts.get(id) ?? [];
+          if (of.length === 0 || this.#writing.has(id)) continue;
+          // the first byte not kept, and the first kept after it
+          let end = 0;
+          let gap: [number, number] | null = null;
+          let have = 0;
+          for (const [at, length] of of) {
+            have += length;
+            if (gap === null && at > end) gap = [end, at];
+            end = Math.max(end, at + length);
+          }
+          if (gap === null && end < size) gap = [end, size];
+          if (gap === null || total - have + size > this.#most[kind]) continue;
+          found.push({ id, kind, mtime, size, at: gap[0], length: gap[1] - gap[0], used });
+        }
+      }
+      return found.sort((a, b) => b.used - a.used || (a.id < b.id ? -1 : 1)).map(({ used: _, ...f }) => f);
+    });
+  }
+
   /// What is kept of the file `id` let go (found changed on the station), unless a part of it is being written.
   forget(id: string): Effect.Effect<void> {
     return Effect.flatMap(this.#db(), (sql) => (sql === null || this.#writing.has(id) ? Effect.void : this.#drop(sql, id)));

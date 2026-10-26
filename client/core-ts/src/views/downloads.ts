@@ -285,6 +285,11 @@ export class Downloads {
     );
   }
 
+  /// Whether one fetches the kept file `id` (a chat's or a drive's file's download has its id): left to it (fill.ts).
+  has(id: string): boolean {
+    return this.#held.has(id);
+  }
+
   /// What was asked and not yet saved when the core last stopped goes on (each written down as it was asked).
   resume(): void {
     this.#inner.runner.fork(

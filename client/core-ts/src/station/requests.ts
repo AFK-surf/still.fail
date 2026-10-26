@@ -407,15 +407,16 @@ export class Requests {
   /// GET /sessions/:key/parts?name=&offset=&length=: a part of a file and its whole size, for a big one fetched a part at
   /// a time (onto the disk) rather than whole. `unsupported` from a station from before parts (it has no such route).
   /// `heard`: the part's bytes so far, as they come; `sink`: its bytes handed over as they come, not kept (`bytes` empty);
-  /// `said`: what the station says it is, as its answer begins (before its bytes).
-  filePart(station: StationAddr, key: string, name: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void, sink?: (piece: Uint8Array) => void, said?: (head: { type: string; total: number }) => void): Effect.Effect<{ type: string; total: number; bytes: Uint8Array }, CoreError> {
+  /// `said`: what the station says it is, as its answer begins (before its bytes). `quiet`: in the background, not said
+  /// to be waited on.
+  filePart(station: StationAddr, key: string, name: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void, sink?: (piece: Uint8Array) => void, said?: (head: { type: string; total: number }) => void, quiet = false): Effect.Effect<{ type: string; total: number; bytes: Uint8Array }, CoreError> {
     const path = `/sessions/${encode(key)}/parts?name=${encode(name)}&offset=${offset}&length=${length}`;
     const onHead = said && ((status: number, headers: [string, string][]) => {
       if (status !== 200) return;
       const total = Number(headerOf(headers, "stillfail-total"));
       if (Number.isSafeInteger(total)) said({ type: headerOf(headers, "content-type") ?? "", total });
     });
-    return Effect.flatMap(this.exchange(station, "GET", path, [], empty, false, ctx, heard, undefined, sink, onHead), (r) => {
+    return Effect.flatMap(this.exchange(station, "GET", path, [], empty, quiet, ctx, heard, undefined, sink, onHead), (r) => {
       if (r.status === 404 && isNoRoute(r.body)) return Effect.fail(new CoreError("unsupported", t("station.core.fileOldStation"), 404));
       if (r.status !== 200) {
         const data = parseJson(r.body);
@@ -449,8 +450,8 @@ export class Requests {
   }
 
   /// GET /drive/read?root=&path=&offset=&length=: a part of a file of the station's drive, its whole size and time.
-  /// `heard`, `sink`, `said`: as filePart's.
-  driveRead(station: StationAddr, root: string, path: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void, sink?: (piece: Uint8Array) => void, said?: (head: { type: string; total: number; mtime: number | null }) => void): Effect.Effect<{ type: string; total: number; mtime: number | null; bytes: Uint8Array }, CoreError> {
+  /// `heard`, `sink`, `said`, `quiet`: as filePart's.
+  driveRead(station: StationAddr, root: string, path: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void, sink?: (piece: Uint8Array) => void, said?: (head: { type: string; total: number; mtime: number | null }) => void, quiet = false): Effect.Effect<{ type: string; total: number; mtime: number | null; bytes: Uint8Array }, CoreError> {
     const asked = `/drive/read?root=${encode(root)}&path=${encode(path)}&offset=${offset}&length=${length}`;
     const onHead = said && ((status: number, headers: [string, string][]) => {
       if (status !== 200) return;
@@ -458,7 +459,7 @@ export class Requests {
       const mtime = Number(headerOf(headers, "stillfail-mtime"));
       if (Number.isSafeInteger(total)) said({ type: headerOf(headers, "content-type") ?? "", total, mtime: Number.isSafeInteger(mtime) ? mtime : null });
     });
-    return Effect.flatMap(this.exchange(station, "GET", asked, [], empty, false, ctx, heard, undefined, sink, onHead), (r) => {
+    return Effect.flatMap(this.exchange(station, "GET", asked, [], empty, quiet, ctx, heard, undefined, sink, onHead), (r) => {
       if (r.status === 404 && isNoRoute(r.body)) return Effect.fail(new CoreError("unsupported", t("station.core.driveOldStation"), 404));
       if (r.status !== 200) {
         const data = parseJson(r.body);

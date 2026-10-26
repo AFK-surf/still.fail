@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect, Fiber } from "effect";
 import type { Inner } from "../src/core.ts";
-import { DriveKept, keptId } from "../src/drive-kept.ts";
+import { DriveKept, chatKeptId, keptId } from "../src/drive-kept.ts";
 import { keptFirst } from "../src/station/calls.ts";
 import { FakeHost } from "../src/testing.ts";
 import { answers, call } from "./helpers.ts";
@@ -267,6 +267,29 @@ test("past their bound the least lately read go, never the one just read nor one
   assert.equal([...host.storage.keys()].filter((k) => k.startsWith("drive-kept-")).length, 2, "the bytes of those let go, gone");
 });
 
+test("what is left of those kept in part: the first of each not kept, the most lately read first, but one whose rest its kind has no room for", async () => {
+  const host = new FakeHost();
+  const kept = new DriveKept(host, { file: 10, played: 100, chat: Number.POSITIVE_INFINITY, sent: 100, outbox: Number.POSITIVE_INFINITY });
+  const run = <A>(e: Effect.Effect<A>) => Effect.runPromise(e);
+  const [film, song, big, whole] = ["film", "song", "big", "whole"].map((n) => keptId(ST, ROOT, n));
+  // its start and a part further on: what is between first
+  await run(kept.keep(film, "played", 1, 40, "video/mp4", 0, bytesOf(10)));
+  await run(kept.keep(film, "played", 1, 40, "video/mp4", 20, bytesOf(5)));
+  host.advance(61_000);
+  await run(kept.keep(song, "played", 1, 30, "audio/mp4", 0, bytesOf(10)));
+  // all of it kept: nothing left of it
+  await run(kept.keep(whole, "played", 1, 5, "audio/mp4", 0, bytesOf(5)));
+  host.advance(61_000);
+  // its rest past what videos keep beside the others
+  await run(kept.keep(big, "played", 1, 90, "video/mp4", 0, bytesOf(10)));
+  const left = await run(kept.unfinished(["played"]));
+  assert.deepEqual(left.map((f) => [f.id, f.at, f.length]), [[song, 10, 20], [film, 10, 10]]);
+  // a chat's not asked for: none of it
+  await run(kept.keep(chatKeptId(ST, "k1", "a.mp4"), "chat", 0, 50, "video/mp4", 0, bytesOf(10)));
+  assert.equal((await run(kept.unfinished(["played"]))).length, 2);
+  assert.deepEqual((await run(kept.unfinished(["chat"]))).map((f) => [f.at, f.length]), [[10, 40]]);
+});
+
 test("a chat's file opened is kept with its chat: read again from the device, listed with it, let go one at a time or with it", async () => {
   const t = await started();
   const pdf = bytesOf(40, 7);
@@ -274,11 +297,12 @@ test("a chat's file opened is kept with its chat: read again from the device, li
   stationReplies(t.host, (req) => {
     const u = new URL(req.url);
     const name = u.searchParams.get("name");
-    if (u.pathname.endsWith("/sessions/k1/files") && name === "plan.pdf") return new Raw({ status: 200, headers: [["content-type", "application/pdf"]], body: pdf });
-    if (u.pathname.endsWith("/sessions/k1/parts") && name === "film.mp4") {
+    // (one read whole is read a part at a time as any other, kept as each comes)
+    const f = name === "plan.pdf" ? { bytes: pdf, type: "application/pdf" } : name === "film.mp4" ? { bytes: film, type: "video/mp4" } : null;
+    if (u.pathname.endsWith("/sessions/k1/parts") && f !== null) {
       const offset = Number(u.searchParams.get("offset"));
-      const body = film.slice(offset, offset + Number(u.searchParams.get("length")));
-      return new Raw({ status: 200, headers: [["content-type", "video/mp4"], ["stillfail-total", String(film.length)]], body });
+      const body = f.bytes.slice(offset, offset + Number(u.searchParams.get("length")));
+      return new Raw({ status: 200, headers: [["content-type", f.type], ["stillfail-total", String(f.bytes.length)]], body });
     }
     return undefined;
   });
