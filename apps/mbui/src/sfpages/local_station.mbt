@@ -108,8 +108,13 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
         c.text(state, style=ls_state) |> ignore
       })
       |> ignore
-      if !running && !working && startable && @sf.button(c, @sf.t("web-pages.localStation.start"), key="local/start-now", tone=Ghost) {
-        act("start")
+      // (words alone, on its name's line: the line as high as with none, its ⋯ concentric in the card's corner)
+      if !running && !working && startable {
+        @sf.line_end(c, fn() {
+          if @sf.button(c, @sf.t("web-pages.localStation.start"), key="local/start-now", tone=Ghost) {
+            act("start")
+          }
+        })
       }
       // its menu (⋯)
       let mid = c.id("local/menu")
