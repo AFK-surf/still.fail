@@ -510,14 +510,18 @@ fn section_header(
     // right under the page's head: 28 under it in all (its 12 and 16), as the web's first section is (the page's head's
     // margin and the sections' own between them, not over the first)
     let first = block_at.val >= 0 && block_at.val == head_block.val + 1
+    // (a library page's first line: already its first block's 28 under the head, none more of its own)
+    let lead = @sf.page_first_line()
     // (with what it holds said here, 10 under that, as the web's head is over its section)
     let said = trailing != ""
     c.box(
-      style=match (first, said) {
-        (true, true) => wide_section_first_said
-        (true, false) => wide_section_first
-        (false, true) => wide_section_said
-        (false, false) => wide_section_box
+      style=match (lead, first, said) {
+        (true, _, true) => wide_section_lead_said
+        (true, _, false) => wide_section_lead
+        (false, true, true) => wide_section_first_said
+        (false, true, false) => wide_section_first
+        (false, false, true) => wide_section_said
+        (false, false, false) => wide_section_box
       },
       fn() {
         c.box(style=wide_section_line, fn() {
@@ -580,6 +584,15 @@ let wide_section_box : @ui.Style = @ui.css("w=Full px=S4 pt=S7 pb=S0_5 gap=S0_5"
 let wide_section_first : @ui.Style = wide_section_box.then(@ui.css("pt=S4"))
 
 ///|
+/// A library page's first line's (@sf.page_first_line): no room over it of its own.
+// kept across runs: a value (no field of it changes)
+let wide_section_lead : @ui.Style = wide_section_box.then(@ui.css("pt=S0"))
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_section_lead_said : @ui.Style = wide_section_lead.then(@ui.css("pb=S2_5"))
+
+///|
 // kept across runs: a value (no field of it changes)
 let wide_section_said : @ui.Style = wide_section_box.then(@ui.css("pb=S2_5"))
 
@@ -592,10 +605,10 @@ let wide_section_first_said : @ui.Style = wide_section_first.then(@ui.css("pb=S2
 let wide_section_line : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
-/// A section's title in the wide frame: its scale's Xl2, 14 on 22 there (page: wide_heading), as the library's section
-/// title is, one size for every page's.
+/// A section's title in the wide frame: the library's section's (14 on 22, 600), one size wherever a section heads a
+/// page's part, 推荐归档's and Claude 订阅's alike (its own Xl2 read larger in a library page: 2026-10-26).
 // kept across runs: a value (no field of it changes)
-let wide_section_title : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Semibold, color=Fg, wrap=false)
+let wide_section_title : @ui.TextStyle = @sf.section_title.then(@ui.text_style(wrap=false))
 
 ///|
 // kept across runs: a value (no field of it changes)

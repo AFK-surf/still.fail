@@ -214,6 +214,7 @@ pub fn reset() -> Unit {
   app.toast_action = ""
   app.toast_run = fn() {  }
   left_pages.clear()
+  said_titles.clear()
   felt_holds.clear()
   // the drive's files going up and being fetched (drive_upload.mbt, drive_keep.mbt)
   ups_reset()
@@ -301,8 +302,32 @@ pub fn feel_hold(c : @ui.Ctx, what : String) -> Unit {
 }
 
 ///|
-/// What back over a page says: the title of the page it goes back to.
+/// The titles pages said as they were drawn (@sf.page_titled, the frame's while it draws page `p`), by page.
+// kept across runs: said as pages are drawn; reset empties it
+let said_titles : Array[(Page, String)] = []
+
+///|
+/// Page `p` drawn, `body` drawing it: what title it says (@sf.page) kept for back over the page above it.
+pub fn titled_page(p : Page, body : () -> Unit) -> Unit {
+  let was = @sf.page_titled.val
+  @sf.page_titled.val = fn(title) {
+    match said_titles.search_by(fn(e) { e.0 == p }) {
+      Some(i) => said_titles[i] = (p, title)
+      None => said_titles.push((p, title))
+    }
+  }
+  body()
+  @sf.page_titled.val = was
+}
+
+///|
+/// What back over a page says: the title of the page it goes back to, as that page said it when it was drawn (a
+/// station's its name); one not drawn yet, by what it is.
 pub fn back_label(p : Page) -> String {
+  match said_titles.search_by(fn(e) { e.0 == p }) {
+    Some(i) if said_titles[i].1 != "" => return said_titles[i].1
+    _ => ()
+  }
   match p {
     Home => @sf.t("android-misc.bar.place.chats")
     Settings | Setting(@settings.Route::Home) => @sf.t("android-settings.title")

@@ -42,13 +42,21 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (Home | Appearance | Fonts | BarSettings | About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) | LocalStation | MemoryDoc(_, _, _) | AutoCompletion | AutoPolicy(_) | Archive)) {
+  if !(route is (Home | Appearance | Fonts | BarSettings | About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) | LocalStation | MemoryDoc(_, _, _) | AutoCompletion | AutoPolicy(_) | Archive | Stations | Profiles(_))) {
     return false
   }
   let core = settings_core(src, w)
   let here = @settings.here_of(core, w.id, w.name)
   @settings.frame(core, here)
   settings_fixture(src, core)
+  // (what title it says kept for back over the page above it: @sfbase.back_label)
+  @sfbase.titled_page(Setting(route), fn() { setting_drawn(c, src, w, core, here, route, frame) })
+  true
+}
+
+///|
+/// The settings' page `route`, one for every frame (setting_route).
+fn setting_drawn(c : @ui.Ctx, src : Source, w : Workspace, core : Core, here : Here, route : Route, frame : PageFrame) -> Unit {
   match route {
     // the settings' list as a page of its own (a small screen's: sfpages' settings_list.mbt), a row pressed its page
     // pushed
@@ -87,12 +95,15 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     LocalStation => @sfpages.local_station_page(c, core, frame)
     // 已归档 as a page of its own (a small screen's: from the filter's menu), its list across it
     Archive => @sfpages.archive_page(c, src, w, frame, core.pop)
+    // Station as a page of its own (a small screen's: the bar's place), its list across it
+    Stations => @sfpages.stations_page(c, src, core, here, w, frame)
+    // Profile as a page of its own (a small screen's: the bar's place; from settings; a station's)
+    Profiles(only) => @sfpages.profiles_page(c, core, here, frame, only)
     MemoryDoc(a, skill, at) => @sfpages.memory_doc_page(c, core, frame, a, skill, at)
     AutoCompletion => @sfpages.completion_page(c, core, here, frame)
     AutoPolicy(s) => @sfpages.policy_page(c, core, here, frame, s)
     _ => ()
   }
-  true
 }
 
 ///|

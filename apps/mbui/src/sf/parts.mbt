@@ -191,7 +191,9 @@ pub fn icon_button(
   let t = theme()
   // (drawn its own size with a finger too: a finger reaches it from round it, mbui's finger_reach)
   let ink = ink.unwrap_or(t.p.text)
-  let quiet = quiet.unwrap_or(t.p.muted)
+  // (at a head's end, what the page does: in its ink at rest, as a button's mark there is, 重新发现模型's; elsewhere
+  // quiet until pointed at)
+  let quiet = quiet.unwrap_or(if at_head_end() { ink } else { t.p.muted })
   let id = c.id(if key == "" { "sf-ib/" + icon } else { key })
   let h = ease_to(c, "sf-ib-h/\{id}", !disabled && (lit || c.lit(id) || c.pressed(id)))
   let ground = if on {
@@ -1533,7 +1535,7 @@ let section_title_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let section_title : @ui.TextStyle = @ui.text_style(size=Body, leading=L7, weight=Semibold, color=Fg)
+pub let section_title : @ui.TextStyle = @ui.text_style(size=Body, leading=L7, weight=Semibold, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)

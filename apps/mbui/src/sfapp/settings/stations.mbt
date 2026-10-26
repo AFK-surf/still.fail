@@ -26,44 +26,6 @@ fn station_mark(c : @ui.Ctx, s : Json?, size : Double, tint : Int64) -> Unit {
 }
 
 ///|
-/// The workspace's stations (StationsScreen), pushed from settings: their cards, each opening its page.
-fn stations_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  let topic = stations_of(core, here)
-  let list = match topic.value {
-    Some(Array(a)) => Some(a)
-    _ => None
-  }
-  // adding one: its owners' and admins' ＋ (the bar's notch at the stack's root)
-  let add = match place_action(core, here, "stations") {
-    Some(run) => Some(("add-station", run))
-    None => None
-  }
-  place_page(c, core, tr("android-misc.bar.place.stations"), primary?=add, fn() {
-    let blocks : Array[() -> Unit] = []
-    match list {
-      None =>
-        blocks.push(fn() {
-          waiting_cards(
-            c,
-            error=match topic.error {
-              Some(e) => error_text(e)
-              None => ""
-            },
-          )
-        })
-      Some(a) if a.length() == 0 => blocks.push(fn() { first_station(c, core, here) })
-      Some(a) => {
-        for st in a {
-          blocks.push(fn() { station_card(c, core, st) })
-        }
-      }
-    }
-    blocks.push(fn() { gap(c, 30.0) })
-    scroll_page(c, "stations", blocks)
-  })
-}
-
-///|
 /// A card's head on this page (a station's, the agents at work's): its mark 28 across, its name and what is said of it
 /// under it (`said`: its line, even empty; none, no line), 12 from the mark; what stands at its end (a chevron).
 fn card_head(c : @ui.Ctx, mark : () -> Unit, name : String, said : String?, end : () -> Unit) -> Unit {
@@ -89,12 +51,13 @@ fn card_head(c : @ui.Ctx, mark : () -> Unit, name : String, said : String?, end 
 let card_mark : Double = 28.0
 
 ///|
-/// A station in the list: its mark (the server's where it has none), its name, what is said of it, and its body (StationBody).
-fn station_card(c : @ui.Ctx, core : Core, st : Json) -> Unit {
+/// A station in the list across a whole page (sfpages' stations.mbt, `Whole`): its mark (the server's where it has
+/// none), its name, what is said of it, and its body (StationBody). True when pressed.
+pub fn station_card(c : @ui.Ctx, core : Core, st : Json) -> Bool {
   let t = @sf.theme()
   let s = Some(st)
   let address = text(s, "station")
-  if card(c, key="station/" + address, fn() {
+  card(c, key="station/" + address, fn() {
       let emoji = text(s, "emoji")
       let icon = text(s, "icon")
       card_head(
@@ -116,9 +79,7 @@ fn station_card(c : @ui.Ctx, core : Core, st : Json) -> Unit {
         },
       )
       station_body(c, core, s)
-    }) {
-    (core.push)(Station(address))
-  }
+    })
 }
 
 ///|

@@ -9,14 +9,16 @@
 
 ///|
 /// Back: a chevron and where to, 6 after it and 4 over and under, its corner 8; rippled where it is pressed
-/// (Parts.kt NavBack: clip(Smooth(8)).clickable).
+/// (Parts.kt NavBack: clip(Smooth(8)).clickable); no wider than its line, where the word it says gives way (a long
+/// page's name: back says the title of the page under it).
 // kept across runs: a value (no field of it changes)
-let nav_back_box : @ui.Style = @ui.css("row pr=S1_5 pt=S1 pb=S1 radius=Lg align=ACenter")
+let nav_back_box : @ui.Style = @ui.css("row w=Cut pr=S1_5 pt=S1 pb=S1 radius=Lg align=ACenter")
 
 ///|
-/// Back's word in a link's ink, its chevron the accent (Parts.kt:491 C.link, 490 C.accent).
+/// Back's word in a link's ink, its chevron the accent (Parts.kt:491 C.link, 490 C.accent), cut short where its line
+/// has not the room.
 // kept across runs: a value (no field of it changes)
-let nav_back_words : @ui.TextStyle = @ui.text_style(size=Title, leading=Font, color=Link, wrap=false)
+let nav_back_words : @ui.TextStyle = @ui.text_style(size=Title, leading=Font, color=Link, wrap=false, w=Cut)
 
 ///|
 /// The bar: 10 in at its start, 16 at its end, 6 over and 10 under (NavBar).

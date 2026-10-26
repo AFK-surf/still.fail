@@ -144,6 +144,7 @@ pub fn page(
   small? : String = "",
   listed? : Bool = false,
 ) -> Unit {
+  (page_titled.val)(title)
   let l = look_for(c.width)
   // (what it holds drawn as its list lays it out, maybe after this returns: each block says its look as it is drawn)
   let content = content.map(fn(b) { fn() { with_look(l, b) } })
@@ -162,6 +163,12 @@ pub fn page(
     })
   })
 }
+
+///|
+/// Told each page's title as it is drawn (page): the frame's, which says it over the page above it (what back says,
+/// sfbase's back_label), the page knowing what it is called; nothing outside a frame's page.
+// kept across runs: said by the frame round each page it draws
+pub let page_titled : Ref[(String) -> Unit] = Ref(fn(_) {  })
 
 ///|
 /// The list a page keyed `key` is drawn in (its lines: Ctx::list_info, a `listed` page's next ones asked for near its
@@ -217,7 +224,22 @@ fn barred_page(
     Wide => {
       // (what it holds as under a head: its first 16 under it, the head's own 12 over that; a list's lines as they are)
       for i, b in content {
-        blocks.push(if listed { b } else { fn() { c.box(style=if i == 0 { desk_first } else { desk_block }, fn() { b() }) |> ignore } })
+        blocks.push(
+      if listed {
+        // (a list's lines as they are, the first as far under the head as a page's first block: 28)
+        if i == 0 {
+          fn() {
+            first_line.val = true
+            c.box(style=desk_list_first, b) |> ignore
+            first_line.val = false
+          }
+        } else {
+          b
+        }
+      } else {
+        fn() { c.box(style=if i == 0 { desk_first } else { desk_block }, fn() { b() }) |> ignore }
+      },
+    )
       }
       desk_lanes(c, key, blocks, foot~)
     }
@@ -406,8 +428,13 @@ fn wide_page(
               }
             })
             |> ignore
+            // (at its head's end as a narrow head's are: at_head_end)
             match actions {
-              Some(f) => f()
+              Some(f) => {
+                head_ends.val = head_ends.val + 1
+                f()
+                head_ends.val = head_ends.val - 1
+              }
               None => ()
             }
           })
@@ -421,7 +448,22 @@ fn wide_page(
       })
   }
   for i, b in content {
-    blocks.push(if listed { b } else { fn() { c.box(style=if i == 0 { desk_first } else { desk_block }, fn() { b() }) |> ignore } })
+    blocks.push(
+      if listed {
+        // (a list's lines as they are, the first as far under the head as a page's first block: 28)
+        if i == 0 {
+          fn() {
+            first_line.val = true
+            c.box(style=desk_list_first, b) |> ignore
+            first_line.val = false
+          }
+        } else {
+          b
+        }
+      } else {
+        fn() { c.box(style=if i == 0 { desk_first } else { desk_block }, fn() { b() }) |> ignore }
+      },
+    )
   }
   desk_lanes(c, key, blocks, foot~)
 }
@@ -2070,11 +2112,11 @@ let desk_back_icon : Double = 14.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_back_line : @ui.Style = @ui.css("row pb=S2 gap=S1 align=ACenter")
+let desk_back_line : @ui.Style = @ui.css("row w=Cut pb=S2 gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_back_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
+let desk_back_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2128,6 +2170,23 @@ let desk_block : @ui.Style = @ui.css("w=Full px=S4")
 ///|
 // kept across runs: a value (no field of it changes)
 let desk_first : @ui.Style = desk_block.then(@ui.css("pt=S4"))
+
+///|
+/// Whether what is drawn is a listed page's first line, already as far under the head as a page's first block
+/// (desk_list_first): what heads it keeps no room of its own over it (a settings section's head).
+// kept across runs: said while a listed page's first line is drawn, false between
+let first_line : Ref[Bool] = Ref(false)
+
+///|
+pub fn page_first_line() -> Bool {
+  first_line.val
+}
+
+///|
+/// A listed page's first line (page `listed`): as far under the head as a first block (16 more than the head's 12),
+/// at the edges its lines keep themselves.
+// kept across runs: a value (no field of it changes)
+let desk_list_first : @ui.Style = @ui.css("w=Full pt=S4")
 
 ///|
 /// What the page is for under a bar of the frame's (barred_page), wide: the line under the title the bar holds, right

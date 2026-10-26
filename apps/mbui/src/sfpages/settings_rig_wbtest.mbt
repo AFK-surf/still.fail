@@ -62,6 +62,13 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
   let here = @settings.here_of(core, rig_workspace.id, rig_workspace.name)
   @settings.frame(core, here)
   let frame : PageFrame = { back: app.nav.under().map(@sfbase.back_label), top: 0.0, foot: 0.0, named: false }
+  // (what title it says kept for back over the page above it, as the frame keeps it: sfbase's titled_page)
+  @sfbase.titled_page(Setting(route), fn() { setting_drawn(c, src, core, here, frame, route) })
+}
+
+///|
+/// The page of `route` drawn (setting_alone).
+fn setting_drawn(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : PageFrame, route : @settings.Route) -> Unit {
   match route {
     About => about_page(c, core, frame)
     Changelog => changelog_page(c, core, frame)
@@ -82,6 +89,8 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     VaultItem(v, item) => vault_item_page(c, core, here, frame, v, item)
     Connects(only) => connects_page(c, src, core, here, frame, only)
     Archive => archive_page(c, src, rig_workspace, frame, core.pop)
+    Stations => stations_page(c, src, core, here, rig_workspace, frame)
+    Profiles(only) => profiles_page(c, core, here, frame, only)
     Connect(station, id) => connect_page(c, src, core, here, frame, station, id)
     Station(a) => station_page(c, core, here, frame, a)
     Profile(a, id) => profile_page(c, core, here, frame, a, id)
