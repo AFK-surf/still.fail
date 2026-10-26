@@ -2,13 +2,17 @@
 // runtime (nothing of Chromium shipped; the SDK's loader is linked in statically). Each is hosted as visuals of the
 // DirectComposition tree under the canvas's swap chain (win_render.cpp): the app paints a hole (kind 9: transparent,
 // unblended) where one shows and what it paints after the hole draws over it, as apple_views.m and NativeViews.java
-// have it. Kind 2, a page of HTML, and kind 3, a site whose every request the app answers (view_site_*); no video
-// player yet (kind 1 opens none: 0). Where WebView2's runtime is not installed (or DirectComposition could not be
-// had), view_open answers 0 and the app says it cannot show it. MBUI_WEBVIEW2_DIR: a fixed-version runtime's folder
-// instead of the installed runtime (one that is not there: as on a machine without it).
+// have it. Kind 2, a page of HTML; kind 3, a site whose every request the app answers (view_site_*); kind 1, a video
+// (or audio) player: a page of ours with the browser's own <video> in it, its picture stretched to the view, the
+// bytes it plays read through the app (view_read_next: each range the browser asks of its file, as Android's and
+// Apple's players read theirs), told what to do by the page's script (view_control) and saying how it stands to the
+// host as it changes (view_info). Where WebView2's runtime is not installed (or DirectComposition could not be had),
+// view_open answers 0 and the app says it cannot show it. MBUI_WEBVIEW2_DIR: a fixed-version runtime's folder instead
+// of the installed runtime (one that is not there: as on a machine without it).
 //
-// Both kinds load from a host of their own that never reaches the network (https://*.stillfail.invalid, its requests
-// taken by WebResourceRequested), as Android's WebView does: a page's HTML from here, a site's from the app.
+// Every kind loads from a host of its own that never reaches the network (https://*.stillfail.invalid, its requests
+// taken by WebResourceRequested), as Android's WebView does: a page's HTML from here, a site's from the app, a
+// player's page from here and its file from the app.
 //
 // Threads: everything here runs on the UI thread, WebView2's events among them (they come through its message loop).
 #define WIN32_LEAN_AND_MEAN
@@ -18,6 +22,7 @@
 #include <shlwapi.h>
 #include <dcomp.h>
 #include <wincodec.h>
+#include <wincrypt.h>
 #include <wrl.h>
 #include <math.h>
 #include <stdarg.h>
@@ -39,6 +44,7 @@
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "version.lib")
 #pragma comment(lib, "windowscodecs.lib")
+#pragma comment(lib, "crypt32.lib")
 
 using Microsoft::WRL::Callback;
 using Microsoft::WRL::ComPtr;
@@ -47,6 +53,41 @@ extern "C" void mb_host_request_frame(void);
 
 static const wchar_t kSite[] = L"https://preview.stillfail.invalid";  // a site's own host (Android's Site.HOST)
 static const wchar_t kPage[] = L"https://page.stillfail.invalid";     // a page's
+static const wchar_t kPlayer[] = L"https://player.stillfail.invalid"; // a player's: its page at /, its file at /media
+
+// A player's page (kind 1): the browser's own <video>, its picture stretched to the view (as the other hosts' are),
+// nothing of its own controls; mbuiPlayer what the host tells it (view_control), how it stands said to the host as it
+// changes ({"t":"s",...}: view_info's), a frame at a time grabbed by a second <video> of the same file, so the one
+// playing is left as it is ({"t":"g","png":...}).
+static const char kPlayerPage[] = R"(<!doctype html><meta charset=utf-8><style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
+video{width:100%;height:100%;object-fit:fill;display:block;background:#000}
+</style><video id=v preload=auto playsinline disablepictureinpicture disableremoteplayback></video><script>
+const v=document.getElementById('v');let want=false;
+const post=o=>window.chrome.webview.postMessage(JSON.stringify(o));
+const say=()=>{const b=v.buffered,t=v.currentTime;let ahead=0;
+for(let i=0;i<b.length;i++)if(b.start(i)<=t+0.05&&b.end(i)>ahead)ahead=b.end(i);
+post({t:'s',d:isFinite(v.duration)?v.duration*1000:-1,p:t*1000,r:v.playbackRate,
+playing:!v.paused&&!v.ended?1:0,w:v.videoWidth,h:v.videoHeight,drawn:v.readyState>=2?1:0,
+buf:want&&!v.paused&&!v.ended&&v.readyState<3?1:0,ahead:ahead*1000,ended:v.ended?1:0,
+ready:v.readyState>=1?1:0,err:v.error?1:0});};
+for(const e of['loadedmetadata','loadeddata','durationchange','timeupdate','play','playing','pause','waiting',
+'canplay','canplaythrough','seeking','seeked','progress','ended','error','ratechange','stalled','suspend'])
+v.addEventListener(e,say);
+window.mbuiPlayer={
+play(){want=true;v.play().catch(()=>{});say()},
+pause(){want=false;v.pause();say()},
+seek(ms,near){if(near&&v.fastSeek)v.fastSeek(ms/1000);else v.currentTime=ms/1000;say()},
+rate(r){if(r>0)v.playbackRate=r;say()},
+grab(ms){const g=document.createElement('video');g.muted=true;g.preload='auto';
+const done=png=>{post({t:'g',png});g.removeAttribute('src');g.load()};
+g.addEventListener('error',()=>done(''),{once:true});
+g.addEventListener('loadeddata',()=>{g.currentTime=ms/1000},{once:true});
+g.addEventListener('seeked',()=>{try{const c=document.createElement('canvas');c.width=g.videoWidth;c.height=g.videoHeight;
+c.getContext('2d').drawImage(g,0,0);const u=c.toDataURL('image/png');done(u.slice(u.indexOf(',')+1))}catch(e){done('')}},
+{once:true});g.src='/media'}};
+v.src='/media';
+</script>)";
 
 // "view N: …" lines on stdout, as the other hosts log theirs
 static void vlog(const char *fmt, ...) {
@@ -167,6 +208,15 @@ struct Req {
   std::vector<uint8_t> data;  // the answer's body so far
 };
 
+// One range of a player's file its page asked for (a request of /media), till the app has given it whole.
+struct MediaRead {
+  int rid;
+  double off, want;
+  ComPtr<ICoreWebView2WebResourceRequestedEventArgs> args;
+  ComPtr<ICoreWebView2Deferral> deferral;
+  std::vector<uint8_t> data;
+};
+
 struct View {
   int vid, kind;
   double x = 0, y = 0, w = 0, h = 0, cx0 = 0, cy0 = 0, cx1 = 0, cy1 = 0, radius = 0;
@@ -201,6 +251,17 @@ struct View {
   std::vector<double> covers;
   std::vector<uint8_t> still;
   int still_state = 0;
+  // a player's (kind 1): its file's type; the ranges its page asked of it, by id, and those not handed to the app yet,
+  // in order; its file's size (the app's, -1 not known yet) and how much of it the app has given; how it stands as its
+  // page last said, and when (its place moved on from there as it plays, view_info)
+  std::wstring mime;
+  std::map<int, MediaRead *> reads;
+  std::deque<int> unread;
+  int next_read = 0;
+  double total = -1, given = 0;
+  double dur = -1, pos = 0, rate = 1, ahead = 0;
+  ULONGLONG said_at = 0;
+  int playing = 0, vw = 0, vh = 0, drawn = 0, buffering = 0, ended = 0, ready = 0;
 };
 
 static HWND hwnd_main;
@@ -284,7 +345,8 @@ static void apply_place(View *v) {
     v->content->SetClip((IDCompositionClip *)NULL);
     v->round.Reset();
   }
-  v->ctl->put_IsVisible(v->shown ? TRUE : FALSE);
+  // (a player's kept visible to its page, hidden by its clip: a page the browser takes for hidden may stop its video)
+  v->ctl->put_IsVisible(v->shown || v->kind == 1 ? TRUE : FALSE);
   mb_render_commit();
   // where it is now, in device pixels (scripts/host_contract.sh HOST views compares it with VIEWTOLD)
   if (v->shown)
@@ -372,12 +434,74 @@ static std::wstring path_of(const wchar_t *uri, const wchar_t *host) {
   return out;
 }
 
+// a player's file asked for (/media): the range its Range header names (from its start, at most `chunk` of an open
+// end), waiting on the app's bytes (view_read_next), the player waiting with it
+static const double kChunk = 2 * 1024 * 1024;
+
+static void player_request(View *v, ICoreWebView2WebResourceRequest *rq, ICoreWebView2WebResourceRequestedEventArgs *args) {
+  double off = 0, end = -1;
+  ComPtr<ICoreWebView2HttpRequestHeaders> hs;
+  LPWSTR range = NULL;
+  if (SUCCEEDED(rq->get_Headers(&hs)) && SUCCEEDED(hs->GetHeader(L"Range", &range)) && range) {
+    const wchar_t *r = wcsstr(range, L"bytes=");
+    if (r) {
+      wchar_t *rest = NULL;
+      off = wcstod(r + 6, &rest);
+      if (rest && *rest == L'-' && rest[1] >= L'0' && rest[1] <= L'9') end = wcstod(rest + 1, NULL);
+    }
+  }
+  CoTaskMemFree(range);
+  double want = end >= off ? end - off + 1 : kChunk;
+  if (v->total >= 0 && off + want > v->total) want = v->total - off;
+  if (v->total >= 0 && off >= v->total) {
+    std::wstring h = L"Content-Range: bytes */" + std::to_wstring((long long)v->total);
+    respond(args, 416, h, "", 0);
+    return;
+  }
+  MediaRead *m = new MediaRead;
+  m->rid = ++v->next_read;
+  m->off = off;
+  m->want = want > 0 ? want : kChunk;
+  m->args = args;
+  args->GetDeferral(&m->deferral);
+  v->reads[m->rid] = m;
+  v->unread.push_back(m->rid);
+  // the player waits on the app now
+  outside(v, 0);
+}
+
+// A range of a player's file answered as the app gave it: 206, its range of the whole (416 past its end)
+static void player_answer(View *v, MediaRead *m) {
+  size_t n = m->data.size();
+  std::wstring total = v->total >= 0 ? std::to_wstring((long long)v->total) : L"*";
+  if (n == 0) {
+    respond(m->args.Get(), 416, L"Content-Range: bytes */" + total, "", 0);
+  } else {
+    std::wstring h = L"Content-Type: " + (v->mime.empty() ? std::wstring(L"application/octet-stream") : v->mime) +
+                     L"\r\nAccept-Ranges: bytes\r\nContent-Range: bytes " + std::to_wstring((long long)m->off) + L"-" +
+                     std::to_wstring((long long)(m->off + n - 1)) + L"/" + total + L"\r\nContent-Length: " +
+                     std::to_wstring((unsigned long long)n);
+    respond(m->args.Get(), 206, h, m->data.data(), n);
+  }
+  if (m->deferral) m->deferral->Complete();
+}
+
 static void on_request(View *v, ICoreWebView2WebResourceRequestedEventArgs *args) {
   ComPtr<ICoreWebView2WebResourceRequest> rq;
   if (FAILED(args->get_Request(&rq))) return;
   LPWSTR uri = NULL, method = NULL;
   rq->get_Uri(&uri);
   rq->get_Method(&method);
+  if (v->kind == 1) {
+    // its page, and its file as the app gives it; nothing else of its host
+    std::wstring p = path_of(uri, kPlayer);
+    if (p == L"/") respond(args, 200, L"Content-Type: text/html; charset=utf-8", kPlayerPage, sizeof kPlayerPage - 1);
+    else if (p == L"/media") player_request(v, rq.Get(), args);
+    else respond(args, 404, L"Content-Type: text/plain", "", 0);
+    CoTaskMemFree(uri);
+    CoTaskMemFree(method);
+    return;
+  }
   if (v->kind == 2) {
     // the page given, and nothing else of its host
     std::wstring p = path_of(uri, kPage);
@@ -482,8 +606,8 @@ static void on_nav_start(View *v, ICoreWebView2NavigationStartingEventArgs *a) {
       v->said.push_back(e);
     }
   } else {
-    // only the page given: no link followed, nothing else loaded
-    ok = about || !path_of(u.c_str(), kPage).empty();
+    // only the page given (a player's, its own): no link followed, nothing else loaded
+    ok = about || !path_of(u.c_str(), v->kind == 1 ? kPlayer : kPage).empty();
     if (!ok) vlog("view %d: navigation to %s cancelled", v->vid, utf8(u.c_str()).c_str());
   }
   if (!ok) a->put_Cancel(TRUE);
@@ -509,6 +633,11 @@ static void on_nav_done(View *v, ICoreWebView2NavigationCompletedEventArgs *a) {
   if (ok || code > 0) {
     v->there = true;
     run_scripts(v);
+    // a player's page there: the player ready once it says it is (player_said)
+    if (v->kind == 1) {
+      v->loaded = true;
+      return;
+    }
     if (v->kind == 3) {
       refresh_snap(v);
       tell(v, 1);
@@ -525,6 +654,56 @@ static void on_nav_done(View *v, ICoreWebView2NavigationCompletedEventArgs *a) {
   fail(v, "the page could not be loaded", (HRESULT)st);
 }
 
+// A number of a player's page's JSON by its key (its default where the page said none).
+static double jnum(const wchar_t *t, const wchar_t *key, double none) {
+  std::wstring k = L"\"" + std::wstring(key) + L"\":";
+  const wchar_t *at = wcsstr(t, k.c_str());
+  if (!at) return none;
+  return wcstod(at + k.size(), NULL);
+}
+
+// What a player's page says: how it stands ({"t":"s"}: ready, then failed or not), or a frame grabbed ({"t":"g"}).
+static void player_said(View *v, const wchar_t *t) {
+  if (wcsstr(t, L"\"t\":\"g\"")) {
+    const wchar_t *png = wcsstr(t, L"\"png\":\"");
+    v->still.clear();
+    if (png) {
+      png += 7;
+      const wchar_t *end = wcschr(png, L'"');
+      DWORD n = 0, len = end ? (DWORD)(end - png) : 0;
+      if (len && CryptStringToBinaryW(png, len, CRYPT_STRING_BASE64, NULL, &n, NULL, NULL) && n) {
+        v->still.resize(n);
+        CryptStringToBinaryW(png, len, CRYPT_STRING_BASE64, v->still.data(), &n, NULL, NULL);
+        v->still.resize(n);
+      }
+    }
+    v->still_state = v->still.empty() ? -1 : 2;
+    vlog("view %d: frame %s", v->vid, v->still_state == 2 ? "grabbed" : "not grabbed");
+    grabs.push_back({v->vid, v->still_state == 2 ? 1 : -1});
+    mb_host_request_frame();
+    return;
+  }
+  v->dur = jnum(t, L"d", -1);
+  v->pos = jnum(t, L"p", 0);
+  v->rate = jnum(t, L"r", 1);
+  v->playing = (int)jnum(t, L"playing", 0);
+  v->vw = (int)jnum(t, L"w", 0);
+  v->vh = (int)jnum(t, L"h", 0);
+  v->drawn = (int)jnum(t, L"drawn", 0);
+  v->buffering = (int)jnum(t, L"buf", 0);
+  v->ahead = jnum(t, L"ahead", 0);
+  v->ended = (int)jnum(t, L"ended", 0);
+  v->said_at = GetTickCount64();
+  if (jnum(t, L"err", 0) > 0) {
+    fail(v, "the player cannot play it", E_FAIL);
+  } else if (!v->ready && jnum(t, L"ready", 0) > 0) {
+    v->ready = 1;
+    vlog("view %d: player ready (%.0f ms, %dx%d)", v->vid, v->dur, v->vw, v->vh);
+    tell(v, 1);
+  }
+  mb_host_request_frame();
+}
+
 static void made(View *v, ICoreWebView2CompositionController *cc) {
   IDCompositionDevice *dc = (IDCompositionDevice *)mb_render_dcomp();
   IDCompositionVisual *under = (IDCompositionVisual *)mb_render_views_visual();
@@ -539,7 +718,9 @@ static void made(View *v, ICoreWebView2CompositionController *cc) {
   v->box->SetClip(D2D_RECT_F{0, 0, 0, 0});
   cc->put_RootVisualTarget(v->content.Get());
   ComPtr<ICoreWebView2Controller2> c2;
-  if (SUCCEEDED(v->ctl.As(&c2))) c2->put_DefaultBackgroundColor(COREWEBVIEW2_COLOR{255, 255, 255, 255});
+  // (a player's black, as a picture's letterbox: the others' a page's white)
+  if (SUCCEEDED(v->ctl.As(&c2)))
+    c2->put_DefaultBackgroundColor(v->kind == 1 ? COREWEBVIEW2_COLOR{255, 0, 0, 0} : COREWEBVIEW2_COLOR{255, 255, 255, 255});
   ComPtr<ICoreWebView2Controller3> c3;
   if (SUCCEEDED(v->ctl.As(&c3))) {
     c3->put_ShouldDetectMonitorScaleChanges(FALSE);
@@ -565,7 +746,11 @@ static void made(View *v, ICoreWebView2CompositionController *cc) {
           [vid](ICoreWebView2 *, ICoreWebView2WebMessageReceivedEventArgs *a) -> HRESULT {
             View *v = find(vid);
             LPWSTR text = NULL;
-            if (v && !v->closed && SUCCEEDED(a->TryGetWebMessageAsString(&text)) && text) {
+            bool got = v && !v->closed && SUCCEEDED(a->TryGetWebMessageAsString(&text)) && text;
+            // a player's page: how it stands (player_said); the others' what they say to the app
+            if (got && v->kind == 1) {
+              player_said(v, text);
+            } else if (got) {
               std::wstring e = L"{\"said\":";
               jstr(e, text);
               e += L'}';
@@ -578,7 +763,7 @@ static void made(View *v, ICoreWebView2CompositionController *cc) {
             return S_OK;
           }).Get(),
       &tok);
-  std::wstring filter = std::wstring(v->kind == 3 ? kSite : kPage) + L"/*";
+  std::wstring filter = std::wstring(v->kind == 3 ? kSite : v->kind == 1 ? kPlayer : kPage) + L"/*";
   v->web->AddWebResourceRequestedFilter(filter.c_str(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
   v->web->add_WebResourceRequested(
       Callback<ICoreWebView2WebResourceRequestedEventHandler>(
@@ -643,7 +828,9 @@ static void made(View *v, ICoreWebView2CompositionController *cc) {
                         &tok);
   if (v->placed) apply_place(v);
   else mb_render_commit();
-  std::wstring url = v->kind == 3 ? std::wstring(kSite) + (v->start.empty() ? L"/" : v->start) : std::wstring(kPage) + L"/";
+  std::wstring url = v->kind == 3   ? std::wstring(kSite) + (v->start.empty() ? L"/" : v->start)
+                     : v->kind == 1 ? std::wstring(kPlayer) + L"/"
+                                    : std::wstring(kPage) + L"/";
   HRESULT hr = v->web->Navigate(url.c_str());
   if (FAILED(hr)) fail(v, "its page could not be asked for", hr);
   vlog("view %d: web view made", vid);
@@ -693,6 +880,10 @@ static void make_env(void) {
   wchar_t dir[MAX_PATH + 32];
   DWORD n = GetTempPathW(MAX_PATH, dir);
   wcscpy_s(dir + n, 32, L"mbui-webview2");
+  // (a player plays when the app says so, no gesture of the page's own asked for: its controls are the app's; said as
+  // the runtime reads its arguments where none are given it, unless the environment says some already)
+  if (!GetEnvironmentVariableW(L"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", NULL, 0))
+    SetEnvironmentVariableW(L"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", L"--autoplay-policy=no-user-gesture-required");
   HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(
       runtime_dir(), dir, NULL,
       Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
@@ -732,14 +923,18 @@ static bool runtime_here(void) {
 // The host API MoonBit calls
 
 extern "C" int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) {
-  if (kind == 1) vlog("view: no video player on Windows yet");
-  if (kind != 2 && kind != 3) return 0;
+  if (kind != 1 && kind != 2 && kind != 3) return 0;
   if (!mb_render_dcomp() || !runtime_here()) return 0;
   if (!hwnd_main) hwnd_main = (HWND)mb_app_hwnd();
   View *v = new View;
   v->vid = ++next_vid;
   v->kind = kind;
-  if (kind == 2) {
+  if (kind == 1) {
+    // (the app draws its controls over it: the mouse the canvas's)
+    v->mime = wstr(arg);
+    v->touch = "through";
+    vlog("view %d: open player (%s)", v->vid, utf8(v->mime.c_str()).c_str());
+  } else if (kind == 2) {
     std::wstring h = wstr(arg);
     v->html = utf8(h.c_str(), (int)h.size());
     v->html_len = (int)v->html.size();
@@ -784,6 +979,11 @@ extern "C" void mb_host_view_close(int32_t vid) {
     delete kv.second;
   }
   v->reqs.clear();
+  for (auto &kv : v->reads) {
+    if (kv.second->deferral) kv.second->deferral->Complete();
+    delete kv.second;
+  }
+  v->reads.clear();
   if (v->ctl) v->ctl->Close();
   IDCompositionVisual *under = (IDCompositionVisual *)mb_render_views_visual();
   if (under && v->box) under->RemoveVisual(v->box.Get());
@@ -830,8 +1030,32 @@ static void grab_page(View *v) {
                          }).Get());
 }
 
+// What its page's script is told (a player's: mbuiPlayer), once it is there.
+static void page_script(View *v, const std::wstring &js) {
+  v->scripts.push_back(js);
+  run_scripts(v);
+}
+
 extern "C" void mb_host_view_control(int32_t vid, int32_t op, double value) {
   View *v = find(vid);
+  if (v && v->kind == 1) {
+    wchar_t js[128];
+    switch (op) {
+      case 1: page_script(v, L"mbuiPlayer.play()"); break;
+      case 2: page_script(v, L"mbuiPlayer.pause()"); break;
+      case 3: swprintf(js, 128, L"mbuiPlayer.seek(%.3f,false)", value); page_script(v, js); break;
+      case 11: swprintf(js, 128, L"mbuiPlayer.seek(%.3f,true)", value); page_script(v, js); break;
+      case 4: swprintf(js, 128, L"mbuiPlayer.rate(%.4f)", value); page_script(v, js); break;
+      // a frame at `value` ms, grabbed (its page's second <video>): told as a grab
+      case 21:
+        v->still_state = 1;
+        v->still.clear();
+        swprintf(js, 128, L"mbuiPlayer.grab(%.3f)", value);
+        page_script(v, js);
+        break;
+    }
+    return;
+  }
   if (v && op == 21) {
     grab_page(v);
     return;
@@ -859,15 +1083,58 @@ extern "C" int32_t mb_host_view_info(int32_t vid, double *out) {
   out[0] = -1;
   View *v = find(vid);
   if (!v) return -1;
+  if (v->kind == 1) {
+    // where it is: where its page last said, moved on since as it plays (its page says so a few times a second)
+    double at = v->pos;
+    if (v->playing && !v->buffering) at += (double)(GetTickCount64() - v->said_at) * v->rate;
+    if (v->dur >= 0 && at > v->dur) at = v->dur;
+    out[0] = v->dur;
+    out[1] = at;
+    out[2] = v->playing;
+    out[3] = v->vw;
+    out[4] = v->vh;
+    out[5] = v->given;
+    out[6] = v->drawn;
+    out[7] = v->buffering;
+    out[8] = v->ahead;
+    out[9] = v->ended;
+    return v->failed ? -1 : v->ready ? 1 : 0;
+  }
   if (v->kind == 2) out[5] = v->html_len;
   out[6] = v->loaded ? 1 : 0;
   return v->failed ? -1 : v->loaded ? 1 : 0;
 }
 
-// a player's: none here
-extern "C" int32_t mb_host_view_read_next(int32_t vid, double *out) { (void)vid; (void)out; return 0; }
+// A player's next range to be read of its file, handed to the app once (its id, its offset and how many bytes).
+extern "C" int32_t mb_host_view_read_next(int32_t vid, double *out) {
+  View *v = find(vid);
+  while (v && !v->unread.empty()) {
+    int rid = v->unread.front();
+    v->unread.pop_front();
+    auto it = v->reads.find(rid);
+    if (it == v->reads.end()) continue;
+    out[0] = it->second->off;
+    out[1] = it->second->want;
+    return rid;
+  }
+  return 0;
+}
+
+// The app's bytes for a range, as they come; whole (`more` none), the page's request answered with them.
 extern "C" void mb_host_view_read_answer(int32_t vid, int32_t req, moonbit_bytes_t data, double total, int32_t more) {
-  (void)vid; (void)req; (void)data; (void)total; (void)more;
+  View *v = find(vid);
+  if (!v) return;
+  auto it = v->reads.find(req);
+  if (it == v->reads.end()) return;
+  MediaRead *m = it->second;
+  int32_t n = Moonbit_array_length(data);
+  m->data.insert(m->data.end(), data, data + n);
+  v->given += n;
+  if (total > 0) v->total = total;
+  if (more) return;
+  v->reads.erase(it);
+  player_answer(v, m);
+  delete m;
 }
 // a page's grab: how it stands (what 2), the PNG
 extern "C" moonbit_string_t mb_host_view_text(int32_t vid, int32_t what) {
@@ -875,6 +1142,7 @@ extern "C" moonbit_string_t mb_host_view_text(int32_t vid, int32_t what) {
   if (!v || what != 2) return moonbit_make_string_raw(0);
   return mstr(std::to_wstring(v->still_state));
 }
+// (a player's frames' times, what 1: not known here)
 extern "C" int32_t mb_host_view_text_known(int32_t vid, int32_t what) { return find(vid) && what == 2 ? 1 : 0; }
 extern "C" moonbit_bytes_t mb_host_view_still(int32_t vid) {
   View *v = find(vid);

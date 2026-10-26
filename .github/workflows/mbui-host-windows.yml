@@ -64,6 +64,9 @@ jobs:
       - name: "PDFs: test/host/pdfcheck.pdf's two pages read and drawn by Windows' own (Windows.Data.Pdf)"
         if: success() || failure()
         run: scripts/host_contract.sh windows pdf
+      - name: "The player: test/host/playcheck.mp4 read through the app, played to its end, a frame grabbed (WebView2's <video>)"
+        if: success() || failure()
+        run: scripts/host_contract.sh windows play
       - name: "Streams: streamdemo's JPEG (WIC) said shown to its end (STREAM done)"
         if: success() || failure()
         timeout-minutes: 10
