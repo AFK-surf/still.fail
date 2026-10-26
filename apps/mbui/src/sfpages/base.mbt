@@ -1,5 +1,6 @@
 // What the pages read of sfbase, by their own names.
 using @sfbase {
+  type ScreenAt, type PageFrame, upload_id, file_seed, dv_part_first, dv_part_max, dv_beside_name,
   type FilePage, type PageMark, type Placed, type ServicePage, type Viewport, type StageHold, type Mark,
   service_site, src_now, clamp_size, keep_size, mark_where, page_marks_frame, page_marks_leave,
   page_marks_new, page_marks_new_page, page_marks_put, page_marks_remove, page_marks_toggle, service_ask,

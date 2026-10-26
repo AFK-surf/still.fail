@@ -32,7 +32,7 @@ let screen_fix_at : ScreenAt = { station: "ws-1/st-1", screen: "browser:tab-1", 
 
 ///|
 /// MBUI_FIXTURE=screen-…: the screen's viewer over the chats.
-fn open_screen_fixture(mode : String) -> Unit {
+pub fn open_screen_fixture(mode : String) -> Unit {
   if !mode.has_prefix("screen-") {
     return
   }
@@ -67,7 +67,7 @@ fn open_screen_fixture(mode : String) -> Unit {
 ///|
 /// What the fixture's core says of `screen.view` for the mode: its state, its config and a frame; for an ended mode its
 /// answer after.
-fn screen_fixture_stream(
+pub fn screen_fixture_stream(
   params : Json,
   on_value : (Json, Bytes?) -> Unit,
   done : (Result[Json, Json]) -> Unit,

@@ -623,3 +623,13 @@ let tile_gap : @ui.Style = @ui.style(w=@sf.grow).then(@ui.css("h=S16"))
 ///|
 // kept across runs: a value (no field of it changes)
 let tile_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Fg, wrap=false)
+
+///|
+/// All of the window, what its frame keeps it from (the system's bars) and the page inside it.
+// kept across runs: a value (no field of it changes)
+let screen_whole : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+/// What its frame leaves it.
+// kept across runs: a value (no field of it changes)
+let screen_within : @ui.Style = @ui.style(w=Full, h=@sf.grow)

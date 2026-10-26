@@ -56,10 +56,6 @@ fn reset() -> Unit {
   bar_timed.val = None
   home_sheet_at_start.val = false
   update_anchor_reset()
-  screens_open.clear()
-  screens_made.val = 0
-  screen_uis.clear()
-  screen_fix_mode.val = ""
   peeks_reset()
   share_in.shared = None
   share_in.files = []
@@ -288,7 +284,7 @@ fn pages_left(src : Source) -> Unit {
       Service(station, job) => service_left(src, station, job)
       PreviewFile(station, key, path, _) => service_left(src, station, "file:" + key + "\n" + path)
       History(r, key, _) => history_left(src, r, key)
-      Screen(at) => screen_left(src, at.station, at.screen)
+      Screen(at) => @sfpages.screen_left(src, at.station, at.screen)
       _ => ()
     }
   }
@@ -439,7 +435,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         // a station's screen: over the whole window, as Android's ScreenActivity is over the app
         match app.nav.top() {
           Screen(at) =>
-            c.layer(fn() { screen_page(c, src, at) }) |> ignore
+            c.layer(fn() { @sfpages.screen_page(c, src, at, system_frame()) }) |> ignore
           // a drive's text read, a film played: over the whole window too, as the web's pages of a file opened
           // (Drive.css.ts opened: fixed over everything)
           DriveRead(at) => c.layer(fn() { reader_page(c, src, at) }) |> ignore
@@ -617,7 +613,7 @@ fn page_view(
         Decisions => decisions_page(c, src, w)
         History(r, key, entry) => history_page(c, src, r, key, entry)
         Words(head, words) => words_page(c, src, head, words)
-        Screen(at) => screen_page(c, src, at)
+        Screen(at) => @sfpages.screen_page(c, src, at, system_frame())
       }
       // the page runs under the status bar; it keeps the paper behind its icons, moving with it (App.kt: the list, a
       // place's top page with the bar and a chat have frosted bars there instead; a book and a film their own)
@@ -745,35 +741,11 @@ fn place_switch(c : @ui.Ctx) -> @motion.Anim {
 }
 
 ///|
-/// What a write said, mbui's toast (@kit.toaster) in the library's look (@sf.toast_look: what an unconfirmed write did
-/// said as not known), 2.6 s (paused while the pointer is on it), coming in and going out; one said again is a new
-/// one. Where the frame has it: the wide frame's 24 over the window's foot (the web's), the narrow one's over the
-/// foot, clear of the bar and the action standing over it (bar_room above it) and above the navigation bar the view
-/// reaches under (Sheet.kt's navigationBars padding).
+/// What a write said (sfbase's toasts), where the frame has it: the wide frame's 24 over the window's foot (the web's),
+/// the narrow one's over the foot, clear of the bar and the action standing over it (bar_room above it) and above the
+/// navigation bar the view reaches under (Sheet.kt's navigationBars padding).
 fn toast(c : @ui.Ctx) -> Unit {
-  let action = if app.toast != "" { app.toast_action } else { "" }
-  let duration = if action != "" { toast_action_ms } else { toast_ms }
-  // its action's button the toaster's (the focus on it holds the toast)
-  let action_id = c.id("toast/t\{app.toast_n}/action")
-  let bottom = if @sfdesk.is_wide(c) { @sf.toast_bottom } else { bar_room + nav_foot() }
-  let said = if app.toast != "" { [@kit.toast("t\{app.toast_n}", @sf.toast_said(app.toast))] } else { [] }
-  let mut pressed = false
-  let r = @kit.toaster(c, "toast", said, duration~, bottom~, look=fn(c, s, _action, _close) {
-    let live = s.toast.id == "t\{app.toast_n}"
-    if @sf.toast_look(c, s, action=if live { action } else { "" }, action_id~) {
-      pressed = true
-    }
-  })
-  // pressed: done, and the toast goes
-  if pressed {
-    let run = app.toast_run
-    app.toast = ""
-    app.toast_action = ""
-    app.toast_run = fn() {  }
-    run()
-  } else if app.toast != "" && r.open.is_empty() {
-    app.toast = ""
-  }
+  @sfbase.toasts(c, if @sfdesk.is_wide(c) { @sf.toast_bottom } else { bar_room + nav_foot() })
 }
 
 ///|

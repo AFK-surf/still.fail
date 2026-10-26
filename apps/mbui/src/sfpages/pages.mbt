@@ -12,6 +12,10 @@ fn init {
 ///|
 /// What this package keeps put back as the app begins anew (its reset).
 pub fn reset() -> Unit {
+  screen_fix_mode.val = ""
+  screens_open.clear()
+  screen_uis.clear()
+  screens_made.val = 0
   hover_reset()
   message_reset()
   rows_reset()

@@ -130,8 +130,9 @@ let rail_say_ms : Double = 3000.0
 
 ///|
 /// The viewer of `at.screen` on `at.station` (ScreenViewer): `at.title` until the core says one (the link's own, or the
-/// row's it was opened from); one opened until its screen is gone (a login's page) goes back by itself then.
-fn screen_page(c : @ui.Ctx, src : Source, at : ScreenAt) -> Unit {
+/// row's it was opened from); one opened until its screen is gone (a login's page) goes back by itself then. Inside
+/// the room its frame keeps over and under it (`frame`: the system's bars), unless full.
+pub fn screen_page(c : @ui.Ctx, src : Source, at : ScreenAt, frame : PageFrame) -> Unit {
   let station = at.station
   let screen = at.screen
   let title = at.title
@@ -204,7 +205,15 @@ fn screen_page(c : @ui.Ctx, src : Source, at : ScreenAt) -> Unit {
   let (ww, wh) = c.window_size()
   let sideways = ww > wh
   // inside the bars unless full (ScreenViewer.kt: windowInsetsPadding(safeDrawing); full, edge to edge)
-  within_bars(c, top=!u.full, foot=!u.full, ground=if u.full { bars_fill } else { screen_page_box }, fn() { c.box(style=if u.full { screen_page_full } else { screen_page_box }, fn() {
+  // (full, edge to edge: no room kept for what its frame keeps it from)
+  let room = fn(h : Double) {
+    if h > 0.0 && !u.full {
+      c.box(style=@ui.style(w=Full, h=Fixed(h)), fn() {  }) |> ignore
+    }
+  }
+  c.box(style=if u.full { screen_whole } else { screen_page_box }, fn() {
+  room(frame.top)
+  c.box(style=screen_within, fn() { c.box(style=if u.full { screen_page_full } else { screen_page_box }, fn() {
     if u.full {
       c.box(style=screen_fill, fn() {
         screen_stage(c, s, u, key)
@@ -268,12 +277,15 @@ fn screen_page(c : @ui.Ctx, src : Source, at : ScreenAt) -> Unit {
       }
     }
   })
-  |> ignore })
+  |> ignore }) |> ignore
+  room(frame.foot)
+  })
+  |> ignore
 }
 
 ///|
 /// The view's page gone: the view, its decoder and its files let go of; upright and asleep again.
-fn screen_left(src : Source, station : String, screen : String) -> Unit {
+pub fn screen_left(src : Source, station : String, screen : String) -> Unit {
   let key = screen_key(station, screen)
   match screens_open.get(key) {
     Some(s) => s.close(src)
@@ -305,7 +317,7 @@ fn screen_act(
   fn(r) {
     match r {
       Ok(_) => ()
-      Err(e) => say(c, fill("android-misc.act.failed", [("what", what), ("error", error_words(e))]))
+      Err(e) => say(c, @sf.t("android-misc.act.failed", args=[("what", what), ("error", error_words(e))]))
     }
   }
 }
@@ -332,7 +344,7 @@ fn screen_copies(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
         CopiedText(t) => {
           @ui.clipboard_set(t, label~)
           if !@ui.copy_shown() {
-            say(c, tr("android-misc.screen.copied"))
+            say(c, @sf.t("android-misc.screen.copied"))
           }
         }
         // only from a screen that says it carries pictures (a station from before them sends none)
@@ -340,7 +352,7 @@ fn screen_copies(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
           if types.contains("png") {
             @ui.clipboard_set_png(b, label~)
             if !@ui.copy_shown() {
-              say(c, tr("android-misc.screen.copiedImage"))
+              say(c, @sf.t("android-misc.screen.copiedImage"))
             }
           }
       }
@@ -360,7 +372,7 @@ fn screen_pasted(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   let types = s.clip_types()
   let image = !(got.picture is NoPicture)
   let words = got.text
-  let what = tr("android-misc.screen.pasteWhat")
+  let what = @sf.t("android-misc.screen.pasteWhat")
   let done = fn(r : Result[Json, Json]) {
     s.pasting = false
     (screen_act(c, what))(r)
@@ -382,42 +394,48 @@ fn screen_pasted(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
         Png(png) => c.tell("screen-paste/" + s.view, fn() { s.paste_png(s.src, png, done) })
         TooLarge => {
           s.pasting = false
-          say(c, tr("android-misc.screen.imageTooLarge"))
+          say(c, @sf.t("android-misc.screen.imageTooLarge"))
         }
         _ => {
           s.pasting = false
-          say(c, tr("android-misc.screen.imageUnread"))
+          say(c, @sf.t("android-misc.screen.imageUnread"))
         }
       }
     "text" => c.tell("screen-paste/" + s.view, fn() { s.paste(s.src, words, done) })
     "no-images" => {
       s.pasting = false
-      say(c, tr("android-misc.screen.noImages"))
+      say(c, @sf.t("android-misc.screen.noImages"))
     }
     "no-text" => {
       s.pasting = false
-      say(c, tr("android-misc.screen.noText"))
+      say(c, @sf.t("android-misc.screen.noText"))
     }
     _ => {
       s.pasting = false
-      say(c, tr("android-misc.screen.clipboardEmpty"))
+      say(c, @sf.t("android-misc.screen.clipboardEmpty"))
     }
   }
 }
 
 ///|
-/// 粘贴手机剪贴板 tapped: the device's clipboard read (the system answers; screen_pasted takes it).
+/// 粘贴手机剪贴板 tapped (or ⌘V): the device's clipboard read (the system answers; screen_pasted takes it), asked once
+/// the frame's builds are over, as the last says it.
 fn paste_asked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   if s.pasting {
     return
   }
-  match @ui.clipboard_read() {
-    Some(r) => {
-      s.pasting = true
-      u.reading = Some(r)
+  c.after_build("screen-paste/" + s.station + "/" + s.screen, fn() {
+    if s.pasting {
+      return
     }
-    None => say(c, tr("android-misc.screen.clipboardEmpty"))
-  }
+    match @ui.clipboard_read() {
+      Some(r) => {
+        s.pasting = true
+        u.reading = Some(r)
+      }
+      None => say(c, @sf.t("android-misc.screen.clipboardEmpty"))
+    }
+  })
 }
 
 ///|
@@ -429,7 +447,7 @@ fn send_asked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
       u.picking = Some(p)
       u.drop_to = Some(to)
     }
-    None => say(c, tr("android-chat.composer.noFiles"))
+    None => say(c, @sf.t("android-chat.composer.noFiles"))
   }
 }
 
@@ -451,9 +469,9 @@ fn screen_picked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 ///|
 /// Trackpad or direct, said as it is chosen: how a finger drives it now.
 fn pad_chosen(c : @ui.Ctx, s : ScreenSess, on : Bool) -> Unit {
-  say(c, tr(if on { "android-misc.screen.padOn" } else { "android-misc.screen.padOff" }))
+  say(c, @sf.t(if on { "android-misc.screen.padOn" } else { "android-misc.screen.padOff" }))
   c.tell("screen-pad/" + s.view, fn() {
-    s.choose_pad(s.src, on, screen_act(c, tr("android-misc.screen.touchWhat")))
+    s.choose_pad(s.src, on, screen_act(c, @sf.t("android-misc.screen.touchWhat")))
   })
 }
 
@@ -530,7 +548,7 @@ fn round_button(c : @ui.Ctx, key : String, icon : String, label : String, on? : 
 /// there).
 fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, close : () -> Unit) -> Unit {
   c.box(style=screen_bar, fn() {
-    if round_button(c, "screen-close", "close", tr("android-misc.screen.close")) {
+    if round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close")) {
       close()
     }
     let live = s.phase() == "live"
@@ -538,7 +556,7 @@ fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, clo
     let w = c.box(style=screen_bar_words, id=if live { words } else { 0 }, fn() {
       let said = match opt_text(s.state, "title") {
         Some(t) if t != "" => t
-        _ => if title != "" { title } else { tr("android-misc.screen.title") }
+        _ => if title != "" { title } else { @sf.t("android-misc.screen.title") }
       }
       c.text(said, style=screen_title_words) |> ignore
       // while another drives it, who does is said below (with 接管), not twice
@@ -559,7 +577,7 @@ fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, clo
       }
     })
     if live {
-      c.semantics(w, Button, id=words, label=tr("web-pages.screen.stats"), actions=[Activate])
+      c.semantics(w, Button, id=words, label=@sf.t("web-pages.screen.stats"), actions=[Activate])
       if c.clicked(words) || u.asked_panel == "net" {
         u.asked_panel = ""
         net_panel_open(s, u, Of(words))
@@ -588,11 +606,11 @@ fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, clo
 fn screen_viewer_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, close : () -> Unit) -> Unit {
   let said = match opt_text(s.state, "title") {
     Some(t) if t != "" => t
-    _ => if title != "" { title } else { tr("android-misc.screen.title") }
+    _ => if title != "" { title } else { @sf.t("android-misc.screen.title") }
   }
   let line = if s.open_now() && !s.can_take_over() { text(s.state, "line") } else { "" }
   let ink = @sf.page_viewer_ink()
-  let back = @sf.viewer_bar(c, "screen-bar", tr("common.back"), said, line, false, ink, fn() {
+  let back = @sf.viewer_bar(c, "screen-bar", @sf.t("common.back"), said, line, false, ink, fn() {
     if s.can_take_over() {
       take_over(c, s, in_bar=true)
       return
@@ -619,8 +637,8 @@ fn screen_viewer_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, 
 /// 只看 / 控制 (Parts.kt Seg, 32 high, its corner 16): the choice, as tapped.
 fn control_seg(c : @ui.Ctx, key : String, controlling : Bool) -> Bool {
   let items = [
-    @kit.item("look", label=tr("android-misc.screen.look")),
-    @kit.item("drive", label=tr("android-misc.screen.drive")),
+    @kit.item("look", label=@sf.t("android-misc.screen.look")),
+    @kit.item("drive", label=@sf.t("android-misc.screen.drive")),
   ]
   let now = @kit.toggle_group(
     c,
@@ -651,7 +669,7 @@ fn control_seg(c : @ui.Ctx, key : String, controlling : Bool) -> Bool {
 /// Pasting the device's clipboard (where the station carries text or pictures), while driving it.
 fn paste_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   if s.pastes() &&
-    round_button(c, "screen-paste", "paste", tr("android-misc.screen.paste"), on=s.pasting) {
+    round_button(c, "screen-paste", "paste", @sf.t("android-misc.screen.paste"), on=s.pasting) {
     paste_asked(c, s, u)
   }
 }
@@ -659,7 +677,7 @@ fn paste_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 ///|
 /// 全屏 (on) or not.
 fn full_button(c : @ui.Ctx, u : ScreenUi) -> Unit {
-  let label = tr(if u.full { "android-misc.screen.unfull" } else { "android-misc.screen.full" })
+  let label = @sf.t(if u.full { "android-misc.screen.unfull" } else { "android-misc.screen.full" })
   if round_button(c, "screen-full", "landscape", label, on=u.full) {
     u.full = !u.full
   }
@@ -669,7 +687,7 @@ fn full_button(c : @ui.Ctx, u : ScreenUi) -> Unit {
 /// Trackpad (on) or direct, as a round button that is on while it is a trackpad.
 fn pad_button(c : @ui.Ctx, s : ScreenSess) -> Unit {
   let on = s.pad(s.src)
-  if round_button(c, "screen-pad", "trackpad", tr("android-misc.screen.trackpad"), on~) {
+  if round_button(c, "screen-pad", "trackpad", @sf.t("android-misc.screen.trackpad"), on~) {
     pad_chosen(c, s, !on)
   }
 }
@@ -679,9 +697,9 @@ fn pad_button(c : @ui.Ctx, s : ScreenSess) -> Unit {
 fn mode_button(c : @ui.Ctx, s : ScreenSess) -> Unit {
   let on = s.controlling()
   let (icon, label) = if on {
-    ("cursor", tr("android-misc.screen.drive"))
+    ("cursor", @sf.t("android-misc.screen.drive"))
   } else {
-    ("eye", tr("android-misc.screen.look"))
+    ("eye", @sf.t("android-misc.screen.look"))
   }
   if round_button(c, "screen-mode-btn", icon, label, on~) {
     control_chosen(c, s, !on)
@@ -690,7 +708,7 @@ fn mode_button(c : @ui.Ctx, s : ScreenSess) -> Unit {
 
 ///|
 fn keyboard_button(c : @ui.Ctx, catcher : String, typing : Bool) -> Unit {
-  if round_button(c, "screen-keyboard", "keyboard", tr("android-misc.screen.keyboard"), on=typing) {
+  if round_button(c, "screen-keyboard", "keyboard", @sf.t("android-misc.screen.keyboard"), on=typing) {
     keyboard_toggled(c, catcher, typing)
   }
 }
@@ -710,9 +728,9 @@ fn full_tools(
   // a round button 4 in from the capsule's edge: its corner 20 + 4
   c.box(style=full_tools_box, fn() {
     let (icon, label) = if u.tools_open {
-      ("close", tr("android-misc.screen.toolsClose"))
+      ("close", @sf.t("android-misc.screen.toolsClose"))
     } else {
-      ("more", tr("android-misc.screen.tools"))
+      ("more", @sf.t("android-misc.screen.tools"))
     }
     if round_button(c, "screen-tools", icon, label, on=u.tools_open) {
       u.tools_open = !u.tools_open
@@ -752,7 +770,7 @@ fn screen_rail(
   let line = text(s.state, "line")
   c.box(fn() {
     c.box(style=rail_box, fn() {
-      if round_button(c, "screen-close", "close", tr("android-misc.screen.close")) {
+      if round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close")) {
         close()
       }
       c.spacer()
@@ -837,14 +855,14 @@ fn screen_row_keys() -> Array[RowKey] {
   [
     k("Esc", "Esc", "Escape", "Escape", 0, "", 0),
     k("Tab", "Tab", "Tab", "Tab", 0, "", 4),
-    k("⌘", tr("android-misc.screen.key.command"), "", "", mod_meta, "", 5),
-    k("⌃", tr("android-misc.screen.key.control"), "", "", mod_ctrl, "", 2),
-    k("⌥", tr("android-misc.screen.key.option"), "", "", mod_alt, "", 1),
-    k("⇧", tr("android-misc.screen.key.shift"), "", "", mod_shift, "", 3),
-    k("", tr("android-misc.screen.key.left"), "ArrowLeft", "ArrowLeft", 0, "arrow-left", 7),
-    k("", tr("android-misc.screen.key.up"), "ArrowUp", "ArrowUp", 0, "arrow-up", 6),
-    k("", tr("android-misc.screen.key.down"), "ArrowDown", "ArrowDown", 0, "arrow-down", 6),
-    k("", tr("android-misc.screen.key.right"), "ArrowRight", "ArrowRight", 0, "arrow-right", 7),
+    k("⌘", @sf.t("android-misc.screen.key.command"), "", "", mod_meta, "", 5),
+    k("⌃", @sf.t("android-misc.screen.key.control"), "", "", mod_ctrl, "", 2),
+    k("⌥", @sf.t("android-misc.screen.key.option"), "", "", mod_alt, "", 1),
+    k("⇧", @sf.t("android-misc.screen.key.shift"), "", "", mod_shift, "", 3),
+    k("", @sf.t("android-misc.screen.key.left"), "ArrowLeft", "ArrowLeft", 0, "arrow-left", 7),
+    k("", @sf.t("android-misc.screen.key.up"), "ArrowUp", "ArrowUp", 0, "arrow-up", 6),
+    k("", @sf.t("android-misc.screen.key.down"), "ArrowDown", "ArrowDown", 0, "arrow-down", 6),
+    k("", @sf.t("android-misc.screen.key.right"), "ArrowRight", "ArrowRight", 0, "arrow-right", 7),
   ]
 }
 
@@ -894,7 +912,7 @@ fn keys_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     let i = c.box(style=row_key_box, selected=turned, id=more, fn() {
       @sf.icon(c, "more", size=key_icon, color=c.color(if turned { Bg } else { Fg })) |> ignore
     })
-    c.semantics(i, Button, id=more, label=tr("common.more"), pressed=turned, actions=[Activate])
+    c.semantics(i, Button, id=more, label=@sf.t("common.more"), pressed=turned, actions=[Activate])
   }
   c.box(style=keys_row_box, fn() {
     if turned {
@@ -937,9 +955,9 @@ fn take_over(c : @ui.Ctx, s : ScreenSess, in_bar? : Bool = false) -> Unit {
     c.box(style=take_over_words_box, fn() {
       c.text(
         if who.is_empty() {
-          tr("android-misc.screen.someoneDrives")
+          @sf.t("android-misc.screen.someoneDrives")
         } else {
-          fill("android-misc.screen.drives", [("who", who.join(tr("web-main.list.separator")))])
+          @sf.t("android-misc.screen.drives", args=[("who", who.join(@sf.t("web-main.list.separator")))])
         },
         style=take_over_words,
       )
@@ -950,12 +968,12 @@ fn take_over(c : @ui.Ctx, s : ScreenSess, in_bar? : Bool = false) -> Unit {
     let id = c.id("screen-take-over")
     // (whole, what says who drives cut short beside it)
     let i = c.box(style=take_over_button, id~, keep=true, fn() {
-      c.text(tr("android-misc.screen.takeOver"), style=take_over_button_words) |> ignore
+      c.text(@sf.t("android-misc.screen.takeOver"), style=take_over_button_words) |> ignore
     })
-    c.semantics(i, Button, id~, label=tr("android-misc.screen.takeOver"), actions=[Activate])
+    c.semantics(i, Button, id~, label=@sf.t("android-misc.screen.takeOver"), actions=[Activate])
     // what it does: their input waits while this person drives
-    let names = if who.is_empty() { tr("web-pages.screen.someone") } else { who.join(tr("web-pages.screen.and")) }
-    @sf.tip(c, "screen-take-over-tip", id, fill("web-pages.screen.takeOverTip", [("names", names)]))
+    let names = if who.is_empty() { @sf.t("web-pages.screen.someone") } else { who.join(@sf.t("web-pages.screen.and")) }
+    @sf.tip(c, "screen-take-over-tip", id, @sf.t("web-pages.screen.takeOverTip", args=[("names", names)]))
     if c.clicked(id) {
       control_chosen(c, s, true)
     }

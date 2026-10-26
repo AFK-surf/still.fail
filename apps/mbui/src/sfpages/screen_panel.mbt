@@ -22,7 +22,7 @@ priv struct Combo {
 /// combosFor): a Mac's for a Mac, else Windows'.
 fn combos_for(os : String) -> Array[Combo] {
   let c = fn(name : String, keys : String, key : String, code : String, mods : Int, icon : String) -> Combo {
-    { name: tr(name), keys, key, code, mods, icon }
+    { name: @sf.t(name), keys, key, code, mods, icon }
   }
   let low = os.to_lower()
   if low.has_prefix("mac") || low.has_prefix("darwin") {
@@ -205,8 +205,8 @@ fn net_panel(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   let h = number(st, "height").to_int()
   let picture = if w > 0 && h > 0 { "\{w}×\{h}" } else { "—" }
   let encoder = match field(video, "hardware") {
-    Some(True) => tr("web-pages.screen.stat.hardware")
-    Some(False) => tr("web-pages.screen.stat.software")
+    Some(True) => @sf.t("web-pages.screen.stat.hardware")
+    Some(False) => @sf.t("web-pages.screen.stat.software")
     _ => "—"
   }
   let loss = match field(net, "loss") {
@@ -217,7 +217,7 @@ fn net_panel(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   c.box(style=net_panel_box, fn() {
     c.box(style=net_head_box, fn() {
       signal_bars(c, level)
-      let words = tr("web-pages.screen.stat.rttHead").replace_all(old="{rtt}", new=or_dash(text(rtt, "text")))
+      let words = @sf.t("web-pages.screen.stat.rttHead").replace_all(old="{rtt}", new=or_dash(text(rtt, "text")))
       c.text(words, style=net_head_words) |> ignore
     })
     |> ignore
@@ -226,7 +226,7 @@ fn net_panel(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     }
     let row = fn(name : String, value : String, level : String) {
       c.box(style=net_row_box, fn() {
-        c.box(style=net_row_name, fn() { c.text(tr(name), style=net_name_words) |> ignore }) |> ignore
+        c.box(style=net_row_name, fn() { c.text(@sf.t(name), style=net_name_words) |> ignore }) |> ignore
         c.text(value, style=net_value_words.then(@ui.text_style(color=level_color(level, Fg)))) |> ignore
       })
       |> ignore
@@ -268,7 +268,7 @@ fn net_panel(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     if @sf.panel_button(
         c,
         "screen-diag",
-        tr(if copied { "web-pages.screen.stat.copied" } else { "web-pages.screen.stat.copy" }),
+        @sf.t(if copied { "web-pages.screen.stat.copied" } else { "web-pages.screen.stat.copy" }),
         tone=Quiet,
       ) {
       @ui.clipboard_set(diagnosis(s, u, net, os).stringify(), label="still.fail")
@@ -334,7 +334,7 @@ let diag_said_ms : Double = 1500.0
 /// 控制中心 as a round button (the bar's, the rail's, the folded tools'): pressed, its panel.
 fn center_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, close : () -> Unit) -> Unit {
   let key = "screen-center"
-  if round_button(c, key, "sliders", tr("web-pages.screen.panel")) || u.asked_panel == "center" {
+  if round_button(c, key, "sliders", @sf.t("web-pages.screen.panel")) || u.asked_panel == "center" {
     center_open(c, s, u, key, close)
   }
 }
@@ -344,14 +344,14 @@ fn center_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, close : () -> Unit) 
 fn center_open(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String, close : () -> Unit) -> Unit {
   u.asked_panel = ""
   let from : @sf.Anchor = Of(c.id(key))
-  @sf.panel(tr("web-pages.screen.panel"), fn(c, done) { center_panel(c, s, u, from, close, done) }, from~, focus=false)
+  @sf.panel(@sf.t("web-pages.screen.panel"), fn(c, done) { center_panel(c, s, u, from, close, done) }, from~, focus=false)
 }
 
 ///|
 /// 控制中心 in the viewer's bar: one of its tools (@sf.viewer_tool, its mark, named on hover); pressed, its panel under it.
 fn center_chip(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, close : () -> Unit) -> Unit {
   let key = "screen-center"
-  if @sf.viewer_tool(c, key, "sliders", tr("web-pages.screen.panel"), @sf.page_viewer_ink()) ||
+  if @sf.viewer_tool(c, key, "sliders", @sf.t("web-pages.screen.panel"), @sf.page_viewer_ink()) ||
     u.asked_panel == "center" {
     center_open(c, s, u, key, close)
   }
@@ -366,7 +366,7 @@ fn net_chip(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     c.box(style=net_mark_tile, fn() { signal_bars(c, text(field(screen_net(s), "rtt"), "level")) }) |> ignore
     c.text(seen_for(u), style=screen_time_words) |> ignore
   })
-  c.semantics(b, Button, id~, label=tr("web-pages.screen.stats"), actions=[Activate])
+  c.semantics(b, Button, id~, label=@sf.t("web-pages.screen.stats"), actions=[Activate])
   if c.clicked(id) || u.asked_panel == "net" {
     u.asked_panel = ""
     net_panel_open(s, u, Of(id))
@@ -406,7 +406,7 @@ fn center_panel(
 ) -> Unit {
   let src = s.src
   if s.driving() {
-    @sf.panel_group(c, label=tr("web-pages.screen.combos"), fn() {
+    @sf.panel_group(c, label=@sf.t("web-pages.screen.combos"), fn() {
       combo_tiles(c, s, combos_for(screen_os(src, s.station)), done)
     })
   }
@@ -415,7 +415,7 @@ fn center_panel(
       let rtt = text(field(screen_net(s), "rtt"), "text")
       if @sf.menu_item(
           c,
-          tr("web-pages.screen.stats"),
+          @sf.t("web-pages.screen.stats"),
           key="screen-center-net",
           panel=true,
           icon="chart",
@@ -428,13 +428,13 @@ fn center_panel(
     })
   }
   let quality = screen_quality(src)
-  @sf.panel_group(c, label=tr("web-pages.screen.quality"), fn() {
+  @sf.panel_group(c, label=@sf.t("web-pages.screen.quality"), fn() {
     let now = screen_qualities.search_by(fn(q) { q.0 == quality }).unwrap_or(0)
     c.box(style=center_choice, fn() {
       let chosen = @sf.segmented(
         c,
         "screen-quality",
-        screen_qualities.map(fn(q) { tr("web-pages.screen.quality." + q.1) }),
+        screen_qualities.map(fn(q) { @sf.t("web-pages.screen.quality." + q.1) }),
         now,
       )
       if chosen != now {
@@ -442,11 +442,11 @@ fn center_panel(
       }
     })
     |> ignore
-    @sf.panel_note(c, tr("web-pages.screen.qualityHint." + screen_qualities[now].1))
+    @sf.panel_note(c, @sf.t("web-pages.screen.qualityHint." + screen_qualities[now].1))
   })
   match s.scale() {
     Some((percent, recommended, steps)) =>
-      @sf.panel_group(c, label=tr("web-pages.screen.scale"), fn() {
+      @sf.panel_group(c, label=@sf.t("web-pages.screen.scale"), fn() {
         let now = steps.search(percent).unwrap_or(-1)
         c.box(style=center_choice, fn() {
           let chosen = @sf.segmented(c, "screen-scale", steps.map(fn(p) { "\{p}%" }), now)
@@ -459,25 +459,25 @@ fn center_panel(
           }
         })
         |> ignore
-        @sf.panel_note(c, fill("web-pages.screen.scaleRecommended", [("percent", "\{recommended}")]))
+        @sf.panel_note(c, @sf.t("web-pages.screen.scaleRecommended", args=[("percent", "\{recommended}")]))
       })
     None => ()
   }
   @sf.panel_group(c, fn() {
     if s.drops_to() is Some(_) &&
-      @sf.menu_item(c, tr("android-misc.screen.sendFile"), key="screen-center-send", panel=true, icon="upload") {
+      @sf.menu_item(c, @sf.t("android-misc.screen.sendFile"), key="screen-center-send", panel=true, icon="upload") {
       done()
       send_asked(c, s, u)
     }
     if s.open_now() {
       let full = full_now(u)
-      let label = tr(if full { "android-misc.screen.unfull" } else { "android-misc.screen.full" })
+      let label = @sf.t(if full { "android-misc.screen.unfull" } else { "android-misc.screen.full" })
       if @sf.menu_item(c, label, key="screen-center-full", panel=true, icon=if full { "shrink" } else { "expand" }) {
         full_asked(c, u)
         done()
       }
     }
-    if @sf.menu_item(c, tr("web-pages.screen.leave"), key="screen-leave", panel=true, icon="close", danger=true) {
+    if @sf.menu_item(c, @sf.t("web-pages.screen.leave"), key="screen-leave", panel=true, icon="close", danger=true) {
       done()
       close()
     }
@@ -526,6 +526,6 @@ fn prefs_chosen(c : @ui.Ctx, s : ScreenSess, name : String, value : String) -> U
   c.tell("screen-prefs/" + s.view + "/" + name + "/" + value, fn() {
     let p : Map[String, Json] = {}
     p[name] = v
-    (s.src.call)("prefs.set", Json::object(p), screen_act(c, tr("web-pages.screen.panel")))
+    (s.src.call)("prefs.set", Json::object(p), screen_act(c, @sf.t("web-pages.screen.panel")))
   })
 }
