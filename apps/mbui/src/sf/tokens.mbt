@@ -1210,6 +1210,25 @@ pub fn mix(a : Int64, share : Double, b : Int64) -> Int64 {
   (ch(24) << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0)
 }
 
+///|
+/// `share` of `a` and the rest of `b` as each is seen over anything: their colours weighed by how opaque each is
+/// (mixed premultiplied), so that what is under the mix shows through as much as between theirs; a ground going from a
+/// see-through colour to a solid one passes through no darker one.
+pub fn mix_seen(a : Int64, share : Double, b : Int64) -> Int64 {
+  let aa = (a & 0xFFL).to_double() / 255.0
+  let ba = (b & 0xFFL).to_double() / 255.0
+  let opacity = aa * share + ba * (1.0 - share)
+  if opacity <= 0.0 {
+    return 0L
+  }
+  let ch = fn(shift : Int) -> Int64 {
+    let x = ((a >> shift) & 0xFFL).to_double() * aa
+    let y = ((b >> shift) & 0xFFL).to_double() * ba
+    ((x * share + y * (1.0 - share)) / opacity).round().to_int64()
+  }
+  (ch(24) << 24) | (ch(16) << 16) | (ch(8) << 8) | (opacity * 255.0).round().to_int64()
+}
+
 // ---------------------------------------------------------------------------
 // mbui's tokens (its docs/style.md): what still.fail's styles (styles.mbt) say by name. The numbers are here and
 // nowhere else; a value off mbui's scale is one of the few `Exact`s below.

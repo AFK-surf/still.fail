@@ -1,6 +1,6 @@
 # The wide frame: a passage of a message picked and quoted, what is said about it typed in its line, sent with no other
-# words: its card flies from the composer to its place in the message, its words setting out from where they were
-# (sfpages composer.mbt flying_quotes). MBUI_WIN=1280x800.
+# words: its card flies from the composer to its place in the message, its words setting out from where they were, its
+# ground from the composer's card's width and colour to its own (sfpages composer.mbt flying_quotes). MBUI_WIN=1280x800.
 timeout 20000
 until 发消息
 wait 600

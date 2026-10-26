@@ -87,13 +87,13 @@ test "pasted words' card (PendingFile's pasted card): what they begin with and h
 
 ///|
 test "a quote's card (QuoteCard): whose and the passage, what is said under it; its source pressed to jump, its ✕ to let it go" {
-  let done : Ref[QuoteCardDone] = Ref({ jumped: false, removed: false })
+  let done : Ref[QuoteCardDone] = Ref({ jumped: false, removed: false, card: -1 })
   let t = @ui.Tester::new(
     fn(c) {
       let _ = begin(c)
       c.box(style=@ui.css("w=Full h=Full p=S4"), fn() {
         let d = quote_card(c, "q1", "Claude", "其余的行按估计的高度占位", comment="量过再记", jump=true, remove=true)
-        done.val = { jumped: done.val.jumped || d.jumped, removed: done.val.removed || d.removed }
+        done.val = { jumped: done.val.jumped || d.jumped, removed: done.val.removed || d.removed, card: d.card }
       })
       |> ignore
     },

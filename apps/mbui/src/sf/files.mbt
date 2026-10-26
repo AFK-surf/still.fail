@@ -568,10 +568,12 @@ let name_row : @ui.Style = @ui.css("row w=Full")
 let name_stem : @ui.Style = @ui.css("w=Hug")
 
 ///|
-/// What was done with a quote's card this frame: its source pressed (`jump`), its ✕ pressed.
+/// What was done with a quote's card this frame: its source pressed (`jump`), its ✕ pressed; and the card's own box
+/// (its ground: what a quote sent flies from and to, sfbase's flight.mbt).
 pub(all) struct QuoteCardDone {
   jumped : Bool
   removed : Bool
+  card : Int
 }
 
 ///|
@@ -605,8 +607,9 @@ pub fn quote_card(
   let hot = jump && c.lit(source)
   // (waiting in the composer, its ✕ hung on its corner as everything's there: with_corner_remove)
   let hung = composer && remove
+  let node = Ref::new(-1)
   let card = fn() {
-    c.box(style=if composer { quote_box_composer.then(composer_card()) } else { quote_box }, fn() {
+    node.val = c.box(style=if composer { quote_box_composer.then(composer_card()) } else { quote_box }, fn() {
     // (a pin in its top corner: there the ladder's inset from both its edges, concentric with it)
     let source_look = match (composer, pin != "") {
       (true, false) => if hung { quote_source_hung } else { quote_source_composer }
@@ -642,7 +645,10 @@ pub fn quote_card(
       Some(f) => c.box(style=quote_comment_composer, f) |> ignore
       None =>
         if comment != "" {
-          c.box(style=quote_comment, fn() { c.text(comment, style=quote_said) |> ignore }) |> ignore
+          c.box(style=if composer { quote_comment_composer } else { quote_comment }, fn() {
+            c.text(comment, style=quote_said) |> ignore
+          })
+          |> ignore
         }
     }
     if remove && !hung {
@@ -655,7 +661,6 @@ pub fn quote_card(
       |> ignore
     }
   })
-  |> ignore
   }
   let removed = if hung {
     with_corner_remove(c, key, t("web-main.quote.remove"), composer_inner, card)
@@ -663,7 +668,7 @@ pub fn quote_card(
     card()
     remove && c.clicked(x)
   }
-  { jumped: jump && c.clicked(source), removed }
+  { jumped: jump && c.clicked(source), removed, card: node.val }
 }
 
 ///|

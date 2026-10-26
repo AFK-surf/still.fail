@@ -1,0 +1,15 @@
+# A phone: a passage of a message held and quoted, what is said about it typed in its line, sent with no other words:
+# its card flies from the composer to its place in the message, its ground from the composer's card's width and
+# colour to its own (sfpages composer.mbt flying_quotes, sfbase's flight.mbt flight_quote_landing).
+timeout 20000
+until 推送截图前要先登录 gh。
+wait 600
+hold 700 推送截图前要先登录 gh。
+wait 400
+tap 引用
+wait 600
+type 这一步写进文档
+wait 600
+tap icon:arrow-up
+wait 1500
+exit

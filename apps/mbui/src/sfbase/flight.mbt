@@ -22,10 +22,11 @@
 // as the words go: a picture's box growing from the tile's to the picture's own in the message (a letterboxed one's
 // share of its box), the picture cropped to it as it is (opening out from the tile's square crop), on no ground and
 // with a file's corner, as the tile and the message draw it; any other file's card carried there, from the tile's size
-// to its own. The quotes sent with them go from their cards in the composer as a card does, each its card in the
-// message carried there as it is, from where its words were (its card in the composer and its own differ in width).
-// Sent with no words, the row comes in where it is, its files and quotes flying into it, and the composer's hint
-// stays.
+// to its own. The quotes sent with them go from their cards in the composer, each its card in the message: its words
+// from where they were to where it has them, its ground from the composer's card to its own (its edges across and
+// its colour, its top and bottom up, on the words' way: the composer's card is as wide as the composer, its own as
+// wide as it needs), drawn where its card was, as the composer drew it, until it sets off. Sent with no words, the
+// row comes in where it is, its files and quotes flying into it, and the composer's hint stays.
 //
 // A new chat's first words are carried (ChatHost.kt Flight.carried, web madeChat.ts): drawn where they were typed from
 // the frame they are sent, over the new chat's composer and then its chat's (newchat.mbt makes the chat, the page
@@ -79,14 +80,14 @@ pub(all) struct SendFlight {
 /// A file sent with the words (ChatHost.kt FlyingFile): the file it is in its message (file_key: one put up from here
 /// its upload, from before it is up on; any other the station's path), its tile in the composer (x, y, w, h in the
 /// window), a picture's key ("" a card), and the tile as the composer drew it (what is drawn where it was while the row
-/// is not in the list). A quote sent with them flies as a card does (quote_key: its place among the message's quotes),
-/// from where its card in the message sets out (its words where they were in its card in the composer), drawn there as
-/// its message draws it.
+/// is not in the list). A quote sent with them (quote_key: its place among the message's quotes) flies from its card in
+/// the composer, `ground` that card's colour (0 a file's).
 pub(all) struct FlyingFile {
   key : String
   from : (Double, Double, Double, Double)
   picture : String
   face : () -> Unit
+  ground : Int64
 }
 
 ///|
@@ -95,8 +96,11 @@ pub let send_flight : Ref[SendFlight?] = { val: None }
 ///|
 /// What flies to the `i`th quote of the message words are sent to (as file_key says a file: "upload:<id>").
 pub fn quote_key(i : Int) -> String {
-  "quote:\{i}"
+  quote_prefix + i.to_string()
 }
+
+///|
+let quote_prefix : String = "quote:"
 
 ///|
 /// Where in its box in the message each file flying there lands (flight_landing's `share`, by its landing's key): the
@@ -754,11 +758,13 @@ pub fn flight_bubble(c : @ui.Ctx, f : SendFlight, i : Int) -> Unit {
 }
 
 ///|
-/// Whether the composer's hint is away: words sent are over it, not yet out of it.
+/// Whether the composer's hint is away: words sent are over it, or quotes (their cards as wide as it, the field coming
+/// up under them as it comes down), not yet out of it.
 pub fn flight_hint_away(c : @ui.Ctx, chat : String) -> Bool {
   match flight_of(chat) {
-    // (only words pass over it: files alone leave it where it is)
-    Some(f) if f.text != "" => !f.placed || flight_up_of(c, f) < 0.5
+    // (files alone leave it where it is)
+    Some(f) if f.text != "" || f.files.iter().any(fn(ff) { ff.key.has_prefix(quote_prefix) }) =>
+      !f.placed || flight_up_of(c, f) < 0.5
     _ => false
   }
 }
@@ -837,15 +843,8 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
 /// A file of the message words were sent to (node `i`, the box it is laid out in; the file it is, `key`: file_key),
 /// while a file flies there (ChatHost.kt landingFile): where it is, kept for the picture flying to it (drawn there by
 /// flight_files, not here), and the `share` of the box its picture takes (a letterboxed one's, centred); a card,
-/// carried from its tile on the words' way, grown from the tile's size to its own (a quote's, not `grow`, as it is).
-pub fn flight_landing(
-  c : @ui.Ctx,
-  f : SendFlight,
-  i : Int,
-  key : String,
-  share? : (Double, Double) = (1.0, 1.0),
-  grow? : Bool = true,
-) -> Unit {
+/// carried from its tile on the words' way, grown from the tile's size to its own.
+pub fn flight_landing(c : @ui.Ctx, f : SendFlight, i : Int, key : String, share? : (Double, Double) = (1.0, 1.0)) -> Unit {
   let ff = match flight_file_of(f, key) {
     Some(ff) => ff
     None => return
@@ -861,10 +860,56 @@ pub fn flight_landing(
   let up = flight_up_of(c, f)
   // from the tile's size: by the larger of its two shares of its own (Compose's crop to the box)
   let s0 = match @motion.measured_rect(c, "flight/to/" + key) {
-    Some((_, _, ew, eh)) if grow && ew > 0.0 && eh > 0.0 => dmax(fw / ew, fh / eh)
+    Some((_, _, ew, eh)) if ew > 0.0 && eh > 0.0 => dmax(fw / ew, fh / eh)
     _ => 1.0
   }
   // (in a new chat's list coming up with the words, drawn below its place by as much: from its tile all the same,
   // straight, as its words go: flight_carry_shift)
   @motion.fly(c, i, fx, fy - flight_carry_rise(c, f), scale=s0, px=flight_across_of(c, f), py=up, ps=up)
+}
+
+///|
+/// A quote's card in the message words were sent to (node `card`, its own box: quote_key `key`), while its card in the
+/// composer flies there: what it holds from where it was there (its words `shift` further in there than here:
+/// @sf.quote_sent_shift) to where it is laid out, across and up on the words' way, over everything; its ground from
+/// the composer's card to its own, its edges across and its top and bottom up, its colour from that card's as it goes
+/// up (as seen over anything: the composer's may be see-through). Where each is this frame laid out (@motion.placed), not a frame behind; its first frame not seen here (drawn
+/// where it was by flight_files).
+pub fn flight_quote_landing(c : @ui.Ctx, f : SendFlight, card : Int, key : String, shift : (Double, Double)) -> Unit {
+  let ff = match flight_file_of(f, key) {
+    Some(ff) => ff
+    None => return
+  }
+  @motion.measure(c, card, "flight/to/" + key)
+  if !f.placed || f.placed_frame == c.frame_number() {
+    c.look(card, @ui.look(alpha=0.0))
+    return
+  }
+  let (fx, fw) = (ff.from.0, ff.from.2)
+  // (in a new chat's list coming up with the words, drawn below its place by as much: from its card all the same,
+  // straight: flight_carry_shift)
+  let fy = ff.from.1 - flight_carry_rise(c, f)
+  let fh = ff.from.3
+  let (sx, sy) = shift
+  let across = flight_across_of(c, f)
+  let up = flight_up_of(c, f)
+  let own = c.node_bg(card)
+  let from = if ff.ground != 0L { ff.ground } else { own }
+  c.put_over(card, z=2)
+  @motion.placed(c, card, fn() {
+    let (x, y, w, h) = c.node_rect(card)
+    let dx = (fx + sx - x) * (1.0 - across)
+    let dy = (fy + sy - y) * (1.0 - up)
+    // (its ground drawn before its look, which moves it too)
+    c.draw_ground(
+      card,
+      fx + (x - fx) * across - dx,
+      fy + (y - fy) * up - dy,
+      fw + (w - fw) * across,
+      fh + (h - fh) * up,
+      c.node_radii(card),
+      bg=@sf.mix_seen(from, 1.0 - up, own),
+    )
+    @ui.look(dx~, dy~)
+  })
 }
