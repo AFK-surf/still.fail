@@ -351,7 +351,7 @@ pub fn workspace_of(station : String) -> String {
 
 ///|
 /// The station this machine is (thisMachine.ts: "<workspace>/<station>"), as its host says (its station's cloud.json),
-/// read once; "" where it is none.
+/// read once it is one; "" where it is none, asked again (one 添加这台 Mac adds, known without the app opened again).
 pub fn this_machine() -> String {
   match machine_here.val {
     Some(h) => h
@@ -363,7 +363,9 @@ pub fn this_machine() -> String {
       } else {
         ""
       }
-      machine_here.val = Some(h)
+      if h != "" {
+        machine_here.val = Some(h)
+      }
       h
     }
   }
@@ -371,5 +373,5 @@ pub fn this_machine() -> String {
 
 
 ///|
-/// The station this machine is, as read once ("" none: this_machine).
+/// The station this machine is, as read once it is one (this_machine).
 pub let machine_here : Ref[String?] = Ref(None)

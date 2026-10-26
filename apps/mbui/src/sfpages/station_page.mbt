@@ -82,6 +82,20 @@ fn station_head(c : @ui.Ctx, core : Core, here : Here, s : Json?, manager : Bool
   let dot = if online { "online" } else { "offline" }
   let problems = items(s, "problems")
   let silent = problems.iter().any(fn(p) { text(Some(p), "key") == "silent" })
+  // this machine's, not running here: started from here (本机 Station's 启动), read again as it starts
+  let stopped = local_stopped(address)
+  if stopped is Some(_) {
+    ignore(c.every(@settings.local_read_ms))
+  }
+  let warnings = problems.map(fn(p) { (text(Some(p), "text"), text(Some(p), "level") == "red") })
+  match local_failed_words(stopped) {
+    "" => ()
+    words => warnings.push((words, true))
+  }
+  let (state_text, state_busy) = match stopped {
+    Some(_) => (local_stopped_words(stopped), text(stopped, "doing") != "")
+    None => (text(s, "stateText"), flag(s, "stateBusy"))
+  }
   let facts = [text(field(s, "host"), "identity")]
   if text(s, "version") != "" {
     facts.push("Station " + text(s, "version"))
@@ -133,20 +147,22 @@ fn station_head(c : @ui.Ctx, core : Core, here : Here, s : Json?, manager : Bool
     rename?=if manager { Some(fn() { station_rename(core, here, s) }) } else { None },
     rename_label=@sf.t("web-pages.settings.stations.rename"),
     lines=[join(facts, " · ")],
-    // its dot before what it says of how it is (reconnecting …), else before what the machine is
-    dot=if text(s, "stateText") == "" { dot } else { "" },
-    state?=if text(s, "stateText") != "" {
+    // its dot before what it says of how it is (reconnecting …; this machine's, how it stands here: 已停止, 正在更新),
+    // else before what the machine is
+    dot=if state_text == "" { dot } else { "" },
+    state?=if state_text != "" {
       Some(fn() {
-        @sf.status_dot(c, dot)
-        c.text(text(s, "stateText"), style=if flag(s, "stateBusy") { st_fact_busy } else { st_fact }) |> ignore
+        @sf.status_dot(c, if state_busy && stopped is Some(_) { "busy" } else { dot })
+        c.text(state_text, style=if state_busy { st_fact_busy } else { st_fact }) |> ignore
       })
     } else {
       None
     },
-    warnings=problems.map(fn(p) { (text(Some(p), "text"), text(Some(p), "level") == "red") }),
+    warnings~,
     actions=fn() {
-      if !online || silent {
-        station_retry(c, core, s)
+      match stopped {
+        Some(_) => station_start(c, core, stopped, address)
+        None => if !online || silent { station_retry(c, core, s) }
       }
       if manager {
         @settings.doing_mark(
@@ -204,6 +220,23 @@ fn station_retry(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
       "client.wake",
       obj([("away", Json::number(0.0)), ("network", Json::boolean(true)), ("retry", Json::boolean(true))]),
     )
+  }
+}
+
+///|
+/// Its 启动 where it is this machine's, not running here (local_stopped): no try at reaching it again, nothing there
+/// to reach; while it is being started, installed or updated, busy.
+fn station_start(c : @ui.Ctx, core : Core, local : Json?, address : String) -> Unit {
+  let working = text(local, "doing") != ""
+  if @sf.button(
+      c,
+      @sf.t("web-pages.localStation.start"),
+      key="station-start/" + address,
+      tone=Ghost,
+      busy=working,
+      disabled=working,
+    ) {
+    local_start(core, local)
   }
 }
 

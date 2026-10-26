@@ -60,12 +60,7 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
   let running = text(s, "runner") != "none"
   let service = field(s, "service") is Some(_)
   let workspace = field(s, "workspace")
-  // started by its service; with none (still.fail's desktop app ran it from its own bundle, gone with that app; its
-  // service taken away), where the app looks after the station here, by the installer without a token, which makes it
-  // one as it is and starts it (更新到最新版's, local_station_carry_on's): a station in a workspace, the installer's
-  // `update` refusing one in none
-  let startable = service ||
-    (text(workspace, "id") != "" && @settings.local_station_managed())
+  let startable = local_startable(s)
   let name = match text(workspace, "stationName") {
     "" => @sf.t(if pc { "web-pages.localStation.thisPc" } else { "web-pages.localStation.thisMac" })
     n => n
@@ -94,10 +89,10 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
     @sf.t(if flag(workspace, "removed") { "web-pages.localStation.removed" } else { "web-pages.localStation.inWorkspace" }, args=[("workspace", ws)])
   }
   let act = fn(a : String) {
-    if a == "update" || (a == "start" && !service) {
-      (core.local_install)(false)
-    } else {
-      @ui.local_station_act(a)
+    match a {
+      "update" => (core.local_install)(false)
+      "start" => local_start(core, s)
+      _ => @ui.local_station_act(a)
     }
   }
   c.box(style=ls_card, fn() {
@@ -221,14 +216,69 @@ fn local_progress(c : @ui.Ctx, s : Json?, doing : String) -> Unit {
 ///|
 /// What went wrong with the last act (warn: red).
 fn local_failed(c : @ui.Ctx, s : Json?) -> Unit {
-  let words = match text(s, "failed") {
-    "" => return
+  match local_failed_words(s) {
+    "" => ()
+    words => c.text(words, style=ls_warn) |> ignore
+  }
+}
+
+///|
+/// What went wrong with the last act, in words ("" nothing).
+fn local_failed_words(s : Json?) -> String {
+  match text(s, "failed") {
     "busy" => @sf.t("desktop.local.busy")
     "byHand" => @sf.t("desktop.local.byHand")
     "noService" => @sf.t("desktop.local.noService")
     e => e
   }
-  c.text(words, style=ls_warn) |> ignore
+}
+
+///|
+/// Whether the station here can be started from here: by its service; with none (still.fail's desktop app ran it from
+/// its own bundle, gone with that app; its service taken away), where the app looks after the station here, by the
+/// installer without a token, which makes it one as it is and starts it (更新到最新版's, local_station_carry_on's): a
+/// station in a workspace, the installer's `update` refusing one in none.
+fn local_startable(s : Json?) -> Bool {
+  field(s, "service") is Some(_) ||
+  (text(field(s, "workspace"), "id") != "" && @settings.local_station_managed())
+}
+
+///|
+/// 启动 the station here (local_startable): its service started, else the installer without a token.
+fn local_start(core : Core, s : Json?) -> Unit {
+  if field(s, "service") is Some(_) {
+    @ui.local_station_act("start")
+  } else {
+    (core.local_install)(false)
+  }
+}
+
+///|
+/// The station here as its host says it, where it is the station at `address` (the page of one in a workspace, the
+/// stations' row) and is not running, but can be started from here (stopped, or being started, installed or updated):
+/// 启动 offered for it there, not a try at reaching it again. None for any other.
+pub fn local_stopped(address : String) -> Json? {
+  if address == "" || address != this_machine() {
+    return None
+  }
+  let s = match @ui.local_station() {
+    "" => return None
+    j => try Some(@json.parse(j)) catch { _ => return None }
+  }
+  if text(s, "runner") == "none" && local_startable(s) {
+    s
+  } else {
+    None
+  }
+}
+
+///|
+/// How the station here stands where it is not running (local_stopped): what is being done to it, else 已停止.
+pub fn local_stopped_words(s : Json?) -> String {
+  match text(s, "doing") {
+    "" => @sf.t("web-pages.localStation.stopped")
+    doing => @sf.t("web-pages.localStation.doing." + doing)
+  }
 }
 
 ///|
