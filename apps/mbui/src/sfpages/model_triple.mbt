@@ -32,14 +32,9 @@ fn triple_reset() -> Unit {
 }
 
 ///|
-/// What is at a row's end (its check, what goes with it): the rest of the row after its words, at its end; or as wide
-/// as what it holds where the words take the rest (triple_option's body_grows).
+/// What is at a row's end (its check, what goes with it): the rest of the row after its words, at its end.
 // kept across runs: a value (no field of it changes)
 let triple_end : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1_5, align=ACenter, justify=JEnd)
-
-///|
-// kept across runs: a value (no field of it changes)
-let triple_end_held : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 /// An effort as it is said (low → 低); one the words do not know, as it is spelled, its first letter up.
@@ -121,6 +116,8 @@ pub fn model_triple(
       fn(c, _) { triple_panel(c, src, station, of) },
       from=Of(id),
       w=triple_panel_w,
+      // (as wide as its columns' words, no wider: 2026-10-26 用户「没啥内容也这么宽感觉会很奇怪」)
+      fits=true,
       foot=fn(c, close) { triple_foot(c, src, station, of, saved, close) },
       gone=fn() { triple.open = "" },
       focus=false,
@@ -314,6 +311,16 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Uni
     pick_draft(src, station, of, { "fast": fv })
   }
   let has_rest = runs_on.length() > 0 || all_efforts.length() > 0 || fast
+  // each column's words as wide as the widest of them picked (the models' of all of them, whatever the filter leaves):
+  // the panel, as wide as what it holds, as wide whichever is picked and whatever is typed (as a segmented choice's)
+  let names_w = options.fold(init=0.0, fn(m, o) {
+    let o = Some(o)
+    dmax(dmax(m, c.words_across(text(o, "name"), triple_row_picked)), c.words_across(text(field(o, "spent"), "text"), triple_note))
+  }).ceil()
+  let widest = fn(said : Array[(String, String)]) {
+    said.fold(init=0.0, fn(m, s) { dmax(m, c.words_across(s.1, triple_picked)) }).ceil()
+  }
+  let (runs_w, efforts_w, speeds_w) = (widest(runs_on), widest(all_efforts), widest(speeds))
   // the models and, beside them, the runtimes and how hard it thinks (and how fast) as columns of their own, where the
   // panel has the room for all of their words (beside what opened it, as the web's: nothing is said of them twice);
   // where it has not (a phone's sheet), those columns leave the row whole (their own row's `drop`, read back) and are
@@ -331,7 +338,7 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Uni
             triple_column_head(c, s.0)
           }
           for o in s.1 {
-            triple_model_row(c, src, station, of, v, Some(o))
+            triple_model_row(c, src, station, of, v, Some(o), names_w)
           }
         }
         if listed.length() == 0 {
@@ -353,7 +360,7 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Uni
               let on = text(draft, "runtime") == r
               if triple_option(c, "triple/runtime/" + r, words, on, fn() {
                   @sf.maker_mark(c, "", r, 14.0) |> ignore
-                  c.text(words, style=if on { triple_picked } else { triple_words }) |> ignore
+                  triple_said(c, words, on, runs_w)
                 }) {
                 pick_runtime(r)
               }
@@ -371,9 +378,7 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Uni
               for o in all_efforts {
                 let (e, words) = o
                 let on = text(draft, "effort") == e
-                if triple_option(c, "triple/effort/" + e, words, on, fn() {
-                    c.text(words, style=if on { triple_picked } else { triple_words }) |> ignore
-                  }) {
+                if triple_option(c, "triple/effort/" + e, words, on, fn() { triple_said(c, words, on, efforts_w) }) {
                   pick_effort(e)
                 }
               }
@@ -385,9 +390,7 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Uni
                 let on = speed_now == f
                 // (Fast says what it costs on hover: ModelTriple.tsx's fastNote)
                 let tip = if f == "fast" { @sf.t("web-main.model.fastNote") } else { "" }
-                if triple_option(c, "triple/fast/" + f, words, on, tip~, fn() {
-                    c.text(words, style=if on { triple_picked } else { triple_words }) |> ignore
-                  }) {
+                if triple_option(c, "triple/fast/" + f, words, on, tip~, fn() { triple_said(c, words, on, speeds_w) }) {
                   pick_speed(f)
                 }
               }
@@ -527,8 +530,17 @@ fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, saved :
 }
 
 ///|
-/// A model's row: its maker's mark, its name (what it has spent under it), the station it comes from.
-fn triple_model_row(c : @ui.Ctx, src : Source, station : String, of : String, v : Json?, o : Json?) -> Unit {
+/// A model's row: its maker's mark, its name (what it has spent under it) `names_w` wide (the widest of the models'),
+/// the station it comes from at its end.
+fn triple_model_row(
+  c : @ui.Ctx,
+  src : Source,
+  station : String,
+  of : String,
+  v : Json?,
+  o : Json?,
+  names_w : Double,
+) -> Unit {
   let t = @sf.theme()
   let model = text(o, "model")
   let picked = text(v, "option") == model
@@ -538,11 +550,26 @@ fn triple_model_row(c : @ui.Ctx, src : Source, station : String, of : String, v 
   }
   // (its ids, a line each, over it while it is pointed at: ModelTriple.tsx's tip)
   let ids = items(o, "ids").filter_map(fn(i) { if i is String(s) { Some(s) } else { None } }).join("\n")
-  if triple_option(c, "triple/model/" + model, text(o, "name"), picked, body_grows=true, tip=ids, fn() {
+  let from_station = match field(o, "fromStation") {
+    Some(Object(_)) as fs =>
+      Some(fn() {
+        if text(fs, "icon") != "" || text(fs, "emoji") != "" {
+          // (where it comes from, or where it is, said over its mark on hover: runOptionFrom's title)
+          let from = c.id("triple/from/" + model)
+          c.box(id=from, taps=false, points=true, fn() { @sf.station_mark(c, text(fs, "emoji"), text(fs, "icon"), 14.0, t.p.muted) })
+          |> ignore
+          @sf.tip(c, "triple/from-tip/" + model, from, text(o, "fromText"))
+        } else {
+          c.text(text(fs, "name"), style=triple_note_cut) |> ignore
+        }
+      })
+    _ => None
+  }
+  if triple_option(c, "triple/model/" + model, text(o, "name"), picked, trail?=from_station, tip=ids, fn() {
       @sf.maker_mark(c, text(field(o, "maker"), "id"), runs, 14.0) |> ignore
-      c.box(style=triple_name_column, fn() {
-        // (all of its name in the room its column leaves it, on a second line where one is not enough: what goes with
-        // the model picked beside the models takes the room its words need first)
+      // (all of its name in the room its column leaves it, on a second line where one is not enough: what goes with
+      // the model picked beside the models takes the room its words need first)
+      c.box(style=triple_name_column.then(@ui.style(w=Fixed(names_w))), fn() {
         c.text(text(o, "name"), style=if picked { triple_row_picked } else { triple_row_name }) |> ignore
         match text(field(o, "spent"), "text") {
           "" => ()
@@ -550,19 +577,6 @@ fn triple_model_row(c : @ui.Ctx, src : Source, station : String, of : String, v 
         }
       })
       |> ignore
-      match field(o, "fromStation") {
-        Some(Object(_)) as fs =>
-          if text(fs, "icon") != "" || text(fs, "emoji") != "" {
-            // (where it comes from, or where it is, said over its mark on hover: runOptionFrom's title)
-            let from = c.id("triple/from/" + model)
-            c.box(id=from, taps=false, points=true, fn() { @sf.station_mark(c, text(fs, "emoji"), text(fs, "icon"), 14.0, t.p.muted) })
-            |> ignore
-            @sf.tip(c, "triple/from-tip/" + model, from, text(o, "fromText"))
-          } else {
-            c.text(text(fs, "name"), style=triple_note_cut) |> ignore
-          }
-        _ => ()
-      }
     }) {
     pick_draft(src, station, of, { "model": Json::string(model) })
   }
@@ -574,6 +588,13 @@ fn triple_model_row(c : @ui.Ctx, src : Source, station : String, of : String, v 
 fn triple_line_before(c : @ui.Ctx) -> Unit {
   // (down to the line over the panel's foot, meeting it, past the room left under the columns)
   c.box(style=triple_rule_side, left=-triple_between_rule, top=0.0, bottom=-@sf.panel_rule_over(), fn() {  }) |> ignore
+}
+
+///|
+/// An option's words (`on`: picked) `w` wide, the widest of its column's picked: the column as wide whichever is.
+fn triple_said(c : @ui.Ctx, words : String, on : Bool, w : Double) -> Unit {
+  c.box(style=@ui.style(w=Fixed(w)), fn() { c.text(words, style=if on { triple_picked } else { triple_words }) |> ignore })
+  |> ignore
 }
 
 ///|
@@ -595,9 +616,8 @@ fn triple_column_head(c : @ui.Ctx, words : String) -> Unit {
 
 ///|
 /// A row of a column (runPickerOption): as high as the screen's picker rows at least (Theme::rows pick), 4 by 10 in, its ground under the pointer and while picked,
-/// `trail` (a button of its own) at its end, a check after it while picked (its room kept while not, as the web's
-/// hidden check); `body_grows`: what `body` lays out takes the room left (a model's name, on two lines where it needs
-/// them); `tip` over it while it is pointed at. True on the frame after a press.
+/// `trail` (a button of its own, the station a model comes from) at its end, a check after it while picked (its room
+/// kept while not, as the web's hidden check); `tip` over it while it is pointed at. True on the frame after a press.
 fn triple_option(
   c : @ui.Ctx,
   key : String,
@@ -605,7 +625,6 @@ fn triple_option(
   on : Bool,
   body : () -> Unit,
   trail? : () -> Unit,
-  body_grows? : Bool = false,
   tip? : String = "",
 ) -> Bool {
   let t = @sf.theme()
@@ -614,9 +633,8 @@ fn triple_option(
   let b = c.box(style=(if on { triple_option_on } else { triple_option_style }).then(@ui.style(min_h=Fixed(t.rows.pick))), id~, keep=true, fn() {
     body()
     // what is at its end, at the end: the room left (no spacer of its own, whose gap took a gap's room from the
-    // words), never less than it needs; the check's room kept while it is not picked; where what it says takes the
-    // room left (`body_grows`), as wide as what it holds
-    c.box(style=if body_grows { triple_end_held } else { triple_end }, keep=true, fn() {
+    // words), never less than it needs; the check's room kept while it is not picked
+    c.box(style=triple_end, keep=true, fn() {
       match trail {
         Some(f) => f()
         None => ()
@@ -902,7 +920,7 @@ let triple_columns : @ui.Style = @ui.style(row=true, w=Full, h=@sf.grow, gap=S2)
 let triple_models : @ui.Style = @ui.style(w=@sf.grow, min_w=Within(triple_models_least))
 
 ///|
-let triple_models_least : Double = 200.0
+pub let triple_models_least : Double = 200.0
 
 ///|
 /// The runtimes, how hard it thinks and how fast beside the models: columns as wide as their words, 8 apart, a line
@@ -971,9 +989,9 @@ let triple_row_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, w=Full, 
 let triple_row_picked : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, w=Full, max_lines=2)
 
 ///|
-/// A model's name and what is under it: the room its row leaves.
+/// A model's name and what is under it: as wide as said, giving way to the room its row leaves where that is less.
 // kept across runs: a value (no field of it changes)
-let triple_name_column : @ui.Style = @ui.style(w=@sf.grow, gap=SPx)
+let triple_name_column : @ui.Style = @ui.css("min_w=SPx gap=SPx")
 
 ///|
 /// Where a row's check is while it is not picked: the row as wide picked or not (its column's words then as wide).
@@ -1052,7 +1070,8 @@ let confirm_foot : @ui.Style = @ui.css("row w=Full pt=S3 gap=S2 align=ACenter ju
 let triple_list_h : Double = 360.0
 
 ///|
-/// The panel's width beside its control (the web's: the models' 200, the runtimes' and the efforts' columns).
+/// The most the panel is wide beside its control, as wide as its columns' words within it (the web's: the models' 200
+/// to 300, the runtimes' and the efforts' columns).
 let triple_panel_w : Double = 520.0
 
 ///|
