@@ -9,7 +9,7 @@
 ///|
 /// A connect's page (ConnectPage, ConnectScreen), by its station and id: a wait until the connects are read (its
 /// station's among them); one gone, that it is not there.
-fn connect_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : PageFrame, station : String, id : String) -> Unit {
+pub fn connect_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : PageFrame, station : String, id : String) -> Unit {
   let connects = (core.topic)("connects", { "scope": str(here.workspace), "mine": Json::boolean(false) })
   let found = items(connects.value, "items").iter().find_first(fn(i) {
     text(Some(i), "station") == station && text(field(Some(i), "connect"), "id") == id
@@ -424,7 +424,7 @@ fn cd_run_section(c : @ui.Ctx, src : Source, core : Core, here : Here, station :
         }
       } else {
         @sf.said_row(c, @sf.t("web-pages.profiles.models"), "", value=fn() {
-          @sfpages.model_triple(c, src, station, "connect:" + id, saved=@sf.t("web-pages.connect.bindSaved"))
+          model_triple(c, src, station, "connect:" + id, saved=@sf.t("web-pages.connect.bindSaved"))
         })
       }
       // how its conversations become sessions, switched in a dialog
@@ -490,7 +490,7 @@ fn cd_link(c : @ui.Ctx, key : String, label : String) -> Bool {
 ///|
 /// How its conversations become sessions, switched (ModeDialog): the ways to choose from, what switching does said
 /// under them (the core's ModeChange), its button the core's words; it closes as it goes, said by a toast.
-fn cd_mode_dialog(core : Core, station : String, item : Json?) -> Unit {
+pub fn cd_mode_dialog(core : Core, station : String, item : Json?) -> Unit {
   let cv = field(item, "connect")
   let id = text(cv, "id")
   let key = "connect-mode/" + (desk_dialogs.val + 1).to_string()
@@ -950,7 +950,7 @@ let cd_card_actions : @ui.Style = @ui.css("row w=Full gap=S2 justify=JEnd")
 /// A card with its buttons last (cd_foot_actions): its foot as far in as makes them concentric with its corners
 /// (@sf.card_foot_in).
 fn cd_footed_card() -> @ui.Style {
-  desk_card.then(@sf.foot_pad(@sf.button_height()))
+  @sf.desk_card.then(@sf.foot_pad(@sf.button_height()))
 }
 
 ///|
@@ -964,7 +964,7 @@ fn cd_foot_actions() -> @ui.Style {
 /// 36 wide, 2 down, the ui's 13 muted; runCardText: as wide as is left, 2 apart, the ui's 13; the feishu app's labels
 /// 84 wide; controls.css.ts cardFoot: the meta's 12 muted).
 // kept across runs: a value (no field of it changes)
-let cd_run_card : @ui.Style = desk_card
+let cd_run_card : @ui.Style = @sf.desk_card
 
 ///|
 // kept across runs: a value (no field of it changes)

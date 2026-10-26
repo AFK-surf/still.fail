@@ -7,7 +7,7 @@
 // 连接). Adding is the new connect's dialog (new_connect.mbt); menus and asking first, the presenters.
 
 ///|
-fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : PageFrame, only : String) -> Unit {
+pub fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : PageFrame, only : String) -> Unit {
   let look = look_of(c)
   let mine = connects_mine.val
   let topic = (core.topic)("connects", { "scope": str(here.workspace), "mine": Json::boolean(mine) })
@@ -78,7 +78,7 @@ fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : Pa
         Wide => {
           c.box(style=cn_quiet_room, fn() { c.text(@sf.t("web-pages.connects.waiting"), style=cn_quiet) |> ignore }) |> ignore
           c.box(style=cn_list_room, fn() {
-            c.box(style=desk_list, fn() {
+            c.box(style=@sf.desk_list, fn() {
               for w in waiting {
                 cn_waiting_app(c, src, core, here, look, w.0, w.1)
               }
@@ -100,7 +100,7 @@ fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : Pa
   }
   if !first {
     if shown.length() == 0 && topic.error is None && (loading || items(wait, "failing").length() > 0) {
-      blocks.push(fn() { gutter(fn() { @sfpages.waiting_rows(c, wait) }) })
+      blocks.push(fn() { gutter(fn() { waiting_rows(c, wait) }) })
     } else if shown.length() == 0 {
       blocks.push(fn() {
         c.box(style=if look == Wide { cn_none_room } else { cn_filter_room_narrow }, fn() {
@@ -116,7 +116,7 @@ fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : Pa
         Wide =>
           blocks.push(fn() {
             c.box(style=cn_list_room, fn() {
-              c.box(style=desk_list, fn() {
+              c.box(style=@sf.desk_list, fn() {
                 for x in shown {
                   let xv = Some(x)
                   let address = text(xv, "station")
@@ -157,7 +157,7 @@ fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : Pa
       }
       // what the list still waits on: a row's shape for a station not read yet, each failure said
       if flag(wait, "reading") || items(wait, "failing").length() > 0 {
-        blocks.push(fn() { gutter(fn() { @sfpages.waiting_rows(c, wait, count=1) }) })
+        blocks.push(fn() { gutter(fn() { waiting_rows(c, wait, count=1) }) })
       }
     }
   }
@@ -205,7 +205,7 @@ pub fn connects_add(src : Source, core : Core, here : Here) -> (() -> Unit)? {
 fn cn_gutter(c : @ui.Ctx, look : Look, body : () -> Unit) -> Unit {
   match look {
     Wide => body()
-    Narrow => c.box(style=narrow_card_room, body) |> ignore
+    Narrow => c.box(style=@sf.pg_card_room, body) |> ignore
   }
 }
 
@@ -402,9 +402,9 @@ fn cn_waiting_app(c : @ui.Ctx, src : Source, core : Core, here : Here, look : Lo
       },
     )
   }
-  c.box(style=if look == Wide { desk_list_row } else { narrow_said_row }, fn() {
+  c.box(style=if look == Wide { desk_list_row } else { @sf.pg_said_row }, fn() {
     c.box(style=cn_kind_box, fn() { @sf.slack_mark(c, cn_waiting_mark) |> ignore }) |> ignore
-    c.box(style=if look == Wide { cn_text } else { narrow_row_words }, keep=true, fn() {
+    c.box(style=if look == Wide { cn_text } else { @sf.pg_row_words }, keep=true, fn() {
       c.box(style=cn_title_line, fn() {
         c.text(text(av, "name"), style=if look == Wide { cn_title } else { narrow_row_title }) |> ignore
         match opt_text(av, "team") {
@@ -482,7 +482,7 @@ let cn_kind_box : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter")
 let cn_filter_room : @ui.Style = @ui.css("w=Full pt=S2 pb=S3 align=AStart")
 
 ///|
-/// The lists at the column's edges, as the head and every other page's (desk_list: a list card).
+/// The lists at the column's edges, as the head and every other page's (@sf.desk_list: a list card).
 // kept across runs: a value (no field of it changes)
 let cn_list_room : @ui.Style = @ui.css("w=Full")
 
@@ -589,3 +589,85 @@ let cn_narrow_sub : @ui.TextStyle = @sf.secondary.then(@sf.one_line)
 ///|
 // kept across runs: a value (no field of it changes)
 let cn_narrow_state : @ui.Style = @ui.css("row gap=S1_25 align=ACenter")
+
+///|
+/// A list's filter on the wide page (components.tsx MineFilter, not compact; History.css.ts mineFilterBtn,
+/// mineFilterWide): a 32 high button 8 in, the field's line round it, 12 over what it filters; its funnel 16 and what
+/// it shows in the muted ink, the words' under the pointer or while open, the accent's on its ground while it narrows;
+/// pressed, its menu of choices under it (all or the viewer's, the shown checked), at its end. `of`: what it filters
+/// (`connects`), as its words name it.
+fn mine_filter(c : @ui.Ctx, key : String, of : String, mine : Bool, set : (Bool) -> Unit) -> Unit {
+  let t = @sf.theme()
+  let id = c.id(key)
+  let open = mine_filter_open.get(key).unwrap_or(false)
+  if c.clicked(id) {
+    mine_filter_open[key] = !open
+  }
+  let named = if mine { @sf.t("web-main.filter." + of + ".mine") } else { @sf.t("web-main.filter.all") }
+  let lit = c.lit(id) || open
+  let ink = if mine {
+    t.p.accent_text
+  } else if lit {
+    t.p.text
+  } else {
+    t.p.muted
+  }
+  let b = c.box(style=if mine { mine_filter_on } else { mine_filter_box }, selected=open, id~, fn() {
+    @sf.icon(c, "filter", size=mine_filter_icon, color=ink) |> ignore
+    c.text(named, style=if mine { mine_filter_on_words } else if lit { mine_filter_lit_words } else { mine_filter_words })
+    |> ignore
+  })
+  c.semantics(b, Button, id~, label=@sf.t("web-main.filter." + of + ".named", args=[("named", named)]), expanded=open)
+  let entries = [
+    @kit.menu_radio("all", !mine, label=@sf.t("web-main.filter." + of + ".all")),
+    @kit.menu_radio("mine", mine, label=@sf.t("web-main.filter." + of + ".mine")),
+  ]
+  let m = @sf.dropdown(c, key + "/menu", open, id, entries, {}, mine_filter_menu_w)
+  if open && !m.open {
+    mine_filter_open[key] = false
+  }
+  match m.chosen {
+    Some(v) => {
+      mine_filter_open[key] = false
+      if (v == "mine") != mine {
+        set(v == "mine")
+      }
+    }
+    None => ()
+  }
+}
+
+///|
+/// Which filter's menu is open, by its key.
+// kept across runs: said again by each press; reset empties it
+let mine_filter_open : Map[String, Bool] = {}
+
+///|
+let mine_filter_icon : Double = 16.0
+
+///|
+/// A menu of choices (controls.css.ts chooserMenu: 220 wide at least).
+let mine_filter_menu_w : Double = 220.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let mine_filter_box : @ui.Style = @ui.css(
+  #|row h=S8 min_w=S8 px=S2 gap=S1_5 align=ACenter radius=Xl border=B1 border_color=Line hovered{bg=Hover}
+  #|selected{bg=Hover}
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let mine_filter_on : @ui.Style = mine_filter_box.then(@ui.css("bg=AccentBg"))
+
+///|
+// kept across runs: a value (no field of it changes)
+let mine_filter_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let mine_filter_lit_words : @ui.TextStyle = mine_filter_words.then(@ui.text_style(color=Fg))
+
+///|
+// kept across runs: a value (no field of it changes)
+let mine_filter_on_words : @ui.TextStyle = mine_filter_words.then(@ui.text_style(color=AccentText))

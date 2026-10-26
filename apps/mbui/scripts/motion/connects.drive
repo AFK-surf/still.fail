@@ -1,4 +1,4 @@
-# 连接 (sfdesk connects.mbt, one page in every frame): MBUI_FIXTURE=settings-connects, a phone's window or a desktop's;
+# 连接 (sfpages connects.mbt, one page in every frame): MBUI_FIXTURE=settings-connects, a phone's window or a desktop's;
 # the list, then a connect's page.
 timeout 20000
 until 星火助手

@@ -248,7 +248,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile-quota-failed" => fx.trouble = "quota"
     "settings-profile-blocked" => fx.trouble = "blocked"
     "settings-profile-signin" => fx.trouble = "login"
-    // a connect's page; its way of making sessions asked (src/sfdesk connect.mbt's dialog)
+    // a connect's page; its way of making sessions asked (src/sfpages connect.mbt's dialog)
     "settings-connect-menu" => ()
     "settings-connect-mode" => fixture_open.desk = "connect-mode"
     "settings-vault-off" => fx.vault_off = true
@@ -286,7 +286,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-new-connect-app" => fx_connect_step.val = "app"
     _ => fx_connect_step.val = "team"
   }
-  // a new connect's dialog over 连接 (src/sfdesk new_connect.mbt), at the step said above
+  // a new connect's dialog over 连接 (src/sfpages new_connect.mbt), at the step said above
   if m.has_prefix("settings-new-connect") {
     fixture_open.desk = "new-connect"
   }

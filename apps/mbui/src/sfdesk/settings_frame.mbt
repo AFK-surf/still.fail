@@ -84,8 +84,8 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     Vault => @sfpages.vault_page(c, core, here, frame)
     VaultItems => @sfpages.vault_items_page(c, core, here, frame)
     VaultItem(v, item) => @sfpages.vault_item_page(c, core, here, frame, v, item)
-    Connects(only) => connects_page(c, src, core, here, frame, only)
-    Connect(station, id) => connect_page(c, src, core, here, frame, station, id)
+    Connects(only) => @sfpages.connects_page(c, src, core, here, frame, only)
+    Connect(station, id) => @sfpages.connect_page(c, src, core, here, frame, station, id)
     Station(a) => station_page(c, core, here, frame, a)
     Profile(a, id) => profile_page(c, core, here, frame, a, id)
     _ => ()
@@ -115,10 +115,10 @@ fn settings_fixture(src : Source, core : Core) -> Unit {
     "local-fonts" => @sfpages.local_open.val = true
     "connect-mode" =>
       match items((core.topic)("connects", { "scope": str("ws1"), "mine": Json::boolean(false) }).value, "items") {
-        [item, ..] => cd_mode_dialog(core, "ws1/st1", Some(item))
+        [item, ..] => @sfpages.cd_mode_dialog(core, "ws1/st1", Some(item))
         _ => ()
       }
-    "new-connect" => new_connect_dialog(src, core, @settings.here_of(core, "ws1", "星火工作室"), "ws1/st1")
+    "new-connect" => @sfpages.new_connect_dialog(src, core, @settings.here_of(core, "ws1", "星火工作室"), "ws1/st1")
     "vault-add" => @sfpages.vault_add_dialog(core, @settings.here_of(core, "ws1", "星火工作室"))
     "vault-editor" => @sfpages.vault_editor_dialog(core, "ws1", "v1", None, kind="token")
     "vault-recover" => @sfpages.vault_recover_dialog(core, "ws1")
@@ -129,12 +129,9 @@ fn settings_fixture(src : Source, core : Core) -> Unit {
 ///|
 /// What the settings pages here keep put back as the app begins anew.
 fn settings_reset() -> Unit {
-  mine_filter_open.clear()
   fx_policy_up.val = ""
   local_menu.val = false
   settings_deep.val = false
-  connect_reset()
-  new_connect_reset()
 }
 
 ///|

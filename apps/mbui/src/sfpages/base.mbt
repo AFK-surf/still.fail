@@ -1,5 +1,7 @@
 // What the pages read of sfbase, by their own names.
 using @sfbase {
+  fresh,
+  pv,
   type ScreenAt, type PageFrame, type DriveAt, upload_id, file_seed, dv_part_first, dv_part_max, dv_beside_name,
   type FilePage, type PageMark, type Placed, type ServicePage, type Viewport, type StageHold, type Mark,
   service_site, src_now, clamp_size, keep_size, mark_where, page_marks_frame, page_marks_leave,
@@ -185,6 +187,8 @@ pub fn dmin(a : Double, b : Double) -> Double {
 ///|
 using @settings {
   binding_of,
+  connects_mine,
+  first_text,
   type VaultEditing,
   lasts_choice,
   mode_name,

@@ -113,7 +113,7 @@ pub let desk_dialogs : Ref[Int] = Ref(0)
 ///|
 /// Puts up a dialog over the page (parts.tsx Dialog: the library's panel opened by nothing, @sf.panel): its title,
 /// what it is about, what it holds, its buttons at its foot, each given what closes it; `wide`, 640 wide; `live`: its
-/// title, its step's count and what it is about as they are now (a wizard's); `gone`: what is let go of as it closes
+/// title, its step's count and what it is about as they are now (a wizard's); `on_gone`: what is let go of as it closes
 /// by its ✕, Esc or a press outside.
 pub fn open_dialog(
   title : String,
@@ -122,10 +122,10 @@ pub fn open_dialog(
   description? : String = "",
   wide? : Bool = false,
   live? : () -> (String, String, String),
-  gone? : () -> Unit = fn() {  },
+  on_gone? : () -> Unit = fn() {  },
 ) -> Unit {
   desk_dialogs.val += 1
-  @sf.panel(title, body, from=Unanchored, description~, foot~, wide~, live?, gone~)
+  @sf.panel(title, body, from=Unanchored, description~, foot~, wide~, live?, gone=on_gone)
 }
 
 // ── who a profile or a key is, at the head of its page (the web's Accounts.css.ts identity), and a card's foot ──
