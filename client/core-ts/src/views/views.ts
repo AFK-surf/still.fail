@@ -977,8 +977,7 @@ export class Views implements Owner {
     if ("err" in v) return { state: "error", message: v.err.message };
     const cause = get(v.ok, "cause");
     const catching = get(v.ok, "catching");
-    const catchingOf = get(v.ok, "catchingOf");
-    return { state: get(v.ok, "state") ?? "connecting", message: get(v.ok, "message") ?? null, last: get(v.ok, "last") ?? null, ...(get(v.ok, "retrying") === true ? { retrying: true } : {}), ...(typeof cause === "string" ? { cause } : {}), ...(typeof catching === "number" ? { catching, catchingOf: typeof catchingOf === "number" ? catchingOf : 0 } : {}) };
+    return { state: get(v.ok, "state") ?? "connecting", message: get(v.ok, "message") ?? null, last: get(v.ok, "last") ?? null, ...(get(v.ok, "retrying") === true ? { retrying: true } : {}), ...(typeof cause === "string" ? { cause } : {}), ...(typeof catching === "number" ? { catching } : {}) };
   }
 
   #clock(): present.Clock {
@@ -1305,7 +1304,6 @@ export class Views implements Owner {
     // how many chats are left to bring the latest of.
     let checking = false;
     let behind = 0;
-    let of = 0;
     // The first screen first (docs/core-db.md): while the stations' rows are not loaded, and they are many, the rows a
     // list shows on top are read by one query, and the rest are loaded after, a station at a time.
     const known = stations.filter((s) => data.listed(s.address, "chats")).map((s) => s.address);
@@ -1366,10 +1364,7 @@ export class Views implements Owner {
         if (link.state === "connecting" && link.retrying !== true) checking = true;
         else if (link.state === "online" && catching !== null) {
           if (catching < 0) checking = true;
-          else {
-            behind += catching;
-            of += typeof link.catchingOf === "number" ? (link.catchingOf as number) : catching;
-          }
+          else behind += catching;
         }
       }
       if (state === "offline") troubles.push(["offline", downWords(this.link(s.address), s.name), get(this.link(s.address), "cause") === "network", s.address]);
@@ -1395,7 +1390,7 @@ export class Views implements Owner {
     const ws = this.ok({ topic: "workspace", workspace: scope });
     const count = Array.isArray(get(ws, "members")) ? ws.members.length : null;
     // (one station still to say: how many are left is not known yet)
-    const syncing = checking ? { text: t("core-views.station.syncing"), part: null } : behind > 0 ? { text: t("core-views.station.syncing_left", { n: behind }), part: of > 0 ? (of - behind) / of : 0 } : null;
+    const syncing = checking ? t("core-views.station.syncing") : behind > 0 ? t("core-views.station.syncing_left", { n: behind }) : null;
     return { ok: { me, stations: states, loading, days, trouble, members: count, leading: "agents", glyph, note, ...(syncing !== null ? { syncing } : {}) } };
   }
 

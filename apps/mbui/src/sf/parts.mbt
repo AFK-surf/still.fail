@@ -3856,32 +3856,49 @@ pub fn update_key(
 
 ///|
 /// The list catching up on what changed while away (the chats' `syncing`; docs/ui-panels.md 等待): beside the keys of
-/// the bar it stands in, `side` across, the refresh mark (`mark`) with how far it has come round it, close to it, as the
-/// update key's (`part`, 0 to 1; None while not known: the spinner's quarter turning), `text` its tip and what it is said
-/// to be. Only once it has gone on later_ms (a moment's catching up shows nothing); gone, its ring goes whole as it fades.
-pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown : Bool, text : String, part : Double?) -> Unit {
+/// the bar it stands in, `side` across, the refresh mark (`mark`, in the grey of what it says nothing of) turning, a
+/// turn each sync_turn_ms, slow at its ends; `text` its tip and what it is said to be. Only once it has gone on later_ms
+/// (a moment's catching up shows nothing). Once all is here, the mark goes to a tick, there sync_done_ms, then fades.
+pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown : Bool, text : String) -> Unit {
   let t = theme()
-  let p = @kit.presence(c, key, shown && waited_long(c, key), exit=@motion.tween(sync_out_ms, ease=LeaveFade))
+  let on = shown && waited_long(c, key)
   if shown {
     sync_said[key] = text
   } else {
     done_waiting(c, key)
   }
+  if on {
+    sync_seen[key] = true
+  }
+  // done: its tick held a while, then gone
+  let seen = sync_seen.get(key).unwrap_or(false)
+  let ticked = seen && !shown
+  let held = ticked && !@kit.after(c, key + "/done", true, sync_done_ms)
+  if !ticked {
+    @kit.after(c, key + "/done", false, sync_done_ms) |> ignore
+  }
+  let p = @kit.presence(c, key, on || held, exit=@motion.tween(sync_out_ms, ease=LeaveFade))
   if !p.built {
     sync_said.remove(key)
+    sync_seen.remove(key)
     return
   }
   let words = sync_said.get(key).unwrap_or(text)
+  // the turning mark to the tick (in 200 ms, each growing from 0.6 as it comes)
+  let done = @kit.animate(c, key + "/tick", if ticked { 1.0 } else { 0.0 }, transition=@motion.tween(sync_tick_ms, ease=Out))
+  let k = c.cycle(sync_turn_ms)
+  let turn = k * k * (3.0 - 2.0 * k) * 2.0 * 3.141592653589793
   let id = c.id(key)
   let b = c.box(style=update_key_box.then(@ui.style(w=Fixed(side), h=Fixed(side))), id~, fn() {
-    icon(c, "refresh", size=mark, color=t.p.muted) |> ignore
-    c.layer(fn() {
-      c.box(style=update_ring_at, fn() {
-        progress_spinner(c, key, if p.shown { part } else { Some(1.0) }, size=mark + 2.0 * (update_ring_clear + spin_stroke)) |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
+    if done < 1.0 {
+      // (each in the whole key, in its middle: turned about it)
+      let a = c.layer(fn() { c.box(style=update_ring_at, fn() { icon(c, "refresh", size=mark, color=t.p.muted) |> ignore }) |> ignore })
+      c.look(a, @ui.look(alpha=1.0 - done, scale=1.0 - 0.4 * done, rot=if ticked { 0.0 } else { turn }))
+    }
+    if done > 0.0 {
+      let d = c.layer(fn() { c.box(style=update_ring_at, fn() { icon(c, "check", size=mark, color=t.p.muted) |> ignore }) |> ignore })
+      c.look(d, @ui.look(alpha=done, scale=0.6 + 0.4 * done))
+    }
   })
   c.look(b, { ..@ui.still_look, alpha: dmin(1.0, p.t) })
   c.semantics(b, Status, id~, label=words)
@@ -3889,12 +3906,26 @@ pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown :
 }
 
 ///|
-/// What the catching up said last, by its key: said as it fades.
+/// What the catching up said last, by its key (said as it goes), and whether it showed (only then the tick).
 // kept across runs: put back as it goes (sync_key)
 let sync_said : Map[String, String] = {}
 
 ///|
-/// How long it fades once all is here (its ring going whole meanwhile: @kit.progress_ms).
+// kept across runs: put back as it goes (sync_key)
+let sync_seen : Map[String, Bool] = {}
+
+///|
+/// A turn of the mark (the web's SyncMark: 1.4s, eased in and out).
+let sync_turn_ms : Double = 1400.0
+
+///|
+/// How long the tick stays once all is here, how long the mark takes to become it, and to fade.
+let sync_done_ms : Double = 1000.0
+
+///|
+let sync_tick_ms : Double = 200.0
+
+///|
 let sync_out_ms : Double = 400.0
 
 ///|

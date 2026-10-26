@@ -53,8 +53,7 @@ export function ChatList({ scope, newChat, stationsPage, archive, decisions, top
   // No station at all: nothing to filter (the lists themselves follow their own topics, ChatPane).
   const none = useTopicSelect<ChatsView, boolean>(chatsTopic(scope, "all"), (s) => !!s.value && !s.value.loading && s.value.stations.length === 0);
   // Catching up on what changed while away (its mark beside the filter): drawn again only as it changes.
-  const syncing = useTopicSelect<ChatsView, ChatsView["syncing"] | null>(chatsTopic(scope, "all"), (s) => s.value?.syncing ?? null,
-    (a, b) => a?.text === b?.text && a?.part === b?.part);
+  const syncing = useTopicSelect<ChatsView, string | null>(chatsTopic(scope, "all"), (s) => s.value?.syncing ?? null);
   // To 奏 from its row in the sidebar's foot, its rows come out of that row (DecisionDesk.tsx): no sliding then.
   const archiveSeen = useRef(false);
   if (mode === "archive") archiveSeen.current = true;

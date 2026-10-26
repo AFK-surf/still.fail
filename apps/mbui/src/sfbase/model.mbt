@@ -152,16 +152,9 @@ pub(all) struct ChatsView {
   /// agents | people: whose pictures lead the rows
   leading : String
   note : ListNote?
-  /// while what changed since the app was last with the stations is still coming: the mark at the list's top
-  syncing : ChatsSyncing?
-}
-
-///|
-/// The list catching up on what changed while away (ChatsSyncing): what it says (正在同步, 正在同步 · 还剩 12 个对话),
-/// and how much of the chats found behind has come (0 to 1; None while not known).
-pub(all) struct ChatsSyncing {
-  text : String
-  part : Double?
+  /// while what changed since the app was last with the stations is still coming: what the mark at the list's top
+  /// says (正在同步, 正在同步 · 还剩 12 个对话)
+  syncing : String?
 }
 
 ///|
@@ -275,17 +268,7 @@ fn chats_view_by(v : Json, item : (Json) -> ChatItem) -> ChatsView {
       l => l
     },
     note,
-    syncing: match field(s, "syncing") {
-      Some(Object(_)) as y =>
-        Some({
-          text: text(y, "text"),
-          part: match field(y, "part") {
-            Some(Number(p, ..)) => Some(p)
-            _ => None
-          },
-        })
-      _ => None
-    },
+    syncing: opt_text(s, "syncing"),
   }
 }
 

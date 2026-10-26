@@ -145,9 +145,8 @@ export class Link {
   readonly historyAsked = new Set<string>();
   /// Catching up on what changed while the device was away (sync.ts `#catching`): from its stream's opening after it
   /// was, until the threads it found behind have their latest on the device. Before it has looked (`tallied`), what is
-  /// behind is not known; `of`, how many were found behind in all (those come: `of` less `behind`). Null once caught up,
-  /// or while it is not reached.
-  catching: { tallied: boolean; behind: Set<number>; of: number } | null = null;
+  /// behind is not known; null once caught up, or while it is not reached.
+  catching: { tallied: boolean; behind: Set<number> } | null = null;
 
   constructor(address: string, addr: StationAddr, scoped: Scoped, memory: Memory = new Memory()) {
     this.address = address;

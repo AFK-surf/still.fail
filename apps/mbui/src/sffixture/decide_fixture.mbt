@@ -785,12 +785,12 @@ pub fn fix_with_trouble(v : Json, params : Map[String, Json]) -> Json {
 }
 
 ///|
-/// The chats' view catching up on what changed while away (home-syncing: twelve chats left of twenty).
+/// The chats' view catching up on what changed while away (home-syncing: twelve chats left).
 pub fn fix_with_syncing(v : Json) -> Json {
   match v {
     Object(m) => {
       let o = m.copy()
-      o["syncing"] = { "text": "正在同步 · 还剩 12 个对话", "part": 0.4 }
+      o["syncing"] = "正在同步 · 还剩 12 个对话"
       Json::object(o)
     }
     _ => v

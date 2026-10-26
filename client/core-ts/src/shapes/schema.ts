@@ -2352,12 +2352,8 @@ export const SHAPES: Record<string, Shape> = {
     ["leading", opt("Lead"), { doc: "Whose pictures lead the rows: the device's setting (`prefs`), 自动 by `members` (unknown: as if alone)." }],
     ["glyph", opt("StationsGlyph"), { doc: "The stations at a glance, and what the list says with no rows; absent from a core before them." }],
     ["note", opt("ListNote")],
-    ["syncing", opt("ChatsSyncing"), { doc: "While what changed since the device was last with the stations is still being brought (station/sync.ts\n`#catching`): the mark at the list's top, beside its filter. Stations not reached are left out (the list says so where\nit says what is wrong with them). Absent once all is here, and from a core before it." }],
+    ["syncing", opt("String"), { said: true, doc: "While what changed since the device was last with the stations is still being brought (station/sync.ts\n`#catching`), what the mark at the list's top beside its filter says (its tip, and to a screen reader): 正在同步 while a\nstation has yet to say what changed, then how many chats are left (正在同步 · 还剩 12 个对话). Stations not reached are\nleft out (the list says so where it says what is wrong with them). Absent once all is here, and from a core before it." }],
   ], { keepNone: true }),
-  ChatsSyncing: struct([
-    ["text", "String", { said: true, doc: "What it says (its tip, and to a screen reader): 正在同步 while a station has yet to say what changed, then how\nmany chats are left (正在同步 · 还剩 12 个对话)." }],
-    ["part", opt("f64"), { doc: "How much has come, 0 to 1, of the chats found behind; absent while that is not known (a station has yet to say)." }],
-  ], { doc: "The list catching up on what changed while away (ChatsView `syncing`)." }),
   Spent: struct([
     ["until", opt("f64")],
     ["text", "String", { said: true }],

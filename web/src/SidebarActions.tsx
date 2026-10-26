@@ -6,13 +6,12 @@ import { MineFilter } from "./components.tsx";
 import { useComposerMove } from "./dock.tsx";
 import { NavAction } from "./SidebarList.tsx";
 import { SyncMark } from "./SyncMark.tsx";
-import type { ChatsSyncing } from "./core/shapes.ts";
 import * as nav from "./Sidebar.css.ts";
 
 export function SidebarActions({ newChat, archive, workspace, syncing, showFilter = true }: {
   newChat: string; archive: string; workspace: string; showFilter?: boolean;
   /** Catching up on what changed while away (the chats' `syncing`): its mark before the filter. */
-  syncing?: ChatsSyncing | null | undefined;
+  syncing?: string | null | undefined;
 }) {
   const move = useComposerMove();
   return (
