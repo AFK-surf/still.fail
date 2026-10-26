@@ -32,9 +32,10 @@
 // A new chat's first words are carried (ChatHost.kt Flight.carried, web madeChat.ts): drawn where they were typed from
 // the frame they are sent, over the new chat's composer and then its chat's (newchat.mbt makes the chat, the page
 // becomes it), until their row is laid out in the chat's list; then the list comes up out of the composer with them,
-// across and up together on Ease.Arrive (480 ms, 90 after: the choices fade first; in the wide frame from the middle of
-// the page at once, the composer going down to the chat's foot meanwhile: sfpages composer.mbt), their bubble's ground
-// and time coming in on the same way. The composer is held as tall as it was while they and their files are in it,
+// on the way any words sent go (520 ms on the flight's curve, across first and up a little after: one motion with every
+// send, not the web's quicker landing; 90 after on a phone: the choices fade first; in the wide frame from the middle
+// of the page at once, the composer going down to the chat's foot meanwhile: sfpages composer.mbt), their bubble's
+// ground and time coming in as they go across. The composer is held as tall as it was while they and their files are in it,
 // the new chat's and then its chat's, as for words sent in a chat, till they set out. The list is not cut at the composer's top as
 // Android's is (ChatHost.kt clipRect): their bubble, in it, is drawn over the composer only while nothing over it cuts
 // what it draws (Ctx::put_over), and what else is in it then (its time) is all but clear there.
@@ -303,7 +304,7 @@ pub fn flight_carry_gone(from : String) -> Unit {
 /// drawn up by it in the same frame, never a frame behind.
 pub fn flight_carry_shift(c : @ui.Ctx, chat : String) -> Double {
   match flight_of(chat) {
-    Some(f) => flight_carry_rise(c, f) * (1.0 - flight_carry_e(f))
+    Some(f) => flight_carry_rise(c, f) * (1.0 - flight_up_of(c, f))
     None => 0.0
   }
 }
@@ -333,12 +334,6 @@ pub fn flight_carry_anchor(f : SendFlight) -> String {
 }
 
 ///|
-/// How far a new chat's first words have come (0 … 1, Ease.Arrive): across, up, their ground and time all at once.
-pub fn flight_carry_e(f : SendFlight) -> Double {
-  @ui.Arrive.at(f.way.get())
-}
-
-///|
 /// The new chat's first words carried, while they wait for their row and go (a new chat's draft `chat`).
 pub fn flight_carried(chat : String) -> Bool {
   match flight_of(chat) {
@@ -364,42 +359,34 @@ pub fn flight_p(c : @ui.Ctx, f : SendFlight) -> Double {
 }
 
 ///|
-/// Its ways across and up (ChatHost.kt Flight.across, up), eased; a new chat's both on Ease.Arrive (flight_carry_e).
+/// Its ways across and up (ChatHost.kt Flight.across, up), eased. A new chat's first words are words sent as any are:
+/// on the same way, as long (the desktop's: what every composer sends with), the list coming up with them on their way
+/// up (flight_carry_shift).
 pub fn flight_across_of(c : @ui.Ctx, f : SendFlight) -> Double {
-  if f.carried {
-    flight_carry_e(f)
-  } else {
-    flight_across(flight_p(c, f), f.desk)
-  }
+  flight_across(flight_p(c, f), flies_desk(f))
 }
 
 ///|
 pub fn flight_up_of(c : @ui.Ctx, f : SendFlight) -> Double {
-  if f.carried {
-    flight_carry_e(f)
-  } else {
-    flight_up(flight_p(c, f), f.desk)
-  }
+  flight_up(flight_p(c, f), flies_desk(f))
 }
 
 ///|
-/// How settled it is (its time and the rest of its row), and how much of its bubble's ground shows; a new chat's coming
-/// in on its way.
+/// How settled it is (its time and the rest of its row), and how much of its bubble's ground shows.
 pub fn flight_settled_of(c : @ui.Ctx, f : SendFlight) -> Double {
-  if f.carried {
-    flight_carry_e(f)
-  } else {
-    flight_settled(flight_p(c, f), f.desk)
-  }
+  flight_settled(flight_p(c, f), flies_desk(f))
 }
 
 ///|
 pub fn flight_ground_of(c : @ui.Ctx, f : SendFlight) -> Double {
-  if f.carried {
-    flight_carry_e(f)
-  } else {
-    flight_ground(flight_p(c, f), f.desk)
-  }
+  flight_ground(flight_p(c, f), flies_desk(f))
+}
+
+///|
+/// Whether it flies the desktop's way (the web's, 520 ms on the flight's curve): what a composer sends does
+/// (`desk`), a new chat's first words too, from either frame.
+fn flies_desk(f : SendFlight) -> Bool {
+  f.desk || f.carried
 }
 
 ///|
@@ -417,11 +404,14 @@ pub fn flight_up(p : Double, desk : Bool) -> Double {
 /// its time coming in as it goes across; the phone's (ChatHost.kt) 600, flown over 80%, settling from 24%.
 pub fn flight_len(desk : Bool) -> Double {
   if desk {
-    520.0
+    flight_desk_ms
   } else {
     flight_ms
   }
 }
+
+///|
+pub let flight_desk_ms : Double = 520.0
 
 ///|
 pub fn fly_share(desk : Bool) -> Double {
@@ -504,9 +494,9 @@ pub fn flight_placed(c : @ui.Ctx, f : SendFlight) -> Unit {
 }
 
 ///|
-/// How long a new chat's first words take to their place, from how long after their row is laid out (ChatHost.kt
-/// ARRIVE_MS, its delay; web madeChat.ts).
-pub let flight_carry_ms : Double = 480.0
+/// How long a new chat's first words take to their place (as long as any words sent: flight_len), from how long after
+/// their row is laid out (on a phone, once its choices have faded: ChatHost.kt's delay; web madeChat.ts).
+pub let flight_carry_ms : Double = flight_desk_ms
 
 ///|
 pub let flight_carry_after_ms : Double = 90.0
@@ -755,7 +745,7 @@ pub fn flight_bubble(c : @ui.Ctx, f : SendFlight, i : Int) -> Unit {
     if !f.placed || f.placed_frame == c.frame_number() {
       c.look(i, @ui.look(alpha=0.0))
     }
-    @motion.fly(c, i, f.from_x - 14.0, f.from_y - 8.0, px=flight_carry_e(f), py=1.0)
+    @motion.fly(c, i, f.from_x - 14.0, f.from_y - 8.0, px=flight_across_of(c, f), py=1.0)
     return
   }
   if !f.placed || f.placed_frame == c.frame_number() {

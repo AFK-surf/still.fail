@@ -1,0 +1,6 @@
+# The wide frame: the made-up chat's card answered (decide.mbt): the options go, the answer comes in.
+timeout 20000
+until =一起换
+wait 800
+tap =一起换
+wait 2500

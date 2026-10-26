@@ -82,7 +82,7 @@ test "turns: the next waits for the list at rest (its glide's declared end), not
 }
 
 ///|
-test "a decision answered: its options close in their turn after the answer has come in, how it went in their place" {
+test "a decision answered here: its options close as the answer comes in, one motion, how it went in their place" {
   // (the fixture's own core: it answers the card, and posts the answer as yours)
   reset()
   let src = fixture("chat")
@@ -99,20 +99,15 @@ test "a decision answered: its options close in their turn after the answer has 
   }
   t.tap_text("把首页和聊天页的截图都更新")
   t.draw()
+  t.draw()
   let tu = turns_of("ws1/st1\u{1}s-c1")
   let rd = reading_of("ws1/st1\u{1}s-c1")
-  // your answer came in its turn first (the reader at the end), the options still there meanwhile
+  // your answer came in, and the options closed from the same moment: not in a turn after it (the list up for the
+  // answer, then down again for them)
   assert_true(rd.admitted.contains("m:ts108"))
-  assert_eq(tu.shown.get("ask/ts8"), Some(true))
-  // their turn: after your answer's (its rise), the list at rest after it (known once the list has set out after it,
-  // as the frame your answer came in lays it out)
-  t.draw()
-  t.draw()
-  let at = tu.start_of("ask/ts8")
-  assert_true(at >= tu.started_at("m:ts108") + @sf.enter_ms && at < @double.infinity)
-  t.run_for(at - t.time())
   assert_eq(tu.shown.get("ask/ts8"), Some(false))
-  assert_eq(tu.started_at("ask/ts8"), at)
+  assert_eq(tu.started_at("ask/ts8"), tu.started_at("m:ts108"))
+  assert_true(tu.with_answer("ask/ts8"))
   t.run_for(under_rest() - t.time())
   assert_true(t.find("你 选择了「一起换」") is Some(_))
   assert_true(t.find("把首页和聊天页的截图都更新") is None)

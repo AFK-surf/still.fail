@@ -71,6 +71,11 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
     None => -1.0
   }
   let start_at = if asked_at >= 0.0 { Some(asked_at) } else { None }
+  // (answered from here: closing and opening on the answer's moment, as its room comes)
+  let gap = match turns {
+    Some(tu) if tu.with_answer("ask/" + m.ts) => close_with_answer
+    _ => close_gap
+  }
   let thread = if here.view.offline || here.view.archived { None } else { here.view.thread }
   c.box(style=decision_box, fn() {
     under_post(
@@ -78,7 +83,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       "options/" + key,
       open,
       exit=@motion.trans(fade=0.0, scale=options_scale, spec=@motion.tween(options_out_ms, ease=options_ease)),
-      close=close_gap,
+      close=gap,
       start_at?,
       fn() {
         c.box(style=decision_box, fn() {
@@ -95,7 +100,12 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
               }
             _ =>
               match (options, thread) {
-                (Some(list), Some(th)) if list.length() > 0 => decision_options(c, src, here, m, th, list, resolved)
+                (Some(list), Some(th)) if list.length() > 0 => decision_options(c, src, here, m, th, list, resolved, on_pick=fn() {
+                    match turns {
+                      Some(tu) => tu.answered_here("ask/" + m.ts)
+                      None => ()
+                    }
+                  })
                 _ => ()
               }
           }
@@ -119,7 +129,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
         spec=@motion.Snap(0.0),
         fade_spec=@motion.tween(options_out_ms, ease=CssOut, delay=options_out_ms),
       ),
-      open=close_gap,
+      open=gap,
       exit=@motion.trans(spec=@motion.Snap(0.0)),
       close=@motion.Snap(0.0),
       fn() {
