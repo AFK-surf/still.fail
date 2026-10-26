@@ -118,12 +118,12 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
   v.mouse_y = py
   v.mouse_seen = true
   // Esc closes it (marking: leaves the marks first), ← and → step
-  if !v.closing && c.key_pressed(@ui.key_escape) {
-    if marking.on {
+  if marking.on {
+    if !v.closing && c.key_pressed(@ui.key_escape) {
       marks_back(c)
-    } else {
-      v.shut(c)
     }
+  } else {
+    v.shut_on_escape(c)
   }
   if !v.closing && !marking.on && kind == Some(KImage) {
     if c.key_pressed(@ui.key_code_left) {

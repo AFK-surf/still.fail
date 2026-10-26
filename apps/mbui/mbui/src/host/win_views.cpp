@@ -58,7 +58,7 @@ static const wchar_t kPlayer[] = L"https://player.stillfail.invalid"; // a playe
 // A player's page (kind 1): the browser's own <video>, its picture stretched to the view (as the other hosts' are),
 // nothing of its own controls; mbuiPlayer what the host tells it (view_control), how it stands said to the host as it
 // changes ({"t":"s",...}: view_info's), a frame at a time grabbed by a second <video> of the same file, so the one
-// playing is left as it is ({"t":"g","png":...}).
+// playing is left as it is ({"t":"g","png":...}); the frame it shows drawn off the one playing (shown: grab_shown's).
 static const char kPlayerPage[] = R"(<!doctype html><meta charset=utf-8><style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
 video{width:100%;height:100%;object-fit:fill;display:block;background:#000}
@@ -85,7 +85,11 @@ g.addEventListener('error',()=>done(''),{once:true});
 g.addEventListener('loadeddata',()=>{g.currentTime=ms/1000},{once:true});
 g.addEventListener('seeked',()=>{try{const c=document.createElement('canvas');c.width=g.videoWidth;c.height=g.videoHeight;
 c.getContext('2d').drawImage(g,0,0);const u=c.toDataURL('image/png');done(u.slice(u.indexOf(',')+1))}catch(e){done('')}},
-{once:true});g.src='/media'}};
+{once:true});g.src='/media'},
+shown(side){let u='';try{const k=Math.min(1,side/Math.max(v.videoWidth,v.videoHeight));const c=document.createElement('canvas');
+c.width=Math.max(1,Math.round(v.videoWidth*k));c.height=Math.max(1,Math.round(v.videoHeight*k));
+c.getContext('2d').drawImage(v,0,0,c.width,c.height);u=c.toDataURL('image/jpeg',0.9);u=u.slice(u.indexOf(',')+1)}catch(e){u=''}
+post({t:'g',png:u})}};
 v.src='/media';
 </script>)";
 
@@ -1051,6 +1055,14 @@ extern "C" void mb_host_view_control(int32_t vid, int32_t op, double value) {
         v->still_state = 1;
         v->still.clear();
         swprintf(js, 128, L"mbuiPlayer.grab(%.3f)", value);
+        page_script(v, js);
+        break;
+      // the frame it shows now, at most `value` pixels on its longer side, as a JPEG (grab_shown's): drawn off the one
+      // playing, told as a grab
+      case 22:
+        v->still_state = 1;
+        v->still.clear();
+        swprintf(js, 128, L"mbuiPlayer.shown(%.0f)", value);
         page_script(v, js);
         break;
     }
