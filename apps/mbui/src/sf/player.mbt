@@ -1989,14 +1989,24 @@ let phone_name_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, 
 let phone_index_words : @ui.TextStyle = @ui.text_style(size=Meta, wrap=false)
 
 ///|
-/// A phone's controls: 8 round them, 720 wide at most, 6 in at the sides and foot and 8 over, their corner a card's (26:
-/// its 40 buttons in its foot corners 6 in, concentric with it).
+/// A phone's controls: 8 round them, 720 wide at most, 8 over, their corner a card's (26), its 40 buttons in its foot
+/// corners as far in at the sides and foot as makes them concentric with it (capsule_in: 4.87).
 // kept across runs: a value (no field of it changes)
 let phone_foot_place : @ui.Style = @ui.css("w=Full p=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let phone_controls_box : @ui.Style = @ui.style(w=Full, max_w=Fixed(phone_controls_most), px=S1_5, pt=S2, pb=S1_5, radius=Xl3)
+let phone_controls_box : @ui.Style = @ui.style(
+  w=Full,
+  max_w=Fixed(phone_controls_most),
+  px=room(phone_keys_in),
+  pt=S2,
+  pb=room(phone_keys_in),
+  radius=Xl3,
+)
+
+///|
+let phone_keys_in : Double = capsule_in(card_corner, 40.0)
 
 ///|
 // kept across runs: a value (no field of it changes)

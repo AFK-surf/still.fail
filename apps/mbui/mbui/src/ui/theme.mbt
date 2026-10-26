@@ -253,7 +253,8 @@ pub fn Theme::light() -> Theme {
     thumb: 0xFFFFFFFFL,
     radius: 12.0,
     radius_lg: 20.0,
-    radius_dialog: 42.0,
+    // (a field 36 high, 24 in, in its corners: 24 + 18 as a circle reads it, smooth.mbt round_like_out)
+    radius_dialog: round_like_out(42.0),
     font: 13.0,
     font_sm: 12.0,
     font_title: 16.0,

@@ -109,7 +109,10 @@ test "corners linked: a link's radius, whether it follows, where it stands" {
   assert_eq(deep.radius(), 34.0)
   assert_false(deep.follows())
   assert_eq(deep.inset(), None)
-  // a capsule 30 high in a 34: 19 in
+  // a capsule 30 high in a 34 (a circle reads it as 32.52): 17.52 in, further than the ranges let; one 40 high, 12.52
   assert_eq(Own(34.0).capsule_at(30.0), None)
-  assert_eq(Own(34.0).capsule_at(40.0), Some(14.0))
+  match Own(34.0).capsule_at(40.0) {
+    Some(d) => assert_true((d - (34.0 * smooth_round - 20.0)).abs() < 1.0e-9)
+    None => fail("a capsule 40 high stands in a 34")
+  }
 }

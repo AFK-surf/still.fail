@@ -44,10 +44,10 @@ pub fn inner_corner(outer : Double, pad : Double) -> Double {
 
 ///|
 /// The corner of a container whose corner holds a whole circle (or a capsule) of `inner` radius `inset` in from both
-/// edges: round with it, the container's corner its inset plus its radius (a circle is not cut to the container: the
-/// container is drawn round it).
+/// edges: round with it, the container's corner as a circle reads it (@ui.round_like) its inset plus its radius (a
+/// circle is not cut to the container: the container is drawn round it).
 pub fn around(inset : Double, inner : Double) -> Double {
-  inset + inner
+  @ui.round_like_out(inset + inner)
 }
 
 ///|

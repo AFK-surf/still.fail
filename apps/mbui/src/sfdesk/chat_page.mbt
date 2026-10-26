@@ -710,8 +710,14 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
   let relayable = !v.archived && !v.offline && v.agents.length() > 0
   let slack = text(chat, "slackUrl")
   let feishu = text(chat, "feishuUrl")
+  let share = field(chat, "xshare")
+  let publish = match field(chat, "publish") {
+    Some(Object(_)) as p if flag(p, "may") || items(p, "links").length() > 0 => p
+    _ => None
+  }
+  let shares = share is Some(Object(_)) || publish is Some(_)
   if files || v.letters > 0 || relayable || slack != "" || feishu != "" {
-    c.box(style=info_tools, fn() {
+    c.box(style=info_tools(!shares), fn() {
       if files && info_row(c, "info-pop/files", "folder", @sf.t("web-pages.chat.files"), "") {
         chat_own.info_open = false
         side_toggle(src, r, "files")
@@ -743,13 +749,8 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
     })
     |> ignore
   }
-  let share = field(chat, "xshare")
-  let publish = match field(chat, "publish") {
-    Some(Object(_)) as p if flag(p, "may") || items(p, "links").length() > 0 => p
-    _ => None
-  }
-  if share is Some(Object(_)) || publish is Some(_) {
-    c.box(style=info_tools, fn() {
+  if shares {
+    c.box(style=info_tools(true), fn() {
       if share is Some(Object(_)) &&
         info_row(c, "info-pop/xshare", "users", @sf.t("web-pages.chat.xshare"), text(share, "text")) &&
         flag(share, "may") {
@@ -897,7 +898,7 @@ let via_dot_side : Double = 8.0
 ///|
 /// How far in from the tag's edge its dot stands: concentric with its round end (@sf.capsule_in; the line round it is
 /// drawn over its padding, not in it).
-let chat_station_dot_in : Double = @sf.capsule_in(chat_station_h / 2.0, via_dot_side)
+let chat_station_dot_in : Double = @sf.capsule_in(chat_station_h / 2.0, via_dot_side, room=chat_station_h / 2.0)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1128,11 +1129,22 @@ let info_agent_line : @ui.Style = @ui.css("w=Full pl=S6")
 /// in its foot corners concentric with them, as a menu's item is), its icon's 14 column and words 10 apart, 10 in,
 /// round with the panel, the pointer's ground on it.
 // kept across runs: a value (no field of it changes)
-let info_tools : @ui.Style = @ui.css("w=Full pt=S2 gap=S0_5")
+let info_tools_base : @ui.Style = @ui.css("w=Full pt=S2 gap=S0_5")
+
+///|
+/// (`last` in the panel: its last row, a capsule with keyboard and mouse, in the panel's foot corners as far in as
+/// makes it concentric with them, @sf.pick_reach)
+fn info_tools(last : Bool) -> @ui.Style {
+  if last {
+    info_tools_base.then(@ui.style(mb=@sf.room_of(-@sf.menu_row_reach(@sf.theme().rows.pick))))
+  } else {
+    info_tools_base
+  }
+}
 
 ///|
 fn info_tool() -> @ui.Style {
-  info_tool_base.then(@sf.pick_high())
+  info_tool_base.then(@sf.pick_high()).then(@sf.pick_reach())
 }
 
 ///|

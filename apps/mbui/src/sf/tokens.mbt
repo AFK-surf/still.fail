@@ -242,7 +242,7 @@ pub let tape_corner : Double = 28.0
 /// (tape_bar_over) and the sidebar's first row on it, whatever a panel's own corners are (the user, 2026-10-25: a page's
 /// bar and the sidebar's first row each where it stood alone, not on one line). The tape's own place for its own
 /// corner (corner_fit, for what follows a corner it does not choose: a window's).
-pub let tape_line : Double = tape_corner - 32.0 / 2.0
+pub let tape_line : Double = capsule_in(tape_corner, 32.0)
 
 ///|
 /// Whether a corner `k` round is one corner_fit lets what lies in a corner have.
@@ -504,15 +504,18 @@ pub fn pane_foot_corner(holds? : Double = 0.0) -> Double {
 ///|
 /// How high a capsule across the foot of what is built is (a composer's one line), `own` high alone, round controls
 /// `holds` across in its ends: in a panel of its own whose foot corners are too square for it to stand concentric in
-/// them (corner_fit's nearest place: its half that corner less 4), as high as stands so in the roundest of them, where
-/// what it holds still stands as near as that in its own ends (holds and 4 each side); else `own`. A finger's 52 (its
-/// 36 buttons 8 in) in the tape's 28: 48, its buttons 6 in (the user, 2026-10-26: 最好能把这个中屏的页面圆角搞小点点).
+/// them as high as that, as high as stands so `window_in` (6) from its edges, as the panel itself stands from the
+/// window's (the user, 2026-10-27: 中屏 composer 胶囊的时候，边上距离小), or nearer where what it holds would stand
+/// nearer than 4 in its own ends, at corner_fit's nearest (4) at most; else `own`. In the tape's 28 (a circle reads it
+/// as 26.78): keyboard and mouse's 48 (its 32 buttons) 41.6, 6 in; a finger's 52 (its 36) 44, 4.8 in.
 pub fn foot_capsule_h(own : Double, holds : Double) -> Double {
   match pane_radii() {
     Some(k) => {
-      let most = 2.0 * (dmax(k[2], k[3]) - corner_fit.near)
-      if own > most + 0.5 && most >= holds + 2.0 * corner_fit.near - 0.5 {
-        most
+      let r = @ui.round_like(dmax(k[2], k[3]))
+      let most = 2.0 * (r - corner_fit.near)
+      let least = holds + 2.0 * corner_fit.near
+      if own > most + 0.5 && most >= least - 0.5 {
+        dmin(most, dmax(2.0 * (r - window_in), least))
       } else {
         own
       }
@@ -526,7 +529,7 @@ pub fn foot_capsule_h(own : Double, holds : Double) -> Double {
 /// circle following a corner stands, corner_fit near); the theme's least where it holds none.
 pub fn holds_least(holds : Double) -> Double {
   if holds > 0.0 {
-    holds / 2.0 + corner_fit.near
+    @ui.round_like_out(holds / 2.0 + corner_fit.near)
   } else {
     corner_fit.least
   }
@@ -542,9 +545,10 @@ pub fn pane_foot_card() -> @ui.Style {
 
 ///|
 /// How far in from a corner of the ladder's `corner` a capsule or a circle `height` high stands, concentric with it
-/// (ui-panels.md: 外圆角 = 距离 + 半高).
-pub fn capsule_in(corner : Double, height : Double) -> Double {
-  corner - height / 2.0
+/// (ui-panels.md: 外圆角 = 距离 + 半高, the corner as a circle reads it: @ui.round_like, wholly smooth; a capsule's end,
+/// `room` its half, as round as it is).
+pub fn capsule_in(corner : Double, height : Double, room? : Double = 1.0e30) -> Double {
+  @ui.round_like(corner, room~) - height / 2.0
 }
 
 ///|
@@ -673,7 +677,7 @@ pub fn capsule_room(corner : Double, height : Double, less? : Double = 0.0) -> @
 /// How far in from a capsule's ends (`outer` high) one `height` high stands in it, concentric with them (a dot, a
 /// button in a capsule's end), as a style's room.
 pub fn capsule_end_room(outer : Double, height : Double) -> @ui.Space {
-  room(capsule_in(outer / 2.0, height))
+  room(capsule_in(outer / 2.0, height, room=outer / 2.0))
 }
 
 ///|
@@ -772,11 +776,25 @@ pub let r_card : Double = 20.0
 pub let r_dialog : Double = 32.0
 
 ///|
-/// (a small panel's: a menu, a popover, a hover's card: its rows, capsules 34 high (menu_row_min), its padding in and
-/// concentric with it, panel_pad + 17 = 23: the ladder's small panels (corner_ladder). What stands further in in it
-/// is round by the ladder's next steps as a card's is: a taller row at its padding 18, what has a ground on its
-/// words' line 10.)
-pub let r_menu : Double = panel_pad + menu_row_min / 2.0
+/// (a small panel's: a menu, a popover, a hover's card, and a list card: a taller row at its padding (panel_pad) the
+/// ladder's row corner, 18, concentric with it, 18 + 6 / 1.25 = 22.8: the ladder's small panels (corner_ladder). What
+/// stands further in in it is round by the ladder's next steps as a card's is: what has a ground on its words' line 10.
+/// Its rows 34 high are capsules: they stand where that is concentric with it (menu_row_reach), a little nearer its
+/// edges.)
+pub let r_menu : Double = surface_corner(panel_pad, row_corner)
+
+///|
+/// How far a small panel's row `height` high reaches past its padding: a capsule (as high as twice the corner it would
+/// have there, or less) to where it is concentric with the panel's corner (capsule_in: a mouse's 34, 4.81 in, 1.19
+/// past), as every capsule in a corner stands (the user, 2026-10-27: a capsule in a smooth corner, off its curve);
+/// a taller row, rounded, none.
+pub fn menu_row_reach(height : Double) -> Double {
+  if height / 2.0 <= small_panel_inner(r_menu) + 0.5 {
+    dmax(0.0, panel_pad - capsule_in(r_menu, height))
+  } else {
+    0.0
+  }
+}
 
 ///|
 pub let r_option : Double = 12.0
@@ -2168,6 +2186,23 @@ pub fn pick_high() -> @ui.Style {
 }
 
 ///|
+/// A small panel's row's margins over and under it reaching `reach` past the panel's padding where it is the `first`
+/// or the `last` in it (menu_row_reach), none where it is not.
+pub fn ends_reach(reach : Double, first : Bool, last : Bool) -> (Double, Double) {
+  let none = 0.0
+  (if first { -reach } else { none }, if last { -reach } else { none })
+}
+
+///|
+/// A small panel's row as high as pick_high, its words text_in in from its ground (a menu's item): reaching past the
+/// panel's padding where it is a capsule, to stand concentric with the panel's corners (menu_row_reach), its words
+/// where they were.
+pub fn pick_reach() -> @ui.Style {
+  let r = menu_row_reach(theme().rows.pick)
+  @ui.style(mx=room(-r), px=room(text_in + r))
+}
+
+///|
 // kept across runs: a value (no field of it changes)
 let pick_high_wide : @ui.Style = @ui.style(min_h=Fixed(wide_rows.pick))
 
@@ -2184,7 +2219,7 @@ pub let menu_row_over : Double = 7.0
 /// capsule end, concentric with it, past the row's padding to there, the row no taller for it (a row of words is as
 /// high, its ＋ or × in it or not).
 pub let menu_row_end : @ui.Style = @ui.style(
-  mr=room(capsule_in(menu_row_min / 2.0, panel_pill) - text_in),
+  mr=room(capsule_in(menu_row_min / 2.0, panel_pill, room=menu_row_min / 2.0) - text_in - menu_row_reach(menu_row_min)),
   my=room((menu_row_min - 2.0 * menu_row_over - panel_pill) / 2.0),
 )
 
@@ -2238,7 +2273,7 @@ pub let toast_px : Double = 18.0
 pub let toast_action_h : Double = 28.0
 
 ///|
-pub let toast_action_in : Double = capsule_in(toast_r, toast_action_h)
+pub let toast_action_in : Double = capsule_in(toast_r, toast_action_h, room=toast_r)
 
 ///|
 pub let toast_max : Double = 560.0

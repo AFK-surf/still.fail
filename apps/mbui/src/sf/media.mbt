@@ -12,7 +12,8 @@ pub let media_bar_most : Double = 1080.0
 pub let media_bar_in : Double = 16.0
 
 ///|
-pub let media_bar_pad : Double = corner_inset
+/// (its round buttons, 32, in its foot corners concentric with it: capsule_in, 8.87 in a card's 26)
+pub let media_bar_pad : Double = capsule_in(card_corner, media_key_d)
 
 ///|
 /// Over its timeline, in the bar; its buttons' size (vvBtn: 32 across); so the bar is this tall, its timeline and a row
@@ -185,7 +186,7 @@ pub let media_strong : Int = 600
 ///|
 // kept across runs: a value (no field of it changes)
 pub let media_bar_box : @ui.Style = @ui.css("radius=Xl3").then(
-  @ui.style(pt=room(media_bar_top), pl=inset_room, pr=inset_room, pb=inset_room),
+  @ui.style(pt=room(media_bar_top), pl=room(media_bar_pad), pr=room(media_bar_pad), pb=room(media_bar_pad)),
 )
 
 ///|

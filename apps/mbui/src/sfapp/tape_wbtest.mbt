@@ -92,6 +92,15 @@ fn page_over(t : @ui.Tester, w : Double) -> Unit {
 }
 
 ///|
+/// Whether `a` is `b` as laid out (within a billionth: worked out through a capsule's place, smooth.mbt round_like).
+fn near_at(a : Double?, b : Double) -> Bool {
+  match a {
+    Some(x) => (x - b).abs() < 1.0e-9
+    None => false
+  }
+}
+
+///|
 /// Where the panel not in use said as `label` is drawn (its cover, the widest said so: tape_covers), from its left to
 /// its right edge.
 fn covered(t : @ui.Tester, label : String) -> (Double, Double)? {
@@ -119,15 +128,15 @@ test "on the tape with the window's buttons in the app's top row (a Mac's) what 
     // the page in use: the sidebar's strip at the left holds them, the page past it
     page_over(t, w)
     assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page, msg=at)
-    assert_eq(covered(t, "展开侧边栏").map(fn(e) { e.1 }), Some(left), msg=at)
+    assert_true(near_at(covered(t, "展开侧边栏").map(fn(e) { e.1 }), left), msg=at)
     // its side panel in use: the page's strip at the left holds them; at the right as before
     tap_said(t, "打开侧栏")
     t.run_for(@sfdesk.side_move_ms)
     assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel, msg=at)
-    assert_eq(covered(t, "收起侧边栏").map(fn(e) { e.1 }), Some(left), msg=at)
+    assert_true(near_at(covered(t, "收起侧边栏").map(fn(e) { e.1 }), left), msg=at)
     t.back()
     t.run_for(@sfdesk.side_move_ms)
-    assert_eq(covered(t, "打开侧栏").map(fn(e) { e.0 }), Some(w - @sfdesk.tape_shows), msg=at)
+    assert_true(near_at(covered(t, "打开侧栏").map(fn(e) { e.0 }), w - @sfdesk.tape_shows), msg=at)
   }
 }
 
@@ -150,17 +159,17 @@ test "on the tape the page or the side panel in use has the window but a strip o
     // the page in use: the sidebar a strip at the left, the page to 6 from the window's right
     page_over(t, w)
     assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page, msg=at)
-    assert_eq(covered(t, "展开侧边栏").map(fn(e) { e.1 }), Some(shows), msg=at)
+    assert_true(near_at(covered(t, "展开侧边栏").map(fn(e) { e.1 }), shows), msg=at)
     // its side panel open: a strip at the right too, the page between the two; the panel in use, the page a strip
     tap_said(t, "打开侧栏")
     t.run_for(@sfdesk.side_move_ms)
     assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel, msg=at)
-    assert_eq(covered(t, "收起侧边栏").map(fn(e) { e.1 }), Some(shows), msg=at)
+    assert_true(near_at(covered(t, "收起侧边栏").map(fn(e) { e.1 }), shows), msg=at)
     t.back()
     t.run_for(@sfdesk.side_move_ms)
     assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page, msg=at)
-    assert_eq(covered(t, "展开侧边栏").map(fn(e) { e.1 }), Some(shows), msg=at)
-    assert_eq(covered(t, "打开侧栏").map(fn(e) { e.0 }), Some(w - shows), msg=at)
+    assert_true(near_at(covered(t, "展开侧边栏").map(fn(e) { e.1 }), shows), msg=at)
+    assert_true(near_at(covered(t, "打开侧栏").map(fn(e) { e.0 }), w - shows), msg=at)
   }
 }
 
@@ -189,12 +198,12 @@ test "on the tape the edge beside the page, the sidebar's or the side panel's in
       t.run_for(slow_drag_ms)
     }
     assert_eq(@sfdesk.wide.side_w, 300.0, msg=at)
-    assert_eq(page_at(), before + 60.0, msg=at)
+    assert_true((page_at() - (before + 60.0)).abs() < 1.0e-9, msg=at)
     assert_true(t.find("调整侧边栏宽度") is None, msg=at)
     t.release(ex + 60.0, ey)
     t.frame()
     assert_eq(@sfdesk.wide.side_w, 300.0, msg=at)
-    assert_eq(page_at(), before + 60.0, msg=at)
+    assert_true((page_at() - (before + 60.0)).abs() < 1.0e-9, msg=at)
     assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side, msg=at)
     // the page in use: no edge (the page as wide as the window leaves past the strips)
     page_over(t, 720.0)
@@ -208,10 +217,10 @@ test "on the tape the edge beside the page, the sidebar's or the side panel's in
     let shown = page_end()
     let (px, py) = edge_middle(t, "调整侧栏宽度")
     drag_slowly(t, px, py, 200.0, up=false)
-    assert_eq(page_end(), shown + 200.0, msg=at)
+    assert_true((page_end() - (shown + 200.0)).abs() < 1.0e-9, msg=at)
     t.release(px + 200.0, py)
     t.frame()
-    assert_eq(page_end(), shown + 200.0, msg=at)
+    assert_true((page_end() - (shown + 200.0)).abs() < 1.0e-9, msg=at)
     assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel, msg=at)
   }
 }
@@ -756,9 +765,11 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   let at = (b.x - p.x, p.x + p.w - (b.x + b.w), p.y + p.h - (b.y + b.h), 0.0)
   let concentric = @sf.capsule_in(panel, h)
   assert_true(near4(at, (concentric, concentric, concentric, 0.0)), msg="the capsule from the panel's edges: \{at}")
-  // (the tape's 28 as round as a capsule 48 high stands concentric in, as near its edges as corner_fit lets: a finger's,
-  // its buttons 36, as high as that too, they 6 in, not 52)
-  assert_eq(h, 2.0 * (panel - @sf.corner_fit.near))
+  // (the tape's 28, as a circle reads it (@ui.round_like: 26.78): a capsule standing concentric 6 in, as the panel
+  // stands from the window's edge, is 41.56 high; a finger's 36 buttons 4 in its ends need 44: 44, 4.78 in)
+  let r = @ui.round_like(panel)
+  assert_true((h - (side + 2.0 * @sf.corner_fit.near)).abs() < 1.0e-9, msg="\{h}")
+  assert_true(2.0 * (r - @sf.window_in) < h && h < 2.0 * (r - @sf.corner_fit.near), msg="\{h}")
   assert_eq(t.corner_faults(), [])
   // lines more: the box concentric with the panel, the send button with the box, 12 in
   t.tap_text("发消息")
@@ -842,7 +853,7 @@ test "on a Mac's tape each panel's corners follow the window's where it stands a
   // (let go of from the next frame on; its change of shape over by twice its length after that)
   t.run_for(@sfpages.let_go_ms + 2.0 * @sfpages.morph_ms)
   guard composer_and_panel(t) is Some((k, p)) else { fail("no composer in a panel") }
-  let six = @sf.capsule_in(pane, 48.0)
+  let six = @sf.capsule_in(pane, k.h)
   let at = (k.x - p.x, p.x + p.w - (k.x + k.w), p.y + p.h - (k.y + k.h))
   assert_true(near4((at.0, at.1, at.2, 0.0), (six, six, six, 0.0)), msg="the capsule from the panel's edges: \{at}")
   assert_eq(t.corner_faults(), [])

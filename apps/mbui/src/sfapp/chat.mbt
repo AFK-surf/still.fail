@@ -364,7 +364,7 @@ fn station_tag(c : @ui.Ctx, s : Station) -> Unit {
   c.box(
     dir=Row,
     max_w=104.0,
-    pl=if s.via != "" { @sf.capsule_in(station_tag_h / 2.0, via_dot_side) } else { station_tag_end },
+    pl=if s.via != "" { station_dot_in } else { station_tag_end },
     pr=station_tag_end,
     pady=2.0,
     gap=4.0,
@@ -391,6 +391,10 @@ fn station_tag(c : @ui.Ctx, s : Station) -> Unit {
 ///|
 /// The tag's height (its words' 16 and 2 over and under), its words' room at its ends, its dot's side.
 let station_tag_h : Double = 20.0
+
+///|
+/// Where the dot leading a station's tag stands in its round end (a capsule's: round, @sf.capsule_in's room its half).
+let station_dot_in : Double = @sf.capsule_in(station_tag_h / 2.0, via_dot_side, room=station_tag_h / 2.0)
 
 ///|
 let station_tag_end : Double = 8.0
