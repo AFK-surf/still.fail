@@ -6,8 +6,7 @@
 # of the two (app: the design system, the pages, the screens, gallery and player; replay: the core and the flows seen
 # again), both by default; check-mbui runs each on a runner of its own. SFAPP_SHARDS: how many processes sfapp's test
 # files are run in side by side (5); 1, the pages' files all in one (the screen sweeps a process each beside them):
-# what one file leaves behind that a later one trips on shows best there; check-mbui runs them in 2, each its files
-# one after another. mbui's own:
+# what one file leaves behind that a later one trips on shows best there, and check-mbui runs them so. mbui's own:
 # its scripts/test.sh.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
@@ -102,8 +101,11 @@ for t in ${TARGETS:-native}; do
     # a process of its own)
     # (contrast's, every screen in every window in the dark theme, contrast_wbtest.mbt: left among the pages, their
     # process went from 96 s to 129 on CI and the app part's run with it, 2026-10-26; a process of its own)
+    # (kept_rows_kinds_wbtest.mbt's, every kind of message the fixtures hold opened twice, its rows kept and built,
+    # in five tests: 70 of the pages' 128 s, each file run alone on CI, 2026-10-27, 40344557870; among the pages one
+    # of their two processes was 207 s, the other 84; two processes of its own)
     sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:2 src/sfapp/squeeze_said_wbtest.mbt:1
-      src/sfapp/contrast_wbtest.mbt:1)
+      src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:2)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
     for w in "${sweeps[@]}"; do
