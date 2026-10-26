@@ -332,12 +332,15 @@ pub fn settings_side_rows(
       let id = c.id(key)
       let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), lit == Some(row.route))
       // (a sidebar's row of one line, as its others are: its mark, its words, how things stand at its end, left out
-      // where the row has not the room)
+      // where the row has not the room: its words whole till then, cut only where they alone have not)
       let draw = fn() {
         let look = t.chat_list.side_row.then(settings_side_across).then(@sf.finger_least_h())
         c.box(style=look.then(@ui.style(bg=Data(ground))), id~, fn() {
           settings_lead(c, core, here, row, true)
-          c.text(row.title, style=t.chat_list.title.then(settings_side_title)) |> ignore
+          c.box(style=settings_side_words, keep=true, fn() {
+            c.text(row.title, style=t.chat_list.title.then(settings_side_title), keep=true) |> ignore
+          })
+          |> ignore
           if row.value != "" {
             c.box(style=settings_side_end, drop=1, fn() {
               if row.dot {
@@ -405,8 +408,13 @@ let settings_side_mark : Double = 16.0
 let settings_side_across : @ui.Style = @ui.css("align=ACenter")
 
 ///|
+/// A sidebar row's words: what the row leaves its mark and what is at its end (settings_side_rows).
 // kept across runs: a value (no field of it changes)
-let settings_side_title : @ui.TextStyle = @ui.text_style(w=@sf.grow)
+let settings_side_words : @ui.Style = @ui.style(w=@sf.grow)
+
+///|
+// kept across runs: a value (no field of it changes)
+let settings_side_title : @ui.TextStyle = @ui.text_style(w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)

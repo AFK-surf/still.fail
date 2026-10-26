@@ -283,7 +283,7 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
       let n = c.box(style=@sf.list_line(frame.at), fn() {
         match line_at(i) {
           Top => list_space(c, frame.top + l.top_in)
-          Foot => list_space(c, frame.foot + l.foot_in)
+          Foot => list_space(c, frame.foot + @sf.list_foot_in(frame.at))
           Part(p) => (p.draw)()
           Wait(note, error) => list_waiting(c, note, error)
           Empty(v) => list_empty(c, v, filter)
@@ -348,12 +348,8 @@ fn open_chat() -> ChatRef? {
 }
 
 ///|
-/// The room over a list under its bar and at its foot with keyboard and mouse's lists (navScroll: 4, 12; the decisions' pane's
-/// too).
+/// The room over a list under its bar with keyboard and mouse's lists (navScroll: 4; the decisions' pane's too).
 pub let lists_top_in : Double = 4.0
-
-///|
-pub let lists_foot_in : Double = 12.0
 
 ///|
 /// Whether list `key` keeps its rows where they are (listMotion.ts usePointerOver, ListMotion.kt HeldOrder): it moving,

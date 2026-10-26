@@ -4,7 +4,8 @@
 // once the pointer has rested on its trigger, kept open while it is over the trigger or the card), a tooltip (Radix's
 // Tooltip: words about its trigger, shown once the pointer has rested on it or at once when the keyboard's focus comes
 // to it; shut by a press on the trigger and by Escape until the pointer leaves; one shown soon after another closed
-// skips the wait; to a finger, which rests on nothing, shown as it is held on the trigger, as Android's tooltips are).
+// skips the wait; to a finger, which rests on nothing, shown as it is held on the trigger, as Android's tooltips are,
+// gone a moment after it is lifted or with the next touch).
 // They come in growing out of the side of what they hang on (@motion.presence: `pop_in`, a tooltip `tip_in`) and go
 // back into it, a little quicker (`pop_out`).
 
@@ -191,7 +192,7 @@ pub let tooltip_lifted_ms : Double = 1500.0
 /// `key`'s tooltip (see the file's head) for the trigger `trigger` (its id), saying `text`: shown once a mouse has
 /// rested on it `delay` ms (at once within `skip` ms of another closing), or at once while it has the focus by the
 /// keyboard, or held by a finger on the trigger (long_press_ms: the press is then no tap) until tooltip_lifted_ms
-/// after it is lifted; beside the trigger, or beside `at` (a rect in the window: a point, the pointer, for a tip that follows
+/// after it is lifted or the next press, wherever it lands; beside the trigger, or beside `at` (a rect in the window: a point, the pointer, for a tip that follows
 /// it along a tall thin trigger, the web's usePointerTip). `shown`: held open by the app meanwhile (a mark that only
 /// explains itself, tapped by a finger, which rests on nothing). Whether it shows.
 pub fn tooltip(
@@ -216,15 +217,22 @@ pub fn tooltip(
   // (a mouse's: a finger held on a button or dragging a list over one shows no tip, @ui.pointing)
   let hovered = @ui.pointing() is Mouse && (c.hovered(trigger) || pointer_in(c, trigger))
   let focused = c.focus_shown(trigger)
-  // a finger held on the trigger: shown while it stays down and a moment after
+  // a finger held on the trigger: shown while it stays down, then a moment after it is lifted, or until the next press
+  // (wherever it lands, a tap's let go before a frame saw it down too: a tip says what was held, the next touch goes on
+  // to something else)
   if @ui.pointing() is Finger && c.held_long(trigger) {
-    kit.val.held_tips[id] = true
+    kit.val.held_tips[id] = false
   }
-  if kit.val.held_tips.contains(id) {
-    let (_, _, down) = c.pointer()
-    if after(c, key + "/lifted", !down, tooltip_lifted_ms) {
-      kit.val.held_tips.remove(id)
+  match kit.val.held_tips.get(id) {
+    Some(lifted) => {
+      let (_, _, down) = c.pointer()
+      if (lifted && (down || c.tapped_anywhere() is Some(_))) || after(c, key + "/lifted", !down, tooltip_lifted_ms) {
+        kit.val.held_tips.remove(id)
+      } else if !down {
+        kit.val.held_tips[id] = true
+      }
     }
+    None => ()
   }
   let held = kit.val.held_tips.contains(id)
   // pressed, or Escape: shut until the pointer and the focus have left it

@@ -42,9 +42,12 @@ pub(all) struct ChatList {
   face_ground : @ui.Style
   face_ring : @ui.Style
   /// the room over its first row and under its last, past what the frame gives (navScroll's padding; none on a touch
-  /// device)
+  /// device, across the whole screen its rows' grounds reaching its edges); under its last in a side column
+  /// (list_foot_in): navScroll's with keyboard and mouse, touch's as far as its rows stand in from the column's sides
+  /// (band_in), its last row's ground as clear of its foot, in a panel's foot corners as in its sides
   top_in : Double
   foot_in : Double
+  side_foot_in : Double
   /// what stands over a sidebar's list, in a line with its rows (新建对话, 待处理, the search's field): how far in from
   /// the list's edge its ground is, its words from its ground, its mark, its height, its words: one set, so they stand
   /// on one line (keyboard and mouse's the web's navNew row: 8, 10, 16, 32, 13; touch's the phone's search field: 16,
@@ -119,6 +122,7 @@ pub let mouse_chat_list : ChatList = {
   face_ring: @ui.css("w=S5 h=S5 radius=Full border=B1 border_color=Fg"),
   top_in: 4.0,
   foot_in: 12.0,
+  side_foot_in: 12.0,
   band_in: mouse_band_in,
   band_pad: mouse_band_pad,
   band_icon: 16.0,
@@ -172,6 +176,7 @@ pub let touch_chat_list : ChatList = {
   face_ring: @ui.style(w=touch_face_ring, h=touch_face_ring, radius=Full, border=B1, border_color=Fg),
   top_in: 0.0,
   foot_in: 0.0,
+  side_foot_in: touch_band_in,
   band_in: touch_band_in,
   band_pad: touch_band_pad,
   band_icon: 17.0,
@@ -234,6 +239,18 @@ pub fn list_line_in(at : ListAt) -> Double {
   match at {
     Side => theme().chat_list.band_in
     Whole => 0.0
+  }
+}
+
+///|
+/// How far under its last line a list's box goes, past what the frame gives (Sidebar.css.ts navScroll's foot): in a
+/// side column the theme's side_foot_in, its last row clear of the column's foot as of its sides; across the whole
+/// screen its foot_in.
+pub fn list_foot_in(at : ListAt) -> Double {
+  let l = theme().chat_list
+  match at {
+    Side => l.side_foot_in
+    Whole => l.foot_in
   }
 }
 

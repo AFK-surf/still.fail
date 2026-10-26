@@ -12,7 +12,8 @@ priv struct KitState {
   opens : Map[Int, Bool]
   /// a tooltip kept shut until the pointer leaves its trigger (pressed, or Escape)
   shut : Map[Int, Bool]
-  /// a tooltip a finger held open on its trigger, until a moment after it is lifted
+  /// a tooltip a finger held open on its trigger, until a moment after it is lifted or the next press: whether it has
+  /// been lifted
   held_tips : Map[Int, Bool]
   /// toasts as drawn (toast.mbt), by their viewport's id; when the next of a viewport's goes (toast_due), by its key
   toasts : Map[Int, Kept]

@@ -198,7 +198,7 @@ test "tooltip: shown once the pointer has rested on its trigger; at once by the 
 }
 
 ///|
-test "tooltip: to a finger, shown as it is held on the trigger (no tap then), gone a moment after it is lifted" {
+test "tooltip: to a finger, shown as it is held on the trigger (no tap then), gone a moment after it is lifted or with the next touch" {
   let shown = Ref(false)
   let taps = Ref(0)
   let t = @ui.Tester::new(
@@ -234,6 +234,26 @@ test "tooltip: to a finger, shown as it is held on the trigger (no tap then), go
   assert_true(shown.val)
   t.run_for(due - t.time())
   assert_false(shown.val)
+  // held again and lifted: the next touch puts it away at once, wherever it lands, a tap let go before a frame saw it
+  // down too; one on the trigger itself is a tap of it
+  for at in [(10.0, 10.0), (x + w / 2.0, y + h / 2.0)] {
+    t.press_at(x + w / 2.0, y + h / 2.0)
+    t.draw()
+    t.run_for(@ui.long_press_ms)
+    t.release(x + w / 2.0, y + h / 2.0)
+    assert_true(shown.val)
+    t.tap(at.0, at.1)
+    assert_false(shown.val, msg="a tap at \{at}")
+  }
+  assert_eq(taps.val, 2)
+  t.press_at(x + w / 2.0, y + h / 2.0)
+  t.draw()
+  t.run_for(@ui.long_press_ms)
+  t.release(x + w / 2.0, y + h / 2.0)
+  t.press_at(10.0, 10.0)
+  t.draw()
+  assert_false(shown.val, msg="a finger down elsewhere")
+  t.release(10.0, 10.0)
 }
 
 ///|
