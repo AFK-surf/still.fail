@@ -162,6 +162,8 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
   } else {
     @sf.rail_ground_radius(Window, closed_bar_in + rail_closed_ground_in, alone=in_bar.radius())
   }
+  // (what it stands on: the marks hung on its grounds' corners on discs of it)
+  rail_under.val = dock_ground(bar)
   let look = if bar {
     rail_closed
   } else if wide.tape {
@@ -218,7 +220,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
     // the workspaces (sfpages' workspace.mbt), on the rail's squares and with its corner's marks
     @sfpages.workspace_squares(c, src, w, all, {
       square: fn(ground, body, id) { rail_square(c, ground, body, id~) },
-      corner: fn(tone) { rail_corner_mark(c, tone) },
+      corner: fn(tone) { rail_tone_mark(c, tone) },
     })
     // settings
     let gear = c.id("rail/settings")
@@ -388,24 +390,28 @@ let rail_round : Ref[@ui.Radius] = Ref(Full)
 let rail_sq_side : Double = 30.0
 
 ///|
-/// What waits in a list of chats or another workspace (Rail.css.ts listMark, mark): its rows' mark (ChatMark.css.ts
-/// chatMarkInline) on a disc of the rail's ground 2 round it, at the place's 38 top right corner 3 in (`at` -3: a
-/// list's) or the workspace's square's 4 out (4); a list's `shown` of the way in as the sidebar folds (listMark: from
-/// clear at 40%, moved with it).
-fn rail_corner_mark(c : @ui.Ctx, tone : String, at? : Double = 4.0, shown? : Double = 1.0) -> Unit {
-  let ground = if wide.in_bar || side_folded() { rail_mark_bar } else { rail_mark_side }
+/// What the rail stands on this frame (dock_ground: the sidebar's ground, or the closed bar's or the tape's panel's).
+/// Said by the rail as it is built.
+// kept across runs: said by the rail each build
+let rail_under : Ref[Int64] = Ref(0L)
+
+///|
+/// A mark hung on the top right corner of one of the rail's grounds (a place's, a workspace's square: drawn in it,
+/// after what is on it): on the corner, not in it (docs/ui-panels.md, the user, 2026-10-17: @sf.on_corner), its middle
+/// on the ground's curve where it turns 45° (its corner this frame: rail_round), on a disc of what the rail stands on
+/// 2 round it (rail_under), which the ground, lit, shows cut out of it. `shown` of the way in (a list's as the sidebar
+/// folds: Rail.css.ts listMark, from clear at 40%, moved with it).
+fn rail_hung(c : @ui.Ctx, mark : () -> Unit, shown? : Double = 1.0) -> Unit {
+  let reach = @sf.on_corner(c.theme().corner(rail_round.val), rail_hung_side, room=rail_sq_side / 2.0)
   c.layer(fn() {
     c.box(style=corner_end, fn() {
-      let i = c.box(style=ground, tx=at, ty=-at, fn() {
-        if tone == "invite" {
-          @sfpages.invite_dot(c, "")
-        } else {
-          chat_mark(c, tone) |> ignore
+      c.box(style=rail_hung_room, tx=reach, ty=-reach, fn() {
+        let i = c.box(style=rail_hung_ring.then(@ui.style(bg=Data(rail_under.val))), mark)
+        if shown < 1.0 {
+          c.look(i, @ui.look(alpha=shown, scale=fold_at(mark_folded_from, 1.0, shown)))
         }
       })
-      if shown < 1.0 {
-        c.look(i, @ui.look(alpha=shown, scale=fold_at(mark_folded_from, 1.0, shown)))
-      }
+      |> ignore
     })
     |> ignore
   })
@@ -413,25 +419,43 @@ fn rail_corner_mark(c : @ui.Ctx, tone : String, at? : Double = 4.0, shown? : Dou
 }
 
 ///|
-// kept across runs: a value (no field of it changes)
-let rail_mark_side : @ui.Style = @ui.css("p=S0_5 radius=Full bg=Sidebar")
+/// What waits in a list of chats or another workspace (Rail.css.ts listMark, mark), hung on its ground's corner
+/// (rail_hung): its rows' mark (ChatMark.css.ts chatMarkInline), or an invitation's dot.
+fn rail_tone_mark(c : @ui.Ctx, tone : String, shown? : Double = 1.0) -> Unit {
+  rail_hung(c, shown~, fn() {
+    if tone == "invite" {
+      @sfpages.invite_dot(c, "")
+    } else {
+      chat_mark(c, tone) |> ignore
+    }
+  })
+}
+
+///|
+/// The room a mark hangs in, its middle the corner's: as large as the largest with its disc (a ring 10 across, 2 round
+/// it), each centred in it.
+let rail_hung_side : Double = 14.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rail_mark_bar : @ui.Style = @ui.css("p=S0_5 radius=Full bg=Surface")
+let rail_hung_room : @ui.Style = @ui.style(
+  w=Fixed(rail_hung_side),
+  h=Fixed(rail_hung_side),
+  align=ACenter,
+  justify=JCenter,
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let rail_hung_ring : @ui.Style = @ui.css("p=S0_5 radius=Full")
 
 ///|
 /// What stands at a square's top right (a layer's whole, its end).
 // kept across runs: a value (no field of it changes)
 let corner_end : @ui.Style = @ui.css("w=Full align=AEnd")
 
-
 ///|
 let mark_folded_from : Double = 0.4
-
-///|
-/// A list's mark 3 in from its place's corner (Rail.css.ts listMark: top 3, right 3).
-let list_mark_in : Double = -3.0
 
 ///|
 /// The sidebar's ground where it is a panel of its own: the closed bar's, floating over the page (closed_ground); on
@@ -457,18 +481,9 @@ pub fn closed_ground() -> Int64 {
 }
 
 ///|
-/// What waits on a place: its dot 4 in from its 38's top right (Rail.css.ts count: 6 from the 38's corner, 2 of it the
-/// ring cut out of the rail's ground).
+/// What waits on a place: a red dot 8 across hung on its ground's corner (Rail.css.ts count: rail_hung).
 // kept across runs: a value (no field of it changes)
-let rail_dot_at : @ui.Style = @ui.css("w=Full pt=S1 pr=S1 align=AEnd")
-
-///|
-// kept across runs: a value (no field of it changes)
-let rail_dot_ring : @ui.Style = @ui.css("w=S3 h=S3 p=S0_5 radius=Full bg=Sidebar")
-
-///|
-// kept across runs: a value (no field of it changes)
-let rail_dot : @ui.Style = @ui.css("w=Full h=Full radius=Full bg=Danger")
+let rail_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Danger")
 
 ///|
 /// 奏, the word, its size the icons' (Rail.css.ts zou: textTitle, 20 high, 600).
@@ -554,6 +569,14 @@ fn rail_place(
       @sf.t("web-main.decisions.entry", args=[("n", count(here, "decisions").to_string())])
     _ => rail_label(src, place)
   }
+  // what wants the person in a list, as its rows' marks: while the sidebar is folded (open, the rows show it;
+  // Rail.css.ts listMark)
+  let tone = match place {
+    "chats" => text(here, "tone")
+    "mine" => text(here, "mineTone")
+    "watching" => text(here, "watchingTone")
+    _ => ""
+  }
   rail_edit_frame(c, src, w, place, moved, fn() {
     rail_ground(c, id, on || (place == "attention" && wide.attention_open), fn(color) {
       if place == "decisions" {
@@ -564,31 +587,18 @@ fn rail_place(
       } else {
         @sf.icon(c, rail_icon(place), size=rail_icon_size, color~) |> ignore
       }
+      // hung on its ground's corner
+      if tone != "" && wide.mark > 0.0 {
+        rail_tone_mark(c, tone, shown=wide.mark)
+      }
+      if dot {
+        rail_hung(c, fn() { c.box(style=rail_dot, fn() {  }) |> ignore })
+      }
     }, label~, tipped=!rail_carded(place))
     // 对话's, 用量's: what the place is about at a glance, beside it as the pointer rests on it (in place of its tip: what
     // it said is in the card; 用量's with the card to share of the agents' week)
     if rail_carded(place) && !wide.editing {
       @sfpages.hover(c, "rail/card/" + place, id, side=Right, along=Start, fn() { @sfpages.rail_card(c, src, w, place) })
-      |> ignore
-    }
-    // what wants the person in a list, as its rows' marks: on its icon's corner while the sidebar is folded (open,
-    // the rows show it; Rail.css.ts listMark)
-    let tone = match place {
-      "chats" => text(here, "tone")
-      "mine" => text(here, "mineTone")
-      "watching" => text(here, "watchingTone")
-      _ => ""
-    }
-    if tone != "" && wide.mark > 0.0 {
-      rail_corner_mark(c, tone, at=list_mark_in, shown=wide.mark)
-    }
-    if dot {
-      c.layer(fn() {
-        c.box(style=rail_dot_at, fn() {
-          c.box(style=rail_dot_ring, fn() { c.box(style=rail_dot, fn() {  }) |> ignore }) |> ignore
-        })
-        |> ignore
-      })
       |> ignore
     }
   })

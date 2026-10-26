@@ -457,15 +457,13 @@ fn dock(
   // (a panel's corners the tape's sidebar's, the closed bar's its own: each in the window's the window's less its 6 from
   // it where it follows it)
   let look = if apart {
-    dock_apart.then(@ui.style(radius=@sf.corners_radius(tape_pane_corners(Side, false))))
+    dock_look.then(@ui.style(radius=@sf.corners_radius(tape_pane_corners(Side, false))))
   } else if bar {
-    dock_closed.then(@ui.style(radius=@sf.closed_bar_corner(rail_closed_ground_in)))
+    dock_look.then(@ui.style(radius=@sf.closed_bar_corner(rail_closed_ground_in)))
   } else {
-    dock_open
+    dock_look
   }
-  // (a panel of its own, the closed bar or on the tape: on its ground (apart_ground), as the lists' bands on it are: one
-  // ground under all of it, whatever the theme's surface is on this system)
-  let look = if bar || apart { look.then(@ui.style(bg=Data(apart_ground()))) } else { look }
+  let look = look.then(@ui.style(bg=Data(dock_ground(bar))))
   let dock_w = dmax(0.0, col - ml - mr)
   let dock_h = dmax(0.0, c.height - top - foot - mt - mb)
   c.layer(fn() {
@@ -510,21 +508,23 @@ fn dock(
 let dock_column : @ui.Style = @ui.css("h=Full")
 
 ///|
-/// The block open (the sidebar's ground, its line and shadow there but clear) and closed to the bar (a floating
-/// panel's ground, its corner concentric with the places' grounds 6 in: shell.css.ts dock, closed); both cut what goes
-/// past their edges.
+/// The block open (its line and shadow there but clear) and closed to the bar or on the tape (a floating panel's, its
+/// corner concentric with the places' grounds 6 in: shell.css.ts dock, closed; on the tape the page's panel's, all the
+/// tape's panels alike, asked 2026-10-24); both cut what goes past their edges. On its ground (dock_ground).
 // kept across runs: a value (no field of it changes)
-let dock_open : @ui.Style = @ui.css("row bg=Sidebar border=B1 clip")
+let dock_look : @ui.Style = @ui.css("row border=B1 clip")
 
 ///|
-// kept across runs: a value (no field of it changes)
-let dock_closed : @ui.Style = @ui.css("row bg=Surface border=B1 clip")
-
-///|
-/// On the tape, a panel of its own as the closed bar is, its corner the page's panel's: all the tape's panels alike
-/// (asked, 2026-10-24).
-// kept across runs: a value (no field of it changes)
-let dock_apart : @ui.Style = @ui.css("row bg=Surface border=B1 clip")
+/// What the block stands on: open, the sidebar's ground; a panel of its own (the closed bar, or on the tape) the
+/// ground it floats on (apart_ground), as the lists' bands on it are: one ground under all of it, whatever the theme's
+/// surface is on this system. The rail's marks are on discs of it (rail_hung).
+fn dock_ground(bar : Bool) -> Int64 {
+  if bar || wide.tape {
+    apart_ground()
+  } else {
+    @sf.theme().p.sidebar
+  }
+}
 
 ///|
 /// The sidebar in the block: its width, the block's height.
