@@ -1,14 +1,38 @@
 # One app: the screen, the input, pages and the shell
 
 still.fail's mbui app is one app on every device (the user, 2026-10-24: 「应该得打成同一个 app 了」). There is no phone
-app and desktop app. How it is laid out follows the screen, in three tiers, and the native input (touch, or keyboard and
-mouse, as the app was started). How it answers the hand follows the input, and only that: the input never decides what is shown, where,
-or how big (the user, 2026-10-25: 「布局不是按屏幕类型和尺寸来的，而是跟操作方式有关……我怀疑是系统性问题」). A tablet given a
-trackpad, a laptop touched on its screen, stays laid out as it was. Each page exists once and is drawn into whichever
-tier it lands in, on either kind of screen, with either hand.
+app and desktop app. How it is arranged follows the screen, in three tiers, each arranged as is best for it (the user,
+2026-10-26: 「没必要把布局也三屏统一吧」「不然屏跟屏之间还有啥差距」). The input (touch, or keyboard and mouse) decides how
+it answers the hand and the size words and icons are drawn at, and only that: never what is shown, where, nor how much
+room a thing has to be pressed (the user, 2026-10-25: 「布局不是按屏幕类型和尺寸来的，而是跟操作方式有关……我怀疑是系统性问题」).
+A tablet given a trackpad, a laptop touched on its screen, stays arranged as it was. Each function exists once, one
+code and one data, and is drawn into whichever tier it lands in, on either kind of screen, with either hand.
 
 This replaces the earlier "the desktop and the phone are two apps" (two page sets: `sfapp`'s, ported from the Kotlin
 app, and `sfdesk`'s, ported from the web's desktop files). The way from here to there is at the end.
+
+## Six principles (the user, 2026-10-26)
+
+Everything below follows from these; where something below says otherwise, these hold.
+
+1. **Every function is as easy to reach with either input; the ways may differ.** Hover, a right click, ⌘K and the
+   keys are keyboard and mouse's ways; a swipe and a long press are touch's. Nothing is reached by the keys alone.
+2. **What always shows and is pressed has room to be pressed, 44×44 at least, overlapping no other's**, on every
+   screen with either input. With keyboard and mouse it may be drawn smaller; its room is not. What shows only under a
+   hovering pointer is mouse's way, and may be mouse's size only where touch has an equal way to the same.
+3. **Steps one after another stay near each other.** On `Small` a menu, a pick and a confirm rise from the foot; on
+   `Medium` and `Large` a menu and a pick float beside what opened them, a confirm in the middle. The screen decides
+   it, not the input.
+4. **The screen decides the arrangement; the input only how things answer:** lit under a hovering pointer or a press,
+   a right click and a long press opening the same menu, the keys, the size words and icons are drawn at (rule 2
+   untouched).
+5. **What is shown and what can be done are the same on the three screens; each is arranged as is best for it.** A
+   narrow page puts one thing on a line. A wide page uses its width: what goes together on one line, a row's actions
+   at its end, short things side by side in columns, things compared in a table, fields not the column's whole width,
+   its content in a column of about 760. Which arrangement is the library's parts' choice, by `look()`; a page is
+   written once.
+6. **Actions stay near what they act on:** a row's in the row, a page's in its head; a switch is not hidden on the
+   next page.
 
 ## The terms (术语)
 
@@ -18,13 +42,14 @@ phone app", "a touch device", "the screen's kind".
 
 | 术语 | Term | Read by | What it decides |
 |---|---|---|---|
-| 屏幕 | the screen | `@sf.layout(width)` | Three tiers, 小屏 / 中屏 / 大屏 (`Small`, `Medium`, `Large`), plus the special screens: a fold half open with its crease across lays a chat out as 小屏 does, a phone is used upright only. How the panes are arranged and where something opened goes. |
-| 原生操控 | the native input | `@sf.native_input()` | Touch (`Finger`) or keyboard and mouse (`Mouse`), as the app was started, the same the whole run. The theme's sizes (words, row heights, what a press reaches), what shows only under a pointer and how else it is reached, what Enter does, scroll bars; with the screen's tier, how a menu or a pick shows (a sheet or beside what opened it) and how search is opened (the field over the list or ⌘K). |
+| 屏幕 | the screen | `@sf.layout(width)` | Three tiers, 小屏 / 中屏 / 大屏 (`Small`, `Medium`, `Large`), plus the special screens: a fold half open with its crease across lays a chat out as 小屏 does, a phone is used upright only. How the panes are arranged, where something opened goes, and how a menu, a pick or a confirm shows (from the foot on `Small`, beside what opened it or in the middle on the others). |
+| 原生操控 | the native input | `@sf.native_input()` | Touch (`Finger`) or keyboard and mouse (`Mouse`), as the app was started, the same the whole run. The size words, icons and rows are drawn at (never a press's room: rule 2), what shows only under a pointer and touch's way to the same, what Enter does, scroll bars, how search is opened (the field over the list or ⌘K). |
 | 当前操控 | the current input | `@ui.pointing()` | Touch or keyboard and mouse as it is used at the moment; it may change while the app runs. How a thing answers the hand alone (`c.lit`, how a menu is asked for, tips, drags); never what is shown, where or how big. |
 | 页面宽窄 | a page's width | `@sf.look()` | 窄排法 / 宽排法 (`Narrow`, `Wide`): how a page arranges itself in the box it is given, by that box's width. |
 
-Sizes (words, row heights, touch targets) follow the native input, not the tier: a tablet's 大屏 has touch's sizes, a
-computer's narrow window keyboard and mouse's.
+The size things are drawn at (words, icons, row heights) follows the native input, not the tier: a tablet's 大屏 has
+touch's sizes, a computer's narrow window keyboard and mouse's. The room a thing always shown is pressed in follows
+neither: 44×44 at least everywhere, overlapping no other's (rule 2).
 
 ## The screen and the input, each read in one place
 
@@ -39,23 +64,24 @@ Android's activity asks for portrait there (`Host.upright`), an iPhone supports 
 The app turning it itself is the exception (a film full screen, a station's screen: `@hostapi.set_sideways(true)`); back
 upright after. A tablet and an opened fold's inner screen turn as they are held.
 
-- **The layout is the screen's and the native input's.** The native input and the tier, and a page's own width (below), decide everything about what
-  is shown, where and how big. Nothing else does: `wide_on`, `@settings.wide`, `t.narrow`, the viewer host's `narrow`
-  and `set_web_lines(wide)` go, and so does every use of the input for any of these.
-  - **The tier:** how the shell arranges the panes, and where something opened goes (pushed, a pane, a side tab).
-  - **The native input:**
-    - the look: the theme's palette, type scale and row heights, and touch targets (44 at least with touch: a row that
-      high; a button drawn its own size, a finger reaching it from round it, mbui's finger_reach: what shows and what a
-      finger takes need not be the same, the user, 2026-10-26);
-      touch's is the phone's, keyboard and mouse's the web's. The panes side by side are told apart by their grounds in
+- **The arrangement is the screen's.** The tier, and a page's own width (below), decide what is shown where. Nothing
+  else does: `wide_on`, `@settings.wide`, `t.narrow`, the viewer host's `narrow` and `set_web_lines(wide)` go, and so
+  does every use of the input for it.
+  - **The tier:** how the shell arranges the panes, where something opened goes (pushed, a pane, a side tab), how a
+    menu, a pick or a confirm shows (Presenters, below: from the foot on `Small`; on `Medium` and `Large` a menu or a
+    pick beside what opened it, a confirm in the middle), and where ⌘K's search shows (its panel over the window, or
+    on `Small` the search page).
+  - **The native input** (the ways and the sizes, not the arrangement):
+    - the look: the theme's palette, type scale, icons and row heights; touch's is the phone's, keyboard and mouse's
+      the web's. What is drawn smaller keeps its room to be pressed (rule 2: 44×44 at least, overlapping no other's;
+      a button drawn its own size, a press reaching it from round it, mbui's finger_reach: what shows and what a press
+      takes need not be the same, the user, 2026-10-26). The panes side by side are told apart by their grounds in
       both, as the web's: the sidebar a step under the page's ground (touch: the page's beige `bg`, the sidebar a step
       under it, what is chosen in it a step under that);
-    - what a page offers to reach things: with touch the search field at the top of the chats' list, with keyboard
-      and mouse ⌘K;
+    - what a page offers to reach things (rule 1, each input a way as easy): with touch the search field at the top of
+      the chats' list, with keyboard and mouse ⌘K;
     - the keyboard: with keyboard and mouse Enter sends and the composer takes the focus as a chat opens; with touch
       Enter makes a new line and nothing raises the keyboard unasked.
-  - **Both:** how a menu, a pick or a confirm shows (Presenters, below): a sheet with touch short of Large,
-    else a popover or a dialog. And where ⌘K's search shows: its panel over the window, or in `Small` the search page.
 - **The current input only says how a thing answers the hand.** Changing hands changes none of the layout:
   - feedback: `c.lit` lights on hover with a mouse and on press with a finger;
   - what a pointer over a thing shows (`c.hovered`: a row's time, its 归档), which a finger reaches otherwise (the
@@ -76,32 +102,45 @@ upright after. A tablet and an opened fold's inner screen turn as they are held.
 
 ### The same on every screen, and what differs
 
-The same on a phone, a tablet and a computer: each page's content, its blocks and their order, what can be done there
-and its words; the parts it is made of; the palette, the corner ladder, the icons, the kinds of motion and the type's
-hierarchy; the presenters and the shell's ways.
+The same on a phone, a tablet and a computer: each page's content, what can be done there and its words; the parts it
+is made of; the palette, the corner ladder, the icons, the kinds of motion and the type's hierarchy; the presenters and
+the shell's ways; the room a thing always shown is pressed in (rule 2).
 
-What differs comes of two things alone, the native input and a width, and none of it is decided in a page:
+Not the same: the arrangement. Each screen is arranged as is best for it (rule 5): its blocks may be put otherwise,
+side by side or one under another, in a table or a list, so long as what is shown and what can be done are the same.
+
+What differs comes of two axes, and none of it is decided in a page:
+
+**The screen (its tier, and the width of the box a page is drawn in): the arrangement.**
 
 | What differs | By | Decided in |
 |---|---|---|
-| Sizes: the type, row heights, density, touch targets (44 at least with touch: rows; buttons reached from round them, drawn their own size) | the native input | the theme, chosen once (`@sf.begin`) |
-| What only a pointer's hover would show (a row's 归档, its time, its ⋯): with touch always there, or on a long press | the native input | the library's parts (sf/hand.mbt) |
-| A menu, a pick, a confirm: a sheet from the foot, or a popover or a dialog | the native input and the tier | the presenters |
-| Reaching things: the search field over the chats' list or ⌘K; the bottom bar or the rail | the native input and the tier | the shell |
+| The panes: one stack, the tape, columns | the tier (the window's width) | the shell |
+| A menu, a pick: a sheet from the foot (`Small`), or floating beside what opened it (`Medium`, `Large`); a confirm: from the foot (`Small`), or a dialog in the middle | the tier | the presenters |
+| Reaching places: the bottom bar or the rail; ⌘K's search as a page (`Small`) or a panel over the window | the tier | the shell |
+| A page's head and column: narrow, under 640 (back over a large title, the page's room 12 at its sides), or wide (its head, the page's actions at its end, one column at most 760 in the middle) | the page's own width | the library's page (`@sf.page`) |
+| A page's parts: narrow, one thing on a line; wide, using the width (what goes together on one line, a row's actions at its end, short things side by side, things compared in a table, fields not the column's whole width, rows denser). On both, its sections under their titles (one level: no heading under a section's), a section's rows on a list card (`@sf.group`), words with their buttons on a content card (the user, 2026-10-26: 「设置感觉很乱」, a wide page's rows were on the page or on cards for no reason) | the page's own width (`look()`) | the library's parts |
+
+**The input: the ways and the sizes, never the arrangement or a press's room.**
+
+| What differs | By | Decided in |
+|---|---|---|
+| The size words, icons and rows are drawn at, and the density (never a press's room under 44×44, nor two overlapping: rule 2) | the native input | the theme, chosen once (`@sf.begin`) |
+| What only a pointer's hover would show (a row's 归档, its time, its ⋯): touch's as easy a way to the same (the row's menu on a long press, a swipe), or always there | the native input | the library's parts (sf/hand.mbt) |
+| Reaching things: the search field over the chats' list or ⌘K; the keys | the native input | the shell |
 | Enter makes a new line or sends; the keyboard raised as a chat opens or not | the native input | the library's fields |
 | Scroll bars: none with touch | the native input | the library (`scroll_bar.mbt`) |
-| The panes: one stack, the tape, columns | the tier (the window's width) | the shell |
-| A page's head and column: narrow, under 640 (back over a large title, the page's room 12 at its sides), or wide (its head, one column at most 760 in the middle). On both, its sections under their titles (one level: no heading under a section's), a section's rows on a list card (`@sf.group`), words with their buttons on a content card (the user, 2026-10-26: 「设置感觉很乱」, a wide page's rows were on the page or on cards for no reason) | the page's own width | the library's parts |
+| How a thing answers: lit under a hovering pointer or a press, a right click or a long press for the same menu, tips | the current input | the library's primitives (`c.lit`, `c.menu_asked`) |
 
 So:
-- **A phone:** Small, a page at a time, laid out narrow, touch's sizes, sheets, the bottom bar, swiped back,
-  upright.
+- **A phone:** Small, a page at a time, laid out narrow, touch's sizes, menus, picks and confirms from the foot, the
+  bottom bar, swiped back, upright.
 - **A tablet:** the tape held upright (Medium), columns on its side (Large); each pane laid out by its own width (a
-  narrow one narrow); touch's sizes and targets; sheets on the tape, popovers in columns; the rail; turned as
-  it is held.
-- **A computer:** columns (Large), laid out wide, the web's sizes and density, popovers and dialogs, ⌘K and the keys,
-  what a pointer's hover shows. A window made narrow takes the tape or the stack and the narrow anatomy, at
-  keyboard and mouse's sizes.
+  narrow one narrow); touch's sizes; menus and picks beside what opened them, confirms in the middle; the rail; turned
+  as it is held.
+- **A computer:** columns (Large), laid out wide, the web's sizes and density, menus and picks beside what opened
+  them, dialogs, ⌘K and the keys, what a pointer's hover shows. A window made narrow takes the tape or the stack and
+  the narrow arrangement, at keyboard and mouse's sizes, its presses' room still 44×44.
 
 ## Three kinds of UI code
 
@@ -113,15 +152,20 @@ frame around them), and the **presenters**:
 - `@sf.menu`, `@sf.pick`, `@sf.panel` (a small panel of rows or fields), `@sf.confirm`, `@sf.ask`.
   - A sheet spans the window, not the pane that opened it: on the tape it is over every panel.
 - A page says what it shows; the presenter decides how:
-  - with touch in Small or Medium, it shows as a bottom sheet;
-  - otherwise, as a popover anchored to what opened it (menu, pick, panel) or a centred dialog (confirm, ask).
+  - in `Small`, it shows as a bottom sheet;
+  - in `Medium` and `Large`, as a popover anchored to what opened it (menu, pick, panel) or a centred dialog
+    (confirm, ask);
+  - by the tier alone, with either input (rule 3).
 - One host draws them all, over the shell. Today's hosts become it: the app's `sheet.mbt`, `decide.mbt`'s `dui.sheet`,
   `settings/sheet.mbt`, and sfdesk's dialogs.
 
 And **a page's parts**: its frame (back and title, or a head of its own: a mark, a name, what it is, what it does),
 sections, groups of rows, rows (to another page, a value, a switch, a pick), cards, notes, choices, buttons and
 fields. Each is laid out as the page it is in is (the anatomy above): the page's frame decides that once, by the
-page's width, and its parts take it from there. A part never measures its own box for it (a section in a 380 column
+page's width, and its parts take it from there. A part has an arrangement of its own for each width (`look()`), each
+the best for it, not the narrow one stretched: a wide row puts what goes together on one line and its actions at its
+end, wide rows are denser, a wide field is not the column's whole width; its rows' height by the input, their room to
+be pressed by rule 2. A part never measures its own box for it (a section in a 380 column
 of a wide page is a wide page's section, and a computer's 480 dialog is no narrow page: what a presenter holds is laid
 out as the presenter says), and a page never passes it to them. Each takes its sizes from the theme. So a page made of
 them is right in any box on either screen. There is one of each, and none draws one screen's
@@ -169,7 +213,8 @@ settings page, each place, sign-in, the landing. There is no phone copy and desk
 - **Its bar:** it says what its bar holds (title, lead, actions). The shell frames it: a back where there is one to
   go to, the window buttons' inset, the glass.
 - **Its design:** made once, from what the page is for: what a person comes to it to see and to do, and in what
-  order. Its structure is the same on every screen; what differs is the table's above, not the page's.
+  order. What it shows and what can be done there are the same on every screen; how it is arranged is each screen's
+  best (rule 5), and that choice is the library's parts', by `look()`, not the page's.
   - The web's desktop and mobile files for it, and the Kotlin app's, are read for why they are as they are and so as
     to miss nothing. They are not copied, and none is picked, neither one for every screen nor one for each screen
     (the user, 2026-10-25: 「做最合理的，而不是从两个里选一个」; 「是不是又代码里 if 一下，直接把手机版代码复制进去」). Where
@@ -177,7 +222,9 @@ settings page, each place, sign-in, the landing. There is no phone copy and desk
     laid out so before it is built.
   - What it shows and does is the core's, and so is its logic.
   - Two copies merged: neither is kept and the other dropped. The page is no worse on a phone than the phone's copy
-    was, nor on a computer than the desktop's; its PR shows both screens before and after.
+    was, nor on a computer than the desktop's; its PR shows both screens before and after. Where both copies'
+    arrangements are reasonable for their screens, both stay, as the parts' narrow and wide ones: one code, not one
+    arrangement.
 - **Decisions that stay:** the touch idioms the user decided:
   - swipe back, and long-press menus;
   - a row swiped to archive;
@@ -247,6 +294,9 @@ one way in) names it until the last step.
 - **detlint holds it:** `page-shell-import` (`sfpages` imports no `sfshell`), `tier-outside-shell` (`@sf.layout`,
   `wide_on`, the stack's and the tape's state read only in `sfshell`), and `page-screen` at 0 in `sfpages`; a page
   calls no sheet or dialog host but through the presenters.
+- **One function, one page:** one code and one data; its arrangement may differ wholly between the screens, done by the
+  library's parts by `look()`. `page-look` only keeps a page from judging its width itself; it does not ask the
+  arrangements to be the same, and a wide one uses the width.
 
 ## Tests
 
@@ -298,7 +348,9 @@ first, the whole app's tests would have moved with it and again as the pages lef
    - those of two copies merged, an area a PR, as the pages above are (what the page is for, said first; drawn and
      tested in the three tiers with both inputs; both old copies deleted): the settings and the places, the files and
      the viewer, the history and 奏, a new chat, the chat (the page, the message list, the side panel) last. Before
-     each, what each copy has is listed, so nothing is lost.
+     each, what each copy has is listed, so nothing is lost. One copy is one code and one data, not one arrangement:
+     where both copies' arrangements are reasonable, both stay, the narrow and the wide, through the library's parts by
+     `look()`; the wide one uses the width, not the narrow one stretched.
 4. **The shell named:** what is left of `sfapp` and `sfdesk` (the shell's files and the whole app's tests) one package,
    `sfshell`, its `view` the main's; `@sfapp.` and `@sfdesk.` are `@sfshell.` everywhere, nothing else changed. The
    tape's files with it, the day it is made. `page-shell-import` (`sfpages` imports no `sfshell`) in; `tier-outside-shell`
