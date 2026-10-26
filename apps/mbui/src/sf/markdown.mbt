@@ -842,12 +842,13 @@ let task_room : Double = 25.0
 ///|
 /// A task's box, as a browser draws a disabled checkbox: 13 across, 4
 /// before it and 8 after, faint grey, filled and ticked when done (its room
-/// task_room across at the system's size of words).
+/// task_room across at the system's size of words). Said a checkbox that takes
+/// nothing, as the browser's is (disabled: its faint tick is asked no contrast).
 fn task_box(c : @ui.Ctx, done : Bool, line : Double) -> Unit {
   let t = theme()
   let faint = if t.dark { 0xA0A0A066L } else { 0x7676764DL }
   c.box(w=Px(c.sp(task_room)), h=Px(line), pl=4.0, pr=8.0, justify=JCenter, align=ACenter, fn() {
-    c.box(
+    let b = c.box(
       w=Px(13.0),
       h=Px(13.0),
       radius=2.0,
@@ -868,7 +869,7 @@ fn task_box(c : @ui.Ctx, done : Bool, line : Double) -> Unit {
         }
       },
     )
-    |> ignore
+    c.semantics(b, Checkbox, check=if done { On } else { Off }, disabled=true)
   })
   |> ignore
 }
@@ -902,7 +903,8 @@ fn Md::words(
     None => ()
   }
   // bold for a heading's 700; a table's head's 500 (medium) is the paragraph's own weight
-  runs_of(xs, runs, weight >= 600, false, false, "", p.accent, titles)
+  // (a chat's mention in the accent's ink, which reads in words; the accent itself was 2.5 to 1 on the page)
+  runs_of(xs, runs, weight >= 600, false, false, "", p.accent_text, titles)
   self.n = self.n + 1
   let runs = found_weight(runs, self.found)
   c.rich(
@@ -971,9 +973,9 @@ fn runs_of(
       Link(href, c) if link == "" && titles.get(href) is Some(title) && is_bare_link(md_plain(c), href) =>
         out.push(@ui.span(title, bold~, italic~, strike~, link=href))
       Link(href, c) if link == "" && is_chat_link(href) => {
-        // a reference to another chat: `@` a little lighter, its title, in
-        // the accent
-        out.push(@ui.span("@", bold~, italic~, strike~, link=href, color=alpha(accent, 0.7)))
+        // a reference to another chat: `@` and its title, in the accent's
+        // ink (the `@` not lighter: at 70% it was 2.5 to 1)
+        out.push(@ui.span("@", bold~, italic~, strike~, link=href, color=accent))
         out.push(@ui.span(md_plain(c), bold~, italic~, strike~, link=href, color=accent))
       }
       Link(href, c) => runs_of(c, out, bold, italic, strike, href, accent, titles)
@@ -1021,13 +1023,12 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
       true
     })
   // the copy key in the block's top right corner: a capsule, as far from both edges as makes it concentric with the
-  // block (a block of the ladder's: row_corner); to a mouse over the code, quiet (55%) until the pointer is on the block
-  // (Prose.css.ts codeBar), to a finger on a row of its own over it (it hovers over nothing: `pointer: coarse`),
-  // whatever the layout
+  // block (a block of the ladder's: row_corner); to a mouse over the code, to a finger on a row of its own over it (it
+  // hovers over nothing: `pointer: coarse`), whatever the layout. Whole: quiet at 55% until pointed at, its words were
+  // 2.2 to 1 (docs/ui-panels.md 对比度)
   let block_radius = row_corner
   let key_inset = capsule_in(block_radius, code_key_h)
   let over = native_input() is Mouse
-  let block = c.id("sf-code-block/" + code)
   let bar = fn() {
     c.box(
       dir=Row,
@@ -1081,7 +1082,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
       },
     )
   }
-  c.box(w=Fill(1.0), bg=t.p.code_ground, radius=block_radius, clip=true, id=if over { block } else { 0 }, fn() {
+  c.box(w=Fill(1.0), bg=t.p.code_ground, radius=block_radius, clip=true, fn() {
     if !over {
       bar() |> ignore
     }
@@ -1103,8 +1104,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
     })
     |> ignore
     if over {
-      let b = c.layer(fn() { bar() |> ignore })
-      c.look(b, @ui.look(alpha=if c.lit(block) || c.lit(id) { 1.0 } else { 0.55 }))
+      c.layer(fn() { bar() |> ignore }) |> ignore
     }
   })
   |> ignore

@@ -56,10 +56,17 @@ pub fn has_drawable(name : String) -> Bool {
 
 ///|
 /// The picture `name` drawn `w` wide (as tall as it is for that), in its own
-/// colours or all in `tint`.
+/// colours (a maker's mark, an illustration: their colours asked no contrast,
+/// @ui's own_colours) or all in `tint`.
 pub fn drawable(c : @ui.Ctx, name : String, w : Double, tint? : Int64) -> Int {
   match drawables.get(name) {
-    Some(d) => draw_drawable(c, name, d, w, tint)
+    Some(d) => {
+      let b = draw_drawable(c, name, d, w, tint)
+      if tint is None {
+        c.own_colours(b)
+      }
+      b
+    }
     None => c.box(w=Px(w), h=Px(w), fn() {  })
   }
 }
@@ -122,7 +129,7 @@ pub fn glyph_color(name : String, dark : Bool) -> Int64? {
     "orange" => 0xB75400FFL
     "amber" => 0xA16700FFL
     "green" => 0x0E8C41FFL
-    "teal" => 0x008D90FFL
+    "teal" => 0x008A8DFFL
     "blue" => 0x2D74CAFFL
     "purple" => 0x835CBEFFL
     "pink" => 0xB24981FFL

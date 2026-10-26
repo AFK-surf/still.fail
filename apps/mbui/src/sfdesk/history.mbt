@@ -479,7 +479,7 @@ let wh_quiet_box : @ui.Style = @ui.css("w=Full").then(@sf.outset_top(4.0))
 ///|
 /// What needs seeing to, in its tone (ChatPage.css.ts attention: 12; the disk amber, an account red).
 // kept across runs: a value (no field of it changes)
-let wh_amber : @ui.TextStyle = @ui.text_style(size=Meta, color=Warn, wrap=false)
+let wh_amber : @ui.TextStyle = @ui.text_style(size=Meta, color=WarnInk, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

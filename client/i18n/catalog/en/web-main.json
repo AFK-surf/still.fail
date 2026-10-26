@@ -193,6 +193,7 @@
   "web-main.chatMark.busy": "Working",
   "web-main.chatMark.done": "Done, unread",
   "web-main.chatMark.other": "Waiting on others",
+  "web-main.chatMark.settled": "Ready to archive",
   "web-main.chatMark.wait": "Your turn",
   "web-main.chatRef.noMatch": "No chat titles match",
   "web-main.chatRef.none": "No other chats on this station",

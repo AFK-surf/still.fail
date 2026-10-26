@@ -2,11 +2,11 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { glass } from "@stillfail/ui/styles/glass.ts";
 import { enterUpKeyframes, jobBreatheKeyframes, popKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
-import { msg } from "./styles/conversation.css.ts";
+import "./styles/conversation.css.ts";
 import { enrollWait } from "./cloud/settings.css.ts";
-// These two before this file in the CSS, as when it named their classes: its rules come after theirs.
+// These before this file in the CSS, as when it named their classes: its rules come after theirs.
 import "./pages/ChatPage.css.ts";
-import { msgUnsent } from "./Chat.css.ts";
+import "./Chat.css.ts";
 import "./History.css.ts";
 import { panelCard, popover } from "@stillfail/ui/styles/controls.css.ts";
 import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
@@ -59,9 +59,8 @@ globalStyle(`${previewBar} ${iconBtn}:disabled`, { opacity: "0.35", cursor: "def
 globalStyle(`${previewAddress} svg`, { flex: "none" });
 globalStyle(`${previewRestart} > span:last-child`, { display: "flex", flexDirection: "column" });
 globalStyle(`${previewRestart} > span:last-child span`, { fontSize: vars.textMeta, color: vars.muted });
-/** A message that did not go: faded, with a short note (why is in its tip) and what to do about it, under it. */
-/** Here rather than with its class: it comes after .preview-bar .icon-btn:disabled, and wins over it. */
-globalStyle(`${msg}[data-unsent] > :not(${msgUnsent})`, { opacity: "0.55" });
+/** A message that did not go: as it is, with a short note in red (why is in its tip) and what to do about it, under it.
+ *  Not faded: at 55% its words were 3.4:1 (docs/ui-panels.md 对比度). */
 /** Here rather than with its class: it comes after .preview-restart-dot, and wins over it. */
 globalStyle("[data-enter]", { animation: `${enterUpKeyframes} 220ms ${vars.easeOut} both` });
 /** Here rather than with its class: it comes after .preview-restart > span:last-child, and wins over it. */

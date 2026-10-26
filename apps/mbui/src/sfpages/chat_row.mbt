@@ -232,7 +232,6 @@ pub fn chat_row(
         at,
         ground,
         high=true,
-        faded=item.settled,
         // (归档 over its first line's end: Sidebar.css.ts rowArchive, 24)
         end_room=if archive_key { @sf.row_keys_room(1) } else { 0.0 },
         corner?=if cornered { Some(fn() { row_aside(c, src, item, lead, face_ground) }) } else { None },
@@ -247,7 +246,7 @@ pub fn chat_row(
               row_rename(c, src, item)
             } else {
               let title = if item.unread { look.title_unread } else { look.title }
-              @sf.name_words(c, item.title, if offline { title.then(title_dim) } else { title }) |> ignore
+              @sf.name_words(c, item.title, if offline || item.settled { title.then(title_dim) } else { title }) |> ignore
             }
             // the station it runs on, by its mark (the core gives one only with several stations)
             if @sf.has_station_mark(item.station_emoji, item.station_icon) && !renaming {
@@ -299,7 +298,7 @@ pub fn chat_row(
             }
         },
         fn() {
-          c.box(style=if offline { look.meta.then(meta_dim) } else { look.meta }, fn() {
+          c.box(style=look.meta, fn() {
             let state = match item.state_text {
               Some(s) => Some(s)
               None => item.decision_text
@@ -312,7 +311,7 @@ pub fn chat_row(
                     "row/state/" + key,
                     slot,
                     s,
-                    lead=item.state_lead,
+                    lead=@sfbase.row_lead(item),
                     lead_text=item.state_lead_text,
                     rest=item.state_rest,
                     alert=item.unsent,
@@ -386,13 +385,12 @@ pub let row_last : @ui.Style = @ui.css("w=Full")
 let mark_slot : @ui.Style = @ui.css("w=S2_5 align=ACenter")
 
 ///|
-/// An offline station's chat's title at half (navSession[data-offline]).
+/// The title of a chat settled (all its work done or dropped) or of an offline station's, stepped back: in the muted
+/// grey (navSession[data-settled], [data-offline]); a settled one says so by the archive box leading its second line
+/// (@sfbase.row_lead), its words going no lighter. Not faded: half its ink was 2.7 to 1 on the sidebar, too faint to read
+/// for a row that still opens (docs/ui-panels.md 对比度).
 // kept across runs: a value (no field of it changes)
-let title_dim : @ui.TextStyle = @ui.text_style(color=A(Fg, O50))
-
-///|
-// kept across runs: a value (no field of it changes)
-let meta_dim : @ui.Style = @ui.css("opacity=O50")
+let title_dim : @ui.TextStyle = @ui.text_style(color=Muted)
 
 ///|
 /// (its state line where the core says one: the words pressed for the message it is about)

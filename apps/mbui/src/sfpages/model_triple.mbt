@@ -848,7 +848,7 @@ let triple_muted : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=f
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_amber : @ui.TextStyle = @ui.text_style(size=Ui, color=Warn, wrap=false)
+let triple_amber : @ui.TextStyle = @ui.text_style(size=Ui, color=WarnInk, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -856,7 +856,7 @@ let triple_red : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, wrap=fals
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_amber_sm : @ui.TextStyle = @ui.text_style(size=Meta, color=Warn)
+let triple_amber_sm : @ui.TextStyle = @ui.text_style(size=Meta, color=WarnInk)
 
 ///|
 // kept across runs: a value (no field of it changes)

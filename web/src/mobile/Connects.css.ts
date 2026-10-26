@@ -30,7 +30,7 @@ export const mSwitch = style({
     "&[data-on]::after": { transform: "translateX(18px)" },
   },
 });
-export const mGreen = style({ color: "var(--m-green)" });
+export const mGreen = style({ color: "var(--m-green-ink)" });
 /** A Feishu bot's QR code, centred in the step. */
 export const mQr = style({ display: "flex", justifyContent: "center", padding: "4px 0" });
 export const mStepsList = style({

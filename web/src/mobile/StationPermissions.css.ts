@@ -11,7 +11,7 @@ export const mAction = style({
 /** Its state: grey, but one not given that the viewer may not ask for. */
 export const mState = style({
   flex: "none", fontSize: vars.textMeta, color: "var(--m-muted)", whiteSpace: "nowrap",
-  selectors: { "&[data-end=missing]": { color: "var(--m-warn)", fontWeight: "500" } },
+  selectors: { "&[data-end=missing]": { color: "var(--m-warn-ink)", fontWeight: "500" } },
 });
 /** What is unavailable now, under the card. */
 /** A grant's line, whole (how one asked for is given at the Mac is not cut short): the ink while its window is up. */

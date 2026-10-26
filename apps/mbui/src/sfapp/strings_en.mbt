@@ -343,6 +343,7 @@ let en : Map[String, String] = {
   "web-main.chatMark.busy": "Working",
   "web-main.chatMark.done": "Done, unread",
   "web-main.chatMark.other": "Waiting on others",
+  "web-main.chatMark.settled": "Ready to archive",
   "web-main.chatMark.wait": "Your turn",
   "android-settings.machine.use": "Use this account",
   "web-pages.profiles.machineSignedIn": "Signed in on {station}",

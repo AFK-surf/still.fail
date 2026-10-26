@@ -5,7 +5,7 @@
 /// The people's colours (Parts.kt AVATAR).
 // kept across runs: a table, never written
 let avatar_colors : Array[Int64] = [
-  0x5B7BB2FFL, 0x2F8F5BFFL, 0xB9471FFFL, 0x8A6BB0FFL, 0x3F8C99FFL, 0xB0842FFFL,
+  0x5877AEFFL, 0x248753FFL, 0xB9471FFFL, 0x8768ADFFL, 0x32818DFFL, 0x9A6F11FFL,
 ]
 
 ///|

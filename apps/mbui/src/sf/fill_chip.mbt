@@ -26,9 +26,10 @@ pub fn level_color(level : String) -> Int64 {
 
 ///|
 /// The chip (FillChip): its ground the neutral one, filled from the left as far as `fill` (0–100), grey while the
-/// level is ok, faintly the level's colour once it is not (the accent's ink for `progress`: chip_fill_share); its figure in the text's colour
-/// while ok, in the level's once low, its `mark` before it a step quieter (halfway to the muted grey). Its words are
-/// the caption's, a screen's own (11 with keyboard and mouse, 12 with touch), 600, tabular.
+/// level is ok, faintly the level's colour once it is not (the accent's ink for `progress`: chip_fill_share); its figure
+/// and its `mark` before it in the text's colour, whatever the level: the fill says the level, and over it the level's
+/// ink, or a grey a step quieter, read too faint (amber 3.3 to 1, the mark 3.9 to 1 in the dark; docs/ui-panels.md
+/// 对比度). Its words are the caption's, a screen's own (11 with keyboard and mouse, 12 with touch), 600, tabular.
 pub fn fill_chip(
   c : @ui.Ctx,
   fill : Int,
@@ -51,7 +52,6 @@ pub fn fill_chip(
   }
   let fill = if fill < 0 { 0 } else if fill > 100 { 100 } else { fill }
   let rest = 100 - fill
-  let mark_ink = mix(t.p.text, chip_mark_share, t.p.muted)
   // (its fill a plain rectangle the chip's clip cuts along its corners; its end square where it stops)
   c.box(style=if small { chip_box_small } else { chip_box }, drop~, keep~, fn() {
     if fill > 0 {
@@ -68,9 +68,9 @@ pub fn fill_chip(
     }
     c.box(style=if small { chip_words_small } else { chip_words }, fn() {
       if mark != "" {
-        c.text(mark, style=chip_text.then(@ui.text_style(color=Data(mark_ink)))) |> ignore
+        c.text(mark, style=chip_text) |> ignore
       }
-      c.text(words, style=chip_text.then(@ui.text_style(color=Data(if low { tone } else { t.p.text })))) |> ignore
+      c.text(words, style=chip_text) |> ignore
     })
     |> ignore
   })
@@ -84,13 +84,9 @@ pub fn fill_chip(
 let chip_fill_share : Double = 0.28
 
 ///|
-/// Its mark's ink: halfway from the text's to the muted grey (quotaChipMark: still about 6:1 over the fill).
-let chip_mark_share : Double = 0.5
-
-///|
 /// Its words: the caption's (11 with keyboard and mouse, 12 with touch: the screen's type), 600, on a line of 16.
 // kept across runs: a value (no field of it changes)
-let chip_text : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, leading=L4, wrap=false, narrow=@ui.text_patch(size=Xs))
+let chip_text : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, leading=L4, wrap=false, color=Fg, narrow=@ui.text_patch(size=Xs))
 
 ///|
 /// The chip: on the neutral ground, round by the ladder's small corner (fill_chip_corner), its words in its middle.

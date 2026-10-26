@@ -5,7 +5,8 @@ import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 export const mGrow = style({ flex: "1", minWidth: "0" });
 export const mMuted = style({ color: "var(--m-muted)" });
 export const mSubtle = style({ color: "var(--m-subtle)" });
-export const mAccent = style({ color: "var(--m-accent)" });
+/** Words in the accent: its ink, dark enough to read on the page (4.5:1; the accent itself is a mark's, a fill's). */
+export const mAccent = style({ color: "var(--m-accent-ink)" });
 export const mRed = style({ color: "var(--m-red)" });
 /** The shared spinner (@stillfail/ui waiting.tsx) on a ground of colour (a solid button, a red stop): in its words' colour. */
 export const mSpinOnColor = style({});
@@ -16,7 +17,7 @@ export const mPad = style({ padding: "0 20px" });
 export const mPad18 = style({ padding: "0 18px 30px" });
 export const mPadX18 = style({ paddingLeft: "18px", paddingRight: "18px" });
 export const mLink = style({
-  border: "0", background: "none", padding: "0", color: "var(--m-accent) !important", fontSize: vars.textUi,
+  border: "0", background: "none", padding: "0", color: "var(--m-accent-ink) !important", fontSize: vars.textUi,
   cursor: "pointer",
 });
 export const mIllus = style({ display: "block", maxWidth: "100%", height: "auto" });

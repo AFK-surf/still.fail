@@ -833,11 +833,11 @@ let sec_row_state : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_warn : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Warn, wrap=false, w=Cut)
+let sec_warn : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=WarnInk, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_warn_state : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Warn, wrap=false)
+let sec_warn_state : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=WarnInk, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -891,7 +891,7 @@ let sec_narrow_row_in : @ui.Style = @ui.css("row w=Full pl=S6 pr=S3 py=S2_5 gap=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_narrow_warn : @ui.TextStyle = narrow_link_note.then(@ui.text_style(color=Warn))
+let sec_narrow_warn : @ui.TextStyle = narrow_link_note.then(@ui.text_style(color=WarnInk))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -899,7 +899,7 @@ let sec_narrow_end : @ui.TextStyle = @sf.secondary.then(@sf.one_line)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_narrow_end_warn : @ui.TextStyle = sec_narrow_end.then(@ui.text_style(color=Warn))
+let sec_narrow_end_warn : @ui.TextStyle = sec_narrow_end.then(@ui.text_style(color=WarnInk))
 
 ///|
 /// 开启安全模式's foot (foot: what signing means for a web page, then cancel and 签名并开启; narrow, 16 from the page's

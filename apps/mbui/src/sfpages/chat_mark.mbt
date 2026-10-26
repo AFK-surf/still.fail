@@ -112,10 +112,11 @@ let mark_pop_peak_at : Double = 0.6
 // A row's second line from where its chat stands (ember web/src/ChatMark.tsx WaitingText `slot`, ChatMark.css.ts
 // leadLine, leadSlot, waitingLead; Sidebar.css.ts navSessionLast): by what the core says leads it (ChatItem's
 // state_lead, its card's lead word state_lead_text, what follows state_rest), never read out of the words. A lead said
-// as an icon (needs the viewer a bell, done a check, waiting the waiting arc, watching a radar) stands in the title's
-// mark's column, centred under it, what follows where the title starts; the two still going move (waiting's dots
-// breathe in turn, the radar's dot beats and its arcs light up after it, inner then outer, then rest: every 3.1 s). 奏 ·
-// … in ink, its lead word bold; needs the viewer in ink too; anything else as quiet as the last message.
+// as an icon (needs the viewer a bell, done a check, done and offered to archive the archive box, waiting the waiting
+// arc, watching a radar) stands in the title's mark's column, centred under it, what follows where the title starts;
+// the two still going move (waiting's dots breathe in turn, the radar's dot beats and its arcs light up after it, inner
+// then outer, then rest: every 3.1 s). 奏 · … in ink, its lead word bold; needs the viewer in ink too; anything else
+// as quiet as the last message.
 
 ///|
 /// The state line `text` (the core's stateText): `lead` what leads it, `lead_text` a card's lead word, `rest` what
@@ -136,11 +137,12 @@ pub fn state_line(
   let look = @sf.theme().chat_list
   let words = if alert { look.state_alert } else if turn { look.state_turn } else { look.state_quiet }
   match lead {
-    "need" | "done" | "wait" | "watch" => {
+    "need" | "done" | "archive" | "wait" | "watch" => {
       let label = match lead {
         "watch" => text
         "need" => @sf.t("web-main.chatMark.alert")
         "done" => @sf.t("web-main.status.done")
+        "archive" => @sf.t("web-main.chatMark.settled")
         _ => @sf.t("web-main.status.waiting")
       }
       let ink = if alert {
@@ -175,9 +177,9 @@ pub fn state_line(
 }
 
 ///|
-/// The lead's icon, 14 in its 10 wide column (standing 2 out of it each side): a bell, a check; waiting's arc with its
-/// three dots breathing one after another; watching's dot beating, its arcs lit after it. Each part that moves is drawn
-/// apart, over what stays (leadSlot's copies).
+/// The lead's icon, 14 in its 10 wide column (standing 2 out of it each side): a bell, a check, the archive box (done and
+/// offered to archive: @sfbase.row_lead); waiting's arc with its three dots breathing one after another; watching's dot
+/// beating, its arcs lit after it. Each part that moves is drawn apart, over what stays (leadSlot's copies).
 fn lead_icon(c : @ui.Ctx, lead : String, ink : Int64) -> Unit {
   let name = match lead {
     "need" => "bell"

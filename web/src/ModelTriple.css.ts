@@ -175,9 +175,10 @@ export const runOptionName = style({ minWidth: 0, overflow: "hidden", textOverfl
 /** The station another station's model comes from, after its name on its line: its mark, else its name (the model's
  *  name gives way first). */
 export const runOptionFrom = style({ display: "inline-flex", alignItems: "center", flex: "none", fontSize: vars.textMeta, fontWeight: 400, color: vars.muted, whiteSpace: "nowrap" });
-/** One not usable here till borrowed: faint, its station too, until it is the one picked. */
+/** One not usable here till borrowed: stepped back, its name to the muted grey and its station to the subtle one, until
+ *  it is the one picked (not faded: at half the station read 2.1:1, docs/ui-panels.md 对比度). */
 globalStyle(`${runPickerOption}[data-availability="borrowable"]:not([aria-pressed="true"]) ${runOptionName}`, { color: vars.muted });
-globalStyle(`${runPickerOption}[data-availability="borrowable"]:not([aria-pressed="true"]) ${runOptionFrom}`, { opacity: 0.5 });
+globalStyle(`${runPickerOption}[data-availability="borrowable"]:not([aria-pressed="true"]) ${runOptionFrom}`, { color: vars.subtle });
 /** Over the foot: the model picked is not usable here yet. */
 export const runPickerBorrow = style({ margin: `0 ${TEXT_IN}px 6px`, fontSize: vars.textMeta, color: vars.muted });
 /** The borrowing dialog's paragraphs. */

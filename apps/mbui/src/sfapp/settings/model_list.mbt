@@ -8,9 +8,6 @@
 // kept across runs: a value (no field of it changes)
 let model_list_page : @ui.Style = @ui.css("w=Full h=Full")
 
-///|
-// kept across runs: a value (no field of it changes)
-let model_from_seen : @ui.Style = @ui.css("opacity=O100")
 
 ///|
 /// The filter's room: 8 over it and 4 under, its sides the page's column's (@sf.over_rows).
@@ -34,11 +31,6 @@ let model_none_room : @ui.Style = @ui.css("w=Full px=S5 py=S4")
 ///|
 // kept across runs: a value (no field of it changes)
 let model_none_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
-
-///|
-/// Where a model comes from, small: half seen while it is not usable here yet.
-// kept across runs: a value (no field of it changes)
-let model_from_faint : @ui.Style = @ui.css("opacity=O50")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -109,20 +101,18 @@ fn model_list(
             Some(o) => text(Some(o), "model") == model
             None => false
           }
-          // not usable here till borrowed: faint, until it is the one picked
+          // not usable here till borrowed: its name in the muted grey, until it is the one picked (where it comes from as
+          // it is: at half it was 1.9 to 1, docs/ui-panels.md 对比度)
           let faint = text(mv, "availability") == "borrowable" && !is_on
           let from = field(mv, "fromStation")
           if @sf.choice_row(c, key + "/" + model, is_on, text(mv, "name"), ink=if faint { t.p.muted } else { t.p.text }, lead=fn() { @sf.maker_mark(c, text(field(mv, "maker"), "id"), runtime, 18.0) |> ignore }, tag?=match from {
                 Some(Object(_)) =>
                   Some(fn() {
-                    c.box(style=if faint { model_from_faint } else { model_from_seen }, fn() {
-                      if @sf.has_station_mark(text(from, "emoji"), text(from, "icon")) {
-                        @sf.station_mark(c, text(from, "emoji"), text(from, "icon"), 14.0, t.p.muted)
-                      } else {
-                        c.text(text(from, "name"), style=model_from_words) |> ignore
-                      }
-                    })
-                    |> ignore
+                    if @sf.has_station_mark(text(from, "emoji"), text(from, "icon")) {
+                      @sf.station_mark(c, text(from, "emoji"), text(from, "icon"), 14.0, t.p.muted)
+                    } else {
+                      c.text(text(from, "name"), style=model_from_words) |> ignore
+                    }
                   })
                 _ => None
               }) {

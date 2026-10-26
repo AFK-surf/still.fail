@@ -90,6 +90,9 @@ pub(all) struct Theme {
   link : Int64
   /// someone else at the controls (Color's Warn)
   warn : Int64
+  /// words said in warn's colour (Color's WarnInk): its amber dark enough to read on the theme's grounds (4.5:1, WCAG's
+  /// AA), as accent_text is the accent's; `warn` itself is a mark's, a dot's, a bar's
+  warn_ink : Int64
   /// what is lifted out of a tinted track (Color's Lifted)
   lifted : Int64
   /// a quiet wash under what comes onto it (Color's Wash)
@@ -230,12 +233,12 @@ pub fn Theme::light() -> Theme {
     bg: 0xFFFFFFFFL,
     surface: 0xFFFFFFFFL,
     fg: 0x24272BFFL,
-    muted: 0x646970FFL,
-    subtle: 0x73787DFFL,
+    muted: 0x565B62FFL,
+    subtle: 0x565B62FFL,
     faint: 0xF1F1F2FFL,
     border: 0xC1C4C9FFL,
     line: 0x322D2424L,
-    accent: 0xEF6A3CFFL,
+    accent: 0xDC5929FFL,
     on_accent: 0xFFFFFFFFL,
     primary: 0x24272BFFL,
     on_primary: 0xFFFFFFFFL,
@@ -267,6 +270,7 @@ pub fn Theme::light() -> Theme {
     selected: 0xEBE7E1FFL,
     link: 0x1559C4FFL,
     warn: 0xD9962BFFL,
+    warn_ink: 0x7F5306FFL,
     lifted: 0xFFFFFFFFL,
     // #322D24 at 6.5%
     wash: 0x322D2411L,
@@ -294,16 +298,17 @@ pub fn Theme::dark() -> Theme {
     bg: 0x1F2023FFL,
     surface: 0x2A2C31FFL,
     fg: 0xE9E9EAFFL,
-    muted: 0xA3A5A9FFL,
-    subtle: 0x8C8F94FFL,
+    muted: 0xA8AAAEFFL,
+    subtle: 0xA8AAAEFFL,
     faint: 0x313237FFL,
     border: 0x3D3F44FFL,
     line: 0xE9E9EA19L,
-    accent: 0xF57E4DFFL,
+    accent: 0xE97342FFL,
+    warn_ink: 0xE6B55DFFL,
     primary: 0xECEDEDFFL,
     on_primary: 0x1F2023FFL,
     positive: 0x68C894FFL,
-    danger: 0xF68482FFL,
+    danger: 0xFB8987FFL,
     on_danger: 0x1F2023FFL,
     hover: 0xFFFFFF0DL,
     field_hover: 0x5D6066FFL,
@@ -333,20 +338,21 @@ pub fn Theme::narrow_light() -> Theme {
   {
     ..Theme::light(),
     bg: 0xF5F3EFFFL,
-    muted: 0x7A7D83FFL,
-    subtle: 0xA6A8ACFFL,
+    muted: 0x585A5FFFL,
+    subtle: 0x585A5FFFL,
     faint: 0xEFECE6FFL,
     line: 0x322D2424L,
-    accent: 0xE5704AFFL,
+    accent: 0xCC5A34FFL,
     positive: 0x2F8F5BFFL,
-    danger: 0xC9412EFFL,
+    danger: 0xB52D1BFFL,
+    warn_ink: 0x855700FFL,
     hover: 0x24272B0FL,
     font: 15.0,
     font_sm: 13.0,
     control_h: 38.0,
     raised: 0xFFFFFFFFL,
     card: 0xFFFFFFFFL,
-    accent_text: 0xB9471FFFL,
+    accent_text: 0xAC3B10FFL,
     accent_bg: 0xFBE6DCFFL,
     neutral: 0x322D2413L,
   }
@@ -360,13 +366,14 @@ pub fn Theme::narrow_dark() -> Theme {
     bg: 0x1B1C1FFFL,
     surface: 0x26272BFFL,
     fg: 0xECECEDFFL,
-    muted: 0x9A9DA3FFL,
-    subtle: 0x6E7177FFL,
+    muted: 0xB8BBC1FFL,
+    subtle: 0xB8BBC1FFL,
     faint: 0x313237FFL,
     line: 0xECECED1FL,
-    accent: 0xEF7A55FFL,
+    accent: 0xE8734FFFL,
     positive: 0x5CC08AFFL,
-    danger: 0xEB6B58FFL,
+    danger: 0xFF816CFFL,
+    warn_ink: 0xDC992FFFL,
     hover: 0xECECED14L,
     font: 15.0,
     font_sm: 13.0,
@@ -424,6 +431,7 @@ pub fn Theme::ios_light() -> Theme {
     selected: 0xD1D1D6FFL,
     link: 0x0A84FFFFL,
     warn: 0xFF9F0AFFL,
+    warn_ink: 0x983F00FFL,
     lifted: 0xFFFFFFFFL,
     // #322D24 at 6.5%
     wash: 0x322D2411L,
@@ -447,6 +455,7 @@ pub fn Theme::ios_dark() -> Theme {
   {
     ..Theme::ios_light(),
     dark: true,
+    warn_ink: 0xFF9F0AFFL,
     bg: 0x000000FFL,
     surface: 0x1C1C1EFFL,
     fg: 0xF5F5F7FFL,
@@ -562,6 +571,7 @@ pub fn Theme::color(self : Theme, c : Color) -> Int64 {
     Link => self.link
     ShadowC => self.shadow
     Warn => self.warn
+    WarnInk => self.warn_ink
     Tint => alpha(self.fg, 0.06)
     TintStrong => self.line
     Floating => over(self.bg, alpha(self.raised, 0.72))

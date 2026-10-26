@@ -10,7 +10,7 @@ export const mDot = style({
   width: "7px", height: "7px", borderRadius: "50%", flex: "none", background: "var(--m-line)",
   selectors: { '&[data-on="true"]': { background: "var(--m-green)" }, '&[data-tone="amber"]': { background: "var(--m-warn)" } },
 });
-export const mWarn = style({ color: "var(--m-warn)", fontSize: vars.textMeta });
+export const mWarn = style({ color: "var(--m-warn-ink)", fontSize: vars.textMeta });
 /** Its request did not go: why, in red. */
 export const mFailed = style({ color: "var(--m-red)", fontSize: vars.textMeta, lineHeight: vars.leadingMeta });
 /** The workspaces a waiting device asks to be let into, in its sheet: their names, as large as its words. */

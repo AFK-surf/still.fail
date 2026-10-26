@@ -96,8 +96,6 @@ export const mChatRow = style({
 });
 export const mChatText = style({
   display: "flex", flexDirection: "column", justifyContent: "center", flex: "1", minWidth: "0",
-  // All its pieces of work done or dropped (the core's `settled`): the row stays, faded.
-  selectors: { [`${mChatRow}[data-settled] &`]: { opacity: ".45" } },
 });
 /** Who is in a chat, at the second line's end: its time there instead while the row is held. */
 export const mRowAside = style({
@@ -111,8 +109,9 @@ export const mChatTitle = style({
   whiteSpace: "nowrap",
   selectors: {
     "&[data-unread]": { fontWeight: "500" },
-    // Its station offline: greyed, and marked where a Slack chat's mark goes.
-    [`${mChatRow}[data-offline] &`]: { opacity: ".45" },
+    // All its pieces of work done or dropped (the core's `settled`), or its station offline (marked where a Slack chat's
+    // mark goes): its title stepped back to the muted grey, not faded (docs/ui-panels.md 对比度).
+    [`${mChatRow}:is([data-settled], [data-offline]) &`]: { color: "var(--m-muted)" },
   },
 });
 /** The icon of the station a chat runs on, after its title. */
@@ -142,9 +141,6 @@ export const mChatTime = style({
 });
 export const mLast = style({
   display: "inline-flex", alignItems: "center", gap: "5px", minWidth: "0",
-  selectors: {
-    [`${mChatRow}[data-offline] &`]: { opacity: ".45" },
-  },
 });
 export const mLastText = style({
   minWidth: "0", fontSize: vars.textMeta, lineHeight: "20px", color: "var(--m-muted)", overflow: "hidden",
@@ -219,7 +215,7 @@ globalStyle(`${mSearchInput} input`, {
 });
 globalStyle(`${mSearchInput} input::-webkit-search-cancel-button`, { display: "none" });
 export const mSearchCancel = style({
-  flex: "none", padding: "0", border: "0", background: "none", color: "var(--m-accent)", fontSize: vars.textTitle, cursor: "pointer",
+  flex: "none", padding: "0", border: "0", background: "none", color: "var(--m-accent-ink)", fontSize: vars.textTitle, cursor: "pointer",
 });
 export const mSearchResults = style({
   flex: "1", minHeight: "0", overflowY: "auto", overscrollBehavior: "contain", paddingBottom: "calc(var(--m-foot) + 20px)",
@@ -240,13 +236,13 @@ export const mFoundUnder = style({
 /** 查看更多 under a kind found, and 全部结果 over one kind alone: a quiet row, as a list's own link. */
 export const mFoundMore = style({
   display: "flex", alignItems: "center", gap: "4px", width: "100%", height: "44px", padding: "0 22px", border: "0",
-  background: "transparent", color: "var(--m-accent)", fontSize: vars.textUi, textAlign: "left", cursor: "pointer",
+  background: "transparent", color: "var(--m-accent-ink)", fontSize: vars.textUi, textAlign: "left", cursor: "pointer",
 });
 /** What the list says under it: stations not answered yet, offline, too old to search. */
 export const mFoundNote = style({ margin: 0, padding: "12px 22px", fontSize: vars.textCaption, color: "var(--m-muted)" });
 /** The words found, in a found message's line: in ink, bold (the rest of the line muted). */
 export const mFoundHit = style({ background: "none", color: "var(--m-ink)", fontWeight: "600" });
 // Over the page's own buttons' ink.
-globalStyle(`${mSearchBar} button${mSearchCancel}`, { color: "var(--m-accent)" });
+globalStyle(`${mSearchBar} button${mSearchCancel}`, { color: "var(--m-accent-ink)" });
 // One field at a time: the list's is the search's while it is open (it flies from and back to the list's place).
 globalStyle(`${mHome}[data-searching] ${mSearchField}`, { visibility: "hidden" });

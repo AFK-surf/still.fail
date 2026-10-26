@@ -927,7 +927,7 @@ let cd_amber : @ui.Style = @ui.css("w=Full px=S3_5 py=S3 radius=Xl1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cd_amber_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Warn, w=Full)
+let cd_amber_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=WarnInk, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)

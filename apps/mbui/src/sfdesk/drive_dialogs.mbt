@@ -428,7 +428,7 @@ let root_text : @ui.Style = @ui.style(w=@sf.grow, gap=SPx, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let root_trouble_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Warn, wrap=false)
+let root_trouble_words : @ui.TextStyle = @ui.text_style(size=Meta, color=WarnInk, wrap=false)
 
 ///|
 /// A row to pick (pickRow): 40 high at least, 6 by 10 in, 10 between, the field's corner; the list's ground under the

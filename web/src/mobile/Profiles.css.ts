@@ -18,7 +18,7 @@ export const mAccount = style({ display: "flex", flexDirection: "column", gap: "
 /** Its state under its line: a dot, its words and when it was checked; coloured only when something is off. */
 export const mAccountState = style({
   display: "inline-flex", alignItems: "center", gap: "6px",
-  selectors: { '&[data-tone="red"]': { color: "var(--m-red)" }, '&[data-tone="amber"]': { color: "var(--m-warn)" } },
+  selectors: { '&[data-tone="red"]': { color: "var(--m-red)" }, '&[data-tone="amber"]': { color: "var(--m-warn-ink)" } },
 });
 /** What a trouble says and its buttons, 10 apart. */
 export const mTrouble = style({ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "10px" });

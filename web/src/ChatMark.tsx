@@ -6,7 +6,7 @@ import { StatusText, Tip } from "./ui.tsx";
 import { jumpTo } from "./jumpTo.ts";
 import * as css from "./ChatMark.css.ts";
 import { t } from "./i18n.ts";
-import { Bell, Check, Wait, Watch } from "@stillfail/ui/icons.tsx";
+import { Archive, Bell, Check, Wait, Watch } from "@stillfail/ui/icons.tsx";
 
 export type ChatTone = "busy" | "done" | "alert" | "wait" | "other";
 
@@ -69,23 +69,23 @@ export function MarkCounts({ mark }: { mark: WorkspaceMark | undefined }) {
  * A row's second line from where its chat stands (the core's `stateText`; a core before it: its decision's `decision.text`),
  * by what the core says leads it (`lead`, `leadText`, `rest`: ChatItem's stateLead…): 奏 · … (Decision · …) in ink, its
  * lead word bold; needs-the-viewer in ink too; 出错：…, 在等：…, 已完成 as quiet as the last message would be. `slot` (every
- * chat list, as Android's): a lead said as an icon (a bell, the waiting arc, a check; watching a radar before its words;
- * the two still going, waiting and watching, move: waiting's dots breathe in turn, the radar's arcs light up in turn, going
- * out) stands in the title's mark's column, centred under it, and what follows starts where the title does. `alert` (a
- * message that did not go, the row's `unsent`): in red.
+ * chat list, as Android's): a lead said as an icon (a bell, the waiting arc, a check, the archive box: rowLead; watching
+ * a radar before its words; the two still going, waiting and watching, move: waiting's dots breathe in turn, the radar's
+ * arcs light up in turn, going out) stands in the title's mark's column, centred under it, and what follows starts where
+ * the title does. `alert` (a message that did not go, the row's `unsent`): in red.
  */
 export function WaitingText({ text, lead, leadText, rest, className, slot = false, alert = false }: { text: string; lead?: string | null | undefined; leadText?: string | null | undefined; rest?: string | null | undefined; className: string; slot?: boolean; alert?: boolean }) {
   const turn = lead === "decision" || lead === "need";
-  const icon = slot && (lead === "need" || lead === "done" || lead === "wait" || lead === "watch") ? lead : null;
+  const icon = slot && (lead === "need" || lead === "done" || lead === "archive" || lead === "wait" || lead === "watch") ? lead : null;
   if (icon) {
     const motion = icon === "watch" ? "watch" : icon === "wait" ? "wait" : undefined;
-    const label = icon === "watch" ? text : t(icon === "need" ? "web-main.chatMark.alert" : icon === "done" ? "web-main.status.done" : "web-main.status.waiting");
+    const label = icon === "watch" ? text : t(icon === "need" ? "web-main.chatMark.alert" : icon === "done" ? "web-main.status.done" : icon === "archive" ? "web-main.chatMark.settled" : "web-main.status.waiting");
     const after = rest ?? "";
     const Moving = icon === "watch" ? Watch : Wait;
     return (
       <span className={`${className} ${css.leadLine}`} data-turn={turn || undefined} data-alert={alert || undefined} data-state-line="" aria-label={text}>
         <Tip label={label}><span className={css.leadSlot} role="img" aria-label={label} data-motion={motion}>
-          {icon === "need" ? <Bell size={14} /> : icon === "done" ? <Check size={14} strokeWidth={1.7} /> : icon === "watch" ? <Watch size={14} strokeWidth={1.7} /> : <Wait size={14} strokeWidth={1.7} />}
+          {icon === "need" ? <Bell size={14} /> : icon === "done" ? <Check size={14} strokeWidth={1.7} /> : icon === "archive" ? <Archive size={14} strokeWidth={1.7} /> : icon === "watch" ? <Watch size={14} strokeWidth={1.7} /> : <Wait size={14} strokeWidth={1.7} />}
           {/* What moves, each part on a copy of its own (ChatMark.css.ts leadSlot). */}
           {motion && MOVING[motion].map(([n, plays]) => <span key={n} ref={plays} data-part={n}><Moving size={14} strokeWidth={1.7} /></span>)}
         </span></Tip>
@@ -134,4 +134,12 @@ export function jumpFromLine(item: ChatItem, target: EventTarget): void {
 /** What a row's second line says of where its chat stands, if anything (an older core: only a decision's line). */
 export function stateLine(item: ChatItem): string | undefined {
   return item.stateText ?? item.decision?.text;
+}
+
+/**
+ * What leads that line (the core's `stateLead`): done and offered to archive (`settled`), the archive box in the check's
+ * place. Its title goes no lighter than the muted grey and still reads, so the mark says it (docs/ui-panels.md 对比度).
+ */
+export function rowLead(item: ChatItem): string | null | undefined {
+  return item.settled && item.stateLead === "done" ? "archive" : item.stateLead;
 }

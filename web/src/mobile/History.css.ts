@@ -11,7 +11,7 @@ import { mBarAgent, mChatBack, mJob, mJobBody, mPlus, mSend } from "./Chat.css.t
 import { mInfoRow } from "./styles/lists.css.ts";
 import { mListRow, mPickRow } from "./parts.css.ts";
 
-export const mWarn = style({ color: "var(--m-warn)" });
+export const mWarn = style({ color: "var(--m-warn-ink)" });
 export const mHHead = style({ display: "flex", alignItems: "center", gap: "6px", padding: "4px 18px 0" });
 export const mHAct = style({
   display: "grid", placeItems: "center", flex: "none", width: "28px", height: "28px", padding: "0", border: "0",

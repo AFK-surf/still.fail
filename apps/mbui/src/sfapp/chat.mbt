@@ -220,7 +220,7 @@ fn bar_frame(
       justify=JCenter,
       id=back,
       fn() {
-        @sf.icon(c, "chevron-left", size=22.0, color=t.p.accent) |> ignore
+        @sf.icon(c, "chevron-left", size=22.0, color=t.p.accent_text) |> ignore
         // Chat.kt: back, clip(CircleShape).clickable
         @motion.ripple(c, back, 20.0)
       },

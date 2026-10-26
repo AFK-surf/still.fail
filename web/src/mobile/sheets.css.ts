@@ -21,7 +21,7 @@ export const mCommand = style({
  *  sides (16), and its corner from the box's. */
 globalStyle(`${mSignIn}:has(> ${mCommand}:last-child)`, { paddingBottom: "16px", borderRadius: surfaceCorner(16, surfaceCorner(COMMAND_PAD, COMMAND_BUTTON_CORNER)) });
 /** Asking: a destructive action's button in red; a command with its copy button. */
-globalStyle(`${mDangerButton}[data-danger] ${mButton}`, { background: "var(--m-red)", color: "#fff !important" });
+globalStyle(`${mDangerButton}[data-danger] ${mButton}`, { background: "var(--m-red)", color: "var(--m-on-red) !important" });
 globalStyle(`${mCommand} code`, {
   flex: "1", minWidth: "0", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: vars.textCaption,
   lineHeight: "18px", overflowWrap: "anywhere", userSelect: "all",

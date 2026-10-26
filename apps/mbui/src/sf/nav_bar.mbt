@@ -54,7 +54,8 @@ let nav_ends : @ui.Style = @ui.css("row w=Full h=S8 align=ACenter")
 let nav_trailing : @ui.Style = @ui.css("row h=S8 align=ACenter")
 
 ///|
-/// Back: a chevron in the accent and where to in a link's ink (Parts.kt NavBack). Its word no wider than `max_w`
+/// Back: a chevron and where to in a link's ink, the accent's that reads on the page (Parts.kt NavBack; the accent
+/// itself, a fill's, was 2.8 to 1 there: docs/ui-panels.md 对比度). Its word no wider than `max_w`
 /// (when that is said): there whole or not at all (Ctx::box drop), the chevron alone where it has not the room, as
 /// iOS's back button gives way; never cut short past knowing (the user, 2026-10-25). It is still what the button is
 /// called. True on the frame after it was tapped.
@@ -62,7 +63,7 @@ pub fn nav_back(c : @ui.Ctx, key : String, label : String, max_w? : Double = 0.0
   let t = theme()
   let id = c.id(key)
   c.box(style=nav_back_box, id~, label=label, fn() {
-    icon(c, "chevron-left", size=22.0, color=t.p.accent) |> ignore
+    icon(c, "chevron-left", size=22.0, color=t.p.accent_text) |> ignore
     if max_w > 0.0 {
       c.box(style=@ui.style(row=true, max_w=Fixed(max_w)), fn() {
         c.box(id=c.id(key + "/word"), taps=false, drop=1, fn() { c.text(label, style=nav_back_words) |> ignore })

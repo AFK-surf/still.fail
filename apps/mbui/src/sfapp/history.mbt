@@ -205,7 +205,7 @@ fn history_summary(c : @ui.Ctx, a : Json?) -> Unit {
           c.text(
             text(nv, "text"),
             size=t.t.caption,
-            color=if text(nv, "kind") == "disk" { 0xD9962BFFL } else { t.p.red },
+            color=if text(nv, "kind") == "disk" { t.p.warn_ink } else { t.p.red },
             wrap=false,
           )
           |> ignore

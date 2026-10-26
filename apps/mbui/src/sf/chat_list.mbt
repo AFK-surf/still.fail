@@ -13,7 +13,6 @@ pub(all) struct ChatList {
   /// pointer shows it), its second line
   row : @ui.Style
   text : @ui.Style
-  text_settled : @ui.Style
   head : @ui.Style
   meta : @ui.Style
   /// its title's line's height (a row's mark beside it: a sidebar list's item's)
@@ -97,7 +96,6 @@ pub let mouse_chat_list : ChatList = {
   // (SidebarList.css.ts item: 7 over and under, as a chat's row)
   item: @ui.style(row=true, w=Full, min_h=S8, py=row_in, gap=S2, align=AStart),
   text: @ui.css("w=Full gap=S0_5"),
-  text_settled: @ui.css("w=Full gap=S0_5 opacity=O45"),
   head: @ui.css("row w=Full h=S5 gap=S1_5 align=ACenter"),
   // (pointed at, room at its end for 归档: 24)
   head_h: 20.0,
@@ -153,7 +151,6 @@ pub let touch_chat_list : ChatList = {
   // (SidebarList.css.ts phone: 10 over and under, its mark's column 8 from its words)
   item: @ui.css("row w=Full py=S2_5 gap=S2 align=AStart"),
   text: @ui.css("w=Full justify=JCenter"),
-  text_settled: @ui.css("w=Full justify=JCenter opacity=O45"),
   head: @ui.style(row=true, w=Full, h=Fixed(touch_title_h), gap=S2, align=ACenter),
   head_h: touch_title_h,
   meta: @ui.css("row w=Full h=S5 gap=S2 align=ACenter"),

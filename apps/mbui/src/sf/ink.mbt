@@ -31,47 +31,49 @@ priv enum Scope {
 } derive(Eq)
 
 ///|
-/// vitesse-light's colour (its tokenColors).
+/// vitesse-light's colour (its tokenColors), each made to read on a code block's ground (4.5:1, WCAG's AA: its hue
+/// and chroma, its lightness moved the least; a string's and a property's quotes as the words they hold, not faded,
+/// docs/ui-panels.md 对比度).
 fn Scope::light(self : Scope) -> Int64 {
   match self {
     Text => 0x393A34FFL
-    Comment => 0xA0ADA0FFL
-    Punct => 0x999999FFL
-    Str => 0xB56959FFL
-    Quote => 0xB5695977L
-    Num => 0x2F798AFFL
+    Comment => 0x667266FFL
+    Punct => 0x6F6F6FFFL
+    Str => 0xA55B4BFFL
+    Quote => 0xA55B4BFFL
+    Num => 0x2E7889FFL
     Control => 0x1E754FFFL
-    Storage => 0xAB5959FFL
-    Func => 0x59873AFFL
-    Var => 0xB07D48FFL
-    Constant => 0xA65E2BFFL
-    TypeName => 0x2E8F82FFL
-    Property => 0x998418FFL
-    PropertyQuote => 0x99841877L
-    Added => 0x22863AFFL
+    Storage => 0xA95757FFL
+    Func => 0x4E7B2EFFL
+    Var => 0x96652FFFL
+    Constant => 0xA55D2AFFL
+    TypeName => 0x137D71FFL
+    Property => 0x836E00FFL
+    PropertyQuote => 0x836E00FFL
+    Added => 0x198034FFL
     Removed => 0xB31D28FFL
     Hunk => 0x6F42C1FFL
   }
 }
 
 ///|
-/// vitesse-dark's colour for the same (Shiki's `--shiki-dark` beside the light one).
+/// vitesse-dark's colour for the same (Shiki's `--shiki-dark` beside the light one), made to read as the light ones.
 fn Scope::dark(self : Scope) -> Int64 {
   match self {
     Text => 0xDBD7CAEEL
-    Comment => 0x758575DDL
-    Punct => 0x666666FFL
+    Comment => 0x869786FFL
+    Punct => 0x939393FFL
     Str => 0xC98A7DFFL
-    Quote => 0xC98A7D77L
-    Num => 0x4C9A91FFL
-    Control => 0x4D9375FFL
-    Storage => 0xCB7676FFL
+    Quote => 0xC98A7DFFL
+    Num => 0x52A096FFL
+    Control => 0x5AA081FFL
+    Storage => 0xD07B7AFFL
     Func => 0x80A665FFL
     Var => 0xBD976AFFL
     Constant => 0xC99076FFL
     TypeName => 0x5DA994FFL
     Property => 0xB8A965FFL
-    PropertyQuote => 0xB8A96577L
+    PropertyQuote => 0xB8A965FFL
     Added => 0x85E89DFFL
     Removed => 0xFDAEB7FFL
     Hunk => 0xB392F0FFL

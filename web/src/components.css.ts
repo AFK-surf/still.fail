@@ -53,15 +53,11 @@ export const quotaChipFill = style({
     [`${quotaChip}[data-level="progress"] > &`]: { background: vars.accentText, transition: "width .5s ease-out" },
   },
 });
-/** Its number in the text's colour while there is plenty (the muted grey over the fill read too faint); in its colour
- * once it runs low. Its mark a step quieter, halfway to the muted grey (still about 6:1 over the fill). */
-export const quotaChipText = style({
-  position: "relative", display: "inline-flex", gap: "5px", color: vars.text,
-  selectors: {
-    [`${quotaChip}:is([data-level="amber"], [data-level="red"]) &`]: { color: "currentColor" },
-  },
-});
-export const quotaChipMark = style({ color: `color-mix(in srgb, ${vars.text} 50%, ${vars.muted})` });
+/** Its number and its mark in the text's colour, whatever the level: the fill says the level (its colour), and over it
+ * the level's own ink, or a grey a step quieter, read too faint (amber 3.3:1, the mark 3.9:1 in the dark;
+ * docs/ui-panels.md 对比度). */
+export const quotaChipText = style({ position: "relative", display: "inline-flex", gap: "5px", color: vars.text });
+export const quotaChipMark = style({});
 // Its mark and number trimmed to their capitals and figures, so they sit in the middle of the box (as the font sets
 // them, lower by the room it keeps above for accents).
 globalStyle(`${quotaChipText} > span`, { display: "inline-block", textBoxTrim: "trim-both", textBoxEdge: "cap alphabetic" });

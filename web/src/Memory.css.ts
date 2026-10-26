@@ -31,6 +31,7 @@ export const memoryChip = style({
     "&[data-on]": { background: vars.text, color: vars.canvas },
   },
 });
-globalStyle(`${memoryChip} span`, { fontSize: vars.textMeta, opacity: "0.6" });
+// (its count smaller, in the chip's own colour: at 60% it was 4:1, docs/ui-panels.md 对比度)
+globalStyle(`${memoryChip} span`, { fontSize: vars.textMeta });
 globalStyle(`${memoryDoc} > :first-child`, { marginTop: "0" });
 globalStyle(`${memoryDoc} > :last-child`, { marginBottom: "0" });
