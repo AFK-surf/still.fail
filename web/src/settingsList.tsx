@@ -4,12 +4,12 @@
 // order. Who is signed in and the workspace in view; then the workspace's, in small groups (who may reach what:
 // security mode and the vault; where its agents run: its stations, connects and profiles; how its agents work: what
 // they decide by themselves, what they remember, when chats are archived, what they used); then this device's (how it
-// looks, whether it notifies, its bottom bar on a phone, its keys, the desktop app's own station); then 关于. Each row
+// looks, whether it notifies, its bottom bar on a phone); then 关于. Each row
 // says how things stand at its end, what is wrong in red. Station, 连接, Profile and 用量 are rows wherever the rail has
 // them too: the settings are one more way to them, not where they live (the user, 2026-10-15). What another page holds
 // (更新日志 in 关于, the system's permission on 通知's page) is not a row of its own.
 import type { ComponentType } from "react";
-import { Archive, Bell, Brain, Chart, Check, Command, Im, Info, Key, Monitor, Quota, Server, ShieldCheck, Sliders, User, Users, ViewColumns, type IconProps } from "@stillfail/ui/icons.tsx";
+import { Archive, Bell, Brain, Chart, Check, Im, Info, Key, Quota, Server, ShieldCheck, Sliders, User, Users, ViewColumns, type IconProps } from "@stillfail/ui/icons.tsx";
 import { useConnects, useProfiles, useStations } from "./api.ts";
 import { useWorkspace } from "./cloud/api.ts";
 import { useLock } from "./cloud/Security.tsx";
@@ -17,8 +17,6 @@ import type { WorkspaceEntry } from "./cloud/workspace.tsx";
 import { useVaults } from "./vault.ts";
 import { useAppearance } from "./theme.ts";
 import { CAN_NOTIFY, useNotifyState } from "./notify.ts";
-import { CHANGEABLE } from "./keymap.ts";
-import { HAS_LOCAL_STATION } from "./pages/LocalStation.tsx";
 import { useChangelog } from "./changelog.ts";
 import { t } from "./i18n.ts";
 
@@ -51,8 +49,7 @@ function themeWords(appearance: string): string {
 
 /**
  * The settings' list as it stands, in its order. `phone`: the narrow screen's (a phone's browser), which has a bottom
- * bar (`bars`: what its row says of it) and no keys to change; the wide screen's has its keys, and the desktop app its
- * own station.
+ * bar (`bars`: what its row says of it).
  */
 export function useSettingsList(entry: WorkspaceEntry, phone: boolean, bars?: string): SettingsPart[] {
   const me = entry.account;
@@ -116,8 +113,6 @@ export function useSettingsList(entry: WorkspaceEntry, phone: boolean, bars?: st
     });
   }
   if (phone) device.push({ key: "bar", path: "bar", icon: ViewColumns, title: t("web-mobile.bar.title"), value: bars });
-  if (!phone && CHANGEABLE) device.push({ key: "shortcuts", path: "shortcuts", icon: Command, title: t("web-pages.settings.nav.shortcuts") });
-  if (!phone && HAS_LOCAL_STATION) device.push({ key: "local-station", path: "local-station", icon: Monitor, title: t("web-pages.localStation.title") });
   parts.push({ heading: t("web-mobile.settings.device"), rows: device });
   // 关于: this build
   parts.push({ rows: [{ key: "about", path: "about", icon: Info, title: t("web-pages.settings.nav.about"), value: build != null ? `0.1.${build}` : undefined }] });

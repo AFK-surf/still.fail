@@ -25,8 +25,8 @@ export const shell = style({
 /**
  * The rail and the sidebar as one block of the sidebar's ground. The sidebar closing, the block narrows to the rail (its
  * column, styles above, moved by brand.tsx) and stands off the page's edges as a long rounded bar, cutting the sidebar as
- * it goes (the sidebar keeps its width inside); in the macOS app the bar is under the window's buttons. Its margins and
- * corner move as long and eased as the column (motion.ts moveState, 380 ms). On a narrow screen it is nothing of its own.
+ * it goes (the sidebar keeps its width inside). Its margins and corner move as long and eased as the column (motion.ts
+ * moveState, 380 ms). On a narrow screen it is nothing of its own.
  */
 export const dock = style({
   "@media": {
@@ -60,7 +60,6 @@ export const dock = style({
           // bar's foot.
           zIndex: 20,
         },
-        '[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] &': { marginTop: 44 },
         // Over the page while it moves too: opened from shown a while, it was under the page (no longer closed) at once,
         // the part reaching over the page cut off until the page had moved out from under it.
         "[data-sidebar-moving] &": { zIndex: 20 },
@@ -89,13 +88,6 @@ globalStyle(`${dock}::after`, {
 
 export const main = style({
   position: "relative", minWidth: "0", minHeight: "0", overflow: "hidden", display: "flex", flexDirection: "column",
-  selectors: {
-    // The desktop app has no title bar: the top row of every page drags the window, whether it has a bar (styles/sidebar.css.ts
-    // pageBar) or not (a new chat, settings, the archive…). Under the page, so the page still takes the pointer. Nothing
-    // in the page's body is no-drag: the window takes the row's area from each such element's whole box, cut by no
-    // scroller, so a link in a message scrolled up out of sight would make the bar above it undraggable.
-    "[data-desktop] &::before": { content: '""', position: "absolute", zIndex: -1, top: 0, left: 0, right: 0, height: 44, WebkitAppRegion: "drag" },
-  },
   "@media": {
     "(max-width: 700px)": {
       selectors: {
@@ -113,21 +105,9 @@ export const main = style({
     },
   },
 });
-// The window takes a click on a drag region for itself and the page never sees it, so a menu, popover or select left open
-// would stay open when the top of the window is clicked. While one is open nothing drags: the click reaches the page and
-// closes it like a click anywhere else. Tooltips (data-state "delayed-open"/"instant-open") don't count.
-// Nor while a folded sidebar is shown a while (Rail.tsx peekSidebar): it reaches over the page's top row, and the window
-// takes that row's area under it whatever is drawn over it. On Windows the page is then told the pointer left it, so the
-// sidebar folded again as the pointer reached 新建对话 (test/browser/peek-drag.mjs). Folded again, the row drags again.
-const nothingDrags = `:root[data-desktop]:is([data-sidebar-peek], :has([data-radix-popper-content-wrapper] > [data-state="open"], [data-radix-select-viewport]))`;
-globalStyle(`${nothingDrags} *, ${nothingDrags} *::before, ${nothingDrags} *::after`, { WebkitAppRegion: "no-drag !important" as "no-drag" });
 export const gate = style({
   height: "100%", display: "grid", placeContent: "center", justifyItems: "center", gap: "8px", padding: "24px",
   textAlign: "center",
-  selectors: {
-    // A page of its own (signing in, an invitation): in the desktop app, with no title bar, its top drags the window.
-    "[data-desktop] &::before": { content: '""', position: "fixed", top: 0, left: 0, right: 0, height: 44, WebkitAppRegion: "drag" },
-  },
 });
 export const muted = style({ color: vars.muted });
 export const mono = style({ fontFamily: vars.fontMono });

@@ -54,29 +54,6 @@ export function droppedOf(dt: DataTransfer): Dragged[] {
   }
 }
 
-/**
- * Files dropped from Finder (or Explorer) in the desktop app on a machine that is one of the workspace's stations: named
- * by their path there, each kept to send as a file if switched. Elsewhere (a browser, an app from before, a machine that
- * is no station of the workspace) none is: they go up as files.
- */
-export function droppedFromFinder(dt: DataTransfer, here: { station: string; name: string } | null): Dropped[] | null {
-  const pathOf = window.stillfailDesktop?.pathOf;
-  if (!here || !pathOf) return null;
-  const items = [...dt.items].filter((i) => i.kind === "file");
-  const out: Dropped[] = [];
-  for (const item of items) {
-    const file = item.getAsFile();
-    const path = file ? pathOf(file) : "";
-    if (!file || !path) return null;
-    const dir = item.webkitGetAsEntry?.()?.isDirectory === true;
-    // Sent to the station it is on, it is copied there from where it is; to another, it goes up from here.
-    const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
-    const drive = cut > 0 ? { station: here.station, root: path.slice(0, cut), path: path.slice(cut + 1) } : undefined;
-    out.push({ name: file.name, size: dir ? 0 : file.size, ref: { station: here.station, stationName: here.name, path, dir }, ...(dir ? {} : { blob: file, ...(drive ? { drive } : {}) }) });
-  }
-  return out.length ? out : null;
-}
-
 /** What is being dragged over a chat's page now (ChatPage.tsx), for its composer to show where it goes: a station's files
  * or Finder's on a machine that is a station (`path`), other files (`file`), or nothing. */
 let over: "path" | "file" | null = null;

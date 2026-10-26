@@ -18,14 +18,12 @@ try {
   document.documentElement.dataset.theme = 'light';
   import {BrowserRouter} from 'react-router';
   import {Tooltip} from 'radix-ui';
-  import {setPageRoot} from './brand.tsx';
   import {createRoot} from 'react-dom/client';
   import {Files} from './Chat.tsx';
   import {setCore, setTopicSource} from './core/react.ts';
   setCore({call: (...args) => window.__videoTestCall(...args), callBytes: async (name, params) => { const got = await window.__videoTestCall(name, params); return {value: got, bytes: Uint8Array.from(atob(got.bytes), (c) => c.charCodeAt(0))}; }, subscribe: () => () => {}} as any);
   setTopicSource(topic => topic.topic === 'prefs' ? {lang:'zh'} : undefined);
   const file = (name: string) => ({name, path: '/test/'+name,size:1000});
-  setPageRoot(document.getElementById('root')!);
   createRoot(document.getElementById('root')!).render(<BrowserRouter><Tooltip.Provider><><Files owner={()=>'test'} files={[file('sample.mp4'),file('broken.webm')]}/><div style={{height:2500}}/><Files owner={()=>'test'} files={[file('later.mp4')]}/></></Tooltip.Provider></BrowserRouter>);
   `, {flag: 'wx'});
   madeFixture = true;

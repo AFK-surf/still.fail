@@ -17,11 +17,11 @@ const CLOUD_HOSTS = ["app.still.fail", "app.youdid.wtf", "ember.3720.org"];
 const cloudHost = (url: URL) => url.protocol === "https:" && url.port === "" && CLOUD_HOSTS.includes(url.hostname);
 
 /**
- * Whether `url` is on the cloud the app at `here` (its page's origin) and `cloud` (the desktop app's cloud origin) is:
+ * Whether `url` is on the cloud the app at `here` (its page's origin) and `cloud` (another origin it is served for) is:
  * either of them, or, when the app is on still.fail cloud, any of its hosts: a link agents post names app.still.fail,
  * a reference written on the test channel's web app names app.youdid.wtf, and both are this app's own wherever it is.
  */
-export function ownOrigin(url: URL, here: string = location.origin, cloud: string | null = window.stillfailDesktop?.cloudOrigin ?? null): boolean {
+export function ownOrigin(url: URL, here: string = location.origin, cloud: string | null = null): boolean {
   if (url.origin === here || (cloud !== null && url.origin === cloud)) return true;
   const ours = (origin: string | null) => {
     try { return origin !== null && cloudHost(new URL(origin)); } catch { return false; }

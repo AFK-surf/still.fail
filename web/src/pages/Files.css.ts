@@ -10,8 +10,6 @@ export const shell = style({ flex: "1", minHeight: "0", minWidth: "0", display: 
 export const bar = style({
   flex: "none", display: "flex", alignItems: "center", gap: "10px", minHeight: "44px", padding: "6px 12px", boxSizing: "border-box",
   borderBottom: `1px solid ${vars.line}`,
-  // On Windows the window's buttons are over its right end (global.css.ts): its buttons stay clear of them.
-  selectors: { ':is([data-desktop="overlay"], [data-desktop="custom"]) &': { paddingRight: "calc(var(--window-buttons, 0px) + 12px)" } },
 });
 /** The groove the tabs share, each an equal part of it (as Safari's compact tabs), drawn as the app's own segmented
  * controls are (Drive.css.ts views): capsules in a capsule, 2 apart, the one shown on the page's ground in it. */
@@ -48,8 +46,6 @@ export const tabClose = style({
 /** What can be done to the folder in front (Drive.tsx FolderView puts it here), then the tabs' own buttons after a line. */
 export const barFolder = style({ flex: "none", display: "flex", alignItems: "center", selectors: { "&:not(:empty)::after": { content: '""', width: "1px", height: "16px", margin: "0 6px 0 10px", background: vars.line } } });
 export const barEnd = style({ flex: "none", display: "flex", alignItems: "center", gap: "4px" });
-// The bar sits in the row that drags the desktop window (styles/shell.css.ts main): its tabs and buttons are still pressed.
-globalStyle(`[data-desktop] ${bar} :is(button, [role="tab"], [role="radio"], [role="radiogroup"])`, { WebkitAppRegion: "no-drag" });
 /** A toggle in the accent while it is on (split). */
 export const toggle = style({ display: "contents" });
 globalStyle(`${toggle}[data-on] button`, { color: vars.accent });

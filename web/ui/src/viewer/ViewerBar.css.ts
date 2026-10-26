@@ -2,15 +2,13 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import * as controlsCss from "../styles/controls.css.ts";
 
-/** How tall the bar is: as a page's bar (styles/sidebar.css.ts), a 32px button in it level with the desktop window's
- * buttons. What is under it starts below it, and goes under it as it is scrolled or as the bar goes. */
+/** How tall the bar is: as a page's bar (styles/sidebar.css.ts). What is under it starts below it, and goes under it as
+ * it is scrolled or as the bar goes. */
 export const VIEWER_BAR = 45;
 
 /**
  * Across the top of the file opened, over the whole window: the way back, the name in the middle, the tools. Its
- * ground, ink and line are the file's own (`--viewer-*`), else the page's. In the desktop app it drags the window
- * (but what is pressed in it) while the pointer is on it (`data-held`, ViewerBar.tsx), clear of the window's buttons:
- * macOS's at its left, Windows' at its right.
+ * ground, ink and line are the file's own (`--viewer-*`), else the page's.
  */
 export const bar = style({
   position: "absolute", zIndex: "3", top: "0", left: "0", right: "0", height: `${VIEWER_BAR}px`, boxSizing: "border-box",
@@ -23,13 +21,8 @@ export const bar = style({
   selectors: {
     // Gone up out of the way: the file under it whole.
     "&[data-hidden]": { transform: "translateY(-100%)", opacity: "0", pointerEvents: "none" },
-    "[data-desktop] &": { WebkitAppRegion: "no-drag" },
-    "[data-desktop] &[data-held]": { WebkitAppRegion: "drag" },
-    ':root[data-desktop="inset"]:not([data-fullscreen]) &': { paddingLeft: "84px" },
-    ':is([data-desktop="overlay"], [data-desktop="custom"]) &': { paddingRight: "calc(var(--window-buttons, 0px) + 12px)" },
   },
 });
-globalStyle(`[data-desktop] ${bar} :is(a, button, input, select, [role="button"], [tabindex])`, { WebkitAppRegion: "no-drag" });
 
 /** The way back, with where to. */
 export const back = style({

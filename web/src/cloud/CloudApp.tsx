@@ -86,15 +86,6 @@ function SlackInstalled() {
 function Home() {
   const list = useAccounts();
   const narrow = useNarrow();
-  const navigate = useNavigate();
-  // In the desktop app: an item's link opened from outside (stillfail://o/… or ember://o/…) comes here, and the page goes there.
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      if (event.origin === location.origin && typeof event.data?.stillfailNavigate === "string") navigate(event.data.stillfailNavigate);
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [navigate]);
   if (!list) return <Splash />;
   if (list.length > 0) return <SignedIn />;
   if (narrow) return <MobileSignIn />;
@@ -348,7 +339,7 @@ function CloudServicePage() {
 /**
  * An item's link from outside (a session's link in Slack): /o/<workspace>/<station>/<session>. On a computer the
  * desktop app is asked to open it (ember://o/…); when nothing takes it within a moment, or on a phone (where the
- * Android app takes these links itself), or inside the desktop app, it opens here.
+ * Android app takes these links itself), it opens here.
  */
 function OpenItem() {
   const { ws = "", station = "", session = "" } = useParams();

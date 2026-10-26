@@ -279,9 +279,7 @@ export const sliderValue = style({ textAlign: "right", fontSize: vars.textMeta, 
 const desk = `${reader}:not([data-narrow])`;
 const BAR = VIEWER_BAR;
 const PANEL = 320;
-// Its bar is the one every file opened has (viewer/ViewerBar.tsx), on the paper. In a narrow window its floating bar,
-// shown, takes the pointer over the window's top row (FilePreview.css.ts).
-globalStyle(`[data-desktop] ${reader}[data-narrow] ${top}[data-shown]`, { WebkitAppRegion: "no-drag" });
+// Its bar is the one every file opened has (viewer/ViewerBar.tsx), on the paper.
 /** The text under it, and clear of the panel docked at the right. */
 // The text from the window's top, starting below the bar and read on under it (it goes as the text is read down).
 globalStyle(`${desk} ${scroller}`, { top: "0", paddingTop: `${BAR + 40}px`, outline: "none" });

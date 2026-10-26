@@ -36,9 +36,8 @@ import { animate, arrive, EASE_OUT, ENTER, follower, glider, motionMs, moveState
 import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
 import { DraftKey, goingUp, MAX_FILE, offerToDraft, pathWords, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
-import { carriesDrive, droppedFrom, droppedFromFinder, droppedOf, useDropOver } from "./drive/drag.ts";
+import { carriesDrive, droppedFrom, droppedOf, useDropOver } from "./drive/drag.ts";
 import { useLanding } from "./drive/flight.ts";
-import { useThisMachine } from "./thisMachine.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
@@ -1788,8 +1787,6 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
     void api.warm(sessionKey).catch(() => {});
   };
   const station = useStation().address;
-  // The station of the machine the desktop app is on, when it is one of this workspace's: what Finder drops are on.
-  const here = useThisMachine(station);
   // Files dragged over its chat's page (ChatPage.tsx useChatDrop).
   const pageOver = useDropOver();
   const outside = useOutsideShare();
@@ -1865,9 +1862,7 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
           if (e.dataTransfer.files.length) {
             e.preventDefault(); setDragging(false);
             if (noFiles) return;
-            // From Finder on a machine that is a station: named by their path there, as a station's files are.
-            const named = droppedFromFinder(e.dataTransfer, here);
-            if (named) draft.addDropped(named); else add(e.dataTransfer.files);
+            add(e.dataTransfer.files);
           }
         }}>
         <ComposerExtras draft={draft} focusQuote={focusQuote} onFocused={onFocused} onDone={() => input.current?.focus()} />

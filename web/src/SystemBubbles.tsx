@@ -1,14 +1,12 @@
 // What the app itself has to say (no one's chat or station: those are the rail's bell, Attention.tsx), as bubbles
-// rising at the page's bottom left by the rail, over whatever is there, the sidebar open or closed: the desktop app's
-// newer build (to install), the page's newer build (to load), what the update just installed brought (the changelog).
+// rising at the page's bottom left by the rail, over whatever is there, the sidebar open or closed: the page's newer
+// build (to load), what the update just installed brought (the changelog).
 // Each says it in a line, with what can be done and a way to put it away.
 import { useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Link } from "react-router";
 import { webUpdates } from "./core/webUpdates.ts";
-import { useAppUpdate } from "./brand.tsx";
 import { useChangelog, useChangelogSeen } from "./changelog.ts";
-import { Close, Download, Refresh, Sparks } from "@stillfail/ui/icons.tsx";
-import { NAME } from "./channel.ts";
+import { Close, Refresh, Sparks } from "@stillfail/ui/icons.tsx";
 import { play } from "@stillfail/ui/motion.ts";
 import * as css from "./SystemBubbles.css.ts";
 import { t } from "./i18n.ts";
@@ -18,7 +16,6 @@ export function SystemBubbles({ scope }: { scope: string }) {
     <div className={css.stack} role="region" aria-label={t("web-main.system.label")}>
       <ChangelogBubble scope={scope} />
       <WebBubble />
-      <AppBubble />
     </div>
   );
 }
@@ -58,27 +55,6 @@ function Bubble({ icon, children, action, onClose, closeLabel }: {
         {onClose && <button type="button" className={css.close} aria-label={closeLabel} title={closeLabel} onClick={() => away(onClose)}><Close size={14} strokeWidth={1.8} /></button>}
       </div>
     </div>
-  );
-}
-
-/** The desktop app's newer build: installed (and the app restarted) when asked; put away for this run of the page. */
-function AppBubble() {
-  const updates = typeof window === "undefined" ? undefined : window.stillfailDesktop?.appUpdate;
-  const state = useAppUpdate();
-  const [away, setAway] = useState(false);
-  if (!updates || !state || (away && state.phase !== "downloading" && state.phase !== "installing")) return null;
-  const busy = state.phase === "downloading" || state.phase === "installing";
-  // A newer web app alone: the pages reload on it, the app does not restart.
-  const web = state.kind === "web";
-  const text = state.phase === "downloading" ? t("web-main.appUpdate.downloading", { percent: state.percent })
-    : state.phase === "installing" ? t(web ? "web-main.appUpdate.reloading" : "web-main.appUpdate.restarting")
-    : state.phase === "failed" ? state.message || t("web-main.appUpdate.failed")
-    : t(web ? "web-main.appUpdate.webTitle" : "web-main.appUpdate.title", { version: state.version, app: NAME });
-  return (
-    <Bubble icon={<Download size={16} />} closeLabel={t("web-main.webUpdate.later")} onClose={busy ? undefined : () => setAway(true)}
-      action={!busy && (() => <button type="button" className={css.action} data-tone="accent" onClick={() => updates.start()}>{state.phase === "failed" ? t("web-main.appUpdate.failed") : t(web ? "web-main.webUpdate.refresh" : "web-main.versions.update")}</button>)}>
-      {text}
-    </Bubble>
   );
 }
 

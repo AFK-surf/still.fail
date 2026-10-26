@@ -69,7 +69,6 @@ import "../ProfileCard.css.ts";
 import "../ProfilesNav.css.ts";
 import "../Memory.css.ts";
 import "../pages/Archive.css.ts";
-import "../pages/AppVersion.css.ts";
 import "../pages/Changelog.css.ts";
 import "../mobile/styles/root.css.ts";
 import "../mobile/styles/pages.css.ts";

@@ -1,6 +1,5 @@
 // Marking a web service's page in a preview, for a chat's agent: this runs in the preview's frame (the preview host's
-// /_ember/frame on the web, cloud/src/preview.ts; the desktop app's ember-preview:// one, apps/desktop/src/main.ts),
-// loaded there as /_ember/annotate.js. The service's page is in a frame of that frame, on the same origin, so its
+// /_ember/frame, cloud/src/preview.ts), loaded there as /_ember/annotate.js. The service's page is in a frame of that frame, on the same origin, so its
 // document can be read and its clicks held here without anything put into the service.
 //
 // Told by the client (ember-preview-annotate): `on` (true/false) starts or ends picking, `remove` drops a mark,

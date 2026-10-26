@@ -19,7 +19,6 @@ import {ACCOUNT,runs} from './src/demo/station.ts';
 import {chatView,message,SAFARI_KEY} from './src/demo/fixtures.ts';
 import {MobileWorkspace} from './src/mobile/index.tsx';
 import {mEdge} from './src/mobile/app.css.ts';
-import {setPageRoot} from './src/brand.tsx';
 const pending=new URLSearchParams(location.search).has('pending');
 const chat=demoCore.chats.find(c=>c.key===SAFARI_KEY)!;
 extendDemo({topic:t=>t.topic==='job'?{id:'review',name:'预览测试',state:'exited',port:null,open:false}:
@@ -28,7 +27,7 @@ history.replaceState(null,'','/w/demo/s/local/chats/'+(pending?'new%3Areview':en
 window.receive=()=>{chat.messages.push(message(chat,'agent','隐藏期间收到的消息'));demoCore.publish();};
 window.edge=mEdge;
 function Navigation(){window.go=useNavigate();return null;}
-const root=document.getElementById('app')!;setPageRoot(root);
+const root=document.getElementById('app')!;
 createRoot(root).render(<Tooltip.Provider><BrowserRouter><Navigation/><Routes><Route path='/w/demo/*' element={<MobileWorkspace entry={{id:'demo',name:'Test',account:ACCOUNT}}/>}/></Routes></BrowserRouter></Tooltip.Provider>);
 `, {flag:'wx'});
   madeFixture = true;

@@ -26,10 +26,8 @@ export function ViewerBar({ back, name, meta, tools, title, hidden = false, onHe
   /** The pointer came onto it (true), or left it (false): a bar that fades as the pointer rests stays while it is on it. */
   onHeld?: (held: boolean) => void;
 }) {
-  // In the desktop app the bar drags the window, and where it does the page hears nothing of the pointer. Dragging all
-  // the time, the page could never tell the pointer is on it (its rest timed out under it), nor reach the file under it
-  // once it has gone. So it drags only while the pointer is on it: heard coming onto it (not dragging yet), held from
-  // then on, let go as the pointer is heard anywhere else (back on the file), or as the bar goes.
+  // A pointer resting on it is heard no more, and its rest would time out under it: held from when it is heard coming
+  // onto it, let go as the pointer is heard anywhere else (back on the file), or as the bar goes.
   const [held, setHeld] = useState(false);
   const el = useRef<HTMLElement>(null);
   const told = useRef(onHeld);
@@ -48,7 +46,7 @@ export function ViewerBar({ back, name, meta, tools, title, hidden = false, onHe
   }, [held]);
   if (hidden && held) setHeld(false);
   // Where the mouse was last heard: a bar that comes back under a pointer at rest there (a screen driven brings it as
-  // the pointer reaches the window's top, where it stops) is held at once, else a press there would not drag.
+  // the pointer reaches the window's top, where it stops) is held at once.
   const last = useRef<{ x: number; y: number } | null>(null);
   useEffect(() => {
     const heard = (e: globalThis.PointerEvent) => { if (e.pointerType === "mouse") last.current = { x: e.clientX, y: e.clientY }; };
@@ -60,7 +58,7 @@ export function ViewerBar({ back, name, meta, tools, title, hidden = false, onHe
     if (!hidden && at && stands(el.current, at.x, at.y)) setHeld(true);
   }, [hidden]);
   return (
-    <header ref={el} className={css.bar} data-hidden={hidden || undefined} data-held={held || undefined} inert={hidden}
+    <header ref={el} className={css.bar} data-hidden={hidden || undefined} inert={hidden}
       onPointerMove={(e) => { if (e.pointerType === "mouse" && !hidden && !held) setHeld(true); }}>
       <button type="button" className={css.back} onClick={back.onClick} aria-label={back.label}><ChevronLeft size={20} /><span>{back.label}</span></button>
       <span className={css.center} title={title}>

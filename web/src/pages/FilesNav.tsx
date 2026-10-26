@@ -10,11 +10,10 @@ import { useDriveStations, useStations } from "../api.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import type { StationView } from "../core/shapes.ts";
 import { stationBase } from "../station.tsx";
-import { useThisMachineAddress } from "../thisMachine.ts";
 import { ICON, Tip } from "../ui.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { StationNamed } from "../StationNamed.tsx";
-import { ChevronRight, Close, Disk, Folder, Monitor, Pin, Plus, Server, Star } from "@stillfail/ui/icons.tsx";
+import { ChevronRight, Close, Disk, Folder, Pin, Plus, Server, Star } from "@stillfail/ui/icons.tsx";
 import { NavAction, NavItem, NavList, NavSection, NavTop } from "../SidebarList.tsx";
 import { drive, drivePath, folderName, type PickFolder } from "../drive/useDrive.ts";
 import { carriesDrive, draggedNow, droppedOf } from "../drive/drag.ts";
@@ -103,7 +102,7 @@ function usePlaces(station: string, open: boolean, anywhere: boolean): PickFolde
 }
 
 /** A station's row: opens its home (or the folder it pins, for a read-only member); its places under it, opened. */
-function StationRow({ s, here, lit, root, path }: { s: StationView; here: boolean; lit: (station: string, root: string, path: string) => boolean; root: string | null; path: string }) {
+function StationRow({ s, lit, root, path }: { s: StationView; lit: (station: string, root: string, path: string) => boolean; root: string | null; path: string }) {
   const d = driveOf(s)!;
   const [open, setOpen] = useState(false);
   const places = usePlaces(s.station, open, d.anywhere === true);
@@ -117,8 +116,8 @@ function StationRow({ s, here, lit, root, path }: { s: StationView; here: boolea
           onClick={() => setOpen(!open)}><ChevronRight size={12} strokeWidth={2} /></button>
         {start !== null ? (
           <FolderRow s={s} root={start} path="" name={s.name} lit={inThis && root === start && path === ""} away={!s.online}
-            mark={s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={ICON.size} /> : here ? <Monitor {...ICON} /> : <Server {...ICON} />}
-            end={<>{here && <span className={css.here}>{t("web-pages.files.thisMachine")}</span>}{s.online ? <DiskBar s={s} /> : <span>{t("web-pages.stations.offline")}</span>}</>} />
+            mark={s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={ICON.size} /> : <Server {...ICON} />}
+            end={s.online ? <DiskBar s={s} /> : <span>{t("web-pages.stations.offline")}</span>} />
         ) : <span className={css.stationName}><StationNamed emoji={s.emoji} icon={s.icon} name={s.name} /></span>}
       </div>
       {open && (
@@ -143,11 +142,10 @@ export function FilesNav({ scope, top }: { scope: string; top?: ReactNode }) {
   const path = q.get("path") ?? "";
   const shownStation = /^\/w\/[^/]+\/s\/([^/]+)\/files/.exec(where.pathname)?.[1];
   const lit = (station: string, r: string, p: string) => shownStation !== undefined && station.endsWith(`/${shownStation}`) && root === r && path === p;
-  const here = useThisMachineAddress();
   const add = useAddFolder(scope);
   const fav = useFavorites(scope);
-  // Those with a drive, this machine's first, then as the workspace lists them.
-  const stations = useDriveStations(scope, here).value ?? [];
+  // Those with a drive, as the workspace lists them.
+  const stations = useDriveStations(scope).value ?? [];
   const pinned = views.flatMap((s) => (driveOf(s)?.roots ?? []).map((r) => ({ s, r })));
   const [keeping, setKeeping] = useState(false);
   // A folder dragged onto 个人收藏: kept there.
@@ -183,7 +181,7 @@ export function FilesNav({ scope, top }: { scope: string; top?: ReactNode }) {
         </div>
         {stations.length > 0 && (
           <NavSection title="Station">
-            {stations.map((s) => <StationRow key={s.station} s={s} here={s.station === here} lit={lit} root={root} path={path} />)}
+            {stations.map((s) => <StationRow key={s.station} s={s} lit={lit} root={root} path={path} />)}
           </NavSection>
         )}
         {pinned.length > 0 && (

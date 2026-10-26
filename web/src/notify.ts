@@ -1,6 +1,6 @@
 // Notifications in the browser (docs/notifications.md): the core's `notices` shown while a page is open, and pushes
-// through the service worker (/sw.js) while none is. The desktop app shows its own from its main process, so its
-// pages show none. Whether they are on is the core's (kept on the device), and the browser's permission. Only the
+// through the service worker (/sw.js) while none is. Whether they are on is the core's (kept on the device), and the
+// browser's permission. Only the
 // workspace the viewer is in is heard of: each page tells the core where it is (`useInWorkspace`).
 import { useEffect, useSyncExternalStore } from "react";
 import { useNavigate } from "react-router";
@@ -14,16 +14,12 @@ const OLD_SHOWN = "stillfail.noticesShown";
 const listeners = new Set<() => void>();
 const changed = () => listeners.forEach((l) => l());
 
-/** Where the page runs has notifications of its own (the desktop app shows them from its main process). */
-const NOTIFIES = typeof window !== "undefined" && "Notification" in window && !window.stillfailDesktop;
+/** Where the page runs has notifications. */
+const NOTIFIES = typeof window !== "undefined" && "Notification" in window;
 const PUSHES = NOTIFIES && "serviceWorker" in navigator && "PushManager" in window;
-/** The desktop app's setting (null until asked, or for an app from before notifications). */
-const DESKTOP = typeof window !== "undefined" ? window.stillfailDesktop?.notify : undefined;
-let desktopOn: boolean | null = null;
-if (DESKTOP) void DESKTOP.get().then((on) => { desktopOn = on; changed(); });
 
 /** This client can tell about the chats: the setting shows. */
-export const CAN_NOTIFY = NOTIFIES || !!DESKTOP;
+export const CAN_NOTIFY = NOTIFIES;
 
 export type NotifyState = "on" | "off" | "denied" | "unsupported";
 
@@ -69,14 +65,12 @@ function watch(): void {
 
 /** What the system allows, found again now and told to the core (the permissions page asks each second). */
 export function checkPermission(): void {
-  if (DESKTOP) void DESKTOP.check?.().catch(() => undefined);
-  else if (NOTIFIES) tellPermission();
+  if (NOTIFIES) tellPermission();
 }
 
 /** Has the system ask the person to allow them (only while it has not been asked). */
 export async function requestPermission(): Promise<void> {
-  if (DESKTOP) await DESKTOP.request?.();
-  else if (NOTIFIES) await Notification.requestPermission();
+  if (NOTIFIES) await Notification.requestPermission();
   checkPermission();
 }
 
@@ -98,7 +92,6 @@ async function migrate(): Promise<void> {
 function state(): NotifyState {
   // What the system allows, as the app found it (the core's; this page's own browser before the core has said).
   const permission = kept?.permission && kept.permission !== "unknown" ? kept.permission : NOTIFIES ? Notification.permission : "unknown";
-  if (DESKTOP) return desktopOn === null ? "unsupported" : permission === "denied" ? "denied" : desktopOn ? "on" : "off";
   if (!NOTIFIES) return "unsupported";
   if (permission === "denied") return "denied";
   const on = kept?.on ?? localStorage.getItem(OLD_KEY) !== "off";
@@ -112,12 +105,6 @@ export function useNotifyState(): NotifyState {
 
 /** Turns them on (asking the browser first) or off, on this browser; rejects, as it was, when that could not be kept. */
 export async function setNotify(on: boolean): Promise<NotifyState> {
-  if (DESKTOP) {
-    await DESKTOP.set(on);
-    desktopOn = on;
-    changed();
-    return state();
-  }
   if (!NOTIFIES) return "unsupported";
   const set = async (on: boolean) => {
     kept = await core().call("notify.set", { on }) as NotifyView;

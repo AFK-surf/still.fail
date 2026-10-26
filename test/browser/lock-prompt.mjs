@@ -39,10 +39,8 @@ try {
 import { createRoot } from 'react-dom/client';
 import './src/styles/index.ts';
 import { DemoApp } from './src/demo/mount.tsx';
-import { setPageRoot } from './src/brand.tsx';
 const root = document.getElementById('app')!;
 root.style.cssText = 'position:fixed;inset:0';
-setPageRoot(root);
 createRoot(root).render(<DemoApp phone={location.search.includes('phone')} />);
 `, { flag: 'wx' });
   madeFixture = true;

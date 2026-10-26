@@ -13,7 +13,6 @@ import { VIEWER_BAR } from "@stillfail/ui/viewer/ViewerBar.css.ts";
 /** The page it is on, over the whole window (as a file opened is: pages/Drive.css.ts opened). */
 export const page = style({
   position: "fixed", inset: "0", zIndex: "61", overflow: "hidden", background: vars.canvas,
-  selectors: { ':root[data-desktop="inset"]:not([data-fullscreen]) &': { vars: { "--m-top": "30px" } } },
 });
 
 /** Phone: the bars' heights and how far from the edges they float. */
@@ -44,8 +43,6 @@ export const stage = style({
     [`${viewer}[data-phone][data-keys] &`]: { bottom: `calc(max(${EDGE}px, var(--safe-bottom)) + ${FOOT + GAP + KEYS + GAP}px)` },
     // 全屏: the whole window.
     [`${viewer}[data-phone][data-full] &`]: { top: "0", bottom: "0", left: "0", right: "0" },
-    // The desktop app's window is dragged by the page's top: not over a screen being driven.
-    "[data-desktop] &": { WebkitAppRegion: "no-drag" },
   },
 });
 
@@ -107,7 +104,6 @@ export const head = style({
   position: "absolute", zIndex: "3", top: `calc(var(--m-top, 0px) + max(${EDGE}px, var(--safe-top)))`, ...centredX,
   display: "flex", alignItems: "center", gap: "6px", width: "max-content", maxWidth: "calc(100% - 24px)", boxSizing: "border-box",
   height: `${HEAD}px`, padding: "6px", borderRadius: "999px", color: vars.text,
-  selectors: { "[data-desktop] &": { WebkitAppRegion: "no-drag" } },
 });
 export const back = style({
   display: "grid", placeItems: "center", flex: "none", width: "32px", height: "32px", padding: "0", border: "0", borderRadius: "50%",
@@ -123,7 +119,6 @@ export const foot = style({
   ...glass,
   position: "absolute", zIndex: "3", bottom: `max(${EDGE}px, var(--safe-bottom))`, ...centredX,
   display: "flex", alignItems: "center", gap: "8px", width: "max-content", maxWidth: "calc(100% - 24px)", boxSizing: "border-box", height: `${FOOT}px`, padding: "6px", borderRadius: "999px",
-  selectors: { "[data-desktop] &": { WebkitAppRegion: "no-drag" } },
 });
 /** The keyboard: a circle as tall as the switch beside it. */
 export const keyboard = style({
@@ -155,7 +150,6 @@ export const keysRow = style({
   position: "absolute", zIndex: "3", bottom: `calc(max(${EDGE}px, var(--safe-bottom)) + ${FOOT + GAP}px)`, ...centredX,
   display: "flex", alignItems: "center", gap: "4px", width: "calc(100% - 24px)", maxWidth: "480px", boxSizing: "border-box",
   height: `${KEYS}px`, padding: "4px", borderRadius: "999px",
-  selectors: { "[data-desktop] &": { WebkitAppRegion: "no-drag" } },
 });
 export const rowKey = style({
   display: "grid", placeItems: "center", flex: "1 1 0", minWidth: "0", height: "36px", padding: "0", border: "0", borderRadius: "999px",
@@ -238,7 +232,6 @@ export const menuCheck = style({ display: "inline-grid", placeItems: "center", w
 /** A column of round buttons by the device's right edge (ScreenViewer.tsx place), as Simulator.app's own are beside it. */
 export const device = style({
   position: "absolute", zIndex: "2", display: "flex", flexDirection: "column", gap: "8px",
-  selectors: { "[data-desktop] &": { WebkitAppRegion: "no-drag" } },
 });
 export const deviceButton = style({
   display: "grid", placeItems: "center", width: "40px", height: "40px", padding: "0", border: "0", borderRadius: "50%",

@@ -23,13 +23,12 @@ export function useAccounts(): Account[] | undefined {
 }
 
 /**
- * Sends the browser to Google (via still.fail cloud); it comes back to /auth/callback.
- * The desktop app opens it in the system browser, which comes back to the app
- * through ember://auth/callback and on to the page's /auth/callback. It signs in by the name the core gives the device.
+ * Sends the browser to Google (via still.fail cloud); it comes back to /auth/callback. It signs in by the name the core
+ * gives the device.
  */
 export async function signIn(returnTo = location.pathname + location.search + location.hash): Promise<void> {
   const { url } = await core().call("auth.begin", {
-    redirect_uri: window.stillfailDesktop ? `${window.stillfailDesktop.scheme ?? "stillfail"}://auth/callback` : `${location.origin}/auth/callback`, return_to: returnTo,
+    redirect_uri: `${location.origin}/auth/callback`, return_to: returnTo,
   }) as { url: string };
   location.assign(url);
 }

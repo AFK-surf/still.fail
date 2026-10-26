@@ -1,5 +1,5 @@
 // The browser host's update state. Kept outside the views: both web layouts show the same notice, and neither
-// requests deployment metadata. This belongs to the web host, not the shared Rust core or the desktop updater.
+// requests deployment metadata. This belongs to the web host, not the shared core.
 import { reload } from "../reloads.ts";
 declare const __WEB_REVISION__: string | null;
 
@@ -52,7 +52,7 @@ export class WebUpdates {
   }
 
   start(): void {
-    if (this.#started || !this.revision || window.stillfailDesktop) return;
+    if (this.#started || !this.revision) return;
     this.#started = true;
     const check = () => { if (document.visibilityState === "visible") void this.check(); };
     check();

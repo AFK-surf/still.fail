@@ -1,11 +1,8 @@
 import { UNTRACKED_OPERATIONS } from "./operations.ts";
-import { PageFiles } from "../../../client/core-ts/src/hosts/file-port.ts";
 // The UI's side of the core (docs/client-core.md): one channel to the worker
 // that runs it, calls with request ids, and subscriptions that survive the
 // worker being replaced. Each tab has a dedicated Worker; one of them runs the
-// core and the others' relay to it (worker.ts, docs/core-db.md). In the desktop
-// app (apps/desktop) the core runs in a utility process instead, reached
-// through a MessagePort; the protocol is the same.
+// core and the others' relay to it (worker.ts, docs/core-db.md).
 import { BUILT_AT } from "./built.ts";
 import { BETA } from "../channel.ts";
 import { applyDelta, type DeltaOp } from "./delta.ts";
@@ -591,229 +588,13 @@ export function workerOpener(): Opener {
   };
 }
 
-/** What the desktop app's preload (apps/desktop/src/preload.ts) gives the page. */
-export interface StillFailDesktop {
-  /** Asks for a port to the core; it arrives as a window message `{ stillfailCore: "port", id }`. */
-  openCore(id: number): void;
-  /** The host a station's web service is shown at, stillfail-preview://<host>/ (apps/desktop/src/main.ts, previews). */
-  previewHost(station: string, port: number): Promise<string | null>;
-  /** A drive's file played as it comes from stillfail-drive:// (apps/desktop/src/main.ts, drive); an app from before this has none. */
-  driveOpen?(file: { station: string; root: string; path: string; size: number; type: string }): Promise<string | null>;
-  driveClose?(url: string): void;
-  /** The page is in a workspace, reached as `account`: the app's station joins it when it is in none yet. */
-  inWorkspace(account: string, workspace: string): void;
-  /** The station the app carries, and joining it to a workspace when asked to; an app from before this has none. */
-  station?: {
-    state(): Promise<CarriedStation | null>;
-    /** Joins it to `workspace` as `account`, even if it joined one before (not over one it is in): its state after, or why not. */
-    join(account: string, workspace: string): Promise<{ station: CarriedStation } | { error: string } | null>;
-  };
-  /**
-   * This machine's station whoever runs it, for the settings' 本机 Station page (apps/desktop/src/main.ts, station:local):
-   * where it stands, and starting, stopping, restarting or updating it, its log or data directory opened. An app from
-   * before it has none.
-   */
-  local?: {
-    state(): Promise<LocalStationState | null>;
-    act(action: LocalStationAction): Promise<{ station: LocalStationState } | { error: string } | { opened: boolean } | null>;
-  };
-  /** Shows a file of this machine in Finder (a directory opened): false when it is not there; an app from before it has none. */
-  reveal?(path: string): Promise<boolean>;
-  /** Where a file dropped or picked is on this machine (Electron's webUtils.getPathForFile): "" for one that is not on its
-   * disk; an app from before this has none. */
-  pathOf?(file: File): string;
-  /**
-   * The window's frame: `inset` (macOS) and `overlay` (Windows) have no title bar, the page's top row is it with the
-   * window's buttons at its left or right; `system` has the system's. None from apps before it, all inset; apps before
-   * `overlay` said `system` on Windows.
-   */
-  frame?: "inset" | "overlay" | "custom" | "system";
-  windowControls?: {
-    state(): Promise<unknown>;
-    action(action: "minimize" | "maximize" | "close"): void;
-    bounds(rect: number[] | null): void;
-    watch(listener: (state: unknown) => void): () => void;
-  };
-  /** The colours of the window's buttons on Windows (`overlay`), as #rrggbb: the top row's under them, their symbols'. */
-  windowColors?(color: string, symbolColor: string): void;
-  /** The cloud's origin (https://app.still.fail): its links are the app's own, though the app is at app://ember. */
-  cloudOrigin?: string;
-  /** The app's version (0.1.<commits>); an app from before it has none. */
-  version?: string;
-  /** The beta app (「youdid.wtf」, beside the released one); an app from before it has none (released). */
-  beta?: boolean;
-  /** The scheme a sign-in comes back to the app on (stillfail://, the beta app's stillfail-beta://); an app from before it has none (stillfail). */
-  scheme?: string;
-  /** A newer build of the app (apps/desktop/src/main.ts, keepUpdated); an app from before updates has none. */
-  appUpdate?: {
-    state(): Promise<AppUpdate | null>;
-    /** Each change of it; the returned function stops listening. */
-    watch(listener: (state: AppUpdate | null) => void): () => void;
-    /** Downloads it; once it is, the app restarts as the new one. */
-    start(): void;
-    /** Asks for a newer build now, not waiting for the next check; an app from before it has none. */
-    check?(): Promise<UpdateCheck | null>;
-  };
-  /** Whether the app tells about the chats (it shows them from its main process); an app from before them has none. */
-  /** macOS's Local Network for the app; an app from before it has none. */
-  localNetwork?: {
-    /** Whether it may reach the LAN it is on: granted | denied | unknown (no LAN, not a Mac). */
-    check(): Promise<string>;
-    /** Whether macOS keeps it from a station at these LAN addresses (`ip:port`). */
-    kept(addrs: string[]): Promise<boolean>;
-    /** Opens System Settings' Local Network list. */
-    settings(): Promise<void>;
-  };
-  notify?: {
-    get(): Promise<boolean | null>;
-    set(on: boolean): Promise<void>;
-    /** Opens the system's notification settings for the app; an app from before it has none. */
-    settings?(): Promise<void>;
-    /** What the system allows now, told to the core too; an app from before it has none. */
-    check?(): Promise<string | null>;
-    /** Has the system ask the person (macOS: the first notification shown asks); an app from before it has none. */
-    request?(): Promise<void>;
-  };
-  /**
-   * The computer woke from sleep after `away` ms (the window may have stayed visible all along, so the page is not
-   * told otherwise); the returned function stops listening. An app from before this has none.
-   */
-  onResume?(listener: (away: number) => void): () => void;
-  /** The computer's network became another; the returned function stops listening. An app from before this has none. */
-  onNetwork?(listener: () => void): () => void;
-  /**
-   * The app asks for the image a picture right-clicked stands in for (a chat's thumbnail), to copy it whole
-   * (web/src/wholeImages.ts): `answer` gives it as a PNG, or null to copy the picture as shown. The returned function
-   * stops answering. An app from before this has none.
-   */
-  onImageWanted?(answer: (src: string) => Promise<Uint8Array | null>): () => void;
-  /** Says which language the page speaks, for the app's menus and dialogs. An app from before languages has none. */
-  language?(lang: "zh" | "en"): void;
-  /**
-   * The menu bar's items for the page's actions (web/src/keymap.ts): told the first key each is bound to and which can
-   * be done now; `onAction` hears one chosen (the returned function stops listening). An app from before it has none.
-   */
-  menu?: {
-    state(state: { keys: Record<string, string | null>; on: string[] }): void;
-    onAction(listener: (action: string) => void): () => void;
-  };
-}
-
-/**
- * The station the desktop app carries (apps/desktop/src/station.ts): `carried` false in a build without one; in no
- * workspace (off), in one (running), or removed from the one it was in (`workspace`: the one it is or was in).
- */
-export interface CarriedStation {
-  carried: boolean;
-  state: "off" | "running" | "removed";
-  workspace?: string;
-  /** Its key in that workspace (an app from before it says none). */
-  station?: string;
-  /** The workspaces it joined beside that one: said by an app that joins a station in one to another (none before). */
-  joined?: string[];
-}
-
-export type LocalStationAction = "start" | "stop" | "restart" | "update" | "log" | "folder";
-
-/**
- * This machine's station (apps/desktop/src/main.ts, localStation): run by the app, by a service installed on its own
- * (`service`: launchd, systemd or a scheduled task), by hand (`other`), or not running (`none`); the release it runs or
- * has (`version`), `outdated` when an installed one is behind the app's (`carriedVersion`); the workspace its data is
- * in, if any; what is being done to it (`doing`).
- */
-export interface LocalStationState {
-  carried: boolean;
-  carriedVersion?: string;
-  data: string;
-  runner: "app" | "service" | "other" | "none";
-  version?: string;
-  service?: { kind: "launchd" | "systemd" | "task"; name: string };
-  outdated: boolean;
-  workspace?: { id: string; name?: string | undefined; station?: string | undefined; stationName?: string | undefined; removed: boolean };
-  doing?: LocalStationAction;
-}
-
-/** What a check asked for now found: the newer build (`latest`), none (neither), or why it could not tell. */
-export type UpdateCheck = { current: string; latest?: string; error?: string };
-
-/**
- * `kind: "web"`: a newer build of the web app alone (apps/desktop/src/web-update.mts, the beta app's), downloaded already:
- * taking it reloads the pages, the app does not restart. Without it, the app's own update, which restarts it.
- */
-export type AppUpdate = (
-  | { phase: "available"; version: string }
-  | { phase: "downloading"; version: string; percent: number }
-  | { phase: "installing"; version: string }
-  | { phase: "failed"; version: string; message: string }
-) & { kind?: "web" };
-
-declare global {
-  interface Window {
-    stillfailDesktop?: StillFailDesktop;
-  }
-}
-
-let nextPort = 1;
-
-/**
- * Opens a channel to the desktop app's core, in its utility process: each
- * channel is a port of its own. Messages go out as objects and come back as
- * the core's JSON. The core's process exiting is announced to every page.
- */
-export function desktopOpener(desktop: StillFailDesktop): Opener {
-  return (onMessage, onFail) => {
-    const id = nextPort++;
-    let port: MessagePort | null = null;
-    const files = new PageFiles((message) => port?.postMessage(message));
-    // What the client posts before the port is here, in order.
-    const early: unknown[] = [];
-    const arrive = (event: MessageEvent) => {
-      if (event.source !== window) return;
-      const data = event.data as { stillfailCore?: string; id?: number; reason?: string } | null;
-      if (data?.stillfailCore === "exit") {
-        onFail(data.reason ?? t("web-main.core.exited"));
-      } else if (data?.stillfailCore === "port" && data.id === id && !port && event.ports[0]) {
-        port = event.ports[0];
-        port.onmessage = (message) => {
-          if (files.receive(message.data)) return;
-          // JSON, or JSON with bytes beside it (a screen view's frame: apps/desktop/src/core.ts).
-          const data = message.data as string | { json: string; bytes: Uint8Array };
-          onMessage(typeof data === "string" ? JSON.parse(data) : { ...JSON.parse(data.json), bytes: data.bytes });
-        };
-        for (const message of early.splice(0)) port.postMessage(message);
-      }
-    };
-    addEventListener("message", arrive);
-    desktop.openCore(id);
-    return {
-      post: (message) => {
-        message = files.prepare(message);
-        if (port) {
-          port.postMessage(message);
-        } else {
-          // Throws now, as posting would, for what cannot be sent.
-          structuredClone(message);
-          early.push(message);
-        }
-      },
-      close: () => {
-        files.close();
-        removeEventListener("message", arrive);
-        port?.close();
-      },
-    };
-  };
-}
-
 function same(a: ChatShown, b: ChatShown): boolean {
   return a.station === b.station && ((a.thread !== null && a.thread === b.thread) || (a.session !== null && a.session === b.session));
 }
 
 /** Starts (or joins) the core and keeps the page's client in step with the page's lifecycle. */
 export function connectCore(): CoreClient {
-  const open = window.stillfailDesktop ? desktopOpener(window.stillfailDesktop) : workerOpener();
-  // The desktop app's core is its own process's, not the page's: kept as the page goes.
-  const client = new CoreClient(open, { onFault: (error) => captureException(error, { source: "core" }), endWithPage: !window.stillfailDesktop });
+  const client = new CoreClient(workerOpener(), { onFault: (error) => captureException(error, { source: "core" }), endWithPage: true });
   addEventListener("pagehide", () => client.suspend());
   // Hidden since when (wall clock: a frozen page's monotonic clock may stand still).
   let hidden = document.visibilityState === "hidden" ? Date.now() : null;
@@ -849,8 +630,5 @@ export function connectCore(): CoreClient {
     kind = now;
     if (was !== undefined && now !== undefined && now !== "none") client.networkChanged();
   });
-  window.stillfailDesktop?.onNetwork?.(() => client.networkChanged());
-  // The computer slept with the window open: the page never went hidden, so the app says so.
-  window.stillfailDesktop?.onResume?.((away) => client.wake(away));
   return client;
 }

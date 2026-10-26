@@ -420,7 +420,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
       <div className={css.grow} />
       {/* Every workspace at the foot, always, not one of the places chosen: the one in view its switcher. */}
       <RailWorkspaces scope={scope} current={workspace} />
-      {/* In a browser, the apps to download (the desktop app has itself). */}
+      {/* The apps to download. */}
       {downloadsOffered() && <RailDownload />}
       {/* A place left out of the rail is reached in the settings: they are lit while in it. */}
       <Tip label={t("web-pages.settings.title")} side="right">

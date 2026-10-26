@@ -12,8 +12,7 @@ try{
 import {createRoot} from 'react-dom/client';
 import './src/styles/index.ts';
 import {DemoApp} from './src/demo/mount.tsx';
-import {setPageRoot} from './src/brand.tsx';
-const root=document.getElementById('app');root.style.cssText='position:fixed;inset:0';setPageRoot(root);createRoot(root).render(<DemoApp phone/>);
+const root=document.getElementById('app');root.style.cssText='position:fixed;inset:0';createRoot(root).render(<DemoApp phone/>);
 `,{flag:'wx'});madeFixture=true;
  await writeFile(html,'<meta name="viewport" content="width=device-width, initial-scale=1"><div id="app"></div><script type="module" src="/gesture-motion-check.tsx"></script>',{flag:'wx'});madeHtml=true;
  server=await createServer({configFile:fileURLToPath(new URL('../../web/vite.demo.config.ts',import.meta.url)),root:fileURLToPath(new URL('../../web',import.meta.url)),plugins:[{name:'bar-render-count',enforce:'pre',transform(code,id){if(!id.split('?')[0].endsWith('/mobile/Bar.tsx'))return;const source=process.env.BASELINE_BAR?readFileSync(process.env.BASELINE_BAR,'utf8'):code;return source.replace('export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) {','export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) { window.barRenders=(window.barRenders||0)+1;');}}],server:{host:'127.0.0.1',port:0,hmr:false}});

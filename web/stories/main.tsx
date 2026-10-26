@@ -92,7 +92,7 @@ function Gallery() {
   const first = stories.find((s) => s.id === location.hash.slice(1)) ?? stories[0]!;
   const [picked, setPicked] = useState<Story>(first);
   const [look, setLook] = useState<string>("light");
-  const [want, setWant] = useState<string>(device(query.get("device"))?.id ?? "mac");
+  const [want, setWant] = useState<string>(device(query.get("device"))?.id ?? "computer");
   useEffect(() => { document.documentElement.dataset.theme = look; }, [look]);
   useEffect(() => { history.replaceState(null, "", `#${picked.id}`); }, [picked]);
   useEffect(() => {
@@ -101,8 +101,8 @@ function Gallery() {
     return () => removeEventListener("hashchange", follow);
   }, []);
   const groups = [...new Set(stories.map((s) => s.group))];
-  // A phone's story on a phone (the first) when a Mac is picked.
-  const on = device(want)!.mac && picked.phone ? DEVICES.find((d) => d.safe && d.cutout)! : device(want)!;
+  // A phone's story on a phone (the first) when a computer is picked.
+  const on = !device(want)!.safe && picked.phone ? DEVICES.find((d) => d.safe && d.cutout)! : device(want)!;
   const src = `?story=${picked.id}&theme=${look}&device=${on.id}&play=1`;
   return (
     <div className={shellCss.shell}>
@@ -179,7 +179,6 @@ function Screen({ on, children }: { on: Device; children: ReactNode }) {
           <div aria-hidden style={{ position: "absolute", inset: 0, pointerEvents: "none", color: vars.text }}>
             <Corners radius={on.radius} ground={ground} />
             <div style={{ position: "absolute", inset: 0, borderRadius: on.radius, boxShadow: `inset 0 0 0 1px ${vars.lineStrong}` }} />
-            {on.mac === "window" && <Lights />}
             {on.safe && <StatusBar on={on} />}
             {on.foot === "indicator" && (
               <div style={{ position: "absolute", left: "50%", bottom: on.os === "ios" ? 8 : 9, transform: "translateX(-50%)", width: on.os === "ios" ? 134 : 108, height: on.os === "ios" ? 5 : 4, borderRadius: 3, background: "currentColor" }} />
@@ -207,15 +206,6 @@ function Corners({ radius, ground }: { radius: number; ground: string }) {
         return <span key={corner} style={{ position: "absolute", ...place, width: radius, height: radius, background: `radial-gradient(circle at ${centre}, transparent ${radius - 0.5}px, ${ground} ${radius}px)` }} />;
       })}
     </>
-  );
-}
-
-/** The Mac window's three buttons, where the app has macOS put them (12 across, 8 apart, from 16, 15). */
-function Lights() {
-  return (
-    <div style={{ position: "absolute", left: 16, top: 15, display: "flex", gap: 8 }}>
-      {["#ff5f57", "#febc2e", "#28c840"].map((c) => <span key={c} style={{ width: 12, height: 12, borderRadius: "50%", background: c, boxShadow: "inset 0 0 0 0.5px rgb(0 0 0 / .12)" }} />)}
-    </div>
   );
 }
 

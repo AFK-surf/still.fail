@@ -20,7 +20,6 @@ import {MobileShell,useApp} from './src/mobile/app.tsx';
 import {Home} from './src/mobile/Home.tsx';
 import {setSidebarMode} from './src/station.tsx';
 import {useDoing} from './src/doing.ts';
-import {setPageRoot} from './src/brand.tsx';
 import {restingLoop} from '@stillfail/ui/motion.ts';
 let doing=[],noStations=false;
 const lists=new Map();
@@ -33,7 +32,7 @@ const Probe=memo(({id})=>{const on=useDoing('chat.pin',{session:id});window.prob
 function HomePage(){const app=useApp();window.app=app;useEffect(()=>{window.activeHome++;return()=>{window.activeHome--;};},[]);return <Home/>;}
 const routes=location=><Routes location={location}><Route path='/w/:ws' element={<HomePage/>}/><Route path='*' element={<div>另一页</div>}/></Routes>;
 history.replaceState(null,'','/w/demo');
-const root=document.getElementById('app');setPageRoot(root);
+const root=document.getElementById('app');
 createRoot(root).render(<Tooltip.Provider><BrowserRouter><MobileShell entry={{id:'demo',name:'Test',account:ACCOUNT}} routes={routes} recent={()=>null}/></BrowserRouter></Tooltip.Provider>);
 createRoot(document.getElementById('probes')).render(<>{Array.from({length:120},(_,i)=><Probe key={i} id={String(i)}/>)}</>);
 Object.assign(window,{filter:f=>setSidebarMode('demo',f),operate:()=>{window.probeRenders=0;doing=[{call:'chat.pin',params:{session:'0'},stage:'running'}];demoCore.publish();},withoutStations:()=>{noStations=true;demoCore.publish();},loop:restingLoop});

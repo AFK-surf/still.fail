@@ -54,10 +54,6 @@ export const taskbar = style({
 export const appIcon = style({ width: "30px", height: "30px", borderRadius: "8px", cornerShape: vars.cornerShape, background: vars.line }); // own corner: an app's icon in the Dock, drawn small, its Dock's shape
 export const appIconMine = style({ position: "relative", width: "30px", height: "30px" });
 export const appIconImage = style({ display: "block", width: "100%", height: "100%", borderRadius: "22%" });
-export const badge = style({
-  position: "absolute", top: "-6px", right: "-8px", minWidth: "18px", height: "18px", padding: "0 5px",
-  borderRadius: "999px", background: vars.red, color: vars.onPrimary, fontSize: vars.textCaption, lineHeight: "18px", textAlign: "center",
-});
 
 // A phone's system (Android, iOS): the device itself, a phone (a tablet, on one) standing up from the preview's foot
 // with its top in view, the card's ground round it: its frame 6 round its screen (the frame's corner the screen's

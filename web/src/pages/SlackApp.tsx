@@ -402,8 +402,7 @@ function AppForm({ connect, settings, links, sections, onSaved }: { connect: Con
   const dirty = changed.length > 0 || icon !== null;
   // Changed permissions are approved in Slack. The browser lets a tab open only while the click is being handled, and
   // the station's answer comes later: a tab is opened on the click, when the permissions change, and sent to Slack's
-  // page once the app is written (closed if it went wrong). The desktop app opens pages in the system browser, from
-  // any time.
+  // page once the app is written (closed if it went wrong).
   const approval = useRef<Window | null>(null);
   // (the core writes only what differs from what it started from)
   const apply = useAction(() => api.putSlackApp(connect.id, { ...draft, ...(icon ? { icon } : {}) }, settings), (result) => {
@@ -413,13 +412,12 @@ function AppForm({ connect, settings, links, sections, onSaved }: { connect: Con
     const tab = approval.current;
     approval.current = null;
     if (result.permissionsUpdated && tab) tab.location.href = links.install;
-    else if (result.permissionsUpdated && window.stillfailDesktop) window.open(links.install, "_blank");
     else tab?.close();
     toast(result.permissionsUpdated ? t("web-pages.slackApp.updatedApprove") : t("web-pages.slackApp.updated"));
     onSaved();
   });
   const save = () => {
-    if (changed.includes("groups") && !window.stillfailDesktop) {
+    if (changed.includes("groups")) {
       const tab = window.open("", "_blank");
       if (tab) {
         tab.opener = null;

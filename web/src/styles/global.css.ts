@@ -27,15 +27,6 @@ globalStyle(":root", {
   },
 });
 /**
- * The Windows app's window buttons (apps/desktop/src/main.ts): the system draws them over the page's top right, as
- * wide as the title bar area leaves (Window Controls Overlay). What sits there keeps this much room; full screen, none.
- */
-globalStyle(':root[data-desktop="overlay"]:not([data-fullscreen])', {
-  vars: { "--window-buttons": "calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw))" },
-});
-// Three 32px buttons, two 2px gaps, a 1px separator with 8px either side, and the right 12px inset.
-globalStyle(':root[data-desktop="custom"]:not([data-fullscreen])', { vars: { "--window-buttons": "129px" } });
-/**
  * Zork's approved desktop tokens (apps/zork-design-pc/tokens), so ember reads as
  * part of the same family: white canvas, warm sidebar, ink text, brand orange,
  * status colours with their own tinted grounds. Dark follows the Zork client.

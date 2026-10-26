@@ -150,7 +150,7 @@ function inlineCode(words: string, code: ReactNode, children: ReactNode): ReactN
 }
 
 /** A link in a message as it is drawn (but one naming the message's own files, which Prose places). A web page opens in
- * a tab of its own, not in place of the app (the desktop app's opens in the browser, as before). */
+ * a tab of its own, not in place of the app. */
 function link(props: ComponentProps<"a">) {
   const href = props.href ?? "";
   // A bare link (its words the link itself): the chip says the chat's title, not the link; a screen's, its title; a

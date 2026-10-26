@@ -17,9 +17,8 @@ import { same } from "../stationPick.ts";
 import { BackLink, Button, ICON, Menu, MobileBack, Pill, Section, Segmented, StatusDot, Time, Waiting } from "../ui.tsx";
 import { SoftwareList } from "../Versions.tsx";
 import { WorkspaceMark } from "../WorkspaceMark.tsx";
-import { HostDetails, joinedText, LanKept, Net, silentOf, state, Uses, useStationNet } from "./StationCards.tsx";
+import { HostDetails, joinedText, Net, silentOf, state, Uses, useStationNet } from "./StationCards.tsx";
 import { ResourcesBody, useResources } from "../Resources.tsx";
-import { useLanKept } from "../localNetwork.ts";
 import { MarkPick } from "./MarkPick.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
 import type { EnvVar } from "../core/shapes.ts";
@@ -30,7 +29,6 @@ import { SearchSection } from "../StationSearch.tsx";
 import { LoginsSection } from "../MachineLogins.tsx";
 import { NavAction, NavList, NavItem, NavLine, NavTop, navFill } from "../SidebarList.tsx";
 import { AddStationDialog, useStationEdits, useWorkspace } from "./settings.tsx";
-import { useStoppedHere, type StoppedHere } from "./thisMac.tsx";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import * as railCss from "../Rail.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
@@ -65,7 +63,7 @@ export function StationsNav({ entry, top }: { entry: WorkspaceEntry; top?: React
       <NavTop top={top} action={manager && view && <NavAction icon={<Plus {...ICON} />} label={t("web-pages.settings.stations.add")} onClick={() => setAdding(true)} />} />
       <NavList>
         {stations.map((s) => <StationRow key={s.id} s={s} to={stationPage(entry.id, s.id)} />)}
-        {adding && view && <AddStationDialog view={view} account={entry.account} stations={stations} onClose={() => setAdding(false)} thisMac />}
+        {adding && view && <AddStationDialog view={view} account={entry.account} stations={stations} onClose={() => setAdding(false)} />}
       </NavList>
     </>
   );
@@ -75,18 +73,14 @@ export function StationsNav({ entry, top }: { entry: WorkspaceEntry; top?: React
  * seen while away); where it is from, if another workspace lent it; then, while it is up, what is left of its CPU, memory and disk in
  * small boxes (as in a chat's bar: their edge in their level's colour), and how this device reaches it, a newer version
  * there said too. Nothing in colour but what is off. */
-function StationRow({ s: listed, to }: { s: StationView; to: string }) {
-  // This machine's, stopped here: said at once, not when the cloud has seen it go.
-  const here = useStoppedHere(listed);
-  const s = here.stopped ? { ...listed, online: false } : listed;
+function StationRow({ s, to }: { s: StationView; to: string }) {
   const meters = s.online ? s.host?.meters ?? [] : [];
   const net = useStationNet(s.online ? s.station : null);
-  const lanKept = useLanKept(net?.lan);
   const newer = s.online && (s.overview?.updates ?? []).some((v) => v.installed && v.updatable && (v.newer || v.downgrade));
   return (
     <NavItem to={to} title={s.name}
       mark={s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={16} /> : <WorkspaceMark w={{ name: s.name }} size={16} />}
-      end={<><span className={railCss.dot} data-online={s.online || undefined} />{here.stopped ? <span className={css.low} data-level="amber">{t("web-pages.stations.page.stopped")}</span> : brief(s)}</>}>
+      end={<><span className={railCss.dot} data-online={s.online || undefined} />{brief(s)}</>}>
       {/* Where it is from, for one another workspace lent (what the machine is, its page says). */}
       {joinedText(s) && <NavLine><span className={navFill}>{joinedText(s)}</span></NavLine>}
       {meters.length > 0 && (
@@ -98,7 +92,6 @@ function StationRow({ s: listed, to }: { s: StationView; to: string }) {
         <NavLine>
           <span className={navFill}>
             {net && <>{net.path}{net.rtt && <>{" · "}<span className={css.low} data-level={net.rtt.level}>{net.rtt.text}</span></>}</>}
-            {net && lanKept && <>{" · "}<span className={css.low} data-level="amber">{t("web-pages.stations.page.lanKept")}</span></>}
             {net && newer && " · "}
             {newer && t("web-pages.stations.page.newer")}
           </span>
@@ -135,8 +128,6 @@ export function StationSettings({ entry }: { entry: WorkspaceEntry }) {
   const { view, manager } = useWorkspace(entry);
   const edits = useStationEdits(view, entry.account, listed ?? []);
   const found = listed?.find((s) => s.id === id);
-  // This machine's, stopped here: said at once (not when the cloud has seen it go), and started from its head.
-  const here = useStoppedHere(found);
   const back = `/w/${entry.id}/settings/stations`;
   if (!listed) {
     return (
@@ -148,11 +139,11 @@ export function StationSettings({ entry }: { entry: WorkspaceEntry }) {
   }
   // Removed (or a link from before): the list, or the first of them.
   if (!found) return <Navigate to={back} replace />;
-  const s = edits.shown(here.stopped ? { ...found, online: false } : found);
+  const s = edits.shown(found);
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       {side ? <MobileBack to={back} label="Station" /> : <BackLink to={back} label="Station" />}
-      <Head s={s} here={here} manager={manager} edits={edits} />
+      <Head s={s} manager={manager} edits={edits} />
       {edits.dialogs}
       <Body s={s} manager={manager} workspace={entry.id} />
     </div>
@@ -163,13 +154,12 @@ type Edits = ReturnType<typeof useStationEdits>;
 
 /** Its mark and name (a title its managers rename where it is, as the workspace's), how it is and what it is; beside
  * them trying it again while away, and its ⋯ (its 文件 are opened from the overview's folders). */
-function Head({ s, here, manager, edits }: { s: StationView; here: StoppedHere; manager: boolean; edits: Edits }) {
+function Head({ s, manager, edits }: { s: StationView; manager: boolean; edits: Edits }) {
   const [name, setName] = useState(s.name);
   useEffect(() => setName(s.name), [s.name]);
   const keep = () => { const to = name.trim(); if (!to) setName(s.name); else edits.rename(s, to); };
   const silent = silentOf(s);
-  // Stopped here: its 启动 says what to do, not how to reach it again.
-  const wrong = here.stopped ? [] : s.problems;
+  const wrong = s.problems;
   const items = edits.menu(s, manager, false);
   return (
     <>
@@ -183,7 +173,7 @@ function Head({ s, here, manager, edits }: { s: StationView; here: StoppedHere; 
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) e.currentTarget.blur(); if (e.key === "Escape") { setName(s.name); e.currentTarget.blur(); } }} />
             : <h1 className={pagesCss.identityName}>{s.name}</h1>}
           <p className={settingsCss.workspaceFacts}>
-            <span className={css.status}><StatusDot state={s.online ? "online" : "offline"} />{here.stopped ? t("web-pages.stations.page.stopped") : state(s)}</span>
+            <span className={css.status}><StatusDot state={s.online ? "online" : "offline"} />{state(s)}</span>
             {s.host && <span>{s.host.identity}</span>}
             {s.version && <span>Station {s.version}</span>}
             {joinedText(s) && <span>{joinedText(s)}</span>}
@@ -192,9 +182,7 @@ function Head({ s, here, manager, edits }: { s: StationView; here: StoppedHere; 
           {wrong.length > 0 && <div className={css.warn}>{wrong.map((p) => <span key={p.key} data-level={p.level}>{p.text}</span>)}</div>}
         </div>
         <div className={css.headActions}>
-          {here.stopped
-            ? <Button variant="primary" busy={here.starting} onClick={() => here.start.run()}>{t("web-pages.stations.page.start")}</Button>
-            : (!s.online || silent) && <RetryPill trying={s.link.retrying === true} />}
+          {(!s.online || silent) && <RetryPill trying={s.link.retrying === true} />}
           {manager && edits.busy(s)}
           {items.length > 0 && <Menu items={items} />}
         </div>
@@ -259,7 +247,6 @@ function Overview({ s, workspace }: { s: StationView; workspace: string }) {
           <div className={css.machine}>
             <MeterDials meters={s.host.meters} />
             {net && <Net net={net} flush />}
-            {net && <LanKept lan={net.lan} />}
             {/* What its agents' processes take of the memory. */}
             {o && o.processes.length > 0 && <p className={css.memory}>{o.processesText}</p>}
             {uses && <Uses use={uses.use} net={uses.net} to={stationProcesses(workspace, s.id)} flush />}

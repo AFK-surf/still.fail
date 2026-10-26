@@ -1,7 +1,5 @@
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useSyncExternalStore } from "react";
 import { useDark } from "./theme.ts";
-import type { AppUpdate } from "./core/client.ts";
 import { shortcutOf, useKeymap, useShortcut } from "./keymap.ts";
 import * as css from "./brand.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
@@ -10,7 +8,6 @@ import * as railCss from "./Rail.css.ts";
 import * as listCss from "./Sidebar.css.ts";
 import * as bubblesCss from "./SystemBubbles.css.ts";
 import { moveState } from "@stillfail/ui/motion.ts";
-import { Tip } from "./ui.tsx";
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
 // still.fail's brand, from web/public (design/brand/README.md): the mark (s. in Inter Bold, its dot still.fail's
@@ -19,7 +16,7 @@ import { t } from "./i18n.ts";
 
 const BASE = import.meta.env.BASE_URL;
 
-// On the test channel (app.youdid.wtf, the beta desktop app) the name is its own, drawn the same way.
+// On the test channel (app.youdid.wtf) the name is its own, drawn the same way.
 const OWN = NAME !== "still.fail";
 // Each drawing's size, in still.fail's: youdid.wtf's y goes below the line, its drawing taller at the same scale.
 const WORDMARK = OWN ? { name: "wordmark-beta", width: 393.41, height: 79.39 } : { name: "wordmark", width: 255.16, height: 63.13 };
@@ -42,27 +39,22 @@ export function Wordmark({ size = 22, className }: { size?: number; className?: 
   return <Themed name={WORDMARK.name} width={Math.round(WORDMARK.width * k)} height={Math.round(WORDMARK.height * k)} alt={NAME} className={className} />;
 }
 
-/** The macOS app's window: its buttons are in the page's top row at the left, no room for the name (Windows' are at the right). */
-const titleless = () => !!window.stillfailDesktop && (window.stillfailDesktop.frame ?? "inset") === "inset";
-
 /**
- * The sidebar's top: the name (on a phone, where the sidebar is a page; and on the web and in the Windows app with no
- * rail). Beside the rail (Rail.tsx) the top is the window's: its buttons, 更新; the rail opens and closes the sidebar.
+ * The sidebar's top: the name (on a phone, where the sidebar is a page; and with no rail). Beside the rail (Rail.tsx)
+ * the rail opens and closes the sidebar.
  */
 export function SidebarBrand({ rail }: { rail?: boolean }) {
   return (
     <>
-      {!titleless() && !rail && <Wordmark className={css.brandWordmark} />}
-      {!titleless() && <span className={css.brandPhone}><Wordmark size={24} className={css.brandBlock} /></span>}
-      {/* Beside the rail the app's newer build is one of its bubbles (SystemBubbles.tsx). */}
-      {!rail && <UpdateButton />}
+      {!rail && <Wordmark className={css.brandWordmark} />}
+      <span className={css.brandPhone}><Wordmark size={24} className={css.brandBlock} /></span>
     </>
   );
 }
 
-/** The wordmark alone, for a page with no sidebar (a workspace's onboarding); none in the desktop app on macOS, whose window has its buttons there. */
+/** The wordmark alone, for a page with no sidebar (a workspace's onboarding). */
 export function PageBrand() {
-  return titleless() ? null : <Wordmark className={css.brandWordmark} />;
+  return <Wordmark className={css.brandWordmark} />;
 }
 
 const SIDEBAR = "stillfail.sidebar";
@@ -74,24 +66,12 @@ function closeSidebar(closed: boolean) {
   try { localStorage.setItem(SIDEBAR, closed ? "closed" : "open"); } catch { /* private mode: for this page only */ }
 }
 
-/** Where the update button is put: the page, unless the app is drawn in a part of one (the site's demo). */
-let pageRoot: HTMLElement | null = null;
-export function setPageRoot(element: HTMLElement): void {
-  pageRoot = element;
-}
-
-/** Put on the page (pageRoot), or in place where there is no page yet (the site built to HTML, where it lands the same). */
-function onPage(node: ReactNode): ReactNode {
-  const page = pageRoot ?? document.body;
-  return page ? createPortal(node, page) : node;
-}
-
 /** The sidebar's latest opening or closing: only its end lets the sidebar overflow again. */
 let moving = 0;
 
 /**
  * The sidebar opened, closed or made wider or narrower by `change`, the page following as it moves (and the sidebar with
- * it, the page bars' room for it, 更新 by it). Only so: resizing the sidebar follows the pointer at once.
+ * it, the page bars' room for it). Only so: resizing the sidebar follows the pointer at once.
  */
 export function moveSidebar(change: () => void): void {
   const moves = (selector: string, props: string[]) => [...document.querySelectorAll<HTMLElement>(selector)].map((el) => [el, props] as [HTMLElement, string[]]);
@@ -103,7 +83,6 @@ export function moveSidebar(change: () => void): void {
     ...moves(`.${shellCss.shell}`, ["grid-template-columns"]),
     // The page as wide as it was, moved aside for the folded sidebar shown a while (shell.css.ts main, Rail.tsx peekShift).
     ...moves(`.${shellCss.shell} > .${shellCss.main}`, ["left"]),
-    ...moves(`.${css.sidebarUpdate}`, ["left", "transform"]),
     ...moves(`.${railCss.edge}`, ["left"]),
     // The rail as narrow as the closed bar and its places as far from its edges, with its margins (no transitions of
     // their own: on other clocks and eases they shook the places).
@@ -166,43 +145,6 @@ export function useSidebarToggle(moved?: (closed: boolean) => void, { keys: owns
   useKeymap();
   const keys = shortcutOf("sidebar.toggle");
   return { closed, toggle, label: `${closed ? t("web-main.sidebar.open") : t("web-main.sidebar.close")}${keys ? `  ${keys}` : ""}` };
-}
-
-/** The desktop app's newer build, as its main process says (null in a browser, or while there is none). */
-export function useAppUpdate(): AppUpdate | null {
-  const updates = window.stillfailDesktop?.appUpdate;
-  const [state, setState] = useState<AppUpdate | null>(null);
-  useEffect(() => {
-    if (!updates) return;
-    let live = true;
-    void updates.state().then((s) => { if (live) setState(s); });
-    const stop = updates.watch(setState);
-    return () => { live = false; stop(); };
-  }, [updates]);
-  return state;
-}
-
-/**
- * The desktop app has a newer build: 更新 at the sidebar's top. Clicked, the build is downloaded (the
- * button says how far) and the app restarts as it; a newer web app alone (kind "web") is downloaded already, and
- * clicked, the pages reload on it.
- */
-function UpdateButton() {
-  const updates = window.stillfailDesktop?.appUpdate;
-  const state = useAppUpdate();
-  if (!updates || !state) return null;
-  const web = state.kind === "web";
-  const label = state.phase === "downloading" ? t("web-main.appUpdate.downloading", { percent: state.percent })
-    : state.phase === "installing" ? t(web ? "web-main.appUpdate.reloading" : "web-main.appUpdate.restarting")
-    : state.phase === "failed" ? t("web-main.appUpdate.failed")
-    : t(web ? "web-main.webUpdate.refresh" : "web-main.versions.update");
-  const busy = state.phase === "downloading" || state.phase === "installing";
-  const title = state.phase === "failed" ? state.message : t(web ? "web-main.appUpdate.webTitle" : "web-main.appUpdate.title", { version: state.version, app: NAME });
-  return onPage(
-    <Tip label={title}><button type="button" className={css.sidebarUpdate} disabled={busy} aria-busy={busy} onClick={() => updates.start()}>
-      {label}
-    </button></Tip>,
-  );
 }
 
 type Illus = "new-chat" | "no-station" | "station-offline" | "sign-in" | "no-profile" | "no-connect";

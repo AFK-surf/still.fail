@@ -14,8 +14,6 @@ export const stationHeading = style({ display: "inline-flex", alignItems: "cente
 // Its buttons reach its corners (the first station's form): its corner theirs (pages.css.ts BUTTON_CARD_CORNER).
 export const onboardingCard = style({ width: "100%", textAlign: "left", padding: CARD_PAD, border: "0", ...cardLook, borderRadius: BUTTON_CARD_CORNER });
 export const onboardingRow = style({ display: "flex", alignItems: "stretch", gap: "8px" });
-/** 「添加这台 Mac」 under the first station's form (the desktop app's). */
-export const firstThisMac = style({ marginTop: "12px" });
 /** An enrollment's command, and the wait for its station (EnrollSteps): spaced by itself, in a dialog's body as in a card. */
 export const enroll = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "20px" });
 /** The command under what to do with it. */

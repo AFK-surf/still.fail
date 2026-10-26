@@ -7,10 +7,9 @@ import { animate, EASE_OUT, type AnimationPlaybackControls } from "@stillfail/ui
 import { scopeOf } from "../station.tsx";
 import { useTopicSelect } from "../core/react.ts";
 import type { StationView } from "../core/shapes.ts";
-import { carriesDrive, draggedNow, droppedFrom, droppedFromFinder, droppedOf, endDrag, nameByType, setDropOver } from "../drive/drag.ts";
+import { carriesDrive, draggedNow, droppedFrom, droppedOf, endDrag, nameByType, setDropOver } from "../drive/drag.ts";
 import { takeOff } from "../drive/flight.ts";
 import { offerToDraft } from "../draft.ts";
-import { useThisMachine } from "../thisMachine.ts";
 import { FileTile } from "../Chat.tsx";
 import { keptWidth } from "../ui.tsx";
 import * as css from "./ChatPage.css.ts";
@@ -85,7 +84,6 @@ export function useSidePanel(open: string[], shown: string | null) {
     // Slid out: the page has laid itself out without the panel now, so the column it held is let go of in the same frame.
     if (!sliding) {
       page?.style.removeProperty("grid-template-columns");
-      page?.style.removeProperty("--panel-visible-width");
       return;
     }
     if (!page || !el) return;
@@ -100,7 +98,6 @@ export function useSidePanel(open: string[], shown: string | null) {
     const start = was ? was.value : sliding === "in" ? 0 : whole;
     const goal = sliding === "in" ? whole : 0;
     const draw = (v: number) => {
-      page.style.setProperty("--panel-visible-width", `${v}px`);
       el.style.width = `${whole}px`;
       if (narrow) el.style.transform = `translateX(${whole - v}px)`;
       else page.style.gridTemplateColumns = `minmax(0, 1fr) ${v}px`;
@@ -169,8 +166,7 @@ type Over = { kind: "path" | "file"; marks: { name: string; dir: boolean }[] };
  * mark (as its card will have it), with what letting go does (DropHint); let go, they go into its message (the draft
  * `chat`), and their marks fly there, each onto its card (drive/flight.ts). The composer leaves a drop on it to this.
  */
-export function useChatDrop(chat: string, station: string) {
-  const here = useThisMachine(station);
+export function useChatDrop(chat: string) {
   const [over, setOver] = useState<Over | null>(null);
   // Let go: the frost going while the marks fly off it.
   const [leaving, setLeaving] = useState<string | null>(null);
@@ -182,7 +178,7 @@ export function useChatDrop(chat: string, station: string) {
     return () => setDropOver(null);
   }, [over?.kind]);
   const kind = (dt: DataTransfer): "path" | "file" | null =>
-    carriesDrive(dt) ? "path" : dt.types.includes("Files") ? (here && window.stillfailDesktop?.pathOf ? "path" : "file") : null;
+    carriesDrive(dt) ? "path" : dt.types.includes("Files") ? "file" : null;
   // A station's files dragged from this page are known by name; Finder's only by type, until they are dropped.
   const marks = (dt: DataTransfer) => carriesDrive(dt)
     ? (draggedNow() ?? []).map((d) => ({ name: d.name, dir: d.dir }))
@@ -207,8 +203,7 @@ export function useChatDrop(chat: string, station: string) {
       setOver(null);
       endDrag();
       if (carriesDrive(e.dataTransfer)) { offerToDraft(chat, { files: [], quotes: [], dropped: droppedOf(e.dataTransfer).map(droppedFrom) }); return; }
-      const named = droppedFromFinder(e.dataTransfer, here);
-      offerToDraft(chat, named ? { files: [], quotes: [], dropped: named } : { files: [...e.dataTransfer.files], quotes: [] });
+      offerToDraft(chat, { files: [...e.dataTransfer.files], quotes: [] });
     },
   };
   return { over, leaving, gone: () => setLeaving(null), handlers, shown, label };

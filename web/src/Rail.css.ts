@@ -25,21 +25,14 @@ export const rail = style({
 // Each place its own 38 (its ground 30 square), however short the window; a place's slot is display: contents.
 globalStyle(`${rail} > *, ${rail} > [data-rail-item] > *`, { flexShrink: 0 });
 /**
- * Level with the sidebar's top row (empty: its brand is gone beside the rail). In the macOS app the row drags the
- * window; its buttons are in it (main.ts puts them 16 px in, reaching past the rail). In the closed bar (shell.css.ts
- * dock), which starts under that row, no more than a margin; it shrinks with the bar (moved with it, as the rail).
+ * Level with the sidebar's top row (empty: its brand is gone beside the rail). In the closed bar (shell.css.ts dock) no
+ * more than a margin; it shrinks with the bar (moved with it, as the rail).
  */
 export const top = style({
-  // On the web nothing is in the sidebar's top row either: a margin, as there. Its first place's ground (30) level with
-  // the sidebar's first row (新对话, 32 from 14 down there): its middle at 30, 3 above the gap's 6 and its 4 within.
+  // Nothing is in the sidebar's top row either: a margin, as there. Its first place's ground (30) level with the
+  // sidebar's first row (新对话, 32 from 14 down there): its middle at 30, 3 above the gap's 6 and its 4 within.
   flex: "none", alignSelf: "stretch", height: 5,
   selectors: {
-    // Only macOS's window has its buttons here; full screen, or on Windows (its buttons at the right, the page's bar
-    // dragging the window), as on the web. Not in the closed bar (below), which starts under the buttons' row: this
-    // selector outweighs that one, so it says so itself.
-    '[data-desktop="inset"]:not([data-fullscreen]):not([data-sidebar="closed"]) &': { height: 41, WebkitAppRegion: "drag" },
-    // On Windows only its margin, but that drags the window too, level with the sidebar's (Sidebar.css.ts navNew).
-    ':is([data-desktop="custom"], [data-desktop="overlay"]):not([data-fullscreen]):not([data-sidebar="closed"]) &': { WebkitAppRegion: "drag" },
     // In the closed bar nothing: its places stand as far from its top as from its sides (rail's padding).
     '[data-sidebar="closed"] &': { height: 0, ...outsetBottom(6) },
   },
@@ -54,7 +47,7 @@ export const edge = style({
   // sidebar's column (brand.tsx's toggle).
   position: "absolute", zIndex: 30, top: 0, bottom: 0, left: "calc(56px + var(--sidebar-w, 240px) - 6px)", width: 12,
   padding: 0, border: 0, background: "none",
-  cursor: "col-resize", touchAction: "none", outline: "none", WebkitAppRegion: "no-drag",
+  cursor: "col-resize", touchAction: "none", outline: "none",
   selectors: {
     // By the page's root, not its own data-closed (set a render later): the sidebar's toggle reads its end in the same
     // frame it closes the sidebar, and moves it there with the column (brand.tsx moveState), not after it, at once.

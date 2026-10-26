@@ -132,7 +132,7 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
     changeTabs(draftKey, on ? "open" : "close", FILES);
   };
   useShortcut("panel.close", open.length ? () => setFiles(false) : null);
-  const drop = useChatDrop(draftKey, station.address);
+  const drop = useChatDrop(draftKey);
 
   const carry = useCarryDraft();
   // The chat pages' one composer (dock.tsx): here in the page, then, once the first message is sent, in the chat's page,

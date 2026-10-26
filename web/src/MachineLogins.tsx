@@ -19,7 +19,6 @@ import { useCall, useTopic } from "./core/react.ts";
 import { Link } from "react-router";
 import { stationBase } from "./station.tsx";
 import { useDoing } from "./doing.ts";
-import { useThisMachineAddress } from "./thisMachine.ts";
 import { Menu, PanelIconButton, Section, Spinner } from "./ui.tsx";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { ArrowUpRight, Close, Key, More } from "@stillfail/ui/icons.tsx";
@@ -55,21 +54,17 @@ function copyAndOpen(login: MachineLoginShown): void {
 }
 
 /**
- * A loopback login's browser, on this device: the core listens for the browser's callback (not on the station's own
- * machine: the browser comes back there by itself), then the page opens. `opened`: this device listens for it now (the
- * core's `listening`), or the page was opened here on the station's own machine.
+ * A loopback login's browser, on this device: the core listens for the browser's callback, then the page opens.
+ * `opened`: this device listens for it now (the core's `listening`).
  */
 function useRelay(station: string, login: MachineLoginShown): { open(): void; busy: boolean; opened: boolean } {
   const call = useCall();
   const act = useAct();
-  const here = useThisMachineAddress() === station;
   const busy = useDoing("machineLogin.open", { station, id: login.id });
-  const [openedHere, setOpenedHere] = useState(false);
   return {
-    busy, opened: login.listening || openedHere,
+    busy, opened: login.listening,
     // This device's port taken: said on the card (the core's `relayText`), nothing opened.
-    open: () => act(call("machineLogin.open", { station, id: login.id, here }).then((answer) => {
-      if (here) setOpenedHere(true);
+    open: () => act(call("machineLogin.open", { station, id: login.id }).then((answer) => {
       openPage((answer as { url?: string }).url);
     }, (e) => { if ((e as { code?: string }).code !== "port_taken") throw e; }), t("web-main.logins.openWhat")),
   };

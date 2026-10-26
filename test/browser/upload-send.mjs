@@ -20,7 +20,6 @@ import { useDraft } from './src/draft.ts';
 import { ComposerView } from './src/Chat.tsx';
 import { ToastProvider } from '@stillfail/ui/toast.tsx';
 import { StationContext } from './src/station.tsx';
-import { setPageRoot } from './src/brand.tsx';
 let value:any = {text:'',files:[],quotes:[],rev:0,version:0,ready:false,uploading:false,starting:false};
 const listeners = new Set<any>();
 const sent:any[] = [];
@@ -45,7 +44,6 @@ function Page(){
  const draft=useDraft({key:'ws/st:k',station:'ws/st'});
  return <main style={{maxWidth:720,margin:'80px auto',padding:24}}><h2>still.fail</h2><p>附件上传中的发送测试</p><ComposerView draft={draft} thread={7} sessionKey={null} draftKey="ws/st:k" /></main>;
 }
-setPageRoot(document.documentElement);
 createRoot(document.getElementById('root')!).render(<MemoryRouter><ToastProvider><Tooltip.Provider><StationContext value={{id:'st',name:'Test',address:'ws/st',base:'',settings:'',online:true}}><Page/></StationContext></Tooltip.Provider></ToastProvider></MemoryRouter>);
 `, { flag: 'wx' });
   await writeFile(html, '<meta charset="utf-8"><div id="root"></div><script type="module" src="/upload-send-check.tsx"></script>', { flag: 'wx' });

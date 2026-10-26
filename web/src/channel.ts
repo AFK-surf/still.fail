@@ -9,5 +9,5 @@ export const BETA_META = typeof document === "undefined" ? null : document.query
 /** Whether this page is the test channel's web (app.youdid.wtf). */
 export const BETA = Boolean(BETA_META) || (typeof location !== "undefined" && location.host === "app.youdid.wtf");
 
-/** The name the product goes by here: on the test channel (its web, or the beta desktop app) its own, youdid.wtf (still.fail's dual). */
-export const NAME = BETA || (typeof window !== "undefined" && window.stillfailDesktop?.beta) ? "youdid.wtf" : "still.fail";
+/** The name the product goes by here: on the test channel's web its own, youdid.wtf (still.fail's dual). */
+export const NAME = BETA ? "youdid.wtf" : "still.fail";

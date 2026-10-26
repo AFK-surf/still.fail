@@ -4,9 +4,7 @@
 // scripts reach nothing of still.fail's; its service worker hands every request of
 // the service to this page, which sends it to the station through the core,
 // like any other call, and hands the answer back. No port on the station is
-// open to anyone. The desktop app needs none of that: the frame is at
-// stillfail-preview://, which the app serves itself through its core; the bar
-// over it is the same.
+// open to anyone.
 //
 // A visualization an agent posted (an HTML file placed in its message, Viz.tsx) opens the same way, in the same
 // frame (marking and all): only the frame's requests are answered here, with the file drawn in still.fail's stylesheet,
@@ -80,14 +78,14 @@ export function StationPreview({ station, port, file, name, service, alone = fal
 export function ServiceFrame(shown: Shown) {
   if (shown.file) return <FileFrame {...shown} file={shown.file} />;
   const port = shown.port ?? 0;
-  return window.stillfailDesktop ? <DesktopPreview {...shown} port={port} /> : <WebPreview {...shown} port={port} />;
+  return <WebPreview {...shown} port={port} />;
 }
 
 
 /**
- * A visualization in the web frame (the desktop app's too: its own frames go to a station's port): the frame asks for
- * its page and gets the file in still.fail's stylesheet, with what its widget kept; what the widget says comes from that
- * page, the frame's own frame, straight to this one (Viz.tsx's useVizMessages).
+ * A visualization in the web frame: the frame asks for its page and gets the file in still.fail's stylesheet, with what
+ * its widget kept; what the widget says comes from that page, the frame's own frame, straight to this one (Viz.tsx's
+ * useVizMessages).
  */
 function FileFrame({ station, file, ...shown }: Shown & { file: FileSource }) {
   const viz = useVizFile(file.session, { name: file.name, path: file.path, size: 0 });
@@ -178,8 +176,7 @@ function Restart({ name, restarting, reload }: { name: string; restarting: Resta
 }
 
 /**
- * The bar over a frame that keeps the service's history (cloud/src/preview.ts on the web, the desktop app's own in
- * apps/desktop/src/main.ts): it says where the service is and whether it can go back or on (ember-preview-at), and is
+ * The bar over a frame that keeps the service's history (cloud/src/preview.ts): it says where the service is and whether it can go back or on (ember-preview-at), and is
  * told where to go (ember-preview-nav). `frame` is the frame at `origin`, loaded with `src`.
  */
 function Framed({ name, external, restarting, draftKey, viewKey, origin, src, nonce, frame, fixed = false, loading }:
@@ -220,19 +217,6 @@ function Framed({ name, external, restarting, draftKey, viewKey, origin, src, no
       </PreviewStage>
     </div>
   );
-}
-
-function DesktopPreview({ station, port, file: _, ...shown }: Shown & { port: number }) {
-  const [nonce] = useState(() => crypto.randomUUID());
-  const [host, setHost] = useState<string | null>(null);
-  const frame = useRef<HTMLIFrameElement>(null);
-  useEffect(() => {
-    let live = true;
-    void window.stillfailDesktop!.previewHost(station, port).then((h) => { if (live) setHost(h); });
-    return () => { live = false; };
-  }, [station, port]);
-  const origin = host && `stillfail-preview://${host}`;
-  return <Framed {...shown} loading={port ? <PreviewLoad station={station} port={port} /> : undefined} viewKey={shown.service && previewKey(station, shown.service)} origin={origin} src={origin && `${origin}/_ember/frame?n=${nonce}&path=%2F`} nonce={nonce} frame={frame} />;
 }
 
 /**

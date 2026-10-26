@@ -14,9 +14,6 @@ export const pageNarrow = style({});
 export const pageHead = style({
   display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", marginBottom: "28px",
 });
-// Its buttons may reach into the row that drags the desktop window (styles/shell.css.ts main): they are still pressed.
-// Only the page's head: anything further down, scrolled up out of sight, would still cut holes in that row.
-globalStyle(`[data-desktop] ${pageHead} :is(a, button, input, select, textarea, [role="button"], [tabindex])`, { WebkitAppRegion: "no-drag" });
 export const identity = style({ display: "flex", alignItems: "center", gap: "16px", marginBottom: "28px" });
 export const identityText = style({ flex: "1", minWidth: "0" });
 export const identityName = style({
