@@ -713,19 +713,7 @@ pub fn stations_of(v : Json?) -> Array[Station] {
     Some(Array(list)) =>
       list.map(fn(x) {
         let s = Some(x)
-        let via = if !flag(s, "online") {
-          "offline"
-        } else if flag(s, "reconnecting") {
-          "waiting"
-        } else {
-          // how this device reaches it (PageParts.kt stationVia: StationView's `way`)
-          match text(field(s, "way"), "via") {
-            "direct" => "direct"
-            "relay" => "relay"
-            "choosing" => "waiting"
-            _ => ""
-          }
-        }
+        let via = @settings.station_via(s)
         {
           address: text(s, "station"),
           name: text(s, "name"),

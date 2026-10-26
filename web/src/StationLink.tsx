@@ -1,5 +1,5 @@
 // How this device reaches a station, as a dot where a chat names it (the bar's agent tile, its station tag): straight
-// there (green), through a relay (amber), away (red), else coming back or a way still being chosen (a grey ring). Its
+// there (green), through a relay (amber), away (red), else coming back or a way still being chosen (grey). Its
 // words (直连, 北京中继, 离线) are its label. Followed alone, not the station's whole view (its load changes much more often);
 // how it is reached only (`way`), not its round trip, which would have it sampled wherever a chat names it.
 import { useTopicSelect } from "./core/react.ts";

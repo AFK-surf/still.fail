@@ -440,7 +440,7 @@ fn station_chip(c : @ui.Ctx, address : String, s : Station) -> Unit {
 
 ///|
 /// How a station is reached (StationLink.css.ts dot, cornerDot): the online green direct, amber through the relay, red
-/// offline, a grey ring while it is being reached; ringed in the page's ground on a tile's corner.
+/// offline, grey while it is being reached; ringed in the page's ground on a tile's corner.
 fn via_dot(c : @ui.Ctx, via : String, size : Double, ring : Double) -> Unit {
   let t = @sf.theme()
   let inner = size - ring * 2.0
@@ -463,14 +463,7 @@ fn via_dot(c : @ui.Ctx, via : String, size : Double, ring : Double) -> Unit {
           c.box(w=Px(inner), h=Px(inner), radius=inner / 2.0, bg=t.p.red, fn() {  })
           |> ignore
         _ =>
-          c.box(
-            w=Px(inner),
-            h=Px(inner),
-            radius=inner / 2.0,
-            border=1.5,
-            border_color=t.p.muted,
-            fn() {  },
-          )
+          c.box(w=Px(inner), h=Px(inner), radius=inner / 2.0, bg=t.p.muted, fn() {  })
           |> ignore
       }
     },

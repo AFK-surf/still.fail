@@ -8,7 +8,7 @@ export const dot = style({
     "&[data-via=direct]": { background: vars.online },
     "&[data-via=relay]": { background: vars.amber },
     "&[data-via=offline]": { background: vars.red },
-    "&[data-via=waiting]": { boxShadow: `inset 0 0 0 1.5px ${vars.muted}` },
+    "&[data-via=waiting]": { background: vars.muted },
   },
 });
 
@@ -18,5 +18,4 @@ export const corner = style({ position: "relative" });
 export const cornerDot = style([dot, {
   position: "absolute", right: "-3px", bottom: "-3px", width: "10px", height: "10px", boxSizing: "border-box",
   border: `2px solid var(--ring, ${vars.canvas})`, pointerEvents: "none",
-  selectors: { "&[data-via=waiting]": { background: vars.canvas } },
 }]);
