@@ -497,10 +497,11 @@ fn composer_text(
   let p = @sf.theme().p
   let prefs = (src.topic)("prefs", {}).value
   let hint = space_hint(c, prefs, spec.locked)
-  // words sent leave the field emptied: its hint gone while they are still over it, back once they are out of it
-  // (madeChat.ts data-made-hint, flight.mbt)
+  // words sent leave the field emptied: its hint and its caret (at its start already) gone while they are still over
+  // it, back once they are out of it (madeChat.ts data-made-hint, flight.mbt)
   let hint_in = @motion.anim(c, "composer/hint", 1.0)
-  if @sfbase.flight_hint_away(c, w.key) {
+  let away = @sfbase.flight_hint_away(c, w.key)
+  if away {
     hint_in.snap(0.0)
   } else {
     hint_in.follow(1.0, @motion.tween(@sf.hint_back_ms, ease=Arrive))
@@ -522,7 +523,7 @@ fn composer_text(
       plain=true,
       color=p.text,
       placeholder_color=@sf.alpha(p.subtle, hint_in.get()),
-      caret_color=p.accent,
+      caret_color=if away { @sf.alpha(p.accent, 0.0) } else { p.accent },
       enter_sends=@sf.enter_sends(),
       // (the `@` menu open: ↑ / ↓ choose in it, Enter and Tab pick)
       leaves=ref_leaves(src, spec, w, c.editor_focused(composer_field_key)),
