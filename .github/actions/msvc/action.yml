@@ -5,7 +5,9 @@
 # 1.5 minutes, the job cancelled at 10). No setting stops cl starting it (VSCMD_SKIP_SENDTELEMETRY is vcvars' own, the
 # SQM OptIn keys are not read: fekir.info/post/disable-vctip-for-good), so on the runner, which is thrown away after
 # the job, the uploader is taken out of MSVC's directories; cl and link go on without it (Chromium's toolchain packs
-# no vctip.exe). Its absence checked: one left fails here.
+# no vctip.exe). Its absence checked: one left fails here. Looked for in bin only, where cl and link are and the six it
+# has are (bin/Host*/*/vctip.exe): the rest of the directory (lib, include, the ATL and MFC sources) is most of its files,
+# and walking all of it took 21 s on a runner whose disk was still cold (run 40268311082), 2.5 s on a warm one.
 name: MSVC
 description: MSVC's tools on PATH, its telemetry uploader taken out
 runs:
@@ -14,7 +16,7 @@ runs:
     - uses: ilammy/msvc-dev-cmd@v1
     - shell: bash
       run: |
-        d=$(cygpath -u "$VCToolsInstallDir")
+        d=$(cygpath -u "$VCToolsInstallDir")/bin
         find "$d" -iname vctip.exe -print -delete
         left=$(find "$d" -iname vctip.exe)
         [ -z "$left" ] || { echo "::error::vctip.exe still in MSVC's directories: $left"; exit 1; }
