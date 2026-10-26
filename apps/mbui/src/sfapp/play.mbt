@@ -1,14 +1,5 @@
-// A video or a song of a station's drive, played (Screen.DrivePlay, pushed from a folder's row): the library's player
-// (@sf.player: opened where it was left on this device, the subtitle beside it, where it is kept as it plays) on the
-// phone's page over a drive's file (sfbase drive_viewer.mbt: its bytes read through the core a part at a time, never
-// the whole file first), the folder (the `drive` topic, as last read) its others. The next or the one before replace
-// this page in place.
-
-///|
-/// The file `at.path` of `at.root` on `at.station`, played; the next or the one before in its place.
-pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
-  drive_player(c, src, at, fn() { @sfbase.close_page(DrivePlay(at)) |> ignore }, fn(other) { app.nav.replace(DrivePlay(other)) })
-}
+// The player on top as the shell has it (its page sfpages' drive_play.mbt): back while it is sideways turns it upright
+// first, and what is on top dark or light whatever the theme (the system bars' icons follow it).
 
 ///|
 /// Back while the player on top is sideways turns it upright first (Player.kt BackHandler).

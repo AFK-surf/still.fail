@@ -51,3 +51,61 @@ pub fn fixture_play_read(params : Json, done : (Result[(Json, Bytes), Json]) -> 
   // a film or the song: the player waits on the network
   true
 }
+
+///|
+/// The made-up drive's film of a player's mode (player-video, -audio, -ended, -opening): its folder made up, the film and
+/// where its player stands (None: still opening); None for another mode.
+pub fn play_fixture(mode : String) -> (DriveAt, @kit.MediaStatus?)? {
+  let (file, pin) : (String, @kit.MediaStatus?) = match mode {
+    "player-video" =>
+      (
+        "第02集.mp4",
+        Some({
+          state: 1,
+          duration: 1404000.0,
+          position: 312000.0,
+          buffered: 420000.0,
+          playing: false,
+          buffering: false,
+          ended: false,
+          width: 1280.0,
+          height: 720.0,
+        }),
+      )
+    "player-audio" =>
+      (
+        "片尾曲.m4a",
+        Some({
+          state: 1,
+          duration: 214000.0,
+          position: 63000.0,
+          buffered: 214000.0,
+          playing: false,
+          buffering: false,
+          ended: false,
+          width: 0.0,
+          height: 0.0,
+        }),
+      )
+    "player-ended" =>
+      (
+        "第01集.mp4",
+        Some({
+          state: 1,
+          duration: 1396000.0,
+          position: 1396000.0,
+          buffered: 1396000.0,
+          playing: false,
+          buffering: false,
+          ended: true,
+          width: 1280.0,
+          height: 720.0,
+        }),
+      )
+    "player-opening" => ("第10集.mp4", None)
+    _ => return None
+  }
+  fix_folders[fix_docs + "\n" + fix_films] = fix_film_entries()
+  let docs : DriveAt = { station: "ws1/st1", root: Some(fix_docs), path: "" }
+  Some(({ ..docs, path: fix_films + "/" + file }, pin))
+}

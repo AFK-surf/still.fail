@@ -12,3 +12,5 @@ import {
   "mbui/signals",
   "stillfail/gallery",
 }
+
+import { "stillfail/sffixture" } for "wbtest"
