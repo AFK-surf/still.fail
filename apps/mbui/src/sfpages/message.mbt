@@ -9,9 +9,9 @@
 /// Where a message is shown: its chat (its station, its session, its view), and, in a list, how that list goes to a
 /// message (by its seq: a quote's card pressed); None out of one (a letter, a decision's). `inline`: no margin for
 /// the pictures (a side panel's, the 奏 page's: Chat.css.ts inlineHeads), each over its head's start. `gutter`: the
-/// room beside the words either side that is only the page's margin (`--list-gutter`: a narrow list's sides, where
-/// the pictures are inline; none where the margin holds them or out of a list), which the message's own tables scroll
-/// out over to the screen's edges. In its chat's list (`list`), how it moves there: its list's turns (what it asks
+/// room beside the words either side that is only the page's margin (`--list-gutter`: a list's sides, narrow or wide,
+/// its pictures out in it standing by their heads' line; none out of a list), which the message's own tables scroll
+/// out over to the pane's edges. In its chat's list (`list`), how it moves there: its list's turns (what it asks
 /// closes in one), its messages out of avatars (by the chat's key), the words sent flying to this row.
 pub(all) struct MessageHere {
   station : String

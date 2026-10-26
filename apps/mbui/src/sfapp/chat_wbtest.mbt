@@ -458,6 +458,28 @@ test "a table wider than the message on a phone: at rest in line with the words,
 }
 
 ///|
+test "a table on a wide list, slid sideways: out over the margin, not cut at the words' column" {
+  reset()
+  let src = fixture("chat-md")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  // (a window whose list is wide, its table wider than its words with its key past it)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=760.0, h=800.0, platform=2)
+  t.run_for(@ui.nav_push_ms)
+  let cell = "只排可见的行"
+  let (x, y) = t.drawn_of(cell).unwrap()
+  // the words' column: the frame's line and the cell's 12 before the cell
+  let column = x - 1.0 - 12.0
+  t.press_at(x + 300.0, y)
+  for step in 1..=8 {
+    t.move(x + 300.0 - step.to_double() * 40.0, y)
+  }
+  t.run_for(long_press_ms)
+  t.release(x - 20.0, y)
+  let (shown, _, _, _) = t.shown_of(cell).unwrap()
+  assert_true(shown < column, msg="\{(shown, column)}")
+}
+
+///|
 /// How soon after a chat is shown a message is said in it (the test's).
 let said_soon_ms : Double = 100.0
 
