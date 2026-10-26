@@ -12,7 +12,8 @@ Each is deployed on its own: deploying the API drops no relay connection and ser
 site, `site`, still-fail-site; and the test channel's, `site-beta`, youdid-wtf-site on youdid.wtf, only when named.)
 The test channel lives on its own domain, youdid.wtf: until that zone is active on Cloudflare (or with STILLFAIL_BETA=off)
 web-beta and site-beta are skipped, the API is deployed without the app.youdid.wtf routes and BETA_ORIGIN, and a deploy
-without parts deploys web instead of web-beta. STILLFAIL_BETA=on skips the check.
+without parts deploys web instead of web-beta. A failed zone lookup stops deployment; it does not mean the zone is
+missing. STILLFAIL_BETA=on skips the check.
 
 The web app goes to the test channel first: a deploy without parts deploys web-beta, not web, and keeps the build it
 deployed in <deploy>/builds/<commit>/cloud-web (the newest ten). Once tried there, that very build (not a new one) goes
@@ -218,11 +219,14 @@ def beta_ready(account: str) -> bool:
             headers["authorization"] = f"Bearer {auth['token']}"
         url = f"https://api.cloudflare.com/client/v4/zones?name={zone}&account.id={account}"
         with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as response:
-            zones = json.loads(response.read()).get("result") or []
+            lookup = json.loads(response.read())
+        if not isinstance(lookup, dict) or lookup.get("success") is not True or not isinstance(lookup.get("result"), list):
+            raise ValueError("Cloudflare did not return a successful zone lookup")
+        zones = lookup["result"]
         return any(z.get("status") == "active" for z in zones)
     except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
-        print(f"note: could not ask Cloudflare about the zone {zone} ({error}); taking it for missing")
-        return False
+        # Unknown is not absent: skipping the test channel here would report a successful release without it.
+        raise RuntimeError(f"could not check Cloudflare zone {zone}; deployment stopped") from error
 
 
 def without_beta(config: dict) -> dict:
