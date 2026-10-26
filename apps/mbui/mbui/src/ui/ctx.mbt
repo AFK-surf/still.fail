@@ -281,6 +281,9 @@ pub struct Ctx {
   mut hover : Int
   /// what holds the one under the pointer (`hover`), as the last frame drew them, outermost first (Ctx::hovered)
   hover_in : Array[Int]
+  /// what the press went down on as the last frame drew it (the hit target) and what holds that one, outermost first
+  /// (Ctx::press_within): not what only lies under it, a page under a layer over it
+  press_on : Array[Int]
   mut active : Int
   mut focus : Int
   clicked : Array[Int]
@@ -586,6 +589,7 @@ fn Ctx::new() -> Ctx {
     down: false,
     hover: 0,
     hover_in: [],
+    press_on: [],
     active: 0,
     focus: 0,
     clicked: [],
@@ -1542,6 +1546,63 @@ fn Ctx::point_at(self : Ctx, x : Double, y : Double) -> Unit {
   self.hover = if k >= 0 { self.hit_ids[k] } else { 0 }
   self.hover_in.clear()
   self.holders(k, self.hover_in)
+}
+
+///|
+/// Whether the press (Ctx::press) went down on `id` or on what is in it, as the last frame drew them: what lies over it
+/// (a layer over the page, a viewer over the chat) took a press there, not it, though it is under the place.
+pub fn Ctx::press_within(self : Ctx, id : Int) -> Bool {
+  id != 0 && self.press_on.contains(id)
+}
+
+///|
+/// The press going down at (x, y) on `target`: it and what holds it, as the last frame drew them (Ctx::press_within).
+fn Ctx::press_on_at(self : Ctx, target : Int, x : Double, y : Double) -> Unit {
+  self.press_on.clear()
+  if target == 0 {
+    return
+  }
+  let k = hit_at(self.hit_ids, self.hit_rects, self.hit_clips, x, y)
+  // (a finger reaching what is smaller than its tip from round it: what holds that one)
+  let k = if k >= 0 && self.hit_ids[k] == target {
+    k
+  } else {
+    let mut j = self.hit_ids.length() - 1
+    while j >= 0 && self.hit_ids[j] != target {
+      j = j - 1
+    }
+    j
+  }
+  self.holders(k, self.press_on)
+  self.press_on.push(target)
+  // a cover a finger is held through (Ctx::holds_through): what lies under it, and what holds that, too
+  if k >= 0 && desk.holds.contains(target) {
+    let mut j = k - 1
+    while j >= 0 {
+      let r = j * 4
+      let rects = self.hit_rects
+      if self.hit_ids[j] != target &&
+        x >= rects[r] &&
+        x < rects[r + 2] &&
+        y >= rects[r + 1] &&
+        y < rects[r + 3] &&
+        in_round_clip(self.hit_clips, j, x, y) &&
+        !self.holds_hit(j, k) {
+        break
+      }
+      j = j - 1
+    }
+    if j >= 0 {
+      self.holders(j, self.press_on)
+      self.press_on.push(self.hit_ids[j])
+    }
+  }
+}
+
+///|
+/// Whether the last frame's hit target `j` holds target `k` (`k` drawn in it: Ctx::hit_ends), as Ctx::holders reads.
+fn Ctx::holds_hit(self : Ctx, j : Int, k : Int) -> Bool {
+  j < k && j < self.hit_ends.length() && self.hit_ends[j] > k
 }
 
 ///|

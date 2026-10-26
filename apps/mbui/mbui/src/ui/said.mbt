@@ -149,6 +149,7 @@ let build_lists : Array[&SaidList] = [
   TakersSaid::{  },
   DragsSaid::{  },
   KeepsSaid::{  },
+  HoldsSaid::{  },
   AskersSaid::{  },
   MouseDragsSaid::{  },
   TellsSaid::{  },
@@ -461,6 +462,28 @@ impl SaidList for KeepsSaid with said_take(_, c, from) {
 impl SaidList for KeepsSaid with said_cut(_, c, len) {
   ignore(c)
   desk.next_keeps.truncate(len)
+}
+
+///|
+/// What a finger held on is what lies under it's (Ctx::holds_through).
+priv struct HoldsSaid {}
+
+///|
+impl SaidList for HoldsSaid with said_len(_, c) {
+  ignore(c)
+  desk.next_holds.length()
+}
+
+///|
+impl SaidList for HoldsSaid with said_take(_, c, from) {
+  ignore(c)
+  IdsTaken::{ name: "holds", all: desk.next_holds[from:].to_owned(), to: desk.next_holds }
+}
+
+///|
+impl SaidList for HoldsSaid with said_cut(_, c, len) {
+  ignore(c)
+  desk.next_holds.truncate(len)
 }
 
 ///|

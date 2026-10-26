@@ -59,7 +59,7 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
 }
 
 ///|
-test "the picture held by a finger, Small or Medium: its one menu, 复制图片, not one more for each time the frame it opens in is built" {
+test "the picture held by a finger, Small or Medium: its one menu, 保存到相册 (a phone pastes nowhere), not one more for each time the frame it opens in is built" {
   for w in [390.0, 720.0] {
     let t = preview_tester("image", w~, platform=2)
     assert_true(viewer.val is Some(_), msg="\{w} wide")
@@ -71,7 +71,23 @@ test "the picture held by a finger, Small or Medium: its one menu, 复制图片,
     t.run_for(@kit.sheet_rest("sf-present") - t.time())
     // (its sheet measures what it holds as it first comes, the frame built again then: that build sees no hold)
     assert_eq(@sf.last_presented() - before, 1, msg="\{w} wide")
-    assert_true(t.reachable("复制图片").length() > 0, msg="\{w} wide")
+    assert_true(t.reachable("保存到相册").length() > 0, msg="\{w} wide")
+    assert_true(t.reachable("复制图片").length() == 0, msg="\{w} wide")
+  }
+}
+
+///|
+test "held by a finger round the picture, over the chat's words under the viewer: none of them picked" {
+  let t = preview_tester("image", platform=2)
+  assert_true(viewer.val is Some(_))
+  for y in [120.0, 200.0, 660.0, 740.0] {
+    for x in [60.0, 195.0, 330.0] {
+      t.press_at(x, y)
+      t.run_for(@ui.long_press_ms + 20.0)
+      t.release(x, y)
+      t.draw()
+      assert_eq(pk.ts, "", msg="\{x}, \{y}")
+    }
   }
 }
 

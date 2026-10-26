@@ -200,6 +200,10 @@ priv struct Desk {
   /// targets a press on keeps what is picked with the pointer (Ctx::keeps_selection), this frame's and the last one's
   next_keeps : Array[Int]
   mut keeps : Array[Int]
+  /// what a finger held on is what lies under it's (Ctx::holds_through), as this frame's build says, and as the last
+  /// one's said
+  next_holds : Array[Int]
+  mut holds : Array[Int]
   /// ⌘V (Ctrl+V) with files or a picture on the clipboard, the host's app key: the read under way and the field it is
   /// for; the files read (the picture as one) for a field that takes files (Ctx::editor `files`), by its id, until the
   /// app takes them
@@ -288,6 +292,8 @@ let desk : Desk = {
   drags: [],
   next_keeps: [],
   keeps: [],
+  next_holds: [],
+  holds: [],
   pasting: None,
   pasted: {},
   next_mouse_drags: [],
@@ -314,7 +320,9 @@ fn desk_reset() -> Unit {
   desk.next_drags.clear()
   desk.drags.clear()
   desk.next_keeps.clear()
+  desk.next_holds.clear()
   desk.keeps.clear()
+  desk.holds.clear()
   desk.pasting = None
   desk.pasted.clear()
   desk.next_mouse_drags.clear()
@@ -354,6 +362,7 @@ fn desk_build_start() -> Unit {
   desk.next_takers.clear()
   desk.next_drags.clear()
   desk.next_keeps.clear()
+  desk.next_holds.clear()
   desk.next_mouse_drags.clear()
   desk.next_sels.clear()
   desk.selecting = false
@@ -373,6 +382,7 @@ fn Ctx::desk_frame_end(self : Ctx) -> Unit {
   }
   desk.drags = desk.next_drags.copy()
   desk.keeps = desk.next_keeps.copy()
+  desk.holds = desk.next_holds.copy()
   desk.mouse_drags = match desk.next_mouse_drags.last() {
     Some(on) => on
     None => true
@@ -1026,6 +1036,15 @@ fn Ctx::select_press(self : Ctx, x : Double, y : Double, clicks : Int) -> Unit {
 pub fn Ctx::keeps_selection(self : Ctx, id : Int) -> Unit {
   ignore(self)
   desk.next_keeps.push(id)
+}
+
+///|
+/// A press on `id` is its own (a tap, a click, a drag), but a finger held still on it is what lies under it's: what
+/// holds the target under it counts the press as within it (Ctx::press_within). A cover over what is shown and not in
+/// use (a pane beside the one in use), whose words are still held to pick them. Said each frame it is drawn.
+pub fn Ctx::holds_through(self : Ctx, id : Int) -> Unit {
+  ignore(self)
+  desk.next_holds.push(id)
 }
 
 ///|
