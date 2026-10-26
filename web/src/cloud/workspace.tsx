@@ -8,7 +8,7 @@ import { Check, ChevronsUpDown, Plus, Settings, UserPlus } from "@stillfail/ui/i
 import { NewChat } from "../NewChat.tsx";
 import { lastChatOf, useLastChat, useRememberChat, useWorkspaceMarks } from "../lastChat.ts";
 import { DropdownMenu } from "radix-ui";
-import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
 import { useChats, useStationViews, useStations } from "../api.ts";
 import { useGo } from "../go.ts";
@@ -22,7 +22,7 @@ import { FilesNav } from "../pages/FilesNav.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ScreenPage } from "../screen/ScreenPage.tsx";
 import { ChatList, StationTrouble, useGlassBands } from "../Sidebar.tsx";
-import { Rail, SidebarEdge, placeOf, useRailItems, type RailItem } from "../Rail.tsx";
+import { Rail, SidebarEdge, openingWidth, placeOf, useRailItems, type RailItem } from "../Rail.tsx";
 import { SystemBubbles } from "../SystemBubbles.tsx";
 import * as railCss from "../Rail.css.ts";
 import { drivePath } from "../drive/useDrive.ts";
@@ -82,6 +82,9 @@ const NO_STATIONS: Station[] = [];
 
 interface InvitationEntry extends PendingInvitation { account: Account }
 
+/** Nothing to hear: whether the page is built ahead (on the server) does not change once it is drawn. */
+const never = () => () => undefined;
+
 /**
  * Drawn again only as the page changes (its path) or its stations do: what changes more often (the workspace's members,
  * the views kept read, what the core marks) is read below it, where it is used, so a message coming in or the side panel
@@ -109,10 +112,14 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
   const own = settings ? "settings" : place === "files" || place === "profiles" || place === "stations" ? place : "chats";
   const bare = !settings && (place === "connects" || place === "usage") && railed.includes(place as RailItem) && wide;
   const closed = useSidebarClosed();
-  const kept = useRef({ side: own, closed, reopened: false });
+  const kept = useRef<{ side: typeof own; closed: boolean; reopened: boolean }>({ side: own, closed, reopened: false });
   if (!bare) kept.current = { side: own, closed, reopened: false };
   else { if (kept.current.closed && !closed) kept.current.reopened = true; kept.current.closed = closed; }
   const side = bare && !kept.current.reopened ? kept.current.side : own;
+  // Built to HTML ahead (the site's demo: demo/prerender.tsx), where no effect puts the sidebar's width on the page's
+  // root (Rail.tsx widthFor), the shell says the width it opens at itself.
+  const ahead = useSyncExternalStore(never, () => false, () => true);
+  const opening = ahead ? openingWidth(side) : "";
   // 奏: the page of the decision picked in the sidebar's 奏 (DecisionDesk.tsx); come to it any way, the sidebar shows 奏.
   const decisions = /^\/w\/[^/]+\/decisions$/.test(path);
   const [mode, setMode] = useSidebarMode();
@@ -139,7 +146,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
     <WorkspacePeople id={entry.id}>
       <DecisionDeskProvider workspace={entry.id}>
       <WorkspaceKept entry={entry} />
-      <div className={shellCss.shell} data-detail={detail} data-rail="">
+      <div className={shellCss.shell} data-detail={detail} data-rail="" style={opening ? { "--sidebar-w": opening } as CSSProperties : undefined}>
 
         <GlobalShortcuts scope={entry.id} newChat={`/w/${entry.id}/new`} settings={`/w/${entry.id}/settings`} />
         {/* The rail and the sidebar in one block, which closes to the rail as a bar (shell.css.ts dock). */}

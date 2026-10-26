@@ -2,7 +2,7 @@
 // page's root says which (data-theme, set before the first paint by site/index.html), and the demo's app follows it.
 import { Monitor, Moon, Sun } from "@stillfail/ui/icons.tsx";
 import { useSyncExternalStore } from "react";
-import { announceAppearance } from "../theme.ts";
+import { announceAppearance } from "../appearanceEvent.ts";
 import * as css from "./site.css.ts";
 import { useSay } from "./words.ts";
 

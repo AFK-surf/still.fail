@@ -170,10 +170,12 @@ export const demo = style({
   position: "relative", height: "720px", overflow: "hidden", clipPath: "inset(0 round 19px)", background: vars.canvas,
   "@media": { [NARROW]: { clipPath: "inset(0 round 13px)", height: "620px" }, [PHONE_BOX]: { clipPath: "inset(0 round 36px)" } },
 });
-/** The demo's opening frame, built into the page: the phone's app where the box is narrow (as the demo picks: under
- *  700 wide, the box being the page's width less its margins), the desktop's elsewhere. */
-export const frameWide = style({ height: "100%", "@media": { [PHONE_BOX]: { display: "none" } } });
-export const framePhone = style({ height: "100%", display: "none", "@media": { [PHONE_BOX]: { display: "block" } } });
+/** The demo's opening frame, built into the page (Site.tsx frameHtml): the phone's app where its box is narrow, the
+ *  desktop's elsewhere, by the box's own width as the demo picks (under 700 wide: demo/mount.tsx PHONE_BELOW). */
+export const frame = style({ height: "100%", containerType: "inline-size" });
+const NARROW_BOX = "(width < 700px)";
+export const frameWide = style({ height: "100%", "@container": { [NARROW_BOX]: { display: "none" } } });
+export const framePhone = style({ height: "100%", display: "none", "@container": { [NARROW_BOX]: { display: "block" } } });
 export const caption = style({ margin: "16px 0 0", textAlign: "center", fontSize: vars.textUi, color: DIM });
 
 // ---- Sections ----
@@ -257,8 +259,10 @@ export const scene = style({ position: "relative" });
 export const sceneStick = style({
   position: "sticky", top: "64px", height: "calc(100vh - 64px)", display: "flex", flexDirection: "column", padding: "16px 0 28px",
 });
-/** Where the devices and the window are placed (OneComputer.tsx). */
-export const oneRoom = style({ position: "relative", flex: "1", minHeight: "0", marginTop: "12px" });
+/** Where the devices and the window are placed (OneComputer.tsx): by its script, so none of them is drawn before it
+ *  has placed them (data-drawn), at the scene's first frame. Unseen by its opacity, not its visibility: the rows read
+ *  for the air till then are copied with every style the app gives them, and a visibility would be inherited into them. */
+export const oneRoom = style({ position: "relative", flex: "1", minHeight: "0", marginTop: "12px", selectors: { "&:not([data-drawn])": { opacity: 0 } } });
 export const oneWires = style({ position: "absolute", inset: "0", width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" });
 const flowing = keyframes({ to: { strokeDashoffset: -26 } });
 globalStyle(`${oneWires} path`, {

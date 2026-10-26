@@ -86,7 +86,7 @@ export function telemetryOn(): boolean {
 
 /** Whether this browser sends them, redrawn when that changes. */
 export function useTelemetryOn(): boolean {
-  return useSyncExternalStore((watcher) => { watchers.add(watcher); return () => watchers.delete(watcher); }, telemetryOn);
+  return useSyncExternalStore((watcher) => { watchers.add(watcher); return () => watchers.delete(watcher); }, telemetryOn, telemetryOn);
 }
 
 /**

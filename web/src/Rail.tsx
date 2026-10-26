@@ -673,7 +673,12 @@ function endPeek(): void {
 const SIDEBAR = { min: 180, max: 480, own: 240, stations: 280 } as const;
 
 /** The sidebars, each its own width: the chats' (and the pages beside them), the settings', the files', the profiles', the stations'. */
-type SidebarGroup = "chats" | "settings" | "files" | "profiles" | "stations";
+export type SidebarGroup = "chats" | "settings" | "files" | "profiles" | "stations";
+/** How wide a sidebar opens where none was made on this device: the stations' a little wider by itself (each row has a
+ *  line of meters); none said, the styles' own (--sidebar-w's 240). */
+export function openingWidth(group: SidebarGroup): string {
+  return group === "stations" ? `${SIDEBAR.stations}px` : "";
+}
 /** The workspace in view (Rail): each has its sidebars open or folded and as wide as it left them, on this device. */
 let sidebarScope = "";
 /** The one shown, whose width the edge drags. */
@@ -687,8 +692,7 @@ function widthFor(group: SidebarGroup): (() => void) | null {
   shownGroup = group;
   const root = document.documentElement.style;
   const saved = Number(localStorage.getItem(`stillfail.width.${widthKey(group)}`) ?? localStorage.getItem(`stillfail.width.${oldWidthKey(group)}`));
-  // The stations' a little wider by itself: each row has a line of meters.
-  const px = saved ? `${Math.min(SIDEBAR.max, Math.max(SIDEBAR.min, saved))}px` : group === "stations" ? `${SIDEBAR.stations}px` : "";
+  const px = saved ? `${Math.min(SIDEBAR.max, Math.max(SIDEBAR.min, saved))}px` : openingWidth(group);
   if (root.getPropertyValue("--sidebar-w") === px) return null;
   return () => { if (px) root.setProperty("--sidebar-w", px); else root.removeProperty("--sidebar-w"); };
 }

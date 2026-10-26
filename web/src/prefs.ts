@@ -6,7 +6,7 @@
 // core is what they are: its value overwrites the copy whenever it comes. A core from before prefs answers the topic
 // with an error: the copy is then all there is, written here as before.
 import { useSyncExternalStore } from "react";
-import { core } from "./core/react.ts";
+import { core, knownOf } from "./core/react.ts";
 import type { DeviceView, PrefsView } from "./core/shapes.ts";
 import { legacyPrefs } from "./core/migrate.ts";
 
@@ -34,7 +34,14 @@ function storage(): Storage | null {
   try { return typeof localStorage === "undefined" ? null : localStorage; } catch { return null; }
 }
 
+/** The prefs as the core says them, with what it fills in where they say nothing. */
+const fromCore = (value: PrefsView): Prefs => ({ ...DEFAULTS, ...value, device: { ...DEFAULTS.device, ...value.device } }) as Prefs;
+
 function copied(): Prefs {
+  // A page whose data is its own (the site's demo: core/react.ts setTopicSource) knows them at once, as every topic: its
+  // first render, on the server too, is as its core says them.
+  const own = knownOf({ topic: "prefs" });
+  if (own && typeof own === "object") return fromCore(own as PrefsView);
   try {
     const raw = storage()?.getItem(COPY);
     if (raw) return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Prefs>) };
@@ -66,7 +73,7 @@ function listen(): void {
   listening = true;
   core().subscribe({ topic: "prefs" }, (value) => {
     if (!value || typeof value !== "object") return;
-    const next = { ...DEFAULTS, ...(value as PrefsView), device: { ...DEFAULTS.device, ...(value as PrefsView).device } } as Prefs;
+    const next = fromCore(value as PrefsView);
     if (sending) waiting = next;
     else keep(next);
   }, () => undefined);
@@ -77,6 +84,12 @@ export function prefs(): Prefs {
   current ??= copied();
   listen();
   return current;
+}
+
+/** Forgets them, so that they are read again as the page knows them now: for a page built to HTML more than once in one
+ *  run, its core saying otherwise each time (the site's demo in another language: demo/prerender.tsx). */
+export function forgetPrefs(): void {
+  current = null;
 }
 
 /** Changes them: shown at once, then as the core has them. */
@@ -114,5 +127,5 @@ export const onPrefs = watch;
  * whole from its root. `pick` returns a value or one of the prefs' own fields, not a new object or array.
  */
 export function usePrefs<T>(pick: (p: Prefs) => T): T {
-  return useSyncExternalStore(watch, () => pick(prefs()), () => pick(DEFAULTS));
+  return useSyncExternalStore(watch, () => pick(prefs()), () => pick(prefs()));
 }

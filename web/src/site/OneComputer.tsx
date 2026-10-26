@@ -69,10 +69,11 @@ function apart(room: { w: number; h: number }, narrow: boolean) {
   return { machines: machines.map(at), phone: at([960, 260]), scale: narrow ? 0.7 : 1 };
 }
 
-/** The app's row for a machine: its name where the app writes it, out to its link (the computer's list) or to its
- *  whole card (the phone's: the first box out from it with a ground of its own, as wide as the window). */
+/** The app's row for a machine: its name where the app writes it (and shows it: of the frame the page was built with,
+ *  the desktop's app or the phone's), out to its link (the computer's list) or to its whole card (the phone's: the
+ *  first box out from it with a ground of its own, as wide as the window). */
 function rowOf(app: HTMLElement, name: string, phone: boolean): HTMLElement | undefined {
-  const words = [...app.querySelectorAll<HTMLElement>("span, b, div")].find((el) => el.childElementCount === 0 && el.textContent?.trim() === name);
+  const words = [...app.querySelectorAll<HTMLElement>("span, b, div")].find((el) => el.childElementCount === 0 && el.textContent?.trim() === name && el.getClientRects().length > 0);
   const wide = app.getBoundingClientRect().width * 0.85;
   let row: HTMLElement | null = words ?? null;
   const card = (el: HTMLElement) => { const c = getComputedStyle(el).backgroundColor; return !!c && c !== "transparent" && !/rgba\(.*,\s*0\)$/.test(c); };
@@ -147,12 +148,14 @@ export function OneComputer(props: DemoProps) {
     const el = scene.current, space = room.current, outer = win.current, inner = screen.current, hand = phone.current, wires = lines.current;
     if (!el || !space || !outer || !inner || !hand || !wires || !air.current) return;
     const narrow = innerWidth <= 860;
-    // The phone's own app beside the computer's, a page of its own as wide as a phone (site/phone.html), so that it is
-    // laid out as on one (its rules go by the screen's width); a wide screen only: on a narrow one the window is the phone.
-    if (!narrow && el.offsetParent !== null && phoneScreen.current && !phoneScreen.current.src) phoneScreen.current.src = `/phone.html${lang === "en" ? "?lang=en" : ""}`;
+    // The phone's own app beside the computer's, a page of its own as wide as a phone (site/phone.html, in the page's
+    // language), so that it is laid out as on one (its rules go by the screen's width); a wide screen only: on a narrow
+    // one the window is the phone.
+    if (!narrow && el.offsetParent !== null && phoneScreen.current && !phoneScreen.current.src) phoneScreen.current.src = lang === "en" ? "/en/phone.html" : "/phone.html";
 
     // The rows, where the app has them in the window (in its own size), and each as it is drawn there, for the air;
-    // read again until the app is there, and when the room changes size.
+    // read again until the app is there, when the room changes size, and once the app is drawn anew (the demo taking
+    // its box over from the frame the page was built with: those read before fly on till its rows are there).
     interface Row { el: HTMLElement; box: Box; flying: HTMLElement; shadow: string }
     let rows: Row[] = [];
     // How large the window is drawn just now; whether the rows are in the air just now.
@@ -166,12 +169,12 @@ export function OneComputer(props: DemoProps) {
       for (const r of rows) { r.el.style.visibility = on ? "hidden" : ""; r.flying.style.display = on ? "" : "none"; }
     };
     const read = () => {
-      leave();
       const app = inner.querySelector<HTMLElement>("#demo");
       const found = app ? names.map((n) => rowOf(app, n, narrow)) : [];
       if (!app || found.some((r) => !r)) return false;
       // A phone's window (a narrow screen's) is in a phone's shell: a status bar's room under its camera island.
       if (narrow && app.dataset.phone === undefined) { app.dataset.phone = ""; return false; }
+      leave();
       const at = inner.getBoundingClientRect();
       const sheet: string[] = [];
       rows = (found as HTMLElement[]).map((row) => {
@@ -228,7 +231,11 @@ export function OneComputer(props: DemoProps) {
         outer.inert = !home;
         if (!home) { demo.current?.reopen(); leave(); }
       }
-      if (rows.length === 0 && !read()) { asked = requestAnimationFrame(draw); return; }
+      const gone = rows.length > 0 && !rows[0]!.el.isConnected;
+      if ((rows.length === 0 || gone) && !read()) {
+        if (rows.length === 0) { asked = requestAnimationFrame(draw); return; }
+        ask();
+      }
       const inRoom = (b: Box): Box => ({ x: w.x + tx + b.x * s, y: w.y + ty + b.y * s, w: b.w * s, h: b.h * s });
 
       // The devices are the app's rows: from where they stand apart (in the room) to their places in its list, in the
@@ -270,6 +277,8 @@ export function OneComputer(props: DemoProps) {
       for (let p = 0; p < ends.length; p++) for (let q = p + 1; q < ends.length; q++) {
         paths[n++]?.setAttribute("d", `M${ends[p]!.x} ${ends[p]!.y} L${ends[q]!.x} ${ends[q]!.y}`);
       }
+      // All of it placed: seen from now on (site.css.ts).
+      if (space.dataset.drawn === undefined) space.dataset.drawn = "";
     };
     const ask = () => { if (!asked) asked = requestAnimationFrame(draw); };
     const resized = () => { leave(); ask(); };
@@ -314,7 +323,7 @@ export function OneComputer(props: DemoProps) {
                 <div className={css.oneBase} />
                 <div className={css.oneKeysInWindow} />
                 <div className={css.oneScreen} ref={screen}>
-                  <Demo v="1" start="stations" className={css.oneDemo} held={demo} {...(props.mountDemo ? { mount: props.mountDemo } : {})} {...(props.demo ? { frame: props.demo } : {})} />
+                  <Demo v="1" start="stations" className={css.oneDemo} held={demo} {...(props.mountDemo ? { mount: props.mountDemo } : {})} {...(props.demo ? { frame: props.demo.stations } : {})} />
                 </div>
                 <div className={css.oneIslandInWindow} />
               </div>

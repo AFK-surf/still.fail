@@ -5,7 +5,7 @@
 // the first paint by site/index.html): your devices joined into one computer (OneComputer.tsx), and the distance it
 // is used across (Distance.tsx). The one chosen stays.
 import { useEffect, useRef, type CSSProperties, type ReactNode, type RefObject } from "react";
-import type { MountedDemo } from "../demo/mount.tsx";
+import type { DemoOptions, MountedDemo } from "../demo/mount.tsx";
 import * as css from "./site.css.ts";
 import { ThemeSwitch } from "./ThemeSwitch.tsx";
 import { OneComputer } from "./OneComputer.tsx";
@@ -38,12 +38,25 @@ export function Button({ href, kind, large, then, children, className }: { href:
 /** Whether the page shows idea `v` (data-v on the root; the first when it says none). */
 const showing = (v: string) => (document.documentElement.dataset.v ?? "1") === v;
 
+/** The demo's opening frame (demo/prerender.tsx): the desktop's app and the phone's, as HTML. */
+export interface DemoFrame { wide: string; phone: string }
+
 /**
- * Where the app runs: mounted once the page is in the browser (demo/mount.tsx), in the idea the page shows. Built to
- * HTML, it holds the demo's opening frame (`frame`, desktop and phone), which the demo replaces as it mounts; React
- * leaves what is in it alone. `held`: the demo, once it runs.
+ * A frame of the demo, built into the page: a picture of the app until the app takes it over, so it takes no input
+ * (inert); the phone's app where its box is narrow, the desktop's elsewhere, as the demo picks (mount.tsx PHONE_BELOW).
+ * Without `wide`, the phone's alone (site/phone.html).
  */
-export function Demo({ mount, frame, v, className, start, held }: { mount?: DemoProps["mountDemo"]; frame?: { wide: string; phone: string }; v: string; className?: string; start?: "chat" | "stations"; held?: RefObject<MountedDemo | null> }) {
+export function frameHtml(frame: { wide?: string; phone: string }): string {
+  const apps = frame.wide === undefined ? frame.phone : `<div class="${css.frameWide}">${frame.wide}</div><div class="${css.framePhone}">${frame.phone}</div>`;
+  return `<div class="${css.frame}" inert>${apps}</div>`;
+}
+
+/**
+ * Where the app runs: mounted once its script is in the browser (demo/mount.tsx, loaded after the page's own: main.tsx),
+ * in the idea the page shows. Built to HTML, it holds the demo's opening frame (`frame`), which the demo replaces as it
+ * mounts; React leaves what is in it alone. `held`: the demo, once it runs.
+ */
+export function Demo({ mount, frame, v, className, start, held }: { mount?: DemoProps["mountDemo"]; frame?: DemoFrame; v: string; className?: string; start?: "chat" | "stations"; held?: RefObject<MountedDemo | null> }) {
   const root = useRef<HTMLDivElement>(null);
   const lang = useSiteLang();
   useEffect(() => {
@@ -51,11 +64,12 @@ export function Demo({ mount, frame, v, className, start, held }: { mount?: Demo
     const demo = mount(root.current, { ...(start ? { start } : {}), lang });
     if (held) held.current = demo;
   }, [mount, v, start, lang, held]);
-  const html = frame ? `<div class="${css.frameWide}">${frame.wide}</div><div class="${css.framePhone}">${frame.phone}</div>` : "";
+  const html = frame ? frameHtml(frame) : "";
   return <div className={`${css.demo} ${className ?? ""}`} id="demo" ref={root} dangerouslySetInnerHTML={{ __html: html }} suppressHydrationWarning />;
 }
 
-export interface DemoProps { mountDemo?: (root: HTMLElement, options?: { start?: "chat" | "stations"; lang?: "zh" | "en" }) => MountedDemo; demo?: { wide: string; phone: string } }
+/** `demo`: the demo's opening frames, built into the page, by where it opens (on its chat, or on the stations' page). */
+export interface DemoProps { mountDemo?: (root: HTMLElement, options?: DemoOptions) => MountedDemo; demo?: Record<"chat" | "stations", DemoFrame> }
 
 /** What it promises about where things are. */
 const PROMISES = [

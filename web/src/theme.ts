@@ -6,9 +6,9 @@ import { useEffect, useState } from "react";
 import type { Appearance } from "./core/shapes.ts";
 import { onPrefs, prefs, setPrefs, usePrefs } from "./prefs.ts";
 import { followMotion } from "@stillfail/ui/motion.ts";
+import { APPEARANCE_EVENT as EVENT, announceAppearance } from "./appearanceEvent.ts";
 
 export type { Appearance };
-const EVENT = "stillfail-appearance";
 
 /** What the page shows: its root's choice, or the system's when it says none. */
 function shown(): Appearance {
@@ -22,7 +22,7 @@ function applyAppearance(value: Appearance): void {
   if (value === shown()) return;
   if (value === "system") delete root.dataset.theme;
   else root.dataset.theme = value;
-  window.dispatchEvent(new Event(EVENT));
+  announceAppearance();
 }
 
 /** The page shows the appearance kept on this device from now on, and moves as its motion setting says; call once
@@ -31,11 +31,6 @@ export function followAppearance(): void {
   applyAppearance(prefs().appearance);
   onPrefs(() => applyAppearance(prefs().appearance));
   onPrefs(followMotion(() => prefs().motion));
-}
-
-/** Tells the page's parts that follow the appearance to read it again: a page that sets it itself (the official site). */
-export function announceAppearance(): void {
-  window.dispatchEvent(new Event(EVENT));
 }
 
 /** The choice kept on this device, and how to change it. */
