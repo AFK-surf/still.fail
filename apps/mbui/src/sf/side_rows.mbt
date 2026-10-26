@@ -155,9 +155,10 @@ let side_list_top : @ui.Style = @ui.css("pt=S1")
 /// A sidebar's list under its band (side_list): what `rows` builds and the room under its last (list_foot_in),
 /// scrolling under the band when it is taller than the room (a list of one: `key` keeps where it is scrolled to).
 pub fn side_scroll(c : @ui.Ctx, key : String, rows : () -> Unit) -> Unit {
-  c.box(style=side_list(), fn() {
+  // The rows keep their inset; the scroll track belongs to the whole sidebar.
+  c.box(style=side_list().then(@ui.style(px=S0)), fn() {
     c.list(key, 1, side_scroll_est, fn(_) {
-      c.box(style=full_width, fn() {
+      c.box(style=theme().chat_list.side_list.then(@ui.style(h=Hug)), fn() {
         rows()
         // (the room under its last)
         c.box(style=@ui.style(h=Fixed(list_foot_in(Side))), fn() {  }) |> ignore

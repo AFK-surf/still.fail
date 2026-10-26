@@ -140,15 +140,15 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
     #|settings narrow 97207:afd0a6a4
     #|station narrow 92824:77551c96
     #|me-reading narrow 15655:d2e95c14
-    #|settings wide 156781:4f05a343
-    #|station wide 204110:ff461d7
-    #|me-reading wide 151467:291c694
+    #|settings wide 156781:b96c0543
+    #|station wide 204110:a368e137
+    #|me-reading wide 151467:57f14cbc
     #|settings-dark narrow 96796:d46978b5
     #|station-dark narrow 92306:aa067833
     #|me-reading-dark narrow 15489:b86dcdb
-    #|settings-dark wide 156425:23dbcc23
-    #|station-dark wide 203622:b729df38
-    #|me-reading-dark wide 151159:6b6a62b8
+    #|settings-dark wide 156425:2ae6158b
+    #|station-dark wide 203622:d37455d8
+    #|me-reading-dark wide 151159:9a22e1c8
     #|
 
 

@@ -1089,7 +1089,7 @@ fn sidebar_edge(c : @ui.Ctx, at : Double) -> Unit {
     @sf.t("web-pages.workspace.resizeSidebar") + " · " + @sf.t("web-main.sidebar.close")
   }
   c.layer(fn() {
-    let strip = c.box(style=edge_strip, moves="edge", left=at, top=0.0, bottom=0.0, id~, fn() {
+    c.box(style=edge_strip, moves="edge", left=at, top=0.0, bottom=0.0, fn() {
       @sf.edge_look(
         c,
         "sidebar-edge",
@@ -1098,8 +1098,12 @@ fn sidebar_edge(c : @ui.Ctx, at : Double) -> Unit {
         active~,
         line=!wide.folded,
       )
+      // The open sidebar's inside edge belongs to its list's scroll thumb. Resize from the page side;
+      // the folded rail still uses the whole strip to open.
+      let strip = c.box(left=if sized { edge_half } else { 0.0 }, right=0.0, top=0.0, bottom=0.0, id~, fn() { })
+      c.semantics(strip, Button, id~, label=words)
     })
-    c.semantics(strip, Button, id~, label=words)
+    |> ignore
     @sf.edge_tip(c, "sidebar-edge", id, words)
   })
   |> ignore

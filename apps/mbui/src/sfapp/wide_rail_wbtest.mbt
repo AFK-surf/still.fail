@@ -175,14 +175,14 @@ test "wide: the sidebar's edge let go a little past where the last frame drew it
   let edge = @sfdesk.rail_w + 240.0
   let edge_at = fn() { t.query(Button, label="调整侧边栏宽度 · 收起侧边栏").unwrap().rect.0 }
   t.hold_drag(edge, 400.0, edge + 60.0, 400.0)
-  assert_eq(edge_at(), @sfdesk.rail_w + 300.0 - @sfdesk.edge_half)
+  assert_eq(edge_at(), @sfdesk.rail_w + 300.0)
   // let go 6 further on, before a frame drew it there (the hand ahead of what is drawn): the frame that sees it let
   // go has the sidebar as wide as the hand left it, not moving the rest of the way after it (the block's move)
   t.release(edge + 66.0, 400.0)
   assert_eq(@sfdesk.wide.side_w, 306.0)
-  assert_eq(edge_at(), @sfdesk.rail_w + 306.0 - @sfdesk.edge_half)
+  assert_eq(edge_at(), @sfdesk.rail_w + 306.0)
   t.run_for(@sfdesk.side_move_ms)
-  assert_eq(edge_at(), @sfdesk.rail_w + 306.0 - @sfdesk.edge_half)
+  assert_eq(edge_at(), @sfdesk.rail_w + 306.0)
   assert_eq(sidebar_kept(calls, "ws1\nchats"), Some(Json::string("306")))
 }
 
@@ -483,7 +483,7 @@ test "wide: folding moves the block as the web's: the list where it was as the b
   let t = wide_tester(calls)
   let (x0, y0, _, _) = t.rect_of("新建对话").unwrap()
   let (ex, _, _, _) = t.query(Button, label="调整侧边栏宽度 · 收起侧边栏").unwrap().rect
-  assert_eq(ex, @sfdesk.rail_w + @sfdesk.wide.side_w - @sfdesk.edge_half)
+  assert_eq(ex, @sfdesk.rail_w + @sfdesk.wide.side_w)
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
   // halfway: the edge on its way with the block, the list not moved across, the block's edges round it (its top row's
   // 8 giving way to the bar's 6 above)
@@ -501,7 +501,7 @@ test "wide: folding moves the block as the web's: the list where it was as the b
   t.move(rx + rw / 2.0, ry + rh / 2.0)
   t.run_for(@sfdesk.side_move_ms)
   let (px, _, _, _) = t.query(Button, label="展开侧边栏").unwrap().rect
-  assert_eq(px, @sfdesk.closed_edge + @sfdesk.wide.side_w)
+  assert_eq(px, @sfdesk.closed_edge + @sfdesk.wide.side_w + @sfdesk.edge_half)
   assert_true(@sfdesk.wide.bar_mr >= 0.0)
 }
 
