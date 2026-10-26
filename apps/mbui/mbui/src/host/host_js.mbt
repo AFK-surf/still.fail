@@ -1205,3 +1205,9 @@ fn post_next() -> (String, String, Bytes)? {
     Some((channel, js_post_json(), js_post_bytes()))
   }
 }
+
+///|
+/// The part of the next frame that differs from the one before (@hostapi.render_dirty): web/host.js draws only that
+/// part of its canvas again.
+extern "js" fn rn_dirty(x : Double, y : Double, w : Double, h : Double) -> Unit =
+  #|(x, y, w, h) => { if (globalThis.__mbhost.renderDirty) globalThis.__mbhost.renderDirty(x, y, w, h) }

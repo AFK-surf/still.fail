@@ -139,6 +139,16 @@ int32_t mbr_snapshot(moonbit_string_t path) {
   free(p);
   return ok;
 }
+
+// the offscreen target as the frames drawn into it left it, as a PNG (apple_render.m)
+int mb_render_snapshot_drawn(const char *path);
+
+int32_t mbr_snapshot_drawn(moonbit_string_t path) {
+  char *p = utf8(path);
+  int ok = mb_render_snapshot_drawn(p);
+  free(p);
+  return ok;
+}
 #elif defined(_WIN32)
 // the thread's messages handled for `ms` (WIC's decodes are told to the image table directly: win_image.cpp)
 void mbr_spin(double ms) {
@@ -159,6 +169,19 @@ int32_t mbr_snapshot(moonbit_string_t path) {
   free(w);
   return ok;
 }
+
+// the offscreen target as the frames drawn into it left it, as a PNG (win_render.cpp)
+int mb_render_snapshot_drawn(const wchar_t *path);
+
+int32_t mbr_snapshot_drawn(moonbit_string_t path) {
+  int32_t n = Moonbit_array_length(path);
+  wchar_t *w = malloc(((size_t)n + 1) * sizeof(wchar_t));
+  memcpy(w, path, (size_t)n * 2);
+  w[n] = 0;
+  int ok = mb_render_snapshot_drawn(w);
+  free(w);
+  return ok;
+}
 #else
 // Android (android_host.c): the image uploads that came meanwhile done on this thread, the GL one
 void mb_render_spin(double ms);
@@ -169,6 +192,16 @@ int mb_render_snapshot(const char *path);
 int32_t mbr_snapshot(moonbit_string_t path) {
   char *p = utf8(path);
   int ok = mb_render_snapshot(p);
+  free(p);
+  return ok;
+}
+
+// the offscreen framebuffer as the frames drawn into it left it, as a PNG (gles_render.h)
+int mb_render_snapshot_drawn(const char *path);
+
+int32_t mbr_snapshot_drawn(moonbit_string_t path) {
+  char *p = utf8(path);
+  int ok = mb_render_snapshot_drawn(p);
   free(p);
   return ok;
 }

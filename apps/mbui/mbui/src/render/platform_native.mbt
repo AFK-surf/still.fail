@@ -80,3 +80,21 @@ fn spin(ms : Double) -> Unit {
 fn snapshot(path : String) -> Bool {
   ffi_snapshot(path) != 0
 }
+
+///|
+#borrow(path)
+extern "C" fn ffi_snapshot_drawn(path : String) -> Int = "mbr_snapshot_drawn"
+
+///|
+/// The target as the frames drawn into it left it, as a PNG at `path` (not the last frame drawn again).
+fn snapshot_drawn(path : String) -> Bool {
+  ffi_snapshot_drawn(path) != 0
+}
+
+///|
+/// A frame drawn and its GPU's time (ms; -1 where not measured).
+fn draw_gpu(inst : FixedArray[Double], count : Int, r : Double, g : Double, b : Double) -> Double {
+  let out = FixedArray::make(2, 0.0)
+  ffi_draw_timed(inst, count, r, g, b, out)
+  out[1]
+}

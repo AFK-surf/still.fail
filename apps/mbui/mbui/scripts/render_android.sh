@@ -57,6 +57,22 @@ case "${1:-run}" in
     "$D/chk" lines $O/lines.png
     draw shapes $O/shapes.png
     "$D/chk" shapes $O/shapes.png
+    # partial-b drawn only where it differs from partial-a, and whole (render_partial)
+    $ADB shell am force-stop $APP_ID
+    $ADB shell run-as $APP_ID rm -f files/partial.png files/partial.whole.png
+    for k in partial-a partial-b; do $ADB exec-in "run-as $APP_ID sh -c 'cat > files/$k.dl'" < $O/$k.dl; done
+    $ADB logcat -c
+    $ADB shell am start -n $APP_ID/dev.mbui.MainActivity \
+      --es env "'MBUI_DL_FROM=$F/partial-a.dl;MBUI_DL=$F/partial-b.dl;MBUI_DL_PNG=$F/partial.png'" >/dev/null
+    said=$($ADB logcat --uid="$render_uid" -v brief -e 'mbui-render: .*(drawn in parts|not written|another window)|FATAL EXCEPTION|Fatal signal' -m 1 | grep -v '^-----')
+    echo "partial: $said"
+    case "$said" in
+      *"drawn in parts"*) ;;
+      *) $ADB logcat -d -t 200 | tail -60; exit 1 ;;
+    esac
+    $ADB exec-out run-as $APP_ID cat files/partial.png > $O/partial.png
+    $ADB exec-out run-as $APP_ID cat files/partial.whole.png > $O/partial.whole.png
+    render_partial android
     $ADB shell am force-stop $APP_ID
     md5sum $O/controls-1.png $O/controls-2.png
     if ! cmp -s $O/controls-1.png $O/controls-2.png; then

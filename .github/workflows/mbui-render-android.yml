@@ -18,6 +18,7 @@ on:
       - "apps/mbui/mbui/scripts/apk"
       - "apps/mbui/mbui/scripts/android.sh"
       - "apps/mbui/mbui/src/render/**"
+      - "apps/mbui/mbui/src/damage/**"
       - "apps/mbui/mbui/src/ui/drawlist.mbt"
       - "apps/mbui/mbui/src/ui/scene.mbt"
       - "apps/mbui/mbui/src/ui/line.mbt"

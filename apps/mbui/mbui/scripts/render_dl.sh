@@ -18,6 +18,26 @@ render_dl() {
   MBUI_DL_PRINT=shapes moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
     awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > "$(dirname "$out")/shapes.dl"
   [ -s "$(dirname "$out")/shapes.dl" ] || { echo "render_dl: no shapes draw list"; return 1; }
+  # and a spinner's two moments' (src/kitdemo/gallery/dl_print_wbtest.mbt partial_shown), partial-a.dl and
+  # partial-b.dl: the second drawn only where it differs from the first (mbui-render's MBUI_DL_FROM), render_partial
+  local k
+  for k in partial-a partial-b; do
+    MBUI_DL_PRINT=$k moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
+      awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > "$(dirname "$out")/$k.dl"
+    [ -s "$(dirname "$out")/$k.dl" ] || { echo "render_dl: no $k draw list"; return 1; }
+  done
+}
+
+# Partial redraw (docs/partial-redraw.md): out/render/partial.png, partial-b.dl drawn only where it differs from
+# partial-a.dl drawn before it, the same to the byte as partial.whole.png, partial-b.dl drawn whole ($1: the host's
+# name, said).
+render_partial() {
+  if cmp -s out/render/partial.png out/render/partial.whole.png; then
+    echo "render_$1: a frame drawn only where it differs is the frame drawn whole, to the byte"
+  else
+    echo "render_$1: a frame drawn only where it differs is not the frame drawn whole (out/render/partial.png, partial.whole.png)"
+    return 1
+  fi
 }
 
 # The picture against its reference, on the machine the references were made on: goldens/render/$1.txt's lines

@@ -342,6 +342,7 @@ static double cur_w, cur_h, cur_scale;
 static GLuint target_fb;
 
 static void glass_lost(void);
+static void canvas_lost(void);
 
 static GLuint compile(GLenum type, const char *src) {
   GLuint s = glCreateShader(type);
@@ -387,6 +388,7 @@ static void gl_setup(void) {
   pu_a = glGetUniformLocation(post, "u_a");
   pu_b = glGetUniformLocation(post, "u_b");
   glass_lost();
+  canvas_lost();
   glGenVertexArrays(1, &vao);
   glBindVertexArray(vao);
   glGenBuffers(1, &vbo);
@@ -478,6 +480,124 @@ static void post_pass(level *src, int sw, int sh, level *dst, int w, int h, int 
   glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
+// Partial redraw (docs/partial-redraw.md): the surface's frame is drawn into a canvas of its own (canvas_fb), kept
+// across frames, and copied onto the surface (what the surface held is gone once shown); where the app says only some
+// parts differ from the frame before (@hostapi.render_dirty), only those parts of the canvas are drawn again, each cut
+// to it (the scissor, `cut`: x, y from the foot, w, h; while `cut_on`), the frame's ground over it first (the instance
+// after the frame's, gl_present's), then every instance. Without the surface the offscreen framebuffer is the canvas.
+static GLuint canvas_fb, canvas_tex;
+static int canvas_w, canvas_h, offscreen;
+// what the canvas (or the offscreen framebuffer) holds is the last frame given
+static int canvas_ok;
+// the parts of the next frame that differ (points: x, y, w, h), all of it (`dirty_whole`), and whether any was said
+#define MB_PARTS 8
+static double dirty[MB_PARTS][4];
+static int dirty_n, dirty_whole, dirty_told;
+// a picture the frame drawn last had none of yet (drawn without it): the next drawn whole
+static int pictures_missing, encode_missing;
+static int cut_on;
+static int cut[4];
+
+void mb_host_render_dirty(double x, double y, double w, double h) {
+  dirty_told = 1;
+  if (w < 0 || h < 0) {
+    dirty_whole = 1;
+  } else if (w > 0 && h > 0) {
+    // (more than it keeps: the last one grown round it)
+    if (dirty_n == MB_PARTS) {
+      double *d = dirty[MB_PARTS - 1];
+      double x1 = fmax(d[0] + d[2], x + w), y1 = fmax(d[1] + d[3], y + h);
+      d[0] = fmin(d[0], x);
+      d[1] = fmin(d[1], y);
+      d[2] = x1 - d[0];
+      d[3] = y1 - d[1];
+    } else {
+      double *d = dirty[dirty_n++];
+      d[0] = x; d[1] = y; d[2] = w; d[3] = h;
+    }
+  }
+}
+
+// The parts of the frame the next one draws, from what was said of them (taken: a frame nothing was said for is drawn
+// whole), into `r` (as `cut`): how many (0 none), -1 all of it. `kept`: the target holds the frame before. In the
+// surface's pixels, the app's top the surface's.
+static int take_parts(int kept, int r[MB_PARTS][4]) {
+  int told = dirty_told, whole = dirty_whole, n = dirty_n;
+  dirty_told = dirty_whole = dirty_n = 0;
+  if (!told || whole || !kept || pictures_missing) return -1;
+  int k = 0;
+  for (int i = 0; i < n; i++) {
+    // (whole pixels round it, and one more)
+    int x0 = (int)floor(dirty[i][0] * cur_scale) - 1, y0 = (int)floor(dirty[i][1] * cur_scale) - 1;
+    int x1 = (int)ceil((dirty[i][0] + dirty[i][2]) * cur_scale) + 1;
+    int y1 = (int)ceil((dirty[i][1] + dirty[i][3]) * cur_scale) + 1;
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x1 > fb_w) x1 = fb_w;
+    if (y1 > fb_h) y1 = fb_h;
+    if (x1 <= x0 || y1 <= y0) continue;
+    r[k][0] = x0;
+    r[k][1] = fb_h - y1;
+    r[k][2] = x1 - x0;
+    r[k][3] = y1 - y0;
+    k++;
+  }
+  return k;
+}
+
+static void draw_into(GLuint fb, int part);
+
+// The frame kept drawn into `fb`, only its parts that differ (take_parts) where it holds the frame before (`kept`),
+// else whole.
+static void draw_parts(GLuint fb, int kept) {
+  int parts[MB_PARTS][4];
+  int n = take_parts(kept, parts);
+  int missing = 0;
+  if (n < 0) {
+    draw_into(fb, 0);
+    missing = encode_missing;
+  }
+  for (int i = 0; i < n; i++) {
+    memcpy(cut, parts[i], sizeof cut);
+    draw_into(fb, 1);
+    missing |= encode_missing;
+  }
+  if (n != 0) pictures_missing = missing;
+}
+
+// The canvas gone with the context it was made in (a new one: gl_setup), nothing of it given back.
+static void canvas_lost(void) {
+  canvas_fb = canvas_tex = 0;
+  canvas_w = canvas_h = 0;
+  canvas_ok = 0;
+}
+
+// The canvas the surface's frames are drawn into, its size: made again at another size (or once the context is new:
+// gl_setup), what it held lost.
+static void ensure_canvas(void) {
+  if (canvas_fb && canvas_w == fb_w && canvas_h == fb_h) return;
+  if (canvas_fb) {
+    glDeleteFramebuffers(1, &canvas_fb);
+    glDeleteTextures(1, &canvas_tex);
+  }
+  canvas_fb = canvas_tex = 0;
+  canvas_ok = 0;
+  canvas_w = fb_w;
+  canvas_h = fb_h;
+  if (fb_w <= 0 || fb_h <= 0) return;
+  glGenTextures(1, &canvas_tex);
+  glBindTexture(GL_TEXTURE_2D, canvas_tex);
+  glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, fb_w, fb_h);
+  glGenFramebuffers(1, &canvas_fb);
+  glBindFramebuffer(GL_FRAMEBUFFER, canvas_fb);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, canvas_tex, 0);
+  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+    glDeleteFramebuffers(1, &canvas_fb);
+    glDeleteTextures(1, &canvas_tex);
+    canvas_fb = canvas_tex = 0;
+  }
+}
+
 // what the run [start, end) of glass sees, frosted glass of the same capture further on (glass.mbt shares_capture)
 // too; 0 when none of it shows
 static int capture(const float *f, int32_t start, int32_t end, int32_t count) {
@@ -525,9 +645,13 @@ static int capture(const float *f, int32_t start, int32_t end, int32_t count) {
   if (pb0 < vy0) pb0 = vy0;
   if (pb1 > top) pb1 = top;
   if (px1 <= px0 || pb1 <= pb0 || x1 <= x0 || y1 <= y0) return 0;
+  // (a capture outside the part drawn: neither copied nor drawn. One that meets it is in it whole: @damage)
+  if (cut_on && (px1 <= cut[0] || cut[0] + cut[2] <= px0 || pb1 <= cut[1] || cut[1] + cut[3] <= pb0)) return 0;
   int w = px1 - px0, h = pb1 - pb0;
   ensure_levels(w, h);
   glDisable(GL_BLEND);
+  // (the copy and the passes whole, not cut to the part: a blit is cut by the scissor too)
+  glDisable(GL_SCISSOR_TEST);
   glBindFramebuffer(GL_READ_FRAMEBUFFER, target_fb);
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, lv[0].fb);
   glBlitFramebuffer(px0, pb0, px1, pb1, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
@@ -562,6 +686,12 @@ static int capture(const float *f, int32_t start, int32_t end, int32_t count) {
 static void main_state(void) {
   glBindFramebuffer(GL_FRAMEBUFFER, target_fb);
   glViewport(0, vy0, fb_w, vhp);
+  if (cut_on) {
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(cut[0], cut[1], cut[2], cut[3]);
+  } else {
+    glDisable(GL_SCISSOR_TEST);
+  }
   glEnable(GL_BLEND);
   glUseProgram(prog);
   glBindVertexArray(vao);
@@ -622,12 +752,29 @@ static int32_t kept_count;
 static double kept_r, kept_g, kept_b;
 static void draw_kept(void);
 
-// A frame presented (the host's mb_host_present, its glyphs in the atlases first): kept, and drawn into target_fb.
+static void canvas_shown(void);
+
+// Whether the frame kept draws a native view's picture into the canvas (Android's views, Linux's players): what it
+// shows changes under the same instances, so the frame is drawn whole.
+static int views_drawn_in(void) {
+  for (int32_t i = 0; i < kept_count; i++) {
+    int tid = (int)fbuf[i * MB_INST + 20];
+    if (tid <= MB_VIEW_TEX) continue;
+#ifdef MB_VIEWS_UNDER
+    if (view_under(tid)) continue;
+#endif
+    return 1;
+  }
+  return 0;
+}
+
+// A frame presented (the host's mb_host_present, its glyphs in the atlases first): kept, and drawn into the canvas,
+// only the part that differs where it holds the frame before, then onto target_fb.
 static void gl_present(double *buf, int32_t count, double r, double g, double b) {
   size_t n = (size_t)(count > 0 ? count : 0) * MB_INST;
-  // (and a row of the shapes' pieces more: segs_upload reads whole rows)
-  if (fcap < n + SEGS_ROW * 4) {
-    fcap = n * 2 + SEGS_ROW * 4;
+  // (and the frame's ground after it, and a row of the shapes' pieces more: segs_upload reads whole rows)
+  if (fcap < n + MB_INST + SEGS_ROW * 4) {
+    fcap = n * 2 + MB_INST + SEGS_ROW * 4;
     fbuf = realloc(fbuf, fcap * sizeof(float));
   }
   for (size_t i = 0; i < n; i++) fbuf[i] = (float)buf[i];
@@ -635,7 +782,30 @@ static void gl_present(double *buf, int32_t count, double r, double g, double b)
   kept_r = r;
   kept_g = g;
   kept_b = b;
-  draw_kept();
+  if (views_drawn_in()) dirty_told = 0;
+  if (offscreen) {
+    draw_parts(target_fb, canvas_ok);
+    canvas_ok = 1;
+    return;
+  }
+  ensure_canvas();
+  if (!canvas_fb) {
+    dirty_told = dirty_whole = dirty_n = 0;
+    draw_into(target_fb, 0);
+    return;
+  }
+  draw_parts(canvas_fb, canvas_ok);
+  canvas_ok = 1;
+  canvas_shown();
+}
+
+// The canvas onto the surface (target_fb), whole.
+static void canvas_shown(void) {
+  glDisable(GL_SCISSOR_TEST);
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas_fb);
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, target_fb);
+  glBlitFramebuffer(0, 0, fb_w, fb_h, 0, 0, fb_w, fb_h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+  glBindFramebuffer(GL_FRAMEBUFFER, target_fb);
 }
 
 // The frame presented last, drawn again into a framebuffer of its own the surface's size (as on the surface: what the
@@ -658,10 +828,7 @@ static void draw_kept_read(void) {
     read_w = fb_w;
     read_h = fb_h;
   }
-  GLuint was = target_fb;
-  target_fb = read_fb;
-  draw_kept();
-  target_fb = was;
+  draw_into(read_fb, 0);
   glBindFramebuffer(GL_FRAMEBUFFER, read_fb);
 }
 
@@ -729,14 +896,36 @@ int32_t mb_render_pixels_of(const double *inst, int32_t count, double r, double 
   return ok;
 }
 
+// The frame kept drawn whole onto the surface again (a native view's picture changed: Android's Native.redraw), through
+// the canvas as a frame presented is.
 static void draw_kept(void) {
+  if (offscreen || !canvas_fb) {
+    draw_into(target_fb, 0);
+    return;
+  }
+  draw_into(canvas_fb, 0);
+  canvas_ok = 1;
+  canvas_shown();
+}
+
+// The frame kept drawn into framebuffer `fb` (the surface's size): `part` 1, only the part `cut` over what it holds
+// (the frame's ground there first), else all of it, cleared to the ground. Whether a picture was missing in
+// encode_missing.
+static void draw_into(GLuint fb, int part) {
   int32_t count = kept_count;
   double r = kept_r, g = kept_g, b = kept_b;
+  GLuint was = target_fb;
+  target_fb = fb;
+  encode_missing = 0;
+  cut_on = part == 1;
   glBindFramebuffer(GL_FRAMEBUFFER, target_fb);
   glViewport(0, 0, fb_w, fb_h);
-  if (over_other) glClearColor(0, 0, 0, 0);
-  else glClearColor((float)r, (float)g, (float)b, 1);
-  glClear(GL_COLOR_BUFFER_BIT);
+  if (!cut_on) {
+    glDisable(GL_SCISSOR_TEST);
+    if (over_other) glClearColor(0, 0, 0, 0);
+    else glClearColor((float)r, (float)g, (float)b, 1);
+    glClear(GL_COLOR_BUFFER_BIT);
+  }
   // the app drawn in the surface's top part, as tall as it was told (the soft keyboard over the rest: MBView)
   int vh = (int)(cur_h * cur_scale + 0.5);
   vy0 = 0;
@@ -746,8 +935,20 @@ static void draw_kept(void) {
     vhp = vh;
   }
   glViewport(0, vy0, fb_w, vhp);
-  if (count <= 0) return;
+  if (count <= 0 && !cut_on) {
+    target_fb = was;
+    return;
+  }
   size_t n = (size_t)count * MB_INST;
+  // the frame's ground after its instances: a rect over all the window, opaque (clear over another app), a part drawn
+  // again first
+  float *gr = fbuf + n;
+  memset(gr, 0, MB_INST * sizeof(float));
+  gr[0] = -16.0f; gr[1] = -16.0f; gr[2] = (float)cur_w + 32.0f; gr[3] = (float)cur_h + 32.0f;
+  if (!over_other) {
+    gr[8] = (float)r; gr[9] = (float)g; gr[10] = (float)b; gr[11] = 1.0f;
+  }
+  gr[16] = -1e9f; gr[17] = -1e9f; gr[18] = 1e9f; gr[19] = 1e9f;
   segs_upload(count);
   bd_tex = 0;
   memset(gmap, 0, sizeof gmap);
@@ -757,8 +958,15 @@ static void draw_kept(void) {
   glUseProgram(prog);
   glBindVertexArray(vao);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  glBufferData(GL_ARRAY_BUFFER, n * sizeof(float), fbuf, GL_STREAM_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, (n + MB_INST) * sizeof(float), fbuf, GL_STREAM_DRAW);
   main_state();
+  if (cut_on) {
+    for (int i = 0; i < MB_INST / 4; i++)
+      glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, MB_INST * 4, (void *)(intptr_t)(count * MB_INST * 4 + i * 16));
+    glDisable(GL_BLEND);
+    glDrawArraysInstanced(GL_TRIANGLES, 0, 6, 1);
+    glEnable(GL_BLEND);
+  }
   // one draw per run of instances showing the same image (slot 20; 0: none, the atlas stands in; a native view's
   // picture where it shows, kind 9: nothing until it has one), or sharing one capture of glass (negative); GLES has no
   // base instance, so the attributes start at the run instead
@@ -784,6 +992,7 @@ static void draw_kept(void) {
       continue;
     }
     GLuint t = tid ? image_tex(tid) : atlas;
+    if (!t && tid > 0 && tid <= MB_STREAM_TEX) encode_missing = 1;
     if (t) {  // 0: lost with the context, decoding again; a stream's or a view's with no picture yet
       if (tid > MB_VIEW_TEX) view_parts_in(tid, start, end);
       glActiveTexture(GL_TEXTURE1);
@@ -804,6 +1013,9 @@ static void draw_kept(void) {
     }
     start = end;
   }
+  if (cut_on) glDisable(GL_SCISSOR_TEST);
+  cut_on = 0;
+  target_fb = was;
 }
 
 // ---------------------------------------------------------------------------
@@ -813,6 +1025,7 @@ static void draw_kept(void) {
 static GLuint off_tex;
 
 static void gl_offscreen(double w, double h, double scale) {
+  offscreen = 1;
   cur_w = w;
   cur_h = h;
   cur_scale = scale;
@@ -826,6 +1039,12 @@ static void gl_offscreen(double w, double h, double scale) {
   glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, off_tex, 0);
   if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) LOG("mbui-render: no framebuffer");
 }
+
+// The offscreen framebuffer as its frames left it (not the last frame drawn again: what drawing only the parts that
+// differ made of it, mbui-render's MBUI_DL_FROM), as a PNG.
+static int gl_png(const char *path, GLuint fb);
+
+int mb_render_snapshot_drawn(const char *path) { return offscreen && target_fb ? gl_png(path, target_fb) : 0; }
 
 static void png_chunk(FILE *f, const char *type, const unsigned char *data, uint32_t n) {
   unsigned char be[4] = {n >> 24, n >> 16, n >> 8, n};

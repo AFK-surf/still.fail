@@ -577,6 +577,71 @@ static void keep_under(const float *f, int32_t start, int32_t count, int32_t pie
 // where the pieces of the frame's shapes start (src/ui/shape.mbt: the instances of kind 12 after every one drawn)
 static int32_t seg_base;
 
+// Partial redraw (docs/partial-redraw.md): a window's frame is drawn into a canvas of its own, kept across frames, and
+// copied into the drawable; where the app says only some parts of it differ from the frame before
+// (@hostapi.render_dirty), only those parts of the canvas are drawn again, a pass each: it loads what the canvas holds,
+// cut to the part (the pass's scissor, `sc`, while `sc_on`), the frame's ground drawn over the part first (the
+// instance after the frame's, upload's), then every instance (what falls outside is cut away).
+static id<MTLTexture> canvas;
+// what the canvas holds is the last frame given (none lost: a frame not drawn into it, its size another)
+static int canvas_ok;
+// the parts of the next frame that differ (points: x, y, w, h), all of it (`dirty_whole`), and whether any was said
+#define MB_PARTS 8
+static double dirty[MB_PARTS][4];
+static int dirty_n, dirty_whole, dirty_told;
+// a picture the frame drawn last had none of yet (its texture not made: drawn without it): the next drawn whole, as
+// what it shows changes under the same numbers
+static int pictures_missing, encode_missing;
+static int sc_on;
+static MTLScissorRect sc;
+
+void mb_host_render_dirty(double x, double y, double w, double h) {
+  dirty_told = 1;
+  if (w < 0 || h < 0) {
+    dirty_whole = 1;
+  } else if (w > 0 && h > 0) {
+    // (more than it keeps: the last one grown round it)
+    if (dirty_n == MB_PARTS) {
+      double *d = dirty[MB_PARTS - 1];
+      double x1 = fmax(d[0] + d[2], x + w), y1 = fmax(d[1] + d[3], y + h);
+      d[0] = fmin(d[0], x);
+      d[1] = fmin(d[1], y);
+      d[2] = x1 - d[0];
+      d[3] = y1 - d[1];
+    } else {
+      double *d = dirty[dirty_n++];
+      d[0] = x; d[1] = y; d[2] = w; d[3] = h;
+    }
+  }
+}
+
+// The parts of a target tw × th pixels the next frame draws, from what was said of them (taken: a frame nothing was
+// said for is drawn whole), into `r`: how many (0 none), -1 all of it. `kept`: the target holds the frame before.
+static int take_parts(int tw, int th, int kept, MTLScissorRect r[MB_PARTS]) {
+  int told = dirty_told, whole = dirty_whole, n = dirty_n;
+  dirty_told = dirty_whole = dirty_n = 0;
+  if (!told || whole || !kept || pictures_missing) return -1;
+  int k = 0;
+  for (int i = 0; i < n; i++) {
+    // (whole pixels round it, and one more: the app's part reaches its pixels' antialiasing, not their rounding)
+    int x0 = (int)floor(dirty[i][0] * vscale) - 1, y0 = (int)floor(dirty[i][1] * vscale) - 1;
+    int x1 = (int)ceil((dirty[i][0] + dirty[i][2]) * vscale) + 1, y1 = (int)ceil((dirty[i][1] + dirty[i][3]) * vscale) + 1;
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x1 > tw) x1 = tw;
+    if (y1 > th) y1 = th;
+    if (x1 > x0 && y1 > y0) r[k++] = (MTLScissorRect){(NSUInteger)x0, (NSUInteger)y0, (NSUInteger)(x1 - x0), (NSUInteger)(y1 - y0)};
+  }
+  return k;
+}
+
+// Whether a grab's rectangle meets the part drawn (all of it where the frame is drawn whole).
+static int grab_in_part(const Grab *m) {
+  if (!sc_on) return 1;
+  return m->px0 < (int)(sc.x + sc.width) && (int)sc.x < m->px0 + m->w && m->py0 < (int)(sc.y + sc.height) &&
+         (int)sc.y < m->py0 + m->h;
+}
+
 static id<MTLRenderCommandEncoder> begin_pass(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderPipelineState> p,
                                               id<MTLBuffer> buf, int clear, double r, double g, double b) {
   MTLRenderPassDescriptor *rp = [MTLRenderPassDescriptor renderPassDescriptor];
@@ -596,17 +661,27 @@ static id<MTLRenderCommandEncoder> begin_pass(id<MTLCommandBuffer> cb, id<MTLTex
   [enc setFragmentTexture:atlas atIndex:0];
   [enc setFragmentTexture:catlas atIndex:3];
   [enc setFragmentTexture:(gtex ?: atlas) atIndex:2];
+  if (sc_on) [enc setScissorRect:sc];
   return enc;
 }
 
+// `part`: only that part of the target drawn again, over what it holds (the frame's ground first: the instance after
+// the frame's, upload's); NULL, all of it, cleared to the ground.
 static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderPipelineState> p,
-                   id<MTLBuffer> buf, int32_t count, double r, double g, double b) {
+                   id<MTLBuffer> buf, int32_t count, double r, double g, double b, const MTLScissorRect *part) {
   gtex = nil;
   memset(&gu, 0, sizeof gu);
+  encode_missing = 0;
   const float *f = (const float *)buf.contents;
   seg_base = count;
   while (seg_base > 0 && (int)(f[(seg_base - 1) * MB_INST + 5] + 0.5f) == 12) seg_base--;
-  id<MTLRenderCommandEncoder> enc = begin_pass(cb, target, p, buf, 1, r, g, b);
+  sc_on = part != NULL;
+  if (part) sc = *part;
+  id<MTLRenderCommandEncoder> enc = begin_pass(cb, target, p, buf, part ? 0 : 1, r, g, b);
+  if (part) {
+    [enc setRenderPipelineState:hpipe];
+    [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:1 baseInstance:count];
+  }
   // one draw per run of instances showing the same image (slot 20; 0:
   // none, the atlas stands in), or sharing one capture of glass (negative),
   // and holes for native views (kind 9) apart, unblended. Glass over a hole
@@ -622,6 +697,9 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
       if (tid != bound) {
         Grab m;
         shows = grab_of(&m, f, start, end, count, (int)target.width, (int)target.height);
+        // (a capture outside the part drawn: neither copied nor drawn, the blur kept as it was. One that meets it is
+        // in it whole: the app's part takes in all a capture it reaches copies, @damage)
+        shows = shows && grab_in_part(&m);
         double key[6] = {target.width, target.height, vscale, r, g, b};
         if (shows && same_under(f, start, count, seg_base, &m, key)) {
           // what it sees is what the levels hold: shown on in this pass
@@ -655,12 +733,33 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
       start = end;
       continue;
     }
+    if (!hole && tid > 0 && tid <= MB_STREAM_TEX && !t) encode_missing = 1;
     [enc setFragmentTexture:(t ?: atlas) atIndex:1];
     [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6
             instanceCount:end - start baseInstance:start];
     start = end;
   }
   [enc endEncoding];
+  sc_on = 0;
+}
+
+// The frame in `buf` drawn into `target`, only its parts that differ (take_parts) where it holds the frame before
+// (`kept`), a pass each, else whole: how many parts (-1 whole, 0 none).
+static int draw_parts(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLBuffer> buf, int32_t count, double r,
+                      double g, double b, int kept) {
+  MTLScissorRect parts[MB_PARTS];
+  int n = take_parts((int)target.width, (int)target.height, kept, parts);
+  int missing = 0;
+  if (n < 0) {
+    encode(cb, target, mpipe, buf, count, r, g, b, NULL);
+    missing = encode_missing;
+  }
+  for (int i = 0; i < n; i++) {
+    encode(cb, target, mpipe, buf, count, r, g, b, &parts[i]);
+    missing |= encode_missing;
+  }
+  if (n != 0) pictures_missing = missing;
+  return n;
 }
 
 // The instances into the next buffer of the ring (as floats), and a copy
@@ -668,14 +767,21 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
 static id<MTLBuffer> upload(const double *inst, int32_t count, double r, double g, double b) {
   buf_i = (buf_i + 1) % 3;
   size_t need = (size_t)(count > 0 ? count : 1) * MB_INST * sizeof(float);
-  if (buf_cap[buf_i] < need) {
-    size_t cap = need * 2;
+  // (and the frame's ground after its instances: a rect over all the window, opaque, a part drawn again first)
+  size_t room = need + MB_INST * sizeof(float);
+  if (buf_cap[buf_i] < room) {
+    size_t cap = room * 2;
     bufs[buf_i] = [dev newBufferWithLength:cap options:MTLResourceStorageModeShared];
     buf_cap[buf_i] = cap;
   }
   float *f = (float *)bufs[buf_i].contents;
   int32_t n = count * MB_INST;
   for (int32_t i = 0; i < n; i++) f[i] = (float)inst[i];
+  float *gr = f + n;
+  memset(gr, 0, MB_INST * sizeof(float));
+  gr[0] = -16.0f; gr[1] = -16.0f; gr[2] = (float)vw + 32.0f; gr[3] = (float)vh + 32.0f;
+  gr[8] = (float)r; gr[9] = (float)g; gr[10] = (float)b; gr[11] = 1.0f;
+  gr[16] = -1e9f; gr[17] = -1e9f; gr[18] = 1e9f; gr[19] = 1e9f;
   // keep a copy for snapshots
   if (last_cap < need) {
     last_inst = realloc(last_inst, need);
@@ -704,6 +810,82 @@ static int same_as_shown(const double *inst, int32_t count, double r, double g, 
   return 1;
 }
 
+// The canvas a window's frames are drawn into (partial redraw, above), tw × th pixels: made again at another size,
+// what it held lost.
+static void ensure_canvas(int tw, int th) {
+  if (canvas && (int)canvas.width == tw && (int)canvas.height == th) return;
+  canvas = nil;
+  canvas_ok = 0;
+  if (tw <= 0 || th <= 0) return;
+  MTLTextureDescriptor *td = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+                                                                                width:(NSUInteger)tw
+                                                                               height:(NSUInteger)th
+                                                                            mipmapped:NO];
+  td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+  td.storageMode = MTLStorageModePrivate;
+  canvas = [dev newTextureWithDescriptor:td];
+}
+
+// MBUI_PARTIAL_CHECK=1 (a device's run, by hand: slow): each frame drawn in part compared with itself drawn whole,
+// a line on the log where they differ, once its commands (`cb`, committed) are done.
+static int partial_check = -1, partial_frames;
+
+static uint8_t *read_texture(id<MTLTexture> src, int *pw, int *ph);
+static uint8_t *read_last(int *pw, int *ph);
+
+static void check_part(id<MTLCommandBuffer> cb, int parts) {
+  if (partial_check < 0) {
+    const char *v = getenv("MBUI_PARTIAL_CHECK");
+    partial_check = v && v[0] == '1';
+  }
+  if (!partial_check) return;
+  [cb waitUntilCompleted];
+  int w, h, fw, fh;
+  uint8_t *drawn = read_texture(canvas, &w, &h);
+  uint8_t *whole = read_last(&fw, &fh);
+  long apart = 0;
+  int most = 0, ax = -1, ay = -1;
+  if (fw == w && fh == h) {
+    for (long i = 0; i < (long)w * h * 4; i++) {
+      int d = abs((int)drawn[i] - (int)whole[i]);
+      if (d) {
+        if (!apart) { ax = (int)(i / 4 % w); ay = (int)(i / 4 / w); }
+        apart++;
+        if (d > most) most = d;
+      }
+    }
+  }
+  partial_frames++;
+  if (apart || fw != w || fh != h || partial_frames % 120 == 1)
+    fprintf(stderr, "PARTIAL check %d: %d parts of %dx%d: %ld bytes apart (at most %d, first at %d,%d)\n",
+            partial_frames, parts, w, h, apart, most, ax, ay);
+  free(drawn);
+  free(whole);
+}
+
+// MBUI_PROBE=1 (src/ui/app.mbt's probe): where a present's time goes, said every 240 of them: waiting for a buffer of
+// the ring (the GPU three frames behind), the instances into it, waiting for a drawable (the display's), and the
+// drawing encoded and committed (ms, on average).
+static int present_probing = -1, present_n;
+static double present_ms[4];
+
+static void present_probe(double ring, double upload_s, double drawable, double encode_s) {
+  if (present_probing < 0) {
+    const char *v = getenv("MBUI_PROBE");
+    present_probing = v && v[0] == '1';
+  }
+  if (!present_probing) return;
+  present_ms[0] += ring * 1000.0;
+  present_ms[1] += upload_s * 1000.0;
+  present_ms[2] += drawable * 1000.0;
+  present_ms[3] += encode_s * 1000.0;
+  if (++present_n < 240) return;
+  fprintf(stderr, "PROBE present avg: ring wait %.2f, upload %.2f, drawable wait %.2f, encode %.2f ms\n",
+          present_ms[0] / present_n, present_ms[1] / present_n, present_ms[2] / present_n, present_ms[3] / present_n);
+  present_n = 0;
+  memset(present_ms, 0, sizeof present_ms);
+}
+
 // What drawing holds, given back as the window stops being the one in front (mac_app.m tell_state: another app's
 // in front, the window covered, minimized or hidden): Core Animation keeps the layer's drawables (three or four, each
 // the window's size in pixels: 22 MB at 3024 × 1890), and the glass its levels. The drawables shrink to a pixel, which
@@ -721,6 +903,9 @@ void mb_render_trim(void) {
   gtex = nil;
   lv_w = lv_h = 0;
   kept_ok = 0;
+  // (and the canvas: the next frame drawn whole into one made again)
+  canvas = nil;
+  canvas_ok = 0;
   [CATransaction begin];
   [CATransaction setDisableActions:YES];
   mlayer.drawableSize = CGSizeMake(1, 1);
@@ -734,13 +919,40 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
   // apart from the view's move, which the frame's transaction takes to the screen: a refresh or two apart, the page
   // out of step with its hole as the list moved
   int with_views = mb_views_take_moved() && !mlayer.presentsWithTransaction;
-  if (same_as_shown(inst, count, r, g, b)) return;
+  if (same_as_shown(inst, count, r, g, b)) {
+    // (what was said of it, nothing changed, not left for the next)
+    dirty_told = dirty_whole = dirty_n = 0;
+    return;
+  }
   if (with_views) mlayer.presentsWithTransaction = YES;
+  double p0 = CACurrentMediaTime();
   dispatch_semaphore_wait(inflight, DISPATCH_TIME_FOREVER);
+  double p1 = CACurrentMediaTime();
   id<MTLBuffer> buf = upload(inst, count, r, g, b);
+  double p2 = CACurrentMediaTime();
   id<CAMetalDrawable> drawable = [mlayer nextDrawable];
+  double p3 = CACurrentMediaTime();
   id<MTLCommandBuffer> cb = [queue commandBuffer];
-  if (drawable) encode(cb, drawable.texture, mpipe, buf, count, r, g, b);
+  // drawn into the canvas, only the part that differs where it holds the frame before, then copied into the drawable;
+  // a drawable of another size than the canvas (a resize between) drawn into whole
+  int tw = (int)mlayer.drawableSize.width, th = (int)mlayer.drawableSize.height;
+  int checked = 0;
+  if (drawable && ((int)drawable.texture.width != tw || (int)drawable.texture.height != th)) {
+    encode(cb, drawable.texture, mpipe, buf, count, r, g, b, NULL);
+    canvas_ok = 0;
+    dirty_told = dirty_whole = dirty_n = 0;
+  } else {
+    ensure_canvas(tw, th);
+    checked = draw_parts(cb, canvas, buf, count, r, g, b, canvas_ok);
+    canvas_ok = 1;
+    if (drawable) {
+      id<MTLBlitCommandEncoder> bl = [cb blitCommandEncoder];
+      [bl copyFromTexture:canvas sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0, 0, 0)
+               sourceSize:MTLSizeMake(tw, th, 1) toTexture:drawable.texture destinationSlice:0 destinationLevel:0
+        destinationOrigin:MTLOriginMake(0, 0, 0)];
+      [bl endEncoding];
+    }
+  }
   __block dispatch_semaphore_t sem = inflight;
   [cb addCompletedHandler:^(id<MTLCommandBuffer> done) {
     last_gpu = (done.GPUEndTime - done.GPUStartTime) * 1000.0;
@@ -766,6 +978,8 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
     [cb commit];
   }
   if (with_views) mlayer.presentsWithTransaction = NO;
+  present_probe(p1 - p0, p2 - p1, p3 - p2, CACurrentMediaTime() - p3);
+  if (checked > 0) check_part(cb, checked);
 }
 
 // MBUI_SAFE's bands (mac_app.m), in points, and their ground
@@ -800,7 +1014,7 @@ static uint8_t *read_of(const float *f, int32_t count, const double bg[3], int *
   id<MTLTexture> tex = read_tex;
   id<MTLBuffer> buf = [dev newBufferWithBytes:f length:(count > 0 ? count : 1) * MB_INST * sizeof(float) options:MTLResourceStorageModeShared];
   id<MTLCommandBuffer> cb = [queue commandBuffer];
-  encode(cb, tex, rpipe_off, buf, count, bg[0], bg[1], bg[2]);
+  encode(cb, tex, rpipe_off, buf, count, bg[0], bg[1], bg[2], NULL);
 #if TARGET_OS_OSX
   id<MTLBlitCommandEncoder> bl = [cb blitCommandEncoder];
   [bl synchronizeResource:tex];
@@ -811,6 +1025,38 @@ static uint8_t *read_of(const float *f, int32_t count, const double bg[3], int *
   size_t bpr = (size_t)w * 4;
   uint8_t *px = malloc(bpr * h);
   [tex getBytes:px bytesPerRow:bpr fromRegion:MTLRegionMake2D(0, 0, w, h) mipmapLevel:0];
+  *pw = w;
+  *ph = h;
+  return px;
+}
+
+// What a texture the GPU keeps (a canvas: private) holds, once what is drawn into it is done, read back as read_of
+// reads: the caller frees it.
+static uint8_t *read_texture(id<MTLTexture> src, int *pw, int *ph) {
+  int w = (int)src.width, h = (int)src.height;
+  uint8_t *px = malloc((size_t)w * h * 4);
+  @autoreleasepool {
+    MTLTextureDescriptor *td = [MTLTextureDescriptor
+        texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:w height:h mipmapped:NO];
+#if TARGET_OS_OSX
+    td.storageMode = MTLStorageModeManaged;
+#else
+    td.storageMode = MTLStorageModeShared;
+#endif
+    id<MTLTexture> tex = [dev newTextureWithDescriptor:td];
+    id<MTLCommandBuffer> cb = [queue commandBuffer];
+    id<MTLBlitCommandEncoder> bl = [cb blitCommandEncoder];
+    [bl copyFromTexture:src sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0, 0, 0)
+             sourceSize:MTLSizeMake(w, h, 1) toTexture:tex destinationSlice:0 destinationLevel:0
+      destinationOrigin:MTLOriginMake(0, 0, 0)];
+#if TARGET_OS_OSX
+    [bl synchronizeResource:tex];
+#endif
+    [bl endEncoding];
+    [cb commit];
+    [cb waitUntilCompleted];
+    [tex getBytes:px bytesPerRow:(size_t)w * 4 fromRegion:MTLRegionMake2D(0, 0, w, h) mipmapLevel:0];
+  }
   *pw = w;
   *ph = h;
   return px;
@@ -901,9 +1147,9 @@ int32_t mb_render_pixels_of(const double *inst, int32_t count, double r, double 
   return ok;
 }
 
-int mb_render_snapshot(const char *path) {
-  int w, h;
-  uint8_t *px = read_last(&w, &h);
+// Pixels `px` (read_of's, w × h, freed here) into a PNG at `path`, the native views under them and the bands round
+// them as the window shows them.
+static int snapshot_of(uint8_t *px, int w, int h, const char *path) {
   size_t bpr = (size_t)w * 4;
   CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
   CGContextRef ctx = CGBitmapContextCreate(px, w, h, 8, bpr, cs,
@@ -950,10 +1196,28 @@ int mb_render_snapshot(const char *path) {
   return ok;
 }
 
+int mb_render_snapshot(const char *path) {
+  int w, h;
+  uint8_t *px = read_last(&w, &h);
+  return snapshot_of(px, w, h, path);
+}
+
+static id<MTLTexture> off_target;
+
+// The offscreen target as its frames left it (not the last frame drawn again: what drawing only the parts that
+// differ made of it, mbui-render's MBUI_DL_FROM), as a PNG.
+int mb_render_snapshot_drawn(const char *path) {
+  if (!off_target) return 0;
+  int w, h;
+  uint8_t *px = read_texture(off_target, &w, &h);
+  return snapshot_of(px, w, h, path);
+}
+
 // Without a window (the bench, src/bench): the renderer with no layer, and
 // frames drawn into a texture kept across frames, the size a window's
-// drawable would be, as nanoui's hill-climb draws its own.
-static id<MTLTexture> off_target;
+// drawable would be, as nanoui's hill-climb draws its own (off_target, above);
+// whether it holds the frame drawn last (partial redraw: draw_parts).
+static int off_ok;
 
 void mb_render_init_offscreen(double w, double h, double scale) {
   mb_render_init(nil);
@@ -979,7 +1243,9 @@ void mb_render_draw_timed(const double *inst, int32_t count, double r, double g,
     double t0 = CACurrentMediaTime();
     id<MTLBuffer> buf = upload(inst, count, r, g, b);
     id<MTLCommandBuffer> cb = [queue commandBuffer];
-    encode(cb, off_target, mpipe, buf, count, r, g, b);
+    // (only the parts said to differ, as a window's canvas is drawn: the target is kept across frames too)
+    draw_parts(cb, off_target, buf, count, r, g, b, off_ok);
+    off_ok = 1;
     [cb commit];
     double t1 = CACurrentMediaTime();
     [cb waitUntilCompleted];

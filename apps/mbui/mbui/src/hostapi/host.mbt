@@ -161,6 +161,7 @@ pub(open) trait Host {
   mk_state(Self, Int) -> Int = _
   mk_png(Self, Int) -> Bytes = _
   nt_show(Self, String, String, String, String, String) -> Unit = _
+  rn_dirty(Self, Double, Double, Double, Double) -> Unit = _
   nt_cancel(Self, String) -> Unit = _
   nt_state(Self, Int) -> Int = _
   nt_text(Self, Int) -> String = _
@@ -943,6 +944,11 @@ impl Host with mk_png(_, _) {
 
 ///|
 impl Host with nt_show(_, _, _, _, _, _) {
+  ()
+}
+
+///|
+impl Host with rn_dirty(_, _, _, _, _) {
   ()
 }
 
@@ -2451,4 +2457,12 @@ fn ncall_result(id : Int) -> String {
 ///|
 fn ncall_end(id : Int) -> Unit {
   current.val.ncall_end(id)
+}
+
+///|
+/// A part of the next frame presented that changed from the one before (points), for a host that keeps its picture
+/// and draws only those parts again, the rest as it drew it (docs/partial-redraw.md): said once for each part before
+/// `present`; `w` < 0, all of it; once with `w` 0, none. A frame nothing was said for is drawn whole.
+pub fn render_dirty(x : Double, y : Double, w : Double, h : Double) -> Unit {
+  current.val.rn_dirty(x, y, w, h)
 }

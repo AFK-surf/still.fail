@@ -47,8 +47,10 @@ static ID3D11BlendState *blend;
 static IDCompositionDevice *dcomp;
 static IDCompositionTarget *dtarget;
 static IDCompositionVisual *droot, *dunder, *dcanvas;
-static ID3D11RasterizerState *raster;
+static ID3D11RasterizerState *raster, *raster_cut;
 static int fb_w, fb_h;
+// the swap chain is a flip model's (its Present1 takes the part that changed)
+static int flip_chain;
 static double vw = 800, vh = 600, vscale = 1;
 // glass (src/ui/glass.mbt): its passes, their constants, the copies they work in (level j 1/2^j of the largest
 // capture yet, the glass and the blur's margin round it, not of the target: a composer's strip, not the window; [4] a
@@ -418,6 +420,7 @@ int mb_render_init(void *hwnd) {
   sd.BufferCount = 2;
   sd.Scaling = DXGI_SCALING_NONE;
   sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+  flip_chain = 1;
   if (make_composed(xdev, factory, (HWND)hwnd)) {
     // the composition's swap chain, made at the window's size (its first buffers' view: at the first frame's size)
     fb_w = fb_h = 0;
@@ -426,6 +429,7 @@ int mb_render_init(void *hwnd) {
     sd.Scaling = DXGI_SCALING_STRETCH;
     sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
     sd.BufferCount = 1;
+    flip_chain = 0;
     factory->CreateSwapChainForHwnd(dev, (HWND)hwnd, &sd, NULL, NULL, &chain);
   }
   factory->MakeWindowAssociation((HWND)hwnd, DXGI_MWA_NO_ALT_ENTER);
@@ -493,6 +497,9 @@ static void make_pipeline(void) {
   rd.CullMode = D3D11_CULL_NONE;
   rd.DepthClipEnable = TRUE;
   dev->CreateRasterizerState(&rd, &raster);
+  // (a part drawn again: cut to it, docs/partial-redraw.md)
+  rd.ScissorEnable = TRUE;
+  dev->CreateRasterizerState(&rd, &raster_cut);
 }
 
 void *mb_render_device(void) { return dev; }
@@ -504,6 +511,8 @@ void mb_render_commit(void) {
   if (dcomp) dcomp->Commit();
 }
 
+static void ensure_canvas(int tw, int th);
+
 void mb_render_set_size(int pw, int ph, double w, double h, double scale) {
   vw = w;
   vh = h;
@@ -512,6 +521,7 @@ void mb_render_set_size(int pw, int ph, double w, double h, double scale) {
   if (rtv) rtv->Release();
   rtv = NULL;
   ctx->OMSetRenderTargets(0, NULL, NULL);
+  ensure_canvas(0, 0);
   chain->ResizeBuffers(0, (UINT)pw, (UINT)ph, DXGI_FORMAT_UNKNOWN, 0);
   ID3D11Texture2D *back = NULL;
   if (SUCCEEDED(chain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void **)&back))) {
@@ -581,6 +591,95 @@ static void post_pass(level *src, int sw, int sh, level *dst, int w, int h, int 
   ctx->Draw(3, 0);
 }
 
+// Partial redraw (docs/partial-redraw.md): a window's frame is drawn into a canvas of its own, kept across frames, and
+// copied into the swap chain's buffer (a flip model's holds a frame before the last); where the app says only some
+// parts differ from the frame before (@hostapi.render_dirty), only those parts of the canvas are drawn again, each cut
+// to it (the scissor, `cut`, while `cut_on`), the frame's ground over it first (the instance after the frame's,
+// submit's), then every instance. Without a window the offscreen target is the canvas.
+static ID3D11Texture2D *canvas;
+static ID3D11RenderTargetView *canvas_rtv;
+static int canvas_w, canvas_h;
+// what the canvas holds is the last frame given; what the offscreen target holds, the frame drawn last
+static int canvas_ok, off_ok;
+// the parts of the next frame that differ (points: x, y, w, h), all of it (`dirty_whole`), and whether any was said
+#define MB_PARTS 8
+static double dirty[MB_PARTS][4];
+static int dirty_n, dirty_whole, dirty_told;
+// a picture the frame drawn last had none of yet (drawn without it): the next drawn whole
+static int pictures_missing, encode_missing;
+static int cut_on;
+static D3D11_RECT cut;
+
+extern "C" void mb_host_render_dirty(double x, double y, double w, double h) {
+  dirty_told = 1;
+  if (w < 0 || h < 0) {
+    dirty_whole = 1;
+  } else if (w > 0 && h > 0) {
+    // (more than it keeps: the last one grown round it)
+    if (dirty_n == MB_PARTS) {
+      double *d = dirty[MB_PARTS - 1];
+      double x1 = fmax(d[0] + d[2], x + w), y1 = fmax(d[1] + d[3], y + h);
+      d[0] = fmin(d[0], x);
+      d[1] = fmin(d[1], y);
+      d[2] = x1 - d[0];
+      d[3] = y1 - d[1];
+    } else {
+      double *d = dirty[dirty_n++];
+      d[0] = x; d[1] = y; d[2] = w; d[3] = h;
+    }
+  }
+}
+
+// The parts of a target tw × th pixels the next frame draws, from what was said of them (taken: a frame nothing was
+// said for is drawn whole), into `r`: how many (0 none), -1 all of it. `kept`: the target holds the frame before.
+static int take_parts(int tw, int th, int kept, D3D11_RECT r[MB_PARTS]) {
+  int told = dirty_told, whole = dirty_whole, n = dirty_n;
+  dirty_told = dirty_whole = dirty_n = 0;
+  if (!told || whole || !kept || pictures_missing) return -1;
+  int k = 0;
+  for (int i = 0; i < n; i++) {
+    // (whole pixels round it, and one more)
+    int x0 = (int)floor(dirty[i][0] * vscale) - 1, y0 = (int)floor(dirty[i][1] * vscale) - 1;
+    int x1 = (int)ceil((dirty[i][0] + dirty[i][2]) * vscale) + 1, y1 = (int)ceil((dirty[i][1] + dirty[i][3]) * vscale) + 1;
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x1 > tw) x1 = tw;
+    if (y1 > th) y1 = th;
+    if (x1 > x0 && y1 > y0) r[k++] = {x0, y0, x1, y1};
+  }
+  return k;
+}
+
+// The canvas a window's frames are drawn into, tw × th pixels: made again at another size, what it held lost.
+static void ensure_canvas(int tw, int th) {
+  if (canvas && canvas_w == tw && canvas_h == th) return;
+  if (canvas_rtv) canvas_rtv->Release();
+  if (canvas) canvas->Release();
+  canvas = NULL;
+  canvas_rtv = NULL;
+  canvas_ok = 0;
+  canvas_w = tw;
+  canvas_h = th;
+  if (tw <= 0 || th <= 0) return;
+  D3D11_TEXTURE2D_DESC td = {};
+  td.Width = (UINT)tw;
+  td.Height = (UINT)th;
+  td.MipLevels = td.ArraySize = 1;
+  td.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+  td.SampleDesc.Count = 1;
+  td.Usage = D3D11_USAGE_DEFAULT;
+  td.BindFlags = D3D11_BIND_RENDER_TARGET;
+  if (FAILED(dev->CreateTexture2D(&td, NULL, &canvas))) {
+    canvas = NULL;
+    return;
+  }
+  if (FAILED(dev->CreateRenderTargetView(canvas, NULL, &canvas_rtv))) {
+    canvas->Release();
+    canvas = NULL;
+    canvas_rtv = NULL;
+  }
+}
+
 // what the run [start, end) of glass sees, from target (pw × ph) into gsrv and gu, frosted glass of the same capture
 // further on (glass.mbt shares_capture) too; 0 when none of it shows
 static int capture(ID3D11RenderTargetView *target, int pw, int ph, const float *f, int32_t start, int32_t end,
@@ -628,6 +727,8 @@ static int capture(ID3D11RenderTargetView *target, int pw, int ph, const float *
   if (px1 > pw) px1 = pw;
   if (py1 > ph) py1 = ph;
   if (px1 <= px0 || py1 <= py0 || x1 <= x0 || y1 <= y0) return 0;
+  // (a capture outside the part drawn: neither copied nor drawn. One that meets it is in it whole: @damage)
+  if (cut_on && (px1 <= cut.left || cut.right <= px0 || py1 <= cut.top || cut.bottom <= py0)) return 0;
   int w = px1 - px0, h = py1 - py0;
   ensure_levels(w, h);
   ID3D11Resource *res = NULL;
@@ -639,6 +740,8 @@ static int capture(ID3D11RenderTargetView *target, int pw, int ph, const float *
   ctx->PSSetShader(pps, NULL, 0);
   ctx->IASetInputLayout(NULL);
   ctx->OMSetBlendState(NULL, NULL, 0xffffffff);
+  // (the passes over the levels whole, not cut to the part)
+  ctx->RSSetState(raster);
   float sp = blur * sc;
   int k = 0;
   while (k < 3 && sp / (float)(1 << (k + 1)) >= 2.0f) k++;
@@ -708,7 +811,8 @@ static void main_state(ID3D11RenderTargetView *target, int pw, int ph) {
   UINT stride = MB_INST * sizeof(float), off = 0;
   ctx->OMSetRenderTargets(1, &target, NULL);
   ctx->RSSetViewports(1, &vp);
-  ctx->RSSetState(raster);
+  ctx->RSSetState(cut_on ? raster_cut : raster);
+  if (cut_on) ctx->RSSetScissorRects(1, &cut);
   ctx->IASetInputLayout(layout);
   ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   ctx->IASetVertexBuffers(0, 1, &vbuf, &stride, &off);
@@ -725,18 +829,28 @@ static void main_state(ID3D11RenderTargetView *target, int pw, int ph) {
   ctx->OMSetBlendState(blend, NULL, 0xffffffff);
 }
 
+// `part`: only that part of the target drawn again, over what it holds (the frame's ground first: the instance after
+// the frame's in the vertex buffer, submit's); NULL, all of it, cleared to the ground.
 static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count, const float *bg,
-                   const float *f) {
+                   const float *f, const D3D11_RECT *part = NULL) {
   float clear[4] = {bg[0], bg[1], bg[2], 1};
+  encode_missing = 0;
   ctx->OMSetRenderTargets(1, &target, NULL);
-  ctx->ClearRenderTargetView(target, clear);
-  if (count <= 0) return;
+  cut_on = part != NULL;
+  if (part) cut = *part;
+  else ctx->ClearRenderTargetView(target, clear);
+  if (count <= 0 && !part) return;
   struct { float vp[2]; float scale; float pad; } u = {{(float)vw, (float)vh}, (float)vscale, 0};
   ctx->UpdateSubresource(ubuf, 0, NULL, &u, 0, 0);
   memset(&gu, 0, sizeof gu);
   gsrv = NULL;
   segs_upload(f, count);
   main_state(target, pw, ph);
+  if (part) {
+    ctx->OMSetBlendState(NULL, NULL, 0xffffffff);
+    ctx->DrawInstanced(6, 1, 0, (UINT)count);
+    ctx->OMSetBlendState(blend, NULL, 0xffffffff);
+  }
   // one draw per run of instances showing the same image (slot 20; 0: none, the atlas stands in), or sharing one
   // capture of glass (negative)
   int32_t start = 0;
@@ -769,21 +883,29 @@ static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count
       start = end;
       continue;
     }
+    if (!hole && tid > 0 && tid <= MB_STREAM_TEX && !t) encode_missing = 1;
     ctx->PSSetShaderResources(1, 1, t ? &t : &atlas_srv);
     if (hole) ctx->OMSetBlendState(NULL, NULL, 0xffffffff);
     ctx->DrawInstanced(6, (UINT)(end - start), 0, (UINT)start);
     if (hole) ctx->OMSetBlendState(blend, NULL, 0xffffffff);
     start = end;
   }
+  if (cut_on) ctx->RSSetState(raster);
+  cut_on = 0;
 }
 
-// The frame's instances into the vertex buffer and kept (a snapshot draws them again), then drawn into the target.
-static int submit(const double *inst, int32_t count, double r, double g, double b) {
+// The frame's instances into the vertex buffer and kept (a snapshot draws them again), then drawn into the target: a
+// window's (`chain`) into the canvas, only the parts that differ where it holds the frame before; how many in
+// `parts_out` (-1 all of it, 0 none), the parts in `cuts`.
+static int submit(const double *inst, int32_t count, double r, double g, double b, int *parts_out = NULL,
+                  D3D11_RECT *cuts = NULL) {
   if (!rtv) return 0;
   size_t need = (size_t)(count > 0 ? count : 1) * MB_INST * sizeof(float);
-  if (vbuf_cap < need) {
+  // (and the frame's ground after its instances: a rect over all the window, opaque, a part drawn again first)
+  size_t room = need + MB_INST * sizeof(float);
+  if (vbuf_cap < room) {
     if (vbuf) vbuf->Release();
-    vbuf_cap = need * 2;
+    vbuf_cap = room * 2;
     D3D11_BUFFER_DESC bd = {(UINT)vbuf_cap, D3D11_USAGE_DYNAMIC, D3D11_BIND_VERTEX_BUFFER,
                             D3D11_CPU_ACCESS_WRITE, 0, 0};
     dev->CreateBuffer(&bd, NULL, &vbuf);
@@ -798,19 +920,74 @@ static int submit(const double *inst, int32_t count, double r, double g, double 
   }
   for (int32_t i = 0; i < n; i++) last_inst[i] = (float)inst[i];
   memcpy(f, last_inst, (size_t)n * sizeof(float));
+  float *gr = f + n;
+  memset(gr, 0, MB_INST * sizeof(float));
+  gr[0] = -16.0f; gr[1] = -16.0f; gr[2] = (float)vw + 32.0f; gr[3] = (float)vh + 32.0f;
+  gr[8] = (float)r; gr[9] = (float)g; gr[10] = (float)b; gr[11] = 1.0f;
+  gr[16] = -1e9f; gr[17] = -1e9f; gr[18] = 1e9f; gr[19] = 1e9f;
   ctx->Unmap(vbuf, 0);
   last_count = count;
   last_bg[0] = (float)r;
   last_bg[1] = (float)g;
   last_bg[2] = (float)b;
-  encode(rtv, fb_w, fb_h, count, last_bg, last_inst);
+  // a window's into its canvas; without one, the offscreen target is kept as a canvas is
+  ID3D11RenderTargetView *target = rtv;
+  int *kept = &off_ok;
+  if (chain) {
+    ensure_canvas(fb_w, fb_h);
+    if (!canvas_rtv) {
+      dirty_told = dirty_whole = dirty_n = 0;
+      encode(rtv, fb_w, fb_h, count, last_bg, last_inst);
+      if (parts_out) *parts_out = -1;
+      return 1;
+    }
+    target = canvas_rtv;
+    kept = &canvas_ok;
+  }
+  D3D11_RECT parts[MB_PARTS];
+  int np = take_parts(fb_w, fb_h, *kept, parts);
+  int missing = 0;
+  if (np < 0) {
+    encode(target, fb_w, fb_h, count, last_bg, last_inst);
+    missing = encode_missing;
+  }
+  for (int i = 0; i < np; i++) {
+    encode(target, fb_w, fb_h, count, last_bg, last_inst, &parts[i]);
+    missing |= encode_missing;
+  }
+  if (np != 0) pictures_missing = missing;
+  *kept = 1;
+  if (parts_out) *parts_out = np;
+  if (cuts) for (int i = 0; i < np; i++) cuts[i] = parts[i];
+  if (chain) {
+    // the canvas whole into the swap chain's buffer
+    ID3D11Resource *back = NULL;
+    rtv->GetResource(&back);
+    ctx->CopyResource(back, canvas);
+    back->Release();
+  }
   return 1;
 }
 
 void mb_render_present(const double *inst, int32_t count, double r, double g, double b) {
-  if (!submit(inst, count, r, g, b) || !chain) return;
-  // a hidden or minimized window does not wait for vsync; pace it as if it did
-  if (chain->Present(1, 0) == DXGI_STATUS_OCCLUDED) Sleep(16);
+  int n = -1;
+  D3D11_RECT parts[MB_PARTS];
+  if (!submit(inst, count, r, g, b, &n, parts) || !chain) return;
+  // a hidden or minimized window does not wait for vsync; pace it as if it did. A flip model's swap chain is told the
+  // parts that changed (what the compositor takes again; none: a pixel's), all of its buffer the canvas's
+  HRESULT hr;
+  if (flip_chain && n >= 0) {
+    RECT dr[MB_PARTS];
+    for (int i = 0; i < n; i++) dr[i] = {parts[i].left, parts[i].top, parts[i].right, parts[i].bottom};
+    if (n == 0) dr[n++] = {0, 0, 1, 1};
+    DXGI_PRESENT_PARAMETERS pp = {};
+    pp.DirtyRectsCount = (UINT)n;
+    pp.pDirtyRects = dr;
+    hr = chain->Present1(1, 0, &pp);
+  } else {
+    hr = chain->Present(1, 0);
+  }
+  if (hr == DXGI_STATUS_OCCLUDED) Sleep(16);
 }
 
 // Without a window (mbui-render, src/render): WARP's device whatever the machine has (the same rasterizer on every
@@ -1038,6 +1215,28 @@ int mb_render_snapshot(const wchar_t *path) {
     }
     ok = write_png(path, px, w, h, stride);
     free(out);
+    ctx->Unmap(staging, 0);
+  }
+  staging->Release();
+  return ok;
+}
+
+// The offscreen target as its frames left it (not the last frame drawn again: what drawing only the parts that differ
+// made of it, mbui-render's MBUI_DL_FROM), as a PNG.
+extern "C" int mb_render_snapshot_drawn(const wchar_t *path) {
+  if (!off_target) return 0;
+  D3D11_TEXTURE2D_DESC td = {};
+  off_target->GetDesc(&td);
+  td.Usage = D3D11_USAGE_STAGING;
+  td.BindFlags = 0;
+  td.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+  ID3D11Texture2D *staging = NULL;
+  if (FAILED(dev->CreateTexture2D(&td, NULL, &staging))) return 0;
+  ctx->CopyResource(staging, off_target);
+  int ok = 0;
+  D3D11_MAPPED_SUBRESOURCE m;
+  if (SUCCEEDED(ctx->Map(staging, 0, D3D11_MAP_READ, 0, &m))) {
+    ok = write_png(path, (const uint8_t *)m.pData, (int)td.Width, (int)td.Height, (int)m.RowPitch);
     ctx->Unmap(staging, 0);
   }
   staging->Release();
