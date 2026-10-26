@@ -4,13 +4,24 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
 const dump = process.env.FAKE_DUMP;
-const say = (m) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', ...m }) + '\n');
+const say = (m) => {
+  const update = m.params?.update;
+  if (process.env.FAKE_HERMES_EDITOR_NAMES && update?.sessionUpdate === 'tool_call' && typeof update.title === 'string') {
+    update.title = update.title.replace(/^mcp__stillfail__/, 'mcp__editor_stillfail_deadbeef__');
+  }
+  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', ...m }) + '\n');
+};
 let sessionId;
 let held;
 let handover;
 const reply = (id, result) => say({ id, result });
 const update = (u) => say({ method: 'session/update', params: { sessionId, update: u } });
 if (dump) appendFileSync(dump, JSON.stringify({ args: process.argv.slice(2), home: process.env.HERMES_HOME, key: process.env.OPENAI_API_KEY ?? null }) + '\n');
+if (process.env.FAKE_HERMES_COLD_LOCK && !existsSync(dump + '.booted')) {
+  writeFileSync(dump + '.booted', 'ready');
+  process.stderr.write('hermes: source-update completion failed: an update is still running; wait for it to exit, then relaunch Hermes\nhermes: no dependency environment is committed for this install\n');
+  process.exit(1);
+}
 for await (const line of createInterface({ input: process.stdin })) {
   const m = JSON.parse(line);
   if (dump) appendFileSync(dump + '.rpc', line + '\n');
@@ -24,6 +35,7 @@ for await (const line of createInterface({ input: process.stdin })) {
   const p = m.params;
   if (m.method === 'initialize') reply(m.id, { protocolVersion: 1, agentInfo: { name: 'hermes-agent', version: process.env.FAKE_HERMES_VERSION ?? '0.21.7' }, agentCapabilities: { loadSession: true, mcpCapabilities: { http: true } } });
   else if (m.method === 'session/new') {
+    if (process.env.FAKE_HERMES_OPEN_ERROR) { say({ id: m.id, error: { code: -32603, message: 'Internal error', data: { details: process.env.FAKE_HERMES_OPEN_ERROR } } }); continue; }
     sessionId = randomUUID();
     writeFileSync(join(process.env.HERMES_HOME, sessionId), 'session');
     reply(m.id, { sessionId, models: { currentModelId: 'openrouter:default', availableModels: [{modelId:'openrouter:test'}, {modelId:'openrouter:default'}, {modelId:'openrouter:test'}] } });

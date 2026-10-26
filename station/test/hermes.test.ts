@@ -120,8 +120,9 @@ test('crash adoption reconstructs partial text without duplicating completed ste
   await adopted.dispose();
 });
 
-for (const recovery of ['none', 'handover', 'crash']) test(`station tool names and disconnection survive ${recovery}`, async () => {
+for (const editorNames of [false, true]) for (const recovery of ['none', 'handover', 'crash']) test(`station tool names and disconnection survive ${recovery} (editor names: ${editorNames})`, async () => {
   const { options, events, driver } = setup();
+  if (editorNames) options.profile.env = { ...options.profile.env as Record<string, string>, FAKE_HERMES_EDITOR_NAMES: '1' };
   let session = await driver.open(options, e => events.push(e));
   await session.prompt('lost');
   await until(() => events.some(e => e.type === 'live' && e.event.kind === 'start' && e.event.id === 'call:lost'));
@@ -161,4 +162,21 @@ test('large configured-provider catalogs are bounded without hiding current or e
   assert.deepEqual(models.slice(0,2),['router:model-9998','router:model-9999']);
   assert.equal(models.includes('not-listed:manual'),false, 'do not invent an unconfigured provider in the discovered catalog');
   assert.deepEqual(profile.models,['router:model-9999','not-listed:manual'], 'manual selections are not rewritten');
+});
+
+
+test('a cold Hermes profile retries the held update lock before reading its models', async () => {
+  const { options, driver, dump } = setup();
+  options.profile.env = { ...options.profile.env as Record<string, string>, FAKE_HERMES_COLD_LOCK: '1' };
+  assert.deepEqual(await driver.models(options.profile), ['openrouter:default', 'openrouter:test']);
+  assert.equal(readFileSync(dump, 'utf8').trim().split('\n').length, 2);
+  const calls = readFileSync(dump + '.rpc', 'utf8').trim().split('\n').map(s=>JSON.parse(s));
+  assert.equal(calls.some(c=>c.method==='session/prompt'), false);
+});
+
+test('an unconfigured Hermes profile surfaces its ACP detail without retrying', async () => {
+  const { options, driver, dump } = setup();
+  options.profile.env = { ...options.profile.env as Record<string, string>, FAKE_HERMES_OPEN_ERROR: 'invalid_params: model: No default model configured' };
+  await assert.rejects(driver.models(options.profile), /No default model configured/);
+  assert.equal(readFileSync(dump, 'utf8').trim().split('\n').length, 1);
 });
