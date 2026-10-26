@@ -17,6 +17,7 @@
   "core-misc.ask.dev_only": "Only the dev cloud allows this sign-in",
   "core-misc.ask.picture_failed": "Couldn't load image: {error}",
   "core-misc.ask.update_failed": "Couldn't get the latest version: {error}",
+  "core-misc.ask.update_unsigned": "Couldn't update: the latest version didn't pass its signature check",
   "core-misc.ask.update_retry": "Couldn't get the latest version. Try again",
   "core-misc.call.already_answered": "Already answered",
   "core-misc.call.base64.device_key": "Device key isn't base64",

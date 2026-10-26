@@ -33,7 +33,7 @@
 #pragma comment(lib, "iphlpapi.lib")
 
 // what the host posts that the window takes on its own thread
-enum { WM_MB_TRAY = WM_APP + 1, WM_MB_NETWORK = WM_APP + 2, WM_MB_STATE = WM_APP + 3 };
+enum { WM_MB_TRAY = WM_APP + 1, WM_MB_NETWORK = WM_APP + 2, WM_MB_STATE = WM_APP + 3, WM_MB_QUIT = WM_APP + 5 };
 // WM_COPYDATA's mark of one of this app's own, started again: what it was started with
 #define MB_HANDED 0x4D42484E
 
@@ -645,6 +645,10 @@ static int life_message(UINT msg, WPARAM wp, LPARAM lp, LRESULT *r) {
     case WM_MB_STATE:
       tell_state();
       *r = 0;
+      return 1;
+    // the app quits on its own thread (win_update.h: the installer of a newer build run)
+    case WM_MB_QUIT:
+      quit();
       return 1;
     // a notification tapped (win_notify.cpp): the window back, what it opens the app's next frame's
     case WM_MB_TAPPED:

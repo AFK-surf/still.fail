@@ -9,17 +9,12 @@
 // without a new app (desktop/web/stillfail-beta-web.json: verifyDesktopWeb), and the packages of the modules a station
 // installs itself (releases/modules/<id>/: verifyModule).
 import { createHash, createPublicKey, verify } from "node:crypto";
+import { RELEASE_KEYS } from "./keys.ts";
 
-/// The keys releases are signed with, raw Ed25519 public keys in base64: the release key (CI's `production`
-/// environment, RELEASE_SIGNING_KEY) and a recovery key kept offline. A key is named by keyId. STILLFAIL_RELEASE_KEYS
-/// (comma-separated) adds keys for a test's own releases (a dev cloud's); it is the station's environment, which only
-/// the machine's user sets.
-export const RELEASE_KEYS: readonly string[] = [
-  // release-1 (id 3c2d0f7ad7f9eca2): CI's RELEASE_SIGNING_KEY; its private key also kept in 1Password.
-  "vJeYSXYJW04ANrn49w+I7nzS/8NFsh1MKwRCiJ8PVPI=",
-  // recovery (id d3353d225efaaecd): kept offline (1Password) only, never in CI; signs a release that replaces release-1 should it be lost.
-  "pvYJzkDfZGPRIPSLQ0jQDTXwhkwfbMsUtXxdVavugxc=",
-];
+/// The keys releases are signed with (keys.ts, which the apps' core reads too). A key is named by keyId.
+/// STILLFAIL_RELEASE_KEYS (comma-separated) adds keys for a test's own releases (a dev cloud's); it is the station's
+/// environment, which only the machine's user sets.
+export { RELEASE_KEYS };
 
 /// What a key is named by in what it signed: the first 16 hex digits of the sha256 of its raw bytes.
 export const keyId = (raw: string) => createHash("sha256").update(Buffer.from(raw, "base64")).digest("hex").slice(0, 16);
