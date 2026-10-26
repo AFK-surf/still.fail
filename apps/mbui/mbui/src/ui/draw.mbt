@@ -134,9 +134,10 @@ priv struct Drawn {
   /// the colour of its ground there, when not its own (a card on its way from one place's ground to another's)
   mut ground_bg : Int64?
   /// a part kept (Ctx::kept_part): built this frame, what it draws taken as it is painted (its id, 0 none); else drawn again
-  /// as its last build drew it, in place of what it holds
+  /// as its last build drew it, in place of what it holds; a list's row kept so (kept_rows.mbt: its id among the rows')
   mut part : Int
   mut again : KeptPart?
+  mut row : Int
 }
 
 ///|
@@ -299,6 +300,7 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     ground_bg: None,
     part: 0,
     again: None,
+    row: 0,
   }
   dr.stamp[i] = dr.build
   dr.at[i] = dr.entries.length()
@@ -529,8 +531,13 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     None => return false
   }
   // a part kept, drawn again as its build drew it, its targets where its build's paint said them (kept_part.mbt): only
-  // them where only targets are taken, only its drawing where it is only drawn
+  // them where only targets are taken, only its drawing where it is only drawn; a list's row, where it is now
+  // (kept_rows.mbt)
   match e.again {
+    Some({ row: Some(_), .. } as st) => {
+      self.row_paint_again(i, st)
+      return true
+    }
     Some(st) => {
       if dr.mode != mode_hits {
         self.part_paint_again(st)
@@ -546,11 +553,20 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     // only where it is tapped: as laid out; drawn only, nowhere
     return e.only
   }
+  // a list's row built: what it draws taken as it is painted, in the band past its list's clip (kept_rows.mbt)
+  if e.row != 0 && dr.mode == 0 && e.look.is_still() && e.z == 0 && !e.only {
+    if e.row > 0 {
+      self.row_paint_record(i, e.row, alpha)
+    } else {
+      self.row_paint_plain(i, alpha)
+    }
+    return true
+  }
   let look = e.look
   let keep = e.keep is Some(_)
   let cutting = (e.bottom >= 0.0 && e.bottom < self.nodes[i].fh) ||
     (e.top >= 0.0 && e.top < self.nodes[i].fh)
-  if look.is_still() && e.z != 2 && !keep && !e.only && !cutting && e.part == 0 {
+  if look.is_still() && e.z != 2 && !keep && !e.only && !cutting && e.part == 0 && e.row == 0 {
     return false
   }
   if dr.mode == 0 && (!look.is_still() || e.z == 2 || cutting) {
@@ -587,8 +603,8 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   let ox = n.x + look.ox * n.fw
   let oy = n.y + look.oy * n.fh
   // whole device pixels: words moved stay crisp
-  let dx = (look.dx * sc).round() / sc
-  let dy = (look.dy * sc).round() / sc
+  let dx = on_pixels(look.dx, sc)
+  let dy = on_pixels(look.dy, sc)
   let (c0, c1, c2, c3) = outer
   let moved = look.sx > 0.001 &&
     look.sy > 0.001 &&

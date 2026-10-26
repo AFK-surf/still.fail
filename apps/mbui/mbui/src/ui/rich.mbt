@@ -1128,8 +1128,8 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
     if g.gw <= 0.0 {
       continue
     }
-    let gx = ((ox + lay.xs[c] + lay.pre[c] + g.ox / z) * sc).round() / sc
-    let gy = ((top + lay.line_base[l] + g.oy / z) * sc).round() / sc
+    let gx = on_pixels(ox + lay.xs[c] + lay.pre[c] + g.ox / z, sc)
+    let gy = on_pixels(top + lay.line_base[l] + g.oy / z, sc)
     self.push_inst(
       gx,
       gy,
@@ -1166,11 +1166,11 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
       let x0 = ox + sx0 + (if c0 == lay.run_c0[k] { room } else { 0.0 })
       let x1 = ox + sx1 - (if c1 == lay.run_c1[k] { room + r.run_room(run, size).1 } else { 0.0 })
       if run.strike {
-        let y = ((base - size * 0.27 - t / 2.0) * sc).round() / sc
+        let y = on_pixels(base - size * 0.27 - t / 2.0, sc)
         self.emit_rect(x0, y, x1 - x0, t, 0.0, colors[k], 0.0, 0L, alpha)
       }
       if run.underline {
-        let y = ((base + size * 0.12) * sc).round() / sc
+        let y = on_pixels(base + size * 0.12, sc)
         self.emit_rect(x0, y, x1 - x0, t, 0.0, colors[k], 0.0, 0L, alpha)
       }
     }

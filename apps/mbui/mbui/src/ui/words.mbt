@@ -79,11 +79,13 @@ pub fn Ctx::words_of(self : Ctx, key : String) -> Words? {
 /// were the pass before, and is placed again as the frame is built again. Words nothing read move with their box.
 fn Ctx::words_after_layout(self : Ctx) -> Unit {
   words_sel.clear()
-  if words_marks.is_empty() {
+  let seen : Map[String, Bool] = {}
+  // what the list rows drawn again marked as they were built, where they are now (kept_rows.mbt)
+  self.rows_words_again(seen)
+  if words_marks.is_empty() && seen.is_empty() {
     words_kept.clear()
     return
   }
-  let seen : Map[String, Bool] = {}
   for m in words_marks {
     let pieces : Array[WordsPiece] = []
     let sb = StringBuilder()
@@ -123,8 +125,14 @@ fn Ctx::words_after_layout(self : Ctx) -> Unit {
         self.read_changed("words_of \"" + m.key + "\"")
       _ => ()
     }
-    words_kept[m.key] = { text: sb.to_string(), pieces }
+    let words = { text: sb.to_string(), pieces }
+    words_kept[m.key] = words
     seen[m.key] = true
+    // (a list's row being built: said again as it is drawn again)
+    match self.row_holding(m.node) {
+      Some(rk) => rk.words.push((m.key, words))
+      None => ()
+    }
   }
   words_marks.clear()
   let gone : Array[String] = []

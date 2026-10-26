@@ -79,6 +79,8 @@ priv struct KeptPart {
   /// whether what the pointer is over was one of its targets as it was built (Ctx::hovered: it lights what it points
   /// at)
   mut lit : Bool
+  /// a list's row kept (kept_rows.mbt): what more it keeps; None a part's
+  mut row : RowKept?
 }
 
 ///|
@@ -96,13 +98,16 @@ priv struct KeptWord {
 }
 
 ///|
-/// The part being built now (0 none) and what its build asks of time; the part whose build is being painted (0 none).
+/// The part being built now (0 none) and what its build asks of time; the part whose build is being painted (0 none);
+/// the same of a list's row kept (kept_rows.mbt: its id among the rows').
 priv struct PartNow {
   mut part : Int
   mut live : Bool
   mut due : Double
   mut due_later : Bool
   mut painting : Int
+  mut row : Int
+  mut painting_row : Int
 }
 
 ///|
@@ -113,6 +118,8 @@ let part_now : PartNow = {
   due: @double.infinity,
   due_later: true,
   painting: 0,
+  row: 0,
+  painting_row: 0,
 }
 
 ///|
@@ -192,6 +199,7 @@ fn parts_frame_start(c : Ctx) -> Unit {
 /// The frame is built: the parts that did not show in it let go (what they read no longer kept by them).
 fn parts_frame_end(c : Ctx) -> Unit {
   if kept_parts.is_empty() {
+    rows_frame_end(c)
     return
   }
   let gone = []
@@ -207,6 +215,7 @@ fn parts_frame_end(c : Ctx) -> Unit {
     }
     kept_parts.remove(id) |> ignore
   }
+  rows_frame_end(c)
 }
 
 ///|
@@ -215,8 +224,15 @@ fn parts_forget() -> Unit {
     st.tracker.dispose()
   }
   kept_parts.clear()
+  for _, st in kept_rows {
+    st.tracker.dispose()
+  }
+  kept_rows.clear()
+  row_ids.clear()
   part_now.part = 0
   part_now.painting = 0
+  part_now.row = 0
+  part_now.painting_row = 0
 }
 
 ///|
@@ -229,52 +245,7 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
   let st = match kept_parts.get(id) {
     Some(st) => st
     None => {
-      let force = @signals.signal(0)
-      let body_now : Ref[() -> Unit] = Ref(fn() {  })
-      let st : KeptPart = {
-        id,
-        insts: FixedArray::make(0, 0.0),
-        floats: 0,
-        segs: [],
-        plots: [],
-        plot_seen: {},
-        images: [],
-        tracker: @signals.computed(fn(_) {
-          force.get() |> ignore
-          (body_now.val)()
-          part_stamp.val = part_stamp.val + 1
-          part_stamp.val
-        }),
-        force,
-        body: body_now,
-        forced: 0,
-        stamp: 0,
-        key: "",
-        outside: -1,
-        epoch: -1,
-        scale: 0.0,
-        pointing: Finger,
-        built: -1,
-        drawn: -1,
-        shown: -1,
-        live: false,
-        due: @double.infinity,
-        due_later: true,
-        waits: [],
-        again: false,
-        words: [],
-        rect: (0.0, 0.0, 0.0, 0.0),
-        hit_ids: [],
-        hit_ends: [],
-        hit_rects: [],
-        hit_clips: [],
-        points: [],
-        scroll_ids: [],
-        scroll_rects: [],
-        sels: [],
-        from: (0, 0, 0),
-        lit: false,
-      }
+      let st = kept_new(id)
       kept_parts[id] = st
       st
     }
@@ -311,6 +282,7 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
     self.part_lit(st) ||
     (pointing() is Mouse && self.px >= rx && self.px < rx + rw && self.py >= ry && self.py < ry + rh)
   let same = parts_on.val &&
+    drawn_again_on.val &&
     !held &&
     !pointed &&
     !inst_owners.on &&
@@ -392,6 +364,59 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
     if part_now.part != 0 {
       part_now.due = dmin(part_now.due, st.due)
     }
+  }
+}
+
+///|
+/// A part kept, not built yet: its build run by a computed of its own (`body` as it is set, again as what it read
+/// changes or `force` is said).
+fn kept_new(id : Int) -> KeptPart {
+  let force = @signals.signal(0)
+  let body_now : Ref[() -> Unit] = Ref(fn() {  })
+  {
+    id,
+    insts: FixedArray::make(0, 0.0),
+    floats: 0,
+    segs: [],
+    plots: [],
+    plot_seen: {},
+    images: [],
+    tracker: @signals.computed(fn(_) {
+      force.get() |> ignore
+      (body_now.val)()
+      part_stamp.val = part_stamp.val + 1
+      part_stamp.val
+    }),
+    force,
+    body: body_now,
+    forced: 0,
+    stamp: 0,
+    key: "",
+    outside: -1,
+    epoch: -1,
+    scale: 0.0,
+    pointing: Finger,
+    built: -1,
+    drawn: -1,
+    shown: -1,
+    live: false,
+    due: @double.infinity,
+    due_later: true,
+    waits: [],
+    again: false,
+    words: [],
+    rect: (0.0, 0.0, 0.0, 0.0),
+    hit_ids: [],
+    hit_ends: [],
+    hit_rects: [],
+    hit_clips: [],
+    points: [],
+    scroll_ids: [],
+    scroll_rects: [],
+    sels: [],
+    from: (0, 0, 0),
+    lit: false,
+    row: None,
   }
 }
 
@@ -478,30 +503,55 @@ fn part_wake(t : Double, later : Bool) -> Unit {
 ///|
 /// Picture `e` drawn, as a part's build is painted.
 fn part_image(e : ImageEntry) -> Unit {
-  if part_now.painting == 0 {
-    return
+  // (a row's in a part's: both's)
+  if part_now.painting != 0 {
+    match kept_parts.get(part_now.painting) {
+      Some(st) => st.image_used(e)
+      None => ()
+    }
   }
-  match kept_parts.get(part_now.painting) {
-    Some(st) if !st.images.iter().any(fn(x) { physical_equal(x, e) }) => st.images.push(e)
-    _ => ()
+  if part_now.painting_row != 0 {
+    match kept_rows.get(part_now.painting_row) {
+      Some(st) => st.image_used(e)
+      None => ()
+    }
   }
+}
+
+///|
+fn KeptPart::image_used(self : KeptPart, e : ImageEntry) -> Unit {
+  for x in self.images {
+    if physical_equal(x, e) {
+      return
+    }
+  }
+  self.images.push(e)
 }
 
 ///|
 /// A glyph drawn from `plot` of the colour atlas or the other, as a part's build is painted.
 fn part_plot(colour : Bool, plot : Int) -> Unit {
-  if part_now.painting == 0 {
-    return
-  }
-  match kept_parts.get(part_now.painting) {
-    Some(st) => {
-      let p = if colour { plot + part_colour_plot } else { plot }
-      if !st.plot_seen.contains(p) {
-        st.plot_seen[p] = true
-        st.plots.push(p)
-      }
+  let p = if colour { plot + part_colour_plot } else { plot }
+  // (a row's in a part's: both's)
+  if part_now.painting != 0 {
+    match kept_parts.get(part_now.painting) {
+      Some(st) => st.plot_used(p)
+      None => ()
     }
-    None => ()
+  }
+  if part_now.painting_row != 0 {
+    match kept_rows.get(part_now.painting_row) {
+      Some(st) => st.plot_used(p)
+      None => ()
+    }
+  }
+}
+
+///|
+fn KeptPart::plot_used(self : KeptPart, p : Int) -> Unit {
+  if !self.plot_seen.contains(p) {
+    self.plot_seen[p] = true
+    self.plots.push(p)
   }
 }
 
@@ -530,70 +580,9 @@ fn Ctx::part_paint_end(self : Ctx, id : Int, node : Int, i0 : Int, was : Int) ->
   part_now.painting = was
   match kept_parts.get(id) {
     Some(st) => {
-      let (h0, s0, sel0) = st.from
-      st.hit_ids.clear()
-      st.hit_ends.clear()
-      st.hit_rects.clear()
-      st.hit_clips.clear()
-      for h in h0..<self.next_hit_ids.length() {
-        st.hit_ids.push(self.next_hit_ids[h])
-        st.hit_ends.push(self.next_hit_ends[h] - h0)
-      }
-      for v in (h0 * 4)..<self.next_hit_rects.length() {
-        st.hit_rects.push(self.next_hit_rects[v])
-      }
-      for v in (h0 * clip_n)..<self.next_hit_clips.length() {
-        st.hit_clips.push(self.next_hit_clips[v])
-      }
-      st.scroll_ids.clear()
-      st.scroll_rects.clear()
-      for j in s0..<self.next_scroll_ids.length() {
-        st.scroll_ids.push(self.next_scroll_ids[j])
-      }
-      for v in (s0 * 4)..<self.next_scroll_rects.length() {
-        st.scroll_rects.push(self.next_scroll_rects[v])
-      }
-      st.sels.clear()
-      for j in sel0..<desk.next_sels.length() {
-        st.sels.push(desk.next_sels[j])
-      }
+      self.take_said(st)
       st.lit = self.part_lit(st)
-      let a = self.inst
-      let floats = (self.ninst - i0) * inst_size
-      if st.insts.length() < floats {
-        st.insts = FixedArray::make(floats, 0.0)
-      }
-      a.blit_to(st.insts, len=floats, src_offset=i0 * inst_size)
-      st.floats = floats
-      st.segs.clear()
-      // (what it covers, where its instances show: their rects within their cuts)
-      let mut x0 = @double.infinity
-      let mut y0 = @double.infinity
-      let mut x1 = -@double.infinity
-      let mut y1 = -@double.infinity
-      let d = st.insts
-      let mut q = 0
-      while q < floats {
-        if d[q + 5] == 11.0 {
-          let first = d[q + 12].to_int()
-          d[q + 12] = (st.segs.length() / 4).to_double()
-          for v in (first * 4)..<((first + d[q + 13].to_int()) * 4) {
-            st.segs.push(self.segs[v])
-          }
-        }
-        let l = dmax(d[q], d[q + 16])
-        let t = dmax(d[q + 1], d[q + 17])
-        let r = dmin(d[q] + d[q + 2], d[q + 18])
-        let b = dmin(d[q + 1] + d[q + 3], d[q + 19])
-        if r > l && b > t {
-          x0 = dmin(x0, l)
-          y0 = dmin(y0, t)
-          x1 = dmax(x1, r)
-          y1 = dmax(y1, b)
-        }
-        q = q + inst_size
-      }
-      st.rect = if x1 > x0 { (x0, y0, x1 - x0, y1 - y0) } else { (0.0, 0.0, 0.0, 0.0) }
+      st.take_insts(self, i0)
       st.drawn = self.frame_no
       // (a Tester's: its words, found while it is drawn again)
       st.words.clear()
@@ -602,6 +591,58 @@ fn Ctx::part_paint_end(self : Ctx, id : Int, node : Int, i0 : Int, was : Int) ->
       }
     }
     None => ()
+  }
+}
+
+///|
+/// What part `st`'s paint said of the frame from where it began (`from`) taken: its targets, what scrolls in it, its
+/// paragraphs that can be picked (what is only pointed at is taken as it is said: Ctx::point_said).
+fn Ctx::take_said(self : Ctx, st : KeptPart) -> Unit {
+  let (h0, s0, sel0) = st.from
+  st.hit_ids.clear()
+  st.hit_ends.clear()
+  st.hit_rects.clear()
+  st.hit_clips.clear()
+  for h in h0..<self.next_hit_ids.length() {
+    st.hit_ids.push(self.next_hit_ids[h])
+    st.hit_ends.push(self.next_hit_ends[h] - h0)
+  }
+  for v in (h0 * 4)..<self.next_hit_rects.length() {
+    st.hit_rects.push(self.next_hit_rects[v])
+  }
+  for v in (h0 * clip_n)..<self.next_hit_clips.length() {
+    st.hit_clips.push(self.next_hit_clips[v])
+  }
+  st.scroll_ids.clear()
+  st.scroll_rects.clear()
+  for j in s0..<self.next_scroll_ids.length() {
+    st.scroll_ids.push(self.next_scroll_ids[j])
+  }
+  for v in (s0 * 4)..<self.next_scroll_rects.length() {
+    st.scroll_rects.push(self.next_scroll_rects[v])
+  }
+  st.sels.clear()
+  for j in sel0..<desk.next_sels.length() {
+    st.sels.push(desk.next_sels[j])
+  }
+}
+
+///|
+/// `id` is only pointed at (Ctx::box `points`), said as it is painted: and of the part kept and the list's row kept
+/// being painted, said again as they are drawn again.
+fn Ctx::point_said(self : Ctx, id : Int) -> Unit {
+  self.next_points[id] = true
+  if part_now.painting != 0 {
+    match kept_parts.get(part_now.painting) {
+      Some(st) => st.points.push(id)
+      None => ()
+    }
+  }
+  if part_now.painting_row != 0 {
+    match kept_rows.get(part_now.painting_row) {
+      Some(st) => st.points.push(id)
+      None => ()
+    }
   }
 }
 
@@ -615,6 +656,62 @@ fn Ctx::part_lit(self : Ctx, st : KeptPart) -> Bool {
     if id == self.hover || self.hover_in.contains(id) {
       return true
     }
+  }
+  false
+}
+
+///|
+/// The frame's instances from `i0` to its last so far taken as part `self`'s drawing, as they are, where they are, with
+/// the pieces of their shapes; what they cover (`rect`).
+fn KeptPart::take_insts(self : KeptPart, c : Ctx, i0 : Int) -> Unit {
+  let st = self
+  let a = c.inst
+  let floats = (c.ninst - i0) * inst_size
+  if st.insts.length() < floats {
+    st.insts = FixedArray::make(floats, 0.0)
+  }
+  a.blit_to(st.insts, len=floats, src_offset=i0 * inst_size)
+  st.floats = floats
+  st.segs.clear()
+  // (what it covers, where its instances show: their rects within their cuts)
+  let mut x0 = @double.infinity
+  let mut y0 = @double.infinity
+  let mut x1 = -@double.infinity
+  let mut y1 = -@double.infinity
+  let d = st.insts
+  let mut q = 0
+  while q < floats {
+    if d[q + 5] == 11.0 {
+      let first = d[q + 12].to_int()
+      d[q + 12] = (st.segs.length() / 4).to_double()
+      for v in (first * 4)..<((first + d[q + 13].to_int()) * 4) {
+        st.segs.push(c.segs[v])
+      }
+    }
+    let l = dmax(d[q], d[q + 16])
+    let t = dmax(d[q + 1], d[q + 17])
+    let r = dmin(d[q] + d[q + 2], d[q + 18])
+    let b = dmin(d[q + 1] + d[q + 3], d[q + 19])
+    if r > l && b > t {
+      x0 = dmin(x0, l)
+      y0 = dmin(y0, t)
+      x1 = dmax(x1, r)
+      y1 = dmax(y1, b)
+    }
+    q = q + inst_size
+  }
+  st.rect = if x1 > x0 { (x0, y0, x1 - x0, y1 - y0) } else { (0.0, 0.0, 0.0, 0.0) }
+}
+
+///|
+/// Whether part `self`'s drawing holds a native view's hole (drawn where the view is put each frame: native.mbt).
+fn KeptPart::holds_native(self : KeptPart) -> Bool {
+  let mut q = 0
+  while q < self.floats {
+    if self.insts[q + 5] == 9.0 {
+      return true
+    }
+    q = q + inst_size
   }
   false
 }
@@ -653,6 +750,8 @@ fn Ctx::part_words(self : Ctx, root : Int) -> Array[KeptWord] {
 /// for any other node.
 fn Ctx::kept_words_at(self : Ctx, i : Int) -> Array[KeptWord] {
   match self.drawn_entry(i) {
+    Some({ again: Some({ row: Some(rk), words, .. }), .. }) =>
+      words.map(fn(w) { { ..w, y: w.y + rk.dy, drawn_y: w.drawn_y + rk.dy } })
     Some({ again: Some(st), .. }) => st.words
     _ => []
   }
@@ -710,7 +809,7 @@ fn Ctx::part_targets_again(self : Ctx, st : KeptPart) -> Unit {
   self.next_hit_rects.append(st.hit_rects)
   self.next_hit_clips.append(st.hit_clips)
   for id in st.points {
-    self.next_points[id] = true
+    self.point_said(id)
   }
   self.next_scroll_ids.append(st.scroll_ids)
   self.next_scroll_rects.append(st.scroll_rects)

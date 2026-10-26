@@ -321,8 +321,8 @@ fn Ctx::paint_page(self : Ctx, n : Node, alpha : Double) -> Unit {
           if key >= 0 {
             let gl = glyph(key, sc)
             if gl.gw > 0.0 {
-              let gx = ((ox + x0 + tl.xs[c] + shift + gl.ox) * sc).round() / sc
-              let gy = ((oy + y + tl.ascent + gl.oy) * sc).round() / sc
+              let gx = on_pixels(ox + x0 + tl.xs[c] + shift + gl.ox, sc)
+              let gy = on_pixels(oy + y + tl.ascent + gl.oy, sc)
               self.push_inst(
                 gx,
                 gy,

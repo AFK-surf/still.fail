@@ -359,6 +359,8 @@ fn drawn_from(t : @ui.Tester, left : Double) -> Array[String] {
 test "on the tape the sidebar's list scrolled with a finger: the page beside drawn again as it was, none of it built" {
   let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
   t.keep_parts(true)
+  // (drawn as parts and rows are drawn when kept, built: what drawing them again is held to)
+  t.draw()
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
   let left = match covered(t, @sf.t("web-main.sidebar.close")) {
     Some((l, _)) => l
@@ -384,7 +386,8 @@ let tape_fling_step_ms : Double = 150.0
 
 ///|
 /// The sidebar's list flung and the page brought over while it flings on: what is drawn as the tape has moved, and at
-/// moments after, the sidebar kept where it can be (`keep`) or built every frame.
+/// moments after, the sidebar kept where it can be (`keep`) or built every frame (its drawing taken as when it is
+/// kept).
 fn tape_flung(keep : Bool) -> Array[String] {
   // (many weeks of chats in the sidebar: far to fling)
   reset()
@@ -393,7 +396,8 @@ fn tape_flung(keep : Bool) -> Array[String] {
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=690.0, h=840.0, platform=2)
   say_room(t, "medium", "medium")
   t.run_for(@ui.nav_push_ms)
-  t.keep_parts(keep)
+  t.keep_parts(true)
+  t.drawn_again(keep)
   t.drag(150.0, 760.0, 150.0, 260.0, steps=6)
   t.tap(690.0 - @sfdesk.tape_shows / 2.0, 400.0)
   let out = []
