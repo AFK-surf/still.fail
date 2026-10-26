@@ -987,46 +987,27 @@ fn grounds_at(t : @ui.Tester, x : Double, y : Double) -> Array[Int64] {
 }
 
 ///|
-test "on the tape the panels behind the one in use stand on a ground a step darker, their words as they are" {
+test "on the tape every panel stands on the page's ground, the one in use and those behind it alike" {
+  // (the user, 2026-10-27: a chat's list and the chat not told apart by their grounds on a mid screen, as on a small
+  // one; the panels apart on the tape, the window's ground between them, where the large screen's sidebar beside the
+  // page with no line between is a step darker)
   for dark in [false, true] {
     let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
     t.set_dark(dark)
     t.draw()
-    let behind = @sf.behind_ground()
     let bg = @sf.theme().p.bg
-    assert_true(behind != bg)
-    // the sidebar in use: the page behind (what shows of it at the right), on the darker ground, its words drawn as
-    // before
+    // the sidebar in use: the page behind it (what shows of it at the right) on the page's ground, as the sidebar is
     let (mx, my, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
-    assert_true(grounds_at(t, mx + 4.0, my).contains(behind), msg="dark \{dark}: the page's grounds \{grounds_at(t, mx + 4.0, my)}")
+    assert_eq(grounds_at(t, mx + 4.0, my).filter(fn(g) { g != 0L })[0], bg, msg="dark \{dark}: the page behind")
     let (rx, ry) = t.find("首页的列表改成按天分组").unwrap()
-    assert_false(grounds_at(t, rx, ry).contains(behind), msg="dark \{dark}: the sidebar's grounds")
-    // the page brought over: the sidebar behind now (what shows of it at the left), the page on its own ground
+    assert_true(grounds_at(t, rx, ry).contains(bg), msg="dark \{dark}: the sidebar in use")
+    // the page brought over: the sidebar behind it now (what shows of it at the left), on the page's ground still
     page_over(t, 750.0)
     let (mx, my) = t.find("做完了：列表、跳到最新的按钮").unwrap()
-    assert_false(grounds_at(t, mx - 4.0, my).contains(behind), msg="dark \{dark}: the page in use")
+    assert_eq(grounds_at(t, mx - 4.0, my).filter(fn(g) { g != 0L })[0], bg, msg="dark \{dark}: the page in use")
     let (_, ry) = t.find("首页的列表改成按天分组").unwrap()
-    assert_true(grounds_at(t, @sfdesk.tape_shows / 2.0, ry).contains(behind), msg="dark \{dark}: the sidebar behind")
+    assert_true(grounds_at(t, @sfdesk.tape_shows / 2.0, ry).contains(bg), msg="dark \{dark}: the sidebar behind")
   }
-}
-
-///|
-test "on the tape a panel's ground goes behind or comes in front with the tape's move, not at once" {
-  let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
-  let behind = @sf.behind_ground()
-  let bg = @sf.theme().p.bg
-  let (mx, my, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
-  assert_true(grounds_at(t, mx + 4.0, my).contains(behind))
-  // what shows of the page pressed: half way over, its ground half way back to the page's
-  t.tap(750.0 - @sfdesk.tape_shows / 2.0, 400.0)
-  t.run_for(@sfdesk.side_move_ms / 2.0)
-  let (mx, my) = t.find("做完了：列表、跳到最新的按钮").unwrap()
-  // (the ground on top there: the page's panel's, its message's own drawn on it clear)
-  let half = grounds_at(t, mx - 4.0, my).filter(fn(g) { g != 0L })[0]
-  assert_true(half != behind && half != bg, msg="\{half}")
-  t.run_for(@sfdesk.side_move_ms)
-  let (mx, my) = t.find("做完了：列表、跳到最新的按钮").unwrap()
-  assert_false(grounds_at(t, mx - 4.0, my).contains(behind))
 }
 
 ///|
