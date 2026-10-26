@@ -224,6 +224,8 @@ static int mods_now(void) {
 #include "win_device.h"
 // the app's life: once for its person, put away to the notification area, links, in front or not, light or dark
 #include "win_life.h"
+// this machine's station: what it is, started, stopped, installed
+#include "win_station.h"
 
 static void key_down(WPARAM vk) {
   // a key catcher's focus (win_device.h): its keys (a composition under way keeps them)
@@ -990,9 +992,7 @@ void mb_host_window_drag(void) {
 // The pointer's shape (@hostapi.set_cursor), shown at once where it is over the window.
 // The number on the app's icon (@hostapi.set_badge): none on Windows here (its taskbar's overlay is not drawn yet).
 void mb_host_set_badge(int32_t n) { (void)n; }
-// (this machine's station: managed from the macOS app only)
-moonbit_string_t mb_host_local_station(void) { return moonbit_make_string_raw(0); }
-void mb_host_local_station_act(moonbit_string_t a) { (void)a; }
+// (this machine's station: win_station.h)
 // The keys held now (@hostapi.mods_held), as a key's are told.
 int32_t mb_host_mods_held(void) { return mods_now(); }
 

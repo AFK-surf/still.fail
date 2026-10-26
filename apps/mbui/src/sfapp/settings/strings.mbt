@@ -1555,6 +1555,7 @@ let zh : Map[String, String] = {
   "web-pages.localStation.openFolderPc": "在资源管理器中显示数据",
   "web-pages.localStation.doing.install": "正在下载并安装",
   "web-pages.settings.thisMac.add": "添加这台 Mac",
+  "web-pages.settings.thisPc.add": "添加这台电脑",
   "web-pages.localStation.update": "更新到最新版",
   "desktop.local.busy": "上一个操作尚未完成",
   "desktop.local.byHand": "此 station 为手动启动，此处只能停止",

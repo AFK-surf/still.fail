@@ -1596,6 +1596,7 @@ let en : Map[String, String] = {
   "web-pages.localStation.openFolderPc": "Show data in Explorer",
   "web-pages.localStation.doing.install": "Downloading and installing",
   "web-pages.settings.thisMac.add": "Add this Mac",
+  "web-pages.settings.thisPc.add": "Add this PC",
   "web-pages.localStation.update": "Update to the latest",
   "desktop.local.busy": "The previous action is still in progress",
   "desktop.local.byHand": "This station was started manually and can only be stopped here",

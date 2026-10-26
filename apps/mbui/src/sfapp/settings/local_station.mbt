@@ -22,10 +22,12 @@ fn local_station_page(c : @ui.Ctx, core : Core) -> Unit {
       blocks.push(fn() { local_progress(c, s, doing) })
     } else {
       blocks.push(fn() { section_note(c, tr("desktop.local.noService")) })
-      if @ui.platform() == 0 {
+      if (@ui.platform() == 0 || @ui.platform() == 3) {
         blocks.push(fn() {
           list_card(c, boxed=true, fn() {
-            if list_row(c, key="local/install", fn() { row_title(c, tr("web-pages.settings.thisMac.add")) }) {
+            if list_row(c, key="local/install", fn() {
+                row_title(c, tr(if @ui.platform() == 3 { "web-pages.settings.thisPc.add" } else { "web-pages.settings.thisMac.add" }))
+              }) {
               (core.local_install)(true)
             }
           })
@@ -40,7 +42,7 @@ fn local_station_page(c : @ui.Ctx, core : Core) -> Unit {
   let service = field(s, "service") is Some(_)
   let workspace = field(s, "workspace")
   let name = match text(workspace, "stationName") {
-    "" => tr("web-pages.localStation.thisMac")
+    "" => tr(if @ui.platform() == 3 { "web-pages.localStation.thisPc" } else { "web-pages.localStation.thisMac" })
     n => n
   }
   let state = if doing != "" {
@@ -98,11 +100,11 @@ fn local_station_page(c : @ui.Ctx, core : Core) -> Unit {
     }
   }
   // brought up to the latest release (the installer, which makes one with no service a service), not one started by hand
-  if doing == "" && text(s, "runner") != "other" && @ui.platform() == 0 {
+  if doing == "" && text(s, "runner") != "other" && (@ui.platform() == 0 || @ui.platform() == 3) {
     acts.push(("update", tr("web-pages.localStation.update")))
   }
   acts.push(("log", tr("web-pages.localStation.openLog")))
-  acts.push(("folder", tr("web-pages.localStation.openFolder")))
+  acts.push(("folder", tr(if @ui.platform() == 3 { "web-pages.localStation.openFolderPc" } else { "web-pages.localStation.openFolder" })))
   blocks.push(fn() {
     list_card(c, boxed=true, fn() {
       for a in acts {
