@@ -58,7 +58,13 @@ pub fn button(
   let id = c.id(if key == "" { "sf-btn/" + label } else { key })
   let live = !disabled && !busy
   let h = ease_to(c, "sf-btn-h/\{id}", live && (c.lit(id) || c.pressed(id)))
-  let (ground, line, ink) = if t.narrow {
+  let (ground, line, ink) = if on_night.val {
+    // (on a stage: the night under it whatever the theme)
+    match tone {
+      Primary | DangerSolid => (mix(0xFFFFFFFFL, h, share_ink), 0L, share_ground)
+      _ => (mix(stage_plain_lit, h, stage_plain), 0L, share_ink)
+    }
+  } else if t.narrow {
     match tone {
       Primary => (p.text, p.text, p.bg)
       // (white on the light theme's deep red, the page's ink on the dark one's light red: white was 2.4 to 1 there)
@@ -140,6 +146,12 @@ pub fn button(
 /// Whether a button laid out now is at a sheet's foot (the presenters' sheet_body says so while it draws one): each
 /// of its buttons as wide as the others, across the sheet (the phone's sheets' primary button, Button in mPad).
 let foot_fills : Ref[Bool] = { val: false }
+
+///|
+/// Whether a button is drawn on the night whatever the theme (a stage's foot: presenters' stage_centred), in its
+/// colours.
+// kept across runs: set only while a stage's foot is built, and put back
+let on_night : Ref[Bool] = { val: false }
 
 ///|
 /// A button's height in the theme in force: the phone's 38 on a narrow, else button_h.

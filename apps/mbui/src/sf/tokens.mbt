@@ -1518,6 +1518,23 @@ pub let ring_turn_keep : Double = 0.82
 pub let share_orange : Int64 = 0xE5704AFFL
 
 ///|
+/// A picture shown alone to be handed out (a panel's `stage`: the card to share): the window under it the night at
+/// 92% (all but gone: at 80% a phone's bars and their notch showed through round its buttons), whatever the theme (2026-10-26 用户「分享的弹窗有点丑，感觉应该给分享特制一个逼格高点的」), the picture's edge a
+/// hairline of the white over it (the night on the night otherwise), its buttons under it on the night.
+pub let stage_scrim : Int64 = 0x0B0B0DEBL
+
+///|
+pub let stage_edge : Int64 = 0xF4F4F51FL
+
+///|
+/// A button on the stage (button's, `on_night`): the primary the white, its words the night; the others the white at
+/// 12%, a step more pointed at, their words the white.
+pub let stage_plain : Int64 = 0xF4F4F51FL
+
+///|
+pub let stage_plain_lit : Int64 = 0xF4F4F533L
+
+///|
 /// A picking row's line under its words (Controls.kt PickRow: 12.sp on 17.sp), between L4's 16 and L5's 18.
 pub let pick_sub_line : @ui.Leading = Exact(17.0)
 

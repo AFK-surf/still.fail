@@ -446,12 +446,18 @@ let opencode_frame : @ui.Style = @ui.css("border=B1_5 border_color=Fg")
 let logo_room : @ui.Style = @ui.css("align=ACenter justify=JCenter")
 
 ///|
-/// Rings one inside another (Activity's), `side` across, each `width` wide and `gap` from the next, from the outside
-/// in: each its track all round in its colour at `track` (an alpha, 0-255), and as much of it as its share drawn round
-/// from its top in its colour, round at its ends; a share past 1 (two accounts' quota past one's) goes round again
-/// over it, each turn past the first deeper (ring_turn_keep), the last whole one under what is left of it.
-pub fn rings(c : @ui.Ctx, shares : Array[(Double, Int64)], side : Double, width : Double, gap : Double, track : Int64) -> Int {
+/// Rings one inside another (Activity's), `side` across, with the room for `most` of them (as many as are ever drawn
+/// there: fewer stand where those would, the outer ones): each as wide as the hole they leave in their middle is round
+/// (ring_hole), ring_apart of that from the next, so the innermost is a ring still (2026-10-26 用户 of three in 88,
+/// each 12: 「最里面的那个圆点不对吧」, the third a disc, its share a dot), from the outside in: each its track all round in
+/// its colour at `track` (an alpha, 0-255), and as much of it as its share drawn round from its top in its colour, round
+/// at its ends; a share past 1 (two accounts' quota past one's) goes round again over it, each turn past the first
+/// deeper (ring_turn_keep), the last whole one under what is left of it.
+pub fn rings(c : @ui.Ctx, shares : Array[(Double, Int64)], side : Double, track : Int64, most~ : Int) -> Int {
   let mid = side / 2.0
+  let n = (if most > 1 { most } else { 1 }).to_double()
+  let width = mid / (n + ring_hole + ring_apart * (n - 1.0))
+  let gap = width * ring_apart
   let layers : Array[@pixels.VectorPath] = []
   let keys : Array[String] = []
   for k, ring in shares {
@@ -489,4 +495,13 @@ pub fn rings(c : @ui.Ctx, shares : Array[(Double, Int64)], side : Double, width 
   }
   vector(c, "rings/\{side}/\{width}/\{gap}/\{track}/" + keys.join(","), { w: side, h: side, layers }, side)
 }
+
+///|
+/// The hole in the middle of rings (rings): round as far as a ring is wide (Activity's: three rings, the hole as wide
+/// as one).
+let ring_hole : Double = 1.0
+
+///|
+/// How far apart rings are (rings): this much of one's width.
+let ring_apart : Double = 0.2
 

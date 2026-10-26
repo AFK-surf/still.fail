@@ -3312,7 +3312,11 @@ export interface FleetDay {
 export interface FleetQuota {
 	/** The kind of subscription (the profiles' group: claude, chatgpt…). */
 	kind: string;
+	/** Its name: Claude 订阅. */
+	name: string;
 	accounts: number;
+	/** Its accounts in words: 6 个账号. */
+	accountsText: string;
 	/**
 	 * How much of a week's quota they used, in percent of one account's: each account's share of its own
 	 * added up (80% and 90%: 170%).

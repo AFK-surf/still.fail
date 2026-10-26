@@ -80,6 +80,8 @@ priv struct PanelOf {
   form : Bool
   /// the field given the keyboard's focus as it opens where it is not a sheet ("" none: panel's `field`)
   field : String
+  /// a picture shown alone over the window, its buttons under it (panel's `stage`)
+  stage : Bool
 }
 
 ///|
@@ -206,7 +208,10 @@ pub fn pick(title : String, choices : Array[Choice], chosen : String, choose : (
 /// with touch short of Large), as the web's are; what is only chosen from or looked at (a pick, a card) stands beside
 /// what opened it. `field`: the editor (by its key) given the keyboard's focus as it opens, where the keyboard is at hand
 /// (a dialog's, beside what opened it), not in a sheet (a phone's keyboard raised over what it shows): typed into at
-/// once with keyboard and mouse, looked at first with touch.
+/// once with keyboard and mouse, looked at first with touch. `stage`: a picture to hand out shown alone, on every screen
+/// the same (stage_centred): no panel round it, the window under it the night (stage_scrim), what it holds in the
+/// middle drawn as large as the window lets it (whole_fitted), 关闭 and its `foot`'s buttons under it on the night;
+/// a press beside it, Escape and the back close it too.
 pub fn panel(
   title : String,
   body : (@ui.Ctx, () -> Unit) -> Unit,
@@ -225,8 +230,13 @@ pub fn panel(
   lists? : Bool = false,
   form? : Bool = false,
   field? : String = "",
+  stage? : Bool = false,
 ) -> Unit {
-  present(Panel({ title, description, body, foot, w, fits, wide, live, tall, grows, focus, ruled, lists, form, field }), from, gone~)
+  present(
+    Panel({ title, description, body, foot, w, fits, wide, live, tall, grows, focus, ruled, lists, form, field, stage }),
+    from,
+    gone~,
+  )
 }
 
 ///|
@@ -375,33 +385,52 @@ pub fn panel_list(
 /// a list says its rows (measured_body), so the panel is as tall as all of it while the window has the room and no
 /// taller; past that it is drawn smaller (a look over its layout: what it is laid out as stays as it is, its words in
 /// their places). Put where it is in the room out of its flow, so the room is as large as the panel gives it, not as
-/// what it holds (which would hold it as large as the picture, never smaller). `id`: a box over it as large as it is
-/// drawn.
+/// what it holds (which would hold it as large as the picture, never smaller). On a stage (a panel's `stage`), laid out
+/// `most` wide whatever the stage's (as what is handed out is: one picture everywhere), drawn smaller where the stage
+/// leaves it less (stage_room), its room as large as it is drawn, in the stage's middle. `id`: a box over it as large
+/// as it is drawn.
 pub fn whole_fitted(c : @ui.Ctx, key : String, id : Int, most : Double, draw : (Int) -> Int) -> Unit {
   let room_id = c.id(key + "/room")
   let whole_id = c.id(key + "/whole")
-  let (rw, rh) = c.laid_size(room_id).unwrap_or((most, 0.0))
-  let w = dmin(most, rw)
   let h = match c.laid_size(whole_id) {
     Some((_, h)) => h
     None => 0.0
   }
+  // the room and how much smaller it is drawn: on a stage (stage_room) laid out `most` wide whatever the stage's (as
+  // it is handed out: the same picture on every screen), drawn smaller where the stage has not its width or its
+  // height, the room as large as it is drawn; else the room the panel gives it, laid out as wide as that up to `most`,
+  // drawn smaller where it has not its height
+  let (room, room_w, w, k) = match stage_room.val {
+    Some((sw, sh)) => {
+      let k = dmin(1.0, dmin(sw / most, if h > 0.0 { sh / h } else { 1.0 }))
+      let drawn_h = if h > 0.0 { h * k } else { sh }
+      (@ui.style(w=Fixed(most * k), h=Fixed(drawn_h)), most * k, most, k)
+    }
+    None => {
+      let (rw, rh) = c.laid_size(room_id).unwrap_or((most, 0.0))
+      (whole_room, rw, dmin(most, rw), if h > 0.0 && rh > 0.0 { dmin(1.0, rh / h) } else { 1.0 })
+    }
+  }
   if lists_said_now.val && h > 0.0 {
     lists_now.push((room_id, h))
   }
-  let k = if h > 0.0 && rh > 0.0 { dmin(1.0, rh / h) } else { 1.0 }
-  c.box(style=whole_room, id=room_id, taps=false, fn() {
+  c.box(style=room, id=room_id, taps=false, fn() {
     // (as wide as it is laid out, in the room's middle, drawn smaller from its top's middle)
-    let at = c.box(style=whole_box.then(@ui.style(w=Fixed(w))), left=(rw - w) / 2.0, top=0.0, taps=false, fn() {
+    let at = c.box(style=whole_box.then(@ui.style(w=Fixed(w))), left=(room_w - w) / 2.0, top=0.0, taps=false, fn() {
       draw(whole_id) |> ignore
     })
     c.look(at, @ui.look(scale=k, ox=0.5, oy=0.0))
     // (over it, as large as it is drawn)
-    c.box(style=whole_box.then(@ui.style(w=Fixed(w * k), h=Fixed(h * k))), id~, left=(rw - w * k) / 2.0, top=0.0, fn() {  })
+    c.box(style=whole_box.then(@ui.style(w=Fixed(w * k), h=Fixed(h * k))), id~, left=(room_w - w * k) / 2.0, top=0.0, fn() {  })
     |> ignore
   })
   |> ignore
 }
+
+///|
+/// The room a stage gives what it shows (stage_centred), while it is drawn: as wide and as tall as that may be.
+// kept across runs: set only while a stage's body is built, and put back
+let stage_room : Ref[(Double, Double)?] = Ref(None)
 
 ///|
 /// The room a fitted picture is given: what the panel leaves.
@@ -748,6 +777,7 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
 ///|
 fn how_of(shows : Shows, from : Anchor, sheet : Bool) -> How {
   match (sheet, shows) {
+    (_, Panel(x)) if x.stage => AsDialog
     (true, _) => AsSheet
     (false, Panel(x)) if from == Unanchored || x.form => AsDialog
     (false, Menu(_, _, _) | Pick(_, _, _, _) | Panel(_)) => AsPopover
@@ -767,6 +797,10 @@ fn draw_presented(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
 ///|
 fn draw_presented_as(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
   let key = "sf-present"
+  match p.shows {
+    Panel(x) if x.stage => return stage_centred(c, key, p, x)
+    _ => ()
+  }
   if sheet {
     return present_sheet(c, key, p)
   }
@@ -1132,6 +1166,78 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
   words_in_now.val = words_were
   (still && p.open, dialog_built(c, key, p.open))
 }
+
+///|
+/// A panel's `stage` (panel), the same on every screen: no panel round what it holds; the window under it the night
+/// (stage_scrim, coming and going as a dialog's ground does), what it holds in the window's middle as large as the
+/// window lets it (whole_fitted, in stage_room: stage_margin and the system's bars clear of the window's edges, the room
+/// its foot takes under it), 关闭 and its foot's buttons under it on the night (on_night), stage_gap apart. Escape, the
+/// back, 关闭 and a press beside it close it.
+fn stage_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool, Bool) {
+  let close = fn() { done_with(c, p, fn() {  }) }
+  let title = match x.live {
+    Some(f) => f().0
+    None => x.title
+  }
+  let (ww, wh) = c.window_size()
+  let bars = @ui.system_bars()
+  let foot_id = c.id(key + "/stage-foot")
+  let foot_h = match c.laid_size(foot_id) {
+    Some((_, h)) => h
+    None => button_height()
+  }
+  let room_w = ww - 2.0 * stage_margin - bars.left - bars.right
+  let room_h = wh - 2.0 * stage_margin - bars.top - bars.bottom - foot_h - stage_gap
+  let mut closed = false
+  let d = @kit.dialog(
+    c,
+    key,
+    p.open,
+    title,
+    w=room_w,
+    close_label="",
+    scrim=stage_scrim,
+    look=fn(c, _, inner) { c.box(style=stage_box, id=c.id(key + "/frame"), inner) |> ignore },
+    fn() {
+      let was = stage_room.val
+      stage_room.val = Some((room_w, room_h))
+      panel_whole_now.val += 1
+      draw_panel_body(x, c, close, keyed=p)
+      panel_whole_now.val -= 1
+      stage_room.val = was
+      c.box(style=stage_foot, id=foot_id, fn() {
+        let night = on_night.val
+        on_night.val = true
+        if button(c, t("common.close"), key=key + "/stage-close") {
+          closed = true
+        }
+        match x.foot {
+          Some(f) => f(c, close)
+          None => ()
+        }
+        on_night.val = night
+      })
+      |> ignore
+    },
+  )
+  (d.value && !closed && p.open, dialog_built(c, key, p.open))
+}
+
+///|
+/// A stage (stage_centred): what it holds over its buttons, stage_gap apart, each in the stage's middle.
+// kept across runs: a value (no field of it changes)
+let stage_box : @ui.Style = @ui.css("align=ACenter gap=S5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let stage_foot : @ui.Style = @ui.css("row gap=S2 align=ACenter justify=JCenter")
+
+///|
+/// How far what a stage holds stands from its buttons (stage_box's gap), and the stage from the window's edges.
+let stage_gap : Double = @ui.Space::px(S5)
+
+///|
+let stage_margin : Double = @ui.Space::px(S6)
 
 ///|
 /// A capped panel's body in a sheet and the sheet's whole, as present_sheet names them for sheet_body.

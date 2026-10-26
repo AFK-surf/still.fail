@@ -2585,7 +2585,9 @@ export const SHAPES: Record<string, Shape> = {
   ]),
   FleetQuota: struct([
     ["kind", "String", { doc: "The kind of subscription (the profiles' group: claude, chatgpt…)." }],
+    ["name", "String", { doc: "Its name: Claude 订阅." }],
     ["accounts", "i64", { client: "I54" }],
+    ["accountsText", "String", { doc: "Its accounts in words: 6 个账号." }],
     ["used", "i64", { client: "I54", doc: "How much of a week's quota they used, in percent of one account's: each account's share of its own\nadded up (80% and 90%: 170%)." }],
     ["usedText", "String", { doc: "170%." }],
     ["share", "f64", { doc: "That as a share of all their accounts' weeks, what its ring draws (0 to 1: 170% of two, 0.85)." }],

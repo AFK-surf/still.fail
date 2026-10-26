@@ -9,9 +9,11 @@
 // ── the card to share ────────────────────────────────────────────────────
 
 ///|
-/// The card to share of workspace `w`'s agents at work, opened by nothing (a dialog; a sheet to a finger): the picture
-/// (share_picture), under it 复制图片, or on a phone (iOS, Android) 保存到相册: a phone keeps pictures in its photo
-/// album, where a post or a chat picks them from (2026-10-26 用户：「手机上能复制图片吗？」「是不是应该是下载」「保存」).
+/// The card to share of workspace `w`'s agents at work, opened by nothing, on a stage of its own on every screen (a
+/// panel's `stage`: the picture alone in the window's middle over the night, no dialog round it: 2026-10-26 用户「分享的
+/// 弹窗有点丑，感觉应该给分享特制一个逼格高点的」): the picture (share_picture), under it 关闭 and 复制图片, or on a phone
+/// (iOS, Android) 保存到相册: a phone keeps pictures in its photo album, where a post or a chat picks them from
+/// (2026-10-26 用户：「手机上能复制图片吗？」「是不是应该是下载」「保存」).
 pub fn share_card_open(src : Source, w : Workspace) -> Unit {
   @sf.panel(
     @sf.t("web-main.stations.shareCard"),
@@ -21,8 +23,8 @@ pub fn share_card_open(src : Source, w : Workspace) -> Unit {
       c.shot(share_shot, @sf.share_w_most, fn() { share_poster(c, src, w, 0, flat=true) |> ignore })
     },
     from=Unanchored,
-    // (as tall as the picture while the window has the room; past it, the picture drawn smaller: @sf.whole_fitted)
-    tall=@sf.sheet_most,
+    // (as large as the picture while the window has the room; past it, the picture drawn smaller: @sf.whole_fitted)
+    stage=true,
     // (its title said as it is drawn, in the language then)
     live=fn() { (@sf.t("web-main.stations.shareCard"), "", "") },
     foot=fn(c, _) {
@@ -170,8 +172,10 @@ fn pic_lead(c : @ui.Ctx, first : Json?) -> Unit {
 }
 
 ///|
-/// Each kind but the first, a line: its colour's dot, the same sentence round its share (用 2 个 ChatGPT 订阅账号消耗了
-/// 17% 的周额度), the share in ink.
+/// Each kind but the first, a line as its ring's key (the first's said whole over them): its colour's dot, its name, its
+/// accounts dimmer, its share at the line's end in ink, the shares one under another. One line each whatever its name:
+/// said as a sentence, a name long enough broke it, a character on a line of its own (2026-10-26 用户：「这里折行了不太
+/// 好看」); a name too long for its line cut short, nothing else.
 fn pic_other_kinds(c : @ui.Ctx, quota : Array[Json]) -> Unit {
   if quota.length() < 2 {
     return
@@ -184,15 +188,10 @@ fn pic_other_kinds(c : @ui.Ctx, quota : Array[Json]) -> Unit {
       let q = Some(q)
       c.box(style=pic_other, fn() {
         c.box(style=pic_key_dot.then(@ui.style(bg=Data(ring_color(k)))), fn() {  }) |> ignore
-        c.rich(
-          [
-            @ui.span(text(q, "lead") + " ", color=@sf.share_dim),
-            @ui.span(text(q, "usedText"), weight=700),
-            @ui.span(" " + text(q, "of"), color=@sf.share_dim),
-          ],
-          style=pic_other_words,
-        )
-        |> ignore
+        c.text(text(q, "name"), style=pic_key_name) |> ignore
+        c.text(text(q, "accountsText"), style=pic_key_accounts) |> ignore
+        c.box(style=pic_grow, fn() {  }) |> ignore
+        c.text(text(q, "usedText"), style=pic_key_share) |> ignore
       })
       |> ignore
     }
@@ -211,7 +210,7 @@ fn pic_rings(c : @ui.Ctx, quota : Array[Json]) -> Unit {
     }
     rings.push((number(Some(q), "share"), ring_color(k)))
   }
-  @sf.rings(c, rings, pic_rings_side, pic_ring_w, pic_ring_gap, pic_track_alpha)
+  @sf.rings(c, rings, pic_rings_side, pic_track_alpha, most=@sf.share_rings.length())
   |> ignore
 }
 
@@ -261,14 +260,16 @@ fn pic_bars(c : @ui.Ctx, week : Json?) -> Unit {
 ///|
 /// The picture: as wide as @sf.whole_fitted lays it out (@sf.share_w_most), 20 in (nothing at its corners but words: the
 /// corners' rule asks nothing of them), its parts 12 apart, round as a card, on night (what is drawn on it seen against
-/// that).
+/// that), its edge a hairline (@sf.stage_edge: on the stage's night, where it ends).
 // kept across runs: a value (no field of it changes)
-let pic_box : @ui.Style = @ui.css("w=Full p=S5 gap=S3 radius=Xl3 clip").then(@ui.style(bg=Data(@sf.share_ground)))
+let pic_box : @ui.Style = @ui.css("w=Full p=S5 gap=S3 radius=Xl3 clip border=B1").then(
+  @ui.style(bg=Data(@sf.share_ground), border_color=Data(@sf.stage_edge)),
+)
 
 ///|
 /// The picture handed out: its ground to its edges.
 // kept across runs: a value (no field of it changes)
-let pic_box_flat : @ui.Style = pic_box.then(@ui.css("radius=Sharp"))
+let pic_box_flat : @ui.Style = pic_box.then(@ui.css("radius=Sharp border=B0"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -296,19 +297,12 @@ let pic_hero : @ui.Style = @ui.css("row w=Full gap=S5 align=ACenter")
 let pic_hero_words : @ui.Style = @ui.css("gap=S1").then(@ui.style(w=@sf.grow))
 
 ///|
-/// The rings: 88 across, as tall as the share and what it is of beside them, each 12 wide, 4 apart; their tracks the
-/// colour at 22%, as seen on the night.
+/// The rings: 88 across, as tall as the share and what it is of beside them, the room for every kind's (each 10 wide, 2
+/// apart, the hole 10 round: @sf.rings); their tracks the colour at 22%, as seen on the night.
 let pic_rings_side : Double = 88.0
 
 ///|
-let pic_ring_w : Double = 12.0
-
-///|
-let pic_ring_gap : Double = 4.0
-
-///|
 let pic_track_alpha : Int64 = 0x38L
-
 
 ///|
 /// The number, as large as a picture's one number is (the scale's past its words', Xl6 60: 170% beside the rings too),
@@ -340,8 +334,17 @@ let pic_other : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter pt=S1")
 let pic_key_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full")
 
 ///|
+/// A key's name, cut short where its line has not the room for it; its accounts after it, dimmer; its share in ink.
 // kept across runs: a value (no field of it changes)
-let pic_other_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Data(@sf.share_ink), w=Full)
+let pic_key_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Data(@sf.share_ink), w=Cut, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pic_key_accounts : @ui.TextStyle = @ui.text_style(size=Sm, color=Data(@sf.share_dim), wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pic_key_share : @ui.TextStyle = @ui.text_style(size=Sm, weight=Bold, color=Data(@sf.share_ink), wrap=false)
 
 ///|
 /// Today over the last 7 days, 10 apart, each as wide as the picture.
