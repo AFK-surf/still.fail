@@ -9,10 +9,11 @@ particular to this app:
 Four things decide how the app looks and answers (docs/architecture.md, the terms):
 
 - **屏幕** (the screen): 小屏 / 中屏 / 大屏 (`@sf.layout`: `Small`, `Medium`, `Large`), plus the special screens (a fold
-  half open, crease across: a chat laid out as 小屏's; a phone used upright only). How the panes are arranged.
+  half open, crease across: a chat laid out as 小屏's; a phone used upright only). How the panes are arranged, and
+  sheets from the foot (小屏) or popovers beside what opened them (中屏, 大屏).
 - **原生操控** (the native input, `@sf.native_input()`): touch or keyboard and mouse, as the app was started, the same
-  the whole run. The theme's sizes, what shows only under a pointer, Enter, scroll bars; with the tier, sheets or
-  popovers and the search field or ⌘K.
+  the whole run. The size words, icons and rows are drawn at (never a press's room: 44×44 at least, overlapping
+  none), what shows only under a pointer and touch's way to the same, Enter, scroll bars, the search field or ⌘K.
 - **当前操控** (the current input, `@ui.pointing()`): touch or keyboard and mouse at the moment; it may change. How a
   thing answers the hand alone, never what is shown, where or how big.
 - **页面宽窄** (a page's width, `@sf.look()`): 窄排法 / 宽排法, by the width of the box a page is drawn in.
@@ -47,9 +48,14 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 
 - `docs/architecture.md` is how the app is built; read it before changing a page or the frame. In short:
   - It is one app on every device (the user, 2026-10-24); there is no phone app and desktop app.
-  - Its layout follows the screen's tier (`@sf.layout`: Small, Medium, Large) and the native input
-    (`@sf.native_input()`). How it answers the hand follows the current input (`@ui.pointing()`), and only that: the
-    current input never decides what is shown, where or how big (2026-10-25).
+  - Six principles come first (the user, 2026-10-26; docs/architecture.md): every function as easy with either
+    input; what always shows is pressed in 44×44 at least, overlapping none; menus and picks from the foot on Small,
+    beside what opened them on Medium and Large; the screen decides the arrangement, the input only how things
+    answer and the size they are drawn at; the same content and actions on the three screens, each arranged as is
+    best for it (by the library's parts, by `look()`); actions near what they act on.
+  - Its arrangement follows the screen's tier (`@sf.layout`: Small, Medium, Large) and a page's width. How it
+    answers the hand follows the input (`@ui.pointing()`), and only that: the input never decides what is shown or
+    where (2026-10-25).
   - Each page exists once, drawn into the box it gets in any tier with either input. It opens things by saying what,
     and shows menus and dialogs through the library's presenters. The shell arranges the panes per tier.
 - **Packages now, while the two page sets are merged:**
