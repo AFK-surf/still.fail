@@ -2,6 +2,7 @@
 android_controls
 drive_controls
 ios_controls
+linux_controls
 mini1_controls
 mini1_disclosure
 mini1_foundation
