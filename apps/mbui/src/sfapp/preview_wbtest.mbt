@@ -1,9 +1,10 @@
 ///|
-/// The made-up chat with one of its made-up files open in the preview (preview_fixture.mbt).
-fn preview_tester(what : String) -> @ui.Tester {
+/// The made-up chat with one of its made-up files open in the preview (preview_fixture.mbt), the window `w` wide, on
+/// `platform`'s screen.
+fn preview_tester(what : String, w? : Double = 390.0, platform? : Int = 0) -> @ui.Tester {
   reset()
   let src = fixture("chat-preview-" + what)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=844.0, platform~)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   t.draw()
   // seen once it is in (grown from its thumbnail, or faded in)
@@ -55,6 +56,23 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
   t.run_for(if v.flies { fly_close_ms } else { pv_fade_ms })
   assert_true(t.find("界面草图.png") is None)
   t.assert_idle()
+}
+
+///|
+test "the picture held by a finger, Small or Medium: its one menu, 复制图片, not one more for each time the frame it opens in is built" {
+  for w in [390.0, 720.0] {
+    let t = preview_tester("image", w~, platform=2)
+    assert_true(viewer.val is Some(_), msg="\{w} wide")
+    let before = @sf.last_presented()
+    t.press_at(w / 2.0, 422.0)
+    t.run_for(@ui.long_press_ms + 20.0)
+    t.release(w / 2.0, 422.0)
+    t.draw()
+    t.run_for(@kit.sheet_rest("sf-present") - t.time())
+    // (its sheet measures what it holds as it first comes, the frame built again then: that build sees no hold)
+    assert_eq(@sf.last_presented() - before, 1, msg="\{w} wide")
+    assert_true(t.reachable("复制图片").length() > 0, msg="\{w} wide")
+  }
 }
 
 ///|

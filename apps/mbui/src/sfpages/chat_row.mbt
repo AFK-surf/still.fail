@@ -147,8 +147,7 @@ pub fn chat_row(
   // right clicked, or held long by a finger (Ctx::menu_asked, each part asked once): its menu
   let asked = parts.fold(init=None, fn(at, p) { if at is Some(_) { at } else { c.menu_asked(p) } })
   match asked {
-    // (once: the frame built again as it opens asks again)
-    Some((x, y)) if menu && !(rows.menu_for == key && @sf.presented_open_of(rows.menu_serial)) => {
+    Some((x, y)) if menu => {
       row_held.val = (id, true)
       row_menu(c, src, item, id, x, y)
     }
