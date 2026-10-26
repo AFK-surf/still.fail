@@ -6,7 +6,7 @@
 
 ///|
 /// 记忆 (MemorySettings, MemoriesScreen): a row to each station's memory; one offline says so.
-fn memories_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
+pub fn memories_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let topic = @settings.stations_of(core, here)
   let stations = match topic.value {
     Some(Array(a)) => a
@@ -43,7 +43,7 @@ fn memories_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Un
 
 ///|
 /// One station's memory, on a page of its own (MemoryScreen; wide, a link to it): as 记忆 shows it, under its name.
-fn memory_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address : String) -> Unit {
+pub fn memory_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address : String) -> Unit {
   let look = look_of(c)
   let stations = match @settings.stations_of(core, here).value {
     Some(Array(a)) => a
@@ -188,7 +188,7 @@ fn memory_row(
     })
     |> ignore
     if value != "" {
-      c.text(value, style=if narrow { narrow_value } else { mem_tag_muted }) |> ignore
+      c.text(value, style=if narrow { @sf.pg_value } else { mem_tag_muted }) |> ignore
     }
     @sf.icon(c, if open { "chevron-down" } else { "chevron-right" }, size=memory_chevron, color=t.p.subtle) |> ignore
     if narrow {
@@ -211,7 +211,7 @@ let mem_narrow_none_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mem_narrow_title : @ui.TextStyle = @sf.body.then(@sf.one_line)
+pub let mem_narrow_title : @ui.TextStyle = @sf.body.then(@sf.one_line)
 
 ///|
 // kept across runs: a value (no field of it changes)

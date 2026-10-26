@@ -1,4 +1,4 @@
-# 用量 (sfdesk usage.mbt, one page in every frame): MBUI_FIXTURE=settings-usage, a phone's window or a desktop's. Its
+# 用量 (sfpages usage.mbt, one page in every frame): MBUI_FIXTURE=settings-usage, a phone's window or a desktop's. Its
 # week, then 30 天.
 timeout 20000
 until $118

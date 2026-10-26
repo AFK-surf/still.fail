@@ -1,4 +1,5 @@
-// The settings' pages here (about.mbt, appearance.mbt, bars.mbt, notifications.mbt, permissions.mbt, shortcuts.mbt)
+// The settings' pages here (about.mbt, appearance.mbt, automatic_decisions.mbt, bars.mbt, memory.mbt,
+// notifications.mbt, permissions.mbt, shortcuts.mbt, usage.mbt)
 // drawn alone over the made-up core's settings, in a box of each width, with a finger and with a mouse: what each is
 // for, laid out by its own width. What the shell does around them (the tier, its sidebar, the system's bars) is the
 // whole app's tests' (src/sfapp).
@@ -64,6 +65,11 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     StationArchiving(s) => station_archiving_page(c, core, here, frame, s)
     Notifications => notify_page(c, core, here, frame)
     Shortcuts => shortcuts_page(c, core, frame)
+    Memories => memories_page(c, core, here, frame)
+    Memory(a) => memory_page(c, core, here, frame, a)
+    AutoDecisions => decisions_page(c, core, here, frame)
+    Usage => usage_page(c, core, here, frame)
+    UsagePrices(days) => usage_prices_page(c, core, here, frame, days)
     _ => ()
   }
 }

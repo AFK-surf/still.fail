@@ -97,3 +97,10 @@ let narrow_chevron : Double = @sf.pg_chevron
 pub fn waiting_cards(c : @ui.Ctx, count? : Int = 3, error? : String = "", failing? : Array[String] = []) -> Unit {
   @sf.waiting(c, shape=Cards, count~, error~, note={ reading: failing.length() == 0, text: "", failing })
 }
+
+///|
+/// What a list still waits on (the core's `wait`: stations not read yet, each failure said): `count` rows' shapes.
+pub fn waiting_rows(c : @ui.Ctx, wait : Json?, count? : Int = 3) -> Unit {
+  let failing = failing_of(wait)
+  @sf.waiting(c, shape=Rows, count~, note={ reading: failing.length() == 0, text: "", failing })
+}

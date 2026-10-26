@@ -171,13 +171,6 @@ fn open_dialog(
 }
 
 ///|
-/// What a list still waits on (the core's `wait`: stations not read yet, each failure said): `count` rows' shapes.
-fn desk_waiting_rows(c : @ui.Ctx, wait : Json?, count? : Int = 3) -> Unit {
-  let failing = failing_of(wait)
-  @sf.waiting(c, shape=Rows, count~, note={ reading: failing.length() == 0, text: "", failing })
-}
-
-///|
 /// A page of the desktop's settings still drawn with its desktop pieces alone: the library's page laid out wide (counted
 /// by page-look where a page asks for it), back over it on a page under another (`back` where it goes; `on_back`, else
 /// the page popped).

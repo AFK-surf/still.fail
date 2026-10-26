@@ -288,7 +288,7 @@ fn ws_person(
     // words: docs/ui-panels.md 放不下的时候)
     @sf.row_lines(c, fn() {
       c.box(style=desk_named.then(ws_row_head), fn() {
-        c.text(name, style=if narrow { mem_narrow_title } else { desk_list_title }) |> ignore
+        c.text(name, style=if narrow { @sfpages.mem_narrow_title } else { desk_list_title }) |> ignore
         if badge != "" {
           you(c, badge)
         }

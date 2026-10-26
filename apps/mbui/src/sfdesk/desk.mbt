@@ -53,7 +53,6 @@ pub fn reset() -> Unit {
   station_cards_reset()
   places_reset()
   chat_page_reset()
-  usage_reset()
   layers_reset()
   zou_page_reset()
 }

@@ -100,7 +100,7 @@ fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : Pa
   }
   if !first {
     if shown.length() == 0 && topic.error is None && (loading || items(wait, "failing").length() > 0) {
-      blocks.push(fn() { gutter(fn() { desk_waiting_rows(c, wait) }) })
+      blocks.push(fn() { gutter(fn() { @sfpages.waiting_rows(c, wait) }) })
     } else if shown.length() == 0 {
       blocks.push(fn() {
         c.box(style=if look == Wide { cn_none_room } else { cn_filter_room_narrow }, fn() {
@@ -157,7 +157,7 @@ fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : Pa
       }
       // what the list still waits on: a row's shape for a station not read yet, each failure said
       if flag(wait, "reading") || items(wait, "failing").length() > 0 {
-        blocks.push(fn() { gutter(fn() { desk_waiting_rows(c, wait, count=1) }) })
+        blocks.push(fn() { gutter(fn() { @sfpages.waiting_rows(c, wait, count=1) }) })
       }
     }
   }
