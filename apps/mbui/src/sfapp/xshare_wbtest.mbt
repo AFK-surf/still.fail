@@ -102,10 +102,10 @@ test "分享给其他 workspace on a phone: its rows a finger's, 完成 across t
   t.tap_text("分享给其他 workspace")
   t.frame()
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
-  // (each row 48 at least: the next one's words that far under its words)
+  // (each row a finger's 44 at least: the next one's words that far under its words)
   let (_, y1, _, _) = t.rect_of("日常").unwrap()
   let (_, y2, _, _) = t.rect_of("开源").unwrap()
-  assert_true(y2 - y1 >= 48.0, msg="rows \{y2 - y1} apart")
+  assert_true(y2 - y1 >= 44.0, msg="rows \{y2 - y1} apart")
   // their names a phone's row title (its body's 15 on 21), as the phone's sheet had them; the switch's too
   let (_, _, _, nh) = t.rect_of("日常").unwrap()
   assert_true(nh >= 21.0, msg="a row's name \{nh} high")

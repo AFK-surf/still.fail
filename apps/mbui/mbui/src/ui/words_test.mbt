@@ -270,7 +270,7 @@ test "a link right clicked: its hold told at once, with where it leads and its p
   assert_true(held.length() > 0)
   assert_true(held.iter().all(fn(x) { x.0 == "https://example.com/d" && (x.1).2 == w }))
   assert_eq(tapped.length(), 0)
-  // the words beside it, past its room (44 across round its middle: press_reach): nothing
+  // the words beside it, past its room (a pointer's 36 across round its middle: press_reach): nothing
   held.clear()
   t.frame()
   t.right_click(x - 20.0, y + h / 2.0)

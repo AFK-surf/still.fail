@@ -752,8 +752,9 @@ test "desktop: a finger or a pointer reaches a target smaller than its room from
   for platform in [2, 0] {
     clicks.clear()
     let t = @ui.Tester::new(view, platform~)
-    // 8 over the first button (at 240..260, 20..40): its own, its room 44 round its middle
-    t.tap(250.0, 12.0)
+    // 6 over the first button (at 240..260, 20..40): its own, its room round its middle (a finger's 44, a pointer's
+    // 36)
+    t.tap(250.0, 14.0)
     // on the first, by its edge nearest the second: the first keeps it
     t.tap(259.0, 30.0)
     // between them, nearer the second
@@ -765,7 +766,7 @@ test "desktop: a finger or a pointer reaches a target smaller than its room from
   // the pointer resting where a click reaches the first: the first lit (and the row that holds it), as a click there
   // is its
   let t = @ui.Tester::new(view, platform=0)
-  t.move(250.0, 12.0)
+  t.move(250.0, 14.0)
   t.draw()
   assert_true(lit.contains("a") && !lit.contains("b"), msg="\{lit}")
 }
@@ -782,11 +783,11 @@ test "desktop: a target smaller than its room at the window's edge has its room 
     |> ignore
   }
   let t = @ui.Tester::new(view, w=200.0, h=100.0, platform=0)
-  // drawn at 0..20 each way in the window's corner: its room 0..44 each way, not -12..32 cut to 0..32
-  t.tap(38.0, 38.0)
+  // drawn at 0..20 each way in the window's corner: its room a pointer's 36 each way, 0..36, not -8..28 cut to 0..28
+  t.tap(32.0, 32.0)
   assert_eq(clicks, ["a"])
   // past it: nothing
-  t.tap(46.0, 10.0)
+  t.tap(38.0, 10.0)
   assert_eq(clicks, ["a"])
 }
 

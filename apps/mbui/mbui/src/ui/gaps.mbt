@@ -163,6 +163,26 @@ fn Ctx::gap_ink(self : Ctx, i : Int) -> (Double, Double)? {
 }
 
 ///|
+/// Whether node `i` is words, or a box with no ground and no drawing of its own holding only words (a row's value).
+fn Ctx::words_only(self : Ctx, i : Int) -> Bool {
+  let n = self.nodes[i]
+  if n.kind == kind_text || n.kind == kind_rich {
+    return true
+  }
+  if n.kind != kind_box || n.grounded() || n.shapes.length() > 0 || n.lines.length() > 0 || n.first < 0 {
+    return false
+  }
+  let mut k = n.first
+  while k >= 0 {
+    if !self.words_only(k) {
+      return false
+    }
+    k = self.nodes[k].next
+  }
+  true
+}
+
+///|
 /// Whether node `i` draws words, a drawing of its own (an icon) or a block with a ground (a chip, a tag): what rule 4
 /// holds in from the edges of the box with a ground round it.
 fn Node::gap_content(self : Node) -> Bool {
@@ -514,6 +534,11 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
         return None
       }
       let n = self.nodes[i]
+      // (words are held by their box, however short, and so is a box holding words alone: a value "浅色" at a 36
+      // row's end as far in as the row's start; a mark stands concentric with a capsule's end)
+      if self.words_only(i) {
+        return None
+      }
       let inset = if left { n.x - gb.x } else { gb.x + gb.fw - (n.x + n.fw) }
       if n.fw <= gb.fh + gap_slack {
         Some(inset + n.fw / 2.0)
