@@ -303,9 +303,21 @@ pub fn segmented(
   ink? : Int64,
   thumb? : Int64,
 ) -> Int {
-  // (a narrow page's: as wide as where it is, each option an equal share, Seg's look (seg.mbt); a wide page's: the
-  // web's Segmented, as wide as its options, its track round them alone)
+  // (a narrow page's: as wide as where it is, each option an equal share, Seg's look (seg.mbt), but at a head's end
+  // (head_end), as wide as its options beside the title; a wide page's: the web's Segmented, as wide as its options,
+  // its track round them alone)
   if look() is Narrow {
+    if at_head_end() {
+      // (as wide as its options where its line has the room, as narrow as the chosen one with the chevron where it has
+      // less: filling what that leaves it)
+      let (whole, least) = seg_room(c, labels)
+      let mut now = chosen
+      c.box(style=@ui.style(w=Fixed(whole), min_w=Fixed(least)), fn() {
+        now = seg(c, key, labels, chosen, fill=true, height=segmented_narrow_h)
+      })
+      |> ignore
+      return now
+    }
     return seg(c, key, labels, chosen, fill=true, height=segmented_narrow_h)
   }
   let t = theme()
@@ -314,7 +326,7 @@ pub fn segmented(
   // its words as drawn (the system's size of words applied), in the chosen weight (as wide unchosen as chosen: no
   // column changes as the choice does)
   let size = c.sp(t.t.ui)
-  let words = labels.map(fn(l) { @ui.text_advance(l, size~, weight=500) })
+  let words = labels.map(fn(l) { choice_words_w(c, l, size, weight=500) })
   let widest = words.fold(init=0.0, fn(m, w) { dmax(m, w) })
   let col = dmax(item_w, widest + 2.0 * segmented_in)
   let n = labels.length()

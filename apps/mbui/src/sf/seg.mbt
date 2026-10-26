@@ -39,7 +39,7 @@ fn seg(
     match c.laid_size(track) {
       Some((w, _)) => {
         let size = c.sp(base)
-        let words = options.map(fn(l) { @ui.text_advance(l, size~) })
+        let words = options.map(fn(l) { choice_words_w(c, l, size) })
         let room = w - 2.0 * inset
         if words.fold(init=0.0, fn(s, x) { s + x + 2.0 * seg_side }) > room + 0.5 {
           Some(fitted(c, options, room, base, 400, seg_side, seg_least))
@@ -134,6 +134,37 @@ fn seg(
     _ => selected
   }
 }
+
+///|
+/// How wide a filling Seg of `options` is with its options' words whole at their size with their sides, and how
+/// narrow it may go: the chosen one's (the widest's) words with the chevron, as it is when they do not fit side by
+/// side (seg's pick). A filling one as wide as its options (at a head's end: @sf.segmented) is laid in that.
+fn seg_room(c : @ui.Ctx, options : Array[String]) -> (Double, Double) {
+  let size = c.sp(c.text_size(Base).0)
+  let whole = options.fold(init=2.0 * seg_inset, fn(s, l) { s + choice_words_w(c, l, size) + 2.0 * seg_side })
+  let menu = c.sp(c.text_size(Body).0)
+  let widest = options.fold(init=0.0, fn(m, l) { dmax(m, choice_words_w(c, l, menu)) })
+  (whole, 2.0 * seg_inset + 2.0 * seg_menu_in + widest + seg_menu_gap + seg_chevron)
+}
+
+///|
+/// How wide a choice's words `s` are on one line at `size` and `weight`, as they are drawn: the app's own words, their
+/// digits all one width where the theme says so (@ui.Theme `tabular`: 「7 天」's 7 as wide as 30's digits each).
+fn choice_words_w(c : @ui.Ctx, s : String, size : Double, weight? : Int = 400) -> Double {
+  @ui.text_advance(s, size~, weight~, style=if c.theme().tabular { @hostapi.style_tabular } else { 0 })
+}
+
+///|
+/// How far its track stands round its options (seg_track's p=S0_5).
+let seg_inset : Double = @ui.Space::px(S0_5)
+
+///|
+/// How far the chosen one's words stand in from its track's side, and from the chevron, when they do not fit side by
+/// side (seg_menu's px=S2_5, gap=S2).
+let seg_menu_in : Double = @ui.Space::px(S2_5)
+
+///|
+let seg_menu_gap : Double = @ui.Space::px(S2)
 
 ///|
 /// Seg's track (its height and corner said where it is used): its options in a line, 2 in; as wide as where it is
@@ -246,15 +277,32 @@ fn fitted(
   least : Double,
 ) -> Fitted {
   let size = c.sp(base)
-  let words = labels.map(fn(l) { @ui.text_advance(l, size~, weight~) })
+  let words = labels.map(fn(l) { choice_words_w(c, l, size, weight~) })
   // (no smaller than the app says them: the size the system's own size of words draws)
-  let (widths, fit) = option_widths(words, room, side, least, dmin(1.0, base / size))
+  let smallest = dmin(1.0, base / size)
+  let (widths, fit) = option_widths(words, room, side, least, smallest)
   match fit {
-    // (their words as drawn that much smaller, what is left shared alike)
-    Smaller(k) => {
-      let drawn = labels.map(fn(l) { @ui.text_advance(l, size=size * k, weight~) })
-      let left = (room - drawn.fold(init=0.0, fn(s, w) { s + w })) / labels.length().to_double()
-      { widths: drawn.map(fn(w) { w + left }), fit }
+    // (their words as drawn that much smaller, what is left shared alike; a face's words narrow not quite as its size
+    // does (San Francisco's optical sizes: smaller, set looser), so measured as drawn and made smaller again till they
+    // fit with the least either side, else not side by side)
+    Smaller(k0) => {
+      let most = room - 2.0 * least * labels.length().to_double()
+      let mut k = k0
+      let mut drawn = labels.map(fn(l) { choice_words_w(c, l, size * k, weight~) })
+      let mut sum = drawn.fold(init=0.0, fn(s, w) { s + w })
+      for _ in 0..<4 {
+        if sum <= most + 0.01 || sum <= 0.0 || k < smallest {
+          break
+        }
+        k = k * most / sum
+        drawn = labels.map(fn(l) { choice_words_w(c, l, size * k, weight~) })
+        sum = drawn.fold(init=0.0, fn(s, w) { s + w })
+      }
+      if k < smallest || sum > most + 0.01 {
+        return { widths: [], fit: Menu }
+      }
+      let left = (room - sum) / labels.length().to_double()
+      { widths: drawn.map(fn(w) { w + left }), fit: Smaller(k) }
     }
     _ => { widths, fit }
   }
