@@ -79,6 +79,8 @@ pub(all) struct Emits {
   /// the first row of what was sent from here not in the chat yet (the outbox's, under the messages), as last built
   /// ("" none): a message coming in comes in over it
   mut out_key : String
+  /// the chat's messages as last taken (emit_take), each decided: the same version again holds none new
+  mut taken : Array[Message]
 }
 
 ///|
@@ -103,6 +105,7 @@ pub fn emits_of(key : String) -> Emits {
         mover: @ui.Mover::new(),
         held_until: -1.0,
         out_key: "",
+        taken: [],
       }
       emits[key] = e
       e
@@ -117,8 +120,13 @@ pub fn seq_s(seq : Double) -> String {
 
 ///|
 /// Messages seen for the first time (ChatMotion.take): an agent's, said while the chat shows (the core's `said`),
-/// while its activity shows, waits its turn to come out of it.
+/// while its activity shows, waits its turn to come out of it. Looked through once for each version of the chat
+/// (view_of_chat), not each frame: a long chat holds thousands.
 pub fn emit_take(c : @ui.Ctx, e : Emits, v : ChatView, showing : Map[String, Bool]) -> Unit {
+  if physical_equal(v.messages, e.taken) {
+    return
+  }
+  e.taken = v.messages
   for m in v.messages {
     let k = seq_s(m.seq)
     if e.decided.contains(k) {
