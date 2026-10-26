@@ -1158,7 +1158,7 @@ fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bo
   ffi_view_read_answer(id, req, data, total, if more { 1 } else { 0 })
 }
 
-// PDFs drawn by the system (Android's PdfRenderer, Core Graphics' CGPDF), page by page into images.
+// PDFs drawn by the system (Android's PdfRenderer, Core Graphics' CGPDF, Windows.Data.Pdf), page by page into images.
 
 ///|
 #borrow(data)

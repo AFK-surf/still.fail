@@ -3,12 +3,22 @@
 // decoding at a reduced size), turned by the EXIF orientation, converted to
 // premultiplied BGRA, into a Direct3D 11 texture made right there (device
 // methods are free-threaded). http(s) goes through URLDownloadToCacheFile.
+// PDFs' pages too (below): drawn by Windows' own (Windows.Data.Pdf) into a PNG
+// in memory, which WIC decodes the same way.
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <objbase.h>
 #include <d3d11.h>
 #include <wincodec.h>
 #include <urlmon.h>
+#include <shlwapi.h>
+#include <shcore.h>
+#include <roapi.h>
+#include <wrl.h>
+#include <wrl/wrappers/corewrappers.h>
+#include <windows.data.pdf.h>
+#include <windows.storage.streams.h>
+#include <windows.ui.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +28,11 @@
 #pragma comment(lib, "windowscodecs.lib")
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "urlmon.lib")
+#pragma comment(lib, "shlwapi.lib")
+#pragma comment(lib, "shcore.lib")
+#pragma comment(lib, "runtimeobject.lib")
+
+struct Pdf;
 
 struct Image {
   int state;  // 0 decoding, 1 ready, -1 failed or freed
@@ -31,7 +46,13 @@ struct Job {
   wchar_t *src;  // or
   uint8_t *data;
   size_t len;
+  Pdf *pdf;  // or a PDF's page (held while it is drawn)
+  int page;
 };
+
+static ID3D11ShaderResourceView *pdf_draw(IWICImagingFactory *wic, Pdf *p, int page, int max_px, int *w, int *h,
+                                          int *ow, int *oh);
+static void pdf_let_go(Pdf *p);
 
 // by id (ids are not reused); the UI thread grows it, workers fill entries in
 static Image *imgs;
@@ -196,7 +217,10 @@ static void CALLBACK work(PTP_CALLBACK_INSTANCE inst, void *arg) {
   if (SUCCEEDED(CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER,
                                  __uuidof(IWICImagingFactory), (void **)&wic))) {
     HRESULT hr = E_FAIL;
-    if (j->data) {
+    if (j->pdf) {
+      srv = pdf_draw(wic, j->pdf, j->page, j->max_px, &w, &h, &ow, &oh);
+      hr = E_ABORT;  // (drawn: nothing more to decode)
+    } else if (j->data) {
       if (SUCCEEDED(wic->CreateStream(&stream)) &&
           SUCCEEDED(stream->InitializeFromMemory(j->data, (DWORD)j->len)))
         hr = wic->CreateDecoderFromStream(stream, NULL, WICDecodeMetadataCacheOnDemand, &dec);
@@ -217,6 +241,7 @@ static void CALLBACK work(PTP_CALLBACK_INSTANCE inst, void *arg) {
     fflush(stdout);
   }
   finish(j->id, srv ? 1 : -1, w, h, ow, oh, srv);
+  if (j->pdf) pdf_let_go(j->pdf);
   free(j->src);
   free(j->data);
   free(j);
@@ -236,6 +261,7 @@ static int start(Job *j) {
   if (!TrySubmitThreadpoolCallback(work, j, &pool_env)) {
     finish(j->id, -1, 0, 0, 0, 0, NULL);
     int id = j->id;
+    if (j->pdf) pdf_let_go(j->pdf);
     free(j->src);
     free(j->data);
     free(j);
@@ -422,6 +448,207 @@ int mb_png_of_dib(const void *dib, size_t n, unsigned char **png, size_t *len) {
     *len = 0;
   }
   return ok;
+}
+
+}  // extern "C"
+
+// ---------------------------------------------------------------------------
+// PDFs (host_native.mbt's pdf_*): Windows' own (Windows.Data.Pdf). A document is opened from its bytes on a thread of
+// its own in the multithreaded apartment, where its asynchronous calls are waited on (never the UI thread's, whose
+// apartment they would call back into), its pages' sizes read there too; a page is drawn on the pool's thread at the
+// size asked, on white, as a PNG into memory (RenderToStreamAsync), which WIC decodes into an image of the table
+// above (image_info, image_free and the renderer's textures take it as any other). One page at a time of a document.
+
+using Microsoft::WRL::Callback;
+using Microsoft::WRL::ComPtr;
+using Microsoft::WRL::Wrappers::HStringReference;
+namespace wf = ABI::Windows::Foundation;
+namespace wpdf = ABI::Windows::Data::Pdf;
+namespace wss = ABI::Windows::Storage::Streams;
+
+struct Pdf {
+  LONG refs;                     // the table's (till closed) and each job's drawing it
+  wpdf::IPdfDocument *doc;       // NULL: the bytes were no PDF it could open
+  int pages;
+  double *sizes;                 // each page's width and height in points (its size in DIPs, 96 an inch, as 72)
+  SRWLOCK draw;
+  const uint8_t *data;           // (while it is opened)
+  size_t len;
+};
+
+static Pdf **pdfs;
+static int npdfs, pdf_cap;
+static SRWLOCK pdfs_lock = SRWLOCK_INIT;
+
+static void pdf_let_go(Pdf *p) {
+  if (InterlockedDecrement(&p->refs) != 0) return;
+  if (p->doc) p->doc->Release();
+  free(p->sizes);
+  free(p);
+}
+
+// an asynchronous call's end waited for (on a thread of the multithreaded apartment)
+template <typename Op, typename Done>
+static HRESULT pdf_wait(Op *op) {
+  HANDLE ended = CreateEventW(NULL, TRUE, FALSE, NULL);
+  if (!ended) return E_FAIL;
+  HRESULT hr = op->put_Completed(Callback<Done>([ended](Op *, wf::AsyncStatus) -> HRESULT {
+                                   SetEvent(ended);
+                                   return S_OK;
+                                 }).Get());
+  if (SUCCEEDED(hr)) WaitForSingleObject(ended, INFINITE);
+  CloseHandle(ended);
+  return hr;
+}
+
+static DWORD WINAPI pdf_open_thread(void *arg) {
+  Pdf *p = (Pdf *)arg;
+  if (FAILED(RoInitialize(RO_INIT_MULTITHREADED))) return 0;
+  {
+    ComPtr<IStream> mem;
+    mem.Attach(SHCreateMemStream(p->data, (UINT)p->len));
+    ComPtr<wss::IRandomAccessStream> in;
+    ComPtr<wpdf::IPdfDocumentStatics> statics;
+    ComPtr<wf::IAsyncOperation<wpdf::PdfDocument *>> op;
+    ComPtr<wpdf::IPdfDocument> doc;
+    UINT32 n = 0;
+    if (mem && SUCCEEDED(CreateRandomAccessStreamOverStream(mem.Get(), BSOS_DEFAULT, IID_PPV_ARGS(&in))) &&
+        SUCCEEDED(wf::GetActivationFactory(HStringReference(RuntimeClass_Windows_Data_Pdf_PdfDocument).Get(), &statics)) &&
+        SUCCEEDED(statics->LoadFromStreamAsync(in.Get(), &op)) &&
+        SUCCEEDED((pdf_wait<wf::IAsyncOperation<wpdf::PdfDocument *>, wf::IAsyncOperationCompletedHandler<wpdf::PdfDocument *>>(op.Get()))) &&
+        SUCCEEDED(op->GetResults(&doc)) && doc && SUCCEEDED(doc->get_PageCount(&n))) {
+      p->sizes = (double *)calloc((size_t)(n ? n : 1) * 2, sizeof(double));
+      for (UINT32 i = 0; p->sizes && i < n; i++) {
+        ComPtr<wpdf::IPdfPage> page;
+        wf::Size size = {};
+        // (as the page is shown: its crop box, turned as it says)
+        if (SUCCEEDED(doc->GetPage(i, &page)) && SUCCEEDED(page->get_Size(&size))) {
+          p->sizes[2 * i] = size.Width * 72.0 / 96.0;
+          p->sizes[2 * i + 1] = size.Height * 72.0 / 96.0;
+        }
+      }
+      if (p->sizes) {
+        p->doc = doc.Detach();
+        p->pages = (int)n;
+      }
+    }
+  }
+  RoUninitialize();
+  return 0;
+}
+
+// a page drawn at most `max_px` on its longer side (8192 at most, 1024 unsaid), on white (on the pool's thread)
+static ID3D11ShaderResourceView *pdf_draw(IWICImagingFactory *wic, Pdf *p, int page, int max_px, int *w, int *h,
+                                          int *ow, int *oh) {
+  if (!p->doc || page < 0 || page >= p->pages) return NULL;
+  double pw = p->sizes[2 * page], ph = p->sizes[2 * page + 1];
+  if (pw <= 0 || ph <= 0) return NULL;
+  int lim = max_px > 0 ? (max_px < 8192 ? max_px : 8192) : 1024;
+  double k = lim / fmax(pw, ph);
+  UINT32 dw = (UINT32)fmax(1, lround(pw * k)), dh = (UINT32)fmax(1, lround(ph * k));
+  ID3D11ShaderResourceView *srv = NULL;
+  if (FAILED(RoInitialize(RO_INIT_MULTITHREADED))) return NULL;
+  AcquireSRWLockExclusive(&p->draw);
+  {
+    ComPtr<wpdf::IPdfPage> pg;
+    ComPtr<IInspectable> made;
+    ComPtr<wpdf::IPdfPageRenderOptions> opts;
+    ComPtr<IStream> out;
+    ComPtr<wss::IRandomAccessStream> to;
+    ComPtr<wf::IAsyncAction> act;
+    IWICBitmapDecoder *dec = NULL;
+    ABI::Windows::UI::Color white = {255, 255, 255, 255};
+    LARGE_INTEGER start = {};
+    if (SUCCEEDED(p->doc->GetPage((UINT32)page, &pg)) &&
+        SUCCEEDED(RoActivateInstance(HStringReference(RuntimeClass_Windows_Data_Pdf_PdfPageRenderOptions).Get(), &made)) &&
+        SUCCEEDED(made.As(&opts)) && SUCCEEDED(opts->put_DestinationWidth(dw)) &&
+        SUCCEEDED(opts->put_DestinationHeight(dh)) && SUCCEEDED(opts->put_BackgroundColor(white)) &&
+        SUCCEEDED(CreateStreamOnHGlobal(NULL, TRUE, &out)) &&
+        SUCCEEDED(CreateRandomAccessStreamOverStream(out.Get(), BSOS_DEFAULT, IID_PPV_ARGS(&to))) &&
+        SUCCEEDED(pg->RenderWithOptionsToStreamAsync(to.Get(), opts.Get(), &act)) &&
+        SUCCEEDED((pdf_wait<wf::IAsyncAction, wf::IAsyncActionCompletedHandler>(act.Get()))) &&
+        SUCCEEDED(act->GetResults()) && SUCCEEDED(out->Seek(start, STREAM_SEEK_SET, NULL)) &&
+        SUCCEEDED(wic->CreateDecoderFromStream(out.Get(), NULL, WICDecodeMetadataCacheOnDemand, &dec))) {
+      srv = decode(wic, dec, lim, w, h, ow, oh);
+    }
+    if (dec) dec->Release();
+  }
+  ReleaseSRWLockExclusive(&p->draw);
+  RoUninitialize();
+  // (its size the page's, in points, as an image's own is)
+  *ow = (int)lround(pw);
+  *oh = (int)lround(ph);
+  return srv;
+}
+
+static Pdf *pdf_of(int doc) {
+  AcquireSRWLockShared(&pdfs_lock);
+  Pdf *p = doc > 0 && doc < npdfs ? pdfs[doc] : NULL;
+  ReleaseSRWLockShared(&pdfs_lock);
+  return p;
+}
+
+extern "C" {
+
+int32_t mb_host_pdf_open(moonbit_bytes_t data) {
+  Pdf *p = (Pdf *)calloc(1, sizeof(Pdf));
+  if (!p) return 0;
+  p->refs = 1;
+  InitializeSRWLock(&p->draw);
+  p->data = (const uint8_t *)data;
+  p->len = (size_t)Moonbit_array_length(data);
+  // (opened on a thread of its own, waited for: the bytes are the app's till it returns)
+  HANDLE t = CreateThread(NULL, 0, pdf_open_thread, p, 0, NULL);
+  if (t) {
+    WaitForSingleObject(t, INFINITE);
+    CloseHandle(t);
+  }
+  p->data = NULL;
+  AcquireSRWLockExclusive(&pdfs_lock);
+  if (npdfs == 0) npdfs = 1;  // 0 is no PDF
+  if (npdfs >= pdf_cap) {
+    pdf_cap = pdf_cap ? pdf_cap * 2 : 16;
+    pdfs = (Pdf **)realloc(pdfs, (size_t)pdf_cap * sizeof *pdfs);
+  }
+  int id = npdfs++;
+  pdfs[id] = p;
+  ReleaseSRWLockExclusive(&pdfs_lock);
+  return id;
+}
+
+int32_t mb_host_pdf_pages(int32_t doc) {
+  Pdf *p = pdf_of(doc);
+  return p && p->doc ? p->pages : -1;
+}
+
+void mb_host_pdf_page_size(int32_t doc, int32_t page, double *out) {
+  out[0] = out[1] = 0;
+  Pdf *p = pdf_of(doc);
+  if (!p || !p->doc || page < 0 || page >= p->pages) return;
+  out[0] = p->sizes[2 * page];
+  out[1] = p->sizes[2 * page + 1];
+}
+
+int32_t mb_host_pdf_page_load(int32_t doc, int32_t page, int32_t max_px) {
+  Pdf *p = pdf_of(doc);
+  Job *j = (Job *)calloc(1, sizeof(Job));
+  j->max_px = max_px;
+  j->page = page;
+  if (p) {
+    InterlockedIncrement(&p->refs);
+    j->pdf = p;
+  }
+  // (none: a job that fails, its image failed as a bad one's)
+  if (!p) j->data = (uint8_t *)malloc(1), j->len = 0;
+  return start(j);
+}
+
+void mb_host_pdf_close(int32_t doc) {
+  AcquireSRWLockExclusive(&pdfs_lock);
+  Pdf *p = doc > 0 && doc < npdfs ? pdfs[doc] : NULL;
+  if (p) pdfs[doc] = NULL;
+  ReleaseSRWLockExclusive(&pdfs_lock);
+  if (p) pdf_let_go(p);
 }
 
 void *mb_image_srv(int id) {

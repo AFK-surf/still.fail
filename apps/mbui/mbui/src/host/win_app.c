@@ -821,7 +821,7 @@ int32_t mb_host_reduce_motion(void) {
 
 // What the host did for the app is done (host_native.mbt's set_outside): kind 1 an image decoded (win_image.cpp), 2 a
 // native view ready, failed, or waiting on the app (win_views.cpp); told as each frame begins: on this thread, between
-// frames. No PDFs yet (pdf_page_load answers 0: nothing the app awaits).
+// frames (a PDF's page drawn among the images).
 int32_t mb_host_set_outside(mb_outside_fn f) {
   outside_cb = f;
   return 1;
@@ -1030,13 +1030,8 @@ moonbit_string_t mb_host_gallery_read_rows(int32_t id) { (void)id; return moonbi
 void mb_host_gallery_read_end(int32_t id) { (void)id; }
 int32_t mb_host_pick_photo(moonbit_string_t src) { (void)src; return 0; }
 
-// Native views over the canvas: win_views.cpp. PDFs (host_native.mbt): not on Windows yet; no PDF is drawn (pages -1),
-// the app says it cannot show it. (Saving a file: at the end, with keep.mbt's.)
-int32_t mb_host_pdf_open(moonbit_bytes_t data) { (void)data; return 0; }
-int32_t mb_host_pdf_pages(int32_t doc) { (void)doc; return -1; }
-void mb_host_pdf_page_size(int32_t doc, int32_t page, double *out) { (void)doc; (void)page; out[0] = out[1] = 0; }
-int32_t mb_host_pdf_page_load(int32_t doc, int32_t page, int32_t max_px) { (void)doc; (void)page; (void)max_px; return 0; }
-void mb_host_pdf_close(int32_t doc) { (void)doc; }
+// Native views over the canvas: win_views.cpp. PDFs (host_native.mbt): win_image.cpp, Windows.Data.Pdf's. (Saving a
+// file: at the end, with keep.mbt's.)
 int32_t mb_host_save_file(moonbit_string_t name, moonbit_bytes_t data);  // below, with keep.mbt's
 
 // ---------------------------------------------------------------------------
