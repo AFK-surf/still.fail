@@ -68,7 +68,11 @@ pub fn viewer_bar(
         }
         let b = c.box(style=viewer_back_box, id=if live { id } else { 0 }, fn() {
           icon(c, "chevron-left", size=viewer_back_icon, color=ink.ink) |> ignore
-          c.text(back, style=viewer_back_words.then(@ui.text_style(color=Data(ink.ink)))) |> ignore
+          // (short of room, its words leave it whole and the chevron stays, as a page's bar's way back does)
+          c.box(drop=1, fn() {
+            c.text(back, style=viewer_back_words.then(@ui.text_style(color=Data(ink.ink)))) |> ignore
+          })
+          |> ignore
         })
         c.semantics(b, Button, id~, label=back)
       })

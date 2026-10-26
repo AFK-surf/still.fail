@@ -282,7 +282,6 @@
     },
     "page-screen": {
       "src/sfapp/composer.mbt": 2,
-      "src/sfapp/screen_view.mbt": 1,
       "src/sfdesk/appearance.mbt": 1,
       "src/sfdesk/frame.mbt": 2,
       "src/sfdesk/resources.mbt": 1,

@@ -32,9 +32,12 @@ fn ScreenUi::fit(self : ScreenUi) -> SRect {
 }
 
 ///|
-/// Where the pointer is now as this device draws it: the trackpad's while it drives it so, else the station's.
+/// Where the pointer is now as this device draws it: the trackpad's while it drives it so, else the station's; none
+/// while this device's own mouse is over the picture driving it (it is the screen's pointer then, in its shape).
 fn pointer_now(s : ScreenSess, u : ScreenUi) -> (Double, Double)? {
-  if s.driving() && s.pad(s.src) {
+  if u.mouse.over {
+    None
+  } else if s.driving() && s.pad(s.src) {
     Some(u.pad.at())
   } else {
     s.cursor()
@@ -84,8 +87,14 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
   u.zoom.boxed(u.box_w, u.box_h)
   let fit = u.fit()
   // (the pointer's way taken once a frame, whatever builds it)
-  screen_gestures(c, s, u, stage, fit)
+  screen_gestures(c, s, u, stage, fit, "screen-keys/" + key)
   c.drag_on(stage, axis=Free)
+  // the wheel over it is its own (a mouse's, sent to the screen)
+  @ui.capture(c, stage)
+  // this device's mouse over the picture driving it: in the screen's pointer's shape
+  if u.mouse.over {
+    c.cursor(stage, cursor_of_shape(text(field(s.state, "cursor"), "shape")))
+  }
   c.box(style=stage_box, id=stage, fn() {
     if size is Some(_) && fit.w > 0.0 {
       let shown = u.shown()
@@ -476,13 +485,26 @@ fn gesture_new() -> Gesture {
 /// press held a right click, a drag a drag (down, moves, up), two fingers moving together a wheel. Either way two
 /// fingers spreading zoom the frame here (it is not sent); only looking, moving together pan it when zoomed, one finger
 /// too. What is sent goes once the frame's builds are over (Ctx::tell), in the order it was done.
-fn screen_gestures(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, fit : SRect) -> Unit {
+fn screen_gestures(
+  c : @ui.Ctx,
+  s : ScreenSess,
+  u : ScreenUi,
+  stage : Int,
+  fit : SRect,
+  catcher : String,
+) -> Unit {
   let g = u.gesture
   let frame = c.frame_number()
   if g.frame == frame {
     return
   }
   g.frame = frame
+  // a mouse is itself: the screen's pointer where it is
+  if @sf.pointer_rests() {
+    screen_mouse(c, s, u, stage, catcher, frame)
+    return
+  }
+  u.mouse.over = false
   let sent : Array[Json] = []
   let buzz : Array[@ui.Haptic] = []
   let (ox, oy) = match c.rect_of(stage) {
@@ -734,4 +756,140 @@ fn scroll_by(
   }
   let k = fw.to_double() / shown.w
   sent.push(wheel_input(at, -dx * k, -dy * k))
+}
+
+// ── a mouse ──────────────────────────────────────────────────────────────
+
+///|
+/// The mouse on the stage, as it was last seen: its primary button down there, and whether that press went to the
+/// screen (it began on the picture, driving it) with the modifiers held as it did; where the screen's pointer was last
+/// sent; whether the mouse is over the picture driving it (the screen's pointer then, the station's not drawn).
+priv struct MouseDrive {
+  mut down : Bool
+  mut sent_down : Bool
+  mut mods : Int
+  mut at : (Double, Double)?
+  mut over : Bool
+}
+
+///|
+fn mouse_drive_new() -> MouseDrive {
+  { down: false, sent_down: false, mods: 0, at: None, over: false }
+}
+
+///|
+/// What a mouse did on the stage since the last frame, as the screen takes it (web/src/screen/input.ts, a mouse): its
+/// moves over the picture (the frame's last), its primary button down where it is, moved held (past the picture's
+/// edge, at its edge) and up, its secondary button a right click, its wheel (in pixels, not a pinch); with ⇧ ⌃ ⌥ ⌘
+/// held as a button goes down, their keys round it. A press on the stage, a picture's letterbox too, gives it the
+/// keyboard. Only while driving it: only looking, nothing goes.
+fn screen_mouse(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, catcher : String, frame : Int) -> Unit {
+  let m = u.mouse
+  let sent : Array[Json] = []
+  let send = fn(j : Json) { sent.push(j) }
+  let (ox, oy) = match c.rect_of(stage) {
+    Some((x, y, _, _)) => (x, y)
+    None => (u.stage_x, u.stage_y)
+  }
+  u.stage_x = ox
+  u.stage_y = oy
+  let shown = u.shown()
+  let driving = s.driving()
+  let on_frame = fn(x : Double, y : Double, clamp : Bool) { screen_frame_at(x - ox, y - oy, shown, clamp) }
+  let move_to = fn(at : (Double, Double), buttons : Int) {
+    if m.at != Some(at) {
+      m.at = Some(at)
+      send(pointer_input("move", at, buttons))
+    }
+  }
+  let mut keys = false
+  match c.drag_of(stage) {
+    Some(d) => {
+      // down now, or down and up since the last frame (a click)
+      let clicked = d.take_tap()
+      d.take_end() |> ignore
+      d.take_move() |> ignore
+      if (d.down || clicked) && !m.down {
+        m.down = true
+        m.sent_down = false
+        if driving {
+          keys = true
+          match on_frame(d.x0, d.y0, false) {
+            Some(at) => {
+              m.mods = mods_of_held(@ui.mods_held())
+              mods_round(send, m.mods, "down")
+              m.at = Some(at)
+              send(pointer_input("down", at, btn_primary))
+              m.sent_down = true
+            }
+            None => ()
+          }
+        }
+      }
+      if m.sent_down && d.down {
+        match on_frame(d.x, d.y, true) {
+          Some(at) => move_to(at, btn_primary)
+          None => ()
+        }
+      }
+      if m.down && !d.down {
+        m.down = false
+        if m.sent_down {
+          m.sent_down = false
+          let at = match on_frame(d.x, d.y, true) {
+            Some(at) => at
+            None => m.at.unwrap_or((0.5, 0.5))
+          }
+          m.at = Some(at)
+          send(pointer_input("up", at, 0))
+          mods_round(send, m.mods, "up")
+        }
+      }
+    }
+    None => ()
+  }
+  // over the picture, nothing held: the screen's pointer goes where it is
+  let (px, py, _) = c.pointer()
+  let over = if c.hovered(stage) { on_frame(px, py, false) } else { None }
+  m.over = driving && (over is Some(_) || m.sent_down)
+  match over {
+    Some(at) if driving && !m.down => move_to(at, 0)
+    _ => ()
+  }
+  // the secondary button: a right click where it is (Ctrl-click is the system's own right click: no ⌃ round it)
+  match c.right_clicked(stage) {
+    Some((x, y)) if driving => {
+      keys = true
+      match on_frame(x, y, false) {
+        Some(at) => {
+          let mods = mods_of_held(@ui.mods_held()) & mod_ctrl.lnot()
+          mods_round(send, mods, "down")
+          m.at = Some(at)
+          send(pointer_input("down", at, btn_secondary))
+          send(pointer_input("up", at, 0))
+          mods_round(send, mods, "up")
+        }
+        None => ()
+      }
+    }
+    _ => ()
+  }
+  // the wheel, where the mouse is (a trackpad's pinch zooms nothing there)
+  let (dx, dy, wmods) = @ui.wheel_of(c, stage)
+  if driving && (dx != 0.0 || dy != 0.0) && (wmods & @ui.wheel_mod_pinch) == 0 {
+    match on_frame(px, py, false) {
+      Some(at) => send(wheel_input(at, dx, dy))
+      None => ()
+    }
+  }
+  if keys {
+    c.catch_keys(catcher, true)
+  }
+  if sent.length() > 0 {
+    c.tell("screen-mouse/" + s.view + "/\{frame}", fn() {
+      for j in sent {
+        s.input(s.src, j)
+      }
+    })
+  }
 }

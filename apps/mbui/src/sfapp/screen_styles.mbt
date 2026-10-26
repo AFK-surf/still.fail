@@ -90,7 +90,7 @@ let seg_track : @ui.Style = @ui.css("row h=S8 p=S0_5 radius=Xl1_5 bg=Tint")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let seg_item : @ui.Style = @ui.css("h=Full px=S2_5 align=ACenter justify=JCenter")
+let seg_item : @ui.Style = @ui.css("row h=Full px=S2_5 align=ACenter justify=JCenter")
 
 ///|
 /// The thumb: lifted out of the track (white; the dark theme's 0x3A3B40) with a hairline round it (the line's colour,
@@ -511,6 +511,22 @@ let screen_time_words : @ui.TextStyle = @ui.text_style(
   wrap=false,
   tabular=true,
 )
+
+///|
+/// With keyboard and mouse, how the view goes in the viewer's bar (the web's netChip): 32 high, round, the page's hover
+/// under the pointer; the mark on its tile 4 in, the time 10 from the end, 8 between.
+// kept across runs: a value (no field of it changes)
+let net_chip_box : @ui.Style = @ui.css("row h=S8 pl=S1 pr=S2_5 gap=S2 align=ACenter radius=Full hovered{bg=Hover}")
+
+///|
+/// The signal mark's tile: 24, round, the ink at 6% under it.
+// kept across runs: a value (no field of it changes)
+let net_mark_tile : @ui.Style = @ui.css("w=S6 h=S6 radius=Full bg=Tint align=ACenter justify=JCenter")
+
+///|
+/// Who drives it and 接管 among the viewer's bar's tools: its dot, the words (cut short first) and 接管, 10 apart.
+// kept across runs: a value (no field of it changes)
+let take_over_bar_row : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
 
 ///|
 /// The signal mark's bars side by side, 2 apart, standing on its foot.

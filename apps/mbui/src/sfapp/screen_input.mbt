@@ -132,6 +132,47 @@ fn stroke(send : (Json) -> Unit, key : String, code : String, mods : Int) -> Uni
 }
 
 ///|
+/// The keys held on this device (@ui.mods_held: mod_shift_key, mod_ctrl, mod_alt, mod_cmd) as the station takes them.
+fn mods_of_held(held : Int) -> Int {
+  (if (held & @ui.mod_alt) != 0 { mod_alt } else { 0 }) |
+  (if (held & @ui.mod_ctrl) != 0 { mod_ctrl } else { 0 }) |
+  (if (held & @ui.mod_cmd) != 0 { mod_meta } else { 0 }) |
+  (if (held & @ui.mod_shift_key) != 0 { mod_shift } else { 0 })
+}
+
+///|
+/// The modifier keys of `mods`, each its key going `kind` ("down" before a press, "up" after it), so a click with ⇧ or
+/// ⌘ held is one there too (a key held alone never comes to a key catcher).
+fn mods_round(send : (Json) -> Unit, mods : Int, kind : String) -> Unit {
+  for k in [
+    (mod_meta, "Meta", "MetaLeft"),
+    (mod_ctrl, "Control", "ControlLeft"),
+    (mod_alt, "Alt", "AltLeft"),
+    (mod_shift, "Shift", "ShiftLeft"),
+  ] {
+    if (mods & k.0) != 0 {
+      send(key_input(kind, k.1, k.2, mods))
+    }
+  }
+}
+
+///|
+/// The station's pointer's shape (a CSS cursor's name: docs/remote-screens.md `cursor`) as this device draws its own.
+fn cursor_of_shape(shape : String) -> @ui.Cursor {
+  match shape {
+    "pointer" => Hand
+    "text" | "vertical-text" => IBeam
+    "ew-resize" | "col-resize" | "e-resize" | "w-resize" => ResizeX
+    "ns-resize" | "row-resize" | "n-resize" | "s-resize" => ResizeY
+    "grab" | "move" | "all-scroll" => Grab
+    "grabbing" => Grabbing
+    "crosshair" => Crosshair
+    "not-allowed" | "no-drop" => NotAllowed
+    _ => Arrow
+  }
+}
+
+///|
 /// The modifiers tapped on the keys row (⌘ ⌃ ⌥ ⇧, which a phone's keyboard has not): held for the next key or
 /// character, then let go, as a phone's own shift is.
 priv struct HeldKeys {

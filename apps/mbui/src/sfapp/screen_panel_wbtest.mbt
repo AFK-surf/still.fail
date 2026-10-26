@@ -3,10 +3,20 @@
 // 复制诊断, 断开.
 
 ///|
-/// 控制中心 opened from the bar, its sheet in.
+/// 控制中心 opened from the bar, its sheet in (a popover's beside it with keyboard and mouse).
 fn open_center(r : ScreenRig) -> Unit {
   r.tap_label(tr("web-pages.screen.panel"))
   r.t.run_for(@sf.later_ms)
+  to_sheet_rest(r.t)
+}
+
+///|
+/// The presenters' sheet, where one is moving (a phone's 控制中心 opened or closed), at its rest.
+fn to_sheet_rest(t : @ui.Tester) -> Unit {
+  let rest = @kit.sheet_rest("sf-present")
+  if rest > t.time() && rest < @double.infinity {
+    t.run_for(rest - t.time())
+  }
 }
 
 ///|
@@ -14,6 +24,7 @@ fn open_center(r : ScreenRig) -> Unit {
 fn shut(r : ScreenRig) -> Unit {
   r.t.press("Escape")
   r.t.run_for(@kit.presence_out_ms + @sf.later_ms)
+  to_sheet_rest(r.t)
   // (a segmented choice's thumb gone on its spring to the one chosen: run to its rest)
   let rest = r.t.rest_of("spring")
   if rest > r.t.time() {
@@ -83,6 +94,7 @@ test "组合键 while driving: a Windows station's, tiles at 控制中心's top,
   assert_eq(kind_of_input(ins[1]), "up")
   // chosen, 控制中心 closes
   r.t.run_for(@sf.later_ms)
+  to_sheet_rest(r.t)
   assert_true(r.t.find(tr("web-pages.screen.combos")) is None)
   // only looking: no keys to send (nor the keys row)
   r.state("live", control=false)

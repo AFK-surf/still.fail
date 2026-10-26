@@ -331,6 +331,18 @@ the screen's own size; another opens the view again), 组合键 while driving (t
 itself, as the station's system names them: ⌘Tab, Alt+Tab, the Windows key…, each a key with its `mods`; Ctrl+Alt+Del
 cannot be sent, Windows keeps it from any app), sending files, a window of its own, 全屏 and 断开. 在新窗口打开 moves the view to a window of its own (`?window`: back closes it).
 
+The mbui app goes by its native input (apps/mbui/docs/architecture.md, `@sf.soft_keyboard()`): with touch as Android
+above, with keyboard and mouse as the web on a computer (apps/mbui/src/sfapp/screen_view.mbt): the library's viewer bar
+across the window's top (clear of the window's buttons, dragging the window; back, the name and the core's line, the
+signal mark and how long, 控制中心, 只看/控制), the picture under it, no trackpad, keyboard button or keys row. The mouse is
+the screen's pointer where it is: its moves over the picture, its primary button down, moved and up (a press began on
+the picture held past its edge at its edge), its secondary button a right click, its wheel in pixels (a trackpad's pinch
+not sent), with ⇧ ⌃ ⌥ ⌘ held as a button goes down their keys sent round it (a key catcher never hears a modifier
+alone); a press on the stage gives it the keyboard (a key catcher: words as text, keys with modifiers as keys), ⌘V
+(Ctrl+V) pastes this device's clipboard there where the screen carries one, and over the picture the station's pointer
+is not drawn, the mouse's own taking its shape. 全屏 fills the screen with the window, the bar kept, and closing the
+screen puts the window back.
+
 ### Asking a person to take over
 
 The agents' `screen` tool lists the station's screens and gives a link to one: `<cloud>/w/<workspace>/s/<station>/screen/<id>`.

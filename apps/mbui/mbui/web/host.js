@@ -1645,7 +1645,7 @@
   }
 
   // the pointer's shape (@hostapi.set_cursor)
-  const cursors = ['default', 'pointer', 'text', 'ew-resize', 'ns-resize', 'grab'];
+  const cursors = ['default', 'pointer', 'text', 'ew-resize', 'ns-resize', 'grab', 'grabbing', 'crosshair', 'not-allowed'];
   H.setCursor = (k) => { canvas.style.cursor = cursors[k] || 'default'; };
   H.clipboardSet = (s) => { navigator.clipboard?.writeText(s).catch(() => {}); };
   // the word around a UTF-16 offset as the browser finds words (Intl.Segmenter: a dictionary's in Chinese), start × 2³²

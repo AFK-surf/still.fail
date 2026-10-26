@@ -1139,7 +1139,7 @@ pub fn window_drag() -> Unit {
 
 ///|
 /// The pointer's shape from now on: 0 the arrow, 1 a hand, 2 the text's I-beam, 3 resizing sideways, 4 up and down,
-/// 5 an open hand. Nothing where there is no pointer.
+/// 5 an open hand, 6 a closed hand, 7 a crosshair, 8 what cannot be done. Nothing where there is no pointer.
 pub fn set_cursor(kind : Int) -> Unit {
   current.val.set_cursor(kind)
 }
