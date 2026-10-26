@@ -62,6 +62,8 @@ priv struct Composing {
   /// each quote's card's colour as it was last drawn, by quote: where its ground sets out from as it is sent
   /// (flying_quotes)
   grounds : Map[String, Int64]
+  /// each quote's own picture as it was last drawn in its card, by quote: what flies from there as it is sent
+  pictures : Map[String, String]
 }
 
 ///|
@@ -92,6 +94,7 @@ let composing : Composing = {
   cc_open: false,
   wanted: false,
   grounds: {},
+  pictures: {},
 }
 
 ///|
@@ -101,6 +104,7 @@ fn composing_reset() -> Unit {
   composing.warmed.clear()
   composing.comments.clear()
   composing.grounds.clear()
+  composing.pictures.clear()
   composing.roomy = None
   composing.draft = ""
   composing.roomy_before = None
@@ -692,6 +696,16 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
           role=text(v, "role"),
           composer=true,
           remove=true,
+          // its own picture (an image of a message quoted, a mark's screenshot) in its card as a picture waiting is,
+          // where it flies from to its place in the message (flying_quotes)
+          picture?=quote_picture(src, spec.station, v).map(fn(own) {
+            fn() {
+              let (picture, f) = own
+              let tile = picture_tile(c, picture, going_now(f), gone_up(f), text(f, "error"))
+              @motion.measure(c, tile, quote_picture_key(id))
+              composing.pictures[id] = picture
+            }
+          }),
           comment_field=fn() {
             let res = c.editor(
               key,
@@ -1306,12 +1320,7 @@ fn flying_files(c : @ui.Ctx, w : Writing) -> Array[FlyingFile] {
   w.files.filter_map(fn(f) {
     let v = Some(f)
     let id = text(v, "id")
-    let key = match field(v, "done") {
-      Some(_) if @sfbase.writing_put_here(id) => @sfbase.upload_path(id)
-      Some(done) => text(Some(done), "path")
-      None if going.contains(id) && file_kind(text(v, "name")) == "image" => @sfbase.upload_path(id)
-      None => ""
-    }
+    let key = flying_key(v, going.contains(id))
     match c.rect_of(c.id("composer/file/" + id)) {
       Some(from) if key != "" => {
         let picture = writing_pictures.get(id).unwrap_or("")
@@ -1369,13 +1378,63 @@ fn quote_card_key(id : String) -> String {
 }
 
 ///|
+/// Where quote `id`'s own picture is in its card in the composer (composer_extras).
+fn quote_picture_key(id : String) -> String {
+  "composer/quote-picture/" + id
+}
+
+///|
+/// A quote's own picture, if it is an image (Chat.tsx QuotedThumb, PendingFile), and its file: the picture from here
+/// while it is this device's (a mark's screenshot), else the station's (an image of a message quoted).
+fn quote_picture(src : Source, station : String, q : Json?) -> (String, Json?)? {
+  let own = field(q, "own")
+  guard own is Some(_) && file_kind(text(own, "name")) == "image" else { return None }
+  match writing_pictures.get(text(own, "id")) {
+    Some(picture) => Some((picture, own))
+    None => {
+      let done = field(own, "done")
+      guard text(done, "owner") != "" else { return None }
+      Some(((src.file)(station, text(done, "owner"), stored_name(text(done, "path"))), own))
+    }
+  }
+}
+
+///|
+/// What a file waiting is in the message it goes with (file_key: one put up from here, or an image still going up
+/// (`going`), its upload; any other its path), "" none.
+fn flying_key(v : Json?, going : Bool) -> String {
+  let id = text(v, "id")
+  match field(v, "done") {
+    Some(_) if @sfbase.writing_put_here(id) => @sfbase.upload_path(id)
+    Some(done) => text(Some(done), "path")
+    None if going && file_kind(text(v, "name")) == "image" => @sfbase.upload_path(id)
+    None => ""
+  }
+}
+
+///|
 /// The quotes of a draft, flying as it is sent to their cards in its message (quote_key: each by its place among
 /// them), each from its card here (where it is, its colour: what its ground sets out from), drawn there as it was, what
-/// is said about it as written, until it sets off.
+/// is said about it as written, until it sets off; its own picture from its tile in the card to its place in the
+/// message's card, as a picture sent goes (flight_files).
 fn flying_quotes(c : @ui.Ctx, w : Writing) -> Array[FlyingFile] {
   let flying : Array[FlyingFile] = []
+  let going = going_files(w).map(fn(f) { text(Some(f), "id") })
   for i, q in sent_quotes(w) {
-    let id = text(Some(w.quotes[i]), "id")
+    let v = Some(w.quotes[i])
+    let id = text(v, "id")
+    let own = field(v, "own")
+    let picture = match (own, composing.pictures.get(id), @motion.measured_rect(c, quote_picture_key(id))) {
+      (Some(_), Some(picture), Some(from)) => {
+        let key = flying_key(own, going.contains(text(own, "id")))
+        if key != "" {
+          Some((key, picture, from))
+        } else {
+          None
+        }
+      }
+      _ => None
+    }
     match @motion.measured_rect(c, quote_card_key(id)) {
       Some((x, y, wide, high)) => {
         let s = @sfbase.quote_of(q)
@@ -1386,7 +1445,20 @@ fn flying_quotes(c : @ui.Ctx, w : Writing) -> Array[FlyingFile] {
           face: fn() {
             let c = @ui.current()
             c.box(style=@ui.style(w=Fixed(wide)), fn() {
-              @sf.quote_card(c, "flying/quote/" + id, s.author, s.text, role=s.role, comment=s.comment, composer=true)
+              @sf.quote_card(
+                c,
+                "flying/quote/" + id,
+                s.author,
+                s.text,
+                role=s.role,
+                comment=s.comment,
+                composer=true,
+                // (its picture's room: the picture is drawn there flying, over the card)
+                picture?=picture.map(fn(p) {
+                  let (_, _, pw, ph) = p.2
+                  fn() { c.box(style=@ui.style(w=Fixed(pw), h=Fixed(ph)), fn() {  }) |> ignore }
+                }),
+              )
               |> ignore
             })
             |> ignore
@@ -1395,6 +1467,19 @@ fn flying_quotes(c : @ui.Ctx, w : Writing) -> Array[FlyingFile] {
         })
       }
       None => ()
+    }
+    match (own, picture) {
+      (Some(f), Some((key, picture, from))) =>
+        flying.push({
+          key,
+          from,
+          picture,
+          face: fn() {
+            picture_tile(@ui.current(), picture, going_now(Some(f)), gone_up(Some(f)), text(Some(f), "error")) |> ignore
+          },
+          ground: 0L,
+        })
+      _ => ()
     }
   }
   flying

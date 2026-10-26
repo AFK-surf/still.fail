@@ -62,6 +62,33 @@ test "a person's image held: quoted (whose, the file named), its file once in th
 }
 
 ///|
+test "an image quoted: its picture in its card in the composer; sent, it grows from there to its place in the message, never there at once" {
+  let (t, x, y) = image_in_chat("插画参考.png")
+  hold_quote(t, x, y)
+  t.run_for(composer_morph_ms)
+  t.draw()
+  // its tile in its card (as a picture waiting is: 56 square)
+  let tile = match t.drawn_images().iter().find_first(fn(i) { (i[2] - 56.0).abs() < 0.5 && (i[3] - 56.0).abs() < 0.5 }) {
+    Some(i) => i
+    None => fail("no picture in the quote's card: \{t.drawn_images()}")
+  }
+  tap_send(t)
+  // as it sets out: where its tile was
+  assert_true(
+    t.drawn_images().iter().any(fn(i) { (i[0] - tile[0]).abs() < 0.5 && (i[1] - tile[1]).abs() < 0.5 && (i[2] - 56.0).abs() < 0.5 }),
+    msg="\{t.drawn_images()}",
+  )
+  // on its way: between its tile's size and its own, drawn at no size it has at rest
+  t.run_for(@sfbase.flight_len(true) * 0.4)
+  let mid = t.drawn_images().map(fn(i) { i[2] })
+  t.run_for(@sfbase.flight_len(true) + @sf.hint_back_ms)
+  assert_true(send_flight.val is None)
+  let rest = t.drawn_images().map(fn(i) { i[2] })
+  let between = mid.filter(fn(w) { w > 56.5 && rest.iter().all(fn(r) { (r - w).abs() > 0.5 }) })
+  assert_true(between.length() > 0, msg="drawn \{mid} on its way, at rest \{rest}")
+}
+
+///|
 test "an agent's video and file card right clicked: 引用 quotes each, its file named, nothing played or opened" {
   reset()
   let src = fixture("chat-download")

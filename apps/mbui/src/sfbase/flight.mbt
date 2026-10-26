@@ -26,7 +26,8 @@
 // from where they were to where it has them, its ground from the composer's card to its own (its edges across, its
 // top and bottom and its colour up, on the words' way: the composer's card is as wide as the composer, its own as
 // wide as it needs), drawn where its card was, as the composer drew it, until it sets off; its ✕ going with it as it
-// sets out, leaving as what leaves goes. Sent with no words, the row comes in where it is, its files and quotes flying
+// sets out, leaving as what leaves goes; its own picture (an image quoted) from its tile in the card to its place in
+// the card in the message, as a picture sent with them goes. Sent with no words, the row comes in where it is, its files and quotes flying
 // into it, and the composer's hint stays away while a quote is over it.
 //
 // A new chat's first words are carried (ChatHost.kt Flight.carried, web madeChat.ts): drawn where they were typed from
