@@ -21,7 +21,7 @@ pub(all) struct Shell {
   /// system's: what the keys, the frames and the pages' back call (back_step, go_back), never the stack themselves
   back : () -> (() -> Unit)?
   /// what was chosen in a list (a row of a place's list, a pick) shown where the layout has the page: on the tape the
-  /// page brought over (show_chosen)
+  /// page beside the sidebar in use, brought over from the side panel (show_chosen)
   show : () -> Unit
   /// the rail changed where it is (自定义侧边条, Rail.tsx editing), where the layout has a rail beside the pages; none
   /// where it has none

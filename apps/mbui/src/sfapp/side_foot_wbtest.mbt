@@ -21,8 +21,8 @@ fn side_panel(t : @ui.Tester) -> @ui.Laid? {
 
 ///|
 /// The tape's settings on a touch screen's medium window `h` high, the device's language `locale` (its host's
-/// MBUI_LOCALE; "": Chinese): 关于's page opened from the sidebar's list scrolled to its end, the sidebar brought back
-/// over, 关于 its last row, lit; then a newer build known where `newer`.
+/// MBUI_LOCALE; "": Chinese): 关于's page opened from the sidebar's list scrolled to its end, beside the sidebar still
+/// in use, 关于 its last row, lit; then a newer build known where `newer`.
 fn settings_at_end(h : Double, locale? : String = "", newer? : String = "") -> @ui.Tester raise {
   reset()
   let src = fixture("chat")
@@ -39,8 +39,8 @@ fn settings_at_end(h : Double, locale? : String = "", newer? : String = "") -> @
   t.tap(x + w / 2.0, y + rh / 2.0)
   t.run_for(@sfdesk.side_move_ms * 2.0)
   assert_true(app.nav.top() == Setting(@settings.Route::About))
-  t.back()
-  t.run_for(@sfdesk.side_move_ms * 2.0)
+  // (its page beside the sidebar, the sidebar still in use)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
   // (said once 关于 has asked still.fail cloud: what it answered, none newer, said over)
   if newer != "" {
     update.available = Some({ "versionName": Json::string(newer) })

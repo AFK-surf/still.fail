@@ -129,7 +129,7 @@ fn open_job(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
 
 ///|
 /// A chat gone to from beside the list (a job's row): its page the one open, the chats' place under it; on the tape
-/// brought over to show it (show_page), the chat already open too.
+/// shown in the page (show_page), the chat already open too.
 fn open_chat_ref(r : ChatRef) -> Unit {
   @sfbase.show_chosen()
   match app.nav.top() {
