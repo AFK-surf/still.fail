@@ -43,10 +43,11 @@
 - **host 主动告诉**（`share.changed`）：分享了、内容变了、不再给这台了、搬到哪台了。没联系上的记着，过一阵再告诉（1 分钟起，越来越久，最多 30 分钟）。
 - **使用方每次启动问一次**（`share.version`），补上自己离线期间的变化；对方说搬走了就转去问新的 host。
 - **一台 station 被移出 workspace**：它分享的副本在各台被删掉，它作为使用方被各 host 忘掉。
+- **一台 station 在几个 workspace 里**（docs/multi-workspace.md）：profile 发给它服务的每个 workspace 里的 station，skill 只发给主 workspace 的；收方认自己任一 workspace 里的分享方，收到的 skill 链进它来的那个 workspace 的 skills。两边不再同在任何一个相关的 workspace 里，就当被移出。
 
 ## station 之间：`share.*` 方法
 
-走现有的 `stillfail/station/1`（`station/src/mesh/peer.ts` → `jobs/remote.ts` 的 `handle`），加一组方法。跟 `session.message` 一样，只要求对方是当前 roster 里同 workspace 的 station。另外再检查一条：对方在这个分享项的 `allow` 名单里，或者名单为空；以 cloud 推来的为准。
+走现有的 `stillfail/station/1`（`station/src/mesh/peer.ts` → `jobs/remote.ts` 的 `handle`），加一组方法。跟 `session.message` 一样，只要求对方是当前 roster 里同 workspace 的 station（任一个都行）。另外再检查两条：对方在这个分享项发给的 workspace 里（profile 服务的、skill 是主 workspace），并且在 `allow` 名单里或者名单为空；以 cloud 推来的为准。
 
 | 方法 | 谁问谁 | 做什么 |
 |---|---|---|

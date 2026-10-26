@@ -227,6 +227,28 @@ export class Cloud {
     this.planeLockSeqs.delete(ws);
   }
 
+  /// A workspace it joined takes over as its home one, the home it was taken out of gone (docs/multi-workspace.md): that
+  /// workspace's lock, pinned or named by joining, is the home one's now (lock.json, lock-pending.json), the old home's
+  /// forgotten. Refused (false) while the home one is locked and that workspace's lock is not pinned here: the station
+  /// stays where its lock keeps it.
+  succeed(ws: string): boolean {
+    if (this.locked() !== null && this.locked(ws) === null) return false;
+    this.writing = true;
+    try {
+      for (const [from, to] of [[joinedLockPath(this.data, ws), lockPath(this.data)], [joinedPendingPath(this.data, ws), pendingLockPath(this.data)]] as const) {
+        if (existsSync(from)) renameSync(from, to);
+        else rmSync(to, { force: true });
+      }
+    } finally {
+      wall.after(100, () => (this.writing = false));
+    }
+    this.lock = readLock(this.data);
+    this.joinedLocks.delete(ws);
+    this.planeLockSeqs.delete(ws);
+    log.info("lock", "a workspace this station joined took over as its home one; its lock is the home one's now", { workspace: ws, locked: this.lock !== null });
+    return true;
+  }
+
   /// What the control plane says of the roster and gateways (a `state` frame), kept as the lock lets it: only stations
   /// and gateways in the lock too. The control plane can leave one out, never add one.
   setPlaneLists(peers: any[], gateways: string[] | undefined) {

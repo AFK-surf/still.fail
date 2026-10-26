@@ -217,8 +217,13 @@ export function applyState(s: CloudState, text: string, send: (frame: unknown) =
     return;
   }
   if (body?.type === "state") {
+    // A workspace it joined taking over from a home it was taken out of: its lock goes along (cloud/state.ts `succeed`).
+    const was = s.state;
+    const took = was !== null && typeof body.workspace === "string" && body.workspace !== was.workspace
+      && (was.joined ?? []).some((j) => j.workspace === body.workspace) && !joinedOf(body.workspaces).some((j) => j.workspace === was.workspace)
+      && s.succeed(body.workspace);
     const locked = s.locked() !== null;
-    if (locked && s.state && ((typeof body.workspace === "string" && body.workspace !== s.state.workspace) || (typeof body.origin === "string" && body.origin !== s.state.origin))) {
+    if (locked && s.state && ((typeof body.workspace === "string" && body.workspace !== s.state.workspace && !took) || (typeof body.origin === "string" && body.origin !== s.state.origin))) {
       log.warn("lock", "the control plane moves this station; the workspace lock keeps it where it is", { workspace: body.workspace, origin: body.origin });
     }
     s.setPlaneLists(Array.isArray(body.peers) ? body.peers : [], Array.isArray(body.gateway_keys) ? body.gateway_keys.filter((k: unknown): k is string => typeof k === "string") : undefined);
@@ -226,7 +231,7 @@ export function applyState(s: CloudState, text: string, send: (frame: unknown) =
     s.peersCurrent = Array.isArray(body.peers);
     s.update((st) => {
       for (const k of ["workspace", "workspace_name", "name", "origin", "relay_url"] as const) {
-        if (locked && (k === "workspace" || k === "origin")) continue;
+        if (locked && (k === "origin" || (k === "workspace" && !took))) continue;
         if (typeof body[k] === "string") st[k] = body[k];
       }
       if (Array.isArray(body.relay_urls)) st.relay_urls = body.relay_urls.filter((u: unknown) => typeof u === "string");

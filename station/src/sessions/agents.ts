@@ -416,9 +416,10 @@ export const AgentsLive = (control: Control) =>
       let taken = false;
 
       // Profiles, sign-ins, allowances and the machine's own logins; the Claude driver's machine token renewed by it.
+      // (As the first of the station's workspaces it is in calls it, the home one first.)
       const hostName = (p: any) => {
         const host = p?.share?.host;
-        return cloud.state?.peers.find((x) => x?.id === host)?.name ?? host ?? null;
+        return cloud.memberships().flatMap((m) => m.peers).find((x) => x?.id === host)?.name ?? host ?? null;
       };
       const accounts: Accounts = makeAccounts({
         data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, hermes: () => hermes, following: () => events.inUse() || hub.anyRunning(), checkOnStart: true,
@@ -428,8 +429,7 @@ export const AgentsLive = (control: Control) =>
       accounts.start();
       sharing = new Sharing({
         data, config, cloud,
-        // What the station shares is its home workspace's (docs/multi-workspace.md).
-        ask: (station, request) => remote.ask(station, { workspace: cloud.home() ?? undefined, ...request }),
+        ask: (station, workspace, request) => remote.ask(station, workspace === null ? request : { workspace, ...request }),
         agentHome: () => settings().agentHome,
         env: process.env as Record<string, string | undefined>,
         claudeToken: (p, rejected) => accounts.claudeToken(p, rejected),
@@ -439,10 +439,7 @@ export const AgentsLive = (control: Control) =>
         changed: () => events.overviewChanged(),
         recheck: () => accounts.recheckBorrowed(),
       });
-      remote.setShares(async (peer, request, workspace) => {
-        if (workspace !== undefined && workspace !== cloud.home()) throw new Error("this station shares profiles and skills with its home workspace's stations only");
-        return sharing!.handle(peer, request);
-      });
+      remote.setShares((peer, request, workspace) => sharing!.handle(peer, request, workspace));
       sharing.start();
       xshare.start();
       const platformView = (viewer: Viewer, lang: Lang) => overview({ store, hub, cloud, config: () => config.raw(), accounts, updates, connectKinds, rootView: (p) => rootViewThrough(p, helperFiles), modules: () => modules.listed(), ...(grants ? { permissions: (v: Viewer) => permissionsView(grants, v) } : {}) }, viewer, lang);
