@@ -406,6 +406,8 @@ pub fn Ctx::list(
   st.direction = self.direction
   st.layer = self.layer_cur
   st.part = part_now.part
+  // (what moves it, in the part it is built in: Mover's `part`)
+  st.ease_mover.part = part_now.part
   // shown again (not built the frame before): what of it still moves says so again
   let back = st.built >= 0 && st.built < self.frame_no - 1
   // (built again in the same frame: its motion stepped once a frame, at the first)

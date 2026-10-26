@@ -528,17 +528,23 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     Some(e) => e
     None => return false
   }
-  if dr.mode == mode_hits {
-    // only where it is tapped: as laid out; drawn only, nowhere
-    return e.only
-  }
-  // a part kept, drawn again as its build drew it (kept_part.mbt)
+  // a part kept, drawn again as its build drew it, its targets where its build's paint said them (kept_part.mbt): only
+  // them where only targets are taken, only its drawing where it is only drawn
   match e.again {
     Some(st) => {
-      self.part_paint_again(st)
+      if dr.mode != mode_hits {
+        self.part_paint_again(st)
+      }
+      if dr.mode != mode_draw {
+        self.part_targets_again(st)
+      }
       return true
     }
     None => ()
+  }
+  if dr.mode == mode_hits {
+    // only where it is tapped: as laid out; drawn only, nowhere
+    return e.only
   }
   let look = e.look
   let keep = e.keep is Some(_)
@@ -618,7 +624,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     dr.mode = mode_draw
   }
   // (a part kept: what its build draws taken, with the glyphs' plots it draws from: kept_part.mbt)
-  let painting = if e.part != 0 { part_paint_begin(e.part) } else { 0 }
+  let painting = if e.part != 0 { self.part_paint_begin(e.part) } else { 0 }
   dr.bypass = i
   self.paint(i, alpha)
   dr.bypass = -1

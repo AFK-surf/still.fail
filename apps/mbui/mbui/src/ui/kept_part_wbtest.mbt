@@ -196,3 +196,107 @@ test "a part kept is built each frame a press is held down on what it draws, and
   t.wheel(75.0, 100.0, 40.0)
   assert_eq(k.builds.val, wheeled)
 }
+
+///|
+/// How long a wheel's notch is let ease on in the tests below.
+let kept_ease_ms : Double = 400.0
+
+///|
+/// A part holding a list of rows, and a box at its top lit under the pointer.
+fn kept_list_view(builds : Ref[Int]) -> (Ctx) -> Unit {
+  fn(c) {
+    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+      c.kept_part(c.id("part"), "k", fn() {
+        builds.val = builds.val + 1
+        c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+          let lit = c.id("lit")
+          c.box(id=lit, w=Px(200.0), h=Px(40.0), bg=if c.hovered(lit) { 0xDDE6FFFFL } else { 0xEEEEEEFFL }, fn() {
+            c.text("lit", size=12.0) |> ignore
+          })
+          |> ignore
+          c.list("in-part", 80, 40.0, fn(i) {
+            c.box(h=Px(40.0), fn() { c.text("item \{i}", size=12.0) |> ignore }) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+    })
+    |> ignore
+  }
+}
+
+///|
+/// Every frame `steps` draws with the part kept where it can be (`keep`) or built every frame, as numbers.
+fn kept_frames(
+  keep : Bool,
+  platform : Int,
+  steps : (Tester) -> Unit,
+  pointing? : Pointing = Finger,
+) -> Array[Array[Double]] {
+  let t = Tester::new(kept_list_view(Ref(0)), w=300.0, h=400.0, platform~, pointing~)
+  t.keep_parts(keep)
+  let frames = []
+  frame_hook.val = Some(fn() {
+    let c = g()
+    let f = []
+    for v in 0..<(c.ninst * inst_size) {
+      f.push(c.inst[v])
+    }
+    frames.push(f)
+  })
+  t.draw()
+  steps(t)
+  frame_hook.val = None
+  frames
+}
+
+///|
+/// The two runs drew the same frames.
+fn kept_same(kept : Array[Array[Double]], built : Array[Array[Double]]) -> Unit raise {
+  assert_eq(kept.length(), built.length())
+  for f in 0..<kept.length() {
+    let x = kept[f]
+    let y = built[f]
+    if x.length() != y.length() {
+      fail("frame \{f}: \{x.length() / inst_size} instances kept, \{y.length() / inst_size} built")
+    }
+    for v in 0..<x.length() {
+      if x[v] != y[v] {
+        let b = v / inst_size * inst_size
+        fail(
+          "frame \{f}: instance \{v / inst_size} (kind \{y[b + 5]} at \{y[b]},\{y[b + 1]} \{y[b + 2]}x\{y[b + 3]})'s \{v % inst_size} is \{x[v]} kept, \{y[v]} built",
+        )
+      }
+    }
+  }
+}
+
+///|
+test "a part kept is built each frame what moves in it goes, told as it was not built: its list eased by a wheel" {
+  let steps = fn(t : Tester) {
+    t.run_for(kept_ease_ms)
+    t.wheel(150.0, 200.0, 120.0)
+    t.run_for(kept_ease_ms)
+  }
+  let kept = kept_frames(true, 2, steps)
+  let built = kept_frames(false, 2, steps)
+  kept_same(kept, built)
+}
+
+///|
+test "a part kept is built while the mouse's pointer is over it: what it points at lit, and unlit once it leaves" {
+  let steps = fn(t : Tester) {
+    t.run_for(kept_ease_ms)
+    t.move(100.0, 20.0)
+    t.run_for(kept_ease_ms)
+    t.move(100.0, 300.0)
+    t.run_for(kept_ease_ms)
+    t.move(100.0, 20.0)
+    t.move(100.0, 30.0)
+    t.run_for(kept_ease_ms)
+  }
+  let kept = kept_frames(true, 0, steps, pointing=Mouse)
+  let built = kept_frames(false, 0, steps, pointing=Mouse)
+  kept_same(kept, built)
+}

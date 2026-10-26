@@ -10,10 +10,13 @@
 // its own runs its build, so a topic it read changed builds it again whatever else said, and what it read stays kept
 // while it shows (what follows a computed keeps it). What is not a signal is caught by what changes it: an event from
 // outside (outside_events: what the host or the runtime did, not a pointer moved nor a wheel turned elsewhere), its
-// `key` (what it is built from by its caller), the layout's epoch, its own motions and wakes, a press held down on it
-// or a wheel turned over it (what it holds may take them). It is built whole the first frames it shows, while a motion
-// going on as it came may still move what it holds. Drawn again it takes no press and holds no words; it is never read
-// out, built or not, so what is read out does not come and go with it.
+// `key` (what it is built from by its caller), the layout's epoch, what moves what it holds (its own motions, and what
+// moves a list or a box built in it, whenever it was told: a list flung before the part was kept flings on in it), its
+// wakes, a press held down on it or a wheel turned over it (what it holds may take them), the mouse's pointer over it
+// (it lights what it points at). It is built whole the first frames it shows, while a motion going on as it came may
+// still move what it holds. Drawn again, what its build's paint said of the frame is said again, where it was: its
+// targets, what scrolls in it, the words that can be picked, so presses, the wheel and the pointer find in it what they
+// found as it was built. It is never read out, built or not, so what is read out does not come and go with it.
 
 ///|
 /// A part kept (Ctx::kept_part): what its build drew (its instances, where they were; the pieces of its shapes; the
@@ -59,8 +62,23 @@ priv struct KeptPart {
   /// a Tester's: the words its build drew (KeptWord), what the Tester finds in it while it is drawn again
   words : Array[KeptWord]
   /// what its build drew covers (x, y, w, h: its instances where they show): a press held or a wheel turned there is
-  /// its
+  /// its; the mouse's pointer there lights what is in it
   mut rect : (Double, Double, Double, Double)
+  /// what its build's paint said of the frame, said again as it is drawn again: its targets (where presses go: their
+  /// ids, their ends from the first, their rects, their clips), what is only pointed at, what scrolls (ids, rects), the
+  /// paragraphs that can be picked; where they began among the frame's as it was painted
+  hit_ids : Array[Int]
+  hit_ends : Array[Int]
+  hit_rects : Array[Double]
+  hit_clips : Array[Double]
+  points : Array[Int]
+  scroll_ids : Array[Int]
+  scroll_rects : Array[Double]
+  sels : Array[SelTarget]
+  mut from : (Int, Int, Int)
+  /// whether what the pointer is over was one of its targets as it was built (Ctx::hovered: it lights what it points
+  /// at)
+  mut lit : Bool
 }
 
 ///|
@@ -246,24 +264,40 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
         again: false,
         words: [],
         rect: (0.0, 0.0, 0.0, 0.0),
+        hit_ids: [],
+        hit_ends: [],
+        hit_rects: [],
+        hit_clips: [],
+        points: [],
+        scroll_ids: [],
+        scroll_rects: [],
+        sels: [],
+        from: (0, 0, 0),
+        lit: false,
       }
       kept_parts[id] = st
       st
     }
   }
   // (shown in the frame before, or in this one's build before: else it comes now, the motions going on waited for)
-  if st.shown < self.frame_no - 1 {
+  // (what moves asked as the last frame left it: this frame's build has not said yet what it moves, a list not built
+  // yet says it is at rest)
+  let last = self.frame_no - 1
+  if st.shown < last {
     st.built = -1
     st.waits.clear()
     for e in self.movers {
-      if e.m.rest_at(self.now, self.frame_no) > self.now {
+      if e.m.rest_at(self.now, last) > self.now {
         st.waits.push(e)
       }
     }
   }
   st.shown = self.frame_no
-  st.waits.retain(fn(e) { e.m.rest_at(self.now, self.frame_no) > self.now })
-  let moving = self.movers.iter().any(fn(e) { e.part == id && e.m.rest_at(self.now, self.frame_no) > self.now })
+  st.waits.retain(fn(e) { e.m.rest_at(self.now, last) > self.now })
+  // (what moves what it holds, told as it was built or not: a list in it flung before it was kept)
+  let moving = self.movers.iter().any(fn(e) {
+    (e.part == id || e.who.part == id) && e.m.rest_at(self.now, last) > self.now
+  })
   // (a finger or a button held down on it: what it holds may take the press, a hold picking its words)
   let (rx, ry, rw, rh) = st.rect
   let held = self.down &&
@@ -271,8 +305,14 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
     self.press_x < rx + rw &&
     self.press_y >= ry &&
     self.press_y < ry + rh
+  // (the mouse's pointer over it, or what the pointer is over one of its targets as it was built or now: it lights what
+  // it points at, a frame late)
+  let pointed = st.lit ||
+    self.part_lit(st) ||
+    (pointing() is Mouse && self.px >= rx && self.px < rx + rw && self.py >= ry && self.py < ry + rh)
   let same = parts_on.val &&
     !held &&
+    !pointed &&
     !inst_owners.on &&
     st.built >= 0 &&
     st.built != self.frame_no &&
@@ -467,13 +507,15 @@ fn part_plot(colour : Bool, plot : Int) -> Unit {
 
 ///|
 /// Part `id`'s build about to be painted from instance `i0`: its plots taken anew as its glyphs are drawn.
-fn part_paint_begin(id : Int) -> Int {
+fn Ctx::part_paint_begin(self : Ctx, id : Int) -> Int {
   let was = part_now.painting
   match kept_parts.get(id) {
     Some(st) => {
       st.plots.clear()
       st.plot_seen.clear()
       st.images.clear()
+      st.points.clear()
+      st.from = (self.next_hit_ids.length(), self.next_scroll_ids.length(), desk.next_sels.length())
     }
     None => ()
   }
@@ -488,6 +530,34 @@ fn Ctx::part_paint_end(self : Ctx, id : Int, node : Int, i0 : Int, was : Int) ->
   part_now.painting = was
   match kept_parts.get(id) {
     Some(st) => {
+      let (h0, s0, sel0) = st.from
+      st.hit_ids.clear()
+      st.hit_ends.clear()
+      st.hit_rects.clear()
+      st.hit_clips.clear()
+      for h in h0..<self.next_hit_ids.length() {
+        st.hit_ids.push(self.next_hit_ids[h])
+        st.hit_ends.push(self.next_hit_ends[h] - h0)
+      }
+      for v in (h0 * 4)..<self.next_hit_rects.length() {
+        st.hit_rects.push(self.next_hit_rects[v])
+      }
+      for v in (h0 * clip_n)..<self.next_hit_clips.length() {
+        st.hit_clips.push(self.next_hit_clips[v])
+      }
+      st.scroll_ids.clear()
+      st.scroll_rects.clear()
+      for j in s0..<self.next_scroll_ids.length() {
+        st.scroll_ids.push(self.next_scroll_ids[j])
+      }
+      for v in (s0 * 4)..<self.next_scroll_rects.length() {
+        st.scroll_rects.push(self.next_scroll_rects[v])
+      }
+      st.sels.clear()
+      for j in sel0..<desk.next_sels.length() {
+        st.sels.push(desk.next_sels[j])
+      }
+      st.lit = self.part_lit(st)
       let a = self.inst
       let floats = (self.ninst - i0) * inst_size
       if st.insts.length() < floats {
@@ -533,6 +603,20 @@ fn Ctx::part_paint_end(self : Ctx, id : Int, node : Int, i0 : Int, was : Int) ->
     }
     None => ()
   }
+}
+
+///|
+/// Whether what the pointer is over (Ctx::hovered) is one of part `st`'s targets, as its paint said them.
+fn Ctx::part_lit(self : Ctx, st : KeptPart) -> Bool {
+  if self.hover == 0 && self.hover_in.is_empty() {
+    return false
+  }
+  for id in st.hit_ids {
+    if id == self.hover || self.hover_in.contains(id) {
+      return true
+    }
+  }
+  false
 }
 
 ///|
@@ -611,4 +695,26 @@ fn Ctx::part_paint_again(self : Ctx, st : KeptPart) -> Unit {
     }
   }
   self.ninst = i0 + count
+}
+
+///|
+/// Part `st` drawn again: what its build's paint said of the frame said again, where it said it (nothing round it
+/// moved: its key the same): its targets, what is only pointed at, what scrolls in it, its paragraphs that can be
+/// picked. So presses, the wheel and the pointer find in it what they found as it was built.
+fn Ctx::part_targets_again(self : Ctx, st : KeptPart) -> Unit {
+  let h0 = self.next_hit_ids.length()
+  for j in 0..<st.hit_ids.length() {
+    self.next_hit_ids.push(st.hit_ids[j])
+    self.next_hit_ends.push(st.hit_ends[j] + h0)
+  }
+  self.next_hit_rects.append(st.hit_rects)
+  self.next_hit_clips.append(st.hit_clips)
+  for id in st.points {
+    self.next_points[id] = true
+  }
+  self.next_scroll_ids.append(st.scroll_ids)
+  self.next_scroll_rects.append(st.scroll_rects)
+  for t in st.sels {
+    selectable_painted(t.base, t.lay, t.text, t.ox, t.oy, t.x0, t.y0, t.x1, t.y1)
+  }
 }
