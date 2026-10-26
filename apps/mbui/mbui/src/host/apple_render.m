@@ -901,7 +901,7 @@ static id<MTLTexture> off_target;
 void mb_render_init_offscreen(double w, double h, double scale) {
   mb_render_init(nil);
   mb_render_set_size(w, h, scale);
-  mb_text_scale = scale;
+  mb_text_set_scale(scale);
   MTLTextureDescriptor *td = [MTLTextureDescriptor
       texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
                                    width:(NSUInteger)round(w * scale)

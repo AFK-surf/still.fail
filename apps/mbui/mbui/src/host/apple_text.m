@@ -9,7 +9,7 @@
 #include <math.h>
 #include <pthread.h>
 
-double mb_text_scale = 2.0;
+static double text_scale = 2.0;
 
 typedef struct {
   double size;
@@ -135,6 +135,15 @@ static void faces_changed(void) {
   [fonts removeAllObjects];
   ahead_forget();
   last_size = -1;
+  generation++;
+}
+
+// Drawn at this many pixels a point (the screen the window is on): a change draws every glyph again, as a face's does
+// (MoonBit places a glyph by its pixels at the scale it was drawn at).
+void mb_text_set_scale(double scale) {
+  if (scale == text_scale) return;
+  text_scale = scale;
+  ahead_forget();
   generation++;
 }
 
@@ -700,7 +709,7 @@ static MBDrawn *draw_cluster(NSString *cluster, CTFontRef f, int style, BOOL clo
 static int held_key = -1;
 static MBDrawn *held;
 
-// The glyph of `key` from its picture (drawn at mb_text_scale): its box, and the picture held for mb_host_glyph_put
+// The glyph of `key` from its picture (drawn at text_scale): its box, and the picture held for mb_host_glyph_put
 // (where it goes in its atlas is MoonBit's: hostapi's atlas.mbt).
 static void place(int key, MBDrawn *d) {
   glyph_entry *e = &entries[key];
@@ -710,7 +719,7 @@ static void place(int key, MBDrawn *d) {
   if (!d.px) return;
   held = d;
   held_key = key;
-  double sc = mb_text_scale;
+  double sc = text_scale;
   CGRect b = d.b;
   e->w = d.pw / sc;
   e->h = d.ph / sc;
@@ -817,7 +826,7 @@ void mb_host_glyphs_ahead(int32_t *keys, int32_t n) {
       a.font = (__bridge id)font_for(e->size, e->weight, e->style);
       a.style = e->style;
       a.closer = e->dx != 0;
-      a.scale = mb_text_scale;
+      a.scale = text_scale;
       a.state = AHEAD_ASKED;
       ahead_of[@(k)] = a;
       [ahead_order addObject:a];
@@ -846,14 +855,14 @@ static MBDrawn *drawn_ahead(int key) {
   MBDrawn *d = a.state == AHEAD_DRAWN ? a.drawn : nil;
   a.drawn = nil;
   pthread_mutex_unlock(&ahead_lock);
-  return d && a.scale == mb_text_scale ? d : nil;
+  return d && a.scale == text_scale ? d : nil;
 }
 
 static void rasterize(int key) {
   MBDrawn *d = drawn_ahead(key);
   if (!d) {
     glyph_entry *e = &entries[key];
-    d = draw_cluster(texts[key], font_for(e->size, e->weight, e->style), e->style, e->dx != 0, mb_text_scale);
+    d = draw_cluster(texts[key], font_for(e->size, e->weight, e->style), e->style, e->dx != 0, text_scale);
   }
   place(key, d);
 }

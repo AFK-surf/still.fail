@@ -251,7 +251,7 @@ static double record_t0 = -1;
   NSSize s = self.bounds.size;
   double scale = self.window.backingScaleFactor ?: 2.0;
   ((CAMetalLayer *)self.layer).contentsScale = scale;
-  mb_text_scale = scale;
+  mb_text_set_scale(scale);
   mb_render_set_size(s.width, s.height, scale);
   self.wantFrame = NO;
   if (record_dir) {

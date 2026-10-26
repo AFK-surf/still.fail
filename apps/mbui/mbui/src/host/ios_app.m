@@ -190,7 +190,7 @@ static void run_script_step(int step);
   CGSize s = self.bounds.size;
   double scale = self.window.screen.scale ?: 3.0;
   self.layer.contentsScale = scale;
-  mb_text_scale = scale;
+  mb_text_set_scale(scale);
   mb_render_set_size(s.width, s.height, scale);
   self.wantFrame = NO;
   double t0 = frames_drawn == 0 ? mb_now_ms() : 0;
