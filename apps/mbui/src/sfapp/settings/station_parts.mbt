@@ -147,28 +147,27 @@ fn adb_texts() -> Json {
 
 ///|
 /// The one thing to do next on 共享调试's page: what it is (`sub` how, where that needs saying), and at the row's end
-/// where a tap goes (`go`, "" none) or the call it makes under way (`doing`).
+/// where a tap goes (`go`, "" none) or the call it makes under way (`doing`); what the tap does (`act`: adb_do).
 priv struct AdbStep {
   title : String
   sub : String
   go : String
   doing : String
-  tap : (() -> Unit)?
+  act : String
 }
 
 ///|
 /// A step for adb_next to say.
-fn adb_step(title : String, sub? : String = "", go? : String = "", doing? : String = "", tap? : () -> Unit) -> AdbStep? {
-  Some({ title, sub, go, doing, tap })
+fn adb_step(title : String, sub? : String = "", go? : String = "", doing? : String = "", act? : String = "") -> AdbStep? {
+  Some({ title, sub, go, doing, act })
 }
 
 ///|
 /// What is next for the lending, as the phone has it and the station holds it: the first thing the phone lacks, else
 /// what the station's adb waits on (pairing, the phone's 允许); None while nothing is asked of the person (lent and
 /// connected, connecting, adb failing and tried again by itself).
-fn adb_next(core : Core, view : Json?, phone : Json?, there : Bool) -> AdbStep? {
+fn adb_next(view : Json?, phone : Json?, there : Bool) -> AdbStep? {
   let adb = text(view, "adb")
-  let can_switch = flag(phone, "canSwitch")
   if !flag(phone, "developer") {
     return adb_step(tr("android-misc.adb.step.developer"), sub=tr("android-misc.adb.developer.how"))
   }
@@ -176,16 +175,11 @@ fn adb_next(core : Core, view : Json?, phone : Json?, there : Bool) -> AdbStep? 
     return adb_step(tr("android-misc.adb.step.wifi"))
   }
   if !flag(phone, "wireless") || (there && adb == "off") {
+    let can_switch = flag(phone, "canSwitch")
     return adb_step(
       tr("android-misc.adb.step.wireless"),
       go=tr(if can_switch { "android-misc.adb.wireless.turnOn" } else { "android-misc.adb.wireless.settings" }),
-      tap=fn() {
-        if can_switch {
-          adb_ask("adb.switch", obj([]))
-        } else {
-          adb_ask("adb.open", obj([("what", str("wireless"))]))
-        }
-      },
+      act=if can_switch { "switch" } else { "wireless" },
     )
   }
   if !there || text(view, "phase") != "offered" {
@@ -194,37 +188,47 @@ fn adb_next(core : Core, view : Json?, phone : Json?, there : Bool) -> AdbStep? 
   match adb {
     "unpaired" if has(view, "pairPort") && flag(phone, "reads") => adb_step(tr("android-misc.adb.step.reading"))
     "unpaired" if has(view, "pairPort") =>
-      adb_step(tr("android-misc.adb.enterCode"), go=tr("android-misc.adb.pair.action"), doing="adb.pair", tap=fn() {
-        ask(
-          tr("android-misc.adb.pair.ask"),
-          "",
-          tr("android-misc.adb.code"),
-          tr("android-misc.adb.pair.action"),
-          hint=tr("android-misc.adb.pair.hint"),
-          fn(code) {
-            let digits = StringBuilder()
-            for ch in code {
-              if ch >= '0' && ch <= '9' {
-                digits.write_char(ch)
-              }
-            }
-            act(
-              core,
-              tr("android-misc.adb.pair.action"),
-              "adb.pair",
-              obj([("code", str(digits.to_string()))]),
-              done=tr("android-misc.adb.paired"),
-            )
-          },
-        )
-      })
+      adb_step(tr("android-misc.adb.enterCode"), go=tr("android-misc.adb.pair.action"), doing="adb.pair", act="code")
     "unpaired" =>
-      adb_step(tr("android-misc.adb.pair.open"), sub=tr("android-misc.adb.step.pairHow"), go=tr("android-misc.adb.pair.go"), tap=fn() {
-        adb_ask("adb.open", obj([("what", str("wireless")), ("beside", Json::boolean(true))]))
-      })
+      adb_step(tr("android-misc.adb.pair.open"), sub=tr("android-misc.adb.step.pairHow"), go=tr("android-misc.adb.pair.go"), act="pairing")
     "unauthorized" => adb_step(tr("android-misc.adb.unauthorized"))
     "missing" => adb_step(tr("android-misc.adb.step.install"))
     _ => None
+  }
+}
+
+///|
+/// A step's tap (AdbStep `act`): Wireless debugging turned on by the app (`switch`) or in Settings (`wireless`), the
+/// pairing dialog opened beside the app (`pairing`), the code asked for and paired with (`code`).
+fn adb_do(core : Core, act : String) -> Unit {
+  match act {
+    "switch" => adb_ask("adb.switch", obj([]))
+    "wireless" => adb_ask("adb.open", obj([("what", str("wireless"))]))
+    "pairing" => adb_ask("adb.open", obj([("what", str("wireless")), ("beside", Json::boolean(true))]))
+    "code" =>
+      ask(
+        tr("android-misc.adb.pair.ask"),
+        "",
+        tr("android-misc.adb.code"),
+        tr("android-misc.adb.pair.action"),
+        hint=tr("android-misc.adb.pair.hint"),
+        fn(code) {
+          let digits = StringBuilder()
+          for ch in code {
+            if ch >= '0' && ch <= '9' {
+              digits.write_char(ch)
+            }
+          }
+          act(
+            core,
+            tr("android-misc.adb.pair.action"),
+            "adb.pair",
+            obj([("code", str(digits.to_string()))]),
+            done=tr("android-misc.adb.paired"),
+          )
+        },
+      )
+    _ => ()
   }
 }
 
@@ -348,13 +352,13 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
         })
       })
       // the one thing to do next
-      match adb_next(core, view, phone, there) {
+      match adb_next(view, phone, there) {
         Some(step) => {
           blocks.push(fn() { section_header(c, tr("android-misc.adb.next"), start=S6) })
           blocks.push(fn() {
             list_card(c, fn() {
               let busy = step.doing != "" && is_doing(core, [step.doing], [])
-              if list_row(c, key=if step.tap is Some(_) && !busy { "adb-next" } else { "" }, fn() {
+              if list_row(c, key=if step.act != "" && !busy { "adb-next" } else { "" }, fn() {
                   row_lines(c, step.title, step.sub, wrap_title=true, wrap_sub=true, end=fn() {
                     if step.doing != "" && (busy || failed_of(core, [step.doing], []) is Some(_)) {
                       doing_mark(c, busy, failed_of(core, [step.doing], []))
@@ -363,9 +367,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
                     }
                   })
                 }) {
-                if step.tap is Some(tap) {
-                  tap()
-                }
+                adb_do(core, step.act)
               }
             })
           })
