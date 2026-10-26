@@ -40,7 +40,8 @@ pub(all) struct Palette {
   red : Int64
   red_bg : Int64
   /// the grounds of a pill in a tone (parts.css.ts pill: --green-bg, --blue-bg, --amber-bg; the amber's ink is
-  /// warn_ink)
+  /// warn_ink), as red_bg and accent_bg: the tone's ink at an opacity (tone_light, tone_dark), so each stands a step
+  /// off whatever it lies on, the page, a card, a menu, a selected row, as neutral_bg does
   green_bg : Int64
   blue_bg : Int64
   amber_bg : Int64
@@ -238,7 +239,7 @@ pub let tape_corner : Double = 28.0
 /// (tape_bar_over) and the sidebar's first row on it, whatever a panel's own corners are (the user, 2026-10-25: a page's
 /// bar and the sidebar's first row each where it stood alone, not on one line). The tape's own place for its own
 /// corner (corner_fit, for what follows a corner it does not choose: a window's).
-pub let tape_line : Double = tape_corner - 32.0 / 2.0
+pub let tape_line : Double = capsule_in(tape_corner, 32.0)
 
 ///|
 /// Whether a corner `k` round is one corner_fit lets what lies in a corner have.
@@ -500,15 +501,18 @@ pub fn pane_foot_corner(holds? : Double = 0.0) -> Double {
 ///|
 /// How high a capsule across the foot of what is built is (a composer's one line), `own` high alone, round controls
 /// `holds` across in its ends: in a panel of its own whose foot corners are too square for it to stand concentric in
-/// them (corner_fit's nearest place: its half that corner less 4), as high as stands so in the roundest of them, where
-/// what it holds still stands as near as that in its own ends (holds and 4 each side); else `own`. A finger's 52 (its
-/// 36 buttons 8 in) in the tape's 28: 48, its buttons 6 in (the user, 2026-10-26: 最好能把这个中屏的页面圆角搞小点点).
+/// them as high as that, as high as stands so `window_in` (6) from its edges, as the panel itself stands from the
+/// window's (the user, 2026-10-27: 中屏 composer 胶囊的时候，边上距离小), or nearer where what it holds would stand
+/// nearer than 4 in its own ends, at corner_fit's nearest (4) at most; else `own`. In the tape's 28 (a circle reads it
+/// as 26.78): keyboard and mouse's 48 (its 32 buttons) 41.6, 6 in; a finger's 52 (its 36) 44, 4.8 in.
 pub fn foot_capsule_h(own : Double, holds : Double) -> Double {
   match pane_radii() {
     Some(k) => {
-      let most = 2.0 * (dmax(k[2], k[3]) - corner_fit.near)
-      if own > most + 0.5 && most >= holds + 2.0 * corner_fit.near - 0.5 {
-        most
+      let r = @ui.round_like(dmax(k[2], k[3]))
+      let most = 2.0 * (r - corner_fit.near)
+      let least = holds + 2.0 * corner_fit.near
+      if own > most + 0.5 && most >= least - 0.5 {
+        dmin(most, dmax(2.0 * (r - window_in), least))
       } else {
         own
       }
@@ -522,7 +526,7 @@ pub fn foot_capsule_h(own : Double, holds : Double) -> Double {
 /// circle following a corner stands, corner_fit near); the theme's least where it holds none.
 pub fn holds_least(holds : Double) -> Double {
   if holds > 0.0 {
-    holds / 2.0 + corner_fit.near
+    @ui.round_like_out(holds / 2.0 + corner_fit.near)
   } else {
     corner_fit.least
   }
@@ -538,9 +542,10 @@ pub fn pane_foot_card() -> @ui.Style {
 
 ///|
 /// How far in from a corner of the ladder's `corner` a capsule or a circle `height` high stands, concentric with it
-/// (ui-panels.md: 外圆角 = 距离 + 半高).
-pub fn capsule_in(corner : Double, height : Double) -> Double {
-  corner - height / 2.0
+/// (ui-panels.md: 外圆角 = 距离 + 半高, the corner as a circle reads it: @ui.round_like, wholly smooth; a capsule's end,
+/// `room` its half, as round as it is).
+pub fn capsule_in(corner : Double, height : Double, room? : Double = 1.0e30) -> Double {
+  @ui.round_like(corner, room~) - height / 2.0
 }
 
 ///|
@@ -669,7 +674,7 @@ pub fn capsule_room(corner : Double, height : Double, less? : Double = 0.0) -> @
 /// How far in from a capsule's ends (`outer` high) one `height` high stands in it, concentric with them (a dot, a
 /// button in a capsule's end), as a style's room.
 pub fn capsule_end_room(outer : Double, height : Double) -> @ui.Space {
-  room(capsule_in(outer / 2.0, height))
+  room(capsule_in(outer / 2.0, height, room=outer / 2.0))
 }
 
 ///|
@@ -768,11 +773,25 @@ pub let r_card : Double = 20.0
 pub let r_dialog : Double = 32.0
 
 ///|
-/// (a small panel's: a menu, a popover, a hover's card: its rows, capsules 34 high (menu_row_min), its padding in and
-/// concentric with it, panel_pad + 17 = 23: the ladder's small panels (corner_ladder). What stands further in in it
-/// is round by the ladder's next steps as a card's is: a taller row at its padding 18, what has a ground on its
-/// words' line 10.)
-pub let r_menu : Double = panel_pad + menu_row_min / 2.0
+/// (a small panel's: a menu, a popover, a hover's card, and a list card: a taller row at its padding (panel_pad) the
+/// ladder's row corner, 18, concentric with it, 18 + 6 / 1.25 = 22.8: the ladder's small panels (corner_ladder). What
+/// stands further in in it is round by the ladder's next steps as a card's is: what has a ground on its words' line 10.
+/// Its rows 34 high are capsules: they stand where that is concentric with it (menu_row_reach), a little nearer its
+/// edges.)
+pub let r_menu : Double = surface_corner(panel_pad, row_corner)
+
+///|
+/// How far a small panel's row `height` high reaches past its padding: a capsule (as high as twice the corner it would
+/// have there, or less) to where it is concentric with the panel's corner (capsule_in: a mouse's 34, 4.81 in, 1.19
+/// past), as every capsule in a corner stands (the user, 2026-10-27: a capsule in a smooth corner, off its curve);
+/// a taller row, rounded, none.
+pub fn menu_row_reach(height : Double) -> Double {
+  if height / 2.0 <= small_panel_inner(r_menu) + 0.5 {
+    dmax(0.0, panel_pad - capsule_in(r_menu, height))
+  } else {
+    0.0
+  }
+}
 
 ///|
 pub let r_option : Double = 12.0
@@ -787,6 +806,23 @@ pub let medium_from : Double = 600.0
 pub let large_from : Double = 840.0
 
 // ---------------------------------------------------------------------------
+
+///|
+/// How opaque a tone's ink is as its ground (a pill's, a mention's, an error's card: green_bg, red_bg…), in the light
+/// themes and the dark: far enough off whatever it lies on to be seen (1.25 to 1 and more, docs/ui-panels.md 对比度),
+/// and its ink on it still read (4.5 to 1). Grounds fitted to the page alone, opaque, were 1.0 to 1.1 to 1 off a card
+/// in the dark (a pull request's 开启, 2026-10-27): its words seen, not its pill.
+let tone_light : Double = 0.18
+
+///|
+let tone_dark : Double = 0.16
+
+///|
+/// A ground in a tone the palette has none for (a merged pull request's purple): its ink at the theme's opacity, as
+/// green_bg is green_ink's.
+pub fn tone_ground(ink : Int64) -> Int64 {
+  alpha(ink, if current.val.dark { tone_dark } else { tone_light })
+}
 
 ///|
 /// The web's own tones (a white page, grey cards on it): what the message's Markdown keeps of them (markdown.mbt `web`),
@@ -806,16 +842,16 @@ let web_light : Palette = {
   selected: 0xEBE7E1FFL,
   paper: 0xF6F2EAFFL,
   accent: 0xDC5929FFL,
-  accent_text: 0xA23203FFL,
-  accent_bg: 0xFFEFE6FFL,
+  accent_text: 0x982E01FFL,
+  accent_bg: alpha(0x982E01FFL, tone_light),
   green: 0x006A3FFFL,
-  green_ink: 0x006A3FFFL,
-  warn_ink: 0x7F5306FFL,
-  red: 0xA12F35FFL,
-  red_bg: 0xFFF0EFFFL,
-  green_bg: 0xE7F6EDFFL,
-  blue_bg: 0xEAF2FFFFL,
-  amber_bg: 0xFEF4E0FFL,
+  green_ink: 0x026039FFL,
+  warn_ink: 0x6E4802FFL,
+  red: 0x9A2830FFL,
+  red_bg: alpha(0x9A2830FFL, tone_light),
+  green_bg: alpha(0x026039FFL, tone_light),
+  blue_bg: alpha(0x0047AEFFL, tone_light),
+  amber_bg: alpha(0x6E4802FFL, tone_light),
   online: 0x45B164FFL,
   neutral_bg: 0x24272B13L,
   overlay: 0x13161B33L,
@@ -827,7 +863,7 @@ let web_light : Palette = {
   card: 0xF6F6F7FFL,
   card2: 0xFBFAF7FFL,
   chip: 0xEFECE6FFL,
-  blue: 0x1559C4FFL,
+  blue: 0x0047AEFFL,
   code_ink: 0x7C3FA0FFL,
   code_ground: 0xF5F5F5FFL,
 }
@@ -848,16 +884,16 @@ let web_dark : Palette = {
   selected: 0x323338FFL,
   paper: 0x26272BFFL,
   accent: 0xE97342FFL,
-  accent_text: 0xFC9B6FFFL,
-  accent_bg: 0x43251AFFL,
+  accent_text: 0xFF9E71FFL,
+  accent_bg: alpha(0xFF9E71FFL, tone_dark),
   green: 0x68C894FFL,
-  green_ink: 0x68C894FFL,
+  green_ink: 0x6ACA96FFL,
   warn_ink: 0xE6B55DFFL,
-  red: 0xFB8987FFL,
-  red_bg: 0x442322FFL,
-  green_bg: 0x1B3426FFL,
-  blue_bg: 0x1F2E47FFL,
-  amber_bg: 0x403012FFL,
+  red: 0xFF9A97FFL,
+  red_bg: alpha(0xFF9A97FFL, tone_dark),
+  green_bg: alpha(0x6ACA96FFL, tone_dark),
+  blue_bg: alpha(0x8EB8FEFFL, tone_dark),
+  amber_bg: alpha(0xE6B55DFFL, tone_dark),
   online: 0x45B164FFL,
   neutral_bg: 0xE9E9EA0EL,
   overlay: 0x00000080L,
@@ -868,7 +904,7 @@ let web_dark : Palette = {
   card: 0x28292CFFL,
   card2: 0x2C2D31FFL,
   chip: 0x313237FFL,
-  blue: 0x81AEFAFFL,
+  blue: 0x8EB8FEFFL,
   code_ink: 0xC9A2E6FFL,
   code_ground: 0x26272AFFL,
 }
@@ -883,16 +919,17 @@ let light_palette : Palette = {
   raised: 0xFFFFFFFFL,
   text: 0x24272BFFL,
   // the greys and the red Android's (Theme.kt Light), what the app on a phone matches, not the narrow web's
-  muted: 0x585A5FFFL,
-  subtle: 0x585A5FFFL,
+  muted: 0x535559FFL,
+  subtle: 0x535559FFL,
   line: 0x322D2424L,
   accent: 0xCC5A34FFL,
-  accent_text: 0xAC3B10FFL,
-  accent_bg: 0xFBE6DCFFL,
+  accent_text: 0x8F2B01FFL,
+  accent_bg: alpha(0x8F2B01FFL, tone_light),
   green: 0x2F8F5BFFL,
-  green_ink: 0x196E42FFL,
-  warn_ink: 0x855700FFL,
-  red: 0xB1301FFFL,
+  green_ink: 0x045B33FFL,
+  red: 0x991302FFL,
+  red_bg: alpha(0x991302FFL, tone_light),
+  green_bg: alpha(0x045B33FFL, tone_light),
   // its placeholders in its bubbles' grey, a step darker than the page
   neutral_bg: 0x322D2413L,
   card: 0xFFFFFFFFL,
@@ -919,11 +956,15 @@ let dark_palette : Palette = {
   line: 0xECECED1FL,
   accent: 0xE8734FFFL,
   accent_text: 0xF6A383FFL,
-  accent_bg: 0x4A2F25FFL,
+  accent_bg: alpha(0xF6A383FFL, tone_dark),
   green: 0x5CC08AFFL,
-  green_ink: 0x5CC08AFFL,
-  warn_ink: 0xDC992FFFL,
-  red: 0xFF816CFFL,
+  green_ink: 0x66CA93FFL,
+  warn_ink: 0xEEAA44FFL,
+  red: 0xFE9D8CFFL,
+  red_bg: alpha(0xFE9D8CFFL, tone_dark),
+  green_bg: alpha(0x66CA93FFL, tone_dark),
+  blue_bg: alpha(0x8EB8FEFFL, tone_dark),
+  amber_bg: alpha(0xEEAA44FFL, tone_dark),
   neutral_bg: 0xECECED1BL,
   // an outline a step lighter than the web's (3D3F44), as the grounds it lies on are (its canvas 1F2023 → 26272B): a
   // quote's bar on a card's chip still seen
@@ -1454,14 +1495,19 @@ pub fn ui_theme() -> @ui.Theme {
     text: text_roles(t.t),
     leading: leading_scale,
     radii,
-    link: base.accent_text,
+    link: t.p.accent_text,
+    // a tone's ink and ground the palette's (a ground the ink at an opacity: tone_light), what a style's AccentText,
+    // AccentBg, Danger, DangerBg and WarnInk say, not mbui's own still.fail theme's opaque grounds
+    accent_text: t.p.accent_text,
+    accent_bg: t.p.accent_bg,
+    danger: t.p.red,
+    danger_bg: t.p.red_bg,
+    warn_ink: t.p.warn_ink,
     // the greys Android's (Theme.kt C.muted, C.subtle: the palette's), not mbui's own paper theme's lighter dark ones:
     // what a style's Muted and Subtle say
     muted: t.p.muted,
     subtle: t.p.subtle,
-    // the red and the outline the palette's too (Android's red, B1301F, not mbui's paper theme's B52D1B): what a
-    // style's Danger and Border say are what `p.red` and `p.line_strong` are
-    danger: t.p.red,
+    // the outline the palette's too: what a style's Border says is `p.line_strong`
     border: t.p.line_strong,
     // the panes' grounds the palette's (touch's sidebar a step under its beige page, what is chosen a step
     // under that): what a style's Sidebar and Selected say, not mbui's narrow theme's, which has the web's
@@ -2129,6 +2175,23 @@ pub fn pick_high() -> @ui.Style {
 }
 
 ///|
+/// A small panel's row's margins over and under it reaching `reach` past the panel's padding where it is the `first`
+/// or the `last` in it (menu_row_reach), none where it is not.
+pub fn ends_reach(reach : Double, first : Bool, last : Bool) -> (Double, Double) {
+  let none = 0.0
+  (if first { -reach } else { none }, if last { -reach } else { none })
+}
+
+///|
+/// A small panel's row as high as pick_high, its words text_in in from its ground (a menu's item): reaching past the
+/// panel's padding where it is a capsule, to stand concentric with the panel's corners (menu_row_reach), its words
+/// where they were.
+pub fn pick_reach() -> @ui.Style {
+  let r = menu_row_reach(theme().rows.pick)
+  @ui.style(mx=room(-r), px=room(text_in + r))
+}
+
+///|
 // kept across runs: a value (no field of it changes)
 let pick_high_wide : @ui.Style = @ui.style(min_h=Fixed(wide_rows.pick))
 
@@ -2145,7 +2208,7 @@ pub let menu_row_over : Double = 7.0
 /// capsule end, concentric with it, past the row's padding to there, the row no taller for it (a row of words is as
 /// high, its ＋ or × in it or not).
 pub let menu_row_end : @ui.Style = @ui.style(
-  mr=room(capsule_in(menu_row_min / 2.0, panel_pill) - text_in),
+  mr=room(capsule_in(menu_row_min / 2.0, panel_pill, room=menu_row_min / 2.0) - text_in - menu_row_reach(menu_row_min)),
   my=room((menu_row_min - 2.0 * menu_row_over - panel_pill) / 2.0),
 )
 
@@ -2199,7 +2262,7 @@ pub let toast_px : Double = 18.0
 pub let toast_action_h : Double = 28.0
 
 ///|
-pub let toast_action_in : Double = capsule_in(toast_r, toast_action_h)
+pub let toast_action_in : Double = capsule_in(toast_r, toast_action_h, room=toast_r)
 
 ///|
 pub let toast_max : Double = 560.0

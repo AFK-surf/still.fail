@@ -500,8 +500,10 @@ static void wheel(WPARAM wp, LPARAM lp, int horizontal) {
   // a notch is WHEEL_DELTA; a line 100/3 points, as a browser scrolls (100 a notch of three lines), eased in by the
   // app (phase 4)
   double d = GET_WHEEL_DELTA_WPARAM(wp) / (double)WHEEL_DELTA * lines * (100.0 / 3.0);
-  // what is held with it, above the phase (ui's wheel_mod_*: a precision touchpad's pinch comes as Ctrl and the wheel)
-  int mods = (GetKeyState(VK_SHIFT) < 0 ? 1 : 0) | (GetKeyState(VK_CONTROL) < 0 ? 2 : 0) | (GetKeyState(VK_MENU) < 0 ? 4 : 0);
+  // what is held with it, above the phase (ui's wheel_mod_*), as the message says it (MK_*): a precision touchpad's
+  // pinch comes as the wheel with MK_CONTROL and no Ctrl key down, so the keyboard's state would never see it
+  WORD keys = GET_KEYSTATE_WPARAM(wp);
+  int mods = ((keys & MK_SHIFT) ? 1 : 0) | ((keys & MK_CONTROL) ? 2 : 0) | (GetKeyState(VK_MENU) < 0 ? 4 : 0);
   if (horizontal) mb_cb.wheel(p.x / scale, p.y / scale, d, 0, 4 | (mods << 4));
   else mb_cb.wheel(p.x / scale, p.y / scale, 0, -d, 4 | (mods << 4));
 }

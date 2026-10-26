@@ -14,14 +14,14 @@ const darkVars = {
   "--m-subtle": "#B8BBC1",
   "--m-line": "rgb(236 236 237 / .122)",
   "--m-accent": "#E8734F",
-  "--m-accent-bg": "#4A2F25",
+  "--m-accent-bg": "color-mix(in srgb, #F6A383 16%, transparent)",
   "--m-accent-ink": "#F6A383",
   "--m-green": "#5CC08A",
-  "--m-red": "#FF816C",
-  "--m-warn-ink": "#DC992F",
-  "--m-green-ink": "#5CC08A",
+  "--m-red": "#FE9D8C",
+  "--m-warn-ink": "#EEAA44",
+  "--m-green-ink": "#66CA93",
   "--m-on-red": "#1B1C1F",
-  "--m-blue": "#81AEFA",
+  "--m-blue": "#8EB8FE",
   "--m-chip": "#313237",
   "--m-bubble": "rgb(236 236 237 / .106)",
   "--m-thumb": "#3A3B40",
@@ -49,25 +49,27 @@ export const m = style({
     // Its floating capsules white over the warm page (the wide screen's grey showed too little against it); dark as the wide screen's.
     "--raised": "#FFFFFF",
     "--m-ink": "#24272B",
-    "--m-muted": "#585A5F",
-    "--m-subtle": "#585A5F",
+    "--m-muted": "#535559",
+    "--m-subtle": "#535559",
     // The ink at an opacity, as the wide screen's --line and --neutral-bg (styles/global.css.ts): as far off whatever
     // they lie on, the page, a card or a sheet.
     "--m-line": "rgb(50 45 36 / .141)",
     "--m-accent": "#CC5A34",
-    "--m-accent-bg": "#FBE6DC",
-    "--m-accent-ink": "#AC3B10",
+    // The accent's ink at an opacity, as the wide screen's --accent-bg (styles/global.css.ts): a step off the page, a
+    // card or a sheet alike.
+    "--m-accent-bg": "color-mix(in srgb, #8F2B01 18%, transparent)",
+    "--m-accent-ink": "#8F2B01",
     "--m-green": "#2F8F5B",
-    "--m-red": "#B1301F",
+    "--m-red": "#991302",
     "--m-warn": "#D9962B",
     // Words and icons in warn's colour: its amber dark enough to read (4.5:1), as --m-accent-ink is the accent's.
-    "--m-warn-ink": "#855700",
+    "--m-warn-ink": "#6E4802",
     // Words in green (verified, online): its ink, as --m-accent-ink is the accent's; --m-green is a dot's, a switch's.
-    "--m-green-ink": "#196E42",
+    "--m-green-ink": "#045B33",
     // What is said on the red (a solid danger button, a failed mark): white on the light theme's deep red, the page's ink
     // on the dark theme's light one (white on it was 2.4:1).
     "--m-on-red": "#FFFFFF",
-    "--m-blue": "#1559C4",
+    "--m-blue": "#0047AE",
     "--m-chip": "#E8E4DC",
     // A step darker than the page (the wide screen's grey sat as light as this warm page, and its bubbles barely showed).
     "--m-bubble": "rgb(50 45 36 / .075)",

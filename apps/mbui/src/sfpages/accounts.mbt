@@ -1511,7 +1511,17 @@ fn model_checklist(c : @ui.Ctx, core : Core, address : String, p : Json?, head? 
     // the filter in its top corner, concentric with it (@sf.head_reach), the two back where the card's words stand)
     let filtered = all.length() > 10
     let reach = head && filtered
-    c.box(style=if reach { pf_pool_tools.then(@sf.head_reach(@sf.input_height())) } else { pf_pool_tools }, flow=true, fn() {
+    // (on one line the two as far from the filter as the scale's 28, what head_back takes them back by among it)
+    let back = @sf.card_pad - @sf.card_foot_in(@sf.input_height())
+    c.box(
+      style=if reach {
+        pf_pool_tools.then(@sf.head_reach(@sf.input_height())).then(@ui.style(gap=@sf.room_of(pf_pool_apart - back)))
+      } else {
+        pf_pool_tools
+      },
+      flow=true,
+      line_gap=@ui.Space::S3.px(),
+      fn() {
       if filtered {
         c.box(style=pf_pool_filter, fn() {
           @sf.input(c, "profile-filter/" + key, placeholder=@sf.t("web-pages.profiles.filter"), field=filter) |> ignore
@@ -1533,7 +1543,8 @@ fn model_checklist(c : @ui.Ctx, core : Core, address : String, p : Json?, head? 
         }
       })
       |> ignore
-    })
+      },
+    )
     |> ignore
     for s in items(p, "series") {
       let sv = Some(s)
@@ -1771,6 +1782,10 @@ let pf_chip_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg
 /// The list to tick (modelPool): its tools (a filter, all, none), each series' head and its models.
 // kept across runs: a value (no field of it changes)
 let pf_pool : @ui.Style = @ui.css("w=Full gap=S3")
+
+///|
+/// How far the filter and the two after it stand apart on one line where the filter reaches into the card's corner.
+let pf_pool_apart : Double = 28.0
 
 ///|
 // kept across runs: a value (no field of it changes)

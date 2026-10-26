@@ -523,7 +523,7 @@ test "a toast is a capsule while its words fit a line; its 撤销 a capsule in i
     let (bx, by, bw, bh) = button.unwrap()
     // as high as one without; its button as far from its top, foot and end as its corner has a capsule that high
     assert_true((h - 2.0 * @sf.toast_r).abs() < 0.5, msg="\{wide} \{h}")
-    let inset = @sf.capsule_in(@sf.toast_r, bh)
+    let inset = @sf.capsule_in(@sf.toast_r, bh, room=@sf.toast_r)
     for gap in [by - y, y + h - (by + bh), x + w - (bx + bw)] {
       assert_true((gap - inset).abs() < 0.5, msg="\{wide} \{gap} \{inset}")
     }

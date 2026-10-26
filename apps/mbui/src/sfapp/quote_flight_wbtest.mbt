@@ -102,11 +102,13 @@ fn send_ground(t : @ui.Tester) -> Int64 raise {
     Some(b) => b.rect
     None => fail("no send button")
   }
-  // (its round: the largest round about its middle, what it is pressed in reaching past it)
+  // (its round: the largest round about its middle, what it is pressed in reaching past it; drawn on its way as the
+  // composer changes shape, its place in the capsule's end and in the opened box's corner 1.13 apart: smooth.mbt
+  // round_like)
   let (mx, my) = (x + w / 2.0, y + h / 2.0)
   let mut round : (Double, Double, Double, Double, Int64)? = None
   for r in t.drawn_rects() {
-    if (r.0 + r.2 / 2.0 - mx).abs() < 1.0 && (r.1 + r.3 / 2.0 - my).abs() < 1.0 && (r.2 - r.3).abs() < 0.5 {
+    if (r.0 + r.2 / 2.0 - mx).abs() < 1.5 && (r.1 + r.3 / 2.0 - my).abs() < 1.5 && (r.2 - r.3).abs() < 0.5 {
       match round {
         Some(b) if b.2 >= r.2 => ()
         _ => round = Some(r)

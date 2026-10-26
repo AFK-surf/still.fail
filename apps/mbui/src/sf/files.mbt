@@ -787,14 +787,26 @@ let quote_source_composer : @ui.Style = @ui.style(
 )
 
 ///|
-/// A page mark's quote: its pin (a capsule 16 high) the ladder's inset from its top and start, concentric with its
-/// corner (capsule_in(quote_corner, 16) = corner_inset).
+/// How far from a quote's top and start its pin (a capsule quote_pin_h high) stands, concentric with its corner
+/// (capsule_in: 9.22).
+let quote_pin_in : Double = capsule_in(quote_corner, quote_pin_h)
+
+///|
+let quote_pin_h : Double = 16.0
+
+///|
+/// A page mark's quote: its pin (a capsule 16 high) as far from its top and start as makes it concentric with its
+/// corner (quote_pin_in).
 // kept across runs: a value (no field of it changes)
-let quote_source_pin : @ui.Style = quote_source.then(@ui.style(pl=inset_room, pt=inset_room))
+let quote_source_pin : @ui.Style = quote_source.then(
+  @ui.style(pl=room(quote_pin_in), pt=room(quote_pin_in)),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let quote_source_composer_pin : @ui.Style = quote_source_composer.then(@ui.style(pl=inset_room, pt=inset_room))
+let quote_source_composer_pin : @ui.Style = quote_source_composer.then(
+  @ui.style(pl=room(quote_pin_in), pt=room(quote_pin_in)),
+)
 
 ///|
 /// With its ✕ hung on its corner (with_corner_remove), nothing kept at its end for it: its words as far in at its end
@@ -804,7 +816,9 @@ let quote_source_hung : @ui.Style = quote_source_composer.then(@ui.css("pr=S4"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let quote_source_hung_pin : @ui.Style = quote_source_hung.then(@ui.style(pl=inset_room, pt=inset_room))
+let quote_source_hung_pin : @ui.Style = quote_source_hung.then(
+  @ui.style(pl=room(quote_pin_in), pt=room(quote_pin_in)),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)

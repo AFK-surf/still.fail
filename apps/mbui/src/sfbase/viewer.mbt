@@ -1246,7 +1246,7 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
       }
       // a video, its thumbnail on the screen: back into it with the frame it shows (grabbed first: the thumbnail keeps
       // it, and where it was), else with its still (FilePreview.kt close: flight.frame())
-      (Some(t), Some(KVideo), _) if self.drive is None && self.vzoom.rect() is Some(_) => {
+      (Some(t), Some(KVideo), _) if self.drive is None && self.video_rect(c) is Some(_) => {
         self.fly_from = Some(t)
         self.fly_to = match self.media {
           Some(m) => @sf.player_picture_at(m.key())
@@ -1658,9 +1658,10 @@ pub fn Viewer::flight_target(self : Viewer, c : @ui.Ctx, src : Source) -> (Doubl
     } else {
       (0.0, 0.0)
     }
-    return match self.vzoom.rect() {
+    let (top, foot) = @sf.player_room(c.width)
+    return match self.video_rect(c) {
       Some(r) => Some(r)
-      None => fitted_rect(nw, nh, c.width, c.height)
+      None => fitted_rect(nw, nh, c.width, c.height - top - foot).map(fn(r) { (r.0, r.1 + top, r.2, r.3) })
     }
   }
   if self.shown_kind() != Some(KImage) {
@@ -2372,6 +2373,13 @@ pub fn Viewer::still(self : Viewer, src : Source) -> String {
 }
 
 ///|
+/// Where a film's picture is fitted in the viewer (vzoom), clear of the player's bar and controls (@sf.player_room).
+fn Viewer::video_rect(self : Viewer, c : @ui.Ctx) -> (Double, Double, Double, Double)? {
+  let top = @sf.player_room(c.width).0
+  self.vzoom.rect().map(fn(r) { (r.0, r.1 + top, r.2, r.3) })
+}
+
+///|
 /// The player's view of a film or a song (the system's player in a native view), while one is open.
 pub fn Viewer::view(self : Viewer) -> @ui.NativeView? {
   match self.media {
@@ -2402,7 +2410,9 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
   // (a song has no picture: no still of it is asked for)
   let still = if v.shown_kind() == Some(KVideo) { v.still(src) } else { "" }
   let z = v.vzoom
-  z.boxed(c.width, c.height)
+  // (clear of the bar and the controls as the player fits it: player_room)
+  let (top, foot) = @sf.player_room(c.width)
+  z.boxed(c.width, c.height - top - foot)
   let (nw, nh) = match m.native() {
     Some(n) => n.natural()
     None => (0.0, 0.0)
@@ -2423,7 +2433,7 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
   if v.flies && (!v.closing || !v.leaving_grab) {
     let to = match v.fly_to {
       Some(r) if v.fly_back => Some(r)
-      _ => z.rect()
+      _ => v.video_rect(c)
     }
     match to {
       Some(r) => v.draw_flight(c, if v.fly_pic != "" { v.fly_pic } else { still }, r, v.flying(), ground=0x000000FFL)

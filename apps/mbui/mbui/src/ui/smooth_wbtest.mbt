@@ -125,6 +125,42 @@ test "concentric: a curve moved in is drawn as much smaller, a corner drawn a qu
 }
 
 ///|
+/// The most a circle `r` round, centred `centre` in from both edges of a wholly smooth corner of 28 (a 300 by 200 box's
+/// top right), is off an even gap from it (its distance from its edges, centre less r) anywhere along its quarter.
+fn circle_off_even(centre : Double, r : Double) -> Double {
+  let d = centre - r
+  let mut most = 0.0
+  for i in 0..=90 {
+    let a = i.to_double() * 1.5707963267948966 / 90.0
+    let x = centre - r * @dmath.cos(a)
+    let y = centre - r * @dmath.sin(a)
+    let gap = -sd_corner(300.0 - x, 200.0 - y, 300.0, 200.0, 28.0, 1.0)
+    most = dmax(most, (gap - d).abs())
+  }
+  most
+}
+
+///|
+test "a circle in a smooth corner follows it as round_like's round corner: an even gap within 1.25% of its radius" {
+  // (the user, 2026-10-27: 中型屏的单行 composer 跟圆角还是对不上: a capsule 48 high 4 in from a corner of 28)
+  let k = round_like(28.0)
+  assert_true((k - 28.0 * smooth_round).abs() < 1.0e-12)
+  for r in [8.0, 16.0, 22.0] {
+    assert_true(circle_off_even(k, r) < 0.0125 * 28.0, msg="a circle \{r} round: \{circle_off_even(k, r)}")
+    // centred the corner's whole radius in, as in a round one: off by over twice as much at the curve's middle
+    assert_true(circle_off_even(28.0, r) > 0.025 * 28.0)
+  }
+  // a capsule's end (no room to be smooth) is round: itself; between, as smooth as its box has room for
+  assert_eq(round_like(20.0, room=20.0), 20.0)
+  assert_true(round_like(20.0, room=22.5) > round_like(20.0) && round_like(20.0, room=22.5) < 20.0)
+  // and back
+  for c in [(28.0, 1.0e30), (20.0, 20.0), (20.0, 22.5), (34.0, 1.0e30)] {
+    let (r, room) = c
+    assert_true((round_like_out(round_like(r, room~), room~) - r).abs() < 1.0e-9)
+  }
+}
+
+///|
 test "the middle of a corner as smooth as its box has room for: on the curve, as far in from both edges" {
   // a square 30 across: a circle, a corner a little too round to be wholly smooth, one wholly smooth
   for c in [(15.0, 15.0), (13.0, 15.0), (7.0, 15.0)] {

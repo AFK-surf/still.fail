@@ -1032,7 +1032,14 @@ fn pick_popover(
     },
     fn() {
       let found = {
-        let f = input(c, key + "/search", placeholder=t("common.search"), small=true, field=p.line)
+        // (a capsule in the panel's top corners: as far in as makes it concentric with them, menu_row_reach)
+        let r = menu_row_reach(theme().rows.pick)
+        let mut got : @kit.Field? = None
+        c.box(style=@ui.style(w=Full, mx=room(-r), mt=room(-r)), fn() {
+          got = Some(input(c, key + "/search", placeholder=t("common.search"), small=true, field=p.line))
+        })
+        |> ignore
+        let f = got.unwrap()
         focus_once(c, p, key + "/search")
         let found = pick_found(choices, f.text)
         if f.submitted && !found.is_empty() {
@@ -1045,8 +1052,8 @@ fn pick_popover(
       }
       // (scrolling past pick_list_most, or what the room it has leaves it)
       @kit.in_room(c, beside_given.val, key=key + "/list", most=pick_list_most, fn() {
-        for x in found {
-          if menu_item(c, x.label, key=key + "/" + x.key, icon=x.icon, mark?=x.mark, on=x.key == chosen, note=x.value, under=x.note, panel=x.icon != "" || x.mark is Some(_)) {
+        for i, x in found {
+          if menu_item(c, x.label, key=key + "/" + x.key, icon=x.icon, mark?=x.mark, on=x.key == chosen, note=x.value, under=x.note, panel=x.icon != "" || x.mark is Some(_), at_foot=i == found.length() - 1) {
             done_with(c, p, fn() { choose(x.key) })
           }
         }

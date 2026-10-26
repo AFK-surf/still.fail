@@ -12,7 +12,19 @@ pub let media_bar_most : Double = 1080.0
 pub let media_bar_in : Double = 16.0
 
 ///|
-pub let media_bar_pad : Double = corner_inset
+/// (its round buttons, 32, in its foot corners concentric with it: capsule_in, 8.87 in a card's 26)
+pub let media_bar_pad : Double = capsule_in(card_corner, media_key_d)
+
+///|
+/// Over its timeline, in the bar; its buttons' size (vvBtn: 32 across); so the bar is this tall, its timeline and a row
+/// of its buttons between its pads: what a picture fitted clear of it keeps off (player.mbt desk_play_room).
+pub let media_bar_top : Double = 2.0
+
+///|
+pub let media_key_d : Double = 32.0
+
+///|
+pub let media_bar_h : Double = media_bar_top + media_timeline_h + media_key_d + media_bar_pad
 
 ///|
 pub let media_glass_share : Double = 0.72
@@ -173,8 +185,8 @@ pub let media_strong : Int = 600
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let media_bar_box : @ui.Style = @ui.css("pt=S0_5 radius=Xl3").then(
-  @ui.style(pl=inset_room, pr=inset_room, pb=inset_room),
+pub let media_bar_box : @ui.Style = @ui.css("radius=Xl3").then(
+  @ui.style(pt=room(media_bar_top), pl=room(media_bar_pad), pr=room(media_bar_pad), pb=room(media_bar_pad)),
 )
 
 ///|
@@ -250,4 +262,6 @@ let media_rate_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let media_key_box : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter disabled{opacity=O35}")
+let media_key_box : @ui.Style = @ui.css("radius=Full align=ACenter justify=JCenter disabled{opacity=O35}").then(
+  @ui.style(w=Fixed(media_key_d), h=Fixed(media_key_d)),
+)

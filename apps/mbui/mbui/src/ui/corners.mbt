@@ -118,6 +118,18 @@ fn Ctx::container_r(self : Ctx, ct : Container, k : Int) -> Double {
 }
 
 ///|
+/// Half container `ct`'s shorter side, how smooth its corners are drawn by (smooth.mbt smoothness): the window's as
+/// round as the system draws it (its own room, no more).
+fn Ctx::container_room(self : Ctx, ct : Container) -> Double {
+  if ct.window {
+    self.window_corner
+  } else {
+    let g = self.nodes[ct.ground]
+    dmin(g.fw, g.fh) / 2.0
+  }
+}
+
+///|
 /// The roundest of container `ct`'s corners.
 fn Ctx::container_most(self : Ctx, ct : Container) -> Double {
   if ct.window {
@@ -284,7 +296,9 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
         }
       }
       let (dx, dy) = corner_gaps(a, b, k)
-      if dx < -0.5 || dy < -0.5 || dx >= ra || dy >= ra || !nearest_corner(k, l, t, r, d) {
+      // (a circle or a capsule is in the corner as a circle reads it: round_like)
+      let reach = if round { round_like(ra, room=c.container_room(ct)) } else { ra }
+      if dx < -0.5 || dy < -0.5 || dx >= reach || dy >= reach || !nearest_corner(k, l, t, r, d) {
         continue
       }
       // a corner that never shows: past the window's foot or head (a sheet held past the bottom so its foot's corners
@@ -318,17 +332,18 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
         None => ()
       }
       let even = (dx - dy).abs() <= 0.5
-      // a round one at a corner: it is the container whose corner follows it (ui-panels.md: 外圆角 = 距离 + 半高), the
-      // fault the container's when it does not
+      // a round one at a corner: it is the container whose corner follows it (ui-panels.md: 外圆角 = 距离 + 半高, the
+      // container's as round as a circle reads it, smooth.mbt round_like), the fault the container's when it does not
+      let room_a = c.container_room(ct)
       let in_step = if round {
-        (ra - (dmax(dx, dy) + rb)).abs() <= 0.5
+        (round_like(ra, room=room_a) - (dmax(dx, dy) + rb)).abs() <= 0.5
       } else {
         (rb - concentric(ra, dmax(dx, dy))).abs() <= 0.5
       }
       let corner = corner_names[k]
       // none of the theme's ranges makes it concentric there (Theme::corner_fit: the container too square for it, or
       // too round, a window's corner among them): it stands as it would alone, and the rule asks nothing more of it
-      if !in_step && !c.fit_there(ra, rb, round) {
+      if !in_step && !c.fit_there(ra, rb, round, room=room_a) {
         continue
       }
       // nor a smooth one standing in it (not flush with it) whose own corner is rounder than any it could have
@@ -354,7 +369,7 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       }
       // concentric where it stands, but with a corner the ranges do not let it have (squarer than the least: as good
       // as square in a round corner) where some place in them would: it stands where that is (Ctx::fit_place)
-      if !round && even && in_step && !c.corner_fits(rb) && c.fit_there(ra, rb, round) {
+      if !round && even && in_step && !c.corner_fits(rb) && c.fit_there(ra, rb, round, room=room_a) {
         let place = c.fit_place(ra, dx)
         out.push(
           "\{c.named(i)} (corner \{rb}) in the \{corner} of \{c.named(p)} (corner \{ra}): \{dx} from its edges, a corner the theme's ranges do not let it have; \{place} in, it would be \{concentric(ra, place)}",
@@ -399,7 +414,7 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       if !(even && in_step) {
         out.push(
           if round && even {
-            "\{c.named(p)} (corner \{ra}): wants corner \{dmax(dx, dy) + rb}, for \{c.named(i)} (round, corner \{rb}) in its \{corner}, \{dx} from both edges"
+            "\{c.named(p)} (corner \{ra}): wants corner \{round_like_out(dmax(dx, dy) + rb, room=room_a)}, for \{c.named(i)} (round, corner \{rb}) in its \{corner}, \{dx} from both edges"
           } else {
             "\{c.named(i)} (corner \{rb}) in the \{corner} of \{c.named(p)} (corner \{ra}): \{dx} and \{dy} from its edges" +
             (
@@ -421,7 +436,8 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
 }
 
 ///|
-/// Whether a corner `ra` round is too square for a circle or a capsule `rb` round (its half) to follow it: concentric
+/// Whether a corner `ra` round (as a circle reads it: round_like) is too square for a circle or a capsule `rb` round
+/// (its half) to follow it: concentric
 /// there, it would stand nearer its edges than the theme lets what follows a corner stand (Theme::corner_fit near).
 fn Ctx::too_square(self : Ctx, ra : Double, rb : Double) -> Bool {
   match self.corner_fit {
@@ -491,22 +507,25 @@ fn Ctx::round_held(self : Ctx, grounds : Map[Int, Int], pictures : Set[Int]) -> 
 /// it `rb` round (as following its own container's would make it): one too round for it there.
 fn Ctx::holds_unfollowing(self : Ctx, holds : Map[Int, Array[(Int, Double)]], i : Int, k : Int, rb : Double) -> Bool {
   match holds.get(i) {
-    Some(list) => list.iter().any(fn(h) { h.0 == k && self.too_square(rb, h.1) })
+    Some(list) => {
+      let b = self.nodes[i]
+      list.iter().any(fn(h) { h.0 == k && self.too_square(round_like(rb, room=dmin(b.fw, b.fh) / 2.0), h.1) })
+    }
     None => false
   }
 }
 
 ///|
 /// Whether what lies in a corner `ra` round, its own corner `rb`, could be concentric with it anywhere and in any shape
-/// the theme lets it (Theme::corner_fit): a circle or a capsule (`round`) where it stands `ra - rb` in, if that is a
-/// place it may stand; a smooth box as round as concentric asks where it stands, if some place it may stand makes that
+/// the theme lets it (Theme::corner_fit): a circle or a capsule (`round`) where it stands its radius as a circle reads it
+/// (round_like, `room` the container's shorter half) less `rb` in, if that is a place it may stand; a smooth box as round as concentric asks where it stands, if some place it may stand makes that
 /// a corner it may have. Always, where the theme says no ranges.
-fn Ctx::fit_there(self : Ctx, ra : Double, rb : Double, round : Bool) -> Bool {
+fn Ctx::fit_there(self : Ctx, ra : Double, rb : Double, round : Bool, room? : Double = 1.0e30) -> Bool {
   match self.corner_fit {
     None => true
     Some(f) =>
       if round {
-        self.place_fits(ra - rb)
+        self.place_fits(round_like(ra, room~) - rb)
       } else {
         concentric(ra, f.far) <= f.most + 0.5 && concentric(ra, f.near) >= f.least - 0.5
       }
@@ -1103,7 +1122,7 @@ fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int], hung : 
     rs[k] = match own {
       Some(r) if !lies => r[k]
       Some(r) if r[k] >= half && kk >= half => r[k]
-      Some(r) if r[k] >= half && !self.place_fits(rk - half) => r[k]
+      Some(r) if r[k] >= half && !self.place_fits(round_like(rk, room=self.container_room(ct)) - half) => r[k]
       Some(r) if r[k] < half - 0.5 && kk >= half - 0.5 => r[k]
       Some(r) if !self.corner_fits(kk) => r[k]
       _ => kk
@@ -1381,7 +1400,7 @@ fn Ctx::arounds_after_layout(self : Ctx) -> Unit {
         let b = self.nodes[i]
         let rb = b.corner_at(k)
         let round = rb >= dmin(b.fw, b.fh) / 2.0 - 0.5
-        a.radius = if round { dx + rb } else { concentric_out(rb, dx) }
+        a.radius = if round { round_like_out(dx + rb, room=dmin(a.fw, a.fh) / 2.0) } else { concentric_out(rb, dx) }
       }
     }
   }

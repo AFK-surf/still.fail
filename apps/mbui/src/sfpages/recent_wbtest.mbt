@@ -117,7 +117,7 @@ test "recent photos: a tap puts one in alone; its ring chooses it, then a tap an
   // each numbered in the order chosen, in its ring
   let ring_at = fn(i : Int) {
     let (x, _) = strip_tile(i)
-    x + recent_tile_w - recent_mark_in - recent_mark_side
+    x + recent_tile_w - recent_mark_in(@sf.row_corner) - recent_mark_side
   }
   match (t.rect_of("1"), t.rect_of("2")) {
     (Some((a, _, aw, _)), Some((b, _, bw, _))) => {

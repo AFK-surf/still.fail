@@ -111,6 +111,7 @@ fn login_step(
   busy? : Bool = false,
   external? : Bool = false,
   more? : Array[(String, () -> Unit)] = [],
+  last? : Bool = true,
 ) -> Bool {
   let p = @sf.theme().p
   let id = if busy { 0 } else { c.id(key) }
@@ -127,12 +128,13 @@ fn login_step(
     })
     |> ignore
   }
+  let foot = fn(style : @ui.Style) { if last { style.then(lc_foot_reach) } else { style } }
   if more.is_empty() {
-    step(if solid { lc_step_solid } else { lc_step })
+    step(foot(if solid { lc_step_solid } else { lc_step }))
   } else {
     // the other ways of doing the step, seldom used, in a ⋯ at the row's end (docs/ui-panels.md: what is used least
     // goes into the row's ⋯)
-    c.box(style=lc_step_row, fn() {
+    c.box(style=foot(lc_step_row), fn() {
       step(if solid { lc_step_solid_in_row } else { lc_step_in_row })
       let mid = c.id(key + "/more")
       let what = @sf.t("common.login.otherWays")
@@ -360,7 +362,7 @@ fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?) -> Unit {
     Some(way) => [way]
     None => []
   }
-  if login_step(c, "login-paste-open/" + id, @sf.t("web-main.logins.openPage"), !opened && !typed && !busy, external=true, more=elsewhere) {
+  if login_step(c, "login-paste-open/" + id, @sf.t("web-main.logins.openPage"), !opened && !typed && !busy, external=true, more=elsewhere, last=false) {
     logins_here.pressed[id] = true
     login_open(core, text(l, "url"))
   }
@@ -513,7 +515,13 @@ let lc_code : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=
 // kept across runs: a value (no field of it changes)
 let lc_step : @ui.Style = @ui.css(
   "row w=Full h=S8 mt=S2 px=S3 gap=S1_5 radius=Inner bg=A(Fg,O5) align=ACenter justify=JCenter hovered{bg=Hover}",
-)
+).then(@ui.style(mx=@sf.room_of(-lc_step_reach)))
+
+///|
+/// How far past the card's padding a step's button (a capsule 32 high, in the card's foot corners where it is last, a
+/// pasted code's field so: lc_paste) reaches,
+/// to stand concentric with them (capsule_in: 8.87 in, the card's padding 10).
+let lc_step_reach : Double = @sf.corner_inset - @sf.capsule_in(@sf.card_corner, 32.0)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -523,15 +531,22 @@ let lc_step_solid : @ui.Style = lc_step.then(@ui.css("bg=Primary hovered{bg=Over
 /// A step's button with its ⋯ (login_step's `more`): the row 8 under what is over it, the button the rest of it, the ⋯
 /// a round one as high, 6 after it, on the step's grey.
 // kept across runs: a value (no field of it changes)
-let lc_step_row : @ui.Style = @ui.css("row w=Full mt=S2 gap=S1_5 align=ACenter")
+let lc_step_row : @ui.Style = @ui.css("row w=Full mt=S2 gap=S1_5 align=ACenter").then(
+  @ui.style(mx=@sf.room_of(-lc_step_reach)),
+)
+
+///|
+/// What is last in the card reaching its foot as far as its sides (lc_step_reach).
+// kept across runs: a value (no field of it changes)
+let lc_foot_reach : @ui.Style = @ui.style(mb=@sf.room_of(-lc_step_reach))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let lc_step_in_row : @ui.Style = lc_step.then(@ui.css("mt=S0"))
+let lc_step_in_row : @ui.Style = lc_step.then(@ui.css("mt=S0 mx=S0 mb=S0"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let lc_step_solid_in_row : @ui.Style = lc_step_solid.then(@ui.css("mt=S0"))
+let lc_step_solid_in_row : @ui.Style = lc_step_solid.then(@ui.css("mt=S0 mx=S0 mb=S0"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -550,7 +565,9 @@ let lc_step_words_solid : @ui.TextStyle = lc_step_words.then(@ui.text_style(colo
 /// on the canvas, its corner the step's; 完成 at its end (cardPasteDone): 24 high, 12 in, solid, its corner the field's
 /// less 4, its words 12 medium.
 // kept across runs: a value (no field of it changes)
-let lc_paste : @ui.Style = @ui.css("row w=Full h=S8 mt=S1_5 pl=S3 pr=S1 gap=S1 radius=Inner bg=Bg align=ACenter")
+let lc_paste : @ui.Style = @ui.css("row w=Full h=S8 mt=S1_5 pl=S3 pr=S1 gap=S1 radius=Inner bg=Bg align=ACenter").then(
+  @ui.style(mx=@sf.room_of(-lc_step_reach), mb=@sf.room_of(-lc_step_reach)),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)

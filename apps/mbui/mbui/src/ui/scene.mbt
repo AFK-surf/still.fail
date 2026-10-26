@@ -85,12 +85,14 @@ fn clip_top() -> Int {
 
 ///|
 /// The corner of the clip `k` (in `clip_stack`) at its corner `corner` (0 top left, then clockwise) where (`x`, `y`) is
-/// that corner: its radius and how smooth it is, else square (0, 0).
+/// that corner (as laid out: within a millionth, what the same place worked out two ways may differ by, a capsule's
+/// place in a smooth corner being no whole number, smooth.mbt round_like): its radius and how smooth it is, else
+/// square (0, 0).
 fn clip_corner_r(k : Int, corner : Int, x : Double, y : Double) -> (Double, Double) {
   let s = clip_stack
   let cx = if corner == 0 || corner == 3 { s[k] } else { s[k + 2] }
   let cy = if corner < 2 { s[k + 1] } else { s[k + 3] }
-  if x == cx && y == cy {
+  if (x - cx).abs() < 1.0e-6 && (y - cy).abs() < 1.0e-6 {
     (s[k + 4 + corner], s[k + 8 + corner])
   } else {
     (0.0, 0.0)
@@ -195,7 +197,7 @@ fn clip_cuts(k : Int, x0 : Double, y0 : Double, x1 : Double, y1 : Double, r : (D
     // its own corner there, the same corner, as round and as long: the clip's curve within its own
     let ox = if left { x0 } else { x1 }
     let oy = if top { y0 } else { y1 }
-    if ox == cx && oy == cy && own[j] >= rr && dmin(x1 - x0, y1 - y0) / 2.0 >= reach {
+    if (ox - cx).abs() < 1.0e-6 && (oy - cy).abs() < 1.0e-6 && own[j] >= rr && dmin(x1 - x0, y1 - y0) / 2.0 >= reach {
       continue
     }
     return true

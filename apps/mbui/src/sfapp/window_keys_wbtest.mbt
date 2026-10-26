@@ -121,7 +121,7 @@ test "a Windows window laid out Small: its buttons in the band over the page; on
   let line = @sf.window_in + @sf.tape_line
   assert_eq((cx + cw, cy), (690.0 - line, line))
   guard named_at(t, "最小化") is Some((mx, _, _, _)) else { fail("no minimize button") }
-  assert_eq(@sfdesk.tape_shows_right(), 690.0 - (mx - 17.0) + 6.0)
+  assert_true((@sfdesk.tape_shows_right() - (690.0 - (mx - 17.0) + 6.0)).abs() < 1.0e-9)
   // the page's panel brought over: where they are the same, its bar's keys before them
   t.tap(650.0, 400.0)
   t.run_for(@sfdesk.side_move_ms * 2.0)

@@ -1076,7 +1076,9 @@ pub fn note_box(c : @ui.Ctx, note : (Int, Int, String, Int64)) -> Unit {
   if c.clicked(done) {
     marks_note_done(c)
   }
-  let box = c.box(w=Fill(1.0), pl=8.0, pr=8.0, pt=10.0, pb=8.0, gap=6.0, radius=note_box_corner, bg=note_ground, shadow=@sf.floating.sigma, shadow_y=@sf.floating.dy, shadow_color=@sf.floating.color, fn() {
+  // (its round buttons, 36, in its foot corners as far in as makes them concentric with it: @sf.capsule_in)
+  let keys_in = @sf.capsule_in(note_box_corner, 36.0)
+  let box = c.box(w=Fill(1.0), pl=keys_in, pr=keys_in, pt=10.0, pb=keys_in, gap=6.0, radius=note_box_corner, bg=note_ground, shadow=@sf.floating.sigma, shadow_y=@sf.floating.dy, shadow_color=@sf.floating.color, fn() {
     c.box(style=note_head, fn() {
       picture_pin(c, n, color, 16.0) |> ignore
       c.text(what, size=@sf.theme().t.meta, line=18.0, color=note_muted, wrap=false) |> ignore

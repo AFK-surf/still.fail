@@ -1,0 +1,7 @@
+# A tablet's wide frame pointed at with a finger: ＋'s panel opened beside it (the tiles' names whole).
+system {"size_class":{"width":"regular","height":"regular"}}
+timeout 20000
+until 发消息
+wait 800
+tap icon:plus
+wait 1500

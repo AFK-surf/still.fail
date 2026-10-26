@@ -33,7 +33,7 @@ pub fn open_fixture(mode : String) -> Unit {
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   match mode {
     "decisions" | "decisions-text" | "decisions-idle" => app.nav.push(Decisions)
-    "history" | "history-details" => {
+    "history" | "history-reading" | "history-details" => {
       app.nav.push(Chat(r))
       app.nav.push(History(r, "s-c1", None))
       if mode == "history-details" {

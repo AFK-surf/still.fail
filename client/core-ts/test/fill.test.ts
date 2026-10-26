@@ -8,7 +8,7 @@ import { Effect } from "effect";
 import type { FakeHost } from "../src/testing.ts";
 import { Core } from "../src/core.ts";
 import { HostError } from "../src/error.ts";
-import { IDLE_MS } from "../src/fill.ts";
+import { FILL_RECENT_MS, IDLE_MS } from "../src/fill.ts";
 import { chatKeptId, keptId } from "../src/drive-kept.ts";
 import { HostWire } from "../src/station/wire.ts";
 import { call } from "./helpers.ts";
@@ -130,6 +130,21 @@ test("it goes on as the core starts again; a station not reached is waited for; 
   core.inner.fill.stationBack(ST);
   await t.host.time.pass(IDLE_MS + 100);
   assert.equal(await Effect.runPromise(kept.whole(chatKeptId(ST, "k1", "film.mp4"), film.length)), true);
+  core.close();
+});
+
+test("one read long ago is left as it is: only what was opened lately is brought", async () => {
+  const film = bytesOf(6 * MB, 6);
+  const t = await started();
+  files(t.host, new Map([["old.mp4", film]]));
+  const r = await rig(t);
+  // read, then the app closed for days
+  await r.ask("station.file.part", { station: ST, key: "k1", name: "old.mp4", offset: 0, length: MB, keep: true, size: film.length });
+  t.core.close();
+  t.host.advance(FILL_RECENT_MS + 1);
+  const core = await Core.create(t.host, { clock: t.host.time.clock, sample: 0, wire: () => new HostWire(t.host) });
+  await t.host.time.pass(IDLE_MS * 2);
+  assert.equal(r.parts("old.mp4"), 1);
   core.close();
 });
 

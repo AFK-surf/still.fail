@@ -352,7 +352,7 @@ fn mark_pick_body(
               if emojis {
                 c.text(key, style=mark_emoji_words) |> ignore
               } else {
-                @sf.station_mark(c, "", "glyph:" + key, mark_glyph, tint.unwrap_or(if on { t.p.accent } else { t.p.text }))
+                @sf.station_mark(c, "", "glyph:" + key, mark_glyph, tint.unwrap_or(if on { t.p.accent_text } else { t.p.text }))
               }
               @sf.row_ripple(c, id)
             })

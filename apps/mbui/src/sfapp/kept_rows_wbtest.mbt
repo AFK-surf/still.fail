@@ -10,19 +10,7 @@ let kept_rows_step_ms : Double = 120.0
 /// after (its instances), and how many rows were drawn again then; the rows drawn again where they can be (`again`) or
 /// built every frame.
 fn kept_rows_scrolled(again : Bool, w : Double, h : Double, a11y? : Bool = false) -> (Array[Array[String]], Int) {
-  reset()
-  let src = fixture("chat-long")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=2)
-  if w > 600.0 {
-    say_room(t, "medium", "medium")
-  }
-  t.run_for(@ui.nav_push_ms)
-  if w > 600.0 {
-    // the page brought over the sidebar
-    t.tap(w - @sfdesk.tape_shows / 2.0, h / 2.0)
-    t.run_for(@sfdesk.side_move_ms)
-  }
+  let t = kept_rows_open("chat-long", w, h)
   t.keep_parts(true)
   t.drawn_again(again)
   t.set_a11y(a11y)
@@ -128,6 +116,14 @@ test "a long chat's messages scrolled on 小屏: drawn again as building them dr
 test "a long chat's messages scrolled on 中屏's tape: drawn again as building them draws them" {
   let (kept, n) = kept_rows_scrolled(true, 720.0, 800.0)
   let (built, _) = kept_rows_scrolled(false, 720.0, 800.0)
+  assert_true(n > 10, msg="rows drawn again: \{n}")
+  kept_rows_same(kept, built)
+}
+
+///|
+test "a long chat's messages scrolled on 大屏: drawn again as building them draws them" {
+  let (kept, n) = kept_rows_scrolled(true, 1280.0, 800.0)
+  let (built, _) = kept_rows_scrolled(false, 1280.0, 800.0)
   assert_true(n > 10, msg="rows drawn again: \{n}")
   kept_rows_same(kept, built)
 }

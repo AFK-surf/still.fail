@@ -18,10 +18,13 @@ test "align: a surface's corner is what sits in it and its padding together, dra
 
 ///|
 test "align: a pill in a surface's corner leaves no crescent: the surface round it, its half height and the pad" {
-  // the web's pillInner(6, 24, 1.25): (6 + 12) × 1.25 − 6 = 16.5 drawn
-  assert_true(near(pill_inner(panel_pad, panel_pill) * smooth_scale, (panel_pad + panel_pill / 2.0) * smooth_scale - panel_pad))
+  // the web's pillInner(6, 24, 1.25), the surface's corner (6 + 12) as a circle reads it (@ui.round_like): that over
+  // 0.9565, × 1.25 − 6 drawn
+  assert_true(
+    near(pill_inner(panel_pad, panel_pill) * smooth_scale, (panel_pad + panel_pill / 2.0) / @ui.smooth_round * smooth_scale - panel_pad),
+  )
   // a small panel's pill in its corner (PanelFoot): as far in as makes the panel's corner its distance and its half
-  assert_eq(around(capsule_in(r_menu, panel_pill), panel_pill / 2.0), r_menu)
+  assert_true(near(around(capsule_in(r_menu, panel_pill), panel_pill / 2.0), r_menu))
 }
 
 ///|

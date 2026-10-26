@@ -465,8 +465,9 @@ test "style: radius=InnerOr: alone its own corner; in a panel's corner the panel
   assert_eq(c.nodes[capsule].corner(), 22.0)
   assert_eq(c.nodes[button].corner(), 16.0)
   assert_eq(t.corner_faults(), [])
-  // in the corner of a panel rounded as far in as the capsule's half height (12 + 22): a capsule still
-  let t = Tester::new(capsule_in_panel(34.0, 12.0))
+  // in the corner of a panel rounded as far in as the capsule's half height (12 + 22, as a circle reads the panel's:
+  // round_like): a capsule still
+  let t = Tester::new(capsule_in_panel(round_like_out(34.0), 12.0))
   t.draw()
   let c = g()
   assert_eq(c.nodes[capsule].corner(), 22.0)
@@ -483,7 +484,7 @@ test "style: radius=InnerOr: alone its own corner; in a panel's corner the panel
   assert_eq(drawn4(c.nodes[button]), (16.0, 16.0, 16.0, 16.0))
   let faults = t.corner_faults()
   assert_true(
-    faults.length() == 2 && faults.iter().all(fn(f) { f.contains("wants corner 34") }),
+    faults.length() == 2 && faults.iter().all(fn(f) { f.contains("wants corner 35.5") }),
     msg=faults.join("\n"),
   )
   // nearer the panel's foot than its sides: its own corner kept, and said
@@ -762,8 +763,8 @@ test "corners: what lies in a container's corner keeps one corner for all four; 
 
 ///|
 test "corners: a capsule in a container's corner keeps its shape, and is concentric only where it stands so" {
-  // 32 round 16, 10 in: the container's 26 is its distance and its half
-  let t = Tester::new(corner_card(10.0, 16.0, 32.0))
+  // 32 round 16, 8.87 in: the container's 26, as a circle reads it (round_like: 24.87), is its distance and its half
+  let t = Tester::new(corner_card(round_like(26.0) - 16.0, 16.0, 32.0))
   t.draw()
   assert_eq(g().nodes[3].radius, 16.0)
   assert_eq(t.corner_faults(), [])

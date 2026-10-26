@@ -44,6 +44,40 @@ pub fn concentric_out(inner : Double, inset : Double) -> Double {
 }
 
 ///|
+/// How round a circle's arc a wholly smooth corner reads as, to what lies in it (a circle, a capsule's end): no circle
+/// is concentric with a superellipse, and the one tangent to its edges that keeps nearest an even gap to it all along is
+/// centred this much of its radius in from them (fitted: the gap off even by under 1.25% of its radius anywhere, 0.34
+/// in a corner of 28; a circle centred its whole radius in, as a round corner would ask, is 3% off at the curve's
+/// middle, 0.84 there, the user, 2026-10-27: 中型屏的单行 composer 跟圆角还是对不上).
+pub let smooth_round : Double = 0.9565
+
+///|
+/// The round corner a circle or a capsule's end lying in a corner of `radius` follows, `room` half its box's shorter
+/// side (as smooth as that has room for, smoothness): it lies concentric where it stands that less its own half in from
+/// the corner's edges. A wholly smooth corner's smooth_round of it, a round one (a capsule's end) itself.
+pub fn round_like(radius : Double, room? : Double = 1.0e30) -> Double {
+  let r = dmin(radius, room)
+  r * (1.0 - (1.0 - smooth_round) * smoothness(r, room))
+}
+
+///|
+/// The other way round: the corner, of a box `room` its shorter half, that a circle or a capsule's end follows as
+/// `round` (round_like of it is `round`; at most `room`). By halving: round_like grows with the radius.
+pub fn round_like_out(round : Double, room? : Double = 1.0e30) -> Double {
+  let mut lo = dmin(round, room)
+  let mut hi = dmin(round / smooth_round, room)
+  for _ in 0..<48 {
+    let mid = (lo + hi) / 2.0
+    if round_like(mid, room~) < round {
+      lo = mid
+    } else {
+      hi = mid
+    }
+  }
+  hi
+}
+
+///|
 /// How far in from each of its edges a corner of `radius` (room enough to be wholly smooth) passes at its middle, where
 /// it turns 45°: the superellipse's point with x = y, 2^(-1/n) of the longer radius from its centre.
 pub fn smooth_middle(radius : Double) -> Double {

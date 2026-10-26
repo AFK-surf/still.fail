@@ -18,10 +18,11 @@
 // in it, whenever it was told: a list flung before the part was kept flings on in it), a press held down on it or a
 // wheel turned over it (what it holds may take them), the mouse's pointer over it (it lights what it points at). It is
 // built whole the first frames it shows, while a motion going on as it came may still move what it holds. Drawn again,
-// what its build's paint said of the frame is said again, where it was, all of it by one rule (said.mbt): its targets,
-// what scrolls in it, the words that can be picked, its scroll bars, so presses, the wheel and the pointer find in it
-// what they found as it was built. It is never read out, built or not, so what is read out does not come and go with
-// it.
+// what its build and its paint said of the frame is said again, where it was, all of it by one rule (said.mbt): what
+// takes the focus, the pointer's shape, what asks for a menu, what is told outside, its targets, what scrolls in it,
+// the words that can be picked, its scroll bars, so keys, presses, the wheel and the pointer find in it what they found
+// as it was built; and what the rows of its lists said, where they said it. It is never read out, built or not, so
+// what is read out does not come and go with it.
 
 ///|
 /// A part kept (Ctx::kept_part): what its build drew (its instances, where they were; the pieces of its shapes; the
@@ -40,6 +41,14 @@ priv struct KeptPart {
   /// now, and what the tracker answered as it last ran it
   tracker : @signals.Computed[Int]
   body : Ref[() -> Unit]
+  /// what its build said of the frame (said.mbt's build lists), said again as it is drawn again; where each of them
+  /// stood as it began
+  built_marks : Array[Int]
+  built_said : Array[&SaidAgain]
+  /// a part's: the rows of its lists that said what their builds said where its lists' rows say theirs, in the order
+  /// they said it (Ctx::row_build_said), as it was last shown: drawn again, it says theirs again where its box is laid
+  /// out
+  rows_said : Array[Int]
   mut stamp : Int
   /// what it was built from: its caller's key, the events from outside seen, the layout's epoch, the scale, the hand
   mut key : String
@@ -166,21 +175,11 @@ fn outside_came() -> Unit {
 let parts_on : Ref[Bool] = Ref(true)
 
 ///|
-/// Whether a list's rows are kept too (kept_rows.mbt): not on a host's frames, until what a row's build and paint say
-/// of the frame is kept for it all in one place (a frame's record taken and given again by its range, as GPUI's
-/// `reuse_paint`), not each registry by hand (the user, 2026-10-26: what it left out, a motion's place, a box's size,
-/// moved what was drawn); a Tester keeping parts keeps them, so what keeps them stays held to drawing what building
-/// does.
-// kept across runs: set by each Tester (keep_parts)
-let rows_kept_on : Ref[Bool] = Ref(false)
-
-///|
 /// Parts kept as a host keeps them (Ctx::kept_part), from now on, or not (every frame built whole: a Tester's own); a
-/// list's rows with them (rows_kept_on).
+/// list's rows with them (kept_rows.mbt).
 pub fn Tester::keep_parts(self : Tester, on : Bool) -> Unit {
   ignore(self)
   parts_on.val = on
-  rows_kept_on.val = on
 }
 
 ///|
@@ -273,7 +272,7 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
   let st = match kept_parts.get(id) {
     Some(st) => st
     None => {
-      let st = kept_new(id)
+      let st = kept_new(id, row=false)
       kept_parts[id] = st
       st
     }
@@ -354,6 +353,8 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
   let e = self.drawn_of(i)
   st.again = !ran
   if ran {
+    // (its rows say theirs as its lists are laid out)
+    st.rows_said.clear()
     st.built = self.frame_no
     st.key = key
     st.outside = outside_events.val
@@ -365,12 +366,14 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
   } else {
     // drawn again: what it draws from kept through this frame, the frame it asked for coming
     e.again = Some(st)
+    // what its build said of the frame said again where it said it, of its box (said.mbt)
+    self.say_again(st.built_said, moved_to(i))
     self.drawn_again_told((0, id), 0.0, 0.0)
-    // (the rows of its lists its drawing holds, those its last frame showed: shown with it, not let go, and the
-    // packages told of them as of it)
-    for _, rp in kept_rows {
-      match rp.row {
-        Some(rk) if rk.part == id && rp.shown == self.frame_no - 1 => {
+    // (the rows of its lists its drawing holds: shown with it, not let go, the packages told of them as of it, and what
+    // they said said again where its box is laid out, as they said it as its lists were: Ctx::parts_rows_laid)
+    for rid in st.rows_said {
+      match kept_rows.get(rid) {
+        Some({ row: Some(rk), .. } as rp) => {
           rp.shown = self.frame_no
           rp.again = true
           rk.kept = true
@@ -378,6 +381,9 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
         }
         _ => ()
       }
+    }
+    if !st.rows_said.is_empty() {
+      parts_laid_again[i] = st
     }
     for p in st.plots {
       if p >= part_colour_plot {
@@ -395,9 +401,10 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
 ///|
 /// A part kept, not built yet: its build run by a computed of its own (`body` as it is set, again as what it read
 /// changes or it is invalidated).
-fn kept_new(id : Int) -> KeptPart {
+fn kept_new(id : Int, row~ : Bool) -> KeptPart {
   let body_now : Ref[() -> Unit] = Ref(fn() {  })
   let reads : KeptReads = { laid: {}, shown: {}, left: {} }
+  let (built_marks, built_said) : (Array[Int], Array[&SaidAgain]) = ([], [])
   {
     id,
     insts: FixedArray::make(0, 0.0),
@@ -410,7 +417,11 @@ fn kept_new(id : Int) -> KeptPart {
       let c = g()
       let (layers, back) = (c.layers.length(), c.back_next)
       reads.clear()
+      // (what it says of the frame as it is built taken, to be said again as it is drawn again; a row's said where
+      // its list's rows say theirs, in their order: Ctx::rows_placed)
+      c.build_marks(built_marks)
       (body_now.val)()
+      c.build_take(built_marks, built_said, cut=row)
       // (a layer it opened, back it took: laid over the window and taken anew each frame, apart from what it draws)
       if c.layers.length() != layers || !physical_equal(c.back_next, back) {
         part_live()
@@ -419,6 +430,9 @@ fn kept_new(id : Int) -> KeptPart {
       part_stamp.val
     }),
     body: body_now,
+    built_marks,
+    built_said,
+    rows_said: [],
     stamp: 0,
     key: "",
     outside: -1,
@@ -908,6 +922,46 @@ fn Ctx::part_paint_again(self : Ctx, st : KeptPart) -> Unit {
     }
   }
   self.ninst = i0 + count
+}
+
+///|
+/// The parts drawn again in this build of the frame whose lists' rows said what their builds said (KeptPart's
+/// `rows_said`), by their boxes' nodes.
+// kept across runs: let go as each build of a frame starts (Ctx::parts_build_start)
+let parts_laid_again : Map[Int, KeptPart] = {}
+
+///|
+/// As a build of the frame starts: no part drawn again in it yet.
+fn parts_build_start() -> Unit {
+  parts_laid_again.clear()
+}
+
+///|
+/// Node `i` laid out: where it is a part drawn again, what the rows of its lists said said again there, in their
+/// order, as its lists say theirs as they are laid out (Ctx::rows_placed).
+fn Ctx::parts_rows_laid(self : Ctx, i : Int) -> Unit {
+  match parts_laid_again.get(i) {
+    Some(st) => {
+      parts_laid_again.remove(i)
+      for rid in st.rows_said {
+        match kept_rows.get(rid) {
+          Some(rp) => self.say_again(rp.built_said, moved_to(i))
+          None => ()
+        }
+      }
+    }
+    None => ()
+  }
+}
+
+///|
+/// The frame laid out: what the rows of the parts drawn again whose boxes were not laid out anew said (a box placed as
+/// it was, with what holds it), said now.
+fn Ctx::parts_rows_left(self : Ctx) -> Unit {
+  let left = parts_laid_again.keys().collect()
+  for i in left {
+    self.parts_rows_laid(i)
+  }
 }
 
 ///|
