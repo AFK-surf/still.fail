@@ -1309,11 +1309,12 @@ static bool covered_at(View *v, double x, double y) {
 }
 
 // the view shown at (x, y), points from the client area's top left, the last stacked first (not where the app draws
-// what takes a press over it)
+// what takes a press over it; never a player's: a video takes no input, the app's clicks, wheel and keys over it, as
+// the Mac's MBPlayerView. Its page took the mouse and with it the keys: Esc, Space, the wheel's zoom went to it)
 static View *view_at(double x, double y) {
   for (auto it = views.rbegin(); it != views.rend(); ++it) {
     View *v = it->second;
-    if (!v->shown || !v->placed || !v->comp || v->touch == "through" || covered_at(v, x, y)) continue;
+    if (!v->shown || !v->placed || !v->comp || v->kind == 1 || v->touch == "through" || covered_at(v, x, y)) continue;
     double x0 = fmax(v->cx0, v->x), y0 = fmax(v->cy0, v->y);
     double x1 = fmin(v->cx1, v->x + v->w), y1 = fmin(v->cy1, v->y + v->h);
     if (x >= x0 && x < x1 && y >= y0 && y < y1) return v;
