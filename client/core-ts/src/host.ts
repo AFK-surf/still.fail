@@ -104,6 +104,12 @@ export interface Host {
   /// what the system cannot: the core orders them by hand (drive-browse.ts).
   collate?(names: readonly string[]): number[] | null;
 
+  /// An Ed25519 seed's public key and its signature of `message`, where the host has a way of its own (a native app's
+  /// shell). None, or null for a host that cannot: the core's own, noble's, in JS, which in Hermes (no JIT) took ~8 ms
+  /// a signature and longer the first time, a lock claim's for each workspace and endpoint as the core connects
+  /// (lock.ts lockClaim), all of it on the core's thread ahead of what the UI asked for.
+  ed25519Sign?(seed: Uint8Array, message: Uint8Array): { publicKey: Uint8Array; signature: Uint8Array } | null;
+
   /// A zstd stream taken apart by the host, open while the scope is, where it has a way of its own (a native app's
   /// shell: libzstd). None: the core's own, fzstd, in JS, which Hermes (no JIT) runs at some 10 MB of what it makes a
   /// second on an M2 Max, a tenth of V8's and far under native (bench/zstd-read.ts): what a station sends, compressed,
