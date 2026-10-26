@@ -5,7 +5,6 @@ import { Context, Effect, Layer, Queue, Stream, SubscriptionRef } from "effect";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Admin } from "./api/admin.ts";
-import { Shares } from "./mesh/adb.ts";
 import { Events as EventStreams, eventsHandoverFile } from "./api/events.ts";
 import { Host } from "./api/host.ts";
 import { jobSeen, sessionSeen, threadSeen } from "./api/seen.ts";
@@ -389,17 +388,6 @@ export class AdminApi extends Context.Service<AdminApi, Admin>()("stillfail/Admi
         store: yield* Store, events: yield* Events, host: yield* AdminHost, agents: () => side.current ?? undefined, screens: yield* ScreenRegistry, helper: yield* Helper, grants: yield* Grants,
         drive: yield* StationDrive, modules: yield* Modules, parts: yield* Parts, config, data: (yield* Paths).data, cloud: (yield* ControlPlane).state,
       });
-    }),
-  );
-}
-
-/// Phones lent to the agents over members' links (src/mesh/adb.ts): offered on the mesh, listed to the agents.
-export class AdbShares extends Context.Service<AdbShares, Shares>()("stillfail/AdbShares") {
-  static readonly layer = Layer.effect(
-    AdbShares,
-    Effect.gen(function* () {
-      const cloud = (yield* ControlPlane).state;
-      return yield* Effect.acquireRelease(Effect.sync(() => new Shares({ cloud })), (s) => Effect.promise(() => s.close()));
     }),
   );
 }

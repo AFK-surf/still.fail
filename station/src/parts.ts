@@ -1,13 +1,14 @@
 // The station's parts that are modules of it, in its own process (docs/station-modules.md, 「进程内的模块」): each a
 // layer the composition root (main.ts) lists, made after the platform and the agents' side, saying here what it adds to
-// what the station answers: its routes of the admin API, the writes a read-only member may make of them, its fields of
-// the overview and its tools for the agents. Nothing registers itself: a part is in the station because main.ts names
+// what the station answers: its routes of the admin API, the writes a read-only member may make of them, its own kinds
+// of request on a member's link, its fields of the overview and its tools for the agents. Nothing registers itself: a part is in the station because main.ts names
 // it, and says what it adds as it is made. What is said here is read as it is asked for (a request, an agent's tool
 // list), so the admin API and the agents, made before the parts, take what they add.
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Duplex } from "node:stream";
 import type { Route, Tools } from "./api/admin.ts";
-import type { Connection } from "./mesh/native.ts";
+import type { Connection, Stream } from "./mesh/native.ts";
+import type { Reader } from "./mesh/serve.ts";
 import type { Lang } from "./ops/i18n.ts";
 import type { Viewer } from "./mesh/credential.ts";
 import type { Tool } from "./tools/mcp.ts";
@@ -20,6 +21,10 @@ export type DoorRoute = {
   upgrade(req: IncomingMessage, socket: Duplex, head: Buffer): Promise<void>;
 };
 
+/// A request on a member's link a part answers itself (mesh/serve.ts): its stream, the head line it came with (already
+/// read, the rest of the stream's bytes in `reader`), the member and their connection.
+export type MemberAsk = { conn: Connection; viewer: Viewer; head: any; stream: Stream; reader: Reader };
+
 export class StationParts {
   readonly #routes: (Route[] | ((tools: Tools) => Route[]))[] = [];
   /// The routes as made for an admin API's tools, and how many parts' routes they were made of.
@@ -30,6 +35,7 @@ export class StationParts {
   readonly #tools: Tool[] = [];
   readonly #door: DoorRoute[] = [];
   readonly #ended: ((session: string) => void)[] = [];
+  readonly #streams = new Map<string, (ask: MemberAsk) => Promise<void>>();
   #doorUrl: string | null = null;
 
   /// A part's routes of the admin API (after the platform's own); made with what the admin API's routes are given
@@ -42,6 +48,13 @@ export class StationParts {
   /// connections, whoever makes them; it checks what it lets them have.
   alpn(alpn: Buffer, serve: (conn: Connection) => Promise<void>): void {
     this.#alpns.push({ alpn, serve });
+  }
+
+  /// A kind of request on a member's link a part answers itself (a phone lent over it, say): one whose head line has an
+  /// object under `key` (`{"adb": {…}}`), whatever its path. The part says what the member may.
+  streams(key: string, answer: (ask: MemberAsk) => Promise<void>): void {
+    if (this.#streams.has(key)) throw new Error(`a member's ${key} requests are answered twice`);
+    this.#streams.set(key, answer);
   }
 
   /// Which of a part's requests besides reads a read-only member may make (their own marks, say).
@@ -96,6 +109,15 @@ export class StationParts {
       this.#made.set(tools, made);
     }
     return made.routes;
+  }
+
+  /// The part that answers a request whose head line is `head`, if one does.
+  streamOf(head: any): ((ask: MemberAsk) => Promise<void>) | undefined {
+    for (const [key, answer] of this.#streams) {
+      const v = head?.[key];
+      if (v !== null && typeof v === "object" && !Array.isArray(v)) return answer;
+    }
+    return undefined;
   }
 
   allAlpns(): readonly { alpn: Buffer; serve: (conn: Connection) => Promise<void> }[] {

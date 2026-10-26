@@ -3,7 +3,7 @@
 // the endpoint and every connection and loop it started.
 import { Cause, Effect, FiberSet, Layer, Option, Stream } from "effect";
 import { log } from "../ops/log.ts";
-import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, MeshSide, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../services.ts";
+import { AdminApi, ControlPlane, Key, MeshNative, MeshSide, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../services.ts";
 import { DeviceTools, accessOf } from "../device/tools.ts";
 import { TOOLS_ALPN, adminSessions, presenceTools, serveTools } from "./tools.ts";
 import { PEER_ALPN, peerCall, servePeer } from "./peer.ts";
@@ -36,7 +36,6 @@ export const MeshLive = Layer.effectDiscard(
     // The protocols the station's parts answer themselves (parts.ts): a published chat's visitors, say.
     const parts = yield* Parts;
     const config = yield* StationConfig;
-    const shares = yield* AdbShares;
     const screens = yield* ScreenRegistry;
     const run = Effect.gen(function* () {
       // Not in a workspace yet: on the mesh once `enroll` writes cloud.json.
@@ -99,7 +98,7 @@ export const MeshLive = Layer.effectDiscard(
         (traces) => Effect.promise(() => traces.close()),
       );
       if (traces.enabled) traces.exportTo((spans) => Effect.runPromise(plane.traces(spans)));
-      const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), shares, screens, traces, accepted: plane.credential, lan: () => lanAddrs(endpoint.sockets()) };
+      const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), streams: (head: any) => parts.streamOf(head), screens, traces, accepted: plane.credential, lan: () => lanAddrs(endpoint.sockets()) };
       // The control plane's gateways: the device tools, as far as the station's own setting lets them.
       const device = yield* Effect.acquireRelease(
         Effect.sync(() =>

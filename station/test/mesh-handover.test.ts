@@ -3,7 +3,7 @@ import { test, type TestContext } from "node:test";
 import { Effect, Fiber, Layer, Stream, SubscriptionRef } from "effect";
 import { MeshLive } from "../src/mesh/mesh.ts";
 import { Net } from "../src/jobs/load.ts";
-import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, MeshSide, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../src/services.ts";
+import { AdminApi, ControlPlane, Key, MeshNative, MeshSide, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../src/services.ts";
 import type { Mesh } from "../src/mesh/native.ts";
 import { memoryMesh } from "./memory-mesh.ts";
 import { StationParts } from "../src/parts.ts";
@@ -54,7 +54,7 @@ function startup(t: TestContext, bindAddr: string | undefined) {
       return endpoint;
     } } as unknown as Mesh),
     Layer.succeed(Store)(null!), Layer.succeed(AdminApi)(null!),
-    Layer.succeed(Up)(Effect.runSync(SubscriptionRef.make(true))), Layer.succeed(AdbShares)(null!), Layer.succeed(ScreenRegistry)(null!),
+    Layer.succeed(Up)(Effect.runSync(SubscriptionRef.make(true))), Layer.succeed(ScreenRegistry)(null!),
   );
   const running = Effect.runFork(Effect.scoped(Effect.gen(function* () {
     yield* Layer.build(MeshLive.pipe(Layer.provide(inputs)));

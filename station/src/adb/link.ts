@@ -20,9 +20,9 @@ import { wall } from "../ops/fibers.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { platform } from "../platform/index.ts";
-import type { Viewer } from "./credential.ts";
-import type { Connection, Stream } from "./native.ts";
-import { Reader, writeLine } from "./serve.ts";
+import type { Viewer } from "../mesh/credential.ts";
+import type { Connection, Stream } from "../mesh/native.ts";
+import { Reader, writeLine } from "../mesh/serve.ts";
 
 type Json = any;
 

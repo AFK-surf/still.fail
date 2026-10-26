@@ -73,7 +73,7 @@ Over the member link (ALPN `stillfail/admin/1`; station/src/mesh/serve.ts):
 
 ## On the station
 
-`station/src/mesh/adb.ts`: a listener on `127.0.0.1` for each phone offered (the
+`station/src/adb/link.ts`: a listener on `127.0.0.1` for each phone offered (the
 same port for the same phone when it is free, 37000–37999), `adb connect` to it
 as the offer comes, `adb disconnect` as it goes. adb is the station machine's
 (`PATH`, `$ANDROID_HOME`, the SDK's usual places); without it the offer says

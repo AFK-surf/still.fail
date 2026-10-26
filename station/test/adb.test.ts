@@ -1,4 +1,4 @@
-// Phones lent to the station's agents (mesh/adb.ts, from the Rust station's adb.rs): the Rust tests, the offer's states
+// Phones lent to the station's agents (adb/link.ts, from the Rust station's adb.rs): the Rust tests, the offer's states
 // and asks over in-memory streams, and an offer from a fake phone over a connection in memory, its tunnels reaching
 // the phone, with a fake adb (test/fake/adb) — never a real device.
 import assert from "node:assert/strict";
@@ -11,7 +11,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { Clock, Duration, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
-import { GRACE, PORTS, SETTLE, Shares, answerAdb, bind, isPackage, text } from "../src/mesh/adb.ts";
+import { GRACE, PORTS, SETTLE, Shares, answerAdb, bind, isPackage, text } from "../src/adb/link.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
 import type { Connection, Stream } from "../src/mesh/native.ts";
 import { Reader, writeLine } from "../src/mesh/serve.ts";

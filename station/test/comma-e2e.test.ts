@@ -100,7 +100,7 @@ test("a station in Comma: enrolled, online, a member admitted, a viewer read-onl
   const station = await mesh.bind({ secretKey: key.seed, alpns: [ALPN, TOOLS_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
   const work = mkdtempSync(join(tmpdir(), "comma-work-"));
   const device = new DeviceTools({ home: work, protect: () => [data], sessions: adminSessions(() => admin, () => store, () => ["claude"], () => "ws1", gateway.id()) });
-  const members = { cloud: state, admin, up: () => true, shares: {} as any, accepted: plane.credential };
+  const members = { cloud: state, admin, up: () => true, accepted: plane.credential };
   const gateways = { cloud: state, tools: device, access: () => accessOf(config.raw()), enabled: () => plane.spec().tools };
   state.toolCalls = presenceTools(gateways);
   void (async () => {

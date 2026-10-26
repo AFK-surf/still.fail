@@ -240,7 +240,7 @@ test("over the mesh: a member's request to a module streamed in, its event strea
     for (;;) {
       const conn = await at.accept();
       if (!conn) return;
-      void serve({ cloud, admin: s.admin, up: () => true, shares: {} as any }, conn).catch(() => {});
+      void serve({ cloud, admin: s.admin, up: () => true }, conn).catch(() => {});
     }
   })();
   const line = (stream: MeshStream, value: unknown) => stream.write(Buffer.from(JSON.stringify(value) + "\n"));
