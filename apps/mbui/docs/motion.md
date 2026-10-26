@@ -56,6 +56,11 @@ before the page moves, not as a skipped step in the middle of its slide (UIKit's
 page before they start too). The cause is still the push; its moment moved on by what the display said, an input as
 a touch's time is, kept on a run's tape (`LATE`) and given again to a Tester.
 
+On 中屏's tape the same: what is chosen in the sidebar is put on the page, and the tape brings the page over once the
+page shows it (`Nav::top_shows`: the core's answer waited for as a pushed page waits for it, at most `LOCAL_MS`), not
+sliding over with the page before on it and swapping it mid-way. Every move of a state (`Ctx::move_state`: the tape,
+the sidebar, a side panel) waits for its first frame's lateness as a slide does.
+
 ## Three rules
 
 1. **No motion from a layout's difference.** A place or a size moves only when its cause says so, from the frame of

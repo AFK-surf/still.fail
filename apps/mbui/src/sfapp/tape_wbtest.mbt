@@ -295,6 +295,41 @@ test "on the tape a chat chosen in the sidebar brings the page over, chosen agai
 }
 
 ///|
+/// How late the core gives each topic's first value in the test below (round_trip): within what a page waits for
+/// (LOCAL_MS).
+let tape_core_late_ms : Double = 50.0
+
+///|
+test "on the tape a chat chosen in the sidebar while its view is on its way: the page comes over once it shows it, not sliding with the chat before on it" {
+  reset()
+  let src = round_trip(fixture("chat"), tape_core_late_ms)
+  let read = fn(session : String) { readings.contains("ws1/st1\u{1}" + session) }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=720.0, h=800.0, platform=0)
+  t.draw()
+  // the workspace, its list and the chat, their topics one after another
+  t.run_for(tape_core_late_ms * 6.0 + @ui.nav_push_ms)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_true(read("s-c1"))
+  // (where the tape is: the sidebar's first row)
+  let (nx, _) = t.find("新建对话").unwrap()
+  // chosen while its view is on its way: the chat before stays on the page, the tape where it is
+  t.tap_text("首页的列表改成按天分组")
+  t.run_for(tape_core_late_ms / 2.0)
+  assert_true(app.nav.top() is Chat({ session: "s-c2", .. }), msg="the stack has it")
+  assert_true(read("s-c1") && !read("s-c2"), msg="the chat before stays")
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(t.find("新建对话").unwrap().0, nx)
+  // its view come: the page shows it, and comes over
+  t.run_for(tape_core_late_ms)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_true(read("s-c2") && !read("s-c1"), msg="the chat chosen shown, the one before left")
+  t.run_for(@sfdesk.side_move_ms)
+  let (x, _) = t.find("新建对话").unwrap()
+  assert_true(x < nx - 100.0, msg="the sidebar's first row at \{x}, from \{nx}")
+}
+
+///|
 test "on the tape a chat's side panel is a panel of its own after the page's: opened it comes over, back the page" {
   let t = tape_chat(0, 720.0, 800.0)
   page_over(t, 720.0)

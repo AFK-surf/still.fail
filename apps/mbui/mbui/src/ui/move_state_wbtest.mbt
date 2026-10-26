@@ -86,6 +86,54 @@ test "a state moved to: each property from what it showed to what is built, on t
 }
 
 ///|
+/// How late a move's first frame is to the screen in these tests (a page built in it), and one far later than a move
+/// waits for (nav_late_most).
+let move_first_late_ms : Double = 40.0
+
+///|
+let move_first_very_late_ms : Double = 500.0
+
+///|
+test "a move whose first frame is late to the screen moves from where that frame drew it, at the display's pace; nav_late_most at most" {
+  // the same move, its first frame on time: half its time in
+  let on_time = Dock::new()
+  let t = Tester::new(on_time.view(), w=800.0, h=600.0)
+  t.draw()
+  on_time.fold.val = true
+  t.draw()
+  t.run_for(move_ms / 2.0)
+  let half = width_of(on_time.node.val)
+  // its first frame (the one it set out in, the new state built in it) late to the screen, as the host says in the next
+  let d = Dock::new()
+  let t = Tester::new(d.view(), w=800.0, h=600.0)
+  t.draw()
+  d.fold.val = true
+  t.draw()
+  let start = t.time()
+  t.frame_late(move_first_late_ms)
+  t.run_for(first_frame_ms)
+  // not moved yet: where its first frame drew it
+  assert_eq(width_of(d.node.val), 300.0)
+  // from then, as the one on time from its frame
+  t.run_for(start + move_first_late_ms + move_ms / 2.0 - t.time())
+  assert_true((width_of(d.node.val) - half).abs() < 1.0e-6)
+  t.run_for(start + move_first_late_ms + move_ms - t.time())
+  assert_eq(width_of(d.node.val), 56.0)
+  t.assert_idle()
+  // far later: it waits nav_late_most, no more
+  d.fold.val = true
+  t.draw()
+  let start = t.time()
+  t.frame_late(move_first_very_late_ms)
+  t.run_for(first_frame_ms)
+  t.run_for(start + nav_late_most + move_ms / 2.0 - t.time())
+  assert_true((width_of(d.node.val) - (56.0 + (300.0 - 56.0) * Out.at(0.5))).abs() < 1.0e-6)
+  t.run_for(start + nav_late_most + move_ms - t.time())
+  assert_eq(width_of(d.node.val), 300.0)
+  t.assert_idle()
+}
+
+///|
 test "a move said again over one going on goes on from where that had got to" {
   let d = Dock::new()
   let t = Tester::new(d.view(), w=800.0, h=600.0)
