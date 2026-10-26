@@ -1,6 +1,7 @@
-// Every kind of message the fixtures hold, left still with its rows kept (mbui's kept_rows.mbt): what goes on in them
+// Every kind of message the fixtures hold, with its rows kept (mbui's kept_rows.mbt): left still, what goes on in them
 // as time goes (a ring stepping round an agent at work, a spinner under a message waiting, a clock's seconds, words
-// coming after a moment) drawn at each moment as building every row draws it.
+// coming after a moment), and scrolled, what comes into view and what reads the layout (a table's width, a picture's,
+// the list's end for the way to the newest), drawn at each moment as building every row draws it.
 
 ///|
 /// The fixtures' chats, each with kinds of messages of its own.
@@ -44,12 +45,54 @@ fn kept_rows_kind(mode : String, again : Bool, w : Double, h : Double, a11y? : B
 }
 
 ///|
-/// Each chat drawn the same with its rows drawn again and built: the chats that are not, said with where.
-fn kept_rows_kinds_apart(w : Double, h : Double, a11y? : Bool = false) -> Array[String] {
+/// Chat `mode` dragged back and let go, then dragged on: what is drawn at each moment after, the rows drawn again where
+/// they can be (`again`) or built every frame.
+fn kept_rows_kind_scrolled(mode : String, again : Bool, w : Double, h : Double) -> Array[Array[String]] {
+  reset()
+  let src = fixture(mode)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=2, corners_held=false)
+  if w > 600.0 {
+    say_room(t, "medium", "medium")
+  }
+  t.run_for(@ui.nav_push_ms)
+  if w > 600.0 {
+    t.tap(w - @sfdesk.tape_shows / 2.0, h / 2.0)
+    t.run_for(@sfdesk.side_move_ms)
+  }
+  t.keep_parts(true)
+  t.drawn_again(again)
+  let out = []
+  let x = w * 0.7
+  t.drag(x, h * 0.3, x, h * 0.7, steps=8)
+  for _ in 0..<5 {
+    t.run_for(kept_rows_step_ms)
+    out.push(drawn_from(t, -1000.0).map(kept_rows_inst))
+  }
+  t.drag(x, h * 0.7, x, h * 0.35, steps=8)
+  for _ in 0..<5 {
+    t.run_for(kept_rows_step_ms)
+    out.push(drawn_from(t, -1000.0).map(kept_rows_inst))
+  }
+  out
+}
+
+///|
+/// Each chat drawn the same with its rows drawn again and built (`scrolled`, or left still): the chats that are not,
+/// said with where.
+fn kept_rows_kinds_apart(w : Double, h : Double, a11y? : Bool = false, scrolled? : Bool = false) -> Array[String] {
   let apart = []
   for mode in kept_rows_kinds {
-    let kept = kept_rows_kind(mode, true, w, h, a11y~)
-    let built = kept_rows_kind(mode, false, w, h, a11y~)
+    let kept = if scrolled {
+      kept_rows_kind_scrolled(mode, true, w, h)
+    } else {
+      kept_rows_kind(mode, true, w, h, a11y~)
+    }
+    let built = if scrolled {
+      kept_rows_kind_scrolled(mode, false, w, h)
+    } else {
+      kept_rows_kind(mode, false, w, h, a11y~)
+    }
     let mut said = false
     for i in 0..<kept.length() {
       if said {
@@ -92,6 +135,22 @@ test "every kind of message left still on 中屏's tape: what goes on in it draw
 ///|
 test "every kind of message left still on 中屏's tape, read out: what goes on in it drawn as building it draws it" {
   let apart = kept_rows_kinds_apart(720.0, 800.0, a11y=true)
+  if apart.length() > 0 {
+    fail(apart.join("\n"))
+  }
+}
+
+///|
+test "every kind of message scrolled on 小屏: drawn again as building it draws it" {
+  let apart = kept_rows_kinds_apart(390.0, 844.0, scrolled=true)
+  if apart.length() > 0 {
+    fail(apart.join("\n"))
+  }
+}
+
+///|
+test "every kind of message scrolled on 中屏's tape: drawn again as building it draws it" {
+  let apart = kept_rows_kinds_apart(720.0, 800.0, scrolled=true)
   if apart.length() > 0 {
     fail(apart.join("\n"))
   }

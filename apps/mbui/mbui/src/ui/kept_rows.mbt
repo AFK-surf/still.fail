@@ -374,6 +374,23 @@ fn Ctx::row_of(self : Ctx, li : Int, st : ListState, k : Int, iw : Double, force
     for img in kp.images {
       img.used = self.frame_no
     }
+    // (what its build read of the layout, the part's its list is in too: drawn again with it later, the part keeps it)
+    if st.part != 0 {
+      match kept_parts.get(st.part) {
+        Some(p) => {
+          for id, rect in kp.reads.laid {
+            p.reads.laid[id] = rect
+          }
+          for id, v in kp.reads.shown {
+            p.reads.shown[id] = v
+          }
+          for id, v in kp.reads.left {
+            p.reads.left[id] = v
+          }
+        }
+        None => ()
+      }
+    }
   }
   r
 }
