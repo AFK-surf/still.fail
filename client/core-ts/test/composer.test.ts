@@ -11,6 +11,7 @@ import { FileSource } from "../src/file-source.ts";
 import { CoreError } from "../src/error.ts";
 import { Raw, stationReplies, started } from "./station-fixture.ts";
 import { HostWire } from "../src/station/wire.ts";
+import { Requests } from "../src/station/requests.ts";
 
 /// A draft as written, without the name the core gives it (its own test: draft-id.test.ts).
 const noId = ({ id: _, ...d }: any) => d;
@@ -1063,18 +1064,26 @@ test("a_file_ended_part_way_up_is_kept_whole_and_its_message_sent_from_it", asyn
   await Effect.runPromise(t.core.inner.data.written);
   t.core.close();
   t.host.takeEmitted();
+  // The core started again sends it on by itself (views/calls.ts resume), before the answers below are set on it: its
+  // naming held till they are (no station has it before it goes up, as in setup). Named for real, its 4 MB were read on
+  // another thread in real time (crypto.subtle), which the test's clock does not wait for: whether they were set before
+  // it went on was the machine's to say (it failed so on CI, 2026-10-27).
+  const naming = Requests.prototype.uploadName;
+  let set = () => {};
+  const answered = new Promise<null>((r) => { set = () => r(null); });
+  Requests.prototype.uploadName = () => answered;
   const again = await Core.create(t.host, { clock: t.host.time.clock, sample: 0, wire: () => new HostWire(t.host) });
   try {
     const got: number[] = [];
     let have = 0;
     (again.inner.stations.requests as J).uploadPart = (_addr: unknown, q: J, part: Uint8Array) => {
-      if (q.sha256 !== undefined) return Effect.succeed({ have: 0 });
       for (const b of part.subarray(0, 4)) got.push(b);
       have = q.offset + part.length;
       return Effect.succeed(have === size ? { have, file: { name: q.name, size, path: "/u/big.bin" } } : { have });
     };
     const posted: J[] = [];
     (again.inner.stations as J).post = (_station: string, thread: number, message: J) => Effect.sync(() => { posted.push({ thread, ...message }); return posted.length; });
+    set();
     const ui = again.connect();
     const entry = again.inner.views.local.outbox("ws/st", 7)[0];
     call(again, ui, 601, "chat.retry", { station: "ws/st", thread: 7, id: entry.id });
@@ -1087,5 +1096,8 @@ test("a_file_ended_part_way_up_is_kept_whole_and_its_message_sent_from_it", asyn
     assert.deepEqual(got.slice(0, 4), [0, 1, 2, 3]);
     assert.equal(posted.length, 1);
     assert.deepEqual(posted[0].attachments, [{ name: "big.bin", size, path: "/u/big.bin" }]);
-  } finally { again.close(); }
+  } finally {
+    again.close();
+    Requests.prototype.uploadName = naming;
+  }
 });
