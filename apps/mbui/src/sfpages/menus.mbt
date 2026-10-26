@@ -48,8 +48,15 @@ fn link_held(c : @ui.Ctx, href : String) -> Unit {
 
 ///|
 /// A file in a message (box `id`; a picture's image `src`, else "") held or right clicked: its menu there, as a
-/// passage's (pick.mbt): 引用 into the chat's draft (`quote`, where it is a message's), then a picture's copy.
-fn file_menu(c : @ui.Ctx, id : Int, src : String, quote? : (() -> Unit)? = None) -> Unit {
+/// passage's (pick.mbt): 引用 into the chat's draft (`quote`, where it is a message's), then what else it offers
+/// (`more`: a video's 加载), then a picture's copy.
+fn file_menu(
+  c : @ui.Ctx,
+  id : Int,
+  src : String,
+  quote? : (() -> Unit)? = None,
+  more? : Array[@sf.MenuItem?] = [],
+) -> Unit {
   match c.menu_asked(id) {
     Some((x, y)) => {
       menu_doing.offered = src
@@ -63,6 +70,7 @@ fn file_menu(c : @ui.Ctx, id : Int, src : String, quote? : (() -> Unit)? = None)
         Some(q) => items.push(Some(@sf.menu_item_of(@sf.t("web-main.chat.quote"), q, icon="quote")))
         None => ()
       }
+      items.append(more)
       if src != "" && src != "!" {
         items.push(Some(@sf.menu_item_of(@sf.t("desktop.contextMenu.copyImage"), fn() { menu_doing.image = src }, icon="copy")))
       }

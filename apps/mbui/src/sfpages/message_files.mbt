@@ -290,7 +290,8 @@ fn image_box_style(w : Double, h : Double, shown : Bool) -> @ui.Style {
 ///|
 /// A video (FileItem's video): its still on black (the frame the preview was left at, else the station's), its play
 /// mark in its middle, its name at its foot over a dark band, how long it is at the band's end; while the core
-/// downloads it, how far there over a bar. Held or right clicked, its menu (引用).
+/// downloads it, how far there over a bar. Held or right clicked, its menu: 引用; 加载 (brought onto this device by
+/// the core, whatever page shows, to play from here at once), 停止加载 while it comes.
 fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?) -> Unit {
 
   let open = c.id("msg-file/" + @sfbase.file_key(a))
@@ -298,7 +299,19 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   if c.clicked(open) {
     open_file(here, a)
   }
-  file_menu(c, open, "", quote=quote_of(here, a, owner, by))
+  let name = stored_name(a.path)
+  let coming = download_of(src, here.station, owner, name)
+  // (being downloaded to be saved: it comes anyway, nothing to load or stop here)
+  let load : Array[@sf.MenuItem?] = if flag(coming, "active") && flag(coming, "keep") {
+    let id = text(coming, "id")
+    [Some(@sf.menu_item_of(@sf.t("web-main.file.stopLoading"), fn() { download_cancel(src, id) }, icon="stop"))]
+  } else if flag(coming, "active") {
+    []
+  } else {
+    let (station, size) = (here.station, a.size)
+    [Some(@sf.menu_item_of(@sf.t("web-main.file.load"), fn() { download_start(src, station, owner, name, size, keep=true) }, icon="download"))]
+  }
+  file_menu(c, open, "", quote=quote_of(here, a, owner, by), more=load)
   @sf.tip(c, "msg-file/" + @sfbase.file_key(a), open, a.name)
   let (bw, bh, letterbox) = image_box(a, video_least)
   let h = bh * w / bw

@@ -72,6 +72,7 @@ using @sfbase {
   open_page,
   doing,
   download_cancel,
+  download_start,
   download_of,
   download_retry,
   each_second,

@@ -65,6 +65,59 @@ fn listed(name : String, state : String, loaded : Double, size : Double, said : 
 }
 
 ///|
+test "downloads: a message's video right clicked, 加载: the core brings it onto the device only, not saved; while it comes, 停止加载 calls it off" {
+  reset()
+  let calls : Array[(String, Json)] = []
+  let list : Array[Json] = []
+  let src = downloads_src("chat-download", list, calls)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  open_fixture_mode("chat-download")
+  t.run_for(@ui.nav_push_ms)
+  // (above its name, in its picture: while it comes, how far is said where its name was)
+  let w = t.words().filter(fn(w) { w.0.has_prefix("演示录屏") })
+  assert_true(w.length() > 0)
+  let (x, y) = (w[0].1 + 4.0, w[0].2 - 40.0)
+  let video = fn() {
+    t.right_click(x, y)
+    t.draw()
+  }
+  video()
+  assert_eq(t.words().filter(fn(w) { w.0 == tr("web-main.file.stopLoading") }).length(), 0)
+  let first = @sf.last_presented()
+  t.tap_text(tr("web-main.file.load"))
+  t.frame()
+  assert_false(@sf.presented_open_of(first))
+  // (gone as it closes)
+  t.run_for(@kit.pop_out_ms)
+  let starts = calls.filter(fn(m) { m.0 == "download.start" })
+  assert_eq(starts.length(), 1)
+  let p = Some(starts[0].1)
+  assert_eq(field(p, "keep"), Some(Json::boolean(true)))
+  assert_eq(text(p, "key"), "s-c1")
+  assert_eq(text(p, "name"), "演示录屏.mp4")
+  // nothing opened over the chat
+  assert_true(viewer.val is None)
+  // coming (only kept): its menu calls it off instead
+  let going = listed("演示录屏.mp4", "going", 1048576.0, 5242880.0, "正在加载 20% · 5 MB")
+  match going {
+    Object(o) => o["keep"] = Json::boolean(true)
+    _ => ()
+  }
+  list.push(going)
+  t.draw()
+  assert_true(t.find("正在加载 20% · 5 MB") is Some(_))
+  video()
+  assert_true(@sf.last_presented() != first && @sf.presented_open_of(@sf.last_presented()))
+  // (加载 alone, not in 停止加载)
+  assert_eq(t.words().filter(fn(w) { w.0 == tr("web-main.file.load") }).length(), 0)
+  let stop = t.reachable(tr("web-main.file.stopLoading"))
+  assert_eq(stop.length(), 1)
+  t.tap(stop[0].0, stop[0].1)
+  t.frame()
+  assert_eq(calls.filter(fn(m) { m.0 == "download.cancel" }).map(fn(m) { text(Some(m.1), "id") }), ["ws1/st1|s-c1|演示录屏.mp4"])
+}
+
+///|
 test "downloads: one the core has all here is taken once, read off the device a part at a time into the host's keep, then said done once the host has kept it, whatever page shows" {
   reset()
   let calls : Array[(String, Json)] = []

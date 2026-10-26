@@ -135,6 +135,30 @@ test("saved, a file a viewer kept before stays kept: the device keeps what it ke
   r.core.close();
 });
 
+test("a video loaded (keep): brought onto the device only, out of the list once here, never saved; played, off the device; asked to be saved while it comes, saved", async () => {
+  const film = bytesOf(9 * MB, 7);
+  const r = await rig(new Map([["film.mp4", film], ["b.mp4", film]]));
+  const started = await r.ask("download.start", { station: ST, key: "k1", name: "film.mp4", size: film.length, keep: true });
+  const id = started.ok.download.id as string;
+  assert.deepEqual([started.ok.download.keep, started.ok.download.state], [true, "going"]);
+  assert.match(started.ok.download.statusText, /正在加载/);
+  // all here: out of the list, nothing to take, but kept
+  assert.deepEqual(await r.view(), []);
+  assert.equal(await Effect.runPromise(r.core.inner.driveKept.has(id)), true);
+  assert.deepEqual((await r.ask("download.take", { id })).ok, { taken: false });
+  assert.equal(r.parts("film.mp4"), 3);
+  // played: off the device, the station not asked again
+  await r.ask("station.file.part", { station: ST, key: "k1", name: "film.mp4", offset: 4 * MB, length: 4 * MB, keep: true, size: film.length });
+  assert.equal(r.parts("film.mp4"), 3);
+  // one loading asked to be saved as well (before it is here): saved once it is, kept as any download is
+  call(r.core, r.core.connect(), 900, "download.start", { station: ST, key: "k1", name: "b.mp4", size: film.length, keep: true });
+  const again = await r.ask("download.start", { station: ST, key: "k1", name: "b.mp4", size: film.length });
+  assert.equal(again.ok.download.keep, undefined);
+  const [d] = await r.view();
+  assert.deepEqual([d.name, d.state, d.keep], ["b.mp4", "ready", undefined]);
+  r.core.close();
+});
+
 test("a download stopped by the app's end goes on as the core starts again, from what it had fetched; one taken and not saved is taken again", async () => {
   const big = bytesOf(12 * MB, 2);
   const small = bytesOf(MB, 4);

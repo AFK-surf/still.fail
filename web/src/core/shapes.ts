@@ -3049,6 +3049,8 @@ export interface DownloadShown {
 	/** How it stands, in a line: 正在下载 42% · 18.3 MB · 等待连接 station · 正在保存 · 下载失败：… . */
 	statusText: string;
 	error?: string;
+	/** Only brought onto this device (加载: a video to play), not saved: out of the list once it is here. */
+	keep?: boolean;
 	startedAt: number;
 }
 
