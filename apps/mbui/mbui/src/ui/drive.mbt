@@ -6,7 +6,8 @@
 //
 //   # a comment                 wait MS                   timeout MS (for until/gone/field after it; 20000 to start)
 //   until TEXT                  words containing TEXT on screen (a text, rich text, a field's placeholder, or
-//                               icon:NAME, an @sf icon; img:NAME an image whose source has NAME in it), within the
+//                               icon:NAME, an @sf icon; img:NAME an image whose source has NAME in it; switch:LABEL
+//                               the switch that turns LABEL), within the
 //                               timeout; else the run fails
 //                               (=TEXT: words that are TEXT exactly)
 //   untiln N TEXT               N or more of them on screen
@@ -397,6 +398,22 @@ fn on_screen_nodes(
   what : String,
 ) -> Array[(Double, Double, Int, (Double, Double, Double, Double))] {
   let found = []
+  // a switch by what it turns (its label in the semantics tree, whole): the switch alone takes the press, not the
+  // words beside it (sf's switch rows)
+  if what.has_prefix("switch:") {
+    let label = what.unsafe_substring(start=7, end=what.length())
+    for sem in c.sems {
+      if sem.role is Switch && sem.label == label && !sem.hidden && sem.node >= 0 && sem.node < c.count {
+        let n = c.nodes[sem.node]
+        let x = n.x + n.fw / 2.0
+        let y = n.y + n.fh / 2.0
+        if n.fw > 0.0 && n.fh > 0.0 && !c.in_draw_only(sem.node) && x >= 0.0 && x <= c.width && y >= 0.0 && y <= c.height {
+          found.push((x, y, sem.node, (n.x, n.y, n.x + n.fw, n.y + n.fh)))
+        }
+      }
+    }
+    return found
+  }
   let icon = if what.has_prefix("icon:") {
     Some("/icon/" + what.unsafe_substring(start=5, end=what.length()) + "/")
   } else if what.has_prefix("img:") {

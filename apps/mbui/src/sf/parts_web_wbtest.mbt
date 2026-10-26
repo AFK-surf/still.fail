@@ -10,7 +10,7 @@ fn wide_view(body : (@ui.Ctx) -> Unit) -> (@ui.Ctx) -> Unit {
 }
 
 ///|
-test "a switch: 36 by 22 (small 26 by 16), turned by a click, the accent on and the strong line's grey off" {
+test "a switch: 36 by 22 (small 26 by 16), pressed within a finger's least round it, turned by a click, the accent on and the strong line's grey off" {
   let on = Ref(false)
   let t = @ui.Tester::new(
     wide_view(fn(c) {
@@ -24,9 +24,12 @@ test "a switch: 36 by 22 (small 26 by 16), turned by a click, the accent on and 
     h=600.0,
   )
   t.draw()
+  // (drawn its size, pressed as high as a finger's least: the room it takes is its press's)
+  let reach = theme().items.least
   let s = t.get(Switch, label="提醒")
-  assert_eq((s.rect.2, s.rect.3), (switch_w, switch_h))
-  assert_eq((t.get(Switch, label="小").rect.2, t.get(Switch, label="小").rect.3), (switch_small_w, switch_small_h))
+  assert_eq((s.rect.2, s.rect.3), (switch_w, dmax(switch_h, reach)))
+  let small = t.get(Switch, label="小")
+  assert_eq((small.rect.2, small.rect.3), (switch_small_w, dmax(switch_small_h, reach)))
   t.click(Switch, label="提醒")
   assert_true(on.val)
   t.click(Switch, label="提醒")
@@ -34,7 +37,25 @@ test "a switch: 36 by 22 (small 26 by 16), turned by a click, the accent on and 
 }
 
 ///|
-test "a switch's row: its words turn it as its switch does" {
+test "a switch held long by a finger is still its press: let go, turned" {
+  let on = Ref(false)
+  let t = @ui.Tester::new(
+    wide_view(fn(c) { c.box(fn() { on.val = switch(c, "s", on.val, label="提醒") }) |> ignore }),
+    w=800.0,
+    h=600.0,
+    platform=2,
+  )
+  t.draw()
+  let (x, y, w, h) = t.get(Switch, label="提醒").rect
+  t.press_at(x + w / 2.0, y + h / 2.0)
+  // (held past a long press: a hold on it is still the switch's)
+  t.run_for(@ui.long_press_ms * 2.0)
+  t.release(x + w / 2.0, y + h / 2.0)
+  assert_true(on.val)
+}
+
+///|
+test "a switch's row: its switch alone turns it, not its words" {
   let on = Ref(false)
   let t = @ui.Tester::new(
     wide_view(fn(c) { on.val = switch_row(c, "preview", "预览", on.val, note="通知里显示消息的内容") }),
@@ -46,9 +67,9 @@ test "a switch's row: its words turn it as its switch does" {
     Some((x, y)) => t.tap(x, y)
     None => fail("no words")
   }
-  assert_true(on.val)
+  assert_true(!on.val, msg="its words take no press (2026-10-27)")
   t.click(Switch, label="预览")
-  assert_true(!on.val)
+  assert_true(on.val)
 }
 
 ///|

@@ -1438,7 +1438,15 @@ let about_box : @ui.Style = @ui.css("w=S5 h=S5 radius=Full align=ACenter justify
 fn switch_look_for(small : Bool) -> (@ui.Ctx, @kit.SwitchState) -> Unit {
   let t = theme()
   let (w, h) = switch_size(small)
-  @kit.switch_look_of(w~, h~, inset=switch_in, on_color=t.p.accent, off_color=t.p.line_strong, knob=0xFFFFFFFFL)
+  @kit.switch_look_of(
+    w~,
+    h~,
+    inset=switch_in,
+    on_color=t.p.accent,
+    off_color=t.p.line_strong,
+    knob=0xFFFFFFFFL,
+    lens=glass_knob(),
+  )
 }
 
 ///|
@@ -1472,7 +1480,12 @@ pub fn switch(
   // its own height wherever it is (in a row, in its middle: switchSmall's alignSelf), not stretched
   let mut now = on
   let b = c.box(style=switch_at, fn() {
-    now = @kit.switch(c, key, on, label~, disabled=disabled || busy, look=switch_look_for(small)).value
+    let look = switch_look_for(small)
+    // (pressed within a finger's least round it, however small it is drawn: the room it takes is its press's)
+    let reach = fn(c : @ui.Ctx, st : @kit.SwitchState) {
+      c.box(style=switch_reach.then(@ui.style(min_h=Fixed(theme().items.least))), fn() { look(c, st) }) |> ignore
+    }
+    now = @kit.switch(c, key, on, label~, disabled=disabled || busy, look=reach).value
   })
   // (in a page's bones, one piece: on or off is not known yet)
   c.bone_whole(b)
@@ -1484,15 +1497,21 @@ pub fn switch(
 let switch_at : @ui.Style = @ui.css("justify=JCenter align=AStart")
 
 ///|
+/// A switch's press round it: its look in the middle of it, up and down.
+// kept across runs: a value (no field of it changes)
+let switch_reach : @ui.Style = @ui.css("justify=JCenter")
+
+///|
 /// A switch drawn in a row that takes the tap itself (the row turns it): its look alone, its thumb sliding as a
-/// switch's does (`@kit.switch_knob` by `key`).
-pub fn switch_look(c : @ui.Ctx, key : String, on : Bool, small? : Bool = false) -> Unit {
+/// switch's does (`@kit.switch_knob` by `key`), held as the row is `pressed`.
+pub fn switch_look(c : @ui.Ctx, key : String, on : Bool, small? : Bool = false, pressed? : Bool = false) -> Unit {
   let (w, h) = switch_size(small)
   switch_look_for(small)(c, {
     on,
     t: @kit.switch_knob(c, key, on),
     hovered: false,
-    pressed: false,
+    pressed,
+    held: @kit.switch_held(c, key, pressed),
     focus_shown: false,
     disabled: false,
     rect: (0.0, 0.0, w, h),
@@ -1515,12 +1534,9 @@ fn wide_switch_row(
 ) -> Bool {
   let id = c.id(key + "/words")
   let mut now = on
-  control_row(c, title, fn() { now = switch(c, key, on, label=title, disabled~, busy~) }, note~, title_style~, note_style~, words_id=if disabled || busy { 0 } else { id })
-  if c.clicked(id) {
-    !on
-  } else {
-    now
-  }
+  // (the switch alone answers, not its words: 2026-10-27 用户「只有开关响应」)
+  control_row(c, title, fn() { now = switch(c, key, on, label=title, disabled~, busy~) }, note~, title_style~, note_style~)
+  now
 }
 
 ///|

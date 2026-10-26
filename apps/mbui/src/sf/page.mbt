@@ -1651,9 +1651,8 @@ let choice_label_line : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
 
 ///|
 /// A row that turns something on or off (parts.tsx SwitchRow): its title, `note` quieter under it, the switch at its
-/// end across their middle (a round control stays out of the row's corners: docs/ui-panels.md 放不下的时候); narrow,
-/// the whole row takes the press; wide, and on a card of words (page_card) at any width, the switch and its words (16
-/// apart). `busy`: what it set is on its
+/// end across their middle (a round control stays out of the row's corners: docs/ui-panels.md 放不下的时候); the switch
+/// alone takes the press, at every width (its reach a finger's least however small it is drawn), its words none. `busy`: what it set is on its
 /// way (not turned again meanwhile). Answers whether it is on now.
 pub fn switch_row(
   c : @ui.Ctx,
@@ -1677,9 +1676,9 @@ pub fn switch_row(
         wide_switch_row(c, key, title, on, note~, disabled~, busy~)
       }
     Narrow => {
-      let live = !disabled && !busy
-      let id = if live { c.id(key) } else { 0 }
-      let b = c.box(style=narrow_row(true), id~, fn() {
+      // (the switch alone answers: the row is its words, not a press of its own; 2026-10-27 用户「只有开关响应」)
+      let mut now = on
+      c.box(style=narrow_row(false), fn() {
         // (its switch across the middle of its words: on its title's line it stood in the row's corner, not
         // concentric with it; a switch is narrow, its note keeps most of the row)
         c.box(style=pg_row_words, fn() {
@@ -1689,20 +1688,10 @@ pub fn switch_row(
           }
         })
         |> ignore
-        if busy {
-          spinner(c, size=spinner_inline) |> ignore
-        }
-        switch_look(c, key, on)
-        if live {
-          row_ripple(c, id)
-        }
+        now = switch(c, key, on, label=title, disabled~, busy~)
       })
-      c.semantics(b, Switch, id~, label=title, check=if on { @ui.Check::On } else { @ui.Check::Off })
-      if live && c.clicked(id) {
-        !on
-      } else {
-        on
-      }
+      |> ignore
+      now
     }
   }
 }

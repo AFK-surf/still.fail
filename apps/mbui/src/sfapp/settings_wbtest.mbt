@@ -684,7 +684,7 @@ test "a secret's longest grant: on its page its own or its vault's, in its edito
   let e = settings_tester("vault-items", shows="settings-vault-editor")
   sheet_rested(e, "sf-present")
   assert_true(e.find("跟随默认") is None)
-  e.tap_text("允许 agent 申请")
+  e.click(Switch, label="允许 agent 申请")
   e.draw()
   assert_true(e.find("跟随默认") is Some(_))
   assert_true(e.find("批准这个密钥的申请时") is Some(_))

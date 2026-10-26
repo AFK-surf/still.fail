@@ -195,22 +195,7 @@ pub fn chat_row(
   let swipes = @sf.more_held() && item.swipe_archive && !found
   // held by a finger, it lifts off the list toward the finger (iOS's context menu): a little as its time shows, all
   // the way once its menu opens, back down as the menu goes (kind 7, a control answering: held, its menu open)
-  let lift = if finger && !found {
-    @motion.animate(
-      c,
-      "row-lift/" + key,
-      if menu_on {
-        1.0
-      } else if held {
-        row_lift_held
-      } else {
-        0.0
-      },
-      spec=row_lift_spring,
-    )
-  } else {
-    0.0
-  }
+  let lift = if finger && !found { @sf.lift_of(c, "row/" + key, held, menu_on) } else { 0.0 }
   let busy = row_busy(src, item)
   let failed = row_failed(src, item)
   let offline = item.offline is Some(_)
@@ -379,19 +364,7 @@ pub fn chat_row(
     })
     // (a card of it, drawn in from the screen's sides; over the menu's scrim while it is up, under the menu: what the
     // menu is of stands out of what it dims)
-    if lift != 0.0 {
-      c.look(row_box, @ui.look(scale=1.0 - row_lift_inset * lift))
-      c.put_over(row_box, z=3)
-      // (a sheet coming up over where it is: it goes up before it, clear of it, and back down with it as it goes)
-      @motion.measure(c, row_box, "row-lifted/" + key)
-      @motion.placed(c, row_box, fn() {
-        match (@kit.sheet_top(c), @motion.measured_rect(c, "row-lifted/" + key)) {
-          (Some(top), Some((_, y, _, h))) if y + h + row_lift_clear > top =>
-            { ..@ui.still_look, dy: top - row_lift_clear - (y + h) }
-          _ => @ui.still_look
-        }
-      })
-    }
+    @sf.lift_over(c, row_box, "row/" + key, lift, 1.0 - row_lift_inset)
     row_box
   }
   if swipes {
@@ -439,11 +412,7 @@ let sample_titles : Array[Int] = [7, 10, 6, 12, 8, 9, 5, 11]
 let sample_lines : Array[Int] = [14, 11, 16, 9, 13, 15, 10, 12]
 
 ///|
-/// A row held: how far it lifts as its time shows (of all the way, its menu open), how much it is drawn in all the way
-/// up, on a spring with a little give.
-let row_lift_held : Double = 0.35
-
-///|
+/// A row held, all the way up: how much it is drawn in from the screen's sides (a card of it, @sf.lift_over).
 let row_lift_inset : Double = 0.045
 
 ///|
@@ -457,14 +426,6 @@ fn row_lifted(ink : Double) -> @ui.Style {
     shadow=Cast(@sf.held_raised.sigma * ink, @sf.held_raised.dy * ink, @sf.held_raised.color),
   )
 }
-
-///|
-/// How far over a sheet coming up over it a lifted row stays.
-let row_lift_clear : Double = 12.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let row_lift_spring : @motion.Spec = @motion.motion_spring(0.32, bounce=0.28)
 
 ///|
 /// How long a row going ahead of others has a ground of its own (motion's lift).

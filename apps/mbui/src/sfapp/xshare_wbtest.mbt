@@ -38,7 +38,7 @@ test "分享给其他 workspace: its row says where; the sheet ticks another and
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("所选 workspace 中的 agent 可读取此对话") is Some(_))
   t.tap_text("日常")
-  t.tap_text("可发送消息")
+  t.click(Switch, label="可发送消息")
   t.tap_text("完成")
   let made = named(calls, "chat.xshare")
   assert_eq(made.length(), 1)
@@ -61,7 +61,7 @@ test "分享给其他 workspace: none ticked, their agents cannot be let send" {
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   // the one it is shared with let go: none left
   t.tap_text("开源")
-  t.tap_text("可发送消息")
+  t.click(Switch, label="可发送消息")
   t.tap_text("完成")
   let made = named(calls, "chat.xshare")
   assert_eq(made.length(), 1)

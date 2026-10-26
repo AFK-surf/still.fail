@@ -3,6 +3,10 @@
 // web's Segmented on a wide one.
 
 ///|
+/// How much larger than the thumb its lens is, a finger on it: past the track's edges.
+let seg_lens_grow : Double = 1.3
+
+///|
 /// A segmented choice (Seg): mbui's sliding toggle group (@kit.toggle_group: the arrows move along it, a screen reader
 /// reads its options) in Seg's look: a track the ink at 6%, a thumb lifted out of it (the theme's lifted, a hairline round it) sliding to the one
 /// chosen. `fill`: as wide as where it is, each option an equal share, none narrower than its words (one that needs
@@ -118,6 +122,10 @@ fn seg(
         c.box(w=Px(w), h=Px(h), radius=inner_corner(radius, inset), bg=thumb, border=0.5, border_color=t.p.line, fn() {  })
         |> ignore
       },
+      // a finger on an option: the thumb there as a lens of liquid glass over them (iOS 26's), a capsule
+      lens=glass_knob(),
+      // (larger than the track, out over its edges: lifted off it, as iOS 26's)
+      lens_grow=seg_lens_grow,
       ground=fn(c, _, options) {
         // (in a row, as wide as its options: not stretched to its parent's width)
         if pill {
