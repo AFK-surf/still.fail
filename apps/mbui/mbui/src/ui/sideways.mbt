@@ -336,7 +336,9 @@ fn Ctx::sideways_after_layout(self : Ctx) -> Unit {
   let gone : Array[Int] = []
   sideways.each(fn(id, st) {
     if st.frame != self.build_no {
-      if !st.held {
+      // (one in a part or a list's row drawn again, not built, is still there: kept, where it was scrolled to and
+      // what a press on it waits for)
+      if !st.held && !sideways_kept(id, self.frame_no) {
         gone.push(id)
       }
       return
@@ -402,6 +404,22 @@ fn Ctx::sideways_after_layout(self : Ctx) -> Unit {
   for id in gone {
     sideways.remove(id)
   }
+}
+
+///|
+/// Whether sideways box `id` is in a part or a list's row shown in `frame`, as its build said what scrolls in it.
+fn sideways_kept(id : Int, frame : Int) -> Bool {
+  for _, st in kept_rows {
+    if st.shown == frame && st.scroll_ids.contains(id) {
+      return true
+    }
+  }
+  for _, st in kept_parts {
+    if st.shown == frame && st.scroll_ids.contains(id) {
+      return true
+    }
+  }
+  false
 }
 
 ///|

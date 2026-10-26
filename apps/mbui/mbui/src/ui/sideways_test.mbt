@@ -52,6 +52,38 @@ test "sideways: a finger moving sideways drags it; up or down, the list scrolls"
 }
 
 ///|
+test "sideways: in a row drawn again as the list scrolled, a finger up or down on it scrolls the list, where it is scrolled to kept" {
+  let at = Ref::new(0.0)
+  let t = sideways_view(at)
+  t.keep_parts(true)
+  t.draw()
+  let (_, y, _, _) = t.rect_of("xxxx").unwrap()
+  t.drag(250.0, y + 5.0, 50.0, y + 5.0)
+  // (its fling run out)
+  t.run_for(2000.0)
+  let was = at.val
+  assert_true(was > 150.0)
+  // the list dragged up a little by another row, slowly (no fling): the rows drawn again as it moves, not built
+  t.press_at(150.0, 250.0)
+  for i in 1..=6 {
+    t.move(150.0, 250.0 - 5.0 * i.to_double())
+  }
+  assert_true(t.rows_kept() > 0, msg="\{t.rows_kept()}")
+  t.run_for(500.0)
+  t.release(150.0, 220.0)
+  t.run_for(1200.0)
+  let scrolled = t.list_offset()
+  assert_true(scrolled > 10.0 && scrolled < 30.0, msg="\{scrolled}")
+  // a finger on the line, up: the list's
+  let y = y - scrolled
+  t.drag(250.0, y + 5.0, 250.0, y - 115.0)
+  t.draw()
+  assert_true(t.list_offset() > scrolled + 80.0, msg="\{t.list_offset()}")
+  // (built again as the press came: still scrolled, not back at its start)
+  assert_true(at.val >= was, msg="\{at.val} < \{was}")
+}
+
+///|
 test "sideways: it stops at its ends" {
   let at = Ref::new(0.0)
   let t = sideways_view(at)
