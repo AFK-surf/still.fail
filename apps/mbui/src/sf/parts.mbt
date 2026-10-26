@@ -3481,7 +3481,14 @@ pub fn update_key(
     fn() {
       if busy {
         icon(c, "download", size=mark, color=t.p.text) |> ignore
-        c.layer(fn() { update_key_ring(c, key, side, mark, coming) })
+        // (close round the mark: its inside 2 off the mark's box, not out on the key's edge, where the ring looked
+        // bigger than the keys beside it, whose edges are not drawn)
+        c.layer(fn() {
+          c.box(style=update_ring_at, fn() {
+            progress_spinner(c, key, coming, size=mark + 2.0 * (update_ring_clear + spin_stroke)) |> ignore
+          })
+          |> ignore
+        })
         |> ignore
       } else {
         icon(c, "download", size=mark, color=t.p.text) |> ignore
@@ -3519,29 +3526,9 @@ let update_key_box : @ui.Style = @ui.css("radius=Full align=ACenter justify=JCen
 let update_key_hot : @ui.Style = update_key_box.then(@ui.css("bg=Hover"))
 
 ///|
-/// How far an update has come, round the update key's mark (the spinner's ring, its line 2 wide, in line_strong; its
-/// inside 2 off the mark's box: close round the mark, not out on the key's edge, where the ring looked bigger than the
-/// keys beside it, whose edges are not drawn): the accent from its top as far round as it has come, going to a part
-/// told anew as a progress bar's fill does; while that is not known, the spinner's quarter turning.
-fn update_key_ring(c : @ui.Ctx, key : String, side : Double, mark : Double, coming : Double?) -> Unit {
-  let t = theme()
-  let pi = 3.141592653589793
-  let mid = side / 2.0
-  let r = mark / 2.0 + update_ring_clear + spin_stroke / 2.0
-  let (from, sweep) = match coming {
-    Some(k) => {
-      let k = if k < 0.0 { 0.0 } else if k > 1.0 { 1.0 } else { k }
-      let shown = @motion.animate(c, key + "/coming", k, spec=@motion.tween(@kit.progress_ms, ease=Out))
-      (-0.5 * pi, shown * 2.0 * pi)
-    }
-    None => (-0.75 * pi + c.cycle(spinner_turn_ms) * 2.0 * pi, 0.5 * pi)
-  }
-  let lines = [@ui.line(@ui.arc(mid, mid, r, from=0.0, sweep=2.0 * pi), width=spin_stroke, color=t.p.line_strong)]
-  if sweep > 0.0 {
-    lines.push(@ui.line(@ui.arc(mid, mid, r, from~, sweep~), width=spin_stroke, color=t.p.accent))
-  }
-  c.lines(lines, w=Px(side), h=Px(side)) |> ignore
-}
+/// How far an update has come round the update key's mark (@sf.progress_spinner), in its middle.
+// kept across runs: a value (no field of it changes)
+let update_ring_at : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 ///|
 /// How far the ring's inside stands off the mark's box.
