@@ -12,7 +12,8 @@
 // apart (no defaults). Kinds are HTML's names where it has one:
 //   blocks  p · ["h", […], {depth}] · ["pre", {code, lang?, ink?}] (`code` words as a run is; `ink`: its colours,
 //           highlight.ts) · quote · ["list", [li…], {ordered?, start?}] · ["li", […], {checked?}] (a tight list's item
-//           holds its words, a loose one's its paragraphs) · ["table", [tr…], {align}] · tr · th · td · hr
+//           holds its words, a loose one's its paragraphs) · ["table", [tr…], {align, md, csv}] (`md`, `csv`: the table
+//           to copy, as Markdown and as CSV: tableMarkdown, tableCsv) · tr · th · td · hr
 //   inline  b · i · s · ["code", {content, path?, line?, shown?}] (words as a run is; `path` where it names a file, a
 //           run too, `line` the line it points at, `shown` a chip's words where they are not its path's: paths.ts) ·
 //           ["a", […], {href, title?, path?, line?, shown?}] · ["img", {src, alt?, title?}] · br
@@ -34,7 +35,7 @@ export type MdStore = { has(key: string): boolean; get(key: string): string | nu
 
 /// How the trees kept are read: another number whenever what `parse` makes of a text changes (a test holds it to the
 /// trees of a set of texts: markdown.test.ts), so a tree kept by a core before is read afresh, not shown.
-export const MD_READING = 3;
+export const MD_READING = 4;
 
 /// A text's key among the trees kept: the reading, its length and two FNV-1a hashes of it (64 bits).
 export function mdKey(text: string): string {
@@ -171,8 +172,12 @@ function block(n: Node, cx: Cx): MdNode[] {
       return [Object.keys(attrs).length ? ["list", items, attrs] : ["list", items]];
     }
     case "table": {
-      const rows = (n.children ?? []).map((row, r): MdNode => ["tr", (row.children ?? []).map((cell): MdNode => [r === 0 ? "th" : "td", inlines(cell.children ?? [], cx)])]);
-      return [["table", rows, { align: (n.align ?? []).map((a) => a ?? null) }]];
+      const align = (n.align ?? []).map((a) => a ?? null);
+      const cells = (n.children ?? []).map((row) => (row.children ?? []).map((cell) => ({ written: cell.value ?? "", words: inlines(cell.children ?? [], cx) })));
+      const rows = cells.map((row, r): MdNode => ["tr", row.map((cell): MdNode => [r === 0 ? "th" : "td", cell.words])]);
+      const md = tableMarkdown(cells.map((row) => row.map((cell) => cell.written)), align);
+      const csv = tableCsv(cells.map((row) => row.map((cell) => cell.words.map((w) => wordsIn(w, cx.source, true)).join(""))));
+      return [["table", rows, { align, md, csv }]];
     }
     case "thematicBreak":
       return [["hr"]];
@@ -268,17 +273,36 @@ function image(src: string, alt: string | null | undefined, title: string | null
 /// Its words as read from `source` (the text it was read from), without the marks (what a quote of it carries, what a
 /// search finds).
 export function plainOf(md: Md, source: string): string {
-  const words = (node: MdNode): string => {
-    if (typeof node === "string" || typeof node[0] === "number") return wordsOf(node, source);
-    const [kind, first, second] = node as [string, unknown, unknown];
-    const attrs = ((Array.isArray(first) ? second : first) ?? {}) as Record<string, unknown>;
-    if (kind === "pre") return wordsOf(attrs.code, source);
-    if (kind === "code") return wordsOf(attrs.content, source);
-    if (kind === "img") return String(attrs.alt ?? "");
-    if (kind === "br") return "\n";
-    return Array.isArray(first) ? (first as MdNode[]).map(words).join("") : "";
-  };
-  return md.map(words).join("\n\n");
+  return md.map((node) => wordsIn(node, source)).join("\n\n");
+}
+
+/// A node's words as read from `source`, without the marks; an image's its words, or (`addressed`) its address where it
+/// has none.
+function wordsIn(node: MdNode, source: string, addressed = false): string {
+  if (typeof node === "string" || typeof node[0] === "number") return wordsOf(node, source);
+  const [kind, first, second] = node as [string, unknown, unknown];
+  const attrs = ((Array.isArray(first) ? second : first) ?? {}) as Record<string, unknown>;
+  if (kind === "pre") return wordsOf(attrs.code, source);
+  if (kind === "code") return wordsOf(attrs.content, source);
+  if (kind === "img") return String(attrs.alt || (addressed ? attrs.src ?? "" : ""));
+  if (kind === "br") return "\n";
+  return Array.isArray(first) ? (first as MdNode[]).map((k) => wordsIn(k, source, addressed)).join("") : "";
+}
+
+/// A table as GitHub's Markdown writes one, whatever its lines were written in (a quote's, a list's): its cells as
+/// written (`rows`, the head first), a bar in one escaped; under the head how each column is aligned.
+export function tableMarkdown(rows: string[][], align: (string | null)[]): string {
+  const line = (cells: string[]) => `| ${cells.map((c) => c.replace(/\|/g, "\\|")).join(" | ")} |`;
+  const rule = align.map((a) => (a === "left" ? ":--" : a === "right" ? "--:" : a === "center" ? ":-:" : "---"));
+  const [head = [], ...body] = rows;
+  return [line(head), `| ${rule.join(" | ")} |`, ...body.map(line)].join("\n");
+}
+
+/// A table's words as CSV (RFC 4180, lines apart by a line's end): a cell in quotes where it holds a comma, a quote or a
+/// line's end, a quote in one doubled.
+export function tableCsv(rows: string[][]): string {
+  const cell = (c: string) => (/[",\r\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c);
+  return rows.map((row) => row.map(cell).join(",")).join("\n");
 }
 
 /// Its first line of words, without the marks, as plainOf reads them: what a line standing for it shows closed (a

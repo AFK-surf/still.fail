@@ -39,7 +39,10 @@ test("mdHead_cuts_within_a_long_paragraph_a_list_a_code_block_and_a_table", () =
   assert.deepEqual(mdHead(md("```ts\n" + Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n") + "\n```"), 3), [["pre", { code: "line 0\nline 1\nline 2", lang: "ts", ink: "j5f2j5f2j5f" }]]);
   const table = mdHead(md("| a |\n|--|\n" + Array.from({ length: 30 }, (_, i) => `| ${i} |`).join("\n")), 8)!;
   assert.equal((table[0] as [string, unknown[], unknown])[1].length, 8);
-  assert.deepEqual((table[0] as [string, unknown[], unknown])[2], { align: [null] });
+  // (copied whole: as Markdown, its head, its rule and its 30 rows)
+  const attrs = (table[0] as [string, unknown[], { align: unknown; md: string }])[2];
+  assert.deepEqual(attrs.align, [null]);
+  assert.equal(attrs.md.split("\n").length, 32);
 });
 
 test("mdHead_a_chart_whole_and_what_follows_it_left", () => {

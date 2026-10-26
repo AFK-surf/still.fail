@@ -303,7 +303,8 @@ function tableOf(w: Walk, open: J): Node {
       }
       const inline = w.tokens[w.at]?.type === "inline" ? w.tokens[w.at++] : null;
       w.at++; // th_close, td_close
-      cells.push({ type: "tableCell", children: inline ? inlinesOf(w, inline.children ?? [], span(w, t.map)) : [] });
+      // (`value`: the cell as written, between its bars, an escaped bar a bar: what the table as Markdown is made of)
+      cells.push({ type: "tableCell", value: inline ? String(inline.content ?? "") : "", children: inline ? inlinesOf(w, inline.children ?? [], span(w, t.map)) : [] });
     }
     w.at++;
     rows.push({ type: "tableRow", children: cells });

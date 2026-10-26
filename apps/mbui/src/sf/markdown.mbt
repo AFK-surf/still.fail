@@ -71,6 +71,8 @@ priv struct Md {
   /// how far past its column either side a table of it scrolls (Md::table): the page's margin where it has one, none
   /// in a list or a quote
   mut bleed : Double
+  /// its tables offer to be copied (table_copy.mbt): not in a picture of them
+  copy : Bool
 }
 
 ///|
@@ -455,7 +457,8 @@ fn web() -> Palette {
 /// words' (0: the theme's body); `on_link` is told where a tapped link
 /// leads, `on_link_shown` each link, its words and its id as it is drawn (its card over it); `files` and `screens` as
 /// the file's head says; `document`: its headings a document's (Md's `document`);
-/// `bleed`: how far past the column either side the page lets its tables scroll (Md::table: a chat's margin).
+/// `bleed`: how far past the column either side the page lets its tables scroll (Md::table: a chat's margin); `copy`
+/// false: its tables offer no copying (a picture of the words).
 /// `line`: the lines' height over the size (0: Markdown's own); `one_line`: its first block's words alone, on one line
 /// as wide as they are, cut with an ellipsis where the column is narrower (a notice closed: Chat.css.ts
 /// `msgSystemBox:not([data-open])`). `chat_title`: the title of the chat a link written bare names, its reference
@@ -479,6 +482,7 @@ pub fn markdown(
   chat_title? : (String) -> String? = fn(_) { None },
   document? : Bool = false,
   bleed? : Double = 0.0,
+  copy? : Bool = true,
   paths? : Bool = false,
 ) -> Int {
   let t = theme()
@@ -506,6 +510,7 @@ pub fn markdown(
     serif: false,
     document,
     bleed,
+    copy,
   }
   if tree is None && !core_parsed.contains(text) && !markdown_asked.contains(text) {
     if markdown_read.val is Some(read) {
@@ -624,6 +629,7 @@ pub fn markdown_part(
     serif,
     document,
     bleed: 0.0,
+    copy: true,
   }
   let blocks = match parts.get(key) {
     Some(b) => b
@@ -1332,7 +1338,8 @@ fn cell_widths(s : String, size : Double, weight : Int) -> (Double, Double) {
 /// words on one line or 14em of them, whichever is less (its longest word if wider): a wrapped cell still reads as
 /// lines, not a word or two to each. Wider than the message, it scrolls sideways, the frame with it, out to `bleed`
 /// past the message either side (a chat's margin, to the screen's edges): at rest in line with the words, scrolled to
-/// its end its right edge in line with theirs.
+/// its end its key's room in line with theirs. Its copy key hangs past its right edge, in what scrolls (table_copy.mbt):
+/// beside it where the message has room, else past its end, scrolled to.
 fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
   let c = self.c
   let cols = t.head.length()
@@ -1341,7 +1348,6 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
   }
   let rows = [t.head]
   rows.append(t.rows)
-  let w = web()
   self.n = self.n + 1
   let key = "sf-md/table\{self.n}"
   let id = c.id(key)
@@ -1400,75 +1406,104 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
   }
   // what scrolls: the message's width and `bleed` more either side (what is measured: the room the table has; named to
   // be measured, not pressed: what holds the message takes the presses on its room), the table in it as wide as its
-  // columns, `bleed` in from its ends
+  // columns, `bleed` in from its ends, its copy key past it
   c.box(mx=-bleed, id~, taps=false, fn() {
     c.sideways(key, padx=bleed, fn() {
-      c.box(
-        w=Px(total + 2.0),
-        radius=row_corner,
-        border=1.0,
-        border_color=w.line,
-        bg=table_ground(),
-        pad=1.0,
-        clip=true,
-        fn() {
-          // the head's tint behind its row: in the frame's top corners as the web's overflow-hidden card cuts it
-          // (docs/ui-panels.md: concentric with the 20 it sits 1 in; square under it). A clip is a rectangle, so the
-          // tint is a round box taller than the head, cut at the head's foot.
-          match @motion.measured(c, key + "/head") {
-            Some(hh) if hh > 0.0 =>
-              c.layer(pad=1.0, fn() {
-                c.box(w=Fill(1.0), h=Px(hh), clip=true, fn() {
-                  c.box(w=Fill(1.0), h=Px(hh + 40.0), radius=table_head_radius, bg=theme().p.code_ground, fn() {  })
-                  |> ignore
-                })
-                |> ignore
-              })
-              |> ignore
-            _ => ()
-          }
-          for r, row in rows {
-            let head = r == 0
-            let row_box = c.box(dir=Row, align=AStretch, fn() {
-              for k in 0..<cols {
-                c.box(w=Px(widths[k]), padx=12.0, pady=7.0, justify=JCenter, fn() {
-                  match self.cell_images(row[k]) {
-                    Some(images) => {
-                      // side by side, 6 apart, 4 over and under, each drawn as wide as cell_image_width says
-                      c.box(style=cell_image_row, fn() {
-                        for im in images {
-                          let (r, draw) = im
-                          draw(cell_image_width(r))
-                        }
-                      })
-                      |> ignore
-                      return
-                    }
-                    None => ()
-                  }
-                  if head {
-                    self.words(row[k], 12.0, 500, w.muted, None)
-                  } else {
-                    self.words(row[k], 13.0, 0, self.ink, None)
-                  }
-                })
-                |> ignore
-              }
-            })
-            if head {
-              @motion.measure(c, row_box, key + "/head")
-            }
-            // a rule under every row but the last
-            if r < rows.length() - 1 {
-              c.box(w=Px(total), h=Px(1.0), bg=w.line, fn() {  }) |> ignore
-            }
-          }
-        },
-      )
+      c.box(style=table_beside, fn() {
+        self.table_frame(rows, widths, total, key + "/head")
+        if self.copy {
+          self.table_key(key, t)
+        }
+      })
       |> ignore
     })
     |> ignore
   })
+  |> ignore
+  // its picture, while one is taken (table_copy.mbt): the table whole, as wide as its columns, on the page's ground (its
+  // words' ids its own: the next block's as they were)
+  let n = self.n
+  c.shot(table_shot(key), total + 2.0 + 2.0 * table_shot_in, fn() {
+    c.box(style=table_shot_paper, fn() { self.table_frame(rows, widths, total, key + "/picture-head") }) |> ignore
+  })
+  self.n = n
+}
+
+///|
+/// A table's frame, its columns `widths` wide (`total` together), its rows (the head's first) in it: a card's frame (a
+/// line round it, a faint ground), the head's row tinted (its height measured as `head_at`), rows ruled between them.
+fn Md::table_frame(
+  self : Md,
+  rows : Array[Array[Array[MdInline]]],
+  widths : Array[Double],
+  total : Double,
+  head_at : String,
+) -> Unit {
+  let c = self.c
+  let w = web()
+  let cols = widths.length()
+  c.box(
+    w=Px(total + 2.0),
+    radius=row_corner,
+    border=1.0,
+    border_color=w.line,
+    bg=table_ground(),
+    pad=1.0,
+    clip=true,
+    fn() {
+      // the head's tint behind its row: in the frame's top corners as the web's overflow-hidden card cuts it
+      // (docs/ui-panels.md: concentric with the 20 it sits 1 in; square under it). A clip is a rectangle, so the
+      // tint is a round box taller than the head, cut at the head's foot.
+      match @motion.measured(c, head_at) {
+        Some(hh) if hh > 0.0 =>
+          c.layer(pad=1.0, fn() {
+            c.box(w=Fill(1.0), h=Px(hh), clip=true, fn() {
+              c.box(w=Fill(1.0), h=Px(hh + 40.0), radius=table_head_radius, bg=theme().p.code_ground, fn() {  })
+              |> ignore
+            })
+            |> ignore
+          })
+          |> ignore
+        _ => ()
+      }
+      for r, row in rows {
+        let head = r == 0
+        let row_box = c.box(dir=Row, align=AStretch, fn() {
+          for k in 0..<cols {
+            c.box(w=Px(widths[k]), padx=12.0, pady=7.0, justify=JCenter, fn() {
+              match self.cell_images(row[k]) {
+                Some(images) => {
+                  // side by side, 6 apart, 4 over and under, each drawn as wide as cell_image_width says
+                  c.box(style=cell_image_row, fn() {
+                    for im in images {
+                      let (r, draw) = im
+                      draw(cell_image_width(r))
+                    }
+                  })
+                  |> ignore
+                  return
+                }
+                None => ()
+              }
+              if head {
+                self.words(row[k], 12.0, 500, w.muted, None)
+              } else {
+                self.words(row[k], 13.0, 0, self.ink, None)
+              }
+            })
+            |> ignore
+          }
+        })
+        if head {
+          @motion.measure(c, row_box, head_at)
+        }
+        // a rule under every row but the last
+        if r < rows.length() - 1 {
+          c.box(w=Px(total), h=Px(1.0), bg=w.line, fn() {  }) |> ignore
+        }
+      }
+    },
+  )
   |> ignore
 }
 

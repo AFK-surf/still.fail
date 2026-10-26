@@ -58,8 +58,25 @@ test("markdown_a_task_is_a_list_item_whose_words_begin_with_its_box", () => {
 
 test("markdown_a_table_its_header_cells_then_its_rows", () => {
   assert.deepEqual(read("| 项 | 数 |\n|:--|--:|\n| 打开 | 1ms |"), [
-    ["table", [["tr", [["th", ["项"]], ["th", ["数"]]]], ["tr", [["td", ["打开"]], ["td", ["1ms"]]]]], { align: ["left", "right"] }],
+    ["table", [["tr", [["th", ["项"]], ["th", ["数"]]]], ["tr", [["td", ["打开"]], ["td", ["1ms"]]]]], {
+      align: ["left", "right"], md: "| 项 | 数 |\n| :-- | --: |\n| 打开 | 1ms |", csv: "项,数\n打开,1ms",
+    }],
   ]);
+});
+
+test("markdown_a_table_says_itself_as_markdown_and_as_csv_to_copy", () => {
+  // In a quote, its cells as written (a bar in one escaped, in code too, as GitHub reads it); its words as CSV, an image
+  // by its words or else its address.
+  const text = "> | 名 | 说明 | 数 |\n> |:-:|---|--:|\n> | **粗** | a, \"b\" | \\| 竖线 |\n> | [链接](https://x.dev) | ![图](a.png) ![](b.png) | `x\\|y` |\n> | 少一格 |";
+  const [[, [table]]] = read(text) as [[string, [[string, unknown[], { md: string; csv: string }]]]];
+  assert.equal(table[2].md, [
+    "| 名 | 说明 | 数 |",
+    "| :-: | --- | --: |",
+    "| **粗** | a, \"b\" | \\| 竖线 |",
+    "| [链接](https://x.dev) | ![图](a.png) ![](b.png) | `x\\|y` |",
+    "| 少一格 |  |  |",
+  ].join("\n"));
+  assert.equal(table[2].csv, ["名,说明,数", "粗,\"a, \"\"b\"\"\",| 竖线", "链接,图 b.png,x|y", "少一格,,"].join("\n"));
 });
 
 test("markdown_links_as_written_and_bare_addresses_where_a_reader_sees_them_end", () => {
@@ -125,7 +142,7 @@ test("markdown_kept_on_the_device_is_read_as_this_reading_reads_it_or_its_readin
     "<b>不要</b> 原样\n第二行  \n硬换行 &amp; &lt; &#x4e2d;\n\n![图](a.png \"标题\") [引用][r]\n\n[r]: https://r.dev",
   ];
   const digest = createHash("sha256").update(JSON.stringify(texts.map(parse))).digest("hex").slice(0, 16);
-  assert.equal(`${MD_READING}:${digest}`, "3:69f4de047e713edc", "what Markdown is read as changed: MD_READING one more (markdown.ts) and this digest with it");
+  assert.equal(`${MD_READING}:${digest}`, "4:5bf390265ff58043", "what Markdown is read as changed: MD_READING one more (markdown.ts) and this digest with it");
 });
 
 test("math_is_code_with_a_rendering_hint_and_keeps_its_source_runs", () => {
@@ -148,7 +165,7 @@ test("math_leaves_escaped_dollars_code_and_unmatched_inline_delimiters_alone", (
     ["pre", { code: "$$x$$", lang: "tex" }],
   ]);
   assert.deepEqual(read("| 预测 |\n|---|\n| \\(x^2\\) |"), [
-    ["table", [["tr", [["th", ["预测"]]]], ["tr", [["td", [["code", { content: "x^2", math: true }]]]]]], { align: [null] }],
+    ["table", [["tr", [["th", ["预测"]]]], ["tr", [["td", [["code", { content: "x^2", math: true }]]]]]], { align: [null], md: "| 预测 |\n| --- |\n| \\(x^2\\) |", csv: "预测\nx^2" }],
   ]);
 });
 
