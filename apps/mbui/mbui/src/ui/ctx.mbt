@@ -456,6 +456,9 @@ pub struct Ctx {
   // every id lit by the hand at once (Ctx::lit, and Ctx::hovered where the pointing is a mouse's): a test's, to hold
   // that the hand changes looks alone (Tester::hand_moves)
   mut lit_every : Bool
+  /// whether something reads the widgets out this frame (a screen reader, any service of the system's accessibility:
+  /// @hostapi.a11y_on), asked once as the frame begins
+  mut reads_out : Bool
   mut window_corner : Double
   mut direction : Direction
   // what the widgets built this frame say they are (semantics.mbt), and how deep in a part hidden from it the view
@@ -676,6 +679,7 @@ fn Ctx::new() -> Ctx {
     lit_reach: 0.0,
     lit_all: false,
     lit_every: false,
+    reads_out: false,
     window_corner: 0.0,
     inner_faults: [],
     direction: Ltr,

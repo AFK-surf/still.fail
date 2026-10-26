@@ -63,10 +63,10 @@ pub fn Ctx::a11y_lines(self : Ctx) -> String {
       s.id.to_string(),
       s.role.to_string(),
       a11y_flags(s),
-      x.to_string(),
-      y.to_string(),
-      w.to_string(),
-      h.to_string(),
+      a11y_length(x),
+      a11y_length(y),
+      a11y_length(w),
+      a11y_length(h),
       a11y_clean(s.label),
       a11y_clean(s.value),
       a11y_clean(s.description),
@@ -149,6 +149,13 @@ fn a11y_clean(s : String) -> String {
 }
 
 ///|
+/// A place or a size as the host is told it: to a thousandth of a point, as no screen shows finer (what a layout summed
+/// one way or another, 617 or 617.0000000000001, is told the same, and the same tree is not told again for it).
+fn a11y_length(v : Double) -> String {
+  ((v * 1000.0).round() / 1000.0).to_string()
+}
+
+///|
 /// FNV-1a over the words' code units (a number of their own from frame to frame, not the runtime's hash).
 fn a11y_hash(s : String) -> Int {
   let mut h = 0x811C9DC5U
@@ -162,7 +169,7 @@ fn a11y_hash(s : String) -> Int {
 /// As a frame has been painted: the host told what the widgets are when something reads them out and they are not as
 /// last told (app.mbt frame_body). Nothing while nothing reads them.
 fn Ctx::a11y_after_paint(self : Ctx) -> Unit {
-  if !h_a11y_on() {
+  if !self.reads_out {
     self.a11y_sent = ""
     return
   }

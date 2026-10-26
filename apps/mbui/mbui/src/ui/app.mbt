@@ -201,6 +201,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.wake_by = None
   c.page_in_hand = false
   c.cycling = false
+  c.reads_out = h_a11y_on()
   c.cycles.clear()
   c.periodic.clear()
   c.nav_rest = -1.0

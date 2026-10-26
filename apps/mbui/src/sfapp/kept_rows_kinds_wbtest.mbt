@@ -38,7 +38,7 @@ fn kept_rows_kind(mode : String, again : Bool, w : Double, h : Double, a11y? : B
   let out = []
   for _ in 0..<24 {
     t.run_for(kept_rows_still_ms)
-    out.push(drawn_from(t, -1000.0).map(kept_rows_inst))
+    out.push(drawn_from(t, -1000.0).map(kept_rows_inst) + kept_rows_read_out(t, a11y))
   }
   out
 }

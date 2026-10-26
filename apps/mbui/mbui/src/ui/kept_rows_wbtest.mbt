@@ -469,3 +469,34 @@ test "a list's rows as messages come: one all read through signals builds again 
   assert_eq(t.rows_kept(), 0)
   assert_eq(k.builds[2], builds[2] + 1)
 }
+
+///|
+test "a list's rows read out as they are dragged and flung: kept, read out as building them says them" {
+  let run = fn(replay : Bool) -> (Array[String], Int) {
+    let k = TestRows::new()
+    let t = Tester::new(k.view(), w=320.0, h=420.0, platform=2)
+    t.keep_parts(true)
+    t.set_a11y(true)
+    drawn_again_on.val = replay
+    let said = []
+    let mut kept = 0
+    frame_hook.val = Some(fn() {
+      said.push(t.a11y_said())
+      kept = kept + t.rows_kept()
+    })
+    t.draw()
+    rows_strokes(t, k)
+    frame_hook.val = None
+    drawn_again_on.val = true
+    (said, kept)
+  }
+  let (kept, n) = run(true)
+  let (built, _) = run(false)
+  assert_true(n > 200, msg="rows drawn again: \{n}")
+  assert_eq(kept.length(), built.length())
+  for f in 0..<kept.length() {
+    if kept[f] != built[f] {
+      fail("frame \{f}: read out drawn again:\n\{kept[f]}\nbuilt:\n\{built[f]}")
+    }
+  }
+}
