@@ -113,8 +113,16 @@ fn going_up(going : Array[Json]) -> (Array[Json], Array[(String, Int, Int)]) {
 ///|
 /// Words sent from chat `rk` (its station and session; `v` its view, None for one just made) are in its list now,
 /// before the core has them (LocalSent), with its files up (`files`, each one put up from here naming its upload as the
-/// core's row will: file_key) and those still going up (`going`: going_up). Its key, for what flies there (flight.mbt).
-pub fn sent_local(rk : String, v : ChatView?, words : String, files : Array[Json], going? : Array[Json] = []) -> String {
+/// core's row will: file_key), those still going up (`going`: going_up) and what it quotes (`quotes`, as the core's row
+/// will have them). Its key, for what flies there (flight.mbt).
+pub fn sent_local(
+  rk : String,
+  v : ChatView?,
+  words : String,
+  files : Array[Json],
+  going? : Array[Json] = [],
+  quotes? : Array[Json] = [],
+) -> String {
   local_sent_n.val += 1
   let id = "local:\{local_sent_n.val}"
   let (images, cards) = going_up(going)
@@ -123,7 +131,7 @@ pub fn sent_local(rk : String, v : ChatView?, words : String, files : Array[Json
       id,
       text: words,
       attachments: (files + images).map(attachment_of),
-      quotes: [],
+      quotes: quotes.map(quote_of),
       state: "sending",
       error: "",
       joined: false,

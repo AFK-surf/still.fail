@@ -672,36 +672,41 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
           c.focus_editor(key)
           writing_focused(src, w)
         }
-        let done = @sf.quote_card(
-          c,
-          key,
-          text(v, "author"),
-          text(v, "text"),
-          role=text(v, "role"),
-          composer=true,
-          remove=true,
-          comment_field=fn() {
-            let res = c.editor(
-              key,
-              placeholder=@sf.t("web-main.quote.commentPlaceholder"),
-              font_size=@sf.theme().t.ui,
-              line=@sf.theme().t.ui_line,
-              max_lines=1,
-              plain=true,
-              color=@sf.theme().p.text,
-              placeholder_color=@sf.theme().p.subtle,
-              caret_color=@sf.theme().p.accent,
-              field=f,
-            )
-            if res.text != text(v, "comment") {
-              writing_comment(src, w, id, res.text)
-            }
-            if res.submitted is Some(_) {
-              c.focus_editor(composer_field_key)
-            }
-          },
-        )
-        if done.removed {
+        let done : Ref[@sf.QuoteCardDone] = Ref::new({ jumped: false, removed: false })
+        let card = c.box(style=@sf.full_width, fn() {
+          done.val = @sf.quote_card(
+            c,
+            key,
+            text(v, "author"),
+            text(v, "text"),
+            role=text(v, "role"),
+            composer=true,
+            remove=true,
+            comment_field=fn() {
+              let res = c.editor(
+                key,
+                placeholder=@sf.t("web-main.quote.commentPlaceholder"),
+                font_size=@sf.theme().t.ui,
+                line=@sf.theme().t.ui_line,
+                max_lines=1,
+                plain=true,
+                color=@sf.theme().p.text,
+                placeholder_color=@sf.theme().p.subtle,
+                caret_color=@sf.theme().p.accent,
+                field=f,
+              )
+              if res.text != text(v, "comment") {
+                writing_comment(src, w, id, res.text)
+              }
+              if res.submitted is Some(_) {
+                c.focus_editor(composer_field_key)
+              }
+            },
+          )
+        })
+        // (where it is: what flies from it as it is sent, flying_quotes)
+        @motion.measure(c, card, quote_card_key(id))
+        if done.val.removed {
           writing_unquote(src, w, id)
         }
       }
@@ -1224,9 +1229,9 @@ let composer_error_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Da
 
 ///|
 /// The files of a draft still going up as it is sent (composer.ts take's `uploads`: neither up nor failed, nor a link
-/// or a file named by its path, which go as words).
+/// or a file named by its path, which go as words), its quotes' own pictures among them.
 fn going_files(w : Writing) -> Array[Json] {
-  w.files.filter(fn(f) {
+  @sfbase.writing_files(w).filter(fn(f) {
     let v = Some(f)
     field(v, "done") is None &&
     text(v, "error") == "" &&
@@ -1236,10 +1241,10 @@ fn going_files(w : Writing) -> Array[Json] {
 }
 
 ///|
-/// The files of a draft that are up, as its message has them: one put up from here naming its upload (`upload`), as
-/// the core's row does (file_key).
+/// The files of a draft that are up, as its message has them (its quotes' own pictures among them): one put up from
+/// here naming its upload (`upload`), as the core's row does (file_key).
 fn up_files(w : Writing) -> Array[Json] {
-  w.files.filter_map(fn(f) {
+  @sfbase.writing_files(w).filter_map(fn(f) {
     match field(Some(f), "done") {
       Some(Object(done)) if @sfbase.writing_put_here(text(Some(f), "id")) => {
         let a = done.copy()
@@ -1295,6 +1300,67 @@ fn flying_files(c : @ui.Ctx, w : Writing) -> Array[FlyingFile] {
 }
 
 ///|
+/// The quotes of a draft as its message has them (composer.ts sentQuote): what is said about each trimmed, its own
+/// picture named as its file goes.
+fn sent_quotes(w : Writing) -> Array[Json] {
+  w.quotes.map(fn(q) {
+    let v = Some(q)
+    let own = field(v, "own")
+    let file = match field(own, "done") {
+      Some(done) if text(Some(done), "name") != "" => text(Some(done), "name")
+      _ => text(own, "name")
+    }
+    Json::object({
+      "author": Json::string(text(v, "author")),
+      "text": Json::string(text(v, "text")),
+      "comment": Json::string(text(v, "comment").trim(chars=" \n\t").to_string()),
+      "ts": Json::string(text(v, "ts")),
+      "role": Json::string(text(v, "role")),
+      "file": Json::string(file),
+    })
+  })
+}
+
+///|
+/// Where quote `id` waiting in the composer is (composer_extras).
+fn quote_card_key(id : String) -> String {
+  "composer/quote-card/" + id
+}
+
+///|
+/// The quotes of a draft, flying as it is sent to their cards in its message (quote_key: each by its place among
+/// them), each from its card here: its card there carried from where this one's corner is, off by as much as its words
+/// are further in here (quote_sent_shift), so that they set out from where they were; drawn there as its message
+/// draws it until it sets off.
+fn flying_quotes(c : @ui.Ctx, w : Writing) -> Array[FlyingFile] {
+  let most = mine_most(c)
+  let flying : Array[FlyingFile] = []
+  for i, q in sent_quotes(w) {
+    let id = text(Some(w.quotes[i]), "id")
+    match @motion.measured_rect(c, quote_card_key(id)) {
+      Some((x, y, wide, high)) => {
+        let s = @sfbase.quote_of(q)
+        let (dx, dy) = @sf.quote_sent_shift(s.author, s.role)
+        flying.push({
+          key: @sfbase.quote_key(i),
+          from: (x + dx, y + dy, wide, high),
+          picture: "",
+          face: fn() {
+            let c = @ui.current()
+            c.box(style=quote_cards_end.then(@ui.style(max_w=Fixed(most))), fn() {
+              @sf.quote_card(c, "flying/quote/" + id, s.author, s.text, role=s.role, comment=s.comment) |> ignore
+            })
+            |> ignore
+          },
+        })
+      }
+      None => ()
+    }
+  }
+  flying
+}
+
+///|
 /// What is written sent into chat `r` (`v` its view: its thread, what is in it now; sendDraft, draft.ts send): in the
 /// list and flying there in the frame it is sent, before the core has it (sent_local: the rule), the composer empty at
 /// once; then what the core took (`composer.take`: the words with the links and the paths after them, the files up,
@@ -1308,13 +1374,13 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   }
   let words = w.text.trim(chars=" \n\t").to_string()
   let rk = r.station + "\u{1}" + r.session
-  let row = sent_local(rk, Some(v), words, up_files(w), going=going_files(w))
+  let row = sent_local(rk, Some(v), words, up_files(w), going=going_files(w), quotes=sent_quotes(w))
   // its words take off from the field as they are (before it is emptied), the composer (its box and its room) held as
   // tall as it is till they let go of it
   let room = @motion.measured(c, "composer/foot").unwrap_or(0.0)
   let box = @motion.measured(c, "composer/content").unwrap_or(0.0)
-  // its files that are up fly too, each from its tile (ChatHost.kt sending)
-  let flying = flying_files(c, w)
+  // its quotes fly too, each from its card, and its files that are up, each from its tile (ChatHost.kt sending)
+  let flying = flying_quotes(c, w) + flying_files(c, w)
   @sfbase.flight_start(
     c,
     w.key,

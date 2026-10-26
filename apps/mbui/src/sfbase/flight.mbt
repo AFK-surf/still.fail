@@ -22,8 +22,10 @@
 // as the words go: a picture's box growing from the tile's to the picture's own in the message (a letterboxed one's
 // share of its box), the picture cropped to it as it is (opening out from the tile's square crop), on no ground and
 // with a file's corner, as the tile and the message draw it; any other file's card carried there, from the tile's size
-// to its own. Sent with no words, the row comes in where it is, its files flying into it,
-// and the composer's hint stays.
+// to its own. The quotes sent with them go from their cards in the composer as a card does, each its card in the
+// message carried there as it is, from where its words were (its card in the composer and its own differ in width).
+// Sent with no words, the row comes in where it is, its files and quotes flying into it, and the composer's hint
+// stays.
 //
 // A new chat's first words are carried (ChatHost.kt Flight.carried, web madeChat.ts): drawn where they were typed from
 // the frame they are sent, over the new chat's composer and then its chat's (newchat.mbt makes the chat, the page
@@ -58,7 +60,7 @@ pub(all) struct SendFlight {
   /// one block
   lines : @ui.FieldLines?
   lead : Int
-  /// the files sent with them, from their tiles
+  /// the files sent with them, from their tiles, and their quotes, from their cards
   files : Array[FlyingFile]
   /// its row's key (what was sent from here, then the core's row it became: chat.mbt row_keys), whether it is laid
   /// out and from which frame; how far it has come (0 … 1, linear,
@@ -77,7 +79,9 @@ pub(all) struct SendFlight {
 /// A file sent with the words (ChatHost.kt FlyingFile): the file it is in its message (file_key: one put up from here
 /// its upload, from before it is up on; any other the station's path), its tile in the composer (x, y, w, h in the
 /// window), a picture's key ("" a card), and the tile as the composer drew it (what is drawn where it was while the row
-/// is not in the list).
+/// is not in the list). A quote sent with them flies as a card does (quote_key: its place among the message's quotes),
+/// from where its card in the message sets out (its words where they were in its card in the composer), drawn there as
+/// its message draws it.
 pub(all) struct FlyingFile {
   key : String
   from : (Double, Double, Double, Double)
@@ -87,6 +91,12 @@ pub(all) struct FlyingFile {
 
 ///|
 pub let send_flight : Ref[SendFlight?] = { val: None }
+
+///|
+/// What flies to the `i`th quote of the message words are sent to (as file_key says a file: "upload:<id>").
+pub fn quote_key(i : Int) -> String {
+  "quote:\{i}"
+}
 
 ///|
 /// Where in its box in the message each file flying there lands (flight_landing's `share`, by its landing's key): the
@@ -827,8 +837,15 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
 /// A file of the message words were sent to (node `i`, the box it is laid out in; the file it is, `key`: file_key),
 /// while a file flies there (ChatHost.kt landingFile): where it is, kept for the picture flying to it (drawn there by
 /// flight_files, not here), and the `share` of the box its picture takes (a letterboxed one's, centred); a card,
-/// carried from its tile on the words' way, grown from the tile's size to its own.
-pub fn flight_landing(c : @ui.Ctx, f : SendFlight, i : Int, key : String, share? : (Double, Double) = (1.0, 1.0)) -> Unit {
+/// carried from its tile on the words' way, grown from the tile's size to its own (a quote's, not `grow`, as it is).
+pub fn flight_landing(
+  c : @ui.Ctx,
+  f : SendFlight,
+  i : Int,
+  key : String,
+  share? : (Double, Double) = (1.0, 1.0),
+  grow? : Bool = true,
+) -> Unit {
   let ff = match flight_file_of(f, key) {
     Some(ff) => ff
     None => return
@@ -844,7 +861,7 @@ pub fn flight_landing(c : @ui.Ctx, f : SendFlight, i : Int, key : String, share?
   let up = flight_up_of(c, f)
   // from the tile's size: by the larger of its two shares of its own (Compose's crop to the box)
   let s0 = match @motion.measured_rect(c, "flight/to/" + key) {
-    Some((_, _, ew, eh)) if ew > 0.0 && eh > 0.0 => dmax(fw / ew, fh / eh)
+    Some((_, _, ew, eh)) if grow && ew > 0.0 && eh > 0.0 => dmax(fw / ew, fh / eh)
     _ => 1.0
   }
   // (in a new chat's list coming up with the words, drawn below its place by as much: from its tile all the same,

@@ -718,7 +718,8 @@ fn blocked_line(c : @ui.Ctx, src : Source, station : String, key : String, b : I
 
 ///|
 /// Quotes as sent (Quotes): each a card of its own ahead of the message, its own picture in it (a preview mark's
-/// screenshot: the file of `files` it names); pressed, the list goes to the message it quotes.
+/// screenshot: the file of `files` it names); pressed, the list goes to the message it quotes. Sent from the composer,
+/// each flies there from its card in it (sfbase's flight.mbt).
 pub fn quotes(
   c : @ui.Ctx,
   src : Source,
@@ -738,20 +739,27 @@ pub fn quotes(
         Some(m) => m.seq
         None => -1.0
       }
-      let done = @sf.quote_card(
-        c,
-        "msg-quote/" + q.ts + "/" + i.to_string(),
-        q.author,
-        q.text,
-        role=q.role,
-        comment=q.comment,
-        jump=q.ts != "" && here.go is Some(_),
-        // (its own box, as the message's files have theirs: at most as wide as the card has room)
-        picture?=own.map(fn(a) { fn() { message_files(c, src, here, [a], false) } }),
-      )
-      match here.go {
-        Some(go) if done.jumped && seq >= 0.0 => go(seq)
-        _ => ()
+      // (in a box of its own: where a quote sent from the composer flies to)
+      let item = c.box(style=@sf.full_width, fn() {
+        let done = @sf.quote_card(
+          c,
+          "msg-quote/" + q.ts + "/" + i.to_string(),
+          q.author,
+          q.text,
+          role=q.role,
+          comment=q.comment,
+          jump=q.ts != "" && here.go is Some(_),
+          // (its own box, as the message's files have theirs: at most as wide as the card has room)
+          picture?=own.map(fn(a) { fn() { message_files(c, src, here, [a], false) } }),
+        )
+        match here.go {
+          Some(go) if done.jumped && seq >= 0.0 => go(seq)
+          _ => ()
+        }
+      })
+      match flight_here(here) {
+        Some(f) => flight_landing(c, f, item, @sfbase.quote_key(i), grow=false)
+        None => ()
       }
     }
   })

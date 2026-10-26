@@ -838,15 +838,19 @@ fn new_send(
     return
   }
   let words = d.text.trim(chars=" \n\t").to_string()
+  // (as its message will have them: taken out of the draft before the chat is made)
+  let up = up_files(d)
   let going = going_files(d)
-  // (its words where they were typed while the chat is made, its files where their tiles were: carried, the composer
-  // held as tall as it is meanwhile, the new chat's and then its chat's, till they set out)
+  let quotes = sent_quotes(d)
+  // (its words where they were typed while the chat is made, its quotes where their cards were and its files where
+  // their tiles were: carried, the composer held as tall as it is meanwhile, the new chat's and then its chat's, till
+  // they set out)
   let box = @motion.measured(c, "composer/content").unwrap_or(0.0)
   @sfbase.flight_carry_start(
     c,
     d.key,
     words,
-    flying_files(c, d),
+    flying_quotes(c, d) + flying_files(c, d),
     field=composer_field_key,
     hold=fn(ms) { composer_hold(d.key, 0.0, box, ms) },
     // (the flight where the chat opens has: in this page's place, Android's; beside it, the web's)
@@ -895,7 +899,7 @@ fn new_send(
               d.key,
               station + ":" + key,
               rk,
-              sent_local(rk, None, words, up_files(d), going~),
+              sent_local(rk, None, words, up, going~, quotes~),
               hold=fn(ms) { composer_hold(station + ":" + key, 0.0, box, ms) },
             )
             // what is written meanwhile goes on in the chat's draft (dock.tsx carryTo)
