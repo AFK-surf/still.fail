@@ -663,6 +663,8 @@ let zh : Map[String, String] = {
   "android-settings.slack.uploadImage": "上传图片",
   "android-settings.slack.zhipu": "智谱",
   "android-settings.station.add": "添加 station",
+  "android-settings.station.addHere": "也可以直接添加这台 Mac：在这里下载 station 并加入这个 workspace，不用到终端里执行命令。",
+  "android-settings.station.addHerePc": "也可以直接添加这台电脑：在这里下载 station 并加入这个 workspace，不用到终端里执行命令。",
   "android-settings.station.addNote": "station 是一台运行 {app} 的机器。为它命名，然后在该机器的终端中执行生成的命令，它会安装 {app} 并加入。",
   "android-settings.station.emoji": "图标",
   "android-settings.station.emojiClear": "不使用图标",

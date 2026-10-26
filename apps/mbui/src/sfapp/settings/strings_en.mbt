@@ -680,6 +680,8 @@ let en : Map[String, String] = {
   "android-settings.slack.uploadImage": "Upload image",
   "android-settings.slack.zhipu": "Zhipu",
   "android-settings.station.add": "Add station",
+  "android-settings.station.addHere": "Or add this Mac itself: the station is downloaded here and joins this workspace, with no command to run.",
+  "android-settings.station.addHerePc": "Or add this PC itself: the station is downloaded here and joins this workspace, with no command to run.",
   "android-settings.station.addNote": "A station is a machine running {app}. Name it, then run the generated command in its terminal: it installs {app} and joins.",
   "android-settings.station.emoji": "Icon",
   "android-settings.station.emojiClear": "No icon",

@@ -799,6 +799,8 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   mb_cb = (mb_callbacks){frame, pointer_fn, wheel_fn, key, text};
   script = getenv("MBUI_SCRIPT");
   shot_dir = getenv("MBUI_SHOT_DIR");
+  // this machine's name (MBUI_MACHINE, @ui.env): what a station added from here is called (sfbase local_machine_name)
+  if (!getenv("MBUI_MACHINE")) setenv("MBUI_MACHINE", g_get_host_name(), 0);
   setlocale(LC_ALL, "");
   // its icon's name its id (MBUI_APP_ID, as its desktop entry runs it: still.fail's linux/install.sh), which the
   // desktop knows its window by too (life_begin)
