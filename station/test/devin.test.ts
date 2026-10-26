@@ -333,7 +333,7 @@ describe("the Devin driver", { concurrency: true }, () => {
     await session.dispose();
   });
 
-  test("a permission it asks is allowed; a question of its own is answered as not supported", async () => {
+  test("a permission it asks is allowed for that call only; a question of its own is answered as not supported", async () => {
     const d = driver();
     const o = options();
     const { events, push, until } = listen();
@@ -342,7 +342,7 @@ describe("the Devin driver", { concurrency: true }, () => {
     await until(ended(1));
     assert.deepEqual(outcome(events), { kind: "completed" });
     const sent = stdin(o.dump);
-    assert.deepEqual(sent.find((m) => m.id === "perm-1")?.result, { outcome: { outcome: "selected", optionId: "allow-always" } });
+    assert.deepEqual(sent.find((m) => m.id === "perm-1")?.result, { outcome: { outcome: "selected", optionId: "allow-once" } });
     assert.equal(sent.find((m) => m.id === "question-1")?.error?.code, -32601);
     await session.dispose();
   });

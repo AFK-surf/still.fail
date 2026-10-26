@@ -346,6 +346,11 @@ export function acpCall(name: string, input: Json): [string, Json] {
   return [name, input];
 }
 
+/// A call an ACP update starts, as the station names and gives it: Grok Build names it in its own _meta, Devin in its own
+/// (an MCP tool's as mcp__<server>__<tool>), the others in its title.
+export const acpNamed = (update: Json): [string, Json] =>
+  acpCall(str(update?._meta?.["x.ai/tool"]?.name) ?? str(update?._meta?.["cognition.ai/inferenceToolName"]) ?? str(update?.title) ?? "", update?.rawInput ?? null);
+
 /// An ACP agent's `session/update`s as live steps (Grok Build's). What the model says streams in chunks with no id of
 /// their own: a run of chunks of one kind is a step, which ends when something else begins (a thought, a call) or the
 /// turn ends; a call starts with `tool_call` and ends with the update that says it completed or failed, which carries
@@ -421,8 +426,7 @@ export class LiveFromAcp {
       this.to("working", out);
       if (!this.open.has(id)) {
         this.open.add(id);
-        // Grok Build names a call in its own _meta, Devin in its own (an MCP tool's as mcp__<server>__<tool>); else its title.
-        const [name, input] = acpCall(str(update._meta?.["x.ai/tool"]?.name) ?? str(update._meta?.["cognition.ai/inferenceToolName"]) ?? str(update.title) ?? "", update.rawInput ?? null);
+        const [name, input] = acpNamed(update);
         out.push(start(id, "tool", name, chars(pretty(input), INPUT_MOST)));
       }
       this.result(id, update, out);
