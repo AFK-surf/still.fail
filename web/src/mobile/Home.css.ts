@@ -31,6 +31,8 @@ export const mHomePane = style({
   padding: "calc(var(--m-top) + 58px) 0 calc(var(--m-foot) + 126px)",
 });
 export const mHomeItem = style({ flex: "none", display: "flow-root" });
+/** What changed while away still coming, over the rows (the chats' `syncing`): in line with the rows' words. */
+export const mSyncing = style({ padding: "0 22px 8px" });
 /**
  * A list pulled down from its top (./pull.ts): a frosted disc in the middle of the gap the list leaves under the bar,
  * its arrow turning as it opens, in the accent once letting go reloads, spinning as it does.

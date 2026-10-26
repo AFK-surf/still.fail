@@ -371,6 +371,11 @@
   "core-views.station.offline": "{name} offline",
   "core-views.station.offline_short": "Offline",
   "core-views.station.offline_since": "Offline · {ago}",
+  "core-views.station.syncing": "Syncing",
+  "core-views.station.syncing_left": {
+    "one": "Syncing · 1 chat left",
+    "other": "Syncing · {n} chats left"
+  },
   "core-views.station.reconnecting": "Reconnecting to {name}",
   "core-views.station.reconnecting_now": "Reconnecting to {name}",
   "core-views.station.retrying": "Can't reach {name}, retrying",

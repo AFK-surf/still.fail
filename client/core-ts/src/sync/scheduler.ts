@@ -53,6 +53,8 @@ export class Scheduler {
   #seq = 0;
   /// The priority things matching a key's prefix get while a UI makes them urgent (`prioritize`), by who asked.
   readonly #boosts = new Map<string, [string, number]>();
+  /// Told when a lane has nothing left to run, a task of it just over.
+  onIdle: (lane: string) => void = () => {};
 
   constructor(runner: Runner, scoped: Scoped) {
     this.#runner = runner;
@@ -91,11 +93,17 @@ export class Scheduler {
     }
     const task: Waiting = { key, priority: p, seq: ++this.#seq, work, done: Deferred.makeUnsafe<void, CoreError>() };
     l.waiting.push(task);
-    this.#pump(l);
+    this.#pump(l, lane);
     return task.done;
   }
 
-  #pump(lane: Lane): void {
+  /// Whether a lane has anything to run, or running.
+  busy(lane: string): boolean {
+    const l = this.#lanes.get(lane);
+    return l !== undefined && (l.running.size > 0 || l.waiting.length > 0);
+  }
+
+  #pump(lane: Lane, name: string): void {
     for (;;) {
       // The most urgent, then the oldest; one already running for its key waits for that run.
       let best = -1;
@@ -117,7 +125,8 @@ export class Scheduler {
             Effect.sync(() => {
               lane.running.delete(task.key);
               Deferred.doneUnsafe(task.done, exit);
-              this.#pump(lane);
+              this.#pump(lane, name);
+              if (lane.running.size === 0 && lane.waiting.length === 0) this.onIdle(name);
             }),
           ),
           Effect.onInterrupt(() =>

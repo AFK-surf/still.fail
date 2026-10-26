@@ -112,6 +112,8 @@ export const navHeading = style({
   fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted,
 });
 export const navEmpty = style({ margin: "16px 10px", fontSize: vars.textUi, color: vars.muted });
+/** What changed while away still coming, over the rows (the chats' `syncing`): in line with the rows' words. */
+export const navSyncing = style({ padding: "2px 10px 8px" });
 export const navError = style({ color: vars.red });
 
 export const navRow = style({

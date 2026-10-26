@@ -13,7 +13,8 @@
 // open), "chat-find" (⌘F's bar, a word typed in it), "chat-agent-card" (the chat, its agent's details and card read:
 // what its card over its picture says); "home-jobs"
 // (Home with the jobs left up a long while at its top); "home-attention" (the wide frame's 待处理 open: a decision to let
-// go, a failure looked at, a station offline); "history-link" (Home, the history there for a link to open at
+// go, a failure looked at, a station offline); "home-syncing" (Home catching up on what changed while away: the line
+// over the rows); "history-link" (Home, the history there for a link to open at
 // an entry: what apps/android's MbuiCompareTest pictures beside it). Every word here is made up.
 
 ///|
@@ -24,7 +25,7 @@ pub fn decide_mode(mode : String) -> Bool {
     "chat-info", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
     "chat-letters-info", "chat-letters", "chat-letters-many", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
     "chat-jobs-side", "chat-history-side", "chat-tabs-side", "chat-model-pop", "chat-find", "chat-agent-card",
-    "chat-station-tag", "home-attention",
+    "chat-station-tag", "home-attention", "home-syncing",
   ].contains(mode)
 }
 
@@ -777,6 +778,19 @@ pub fn fix_with_trouble(v : Json, params : Map[String, Json]) -> Json {
     (Object(m), Some(String("ws1"))) => {
       let o = m.copy()
       o["trouble"] = { "text": "MBA 离线" }
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// The chats' view catching up on what changed while away (home-syncing: twelve chats left).
+pub fn fix_with_syncing(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      o["syncing"] = "正在同步 · 还剩 12 个对话"
       Json::object(o)
     }
     _ => v

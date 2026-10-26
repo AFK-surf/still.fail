@@ -15,7 +15,7 @@ import { RowAside } from "./RowPicture.tsx";
 import { sampleChats, sampleWords } from "./samples.ts";
 import { Retry, Waiting as StatusWaiting, WaitingItems } from "./Status.tsx";
 import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
-import { Confirm, ConnectKindIcon, ICON, Time, Tip, Waiting } from "./ui.tsx";
+import { Confirm, ConnectKindIcon, ICON, LaterLine, Time, Tip, Waiting } from "./ui.tsx";
 import { chatClicked } from "./telemetry.ts";
 import { useComposerMove } from "./dock.tsx";
 import { goToNeighbour } from "./Chat.tsx";
@@ -222,6 +222,7 @@ const ChatPane = memo(function ChatPane({ scope, filter, stationsPage, hidden }:
           : stations.length ? t("web-main.sidebar.none")
           : <>{t("web-main.sidebar.noStation.before")}<NavLink className={chatCss.inlineLink} to={stationsPage}>{t("web-main.sidebar.noStation.link")}</NavLink>{t("web-main.sidebar.noStation.after")}</>}</p>
       )}
+      {days.length > 0 && view?.syncing && <LaterLine className={nav.navSyncing} text={view.syncing} />}
       {days.map((day) => (
         <NavSection key={day.daysAgo} title={day.label} flip={`day:${day.daysAgo}`}>
           {day.items.map((item) => <ChatRow key={rowKey(item)} scope={scope} filter={filter} row={rowKey(item)} lead={lead} />)}

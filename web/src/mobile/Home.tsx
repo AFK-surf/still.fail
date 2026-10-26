@@ -17,7 +17,7 @@ import { useCopyChatLink } from "../ChatRef.tsx";
 import { setSidebarMode, stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
 import { useApp, useOpenPage } from "./app.tsx";
 import { FailedMark, FilterMenu, Illustration, SectionHeader, SlackMark, ticked } from "./parts.tsx";
-import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
+import { LaterLine, Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import { ChatMark, chatTone, jumpFromLine, rowLead, stateLine, WaitingText } from "../ChatMark.tsx";
 import * as chatMarkCss from "../ChatMark.css.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
@@ -401,6 +401,7 @@ const ChatPane = memo(function ChatPane({ chats, filter, onSearch }: { chats: To
   const intro = <>
     {view && !view.note?.empty && <SearchField onOpen={onSearch} />}
     <ChangelogNews />
+    {!!view?.syncing && view.days.length > 0 && <LaterLine className={css.mSyncing} text={view.syncing} />}
     {!view ? <Waiting text={t("web-mobile.home.reading")} error={chats.error?.message} sample={<ChatRowsSample lead={lead} n={7} />} /> : <>
       {(view.note?.reading || !!view.note?.failing.length) && <Waiting note={view.note} text={t("web-mobile.home.reading")} sample={<ChatRowsSample lead={lead} n={view.note.reading ? 7 : 4} />} />}
       {view.note?.empty && <Empty view={view} filter={filter} />}

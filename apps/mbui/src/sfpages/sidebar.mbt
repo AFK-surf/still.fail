@@ -126,6 +126,8 @@ priv enum Line {
   Part(ListPart)
   /// read the first time: the rows to come, what the core waits on or cannot read, what went wrong
   Wait(ListNote?, String?)
+  /// what changed while away still coming, over the rows (ChatsView.syncing)
+  Sync(String)
   Empty(ChatsView)
   Heading(String)
   Row(ChatItem)
@@ -139,6 +141,7 @@ fn line_key(line : Line) -> String {
     Foot => "foot"
     Part(p) => "part/" + p.key
     Wait(_, _) => "wait"
+    Sync(_) => "sync"
     Empty(_) => "empty"
     Heading(label) => "h/" + label
     Row(item) => "r/" + @sfbase.row_name(item)
@@ -235,6 +238,14 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
         Some(n) if n.empty && v.days.length() == 0 => lines.push(Empty(v))
         _ => ()
       }
+      // over rows there already (with none, the list's waiting says it), once it has gone on a while: a moment's
+      // catching up shows nothing
+      match v.syncing {
+        Some(words) if v.days.length() > 0 && @kit.after(c, sync_wait, true, @sf.later_ms) =>
+          lines.push(Sync(words))
+        Some(_) => ()
+        None => @kit.after(c, sync_wait, false, @sf.later_ms) |> ignore
+      }
       for p in (frame.after)(filter, Some(v)) {
         lines.push(Part(p))
       }
@@ -289,6 +300,7 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
           Foot => list_space(c, frame.foot + @sf.list_foot_in(frame.at))
           Part(p) => (p.draw)()
           Wait(note, error) => list_waiting(c, note, error, frame.at)
+          Sync(words) => list_syncing(c, words, frame.at)
           Empty(v) => list_empty(c, v, filter)
           Heading(label) => @sf.list_heading(c, label, frame.at)
           Row(item) => {
@@ -441,6 +453,25 @@ fn list_waiting(c : @ui.Ctx, note : ListNote?, error : String?, at : @sf.ListAt)
     },
   )
 }
+
+///|
+/// How long the list's catching up has gone on (@kit.after), for its line to show only past a moment.
+let sync_wait : String = "chats/syncing"
+
+///|
+/// What changed while away still coming (ChatsView.syncing): a spinner and its grey words, over the rows, in line
+/// with the days' headings.
+fn list_syncing(c : @ui.Ctx, words : String, at : @sf.ListAt) -> Unit {
+  c.box(style=sync_box.then(@sf.list_heading_in(at)), fn() {
+    @sf.spinner(c, size=@sf.spinner_inline) |> ignore
+    c.text(words, style=said_words) |> ignore
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let sync_box : @ui.Style = @ui.style(row=true, w=Full, pb=S2, gap=S2, align=ACenter)
 
 ///|
 /// A list with nothing in it (mobile/Home.tsx Empty; Sidebar.tsx's navEmpty): in a box a phone wide or wider, the

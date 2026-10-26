@@ -152,6 +152,9 @@ pub(all) struct ChatsView {
   /// agents | people: whose pictures lead the rows
   leading : String
   note : ListNote?
+  /// while what changed since the app was last with the stations is still coming: the line over the rows (正在同步,
+  /// 正在同步 · 还剩 12 个对话)
+  syncing : String?
 }
 
 ///|
@@ -265,6 +268,7 @@ fn chats_view_by(v : Json, item : (Json) -> ChatItem) -> ChatsView {
       l => l
     },
     note,
+    syncing: opt_text(s, "syncing"),
   }
 }
 

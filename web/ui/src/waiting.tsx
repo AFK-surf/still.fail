@@ -55,6 +55,24 @@ export function WaitLine({ text = t("common.reading"), error = false, className 
   );
 }
 
+/**
+ * A line over what is there already, while more of it is on its way (the chats' `syncing`): it takes no room until it
+ * has gone on a while (LATER_MS), so what is there in a moment does not move what is under it.
+ */
+export function LaterLine({ text, className }: { text: string; className?: string }) {
+  const [shown, setShown] = useState(false);
+  useLayoutEffect(() => {
+    const at = setTimeout(() => setShown(true), css.LATER_MS);
+    return () => clearTimeout(at);
+  }, []);
+  if (!shown) return null;
+  return (
+    <div className={className ? `${css.line} ${css.lineNow} ${className}` : `${css.line} ${css.lineNow}`} role="status" aria-live="polite">
+      <Spinner inline /><Said text={text} />
+    </div>
+  );
+}
+
 /** What a page or list waits on, from the core's note (ListNote) or the page's own words. */
 export interface WaitNote {
   /** Still reading: the placeholders breathe. */

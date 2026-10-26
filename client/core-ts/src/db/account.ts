@@ -1068,6 +1068,12 @@ export class AccountDb {
     return this.sql.all("SELECT id FROM thread WHERE station = ? AND listed = 1 ORDER BY sort_at DESC, created_at DESC, id DESC", [station]).map((r) => r[0] as number);
   }
 
+  /// A station's listed threads whose summary goes further than the entries held of them (none held, or fewer at the
+  /// end): what the device has yet to bring of each one's latest.
+  threadsBehind(station: string): number[] {
+    return this.sql.all("SELECT id FROM thread WHERE station = ? AND listed = 1 AND last > COALESCE((SELECT max(n) FROM entry WHERE entry.station = thread.station AND entry.thread = thread.id), 0)", [station]).map((r) => r[0] as number);
+  }
+
   /// How far a thread goes as its summary says (0 when none is held).
   threadLast(station: string, id: number): number {
     const v = this.sql.all("SELECT last FROM thread WHERE station = ? AND id = ?", [station, id])[0]?.[0];
