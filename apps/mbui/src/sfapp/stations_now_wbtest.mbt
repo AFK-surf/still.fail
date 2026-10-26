@@ -152,7 +152,7 @@ fn share_card_laid(t : @ui.Tester) -> Unit raise {
   let days = ["10/20", "10/26"].map(fn(d) { word(d) })
   assert_true(days.iter().all(fn(d) { d.length() == 1 }) && days[0][0].1 < days[1][0].1, msg="\{days}")
   // the chats at work now, the tasks run across devices, and still.fail's line
-  assert_true(t.find("9 个对话正在运行") is Some(_) && t.find("今天的对话分布在 3 台设备") is Some(_))
+  assert_true(t.find("9 个对话正在运行") is Some(_) && t.find("今天用了 3 台设备") is Some(_))
   assert_true(t.find("近 7 天 agent 跨设备执行了 312 个任务") is Some(_) && t.find("平均每个对话 5.2 个") is Some(_))
   // the picture all in its sheet or dialog, over its button
   let line = word("一生万物，万物归一")

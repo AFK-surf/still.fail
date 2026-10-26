@@ -75,7 +75,7 @@ test("the card shared says how many chats are at work now, and on how many stati
     Date.UTC(2026, 9, 26, 4, 12),
   );
   // today's on a and b (at work), e and g (at rest); not on f, nor on d (it runs tasks for them: not where they are)
-  assert.deepEqual([v.chats, v.chatsText, v.where, v.at], [4, "4 个对话正在运行", "今天的对话分布在 4 台设备", "10月26日 04:12"]);
+  assert.deepEqual([v.chats, v.chatsText, v.where, v.at], [4, "4 个对话正在运行", "今天用了 4 台设备", "10月26日 04:12"]);
   assert.deepEqual([v.tasksText, v.tasksPer], ["近 7 天 agent 跨设备执行了 4 个任务", "平均每个对话 2 个"]);
   assert.equal(v.quota[0].usedText, "50%");
   assert.deepEqual(v.today, { title: "今天", stats: [{ label: "归档的对话", value: "4 个" }, { label: "折合费用", value: "$8" }] });
