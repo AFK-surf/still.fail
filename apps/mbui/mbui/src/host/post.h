@@ -1,6 +1,7 @@
 // What comes from outside the frames as a message (a core's answer, from the core's own thread), kept by the framework
 // for the window's next frame (docs/determinism.md, src/ui/messages.mbt). Included once by each host's own file
-// (mac_app.m, ios_app.m, android_host.c, win_app.c), which defines `mb_post_wake`: a frame asked for, from any thread.
+// (mac_app.m, ios_app.m, android_host.c, win_app.c, linux_app.c), which defines `mb_post_wake`: a frame asked for, from
+// any thread.
 //
 //   mb_post(channel, json, len, bytes, blen)   any thread: the message copied in; the first since the last take wakes
 //                                              the host (one frame), the rest wait for it

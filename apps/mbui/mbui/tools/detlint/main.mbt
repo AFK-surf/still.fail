@@ -60,7 +60,8 @@ let script_waits : Array[@re.Regex] = [
 let page_settle : @re.Regex = rx("\\b__mb\\w*\\.(?:settled|unsettled)\\b")
 
 ///|
-/// a host doing something a fixed time later: Android's Handler, Apple's GCD and a selector's delay, Windows' timers
+/// a host doing something a fixed time later: Android's Handler, Apple's GCD and a selector's delay, Windows' timers,
+/// GLib's (Linux's)
 let host_delays : Array[@re.Regex] = [
   rx("\\bpostDelayed\\("),
   rx("\\bdispatch_after\\("),
@@ -68,6 +69,7 @@ let host_delays : Array[@re.Regex] = [
   rx("\\bSetTimer\\("),
   rx("\\bCreateTimerQueueTimer\\("),
   rx("\\bsetTimeout\\("),
+  rx("\\bg_timeout_add(?:_full|_seconds)?\\("),
 ]
 
 ///|

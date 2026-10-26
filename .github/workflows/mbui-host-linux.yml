@@ -1,0 +1,68 @@
+# mbui (apps/mbui/mbui): the host's and the text's contracts on Linux (docs/determinism.md, "What is compared, and
+# where"; scripts/host_contract.sh), as mbui-host-windows.yml has Windows': kitdemo built for the GTK 4 host
+# (src/host/linux_*, scripts/linux.sh), its controls page run in a window of Xvfb's (Mesa's llvmpipe draws it: no GPU)
+# with its scripted taps, its tape made a Tester's test and run here (every frame the same), then the committed tape's
+# text (linux_controls) asked of Pango again (every answer the same), and the runner's files told as they come. On
+# GitHub's own Ubuntu (a public repository's: free). When the Linux host changes.
+name: mbui-host-linux
+on:
+  pull_request:
+    paths: &paths
+      - "apps/mbui/mbui/src/ui/native.mbt"
+      - "apps/mbui/mbui/src/kitdemo/gallery/viewcheck.mbt"
+      - "apps/mbui/mbui/src/host/linux*"
+      - "apps/mbui/mbui/src/host/gles_render.h"
+      - "apps/mbui/mbui/src/host/corner_sl.h"
+      - "apps/mbui/mbui/src/host/done_watch.h"
+      - "apps/mbui/mbui/src/host/post.h"
+      - "apps/mbui/mbui/src/host/listen_api.h"
+      - "apps/mbui/mbui/src/ui/drive.mbt"
+      - "apps/mbui/mbui/scripts/done_runner.py"
+      - "apps/mbui/mbui/scripts/linux.sh"
+      - "apps/mbui/mbui/scripts/host_contract.sh"
+      - "apps/mbui/mbui/tools/chk/textrec.mbt"
+      - "apps/mbui/mbui/test/host/**"
+      - "apps/mbui/mbui/src/kitdemo/gallery/textcheck.mbt"
+      - "apps/mbui/mbui/src/kitdemo/gallery/textrec_linux_*"
+      - ".github/workflows/mbui-host-linux.yml"
+  push:
+    branches: [main]
+    paths: *paths
+  workflow_dispatch:
+
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      # GTK 4 and what the host draws with (epoxy, Pango, cairo, gdk-pixbuf, libsoup), Mesa's software GL, Xvfb, and the
+      # fonts the text is set in (the system's sans-serif, Han in Noto Sans CJK SC, Noto Color Emoji)
+      - name: GTK 4, Mesa, Xvfb, the fonts
+        working-directory: ${{ github.workspace }}
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends libgtk-4-dev libepoxy-dev libpango1.0-dev libcairo2-dev \
+            libfontconfig-dev libgdk-pixbuf-2.0-dev libsoup-3.0-dev zlib1g-dev libgl1-mesa-dri libegl-mesa0 xvfb xauth \
+            fonts-noto-cjk fonts-noto-color-emoji fonts-dejavu-core
+      - uses: ./.github/actions/mbui-moonbit
+      - name: kitdemo
+        run: scripts/host_contract.sh linux build
+      - name: "The host's contract: a run's tape = a Tester's frames"
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux record
+      - name: "The text's contract: linux_controls = Pango's"
+        if: success() || failure()
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux text
+      - name: "The runner's contract: a file written in the run's directory is told as it comes (done X)"
+        if: success() || failure()
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux runner
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: host-linux
+          path: apps/mbui/mbui/out/host/
+          if-no-files-found: ignore

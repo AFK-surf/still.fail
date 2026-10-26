@@ -1,8 +1,9 @@
 // The outsides' kinds as src/ui/hostcall.mbt numbers them (its outside_kinds) and as each host does.
 //
 // hostcall.mbt: every `let outside_NAME = N` in outside_kinds as ("NAME", outside_NAME), no number twice. Each host:
-// every kind it names (Native.java's OUTSIDE_*, apple.h's / win.h's / android_host.c's MB_OUTSIDE_*, web/host.js's
-// OUTSIDE_*) one of those, by the same number; a kind told as a bare number (tell(9, …)) is not one. Exit 1 on any.
+// every kind it names (Native.java's OUTSIDE_*, apple.h's / win.h's / linux.h's / android_host.c's MB_OUTSIDE_*,
+// web/host.js's OUTSIDE_*) one of those, by the same number; a kind told as a bare number (tell(9, …)) is not one.
+// Exit 1 on any.
 
 ///|
 let hosts : Array[(String, Array[String])] = [
@@ -24,6 +25,7 @@ let hosts : Array[(String, Array[String])] = [
     "windows",
     ["src/host/win.h", "src/host/win_*.h", "src/host/win_*.c", "src/host/win_*.cpp"],
   ),
+  ("linux", ["src/host/linux.h", "src/host/linux_*.h", "src/host/linux_*.c"]),
   ("web", ["web/host.js"]),
 ]
 

@@ -9,6 +9,7 @@ on:
   pull_request:
     paths: &paths
       - "apps/mbui/mbui/src/host/android_host.c"
+      - "apps/mbui/mbui/src/host/gles_render.h"
       - "apps/mbui/mbui/android/app/src/main/java/dev/mbui/MBText.java"
       - "apps/mbui/mbui/android/app/src/main/java/dev/mbui/Images.java"
       - "apps/mbui/mbui/android/apk.json"
