@@ -147,7 +147,25 @@ test("a_task_notification_is_read_into_how_the_work_ended", () => {
   const h = presentHistory({ loaded: true, timeline: [{ kind: "user", text: note("failed", 'Background command "Run tests" failed with exit code 2') }] }, cx([], [], []));
   const received = h.items[0].body.content;
   assert.equal(received.note, null);
-  assert.deepEqual(received.tasks, [{ text: "后台命令失败（退出码 2）：Run tests", agent: false, failed: true, result: null, md: null }]);
+  assert.deepEqual(received.tasks, [{ text: "后台命令失败（退出码 2）：Run tests", agent: false, failed: true, result: null, md: null, line: null }]);
+});
+
+test("a_line_standing_for_words_closed_is_their_first_words_without_marks", () => {
+  const note = '<task-notification>\n<task-id>b1</task-id>\n<tool-use-id>toolu_1</tool-use-id>\n<output-file>/tmp/b1.output</output-file>\n<status>completed</status>\n<summary>Agent "Map it" finished</summary>\n<result>## Found\n**it**</result>\n</task-notification>';
+  const timeline = [
+    { kind: "user", text: note },
+    { kind: "thinking", text: "**Planning the fix**\n\nRead `list.mbt` first." },
+    { kind: "tool_call", tool: "Read", text: '{"file_path":"/a.ts"}', callId: "a" },
+    { kind: "tool_result", callId: "a", ok: true, text: "x" },
+    { kind: "assistant", text: "**Done.** The [list](https://a.b/c) is fixed.\n\n- one" },
+  ];
+  const items = presentHistory({ loaded: true, timeline }, cx([], [], [])).items;
+  assert.deepEqual(items.map((i: J) => i.body.kind), ["received", "group", "text"]);
+  // A sub-agent's answer, a thought (read as Markdown, drawn so), the agent's own words: each its line closed.
+  assert.equal(items[0].body.content.tasks[0].line, "Found");
+  const thought = items[1].body.content.rows[0].content;
+  assert.deepEqual([thought.first, thought.md], ["Planning the fix", markdown(thought.text)]);
+  assert.equal(items[2].body.content.line, "Done. The list is fixed.");
 });
 
 test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {

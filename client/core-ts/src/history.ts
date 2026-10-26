@@ -5,7 +5,7 @@ import { args, doing, epochMs, kindOf, type Known, tasksOf, told, toolName } fro
 import * as format from "./format.ts";
 import * as brand from "./brand.ts";
 import { t } from "./i18n.ts";
-import { markdown, type MdStore } from "./markdown.ts";
+import { lineOf, markdown, type MdStore } from "./markdown.ts";
 import * as present from "./present.ts";
 import { money } from "./views/usage.ts";
 
@@ -356,13 +356,13 @@ export function presentHistory(live: J, cx: Context): J {
         v = {
           kind: "received",
           note: note !== "" ? note : null,
-          tasks: tasks.map((task) => ({
+          tasks: tasks.map((task) => answered({
             text: taskText(task),
             agent: task.agent,
             failed: task.status === "failed" || task.status === "killed",
             result: task.result,
             md: task.result !== null ? markdown(task.result, cx.md) : null,
-          })).concat(events.map((n) => ({
+          })).concat(events.map((n) => answered({
             text: n.line,
             agent: n.chat,
             failed: n.failed,
@@ -390,9 +390,12 @@ export function presentHistory(live: J, cx: Context): J {
         };
         break;
       }
-      case "text":
-        v = { kind: "text", text: s(timeline[item.i], "text"), md: markdown(s(timeline[item.i], "text"), cx.md), subagent: flag(timeline[item.i], "subagent") };
+      case "text": {
+        const said = s(timeline[item.i], "text");
+        const md = markdown(said, cx.md);
+        v = { kind: "text", text: said, md, line: lineOf(md, said), subagent: flag(timeline[item.i], "subagent") };
         break;
+      }
       case "post": {
         const a = args(s(timeline[steps[item.step].call], "text")) ?? {};
         const text = (k: string): string | null => (typeof a[k] === "string" ? a[k] : null);
@@ -462,7 +465,7 @@ export function presentHistory(live: J, cx: Context): J {
         }
         break;
       case "group":
-        v = group(timeline, steps, item.rows, base, known);
+        v = group(timeline, steps, item.rows, base, known, cx.md);
         break;
     }
     const kind = v.kind ?? null;
@@ -576,9 +579,14 @@ function endsOf(kind: string | null): "done" | "human" | "waiting" | null {
   return null;
 }
 
+/// Work the agent started, as the history shows it: with the line its answer shows closed (lineOf its Markdown).
+function answered(task: J): J {
+  return { ...task, line: typeof task.result === "string" && Array.isArray(task.md) ? lineOf(task.md, task.result) : null };
+}
+
 /// A group of the history; `base`: the transcript entry its timeline starts at (what a step's or thought's `entries` count
 /// from: what `history.detail` reads whole, of one in brief).
-function group(timeline: J[], steps: Step[], rows: Row[], base: number, known: Known): J {
+function group(timeline: J[], steps: Step[], rows: Row[], base: number, known: Known, store?: MdStore): J {
   const members = rows.flatMap((r) => ("step" in r ? [r.step] : []));
   const thinking = rows.flatMap((r) => ("thought" in r ? [r.thought] : []));
   const text = (i: number): string => (typeof timeline[i]?.text === "string" ? timeline[i].text : "");
@@ -603,11 +611,15 @@ function group(timeline: J[], steps: Step[], rows: Row[], base: number, known: K
   if (chars.length > 0) title = chars[0].toUpperCase() + chars.slice(1).join("");
   const failed = members.filter((m) => failedOf(steps[m])).length;
   const pending = members.filter((m) => steps[m].result === null).length;
-  const firstLine = (s: string) => s.split("\n").find((l) => l.trim() !== "") ?? "";
+  // a thought's words, read as Markdown, and their first line without its marks
+  const thought = (i: number) => {
+    const md = markdown(text(i), store);
+    return { md, first: lineOf(md, text(i)) };
+  };
   let summary: string;
   const lastMember = members[members.length - 1];
   if (lastMember === undefined) {
-    summary = t("core-logic.history.thinking", { text: thinking.length > 0 ? Array.from(firstLine(text(thinking[0]))).slice(0, 80).join("") : "" });
+    summary = t("core-logic.history.thinking", { text: thinking.length > 0 ? Array.from(thought(thinking[0]).first).slice(0, 80).join("") : "" });
   } else {
     const call = steps[lastMember].call;
     // Said as the chat's activity says the call while it runs (activity.ts doing).
@@ -642,7 +654,7 @@ function group(timeline: J[], steps: Step[], rows: Row[], base: number, known: K
     failures: failed,
     pending,
     rows: rows.map((r) => ("thought" in r
-      ? { kind: "thought", content: { text: text(r.thought), first: firstLine(text(r.thought)), entries: [base + r.thought], brief: timeline[r.thought]?.brief === true } }
+      ? { kind: "thought", content: { text: text(r.thought), ...thought(r.thought), entries: [base + r.thought], brief: timeline[r.thought]?.brief === true } }
       : { kind: "step", content: step(r.step) })),
   };
 }

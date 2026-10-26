@@ -302,7 +302,7 @@ const HistoryItemView = memo(function HistoryItemView({ item }: { item: HistoryI
       return (
         <Ev icon={<Said {...ICON} size={14} />}>
           <OneLine lead={<span className={css.hTag}>{t(body.content.subagent ? "web-main.history.subagent" : "web-main.history.notSent")}</span>}
-            line={firstLine(body.content.text)}>
+            line={body.content.line}>
             <div className={`${conversationCss.markdown} ${css.hNote}`}><MdView md={body.content.md as Md} source={body.content.text} /></div>
           </OneLine>
         </Ev>
@@ -449,7 +449,7 @@ function Task({ task }: { task: HistoryTask }) {
   const Icon = task.agent ? Agent : Command;
   const [open, setOpen] = useState(false);
   useKeepRow(open);
-  const answer = task.md != null && task.result != null ? firstLine(task.result) : null;
+  const answer = task.md != null && task.result != null ? (task.line ?? "") : null;
   return (
     <Ev icon={<Icon {...ICON} size={14} />} tone={task.failed ? "red" : undefined}>
       {answer === null
@@ -482,10 +482,10 @@ function Group({ group }: { group: HistoryGroup }) {
           {rows.map((row, i) => row.kind === "thought" ? (calls ? (
             <Opened key={i} className={css.hStep} brief={row.content.brief} entries={row.content.entries}
               summary={<><span className={css.hStepName}>{t("web-main.history.thinking")}</span><span className={css.hStepHint}>{row.content.first}</span></>}>
-              <div className={`${css.hStepBody} ${shellCss.muted}`}>{row.content.text}</div>
+              <div className={`${css.hThoughtBody} ${conversationCss.markdown} ${css.hNote}`}><MdView md={row.content.md as Md} source={row.content.text} /></div>
             </Opened>
           ) : (
-            <Whole key={i} brief={row.content.brief} entries={row.content.entries}><div className={css.hThinking}>{row.content.text}</div></Whole>
+            <Whole key={i} brief={row.content.brief} entries={row.content.entries}><div className={`${css.hThinking} ${conversationCss.markdown} ${css.hNote}`}><MdView md={row.content.md as Md} source={row.content.text} /></div></Whole>
           )) : (
             <Step key={i} step={row.content} />
           ))}

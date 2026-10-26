@@ -114,9 +114,9 @@ export const hStepMeta = style({
 export const hStepBody = style({
   padding: "4px 6px 8px", fontSize: vars.textMeta, whiteSpace: "pre-wrap", overflowWrap: "anywhere",
 });
-export const hThinking = style({
-  padding: "2px 0 6px 6px", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "pre-wrap", overflowWrap: "anywhere",
-});
+/** A thought, whole: its Markdown small and grey (with hNote), under its head (`hThoughtBody`, as a step's body) or alone. */
+export const hThinking = style({ padding: "2px 0 6px 6px", overflowWrap: "anywhere" });
+export const hThoughtBody = style({ padding: "4px 6px 8px", overflowWrap: "anywhere" });
 /** Open under the head, on the same ground: one block, ruled off from the steps. */
 export const historyDetails = style({ borderBottom: `1px solid ${vars.line}` });
 export const flip = style({
