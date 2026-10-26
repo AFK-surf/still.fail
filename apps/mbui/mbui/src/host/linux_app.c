@@ -128,6 +128,7 @@ static void mb_post_wake(void) { mb_app_wake(); }
 double mb_app_scale(void) { return scale; }
 
 static void device_tell(mb_outside_fn tell);  // linux_device.h: the clipboard's reads done
+static void pick_tell(mb_outside_fn tell);    // the files picked
 void mb_host_set_cursor(int32_t kind);
 
 static gboolean on_render(GtkGLArea *a, GdkGLContext *c, gpointer data) {
@@ -138,6 +139,7 @@ static gboolean on_render(GtkGLArea *a, GdkGLContext *c, gpointer data) {
   mb_streams_upload();
   mb_images_tell(outside_cb);
   device_tell(outside_cb);
+  pick_tell(outside_cb);
   int w = gtk_widget_get_width(GTK_WIDGET(a)), h = gtk_widget_get_height(GTK_WIDGET(a));
   if (w <= 0 || h <= 0 || fb_pw <= 0 || fb_ph <= 0) return TRUE;
   scale = fb_pw / (double)w;
@@ -618,7 +620,12 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   script = getenv("MBUI_SCRIPT");
   shot_dir = getenv("MBUI_SHOT_DIR");
   setlocale(LC_ALL, "");
+  // its id (MBUI_APP_ID, as its desktop entry runs it: still.fail's linux/install.sh), what the desktop knows its window
+  // by (Wayland's app id, X11's class) and its icon's name
+  const char *id = getenv("MBUI_APP_ID");
+  if (id && *id) g_set_prgname(id);
   gtk_init();
+  if (id && *id) gtk_window_set_default_icon_name(id);
   GtkSettings *gs = gtk_settings_get_default();
   if (gs) {
     on_font_name(G_OBJECT(gs), NULL, NULL);
@@ -1045,32 +1052,106 @@ double mb_host_mem_bytes(void) {
   return n == 2 ? (double)resident * sysconf(_SC_PAGESIZE) : 0;
 }
 
-// Files picked (pick.mbt): not on this host yet.
-int32_t mb_host_pick_start(int32_t kind) {
-  (void)kind;
-  return 0;
+// Files picked (pick.mbt): GTK's file dialog (the desktop portal's chooser where there is one), more than one; pictures
+// for the photo picker, anything for the file picker, no camera. Each read whole as the dialog answers (no file held
+// by the host yet), told as the next frame begins (pick_tell).
+typedef struct {
+  int state;  // 0 asking, 1 answered, -1 called off or failed
+  int told;
+  GPtrArray *names;  // char *
+  GPtrArray *bytes;  // GBytes *
+} pick;
+static pick *picks;
+static int npicks = 1;  // ids from 1
+
+static pick *pick_of(int32_t id) { return id > 0 && id < npicks ? &picks[id] : NULL; }
+
+static void pick_done(GObject *src, GAsyncResult *res, gpointer data) {
+  pick *k = pick_of(GPOINTER_TO_INT(data));
+  GListModel *files = gtk_file_dialog_open_multiple_finish(GTK_FILE_DIALOG(src), res, NULL);
+  if (k && k->state == 0) {
+    k->state = files ? 1 : -1;
+    for (guint i = 0; files && i < g_list_model_get_n_items(files); i++) {
+      GFile *f = g_list_model_get_item(files, i);
+      char *data_ = NULL;
+      gsize n = 0;
+      if (g_file_load_contents(f, NULL, &data_, &n, NULL, NULL)) {
+        g_ptr_array_add(k->names, g_file_get_basename(f));
+        g_ptr_array_add(k->bytes, g_bytes_new_take(data_, n));
+      }
+      g_object_unref(f);
+    }
+  }
+  if (files) g_object_unref(files);
+  g_object_unref(src);
+  schedule();
 }
+
+int32_t mb_host_pick_start(int32_t kind) {
+  int what = kind & 15;
+  if (!win || (what != 1 && what != 2)) return 0;
+  picks = realloc(picks, sizeof(pick) * (size_t)(npicks + 1));
+  int id = npicks++;
+  picks[id] = (pick){0, 0, g_ptr_array_new_with_free_func(g_free),
+                     g_ptr_array_new_with_free_func((GDestroyNotify)g_bytes_unref)};
+  GtkFileDialog *d = gtk_file_dialog_new();
+  if (what == 1) {
+    GtkFileFilter *f = gtk_file_filter_new();
+    gtk_file_filter_add_mime_type(f, "image/*");
+    GListStore *filters = g_list_store_new(GTK_TYPE_FILE_FILTER);
+    g_list_store_append(filters, f);
+    gtk_file_dialog_set_filters(d, G_LIST_MODEL(filters));
+    gtk_file_dialog_set_default_filter(d, f);
+    g_object_unref(filters);
+    g_object_unref(f);
+  }
+  gtk_file_dialog_open_multiple(d, GTK_WINDOW(win), NULL, pick_done, GINT_TO_POINTER(id));
+  return id;
+}
+
+// The picks answered since the last frame, told before it is drawn.
+static void pick_tell(mb_outside_fn tell) {
+  for (int i = 1; i < npicks; i++)
+    if (picks[i].state != 0 && !picks[i].told) {
+      picks[i].told = 1;
+      if (tell) tell(MB_OUTSIDE_PICK, i, picks[i].state);
+    }
+}
+
 int32_t mb_host_pick_state(int32_t id) {
-  (void)id;
-  return -1;
+  pick *k = pick_of(id);
+  return k ? k->state : -1;
 }
 int32_t mb_host_pick_count(int32_t id) {
-  (void)id;
-  return 0;
+  pick *k = pick_of(id);
+  return k && k->state == 1 ? (int32_t)k->names->len : 0;
 }
 moonbit_string_t mb_host_pick_name(int32_t id, int32_t i) {
-  (void)id, (void)i;
-  return moonbit_make_string_raw(0);
+  pick *k = pick_of(id);
+  return k && i >= 0 && i < mb_host_pick_count(id) ? mstr(g_ptr_array_index(k->names, i)) : moonbit_make_string_raw(0);
 }
 moonbit_bytes_t mb_host_pick_bytes(int32_t id, int32_t i) {
-  (void)id, (void)i;
-  return moonbit_make_bytes(0, 0);
+  pick *k = pick_of(id);
+  if (!k || i < 0 || i >= mb_host_pick_count(id)) return moonbit_make_bytes(0, 0);
+  gsize n = 0;
+  const void *p = g_bytes_get_data(g_ptr_array_index(k->bytes, i), &n);
+  moonbit_bytes_t b = moonbit_make_bytes((int32_t)n, 0);
+  if (n) memcpy(b, p, n);
+  return b;
 }
+// (every one read whole: none held)
 moonbit_string_t mb_host_pick_info(int32_t id, int32_t i) {
   (void)id, (void)i;
   return moonbit_make_string_raw(0);
 }
-void mb_host_pick_end(int32_t id) { (void)id; }
+void mb_host_pick_end(int32_t id) {
+  pick *k = pick_of(id);
+  if (!k) return;
+  g_ptr_array_set_size(k->names, 0);
+  g_ptr_array_set_size(k->bytes, 0);
+  k->state = -1;
+  k->told = 1;
+}
 
 // The gallery (gallery.mbt): none on this host; no photo of it picked.
 int32_t mb_host_gallery_access(void) { return -1; }

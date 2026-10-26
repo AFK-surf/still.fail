@@ -1,11 +1,12 @@
-# The prebuilt native parts (scripts/native.ts `msvc`: the mbui app's shell and engine, Android's and Windows'), which
+# The prebuilt native parts (scripts/native.ts `msvc`: the mbui app's shell and engine, Android's, Windows' and Linux'), which
 # CI's other jobs only fetch, built when asked: for a branch whose change makes a new one (apps/mbui/engine,
 # client/shell, …), the jobs that fetch it fail saying to run this:
 #
 #     gh workflow run prebuild.yml -R AFK-surf/still.fail --ref <branch>
 #
 # Each that neither the store nor the release has is built from the branch's checkout (Windows' on GitHub's Windows,
-# Android's on Linux with the NDK) and put in the release native-artifacts, which they fetch from (main's
+# Android's on Linux with the NDK, Linux's on GitHub's Ubuntu of their own architecture) and put in the release
+# native-artifacts, which they fetch from (main's
 # natives-store copies the Windows ones into the store); then the failed jobs of the commit's pipeline and mbui runs
 # run again. Never on its own (2026-10-23, as asked: what needs building is triggered by hand). A Mac still can:
 # node scripts/native.ts prebuild.
@@ -27,14 +28,18 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with: { node-version-file: .node-version, package-manager-cache: false }
-      # One job a Windows part (each its own build, minutes); Android's in one, the shell first (the engine links it).
+      # One job a Windows part (each its own build, minutes); Android's in one, the shell first (the engine links it);
+      # one job a Linux part too (the engine leaves the shell's symbols to the loader: not linked to it), on its own
+      # architecture's Ubuntu (built there: Hermes and its hermesc for that machine).
       - id: what
         run: |
           missing=$(node scripts/native.ts missing --prebuilt)
           echo "${missing:-nothing missing}"
           builds=$(printf '%s\n' $missing | jq -R . | jq -sc '
             (map(select(endswith(":win32-x64"))) | map({name: ., os: "windows-2025", parts: .}))
-            + (map(select(endswith(":android-arm64"))) | if length > 0 then [{name: "android-arm64", os: "ubuntu-24.04", parts: join(" ")}] else [] end)')
+            + (map(select(endswith(":android-arm64"))) | if length > 0 then [{name: "android-arm64", os: "ubuntu-24.04", parts: join(" ")}] else [] end)
+            + (map(select(endswith(":linux-x64"))) | map({name: ., os: "ubuntu-24.04", parts: .}))
+            + (map(select(endswith(":linux-arm64"))) | map({name: ., os: "ubuntu-24.04-arm", parts: .}))')
           echo "builds=$builds" >> "$GITHUB_OUTPUT"
 
   build:
@@ -66,17 +71,21 @@ jobs:
       - if: runner.os == 'Windows'
         run: echo "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$(cygpath -m "$(dirname "$(which cl)")/link.exe")" >> "$GITHUB_ENV"
       # The NDK from the Actions cache the setup action keeps it in (a gigabyte from Google's servers otherwise)
-      - if: runner.os == 'Linux'
+      - if: matrix.name == 'android-arm64'
         id: ndk
         uses: actions/cache/restore@v4
         with:
           path: /usr/local/lib/android/sdk/ndk/28.2.13676358
           key: android-ndk-28.2.13676358-${{ runner.os }}-${{ runner.arch }}
-      - if: runner.os == 'Linux'
+      - if: matrix.name == 'android-arm64'
         run: |
           sdkmanager=$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
           if [ "${{ steps.ndk.outputs.cache-hit }}" != true ]; then "$sdkmanager" 'ndk;28.2.13676358' > /dev/null; fi
           ls "$ANDROID_HOME/cmake" 2>/dev/null | grep -q . || "$sdkmanager" 'cmake;3.31.6' > /dev/null
+      # Linux's engine: Hermes built with clang, CMake and Ninja, ICU's shared libraries beside it (scripts/native.ts
+      # HERMES_LINUX_CMAKE)
+      - if: contains(matrix.name, ':linux-')
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends clang cmake ninja-build libicu-dev
       - name: Build ${{ matrix.parts }}, put it in the release
         env:
           GH_TOKEN: ${{ github.token }}

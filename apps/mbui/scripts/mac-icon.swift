@@ -1,20 +1,22 @@
-// still.fail mbui's macOS, iOS and Windows icons (the Android app's launcher icon, android/app/src/main/res: still.fail's
-// face under a crescent, on violet): drawn into the shape of a macOS app icon and made an .icns, the iPhone's square
-// (the system rounds it) as the 1024-pixel PNG of an asset catalog's app icon (scripts/ios.sh), or Windows' .ico.
+// still.fail mbui's macOS, iOS, Windows and Linux icons (the Android app's launcher icon, android/app/src/main/res:
+// still.fail's face under a crescent, on violet): drawn into the shape of a macOS app icon and made an .icns, the
+// iPhone's square (the system rounds it) as the 1024-pixel PNG of an asset catalog's app icon (scripts/ios.sh),
+// Windows' .ico, or Linux's 512-pixel PNG (its desktop entry's icon, in Windows' shape).
 //   swift apps/mbui/scripts/mac-icon.swift OUT.icns
 //   swift apps/mbui/scripts/mac-icon.swift --ios OUT.png
 //   swift apps/mbui/scripts/mac-icon.swift --ico OUT.ico
+//   swift apps/mbui/scripts/mac-icon.swift --png OUT.png
 // The Android drawable's 108-unit viewport, of which a launcher shows the middle 72 (18 to 90), is laid on the icon's
 // 824-point rounded square (100 to 924 of 1024, Apple's grid), on the whole of the iPhone's, or on Windows' square
 // (32 to 992: its icons fill their cell, a sliver of it left for the rounded corners' edge to be seen).
-// Windows' is not made where it is built (no AppKit there): its .ico is kept in the repository, named by this
-// script's hash (apps/mbui/windows/AppIcon-<hash>.ico, which scripts/win.sh asks for): this script changed, it is
-// made again here (on a Mac) and the one before removed.
+// Windows' and Linux's are not made where they are built (no AppKit there): kept in the repository, named by this
+// script's hash (apps/mbui/windows/AppIcon-<hash>.ico, which scripts/win.sh asks for; apps/mbui/linux/AppIcon-<hash>.png,
+// scripts/beta.sh linux's): this script changed, they are made again here (on a Mac) and the ones before removed.
 import AppKit
 import Foundation
 
 let mode = CommandLine.arguments.count > 2 ? CommandLine.arguments[1] : ""
-let ios = mode == "--ios", ico = mode == "--ico"
+let ios = mode == "--ios", ico = mode == "--ico" || mode == "--png", png = mode == "--png"
 let out = mode != "" ? CommandLine.arguments[2] : CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "AppIcon.icns"
 // where the square is on the 1024 grid, and its corners' radius
 let (edge, side, radius): (CGFloat, CGFloat, CGFloat) = ios ? (0, 1024, 0) : ico ? (32, 960, 192) : (100, 824, 185)
@@ -66,6 +68,10 @@ func render(_ size: Int) -> Data {
 
 if ios {
   try render(1024).write(to: URL(fileURLWithPath: out))
+  exit(0)
+}
+if png {
+  try render(512).write(to: URL(fileURLWithPath: out))
   exit(0)
 }
 // Windows': each size the shell asks for at 100-200 % scaling a PNG of its own (an .ico holds PNGs since Vista), the

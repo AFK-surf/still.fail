@@ -18,11 +18,14 @@
 #   apps/mbui/scripts/beta.sh win        the Windows app (scripts/win.sh's build, its engine, shell and core.hbc beside it),
 #                                        zipped into $RELEASE_DIR as win/stillfail-mbui-<n>-x64-win.zip and
 #                                        win/mbui/latest.json
-#   apps/mbui/scripts/beta.sh changed android|mac|win
+#   apps/mbui/scripts/beta.sh linux      the Linux app (scripts/linux.sh's build, its engine, shell and core.hbc beside it),
+#                                        with its icon and linux/install.sh, in still.fail-mbui/, into $RELEASE_DIR as
+#                                        linux/stillfail-mbui-<n>-<x64|arm64>-linux.tar.gz and linux/mbui/latest.json
+#   apps/mbui/scripts/beta.sh changed android|mac|win|linux
 #                                        yes when what the app is made of (APP_SRC: its code, not its tests, docs,
 #                                        scripts or CI) changed since the build that feed names now (or it has none),
 #                                        else no: main's push makes and puts a package only then
-#   apps/mbui/scripts/beta.sh publish android|mac|win
+#   apps/mbui/scripts/beta.sh publish android|mac|win|linux
 #                                        what `build` or `mac` made put (scripts/release-put.sh), fetched back from where
 #                                        it is served and checked (size, SHA-256), then its feed: https://app.still.fail/
 #                                        releases/latest/android-mbui (mac-mbui) is the newest from then on
@@ -257,6 +260,34 @@ win() {
   summary "- Windows app 0.1.$n: $(wc -c < "$zip" | tr -d ' ') bytes, zipped in $(secs $t0) s"
 }
 
+# The Linux app as linux.sh built and put it (the program, the engine's and the shell's libraries, core.hbc), with its
+# icon (linux/AppIcon-<mac-icon.swift's hash>.png: drawn on a Mac) and the script that installs it for the person who
+# unpacks it (linux/install.sh), in one folder, still.fail-mbui/, tarred
+linux() {
+  local t0=$(now) n dir arch name tgz stage icon
+  n=$(build_number)
+  local MBUI_DIR
+  MBUI_DIR=$(sh "$A/scripts/mbui.sh")
+  . "$MBUI_DIR/scripts/env.sh"
+  dir=$MBUI_DIR/out/linux/app/$(cd "$MBUI_DIR/out/linux/app" && pkg_build stillfail native release)
+  [ -f "$dir/stillfail.exe" ] || { echo "beta: no stillfail.exe in $dir (linux.sh build, put)" >&2; exit 1; }
+  icon=$A/linux/AppIcon-$(sha256sum "$A/scripts/mac-icon.swift" | cut -c1-12).png
+  [ -f "$icon" ] || { echo "beta: no $icon (scripts/mac-icon.swift changed: swift scripts/mac-icon.swift --png $icon, on a Mac)" >&2; exit 1; }
+  arch=$(uname -m | sed 's/x86_64/x64/; s/aarch64/arm64/')
+  stage=$C/linux-stage/still.fail-mbui
+  rm -rf "$C/linux-stage" && mkdir -p "$stage"
+  cp "$dir/stillfail.exe" "$stage/stillfail"
+  cp "$dir"/lib*.so* "$dir/core.hbc" "$A/linux/install.sh" "$stage/"
+  cp "$icon" "$stage/icon.png"
+  echo "0.1.$n" > "$stage/VERSION"
+  rm -rf "$RELEASE_DIR/linux" && mkdir -p "$RELEASE_DIR/linux/linux"
+  name=linux/stillfail-mbui-$n-$arch-linux.tar.gz
+  tgz=$RELEASE_DIR/linux/$name
+  tar -C "$C/linux-stage" -czf "$tgz" still.fail-mbui
+  feed linux "$n" "$name" "$tgz"
+  summary "- Linux app 0.1.$n ($arch): $(wc -c < "$tgz" | tr -d ' ') bytes, tarred in $(secs $t0) s"
+}
+
 # fetched back and the same bytes as made: from R2 itself through Cloudflare's API when there is a token (R2 reads what
 # was written, at once: no waiting for it to show), else from the public URL; a request the line from mini1 drops
 # tried again by curl itself (--retry: its network errors, not a wait for the object)
@@ -296,6 +327,7 @@ case "${1:-}" in
   build) build ;;
   mac) mac ;;
   win) win ;;
+  linux) linux ;;
   changed) changed "${2:-android}" ;;
   publish) publish "${2:-android}" ;;
   *) sed -n '2,20p' "$0"; exit 1 ;;
