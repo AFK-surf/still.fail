@@ -357,7 +357,9 @@ pub fn side_beside(c : @ui.Ctx, key : String, open : Bool, whole : Double, page 
   let left = c.width - col
   c.box(style=panel_row, fn() {
     c.box(style=@ui.style(w=Fixed(left), h=Full), fn() { c.sized(left, c.height, page) }) |> ignore
-    c.box(style=@ui.style(w=Fixed(col), h=Full, clip=true), fn() {
+    // (cut to its column only while it slides: at rest what it puts past its left edge, its edge's handle half over
+    // the page, shows whole, as the web's sidePanel cuts nothing)
+    c.box(style=@ui.style(w=Fixed(col), h=Full, clip=col < whole), fn() {
       c.box(style=@ui.style(w=Fixed(whole), h=Full), fn() { c.sized(whole, c.height, panel) }) |> ignore
     })
     |> ignore
