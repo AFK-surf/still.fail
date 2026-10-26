@@ -120,7 +120,7 @@ function WorkspaceList({ scope }: { scope: string }) {
   const groups = profileGroups(view.items);
   return (
     <>
-      {wait.empty && <ListCard><ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.none")}</span></ListRow></ListCard>}
+      {wait.empty && <ListCard><ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-pages.settings.profiles.none")}</span></ListRow></ListCard>}
       {/* What Profile is, said while there is none (the page says it nowhere else). */}
       {wait.empty && <PlaceNote>{t("web-mobile.profiles.note")}</PlaceNote>}
       {/* A section each kind of account (the core's order). */}

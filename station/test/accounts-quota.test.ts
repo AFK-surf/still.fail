@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { claudeOAuthToken, RefreshLock } from "../src/accounts/oauth.ts";
 import { readClaudeCredentials } from "../src/agents/machine-logins.ts";
 import { URLS } from "../src/accounts/profiles.ts";
-import { at, checkQuota, claudeUsage, claudeWithRefresh, codexQuota, codexUsage, codexWindows, windowLabel } from "../src/accounts/quota.ts";
+import { at, checkQuota, claudeUsage, claudeWithRefresh, codexQuota, codexUsage, codexWindows, machineUsage, windowLabel } from "../src/accounts/quota.ts";
 import { hubConfig } from "../src/sessions/config.ts";
 import { machine, provider, script, temp, until } from "./accounts-fakes.ts";
 
@@ -48,6 +48,16 @@ describe("allowances and renewing", { concurrency: true }, () => {
     // No file (the keychain keeps it): nothing to read.
     assert.equal(await codexUsage(join(dir, "none", "auth.json"), { ...URLS, chatgpt: p.base }), null);
     await p.close();
+  });
+
+  test("a provider the station cannot reach is said so, not as Node says it", async () => {
+    const dir = temp("codex-unreached");
+    writeFileSync(join(dir, "auth.json"), JSON.stringify({ tokens: { access_token: "at" } }));
+    // (a port nothing listens on any more: the connection is refused)
+    const p = await provider(() => ({ status: 200, body: {} }));
+    await p.close();
+    const quota = await machineUsage("codex", { CODEX_HOME: dir }, { ...URLS, chatgpt: p.base }, "zh");
+    assert.deepEqual([quota!.state, quota!.detail], ["unavailable", "无法连接服务商，请检查此 station 的网络或代理"]);
   });
 
   test("codex credits and resets are independent of windows and preserve unknowns", () => {

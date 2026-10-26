@@ -194,7 +194,19 @@ export function codexQuota(result: Json, lang: Lang = stationLang()): ProfileQuo
 /// Reaches a profile's codex app-server for its account/rateLimits/read.
 export type CodexRateLimits = (profile: Profile) => Promise<Json>;
 
-function failed(error: unknown): ProfileQuota {
+/// A socket's errors where the provider was not reached (through a proxy, https.request says them as they are).
+const UNREACHED = new Set(["ECONNREFUSED", "ECONNRESET", "ECONNABORTED", "ENOTFOUND", "EAI_AGAIN", "ETIMEDOUT", "EHOSTUNREACH", "ENETUNREACH", "EPIPE"]);
+
+/// Whether a request to the provider got no answer at all: no way there (fetch's "fetch failed", a socket's error)
+/// or none in time.
+function unanswered(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return error.name === "TimeoutError" || (error instanceof TypeError && error.message === "fetch failed") || UNREACHED.has(String((error as NodeJS.ErrnoException).code));
+}
+
+function failed(error: unknown, lang: Lang): ProfileQuota {
+  // One that never reached the provider said in words, not as Node says it.
+  if (unanswered(error)) return quota("unavailable", [], tr(lang, "station.quota.unreachable"));
   const detail = error instanceof Error ? error.message : String(error);
   // Its login over: its profile is checked again, to say so (Accounts).
   if (error instanceof RenewRefused) return { ...quota("unavailable", [], detail), signedOut: true };
@@ -222,7 +234,7 @@ export async function checkQuota(profile: Profile, env: Env, codexRateLimits: Co
     if (!codexRateLimits) throw new Error("no codex app-server to ask");
     return codexQuota(await codexRateLimits(profile), lang);
   } catch (e) {
-    return failed(e);
+    return failed(e, lang);
   }
 }
 
@@ -384,6 +396,6 @@ export async function machineUsage(runtime: "claude" | "codex", env: Env, urls: 
   try {
     return runtime === "codex" ? await codexUsage(codexAuthFile(env), urls, lang) : await claudeWithRefresh(env, null, urls, lang);
   } catch (e) {
-    return failed(e);
+    return failed(e, lang);
   }
 }
