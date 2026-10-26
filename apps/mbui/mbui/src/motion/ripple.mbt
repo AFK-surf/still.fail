@@ -7,6 +7,10 @@
 // radius is 2.3 times the box's half diagonal and 10 more (Compose's bounded ripple, RippleShader.setRadius) times the
 // progress, its edge soft from half that radius to half again (softCircle, blur 1: drawn here as the disc blurred, its
 // middle where the edge's is). Its sparkles (white specks in the growing ring, on the clock's noise) are not drawn.
+// While a finger is on it, the box it ripples sinks a little (drawn smaller about its middle, by a few points however
+// large it is: press_sink), and springs back as it lifts (docs/motion.md kind 7, a control answering: pressed): a box
+// that stands on a ground of its own (a button, a card: Ctx::own_ground), not a row lying in a list or a card, whose
+// press is its ground lit (a row sunk in its card is drawn in from the card's edges, as if pressed out of it).
 
 ///|
 /// One press's ripple: where in its box the finger went down, how far it has gone (RippleShader's progress), when it
@@ -58,6 +62,19 @@ let ripple_soft : Double = 0.27
 let ripple_drop : Double = 0.0
 
 ///|
+/// How far a box sinks under a finger: by so many points across its longer side, no more than so much of it (a
+/// small button's).
+pub let press_sink : Double = 4.0
+
+///|
+let press_sink_most : Double = 0.04
+
+///|
+/// The way down and back up: a spring with a little give.
+// kept across runs: a value (no field of it changes)
+let sink_spring : Spec = motion_spring(0.25, bounce=0.35)
+
+///|
 /// The share of `p` between `a` and `b` (RippleShader subProgress).
 fn sub_progress(a : Double, b : Double, p : Double) -> Double {
   (clamp(a, b, p) - a) / (b - a)
@@ -82,6 +99,8 @@ pub fn ripple(
 ) -> Unit {
   let top = out_top.unwrap_or(out_y)
   let bottom = out_bottom.unwrap_or(out_y)
+  // (the box it is called in: what sinks)
+  let holder = c.building()
   let list = match ripples.get(id) {
     Some(l) => l
     None => []
@@ -117,6 +136,24 @@ pub fn ripple(
     if r.lifted && !r.leaving && c.now() >= out_at {
       r.leaving = true
       r.progress.animate(1.0, tween(ripple_exit_ms, ease=Linear), start_at=out_at)
+    }
+  }
+  // a finger on it (its ripple not let go): sunk a little, back as it lifts
+  let on = list.iter().any(fn(r) { !r.lifted })
+  // (none asked of what no finger has been on: nothing to keep for every box that ripples)
+  let sink_key = "\u{2}sink/\{id}"
+  let sunk = if c.own_ground(holder) && (on || anims.contains(c.id(sink_key))) {
+    animate(c, sink_key, if on { 1.0 } else { 0.0 }, spec=sink_spring)
+  } else {
+    0.0
+  }
+  if sunk != 0.0 && c.own_ground(holder) {
+    match c.laid_size(id) {
+      Some((bw, bh)) if bw > 0.0 && bh > 0.0 => {
+        let most = dmin(press_sink_most, press_sink / dmax(bw, bh))
+        c.look(holder, @ui.look(scale=1.0 - most * sunk))
+      }
+      _ => ()
     }
   }
   if list.length() == 0 {

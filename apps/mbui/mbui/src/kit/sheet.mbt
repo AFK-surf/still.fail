@@ -155,17 +155,18 @@ pub fn sheet(
     Some(d) if open => {
       let (_, dy) = d.take_move()
       if dy != 0.0 {
+        // (`held`: where the finger has it, past its top too; drawn there, past its top given way to: stretched)
         let from = if s.held >= 0.0 { s.held } else { s.h.value_at(c) }
         let top = if draggable { total * detents.fold(init=0.0, fn(a, b) { dmax(a, b) }) } else { target }
         // (one with detents no shorter than its least drag keeps; one without follows the finger down all the way,
         // however short it is: else one shorter than that and 80 could never be dragged closed)
         let least = if draggable { sheet_least_h } else { 0.0 }
-        let to = dclamp(from - dy, least, top)
+        let to = dmax(from - dy, least)
         s.held = to
-        s.h.put(to)
+        s.h.put(stretched(to, top, total - top))
       }
       if d.take_end() {
-        let at = if s.held >= 0.0 { s.held } else { s.h.value_at(c) }
+        let at = s.h.value_at(c)
         s.held = -1.0
         // up is more, per second
         let v = -d.vy * 1000.0
@@ -249,6 +250,22 @@ pub fn sheet(
   s.was_open = now
   { open: now, shown: true, dragged }
 }
+
+///|
+/// How tall a sheet is drawn `h` high under a finger, its top `top` and `room` above that: as high as the finger has it
+/// up to its top, past it giving way more the further it is drawn (iOS's rubber band: (1 − 1 / (x·0.55 / d + 1))·d),
+/// never past the room there is.
+fn stretched(h : Double, top : Double, room : Double) -> Double {
+  if h <= top || room <= 0.0 {
+    return dmin(h, top)
+  }
+  let x = h - top
+  top + (1.0 - 1.0 / (x * sheet_give / room + 1.0)) * room
+}
+
+///|
+/// How much a sheet drawn past its top gives way (UIScrollView's rubber band's constant).
+let sheet_give : Double = 0.55
 
 ///|
 /// Where the top of the sheet up is in the window this frame, as it is laid out (None where none is up): for what

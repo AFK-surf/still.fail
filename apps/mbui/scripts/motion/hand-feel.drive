@@ -1,0 +1,12 @@
+# A finger's controls (mbui's press sink, the switch's and the segmented choice's lens): 关于's switch row held and let
+# go (the row sinking, the switch's knob a lens of liquid glass while held), then held again; MBUI_FIXTURE=settings-about.
+timeout 20000
+until 服务条款
+wait 800
+hold 700 发送使用统计
+wait 1200
+hold 700 发送使用统计
+wait 1200
+tap 更新日志
+wait 1200
+exit

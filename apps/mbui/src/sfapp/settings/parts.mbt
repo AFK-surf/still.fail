@@ -1101,6 +1101,7 @@ pub fn switch(c : @ui.Ctx, key : String, on : Bool) -> Unit {
       t: @kit.switch_knob(c, key, on),
       hovered: false,
       pressed: false,
+      held: 0.0,
       focus_shown: false,
       disabled: false,
       rect: (0.0, 0.0, 44.0, 26.0),

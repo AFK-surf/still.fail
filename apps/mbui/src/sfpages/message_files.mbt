@@ -277,8 +277,14 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   // where it is and what it shows, for the preview to fly from and back into; hidden while the preview is its picture
   note_thumb(c, thumb, b, @sf.message_file_corner, picture=shows, letterbox~)
   c.look(b, @ui.look(alpha=thumb_shows(thumb)))
+  // held by a finger for its menu: lifted over the menu's scrim (@sf.lift_over)
+  @sf.lift_over(c, b, "file/" + thumb, @sf.lift_of(c, "file/" + thumb, false, file_held_open(open)), file_lift_scale)
   c.semantics(b, Button, id=open, label=@sf.t("web-main.file.view", args=[("name", a.name)]))
 }
+
+///|
+/// How much larger a message's picture is lifted all the way, held for its menu.
+let file_lift_scale : Double = 1.04
 
 ///|
 /// An image's box (msgImage): `w` by `h`, rounded as a message's files are, the neutral ground while it waits (none
@@ -357,6 +363,8 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   // where it is and what it shows, for the preview to fly from and back into; hidden while the preview is its picture
   note_thumb(c, thumb, b, @sf.message_file_corner, picture=if still == "!" { "" } else { still }, letterbox~)
   c.look(b, @ui.look(alpha=thumb_shows(thumb)))
+  // held by a finger for its menu: lifted over the menu's scrim (@sf.lift_over)
+  @sf.lift_over(c, b, "file/" + thumb, @sf.lift_of(c, "file/" + thumb, false, file_held_open(open)), file_lift_scale)
   c.semantics(b, Button, id=open, label=@sf.t("web-main.file.play", args=[("name", a.name)]))
 }
 

@@ -350,12 +350,12 @@ test "settings: usage statistics and error reports switched off on this device, 
   t.scroll_to_end()
   t.draw()
   assert_true(t.find("不会包含你的聊天内容") is Some(_))
-  t.tap_text("发送使用统计和错误报告")
+  t.click(Switch, label="发送使用统计和错误报告")
   // off: what Crashes.send then sends is nothing (Crashes.java: !reporting, no batch goes)
   assert_eq(told, [false])
   assert_true(!on.val)
   t.draw()
-  t.tap_text("发送使用统计和错误报告")
+  t.click(Switch, label="发送使用统计和错误报告")
   assert_eq(told, [false, true])
   reporting_host.val = None
 }

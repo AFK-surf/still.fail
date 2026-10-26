@@ -22,7 +22,8 @@ test "85-vault-item" {
     f.type_text("e2e-080726")
     f.tap("ghp_…")
     f.type_text("ghp_madeup_080726_value")
-    f.tap("=允许 agent 申请")
+    // (its switch: the row's words take no press, 2026-10-27)
+    f.tap("switch:允许 agent 申请")
     // the editor taller than a sheet's most now (as it is laid out, the frame after): the sheet that tall, what it
     // holds scrolling in it
     f.until(fn() { @kit.sheet_rest("sf-present") > f.t.time() })

@@ -1,0 +1,15 @@
+# A message's picture held by a finger for its menu (sfpages message_files.mbt, @sf.lift_over): it lifts over the
+# menu's scrim, up before the menu's sheet, and back down with it as the menu goes. MBUI_FIXTURE=home.
+timeout 20000
+until 整理发布清单
+wait 600
+tap 整理发布清单
+wait 1000
+wheel -900
+wait 1800
+until img:compare.png
+hold 1100 img:compare.png
+wait 1600
+back
+wait 1400
+exit

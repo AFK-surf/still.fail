@@ -754,6 +754,23 @@ fn mix(a : Int, b : Int) -> Int {
 }
 
 ///|
+/// Whether box `i` stands on a ground of its own (a button's, a card's: a colour more solid than not, glass, an edge),
+/// not on what holds it (a row in a list or a card, lit only as it is pressed or pointed at).
+pub fn Ctx::own_ground(self : Ctx, i : Int) -> Bool {
+  if i < 0 || i >= self.count {
+    return false
+  }
+  let n = self.nodes[i]
+  (n.bg & 0xFFL) >= 0x80L || n.glass is Some(_) || n.border_w > 0.0
+}
+
+///|
+/// The box whose body is being built now (what a part called in a box's body is in: a press's ripple's box); -1 none.
+pub fn Ctx::building(self : Ctx) -> Int {
+  self.cur
+}
+
+///|
 /// A widget id from a key, unique within the current scope.
 pub fn Ctx::id(self : Ctx, key : String) -> Int {
   mix(self.id_seed, stable_hash(key).to_int())

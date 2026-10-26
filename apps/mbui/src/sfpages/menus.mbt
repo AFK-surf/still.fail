@@ -11,10 +11,13 @@ priv struct MenuDoing {
   mut copy : String
   mut image : String
   mut offered : String
+  /// the file whose menu a finger held opened (its box's id, 0 none), and that menu (the presenters' serial)
+  mut held_for : Int
+  mut held_serial : Int
 }
 
 ///|
-let menu_doing : MenuDoing = { open: "", copy: "", image: "", offered: "" }
+let menu_doing : MenuDoing = { open: "", copy: "", image: "", offered: "", held_for: 0, held_serial: -1 }
 
 ///|
 /// The picture whose menu was last opened ("" none).
@@ -28,6 +31,14 @@ fn menus_reset() -> Unit {
   menu_doing.copy = ""
   menu_doing.image = ""
   menu_doing.offered = ""
+  menu_doing.held_for = 0
+  menu_doing.held_serial = -1
+}
+
+///|
+/// Whether a finger held file `id` (its box's id) for its menu and that menu is up (lifted meanwhile: @sf.lift_over).
+fn file_held_open(id : Int) -> Bool {
+  menu_doing.held_for == id && @sf.presented_drawn_of(menu_doing.held_serial)
 }
 
 ///|
@@ -61,7 +72,8 @@ fn file_menu(
     Some((x, y)) => {
       menu_doing.offered = src
       // held with a finger: the press is the menu's (lifting it opens nothing), felt
-      if @sf.menu_held(c, "file") {
+      let held = @sf.menu_held(c, "file")
+      if held {
         // (the press is the file's menu's, not a passage's pick)
         pk.taken_at = c.press().frame
       }
@@ -76,6 +88,8 @@ fn file_menu(
       }
       if items.length() > 0 {
         @sf.menu(items, from=@sf.at_point(x, y))
+        menu_doing.held_for = if held { id } else { 0 }
+        menu_doing.held_serial = @sf.last_presented()
       }
     }
     _ => ()

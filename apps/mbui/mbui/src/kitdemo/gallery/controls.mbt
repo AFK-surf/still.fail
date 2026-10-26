@@ -40,6 +40,7 @@ fn controls(c : @ui.Ctx) -> Unit {
           t: 0.0,
           hovered: false,
           pressed: false,
+          held: 0.0,
           focus_shown: true,
           disabled: false,
           rect: ring(36.0, 22.0),

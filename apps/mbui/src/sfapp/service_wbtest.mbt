@@ -47,7 +47,7 @@ test "a phone's size key: its sizes in a sheet; 移动页面 on, said on the key
   assert_true(t.find("自适应") is Some(_), msg="its sizes")
   assert_true(t.find("自定义") is Some(_), msg="any size")
   // moving the page by a finger, from the sheet (the sheet goes: what it changes is the page under it)
-  t.tap_text("移动页面")
+  t.click(Switch, label="移动页面")
   t.frame()
   let p = service_pages.get(service_key("ws1/st1", "j-web")).unwrap()
   assert_true(p.moving, msg="moving")

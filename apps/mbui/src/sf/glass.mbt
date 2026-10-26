@@ -83,6 +83,13 @@ pub fn glass_lens() -> @ui.Glass {
 }
 
 ///|
+/// A control's knob held (a switch's, a segmented choice's thumb: iOS 26's): the bar's lens, its rim narrower and
+/// bending less, as small as it is.
+pub fn glass_knob() -> @ui.Glass {
+  { ..glass_lens(), bezel: 7.0, refraction: 5.0 }
+}
+
+///|
 /// The page's primary action in the bar's notch (Bar.kt: 令, a "+"): the accent at 86% over a 20px blur, its rim
 /// 0.4 / 0.75 / 0.4.
 pub fn glass_action() -> @ui.Glass {

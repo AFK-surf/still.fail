@@ -1,0 +1,12 @@
+# A sheet drawn up past its top (mbui's kit sheet: it gives way, the further the more, and springs back as it is let
+# go): a chat's row held for its menu, its sheet's grabber drawn up and let go, then up again further.
+timeout 20000
+until 整理发布清单
+wait 600
+hold 1100 夜里的构建又失败了
+wait 1200
+drag 195 514 0 -160 700
+wait 1200
+drag 195 514 0 -400 900
+wait 1400
+exit

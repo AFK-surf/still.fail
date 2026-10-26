@@ -1,0 +1,10 @@
+# 关于's switch row (MBUI_FIXTURE=settings-about): its words held (nothing answers: the switch alone takes a press), then
+# the switch held and let go (its knob a lens of liquid glass while held; let go, turned off).
+timeout 20000
+until 服务条款
+wait 800
+hold 600 发送使用统计
+wait 1000
+hold 700 switch:发送使用统计和错误报告
+wait 1200
+exit

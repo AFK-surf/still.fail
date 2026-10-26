@@ -7,12 +7,12 @@ test "a skill's sharing: the row switches it off and on, the memory read again e
   let conflicts = "两台 station 同时修改，有冲突的改动：SKILL.md"
   assert_true(t.find("分享给其他 station") is Some(_))
   assert_true(t.find(conflicts) is Some(_), msg="the edits made at once, under the row")
-  t.tap_text("分享给其他 station")
+  t.click(Switch, label="分享给其他 station")
   // the station's answer in, the memory asked again and read: no longer shared, nothing at odds
   t.frame()
   t.frame()
   assert_true(t.find(conflicts) is None, msg="no longer shared")
-  t.tap_text("分享给其他 station")
+  t.click(Switch, label="分享给其他 station")
   t.frame()
   t.frame()
   assert_true(t.find(conflicts) is Some(_), msg="shared again")

@@ -2,7 +2,9 @@
 // the focus, the Activate action turn it. A toggle group (Radix's ToggleGroup): toggles in a roving group (one stop
 // for Tab, the arrows moving among them), one of them pressed at most (`multiple` false: pressing the pressed one
 // lets it go) or any of them. A group that `slide`s (still.fail's segmented choice) has one thumb behind its items,
-// moving on a spring to the pressed one.
+// moving on a spring to the pressed one. Given a `lens` (liquid glass), a finger on one of its items brings the thumb
+// there as a lens over the items, larger, what is under its rim bent (iOS 26's segmented control); let go, the thumb
+// again, on the one chosen.
 
 ///|
 /// An item of a group (a toggle group's, a radio group's): its value, its words, whether it is disabled.
@@ -102,8 +104,8 @@ pub(all) struct GroupState {
 /// items sharing its width, none narrower than its look needs (its words whole: one that needs more than its share
 /// keeps that, the others sharing what is left, as CSS's flex: 1); `widths`: each item as wide as its first where the
 /// room is, giving way down to its second where there is less (CSS's width with its min-width: a row short of room
-/// takes alike from each, none past its least), its look as wide. What is pressed now, and what happened to the group
-/// (`changed`; `clicked` when an item was).
+/// takes alike from each, none past its least), its look as wide; `lens`: the glass the thumb is under a finger
+/// (`lens_grow` larger, a capsule). What is pressed now, and what happened to the group (`changed`; `clicked` when an item was).
 pub fn toggle_group(
   c : @ui.Ctx,
   key : String,
@@ -120,6 +122,8 @@ pub fn toggle_group(
   look? : (@ui.Ctx, ToggleState) -> Unit,
   thumb? : (@ui.Ctx, Double, Double) -> Unit = group_thumb_look,
   ground? : (@ui.Ctx, GroupState, () -> Unit) -> Unit = group_look,
+  lens? : @ui.Glass,
+  lens_grow? : Double = 1.12,
 ) -> @ui.Changed[Array[String]] {
   let id = c.id(key)
   let slide = slide && !multiple
@@ -138,10 +142,16 @@ pub fn toggle_group(
         // the thumb behind the items, laid out over the one pressed (Ctx::cover)
         let holder = if slide { c.layer(fn() {  }) } else { -1 }
         let nodes : Array[Int] = []
+        // (the item a finger is on, where the thumb is a lens)
+        let mut fingered = -1
         for k, it in items {
           let iid = part_id(id, k)
           let off = disabled || it.disabled
-          let r = c.interact(iid, disabled=off)
+          // (with a lens, a finger held on it is still its press: let go, chosen)
+          let r = c.interact(iid, disabled=off, holds=slide && lens is Some(_))
+          if r.pressed && @ui.pointing() is Finger {
+            fingered = k
+          }
           if r.clicked {
             any = r
             if multiple {
@@ -193,8 +203,45 @@ pub fn toggle_group(
           }
         }
         if slide {
-          match items.search_by(fn(it) { now.contains(it.value) }) {
-            Some(k) => c.cover(key + "/thumb", holder, nodes, k, thumb)
+          let glass = match lens {
+            Some(g) if !c.glass_solid() => Some(g)
+            _ => None
+          }
+          let held = match glass {
+            Some(_) =>
+              animate(c, key + "/held", if fingered >= 0 { 1.0 } else { 0.0 }, transition=@motion.motion_spring(
+                0.3,
+                bounce=0.3,
+              ))
+            None => 0.0
+          }
+          let chosen = items.search_by(fn(it) { now.contains(it.value) })
+          let at = if glass is Some(_) && fingered >= 0 { Some(fingered) } else { chosen }
+          match at {
+            Some(k) => {
+              c.cover(key + "/thumb", holder, nodes, k, fn(c, w, h) {
+                let b = c.box(fn() { thumb(c, w, h) })
+                if held > 0.0 {
+                  c.look(b, @ui.look(alpha=1.0 - dmin(1.0, held)))
+                }
+              })
+              // the lens over the items, on the thumb's way (the same item at the same moments: the same spring)
+              match glass {
+                Some(g) => {
+                  let over = c.layer(fn() {  })
+                  c.cover(key + "/lens", over, nodes, k, fn(c, w, h) {
+                    if held > 0.0 {
+                      // (raised off the track as it grows past it: a shadow as far as it is in the finger)
+                      let full = dmin(1.0, held)
+                      let shade : @ui.Shadow = Cast(lens_shadow * full, lens_shadow_y * full, c.theme().shadow)
+                      let b = c.box(style=lens_capsule(w, h).then(@ui.style(shadow=shade)), glass=g, fn() {  })
+                      c.look(b, @ui.look(alpha=full, scale=1.0 + (lens_grow - 1.0) * held))
+                    }
+                  })
+                }
+                None => ()
+              }
+            }
             None => ()
           }
         }
@@ -205,6 +252,13 @@ pub fn toggle_group(
   let changed = now.length() != value.length() || now.iter().any(fn(v) { !value.contains(v) })
   { value: now, response: { ..any, id, changed: changed } }
 }
+
+///|
+/// A sliding group's lens's shadow, held all the way: its blur and how far down.
+let lens_shadow : Double = 6.0
+
+///|
+let lens_shadow_y : Double = 2.0
 
 ///|
 /// A sliding group's default thumb (still.fail's segmented choice): `w` by `h`, lifted out of the track (the theme's
