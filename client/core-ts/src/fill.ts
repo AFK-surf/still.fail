@@ -6,7 +6,8 @@
 // what a person opens has the link to itself. What is kept is the one record of what is left: nothing else is written
 // down, and it goes on as the core starts again. Its station not reached, it waits for it; the file no longer there,
 // what was kept of it goes. Not one past FILL_MAX, nor one whose rest its kind has no room for (it would push out what
-// else is kept, then itself), nor one a download fetches.
+// else is kept, then itself), nor one a download fetches, nor one last read before FILL_RECENT_MS ago (what was opened
+// lately, not every file ever let go of: those kept before this went on would all come at once).
 import { Effect } from "effect";
 import type { Inner } from "./core.ts";
 import { handlers } from "./core/execute.ts";
@@ -19,6 +20,8 @@ import { DOWNLOAD_PART } from "./views/downloads.ts";
 
 /// The most a file is brought whole by itself.
 export const FILL_MAX = 1024 * 1024 * 1024;
+/// How lately a file must have been read to be brought whole.
+export const FILL_RECENT_MS = 3 * 24 * 3600_000;
 /// How long nothing must have been waited on before it goes (a player's next part is asked within this).
 export const IDLE_MS = 3_000;
 
@@ -131,7 +134,7 @@ export class Fill {
   /// The file to bring a part of next, and the call that reads it: the most lately read whose station is reached.
   #next(): Effect.Effect<[{ id: string; size: number }, Extract<Call, { kind: "stationFilePart" | "driveRead" }>] | null> {
     const inner = this.#inner;
-    return Effect.map(inner.driveKept.unfinished(["chat", "played"]), (files) => {
+    return Effect.map(inner.driveKept.unfinished(["chat", "played"], inner.host.nowMs() - FILL_RECENT_MS), (files) => {
       for (const f of files) {
         if (f.size > FILL_MAX || this.#failed.has(f.id) || inner.downloads.has(f.id)) continue;
         const call = partOf(f);

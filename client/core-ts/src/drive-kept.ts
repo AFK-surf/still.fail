@@ -252,10 +252,11 @@ export class DriveKept {
     });
   }
 
-  /// The files of `kinds` a part of which is kept and not all, the most lately read first, each with where the first
-  /// of it not kept is (`at`, `length` bytes on from there): those whose rest fits in what their kind keeps beside all
-  /// else kept of it (bringing it would not push out another, nor then itself), and none being written now.
-  unfinished(kinds: readonly KeepKind[]): Effect.Effect<{ id: string; kind: KeepKind; mtime: number; size: number; at: number; length: number }[]> {
+  /// The files of `kinds` a part of which is kept and not all, read since `since` (ms), the most lately read first,
+  /// each with where the first of it not kept is (`at`, `length` bytes on from there): those whose rest fits in what
+  /// their kind keeps beside all else kept of it (bringing it would not push out another, nor then itself), and none
+  /// being written now.
+  unfinished(kinds: readonly KeepKind[], since = 0): Effect.Effect<{ id: string; kind: KeepKind; mtime: number; size: number; at: number; length: number }[]> {
     return Effect.map(this.#db(), (sql) => {
       if (sql === null) return [];
       const found: { id: string; kind: KeepKind; mtime: number; size: number; at: number; length: number; used: number }[] = [];
@@ -273,7 +274,7 @@ export class DriveKept {
         for (const r of rows) {
           const [id, mtime, size, used] = [String(r[0]), Number(r[1]), Number(r[2]), Number(r[3])];
           const of = parts.get(id) ?? [];
-          if (of.length === 0 || this.#writing.has(id)) continue;
+          if (of.length === 0 || used < since || this.#writing.has(id)) continue;
           // the first byte not kept, and the first kept after it
           let end = 0;
           let gap: [number, number] | null = null;
