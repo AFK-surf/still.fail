@@ -899,8 +899,11 @@ let tile : @ui.Style = @ui.style(
 let tile_on : @ui.Style = tile.then(@ui.css("border_color=Accent"))
 
 ///|
+/// (its foot as far up as its way to allow it stands concentric with its corners: tile_action_button)
 // kept across runs: a value (no field of it changes)
-let tile_action : @ui.Style = tile.then(@ui.css("border_color=A(Danger,O55)"))
+let tile_action : @ui.Style = tile.then(@ui.css("border_color=A(Danger,O55)")).then(
+  @ui.style(pb=@sf.room_of(@sf.card_foot_in(tile_action_h))),
+)
 
 ///|
 /// A tile's picture (tilePicture: a screen drawn small, 72 by 46, 4 over its name, 8 round, the canvas on a line):
@@ -994,13 +997,19 @@ let tile_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Mediu
 let tile_state : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
-/// The way to allow it (tileAction: 4 over, 4 by 10 and 12 in, round, red; its words the meta's 12 in 500 white).
+/// The way to allow it (tileAction: 4 over, 26 high, its words 12 and 10 in, round, red; its words the meta's 12 in 500
+/// white): a capsule across the tile's foot, its ends in the tile's foot corners concentric with them (@sf.card_foot_in:
+/// 13 from its sides and foot), as a card's button at its foot is. As wide as its words, its ends came into those
+/// corners off their arcs where the tile is narrow (a phone's two side by side: 18.5 from its sides, 12 from its foot).
 let tile_action_chevron : Double = 14.0
 
 ///|
+let tile_action_h : Double = 26.0
+
+///|
 // kept across runs: a value (no field of it changes)
-let tile_action_button : @ui.Style = @ui.css(
-  #|row mt=S1 pl=S3 pr=S2_5 py=S1 gap=SPx align=ACenter radius=Full bg=Danger
+let tile_action_button : @ui.Style = @ui.css("row w=Full mt=S1 pl=S3 pr=S2_5 gap=SPx align=ACenter justify=JCenter radius=Full bg=Danger").then(
+  @ui.style(h=Fixed(tile_action_h), mx=@sf.room_of(@sf.card_foot_in(tile_action_h) - @ui.Space::px(S2_5))),
 )
 
 ///|

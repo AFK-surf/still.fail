@@ -744,24 +744,36 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   // (a square window: the panels' corners all the tape's)
   assert_eq(@sf.tape_edge.radius(), @sf.tape_corner)
   let panel = @sf.tape_corner
-  // one line: a capsule (its half: a pill in the panel's corner keeps its own, as round as the panel's less the inset
-  // where its buttons are keyboard and mouse's 32), its buttons round in its ends; the screen's buttons (a touch screen's
-  // larger), the same shape
+  // one line: a capsule (its half: a pill in the panel's corner keeps its own, the panel's less how far in it stands),
+  // its buttons round in its ends; the screen's buttons (a touch screen's larger), the same shape
   let side = @sf.theme().round.side
   guard composer_corners(t) is Some((k, s, h)) else { fail("no composer") }
   assert_eq(k, h / 2.0)
   assert_eq(s, side / 2.0)
+  // its ends concentric with the panel's foot corners as high as it is: as far in from its sides and foot as the
+  // panel's corner less its half (the user, 2026-10-26: a finger's, 52 high, stood where keyboard and mouse's 48 would)
+  guard composer_and_panel(t) is Some((b, p)) else { fail("no composer in a panel") }
+  let at = (b.x - p.x, p.x + p.w - (b.x + b.w), p.y + p.h - (b.y + b.h), 0.0)
+  let concentric = @sf.capsule_in(panel, h)
+  assert_true(near4(at, (concentric, concentric, concentric, 0.0)), msg="the capsule from the panel's edges: \{at}")
+  // (the tape's 28 as round as a capsule 48 high stands concentric in, as near its edges as corner_fit lets: a finger's,
+  // its buttons 36, as high as that too, they 6 in, not 52)
+  assert_eq(h, 2.0 * (panel - @sf.corner_fit.near))
   assert_eq(t.corner_faults(), [])
   // lines more: the box concentric with the panel, the send button with the box, 12 in
   t.tap_text("发消息")
   t.type_text("第一行\n第二行\n第三行")
   t.run_for(@sfpages.morph_ms)
   guard composer_corners(t) is Some((k, s, _)) else { fail("no composer") }
-  // (the ladder's: the panel's corner a step in, a card's, 5 in; its buttons round in its corners, the inset in)
-  let five = (panel - @sf.card_corner) * @ui.smooth_scale
-  assert_eq(@sf.foot_fit(panel, panel, five, least=@sf.holds_least(side)), five)
-  assert_eq(k, @ui.concentric(panel, five))
-  assert_eq(k, @sf.card_corner)
+  // (a card's corner would stand 2.5 in, nearer than corner_fit lets: as near as it does, 4, less round than a card's
+  // there, 24.8; its buttons round in its corners)
+  let d = @sf.foot_fit(panel, panel, 0.0, least=@sf.holds_least(side))
+  assert_eq(d, @sf.corner_fit.near)
+  guard composer_and_panel(t) is Some((b, p)) else { fail("no composer in a panel") }
+  let at = (b.x - p.x, p.x + p.w - (b.x + b.w), p.y + p.h - (b.y + b.h), 0.0)
+  assert_true(near4(at, (d, d, d, 0.0)), msg="the box from the panel's edges: \{at}")
+  assert_true((k - @ui.concentric(panel, d)).abs() < 0.01, msg="the box's corner: \{k}")
+  assert_true(k < @sf.card_corner)
   assert_eq(s, side / 2.0)
   assert_eq(t.corner_faults(), [])
 }
@@ -811,23 +823,20 @@ test "on a Mac's tape each panel's corners follow the window's where it stands a
   )
   assert_eq(t.corner_faults(), [])
   // the page brought over, its composer taking the cursor (keyboard and mouse's): a box, its foot's left corner
-  // following the panel's 30 (5 in: the ladder's card corner, its ＋ in it concentric with it); its right not the
-  // window's 11.2, which its send could not follow in turn (the user, 2026-10-25: the corner followed, the send did not),
-  // standing alone there, the send in it as in its other corners
+  // following the panel's 28 (4 in, as near as corner_fit lets: 24.8, its ＋ in it concentric with it); its right not
+  // the window's 11.2, which its send could not follow in turn (the user, 2026-10-25: the corner followed, the send did
+  // not), as round as its left there, the send in it as in its other corners
   t.tap(650.0, 400.0)
   t.run_for(@sfdesk.side_move_ms * 2.0)
   guard composer_and_panel(t) is Some((k, p)) else { fail("no composer in a panel") }
-  let five = (pane - @sf.card_corner) * @ui.smooth_scale
-  let d = @sf.foot_fit(pane, edge, five, least=@sf.holds_least(32.0))
-  assert_true((d - five).abs() < 0.01, msg="the box's place: \{d}")
+  let d = @sf.foot_fit(pane, edge, 0.0, least=@sf.holds_least(32.0))
+  assert_true((d - @sf.corner_fit.near).abs() < 0.01, msg="the box's place: \{d}")
   let at = (k.x - p.x, p.x + p.w - (k.x + k.w), p.y + p.h - (k.y + k.h))
   assert_true(near4((at.0, at.1, at.2, 0.0), (d, d, d, 0.0)), msg="the box from the panel's edges: \{at}")
-  assert_true(
-    near4(k.radii, (@sf.card_corner, @sf.card_corner, @sf.card_corner, @ui.concentric(pane, d))),
-    msg="the box's corners: \{k.radii}",
-  )
+  let round = @ui.concentric(pane, d)
+  assert_true(near4(k.radii, (round, round, round, round)), msg="the box's corners: \{k.radii}")
   assert_eq(t.corner_faults(), [])
-  // let go of: a capsule, its left end concentric with the panel's 30 (6 in), its right in the window's 11.2, too
+  // let go of: a capsule, its left end concentric with the panel's 28 (4 in), its right in the window's 11.2, too
   // square for it, as far in as the left; the box's place to the capsule's in the one change of shape
   t.ctx().blur()
   // (let go of from the next frame on; its change of shape over by twice its length after that)

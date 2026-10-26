@@ -780,7 +780,7 @@ fn info_time(c : @ui.Ctx, key : String, stamp : Json?) -> Unit {
 /// it. True on the frame after a press.
 fn info_row(c : @ui.Ctx, key : String, icon : String, label : String, end : String) -> Bool {
   let id = c.id(key)
-  let b = c.box(style=info_tool, id~, fn() {
+  let b = c.box(style=info_tool(), id~, fn() {
     c.box(style=info_tool_icon, fn() { @sf.icon(c, icon, size=14.0, color=@sf.theme().p.muted) |> ignore }) |> ignore
     // (what it says of it at the line's end, under its words where the line has not the room: its words whole)
     c.box(style=info_label_flow, flow=true, line_gap=0.0, fn() {
@@ -1124,14 +1124,20 @@ let info_mark_side : Double = 14.0
 let info_agent_line : @ui.Style = @ui.css("w=Full pl=S6")
 
 ///|
-/// What is done with it (infoTools, PanelRow): 8 under what is over it, 2 apart; a row 32 high at least, its icon's
-/// 14 column and words 10 apart, 10 in, round with the panel, the pointer's ground on it.
+/// What is done with it (infoTools, PanelRow): 8 under what is over it, 2 apart; a row a small panel's (@sf.pick_high:
+/// in its foot corners concentric with them, as a menu's item is), its icon's 14 column and words 10 apart, 10 in,
+/// round with the panel, the pointer's ground on it.
 // kept across runs: a value (no field of it changes)
 let info_tools : @ui.Style = @ui.css("w=Full pt=S2 gap=S0_5")
 
 ///|
+fn info_tool() -> @ui.Style {
+  info_tool_base.then(@sf.pick_high())
+}
+
+///|
 // kept across runs: a value (no field of it changes)
-let info_tool : @ui.Style = @ui.css("row w=Full min_h=S8 px=S2_5 gap=S2_5 align=ACenter radius=Inner hovered{bg=Hover}")
+let info_tool_base : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2_5 align=ACenter radius=Inner hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)

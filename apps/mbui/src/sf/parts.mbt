@@ -2192,7 +2192,7 @@ let field_hint : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Mut
 /// A line to type in (controls.css.ts input, a one-line one: a pill as the buttons beside it are, 36 high at least,
 /// 16 in, a line of the strong grey, the field's hover grey pointed at or written in, on the canvas, its words 14, the
 /// placeholder subtle): mbui's field (@kit.text_field), its editor `key`'s; `field`: what it holds, the view's own;
-/// `small`: 32 high (a small panel's, as its rows: input_box_small); `solid`: on a card's ground in a chat (field_solid);
+/// `small`: 34 high (a small panel's, as its rows: input_box_small); `solid`: on a card's ground in a chat (field_solid);
 /// `shorter`: other ways to say the placeholder where the field has less room (Ctx::editor's). What is in it now, and
 /// whether Enter was pressed in it.
 pub fn input(
@@ -2349,10 +2349,11 @@ let field_solid : @ui.Style = @ui.css("bg=Bg border_color=Bg")
 let field_solid_hot : @ui.Style = @ui.css("bg=Bg")
 
 ///|
-/// `small`: 32 high, a small panel's (its search): a capsule its padding in from its corner, concentric with it
-/// (capsule_in(r_menu, 32) = panel_pad), as its rows are.
+/// `small`: a small panel's (its search), as high as its rows (menu_row_min), so a capsule its padding in from its
+/// corner, concentric with it (capsule_in(r_menu, 34) = panel_pad), as its rows are; its words' line (the body's 22, not
+/// a row's 20: menu_row_over would make it 36) in its middle.
 // kept across runs: a value (no field of it changes)
-let input_box_small : @ui.Style = input_box.then(@ui.style(min_h=Fixed(menu_row_min), py=room(menu_row_over)))
+let input_box_small : @ui.Style = input_box.then(@ui.style(h=Fixed(menu_row_min)))
 
 ///|
 // kept across runs: a value (no field of it changes)

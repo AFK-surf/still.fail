@@ -473,14 +473,19 @@ test "style: radius=InnerOr: alone its own corner; in a panel's corner the panel
   assert_eq(c.nodes[button].corner(), 16.0)
   assert_eq(t.corner_faults(), [])
   // a panel less round: concentric in its foot corners alone, the capsule's corners would be unlike (its top's round
-  // as alone): never worked out so; a capsule still, its button round in it (across the panel, as far from both its
-  // sides, a capsule is in the middle of it, in none of its corners: nothing said)
+  // as alone): never worked out so; a capsule still, its button round in it. Across the panel's foot its ends are in
+  // its foot corners (the user, 2026-10-26: a composer's capsule there, its ends not on the page's corners): the panel
+  // wants a corner as far in as they stand and their half, said
   let t = Tester::new(capsule_in_panel(24.0, 12.0))
   t.draw()
   let c = g()
   assert_eq(drawn4(c.nodes[capsule]), (22.0, 22.0, 22.0, 22.0))
   assert_eq(drawn4(c.nodes[button]), (16.0, 16.0, 16.0, 16.0))
-  assert_eq(t.corner_faults(), [])
+  let faults = t.corner_faults()
+  assert_true(
+    faults.length() == 2 && faults.iter().all(fn(f) { f.contains("wants corner 34") }),
+    msg=faults.join("\n"),
+  )
   // nearer the panel's foot than its sides: its own corner kept, and said
   let t = Tester::new(fn(c) {
     c.box(pad=20.0, align=AStart, fn() {
