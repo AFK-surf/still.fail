@@ -5,6 +5,7 @@ import "./demo.css.ts";
 import "../viewer/whole.ts";
 import { startScrollbars } from "../scrollbars.ts";
 import { StrictMode, useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router";
 import "@fontsource-variable/inter";
@@ -571,8 +572,20 @@ function useDemoPhone(): boolean {
   return phone;
 }
 
+/** How many times the app has been put back as it opened (MountedDemo.reopen): its key, so that it starts again. */
+let rounds = 0;
+let startAgain: ((round: number) => void) | null = null;
+
 function Demo() {
-  return <DemoApp phone={useDemoPhone()} />;
+  const phone = useDemoPhone();
+  const [round, setRound] = useState(rounds);
+  useEffect(() => {
+    startAgain = setRound;
+    return () => {
+      startAgain = null;
+    };
+  }, []);
+  return <DemoApp key={round} phone={phone} />;
 }
 
 /** The demo as the phone's app or the desktop's, opened on the chat in view (so switching between them keeps it). */
@@ -607,7 +620,6 @@ export function demoTape(extra: Topic[] = []): { topic: Topic; value: unknown }[
   return [...all.values()].flatMap((topic) => { const v = valueOf(topic); return v instanceof CoreError || v === undefined ? [] : [{ topic, value: v }]; });
 }
 
-/** Runs the demo in `element` (once): the app, its made-up core, and the story played when it comes into view. */
 /** The demo's chats stop where they are, nobody at work any more (the stories' tests, to look at a page that holds still). */
 export function endDemo(): void {
   story.end();
@@ -619,8 +631,27 @@ let start: "chat" | "stations" = "chat";
 /** The language the demo is in: the app's and what it makes up (the site's English page: "en"); else as the app's own. */
 let language: "zh" | "en" | undefined;
 
-export function mountDemo(element: HTMLElement, options: { start?: "chat" | "stations"; lang?: "zh" | "en" } = {}): void {
-  if (mounted) return;
+/** What the page holds of its demo. */
+export interface MountedDemo {
+  /**
+   * The app as it opened again, drawn before this returns, if the visitor has clicked in it since it last was (the
+   * site's scene, played back, plays on the app as it was put together: OneComputer.tsx).
+   */
+  reopen(): void;
+}
+
+const mountedDemo: MountedDemo = {
+  reopen() {
+    if (!touched) return;
+    touched = false;
+    rounds += 1;
+    flushSync(() => startAgain?.(rounds));
+  },
+};
+
+/** Runs the demo in `element` (once): the app, its made-up core, and the story played when it comes into view. */
+export function mountDemo(element: HTMLElement, options: { start?: "chat" | "stations"; lang?: "zh" | "en" } = {}): MountedDemo {
+  if (mounted) return mountedDemo;
   mounted = true;
   start = options.start ?? "chat";
   language = options.lang;
@@ -683,4 +714,5 @@ export function mountDemo(element: HTMLElement, options: { start?: "chat" | "sta
       <Demo />
     </StrictMode>,
   );
+  return mountedDemo;
 }

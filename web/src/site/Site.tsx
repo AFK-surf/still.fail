@@ -4,7 +4,8 @@
 // Two ideas of it are built side by side for now, the page showing one (?v=1 or ?v=2: data-v on the root, set before
 // the first paint by site/index.html): your devices joined into one computer (OneComputer.tsx), and the distance it
 // is used across (Distance.tsx). The one chosen stays.
-import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, type CSSProperties, type ReactNode, type RefObject } from "react";
+import type { MountedDemo } from "../demo/mount.tsx";
 import * as css from "./site.css.ts";
 import { ThemeSwitch } from "./ThemeSwitch.tsx";
 import { OneComputer } from "./OneComputer.tsx";
@@ -40,19 +41,21 @@ const showing = (v: string) => (document.documentElement.dataset.v ?? "1") === v
 /**
  * Where the app runs: mounted once the page is in the browser (demo/mount.tsx), in the idea the page shows. Built to
  * HTML, it holds the demo's opening frame (`frame`, desktop and phone), which the demo replaces as it mounts; React
- * leaves what is in it alone.
+ * leaves what is in it alone. `held`: the demo, once it runs.
  */
-export function Demo({ mount, frame, v, className, start }: { mount?: DemoProps["mountDemo"]; frame?: { wide: string; phone: string }; v: string; className?: string; start?: "chat" | "stations" }) {
+export function Demo({ mount, frame, v, className, start, held }: { mount?: DemoProps["mountDemo"]; frame?: { wide: string; phone: string }; v: string; className?: string; start?: "chat" | "stations"; held?: RefObject<MountedDemo | null> }) {
   const root = useRef<HTMLDivElement>(null);
   const lang = useSiteLang();
   useEffect(() => {
-    if (root.current && mount && showing(v)) mount(root.current, { ...(start ? { start } : {}), lang });
-  }, [mount, v, start, lang]);
+    if (!root.current || !mount || !showing(v)) return;
+    const demo = mount(root.current, { ...(start ? { start } : {}), lang });
+    if (held) held.current = demo;
+  }, [mount, v, start, lang, held]);
   const html = frame ? `<div class="${css.frameWide}">${frame.wide}</div><div class="${css.framePhone}">${frame.phone}</div>` : "";
   return <div className={`${css.demo} ${className ?? ""}`} id="demo" ref={root} dangerouslySetInnerHTML={{ __html: html }} suppressHydrationWarning />;
 }
 
-export interface DemoProps { mountDemo?: (root: HTMLElement, options?: { start?: "chat" | "stations"; lang?: "zh" | "en" }) => void; demo?: { wide: string; phone: string } }
+export interface DemoProps { mountDemo?: (root: HTMLElement, options?: { start?: "chat" | "stations"; lang?: "zh" | "en" }) => MountedDemo; demo?: { wide: string; phone: string } }
 
 /** What it promises about where things are. */
 const PROMISES = [
