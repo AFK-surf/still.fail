@@ -1,0 +1,24 @@
+# Files into the test chat's composer from outside (mbui's src/host/win_files.h, win_device.h): Explorer's copied file
+# and a bitmap alone (a screenshot's) pasted with Ctrl+V in the composer, which takes the cursor as the chat opens (the
+# runner puts each on the clipboard: e2e/win.sh files_do); then ＋, the system's file dialog, which MBUI_PICK_FILES
+# answers (a photo and a file); all put up to the station.
+timeout 60000
+#station tap 端到端测试
+#station until icon:plus
+#station log do: clip-files
+#station done clip-files
+#station key cmd+v
+# (a file's card says its name and its kind apart: e2e-paste, .txt)
+#station until e2e-paste
+#station log do: clip-picture
+#station done clip-picture
+#station key cmd+v
+# (a picture its tile, drawn from the bytes the composer keeps: mem:writing/…)
+#station until img:mem:writing/
+#station tap icon:plus
+#station until e2e-data
+#station untiln 2 img:mem:writing/
+#station shot 5-files
+#station timeout 180000
+#station gone 正在上传
+exit

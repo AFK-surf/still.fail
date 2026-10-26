@@ -3,7 +3,8 @@
 // file picker (ACTION_OPEN_DOCUMENT; the open panel), a photo taken now (ACTION_IMAGE_CAPTURE's picture). The system
 // asks on its own; `files` is None until it has answered, then what was picked (none when it was called off). A frame
 // is asked for as the answer comes, so a view can look each frame. iOS: its photo picker (PHPickerViewController), its
-// document picker, its camera (UIImagePickerController). Not on Windows or the web yet (`pick` is None there).
+// document picker, its camera (UIImagePickerController). Windows: its file dialog (IFileOpenDialog, the pictures' kinds
+// for Photos; no camera: win_files.h). Not on the web yet (`pick` is None there).
 
 ///|
 /// What the system's pickers offer.

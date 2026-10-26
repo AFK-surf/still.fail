@@ -355,6 +355,75 @@ void mb_images_tell(mb_outside_fn f) {
   }
 }
 
+// A bitmap the clipboard holds (CF_DIB, CF_DIBV5: its header, its colours, its pixels) as a PNG's bytes (malloc'd, into
+// *png and *len): 1 when made. Read as a .bmp file is by WIC (the file's own header put before it), then written as
+// a PNG. On any thread with COM (win_device.h's clipboard reads, on one of their own).
+int mb_png_of_dib(const void *dib, size_t n, unsigned char **png, size_t *len) {
+  *png = NULL;
+  *len = 0;
+  if (n < sizeof(BITMAPINFOHEADER)) return 0;
+  const BITMAPINFOHEADER *h = (const BITMAPINFOHEADER *)dib;
+  // where the pixels start: after the header, the three masks of a BITMAPINFOHEADER's BI_BITFIELDS, and its colours
+  size_t colours = h->biClrUsed ? h->biClrUsed : (h->biBitCount <= 8 ? (1u << h->biBitCount) : 0);
+  size_t masks = h->biSize == sizeof(BITMAPINFOHEADER) && h->biCompression == BI_BITFIELDS ? 12 : 0;
+  size_t at = h->biSize + masks + colours * 4;
+  if (at > n) return 0;
+  size_t file = 14 + n;
+  uint8_t *bmp = (uint8_t *)malloc(file);
+  if (!bmp) return 0;
+  bmp[0] = 'B';
+  bmp[1] = 'M';
+  uint32_t size = (uint32_t)file, zero = 0, off = (uint32_t)(14 + at);
+  memcpy(bmp + 2, &size, 4);
+  memcpy(bmp + 6, &zero, 4);
+  memcpy(bmp + 10, &off, 4);
+  memcpy(bmp + 14, dib, n);
+  IWICImagingFactory *wic = NULL;
+  IWICStream *in = NULL;
+  IWICBitmapDecoder *dec = NULL;
+  IWICBitmapFrameDecode *frame = NULL;
+  IStream *out = NULL;
+  IWICBitmapEncoder *enc = NULL;
+  IWICBitmapFrameEncode *put = NULL;
+  int ok = 0;
+  if (SUCCEEDED(CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&wic))) &&
+      SUCCEEDED(wic->CreateStream(&in)) && SUCCEEDED(in->InitializeFromMemory(bmp, (DWORD)file)) &&
+      SUCCEEDED(wic->CreateDecoderFromStream(in, NULL, WICDecodeMetadataCacheOnDemand, &dec)) &&
+      SUCCEEDED(dec->GetFrame(0, &frame)) && SUCCEEDED(CreateStreamOnHGlobal(NULL, TRUE, &out)) &&
+      SUCCEEDED(wic->CreateEncoder(GUID_ContainerFormatPng, NULL, &enc)) &&
+      SUCCEEDED(enc->Initialize(out, WICBitmapEncoderNoCache)) && SUCCEEDED(enc->CreateNewFrame(&put, NULL)) &&
+      SUCCEEDED(put->Initialize(NULL)) && SUCCEEDED(put->WriteSource(frame, NULL)) && SUCCEEDED(put->Commit()) &&
+      SUCCEEDED(enc->Commit())) {
+    HGLOBAL g = NULL;
+    STATSTG st;
+    if (SUCCEEDED(GetHGlobalFromStream(out, &g)) && SUCCEEDED(out->Stat(&st, STATFLAG_NONAME))) {
+      size_t m = (size_t)st.cbSize.QuadPart;
+      const void *p = GlobalLock(g);
+      *png = (unsigned char *)malloc(m ? m : 1);
+      if (p && *png) {
+        memcpy(*png, p, m);
+        *len = m;
+        ok = 1;
+      }
+      if (p) GlobalUnlock(g);
+    }
+  }
+  if (put) put->Release();
+  if (enc) enc->Release();
+  if (out) out->Release();
+  if (frame) frame->Release();
+  if (dec) dec->Release();
+  if (in) in->Release();
+  if (wic) wic->Release();
+  free(bmp);
+  if (!ok) {
+    free(*png);
+    *png = NULL;
+    *len = 0;
+  }
+  return ok;
+}
+
 void *mb_image_srv(int id) {
   if (id <= 0 || id >= nimgs) return NULL;
   EnterCriticalSection(&lock);

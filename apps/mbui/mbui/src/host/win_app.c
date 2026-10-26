@@ -83,6 +83,7 @@ double mb_host_mem_bytes(void);
 
 static mb_outside_fn outside_cb;  // who is told as what the host does for the app is done (mb_host_set_outside)
 static void device_tell(mb_outside_fn tell);  // win_device.h: the clipboard's reads done
+static void pick_tell(mb_outside_fn tell);    // win_files.h: the picks read
 
 static void draw_frame(void) {
   RECT rc;
@@ -91,6 +92,7 @@ static void draw_frame(void) {
   mb_images_tell(outside_cb);
   mb_views_tell(outside_cb);
   device_tell(outside_cb);
+  pick_tell(outside_cb);
   // minimized, or put away (win_life.h): WM_SIZE, or the window back, asks again
   if (rc.right <= 0 || rc.bottom <= 0 || !IsWindowVisible(hwnd)) return;
   double was = scale;
@@ -197,6 +199,8 @@ static int mods_now(void) {
          ((GetKeyState(VK_LWIN) < 0 || GetKeyState(VK_RWIN) < 0) ? 8 : 0);
 }
 
+// files from outside: the system's dialog, let go on the window
+#include "win_files.h"
 // the device beyond the window (device.mbt): a key catcher's keys, the clipboard, awake
 #include "win_device.h"
 // the app's life: once for its person, put away to the notification area, links, in front or not, light or dark
@@ -212,11 +216,11 @@ static void key_down(WPARAM vk) {
       case 'C': code = 13; break;
       case 'X': code = 14; break;
       case 'V':
-        // a picture on it (PNG, or a bitmap; not files dropped there): the app's Ctrl+V (1000 + v), which reads the
-        // clipboard for it (@hostapi.clip_read), as a page's paste takes a picture as a file; else its words
-        if (!IsClipboardFormatAvailable(CF_HDROP) &&
-            (IsClipboardFormatAvailable(RegisterClipboardFormatW(L"PNG")) || IsClipboardFormatAvailable(CF_DIB) ||
-             IsClipboardFormatAvailable(CF_DIBV5) || IsClipboardFormatAvailable(CF_BITMAP))) {
+        // files on it (Explorer's copied ones) or a picture (PNG, or a bitmap): the app's Ctrl+V (1000 + v), which
+        // reads the clipboard for them (@hostapi.clip_read), as a page's paste takes them as files; else its words
+        if (IsClipboardFormatAvailable(CF_HDROP) ||
+            IsClipboardFormatAvailable(RegisterClipboardFormatW(L"PNG")) || IsClipboardFormatAvailable(CF_DIB) ||
+            IsClipboardFormatAvailable(CF_DIBV5) || IsClipboardFormatAvailable(CF_BITMAP)) {
           mb_cb.key(1000 + 'v', mods);
         } else {
           paste();
@@ -536,7 +540,8 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   // (an app's console, its one run and its identity: decided as the program started, win_life.h life_begin)
   SetConsoleOutputCP(CP_UTF8);
   SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-  CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+  // (OLE's, for the drop target: COM's single-threaded apartment with it)
+  OleInitialize(NULL);
 
   WCHAR cls[300];
   window_class(cls, 300);
@@ -572,6 +577,7 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   if (!mb_render_init(hwnd)) exit(1);
   ShowWindow(hwnd, SW_SHOW);
   life_start(t);
+  files_start();
   free(given);
   want_frame = 1;
 
@@ -1010,14 +1016,7 @@ double mb_host_mem_bytes(void) {
 
 // A sign-in in the browser that comes back here (host_native.mbt `browser_login`): win_browser_login.c.
 
-// Files picked (pick.mbt): not on this host yet.
-int32_t mb_host_pick_start(int32_t kind) { return 0; }
-int32_t mb_host_pick_state(int32_t pid) { return -1; }
-int32_t mb_host_pick_count(int32_t pid) { return 0; }
-moonbit_string_t mb_host_pick_name(int32_t pid, int32_t i) { return moonbit_make_string_raw(0); }
-moonbit_bytes_t mb_host_pick_bytes(int32_t pid, int32_t i) { return moonbit_make_bytes(0, 0); }
-moonbit_string_t mb_host_pick_info(int32_t pid, int32_t i) { return moonbit_make_string_raw(0); }
-void mb_host_pick_end(int32_t pid) {}
+// Files picked (pick.mbt) and let go on the window (drop.mbt): win_files.h.
 
 // The gallery (gallery.mbt): none on this host; no photo of it picked.
 int32_t mb_host_gallery_access(void) { return -1; }

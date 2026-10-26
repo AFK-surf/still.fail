@@ -15,9 +15,9 @@ typedef void (*mb_wheel_fn)(double, double, double, double, int32_t);
 typedef void (*mb_key_fn)(int32_t, int32_t);
 typedef void (*mb_text_fn)(int32_t, moonbit_string_t, int32_t, int32_t);
 typedef void (*mb_outside_fn)(int32_t, int32_t, int32_t);
-// the kinds of what the host does for the app, named as src/ui/hostcall.mbt's outside_* (this host has no picker,
-// gallery, marks or update of its own yet)
-enum { MB_OUTSIDE_IMAGE = 1, MB_OUTSIDE_VIEW = 2, MB_OUTSIDE_GRAB = 6, MB_OUTSIDE_CLIP = 9 };
+// the kinds of what the host does for the app, named as src/ui/hostcall.mbt's outside_* (this host has no gallery,
+// marks or update of its own yet)
+enum { MB_OUTSIDE_IMAGE = 1, MB_OUTSIDE_VIEW = 2, MB_OUTSIDE_PICK = 3, MB_OUTSIDE_GRAB = 6, MB_OUTSIDE_CLIP = 9 };
 
 typedef struct {
   mb_frame_fn frame;
@@ -53,6 +53,8 @@ void mb_render_commit(void);  // the composition's changes shown
 
 // images (win_image.cpp): the ID3D11ShaderResourceView * of a ready one
 void *mb_image_srv(int id);
+// a bitmap the clipboard holds (CF_DIB) as a PNG's bytes (malloc'd): 1 when made (win_image.cpp)
+int mb_png_of_dib(const void *dib, size_t n, unsigned char **png, size_t *len);
 // streams (win_stream.cpp): what stream id is drawn with now (ID3D11ShaderResourceView *), NULL before a frame shows;
 // an instance's image MB_STREAM_TEX + id is it (src/hostapi/stream.mbt)
 #define MB_STREAM_TEX 4194304
