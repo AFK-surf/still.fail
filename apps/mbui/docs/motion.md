@@ -44,7 +44,7 @@ right: the state is the control's alone and means one thing.
 - What its container does to it: the window resized, the sidebar dragged wider, a keyboard coming or going, another
   tier, the device turned. It is laid out where it now goes, in the same frame. When the container itself moves (a
   page sliding in, the tape), it goes with it, as part of it.
-- Content swapped: another chat in the same pane, a page's data read again. A whole page never crossfades.
+- Content swapped: another chat in the same pane, a page's data read again. A whole page never crossfades. Existing chat messages show at full opacity in their first frame, including older rows loaded above; only genuinely new messages enter.
 
 ## A page's first frame comes before its motion
 

@@ -28,6 +28,13 @@ fn wide_tester(
 }
 
 ///|
+test "wide: existing chat messages are fully visible in the first frame" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  assert_eq(t.look_of("做完了：").map(fn(l) { l.2 }), Some(1.0))
+}
+
+///|
 test "wide: the rail, the chats' list beside it and a page in the rest; below the breakpoint the phone's Home" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
@@ -732,7 +739,6 @@ fn choices_in_ground(t : @ui.Tester) -> Unit raise {
 test "wide: a chat and a new chat switched by the sidebar: the composer goes between their places, a new chat left leaves by its own way, what comes in is there at once" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
-  t.run_for(history_fade_ms)
   let (_, cy, _, ch) = composer_glass(t)
   // to a new chat: the composer from the chat's foot up to its place in the page, the scene there at once (no page
   // crossfades)
@@ -782,7 +788,6 @@ fn words_rect(t : @ui.Tester, s : String) -> (Double, Double, Double, Double) ra
 test "wide: a right click in a chat as the desktop app's: a link's 在浏览器中打开链接 and 复制链接, words picked 复制" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
-  t.run_for(history_fade_ms)
   // Ana's message, its address a link
   for _ in 0..<12 {
     match t.run_rects("example.com/review/42") {
@@ -790,7 +795,6 @@ test "wide: a right click in a chat as the desktop app's: a link's 在浏览器�
       _ => t.wheel(900.0, 400.0, -200.0)
     }
   }
-  t.run_for(history_fade_ms)
   let (x, y, w, h) = words_rect(t, "example.com/review/42")
   t.right_click(x + w / 2.0, y + h / 2.0)
   t.frame()
@@ -823,7 +827,6 @@ test "wide: a right click in a chat as the desktop app's: a link's 在浏览器�
 test "wide: words picked in a message are what ⌘C copies while the composer keeps the focus" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
-  t.run_for(history_fade_ms)
   let (fx, fy) = match t.find("发消息") {
     Some(at) => at
     None => fail("no composer")
@@ -837,7 +840,6 @@ test "wide: words picked in a message are what ⌘C copies while the composer ke
       _ => t.wheel(900.0, 400.0, -200.0)
     }
   }
-  t.run_for(history_fade_ms)
   let (px, py, pw, ph) = words_rect(t, "第二屏的插画")
   t.drag(px + 1.0, py + ph / 2.0, px + pw - 1.0, py + ph / 2.0)
   t.frame()
@@ -846,13 +848,13 @@ test "wide: words picked in a message are what ⌘C copies while the composer ke
   t.key(@ui.key_code_copy, mods=@ui.mod_cmd)
   t.frame()
   assert_eq(t.clipboard(), "第二屏的插画")
+  assert_true(t.ctx().field_focused())
 }
 
 ///|
 test "wide: a right click on the composer's words as the desktop app's: 剪切, 复制, 粘贴, 全选 as they can be done" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
-  t.run_for(history_fade_ms)
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
   let (fx, fy) = match t.find("发消息") {
     Some(at) => at
@@ -903,7 +905,6 @@ test "wide: a right click on the composer's words as the desktop app's: 剪切, 
 test "wide: a right click on a message's image: 复制图片, the picture on the clipboard as PNG" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
-  t.run_for(history_fade_ms)
   // an image of the chat's in view, at the pane's middle
   let mut at : (Double, Double)? = None
   for _ in 0..<12 {
@@ -919,7 +920,6 @@ test "wide: a right click on a message's image: 复制图片, the picture on the
     Some(p) => p
     None => fail("no image in view")
   }
-  t.run_for(history_fade_ms)
   t.right_click(x, y)
   t.frame()
   // (its menu, the presenters': a small panel at the pointer with a mouse, in)
@@ -939,7 +939,6 @@ test "wide: a right click on a message's image: 复制图片, the picture on the
 test "wide: words picked in a message with the pointer: 引用 over them quotes them into the chat's draft" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
-  t.run_for(history_fade_ms)
   let (px, py, pw, ph) = words_rect(t, "高度先按 90 估")
   t.drag(px + 1.0, py + ph / 2.0, px + pw - 1.0, py + ph / 2.0)
   t.frame()
@@ -964,14 +963,12 @@ test "wide: words picked in a message with the pointer: 引用 over them quotes 
 test "wide: words picked with the pointer from a message's heading into its list: 引用 over them quotes all of them, a line each" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
-  t.run_for(history_fade_ms)
   for _ in 0..<12 {
     match t.run_rects("做了什么") {
       [(_, y, _, _), ..] if y > 100.0 && y < 500.0 => break
       _ => t.wheel(900.0, 400.0, -200.0)
     }
   }
-  t.run_for(history_fade_ms)
   let (hx, hy, _, hh) = words_rect(t, "做了什么")
   let (ix, iy, iw, ih) = words_rect(t, "滚动位置记成")
   t.drag(hx + 1.0, hy + hh / 2.0, ix + iw - 1.0, iy + ih / 2.0)
@@ -1952,7 +1949,6 @@ test "wide: ⌘V with a picture or files on the clipboard puts them in as files 
 test "wide: an agent's card over its picture beside its message (AgentCard.tsx), laid out as the web's over the window" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat-agent-card")
-  t.run_for(history_fade_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   // the last of its messages' names; its picture in the margin before it
   let names = word("Claude")
@@ -2025,7 +2021,6 @@ fn peek_words_at(t : @ui.Tester, s : String) -> (Double, Double) raise {
 test "wide: a web link in a message has its page's card while the pointer rests on it, read by the core (LinkHover)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat-peeks")
-  t.run_for(history_fade_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   let (x, y) = peek_words_at(t, "https://example.com/bench/list")
   assert_eq(word("列表滚动的性能数据").length(), 0)
@@ -2044,7 +2039,6 @@ test "wide: a web link in a message has its page's card while the pointer rests 
 test "wide: a pull request's link in a message has its card as GitHub says it: its state, where it is, its size and checks (PullRequestCard)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat-peeks")
-  t.run_for(history_fade_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   let (x, y) = peek_words_at(t, "https://github.com/acme/shop/pull/128")
   let said = ["已合并", "acme/shop #128", "3 小时前", "首页列表按天分组", "lin", "+120", "4 个文件", "检查通过 9"]
@@ -2061,7 +2055,6 @@ test "wide: a pull request's link in a message has its card as GitHub says it: i
 test "wide: a file an agent names by its path is a chip in its words, its card a few of its lines while the pointer rests on it, its path to copy (FileRef)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat-peeks")
-  t.run_for(history_fade_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   // its chip: its path and the line it names, as the core shortened it
   let (x, y) = peek_words_at(t, "src/list/place.mbt:12")
@@ -2082,7 +2075,6 @@ test "wide: a file an agent names by its path is a chip in its words, its card a
 test "wide: a reference to a chat in a message has the chat's card while the pointer rests on it, as the list has it (RefPreview)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat-peeks")
-  t.run_for(history_fade_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   let said = "奏 · 分组的标题用相对日期还是具体日期？"
   // (its @ and its title one link: from either, the same card)
@@ -2102,7 +2094,6 @@ test "wide: a reference to a chat in a message has the chat's card while the poi
 test "wide: an agent's card says over each of its allowance's chips what is left of it (QuotaBars' tip)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat-agent-card")
-  t.run_for(history_fade_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   // its card over its picture beside its last message
   let names = word("Claude")
@@ -2139,7 +2130,6 @@ test "wide: an agent's card says over each of its allowance's chips what is left
 test "wide: the station a chat's agent runs on, beside its mark in the bar, has its card while the pointer rests on it (StationHover)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat-agent-card")
-  t.run_for(history_fade_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   // its part of the tile: in the chat's bar, named for what it is
   let part = t.locate("=Studio").filter(fn(p) { p.1 < 60.0 && p.0 > 400.0 })
@@ -2187,7 +2177,6 @@ test "wide: a working agent's card has its stop in its top right corner, concent
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
-  t.run_for(history_fade_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   let last = word("Claude").iter().fold(init=None, fn(acc : (String, Double, Double, Double, Double, Double)?, w) {
     match acc {
@@ -2235,7 +2224,6 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
-  t.run_for(history_fade_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.0 }) }
   let last = word("Claude").iter().fold(init=None, fn(acc : (String, Double, Double, Double, Double, Double)?, w) {
     match acc {

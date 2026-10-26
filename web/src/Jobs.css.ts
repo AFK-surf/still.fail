@@ -4,7 +4,7 @@ import { emitOutKeyframes, enterUpKeyframes, jobBreatheKeyframes, jobLiveKeyfram
 import { msg, msgBubble } from "./styles/conversation.css.ts";
 import { msgMine } from "./styles/chat.css.ts";
 import { detailsList, jobsPanel } from "./pages/ChatPage.css.ts";
-import { activityLine, agentActivity, chatMessages, composerThumb, msgFlash, msgWaitingLate } from "./Chat.css.ts";
+import { activityLine, agentActivity, composerThumb, msgFlash, msgWaitingLate } from "./Chat.css.ts";
 import { tokenGuide } from "./pages/SlackApp.css.ts";
 import { TEXT_IN, outsetStart } from "@stillfail/ui/styles/align.ts";
 import { segmented, segmentedOption } from "@stillfail/ui/parts.css.ts";
@@ -196,21 +196,19 @@ globalStyle(`${msg}[data-emitting] > *`, {
   transformOrigin: "12px 12px", willChange: "transform, clip-path",
   animation: `${emitOutKeyframes} 380ms ${vars.easeOut} both`,
 });
-/** Here rather than with its class: it comes after [data-enter], and wins over it; over a row that faded in with
- *  the history (Chat.css.ts [data-history-fade], which stays on it) too, or a jump to it would not show. */
-const flashing = `${msgFlash}, ${chatMessages} > ${msg}${msgFlash}[data-history-fade]`;
-globalStyle(flashing, {
+/** Here rather than with its class: it comes after [data-enter], and wins over it. */
+globalStyle(msgFlash, {
   animation: `${msgFlashKeyframes} 1700ms`,
   borderRadius: `calc(6px * ${vars.cornerScale})`, // own corner: 14 outside with its ground's 8px (as Android's flash)
   cornerShape: vars.cornerShape,
 });
 /** Your words: their bubble is the message, and takes the tint; the row round it does not. */
-globalStyle(`${msgMine}${msgFlash}:has(${msgBubble}), ${chatMessages} > ${msgMine}${msgFlash}[data-history-fade]:has(${msgBubble})`, { animation: "none" });
+globalStyle(`${msgMine}${msgFlash}:has(${msgBubble})`, { animation: "none" });
 globalStyle(`${msgMine}${msgFlash} ${msgBubble}`, { animation: `${bubbleFlashKeyframes} 1700ms` });
 /** Here rather than with its class: it comes after .msg-flash, and wins over it. */
-globalStyle(`${STILL} ${msgFlash}, ${STILL} ${chatMessages} > ${msg}${msgFlash}[data-history-fade]`, stillFlash(msgFlashHeldKeyframes, "1700ms"));
+globalStyle(`${STILL} ${msgFlash}`, stillFlash(msgFlashHeldKeyframes, "1700ms"));
 // Your words: still their bubble, not the row (the held tint above is over every rule without it).
-globalStyle(`${STILL} ${msgMine}${msgFlash}:has(${msgBubble}), ${STILL} ${chatMessages} > ${msgMine}${msgFlash}[data-history-fade]:has(${msgBubble})`, { animation: "none !important" });
+globalStyle(`${STILL} ${msgMine}${msgFlash}:has(${msgBubble})`, { animation: "none !important" });
 globalStyle(`${STILL} ${msgMine}${msgFlash} ${msgBubble}`, stillFlash(bubbleFlashHeldKeyframes, "1700ms"));
 /** Here rather than with its class: it comes after [data-enter], and wins over it. */
 globalStyle(composerThumb, {
