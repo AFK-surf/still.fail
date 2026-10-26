@@ -1,5 +1,5 @@
-// An agent's request about a vault item on its card (vault_approval.mbt; VaultAsk.tsx), and the secrets left in plain
-// text from before security mode (settings/vault.mbt plain_left; Vault.kt PlainLeft).
+// An agent's request about a vault item on its card (vault_approval.mbt; VaultAsk.tsx). The vault's page itself:
+// src/sfpages vault_wbtest.mbt.
 
 ///|
 /// A source over the settings' fixture whose vault in ws1 holds `requests` (and holds keys here: `available`); the
@@ -49,32 +49,6 @@ fn vault_src(
       calls.push(name + " " + params.stringify())
       done(Ok(Json::null()))
     },
-  }
-}
-
-///|
-test "secrets left in plain text from before security mode: how many, 加密 encrypting them into the vault" {
-  let t = settings_tester("vault", mode="settings-vault-plain", shows="settings-vault-plain")
-  shown_on_page(t, "2 条密钥尚未加密")
-  assert_true(t.find("2 条密钥尚未加密") is Some(_))
-  // (its row pressed: 加密 where it says what it does, the last words with 加密 in them as the title says it too)
-  let (x, y) = t.find_last("加密").unwrap()
-  t.tap(x, y)
-  assert_true(t.find("2 条密钥尚未加密") is None)
-}
-
-///|
-test "密钥: 默认最长授权 a row over the profiles' keys, the one now under it; pressed, its three choices, each with what it means (Vault.kt DefaultLasts)" {
-  let t = settings_tester("vault")
-  shown_on_page(t, "默认最长授权")
-  assert_true(t.find("直到对话归档") is Some(_))
-  assert_true(t.find("每次使用都要你批准一次") is None)
-  let (x, y) = t.find("默认最长授权").unwrap()
-  t.tap(x, y)
-  t.frame()
-  presented_in(t)
-  for words in ["仅一次", "1 小时", "每次使用都要你批准一次", "最长能选「本对话直到归档」，至多 30 天"] {
-    assert_true(t.find(words) is Some(_), msg=words)
   }
 }
 

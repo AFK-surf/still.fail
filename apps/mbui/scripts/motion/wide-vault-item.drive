@@ -1,4 +1,4 @@
-# A secret's page on the desktop (sfdesk vault_item.mbt, the web's cloud/VaultItem.tsx): MBUI_WIN=1280x800 over the
+# A secret's page on the desktop (sfpages vault_item.mbt, the web's cloud/VaultItem.tsx): MBUI_WIN=1280x800 over the
 # made-up chat. ⌘, then 密钥, down to its secrets, the first.
 timeout 30000
 until 按空格输入

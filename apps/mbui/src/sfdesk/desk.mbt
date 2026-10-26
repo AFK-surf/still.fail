@@ -46,8 +46,6 @@ pub fn reset() -> Unit {
   settings_reset()
   station_page_reset()
   profile_page_reset()
-  vault_item_reset()
-  vault_reset()
   memory_doc_reset()
   add_profile_reset()
   station_cards_reset()

@@ -14,7 +14,7 @@
 
 ///|
 /// 密钥 (VaultSettings, VaultScreen): as the core's `vaults` says where the viewer stands.
-fn vault_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
+pub fn vault_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let ws = here.workspace
   let v = (core.topic)("vaults", { "workspace": str(ws) }).value
@@ -27,7 +27,7 @@ fn vault_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit 
 
 ///|
 /// 全部密钥 (VaultItems): what the library keeps, 添加 at its head; what has to come first, as on 密钥.
-fn vault_items_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
+pub fn vault_items_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let ws = here.workspace
   let v = (core.topic)("vaults", { "workspace": str(ws) }).value
@@ -157,8 +157,8 @@ fn vault_words(c : @ui.Ctx, ws : String, words : Array[String]) -> Unit {
             let k = r * 3 + i
             c.box(style=vt_word, fn() {
               if k < words.length() {
-                c.box(style=vt_word_number, fn() { mono(c, (k + 1).to_string(), style=vt_word_number_words) }) |> ignore
-                mono(c, words[k], style=vt_word_words)
+                c.box(style=vt_word_number, fn() { @settings.mono(c, (k + 1).to_string(), style=vt_word_number_words) }) |> ignore
+                @settings.mono(c, words[k], style=vt_word_words)
               }
             })
             |> ignore
@@ -650,7 +650,7 @@ let vt_glyph : Double = 16.0
 ///|
 /// (actions: a card's buttons at its foot, 8 apart, its words before them)
 // kept across runs: a value (no field of it changes)
-let vt_actions : @ui.Style = @ui.css("row w=Full gap=S2 pt=S1 align=ACenter")
+pub let vt_actions : @ui.Style = @ui.css("row w=Full gap=S2 pt=S1 align=ACenter")
 
 ///|
 /// 全部密钥's field: over its list, as wide as its card, 10 above it.

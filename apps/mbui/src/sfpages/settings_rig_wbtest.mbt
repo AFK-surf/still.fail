@@ -1,5 +1,5 @@
 // The settings' pages here (about.mbt, appearance.mbt, automatic_decisions.mbt, bars.mbt, memory.mbt,
-// notifications.mbt, permissions.mbt, shortcuts.mbt, usage.mbt, account.mbt, workspace_page.mbt, security.mbt)
+// notifications.mbt, permissions.mbt, shortcuts.mbt, usage.mbt, account.mbt, workspace_page.mbt, security.mbt, vault.mbt, vault_item.mbt)
 // drawn alone over the made-up core's settings, in a box of each width, with a finger and with a mouse: what each is
 // for, laid out by its own width. What the shell does around them (the tier, its sidebar, the system's bars) is the
 // whole app's tests' (src/sfapp).
@@ -25,6 +25,10 @@ fn setting_tester(
   @sffixture.fixture_reset()
   @sf.presenters_reset()
   @sf.set_words(@sfbase.fill)
+  // (what the settings' own fixture keeps for a mode: their made-up state, as the app's fixture sets it)
+  if mode != "settings" {
+    @settings.fixture_page(mode) |> ignore
+  }
   let src = over(@sffixture.fixture(mode))
   app.nav.push(Settings)
   app.nav.push(Setting(route))
@@ -69,6 +73,9 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     Workspace => workspace_page(c, core, here, frame)
     Security => security_page(c, core, here, frame)
     SecurityOpen => security_open_page(c, core, here, frame)
+    Vault => vault_page(c, core, here, frame)
+    VaultItems => vault_items_page(c, core, here, frame)
+    VaultItem(v, item) => vault_item_page(c, core, here, frame, v, item)
     Memories => memories_page(c, core, here, frame)
     Memory(a) => memory_page(c, core, here, frame, a)
     AutoDecisions => decisions_page(c, core, here, frame)

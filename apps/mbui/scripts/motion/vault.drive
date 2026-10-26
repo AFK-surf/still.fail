@@ -1,4 +1,4 @@
-# 密钥 (sfdesk vault.mbt, one page in every frame): MBUI_FIXTURE=settings-vault, a phone's window or a desktop's; the
+# 密钥 (sfpages vault.mbt, one page in every frame): MBUI_FIXTURE=settings-vault, a phone's window or a desktop's; the
 # page (the request waiting, how its secrets are kept), then down it to deleting the vault at its foot.
 timeout 20000
 until git push origin main
