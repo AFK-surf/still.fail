@@ -26,7 +26,9 @@
 //     mbc mirror STAGE COPY
 //         COPY's files as STAGE has them (each file and directory at STAGE's top, the rest of COPY left alone: its
 //         _build), a file only written when its content changed, so that moon, which goes by mtimes, builds anew
-//         only what changed. Gone from STAGE: gone.
+//         only what changed. Gone from STAGE: gone. A C source's content is what it includes too: moon compiles a
+//         native stub again only for a newer stub, so each is written with the digest of the files it includes after
+//         it (a comment), and anew when one of them changed.
 //
 // moonbit_init (every global's initial value, tens of thousands of lines, run once) is units of its own (one for
 // each package's pieces of it), compiled with --init-flags (MBC_INIT_FLAGS) after the others' flags: by default -O0
@@ -1277,6 +1279,7 @@ fn cmd_mirror(args : Array[String]) -> Unit {
   }
   let src_top = utf8(args[0])
   let dst_top = utf8(args[1])
+  let dirs = cl_include_dirs()
   let mut written = 0
   for top in sort_bytes(list_dir(src_top)) {
     let src = path_join(src_top, top)
@@ -1300,8 +1303,12 @@ fn cmd_mirror(args : Array[String]) -> Unit {
     }
     for p in pairs {
       let (s, d) = p
-      match (read_file(s), read_file(d)) {
-        (Some(a), Some(b)) if a == b => continue
+      let want = match mirrored(s, dirs) {
+        Some(w) => w
+        None => continue
+      }
+      match read_file(d) {
+        Some(b) if b == want => continue
         _ => ()
       }
       makedirs(dirname(d))
@@ -1309,13 +1316,159 @@ fn cmd_mirror(args : Array[String]) -> Unit {
         rmtree(d)
       }
       // (a file written now: newer than anything built from what it was)
-      let _ = copyfile(s, d)
+      let _ = write_file(d, want)
       written += 1
     }
   }
   if getenv("MBC_VERBOSE") is Some(_) {
     log("mirror \{args[1]}: \{written} files written")
   }
+}
+
+///|
+/// A file as mirror writes it: as it is, a C source with the digest of the files it includes after it, so that it is
+/// written anew when one of them changes (still.fail's Windows host, src/host/win_core.c, is its win_engine.c's
+/// #include: compiled on 2026-10-24, it was kept by every build after, though it changed). None: it cannot be read.
+fn mirrored(src : Bytes, dirs : Array[Bytes]) -> Bytes? {
+  let t = match read_file(src) {
+    Some(t) => t
+    None => return None
+  }
+  if !is_c_source(src) {
+    return Some(t)
+  }
+  let files = included_files(src, dirs)
+  if files.length() == 0 {
+    return Some(t)
+  }
+  let all = @buffer.new()
+  for f in files {
+    match read_file(f) {
+      Some(d) => {
+        all.write_bytes(utf8("\{d.length()}:"))
+        all.write_bytes(d)
+      }
+      None => ()
+    }
+  }
+  let end = if t.length() > 0 && t[t.length() - 1] != b'\n' { b"\n" } else { b"" }
+  Some(cat([t, end, b"// mbc mirror: what it includes, by content: ", sha1_hex(all.to_bytes(), 40), b"\n"]))
+}
+
+///|
+/// What moon compiles as a package's native stub: C, C++, Objective-C
+fn is_c_source(p : Bytes) -> Bool {
+  let (_, ext) = splitext(p)
+  ext == b".c" || ext == b".cc" || ext == b".cpp" || ext == b".m" || ext == b".mm"
+}
+
+///|
+/// Where the C compiler looks for an #include beyond the includer's own directory: the directories given it in CL
+/// (MSVC's options from the environment, as still.fail's scripts/win.sh gives them: /I<dir>, -I<dir>, /I <dir>)
+fn cl_include_dirs() -> Array[Bytes] {
+  let out = []
+  let words = match getenv("CL") {
+    Some(cl) => split_words(cl, posix=false)
+    None => []
+  }
+  let mut i = 0
+  while i < words.length() {
+    let w = words[i]
+    if w.length() >= 2 && (w[0] == b'/' || w[0] == b'-') && w[1] == b'I' {
+      let mut d = sub(w, 2, w.length())
+      if d.length() == 0 && i + 1 < words.length() {
+        i += 1
+        d = words[i]
+      }
+      if d.length() >= 2 && d[0] == b'"' && d[d.length() - 1] == b'"' {
+        d = sub(d, 1, d.length() - 1)
+      }
+      if d.length() > 0 {
+        out.push(d)
+      }
+    }
+    i += 1
+  }
+  out
+}
+
+///|
+/// What a C source's #include and #import lines name, in order: (the name, true for a "…" one, looked for beside the
+/// file first; false for a <…> one)
+fn include_names(t : Bytes) -> Array[(Bytes, Bool)] {
+  let out = []
+  let n = t.length()
+  let mut i = 0
+  while i < n {
+    let e = eol(t, i)
+    let mut k = i
+    while k < e && (t[k] == b' ' || t[k] == b'\t') {
+      k += 1
+    }
+    if k < e && t[k] == b'#' {
+      k += 1
+      while k < e && (t[k] == b' ' || t[k] == b'\t') {
+        k += 1
+      }
+      let word = if starts_at(t, k, b"include") {
+        7
+      } else if starts_at(t, k, b"import") {
+        6
+      } else {
+        0
+      }
+      if word > 0 {
+        k += word
+        while k < e && (t[k] == b' ' || t[k] == b'\t') {
+          k += 1
+        }
+        if k < e && (t[k] == b'"' || t[k] == b'<') {
+          let quoted = t[k] == b'"'
+          let c = find_byte(t[:e], if quoted { b'"' } else { b'>' }, k + 1)
+          if c > k + 1 {
+            out.push((sub(t, k + 1, c), quoted))
+          }
+        }
+      }
+    }
+    i = e + 1
+  }
+  out
+}
+
+///|
+/// The files a C source includes and those include, each once, as the compiler finds them: a "…" one beside the file
+/// naming it, else in `dirs`; a <…> one in `dirs` (the system's headers, past them, are not followed)
+fn included_files(src : Bytes, dirs : Array[Bytes]) -> Array[Bytes] {
+  let seen = BSet::of([normpath(src)])
+  let out = []
+  let todo = [src]
+  while todo.length() > 0 {
+    let p = todo.pop().unwrap()
+    match read_file(p) {
+      Some(t) =>
+        for x in include_names(t) {
+          let (name, quoted) = x
+          let places = if quoted { [path_join(dirname(p), name)] } else { [] }
+          for d in dirs {
+            places.push(path_join(d, name))
+          }
+          for q in places {
+            if is_file(q) {
+              let q = normpath(q)
+              if !seen.has(q) {
+                seen.add(q)
+                out.push(q)
+                todo.push(q)
+              }
+              break
+            }
+          }
+        }
+      None => ()
+    }
+  }
+  out
 }
 
 ///|
