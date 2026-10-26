@@ -590,6 +590,46 @@ fn composer_glass(t : @ui.Tester) -> (Double, Double, Double, Double) raise {
 }
 
 ///|
+/// How far the composer's ground stands under the lowest line of the chat's messages over it.
+fn composer_gap(t : @ui.Tester) -> Double raise {
+  let (gx, gy, gw, _) = composer_glass(t)
+  let mut last = -1.0e9
+  for g in t.drawn_glyphs() {
+    if g.0 > gx && g.0 < gx + gw && g.1 < gy - 2.0 && g.1 > last {
+      last = g.1
+    }
+  }
+  gy - last
+}
+
+///|
+test "wide: a line more or less in the composer, the chat's last row goes with its ground as it reshapes, not ahead of it" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  t.frame()
+  let (gx, gy, gw, gh) = composer_glass(t)
+  t.tap(gx + gw / 2.0, gy + gh / 2.0)
+  t.type_text("一一")
+  t.run_for(@sfpages.morph_ms)
+  let gap = composer_gap(t)
+  // a line more: half way, its ground on its way up and the row with it
+  t.key(@ui.key_code_enter, mods=@ui.mod_shift_key)
+  t.type_text("二二")
+  t.run_for(@sfpages.morph_ms / 4.0)
+  assert_true((composer_gap(t) - gap).abs() < 1.0, msg="growing: \{composer_gap(t)} from \{gap}")
+  t.run_for(@sfpages.morph_ms)
+  assert_true((composer_gap(t) - gap).abs() < 1.0)
+  // and the line taken out again
+  t.key(@ui.key_code_backspace)
+  t.key(@ui.key_code_backspace)
+  t.key(@ui.key_code_backspace)
+  t.run_for(@sfpages.morph_ms / 4.0)
+  assert_true((composer_gap(t) - gap).abs() < 1.0, msg="shrinking: \{composer_gap(t)} from \{gap}")
+  t.run_for(@sfpages.morph_ms)
+  assert_true((composer_gap(t) - gap).abs() < 1.0)
+}
+
+///|
 test "wide: a new chat becomes its chat as the web's: its scene up and away, the composer down to the chat's foot, the words up into their bubble" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)

@@ -1495,9 +1495,10 @@ fn composer_held_box(c : @ui.Ctx, draft : String) -> Double {
 
 ///|
 /// How much room draft `draft`'s composer takes at its page's foot (what the list leaves free under its last row): as
-/// tall as its place (chat_composer: its box, what it says under it, its margins), at least as tall as that opened with
-/// one line; let go by words sent from it (composer_hold), from as tall as it was then down to that, on its ground's
-/// curve.
+/// tall as its place (chat_composer: its box, what it says under it, its margins) with its ground as drawn (a line
+/// more or less: the list's rows go with the ground as it reshapes, the frame it does), at least as tall as that opened
+/// with one line; let go by words sent from it (composer_hold), from as tall as it was then down to that, on its
+/// ground's curve.
 pub fn composer_room(c : @ui.Ctx, draft : String) -> Double {
   // (not laid out yet: a capsule's)
   let foot = @motion.measured(c, "composer/foot").unwrap_or(capsule_room(c.width))
@@ -1508,7 +1509,7 @@ pub fn composer_room(c : @ui.Ctx, draft : String) -> Double {
     Some(box) => foot - box + composer_open_box()
     None => composer_open_room(c.width)
   }
-  let now = dmax(foot, least)
+  let now = dmax(foot + @motion.reshaped_over(c, "composer/box"), least)
   let held = @motion.anim(c, "composer/held/" + draft, 0.0, global=true).get()
   let share = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true).get()
   if held > now {

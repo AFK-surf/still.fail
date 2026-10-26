@@ -695,6 +695,25 @@ pub fn measured(c : @ui.Ctx, key : String) -> Double? {
 }
 
 ///|
+/// How far over its laid out top the ground of the shape keyed `key` (reshape) is drawn now, on its way from the shape
+/// it had (less than 0 while it is drawn lower: growing up to it): what stands on it moves with it so, in the same
+/// frame. 0 at rest, and while it goes from where it was with what it holds (`carry`: to another place, not another
+/// shape there).
+pub fn reshaped_over(c : @ui.Ctx, key : String) -> Double {
+  match mo.recs.get(motion_key(key)) {
+    Some(r) if r.seen >= c.frame_number() - 1 && !r.g_carry => {
+      let p = r.gp.get()
+      if p < 1.0 {
+        (r.y - r.gy) * (1.0 - p)
+      } else {
+        0.0
+      }
+    }
+    _ => 0.0
+  }
+}
+
+///|
 /// Where the node kept as `key` (measure) was last laid out, in the window: x, y, w, h (None before it was, or once it
 /// has not been for a frame).
 pub fn measured_rect(c : @ui.Ctx, key : String) -> (Double, Double, Double, Double)? {
