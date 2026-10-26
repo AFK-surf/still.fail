@@ -361,3 +361,5 @@ first, the whole app's tests would have moved with it and again as the pages lef
    and `page-screen` at 0. What opens a mode over the app (`fixture_open.mbt`) and the whole app's tests that call it
    go to the tests' side then, the app no longer linking the made-up core; what those tests read of the shell's own
    is asked through its public ways, or the test written again, not made public for them.
+
+A station destination opened from a chat on Medium or Large stays beside that chat: screens use `screen:[station,screen]`, files use `drive:[station]`, and machine details use `station:[station]`. Reopening focuses the existing tab. Folder navigation is independent for each chat and station; choosing a pinned folder changes that station's location. Small keeps these destinations on the page stack. Hidden screen tabs release their stream and decoder and reopen when selected.

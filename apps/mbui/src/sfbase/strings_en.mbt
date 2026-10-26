@@ -1958,4 +1958,7 @@ let en : Map[String, String] = {
   "web-pages.workspace.people": "{n} people",
   "web-pages.workspace.people.one": "1 person",
   "web-pages.workspace.resizeSidebar": "Resize sidebar",
+  "web-pages.drive.viewAll": "View all files",
+  "web-pages.drive.pinnedFolders": "Pinned folders",
+  "web-pages.screen.none": "No screens yet",
 }

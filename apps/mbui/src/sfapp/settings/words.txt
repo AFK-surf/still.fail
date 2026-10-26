@@ -1559,3 +1559,7 @@ web-pages.vault.uses.last
 web-pages.vault.uses.none
 web-pages.vault.uses.title
 web-pages.vault.vaults
+
+web-pages.drive.viewAll
+web-pages.drive.pinnedFolders
+web-pages.screen.none

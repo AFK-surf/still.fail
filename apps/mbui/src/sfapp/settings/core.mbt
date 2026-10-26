@@ -31,6 +31,8 @@ pub(all) struct Core {
   open_chat : (String, String, String) -> Unit
   /// a station's drive opened (its folders lent: src/sfapp/drive.mbt), by its address
   open_drive : (String) -> Unit
+  /// A pinned folder opened in the same destination as the station's files.
+  open_folder : (String, String) -> Unit
   /// signing another account in (登录其他账号)
   sign_in : () -> Unit
   /// a toast (Sheet.kt ToastHost)

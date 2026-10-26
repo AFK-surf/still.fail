@@ -919,10 +919,10 @@ fn menu_popover(
       Some(item) => {
         let v = i.to_string()
         entries.push(
-          match item.chosen {
+          if item.heading { @kit.menu_label(item.label) } else { match item.chosen {
             Some(on) => @kit.menu_radio(v, on, label=item.label, disabled=item.disabled)
             None => @kit.menu_item(v, label=item.label, disabled=item.disabled)
-          },
+          } },
         )
         if item.icon != "" {
           icons[v] = item.icon
@@ -1566,7 +1566,7 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
           match x {
             None => c.box(style=sheet_rule, fn() {  }) |> ignore
             Some(item) =>
-              if sheet_row(
+              if item.heading { sheet_title(c, item.label) } else if sheet_row(
                   c,
                   key + "/" + i.to_string(),
                   item.label,

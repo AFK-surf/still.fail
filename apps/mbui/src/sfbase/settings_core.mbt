@@ -80,6 +80,7 @@ fn settings_core_of(
       open_page(Chat({ station, session, title, station_name: name }))
     },
     open_drive: fn(station) { open_page(Drive({ station, root: None, path: "" })) },
+    open_folder: fn(station, root) { open_page(Drive({ station, root: Some(root), path: "" })) },
     sign_in: fn() { (src.sign_in)() },
     say: fn(words) {
       toast_later(words)

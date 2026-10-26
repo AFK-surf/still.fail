@@ -392,6 +392,7 @@ pub fn dropdown_menu(
   rule_look? : (@ui.Ctx) -> Unit = menu_rule_look,
   at? : (Double, Double, Double, Double),
   scrim? : Int64 = 0L,
+  submenu? : Bool = false,
   enter? : @motion.Trans = pop_in,
   exit? : @motion.Trans = pop_out,
 ) -> Menu {
@@ -409,7 +410,7 @@ pub fn dropdown_menu(
   let dim = if scrim != 0L { animate(c, key + "/scrim", if now { 1.0 } else { 0.0 }, transition=@motion.tween(200.0)) } else { 0.0 }
   let mut chosen = None
   if shown || dim > 0.0 {
-    let o = c.overlay(key, modal=true, anchor=trigger, scrim=faded(scrim, dim), initial_focus=pick(by_key, first_item(c, key, entries), pid), inert=!now, fn() {
+    let o = c.overlay(key, modal=!submenu, anchor=trigger, return_focus=if submenu { trigger } else { 0 }, scrim=faded(scrim, dim), initial_focus=pick(by_key, first_item(c, key, entries), pid), inert=!now, fn() {
       guard moved is Some(shows) else { return }
       let out = menu_panel(
         c,
@@ -421,7 +422,7 @@ pub fn dropdown_menu(
         offset,
         shows,
         label,
-        0,
+        if submenu { 1 } else { 0 },
         false,
         min_w,
         look,
@@ -430,6 +431,7 @@ pub fn dropdown_menu(
         rule_look~,
       )
       chosen = out.chosen
+      if out.back { now = false }
     })
     if o.dismissed is Some(_) || chosen is Some(_) {
       now = false

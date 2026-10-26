@@ -58,16 +58,7 @@ pub fn station_peek_card(c : @ui.Ctx, address : String) -> Unit {
       }
     })
     |> ignore
-    match field(field(s, "overview"), "drive") {
-      Some(Object(_)) =>
-        if @sf.menu_item(c, tr("android-misc.drive.title"), key="peek-card/drive/" + address, end="chevron-right") {
-          (core.open_drive)(address)
-        }
-      _ => ()
-    }
-    if @sf.menu_item(c, tr("android-chat.station.details"), key="peek-card/station/" + address, end="chevron-right") {
-      (core.push)(Station(address))
-    }
+    peek_ways(c, core, address, s, fn() { })
   })
   |> ignore
 }
@@ -179,29 +170,47 @@ fn station_peek(c : @ui.Ctx, core : Core, address : String, close : () -> Unit) 
 ///|
 /// Where to go on from it: its files (docs/drive.md), where it has a drive, a way there from where it is named; its page.
 fn peek_ways(c : @ui.Ctx, core : Core, address : String, s : Json?, close : () -> Unit) -> Unit {
+  let screens = (core.topic)("screens", { "station": str(address) }).value
+  let screen_items : Array[@sf.MenuItem?] = []
+  for screen in items(screens, "screens") {
+    let sc = Some(screen)
+    screen_items.push(Some(@sf.menu_item_of(text(sc, "title"), icon=if text(sc, "kind") == "browser" { "web" } else { "monitor" }, fn() {
+      close()
+      (core.open_screen)(address, text(sc, "id"))
+    })))
+  }
+  if screen_items.is_empty() {
+    let note = text(screens, "note")
+    screen_items.push(Some(@sf.menu_item_of(if note == "" { tr("web-pages.screen.none") } else { note }, disabled=true, fn() { })))
+  }
+  @sf.submenu_row(c, "peek-screen/" + address, tr("android-misc.screen.section"), screen_items)
   match field(field(s, "overview"), "drive") {
     Some(Object(_)) as drive => {
-      let n = items(drive, "roots").length()
-      if @sf.link_row(
-          c,
-          "peek-drive",
-          tr("android-misc.drive.title"),
-          value=if n == 0 {
-            tr("android-misc.drive.row.none")
-          } else {
-            fill("android-misc.drive.roots.count", [("n", n.to_string())])
-          },
-        ) {
+      let files : Array[@sf.MenuItem?] = [Some(@sf.menu_item_of(tr("web-pages.drive.viewAll"), icon="folder", fn() {
         close()
         (core.open_drive)(address)
+      }))]
+      let roots = items(drive, "roots")
+      if !roots.is_empty() {
+        files.push(None)
+        files.push(Some(@sf.menu_item_of(tr("web-pages.drive.pinnedFolders"), heading=true, fn() { })))
+        for root in roots {
+          let r = Some(root)
+          files.push(Some(@sf.menu_item_of(text(r, "name"), icon="folder", fn() {
+            close()
+            (core.open_folder)(address, text(r, "path"))
+          })))
+        }
       }
+      @sf.submenu_row(c, "peek-drive/" + address, tr("android-misc.drive.title"), files)
     }
     _ => ()
   }
-  if @sf.link_row(c, "peek-station", tr("android-chat.station.details")) {
+  if @sf.menu_item(c, tr("android-chat.station.details"), key="peek-station/" + address, end="panel-open") {
     close()
     (core.push)(Station(address))
   }
+
 }
 
 ///|

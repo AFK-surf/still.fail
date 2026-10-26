@@ -350,6 +350,31 @@ fn Ctx::focus_in_layer(self : Ctx, id : Int) -> Bool {
 }
 
 ///|
+/// Whether keyboard focus is in an overlay or a nested overlay it owns.
+pub fn Ctx::keyboard_in_overlay(self : Ctx, id : Int) -> Bool {
+  self.focus_visible && self.focus_in_layer(id)
+}
+
+///|
+/// Whether the pointer is inside an overlay or a nested overlay it owns.
+pub fn Ctx::pointer_in_overlay(self : Ctx, id : Int) -> Bool {
+  let (px, py, _) = self.pointer()
+  for f in self.last_focusables {
+    guard self.rect_of(f.id) is Some((x, y, w, h)) else { continue }
+    if px < x || px >= x + w || py < y || py >= y + h { continue }
+    let mut at = f.layer
+    for _ in 0..<64 {
+      if at == id { return true }
+      match self.last_layers.iter().find_first(fn(l) { l.id == at && !l.inert }) {
+        Some(l) if at != 0 => at = l.parent
+        _ => break
+      }
+    }
+  }
+  false
+}
+
+///|
 /// Whether what is being built now reads the keys: it is in the layer they go to (or one built in it), or none takes
 /// them.
 fn Ctx::keys_here(self : Ctx) -> Bool {
