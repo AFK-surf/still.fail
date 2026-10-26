@@ -521,6 +521,12 @@ jobs:
           d=$(sh apps/mbui/scripts/mbui.sh)
           c=$(sha256sum "$d/out/win/app/_build/native/release/build/stillfail/stillfail/stillfail.c" | cut -c1-16)
           echo "BUILD_KEY=mbui-win-build-mono-$c" >> "$GITHUB_ENV"
+      # the installer (apps/mbui/windows/setup.c) made of the app as built, put into a folder of this run's, put again
+      # over it, taken away (e2e/win/setup.sh: ~5 s)
+      - name: The installer, installed and taken away (win.sh setup, e2e/win/setup.sh)
+        run: |
+          bash apps/mbui/scripts/win.sh setup
+          bash apps/mbui/e2e/win/setup.sh "$(ls apps/mbui/out/setup/stillfail-setup-*.exe)"
       # out before the e2e flow ends (its tests hold nothing back): zipped, put, checked, then its feed, beside the
       # cache's save and the e2e flow (one after another they were ~6 + 13 + 17 s after the build, 2026-10-24,
       # 40064767331; the put mostly waiting on the network)
@@ -575,4 +581,6 @@ jobs:
           path: |
             apps/mbui/out/e2e/windows/
             !apps/mbui/out/e2e/windows/core/
+            apps/mbui/out/setup/*.log
+            apps/mbui/out/setup/result.txt
           if-no-files-found: warn
