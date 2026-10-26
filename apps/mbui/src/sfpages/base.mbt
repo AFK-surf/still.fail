@@ -21,7 +21,6 @@ using @sfbase {
   options_out_ms,
   options_scale,
   close_gap,
-  close_with_answer,
   under_post,
   pk,
   quoted_into,

@@ -82,7 +82,7 @@ test "turns: the next waits for the list at rest (its glide's declared end), not
 }
 
 ///|
-test "a decision answered here: its options close as the answer comes in, one motion, how it went in their place" {
+test "a decision answered here: your answer comes in first, the options none pressed meanwhile, closing in the next turn" {
   // (the fixture's own core: it answers the card, and posts the answer as yours)
   reset()
   let src = fixture("chat")
@@ -102,15 +102,69 @@ test "a decision answered here: its options close as the answer comes in, one mo
   t.draw()
   let tu = turns_of("ws1/st1\u{1}s-c1")
   let rd = reading_of("ws1/st1\u{1}s-c1")
-  // your answer came in, and the options closed from the same moment: not in a turn after it (the list up for the
-  // answer, then down again for them)
+  // your answer came in, in the turn kept for it as you picked; the options still there meanwhile
   assert_true(rd.admitted.contains("m:ts108"))
+  assert_eq(tu.shown.get("ask/ts8"), Some(true))
+  // their turn: after your answer's rise, the list at rest after it
+  t.draw()
+  t.draw()
+  let at = tu.start_of("ask/ts8")
+  assert_true(at >= tu.started_at("m:ts108") + @sf.enter_ms && at < @double.infinity)
+  t.run_for(at - t.time())
   assert_eq(tu.shown.get("ask/ts8"), Some(false))
-  assert_eq(tu.started_at("ask/ts8"), tu.started_at("m:ts108"))
-  assert_true(tu.with_answer("ask/ts8"))
+  assert_eq(tu.started_at("ask/ts8"), at)
   t.run_for(under_rest() - t.time())
   assert_true(t.find("你 选择了「一起换」") is Some(_))
   assert_true(t.find("把首页和聊天页的截图都更新") is None)
+}
+
+///|
+test "turns: a turn kept for the viewer's row goes to it, before what was asked after it, whenever the row comes" {
+  reset()
+  let tu = turns_of("test")
+  let phase = Ref::new(0)
+  let t = @ui.Tester::new(
+    fn(c) {
+      tu.step(c, -1.0)
+      match phase.val {
+        0 => {
+          ignore(tu.in_turn(c, "k", true, close_turn_ms))
+          // (a row under way: what is kept waits behind it)
+          tu.admit(c, "a", row_turn_ms)
+          tu.keep_turn(c)
+          phase.val = 1
+        }
+        1 => {
+          // (the options' change seen before the answer's row)
+          ignore(tu.in_turn(c, "k", false, close_turn_ms))
+          phase.val = 2
+        }
+        2 => {
+          tu.admit(c, "b", row_turn_ms)
+          ignore(tu.in_turn(c, "k", false, close_turn_ms))
+          phase.val = 3
+        }
+        _ => ignore(tu.in_turn(c, "k", false, close_turn_ms))
+      }
+      c.box(fn() {  }) |> ignore
+    },
+    w=100.0,
+    h=100.0,
+    platform=2,
+  )
+  t.draw()
+  t.draw()
+  t.draw()
+  let a_at = tu.started_at("a")
+  assert_true(tu.waiting.contains("b"))
+  // the row in the kept turn, right after the one before; the change after it
+  t.run_for(row_turn_ms + turn_calm_ms)
+  assert_false(tu.waiting.contains("b"))
+  assert_eq(tu.started_at("b"), a_at + row_turn_ms + turn_calm_ms)
+  assert_eq(tu.shown.get("k"), Some(true))
+  t.run_for(row_turn_ms + turn_calm_ms)
+  assert_eq(tu.shown.get("k"), Some(false))
+  assert_eq(tu.started_at("k"), tu.started_at("b") + row_turn_ms + turn_calm_ms)
 }
 
 ///|

@@ -15,12 +15,13 @@
 
 ///|
 /// What a turn is for: a row coming in (by its key), something under a post shown or not (by its key), words sent,
-/// messages coming out of avatars.
+/// messages coming out of avatars, the row of what the viewer just did here, not made yet (Turns::keep_turn).
 pub(all) enum TurnFor {
   Admit(String)
   Change(String)
   Send
   Emits
+  Kept
 } derive(Eq, Show)
 
 ///|
@@ -49,11 +50,6 @@ pub(all) struct Turns {
   /// what is under a post as shown (Turns::in_turn), by key, and what it is to become in its turn
   shown : Map[String, Bool]
   wants : Map[String, Bool]
-  /// what is under a post the viewer answered from here (its key): it changes as the answer goes in, in its turn
-  /// (Turns::answered_here)
-  answering : Map[String, Bool]
-  /// and those that changed so, with their answer (Turns::with_answer)
-  answered : Map[String, Bool]
   /// when each row came in or each change was made, by key (what plays in it starts from there)
   started : Map[String, Double]
   /// words last sent: when (-1: none), and till when what is asked after them waits (their landing, as they say it:
@@ -87,8 +83,6 @@ pub fn turns_of(key : String) -> Turns {
         waiting: {},
         shown: {},
         wants: {},
-        answering: {},
-        answered: {},
         started: {},
         sent_at: -1.0,
         sent_until: -1.0,
@@ -145,6 +139,29 @@ pub fn Turns::admit(self : Turns, c : @ui.Ctx, key : String, ms : Double, after?
   if self.waiting.contains(key) {
     return
   }
+  // the turn kept for the viewer's row (Turns::keep_turn), not an agent's line going after the others: it comes in that
+  // turn, waiting for it meanwhile, or at once, it being under way
+  if !after {
+    match self.asks.search_by(fn(a) { a.what == Kept }) {
+      Some(i) => {
+        self.asks[i] = { ..self.asks[i], what: Admit(key), ms }
+        self.waiting[key] = true
+        return
+      }
+      None => ()
+    }
+    if self.on == Some(Kept) && self.open {
+      let at = self.moment(c)
+      if at < self.until {
+        self.on = Some(Admit(key))
+        self.open = false
+        self.until = at + ms + turn_calm_ms
+        self.started[key] = at
+        self.list_rest = @double.infinity
+        return
+      }
+    }
+  }
   self.waiting[key] = true
   self.ask(c, Admit(key), ms, after~)
 }
@@ -182,19 +199,6 @@ pub fn Turns::in_turn(self : Turns, c : @ui.Ctx, key : String, target : Bool, ms
       self.shown[key] = target
       target
     }
-    // answered from here: changed as the answer comes in, one motion with it, not a turn after it
-    Some(shown) if shown != target && self.answering.contains(key) => {
-      self.answering.remove(key)
-      self.answered[key] = true
-      match self.asks.search_by(fn(a) { a.what == Change(key) }) {
-        Some(i) => self.asks.remove(i) |> ignore
-        None => ()
-      }
-      self.shown[key] = target
-      self.wants[key] = target
-      self.started[key] = self.moment(c)
-      target
-    }
     Some(shown) => {
       let asked = self.asks.iter().any(fn(a) { a.what == Change(key) })
       if shown != target && !asked {
@@ -207,18 +211,15 @@ pub fn Turns::in_turn(self : Turns, c : @ui.Ctx, key : String, target : Bool, ms
 }
 
 ///|
-/// What is under a post `key` answered from here (a card's options picked): the viewer's answer is theirs as words
-/// sent are, so as it comes in what is under the post changes with it, the one cause one motion (not the answer coming
-/// in, then in a turn after it the options closing, the list going up and then down again).
-pub fn Turns::answered_here(self : Turns, key : String) -> Unit {
-  self.answering[key] = true
-}
-
-///|
-/// Whether what is under a post `key` last changed with the viewer's answer from here (Turns::answered_here): its room
-/// goes on the answer's moment, with no wait of its own.
-pub fn Turns::with_answer(self : Turns, key : String) -> Bool {
-  self.answered.contains(key)
+/// The row of what the viewer just did here (a card's option picked: their answer, in the outbox) takes its turn as
+/// they do it, before what comes of it (the options closing, asked once the core says they are answered): the next row
+/// asked comes in it (web/src/listQueue.ts reserveRow), the options still there, none pressed, meanwhile. No row by
+/// turn_most_ms (an option that closes the card without one), the turn goes.
+pub fn Turns::keep_turn(self : Turns, c : @ui.Ctx) -> Unit {
+  if self.asks.iter().any(fn(a) { a.what == Kept }) {
+    return
+  }
+  self.ask(c, Kept, @double.infinity)
 }
 
 ///|
@@ -320,11 +321,10 @@ pub fn Turns::step(self : Turns, c : @ui.Ctx, list_rest : Double) -> Unit {
         self.list_rest = @double.infinity
       }
       Change(k) => {
-        self.answered.remove(k) |> ignore
         self.shown[k] = self.wants.get(k).unwrap_or(!self.shown.get(k).unwrap_or(false))
         self.started[k] = at
       }
-      Send => ()
+      Send | Kept => ()
       Emits => self.started[emits_turn] = at
     }
   }

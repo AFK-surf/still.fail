@@ -129,9 +129,10 @@ of them. Their numbers are the web's at the same place (paths from the repositor
   first tenth: beside every other send it read as a jump (the user, 2026-10-27: 「非 new chat 的发消息比 new chat 流畅很多」).
   The composer going down to its chat's foot as they set out goes on their way too, not a page's 340 ms ease-out, which
   went a fifth of 200 in its first frame, ahead of words still setting off (the user: 「composer 好像还是会一帧动老远」).
-- A card answered from here: its options close as the answer comes in, one motion (list_turns.mbt `answered_here`),
-  not in a turn after it: the list went up for the answer and then down again for the options (the user, 2026-10-27:
-  「点决策感觉动效怪怪的」).
+- A card answered from here: the web's order (Decisions.tsx DecisionOptions, listQueue.ts reserveRow). Picked, none is
+  pressed any more; the answer's row comes in first, in a turn kept for it as it is picked (list_turns.mbt `keep_turn`),
+  and only once it is in do the options close, in the next turn. Closing them with the answer (#2222) read as the list
+  jumping about (the user, 2026-10-27: 「决策点完先 disable，决策消息上屏动效播完，然后决策再收起来」).
 - The composer going to another page: 340 ms, the web's for it (the view transition), not a layout switched's 380: it
   is the composer moving with its page, not the page's layout changing.
 - Words sent keep the shape they were typed in, so that sending them only moves them (Android's SendText.kt, the
