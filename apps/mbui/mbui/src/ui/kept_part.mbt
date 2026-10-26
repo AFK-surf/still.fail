@@ -356,6 +356,7 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
   } else {
     // drawn again: what it draws from kept through this frame, the frame it asked for coming
     e.again = Some(st)
+    self.drawn_again_told((0, id), 0.0, 0.0)
     for p in st.plots {
       if p >= part_colour_plot {
         atlas_for(true).0.drawn(p - part_colour_plot)
@@ -934,6 +935,27 @@ fn Ctx::part_targets_again(self : Ctx, st : KeptPart) -> Unit {
   self.next_scroll_rects.append(st.scroll_rects)
   for t in st.sels {
     selectable_painted(t.base, t.at, t.lay, t.text, t.ox, t.oy, t.x0, t.y0, t.x1, t.y1)
+  }
+}
+
+///|
+/// What is kept as it was built and is being built now, the innermost: a list's row (1 and its id among the rows'), a
+/// part (0 and its id), or none ((0, 0)). What a package keeps of what that build lays out is that row's or part's, kept
+/// for it while it is drawn again (on_drawn_again).
+pub fn kept_building() -> (Int, Int) {
+  if part_now.row != 0 {
+    (1, part_now.row)
+  } else {
+    (0, part_now.part)
+  }
+}
+
+///|
+/// Part or row `which` drawn again this frame, `dy` down the window from where its build laid it out, `rel` down its
+/// list's rows: the packages told (on_drawn_again).
+fn Ctx::drawn_again_told(self : Ctx, which : (Int, Int), dy : Double, rel : Double) -> Unit {
+  for f in drawn_again_hooks {
+    f(self, which, dy, rel)
   }
 }
 
