@@ -44,6 +44,11 @@ impl @hostapi.Host for FakeHost with event_time(_) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with event_finger(_) {
+  h_event_finger()
+}
+
+///|
 impl @hostapi.Host for FakeHost with frame_late(_) {
   h_frame_late()
 }

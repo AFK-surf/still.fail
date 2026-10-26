@@ -654,3 +654,20 @@ test "panic set_frame_times: a time not later than now is said" {
   let t = @ui.Tester::new(fn(c) { c.text("x") |> ignore }, w=100.0, h=100.0)
   t.set_frame_times([t.time()])
 }
+
+///|
+test "a host saying what its pointer's events come from: the hand of the moment is the last one's, taped with it" {
+  let t = @ui.Tester::new(fn(c) { c.text("app", wrap=false) |> ignore }, platform=3)
+  t.start_tape()
+  t.draw()
+  assert_eq(@ui.pointing(), @ui.Pointing::Mouse)
+  t.host_says_finger(Some(true))
+  t.tap(10.0, 10.0)
+  assert_eq(@ui.pointing(), @ui.Pointing::Finger)
+  t.host_says_finger(Some(false))
+  t.move(20.0, 20.0)
+  assert_eq(@ui.pointing(), @ui.Pointing::Mouse)
+  // (each event's own: what a replay of the tape gives the app again)
+  assert_true(t.tape().contains("\"a\":[0,10,10,0,0,1]"))
+  assert_true(t.tape().contains("\"a\":[1,20,20,0,0,0]"))
+}

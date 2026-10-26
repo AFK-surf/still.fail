@@ -79,8 +79,32 @@ pub fn pointing() -> Pointing {
     None =>
       match said_pointing.val {
         Some(p) => p
-        None => platform_pointing(platform())
+        None =>
+          match host_pointing.val {
+            Some(p) => p
+            None => platform_pointing(platform())
+          }
       }
+  }
+}
+
+///|
+/// What the host last said a pointer's event came from (@hostapi.event_finger), on a machine that has both a touch
+/// screen and a mouse (Windows'): the hand of the moment from then on. None: nothing said.
+// kept across runs: a real host's alone (a Tester's is its fake host's pointing)
+let host_pointing : Ref[Pointing?] = Ref(None)
+
+///|
+/// A pointer's event said to come from a finger (1) or a mouse or a pen (0): pointing() is that from now on (the fake
+/// host's own, under a Tester); -1, nothing said, leaves it.
+fn pointing_said_by_host(by : Int) -> Unit {
+  if by < 0 {
+    return
+  }
+  let p = if by == 1 { Finger } else { Mouse }
+  match fake.val {
+    Some(f) => f.pointing = p
+    None => host_pointing.val = Some(p)
   }
 }
 

@@ -934,6 +934,9 @@ int32_t mb_host_utc_offset_min(double at_ms) {
 
 double mb_host_event_time(void) { return event_time; }
 
+// What a pointer's event came from (@hostapi.event_finger): not said (the system's hand).
+int32_t mb_host_event_finger(void) { return -1; }
+
 double mb_host_frame_late(void) { return frame_late; }
 
 int32_t mb_host_platform(void) { return 1; }

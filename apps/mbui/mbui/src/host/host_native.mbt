@@ -15,6 +15,8 @@ extern "C" fn ffi_now() -> Double = "mb_host_now"
 
 extern "C" fn ffi_event_time() -> Double = "mb_host_event_time"
 
+extern "C" fn ffi_event_finger() -> Int = "mb_host_event_finger"
+
 extern "C" fn ffi_frame_late() -> Double = "mb_host_frame_late"
 
 extern "C" fn ffi_platform() -> Int = "mb_host_platform"
@@ -413,6 +415,12 @@ fn utc_offset_min(at_ms : Double) -> Int {
 /// are handled together); negative when the host doesn't say.
 fn event_time() -> Double {
   ffi_event_time()
+}
+
+///|
+/// What the pointer's event being delivered came from: 1 a finger, 0 a mouse or a pen, -1 not said (@hostapi.event_finger).
+fn event_finger() -> Int {
+  ffi_event_finger()
 }
 
 ///|

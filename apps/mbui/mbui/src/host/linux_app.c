@@ -752,6 +752,9 @@ int32_t mb_host_utc_offset_min(double at_ms) {
 
 double mb_host_event_time(void) { return -1; }
 
+// What a pointer's event came from (@hostapi.event_finger): not said (GTK hands touches as the pointer's here).
+int32_t mb_host_event_finger(void) { return -1; }
+
 // (how late the frame before reached the screen: not told here)
 double mb_host_frame_late(void) { return 0; }
 

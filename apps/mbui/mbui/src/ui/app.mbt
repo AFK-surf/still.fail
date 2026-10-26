@@ -567,14 +567,21 @@ fn input_came() -> Unit {
 
 ///|
 fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
-  // the keys held as it goes down, read once and kept with it (a replay hands the same on)
-  pointer_in(kind, x, y, button, if kind == 0 { mods_held() } else { 0 })
+  // the keys held as it goes down, read once and kept with it (a replay hands the same on); what the host says it
+  // came from, a finger or a mouse, likewise
+  pointer_in(kind, x, y, button, if kind == 0 { mods_held() } else { 0 }, by=h_event_finger())
 }
 
 ///|
-/// A pointer's event, with the keys held as it went down (0 for an event other than a press).
-fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int) -> Unit {
-  took_input("pointer", h_event_time(), [kind.to_double(), x, y, button.to_double(), mods.to_double()])
+/// A pointer's event, with the keys held as it went down (0 for an event other than a press), and what it came from
+/// where the host says (`by`: 1 a finger, 0 a mouse or a pen; the hand of the moment from it on: pointing).
+fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? : Int = -1) -> Unit {
+  let args = [kind.to_double(), x, y, button.to_double(), mods.to_double()]
+  if by >= 0 {
+    args.push(by.to_double())
+  }
+  took_input("pointer", h_event_time(), args)
+  pointing_said_by_host(by)
   let c = g()
   // a second finger (4 down, 5 moved, 6 up: hosts with touch screens), for a pinch (native.mbt `second_pointer`)
   if kind >= 4 && kind <= 6 {

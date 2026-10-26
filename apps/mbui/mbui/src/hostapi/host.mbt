@@ -32,6 +32,7 @@ pub(open) trait Host {
   wall_ms(Self) -> Double = _
   utc_offset_min(Self, Double) -> Int = _
   event_time(Self) -> Double = _
+  event_finger(Self) -> Int = _
   frame_late(Self) -> Double = _
   platform(Self) -> Int = _
   request_frame(Self) -> Unit = _
@@ -298,6 +299,11 @@ impl Host with utc_offset_min(_, _) {
 ///|
 impl Host with event_time(_) {
   -1.0
+}
+
+///|
+impl Host with event_finger(_) {
+  -1
 }
 
 ///|
@@ -1280,6 +1286,14 @@ pub fn now() -> Double {
 /// A run to a declared moment (a scripted shot) has its own: from a fixed day, on with its frames' clock.
 pub fn wall_ms() -> Double {
   current.val.wall_ms()
+}
+
+///|
+/// What the pointer's event being delivered came from, where one machine has both: 1 a finger on the screen, 0 a
+/// mouse, a trackpad or a pen (Windows: a touch screen beside a mouse); -1 where the host does not say (its system's
+/// hand: Android's and iOS's fingers, a Mac's pointer).
+pub fn event_finger() -> Int {
+  current.val.event_finger()
 }
 
 ///|
