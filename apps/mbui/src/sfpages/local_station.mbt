@@ -60,6 +60,12 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
   let running = text(s, "runner") != "none"
   let service = field(s, "service") is Some(_)
   let workspace = field(s, "workspace")
+  // started by its service; with none (still.fail's desktop app ran it from its own bundle, gone with that app; its
+  // service taken away), where the app looks after the station here, by the installer without a token, which makes it
+  // one as it is and starts it (更新到最新版's, local_station_carry_on's): a station in a workspace, the installer's
+  // `update` refusing one in none
+  let startable = service ||
+    (text(workspace, "id") != "" && @settings.local_station_managed())
   let name = match text(workspace, "stationName") {
     "" => @sf.t(if pc { "web-pages.localStation.thisPc" } else { "web-pages.localStation.thisMac" })
     n => n
@@ -75,12 +81,8 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
     "service" => service_name(s)
     "other" => @sf.t("web-pages.localStation.byHand")
     "app" => @sf.t("web-pages.localStation.byApp", args=[("name", "still.fail")])
-    _ =>
-      if service {
-        service_name(s)
-      } else {
-        @sf.t("web-pages.localStation.byApp", args=[("name", "still.fail")])
-      }
+    // stopped: its service's; with none, nothing runs it (this app runs none of its own)
+    _ => if service { service_name(s) } else { "" }
   }
   let place = if workspace is None {
     @sf.t("web-pages.localStation.noWorkspace")
@@ -92,7 +94,7 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
     @sf.t(if flag(workspace, "removed") { "web-pages.localStation.removed" } else { "web-pages.localStation.inWorkspace" }, args=[("workspace", ws)])
   }
   let act = fn(a : String) {
-    if a == "update" {
+    if a == "update" || (a == "start" && !service) {
       (core.local_install)(false)
     } else {
       @ui.local_station_act(a)
@@ -106,8 +108,13 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
         c.text(state, style=ls_state) |> ignore
       })
       |> ignore
-      if !running && !working && service && @sf.button(c, @sf.t("web-pages.localStation.start"), key="local/start-now", tone=Ghost) {
-        act("start")
+      // (words alone, on its name's line: the line as high as with none, its ⋯ concentric in the card's corner)
+      if !running && !working && startable {
+        @sf.line_end(c, fn() {
+          if @sf.button(c, @sf.t("web-pages.localStation.start"), key="local/start-now", tone=Ghost) {
+            act("start")
+          }
+        })
       }
       // its menu (⋯)
       let mid = c.id("local/menu")
@@ -124,7 +131,7 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
           entries.push(@kit.menu_item("restart", label=@sf.t("web-pages.localStation.restart"), disabled=working))
         }
       } else {
-        entries.push(@kit.menu_item("start", label=@sf.t("web-pages.localStation.start"), disabled=working || !service))
+        entries.push(@kit.menu_item("start", label=@sf.t("web-pages.localStation.start"), disabled=working || !startable))
       }
       // brought up to the latest release (the installer), not one started by hand
       if text(s, "runner") != "other" && @settings.local_station_managed() {

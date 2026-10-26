@@ -33,6 +33,45 @@ test "本机 Station, at each width and with either hand: as the system says it 
 }
 
 ///|
+test "本机 Station still.fail's desktop app ran (in a workspace, no service, stopped): 启动 runs the installer without a token" {
+  for case in page_cases {
+    let (w, platform) = case
+    // (a Mac's host: the app looks after the station here)
+    if platform != 0 {
+      continue
+    }
+    let t = setting_tester(LocalStation, w, platform~)
+    t.set_local_station(
+      #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","name":"星火工作室","stationName":"MacBook","removed":false}}
+      ,
+    )
+    t.draw()
+    let at = "\{w}"
+    assert_true(t.find("已停止") is Some(_), msg=at)
+    // (nothing runs it: no app said to)
+    assert_true(t.find("由 still.fail app 运行") is None, msg=at)
+    t.click(Button, label="启动")
+    t.frame()
+    let acts = t.local_acts()
+    assert_eq(acts.length(), 1, msg=at)
+    assert_true(acts[0].has_prefix("update {"), msg="\{at}: \{acts[0]}")
+    assert_true(!acts[0].contains("\"token\""), msg="\{at}: \{acts[0]}")
+  }
+}
+
+///|
+test "本机 Station with data in no workspace and no service: nothing to start it with" {
+  let t = setting_tester(LocalStation, 1280.0, platform=0)
+  t.set_local_station(
+    #|{"data":"~/.stillfail","runner":"none"}
+    ,
+  )
+  t.draw()
+  assert_true(t.find("已停止") is Some(_))
+  assert_true(t.query(Button, label="启动") is None)
+}
+
+///|
 test "本机 Station with none here: 添加这台 Mac where the app adds one, the note alone where it does not" {
   for case in page_cases {
     let (w, platform) = case
