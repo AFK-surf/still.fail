@@ -11,6 +11,7 @@ on:
       - "apps/mbui/mbui/src/kitdemo/gallery/viewcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/playcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/secretcheck.mbt"
+      - "apps/mbui/mbui/src/kitdemo/gallery/a11ycheck.mbt"
       - "apps/mbui/mbui/src/host/win_*"
       - "apps/mbui/mbui/src/host/win.h"
       - "apps/mbui/mbui/src/host/mini_json.h"
@@ -63,6 +64,9 @@ jobs:
       - name: "The runner's contract: a file written in the run's directory is told as it comes (done X)"
         if: success() || failure()
         run: scripts/host_contract.sh windows runner
+      - name: "The widgets read out by UI Automation's client (as a reader: Narrator, NVDA), a button pressed through it"
+        if: success() || failure()
+        run: scripts/host_contract.sh windows a11y
       - name: "Secrets copied: kept out of the clipboard's history, taken off as the app ends, left when something else was copied since"
         if: success() || failure()
         run: scripts/host_contract.sh windows secret

@@ -573,6 +573,11 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
       want_frame = 1;
       return 0;
     }
+    case WM_GETOBJECT: {
+      intptr_t r;
+      if (mb_a11y_object(h, wp, lp, &r)) return (LRESULT)r;
+      break;
+    }
     case WM_POINTERDOWN:
     case WM_POINTERUPDATE:
     case WM_POINTERUP:
@@ -1114,9 +1119,7 @@ int32_t mb_host_native_pointing(void) {
 }
 // Whether a keyboard is at hand (@hostapi.keyboard): a Windows PC's, always.
 int32_t mb_host_keyboard(void) { return 1; }
-// The app's widgets for the system's accessibility (@hostapi.a11y_on, a11y_tree): not told here yet.
-int32_t mb_host_a11y_on(void) { return 0; }
-void mb_host_a11y_tree(moonbit_string_t s) { (void)s; }
+// (the app's widgets for the system's accessibility, @hostapi.a11y_on and a11y_tree: win_a11y.cpp's UI Automation)
 
 // Sharing (@hostapi.share, @hostapi.shared_in): no share sheet here yet; nothing comes in.
 int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_string_t mime, moonbit_bytes_t data) {
