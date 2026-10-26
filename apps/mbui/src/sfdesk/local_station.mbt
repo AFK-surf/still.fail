@@ -9,14 +9,14 @@ fn local_station_page(c : @ui.Ctx, core : Core) -> Unit {
   ignore(c.every(local_read_ms))
   let parsed = @json.parse(@ui.local_station()) catch { _ => Json::null() }
   let s = Some(parsed)
-  let pc = @ui.platform() == 3
+  let pc = @sfbase.local_machine_pc()
   let doing = text(s, "doing")
   let body : Array[() -> Unit] = []
   if text(s, "data") == "" {
     // none here: 添加这台 Mac downloads one, joins it and runs it as a service
     body.push(fn() {
       // (添加这台 Mac last, in the card's foot corner: concentric with it, out past its words: @sf.card_foot_in)
-      let adds = doing == "" && @ui.platform() == 0
+      let adds = doing == "" && @sfbase.local_station_managed()
       c.box(style=if adds { desk_card.then(@sf.foot_pad(@sf.button_height())) } else { desk_card }, fn() {
         if doing != "" {
           local_progress(c, s, doing)
@@ -26,7 +26,7 @@ fn local_station_page(c : @ui.Ctx, core : Core) -> Unit {
         local_failed(c, s)
         if adds {
           c.box(style=vt_actions.then(@sf.foot_across(@sf.button_height())), fn() {
-            if @sf.button(c, @sf.t("web-pages.settings.thisMac.add"), key="local/install", tone=Primary) {
+            if @sf.button(c, @sf.t(if pc { "web-pages.settings.thisPc.add" } else { "web-pages.settings.thisMac.add" }), key="local/install", tone=Primary) {
               (core.local_install)(true)
             }
           })
@@ -124,7 +124,7 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
         entries.push(@kit.menu_item("start", label=@sf.t("web-pages.localStation.start"), disabled=working || !service))
       }
       // brought up to the latest release (the installer), not one started by hand
-      if text(s, "runner") != "other" && @ui.platform() == 0 {
+      if text(s, "runner") != "other" && @sfbase.local_station_managed() {
         entries.push(@kit.menu_item("update", label=@sf.t("web-pages.localStation.update"), disabled=working))
       }
       entries.push(@kit.menu_separator())
