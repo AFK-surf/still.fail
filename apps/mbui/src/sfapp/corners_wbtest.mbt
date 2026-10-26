@@ -53,7 +53,7 @@ let corner_modes : Array[String] = [
   "settings-me", "settings-me-reading", "settings-workspace", "settings-security", "settings-vault",
   "settings-vault-items", "settings-vault-item", "settings-stations", "settings-station", "settings-station-offline", "settings-station-env", "settings-station-processes",
   "settings-station-mark", "settings-station-lower", "settings-station-versions", "settings-stations-add",
-  "settings-stations-existing", "settings-stations-command", "settings-first-station", "settings-adb",
+  "settings-stations-existing", "settings-stations-command", "settings-first-station", "settings-adb", "settings-adb-unpaired", "settings-adb-pairing", "settings-adb-connected", "settings-adb-failed",
   "settings-profiles", "settings-profile", "settings-profile-quota", "settings-profile-models",
   "settings-profile-lower", "settings-profile-login", "settings-profile-login-failed", "settings-profile-quota-failed",
   "settings-profile-blocked", "settings-profile-signin", "settings-profile-key", "settings-new-profile",
