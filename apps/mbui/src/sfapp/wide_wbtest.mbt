@@ -142,6 +142,29 @@ test "wide: ⌘K over a chat lists what can be done only as the core finds it fo
 }
 
 ///|
+test "wide: ⌘K over a chat offers what its keys and bar do (归档, 执行历史, 发送文件, 接力), and runs it" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
+  for words in ["执行历史", "发送文件", "接力到频道"] {
+    t.clear()
+    t.type_text(words)
+    t.frame()
+    assert_true(t.find(words) is Some(_), msg=words + ": " + t.words().map(fn(w) { w.0 }).join("|"))
+  }
+  t.clear()
+  t.type_text("归档对话")
+  t.frame()
+  t.enter()
+  t.frame()
+  assert_true(t.find("搜索全部内容和操作") is None)
+  assert_true(
+    named(calls, "chat.archive").length() == 1 || t.find("仍在运行") is Some(_),
+    msg="into the archive, or asked first: " + t.words().map(fn(w) { w.0 }).join("|"),
+  )
+}
+
+///|
 test "wide: the 奏 page shows the decision the core shows: a row pressed (decision.show), ⌥↓ and ⌥↑ through its list" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="decisions")

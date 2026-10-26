@@ -67,7 +67,7 @@ pub fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   if !switching.val {
     return
   }
-  let offered = switcher_offered(c, src)
+  let offered = switcher_offered(c, src, w)
   let t = @sf.theme()
   let close = fn() {
     switching.val = false
@@ -195,82 +195,81 @@ let switcher_search_line : Double = 24.0
 
 ///|
 ///|
+/// One of the keys' actions as ⌘K offers it (the core names it): its icon, what it does; for update.app and
+/// update.station, the version it goes to and the station updated. Its keys are put in as it is offered.
+fn action_offered(id : String, icon : String, version? : String = "", station? : String = "", run : () -> Unit) -> @sfpages.Offered {
+  { id, group: "", label: "", words: "", typed: false, version, station, icon, keys: "", run }
+}
+
+///|
 /// What ⌘K offers of what the frame can do now (Switcher.tsx offered: the keys' actions it answers, and its own): the
-/// open chat's (find, its services), the app's (a new chat, the sidebar, settings, the shortcuts), settings' pages (only
-/// found by typing). The core names the keys' actions and finds what was typed among them (sfdesk/switcher.mbt).
-fn switcher_offered(c : @ui.Ctx, src : Source) -> Array[@sfpages.Offered] {
+/// open chat's (find, its services, into the archive, its agents' history, its agents stopped, a file into its draft,
+/// relayed, its station updated: as its keys and its bar's offer them now), the app's newer build, the app's (a new
+/// chat, the sidebar, settings, the shortcuts), settings' pages (only found by typing). The core names the keys'
+/// actions and finds what was typed among them (sfdesk/switcher.mbt).
+fn switcher_offered(c : @ui.Ctx, src : Source, w : Workspace) -> Array[@sfpages.Offered] {
   // an action's first keys as shown (as kept on this device: settings' 快捷键)
   let prefs = (src.topic)("prefs", {}).value
   let keys = fn(action : String) { @settings.key_label(prefs, action) }
-  // the open chat's (ChatPage.tsx chat.find, chat.jobs)
-  let all : Array[@sfpages.Offered] = match app.nav.top() {
-    Chat(r) =>
-      [
-        {
-          id: "chat.find",
-          group: "",
-          label: "",
-          words: "",
-          icon: "search",
-          keys: keys("chat.find"),
-          typed: false,
-          run: fn() { chat_find_open(c, r) },
-        },
-        {
-          id: "chat.jobs",
-          group: "",
-          label: "",
-          words: "",
-          icon: "web",
-          keys: keys("chat.jobs"),
-          typed: false,
-          run: fn() { open_jobs_pop() },
-        },
-      ]
-    _ => []
+  let all : Array[@sfpages.Offered] = []
+  let offer = fn(o : @sfpages.Offered) { all.push({ ..o, keys: keys(o.id) }) }
+  // the open chat's (ChatPage.tsx chat.find, chat.jobs, chat.archive, chat.history, chat.stop, composer.file; Relay.tsx
+  // chat.relay; StationUpdate.tsx update.station)
+  match app.nav.top() {
+    Chat(r) => {
+      let view = view_of_chat(src, r).0
+      if view is Some({ thread: Some(_), .. }) {
+        offer(action_offered("chat.find", "search", fn() { chat_find_open(c, r) }))
+      }
+      offer(action_offered("chat.jobs", "web", fn() { open_jobs_pop() }))
+      match view {
+        Some(v) => {
+          let chat = (src.topic)("chat", chat_params(r)).value
+          let open = !v.archived && !v.offline
+          if open {
+            offer(action_offered("chat.archive", "archive", fn() { c.tell("chat/archive", fn() { archive_asked(src, w, r, v, chat) }) }))
+          }
+          if v.agents.length() > 0 {
+            offer(action_offered("chat.history", "thread", fn() { c.tell("chat/history", fn() { history_toggle(src, r, v) }) }))
+          }
+          if agents_working(v) {
+            offer(action_offered("chat.stop", "stop", fn() { stop_agents(src, r, v) }))
+          }
+          if open {
+            offer(action_offered("composer.file", "file", fn() { @sfpages.pick_files(writing(src, r.station + ":" + r.session)) }))
+          }
+          match v.thread {
+            Some(th) if open && v.agents.length() > 0 =>
+              offer(action_offered("chat.relay", "arrow-up-right", fn() { @sfpages.open_relay(src, r, th, from=Unanchored) }))
+            _ => ()
+          }
+          let notice = v.station_update
+          let on = [("station", r.station), ("id", "station")]
+          if flag(notice, "canUpdate") && !core_doing(src, ["software.update"], on) {
+            offer(action_offered("update.station", "download", station=text(notice, "station"), fn() {
+              act(src, @sf.t("web-main.stationUpdate.updateAction"), "", "software.update", {
+                "station": Json::string(r.station),
+                "id": "station",
+              })
+            }))
+          }
+        }
+        None => ()
+      }
+    }
+    _ => ()
   }
-  all.push({
-    id: "chat.new",
-    group: "",
-    label: "",
-    words: "",
-    icon: "compose",
-    keys: keys("chat.new"),
-    typed: false,
-    run: fn() { new_chat() },
-  })
+  // the app's newer build, as 更新 over the sidebar offers it (brand.mbt)
+  if update.available is Some(_) && !update_under_way() {
+    offer(action_offered("update.app", "download", version=text(update.available, "versionName"), fn() { update_install(src) }))
+  }
+  offer(action_offered("chat.new", "compose", fn() { new_chat() }))
   // (the wide frame's alone)
-  if is_wide(c) { all.push({
-    id: "sidebar.toggle",
-    group: "",
-    label: "",
-    words: "",
-    icon: "panel-open",
-    keys: keys("sidebar.toggle"),
-    typed: false,
-    run: fn() { sidebar_toggle() },
-  })
+  if is_wide(c) {
+    offer(action_offered("sidebar.toggle", "panel-open", fn() { sidebar_toggle() }))
   }
-  all.push({
-    id: "settings",
-    group: "",
-    label: "",
-    words: "",
-    icon: "settings",
-    keys: keys("settings"),
-    typed: false,
-    run: fn() { open_settings() },
-  })
-  all.push({
-    id: "shortcuts",
-    group: "",
-    label: "",
-    words: "",
-    icon: "command",
-    keys: keys("shortcuts"),
-    typed: false,
-    run: fn() { wide.keys_open = true },
-  })
+  offer(action_offered("settings", "settings", fn() { open_settings() }))
+  offer(action_offered("shortcuts", "command", fn() { wide.keys_open = true }))
   let routes : Array[(String, @settings.Route, String)] = [
     ("appearance", @settings.Route::Appearance, @sf.t("web-pages.settings.nav.appearance")),
     ("notifications", @settings.Route::Notifications, @sf.t("web-pages.settings.nav.notifications")),
@@ -292,6 +291,8 @@ fn switcher_offered(c : @ui.Ctx, src : Source) -> Array[@sfpages.Offered] {
       icon: "settings",
       keys: "",
       typed: true,
+      version: "",
+      station: "",
       run: fn() {
         open_settings_at(route)
       },
