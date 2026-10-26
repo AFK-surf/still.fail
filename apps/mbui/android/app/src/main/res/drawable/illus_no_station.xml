@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- web/public/illus-no-station.svg as a VectorDrawable (design/brand/illus.py, svg2vd's convert). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="320dp" android:height="160dp" android:viewportWidth="320" android:viewportHeight="160">
+    <path android:pathData="M50 50H122A6 6 0 0 1 128 56V98A6 6 0 0 1 122 104H50A6 6 0 0 1 44 98V56A6 6 0 0 1 50 50Z"
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#24272B"
+        android:strokeWidth="1.5" />
+    <path android:pathData="M 56 65 H 88 M 56 76 H 106"
+        android:strokeColor="#8A8C90"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path android:pathData="M 74 89 H 116"
+        android:strokeColor="#24272B"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path android:pathData="M38 104H134A3 3 0 0 1 137 107V107A3 3 0 0 1 134 110H38A3 3 0 0 1 35 107V107A3 3 0 0 1 38 104Z"
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#24272B"
+        android:strokeWidth="1.5" />
+    <path android:pathData="M 128 78 L 130.46 78.02 L 132 78.05 M 136 78.2 L 137.37 78.28 L 139.53 78.42 L 139.99 78.46 M 143.97 78.84 L 145.63 79.04 L 147.55 79.29 L 147.94 79.35 M 151.89 79.99 L 153 80.19 L 154.73 80.52 L 155.81 80.75 M 159.71 81.63 L 161.3 82.02 L 162.88 82.43 L 163.59 82.62 M 167.45 83.68 L 167.48 83.69 L 169 84.13 L 170.5 84.56 L 171.29 84.79 M 175.13 85.91 L 176.52 86.31 L 178.04 86.73 L 178.98 86.99 M 182.85 88.01 L 184.3 88.37 L 185.92 88.75 L 186.74 88.94 M 190.66 89.75 L 191 89.81 L 192.77 90.13 L 194.59 90.43 L 194.6 90.43 M 198.56 90.98 L 200.34 91.19 L 202.38 91.4 L 202.54 91.41 M 206.52 91.72 L 206.63 91.72 L 208.86 91.84 L 210.52 91.91 M 214.52 91.99 L 216 92"
+        android:strokeColor="#8A8C90"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path android:pathData="M 268 74 L 269.56 74.15 L 271.06 74.61 L 271.82 75.02 M 274.73 77.7 L 275.39 78.94 L 275.85 80.44 L 275.95 81.46 M 276 85.45 L 276 89.45 M 276 93.45 L 276 97.45 M 276 101.45 L 276 102 L 275.85 103.56 L 275.39 105.06 L 275.24 105.34 M 272.74 108.41 L 272.44 108.65 L 271.06 109.39 L 269.56 109.85 L 269.09 109.89 M 265.09 110 L 261.09 110 M 257.09 110 L 253.09 110 M 249.09 110 L 245.09 110 M 241.09 110 L 237.09 110 M 233.09 110 L 229.09 110 M 225.09 110 L 224 110 L 222.44 109.85 L 221.16 109.46 M 217.94 107.17 L 217.35 106.44 L 216.61 105.06 L 216.17 103.63 M 216 99.64 L 216 95.64 M 216 91.64 L 216 87.64 M 216 83.64 L 216 82 L 216.15 80.44 L 216.38 79.68 M 218.41 76.29 L 219.56 75.35 L 220.94 74.61 L 221.85 74.33 M 225.82 74 L 229.82 74 M 233.82 74 L 237.82 74 M 241.82 74 L 245.82 74 M 249.82 74 L 253.82 74 M 257.82 74 L 261.82 74 M 265.82 74 L 268 74"
+        android:strokeColor="#8A8C90"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path android:pathData="M 240 92 H 252 M 246 86 V 98"
+        android:strokeColor="#8A8C90"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
