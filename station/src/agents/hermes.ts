@@ -2,8 +2,9 @@
 // docs/hermes.md for the protocol contract and supported profile setup. Beside what ACP says: the station's instructions
 // go with each prompt; a message for the running turn waits for the next (Hermes would make it a turn of its own); a
 // call's title is `<tool>: <its input>`; the station keeps the transcript (acp.ts KeptTranscript).
-import { existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { closeSync, existsSync, mkdirSync, openSync, readSync } from "node:fs";
+import { isAbsolute, join, normalize } from "node:path";
+import { homedir } from "node:os";
 import { wall } from "../ops/fibers.ts";
 import { peerHttpBase } from "../tools/http.ts";
 import { AcpDriver, AcpSession, KeptTranscript, acpOutcome, type AcpStart } from "./acp.ts";
@@ -28,6 +29,31 @@ export const SESSIONS = "sessions";
 
 /// The session ids Hermes gives: a path segment of the transcript's.
 const SESSION_ID = /^[a-zA-Z0-9_-]+$/;
+
+/// Explicit configuration is an opt-in to an existing Hermes home; ambient machine variables stay filtered.
+function configuredHome(value: string | undefined, fallback: string): string {
+  const picked = value?.trim();
+  if (!picked) return fallback;
+  const path = picked === "~" ? homedir() : picked.startsWith("~/") || picked.startsWith("~\\") ? join(homedir(), picked.slice(2)) : picked;
+  if (!isAbsolute(path)) throw new Error("HERMES_HOME must be an absolute path or start with ~/.");
+  return normalize(path);
+}
+
+/// Native state stays where a conversation began, even when its Profile now selects another home.
+/// Before this header existed all Hermes sessions used the profile's private home.
+function sessionHome(options: OpenOptions, configured: string): string {
+  if (options.resume === undefined) return configured;
+  if (!SESSION_ID.test(options.resume)) throw new Error("invalid Hermes session id");
+  const privateHome = hermesHome(options.profile.home);
+  const fd = openSync(join(privateHome, SESSIONS, `${options.resume}.jsonl`), "r");
+  try {
+    const head = Buffer.alloc(16_384);
+    const line = head.subarray(0, readSync(fd, head, 0, head.length, 0)).toString("utf8").split("\n", 1)[0]!;
+    const header = JSON.parse(line);
+    if (header.type !== "session") throw new Error("Hermes transcript has no session header");
+    return configuredHome(header.hermesHome, privateHome);
+  } finally { closeSync(fd); }
+}
 
 /// Hermes' ACP title is `<tool_name>: <argument preview>` (acp_adapter/tools.py). The live and transcript readers
 /// need the tool's name, notably to recognise chat_post; its arguments remain in rawInput, not in the name.
@@ -55,7 +81,7 @@ export type HermesDriverOptions = {
 export function hermesEnv(options: OpenOptions): Record<string, string> {
   const inherited = Object.fromEntries(Object.entries(cleanEnv([])).filter(([key]) => INHERITED.has(key.toUpperCase()) || /^LC_[A-Z_]+$/i.test(key)));
   const env = { ...inherited, ...expandRoute(profileEnv(options.profile, "hermes"), options.route) };
-  env.HERMES_HOME = hermesHome(options.profile.home);
+  env.HERMES_HOME = sessionHome(options, configuredHome(env.HERMES_HOME, hermesHome(options.profile.home)));
   // Hermes treats a borrowed Claude/Codex login as a configured provider. Keep those readers inside this profile,
   // unless the profile explicitly names a credential directory, and never borrow macOS's shared Claude login.
   env.CLAUDE_CONFIG_DIR ??= join(env.HERMES_HOME, "claude");
@@ -155,6 +181,7 @@ export class HermesDriver extends AcpDriver<HermesSession> {
 export class HermesSession extends AcpSession {
   private readonly instructions: string;
   private readonly profile: Profile;
+  private readonly nativeHome: string;
   /// What session/new said it offers (hermesCatalog).
   availableModels: string[] = [];
 
@@ -162,7 +189,12 @@ export class HermesSession extends AcpSession {
     super(driver, events, new KeptTranscript("hermes", join(hermesHome(options.profile.home), SESSIONS)));
     this.instructions = options.instructions;
     this.profile = options.profile;
+    this.nativeHome = hermesEnv(options).HERMES_HOME!;
     this.model = options.model ?? profileModel(options.profile) ?? null;
+  }
+
+  override began(cwd: string) {
+    this.transcript?.keep(this.id(), { type: "session", id: this.id(), cwd, hermesHome: this.nativeHome });
   }
 
   protected classify(text: string) {
