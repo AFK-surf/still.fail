@@ -24,6 +24,8 @@ fn main {
   let noticed = @ui.env("MBUI_NOTICECHECK") == "1"
   // MBUI_PDFCHECK=<a PDF, base64>: its pages read and drawn by the host, said on the log (pdfcheck.mbt)
   let pdf = @ui.env("MBUI_PDFCHECK")
+  // MBUI_PLAYCHECK=<a video, base64>: played by the host's player, its bytes read through the app (playcheck.mbt)
+  let play = @ui.env("MBUI_PLAYCHECK")
   // MBUI_STATIONCHECK=read|stop: this machine's station as the host says it, and stopped (stationcheck.mbt)
   let station = @ui.env("MBUI_STATIONCHECK")
   // MBUI_BADGECHECK=<n>: the number on the app's icon set, for the desktop's side to be asked (badgecheck.mbt)
@@ -40,6 +42,8 @@ fn main {
       @gallery.notice_check_run(c)
     } else if pdf != "" {
       @gallery.pdf_check_run(c, pdf)
+    } else if play != "" {
+      @gallery.play_check_run(c, play)
     } else if station != "" {
       @gallery.station_check_run(c, station)
     } else if badge != "" {

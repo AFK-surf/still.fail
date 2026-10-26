@@ -37,6 +37,9 @@
 #   scripts/host_contract.sh HOST pdf           test/host/pdfcheck.pdf's two pages read and drawn by the host, the
 #        second turned a quarter clockwise as its /Rotate says: their sizes, and each drawn page's colours (kitdemo's
 #        MBUI_PDFCHECK, src/kitdemo/gallery/pdfcheck.mbt)
+#   scripts/host_contract.sh HOST play          test/host/playcheck.mp4 played by the host's player, its bytes read
+#        through the app: its length and size once ready, played to its end, a frame grabbed (kitdemo's MBUI_PLAYCHECK,
+#        src/kitdemo/gallery/playcheck.mbt)
 #   scripts/host_contract.sh linux station      this machine's station as the host says it, in a home of the run's own
 #        (kitdemo's MBUI_STATIONCHECK, src/kitdemo/gallery/stationcheck.mbt): one started by hand said so, with its
 #        release, workspace and data, and stopped; then one the installer's service runs said so
@@ -640,6 +643,15 @@ INSTALL
     case "$read" in *'"runner":"service"'*'"service":{"kind":"systemd","name":"stillfail-station.service"}'*) ;;
       *) echo "station contract (linux): its service not said"; exit 1 ;; esac
     echo "station contract (linux): one started by hand said and stopped; the service's said as running it" ;;
+  play)
+    # (a second of 64 × 48 at 10 frames a second, H.264: its bytes read through the app, played to its end, a frame grabbed)
+    run "MBUI_PLAYCHECK=$(base64 < test/host/playcheck.mp4 | tr -d '\n\r')" $O/play.log || true
+    want="PLAYCHECK ready 1000 64x48|PLAYCHECK ended|PLAYCHECK grabbed"
+    have=$(grep -a "PLAYCHECK" $O/play.log | sed 's/.*PLAYCHECK/PLAYCHECK/' | tr -d '\r' | paste -sd'|' -)
+    if [ "$have" != "$want" ]; then
+      echo "play contract ($H): the host said \"$have\", not \"$want\""; tail -30 $O/play.log; exit 1
+    fi
+    echo "play contract ($H): $have" ;;
   pdf)
     # (each page at most 400 pixels on its longer side: red on the side its left half went to, blue on the other's)
     run "MBUI_PDFCHECK=$(base64 < test/host/pdfcheck.pdf | tr -d '\n\r')" $O/pdf.log || true
@@ -737,5 +749,5 @@ INSTALL
     echo "links contract (mac): opened with a link of its own scheme, the app said it" ;;
   kinds)
     scripts/chk outside-kinds $H ;;
-  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, station, badge; ios: free, done)" >&2; exit 1 ;;
+  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, play, station, badge; ios: free, done)" >&2; exit 1 ;;
 esac
