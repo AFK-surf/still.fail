@@ -330,6 +330,55 @@ test "on the tape a chat chosen in the sidebar while its view is on its way: the
 }
 
 ///|
+/// What the last frame drew from `left` across on (its instances, as Tester::drawn_text says them).
+fn drawn_from(t : @ui.Tester, left : Double) -> Array[String] {
+  let out = []
+  for line in t.drawn_text().split("\n") {
+    if line.has_prefix("inst ") {
+      // (its first number: where it is across, in 1/64 px)
+      let mut x = 0
+      let mut sign = 1
+      for ch in line.view(start_offset=5) {
+        if ch == '-' {
+          sign = -1
+        } else if ch >= '0' && ch <= '9' {
+          x = x * 10 + (ch.to_int() - 48)
+        } else {
+          break
+        }
+      }
+      if (sign * x).to_double() / 64.0 >= left {
+        out.push(line.to_string())
+      }
+    }
+  }
+  out
+}
+
+///|
+test "on the tape the sidebar's list scrolled with a finger: the page beside drawn again as it was, none of it built" {
+  let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
+  t.keep_parts(true)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  let left = match covered(t, @sf.t("web-main.sidebar.close")) {
+    Some((l, _)) => l
+    None => fail("no page beside the sidebar")
+  }
+  let page = drawn_from(t, left)
+  assert_true(page.length() > 20, msg="the page beside draws \{page.length()}")
+  // the list dragged: the page beside drawn again, as it was
+  t.press_at(150.0, 600.0)
+  for i in 1..=12 {
+    t.move(150.0, 600.0 - 15.0 * i.to_double())
+  }
+  assert_true(t.parts_kept() >= 1)
+  assert_eq(drawn_from(t, left), page)
+  // let go: built anew (an event from outside), still as it was
+  t.release(150.0, 420.0)
+  assert_eq(drawn_from(t, left), page)
+}
+
+///|
 test "on the tape a chat's side panel is a panel of its own after the page's: opened it comes over, back the page" {
   let t = tape_chat(0, 720.0, 800.0)
   page_over(t, 720.0)
@@ -863,6 +912,8 @@ test "on the tape a finger's search at the lists' top: tucked under the band at 
 ///|
 test "on the tape a passage held in the page beside the sidebar brings the page over, and its 引用 quotes it" {
   let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
+  // (the page beside kept as it was drawn while nothing changes it, as on a device: held, built)
+  t.keep_parts(true)
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   t.draw()

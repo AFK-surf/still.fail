@@ -133,6 +133,10 @@ priv struct Drawn {
   mut ground : (Double, Double, Double, Double, (Double, Double, Double, Double))?
   /// the colour of its ground there, when not its own (a card on its way from one place's ground to another's)
   mut ground_bg : Int64?
+  /// a part kept (Ctx::kept_part): built this frame, what it draws taken as it is painted (its id, 0 none); else drawn again
+  /// as its last build drew it, in place of what it holds
+  mut part : Int
+  mut again : KeptPart?
 }
 
 ///|
@@ -293,6 +297,8 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     top: -1.0,
     ground: None,
     ground_bg: None,
+    part: 0,
+    again: None,
   }
   dr.stamp[i] = dr.build
   dr.at[i] = dr.entries.length()
@@ -344,6 +350,10 @@ pub fn Ctx::look_of(self : Ctx, i : Int) -> Look {
 /// bars and the composer; in what is drawn moved by a look of its own, a list carried up, over everything of its layer
 /// where that moves it: drawn_paint). Tapped where it is laid out, in its place among the rest.
 pub fn Ctx::put_over(self : Ctx, i : Int, z? : Int = 1) -> Unit {
+  // (over everything: painted after the rest, out of what a part kept draws, kept_part.mbt)
+  if z == 2 {
+    part_live()
+  }
   // what a list's row holds: the row, over the list's other rows
   let p = self.nodes[i].parent
   let j = if z == 1 &&
@@ -522,11 +532,19 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     // only where it is tapped: as laid out; drawn only, nowhere
     return e.only
   }
+  // a part kept, drawn again as its build drew it (kept_part.mbt)
+  match e.again {
+    Some(st) => {
+      self.part_paint_again(st)
+      return true
+    }
+    None => ()
+  }
   let look = e.look
   let keep = e.keep is Some(_)
   let cutting = (e.bottom >= 0.0 && e.bottom < self.nodes[i].fh) ||
     (e.top >= 0.0 && e.top < self.nodes[i].fh)
-  if look.is_still() && e.z != 2 && !keep && !e.only && !cutting {
+  if look.is_still() && e.z != 2 && !keep && !e.only && !cutting && e.part == 0 {
     return false
   }
   if dr.mode == 0 && (!look.is_still() || e.z == 2 || cutting) {
@@ -599,10 +617,15 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   if !look.is_still() || e.z == 2 || e.only || cutting {
     dr.mode = mode_draw
   }
+  // (a part kept: what its build draws taken, with the glyphs' plots it draws from: kept_part.mbt)
+  let painting = if e.part != 0 { part_paint_begin(e.part) } else { 0 }
   dr.bypass = i
   self.paint(i, alpha)
   dr.bypass = -1
   dr.mode = was
+  if e.part != 0 {
+    self.part_paint_end(e.part, i, i0, painting)
+  }
   if cutting {
     pop_clip()
   }

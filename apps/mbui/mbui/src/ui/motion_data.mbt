@@ -45,6 +45,8 @@ struct MoverEntry {
   who : Mover
   mut m : &Moving
   mut what : String
+  /// the part kept while it is the same (Ctx::kept_part) being built as it was told, whose drawing it moves (0: none)
+  mut part : Int
 }
 
 ///|
@@ -86,14 +88,16 @@ fn Ctx::movers_sample(self : Ctx) -> Unit {
 /// The same as Ctx::moving, `what` saying all of what it is and who told it (what moves again by itself, as first told).
 pub fn Ctx::moving_as(self : Ctx, who : Mover, m : &Moving, what : String) -> Unit {
   who.told = who.told + 1
+  let part = part_now.part
   for e in self.movers {
     if physical_equal(e.who, who) {
       e.m = m
       e.what = what
+      e.part = part
       return
     }
   }
-  self.movers.push({ who, m, what })
+  self.movers.push({ who, m, what, part })
 }
 
 ///|
@@ -177,6 +181,7 @@ pub fn Ctx::cycle(self : Ctx, period : Double, resident? : Bool = false, loc~ : 
   }
   if period <= 0.0 {
     self.cycling = true
+    part_live()
     return 0.0
   }
   // (a frame measured for contrast: each loop at its start, a breath whole, a spinner's first spoke lit, as it is seen
@@ -190,6 +195,7 @@ pub fn Ctx::cycle(self : Ctx, period : Double, resident? : Bool = false, loc~ : 
     step * cycle_step_ms
   } else {
     self.cycling = true
+    part_live()
     self.now
   }
   let p = at / period

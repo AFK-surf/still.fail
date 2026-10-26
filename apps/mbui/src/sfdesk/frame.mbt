@@ -798,7 +798,9 @@ pub fn frame(
           id=page_id,
           fn() {
             @sf.pane_round.val = Some(page_corners)
-            page_in(panel_h)
+            tape_part(c, Page, "\{col} \{panel_top} \{main_w} \{panel_h} \{tape_x} \{wide.bar_pl} \{wide.bar_ml} \{wide.bar_mr}", fn() {
+              page_in(panel_h)
+            })
             @sf.pane_round.val = None
           },
         ) })
@@ -820,7 +822,9 @@ pub fn frame(
               tx=tape_x,
               fn() {
                 @sf.pane_round.val = Some(tape_pane_corners(Panel, true))
-                c.sized(panel_w, panel_h, fn() { tape_side(c, src, w, side) })
+                tape_part(c, Panel, "\{col} \{main_w} \{panel_top} \{panel_w} \{panel_h} \{tape_x} \{side.key()}", fn() {
+                  c.sized(panel_w, panel_h, fn() { tape_side(c, src, w, side) })
+                })
                 @sf.pane_round.val = None
               },
             ) })
@@ -848,7 +852,11 @@ pub fn frame(
       })
       |> ignore
     }
-    tape_behind(c, Side, fn() { dock(c, src, w, all, bar, peek, s, col, top, foot, tape_x) })
+    tape_behind(c, Side, fn() {
+      tape_part(c, Side, "\{s} \{col} \{top} \{foot} \{tape_x} \{c.width} \{c.height} \{wide.brand_h} \{wide.band}", fn() {
+        dock(c, src, w, all, bar, peek, s, col, top, foot, tape_x)
+      })
+    })
     // (with the sidebar closed, where its first row is not shown: 更新 where the bar's start leaves room for it)
     if updating && bar && !peek && !wide.tape {
       update_button(c, src, inset, top)
@@ -1272,6 +1280,20 @@ fn tape_frame(c : @ui.Ctx, panel : SideOf?, at : (Double, Double, Double), known
 ///|
 /// What the frame knew of the shown chat's side panel while its view had not come (tape_frame): neither open nor not.
 let tape_unknown : String = "?"
+
+///|
+/// What panel `p` holds (`body`): built as ever while it is in use (and off the tape); behind the one in use, only
+/// drawn (a press there brings it over: tape_covers) and kept as it was drawn while nothing it shows can have changed
+/// (Ctx::kept_part): a list scrolled in the one in use builds none of it. `at`: where it is and how big, and what else of
+/// the frame's it is built from (its ground said with it).
+fn tape_part(c : @ui.Ctx, p : TapePane, at : String, body : () -> Unit) -> Unit {
+  if !wide.tape || wide.tape_at == p {
+    body()
+  } else {
+    let t = @sf.theme()
+    c.kept_part(c.id("tape/kept/" + p.to_string()), "\{at} \{t.p.bg} \{t.dark}", body)
+  }
+}
 
 ///|
 /// What `body` draws of panel `p` (its answer): on the tape behind the one in use, on the ground a step darker

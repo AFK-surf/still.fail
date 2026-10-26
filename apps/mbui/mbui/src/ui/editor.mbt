@@ -725,6 +725,10 @@ pub fn Ctx::editor(
   files? : Bool = false,
 ) -> EditorResult {
   let id = self.id(key)
+  // (the focus in it: its caret and what the keys do, each frame; a part kept builds it each frame, kept_part.mbt)
+  if self.focus == id {
+    part_live()
+  }
   let st = match (self.editors.get(id), field) {
     // what the app keeps (Field): this editor shows it from now on
     (Some(s), Some(f)) if physical_equal(s, f.st) => s

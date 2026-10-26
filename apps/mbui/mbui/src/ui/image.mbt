@@ -176,7 +176,10 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
   }
   let r = if good is Some(_) { good } else { fallback }
   match r {
-    Some(e) => e.used = self.frame_no
+    Some(e) => {
+      e.used = self.frame_no
+      part_image(e)
+    }
     None => ()
   }
   r

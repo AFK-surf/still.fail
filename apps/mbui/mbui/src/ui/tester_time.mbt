@@ -14,6 +14,15 @@
 /// by run_for). Three at most: a layout read back still moving after them never converges, and the test fails, saying
 /// whose.
 pub fn Tester::draw(self : Tester) -> Unit {
+  // (what the test changed, as an event from outside is: a part kept is built anew, kept_part.mbt)
+  outside_came()
+  self.drawn_now()
+}
+
+///|
+/// The frames owed now (Tester::draw's) after what is the hand's on mbui's own (a pointer moved, a wheel turned): not
+/// a change of the test's.
+fn Tester::drawn_now(self : Tester) -> Unit {
   self.frame_now()
   self.draw_owed(1)
 }
