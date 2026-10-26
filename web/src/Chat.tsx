@@ -46,6 +46,7 @@ import type { ChatAsk, ChatCcTo, ChatSentElsewhere, DownloadShown, NoticeShown, 
 import * as partsCss from "@stillfail/ui/parts.css.ts";
 import * as historyCss from "./History.css.ts";
 import * as css from "./Chat.css.ts";
+import { sampleMessages } from "./samples.ts";
 import * as refCss from "./ChatRef.css.ts";
 import { core, useCall } from "./core/react.ts";
 import { ChatRefMenu, LinkedChats, markBefore, refAt, RefMirror, WithRefs } from "./ChatRef.tsx";
@@ -1126,6 +1127,15 @@ export function StaticMessage({ message, keeper }: { message: ChatMessage; /** T
     </FileKeeper.Provider>
   );
 }
+
+/**
+ * A chat's messages made up, for what its page shows while it is read (in their bones), as its list draws them: in a
+ * list of `className` (the wide screen's, unless said).
+ */
+export function ChatSample({ className = `${sessionCss.chatList} ${css.chatMessages}` }: { className?: string }) {
+  return <div className={className}>{SAMPLE_MESSAGES.map((m) => <StaticMessage key={m.seq} message={m} keeper="" />)}</div>;
+}
+const SAMPLE_MESSAGES = sampleMessages();
 
 type Data = { [key: `data-${string}`]: string | number | boolean | undefined };
 

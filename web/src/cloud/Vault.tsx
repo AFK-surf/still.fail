@@ -22,6 +22,7 @@ import {
   KINDS, LASTS, SCOPES, scopeOf, blankForm, copySecret, itemPath, lastsChoice, lastsName, formOf, formProblem, kindName, masked, modeName, modesOf, putOf, useForm,
   useVaultCall, useVaultItems, useVaults, useVaultsItems, type Form, type Kind, type Mode, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView,
 } from "../vault.ts";
+import { sampleVaultItems, sampleVaults } from "../samples.ts";
 import { t } from "../i18n.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
@@ -37,7 +38,7 @@ export function KindIcon({ kind, size = 16 }: { kind: string | undefined; size?:
 
 /** 设置 › 密钥. */
 export function VaultSettings({ entry }: { entry: WorkspaceEntry }) {
-  const { view, first } = useFirst(entry);
+  const { view, first } = useFirst(entry, <Library entry={entry} view={SAMPLE_VAULTS} />);
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={`/w/${entry.id}/settings`} label={t("web-pages.settings.title")} />
@@ -51,7 +52,7 @@ export function VaultSettings({ entry }: { entry: WorkspaceEntry }) {
 
 /** 设置 › 密钥 › 全部密钥: what the library keeps, 添加 at its head; what has to come first, as on 密钥. */
 export function VaultAll({ entry }: { entry: WorkspaceEntry }) {
-  const { view, first } = useFirst(entry);
+  const { view, first } = useFirst(entry, <All entry={entry} view={SAMPLE_VAULTS} adding={false} onAdded={() => undefined} />);
   const [adding, setAdding] = useState(false);
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
@@ -65,14 +66,14 @@ export function VaultAll({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-/** What 密钥 and 全部密钥 show before the library: waiting for the core; the recovery words to write down; a web page's
- * names; what has to come first. `first` null where the library is there to be used (in plain text on the station, or
- * locked, signed and set up here). */
-function useFirst(entry: WorkspaceEntry): { view: VaultsView | undefined; first: ReactNode | null } {
+/** What 密钥 and 全部密钥 show before the library: waiting for the core (the page as it will be, `sample`, in its bones);
+ * the recovery words to write down; a web page's names; what has to come first. `first` null where the library is there
+ * to be used (in plain text on the station, or locked, signed and set up here). */
+function useFirst(entry: WorkspaceEntry, sample: ReactNode): { view: VaultsView | undefined; first: ReactNode | null } {
   const view = useVaults(entry.id);
   // The recovery words, the once the core gives them (`vault.setup`): shown until they are written down.
   const [words, setWords] = useState<string[] | null>(null);
-  const first = !view ? <Waiting shape="cards" count={2} />
+  const first = !view ? <Waiting sample={sample} />
     : words ? <Words words={words} onDone={() => setWords(null)} />
     : view.plain === true ? null
     : !view.available ? <ReadOnly entry={entry} view={view} />
@@ -82,6 +83,10 @@ function useFirst(entry: WorkspaceEntry): { view: VaultsView | undefined; first:
     : null;
   return { view, first };
 }
+
+/** The vault and its secrets made up, for what its pages show while they are read (in their bones). */
+const SAMPLE_VAULTS = sampleVaults();
+const SAMPLE_ITEMS = sampleVaultItems();
 
 /** What the vault waits for before anything else (security mode; this device in it): said, with the way there. */
 function Gate({ entry, title, why }: { entry: WorkspaceEntry; title: string; why: string }) {
@@ -200,7 +205,6 @@ function Library({ entry, view }: { entry: WorkspaceEntry; view: VaultsView }) {
  * what is looked for is among them. Adding to it. */
 function All({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view: VaultsView; adding: boolean; onAdded(): void }) {
   const navigate = useNavigate();
-  const run = useVaultCall();
   const plain = view.plain === true;
   const mine = view.vaults.find((v) => v.mine);
   const [editing, setEditing] = useState<Kind | null>(null);
@@ -229,40 +233,7 @@ function All({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view: Va
       <div className={css.find}>
         <input className={controlsCss.input} type="search" value={find} onChange={(e) => setFind(e.target.value)} placeholder={t("web-pages.vault.find")} aria-label={t("web-pages.vault.find")} />
       </div>
-      {secrets.length + unnamed.length > 0 && (
-        <ul className={pagesCss.list}>
-          {secrets.map(({ v, row }) => {
-            const keyed = plain || v.keyed;
-            const body = <>
-              <span className={css.rowIcon}><KindIcon kind={row.kind ?? undefined} /></span>
-              <span className={pagesCss.listRowText}>
-                <span className={pagesCss.listRowTitle}>{row.name}</span>
-                {/* (its kind, its vault where there are more than one; the core's: how an agent gets it, when and where it was
-                    last used) */}
-                <span className={css.rowMeta}>{said(row.kindText, many ? v.name : null, keyed ? row.lineText : row.agentText)}</span>
-              </span>
-            </>;
-            return (
-              <li key={`${v.id}/${row.id}`}>
-                {keyed ? <Link className={`${pagesCss.listRow} ${css.rowButton}`} to={itemPath(entry.id, v.id, row.id)}>{body}<ChevronRight size={14} className={css.chevron} /></Link>
-                  : <div className={pagesCss.listRow}>{body}</div>}
-              </li>
-            );
-          })}
-          {/* (unlocked by opening one of them: the vault's key kept a while, every name shown) */}
-          {unnamed.map(({ v, hidden }) => (
-            <li key={`${v.id}/hidden`}>
-              {plain || v.keyed
-                ? <button type="button" className={`${pagesCss.listRow} ${css.rowButton}`} onClick={() => void run("vault.open", { workspace: entry.id, item: hidden[0]!.id }, t("web-pages.vault.unlockWhat"))}>
-                    <span className={css.rowIcon} />
-                    <span className={pagesCss.listRowTitle}>{t("web-pages.vault.hidden", { n: hidden.length })}</span>
-                    <span className={css.link}>{t("web-pages.vault.unlock")}</span>
-                  </button>
-                : <div className={pagesCss.listRow}><span className={css.rowIcon} /><span className={css.rowMeta}>{t("web-pages.vault.hidden", { n: hidden.length })}</span></div>}
-            </li>
-          ))}
-        </ul>
-      )}
+      <Secrets entry={entry} secrets={secrets} unnamed={unnamed} plain={plain} many={many} />
       {/* The accounts, folded under a row naming them (open where what is looked for is among them). */}
       {accounts.length > 0 && (
         <ul className={pagesCss.list}>
@@ -291,7 +262,7 @@ function All({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view: Va
           ))}
         </ul>
       )}
-      {reading ? <Waiting count={3} dense />
+      {reading ? <Waiting sample={<Secrets entry={entry} secrets={SAMPLE_ITEMS.map((row) => ({ v: SAMPLE_VAULTS.vaults[0]!, row }))} unnamed={[]} plain={false} many={false} />} />
         : q !== "" && accounts.length + secrets.length === 0 ? <p className={css.note}>{t("web-pages.vault.noMatch", { q: find.trim() })}</p>
         : (profiles?.items.length ?? 0) + secrets.length + unnamed.length === 0 && <p className={css.note}>{t("web-pages.vault.empty")}</p>}
       <Dialog open={adding} onClose={onAdded} title={t("web-pages.vault.addKind.title")}>
@@ -304,6 +275,50 @@ function All({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view: Va
       </Dialog>
       {editing && mine && <Editor workspace={entry.id} vault={mine.id} first={{ ...blankForm(), kind: editing }} id={null} plain={plain} kinds={false} onClose={() => setEditing(null)} />}
     </>
+  );
+}
+
+/** 全部密钥's secrets, a row each (`secrets`, each with its vault), and a row for each vault's unnamed ones, to unlock it. */
+function Secrets({ entry, secrets, unnamed, plain, many }: {
+  entry: WorkspaceEntry; secrets: { v: VaultRow; row: VaultItemRow }[]; unnamed: { v: VaultRow; hidden: VaultItemRow[] }[]; plain: boolean; many: boolean;
+}) {
+  const run = useVaultCall();
+  if (secrets.length + unnamed.length === 0) return null;
+  // (a row's line: what is said of it, those words that are not empty, a dot between)
+  const said = (...words: (string | null | undefined)[]) => words.filter((w) => w).join(" · ");
+  return (
+    <ul className={pagesCss.list}>
+      {secrets.map(({ v, row }) => {
+        const keyed = plain || v.keyed;
+        const body = <>
+          <span className={css.rowIcon}><KindIcon kind={row.kind ?? undefined} /></span>
+          <span className={pagesCss.listRowText}>
+            <span className={pagesCss.listRowTitle}>{row.name}</span>
+            {/* (its kind, its vault where there are more than one; the core's: how an agent gets it, when and where it was
+                last used) */}
+            <span className={css.rowMeta}>{said(row.kindText, many ? v.name : null, keyed ? row.lineText : row.agentText)}</span>
+          </span>
+        </>;
+        return (
+          <li key={`${v.id}/${row.id}`}>
+            {keyed ? <Link className={`${pagesCss.listRow} ${css.rowButton}`} to={itemPath(entry.id, v.id, row.id)}>{body}<ChevronRight size={14} className={css.chevron} /></Link>
+              : <div className={pagesCss.listRow}>{body}</div>}
+          </li>
+        );
+      })}
+      {/* (unlocked by opening one of them: the vault's key kept a while, every name shown) */}
+      {unnamed.map(({ v, hidden }) => (
+        <li key={`${v.id}/hidden`}>
+          {plain || v.keyed
+            ? <button type="button" className={`${pagesCss.listRow} ${css.rowButton}`} onClick={() => void run("vault.open", { workspace: entry.id, item: hidden[0]!.id }, t("web-pages.vault.unlockWhat"))}>
+                <span className={css.rowIcon} />
+                <span className={pagesCss.listRowTitle}>{t("web-pages.vault.hidden", { n: hidden.length })}</span>
+                <span className={css.link}>{t("web-pages.vault.unlock")}</span>
+              </button>
+            : <div className={pagesCss.listRow}><span className={css.rowIcon} /><span className={css.rowMeta}>{t("web-pages.vault.hidden", { n: hidden.length })}</span></div>}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -480,7 +495,7 @@ function VaultSection({ entry, v, readOnly = false }: { entry: WorkspaceEntry; v
           <p className={css.sub}>{t("web-pages.vault.notKeyedWhy")}</p>
           {v.recoverable && v.mine && <div className={css.actions}><Button variant="primary" onClick={() => setRecovering(true)}>{t("web-pages.vault.recover")}</Button></div>}
         </div>
-      ) : !items ? <Waiting count={4} />
+      ) : !items ? <Waiting sample={<ul className={pagesCss.list}>{SAMPLE_ITEMS.map((row) => <ItemRow key={row.id} entry={entry} row={row} readOnly onOpen={() => undefined} />)}</ul>} />
         : items.items.length === 0 ? <p className={css.note}>{t("web-pages.vault.empty")}</p>
         : (
           <ul className={pagesCss.list}>

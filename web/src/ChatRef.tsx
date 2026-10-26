@@ -15,7 +15,9 @@ import { chatOfLink, copyChatLink, REF_LINK, REF_MARK, shareLink, splitBy, stati
 import { failure } from "@stillfail/ui/toast.tsx";
 import * as css from "./ChatRef.css.ts";
 import * as hover from "./Hover.css.ts";
-import { CardSkeleton, Hover } from "./Peeks.tsx";
+import { Hover } from "./Peeks.tsx";
+import { Bones } from "@stillfail/ui/waiting.tsx";
+import { sampleChat } from "./samples.ts";
 
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
@@ -98,7 +100,15 @@ function RefPreview({ href, here, station, emoji, icon }: { href: string; here: 
       </div>
     );
   }
-  if (!item) return listed ? <p className={hover.note}>{t("web-main.chatRef.previewGone")}</p> : <CardSkeleton />;
+  if (!item) return listed ? <p className={hover.note}>{t("web-main.chatRef.previewGone")}</p> : <Bones><RefShown item={SAMPLE_CHAT} of={of} station={station} emoji={emoji} icon={icon} /></Bones>;
+  return <RefShown item={item} of={of} station={station} emoji={emoji} icon={icon} />;
+}
+
+/** A chat made up, for what its reference's card shows while the list is read (in its bones). */
+const SAMPLE_CHAT = sampleChat(0);
+
+/** A reference's chat (`item`, `of` it) as its card shows it, at `station`. */
+function RefShown({ item, of, station, emoji, icon }: { item: ChatItem; of: { history: string } | null; station: string | null; emoji?: string | null | undefined; icon?: string | null | undefined }) {
   const state = stateLine(item);
   return (
     <div className={hover.rich}>

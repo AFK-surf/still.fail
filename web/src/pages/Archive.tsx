@@ -25,6 +25,7 @@ import * as css from "./Archive.css.ts";
 import { t } from "../i18n.ts";
 import { Words } from "../cloud/words.tsx";
 import * as pageCss from "@stillfail/ui/styles/page.css.ts";
+import { sampleArchive, sampleWords } from "../samples.ts";
 
 /**
  * The archive of a scope's stations online, as both screens show it (the phone's in ../mobile/Archive.tsx), as the
@@ -130,7 +131,7 @@ export const ArchiveRows = memo(function ArchiveRows({ scope, hidden }: { scope:
           onChange={(e) => { setQ(e.target.value); setLimit(PAGE); }} />
       </label>
       {!waiting && errors.map((e) => <p key={e.station} className={`${nav.navEmpty} ${nav.navError}`}>{e.text}</p>)}
-      {waiting && <Waiting shape="rows" dense note={wait} error={failed} />}
+      {waiting && <Waiting note={wait} error={failed} sample={<NavSection title={sampleWords(2)}>{SAMPLE_ARCHIVE.map((item) => <ArchiveRow key={itemKey(item)} item={item} restore={() => Promise.resolve()} ask={() => undefined} />)}</NavSection>} />}
       {read && !waiting && note && <p className={nav.navEmpty}>{note}</p>}
       {days.map((day) => (
         <NavSection key={day.label} title={day.label} flip={`archive:${day.label}`}>
@@ -144,6 +145,9 @@ export const ArchiveRows = memo(function ArchiveRows({ scope, hidden }: { scope:
     </div>
   );
 });
+
+/** Archived chats made up, for what the list shows while it is read (in their bones). */
+const SAMPLE_ARCHIVE = sampleArchive();
 
 /**
  * An archived chat: its title (its station's mark at the end, with several), the last thing said in it under it, when

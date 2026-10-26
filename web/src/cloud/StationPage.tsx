@@ -18,7 +18,8 @@ import { BackLink, Button, ICON, Menu, MobileBack, Pill, Section, Segmented, Sta
 import { SoftwareList } from "../Versions.tsx";
 import { WorkspaceMark } from "../WorkspaceMark.tsx";
 import { HostDetails, joinedText, Net, silentOf, state, Uses, useStationNet } from "./StationCards.tsx";
-import { ResourcesBody, useResources } from "../Resources.tsx";
+import { ResourcesBody, SAMPLE_RESOURCES, useResources } from "../Resources.tsx";
+import { sampleStation, sampleStations } from "../samples.ts";
 import { MarkPick } from "./MarkPick.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
 import type { EnvVar } from "../core/shapes.ts";
@@ -55,13 +56,16 @@ export const stationLoginPage = (workspace: string, id: string, login: string) =
 
 /** The sidebar's list: adding one in the band over it (a manager), then each station, how it is at its row's end. */
 export function StationsNav({ entry, top }: { entry: WorkspaceEntry; top?: ReactNode }) {
-  const stations = useStations(entry.id).value ?? [];
+  const listed = useStations(entry.id).value;
+  const stations = listed ?? [];
   const { view, manager } = useWorkspace(entry);
   const [adding, setAdding] = useState(false);
   return (
     <>
       <NavTop top={top} action={manager && view && <NavAction icon={<Plus {...ICON} />} label={t("web-pages.settings.stations.add")} onClick={() => setAdding(true)} />} />
       <NavList>
+        {/* (not read yet: their rows made up, in their bones) */}
+        {!listed && <Waiting text={t("common.readingStations")} sample={SAMPLE_ROWS.map((s) => <StationRow key={s.id} s={s} to={stationPage(entry.id, s.id)} />)} />}
         {stations.map((s) => <StationRow key={s.id} s={s} to={stationPage(entry.id, s.id)} />)}
         {adding && view && <AddStationDialog view={view} account={entry.account} stations={stations} onClose={() => setAdding(false)} />}
       </NavList>
@@ -112,12 +116,22 @@ function brief(s: StationView): ReactNode {
 /** Where the resources page was (Settings > 资源, a link from before): the first station's 进程. */
 export function ProcessesFirst({ entry }: { entry: WorkspaceEntry }) {
   const first = useStations(entry.id).value?.[0];
-  return first ? <Navigate to={stationProcesses(entry.id, first.id)} replace /> : <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting shape="cards" text={t("common.readingStations")} /></div>;
+  return first ? <Navigate to={stationProcesses(entry.id, first.id)} replace /> : <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting text={t("common.readingStations")} sample={<StationSample entry={entry} />} /></div>;
 }
 
 export function StationsFirst({ entry }: { entry: WorkspaceEntry }) {
   const first = useStations(entry.id).value?.[0];
-  return first ? <Navigate to={stationPage(entry.id, first.id)} replace /> : <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting shape="cards" text={t("common.readingStations")} /></div>;
+  return first ? <Navigate to={stationPage(entry.id, first.id)} replace /> : <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting text={t("common.readingStations")} sample={<StationSample entry={entry} />} /></div>;
+}
+
+/** A station made up, for what its page shows while the stations are read (in their bones), and the sidebar's rows. */
+const SAMPLE_STATION = sampleStation(0);
+const SAMPLE_ROWS = sampleStations(2);
+
+/** A station's page under its way back, made up: its head, its parts. */
+function StationSample({ entry }: { entry: WorkspaceEntry }) {
+  const edits = useStationEdits(undefined, entry.account, []);
+  return <><Head s={SAMPLE_STATION} manager={false} edits={edits} /><Body s={SAMPLE_STATION} manager={false} workspace={entry.id} /></>;
 }
 
 /** A station's own page. */
@@ -133,7 +147,7 @@ export function StationSettings({ entry }: { entry: WorkspaceEntry }) {
     return (
       <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
         {side ? <MobileBack to={back} label="Station" /> : <BackLink to={back} label="Station" />}
-        <Waiting shape="cards" text={t("common.readingStations")} />
+        <Waiting text={t("common.readingStations")} sample={<StationSample entry={entry} />} />
       </div>
     );
   }
@@ -225,7 +239,8 @@ function Processes({ s, workspace }: { s: StationView; workspace: string }) {
     <div className={css.processes}>
       <p className={css.memory}>{t("web-pages.stations.processesLead")}</p>
       {resources.value ? <ResourcesBody view={resources.value} />
-        : resources.error ? <p className={controlsCss.fieldError}>{t("web-pages.stations.processesFailed", { error: resources.error.message })}</p> : <Waiting shape="cards" />}
+        : resources.error ? <p className={controlsCss.fieldError}>{t("web-pages.stations.processesFailed", { error: resources.error.message })}</p>
+        : <Waiting sample={<ResourcesBody view={SAMPLE_RESOURCES} />} />}
     </div>
   );
 }

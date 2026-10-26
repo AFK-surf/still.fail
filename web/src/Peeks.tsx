@@ -13,7 +13,7 @@ import { t } from "./i18n.ts";
 import { useStation } from "./station.tsx";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import * as css from "./Hover.css.ts";
-import * as waitingCss from "@stillfail/ui/waiting.css.ts";
+import { Bones, sampleWords } from "@stillfail/ui/waiting.tsx";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
 import { PanelButton } from "./ui.tsx";
 import { chipPath, pathIn, shownPath } from "./paths.ts";
@@ -50,17 +50,6 @@ export function Hover({ children, content, tile = false, warm }: { children: Rea
         </HoverCard.Content>
       </HoverCard.Portal>
     </HoverCard.Root>
-  );
-}
-
-/** Bars where a card's lines will be, while it is read, breathing as every wait's shapes (waiting.tsx). */
-export function CardSkeleton() {
-  return (
-    <div className={`${css.rich} ${waitingCss.shapes}`} aria-busy="true">
-      <span className={css.bar} data-bar="meta" />
-      <span className={css.bar} data-bar="title" />
-      <span className={css.bar} data-bar="detail" />
-    </div>
   );
 }
 
@@ -106,7 +95,8 @@ export function LinkHover({ href, label, children }: { href: string; label: stri
 function LinkCard({ href, label }: { href: string; label: string }) {
   const station = useStation();
   const read = useTopic<LinkPreview | null>({ topic: "linkPreview", station: station.address, url: href });
-  if (read.value === undefined && read.error === null && RICH.test(href)) return <CardSkeleton />;
+  // (read first: the card it will be, made up, in its bones)
+  if (read.value === undefined && read.error === null && RICH.test(href)) return <Bones>{/\/pull\//.test(href) ? <PullRequestCard preview={SAMPLE_PR} /> : <IssueCard preview={SAMPLE_ISSUE} />}</Bones>;
   const preview = read.value ?? null;
   if (preview?.kind === "github_pull_request") return <PullRequestCard preview={preview} />;
   if (preview?.kind === "github_issue") return <IssueCard preview={preview} />;
@@ -132,6 +122,16 @@ function LinkCard({ href, label }: { href: string; label: string }) {
     </div>
   );
 }
+
+/** A pull request's and an issue's cards made up, for what shows while one is read (in their bones). */
+const SAMPLE_PR: Extract<LinkPreview, { kind: "github_pull_request" }> = {
+  kind: "github_pull_request", url: "", repository: sampleWords(9), number: 0, title: sampleWords(22), state: "open", author: { login: sampleWords(6) },
+  additions: 0, deletions: 0, changedFiles: 0, updatedAt: null, time: { updatedAt: { ago: sampleWords(3) } },
+};
+const SAMPLE_ISSUE: Extract<LinkPreview, { kind: "github_issue" }> = {
+  kind: "github_issue", url: "", repository: sampleWords(9), number: 0, title: sampleWords(22), state: "open", author: { login: sampleWords(6) },
+  comments: 2, labels: [sampleWords(3)], updatedAt: null, time: { updatedAt: { ago: sampleWords(3) } },
+};
 
 const PR_STATE = { open: "web-main.preview.pr.open", merged: "web-main.preview.pr.merged", closed: "web-main.preview.pr.closed", draft: "web-main.preview.pr.draft" } as const;
 const ISSUE_STATE = { open: "web-main.preview.issue.open", completed: "web-main.preview.issue.completed", not_planned: "web-main.preview.issue.notPlanned", closed: "web-main.preview.issue.closed" } as const;
@@ -320,7 +320,8 @@ if (typeof document !== "undefined") {
 
 function FileCard({ session, station, path, line }: { session: string; station: string; path: string; line: number | null }) {
   const read = useTopic<Peek | null>(peekTopic(station, session, path, line));
-  if (read.value == null && read.error === null) return <CardSkeleton />;
+  // (read first: its card with its name and made-up lines, in its bones)
+  if (read.value == null && read.error === null) return <Bones><FileShown p={samplePeek(path)} /></Bones>;
   if (read.value == null) return (
     <>
       <div className={css.rich}>
@@ -330,7 +331,17 @@ function FileCard({ session, station, path, line }: { session: string; station: 
       <div className={`${css.fileFoot} ${panelEdge}`}><PathActions path={path} /></div>
     </>
   );
-  const p = read.value;
+  return <FileShown p={read.value} />;
+}
+
+/** A file named by `path` as its card shows it while it is read (in its bones): its name, a few lines made up. */
+const samplePeek = (path: string): Peek => ({
+  path, name: path.replace(/\/$/, "").split("/").at(-1) || path, size: 0, mtime: 0, type: "", kind: path.endsWith("/") ? "dir" : "text",
+  lines: { start: 1, text: [18, 30, 24, 12, 27].map(sampleWords) }, entries: [8, 12, 6].map(sampleWords), time: { mtime: { ago: sampleWords(3) } },
+});
+
+/** A file's card (`p`): its head, its lines, picture or entries, and at its foot its size and what can be done with it. */
+function FileShown({ p }: { p: Peek }) {
   const dir = p.kind === "dir";
   return (
     <>

@@ -133,7 +133,7 @@ globalStyle(`${m} button`, { WebkitTapHighlightColor: "transparent" });
 globalStyle(`${m} p:not(${wide} *)`, { margin: "0" });
 globalStyle(`${m} [data-enter]:not(${wide} *)`, { animation: `${mRiseKeyframes} 320ms var(--m-standard) both` });
 
-// Waiting (@stillfail/ui waiting.tsx) on the phone: its pill in the phone's grey (as its message bubbles), its placeholders
-// in the phone's line, not the wide screen's; a settings page's cards inset as its cards are (parts.css.ts mListCard).
-globalStyle(`${m} ${waitCss.wait}, ${m} ${waitCss.shapes}, ${m} ${waitCss.pill}`, { vars: { [vars.neutralBg]: "var(--m-bubble)", [vars.line]: "var(--m-line)" } });
-globalStyle(`${m} ${waitCss.cards}`, { gap: "10px", padding: "0 12px" });
+// Waiting (@stillfail/ui waiting.tsx) on the phone: its pill in the phone's grey (as its message bubbles), a page's bones
+// in the phone's line, not the wide screen's (what they are drawn over is the page's own, as it will be).
+globalStyle(`${m} ${waitCss.pill}`, { vars: { [vars.neutralBg]: "var(--m-bubble)", [vars.line]: "var(--m-line)" } });
+globalStyle(`${m} ${waitCss.boneMarks}`, { vars: { [vars.line]: "var(--m-line)" } });

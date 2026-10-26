@@ -18,6 +18,7 @@ import * as css from "./Security.css.ts";
 
 export type { LockDevice, LockPairing, LockRequest, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
 import type { LockDevice, LockPairing, LockPromptsView, LockRequest, LockStation, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
+import { sampleLock, sampleLockDraft } from "../samples.ts";
 
 // A function, not a table made as the module loads: words are the page's language when shown (and the site's
 // prerender loads this module before any language is set).
@@ -44,11 +45,15 @@ export function SecuritySettings({ entry }: { entry: WorkspaceEntry }) {
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={back} label={t("web-pages.settings.title")} />
       <header className={pagesCss.pageHead}><div><h1>{t("web-pages.security.title")}</h1><p className={css.sub}>{t("web-pages.security.lead")}</p></div></header>
-      {!lock ? <Waiting shape="cards" count={2} /> : !lock.available ? <div className={pagesCss.card}><p className={css.sub}>{t("web-pages.security.unavailable")}</p></div>
+      {!lock ? <Waiting sample={<Off entry={entry} lock={SAMPLE_LOCK} />} /> : !lock.available ? <div className={pagesCss.card}><p className={css.sub}>{t("web-pages.security.unavailable")}</p></div>
         : lock.locked ? <On entry={entry} lock={lock} /> : <Off entry={entry} lock={lock} />}
     </div>
   );
 }
+
+/** Security mode and turning it on made up, for what their pages show while they are read (in their bones). */
+const SAMPLE_LOCK = sampleLock();
+const SAMPLE_DRAFT = sampleLockDraft();
 
 function Off({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
   const navigate = useNavigate();
@@ -289,25 +294,31 @@ export function PromptPlaces({ r }: { r: LockPairing }) {
 /** 开启安全模式: what it will sign, everything ticked but what is left out. */
 export function SecurityOpen({ entry }: { entry: WorkspaceEntry }) {
   const draft = useTopic<LockDraft>({ topic: "lockDraft", workspace: entry.id }).value;
+  const back = `/w/${entry.id}/settings/security`;
+  return (
+    <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
+      <MobileBack to={back} label={t("web-pages.security.title")} />
+      <header className={pagesCss.pageHead}><div><h1>{t("web-pages.security.openTitle")}</h1><p className={css.sub}>{t("web-pages.security.openLead")}</p></div></header>
+      {!draft || draft.loading ? <Waiting sample={<OpenDraft entry={entry} draft={SAMPLE_DRAFT} />} /> : <OpenDraft entry={entry} draft={draft} />}
+    </div>
+  );
+}
+
+/** Turning security mode on, under its page's head: who and what `draft` takes in, and signing it. */
+function OpenDraft({ entry, draft }: { entry: WorkspaceEntry; draft: LockDraft }) {
   const call = useCall();
   const act = useAct();
   const navigate = useNavigate();
   const opening = useDoing("lock.open", { workspace: entry.id });
   const back = `/w/${entry.id}/settings/security`;
   const toggle = (id: string) => void call("lock.toggle", { workspace: entry.id, id });
-  const head = <>
-    <MobileBack to={back} label={t("web-pages.security.title")} />
-    <header className={pagesCss.pageHead}><div><h1>{t("web-pages.security.openTitle")}</h1><p className={css.sub}>{t("web-pages.security.openLead")}</p></div></header>
-  </>;
-  if (!draft || draft.loading) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>{head}<Waiting shape="cards" /></div>;
   const open = () => {
     const doing = call("lock.open", { workspace: entry.id });
     act(doing, t("web-pages.security.turnOn"), t("web-pages.security.turnedOn"));
     void doing.then(() => navigate(back), () => {});
   };
   return (
-    <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
-      {head}
+    <>
       <Section title={t("web-pages.security.members")} actions={<span className={css.rowMeta}>{t("web-pages.security.peopleCount", { n: draft.members.length })}</span>}>
         <div className={pagesCss.card}><div className={css.rows}>
           {draft.members.map((m) => <div key={m.sub} className={css.row}><div className={css.rowText}><span className={css.rowName}>{m.nameText}</span><span className={css.rowMeta}>{m.email}</span></div><span className={css.rowMeta}>{m.roleText}</span></div>)}
@@ -343,7 +354,7 @@ export function SecurityOpen({ entry }: { entry: WorkspaceEntry }) {
         <Link to={back}><Button variant="ghost">{t("common.cancel")}</Button></Link>
         <Button variant="primary" busy={opening} disabled={!draft.ready || !draft.owner || !draft.canSign} onClick={open}>{t("web-pages.security.signAndTurnOn")}</Button>
       </div>
-    </div>
+    </>
   );
 }
 

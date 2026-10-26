@@ -17,6 +17,7 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import * as css from "./Security.css.ts";
+import { sampleLock, sampleLockDraft } from "../samples.ts";
 
 /** What a call answers, said by toast when it fails (and `done` when it worked). */
 function useRun() {
@@ -37,7 +38,7 @@ export function SecurityScreen() {
       <div className={pagesCss.mScroll}>
         <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} />
         <LargeTitle small="" big={t("web-pages.security.title")} />
-        {!lock ? <Waiting shape="cards" count={2} /> : !lock.available
+        {!lock ? <Waiting sample={<Off lock={SAMPLE_LOCK} />} /> : !lock.available
           ? <ListCard><div className={css.mBody}><span className={partsCss.mSubtle}>{t("web-pages.security.unavailable")}</span></div></ListCard>
           : lock.locked ? <On lock={lock} /> : <Off lock={lock} />}
         <div style={{ height: 30 }} />
@@ -46,6 +47,10 @@ export function SecurityScreen() {
     </div>
   );
 }
+
+/** Security mode made up, and turning it on, for what the screens show while they are read (in their bones). */
+const SAMPLE_LOCK = sampleLock();
+const SAMPLE_DRAFT = sampleLockDraft();
 
 function Off({ lock }: { lock: LockView }) {
   return (
@@ -242,23 +247,7 @@ export function SecurityOpenScreen() {
       <div className={pagesCss.mScroll}>
       <TopBack label={t("web-pages.security.title")} onBack={app.pop} />
       <LargeTitle small="" big={t("web-pages.security.openTitle")} />
-      {!draft || draft.loading ? <Waiting shape="cards" count={3} /> : <>
-        <p className={css.mLead}>{t("web-pages.security.openLead")}</p>
-        <SectionHeader title={t("web-pages.security.members")} trailing={t("web-pages.security.peopleCount", { n: draft.members.length })} start={24} />
-        <ListCard>{draft.members.map((m) => <ListRow key={m.sub}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{m.nameText}</span><span className={listsCss.mRowNote}>{m.email}</span></span><span className={partsCss.mSubtle}>{m.roleText}</span></ListRow>)}</ListCard>
-        <SectionHeader title={t("web-pages.security.devices")} trailing={t("web-pages.security.devicesWhich")} start={24} />
-        <ListCard>{draft.devices.map((d) => (
-          <PickRow key={d.id} label={d.nameText} sub={d.howText}
-            checked={d.on} enabled={!d.fixed} onClick={() => toggle(d.id)} />
-        ))}</ListCard>
-        <SectionHeader title="Station" start={24} />
-        <ListCard>{draft.stations.map((s) => (
-          <PickRow key={s.id} label={s.name} sub={s.state === "ok" ? (s.version ?? undefined) : s.state === "asking" ? t("web-pages.security.asking") : s.state === "old" ? t("web-pages.security.tooOld") : t("web-pages.security.offline")}
-            checked={s.on} enabled={!s.fixed} onClick={() => toggle(s.id)} />
-        ))}</ListCard>
-        <p className={css.mLead}>{t("web-pages.security.unprotectedNote")}</p>
-        <div style={{ height: 24 }} />
-      </>}
+      {!draft || draft.loading ? <Waiting sample={<OpenDraft draft={SAMPLE_DRAFT} onToggle={() => undefined} />} /> : <OpenDraft draft={draft} onToggle={toggle} />}
       </div>
       {draft && !draft.loading && (
         <div className={css.mFoot}>
@@ -269,6 +258,27 @@ export function SecurityOpenScreen() {
       )}
     </div>
   );
+}
+
+/** Turning security mode on as `draft` has it: who it covers, which of their devices and stations (each `onToggle`d). */
+function OpenDraft({ draft, onToggle }: { draft: LockDraft; onToggle(id: string): void }) {
+  return <>
+    <p className={css.mLead}>{t("web-pages.security.openLead")}</p>
+    <SectionHeader title={t("web-pages.security.members")} trailing={t("web-pages.security.peopleCount", { n: draft.members.length })} start={24} />
+    <ListCard>{draft.members.map((m) => <ListRow key={m.sub}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{m.nameText}</span><span className={listsCss.mRowNote}>{m.email}</span></span><span className={partsCss.mSubtle}>{m.roleText}</span></ListRow>)}</ListCard>
+    <SectionHeader title={t("web-pages.security.devices")} trailing={t("web-pages.security.devicesWhich")} start={24} />
+    <ListCard>{draft.devices.map((d) => (
+      <PickRow key={d.id} label={d.nameText} sub={d.howText}
+        checked={d.on} enabled={!d.fixed} onClick={() => onToggle(d.id)} />
+    ))}</ListCard>
+    <SectionHeader title="Station" start={24} />
+    <ListCard>{draft.stations.map((s) => (
+      <PickRow key={s.id} label={s.name} sub={s.state === "ok" ? (s.version ?? undefined) : s.state === "asking" ? t("web-pages.security.asking") : s.state === "old" ? t("web-pages.security.tooOld") : t("web-pages.security.offline")}
+        checked={s.on} enabled={!s.fixed} onClick={() => onToggle(s.id)} />
+    ))}</ListCard>
+    <p className={css.mLead}>{t("web-pages.security.unprotectedNote")}</p>
+    <div style={{ height: 24 }} />
+  </>;
 }
 
 /** What a device waiting to be confirmed shows instead of the workspace: asking by hand, its person's trusted devices

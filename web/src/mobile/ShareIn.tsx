@@ -18,6 +18,7 @@ import * as sheetsCss from "./styles/sheets.css.ts";
 import * as workspacesCss from "./Workspaces.css.ts";
 import * as css from "./ShareIn.css.ts";
 import { t } from "../i18n.ts";
+import { sampleChats } from "../samples.ts";
 
 /** Puts the sheet up when something is shared (over whatever page the workspace has open), and keeps it as pages change. */
 export function ShareInSheet() {
@@ -72,11 +73,14 @@ function Sheet({ shared }: { shared: Shared }) {
           )}
         </div>
         {query !== null && <SearchField query={query} onQuery={setQuery} />}
-        {view ? <Places view={view} searching={!!query?.trim()} onOpen={open} /> : <Waiting count={3} />}
+        {view ? <Places view={view} searching={!!query?.trim()} onOpen={open} /> : <Waiting sample={<Places view={SAMPLE_PLACES} searching={false} onOpen={() => undefined} />} />}
       </div>
     </>
   );
 }
+
+/** Where it can go made up, for what the sheet shows while that is read (in its bones): a few chats. */
+const SAMPLE_PLACES: ShareInView = { items: sampleChats(3), stations: [], loading: false };
 
 /** What is shared: its title (or its link's site), over what it is (the link, the text). */
 function What({ shared, site }: { shared: Shared; site: string | undefined }) {
@@ -104,7 +108,7 @@ function SearchField({ query, onQuery }: { query: string; onQuery: (query: strin
  * one on; `searching`, only the chats found (or that none is).
  */
 function Places({ view, searching, onOpen }: { view: ShareInView; searching: boolean; onOpen: (station: string, id?: string) => void }) {
-  if (view.loading) return <Waiting count={3} />;
+  if (view.loading) return <Waiting sample={<Places view={SAMPLE_PLACES} searching={false} onOpen={() => undefined} />} />;
   const on = view.newOn ?? view.stations[0]?.station;
   return (
     <>

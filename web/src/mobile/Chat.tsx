@@ -10,7 +10,7 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type React
 import { useLocation, useNavigate, useParams } from "react-router";
 import { topicNow, useCall, useReady, useTopicSelect } from "../core/react.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
-import { stationApi, useApi, useChat, useChatJobs, useLives, useStationCall, useStationLook, useStations, type ChatAgent, type ChatThread, type ChatView, type Quote, type Attachment } from "../api.ts";
+import { stationApi, useApi, useChat, useChatJobs, useListedChat, useLives, useStationCall, useStationLook, useStations, type ChatAgent, type ChatThread, type ChatView, type Quote, type Attachment } from "../api.ts";
 import { draftKeyOf, useHost, type HostComposer } from "./ChatHost.tsx";
 import { DraftKey } from "../draft.ts";
 import { OpenFile } from "../Viz.tsx";
@@ -19,7 +19,7 @@ import type { Draft as SharedDraft } from "../draft.ts";
 import { Gallery } from "../FilePreview.tsx";
 import { chatPage, useChatPageActions } from "../chatPage.ts";
 import { useChatFind } from "../ChatFind.tsx";
-import { askClear, ChatRows, historyLinkClicked, ImageQuote, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
+import { askClear, ChatRows, ChatSample, historyLinkClicked, ImageQuote, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { jumpTo } from "../jumpTo.ts";
 import { Archive, ArrowDown, ArrowUp, ArrowUpRight, Bell, Camera, Chats, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Search, Server, Stop, Users, Web } from "@stillfail/ui/icons.tsx";
 import { scopeOf, stationBase, useStation } from "../station.tsx";
@@ -94,10 +94,12 @@ export function ChatScreen() {
     navigate(`${stationBase(station.address)}/chats/${encodeURIComponent(stationKey)}`, { replace: true });
   }, [stationKey, address]);
   const lives = useLives(station.address, (view?.agents ?? []).map((a) => a.session.key));
-  // Until the core has the chat, the page is already a chat's page (its bar, empty): what comes fills it in place.
+  const listed = useListedChat(station.address, key);
+  // Until the core has the chat, the page is already a chat's page (its bar, with its title as the list has it): what
+  // comes fills it in place.
   if (!view) {
     // Read from its station meanwhile, over the messages to come; what is wrong in red, over faded ones.
-    return <ChatWaiting text={station.name ? t("web-mobile.chat.readingFrom", { station: station.name }) : t("web-mobile.chat.reading")}
+    return <ChatWaiting title={listed?.title} text={station.name ? t("web-mobile.chat.readingFrom", { station: station.name }) : t("web-mobile.chat.reading")}
       error={chat.error ? t("web-mobile.chat.failed", { error: chat.error.message }) : undefined} />;
   }
   return <Chat view={view} sessionKey={key} lives={lives} />;
@@ -241,14 +243,15 @@ function StationSheet({ station }: { station: string }) {
 }
 
 /**
- * A chat's page before its chat is there: its bar (empty) and under it the messages to come, with what it waits on
- * (@stillfail/ui waiting.tsx) or in red what is wrong; `gone`: there is nothing to wait for (no such station), said instead.
+ * A chat's page before its chat is there: its bar (its `title` as the list has it, if it has it) and under it the messages to come in their bones, with what
+ * it waits on (@stillfail/ui waiting.tsx) or in red what is wrong; `gone`: there is nothing to wait for (no such
+ * station), said instead.
  */
-export function ChatWaiting({ text, error, gone }: { text?: string; error?: string | undefined; gone?: string }) {
+export function ChatWaiting({ title = "", text, error, gone }: { title?: string | undefined; text?: string; error?: string | undefined; gone?: string }) {
   return (
     <div className={chatCss.mChat}>
-      <BarFrame title="" more={false} />
-      <div className={css.mChatWaiting}>{gone !== undefined ? <Gone text={gone} /> : <Waiting shape="messages" text={text} error={error} />}</div>
+      <BarFrame title={title} more={false} />
+      <div className={css.mChatWaiting}>{gone !== undefined ? <Gone text={gone} /> : <Waiting text={text} error={error} sample={<ChatSample className={`${chatCss.mMessages} ${chatCss.mMessagesHeld} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} />} />}</div>
     </div>
   );
 }

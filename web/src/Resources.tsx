@@ -13,6 +13,7 @@ import { stationBase } from "./station.tsx";
 import { Confirm, IconButton, Segmented, Waiting } from "./ui.tsx";
 import * as css from "./Resources.css.ts";
 import { t } from "./i18n.ts";
+import { sampleResources } from "./samples.ts";
 
 /** `station`: that one's only; none, every station's of the workspace. */
 export function useResources(scope: string, station?: string) {
@@ -45,10 +46,12 @@ export function ResourcesBody({ view }: { view: ResourcesView }) {
       .then(() => toast(t("web-main.resources.ended", { name: e.process.name })))
       .catch((err: unknown) => toast(t("web-main.resources.endFailed", { name: e.process.name, error: failure(err) })));
   };
+  // (nothing read yet: what will come, made up, in its bones)
+  if (view.empty && (view.wait.reading || view.wait.failing.length > 0)) return <Waiting note={view.wait} sample={<ResourcesBody view={SAMPLE_RESOURCES} />} />;
   if (view.empty) {
     return (
       <div className={css.page}>
-        {view.wait.reading || view.wait.failing.length > 0 ? <Waiting shape="cards" count={2} note={view.wait} /> : <p className={css.empty}>{t("web-main.resources.none")}</p>}
+        <p className={css.empty}>{t("web-main.resources.none")}</p>
         <Foot view={view} basis={false} />
       </div>
     );
@@ -74,6 +77,9 @@ export function ResourcesBody({ view }: { view: ResourcesView }) {
     </div>
   );
 }
+
+/** What a machine's still.fail uses made up, for what the pages show while it is read (in their bones). */
+export const SAMPLE_RESOURCES = sampleResources();
 
 /** A total, said, with the last minutes' line under it. */
 function Tile({ tile }: { tile: ResourceTile }) {

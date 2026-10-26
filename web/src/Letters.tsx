@@ -11,13 +11,15 @@ import { ArrowLeft } from "@stillfail/ui/icons.tsx";
 import { t } from "./i18n.ts";
 import * as chatCss from "./Chat.css.ts";
 import * as css from "./Letters.css.ts";
+import type { LettersChat } from "./core/shapes.ts";
+import { sampleChats } from "./samples.ts";
 
 export function Letters({ station, thread, keeper }: { station: string; thread: number;
   /** The session that keeps the chat's files. */
   keeper: string }) {
   const view = useChatLetters(station, thread).value;
   const [opened, open] = useState<string | null>(null);
-  if (!view || (view.chats.length === 0 && !view.whole)) return <Waiting shape="rows" fill />;
+  if (!view || (view.chats.length === 0 && !view.whole)) return <Waiting fill sample={<div className={css.letters}><LetterChats chats={SAMPLE_CHATS} onOpen={() => undefined} /></div>} />;
   if (view.chats.length === 0) return <Empty><p>{t("web-main.letters.none")}</p></Empty>;
   // Not all of the chat is here yet: more may come, older ones.
   const more = !view.whole && <div className={css.lettersMore}><Spinner /></div>;
@@ -25,17 +27,7 @@ export function Letters({ station, thread, keeper }: { station: string; thread: 
   if (!chat) {
     return (
       <div className={css.letters}>
-        <div className={css.lettersList}>
-          {view.chats.map((c) => (
-            <button key={c.key} type="button" className={css.lettersRow} onClick={() => open(c.key)}>
-              <span className={css.lettersRowHead}>
-                <span className={css.lettersRowTitle}>{c.title}</span>
-                <span className={css.lettersRowMeta}>{t("web-main.letters.count", { n: c.letters.length })} · <Time stamp={c.time?.lastActiveAt} /></span>
-              </span>
-              <span className={css.lettersRowLast}>{c.last}</span>
-            </button>
-          ))}
-        </div>
+        <LetterChats chats={view.chats} onOpen={open} />
         {more}
       </div>
     );
@@ -54,3 +46,23 @@ export function Letters({ station, thread, keeper }: { station: string; thread: 
     </div>
   );
 }
+
+/** The chats it wrote with (`chats`), a row each: its title, how many letters and when the last, the last one; one opened (`onOpen`). */
+function LetterChats({ chats, onOpen }: { chats: LettersChat[]; onOpen(key: string): void }) {
+  return (
+    <div className={css.lettersList}>
+      {chats.map((c) => (
+        <button key={c.key} type="button" className={css.lettersRow} onClick={() => onOpen(c.key)}>
+          <span className={css.lettersRowHead}>
+            <span className={css.lettersRowTitle}>{c.title}</span>
+            <span className={css.lettersRowMeta}>{t("web-main.letters.count", { n: c.letters.length })} · <Time stamp={c.time?.lastActiveAt} /></span>
+          </span>
+          <span className={css.lettersRowLast}>{c.last}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Chats written with made up, for what the list shows while it is read (in their bones). */
+const SAMPLE_CHATS: LettersChat[] = sampleChats(4).map((c) => ({ key: c.id, title: c.title, last: c.last?.preview ?? "", lastActiveAt: 0, letters: [], ...(c.time ? { time: c.time } : {}) }));

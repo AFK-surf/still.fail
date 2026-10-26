@@ -30,7 +30,7 @@ import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { AT, apk, clips, CODE_COLOURS, MATH, folder, HISTORY, JOIN_REFUSED, JOINABLE, LOGINS, loginsView, MEMBERSHIPS, note, NOTE, novel, picture, SCREENS, TABLE, VIEWER_LOGIN } from "./data.ts";
 import { LoginCard, LoginsSection } from "../src/MachineLogins.tsx";
 import * as pagesCss from "../src/styles/pages.css.ts";
-import type { DemoExtension } from "../src/demo/mount.tsx";
+import { HELD, type DemoExtension } from "../src/demo/mount.tsx";
 import { shown as fontsShown } from "../../client/core-ts/src/fonts.ts";
 import type { ChatMessage, ChatView, DownloadShown, ShareInView, StationView } from "../src/core/shapes.ts";
 import { stamp } from "../src/demo/fixtures.ts";
@@ -54,6 +54,8 @@ import { Console } from "../src/admin/console.tsx";
 import { ACCOUNT } from "../src/demo/station.ts";
 import { ModelTriple } from "../src/ModelTriple.tsx";
 import { ModelList } from "../src/mobile/History.tsx";
+import { ChatRowsSample } from "../src/Sidebar.tsx";
+import { PriceTables, SAMPLE_USAGE } from "../src/Usage.tsx";
 import type { Picking } from "../src/pick.ts";
 import type { ModelOption, PickView } from "../src/core/shapes.ts";
 import CLIP_URL from "./assets/story-clip.mp4?url";
@@ -555,6 +557,8 @@ const stationDown: DemoExtension = together(memberships(true), {
     : t.topic !== "chats" || !value ? undefined
     : { ...(value as object), trouble: { text: "无法连接「Mini1」", state: "error", retry: false, station: "demo/mini1" } },
 });
+/** What the core is still reading (topics `names`): never answered, their pages waiting. */
+const held = (...names: string[]): DemoExtension => ({ topic: (t) => (names.includes(t.topic) ? HELD : undefined) });
 /** 用量 not come yet: its stations still read. */
 const usageWaiting: DemoExtension = {
   then: (t, value) => (t.topic !== "usage" || !value ? undefined : { ...(value as object), empty: true, wait: { reading: true, text: "正在从 Studio 读取用量", failing: [], empty: false } }),
@@ -762,8 +766,8 @@ export const stories: Story[] = [
   {
     id: "control-states", group: "基础控件", title: "等待、空和命令",
     render: () => sheet([
-      ["列表第一次读取", <div style={{ width: 420 }}><Waiting count={3} text="正在读取会话" /></div>],
-      ["设置页第一次读取", <div style={{ width: 420 }}><Waiting shape="cards" count={2} /></div>],
+      ["列表第一次读取", <div style={{ width: 420 }}><Waiting text="正在读取会话" sample={<ChatRowsSample lead="agents" />} /></div>],
+      ["设置页第一次读取", <div style={{ width: 420 }}><Waiting sample={<PriceTables view={SAMPLE_USAGE} />} /></div>],
       ["一节内容", <WaitLine text="正在读取配置" />],
       ["胶囊", <><WaitPill text="正在连接 Studio" /><WaitPill text="无法连接 MBA" error /></>],
       ["进度", <div style={{ display: "grid", gap: 12, width: 240 }}><Progress part={0.4} /><Progress part={null} /></div>],
@@ -934,6 +938,17 @@ export const stories: Story[] = [
   { id: "app-waiting-chats", group: "等待", title: "侧栏 · 正在读取对话", app: true, demo: chatsWaiting("reading") },
   { id: "app-waiting-failing", group: "等待", title: "侧栏 · station 无法连接", app: true, demo: chatsWaiting("failing") },
   { id: "app-waiting-usage", group: "等待", title: "设置页 · 正在读取用量", app: true, demo: usageWaiting, steps: [{ click: '[aria-label="用量"]' }] },
+  { id: "app-waiting-chat", group: "等待", title: "对话 · 正在读取消息", app: true, demo: held("chat") },
+  { id: "app-waiting-memory", group: "等待", title: "设置页 · 正在读取记忆", app: true, demo: held("memory"), steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }] },
+  { id: "phone-waiting-chats", group: "等待", title: "手机 · 首页 · 正在读取对话", app: true, phone: true, demo: chatsWaiting("reading"), steps: [{ click: '[aria-label="返回"]' }] },
+  { id: "phone-waiting-chat", group: "等待", title: "手机 · 对话 · 正在读取消息", app: true, phone: true, demo: held("chat") },
+  { id: "phone-waiting-memory", group: "等待", title: "手机 · 记忆 · 正在读取", app: true, phone: true, demo: held("memory"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }] },
+  { id: "phone-waiting-stations", group: "等待", title: "手机 · Station · 正在读取", app: true, phone: true, demo: held("stations"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }] },
+  { id: "app-waiting-stations", group: "等待", title: "设置页 · Station · 正在读取", app: true, demo: held("stations"), steps: [{ click: '[aria-label="设置"]' }, { text: "Station" }] },
+  { id: "app-waiting-devices", group: "等待", title: "设置页 · 账号 · 正在读取已登录设备", app: true, demo: held("loginSessions"), steps: [{ click: '[aria-label="设置"]' }] },
+  { id: "app-waiting-workspace", group: "等待", title: "设置页 · Workspace · 正在读取", app: true, demo: held("workspace"), steps: [{ click: '[aria-label="设置"]' }, { text: "Acme" }] },
+  { id: "app-waiting-profiles", group: "等待", title: "Profile · 正在读取", app: true, demo: held("profiles"), steps: [{ click: '[aria-label="Profile"]' }] },
+  { id: "phone-waiting-profiles", group: "等待", title: "手机 · Profile · 正在读取", app: true, phone: true, demo: held("profiles"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Profile" }] },
   {
     id: "control-busy", group: "等待", title: "做事中的按钮和行",
     render: () => sheet([

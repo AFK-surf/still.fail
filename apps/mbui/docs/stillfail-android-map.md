@@ -121,7 +121,7 @@ Path prefixes used below:
 - **ToolStep.kt (393)**: draws tool calls by kind: a command, an edit as a diff, a file as highlighted code, a patch, a plan.
 - **Viz.kt (439)**: inline HTML visualizations and ```mermaid blocks in a WebView.
 - **Waiting.kt (239)**: three ways of waiting.
-  - First load: `Waiting`/`WaitShapes`, placeholders shaped like the content, "breathing", no words.
+  - First load: `Waiting` with its `sample`, the page's own parts on made-up data drawn as their bones (web `Bones`, mbui `@sf.waiting`), "breathing", no words.
   - In-progress: `Spinner`, `Progress`, `WaitLine`, `WaitPill`.
   - Docs: `docs/ui-panels.md`.
 - **Motion.kt (169)**: CSS curves.

@@ -52,6 +52,7 @@ import * as css from "./Drive.css.ts";
 import { t } from "../i18n.ts";
 import { StationMark } from "../StationMark.tsx";
 import { StationNamedAt } from "../StationNamed.tsx";
+import { sampleDriveEntries, sampleDriveRoots } from "../samples.ts";
 
 export function DrivePage() {
   const station = useStation();
@@ -88,7 +89,7 @@ export function DriveHome({ scope }: { scope: string }) {
   return (
     <div className={`${pagesCss.page} ${css.page}`}>
       <header className={pagesCss.pageHead}><div className={css.headText}><h1>{t("web-pages.drive.title")}</h1></div></header>
-      {!stations ? <Waiting count={4} text={t("common.readingStations")} />
+      {!stations ? <Waiting text={t("common.readingStations")} sample={<RootList roots={SAMPLE_ROOTS} onOpen={() => undefined} />} />
         : <Empty text={t("web-main.rail.filesNone")} action={add.can ? <Button variant="primary" icon={Folder} onClick={add.start}>{t("web-pages.drive.pick")}</Button> : undefined} />}
       {add.dialogs}
     </div>
@@ -155,21 +156,29 @@ function Roots({ d }: { d: DriveState }) {
         </div>
         {(d.manage || d.anywhere) && d.offered && d.roots.length > 0 && <div className={css.actions}><Menu items={[{ label: t("web-pages.drive.manage"), icon: Folder, onSelect: manage.open }]} /></div>}
       </header>
-      {d.loading ? <Waiting count={6} error={d.error} />
+      {d.loading ? <Waiting error={d.error} sample={<RootList roots={SAMPLE_ROOTS} onOpen={() => undefined} />} />
         : !d.offered ? <Empty text={t("web-pages.drive.oldStation")} />
         : d.roots.length === 0 ? (
           <Empty text={d.manage || d.anywhere ? t("web-pages.drive.noneManage") : t("web-pages.drive.noneMember")}
             action={d.manage || d.anywhere ? <Button variant="primary" icon={Folder} onClick={manage.pick}>{t("web-pages.drive.pick")}</Button> : undefined} />
-        ) : (
-          <div className={css.list}>
-            <p className={css.count}>{t("web-pages.drive.rootsCount", { n: d.roots.length })}</p>
-            {d.roots.map((r) => <RootRow key={r.path} root={r} onOpen={() => go(drivePath(station.base, r.path))} />)}
-          </div>
-        )}
+        ) : <RootList roots={d.roots} onOpen={(r) => go(drivePath(station.base, r.path))} />}
       {manage.dialogs}
     </>
   );
 }
+
+/** The folders pinned (`roots`), how many, a row each. */
+function RootList({ roots, onOpen }: { roots: DriveRoot[]; onOpen(root: DriveRoot): void }) {
+  return (
+    <div className={css.list}>
+      <p className={css.count}>{t("web-pages.drive.rootsCount", { n: roots.length })}</p>
+      {roots.map((r) => <RootRow key={r.path} root={r} onOpen={() => onOpen(r)} />)}
+    </div>
+  );
+}
+
+/** Folders pinned made up, for what the files' pages show while they are read (in their bones). */
+const SAMPLE_ROOTS = sampleDriveRoots();
 
 function RootRow({ root, onOpen }: { root: DriveRoot; onOpen: () => void }) {
   const trouble = rootTrouble(root);
@@ -458,7 +467,10 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
           </>
         ) : folder.error ? (
           <div className={css.problem}><p className={controlsCss.fieldError}>{folder.error.message}</p><Button variant="ghost" icon={Retry} onClick={reload}>{t("web-pages.drive.retry")}</Button></div>
-        ) : !folder.value || !arranged ? <Waiting count={8} /> : (
+        ) : !folder.value || !arranged ? <Waiting sample={<>
+          {view === "list" && <ListHead arrangement={browse.arrangement} onSort={() => undefined} />}
+          <DriveSample />
+        </>} /> : (
           <>
             {uploads.map((u) => <UploadRow key={u.key} u={u} />)}
             {view === "list" && shownEntries.length > 0 && <ListHead arrangement={browse.arrangement} onSort={(by) => browse.arrangeAs(by === browse.arrangement.by ? { down: !browse.arrangement.down } : { by, down: false })} />}
@@ -515,6 +527,16 @@ export function usePreviewShown(place: "page" | "tab" = "page"): [boolean, (on: 
 export function useStationName(station: string): string {
   return useTopicSelect<StationView[], string>({ topic: "stations", scope: station.split("/")[0] ?? "" }, (s) => s.value?.find((x) => x.station === station)?.name ?? station);
 }
+
+/** A folder's rows made up, for what its list shows while it is read (in their bones); `compact` as DriveRow's. */
+export function DriveSample({ compact = false }: { compact?: boolean }) {
+  return SAMPLE_ENTRIES.map((e) => <DriveRow key={e.name} at={SAMPLE_AT} entry={e} row={SAMPLE_ROW} compact={compact} />);
+}
+const SAMPLE_ENTRIES = sampleDriveEntries();
+const SAMPLE_AT: At = { station: "sample", root: "", path: "" };
+const SAMPLE_ROW: RowProps = {
+  items: [], open: () => undefined, press: () => undefined, menu: () => undefined, chosen: false, renaming: false, rename: () => undefined, dragged: () => [],
+};
 
 /**
  * A row of a folder's list, as the files' page and a chat's 文件 tab draw it: its mark, name, size and time (`compact`:

@@ -19,14 +19,15 @@ import { VaultActions } from "../VaultApproval.tsx";
 import { AskCard } from "../VaultAsk.tsx";
 import {
   ITEM_SECTIONS, KINDS, LASTS, SCOPES, scopeOf, blankForm, copySecret, lastsChoice, lastsName, useVaultUses, type Kind, formOf, formProblem, kindName, masked, modeName, modesOf, putOf, useForm,
-  useVaultCall, useVaultItems, useVaults, useVaultsItems, type Form, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView,
+  useVaultCall, useVaultItems, useVaults, useVaultsItems, type Form, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView, type VaultUse,
 } from "../vault.ts";
 import { t } from "../i18n.ts";
 import { StationInWords } from "../StationNamed.tsx";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { confirm } from "./sheets.tsx";
 import { Button, LargeTitle, LinkButton, ListCard, ListRow, NavBar, NavButton, PickRow, SectionHeader, Seg, TopBack } from "./parts.tsx";
-import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
+import { Spinner, Waiting } from "@stillfail/ui/waiting.tsx";
+import { sampleVaultItems, sampleVaults, sampleVaultUses } from "../samples.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
@@ -39,7 +40,7 @@ import * as css from "./Vault.css.ts";
 
 export function VaultScreen() {
   const app = useApp();
-  const { view, first, foot } = useFirst();
+  const { view, first, foot } = useFirst(<Library view={SAMPLE_VAULTS} />);
   return (
     <div className={pagesCss.mScreen}>
       <div className={pagesCss.mScroll}>
@@ -56,7 +57,7 @@ export function VaultScreen() {
 /** 全部密钥: what the library keeps, 添加 at its top; what has to come first, as on 密钥. */
 export function VaultAllScreen() {
   const app = useApp();
-  const { view, first, foot } = useFirst();
+  const { view, first, foot } = useFirst(<All view={SAMPLE_VAULTS} />);
   return (
     <div className={pagesCss.mScreen}>
       <div className={pagesCss.mScroll}>
@@ -71,10 +72,10 @@ export function VaultAllScreen() {
   );
 }
 
-/** What 密钥 and 全部密钥 show before the library, and the button at their foot: waiting for the core; the recovery
- * words to write down; a web page's names; what has to come first. `first` null where the library is there to be used
- * (in plain text on the station, or locked, signed and set up here). */
-function useFirst(): { view: VaultsView | undefined; first: ReactNode | null; foot: ReactNode | null } {
+/** What 密钥 and 全部密钥 show before the library, and the button at their foot: waiting for the core (the page as it
+ * will be, `sample`, in its bones); the recovery words to write down; a web page's names; what has to come first.
+ * `first` null where the library is there to be used (in plain text on the station, or locked, signed and set up here). */
+function useFirst(sample: ReactNode): { view: VaultsView | undefined; first: ReactNode | null; foot: ReactNode | null } {
   const app = useApp();
   const ws = app.entry.id;
   const view = useVaults(ws);
@@ -93,7 +94,7 @@ function useFirst(): { view: VaultsView | undefined; first: ReactNode | null; fo
     : view.available && view.locked && view.canSign && (!view.setUp || view.vaults.length === 0)
       ? <Button primary busy={settingUp || creating} label={t("web-pages.vault.setUp")} onClick={view.setUp ? () => void create() : setUp} />
     : null;
-  const first = !view ? <Waiting shape="cards" count={2} />
+  const first = !view ? <Waiting sample={sample} />
     : words ? <Words words={words} />
     : view.plain === true ? null
     : !view.available ? <ReadOnly view={view} />
@@ -103,6 +104,11 @@ function useFirst(): { view: VaultsView | undefined; first: ReactNode | null; fo
     : null;
   return { view, first, foot };
 }
+
+/** The vault, its secrets and a secret's uses made up, for what its pages show while they are read (in their bones). */
+const SAMPLE_VAULTS = sampleVaults();
+const SAMPLE_ITEMS = sampleVaultItems();
+const SAMPLE_USES = sampleVaultUses();
 
 /** What the vault waits for first (security mode; this device in it), and the way there. */
 function Gate({ title, why }: { title: string; why: string }) {
@@ -185,7 +191,6 @@ function Library({ view }: { view: VaultsView }) {
  * them. */
 function All({ view }: { view: VaultsView }) {
   const app = useApp();
-  const run = useVaultCall();
   const [find, setFind] = useState("");
   // (the profiles' accounts folded at the foot: seen on the profiles' pages first)
   const [opened, setOpened] = useState(false);
@@ -214,33 +219,7 @@ function All({ view }: { view: VaultsView }) {
             onChange={(e) => setFind(e.target.value)} />
         </label>
       </div>
-      {secrets.length + unnamed.length > 0 && (
-        <ListCard>
-          {secrets.map(({ v, row }) => {
-            const keyed = plain || v.keyed;
-            return (
-              <ListRow key={`${v.id}/${row.id}`} onClick={keyed ? () => app.push(app.at(`/settings/vault/${encodeURIComponent(v.id)}/${encodeURIComponent(row.id)}`)) : undefined}>
-                <span className={css.mMark}><KindIcon kind={row.kind ?? undefined} /></span>
-                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-                  <span className={listsCss.mRowTitle}>{row.name}</span>
-                  {/* (its kind, its vault where there are more than one; the core's: how an agent gets it, when and where
-                      it was last used) */}
-                  <span className={css.mLine}>{said(row.kindText, many ? v.name : null, keyed ? row.lineText : row.agentText)}</span>
-                </span>
-                {keyed && <ChevronRight size={14} className={partsCss.mSubtle} />}
-              </ListRow>
-            );
-          })}
-          {/* (unlocked by opening one of them: the vault's key kept a while, every name shown) */}
-          {unnamed.map(({ v, hidden }) => (
-            <ListRow key={`${v.id}/hidden`} onClick={plain || v.keyed ? () => void run("vault.open", { workspace: app.entry.id, item: hidden[0]!.id }, t("web-pages.vault.unlockWhat")) : undefined}>
-              <span className={css.mMark} />
-              <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("web-pages.vault.hidden", { n: hidden.length })}</span>
-              {(plain || v.keyed) && <span className={partsCss.mAccent}>{t("web-pages.vault.unlock")}</span>}
-            </ListRow>
-          ))}
-        </ListCard>
-      )}
+      <Secrets secrets={secrets} unnamed={unnamed} plain={plain} many={many} />
       {/* The accounts, folded under a row naming them (open where what is looked for is among them). */}
       {accounts.length > 0 && (
         <ListCard>
@@ -265,10 +244,46 @@ function All({ view }: { view: VaultsView }) {
           ))}
         </ListCard>
       )}
-      {reading ? <ListCard><ListRow><WaitLine /></ListRow></ListCard>
+      {reading ? <Waiting sample={<Secrets secrets={SAMPLE_ITEMS.map((row) => ({ v: SAMPLE_VAULTS.vaults[0]!, row }))} unnamed={[]} plain={false} many={false} />} />
         : q !== "" && accounts.length + secrets.length === 0 ? <p className={securityCss.mLead}>{t("web-pages.vault.noMatch", { q: find.trim() })}</p>
         : (profiles?.items.length ?? 0) + secrets.length + unnamed.length === 0 && <p className={securityCss.mLead}>{t("web-pages.vault.empty")}</p>}
     </>
+  );
+}
+
+/** 全部密钥's secrets on one card, a row each (`secrets`, each with its vault), and a row for each vault's unnamed ones, to unlock it. */
+function Secrets({ secrets, unnamed, plain, many }: { secrets: { v: VaultRow; row: VaultItemRow }[]; unnamed: { v: VaultRow; hidden: VaultItemRow[] }[]; plain: boolean; many: boolean }) {
+  const app = useApp();
+  const run = useVaultCall();
+  if (secrets.length + unnamed.length === 0) return null;
+  // (a row's line: what is said of it, those words that are not empty, a dot between)
+  const said = (...words: (string | null | undefined)[]) => words.filter((w) => w).join(" · ");
+  return (
+    <ListCard>
+      {secrets.map(({ v, row }) => {
+        const keyed = plain || v.keyed;
+        return (
+          <ListRow key={`${v.id}/${row.id}`} onClick={keyed ? () => app.push(app.at(`/settings/vault/${encodeURIComponent(v.id)}/${encodeURIComponent(row.id)}`)) : undefined}>
+            <span className={css.mMark}><KindIcon kind={row.kind ?? undefined} /></span>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+              <span className={listsCss.mRowTitle}>{row.name}</span>
+              {/* (its kind, its vault where there are more than one; the core's: how an agent gets it, when and where
+                  it was last used) */}
+              <span className={css.mLine}>{said(row.kindText, many ? v.name : null, keyed ? row.lineText : row.agentText)}</span>
+            </span>
+            {keyed && <ChevronRight size={14} className={partsCss.mSubtle} />}
+          </ListRow>
+        );
+      })}
+      {/* (unlocked by opening one of them: the vault's key kept a while, every name shown) */}
+      {unnamed.map(({ v, hidden }) => (
+        <ListRow key={`${v.id}/hidden`} onClick={plain || v.keyed ? () => void run("vault.open", { workspace: app.entry.id, item: hidden[0]!.id }, t("web-pages.vault.unlockWhat")) : undefined}>
+          <span className={css.mMark} />
+          <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("web-pages.vault.hidden", { n: hidden.length })}</span>
+          {(plain || v.keyed) && <span className={partsCss.mAccent}>{t("web-pages.vault.unlock")}</span>}
+        </ListRow>
+      ))}
+    </ListCard>
   );
 }
 
@@ -309,8 +324,8 @@ function VaultItems({ v }: { v: VaultRow }) {
   const hidden = (items?.items.length ?? 0) - named.length;
   return <>
     <SectionHeader title={v.name} start={24} />
-    <ListCard>
-      {!items ? <ListRow><WaitLine /></ListRow> : <>
+    {!items ? <Waiting sample={<ListCard>{SAMPLE_ITEMS.map((row) => <ItemRow key={row.id} row={row} />)}</ListCard>} /> : (
+      <ListCard>
         {items.items.length === 0 && <ListRow><span className={partsCss.mSubtle}>{t("web-pages.vault.empty")}</span></ListRow>}
         {named.map((row) => <ItemRow key={row.id} row={row} />)}
         {hidden > 0 && (
@@ -319,8 +334,8 @@ function VaultItems({ v }: { v: VaultRow }) {
             <span className={`${partsCss.mGrow} ${partsCss.mSubtle}`}>{t("web-pages.vault.hidden", { n: hidden })}</span>
           </ListRow>
         )}
-      </>}
-    </ListCard>
+      </ListCard>
+    )}
   </>;
 }
 
@@ -612,26 +627,50 @@ function AddSheet() {
  * masked until shown, how agents may use it, and when they did. */
 export function VaultItemScreen() {
   const app = useApp();
-  const ws = app.entry.id;
   const { vault = "", item = "" } = useParams();
-  const view = useVaults(ws);
-  const items = useVaultItems(ws, vault);
-  const uses = useVaultUses(ws, vault, item);
+  const view = useVaults(app.entry.id);
+  const items = useVaultItems(app.entry.id, vault);
+  const v = view?.vaults.find((x) => x.id === vault);
+  const row = items?.items.find((i) => i.id === item);
+  const back = t("web-pages.vault.all");
+  if (!view || !items || !v || !row) {
+    return <div className={pagesCss.mScreen}><NavBar back={back} onBack={app.pop} title={back} />
+      <Waiting sample={<ItemBody v={SAMPLE_VAULTS.vaults[0]!} row={SAMPLE_ITEMS[0]!} plain={false} opened={null} revealed={false} opening={false} onShow={() => undefined} />} /></div>;
+  }
+  return <ItemScreen v={v} row={row} plain={view.plain === true} />;
+}
+
+/** A secret's page: `row`, kept in `v` (`plain`: a library not locked), opened to be shown or edited. */
+function ItemScreen({ v, row, plain }: { v: VaultRow; row: VaultItemRow; plain: boolean }) {
+  const app = useApp();
+  const ws = app.entry.id;
+  const vault = v.id, item = row.id;
+  const back = t("web-pages.vault.all");
   const run = useVaultCall();
   const [opened, setOpened] = useState<Opened | null>(null);
   const [revealed, setRevealed] = useState(false);
   const opening = useDoing("vault.open", { workspace: ws, item });
-  const v = view?.vaults.find((x) => x.id === vault);
-  const row = items?.items.find((i) => i.id === item);
-  const back = t("web-pages.vault.all");
-  if (!view || !items || !v || !row) return <div className={pagesCss.mScreen}><NavBar back={back} onBack={app.pop} title={back} /><Waiting shape="cards" count={2} /></div>;
-  const plain = view.plain === true;
   const open = (then?: (o: Opened) => void) => void run<Opened>("vault.open", { workspace: ws, item }, t("web-pages.vault.openWhat")).then((o) => { if (o) { setOpened(o); then?.(o); } });
   const edit = () => (opened ? openEditor(app, vault, formOf(opened, row), opened.id, plain) : open((o) => openEditor(app, vault, formOf(o, row), o.id, plain)));
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       <NavBar back={back} onBack={app.pop} title={row.name ?? ""} sub={<span>{<StationInWords station={v.station} text={[row.kindText, t("web-pages.vault.storedOn", { station: v.stationName })].join(" · ")} />}</span>}
         trailing={<NavButton icon={Edit} label={t("common.edit")} onClick={edit} />} />
+      <ItemBody v={v} row={row} plain={plain} opened={opened} revealed={revealed} opening={opening} onShow={() => open(() => setRevealed(true))} />
+    </div>
+  );
+}
+
+/** A secret's page under its bar: in a library not locked (`plain`) that it is not encrypted, its content (masked until
+ * `opened`; `onShow` opens it), how agents may use it, and when they did. */
+function ItemBody({ v, row, plain, opened, revealed, opening, onShow }: {
+  v: VaultRow; row: VaultItemRow; plain: boolean; opened: Opened | null; revealed: boolean; opening: boolean; onShow(): void;
+}) {
+  const app = useApp();
+  const ws = app.entry.id;
+  const uses = useVaultUses(ws, v.id, row.id);
+  return (
+    <>
       {plain && (
         <ListCard><div className={securityCss.mBody}>
           <div className={securityCss.mState}><span className={securityCss.mDot} data-tone="amber" />{t("web-pages.vault.risk.title")}</div>
@@ -645,7 +684,7 @@ export function VaultItemScreen() {
           ? <div className={securityCss.mBody}>{opened.shown.map((f) => <Secret key={f.key} label={f.label} value={f.value} secret={f.secret} mono={f.mono} revealed={revealed} />)}</div>
           : <div className={securityCss.mBody}><div className={css.mSecretLine}>
               <span className={`${css.mSecretValue} ${css.mMono}`}>{masked("x".repeat(20))}</span>
-              <LinkButton label={t("web-pages.vault.show")} busy={opening} onClick={() => open(() => setRevealed(true))} />
+              <LinkButton label={t("web-pages.vault.show")} busy={opening} onClick={onShow} />
             </div></div>}
       </ListCard>
       <SectionHeader title={t("web-pages.vault.forAgents")} start={24} />
@@ -659,20 +698,27 @@ export function VaultItemScreen() {
         ) : <span className={partsCss.mSubtle}>{t("web-pages.vault.notForAgents")}</span>}
       </div></ListCard>
       <SectionHeader title={t("web-pages.vault.uses.title")} start={24} />
-      <ListCard>
-        {!uses ? <ListRow><span className={partsCss.mSubtle}>{t("web-pages.settings.reading")}</span></ListRow>
-          : uses.uses.length === 0 ? <ListRow><span className={partsCss.mSubtle}>{t("web-pages.vault.uses.none")}</span></ListRow>
-          : uses.uses.map((u, i) => (
-            <ListRow key={i} onClick={u.station ? () => app.push(`${stationBase(`${ws}/${u.station}`)}/chats/${encodeURIComponent(u.session)}`) : undefined}>
-              <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-                <span className={listsCss.mRowTitle}>{u.chatTitle ?? u.session}{u.denied && <span className={securityCss.mWarn}> · {t("web-pages.vault.uses.denied")}</span>}</span>
-                <span className={`${listsCss.mRowNote} ${css.mMono}`}>{u.howText}</span>
-              </span>
-              <span className={listsCss.mRowNote}>{u.at.ago}</span>
-            </ListRow>
-          ))}
-      </ListCard>
+      {!uses ? <Waiting sample={<ListCard><UseRows ws={ws} uses={SAMPLE_USES} /></ListCard>} /> : (
+        <ListCard>
+          {uses.uses.length === 0 ? <ListRow><span className={partsCss.mSubtle}>{t("web-pages.vault.uses.none")}</span></ListRow> : <UseRows ws={ws} uses={uses.uses} />}
+        </ListCard>
+      )}
       <div style={{ height: 30 }} />
-    </div>
+    </>
   );
 }
+
+/** A secret's `uses`, a row each: the chat it was in (opening it), how, when; turned down, said. */
+function UseRows({ ws, uses }: { ws: string; uses: VaultUse[] }) {
+  const app = useApp();
+  return uses.map((u, i) => (
+    <ListRow key={i} onClick={u.station ? () => app.push(`${stationBase(`${ws}/${u.station}`)}/chats/${encodeURIComponent(u.session)}`) : undefined}>
+      <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+        <span className={listsCss.mRowTitle}>{u.chatTitle ?? u.session}{u.denied && <span className={securityCss.mWarn}> · {t("web-pages.vault.uses.denied")}</span>}</span>
+        <span className={`${listsCss.mRowNote} ${css.mMono}`}>{u.howText}</span>
+      </span>
+      <span className={listsCss.mRowNote}>{u.at.ago}</span>
+    </ListRow>
+  ));
+}
+

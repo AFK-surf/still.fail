@@ -22,6 +22,7 @@ import { ChatMark, chatTone, jumpFromLine, rowLead, stateLine, WaitingText } fro
 import * as chatMarkCss from "../ChatMark.css.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
 import { RowAside } from "../RowPicture.tsx";
+import { sampleChats, sampleWords } from "../samples.ts";
 import { FirstStation } from "./Stations.tsx";
 import { OpenJobs } from "./OpenJobs.tsx";
 import { filesPath } from "../searchOpen.ts";
@@ -400,8 +401,8 @@ const ChatPane = memo(function ChatPane({ chats, filter, onSearch }: { chats: To
   const intro = <>
     {view && !view.note?.empty && <SearchField onOpen={onSearch} />}
     <ChangelogNews />
-    {!view ? <Waiting text={t("web-mobile.home.reading")} error={chats.error?.message} /> : <>
-      {(view.note?.reading || !!view.note?.failing.length) && <Waiting note={view.note} text={t("web-mobile.home.reading")} count={view.note.reading ? 7 : 4} />}
+    {!view ? <Waiting text={t("web-mobile.home.reading")} error={chats.error?.message} sample={<ChatRowsSample lead={lead} n={7} />} /> : <>
+      {(view.note?.reading || !!view.note?.failing.length) && <Waiting note={view.note} text={t("web-mobile.home.reading")} sample={<ChatRowsSample lead={lead} n={view.note.reading ? 7 : 4} />} />}
       {view.note?.empty && <Empty view={view} filter={filter} />}
       <OpenJobs scope={scope} />
     </>}
@@ -415,6 +416,15 @@ const ChatPane = memo(function ChatPane({ chats, filter, onSearch }: { chats: To
     </div>
   );
 });
+
+/** The list's rows made up, `n` of them, for what it shows while it is read (in their bones): a day's, as the list draws them. */
+function ChatRowsSample({ lead, n }: { lead: "agents" | "people"; n: number }) {
+  return <>
+    <div className={css.mHomeItem}><SectionHeader title={sampleWords(2)} /></div>
+    {SAMPLE_CHATS.slice(0, n).map((item) => <div key={item.id} className={css.mHomeItem}><ChatRow item={item} lead={lead} /></div>)}
+  </>;
+}
+const SAMPLE_CHATS = sampleChats(7);
 
 function Note({ text, error = false }: { text: string; error?: boolean }) {
   return <p className={homeCss.mNote} data-error={error || undefined}>{text}</p>;

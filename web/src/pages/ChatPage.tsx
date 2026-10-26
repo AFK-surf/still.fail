@@ -18,7 +18,7 @@ import { ownOrigin } from "../stillfailLink.ts";
 import { changeTabs } from "../chatTabs.ts";
 import { usePrefs } from "../prefs.ts";
 import type { ChatJobsView, ChatPublish, ChatShare, Host, StationView } from "../core/shapes.ts";
-import { stationApi, useAction, useApi, useStatus, useChat, useChatJobs, useChats, useHistory, useHost, useStationCall, useStationLook, useAgentCard, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
+import { stationApi, useAction, useApi, useStatus, useChat, useChatJobs, useListedChat, useHistory, useHost, useStationCall, useStationLook, useAgentCard, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { StationCornerDot, StationDot, useStationLink } from "../StationLink.tsx";
@@ -28,7 +28,7 @@ import { Hover } from "../Peeks.tsx";
 import { AgentCard, UsageTiles } from "../AgentCard.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
 import { usePick } from "../pick.ts";
-import { ChatPanel, goToNeighbour } from "../Chat.tsx";
+import { ChatPanel, ChatSample, goToNeighbour } from "../Chat.tsx";
 import { OpenFile } from "../Viz.tsx";
 import { OpenScreen, screenOfTab, screenTab, useScreenCard } from "../screen/ScreenLink.tsx";
 import { ScreenViewer } from "../screen/ScreenViewer.tsx";
@@ -302,6 +302,10 @@ function ChatScreen({ session: chatSession }: { session: string }) {
     return (
       <div className={sessionCss.sessionPage} data-panel={open.length > 0}>
         <div className={jobsCss.sessionMain}>
+          <header className={sidebarCss.pageBar}>
+            <MobileBack to={link("/chats")} label={t("web-pages.decisions.back")} />
+            <div className={conversationCss.pageBarTitle}><ListedTitle session={chatSession} /></div>
+          </header>
           <section className={sessionCss.chat} aria-label={t("web-pages.decisions.back")} data-under-composer="" data-avoid-previews="">
             <ChatWaiting />
             <ComposerSlot variant="chat" station={station} draftKey={chatKey} thread={null} sessionKey={null} locked />
@@ -509,15 +513,21 @@ const AgentButton = memo(function AgentButton({ station: address, chat, session:
   return <AgentTile agent={agent} chat={chat} marked={marked} station={first} />;
 });
 
+/** A chat's title as the list has it, while the chat itself is read (nothing, where the list has it not). */
+function ListedTitle({ session }: { session: string }) {
+  const item = useListedChat(useStation().address, session);
+  return item ? <h1>{item.title}</h1> : null;
+}
+
 /**
- * A chat not read yet: its messages' shapes, and over them what it waits on: what the core says is slow (正在连接 Studio),
- * else where it reads from; a connection down, in red.
+ * A chat not read yet: its messages in their bones, and over them what it waits on: what the core says is slow
+ * (正在连接 Studio), else where it reads from; a connection down, in red.
  */
 function ChatWaiting() {
   const station = useStation();
   const status = useStatus(scopeOf(station.address));
   const text = status?.text ?? (station.name ? t("web-pages.chat.loadingFrom", { name: station.name }) : t("web-pages.chat.loading"));
-  return <Waiting shape="messages" fill text={text} error={status?.state === "trouble" ? text : null} />;
+  return <Waiting fill text={text} error={status?.state === "trouble" ? text : null} sample={<ChatSample />} />;
 }
 
 function AgentTile({ agent, chat, marked, station }: { agent: ChatAgent; chat: string; marked: boolean; station: boolean }) {
