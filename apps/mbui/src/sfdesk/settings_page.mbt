@@ -148,29 +148,6 @@ let mine_filter_lit_words : @ui.TextStyle = mine_filter_words.then(@ui.text_styl
 let mine_filter_on_words : @ui.TextStyle = mine_filter_words.then(@ui.text_style(color=AccentText))
 
 ///|
-/// How many dialogs were put up (a dialog's fields' keys, new each time it opens).
-// kept across runs: counted by open_dialog; settings_reset puts it back
-let desk_dialogs : Ref[Int] = Ref(0)
-
-///|
-/// Puts up a dialog over the page (parts.tsx Dialog: the library's panel opened by nothing, @sf.panel): its title,
-/// what it is about, what it holds, its buttons at its foot, each given what closes it; `wide`, 640 wide; `live`: its
-/// title, its step's count and what it is about as they are now (a wizard's); `gone`: what is let go of as it closes
-/// by its ✕, Esc or a press outside.
-fn open_dialog(
-  title : String,
-  body : (@ui.Ctx, () -> Unit) -> Unit,
-  foot : (@ui.Ctx, () -> Unit) -> Unit,
-  description? : String = "",
-  wide? : Bool = false,
-  live? : () -> (String, String, String),
-  gone? : () -> Unit = fn() {  },
-) -> Unit {
-  desk_dialogs.val += 1
-  @sf.panel(title, body, from=Unanchored, description~, foot~, wide~, live?, gone~)
-}
-
-///|
 /// A page of the desktop's settings still drawn with its desktop pieces alone: the library's page laid out wide (counted
 /// by page-look where a page asks for it), back over it on a page under another (`back` where it goes; `on_back`, else
 /// the page popped).

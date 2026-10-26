@@ -1,5 +1,5 @@
 // The settings' pages here (about.mbt, appearance.mbt, automatic_decisions.mbt, bars.mbt, memory.mbt,
-// notifications.mbt, permissions.mbt, shortcuts.mbt, usage.mbt, account.mbt, workspace_page.mbt)
+// notifications.mbt, permissions.mbt, shortcuts.mbt, usage.mbt, account.mbt, workspace_page.mbt, security.mbt)
 // drawn alone over the made-up core's settings, in a box of each width, with a finger and with a mouse: what each is
 // for, laid out by its own width. What the shell does around them (the tier, its sidebar, the system's bars) is the
 // whole app's tests' (src/sfapp).
@@ -67,6 +67,8 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     Shortcuts => shortcuts_page(c, core, frame)
     Me => me_page(c, core, here, frame)
     Workspace => workspace_page(c, core, here, frame)
+    Security => security_page(c, core, here, frame)
+    SecurityOpen => security_open_page(c, core, here, frame)
     Memories => memories_page(c, core, here, frame)
     Memory(a) => memory_page(c, core, here, frame, a)
     AutoDecisions => decisions_page(c, core, here, frame)
@@ -100,4 +102,18 @@ fn scrolled_to(t : @ui.Tester, w : Double, words : String) -> Unit {
       _ => t.wheel(x, 450.0, 300.0)
     }
   }
+}
+
+///|
+/// Presses `words` drawn whole and shown (the rightmost where several are: the page's, not its title's or a note's).
+fn tap_words(t : @ui.Tester, words : String) -> Unit raise {
+  let shown = t.words().filter(fn(w) { w.0 == words && w.5 > 0.5 })
+  guard shown.length() > 0 else { fail("no \{words} drawn") }
+  let mut at = shown[0]
+  for w in shown {
+    if w.1 > at.1 {
+      at = w
+    }
+  }
+  t.tap(at.1 + at.3 / 2.0, at.2 + at.4 / 2.0)
 }

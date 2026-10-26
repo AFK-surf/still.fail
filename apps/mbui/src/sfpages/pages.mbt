@@ -44,4 +44,5 @@ pub fn reset() -> Unit {
   font_setting_reset()
   notify_page_reset()
   usage_reset()
+  desk_dialogs.val = 0
 }
