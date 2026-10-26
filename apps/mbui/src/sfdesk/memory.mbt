@@ -74,16 +74,9 @@ fn station_names(stations : Array[Json]) -> Map[String, String] {
 /// A station's memory as a list (MemoryView): its sections, each a row that opens its page; a wait while it is read.
 fn memory_view(c : @ui.Ctx, core : Core, look : Look, address : String, names : Map[String, String]) -> Unit {
   let read = memory_of(core, address)
+  // (read the first time: its sections' cards' shapes, on every width as what comes is the same there)
   guard read.value is Some(_) else {
-    match look {
-      Narrow => waiting_cards(c, error=if read.error == "" { "" } else { @sf.t("web-main.memory.failed", args=[("error", read.error)]) })
-      Wide =>
-        if read.error == "" {
-          @sf.wait_line(c, @sf.t("common.reading"))
-        } else {
-          c.text(@sf.t("web-main.memory.failed", args=[("error", read.error)]), style=desk_note_bad) |> ignore
-        }
-    }
+    waiting_cards(c, error=if read.error == "" { "" } else { @sf.t("web-main.memory.failed", args=[("error", read.error)]) })
   }
   let m = read.value
   let sections = sections_of(m)

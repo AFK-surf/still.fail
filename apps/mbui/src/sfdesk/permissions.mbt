@@ -161,14 +161,16 @@ fn archiving_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> U
     },
     fn() {
       @sf.section(c, @sf.t("web-pages.archiving.auto.title"), heads=true, note=if look == Wide { @sf.t("web-pages.archiving.auto.description") } else { "" }, fn() {
+        // (read the first time: rows' shapes where their card's rows will be, not a wait's line over an empty card)
         if read is None {
-          @sf.wait_line(c, @sf.t("common.readingStations"), key="archiving-stations")
+          @sf.group_waiting(c, count=2, text=@sf.t("common.readingStations"))
+        } else {
+          @sf.group(c, fn() {
+            for s in stations {
+              archiving_row(c, core, look, Some(s))
+            }
+          })
         }
-        @sf.group(c, fn() {
-          for s in stations {
-            archiving_row(c, core, look, Some(s))
-          }
-        })
         if look == Narrow {
           @sf.page_note(c, @sf.t("web-pages.archiving.auto.description"))
         }

@@ -119,7 +119,8 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
 
 ///|
 /// Where the account is signed in (the `loginSessions` topic): each device's name (this one marked 当前), when it signed
-/// in and until when; 退出 on the others (`loginSession.revoke`). Narrow, on a card.
+/// in and until when; 退出 on the others (`loginSession.revoke`). Narrow, on a card. Read the first time, rows' shapes
+/// where their card's rows will be (settings.tsx: Waiting, 3).
 fn acc_devices(c : @ui.Ctx, core : Core, look : Look, here : Here) -> Unit {
   let topic = (core.topic)("loginSessions", { "account": str(here.sub) })
   let list = match topic.value {
@@ -127,7 +128,7 @@ fn acc_devices(c : @ui.Ctx, core : Core, look : Look, here : Here) -> Unit {
     _ => {
       match topic.error {
         Some(e) => @sf.page_note(c, @sf.t("web-pages.settings.account.sessionsFailed", args=[("error", error_text(e))]), bad=true)
-        None => @sf.wait_line(c, @sf.t("common.reading"))
+        None => @sf.group_waiting(c, text=@sf.t("common.reading"))
       }
       return
     }

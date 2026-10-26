@@ -401,7 +401,8 @@ fn vault_all(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Un
     })
   }
   if reading {
-    out.push(fn() { @sf.wait_line(c, @sf.t("common.reading")) })
+    // (a vault's secrets still read: rows' shapes under what is shown, Vault.tsx's Waiting, 3 dense)
+    out.push(fn() { @sf.group_waiting(c, dense=true, text=@sf.t("common.reading")) })
   } else if rows.length() + accounts.length() == 0 && find != "" {
     out.push(fn() { @sf.page_note(c, @sf.t("web-pages.vault.noMatch", args=[("q", vault_find.text().trim(chars=" ").to_owned())])) })
   } else if rows.length() + unnamed.length() + kept_accounts == 0 {
@@ -619,7 +620,8 @@ fn vault_named(c : @ui.Ctx, core : Core, ws : String, row : Json) -> Unit {
         None =>
           match topic.error {
             Some(e) => @sf.page_note(c, error_text(e), bad=true)
-            None => @sf.wait_line(c, @sf.t("common.reading"))
+            // (read the first time: rows' shapes where its card's rows will be, Vault.tsx's Waiting, 4)
+            None => @sf.group_waiting(c, count=4, text=@sf.t("common.reading"))
           }
         Some(_) => @sf.page_note(c, @sf.t("android-settings.vault.empty"))
       }

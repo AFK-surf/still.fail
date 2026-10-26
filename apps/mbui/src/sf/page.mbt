@@ -521,6 +521,25 @@ pub fn group(c : @ui.Ctx, body : () -> Unit, card? : Bool = false) -> Unit {
 }
 
 ///|
+/// A group's rows while they are read the first time (docs/ui-panels.md 等待: a list's first read, a section's as
+/// well): `count` rows' shapes breathing (`waiting`'s Rows, `dense` a dense list's) where its card's rows will be, in
+/// its card's room and in from its edges as far, `text` what it waits on said to a screen reader. A wait's line in its
+/// place stood at the card's edge, against the next card (2026-10-26, 账号's devices: 「这个 loading 很怪」). Not on
+/// the card's ground: a card with nothing in it is a placeholder itself, too faint on the page (对比度).
+pub fn group_waiting(c : @ui.Ctx, count? : Int = 3, dense? : Bool = false, text? : String = "") -> Unit {
+  let shapes = fn() { c.box(style=group_bare, fn() { waiting(c, shape=Rows, count~, dense~, text~) }) |> ignore }
+  match look() {
+    Narrow => c.box(style=pg_card_room, shapes) |> ignore
+    Wide => wide_alone(c, shapes)
+  }
+}
+
+///|
+/// A group's card's box with no ground (group_waiting): as wide, as far in from its edges (pg_card, desk_list).
+// kept across runs: a value (no field of it changes)
+let group_bare : @ui.Style = @ui.style(w=Full, p=list_room)
+
+///|
 /// A page's long list (its rows laid out as they come into view: `Ctx::list`), its rows drawn in the arrangement of
 /// the page it is in: they are drawn after the page's frame has said it (group_row reads it).
 pub fn rows_list(c : @ui.Ctx, key : String, count : Int, est : Double, row : (Int) -> Unit) -> Int {
