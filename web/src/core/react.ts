@@ -65,6 +65,21 @@ let known: ((topic: Topic) => unknown) | null = null;
 export function setTopicSource(source: (topic: Topic) => unknown): void {
   known = source;
 }
+
+/** What the page knows of a topic before any core answers (setTopicSource), if it knows anything. */
+export function knownOf(topic: Topic): unknown {
+  return known?.(topic) ?? undefined;
+}
+
+/**
+ * Forgets what is known of every topic, so that each starts again at what the source gives now: for a page built to HTML
+ * more than once in one run, its source saying otherwise each time (the site's demo, opening elsewhere or in another
+ * language: demo/prerender.tsx).
+ */
+export function forgetTopics(): void {
+  for (const e of entries.values()) if (e.drop) clearTimeout(e.drop);
+  entries.clear();
+}
 const IDLE: TopicState<never> = { value: undefined, error: null, loading: false };
 
 /** The same key for the same topic, whatever order its fields were written in. */

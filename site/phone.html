@@ -14,8 +14,10 @@
 </head>
 <body style="margin:0;overflow:hidden">
 <!-- The phone beside the computer on the site's page (web/src/site/OneComputer.tsx): the demo's app as wide as a
-     phone, so that it is laid out as on one (web/src/site/phone.tsx). -->
-<div id="demo" style="width:100vw;height:100vh"></div>
+     phone, so that it is laid out as on one (web/src/site/phone.tsx), in a phone's shell (data-phone: a status bar's
+     room under its camera island). Its opening frame is built to HTML here by web/site-prerender.mjs, until the app
+     takes it over. -->
+<div id="demo" data-phone style="width:100vw;height:100vh"><!--demo--></div>
 <script type="module" src="./phone.ts"></script>
 </body>
 </html>

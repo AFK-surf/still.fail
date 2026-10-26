@@ -55,6 +55,9 @@ export default defineConfig({
     target: "es2022",
     // The page (in Chinese, and in English: en/), and the phone beside the computer on it (site/phone.html: the app as
     // wide as a phone).
-    rollupOptions: { input: { index: here("../site/index.html"), en: here("../site/en/index.html"), phone: here("../site/phone.html") } },
+    rollupOptions: { input: { index: here("../site/index.html"), en: here("../site/en/index.html"), phone: here("../site/phone.html"), phoneEn: here("../site/en/phone.html") } },
+    // Every style in one sheet, in each page's head: the demo's script comes after the page's own (src/site/main.tsx),
+    // and the frame it was built with (its app as HTML) is drawn with the app's styles before it is here.
+    cssCodeSplit: false,
   },
 });

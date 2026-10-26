@@ -107,7 +107,7 @@ function state(): NotifyState {
 
 export function useNotifyState(): NotifyState {
   watch();
-  return useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, state);
+  return useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, state, state);
 }
 
 /** Turns them on (asking the browser first) or off, on this browser; rejects, as it was, when that could not be kept. */

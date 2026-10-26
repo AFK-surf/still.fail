@@ -113,7 +113,7 @@ export function Distance(props: DemoProps) {
           <h2 className={css.headingTitle}>试用 still.fail</h2>
           <p className={css.headingLede}>以下为使用示例数据的 still.fail</p>
           <div className={`${css.edge} ${css.demoAfterHeading}`}>
-            <Demo v="2" {...(props.mountDemo ? { mount: props.mountDemo } : {})} {...(props.demo ? { frame: props.demo } : {})} />
+            <Demo v="2" {...(props.mountDemo ? { mount: props.mountDemo } : {})} {...(props.demo ? { frame: props.demo.chat } : {})} />
           </div>
         </div>
       </section>

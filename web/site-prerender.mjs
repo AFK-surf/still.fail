@@ -29,15 +29,18 @@ Object.defineProperty(globalThis, "navigator", { configurable: true, value: { us
 Object.defineProperty(globalThis, "navigator", { value: { userAgent: navigator.userAgent, language: navigator.language, languages: navigator.languages, platform: navigator.platform, hardwareConcurrency: navigator.hardwareConcurrency, appVersion: "" }, configurable: true });
 
 const dist = (path) => fileURLToPath(new URL(`../dist/${path}`, import.meta.url));
-const { render } = await import(pathToFileURL(dist("site-ssr/prerender.js")).href);
+const { render, renderPhone } = await import(pathToFileURL(dist("site-ssr/prerender.js")).href);
 // STILLFAIL_SITE=beta: the test channel's site, youdid.wtf (web/vite.demo.config.ts).
-// The page in Chinese at /, in English at /en/.
+// The page in Chinese at /, in English at /en/; the phone beside the computer on each (phone.html, en/phone.html).
 const root = process.env.STILLFAIL_SITE === "beta" ? "site-beta" : "site";
-for (const [lang, file] of [["zh", "index.html"], ["en", "en/index.html"]]) {
+for (const [lang, file, mark, build] of [
+  ["zh", "index.html", "<!--site-->", render], ["en", "en/index.html", "<!--site-->", render],
+  ["zh", "phone.html", "<!--demo-->", renderPhone], ["en", "en/phone.html", "<!--demo-->", renderPhone],
+]) {
   const page = dist(`${root}/${file}`);
   const html = readFileSync(page, "utf8");
-  if (!html.includes("<!--site-->")) throw new Error(`${page} has no <!--site--> to fill`);
-  writeFileSync(page, html.replace("<!--site-->", render(lang)));
+  if (!html.includes(mark)) throw new Error(`${page} has no ${mark} to fill`);
+  writeFileSync(page, html.replace(mark, build(lang)));
   console.log(`prerendered ${page}`);
 }
 rmSync(dist("site-ssr"), { recursive: true, force: true });

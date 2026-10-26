@@ -27,7 +27,7 @@ import * as station from "./station.ts";
 import { inEnglish } from "./english.ts";
 import * as fonts from "../../../client/core-ts/src/fonts.ts";
 import { railView } from "../../../client/core-ts/src/rail.ts";
-import { lang } from "../i18n.ts";
+import { deviceLocale, langOf } from "../i18n.ts";
 import { changed, tabsOf } from "../../../client/core-ts/src/chat-tabs.ts";
 import { followFonts } from "../fonts.ts";
 import { markdown } from "../../../client/core-ts/src/markdown.ts";
@@ -124,7 +124,12 @@ function demoValueOf(topic: Topic): unknown {
     case "status": return { items: [] };
     case "connection": return { items: [] };
     // What the visitor chose (prefs.set, below): the defaults till then (the core's shape leaves them out).
-    case "prefs": return { ...(language ? { lang: language } : {}), ...prefs, fonts: fonts.chosen(prefs.fonts), faces: fonts.shown(prefs.fonts), keymap: keymap.view({ ...prefs, device: DEVICE }), railView: railView(prefs, lang()) };
+    case "prefs": {
+      // The rail's words in the language the app takes from these (i18n.ts): the visitor's choice in it, else the demo's,
+      // else the browser's.
+      const view = { ...(language ? { lang: language } : {}), ...prefs };
+      return { ...view, fonts: fonts.chosen(prefs.fonts), faces: fonts.shown(prefs.fonts), keymap: keymap.view({ ...prefs, device: DEVICE }), railView: railView(prefs, langOf(typeof view.lang === "string" ? view.lang : deviceLocale())) };
+    }
     case "doing": return { doing: [] };
     // What is written stays the page's here (draft.ts shows what it did), but for what was shared into a chat.
     case "composer": return composerView(String(topic.key ?? ""));
@@ -631,6 +636,15 @@ let start: "chat" | "stations" = "chat";
 /** The language the demo is in: the app's and what it makes up (the site's English page: "en"); else as the app's own. */
 let language: "zh" | "en" | undefined;
 
+/** Where the demo opens and the language it is in. */
+export interface DemoOptions { start?: "chat" | "stations"; lang?: "zh" | "en" }
+
+/** The demo opens as `options` say: as it is mounted, and as its opening frame is built into the page (prerender.tsx). */
+export function openOn(options: DemoOptions): void {
+  start = options.start ?? "chat";
+  language = options.lang;
+}
+
 /** What the page holds of its demo. */
 export interface MountedDemo {
   /**
@@ -650,11 +664,10 @@ const mountedDemo: MountedDemo = {
 };
 
 /** Runs the demo in `element` (once): the app, its made-up core, and the story played when it comes into view. */
-export function mountDemo(element: HTMLElement, options: { start?: "chat" | "stations"; lang?: "zh" | "en" } = {}): MountedDemo {
+export function mountDemo(element: HTMLElement, options: DemoOptions = {}): MountedDemo {
   if (mounted) return mountedDemo;
   mounted = true;
-  start = options.start ?? "chat";
-  language = options.lang;
+  openOn(options);
   root = element;
   // What the page was built with (its opening frame, as HTML) gives way to the demo itself.
   root.replaceChildren();
