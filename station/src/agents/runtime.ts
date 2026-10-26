@@ -105,7 +105,32 @@ export const TOOL_SERVERS = ["stillfail", "ember"];
 
 /// A tool call's error that says the station's tools could not be reached at all (not that the tool refused).
 export function unreachable(text: string): boolean {
-  return /ECONNREFUSED|ECONNRESET|Unable to connect|is not connected|fetch failed|socket hang up|connection refused/i.test(text);
+  return /ECONNREFUSED|ECONNRESET|Unable to connect|is not connected|fetch failed|socket hang up|connection refused|failed to connect to mcp server/i.test(text);
+}
+
+/// Whether a call, by the name the station gives it, is to one of the station's tools: an MCP tool's name is
+/// mcp__<server>__<tool>, or <server>__<tool> where a runtime calls it so itself (Grok Build).
+export const stationTool = (name: string) => TOOL_SERVERS.some((s) => name.startsWith(`mcp__${s}__`) || name.startsWith(`${s}__`));
+
+/// What a runtime's failures say beyond what all of them may: words of its error codes and phrases of its messages that
+/// are about its account, or about its limits.
+export type FailureWords = { authCodes?: string[]; auth?: string[]; limitCodes?: string[]; limit?: string[] };
+
+/// What its messages (any runtime's) say when it is the account: signed out, a key refused, not allowed.
+const AUTH = ["unauthorized", "authenticat", "not logged in", "sign in", "log in", "api key", "permission_denied", "invalid credential"];
+/// What they say when it is a limit: of rate, quota or usage.
+const LIMIT = ["rate limit", "rate_limit", "quota", "usage limit", "limit reached", "resource_exhausted", "overloaded", "too many requests"];
+
+/// What failed a turn, from what the runtime said of it (its error's code first, where it gives one): the account, a
+/// limit, or else the model.
+export function failureOf(text: string, extra: FailureWords = {}): FailureReason {
+  const lower = text.toLowerCase();
+  const words = lower.split(/[^\p{L}\p{N}_]+/u);
+  const word = (w: string) => words.includes(w);
+  const says = (s: string) => lower.includes(s);
+  if (["401", "403", ...(extra.authCodes ?? [])].some(word) || [...AUTH, ...(extra.auth ?? [])].some(says)) return "auth";
+  if (["429", ...(extra.limitCodes ?? [])].some(word) || [...LIMIT, ...(extra.limit ?? [])].some(says)) return "rate_limit";
+  return "model";
 }
 
 export interface AgentDriver {
