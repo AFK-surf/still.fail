@@ -830,6 +830,7 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
     "imageNear" => fixture_image_near(params)
     // (待处理 open, MBA offline: decide_fixture.mbt)
     "chats" if f.mode == "home-attention" => fixture_chats(f, params).map(fn(v) { fix_with_trouble(v, params) })
+    "chats" if f.mode == "home-syncing" => fixture_chats(f, params).map(fix_with_syncing)
     "chats" => fixture_chats(f, params)
     "fleet" => Some(fixture_fleet(f))
     "railCard" => fixture_rail_card(params)

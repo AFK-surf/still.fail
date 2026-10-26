@@ -3855,6 +3855,82 @@ pub fn update_key(
 }
 
 ///|
+/// The list catching up on what changed while away (the chats' `syncing`; docs/ui-panels.md 等待): beside the keys of
+/// the bar it stands in, `side` across, the refresh mark (`mark`, in the grey of what it says nothing of) turning, a
+/// turn each sync_turn_ms, slow at its ends (by the clock as each frame is drawn: nothing built anew for it); `text` its tip and what it is said to be. Only once it has gone on later_ms
+/// (a moment's catching up shows nothing). Once all is here, the mark goes to a tick, there sync_done_ms, then fades.
+pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown : Bool, text : String) -> Unit {
+  let t = theme()
+  let on = shown && waited_long(c, key)
+  if shown {
+    sync_said[key] = text
+  } else {
+    done_waiting(c, key)
+  }
+  if on {
+    sync_seen[key] = true
+  }
+  // done: its tick held a while, then gone
+  let seen = sync_seen.get(key).unwrap_or(false)
+  let ticked = seen && !shown
+  let held = ticked && !@kit.after(c, key + "/done", true, sync_done_ms)
+  if !ticked {
+    @kit.after(c, key + "/done", false, sync_done_ms) |> ignore
+  }
+  let p = @kit.presence(c, key, on || held, exit=@motion.tween(sync_out_ms, ease=LeaveFade))
+  if !p.built {
+    sync_said.remove(key)
+    sync_seen.remove(key)
+    return
+  }
+  let words = sync_said.get(key).unwrap_or(text)
+  // the turning mark to the tick (in 200 ms, each growing from 0.6 as it comes)
+  let done = @kit.animate(c, key + "/tick", if ticked { 1.0 } else { 0.0 }, transition=@motion.tween(sync_tick_ms, ease=Out))
+  let id = c.id(key)
+  let b = c.box(style=update_key_box.then(@ui.style(w=Fixed(side), h=Fixed(side))), id~, fn() {
+    if done < 1.0 {
+      // (each in the whole key, in its middle: turned about it)
+      let a = c.layer(fn() { c.box(style=update_ring_at, fn() { icon(c, "refresh", size=mark, color=t.p.muted) |> ignore }) |> ignore })
+      c.look(a, @ui.look(alpha=1.0 - done, scale=1.0 - 0.4 * done))
+      // turned by the clock as each frame is drawn (Ctx::cycle_look), slow at a turn's ends; still once ticked
+      if !ticked {
+        c.cycle_look(a, sync_turn_ms, fn(k) { @ui.look(rot=k * k * (3.0 - 2.0 * k) * 2.0 * 3.141592653589793) })
+      }
+    }
+    if done > 0.0 {
+      let d = c.layer(fn() { c.box(style=update_ring_at, fn() { icon(c, "check", size=mark, color=t.p.muted) |> ignore }) |> ignore })
+      c.look(d, @ui.look(alpha=done, scale=0.6 + 0.4 * done))
+    }
+  })
+  c.look(b, { ..@ui.still_look, alpha: dmin(1.0, p.t) })
+  c.semantics(b, Status, id~, label=words)
+  tip(c, key + "/tip", id, words, side=Bottom)
+}
+
+///|
+/// What the catching up said last, by its key (said as it goes), and whether it showed (only then the tick).
+// kept across runs: put back as it goes (sync_key)
+let sync_said : Map[String, String] = {}
+
+///|
+// kept across runs: put back as it goes (sync_key)
+let sync_seen : Map[String, Bool] = {}
+
+///|
+/// A turn of the mark (the web's SyncMark: 1.4s, eased in and out).
+let sync_turn_ms : Double = 1400.0
+
+///|
+/// How long the tick stays once all is here, how long the mark takes to become it, and to fade.
+let sync_done_ms : Double = 1000.0
+
+///|
+let sync_tick_ms : Double = 200.0
+
+///|
+let sync_out_ms : Double = 400.0
+
+///|
 /// The key: round, what it holds in its middle.
 // kept across runs: a value (no field of it changes)
 let update_key_box : @ui.Style = @ui.css("radius=Full align=ACenter justify=JCenter")

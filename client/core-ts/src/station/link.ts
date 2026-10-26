@@ -143,6 +143,10 @@ export class Link {
   /// What is left of the sweep of its history under way (#history), and what the sweep asked (each read once).
   history: HistoryRead[] = [];
   readonly historyAsked = new Set<string>();
+  /// Catching up on what changed while the device was away (sync.ts `#catching`): from its stream's opening after it
+  /// was, until the threads it found behind have their latest on the device. Before it has looked (`tallied`), what is
+  /// behind is not known; null once caught up, or while it is not reached.
+  catching: { tallied: boolean; behind: Set<number> } | null = null;
 
   constructor(address: string, addr: StationAddr, scoped: Scoped, memory: Memory = new Memory()) {
     this.address = address;
@@ -164,6 +168,8 @@ export type Told = {
   goesOn(address: string, how: { away: boolean; restored: boolean }): void;
   /// An event of a stream.
   event(address: string, name: string, raw: string): void;
+  /// What a stream that went on was told first is in (the station tells what was missed as it joins, in the same turn).
+  toldMissed(address: string): void;
   /// How a station's link is, or its host figures as last kept, changed.
   changed(address: string, what: "link" | "host"): void;
   /// A station is no longer linked.
@@ -367,6 +373,8 @@ export class Links {
     if ((state === "online" || state === "offline") && this.#core.data.record("link", address) !== state) this.#core.data.put("link", address, state);
     const was = link.state.state;
     link.state = value;
+    // Not reached: nothing is being caught up on (its stream says so again once it opens).
+    if (state !== "online") link.catching = null;
     this.#told.changed(address, "link");
     // Reached again: what was to go to it while it was not goes now.
     if (state === "online" && was !== "online") {
@@ -617,6 +625,7 @@ export class Links {
                 } else self.#told.event(address, name, data);
                 if (id !== undefined) link.cursor.heard(id);
               }
+              if (!snapshotted && link.catching?.tallied === false) self.#told.toldMissed(address);
               // Written down in the same write as what the events changed: a core after this one takes up from it.
               const keep = link.cursor.toKeep();
               if (keep !== null) core.data.put("heard", address, keep);

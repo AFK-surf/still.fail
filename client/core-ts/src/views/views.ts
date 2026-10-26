@@ -976,7 +976,8 @@ export class Views implements Owner {
     if (v === undefined) return { state: "connecting", message: null };
     if ("err" in v) return { state: "error", message: v.err.message };
     const cause = get(v.ok, "cause");
-    return { state: get(v.ok, "state") ?? "connecting", message: get(v.ok, "message") ?? null, last: get(v.ok, "last") ?? null, ...(get(v.ok, "retrying") === true ? { retrying: true } : {}), ...(typeof cause === "string" ? { cause } : {}) };
+    const catching = get(v.ok, "catching");
+    return { state: get(v.ok, "state") ?? "connecting", message: get(v.ok, "message") ?? null, last: get(v.ok, "last") ?? null, ...(get(v.ok, "retrying") === true ? { retrying: true } : {}), ...(typeof cause === "string" ? { cause } : {}), ...(typeof catching === "number" ? { catching } : {}) };
   }
 
   #clock(): present.Clock {
@@ -1299,6 +1300,10 @@ export class Views implements Owner {
     const rows: J[] = [];
     let loading = false;
     const unread: string[] = [];
+    // Catching up on what changed while away (station/sync.ts `#catching`): whether a station has yet to say what, and
+    // how many chats are left to bring the latest of.
+    let checking = false;
+    let behind = 0;
     // The first screen first (docs/core-db.md): while the stations' rows are not loaded, and they are many, the rows a
     // list shows on top are read by one query, and the rest are loaded after, a station at a time.
     const known = stations.filter((s) => data.listed(s.address, "chats")).map((s) => s.address);
@@ -1353,6 +1358,15 @@ export class Views implements Owner {
           else state = "connecting";
         }
       }
+      if (s.online) {
+        const link = this.link(s.address);
+        const catching = typeof link.catching === "number" ? (link.catching as number) : null;
+        if (link.state === "connecting" && link.retrying !== true) checking = true;
+        else if (link.state === "online" && catching !== null) {
+          if (catching < 0) checking = true;
+          else behind += catching;
+        }
+      }
       if (state === "offline") troubles.push(["offline", downWords(this.link(s.address), s.name), get(this.link(s.address), "cause") === "network", s.address]);
       else if (state === "error") troubles.push(["error", t("core-views.station.unreachable", { name: s.name }), false, s.address]);
       else if (state === "connecting" && read && "ok" in read) troubles.push(["reconnecting", t("core-views.station.reconnecting", { name: s.name }), false, s.address]);
@@ -1375,7 +1389,9 @@ export class Views implements Owner {
     const note = looks.listNote(states, days, loading, unread);
     const ws = this.ok({ topic: "workspace", workspace: scope });
     const count = Array.isArray(get(ws, "members")) ? ws.members.length : null;
-    return { ok: { me, stations: states, loading, days, trouble, members: count, leading: "agents", glyph, note } };
+    // (one station still to say: how many are left is not known yet)
+    const syncing = checking ? t("core-views.station.syncing") : behind > 0 ? t("core-views.station.syncing_left", { n: behind }) : null;
+    return { ok: { me, stations: states, loading, days, trouble, members: count, leading: "agents", glyph, note, ...(syncing !== null ? { syncing } : {}) } };
   }
 
   /// The rows a scope's list shows on top (HEAD of them), by station, while its stations' rows load: one is loaded

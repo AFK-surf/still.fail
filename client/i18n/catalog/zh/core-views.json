@@ -317,6 +317,8 @@
   "core-views.station.offline": "{name} 离线",
   "core-views.station.offline_short": "离线",
   "core-views.station.offline_since": "离线 · {ago}",
+  "core-views.station.syncing": "正在同步",
+  "core-views.station.syncing_left": "正在同步 · 还剩 {n} 个对话",
   "core-views.station.reconnecting": "正在重新连接 {name}",
   "core-views.station.reconnecting_now": "正在重新连接 {name}",
   "core-views.station.retrying": "无法连接 {name}，正在重试",

@@ -60,6 +60,11 @@ export class Cursor {
     this.#kept = null;
   }
 
+  /// Whether a reading of the station afresh is not done yet.
+  get busy(): boolean {
+    return this.#reading > 0;
+  }
+
   /// A reading of the station could not read all of it: nothing is written down until another reads it all.
   unread(): void {
     this.#unread = true;

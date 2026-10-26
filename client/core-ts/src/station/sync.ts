@@ -125,9 +125,16 @@ export class StationsSync {
       afresh: (address, ctx) => this.snapshot(address, ctx),
       goesOn: (address, how) => this.#goesOn(address, how),
       event: (address, name, raw) => this.onEvent(address, name, raw),
+      toldMissed: (address) => this.#tally(address),
       changed: (address, what) => this.onChange(address, what),
       gone: (address) => this.channels.forget(address),
     });
+    // A thread caught up on brought its latest: one less to catch up on.
+    core.data.onLogChange((table, station, id) => {
+      if (table === "entry") this.#caughtUp(station, Number(id));
+    });
+    // Nothing left to bring of a station: what is still behind is not coming now (read again later, as the sync goes).
+    core.scheduler.onIdle = (lane) => this.#lull(lane);
     this.requests.onAnswered = (station) => this.#links.answered(station.toString());
     this.relays = new Relays(core);
     this.relays.onChange = (station) => this.onChange(station, "logins");
@@ -190,6 +197,7 @@ export class StationsSync {
   /// hang on all of it having been told). Taken up from where a core before this one was, the station's history is
   /// swept as a reading of everything would.
   #goesOn(address: string, how: { away: boolean; restored: boolean }): void {
+    if (how.away || how.restored) this.#catchingFrom(address);
     if (how.away) this.#catchUpShown(address);
     // Its screens and its logins are held in its link's memory, not its log of events (what was kept of them shows
     // meanwhile): its screens read again whenever the stream was not there to hear them change, both once a run.
@@ -214,6 +222,7 @@ export class StationsSync {
       link.cursor.reading();
       this.#core.data.forgetRecord("heard", address);
     }
+    this.#catchingFrom(address);
     const unread = () => link?.cursor.unread();
     const read = (topic: Topic, path: string) => this.#read(address, topic, path, undefined, ctx, 0, unread);
     // The chats a UI has open, first: what was said in them after what is held, in the room kept for what is open. The
@@ -238,8 +247,54 @@ export class StationsSync {
     const kept = Effect.sync(() => {
       const keep = link?.cursor.read() ?? null;
       if (keep !== null && this.#links.get(address) === link) this.#core.data.put("heard", address, keep);
+      if (link?.cursor.busy === false && this.#links.get(address) === link) this.#tally(address);
     });
     this.#core.runner.fork(Effect.ensuring(Effect.andThen(Effect.ignore(Effect.all(done.map((d) => Deferred.await(d)), { mode: "result" })), kept), Effect.sync(() => span.end())));
+  }
+
+  // ── catching up ──
+
+  /// The station's stream opened after the device was away from it (read afresh, or going on from where it was): what
+  /// changed meanwhile is being caught up on, not yet known (link.ts `catching`).
+  #catchingFrom(address: string): void {
+    const link = this.#links.get(address);
+    if (!link) return;
+    link.catching = { tallied: false, behind: new Set() };
+    this.onChange(address, "link");
+  }
+
+  /// What was missed is known (the station read, or what a stream that went on was told first): the threads it left
+  /// behind, each until its latest is on the device. None: caught up.
+  #tally(address: string): void {
+    const link = this.#links.get(address);
+    if (!link?.catching || link.catching.tallied) return;
+    const data = this.#core.data;
+    const behind = data.threadsBehind(address).filter((id) => !data.evicted("entry", address, String(id)));
+    link.catching = behind.length === 0 || !this.#core.scheduler.busy(address) ? null : { tallied: true, behind: new Set(behind) };
+    this.onChange(address, "link");
+  }
+
+  /// A station's lane with nothing left to run: done catching up, whatever is still behind.
+  #lull(address: string): void {
+    const link = this.#links.get(address);
+    if (!link?.catching?.tallied) return;
+    link.catching = null;
+    this.onChange(address, "link");
+  }
+
+  /// Whether a thread's summary goes further than what is held of it (and it is to be brought: not let go for room).
+  #behind(address: string, id: number): boolean {
+    const data = this.#core.data;
+    return data.threadLast(address, id) > (data.logSpan("entry", address, String(id))?.max ?? 0) && !data.evicted("entry", address, String(id));
+  }
+
+  /// A thread caught up on that has its latest now (or will not have it while catching up: `gone`), let go of.
+  #caughtUp(address: string, id: number, gone = false): void {
+    const catching = this.#links.get(address)?.catching;
+    if (!catching?.tallied || !catching.behind.has(id) || (!gone && this.#behind(address, id))) return;
+    catching.behind.delete(id);
+    if (catching.behind.size === 0) this.#links.get(address)!.catching = null;
+    this.onChange(address, "link");
   }
 
   /// A push came of a chat (`notice.bring`, `seq` the message it is about): what it says is brought onto the device now,
@@ -811,6 +866,8 @@ export class StationsSync {
     if (channel.kind !== ENTRIES) return;
     const id = Number(channel.id);
     const topic = topicKey({ topic: "thread", station: channel.station, thread: id });
+    // Not brought now (it is read again later, as the sync goes): not waited on while catching up.
+    if (error !== null) this.#caughtUp(channel.station, id, true);
     if (error === null) {
       if (link.errors.delete(topic)) this.onChange(channel.station, "errors", topic);
     } else if (error.status === 404) this.#threadGone(channel.station, id);
@@ -1062,6 +1119,12 @@ export class StationsSync {
     const id = u64(get(view, "id"));
     const last = u64(get(view, "last"));
     if (id !== null && last !== null) this.channels.goesTo(entriesOf(address, id), last);
+    // Found further while catching up (its summary read again after what was missed): one more to catch up on.
+    const catching = this.#links.get(address)?.catching;
+    if (id !== null && catching?.tallied && !catching.behind.has(id) && this.#behind(address, id)) {
+      catching.behind.add(id);
+      this.onChange(address, "link");
+    }
   }
 
   /// The viewer read a thread up to entry `n`: its read position moves there, nothing unread once it covers the last

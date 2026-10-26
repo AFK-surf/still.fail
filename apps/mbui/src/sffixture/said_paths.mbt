@@ -382,6 +382,7 @@ pub let said_paths : Map[String, Array[String]] = {
     "note.text",
     "note.failing.*.text",
     "note.failing.*.message",
+    "syncing",
   ],
   "connectFlow": [
     "settings.name",

@@ -52,6 +52,8 @@ export function ChatList({ scope, newChat, stationsPage, archive, decisions, top
   useShortcut("chat.next", () => goToNeighbour(1));
   // No station at all: nothing to filter (the lists themselves follow their own topics, ChatPane).
   const none = useTopicSelect<ChatsView, boolean>(chatsTopic(scope, "all"), (s) => !!s.value && !s.value.loading && s.value.stations.length === 0);
+  // Catching up on what changed while away (its mark beside the filter): drawn again only as it changes.
+  const syncing = useTopicSelect<ChatsView, string | null>(chatsTopic(scope, "all"), (s) => s.value?.syncing ?? null);
   // To 奏 from its row in the sidebar's foot, its rows come out of that row (DecisionDesk.tsx): no sliding then.
   const archiveSeen = useRef(false);
   if (mode === "archive") archiveSeen.current = true;
@@ -65,7 +67,7 @@ export function ChatList({ scope, newChat, stationsPage, archive, decisions, top
     <>
       <GoingArrived />
       <NavTop top={top} below={below}
-        action={<SidebarActions newChat={newChat} archive={archive} workspace={`/w/${scope}`} showFilter={!none} />} />
+        action={<SidebarActions newChat={newChat} archive={archive} workspace={`/w/${scope}`} syncing={syncing} showFilter={!none} />} />
       <div className={nav.navSlider}>
         <div className={nav.navTrack} data-filter={mode} data-instant={instant.current || undefined} ref={sliding}>
           {/* Followed at once, side by side: switching slides from one to another with nothing to wait for. */}

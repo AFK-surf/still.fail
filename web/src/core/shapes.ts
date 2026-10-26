@@ -2587,6 +2587,13 @@ export interface ChatsView {
 	/** The stations at a glance, and what the list says with no rows; absent from a core before them. */
 	glyph?: StationsGlyph;
 	note?: ListNote;
+	/**
+	 * While what changed since the device was last with the stations is still being brought (station/sync.ts
+	 * `#catching`), what the mark at the list's top beside its filter says (its tip, and to a screen reader): 正在同步 while a
+	 * station has yet to say what changed, then how many chats are left (正在同步 · 还剩 12 个对话). Stations not reached are
+	 * left out (the list says so where it says what is wrong with them). Absent once all is here, and from a core before it.
+	 */
+	syncing?: string;
 }
 
 export interface FoundCommand {

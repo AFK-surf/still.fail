@@ -238,7 +238,9 @@ export class StationTopics implements Owner {
     const error = link?.errors.get(topicKey(topic));
     switch (topic.topic) {
       case "link":
-        return { ok: link ? link.state : { state: "offline", message: t("core-views.station.not_listed") } };
+        if (!link) return { ok: { state: "offline", message: t("core-views.station.not_listed") } };
+        // While catching up on what was missed: how many chats are left to (-1 while that is not known yet).
+        return { ok: link.catching === null ? link.state : { ...link.state, catching: link.catching.tallied ? link.catching.behind.size : -1 } };
       case "host": {
         const v = link?.memory.get("host");
         return v === undefined ? undefined : { ok: v };
