@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as format from "../src/format.ts";
 import { args, doing } from "../src/activity.ts";
-import { hint, parsePrompt, parseTasks, presentHistory, type Context } from "../src/history.ts";
+import { activity, hint, parsePrompt, parseTasks, presentHistory, type Context } from "../src/history.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { markdown } from "../src/markdown.ts";
 
@@ -249,6 +249,22 @@ test("a_groups_thinking_and_calls_keep_the_order_they_came_in", () => {
   ];
   const g = presentHistory({ loaded: true, timeline }, cx([], [], [])).items[0].body.content;
   assert.deepEqual(g.rows.map((r: J) => (r.kind === "thought" ? r.content.text : r.content.name)), ["first", "Read", "second", "Bash", "third"]);
+});
+
+test("a_result_written_before_its_call_still_answers_that_call", () => {
+  // Claude Code can write a quick call's result (ToolSearch's) before the call it answers: the result goes to its call
+  // by id, not to the call before it, and neither shows running.
+  const timeline = [
+    { kind: "user", text: "go" },
+    { kind: "tool_call", tool: "Skill", text: '{"skill":"x"}', callId: "a" },
+    { kind: "tool_result", callId: "b", ok: true, text: "tools" },
+    { kind: "tool_result", callId: "a", ok: true, text: "skill" },
+    { kind: "tool_call", tool: "ToolSearch", text: '{"query":"select:mcp__stillfail__chat_post"}', callId: "b" },
+  ];
+  const g = presentHistory({ loaded: true, timeline }, cx([], [], [])).items.find((i: J) => i.body.kind === "group").body.content;
+  assert.equal(g.pending, 0);
+  assert.deepEqual(g.rows.map((r: J) => r.content.result), ["skill", "tools"]);
+  assert.equal(activity({ timeline, phase: { phase: "thinking" } }).now.key, "think");
 });
 
 test("a_post_read_from_the_transcript_stands_where_it_was_made", () => {

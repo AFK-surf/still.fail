@@ -639,24 +639,25 @@ function span(s: number): string {
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
-/// Each call with its result: a result by its call's id, or (one without) the latest call before it with none yet.
+/// Each call with its result: a result by its call's id wherever that call stands (Claude Code can write a quick call's
+/// result before the call), or (one without) the latest call before it with none yet.
 function pair(timeline: J[]): { steps: Step[]; stepAt: Map<number, number> } {
   const steps: Step[] = [];
   const stepAt = new Map<number, number>();
   const byCall = new Map<string, number>();
+  timeline.forEach((e, i) => {
+    if (e?.kind !== "tool_call") return;
+    const step = steps.length;
+    steps.push({ call: i, result: null });
+    stepAt.set(i, step);
+    if (typeof e.callId === "string") byCall.set(e.callId, step);
+  });
   let lastStep: number | null = null;
   timeline.forEach((e, i) => {
-    const kind = typeof e?.kind === "string" ? e.kind : "";
-    if (kind === "tool_result") {
-      let step = typeof e.callId === "string" ? byCall.get(e.callId) : undefined;
-      if (step === undefined && lastStep !== null && steps[lastStep].result === null) step = lastStep;
+    if (e?.kind === "tool_call") lastStep = stepAt.get(i)!;
+    else if (e?.kind === "tool_result") {
+      const step = typeof e.callId === "string" ? byCall.get(e.callId) : lastStep !== null && steps[lastStep].result === null ? lastStep : undefined;
       if (step !== undefined) steps[step].result = i;
-    } else if (kind === "tool_call") {
-      const step = steps.length;
-      steps.push({ call: i, result: null });
-      stepAt.set(i, step);
-      if (typeof e.callId === "string") byCall.set(e.callId, step);
-      lastStep = step;
     }
   });
   return { steps, stepAt };
