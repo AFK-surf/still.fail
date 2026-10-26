@@ -278,6 +278,7 @@ pub using @sfbase {
   flight_wait_ms,
   flight_start,
   flight_carry_ms,
+  flight_desk_ms,
   flight_carry_after_ms,
   flight_carry_start,
   flight_carry_into,

@@ -124,6 +124,14 @@ of them. Their numbers are the web's at the same place (paths from the repositor
   `--m-standard`, up from 14 (web/src/mobile/styles/root.css.ts:124); one app on every device takes the library's.
 - Words sent: the web's 520 ms on every screen, since the phone took the shared composer (#1646). Android's 600 (its
   flight over 80%, settling from 24%) is left only on sfapp's old composer, which sends nothing of its own now.
+- A new chat's first words: words sent like any (520 ms on the flight's curve, the list coming up with them on their
+  way up), not the web's 480 ms on `--m-ease` (madeChat.ts toMadeChat), which lands three quarters of the way in its
+  first tenth: beside every other send it read as a jump (the user, 2026-10-27: 「非 new chat 的发消息比 new chat 流畅很多」).
+  The composer going down to its chat's foot as they set out goes on their way too, not a page's 340 ms ease-out, which
+  went a fifth of 200 in its first frame, ahead of words still setting off (the user: 「composer 好像还是会一帧动老远」).
+- A card answered from here: its options close as the answer comes in, one motion (list_turns.mbt `answered_here`),
+  not in a turn after it: the list went up for the answer and then down again for the options (the user, 2026-10-27:
+  「点决策感觉动效怪怪的」).
 - The composer going to another page: 340 ms, the web's for it (the view transition), not a layout switched's 380: it
   is the composer moving with its page, not the page's layout changing.
 - Words sent keep the shape they were typed in, so that sending them only moves them (Android's SendText.kt, the

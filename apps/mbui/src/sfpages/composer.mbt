@@ -290,7 +290,13 @@ pub fn composer(
     "\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{w.files.length()}|\{w.quotes.length()}|\{w.error != ""}|" +
     w.field.text()
   }
-  let shape = @motion.tween(if moved { page_move_ms } else { morph_ms }, ease=Out)
+  // (gone to its chat's foot as a new chat's first words set out from it: on their way and as long, one motion with
+  // them, not a page's quick start that leaves them behind and goes far in its first frame)
+  let shape = if moved && flight_carried(spec.draft) {
+    @motion.tween(flight_desk_ms, ease=Flight)
+  } else {
+    @motion.tween(if moved { page_move_ms } else { morph_ms }, ease=Out)
+  }
   @motion.reshape(c, box, "composer/box", by=holds, spec=shape, carry=moved)
   for part in [(plus, "plus"), (words, "words"), (send_i, "send"), (chosen, "choices")] {
     if part.0 >= 0 {
