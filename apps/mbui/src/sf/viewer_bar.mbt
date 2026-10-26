@@ -308,6 +308,10 @@ let viewer_name_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold,
 let viewer_meta_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, wrap=false)
 
 ///|
+/// How tall a bar's tools are (viewer_tool_box's S8): a button in words among them too (button).
+let viewer_tool_h : Double = 32.0
+
+///|
 /// A tool (page.css.ts iconBtn): 32, round, as a bar's buttons are (in the corner of a bar 44 high, 6 in, as round as
 /// it is there), the bar's hover under the pointer, its chosen ground on (viewer_lit).
 // kept across runs: a value (no field of it changes)

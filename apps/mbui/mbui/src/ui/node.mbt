@@ -189,6 +189,8 @@ struct Node {
   // laid over the whole window, drawn and tapped over everything built outside one (overlay.mbt), and in it, what
   // takes every press and wheel that what lies over it does not (a modal's ground)
   mut portal : Bool
+  // a shot's layer (shot.mbt): drawn not on the screen but into the shot's own instances
+  mut shot : Bool
   mut blocks : Bool
   // the wheel stops at it: what lies under it scrolls by no wheel over it (Ctx::stop_wheel: a popover's panel)
   mut stops_wheel : Bool
@@ -372,6 +374,7 @@ fn Node::new() -> Node {
     rtl: false,
     aspect: 0.0,
     portal: false,
+    shot: false,
     blocks: false,
     stops_wheel: false,
     sideways: false,
@@ -460,6 +463,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.at_b = 0.0 / 0.0
   self.moves = ""
   self.portal = false
+  self.shot = false
   self.blocks = false
   self.stops_wheel = false
   self.sideways = false

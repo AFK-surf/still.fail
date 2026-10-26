@@ -186,6 +186,31 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
 }
 
 ///|
+/// Whether the image at `src` is still coming at `px` on its long side (its bytes on their way, or a decode of it that
+/// large not ready yet and not failed): a shot waits for it (shot.mbt).
+fn image_awaited(src : String, px : Double) -> Bool {
+  if src.has_prefix("mem:") && !image_data.contains(src) {
+    return true
+  }
+  let want = bucket(px)
+  match image_cache.get(src) {
+    Some(list) => {
+      let mut coming = false
+      for e in list {
+        if e.state == 1 && e.px >= want {
+          return false
+        }
+        if e.state == 0 && e.px >= want {
+          coming = true
+        }
+      }
+      coming
+    }
+    None => false
+  }
+}
+
+///|
 /// The original's size in pixels, once any decode of it is ready.
 fn image_size(src : String) -> (Double, Double)? {
   match image_cache.get(src) {
@@ -418,6 +443,9 @@ fn Ctx::draw_image(
   let e = match self.image_for(src, px) {
     Some(e) => e
     None => {
+      if shooting.val && image_awaited(src, px) {
+        shot_waits.val = true
+      }
       if grounded {
         self.emit_rect(bx, by, bw, bh, radius, ground, 0.0, 0L, alpha)
       }
@@ -427,7 +455,11 @@ fn Ctx::draw_image(
   if bw <= 0.0 || bh <= 0.0 {
     return
   }
-  let fade = if fade {
+  // (in a shot: whole, and one still decoding there waited for)
+  if shooting.val && image_awaited(src, px) {
+    shot_waits.val = true
+  }
+  let fade = if fade && !shooting.val {
     dclamp((self.now - e.ready_at) / image_fade_ms, 0.0, 1.0)
   } else {
     1.0

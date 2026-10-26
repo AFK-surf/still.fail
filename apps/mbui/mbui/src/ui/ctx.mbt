@@ -488,6 +488,8 @@ pub struct Ctx {
   /// what the frame's builds said to tell outside, by its key, the last said of each kept, whichever build said it
   /// (Ctx::tell)
   told : Array[(Int, () -> Unit)]
+  /// the shots being taken, by their keys' (shot.mbt)
+  shots : Map[Int, Shot]
   mut layer_cur : Int
   /// the layer the keys go to this frame (the topmost open one that takes them, as the frame before built it; 0: the
   /// page): what is built under it reads none (Ctx::key_pressed, Ctx::keys)
@@ -692,6 +694,7 @@ fn Ctx::new() -> Ctx {
     layers_opened: [],
     tells: [],
     told: [],
+    shots: Map::new(),
     layer_cur: 0,
     keys_layer: 0,
     dismissals: Map::new(),

@@ -325,6 +325,7 @@ pub fn Tester::new(
     pixels_of: {},
     live,
     live_images: {},
+    shots: [],
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)

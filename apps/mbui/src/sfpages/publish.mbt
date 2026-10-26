@@ -1,16 +1,23 @@
-// A chat made public (docs/public-share.md; ember web/src/Publish.tsx PublishDialog, PublishMessages, FileToggle;
-// Publish.css.ts, FilePreview.css.ts fp; the phone's PublishSheet in mobile/Chat.tsx, the same preview), one on every
-// screen: from its info's 公开分享, over the whole window as a file is previewed, what a snapshot would hold now
-// (`chat.publishPreview`, asked as it opens: nothing is kept until it is published) laid out as the chat lays out
-// messages, each attachment where its message has it, pressed anywhere to tick it or not (all at first: FileToggle's
-// label); a bar floating at the top, under the system's, with how much was hidden, 发布 and close. Published
-// (`chat.publish`), its link to copy in a small panel (the presenters': a sheet with touch short of Large); the
-// chat's info lists it from then on. Which files an agent's words place, and those words as Markdown, are the core's
-// (the preview's `placed`, `md`). The frames draw it over their pages (publish_layer).
+// A chat shared as a picture (2026-10-26 用户：「静态分享功能改成分享图片吧，把内容直接渲染成一张长图」; ember
+// web/src/Publish.tsx PublishDialog, PublishMessages, FileToggle; Publish.css.ts, FilePreview.css.ts fp; the phone's
+// PublishSheet in mobile/Chat.tsx, the same), one on every screen: from its info's 分享图片, over the whole window as a
+// file is previewed, the picture as it would be (`chat.publishPreview`, asked as it opens: what the chat holds now,
+// what looks like a secret in it hidden): the chat's name, its messages laid out as the chat lays out messages, each
+// attachment where its message has it, pressed anywhere to tick it or not (all at first: FileToggle's label), and
+// still.fail's mark at its foot. What it is for is the library's viewer_frame_act (2026-10-26 用户, of a button filled
+// in a pill of its own over it: 「太不对劲了」「应该放下面，俩按钮，一个取消一个保存到相册，pc 的话直接跟附件预览一样，有顶栏」「pc
+// 也用文字按钮，不要用图标」): on a wide screen the bar a file opened has across the top (back to the chat by its name, 分享图片
+// and how much was hidden), the button 复制图片 at its end; on a small screen 取消 and 保存到相册 side by side at the foot
+// (picture_out). Pressed, the picture is drawn whole off the screen as one long picture (Ctx::shot), the attachments
+// left out not in it, nor the ticks and the notes of what was hidden that are for the one sharing it, its times as
+// dates; then handed out. Which files an agent's words place, and those words as Markdown, are the core's (the
+// preview's `placed`, `md`). The frames draw it over their pages (publish_layer). (A link once made of a chat,
+// docs/public-share.md, is made no more; those made still open, and its info lists them.)
 
 ///|
-/// The publishing as it stands: the chat it is of and its thread (None: closed), the preview as read (0 being read,
-/// 1 read, 2 not: `error` says why), the attachments left out (by their `k`), being published.
+/// The sharing as it stands: the chat it is of and its thread (None: closed), the preview as read (0 being read, 1
+/// read, 2 not: `error` says why), the attachments left out (by their `k`), its picture being taken, how many times it
+/// was copied (its button 已复制 a moment after).
 priv struct Publishing {
   mut of : (ChatRef, Double)?
   mut read : Int
@@ -18,6 +25,7 @@ priv struct Publishing {
   mut error : String
   off : Map[String, Bool]
   mut busy : Bool
+  mut copied : Int
 }
 
 ///|
@@ -28,6 +36,7 @@ let publishing : Publishing = {
   error: "",
   off: {},
   busy: false,
+  copied: 0,
 }
 
 ///|
@@ -38,10 +47,11 @@ pub fn publish_reset() -> Unit {
   publishing.error = ""
   publishing.off.clear()
   publishing.busy = false
+  publishing.copied = 0
 }
 
 ///|
-/// Opened for chat `r`'s `thread`: what a snapshot would hold asked now (usePublishPreview).
+/// Opened for chat `r`'s `thread`: what the picture would hold asked now (usePublishPreview).
 pub fn open_publish(src : Source, r : ChatRef, thread : Double) -> Unit {
   publish_reset()
   publishing.of = Some((r, thread))
@@ -64,7 +74,7 @@ pub fn open_publish(src : Source, r : ChatRef, thread : Double) -> Unit {
 }
 
 ///|
-/// Chat `r`'s `thread` being published, `preview` read (a screen's fixture).
+/// Chat `r`'s `thread` being shared, `preview` read (a screen's fixture).
 pub fn publish_set(r : ChatRef, thread : Double, preview : Json) -> Unit {
   publish_reset()
   publishing.of = Some((r, thread))
@@ -73,38 +83,31 @@ pub fn publish_set(r : ChatRef, thread : Double, preview : Json) -> Unit {
 }
 
 ///|
-/// Whether attachment `k` is left out of the snapshot (tests).
+/// Whether attachment `k` is left out of the picture (tests).
 pub fn publish_left_out(k : String) -> Bool {
   publishing.off.contains(k)
 }
 
 ///|
-/// Published (`chat.publish`): up to the message the preview ended at, with the attachments ticked; its link in the
-/// small dialog that follows, why not said.
-fn publish_go(src : Source, r : ChatRef, thread : Double, p : Json?) -> Unit {
-  let ticked = items(p, "files").map(fn(f) { text(Some(f), "k") }).filter(fn(k) { !publishing.off.contains(k) })
+/// The picture's shot (Ctx::shot).
+let publish_shot : String = "publish/picture"
+
+///|
+/// The picture taken (the attachments ticked in it, nothing else of the page's), then handed out as its button says:
+/// copied, its button 已复制 a moment, else what came of it said.
+fn publish_go(c : @ui.Ctx) -> Unit {
   publishing.busy = true
-  act(
-    src,
-    @sf.t("web-pages.chat.publish.verb"),
-    "",
-    "chat.publish",
-    {
-      "station": Json::string(r.station),
-      "thread": Json::number(thread),
-      "upto": Json::number(number(p, "upto")),
-      "files": Json::array(ticked.map(Json::string(_))),
-    },
-    ok=fn(v) {
-      publish_reset()
-      publish_made(text(Some(v), "link"))
-    },
-    failed=fn() { publishing.busy = false },
-  )
+  c.take_shot(publish_shot, fn(png) {
+    publishing.busy = false
+    let (_, icon) = picture_out_way()
+    if picture_out(c, png, copy_said=icon == "copy") && icon == "copy" {
+      publishing.copied += 1
+    }
+  })
 }
 
 ///|
-/// The page that publishes it, while it is open, over the frame's pages (under the presenters and the toasts).
+/// The page that shares it, while it is open, over the frame's pages (under the presenters and the toasts).
 pub fn publish_layer(c : @ui.Ctx, src : Source) -> Unit {
   match publishing.of {
     Some((r, thread)) => publish_page(c, src, r, thread)
@@ -113,32 +116,27 @@ pub fn publish_layer(c : @ui.Ctx, src : Source) -> Unit {
 }
 
 ///|
-/// Published (PublishDialog's `made`): 已公开分享, who can read it, its link as a one-line field shows it; 完成 and 复制链接.
-fn publish_made(link : String) -> Unit {
-  @sf.panel(
-    @sf.t("web-pages.chat.publish.made"),
-    fn(c, _) { c.box(style=publish_made_link, fn() { c.text(link, style=publish_made_words) |> ignore }) |> ignore },
-    from=Unanchored,
-    description=@sf.t("web-pages.chat.publish.lead"),
-    wide=true,
-    foot=fn(c, close) {
-      if @sf.button(c, @sf.t("common.done"), key="publish-made/done", tone=Ghost) {
-        close()
-      }
-      if @sf.button(c, @sf.t("web-pages.chat.publish.copyLink"), key="publish-made/copy", tone=Primary, icon="copy") {
-        c.copy_text(link)
-        toast_later(@sf.t("common.link.copied"))
-      }
-    },
-  )
-}
-
-///|
-/// The page that publishes it (PublishDialog): over the whole window on the canvas, its bar floating at its top
-/// (公开分享, how much was hidden, 发布, close), what it would hold under it at the chat's width; Esc closes it.
+/// The page that shares it (PublishDialog): over the whole window on the canvas, the picture as it would be at the
+/// chat's width, what it is for over it (viewer_frame_act: the bar a file opened has, or 取消 and 保存到相册 at the
+/// foot); Esc closes it. While its picture is taken, the picture drawn whole off the screen.
 fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
   let p = publishing.preview
   let messages = items(p, "messages")
+  let here : MessageHere = {
+    station: r.station,
+    session: r.session,
+    view: match @sfbase.view_of_chat(src, r).0 {
+      Some(v) => v
+      None => @sfbase.chat_view_made(Json::null())
+    },
+    go: None,
+    inline: true,
+    gutter: 0.0,
+    list: None,
+    core: None,
+  }
+  // (the column's width: the window's on a phone)
+  let column = dmin(c.width, publish_page_w)
   let o = c.overlay("publish", modal=true, scrim=@sf.theme().p.bg, fn() {
     c.box(style=publish_fill, fn() {
       match publishing.read {
@@ -150,26 +148,11 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
         _ =>
           c.list("publish/page/" + r.station + "/" + thread.to_string(), 1, c.height, fn(_) {
             c.box(style=publish_column_room, fn() {
-              c.box(style=publish_column.then(@ui.style(pt=@sf.system_top_room(publish_page_top))), fn() {
-                c.text(@sf.t("web-pages.chat.publish.lead"), style=publish_lead) |> ignore
-                let here : MessageHere = {
-                  station: r.station,
-                  session: r.session,
-                  view: match @sfbase.view_of_chat(src, r).0 {
-                    Some(v) => v
-                    None => @sfbase.chat_view_made(Json::null())
-                  },
-                  go: None,
-                  inline: true,
-                  gutter: 0.0,
-                  list: None,
-                  core: None,
-                }
-                // (the column's words' width: the window's on a phone)
-                let room = dmin(c.width, publish_page_w) - 2.0 * publish_page_in
-                for m in messages {
-                  publish_message(c, src, here, Some(m), room)
-                }
+              // (under what is over it at the top, over the band at the foot)
+              let top = @sf.room_of(@sf.viewer_act_head(c))
+              let foot = @sf.room_of(publish_page_under + @sf.viewer_act_foot(c))
+              c.box(style=publish_column.then(@ui.style(pt=top, pb=foot)), fn() {
+                publish_picture(c, src, here, p, column, false)
               })
               |> ignore
             })
@@ -177,44 +160,38 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
           })
           |> ignore
       }
-      // its bar, floating at the top (fpHead with Publish.css.ts head: a pill, 20 in at its start, 4 at its end)
+      // what it is for: on a wide screen the bar a file opened has (back to the chat), 复制图片 at its end; on a small
+      // one 取消 and 保存到相册 at the foot
       c.layer(fn() {
-        c.box(style=publish_bar_room.then(@ui.style(pt=@sf.system_top_room(publish_bar_top))), fn() {
-          c.box(style=publish_bar, glass=@sf.glass_floating(), fn() {
-            c.text(@sf.t("web-pages.chat.publish"), style=publish_name) |> ignore
-            match text(p, "hiddenText") {
-              "" => ()
-              hidden =>
-                // (where the bar has not the room, a phone's in English, left out: each message says its own)
-                c.box(style=publish_head_note, drop=publish_drop_note, fn() {
-                  @sf.icon(c, "shield-check", size=publish_note_icon, color=@sf.theme().p.muted) |> ignore
-                  c.text(hidden, style=publish_meta) |> ignore
-                })
-                |> ignore
-            }
-            if @sf.button(
-                c,
-                @sf.t("web-pages.chat.publish.go"),
-                key="publish/go",
-                tone=Primary,
-                busy=publishing.busy,
-                disabled=p is None || messages.length() == 0,
-              ) {
-              publish_go(src, r, thread, p)
-            }
-            let close = c.id("publish/close")
-            if @sf.icon_button(c, "close", key="publish/close", round=true, label=@sf.t("common.close")) {
-              publish_reset()
-            }
-            @sf.tip(c, "publish/close-tip", close, @sf.t("web-main.preview.closeKey"))
-          })
-          |> ignore
-        })
-        |> ignore
+        let (label, _) = picture_out_way()
+        // (copied: 已复制 a moment after)
+        let shown = publishing.copied > 0 &&
+          !@kit.after(c, "publish/copied/\{publishing.copied}", true, @sf.copied_ms)
+        let (closed, acted) = @sf.viewer_frame_act(
+          c,
+          "publish",
+          if r.title != "" { r.title } else { @sf.t("common.close") },
+          @sf.t("web-pages.chat.shareImage"),
+          text(p, "hiddenText"),
+          @sf.page_viewer_ink(),
+          if shown { @sf.t("common.copied") } else { label },
+          busy=publishing.busy,
+          disabled=p is None || messages.length() == 0,
+        )
+        if acted && p is Some(_) && messages.length() > 0 {
+          publish_go(c)
+        }
+        if closed {
+          publish_reset()
+        }
       })
       |> ignore
     })
     |> ignore
+    // the picture itself, while it is taken: the same, all of it, off the screen
+    if messages.length() > 0 {
+      c.shot(publish_shot, column, fn() { publish_picture(c, src, here, p, column, true) })
+    }
   })
   if o.dismissed is Some(_) && !publishing.busy {
     publish_reset()
@@ -222,24 +199,52 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
 }
 
 ///|
-/// A snapshot's message as the chat draws others' (PreviewMessage: each one's head in line with its avatar): an agent's
-/// Markdown with the attachments its words place where they place them, a person's as written; the rest under it,
-/// each to tick; under one with something hidden, how many.
-fn publish_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Json?, room : Double) -> Unit {
+/// The picture, `w` wide (as it is taken: `taking`; else as the page shows it): on the page's ground, the chat's name
+/// over its messages, still.fail's mark and name at its foot.
+fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w : Double, taking : Bool) -> Unit {
+  // (the column's words' width)
+  let room = w - 2.0 * publish_page_in
+  c.box(style=publish_paper, fn() {
+    match text(p, "title") {
+      "" => ()
+      title => c.text(title, style=publish_title) |> ignore
+    }
+    for m in items(p, "messages") {
+      publish_message(c, src, here, Some(m), room, taking)
+    }
+    c.box(style=publish_foot, fn() {
+      @sf.drawable(c, if @sf.theme().dark { "stillfail_mark_dark" } else { "stillfail_mark" }, publish_mark) |> ignore
+      c.text("still.fail", style=publish_brand) |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A message of the picture's as the chat draws others' (PreviewMessage: each one's head in line with its avatar): an
+/// agent's Markdown with the attachments its words place where they place them, a person's as written; the rest under
+/// it. On the page each attachment to tick, and under one with something hidden how many; in the picture taken
+/// (`taking`) only those ticked, as the chat shows them, and its time a date (how long ago it was is not so for long).
+fn publish_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Json?, room : Double, taking : Bool) -> Unit {
   let n = number(m, "n").to_int64().to_string()
   let agent = flag(m, "agent")
-  let files = items(m, "files")
+  let files = items(m, "files").filter(fn(f) { !taking || !publishing.off.contains(text(Some(f), "k")) })
   let placed = items(m, "placed").map(fn(x) { match x { String(s) => s; _ => "" } })
   let named : Map[String, Json] = {}
   for f in files {
     named[text(Some(f), "name")] = f
   }
   let under = files.filter(fn(f) { !placed.contains(text(Some(f), "name")) })
+  let time = match @sfbase.stamp_of(m, "createdAt") {
+    Some(s) if taking => Some({ ..s, ago: s.full })
+    s => s
+  }
   others_message(
     c,
     true,
     "publish/" + n,
-    @sfbase.stamp_of(m, "createdAt"),
+    time,
     fn() {
       if agent {
         agent_avatar(c, src, here, "publish/" + n, text(field(m, "maker"), "id"), text(m, "runtime"), "", "")
@@ -262,8 +267,8 @@ fn publish_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Json?, roo
               named.get(name).map(fn(f) -> @sf.Placed {
                 let a = @sfbase.attachment_of(field(Some(f), "file").unwrap_or(Json::null()))
                 {
-                  draw: fn() { publish_file(c, src, here, f, room) },
-                  image: image_ratio(a).map(fn(r) { (r, fn(w) { publish_file(c, src, here, f, w) }) }),
+                  draw: fn() { publish_file(c, src, here, f, room, taking) },
+                  image: image_ratio(a).map(fn(r) { (r, fn(w) { publish_file(c, src, here, f, w, taking) }) }),
                 }
               })
             } else {
@@ -278,13 +283,14 @@ fn publish_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Json?, roo
       if under.length() > 0 {
         c.box(style=publish_files, fn() {
           for f in under {
-            publish_file(c, src, here, f, room)
+            publish_file(c, src, here, f, room, taking)
           }
         })
         |> ignore
       }
       match text(m, "hiddenText") {
         "" => ()
+        _ if taking => ()
         hidden =>
           c.box(style=publish_head_note, fn() {
             @sf.icon(c, "shield-check", size=publish_note_icon_small, color=@sf.theme().p.muted) |> ignore
@@ -297,9 +303,9 @@ fn publish_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Json?, roo
 }
 
 ///|
-/// An attachment in the preview, as the chat shows it (FileToggle): ticked (its box at its end), it goes
-/// with the snapshot; unticked, it fades. Its box at its end, half way down (publish_tick).
-fn publish_file(c : @ui.Ctx, src : Source, here : MessageHere, f : Json, room : Double) -> Unit {
+/// An attachment in the picture, as the chat shows it (FileToggle). On the page, ticked (its box at its end, half
+/// way down: publish_tick) it goes in the picture; unticked, it fades. In the picture taken, as it is.
+fn publish_file(c : @ui.Ctx, src : Source, here : MessageHere, f : Json, room : Double, taking : Bool) -> Unit {
   let k = text(Some(f), "k")
   let on = !publishing.off.contains(k)
   let a = @sfbase.attachment_of(field(Some(f), "file").unwrap_or(Json::null()))
@@ -308,6 +314,10 @@ fn publish_file(c : @ui.Ctx, src : Source, here : MessageHere, f : Json, room : 
     "image" => dmin(image_box(a, image_least).0, room)
     "video" => dmin(image_box(a, video_least).0, room)
     _ => dmin(@sf.file_card_w, room)
+  }
+  if taking {
+    c.box(style=publish_file_box.then(@ui.style(w=Fixed(w))), fn() { message_files(c, src, here, [a], false) }) |> ignore
+    return
   }
   let toggle = fn(now : Bool) {
     if now {
@@ -348,9 +358,6 @@ fn publish_file(c : @ui.Ctx, src : Source, here : MessageHere, f : Json, room : 
 let publish_off_alpha : Double = 0.45
 
 ///|
-let publish_note_icon : Double = 14.0
-
-///|
 let publish_note_icon_small : Double = 13.0
 
 ///|
@@ -372,17 +379,42 @@ let publish_note_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 let publish_problem : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger)
 
 ///|
-/// What it would hold (page): the chat's width (760 at most) in the middle, 84 down, 32 in, 96 under, 16 apart.
+/// What it would hold (page): the chat's width (760 at most) in the middle, right under what is over it at the top
+/// (the bar on a wide screen, the status bar on a small one: its own 32 the room under them), 64 under (and the band at
+/// the foot of a small screen).
 // kept across runs: a value (no field of it changes)
 let publish_column_room : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let publish_column : @ui.Style = @ui.css("w=Full px=S8 pb=S24 gap=S4").then(@ui.style(max_w=Fixed(publish_page_w)))
+let publish_column : @ui.Style = @ui.style(w=Full, max_w=Fixed(publish_page_w))
 
 ///|
-/// What it would hold starts 80 under the window's top (the bar over it), under the system's bar where there is one.
-let publish_page_top : Double = 80.0
+/// The picture (page): its words 32 in, 32 down from its top and up from its foot, its parts 16 apart, on the page's
+/// ground (what it is drawn on when it is taken too).
+// kept across runs: a value (no field of it changes)
+let publish_paper : @ui.Style = @ui.css("w=Full px=S8 py=S8 gap=S4 bg=Bg")
+
+///|
+/// The chat's name over its messages (the chat's bar's title, its size).
+// kept across runs: a value (no field of it changes)
+let publish_title : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Fg, w=Full)
+
+///|
+/// still.fail's mark and name at its foot, 6 apart, 8 under the last message, muted.
+// kept across runs: a value (no field of it changes)
+let publish_foot : @ui.Style = @ui.css("row pt=S2 gap=S1_5 align=ACenter")
+
+///|
+let publish_mark : Double = 16.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let publish_brand : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Muted, wrap=false)
+
+///|
+/// How far under the picture the page ends: 64, over the band of 取消 and 保存到相册 on a small screen.
+let publish_page_under : Double = 64.0
 
 ///|
 let publish_page_w : Double = 760.0
@@ -390,36 +422,6 @@ let publish_page_w : Double = 760.0
 ///|
 /// How far in its words are (page: 32 each side).
 let publish_page_in : Double = 32.0
-
-///|
-/// Who can read it (lead: the ui's size, muted).
-// kept across runs: a value (no field of it changes)
-let publish_lead : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
-
-///|
-/// The bar's place: in the middle.
-// kept across runs: a value (no field of it changes)
-let publish_bar_room : @ui.Style = @ui.css("w=Full px=S4 align=ACenter")
-
-///|
-/// The bar's 16 under the window's top, under the system's bar where there is one (a phone's).
-let publish_bar_top : Double = 16.0
-
-///|
-/// The bar (fpHead, Publish.css.ts head): 44 high, a pill, 20 in at its start and 6 at its end (its close, round, as far
-/// from its end as from its top: concentric with it), its parts 12 apart, a line round it and a shadow under it.
-// kept across runs: a value (no field of it changes)
-let publish_bar : @ui.Style = @ui.css("row max_w=Full h=S11 pl=S5 pr=S1_5 gap=S3 radius=Full align=ACenter border=B1 border_color=Line shadow=Md")
-
-///|
-/// What was hidden, beside its name, is the first to give way where the bar has not the room (a phone's, in English):
-/// left out whole (each message under says its own), 发布 and close never.
-let publish_drop_note : Int = 1
-
-
-///|
-// kept across runs: a value (no field of it changes)
-let publish_name : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// How much was hidden (headNote, note: its shield 4 or 6 before it, the meta's size, muted).
@@ -445,12 +447,3 @@ let publish_file_box : @ui.Style = @ui.css("align=AStart")
 /// (FileCard's fileCardAction: download's ✕, retry's ↻), so the box to tick stands where the card's action does.
 // kept across runs: a value (no field of it changes)
 let publish_tick : @ui.Style = @ui.css("w=Full h=Full pr=S2_5 align=AEnd justify=JCenter")
-
-///|
-/// The link once published (madeLink: a pill 40 high, 18 in, on the card's ground, cut short at its end).
-// kept across runs: a value (no field of it changes)
-let publish_made_link : @ui.Style = @ui.css("w=Full h=S10 px=S4_5 radius=Full bg=Card justify=JCenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let publish_made_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, max_lines=1)

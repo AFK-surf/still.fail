@@ -582,6 +582,24 @@ fn drawn_pixels(x : Int, y : Int, w : Int, h : Int, out : FixedArray[Byte]) -> B
   false
 }
 
+///|
+/// Instances drawn as a frame and read back (as host_native.mbt's): a page's canvas is not read back here.
+fn drawn_pixels_of(
+  inst : FixedArray[Double],
+  count : Int,
+  r : Double,
+  g : Double,
+  b : Double,
+  x : Int,
+  y : Int,
+  w : Int,
+  h : Int,
+  out : FixedArray[Byte],
+) -> Bool {
+  ignore((inst, count, r, g, b, x, y, w, h, out))
+  false
+}
+
 // A sign-in in the browser that comes back here (browser_login.mbt): a page cannot listen.
 
 ///|

@@ -99,6 +99,8 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   }
   let t3 = h_now()
   h_present(c.inst, c.ninst)
+  // what the shots being taken drew read back (shot.mbt)
+  c.shots_after_present()
   log_drawn(w, h, scale, t)
   c.trim_images()
   let t4 = h_now()
@@ -329,6 +331,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   // what was shaped and not drawn, for the host to draw ahead while it presents this frame (text.mbt)
   glyphs_ahead()
   c.emit_segs()
+  // the shots being taken, each into instances of its own (shot.mbt)
+  c.paint_shots()
   c.sync_views()
   // what the widgets are, for a screen reader reading them (a11y.mbt)
   c.a11y_after_paint()

@@ -1,5 +1,6 @@
-// Making a chat public on a phone (sfpages' publish.mbt, the same as keyboard and mouse's; publish.mbt the info's links) over
-// the fixture's chat: its sheet's links, the publishing over the screen with what a snapshot would hold, the attachments ticked, and a link revoked once asked.
+// Sharing a chat as a picture on a phone (sfpages' publish.mbt, the same as keyboard and mouse's; publish.mbt the
+// info's rows) over the fixture's chat: its sheet's 分享图片 and the public links made before, the page with the picture
+// as it would be, the attachments ticked, the picture taken and kept in the photo album, and a link revoked once asked.
 
 ///|
 /// The chat's sheet open over the fixture's chat; `chat.publishPreview` answered with fix_preview, `chat.publish` with
@@ -34,10 +35,10 @@ fn publish_core(calls : Array[Made]) -> @ui.Tester {
 }
 
 ///|
-test "公开分享: the chat's sheet lists its link, 复制 copies it" {
+test "分享图片: the chat's sheet opens it, and lists the public links made before; 复制 copies one" {
   let calls : Array[Made] = []
   let t = publish_core(calls)
-  assert_true(t.find("公开分享") is Some(_))
+  assert_true(t.find("分享图片") is Some(_))
   assert_true(t.find("10 分钟前 · Alice") is Some(_))
   assert_true(t.find("2 天前 · Bob") is Some(_))
   // Bob's only copied: the viewer did not publish it (the one 撤销 is on the viewer's own row)
@@ -55,22 +56,22 @@ test "公开分享: the chat's sheet lists its link, 复制 copies it" {
 }
 
 ///|
-test "公开分享: the sheet shows what a snapshot would hold; 发布 takes the attachments ticked, then its link" {
+test "分享图片: the page shows the picture as it would be, 取消 and 保存到相册 at its foot; 保存到相册 keeps it in the album, without what was left out" {
   let calls : Array[Made] = []
   let t = publish_core(calls)
-  t.tap_text("公开分享")
-  // the chat's sheet put down (to where it rests, gone), the publishing over the whole screen (the pages', as on a
-  // computer)
+  t.tap_text("分享图片")
+  // the chat's sheet put down (to where it rests, gone), the page over the whole screen (the pages', as on a computer)
   t.frame()
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   let asked = named(calls, "chat.publishPreview")
   assert_eq(asked.length(), 1)
   assert_eq(text(Some(asked[0].params), "station"), "ws1/st1")
   assert_eq(number(Some(asked[0].params), "thread"), 7.0)
-  assert_true(t.find("持有链接的任何人都可查看这些消息") is Some(_))
+  // the picture as it would be: the chat's name over its messages, still.fail's at its foot; what was hidden said
+  // under its message (the floating bar of a small screen says no more than its name)
+  assert_true(t.find("部署登录页") is Some(_))
   assert_true(t.find("截图、日志和构建缓存都附上了") is Some(_))
   assert_true(t.find("已隐藏 1 处") is Some(_))
-  assert_true(t.find("共隐藏 1 处疑似机密") is Some(_))
   // the log and the cache left out: tapped, each is unticked (nothing opens); brought up from under the screen's foot
   // (a file's card says its name's stem and its extension apart, as the chat's)
   for _ in 0..<6 {
@@ -83,25 +84,35 @@ test "公开分享: the sheet shows what a snapshot would hold; 发布 takes the
   t.tap_text(".tar")
   assert_true(@sfpages.publish_left_out("f1") && @sfpages.publish_left_out("f2"))
   assert_true(viewer.val is None)
-  // (the button, under the chat's name 整理发布清单)
-  tap_last(t, "发布")
-  let made = named(calls, "chat.publish")
-  assert_eq(made.length(), 1)
-  assert_eq(number(Some(made[0].params), "upto"), 9.0)
-  match field(Some(made[0].params), "files") {
-    Some(Array(fs)) => assert_eq(fs, [Json::string("f0")])
-    _ => fail("no files said")
+  // nothing is published
+  assert_true(t.query(Button, label="复制图片") is None)
+  t.click(Button, label="保存到相册")
+  t.run_for(@kit.presence_in_ms)
+  assert_eq(named(calls, "chat.publish").length(), 0)
+  // the picture taken: the chat's name, its messages, their times as dates, still.fail's; not the attachments left
+  // out, nor the notes of what was hidden (for the one sharing it)
+  let shots = t.shots()
+  assert_eq(shots.length(), 1)
+  let words = shots[0].join("|")
+  assert_true(words.contains("部署登录页") && words.contains("截图、日志和构建缓存都附上了"), msg=words)
+  assert_true(words.contains("10月15日 10:00") && !words.contains("分钟前"), msg=words)
+  assert_true(!words.contains(".log") && !words.contains(".tar") && !words.contains("已隐藏 1 处"), msg=words)
+  assert_true(words.contains("still.fail"), msg=words)
+  // kept in the photo album, a PNG as wide as the screen at its scale, said once it is
+  assert_eq(t.kept_ways().map(fn(k) { (k.0, k.1.to_string()) }), [("still.fail.png", "Photos")])
+  match png_size(t.kept()[0].2) {
+    Some((pw, ph)) => assert_true(pw == 780 && ph > 600, msg="\{(pw, ph)}")
+    None => fail("not a PNG")
   }
-  // published: the publishing gone, its link in the presenters' sheet
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
-  assert_true(t.find("已发布") is Some(_))
-  assert_true(t.find("https://share.still.fail/#st1key.p3.k3") is Some(_))
-  t.tap_text("复制链接")
-  assert_eq(t.clipboard(), "https://share.still.fail/#st1key.p3.k3")
+  assert_true(t.find("已保存到相册") is Some(_))
+  // 取消, beside it at the foot, closes it
+  t.click(Button, label="取消")
+  t.frame()
+  assert_true(t.find("部署登录页") is None)
 }
 
 ///|
-test "公开分享: 撤销 asks first, then revokes that link" {
+test "分享图片: 撤销 asks first, then revokes that public link" {
   let calls : Array[Made] = []
   let t = publish_core(calls)
   t.tap_text("撤销")

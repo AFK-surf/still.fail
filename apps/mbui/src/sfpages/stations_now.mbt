@@ -22,37 +22,14 @@ pub fn share_card_open(src : Source, w : Workspace) -> Unit {
     // (its title said as it is drawn, in the language then)
     live=fn() { (@sf.t("web-main.stations.shareCard"), "", "") },
     foot=fn(c, _) {
-      let album = @ui.platform() == 1 || @ui.platform() == 2
-      let (label, icon) = if album {
-        (@sf.t("web-main.stations.saveToPhotos"), "download")
-      } else {
-        (@sf.t("desktop.contextMenu.copyImage"), "copy")
-      }
+      let (label, icon) = picture_out_way()
       if @sf.button(c, label, key="share-card/copy", tone=Primary, icon~) {
         let picture = c.id(share_picture_key)
         // (once the frame's builds are over: the picture as the last frame drew it, read back by the host's renderer)
         c.tell("share-card/copy", fn() {
           match c.drawn_pixels(picture, inset=pic_copy_in) {
-            @ui.PixelsRead(pw, ph, rgba) => {
-              let png = @pixels.png(pw, ph, unpremultiplied(rgba))
-              if album {
-                @sfbase.keep_bytes(
-                  c,
-                  "still.fail.png",
-                  "image/png",
-                  png,
-                  way=Photos,
-                  saved=@sf.t("web-main.stations.savedToPhotos"),
-                  failed=@sf.t("web-main.stations.saveToPhotosFailed"),
-                )
-              } else {
-                @ui.clipboard_set_png(png, label="still.fail")
-                if !@ui.copy_shown() {
-                  say(c, @sf.t("common.copied"))
-                }
-              }
-            }
-            _ => say(c, @sf.t("web-main.stations.shareFailed"))
+            @ui.PixelsRead(pw, ph, rgba) => picture_out(c, Some(@pixels.png(pw, ph, unpremultiplied(rgba)))) |> ignore
+            _ => picture_out(c, None) |> ignore
           }
         })
       }

@@ -232,7 +232,7 @@ export function Time({ stamp, className, fixed = false }: { stamp: Stamp | undef
   const absolute = switched && !fixed;
   return (
     <Tip label={absolute ? stamp.ago : stamp.full}><time className={`${fixed ? "" : css.timeToggle}${className ? ` ${className}` : ""}`.trim()} dateTime={new Date(stamp.at).toISOString()}
-      onClick={fixed ? undefined : (e) => { e.preventDefault(); e.stopPropagation(); flip(); }}>
+      data-full={stamp.full} onClick={fixed ? undefined : (e) => { e.preventDefault(); e.stopPropagation(); flip(); }}>
       {absolute ? stamp.full : stamp.ago}
     </time></Tip>
   );

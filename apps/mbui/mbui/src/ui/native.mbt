@@ -652,6 +652,10 @@ let native_nodes : Map[Int, (NativeView, (Double, Double, Double, Double)?, Doub
 
 ///|
 fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
+  // (a shot shows no native view: it is the window's, where the page has it)
+  if shooting.val {
+    return
+  }
   let (v, content, radius) = match native_nodes.get(i) {
     Some(x) => x
     None => return

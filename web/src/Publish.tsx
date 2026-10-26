@@ -1,17 +1,22 @@
-// A chat made public (docs/public-share.md; the core's views/publish.ts): what a snapshot would hold, drawn as the chat
-// draws its messages (both screens), and on the wide screen the dialog that publishes it and the links in its info.
-// The phone's sheet is in mobile/Chat.tsx, with these same messages.
-import { useEffect, useState, type ReactNode } from "react";
+// A chat shared as a picture (2026-10-26: 「静态分享功能改成分享图片吧，把内容直接渲染成一张长图」; the core's
+// views/publish.ts reads what it would hold): the chat's name, its messages drawn as the chat draws them (both
+// screens), its attachments to tick, still.fail's mark at its foot; on the wide screen the dialog it is made in and,
+// in its info, the public links made of it before pictures (docs/public-share.md: they still open). The phone's sheet
+// is in mobile/Chat.tsx, with this same picture.
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { stationApi, useStationCall } from "./api.ts";
 import type { ChatPublished, PublishFile, PublishMessage, PublishPreview } from "./core/shapes.ts";
 import { AgentAvatar, FileLook, MessageName, OthersMessage, PersonWords } from "./Chat.tsx";
 import { Prose } from "./Prose.tsx";
+import { Mark } from "./brand.tsx";
+import { longPicture } from "./longPicture.ts";
 import { Dialog as RDialog } from "radix-ui";
-import { Avatar, Button, Confirm, Dialog, Time, Tip, WaitLine } from "./ui.tsx";
-import { Close, Copy, ShieldCheck } from "@stillfail/ui/icons.tsx";
+import { Avatar, Button, Confirm, Time, Tip, WaitLine } from "./ui.tsx";
+import { Close, ShieldCheck, Web } from "@stillfail/ui/icons.tsx";
+import { ViewerBar } from "@stillfail/ui/viewer/ViewerBar.tsx";
+import { useNarrow } from "./mobile/narrow.ts";
 import { useBackClose } from "@stillfail/ui/backClose.ts";
 import * as fpCss from "./FilePreview.css.ts";
-import { useDoing } from "./doing.ts";
 import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
 import * as css from "./Publish.css.ts";
 import * as chatCss from "./Chat.css.ts";
@@ -35,18 +40,13 @@ export function usePublishPreview(station: string, thread: number): Previewed {
   return shown;
 }
 
-/** The attachments a preview's panel publishes: all but those unticked. */
-export function tickedOf(preview: PublishPreview, off: ReadonlySet<string>): string[] {
-  return preview.files.filter((f) => !off.has(f.k)).map((f) => f.k);
-}
-
 /** Puts a link on the clipboard, saying so. */
 export function useCopyLink(): (link: string) => void {
   const toast = useToast();
   return (link) => void navigator.clipboard.writeText(link).then(() => toast(t("common.link.copied")), (e: unknown) => toast(t("common.link.copyFailed", { error: failure(e) })));
 }
 
-/** Which attachments a panel leaves out (all are in at first), and how one is ticked or unticked. */
+/** Which attachments the picture leaves out (all are in at first), and how one is ticked or unticked. */
 export type Ticking = { off: ReadonlySet<string>; toggle(k: string): void };
 
 /** The attachments left out, one more ticked or unticked. */
@@ -56,11 +56,45 @@ export function useTicking(): Ticking {
 }
 
 /**
- * A snapshot's messages as the chat draws others' (each one's head in line with its avatar, the phone's way): an
+ * The picture as it would be, on the page's ground: the chat's name, its messages as the chat draws others' (each one's
+ * head in line with its avatar, the phone's way), still.fail's mark and name at its foot. What is only for the one
+ * sharing it (each attachment's box to tick, one left out, how much was hidden in a message) is marked `data-shot-off`:
+ * the picture taken (takePicture) leaves it out.
+ */
+export function PublishPicture({ preview, ticking, paper }: { preview: PublishPreview; ticking: Ticking; paper: RefObject<HTMLDivElement | null> }) {
+  return (
+    <div ref={paper} className={css.paper}>
+      {preview.title && <h2 className={css.title}>{preview.title}</h2>}
+      <PublishMessages messages={preview.messages} ticking={ticking} whole />
+      <div className={css.foot}><Mark size={16} />still.fail</div>
+    </div>
+  );
+}
+
+/**
+ * The picture `paper` shows, taken whole however long it is (longPicture), at the screen's pixels: without what is
+ * marked `data-shot-off`, its times said as dates (how long ago it was is not so for long).
+ */
+export function takePicture(paper: HTMLElement): Promise<Blob> {
+  return longPicture(paper, {
+    scale: Math.min(Math.max(window.devicePixelRatio || 1, 1), 3),
+    background: getComputedStyle(paper).backgroundColor,
+    // (the copy's nodes are another window's: not this one's Element)
+    keep: (node) => node.nodeType !== Node.ELEMENT_NODE || !(node as Element).hasAttribute("data-shot-off"),
+    copied: (node) => {
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      const full = (node as Element).getAttribute("data-full");
+      if ((node as Element).tagName === "TIME" && full) node.textContent = full;
+    },
+  });
+}
+
+/**
+ * The picture's messages as the chat draws others' (each one's head in line with its avatar, the phone's way): an
  * agent's in Markdown, a person's as written; under one with something hidden, how many. Its attachments are where the
  * message has them, drawn as the chat draws them, each ticked to go with it or not: one its words place is there, the
- * rest under it. `whole`: all of it, in what scrolls around it (the phone's
- * sheet), rather than a box of its own that scrolls.
+ * rest under it. `whole`: all of it, in what scrolls around it (the phone's sheet), rather than a box of its own that
+ * scrolls.
  */
 export function PublishMessages({ messages, ticking, whole = false }: { messages: PublishMessage[]; ticking: Ticking; whole?: boolean }) {
   return (
@@ -91,52 +125,81 @@ function PreviewMessage({ message: m, ticking }: { message: PublishMessage; tick
         ? <div className={conversationCss.markdown}><Prose files={named} file={(f) => toggle(f.name)}>{m.text}</Prose></div>
         : <PersonWords text={m.text} />}
       {under.length > 0 && <div className={css.files}>{under.map((f) => <FileToggle key={f.k} file={f} ticking={ticking} />)}</div>}
-      {m.hiddenText && <div className={css.note}><ShieldCheck size={13} />{m.hiddenText}</div>}
+      {m.hiddenText && <div className={css.note} data-shot-off=""><ShieldCheck size={13} />{m.hiddenText}</div>}
     </OthersMessage>
   );
 }
 
-/** An attachment in the preview, as the chat shows it: ticked (its box in the corner), it goes with the snapshot; unticked, it fades. */
+/** An attachment in the picture, as the chat shows it: ticked (its box in the corner), it goes in it; unticked, it fades. */
 function FileToggle({ file: f, ticking }: { file: PublishFile; ticking: Ticking }) {
   const on = !ticking.off.has(f.k);
   return (
-    <label className={css.file} data-off={!on || undefined}>
+    <label className={css.file} data-off={!on || undefined} data-shot-off={!on ? "" : undefined}>
       <FileLook sessionKey={f.file.owner ?? null} file={f.file} />
-      <input type="checkbox" className={css.tick} checked={on} onChange={() => ticking.toggle(f.k)} aria-label={f.name} />
+      <input type="checkbox" className={css.tick} checked={on} onChange={() => ticking.toggle(f.k)} aria-label={f.name} data-shot-off="" />
     </label>
   );
 }
 
 /**
- * Publishes the chat (wide screen), as a file is previewed (FilePreview.tsx): over the whole window, what it would hold
- * laid out as the chat lays it out, its attachments ticked in their messages (all at first), a bar floating on top with
- * how much was hidden, 「发布」 and close. Published, a small dialog has its link to copy; the info lists it from then on.
+ * Hands the picture out on the wide screen: on the clipboard, copied whole. What a browser cannot put there (no
+ * ClipboardItem) is saved as a file instead. True once it is there.
+ */
+export function useCopyPicture(): (paper: HTMLElement) => Promise<boolean> {
+  const toast = useToast();
+  return async (paper) => {
+    try {
+      if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) {
+        savePicture(await takePicture(paper));
+        return true;
+      }
+      // (the picture as it is made: Safari takes a clipboard's item only within the press, as a promise)
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": takePicture(paper) })]);
+      return true;
+    } catch (e) {
+      toast(t("web-pages.chat.shareImage.failed", { error: failure(e) }));
+      return false;
+    }
+  };
+}
+
+/** The picture saved as a file (where the browser keeps downloads). */
+export function savePicture(png: Blob): void {
+  const url = URL.createObjectURL(png);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "still.fail.png";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+/**
+ * Shares the chat as a picture (wide screen), as a file is previewed (FilePreview.tsx): over the whole window, the
+ * picture as it would be, its attachments ticked in their messages (all at first), under the bar a file opened has
+ * (with a mouse on a wide screen across the top, back to the chat by its name; else floating, with close): 分享图片, how
+ * much was hidden, and at its end the button 复制图片 in words (已复制 a moment after; 2026-10-26: 「pc 也用文字按钮，不要用
+ * 图标」).
  */
 export function PublishDialog({ station, thread, onClose }: { station: string; thread: number; onClose(): void }) {
-  const api = stationApi(useStationCall(station));
-  const toast = useToast();
-  const copy = useCopyLink();
   const preview = usePublishPreview(station, thread);
   const ticking = useTicking();
-  const [made, setMade] = useState<ChatPublished | null>(null);
-  const publishing = useDoing("chat.publish", { station, thread });
-  useBackClose(made === null, onClose);
+  const paper = useRef<HTMLDivElement | null>(null);
+  const copy = useCopyPicture();
+  const docked = !useNarrow();
+  const [taking, setTaking] = useState(false);
+  const [copied, setCopied] = useState(false);
+  useBackClose(true, onClose);
   const p = "ok" in preview ? preview.ok : null;
   const go = () => {
-    if (!p) return;
-    api.publish(thread, p.upto, tickedOf(p, ticking.off)).then(setMade, (e: unknown) => toast(t("web-main.act.failed", { what: t("web-pages.chat.publish.verb"), error: failure(e) })));
+    if (!paper.current || taking) return;
+    setTaking(true);
+    void copy(paper.current).then((done) => {
+      if (done) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1600);
+      }
+    }).finally(() => setTaking(false));
   };
-  if (made) {
-    return (
-      <Dialog open wide onClose={onClose} title={t("web-pages.chat.publish.made")} description={t("web-pages.chat.publish.lead")}
-        footer={<>
-          <Button variant="ghost" onClick={onClose}>{t("common.done")}</Button>
-          <Button variant="primary" icon={Copy} onClick={() => copy(made.link)}>{t("web-pages.chat.publish.copyLink")}</Button>
-        </>}>
-        <span className={css.madeLink} title={made.link}>{made.link}</span>
-      </Dialog>
-    );
-  }
   let body: ReactNode;
   if ("reading" in preview) body = <div className={fpCss.fpNote}><WaitLine text={t("web-pages.chat.publish.reading")} /></div>;
   else if ("error" in preview) body = <div className={fpCss.fpNote}><span className={css.problem} role="alert">{preview.error}</span></div>;
@@ -144,25 +207,33 @@ export function PublishDialog({ station, thread, onClose }: { station: string; t
   else {
     body = (
       <div className={fpCss.fpPage}>
-        <div className={css.page}>
-          <p className={css.lead}>{t("web-pages.chat.publish.lead")}</p>
-          <PublishMessages messages={p!.messages} ticking={ticking} whole />
-        </div>
+        <div className={css.page}><PublishPicture preview={p!} ticking={ticking} paper={paper} /></div>
       </div>
     );
   }
+  const tool = (
+    <Button variant="primary" busy={taking} disabled={!p || p.messages.length === 0} onClick={go}>
+      {copied ? t("common.copied") : t("desktop.contextMenu.copyImage")}
+    </Button>
+  );
   return (
     <RDialog.Root open onOpenChange={(o) => { if (!o) onClose(); }}>
       <RDialog.Portal>
         <RDialog.Content className={fpCss.fp} aria-describedby={undefined} data-awake="">
-          <header className={`${fpCss.fpHead} ${css.head}`}>
-            <div className={fpCss.fpTitle}>
-              <RDialog.Title className={fpCss.fpName}>{t("web-pages.chat.publish")}</RDialog.Title>
-              {p?.hiddenText && <span className={`${fpCss.fpMeta} ${css.headNote}`}><ShieldCheck size={14} />{p.hiddenText}</span>}
-            </div>
-            <Button variant="primary" busy={publishing} disabled={!p || p.messages.length === 0} onClick={go}>{t("web-pages.chat.publish.go")}</Button>
-            <Tip label={t("web-main.preview.closeKey")}><RDialog.Close className={pageCss.iconBtn} aria-label={t("common.close")}><Close size={18} /></RDialog.Close></Tip>
-          </header>
+          {docked ? (
+            <ViewerBar back={{ label: p?.title || t("common.close"), onClick: onClose }}
+              name={<RDialog.Title asChild><span>{t("web-pages.chat.shareImage")}</span></RDialog.Title>}
+              meta={p?.hiddenText} tools={tool} />
+          ) : (
+            <header className={fpCss.fpHead}>
+              <div className={fpCss.fpTitle}>
+                <RDialog.Title className={fpCss.fpName}>{t("web-pages.chat.shareImage")}</RDialog.Title>
+                {p?.hiddenText && <span className={`${fpCss.fpMeta} ${css.headNote}`}><ShieldCheck size={14} />{p.hiddenText}</span>}
+              </div>
+              {tool}
+              <Tip label={t("web-main.preview.closeKey")}><RDialog.Close className={pageCss.iconBtn} aria-label={t("common.close")}><Close size={18} /></RDialog.Close></Tip>
+            </header>
+          )}
           <div className={fpCss.fpBody}>{body}</div>
         </RDialog.Content>
       </RDialog.Portal>
@@ -171,8 +242,9 @@ export function PublishDialog({ station, thread, onClose }: { station: string; t
 }
 
 /**
- * The chat's public links in its info (wide screen), under 「公开分享」: each when and by whom it was published, 复制, and
- * 撤销 for those who may (who published it, an owner or admin), which `onRevoke` asks about first.
+ * The chat's public links in its info (wide screen), made before pictures, under 「分享图片」: each with a link's mark
+ * (the web's globe), when and by whom it was published, 复制, and 撤销 for those who may (who published it, an owner
+ * or admin), which `onRevoke` asks about first.
  */
 export function PublishedLinks({ links, onRevoke }: { links: ChatPublished[]; onRevoke(id: string): void }) {
   const copy = useCopyLink();
@@ -180,6 +252,7 @@ export function PublishedLinks({ links, onRevoke }: { links: ChatPublished[]; on
     <>
       {links.map((l) => (
         <div key={l.id} className={css.link}>
+          <Web size={14} className={css.linkMark} />
           <span className={css.linkText}><Time stamp={l.time?.createdAt} /> · {l.byName}</span>
           <button type="button" className={css.linkAction} onClick={() => copy(l.link)}>{t("common.copy")}</button>
           {l.mayRevoke && <button type="button" className={css.linkAction} onClick={() => onRevoke(l.id)}>{t("web-pages.chat.publish.revoke")}</button>}
