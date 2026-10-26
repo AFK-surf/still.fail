@@ -89,6 +89,13 @@ output inside it rather than elsewhere on that machine (or over ssh): it is remo
 this chat is archived or deleted, or after 14 days unused, which is what keeps the target's disk free. Pin inputs and
 versions: clone or fetch the intended revision there, or upload a bundle.
 
+A station is often someone's own computer, in use. A command that needs an administrator's password or a permission
+the system asks for (`sudo`, `sfltool dumpbtm`, a first `osascript` controlling another app, a protected folder) puts
+the system's dialog on that machine's screen, naming only the command, so nobody there can tell who asks; the task
+waits until someone answers it. Prefer a way that asks nothing (login items through System Events, launchd jobs from
+their plists); when none will do, say in the chat first what will appear on which machine and why, and end
+`need_human`.
+
 To build or test a local working directory there (a checkout with uncommitted changes), prepare with `dir` (its
 absolute path here) instead of uploading: each start syncs it into a mirror on the target (named in prepare's answer,
 inside the session directory) and runs the command there. Only files Git tracks or would add (all but the usual build
