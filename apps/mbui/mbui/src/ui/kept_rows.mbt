@@ -205,10 +205,18 @@ let rows_round : RowsRound = { list: 0, build: -1, key: "", moving: false, rows:
 let drawn_again_on : Ref[Bool] = Ref(true)
 
 ///|
-/// Whether a list's rows may be kept this frame: as parts are (Tester::keep_parts), and not while anything reads what
-/// each frame builds (a test's instance owners, a test lighting everything). What reads the widgets out (a screen
-/// reader) reads a row kept as its build said it (semantics.mbt's row_read_out).
+/// Whether a list's rows may be kept this frame: as parts are, where they are (rows_kept_on: a Tester's, not a host's
+/// for now), and not while anything reads what each frame builds (a test's instance owners, a test lighting everything).
+/// What reads the widgets out (a screen reader) reads a row kept as its build said it (semantics.mbt's row_read_out).
 fn Ctx::rows_on(self : Ctx) -> Bool {
+  self.rows_on_grid() && rows_kept_on.val
+}
+
+///|
+/// Whether a list's rows are laid on the device's pixels (Ctx::rows_on_pixels, row_slot): as a host lays them, kept or
+/// not (a Tester's where it keeps parts: what every frame builds is laid as it always was), and not while anything reads
+/// what each frame builds as it was (a test's instance owners, a test lighting everything).
+fn Ctx::rows_on_grid(self : Ctx) -> Bool {
   parts_on.val && !inst_owners.on && !self.lit_every
 }
 
