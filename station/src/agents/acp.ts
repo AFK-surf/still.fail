@@ -45,7 +45,7 @@ export const turnStep = (update: Json) => ["agent_message_chunk", "agent_thought
 /// What an error answer says: its message, and its data's.
 function errorText(error: Json): string {
   const text = typeof error?.message === "string" ? error.message.replace(/^Internal error: /, "") : JSON.stringify(error);
-  const data = typeof error?.data === "string" ? `: ${error.data}` : typeof error?.data?.message === "string" ? `: ${error.data.message}` : "";
+  const data = typeof error?.data === "string" ? `: ${error.data}` : typeof error?.data?.message === "string" ? `: ${error.data.message}` : typeof error?.data?.details === "string" ? `: ${error.data.details}` : "";
   return `${text}${data}`;
 }
 
@@ -209,8 +209,8 @@ export abstract class AcpSession extends OwnProcessSession {
   }
 
   /// A request whose answer is waited for: an error answer rejects.
-  request(id: string, method: string, params: Json): Promise<Json> {
-    const answer = this.waiting.wait(id, (m) => (m?.error !== undefined ? new Error(`${this.kind} ${method}: ${errorText(m.error)}`) : null));
+  request(id: string, method: string, params: Json, timeoutMs?: number): Promise<Json> {
+    const answer = this.waiting.wait(id, (m) => (m?.error !== undefined ? new Error(`${this.kind} ${method}: ${errorText(m.error)}`) : null), undefined, timeoutMs);
     this.proc.write(rpc(id, method, params));
     return answer;
   }
@@ -434,6 +434,8 @@ export abstract class AcpSession extends OwnProcessSession {
 
 /// How a runtime's process is started for a session, and what the protocol's own requests carry of it.
 export type AcpStart = {
+  /// Only initialize: a runtime may prepare its profile dependencies before it can speak ACP.
+  initializeTimeoutMs?: number;
   command: string;
   args: string[];
   env: Record<string, string>;
@@ -466,7 +468,7 @@ export abstract class AcpDriver<S extends AcpSession> extends OwnProcessDriver<S
     await this.start(session, options, start.command, start.args, start.env);
     try {
       const meta = start.meta === undefined ? {} : { _meta: start.meta };
-      const answer = await session.request(INIT, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: CLIENT, ...meta });
+      const answer = await session.request(INIT, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: CLIENT, ...meta }, start.initializeTimeoutMs);
       await this.initialized(session, answer, options);
       const opening = { cwd: options.cwd, mcpServers: probe ? [] : mcpServers(options.mcpUrl, options.mcpToken), ...start.opening, ...meta };
       let opened: Json;

@@ -4,6 +4,7 @@
 // call's title is `<tool>: <its input>`; the station keeps the transcript (acp.ts KeptTranscript).
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { wall } from "../ops/fibers.ts";
 import { peerHttpBase } from "../tools/http.ts";
 import { AcpDriver, AcpSession, KeptTranscript, acpOutcome, type AcpStart } from "./acp.ts";
 import { fileCredentials } from "./no-keychain.ts";
@@ -32,7 +33,10 @@ const SESSION_ID = /^[a-zA-Z0-9_-]+$/;
 /// need the tool's name, notably to recognise chat_post; its arguments remain in rawInput, not in the name.
 function hermesUpdate(update: Json): Json {
   if (update?.sessionUpdate !== "tool_call" || typeof update.title !== "string") return update;
-  return { ...update, title: update.title.split(": ", 1)[0] };
+  const name = update.title.split(": ", 1)[0]!;
+  // Hermes 0.22 scopes editor MCP servers by session: keep our tools recognisable across those hashes.
+  const title = name.replace(/^mcp__editor_(stillfail|ember)_[0-9a-f]{8}__/, "mcp__$1__");
+  return { ...update, title };
 }
 
 /// What failed a turn, from what Hermes said of it.
@@ -82,6 +86,7 @@ export function hermesCatalog(catalog: Json, profile: Profile): string[] {
 
 export class HermesDriver extends AcpDriver<HermesSession> {
   private readonly command: string;
+  private stopping = false;
 
   constructor(options: HermesDriverOptions) {
     super(options.data);
@@ -95,12 +100,27 @@ export class HermesDriver extends AcpDriver<HermesSession> {
   /// The models a profile's Hermes offers: a session opened only to ask.
   async models(profile: Profile): Promise<string[]> {
     mkdirSync(profile.home, { recursive: true });
-    const session = await this.begin({ key: `models-${profile.id}-${uuid()}`, profile, cwd: profile.home, instructions: "", mcpToken: "", mcpUrl: "", route: "model-discovery" }, () => {}, true);
-    try {
-      return session.availableModels;
-    } finally {
-      await session.dispose();
+    // A fresh HERMES_HOME has no dependency generation to fall back to while another launch owns the
+    // shared checkout's update lock. Retry only that pre-ACP refusal; never retry an authentication or turn error.
+    const deadline = wall.now() + 120_000;
+    for (;;) {
+      if (this.stopping) throw new Error("Hermes driver is shutting down");
+      try {
+        const session = await this.begin({ key: `models-${profile.id}-${uuid()}`, profile, cwd: profile.home, instructions: "", mcpToken: "", mcpUrl: "", route: "model-discovery" }, () => {}, true);
+        try { return session.availableModels; }
+        finally { await session.dispose(); }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes("an update is still running") || !message.includes("no dependency environment is committed")
+            || wall.now() >= deadline || this.stopping) throw error;
+        await wall.sleep(2_000);
+      }
     }
+  }
+
+  override async shutdown() {
+    this.stopping = true;
+    await super.shutdown();
   }
 
   protected session(options: OpenOptions, events: Events) {
@@ -113,7 +133,8 @@ export class HermesDriver extends AcpDriver<HermesSession> {
     mkdirSync(sessions, { recursive: true });
     // Not one the station kept.
     if (options.resume !== undefined && !existsSync(join(sessions, `${options.resume}.jsonl`))) throw new Error(`no Hermes session ${options.resume}`);
-    return { command: this.command, args: ["acp"], env: hermesEnv(options) };
+    // Hermes 0.22 prepares a PM environment for each fresh HERMES_HOME before answering initialize.
+    return { command: this.command, args: ["acp"], env: hermesEnv(options), initializeTimeoutMs: 600_000 };
   }
 
   /// Older ACP adapters omit completion updates for tools invoked through Hermes' discovery bridge. That loses their
