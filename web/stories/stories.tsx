@@ -1077,6 +1077,7 @@ export const stories: Story[] = [
   { id: "vault-save-card", group: "密钥", title: "agent 申请存入", app: true, demo: vaultDemo("waiting", { save: true }) },
   { id: "vault-save-card-off", group: "密钥", title: "agent 申请存入 · 密钥库尚未开启", app: true, demo: vaultDemo("off", { save: true }) },
   { id: "vault-save-card-kept", group: "密钥", title: "agent 申请存入 · 已存入", app: true, demo: vaultDemo("on", { save: true, status: "granted" }) },
+  { id: "vault-typed-card", group: "密钥", title: "agent 请你填入密钥", app: true, demo: vaultDemo("waiting", { typed: true }) },
   { id: "vault-card-long", group: "密钥", title: "对话里的申请 · 长命令", app: true, demo: vaultDemo("waiting", { command: LONG_COMMAND }) },
   { id: "phone-vault-web", group: "密钥", title: "手机 · 网页只看名字", app: true, phone: true, demo: vaultDemo("web"), steps: toPhoneVault },
   { id: "phone-vault-no-lock", group: "密钥", title: "手机 · 先打开安全模式", app: true, phone: true, demo: vaultDemo("noLock"), steps: toPhoneVault },

@@ -1208,7 +1208,8 @@ fn seeded_outbox(mode : String) -> Array[Json] {
 // The fixture takes a card's answer as the core does (Decisions.kt): answered at once (the option picked, 你 选择了
 // 「…」 as how it went), let go at once (no longer asked). An option with 失败 in it fails. The modes chat-cards (the
 // card answered) and chat-answering (an option under way) open the first row's chat so (scripts/shots.sh cards);
-// chat-vault, with an agent asking to keep a password at its end, decided here as the core decides it.
+// chat-vault, with an agent asking to keep a password at its end, decided here as the core decides it; chat-vault-typed,
+// asking the person to type a token in instead.
 
 ///|
 /// How the first row's chat's cards stand as answered here: by seq, the card's decision.
@@ -1223,19 +1224,18 @@ let fix_replied : Map[Int, String] = {}
 let fix_vault : Ref[String] = Ref("")
 
 ///|
-/// chat-vault's last post: an agent asking to keep a password, its card as the core says it, answered here; decided,
-/// how it went.
-fn vault_post() -> Json {
-  let ask : Map[String, Json] = {
-    "name": "UniFi UX7",
-    "mode": "env",
-    "save": { "kind": "login", "username": "zzj" },
-    "answer": "approve",
+/// chat-vault's last post: an agent asking to keep a password (`typed`: a token the person types in), its card as the
+/// core says it, answered here; decided, how it went.
+fn vault_post(typed : Bool) -> Json {
+  let ask : Map[String, Json] = if typed {
+    { "name": "OpenCode Go", "mode": "proxy", "hosts": ["opencode.ai"], "save": { "kind": "token", "typed": true }, "answer": "approve" }
+  } else {
+    { "name": "UniFi UX7", "mode": "env", "save": { "kind": "login", "username": "zzj" }, "answer": "approve" }
   }
   if fix_vault.val != "" {
     ask["status"] = Json::string(fix_vault.val)
   }
-  msg(60, "agent", by_agent("Anthropic", "claude", "s-c1"), "要存入 UniFi UX7 的密码", "刚刚", {
+  msg(60, "agent", by_agent("Anthropic", "claude", "s-c1"), if typed { "请填入 OpenCode Go 的 API key" } else { "要存入 UniFi UX7 的密码" }, "刚刚", {
     "card": { "type": "options", "vault": "r-ux7", "vaultAsk": Json::object(ask) },
     "createdAt": Json::number(1.0e9),
   })
@@ -1245,7 +1245,7 @@ fn vault_post() -> Json {
 /// The chat `v` with what was answered here in it.
 fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let seeded = f.mode == "chat-cards"
-  let vault = f.mode == "chat-vault"
+  let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed"
   if session != "s-c1" || (fix_decided.is_empty() && !seeded && !vault) {
     return v
   }
@@ -1275,7 +1275,7 @@ fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       }
       // chat-vault's request to keep a password, last
       if vault {
-        all.push(vault_post())
+        all.push(vault_post(f.mode == "chat-vault-typed"))
       }
       // each answer's message, after the rest
       for seq, label in fix_replied {

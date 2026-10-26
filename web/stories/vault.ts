@@ -45,6 +45,13 @@ export const SAVE_REQUEST: VaultRequest = {
   save: { kind: "login", username: "zzj3720" },
 };
 
+/** An agent asking the person to type in a key it has no way to read (secret_save with neither value nor command). */
+export const TYPED_REQUEST: VaultRequest = {
+  id: "r_01JATYPED", vault: PERSONAL.id, vaultName: "个人", item: "i_go", itemName: "OpenCode Go", session: "ember:c-demo-safari", chat: "EMBER/1792199000.000100",
+  station: "local", mode: "proxy", reason: "把 OpenCode Go 接到 CLIProxyAPI 后面；在 OpenCode 控制台的 API Keys 里新建一个", hosts: ["opencode.ai"], at: AT,
+  save: { kind: "token", typed: true },
+};
+
 /** The page's states, as the core says them. */
 export type VaultStory = "web" | "noLock" | "unconfirmed" | "off" | "on" | "locked" | "waiting" | "notKeyed";
 
@@ -77,7 +84,7 @@ function items(story: VaultStory): VaultItemsView {
 export const LONG_COMMAND = "sh /private/tmp/claude-501/-Users-ada--stillfail-sessions-ember-c-28ddcd9a46-workspace/a511bb72-32b1-47de-b73d-590cfd491c4a/scratchpad/s/search.sh --query 'release job' --channels eng,ops --since 2026-10-01 --limit 200 --format json --fields ts,user,text,thread_ts,reactions --sort recent --out /tmp/release-job.json";
 
 /** How the request's card is told: its command, and how it ended (none: it waits). */
-export type CardStory = { command?: string; status?: "granted" | "denied" | "expired"; scope?: "once" | "hour" | "chat"; lasts?: "once" | "hour"; save?: boolean };
+export type CardStory = { command?: string; status?: "granted" | "denied" | "expired"; scope?: "once" | "hour" | "chat"; lasts?: "once" | "hour"; save?: boolean; typed?: boolean };
 
 /** The station's card for the request, under the agent's post in the chat on show (as station/src/vault/secrets.ts posts it). */
 function withCard(chat: ChatView, told: CardStory): ChatView {
@@ -89,18 +96,18 @@ function withCard(chat: ChatView, told: CardStory): ChatView {
     { label: "本对话 1 小时内", detail: "1 小时内这个对话可以反复使用，不用再批准" },
     { label: "本对话直到归档", detail: "这个对话归档或删除前都能用，最长 30 天" },
   ].slice(0, told.lasts === "once" ? 1 : told.lasts === "hour" ? 2 : 3);
-  const options = told.save
+  const options = told.save || told.typed
     ? [{ label: "存入密钥库", detail: "agent 之后每次使用仍需你批准", recommended: true }, { label: "拒绝", detail: "不保存，通知 agent" }]
     : [...scopes.map((o, i) => (i === scopes.length - 1 ? { ...o, recommended: true } : o)), { label: "拒绝", detail: "通知 agent 已拒绝" }];
-  if (told.save) {
-    const r = SAVE_REQUEST;
+  if (told.save || told.typed) {
+    const r = told.typed ? TYPED_REQUEST : SAVE_REQUEST;
     const keep: ChatMessage = {
       ...last, seq, ts: `${Number(last.ts) + 30}`, quotes: [], attachments: [],
-      text: `申请将「${r.itemName}」存入密钥库：${r.reason}\n\n类型：登录（用户名 zzj3720）\n\n来源：\`${r.command}\`\n\nagent 使用方式：环境变量（命令可读取明文），每次使用需你批准`,
+      text: told.typed ? `请填入「${r.itemName}」（Token）并存入密钥库：${r.reason}` : `申请将「${r.itemName}」存入密钥库：${r.reason}\n\n类型：登录（用户名 zzj3720）\n\n来源：\`${r.command}\`\n\nagent 使用方式：环境变量（命令可读取明文），每次使用需你批准`,
       options,
       card: {
         type: "options", options, assignee: "you@acme.dev", assigneeText: "待你决策", vault: r.id,
-        vaultAsk: { name: r.itemName!, reason: r.reason, command: r.command!, mode: "env", hosts: [], save: r.save!, ...(told.status ? { status: told.status } : {}) },
+        vaultAsk: { name: r.itemName!, reason: r.reason, ...(r.command ? { command: r.command } : {}), mode: r.mode, hosts: r.hosts, save: r.save!, ...(told.status ? { status: told.status } : {}) },
       },
       decision: { resolved: !!told.status },
     };
@@ -128,7 +135,7 @@ export function vaultDemo(story: VaultStory, card: boolean | CardStory = false):
         const v = view(story);
         const lasts = typeof card === "object" ? card.lasts : undefined;
         // One to keep: waiting on the viewer while it is not decided, whether their vault is on here or not.
-        if (typeof card === "object" && card.save) return { ...v, requests: card.status ? [] : [SAVE_REQUEST] };
+        if (typeof card === "object" && (card.save || card.typed)) return { ...v, requests: card.status ? [] : [card.typed ? TYPED_REQUEST : SAVE_REQUEST] };
         return lasts ? { ...v, requests: v.requests.map((r) => ({ ...r, lasts })) } : v;
       }
       return t.topic === "vaultItems" ? items(story) : undefined;

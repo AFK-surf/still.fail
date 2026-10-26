@@ -125,13 +125,15 @@ pub(all) struct Card {
 
 ///|
 /// An agent's request about a vault item as its card says it (VaultAsk): the item, how it is given, the command it is
-/// for; one to keep a secret (`save_kind` not empty): what kind and the account; once decided, how (`status`, `scope`).
+/// for; one to keep a secret (`save_kind` not empty): what kind, the account, whether the person types it in (`typed`);
+/// once decided, how (`status`, `scope`).
 pub(all) struct VaultAsk {
   name : String
   mode : String
   command : String
   save_kind : String
   username : String
+  typed : Bool
   status : String
   scope : String
   /// another station of the workspace its commands run on, by name (empty: the chat's)
@@ -341,6 +343,7 @@ pub fn message_of(m : Json) -> Message {
                 command: text(a, "command"),
                 save_kind: text(field(a, "save"), "kind"),
                 username: text(field(a, "save"), "username"),
+                typed: flag(field(a, "save"), "typed"),
                 status: text(a, "status"),
                 scope: text(a, "scope"),
                 station: text(a, "station"),

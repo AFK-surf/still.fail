@@ -148,6 +148,7 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
     command: ask.command,
     save_kind: ask.save_kind,
     username: ask.username,
+    typed: ask.typed,
     station: ask.station,
   }
   let decided = ask.status != ""

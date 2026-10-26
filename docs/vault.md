@@ -126,13 +126,14 @@ sequenceDiagram
 
 chat EMBER/1792782824.926000（「当然是 agent 申请添加我来审批」）。agent 手上有了以后还要用的凭据（用 `op`/`bw` 读出的密码、人给的 token、自己建的 key），由 agent 申请存进库，人在卡片上批准，不让人自己去 app 里填。
 
-- **工具** `secret_save {name, kind, reason, command | value, username?, public_key?, modes?, hosts?, env?}`：存给这个 chat 的发起人。值优先用 `command` 给：station 在 session 的工作目录里 `sh -c` 跑它，标准输出（去掉末尾一个换行，最多 64 KB）就是值，agent 看不到；失败时只回 stderr，且把输出逐字遮掉。`value` 只给 agent 本来就拿着的值。`modes` 默认：有 `hosts` 用代理，SSH 钥匙用 ssh，其余用环境变量。
+- **工具** `secret_save {name, kind, reason, command | value | 都不给, username?, public_key?, modes?, hosts?, env?}`：存给这个 chat 的发起人。值优先用 `command` 给：station 在 session 的工作目录里 `sh -c` 跑它，标准输出（去掉末尾一个换行，最多 64 KB）就是值，agent 看不到；失败时只回 stderr，且把输出逐字遮掉。`value` 只给 agent 本来就拿着的值。`modes` 默认：有 `hosts` 用代理，SSH 钥匙用 ssh，其余用环境变量。
 - **申请**：还是 `vault_requests` 里的一条 Request，多 `save`（条目的 listing 加上不是秘密的 `username`、`public_key`）和 `owner`（发起人的 email，由他决定）；`item` 是 station 先分配好的条目 id，`vault` 是打算放进的库：
   - 加锁：发起人自己的、他某台已设置设备有钥匙的库（自己是 owner 的优先），没有就空着。值用 `seal` 封给他每台已设置设备的箱钥匙（锁里验过的证书），上下文 `stillfail-vault-save/1\0<ws>\0<request>`，存在 `sealed: [{device, box, secret}]` 里；station 不存原值。
   - 不加锁：`vault` 是 `plain`。
   - 两种都把原值留在 station 内存里直到有结果（重启就忘，agent 重新申请）：不加锁的批准时由 station 写进明文库；加锁的在他之后才设置的设备发布箱钥匙证书时（`PUT vault/boxes`）补封给那台设备，申请重新推送。
 - **卡片**：options 卡片「存入密钥库 / 拒绝」，assignee 是发起人，`vault` 字段多 `save: {kind, username?}`；客户端据此画成「想存入」而不是「想使用」，批准行是「存入 / 拒绝」。他在这个 workspace 里还没开启密钥库（加锁但这台设备没设置、或者一个库都没有）时，卡片上是「开启密钥库」，进「密钥」页走原来的开启流程（抄恢复码），回来再存入。
 - **批准**：`vault.approve {request}`（scope 不用）。加锁：用这台设备的箱钥匙打开给它的那份（过一次生物识别），选库（申请指定的、这台设备有钥匙的优先，其次自己的；自己的库都没有才建一个「个人」库，有但这台设备还没钥匙就回 `vault_no_key`），用请求里的 `item` 写第 0 版（已经写过就不再写），把副本送到提出申请的 station，再 `POST vault/saves {request, vault}`；station 核对那个库里确有这个条目、名字对得上，记为 granted。不加锁：`POST vault/plain/saves {request}`，station 用内存里的值写进明文库、推 `vault-plain`。拒绝和别的申请一样走 `vault/denials`、`vault/plain/denials`（存入的申请由发起人决定，不看库成员）。
+- **人来填**（2026-10-26，chat EMBER/1792983584.391000：「agent 应该要能够主动发一张卡片来要求用户把一些东西填进去，然后会存到密钥库」）：agent 要的凭据只有人拿得到（只能登录控制台才能建的 API key），`secret_save` 不给 `value` 也不给 `command`，`save` 多 `typed: true`，station 手上没有值、什么都不封（`sealed` 为空，`#unsaved` 不记，重启后申请照样有效）。卡片标题照旧（存入 Token「…」），按钮上面多一个输入框：Token「粘贴 Token」、密码「密码」（agent 没给 `username` 时上面再加「用户名」）、SSH 私钥多行「粘贴私钥」；框里没字时「存入」按不了，回车等于「存入」。批准走 `vault.approve {request, typed: {secret, username?}}`（对象，不会被 `doing` 记下）：core 按条目编辑器的写法变成字段（Token 去首尾空白，私钥末尾补换行，密码原样）。加锁：这台设备自己写进库（读一次箱钥匙解开库钥匙，没有库就建「个人」），其余和上面一样（`POST vault/saves` 带给这个对话的授权）；明文从头到尾只在这台设备上。不加锁：`POST vault/plain/saves {request, fields}`，station 照条目规则查字段、秘密那一项不能空、合起来不超过 64 KB。旧 app 批准这种申请会报错（加锁「没封给这台设备」，不加锁要求更新 app），不会存进空值。在 Slack/飞书里卡片是字，说「请在 still.fail 客户端的「密钥」中填写并存入」，到「密钥」页的待批准里填。
 - **之后**：存进去的条目和人自己加的一样，agent 用时照样 `secret_use` → 卡片 → `secret_run`。存入的申请不算条目的使用记录（`uses` 里不列）。
 - **主动提**：内置 skill `stillfail-vault`，agent 的指令里也有一句：要读密码管理器、人贴了凭据、自己建了 key、写的脚本要登录某处时，先提议存进库再用；他的库没开启时照样调 `secret_save`，卡片会请他开启。`secret_list` 会说他的库开没开。
 

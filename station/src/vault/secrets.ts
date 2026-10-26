@@ -3,7 +3,8 @@
 // alone ever holds the secret), and the commands run with a grant. Without security mode, the secrets are the plain
 // library's (plain.ts): the same request and card, decided by the item's owner, the value read from the station. An
 // agent may also ask to keep a secret in its owner's vault (secret_save): sealed to their devices, written by the app
-// that approves it (or, without security mode, into the plain library here). A grant may be for commands on another
+// that approves it (or, without security mode, into the plain library here); or one only they hold, typed in on its card
+// by them, written by their app as it is approved (`save.typed`). A grant may be for commands on another
 // station of the workspace (`runOn`): the secret is sent there over the station transport for each command, run in the
 // session's directory there, and only the outcome comes back. The requests and what was done with them are kept
 // in the station's database (`vault_requests`, `vault_audit`), never a secret; the vaults' grants only in memory, the
@@ -82,6 +83,22 @@ const SAVE_WORDS = {
 };
 const KIND_WORDS: Record<Kind, string> = { token: "Token", login: "登录", ssh_key: "SSH 密钥" };
 const howWords = (mode: Mode, hosts: string[]): string => (mode === "proxy" ? `代理（限 ${hosts.join(", ")}）` : mode === "ssh" ? "ssh-agent（私钥不出 station）" : "环境变量（命令可读取明文）");
+
+/// The field of each kind that holds its secret.
+const SECRET_FIELD: Record<Kind, string> = { token: "value", login: "password", ssh_key: "private_key" };
+/// The most a secret typed in may be, its fields together (as a command's output may: one secret).
+const TYPED_MOST = 64 * 1024;
+
+/// The fields of a secret its owner typed in, as their app sent them: words only, its secret not empty, one secret's
+/// size at most (which fields a kind has, plainOk says); undefined when they are not.
+function typedFields(kind: Kind, v: unknown): Record<string, string> | undefined {
+  if (v === null || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const fields = Object.entries(v as Record<string, unknown>);
+  if (!fields.every(([, x]) => typeof x === "string")) return undefined;
+  const all = Object.fromEntries(fields) as Record<string, string>;
+  const size = fields.reduce((n, [k, x]) => n + k.length + (x as string).length, 0);
+  return (all[SECRET_FIELD[kind]] ?? "").trim() !== "" && size <= TYPED_MOST ? all : undefined;
+}
 
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 /// A ULID: 48 bits of milliseconds, 80 random.
@@ -285,8 +302,9 @@ export class Secrets {
       .map((r) => JSON.parse(r.body) as Request)
       .filter((r) => {
         // A vault's request whose box this station no longer holds (it restarted) can never be granted: let go. So is a
-        // secret to keep that is gone with a restart (the plain library's) and sealed to no device.
-        const live = r.save ? this.#unsaved.has(r.id) || (r.vault !== PLAIN && (r.sealed?.length ?? 0) > 0) : r.vault === PLAIN || this.keeper.waiting(r.id);
+        // secret to keep that is gone with a restart (the plain library's) and sealed to no device; one the person types
+        // in is held nowhere until then.
+        const live = r.save ? r.save.typed === true || this.#unsaved.has(r.id) || (r.vault !== PLAIN && (r.sealed?.length ?? 0) > 0) : r.vault === PLAIN || this.keeper.waiting(r.id);
         if (r.at + PENDING_SECS > now && live) return true;
         this.#settle(r, "expired");
         return false;
@@ -475,8 +493,9 @@ export class Secrets {
     return this.#vaultFor(lock, sub) !== "" ? "on" : "off";
   }
 
-  /// secret_save: a request from `session` to keep a secret in the vault of whoever started its chat, given as `value`
-  /// or printed by `command` (run here in `cwd`; what it prints is never shown); waits a while for its decision.
+  /// secret_save: a request from `session` to keep a secret in the vault of whoever started its chat, given as `value`,
+  /// printed by `command` (run here in `cwd`; what it prints is never shown) or, given neither, typed in by that person
+  /// on its card (`save.typed`: nothing of it held or sealed here); waits a while for its decision.
   async save(
     session: string,
     a: { name: string; kind: string; reason: string; value?: string; command?: string; username?: string; public_key?: string; modes?: string[]; hosts?: string[]; env?: string; cwd: string; station?: string },
@@ -491,7 +510,8 @@ export class Secrets {
     const name = a.name.trim();
     if (name === "" || name.length > 200) throw new Refused("name is required (at most 200 characters): what the person and agents will know it by");
     if (a.reason.trim() === "") throw new Refused("reason is required: why it is worth keeping, for the person deciding");
-    if ((a.value === undefined) === (a.command === undefined)) throw new Refused("Give the secret either as value or as a command that prints it (command), not both.");
+    if (a.value !== undefined && a.command !== undefined) throw new Refused("Give the secret as value or as a command that prints it (command), not both; neither, and the card asks the person to type it in.");
+    const typed = a.value === undefined && a.command === undefined;
     const hosts = [...new Set((a.hosts ?? []).map((h) => h.trim().toLowerCase()).filter((h) => h !== ""))];
     const modes = (a.modes?.length ? [...new Set(a.modes)] : kind === "ssh_key" ? ["ssh"] : hosts.length > 0 ? ["proxy"] : ["env"]) as Mode[];
     if (!modes.every((m) => MODES.includes(m))) throw new Refused("modes are proxy, ssh or env");
@@ -515,18 +535,20 @@ export class Secrets {
       if (got.tooLong) throw new Refused("The command printed more than 64 KB: that is not one secret; nothing was kept.");
       value = got.out;
     }
-    if (value === "") throw new Refused("The secret is empty; nothing was kept.");
-    const fields = fieldsOf(value);
+    if (value === "" && !typed) throw new Refused("The secret is empty; nothing was kept.");
+    const fields = typed ? null : fieldsOf(value);
     const id = `r_${ulid(now)}`;
-    const save: Save = { kind, name, modes, hosts, ...(a.env ? { env: a.env } : {}), ...(a.username ? { username: a.username } : {}), ...(a.public_key ? { public_key: a.public_key } : {}) };
+    const save: Save = {
+      kind, name, modes, hosts, ...(a.env ? { env: a.env } : {}), ...(a.username ? { username: a.username } : {}), ...(a.public_key ? { public_key: a.public_key } : {}), ...(typed ? { typed: true as const } : {}),
+    };
     const request: Request = {
       id, ws, vault: lock === null ? PLAIN : this.#vaultFor(lock, sub!), item, session, chat: "", mode: modes[0]!, reason: a.reason.trim(),
       ...(a.command !== undefined ? { command: a.command } : {}), ...(hosts.length ? { hosts } : {}),
       // A vault's: a box for the grant to this chat that comes with keeping it (the app seals the secret to it too).
       box: lock === null ? "" : this.keeper.open(id), at: Math.floor(now / 1000), status: "pending", owner: email, save, ...(from ? { runOn: from } : {}),
-      ...(lock !== null ? { sealed: this.#certsOf(lock, sub!).map((c) => this.#sealTo(c, ws, id, fields)) } : {}),
+      ...(lock !== null && fields !== null ? { sealed: this.#certsOf(lock, sub!).map((c) => this.#sealTo(c, ws, id, fields)) } : {}),
     };
-    this.#unsaved.set(id, fields);
+    if (fields !== null) this.#unsaved.set(id, fields);
     const kept: Kept = { request, thread: null, cardTs: null };
     const thread = this.#d.hub.store.latestThread(session);
     if (thread !== null) {
@@ -535,7 +557,7 @@ export class Secrets {
       kept.thread = thread.thread.id;
     }
     this.#save(kept);
-    this.#audit(request, "save-request", [modes.join(" "), hosts.join(" "), from ? `${from.name}: ${a.command}` : (a.command ?? "")].filter((x) => x !== "").join(" · "));
+    this.#audit(request, "save-request", [modes.join(" "), hosts.join(" "), from ? `${from.name}: ${a.command}` : (a.command ?? ""), typed ? "typed" : ""].filter((x) => x !== "").join(" · "));
     this.#told(request);
     const decided = await this.#decision(id, WAIT_MS);
     return this.#saidSave(decided ?? request);
@@ -546,9 +568,10 @@ export class Secrets {
   async #postSave(session: string, thread: SessionThread, r: Request): Promise<string | null> {
     const s = r.save!;
     const stillfail = thread.thread.surface === STILLFAIL_SURFACE;
+    const kind = `（${KIND_WORDS[s.kind]}${s.username ? ` · ${s.username}` : ""}）`;
     const text = [
-      `申请将「${s.name}」存入密钥库（${KIND_WORDS[s.kind]}${s.username ? ` · ${s.username}` : ""}）：${r.reason}`,
-      ...(stillfail ? [] : ["请在 still.fail 客户端的「密钥」中批准。"]),
+      s.typed ? `请填入「${s.name}」${kind}并存入密钥库：${r.reason}` : `申请将「${s.name}」存入密钥库${kind}：${r.reason}`,
+      ...(stillfail ? [] : [s.typed ? "请在 still.fail 客户端的「密钥」中填写并存入。" : "请在 still.fail 客户端的「密钥」中批准。"]),
     ].join("\n\n");
     const card = stillfail
       ? {
@@ -559,7 +582,7 @@ export class Secrets {
           vault: {
             request: r.id, name: s.name, reason: r.reason, ...(r.command ? { command: r.command } : {}), mode: s.modes[0], hosts: s.modes[0] === "proxy" ? s.hosts : [],
             ...(r.runOn ? { station: r.runOn.name } : {}),
-            save: { kind: s.kind, ...(s.username ? { username: s.username } : {}) },
+            save: { kind: s.kind, ...(s.username ? { username: s.username } : {}), ...(s.typed ? { typed: true } : {}) },
           },
         }
       : null;
@@ -579,8 +602,11 @@ export class Secrets {
     }
     if (r.status === "denied") return `${whose} chose not to keep 「${s.name}」 (request ${r.id}).`;
     if (r.status === "expired") return `The request to keep 「${s.name}」 (${r.id}) was let go.`;
-    const off = r.vault === "" ? " Their vault is not turned on yet: the card lets them turn it on in the still.fail app, and then keep it." : "";
-    return `Asked to keep 「${s.name}」 (request ${r.id}); the card is in your chat for ${whose}, who approves it in the still.fail app.${off} Not decided yet: end your turn need_human (about the card), and you are told when it is decided. Only their approval in the app keeps it: a reply in the chat saying yes does not.`;
+    const off = r.vault === "" && !s.typed ? " Their vault is not turned on yet: the card lets them turn it on in the still.fail app, and then keep it." : "";
+    const asked = s.typed
+      ? `Asked ${whose} to type 「${s.name}」 in (request ${r.id}): its card has a field for it, and what they type goes into their vault as they approve it in the still.fail app (turning their vault on first where it is not), never to you.`
+      : `Asked to keep 「${s.name}」 (request ${r.id}); the card is in your chat for ${whose}, who approves it in the still.fail app.${off}`;
+    return `${asked} Not decided yet: end your turn need_human (about the card), and you are told when it is decided. Only their approval in the app keeps it: a reply in the chat saying yes does not.`;
   }
 
   /// A device's box key published (PUT vault/boxes, checked): the secrets waiting to be kept for its person sealed to
@@ -626,16 +652,16 @@ export class Secrets {
   }
 
   /// POST vault/plain/saves: a secret asked to be kept, approved by whoever it is for (no security mode): written into
-  /// the plain library here. The item as written, or why not.
-  savedPlain(ws: string, lock: LockState | null, email: string, d: { request?: unknown }): PlainItem | string {
+  /// the plain library here; one they type in, with its `fields` as their app sent them. The item as written, or why not.
+  savedPlain(ws: string, lock: LockState | null, email: string, d: { request?: unknown; fields?: unknown }): PlainItem | string {
     const k = typeof d?.request === "string" ? this.#kept(ws, d.request) : null;
     if (k === null || !k.request.save || k.request.vault !== PLAIN) return "no such request to keep a secret";
     if (k.request.owner !== email.toLowerCase()) return "only the person it is kept for decides it";
     if (lock !== null) return "security mode is on: secrets go into the vault, encrypted";
     if (k.request.status !== "pending") return `the request is ${k.request.status}`;
-    const fields = this.#unsaved.get(k.request.id);
-    if (fields === undefined) return "the secret is gone (the station restarted): the agent asks again";
     const s = k.request.save;
+    const fields = s.typed ? typedFields(s.kind, d.fields) : this.#unsaved.get(k.request.id);
+    if (fields === undefined) return s.typed ? "this secret is typed in on its card, and sent with its fields (an app from before that cannot: update it)" : "the secret is gone (the station restarted): the agent asks again";
     const next: PlainItem = {
       ws, id: k.request.item, owner: k.request.owner!, version: 0, kind: s.kind, name: s.name, fields, notes: "",
       listing: { name: s.name, kind: s.kind, modes: s.modes, hosts: s.hosts, ...(s.env ? { env: s.env } : {}) }, at: Math.floor(this.#d.now() / 1000),

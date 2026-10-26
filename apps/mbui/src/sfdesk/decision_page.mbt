@@ -264,7 +264,7 @@ fn zou_picks(c : @ui.Ctx, src : Source, core : Core, here : MessageHere, x : Jso
       // (as the core said it with the card, from the vault it holds)
       Some(Object(_)) as ask => {
         let answer = @settings.card_answer(text(ask, "answer"), text(ask, "lasts"), mine)
-        @settings.vault_foot(c, core, ws, vault, answer, field(ask, "save") is Some(_))
+        @settings.vault_foot(c, core, ws, vault, answer, field(ask, "save") is Some(_), typed=@settings.typed_of(field(ask, "save")))
       }
       _ => @settings.vault_actions(c, core, ws, vault, mine)
     }

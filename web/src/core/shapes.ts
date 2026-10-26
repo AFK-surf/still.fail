@@ -1584,6 +1584,11 @@ export interface VaultSave {
 	kind: string;
 	/** A login's account name. */
 	username?: string;
+	/**
+	 * The secret is the person's to type in on the card (the agent has none): a field for it (and a login's
+	 * account, when `username` is absent) over the answer, `vault.approve` with `typed`.
+	 */
+	typed?: boolean;
 }
 
 /** An agent's request to use a vault item, or to keep one, as its card in the chat says it (station/src/vault/secrets.ts). */

@@ -1,7 +1,8 @@
 // Agents asking to keep a secret in the vault (docs/vault.md agent 存入; src/vault/secrets.ts `save`): sealed to the
 // devices of whoever started the chat and decided by them alone, kept once their app wrote it into their vault (or,
 // without security mode, written into their plain library here), sealed to a device set up later, a command's output
-// taken without being shown. Nothing waits on time: a request's answer is awaited only once it is decided.
+// taken without being shown, or one its owner types in on the card. Nothing waits on time: a request's answer is awaited
+// only once it is decided.
 import assert from "node:assert/strict";
 import { createPublicKey, generateKeyPairSync, sign as nodeSign } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -99,7 +100,7 @@ test("a secret to keep in a vault: sealed to its owner's devices, decided by the
   h.vaults.putBox(w.cert(w.bob));
   try {
     assert.equal(h.secrets.status("s1"), "on");
-    await assert.rejects(h.secrets.save("s1", { name: "UX7", kind: "login", reason: "x", cwd: h.dir }), /either as value or as a command/);
+    await assert.rejects(h.secrets.save("s1", { name: "UX7", kind: "login", reason: "x", value: "p", command: "true", cwd: h.dir }), /not both/);
     await assert.rejects(h.secrets.save("s1", { name: "UX7", kind: "login", reason: "x", value: "p", modes: ["ssh"], cwd: h.dir }), /SSH key is given by ssh/);
     await assert.rejects(h.secrets.save("s1", { name: "UX7", kind: "token", reason: "x", value: "p", modes: ["proxy"], cwd: h.dir }), /names its hosts/);
 
@@ -237,6 +238,56 @@ test("a secret to keep without security mode: written into the owner's plain lib
     await tick();
     const after = h.make();
     assert.deepEqual(pendingOf(after, null, "bob@x.com"), []);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a secret its owner types in: nothing of it held or sealed here, the card asking for it; kept as their app writes it, waiting through a restart", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  h.vaults.putVault(w.vault);
+  h.vaults.putBox(w.cert(w.alice));
+  try {
+    const asked = h.secrets.save("s1", { name: "OpenCode Go", kind: "token", reason: "在 OpenCode 控制台的 API Keys 里新建一个", hosts: ["opencode.ai"], cwd: h.dir });
+    await tick();
+    const [r] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.ok(r && r.vault === VAULT && r.box !== "" && r.sealed === undefined && r.command === undefined);
+    assert.deepEqual(r.save, { kind: "token", name: "OpenCode Go", modes: ["proxy"], hosts: ["opencode.ai"], typed: true });
+    const { text, card } = h.cards[0]!;
+    assert.equal(text, "请填入「OpenCode Go」（Token）并存入密钥库：在 OpenCode 控制台的 API Keys 里新建一个");
+    assert.deepEqual(card.vault.save, { kind: "token", typed: true });
+
+    // Held nowhere until typed in: a restart lets it wait on.
+    const after = h.make();
+    assert.deepEqual(pendingOf(after, w.state, "alice@x.com").map((x) => x.id), [r.id]);
+    // Her app writes what she typed into her vault, as for any secret to keep.
+    h.vaults.putItem(written(r, w.alice, { value: PASSWORD }));
+    assert.equal(h.secrets.saved(w.state, "alice", { request: r.id, vault: VAULT }), null);
+    assert.match(await asked, /Kept: 「OpenCode Go」/);
+    assert.deepEqual(h.secrets.listings("s1").map((l) => [l.listing.name, l.listing.hosts]), [["OpenCode Go", ["opencode.ai"]]]);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a secret its owner types in without security mode: written into their plain library with the fields their app sends, its secret not empty", async () => {
+  const h = harness(() => null, "bob@x.com");
+  try {
+    const asked = h.secrets.save("s1", { name: "Router", kind: "login", reason: "router", cwd: h.dir });
+    await tick();
+    const [r] = pendingOf(h.secrets, null, "bob@x.com");
+    assert.ok(r && r.vault === PLAIN && r.save?.typed === true);
+    // An app from before sends none; nor is an empty secret, or a field the kind has not, kept.
+    assert.match(h.secrets.savedPlain(WS, null, "bob@x.com", { request: r.id }) as string, /typed in on its card/);
+    assert.match(h.secrets.savedPlain(WS, null, "bob@x.com", { request: r.id, fields: { username: "admin", password: " " } }) as string, /typed in on its card/);
+    assert.match(h.secrets.savedPlain(WS, null, "bob@x.com", { request: r.id, fields: { password: "p", value: "v" } }) as string, /a login's fields are/);
+    assert.equal(h.secrets.savedPlain(WS, null, "carol@x.com", { request: r.id, fields: { password: "p" } }), "only the person it is kept for decides it");
+    const kept = h.secrets.savedPlain(WS, null, "bob@x.com", { request: r.id, fields: { username: "admin", password: PASSWORD } });
+    assert.ok(typeof kept !== "string");
+    assert.deepEqual([kept.id, kept.fields], [r.item, { username: "admin", password: PASSWORD }]);
+    assert.match(await asked, /Kept: 「Router」.*This chat may use it now/);
+    assert.deepEqual(h.secrets.held("s1").map((x) => x.secret.fields.password), [PASSWORD]);
   } finally {
     rmSync(h.dir, { recursive: true, force: true });
   }

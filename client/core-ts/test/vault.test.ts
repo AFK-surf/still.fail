@@ -564,6 +564,48 @@ test("vault calls: a secret an agent asks to keep, opened with this device's box
   r.core.close();
 });
 
+test("vault calls: a secret an agent asks the person to type in: what they typed written into their vault (nothing to open), the chat given it; nothing typed, nothing kept", async () => {
+  const r = await rig();
+  r.putLock();
+  await r.ask("vault.setup", {});
+  const keeper = fill(9);
+  const typed = (rid: string, item: string, save: Request["save"]): Request => ({
+    id: rid, ws: "ws", vault: "", item, session: "k1", chat: "7", mode: "proxy", reason: "在 OpenCode 控制台新建一个", hosts: ["opencode.ai"], box: boxPublic(keeper), at: 1, status: "pending", owner: "a@x.com", save,
+  });
+  const item = "i_01JAKEEP00000000000000TYPE";
+  const asked = typed("r_y", item, { kind: "token", name: "OpenCode Go", modes: ["proxy"], hosts: ["opencode.ai"], typed: true });
+  r.st.requests.push(asked);
+  r.push("vault-request", asked);
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  await r.host.time.pass(500);
+  r.take();
+  assert.deepEqual(vaults().requests.map((q: any) => [q.id, q.save]), [["r_y", { kind: "token", typed: true }]]);
+
+  // Nothing typed (or only spaces): refused before the person is asked.
+  const before = r.host.secureAsked.length;
+  await fails(r.ask("vault.approve", { request: "r_y", scope: "once" }), "vault_typed_empty");
+  await fails(r.ask("vault.approve", { request: "r_y", scope: "once", typed: { secret: "  " } }), "vault_typed_empty");
+  assert.equal(r.host.secureAsked.length, before);
+  const kept = await r.ask("vault.approve", { request: "r_y", scope: "once", typed: { secret: " sk-go-1\n" } });
+  assert.equal(r.host.secureAsked.length, before + 1, "the person is asked once");
+  const [own] = [...r.st.vaults.values()];
+  assert.ok(own && kept.vault === own.id);
+  assert.deepEqual([r.st.items.get(item)!.vault, r.st.items.get(item)!.listing], [own.id, { name: "OpenCode Go", kind: "token", modes: ["proxy"], hosts: ["opencode.ai"] }]);
+  assert.deepEqual((await r.ask("vault.open", { item })).plain.fields, { value: "sk-go-1" });
+  const saved = r.st.saves[0] as any;
+  assert.deepEqual([saved.request, saved.grant.mode, saved.grant.hosts], ["r_y", "proxy", ["opencode.ai"]]);
+  assert.deepEqual(JSON.parse(new TextDecoder().decode(openSeal(keeper, saved.grant.secret, grantContext("ws", "r_y")))).fields, { value: "sk-go-1" });
+
+  // A login with no account given: the one typed in with the password, as typed.
+  const login = "i_01JAKEEP0000000000000LOGIN";
+  const asksLogin = typed("r_z", login, { kind: "login", name: "Router", modes: ["env"], hosts: [], typed: true });
+  r.st.requests.push(asksLogin);
+  r.push("vault-request", asksLogin);
+  await r.ask("vault.approve", { request: "r_z", scope: "once", typed: { secret: " pw ", username: " admin " } });
+  assert.deepEqual((await r.ask("vault.open", { item: login })).plain.fields, { username: "admin", password: " pw " });
+  r.core.close();
+});
+
 test("one vault of one's own: a device set up later makes none, and is given its key as soon as one of the owner's devices that has it unseals it", async () => {
   const r = await rig();
   r.putLock();
@@ -742,6 +784,11 @@ test("the plain library: no security mode, items kept on the station as they are
   r.st.requests.push({ id: "r_k", ws: "ws", vault: "plain", item: "i_01JAKEEP0000000000000PLAIN", session: "ember:s", chat: "", mode: "env", reason: "slack", box: "", at: 1000, status: "pending", owner: "me@x.com", save: { kind: "token", name: "Slack", modes: ["env"], hosts: [] } } as Request);
   await r.ask("vault.approve", { request: "r_k", scope: "once" });
   assert.deepEqual(r.st.plainSaves, [{ request: "r_k" }]);
+  // One its owner types in: sent with what they typed, as the item's fields.
+  r.st.requests.push({ id: "r_t", ws: "ws", vault: "plain", item: "i_01JAKEEP0000000000000TYPED", session: "ember:s", chat: "", mode: "env", reason: "go", box: "", at: 1000, status: "pending", owner: "me@x.com", save: { kind: "token", name: "Go", modes: ["env"], hosts: [], typed: true } } as Request);
+  await fails(r.ask("vault.approve", { request: "r_t", scope: "once" }), "vault_typed_empty");
+  await r.ask("vault.approve", { request: "r_t", scope: "once", typed: { secret: "sk-go" } });
+  assert.deepEqual(r.st.plainSaves, [{ request: "r_k" }, { request: "r_t", fields: { value: "sk-go" } }]);
   // The person's longest grant, told to the station keeping the library.
   await r.ask("vault.setLasts", { vault: "plain", lasts: "hour" });
   assert.equal(r.st.plainLasts.lasts, "hour");

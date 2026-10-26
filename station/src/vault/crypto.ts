@@ -51,8 +51,9 @@ export type Request = {
   runOn?: { id: string; name: string };
 };
 /// What an agent asks to keep: the item's listing, and the fields of it that are not secret (a login's account name, an
-/// SSH key's public half), said on its card.
-export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string };
+/// SSH key's public half), said on its card. `typed`: the secret is none the agent holds, but what the person types in
+/// on the card (nothing of it here until then, nothing sealed).
+export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string; typed?: true };
 export type Sealed = { device: string; box: string; secret: string };
 export type Grant = {
   v: 1; ws: string; request: string; vault: string; item: string; mode: Mode; hosts: string[]; scope: Scope; exp: number;
