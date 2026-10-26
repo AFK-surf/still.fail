@@ -76,8 +76,6 @@ const BAR = VIEWER_BAR;
 const LIST = 320;
 const desk = `${player}:not([data-narrow]):not(:fullscreen)`;
 // Its bar out of full screen is the one every file opened has (viewer/ViewerBar.tsx).
-// Narrow or full screen, its floating bar, awake, takes the pointer over that row (FilePreview.css.ts).
-globalStyle(`[data-desktop] ${head}[data-awake]`, { WebkitAppRegion: "no-drag" });
 /** The picture under it, clear of the list docked at the right; the controls and a subtitle over the picture's middle. */
 // The picture the whole window: the bar over it, gone with the controls as it plays on.
 globalStyle(`${desk} ${stage}`, { top: "0" });

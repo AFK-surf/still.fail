@@ -10,10 +10,10 @@ import type { CommandGroup, CommandsFound, FoundMessage, SearchItem, SearchOpen 
 import { useCall } from "./core/react.ts";
 import { Marked } from "./Marked.tsx";
 import { jumpTo } from "./jumpTo.ts";
-import { Mark, useAppUpdate } from "./brand.tsx";
+import { Mark } from "./brand.tsx";
 import { commands, useCommands, type Command } from "./commands.ts";
 import { webUpdates } from "./core/webUpdates.ts";
-import { Archive, ArrowDown, ArrowLeft, ArrowRight, ChevronDown, ChevronUp, Close, Command as CommandIcon, Compose, Download, Edit, File, Folder, Keyboard, More, PanelOpen, Refresh, Search, Server, Settings, Stop, Thread, User, Web, type IconProps } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowDown, ArrowLeft, ArrowRight, ChevronDown, ChevronUp, Close, Command as CommandIcon, Compose, Edit, File, Folder, Keyboard, More, PanelOpen, Refresh, Search, Server, Settings, Stop, Thread, User, Web, type IconProps } from "@stillfail/ui/icons.tsx";
 import { availableActions, runAction, shortcutOf, useShortcut, type Action } from "./keymap.ts";
 import { ShortcutsDialog } from "./Shortcuts.tsx";
 import { RelayHost } from "./Relay.tsx";
@@ -37,31 +37,20 @@ export const GlobalShortcuts = memo(function GlobalShortcuts({ scope, newChat, s
   useShortcut("settings", () => navigate(settings));
   useShortcut("nav.back", () => history.back());
   useShortcut("nav.forward", () => history.forward());
-  useCommands(useUpdateCommands(settings));
+  useCommands(useUpdateCommands());
   return (
     <>
       <ChatSwitcher scope={scope} settings={settings} open={switching} onClose={() => setSwitching(false)} />
-      <ShortcutsDialog open={listing} onClose={() => setListing(false)} settings={`${settings}/shortcuts`} />
+      <ShortcutsDialog open={listing} onClose={() => setListing(false)} />
       <RelayHost />
     </>
   );
 });
 
-/**
- * Updating what runs here: the page to a newer build of it (as the sidebar's foot offers), the desktop app to its newer
- * build (as 更新 at the sidebar's top does), or looking for one now (its version page, looking as it opens).
- */
-function useUpdateCommands(settings: string): Command[] {
-  const navigate = useGo();
+/** Updating what runs here: the page to a newer build of it (as the sidebar's foot offers). */
+function useUpdateCommands(): Command[] {
   const page = useSyncExternalStore(webUpdates.subscribe, webUpdates.snapshot, () => null);
-  const app = useAppUpdate();
-  const updates = window.stillfailDesktop?.appUpdate;
-  return [
-    ...(page ? [{ id: "update.page", icon: Refresh, run: webUpdates.refresh }] : []),
-    ...(updates && app && (app.phase === "available" || app.phase === "failed")
-      ? [{ id: "update.app", version: app.version, icon: Download, run: () => updates.start() }] : []),
-    ...(updates?.check && !app ? [{ id: "update.check", icon: Refresh, run: () => navigate(`${settings}/version?check`) }] : []),
-  ];
+  return page ? [{ id: "update.page", icon: Refresh, run: webUpdates.refresh }] : [];
 }
 
 function ChatSwitcher({ scope, settings, open, onClose }: { scope: string; settings: string; open: boolean; onClose(): void }) {

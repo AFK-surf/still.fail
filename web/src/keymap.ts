@@ -1,11 +1,9 @@
 // The app's keyboard shortcuts: what each does and the keys that do it are the core's (the prefs' `keymap`;
-// client/core-ts/src/keymap.ts), changed in the desktop app (`keys.set`, kept on this device). A component that can do
-// an action says so with useShortcut (the one mounted last answers); one listener on the window turns a key press into
-// a binding and finds the action it is bound to. What shows a shortcut (a tooltip, the list of them) reads it from here.
+// client/core-ts/src/keymap.ts). A component that can do an action says so with useShortcut (the one mounted last
+// answers); one listener on the window turns a key press into a binding and finds the action it is bound to. What shows a shortcut (a tooltip, the list of them) reads it from here.
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import { core } from "./core/react.ts";
 import type { KeyAction, KeyActionName, KeymapView } from "./core/shapes.ts";
-import { onPrefs, prefs, usePrefs } from "./prefs.ts";
+import { prefs, usePrefs } from "./prefs.ts";
 
 export type Action = KeyActionName;
 
@@ -51,21 +49,9 @@ export function labelOf(action: Action): string {
 
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform);
 
-/** Keys are changed only in the desktop app; the web pages keep the app's own. */
-export const CHANGEABLE = !!window.stillfailDesktop;
-
 /** The keys that do an action here. */
 export function keysOf(action: Action): Binding[] {
   return actionOf(action)?.keys ?? [];
-}
-
-/**
- * Changes an action's keys on this device (null: its own again; no action: every one's). Keys another action had are
- * moved here: the answer is what the core says of it (null: none moved, or not changed).
- */
-export function setKeys(action: Action | null, keys: Binding[] | null): Promise<string | null> {
-  return core().call("keys.set", action ? { action, keys } : {})
-    .then((ok) => (ok as { said?: string | null } | null)?.said ?? null, () => null);
 }
 
 /** Redrawn when the keymap changes: what shows the keys reads them anew. */
@@ -195,10 +181,8 @@ export function useShortcut(action: Action, handler: Handler | null): void {
     const entry: Handler = (e) => latest.current?.(e);
     const stack = handlers.get(action) ?? [];
     handlers.set(action, [...stack, entry]);
-    tellMenu();
     return () => {
       handlers.set(action, (handlers.get(action) ?? []).filter((h) => h !== entry));
-      tellMenu();
     };
   }, [action, on]);
 }
@@ -208,34 +192,7 @@ export function availableActions(): Action[] {
   return actions().map((a) => a.action).filter((a) => handlers.get(a)?.length);
 }
 
-/** Does an action as its key would (⌘K's list, the menu bar). */
+/** Does an action as its key would (⌘K's list). */
 export function runAction(action: Action): void {
   void handlers.get(action)?.at(-1)?.(new KeyboardEvent("keydown"));
-}
-
-// The desktop app's menu bar offers the actions too (apps/desktop/src/main.ts, setMenu): it is told the keys each is
-// bound to and which can be done now, and a menu item chosen does the action as its key would.
-const menu = window.stillfailDesktop?.menu;
-let telling = false;
-
-/** Tells the menu bar the actions as they are now, once for the changes made together. */
-function tellMenu(): void {
-  if (!menu || telling) return;
-  telling = true;
-  setTimeout(() => {
-    telling = false;
-    const all = actions().map((a) => a.action);
-    menu.state({
-      keys: Object.fromEntries(all.map((a) => [a, keysOf(a)[0] ?? null])),
-      on: all.filter((a) => handlers.get(a)?.length),
-    });
-  }, 50);
-}
-
-if (menu) {
-  onPrefs(tellMenu);
-  tellMenu();
-  menu.onAction((action) => {
-    if (actionOf(action as Action)) runAction(action as Action);
-  });
 }

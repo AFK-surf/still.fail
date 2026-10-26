@@ -227,7 +227,7 @@ export const srOnly = style({
   position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap",
 });
 export const resizeHandle = style({
-  outline: "none", WebkitAppRegion: "no-drag",
+  outline: "none",
   selectors: {
     "&[data-edge=\"right\"]": { right: "-4px" },
     "&[data-edge=\"left\"]": { left: "-4px" },

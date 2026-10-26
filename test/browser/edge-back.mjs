@@ -16,7 +16,6 @@ import { BrowserRouter, Route, Routes, type Location } from 'react-router';
 import './src/styles/index.ts';
 import './src/demo/mount.tsx';
 import { ACCOUNT } from './src/demo/station.ts';
-import { setPageRoot } from './src/brand.tsx';
 import { MobileShell, useApp } from './src/mobile/app.tsx';
 import * as css from './src/mobile/app.css.ts';
 
@@ -43,7 +42,6 @@ function App() {
 }
 history.replaceState(null, '', '/w/demo');
 const root = document.getElementById('app')!;
-setPageRoot(root);
 new MutationObserver(() => {
   for (const p of document.querySelectorAll('[data-role="in"], [data-role="out"]')) (window as any).reviewMoves.push(p.getAttribute('data-role'));
 }).observe(root, { subtree: true, attributes: true, attributeFilter: ['data-role'], childList: true });

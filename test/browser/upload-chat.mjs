@@ -45,7 +45,6 @@ import { ComposerView, ChatRows, useMessageList } from './src/Chat.tsx';
 import * as css from './src/Chat.css.ts';
 import { ToastProvider } from '@stillfail/ui/toast.tsx';
 import { StationContext } from './src/station.tsx';
-import { setPageRoot } from './src/brand.tsx';
 const client = new CoreClient(onMessage => {
  let closed=false, queue=Promise.resolve();
  function post(message:any) {
@@ -70,7 +69,6 @@ function Page(){
  const chat=useTopic<any>({topic:'chat',station:'ws/st',thread:7}).value;
  return <main style={{maxWidth:720,margin:'50px auto',padding:24}}><h2>still.fail</h2>{chat&&<Messages chat={chat}/>}<ComposerView draft={draft} thread={7} sessionKey={null} draftKey="ws/st:k" /></main>;
 }
-setPageRoot(document.documentElement);
 createRoot(document.getElementById('root')!).render(<MemoryRouter><ToastProvider><Tooltip.Provider><StationContext value={{id:'st',name:'Test',address:'ws/st',base:'',settings:'',online:true}}><Page/></StationContext></Tooltip.Provider></ToastProvider></MemoryRouter>);
 `, { flag: 'wx' });
   await writeFile(html, '<meta charset="utf-8"><div id="root"></div><script type="module" src="/upload-chat-check.tsx"></script>', { flag: 'wx' });

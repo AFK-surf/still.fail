@@ -6,7 +6,7 @@ import { glass } from "@stillfail/ui/styles/glass.ts";
 /** The chat's find bar (ChatFind.tsx): in the page's bar, in place of its buttons while it is open, so it covers
  *  nothing of the chat. Where a page has no such place, over the top right of the list. */
 export const bar = style({
-  display: "flex", alignItems: "center", gap: "8px", minWidth: "0", WebkitAppRegion: "no-drag",
+  display: "flex", alignItems: "center", gap: "8px", minWidth: "0",
   animation: `${fadeKeyframes} 120ms ${vars.easeOut}`,
   selectors: {
     "&[data-over]": { position: "absolute", top: "12px", right: "24px", zIndex: "6", maxWidth: "calc(100% - 48px)" },

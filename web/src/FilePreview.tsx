@@ -19,7 +19,7 @@ import { Segmented, Tip, Progress, Spinner, WaitLine } from "./ui.tsx";
 import { useImageMarks } from "./annotate/ImageMarks.tsx";
 import { useBackClose } from "@stillfail/ui/backClose.ts";
 import { thumbId, viewerFlight } from "./viewerFlight.ts";
-import { asPng, standIn } from "./wholeImages.ts";
+import { asPng } from "./wholeImages.ts";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { animate, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
@@ -97,15 +97,15 @@ const KEEP_BLOBS = 100;
  * row made anew as a chat is opened again or scrolled back to) is the same picture, already decoded, from its first
  * frame, not a placeholder until a new URL loads. Kept as many as the blobs; one in use is not let go.
  */
-const urls = new Map<string, { blob: Blob; url: string; users: number; unstand: (() => void) | null }>();
+const urls = new Map<string, { blob: Blob; url: string; users: number }>();
 
-/** The URL of `id`'s blob (made the first time), taken by one more user; `whole`: the image a thumbnail stands in for. */
-function takeUrl(id: string, blob: Blob, whole: (() => Promise<Blob>) | null): string {
+/** The URL of `id`'s blob (made the first time), taken by one more user. */
+function takeUrl(id: string, blob: Blob): string {
   let kept = urls.get(id);
   if (kept?.blob !== blob) {
     if (kept) letGo(id, kept);
     const url = URL.createObjectURL(blob);
-    kept = { blob, url, users: 0, unstand: whole ? standIn(url, whole) : null };
+    kept = { blob, url, users: 0 };
   }
   urls.delete(id);
   urls.set(id, kept);
@@ -117,9 +117,8 @@ function takeUrl(id: string, blob: Blob, whole: (() => Promise<Blob>) | null): s
   return kept.url;
 }
 
-function letGo(id: string, kept: { url: string; unstand: (() => void) | null }) {
+function letGo(id: string, kept: { url: string }) {
   urls.delete(id);
-  kept.unstand?.();
   URL.revokeObjectURL(kept.url);
 }
 
@@ -191,10 +190,8 @@ function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb =
     const id = fileId(station.address, sessionKey, file, thumb);
     let u: string | null = null;
     let current = true;
-    // A thumbnail stands in for the image: copied in the desktop app, the image itself is (wholeImages.ts).
-    const whole = thumb ? () => fetchFile(api, station.address, sessionKey, file, false, source) : null;
     const take = (blob: Blob) => {
-      u = takeUrl(id, blob, whole);
+      u = takeUrl(id, blob);
       const url = u;
       setLoaded((l) => (l.state === "ready" && l.url === url ? l : { state: "ready", blob, url }));
     };

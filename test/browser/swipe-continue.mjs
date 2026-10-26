@@ -19,7 +19,6 @@ import { ACCOUNT } from './src/demo/station.ts';
 import { followMotion } from '@stillfail/ui/motion.ts';
 // The emulated system's reduced motion on the root, as the app's pages put it.
 followMotion();
-import { setPageRoot } from './src/brand.tsx';
 import { MobileShell, useApp } from './src/mobile/app.tsx';
 import * as css from './src/mobile/app.css.ts';
 Object.assign(window, { reviewEdge: css.mEdge });
@@ -35,7 +34,6 @@ function App() {
 }
 history.replaceState(null, '', '/w/demo');
 const root = document.getElementById('app')!;
-setPageRoot(root);
 createRoot(root).render(<BrowserRouter><App /></BrowserRouter>);
 `, { flag: 'wx' });
   madeFixture = true;

@@ -17,7 +17,6 @@ import * as waitingCss from "@stillfail/ui/waiting.css.ts";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
 import { PanelButton } from "./ui.tsx";
 import { chipPath, pathIn, shownPath } from "./paths.ts";
-import { useThisMachineAddress } from "./thisMachine.ts";
 
 export { pathIn };
 
@@ -241,8 +240,7 @@ type Opened = { name: string; path: string; type: string; size: number };
 
 /**
  * A file a message names by its path: a chip with its icon and the path as written (chipPath; a directory's once its
- * card has read it as one, written with a `/` or not), its card on hover, the file itself on a click (a directory on
- * this machine: Finder). Copied with the text around it, it is the path as written, whole (`data-copy`, copied below).
+ * card has read it as one, written with a `/` or not), its card on hover, the file itself on a click. Copied with the text around it, it is the path as written, whole (`data-copy`, copied below).
  */
 export function FileRef({ path, line, children, words }: { path: string; line: number | null; children: ReactNode; /** A link's own words, shown instead of the file's name. */ words?: ReactNode }) {
   const owner = useContext(PathSession);
@@ -250,7 +248,6 @@ export function FileRef({ path, line, children, words }: { path: string; line: n
   const here = useStation().address;
   const station = { address: owner?.station ?? here };
   const toast = useToast();
-  const local = useOnThisMachine(station.address);
   const topic = session === null ? null : peekTopic(station.address, session, path, line);
   const [opened, setOpened] = useState<{ file: Attachment; local: LocalFile } | null>(null);
   useEffect(() => () => { if (opened) URL.revokeObjectURL(opened.local.url); }, [opened]);
@@ -262,10 +259,7 @@ export function FileRef({ path, line, children, words }: { path: string; line: n
   const dir = path.endsWith("/") || peeked?.kind === "dir";
   const whole = typeof children === "string" ? children.trim() : `${path}${line !== null ? `:${line}` : ""}`;
   const open = () => {
-    if (dir) {
-      if (local) void reveal(peeked?.path ?? path, toast);
-      return;
-    }
+    if (dir) return;
     // Its bytes beside the answer.
     void core().callBytes("file.open", { station: station.address, key: session, path }).then((got) => {
       const f = got.value as Opened;
@@ -276,8 +270,8 @@ export function FileRef({ path, line, children, words }: { path: string; line: n
   const Icon = dir ? Folder : FileIcon;
   return (
     <>
-      <Hover warm={peek} content={<FileCard session={session} station={station.address} path={path} line={line} local={local} />}>
-        <button type="button" className={css.fileChip} onClick={open} data-dir={dir || undefined} data-opens={!dir || local || undefined} data-copy={words === undefined ? whole : undefined}>
+      <Hover warm={peek} content={<FileCard session={session} station={station.address} path={path} line={line} />}>
+        <button type="button" className={css.fileChip} onClick={open} data-dir={dir || undefined} data-opens={!dir || undefined} data-copy={words === undefined ? whole : undefined}>
           <Icon size={12} className={css.fileChipIcon} />
           <span className={css.fileChipName}>{words ?? `${chipPath(path)}${dir && !path.endsWith("/") ? "/" : ""}`}</span>
           {line !== null && words === undefined && <span className={css.fileChipLine}>:{line}</span>}
@@ -288,22 +282,8 @@ export function FileRef({ path, line, children, words }: { path: string; line: n
   );
 }
 
-/** Whether `address` is the station of the machine the page is on (the desktop app's): its files can be shown in Finder. */
-function useOnThisMachine(address: string): boolean {
-  const here = useThisMachineAddress();
-  return !!window.stillfailDesktop?.reveal && here !== null && here === address;
-}
-
-/** What shows the machine's files: Finder on a Mac, Explorer on Windows. */
-const FILES_APP = typeof navigator !== "undefined" && /Windows/.test(navigator.userAgent) ? "Explorer" : "Finder";
-
-async function reveal(path: string, toast: (message: string) => void): Promise<void> {
-  const shown = await window.stillfailDesktop?.reveal?.(path).catch(() => false);
-  if (!shown) toast(t("web-main.preview.revealFailed", { path: shownPath(path), app: FILES_APP }));
-}
-
-/** A file's whole path, and showing it in Finder when it is on this machine (a relative one cannot be). */
-function PathActions({ path, local }: { path: string; local: boolean }) {
+/** A file's whole path, to copy. */
+function PathActions({ path }: { path: string }) {
   const toast = useToast();
   const [copied, setCopied] = useState(false);
   const copy = () => void navigator.clipboard.writeText(path).then(() => {
@@ -313,9 +293,6 @@ function PathActions({ path, local }: { path: string; local: boolean }) {
   return (
     <span className={css.actions}>
       <PanelButton tone="quiet" onClick={copy}>{copied ? <Check size={12} /> : <Copy size={12} />}{copied ? t("common.copied") : t("web-main.preview.copyPath")}</PanelButton>
-      {local && (path.startsWith("/") || path.startsWith("~/")) && (
-        <PanelButton tone="quiet" onClick={() => void reveal(path, toast)}><Folder size={12} />{t("web-main.preview.reveal", { app: FILES_APP })}</PanelButton>
-      )}
     </span>
   );
 }
@@ -341,7 +318,7 @@ if (typeof document !== "undefined") {
   });
 }
 
-function FileCard({ session, station, path, line, local }: { session: string; station: string; path: string; line: number | null; local: boolean }) {
+function FileCard({ session, station, path, line }: { session: string; station: string; path: string; line: number | null }) {
   const read = useTopic<Peek | null>(peekTopic(station, session, path, line));
   if (read.value == null && read.error === null) return <CardSkeleton />;
   if (read.value == null) return (
@@ -350,7 +327,7 @@ function FileCard({ session, station, path, line, local }: { session: string; st
         <FileHead name={path.replace(/\/$/, "").split("/").at(-1) || path} dir={path.endsWith("/")} path={path} />
         <p className={css.note}>{read.error?.message}</p>
       </div>
-      <div className={`${css.fileFoot} ${panelEdge}`}><PathActions path={path} local={local} /></div>
+      <div className={`${css.fileFoot} ${panelEdge}`}><PathActions path={path} /></div>
     </>
   );
   const p = read.value;
@@ -381,7 +358,7 @@ function FileCard({ session, station, path, line, local }: { session: string; st
         {dir && <span>{t("web-main.preview.items", { count: p.count ?? p.entries?.length ?? 0 })}</span>}
         {!dir && <span>{fileSize(p.size)}</span>}
         {p.kind === "binary" && <span>{t("web-main.preview.binary")}</span>}
-        <PathActions path={p.path} local={local} />
+        <PathActions path={p.path} />
       </div>
     </>
   );

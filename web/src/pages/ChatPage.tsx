@@ -198,8 +198,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [askedHistory]);
   // still.fail's own links (/o/<workspace>/<station>/<session>, as agents post them): one of this chat's agents' web services
-  // opens beside the chat; another session of the workspace opens here, in the page, not through the desktop app. In
-  // the desktop app (at app://ember) still.fail cloud's links are its own too.
+  // opens beside the chat; another session of the workspace opens here, in the page, not through the desktop app.
   const root = useHref("/").replace(/\/$/, "");
   const opens = useRef({ agents, openTab, root });
   opens.current = { agents, openTab, root };
@@ -210,7 +209,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
       if (!anchor) return;
       const url = new URL(anchor.href, location.href);
       // Another chat's page (as a reference to it is written, ChatRef.tsx): opened here, from this origin or from any of
-      // still.fail cloud's (one written on app.still.fail, read on app.youdid.wtf or in the desktop app).
+      // still.fail cloud's (one written on app.still.fail, read on app.youdid.wtf).
       const page = url.origin === location.origin && url.pathname.startsWith(`${opens.current.root}/`) ? url.pathname.slice(opens.current.root.length)
         : url.origin !== location.origin && ownOrigin(url) ? url.pathname : null;
       if (page && /^(\/w\/[^/]+\/s\/[^/]+)?\/chats\/[^/]+\/?$/.test(page)) {
@@ -271,7 +270,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   // The stations' files beside the chat (DriveTab.tsx), where they have them: pressed again while in front, closed.
   const drive = useStationDrive(station.address);
   // Files dragged anywhere over the chat go into its message (useChatDrop).
-  const drop = useChatDrop(chatKey, station.address);
+  const drop = useChatDrop(chatKey);
   const toggleFiles = () => (open.includes(FILES) && shown === FILES ? closeTab(FILES) : openTab(FILES));
   const toggleLetters = () => (open.includes(LETTERS) && shown === LETTERS ? closeTab(LETTERS) : openTab(LETTERS));
   useShortcut("panel.close", open.length ? closePanel : null);
@@ -328,7 +327,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
         <MobileBack to={link("/chats")} label={t("web-pages.decisions.back")} />
         {/* The chat's title, then who is in it: its people, then its agents (each opens its history). */}
         <div className={conversationCss.pageBarTitle}>
-          {/* Text only, under the bar's drag in the desktop app: a chat is renamed in the sidebar. */}
+          {/* Text only: a chat is renamed in the sidebar. */}
           <ChatTitle station={station.address} session={keeper} title={chat.title} />
           <StationUpdate station={station.address} notice={chat.stationUpdate} />
           {agents.length === 0 && <ChatStation />}

@@ -229,8 +229,6 @@ globalStyle(`${mChatBarTitle} b`, {
 });
 /** Here rather than with its class: it comes after .m-loading, and wins over it. */
 globalStyle(`${mMessages} > *`, { flex: "none" });
-globalStyle(`:root[data-desktop] :is(${mHomeBar}, ${mPlaceHead}, ${mChatBar}, ${mNavbar}, ${mTopBack}, ${mReaderBar})`, { WebkitAppRegion: "drag" });
-globalStyle(`:root[data-desktop] :is(${mHomeBar}, ${mPlaceHead}, ${mChatBar}, ${mNavbar}, ${mTopBack}, ${mReaderBar}) :is(button, a)`, { WebkitAppRegion: "no-drag" });
 globalStyle(`${mListRow} ${mRunLabel}`, { width: "32px", flex: "none", fontSize: vars.textMeta, color: "var(--m-muted)" });
 /** Here rather than with its class: it comes after .m-quote-source > span, and wins over it. */
 globalStyle(`${mJobHead} span`, { display: "flex", flexDirection: "column", minWidth: "0" });

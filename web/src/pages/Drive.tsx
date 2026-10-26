@@ -41,7 +41,6 @@ import { CopyTo } from "./Transfers.tsx";
 import { DrivePane, type Previewed } from "./DrivePane.tsx";
 import { setPrefs, usePrefs } from "../prefs.ts";
 import { paneUrl, useFilesTabs } from "../drive/tabs.ts";
-import { useThisMachineAddress } from "../thisMachine.ts";
 import type { Dragged } from "../drive/drag.ts";
 import { ColumnsView, modsOf, TreeView, useDriveView, useDropZone, ViewSwitch, type DropTarget, type RowOf, type RowProps, type Shown } from "./DriveViews.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
@@ -73,17 +72,14 @@ export function DrivePage() {
 }
 
 /** 文件 in the rail (`/w/<ws>/files`): the folder in front of the tabs as they were left (else the folder last open on
- * this page), else this machine's home (the desktop app on a station of the workspace), else the first folder pinned on
- * any station (the sidebar lists them all), else the first station's home; none, says so. */
+ * this page), else the first folder pinned on any station (the sidebar lists them all), else the first station's home;
+ * none, says so. */
 export function DriveHome({ scope }: { scope: string }) {
   const stations = useStations(scope).value;
   const add = useAddFolder(scope);
   const [kept] = useFilesTabs(scope);
-  const here = useThisMachineAddress();
   const front = kept?.front ?? null;
-  const mine = (stations ?? []).find((s) => s.station === here)?.overview?.drive;
   const first = (front ? paneUrl(front) : null) ?? lastFilesPage(scope)
-    ?? (here && mine?.anywhere && mine.home ? drivePath(stationBase(here), mine.home) : null)
     ?? (stations ?? []).flatMap((s) => (s.overview?.drive?.roots ?? []).map((r) => drivePath(stationBase(s.station), r.path)))[0]
     ?? (stations ?? []).flatMap((s) => (s.overview?.drive?.anywhere && s.overview.drive.home ? [drivePath(stationBase(s.station), s.overview.drive.home)] : []))[0];
   // The tabs not known yet: where they were left is waited for.

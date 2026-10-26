@@ -1,7 +1,7 @@
 // A station's screen on a page of its own (`/w/<workspace>/s/<station>/screen/<id>`: its page in the station's list, a
 // link an agent posted in a chat), over the whole window as a file opened is. Back goes where it was opened from, or
-// to the station's page when it was opened straight. It moves to a window of its own on asking (`?window`: the
-// desktop app opens the app's pages as windows with the system's title bar, main.ts), where back closes that window.
+// to the station's page when it was opened straight. It moves to a window of its own on asking (`?window`), where back
+// closes that window.
 // One opened for a while only (`?until-gone`: a sign-in's page in the station's browser, its tab closed as it ends)
 // goes back by itself once its screen is gone.
 import { useLocation, useParams } from "react-router";
@@ -25,8 +25,7 @@ export function ScreenPage() {
     else if (((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0) go(-1);
     else go(stationPage(scopeOf(station.address), station.id));
   };
-  // The view moves there: this one closes, so the screen is not open twice. (The desktop app answers no window to the
-  // page: it opens its own, main.ts.)
+  // The view moves there: this one closes, so the screen is not open twice.
   const own = () => {
     window.open(`${pathname}?window`, "_blank");
     back();

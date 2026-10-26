@@ -15,7 +15,6 @@ import { BrowserRouter } from 'react-router';
 import './src/styles/index.ts';
 import './src/demo/mount.tsx';
 import { ACCOUNT } from './src/demo/station.ts';
-import { setPageRoot } from './src/brand.tsx';
 import { MobileShell, SheetGrab, SheetHead, useApp } from './src/mobile/app.tsx';
 import * as css from './src/mobile/styles/sheets.css.ts';
 function Page() {
@@ -29,7 +28,6 @@ function Page() {
 }
 history.replaceState(null, '', '/w/demo');
 const root = document.getElementById('app')!;
-setPageRoot(root);
 createRoot(root).render(<BrowserRouter><MobileShell entry={{id: 'demo', name: 'Test', account: ACCOUNT}} routes={() => <Page />} recent={() => null} /></BrowserRouter>);
 `, { flag: 'wx' });
   madeFixture = true;

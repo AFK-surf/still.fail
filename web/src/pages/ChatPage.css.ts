@@ -4,9 +4,7 @@ import { glass } from "@stillfail/ui/styles/glass.ts";
 import { muted } from "../styles/shell.css.ts";
 import { sessionPage } from "../styles/session.css.ts";
 import { pageBarTitle } from "../styles/conversation.css.ts";
-import { sessionMain } from "../styles/jobs.css.ts";
 import { windowsEmoji } from "../StationMark.css.ts";
-import { pageBar } from "../styles/sidebar.css.ts";
 import { TEXT_IN, outset, outsetTop } from "@stillfail/ui/styles/align.ts";
 import { panelRow, resizeHandle } from "@stillfail/ui/parts.css.ts";
 
@@ -219,23 +217,6 @@ export const sideTabClose = style({
 export const sideBar = style({
   display: "flex", alignItems: "center", gap: "8px", height: "45px", padding: "0 12px 1px 8px",
   flex: "none",
-  selectors: {
-    // The desktop app has no title bar: the panel's bar drags the window as the page's does (styles/sidebar.css.ts),
-    // and on Windows keeps clear of the window's buttons over its right end (styles/global.css.ts).
-    "[data-desktop] &": { WebkitAppRegion: "drag" },
-    ':is([data-desktop="overlay"], [data-desktop="custom"]) &': {
-      paddingRight: "calc(var(--window-buttons, 0px) + 12px)",
-      // The bar slides beyond the viewport; clip its moving contents before the fixed window buttons.
-      clipPath: "inset(0 max(0px, calc(100% - var(--panel-visible-width, 100vw) + var(--window-buttons, 0px))) 0 0)",
-    },
-  },
-});
-// The tab list itself takes a tabindex (Radix's roving focus) and fills the bar: it stays a handle, only its tabs don't.
-globalStyle(`[data-desktop] ${sideBar} :is(a, button, input, select, textarea, [role="button"], [role="tab"], [tabindex]):not([role="tablist"])`, { WebkitAppRegion: "no-drag" });
-// While the panel narrows, its remaining width only covers part of the window controls. The chat's bar reserves
-// the rest, including the final animation frame before the panel unmounts. At rest the panel covers them all.
-globalStyle(`:is([data-desktop="overlay"], [data-desktop="custom"]) ${sessionPage}[data-panel="true"] > ${sessionMain} > ${pageBar}`, {
-  "@media": { "(min-width: 1101px)": { paddingRight: "calc(12px + max(0px, var(--window-buttons, 0px) - var(--panel-visible-width, 100vw)))" } },
 });
 globalStyle(`${jobsPanel} section`, { display: "flex", flexDirection: "column" });
 globalStyle(`${jobsPanel} section + section`, { marginTop: "6px" });

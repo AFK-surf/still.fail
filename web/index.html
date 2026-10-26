@@ -10,8 +10,8 @@
   <script>try{var a=localStorage.getItem("stillfail.appearance");if(a==="light"||a==="dark")document.documentElement.dataset.theme=a}catch(e){}</script>
   <!-- Motion as chosen (src/theme.ts, @stillfail/ui motion.ts followMotion), the splash's too: reduced, full, or as the system asks. -->
   <script>try{var m=localStorage.getItem("stillfail.motion");if(m==="reduce"||(m!=="full"&&matchMedia("(prefers-reduced-motion: reduce)").matches))document.documentElement.setAttribute("data-reduced-motion","")}catch(e){}</script>
-  <!-- In the desktop app (its preload gives stillfailDesktop) the window has no title bar on macOS (frame "inset", its buttons at the left; an app from before frames says none) and Windows ("overlay", at the right): the page's top row is it (its styles). -->
-  <script>if("stillfailDesktop"in window&&stillfailDesktop.frame!=="system")document.documentElement.dataset.desktop=stillfailDesktop.frame||"inset";try{if(localStorage.getItem("stillfail.sidebar")==="closed")document.documentElement.dataset.sidebar="closed"}catch(e){}</script>
+  <!-- The sidebar as it was left (src/brand.tsx), before the first paint. -->
+  <script>try{if(localStorage.getItem("stillfail.sidebar")==="closed")document.documentElement.dataset.sidebar="closed"}catch(e){}</script>
   <title>still.fail</title>
   <meta name="description" content="still.fail — 把你的机器连到任何地方">
   <!-- 以 / 开头的 public 文件，Vite 会按 base 补全路径 -->

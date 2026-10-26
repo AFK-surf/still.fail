@@ -1,10 +1,8 @@
 // The bar along a viewer's top on a wide screen with a mouse (ViewerBar.tsx), in the stories: a picture (图片预览) and a
 // film playing (播放器), whose bars fade as the pointer rests, and a screen driven (屏幕 · 控制), whose bar is always there
-// with the picture below it (what is at the screen's top is never under it). In the desktop app the bar
-// drags the window, and where it does the page hears nothing of the pointer; so it drags only while the pointer is on
-// it (held): the bar stays then though nothing more is heard (macOS), or the page is told the pointer left it (Windows),
-// and lets go, fading again, once the pointer is heard back on what is shown. Gone, it neither drags nor takes the
-// pointer: nothing under it out of reach. The page's clock is run on by hand (Playwright's), so nothing here waits on time.
+// with the picture below it (what is at the screen's top is never under it). A pointer resting on the bar is heard no
+// more: the bar stays while the pointer is on it (held), and lets go, fading again, once the pointer is heard back on
+// what is shown. The page's clock is run on by hand (Playwright's), so nothing here waits on time.
 // PLAYWRIGHT_MODULE selects Playwright (PLAYWRIGHT_CHANNEL a Chrome the machine has, as CI's).
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -34,60 +32,45 @@ try {
     await page.goto(`${base}?story=${story}&theme=light`);
     await page.locator(shown).first().waitFor();
     if (start) await page.evaluate(start);
-    // As in the desktop app (its drag regions are styled under [data-desktop]).
-    await page.evaluate(() => { document.documentElement.dataset.desktop = 'inset'; });
     await page.clock.install();
     const bar = page.locator('header').filter({ has: page.locator('button[aria-label]') }).first();
-    const state = () => bar.evaluate((el) => ({ hidden: el.hasAttribute('data-hidden'), drags: getComputedStyle(el).getPropertyValue('-webkit-app-region') === 'drag' }));
+    const state = () => bar.evaluate((el) => ({ hidden: el.hasAttribute('data-hidden') }));
     const is = async (want, why) => assert.deepEqual(await state(), want, `${story}: ${why}`);
-    /** The page told the pointer left it at (x, y), as Windows tells it of the pointer gone into a drag region. */
-    const leave = (x, y) => page.evaluate(([x, y]) => {
-      document.elementFromPoint(x, y).dispatchEvent(new PointerEvent('pointerout', { bubbles: true, pointerType: 'mouse', clientX: x, clientY: y, relatedTarget: null }));
-    }, [x, y]);
 
     if (stays) {
-      // Always there, the picture below it: on the bar it drags; back on the picture, not.
+      // Always there, the picture below it.
       await page.mouse.move(640, 400);
       await page.clock.runFor(REST);
-      await is({ hidden: false, drags: false }, 'there as the pointer rests on what is shown, dragging nothing');
+      await is({ hidden: false }, 'there as the pointer rests on what is shown');
       await page.mouse.move(640, 20, { steps: 4 });
-      await is({ hidden: false, drags: true }, 'the pointer on it: dragging the window');
       await page.clock.runFor(REST);
-      await leave(640, 20);
-      await is({ hidden: false, drags: true }, 'stays dragging as the page is told the pointer left it there');
-      await page.mouse.move(640, 400, { steps: 4 });
-      await is({ hidden: false, drags: false }, 'the pointer back on what is shown: no longer dragging');
+      await is({ hidden: false }, 'there as the pointer rests on it');
       const top = await page.locator(shown).first().evaluate((el) => el.getBoundingClientRect().top);
       const bottom = await bar.evaluate((el) => el.getBoundingClientRect().bottom);
       assert.ok(top >= bottom, `${story}: the picture starts below the bar (${top} < ${bottom})`);
       await page.close();
-      console.log(`ok: ${story}: the bar is always there, above the picture, and drags while the pointer is on it`);
+      console.log(`ok: ${story}: the bar is always there, above the picture`);
       continue;
     }
     // Woken by the pointer just under it (a screen driven wakes it only there), then at rest on what is shown.
     await page.mouse.move(640, 60);
     await page.mouse.move(640, 400);
     await page.clock.runFor(REST);
-    await is({ hidden: true, drags: false }, 'gone as the pointer rests on what is shown, dragging nothing');
-    // Onto the bar's middle (its name): heard coming, held, dragging; then nothing more is heard of the pointer.
+    await is({ hidden: true }, 'gone as the pointer rests on what is shown');
+    // Onto the bar's middle (its name): heard coming, held; then nothing more is heard of the pointer.
     await page.mouse.move(640, 300);
     await page.mouse.move(640, 20, { steps: 4 });
-    // (It came back as the pointer got there, and the pointer may stop there: it drags at once.)
-    await is({ hidden: false, drags: true }, 'the pointer on it: there, dragging the window');
+    await is({ hidden: false }, 'the pointer on it: there');
     await page.mouse.move(644, 20);
-    await is({ hidden: false, drags: true }, 'the pointer moving on it: still dragging');
     await page.clock.runFor(REST);
-    await is({ hidden: false, drags: true }, 'stays while the pointer is on it, nothing more heard');
-    await leave(640, 20);
-    await page.clock.runFor(REST);
-    await is({ hidden: false, drags: true }, 'stays as the page is told the pointer left it there');
+    await is({ hidden: false }, 'stays while the pointer is on it, nothing more heard');
     // Back on what is shown: let go, and gone again at rest.
     await page.mouse.move(640, 400, { steps: 4 });
-    await is({ hidden: false, drags: false }, 'the pointer back on what is shown: no longer dragging');
+    await is({ hidden: false }, 'the pointer back on what is shown: there until it rests');
     await page.clock.runFor(REST);
-    await is({ hidden: true, drags: false }, 'gone again as the pointer rests');
+    await is({ hidden: true }, 'gone again as the pointer rests');
     await page.close();
-    console.log(`ok: ${story}: the bar drags only while the pointer is on it, and stays then`);
+    console.log(`ok: ${story}: the bar stays while the pointer is on it, and goes as it rests on what is shown`);
   }
 } finally {
   await browser?.close();

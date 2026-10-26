@@ -63,7 +63,7 @@ export function FilesShell({ scope, here }: { scope: string; here: Pane }) {
   const [bar, setBar] = useState<HTMLElement | null>(null);
   const actions: FilesActions = { open: (p, where) => show({ act: where === "tab" ? "open" : "besides", pane: p }), goTo: () => setGoing(true), bar };
   const splitAt = tab.panes.length === 2;
-  // ⌘T a new tab where the front is (⌘W stays the window's: the desktop app's menu closes it), ⌃Tab / ⌘⇧] and ⌘⇧[ go
+  // ⌘T a new tab where the front is (⌘W stays the browser's), ⌃Tab / ⌘⇧] and ⌘⇧[ go
   // along them, ⌘⌥D splits.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

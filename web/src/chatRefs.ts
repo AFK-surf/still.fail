@@ -9,13 +9,12 @@ export { adbOfLink, chatOfLink, isChatLink, REF_LINK, REF_MARK, screenOfLink, sp
 
 /**
  * The link a chat is given away by (copied from its row's menu; refLinks.ts shareLink): still.fail's, under still.fail
- * cloud's origin (the desktop app's, else this page's), or, a station of no workspace, its page here (`root`, where
+ * cloud's origin (this page's), or, a station of no workspace, its page here (`root`, where
  * this page's routes start); `history`: an agent's execution history there, opened at `entry`.
  */
 export function shareLink(item: { station: string; session: string; id: string }, root: string, history?: { key: string; entry?: number | undefined }): string {
   const here = /^https?:$/.test(location.protocol) ? location.origin : null;
-  const cloud = window.stillfailDesktop?.cloudOrigin || here;
-  return refLinks.shareLink(item, { cloud, here, root }, history);
+  return refLinks.shareLink(item, { cloud: here, here, root }, history);
 }
 
 /**

@@ -10,10 +10,9 @@ import { useToast } from "@stillfail/ui/toast.tsx";
 import { useCall } from "../core/react.ts";
 import type { StationView } from "../core/shapes.ts";
 import { stationBase } from "../station.tsx";
-import { useThisMachineAddress } from "../thisMachine.ts";
 import { Dialog } from "../ui.tsx";
 import { StationMark } from "../StationMark.tsx";
-import { ChevronDown, Folder, Monitor, Server } from "@stillfail/ui/icons.tsx";
+import { ChevronDown, Folder, Server } from "@stillfail/ui/icons.tsx";
 import { absoluteOf, childOf, drive, drivePath } from "../drive/useDrive.ts";
 import { useFilesActions } from "./Files.tsx";
 import type { Pane } from "../drive/tabs.ts";
@@ -42,7 +41,6 @@ async function sameOrHome(s: StationView, abs: string): Promise<{ root: string; 
 export function StationSwitch({ station, abs }: { station: string; abs: string }) {
   const scope = station.split("/")[0] ?? "";
   const views = useDriveStations(scope).value ?? [];
-  const here = useThisMachineAddress();
   const go = useGo();
   const toast = useToast();
   const files = useFilesActions();
@@ -62,7 +60,7 @@ export function StationSwitch({ station, abs }: { station: string; abs: string }
     <DropdownMenu.Root modal={false}>
       <DropdownMenu.Trigger asChild>
         <button type="button" className={css.switchButton} aria-label={t("web-pages.files.switchStation")}>
-          {current?.emoji || current?.icon ? <StationMark emoji={current.emoji} icon={current.icon} size={14} /> : station === here ? <Monitor size={14} /> : <Server size={14} />}
+          {current?.emoji || current?.icon ? <StationMark emoji={current.emoji} icon={current.icon} size={14} /> : <Server size={14} />}
           <span>{current?.name ?? ""}</span>
           <ChevronDown size={12} strokeWidth={2} />
         </button>
@@ -73,10 +71,10 @@ export function StationSwitch({ station, abs }: { station: string; abs: string }
             <DropdownMenu.Item key={s.station} className={controlsCss.menuItem} disabled={!s.online} data-on={s.station === station || undefined}
               onPointerDown={(e) => { alt.current = e.altKey; }} onKeyDown={(e) => { alt.current = e.altKey; }}
               onSelect={() => void pick(s, { altKey: alt.current })}>
-              {s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={16} /> : s.station === here ? <Monitor size={16} /> : <Server size={16} />}
+              {s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={16} /> : <Server size={16} />}
               <span className={css.stationName}>{s.name}</span>
               <span className={css.stationMeta}>
-                {[s.station === here ? t("web-pages.files.thisMachine") : null, s.station === station ? t("web-pages.files.current") : null, !s.online ? t("web-pages.stations.offline") : null].filter(Boolean).join(" · ")}
+                {[s.station === station ? t("web-pages.files.current") : null, !s.online ? t("web-pages.stations.offline") : null].filter(Boolean).join(" · ")}
               </span>
             </DropdownMenu.Item>
           ))}

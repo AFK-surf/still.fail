@@ -44,30 +44,16 @@ globalStyle(`${sidebar} > :not(${resizeHandle})`, { "@media": { [wide]: { minWid
 /** The sidebar's top row: the name, 16 px in, over the rows' icons below. */
 export const brand = style({
   display: "flex", alignItems: "center", gap: 8, height: 56, padding: "0 16px",
-  selectors: {
-    // The desktop app has no title bar: the top row drags the window. On macOS it holds the window's buttons
-    // (apps/desktop/src/main.ts puts them in it); on Windows they are at the page's right.
-    "[data-desktop] &": { height: 44, WebkitAppRegion: "drag" },
-    '[data-desktop="inset"] &': { paddingLeft: 86 },
-    // Beside the rail (Rail.css.ts), the window's buttons reach over it into this row.
-    '[data-desktop="inset"] [data-rail] &': { paddingLeft: 30 },
-    // Full screen, the window's buttons are gone.
-    '[data-desktop="inset"][data-fullscreen] &': { paddingLeft: 16 },
-  },
   "@media": {
-    // No rail on a narrow window: the buttons are all in this row.
-    [narrow]: { selectors: { '[data-desktop="inset"] [data-rail] &': { paddingLeft: 86 } } },
-    // Beside the rail on the web, nothing is left in it (no name, no window to drag): a margin only.
-    // Nor in the desktop app full screen, its window's buttons gone, nor on Windows, whose buttons are at the right.
-    // Closed (shown a while over the page, Rail.tsx peekSidebar), none either: the bar starts under the window's buttons,
-    // its first row level with the rail's first place.
+    // Beside the rail, nothing is left in it (no name): a margin only. Closed (shown a while over the page, Rail.tsx
+    // peekSidebar), none either: its first row level with the rail's first place.
     [wide]: { selectors: {
-      ':root:is(:not([data-desktop="inset"]), [data-fullscreen]) [data-rail] &': { height: 8 },
+      ':root [data-rail] &': { height: 8 },
       ':root[data-sidebar="closed"] [data-rail] &': { height: 0 },
     } },
   },
 });
-/** 云端侧边栏：字标在 workspace 切换器上方（always with `brand`, whose desktop top row still wins） */
+/** 云端侧边栏：字标在 workspace 切换器上方（always with `brand`） */
 export const brandCompact = style({ height: 48, padding: "0 16px" });
 
 /** The sidebar's top and foot are frosted bands over the lists, which scroll on under them (glassBands in Sidebar.tsx
@@ -145,16 +131,10 @@ export const navRow = style({
 });
 globalStyle(`${navRow} svg`, { color: vars.muted, flex: "none" });
 export const navText = style(ellipsis);
-/** The windows whose sidebar's top row is only a margin (Windows, its buttons at the page's right; brand, above). */
-const marginTop = ':root:is([data-desktop="custom"], [data-desktop="overlay"]):not([data-fullscreen]):not([data-sidebar="closed"])';
 /** The action over a list (SidebarList.tsx NavAction): 新建对话, with the filter beside it; 添加 Station, …. */
 export const navNew = style({
   display: "flex", alignItems: "center", gap: 4, padding: "6px 8px 2px",
-  // There it drags the window too, all but its controls (as the page's bar beside it does): with that margin, all that
-  // is empty above and beside 新建对话. Not in the closed bar, floating over the page.
-  selectors: { [`${marginTop} &`]: { WebkitAppRegion: "drag" } },
 });
-globalStyle(`${marginTop} ${navNew} :is(a, button, input, select, textarea, [role="button"], [tabindex])`, { WebkitAppRegion: "no-drag" });
 globalStyle(`${navNew} > ${navRow}`, { flex: 1, minWidth: 0 });
 /**
  * Folded and shown a while, the bar floats with a corner (shell.css.ts dock: the rail's places' 9 px ground, 6 in): what

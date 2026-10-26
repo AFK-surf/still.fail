@@ -1,6 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { litOver } from "@stillfail/ui/styles/lit.ts";
 import { CARD_PAD, LIST_PAD, ROW_CORNER, list, listCardLook, listRow, pageNarrow } from "./styles/pages.css.ts";
 import { newChat } from "./NewChat.css.ts";
 import { profileCard } from "./ProfileCard.css.ts";
@@ -26,37 +25,11 @@ export const illus = style({
     },
   },
 });
-/** 更新 at the sidebar's top (the desktop app): by the open sidebar's edge, closed by the window's buttons. */
-export const sidebarUpdate = style({
-  position: "fixed", zIndex: "40", top: "18px", left: "calc(var(--sidebar-w, 240px) - 36px)",
-  transform: "translateX(-100%)", height: "22px", padding: "0 9px", border: "0", borderRadius: "999px",
-  font: "inherit", fontSize: vars.textMeta, fontWeight: "500", whiteSpace: "nowrap", background: vars.accentBg,
-  color: vars.accentText, cursor: "pointer", WebkitAppRegion: "no-drag",
-  selectors: {
-    "&:hover:not(:disabled)": litOver,
-    "&:disabled": { cursor: "progress" },
-    "[data-sidebar=\"closed\"] &": { left: "50px", transform: "none" },
-    "[data-desktop] &": { top: "11px" },
-    "[data-desktop=\"inset\"]:not([data-fullscreen])[data-sidebar=\"closed\"] &": { left: "120px" },
-  },
-  "@media": {
-    "(max-width: 700px)": {
-      display: "none",
-    },
-  },
-});
-// Beside the rail (Rail.tsx, a workspace's page), which opens and closes the sidebar: 更新 at the open sidebar's top right,
-// or past the window's buttons when it is closed, the page bars making room for what is over them.
+// Beside the rail (Rail.tsx, a workspace's page), which opens and closes the sidebar: the page bars from the rail's edge
+// when it is closed.
 const railed = ":root:has([data-rail])";
 const wide = "(min-width: 701px)";
-globalStyle(`${railed} ${sidebarUpdate}`, { "@media": { [wide]: { left: "calc(56px + var(--sidebar-w, 240px) - 12px)" } } });
-globalStyle(`${railed}[data-sidebar="closed"] ${sidebarUpdate}`, { "@media": { [wide]: { left: "68px", transform: "none" } } });
-globalStyle(`${railed}[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] ${sidebarUpdate}`, { "@media": { [wide]: { left: "80px" } } });
 globalStyle(`${railed}[data-sidebar="closed"] ${pageBar}`, { "@media": { [wide]: { paddingLeft: "12px" } } });
-// The window's buttons reach 12 px past the rail.
-globalStyle(`${railed}[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] ${pageBar}`, { "@media": { [wide]: { paddingLeft: "28px" } } });
-globalStyle(`${railed}:has(${sidebarUpdate})[data-sidebar="closed"] ${pageBar}`, { "@media": { [wide]: { paddingLeft: "72px" } } });
-globalStyle(`${railed}:has(${sidebarUpdate})[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] ${pageBar}`, { "@media": { [wide]: { paddingLeft: "84px" } } });
 // A folded sidebar shown a while (Rail.tsx peekSidebar): the page moved only as far as its column needs (shell.css.ts
 // main), its bar from past the sidebar's edge to the window's, its buttons not moved out of it.
 globalStyle(`${railed}[data-sidebar="closed"][data-sidebar-peek] ${pageBar}`, {

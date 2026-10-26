@@ -33,15 +33,12 @@ import { MarkCounts } from "../ChatMark.tsx";
 import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
 import { OpenJobsChip } from "../OpenJobs.tsx";
 import { GlobalShortcuts } from "../Switcher.tsx";
-import { ShortcutsPage } from "../Shortcuts.tsx";
-import { CHANGEABLE, workspaceIndexOf, workspaceKeyLabel } from "../keymap.ts";
+import { workspaceIndexOf, workspaceKeyLabel } from "../keymap.ts";
 import { ArchivePage } from "../pages/Archive.tsx";
 import { AppearancePage } from "../pages/Appearance.tsx";
 import { NotificationsPage } from "../pages/Notifications.tsx";
 import { ArchivingPage } from "../pages/Archiving.tsx";
 import { PermissionsPage } from "../pages/Permissions.tsx";
-import { AppVersionPage, HAS_VERSION } from "../pages/AppVersion.tsx";
-import { HAS_LOCAL_STATION, LocalStationPage } from "../pages/LocalStation.tsx";
 import { ChangelogNews, ChangelogPage } from "../pages/Changelog.tsx";
 import { AboutPage } from "../pages/About.tsx";
 import { AddProfile } from "../pages/AddProfile.tsx";
@@ -175,9 +172,6 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
             <Route path="settings/appearance/fonts" element={<AppearancePage back={`/w/${entry.id}/settings`} />} />
             <Route path="settings/notifications" element={<NotificationsPage back={`/w/${entry.id}/settings`} workspace={entry.id} />} />
             <Route path="settings/permissions" element={<PermissionsPage back={`/w/${entry.id}/settings`} />} />
-            {CHANGEABLE && <Route path="settings/shortcuts" element={<ShortcutsPage back={`/w/${entry.id}/settings`} />} />}
-            {HAS_VERSION && <Route path="settings/version" element={<AppVersionPage back={`/w/${entry.id}/settings`} />} />}
-            {HAS_LOCAL_STATION && <Route path="settings/local-station" element={<LocalStationPage back={`/w/${entry.id}/settings`} />} />}
             <Route path="settings/changelog" element={<ChangelogPage back={`/w/${entry.id}/settings`} />} />
             <Route path="settings/about" element={<AboutPage back={`/w/${entry.id}/settings`} />} />
             <Route path="settings/account" element={<AccountSettings entry={entry} />} />
@@ -244,7 +238,6 @@ const WorkspaceKept = memo(function WorkspaceKept({ entry }: { entry: WorkspaceE
   useSettingsCommands(entry);
   useRememberChat(entry.id, (p) => /^\/w\/[^/]+\/(new|s\/[^/]+\/chats\/.+)$/.test(p));
   useEffect(() => identify(entry.account), [entry.account]);
-  useEffect(() => window.stillfailDesktop?.inWorkspace(entry.account.sub, entry.id), [entry.account.sub, entry.id]);
   useInWorkspace(entry.id);
   useTopics<unknown>([
     { topic: "connects", scope: entry.id, mine: false },

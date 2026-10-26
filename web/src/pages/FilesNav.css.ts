@@ -42,7 +42,6 @@ export const disclosure = style({
 globalStyle(`${disclosure} svg`, { transition: `transform ${vars.dur} ${vars.easeOut}` });
 globalStyle(`${disclosure}[data-open] svg`, { transform: "rotate(90deg)" });
 export const stationName = style({ padding: "7px 12px 7px 36px", color: vars.muted, fontSize: vars.textUi });
-export const here = style({ padding: "0 5px", borderRadius: "999px", background: vars.accentBg, color: vars.accentText, fontSize: vars.textCaption });
 /** How full the disk is: 28 wide, amber past 90%. */
 export const disk = style({ display: "block", width: "28px", height: "3px", borderRadius: "2px", background: vars.line, overflow: "hidden" });
 globalStyle(`${disk} > span`, { display: "block", height: "100%", background: vars.muted, transformOrigin: "left" });

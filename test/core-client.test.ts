@@ -1,43 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CoreClient, CoreError, WAKE_ANSWER_MS, desktopOpener, type Channel, type Opener } from "../web/src/core/client.ts";
+import { CoreClient, CoreError, WAKE_ANSWER_MS, type Channel, type Opener } from "../web/src/core/client.ts";
 import { migrateLegacy, migratePrefs } from "../web/src/core/migrate.ts";
 import { carryOver } from "../web/src/renamed.ts";
-import { CoreFiles } from "../client/core-ts/src/hosts/file-port.ts";
-import { FileSource } from "../client/core-ts/src/file-source.ts";
-
-test("desktop: a file queued before its port opens is read through the channel without a DOM Blob", async () => {
-  const globals = globalThis as unknown as Record<string, unknown>;
-  const before = ["window", "addEventListener", "removeEventListener"].map((key) => [key, globals[key]] as const);
-  const page = new EventTarget();
-  Object.assign(globalThis, { window: page, addEventListener: page.addEventListener.bind(page), removeEventListener: page.removeEventListener.bind(page) });
-  let asked = 0;
-  const client = new CoreClient(desktopOpener({ openCore: (id) => { asked = id; }, previewHost: async () => null, inWorkspace: () => {} }));
-  const ports = new MessageChannel();
-  const files = new CoreFiles((m) => ports.port2.postMessage(m));
-  ports.port2.onmessage = async ({ data }) => {
-    if (files.receive(data)) return;
-    try {
-      assert.equal(data.params.files[0].blob instanceof Blob, false);
-      const restored = files.prepare(data) as { params: { files: { blob: FileSource }[] } };
-      const blob = restored.params.files[0]!.blob;
-      assert.ok(blob instanceof FileSource);
-      const bytes = new Uint8Array(await blob.slice(0, blob.size).arrayBuffer());
-      blob.close();
-      ports.port2.postMessage(JSON.stringify({ id: data.id, ok: [...bytes] }));
-    } catch (error) {
-      ports.port2.postMessage(JSON.stringify({ id: data.id, error: { code: "test", message: String(error) } }));
-    }
-  };
-  const uploaded = client.call("composer.add", { key: "ws/st:k", station: "ws/st", files: [{ id: "f1", name: "paste.png", size: 3, blob: new File([new Uint8Array([0, 127, 255])], "paste.png", { type: "image/png" }) }] });
-  page.dispatchEvent(Object.assign(new Event("message"), { data: { stillfailCore: "port", id: asked }, source: page, ports: [ports.port1] }));
-  try { assert.deepEqual(await uploaded, [0, 127, 255]); }
-  finally {
-    delete globals.window;
-    client.close(); files.close(); ports.port2.close();
-    for (const [key, value] of before) { if (value === undefined) delete globals[key]; else globals[key] = value; }
-  }
-});
 
 /** A worker stand-in: records what the client posts and answers on demand. */
 class FakeWorkers {
@@ -213,50 +178,6 @@ test("back after being away: the core is told, and a worker that was up and now 
   assert.deepEqual(old.sent.at(-1), { bye: true });
   assert.equal(workers.opened.length, 2);
   assert.deepEqual(workers.last.sent, [{ id: 1, subscribe: { topic: "accounts" }, keyed: true }]);
-});
-
-test("desktop: posts wait for the core's port, go out as objects and come back as its JSON; the core exiting fails the channel", async () => {
-  // The page's window, as much of it as desktopOpener uses.
-  const page = new EventTarget();
-  Object.assign(globalThis, { window: page, addEventListener: page.addEventListener.bind(page), removeEventListener: page.removeEventListener.bind(page) });
-  const message = (data: unknown, ports: MessagePort[] = []) => page.dispatchEvent(Object.assign(new Event("message"), { data, source: page, ports }));
-  const asked: number[] = [];
-  const received: unknown[] = [];
-  const failed: string[] = [];
-  const channel = desktopOpener({ openCore: (id) => asked.push(id), previewHost: async () => null, inWorkspace: () => {} })((data) => received.push(data), (reason) => failed.push(reason));
-  assert.equal(asked.length, 1);
-  channel.post({ id: 1, call: "migrate", params: { accounts: [] } });
-  assert.throws(() => channel.post({ id: 2, call: "x", params: { f: () => undefined } }));
-
-  const other = new MessageChannel();
-  const core = new MessageChannel();
-  const atCore: unknown[] = [];
-  const arrived = new Promise<void>((resolve) => {
-    core.port2.onmessage = (event) => {
-      atCore.push(event.data);
-      resolve();
-    };
-  });
-  message({ stillfailCore: "port", id: asked[0]! + 1 }, [other.port1]);
-  message({ stillfailCore: "port", id: asked[0] }, [core.port1]);
-  await arrived;
-  assert.deepEqual(atCore, [{ id: 1, call: "migrate", params: { accounts: [] } }]);
-
-  const answered = new Promise<void>((resolve) => {
-    core.port1.addEventListener("message", () => setImmediate(resolve));
-  });
-  core.port2.postMessage(JSON.stringify({ id: 1, ok: null }));
-  await answered;
-  assert.deepEqual(received, [{ id: 1, ok: null }]);
-
-  message({ stillfailCore: "exit", reason: "核心进程退出了（9）" });
-  assert.deepEqual(failed, ["核心进程退出了（9）"]);
-  channel.close();
-  core.port2.close();
-  other.port1.close();
-  other.port2.close();
-  message({ stillfailCore: "exit", reason: "again" });
-  assert.equal(failed.length, 1);
 });
 
 test("localStorage is handed to the core once", async () => {

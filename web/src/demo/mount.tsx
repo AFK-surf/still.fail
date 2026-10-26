@@ -9,7 +9,6 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router";
 import "@fontsource-variable/inter";
-import { setPageRoot } from "../brand.tsx";
 import { t } from "../i18n.ts";
 import { withoutDownloads } from "../downloads.ts";
 import { Tooltip } from "radix-ui";
@@ -39,7 +38,7 @@ import { openOf } from "../../../client/core-ts/src/search-open.ts";
 import { Browsing, CALLS as BROWSE_CALLS, withDrive } from "../../../client/core-ts/src/drive-browse.ts";
 import { collate } from "../../../client/core-ts/src/hosts/collate.ts";
 
-/** The demo's box; the app is drawn in a box of its own inside it (what it puts on the page goes beside it: setPageRoot). */
+/** The demo's box; the app is drawn in a box of its own inside it. */
 let root: HTMLElement;
 /** The visitor has clicked in the demo: from then on it is theirs (the story stops moving between chats). */
 let touched = false;
@@ -329,7 +328,7 @@ const BANNED = `⚠️ 认证失败，需要管理员检查账号：${station.BA
 /** The prefs as the visitor set them here (the sidebar's list, …), kept for the page's life as a core keeps them. */
 const prefs: Record<string, unknown> = {};
 /** This device as a core told it would have it (prefs.ts device): what its keymap goes by. */
-const DEVICE = { app: window.stillfailDesktop ? "desktop" : "web", mac: /Mac|iPhone|iPad/.test(navigator.platform) };
+const DEVICE = { app: "web", mac: /Mac|iPhone|iPad/.test(navigator.platform) };
 
 /** A chat's side-panel tabs, as the core says them (client/core-ts/src/chat-tabs.ts): from what is kept for it here. */
 function withTabs(view: ChatView, key: string, session: string): ChatView {
@@ -671,7 +670,6 @@ export function mountDemo(element: HTMLElement, options: DemoOptions = {}): Moun
   root = element;
   // What the page was built with (its opening frame, as HTML) gives way to the demo itself.
   root.replaceChildren();
-  setPageRoot(root);
   withoutDownloads();
   const app = root.appendChild(document.createElement("div"));
   app.style.height = "100%";

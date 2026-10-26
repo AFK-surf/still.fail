@@ -3,10 +3,10 @@
 import { BETA, BETA_META } from "./channel.ts";
 
 /**
- * Whether the apps are offered here: in a browser, not in the desktop app (which has itself already), nor in the site's
- * demo (the site has its own 下载 over it: withoutDownloads).
+ * Whether the apps are offered here: in a browser, not in the site's demo (the site has its own 下载 over it:
+ * withoutDownloads).
  */
-let offered = typeof window !== "undefined" && !window.stillfailDesktop;
+let offered = typeof window !== "undefined";
 export const downloadsOffered = () => offered;
 export function withoutDownloads(): void {
   offered = false;

@@ -17,7 +17,6 @@ import { BrowserRouter } from 'react-router';
 import './src/styles/index.ts';
 import './src/demo/mount.tsx';
 import { ACCOUNT } from './src/demo/station.ts';
-import { setPageRoot } from './src/brand.tsx';
 import { useDraft } from './src/draft.ts';
 import { MobileShell } from './src/mobile/app.tsx';
 import { MobileComposer } from './src/mobile/ChatHost.tsx';
@@ -50,7 +49,6 @@ function Page() {
 }
 history.replaceState(null, '', '/w/demo');
 const root = document.getElementById('app')!;
-setPageRoot(root);
 createRoot(root).render(<BrowserRouter><MobileShell entry={{ id: 'demo', name: 'Test', account: ACCOUNT }} routes={() => <Page />} recent={() => null} /></BrowserRouter>);
 `, { flag: 'wx' });
   madeFixture = true;

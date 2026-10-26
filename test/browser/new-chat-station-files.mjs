@@ -18,7 +18,6 @@ import { setCore } from './src/core/react.ts';
 import { useDraft } from './src/draft.ts';
 import { ToastProvider } from '@stillfail/ui/toast.tsx';
 import { StationContext } from './src/station.tsx';
-import { setPageRoot } from './src/brand.tsx';
 const blank = () => ({text:'',files:[] as any[],quotes:[],rev:0,version:0,ready:false,uploading:false,starting:false});
 const drafts = new Map<string, any>();
 const listeners = new Map<string, Set<any>>();
@@ -60,7 +59,6 @@ function Page() {
   (window as any).toStation = setStation;
   return <main><p data-files>{draft.files.map((f) => f.name + '@' + (f.done?.path ?? '')).join(',')}</p><p data-text>{draft.text}</p><p data-error>{draft.error ?? ''}</p></main>;
 }
-setPageRoot(document.documentElement);
 createRoot(document.getElementById('root')!).render(<MemoryRouter><ToastProvider><Tooltip.Provider><StationContext value={{id:'mini',name:'mini',address:'ws/mini',base:'',settings:'',online:true}}><Page/></StationContext></Tooltip.Provider></ToastProvider></MemoryRouter>);
 `, { flag: 'wx' });
   await writeFile(html, '<meta charset="utf-8"><div id="root"></div><script type="module" src="/new-chat-station-files-check.tsx"></script>', { flag: 'wx' });
