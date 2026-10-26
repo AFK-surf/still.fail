@@ -137,8 +137,11 @@ let side_icon : Double = 16.0
 /// its page comes over: a new chat is opened to be written in (pengxiao, 2026-10-25: opened from the sidebar in use,
 /// it showed beside it with the sidebar still in use).
 pub fn new_chat() -> Unit {
-  // (on the tape its page brought over, as what is opened in it is: show_page)
   open_page(NewChat)
+  // (on the tape its page brought over, from the sidebar in use too)
+  if is_wide(@ui.current()) {
+    bring_page()
+  }
   // what it is opened for: the cursor in its words, its keyboard up with touch
   @sfpages.composer_take_focus()
 }

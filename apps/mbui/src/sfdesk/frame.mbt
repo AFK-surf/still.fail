@@ -16,9 +16,10 @@
 // user, 2026-10-26, its width to be set), the page showing what it leaves; as screens beside it,
 // untinted (the user, 2026-10-25: the page's ground as a phone's). What shows of another is not used where it is: a press on it, a tap or a click, only brings it
 // over (the tape moving, 380 ms), and what it holds answers from then on; dragged across, it comes with the finger and,
-// let go, over or back (the user, 2026-10-25: only there; a drag on the one in use is its own). Something chosen to be
-// shown in the page (a row of the sidebar, a search's, ⌘K's, a link's) brings the page over to show it, as a phone's
-// list opens its page (show_page); nothing else puts the sidebar away (no ⌘\, no lit place pressed again: asked,
+// let go, over or back (the user, 2026-10-25: only there; a drag on the one in use is its own). Something shown in
+// the page while the sidebar is in use (a row of the sidebar, a search's, ⌘K's, a link's) shows beside it, the sidebar
+// still in use (show_page; the user, 2026-10-27); with the side panel in use the page comes over to show it; 新建对话
+// brings it over, opened to be written in (bring_page); nothing else puts the sidebar away (no ⌘\, no lit place pressed again: asked,
 // 2026-10-24); the sidebar at first. The side panel comes over as it opens (the page again as it closes). What is
 // opened from the page in use (or its side panel) goes over it as on a phone, sliding in (page_goes_on); chosen in the
 // sidebar, in its place. Back goes from the side panel to the page, takes what was opened over the page off one at a
@@ -239,12 +240,22 @@ pub fn is_wide(c : @ui.Ctx) -> Bool {
 
 ///|
 /// Something chosen to be shown in the page (a row of the sidebar's lists, a search's, ⌘K's, a link's, a
-/// notification's, what the bell's panel or the services' open): on the tape the page comes over to show it, as a
-/// phone's list opens its page: what is chosen is to be used there, where the page is in use. Off the tape nothing
-/// comes of it (tape_frame lets the ask go): the page is beside the list. Asked before the frame knows it is on the
-/// tape (a page opened as the app begins, before its first frame) it is taken as the tape comes. What a place is gone
-/// to with (the rail, its list's own page) is not one: its list is the sidebar's.
+/// notification's, what the bell's panel or the services' open). On the tape with the sidebar in use the page beside it
+/// shows it and the tape stays: what shows of the page is a screen beside it, pressed when it is to be used (the user,
+/// 2026-10-24: 当需要操作某个视窗的时候，应该先点击，然后视窗会过来; 2026-10-27: 为啥现在中屏侧边栏点击就直接切到 chat 页面了),
+/// as nothing else puts the sidebar away; with the side panel in use, where the page is a strip, the page comes over
+/// to show it. Off the tape nothing comes of it (tape_frame lets the ask go): the page is beside the list. What a place
+/// is gone to with (the rail, its list's own page) is not one: its list is the sidebar's.
 pub fn show_page() -> Unit {
+  if wide.tape_at != Side {
+    wide.tape_ask = Some(Page)
+  }
+}
+
+///|
+/// The page brought over whatever is in use: what is opened to be written in at once (新建对话, ⌘N: pengxiao,
+/// 2026-10-25, opened from the sidebar in use it showed beside it), a fixture's page as the app begins (a picture's).
+pub fn bring_page() -> Unit {
   wide.tape_ask = Some(Page)
 }
 
@@ -1219,8 +1230,8 @@ fn tape_frame(c : @ui.Ctx, panel : SideOf?, at : (Double, Double, Double), known
   // the chat's side panel opened beside it (the same chat as before, its panel closed then, its view come): the panel
   // comes over; closed while in use, the page. Another chat shown while a panel was in use: its page, not the panel
   // open in it (pengxiao, 2026-10-25: the chat in the middle is what one comes to; a panel shown as its view comes is
-  // not one opened). What is chosen to be shown in the page brings it over (show_page); nothing else moves the tape by
-  // itself
+  // not one opened). What is chosen to be shown in the page with the side panel in use brings it over (show_page);
+  // nothing else moves the tape by itself
   // a passage of a message picked while the page is not in use (held where it shows beside the sidebar): the page
   // comes over with it, its bar there to be pressed (pengxiao, 2026-10-25: 引用 pressed there went to what showed of
   // the page and brought it over, quoting nothing). As it is picked, once: a passage left picked keeps nothing from

@@ -861,7 +861,7 @@ pub fn open_settings() -> Unit {
 
 ///|
 /// Settings at one of its pages, chosen (快捷键 from the shortcuts' dialog, 通知设置 from the bell's, ⌘K's): the sidebar
-/// its list, the page shown (on the tape brought over, show_page), as a row of their list opens one.
+/// its list, the page shown (on the tape beside the sidebar in use, show_page), as a row of their list opens one.
 pub fn open_settings_at(route : @settings.Route) -> Unit {
   settings_beside(route)
   show_page()

@@ -274,7 +274,7 @@ test "on the tape the sidebar at first, the page showing beside it: a click ther
 }
 
 ///|
-test "on the tape a chat chosen in the sidebar brings the page over, chosen again too; ⌘\\ puts nothing away" {
+test "on the tape a chat chosen in the sidebar shows beside it, the sidebar still in use; the page pressed comes over; ⌘\\ puts nothing away" {
   let t = tape_chat(0, 720.0, 800.0)
   t.tap_text("首页的列表改成按天分组")
   match app.nav.top() {
@@ -282,14 +282,16 @@ test "on the tape a chat chosen in the sidebar brings the page over, chosen agai
     _ => fail("no chat open")
   }
   t.run_for(@sfdesk.side_move_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
-  // the sidebar again, the same chat chosen: the page comes over again
-  t.back()
-  t.run_for(@sfdesk.side_move_ms)
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
-  t.tap_text("首页的列表改成按天分组")
+  // another chosen: shown in its place, the sidebar where it is
+  t.tap_text("整理发布清单")
   t.run_for(@sfdesk.side_move_ms)
+  assert_true(app.nav.top() is Chat({ session: "s-c1", .. }))
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  // what shows of the page pressed: it comes over
+  page_over(t, 720.0)
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_true(app.nav.top() is Chat({ session: "s-c1", .. }))
   // the sidebar's toggle (⌘\, its place pressed again, ⌘K's command): nothing folds, nothing moves
   @sfdesk.sidebar_toggle()
   t.run_for(@sfdesk.side_move_ms)
@@ -309,7 +311,7 @@ test "on the tape a chat chosen in the sidebar brings the page over, chosen agai
 let tape_core_late_ms : Double = 50.0
 
 ///|
-test "on the tape a chat chosen in the sidebar while its view is on its way: the page comes over once it shows it, not sliding with the chat before on it" {
+test "on the tape a chat brought over while its view is on its way: the page comes over once it shows it, not sliding with the chat before on it" {
   reset()
   let src = round_trip(fixture("chat"), tape_core_late_ms)
   let read = fn(session : String) { readings.contains("ws1/st1\u{1}" + session) }
@@ -322,8 +324,10 @@ test "on the tape a chat chosen in the sidebar while its view is on its way: the
   assert_true(read("s-c1"))
   // (where the tape is: the sidebar's first row)
   let (nx, _) = t.find("新建对话").unwrap()
-  // chosen while its view is on its way: the chat before stays on the page, the tape where it is
-  t.tap_text("首页的列表改成按天分组")
+  // opened and brought over (as 新建对话 is) while its view is on its way: the chat before stays on the page, the tape
+  // where it is
+  open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" })
+  @sfdesk.bring_page()
   t.run_for(tape_core_late_ms / 2.0)
   assert_true(app.nav.top() is Chat({ session: "s-c2", .. }), msg="the stack has it")
   assert_true(read("s-c1") && !read("s-c2"), msg="the chat before stays")
@@ -570,12 +574,12 @@ test "on the tape a chat opened from the page in use goes over it, as on a phone
   t.run_for(@sfdesk.side_move_ms)
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
   assert_true(on_first_chat())
-  // chosen in the sidebar: in its place, nothing over it
+  // chosen in the sidebar: in its place, nothing over it, beside the sidebar still in use
   t.tap_text("首页的列表改成按天分组")
   t.run_for(@sfdesk.side_move_ms)
   assert_eq(app.nav.depth(), 2)
   assert_false(app.nav.top_over())
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
 }
 
 ///|
@@ -1158,9 +1162,11 @@ fn settings_page_whole(t : @ui.Tester, words : String, w : Double) -> Bool {
 }
 
 ///|
-test "on the tape a settings page opened at one of its own (⌘K's, the bell's 通知设置, 快捷键 from its dialog) comes over, whole in the window" {
+test "on the tape a settings page opened at one of its own (⌘K's, the bell's 通知设置, 快捷键 from its dialog) shows beside their list, pressed whole in the window" {
   let t = tape_settings(600.0, fn() { @sfdesk.open_settings_at(@settings.Route::LocalStation) })
   assert_true(@sfdesk.wide.tape)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  page_over(t, 600.0)
   assert_true(settings_page_whole(t, local_none, 600.0), msg="\{@sfdesk.wide.tape_at} \{t.rect_of(local_none)}")
 }
 
@@ -1183,12 +1189,14 @@ test "on the tape the gear's settings: their list in use, its first row's page s
 let local_none : String = "本机没有单独安装的 station"
 
 ///|
-test "on the tape any settings page come to, from their list's row and from a page of theirs a level further in, is the one in use, whole in the window" {
+test "on the tape a settings page chosen in their list shows beside it, pressed is the one in use; from a page of theirs a level further in, it stays in use: whole in the window" {
   let t = tape_settings(600.0, fn() { open_page(Settings) })
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
-  // a row of their list: 记忆, brought over
+  // a row of their list: 记忆, beside it; what shows of it pressed, over
   t.click(Link, label="记忆")
   t.run_for(@sfdesk.side_move_ms)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  page_over(t, 600.0)
   assert_true(settings_page_whole(t, "全局记忆 · 项目记忆", 600.0), msg="\{@sfdesk.wide.tape_at} \{t.rect_of("全局记忆 · 项目记忆")}")
   // a level further in from the page in use: a station's memory, then one of its pages
   t.tap_text("Studio")
