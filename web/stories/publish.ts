@@ -28,7 +28,8 @@ function preview(): PublishPreview {
       authorKind: "agent", author: AGENT.agent, by: AGENT, text: "申请使用「Axiom 查询 token」：查登录页的错误日志",
       card: { type: "options", vault: "r-axiom", vaultAsk: { name: "Axiom 查询 token", reason: "查登录页的错误日志", mode: "proxy", hosts: ["api.axiom.co"], command: "curl -s https://api.axiom.co/v1/datasets/_apl -H \"Authorization: Bearer $AXIOM_TOKEN\"" } },
     }),
-    said(9, 8, { authorKind: "person", author: LIN.id, by: { name: LIN.name }, text: "截图和慢查询记录都附上了", attachments: sent }),
+    // (by their picture, as the core gives a member's)
+    said(9, 8, { authorKind: "person", author: LIN.id, by: { name: LIN.name, ...(LIN.shown.picture ? { picture: LIN.shown.picture } : {}) }, text: "截图和慢查询记录都附上了", attachments: sent }),
   ];
   const messages: PublishMessage[] = list.map((m) => ({
     n: m.seq, author: m.by.name, agent: m.authorKind === "agent", text: m.text, files: files.filter((f) => f.n === m.seq), createdAt: m.createdAt,
