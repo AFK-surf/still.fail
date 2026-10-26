@@ -4,7 +4,8 @@
 // effect's cleanup is said by which of `effect` and `effect_cleanup` makes it; nothing throws, so nothing is put back
 // in a `finally`; and "the same value" is `same` (physical_equal by default: index.ts's `!==`, but for strings, which it
 // compares by their words: say `same=fn(a, b) { a == b }` where that matters). Added for what keeps its own computeds
-// (docs/signals.md): Computed::peek, Computed::dispose, Signal::watched, untracked.
+// (docs/signals.md): Computed::peek, Computed::dispose, Signal::watched, untracked; and for what holds what another
+// computed builds after it ran: Computed::reading, Computed::lend; Computed::invalidate.
 
 ///|
 /// A parent (an effect or a scope) whose deps include at least one effect of its own (HasChildEffect): what it runs
@@ -536,4 +537,48 @@ pub fn[T] untracked(f : () -> T) -> T {
   let v = f()
   run.active_sub = prev_sub
   v
+}
+
+///|
+/// The computed worked out again as it is next read, whatever it read (what reads it told, as a signal set tells it):
+/// for one built again for what is no signal (a part kept, Ctx::kept_part: its key, the pointer over it).
+pub fn[T] Computed::invalidate(self : Computed[T]) -> Unit {
+  let node = self.node
+  node.flags = node.flags | DIRTY
+  match node.subs {
+    Some(subs) => {
+      propagate(subs, run.run_depth != 0)
+      if run.batch_depth == 0 {
+        flush()
+      }
+    }
+    None => ()
+  }
+}
+
+///|
+/// What `f` makes, what it reads read by the computed as well, as though its run had read it after what it read: what
+/// is built for it after it ran (a list's rows, laid out after the part they are in was built). Let go as the
+/// computed's run reads anew, as what it read is.
+pub fn[T, U] Computed::reading(self : Computed[T], f : () -> U) -> U {
+  let prev_sub = set_active_sub(Some(self.node))
+  let v = f()
+  run.active_sub = prev_sub
+  v
+}
+
+///|
+/// What the computed read read by `to` as well, as though `to`'s run had read it after what it read (as
+/// Computed::reading: a row's build, run by a computed of its own, read for the part it is in).
+pub fn[T, U] Computed::lend(self : Computed[T], to : Computed[U]) -> Unit {
+  let mut l = self.node.deps
+  while true {
+    match l {
+      Some(d) => {
+        link(d.dep, to.node, run.cycle)
+        l = d.next_dep
+      }
+      None => break
+    }
+  }
 }

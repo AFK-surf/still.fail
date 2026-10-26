@@ -1,22 +1,26 @@
 // A part kept as it was drawn while nothing it shows can have changed (Ctx::kept_part): what the view builds is built
 // every frame, but a part nobody uses where it is (a panel behind the one in use, on still.fail's tape) changes only
 // by what comes from outside the hand on another part: the core's data, a timer, the system, a press or a key; its
-// size and its ground; or what it said changes with time (a motion of its own, a cycle, a wake). A frame with none of
+// size and its ground; or time, where what it shows changes with it (a motion, a cycle, a clock). A frame with none of
 // those (a list elsewhere scrolled, by a finger or a wheel, flung on) draws it again from what its last build drew,
 // not built, laid out nor painted anew: its instances as they were, where they were. (Zed's GPUI keeps a view so,
 // `AnyView::cached`: its last frame's paint replayed while it was not notified and its bounds are the same.)
 //
 // What it read of the core and of what was worked out of it (mbui/signals) is followed as it is built: a computed of
 // its own runs its build, so a topic it read changed builds it again whatever else said, and what it read stays kept
-// while it shows (what follows a computed keeps it). What is not a signal is caught by what changes it: an event from
-// outside (outside_events: what the host or the runtime did, not a pointer moved nor a wheel turned elsewhere), its
-// `key` (what it is built from by its caller), the layout's epoch, what moves what it holds (its own motions, and what
-// moves a list or a box built in it, whenever it was told: a list flung before the part was kept flings on in it), its
-// wakes, a press held down on it or a wheel turned over it (what it holds may take them), the mouse's pointer over it
-// (it lights what it points at). It is built whole the first frames it shows, while a motion going on as it came may
-// still move what it holds. Drawn again, what its build's paint said of the frame is said again, where it was: its
-// targets, what scrolls in it, the words that can be picked, so presses, the wheel and the pointer find in it what they
-// found as it was built. It is never read out, built or not, so what is read out does not come and go with it.
+// while it shows (what follows a computed keeps it). What it reads of time is read so too (KeptClock): the frame, where
+// what it shows changes each frame (a motion going on read where it is now, a cycle drawn each frame, a layer it
+// opened), and the moment what it shows changes at (a clock's step, a timer's end), whoever told the motion or the
+// timer and wherever it was told; what the rows of a list in it read as they are laid out, after its build, is read by
+// it too (kept_rows.mbt). What is not a signal is caught by what changes it: an event from outside (outside_events:
+// what the host or the runtime did, not a pointer moved nor a wheel turned elsewhere), its `key` (what it is built from
+// by its caller), the layout's epoch, what moves what it holds (its own motions, and what moves a list or a box built
+// in it, whenever it was told: a list flung before the part was kept flings on in it), a press held down on it or a
+// wheel turned over it (what it holds may take them), the mouse's pointer over it (it lights what it points at). It is
+// built whole the first frames it shows, while a motion going on as it came may still move what it holds. Drawn again,
+// what its build's paint said of the frame is said again, where it was: its targets, what scrolls in it, the words
+// that can be picked, so presses, the wheel and the pointer find in it what they found as it was built. It is never
+// read out, built or not, so what is read out does not come and go with it.
 
 ///|
 /// A part kept (Ctx::kept_part): what its build drew (its instances, where they were; the pieces of its shapes; the
@@ -31,12 +35,10 @@ priv struct KeptPart {
   plots : Array[Int]
   plot_seen : Map[Int, Bool]
   images : Array[ImageEntry]
-  /// its build, run by `tracker` as what it read changes or `force` is said; the build now, and what the tracker
-  /// answered as it last ran it
+  /// its build, run by `tracker` as what it read changes or it is invalidated (what is no signal changed); the build
+  /// now, and what the tracker answered as it last ran it
   tracker : @signals.Computed[Int]
-  force : @signals.Signal[Int]
   body : Ref[() -> Unit]
-  mut forced : Int
   mut stamp : Int
   /// what it was built from: its caller's key, the events from outside seen, the layout's epoch, the scale, the hand
   mut key : String
@@ -49,12 +51,6 @@ priv struct KeptPart {
   mut built : Int
   mut drawn : Int
   mut shown : Int
-  /// what its build asked of time: a frame each frame (a motion it set out, a cycle drawn each frame, a frame owed, a
-  /// layer opened, back taken, a picture of the system's, the focus), the earliest wake it asked for and whether what is
-  /// shown waits for it
-  mut live : Bool
-  mut due : Double
-  mut due_later : Bool
   /// the motions going on as it first showed: it is built while any of them still goes
   waits : Array[MoverEntry]
   /// drawn again this frame (not built)
@@ -98,13 +94,10 @@ priv struct KeptWord {
 }
 
 ///|
-/// The part being built now (0 none) and what its build asks of time; the part whose build is being painted (0 none);
-/// the same of a list's row kept (kept_rows.mbt: its id among the rows').
+/// The part being built now (0 none); the part whose build is being painted (0 none); the same of a list's row kept
+/// (kept_rows.mbt: its id among the rows').
 priv struct PartNow {
   mut part : Int
-  mut live : Bool
-  mut due : Double
-  mut due_later : Bool
   mut painting : Int
   mut row : Int
   mut painting_row : Int
@@ -114,9 +107,6 @@ priv struct PartNow {
 // kept across runs: set round each part's build and paint and put back after it
 let part_now : PartNow = {
   part: 0,
-  live: false,
-  due: @double.infinity,
-  due_later: true,
   painting: 0,
   row: 0,
   painting_row: 0,
@@ -193,13 +183,22 @@ fn parts_frame_start(c : Ctx) -> Unit {
     parts_run.steps = steps
     outside_came()
   }
+  clock_frame_start(c)
 }
 
 ///|
-/// The frame is built: the parts that did not show in it let go (what they read no longer kept by them).
+/// The frame is built: the parts and the rows that did not show in it let go (what they read no longer kept by them);
+/// the moments those that did read are waited for.
 fn parts_frame_end(c : Ctx) -> Unit {
+  parts_gone(c)
+  rows_frame_end(c)
+  clock_frame_end(c)
+}
+
+///|
+/// The parts that did not show in this frame let go (what they read no longer kept by them).
+fn parts_gone(c : Ctx) -> Unit {
   if kept_parts.is_empty() {
-    rows_frame_end(c)
     return
   }
   let gone = []
@@ -215,7 +214,6 @@ fn parts_frame_end(c : Ctx) -> Unit {
     }
     kept_parts.remove(id) |> ignore
   }
-  rows_frame_end(c)
 }
 
 ///|
@@ -229,6 +227,7 @@ fn parts_forget() -> Unit {
   }
   kept_rows.clear()
   row_ids.clear()
+  kept_clock.dues.clear()
   part_now.part = 0
   part_now.painting = 0
   part_now.row = 0
@@ -294,45 +293,35 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
     st.epoch == self.epoch &&
     st.scale == self.scale &&
     st.pointing == pointing() &&
-    !st.live &&
-    self.now < st.due &&
     st.waits.is_empty() &&
     !moving
   st.body.val = body
   if !same {
-    st.forced = st.forced + 1
-    st.force.set(st.forced)
+    st.tracker.invalidate()
   }
   let mut ran = false
+  // (what holds it, a part or a row being built, reads what it read: its computed is none of what holds it reads, so
+  // that what holds it never runs its build to see whether it changed)
+  let holder = part_holder()
   let i = self.box(left=0.0, top=0.0, right=0.0, bottom=0.0, fn() {
-    let (part, live, due, due_later) = (part_now.part, part_now.live, part_now.due, part_now.due_later)
-    let layers = self.layers.length()
-    let back = self.back_next
+    let part = part_now.part
     part_now.part = id
-    part_now.live = false
-    part_now.due = @double.infinity
-    part_now.due_later = true
     // (not read out: it is only drawn, built or drawn again alike)
     self.hidden_from_semantics(fn() {
+      let reading = @signals.set_active_sub(None)
       let stamp = st.tracker.get()
+      @signals.set_active_sub(reading) |> ignore
       if stamp != st.stamp {
         ran = true
         st.stamp = stamp
-        st.live = part_now.live ||
-          self.layers.length() != layers ||
-          !physical_equal(self.back_next, back)
-        st.due = part_now.due
-        st.due_later = part_now.due_later
       }
     })
-    // (what holds it asks what it asked of time)
     part_now.part = part
-    part_now.live = live || part_now.live
-    if part_now.due >= due {
-      part_now.due = due
-      part_now.due_later = due_later
-    }
   })
+  match holder {
+    Some(h) => st.tracker.lend(h)
+    None => ()
+  }
   let e = self.drawn_of(i)
   st.again = !ran
   if ran {
@@ -357,18 +346,13 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
     for img in st.images {
       img.used = self.frame_no
     }
-    // (what holds it, a part or a row being built, told as its own build would: part_wake)
-    if st.due < @double.infinity {
-      self.wake_at_time(st.due, later=st.due_later)
-    }
   }
 }
 
 ///|
 /// A part kept, not built yet: its build run by a computed of its own (`body` as it is set, again as what it read
-/// changes or `force` is said).
+/// changes or it is invalidated).
 fn kept_new(id : Int) -> KeptPart {
-  let force = @signals.signal(0)
   let body_now : Ref[() -> Unit] = Ref(fn() {  })
   {
     id,
@@ -379,14 +363,17 @@ fn kept_new(id : Int) -> KeptPart {
     plot_seen: {},
     images: [],
     tracker: @signals.computed(fn(_) {
-      force.get() |> ignore
+      let c = g()
+      let (layers, back) = (c.layers.length(), c.back_next)
       (body_now.val)()
+      // (a layer it opened, back it took: laid over the window and taken anew each frame, apart from what it draws)
+      if c.layers.length() != layers || !physical_equal(c.back_next, back) {
+        part_live()
+      }
       part_stamp.val = part_stamp.val + 1
       part_stamp.val
     }),
-    force,
     body: body_now,
-    forced: 0,
     stamp: 0,
     key: "",
     outside: -1,
@@ -396,9 +383,6 @@ fn kept_new(id : Int) -> KeptPart {
     built: -1,
     drawn: -1,
     shown: -1,
-    live: false,
-    due: @double.infinity,
-    due_later: true,
     waits: [],
     again: false,
     words: [],
@@ -451,57 +435,164 @@ pub fn Ctx::part_kept(self : Ctx, id : Int) -> Bool {
 }
 
 ///|
-/// What `build` (a row of a list in part `part`, built as the list is laid out, after the part's own build) asks of
-/// time, the part's (0: no part's).
+/// What `build` (a row of a list in part `part`, built as the list is laid out, after the part's own build) reads, read
+/// by the part (0: no part's) as though its build had read it.
 fn part_rows(part : Int, build : () -> Unit) -> Unit {
   if part == 0 || part_now.part == part {
     build()
     return
   }
-  let (was, live, due, due_later) = (part_now.part, part_now.live, part_now.due, part_now.due_later)
-  part_now.part = part
-  part_now.live = false
-  part_now.due = @double.infinity
-  part_now.due_later = true
-  build()
   match kept_parts.get(part) {
     Some(st) => {
-      st.live = st.live || part_now.live
-      if part_now.due < st.due {
-        st.due = part_now.due
-        st.due_later = part_now.due_later
-      }
+      let was = part_now.part
+      part_now.part = part
+      st.tracker.reading(build)
+      part_now.part = was
     }
-    None => ()
+    None => build()
   }
-  part_now.part = was
-  part_now.live = live
-  part_now.due = due
-  part_now.due_later = due_later
+}
+
+///|
+/// What is being built now that is kept as it was built (a part, or a list's row: kept_rows.mbt, in a part or not) and
+/// reads what is built in it after it ran, laid out later: its computed (None: none is).
+fn part_holder() -> @signals.Computed[Int]? {
+  if part_now.row != 0 {
+    match kept_rows.get(part_now.row) {
+      Some(st) => return Some(st.tracker)
+      None => ()
+    }
+  }
+  if part_now.part != 0 {
+    match kept_parts.get(part_now.part) {
+      Some(st) => return Some(st.tracker)
+      None => ()
+    }
+  }
+  None
 }
 
 ///|
 /// Whether what is built now is kept as it was built: a part's build, or a list's row's (kept_rows.mbt), a row on its own
-/// as much as one in a part (on 小屏 a chat's messages are in none): what it asks of time is its own.
+/// as much as one in a part (on 小屏 a chat's messages are in none): what it reads of time is followed.
 fn part_building() -> Bool {
   part_now.part != 0 || part_now.row != 0
 }
 
 ///|
-/// What the build of the part or row being built asks of time: a frame each frame from now on (as what it holds
-/// moves).
+/// What a build reads of time, as signals (kept_part.mbt's head): the frame, set as each begins (what shows what
+/// changes each frame reads it: a motion going on, a cycle drawn each frame, a frame owed), and the moments what is
+/// shown changes at (a clock's step, a timer's end, a motion's), each set as the first frame at or past it begins, in
+/// order, with whether what is shown waits for it (`later`: none of those that read it does).
+priv struct KeptClock {
+  frame : @signals.Signal[Int]
+  dues : Array[KeptDue]
+}
+
+///|
+priv struct KeptDue {
+  at : Double
+  mut later : Bool
+  come : @signals.Signal[Bool]
+}
+
+///|
+// kept across runs: its frame only counts on; its moments let go as they come and with the parts (parts_forget)
+let kept_clock : KeptClock = { frame: @signals.signal(0), dues: [] }
+
+///|
+/// What is built now shows what changes each frame (as what it holds moves): built again each frame, kept or not.
 fn part_live() -> Unit {
   if part_building() {
-    part_now.live = true
+    kept_clock.frame.get() |> ignore
   }
 }
 
 ///|
-/// The build of the part or row being built asks for a frame at `t` (`later`: what is shown does not wait for it).
-fn part_wake(t : Double, later : Bool) -> Unit {
-  if part_building() && t < part_now.due {
-    part_now.due = t
-    part_now.due_later = later
+/// What is built now changes at `t` (`later`: what is shown does not wait for it): built again in the first frame at
+/// or past it, kept or not; one past already, the next frame's.
+fn part_wake(now : Double, t : Double, later : Bool) -> Unit {
+  if !part_building() || t == @double.infinity {
+    return
+  }
+  if t <= now {
+    kept_clock.frame.get() |> ignore
+    return
+  }
+  let dues = kept_clock.dues
+  let mut i = 0
+  while i < dues.length() && dues[i].at < t {
+    i = i + 1
+  }
+  let d = if i < dues.length() && dues[i].at == t {
+    dues[i]
+  } else {
+    let d = { at: t, later: true, come: @signals.signal(false) }
+    dues.insert(i, d)
+    d
+  }
+  d.later = d.later && later
+  d.come.get() |> ignore
+}
+
+///|
+/// What is being built shows where `who`'s motion is now (an Anim, a Value, a spring: read so as they are read): built
+/// again as it is told anew, wherever and whenever that is, and each frame while it goes (`going`); kept as it was drawn
+/// or not (a part's, a list's row's: kept_part.mbt's head).
+pub fn Ctx::shows_motion(self : Ctx, who : Mover, going : Bool) -> Unit {
+  ignore(self)
+  if !part_building() {
+    return
+  }
+  let said = match who.said {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(who.told)
+      who.said = Some(s)
+      s
+    }
+  }
+  said.get() |> ignore
+  if going {
+    kept_clock.frame.get() |> ignore
+  }
+}
+
+///|
+/// What is being built changes at `t` (the frames' clock: a motion's declared end, read as whether it is over): built
+/// again in the first frame at or past it, kept as it was drawn or not.
+pub fn Ctx::shows_until(self : Ctx, t : Double) -> Unit {
+  part_wake(self.now, t, true)
+}
+
+///|
+/// A frame begins (parts_frame_start): what read the frame told it changed, and what read a moment come.
+fn clock_frame_start(c : Ctx) -> Unit {
+  @signals.start_batch()
+  kept_clock.frame.set(c.frame_no)
+  let dues = kept_clock.dues
+  let mut n = 0
+  while n < dues.length() && dues[n].at <= c.now {
+    dues[n].come.set(true)
+    n = n + 1
+  }
+  if n > 0 {
+    let left = dues.length() - n
+    for k in 0..<left {
+      dues[k] = dues[k + n]
+    }
+    dues.truncate(left)
+  }
+  @signals.end_batch()
+}
+
+///|
+/// The frame is built (parts_frame_end): the moments a part or a row kept that showed reads are the host's wakes (one
+/// drawn again asks none itself, its build not run); those nothing reads let go.
+fn clock_frame_end(c : Ctx) -> Unit {
+  kept_clock.dues.retain(fn(d) { d.come.watched() })
+  for d in kept_clock.dues {
+    c.wake_at_time(d.at, later=d.later)
   }
 }
 

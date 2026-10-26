@@ -289,3 +289,87 @@ test "a list's rows left still: a row going on with the clock built as it goes, 
   assert_true(n > 100, msg="rows drawn again: \{n}")
   rows_same({ frames: kept, kept: n, clicks: [] }, { frames: built, kept: 0, clicks: [] })
 }
+
+///|
+/// A part kept holding a list (`list_part`), another part beside it (`other`); row 3 of the list shows what `mark` says,
+/// which nothing but it reads, and row 5 is as wide as `spring` is now, a spring the other part sets going as it is
+/// built.
+fn parted_rows(mark : @signals.Signal[Int], spring : SpringPath, go : @signals.Signal[Double]) -> (Ctx) -> Unit {
+  fn(c) {
+    c.box(w=Fill(1.0), h=Fill(1.0), dir=Row, fn() {
+      c.box(w=Px(100.0), h=Fill(1.0), fn() {
+        c.kept_part(c.id("other"), "", fn() {
+          let to = go.get()
+          if to != spring.target() {
+            spring.go_at(c, to)
+          }
+          c.text("other", size=12.0) |> ignore
+        })
+      })
+      |> ignore
+      c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+        c.kept_part(c.id("list_part"), "", fn() {
+          c.list("parted", 30, 50.0, fn(i) {
+            let words = if i == 3 { "row 3 mark \{mark.get()}" } else { "row \{i}" }
+            let w = if i == 5 { 40.0 + spring.value(c.now) } else { 40.0 }
+            c.box(h=Px(50.0), padx=10.0, dir=Row, fn() {
+              c.box(w=Px(w), h=Px(10.0), bg=0x3366CCFFL, fn() {  }) |> ignore
+              c.text(words, size=12.0) |> ignore
+            })
+            |> ignore
+          })
+          |> ignore
+        })
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
+test "a list's row in a part kept reads what nothing else there reads: the part is built again as it changes" {
+  let mark = @signals.signal(0)
+  let t = Tester::new(
+    parted_rows(mark, SpringPath::new(0.0, k=420.0, c=32.0), @signals.signal(0.0)),
+    w=420.0,
+    h=420.0,
+    platform=2,
+  )
+  t.keep_parts(true)
+  t.draw()
+  t.frame()
+  t.frame()
+  assert_true(t.parts_kept() > 0, msg="parts drawn again: \{t.parts_kept()}")
+  mark.set(7)
+  t.frame()
+  assert_true(t.find("row 3 mark 7") is Some(_))
+}
+
+///|
+test "a list's row in a part kept shows a motion another part told: drawn as it goes, as building it draws it" {
+  let run = fn(replay : Bool) -> Array[Array[Double]] {
+    let go = @signals.signal(0.0)
+    let t = Tester::new(
+      parted_rows(@signals.signal(0), SpringPath::new(0.0, k=420.0, c=32.0), go),
+      w=420.0,
+      h=420.0,
+      platform=2,
+    )
+    t.keep_parts(true)
+    drawn_again_on.val = replay
+    t.draw()
+    t.frame()
+    go.set(120.0)
+    let frames = []
+    for _ in 0..<12 {
+      t.run_for(rows_still_ms)
+      frames.push(rows_frame())
+    }
+    drawn_again_on.val = true
+    frames
+  }
+  let kept = run(true)
+  let built = run(false)
+  rows_same({ frames: kept, kept: 0, clicks: [] }, { frames: built, kept: 0, clicks: [] })
+}

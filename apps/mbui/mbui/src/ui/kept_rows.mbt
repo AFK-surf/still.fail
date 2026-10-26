@@ -3,8 +3,8 @@
 // is, moved with it. (Zed's GPUI replays a cached view's paint with its hitboxes and what it said of the frame;
 // Chromium keeps a layer's display list recorded past what shows, its interest rect, so that scrolling replays it.)
 //
-// What builds a row again is a part's (kept_part.mbt's head): what it read of signals, an event from outside, its key
-// (the list's width, its rows' count, its scope), the layout's epoch, a motion, cycle or wake of its own; and
+// What builds a row again is a part's (kept_part.mbt's head): what it read of signals and of time (the frame, a
+// moment), an event from outside, its key (the list's width, its rows' count, its scope), the layout's epoch; and
 // a row's own: any motion round it but its list's scrolling (what moves may be read in what it shows), a press held but
 // for the list's own drag, the mouse's pointer over it (it lights what it points at), what it holds held at the list's
 // top as it scrolls past (Ctx::stick: a message's picture), and where it now shows more than its last build drew of it
@@ -263,13 +263,10 @@ fn Ctx::row_of(self : Ctx, li : Int, st : ListState, k : Int, iw : Double, force
     kp.epoch == self.epoch &&
     kp.scale == self.scale &&
     kp.pointing == pointing() &&
-    !kp.live &&
-    self.now < kp.due &&
     !moving
   rk.build = st.row
   if !same {
-    kp.forced = kp.forced + 1
-    kp.force.set(kp.forced)
+    kp.tracker.invalidate()
   }
   // built as build_row builds a row, its build run by the part's tracker
   let saved_cur = self.cur
@@ -293,49 +290,30 @@ fn Ctx::row_of(self : Ctx, li : Int, st : ListState, k : Int, iw : Double, force
   self.nodes[r].item = k
   // (in a part kept: what the row tells moves the part's too, kept_part.mbt)
   let (row_was, part_was) = (part_now.row, part_now.part)
-  let (live, due, due_later) = (part_now.live, part_now.due, part_now.due_later)
   part_now.row = id
   part_now.part = st.part
-  part_now.live = false
-  part_now.due = @double.infinity
-  part_now.due_later = true
-  let layers = self.layers.length()
-  let back = self.back_next
   let mut ran = false
   self.with_parent(r, fn() {
     self.scope(k, fn() {
+      // (its computed none of what holds it reads, else what holds it would run the row's build to see whether it
+      // changed, out of its list's layout)
+      let reading = @signals.set_active_sub(None)
       let stamp = kp.tracker.get()
+      @signals.set_active_sub(reading) |> ignore
       if stamp != kp.stamp {
         ran = true
         kp.stamp = stamp
-        kp.live = part_now.live || self.layers.length() != layers || !physical_equal(self.back_next, back)
-        kp.due = part_now.due
-        kp.due_later = part_now.due_later
       }
     })
   })
-  // (what holds it asks what it asked of time: a row it is in, being built, as a part's build tells what holds it; the
-  // part its list is in, built before its rows are laid, told itself)
-  let (rlive, rdue, rlater) = (kp.live, kp.due, kp.due_later)
   part_now.row = row_was
   part_now.part = part_was
-  part_now.live = live || rlive
-  if rdue < due {
-    part_now.due = rdue
-    part_now.due_later = rlater
-  } else {
-    part_now.due = due
-    part_now.due_later = due_later
-  }
+  // what it read, built or drawn again, read by the part its list is in: built before its rows are laid, it is drawn
+  // again only while nothing they show changed (a row that holds a list of its own is built each frame: its list's
+  // rows' are the part's alone)
   if st.part != 0 {
     match kept_parts.get(st.part) {
-      Some(p) => {
-        p.live = p.live || rlive
-        if rdue < p.due {
-          p.due = rdue
-          p.due_later = rlater
-        }
-      }
+      Some(p) => kp.tracker.lend(p.tracker)
       None => ()
     }
   }
@@ -379,9 +357,6 @@ fn Ctx::row_of(self : Ctx, li : Int, st : ListState, k : Int, iw : Double, force
     }
     for img in kp.images {
       img.used = self.frame_no
-    }
-    if kp.due < @double.infinity {
-      self.wake_at_time(kp.due, later=kp.due_later)
     }
   }
   r

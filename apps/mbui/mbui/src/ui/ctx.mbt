@@ -1891,7 +1891,7 @@ pub fn Ctx::spring_rest(self : Ctx, key : String) -> Double {
 
 ///|
 fn Ctx::wake_at_time(self : Ctx, t : Double, later? : Bool = false) -> Unit {
-  part_wake(t, later)
+  part_wake(self.now, t, later)
   if self.wake_at < 0.0 || t < self.wake_at {
     self.wake_at = t
   }

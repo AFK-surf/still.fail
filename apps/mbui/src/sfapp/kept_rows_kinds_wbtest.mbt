@@ -82,6 +82,14 @@ test "every kind of message left still on 小屏: what goes on in it drawn as bu
 }
 
 ///|
+test "every kind of message left still on 中屏's tape: what goes on in it drawn as building it draws it" {
+  let apart = kept_rows_kinds_apart(720.0, 800.0)
+  if apart.length() > 0 {
+    fail(apart.join("\n"))
+  }
+}
+
+///|
 test "every kind of message left still on 中屏's tape, read out: what goes on in it drawn as building it draws it" {
   let apart = kept_rows_kinds_apart(720.0, 800.0, a11y=true)
   if apart.length() > 0 {

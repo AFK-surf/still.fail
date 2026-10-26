@@ -34,12 +34,25 @@ pub struct Mover {
   /// the part kept (Ctx::kept_part) what it moves was last built in (0 none): what it says moves that part's drawing,
   /// whenever it is said (a list flung before its panel was kept flings on in it)
   priv mut part : Int
+  /// how many times it was told, as a signal, once a part or a row kept read where it is (Ctx::shows_motion)
+  priv mut said : @signals.Signal[Int]?
 }
 
 ///|
 /// A mover of its own, for what moves.
 pub fn Mover::new() -> Mover {
-  { told: 0, part: 0 }
+  { told: 0, part: 0, said: None }
+}
+
+///|
+/// What it moves is told anew (set going, or put somewhere at once: snapped, set): what was built from where it was
+/// (Ctx::shows_motion) is built again.
+pub fn Mover::changed(self : Mover) -> Unit {
+  self.told = self.told + 1
+  match self.said {
+    Some(s) => s.set(self.told)
+    None => ()
+  }
 }
 
 ///|
@@ -92,7 +105,7 @@ fn Ctx::movers_sample(self : Ctx) -> Unit {
 ///|
 /// The same as Ctx::moving, `what` saying all of what it is and who told it (what moves again by itself, as first told).
 pub fn Ctx::moving_as(self : Ctx, who : Mover, m : &Moving, what : String) -> Unit {
-  who.told = who.told + 1
+  who.changed()
   let part = part_now.part
   if part != 0 {
     who.part = part
@@ -306,8 +319,9 @@ pub fn SpringPath::at(self : SpringPath, now : Double) -> (Double, Double) {
 }
 
 ///|
-/// Where it is at `now`.
+/// Where it is at `now` (what is being built from it, built again each frame till it rests: kept_part.mbt).
 pub fn SpringPath::value(self : SpringPath, now : Double) -> Double {
+  g().shows_motion(self.id, now < self.end)
   self.at(now).0
 }
 
