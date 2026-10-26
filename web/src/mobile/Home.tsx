@@ -17,7 +17,7 @@ import { useCopyChatLink } from "../ChatRef.tsx";
 import { setSidebarMode, stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
 import { useApp, useOpenPage } from "./app.tsx";
 import { FailedMark, FilterMenu, Illustration, SectionHeader, SlackMark, ticked } from "./parts.tsx";
-import { LaterLine, Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
+import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import { ChatMark, chatTone, jumpFromLine, rowLead, stateLine, WaitingText } from "../ChatMark.tsx";
 import * as chatMarkCss from "../ChatMark.css.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
@@ -37,6 +37,7 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as homeCss from "./styles/home.css.ts";
 import { Tip } from "../ui.tsx";
+import { SyncMark } from "../SyncMark.tsx";
 import { useVirtualList, useVirtualModel } from "../virtual/list.tsx";
 import type { Item } from "../virtual/model.ts";
 import { useDoing, useDoingFailed } from "../doing.ts";
@@ -88,7 +89,7 @@ export function Home() {
       <div ref={pull.mark} className={`${css.mPull} ${pagesCss.mFloating}`} aria-hidden="true"><Refresh size={18} /></div>
       {/* The lists run under both bars, which are frosted glass over them. */}
       <HomeBar others={marks?.others} othersLabel={marks?.othersLabel} invited={invited} filtering={(all.value?.stations.length ?? 0) > 0}
-        filter={filter} />
+        filter={filter} syncing={all.value?.syncing} />
       {searching && <SearchPage from={searching} onLeave={() => setAway(false)} onClose={() => setSearching(null)} />}
     </div>
   );
@@ -115,9 +116,9 @@ export function WaitingHome({ lock }: { lock: LockView }) {
  * The list's top bar: the viewer's settings, the workspace (and whether others have something waiting), the filter (the
  * stations are on the bottom bar). Drawn again only when what it shows changes, not with each change of the lists under it.
  */
-const HomeBar = memo(function HomeBar({ others, othersLabel, invited, filtering, filter }: {
+const HomeBar = memo(function HomeBar({ others, othersLabel, invited, filtering, filter, syncing }: {
   others: string | null | undefined; othersLabel: string | null | undefined; invited: boolean; filtering: boolean;
-  filter: ChatFilter;
+  filter: ChatFilter; syncing?: ChatsView["syncing"];
 }) {
   const app = useApp();
   return (
@@ -132,6 +133,8 @@ const HomeBar = memo(function HomeBar({ others, othersLabel, invited, filtering,
           : invited && <span className={css.mDot} aria-label={t("web-mobile.home.invited")} />}
         <ChevronDown size={16} />
       </button>
+      {/* Catching up on what changed while away, the keys' size. */}
+      <SyncMark syncing={syncing} size={34} mark={20} />
       {/* The filter, and the archive in its menu, as on the wide screen: nothing to narrow or look back on with no station. */}
       {filtering && <FilterButton filter={filter} />}
     </header>
@@ -401,7 +404,6 @@ const ChatPane = memo(function ChatPane({ chats, filter, onSearch }: { chats: To
   const intro = <>
     {view && !view.note?.empty && <SearchField onOpen={onSearch} />}
     <ChangelogNews />
-    {!!view?.syncing && view.days.length > 0 && <LaterLine className={css.mSyncing} text={view.syncing} />}
     {!view ? <Waiting text={t("web-mobile.home.reading")} error={chats.error?.message} sample={<ChatRowsSample lead={lead} n={7} />} /> : <>
       {(view.note?.reading || !!view.note?.failing.length) && <Waiting note={view.note} text={t("web-mobile.home.reading")} sample={<ChatRowsSample lead={lead} n={view.note.reading ? 7 : 4} />} />}
       {view.note?.empty && <Empty view={view} filter={filter} />}

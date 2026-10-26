@@ -26,6 +26,12 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         }
       })
       |> ignore
+      // catching up on what changed while away, before 更新 and the filter (the keys' size: brand.mbt)
+      let (syncing, said, part) = match view {
+        Some({ syncing: Some(y), .. }) => (true, y.text, y.part)
+        _ => (false, "", None)
+      }
+      @sf.sync_key(c, "side/syncing", update_key_side, update_key_mark, syncing, said, part)
       // 更新 here, before the filter, wherever the sidebar shows this row (brand.mbt update_in_row)
       if update_shown() {
         update_in_row(c, src)

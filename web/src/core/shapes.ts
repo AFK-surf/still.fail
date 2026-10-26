@@ -2510,6 +2510,17 @@ export interface ChatView {
 	tabs?: ChatTabs;
 }
 
+/** The list catching up on what changed while away (ChatsView `syncing`). */
+export interface ChatsSyncing {
+	/**
+	 * What it says (its tip, and to a screen reader): 正在同步 while a station has yet to say what changed, then how
+	 * many chats are left (正在同步 · 还剩 12 个对话).
+	 */
+	text: string;
+	/** How much has come, 0 to 1, of the chats found behind; absent while that is not known (a station has yet to say). */
+	part?: number;
+}
+
 export interface StationState {
 	station: string;
 	id: string;
@@ -2589,11 +2600,10 @@ export interface ChatsView {
 	note?: ListNote;
 	/**
 	 * While what changed since the device was last with the stations is still being brought (station/sync.ts
-	 * `#catching`), the line over the rows: 正在同步 while a station has yet to say what changed, then how many chats are left
-	 * (正在同步 · 还剩 12 个对话). Stations not reached are left out (the list says so where it says what is wrong with them).
-	 * Absent once all is here, and from a core before it.
+	 * `#catching`): the mark at the list's top, beside its filter. Stations not reached are left out (the list says so where
+	 * it says what is wrong with them). Absent once all is here, and from a core before it.
 	 */
-	syncing?: string;
+	syncing?: ChatsSyncing;
 }
 
 export interface FoundCommand {

@@ -15,7 +15,7 @@ import { RowAside } from "./RowPicture.tsx";
 import { sampleChats, sampleWords } from "./samples.ts";
 import { Retry, Waiting as StatusWaiting, WaitingItems } from "./Status.tsx";
 import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
-import { Confirm, ConnectKindIcon, ICON, LaterLine, Time, Tip, Waiting } from "./ui.tsx";
+import { Confirm, ConnectKindIcon, ICON, Time, Tip, Waiting } from "./ui.tsx";
 import { chatClicked } from "./telemetry.ts";
 import { useComposerMove } from "./dock.tsx";
 import { goToNeighbour } from "./Chat.tsx";
@@ -52,6 +52,9 @@ export function ChatList({ scope, newChat, stationsPage, archive, decisions, top
   useShortcut("chat.next", () => goToNeighbour(1));
   // No station at all: nothing to filter (the lists themselves follow their own topics, ChatPane).
   const none = useTopicSelect<ChatsView, boolean>(chatsTopic(scope, "all"), (s) => !!s.value && !s.value.loading && s.value.stations.length === 0);
+  // Catching up on what changed while away (its mark beside the filter): drawn again only as it changes.
+  const syncing = useTopicSelect<ChatsView, ChatsView["syncing"] | null>(chatsTopic(scope, "all"), (s) => s.value?.syncing ?? null,
+    (a, b) => a?.text === b?.text && a?.part === b?.part);
   // To 奏 from its row in the sidebar's foot, its rows come out of that row (DecisionDesk.tsx): no sliding then.
   const archiveSeen = useRef(false);
   if (mode === "archive") archiveSeen.current = true;
@@ -65,7 +68,7 @@ export function ChatList({ scope, newChat, stationsPage, archive, decisions, top
     <>
       <GoingArrived />
       <NavTop top={top} below={below}
-        action={<SidebarActions newChat={newChat} archive={archive} workspace={`/w/${scope}`} showFilter={!none} />} />
+        action={<SidebarActions newChat={newChat} archive={archive} workspace={`/w/${scope}`} syncing={syncing} showFilter={!none} />} />
       <div className={nav.navSlider}>
         <div className={nav.navTrack} data-filter={mode} data-instant={instant.current || undefined} ref={sliding}>
           {/* Followed at once, side by side: switching slides from one to another with nothing to wait for. */}
@@ -222,7 +225,6 @@ const ChatPane = memo(function ChatPane({ scope, filter, stationsPage, hidden }:
           : stations.length ? t("web-main.sidebar.none")
           : <>{t("web-main.sidebar.noStation.before")}<NavLink className={chatCss.inlineLink} to={stationsPage}>{t("web-main.sidebar.noStation.link")}</NavLink>{t("web-main.sidebar.noStation.after")}</>}</p>
       )}
-      {days.length > 0 && view?.syncing && <LaterLine className={nav.navSyncing} text={view.syncing} />}
       {days.map((day) => (
         <NavSection key={day.daysAgo} title={day.label} flip={`day:${day.daysAgo}`}>
           {day.items.map((item) => <ChatRow key={rowKey(item)} scope={scope} filter={filter} row={rowKey(item)} lead={lead} />)}

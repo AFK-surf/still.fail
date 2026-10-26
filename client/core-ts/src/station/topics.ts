@@ -239,8 +239,9 @@ export class StationTopics implements Owner {
     switch (topic.topic) {
       case "link":
         if (!link) return { ok: { state: "offline", message: t("core-views.station.not_listed") } };
-        // While catching up on what was missed: how many chats are left to (-1 while that is not known yet).
-        return { ok: link.catching === null ? link.state : { ...link.state, catching: link.catching.tallied ? link.catching.behind.size : -1 } };
+        // While catching up on what was missed: how many chats are left to (-1 while that is not known yet), of how many.
+        const c = link.catching;
+        return { ok: c === null ? link.state : { ...link.state, catching: c.tallied ? c.behind.size : -1, catchingOf: c.of } };
       case "host": {
         const v = link?.memory.get("host");
         return v === undefined ? undefined : { ok: v };

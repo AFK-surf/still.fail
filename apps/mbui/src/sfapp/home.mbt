@@ -111,6 +111,12 @@ fn top_bar(
         @sf.icon(c, "chevron-down", size=16.0, color=t.p.muted) |> ignore
       })
       |> ignore
+      // catching up on what changed while away: its mark, the size of the keys beside it (update_button's)
+      let (syncing, said, part) = match view {
+        Some({ syncing: Some(y), .. }) => (true, y.text, y.part)
+        _ => (false, "", None)
+      }
+      @sf.sync_key(c, "home-syncing", 34.0, 20.0, syncing, said, part)
       // a newer build that brings something (updates.mbt): its key, or how far it has come
       update_button(c, src)
       // the filter, and the archive in its menu: nothing to narrow or look back on with no station

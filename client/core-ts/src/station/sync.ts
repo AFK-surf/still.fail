@@ -259,7 +259,7 @@ export class StationsSync {
   #catchingFrom(address: string): void {
     const link = this.#links.get(address);
     if (!link) return;
-    link.catching = { tallied: false, behind: new Set() };
+    link.catching = { tallied: false, behind: new Set(), of: 0 };
     this.onChange(address, "link");
   }
 
@@ -270,7 +270,7 @@ export class StationsSync {
     if (!link?.catching || link.catching.tallied) return;
     const data = this.#core.data;
     const behind = data.threadsBehind(address).filter((id) => !data.evicted("entry", address, String(id)));
-    link.catching = behind.length === 0 || !this.#core.scheduler.busy(address) ? null : { tallied: true, behind: new Set(behind) };
+    link.catching = behind.length === 0 || !this.#core.scheduler.busy(address) ? null : { tallied: true, behind: new Set(behind), of: behind.length };
     this.onChange(address, "link");
   }
 
@@ -1123,6 +1123,7 @@ export class StationsSync {
     const catching = this.#links.get(address)?.catching;
     if (id !== null && catching?.tallied && !catching.behind.has(id) && this.#behind(address, id)) {
       catching.behind.add(id);
+      catching.of++;
       this.onChange(address, "link");
     }
   }

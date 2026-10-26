@@ -33,8 +33,6 @@ export const line = style({
   display: "flex", alignItems: "center", gap: "8px", color: vars.muted, fontSize: vars.textMeta, lineHeight: "18px",
   animation: later, selectors: { "&[data-error]": { color: vars.red, animation: "none" } },
 });
-// Shown only once it has waited (waiting.tsx LaterLine): there at once.
-export const lineNow = style({ animation: "none" });
 // A page's bones (waiting.tsx Bones, ./bones.ts): what is drawn of made-up data keeps its grounds and edges and none of
 // its ink (words, icons, pictures); a ground that says something by its colour, and what is drawn whole, nothing of
 // their own; over it the bones, breathing together.
