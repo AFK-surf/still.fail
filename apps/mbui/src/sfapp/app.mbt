@@ -370,8 +370,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
   let (current, all, answered, invited) = workspace_in_view(src)
   match current {
     Some(w) => {
-      // (told once the frame's builds are over, as the last saw the app and the workspace)
-      c.after_build("attend", fn() { attend(src, w.id) })
+      // (told once the frame's builds are over, as the last saw the app, the workspace and the page on top)
+      c.after_build("attend", fn() { attend(src, w.id, app.nav.top() is NewChat) })
       // notifications: shown while the app is, a tapped one's chat opened, the one of a chat on top taken off (once the
       // frame's builds are over: a build let go of follows no workspace)
       c.after_build("notices", fn() { notices_frame(src, w) })

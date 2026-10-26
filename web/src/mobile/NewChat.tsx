@@ -1,9 +1,10 @@
 // A new chat on a narrow screen, as the Android app has it (apps/android/…/screens/NewChat.kt): it rises from the
 // bottom; say what to do, having picked where it runs (station), on what (model) and how hard it thinks. The first
 // message (or file) makes the session on that station; then the page becomes the chat.
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import type { ModelOption, RuntimeKind, StationView } from "../api.ts";
 import { FrequentCombos } from "../FrequentCombos.tsx";
+import { core } from "../core/react.ts";
 import type { NewChatView } from "../core/shapes.ts";
 import { useNewChat, usePick, type PickPatch } from "../pick.ts";
 import { FromMark, openBorrow } from "./Borrow.tsx";
@@ -37,6 +38,8 @@ export function NewChatScreen() {
   const app = useApp();
   // The station last started on (or picked) in this workspace and what it runs there, on either screen (../pick.ts).
   const chat = useNewChat(app.entry.id);
+  // What the workspace goes back to: this new chat, not the chat shown before it (../NewChat.tsx).
+  useEffect(() => void core().focus({ newChat: app.entry.id }).catch(() => undefined), [app.entry.id]);
   const choice = chat.value;
   const view = choice?.station;
   return (

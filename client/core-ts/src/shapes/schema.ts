@@ -1801,7 +1801,7 @@ export const SHAPES: Record<string, Shape> = {
     ["keys", map(vec("String")), { default: true, doc: "Keys changed for an action (the desktop app's), by action." }],
     ["workspace", opt("String"), { default: true, doc: "The workspace last open, as the apps keep it: the one they open at start (the first one when it is gone)." }],
     ["lastChat", map("String"), { default: true, doc: "The chat page last open, by scope (a workspace; `local` in what a station's own page kept, before it went)." }],
-    ["openChat", map("OpenChat"), { default: true, doc: "The chat last open, by workspace, as the core keeps it from `client.focus` (a settings page leaves it as it\nwas): what the workspace's page goes back to." }],
+    ["openChat", map("OpenChat"), { default: true, doc: "The chat last open, by workspace, as the core keeps it from `client.focus` (a settings page leaves it as it\nwas; a new chat shown, none): what the workspace's page goes back to." }],
     ["chatTabs", map("KeptTabs"), { default: true, doc: "Each chat's history tabs, by `<station>:<chat>` (the latest 200)." }],
     ["dropFiles", map("bool"), { default: true, doc: "Chats whose files dragged in go otherwise than `dropAs` says, by `<station>:<chat>`: true as files, false\nnamed by their path (folders are named all the same)." }],
     ["driveViews", map("String"), { default: true, doc: "How a station's files are listed on this device: each place's view (`page`: the files' page, `tab`: a\nchat's 文件 tab; tree, columns or list, none: columns), their order (`sort`: name, time, size or kind, `-down`\nafter it for the other way; none: name), whether hidden files show (`hidden`: shown) and how wide columns are\n(`column`: in pixels; none: 240)." }],

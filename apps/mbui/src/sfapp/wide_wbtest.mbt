@@ -46,6 +46,36 @@ test "wide: the rail, the chats' list beside it and a page in the rest; below th
 }
 
 ///|
+/// The `client.focus` the app told of its attention, those that say a new chat is on top (`newChat`).
+fn new_chat_told(calls : Array[Made]) -> Array[String] {
+  named(calls, "client.focus").filter_map(fn(m) {
+    match field(Some(m.params), "newChat") {
+      Some(String(w)) => Some(w)
+      _ => None
+    }
+  })
+}
+
+///|
+test "wide: a new chat on top is told the core as what its workspace goes back to (the app opened again lands there), a chat opened over it not" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  assert_true(app.nav.top() == NewChat)
+  assert_eq(new_chat_told(calls).last(), Some("ws1"))
+  let before = new_chat_told(calls).length()
+  t.tap_text("夜里的构建又失败了")
+  assert_true(app.nav.top() is Chat(_))
+  assert_eq(new_chat_told(calls).length(), before)
+  // the chat's own, as it shows (chat_list.mbt tell_focus): what the workspace goes back to now
+  assert_true(named(calls, "client.focus").last().map(fn(m) { field(Some(m.params), "newChat") is None }) == Some(true))
+  t.tap_text("新建对话")
+  t.draw()
+  assert_true(app.nav.top() == NewChat)
+  assert_eq(new_chat_told(calls).length(), before + 1)
+  assert_eq(new_chat_told(calls).last(), Some("ws1"))
+}
+
+///|
 test "wide: a row pressed opens its chat beside the list, lit; another replaces it; ⌥↓ the next" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)

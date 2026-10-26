@@ -9,8 +9,9 @@ import { isObject } from "./util.ts";
 /// message shown whole (`seen`, its seq).
 export type ChatOf = { station: string; thread: number | null; session: string | null; end: boolean; seen: number | null };
 
-/// What a UI said: each field given changes, the rest stays. `chat` undefined: not said; null: shows none.
-export type FocusCall = { visible: boolean | null; focused: boolean | null; chat: ChatOf | null | undefined; left: ChatOf | null; workspace: string | null };
+/// What a UI said: each field given changes, the rest stays. `chat` undefined: not said; null: shows none. `newChat`: the
+/// workspace whose new chat it shows now (what that workspace goes back to).
+export type FocusCall = { visible: boolean | null; focused: boolean | null; chat: ChatOf | null | undefined; left: ChatOf | null; workspace: string | null; newChat: string | null };
 
 export type AttendCall =
   | { kind: "focus"; focus: FocusCall }
@@ -46,11 +47,12 @@ export function parseAttend(name: string, params: unknown): AttendCall | null {
         ["chat", "value", "opt"],
         ["left", "value", "opt"],
         ["workspace", "string", "opt"],
+        ["newChat", "string", "opt"],
       ]);
       const given = isObject(p) && "chat" in p;
       const chat = !given ? undefined : f.chat === null ? null : chatOf(f.chat);
       const left = f.left === null ? null : chatOf(f.left);
-      return { kind: "focus", focus: { visible: f.visible as boolean | null, focused: f.focused as boolean | null, chat, left, workspace: f.workspace as string | null } };
+      return { kind: "focus", focus: { visible: f.visible as boolean | null, focused: f.focused as boolean | null, chat, left, workspace: f.workspace as string | null, newChat: f.newChat as string | null } };
     }
     case "notify.set": {
       const f = read(p, [

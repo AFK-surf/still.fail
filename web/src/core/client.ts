@@ -171,9 +171,9 @@ export interface ChatShown { station: string; thread: number | null; session: st
 /**
  * Where this page's attention is (`client.focus`, client/core-ts/src/attend.ts): in view, looked at, the chat it shows,
  * the workspace it is in (an id, or `local`). Each field given changes; `chat: null` shows none; `left` says the chat
- * named is not shown any more.
+ * named is not shown any more; `newChat`, that the new chat of the workspace named shows (what it goes back to).
  */
-export interface Focus { visible?: boolean; focused?: boolean; chat?: ChatShown | null; left?: ChatShown; workspace?: string }
+export interface Focus { visible?: boolean; focused?: boolean; chat?: ChatShown | null; left?: ChatShown; workspace?: string; newChat?: string }
 
 export interface ErrorBody {
   code: string;
@@ -348,7 +348,8 @@ export class CoreClient {
 
   /** Tells the core where this page's attention is (see `Focus`); a core from before it refuses it (`unknown_call`). */
   focus(part: Focus): Promise<unknown> {
-    const { left, ...rest } = part;
+    // (a new chat shown is kept by the core as what its workspace goes back to: not said again to a core started anew)
+    const { left, newChat: _, ...rest } = part;
     const next: Focus = { ...this.#focus, ...rest };
     if (left && next.chat && same(next.chat, left)) next.chat = null;
     this.#focus = next;

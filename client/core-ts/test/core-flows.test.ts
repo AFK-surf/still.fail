@@ -1054,6 +1054,40 @@ test("a_chat_shown_has_its_unread_line_and_is_read_while_its_end_is_in_view", as
   core.close();
 });
 
+// The desktop app opened again on the chat shown before the new chat it was left on (2026-10-26): the new chat told the
+// core nothing, so the chat stayed the one the workspace went back to.
+test("a_workspace_goes_back_to_its_new_chat_once_one_shows_after_a_chat_and_so_when_the_app_opens_again", async () => {
+  const { host, core } = await started();
+  let ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "workspaceMarks", workspace: "ws" });
+  call(core, ui, 2, "client.focus", { visible: true, workspace: "ws", chat: { station: "ws/st", thread: 7, session: "k1" } });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).workspaces.ws.chat, { station: "ws/st", key: "k1" });
+  // Its new chat shown in its place: what the workspace goes back to.
+  call(core, ui, 3, "client.focus", { left: { station: "ws/st", thread: 7, session: "k1" }, newChat: "ws" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).workspaces.ws.chat, undefined);
+  // Opened again: the same.
+  core.close();
+  const again = await Core.create(host, { clock: host.time.clock, sample: 0, wire: () => new HostWire(host) });
+  ui = again.connect();
+  const after = new Map();
+  subscribe(again, ui, 1, { topic: "workspaceMarks", workspace: "ws" });
+  await host.settle();
+  apply(host, after);
+  assert.ok(v(after, 1).workspaces.ws);
+  assert.equal(v(after, 1).workspaces.ws.chat, undefined);
+  // A chat shown after it: that chat again.
+  call(again, ui, 2, "client.focus", { chat: { station: "ws/st", thread: 7, session: "k1" } });
+  await host.settle();
+  apply(host, after);
+  assert.deepEqual(v(after, 1).workspaces.ws.chat, { station: "ws/st", key: "k1" });
+  again.close();
+});
+
 test("what_two_chats_agents_wrote_each_other_is_not_in_the_chat_but_on_its_letters_page_by_the_other_chat", async () => {
   const said = (n: number, over: J = {}) => ({ thread: 7, n, kind: "message", ts: `${n}.0`, authorKind: "agent", author: "k1", authorName: null, text: "好", at: n, ...over });
   const backups = { title: "备份", link: "https://x/o/w/s/b" };
