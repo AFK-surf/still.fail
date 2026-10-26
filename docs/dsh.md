@@ -15,7 +15,7 @@ A station runs Claude Code, Codex, DeepSeek Harness and Grok Build (docs/grok.md
 dsh's configuration is a stack of patches over its shipped `acp` profile (`dsh --profile acp --dump-default-config` shows it). The station writes one more per session, in `<profile home>/stillfail/<hash of the session key>.patch.yml` (JSON, which is YAML), from `dshPatch`:
 
 - the profile's provider as a route: DeepSeek's own API on dsh's `deepseek-official` route (`llm-deepseek`, key in `DEEPSEEK_API_KEY`); any other on a pi-ai route named `stillfail` (`llm-pi-ai`) with the protocol the provider speaks, chat completions first, then Anthropic's, then Responses; key in `STILLFAIL_DSH_KEY`. A pi-ai route needs its model named.
-- the model (`agent-default-model`, and the route the plugin's `open` asks for), the effort (`low`/`medium`/`high`/`max`; DeepSeek's route takes `low`, `high`, `max`),
+- the model (`agent-default-model`, and the route the plugin's `open` asks for), the effort (`low`/`medium`/`high`/`max`; DeepSeek's route takes `low`, `high`, `max`); a pi-ai model known to read images (`accounts/models.ts` `seesImages`) is declared `input: ["text", "image"]`, so dsh's image tools read one for it — without the declaration dsh refuses every image, saying to switch models, whatever the model can do,
 - the station's instructions as the system prompt's `personaSuffix`, with no prompt variables (the ACP server's `{{model}}` has no value without it; `{{` in the instructions is broken with a zero-width space: dsh's variables are strict),
 - transcripts uncompressed under `<profile home>/dsh-sessions` (not dsh's own `sessions/`: a profile home's is Codex's too).
 
