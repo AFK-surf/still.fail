@@ -248,6 +248,62 @@ test("a turn that starts before the wait is over ends it", async (t) => {
   await r.close();
 });
 
+test("a turn that fails after it said it would wait ends failed, not waiting: nothing would ask it again", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
+  const r = new Rig();
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  await r.call(key, "chat_state", { kind: "waiting", seconds: 60, for: "CI 跑完" });
+  // It went on working after saying so, and its model could not be reached.
+  r.claude.last().end({ kind: "failed", reason: "model", message: "API Error: Connection dropped (ECONNRESET)" });
+  await settle();
+  const last = () => r.store.lastTurn(key)!;
+  assert.deepEqual([last().outcome, last().declared, last().waitSeconds], ["failed", null, null], "shown failed, not waiting");
+  assert.ok(matches(r.chat.lastText(), ["ECONNRESET"]), r.chat.lastText());
+  // As a station from before recorded it: waiting. The next station, started without a handover, puts it right.
+  r.store.endTurn(r.store.listTurns(key).at(-1)!.id, "failed", "model: API Error: Connection dropped (ECONNRESET)", "waiting", 60);
+  await r.hub.shutdown();
+  const claude = new FakeDriver("claude");
+  r.hub = r.newHub({ chats: (id) => (id === "cl" ? r.chat : undefined), drivers: [claude, new FakeDriver("codex")], internal: false });
+  await r.hub.takeUp();
+  r.hub.recover();
+  await settle();
+  assert.deepEqual([last().outcome, last().declared, last().waitSeconds], ["failed", null, null]);
+  t.mock.timers.tick(120_000);
+  await settle();
+  assert.equal(claude.count(), 0, "not asked again");
+  await r.close();
+});
+
+test("after a restart without a handover, a wait on record still asks again when it would have", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
+  const r = new Rig();
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  await r.call(key, "chat_state", { kind: "waiting", seconds: 60, for: "CI 跑完" });
+  r.claude.last().complete();
+  await settle();
+  // Stopped with nothing handed over (a crash), then the next station on the same store.
+  await r.hub.shutdown();
+  t.mock.timers.tick(20_000);
+  const claude = new FakeDriver("claude");
+  r.hub = r.newHub({ chats: (id) => (id === "cl" ? r.chat : undefined), drivers: [claude, new FakeDriver("codex")], internal: false });
+  await r.hub.takeUp();
+  r.hub.recover();
+  await settle();
+  t.mock.timers.tick(30_000);
+  await settle();
+  assert.equal(claude.count(), 0, "not before its time");
+  t.mock.timers.tick(11_000);
+  await settle();
+  assert.ok(claude.last().prompts[0]?.includes("waiting on work you started (60 seconds)"), JSON.stringify(claude.last().prompts));
+  await r.close();
+});
+
 test("slack edits are appended to the thread as entries of their own", async () => {
   const r = new Rig();
   const m = say("<@UBOT> typo");
