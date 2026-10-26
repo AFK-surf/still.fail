@@ -61,14 +61,15 @@ priv enum Shows {
 
 ///|
 /// A panel: its title ("" none), what it is about ("" nothing), what it holds and what is at its foot (each given
-/// what closes it), how wide beside what opened it, whether a wide dialog; its title, its step's count and what it
-/// is about as they are now (a wizard's), over those given.
+/// what closes it), how wide beside what opened it (or at most, where it `fits` what it holds), whether a wide dialog;
+/// its title, its step's count and what it is about as they are now (a wizard's), over those given.
 priv struct PanelOf {
   title : String
   description : String
   body : (@ui.Ctx, () -> Unit) -> Unit
   foot : ((@ui.Ctx, () -> Unit) -> Unit)?
   w : Double
+  fits : Bool
   wide : Bool
   live : (() -> (String, String, String))?
   tall : Double
@@ -97,6 +98,9 @@ priv struct Presented {
   mut ended : Bool
   /// as a sheet, found taller than a sheet's most: that tall from then on, what it holds scrolling in it
   mut over : Bool
+  /// beside what opened it as wide as what it holds (`fits`): the widest it has been laid out, never narrower from then
+  /// on
+  mut widest : Double
 }
 
 ///|
@@ -149,6 +153,7 @@ fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit
     gone,
     ended: false,
     over: false,
+    widest: 0.0,
   })
 }
 
@@ -183,7 +188,8 @@ pub fn pick(title : String, choices : Array[Choice], chosen : String, choose : (
 
 ///|
 /// A small panel (parts.tsx PanelHead and its rows, fields) titled `title` ("" none), opened by `from`: `body` draws
-/// what it holds each frame, given what closes it. `w`: how wide beside what opened it. Opened by nothing
+/// what it holds each frame, given what closes it. `w`: how wide beside what opened it; `fits`: as wide there as what
+/// it holds, `w` at most (columns of choices, the run picker's: no wider than its words). Opened by nothing
 /// (Unanchored), a dialog in the middle of the window (parts.tsx Dialog: `description` under its title, `foot`'s
 /// buttons at its foot, given what closes it, `wide` 640 wide in place of 520; `live`: its title, its step's count and
 /// what it is about as they are now, a wizard's). `gone`: what is let go of as it closes unsaid (back, Escape, a press
@@ -206,6 +212,7 @@ pub fn panel(
   body : (@ui.Ctx, () -> Unit) -> Unit,
   from~ : Anchor,
   w? : Double = panel_w,
+  fits? : Bool = false,
   description? : String = "",
   foot? : (@ui.Ctx, () -> Unit) -> Unit,
   wide? : Bool = false,
@@ -219,7 +226,7 @@ pub fn panel(
   form? : Bool = false,
   field? : String = "",
 ) -> Unit {
-  present(Panel({ title, description, body, foot, w, wide, live, tall, grows, focus, ruled, lists, form, field }), from, gone~)
+  present(Panel({ title, description, body, foot, w, fits, wide, live, tall, grows, focus, ruled, lists, form, field }), from, gone~)
 }
 
 ///|
@@ -952,7 +959,16 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
       beside_given.val = s
       // (a share of the window no taller than the room it has)
       let h : @ui.Size = if x.tall > 0.0 { Px(dmin(x.tall * wh_of(c), s.room)) } else { Auto }
-      small_panel(c, w=Px(x.w), h~, inner) |> ignore
+      if x.fits {
+        // (never narrower than it has been since it opened: what it holds changing as it is chosen in, a column of it
+        // coming and going, it keeps its sides where they were)
+        if c.laid_size(s.panel) is Some((w, _)) {
+          p.widest = dmax(p.widest, w)
+        }
+        small_panel(c, min_w?=if p.widest > 0.0 { Some(p.widest) } else { None }, max_w=x.w, h~, inner) |> ignore
+      } else {
+        small_panel(c, w=Px(x.w), h~, inner) |> ignore
+      }
     },
     fn() {
       // (its title as it is now, `live`'s, as a dialog's and a sheet's are)
