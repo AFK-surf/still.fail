@@ -35,9 +35,10 @@ for size in ${SIZES:-touch600 desk600 phone320}; do
       printf '%s\ntimeout 4000\nwait 1200\nsqueeze\nexit\n' "$system" > "$script"
       film="$dir/$mode.mp4"
       MBUI_LOCALE=$lang MBUI_FIXTURE=$mode MBUI_WIN=${w}x$h MBUI_FILM_PLATFORM=$platform MBUI_FILM_SCALE=2 \
-        MBUI_FILM="$PWD/$film" MBUI_FILM_DRIVE="$PWD/$script" "$EXE" 2>&1 | grep 'DRIVE SQUEEZE' \
+        MBUI_FILM="$PWD/$film" MBUI_FILM_LAST="$PWD/$dir/$mode.png" MBUI_FILM_DRIVE="$PWD/$script" "$EXE" 2>&1 | grep 'DRIVE SQUEEZE' \
         | sed "s|^.*DRIVE SQUEEZE |$size-$lang $mode: |" >> $OUT/faults.txt
-      "$FF" -loglevel error -y -sseof -0.05 -i "$film" -frames:v 1 "$dir/$mode.png" && rm -f "$film" "$film.textrec"
+      # (the last frame as drawn, MBUI_FILM_LAST: never one taken out of the film, whose H.264 is lossy)
+      rm -f "$film" "$film.textrec"
     done
   done
 done

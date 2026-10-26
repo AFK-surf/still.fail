@@ -18,6 +18,8 @@ mkdir -p out/corners
 : > out/corners/faults.txt
 if [ $# -gt 0 ]; then printf '%s %s %s\n' "$@"; else cat; fi | while read -r win lang mode step; do
   [ -n "$mode" ] || continue
+  # (a drive step after them may be several, `;` between them)
+  step=${step//;/$'\n'}
   # (a desktop's window rounded as its system draws it: a Mac's 16, Windows 11's 8; a phone's or a tablet's app fills
   # its screen)
   corner=0
@@ -41,7 +43,7 @@ if [ $# -gt 0 ]; then printf '%s %s %s\n' "$@"; else cat; fi | while read -r win
   film="$dir/$mode.mp4"
   said="$dir/$mode.txt"
   MBUI_LOCALE=$lang MBUI_FIXTURE=$mode MBUI_WIN=${w}x$h MBUI_FILM_PLATFORM=$platform MBUI_FILM_SCALE=2 MBUI_FILM_WINDOW_CORNER=$corner \
-    MBUI_FILM="$PWD/$film" MBUI_FILM_DRIVE="$PWD/$script" "$EXE" 2>&1 | grep 'DRIVE CORNER' \
+    MBUI_FILM="$PWD/$film" MBUI_FILM_LAST="$PWD/$dir/$mode.png" MBUI_FILM_DRIVE="$PWD/$script" "$EXE" 2>&1 | grep 'DRIVE CORNER' \
     | sed 's|^.*DRIVE CORNER ||' > "$said"
   sed "s|^|$win-$lang $mode: |" "$said" >> out/corners/faults.txt
   # the last frame as it is (<mode>.png) and with each fault outlined just outside its edges (<mode>-marked.png): the
@@ -61,7 +63,8 @@ if [ $# -gt 0 ]; then printf '%s %s %s\n' "$@"; else cat; fi | while read -r win
       [ $n -ge 2 ] && break
     done
   done < "$said"
-  "$FF" -loglevel error -y -sseof -0.05 -i "$film" -frames:v 1 "$dir/$mode.png" &&
+  # (the last frame as drawn, MBUI_FILM_LAST: never one taken out of the film, whose H.264 is lossy)
+  [ -s "$dir/$mode.png" ] &&
     "$FF" -loglevel error -y -i "$dir/$mode.png" -vf "null$boxes" "$dir/$mode-marked.png" && rm -f "$film" "$film.textrec"
 done
 echo "corners: $(wc -l < out/corners/faults.txt) faults, out/corners/faults.txt"

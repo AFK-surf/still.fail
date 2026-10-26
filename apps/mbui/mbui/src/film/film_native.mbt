@@ -45,6 +45,10 @@ extern "C" fn ffi_write_text(path : String, text : String) -> Int = "mbf_write_t
 extern "C" fn ffi_exit(code : Int) -> Unit = "mbf_exit"
 
 ///|
+#borrow(path)
+extern "C" fn ffi_snapshot(path : String) -> Int = "mbf_snapshot"
+
+///|
 fn init_offscreen(w : Double, h : Double, scale : Double) -> Unit {
   ffi_init_offscreen(w, h, scale)
 }
@@ -71,6 +75,12 @@ fn put_frame(k : Int) -> Bool {
 /// The film ended after `frames` frames and written out whole.
 fn close(frames : Int) -> Bool {
   ffi_close(frames) != 0
+}
+
+///|
+/// The frame drawn last, as the renderer drew it, written to `path` (a PNG).
+fn snapshot(path : String) -> Bool {
+  ffi_snapshot(path) != 0
 }
 
 ///|
