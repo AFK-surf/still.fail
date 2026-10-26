@@ -23,7 +23,7 @@ fn vault_item_reset() -> Unit {
 
 ///|
 /// The page (VaultItemPage, VaultItemScreen).
-fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, vault : String, item : String) -> Unit {
+pub fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, vault : String, item : String) -> Unit {
   let t = @sf.theme()
   let look = look_of(c)
   let ws = here.workspace

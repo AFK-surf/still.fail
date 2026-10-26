@@ -787,3 +787,11 @@ test "a connect's page: its model the one its station's profiles turned on, at i
   assert_true(t.find("自动分配") is Some(_))
   assert_true(t.find("尚未启用模型") is None)
 }
+
+///|
+/// What was just presented, in: a sheet (with a finger short of the Large tier) at rest; a panel by what opened it or
+/// a dialog (with a pointer) past its coming.
+fn presented_in(t : @ui.Tester) -> Unit {
+  let rest = @kit.sheet_rest("sf-present")
+  t.run_for(if rest > t.time() { rest - t.time() } else { @ui.nav_push_ms })
+}

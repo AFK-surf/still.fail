@@ -294,6 +294,14 @@ using @sf {
 
 ///|
 using @sfpages {
+  pf_card_foot,
+  pf_head,
+  pf_identity,
+  pf_mark,
+  pf_name,
+  pf_name_line,
+  pf_spin,
+  pf_sub,
   open_dialog,
   desk_dialogs,
   sec_section,

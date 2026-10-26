@@ -1,4 +1,4 @@
-// What the vault's pages and dialogs share (Vault.kt; the pages are src/sfdesk vault.mbt and vault_item.mbt, the
+// What the vault's pages and dialogs share (Vault.kt; the pages are src/sfpages vault.mbt and vault_item.mbt, the
 // dialogs vault_dialogs.mbt): its calls and how they failed (`vault.*`), the recovery words shown the once, an item
 // opened while its page is up (`vault.open`; what it holds never kept, never logged: stillfail/main.mbt `logged`), an
 // item written (`vault.putItem`: its params, the hosts it is given to, what is wrong with it).

@@ -1,6 +1,6 @@
 // What the vault's pages share (docs/vault.md; the core's `vaults` and `vaultItems`): its kinds of item and their
 // marks, how a secret is given, its grants and how long they last, the profiles' accounts by kind, whose service a
-// profile runs on. Its page is src/sfdesk vault.mbt's, one in every frame.
+// profile runs on. Its page is src/sfpages vault.mbt's, one in every frame.
 
 ///|
 /// The kinds of item, in the editor's order (Vault.kt KINDS).

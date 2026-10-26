@@ -5,7 +5,7 @@
 ///|
 /// 添加 (AddKinds): a subscription or a model's key (a profile: the Profile list), or a secret of a kind (its editor,
 /// the kind fixed); not locked, that such a secret is kept in the clear.
-fn vault_add_dialog(core : Core, here : Here) -> Unit {
+pub fn vault_add_dialog(core : Core, here : Here) -> Unit {
   let ws = here.workspace
   open_dialog(@sf.t("web-pages.vault.addKind.title"), fn(c, shut) {
     let t = @sf.theme()
@@ -56,7 +56,7 @@ fn vault_add_dialog(core : Core, here : Here) -> Unit {
 /// one opened changed (its row and what it holds); its name and fields, whether agents may ask for it (then how it is
 /// given, where to, under which variable, its longest grant); `vault.putItem`, the dialog staying while it is saved
 /// (refused, why under it); 删除 for one there, asked first. `plain`: the library is not locked, said first.
-fn vault_editor_dialog(
+pub fn vault_editor_dialog(
   core : Core,
   ws : String,
   vault : String,
@@ -261,7 +261,7 @@ fn vault_editor_dialog(
 ///|
 /// The recovery words typed in (Recover): this device keyed into the person's vaults again (`vault.recover`); how many
 /// typed of 24 at the foot.
-fn vault_recover_dialog(core : Core, ws : String) -> Unit {
+pub fn vault_recover_dialog(core : Core, ws : String) -> Unit {
   vault_serial.val += 1
   let key = "vault-recover/" + vault_serial.val.to_string()
   let state : Ref[(Bool, String)] = Ref((false, ""))
@@ -318,7 +318,7 @@ fn vault_recover_dialog(core : Core, ws : String) -> Unit {
 ///|
 /// (AddKinds: a card of rows, each its mark, its name and what it is)
 // kept across runs: a value (no field of it changes)
-let vd_kinds : @ui.Style = desk_list
+let vd_kinds : @ui.Style = @sf.desk_list
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -25,7 +25,7 @@ fn local_station_page(c : @ui.Ctx, core : Core) -> Unit {
         }
         local_failed(c, s)
         if adds {
-          c.box(style=vt_actions.then(@sf.foot_across(@sf.button_height())), fn() {
+          c.box(style=@sfpages.vt_actions.then(@sf.foot_across(@sf.button_height())), fn() {
             if @sf.button(c, @sf.t(if pc { "web-pages.settings.thisPc.add" } else { "web-pages.settings.thisMac.add" }), key="local/install", tone=Primary) {
               (core.local_install)(true)
             }

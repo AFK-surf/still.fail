@@ -45,4 +45,6 @@ pub fn reset() -> Unit {
   notify_page_reset()
   usage_reset()
   desk_dialogs.val = 0
+  vault_reset()
+  vault_item_reset()
 }

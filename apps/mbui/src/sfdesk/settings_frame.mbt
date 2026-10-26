@@ -81,9 +81,9 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     Workspace => @sfpages.workspace_page(c, core, here, frame)
     Security => @sfpages.security_page(c, core, here, frame)
     SecurityOpen => @sfpages.security_open_page(c, core, here, frame)
-    Vault => vault_page(c, core, here, frame)
-    VaultItems => vault_items_page(c, core, here, frame)
-    VaultItem(v, item) => vault_item_page(c, core, here, frame, v, item)
+    Vault => @sfpages.vault_page(c, core, here, frame)
+    VaultItems => @sfpages.vault_items_page(c, core, here, frame)
+    VaultItem(v, item) => @sfpages.vault_item_page(c, core, here, frame, v, item)
     Connects(only) => connects_page(c, src, core, here, frame, only)
     Connect(station, id) => connect_page(c, src, core, here, frame, station, id)
     Station(a) => station_page(c, core, here, frame, a)
@@ -119,9 +119,9 @@ fn settings_fixture(src : Source, core : Core) -> Unit {
         _ => ()
       }
     "new-connect" => new_connect_dialog(src, core, @settings.here_of(core, "ws1", "星火工作室"), "ws1/st1")
-    "vault-add" => vault_add_dialog(core, @settings.here_of(core, "ws1", "星火工作室"))
-    "vault-editor" => vault_editor_dialog(core, "ws1", "v1", None, kind="token")
-    "vault-recover" => vault_recover_dialog(core, "ws1")
+    "vault-add" => @sfpages.vault_add_dialog(core, @settings.here_of(core, "ws1", "星火工作室"))
+    "vault-editor" => @sfpages.vault_editor_dialog(core, "ws1", "v1", None, kind="token")
+    "vault-recover" => @sfpages.vault_recover_dialog(core, "ws1")
     _ => ()
   }
 }

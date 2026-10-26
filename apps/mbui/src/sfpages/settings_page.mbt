@@ -127,3 +127,39 @@ pub fn open_dialog(
   desk_dialogs.val += 1
   @sf.panel(title, body, from=Unanchored, description~, foot~, wide~, live?, gone~)
 }
+
+// ── who a profile or a key is, at the head of its page (the web's Accounts.css.ts identity), and a card's foot ──
+
+///|
+/// A card's buttons at its foot (cardFoot).
+// kept across runs: a value (no field of it changes)
+pub let pf_card_foot : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
+
+///|
+/// Who the account is (identity: its mark 48, its words beside it, 16 apart, 28 over what follows), where the page's
+/// frame puts it (the page's own top is the frame's: desk_own_head).
+// kept across runs: a value (no field of it changes)
+pub let pf_head : @ui.Style = @ui.css("row w=Full pb=S7 gap=S4 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+pub let pf_identity : @ui.Style = @ui.style(w=@sf.grow, gap=S1_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+pub let pf_mark : @ui.Style = @ui.css("w=S12 h=S12 radius=Lg bg=Neutral align=ACenter justify=JCenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+pub let pf_name : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false, w=Cut)
+
+///|
+// kept across runs: a value (no field of it changes)
+pub let pf_name_line : @ui.Style = @ui.css("row gap=S1 align=ACenter")
+
+///|
+pub let pf_spin : Double = 14.0
+
+///|
+// kept across runs: a value (no field of it changes)
+pub let pf_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)

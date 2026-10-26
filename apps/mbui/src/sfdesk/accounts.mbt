@@ -1660,37 +1660,15 @@ let pf_tag_glyph : Double = 12.0
 ///|
 let pf_chip_glyph : Double = 14.0
 
-///|
-let pf_spin : Double = 14.0
 
 ///|
 let pf_user_avatar : Double = 24.0
 
-///|
-/// Who the account is (identity: its mark 48, its words beside it, 16 apart, 28 over what follows), where the page's
-/// frame puts it (the page's own top is the frame's: desk_own_head).
-// kept across runs: a value (no field of it changes)
-let pf_head : @ui.Style = @ui.css("row w=Full pb=S7 gap=S4 align=ACenter")
 
-///|
-// kept across runs: a value (no field of it changes)
-let pf_mark : @ui.Style = @ui.css("w=S12 h=S12 radius=Lg bg=Neutral align=ACenter justify=JCenter")
 
-///|
-// kept across runs: a value (no field of it changes)
-let pf_identity : @ui.Style = @ui.style(w=@sf.grow, gap=S1_5)
 
-///|
-// kept across runs: a value (no field of it changes)
-let pf_name_line : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
-///|
-// kept across runs: a value (no field of it changes)
-let pf_name : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false, w=Cut)
 
-///|
-// kept across runs: a value (no field of it changes)
-let pf_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)
 
 ///|
 /// What its last check said, cut short where its line has less.
@@ -1723,10 +1701,6 @@ let pf_tag : @ui.Style = @ui.css("row h=S4_5 px=S1 gap=SPx align=ACenter radius=
 // kept across runs: a value (no field of it changes)
 let pf_tag_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, weight=Medium, color=Muted, wrap=false)
 
-///|
-/// A card's buttons at its foot (cardFoot).
-// kept across runs: a value (no field of it changes)
-let pf_card_foot : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
