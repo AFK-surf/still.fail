@@ -24,6 +24,8 @@ jobs:
       matrix:
         include:
           - { os: ubuntu-24.04, bin: moonbit-linux-x86_64.tar.gz, core: core-latest.tar.gz }
+          # (the Linux app's arm64 build: mbui.yml's linux job on GitHub's arm64 Ubuntu)
+          - { os: ubuntu-24.04-arm, bin: moonbit-linux-aarch64.tar.gz, core: core-latest.tar.gz }
           - { os: macos-15, bin: moonbit-darwin-aarch64.tar.gz, core: core-latest.tar.gz }
           - { os: windows-latest, bin: moonbit-windows-x86_64.zip, core: core-latest.zip }
           # (Mini1's own entry: a self-hosted runner's cache is not the same entry as macos-15's, its tar and
