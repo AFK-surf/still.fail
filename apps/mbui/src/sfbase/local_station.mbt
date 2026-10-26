@@ -31,8 +31,14 @@ fn local_station_install(src : Source, workspace : String) -> Unit {
   let failed = fn(error : String) {
     toast_later(fill(if pc { "web-pages.settings.thisPc.failed" } else { "web-pages.settings.thisMac.failed" }, [("error", error)]))
   }
-  // (the cloud names the station by its token: a token asked without a name is refused, invalid_name)
-  (src.call)("workspace.enroll", { "workspace": Json::string(workspace), "name": Json::string(local_machine_name()) }, fn(r) {
+  // (the cloud names the station by its token: a token asked without a name is refused, invalid_name; the core asks
+  // it as the account the workspace is reached through, none said refused too: 缺少 account)
+  let ask : Map[String, Json] = {
+    "workspace": Json::string(workspace),
+    "name": Json::string(local_machine_name()),
+    "account": Json::string(account_of(src, workspace)),
+  }
+  (src.call)("workspace.enroll", Json::object(ask), fn(r) {
     match r {
       Ok(v) =>
         match text(Some(v), "token") {
@@ -43,6 +49,23 @@ fn local_station_install(src : Source, workspace : String) -> Unit {
       Err(e) => failed(@settings.error_text(e))
     }
   })
+}
+
+///|
+/// The account `workspace` is reached through (the `workspaces` topic, as the settings' here_of reads it), "" none.
+fn account_of(src : Source, workspace : String) -> String {
+  match (src.topic)("workspaces", Map::new()).value {
+    Some(Array(accounts)) =>
+      for a in accounts {
+        for w in items(Some(a), "workspaces") {
+          if text(Some(w), "id") == workspace {
+            return text(field(Some(a), "account"), "sub")
+          }
+        }
+      }
+    _ => ()
+  }
+  ""
 }
 
 ///|
