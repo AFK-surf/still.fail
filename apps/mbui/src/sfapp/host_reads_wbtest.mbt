@@ -38,6 +38,15 @@ test "host reads: the window's buttons in the app's top row push the sidebar dow
 }
 
 ///|
+test "host reads: Windows caption buttons on the right leave the sidebar at its normal top" {
+  let t = reads_tester(platform=3)
+  let (_, normal) = t.find("新建对话").unwrap()
+  let t = reads_tester(platform=3, window_inset=true)
+  let (_, inset) = t.find("新建对话").unwrap()
+  assert_eq(inset, normal)
+}
+
+///|
 test "host reads: an action's keys said only while a keyboard is at hand: a phone's when one is plugged in, at once" {
   // (Android: none until one is plugged in, none again once it is taken away; macOS ⌘, Windows Ctrl+)
   let t = reads_tester(platform=2)

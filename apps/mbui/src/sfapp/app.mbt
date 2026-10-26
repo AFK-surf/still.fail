@@ -44,7 +44,6 @@ fn reset() -> Unit {
   bar_timing.val = None
   bar_timed.val = None
   home_sheet_at_start.val = false
-  update_anchor_reset()
   peeks_reset()
   share_in.shared = None
   share_in.files = []
