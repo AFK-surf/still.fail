@@ -40,7 +40,7 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       @sfpages.new_chat_page(c, src, w, frame)
       // its bar (newChatBar): 文件 where a chat's bar has it, over the page, what is in its middle where it is
       c.layer(fn() {
-        c.box(style=if @sf.in_pane() { new_files_bar_tape() } else { new_files_bar }, fn() {
+        c.box(style=if @sf.in_pane() { new_files_bar_tape() } else { new_files_bar_wide(files) }, fn() {
           if @sf.icon_button(c, "folder", key="new/files", round=true, label=@sf.t("web-pages.chat.files")) {
             new_files_set(src, w.id, !files)
           }
@@ -191,6 +191,18 @@ let new_frame_style : @ui.Style = @ui.css("w=Full h=Full")
 /// Where 文件 is: the chat's bar's end, over the page.
 // kept across runs: a value (no field of it changes)
 let new_files_bar : @ui.Style = @ui.style(row=true, w=Full, h=@sf.wide_bar_h_size, px=S3, align=ACenter, justify=JEnd)
+
+///|
+/// The same in a window's whole (laid out Large) while its panel is not open beside the page: 文件 before the window's
+/// own buttons where they are the app's, as a chat's bar's last (chat_page.mbt, page_bar_room: @sf.window_end_in);
+/// beside the panel, or where they are not the app's, 12 in.
+fn new_files_bar_wide(beside : Bool) -> @ui.Style {
+  if beside || !@ui.window_keys_own() {
+    new_files_bar
+  } else {
+    new_files_bar.then(@ui.style(pr=@sf.room_of(@sf.window_end_in(new_files_end))))
+  }
+}
 
 ///|
 /// The same in a panel of the tape, as a chat's bar there (chat_page.mbt chat_bar_box_tape): on the tape's line, 文件 in

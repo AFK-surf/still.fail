@@ -59,6 +59,23 @@ test "a Windows window laid out Large: its own buttons at the top row's right, 1
 }
 
 ///|
+test "a Windows window laid out Large: a new chat's Station 文件 before the window's buttons' rule, its panel open or closed" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="newchat-files", platform=3, window_corner=8.0, window_inset=true)
+  t.run_for(@ui.nav_push_ms)
+  assert_true(app.nav.top() == NewChat)
+  guard named_at(t, "最小化") is Some((mx, _, _, _)) else { fail("no minimize button") }
+  // kept open: the panel's bar's switch before them
+  assert_eq(past_rule(t, mx - 17.0), None)
+  // closed: 文件 at the page's end before their rule, as a chat's bar's last is (it stood under close)
+  t.click(Button, label="收起侧栏")
+  t.run_for(@sfdesk.side_out_ms)
+  guard named_at(t, "Station 文件") is Some((fx, _, fw, _)) else { fail("no Station 文件") }
+  assert_eq(fx + fw, mx - 17.0 - 12.0)
+  assert_eq(past_rule(t, mx - 17.0), None)
+}
+
+///|
 test "a Windows window's buttons: minimize and close do what the window's do; maximize as the host says the pointer stands on it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, platform=3, window_corner=8.0, window_inset=true)
