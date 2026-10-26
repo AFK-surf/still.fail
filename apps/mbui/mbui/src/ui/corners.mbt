@@ -24,6 +24,15 @@ fn Node::grounded(self : Node) -> Bool {
 }
 
 ///|
+/// Whether node `n` shows a ground of its own to the corner rule: a fill or an edge (grounded), or glass (a
+/// composer's frosted capsule, its ground the glass alone, no fill: the user, 2026-10-26, a finger's not concentric with
+/// the page's corners, not found).
+fn Node::shows_ground(self : Node) -> Bool {
+  self.grounded() ||
+  (self.kind == kind_box && self.opacity > 0.01 && self.fw > 0.0 && self.fh > 0.0 && self.glass is Some(_))
+}
+
+///|
 /// Whether node `n` has a ground in a state it is not in now, whatever it shows in this frame: one its style gives it
 /// pointed at, pressed, chosen or focused (state_ground), a row pressed as a whole too (its ground under the pointer in
 /// its container's corner as any other's: the user, 2026-10-26, a dialog's last row lit, its corners not alike, not
@@ -176,7 +185,7 @@ pub fn Tester::mixed_corners(self : Tester, lit? : Bool = false) -> Array[String
     if b.layer || b.opacity <= 0.01 || b.fw <= 0.0 || b.fh <= 0.0 {
       continue
     }
-    if !(b.grounded() || b.lit_ground() || b.clip) {
+    if !(b.shows_ground() || b.lit_ground() || b.clip) {
       continue
     }
     let half = dmin(b.fw, b.fh) / 2.0
@@ -216,7 +225,7 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
   let holds = c.round_held(grounds, pictures)
   for i in 0..<c.count {
     let b = c.nodes[i]
-    if !(b.grounded() || b.lit_ground()) || b.layer {
+    if !(b.shows_ground() || b.lit_ground()) || b.layer {
       continue
     }
     let ct = match c.corner_container(i, grounds) {
@@ -429,7 +438,7 @@ fn Ctx::round_held(self : Ctx, grounds : Map[Int, Int], pictures : Set[Int]) -> 
   let out : Map[Int, Array[(Int, Double)]] = {}
   for j in 0..<self.count {
     let b = self.nodes[j]
-    if !(b.grounded() || b.lit_ground()) || b.layer {
+    if !(b.shows_ground() || b.lit_ground()) || b.layer {
       continue
     }
     let half = dmin(b.fw, b.fh) / 2.0
