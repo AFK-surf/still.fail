@@ -7,7 +7,7 @@
 // scripts/android.sh fling-test).
 
 ///|
-priv struct Fixture {
+pub(all) struct Fixture {
   mode : String
   mut workspace : String
   /// the theme chosen (the prefs' `appearance`): light unless the mode ends in -dark or MBUI_DARK=1, so that
@@ -47,7 +47,7 @@ priv struct Fixture {
 /// The 奏 page's queue as the core makes it of the made-up stations' decisions (the view's `items`, `count`, `shown`):
 /// those answered or let go here gone, as their station takes them; their order and the one shown the core's
 /// (decisions.ts order and shownIn, its answers kept), what it keeps of the one shown kept here for the next view.
-fn fixture_queue(f : Fixture, value : Json?) -> Json? {
+pub fn fixture_queue(f : Fixture, value : Json?) -> Json? {
   match value {
     Some(Object(m)) => {
       let all = items(value, "items").filter(fn(i) { !f.queue_gone.contains(decision_key(i)) })
@@ -96,7 +96,7 @@ fn fixture_queue(f : Fixture, value : Json?) -> Json? {
 /// What a call answered (`done`) does to the 奏 page's queue, once its station takes it: an answer, a reply, a letting
 /// go take the decision out of it; set aside, it goes last, and if it was shown the one then in its place is (the
 /// core's decisions.ts setAside, kept); picked (`decision.show`), it is the one shown.
-fn fixture_queue_done(
+pub fn fixture_queue_done(
   f : Fixture,
   name : String,
   params : Json,
@@ -146,7 +146,7 @@ fn fixture_queue_done(
 ///|
 /// The tabs kept to begin with: the new chat's Station 文件 (newchat-files), and what the first row's chat has open
 /// beside it on the wide frame's screenshots (its agent's history, its services and jobs, agent 往来).
-fn fixture_chat_tabs(mode : String) -> Map[String, Json] {
+pub fn fixture_chat_tabs(mode : String) -> Map[String, Json] {
   let kept = fn(tab : String) -> Json { { "tabs": [Json::string(tab)], "active": Json::string(tab) } }
   match mode {
     "newchat-files" => { "new:ws1": kept("files") }
@@ -161,7 +161,7 @@ fn fixture_chat_tabs(mode : String) -> Map[String, Json] {
 ///|
 /// The tabs shown to begin with where more than one is kept (chat-tabs-side: the agent's history behind 任务, the
 /// panel's two tabs pointed at), as the core shows what is kept (chat-tabs.ts tabsOf).
-fn fixture_tabs_shown(mode : String) -> Map[String, Json] {
+pub fn fixture_tabs_shown(mode : String) -> Map[String, Json] {
   match mode {
     "chat-tabs-side" => { "ws1/st1:s-c1": { "open": ["s-c1", "jobs"], "shown": "jobs" } }
     _ => {}
@@ -171,7 +171,7 @@ fn fixture_tabs_shown(mode : String) -> Map[String, Json] {
 ///|
 /// What the core is asked of a chat's tabs (chat-tabs.ts: what is kept for `key`, the agents of `chat`, its view, as
 /// far as their tabs go, whether it has a chat yet, its session; the `change`, when one is made), as kept.
-fn fixture_tabs_ask(f : Fixture, key : String, chat : Json?, change : Json?) -> Json {
+pub fn fixture_tabs_ask(f : Fixture, key : String, chat : Json?, change : Json?) -> Json {
   let (station, rest) = match key.find(":") {
     Some(i) => (key.view(end_offset=i).to_string(), key.view(start_offset=i + 1).to_string())
     None => ("", "")
@@ -198,7 +198,7 @@ fn fixture_tabs_ask(f : Fixture, key : String, chat : Json?, change : Json?) -> 
 
 ///|
 /// A chat's view with its side panel's tabs, as the core makes them of what is kept for it (the view's `tabs`).
-fn fixture_with_tabs(f : Fixture, params : Map[String, Json], value : Json?) -> Json? {
+pub fn fixture_with_tabs(f : Fixture, params : Map[String, Json], value : Json?) -> Json? {
   match value {
     Some(Object(m)) => {
       let key = text(Some(Json::object(params)), "station") + ":" + text(Some(Json::object(params)), "session")
@@ -220,7 +220,7 @@ fn fixture_with_tabs(f : Fixture, params : Map[String, Json], value : Json?) -> 
 ///|
 /// `chat.tabs.open / close / front / clear` (`chat`: its key, `tab`, `auto`): what is kept for the chat changed as the
 /// core changes it (nothing, where it says nothing changes).
-fn fixture_tabs_call(f : Fixture, name : String, params : Json) -> Result[Json, Json] {
+pub fn fixture_tabs_call(f : Fixture, name : String, params : Json) -> Result[Json, Json] {
   let key = text(Some(params), "chat")
   let chat = match key.find(":") {
     Some(i) if key.view(end_offset=i).contains("/") =>
@@ -256,7 +256,7 @@ fn fixture_tabs_call(f : Fixture, name : String, params : Json) -> Result[Json, 
 }
 
 ///|
-fn agent(maker : String, runtime : String) -> Json {
+pub fn agent(maker : String, runtime : String) -> Json {
   let a : Map[String, Json] = {
     "runtime": Json::string(runtime),
     "agentText": Json::string(maker + " · " + runtime),
@@ -268,7 +268,7 @@ fn agent(maker : String, runtime : String) -> Json {
 }
 
 ///|
-fn person(id : String, name : String, mine : Bool) -> Json {
+pub fn person(id : String, name : String, mine : Bool) -> Json {
   {
     "id": Json::string(id),
     "name": Json::string(name),
@@ -284,7 +284,7 @@ fn person(id : String, name : String, mine : Bool) -> Json {
 
 ///|
 /// A row: its id and title, its station, when, and the rest as the view gives it.
-fn row(
+pub fn row(
   id : String,
   title : String,
   station : String,
@@ -318,16 +318,16 @@ fn row(
 }
 
 ///|
-let me : Json = person("lin@example.com", "林", true)
+pub let me : Json = person("lin@example.com", "林", true)
 
 ///|
-let ana : Json = person("ana@example.com", "Ana", false)
+pub let ana : Json = person("ana@example.com", "Ana", false)
 
 ///|
-let zhou : Json = person("zhou@example.com", "周", false)
+pub let zhou : Json = person("zhou@example.com", "周", false)
 
 ///|
-fn last(text : String) -> Json {
+pub fn last(text : String) -> Json {
   { "seq": 1, "authorKind": "agent", "author": "a", "text": Json::string(text), "createdAt": 0, "preview": Json::string(text) }
 }
 
@@ -335,7 +335,7 @@ fn last(text : String) -> Json {
 /// The web's demo's chats (ember web/src/demo/fixtures.ts startingChats), its one station's, as its core lists them:
 /// MBUI_FIXTURE=webdemo, the wide frame beside the web's story app-chat with the same chats (their people's pictures
 /// letters here).
-fn webdemo_days() -> Array[Json] {
+pub fn webdemo_days() -> Array[Json] {
   let lin = person("lin@acme.dev", "林晓", false)
   let chen = person("chen@acme.dev", "陈默", false)
   let zhou = person("zhou@acme.dev", "周宁", false)
@@ -386,7 +386,7 @@ fn webdemo_days() -> Array[Json] {
 
 ///|
 /// The chats of the first workspace, newest first, by day.
-fn fixture_days(f : Fixture) -> Array[Json] {
+pub fn fixture_days(f : Fixture) -> Array[Json] {
   if f.mode == "webdemo" {
     return webdemo_days()
   }
@@ -542,7 +542,7 @@ fn fixture_days(f : Fixture) -> Array[Json] {
 }
 
 ///|
-fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
+pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
   let scope = match params.get("scope") {
     Some(String(s)) => s
     _ => ""
@@ -629,13 +629,13 @@ fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
 ///|
 /// The made-up core changed: its version on by one, told to what follows its topics (@settings.fixture_changed), as
 /// the core's message for a subscription is (src/core Sub.changes).
-fn Fixture::changed(self : Fixture) -> Unit {
+pub fn Fixture::changed(self : Fixture) -> Unit {
   self.version += 1
   @settings.fixture_changed()
 }
 
 ///|
-fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topic {
+pub fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topic {
   // (read in a computed, followed as the made-up core changes: Fixture::changed)
   @settings.fixture_followed()
   fix_tick(f)
@@ -676,7 +676,7 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
 ///|
 /// What the made-up station says of a file a message names (GET /sessions/:key/peek): the rich chat's place.mbt, a few
 /// of its lines round the one named; anything else not there.
-fn fixture_file_peek(path : String) -> Json {
+pub fn fixture_file_peek(path : String) -> Json {
   match path {
     "src/list/place.mbt" =>
       {
@@ -700,7 +700,7 @@ fn fixture_file_peek(path : String) -> Json {
 ///|
 /// What the made-up station says of a web link (station/src/links/preview.ts): the rich chat's benchmark page as a
 /// page, a pull request on GitHub as GitHub says it, anything else nothing to show of it.
-fn fixture_link_preview(url : String) -> Json {
+pub fn fixture_link_preview(url : String) -> Json {
   match url {
     "https://example.com/bench/list" =>
       { "kind": "page", "url": url, "title": "列表滚动的性能数据", "site": "Example", "description": "每一帧的耗时" }
@@ -726,7 +726,7 @@ fn fixture_link_preview(url : String) -> Json {
 
 ///|
 /// What a made-up topic says (fixture_topic: as the screens' fixtures have it, before the core's shapes are made of it).
-fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -> Json? {
+pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -> Json? {
   let account : Json = { "sub": "u1", "email": "lin@example.com", "name": "林" }
   let value : Json? = match name {
     "accounts" =>
@@ -871,7 +871,7 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
 ///|
 /// The made-up stations as the core lists them: each one's `net` left out, how this device reaches it (`way`: its
 /// path and via) in its place.
-fn fixture_stations_way(v : Json?) -> Json? {
+pub fn fixture_stations_way(v : Json?) -> Json? {
   match v {
     Some(Array(list)) =>
       Some(
@@ -1243,7 +1243,7 @@ pub fn fixture_updates(ms? : Double = 0.0) -> Unit {
 ///|
 /// The core's pure calls (`markdown`, `code.ink`, `reader.*`, `commands.find`) as the real core answered them, kept (src/sfkept: bound
 /// by a run without a core); None for any other.
-fn fixture_kept(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Bytes?), Json]? {
+pub fn fixture_kept(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Bytes?), Json]? {
   // (⌘K's words are the core's in its language: the made-up core's is the app's)
   let params = match (name, params) {
     ("commands.find", Object(m)) => {
@@ -1260,122 +1260,11 @@ fn fixture_kept(name : String, params : Json, bytes : Bytes?) -> Result[(Json, B
 }
 
 ///|
-/// What a fixture mode opens over Home before the first frame, as src/sffix (the screenshots' app) opens it: the
-/// first row's chat (opened at a message from a notification for chat-flash…), its cards' states; the drive's pages;
-/// the 奏 page, a history, a chat's sheets; a new chat, the bar's panel, a place; a page of the settings.
-pub fn open_fixture_mode(mode : String) -> Unit {
-  let rich : ChatRef = {
-    station: "ws1/st1",
-    session: "s-c1",
-    title: "整理发布清单",
-    station_name: "Studio",
-  }
-  if mode == "chat-flash" || mode == "chat-flash-mine" {
-    // opened from a notification at a message (Ana's, or yours), its flash held at its peak (slice 10's)
-    open_chat_at(rich, if mode == "chat-flash" { 4.0 } else { 6.0 }, held=true)
-  } else if mode.has_prefix("chat") {
-    open_chat(rich)
-    // the cards' states (chat_fixture.mbt): chat-cards, chat-answering
-    open_cards_fixture(mode)
-  }
-  // the drive's pages (src/sfapp/drive_fixture.mbt): files, drive…, reader…
-  open_drive_fixture(mode)
-  // slice 8's (src/sfapp/decide_fixture.mbt): the 奏 page, a history, a chat's sheets
-  open_fixture(mode)
-  // a new chat (with its sheets), the bar's panel, a place: newchat_fixture.mbt
-  open_mode(mode)
-  // a station's screen (screen_fixture.mbt)
-  @sfpages.open_screen_fixture(mode)
-  if mode.has_prefix("settings") {
-    open_setting(@settings.fixture_page(mode))
-  }
-  // 关于 with a newer build offered and still.fail cloud asked again before it downloads, on a device that sends
-  // usage statistics and error reports: its rows at their fullest
-  if mode == "settings-about" {
-    fixture_update("0.1.5283")
-    update.installing = true
-    reporting_host.val = Some({ get: fn() { true }, set: fn(_) {  } })
-  }
-  // the search open over Home, words typed (search_fixture.mbt)
-  @sfpages.open_search_mode(mode)
-  // a device not yet confirmed in the workspace's safe mode: lock-waiting, lock-finding, lock-code, lock-wrong (its
-  // waiting page in the chats' place), lock-security (its security page)
-  if mode == "lock-security" {
-    open_setting(@settings.fixture_page("settings-security"))
-  }
-  // ⌘/'s shortcuts at a glance (wide_keys.mbt keys_dialog)
-  if mode == "keys-dialog" {
-    @sfdesk.wide.keys_open = true
-  }
-}
-
-///|
-/// The app as src/sffix starts it for `mode`, for a Tester made next (screens_wbtest.mbt): the app as at the start (reset:
-/// whatever ran before in the process), the made-up source of the mode and what it opens before the first frame
-/// (open_fixture_mode). The Tester keeps it as it starts (reset by hand).
-pub fn fixture_app(mode : String) -> Source {
-  reset()
-  let src = fixture(mode)
-  open_fixture_over(mode, src)
-  src
-}
-
-///|
-/// What `mode` opens over the app, over `src` (its own, or a test's made of it): its pages (open_fixture_mode), then
-/// what is put up reading through `src` (open_fixture_src). The one way a mode is opened: sffix's, the films', the
-/// screens' and the tests' alike.
-pub fn open_fixture_over(mode : String, src : Source) -> Unit {
-  open_fixture_mode(mode)
-  open_fixture_src(mode, src)
-}
-
-///|
-/// What the mode opens over the app once its source is made (what is put up reading through it), as open_fixture_mode
-/// opens its pages: ＋'s Station 文件 (chat-station-files); a station's file's card pressed, its panel (chat-station-sheet);
-/// the files' Pin 文件夹 with no one station in view, which station first (files-add-folder: its rows' grounds under the
-/// pointer, the last in the dialog's foot corners); the card to share of the agents at work (share-card).
-pub fn open_fixture_src(mode : String, src : Source) -> Unit {
-  // slice 8's panels over the chat (decide_fixture.mbt)
-  open_decide_panels(mode, src)
-  if mode == "files-add-folder" {
-    @sfdesk.add_folder(src, "ws1", @sfdesk.pin_stations(src, "ws1"))
-  }
-  // (share-card-dark: over the dark theme)
-  if mode == "share-card" || mode == "share-card-dark" {
-    @sfpages.share_card_open(src, { id: "ws1", name: "星火工作室", emoji: "", icon: "", email: "lin@example.com" })
-  }
-  if mode == "chat-station-files" {
-    fixture_station_files(src)
-  }
-  if mode == "chat-station-sheet" {
-    @sfpages.ref_panel_put(src, "ws1/st1:s-c1", "ws1/st1", "ref-发布清单.md", "发布清单.md")
-  }
-}
-
-///|
-/// The first row's chat (opened by sffix for chat… modes): ＋'s Station 文件 in 文档, a file ticked.
-fn fixture_station_files(src : Source) -> Unit {
-  @sfdesk.station_files_pick(src, "ws1/st1:s-c1")
-  @sfdesk.station_pick_set({ station: "ws1/st1", station_name: "Studio", root: fix_docs, root_name: "文档", path: "" }, [
-    {
-      station: "ws1/st1",
-      station_name: "Studio",
-      root: fix_docs,
-      path: "发布清单.md",
-      abs: fix_docs + "/发布清单.md",
-      name: "发布清单.md",
-      size: 4210.0,
-      dir: false,
-    },
-  ])
-}
-
-///|
 /// The card shared of the agents at work (the core's `fleet` view, views/fleet.ts), as the made-up workspace has it:
 /// its one Claude subscription's week, Studio's one chat at work; the card to share's (share-card, share-card-…) three
 /// kinds of subscription (six Claude accounts' 489%, 4.89 accounts' weeks; two ChatGPT's, two OpenCode Go's), nine
 /// chats at work on three stations, and their week.
-fn fixture_fleet(f : Fixture) -> Json {
+pub fn fixture_fleet(f : Fixture) -> Json {
   if !f.mode.has_prefix("share-card") {
     return {
       "at": "10月26日 04:12",

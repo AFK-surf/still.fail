@@ -7,6 +7,7 @@
 fn init {
   @sfbase.login_card_of.val = fn(c, core, station, id, marked) { login_card(c, core, station, id, marked~) }
   @sfbase.share_card_of.val = share_card_open
+  @sfbase.screen_made_stream.val = screen_fixture_stream
 }
 
 ///|

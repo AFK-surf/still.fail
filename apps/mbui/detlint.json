@@ -161,6 +161,12 @@
       "nav_foot"
     ]
   },
+  "fixture": {
+    "package": "@sffixture",
+    "openers": [
+      "src/sfapp/fixture_open.mbt"
+    ]
+  },
   "build_effect": {
     "later": [
       "@sf.menu",
@@ -382,7 +388,8 @@
       "src/sfdesk/newchat.mbt": 2,
       "src/sfdesk/settings_frame.mbt": 1,
       "src/sfdesk/shortcuts.mbt": 2
-    }
+    },
+    "fixture-import": {}
   },
   "excused": {
     "frame-request": {},
@@ -399,7 +406,7 @@
     "stable-mode": {},
     "retired-api": {},
     "app-clock": {
-      "src/sfapp/browse_fixture.mbt": 1
+      "src/sffixture/browse_fixture.mbt": 1
     },
     "wall-clock": {},
     "engine-math": {},
@@ -437,6 +444,7 @@
       "src/sfdesk/drive_views.mbt": 1
     },
     "cursor-hand": {},
-    "tier-outside-shell": {}
+    "tier-outside-shell": {},
+    "fixture-import": {}
   }
 }

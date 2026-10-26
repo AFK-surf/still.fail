@@ -8,23 +8,23 @@
 // chat of thousands of messages, for timing the list. Every word here is made up.
 
 ///|
-fn by_agent(maker : String, runtime : String, key : String) -> Json {
+pub fn by_agent(maker : String, runtime : String, key : String) -> Json {
   { "name": "Claude", "agent": Json::string(key), "maker": { "id": Json::string(maker), "name": Json::string(maker) }, "runtime": Json::string(runtime), "here": true }
 }
 
 ///|
-fn by_person(name : String) -> Json {
+pub fn by_person(name : String) -> Json {
   { "name": Json::string(name) }
 }
 
 ///|
-fn ago(s : String, full : String) -> Json {
+pub fn ago(s : String, full : String) -> Json {
   { "createdAt": { "at": 0, "ago": Json::string(s), "full": Json::string(full), "until": "", "past": true } }
 }
 
 ///|
 /// A message: its seq, who said it, its words, and the rest as the view gives it.
-fn msg(
+pub fn msg(
   seq : Int,
   kind : String,
   by : Json,
@@ -63,7 +63,7 @@ fn msg(
 }
 
 ///|
-fn file(name : String, w : Int, h : Int, size : Int) -> Json {
+pub fn file(name : String, w : Int, h : Int, size : Int) -> Json {
   let f : Map[String, Json] = {
     "name": Json::string(name),
     "path": Json::string("work/s-c1/" + name),
@@ -79,7 +79,7 @@ fn file(name : String, w : Int, h : Int, size : Int) -> Json {
 
 ///|
 /// A film as the station keeps it in a message: its size, and its length (ms) and frames as read from its header.
-fn film_file(name : String, w : Int, h : Int, size : Int, ms : Int, frames : Int) -> Json {
+pub fn film_file(name : String, w : Int, h : Int, size : Int, ms : Int, frames : Int) -> Json {
   match file(name, w, h, size) {
     Object(f) => {
       let f = f.copy()
@@ -92,7 +92,7 @@ fn film_file(name : String, w : Int, h : Int, size : Int, ms : Int, frames : Int
 }
 
 ///|
-let long_reply : String =
+pub let long_reply : String =
   #|## 列表改成虚拟列表
   #|
   #|先说结论：**只建屏幕上看得见的行**，其余的行按估计的高度占位，滚到时再量真实高度。这样几千条消息也只排十几行。
@@ -129,7 +129,7 @@ let long_reply : String =
 
 ///|
 /// The first row's chat, its page of `older` pages back included.
-fn rich_chat(older : Int) -> Json {
+pub fn rich_chat(older : Int) -> Json {
   let claude = by_agent("anthropic", "claude", "s-c1")
   let early : Array[Json] = []
   // the pages before, oldest first: ten short messages each
@@ -259,7 +259,7 @@ fn rich_chat(older : Int) -> Json {
 
 ///|
 /// Any other row's chat: what was asked, and the answer.
-fn small_chat(title : String, session : String) -> Json {
+pub fn small_chat(title : String, session : String) -> Json {
   let claude = by_agent("anthropic", "claude", session)
   {
     "me": { "email": "lin@example.com" },
@@ -290,7 +290,7 @@ fn small_chat(title : String, session : String) -> Json {
 ///|
 /// A chat just made from a new chat (`new:N`, newChat.create): named by no one yet (新对话, as the core calls it),
 /// nothing said in it.
-fn made_chat(session : String) -> Json {
+pub fn made_chat(session : String) -> Json {
   match small_chat("新对话", session) {
     Object(m) => {
       let o = m.copy()
@@ -303,7 +303,7 @@ fn made_chat(session : String) -> Json {
 
 ///|
 /// Thousands of messages, of the kinds a long chat has: short words back and forth, an agent's Markdown now and then.
-fn long_chat(n : Int) -> Json {
+pub fn long_chat(n : Int) -> Json {
   let claude = by_agent("anthropic", "claude", "s-c1")
   let out : Array[Json] = []
   for i in 0..<n {
@@ -342,10 +342,10 @@ fn long_chat(n : Int) -> Json {
 
 ///|
 /// The made-up chats as made the first time (made again each frame, a long one would cost more than the page).
-let kept_chats : Map[String, Json] = {}
+pub let kept_chats : Map[String, Json] = {}
 
 ///|
-fn kept_chat(key : String, make : () -> Json) -> Json {
+pub fn kept_chat(key : String, make : () -> Json) -> Json {
   match kept_chats.get(key) {
     Some(v) => v
     None => {
@@ -358,10 +358,10 @@ fn kept_chat(key : String, make : () -> Json) -> Json {
 
 ///|
 /// The pictures the made-up files are: soft gradients of their own, made once.
-let fixture_pictures : Map[String, String] = {}
+pub let fixture_pictures : Map[String, String] = {}
 
 ///|
-fn fixture_file(name : String) -> String {
+pub fn fixture_file(name : String) -> String {
   match fixture_pictures.get(name) {
     Some(k) => k
     None => {
@@ -375,7 +375,7 @@ fn fixture_file(name : String) -> String {
 
 ///|
 /// A made-up file's picture as PNG bytes: the same one its thumbnail in the chat shows and the preview opens.
-fn fixture_file_png(name : String) -> Bytes {
+pub fn fixture_file_png(name : String) -> Bytes {
   let (w, h, a, b) = match name {
     "home-after.png" => (60, 130, (0xF5, 0xF3, 0xEF), (0xE5, 0x70, 0x4A))
     "compare.png" => (160, 90, (0x5B, 0x7B, 0xB2), (0xF2, 0xB0, 0x1E))
@@ -402,7 +402,7 @@ fn fixture_file_png(name : String) -> Bytes {
 
 ///|
 /// The fixture's chat topics: the chat (by its session), the workspace's stations, its jobs, its login card.
-fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) -> Json? {
+pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) -> Json? {
   let session = match params.get("session") {
     Some(String(s)) => s
     _ => ""
@@ -644,7 +644,7 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
 
 ///|
 /// A made-up chat as the fixture changes it: what was sent in it since (its messages, its outbox), by session.
-priv struct FixChat {
+pub(all) struct FixChat {
   sent : Array[Json]
   outbox : Array[Json]
   /// its agent at work on what was sent (its activity shows), since when (ms)
@@ -655,14 +655,14 @@ priv struct FixChat {
 }
 
 ///|
-let fix_chats : Map[String, FixChat] = {}
+pub let fix_chats : Map[String, FixChat] = {}
 
 ///|
 /// The made-up chats' threads, by id: their sessions (what is sent by thread goes to its session's chat).
-let fix_threads : Map[Int, String] = {}
+pub let fix_threads : Map[Int, String] = {}
 
 ///|
-fn fix_chat(session : String) -> FixChat {
+pub fn fix_chat(session : String) -> FixChat {
   match fix_chats.get(session) {
     Some(f) => f
     None => {
@@ -677,50 +677,50 @@ fn fix_chat(session : String) -> FixChat {
 /// What the fixture's station does later (its answers): `ms` after it is said, on the window's runtime's clock
 /// (Runtime::after: the station is outside the view, timed as a host's answer is), or on a test's own clock
 /// (fix_clock). Due, it is done as the fixture is next read (fix_tick): what is shown reads it then.
-let fix_due : Array[() -> Unit] = []
+pub let fix_due : Array[() -> Unit] = []
 
 ///|
 /// What was said later before the window's first frame (as the fixture is made): handed to its runtime as the
 /// fixture is first read, `ms` from then.
-let fix_unsaid : Array[(Double, () -> Unit)] = []
+pub let fix_unsaid : Array[(Double, () -> Unit)] = []
 
 ///|
 /// What is said later on a test's own clock (fix_clock), at a time on it.
-let fix_timers : Array[(Double, () -> Unit)] = []
+pub let fix_timers : Array[(Double, () -> Unit)] = []
 
 ///|
 /// The window's context of the frame being built (`view` sets it): none yet, the fixture is being made.
-let fix_ctx : Ref[@ui.Ctx?] = { val: None }
+pub let fix_ctx : Ref[@ui.Ctx?] = { val: None }
 
 ///|
 /// A test's own clock for the fixture's station, moved on by the test (none: the window's runtime times it).
-let fix_clock : Ref[(() -> Double)?] = { val: None }
+pub let fix_clock : Ref[(() -> Double)?] = { val: None }
 
 ///|
-let fix_drafts : Map[String, Json] = {}
+pub let fix_drafts : Map[String, Json] = {}
 
 ///|
 /// The fixture core's composers' files (`composer.add`), by the composer's key: each up as soon as it is added, as the
 /// station takes it whole.
-let fix_composers : Map[String, Array[Json]] = {}
+pub let fix_composers : Map[String, Array[Json]] = {}
 
 ///|
 /// The chats of the viewer's other workspace (个人, its station ws2/st9) that a reference may name (`chat.outsideRefs`):
 /// their keys, titles, and whether the viewer may share them.
 // kept across runs: a table, never written
-let fix_outside : Array[(String, String, Bool)] = [("s-p1", "季度路线图", true), ("s-p2", "预算草稿", false)]
+pub let fix_outside : Array[(String, String, Bool)] = [("s-p1", "季度路线图", true), ("s-p2", "预算草稿", false)]
 
 ///|
 /// Those of them shared with 星火工作室 since (`chat.xshareAdd`): outside no more.
-let fix_xshared : Map[String, Bool] = {}
+pub let fix_xshared : Map[String, Bool] = {}
 
 ///|
-let fix_serial : Ref[Int] = { val: 0 }
+pub let fix_serial : Ref[Int] = { val: 0 }
 
 ///|
 /// What is due, done (each a change: the views read again); what was said before the first frame, handed to the
 /// runtime.
-fn fix_tick(f : Fixture) -> Unit {
+pub fn fix_tick(f : Fixture) -> Unit {
   if fix_ctx.val is Some(_) && fix_unsaid.length() > 0 {
     let unsaid = fix_unsaid.copy()
     fix_unsaid.clear()
@@ -751,16 +751,16 @@ fn fix_tick(f : Fixture) -> Unit {
 ///|
 /// What the fixture's station takes its time over: a message sent (or retried) is in the chat after
 /// `fix_deliver_ms`; its agent answers `fix_answer_ms` after that, and its turn ends `fix_turn_end_ms` after the answer.
-let fix_deliver_ms : Double = 700.0
+pub let fix_deliver_ms : Double = 700.0
 
 ///|
-let fix_answer_ms : Double = 1400.0
+pub let fix_answer_ms : Double = 1400.0
 
 ///|
-let fix_turn_end_ms : Double = 700.0
+pub let fix_turn_end_ms : Double = 700.0
 
 ///|
-fn fix_later(ms : Double, f : () -> Unit) -> Unit {
+pub fn fix_later(ms : Double, f : () -> Unit) -> Unit {
   match (fix_clock.val, fix_ctx.val) {
     (Some(clock), _) => fix_timers.push((clock() + ms, f))
     (None, Some(_)) => @ui.runtime().after(ms.ceil().to_int(), fn() { fix_due.push(f) })
@@ -770,7 +770,7 @@ fn fix_later(ms : Double, f : () -> Unit) -> Unit {
 
 ///|
 /// The chat with what was sent in it since.
-fn with_sent(base : Json, session : String) -> Json {
+pub fn with_sent(base : Json, session : String) -> Json {
   match field(field(Some(base), "thread"), "id") {
     Some(Number(n, ..)) => fix_threads[n.to_int()] = session
     _ => ()
@@ -814,7 +814,7 @@ fn with_sent(base : Json, session : String) -> Json {
 
 ///|
 /// An entry of the outbox (Outgoing).
-fn outgoing_json(id : String, params : Json, state : String, error : String) -> Json {
+pub fn outgoing_json(id : String, params : Json, state : String, error : String) -> Json {
   let p = Some(params)
   let o : Map[String, Json] = {
     "id": Json::string(id),
@@ -833,11 +833,11 @@ fn outgoing_json(id : String, params : Json, state : String, error : String) -> 
 ///|
 /// The files put up from here (`composer.add` with their bytes), by where the station keeps each: the upload each was,
 /// which every message it goes with says (views.ts uploadOf).
-let fix_put_up : Map[String, String] = {}
+pub let fix_put_up : Map[String, String] = {}
 
 ///|
 /// A message's files as the core draws them: one put up from here naming its upload (views.ts drawn's `own`).
-fn fix_own(files : Array[Json]) -> Array[Json] {
+pub fn fix_own(files : Array[Json]) -> Array[Json] {
   files.map(fn(a) {
     match (a, fix_put_up.get(text(Some(a), "path"))) {
       (Object(m), Some(id)) => {
@@ -852,7 +852,7 @@ fn fix_own(files : Array[Json]) -> Array[Json] {
 
 ///|
 /// The station has it: out of the outbox, the chat's own message; the agent's answer a moment after.
-fn fix_deliver(session : String, id : String) -> Unit {
+pub fn fix_deliver(session : String, id : String) -> Unit {
   let fc = fix_chat(session)
   let mut found : Json? = None
   for o in fc.outbox {
@@ -916,7 +916,7 @@ fn fix_deliver(session : String, id : String) -> Unit {
 ///|
 /// The fixture's writes in a chat (`chat.send`, `chat.retry`, `chat.discard`, `draft.get`, `draft.put`,
 /// `station.upload.part`, `session.warm`), and what the page tells (`client.focus`, `chat.place`): None for any other.
-fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
+pub fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
   // what is written, as the core's composers keep it (compose_fixture.mbt)
   match fix_compose_call(f, name, params) {
     Some(r) => return Some(r)
@@ -1134,7 +1134,7 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
 
 ///|
 /// chat-uploading's picture still going up, as its message names it (views.ts goingUp: its upload).
-let going_up_picture : Json = {
+pub let going_up_picture : Json = {
   "name": "compare.png",
   "path": "upload:up-seed",
   "size": 402000,
@@ -1146,7 +1146,7 @@ let going_up_picture : Json = {
 ///|
 /// The first row's chat's draft as each composer mode has it (none in any other); a new chat's with a picture and words
 /// (newchat-attach: scripts/motion/send-newchat-picture.drive).
-fn seeded_draft(mode : String, key : String) -> Json {
+pub fn seeded_draft(mode : String, key : String) -> Json {
   if mode == "newchat-attach" && key.has_prefix("new:") {
     return {
       "text": "照着这张截图把第二屏改一下",
@@ -1202,7 +1202,7 @@ fn seeded_draft(mode : String, key : String) -> Json {
 
 ///|
 /// The outbox the first row's chat opens with in the modes chat-sending and chat-failed.
-fn seeded_outbox(mode : String) -> Array[Json] {
+pub fn seeded_outbox(mode : String) -> Array[Json] {
   let words : Json = { "text": "好，就按这个改，顺便把深色模式的截图也换掉" }
   match mode {
     "chat-sending" => [outgoing_json("o-seed", words, "sending", "")]
@@ -1233,20 +1233,20 @@ fn seeded_outbox(mode : String) -> Array[Json] {
 
 ///|
 /// How the first row's chat's cards stand as answered here: by seq, the card's decision.
-let fix_decided : Map[Int, Json] = {}
+pub let fix_decided : Map[Int, Json] = {}
 
 ///|
 /// The answers given here, by the card's seq: the viewer's message the core posts with each (said as the chat shows).
-let fix_replied : Map[Int, String] = {}
+pub let fix_replied : Map[Int, String] = {}
 
 ///|
 /// How chat-vault's request to keep a password, at the chat's end, went once decided here ("": waiting).
-let fix_vault : Ref[String] = Ref("")
+pub let fix_vault : Ref[String] = Ref("")
 
 ///|
 /// chat-vault's last post: an agent asking to keep a password (`typed`: a token the person types in), its card as the
 /// core says it, answered here; decided, how it went.
-fn vault_post(typed : Bool) -> Json {
+pub fn vault_post(typed : Bool) -> Json {
   let ask : Map[String, Json] = if typed {
     { "name": "OpenCode Go", "mode": "proxy", "hosts": ["opencode.ai"], "save": { "kind": "token", "typed": true }, "answer": "approve" }
   } else {
@@ -1263,7 +1263,7 @@ fn vault_post(typed : Bool) -> Json {
 
 ///|
 /// The chat `v` with what was answered here in it.
-fn with_cards(f : Fixture, v : Json, session : String) -> Json {
+pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let seeded = f.mode == "chat-cards"
   let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed"
   if session != "s-c1" || (fix_decided.is_empty() && !seeded && !vault) {
@@ -1318,7 +1318,7 @@ fn with_cards(f : Fixture, v : Json, session : String) -> Json {
 
 ///|
 /// A card answered with `label`, as the core says it.
-fn decided_json(label : String) -> Json {
+pub fn decided_json(label : String) -> Json {
   {
     "resolved": true,
     "chosen": Json::string(label),
@@ -1328,7 +1328,7 @@ fn decided_json(label : String) -> Json {
 
 ///|
 /// The cards' calls in the made-up chat (`decision.answer`, `decision.dismiss`): None for any other.
-fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
+pub fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
   let p = Some(params)
   let seq = number(p, "seq").to_int()
   match name {
@@ -1358,34 +1358,9 @@ fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Json, 
 }
 
 ///|
-/// What the modes of the cards and words set going as the chat opens: chat-answering's option under way, chat-pick's
-/// word picked, chat-link-menu's link held.
-pub fn open_cards_fixture(mode : String) -> Unit {
-  match mode {
-    "chat-answering" => acting.doing["answer/" + seq_key("ws1/st1", 7.0, 8.0) + "/一起换"] = true
-    // a word of the last post picked (its handles and its bar), once laid out (pick.mbt)
-    "chat-pick" => {
-      pk.ts = "ts11"
-      pk.sel.key = "pick/ts11"
-      pk.author = "Claude"
-      pk.role = "agent"
-      pk.sel.a = 4
-      pk.sel.b = 6
-    }
-    // the bare address in the long answer held: its menu (link_menu.mbt)
-    "chat-link-menu" => {
-      link_menu_at("https://example.com/bench/list", 220.0, 360.0, 383.0)
-    }
-    _ => ()
-  }
-}
-
-// ── Markdown's tables and code (MBUI_FIXTURE=chat-md) ───────────────────
-
-///|
 /// An agent's answer with a table, highlighted code (one line too long for the message: it scrolls sideways) and a
 /// command, at the end of the first row's chat.
-let md_answer : String =
+pub let md_answer : String =
   #|对比了三种做法，结果如下：
   #|
   #|| 做法 | 首帧耗时 | 内存 | 结论 |
@@ -1406,7 +1381,7 @@ let md_answer : String =
   #|```
 
 ///|
-fn with_viz_message(v : Json) -> Json {
+pub fn with_viz_message(v : Json) -> Json {
   match v {
     Object(m) => {
       let o = m.copy()
@@ -1430,7 +1405,7 @@ fn with_viz_message(v : Json) -> Json {
 
 ///|
 /// The words of MBUI_FIXTURE=chat-viz's last message: a visualization placed, and a mermaid chart.
-let viz_answer : String =
+pub let viz_answer : String =
   #|这周的发布节奏：
   #|
   #|[发布节奏](release.html)
@@ -1444,7 +1419,7 @@ let viz_answer : String =
 ///|
 /// MBUI_FIXTURE=chat-file-links: a last message naming two of its files by links within a sentence, written escaped
 /// as the station sends them (`release%2Ehtml`), its Markdown tree with it (file_links_md).
-fn with_file_links(v : Json) -> Json {
+pub fn with_file_links(v : Json) -> Json {
   match v {
     Object(m) => {
       let o = m.copy()
@@ -1468,11 +1443,11 @@ fn with_file_links(v : Json) -> Json {
 }
 
 ///|
-let file_links_answer : String = "这周的[发布节奏](release%2Ehtml)，草图在[界面草图](%E7%95%8C%E9%9D%A2%E8%8D%89%E5%9B%BE.png)。"
+pub let file_links_answer : String = "这周的[发布节奏](release%2Ehtml)，草图在[界面草图](%E7%95%8C%E9%9D%A2%E8%8D%89%E5%9B%BE.png)。"
 
 ///|
 /// file_links_answer's tree as the core reads it: its words by where they are in it.
-let file_links_md : Json = [
+pub let file_links_md : Json = [
   [
     "p",
     [
@@ -1488,7 +1463,7 @@ let file_links_md : Json = [
 ///|
 /// MBUI_FIXTURE=chat-table-images: a last message placing two of its pictures in a table's cells, a wide one and a
 /// tall one, escaped as the station sends them, its Markdown tree with it (table_images_md).
-fn with_table_images(v : Json) -> Json {
+pub fn with_table_images(v : Json) -> Json {
   match v {
     Object(m) => {
       let o = m.copy()
@@ -1512,11 +1487,11 @@ fn with_table_images(v : Json) -> Json {
 }
 
 ///|
-let table_images_answer : String = "| 网页 | 手机网页 |\n|---|---|\n| ![](web%2Dfolded.png) | ![](phone.png) |\n"
+pub let table_images_answer : String = "| 网页 | 手机网页 |\n|---|---|\n| ![](web%2Dfolded.png) | ![](phone.png) |\n"
 
 ///|
 /// table_images_answer's tree as the core reads it (src/sfkept): its words by where they are in it.
-let table_images_md : Json = [
+pub let table_images_md : Json = [
   [
     "table",
     [
@@ -1529,18 +1504,18 @@ let table_images_md : Json = [
 
 ///|
 /// MBUI_FIXTURE=chat-viz's visualization: a fragment, as the viz skill has agents write them.
-let fixture_viz_html : String =
+pub let fixture_viz_html : String =
   #|<div class="viz-card" style="padding:16px"><b>本周发布</b><p>周一 2 个、周三 1 个、周五 3 个</p>
   #|<button onclick="ember.setWidgetState({seen:true})">看过了</button></div>
 
 ///|
-fn with_md_message(v : Json) -> Json {
+pub fn with_md_message(v : Json) -> Json {
   with_message(v, md_answer)
 }
 
 ///|
 /// The chat with an agent's answer of `words` at its end.
-fn with_message(v : Json, words : String) -> Json {
+pub fn with_message(v : Json, words : String) -> Json {
   match v {
     Object(m) => {
       let o = m.copy()
@@ -1563,7 +1538,7 @@ fn with_message(v : Json, words : String) -> Json {
 ///|
 /// The chat `v` ending on an agent's need with no card ("chat-need"): what it asks, waiting for a person, nothing to
 /// pick (the core's `asked`).
-fn with_need(v : Json) -> Json {
+pub fn with_need(v : Json) -> Json {
   match v {
     Object(m) => {
       let o = m.copy()
@@ -1588,11 +1563,11 @@ fn with_need(v : Json) -> Json {
 
 ///|
 /// What the agent of the first row's chat does now, as long as an agent's step may say it (its call's description).
-let working_step : String = "在 Studio 上跑整套检查：先编译 mbui 的原生测试，再逐个对比手机、平板和桌面三种宽度下的截图"
+pub let working_step : String = "在 Studio 上跑整套检查：先编译 mbui 的原生测试，再逐个对比手机、平板和桌面三种宽度下的截图"
 
 ///|
 /// The first row's chat with its agent at work on that step, three minutes in: there as the chat opens.
-fn with_working(v : Json) -> Json {
+pub fn with_working(v : Json) -> Json {
   match v {
     Object(m) => {
       let o = m.copy()
@@ -1620,13 +1595,13 @@ fn with_working(v : Json) -> Json {
 ///|
 /// An agent's answer last in the chat with a link of each kind a card shows over (peeks.mbt): a pull request on GitHub,
 /// a page, another chat, a file it names by its path.
-let peeks_answer : String = "改动在 https://github.com/acme/shop/pull/128 ，数据在 https://example.com/bench/list ，和 [首页的列表改成按天分组](https://app.still.fail/w/ws1/s/st1/chats/s-c2) 有关，入口在 `src/list/place.mbt:12`。"
+pub let peeks_answer : String = "改动在 https://github.com/acme/shop/pull/128 ，数据在 https://example.com/bench/list ，和 [首页的列表改成按天分组](https://app.still.fail/w/ws1/s/st1/chats/s-c2) 有关，入口在 `src/list/place.mbt:12`。"
 
 ///|
 /// An agent's answer with links to Studio's screens and its 共享调试 (screen_links.mbt): the desktop's card, a tab's
 /// with its preview (the link's own words its title), a tab gone, 共享调试 bare in a sentence (its title) and alone
 /// (its card), and a link to anywhere else.
-let screens_answer : String =
+pub let screens_answer : String =
   #|登录页改好了，Studio 的桌面开着：
   #|
   #|https://still.fail/w/ws1/s/st1/screen/desktop
@@ -1646,7 +1621,7 @@ let screens_answer : String =
 ///|
 /// The core's cards of Studio's screens and its 共享调试 (`screenCard`, `adbCard`): the desktop someone looks at, a
 /// tab it previews (1280 × 800), a tab it no longer has; this phone's adb not shared.
-fn fixture_link_card(name : String, params : Map[String, Json]) -> Json? {
+pub fn fixture_link_card(name : String, params : Map[String, Json]) -> Json? {
   if name == "adbCard" {
     return Some({ "title": "共享调试", "line": "未共享", "sharing": false, "lendable": true })
   }
@@ -1677,7 +1652,7 @@ fn fixture_link_card(name : String, params : Map[String, Json]) -> Json? {
 ///|
 /// A screen's preview (`screen.view` with `peek`): one frame, the made-up tab's picture, as the station sends its
 /// first.
-fn fixture_peek(on_value : (Json, Bytes?) -> Unit) -> Int {
+pub fn fixture_peek(on_value : (Json, Bytes?) -> Unit) -> Int {
   fix_later(0.0, fn() { on_value({ "frame": { "ts": 1 } }, Some(fixture_file_png("peek.png"))) })
   fix_stream_ids.val += 1
   fix_stream_ids.val
@@ -1685,7 +1660,7 @@ fn fixture_peek(on_value : (Json, Bytes?) -> Unit) -> Int {
 
 ///|
 /// The chat with its station's update said in its bar and opened (MBUI_FIXTURE=chat-update: station_update.mbt).
-fn with_station_update(v : Json) -> Json {
+pub fn with_station_update(v : Json) -> Json {
   match v {
     Object(m) => {
       let o = m.copy()
@@ -1711,7 +1686,7 @@ fn with_station_update(v : Json) -> Json {
 ///|
 /// Studio's overview (fixture_station_drive's), with its software as the core says it (its versions, a newer Claude
 /// Code out) and what its agents' processes take.
-fn fixture_station_overview() -> Json {
+pub fn fixture_station_overview() -> Json {
   let o = match fixture_station_drive(true) {
     Object(m) => m
     _ => {}
@@ -1759,7 +1734,7 @@ fn fixture_station_overview() -> Json {
 
 ///|
 /// The places the made-up station's one bot is in (`chat.relayPlaces`): one relayed to before, a private one.
-fn fix_relay_places() -> Json {
+pub fn fix_relay_places() -> Json {
   {
     "connects": [
       {

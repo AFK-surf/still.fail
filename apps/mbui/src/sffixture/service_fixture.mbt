@@ -4,7 +4,7 @@
 // ring, laid out as a phone's on the canvas, being started again, stopped. Every word in it is made up.
 
 ///|
-let fix_service_html : String =
+pub let fix_service_html : String =
   #|<!doctype html>
   #|<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   #|<link rel="stylesheet" href="/app.css"><title>发布看板</title></head>
@@ -16,7 +16,7 @@ let fix_service_html : String =
   #|</body></html>
 
 ///|
-let fix_service_css : String =
+pub let fix_service_css : String =
   #|body { margin: 0; font-family: system-ui, sans-serif; color: #24272b; background: #f7f6f3; }
   #|header { padding: 18px 20px; font-size: 20px; font-weight: 700; background: #e5704a; color: #fff; }
   #|main { padding: 12px 16px; }
@@ -26,7 +26,7 @@ let fix_service_css : String =
 
 ///|
 /// The service's own topics: its job (as the mode has it) and how its page's resources came.
-fn fixture_service_topic(f : Fixture, name : String, params : Map[String, Json]) -> Json? {
+pub fn fixture_service_topic(f : Fixture, name : String, params : Map[String, Json]) -> Json? {
   match name {
     "job" => {
       let m = match fix_job(text(Some(Json::object(params)), "id")) {
@@ -65,7 +65,7 @@ fn fixture_service_topic(f : Fixture, name : String, params : Map[String, Json])
 ///|
 /// `station.preview` as a station answers it: the page and its stylesheet, anything else not found; the head, then
 /// the body in one piece.
-fn fixture_stream(
+pub fn fixture_stream(
   name : String,
   params : Json,
   on_value : (Json, Bytes?) -> Unit,
@@ -76,7 +76,7 @@ fn fixture_stream(
     if params is Object(o) && o.get("peek") is Some(True) {
       return fixture_peek(on_value)
     }
-    return @sfpages.screen_fixture_stream(params, on_value, done)
+    return (@sfbase.screen_made_stream.val)(params, on_value, done)
   }
   if name != "station.preview" {
     done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
@@ -96,19 +96,4 @@ fn fixture_stream(
 }
 
 ///|
-let fix_stream_ids : Ref[Int] = Ref(0)
-
-///|
-/// MBUI_FIXTURE=service…: the first row's chat, its service's page over it.
-fn open_service_fixture(mode : String) -> Unit {
-  match mode {
-    "service" | "service-sized" | "service-restart" | "service-stopped" => {
-      app.nav.push(Chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }))
-      app.nav.push(Service("ws1/st1", "j-web"))
-      if mode == "service-sized" {
-        svc_viewports[service_key("ws1/st1", "j-web")] = Some({ width: 390, height: Some(844) })
-      }
-    }
-    _ => ()
-  }
-}
+pub let fix_stream_ids : Ref[Int] = Ref(0)

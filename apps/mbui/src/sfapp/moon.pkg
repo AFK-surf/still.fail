@@ -17,6 +17,7 @@ import {
   "stillfail/sfbase",
   "stillfail/sfdesk",
   "stillfail/sfpages",
+  "stillfail/sffixture",
 }
 
 import { "stillfail/sfkept", "stillfail/sfscreens", "mbui/signals" } for "wbtest"

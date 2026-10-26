@@ -232,6 +232,13 @@ Four, at the end of the way there:
 | `src/sfpages` | The pages, each file named after the web's. |
 | `src/sfshell` | The shell, and the app's `view`, which the main calls. |
 
+And a fifth, not the app's: `src/sffixture`, the made-up core the tests and the tools run the app over (what each topic
+says, how each call is answered, each area's made-up data), below the pages (it imports sfbase and the library), so a
+page's own tests in sfpages read the same data as the app's. The app's code says none of it (detlint's
+`fixture-import`): what it needs of a made-up core it is given through sfbase's wires (`made_reset`, `made_frame`, set as
+the made-up core is linked); only what opens a mode over the app (sfapp's `fixture_open.mbt`, the tests' and sffix's
+one way in) names it until the last step.
+
 - **What goes:** `src/sfapp` and `src/sfdesk`. A page moves into `sfpages`; what is left, the frames' pieces (the
   phone's stack, bars and bottom bar, the desk's frame, tape, rail, columns and switcher), is renamed `sfshell`.
 - **Which way they import:** `sfshell` imports `sfpages`, `sfpages` imports `sfbase`, all three the library. What a
@@ -295,4 +302,6 @@ first, the whole app's tests would have moved with it and again as the pages lef
 4. **The shell named:** what is left of `sfapp` and `sfdesk` (the shell's files and the whole app's tests) one package,
    `sfshell`, its `view` the main's; `@sfapp.` and `@sfdesk.` are `@sfshell.` everywhere, nothing else changed. The
    tape's files with it, the day it is made. `page-shell-import` (`sfpages` imports no `sfshell`) in; `tier-outside-shell`
-   and `page-screen` at 0.
+   and `page-screen` at 0. What opens a mode over the app (`fixture_open.mbt`) and the whole app's tests that call it
+   go to the tests' side then, the app no longer linking the made-up core; what those tests read of the shell's own
+   is asked through its public ways, or the test written again, not made public for them.

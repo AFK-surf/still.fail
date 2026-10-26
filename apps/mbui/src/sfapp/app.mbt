@@ -41,17 +41,6 @@ fn reset() -> Unit {
   sheet_host.kind = NoSheet
   sheet_host.serial = 0
   bar_reset()
-  new_fix.station = "st1"
-  new_fix.model = "claude-opus-5-5"
-  new_fix.runtime = "claude"
-  new_fix.effort = "high"
-  new_fix.d_model = "claude-opus-5-5"
-  new_fix.d_runtime = "claude"
-  new_fix.d_effort = "high"
-  new_fix.d_profile = ""
-  new_fix.made = 0
-  new_fix.reading = 0
-  new_fix.crowded = false
   bar_timing.val = None
   bar_timed.val = None
   home_sheet_at_start.val = false
@@ -83,19 +72,6 @@ fn reset() -> Unit {
   cui.content_id = 0
   cui.doing.clear()
   pick_reset()
-  fix_chats.clear()
-  fix_timers.clear()
-  fix_downloads.clear()
-  fix_due.clear()
-  fix_unsaid.clear()
-  fix_drafts.clear()
-  fix_composers.clear()
-  fix_put_up.clear()
-  fix_writes.clear()
-  fix_xshared.clear()
-  fix_decided.clear()
-  fix_replied.clear()
-  fix_vault.val = ""
   dv_reset()
   decide_reset()
   @settings.reset()
@@ -111,15 +87,6 @@ fn reset() -> Unit {
   outside_reset()
   attach_reset()
   // the menu bar given (menu_bar.mbt)
-  // the made-up chats and their station (chat_fixture.mbt, service_fixture.mbt, drive_fixture.mbt)
-  kept_chats.clear()
-  fixture_pictures.clear()
-  fix_threads.clear()
-  fix_browse_reset()
-  fix_ctx.val = None
-  fix_clock.val = None
-  fix_serial.val = 0
-  fix_stream_ids.val = 0
   // Home (home.mbt), the host told (above), a chat's page and what is in it
   flying.val = None
   opened_notices.clear()
@@ -131,7 +98,8 @@ fn reset() -> Unit {
   next_pending.val = 1
   quote_fields.clear()
   share_files_made.val = 0
-  fix_fetches.clear()
+  // the made-up core's own, where one is linked (a test's, a tool's: sffixture's, as its wire says)
+  (@sfbase.made_reset.val)()
   // a drive's files, a text read (keep.mbt, drive_reader.mbt)
   reset_by_hand.val = true
 }
@@ -299,7 +267,8 @@ let page_whole : @ui.Style = @ui.css("w=Full h=Full")
 ///|
 /// The app over `src`: call each frame.
 pub fn view(c : @ui.Ctx, src : Source) -> Unit {
-  fix_ctx.val = Some(c)
+  // (the made-up core, where one is linked, on this frame's runtime)
+  (@sfbase.made_frame.val)(c)
   shell.val = pages_shell()
   // the Mac's menu bar, in the app's words (menu_bar.mbt); an item of the pages' chosen is read as its keys by the
   // frame after the menu said it (@settings.ask_action), and asked no more once that frame is built

@@ -6,10 +6,6 @@
 /// As at the start (tests).
 fn dv_reset() -> Unit {
   reader_set.clear()
-  fix_folders.clear()
-  fix_places.clear()
-  fix_transfers.clear()
-  fix_reads.clear()
   draft_refs.clear()
   sfs.ref = None
   sfs.ref_closing = false

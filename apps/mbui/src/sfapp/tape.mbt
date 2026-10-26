@@ -97,9 +97,9 @@ fn tape_topic_key(name : String, params : Map[String, Json]) -> Json {
 
 ///|
 /// The tape's core at its moment `at()`: each topic's value as last set by then (its version how many times it was),
-/// each call answered as Android's was (the one recorded with the same name and params, else the same name).
-fn tape_source(tape : Tape, at : () -> Double) -> Source {
-  let base = fixture("")
+/// each call answered as Android's was (the one recorded with the same name and params, else the same name); over
+/// `base` (a made-up core's, the caller's: the app's own code links none).
+fn tape_source(tape : Tape, at : () -> Double, base : Source) -> Source {
   {
     ..base,
     // the wall clock as Android's had it: from the tape's start on, at its moments
@@ -189,12 +189,13 @@ let tape_slack : Double = 2.0
 /// with this app's at the same moment. What differs, in order: a frame's words not drawn here, or drawn more than
 /// tape_slack away (each word once, at the first frame it differs, with where).
 ///
-/// `trace`: words whose place in each frame, Android's and here, is said too (one line a frame: TRACE …).
-pub fn tape_differences(json : String, trace? : Array[String] = []) -> Array[String] {
+/// `trace`: words whose place in each frame, Android's and here, is said too (one line a frame: TRACE …). `base`: the
+/// made-up core under the tape's answers (@sffixture.fixture("")).
+pub fn tape_differences(json : String, base~ : Source, trace? : Array[String] = []) -> Array[String] {
   reset()
   let tape = tape_read(json)
   let moment = Ref::new(-1.0)
-  let src = tape_source(tape, fn() { moment.val })
+  let src = tape_source(tape, fn() { moment.val }, base)
   tape_open(tape)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=tape.w, h=tape.h, platform=2)
   // the system bars as Android's window had them (the host says them: bars.mbt)

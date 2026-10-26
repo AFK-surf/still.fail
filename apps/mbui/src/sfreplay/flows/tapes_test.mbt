@@ -17,7 +17,7 @@ test "Android's recordings replayed: where their words are drawn here, frame by 
   for name in tapes {
     match @sfreplay.read_trace("../tapes/" + name) {
       Some(json) => {
-        let diffs = @sfapp.tape_differences(json)
+        let diffs = @sfapp.tape_differences(json, base=@sffixture.fixture(""))
         println("TAPE \{name}: \{diffs.length()} words differ")
         for d in diffs {
           println("TAPE   " + d)

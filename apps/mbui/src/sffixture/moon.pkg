@@ -1,0 +1,20 @@
+import {
+  "mbui/pixels",
+  "mbui/codec",
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+  "moonbitlang/core/math",
+  "mbui/dmath",
+  "mbui/ui",
+  "mbui/kit",
+  "mbui/motion",
+  "stillfail/sf",
+  "stillfail/gallery",
+  "mbui/hostapi",
+  "mbui/zip",
+  "stillfail/sfapp/settings",
+  "stillfail/sfbase",
+}
+
+import { "stillfail/sfkept" } for "wbtest"

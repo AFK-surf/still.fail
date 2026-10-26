@@ -17,7 +17,7 @@
 
 ///|
 /// Whether `mode` is one of this slice's.
-fn decide_mode(mode : String) -> Bool {
+pub fn decide_mode(mode : String) -> Bool {
   [
     "decisions", "decisions-text", "decisions-idle", "history", "history-details",
     "chat-info", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
@@ -29,7 +29,7 @@ fn decide_mode(mode : String) -> Bool {
 
 ///|
 /// The fixture's first agent as the chat's view has it once its details are read.
-fn fix_agent() -> Json {
+pub fn fix_agent() -> Json {
   {
     "session": {
       "key": "s-c1",
@@ -66,7 +66,7 @@ fn fix_agent() -> Json {
 
 ///|
 /// A job of the fixture's chat.
-fn fix_job(id : String) -> Json {
+pub fn fix_job(id : String) -> Json {
   match id {
     "j-web" =>
       {
@@ -125,7 +125,7 @@ fn fix_job(id : String) -> Json {
 
 ///|
 /// Its agent, its context compactable and clearable by hand (`chat-agent-unsaid`).
-fn fix_context_actions(chat : Json) -> Json {
+pub fn fix_context_actions(chat : Json) -> Json {
   match chat {
     Object(m) => {
       let o = m.copy()
@@ -155,7 +155,7 @@ fn fix_context_actions(chat : Json) -> Json {
 
 ///|
 /// The chat's view with no agent in it yet (`chat-station-tag`).
-fn fix_no_agent(chat : Json) -> Json {
+pub fn fix_no_agent(chat : Json) -> Json {
   match chat {
     Object(m) => {
       let o = m.copy()
@@ -168,7 +168,7 @@ fn fix_no_agent(chat : Json) -> Json {
 
 ///|
 /// The chat's view with its thread's facts and its agent's details (what its sheets show).
-fn fix_detailed_chat(base : Json) -> Json {
+pub fn fix_detailed_chat(base : Json) -> Json {
   match base {
     Object(m) => {
       let o = m.copy()
@@ -213,7 +213,7 @@ fn fix_detailed_chat(base : Json) -> Json {
 }
 
 ///|
-fn fix_history() -> Json {
+pub fn fix_history() -> Json {
   let item = fn(key : String, kind : String, content : Json) -> Json {
     { "key": Json::string(key), "entries": [1, 2], "body": { "kind": Json::string(kind), "content": content } }
   }
@@ -339,7 +339,7 @@ fn fix_history() -> Json {
 }
 
 ///|
-fn fix_decisions(mode : String) -> Json {
+pub fn fix_decisions(mode : String) -> Json {
   if mode == "decisions-idle" {
     return {
       "items": [],
@@ -445,7 +445,7 @@ fn fix_decisions(mode : String) -> Json {
 }
 
 ///|
-fn fix_chat_jobs() -> Json {
+pub fn fix_chat_jobs() -> Json {
   {
     "jobs": [fix_job("j-web"), fix_job("j-ci"), fix_job("j-build")],
     "servicesNote": "1 个在线",
@@ -461,7 +461,7 @@ fn fix_chat_jobs() -> Json {
 
 ///|
 /// This slice's topics in the fixture, for its modes (Some: handled, with its value).
-fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Json?? {
+pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Json?? {
   if !decide_mode(f.mode) {
     return None
   }
@@ -559,7 +559,7 @@ fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Json]) 
 
 ///|
 /// A service left up a long while, as the `longJobs` view has it.
-fn long_job() -> Json {
+pub fn long_job() -> Json {
   let m = match fix_job("j-web") {
     Object(m) => m.copy()
     _ => {}
@@ -574,7 +574,7 @@ fn long_job() -> Json {
 ///|
 /// What the fixture's core says a snapshot would hold (apps/android PublishSheetTest's `preview`, the same words, so
 /// the two are pictured alike): a person's message with a key hidden, an agent's reply, three attachments.
-fn fix_preview() -> Json {
+pub fn fix_preview() -> Json {
   let file = fn(k : String, name : String, size : Int, size_text : String, kind : String) -> Json {
     {
       "k": Json::string(k),
@@ -677,7 +677,7 @@ fn fix_preview() -> Json {
 
 ///|
 /// This slice's calls in the fixture: taken as a station would.
-fn decide_fixture_call(name : String) -> Result[Json, Json]? {
+pub fn decide_fixture_call(name : String) -> Result[Json, Json]? {
   match name {
     "decision.answer" | "decision.dismiss" | "decision.defer" | "decision.reply" | "chat.pin" | "chat.rename" | "session.stop" | "session.evict" | "session.compact" | "session.clear" | "job.stop" | "job.clearEnded" | "history.detail" | "history.older" | "machineLogin.cancel" | "chat.unpublish" =>
       Some(Ok(Json::object({})))
@@ -687,67 +687,8 @@ fn decide_fixture_call(name : String) -> Result[Json, Json]? {
 }
 
 ///|
-/// What a fixture mode of this slice opens over Home (sffix's main, as the app starts).
-pub fn open_fixture(mode : String) -> Unit {
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
-  match mode {
-    "decisions" | "decisions-text" | "decisions-idle" => app.nav.push(Decisions)
-    "history" | "history-details" => {
-      app.nav.push(Chat(r))
-      app.nav.push(History(r, "s-c1", None))
-      if mode == "history-details" {
-        dui.history_tab = 1
-      } else {
-        @sfpages.history_open(["h2/group", "h2/group/1", "h4/group", "h4/group/0"])
-      }
-    }
-    // the wide frame's (wide_panel.mbt): the chat's "…" open, its services' popover, what is opened beside it
-    "chat-letters-pop" => @sfdesk.open_info_pop()
-    "chat-jobs-pop" => @sfdesk.open_jobs_pop()
-    "home-attention" => @sfdesk.open_attention()
-    // (what is beside it: the made-up core keeps it so, fixture.mbt fixture_chat_tabs)
-    "chat-letters-side" => {
-      dui.letters_open = ""
-      dui.letters_held[r.station + "\u{1}" + r.session] = 7.0
-    }
-    "chat-model-pop" => @sfpages.open_triple(r.station, "session:s-c1")
-    // (what is typed is looked for as the bar is first drawn)
-    "chat-find" => @sfpages.find_preset(side_key(r), "截图")
-    // the sheet that publishes the chat, what a snapshot would hold read (Publish.kt openPublish)
-    "chat-publish" => {
-      @sfpages.publish_set(r, 7.0, fix_preview())
-    }
-    // its station's card, from the agent's (Stations.kt openStationPeek)
-    "chat-peek" => @settings.open_station_peek(r.station, from=Unanchored)
-    _ => ()
-  }
-}
-
-///|
-/// What a fixture mode of this slice puts up over the chat once its source is made (open_fixture_src): the chat's
-/// sheet, its letters (one opened), an agent's card, its jobs, a job.
-fn open_decide_panels(mode : String, src : Source) -> Unit {
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
-  match mode {
-    "chat-info" | "chat-letters-info" => open_info(src, r)
-    "chat-letters" | "chat-letters-many" => open_letters(src, r, 7.0)
-    "chat-letters-open" => {
-      open_letters(src, r, 7.0)
-      dui.letters_open = fix_letters_link
-    }
-    "chat-agent" | "chat-agent-unsaid" => open_agent(src, r, "s-c1")
-    "chat-jobs" => open_chat_jobs(src, r)
-    "chat-job" => {
-      dui.job_tab = 0
-      open_job(src, r, "j-ci")
-    }
-    _ => ()
-  }
-}
-
-///|
 /// The letters with 30 chats written with (`chat-letters-many`): fix_letters' first, again and again, each its own.
-fn fix_letters_many() -> Json {
+pub fn fix_letters_many() -> Json {
   let base = fix_letters()
   let first = match items(Some(base), "chats") {
     [c, ..] => c
@@ -779,7 +720,7 @@ fn fix_letters_many() -> Json {
 
 ///|
 /// The chat's view saying how many letters its agents and other chats' wrote each other (the core's `letters`).
-fn fix_with_letters(v : Json) -> Json {
+pub fn fix_with_letters(v : Json) -> Json {
   match v {
     Object(m) => {
       let o = m.copy()
@@ -793,7 +734,7 @@ fn fix_with_letters(v : Json) -> Json {
 ///|
 /// What wants the viewer in 待处理 (home-attention: the core's `workspaceMarks`): a decision waiting in 整理发布清单,
 /// to be let go, and a failure in another chat, looked at.
-fn fix_attention_marks() -> Json {
+pub fn fix_attention_marks() -> Json {
   let item = fn(kind : String, title : String, what : String, station : String, name : String, thread : Double) {
     let m : Map[String, Json] = {
       "kind": Json::string(kind),
@@ -828,7 +769,7 @@ fn fix_attention_marks() -> Json {
 
 ///|
 /// The chats' view of `ws1` with its stations' trouble (home-attention: MBA offline).
-fn fix_with_trouble(v : Json, params : Map[String, Json]) -> Json {
+pub fn fix_with_trouble(v : Json, params : Map[String, Json]) -> Json {
   match (v, params.get("scope")) {
     (Object(m), Some(String("ws1"))) => {
       let o = m.copy()
@@ -841,12 +782,12 @@ fn fix_with_trouble(v : Json, params : Map[String, Json]) -> Json {
 
 ///|
 /// The chat a letter came from, by its link (the core's key for it).
-let fix_letters_link : String = "https://app.still.fail/o/w/s/ember%3Ac-4dbf0d0c6e"
+pub let fix_letters_link : String = "https://app.still.fail/o/w/s/ember%3Ac-4dbf0d0c6e"
 
 ///|
 /// What the chat's agents and other chats' wrote each other (the core's `chatLetters`): two chats written with, the
 /// one written with last first; the other's three letters, two coming in and one going out.
-fn fix_letters() -> Json {
+pub fn fix_letters() -> Json {
   let link = fix_letters_link
   let theirs = fn(chat : String, from : String) -> Json {
     { "name": "「" + chat + "」的 agent", "from": from, "maker": { "id": "anthropic", "name": "anthropic" } }

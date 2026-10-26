@@ -4,7 +4,7 @@
 ///|
 /// The actions, their group, their own keys and the desktop app's before them (keymap.ts ACTIONS).
 // kept across runs: a table, never written
-let fx_key_actions : Array[(String, String, Array[String], Array[String], String)] = [
+pub let fx_key_actions : Array[(String, String, Array[String], Array[String], String)] = [
   ("chat.switch", "global", ["Mod+K"], [], "yes"),
   ("chat.new", "global", ["Alt+Mod+N"], ["Mod+N"], "yes"),
   ("chat.prev", "global", ["Alt+Up"], [], "yes"),
@@ -28,7 +28,7 @@ let fx_key_actions : Array[(String, String, Array[String], Array[String], String
 
 ///|
 /// A binding as a key cap shows it (keymap.ts label): ⌘⇧H on a Mac, Ctrl+Shift+H elsewhere.
-fn fx_key_label(b : String, mac : Bool) -> String {
+pub fn fx_key_label(b : String, mac : Bool) -> String {
   let parts = b.split("+").map(fn(p) { p.to_string() }).collect()
   let key = parts.pop().unwrap_or("")
   let shown = match key {
@@ -58,7 +58,7 @@ fn fx_key_label(b : String, mac : Bool) -> String {
 
 ///|
 /// The keys that do an action: changed here, or its own (the desktop app's first).
-fn fx_keys_of(changed : Map[String, Array[String]], a : (String, String, Array[String], Array[String], String)) -> Array[String] {
+pub fn fx_keys_of(changed : Map[String, Array[String]], a : (String, String, Array[String], Array[String], String)) -> Array[String] {
   match changed.get(a.0) {
     Some(keys) => keys
     None => a.3 + a.2
@@ -67,7 +67,7 @@ fn fx_keys_of(changed : Map[String, Array[String]], a : (String, String, Array[S
 
 ///|
 /// The prefs' `keymap` (KeymapView) with `changed` the keys changed here; as on a Mac where the Tester plays one.
-fn fixture_keymap(changed : Map[String, Array[String]]) -> Json {
+pub fn fixture_keymap(changed : Map[String, Array[String]]) -> Json {
   let mac = @ui.platform() == 0
   let actions = fx_key_actions.map(fn(a) {
     let keys = fx_keys_of(changed, a)
@@ -103,7 +103,7 @@ fn fixture_keymap(changed : Map[String, Array[String]]) -> Json {
 ///|
 /// `keys.set` (keymap.ts change): an action's keys (null: its own again), each taken from any other action that had
 /// it, said so; no action, every one's own again. What it answers: `{moved, said}`.
-fn fixture_keys_set(changed : Map[String, Array[String]], params : Json) -> Json {
+pub fn fixture_keys_set(changed : Map[String, Array[String]], params : Json) -> Json {
   let action = match field(Some(params), "action") {
     Some(String(a)) => a
     _ => {
@@ -144,7 +144,7 @@ fn fixture_keys_set(changed : Map[String, Array[String]], params : Json) -> Json
 
 ///|
 /// The prefs' `keys`: each action's keys changed here.
-fn fixture_keys(changed : Map[String, Array[String]]) -> Json {
+pub fn fixture_keys(changed : Map[String, Array[String]]) -> Json {
   let o : Map[String, Json] = {}
   for k, v in changed {
     o[k] = Json::array(v.map(Json::string(_)))

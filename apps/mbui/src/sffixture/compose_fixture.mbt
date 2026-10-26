@@ -7,7 +7,7 @@
 /// The pictures of a mode's seeded draft drawn from them in its tiles, as a picture picked here is (the composer's
 /// `writing_pictures`): newchat-attach's and chat-attach-pic's (the films of sending them: scripts/motion), and
 /// chat-uploading's going up.
-fn seeded_pictures(mode : String, files : Array[Json]) -> Unit {
+pub fn seeded_pictures(mode : String, files : Array[Json]) -> Unit {
   if mode != "newchat-attach" && mode != "chat-attach-pic" && mode != "chat-uploading" {
     return
   }
@@ -20,7 +20,7 @@ fn seeded_pictures(mode : String, files : Array[Json]) -> Unit {
 
 ///|
 /// A fixture composer, by its key.
-priv struct FixWrite {
+pub(all) struct FixWrite {
   mut text : String
   mut rev : Int
   mut quotes : Array[Json]
@@ -33,10 +33,10 @@ priv struct FixWrite {
 }
 
 ///|
-let fix_writes : Map[String, FixWrite] = {}
+pub let fix_writes : Map[String, FixWrite] = {}
 
 ///|
-fn fix_write(f : Fixture, key : String) -> FixWrite {
+pub fn fix_write(f : Fixture, key : String) -> FixWrite {
   match fix_writes.get(key) {
     Some(w) => w
     None => {
@@ -79,7 +79,7 @@ fn fix_write(f : Fixture, key : String) -> FixWrite {
 
 ///|
 /// The `composer` topic of key `key`: what is written, as the core says it.
-fn fix_compose_view(f : Fixture, key : String) -> Json {
+pub fn fix_compose_view(f : Fixture, key : String) -> Json {
   let w = fix_write(f, key)
   let files = fix_composers.get(key).unwrap_or([])
   let uploading = files.iter().any(fn(x) { field(Some(x), "done") is None && text(Some(x), "error") == "" })
@@ -120,7 +120,7 @@ fn fix_compose_view(f : Fixture, key : String) -> Json {
 ///|
 /// A `composer.*` call other than `add` and `remove` (chat_fixture.mbt's, which keep the files): done at once, its
 /// answer the composer's new version; None for any other call.
-fn fix_compose_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
+pub fn fix_compose_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
   guard name.has_prefix("composer.") else { return None }
   let p = Some(params)
   let key = text(p, "key")

@@ -4,14 +4,14 @@
 // and a document shared instead. Every word in it is made up.
 
 ///|
-let fix_shared : (String, String?) = (
+pub let fix_shared : (String, String?) = (
   "列表滑动的十个细节 https://www.youtube.com/watch?v=e2e-list&si=abc",
   Some("列表滑动的十个细节"),
 )
 
 ///|
 /// The `shareIn` view as the core has it for the made-up workspace.
-fn fixture_share_topic(params : Map[String, Json]) -> Json? {
+pub fn fixture_share_topic(params : Map[String, Json]) -> Json? {
   let query = match params.get("query") {
     Some(String(q)) => q
     _ => ""
@@ -45,7 +45,7 @@ fn fixture_share_topic(params : Map[String, Json]) -> Json? {
 
 ///|
 /// `shareIn.open` as the core answers it: a chat's key and session, or the workspace's new chat's key.
-fn fixture_share_call(name : String, params : Json) -> Result[Json, Json]? {
+pub fn fixture_share_call(name : String, params : Json) -> Result[Json, Json]? {
   if name != "shareIn.open" {
     return None
   }
@@ -62,32 +62,5 @@ fn fixture_share_call(name : String, params : Json) -> Result[Json, Json]? {
           "title": "收集视频",
         }),
       )
-  }
-}
-
-///|
-/// MBUI_FIXTURE=share-in…: the sheet raised over Home.
-fn open_share_fixture(mode : String) -> Unit {
-  match mode {
-    "share-in" | "share-in-stations" => {
-      share_in.shared = Some(fix_shared)
-      share_in.env_taken = true
-      raise_sheet(ShareSheet)
-      share_in.raised = true
-      share_in.choosing = mode == "share-in-stations"
-    }
-    // files from another app's share sheet (ACTION_SEND_MULTIPLE): two pictures (the chat fixture's) and a document
-    "share-in-files" => {
-      share_in.shared = Some(("", None))
-      share_in.files = [
-        { name: "home-after.png", bytes: Bytes::new(182345), image: fixture_file("home-after.png") },
-        { name: "compare.png", bytes: Bytes::new(96512), image: fixture_file("compare.png") },
-        { name: "季度数据.csv", bytes: Bytes::new(23110), image: "" },
-      ]
-      share_in.env_taken = true
-      raise_sheet(ShareSheet)
-      share_in.raised = true
-    }
-    _ => ()
   }
 }
