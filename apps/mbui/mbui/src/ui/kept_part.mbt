@@ -357,12 +357,9 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
     for img in st.images {
       img.used = self.frame_no
     }
+    // (what holds it, a part or a row being built, told as its own build would: part_wake)
     if st.due < @double.infinity {
       self.wake_at_time(st.due, later=st.due_later)
-    }
-    // (what holds it says what it asks of time as its own build would)
-    if part_now.part != 0 {
-      part_now.due = dmin(part_now.due, st.due)
     }
   }
 }
@@ -484,17 +481,25 @@ fn part_rows(part : Int, build : () -> Unit) -> Unit {
 }
 
 ///|
-/// What the build of the part being built asks of time: a frame each frame from now on (as what it holds moves).
+/// Whether what is built now is kept as it was built: a part's build, or a list's row's (kept_rows.mbt), a row on its own
+/// as much as one in a part (on 小屏 a chat's messages are in none): what it asks of time is its own.
+fn part_building() -> Bool {
+  part_now.part != 0 || part_now.row != 0
+}
+
+///|
+/// What the build of the part or row being built asks of time: a frame each frame from now on (as what it holds
+/// moves).
 fn part_live() -> Unit {
-  if part_now.part != 0 {
+  if part_building() {
     part_now.live = true
   }
 }
 
 ///|
-/// The build of the part being built asks for a frame at `t` (`later`: what is shown does not wait for it).
+/// The build of the part or row being built asks for a frame at `t` (`later`: what is shown does not wait for it).
 fn part_wake(t : Double, later : Bool) -> Unit {
-  if part_now.part != 0 && t < part_now.due {
+  if part_building() && t < part_now.due {
     part_now.due = t
     part_now.due_later = later
   }

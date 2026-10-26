@@ -240,3 +240,52 @@ test "a list's row reading a signal is built as it changes, the others drawn aga
   assert_eq(k.builds[4], builds[4])
   assert_true(t.find("row 3 mark 3") is Some(_))
 }
+
+///|
+/// How far apart the moments are that rows left still are looked at (no step of their clock's falls on one).
+let rows_still_ms : Double = 70.0
+
+///|
+/// 30 rows, not in a part kept (as a chat's messages on 小屏): row 2 turning with the clock (Ctx::cycle, a spinner's),
+/// row 4 stepping once a 100 ms (Ctx::every, a ring's steps, a clock's seconds), the others still; how many times each
+/// was built.
+fn timed_rows(builds : Array[Int]) -> (Ctx) -> Unit {
+  fn(c) {
+    c.list("timed", 30, 50.0, fn(i) {
+      builds[i] = builds[i] + 1
+      let words = if i == 2 {
+        "turned \{(c.cycle(800.0) * 360.0).to_int()}"
+      } else if i == 4 {
+        "step \{c.every(100.0) % 8}"
+      } else {
+        "row \{i}"
+      }
+      c.box(h=Px(50.0), padx=10.0, fn() { c.text(words, size=12.0) |> ignore }) |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
+test "a list's rows left still: a row going on with the clock built as it goes, the others drawn again" {
+  let run = fn(replay : Bool) -> (Array[Array[Double]], Int) {
+    let builds = Array::make(30, 0)
+    let t = Tester::new(timed_rows(builds), w=320.0, h=420.0, platform=2)
+    t.keep_parts(true)
+    drawn_again_on.val = replay
+    t.draw()
+    let frames = []
+    let mut kept = 0
+    for _ in 0..<20 {
+      t.run_for(rows_still_ms)
+      frames.push(rows_frame())
+      kept = kept + t.rows_kept()
+    }
+    drawn_again_on.val = true
+    (frames, kept)
+  }
+  let (kept, n) = run(true)
+  let (built, _) = run(false)
+  assert_true(n > 100, msg="rows drawn again: \{n}")
+  rows_same({ frames: kept, kept: n, clicks: [] }, { frames: built, kept: 0, clicks: [] })
+}
