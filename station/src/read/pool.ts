@@ -72,7 +72,7 @@ export class Readers {
       const asked = slot.held;
       slot.held = null;
       if (asked !== null && asked.ask.id === answer.id) {
-        const now = Date.now();
+        const now = wall.now();
         if (now - asked.at > SLOW_MS) log.warn("readers", "a read went slowly", { op: asked.ask.op, told: asked.told, waitedMs: asked.took - asked.at, ms: now - asked.took });
         if (answer.text !== undefined) asked.resolve(answer.text);
         else asked.reject(new HttpError(answer.status ?? 500, answer.error ?? "read failed"));
@@ -109,7 +109,7 @@ export class Readers {
     const home = session !== null ? this.homes.get(session) : undefined;
     const ask: Ask = { id: this.next++, op, args, lang, names: [], processes: [], clientKeys: [] };
     return new Promise((resolve, reject) => {
-      const asked: Asked = { ask, told, session, home: home !== undefined && this.slots.includes(home) ? home : null, at: Date.now(), took: 0, resolve, reject };
+      const asked: Asked = { ask, told, session, home: home !== undefined && this.slots.includes(home) ? home : null, at: wall.now(), took: 0, resolve, reject };
       const behind = told ? this.line.findIndex((a) => !a.told) : -1;
       if (behind < 0) this.line.push(asked);
       else this.line.splice(behind, 0, asked);
@@ -136,7 +136,7 @@ export class Readers {
     slot.idle?.();
     slot.idle = undefined;
     slot.held = asked;
-    asked.took = Date.now();
+    asked.took = wall.now();
     if (asked.session !== null) {
       // Where its reading will stand.
       this.homes.delete(asked.session);
