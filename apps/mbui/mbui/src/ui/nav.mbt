@@ -396,6 +396,39 @@ pub fn[P] Nav::shows_when(self : Nav[P], ready : () -> Bool, most : Double) -> U
 }
 
 ///|
+/// Drawn flat (Ctx::nav_flat), the page drawn in place of the one on top this frame while that one is waited for
+/// (Nav::shows_when): the page drawn there last, until the one on top has what it shows or its wait is over; else none.
+/// The same whoever asks in a frame.
+fn[P] Nav::flat_held(self : Nav[P], c : Ctx) -> NavPage[P]? {
+  let top = self.pages[self.pages.length() - 1]
+  // (shown here as the last frame was drawn, or in this frame's build before: else no page shows to stay)
+  match self.flat_shown {
+    Some(shown) if shown.serial != top.serial && self.flat_asked == c.frame_no && self.flat_frame >= c.frame_no - 1 => {
+      if self.flat_for != top.serial {
+        self.flat_for = top.serial
+        self.flat_from = c.now
+      }
+      if c.now < self.flat_from + self.flat_most && !(self.flat_ready)() {
+        c.wake_at_time(self.flat_from + self.flat_most)
+        Some(shown)
+      } else {
+        None
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+/// Drawn flat (Ctx::nav_flat), whether the page on top shows this frame: not waited for while the one before stays
+/// (Nav::shows_when). What moves to show it (a pane brought over on a tape) sets out once it does, as a page pushed
+/// slides in once it has what it shows (Nav::comes_when); one pushed over a stack drawn flat holds its own slide.
+/// Asked as the frame builds, after Nav::shows_when.
+pub fn[P] Nav::top_shows(self : Nav[P]) -> Bool {
+  self.stacked() || self.flat_held(g()) is None
+}
+
+///|
 /// Pushes `page`: it slides in over the one on top.
 pub fn[P] Nav::push(self : Nav[P], page : P) -> Unit {
   self.settle()
@@ -856,24 +889,7 @@ pub fn[P] Ctx::nav_flat(
   }
   let top = nav.pages[nav.pages.length() - 1]
   // the page put on top since the last frame drawn, waited for while that one stays (Nav::shows_when)
-  // (shown here as the last frame was drawn, or in this frame's build before: else no page shows to stay)
-  let held = match nav.flat_shown {
-    Some(shown) if shown.serial != top.serial &&
-      nav.flat_asked == self.frame_no &&
-      nav.flat_frame >= self.frame_no - 1 => {
-      if nav.flat_for != top.serial {
-        nav.flat_for = top.serial
-        nav.flat_from = self.now
-      }
-      if self.now < nav.flat_from + nav.flat_most && !(nav.flat_ready)() {
-        self.wake_at_time(nav.flat_from + nav.flat_most)
-        Some(shown)
-      } else {
-        None
-      }
-    }
-    _ => None
-  }
+  let held = nav.flat_held(self)
   // what left the stack forgotten (and told), but the page that stays shown while the new one is waited for
   let kept : Array[NavPage[P]] = []
   for e in nav.gone {

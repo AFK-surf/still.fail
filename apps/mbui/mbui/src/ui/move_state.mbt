@@ -5,6 +5,12 @@
 // curve. What the view builds stays the truth: a move holds nothing once it ends. Said again over one going on, it
 // goes on from wherever that had got to. Motion as data (docs/determinism.md): what is shown at a moment is a
 // function of that moment, however many frames came between.
+//
+// Its first frame builds the new state, which may take longer than the display's frame (a page built for the first
+// time as it is brought over, its words shaped, its rows laid out): its clock does not run while that frame is late to
+// the screen (the host says how late: @hostapi.frame_late), up to nav_late_most, so it moves from where that frame drew
+// it at the display's pace, no step skipped, the wait before it moves instead (as a stack's slide does: nav.mbt; as
+// the web's transitions start once their first frame is drawn).
 
 ///|
 /// The properties a move takes, by their CSS names (one name may stand for several: `margin` for its four,
@@ -74,14 +80,18 @@ struct MoveShown {
 ///|
 /// A move going on: when it set out, for how long, by what curve; what of each name it moves (indices into
 /// move_props' numbers), the values it moves (their `--` names); where the boxes and values were shown as it set out.
+/// Its start moved on by how late its first frame reached the screen: whether that is still to be, and that frame's
+/// time (-1: not drawn yet).
 struct MoveRun {
   who : Mover
-  start : Double
+  mut start : Double
   dur : Double
   ease : Ease
   names : Map[String, FixedArray[Bool]]
   vars : Array[String]
   from : Map[String, MoveShown]
+  mut waits_late : Bool
+  mut late_at : Double
 }
 
 ///|
@@ -89,6 +99,24 @@ impl Moving for MoveRun with rest_at(self, now, frame) {
   ignore(now)
   ignore(frame)
   self.start + self.dur
+}
+
+///|
+/// Handed each frame's time: the frame after its first, told how late that one was to the screen, its start moved on
+/// that much (nav_late_most at most).
+impl Moving for MoveRun with sample(self, now) {
+  if !self.waits_late {
+    return
+  }
+  if self.late_at < 0.0 {
+    self.late_at = now
+  } else if now > self.late_at {
+    self.waits_late = false
+    let late = dmin(h_frame_late(), nav_late_most)
+    if late > 0.0 {
+      self.start = self.start + late
+    }
+  }
 }
 
 ///|
@@ -110,7 +138,7 @@ fn MoveRun::at(self : MoveRun, now : Double) -> Double {
 /// `ease` (by default the web's: 380 ms, its ease-out). Said as the state changes: in the handler that changes it,
 /// before or after. A value of the view's own goes with them where a box lists it by its `--` name (Ctx::moved). A box
 /// shown for the first time as it sets out is at once what it is built as; with motion reduced (Ctx::still) every box
-/// is.
+/// is. Its clock waits as long as its first frame is late to the screen (nav_late_most at most).
 #callsite(autofill(loc))
 pub fn Ctx::move_state(
   self : Ctx,
@@ -158,7 +186,9 @@ pub fn Ctx::move_state(
     h_now()
   }
   let who = Mover::new()
-  let run : MoveRun = { who, start, dur: duration, ease, names, vars, from }
+  // (its first frame: this one, said in it; else the next drawn, as it is handed its time)
+  let late_at = if self.in_frame() { start } else { -1.0 }
+  let run : MoveRun = { who, start, dur: duration, ease, names, vars, from, waits_late: true, late_at }
   self.moving_as(who, run as &Moving, "a move of \{names.keys().collect()} set out at \{loc}")
   self.move_runs.push(run)
 }

@@ -1239,6 +1239,10 @@ fn tape_frame(c : @ui.Ctx, panel : SideOf?, at : (Double, Double, Double), known
   wide.tape_chat = chat
   wide.tape_panel = if known { open } else { tape_unknown }
   match wide.tape_ask {
+    // the page brought over for what was put on it once it shows it (the core's answer waited for, LOCAL_MS at most:
+    // Nav::shows_when), as a phone's page slides in once it has what it shows: not sliding over with the page before
+    // on it, swapped mid-way and built for the first time as it moves; asked still till then
+    Some(Page) if wide.tape_at != Page && !app.nav.top_shows() => ()
     Some(p) => {
       wide.tape_ask = None
       if p != wide.tape_at && !(p == Panel && open == "") {
