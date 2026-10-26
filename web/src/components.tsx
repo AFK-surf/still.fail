@@ -16,7 +16,7 @@ import { t } from "./i18n.ts";
 
 /**
  * A filter: 全部 or only the viewer's (我参与的 for chats, 我创建的 for connects), from a menu; for chats (`watching`)
- * also the watching ones (监控中). `compact`: a filter button alone, marked while it filters; else the filter's name
+ * also the watching ones (监控中). `compact`: a filter button alone, marked while it filters (the chats' 我参与的 not); else the filter's name
  * beside it. `decisions` (奏) and `archive` (已归档, the archive's page, under a line): lists the sidebar shows in place
  * of the chats, each with a page of its own; another list picked there goes back to the chats. Its words are the chats'
  * with `watching`, else the connects' (`label` and `mine`, which named them, are no longer read).
@@ -48,7 +48,7 @@ export function MineFilter({ compact, archive, watching, decisions }: { label?: 
   );
   return (
     <DropdownMenu.Root modal={false}>
-      <Tip label={t(`web-main.filter.${of}`)}><DropdownMenu.Trigger className={compact ? css.mineFilterBtn : `${css.mineFilterBtn} ${css.mineFilterWide}`} aria-label={t(`web-main.filter.${of}.named`, { named })} data-on={filter !== "all" || undefined}>
+      <Tip label={t(`web-main.filter.${of}`)}><DropdownMenu.Trigger className={compact ? css.mineFilterBtn : `${css.mineFilterBtn} ${css.mineFilterWide}`} aria-label={t(`web-main.filter.${of}.named`, { named })} data-on={(filter !== "all" && !(watching && filter === "mine")) || undefined}>
         <Filter size={16} strokeWidth={1.8} />{!compact && <span>{named}</span>}
       </DropdownMenu.Trigger></Tip>
       <DropdownMenu.Portal>

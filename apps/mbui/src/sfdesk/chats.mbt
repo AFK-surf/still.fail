@@ -7,7 +7,6 @@
 /// bar's as it closes (moved with it).
 fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
-  let filter = filter_of(src, w.id)
   let (view, _) = chats_of(src, w.id, "all")
   let band = c.box(style=side_full.then(@ui.style(bg=Data(@sf.mix(apart_ground(), wide.band, t.p.sidebar)))), fn() {
     side_top(c)
@@ -37,8 +36,8 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         update_in_row(c, src)
       }
       match view {
-        // (lit while it narrows the chats or another list is shown: 奏, 已归档)
-        Some(v) if v.stations > 0 => filter_button(c, src, w, filter, list_place(list_mode(src, w)), list_mode(src, w) != 0, in_bar)
+        // (lit while 监控中 or another list is shown: 奏, 已归档; not for 我参与的, asked 2026-10-27)
+        Some(v) if v.stations > 0 => filter_button(c, src, w, list_place(list_mode(src, w)), list_mode(src, w) > 1, in_bar)
         _ => ()
       }
     })
@@ -197,13 +196,12 @@ let side_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=
 let side_words_bad : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, leading=L6)
 
 ///|
-/// The list's filter (components.tsx MineFilter, compact): a circle 32 across, in the accent's ground while it narrows the
-/// list or another list is shown (`narrowed`), its tip 筛选会话; pressed, its menu (filter_menu).
+/// The list's filter (components.tsx MineFilter, compact): a circle 32 across, in the accent's ground while it shows
+/// 监控中 or another list (`narrowed`; 我参与的 is not marked), its tip 筛选会话; pressed, its menu (filter_menu).
 fn filter_button(
   c : @ui.Ctx,
   src : Source,
   w : Workspace,
-  filter : String,
   shown : String,
   narrowed : Bool,
   in_bar : Bool,
@@ -220,7 +218,6 @@ fn filter_button(
       }
     })
   }
-  let narrowed = narrowed || filter != "all"
   // its ground and colour moved over 140 ms (page.css.ts iconBtn: transition background, color)
   let hot = @kit.animate(c, "side/filter/hover", if c.lit(id) || @sfpages.filter_menu_open() { 1.0 } else { 0.0 }, transition=nav_fade)
   let lit = @kit.animate(c, "side/filter/on", if narrowed { 1.0 } else { 0.0 }, transition=nav_fade)
