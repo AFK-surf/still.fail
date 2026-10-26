@@ -155,6 +155,37 @@ test "tapped, the notice's chat opens over Home at its message, which flashes; i
 }
 
 ///|
+test "tapped while a file is open over the window, the file is put down and the notice's chat shows" {
+  let calls : Array[Made] = []
+  let sys = fake_system()
+  let t = notify_core(calls, sys, show=[a_notice])
+  let a : Attachment = {
+    name: "界面草图.png",
+    path: "uploads/fx/界面草图.png",
+    size: 1024.0,
+    width: 800.0,
+    height: 600.0,
+    thumbhash: "",
+    owner: "s-c1",
+    upload: "",
+    duration: 0.0,
+    frames: 0,
+  }
+  open_preview("ws1/st1", "s-c1", a)
+  t.frame()
+  assert_true(@sfbase.preview_open())
+  sys.opened = "/o/ws1/st1/s-c2?message=2\n2"
+  t.frame()
+  t.run_for(@ui.nav_push_ms)
+  assert_false(@sfbase.preview_open())
+  match app.nav.top() {
+    Chat(r) => assert_eq(r.session, "s-c2")
+    _ => fail("not the chat")
+  }
+  assert_true(t.find("好的，我来处理。") is Some(_))
+}
+
+///|
 test "put away where the app goes on (a desktop's tray, minimized), its notices still come; behind for good, left" {
   let calls : Array[Made] = []
   let sys = fake_system()
