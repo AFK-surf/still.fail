@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import type { Clock, Effect } from "effect";
 import WebSocket from "ws";
 import type { BotIdentity } from "../connects/connections.ts";
+import { channelKey, personKey } from "../connects/keys.ts";
 import type { NameBook } from "../connects/names.ts";
 import { ConnectedSurface } from "../connects/surface.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
@@ -548,14 +549,14 @@ export class SlackSurface extends ConnectedSurface {
         return null;
       }
     };
-    return this.book.person(`u:${team}:${user}`, fetch, (known) => known.picture === undefined);
+    return this.book.person(personKey(team, user), fetch, (known) => known.picture === undefined);
   }
 
   /// A channel's name as far as already known (null for DMs or not yet known), without waiting.
   knownChannel(channel: string): string | null {
     if (!this.book) return null;
     const team = this.workspace() ?? "?";
-    return this.book.channel(`c:${team}:${channel}`, () => channelNameOf(this.client, channel, this.botToken));
+    return this.book.channel(channelKey(team, channel), () => channelNameOf(this.client, channel, this.botToken));
   }
 
   /// Channel name via conversations.info (null for DMs), kept for the connection's lifetime.

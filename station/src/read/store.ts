@@ -11,64 +11,30 @@ import { DatabaseSync } from "node:sqlite";
 import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
 import { USAGE_GROUPS } from "../store/usage.ts";
-import { CARD_BEFORE, CC_THREADS_SQL, CLOSED_SINCE, type InWorkspace, JOBS_RUNNING, LETTER_SQL, OPTIONS_BEFORE, SAID_SINCE, SESSION_JOBS, SESSION_OF_RUNTIME, PEOPLE_AT, type Letter, isLetter, liveShare, sees, toChatShare, withLetter } from "../store/rows.ts";
+import * as rows from "../store/rows.ts";
+import {
+  CARD_BEFORE, CC_THREADS_SQL, CLOSED_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LETTER_SQL, type Membership, type MessageRow, OPTIONS_BEFORE,
+  PEOPLE_AT, SAID_SINCE, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, attachment, authorKind, cardOf, isLetter, liveShare, mergeEntries,
+  ending, parsed, quote, saidBefore, sees, takeChars, toChatShare, toEntry, toMembership, toMessage, toThread, withLetter,
+} from "../store/rows.ts";
 
 export type Json = any;
 
-/// The page's own threads live on this surface (stored under the name of before the rename).
-export const STILLFAIL_SURFACE = "ember";
-/// Archived by a person.
-export const MANUAL = "manual";
+// The rows (camelCase) and how they are read from the database are the station's own (store/rows.ts): the readers'
+// leave out what is not for the pages (a session's and a job's token).
+export { I64_MAX, MANUAL, STILLFAIL_SURFACE, ending, optionsCard, saidBefore, takeChars } from "../store/rows.ts";
+export type { AuthorKind, CardAnswer, EntryRow, Membership, MessageRow, ThreadRow } from "../store/rows.ts";
+
 /// Archived threads whose entries are kept decompressed, the most recently read last.
 const ARCHIVE_CACHE = 32;
-/// SQLite's and Rust's i64::MAX, for "no bound".
-export const I64_MAX = 9223372036854775807n;
 
 /// The readers' threads have no clock of their own: the machine's time.
 export const nowMs = () => wall.now();
 
 // ---- rows ----
 
-export type AuthorKind = "person" | "agent" | "ember";
-
-export type SessionRow = {
-  key: string; connect: string; scope: "thread" | "all"; title: string | null; createdBy: string | null; runtime: string;
-  profile: string; profilePinned: boolean; model: string | null; effort: string | null; fast: boolean | null;
-  runtimeSessionId: string | null; workspace: string; cwd: string | null; running: boolean; createdAt: number;
-  lastActiveAt: number; archivedAt: number | null; archivedBy: string | null; shownAt: number | null;
-  /// Which of the station's workspaces its chat is in (store/rows.ts): null is the home one. Not for the pages.
-  ws: string | null;
-};
-
-export type ThreadRow = {
-  id: number; surface: string; channel: string; threadTs: string; title: string | null; autoTitle: string | null;
-  createdBy: string | null; createdAt: number; home: string | null; hiddenAt: number | null; hiddenBy: string | null;
-  shownAt: number | null;
-};
-
-/// A session in a thread, and the connect it posts there through.
-export type Membership = { thread: number; session: string; connect: string; joinedAt: number };
-
-/// One entry of a thread's log. `agentIdentity`, `options` and `card` are undefined where the Rust has None (and
-/// leaves them out), and may be null where it has Some(Value::Null).
-export type EntryRow = {
-  agentIdentity: Json | undefined; thread: number; n: number; kind: "message" | "edit"; target: number | null;
-  ts: string | null; authorKind: AuthorKind; author: string; text: string | null; attachments: Json[]; quotes: Json[];
-  declared: string | null; client: string | null; profile: string | null; runtime: string | null; options: Json | undefined; card: Json | undefined;
-  at: number;
-  /// A letter's (store/rows.ts Letter). Absent on every other entry.
-  letter?: Letter;
-};
-
-/// A message as it reads now: its latest edit's words, files and quotes.
-export type MessageRow = {
-  agentIdentity: Json | null; thread: number; n: number; ts: string; authorKind: AuthorKind; author: string; text: string;
-  attachments: Json[]; quotes: Json[]; declared: string | null; client: string | null; createdAt: number; editedAt: number | null;
-  letter?: Letter;
-};
-
-/// A card someone answered (`answers_since`).
-export type CardAnswer = { question: MessageRow; card: Json; by: string; at: number; answer: MessageRow | null };
+/// A session as the pages are given it: without its token.
+export type SessionRow = Omit<rows.SessionRow, "token">;
 
 /// A thread for listings: who takes part, the last thing said, and how much the viewer has not read.
 export type ThreadSummary = {
@@ -83,156 +49,12 @@ export type TurnSummary = Record<string, Json>;
 
 export type SessionStats = { turns: number; pending: number; firstText: string | null; lastTurn: TurnSummary | null };
 
-export type JobRow = {
-  id: string; sessionKey: string; name: string; command: string; cwd: string; port: number | null; state: string;
-  pgid: number | null; exitCode: number | null; startedAt: number; endedAt: number | null; restarts: number; log: string;
-  watch: boolean;
-  queued?: boolean;
-  screen?: boolean;
-};
-
-/// How a turn ended or a post was declared, in the words from before: final, block, waiting.
-export function saidBefore(declared: string): string {
-  if (declared === "all_done") return "final";
-  if (declared === "need_decision" || declared === "need_help") return "block";
-  return declared;
-}
-
-/// The same in today's words: final is all_done, block and need_decision need_help.
-export function ending(declared: string): string {
-  if (declared === "final") return "all_done";
-  if (declared === "block" || declared === "need_decision") return "need_help";
-  return declared;
-}
-
-/// AuthorKind::parse.
-function authorKind(s: string): AuthorKind {
-  if (s === "agent") return "agent";
-  if (s === "ember" || s === "stillfail") return "ember";
-  return "person";
-}
-
-/// Options to pick from as a card.
-export const optionsCard = (options: Json): Json => ({ type: "options", options });
-
-/// `serde_json::from_str::<Value>(..).ok()`: undefined when it does not parse.
-function parsed(text: string | null): Json | undefined {
-  if (text === null || text === undefined) return undefined;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-}
-
-/// A message's card as kept: its `card` column, else its `options` (from before cards) as an options card.
-function cardOf(card: string | null, options: string | null): Json | undefined {
-  const own = parsed(card);
-  if (own !== undefined) return own;
-  const before = parsed(options);
-  return before === undefined ? undefined : optionsCard(before);
-}
-
-// serde's reading of Attachment and Quote: their fields in their order, unknown ones dropped, a wrong one fails the list.
-const isObj = (v: Json) => v !== null && typeof v === "object" && !Array.isArray(v);
-const optional = (v: Json, ok: (v: Json) => boolean) => v === undefined || v === null || ok(v);
-const isStr = (v: Json) => typeof v === "string";
-const isU64 = (v: Json) => typeof v === "number" && Number.isInteger(v) && v >= 0;
-const isU32 = (v: Json) => isU64(v) && v <= 0xffffffff;
-
-function attachment(a: Json): Json {
-  if (!isObj(a) || !isStr(a.name) || !isStr(a.path) || !isU64(a.size)) throw new Error("attachment");
-  if (!optional(a.width, isU32) || !optional(a.height, isU32) || !optional(a.thumbhash, isStr)) throw new Error("attachment");
-  const v: Json = { name: a.name, path: a.path, size: a.size };
-  if (a.width !== undefined && a.width !== null) v.width = a.width;
-  if (a.height !== undefined && a.height !== null) v.height = a.height;
-  if (a.thumbhash !== undefined && a.thumbhash !== null) v.thumbhash = a.thumbhash;
-  return v;
-}
-
-function quote(q: Json): Json {
-  if (!isObj(q) || !isStr(q.author) || !isStr(q.text) || !isStr(q.comment)) throw new Error("quote");
-  if (!optional(q.ts, isStr) || !optional(q.role, isStr) || !optional(q.file, isStr)) throw new Error("quote");
-  const v: Json = { author: q.author, text: q.text, comment: q.comment };
-  if (q.ts !== undefined && q.ts !== null) v.ts = q.ts;
-  if (q.role !== undefined && q.role !== null) v.role = q.role;
-  if (q.file !== undefined && q.file !== null) v.file = q.file;
-  return v;
-}
-
-/// from_json_list: a stored list, or none when it does not read.
-function fromJsonList(text: string | null, read: (v: Json) => Json): Json[] {
-  const list = parsed(text);
-  if (!Array.isArray(list)) return [];
-  try {
-    return list.map(read);
-  } catch {
-    return [];
-  }
-}
+/// A job as the pages are given it: without its token (nor the sandbox it asked for).
+export type JobRow = Omit<rows.JobRow, "token" | "size">;
 
 function toSession(r: Json): SessionRow {
-  return {
-    key: r.key, connect: r.connect, scope: r.scope === "all" ? "all" : "thread", title: r.title, createdBy: r.created_by,
-    runtime: r.runtime, profile: r.profile, profilePinned: r.profile_pinned === 1, model: r.model, effort: r.effort,
-    fast: r.fast === null || r.fast === undefined ? null : r.fast !== 0, runtimeSessionId: r.runtime_session_id,
-    workspace: r.workspace, cwd: r.cwd ?? null, running: r.running === 1, createdAt: r.created_at,
-    lastActiveAt: r.last_active_at, archivedAt: r.archived_at, archivedBy: r.archived_by, shownAt: r.shown_at,
-    ws: r.ws ?? null,
-  };
-}
-
-function toThread(r: Json): ThreadRow {
-  return {
-    id: r.id, surface: r.surface, channel: r.channel, threadTs: r.thread_ts, title: r.title, autoTitle: r.auto_title,
-    createdBy: r.created_by, createdAt: r.created_at, home: r.home, hiddenAt: r.hidden_at, hiddenBy: r.hidden_by,
-    shownAt: r.shown_at,
-  };
-}
-
-const toMembership = (r: Json): Membership => ({ thread: r.thread, session: r.session, connect: r.connect, joinedAt: r.joined_at });
-
-function toEntry(r: Json): EntryRow {
-  return {
-    agentIdentity: parsed(r.agent_identity),
-    thread: r.thread,
-    n: r.n,
-    kind: r.kind === "edit" ? "edit" : "message",
-    target: r.target,
-    ts: r.ts,
-    authorKind: authorKind(r.author_kind),
-    author: r.author,
-    text: r.text,
-    attachments: fromJsonList(r.attachments, attachment),
-    quotes: fromJsonList(r.quotes, quote),
-    declared: r.declared,
-    client: r.client,
-    profile: r.profile,
-    runtime: r.runtime ?? null,
-    options: parsed(r.options),
-    card: parsed(r.card),
-    at: r.at,
-    ...withLetter(r.letter),
-  };
-}
-
-function toMessage(r: Json): MessageRow {
-  return {
-    agentIdentity: parsed(r.agent_identity) ?? null,
-    thread: r.thread,
-    n: r.n,
-    ts: r.ts ?? "",
-    authorKind: authorKind(r.author_kind),
-    author: r.author,
-    text: r.text ?? "",
-    attachments: fromJsonList(r.attachments, attachment),
-    quotes: fromJsonList(r.quotes, quote),
-    declared: r.declared,
-    client: r.client,
-    createdAt: r.created_at,
-    editedAt: r.edited_at,
-    ...withLetter(r.letter),
-  };
+  const { token: _, ...session } = rows.toSession(r);
+  return session;
 }
 
 /// An entry from an archive file, as serde reads EntryRow (null where an Option is: None).
@@ -248,40 +70,6 @@ function archivedEntry(e: Json): EntryRow {
     options: some(e.options), card: some(e.card), at: e.at,
     ...withLetter(e.letter),
   };
-}
-
-/// Entries merged into their messages, as the `merged` view does: for a thread read from its archive file.
-function mergeEntries(entries: EntryRow[]): MessageRow[] {
-  const messages = new Map<number, MessageRow>();
-  for (const e of entries) {
-    if (e.kind === "message") {
-      messages.set(e.n, {
-        agentIdentity: e.agentIdentity ?? null, thread: e.thread, n: e.n, ts: e.ts ?? "", authorKind: e.authorKind,
-        author: e.author, text: e.text ?? "", attachments: e.attachments, quotes: e.quotes, declared: e.declared,
-        client: e.client, createdAt: e.at, editedAt: null, ...(e.letter !== undefined ? { letter: e.letter } : {}),
-      });
-    } else {
-      const m = e.target === null ? undefined : messages.get(e.target);
-      if (m) {
-        m.text = e.text ?? "";
-        m.attachments = e.attachments;
-        m.quotes = e.quotes;
-        m.editedAt = e.at;
-      }
-    }
-  }
-  return [...messages.values()].sort((a, b) => a.n - b.n);
-}
-
-/// The first `n` characters (Rust's `chars().take(n)`: code points, not UTF-16 units).
-export function takeChars(text: string, n: number): string {
-  let out = "";
-  let count = 0;
-  for (const c of text) {
-    if (count++ >= n) break;
-    out += c;
-  }
-  return out;
 }
 
 // ---- the store ----
@@ -825,11 +613,10 @@ export function sessionStats(s: Store, key: string | string[] | null): Map<strin
 
 // ── jobs ──
 
-const toJob = (r: Json): JobRow => ({
-  id: r.id, sessionKey: r.session_key, name: r.name, command: r.command, cwd: r.cwd, port: r.port, state: r.state,
-  pgid: r.pgid, exitCode: r.exit_code, startedAt: r.started_at, endedAt: r.ended_at, restarts: r.restarts, log: r.log,
-  watch: r.watch !== 0, ...(r.queued === 1 ? { queued: true } : {}), ...(r.screen === 1 ? { screen: true } : {}),
-});
+const toJob = (r: Json): JobRow => {
+  const { token: _, size: __, ...job } = rows.toJob(r);
+  return job;
+};
 
 /// A session's jobs (all sessions' with null), newest first.
 export function listJobs(s: Store, session: string | null): JobRow[] {

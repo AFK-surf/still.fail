@@ -4,6 +4,7 @@
 // the person or channel, and the pages are told to read again then.
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { NAMES_FILE, channelKey, personKey } from "../connects/keys.ts";
 import type { Json, Store } from "./store.ts";
 
 type Cached<T> = { stamp: string; value: T };
@@ -49,7 +50,7 @@ function teams(s: Store): Map<string, Team> {
 
 /// The names book a connect's are in: Slack's (<data>/slack-names.json), or Feishu's (feishu-names.json).
 function book(s: Store, feishu = false): Record<string, Json> {
-  return readJson(join(s.dataDir, feishu ? "feishu-names.json" : "slack-names.json"), {}, (v) => (v !== null && typeof v === "object" && !Array.isArray(v) ? v : {}));
+  return readJson(join(s.dataDir, feishu ? NAMES_FILE.feishu : NAMES_FILE.slack), {}, (v) => (v !== null && typeof v === "object" && !Array.isArray(v) ? v : {}));
 }
 
 /// A connect's Slack workspace's name, when known.
@@ -61,7 +62,7 @@ export function teamName(s: Store, connect: string): string | null {
 /// A Slack person of a connect, as far as known: their name, email and profile picture's address ("" when not known).
 export function knownPerson(s: Store, connect: string, user: string): { name: string; email: string; picture: string } | null {
   const t = teams(s).get(connect);
-  const person = book(s, t?.feishu)[`u:${t?.id ?? "?"}:${user}`]?.person;
+  const person = book(s, t?.feishu)[personKey(t?.id ?? "?", user)]?.person;
   const said = (v: Json) => (typeof v === "string" ? v : "");
   return person && typeof person.name === "string" ? { name: person.name, email: said(person.email), picture: said(person.picture) } : null;
 }
@@ -70,7 +71,7 @@ export function knownPerson(s: Store, connect: string, user: string): { name: st
 export function knownChannel(s: Store, connect: string | null, channel: string): string | null {
   if (connect === null) return null;
   const t = teams(s).get(connect);
-  const name = book(s, t?.feishu)[`c:${t?.id ?? "?"}:${channel}`]?.channel;
+  const name = book(s, t?.feishu)[channelKey(t?.id ?? "?", channel)]?.channel;
   return typeof name === "string" ? name : null;
 }
 
