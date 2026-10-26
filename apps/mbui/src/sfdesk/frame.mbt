@@ -1298,17 +1298,15 @@ fn tape_frame(c : @ui.Ctx, panel : SideOf?, at : (Double, Double, Double), known
 let tape_unknown : String = "?"
 
 ///|
-/// What panel `p` holds (`body`): built as ever while it is in use (and off the tape); behind the one in use, only
-/// drawn (a press there brings it over: tape_covers) and kept as it was drawn while nothing it shows can have changed
-/// (Ctx::kept_part): a list scrolled in the one in use builds none of it. `at`: where it is and how big, and what else of
-/// the frame's it is built from (its ground said with it).
+/// What panel `p` holds (`body`), kept as it was drawn while nothing it shows can have changed (Ctx::kept_part), in use
+/// or not, as GPUI keeps every view it was not told changed: a list scrolled in one builds none of the others, a mark
+/// stepping in one builds nothing. In use (and off the tape), read out and taking the hand (built while a finger is on
+/// it, and the frame after); behind the one in use, only drawn (a press there brings it over: tape_covers). `at`: where
+/// it is and how big, and what else of the frame's it is built from (its ground said with it).
 fn tape_part(c : @ui.Ctx, p : TapePane, at : String, body : () -> Unit) -> Unit {
-  if !wide.tape || wide.tape_at == p {
-    body()
-  } else {
-    let t = @sf.theme()
-    c.kept_part(c.id("tape/kept/" + p.to_string()), "\{at} \{t.p.bg} \{t.dark}", body)
-  }
+  let t = @sf.theme()
+  let in_use = !wide.tape || wide.tape_at == p
+  c.kept_part(c.id("tape/kept/" + p.to_string()), "\{at} \{t.p.bg} \{t.dark}", body, read_out=in_use)
 }
 
 ///|

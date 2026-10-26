@@ -4,13 +4,13 @@
 // Chromium keeps a layer's display list recorded past what shows, its interest rect, so that scrolling replays it.)
 //
 // What builds a row again is a part's (kept_part.mbt's head): what it read of signals and of time (the frame, a
-// moment), an event from outside, its key (the list's width, its rows' count, its scope), the layout's epoch; and
-// a row's own: any motion round it but its list's scrolling (what moves may be read in what it shows), a press held but
-// for the list's own drag, the mouse's pointer over it (it lights what it points at), what it holds held at the list's
-// top as it scrolls past (Ctx::stick: a message's picture), and where it now shows more than its last build drew of it
-// (row_reach past its list's clip, both ways: a row taller than that is built again every so often as it scrolls). A
-// row that holds what must be built each frame (a field, a native view, a list of its own, a scroll bar its list's rows
-// share, what is drawn over everything) is always built.
+// moment), an event from outside, its key (the list's width, its rows' count, its scope), the layout's epoch; and a
+// row's own: any motion round it but its list's scrolling (what moves may be read in what it shows; and the frame it is
+// over, as it ended), a press held but for the list's own drag, the mouse's pointer over it (it lights what it points
+// at), what it holds held at the list's top as it scrolls past (Ctx::stick: a message's picture), and where it now
+// shows more than its last build drew of it (row_reach past its list's clip, both ways: a row taller than that is built
+// again every so often as it scrolls). A row that holds what must be built each frame (a field, a native view, a list
+// of its own, a scroll bar its list's rows share, what is drawn over everything) is always built.
 //
 // Its list's rows are laid on the pixels, each as tall as whole pixels (Ctx::row_slot, rows_on_pixels): a row is drawn
 // again only moved by whole device pixels, as its laying out there would set its words and boxes.
@@ -74,6 +74,9 @@ priv struct RowKept {
   /// the words its build held, as what holds it is named by them (Ctx::words_in), and as a box pressed is (own_words)
   mut read_words : String
   mut read_own : String
+  /// its last build was while a motion round it went (its ground fading from under the pointer): built once more as it
+  /// is over, so what is drawn again is where the motion ended, not where it had got as that build was drawn
+  mut moved_built : Bool
 }
 
 ///|
@@ -104,6 +107,7 @@ fn RowKept::new(list : Int, item : Int) -> RowKept {
     read_out: false,
     read_words: "",
     read_own: "",
+    moved_built: false,
   }
 }
 
@@ -266,7 +270,8 @@ fn Ctx::row_of(self : Ctx, li : Int, st : ListState, k : Int, iw : Double, force
     kp.pointing == pointing() &&
     // (read out: what it said taken as it was built, else built so that it is)
     (rk.read_out || !self.reads_out) &&
-    !moving
+    !moving &&
+    !rk.moved_built
   rk.build = st.row
   rk.part = st.part
   if !same {
@@ -335,6 +340,7 @@ fn Ctx::row_of(self : Ctx, li : Int, st : ListState, k : Int, iw : Double, force
   rk.node = r
   if ran {
     kp.built = self.frame_no
+    rk.moved_built = moving
     kp.key = key
     kp.outside = outside_events.val
     kp.epoch = self.epoch
