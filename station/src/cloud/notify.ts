@@ -71,7 +71,7 @@ export class Notifier {
   }
 
   private ask(op: string, args: unknown) {
-    void this.readers.read(op, args, stationLang()).then(
+    void this.readers.read(op, args, stationLang(), { told: true }).then(
       (text) => {
         const answer = JSON.parse(text);
         this.queue(Array.isArray(answer) ? answer : answer.notices);

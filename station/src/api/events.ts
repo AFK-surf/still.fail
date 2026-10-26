@@ -51,6 +51,9 @@ const HOST_MS = 10_000;
 /// changes with every model call, some seconds apart while agents work, and each telling has a page showing usage, and every
 /// client from before it is read only so, read all of it again (some 200 KB).
 const USAGE_EVERY_MS = 60_000;
+/// What the streams tell is read before the pages a device asked (read/pool.ts): a message just said is not held up
+/// behind a heavy read.
+const TOLD = { told: true };
 /// A stream's answer when it was told first what came after `since` (the client then reads nothing again).
 export const RESUMED = "stillfail-resumed";
 /// A stream's answer when it was asked `running=1` and is told what every session at work its viewer sees does, as it
@@ -639,14 +642,14 @@ export class Events {
           // Entries as the pages show them (with their authors' names), read off the main thread.
           this.whenRead(
             this.deps.readers
-              .read("entries", { viewer: who.viewer, thread: change.id, params: [["from", String(first)], ["to", String(last)]] }, who.lang)
+              .read("entries", { viewer: who.viewer, thread: change.id, params: [["from", String(first)], ["to", String(last)]] }, who.lang, TOLD)
               .then((text) => this.emit("thread", { id: change.id, entries: JSON.parse(text).entries }, { sees: { thread: change.id } }), (e) => log.warn("events", "thread event not sent", { error: (e as Error).message })),
           );
           // And to each viewer, the thread as GET /threads/:id has it for them (their read position, their unread count):
           // a client puts it in place rather than read it again after every message (a phone did some two a minute).
           for (const { viewer, lang } of this.viewers(who).filter((v) => this.deps.seen?.(v.viewer, { thread: change.id }) ?? true)) {
             const k = viewerKey(viewer, lang);
-            this.whenRead(this.deps.readers.read("thread", { viewer, id: change.id, lang }, lang).then((text) => this.emit("thread-view", JSON.parse(text), { viewer: k }, `thread-view\0${change.id}\0${k}`), () => {}));
+            this.whenRead(this.deps.readers.read("thread", { viewer, id: change.id, lang }, lang, TOLD).then((text) => this.emit("thread-view", JSON.parse(text), { viewer: k }, `thread-view\0${change.id}\0${k}`), () => {}));
           }
         }
         this.itemsChanged({ threads: [change.id] });
@@ -671,7 +674,7 @@ export class Events {
         break;
       case "job":
         // A job as GET /jobs/:id answers it, so a client holding it puts it in place without reading anything again.
-        this.whenRead(this.deps.readers.read("job", { id: change.id }, "zh").then((text) => this.emit("job", JSON.parse(text), { sees: { job: change.id } }, `job\0${change.id}`), () => {}));
+        this.whenRead(this.deps.readers.read("job", { id: change.id }, "zh", TOLD).then((text) => this.emit("job", JSON.parse(text), { sees: { job: change.id } }, `job\0${change.id}`), () => {}));
         break;
       case "jobRemoved":
         this.emit("job-removed", { id: change.id, session: change.session }, { sees: { session: change.session } }, `job\0${change.id}`);
@@ -735,7 +738,7 @@ export class Events {
     for (const key of dirty.sessions) {
       if (!this.deps.sessionExists(key)) continue;
       try {
-        this.emit("session", JSON.parse(await this.deps.readers.read("summary", { key }, "zh")), { sees: { session: key } }, `session\0${key}`);
+        this.emit("session", JSON.parse(await this.deps.readers.read("summary", { key }, "zh", TOLD)), { sees: { session: key } }, `session\0${key}`);
       } catch (error) {
         log.warn("events", "session event not sent", { session: key, error: (error as Error).message });
       }
@@ -775,7 +778,7 @@ export class Events {
           if (!touched(viewer)) return;
           let read: { rows: any[]; scope: string[] };
           try {
-            read = JSON.parse(await this.deps.readers.read("chatRows", { viewer, sessions: [...dirty.items.sessions], threads: [...threads] }, lang));
+            read = JSON.parse(await this.deps.readers.read("chatRows", { viewer, sessions: [...dirty.items.sessions], threads: [...threads] }, lang, TOLD));
           } catch (error) {
             log.warn("events", "sidebar rows not read", { error: (error as Error).message });
             return;
