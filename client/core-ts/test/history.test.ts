@@ -199,6 +199,18 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
   // What it waited for (chat_state's `for`) leads its words, and goes with the wait for the pages' running count.
   const ci = waits('{"kind":"waiting","seconds":600,"for":"CI 跑完"}', "2026-09-27T00:05:00.000Z");
   assert.deepEqual([ci.text, ci.wait.what], ["CI 跑完 · 等待了 5m / 10m", "CI 跑完"]);
+  // An agent that went on working after its mark waits no more from its next call (another mark is one); what it posts
+  // as its turn ends, and a sub-agent's work, do not end it.
+  const then = (...more: J[]) => {
+    const timeline: J[] = [{ kind: "tool_call", tool: "mcp__stillfail__chat_state", text: '{"kind":"waiting","seconds":600}', at: "2026-09-27T00:00:00.000Z" }, ...more];
+    return presentHistory({ loaded: true, timeline }, cx(threads, members, slack)).items[0].body.content.wait.until;
+  };
+  const later = (k: number) => `2026-09-27T00:00:0${k}.000Z`;
+  assert.equal(then({ kind: "assistant", text: "checking", at: later(1) }, { kind: "tool_call", tool: "Bash", text: '{"command":"gh pr checks"}', at: later(3) }), Date.parse(later(3)));
+  assert.equal(then({ kind: "tool_call", tool: "mcp__stillfail__chat_state", text: '{"kind":"waiting","seconds":60}', at: later(4) }), Date.parse(later(4)));
+  assert.equal(then({ kind: "tool_call", tool: "mcp__stillfail__chat_post", text: '{"to":"C/1","text":"waiting on CI"}', at: later(2) }, { kind: "assistant", text: "waiting", at: later(3) }), null);
+  assert.equal(then({ kind: "tool_call", tool: "mcp__stillfail__chat_post", text: '{"to":"C/1","text":"done","kind":"all_done"}', at: later(2) }), Date.parse(later(2)));
+  assert.equal(then({ kind: "tool_call", tool: "Bash", text: '{"command":"ls"}', at: later(5), subagent: true }), null);
   assert.deepEqual(h.live, [{ id: "s", text: "正在思考…" }]);
   assert.equal(h.phase.text, "正在启动 Codex");
   assert.equal(h.usage[4].value, "50%");

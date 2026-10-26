@@ -181,6 +181,10 @@ function corpus(): { claude: string; codex: string } {
     { type: "user", timestamp: at, message: { role: "user", content: [{ type: "tool_result", tool_use_id: "t1", content: "error: missing", is_error: true }] } },
     { type: "assistant", timestamp: at, message: { id: "r3", content: [{ type: "tool_use", id: "t2", name: "mcp__stillfail__chat_post", input: { to: "C/1", text: "done" } }] } },
     { type: "user", timestamp: at, message: { role: "user", content: [{ type: "tool_result", tool_use_id: "t2", content: [{ type: "text", text: "Posted." }, { type: "image", source: {} }] }] } },
+    // What came while it worked, given to it between two calls; the rest of what Claude Code attaches gives nothing.
+    { type: "attachment", timestamp: at, attachment: { type: "queued_command", prompt: '<message via="slack" from="Ada (U1)" ts="1.2">and the tests</message>' } },
+    { type: "attachment", timestamp: at, attachment: { type: "queued_command", prompt: [{ type: "text", text: "<task-notification>\n<status>completed</status>\n</task-notification>" }, { type: "image", source: {} }], commandMode: "task-notification" } },
+    { type: "attachment", timestamp: at, attachment: { type: "total_tokens_reminder", text: "<total_tokens>1 tokens left</total_tokens>" } },
     { type: "assistant", timestamp: at, isSidechain: true, message: { id: "r4", content: [{ type: "text", text: "from a subagent" }] } },
     { type: "system", timestamp: at, content: "compacted" },
   ];
@@ -205,7 +209,21 @@ function corpus(): { claude: string; codex: string } {
 
 /// What lines gave when READING was each: a reading kept on disk (read/transcripts.ts) counts and marks entries as lines
 /// gave them then.
-const READ_AS: Record<number, string> = { 1: "3983ee905f8cbf19" };
+const READ_AS: Record<number, string> = { 2: "8a08a82d23cb7c00" };
+
+test("a prompt that came while a Claude agent worked is read as one that began a turn, where it was given", () => {
+  const dir = temp();
+  const path = join(dir, "claude.jsonl");
+  writeFileSync(path, corpus().claude);
+  const entries = readTimeline("claude", path);
+  const posted = entries.findIndex((e) => e.kind === "tool_result" && e.callId === "t2");
+  assert.deepEqual(entries.slice(posted + 1, posted + 3).map((e) => [e.kind, e.text]), [
+    ["user", '<message via="slack" from="Ada (U1)" ts="1.2">and the tests</message>'],
+    ["user", "<task-notification>\n<status>completed</status>\n</task-notification>"],
+  ]);
+  assert.ok(!entries.some((e) => e.text.includes("tokens left")));
+  rmSync(dir, { recursive: true, force: true });
+});
 
 test("what lines give is what READING says: a change to it takes READING higher", () => {
   const dir = temp();

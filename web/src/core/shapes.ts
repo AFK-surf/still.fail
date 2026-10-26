@@ -3601,8 +3601,8 @@ export interface HistoryLive {
 }
 
 /**
- * A wait in an agent's history: from its mark (`since`) until the next word brought it back (`until`, absent while it
- * still waits: count on from `since`), at most `seconds`.
+ * A wait in an agent's history: from its mark (`since`) until what moved it on (`until`: a prompt bringing it back, or
+ * a call of its own after the mark; absent while it still waits: count on from `since`), at most `seconds`.
  */
 export interface HistoryWait {
 	since: number;

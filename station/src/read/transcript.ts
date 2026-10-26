@@ -81,7 +81,7 @@ export const utf8 = new TextDecoder("utf-8", { ignoreBOM: true });
 
 /// How lines are read into entries (`timelineOf`): a change to how many entries a line gives, or which, takes this one
 /// higher, so what was counted and marked of transcripts the way before is read anew (read/transcripts.ts).
-export const READING = 1;
+export const READING = 2;
 
 /**
  * An entry as an execution history shows it before it is opened (`brief: true` when anything was left out; the whole of
@@ -461,7 +461,6 @@ function cursorResult(result: Json): string {
 
 function claudeTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
   const kind = stringOf(get(r, "type")) ?? "";
-  if ((kind !== "user" && kind !== "assistant") || get(r, "isMeta") === true) return;
   const at = stringOf(get(r, "timestamp")) ?? null;
   const subagent = get(r, "isSidechain") === true;
   const entry = (kind: string, text: string): TimelineEntry => {
@@ -469,6 +468,18 @@ function claudeTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
     if (subagent) e.subagent = true;
     return e;
   };
+  // A prompt that came while the agent worked (a message, a notice, a background task's end), given to it between two of
+  // its calls: Claude Code keeps it as a queued command, not as a user's message, but it is one as much as a prompt
+  // that began a turn.
+  const queued = get(r, "attachment");
+  if (kind === "attachment" && get(queued, "type") === "queued_command") {
+    const prompt = get(queued, "prompt");
+    for (const t of isStr(prompt) ? [prompt] : (Array.isArray(prompt) ? prompt : []).map((b: Json) => (get(b, "type") === "text" ? stringOf(get(b, "text")) : undefined))) {
+      if (t !== undefined && trim(t) !== "") out.push(entry("user", clip(t)));
+    }
+    return;
+  }
+  if ((kind !== "user" && kind !== "assistant") || get(r, "isMeta") === true) return;
   // Fields in serde's order: at, kind, text, tool, ok, callId, subagent.
   const withFields = (e: TimelineEntry, more: Partial<TimelineEntry>): TimelineEntry => {
     const v: TimelineEntry = { at: e.at, kind: e.kind, text: e.text };
