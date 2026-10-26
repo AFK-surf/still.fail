@@ -779,7 +779,7 @@ pub fn frame(
         // a right click in it: what is picked copied (context_menu.mbt)
         context_page(c, page_id)
         let page_corners = tape_pane_corners(Page, panel_of is Some(_))
-        let pane = c.box(
+        let pane = tape_behind(c, Page, fn() { c.box(
           style=page_apart.then(
             @ui.style(w=Fixed(main_w), h=Fixed(panel_h), radius=@sf.corners_radius(page_corners)),
           ),
@@ -794,13 +794,13 @@ pub fn frame(
             })
             @sf.pane_round.val = None
           },
-        )
+        ) })
         // what moves in the page of its own (the composer) takes its place from the page's foot: the tape moving the
         // page, a keyboard making it shorter, move none of it (it goes with the page, at once)
         @motion.scope(c, pane, bottom=true)
         match panel_of {
           Some(side) =>
-            c.box(
+            tape_behind(c, Panel, fn() { c.box(
               style=page_apart.then(
                 @ui.style(
                   w=Fixed(panel_w),
@@ -818,7 +818,7 @@ pub fn frame(
                 })
                 @sf.pane_round.val = None
               },
-            )
+            ) })
             |> ignore
           None => ()
         }
@@ -843,8 +843,10 @@ pub fn frame(
       })
       |> ignore
     }
-    tape_part(c, Side, "\{s} \{col} \{top} \{foot} \{tape_x} \{c.width} \{c.height} \{wide.brand_h} \{wide.band}", fn() {
-      dock(c, src, w, all, bar, peek, s, col, top, foot, tape_x)
+    tape_behind(c, Side, fn() {
+      tape_part(c, Side, "\{s} \{col} \{top} \{foot} \{tape_x} \{c.width} \{c.height} \{wide.brand_h} \{wide.band}", fn() {
+        dock(c, src, w, all, bar, peek, s, col, top, foot, tape_x)
+      })
     })
     // (with the sidebar closed, where its first row is not shown: 更新 where the bar's start leaves room for it)
     if updating && bar && !peek && !wide.tape {
@@ -1035,7 +1037,7 @@ fn tape_side_w(width : Double, own : Double) -> Double {
 /// ease out).
 // kept across runs: a table, never written
 let tape_moves : Array[(String, Array[String])] = [
-  ("tape", ["--tape-x"]),
+  ("tape", ["--tape-x", "--behind-side", "--behind-page", "--behind-panel"]),
 ]
 
 ///|
@@ -1295,6 +1297,30 @@ fn tape_part(c : @ui.Ctx, p : TapePane, at : String, body : () -> Unit) -> Unit 
   } else {
     let t = @sf.theme()
     c.kept_part(c.id("tape/kept/" + p.to_string()), "\{at} \{t.p.bg} \{t.dark}", body)
+  }
+}
+
+///|
+/// What `body` draws of panel `p` (its answer): on the tape behind the one in use, on the ground a step darker
+/// (@sf.behind_ground), what is on it as it is; in use, or off the tape, on its own.
+fn[T] tape_behind(c : @ui.Ctx, p : TapePane, body : () -> T) -> T {
+  // (how far behind it is: as far as the tape's move has got, the tape and its grounds one move: tape_moves)
+  let k = if wide.tape { c.moved(tape_behind_var(p), if wide.tape_at == p { 0.0 } else { 1.0 }) } else { 0.0 }
+  if k <= 0.0 {
+    return body()
+  }
+  let mut out : T? = None
+  @sf.with_ground(c, @sf.behind_ground(k~), fn() { out = Some(body()) })
+  out.unwrap()
+}
+
+///|
+/// The move's name for how far panel `p` is behind (tape_moves).
+fn tape_behind_var(p : TapePane) -> String {
+  match p {
+    Side => "--behind-side"
+    Page => "--behind-page"
+    Panel => "--behind-panel"
   }
 }
 

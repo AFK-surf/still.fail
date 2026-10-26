@@ -76,11 +76,8 @@ upright after. A tablet and an opened fold's inner screen turn as they are held.
       What is drawn smaller keeps its room to be pressed (rule 2: 44×44 at least, overlapping no other's; a button
       drawn its own size, a press reaching it from round it, mbui's finger_reach: what shows and what a press takes
       need not be the same, the user, 2026-10-26). The colours are neither the screen's nor the input's: one palette
-      everywhere, the phone's (warm paper, white cards on it), light or dark as set. The panes side by side with no
-      line between them (the large screen's columns) are told apart by their grounds: the sidebar a step under the
-      page's beige `bg`, what is chosen in it a step under that. Where they stand apart (the mid screen's tape, its
-      panels with the window's ground between) or one at a time (the small screen), every pane is on the page's `bg`,
-      the one in use and those behind it alike (the user, 2026-10-27);
+      everywhere, the phone's (warm paper, white cards on it), light or dark as set. The panes side by side are told
+      apart by their grounds: the sidebar a step under the page's beige `bg`, what is chosen in it a step under that;
     - what a page offers to reach things (rule 1, each input a way as easy): with touch the search field at the top of
       the chats' list, with keyboard and mouse ⌘K;
     - the keyboard: with keyboard and mouse Enter sends and the composer takes the focus as a chat opens; with touch
