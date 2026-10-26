@@ -26,6 +26,7 @@ fn reset() -> Unit {
   station_check_stopped.val = false
   badge_check_set.val = false
   secret_check_put.val = false
+  a11y_check_box.val = Off
   cb.val = On
   size.val = "m"
   bold.val = true

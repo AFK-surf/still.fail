@@ -50,6 +50,9 @@
 #   scripts/host_contract.sh linux links        (a session bus: dbus-run-session's) the app started with a link of its
 #        schemes, said to it; started again with one while it runs, handed over to the one running (once for its
 #        person: src/host/linux_life.h), which says it
+#   scripts/host_contract.sh windows a11y       the app's widgets read out by UI Automation's client (kitdemo's
+#        MBUI_A11YCHECK, src/kitdemo/gallery/a11ycheck.mbt; test/host/a11ycheck.ps1): a button and a checkbox found by
+#        their names, as their control types and the checkbox's state, the button invoked and the app pressed by it
 #   scripts/host_contract.sh windows secret     a secret copied (kitdemo's MBUI_SECRETCHECK, src/kitdemo/gallery/
 #        secretcheck.mbt), the clipboard read after the app's end: its words there, kept out of the clipboard's history
 #        and the cloud's (Windows' formats for that); one to be taken off, gone when the app's clock says, and as the
@@ -664,6 +667,22 @@ INSTALL
       echo "play contract ($H): the host said \"$have\", not \"$want\""; tail -30 $O/play.log; exit 1
     fi
     echo "play contract ($H): $have" ;;
+  a11y)
+    [ "$H" = windows ] || { echo "a11y contract: Windows' (Android's is TalkBack's on its emulator; the others tell no reader yet)"; exit 1; }
+    # the app's widgets as UI Automation's client finds them (test/host/a11ycheck.ps1), the button pressed through it
+    A=$PWD/$O/a11y
+    rm -rf "$A" && mkdir -p "$A"
+    env MBUI_BENCH=-1 MBUI_WIN=480x320 MBUI_A11YCHECK=1 ./out/win/mod/_build/native/release/build/kitdemo/kitdemo.exe > "$A/run.log" 2>&1 &
+    pid=$(cat /proc/$!/winpid)
+    client=0
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w test/host/a11ycheck.ps1)" -AppId "$pid" > "$A/client.log" 2>&1 || client=1
+    wait
+    tr -d '\r' < "$A/client.log" | grep -a "A11YCHECK"
+    grep -a "A11YCHECK" "$A/run.log"
+    [ $client = 0 ] && grep -aq "A11YCHECK button ControlType.Button" "$A/client.log" &&
+      grep -aq "A11YCHECK check ControlType.CheckBox Off" "$A/client.log" && grep -aq "A11YCHECK activated" "$A/run.log" ||
+      { echo "a11y contract (windows): not read out and pressed as told"; tail -20 "$A/client.log"; exit 1; }
+    echo "a11y contract (windows): a button and a checkbox read out by UI Automation, the button pressed through it" ;;
   secret)
     [ "$H" = windows ] || { echo "secret contract: Windows' (Android's marks it in Host.java; the others put words)"; exit 1; }
     # the clipboard's words, then what it says of its history: CanIncludeInClipboardHistory's DWORD (none: -), and
@@ -793,5 +812,5 @@ INSTALL
     echo "links contract (mac): opened with a link of its own scheme, the app said it" ;;
   kinds)
     scripts/chk outside-kinds $H ;;
-  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, play, station, badge, secret; ios: free, done)" >&2; exit 1 ;;
+  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, play, station, badge, secret, a11y; ios: free, done)" >&2; exit 1 ;;
 esac

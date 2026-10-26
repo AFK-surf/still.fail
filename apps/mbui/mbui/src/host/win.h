@@ -91,6 +91,8 @@ int mb_views_count(void);
 int mb_views_pass_through(double x, double y);
 // a mouse message (WM_*) handed to the web view under it: 1 when it took it
 int mb_views_input(unsigned msg, uintptr_t wp, intptr_t lp);
+// UI Automation (win_a11y.cpp): WM_GETOBJECT's ask for the window's widgets answered (1, its answer in *r)
+int mb_a11y_object(void *hwnd, uintptr_t wp, intptr_t lp, intptr_t *r);
 void *mb_views_cursor(double x, double y);  // HCURSOR of the page under (x, y), or NULL
 void mb_views_rescale(void);
 // what the app awaits of them told as it came, each to f(2, id, state) (host_native.mbt's set_outside; NULL: dropped),
