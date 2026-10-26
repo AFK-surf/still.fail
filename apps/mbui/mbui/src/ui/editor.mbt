@@ -789,6 +789,16 @@ pub fn Ctx::editor(
       }
     _ => ()
   }
+  // words a screen reader put in it (Action::SetText): in place of all it held, as though typed
+  match self.text_asked(id) {
+    Some(t) => {
+      st.marked = ""
+      st.anchor = 0
+      st.caret = st.text.length()
+      st.text_input(0, t, 0, 0, self.now)
+    }
+    None => ()
+  }
   // Android's long press on it (the finger still, held long_press_ms: one that moves past the slop is no tap, app.mbt): the word there picked, its handles and the
   // floating menu, felt (Compose's text field); the finger sliding on from there widens it by words (`editor_tap`
   // is Android's alone: elsewhere a press on a field puts the caret at once)
@@ -823,7 +833,7 @@ pub fn Ctx::editor(
   let i = self.alloc(kind_editor)
   // in Tab's order (focus.mbt); its keys are its own
   self.focusable(id, node=i, keys=0, on_press=true)
-  self.semantics(i, TextField, id~, label=placeholder, value=if secret { "" } else { st.text })
+  self.semantics(i, TextField, id~, label=placeholder, value=if secret { "" } else { st.text }, actions=[SetText("")])
   let n = self.nodes[i]
   // (the system's size of words: as Ctx::text's)
   let font_size = self.sp(font_size)

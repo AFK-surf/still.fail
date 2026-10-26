@@ -4,7 +4,7 @@
 // more), under the window's own (the fragment root, which WM_GETOBJECT hands out: mb_a11y_object). Each says its control
 // type by the node's role, its name, its state and its rectangle on the screen, and the patterns its node can take:
 // Invoke, Toggle, ExpandCollapse, SelectionItem, Value, RangeValue. What the reader asks (Invoke, Toggle, a slider's
-// value) goes to the app on @hostapi.a11y_channel for its next frame, as on Android. The app tells its widgets once a
+// value, a field's words) goes to the app on @hostapi.a11y_channel for its next frame, as on Android. The app tells its widgets once a
 // reader asked for the window, while one listens (@hostapi.a11y_on); that first ask asks for a frame, so that they are
 // told. As they change the readers are told: the window's children anew, the focus moved, a node's
 // name, check, expansion, selection or value. All of it on the window's thread (COM's threading: the UI thread is a
@@ -75,6 +75,29 @@ void ask(const Node *n, const char *action) {
   char json[96];
   int len = snprintf(json, sizeof json, "{\"id\":%d,\"action\":\"%s\"}", n->widget, action);
   mb_post("a11y", json, (size_t)len, NULL, 0);
+}
+
+// words a reader puts in the node's field, posted to the app (`set_text`, its words as JSON's)
+void ask_text(const Node *n, LPCWSTR text) {
+  if (!n || !n->widget) return;
+  std::string j = "{\"id\":" + std::to_string(n->widget) + ",\"action\":\"set_text\",\"text\":\"";
+  for (const wchar_t *p = text; p && *p; p++) {
+    unsigned c = *p;
+    if (c >= 0xD800 && c <= 0xDBFF && p[1] >= 0xDC00 && p[1] <= 0xDFFF) c = 0x10000 + ((c - 0xD800) << 10) + (p[1] - 0xDC00), p++;
+    if (c == '"' || c == '\\') j += '\\', j += (char)c;
+    else if (c < 0x20) {
+      char e[8];
+      snprintf(e, sizeof e, "\\u%04x", c);
+      j += e;
+    } else if (c < 0x80) j += (char)c;
+    else if (c < 0x800) j += (char)(0xC0 | c >> 6), j += (char)(0x80 | (c & 0x3F));
+    else if (c < 0x10000) j += (char)(0xE0 | c >> 12), j += (char)(0x80 | ((c >> 6) & 0x3F)), j += (char)(0x80 | (c & 0x3F));
+    else
+      j += (char)(0xF0 | c >> 18), j += (char)(0x80 | ((c >> 12) & 0x3F)), j += (char)(0x80 | ((c >> 6) & 0x3F)),
+          j += (char)(0x80 | (c & 0x3F));
+  }
+  j += "\"}";
+  mb_post("a11y", j.data(), j.size(), NULL, 0);
 }
 
 double scale_now() { return mb_app_scale(); }
@@ -333,8 +356,15 @@ class Item : public IRawElementProviderSimple,
     }
     return S_OK;
   }
-  // IValueProvider (what a field holds, read; the app takes no words from here)
-  HRESULT STDMETHODCALLTYPE SetValue(LPCWSTR) override { return UIA_E_NOTSUPPORTED; }
+  // IValueProvider (what a field holds; words put in it where it takes them, in place of what it held)
+  HRESULT STDMETHODCALLTYPE SetValue(LPCWSTR text) override {
+    const Node *n = node();
+    if (!n) return UIA_E_ELEMENTNOTAVAILABLE;
+    if (!n->can(L't')) return UIA_E_NOTSUPPORTED;
+    if (n->has(L'd')) return UIA_E_ELEMENTNOTENABLED;
+    ask_text(n, text);
+    return S_OK;
+  }
   HRESULT STDMETHODCALLTYPE get_Value(BSTR *out) override {
     const Node *n = node();
     if (!n) return UIA_E_ELEMENTNOTAVAILABLE;
@@ -344,7 +374,7 @@ class Item : public IRawElementProviderSimple,
   HRESULT STDMETHODCALLTYPE get_IsReadOnly(BOOL *ro) override {
     const Node *n = node();
     if (!n) return UIA_E_ELEMENTNOTAVAILABLE;
-    *ro = n->range ? !(n->can(L'i') || n->can(L'd')) : TRUE;
+    *ro = n->range ? !(n->can(L'i') || n->can(L'd')) : !n->can(L't');
     return S_OK;
   }
   // IRangeValueProvider (a step up or down asked of the app, towards the value asked)

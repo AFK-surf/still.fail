@@ -68,6 +68,9 @@ pub(all) enum Action {
   Collapse
   Dismiss
   Focus
+  /// words put in a field in place of what it held, as a screen reader writes them (UI Automation's SetValue,
+  /// TalkBack's set text); among what a widget says it takes, its words are none's (SetText(""))
+  SetText(String)
 } derive(Eq, Show, Debug)
 
 ///|
@@ -193,6 +196,18 @@ pub fn Ctx::action_asked(self : Ctx, id : Int, action : Action) -> Bool {
     }
   }
   false
+}
+
+///|
+/// The words asked to be put in `id` this frame in place of what it holds (Action::SetText), the last asked.
+pub fn Ctx::text_asked(self : Ctx, id : Int) -> String? {
+  let mut got = None
+  for a in self.actions {
+    if a.0 == id && a.1 is SetText(s) {
+      got = Some(s)
+    }
+  }
+  got
 }
 
 ///|

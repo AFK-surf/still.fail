@@ -54,7 +54,8 @@
 #        the app (kitdemo's MBUI_FONTSCALECHECK, src/kitdemo/gallery/fontscalecheck.mbt): 1.5
 #   scripts/host_contract.sh windows a11y       the app's widgets read out by UI Automation's client (kitdemo's
 #        MBUI_A11YCHECK, src/kitdemo/gallery/a11ycheck.mbt; test/host/a11ycheck.ps1): a button and a checkbox found by
-#        their names, as their control types and the checkbox's state, the button invoked and the app pressed by it
+#        their names, as their control types and the checkbox's state, words put in a field, the button invoked and the
+#        app pressed by it, the field holding them
 #   scripts/host_contract.sh windows secret     a secret copied (kitdemo's MBUI_SECRETCHECK, src/kitdemo/gallery/
 #        secretcheck.mbt), the clipboard read after the app's end: its words there, kept out of the clipboard's history
 #        and the cloud's (Windows' formats for that); one to be taken off, gone when the app's clock says, and as the
@@ -695,9 +696,11 @@ INSTALL
     tr -d '\r' < "$A/client.log" | grep -a "A11YCHECK"
     grep -a "A11YCHECK" "$A/run.log"
     [ $client = 0 ] && grep -aq "A11YCHECK button ControlType.Button" "$A/client.log" &&
-      grep -aq "A11YCHECK check ControlType.CheckBox Off" "$A/client.log" && grep -aq "A11YCHECK activated" "$A/run.log" ||
+      grep -aq "A11YCHECK check ControlType.CheckBox Off" "$A/client.log" &&
+      grep -aq "A11YCHECK field ControlType.Edit read-only False" "$A/client.log" &&
+      grep -aq "A11YCHECK activated written by a reader" "$A/run.log" ||
       { echo "a11y contract (windows): not read out and pressed as told"; tail -20 "$A/client.log"; exit 1; }
-    echo "a11y contract (windows): a button and a checkbox read out by UI Automation, the button pressed through it" ;;
+    echo "a11y contract (windows): a field, a button and a checkbox read out by UI Automation, words written in the field and the button pressed through it" ;;
   secret)
     [ "$H" = windows ] || { echo "secret contract: Windows' (Android's marks it in Host.java; the others put words)"; exit 1; }
     # the clipboard's words, then what it says of its history: CanIncludeInClipboardHistory's DWORD (none: -), and
