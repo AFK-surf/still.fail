@@ -16,7 +16,7 @@ import { CoreError } from "./error.ts";
 import { Beside } from "./protocol.ts";
 import { Kind } from "./trace.ts";
 import { Priority } from "./sync/scheduler.ts";
-import { DOWNLOAD_PART } from "./views/downloads.ts";
+import { DOWNLOAD_PART, titleOf } from "./views/downloads.ts";
 import type { Unfinished } from "./drive-kept.ts";
 import { bytes } from "./format.ts";
 import { t } from "./i18n.ts";
@@ -123,11 +123,11 @@ export class Fill {
       const percent = f.size > 0 ? Math.floor((loaded / f.size) * 100) : 0;
       const statusText = state === "going" ? t("core-logic.keeping.going", { percent, total: bytes(f.size) })
         : state === "yielding" ? t("core-logic.keeping.yielding", { percent })
-        : state === "waiting" ? t("core-logic.download.waiting", { percent })
+        : state === "waiting" ? t("core-logic.keeping.waiting", { percent })
         : t("core-logic.keeping.queued", { percent });
       const where = call === null ? {} : call.kind === "stationFilePart" ? { key: call.key } : { root: call.root, path: call.path };
       const name = call === null ? f.id : call.kind === "stationFilePart" ? call.name : (call.path.split("/").pop() ?? call.path);
-      out.push({ id: f.id, station, ...where, name, size: f.size, loaded, progress: f.size > 0 ? loaded / f.size : 0, state, statusText });
+      out.push({ id: f.id, station, ...where, name, title: call?.kind === "stationFilePart" ? titleOf(name) : name, size: f.size, loaded, progress: f.size > 0 ? loaded / f.size : 0, state, statusText });
     }
     // what comes now first
     return out.sort((a, b) => Number(b.state === "going" || b.state === "yielding") - Number(a.state === "going" || a.state === "yielding"));

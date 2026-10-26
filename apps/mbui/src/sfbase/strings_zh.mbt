@@ -1622,6 +1622,7 @@ let zh : Map[String, String] = {
   "web-pages.files.size": "大小",
   "web-pages.files.skip": "跳过",
   "web-pages.files.split": "左右分栏",
+  "web-pages.files.stopKeeping": "停止缓存",
   "web-pages.files.switchNote": "尽量打开同一个文件夹 · 按住 ⌥ 在新标签打开",
   "web-pages.files.switchStation": "换 station",
   "web-pages.files.tabs": "文件标签",

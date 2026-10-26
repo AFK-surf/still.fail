@@ -40,9 +40,9 @@ fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit 
   c.box(style=lists_fill, fn() {
     @sfpages.chats_lists(c, src, w, frame)
     let b = c.layer(fn() { lists_band(c, src, w) })
-    // with no bell in the rail: the stations' trouble and the services up long, at the foot (the rail's bell has them
-    // where it is: cloud/workspace.tsx WorkspaceSidebarFooter)
-    let f = if !rail_items(src, w.id).contains("attention") { c.layer(fn() { lists_foot(c, src, w) }) } else { 0 }
+    // the stations' trouble and the services up long at the foot with no bell in the rail (the rail's bell has them
+    // where it is: cloud/workspace.tsx WorkspaceSidebarFooter); what comes and goes there with it or not
+    let f = c.layer(fn() { lists_foot(c, src, w) })
     if away > 0.0 {
       c.look(b, { ..@ui.still_look, alpha: 1.0 - away })
       if f != 0 {
@@ -56,19 +56,21 @@ fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit 
 
 ///|
 /// The lists' foot band (Sidebar.css.ts navFoot, navFootStatus): what is wrong with the stations (StationTrouble: their
-/// glyph and its words, red while one fails, leading to them; beside the rail only then), and 运行中 N (OpenJobsChip:
-/// the services left up long, their panel over it). Nothing when neither is, nor with the bell in the rail (they are in
-/// its panel).
+/// glyph and its words, red while one fails, leading to them; beside the rail only then), 运行中 N (OpenJobsChip: the
+/// services left up long, their panel over it), and 传输 (what comes to this device and goes between the stations,
+/// transfers.mbt: how many, how far, their list over it). Nothing when none is; with the bell in the rail, the first two
+/// are in its panel (only 传输 here then).
 fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
-  // with the bell in the rail, they are in its panel (workspace.tsx WorkspaceSidebarFooter)
-  if rail_items(src, w.id).contains("attention") {
-    return
-  }
+  // with the bell in the rail, the trouble and the services are in its panel (workspace.tsx WorkspaceSidebarFooter)
+  let railed = rail_items(src, w.id).contains("attention")
   let chats = (src.topic)("chats", { "scope": Json::string(w.id), "mine": Json::boolean(false) }).value
-  let trouble = field(chats, "trouble")
-  let jobs = long_jobs(src, w)
-  if trouble is None && jobs == 0 {
+  let trouble = if railed { None } else { field(chats, "trouble") }
+  let jobs = if railed { 0 } else { long_jobs(src, w) }
+  let moving = transfers_shown(src, w.id)
+  if trouble is None && jobs == 0 && !moving {
+    // (its list let go with it)
+    side_transfers(c, src, w.id)
     return
   }
   c.box(style=foot_fill, fn() {
@@ -115,6 +117,9 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           fn() { open_jobs(c, src, w) },
         )
         wide.jobs_open = p.value
+      }
+      if moving {
+        side_transfers(c, src, w.id)
       }
     })
     // over the lists: their scroll bar keeps clear of it (the web's --nav-foot)

@@ -32,12 +32,16 @@ fn home_page(
     ground: @sf.theme().p.bg,
     // what the last update brought, until it is seen (sfpages' changelog.mbt; beside the wide frame's rail the web
     // says it in a bubble of its own), even while the list is read
+    // and what comes to this device and goes between the stations (transfers.mbt)
     before: fn(_, _) {
+      let out : Array[@sfpages.ListPart] = []
       if @sfpages.news_of(src) is Some(_) {
-        [{ key: "changelog-news", draw: fn() { @sfpages.changelog_news(c, src) }, tucked: false }]
-      } else {
-        []
+        out.push({ key: "changelog-news", draw: fn() { @sfpages.changelog_news(c, src) }, tucked: false })
       }
+      if @sfdesk.transfers_shown(src, w.id) {
+        out.push({ key: "transfers", draw: fn() { @sfdesk.home_transfers(c, src, w.id, @sf.theme().chat_list.band_in) }, tucked: false })
+      }
+      out
     },
     // what is left up a long while on the stations (OpenJobs.kt): nothing while there is none
     after: fn(_, _) {

@@ -1602,6 +1602,7 @@ web-pages.files.showPreview
 web-pages.files.size
 web-pages.files.skip
 web-pages.files.split
+web-pages.files.stopKeeping
 web-pages.files.switchNote
 web-pages.files.switchStation
 web-pages.files.tabs

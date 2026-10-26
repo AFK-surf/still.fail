@@ -321,6 +321,13 @@ android-settings.files.drive.sub
 android-settings.files.drive.text
 android-settings.files.files
 android-settings.files.filesTotal
+android-settings.files.fill.any
+android-settings.files.fill.going
+android-settings.files.fill.max
+android-settings.files.fill.on
+android-settings.files.fill.on.sub
+android-settings.files.fill.stopAll
+android-settings.files.fill.title
 android-settings.files.hours
 android-settings.files.justNow
 android-settings.files.loose
@@ -1147,6 +1154,7 @@ web-pages.connects.removeHere
 web-pages.connects.stationFirst
 web-pages.connects.stationOffline
 web-pages.connects.waiting
+web-pages.files.stopKeeping
 web-pages.localStation.byApp
 web-pages.localStation.byHand
 web-pages.localStation.doing.install

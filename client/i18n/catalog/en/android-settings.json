@@ -136,6 +136,13 @@
   "android-settings.files.drive": "Files browsed",
   "android-settings.files.drive.sub": "Up to 2 GB; least recently opened files are deleted first",
   "android-settings.files.drive.text": "Deletes text, images, videos and other files opened from station files. They download again when opened.",
+  "android-settings.files.fill.any": "Any size",
+  "android-settings.files.fill.going": "Caching",
+  "android-settings.files.fill.max": "Largest file",
+  "android-settings.files.fill.on": "Keep downloading after closing",
+  "android-settings.files.fill.on.sub": "Files you opened finish in the background; what you're viewing comes first",
+  "android-settings.files.fill.stopAll": "Stop all",
+  "android-settings.files.fill.title": "Background downloads",
   "android-settings.files.files": "Files opened",
   "android-settings.files.filesTotal": "{n} · {size}",
   "android-settings.files.hours": {

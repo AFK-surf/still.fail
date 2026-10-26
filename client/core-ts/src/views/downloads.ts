@@ -105,6 +105,12 @@ const unreached = (e: CoreError) => e.status === undefined && (e.code === "host"
 
 const percent = (d: Download) => (d.size > 0 ? Math.floor((d.loaded / d.size) * 100) : 100);
 
+/// What a file is called to people: a file sent up as its sender named it, without what the station put before it
+/// (station/src/api/routes/hub.ts uploadPath: the time and a mark).
+export function titleOf(name: string): string {
+  return name.replace(/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-[0-9a-f]{6}-(?=.)/, "");
+}
+
 /// A download as the list shows it: `active` while it is not failed (its progress shown, it can be called off).
 export function shown(d: Download): Record<string, unknown> {
   const statusText =
@@ -118,7 +124,7 @@ export function shown(d: Download): Record<string, unknown> {
   return {
     id: d.id,
     station: d.station,
-    ...(from.kind === "chat" ? { key: from.key, name: from.file } : { root: from.root, path: from.path, name: d.name, ...(from.kind === "zip" ? { zip: true } : {}) }),
+    ...(from.kind === "chat" ? { key: from.key, name: from.file, title: titleOf(from.file) } : { root: from.root, path: from.path, name: d.name, title: d.name, ...(from.kind === "zip" ? { zip: true } : {}) }),
     size: d.size,
     loaded: d.loaded,
     progress: d.size > 0 ? d.loaded / d.size : d.state === "going" || d.state === "waiting" ? 0 : 1,

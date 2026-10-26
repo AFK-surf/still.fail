@@ -115,6 +115,41 @@ pub fn download_of(src : Source, station : String, key : String, name : String) 
 }
 
 ///|
+/// What was opened of that file and let go, being brought after everything else (the core's `downloads`' `keeping`:
+/// client/core-ts fill.ts): its `progress`, `state` (going, yielding, waiting, queued), `statusText` and `id`; None
+/// while it is not.
+pub fn keeping_of(src : Source, station : String, key : String, name : String) -> Json? {
+  for k in items((src.topic)("downloads", {}).value, "keeping") {
+    let k = Some(k)
+    if text(k, "station") == station && text(k, "key") == key && text(k, "name") == name {
+      return k
+    }
+  }
+  None
+}
+
+///|
+/// The file `id` no longer brought after everything else, what was kept of it let go (`fill.stop`).
+pub fn keeping_stop(src : Source, id : String) -> Unit {
+  (src.call)("fill.stop", { "id": Json::string(id) }, fn(_) {  })
+}
+
+///|
+/// None of them brought any more, what was kept of each let go (`fill.stopAll`).
+pub fn keeping_stop_all(src : Source) -> Unit {
+  (src.call)("fill.stopAll", {}, fn(_) {  })
+}
+
+///|
+/// What comes to this device from workspace `ws`'s stations (the `downloads` topic): its downloads (a chat's file, a
+/// drive's, a folder zipped), newest first, and what was opened and let go being brought, the one coming first.
+pub fn coming_of(src : Source, ws : String) -> (Array[Json], Array[Json]) {
+  let v = (src.topic)("downloads", {}).value
+  let mine = fn(d : Json) { text(Some(d), "station").has_prefix(ws + "/") }
+  (items(v, "downloads").filter(mine), items(v, "keeping").filter(mine))
+}
+
+///|
 /// Each frame, whatever page shows: a download all here taken (once) and saved.
 pub fn downloads_frame(c : @ui.Ctx, src : Source) -> Unit {
   if downloads.unread > 0 {

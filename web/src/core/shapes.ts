@@ -3038,6 +3038,11 @@ export interface DownloadShown {
 	zip?: boolean;
 	/** A chat's file's name as the station keeps it (the last part of its path); a drive's file's name, a folder's zip's. */
 	name: string;
+	/**
+	 * What it is called to people: `name`, but a file sent up as its sender named it (without the time and
+	 * mark the station put before it).
+	 */
+	title: string;
 	size: number;
 	/** How much of it is here. */
 	loaded: number;
@@ -3068,13 +3073,15 @@ export interface KeepingShown {
 	path?: string;
 	/** A chat's file's name as the station keeps it; a drive's file's name. */
 	name: string;
+	/** What it is called to people (as a download's). */
+	title: string;
 	size: number;
 	/** How much of it is here. */
 	loaded: number;
 	/** How much of it is here, 0 to 1. */
 	progress: number;
 	state: KeepingState;
-	/** How it stands, in a line: 后台缓存 42% · 18.3 MB · 已暂停，先下载正在查看的 · 排队中 . */
+	/** How it stands, in a line: 后台缓存 42% · 18.3 MB · 后台缓存排队中 · 12% . */
 	statusText: string;
 }
 

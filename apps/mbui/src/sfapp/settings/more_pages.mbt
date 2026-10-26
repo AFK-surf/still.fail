@@ -241,6 +241,7 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
     fn() { large_title(c, tr("android-settings.files.title")) },
     fn() { page_note(c, tr("android-settings.files.note")) },
   ]
+  fill_blocks(c, core, blocks)
   match kept.chats {
     None => blocks.push(fn() { waiting_rows(c, fn() { kept_sample(c, true) }) })
     Some(chats) => {
@@ -340,6 +341,88 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
   }
   blocks.push(fn() { gap(c, 30.0) })
   scroll_page(c, "kept", blocks)
+}
+
+///|
+/// A row's words beside what is at its end (a switch, a ✕), as wide as it leaves them.
+// kept across runs: a value (no field of it changes)
+let fill_words : @ui.Style = @ui.style(w=@sf.grow)
+
+///|
+/// The sizes a file opened and let go may be to be brought whole (prefs `fillMax`: 0 any), the core's own first.
+let fill_sizes : Array[Double] = [1024.0 * 1024.0 * 1024.0, 100.0 * 1024.0 * 1024.0, 500.0 * 1024.0 * 1024.0, 0.0]
+
+///|
+/// 后台下载 (client/core-ts fill.ts): whether what was opened and let go goes on coming after everything else (prefs
+/// `fillOff`), up to how big (`fillMax`, picked from fill_sizes), and what is coming so now (the `downloads` topic's
+/// `keeping`), each with how it stands, all of them stopped at once; into `blocks`.
+fn fill_blocks(c : @ui.Ctx, core : Core, blocks : Array[() -> Unit]) -> Unit {
+  let t = @sf.theme()
+  let prefs = (core.topic)("prefs", Map::new()).value
+  let on = !flag(prefs, "fillOff")
+  let most = match field(prefs, "fillMax") {
+    Some(Number(n, ..)) => n
+    _ => fill_sizes[0]
+  }
+  let size_said = fn(n : Double) { if n == 0.0 { tr("android-settings.files.fill.any") } else { size_words(n) } }
+  let set = fn(name : String, value : Json) { (core.call)("prefs.set", obj([(name, value)]), fn(_) {  }) }
+  blocks.push(fn() { section_header(c, tr("android-settings.files.fill.title"), start=S6) })
+  blocks.push(fn() {
+    list_card(c, fn() {
+      // (the switch in the row's middle, off its corners, as settings' switches are)
+      if list_row(c, key="kept-fill", fn() {
+          c.box(style=fill_words, fn() { row_lines(c, tr("android-settings.files.fill.on"), tr("android-settings.files.fill.on.sub"), wrap_sub=true) })
+          |> ignore
+          switch(c, "kept-fill-switch", on)
+        }) {
+        set("fillOff", if on { Json::boolean(true) } else { Json::null() })
+      }
+      if on {
+        let id = c.id("kept-fill-max")
+        if list_row(c, key="kept-fill-max", fn() {
+            row_lines(c, tr("android-settings.files.fill.max"), "", end=fn() {
+              c.text(size_said(most), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
+              chevron(c)
+            })
+          }) {
+          let choices = fill_sizes.map(fn(n) { @sf.choice(n.to_string(), size_said(n)) })
+          @sf.pick(
+            tr("android-settings.files.fill.max"),
+            choices,
+            most.to_string(),
+            fn(k) {
+              let n = fill_sizes.search_by(fn(x) { x.to_string() == k }).map(fn(i) { fill_sizes[i] }).unwrap_or(fill_sizes[0])
+              set("fillMax", if n == fill_sizes[0] { Json::null() } else { Json::number(n) })
+            },
+            from=Of(id),
+          )
+        }
+      }
+    })
+  })
+  let keeping = items((core.topic)("downloads", Map::new()).value, "keeping")
+  if !on || keeping.length() == 0 {
+    return
+  }
+  let total = keeping.fold(init=0.0, fn(n, k) { n + number(Some(k), "size") })
+  blocks.push(fn() {
+    section_header(c, tr("android-settings.files.fill.going"), trailing=fill("android-settings.files.total", [("size", size_words(total))]), start=S6)
+  })
+  for i, k in keeping {
+    blocks.push(fn() {
+      let kv = Some(k)
+      // (each stopped where it shows: the transfers' list, its message's card; all of them here at once)
+      list_row(c, key="", piece=(i == 0, false), fn() { row_lines(c, text(kv, "title"), text(kv, "statusText")) })
+      |> ignore
+    })
+  }
+  blocks.push(fn() {
+    if list_row(c, key="kept-fill-stop-all", piece=(false, true), fn() {
+        row_title(c, tr("android-settings.files.fill.stopAll"), color=t.p.red)
+      }) {
+      (core.call)("fill.stopAll", obj([]), fn(_) {  })
+    }
+  })
 }
 
 ///|

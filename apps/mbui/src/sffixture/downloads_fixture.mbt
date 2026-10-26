@@ -47,6 +47,7 @@ pub fn fix_download_shown(d : FixDownload) -> Json {
     "id": Json::string(fix_download_id(d)),
     "station": Json::string(d.station),
     "name": Json::string(d.name),
+    "title": Json::string(d.name),
     "size": Json::number(d.size),
     "loaded": Json::number(d.loaded),
     "progress": Json::number(
@@ -83,9 +84,176 @@ pub fn fix_download_shown(d : FixDownload) -> Json {
 }
 
 ///|
+/// A file opened and let go, being brought after everything else, made up (client/core-ts fill.ts): its file (a
+/// chat's session `key`, or a drive's `root` and `path`), what it is called, how big, how much is here, how it stands
+/// (going, yielding, waiting, queued).
+pub(all) struct FixKeeping {
+  station : String
+  key : String
+  root : String
+  path : String
+  name : String
+  title : String
+  size : Double
+  loaded : Double
+  state : String
+}
+
+///|
+/// The fixture's files being brought after everything else, the one coming first.
+pub let fix_keeping : Array[FixKeeping] = []
+
+///|
+/// Whether they are brought (the prefs' `fillOff` not so), and up to how big (`fillMax`: None the core's 1 GB, 0 any).
+priv struct FixFill {
+  mut off : Bool
+  mut max : Double?
+}
+
+///|
+let fix_fill : FixFill = { off: false, max: None }
+
+///|
+/// The made-up bringing as it starts: none, on, up to 1 GB.
+pub fn fix_keeping_reset() -> Unit {
+  fix_keeping.clear()
+  fix_fill.off = false
+  fix_fill.max = None
+}
+
+///|
+/// A file being brought's id, as the made-up core gives it (drive-kept.ts chatKeptId, keptId).
+pub fn fix_keeping_id(k : FixKeeping) -> String {
+  if k.root == "" {
+    "chat\n" + k.station + "\n" + k.key + "\n" + k.name
+  } else {
+    k.station + "\n" + k.root + "\n" + k.path
+  }
+}
+
+///|
+/// A file being brought as the core lists it (fill.ts shown), its words as the core's (core-logic.keeping.*).
+pub fn fix_keeping_shown(k : FixKeeping) -> Json {
+  let percent = if k.size > 0.0 { (k.loaded / k.size * 100.0).floor().to_int() } else { 0 }
+  let o : Map[String, Json] = {
+    "id": Json::string(fix_keeping_id(k)),
+    "station": Json::string(k.station),
+    "name": Json::string(k.name),
+    "title": Json::string(k.title),
+    "size": Json::number(k.size),
+    "loaded": Json::number(k.loaded),
+    "progress": Json::number(if k.size > 0.0 { k.loaded / k.size } else { 0.0 }),
+    "state": Json::string(k.state),
+    "statusText": Json::string(
+      match k.state {
+        "going" => "后台缓存 \{percent}% · \{@sf.file_size(k.size)}"
+        "yielding" => "后台缓存暂停，正在看的优先 · \{percent}%"
+        "waiting" => "后台缓存等待连接 station · \{percent}%"
+        _ => "后台缓存排队中 · \{percent}%"
+      },
+    ),
+  }
+  if k.root == "" {
+    o["key"] = Json::string(k.key)
+  } else {
+    o["root"] = Json::string(k.root)
+    o["path"] = Json::string(k.path)
+  }
+  Json::object(o)
+}
+
+///|
 /// The `downloads` topic made up.
 pub fn fixture_downloads_topic() -> Json {
-  { "downloads": Json::array(fix_downloads.map(fix_download_shown)) }
+  let keeping = if fix_fill.off { [] } else { fix_keeping.map(fix_keeping_shown) }
+  { "downloads": Json::array(fix_downloads.map(fix_download_shown)), "keeping": Json::array(keeping) }
+}
+
+///|
+/// The prefs' `fillOff`, `fillMax` as the made-up core keeps them, into the `prefs` topic's `o`.
+pub fn fix_fill_prefs_into(o : Map[String, Json]) -> Unit {
+  if fix_fill.off {
+    o["fillOff"] = Json::boolean(true)
+  }
+  match fix_fill.max {
+    Some(n) => o["fillMax"] = Json::number(n)
+    None => ()
+  }
+}
+
+///|
+/// `prefs.set`'s `fillOff`, `fillMax` (null: none) put in.
+pub fn fix_fill_prefs_set(params : Json) -> Unit {
+  match field(Some(params), "fillOff") {
+    Some(True) => fix_fill.off = true
+    Some(False) | Some(Null) => fix_fill.off = false
+    _ => ()
+  }
+  match field(Some(params), "fillMax") {
+    Some(Number(n, ..)) => fix_fill.max = Some(n)
+    Some(Null) => fix_fill.max = None
+    _ => ()
+  }
+}
+
+///|
+/// MBUI_FIXTURE=chat-keeping: the chat-download's message, both its files opened and let go, being brought (the
+/// package coming, the recording after it).
+pub fn fix_keeping_message(station : String, key : String) -> Unit {
+  let mb = 1024.0 * 1024.0
+  fix_keeping.push({ station, key, root: "", path: "", name: "发布包.zip", title: "发布包.zip", size: 50.0 * mb, loaded: 21.0 * mb, state: "going" })
+  fix_keeping.push({ station, key, root: "", path: "", name: "演示录屏.mp4", title: "演示录屏.mp4", size: 5.0 * mb, loaded: 1.0 * mb, state: "queued" })
+}
+
+///|
+/// MBUI_FIXTURE=transfers, home-transfers, settings-kept-fill: what comes to this device in every way at once, as the transfers' list shows
+/// it: a chat's file downloading, a video and a recording opened and let go being brought (the video coming, the
+/// recording after it), a drive's video waiting for its station.
+pub fn fix_every_transfer(station : String, key : String, root : String) -> Unit {
+  fix_downloads.push({
+    station,
+    key,
+    root: "",
+    path: "",
+    zip: false,
+    name: "发布包.zip",
+    size: 48.0 * 1024.0 * 1024.0,
+    loaded: 29.0 * 1024.0 * 1024.0,
+    state: "going",
+  })
+  fix_keeping.push({
+    station,
+    key,
+    root: "",
+    path: "",
+    name: "2026-10-24T21-59-13-dc7ed5-产品演示.mp4",
+    title: "产品演示.mp4",
+    size: 186.0 * 1024.0 * 1024.0,
+    loaded: 84.0 * 1024.0 * 1024.0,
+    state: "going",
+  })
+  fix_keeping.push({
+    station,
+    key,
+    root: "",
+    path: "",
+    name: "周会录音.m4a",
+    title: "周会录音.m4a",
+    size: 42.0 * 1024.0 * 1024.0,
+    loaded: 5.0 * 1024.0 * 1024.0,
+    state: "queued",
+  })
+  fix_keeping.push({
+    station: "ws1/st2",
+    key: "",
+    root,
+    path: "录屏/上线演练.mov",
+    name: "上线演练.mov",
+    title: "上线演练.mov",
+    size: 320.0 * 1024.0 * 1024.0,
+    loaded: 64.0 * 1024.0 * 1024.0,
+    state: "waiting",
+  })
 }
 
 ///|
@@ -142,6 +310,17 @@ pub fn fixture_downloads_call(f : Fixture, name : String, params : Json) -> Resu
       Some(Ok({}))
     }
     "download.retry" => Some(Ok({}))
+    "fill.stop" => {
+      let id = text(p, "id")
+      fix_keeping.retain(fn(k) { fix_keeping_id(k) != id })
+      f.changed()
+      Some(Ok({}))
+    }
+    "fill.stopAll" => {
+      fix_keeping.clear()
+      f.changed()
+      Some(Ok({}))
+    }
     _ => None
   }
 }

@@ -74,6 +74,8 @@ using @sfbase {
   download_cancel,
   download_of,
   download_retry,
+  keeping_of,
+  keeping_stop,
   each_second,
   elapsed,
   emit_emitting,

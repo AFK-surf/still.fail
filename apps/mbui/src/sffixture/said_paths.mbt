@@ -605,9 +605,11 @@ pub let said_paths : Map[String, Array[String]] = {
   ],
   "downloads": [
     "downloads.*.name",
+    "downloads.*.title",
     "downloads.*.statusText",
     "downloads.*.error",
     "keeping.*.name",
+    "keeping.*.title",
     "keeping.*.statusText",
   ],
   "draft": [
