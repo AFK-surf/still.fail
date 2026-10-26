@@ -35,8 +35,8 @@ fn usage_reset() -> Unit {
 let usage_days_choices : Array[Int] = [7, 30]
 
 ///|
-/// 用量 (UsageSettings): its head (what it counts by a mark beside its title), the days at its end; the view once read, a wait till then, what went
-/// wrong.
+/// 用量 (UsageSettings): its head (what it counts by a mark beside its title), the days at its end and 分享卡片 once
+/// something was spent; the view once read, a wait till then, what went wrong.
 fn usage_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let days = usage_pick.days
@@ -56,6 +56,13 @@ fn usage_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit 
     @sf.t("web-pages.settings.usage.title"),
     about=@sf.t("web-pages.settings.usage.lead"),
     actions=fn() {
+      // the card to share of the agents' week, once something was spent (as 用量's card over the rail offers it:
+      // 2026-10-26 用户「分享放到 usage 的 hover 卡片上」), before the days (they stand in the bar's corner, as they did):
+      // its mark alone, named in its tip, beside the days on a phone's line too
+      if v is Some(_) && !flag(v, "empty") &&
+        @sf.icon_button(c, "photo", key="usage-share", label=@sf.t("web-main.stations.shareCard")) {
+        (core.share_card)()
+      }
       let at = if days == 30 { 1 } else { 0 }
       let labels = usage_days_choices.map(fn(n) { @sf.t("web-main.usage.days", args=[("n", n.to_string())]) })
       let picked = @sf.segmented(c, "usage-days", labels, at)

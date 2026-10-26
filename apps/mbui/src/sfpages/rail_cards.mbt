@@ -1,12 +1,12 @@
 // The cards over the rail's places as the pointer rests on them (the core's `railCard` view, views/rail-cards.ts;
-// 2026-10-26 用户：「好几个 tab 都可以 hover 出卡片，比如 chat，stations，profiles，usage」「显示一些有用的统计信息」, of
-// Station's 「现在看着好像没啥东西」): 对话, Station, Profile, 用量, each the same card: a line saying how the place stands,
-// its figures side by side (each its value over what it is of, one that wants a look in its colour), the last 7 days
-// as bars where it has them, what it is made of a line each (a station's chip, CPU and memory under it), a line more;
-// Station's 分享卡片 at its foot.
+// 2026-10-26 用户：「好几个 tab 都可以 hover 出卡片，比如 chat，stations，profiles，usage」「显示一些有用的统计信息」, then
+// 「stations 和 profiles tab 的 hover 卡片去掉吧，分享放到 usage 的 hover 卡片上」): 对话 and 用量, each the same card: a line
+// saying how the place stands, its figures side by side (each its value over what it is of, one that wants a look in
+// its colour), the last 7 days as bars where it has them, what it is made of a line each; 分享卡片 at its foot where
+// the core offers it (用量's).
 
 ///|
-/// Place `place`'s card of workspace `w` (chats, stations, profiles, usage), as its core says it.
+/// Place `place`'s card of workspace `w` (chats, usage), as its core says it.
 pub fn rail_card(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
   let card = (src.topic)("railCard", { "scope": Json::string(w.id), "place": Json::string(place) }).value
   c.box(style=rc_box, fn() {
@@ -38,11 +38,8 @@ pub fn rail_card(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Un
       })
       |> ignore
     }
-    if text(card, "note") != "" {
-      c.text(text(card, "note"), style=rc_note) |> ignore
-    }
-    if place == "stations" && flag(card, "share") {
-      let id = c.id("stations-now/share")
+    if flag(card, "share") {
+      let id = c.id("rail/share")
       if c.clicked(id) {
         share_card_open(src, w)
       }
@@ -57,22 +54,11 @@ pub fn rail_card(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Un
 }
 
 ///|
-/// What a line is made of: its name, what is at its end (in its tone), what is under its name (in its own); a line with
-/// nothing at its end says it all, wrapped as it needs (a kind of subscription's sentence).
+/// What a line is made of: its name, what is at its end (a model's, what it cost).
 fn rc_row(c : @ui.Ctx, r : Json?) -> Unit {
-  c.box(style=rc_row_box, fn() {
-    if text(r, "value") == "" {
-      c.text(text(r, "name"), style=rc_sentence) |> ignore
-    } else {
-      c.box(style=rc_line, fn() {
-        c.box(style=rc_name_room, fn() { c.text(text(r, "name"), style=rc_name) |> ignore }) |> ignore
-        c.text(text(r, "value"), style=rc_end.then(toned(text(r, "tone")))) |> ignore
-      })
-      |> ignore
-    }
-    if text(r, "sub") != "" {
-      c.text(text(r, "sub"), style=rc_sub.then(toned(text(r, "subTone")))) |> ignore
-    }
+  c.box(style=rc_line, fn() {
+    c.box(style=rc_name_room, fn() { c.text(text(r, "name"), style=rc_name) |> ignore }) |> ignore
+    c.text(text(r, "value"), style=rc_end) |> ignore
   })
   |> ignore
 }
@@ -154,10 +140,6 @@ let rc_plain : @ui.TextStyle = @ui.text_style()
 let rc_rows : @ui.Style = @ui.css("w=Full gap=S2")
 
 ///|
-// kept across runs: a value (no field of it changes)
-let rc_row_box : @ui.Style = @ui.css("w=Full gap=S0_5")
-
-///|
 /// A line: its name, what is at its end.
 // kept across runs: a value (no field of it changes)
 let rc_line : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
@@ -173,18 +155,6 @@ let rc_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Cu
 ///|
 // kept across runs: a value (no field of it changes)
 let rc_end : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let rc_sentence : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let rc_sub : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false, w=Cut)
-
-///|
-// kept across runs: a value (no field of it changes)
-let rc_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 /// The days' bars side by side, 4 apart.

@@ -561,8 +561,8 @@ fn rail_place(
         @sf.icon(c, rail_icon(place), size=rail_icon_size, color~) |> ignore
       }
     }, label~, tipped=!rail_carded(place))
-    // 对话's, Station's, Profile's, 用量's: what the place is about at a glance, beside it as the pointer rests on it (in
-    // place of its tip: what it said is in the card; Station's with the card to share of the agents at work)
+    // 对话's, 用量's: what the place is about at a glance, beside it as the pointer rests on it (in place of its tip: what
+    // it said is in the card; 用量's with the card to share of the agents' week)
     if rail_carded(place) && !wide.editing {
       @sfpages.hover(c, "rail/card/" + place, id, side=Right, along=Start, fn() { @sfpages.rail_card(c, src, w, place) })
       |> ignore
@@ -591,10 +591,10 @@ fn rail_place(
 }
 
 ///|
-/// Whether place `place` has a card as the pointer rests on it (the core's `railCard`: 对话, Station, Profile, 用量); the
-/// others keep their tip.
+/// Whether place `place` has a card as the pointer rests on it (the core's `railCard`: 对话, 用量; 2026-10-26 用户「stations
+/// 和 profiles tab 的 hover 卡片去掉吧」); the others keep their tip.
 fn rail_carded(place : String) -> Bool {
-  place == "chats" || place == "stations" || place == "profiles" || place == "usage"
+  place == "chats" || place == "usage"
 }
 
 ///|

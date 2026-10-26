@@ -2565,11 +2565,10 @@ export const SHAPES: Record<string, Shape> = {
   RailCard: struct([
     ["head", "String", { doc: "How the place stands, in a line: 9 个 agent 正在运行, 近 7 天折合 $1,911." }],
     ["stats", vec("RailStat"), { doc: "A few figures, each its value over what it is of." }],
-    ["rows", vec("RailRow"), { doc: "What it is made of, a line each (each station, each kind of subscription, the models that cost most)." }],
+    ["rows", vec("RailRow"), { doc: "What it is made of, a line each (the models that cost most)." }],
     ["days", opt(vec("RailDay")), { doc: "The last 7 days as bars (用量's: each day's cost); absent elsewhere." }],
-    ["note", opt("String"), { doc: "A line more, where one says what the figures do not (the account that refills soonest)." }],
-    ["share", opt("bool"), { doc: "Station's: 分享卡片 is offered (an agent is at work). Absent otherwise." }],
-  ], { doc: "The card over a rail's place as the pointer rests on it (the `railCard` view, views/rail-cards.ts): 对话 (chats), Station\n(stations), Profile (profiles), 用量 (usage).", keepNone: true }),
+    ["share", opt("bool"), { doc: "用量's: 分享卡片 is offered (something was spent). Absent otherwise." }],
+  ], { doc: "The card over a rail's place as the pointer rests on it (the `railCard` view, views/rail-cards.ts): 对话 (chats), 用量\n(usage).", keepNone: true }),
   RailStat: struct([
     ["value", "String"],
     ["label", "String"],
@@ -2577,10 +2576,7 @@ export const SHAPES: Record<string, Shape> = {
   ]),
   RailRow: struct([
     ["name", "String", { said: true }],
-    ["value", "String", { doc: "At its end: what a station is doing, what a model cost." }],
-    ["tone", opt("String"), { doc: "Its value's: red | amber." }],
-    ["sub", opt("String"), { doc: "Under its name: a station's chip, CPU and memory." }],
-    ["subTone", opt("String"), { doc: "Its sub's: red | amber, as full as the fullest of them." }],
+    ["value", "String", { doc: "At its end: what a model cost." }],
   ]),
   RailDay: struct([
     ["label", "String"],

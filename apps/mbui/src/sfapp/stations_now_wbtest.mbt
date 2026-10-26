@@ -1,31 +1,11 @@
 ///|
-test "wide: the rail's Station place, the pointer resting on it, says how many agents are at work on each station; 分享卡片 copies its picture" {
+test "wide: the rail's 用量 place, the pointer resting on it, offers 分享卡片, which copies its picture" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
-  let place = t.query(Button, label="Station：" + @sfdesk.rail_stations_label(fixture("home"), "ws1")).unwrap()
+  let place = t.query(Button, label="用量").unwrap()
   let (x, y, w, h) = place.rect
   t.move(x + w / 2.0, y + h / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
-  // (the card's words: beside the rail, the new chat's page under it says Studio too)
-  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 && w.1 < 400.0 }) }
-  // all of them in a line over the stations, each with what it is doing at its end (the core's words)
-  let head = word("1 个 agent 正在运行")
-  let studio = word("Studio")
-  let busy = word("1 个正在运行")
-  let mba = word("MBA")
-  let away = word("离线")
-  assert_true(
-    head.length() == 1 && studio.length() == 1 && busy.length() == 1 && mba.length() == 1 && away.length() == 1,
-    msg="\{(head, studio, busy, mba, away)}",
-  )
-  assert_true(head[0].2 < studio[0].2 && studio[0].2 < mba[0].2, msg="the line over the stations, in their order")
-  assert_true(away[0].1 > mba[0].1 + mba[0].3, msg="what it is doing after its name")
-  // how many are up of all, the tasks at work; each up station's machine under its name
-  assert_true(t.find("在线设备") is Some(_) && t.find("1/2") is Some(_) && t.find("后台任务") is Some(_))
-  let machine = word("Apple M2 Max · CPU 62% · 内存 54%")
-  assert_true(machine.length() == 1 && machine[0].2 > studio[0].2 && machine[0].2 < mba[0].2, msg="\{machine}")
-  // nothing of it, nor of anything else, against the corners' rule; no tip over it in its place
-  assert_eq(t.corner_faults(), [])
   // the card to share, opened from it: the picture, 复制图片 under it
   t.click(Button, label="分享卡片")
   t.run_for(@kit.presence_in_ms)
@@ -122,4 +102,13 @@ fn share_card_laid(t : @ui.Tester, narrow : Bool) -> Unit raise {
   assert_eq(t.squeeze_faults(), [])
   assert_eq(t.corner_faults(), [])
   assert_eq(t.contrast_faults(), [])
+}
+
+///|
+test "the 用量 page: 分享卡片 beside its days once something was spent (no pointer to rest on 用量's card), opening the card to share" {
+  let t = place_tester("usage")
+  assert_eq(@sf.presenting(), false)
+  t.click(Button, label="分享卡片")
+  t.frame()
+  assert_eq(@sf.presenting(), true)
 }

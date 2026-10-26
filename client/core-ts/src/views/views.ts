@@ -34,8 +34,8 @@ import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
 import { askAnswers } from "./vault.ts";
 import * as marks from "./marks.ts";
 import { usageView } from "./usage.ts";
-import { fleetView, quotaOf } from "./fleet.ts";
-import { chatsCard, profilesCard, stationsCard, usageCard } from "./rail-cards.ts";
+import { fleetView } from "./fleet.ts";
+import { chatsCard, usageCard } from "./rail-cards.ts";
 import { resourcesView } from "./resources.ts";
 import { workspaceProfiles } from "./profiles.ts";
 import { settingsView } from "./settings.ts";
@@ -759,8 +759,6 @@ export class Views implements Owner {
           { topic: "overview", station: s },
           { topic: "link", station: s },
           ...(place === "chats" ? [{ topic: "archivedRows", station: s }] : []),
-          ...(place === "stations" || place === "profiles" ? [{ topic: "host", station: s }, { topic: "way", station: s }] : []),
-          ...(place === "stations" ? [{ topic: "jobs", station: s }] : []),
           ...(place === "usage" ? [{ topic: "stationUsage", station: s }] : []),
         ];
         if (place === "chats") topics.push({ topic: "prefs" }, { topic: "workspaces" });
@@ -1189,18 +1187,6 @@ export class Views implements Owner {
                 .filter((x): x is number => typeof x === "number"),
             );
             return { ok: chatsCard(rows, mark, archived, now, offset) };
-          }
-          case "stations": {
-            const read = arr(get(chats.ok, "stations")).map((st) => {
-              const hostRaw = this.ok({ topic: "host", station: str(get(st, "station")) ?? "" });
-              return { station: st, host: hostRaw === undefined ? null : present.host(hostRaw), jobs: arr(this.ok({ topic: "jobs", station: str(get(st, "station")) ?? "" })) };
-            });
-            return { ok: stationsCard(get(chats.ok, "glyph"), read) };
-          }
-          case "profiles": {
-            const listed = this.#stationsView(scope);
-            const items = listed !== undefined && "ok" in listed ? arr(get(workspaceProfiles(listed.ok as J[]), "items")) : [];
-            return { ok: profilesCard(items, quotaOf(items), now) };
           }
           case "usage": {
             const stations = this.#stationsOr(scope);

@@ -29,8 +29,7 @@ test "a place's page: from under its frosted top bar, scrolled on under it, not 
   }
   assert_true(y0 > 24.0 + 50.0)
   // scrolled 60: the cards go on under the bar; pressed there (beside the title, on none of the bar's buttons), it is
-  // the first card's (how many agents are at work), which opens the card to share of them, as it shows through the
-  // glass
+  // the first card's (Studio's), which opens its station, as it shows through the glass
   t.move(195.0, 300.0)
   t.wheel(195.0, 300.0, 60.0)
   let y1 = match t.rect_of("Studio") {
@@ -40,11 +39,11 @@ test "a place's page: from under its frosted top bar, scrolled on under it, not 
   if (y0 - y1 - 60.0).abs() >= 0.5 {
     fail("Studio at \{y0}, scrolled at \{y1}")
   }
-  assert_eq(@sf.presenting(), false)
+  assert_eq(app.nav.depth(), 1)
   t.tap(300.0, 60.0)
   t.frame()
-  assert_eq(@sf.presenting(), true)
-  assert_eq(app.nav.depth(), 1)
+  assert_eq(@sf.presenting(), false)
+  assert_eq(app.nav.depth(), 2)
 }
 
 ///|
