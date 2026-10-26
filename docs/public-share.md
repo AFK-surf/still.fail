@@ -83,7 +83,7 @@ id TEXT PRIMARY KEY, thread INTEGER, key TEXT, title TEXT, created_by TEXT, by_n
 2. 用一把随机的临时密钥起只走中继的 iroh endpoint（`client/iroh-wasm`），连 station 的 `stillfail/guest/1`。
 3. 读快照，再读图片附件（和消息里放的 HTML），读完关连接。
 4. 用 web 的 Markdown 渲染（`Prose.tsx`）画消息；消息里的 HTML 照 `Viz.tsx` 放进 `sandbox="allow-scripts"` 的 iframe。
-5. 附件点开和 chat 里一样，用 chat 自己的预览（`FilePreview.tsx`：文本、代码、Markdown、CSV、PDF、图片、视频、音频、HTML），图片可以左右翻快照里的其他图。预览经 `FileSource`（`guest.ts` 的 `guestFiles`）读文件：页面已经读到的（图片、放进消息的 HTML）直接用，别的再连一次 station 读完就关。下载只在预览里（它自己的下载按钮，或者预览显示不了的类型给的下载）。`vite.share.config.ts` 把预览用到的 core 部分换成 `web/src/share/stand-ins/` 里的替身（`station.tsx`、`core/react.ts`、`annotate/ImageMarks.tsx` 等），页面里没有 core。
+5. 附件点开和 chat 里一样，用 chat 自己的预览（`FilePreview.tsx`：文本、代码、Markdown、CSV、PDF、图片、视频、音频、HTML），图片可以左右翻快照里的其他图。预览经 `FileSource`（`guest.ts` 的 `guestFiles`）读文件：页面已经读到的（图片、放进消息的 HTML）直接用，别的再连一次 station 读完就关。下载只在预览里（它自己的下载按钮，或者预览显示不了的类型给的下载）。`vite.share.config.ts` 把预览用到的 core 部分换成 `web/src/share/stand-ins/` 里的替身（`station.tsx`、`core/react.ts`、`annotate/ImageMarks.tsx` 等），页面里没有账号或 station core；替身只开放本地 `markdown` 和 `code.ink`，按需加载 core 同一份解析器（含公式布局和代码着色），正文和附件预览共用，其他调用仍拒绝。
 6. station 离线、链接失效、忙，各给一句话。
 
 station 给的东西都不会在 share 的源上当页面打开：HTML 只进 share host 自己的 `/frame`（`sandbox="allow-scripts"`，没有 allow-same-origin；srcdoc 的 frame 会继承页面的 CSP，所以不用），SVG 只放进 `<img>`，下载存成 `application/octet-stream` 的文件，预览里没有指向 blob 的链接。页面的 CSP 为预览只加了 `media-src blob:`（视频、音频）；pdf.js 的 worker 和代码分片都是 share host 自己的脚本，已在 `script-src 'self'` 里。
