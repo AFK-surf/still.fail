@@ -22,6 +22,7 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
+  emptyWorkspace,
   jsonlFiles,
   lock,
   packFile,
@@ -166,6 +167,34 @@ test("interrupted workspace retirement can be restored", async () => {
   write(join(room, "workspace.retiring/source.rs"), "latest surviving original");
   await restoreWorkspace(room);
   assert.equal(readFileSync(join(room, "workspace/source.rs"), "utf8"), "latest surviving original");
+  rmSync(room, { recursive: true });
+});
+
+test("read-only directories (a Go module cache) are packed, restored over leftovers and emptied", { skip: process.platform === "win32" && "Windows keeps no Unix modes" }, async () => {
+  const room = temp();
+  const cache = join(room, "workspace/gopath/mod/example.com/m@v1.0.0");
+  write(join(cache, ".github/workflows/build.yml"), "on: push");
+  write(join(cache, "go.mod"), "module example.com/m");
+  const readOnly = () => [join(cache, ".github/workflows"), join(cache, ".github"), cache].forEach((d) => chmodSync(d, 0o555));
+  readOnly();
+  await packWorkspace(room);
+  assert.ok(existsSync(workspaceArchive(room)));
+  assert.ok(!existsSync(join(room, "workspace.retiring")));
+  // What a failed restore and a failed retirement left, read-only too: overlaid, then removed.
+  const stale = join(room, "workspace.restoring/gopath/mod/example.com/m@v1.0.0");
+  write(join(stale, ".github/workflows/build.yml"), "stale");
+  chmodSync(join(stale, ".github/workflows"), 0o555);
+  write(join(room, "workspace.retiring/gopath/mod/example.com/m@v1.0.0/go.mod"), "module example.com/m // edited");
+  chmodSync(join(room, "workspace.retiring/gopath/mod/example.com/m@v1.0.0"), 0o555);
+  await restoreWorkspace(room);
+  assert.equal(readFileSync(join(cache, ".github/workflows/build.yml"), "utf8"), "on: push");
+  assert.equal(readFileSync(join(cache, "go.mod"), "utf8"), "module example.com/m // edited");
+  assert.equal(statSync(cache).mode & 0o777, 0o555);
+  assert.equal(statSync(join(cache, ".github/workflows")).mode & 0o777, 0o555);
+  for (const left of ["workspace.restoring", "workspace.retiring", "workspace.restored-old"]) assert.ok(!existsSync(join(room, left)), left);
+  await packWorkspace(room);
+  await emptyWorkspace(room);
+  assert.ok(!existsSync(join(room, "workspace/gopath")));
   rmSync(room, { recursive: true });
 });
 

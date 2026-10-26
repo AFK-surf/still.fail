@@ -4,7 +4,7 @@
 // keeps in station storage are packed (archive.ts); they are restored before its runtime starts again, or when it is
 // shown again. The hub calls it (ColdStorage) from the session's queue, so no turn starts halfway through.
 import { existsSync, realpathSync, statSync } from "node:fs";
-import { readdir, rm, unlink, writeFile } from "node:fs/promises";
+import { readdir, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { log } from "../ops/log.ts";
 import { realOutside } from "../ops/places.ts";
@@ -79,7 +79,7 @@ export class ColdRooms implements ColdStorage {
       if (!(row && row.archivedAt !== null && !row.running) || this.hasJobs(key, dir)) break;
       if (!(await safeToRemove(path))) continue;
       try {
-        await rm(path, { recursive: true });
+        await archive.removeTree(path);
         freed += bytes;
       } catch (error) {
         log.warn("hub", "not removed", { path, error: (error as Error).message });
