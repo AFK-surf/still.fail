@@ -26,7 +26,7 @@ test "wide: the rail's Station place, the pointer resting on it, says how many a
   t.click(Button, label="分享卡片")
   t.run_for(@kit.presence_in_ms)
   assert_true(t.find("1 个 Claude 订阅账号的周额度") is Some(_), msg="the picture's words beside its number")
-  assert_true(t.find("拿起任何一台，就能用上所有设备") is Some(_))
+  assert_true(t.find("一生万物，万物归一") is Some(_))
   assert_eq(t.corner_faults(), [])
   t.click(Button, label="复制图片")
   t.frame()
@@ -101,7 +101,7 @@ fn share_card_laid(t : @ui.Tester, narrow : Bool) -> Unit raise {
     let more = word("平均每个对话 5.2 个")
     assert_true(lead.length() == 1 && more.length() == 1 && lead[0].4 == more[0].4 && more[0].2 > lead[0].2, msg="\{(lead, more)}")
   }
-  assert_true(t.find("拿起任何一台，就能用上所有设备") is Some(_))
+  assert_true(t.find("一生万物，万物归一") is Some(_))
   assert_eq(t.squeeze_faults(), [])
   assert_eq(t.corner_faults(), [])
   assert_eq(t.contrast_faults(), [])
