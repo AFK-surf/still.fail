@@ -480,25 +480,16 @@ let card_named : @ui.Style = card_box.then(@ui.css("bg=Clear border=B1 dashed"))
 
 ///|
 /// What waits in the composer (a file's card, a quote) stands off its frosted ground by its own ground alone, no shadow
-/// (the user, 2026-10-16: 附件有点难以分辨; 2026-10-25: 背景色好分辨就行了，不用这么深阴影): on a computer, whose composer
-/// is greyer than its page, the page's own (Chat.css.ts `composerFiles fileCard, composerQuote quoteCard`); on a touch
-/// device, whose capsule is whiter than its paper, the neutral one; in the dark a step up (the text at 10% over what
-/// floats). One named by its path keeps card_named's: no ground, outlined.
+/// (the user, 2026-10-16: 附件有点难以分辨; 2026-10-25: 背景色好分辨就行了，不用这么深阴影): the capsule whiter than its
+/// paper, the neutral one; in the dark a step up (the text at 10% over what floats). One named by its path keeps
+/// card_named's: no ground, outlined.
 pub fn composer_card() -> @ui.Style {
-  if theme().narrow {
-    composer_card_narrow
-  } else {
-    composer_card_wide
-  }
+  composer_card_ground
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
-let composer_card_wide : @ui.Style = @ui.css("bg=Bg dark{bg=Over(Raised, A(Fg, O10))}")
-
-///|
-// kept across runs: a value (no field of it changes)
-let composer_card_narrow : @ui.Style = @ui.css("bg=Neutral dark{bg=Over(Raised, A(Fg, O10))}")
+let composer_card_ground : @ui.Style = @ui.css("bg=Neutral dark{bg=Over(Raised, A(Fg, O10))}")
 
 ///|
 /// A file's card waiting in the composer: as tall as a picture's tile beside it (56), its words on its middle.

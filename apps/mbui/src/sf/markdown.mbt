@@ -442,13 +442,13 @@ fn bare_chats(xs : Array[MdInline], out : Array[String]) -> Unit {
 }
 
 ///|
-/// The web's own tones where the message's parts use them (the wide
-/// screen's palette, as Markdown.kt's webMuted, webSubtle, webLine).
+/// The web's own tones where the message's parts use them, on every screen (as Markdown.kt's webMuted, webSubtle,
+/// webLine).
 fn web() -> Palette {
   if theme().dark {
-    wide_dark
+    web_dark
   } else {
-    wide_light
+    web_light
   }
 }
 

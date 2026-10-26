@@ -3,14 +3,15 @@
 // for mbui: its colours, type and measures, said once here, so a view built
 // with them looks as still.fail's own pages do.
 //
-// Two grounds: the wide screen's (white canvas, ink, the ember orange) and
-// the narrow screen's (as the Android app: warm paper, its own greys, type a
-// size up). Each light and dark. `begin` picks them each frame from the
-// window's width and the appearance set.
+// One palette on every screen and with either input (the phone's, as the Android app: warm paper, white cards on it,
+// its own greys and tones), light and dark: the screen says how things are laid out and the native input how large
+// they are, neither what colour they are. `begin` picks light or dark each frame from the appearance set. The web's
+// own tones (a white page, grey cards on it) stay only where the message's Markdown has them on every screen
+// (markdown.mbt `web`).
 
 ///|
 /// The colours a view reads (the web's names: `text` is --text, `bg` the
-/// page's ground: the canvas on a wide screen, the warm paper on a narrow).
+/// page's ground, the warm paper; `card` and `canvas` what stands on it, white).
 pub(all) struct Palette {
   bg : Int64
   canvas : Int64
@@ -105,10 +106,6 @@ pub(all) struct Round {
 ///|
 pub(all) struct Theme {
   dark : Bool
-  /// the phone's palette (its paper, white cards on it, its own tones), not the web's (a white page, grey cards on it):
-  /// on a touch device or in a window laid out Small. Colours only: the sizes go by `touch`. (Two looks until they are
-  /// one: the grounds are each other's inverse, which one is a design's choice, not a merge.)
-  narrow : Bool
   /// the native input is touch (native_input): the sizes (words, rows, controls, what a press reaches) a finger's, on
   /// every screen; keyboard and mouse's on every screen else, a narrow window's too
   touch : Bool
@@ -792,7 +789,9 @@ pub let large_from : Double = 840.0
 // ---------------------------------------------------------------------------
 
 ///|
-let wide_light : Palette = {
+/// The web's own tones (a white page, grey cards on it): what the message's Markdown keeps of them (markdown.mbt `web`),
+/// and what the palette's names not its own mean (light_palette).
+let web_light : Palette = {
   bg: 0xFFFFFFFFL,
   canvas: 0xFFFFFFFFL,
   raised: 0xE4E4E8FFL,
@@ -834,7 +833,7 @@ let wide_light : Palette = {
 }
 
 ///|
-let wide_dark : Palette = {
+let web_dark : Palette = {
   bg: 0x1F2023FFL,
   canvas: 0x1F2023FFL,
   raised: 0x2A2C31FFL,
@@ -875,10 +874,10 @@ let wide_dark : Palette = {
 }
 
 ///|
-/// The narrow screen's (root.css.ts m): warm paper, its own greys; what the
-/// wide screen's names mean there.
-let narrow_light : Palette = {
-  ..wide_light,
+/// still.fail's palette on every screen (the phone's, root.css.ts m): warm paper, white cards on it, its own greys;
+/// what the web's names mean there.
+let light_palette : Palette = {
+  ..web_light,
   bg: 0xF5F3EFFFL,
   canvas: 0xFFFFFFFFL,
   raised: 0xFFFFFFFFL,
@@ -908,8 +907,8 @@ let narrow_light : Palette = {
 }
 
 ///|
-let narrow_dark : Palette = {
-  ..wide_dark,
+let dark_palette : Palette = {
+  ..web_dark,
   bg: 0x1B1C1FFFL,
   canvas: 0x26272BFFL,
   raised: 0x2A2C31FFL,
@@ -1075,9 +1074,8 @@ let dark_set : Ref[Bool?] = { val: None }
 let current : Ref[Theme] = {
   val: {
     dark: false,
-    narrow: false,
     touch: false,
-    p: wide_light,
+    p: light_palette,
     t: wide_type,
     rows: wide_rows,
     control_h: wide_control_h,
@@ -1166,24 +1164,15 @@ fn screen_layout(width : Double) -> Layout {
 ///|
 /// The theme for this frame (docs/architecture.md, the terms): its sizes by the native input alone (rule 4: the screen
 /// says how things are laid out, never how large they are), a finger's on a touch device (Android's app, a tablet's
-/// too), keyboard and mouse's on a computer, its window narrow or not; its palette the phone's on a touch device and in
-/// a window laid Small, whose pages are the phone's and carry its palette in places (sfapp messages.mbt `ink`), the
-/// web's else, until the two are one (`narrow`): call at the top of a view.
-pub fn begin(c : @ui.Ctx) -> Theme {
+/// too), keyboard and mouse's on a computer, its window narrow or not; its colours one palette on every screen, light
+/// or dark as set: call at the top of a view.
+pub fn begin(_c : @ui.Ctx) -> Theme {
   let dark = dark_set.val.unwrap_or(false)
   let touch = native_input() is Finger
-  let narrow = touch || layout(c.window_size().0) is Small
-  let p = match (narrow, dark) {
-    (false, false) => wide_light
-    (false, true) => wide_dark
-    (true, false) => narrow_light
-    (true, true) => narrow_dark
-  }
   current.val = {
     dark,
-    narrow,
     touch,
-    p,
+    p: if dark { dark_palette } else { light_palette },
     t: if touch { narrow_type } else { wide_type },
     rows: if touch { narrow_rows } else { wide_rows },
     control_h: if touch { narrow_control_h } else { wide_control_h },
@@ -1450,16 +1439,11 @@ pub let nav_button_side : @ui.Len = Fixed(34.0)
 pub let hairline : @ui.Len = Fixed(0.5)
 
 ///|
-/// The theme as mbui's (its Theme's roles over this frame's palette: wide or narrow, light or dark), with
-/// still.fail's sizes of words: what the styles' tokens are looked up in.
+/// The theme as mbui's (its Theme's roles over this frame's palette: the paper's, light or dark), with still.fail's
+/// sizes of words: what the styles' tokens are looked up in.
 pub fn ui_theme() -> @ui.Theme {
   let t = current.val
-  let base = match (t.narrow, t.dark) {
-    (false, false) => @ui.Theme::light()
-    (false, true) => @ui.Theme::dark()
-    (true, false) => @ui.Theme::narrow_light()
-    (true, true) => @ui.Theme::narrow_dark()
-  }
+  let base = if t.dark { @ui.Theme::narrow_dark() } else { @ui.Theme::narrow_light() }
   // a link's ink: the accent's ink (the darker one on paper, the lighter in the dark), which reads in words; the
   // accent itself in the dark was 4.3 to 1 on a raised ground (docs/ui-panels.md 对比度)
   {
@@ -1468,10 +1452,10 @@ pub fn ui_theme() -> @ui.Theme {
     leading: leading_scale,
     radii,
     link: base.accent_text,
-    // on a phone the greys Android's (Theme.kt C.muted, C.subtle: the narrow palette's), not mbui's own narrow theme's
-    // lighter ones: what a style's Muted and Subtle say there
-    muted: if t.narrow { t.p.muted } else { base.muted },
-    subtle: if t.narrow { t.p.subtle } else { base.subtle },
+    // the greys Android's (Theme.kt C.muted, C.subtle: the palette's), not mbui's own paper theme's lighter dark ones:
+    // what a style's Muted and Subtle say
+    muted: t.p.muted,
+    subtle: t.p.subtle,
     // the panes' grounds the palette's (touch's sidebar a step under its beige page, what is chosen a step
     // under that): what a style's Sidebar and Selected say, not mbui's narrow theme's, which has the web's
     sidebar: t.p.sidebar,

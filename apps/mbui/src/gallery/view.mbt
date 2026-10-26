@@ -98,10 +98,10 @@ fn duration_label(s : Double) -> String {
 fn grid(c : @ui.Ctx) -> (Int, Double, Double, Double) {
   let t = @sf.theme()
   // edge to edge on a phone, as its photos are; in the page's column wide
-  let inset = if t.narrow { 0.0 } else { 40.0 }
-  let gap = if t.narrow { 2.0 } else { 4.0 }
+  let inset = if small(c) { 0.0 } else { 40.0 }
+  let gap = if small(c) { 2.0 } else { 4.0 }
   let room = dmin(c.width - 2.0 * inset, 1400.0)
-  let least = if t.narrow { 88.0 } else { 150.0 }
+  let least = if small(c) { 88.0 } else { 150.0 }
   let mut cols = ((room + gap) / (least + gap)).floor().to_int()
   if cols < 3 {
     cols = 3
@@ -115,7 +115,7 @@ fn timeline(c : @ui.Ctx, src : Source, got : Result[Array[Day], String]?) -> Uni
   let t = @sf.theme()
   let p = t.p
   let (cols, side, gap, inset) = grid(c)
-  let head_pad = if t.narrow { 20.0 } else { 40.0 }
+  let head_pad = if small(c) { 20.0 } else { 40.0 }
   c.column(w=Fill(1.0), h=Fill(1.0), bg=p.bg, fn() {
     let days = match got {
       Some(Ok(d)) => d
@@ -166,7 +166,7 @@ fn timeline(c : @ui.Ctx, src : Source, got : Result[Array[Day], String]?) -> Uni
         DayHead(di) =>
           c.box(
             dir=Row,
-            pl=if t.narrow { 16.0 } else { inset },
+            pl=if small(c) { 16.0 } else { inset },
             pr=inset,
             pt=if di == 0 { 4.0 } else { 20.0 },
             pb=8.0,
@@ -203,7 +203,7 @@ fn timeline(c : @ui.Ctx, src : Source, got : Result[Array[Day], String]?) -> Uni
             }
           })
           |> ignore
-        Foot => c.box(h=Px(if t.narrow { 24.0 } else { 64.0 }), fn() {  }) |> ignore
+        Foot => c.box(h=Px(if small(c) { 24.0 } else { 64.0 }), fn() {  }) |> ignore
       }
     })
     |> ignore
@@ -216,9 +216,9 @@ fn head(c : @ui.Ctx, pad : Double, meta : String) -> Unit {
   let t = @sf.theme()
   c.box(
     pl=pad,
-    pr=if t.narrow { 12.0 } else { pad },
-    pt=if t.narrow { 14.0 } else { 32.0 },
-    pb=if t.narrow { 6.0 } else { 12.0 },
+    pr=if small(c) { 12.0 } else { pad },
+    pt=if small(c) { 14.0 } else { 32.0 },
+    pb=if small(c) { 6.0 } else { 12.0 },
     fn() { @sf.page_head(c, "照片", meta~) },
   )
   |> ignore
@@ -234,7 +234,7 @@ fn cell(c : @ui.Ctx, src : Source, it : Item, index : Int, side : Double) -> Uni
     state.open = Some(index)
     state.bars = true
   }
-  let radius = if t.narrow { 0.0 } else { 6.0 }
+  let radius = if small(c) { 0.0 } else { 6.0 }
   c.box(w=Px(side), h=Px(side), radius~, clip=true, bg=t.p.neutral_bg, id~, fn() {
     match thumbhash_image(it.thumbhash) {
       Some(k) =>
@@ -265,7 +265,7 @@ fn cell(c : @ui.Ctx, src : Source, it : Item, index : Int, side : Double) -> Uni
       |> ignore
     }
     // pressed: a step darker
-    if c.pressed(id) || (!t.narrow && c.hovered(id)) {
+    if c.pressed(id) || (!small(c) && c.hovered(id)) {
       c.layer(fn() {
         c.box(
           w=Fill(1.0),
@@ -302,14 +302,14 @@ fn shapes(
     None => ()
   }
   c.box(w=Fill(1.0), h=Fill(1.0), clip=true, gap~, opacity=@sf.breath(c, failed=error is Some(_)), fn() {
-    c.box(pl=if t.narrow { 16.0 } else { inset }, pt=4.0, pb=4.0, fn() {
+    c.box(pl=if small(c) { 16.0 } else { inset }, pt=4.0, pb=4.0, fn() {
       @sf.bar(c, Px(120.0), 13.0)
     })
     |> ignore
     for _ in 0..<8 {
       c.box(dir=Row, pl=inset, pr=inset, gap~, fn() {
         for _ in 0..<cols {
-          @sf.bar(c, Px(side), side, radius=if t.narrow { 0.0 } else { 6.0 })
+          @sf.bar(c, Px(side), side, radius=if small(c) { 0.0 } else { 6.0 })
         }
       })
       |> ignore
@@ -481,4 +481,11 @@ fn picture(c : @ui.Ctx, src : Source, it : Item) -> Unit {
     }
   })
   |> ignore
+}
+
+///|
+/// Laid out for a small screen (the window's width alone, @sf.layout): edge to edge, a phone's measures. The screen
+/// says how the page is laid out; the colours are one on every screen (@sf.begin).
+fn small(c : @ui.Ctx) -> Bool {
+  @sf.layout(c.window_size().0) is Small
 }

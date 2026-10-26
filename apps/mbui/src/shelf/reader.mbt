@@ -152,7 +152,7 @@ fn chapter_title(src : Source, r : Reading) -> String {
 ///|
 fn reader(c : @ui.Ctx, src : Source, r : Reading) -> Unit {
   let t = @sf.theme()
-  let narrow = t.narrow
+  let narrow = small(c)
   let pp = paper()
   let docked = !narrow && r.panel != NoPanel
   // the text's room: beside the docked panel
@@ -417,7 +417,7 @@ fn contents(c : @ui.Ctx, src : Source, r : Reading, pp : Paper) -> Unit {
       if i != r.chapter {
         go_chapter(r, i, false)
       }
-      if t.narrow {
+      if small(c) {
         r.panel = NoPanel
       }
     }
