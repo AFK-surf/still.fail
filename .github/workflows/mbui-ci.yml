@@ -42,6 +42,8 @@ jobs:
         run: scripts/chk textrec --check
       - name: "What the scripts wait with, on Linux's events (scripts/logwait_test.sh, chk logwait: inotify, a pidfd)"
         run: bash scripts/logwait_test.sh
+      - name: Simulator termination exits on failure and leaves no client after a deadline
+        run: bash scripts/ios-terminate-test.sh
       - name: Check
         run: moon version --all && moon check --target native --output-json 2>&1 | scripts/chk errs
       - name: "Check, the web's (the browser host, src/host's js files: what scripts/web.sh builds and scripts/textdiff.sh web needs)"
@@ -183,17 +185,39 @@ jobs:
       - name: "The streams (scripts/android-streams.sh: plain, reopen, away, anew, thrown)"
         if: (success() || failure()) && steps.emu.outcome == 'success'
         run: APP=streamdemo scripts/android.sh build && APP=streamdemo bash scripts/android-streams.sh
-      # (the same over the system's MediaCodec: a smoke run for people, not a gate. Its start has Codec2's deadline,
-      # which this emulator, busy drawing each launch on the runner's CPU, misses now and then: no H.264 decoder)
-      - name: "The streams over the system's decoder (REAL=1, not a gate)"
-        if: (success() || failure()) && steps.emu.outcome == 'success'
-        continue-on-error: true
-        run: REAL=1 APP=streamdemo bash scripts/android-streams.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: android-devices
           path: |
             apps/mbui/mbui/out/android/streams/
-            apps/mbui/mbui/out/android/streams-real/
             apps/mbui/mbui/out/android/keyboard/
+
+  # MediaCodec is diagnostic, and must not consume the contract job's time budget.
+  android-streams-real:
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      ABI: x86_64
+      EMU_PORT: "5554"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: ./.github/actions/mbui-apk
+      - uses: ./.github/actions/mbui-moonbit
+      - uses: ./.github/actions/mbui-android-emulator
+        with: { target: default, profile: pixel_6 }
+      - name: Build the stream demo
+        run: APP=streamdemo scripts/android.sh build
+      - name: "The streams over the system's decoder (REAL=1, not a gate)"
+        continue-on-error: true
+        run: REAL=1 APP=streamdemo bash scripts/android-streams.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-streams-real
+          path: apps/mbui/mbui/out/android/streams-real/
