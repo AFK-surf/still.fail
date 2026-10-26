@@ -15,6 +15,18 @@ C=$OUT/record-src
 mkdir -p "$OUT/traces"
 rsync -a --delete --exclude _build --exclude out --exclude node_modules --exclude .git "$APP/" "$C/"
 (cd "$C/mbui" && patch -s -p1 < "$D/record/trace.patch")
+# The film's Tester keeps nothing (every frame built whole, Tester::new): kept here as a host keeps it (parts kept,
+# kept_part.mbt), so the traces are a host's frames. ROWS=1: a list's rows kept too (kept_rows.mbt; off on a host
+# since #2175): what the app would do with them on, its traces in traces-rows/.
+T=$C/mbui/src/ui/tester.mbt
+sed -i '' 's/^  parts_on.val = false$/  parts_on.val = true/' "$T"
+grep -q '^  parts_on.val = true$' "$T" || { echo "record.sh: Tester::new's parts_on not found"; exit 1; }
+TR=$D/traces
+if [ "${ROWS:-}" = 1 ]; then
+  sed -i '' 's/^  rows_kept_on.val = false$/  rows_kept_on.val = true/' "$T"
+  grep -q '^  rows_kept_on.val = true$' "$T" || { echo "record.sh: Tester::new's rows_kept_on not found"; exit 1; }
+  TR=$D/traces-rows
+fi
 cd "$C"
 APP=sffilm MODE=release bash scripts/mac.sh build > "$OUT/record-build.log" 2>&1 || { tail -40 "$OUT/record-build.log"; exit 1; }
 EXE=$C/_build/native/release/build/stillfail/sffilm/sffilm.exe
@@ -45,6 +57,6 @@ printf '%s\n' "$all" | while IFS='|' read -r name drive fixture win platform; do
     > "$OUT/traces/$name.log" 2>&1 || echo "$name: the film failed (out/traces/$name.log)"
   printf '%-16s %6s frames %8s calls\n' "$name" "$(grep -c '^F$' "$OUT/traces/$name.trace" || true)" \
     "$(wc -l < "$OUT/traces/$name.trace" | tr -d ' ')"
-  mkdir -p "$D/traces"
-  gzip -9 -n -c "$OUT/traces/$name.trace" > "$D/traces/$name.trace.gz"
+  mkdir -p "$TR"
+  gzip -9 -n -c "$OUT/traces/$name.trace" > "$TR/$name.trace.gz"
 done

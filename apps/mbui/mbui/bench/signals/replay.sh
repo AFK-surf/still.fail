@@ -8,7 +8,9 @@ D=$(cd "$(dirname "$0")" && pwd)
 . "$D/../../scripts/env.sh"
 cd "$D"
 mkdir -p out/replay
-for f in traces/*.trace.gz; do gzip -dc "$f" > "out/replay/$(basename "$f" .gz)"; done
+# TRACES=traces-rows: record.sh ROWS=1's
+rm -f out/replay/*.trace
+for f in ${TRACES:-traces}/*.trace.gz; do gzip -dc "$f" > "out/replay/$(basename "$f" .gz)"; done
 (
   unset MOON_CC
   export MBC_REAL_CC=${MBC_REAL_CC:-$(command -v clang || command -v cc)} MBC_LTO=0 MBC_STORE=$D/_build/mbc-store
