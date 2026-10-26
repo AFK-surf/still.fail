@@ -44,7 +44,7 @@ static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m
     m_v_control, m_v_info, m_v_read_next, m_v_read_answer, m_v_site_next, m_v_site_body, m_v_site_head,
     m_v_site_chunk, m_v_site_end, m_v_site_state, m_v_site_load, m_v_tell, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
     m_save, m_system_dark, m_font_scale, m_native_pointing, m_keyboard, m_a11y_on, m_a11y_tree, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways, m_word_at,
-    m_open_url, m_open_tab, m_hold_words, m_clipboard_secret, m_over_done, m_text_scale, m_img_hold, m_img_pump;
+    m_open_url, m_open_tab, m_hold_words, m_clipboard_secret, m_clipboard_secret_off, m_over_done, m_text_scale, m_img_hold, m_img_pump;
 static jclass updates_cls, shares_cls, keeps_cls, holds_cls;
 static jclass gallery_cls, marks_cls;
 static void device_init(JNIEnv *env);  // android_device.h
@@ -88,6 +88,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_clipboard = (*env)->GetStaticMethodID(env, host_cls, "clipboardSet", "(Ljava/lang/String;)V");
   m_text_menu = (*env)->GetStaticMethodID(env, host_cls, "textMenu", "(ZDDDDI)V");
   m_clipboard_secret = (*env)->GetStaticMethodID(env, host_cls, "clipboardSecret", "(Ljava/lang/String;D)V");
+  m_clipboard_secret_off = (*env)->GetStaticMethodID(env, host_cls, "clipboardSecretOff", "()V");
   m_log = (*env)->GetStaticMethodID(env, host_cls, "log", "(Ljava/lang/String;)V");
   m_bench = (*env)->GetStaticMethodID(env, host_cls, "benchMode", "()I");
   m_reduce_motion = (*env)->GetStaticMethodID(env, host_cls, "reduceMotion", "()I");
@@ -786,12 +787,18 @@ void mb_host_clipboard_set(moonbit_string_t s) {
   (*env)->DeleteLocalRef(env, j);
 }
 
-// A secret on the clipboard (Host.clipboardSecret): marked sensitive, cleared `clear_ms` later if still there.
+// A secret on the clipboard (Host.clipboardSecret): marked sensitive; taken off as the app asks.
 void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) {
   JNIEnv *env = env_();
   jstring j = jstr(env, s);
   (*env)->CallStaticVoidMethod(env, host_cls, m_clipboard_secret, j, clear_ms);
   (*env)->DeleteLocalRef(env, j);
+}
+
+// The last secret copied taken off unless something else was copied since (Host.clipboardSecretOff).
+void mb_host_clipboard_secret_off(void) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, host_cls, m_clipboard_secret_off);
 }
 
 void mb_host_log(moonbit_string_t s) {

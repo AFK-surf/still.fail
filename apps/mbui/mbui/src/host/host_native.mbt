@@ -113,6 +113,9 @@ extern "C" fn ffi_clipboard_image(data : Bytes) -> Unit = "mb_host_clipboard_ima
 #borrow(s)
 extern "C" fn ffi_clipboard_secret(s : String, clear_ms : Double) -> Unit = "mb_host_clipboard_secret"
 
+///|
+extern "C" fn ffi_clipboard_secret_off() -> Unit = "mb_host_clipboard_secret_off"
+
 #borrow(s)
 extern "C" fn ffi_log(s : String) -> Unit = "mb_host_log"
 
@@ -566,11 +569,17 @@ fn clipboard_set_image(data : Bytes) -> Unit {
 
 ///|
 /// A secret put on the system's clipboard: marked sensitive where the system masks such (Android 13 on), kept out of
-/// the clipboard's history and the cloud's where it keeps them (Windows), and taken off `clear_ms` later unless
-/// something else was copied meanwhile (0: kept; Windows: as the app ends before then too). Elsewhere as
-/// clipboard_set.
+/// the clipboard's history and the cloud's where it keeps them (Windows), kept to this device (iOS, which takes it off
+/// itself `clear_ms` later). Elsewhere as clipboard_set. The app takes it off `clear_ms` later on its own clock
+/// (Ctx::copy_secret: clipboard_secret_off).
 fn clipboard_set_secret(s : String, clear_ms~ : Double) -> Unit {
   ffi_clipboard_secret(s, clear_ms)
+}
+
+///|
+/// The last secret copied taken off unless something else was copied since (see hostapi's clipboard_secret_off).
+fn clipboard_secret_off() -> Unit {
+  ffi_clipboard_secret_off()
 }
 
 ///|

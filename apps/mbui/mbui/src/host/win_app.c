@@ -45,9 +45,6 @@ static int go_back(void) {
 }
 
 static HWND hwnd;
-// the timer that takes a secret copied off the clipboard (mb_host_clipboard_secret)
-enum { MB_TIMER_SECRET = 2 };
-static void secret_off(int quitting);
 static int want_frame;
 static double wake_at = -1;  // mb_now_ms() of the earliest wake_after, or -1
 static double scale = 1;
@@ -505,10 +502,6 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_ENTERSIZEMOVE: sizing = 1; SetTimer(h, 1, 16, NULL); return 0;
     case WM_EXITSIZEMOVE: sizing = 0; KillTimer(h, 1); return 0;
     case WM_TIMER:
-      if (wp == MB_TIMER_SECRET) {
-        secret_off(0);
-        return 0;
-      }
       if (wake_at >= 0 && mb_now_ms() >= wake_at) {
         wake_at = -1;
         want_frame = 1;
@@ -898,7 +891,6 @@ static void secret_off(int quitting) {
   if (!secret_seq) return;
   int ours = GetClipboardSequenceNumber() == secret_seq;
   secret_seq = 0;
-  if (!quitting) KillTimer(hwnd, MB_TIMER_SECRET);
   if (ours && OpenClipboard(quitting ? NULL : hwnd)) {
     EmptyClipboard();
     CloseClipboard();
@@ -908,18 +900,18 @@ static void secret_off(int quitting) {
 }
 static void secret_off_at_end(void) { secret_off(1); }
 
-// A secret on the clipboard (@hostapi.clipboard_set_secret): kept out of its history and the cloud's, and taken off
-// `clear_ms` later unless something else was copied meanwhile (0: kept), or as the app ends before then.
+// A secret on the clipboard (@hostapi.clipboard_set_secret): kept out of its history and the cloud's; one to be taken
+// off (clear_ms: the app does it then, mb_host_clipboard_secret_off) taken off as the app ends before then.
 void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) {
   static int at_end;
   secret_seq = 0;
-  KillTimer(hwnd, MB_TIMER_SECRET);
   if (!clipboard_words(s, 1) || clear_ms <= 0) return;
   secret_seq = GetClipboardSequenceNumber();
   if (!at_end) atexit(secret_off_at_end), at_end = 1;
-  UINT ms = clear_ms < USER_TIMER_MAXIMUM ? (UINT)clear_ms : USER_TIMER_MAXIMUM;
-  SetTimer(hwnd, MB_TIMER_SECRET, ms, NULL);  // det-ok(host-delay): the app's clear_ms
 }
+
+// The last secret copied taken off (@hostapi.clipboard_secret_off), unless something else was copied since.
+void mb_host_clipboard_secret_off(void) { secret_off(0); }
 
 // A picture on the clipboard (@hostapi.clipboard_set_image): a PNG's bytes under the "PNG" format other programs paste
 // (Office, browsers, Paint.NET); what is not a PNG is put nowhere.

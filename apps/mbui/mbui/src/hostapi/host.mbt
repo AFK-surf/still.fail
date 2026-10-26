@@ -55,6 +55,7 @@ pub(open) trait Host {
   edit_can(Self, Int) -> Unit = _
   clipboard_set(Self, String) -> Unit = _
   clipboard_set_secret(Self, String, Double) -> Unit = _
+  clipboard_secret_off(Self) -> Unit = _
   clipboard_set_image(Self, Bytes) -> Unit = _
   log(Self, String) -> Unit = _
   bench_mode(Self) -> Int = _
@@ -411,6 +412,11 @@ impl Host with clipboard_set(_, _) {
 
 ///|
 impl Host with clipboard_set_secret(_, _, _) {
+  ()
+}
+
+///|
+impl Host with clipboard_secret_off(_) {
   ()
 }
 
@@ -1500,11 +1506,19 @@ pub fn clipboard_set(s : String) -> Unit {
 
 ///|
 /// A secret put on the system's clipboard: marked sensitive where the system masks such (Android 13 on), kept out of
-/// the clipboard's history and the cloud's where it keeps them (Windows), and taken off `clear_ms` later unless
-/// something else was copied meanwhile (0: kept; Windows: as the app ends before then too). Elsewhere as
-/// clipboard_set.
+/// the clipboard's history and the cloud's where it keeps them (Windows), kept to this device (iOS, which takes it off
+/// itself `clear_ms` later). Elsewhere as clipboard_set. The app takes it off `clear_ms` later on its own clock
+/// (Ctx::copy_secret: clipboard_secret_off).
 pub fn clipboard_set_secret(s : String, clear_ms~ : Double) -> Unit {
   current.val.clipboard_set_secret(s, clear_ms)
+}
+
+///|
+/// The last secret put on the clipboard (clipboard_set_secret) taken off, unless something else was copied since
+/// (the app's or another's: the system says whether the clipboard changed). As the app ends before then, a desktop
+/// host takes it off itself (Windows).
+pub fn clipboard_secret_off() -> Unit {
+  current.val.clipboard_secret_off()
 }
 
 ///|

@@ -236,6 +236,11 @@ impl @hostapi.Host for Native with clipboard_set_secret(_, s, clear_ms) {
 }
 
 ///|
+impl @hostapi.Host for Native with clipboard_secret_off(_) {
+  clipboard_secret_off()
+}
+
+///|
 impl @hostapi.Host for Native with log(_, s) {
   log(s)
 }

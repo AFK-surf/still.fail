@@ -334,6 +334,12 @@ fn clipboard_set_secret(s : String, clear_ms~ : Double) -> Unit {
 }
 
 ///|
+/// The secret copied taken off (see host_native.mbt): a page's clipboard is not read back to know it is still there.
+fn clipboard_secret_off() -> Unit {
+  ()
+}
+
+///|
 fn log(s : String) -> Unit {
   js_log(s)
 }

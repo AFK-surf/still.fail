@@ -58,6 +58,7 @@ fn reset_globals() -> Unit {
   faces_reset()
   text_table.val = None
   inputs_since.val = false
+  secret_copies.val = 0
   in_frame.val = false
   building.val = false
   messages_reset()

@@ -174,7 +174,7 @@
     },
     "unsettled-ok": {},
     "host-delay": {
-      "android/app/src/main/java/dev/mbui/Host.java": 2,
+      "android/app/src/main/java/dev/mbui/Host.java": 1,
       "android/app/src/main/java/dev/mbui/LoginService.java": 1,
       "android/app/src/main/java/dev/mbui/NativeViews.java": 1,
       "android/app/src/main/java/dev/mbui/Script.java": 4,

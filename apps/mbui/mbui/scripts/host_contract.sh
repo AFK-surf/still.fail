@@ -52,8 +52,8 @@
 #        person: src/host/linux_life.h), which says it
 #   scripts/host_contract.sh windows secret     a secret copied (kitdemo's MBUI_SECRETCHECK, src/kitdemo/gallery/
 #        secretcheck.mbt), the clipboard read after the app's end: its words there, kept out of the clipboard's history
-#        and the cloud's (Windows' formats for that); one to be taken off, gone as the app ends first; one with other
-#        words copied after it, those left
+#        and the cloud's (Windows' formats for that); one to be taken off, gone when the app's clock says, and as the
+#        app ends before then; one with other words copied after it, those left
 #   scripts/host_contract.sh ios free|done      (iOS) before the runs: the simulator not in another's use (booted with an
 #        app of its running: this fails, saying so); after them: shut down again when these runs booted it
 #
@@ -681,12 +681,13 @@ INSTALL
         "$t|$h|$x"' | tr -d '\r'
     }
     failed=0
-    for how in kept left end; do
+    for how in kept taken left end; do
       run "MBUI_SECRETCHECK=$how" $O/secret-$how.log || true
       grep -aq "SECRETCHECK put $how" $O/secret-$how.log || { echo "secret contract: no secret put ($how)"; tail -20 $O/secret-$how.log; exit 1; }
       have=$(clip)
       case $how in
         kept) want="SECRETCHECK kept|0|excluded" ;;
+        taken) want="|-|no" ;;
         left) want="SECRETCHECK other|-|no" ;;
         end) want="|-|no" ;;
       esac
