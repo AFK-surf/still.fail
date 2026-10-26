@@ -837,6 +837,7 @@ web-main.doing.failed
 web-main.draft.notSent
 web-main.file.cancelDownload
 web-main.file.chatAsFiles
+web-main.file.load
 web-main.file.loadAgain
 web-main.file.modeFile
 web-main.file.modePath
@@ -846,6 +847,7 @@ web-main.file.play
 web-main.file.remove
 web-main.file.retryDownload
 web-main.file.sendAs
+web-main.file.stopLoading
 web-main.file.uploadingPart
 web-main.file.view
 web-main.filter.all

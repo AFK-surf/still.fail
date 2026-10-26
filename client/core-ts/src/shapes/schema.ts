@@ -934,6 +934,7 @@ export const SHAPES: Record<string, Shape> = {
     ["active", "bool", { doc: "Not failed: its progress shown, and it can be called off (`download.cancel`)." }],
     ["statusText", "String", { said: true, doc: "How it stands, in a line: 正在下载 42% · 18.3 MB · 等待连接 station · 正在保存 · 下载失败：… ." }],
     ["error", opt("String"), { said: true }],
+    ["keep", opt("bool"), { doc: "Only brought onto this device (加载: a video to play), not saved: out of the list once it is here." }],
     ["startedAt", "i64", { client: "I54" }],
   ], { doc: "A chat's file, a drive's file or a folder of it being downloaded to this device, as the pages show it." }),
   DownloadsView: struct([

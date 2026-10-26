@@ -159,6 +159,32 @@ test "under the page: the whole screen, its name and a close over it; back close
 }
 
 ///|
+test "the whole window with the window's buttons in the app's top row (a Mac's): the bar every file opened has, clear of them; its way back closes it" {
+  reset()
+  let src = fixture("chat-viz")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  t.set_window_inset(true)
+  t.run_for(@ui.nav_push_ms)
+  viz_open_full("release.html", "ws1/st1", "s-c1", "work/s-c1/release.html", "s-c1")
+  t.frame()
+  t.frame()
+  // (the host's buttons: 16 from the window's left, 54 across: mbui's mac_app.m)
+  let name = t.words().filter(fn(w) { w.0 == "release.html" })
+  assert_true(name.length() > 0, msg=t.words().map(fn(w) { w.0 }).join("|"))
+  let back = t.find(tr("common.back"))
+  match back {
+    Some((x, _)) => assert_true(x > 16.0 + 54.0, msg="\{x}")
+    None => fail("no way back")
+  }
+  assert_true(name[0].1 > 16.0 + 54.0, msg="\{name[0]}")
+  t.tap_text(tr("common.back"))
+  t.frame()
+  t.frame()
+  assert_true(@sfbase.viz_full.val is None)
+}
+
+///|
 test "beside: the visualization as a page of its own, served from here with what it kept; nothing else there" {
   let t = chat_tester("chat-viz")
   t.frame()

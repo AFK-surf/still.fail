@@ -432,9 +432,9 @@ pub fn viz_close_full() -> Unit {
 
 ///|
 /// The visualization over the whole window, if one is open, whatever the layout: call after what is under it. On the
-/// page's ground inside the system's bars (Viz.kt VizFull: windowInsetsPadding(systemBars), the viewers' room), its
-/// name and a close across the top, the page under it as tall as the rest; back (Esc) closes it. One that cannot be
-/// read is said so and closes.
+/// page's ground, under the bar every file opened over the whole window has (@sf.viewer_frame_bar: across the top,
+/// clear of the window's own buttons, its way back by name; laid out Small, floating with its ×), the page under it as
+/// tall as the rest; back (Esc) closes it. One that cannot be read is said so and closes.
 pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
   let v = match viz_full.val {
     Some(v) => v
@@ -456,23 +456,11 @@ pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
       let t = @sf.theme()
       let (top, foot) = (@sf.viewer_host().room)()
       c.take_back(fn() { viz_close_full() })
+      // under the bar, as a file's page is (Viewer::text_stage)
+      let under = if c.width <= @sf.viewer_small_w { top + page_small_top } else { viewer_top(c) + desk_page_top }
       c.layer(fn() {
         c.box(style=viz_ground, fn() {
-          c.box(style=@ui.style(w=Full, h=Fixed(top)), fn() {  }) |> ignore
-          c.box(style=viz_full_bar, fn() {
-            c.box(style=viz_full_name_box, fn() { c.text(v.name, style=viz_full_name) |> ignore }) |> ignore
-            let close = c.id("viz/full/close")
-            if c.clicked(close) {
-              c.tell("viz/full-close", fn() { viz_close_full() })
-            }
-            let b = c.box(style=viz_full_close, id=close, fn() {
-              @sf.icon(c, "close", size=viz_full_close_icon, color=t.p.text) |> ignore
-              // Viz.kt: clip(CircleShape).clickable
-              @motion.ripple(c, close, viz_full_close_icon)
-            })
-            c.semantics(b, Button, id=close, label=@sf.t("common.close"))
-          })
-          |> ignore
+          c.box(style=@ui.style(w=Full, h=Fixed(under)), fn() {  }) |> ignore
           c.box(style=viz_full_page, fn() {
             viz_frame(
               c,
@@ -492,31 +480,27 @@ pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
           c.box(style=@ui.style(w=Full, h=Fixed(foot)), fn() {  }) |> ignore
         })
         |> ignore
+        let (closed, _) = @sf.viewer_frame_bar(
+          c,
+          "viz/full",
+          @sf.t("common.back"),
+          v.name,
+          "",
+          false,
+          true,
+          0.0,
+          1.0,
+          @sf.page_viewer_ink(),
+          fn() {  },
+        )
+        if closed {
+          c.tell("viz/full-close", fn() { viz_close_full() })
+        }
       })
       |> ignore
     }
   }
 }
-
-///|
-/// Over the page: its name (18 in, 15, the ink, one line) and a close at its end (36 round, 8 in), 48 high.
-// kept across runs: a value (no field of it changes)
-pub let viz_full_bar : @ui.Style = @ui.style(row=true, w=Full, h=S12, pl=@sf.viz_full_in, pr=S2, align=ACenter)
-
-///|
-// kept across runs: a value (no field of it changes)
-pub let viz_full_name_box : @ui.Style = @ui.css("w=Full clip")
-
-///|
-// kept across runs: a value (no field of it changes)
-pub let viz_full_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-pub let viz_full_close : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter justify=JCenter hovered{bg=Hover}")
-
-///|
-pub let viz_full_close_icon : Double = 18.0
 
 ///|
 /// The page under it, 12 in at its sides, as tall as the rest.

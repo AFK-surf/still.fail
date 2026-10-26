@@ -27,13 +27,17 @@ pub fn downloads_reset() -> Unit {
 
 ///|
 /// The file a message names (`station`, its session `key`, its `name` at the station, its `size` as the message says)
-/// downloaded by the core: one under way or ready is that one, a failed one starts again.
-pub fn download_start(src : Source, station : String, key : String, name : String, size : Double) -> Unit {
+/// downloaded by the core: one under way or ready is that one, a failed one starts again. `keep`: only brought onto
+/// this device, as its viewer keeps it (加载: a video played from here at once), not saved.
+pub fn download_start(src : Source, station : String, key : String, name : String, size : Double, keep? : Bool = false) -> Unit {
   let p : Map[String, Json] = {
     "station": Json::string(station),
     "key": Json::string(key),
     "name": Json::string(name),
     "size": Json::number(size),
+  }
+  if keep {
+    p["keep"] = Json::boolean(true)
   }
   (src.call)("download.start", Json::object(p), fn(_) {  })
 }

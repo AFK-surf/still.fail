@@ -295,6 +295,8 @@
   "web-main.draft.tooBig": "Over 1 GB",
   "web-main.draft.uploadFailed": "Upload failed",
   "web-main.file.cancelDownload": "Cancel download",
+  "web-main.file.load": "Load",
+  "web-main.file.stopLoading": "Stop loading",
   "web-main.file.noPreview": "Preview unavailable",
   "web-main.file.loadAgain": "Couldn't load. Tap to retry",
   "web-main.file.play": "Play {name}",
