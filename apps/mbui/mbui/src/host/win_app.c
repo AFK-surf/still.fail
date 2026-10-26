@@ -13,6 +13,7 @@
 #include <objbase.h>
 #include <imm.h>
 #include <psapi.h>
+#include <powrprof.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,6 +29,7 @@
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "advapi32.lib")
 #pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "powrprof.lib")
 // (a window's program, not a console's: started from Explorer, a shortcut or a link, no console window comes with it;
 // started from a terminal, its lines go there: win_life.h life_console)
 #pragma comment(linker, "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
@@ -1110,12 +1112,19 @@ void mb_host_back_enabled(int32_t on) { back_on = on; }
 // Words as the app sizes them (@hostapi.font_scale): the system's text scale not read here yet.
 double mb_host_font_scale(void) { return 1.0; }
 // What the app was started to be used with (@hostapi.native_pointing): touch where the machine has a touch screen ready
-// and no mouse, or is in tablet mode (a convertible folded flat: SM_CONVERTIBLESLATEMODE 0); else keyboard and mouse.
+// and no mouse, or is a tablet used as one (a convertible folded flat, a detachable off its keyboard); else keyboard
+// and mouse. Slate mode (SM_CONVERTIBLESLATEMODE 0) counts only on a machine that can be a tablet, as Chromium reads it
+// (IsDeviceUsedAsATablet): not docked, able to turn (a sensor, not a laptop's), a mobile's or a slate's by its power
+// role; elsewhere its 0 means nothing (2026-10-26: a desktop PC with a touch digitizer, 0 there, started as touch: Enter
+// a new line in the composer, touch's sizes).
 #ifndef SM_DIGITIZER
 #define SM_DIGITIZER 94
 #endif
 #ifndef SM_CONVERTIBLESLATEMODE
 #define SM_CONVERTIBLESLATEMODE 0x2003
+#endif
+#ifndef SM_SYSTEMDOCKED
+#define SM_SYSTEMDOCKED 0x2004
 #endif
 #ifndef NID_INTEGRATED_TOUCH
 #define NID_INTEGRATED_TOUCH 0x01
@@ -1126,13 +1135,18 @@ double mb_host_font_scale(void) { return 1.0; }
 #ifndef NID_READY
 #define NID_READY 0x80
 #endif
+static int used_as_tablet(void) {
+  if (GetSystemMetrics(SM_CONVERTIBLESLATEMODE) != 0 || GetSystemMetrics(SM_SYSTEMDOCKED) != 0) return 0;
+  AR_STATE turn;
+  if (GetAutoRotationState(&turn) && (turn & (AR_NOT_SUPPORTED | AR_LAPTOP | AR_NOSENSOR))) return 0;
+  POWER_PLATFORM_ROLE role = PowerDeterminePlatformRoleEx(POWER_PLATFORM_ROLE_V2);
+  return role == PlatformRoleMobile || role == PlatformRoleSlate;
+}
 int32_t mb_host_native_pointing(void) {
   int digitizer = GetSystemMetrics(SM_DIGITIZER);
   int touch = (digitizer & NID_READY) && (digitizer & (NID_INTEGRATED_TOUCH | NID_EXTERNAL_TOUCH));
   if (!touch) return 2;
-  int mouse = GetSystemMetrics(SM_MOUSEPRESENT);
-  int slate = GetSystemMetrics(SM_CONVERTIBLESLATEMODE) == 0;
-  return (!mouse || slate) ? 1 : 2;
+  return (!GetSystemMetrics(SM_MOUSEPRESENT) || used_as_tablet()) ? 1 : 2;
 }
 // Whether a keyboard is at hand (@hostapi.keyboard): a Windows PC's, always.
 int32_t mb_host_keyboard(void) { return 1; }
