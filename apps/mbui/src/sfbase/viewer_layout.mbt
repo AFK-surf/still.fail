@@ -41,19 +41,6 @@ pub fn viewer_folder_label(src : Source, station : String, root : String, folder
 }
 
 ///|
-/// Under an image, where it is drawn (FilePreview.css.ts fpImage): the canvas with the web's shadow round it, so a
-/// picture with clear parts shows them on the page's own ground; none where the stage lays it out flat (image_raised).
-pub fn desk_image_ground(c : @ui.Ctx, x : Double, y : Double, w : Double, h : Double) -> Unit {
-  if !image_raised(c) {
-    return
-  }
-  c.layer(fn() {
-    c.box(style=desk_image_shadow.then(@ui.style(w=Fixed(w), h=Fixed(h))), tx=x, ty=y, fn() {  }) |> ignore
-  })
-  |> ignore
-}
-
-///|
 /// How a PDF's pages lie on a desktop (FilePreview.css.ts fpPdf): as wide as 1000 allows less 28 either side, 76 under
 /// the window's top, 20 apart, 28 at the foot.
 pub fn desk_pdf_width(window : Double) -> Double {
@@ -114,20 +101,6 @@ pub let desk_pinch_rate : Double = 0.01
 
 ///|
 pub let desk_wheel_rate : Double = 0.002
-
-///|
-/// Whether the stage raises an image off its canvas with a shadow (fpImage): on a wide stage, where it lies with the
-/// canvas all round it. Laid out narrow (a phone's width, @sf.viewer_small_w) it spans the stage but for a gutter of 12
-/// at its sides, too narrow for the shadow, which would only smear into it and be cut at the window's edges: flat, as
-/// the screen's own.
-pub fn image_raised(c : @ui.Ctx) -> Bool {
-  c.width > @sf.viewer_small_w
-}
-
-///|
-/// Under an image (fpImage's box-shadow: 0 1px 3px at 8%, 0 8px 28px at 10%): the canvas, a soft shadow round it.
-// kept across runs: a value (no field of it changes)
-pub let desk_image_shadow : @ui.Style = @ui.css("bg=Bg shadow=Lg")
 
 ///|
 /// Code and plain text (fpCode, fpPlain): 12 on 1.6 (code) or 1.65, 32 in, 64 at the foot.
