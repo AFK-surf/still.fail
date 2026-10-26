@@ -8,8 +8,8 @@ import { knownChannel, slackCreator } from "./slack-known.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
-import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, seenBy, sessionThreads, usageGroups, usageSince, usageThreads } from "./store.ts";
-import type { InWorkspace } from "../store/rows.ts";
+import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, remoteRunsSince, seenBy, sessionThreads, usageGroups, usageSince, usageThreads } from "./store.ts";
+import { type InWorkspace, sees } from "../store/rows.ts";
 import { titleOf } from "./views.ts";
 import { profileRuntimes } from "../agents/profiles.ts";
 
@@ -218,6 +218,9 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     threads,
     people,
     profiles: configProfiles(s.dataDir),
+    // the tasks the viewer's workspace's chats on other stations ran here since `from` (the card's 跨设备执行): the
+    // workspace their key names (`remote:<workspace>:…`)
+    remoteRuns: remoteRunsSince(s, from).filter((r) => viewer === null || sees(viewer, r.session.split(":")[1] ?? "")),
   };
 }
 

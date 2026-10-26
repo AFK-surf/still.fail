@@ -69,6 +69,9 @@ const WAL_PAGES = 10_000;
 const ARCHIVE_CACHE = 32;
 /// How many of a job's notices are kept.
 const JOB_NOTICES = 50;
+/// How long a task another station's chat ran here is remembered (remote_runs): past the card's week and the usage
+/// page's month.
+const REMOTE_RUNS_MS = 90 * 24 * 3600 * 1000;
 /// A chat shared with another workspace being used there is noted at most this often (chat_shares `used`).
 const USED_NOTE_MS = 60_000;
 
@@ -1586,6 +1589,15 @@ export class Store {
   }
 
   // ── background jobs ──
+
+  /// A task another station's chat runs here began running (`session` its session's key, `remote:…`), at `at`; those
+  /// older than REMOTE_RUNS_MS go.
+  noteRemoteRun(job: string, session: string, at: number): void {
+    this.#tx(() => {
+      this.#run("INSERT OR IGNORE INTO remote_runs (job, at, session) VALUES (?, ?, ?)", job, at, session);
+      this.#run("DELETE FROM remote_runs WHERE at < ?", at - REMOTE_RUNS_MS);
+    });
+  }
 
   insertJob(job: JobRow): void {
     this.#with((changes) => {

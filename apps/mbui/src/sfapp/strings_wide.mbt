@@ -888,7 +888,7 @@ let zh_wide : Map[String, String] = {
   "web-pages.archive.deleted": "已删除",
   "web-main.jobs.chip": "运行中 {n}",
   "web-main.stations.shareCard": "分享卡片",
-  "web-main.stations.shareTagline": "在任何一台上，用所有设备",
+  "web-main.stations.shareTagline": "一生万物，万物归一",
   "web-main.stations.saveToPhotos": "保存到相册",
   "web-main.stations.savedToPhotos": "已保存到相册",
   "web-main.stations.saveToPhotosFailed": "没能保存到相册",

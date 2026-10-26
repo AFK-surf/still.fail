@@ -92,15 +92,20 @@
     "one": "1 chat running",
     "other": "{n} chats running"
   },
-  "core-logic.fleet.quota": {
-    "one": "of the weekly quota on 1 account ({kind})",
-    "other": "of the weekly quota on {n} accounts ({kind})"
+  "core-logic.fleet.quota_by": {
+    "one": "1 {kind} account used",
+    "other": "{n} {kind} accounts used"
   },
-  "core-logic.fleet.quota_lead": "Used this week",
+  "core-logic.fleet.quota_of": "of a week's quota",
   "core-logic.fleet.today": "Today",
   "core-logic.fleet.week": "Last 7 days",
   "core-logic.fleet.archived": "Chats archived",
   "core-logic.fleet.archived_value": "{n}",
+  "core-logic.fleet.tasks": {
+    "one": "Agents ran 1 task across devices in the last 7 days",
+    "other": "Agents ran {n} tasks across devices in the last 7 days"
+  },
+  "core-logic.fleet.tasks_per": "{n} per chat on average",
   "core-logic.footprint.actions.not_allowed": "Only workspace owners and admins can clean up",
   "core-logic.footprint.all": "All",
   "core-logic.footprint.archived.action": "Delete…",

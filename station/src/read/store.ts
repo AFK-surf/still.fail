@@ -738,6 +738,11 @@ export function usageSince(s: Store): number | null {
   return one(s, "SELECT MIN(at) AS at FROM usage").at ?? null;
 }
 
+/// The tasks other stations' chats ran here since `from` (remote_runs), oldest first: when, and whose session.
+export function remoteRunsSince(s: Store, from: bigint): { at: number; session: string }[] {
+  return all(s, "SELECT at, session FROM remote_runs WHERE at >= ? ORDER BY at", from).map((r) => ({ at: Number(r.at), session: String(r.session) }));
+}
+
 // ── what the session and job reads add (admin/views.rs sessions, session, threads; jobs.rs) ──
 
 /// Rust's ordering of String keys (a BTreeMap's): by their UTF-8 bytes.

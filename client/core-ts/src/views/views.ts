@@ -747,7 +747,7 @@ export class Views implements Owner {
       case "fleet":
         // (the card shared of the agents at work: views/fleet.ts)
         scope = view.scope as string;
-        perStation = (s) => [{ topic: "chatRows", station: s }, { topic: "archivedRows", station: s }, { topic: "overview", station: s }, { topic: "link", station: s }, { topic: "host", station: s }, { topic: "way", station: s }, { topic: "stationUsage", station: s }];
+        perStation = (s) => [{ topic: "chatRows", station: s }, { topic: "archivedRows", station: s }, { topic: "jobs", station: s }, { topic: "overview", station: s }, { topic: "link", station: s }, { topic: "host", station: s }, { topic: "way", station: s }, { topic: "stationUsage", station: s }];
         break;
       case "resources":
         scope = view.scope as string;
@@ -1132,7 +1132,8 @@ export class Views implements Owner {
         // the subscriptions, as the profiles page lists them
         const listed = this.#stationsView(scope);
         const profiles = listed !== undefined && "ok" in listed ? arr(get(workspaceProfiles(listed.ok as J[]), "items")) : [];
-        // the chats at work, and when each archived one was archived (as the archive has it: views/archive.ts)
+        // the chats at work, when each archived one was archived (as the archive has it: views/archive.ts), the jobs (the
+        // tasks other stations' chats run there now), the tasks they ran there before
         const read = stations.map((s) => {
           const rows = this.value({ topic: "chatRows", station: s.address });
           const archived = this.value({ topic: "archivedRows", station: s.address });
@@ -1142,6 +1143,11 @@ export class Views implements Owner {
             online: s.online && !down(this.link(s.address)),
             rows: rows && "ok" in rows ? arr(rows.ok) : [],
             archived: archived && "ok" in archived ? arr(archived.ok).filter((c) => isObject(get(c, "archived"))).map(at).filter((x): x is number => typeof x === "number") : [],
+            jobs: arr(this.ok({ topic: "jobs", station: s.address })),
+            // the tasks other stations' chats ran here, as its usage says them (a station from before says none)
+            runs: arr(get(this.ok({ topic: "stationUsage", station: s.address }), "remoteRuns"))
+              .filter((r) => typeof get(r, "at") === "number" && typeof get(r, "session") === "string")
+              .map((r) => ({ at: get(r, "at") as number, session: get(r, "session") as string })),
           };
         });
         const offset = this.#core.host.utcOffsetMin(now);

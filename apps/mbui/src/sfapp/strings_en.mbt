@@ -1136,7 +1136,7 @@ let en : Map[String, String] = {
   "web-pages.archive.deleted": "Deleted",
   "web-main.jobs.chip": "Running {n}",
   "web-main.stations.shareCard": "Share card",
-  "web-main.stations.shareTagline": "Use all of them from any one",
+  "web-main.stations.shareTagline": "All in one, all is one.",
   "web-main.stations.saveToPhotos": "Save to Photos",
   "web-main.stations.savedToPhotos": "Saved to Photos",
   "web-main.stations.saveToPhotosFailed": "Couldn't save to Photos",
