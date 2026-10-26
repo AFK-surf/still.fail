@@ -1470,28 +1470,36 @@ pub let sign_in_title_size : @ui.TextSize = Exact(28.0, 39.2)
 pub let sign_in_side : @ui.Space = Exact(30.0)
 
 ///|
-/// The card shared of the agents at work (sfpages' stations_now.mbt): the same in either theme, as a poster is: a warm
-/// paper with a peach light on it, ink words and ink thinned for what is said of them, white cards, still.fail's orange.
-pub let share_paper : Int64 = 0xF6F1E9FFL
+/// The card shared of the agents at work (sfpages' stations_now.mbt): the same in either theme, as a poster is, and in
+/// still.fail's own colours (design/brand: words and one orange dot; 2026-10-26 用户「分享卡片的颜色搞高级点」): night,
+/// plain (a faint orange light at its top was seen as a brown stain), its words white and white thinned for what is
+/// said of them, its cards the white barely, still.fail's orange only for its dot, its first ring, today and what is
+/// at work now, the other rings white and grey.
+pub let share_ground : Int64 = 0x111114FFL
 
 ///|
-pub let share_ink : Int64 = 0x24272BFFL
+pub let share_ink : Int64 = 0xF4F4F5FFL
 
 ///|
-/// (thinned to 68%: 4.9 to 1 on the paper, 5.2 on a white card; at 60% it was 3.9: docs/ui-panels.md 对比度)
-pub let share_dim : Int64 = 0x24272BADL
+/// (thinned to 62%: 7.0 to 1 on the night, 6.5 on a card: docs/ui-panels.md 对比度)
+pub let share_dim : Int64 = 0xF4F4F59EL
 
 ///|
-pub let share_card : Int64 = 0xFFFFFFFFL
+/// A span's card: the white at 6% over the night, no shadow (none is seen on it).
+pub let share_card : Int64 = 0xF4F4F50FL
 
 ///|
-/// What a day's bar is drawn in (today's still.fail's orange): the ink thinned, seen on the paper.
-pub let share_bar : Int64 = 0x24272B2EL
+/// What a day's bar is drawn in (today's still.fail's orange): the white thinned, seen on the night.
+pub let share_bar : Int64 = 0xF4F4F52EL
 
 ///|
-/// The rings of the subscriptions' weekly quota, one a kind, in this order: still.fail's orange, a green, a blue.
+/// The rings of the subscriptions' weekly quota, one a kind, in this order: still.fail's orange, its white, a grey.
 // kept across runs: a table, never written
-pub let share_rings : Array[Int64] = [0xCC5A34FFL, 0x1FA77AFFL, 0x4F74E8FFL]
+pub let share_rings : Array[Int64] = [share_orange, share_ink, share_ring_grey]
+
+///|
+/// The third ring's grey, between the white and the night.
+pub let share_ring_grey : Int64 = 0x8E8E95FFL
 
 ///|
 /// A ring's turn past its first (@sf.rings: a share past 1): this much of the turn before's colour, the rest black,
@@ -1499,19 +1507,8 @@ pub let share_rings : Array[Int64] = [0xCC5A34FFL, 0x1FA77AFFL, 0x4F74E8FFL]
 pub let ring_turn_keep : Double = 0.82
 
 ///|
-/// (the light theme's accent: 3.7 to 1 on the paper, as large as the first ring's share is said in it)
-pub let share_orange : Int64 = 0xCC5A34FFL
-
-///|
-/// Words in still.fail's orange at the size of words (its name's .fail, today's date): the light theme's accent's ink,
-/// 5.5 to 1 on the paper (the orange itself 3.7: docs/ui-panels.md 对比度).
-pub let share_orange_ink : Int64 = 0xAC3B10FFL
-
-///|
-pub let share_glow_peach : Int64 = 0xF6B38E8CL
-
-///|
-pub let share_glow_sun : Int64 = 0xFFE3B36BL
+/// still.fail's orange (design/brand), words in it too: 6.1 to 1 on the night.
+pub let share_orange : Int64 = 0xE5704AFFL
 
 ///|
 /// A picking row's line under its words (Controls.kt PickRow: 12.sp on 17.sp), between L4's 16 and L5's 18.

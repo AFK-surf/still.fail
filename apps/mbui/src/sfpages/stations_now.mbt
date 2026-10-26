@@ -66,8 +66,8 @@ let share_picture_key : String = "share-card/picture"
 
 ///|
 /// The picture shared, a poster of what the agents did (the `fleet` view; 2026-10-26 用户：「改成 xx 个 xx 订阅账号的 xx% 周额度，
-/// 分天和周统计，还有当前 chat 数量」「不要小机器人」「这玩意儿是会超过 100% 的」「不如归档 chat 多少个」): on warm paper with a
-/// peach light on it, the same in either theme. still.fail's name (its dot orange) and when it is; the subscriptions' weekly
+/// 分天和周统计，还有当前 chat 数量」「不要小机器人」「这玩意儿是会超过 100% 的」「不如归档 chat 多少个」): on night, the same in
+/// either theme (@sf.share_ground: 「分享卡片的颜色搞高级点」). still.fail's name (its dot orange) and when it is; the subscriptions' weekly
 /// quota used as rings, a kind each (Activity's rings: each the share of all its accounts' weeks, 489% of six 0.815 of
 /// it; 「489% 就是 4.89 个号的周额度」), beside them the first kind's said round its share large (用 6 个 Claude 订阅账号
 /// 消耗了 | 489% | 的周额度), each other kind a line under it; today and the last 7 days side by side (the chats
@@ -86,13 +86,9 @@ fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     _ => c.width < pic_narrow_most
   }
   c.box(style=if narrow { pic_box_narrow } else { pic_box }, id=picture, fn() {
-    c.box(left=0.0, top=0.0, right=0.0, bottom=0.0, fn() {
-      @sf.glow_ground(c, @sf.share_paper, pic_lights, pic_aspect, radius=pic_corner)
-    })
-    |> ignore
     c.box(style=pic_head, fn() {
       c.box(style=pic_grow, fn() {
-        c.rich([@ui.span("still"), @ui.span(".", color=@sf.share_orange_ink), @ui.span("fail")], style=pic_brand) |> ignore
+        c.rich([@ui.span("still"), @ui.span(".", color=@sf.share_orange), @ui.span("fail")], style=pic_brand) |> ignore
       })
       |> ignore
       c.text(text(fleet, "at"), style=pic_at) |> ignore
@@ -104,18 +100,16 @@ fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       // in a narrow picture (beside them it has no room there)
       let first = Some(quota[0])
       if narrow {
-        c.text(text(first, "lead"), style=pic_unit) |> ignore
+        pic_lead(c, first)
       }
       c.box(style=pic_hero, fn() {
         pic_rings(c, quota, narrow)
         c.box(style=pic_hero_words, fn() {
           if !narrow {
-            c.text(text(first, "lead"), style=pic_unit) |> ignore
+            pic_lead(c, first)
           }
-          // (in its ring's colour; smaller in a narrow picture, as wide as 489% is beside the rings there)
-          let color = ring_color(0)
-          let number = if narrow { pic_number_narrow } else { pic_number }
-          c.text(text(first, "usedText"), style=number.then(@ui.text_style(color=Data(color)))) |> ignore
+          // (smaller in a narrow picture, as wide as 489% is beside the rings there)
+          c.text(text(first, "usedText"), style=if narrow { pic_number_narrow } else { pic_number }) |> ignore
           c.text(text(first, "of"), style=pic_unit) |> ignore
           if !narrow {
             pic_other_kinds(c, quota)
@@ -129,7 +123,7 @@ fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       }
     } else {
       c.box(style=pic_hero, fn() {
-        c.text(count(fleet, "chats").to_string(), style=pic_number.then(@ui.text_style(color=Data(@sf.share_orange)))) |> ignore
+        c.text(count(fleet, "chats").to_string(), style=pic_number) |> ignore
         c.box(style=pic_hero_words, fn() { c.text(text(fleet, "chatsText"), style=pic_unit) |> ignore }) |> ignore
       })
       |> ignore
@@ -195,6 +189,17 @@ fn ring_color(k : Int) -> Int64 {
 }
 
 ///|
+/// What leads the first kind's share (用 6 个 Claude 订阅账号消耗了), its ring's dot before it as each other kind's line has
+/// (the share under it in white, as the second ring is: the dot says whose it is).
+fn pic_lead(c : @ui.Ctx, first : Json?) -> Unit {
+  c.box(style=pic_lead_row, fn() {
+    c.box(style=pic_lead_dot, fn() {  }) |> ignore
+    c.text(text(first, "lead"), style=pic_unit) |> ignore
+  })
+  |> ignore
+}
+
+///|
 /// Each kind but the first, a line: its colour's dot, the same sentence round its share (用 2 个 ChatGPT 订阅账号消耗了
 /// 17% 的周额度), the share in ink.
 fn pic_other_kinds(c : @ui.Ctx, quota : Array[Json]) -> Unit {
@@ -241,7 +246,7 @@ fn pic_rings(c : @ui.Ctx, quota : Array[Json], narrow : Bool) -> Unit {
 }
 
 ///|
-/// A span of days (today, the last 7) on a white card: its title, then each figure over what it is.
+/// A span of days (today, the last 7) on a card: its title, then each figure over what it is.
 fn pic_span(c : @ui.Ctx, span : Json?) -> Unit {
   c.box(style=pic_span_box, fn() {
     c.text(text(span, "title"), style=pic_span_title) |> ignore
@@ -285,9 +290,9 @@ fn pic_bars(c : @ui.Ctx, week : Json?, narrow : Bool) -> Unit {
 
 ///|
 /// The picture: 28 in (past its corner: what is at its edges stands clear of it), its parts 16 apart, round as a card,
-/// on warm paper (what is drawn on it seen against that), its light over it clipped to it.
+/// on night (what is drawn on it seen against that).
 // kept across runs: a value (no field of it changes)
-let pic_box : @ui.Style = @ui.css("w=Full p=S7 gap=S4 radius=Xl3 clip").then(@ui.style(bg=Data(@sf.share_paper)))
+let pic_box : @ui.Style = @ui.css("w=Full p=S7 gap=S4 radius=Xl3 clip").then(@ui.style(bg=Data(@sf.share_ground)))
 
 ///|
 /// Narrower than this (as laid out: a phone's sheet, 350 or so), the picture is laid out narrow: what is beside the
@@ -297,28 +302,12 @@ let pic_narrow_most : Double = 520.0
 ///|
 /// A narrow one: 20 in (nothing at its corners but words: the corners' rule asks nothing of them), its parts 12 apart.
 // kept across runs: a value (no field of it changes)
-let pic_box_narrow : @ui.Style = @ui.css("w=Full p=S5 gap=S3 radius=Xl3 clip").then(@ui.style(bg=Data(@sf.share_paper)))
-
-///|
-/// Its corner (Xl3's), its light's picture's.
-let pic_corner : Double = 24.0
+let pic_box_narrow : @ui.Style = @ui.css("w=Full p=S5 gap=S3 radius=Xl3 clip").then(@ui.style(bg=Data(@sf.share_ground)))
 
 ///|
 /// What is copied of the picture: its rectangle this far in from each side, its round corners (24) left out of it, so
 /// the picture copied is its ground to its edges.
 let pic_copy_in : Double = 8.0
-
-///|
-/// The light's picture made in a poster's proportion (4 by 5), stretched over the picture whatever it holds.
-let pic_aspect : Double = 0.8
-
-///|
-/// A peach light at its top right, a warm sun's at its foot left.
-// kept across runs: a table, never written
-let pic_lights : Array[@sf.Glow] = [
-  { x: 0.95, y: 0.05, r: 0.9, color: @sf.share_glow_peach },
-  { x: 0.05, y: 1.0, r: 0.8, color: @sf.share_glow_sun },
-]
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -346,7 +335,7 @@ let pic_hero : @ui.Style = @ui.css("row w=Full gap=S5 align=ACenter")
 let pic_hero_words : @ui.Style = @ui.css("gap=S1").then(@ui.style(w=@sf.grow))
 
 ///|
-/// The rings: 128 across, each 12 wide, 4 apart; their tracks the colour at 30%.
+/// The rings: 128 across, each 12 wide, 4 apart; their tracks the colour at 22%, as seen on the night.
 let pic_rings_side : Double = 128.0
 
 ///|
@@ -360,7 +349,7 @@ let pic_ring_w : Double = 12.0
 let pic_ring_gap : Double = 4.0
 
 ///|
-let pic_track_alpha : Int64 = 0x4DL
+let pic_track_alpha : Int64 = 0x38L
 
 
 ///|
@@ -376,6 +365,16 @@ let pic_number_narrow : @ui.TextStyle = pic_number.then(@ui.text_style(size=Xl6)
 ///|
 // kept across runs: a value (no field of it changes)
 let pic_unit : @ui.TextStyle = @ui.text_style(size=Title, weight=Bold, color=Data(@sf.share_ink), w=Full)
+
+///|
+/// The first kind's lead: its dot, its words.
+// kept across runs: a value (no field of it changes)
+let pic_lead_row : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
+
+///|
+/// Its dot, the first ring's colour (@sf.share_rings' first is the orange).
+// kept across runs: a value (no field of it changes)
+let pic_lead_dot : @ui.Style = pic_key_dot.then(@ui.style(bg=Data(@sf.share_orange)))
 
 ///|
 /// Another kind's line.
@@ -401,9 +400,9 @@ let pic_spans : @ui.Style = @ui.css("row w=Full gap=S2_5 align=AStretch")
 let pic_spans_narrow : @ui.Style = @ui.css("w=Full gap=S2_5 align=AStretch")
 
 ///|
-/// A span: a white card, 12 in, round, raised a little; its title over its figures.
+/// A span: a card of the white barely, 12 in, round; its title over its figures.
 // kept across runs: a value (no field of it changes)
-let pic_span_box : @ui.Style = @ui.css("p=S3 gap=S2 radius=Xl shadow=Sm").then(@ui.style(w=@sf.grow, bg=Data(@sf.share_card)))
+let pic_span_box : @ui.Style = @ui.css("p=S3 gap=S2 radius=Xl").then(@ui.style(w=@sf.grow, bg=Data(@sf.share_card)))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -459,8 +458,9 @@ let pic_bar : @ui.Style = @ui.css("w=Full radius=Sm")
 let pic_day_label : @ui.TextStyle = @ui.text_style(size=Caption, color=Data(@sf.share_dim), wrap=false)
 
 ///|
+/// Today's date: in the orange, as heavy as the others (bold, 10/26 was wider than a 360 phone's day: 「10/…」).
 // kept across runs: a value (no field of it changes)
-let pic_day_today : @ui.TextStyle = @ui.text_style(size=Caption, weight=Bold, color=Data(@sf.share_orange_ink), wrap=false)
+let pic_day_today : @ui.TextStyle = @ui.text_style(size=Caption, color=Data(@sf.share_orange), wrap=false)
 
 ///|
 /// The lines under the days (the chats at work, the tasks run across devices), 8 apart.
@@ -512,6 +512,6 @@ let pic_live_dot : @ui.Style = @ui.css("w=S2_5 h=S2_5 radius=Full").then(@ui.sty
 let pic_live_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Data(@sf.share_ink), w=Full)
 
 ///|
-/// Its foot: still.fail's line.
+/// Its foot: still.fail's line, said quietly (the white thinned).
 // kept across runs: a value (no field of it changes)
-let pic_tagline : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Data(@sf.share_ink), wrap=false)
+let pic_tagline : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Data(@sf.share_dim), wrap=false)
