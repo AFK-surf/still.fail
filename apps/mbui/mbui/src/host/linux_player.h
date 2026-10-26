@@ -18,91 +18,9 @@
 // the player's lock; everything else, its buses' messages among them, on the main thread. The app's bytes go into a
 // source under the lock too: a seek, which lets go of the read under way, comes before a read's bytes or after them,
 // never between deciding they are the stream's next and handing them over. Included by linux_views.c (its next_vid,
-// vlog, told, grabs).
+// vlog, told, grabs); GStreamer as linux_gst.h loads it.
 
-// ---- GStreamer, as it is there: its enums' values (gst/gstelement.h, gstformat.h, gstevent.h, app/gstappsrc.h,
-// playback's GstPlayFlags) ----
-enum { GSTATE_NULL = 1, GSTATE_PAUSED = 3, GSTATE_PLAYING = 4 };
-enum { GFORMAT_TIME = 3 };
-enum { GSEEK_FLUSH = 1 << 0, GSEEK_ACCURATE = 1 << 1, GSEEK_KEY_UNIT = 1 << 2 };
-enum { GSEEK_TYPE_NONE = 0, GSEEK_TYPE_SET = 1 };
-enum { GAPP_SEEKABLE = 1 };
-enum { GPLAY_VIDEO = 1 << 0 };
-#define GCLOCK_NONE ((guint64)-1)
-
-// GstBuffer's head, as gst/gstminiobject.h and gstbuffer.h have it (public, the same through 1.x): its times
-typedef struct {
-  GType type;
-  gint refcount, lockstate;
-  guint flags;
-  void *copy, *dispose, *free;
-  guint priv_uint;
-  gpointer priv_pointer;
-  void *pool;
-  guint64 pts, dts, duration, offset, offset_end;
-} GstBufferHead;
-
-#define GST_FNS(X)                                                                                                   \
-  X(gboolean, gst_init_check, (int *, char ***, GError **))                                                          \
-  X(void *, gst_element_factory_make, (const char *, const char *))                                                  \
-  X(void *, gst_parse_bin_from_description, (const char *, gboolean, GError **))                                     \
-  X(int, gst_element_set_state, (void *, int))                                                                       \
-  X(void *, gst_element_get_bus, (void *))                                                                           \
-  X(void, gst_bus_add_signal_watch, (void *))                                                                        \
-  X(void, gst_bus_remove_signal_watch, (void *))                                                                     \
-  X(void, gst_object_unref, (void *))                                                                                \
-  X(void *, gst_bin_get_by_name, (void *, const char *))                                                             \
-  X(gboolean, gst_element_seek, (void *, double, int, int, int, gint64, int, gint64))                                \
-  X(gboolean, gst_element_query_position, (void *, int, gint64 *))                                                   \
-  X(gboolean, gst_element_query_duration, (void *, int, gint64 *))                                                   \
-  X(void, gst_message_parse_error, (void *, GError **, char **))                                                     \
-  X(void *, gst_buffer_new_memdup, (const void *, gsize))                                                            \
-  X(void *, gst_sample_get_buffer, (void *))                                                                         \
-  X(void *, gst_sample_get_caps, (void *))                                                                           \
-  X(void *, gst_caps_get_structure, (void *, guint))                                                                 \
-  X(gboolean, gst_structure_get_int, (void *, const char *, int *))                                                  \
-  X(gsize, gst_buffer_get_size, (void *))                                                                            \
-  X(gsize, gst_buffer_extract, (void *, gsize, void *, gsize))                                                       \
-  X(void, gst_mini_object_unref, (void *))                                                                           \
-  X(void *, gst_parse_launch, (const char *, GError **))                                                             \
-  X(gboolean, gst_bin_add, (void *, void *))                                                                         \
-  X(gboolean, gst_element_sync_state_with_parent, (void *))                                                          \
-  X(void *, gst_element_get_static_pad, (void *, const char *))                                                      \
-  X(int, gst_pad_link, (void *, void *))                                                                             \
-  X(void *, gst_pad_get_current_caps, (void *))                                                                      \
-  X(const char *, gst_structure_get_name, (void *))                                                                  \
-  X(void *, gst_sample_get_segment, (void *))                                                                        \
-  X(guint64, gst_segment_to_stream_time, (void *, int, guint64))
-
-#define GST_FIELD(ret, name, args) ret(*name) args;
-static struct {
-  GST_FNS(GST_FIELD)
-} gs;
-static int gs_state;  // 0 not looked for, 1 here, -1 not
-
-static int gs_here(void) {
-  if (gs_state) return gs_state > 0;
-  gs_state = -1;
-  void *h = dlopen("libgstreamer-1.0.so.0", RTLD_NOW | RTLD_GLOBAL);
-  if (!h) {
-    vlog("view: no GStreamer (%s): videos cannot be played", dlerror());
-    return 0;
-  }
-#define GST_LOAD(ret, name, args)                                               \
-  if (!(*(void **)&gs.name = dlsym(h, #name))) {                                \
-    vlog("view: a GStreamer without %s: videos cannot be played", #name);       \
-    return 0;                                                                   \
-  }
-  GST_FNS(GST_LOAD)
-  GError *e = NULL;
-  if (!gs.gst_init_check(NULL, NULL, &e)) {
-    vlog("view: GStreamer not started (%s): videos cannot be played", e ? e->message : "?");
-    g_clear_error(&e);
-    return 0;
-  }
-  gs_state = 1;
-  return 1;
-}
+#include "linux_gst.h"
 
 // One read of a source's, the app answering it as its bytes come.
 typedef struct {
