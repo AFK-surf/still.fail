@@ -2,7 +2,7 @@
 // `package` rather than by a command. A module's directory says how it is packed, in its module.json:
 //   { "id": "media", "entry": "src/main.ts", "files": [], "needsStation": 3530 }
 // `entry` and all it imports are bundled by esbuild into one plain ES module, main.mjs, which the station's own Node runs
-// whatever it is (the desktop app's Electron, a Node that does not strip types): node's own modules left to it, no
+// whatever it is (a Node that does not strip types too): node's own modules left to it, no
 // timestamps, no paths but relative ones, so the same sources give the same bytes. `files` (a file, or a directory
 // taken whole) are carried beside it as they are. The package is an archive of plain files for every machine
 // (station/src/updates/archive.ts): main.mjs, the files, and a module.json of the same shape saying `entry: "main.mjs"`.

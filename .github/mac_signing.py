@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""still.fail's macOS signing on the organization's Mac: the identity (apps/desktop/package.json build.mac.identity)
-and Apple's notary service at hand, for the desktop app (.github/release-desktop.py), the station's native parts
-(.github/sign-station.sh) and the mbui app (apps/mbui/scripts/beta.sh).
+"""still.fail's macOS signing on the organization's Mac: the identity (AFK's Developer ID, `identity` below) and
+Apple's notary service at hand, for the Mac app (.github/release-desktop.py, apps/mbui/scripts/beta.sh) and the
+station's native parts (.github/sign-station.sh).
 
 The keychain is AFK's (cue.surf's), the one AFK-surf/Cue signs and notarizes its apps with: its Developer ID
 Application identity and its notarytool profile (Apple ID and app-specific password), in production's
@@ -30,7 +30,8 @@ import sys
 import tempfile
 
 root = Path(__file__).resolve().parents[1]
-identity = json.loads((root / 'apps/desktop/package.json').read_text())['build']['mac']['identity']
+# AFK's Developer ID, named without its kind ("Developer ID Application:"): found() finds its full name.
+identity = 'AFK AI, Inc. (D9AAN3VJK8)'
 SECRETS = ('MACOS_DEVELOPER_ID_KEYCHAIN_B64_1', 'MACOS_DEVELOPER_ID_KEYCHAIN_B64_2', 'KEYCHAIN_PASSWORD_AFK')
 
 
@@ -42,8 +43,8 @@ def run(args, **kwargs):
 
 
 def found(keychain=None):
-    """The signing identity's full name as the keychain (default the search list) has it, None when it is not there:
-    package.json gives a Developer ID without its "Developer ID Application:" (electron-builder refuses the prefix)."""
+    """The signing identity's full name as the keychain (default the search list) has it ("Developer ID Application:
+    …"), None when it is not there."""
     listing = subprocess.check_output(['security', 'find-identity', '-v', '-p', 'codesigning', *([keychain] if keychain else [])], text=True)
     for line in listing.splitlines():
         if '"' in line and identity in line:

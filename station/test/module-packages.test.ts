@@ -66,7 +66,7 @@ process.stdin.resume();
 createServer((req, res) => {
   res.writeHead(200, { "content-type": "application/json" });
   if (req.url === "/manifest") return res.end("{}");
-  res.end(JSON.stringify({ build: ${build}, argv: process.argv.slice(1), electron: process.env.ELECTRON_RUN_AS_NODE ?? null, extra: process.env.FAKE_EXTRA ?? null }));
+  res.end(JSON.stringify({ build: ${build}, argv: process.argv.slice(1), extra: process.env.FAKE_EXTRA ?? null }));
 }).listen(process.env.STILLFAIL_MODULE_SOCKET);
 `;
 
@@ -301,7 +301,7 @@ test("a package: installed from its signed feed, run by the station's Node, upda
   await until(async () => (await s.said())?.build === 101);
   const first = await s.said();
   assert.deepEqual(first.argv, [join(s.app, "101", "main.mjs"), "--more"]);
-  assert.deepEqual([first.electron, first.extra], ["1", "x"]);
+  assert.equal(first.extra, "x");
   assert.deepEqual(readdirSync(join(s.app, "101")).sort(), ["lib", "main.mjs", "module.json"]);
   await until(() => s.state().ran === 101);
   assert.deepEqual(s.state(), { package: "fake", current: 101, previous: null, ran: 101, failed: [] });

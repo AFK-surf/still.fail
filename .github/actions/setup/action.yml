@@ -80,7 +80,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: ${{ env.PNPM_STORE }}
-        key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'apps/desktop/pnpm-lock.yaml', 'client/core-ts/pnpm-lock.yaml', 'cloud/pnpm-lock.yaml', 'media/core/pnpm-lock.yaml', 'media/test/pnpm-lock.yaml', 'station/pnpm-lock.yaml') }}
+        key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'client/core-ts/pnpm-lock.yaml', 'cloud/pnpm-lock.yaml', 'media/core/pnpm-lock.yaml', 'media/test/pnpm-lock.yaml', 'station/pnpm-lock.yaml') }}
         restore-keys: pnpm-${{ runner.os }}-
     - if: inputs.native == 'true'
       shell: bash

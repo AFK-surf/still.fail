@@ -1,8 +1,6 @@
-// Archives of plain files, as releases that are not a station's carry them: the web app the beta desktop app takes
-// without a new app (docs/desktop-web-updates.md: written for CI by scripts/desktop-web.ts, read by the app's
-// web-update.mts) and a module's package (docs/station-modules.md: written by scripts/module-bundle.ts, read by the
-// station's modules/packages.ts). A gzipped tar of plain files, so neither side depends on a tar program and what is in
-// it is only ever files under the directory it is opened into.
+// Archives of plain files, as releases that are not a station's carry them: a module's package (docs/station-modules.md:
+// written by scripts/module-bundle.ts, read by the station's modules/packages.ts). A gzipped tar of plain files, so
+// neither side depends on a tar program and what is in it is only ever files under the directory it is opened into.
 import { gunzipSync, gzipSync } from "node:zlib";
 
 const BLOCK = 512;

@@ -15,7 +15,8 @@ import { Agents } from "../sessions/agents.ts";
 import { Parts, Paths, Store } from "../services.ts";
 import { ResourceWatch } from "./watch.ts";
 
-/// The desktop app's bundle ids begin so (apps/desktop: fail.still.desktop, fail.still.desktop.beta, …).
+/// The desktop app's bundle ids begin so (fail.still.desktop, fail.still.desktop.beta, …: apps/mbui's, in the Electron
+/// app's place, as that app's were).
 const APP_ID = "fail.still.desktop";
 
 /// Whether `command` runs from a bundle of the desktop app's: its Info.plist names the id (as text in an XML plist or a

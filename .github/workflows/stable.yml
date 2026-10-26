@@ -52,8 +52,7 @@ jobs:
         run: sh .github/release.sh --stable android
 
   # The Mac app is mbui's (apps/mbui, its `stable` variant: fail.still.desktop, signed by the same team, so an installed
-  # Electron app's updater moves it over, its data and sign-in kept), as the beta's became on 2026-10-26; the Windows app
-  # is Electron's still, desktop-win's, beside it in a runner of its own.
+  # Electron app's updater moves it over, its data and sign-in kept), as the beta's became on 2026-10-26.
   desktop:
     needs: plan
     runs-on: [self-hosted, mini1]
@@ -72,24 +71,67 @@ jobs:
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
           KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
-        run: python3 .github/release-desktop.py --stable --only mac
+        run: python3 .github/release-desktop.py --stable
 
+  # The Windows app is mbui's (apps/mbui, its `stable` variant: fail.still.desktop, its installer run by an installed
+  # Electron app's updater, its data and sign-in kept), as the beta's became on 2026-10-26: built as the pipeline's
+  # desktop-win job builds the beta's, from main's build as mbui.yml's windows job left it in the Actions cache, its
+  # installer's .sig signed (docs/release-signing.md), not code-signed.
   desktop-win:
     needs: plan
-    runs-on: [self-hosted, mini1]
+    runs-on: windows-2025
     environment: production
     timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    env:
+      MSYS: winsymlinks:nativestrict
+      HBC_CACHE: ${{ github.workspace }}/.ci/hbc
     steps:
+      # (the natives' keys are git's blobs: the checkout as git has it)
+      - run: git config --global core.autocrlf false
       - uses: actions/checkout@v5
-        with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
-      - uses: ./.github/actions/setup-mac
-      - name: Publish the stable Windows app (Electron's), its installer's .sig signed
+        with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0, filter: "blob:none" } # its build is the commits in the history
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/msvc
+      - uses: ./.github/actions/mbui-moonbit
+      - name: The Windows natives' keys
+        id: native-keys
+        run: echo "key=natives-win32-x64-$(node scripts/native.ts key shell win32-x64)-$(node scripts/native.ts key engine win32-x64)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/AppData/Local/stillfail-native
+          key: ${{ steps.native-keys.outputs.key }}
+      - name: The Windows engine and shell, prebuilt
+        run: |
+          node scripts/native.ts fetch shell win32-x64
+          node scripts/native.ts fetch engine win32-x64
+      # (mbui.yml's windows job saves them, main's; read here, never saved)
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            apps/mbui/mbui/_build
+            apps/mbui/mbui/out
+          key: mbui-win-build-mono-${{ needs.plan.outputs.sha }}
+          restore-keys: mbui-win-build-mono-
+      - uses: actions/cache/restore@v4
+        with:
+          path: .ci/hbc
+          key: mbui-win-hbc-${{ needs.plan.outputs.sha }}
+          restore-keys: mbui-win-hbc-
+      - name: Build, pack and sign the stable Windows app
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
           # The installer's signature (its .sig): none is an error.
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
-        run: python3 .github/release-desktop.py --stable --only win
+          RELEASE_DIR: ${{ runner.temp }}/release
+        run: |
+          (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          sh scripts/release.sh desktop-win
+      - name: Put its files, then its feeds
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: sh scripts/release-put.sh "$RUNNER_TEMP/release"
 
   web:
     needs: [plan, android, desktop, desktop-win]

@@ -211,7 +211,6 @@ if part ts; then
   ts_root='^(scripts|test|spike)/.*\.ts$|^(tsconfig\.json|package\.json|pnpm-lock\.yaml)$'
   ts_web='^web/'
   ts_cloud='^cloud/'
-  ts_desktop='^apps/desktop/'
   ts_core='^client/core-ts/|^web/src/core/delta\.ts$'
 
   # The clients' types and the UIs' operation bindings are made from the core's (client/core-ts/src/shapes/schema.ts,
@@ -241,8 +240,8 @@ if part ts; then
     step "the Kotlin Android app frozen (apps/android: change apps/mbui instead)" sh -c "! grep . '$tmp/android-frozen'"
   fi
   # (its own checks gone with it; this one on the mbui app's code in its place)
-  if touches '^(web/src|web/ui|apps/desktop/src|apps/mbui/src)/'; then
-    step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src web/ui apps/desktop/src apps/mbui/src'
+  if touches '^(web/src|web/ui|apps/mbui/src)/'; then
+    step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src web/ui apps/mbui/src'
   fi
   # The design system (web/ui, @stillfail/ui) stands on its own: nothing of the app's (web/src: its core, station,
   # cloud, preferences), so the share page and anything else can draw with it. The app gives it what it needs (words,
@@ -252,8 +251,8 @@ if part ts; then
   fi
   # Colours mixed in sRGB: Chromium leaves an OKLCH mix of near greys with its hue unset but a little chroma, and draws
   # it at hue 0, so the grey grounds (code, tables, tool steps) turned pink.
-  if touches '^(web/src|web/ui|apps/desktop/src)/'; then
-    step "colours mixed in sRGB" sh -c '! git grep -n "in oklch" -- web/src web/ui apps/desktop/src'
+  if touches '^(web/src|web/ui)/'; then
+    step "colours mixed in sRGB" sh -c '! git grep -n "in oklch" -- web/src web/ui'
   fi
   # Type sizes are the tokens' (web/ui/src/styles/tokens.css.ts: text-micro … text-display), never a style's own (an em, relative to its text, may be).
   if touches '^web/(src|ui)/'; then
@@ -294,7 +293,7 @@ if part ts; then
   # their JS dependencies and the real wasm package even when no TS file changed.
   core_tests=0
   if [ $full = 1 ] && touches '^(test|client|web/src/core)/|^package\.json$'; then core_tests=1; fi
-  if touches "$ts_root" || touches "$ts_web" || touches "$ts_cloud" || touches "$ts_desktop" || [ $core_tests = 1 ]; then prep root deps .; fi
+  if touches "$ts_root" || touches "$ts_web" || touches "$ts_cloud" || [ $core_tests = 1 ]; then prep root deps .; fi
   if touches "$ts_root" || touches "$ts_web" || [ $core_tests = 1 ]; then wasm_pkg; fi
   # The stable channel's release notes (docs/changelog.md): each one read as CI will.
   if touches '^docs/releases/|^scripts/changelog\.ts$'; then step "release notes" sh -c 'node scripts/changelog.ts --stable > /dev/null'; fi
@@ -313,16 +312,6 @@ if part ts; then
     prep cloud-types after_cloud_types
     step "typecheck: cloud" after cloud after cloud-types sh -c 'cd cloud && pnpm run check'
   fi
-  if touches "$ts_desktop"; then prep desktop deps apps/desktop; step "typecheck: desktop" after desktop sh -c 'cd apps/desktop && pnpm run typecheck'
-    # What the app's bundles take from the repository is its shell's (scripts/desktop-web.ts SHELL): a change to one of
-    # them is a new app, not a web release alone. Its esbuild reads the core's sources too, which read the core's packages.
-    prep core deps client/core-ts
-    step "desktop: its shell's files" after root after desktop after core node scripts/desktop-web.ts check
-    step "desktop: what it keeps sealed" node --test apps/desktop/test/secure.test.ts
-    step "desktop: local diagnostic records" node --test apps/desktop/test/diagnostic-log.test.ts
-    step "desktop: its station's PATH" node --test apps/desktop/test/station-path.test.ts
-    step "desktop: where its station stands, joining it" node --test apps/desktop/test/station-place.test.ts
-    step "desktop: its executables' own UUIDs" node --test apps/desktop/test/after-pack.test.ts; fi
   # The TypeScript core (docs/core-ts.md): its own tsconfig.
   if touches "$ts_core"; then prep core deps client/core-ts; step "typecheck: core-ts" after core sh -c 'cd client/core-ts && pnpm exec tsgo --noEmit'; fi
   if touches "$ts_core|^client/math/|^apps/mbui/src/sf/math_glyphs\\.mbt$"; then prep core deps client/core-ts; step "shared math alphabet" after core node client/core-ts/scripts/math-font.ts --check; fi

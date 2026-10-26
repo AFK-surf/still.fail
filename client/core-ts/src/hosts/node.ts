@@ -45,8 +45,8 @@ function fetchError(e: unknown): HostError {
   return new HostError(message);
 }
 
-/// What seals values for the core where Node cannot itself (the desktop app: Electron's safeStorage and Touch ID are the
-/// main process's, apps/desktop/src/secure.ts, asked from the utility process the core runs in). Its failures' messages
+/// What seals values for the core where Node cannot itself (an Electron app embedding it, as Comma's desktop app does:
+/// Electron's safeStorage and Touch ID are the main process's, asked from the utility process the core runs in). Its failures' messages
 /// are the host's (host.ts `secureGet`).
 export interface Sealer {
   get(key: string, user: boolean, reason: string): Promise<Uint8Array | null>;
@@ -339,11 +339,11 @@ export class NodeHost implements Host {
 
 /// The Node addon's `start`, as the Rust core had it: a core whose messages go to `listener(client, json)`; `channel` "beta" for a beta app's.
 /// A bug that ends a fiber ends the core as a panic ended the Rust core: each client is told `{"fatal": …}` and the host
-/// starts another (apps/desktop/src/core.ts).
+/// starts another.
 /// `hostWire`: its stations answer at the cloud's origin over plain HTTP, not on the mesh (the side-by-side run,
 /// harness/run.ts). `account`: who the accounts are with, when not still.fail cloud (an app embedding the core gives
 /// `commaAccountProvider({origin, bearer})`; docs/core-ts.md, "Account providers and embedding"). `sealer`: what seals
-/// values for it (the desktop app's main process: apps/desktop/src/core.ts). `modules`: what the app adds to the core
+/// values for it (an Electron app's main process). `modules`: what the app adds to the core
 /// (module.ts).
 export function start(dataDir: string, cloudOrigin: string, listener: Listener, channel?: string, options: { hostWire?: boolean; account?: AccountProviderFactory; sealer?: Sealer; modules?: readonly CoreModule[] } = {}) {
   service.name = "stillfail-native";

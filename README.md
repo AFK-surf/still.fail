@@ -76,8 +76,8 @@ Desktop and Android builds connect to the hosted service at `app.still.fail` by 
 | `station/` | Station (`stillfail-station`): agent runtimes, Slack and Feishu, jobs, files, screens, vault; native parts in `station/native/` |
 | `client/` | Shared client core (`core-ts`), its native shells and translations (`i18n`) |
 | `web/` | Web app, official site and component stories |
-| `apps/desktop/`, `apps/android/` | Electron and native Android clients |
-| `apps/mbui/` | An Android and macOS client written in mbui (`apps/mbui/mbui`), in testing |
+| `apps/mbui/` | The apps (Android, iOS, macOS, Windows, Linux), written in mbui (`apps/mbui/mbui`) |
+| `apps/android/` | The former Android app in Kotlin, frozen |
 | `cloud/` | Accounts, workspaces, relays and releases on Cloudflare |
 | `media/` | Photos, video and books apps built on the same platform, in development |
 | `docs/` | Design and operation notes; release notes in `docs/releases/` |

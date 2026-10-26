@@ -546,7 +546,7 @@ export class Updates {
   }
 
   /// The Node npm is installed with where the machine has none: the version the station runs on (its release's
-  /// NODE_VERSION; the desktop app's, Electron's Node's).
+  /// NODE_VERSION).
   private ownNode(): OwnNode | null {
     let version = process.versions.node;
     try {

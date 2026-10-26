@@ -6,7 +6,7 @@ The commands below run from the repository root unless noted. The station, the c
 
 - Git, Python 3, Node.js 24 or later, and pnpm 10.33.0 (every `package.json` names it in `packageManager`).
 - Rust is optional for everyday work: the native parts the TypeScript station and clients use are prebuilt (see [Native parts](#native-parts)). To change one of them you need rustup (the parts are built with the toolchain pinned in `scripts/native.ts`, which rustup installs on first use), plus, per part: the `wasm32-unknown-unknown` target, `wasm-bindgen-cli` matching `wasm-bindgen` in `client/Cargo.lock` (currently 0.2.129) and LLVM's `clang`/`llvm-ar` with WebAssembly support for the browser's iroh; the NDK below for Android's shell and engine; zig and cargo-zigbuild for the Linux station parts from a Mac.
-- Android additionally needs JDK 17 and the Android SDK (NDK 28.2.13676358 to build its shell or engine, or to strip them when packing); desktop packaging has its own dependencies in `apps/desktop/`.
+- Android additionally needs JDK 17 and the Android SDK (NDK 28.2.13676358 to build its shell or engine, or to strip them when packing); the apps (`apps/mbui/`) need MoonBit and their platform's toolchain, as [its README](../apps/mbui/README.md) says.
 
 ```sh
 git clone https://github.com/AFK-surf/still.fail.git
@@ -90,8 +90,7 @@ With the parts published and an empty cache, the first column plus their downloa
 
 One Node version everywhere, `.node-version`'s: CI (`.github/actions/setup`, and on the Macs `scripts/node-here.sh`),
 the station's releases (which name it in `NODE_VERSION` rather than carry it: the installer gets it once per version,
-`scripts/node-dist.sh` puts it beside the releases) and the desktop app, which runs its station on its own Electron as
-Node. It is Electron's Node: upgrading Electron, `.node-version` goes with it (`apps/desktop/build.sh` stops otherwise).
+`scripts/node-dist.sh` puts it beside the releases).
 
 ## Tests: CI's and the side run's
 
@@ -122,7 +121,6 @@ ending, against a budget, in the run's summary, with a warning when over. The bu
 | A branch | 180 s | ~100 s with caches warm |
 | main, releasing nothing | 180 s | ~100 s |
 | A branch or main that checked the Android app (`check-android`) | 240 s | ~190 s (2026-10-07) |
-| A branch that tried the Windows app on Windows (`windows-smoke`) | 330 s | ~280 s (2026-10-09) |
 | main, releasing apps or the station | 480 s | — |
 
 `node scripts/ci-time.ts <run id>` prints any run's jobs and longest steps. A run over its budget is a regression to
@@ -199,16 +197,7 @@ node src\main.ts run --app $PWD --data $env:TEMP\stillfail-test
 
 ## Local desktop packages
 
-The desktop build currently targets macOS on Apple silicon. Install its dependencies and opt out of the maintainer's signing identity when making a local package:
-
-```sh
-(cd apps/desktop && pnpm install --frozen-lockfile)
-UNSIGNED=1 sh apps/desktop/build.sh
-# Or the beta app:
-UNSIGNED=1 sh apps/desktop/build.sh --beta
-```
-
-`UNSIGNED=1` applies to both channels; it does not publish or install the app. The output is under `apps/desktop/out/mac-arm64/`. `DEV=1` stops before packaging. A redistributed fork also needs its own application identity, cloud origin and update feed; unsigned packaging alone does not configure those.
+The desktop apps are mbui's (`apps/mbui/`): `apps/mbui/scripts/mac-app.sh` makes the macOS app (signed ad hoc without `MAC_SIGN_IDENTITY`), `apps/mbui/scripts/win.sh build` and `win.sh setup` the Windows app and its installer (Git Bash with MSVC's environment); `MBUI_VARIANT=stable` or `beta` builds them as still.fail's released apps rather than still.fail mbui, a test app of its own. None of these publishes or installs the app. A redistributed fork also needs its own application identity, cloud origin and update feed; building alone does not configure those.
 
 ## Production self-hosting
 

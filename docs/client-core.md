@@ -9,7 +9,7 @@ client. Only iroh and, on Android, the IO are native:
 | Client | Where the core runs | Host (network, storage, time) | iroh |
 | --- | --- | --- | --- |
 | Web (app.still.fail) | one tab's dedicated Worker (the one holding the Web Lock `stillfail-core`; the other tabs' workers relay to it) | `src/hosts/web.ts`: fetch, WebSocket, IndexedDB (small values), SQLite's WASM build on OPFS | `client/iroh-wasm` (wasm-bindgen, relay only), loaded on the first link |
-| Desktop (Electron) | a `utilityProcess` (Node) | `src/hosts/node.ts`: fetch, ws, `node:sqlite`, files | the station's napi addon (`station/native/mesh`, `mesh.node`) |
+| Desktop (`apps/mbui`: macOS, Windows, Linux) | Hermes on a thread of its own, as Android's, the core as Hermes bytecode | `src/hosts/bridge.ts` over the Rust shell `client/shell`, as Android's | in `client/shell` |
 | Android (iOS later) | Hermes on a thread of its own (`apps/android/core/src/main/cpp/engine.cpp`), the core as Hermes bytecode | `src/hosts/bridge.ts` over the Rust shell `client/shell` (HTTP, the cloud's WebSocket, files, SQLite, TCP) | in `client/shell` |
 
 The UI never talks to still.fail cloud or a station itself. It sends **calls** and
@@ -741,46 +741,12 @@ the remote screens nothing of the pages (`scripts/check.sh`: phone packages one 
 
 ## Desktop
 
-`apps/desktop` is the web app running natively: the window loads the cloud
-build (`pnpm run build:cloud`'s `dist/cloud-web`, bundled into the app) from
-`app://ember`, served as still.fail cloud serves it (a file, else `index.html`).
-Nothing in the pages differs but the host underneath:
-
-- The core runs in a `utilityProcess` (`src/core.ts`): the TypeScript core
-  (`client/core-ts`, its Node host bundled as `core-ts.js`; docs/core-ts.md),
-  with its data in the app's `userData/core` (the same files the Rust core
-  kept, so an update keeps the sign-in; the accounts' databases in
-  `databases/`, what `core.db` held imported once and left there). Its iroh endpoint is the full native one
-  (the station's napi addon, `mesh.node`), so links go direct once the relay has
-  introduced both sides.
-- A page asks the main process for a channel (`emberDesktop.openCore`, from
-  the preload): a `MessageChannelMain` whose one end goes to the core and the
-  other to the page, as a window message (a port cannot cross the context
-  bridge). `web/src/core/client.ts` uses that port instead of the
-  worker (`desktopOpener`); the protocol is the same, posted as objects
-  and answered as the core's JSON. A port that closes disconnects its client;
-  a core process that exits is announced to every page, which opens a new
-  channel (the main process starts a new core); a `{"fatal"}` (a fiber that
-  failed with a bug) makes the core process start a new core for the channels that follow.
-- Sign-in: `auth.begin` with `redirect_uri` `stillfail://auth/callback` (a scheme
-  the app registers). Leaving `app://ember` opens the system browser instead
-  (so does `window.open`); still.fail cloud sends the browser back to
-  `stillfail://auth/callback?…`, which the OS hands to the app (`open-url` on
-  macOS, `second-instance` elsewhere), and the app loads the page's own
-  `/auth/callback` with that query, which calls `auth.complete` as on the web.
-
-- The app carries a station release (scripts/station-bundle.sh: the station
-  in TypeScript with its Node) and runs its launcher, `stillfail-station`,
-  itself (`src/station.ts`), on
-  `~/.stillfail` like an installed station; when one is running already
-  (`stillfail-station` exits with HELD) it leaves it be.
-
-still.fail cloud defaults to https://app.still.fail; `STILLFAIL_CLOUD_ORIGIN`
-overrides it. `apps/desktop/build.sh` builds the core and the station for
-macOS arm64 and packages an `.app` with electron-builder. Use `UNSIGNED=1`
-for a local unsigned package; release builds use the maintainer signing identity.
-The internal `app://ember` origin is retained so existing localStorage and
-IndexedDB data remain accessible.
+The desktop apps are mbui's (`apps/mbui`): the core in Hermes over the Rust shell, as on Android (their hosts:
+`apps/mbui/src/host/apple_core.mm`, `win_core.c`, `linux_core.c`). Until 2026-10-26 the desktop app was the web app
+in Electron; the Mac and Windows apps took its place under its ids, so an installed one's updater moved it over
+(`scripts/release.sh desktop`, `desktop-win`), and they keep what it kept: the core's files in its `userData/core`,
+the sign-in, the keys it sealed (`apps/mbui/src/host/electron_sealed.h`, `win_electron_sealed.h`). The station it
+carried and ran is made a service as the new app first starts (`apps/mbui/src/sfbase/local_station.mbt`).
 
 ## Web
 

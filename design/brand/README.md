@@ -21,7 +21,7 @@ No character: words and one orange dot (2026-10-26; the rules for where it goes 
 | app icons as drawn | `design/brand/icon-*.svg` |
 | mbui's launcher (its colours per app), marks and illustrations | `apps/mbui/android/app/src/*/res` |
 | macOS, iOS, Windows and Linux icons | the s and dot in `apps/mbui/scripts/mac-icon.swift` (it draws them; the .ico and the .png it made are kept in `apps/mbui/windows/` and `apps/mbui/linux/`) |
-| with `png`: the web app's icons, the link previews' card, the Electron app's, the browser extension's | `web/public/*.png`, `apps/desktop/icon*.png`, `apps/extension/icons/` |
+| with `png`: the web app's icons, the link previews' card, still.fail Helper's, the browser extension's | `web/public/*.png`, `station/native/helper/icon.png`, `apps/extension/icons/` |
 
     pip install fonttools brotli uharfbuzz
     python3 design/brand/make.py [png]

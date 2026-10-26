@@ -367,9 +367,8 @@ def rasters():
         shoot(f"web/public/apple-touch-icon{suf}.png", 180, 180, square(v, 180))
         for s in (192, 512):
             shoot(f"web/public/icon{suf}-{s}.png" if suf else f"web/public/icon-{s}.png", s, s, square(v, s))
-    # the Electron app's (its Windows build and tray), on macOS's grid
-    shoot("apps/desktop/icon.png", 1024, 1024, icon_mac("stable").replace("<svg ", '<svg style="display:block" '))
-    shoot("apps/desktop/icon-beta.png", 1024, 1024, icon_mac("beta").replace("<svg ", '<svg style="display:block" '))
+    # still.fail Helper's (the station's macOS app: scripts/native.ts makes its .icns of it), on macOS's grid
+    shoot("station/native/helper/icon.png", 1024, 1024, icon_mac("stable").replace("<svg ", '<svg style="display:block" '))
     for s in (16, 32, 48, 128):
         shoot(f"apps/extension/icons/{s}.png", s, s, square("stable", s, corner=round(s * 0.22)))
     # the link previews' card: the name, the headline (its full stop the dot), its line

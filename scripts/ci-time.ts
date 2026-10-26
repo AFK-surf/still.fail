@@ -18,9 +18,6 @@ export const BUDGET = {
    * branch that changes the app, about 300 with its job's setup, and stays there as asked (2026-10-17: not mini1's);
    * nothing deploys after it (2026-10-18, #607). */
   android: 330,
-  /** A branch that built the Windows app and tried it on Windows (windows-smoke): its build, its upload and then the
-   * smoke, one after another, ~280 s (2026-10-09). */
-  windows: 330,
   /** main, releasing apps or the station: the check, the API, then the releases side by side (Android's the longest). */
   release: 480,
 } as const;
@@ -50,7 +47,6 @@ export function timing(id: string, attempt?: number) {
   const branchKind = run.head_branch !== "main" ? "branch" : jobs.some((j) => RELEASES.has(j.name)) ? "release" : "main";
   const kind =
     branchKind === "release" ? branchKind
-    : jobs.some((j) => j.name === "windows-smoke") ? "windows"
     : jobs.some((j) => j.name.startsWith("check-android")) ? "android"
     : branchKind;
   const steps = jobs

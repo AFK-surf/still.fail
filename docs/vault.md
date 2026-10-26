@@ -62,7 +62,7 @@ chat EMBER/1792240320.234000。凭据都放在「密钥」这一个库里；库�
 ```
 
 - **设备箱钥匙**：不改锁。每台 app 设备给自己的箱钥匙出一张「箱钥匙证书」，用锁里自己的 `sign_key` 签名，跟着库一起存（格式见「实现约定」）。验证的人拿锁里这台设备的 `sign_key` 验，所以 station 和 cloud 塞不进自己的箱钥匙。网页版设备没有 `sign_key`，也就没有箱钥匙。
-- **存放**：安卓放 Android Keystore（有 StrongBox 就用），要求生物识别或屏幕锁解锁；macOS 放钥匙串，用 Touch ID 解锁；Windows/Linux 用 Electron `safeStorage`。现在锁的签名钥匙（`lock-signer`）是 app 数据目录里的普通文件，`workspace-lock.md` 的「还没做」里已经记着要挪进钥匙串，这件事和箱钥匙一起做。
+- **存放**：安卓放 Android Keystore（有 StrongBox 就用），要求生物识别或屏幕锁解锁；macOS 放钥匙串，用 Touch ID 解锁；Windows 用 DPAPI，Linux 用 Secret Service（libsecret）。现在锁的签名钥匙（`lock-signer`）是 app 数据目录里的普通文件，`workspace-lock.md` 的「还没做」里已经记着要挪进钥匙串，这件事和箱钥匙一起做。
 - **不用主密码**：1Password 用「主密码 + Secret Key」，因为它的新设备要能自己登录、不依赖旧设备。still.fail 加新设备本来就要旧设备核对短码（`lock.confirm`），确认的同时把库钥匙包给新设备的箱钥匙就行，不用多记一个密码。所有设备都丢了，就用恢复码。
 - **一人一个自己的库，新设备拿钥匙不另建**（2026-10-26，chat EMBER/1792949811.536000：一个人因此有了三个库，两个空的）：`setup` 发完证书后重读各 station，这个人一个自己的库都没有时才顺手建「个人」库（回 `made`），界面不再自己调 `create`。之后设置的设备没有那个库的钥匙，由已有钥匙的设备给：owner 的设备只要手上有库钥匙（解开或还在 5 分钟里），就把钥匙封给成员新设置、还没有钥匙的设备，签一个新版本（`#give`），不用人去点；「设备」一栏的「授权新设备」只用在那之后还没解开过的时候。没钥匙的设备批准存入时，这个人已经有自己的库就回 `vault_no_key`（在问指纹之前），不另建一个。
 - **passkey**：passkey 有 PRF 扩展时，可以多包一份库钥匙给 PRF 派生出的钥匙，用来在新设备上恢复。先不做，等锁的 passkey 签名做完再加。
@@ -291,7 +291,7 @@ agent → station（MCP 工具，在 `stillfail` 服务器里）：
 
 ### 设备上的钥匙
 
-- Host 加 `secureGet(key, {user, reason?})`、`secureSet(key, value, {user})`、`secureDelete(key)`（`client/core-ts/src/host.ts`）。只有 app 的 host 有：安卓（`BridgeHost` 的 `secure.*`，由 Kotlin 答）和桌面（`NodeHost` 带 `sealer`，问 Electron 主进程）；网页 host 没有这三个方法。
+- Host 加 `secureGet(key, {user, reason?})`、`secureSet(key, value, {user})`、`secureDelete(key)`（`client/core-ts/src/host.ts`）。只有 app 的 host 有：`BridgeHost` 的 `secure.*`，由各端宿主答（安卓、桌面）；网页 host 没有这三个方法。
 - `user: true`：读的时候要人在（生物识别或屏幕锁；Mac 上有 Touch ID 就用 Touch ID），`reason` 显示在提示里；`user: false`：系统加密保存，读时不问人。值按存的时候的 `user` 读：用另一种 `user` 读一律失败，所以要人在的值不会被不问人读出来。
 - 失败时 HostError 的 message 就是代码：`user_cancelled`（人取消了）、`no_device_lock`（手机没设屏幕锁，存不了也读不了 `user: true` 的值）、`not_in_front`（app 没有界面在前台，没处弹提示）、`key_invalidated`（安卓：屏幕锁被关掉过，`user: true` 的钥匙作废，存的值再也读不出）。
 - 存的东西：`vault-box`（X25519 私钥，`user: true`）、`lock-signer`（`user: false`）。`lock-signer` 已经挪进来（`lock.ts` 的 `Signer`）：host 有 `secureSet` 时先读密封的；没有而普通文件里有，就封进去、读回来核对一样后删掉文件；新建的直接封。没有 `secure*` 的 host 照旧用普通文件。
@@ -304,10 +304,12 @@ agent → station（MCP 工具，在 `stillfail` 服务器里）：
 - 提示用系统的 `android.hardware.biometrics.BiometricPrompt`（minSdk 29 就有），不用 androidx.biometric：后者要 `FragmentActivity`，而 app 的界面都是 `ComponentActivity`。提示弹在前台的那个 activity 上（`Foreground` 从 `StillFailCore.start` 起记着），标题是 app 名，`reason` 是说明。
 - 文件格式：版本字节 `1`、`user` 字节，`user: false` 接 IV(12)‖GCM 输出；`user: true` 接包好的钥匙长度(2，大端)‖包好的钥匙‖IV(12)‖GCM 输出。附加数据 `"stillfail-sealed/1\0<key>\0<0|1>"`，文件挪到别的 key 名下、或改了 `user` 字节都打不开。
 
-**桌面**（`apps/desktop/src/secure.ts`）：core 在 utility process 里跑，拿不到 `safeStorage`，所以 `core.ts` 经 `process.parentPort` 问主进程（`{sealed: {id, op, key, user, reason, value}}`，字节用 base64）。主进程用 `safeStorage` 加密，每个值一个文件 `userData/sealed/<key>`（0600）：`"SFS1"`、`user` 字节、`safeStorage.encryptString("<0|1>:<值的 base64url>")`；`user` 在密文里也有一份，改外面那个字节跳过提示会打不开。`safeStorage` 的钥匙在 macOS 钥匙串里、Windows 用 DPAPI；Linux 上只有明文兜底（`basic_text`）时当作没有，core 照旧用普通文件。
+**桌面**（mbui 的 app，`apps/mbui`）：`secure.*` 由宿主答，每个值按 key 和 `user` 分开存，只能按存时的 `user` 读出。
 
-- macOS 上 `user: true` 的值读之前先 `systemPreferences.promptTouchID(reason)`（`canPromptTouchID()` 为真时；系统显示为「“still.fail”想要<reason>」，所以 `reason` 写成动词短语），取消或失败回 `user_cancelled`；一次只弹一个。
-- Windows、Linux、没有 Touch ID 的 Mac 没处弹提示，`user: true` 只等于「登录了这台电脑的系统账号」，不多防什么。Mac 上的 Touch ID 也只是 app 自己的检查，不是钥匙串强制的：同一系统用户下能冒充 app 签名去读钥匙串的程序可以绕过它（要钥匙串强制，得用带 `kSecAccessControlBiometryAny` 的原生钥匙串项，需要 keychain-access-groups 授权，这一期不做）。
+- macOS（`apps/mbui/src/host/apple_core.mm`）：钥匙串里的通用密码，开机解锁后才能读，从不弹钥匙串对话框。`user: true` 的值先过系统的设备主人验证（LocalAuthentication：Touch ID 或系统密码，`reason` 在提示里），没设系统密码时存不了（`no_device_lock`）。这一关是钥匙串之前 app 自己的检查，不是钥匙串强制的。
+- Windows（`win_core.c`）：DPAPI 按这个 Windows 用户加密，存成 `<data>\secure` 里的文件；还不问人（没接 Windows Hello），`user: true` 只等于「登录了这台电脑的系统账号」。
+- Linux（`linux_core.c`）：Secret Service（GNOME Keyring、KWallet）；没有时存成只有本用户能读的 `<data>/secure` 文件。也不问人。
+- 2026-10-26 以前的桌面版是 Electron 的，用 `safeStorage` 加密存在 `userData/sealed/<key>`。新 app 在它的位置上用它的数据目录，第一次要某个 key 时把那份读出来（`apps/mbui/src/host/electron_sealed.h`、`win_electron_sealed.h`）。
 
 ## 分期
 
