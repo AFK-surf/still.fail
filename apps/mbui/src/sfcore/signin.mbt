@@ -52,7 +52,7 @@ pub let state : SignIn = {
 /// when this build has no core linked in (the web's, a fixture's).
 pub fn start() -> Bool {
   // what the core says is posted to mbui's queue (core_native.c), which hands it here as the next frame begins
-  @ui.on_message_read("core", @core.receive_read)
+  @ui.on_message("core", @core.receive)
   // a screen is settled only once what it asked of the core is in (mbui's effect.mb outside)
   @core.track(what => @ui.runtime().outside_start(what), t => @ui.runtime().outside_end(t))
   let cloud = @ui.env("MBUI_CLOUD")

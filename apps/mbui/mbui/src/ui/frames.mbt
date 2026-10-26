@@ -19,15 +19,6 @@ pub fn Tester::frame_hash(self : Tester) -> Int64 {
 }
 
 ///|
-/// `f` told as each frame is drawn from now on (None: nothing), as the steps of a test run: what each frame drew read
-/// then (Tester::drawn_text), so two runs of the same steps are compared frame by frame. Put back (None) as the test
-/// ends.
-pub fn Tester::on_each_frame(self : Tester, f : (() -> Unit)?) -> Unit {
-  ignore(self)
-  frame_hook.val = f
-}
-
-///|
 /// What the last frame drew as text: the laid-out tree (`dump`), then each instance drawn, one a line (its 24
 /// numbers, positions and sizes in 1/64 px, colours in 1/255): what two frames' hashes part on, line by line.
 pub fn Tester::drawn_text(self : Tester) -> String {

@@ -7,7 +7,7 @@ test "signed out, as a run's core said: the sign-in page" {
     #|{"in":{"id":1,"value":[]},"w":1000}
   ))
   r.attach()
-  @ui.on_message_read("core", @core.receive_read)
+  @ui.on_message("core", @core.receive)
   let t = @ui.Tester::new(@sfreplay.app)
   // posted to mbui's queue, taken by the next frame as it begins
   assert_eq(r.deliver(to=fn(json, bytes) { t.post("core", json, bytes?) }), 1)

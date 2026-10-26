@@ -82,7 +82,7 @@ pub fn Flow::start(
   }
   emit_start(seed, w, h, if platform == 2 { env + [("MBUI_PLATFORM", "android")] } else { env })
   // what the core says comes through mbui's queue, as the app's does (src/stillfail: sfcore.start)
-  @ui.on_message_read("core", @core.receive_read)
+  @ui.on_message("core", @core.receive)
   // (the app started with what the run's was: its trace's env, then what the test says of its own; a trace that does
   // not say it is one recorded before it was kept, to record again: never run as if started with nothing)
   if r.env().is_empty() && emit_path() == "" {
