@@ -59,6 +59,22 @@ test "desk: a chat's film says its size, length and rate in the bar as its messa
 }
 
 ///|
+test "desk: a chat's film fitted clear of the bar and the controls, never under them; ⌘ and the wheel zoom it" {
+  let t = desk_tester("chat-preview-video")
+  let key = viewer.val.unwrap().media.unwrap().key()
+  let (top, foot) = @sf.player_room(1280.0)
+  let (_, y, w, h) = @sf.player_picture_at(key).unwrap()
+  // 1280 × 720 in 1280 × (800 less the bar and the controls): as tall as that leaves, under the bar, over the controls
+  assert_true((y - top).abs() < 0.5, msg="\{y} \{top}")
+  assert_true((y + h - (800.0 - foot)).abs() < 0.5, msg="\{y + h} \{800.0 - foot}")
+  assert_true(w < 1280.0, msg="\{w}")
+  t.wheel_with(640.0, 400.0, 0.0, -200.0, @ui.wheel_mod_cmd)
+  t.run_for(@kit.zoom_glide_ms)
+  let (_, _, w2, _) = @sf.player_picture_at(key).unwrap()
+  assert_true(w2 > w * 1.3, msg="\{w} \{w2}")
+}
+
+///|
 test "desk: a click on the image does nothing, one round it closes the preview" {
   let t = desk_tester("chat-preview-image")
   // 600 × 400 in 1280 × 800, fitted 32 in: in the middle as it is
