@@ -207,7 +207,7 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
         pad(fn() { c.text(text(d, "hint"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore })
       })
       // the machine's own logins not used yet: a profile on one needs no sign-in
-      for b in machine_login_offers(c, core, station, field(s, "overview"), inset=18.0, fn(rt) {
+      for b in machine_login_offers(c, core, s, inset=18.0, fn(rt) {
           edit([("provider", str(if rt == "claude" { "anthropic" } else { "openai" })), ("method", str("plan"))])
         }) {
         blocks.push(b)

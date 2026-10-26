@@ -64,26 +64,29 @@ priv struct LoginState {
 let login_state : LoginState = { copied: {}, manual: {}, error: {}, seen: {} }
 
 ///|
-/// The accounts the station machine's own Claude Code and Codex are signed in with that no profile uses yet
-/// (MachineLoginOffers): one kept where the station reads it used as it is (`profile.useMachineLogin`), one it cannot
-/// signed in again for still.fail (`go_new`), a refused one only said so. A section of the page it is on (its title a
-/// section's, its rows a list card's, as the page's others); `inset`, on a page of its own room (a new profile's sheet):
-/// its title and card that far in.
-fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : Json?, go_new : (String) -> Unit, inset? : Double) -> Array[() -> Unit] {
+/// The accounts a station machine's own Claude Code and Codex are signed in with that no profile uses yet
+/// (MachineLoginOffers), `s` the station as `stations` has it: one kept where the station reads it used as it is
+/// (`profile.useMachineLogin`), one it cannot signed in again for still.fail (`go_new`), a refused one only said so. A
+/// section of the page it is on (its title a section's, its rows a list card's, as the page's others), titled by the
+/// station it is on (the workspace's page has a section each station: the same account signed in on two is in both);
+/// `inset`, on a page of its own room (a new profile's sheet): its title and card that far in.
+fn machine_login_offers(c : @ui.Ctx, core : Core, s : Json?, go_new : (String) -> Unit, inset? : Double) -> Array[() -> Unit] {
   let t = @sf.theme()
-  let offers = items(overview, "machineLogins").filter(fn(l) { flag(Some(l), "offered") })
+  let station = text(s, "station")
+  let offers = items(field(s, "overview"), "machineLogins").filter(fn(l) { flag(Some(l), "offered") })
   if offers.length() == 0 {
     return []
   }
+  let title = fill("web-mobile.profiles.machineLogins", [("station", text(s, "name"))])
   [
     fn() {
       match inset {
         Some(inset) =>
           c.box(w=Fill(1.0), pl=inset + 12.0, pr=inset + 12.0, pt=8.0, pb=4.0, fn() {
-            c.text(tr("android-settings.machine.title"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+            c.text(title, size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
           })
           |> ignore
-        None => section_header(c, tr("android-settings.machine.title"), start=S6)
+        None => section_header(c, title, start=S6)
       }
     },
     fn() {

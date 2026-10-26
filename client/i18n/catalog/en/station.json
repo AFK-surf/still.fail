@@ -301,6 +301,7 @@
   "station.quota.resetUnconfirmed": "OpenAI didn't confirm the reset; check the limits",
   "station.quota.resetUnsupported": "This station doesn't support limit resets",
   "station.quota.signInExpired": "Sign-in expired or invalid",
+  "station.quota.unreachable": "Couldn't reach the provider; check this station's network or proxy",
   "station.session.continued": "Continues the local {runtime} session in {cwd} · [View earlier conversation]({link})",
   "station.session.cwdGone": "Its original directory {cwd} no longer exists",
   "station.session.cwdDenied": "The station can't read {cwd}, so the agent can't start there",
