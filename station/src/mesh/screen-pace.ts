@@ -152,6 +152,39 @@ export class Pacer {
   }
 }
 
+/// A still screen sends nothing (a source makes a picture only when the screen changed), so what is shown is the last
+/// frame's picture, encoded at the rate asked then: a view's first at START_RATE, a whole screen in a few kilobytes,
+/// stays a blur while nothing on it moves (on a Mac's desktop left alone, for minutes). Once no frame has gone for
+/// STILL_MS and the rate the pace asks has gone up past SHARPER times the one the last frame was encoded at, the same
+/// picture goes again as a key frame at it (the source's `keyframe`); its acknowledgement lets the rate go up again,
+/// and so on to the source's own: the picture gets as sharp as the link carries a few steps after the screen stopped,
+/// as a still image is refined. A screen that keeps changing never waits STILL_MS; a link that cannot carry it lowers
+/// the rate, and nothing more is sent.
+export const STILL_MS = 500;
+export const SHARPER = 1.1;
+
+/// When a still screen's picture is sent again sharper (STILL_MS, SHARPER).
+export class Sharpener {
+  #at = -Infinity;
+  #rate: number | null = null;
+
+  /// A frame went at `now`, encoded at `rate` (null: a source with no rate of its own, a JPEG's).
+  sent(now: number, rate: number | null) {
+    this.#at = now;
+    this.#rate = rate;
+  }
+
+  /// How long until the screen has been still for STILL_MS (0: it has).
+  left(now: number): number {
+    return Math.max(0, this.#at + STILL_MS - now);
+  }
+
+  /// Whether the last frame's picture is to go again now, the pace asking `rate`.
+  due(now: number, rate: number | null): boolean {
+    return rate !== null && this.#rate !== null && this.left(now) === 0 && rate > this.#rate * SHARPER;
+  }
+}
+
 /// A picture fitted into 1280×720 while the link carries little.
 export const LOW_BOUNDS = { maxWidth: 1280, maxHeight: 720 };
 /// The rate at most this share of what a picture of its size is encoded at, for DOWNSIZE_MS, and the source using it
