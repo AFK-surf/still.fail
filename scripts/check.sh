@@ -298,7 +298,9 @@ if part ts; then
   if touches "$ts_root" || touches "$ts_web" || [ $core_tests = 1 ]; then wasm_pkg; fi
   # The stable channel's release notes (docs/changelog.md): each one read as CI will.
   if touches '^docs/releases/|^scripts/changelog\.ts$'; then step "release notes" sh -c 'node scripts/changelog.ts --stable > /dev/null'; fi
-  if touches "$ts_root"; then step "typecheck: scripts and tests" after root pnpm exec tsgo -p tsconfig.json; fi
+  # Root tests also import the core's Markdown reader. Wait for its packages on a cold checkout, as the web does.
+  if touches "$ts_root" || [ $core_tests = 1 ]; then prep core deps client/core-ts; fi
+  if touches "$ts_root"; then step "typecheck: scripts and tests" after root after core pnpm exec tsgo -p tsconfig.json; fi
   if touches "$ts_web"; then
     # The web reads the core's own files (its Markdown, client/core-ts/src/markdown.ts), which read the core's packages.
     prep core deps client/core-ts
@@ -375,7 +377,7 @@ if [ $full = 1 ]; then
   fi
   # The tests drive the web core itself (test/core-client.test.ts): only with a real build of it.
   if part ts && [ $core_tests = 1 ]; then
-    if [ -f web/src/core/iroh-pkg/.stand-in ] || [ ! -f web/src/core/iroh-pkg/built.js ]; then later "tests (need the iroh wasm)"; else step "tests" after root pnpm test; fi
+    if [ -f web/src/core/iroh-pkg/.stand-in ] || [ ! -f web/src/core/iroh-pkg/built.js ]; then later "tests (need the iroh wasm)"; else step "tests" after root after core pnpm test; fi
   fi
   # The TypeScript core's own tests; its mesh tests on a simulated network, a few over the station's addon, prebuilt (its
   # package.json). Its side run's (real relays, networks made up at random) are scripts/side.sh's.
