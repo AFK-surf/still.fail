@@ -570,21 +570,54 @@ pub fn section(
 }
 
 ///|
-/// A setting of a few (a choice of a few, a switch, a button): its `title`, what it is for (`note`) and its `control`.
-/// Wide: one line, its words at its start, the control at its end by its title (a section's head with the control
-/// for its actions: rule 5, what goes together on one line, the control at the line's end); narrow: its title over the
-/// control, what it is for under it (the phone's SectionHeader and its note under the choice).
+/// A setting of a few (a choice of a few, a button): its `title`, what it is for (`note`) and its `control`. Wide: a
+/// row of its list card (`group`), as a switch's is (switch_row: the same row, a switch at its end): its title with
+/// its note under it at its start, the control at its end across their middle (rule 5: what goes together on one
+/// line, the control at the line's end); narrow: its title over the control, what it is for under it (the phone's
+/// SectionHeader and its note under the choice). A choice drawn as its control (page_choice) is as wide as its
+/// options there, not a block of its own.
 pub fn setting(c : @ui.Ctx, title : String, control : () -> Unit, note? : String = "") -> Unit {
   match look() {
-    Wide => wide_section(c, title, fn() {  }, note~, actions=control)
-    Narrow => {
-      heading(c, title)
-      control()
-      if note != "" {
-        page_note(c, note)
+    Wide => {
+      let row = fn() { control_row(c, title, fn() { in_setting(control) }, note~) }
+      if in_list.val > 0 {
+        c.box(style=wide_in_list(), row) |> ignore
+      } else {
+        row()
       }
     }
+    // (a section of its own, not a card's: what is in it stands on the page)
+    Narrow =>
+      section(c, title, heads=true, fn() {
+        control()
+        if note != "" {
+          page_note(c, note)
+        }
+      })
   }
+}
+
+///|
+/// A page's settings (each drawing a `setting`) as the page's blocks: wide, the rows of one list card; narrow, a block
+/// each, its title over its control.
+pub fn settings(c : @ui.Ctx, each : Array[() -> Unit]) -> Array[() -> Unit] {
+  // (by the width it is drawn in: a page's blocks are made before its frame says how it is laid out, look())
+  match look_for(c.width) {
+    Wide => [fn() { group(c, fn() { each.each(fn(f) { f() }) }) }]
+    Narrow => each
+  }
+}
+
+///|
+/// How many settings' controls what is drawn now is in (setting, wide).
+// kept across runs: counted up and down round what a setting's control draws (0 between them)
+let settings_in : Ref[Int] = Ref(0)
+
+///|
+fn in_setting(f : () -> Unit) -> Unit {
+  settings_in.val += 1
+  f()
+  settings_in.val -= 1
 }
 
 ///|
@@ -894,7 +927,7 @@ fn narrow_row(goes : Bool) -> @ui.Style {
     (true, false) => pg_row_square
     (false, false) => pg_said_row_square
   }
-  ground.then(@ui.style(min_h=theme().rows.least))
+  ground.then(@ui.style(min_h=Fixed(theme().items.least)))
 }
 
 ///|
@@ -956,6 +989,10 @@ let in_words : Ref[Int] = Ref(0)
 /// A choice of a few (`segmented`: narrow, as wide as the page less 12 each side; wide, at the column's start, each
 /// option `item_w` wide at least). Answers the one chosen (a press's, this frame).
 pub fn page_choice(c : @ui.Ctx, key : String, labels : Array[String], at : Int, item_w? : Double = 0.0) -> Int {
+  // (a wide setting's control: at its row's end, as wide as its options)
+  if settings_in.val > 0 {
+    return segmented(c, key, labels, at, item_w~)
+  }
   let mut picked = at
   let choice = fn() {
     c.box(style=if look() is Narrow { pg_choice_box } else { desk_choice_row }, fn() {
@@ -996,7 +1033,16 @@ pub fn page_note(c : @ui.Ctx, words : String, bad? : Bool = false) -> Unit {
 /// below are lines of their own as wide as its words, what it says, its tail and its chevron on its first line beside
 /// its title (row_top). One that `acts` (does something at once where it is: 检查未决策的 chat) says so at either width:
 /// its title in the link's ink, no chevron; one that `adds` one more to the list it ends (添加: an option, a station) is
-/// one that acts, a ＋ before its title. True on the frame it is pressed.
+/// one that acts, a ＋ before its title. `note_cut`: its note one line, cut short (what is in a memory, how a connect
+/// runs). `face`: its `lead` is a round picture (a person's, a connect's: 28), which stands across the row's middle on
+/// every width: by its first line it stands in the row's corner, 10 from both its edges, its 14 round in the row's 18,
+/// which would want a corner of 24, on no step of the ladder (docs/ui-panels.md 圆角阶梯); a mark (an icon, a dot) is
+/// by its first line.
+/// `title_after` after its title on its line (a pill: 你, 当前; a team's name), dropped before the title where
+/// the line has not the room for both; `control` at its
+/// end, last (a button, a switch, a choice: what is done here, no chevron), a button of words alone there with its
+/// words on the line of what rows say at their ends, its ground under the hand reaching out past them to the card's
+/// edge (row_end; docs/ui-panels.md 页面卡片: 文字按钮). True on the frame it is pressed.
 pub fn link_row(
   c : @ui.Ctx,
   key : String,
@@ -1019,6 +1065,10 @@ pub fn link_row(
   goes? : Bool = true,
   acts? : Bool = false,
   adds? : Bool = false,
+  title_after? : () -> Unit,
+  control? : () -> Unit,
+  note_cut? : Bool = false,
+  face? : Bool = false,
 ) -> Bool {
   let th = theme()
   // (one that acts: its title in the link's ink, no chevron; one that adds, after a ＋)
@@ -1029,11 +1079,26 @@ pub fn link_row(
   } else {
     lead
   }
-  let chevron = chevron && !acts
+  let chevron = chevron && !acts && control is None
+  // (what follows its title on its line: a pill)
+  let after = fn() {
+    match title_after {
+      Some(f) => f()
+      None => ()
+    }
+  }
+  // (what is done here, at its end: on its first line where lines are under it, as high as that line)
+  let control_at_end = fn(under : Bool) {
+    match control {
+      Some(f) => if under { line_end(c, fn() { row_end(f) }) } else { row_end(f) }
+      None => ()
+    }
+  }
   // (what is wrong in red, a line of its own under its note)
   let narrow_note = fn() {
     if note != "" {
-      c.text(note, style=if lacks { pg_link_note.then(lacking) } else { pg_link_note }) |> ignore
+      let style = if lacks { pg_link_note.then(lacking) } else { pg_link_note }
+      c.text(note, style=if note_cut { style.then(cut_words) } else { style }) |> ignore
     }
     if trouble != "" {
       c.text(trouble, style=pg_link_note.then(bad)) |> ignore
@@ -1057,9 +1122,9 @@ pub fn link_row(
   }
   let b = match look() {
     Narrow =>
-      c.box(style=(if under { narrow_row(goes).then(row_top) } else { narrow_row(goes) }).then(row_line(true)), id~, fn() {
+      c.box(style=(if under && !face { narrow_row(goes).then(row_top) } else { narrow_row(goes) }).then(row_line(true)), id~, fn() {
         match lead {
-          Some(f) => if under { row_lead(c, Narrow, f) } else { f() }
+          Some(f) => if under && !face { row_lead(c, Narrow, f) } else { f() }
           None => ()
         }
         let said = fn() {
@@ -1095,9 +1160,11 @@ pub fn link_row(
           if goes && (chevron || out) {
             icon(c, mark, size=pg_chevron, color=th.p.subtle) |> ignore
           }
+          control_at_end(under)
         }
         if !under {
           c.text(title, style=titled, color?=ink) |> ignore
+          after()
           if value != "" {
             said()
           }
@@ -1106,14 +1173,31 @@ pub fn link_row(
           c.box(style=pg_row_words, fn() {
             c.box(style=row_first_line, fn() {
               if value == "" {
-                c.text(title, style=titled, color?=ink) |> ignore
+                if title_after is Some(_) {
+                  c.box(style=title_line, keep=true, fn() {
+                    c.text(title, style=titled.then(cut_words), color?=ink) |> ignore
+                    after()
+                  })
+                  |> ignore
+                } else {
+                  c.text(title, style=titled, color?=ink) |> ignore
+                }
               } else {
                 // its title and what it says in a line (what it says under the title where the line has not the
                 // room)
                 c.box(style=pg_row_words, fn() {
                   c.box(style=pg_title_value, flow=true, line_gap=0.0, fn() {
-                    c.text(title, style=if strong { pg_row_title_in.then(row_strong) } else { pg_row_title_in })
-                    |> ignore
+                    // (what is after its title beside it, one piece: the line's ends are its title's and what it says)
+                    let named = fn() {
+                      c.text(title, style=if strong { pg_row_title_in.then(row_strong) } else { pg_row_title_in })
+                      |> ignore
+                      after()
+                    }
+                    if title_after is Some(_) {
+                      c.box(style=title_beside, named) |> ignore
+                    } else {
+                      named()
+                    }
                     said()
                   })
                   |> ignore
@@ -1133,22 +1217,30 @@ pub fn link_row(
         }
       })
     Wide =>
-      c.box(style=(if under { (if goes { desk_list_link() } else { wide_list_row() }).then(row_top) } else if goes {
+      c.box(style=(if under && !face { (if goes { desk_list_link() } else { wide_list_row() }).then(row_top) } else if goes {
         desk_list_link()
       } else {
         wide_list_row()
       }).then(row_line(false)), id~, fn() {
         match lead {
-          Some(f) => if under { row_lead(c, Wide, f) } else { f() }
+          Some(f) => if under && !face { row_lead(c, Wide, f) } else { f() }
           None => ()
         }
         let title_words = fn() {
-          c.text(title, style=match (strong, danger) {
+          let style = match (strong, danger) {
             (_, true) => desk_list_title.then(bad)
             (true, false) => desk_list_title.then(row_strong)
             (false, false) => desk_list_title
-          }, color?=ink)
-          |> ignore
+          }
+          if title_after is Some(_) {
+            c.box(style=title_line, keep=true, fn() {
+              c.text(title, style=style.then(cut_words), color?=ink) |> ignore
+              after()
+            })
+            |> ignore
+          } else {
+            c.text(title, style~, color?=ink) |> ignore
+          }
         }
         // what it says, what follows it, its chevron
         let end = fn() {
@@ -1178,6 +1270,7 @@ pub fn link_row(
           if goes && (chevron || out) {
             icon(c, mark, size=desk_chevron, color=th.p.muted) |> ignore
           }
+          control_at_end(under)
         }
         if !under {
           c.box(style=desk_list_text, title_words) |> ignore
@@ -1190,7 +1283,8 @@ pub fn link_row(
             })
             |> ignore
             if note != "" {
-              c.text(note, style=if lacks { wide_list_note.then(lacking) } else { wide_list_note }) |> ignore
+              let style = if lacks { wide_list_note.then(lacking) } else { wide_list_note }
+              c.text(note, style=if note_cut { style.then(cut_words) } else { style }) |> ignore
             }
             if trouble != "" {
               c.text(trouble, style=desk_note_bad) |> ignore
@@ -1202,9 +1296,47 @@ pub fn link_row(
       })
   }
   if goes {
-    c.semantics(b, Link, id~, label=title)
+    c.semantics(b, Link, id~, label=title, expanded?=folds)
   }
   goes && c.clicked(id)
+}
+
+///|
+/// A row's title with what follows it on its line (link_row's `title_after`: a pill), 8 apart, across their middle;
+/// the title cut short where the line leaves it less.
+// kept across runs: a value (no field of it changes)
+let title_line : @ui.Style = @ui.style(row=true, w=grow, gap=S2, align=ACenter)
+
+///|
+/// A title with what is after it (a pill: 你), as wide as they are, among what else is on its line.
+// kept across runs: a value (no field of it changes)
+let title_beside : @ui.Style = @ui.css("row gap=S2 align=ACenter")
+
+///|
+/// Words on one line, cut short where their room is less.
+// kept across runs: a value (no field of it changes)
+let cut_words : @ui.TextStyle = @ui.text_style(w=Cut, wrap=false)
+
+///|
+/// How many rows' ends what is drawn now is at (row_end).
+// kept across runs: counted up and down round what a row's end draws (0 between them)
+let row_ends : Ref[Int] = Ref(0)
+
+///|
+/// What is done at a row's end (link_row's `control`): a button of words alone drawn in it stands its words where
+/// the row's value would end, its ground reaching out past them (in_row_end).
+fn row_end(f : () -> Unit) -> Unit {
+  row_ends.val += 1
+  f()
+  row_ends.val -= 1
+}
+
+///|
+/// Whether a button of words alone drawn now is at a row's end (row_end), on either width: its words on the line where
+/// the row's value would end, its ground reaching past them by its own room, out to a list card's edge (the row's
+/// words room and the card's pad, 16, a button's own), as one at a section's head reaches to the column's.
+pub fn at_row_end() -> Bool {
+  row_ends.val > 0
 }
 
 ///|
@@ -2282,7 +2414,7 @@ pub let desk_list : @ui.Style = @ui.style(w=Full, p=list_room, gap=S0_5, radius=
 pub let desk_list_out : Double = 12.0
 
 ///|
-pub fn wide_list_row() -> @ui.Style {
+fn wide_list_row() -> @ui.Style {
   wide_list_row_ground.then(@ui.style(min_h=Fixed(desk_row_least())))
 }
 
@@ -2299,7 +2431,7 @@ let wide_list_row_ground : @ui.Style = @ui.style(
 )
 
 ///|
-pub fn desk_list_link() -> @ui.Style {
+fn desk_list_link() -> @ui.Style {
   wide_list_row().then(link_hover)
 }
 

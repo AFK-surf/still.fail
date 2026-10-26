@@ -17,17 +17,12 @@ using @sf {
   desk_muted,
   desk_chevron,
   desk_mark,
-  desk_list_link,
   desk_list_text,
   desk_named,
   desk_list_title,
   desk_note_bad,
 }
 
-///|
-pub fn desk_list_row() -> @ui.Style {
-  @sf.wide_list_row()
-}
 
 ///|
 // kept across runs: a value (no field of it changes)

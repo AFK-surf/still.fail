@@ -27,10 +27,9 @@ test "外观, at each width on either screen: 主题, 字体, 动画, 语言; �
       t.draw()
       assert_eq(asked.val, 1, msg=at)
     }
-    // back up, the faces' row (under 字体, the faces chosen) opens 字体's page
-    t.wheel(w / 2.0, 450.0, -3000.0)
-    t.run_for(@ui.nav_push_ms)
-    t.tap_text("默认")
+    // the faces' row (under 字体, the faces chosen, after the settings) opens 字体's page (its words whole: 拖入 chat
+    // 的文件's note says 默认 too)
+    tap_words(t, "默认")
     t.run_for(@ui.nav_push_ms)
     assert_true(app.nav.top() == Setting(Fonts), msg=at)
   }

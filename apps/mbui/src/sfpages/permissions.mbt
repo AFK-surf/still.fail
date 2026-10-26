@@ -208,48 +208,36 @@ fn archiving_row(c : @ui.Ctx, core : Core, look : Look, s : Json?) -> Unit {
       }
   }
   let opens = view is Some(Object(_))
-  let id = if opens { c.id("archiving/" + station) } else { 0 }
-  if opens {
-    if hit(c, id) {
-      (core.push)(StationArchiving(station))
-    }
-  }
   let narrow = look == Narrow
-  c.box(style=match (narrow, opens) {
-    (true, _) => narrow_row
-    (false, true) => desk_list_link()
-    (false, false) => desk_list_row()
-  }, id~, fn() {
-    if !narrow {
-      @sf.status_dot(c, if flag(s, "online") { "online" } else { "offline" })
-    }
-    c.box(style=desk_list_text, fn() {
-      c.box(style=desk_named, fn() {
-        if @sf.has_station_mark(text(s, "emoji"), text(s, "icon")) {
-          @sf.station_mark(c, text(s, "emoji"), text(s, "icon"), desk_mark, t.p.text)
-        }
-        c.text(text(s, "name"), style=if narrow { narrow_row_title } else { desk_list_title }) |> ignore
-      })
-      |> ignore
-      c.text(line, style=match (narrow, bad) {
-        (true, true) => narrow_note_bad
-        (true, false) => narrow_note
-        (false, true) => desk_note_bad
-        (false, false) => desk_note
-      })
-      |> ignore
+  // (online or not before its words, wide; its mark before its name)
+  let lead = fn() {
+    c.box(style=archiving_lead, fn() {
+      if !narrow {
+        @sf.status_dot(c, if flag(s, "online") { "online" } else { "offline" })
+      }
+      if @sf.has_station_mark(text(s, "emoji"), text(s, "icon")) {
+        @sf.station_mark(c, text(s, "emoji"), text(s, "icon"), desk_mark, t.p.text)
+      }
     })
     |> ignore
-    if opens {
-      @sf.icon(c, "chevron-right", size=if narrow { narrow_chevron } else { desk_chevron }, color=if narrow { t.p.subtle } else { t.p.muted })
-      |> ignore
-    }
-    if narrow && opens {
-      finger_ripple(c, id)
-    }
-  })
-  |> ignore
+  }
+  if @sf.link_row(
+      c,
+      "archiving/" + station,
+      text(s, "name"),
+      note=if bad { "" } else { line },
+      trouble=if bad { line } else { "" },
+      lead~,
+      goes=opens,
+    ) {
+    (core.push)(StationArchiving(station))
+  }
 }
+
+///|
+/// What is before a station's name in its row: online or not, then its mark, 8 apart, across their middle.
+// kept across runs: a value (no field of it changes)
+let archiving_lead : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 /// A station's own archiving (StationArchivingForm): its review (on or off, the way to it), how it archives, after how

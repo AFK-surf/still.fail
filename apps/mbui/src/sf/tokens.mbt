@@ -105,8 +105,13 @@ pub(all) struct Round {
 ///|
 pub(all) struct Theme {
   dark : Bool
-  /// the narrow screen's (a phone's) ground and type
+  /// the phone's palette (its paper, white cards on it, its own tones), not the web's (a white page, grey cards on it):
+  /// on a touch device or in a window laid out Small. Colours only: the sizes go by `touch`. (Two looks until they are
+  /// one: the grounds are each other's inverse, which one is a design's choice, not a merge.)
   narrow : Bool
+  /// the native input is touch (native_input): the sizes (words, rows, controls, what a press reaches) a finger's, on
+  /// every screen; keyboard and mouse's on every screen else, a narrow window's too
+  touch : Bool
   p : Palette
   t : Type
   /// what a row is on this screen (Rows)
@@ -138,12 +143,12 @@ pub(all) struct Bars {
 
 ///|
 /// A row's roles on the screen in force (docs/architecture.md, the same on every screen and what differs): how high it
-/// is at least, its title's words and its note's, a tick's box, a short field and a switch in it. Touch's: a
-/// finger's (48; the phone's mRowTitle, its body's 15, the scale's Lg on 21, its mRowNote 13; a box 22, a field 72 by
-/// 36, a switch 44 by 26, its mSwitch); keyboard and mouse's: a list row's (40; the web's SwitchRow title, 13 on 20, its note
-/// 12; a box 18, a field 52 by 28, a switch 36 by 22).
+/// is at least (the items' least: one height for a row by the native input), its title's words and its note's, a
+/// tick's box, a short field and a switch in it. Touch's: a finger's (the phone's mRowTitle, its body's 15, the
+/// scale's Lg on 21, its mRowNote 13; a box 22, a field 72 by 36, a switch 44 by 26, its mSwitch); keyboard and
+/// mouse's: a list row's (the web's SwitchRow title, 13 on 20, its note 12; a box 18, a field 52 by 28, a switch 36
+/// by 22).
 pub(all) struct Rows {
-  least : @ui.Len
   /// a row of a picker or a menu in a small panel at least: keyboard and mouse's 34 (a menu's row), a finger's 44
   pick : Double
   title : @ui.TextStyle
@@ -910,7 +915,7 @@ let narrow_control_h : Double = 44.0
 /// on either: a finger reaches one smaller than its tip from round it (mbui's finger_reach, the system's 44 or 48), what
 /// shows and what a finger takes not the same (the user, 2026-10-26: 视觉跟触控区域可以不一样).
 pub fn finger_least_h() -> @ui.Style {
-  if theme().narrow {
+  if theme().touch {
     finger_high
   } else {
     finger_none
@@ -920,7 +925,7 @@ pub fn finger_least_h() -> @ui.Style {
 ///|
 /// The height finger_least_h holds a row to at least (44 on a touch device; none with keyboard and mouse).
 pub fn finger_row_h() -> Double {
-  if theme().narrow {
+  if theme().touch {
     narrow_control_h
   } else {
     0.0
@@ -989,7 +994,6 @@ let narrow_items : Items = {
 
 ///|
 let wide_rows : Rows = {
-  least: Fixed(40.0),
   pick: menu_row_min,
   title: @ui.text_style(size=Ui, leading=L6, color=Fg),
   note: @ui.text_style(size=Meta, leading=L5, color=Muted),
@@ -1003,7 +1007,6 @@ let wide_rows : Rows = {
 
 ///|
 let narrow_rows : Rows = {
-  least: Fixed(48.0),
   pick: narrow_control_h,
   title: @ui.text_style(size=Body, color=Fg),
   note: @ui.text_style(size=Ui, leading=L5, color=Muted),
@@ -1023,6 +1026,7 @@ let current : Ref[Theme] = {
   val: {
     dark: false,
     narrow: false,
+    touch: false,
     p: wide_light,
     t: wide_type,
     rows: wide_rows,
@@ -1110,13 +1114,15 @@ fn screen_layout(width : Double) -> Layout {
 }
 
 ///|
-/// The theme for this frame, by the screen (docs/architecture.md: the layout follows the screen, never the hand): on a
-/// touch the phone's (its palette, its type a finger's size: Android's app, a tablet's too), with keyboard and mouse the
-/// web's. Laid out Small the phone's with keyboard and mouse too, as its pages are the phone's, which carry its palette in places
-/// (sfapp messages.mbt `ink`) until they and the web's are one (the way there 4): call at the top of a view.
+/// The theme for this frame (docs/architecture.md, the terms): its sizes by the native input alone (rule 4: the screen
+/// says how things are laid out, never how large they are), a finger's on a touch device (Android's app, a tablet's
+/// too), keyboard and mouse's on a computer, its window narrow or not; its palette the phone's on a touch device and in
+/// a window laid Small, whose pages are the phone's and carry its palette in places (sfapp messages.mbt `ink`), the
+/// web's else, until the two are one (`narrow`): call at the top of a view.
 pub fn begin(c : @ui.Ctx) -> Theme {
   let dark = dark_set.val.unwrap_or(false)
-  let narrow = (native_input() is Finger) || layout(c.window_size().0) is Small
+  let touch = native_input() is Finger
+  let narrow = touch || layout(c.window_size().0) is Small
   let p = match (narrow, dark) {
     (false, false) => wide_light
     (false, true) => wide_dark
@@ -1126,15 +1132,15 @@ pub fn begin(c : @ui.Ctx) -> Theme {
   current.val = {
     dark,
     narrow,
+    touch,
     p,
-    t: if narrow { narrow_type } else { wide_type },
-    rows: if narrow { narrow_rows } else { wide_rows },
-    control_h: if narrow { narrow_control_h } else { wide_control_h },
+    t: if touch { narrow_type } else { wide_type },
+    rows: if touch { narrow_rows } else { wide_rows },
+    control_h: if touch { narrow_control_h } else { wide_control_h },
     bars: bars_drawn,
-    round: if narrow { narrow_round } else { wide_round },
-    items: if narrow { narrow_items } else { wide_items },
-    // (keyboard and mouse's window made narrow keeps keyboard and mouse's chats' list: the narrow anatomy at keyboard and mouse's sizes)
-    chat_list: if native_input() is Finger { touch_chat_list } else { mouse_chat_list },
+    round: if touch { narrow_round } else { wide_round },
+    items: if touch { narrow_items } else { wide_items },
+    chat_list: if touch { touch_chat_list } else { mouse_chat_list },
   }
   current.val
 }
@@ -2074,7 +2080,7 @@ pub let menu_row_min : Double = 34.0
 /// pick: keyboard and mouse's 34, a finger's 44, docs/architecture.md: touch targets 44 at least with touch), for a row
 /// given as a style.
 pub fn pick_high() -> @ui.Style {
-  if theme().narrow {
+  if theme().touch {
     pick_high_narrow
   } else {
     pick_high_wide

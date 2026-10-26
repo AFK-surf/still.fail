@@ -1209,8 +1209,8 @@ fn desk_find(c : @ui.Ctx, r : Reading, book : Book?, p : ReaderPaper, done? : ()
         "reader-search",
         placeholder=t("web-pages.drive.reader.findPlaceholder"),
         // (what is typed in: 14, a phone's 16, as the web's --text-input)
-        font_size=if theme().narrow { narrow_field_size } else { desk_field_size },
-        line=if theme().narrow { narrow_field_line_h } else { desk_field_line_h },
+        font_size=if theme().touch { narrow_field_size } else { desk_field_size },
+        line=if theme().touch { narrow_field_line_h } else { desk_field_line_h },
         max_lines=1,
         plain=true,
         color=p.ink,

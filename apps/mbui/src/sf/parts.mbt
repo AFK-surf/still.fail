@@ -96,13 +96,18 @@ pub fn button(
   let solid = tone == Primary || tone == DangerSolid
   // (at a sheet's foot, in a thumb's reach: its share of the foot's width, the presenters')
   let w = if w is Auto && foot_fills.val { @ui.Fill(1.0) } else { w }
+  // (one of words alone at a row's end: its words where the row's value would end, its ground reaching past them)
+  let reach = match reach {
+    None if (tone == Ghost || tone == GhostDanger) && at_row_end() => Some(outset_end(button_padx))
+    r => r
+  }
   let b = c.box(
     style=reach.unwrap_or(@ui.style()),
     dir=Row,
     w~,
     h=Px(height),
-    padx=16.0,
-    gap=if t.narrow { 8.0 } else { 6.0 },
+    padx=button_padx,
+    gap=if t.touch { 8.0 } else { 6.0 },
     align=ACenter,
     justify=JCenter,
     bg=ground,
@@ -125,7 +130,7 @@ pub fn button(
       c.text(
         label,
         size=t.t.ui,
-        weight=if t.narrow { 600 } else { 500 },
+        weight=if t.touch { 600 } else { 500 },
         color=ink,
         wrap=false,
         line=t.t.ui_line,
@@ -147,6 +152,10 @@ pub fn button(
 }
 
 ///|
+/// How far a button's words are in from its sides.
+let button_padx : Double = 16.0
+
+///|
 /// Whether a button laid out now is at a sheet's foot (the presenters' sheet_body says so while it draws one): each
 /// of its buttons as wide as the others, across the sheet (the phone's sheets' primary button, Button in mPad).
 let foot_fills : Ref[Bool] = { val: false }
@@ -158,9 +167,9 @@ let foot_fills : Ref[Bool] = { val: false }
 let on_night : Ref[Bool] = { val: false }
 
 ///|
-/// A button's height in the theme in force: the phone's 38 on a narrow, else button_h.
+/// A button's height by the native input: a finger's 38 (the phone's) with touch, else button_h.
 pub fn button_height() -> Double {
-  if theme().narrow {
+  if theme().touch {
     38.0
   } else {
     button_h
@@ -692,8 +701,8 @@ pub fn page_head(
   let t = theme()
   c.box(dir=Row, gap=16.0, align=AStart, fn() {
     c.box(w=Fill(1.0), gap=4.0, fn() {
-      if t.narrow {
-        // the phone's place title: display size
+      if look() == Narrow {
+        // a narrow page's place title (the phone's): display size
         c.text(
           title,
           size=t.t.display,
@@ -1484,22 +1493,38 @@ fn wide_switch_row(
 ) -> Bool {
   let id = c.id(key + "/words")
   let mut now = on
+  control_row(c, title, fn() { now = switch(c, key, on, label=title, disabled~, busy~) }, note~, title_style~, note_style~, words_id=if disabled || busy { 0 } else { id })
+  if c.clicked(id) {
+    !on
+  } else {
+    now
+  }
+}
+
+///|
+/// A row of a setting (a switch's, a choice's: switch_row, setting): its title with its note under it at its start,
+/// taking what the control leaves, `control` at its end across their middle, 16 apart; its words pressed where
+/// `words_id` is given (a switch's: they turn it).
+fn control_row(
+  c : @ui.Ctx,
+  title : String,
+  control : () -> Unit,
+  note? : String = "",
+  title_style? : @ui.TextStyle = theme().rows.title,
+  note_style? : @ui.TextStyle = theme().rows.note,
+  words_id? : Int = 0,
+) -> Unit {
   c.box(style=switch_row_box, fn() {
-    c.box(style=switch_row_words, id=if disabled || busy { 0 } else { id }, fn() {
+    c.box(style=switch_row_words, id=words_id, fn() {
       c.text(title, style=title_style) |> ignore
       if note != "" {
         c.text(note, style=note_style) |> ignore
       }
     })
     |> ignore
-    now = switch(c, key, on, label=title, disabled~, busy~)
+    control()
   })
   |> ignore
-  if c.clicked(id) {
-    !on
-  } else {
-    now
-  }
 }
 
 ///|
@@ -1512,7 +1537,7 @@ pub fn check_row(c : @ui.Ctx, key : String, label : String, on : Bool, note? : S
   let mut now = on
   let mut ticked = false
   let r = theme().rows
-  c.box(style=check_row_box.then(@ui.style(min_h=r.least)), id=if disabled { 0 } else { id }, fn() {
+  c.box(style=check_row_box.then(@ui.style(min_h=Fixed(theme().items.least))), id=if disabled { 0 } else { id }, fn() {
     let look = @kit.checkbox_look_of(size=r.check, radius=r.check_corner)
     let v = @kit.checkbox(c, key, if on { On } else { Off }, label~, disabled~, look~).value
     if (v == On) != on {
@@ -2494,7 +2519,7 @@ pub fn one_of(
   let items = options.map(fn(o) { @kit.item(o.0, label=o.1) })
   let r = @kit.radio_group(c, key, items, value, label~, disabled~, gap=0.0, look=fn(c, s) {
     c.box(
-      style=(if s.hovered || s.pressed { one_of_row_hot } else { one_of_row }).then(@ui.style(min_h=rows.least)),
+      style=(if s.hovered || s.pressed { one_of_row_hot } else { one_of_row }).then(@ui.style(min_h=Fixed(t.items.least))),
       disabled=s.disabled,
       fn() {
         c.text(s.label, style=rows.title) |> ignore

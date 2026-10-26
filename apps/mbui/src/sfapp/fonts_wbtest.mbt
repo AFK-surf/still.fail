@@ -5,9 +5,14 @@
 test "外观's 字体 row: the faces at a glance, opening the page: the places, a chat as they set it, the faces with their sizes" {
   let t = settings_tester("appearance")
   assert_true(t.find("字体") is Some(_))
-  // none chosen: the app's own, the section's row
+  // none chosen: the app's own, the section's row (after the settings: the page scrolled to its end)
   assert_true(t.find("默认") is Some(_))
-  t.tap_text("默认")
+  t.wheel(200.0, 450.0, 3000.0)
+  t.run_for(@ui.nav_push_ms)
+  // (its words whole: 拖入 chat 的文件's note says 默认 too)
+  let said = t.words().filter(fn(w) { w.0 == "默认" && w.5 > 0.5 })
+  assert_eq(said.length(), 1)
+  t.tap(said[0].1 + said[0].3 / 2.0, said[0].2 + said[0].4 / 2.0)
   t.run_for(@ui.nav_push_ms)
   // the places as a switch, the interface's in view
   for w in ["界面", "正文", "代码"] {

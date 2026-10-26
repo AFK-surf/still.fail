@@ -71,25 +71,22 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
         strong=true,
         goes=false,
         lead=fn() { avatar(c, core, here.email, name, acc_picture, picture=here.picture) },
-        tail=fn() {
+        control=fn() {
           let words = if others.length() > 0 {
             @sf.t("android-settings.me.signOut")
           } else {
             @sf.t("android-settings.me.signOutOnly")
           }
-          // (words alone: on its title's line, its email and how it signs in as close under it as a row's without one)
-          @sf.line_end(c, fn() {
-            if @sf.button(c, words, key="sign-out/" + here.sub, tone=Ghost) {
-              sign_out(here.sub, here.email)
-            }
-          })
+          if @sf.button(c, words, key="sign-out/" + here.sub, tone=Ghost) {
+            sign_out(here.sub, here.email)
+          }
         },
       )
       |> ignore
       for a in others {
         let sub = text(Some(a), "sub")
         let email = text(Some(a), "email")
-        @sf.link_row(c, "", email, goes=false, tail=fn() {
+        @sf.link_row(c, "", email, goes=false, control=fn() {
           if @sf.button(c, @sf.t("android-settings.me.signOut"), key="sign-out/" + sub, tone=Ghost) {
             sign_out(sub, email)
           }
@@ -103,7 +100,7 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
   })
   blocks.push(fn() {
     @sf.section(c, @sf.t("web-pages.settings.account.sessions"), heads=true, note=@sf.t("web-pages.settings.account.sessionsLead", args=[("name", "still.fail")]), fn() {
-      acc_devices(c, core, look, here)
+      acc_devices(c, core, here)
     })
   })
   // deleting the account in view, at the foot, in red (Me.tsx)
@@ -121,81 +118,63 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
 /// Where the account is signed in (the `loginSessions` topic): each device's name (this one marked 当前), when it signed
 /// in and until when; 退出 on the others (`loginSession.revoke`). Narrow, on a card. Read the first time, rows' shapes
 /// where their card's rows will be (settings.tsx: Waiting, 3).
-fn acc_devices(c : @ui.Ctx, core : Core, look : Look, here : Here) -> Unit {
+fn acc_devices(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let topic = (core.topic)("loginSessions", { "account": str(here.sub) })
   let list = match topic.value {
     Some(Array(a)) => a
     _ => {
       match topic.error {
         Some(e) => @sf.page_note(c, @sf.t("web-pages.settings.account.sessionsFailed", args=[("error", error_text(e))]), bad=true)
-        None => @sf.waiting(c, fn() { devices_list(c, core.quiet(), look, here, devices_sample()) }, text=@sf.t("common.reading"))
+        None => @sf.waiting(c, fn() { devices_list(c, core.quiet(), here, devices_sample()) }, text=@sf.t("common.reading"))
       }
       return
     }
   }
-  devices_list(c, core, look, here, list)
+  devices_list(c, core, here, list)
 }
 
 ///|
-/// The devices the account is signed in on (`list`): each its name, 当前 or 退出, when it signed in and until when.
-fn devices_list(c : @ui.Ctx, core : Core, look : Look, here : Here, list : Array[Json]) -> Unit {
-  let narrow = look == Narrow
+/// The devices the account is signed in on (`list`): each a row of its own, its name (当前 after it on this one), 退出
+/// at its end on the others, when it signed in and until when under them.
+fn devices_list(c : @ui.Ctx, core : Core, here : Here, list : Array[Json]) -> Unit {
   @sf.group(c, fn() {
     for d in list {
       let dv = Some(d)
       let id = text(dv, "id")
       let current = flag(dv, "current")
-      // its name, 当前 or 退出 on its first line; when it signed in and until when under them, a line of its own
-      c.box(style=if narrow { @sf.pg_said_row } else { desk_list_row() }, fn() {
-        @sf.row_lines(c, spaced=true, fn() {
-          c.box(style=desk_named.then(acc_device_head), fn() {
-            c.text(
-              match text(dv, "name") {
-                "" => @sf.t("web-pages.settings.account.unnamedDevice")
-                n => n
-              },
-              style=if narrow { acc_device_narrow } else { desk_list_title },
-            )
-            |> ignore
-            // (当前 after its name, wide and narrow alike: clear of its row's corners)
-            if current {
-              you(c, @sf.t("web-pages.settings.account.here"))
+      let name = match text(dv, "name") {
+        "" => @sf.t("web-pages.settings.account.unnamedDevice")
+        n => n
+      }
+      let times = @sf.t("web-pages.settings.account.sessionTimes", args=[("time", stamp(dv, "created_at", "ago")), ("until", stamp(dv, "expires_at", "until"))])
+      @sf.link_row(
+        c,
+        "device/" + id,
+        name,
+        note=times,
+        goes=false,
+        title_after?=if current { Some(fn() { you(c, @sf.t("web-pages.settings.account.here")) }) } else { None },
+        control?=if current {
+          None
+        } else {
+          Some(fn() {
+            let revoking = is_doing(core, ["loginSession.revoke"], [("id", id)])
+            if @sf.button(c, @sf.t("web-pages.settings.account.revoke"), key="revoke/" + id, tone=Ghost, busy=revoking) {
+              @settings.act(
+                core,
+                @sf.t("web-pages.settings.account.revoke"),
+                "loginSession.revoke",
+                obj([("id", str(id)), ("account", str(here.sub))]),
+                done=@sf.t("web-pages.settings.account.revoked"),
+              )
             }
           })
-          |> ignore
-          if !current {
-            @sf.line_end(c, fn() {
-              let revoking = is_doing(core, ["loginSession.revoke"], [("id", id)])
-              if @sf.button(c, @sf.t("web-pages.settings.account.revoke"), key="revoke/" + id, tone=Ghost, busy=revoking) {
-                @settings.act(
-                  core,
-                  @sf.t("web-pages.settings.account.revoke"),
-                  "loginSession.revoke",
-                  obj([("id", str(id)), ("account", str(here.sub))]),
-                  done=@sf.t("web-pages.settings.account.revoked"),
-                )
-              }
-            })
-          }
-        }, fn() {
-          let times = @sf.t("web-pages.settings.account.sessionTimes", args=[("time", stamp(dv, "created_at", "ago")), ("until", stamp(dv, "expires_at", "until"))])
-          c.text(times, style=if narrow { @sf.secondary.then(@sf.full_words) } else { desk_muted }) |> ignore
-        })
-      })
+        },
+      )
       |> ignore
     }
   })
 }
-
-///|
-/// A device's name and 当前 taking what its first line leaves 退出.
-// kept across runs: a value (no field of it changes)
-let acc_device_head : @ui.Style = @ui.style(w=@sf.grow)
-
-///|
-/// (a device's name, narrow: as wide as it is, cut short where 当前 after it leaves it less)
-// kept across runs: a value (no field of it changes)
-let acc_device_narrow : @ui.TextStyle = @sf.body.then(@sf.one_line).then(@ui.text_style(w=Cut))
 
 ///|
 let acc_picture : Double = @sf.identity_mark

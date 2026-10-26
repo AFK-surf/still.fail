@@ -41,6 +41,7 @@ fn init {
     current.val = {
       dark: false,
       narrow: false,
+      touch: false,
       p: wide_light,
       t: wide_type,
       rows: wide_rows,

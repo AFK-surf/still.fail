@@ -850,9 +850,10 @@ fn near4(a : (Double, Double, Double, Double), b : (Double, Double, Double, Doub
 /// `words` in it stand from its left and top, and how big they are.
 fn words_in_page(t : @ui.Tester, words : String) -> (Double, Double, Double)? {
   let bs = t.boxes()
+  // (a panel: rounded, large, from the window's top; a card as large on the page stands lower, in the page's panel)
   let mut page : @ui.Laid? = None
   for b in bs {
-    if b.radius >= 11.0 && b.w >= 300.0 && b.h >= 300.0 && (page is None || b.x > page.unwrap().x) {
+    if b.radius >= 11.0 && b.w >= 300.0 && b.h >= 300.0 && b.y < 50.0 && (page is None || b.x > page.unwrap().x) {
       page = Some(b)
     }
   }

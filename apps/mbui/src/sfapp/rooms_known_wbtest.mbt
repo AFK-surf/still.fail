@@ -7,7 +7,7 @@
 
 ///|
 /// The faults each rule still has (2026-10-26, as the rules came): they only fall.
-let rooms_known : Map[String, Int] = { "room": 2558, "apart": 7235, "hover": 28 }
+let rooms_known : Map[String, Int] = { "room": 2558, "apart": 7233, "hover": 28 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.

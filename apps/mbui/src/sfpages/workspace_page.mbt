@@ -131,7 +131,7 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
       fn() {
         @sf.group(c, fn() {
           for m in members {
-            ws_member_row(c, core, here, look, v, m)
+            ws_member_row(c, core, here, v, m)
           }
           if manager {
             for a in added {
@@ -139,11 +139,10 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
               let on = [("workspace", ws), ("email", email)]
               ws_person(
                 c,
-                look,
                 fn() { avatar(c, core, email, email, ws_avatar) },
                 email,
                 @sf.t("android-settings.members.added", args=[("role", role_label(text(Some(a), "role")))]),
-                fn() {
+                control=fn() {
                   if ws_row_action(c, "remove-added/" + email, @sf.t("android-settings.members.remove"), core, ["workspace.removeAdded"], on) {
                     @settings.act(
                       core,
@@ -164,11 +163,10 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
               let on = [("workspace", ws), ("invitation", id)]
               ws_person(
                 c,
-                look,
                 fn() { avatar(c, core, if email != "" { email } else { id }, if email != "" { email } else { "?" }, ws_avatar) },
                 if email != "" { email } else { @sf.t("android-settings.members.anyone") },
                 @sf.t("android-settings.members.invitation", args=[("role", role_label(text(iv, "role"))), ("until", stamp(iv, "expires_at", "until"))]),
-                fn() {
+                control=fn() {
                   if ws_row_action(c, "revoke/" + id, @sf.t("android-settings.members.revoke"), core, ["workspace.revokeInvitation"], on) {
                     @settings.act(
                       core,
@@ -194,7 +192,7 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
       @sf.section(c, @sf.t("android-settings.relays.title"), note=@sf.t("android-settings.relays.lead", args=[("app", "still.fail")]), fn() {
         @sf.group(c, fn() {
           for url in relays {
-            @sf.link_row(c, "", url.replace(old="https://", new="").replace(old="http://", new=""), goes=false, tail=fn() {
+            @sf.link_row(c, "", url.replace(old="https://", new="").replace(old="http://", new=""), goes=false, control=fn() {
               if manager && @sf.button(c, @sf.t("android-settings.members.remove"), key="relay/" + url, tone=Ghost, disabled=busy) {
                 @settings.act(
                   core,
@@ -297,56 +295,40 @@ fn workspace_sample() -> Json {
 
 ///|
 /// A person among the workspace's people, a row of its list card on either width (MemberRow): their picture, their
-/// name (`badge` after it: 你) and what is at its end on its first line (their role, what can be done there), what is
-/// said under them; pressed where `id` is given.
+/// name (`badge` after it: 你), what is said under them, and at its end on its first line `value` (their role) or
+/// `control` (移除, 撤回); pressed where `key` is given (what can be done about them, no chevron: it opens beside it).
 fn ws_person(
   c : @ui.Ctx,
-  look : Look,
   picture : () -> Unit,
   name : String,
   under : String,
-  end : () -> Unit,
+  value? : String = "",
+  tail? : () -> Unit,
+  control? : () -> Unit,
   badge? : String = "",
-  id? : Int = 0,
-) -> Int {
-  let narrow = look == Narrow
-  let style = match (narrow, id != 0) {
-    (true, true) => narrow_row
-    (true, false) => @sf.pg_said_row
-    (false, true) => desk_list_link()
-    (false, false) => desk_list_row()
-  }
-  c.box(style~, id~, fn() {
-    picture()
-    // (their name and what is at its end on its first line, what is said under it a line of its own as wide as their
-    // words: docs/ui-panels.md 放不下的时候)
-    @sf.row_lines(c, fn() {
-      c.box(style=desk_named.then(ws_row_head), fn() {
-        c.text(name, style=if narrow { mem_narrow_title } else { desk_list_title }) |> ignore
-        if badge != "" {
-          you(c, badge)
-        }
-      })
-      |> ignore
-      @sf.line_end(c, end)
-    }, fn() { c.text(under, style=if narrow { narrow_note } else { desk_note }) |> ignore }, spaced=!narrow)
-    if id != 0 && narrow {
-      finger_ripple(c, id)
-    }
-  })
+  key? : String = "",
+) -> Bool {
+  @sf.link_row(
+    c,
+    key,
+    name,
+    value~,
+    note=under,
+    lead=picture,
+    face=true,
+    tail?,
+    control?,
+    title_after?=if badge != "" { Some(fn() { you(c, badge) }) } else { None },
+    goes=key != "",
+    chevron=false,
+  )
 }
-
-///|
-/// A person's row's head: what names them, taking what its first line leaves what is at its end (their role, 移除,
-/// 撤回).
-// kept across runs: a value (no field of it changes)
-let ws_row_head : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 /// A person in the workspace (MemberRow): their picture, name (你 for the viewer) and email, their role at its end;
 /// pressed (where the viewer may), what can be done about them: their role (by the owner), moving them out, asked
 /// first (ws_member_panel: a sheet with a finger, a popover with a mouse).
-fn ws_member_row(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json?, m : Json) -> Unit {
+fn ws_member_row(c : @ui.Ctx, core : Core, here : Here, v : Json?, m : Json) -> Unit {
   let mv = Some(m)
   let sub = text(mv, "sub")
   let email = text(mv, "email")
@@ -359,29 +341,21 @@ fn ws_member_row(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json?, 
   let ws = text(v, "id")
   let now = text(mv, "role")
   let can = sub != here.sub && manager && (now != "owner" || role == "owner")
-  let id = if can { c.id("member/" + sub) } else { 0 }
-  if can {
-    if c.clicked(id) {
-      ws_member_panel(core, here, v, m, name, Of(id))
-    }
-  }
-  let b = ws_person(
+  let key = if can { "member/" + sub } else { "" }
+  let on = [("workspace", ws), ("member", sub)]
+  let calls = ["workspace.setRole", "workspace.removeMember"]
+  let pressed = ws_person(
     c,
-    look,
     fn() { avatar(c, core, email, name, ws_avatar, picture=text(mv, "picture")) },
     name,
     email,
-    fn() {
-      let on = [("workspace", ws), ("member", sub)]
-      let calls = ["workspace.setRole", "workspace.removeMember"]
-      doing_mark(c, is_doing(core, calls, on), failed_of(core, calls, on))
-      c.text(role_label(now), style=if look == Narrow { @sf.pg_value } else { @sf.wide_value }) |> ignore
-    },
+    value=role_label(now),
+    tail=fn() { doing_mark(c, is_doing(core, calls, on), failed_of(core, calls, on)) },
     badge=if sub == here.sub { @sf.t("android-settings.members.you") } else { "" },
-    id~,
+    key~,
   )
-  if can {
-    c.semantics(b, Button, id~, label=name)
+  if pressed {
+    ws_member_panel(core, here, v, m, name, Of(c.id(key)))
   }
 }
 
