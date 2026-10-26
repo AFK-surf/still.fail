@@ -431,46 +431,36 @@ fn connect_form(
 ///|
 /// An account on several stations (ProfileAccountScreen): what they have in common, then each station's part, each
 /// leading to its page there.
-fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> Unit {
+pub fn profile_account_blocks(c : @ui.Ctx, core : Core, here : Here, key : String) -> (String, String, Array[() -> Unit]) {
   let t = @sf.theme()
   let topic = (core.topic)("profiles", { "scope": str(here.workspace) })
   let e = items(topic.value, "items").iter().find_first(fn(x) { text(Some(x), "key") == key })
-  c.box(w=Fill(1.0), h=Fill(1.0), fn() {
     match e {
-      None => {
-        nav_bar(c, core, "Profile", "Profile")
-        if topic.value is Some(_) {
-          place_empty(c, tr("android-settings.profile.none"))
-        } else {
-          waiting_cards(
-            c,
-            error=match topic.error {
-              Some(x) => error_text(x)
-              None => ""
+      None =>
+        (
+          "Profile",
+          "",
+          [
+            fn() {
+              if topic.value is Some(_) {
+                place_empty(c, tr("android-settings.profile.none"))
+              } else {
+                waiting_cards(
+                  c,
+                  error=match topic.error {
+                    Some(x) => error_text(x)
+                    None => ""
+                  },
+                )
+              }
             },
-          )
-        }
-      }
+          ],
+        )
       Some(ev) => {
         let ev = Some(ev)
         let p = field(ev, "profile")
         let station = text(ev, "station")
-        nav_bar(c, core, "Profile", text(p, "name"), sub=fn() {
-          c.text(
-            join(
-              [
-                text(p, "email"),
-                text(p, "kindText"),
-              ],
-              " · ",
-            ),
-            size=t.t.caption,
-            color=t.p.muted,
-            wrap=false,
-            line=16.0,
-          )
-          |> ignore
-        })
+        let small = join([text(p, "email"), text(p, "kindText")], " · ")
         let blocks : Array[() -> Unit] = [
           fn() { gap(c, 16.0) },
           fn() {
@@ -544,12 +534,9 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
             }
           })
         })
-        blocks.push(fn() { gap(c, 30.0) })
-        scroll_page(c, "profile-account/" + key, blocks)
+        (text(p, "name"), small, blocks)
       }
     }
-  })
-  |> ignore
 }
 
 ///|

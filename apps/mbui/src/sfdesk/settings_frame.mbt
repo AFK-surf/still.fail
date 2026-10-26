@@ -42,7 +42,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (Home | Appearance | Fonts | BarSettings | About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) | LocalStation | MemoryDoc(_, _, _) | AutoCompletion | AutoPolicy(_) | Archive | Stations | Profiles(_))) {
+  if !(route is (Home | Appearance | Fonts | BarSettings | About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) | LocalStation | MemoryDoc(_, _, _) | AutoCompletion | AutoPolicy(_) | Archive | Stations | Profiles(_) | AdbShare(_) | ProfileAccount(_) | KeptFiles | KeptChat(_, _))) {
     return false
   }
   let core = settings_core(src, w)
@@ -99,6 +99,11 @@ fn setting_drawn(c : @ui.Ctx, src : Source, w : Workspace, core : Core, here : H
     Stations => @sfpages.stations_page(c, src, core, here, w, frame)
     // Profile as a page of its own (a small screen's: the bar's place; from settings; a station's)
     Profiles(only) => @sfpages.profiles_page(c, core, here, frame, only)
+    // the settings' pages only the narrow app had, in the library's frame (sfpages' settings_one.mbt)
+    KeptFiles => @sfpages.kept_page(c, core, frame)
+    KeptChat(st, thread) => @sfpages.kept_chat_page(c, core, frame, st, thread)
+    AdbShare(a) => @sfpages.adb_page(c, core, here, frame, a)
+    ProfileAccount(k) => @sfpages.profile_account_page(c, core, here, frame, k)
     MemoryDoc(a, skill, at) => @sfpages.memory_doc_page(c, core, frame, a, skill, at)
     AutoCompletion => @sfpages.completion_page(c, core, here, frame)
     AutoPolicy(s) => @sfpages.policy_page(c, core, here, frame, s)

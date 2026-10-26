@@ -218,14 +218,10 @@ fn size_row(
 /// files opened in it), each to look into; then what is of no chat: files of no chat known, the drives' files opened
 /// (`drive.kept.clear`); or everything. (The Android app also lists its web pages' cache, update packages, temporary
 /// files and the core's own data: this app keeps none of those apart.)
-fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
+pub fn kept_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
   let t = @sf.theme()
   kept_read(c, core)
-  let blocks : Array[() -> Unit] = [
-    fn() { top_back(c, core, tr("android-settings.title")) },
-    fn() { large_title(c, tr("android-settings.files.title")) },
-    fn() { page_note(c, tr("android-settings.files.note")) },
-  ]
+  let blocks : Array[() -> Unit] = [fn() { page_note(c, tr("android-settings.files.note")) }]
   match kept.chats {
     None => blocks.push(fn() { waiting_rows(c) })
     Some(chats) => {
@@ -323,8 +319,7 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
       }
     }
   }
-  blocks.push(fn() { gap(c, 30.0) })
-  scroll_page(c, "kept", blocks)
+  blocks
 }
 
 ///|
@@ -384,7 +379,7 @@ let kept_bin : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter justify=
 /// A chat's (KeptChatScreen): what is kept of its messages, deleted when asked (`cache.clear`: read again from its
 /// station when it is opened), and the files opened in it, each to delete; or all of it. Station "": the files of no
 /// chat known.
-fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> Unit {
+pub fn kept_chat_blocks(c : @ui.Ctx, core : Core, station : String, thread : Int) -> (String, Array[() -> Unit]) {
   let t = @sf.theme()
   kept_read(c, core)
   let loose = station == ""
@@ -393,10 +388,8 @@ fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> U
     _ => None
   }
   let files = if loose { kept.loose } else { items(chat, "files") }
-  let blocks : Array[() -> Unit] = [
-    fn() { top_back(c, core, tr("android-settings.files.title")) },
-    fn() { large_title(c, if loose { tr("android-settings.files.loose") } else { text(chat, "title") }) },
-  ]
+  let title = if loose { tr("android-settings.files.loose") } else { text(chat, "title") }
+  let blocks : Array[() -> Unit] = []
   let clear = fn() {
     match chat {
       Some(_) =>
@@ -455,8 +448,7 @@ fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> U
       })
     }
   }
-  blocks.push(fn() { gap(c, 30.0) })
-  scroll_page(c, "kept/" + station + "/" + thread.to_string(), blocks)
+  (title, blocks)
 }
 
 ///|
