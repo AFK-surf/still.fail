@@ -95,10 +95,12 @@ double mb_host_mem_bytes(void);
 
 // ---- frames: GTK's frame clock ticks while one is wanted, and each tick has the area drawn ----
 
+static void canvas_queue_render(GtkWidget *w);
+
 static gboolean on_tick(GtkWidget *w, GdkFrameClock *clock, gpointer data) {
   (void)w, (void)clock, (void)data;
   if (want_frame) {
-    gtk_gl_area_queue_render(GTK_GL_AREA(area));
+    canvas_queue_render(area);
     return G_SOURCE_CONTINUE;
   }
   tick_id = 0;
@@ -131,21 +133,158 @@ double mb_app_scale(void) { return scale; }
 void *mb_app_under(void) { return under; }
 
 // The canvas: a GtkGLArea that holds no press where a native view shows (linux_views.c): the view under it has it.
+// Drawn at the window's own scale, a fractional one too (GNOME's 125%, 150%, at which GTK draws the window:
+// gdk_surface_get_scale): GtkGLArea makes its picture at the whole scale above that (2 for 1.25), which GTK then
+// shrinks as it draws the window, softer than the rest of it and over twice the pixels. So the area's GL context is
+// kept, but its picture is the canvas's own: a texture of the surface's scale drawn into through a framebuffer of its
+// own (on_render), handed to GTK as a GdkGLTexture, which it draws pixel for pixel; upside down as GL draws, flipped
+// back as GtkGLArea does. A texture GTK still holds is not drawn into; the last one drawn is drawn again when the
+// window is drawn for something else.
+typedef struct {
+  GLuint id;
+  int w, h;
+  int held;     // GTK has it (its GdkTexture not released yet)
+  GLsync sync;  // the fence GTK waited on for it, let go as it is drawn into again
+} CanvasTex;
+
 typedef struct {
   GtkGLArea parent;
+  GLuint fbo;
+  GPtrArray *texs;    // CanvasTex, made as needed, kept for drawing into again
+  GdkTexture *last;   // the picture drawn last
+  int needs_render;   // a frame asked for (canvas_queue_render), or none drawn yet
 } Canvas;
 typedef struct {
   GtkGLAreaClass parent;
 } CanvasClass;
 G_DEFINE_TYPE(Canvas, canvas, GTK_TYPE_GL_AREA)
 
+static gboolean on_render(GtkGLArea *a, GdkGLContext *c, gpointer data);
+static void canvas_resized(int pw, int ph);
+
 static gboolean canvas_contains(GtkWidget *w, double x, double y) {
   return !mb_views_pass_through(x, y) && GTK_WIDGET_CLASS(canvas_parent_class)->contains(w, x, y);
 }
 
-static void canvas_class_init(CanvasClass *k) { GTK_WIDGET_CLASS(k)->contains = canvas_contains; }
+// a frame of the canvas asked for: drawn as GTK next draws the window
+static void canvas_queue_render(GtkWidget *w) {
+  ((Canvas *)w)->needs_render = 1;
+  gtk_widget_queue_draw(w);
+}
 
-static void canvas_init(Canvas *c) { (void)c; }
+static void canvas_tex_released(gpointer data) { ((CanvasTex *)data)->held = 0; }
+
+// the window's scale now, fractional ones too
+static double canvas_scale(GtkWidget *w) {
+  GtkNative *n = gtk_widget_get_native(w);
+  GdkSurface *s = n ? gtk_native_get_surface(n) : NULL;
+  double k = s ? gdk_surface_get_scale(s) : 0;
+  return k > 0 ? k : gtk_widget_get_scale_factor(w);
+}
+
+static void canvas_snapshot(GtkWidget *w, GtkSnapshot *snap) {
+  Canvas *c = (Canvas *)w;
+  GdkGLContext *ctx = gtk_gl_area_get_context(GTK_GL_AREA(w));
+  int lw = gtk_widget_get_width(w), lh = gtk_widget_get_height(w);
+  if (!ctx || gtk_gl_area_get_error(GTK_GL_AREA(w))) {
+    GTK_WIDGET_CLASS(canvas_parent_class)->snapshot(w, snap);
+    return;
+  }
+  if (lw <= 0 || lh <= 0) return;
+  double k = canvas_scale(w);
+  int pw = (int)lround(lw * k), ph = (int)lround(lh * k);
+  if (c->last && (gdk_texture_get_width(c->last) != pw || gdk_texture_get_height(c->last) != ph)) c->needs_render = 1;
+  if (c->needs_render || !c->last) {
+    gtk_gl_area_make_current(GTK_GL_AREA(w));
+    CanvasTex *t = NULL;
+    for (guint i = 0; i < c->texs->len && !t; i++) {
+      CanvasTex *u = g_ptr_array_index(c->texs, i);
+      if (!u->held) t = u;
+    }
+    if (!t) {
+      t = g_new0(CanvasTex, 1);
+      glGenTextures(1, &t->id);
+      g_ptr_array_add(c->texs, t);
+    }
+    if (t->sync) glDeleteSync(t->sync), t->sync = NULL;
+    glBindTexture(GL_TEXTURE_2D, t->id);
+    if (t->w != pw || t->h != ph) {
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, pw, ph, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      t->w = pw, t->h = ph;
+    }
+    if (!c->fbo) glGenFramebuffers(1, &c->fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, c->fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, t->id, 0);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+      fprintf(stderr, "mbui: the canvas's framebuffer is not complete (%dx%d)\n", pw, ph);
+      return;
+    }
+    canvas_resized(pw, ph);
+    c->needs_render = 0;
+    on_render(GTK_GL_AREA(w), ctx, NULL);
+    glBindFramebuffer(GL_FRAMEBUFFER, c->fbo);
+    GdkGLTextureBuilder *b = gdk_gl_texture_builder_new();
+    gdk_gl_texture_builder_set_context(b, ctx);
+    gdk_gl_texture_builder_set_id(b, t->id);
+    gdk_gl_texture_builder_set_width(b, pw);
+    gdk_gl_texture_builder_set_height(b, ph);
+    gdk_gl_texture_builder_set_format(b, GDK_MEMORY_R8G8B8A8_PREMULTIPLIED);
+    // (GTK draws it once GL is done with it: a fence, which OpenGL ES 3 has)
+    t->sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    gdk_gl_texture_builder_set_sync(b, t->sync);
+    t->held = 1;
+    g_clear_object(&c->last);
+    c->last = gdk_gl_texture_builder_build(b, canvas_tex_released, t);
+    g_object_unref(b);
+  }
+  gtk_snapshot_save(snap);
+  gtk_snapshot_translate(snap, &GRAPHENE_POINT_INIT(0, lh));
+  gtk_snapshot_scale(snap, 1, -1);
+  gtk_snapshot_append_texture(snap, c->last, &GRAPHENE_RECT_INIT(0, 0, lw, lh));
+  gtk_snapshot_restore(snap);
+}
+
+// its scale changing (to another monitor's, the desktop's setting changed): drawn anew at it
+static void canvas_on_scale(GObject *o, GParamSpec *p, gpointer data) {
+  (void)o, (void)p;
+  canvas_queue_render(data);
+}
+
+static void canvas_realize(GtkWidget *w) {
+  GTK_WIDGET_CLASS(canvas_parent_class)->realize(w);
+  GdkSurface *s = gtk_native_get_surface(gtk_widget_get_native(w));
+  if (s) g_signal_connect_object(s, "notify::scale", G_CALLBACK(canvas_on_scale), w, 0);
+  ((Canvas *)w)->needs_render = 1;
+}
+
+// its context let go: what was made in it with it (a texture GTK holds yet is left to GTK's release of it)
+static void canvas_unrealize(GtkWidget *w) {
+  Canvas *c = (Canvas *)w;
+  if (gtk_gl_area_get_context(GTK_GL_AREA(w))) {
+    gtk_gl_area_make_current(GTK_GL_AREA(w));
+    if (c->fbo) glDeleteFramebuffers(1, &c->fbo);
+    for (guint i = 0; i < c->texs->len; i++) {
+      CanvasTex *t = g_ptr_array_index(c->texs, i);
+      glDeleteTextures(1, &t->id);
+      if (t->sync) glDeleteSync(t->sync);
+    }
+  }
+  c->fbo = 0;
+  g_clear_object(&c->last);
+  g_ptr_array_set_size(c->texs, 0);
+  GTK_WIDGET_CLASS(canvas_parent_class)->unrealize(w);
+}
+
+static void canvas_class_init(CanvasClass *k) {
+  GTK_WIDGET_CLASS(k)->contains = canvas_contains;
+  GTK_WIDGET_CLASS(k)->snapshot = canvas_snapshot;
+  GTK_WIDGET_CLASS(k)->realize = canvas_realize;
+  GTK_WIDGET_CLASS(k)->unrealize = canvas_unrealize;
+}
+
+static void canvas_init(Canvas *c) { c->texs = g_ptr_array_new(); }
 
 static void device_tell(mb_outside_fn tell);  // linux_device.h: the clipboard's reads done
 static void pick_tell(mb_outside_fn tell);    // the files picked
@@ -192,11 +331,11 @@ static gboolean on_render(GtkGLArea *a, GdkGLContext *c, gpointer data) {
   return TRUE;
 }
 
-// the framebuffer's size in pixels (GTK's, at the window's scale), as it changes
-static void on_resize(GtkGLArea *a, int w, int h, gpointer data) {
-  (void)a, (void)data;
-  fb_pw = w;
-  fb_ph = h;
+// the framebuffer's size in pixels (the canvas's, at the window's scale), as it changes
+static void canvas_resized(int pw, int ph) {
+  if (pw == fb_pw && ph == fb_ph) return;
+  fb_pw = pw;
+  fb_ph = ph;
   schedule();
 }
 
@@ -698,8 +837,6 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   if (setup_min_w > 0 || setup_min_h > 0)
     gtk_widget_set_size_request(area, (int)lround(setup_min_w), (int)lround(setup_min_h));
   g_signal_connect(area, "realize", G_CALLBACK(on_realize), NULL);
-  g_signal_connect(area, "render", G_CALLBACK(on_render), NULL);
-  g_signal_connect(area, "resize", G_CALLBACK(on_resize), NULL);
 
   im = gtk_im_multicontext_new();
   gtk_im_context_set_client_widget(im, area);
