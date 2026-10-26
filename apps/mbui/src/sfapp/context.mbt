@@ -73,7 +73,7 @@ fn open_context(src : Source, r : ChatRef, key : String) -> Unit {
       close()
       let params : Json = { "station": Json::string(r.station), "key": Json::string(key) }
       // told once the frame's builds are over, not while this one builds
-      c.after_build("context/compact", fn() {
+      c.tell("context/compact", fn() {
         act(src, tr("web-pages.chat.compact"), context_key("session.compact", r.station, key), "session.compact", params, done=tr("web-mobile.agent.compacting"))
       })
     }

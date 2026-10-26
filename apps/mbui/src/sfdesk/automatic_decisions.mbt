@@ -56,7 +56,7 @@ fn completion_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     // 重新发现模型: every online station's models read again
     actions=fn() {
       if @sf.button(c, @sf.t("web-pages.automaticDecisions.refresh"), key="auto-refresh", tone=Ghost, icon="refresh") {
-        c.after_build("auto-refresh", fn() {
+        c.tell("auto-refresh", fn() {
           match topic.value {
             Some(Array(a)) =>
               for st in a {
@@ -183,15 +183,15 @@ fn completion_station(c : @ui.Ctx, core : Core, s : Json?, view : Json?) -> Unit
           _ => c.text(chosen, style=dc_aside) |> ignore
         }
         if @sf.switch(c, "auto-enabled/" + station, flag(d, "enabled"), disabled=busy) != flag(d, "enabled") {
-          c.after_build("auto-enabled/" + station, fn() { call("edit", [("enabled", Json::boolean(!flag(d, "enabled")))]) })
+          c.tell("auto-enabled/" + station, fn() { call("edit", [("enabled", Json::boolean(!flag(d, "enabled")))]) })
         }
         if flag(d, "dirty") &&
           @sf.button(c, @sf.t("web-pages.automaticDecisions.save"), key="auto-save/" + station, tone=Primary, busy=saving, disabled=busy) {
-          c.after_build("auto-save/" + station, fn() { call("save", []) })
+          c.tell("auto-save/" + station, fn() { call("save", []) })
         }
         if can_review &&
           @sf.button(c, @sf.t("web-pages.automaticDecisions.review"), key="auto-review/" + station, tone=Ghost, busy=reviewing, disabled=busy || reviewing) {
-          c.after_build("auto-review/" + station, fn() {
+          c.tell("auto-review/" + station, fn() {
             @settings.act(
               core,
               @sf.t("web-pages.automaticDecisions.reviewAction"),
@@ -430,7 +430,7 @@ fn policy_body(c : @ui.Ctx, core : Core, station : String, policy : Json?) -> Un
     let wid = c.id("policy-text")
     if !busy {
       if hit(c, wid) {
-        c.after_build("policy-text", fn() { open("", None) })
+        c.tell("policy-text", fn() { open("", None) })
       }
     }
     c.box(style=if busy { pol_words_box } else { pol_words_live }, id=wid, fn() {
@@ -449,7 +449,7 @@ fn policy_body(c : @ui.Ctx, core : Core, station : String, policy : Json?) -> Un
           let oid = c.id("policy-option/" + text(ov, "id"))
           if !busy {
             if hit(c, oid) {
-              c.after_build("policy-option/" + text(ov, "id"), fn() { open(text(ov, "id"), ov) })
+              c.tell("policy-option/" + text(ov, "id"), fn() { open(text(ov, "id"), ov) })
             }
           }
           c.box(style=if busy { pol_option } else { pol_option_live }, id=oid, fn() {
@@ -463,7 +463,7 @@ fn policy_body(c : @ui.Ctx, core : Core, station : String, policy : Json?) -> Un
         let aid = c.id("policy-add/" + archive.to_string())
         if !busy {
           if hit(c, aid) {
-            c.after_build("policy-add/" + archive.to_string(), fn() { add(archive) })
+            c.tell("policy-add/" + archive.to_string(), fn() { add(archive) })
           }
         }
         c.box(style=if busy { pol_add } else { pol_add_live }, id=aid, fn() {
@@ -590,7 +590,7 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
           if flag(o, "archive") { 0 } else { 1 },
         )
         if (i == 0) != flag(o, "archive") {
-          c.after_build("policy-archive", fn() { edit([("option", str(okey)), ("archive", Json::boolean(i == 0))]) })
+          c.tell("policy-archive", fn() { edit([("option", str(okey)), ("archive", Json::boolean(i == 0))]) })
         }
       })
       // the chats the checks put there, each to its chat

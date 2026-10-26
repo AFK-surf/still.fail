@@ -103,3 +103,37 @@ test "what a tell is answered at once is shown by the frame after it, owed at it
   assert_eq(t.time(), at)
   t.assert_idle()
 }
+
+///|
+test "a tap said by after_build is lost when the frame is built again; by tell, told (detlint's after-build-input)" {
+  let told : Array[String] = []
+  let open = Ref::new(false)
+  let t = @ui.Tester::new(
+    fn(c) {
+      let b = c.id("button")
+      if c.clicked(b) {
+        open.val = true
+        // the build that took the tap says both; the build after it sees no tap and says neither
+        c.after_build("by-after-build", fn() { told.push("after_build") })
+        c.tell("by-tell", fn() { told.push("tell") })
+      }
+      let a = c.id("panel")
+      let h = match c.laid_size(a) {
+        Some((_, h)) => h
+        None => 0.0
+      }
+      c.column(fn() {
+        c.box(w=Px(100.0), h=Px(40.0), id=b, fn() {  }) |> ignore
+        c.box(w=Px(100.0), h=Px(if open.val { 80.0 } else { 20.0 }), id=a, fn() {  }) |> ignore
+        c.box(w=Px(100.0), h=Px(h), fn() {  }) |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=400.0,
+  )
+  t.tap(50.0, 20.0)
+  // after_build keeps the last build's alone, which took no tap: what it said is gone
+  assert_eq(told, ["tell"])
+  t.assert_idle()
+}

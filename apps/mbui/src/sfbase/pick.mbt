@@ -126,7 +126,7 @@ pub fn pickable(
     // the press is the pick's: the list holds still, lifting it taps nothing
     c.take_press()
     let at = press.frame
-    c.after_build("haptic/hold/pick", fn() {
+    c.tell("haptic/hold/pick", fn() {
       if pick_felt.val != at {
         pick_felt.val = at
         @ui.haptic(LongPress)

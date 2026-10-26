@@ -172,6 +172,7 @@
       "src/kitdemo/gallery/textcheck.mbt": 1,
       "src/kitdemo/gallery/viewcheck.mbt": 1
     },
+    "after-build-input": {},
     "unsettled-ok": {},
     "host-delay": {
       "android/app/src/main/java/dev/mbui/Host.java": 1,

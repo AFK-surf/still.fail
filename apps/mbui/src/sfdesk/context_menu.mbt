@@ -151,7 +151,7 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
   match m.chosen {
     Some("open") => {
       let href = context.link
-      c.after_build("context-open", fn() { @ui.open_url(href) |> ignore })
+      c.tell("context-open", fn() { @ui.open_url(href) |> ignore })
     }
     Some("copy-link") => c.copy_text(context.link)
     Some("copy") => c.copy_text(context.words)
