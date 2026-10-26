@@ -9,7 +9,8 @@
 //   reaches it from round it, by a finger or a pointer alike (Ctx's press_reach): its room is it grown so round its
 //   middle, moved in from the window's edge rather than cut short there, within what holds it that takes presses (a
 //   row's button: in the row's room, not its neighbour's) (press_room); where two rooms meet, each has the part
-//   nearer it, as the hit test gives it.
+//   nearer it, as the hit test gives it. A ground is no control (Ctx::cursor's Arrow: a stage a click shows the bars
+//   on, the room round a list's rows, a message's words a hold picks in): no room of its own, none it cuts.
 // apart: two such in one layer, neither holding the other, are never drawn over each other: a press there would be
 //   either's.
 // hover: what is shown only under the hand (Ctx::hand_shown: a row's ⋯ under a resting pointer) and takes presses is a
@@ -113,8 +114,9 @@ fn Ctx::room_faults(self : Ctx) -> Array[String] {
       holder[i] = if takes[p] { p } else { holder[p] }
     }
     // (a part of what holds it, a row's state line, its station's mark, is only pointed at, Ctx::box's `points`: a
-    // press on it is what holds it's, no target of its own)
-    if self.takes_at(i) {
+    // press on it is what holds it's, no target of its own; a ground is no control, Ctx::cursor's Arrow: a stage, the
+    // room round a list's rows, a message's words a hold picks in)
+    if self.takes_at(i) && desk.cursors.get(self.nodes[i].id) != Some(Cursor::Arrow.code()) {
       takes[i] = true
       if whole[i] {
         targets.push(i)
