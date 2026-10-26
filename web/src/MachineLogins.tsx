@@ -312,17 +312,20 @@ function StartedIn({ station, login }: { station: string; login: MachineLoginSho
   return <>{words[0]}<Link className={css.chatLink} to={`${stationBase(station)}/chats/${encodeURIComponent(login.chat)}`}>{title}</Link>{words[1]}</>;
 }
 
-/** A login that ended: its command, which chat's agent started it, who ended it and how, when (pressed: nothing). */
+/**
+ * A login that ended: its program (devin, as its card names it: its command line is the agent's way, not what was
+ * logged in to), which chat's agent started it, how it ended, when (pressed: nothing).
+ */
 function PastRow({ station, login, marked }: { station: string; login: MachineLoginShown; marked: boolean }) {
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => { if (marked) box.current?.scrollIntoView({ block: "center" }); }, [marked]);
-  // Who ended it says how it ended (张三 取消): the status then says nothing more.
-  const rest = [login.doneByText, login.whenText, login.doneByText ? null : login.statusText].filter(Boolean).join(" · ");
+  // Who ended it says how it ended (张三 取消), else the status does (已取消); then when.
+  const rest = [login.doneByText || login.statusText, login.whenText].filter(Boolean).join(" · ");
   return (
     <div ref={box} className={`${pagesCss.listRow} ${css.pastRow}`} data-marked={marked || undefined}>
       <span className={`${pagesCss.mark} ${css.mark}`}><Key size={18} strokeWidth={1.7} /></span>
       <span className={pagesCss.cardRowText}>
-        <strong className={css.name}>{login.command}</strong>
+        <strong className={css.name}>{login.name}</strong>
         <span className={login.state === "failed" ? css.stateFailed : css.state}>
           {login.chat && <><StartedIn station={station} login={login} />{" · "}</>}{rest}
         </span>

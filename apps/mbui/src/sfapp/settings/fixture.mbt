@@ -1166,7 +1166,9 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
               obj([
                 ("id", str("login-0")),
                 ("active", Json::boolean(false)),
-                ("command", str("gh auth login")),
+                ("name", str("gh")),
+                ("command", str("env GH_HOST=github.com /opt/homebrew/bin/gh auth login")),
+                ("chat", str("s-c1")),
                 ("chatTitle", str("整理发布清单")),
                 ("whenText", str("昨天")),
                 ("statusText", str("已登录")),
