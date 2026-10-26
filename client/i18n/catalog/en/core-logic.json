@@ -97,8 +97,8 @@
   "core-logic.rail.usage.today": "Today",
   "core-logic.footprint.actions.none": "Nothing to clean up",
   "core-logic.fleet.machines": {
-    "one": "On 1 machine",
-    "other": "On {n} machines"
+    "one": "Used 1 machine today",
+    "other": "Used {n} machines today"
   },
   "core-logic.fleet.chats": {
     "one": "1 chat running",

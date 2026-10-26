@@ -3394,7 +3394,10 @@ export interface FleetView {
 	chats: number;
 	/** That in words: 9 个对话正在运行. */
 	chatsText: string;
-	/** On how many stations (theirs: not those that run tasks for them): 分布在 3 台设备. */
+	/**
+	 * On how many stations today's chats are (those at work, and those whose last letter was written, or that were
+	 * archived, today; theirs: not those that run tasks for them): 今天用了 3 台设备.
+	 */
 	where: string;
 	/** The chats archived and what was spent today; absent while it is read, or with nothing spent nor archived. */
 	today?: FleetToday;

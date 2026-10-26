@@ -1201,7 +1201,7 @@ export class Views implements Owner {
           };
         });
         const offset = this.#core.host.utcOffsetMin(now);
-        return { ok: fleetView(read, profiles, usage, format.dateClock(now, offset), offset) };
+        return { ok: fleetView(read, profiles, usage, now, offset) };
       }
       case "railCard": {
         const scope = view.scope as string;
