@@ -20,6 +20,7 @@
 #include <string.h>
 #include <time.h>
 #include "win.h"
+#include <dwmapi.h>
 #include "post.h"
 #include "done_watch.h"
 
@@ -77,13 +78,37 @@ enum { WM_MB_DRAG = WM_APP + 6 };  // (win_life.h has 1 to 5, win.h 4)
 static int frames_drawn;
 static int sizing;  // inside the modal move/size loop, where our loop does not run
 
-static double mb_now_ms(void) {
+// a reading of the performance counter in ms: the clock of mb_host_now (and of a pointer's own time, which Windows
+// gives in its counts)
+static double qpc_ms(LONGLONG count) {
   static LARGE_INTEGER freq;
-  LARGE_INTEGER t;
   if (!freq.QuadPart) QueryPerformanceFrequency(&freq);
-  QueryPerformanceCounter(&t);
-  return (double)t.QuadPart * 1000.0 / (double)freq.QuadPart;
+  return (double)count * 1000.0 / (double)freq.QuadPart;
 }
+
+static double mb_now_ms(void) {
+  LARGE_INTEGER t;
+  QueryPerformanceCounter(&t);
+  return qpc_ms(t.QuadPart);
+}
+
+// How much later than its time the frame before reached the screen (mb_host_frame_late, as the Apple hosts and
+// Android say it): a frame begun right after the one before (the frames running on: Present waits for the display's
+// frame) more than the display's frame after it, that one was late by as much; the first after the loop waited for
+// what came next, or a scripted run's, none. When the last such frame began (-1: the loop waited since).
+static double frame_late, last_begin = -1;
+
+// the display's frame (ms), as the compositor goes
+static double display_period(void) {
+  DWM_TIMING_INFO ti;
+  memset(&ti, 0, sizeof ti);
+  ti.cbSize = sizeof ti;
+  if (SUCCEEDED(DwmGetCompositionTimingInfo(NULL, &ti)) && ti.qpcRefreshPeriod) return qpc_ms((LONGLONG)ti.qpcRefreshPeriod);
+  return 1000.0 / 60.0;
+}
+
+// the time of the pointer's event being delivered (mb_host_event_time): a finger's own, -1 none said
+static double event_t = -1;
 
 static void send_text(int kind, const WCHAR *s, int n, int a, int b) {
   moonbit_string_t out = moonbit_make_string_raw(n);
@@ -163,7 +188,10 @@ static void draw_frame(void) {
   frame_h = rc.bottom / scale;
   mb_text_set_scale(scale);
   mb_render_set_size(rc.right, rc.bottom, frame_w, frame_h, scale);
-  mb_cb.frame(frame_w, frame_h, scale, mb_now_ms());
+  double begins = mb_now_ms();
+  frame_late = last_begin >= 0 && !script ? fmax(0, begins - last_begin - display_period()) : 0;
+  last_begin = begins;
+  mb_cb.frame(frame_w, frame_h, scale, begins);
   frames_drawn++;
   if (script) run_script_step(frames_drawn);
 }
@@ -425,7 +453,27 @@ static int touch(HWND h, UINT msg, WPARAM wp) {
     }
     }
   }
-  if (kind >= 0) pointer_by(1, kind, x, y, 0);
+  if (kind < 0) return 1;
+  // a move's samples merged since the last (the oldest first, each at its own place and time: a fling's speed is
+  // theirs), then the move itself at its own time, as Android's host hands a MotionEvent's history
+  if (kind == 1 || kind == 5) {
+    UINT32 n = info.historyCount;
+    if (n > 1) {
+      POINTER_INFO past[64];
+      if (n > 64) n = 64;
+      if (GetPointerInfoHistory(id, &n, past)) {
+        for (UINT32 i = n; i-- > 1;) {
+          POINT q = past[i].ptPixelLocation;
+          ScreenToClient(h, &q);
+          event_t = past[i].PerformanceCount ? qpc_ms((LONGLONG)past[i].PerformanceCount) : -1;
+          pointer_by(1, kind, q.x / scale, q.y / scale, 0);
+        }
+      }
+    }
+  }
+  event_t = info.PerformanceCount ? qpc_ms((LONGLONG)info.PerformanceCount) : -1;
+  pointer_by(1, kind, x, y, 0);
+  event_t = -1;
   return 1;
 }
 
@@ -843,6 +891,8 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
       continue;
     }
     DWORD timeout = wake_at < 0 ? INFINITE : (DWORD)ceil(wake_at - now);
+    // (the frames stopped: the next is no later than its time for what the one before took)
+    last_begin = -1;
     MsgWaitForMultipleObjectsEx(0, NULL, timeout, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
   }
 }
@@ -867,10 +917,9 @@ int32_t mb_host_utc_offset_min(double at_ms) {
   return (int32_t)((_mkgmtime64(&local) - _mkgmtime64(&utc)) / 60);
 }
 
-double mb_host_event_time(void) { return -1; }
+double mb_host_event_time(void) { return event_t; }
 
-// (how late the frame before reached the screen: not told here)
-double mb_host_frame_late(void) { return 0; }
+double mb_host_frame_late(void) { return frame_late; }
 
 int32_t mb_host_platform(void) { return 3; }
 
