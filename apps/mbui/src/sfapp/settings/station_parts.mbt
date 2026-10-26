@@ -200,8 +200,8 @@ fn adb_next(view : Json?, phone : Json?, there : Bool) -> AdbStep? {
 ///|
 /// A step's tap (AdbStep `act`): Wireless debugging turned on by the app (`switch`) or in Settings (`wireless`), the
 /// pairing dialog opened beside the app (`pairing`), the code asked for and paired with (`code`).
-fn adb_do(core : Core, act : String) -> Unit {
-  match act {
+fn adb_do(core : Core, what : String) -> Unit {
+  match what {
     "switch" => adb_ask("adb.switch", obj([]))
     "wireless" => adb_ask("adb.open", obj([("what", str("wireless"))]))
     "pairing" => adb_ask("adb.open", obj([("what", str("wireless")), ("beside", Json::boolean(true))]))
