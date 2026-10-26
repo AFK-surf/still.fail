@@ -125,6 +125,10 @@ pub fn Ctx::overlay(
       let b = self.box(w=Fill(1.0), h=Fill(1.0), bg=scrim, id=if inert { 0 } else { id }, fn() {  })
       self.nodes[b].layer = true
       self.nodes[b].blocks = !inert
+      // (what is put over it, a menu's thing held, painted once it is: Ctx::paint_raised)
+      if scrim != 0L {
+        dr.scrims.push(b)
+      }
     }
     if inert {
       // leaving: drawn, never tapped (draw.mbt)

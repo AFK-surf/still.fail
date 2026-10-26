@@ -1,0 +1,14 @@
+# The bottom bar's ball held and slid across the places and back (a lens of liquid glass over them while it is held),
+# then a place tapped (the ball alone, no lens).
+timeout 20000
+until 整理发布清单
+wait 800
+drag 60 -50 270 0 1400
+wait 1000
+drag 330 -50 -270 0 1400
+wait 1000
+tapxy 133 -50
+wait 1200
+tapxy 50 -50
+wait 1200
+exit

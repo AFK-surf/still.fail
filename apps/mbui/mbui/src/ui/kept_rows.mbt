@@ -542,7 +542,7 @@ fn Ctx::row_paint_record(self : Ctx, i : Int, id : Int, alpha : Double) -> Unit 
   let g0 = self.segs.length()
   let a0 = self.across_seen.length()
   let t0 = dr.tops.length()
-  let o0 = dr.overlay.length()
+  let o0 = dr.overlay.length() + dr.raised.length()
   kp.plots.clear()
   kp.plot_seen.clear()
   kp.images.clear()
@@ -594,12 +594,12 @@ fn Ctx::row_paint_record(self : Ctx, i : Int, id : Int, alpha : Double) -> Unit 
   // list of its own)
   rk.keepable = rk.keepable &&
     dr.tops.length() == t0 &&
-    dr.overlay.length() == o0 &&
+    dr.overlay.length() + dr.raised.length() == o0 &&
     self.across_seen.length() == a0 &&
     !kp.holds_native() &&
     !self.holds_built(i)
   // in its list's clip
-  self.row_clip_into(k, i0, g0, drops=dr.tops.length() == t0 && dr.overlay.length() == o0)
+  self.row_clip_into(k, i0, g0, drops=dr.tops.length() == t0 && dr.overlay.length() + dr.raised.length() == o0)
   rk.last = (n.x, n.y, n.fw, n.fh)
   kp.lit = self.part_lit(kp)
 }
@@ -954,11 +954,11 @@ fn Ctx::row_paint_plain(self : Ctx, i : Int, alpha : Double) -> Unit {
   let i0 = self.ninst
   let g0 = self.segs.length()
   let t0 = dr.tops.length()
-  let o0 = dr.overlay.length()
+  let o0 = dr.overlay.length() + dr.raised.length()
   dr.bypass = i
   self.paint(i, alpha)
   dr.bypass = -1
-  if dr.tops.length() == t0 && dr.overlay.length() == o0 {
+  if dr.tops.length() == t0 && dr.overlay.length() + dr.raised.length() == o0 {
     self.row_drop(i0, g0)
   }
 }

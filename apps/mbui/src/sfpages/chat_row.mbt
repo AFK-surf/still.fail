@@ -193,6 +193,24 @@ pub fn chat_row(
   // (swiped to archive, where what the row offers is not under a pointer's hover: the screen's, as its ⋯ is; a pointer
   // has its 归档 key), which rows the core says: those ended, their stations there
   let swipes = @sf.more_held() && item.swipe_archive && !found
+  // held by a finger, it lifts off the list toward the finger (iOS's context menu): a little as its time shows, all
+  // the way once its menu opens, back down as the menu goes (kind 7, a control answering: held, its menu open)
+  let lift = if finger && !found {
+    @motion.animate(
+      c,
+      "row-lift/" + key,
+      if menu_on {
+        1.0
+      } else if held {
+        row_lift_held
+      } else {
+        0.0
+      },
+      spec=row_lift_spring,
+    )
+  } else {
+    0.0
+  }
   let busy = row_busy(src, item)
   let failed = row_failed(src, item)
   let offline = item.offline is Some(_)
@@ -217,12 +235,19 @@ pub fn chat_row(
     } else {
       @sf.nav_ground(c, "row/" + key, hover || pressed, on)
     }
+    // (lifted, its card is its ground: the row's own drawn by the card round it, not square inside it)
+    let lifted_ink = dmin(1.0, dmax(0.0, lift))
+    let ground = if lifted_ink > 0.0 { 0L } else { ground }
     // (what shows of it over the list's: what its faces' rings are cut in)
-    let face_ground = @sf.over(list_ground, ground)
+    let face_ground = @sf.over(list_ground, if lifted_ink > 0.0 { t.p.raised } else { ground })
     // (in a side column who is in it stands in the row's foot's end corner, placed there by the corner rule; across
     // the whole screen at its second line's end; the row pointed at says when instead)
     let cornered = at == Side && !shows_time && row_aside_shows(item, lead)
-    c.box(style=if apart { @sf.list_more(at) } else { row_last }, tx~, fn() {
+    let place = if apart { @sf.list_more(at) } else { row_last }
+    let row_box = c.box(
+      style=if lifted_ink > 0.0 { place.then(row_lifted(lifted_ink)) } else { place },
+      tx~,
+      fn() {
       // (the library's list row, a chat's as high as its row always is: @sf.list_row)
       @sf.list_row(
         c,
@@ -352,6 +377,22 @@ pub fn chat_row(
         })
       }
     })
+    // (a card of it, drawn in from the screen's sides; over the menu's scrim while it is up, under the menu: what the
+    // menu is of stands out of what it dims)
+    if lift != 0.0 {
+      c.look(row_box, @ui.look(scale=1.0 - row_lift_inset * lift))
+      c.put_over(row_box, z=3)
+      // (a sheet coming up over where it is: it goes up before it, clear of it, and back down with it as it goes)
+      @motion.measure(c, row_box, "row-lifted/" + key)
+      @motion.placed(c, row_box, fn() {
+        match (@kit.sheet_top(c), @motion.measured_rect(c, "row-lifted/" + key)) {
+          (Some(top), Some((_, y, _, h))) if y + h + row_lift_clear > top =>
+            { ..@ui.still_look, dy: top - row_lift_clear - (y + h) }
+          _ => @ui.still_look
+        }
+      })
+    }
+    row_box
   }
   if swipes {
     c.box(style=if more { @sf.list_more(at) } else { row_last }, fn() {
@@ -396,6 +437,34 @@ let sample_titles : Array[Int] = [7, 10, 6, 12, 8, 9, 5, 11]
 ///|
 // kept across runs: a table, never written
 let sample_lines : Array[Int] = [14, 11, 16, 9, 13, 15, 10, 12]
+
+///|
+/// A row held: how far it lifts as its time shows (of all the way, its menu open), how much it is drawn in all the way
+/// up, on a spring with a little give.
+let row_lift_held : Double = 0.35
+
+///|
+let row_lift_inset : Double = 0.045
+
+///|
+/// A row lifted `ink` of the way: a card of the raised ground, a row's corner (the ladder's), its shadow as far.
+fn row_lifted(ink : Double) -> @ui.Style {
+  let t = @sf.theme()
+  @ui.style(
+    bg=Data(@sf.alpha(t.p.raised, ink)),
+    radius=@sf.row_radius,
+    // (what a finger holds: its shadow, coming as far as it lifts)
+    shadow=Cast(@sf.held_raised.sigma * ink, @sf.held_raised.dy * ink, @sf.held_raised.color),
+  )
+}
+
+///|
+/// How far over a sheet coming up over it a lifted row stays.
+let row_lift_clear : Double = 12.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let row_lift_spring : @motion.Spec = @motion.motion_spring(0.32, bounce=0.28)
 
 ///|
 /// How long a row going ahead of others has a ground of its own (motion's lift).

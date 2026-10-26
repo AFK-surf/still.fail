@@ -1,0 +1,15 @@
+# A chat's row held by a finger (sfpages chat_row.mbt): it lifts a little as its time shows, all the way as its menu
+# opens (a card over the menu's scrim, under the menu), and comes back down as the menu goes; then a row low on the
+# screen, where the menu comes up over it.
+timeout 20000
+until 整理发布清单
+wait 600
+hold 1100 夜里的构建又失败了
+wait 1600
+back
+wait 1400
+hold 1100 把旧的截图都换成新的
+wait 1600
+back
+wait 1400
+exit
