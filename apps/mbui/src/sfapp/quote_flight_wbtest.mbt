@@ -76,6 +76,26 @@ fn x_seen(t : @ui.Tester) -> Double {
 }
 
 ///|
+/// Whether a quote's ✕ seen now is drawn over its card (after the card's ground), where both are drawn.
+fn x_over_card(t : @ui.Tester) -> Bool raise {
+  let ink = @sf.theme().p.text
+  let rects = t.drawn_rects()
+  let (gx, gy, gw, gh) = quote_ground(t)
+  let mut card = -1
+  let mut x = -1
+  for k, r in rects {
+    let (rx, ry, rw, rh, colour) = r
+    if (rx - gx).abs() < 0.5 && (ry - gy).abs() < 0.5 && (rw - gw).abs() < 0.5 && (rh - gh).abs() < 0.5 {
+      card = k
+    }
+    if rw >= 16.0 && rw <= 21.0 && (rh - rw).abs() < 0.5 && colour >> 8 == ink >> 8 && (colour & 0xFFL) != 0L {
+      x = k
+    }
+  }
+  card < 0 || x < 0 || x > card
+}
+
+///|
 /// The send button's ground as drawn now: its round.
 fn send_ground(t : @ui.Tester) -> Int64 raise {
   let (x, y, w, h) = match t.query(Button, label=@sf.t("web-main.composer.send")) {
@@ -201,6 +221,8 @@ test "sent, a quote's ✕ leaves with its card and the send button fades to fain
     t.frame()
     xs.push(x_seen(t))
     grounds.push(send_ground(t))
+    // over its card all the way, never under it
+    assert_true(x_over_card(t), msg="the ✕ under its card at \{t.time()}")
   }
   // the ✕: seen as it sets out, fading on (never back), gone once it has left
   assert_true(xs[0] > 0.9, msg="\{xs}")
