@@ -717,7 +717,7 @@ test("offers_the_phone_and_tunnels_what_the_station_opens_to_its_adbd", { skip }
   assert.equal(head.path, "/admin/api/adb");
   assert.equal(head.adb.phone.length, 64);
   delete head.adb.phone;
-  assert.deepEqual(head.adb, { op: "share", device: "Pixel 8", android: "14", package: "fail.still.android", adbd: true, pair: false });
+  assert.deepEqual(head.adb, { op: "share", device: "Pixel 8", android: "14", package: "fail.still.android", adbd: true, pair: false, connect: port });
   assert.equal(seen.echoed, "hello");
   const value = adb.value();
   assert.deepEqual([value.sharing, value.station, value.phase, value.serial], [true, station, "offered", "127.0.0.1:37001"]);
