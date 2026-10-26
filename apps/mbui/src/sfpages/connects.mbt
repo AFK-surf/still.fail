@@ -610,7 +610,7 @@ let cn_narrow_state : @ui.Style = @ui.css("row gap=S1_25 align=ACenter")
 ///|
 /// A list's filter on the wide page (components.tsx MineFilter, not compact; History.css.ts mineFilterBtn,
 /// mineFilterWide): a 32 high button 8 in, the field's line round it, 12 over what it filters; its funnel 16 and what
-/// it shows in the muted ink, the words' under the pointer or while open, the accent's on its ground while it narrows;
+/// it shows in the muted ink, the words' under the pointer or while open, never marked for what it shows;
 /// pressed, its menu of choices under it (all or the viewer's, the shown checked), at its end. `of`: what it filters
 /// (`connects`), as its words name it.
 fn mine_filter(c : @ui.Ctx, key : String, of : String, mine : Bool, set : (Bool) -> Unit) -> Unit {
@@ -622,16 +622,10 @@ fn mine_filter(c : @ui.Ctx, key : String, of : String, mine : Bool, set : (Bool)
   }
   let named = if mine { @sf.t("web-main.filter." + of + ".mine") } else { @sf.t("web-main.filter.all") }
   let lit = c.lit(id) || open
-  let ink = if mine {
-    t.p.accent_text
-  } else if lit {
-    t.p.text
-  } else {
-    t.p.muted
-  }
-  let b = c.box(style=if mine { mine_filter_on } else { mine_filter_box }, selected=open, id~, fn() {
+  let ink = if lit { t.p.text } else { t.p.muted }
+  let b = c.box(style=mine_filter_box, selected=open, id~, fn() {
     @sf.icon(c, "filter", size=mine_filter_icon, color=ink) |> ignore
-    c.text(named, style=if mine { mine_filter_on_words } else if lit { mine_filter_lit_words } else { mine_filter_words })
+    c.text(named, style=if lit { mine_filter_lit_words } else { mine_filter_words })
     |> ignore
   })
   c.semantics(b, Button, id~, label=@sf.t("web-main.filter." + of + ".named", args=[("named", named)]), expanded=open)
@@ -675,16 +669,8 @@ let mine_filter_box : @ui.Style = @ui.css(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mine_filter_on : @ui.Style = mine_filter_box.then(@ui.css("bg=AccentBg"))
-
-///|
-// kept across runs: a value (no field of it changes)
 let mine_filter_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
 let mine_filter_lit_words : @ui.TextStyle = mine_filter_words.then(@ui.text_style(color=Fg))
-
-///|
-// kept across runs: a value (no field of it changes)
-let mine_filter_on_words : @ui.TextStyle = mine_filter_words.then(@ui.text_style(color=AccentText))

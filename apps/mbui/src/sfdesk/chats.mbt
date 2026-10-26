@@ -36,8 +36,8 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         update_in_row(c, src)
       }
       match view {
-        // (lit while 监控中 or another list is shown: 奏, 已归档; not for 我参与的, asked 2026-10-27)
-        Some(v) if v.stations > 0 => filter_button(c, src, w, list_place(list_mode(src, w)), list_mode(src, w) > 1, in_bar)
+        // (never lit for the list shown: asked 2026-10-27)
+        Some(v) if v.stations > 0 => filter_button(c, src, w, list_place(list_mode(src, w)), in_bar)
         _ => ()
       }
     })
@@ -196,14 +196,12 @@ let side_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=
 let side_words_bad : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, leading=L6)
 
 ///|
-/// The list's filter (components.tsx MineFilter, compact): a circle 32 across, in the accent's ground while it shows
-/// 监控中 or another list (`narrowed`; 我参与的 is not marked), its tip 筛选会话; pressed, its menu (filter_menu).
+/// The list's filter (components.tsx MineFilter, compact): a circle 32 across, unmarked whichever list is shown, its tip 筛选会话; pressed, its menu (filter_menu).
 fn filter_button(
   c : @ui.Ctx,
   src : Source,
   w : Workspace,
   shown : String,
-  narrowed : Bool,
   in_bar : Bool,
 ) -> Unit {
   let t = @sf.theme()
@@ -220,12 +218,11 @@ fn filter_button(
   }
   // its ground and colour moved over 140 ms (page.css.ts iconBtn: transition background, color)
   let hot = @kit.animate(c, "side/filter/hover", if c.lit(id) || @sfpages.filter_menu_open() { 1.0 } else { 0.0 }, transition=nav_fade)
-  let lit = @kit.animate(c, "side/filter/on", if narrowed { 1.0 } else { 0.0 }, transition=nav_fade)
-  let ground = @sf.over(@sf.alpha(t.p.hover, hot * (1.0 - lit)), @sf.alpha(t.p.accent_bg, lit))
+  let ground = @sf.alpha(t.p.hover, hot)
   // (in the closed bar's corner, concentric with it as the rail's places are: Sidebar.css.ts navNew, closed)
   let look = if in_bar { filter_box_bar() } else { filter_box }
   let b = c.box(style=look.then(@ui.style(bg=Data(ground))), id~, fn() {
-    @sf.icon(c, "filter", size=side_icon, color=@sf.mix(t.p.accent_text, lit, @sf.mix(t.p.text, hot, t.p.muted))) |> ignore
+    @sf.icon(c, "filter", size=side_icon, color=@sf.mix(t.p.text, hot, t.p.muted)) |> ignore
   })
   c.semantics(b, Button, id~, label=@sf.t("web-main.filter.chats.named", args=[("named", filter_named(shown))]))
   @sf.tip(c, "side/filter-tip", id, @sf.t("web-main.filter.chats"))

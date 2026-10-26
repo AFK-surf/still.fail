@@ -127,8 +127,8 @@ fn top_bar(
               "filter",
               20.0,
               key="home-filter",
-              // (not marked for 我参与的: asked 2026-10-27)
-              color=if filter != "all" && filter != "mine" { t.p.accent } else { t.p.text },
+              // (never marked for the list shown: asked 2026-10-27)
+              color=t.p.text,
               said=fill("android-chat.home.filter.label", [
                 (
                   "filter",
