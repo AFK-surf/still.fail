@@ -629,14 +629,16 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
       match text(chat, "place") {
         "" => c.text(@sf.t("web-pages.chat.info.native", args=[("name", "still.fail")]), style=info_words) |> ignore
         place => {
-          let feishu = text(thread, "surface").has_prefix("feishu:")
+          let surface = text(thread, "surface")
           c.box(style=info_inline, fn() {
-            if feishu {
-              @sf.feishu_mark(c, 13.0) |> ignore
+            @sf.place_mark(c, surface, 13.0) |> ignore
+            let through = if surface.has_prefix("feishu:") {
+              @sf.t("web-pages.connect.feishu.name")
+            } else if surface.has_prefix("x:") {
+              "X"
             } else {
-              @sf.slack_mark(c, 13.0) |> ignore
+              "Slack"
             }
-            let through = if feishu { @sf.t("web-pages.connect.feishu.name") } else { "Slack" }
             c.text(through + " · " + place, style=info_words) |> ignore
           })
           |> ignore
@@ -711,7 +713,8 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
   let relayable = !v.archived && !v.offline && v.agents.length() > 0
   let slack = text(chat, "slackUrl")
   let feishu = text(chat, "feishuUrl")
-  if files || v.letters > 0 || relayable || slack != "" || feishu != "" {
+  let x = text(chat, "xUrl")
+  if files || v.letters > 0 || relayable || slack != "" || feishu != "" || x != "" {
     c.box(style=info_tools, fn() {
       if files && info_row(c, "info-pop/files", "folder", @sf.t("web-pages.chat.files"), "") {
         chat_own.info_open = false
@@ -740,6 +743,10 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
       if feishu != "" && info_row(c, "info-pop/feishu", "external", @sf.t("web-pages.chat.openInFeishu"), "") {
         chat_own.info_open = false
         @ui.open_url(feishu) |> ignore
+      }
+      if x != "" && info_row(c, "info-pop/x", "external", @sf.t("web-pages.chat.openInX"), "") {
+        chat_own.info_open = false
+        @ui.open_url(x) |> ignore
       }
     })
     |> ignore

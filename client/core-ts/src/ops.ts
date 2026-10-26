@@ -109,6 +109,10 @@ export const PARAMS: Record<string, string> = {
   "feishu.verify": "appId:string appSecret:string domain?:string",
   "feishu.createConnect": "feishu:json bind?:json mode?:string requireMention?:boolean owner?:json",
   "feishu.putSecret": "id:string appSecret:string",
+  "x.verify": "consumerKey:string consumerSecret:string accessToken:string accessSecret:string",
+  "x.createConnect": "x:json bind?:json mode?:string requireMention?:boolean owner?:json",
+  "x.putAllow": "id:string allow:json",
+  "x.putKeys": "id:string consumerKey?:string consumerSecret?:string accessToken?:string accessSecret?:string",
   "slack.verify": "connect?:string install?:string appToken?:string botToken?:string",
   "slack.makeApp": "team?:string settings?:json icon?:string",
   "slack.dropApp": "appId:string",
@@ -427,6 +431,16 @@ function stationOp(name: string, params: unknown): Request | null {
     // A Feishu connect's App Secret replaced (verified there first).
     case "feishu.putSecret":
       return op("PUT", () => `/feishu/connects/${p.at("id")}/secret`, p.pick(["appSecret"]), connect("id"));
+    // X accounts (docs/x.md): keys checked, a connect added with its list of people (their handles, looked up there),
+    // its list replaced, its keys replaced (checked first: the same account).
+    case "x.verify":
+      return op("POST", () => "/x/verify", p.pick(["consumerKey", "consumerSecret", "accessToken", "accessSecret"]), NONE);
+    case "x.createConnect":
+      return op("POST", () => "/x/connects", p.pick(["x", "bind", "mode", "requireMention", "owner"]), { kind: "connect", id: null });
+    case "x.putAllow":
+      return op("PUT", () => `/x/connects/${p.at("id")}/allow`, p.pick(["allow"]), connect("id"));
+    case "x.putKeys":
+      return op("PUT", () => `/x/connects/${p.at("id")}/keys`, p.pick(["consumerKey", "consumerSecret", "accessToken", "accessSecret"]), connect("id"));
     case "slack.verify":
       return op("POST", () => "/slack/verify", p.pick(["connect", "install", "appToken", "botToken"]), NONE);
     case "slack.makeApp":

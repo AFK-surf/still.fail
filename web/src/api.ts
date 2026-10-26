@@ -20,7 +20,7 @@ export { CoreError };
 
 // ── what is sent to a station (its admin API's inputs) ──
 
-export type ConnectKind = "slack" | "feishu";
+export type ConnectKind = "slack" | "feishu" | "x";
 
 /** POST /connects, PUT /connects/:id. Blank or missing tokens keep the stored ones. */
 export interface ConnectInput {
@@ -33,6 +33,8 @@ export interface ConnectInput {
   slack?: { appToken?: string; botToken?: string; appId?: string; install?: string };
   /** A Feishu connect's App Secret replaced (blank: kept). */
   feishu?: { appSecret?: string };
+  /** An X connect's own settings: its posts keep links (each such post costs much more on X). */
+  x?: { links?: boolean };
   /** Hands the connect to someone else (an email). Owners, admins, the station itself, or the current owner. */
   owner?: { id: string; name?: string };
 }
@@ -455,6 +457,10 @@ export function stationApi(t: StationCall) {
     deleteConnect: (id: string) => ops.connectDelete<Overview>({ id }),
     /** A Feishu connect's App Secret replaced: verified by its station first, then it reconnects. */
     putFeishuSecret: (id: string, appSecret: string) => ops.feishuPutSecret<unknown>({ id, appSecret }),
+    /** An X connect's list replaced, as handles (looked up on X by its station first). */
+    putXAllow: (id: string, allow: string) => ops.xPutAllow<unknown>({ id, allow }),
+    /** An X connect's keys replaced (blank: kept): verified by its station first, the same account, then it reconnects. */
+    putXKeys: (id: string, keys: { consumerKey?: string; consumerSecret?: string; accessToken?: string; accessSecret?: string }) => ops.xPutKeys<unknown>({ id, ...keys }),
     reconnect: (id: string) => ops.connectReconnect<{ ok: true }>({ id }),
     putProfile: (id: string, input: ProfileInput) => ops.profilePut<Overview>({ id, input }),
     /** One model named by hand, added to those enabled (a provider that does not list its models). */

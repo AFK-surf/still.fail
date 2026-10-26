@@ -27,7 +27,7 @@ X（Twitter）的一个账号作为 connect，和 Slack、飞书的 connect 并�
 
 ## 收到的内容
 
-- 正文：长帖读 `note_post` 里的全文，否则读 `text`；把 X 转义过的 `&lt; &gt; &amp;` 还原。
+- 正文：长帖读 `note_post` 里的全文，否则读 `text`；把 X 转义过的 `&lt; &gt; &amp;` 还原。开头连着的一串 @handle（X 加在回复前面的，和 @ bot 的那个）去掉，只剩这一串的帖子原样保留。
 - 引用的帖子：附在正文后面，写成「[Quoting @handle]」加上被引用的内容（引用块）。
 - 图片：附件，从 X 的图片地址下载到会话的 uploads。
 
@@ -84,6 +84,13 @@ config.json 的 connect：
 
 - 消息头 `via="x"`。说明里写了：内容是纯文本，越短越好，不要带链接，每条帖子都要花钱。
 - 工具 `x_api`：以 bot 账号身份调 X API v2，只能 GET（读帖子、查用户、搜索）。发帖走 chat_post。
+
+## 客户端
+
+- core 的新建 connect 向导（`client/core-ts/src/forms.ts`）：station 的 overview 里有 `xConnects: true` 才出现 X 这个平台。步骤是「平台 → 模型和会话方式（xBind）→ 四个 key 和名单（xApp）」：先验证 key，名单不能为空，然后建 connect（`x.createConnect`）。
+- connect 页面（web 两种宽度、mbui）：账号、名单（`x.putAllow` 整份替换）、key（`x.putKeys`，留空的不改）、回复里是否保留链接（`PUT /connects/:id` 的 `x.links`）。
+- 对话：X 来的会话标 X 的标志，地点写「X 帖子」，信息里有「在 X 中打开」（`xUrl`，打开会话最上面那条帖子）。
+- Kotlin 的 apps/android 已冻结，没有改。
 
 ## 测试
 

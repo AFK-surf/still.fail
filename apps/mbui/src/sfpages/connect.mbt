@@ -57,10 +57,11 @@ fn connect_detail(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : P
   let station = text(item, "station")
   let id = text(cv, "id")
   let feishu = text(cv, "kind") == "feishu"
+  let x = text(cv, "kind") == "x"
   let blocks : Array[() -> Unit] = []
-  // what its link needs: Slack's tokens, or why it fails (a Feishu connect's only why)
+  // what its link needs: Slack's tokens, or why it fails (a Feishu or X connect's only why)
   let state = text(field(cv, "connection"), "state")
-  if !feishu && state == "no_tokens" {
+  if !feishu && !x && state == "no_tokens" {
     blocks.push(fn() { cd_slack_section(c, core, station, cv) })
   } else if cd_trouble(cv) != "" {
     blocks.push(fn() { cd_callout(c, cd_trouble(cv)) })
@@ -69,6 +70,10 @@ fn connect_detail(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : P
   if feishu {
     if field(cv, "feishu") is Some(Object(_)) {
       blocks.push(fn() { cd_feishu_section(c, core, station, cv) })
+    }
+  } else if x {
+    if field(cv, "x") is Some(Object(_)) {
+      blocks.push(fn() { cd_x_section(c, core, station, cv) })
     }
   } else {
     blocks.push(fn() { slack_app_section(c, core, station, cv) })
@@ -166,6 +171,7 @@ fn cd_menu(c : @ui.Ctx, core : Core, here : Here, station : String, cv : Json?) 
   let me = station + "/" + id
   let on = [("station", station), ("id", id)]
   let feishu = text(cv, "kind") == "feishu"
+  let x = text(cv, "kind") == "x"
   let reconnecting = is_doing(core, ["connect.reconnect"], on)
   let saving = is_doing(core, ["connect.put"], on)
   let conn = field(cv, "connection")
@@ -201,16 +207,34 @@ fn cd_menu(c : @ui.Ctx, core : Core, here : Here, station : String, cv : Json?) 
       }),
     ),
     Some(
-      @sf.menu_item_of(@sf.t(if feishu { "web-pages.connect.feishu.replace" } else { "web-pages.connect.replaceToken" }), icon="key", fn() {
+      @sf.menu_item_of(
+        @sf.t(
+          if feishu {
+            "web-pages.connect.feishu.replace"
+          } else if x {
+            "web-pages.connect.x.replaceKeys"
+          } else {
+            "web-pages.connect.replaceToken"
+          },
+        ),
+        icon="key",
+        fn() {
         if feishu {
           cd_secret_dialog(core, station, cv)
+        } else if x {
+          cd_x_keys_dialog(core, station, cv)
         } else {
           cd_token_dialog(core, station, cv)
         }
-      }),
+      },
+      ),
     ),
   ]
-  if !feishu && slack_url != "" {
+  let profile = text(field(cv, "x"), "profile")
+  if x && profile != "" {
+    items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.x.openProfile"), icon="external", fn() { (core.open_link)(profile) })))
+  }
+  if !feishu && !x && slack_url != "" {
     items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.openSlack"), icon="external", fn() { (core.open_link)(slack_url) })))
   }
   if feishu && console != "" {
@@ -248,12 +272,11 @@ fn text_number(v : Json?, key : String) -> Int {
 }
 
 ///|
-/// A key of words that differ for a Feishu connect: its `.feishu` twin for one (the web's kindKey).
+/// A key of words that differ for a Feishu or X connect: its `.feishu` or `.x` twin for one (the web's kindKey).
 fn cd_kind_key(key : String, cv : Json?) -> String {
-  if text(cv, "kind") == "feishu" {
-    key + ".feishu"
-  } else {
-    key
+  match text(cv, "kind") {
+    "feishu" | "x" as kind => key + "." + kind
+    _ => key
   }
 }
 
@@ -797,6 +820,166 @@ fn cd_feishu_section(c : @ui.Ctx, core : Core, station : String, cv : Json?) -> 
       |> ignore
     })
   })
+}
+
+///|
+/// An X connect's account (XSection): its @handle (its page on X opened beside it), the people on its list (changed
+/// beside it), its keys masked (replaced beside it), and whether its posts keep links (X bills those twenty times over).
+fn cd_x_section(c : @ui.Ctx, core : Core, station : String, cv : Json?) -> Unit {
+  let account = field(cv, "x")
+  let id = text(cv, "id")
+  @sf.section(c, @sf.t("web-pages.connect.x.section"), fn() {
+    @sf.group(c, fn() {
+      let handle = match opt_text(account, "username") {
+        Some(u) if u != "" => "@" + u
+        _ => text(cv, "name")
+      }
+      match opt_text(account, "profile") {
+        Some(url) if url != "" =>
+          if @sf.link_row(c, "x-profile/" + id, @sf.t("web-pages.connect.x.account"), note=handle, value=@sf.t("web-pages.connect.x.openProfile"), out=true) {
+            (core.open_link)(url)
+          }
+        _ => @sf.said_row(c, @sf.t("web-pages.connect.x.account"), handle)
+      }
+      if @sf.link_row(
+          c,
+          "x-allow/" + id,
+          @sf.t("web-pages.connect.x.allow"),
+          note=match text(account, "allowText") {
+            "" => @sf.t("web-pages.connect.x.allowEmpty")
+            said => said
+          },
+          value=@sf.t("web-pages.connect.x.editAllow"),
+          value_lit=true,
+          chevron=false,
+        ) {
+        cd_x_allow_dialog(core, station, cv)
+      }
+      if @sf.link_row(
+          c,
+          "x-keys/" + id,
+          "Keys",
+          note=cd_masked(text(account, "consumerKey")) + " · " + cd_masked(text(account, "accessToken")),
+          value=@sf.t("web-pages.connect.x.replaceKeys"),
+          value_lit=true,
+          chevron=false,
+        ) {
+        cd_x_keys_dialog(core, station, cv)
+      }
+    })
+    let links = flag(account, "links")
+    let now = @sf.switch_row(c, "x-links/" + id, @sf.t("web-pages.connect.x.links"), links, note=@sf.t("web-pages.connect.x.linksNote"))
+    if now != links {
+      cd_put(core, station, id, obj([("x", obj([("links", Json::boolean(now))]))]), done=@sf.t("web-pages.connect.x.linksSaved"))
+    }
+  })
+}
+
+///|
+/// A key as shown masked ("••••" where the station said none).
+fn cd_masked(key : String) -> String {
+  if key == "" {
+    "••••"
+  } else {
+    key
+  }
+}
+
+///|
+/// The names of an X account's four keys, and what the pages call them.
+// kept across runs: a table, never written
+let cd_x_keys : Array[(String, String)] = [
+  ("consumerKey", "Consumer Key (API Key)"),
+  ("consumerSecret", "Consumer Secret (API Key Secret)"),
+  ("accessToken", "Access Token"),
+  ("accessSecret", "Access Token Secret"),
+]
+
+///|
+/// An X connect's keys replaced (XKeysDialog), those left blank kept: checked by its station as the same account
+/// before they are kept, then it reconnects; the dialog stays while it is, why it was refused under the last field.
+fn cd_x_keys_dialog(core : Core, station : String, cv : Json?) -> Unit {
+  let id = text(cv, "id")
+  let key = "connect-x-keys/" + (desk_dialogs.val + 1).to_string()
+  let fields = cd_x_keys.map(fn(k) { field_of(key + "/" + k.0) })
+  let error : Ref[String] = Ref("")
+  open_dialog(
+    @sf.t("web-pages.connect.x.replaceKeys"),
+    description=@sf.t("web-pages.connect.x.replaceLead"),
+    fn(c, _) {
+      for i, k in cd_x_keys {
+        @sf.field(c, k.1, error=if i == cd_x_keys.length() - 1 { error.val } else { "" }, fn() {
+          @sf.input(c, key + "/" + k.0 + "-input", placeholder=text(field(cv, "x"), k.0), secret=k.0.has_suffix("Secret"), field=fields[i])
+          |> ignore
+        })
+      }
+    },
+    fn(c, shut) {
+      if @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost) {
+        shut()
+      }
+      let given : Array[(String, Json)] = [("station", str(station)), ("id", str(id))]
+      for i, k in cd_x_keys {
+        let typed = fields[i].text().trim(chars=" \t\n").to_owned()
+        if typed != "" {
+          given.push((k.0, str(typed)))
+        }
+      }
+      let saving = is_doing(core, ["x.putKeys"], [("station", station), ("id", id)])
+      if @sf.button(c, @sf.t("web-pages.connect.saveReconnect"), key=key + "/save", tone=Primary, busy=saving, disabled=given.length() == 2) {
+        error.val = ""
+        (core.call)("x.putKeys", obj(given), fn(r) {
+          match r {
+            Ok(_) => {
+              (core.say)(@sf.t("web-pages.connect.x.keysSaved"))
+              shut()
+            }
+            Err(e) => error.val = error_text(e)
+          }
+        })
+      }
+    },
+  )
+}
+
+///|
+/// An X connect's list changed (XAllowDialog): its handles, each looked up on X by its station before the whole list is
+/// kept; the dialog stays while it is, why it was refused (a handle X does not know) under the field.
+fn cd_x_allow_dialog(core : Core, station : String, cv : Json?) -> Unit {
+  let id = text(cv, "id")
+  let key = "connect-x-allow/" + (desk_dialogs.val + 1).to_string()
+  let allow = field_of(key + "/allow")
+  if allow.text() == "" {
+    allow.set(text(field(cv, "x"), "allowText"))
+  }
+  let error : Ref[String] = Ref("")
+  open_dialog(
+    @sf.t("web-pages.connect.x.editAllow"),
+    description=@sf.t("web-pages.connect.x.allowHint"),
+    fn(c, _) {
+      @sf.field(c, @sf.t("web-pages.connect.x.allow"), error=error.val, fn() {
+        @sf.input(c, key + "/allow-input", placeholder="@ada @bob", field=allow) |> ignore
+      })
+    },
+    fn(c, shut) {
+      if @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost) {
+        shut()
+      }
+      let saving = is_doing(core, ["x.putAllow"], [("station", station), ("id", id)])
+      if @sf.button(c, @sf.t("common.save"), key=key + "/save", tone=Primary, busy=saving) {
+        error.val = ""
+        (core.call)("x.putAllow", obj([("station", str(station)), ("id", str(id)), ("allow", str(allow.text()))]), fn(r) {
+          match r {
+            Ok(_) => {
+              (core.say)(@sf.t("web-pages.connect.x.allowSaved"))
+              shut()
+            }
+            Err(e) => error.val = error_text(e)
+          }
+        })
+      }
+    },
+  )
 }
 
 ///|

@@ -59,7 +59,7 @@ export function BackLink({ to, label }: { to: string; label: string }) {
   );
 }
 
-const KIND_ICON = { slack: SlackLogo, feishu: FeishuLogo, wechat: Chat } as const;
+const KIND_ICON = { slack: SlackLogo, feishu: FeishuLogo, x: XLogo, wechat: Chat } as const;
 
 /** What a connect connects to, as an icon: its kind, not its identity. */
 export function ConnectKindIcon({ kind, size = 16, tile }: { kind: string; size?: number; tile?: boolean }) {
@@ -86,9 +86,20 @@ export function SlackLogo({ size = 16 }: { size?: number; strokeWidth?: number }
   );
 }
 
-/** Where a thread elsewhere is (a place's `surface`, a connect's kind): Feishu's mark for Feishu, else Slack's. */
+/** Where a thread elsewhere is (a place's `surface`, a connect's kind): Feishu's mark for Feishu, X's for X, else Slack's. */
 export function ElsewhereLogo({ kind, size = 16 }: { kind: string | null | undefined; size?: number }) {
-  return kind === "feishu" || kind?.startsWith("feishu:") ? <FeishuLogo size={size} /> : <SlackLogo size={size} />;
+  if (kind === "feishu" || kind?.startsWith("feishu:")) return <FeishuLogo size={size} />;
+  if (kind === "x" || kind?.startsWith("x:")) return <XLogo size={size} />;
+  return <SlackLogo size={size} />;
+}
+
+/** X's mark (x.com), in the text's colour as X draws it on either ground. */
+export function XLogo({ size = 16 }: { size?: number; strokeWidth?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" className="x-logo">
+      <path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  );
 }
 
 /** Feishu's (Lark's) mark in its own colours: the bird of the open platform's logo (open.feishu.cn), as Feishu draws it. */

@@ -12,7 +12,7 @@ import { t } from "../i18n.ts";
 import { ModelTriple } from "../ModelTriple.tsx";
 import { QrCode } from "../QrCode.tsx";
 import { profilesPage, useLink, useStation } from "../station.tsx";
-import { Button, Choices, Dialog, FeishuLogo, Field, ICON, Section, SlackLogo, Spinner, SwitchRow } from "../ui.tsx";
+import { Button, Choices, Dialog, FeishuLogo, Field, ICON, Section, SlackLogo, Spinner, SwitchRow, XLogo } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
@@ -55,14 +55,17 @@ export function useFeishuStep(view: ConnectFlowView | undefined, flow: Flow, clo
   if (step === "platform") {
     const platform = view.platform ?? "slack";
     const feishu = view.platforms.includes("feishu");
+    const x = view.platforms.includes("x");
     return {
       body: (
         <Choices label={t("web-pages.connect.feishu.platform")} value={platform} onChange={(p) => flow.edit({ platform: p })} options={[
           { value: "slack", title: "Slack", description: t("web-pages.connect.feishu.slackNote"), icon: <span className={css.platformMark}><SlackLogo size={22} /></span> },
           { value: "feishu", title: t("web-pages.connect.feishu.name"), description: feishu ? t("web-pages.connect.feishu.feishuNote") : t("web-pages.connect.feishu.update"), disabled: !feishu, icon: <span className={css.platformMark}><FeishuLogo size={22} /></span> },
+          // X (docs/x.md): offered by the stations that have its connects.
+          ...(x ? [{ value: "x", title: "X", description: t("web-pages.connect.x.xNote"), icon: <span className={css.platformMark}><XLogo size={20} /></span> }] : []),
         ]} />
       ),
-      footer: <>{back}<Button variant="primary" onClick={() => flow.go(platform === "feishu" && feishu ? "feishuBind" : "team")}>{t("web-pages.connect.next")}</Button></>,
+      footer: <>{back}<Button variant="primary" onClick={() => flow.go(platform === "feishu" && feishu ? "feishuBind" : platform === "x" && x ? "xBind" : "team")}>{t("web-pages.connect.next")}</Button></>,
     };
   }
   if (step === "feishuBind") {

@@ -7,7 +7,7 @@ import { RUNTIME_LABEL } from "../format.ts";
 import { t } from "../i18n.ts";
 import { QrCode } from "../QrCode.tsx";
 import { stationBase, useStation } from "../station.tsx";
-import { FeishuLogo, SlackLogo } from "../ui.tsx";
+import { FeishuLogo, SlackLogo, XLogo } from "../ui.tsx";
 import { Spinner } from "@stillfail/ui/waiting.tsx";
 import { useApp } from "./app.tsx";
 import { Button, GroupLabel, ListCard, MakerIcon, PickRow, Seg } from "./parts.tsx";
@@ -40,14 +40,17 @@ export function FeishuSteps({ view, flow, mode }: { view: ConnectFlowView; flow:
   if (view.step === "platform") {
     const platform = view.platform ?? "slack";
     const feishu = view.platforms.includes("feishu");
+    const x = view.platforms.includes("x");
     return (
       <>
         <ListCard>
           <PickRow label="Slack" sub={t("web-mobile.connects.feishu.slackNote")} leading={<SlackLogo size={20} />} checked={platform === "slack"} onClick={() => flow.edit({ platform: "slack" })} />
           <PickRow label={t("web-mobile.connects.feishu.name")} sub={feishu ? t("web-mobile.connects.feishu.feishuNote") : t("web-mobile.connects.feishu.update")} leading={<FeishuLogo size={20} />}
             checked={platform === "feishu"} enabled={feishu} onClick={() => flow.edit({ platform: "feishu" })} />
+          {/* X (docs/x.md): offered by the stations that have its connects. */}
+          {x && <PickRow label="X" sub={t("web-mobile.connects.x.xNote")} leading={<XLogo size={18} />} checked={platform === "x"} onClick={() => flow.edit({ platform: "x" })} />}
         </ListCard>
-        <Button label={t("web-mobile.connects.next")} primary onClick={() => flow.go(platform === "feishu" && feishu ? "feishuBind" : "team")} />
+        <Button label={t("web-mobile.connects.next")} primary onClick={() => flow.go(platform === "feishu" && feishu ? "feishuBind" : platform === "x" && x ? "xBind" : "team")} />
       </>
     );
   }

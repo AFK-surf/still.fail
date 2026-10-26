@@ -117,6 +117,7 @@
   "core-misc.connect.feishu.expired": "二维码已过期",
   "core-misc.connect.feishu.failed": "无法创建机器人",
   "core-misc.connect.feishu.failed_because": "无法创建机器人：{error}",
+  "core-misc.connect.title.xApp": "填写 X 账号的 key",
   "core-misc.core.closed": "核心已关闭",
   "core-misc.device.android": "{brand} Android{more}",
   "core-misc.device.browser": "浏览器",

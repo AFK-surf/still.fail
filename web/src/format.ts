@@ -14,11 +14,17 @@ const FEISHU_MODE: Record<ConnectMode, { label: string; description: string }> =
   "single-session": { get label() { return t("web-main.mode.feishu.single.label"); }, get description() { return t("web-main.mode.feishu.single.description"); } },
 };
 
-/** The modes as a connect of `kind` has them. */
-export const modeOf = (kind: string | null | undefined) => (kind === "feishu" ? FEISHU_MODE : MODE);
+/** An X connect's: a post and the replies under it are a conversation (docs/x.md). */
+const X_MODE: Record<ConnectMode, { label: string; description: string }> = {
+  "multi-session": { get label() { return t("web-main.mode.x.multi.label"); }, get description() { return t("web-main.mode.x.multi.description"); } },
+  "single-session": { get label() { return t("web-main.mode.x.single.label"); }, get description() { return t("web-main.mode.x.single.description"); } },
+};
 
-/** A key of words that differ for a Feishu connect (its `.feishu` twin) as `kind` has it. */
-export const kindKey = (key: string, kind: string | null | undefined) => (kind === "feishu" ? `${key}.feishu` : key);
+/** The modes as a connect of `kind` has them. */
+export const modeOf = (kind: string | null | undefined) => (kind === "feishu" ? FEISHU_MODE : kind === "x" ? X_MODE : MODE);
+
+/** A key of words that differ for a Feishu or X connect (its `.feishu` or `.x` twin) as `kind` has it. */
+export const kindKey = (key: string, kind: string | null | undefined) => (kind === "feishu" || kind === "x" ? `${key}.${kind}` : key);
 
 export const RUNTIME_LABEL: Record<RuntimeKind, string> = { claude: "Claude Code", codex: "Codex", dsh: "DeepSeek Harness", grok: "Grok Build", cursor: "Cursor", devin: "Devin", hermes: "Hermes Agent" };
 

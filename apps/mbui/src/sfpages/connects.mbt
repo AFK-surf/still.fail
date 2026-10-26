@@ -320,13 +320,9 @@ fn cn_avatar(c : @ui.Ctx, core : Core, cv : Json?) -> Unit {
 }
 
 ///|
-/// What a connect connects to (ConnectKindIcon): Slack's mark or Feishu's.
+/// What a connect connects to (ConnectKindIcon): Slack's mark, Feishu's or X's.
 fn cn_kind(c : @ui.Ctx, kind : String, size : Double) -> Unit {
-  if kind == "feishu" {
-    @sf.feishu_mark(c, size) |> ignore
-  } else {
-    @sf.slack_mark(c, size) |> ignore
-  }
+  @sf.place_mark(c, kind, size) |> ignore
 }
 
 ///|

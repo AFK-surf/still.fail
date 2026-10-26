@@ -22,6 +22,7 @@ import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { PickStation } from "./Profiles.tsx";
 import { FEISHU_STEPS, FeishuSteps } from "./FeishuConnect.tsx";
+import { X_STEPS, XSection, XSteps, openKeys } from "./XConnect.tsx";
 import * as settingsCss from "./styles/settings.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -224,7 +225,7 @@ function ConnectPage({ item }: { item: ConnectItem }) {
         </div>
         {(c.state === "no_tokens" || c.state === "error" || (c.state === "reconnecting" && c.lastError)) && (
           <div className={settingsCss.mCallout}>
-            {c.state === "no_tokens" ? <>{t("web-mobile.connects.noTokens")}<button type="button" className={partsCss.mLink} onClick={() => openTokens(app, connect)}>{t("web-mobile.connects.fillToken")}</button></>
+            {c.state === "no_tokens" ? <>{t("web-mobile.connects.noTokens")}<button type="button" className={partsCss.mLink} onClick={() => (connect.kind === "x" ? openKeys(app, connect) : openTokens(app, connect))}>{t("web-mobile.connects.fillToken")}</button></>
               : c.state === "error" ? c.error : t("web-mobile.connects.reconnecting", { error: c.lastError ?? "" })}
           </div>
         )}
@@ -272,6 +273,7 @@ function ConnectPage({ item }: { item: ConnectItem }) {
             </ListCard>
           </>
         )}
+        {connect.x && <XSection connect={connect} />}
         <SectionHeader title={t("web-mobile.app.recent")} start={24} />
         <ListCard>
           {sessions.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t(kindKey("web-mobile.connects.noSessions", connect.kind), { name: connect.name })}</span></ListRow>}
@@ -315,8 +317,10 @@ function ConnectMenu({ connect }: { connect: Connect }) {
         <PickRow label={t("web-mobile.connects.reconnect")} busy={reconnecting} failed={reconnectFailed} enabled={!busy} onClick={() => go(api.reconnect(connect.id), t("web-mobile.connects.reconnected"), "web-mobile.connects.reconnectFailed")} />
         {connect.kind === "feishu"
           ? <PickRow label={t("web-mobile.connects.feishu.replace")} onClick={() => openSecret(app, connect)} />
+          : connect.kind === "x" ? <PickRow label={t("web-mobile.connects.x.replaceKeys")} onClick={() => openKeys(app, connect)} />
           : <PickRow label={t("web-mobile.connects.changeToken")} onClick={() => openTokens(app, connect)} />}
-        {connect.kind !== "feishu" && workspace?.url && <PickRow label={t("web-mobile.connects.openSlack")} onClick={() => window.open(workspace.url, "_blank", "noopener")} />}
+        {connect.x?.profile && <PickRow label={t("web-mobile.connects.x.openProfile")} onClick={() => window.open(connect.x!.profile!, "_blank", "noopener")} />}
+        {connect.kind !== "feishu" && connect.kind !== "x" && workspace?.url && <PickRow label={t("web-mobile.connects.openSlack")} onClick={() => window.open(workspace.url, "_blank", "noopener")} />}
         {connect.feishu?.console && <PickRow label={t("web-mobile.connects.feishu.openConsole")} onClick={() => window.open(connect.feishu!.console!, "_blank", "noopener")} />}
         {connect.enabled
           ? <PickRow label={t("web-mobile.connects.disable")} sub={t(kindKey("web-mobile.connects.disableNote", connect.kind))} busy={putting} failed={putFailed} enabled={!busy} onClick={() => go(api.putConnect(connect.id, { enabled: false }), t(kindKey("web-mobile.connects.disabled", connect.kind)), "web-mobile.connects.disableFailed")} />
@@ -640,6 +644,9 @@ export function NewConnectScreen() {
         {FEISHU_STEPS.includes(step) && !(step === "platform" && noProfile) && view.feishu && (step !== "done" || view.platform === "feishu") && (
           <FeishuSteps view={view} flow={flow} mode={<ModeChoices value={mode} onChange={setMode} kind="feishu" />} />
         )}
+        {view.x && (X_STEPS.includes(step) || (step === "done" && view.platform === "x")) && (
+          <XSteps view={view} flow={flow} mode={<ModeChoices value={mode} onChange={setMode} kind="x" />} />
+        )}
         {(step === "team" || step === "platform") && noProfile ? (
           <div className={newChatCss.mNewNone}>
             <img className={partsCss.mIllus} src={illustrationUrl("no-profile")} alt="" width={240} />
@@ -742,7 +749,7 @@ export function NewConnectScreen() {
               onClick={() => flow.act("create", ({ id }) => { app.toast(t("web-mobile.connects.added")); app.replace(`${stationBase(station.address)}/connects/${encodeURIComponent(String(id))}`); })} />
           </>
         )}
-        {error && !FEISHU_STEPS.includes(step) && <p className={partsCss.mError}>{error}</p>}
+        {error && !FEISHU_STEPS.includes(step) && !X_STEPS.includes(step) && <p className={partsCss.mError}>{error}</p>}
         <div style={{ height: 30 }} />
       </div>
     </div>

@@ -1770,6 +1770,58 @@ test("connect_wizard_offers_feishu_where_its_station_has_it_and_adds_a_scanned_b
   core.close();
 });
 
+test("connect_wizard_offers_x_where_its_station_has_it_and_adds_an_account_checked_with_its_list", async () => {
+  const { host, core } = await choosing();
+  let verified = 0;
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (path === "/x/verify") return ++verified === 1 ? { identity: null, errors: ["X 不认这组 key：401"] } : { identity: { botName: "Comma Bot", botUserId: "100", username: "commabot" }, errors: [] };
+    if (path === "/x/connects") return { id: "commabot" };
+    return undefined;
+  });
+  const ui = core.connect();
+  const flow = core.inner.forms.connects;
+  const topic = connectTopic("x");
+  const form = { station: "ws/st", form: "x" };
+  await ask(host, core, ui, 1, "connect.flow.open", form);
+  assert.deepEqual(flow.value(topic).platforms, ["slack"], "a station without X's connects");
+  const at = { topic: "overview", station: "ws/st" };
+  core.inner.data.set(at, { ...(structuredClone(core.inner.store.get(at)) as J), xConnects: true });
+  let view = flow.value(topic);
+  assert.deepEqual([view.step, view.platforms], ["platform", ["slack", "x"]]);
+  flow.go(topic, ui, "xBind");
+  view = flow.value(topic);
+  assert.deepEqual([view.step, view.platform, view.back, view.number, view.total], ["xBind", "x", "platform", 2, 3]);
+  await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "connect-new:x", model: "gpt-6-astra", runtime: "codex" });
+  await ask(host, core, ui, 3, "pick.save", { station: "ws/st", of: "connect-new:x" });
+  flow.go(topic, ui, "xApp");
+  view = flow.value(topic);
+  assert.deepEqual([view.step, view.back, view.x.canVerify, view.x.canCreate], ["xApp", "xBind", false, false]);
+  await ask(host, core, ui, 4, "connect.flow.edit", { ...form, input: { x: { consumerKey: " ck ", consumerSecret: "cs", accessToken: "at", accessSecret: "wrong" } } });
+  await ask(host, core, ui, 5, "connect.flow.verify", form);
+  assert.deepEqual([flow.value(topic).x.verified, flow.value(topic).x.errors], [false, ["X 不认这组 key：401"]]);
+  await ask(host, core, ui, 6, "connect.flow.edit", { ...form, input: { x: { accessSecret: "as" } } });
+  assert.deepEqual(flow.value(topic).x.errors, [], "what was found wrong goes once the keys change");
+  await ask(host, core, ui, 7, "connect.flow.verify", form);
+  view = flow.value(topic);
+  assert.deepEqual([view.x.verified, view.x.identity.username, view.x.canCreate], [true, "commabot", false], "no one on its list yet");
+  assert.deepEqual(stationPosted(host, "/x/verify").at(-1), { consumerKey: "ck", consumerSecret: "cs", accessToken: "at", accessSecret: "as" });
+  await assert.rejects(ask(host, core, ui, 8, "connect.flow.create", form));
+  await ask(host, core, ui, 9, "connect.flow.edit", { ...form, input: { x: { allow: "@ada bob" } } });
+  assert.equal(flow.value(topic).x.canCreate, true);
+  const shaped = present.decorate(topic, structuredClone(flow.value(topic)), { now: 0, offsetMin: 0 });
+  assert.ok("ok" in conform("ConnectFlowView", shaped), JSON.stringify(conform("ConnectFlowView", shaped)));
+  const created = await ask(host, core, ui, 10, "connect.flow.create", form);
+  assert.equal(created.id, "commabot");
+  const sent = stationPosted(host, "/x/connects")[0];
+  assert.deepEqual([sent.x, sent.bind.model, sent.mode], [{ consumerKey: "ck", consumerSecret: "cs", accessToken: "at", accessSecret: "as", allow: "@ada bob" }, "gpt-6-astra", "multi-session"]);
+  assert.deepEqual([flow.value(topic).step, flow.value(topic).x.connect], ["done", "commabot"]);
+  // Shown on its page: its list as handles, its keys masked, its account's page.
+  const shown = present.connect({ id: "commabot", kind: "x", name: "Comma Bot", team: "@commabot", x: { consumerKey: "••••", username: "commabot", allow: [{ id: "200", username: "ada" }, { id: "300", username: "" }] }, connection: { state: "connected" } });
+  assert.deepEqual([shown.placeText, shown.x.allowText, shown.x.profile, shown.x.links, shown.modeWords.multi.label], ["@commabot", "@ada 300", "https://x.com/commabot", false, "每条帖子一个会话"]);
+  core.close();
+});
+
 test("connect_wizard_checks_a_feishu_app_of_ones_own_and_lets_go_of_a_bot_not_made", async () => {
   const { host, core } = await choosing();
   let verified = 0;

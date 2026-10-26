@@ -790,5 +790,11 @@
   "web-main.relay.change": "更换",
   "web-main.relay.bots": "用哪个 bot",
   "web-main.relay.via": "那里由 {bot} 回复",
-  "web-main.relay.goTo": "接力到 {place}"
+  "web-main.relay.goTo": "接力到 {place}",
+  "web-main.mode.x.multi.label": "每条帖子一个会话",
+  "web-main.mode.x.multi.description": "名单上的人发帖 @ 它即开始一个会话，这条帖子下他们后续的回复都进入此会话",
+  "web-main.mode.x.single.label": "所有帖子共用一个会话",
+  "web-main.mode.x.single.description": "名单上的人 @ 它的帖子都进入同一个会话，适合长期值守的助手",
+  "web-main.creator.created.x": "由 {name}（X） 创建",
+  "web-main.creator.started.x": "由 {name}（X） 发起"
 }

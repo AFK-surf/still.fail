@@ -609,8 +609,7 @@ fn place_view(c : @ui.Ctx, station : String, key : String, place : Json?) -> Uni
     match text(place, "surface") {
       "ember" | "stillfail" =>
         @sf.drawable(c, if @sf.theme().dark { "stillfail_mark_dark" } else { "stillfail_mark" }, 12.0) |> ignore
-      "feishu" => @sf.feishu_mark(c, 12.0) |> ignore
-      _ => @sf.slack_mark(c, 12.0) |> ignore
+      other => @sf.place_mark(c, other, 12.0) |> ignore
     }
     c.text(text(place, "name"), style=h_place_words) |> ignore
   })

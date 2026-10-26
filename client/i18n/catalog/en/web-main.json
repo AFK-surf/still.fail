@@ -865,5 +865,11 @@
   "web-main.relay.change": "Change",
   "web-main.relay.bots": "Which bot",
   "web-main.relay.via": "{bot} replies there",
-  "web-main.relay.goTo": "Relay to {place}"
+  "web-main.relay.goTo": "Relay to {place}",
+  "web-main.mode.x.multi.label": "One session per post",
+  "web-main.mode.x.multi.description": "A post that @s it, by someone on its list, starts a session; their later replies under that post go into it",
+  "web-main.mode.x.single.label": "One session for every post",
+  "web-main.mode.x.single.description": "Every post on its list's people @ing it goes into the same session, for a standing assistant",
+  "web-main.creator.created.x": "Created by {name} (X)",
+  "web-main.creator.started.x": "Started by {name} (X)"
 }

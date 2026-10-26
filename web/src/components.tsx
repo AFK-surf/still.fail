@@ -75,7 +75,7 @@ export function MineFilter({ compact, archive, watching, decisions }: { label?: 
 export function CreatorText({ creator, verb = "created" }: { creator: { via?: string | null; shown?: PersonShown } | null | undefined; verb?: "created" | "started" }) {
   if (!creator?.shown) return null;
   const said = verb === "created" ? "created" : "started";
-  return <span className={css.creator}>{t(`web-main.creator.${said}${creator.via === "slack" ? ".slack" : creator.via === "feishu" ? ".feishu" : ""}`, { name: creator.shown.display })}</span>;
+  return <span className={css.creator}>{t(`web-main.creator.${said}${creator.via === "slack" ? ".slack" : creator.via === "feishu" ? ".feishu" : creator.via === "x" ? ".x" : ""}`, { name: creator.shown.display })}</span>;
 }
 
 /** Who a connect belongs to: avatar and name as the core names them. */

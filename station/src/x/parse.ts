@@ -83,17 +83,24 @@ export function postOf(post: Json, inc: Includes): XPost | null {
   return { id, conversation: text(post?.conversation_id) || id, author, text: wordsOf(post), repliesTo: referenced(post, "replied_to"), quotes: referenced(post, "quoted"), files };
 }
 
-/// A post's words as a message: the post it quotes after them, as a quote with whose it is.
+/// A post's words without the @handles it begins with (those X puts before a reply, and the bot's own): what it says.
+/// One that is nothing but those keeps them.
+export function said(text: string): string {
+  const rest = text.replace(/^(?:\s*@[A-Za-z0-9_]{1,15}\b)+\s*/, "");
+  return rest === "" ? text : rest;
+}
+
+/// A post's words as a message (said), the post it quotes after them, as a quote with whose it is.
 export function messageText(p: XPost, inc: Includes): string {
   const quoted = p.quotes === null ? null : inc.posts.get(p.quotes);
-  if (!quoted) return p.text;
+  if (!quoted) return said(p.text);
   const who = inc.users.get(text(quoted.author_id));
   const by = who ? `@${who.username}` : "a post";
   const lines = wordsOf(quoted)
     .split("\n")
     .map((l) => `> ${l}`)
     .join("\n");
-  return `${p.text}\n\n[Quoting ${by}]\n${lines}`;
+  return `${said(p.text)}\n\n[Quoting ${by}]\n${lines}`;
 }
 
 // ── what the agent writes, as posts ─────────────────────────────────────────────────────────────────────────────

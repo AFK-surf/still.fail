@@ -134,10 +134,12 @@ function withoutMentions(text: string): string {
 /// What a chat is called, as its station calls it (read/views.ts titleOf): the name people gave it, else the one its
 /// agent gave it; a chat of still.fail's own is a new chat until it has one, the same all along; a Slack or Feishu
 /// thread the first line a person wrote in it, else its channel.
-/// Where a Slack or Feishu thread is, in words: #channel, 私信, the Feishu group; null for a still.fail chat.
+/// Where a Slack, Feishu or X thread is, in words: #channel, 私信, the Feishu group, an X post; null for a still.fail
+/// chat.
 function placeName(surface: string, channel: string, channelName: string): string | null {
   const feishu = surface.startsWith("feishu:") || format.isFeishuChat(channel);
   if (feishu) return channelName || t("core-logic.format.thread.feishu");
+  if (surface.startsWith("x:") || format.isXConversation(channel, channel)) return t("core-logic.format.thread.x");
   if (surface === "ember" || surface === "stillfail" || surface === "") return null;
   return channel.startsWith("D") ? t("core-views.direct_message") : `#${channelName || channel}`;
 }
@@ -159,6 +161,7 @@ export function chatTitle(thread: J): string {
       .find((l) => l !== "");
     if (first !== undefined) return first;
   }
+  if (typeof surface === "string" && surface.startsWith("x:")) return t("core-logic.format.thread.x");
   const channel = text("channelName");
   // A Feishu chat is named as it is there (no #).
   if (channel !== null) return typeof surface === "string" && surface.startsWith("feishu:") ? channel : `#${channel}`;
@@ -1437,11 +1440,12 @@ export class Views implements Owner {
       const o = row.origin ?? null;
       const text = (k: string) => (typeof get(o, k) === "string" && o[k] !== "" ? (o[k] as string) : null);
       const channelName = text("channelName");
-      // A Feishu chat's: its group by name, no #.
+      // A Feishu chat's: its group by name, no #; an X conversation's: its account's handle.
       const feishu = text("surface")?.startsWith("feishu:") === true || format.isFeishuChat(text("channel") ?? "");
-      const place = feishu ? channelName : channelName !== null ? `#${channelName}` : text("channel")?.startsWith("D") ? t("core-views.direct_message") : null;
-      row.originKind = feishu ? "feishu" : "slack";
-      row.originText = [feishu ? t("core-views.feishu") : "Slack", text("teamName"), place].filter((x) => x !== null).join(" · ");
+      const x = text("surface")?.startsWith("x:") === true;
+      const place = feishu ? channelName : x ? null : channelName !== null ? `#${channelName}` : text("channel")?.startsWith("D") ? t("core-views.direct_message") : null;
+      row.originKind = feishu ? "feishu" : x ? "x" : "slack";
+      row.originText = [feishu ? t("core-views.feishu") : x ? "X" : "Slack", text("teamName"), place].filter((x) => x !== null).join(" · ");
     }
     if (isObject(row.last)) {
       const text = format.cleanText(format.plainText(str(row.last.text) ?? ""));
@@ -1700,7 +1704,8 @@ export class Views implements Owner {
     const surface = strOf(thread, "surface");
     const channel = strOf(thread, "channel");
     const feishu = surface.startsWith("feishu:") || format.isFeishuChat(channel);
-    const slack = !(surface === "ember" || surface === "stillfail") && !feishu;
+    const x = surface.startsWith("x:");
+    const slack = !(surface === "ember" || surface === "stillfail") && !feishu && !x;
     const place = placeName(surface, channel, strOf(thread, "channelName"));
     // A Feishu chat opens in Feishu (Lark's own app for its connect's).
     const feishuConnect = arr(get(this.ok({ topic: "overview", station }), "connects")).find((c) => `feishu:${strOf(c, "id")}` === surface);
@@ -1733,6 +1738,8 @@ export class Views implements Owner {
       place,
       slackUrl,
       ...(feishuUrl !== null ? { feishuUrl } : {}),
+      // An X conversation opens at its first post on X.
+      ...(x ? { xUrl: format.xPostUrl(strOf(thread, "threadTs")) } : {}),
       title,
       people,
       agents,
@@ -1775,7 +1782,7 @@ export class Views implements Owner {
       const to = u64(get(o, "thread"));
       const place = placeName(strOf(o, "surface"), strOf(o, "channel"), strOf(o, "channelName"));
       if (to === null || place === null) return [];
-      const via = strOf(o, "surface").startsWith("feishu:") || format.isFeishuChat(strOf(o, "channel")) ? "feishu" : "slack";
+      const via = strOf(o, "surface").startsWith("feishu:") || format.isFeishuChat(strOf(o, "channel")) ? "feishu" : strOf(o, "surface").startsWith("x:") ? "x" : "slack";
       return [{ thread: to, place, via, on: this.ccOn(station, id, to) }];
     });
     if (ccTo.length > 0) view.cc = ccTo;

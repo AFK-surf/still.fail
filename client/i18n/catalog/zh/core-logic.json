@@ -270,6 +270,8 @@
   "core-logic.format.window.days": "{n} 天",
   "core-logic.format.window.weekly": "每周",
   "core-logic.format.window.monthly": "每月",
+  "core-logic.format.connection.no_x": "未连接 X",
+  "core-logic.format.thread.x": "X 帖子",
   "core-logic.history.did.agent": "派出 {n} 个子 agent",
   "core-logic.history.did.command": "运行 {n} 条命令",
   "core-logic.history.did.edit": "编辑 {n} 个文件",

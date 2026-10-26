@@ -589,6 +589,7 @@ export function connect(c: J): J {
   const words = modeWords(kind);
   const single = mode === "single-session";
   const feishu = kind === "feishu";
+  const x = kind === "x";
   return {
     ...o,
     statusText: text,
@@ -600,23 +601,37 @@ export function connect(c: J): J {
     modeSentence: single
       ? words.single.description + t(o.requireMention === false ? "web-pages.connect.everyMessageSentence" : "web-pages.connect.mentionOnlySentence")
       : words.multi.description,
-    placeText: str(o.team) ?? (feishu ? (str(get(o.feishu, "domain")) === "lark" ? "Lark" : t("web-pages.connect.feishu.name")) : "Slack"),
+    placeText: str(o.team) ?? (feishu ? (str(get(o.feishu, "domain")) === "lark" ? "Lark" : t("web-pages.connect.feishu.name")) : x ? "X" : "Slack"),
     runtimeText: format.runtimeLabel(runtime),
     runText: `${format.runtimeLabel(runtime)} · ${label}`,
     modelName: bm ? model.name(bm) : null,
     ...(isObject(o.feishu) ? { feishu: feishuApp(o.feishu) } : {}),
+    ...(isObject(o.x) ? { x: xAccount(o.x) } : {}),
+  };
+}
+
+/// An X connect's account: its list as handles, its page on X.
+function xAccount(a: J): J {
+  const allow = (arr(get(a, "allow")) ?? []).flatMap((p) => (typeof get(p, "id") === "string" ? [{ id: p.id, username: str(get(p, "username")) ?? "" }] : []));
+  const username = str(get(a, "username"));
+  return {
+    consumerKey: "", consumerSecret: "", accessToken: "", accessSecret: "", ...a,
+    allow,
+    allowText: allow.map((p) => (p.username !== "" ? `@${p.username}` : p.id)).join(" "),
+    links: get(a, "links") === true,
+    profile: username !== undefined && username !== "" ? `https://x.com/${encodeURIComponent(username)}` : null,
   };
 }
 
 /// How a connect of `kind` says how its conversations become sessions (`ModeWords`): each way's name and what it means,
-/// and what waiting for an @ does there, on and off; a Feishu connect's in its groups' words.
+/// and what waiting for an @ does there, on and off; a Feishu connect's in its groups' words, an X one's in its posts'.
 export function modeWords(kind: string | null): J {
-  const feishu = kind === "feishu";
+  const own = kind === "feishu" || kind === "x" ? kind : null;
   const way = (m: string) => ({
-    label: t(feishu ? `web-main.mode.feishu.${m}.label` : `web-main.mode.${m}.label`),
-    description: t(feishu ? `web-main.mode.feishu.${m}.description` : `web-main.mode.${m}.description`),
+    label: t(own !== null ? `web-main.mode.${own}.${m}.label` : `web-main.mode.${m}.label`),
+    description: t(own !== null ? `web-main.mode.${own}.${m}.description` : `web-main.mode.${m}.description`),
   });
-  const k = (key: string) => (feishu ? `${key}.feishu` : key);
+  const k = (key: string) => (own !== null ? `${key}.${own}` : key);
   return { multi: way("multi"), single: way("single"), mentionOn: t(k("web-pages.connect.mentionOn")), mentionOff: t(k("web-pages.connect.mentionOff")) };
 }
 

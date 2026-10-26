@@ -267,7 +267,7 @@ pub fn person_avatar(c : @ui.Ctx, src : Source, id : String, name : String, pict
 
 ///|
 /// An agent's picture in a chat (AgentAvatar): its model's maker (still.fail's mark without one) on the neutral
-/// ground; what it said went elsewhere (`slack`: slack | feishu), that place's mark on its corner. One of the chat's
+/// ground; what it said went elsewhere (`slack`: slack | feishu | x), that place's mark on its corner. One of the chat's
 /// (`agent`, its session's key) has its card while the pointer rests on it (AgentHover).
 pub fn agent_avatar(
   c : @ui.Ctx,
@@ -311,11 +311,7 @@ fn place_corner(c : @ui.Ctx, surface : String) -> Unit {
   c.layer(fn() {
     c.box(style=place_corner_room, fn() {
       c.box(style=place_corner_mark, fn() {
-        if surface == "feishu" {
-          @sf.feishu_mark(c, place_corner_side) |> ignore
-        } else {
-          @sf.slack_mark(c, place_corner_side) |> ignore
-        }
+        @sf.place_mark(c, surface, place_corner_side) |> ignore
       })
       |> ignore
     })
@@ -841,7 +837,7 @@ pub fn sent_elsewhere(c : @ui.Ctx, src : Source, here : MessageHere, s : Elsewhe
         })
         |> ignore
       } else {
-        agent_avatar(c, src, here, key, s.by.maker, s.by.runtime, if surface == "feishu" { "feishu" } else { "slack" }, agent)
+        agent_avatar(c, src, here, key, s.by.maker, s.by.runtime, if surface == "feishu" || surface == "x" { surface } else { "slack" }, agent)
       }
     },
     fn() { message_name(c, src, here, key, s.by.name, agent, "") },
@@ -881,8 +877,7 @@ fn elsewhere_route(c : @ui.Ctx, key : String, s : Elsewhere) -> Unit {
       }
       match mark {
         "ember" | "stillfail" => @sf.drawable(c, if t.dark { "stillfail_mark_dark" } else { "stillfail_mark" }, route_mark) |> ignore
-        "feishu" => @sf.feishu_mark(c, route_mark) |> ignore
-        _ => @sf.slack_mark(c, route_mark) |> ignore
+        other => @sf.place_mark(c, other, route_mark) |> ignore
       }
       c.text(name, style=route_place_words) |> ignore
     })

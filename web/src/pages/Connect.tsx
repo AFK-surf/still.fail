@@ -1,5 +1,6 @@
 import type { SlackAppSettings } from "../api.ts";
 import { useConnectFlow } from "../connect-flow.ts";
+import type { ConnectFlowView } from "../core/shapes.ts";
 // A connect: where people reach ember (a Slack app today), the model it is
 // bound to, and how its conversations become sessions.
 import { profilesPage, scopeOf, useStation, useLink } from "../station.tsx";
@@ -19,6 +20,7 @@ import { useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
 import { Button, Choices, Confirm, ConnectAvatar, ConnectKindIcon, Dialog, Empty, Field, ICON, Menu, BackLink, Pill, StatusText, Section, Select, SlackLogo, StatusDot, SwitchRow, Time, Spinner, Waiting, WaitLine } from "../ui.tsx";
 import { FeishuSection, SecretDialog, useFeishuStep } from "./FeishuConnect.tsx";
+import { XAllowDialog, XKeysDialog, XSection, useXStep } from "./XConnect.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./Connect.css.ts";
 import * as cloudCss from "../styles/cloud.css.ts";
@@ -73,6 +75,7 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
   const [deleting, setDeleting] = useState(false);
   const [owning, setOwning] = useState(false);
   const [replacing, setReplacing] = useState(false);
+  const [listing, setListing] = useState(false);
   const remove = useAction(() => api.deleteConnect(connect.id), () => toast(t("web-pages.connect.deleted")));
   const reconnect = useAction(() => api.reconnect(connect.id), () => toast(t("web-pages.connect.reconnected")));
   // Reconnecting, or its settings on their way (from the menu or a section below): said in its status line meanwhile;
@@ -87,8 +90,9 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
     : saveState.error !== undefined ? { error: saveState.error, text: t("web-pages.connect.saveFailedShort") } : null;
   const c = connect.connection;
   const workspace = c.state === "connected" || c.state === "reconnecting" ? c.workspace : null;
-  // A Feishu connect: its app's App ID and secret in place of Slack's tokens and app.
+  // A Feishu connect: its app's App ID and secret in place of Slack's tokens and app; an X one: its account's keys and list.
   const feishu = connect.kind === "feishu";
+  const x = connect.kind === "x";
 
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
@@ -111,8 +115,9 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
         </div>
         <Menu items={[
           { label: t("web-pages.connect.reconnect"), icon: Refresh, disabled: reconnecting, onSelect: () => void reconnect.run() },
-          { label: feishu ? t("web-pages.connect.feishu.replace") : t("web-pages.connect.replaceToken"), icon: Key, onSelect: () => setReplacing(true) },
-          ...(!feishu && workspace?.url ? [{ label: t("web-pages.connect.openSlack"), icon: External, onSelect: () => window.open(workspace.url, "_blank", "noopener") }] : []),
+          { label: feishu ? t("web-pages.connect.feishu.replace") : x ? t("web-pages.connect.x.replaceKeys") : t("web-pages.connect.replaceToken"), icon: Key, onSelect: () => setReplacing(true) },
+          ...(x && connect.x?.profile ? [{ label: t("web-pages.connect.x.openProfile"), icon: External, onSelect: () => window.open(connect.x!.profile!, "_blank", "noopener") }] : []),
+          ...(!feishu && !x && workspace?.url ? [{ label: t("web-pages.connect.openSlack"), icon: External, onSelect: () => window.open(workspace.url, "_blank", "noopener") }] : []),
           ...(feishu && connect.feishu?.console ? [{ label: t("web-pages.connect.feishu.openConsole"), icon: External, onSelect: () => window.open(connect.feishu!.console!, "_blank", "noopener") }] : []),
           "separator",
           connect.enabled
@@ -126,12 +131,17 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
       {save.error && <p className={`${controlsCss.fieldError} ${css.pageError}`} role="alert">{save.error.message}</p>}
       {reconnect.error && <p className={`${controlsCss.fieldError} ${css.pageError}`} role="alert">{t("web-pages.connect.reconnectFailed", { error: reconnect.error.message })}</p>}
 
-      {feishu ? <ConnectTrouble connect={connect} /> : <SlackSection connect={connect} />}
+      {feishu || x ? <ConnectTrouble connect={connect} /> : <SlackSection connect={connect} />}
       <RunSection item={item} />
-      {feishu ? <FeishuSection connect={connect} onReplace={() => setReplacing(true)} /> : <SlackAppSection connect={connect} />}
+      {feishu ? <FeishuSection connect={connect} onReplace={() => setReplacing(true)} />
+        : x ? <XSection connect={connect} onKeys={() => setReplacing(true)} onAllow={() => setListing(true)} />
+        : <SlackAppSection connect={connect} />}
       <ConnectSessions item={item} />
 
-      {replacing && (feishu ? <SecretDialog connect={connect} onClose={() => setReplacing(false)} /> : <TokenDialog connect={connect} onClose={() => setReplacing(false)} />)}
+      {replacing && (feishu ? <SecretDialog connect={connect} onClose={() => setReplacing(false)} />
+        : x ? <XKeysDialog connect={connect} onClose={() => setReplacing(false)} />
+        : <TokenDialog connect={connect} onClose={() => setReplacing(false)} />)}
+      {listing && <XAllowDialog connect={connect} onClose={() => setListing(false)} />}
       {owning && <OwnerDialog connect={connect} onClose={() => setOwning(false)} />}
       {/* Back to the list at once: its row turns there until the station has dropped it, a failure said by toast. */}
       <Confirm open={deleting} onClose={() => setDeleting(false)} onConfirm={() => { setDeleting(false); navigate(`${station.settings}/connects`); void remove.run(); }}
@@ -419,8 +429,11 @@ function CoreNewConnectDialog({ open, onClose, resume }: { open: boolean; onClos
   const [tokens, setTokens, tokenCheck] = useSlackTokens({ install: flow.view?.made?.state ?? undefined, form: flow.form });
   // Only the input's immediate echo belongs to React; all decisions use the core's view.
   const [echo, setEcho] = useState<SlackAppSettings | null>(null);
-  // The platform first, then Feishu's own steps (./FeishuConnect.tsx).
-  const other = useFeishuStep(flow.view, flow, onClose, (v) => <ModeChoices mode={v.mode} requireMention={v.requireMention} onChange={(m) => flow.edit(m)} words={v.modeWords} />);
+  // The platform first, then Feishu's own steps (./FeishuConnect.tsx) or X's (./XConnect.tsx).
+  const modeOfView = (v: ConnectFlowView) => <ModeChoices mode={v.mode} requireMention={v.requireMention} onChange={(m) => flow.edit(m)} words={v.modeWords} />;
+  const feishuStep = useFeishuStep(flow.view, flow, onClose, modeOfView);
+  const xStep = useXStep(flow.view, flow, onClose, modeOfView);
+  const other = feishuStep ?? xStep;
   if (flow.unsupported) return <LegacyNewConnectDialog open={open} onClose={onClose} resume={resume} />;
   const view = flow.view;
   if (!view) return <Dialog open={open} onClose={onClose} title={t("web-pages.connects.add")}><WaitLine /></Dialog>;

@@ -1115,7 +1115,7 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s }: { sent: ChatSentE
     <OthersMessage data-vk={`e:${s.key}`} data-role={received ? "person" : "agent"} data-author={s.by.name} data-elsewhere="" time={s.time?.createdAt}
       avatar={received
         ? <span className={`${chatCss2.msgAvatar} ${css.msgAvatarSlackHolder}`} data-slack=""><Avatar id={s.by.name} name={s.by.name} size={18} /><span className={css.msgAvatarSlack}><ElsewhereLogo kind={kind} size={9} /></span></span>
-        : <AgentAvatar maker={s.by.maker} runtime={s.by.runtime} slack={kind === "feishu" ? "feishu" : true} agent={agent} />}
+        : <AgentAvatar maker={s.by.maker} runtime={s.by.runtime} slack={kind === "feishu" || kind === "x" ? kind : true} agent={agent} />}
       name={agent
         ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => { if (chat) chatPage.agent(chat, agent); }}>{s.by.name}</button>
         : <span className={css.msgName}>{s.by.name}</span>}
@@ -1294,13 +1294,13 @@ export function OthersMessage({ avatar, name, route, time, children, ...data }: 
 
 /** An agent's picture in a chat: its model's maker, in the agents' ground. One of the chat's (`agent`, its session's key)
  * has its card while it is pointed at (AgentCard.tsx). */
-export function AgentAvatar({ maker, runtime, slack, agent }: { maker: Maker | null | undefined; runtime: RuntimeKind | null | undefined; slack?: boolean | "feishu"; agent?: string | undefined }) {
+export function AgentAvatar({ maker, runtime, slack, agent }: { maker: Maker | null | undefined; runtime: RuntimeKind | null | undefined; slack?: boolean | "feishu" | "x"; agent?: string | undefined }) {
   return (
     <AgentHover agent={agent}>
       <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`} data-slack={slack || undefined}>
         {maker || runtime ? <ModelLogo maker={maker} runtime={runtime ?? "claude"} size={12} /> : <Mark size={12} />}
         {/* What it said went to Slack, not here: Slack's mark on its corner. */}
-        {slack && <span className={css.msgAvatarSlack}><ElsewhereLogo kind={slack === "feishu" ? "feishu" : "slack"} size={9} /></span>}
+        {slack && <span className={css.msgAvatarSlack}><ElsewhereLogo kind={slack === true ? "slack" : slack} size={9} /></span>}
       </span>
     </AgentHover>
   );

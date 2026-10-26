@@ -298,8 +298,9 @@ export function splitWhitespace(text: string): string[] {
 /// A thread named for people: where (its channel by name, 私信, or a still.fail chat's title) and when it began.
 export function threadName(threads: unknown[], channel: string, threadTs: string, offsetMin: number): [string, string] {
   const thread = threads.find((t) => str(get(t, "channel")) === channel && str(get(t, "threadTs")) === threadTs);
-  const parsed = Number(threadTs);
-  // A Feishu thread's ts is a message's id: it began when its thread was made.
+  const x = isXConversation(channel, threadTs) || str(get(thread, "surface"))?.startsWith("x:") === true;
+  const parsed = x ? Number.NaN : Number(threadTs);
+  // A Feishu thread's ts is a message's id, an X one's a post's: it began when its thread was made.
   const made = get(thread, "createdAt");
   const started = Number.isFinite(parsed) && threadTs.trim() !== "" ? parsed * 1000 : typeof made === "number" ? made : 0;
   const [, month, day] = local(started, offsetMin);
@@ -317,7 +318,8 @@ export function threadName(threads: unknown[], channel: string, threadTs: string
     // A Feishu chat (群, 私聊) by its name, as its station read it.
     const n = text("channelName");
     where = n === "" ? tr(current(), "core-logic.format.thread.feishu") : n;
-  } else if (channel.startsWith("D")) where = tr(current(), "core-logic.format.thread.dm");
+  } else if (x) where = tr(current(), "core-logic.format.thread.x");
+  else if (channel.startsWith("D")) where = tr(current(), "core-logic.format.thread.dm");
   else {
     const n = text("channelName");
     where = `#${n === "" ? channel : n}`;
@@ -328,13 +330,21 @@ export function threadName(threads: unknown[], channel: string, threadTs: string
 /// A Feishu chat's id (`oc_…`, docs/feishu.md).
 export const isFeishuChat = (channel: string) => /^oc_[A-Za-z0-9_-]+$/.test(channel);
 
-/// "C0OPS/1727.0001" → its channel and thread; a Feishu chat's "oc_…/om_…" (or a topic's "omt_…") too.
+/// An X conversation's address (docs/x.md): its first post's id, twice.
+export const isXConversation = (channel: string, ts: string) => /^[0-9]{1,19}$/.test(channel) && channel === ts;
+
+/// An X conversation's first post on X.
+export const xPostUrl = (id: string) => `https://x.com/i/status/${encodeURIComponent(id)}`;
+
+/// "C0OPS/1727.0001" → its channel and thread; a Feishu chat's "oc_…/om_…" (or a topic's "omt_…") too, and an X
+/// conversation's "123…/123…".
 export function splitThread(address: string): [string, string] | null {
   const slash = address.indexOf("/");
   if (slash < 0) return null;
   const channel = address.slice(0, slash);
   const ts = address.slice(slash + 1);
   if (isFeishuChat(channel)) return /^[A-Za-z0-9_-]+$/.test(ts) ? [channel, ts] : null;
+  if (isXConversation(channel, ts)) return [channel, ts];
   const dot = ts.indexOf(".");
   const valid = /^[A-Z0-9]+$/.test(channel) && dot > 0 && dot < ts.length - 1 && /^[0-9]+$/.test(ts.slice(0, dot)) && /^[0-9]+$/.test(ts.slice(dot + 1));
   return valid ? [channel, ts] : null;
@@ -365,6 +375,7 @@ export function place(threads: unknown[], address: string, offsetMin: number, wo
     const connect = surface?.startsWith("feishu:") ? workspaces.get(surface) : undefined;
     return { name: n, surface: "feishu", session, url: feishuChatUrl(connect?.url ?? feishuApplink(null), channel) };
   }
+  if (isXConversation(channel, ts) || surface?.startsWith("x:")) return { name: n, surface: "x", session, url: xPostUrl(ts) };
   const team = surface?.startsWith("slack:") ? workspaces.get(surface.slice(6)) : undefined;
   const teamName = team && team.name !== "" ? team.name : null;
   const named = teamName === null ? n : n.startsWith("#") ? `${teamName}${n}` : `${teamName} ${n}`;
@@ -435,7 +446,7 @@ export function connection(state: unknown, kind?: string | null): [string, strin
     case "disabled":
       return [said("core-logic.format.connection.disabled"), "offline"];
     default:
-      return [said(kind === "feishu" ? "core-logic.format.connection.no_feishu" : "core-logic.format.connection.no_slack"), "offline"];
+      return [said(kind === "feishu" ? "core-logic.format.connection.no_feishu" : kind === "x" ? "core-logic.format.connection.no_x" : "core-logic.format.connection.no_slack"), "offline"];
   }
 }
 

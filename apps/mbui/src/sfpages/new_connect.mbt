@@ -3,7 +3,8 @@
 // core's wizard (`connectFlow {station, form}`: its step, title, count, what can be done, what is wrong) drawn a step
 // at a time — the platform; Slack's (the workspace to make its app in, a configuration token to add, the app's look
 // and permissions, making and installing it then its app-level token, or both tokens pasted by hand) or Feishu's (the
-// model, how its conversations become sessions, a bot made by scanning or an app of one's own); last the model it
+// model, how its conversations become sessions, a bot made by scanning or an app of one's own) or X's (the model, how
+// its conversations become sessions, the account's keys and whose mentions wake it: docs/x.md); last the model it
 // runs. What is typed goes to the core's draft (`connect.flow.edit`), the way on (`connect.flow.go`), what is done
 // (`connect.flow.<config|make|verify|register|create>`); added, its page.
 
@@ -18,6 +19,9 @@ priv struct NcFlow {
   app_secret : @ui.Field
   mut app_id_sent : String
   mut app_secret_sent : String
+  /// The X account's keys and list as typed (by their names in the core's `x`), and what of each was sent.
+  x_fields : Map[String, @ui.Field]
+  x_sent : Map[String, String]
   mut look : SaDraft?
   mut look_sent : String
   mut icon_sent : String
@@ -54,6 +58,8 @@ pub fn new_connect_dialog(src : Source, core : Core, here : Here, station : Stri
     app_secret: @ui.Field::new(),
     app_id_sent: "",
     app_secret_sent: "",
+    x_fields: {},
+    x_sent: {},
     look: None,
     look_sent: "",
     icon_sent: "",
@@ -181,8 +187,18 @@ fn nc_error(core : Core, f : NcFlow) -> String {
 
 ///|
 /// The connect added: said, the dialog closed onto its page.
-fn nc_added(core : Core, f : NcFlow, id : String, close : () -> Unit, feishu : Bool) -> Unit {
-  (core.say)(@sf.t(if feishu { "web-pages.connect.feishu.added" } else { "web-pages.connect.added" }))
+fn nc_added(core : Core, f : NcFlow, id : String, close : () -> Unit, feishu : Bool, x? : Bool = false) -> Unit {
+  (core.say)(
+    @sf.t(
+      if feishu {
+        "web-pages.connect.feishu.added"
+      } else if x {
+        "web-pages.connect.x.added"
+      } else {
+        "web-pages.connect.added"
+      },
+    ),
+  )
   close()
   (core.push)(Connect(f.station, id))
 }
@@ -209,27 +225,28 @@ fn nc_body(c : @ui.Ctx, src : Source, core : Core, here : Here, f : NcFlow, v : 
       "platform" => {
         let offered = strings(v, "platforms").contains("feishu")
         let platform = opt_text(v, "platform").unwrap_or("slack")
+        let choices = [
+          ("slack", "Slack", @sf.t("web-pages.connect.feishu.slackNote")),
+          (
+            "feishu",
+            @sf.t("web-pages.connect.feishu.name"),
+            @sf.t(if offered { "web-pages.connect.feishu.feishuNote" } else { "web-pages.connect.feishu.update" }),
+          ),
+        ]
+        // X (docs/x.md): offered by the stations that have its connects
+        if strings(v, "platforms").contains("x") {
+          choices.push(("x", "X", @sf.t("web-pages.connect.x.xNote")))
+        }
         let picked = @sf.choices(
           c,
           "nc-platform/" + f.form,
           platform,
-          [
-            ("slack", "Slack", @sf.t("web-pages.connect.feishu.slackNote")),
-            (
-              "feishu",
-              @sf.t("web-pages.connect.feishu.name"),
-              @sf.t(if offered { "web-pages.connect.feishu.feishuNote" } else { "web-pages.connect.feishu.update" }),
-            ),
-          ],
+          choices,
           label=@sf.t("web-pages.connect.feishu.platform"),
           disabled=if offered { [] } else { ["feishu"] },
           icon=fn(p) {
             c.box(style=nc_platform_mark, fn() {
-              if p == "feishu" {
-                @sf.feishu_mark(c, nc_platform_size) |> ignore
-              } else {
-                @sf.slack_mark(c, nc_platform_size) |> ignore
-              }
+              @sf.place_mark(c, p, nc_platform_size) |> ignore
             })
             |> ignore
           },
@@ -238,7 +255,7 @@ fn nc_body(c : @ui.Ctx, src : Source, core : Core, here : Here, f : NcFlow, v : 
           nc_edit(core, f, obj([("platform", str(picked))]))
         }
       }
-      "feishuBind" | "bind" => {
+      "feishuBind" | "bind" | "xBind" => {
         nc_models(c, src, core, f, v)
         @sf.field(c, @sf.t("web-pages.connect.mode"), fn() {
           let (m, r) = mode_choices(c, "nc-mode/" + f.form, field(v, "modeWords"), text(v, "mode"), flag(v, "requireMention"))
@@ -269,6 +286,8 @@ fn nc_body(c : @ui.Ctx, src : Source, core : Core, here : Here, f : NcFlow, v : 
           c.text(error, style=desk_note_bad) |> ignore
         }
       }
+      "xApp" => nc_x_app(c, core, f, field(v, "x"), error)
+      "done" if text(v, "platform") == "x" => nc_x_app(c, core, f, field(v, "x"), error)
       "feishuScan" => nc_scan(c, core, fe)
       "done" if field(fe, "registration") is Some(Object(_)) => nc_scan(c, core, fe)
       "feishuApp" | "done" => nc_feishu_app(c, core, f, fe, error)
@@ -592,6 +611,72 @@ fn nc_feishu_app(c : @ui.Ctx, core : Core, f : NcFlow, fe : Json?, error : Strin
 }
 
 ///|
+/// The names of an X account's four keys in the core's `x`, and what the pages call them.
+// kept across runs: a table, never written
+let nc_x_keys : Array[(String, String)] = [
+  ("consumerKey", "Consumer Key (API Key)"),
+  ("consumerSecret", "Consumer Secret (API Key Secret)"),
+  ("accessToken", "Access Token"),
+  ("accessSecret", "Access Token Secret"),
+]
+
+///|
+/// One of the X account's fields (`name`, in the core's `x`), echoing what is typed: what it is sent to the draft.
+fn nc_x_input(c : @ui.Ctx, core : Core, f : NcFlow, x : Json?, name : String, secret : Bool, placeholder? : String = "") -> Unit {
+  let fd = match f.x_fields.get(name) {
+    Some(fd) => fd
+    None => {
+      let fd = @ui.Field::new()
+      // (the fields echo what is typed; the core has it a moment later)
+      fd.set(text(x, name))
+      f.x_fields[name] = fd
+      f.x_sent[name] = text(x, name)
+      fd
+    }
+  }
+  let typed = @sf.input(c, "nc-x-" + name + "/" + f.form, placeholder~, secret~, field=fd).text
+  if typed != f.x_sent.get(name).unwrap_or("") {
+    f.x_sent[name] = typed
+    c.tell("nc-x-" + name + "/" + f.form, fn() { nc_edit(core, f, obj([("x", obj([(name, str(typed))]))])) })
+  }
+}
+
+///|
+/// An X account (useXStep's app step): where to make its keys (its console opened), its four keys (what verifying found
+/// wrong under the last), who they were verified as, and the handles whose mentions wake it.
+fn nc_x_app(c : @ui.Ctx, core : Core, f : NcFlow, x : Json?, error : String) -> Unit {
+  let errors = strings(x, "errors")
+  for i, k in nc_x_keys {
+    let last = i == nc_x_keys.length() - 1
+    let said = if last { errors.iter().fold(init="", fn(a, e) { if a == "" { e } else { a + "；" + e } }) } else { "" }
+    // (the first says where they are made, its console opened beside its label)
+    if i == 0 {
+      @sf.field(c, k.1, hint=@sf.t("web-pages.connect.x.appHint"), fn() { nc_x_input(c, core, f, x, k.0, false) }, aside=fn() {
+        if cd_link(c, "nc-x-console/" + f.form, @sf.t("web-pages.connect.x.openConsole")) {
+          (core.open_link)("https://developer.x.com/en/portal/dashboard")
+        }
+      })
+    } else {
+      @sf.field(c, k.1, error=said, fn() { nc_x_input(c, core, f, x, k.0, k.0.has_suffix("Secret")) })
+    }
+  }
+  let identity = field(x, "identity")
+  if flag(x, "verified") && identity is Some(Object(_)) {
+    @sf.verify_ok(
+      c,
+      @sf.t("web-pages.connect.x.verified", args=[("bot", text(identity, "botName")), ("username", text(identity, "username"))]),
+    )
+  }
+  let said = match opt_text(x, "error") {
+    Some(e) => e
+    None => error
+  }
+  @sf.field(c, @sf.t("web-pages.connect.x.allow"), hint=@sf.t("web-pages.connect.x.allowHint"), error=said, fn() {
+    nc_x_input(c, core, f, x, "allow", false, placeholder="@ada @bob")
+  })
+}
+
+///|
 /// The dialog's buttons for the step shown (CoreNewConnectDialog's footer; useFeishuStep's): back (or 取消) and the
 /// way on, each as the core says the step stands.
 fn nc_foot(c : @ui.Ctx, core : Core, here : Here, f : NcFlow, v : Json?, close : () -> Unit) -> Unit {
@@ -619,7 +704,36 @@ fn nc_foot(c : @ui.Ctx, core : Core, here : Here, f : NcFlow, v : Json?, close :
     "platform" => {
       feishu_back()
       let feishu = opt_text(v, "platform") == Some("feishu") && strings(v, "platforms").contains("feishu")
-      next(@sf.t("web-pages.connect.next"), false, false, fn() { nc_go(core, f, if feishu { "feishuBind" } else { "team" }, close) })
+      let x = opt_text(v, "platform") == Some("x") && strings(v, "platforms").contains("x")
+      next(@sf.t("web-pages.connect.next"), false, false, fn() {
+        nc_go(
+          core,
+          f,
+          if feishu {
+            "feishuBind"
+          } else if x {
+            "xBind"
+          } else {
+            "team"
+          },
+          close,
+        )
+      })
+    }
+    "xBind" => {
+      feishu_back()
+      next(@sf.t("web-pages.connect.next"), !flag(v, "canCreate"), false, fn() { nc_go(core, f, "xApp", close) })
+    }
+    "xApp" => {
+      feishu_back()
+      let x = field(v, "x")
+      if flag(x, "verified") {
+        next(@sf.t("web-pages.connect.addConnect"), !flag(x, "canCreate"), busy || flag(x, "creating"), fn() {
+          nc_act(core, f, "create", done=fn(a) { nc_added(core, f, text(Some(a), "id"), close, false, x=true) })
+        })
+      } else {
+        next(@sf.t("web-pages.connect.x.verify"), !flag(x, "canVerify"), busy, fn() { nc_act(core, f, "verify") })
+      }
     }
     "feishuBind" => {
       feishu_back()

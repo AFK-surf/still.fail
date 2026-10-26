@@ -110,7 +110,7 @@ test("surface: the list's mentions are heard as their conversation's messages, o
     const a = fake.say({ author: "200", text: "帮我看看" });
     const m = fake.say({ author: "300", text: "me too" });
     await r.poll();
-    assert.deepEqual(messages(r.events).map((x) => [x.channel, x.threadTs, x.ts, x.user, x.text, x.addressed]), [[a, a, a, "200", "@commabot 帮我看看", true]]);
+    assert.deepEqual(messages(r.events).map((x) => [x.channel, x.threadTs, x.ts, x.user, x.text, x.addressed]), [[a, a, a, "200", "帮我看看", true]]);
     assert.equal(r.threads.since("xc"), m, "the newest read, whoever's");
     assert.equal(r.surface.knownPerson("200")?.name, "Ada (@ada)");
     assert.equal(r.surface.mention("200"), "@ada");
@@ -165,7 +165,7 @@ test("surface: an API that takes only the older names of posts' fields is asked 
     const last = fake.calls("GET", "/2/users/100/mentions").at(-1)!;
     assert.ok("tweet.fields" in last.query && !("post.fields" in last.query));
     assert.equal(messages(r.events).at(-1)!.ts, a);
-    assert.equal(messages(r.events).at(-1)!.text, "@commabot what about this\n\n[Quoting @mallory]\n> quoted words");
+    assert.equal(messages(r.events).at(-1)!.text, "what about this\n\n[Quoting @mallory]\n> quoted words");
   } finally {
     await r.close();
   }
@@ -216,7 +216,7 @@ test("hub: an X conversation is a session on the connect's own surface, begun by
     const key = `xc:${root}:${root}`;
     assert.ok(rig.store.getSession(key));
     const thread = rig.store.threadAt("x:xc", root, root)!;
-    assert.deepEqual(rig.said(thread.id).map((m) => [m.ts, m.text]), [[root, "a thread about something"], [mid, "more"], [ask, "@commabot summarise this"]]);
+    assert.deepEqual(rig.said(thread.id).map((m) => [m.ts, m.text]), [[root, "a thread about something"], [mid, "more"], [ask, "summarise this"]]);
     assert.equal(r.fake.calls("POST", "/2/tweets").length, 0, "no session link posted");
     const answer = await rig.call(key, "chat_post", { to: `${root}/${root}`, text: "Here it is.", kind: "all_done", done: "summarised" });
     assert.ok(answer.startsWith(`Posted to ${root}/${root}`), answer);

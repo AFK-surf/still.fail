@@ -117,6 +117,7 @@
   "core-misc.connect.feishu.expired": "QR code expired",
   "core-misc.connect.feishu.failed": "Couldn't create the bot",
   "core-misc.connect.feishu.failed_because": "Couldn't create the bot: {error}",
+  "core-misc.connect.title.xApp": "Your X account's keys",
   "core-misc.core.closed": "Core shut down",
   "core-misc.device.android": "{brand} Android{more}",
   "core-misc.device.browser": "Browser",

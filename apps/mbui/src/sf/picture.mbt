@@ -124,6 +124,25 @@ pub fn feishu_mark(c : @ui.Ctx, size : Double) -> Int {
 }
 
 ///|
+/// X's mark (an X connect, SlackMark's "x"), in the text's colour.
+pub fn x_mark(c : @ui.Ctx, size : Double) -> Int {
+  drawable(c, "x_mark", size, tint=theme().p.text)
+}
+
+///|
+/// Where a thread elsewhere is, as its mark (the web's ElsewhereLogo, `kind`: a connect's kind or a place's surface):
+/// Feishu's for Feishu and Lark, X's for X, else Slack's.
+pub fn place_mark(c : @ui.Ctx, kind : String, size : Double) -> Int {
+  if kind == "feishu" || kind == "lark" || kind.has_prefix("feishu:") {
+    feishu_mark(c, size)
+  } else if kind == "x" || kind.has_prefix("x:") {
+    x_mark(c, size)
+  } else {
+    slack_mark(c, size)
+  }
+}
+
+///|
 /// The station glyphs' colours a station may give its glyph (glyph:<name>:<colour>), light and dark.
 pub fn glyph_color(name : String, dark : Bool) -> Int64? {
   let light = match name {

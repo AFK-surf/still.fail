@@ -843,7 +843,7 @@ export interface Creator {
 	id: string;
 	name: string;
 	email?: string;
-	/** local | cloud | slack | feishu */
+	/** local | cloud | slack | feishu | x */
 	via: string;
 	/** A Slack person's picture, as their Slack shows it; absent for others and from a station that does not say. */
 	picture?: string;
@@ -1008,6 +1008,31 @@ export interface FeishuApp {
 	console?: string;
 }
 
+/** Someone on an X connect's list: their account's id and @handle. */
+export interface XAllowed {
+	id: string;
+	username: string;
+}
+
+/** An X connect's account (docs/x.md). */
+export interface XAccount {
+	/** Masked, as its other keys. */
+	consumerKey: string;
+	consumerSecret: string;
+	accessToken: string;
+	accessSecret: string;
+	/** Its account's @handle, without the @. */
+	username?: string;
+	/** Whose mentions wake it: no one else's. */
+	allow: XAllowed[];
+	/** Its list as handles, @ada @bob (core). */
+	allowText: string;
+	/** Its posts keep links (each such post costs much more on X). */
+	links: boolean;
+	/** Its account's page on X (core). */
+	profile?: string;
+}
+
 export interface SlackIdentity {
 	team: string;
 	teamId: string;
@@ -1072,6 +1097,8 @@ export interface Connect {
 	slack: SlackTokens;
 	/** A Feishu (Lark) connect's app (docs/feishu.md); absent for another kind. */
 	feishu?: FeishuApp;
+	/** An X connect's account and list (docs/x.md); absent for another kind. */
+	x?: XAccount;
 	connection: ConnectState;
 	createdBy?: Owner;
 	sessions: number;
@@ -1485,7 +1512,7 @@ export interface ChatCcTo {
 	thread: number;
 	/** Where it is: #channel, 私信, the Feishu group. */
 	place: string;
-	/** Its platform, for its mark: "slack" or "feishu". */
+	/** Its platform, for its mark: "slack", "feishu" or "x". */
 	via: string;
 	/**
 	 * Ticked: what is sent from here is copied there too, the station's bot saying there who wrote it on still.fail,
@@ -1711,7 +1738,7 @@ export interface ChatItem {
 	state?: Badge;
 	/** Where it came from (Slack · workspace · #channel), for a Slack chat; a Feishu one's (飞书 · tenant · group). */
 	originText?: string;
-	/** slack | feishu: the kind of connect it came from (its mark). */
+	/** slack | feishu | x: the kind of connect it came from (its mark). */
 	originKind?: string;
 	/** Its station is offline, in words ("Studio 离线"): the row is shown greyed and marked. Absent while online. */
 	offline?: string;
@@ -1918,7 +1945,7 @@ export interface MessageDecision {
 export interface Place {
 	/** A still.fail chat's title, or a Slack thread's workspace and channel (`Cue#ops`). */
 	name: string;
-	/** ember | slack | feishu */
+	/** ember | slack | feishu | x */
 	surface: string;
 	session?: string;
 	/** A Slack thread's link in Slack, while a connect is signed in to its workspace; a Feishu chat's in Feishu. */
@@ -2383,6 +2410,8 @@ export interface ChatView {
 	slackUrl?: string;
 	/** A Feishu (Lark) chat's link in Feishu. */
 	feishuUrl?: string;
+	/** An X conversation's first post on X. */
+	xUrl?: string;
 	/**
 	 * Its agents' Slack and Feishu threads, the one said in last first: what is sent from here can be copied to
 	 * those ticked (`chat.cc`). Empty in a chat whose agents are in none, and from a core before it.
@@ -2731,6 +2760,39 @@ export interface MadeSlackApp {
 	installedTeam?: string;
 }
 
+/** The X account a connect's keys sign as. */
+export interface XIdentity {
+	botName: string;
+	botImage?: string;
+	botUserId: string;
+	username: string;
+}
+
+/** The X path of the connect wizard (docs/x.md). */
+export interface ConnectXFlow {
+	consumerKey: string;
+	consumerSecret: string;
+	accessToken: string;
+	accessSecret: string;
+	/** The handles of the people whose mentions wake it, as typed. */
+	allow: string;
+	/** All four keys typed. */
+	canVerify: boolean;
+	/** Verified as typed, with nothing wrong: the connect can be added. */
+	verified: boolean;
+	/** The account the keys were verified as; absent until they are, or once they change. */
+	identity?: XIdentity;
+	/** What the verification found wrong. */
+	errors: string[];
+	/** Verified, with someone on its list and a model to run. */
+	canCreate: boolean;
+	creating: boolean;
+	/** Why adding it failed (a handle X does not know, say). */
+	error?: string;
+	/** The connect added: its page is opened. */
+	connect?: string;
+}
+
 export interface SlackGroupWord {
 	id: string;
 	label: string;
@@ -2777,11 +2839,13 @@ export interface ConnectFlowView {
 	chosen?: SlackTeam;
 	made?: MadeSlackApp;
 	pick?: PickView;
-	/** slack | feishu, once chosen. */
+	/** slack | feishu | x, once chosen. */
 	platform?: string;
-	/** What the station connects to (feishu only where it has the Feishu connect). */
+	/** What the station connects to (feishu, x only where it has their connects). */
 	platforms: string[];
 	feishu?: ConnectFeishuFlow;
+	/** The X path, once the station has X's connects (absent from a core before it). */
+	x?: ConnectXFlow;
 	/** How the ways its conversations become sessions are said, as its platform says them. */
 	modeWords: ModeWords;
 	/** The app's permissions as its form shows them. */

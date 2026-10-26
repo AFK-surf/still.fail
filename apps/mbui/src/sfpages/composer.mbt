@@ -1624,9 +1624,9 @@ let cc_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, wrap=false,
 let cc_words_lit : @ui.TextStyle = cc_words.then(@ui.text_style(color=Fg))
 
 ///|
-/// The mark of the platform it is copied to (the web's ElsewhereLogo): Feishu's for Feishu, else Slack's, 14.
+/// The mark of the platform it is copied to (the web's ElsewhereLogo): Feishu's for Feishu, X's for X, else Slack's, 14.
 fn cc_mark(c : @ui.Ctx, via : String) -> Unit {
-  (if via == "feishu" { @sf.feishu_mark(c, 14.0) } else { @sf.slack_mark(c, 14.0) }) |> ignore
+  @sf.place_mark(c, via, 14.0) |> ignore
 }
 
 ///|

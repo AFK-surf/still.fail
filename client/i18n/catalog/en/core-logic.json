@@ -342,6 +342,8 @@
   },
   "core-logic.format.window.weekly": "Weekly",
   "core-logic.format.window.monthly": "Monthly",
+  "core-logic.format.connection.no_x": "Not connected to X",
+  "core-logic.format.thread.x": "X post",
   "core-logic.history.did.agent": {
     "one": "sent 1 subagent",
     "other": "sent {n} subagents"

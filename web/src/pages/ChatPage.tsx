@@ -44,7 +44,7 @@ import { chatPage, useChatPageActions } from "../chatPage.ts";
 import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
-import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, ElsewhereLogo, Empty, FeishuLogo, ICON, IconButton, Menu, MobileBack, ModelLogo, PanelRow, ResizeHandle, SlackLogo, SwitchRow, Time, Tip, Waiting } from "../ui.tsx";
+import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, ElsewhereLogo, Empty, FeishuLogo, XLogo, ICON, IconButton, Menu, MobileBack, ModelLogo, PanelRow, ResizeHandle, SlackLogo, SwitchRow, Time, Tip, Waiting } from "../ui.tsx";
 import { useRenaming } from "../Rename.tsx";
 import * as sessionCss from "../styles/session.css.ts";
 import * as jobsCss from "../styles/jobs.css.ts";
@@ -87,7 +87,7 @@ function useChatOpened(chat: ChatView | undefined): void {
   useEffect(() => {
     if (!chat || reported.current) return;
     reported.current = true;
-    const surface = !chat.thread || (chat.thread.surface === "ember" || chat.thread.surface === "stillfail") ? "ember" : chat.thread.surface.startsWith("feishu:") ? "feishu" : "slack";
+    const surface = !chat.thread || (chat.thread.surface === "ember" || chat.thread.surface === "stillfail") ? "ember" : chat.thread.surface.startsWith("feishu:") ? "feishu" : chat.thread.surface.startsWith("x:") ? "x" : "slack";
     // The frame after the commit: when the messages are on screen.
     requestAnimationFrame(() => track("chat_opened", { surface, open: opening.cold ? "cold" : "warm", ms: Math.round(performance.now() - opening.at) }));
   }, [chat, opening]);
@@ -637,11 +637,12 @@ function JobsPanel({ station, session, chat }: { station: string; session: strin
   );
 }
 
-/** The connect a Slack chat's agents reach Slack through (links into Slack start at its workspace); a Feishu chat's, by
- * its surface. */
+/** The connect a Slack chat's agents reach Slack through (links into Slack start at its workspace); a Feishu or X
+ * chat's, by its surface. */
 function slackConnect(chat: ChatView) {
-  const feishu = chat.thread?.surface.startsWith("feishu:") ? chat.thread.surface.slice("feishu:".length) : null;
-  return chat.agents.find((a) => (feishu !== null ? a.connect?.id === feishu : a.connect?.kind === "slack"))?.connect ?? null;
+  const surface = chat.thread?.surface ?? "";
+  const own = surface.startsWith("feishu:") ? surface.slice("feishu:".length) : surface.startsWith("x:") ? surface.slice("x:".length) : null;
+  return chat.agents.find((a) => (own !== null ? a.connect?.id === own : a.connect?.kind === "slack"))?.connect ?? null;
 }
 
 /** The chat itself: where it came from, who started it and takes part, its agents. Opens from the title bar. */
@@ -694,6 +695,7 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke, onLetter
   if (!chat?.thread) return null;
   const thread = chat.thread;
   const feishu = thread.surface.startsWith("feishu:");
+  const x = thread.surface.startsWith("x:");
   const connect = slackConnect(chat);
   const row = (label: string, value: ReactNode) => <div className={css.detailRow}><dt>{label}</dt><dd>{value}</dd></div>;
   const where = chat.place;
@@ -704,7 +706,7 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke, onLetter
     <>
       <dl className={css.details}>
         {row(t("web-pages.chat.info.from"), where
-          ? <span className={css.detailInline}><ElsewhereLogo kind={feishu ? "feishu" : "slack"} size={13} />{connect ? <Link to={link(`/connects/${connect.id}`)} className={css.detailLink}>{connect.name}</Link> : feishu ? t("web-pages.connect.feishu.name") : "Slack"} · {where}</span>
+          ? <span className={css.detailInline}><ElsewhereLogo kind={feishu ? "feishu" : x ? "x" : "slack"} size={13} />{connect ? <Link to={link(`/connects/${connect.id}`)} className={css.detailLink}>{connect.name}</Link> : feishu ? t("web-pages.connect.feishu.name") : x ? "X" : "Slack"} · {where}</span>
           : t("web-pages.chat.info.native", { name: NAME }))}
         {row(t("web-pages.chat.info.started"), thread.creator ? <CreatorText creator={thread.creator} verb="started" /> : <span className={shellCss.muted}>{t("web-pages.chat.info.unknown")}</span>)}
         {row(t("web-pages.chat.info.people"), <span className={css.detailInline}><PeopleStack people={chat.people} max={8} />{t("web-pages.workspace.people", { n: chat.people.length })}</span>)}
@@ -716,13 +718,14 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke, onLetter
           {chat.agents.map((a) => <AgentLine key={a.session.key} agent={a} />)}
         </ul>
       )}
-      {(onFiles || chat.letters || onRelay || chat.slackUrl || chat.feishuUrl) && <div className={`${css.infoTools} ${controlsCss.panelEdge}`}>
+      {(onFiles || chat.letters || onRelay || chat.slackUrl || chat.feishuUrl || chat.xUrl) && <div className={`${css.infoTools} ${controlsCss.panelEdge}`}>
         {onFiles && <PanelRow icon={<Folder size={14} />} label={t("web-pages.chat.files")} onClick={onFiles} />}
         {/* What its agents and other chats' wrote each other, not in the chat: their tab beside it. */}
         {chat.letters && <PanelRow icon={<Chats size={14} />} label={t("web-main.letters.title")} end={t("web-main.letters.count", { n: chat.letters })} onClick={onLetters} />}
         {onRelay && <PanelRow icon={<ArrowUpRight size={14} />} label={t("web-main.relay.action")} onClick={onRelay} />}
         {chat.slackUrl && <PanelRow icon={<SlackLogo size={14} />} label={t("web-pages.chat.openInSlack")} onClick={() => window.open(chat.slackUrl!, "_blank", "noopener")} />}
         {chat.feishuUrl && <PanelRow icon={<FeishuLogo size={14} />} label={t("web-pages.chat.openInFeishu")} onClick={() => window.open(chat.feishuUrl!, "_blank", "noopener")} />}
+        {chat.xUrl && <PanelRow icon={<XLogo size={14} />} label={t("web-pages.chat.openInX")} onClick={() => window.open(chat.xUrl!, "_blank", "noopener")} />}
       </div>}
       {(share || publish) && (
         <div className={`${css.infoRows} ${controlsCss.panelEdge}`}>

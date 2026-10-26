@@ -406,6 +406,20 @@ const feishuKey = (f: J) => JSON.stringify([str(f.appId).trim(), str(f.appSecret
 
 const FEISHU_STEPS = ["feishuBind", "feishuWay", "feishuScan", "feishuApp"];
 
+/// The X path's own (docs/x.md): the account's four keys and the handles on its list as typed, the account they were
+/// last verified as, and the connect it became.
+const xBlank = (): J => ({
+  consumerKey: "", consumerSecret: "", accessToken: "", accessSecret: "", allow: "",
+  identity: null, errors: [], checked: null, creating: false, error: null, connect: null,
+});
+
+const X_KEYS = ["consumerKey", "consumerSecret", "accessToken", "accessSecret"];
+
+/// What a verification was of: it holds while the keys stay the same.
+const xKey = (x: J) => JSON.stringify(X_KEYS.map((k) => str(x[k]).trim()));
+
+const X_STEPS = ["xBind", "xApp"];
+
 function initial(input: J): J {
   const name = brand.name();
   const resume = typeof get(input, "resume") === "string";
@@ -414,6 +428,7 @@ function initial(input: J): J {
     step: resume ? "install" : "platform",
     platform: resume ? "slack" : null,
     feishu: feishuBlank(),
+    x: xBlank(),
     resume: get(input, "resume") ?? null,
     mobile: get(input, "mobile") === true,
     team: null,
@@ -542,7 +557,7 @@ export class ConnectFlows {
     for (const field of ["adding", "requireMention"]) if (get(patch, field) !== undefined && typeof patch[field] !== "boolean") throw CoreError.invalid(t("core-misc.params.not_bool"));
     if (get(patch, "mode") !== undefined && patch.mode !== "single-session" && patch.mode !== "multi-session") throw CoreError.invalid(t("core-misc.connect.no_such_mode"));
     const platform = get(patch, "platform");
-    if (platform !== undefined && platform !== "slack" && platform !== "feishu") throw CoreError.invalid(t("core-misc.connect.not_ready"));
+    if (platform !== undefined && platform !== "slack" && platform !== "feishu" && platform !== "x") throw CoreError.invalid(t("core-misc.connect.not_ready"));
     const feishu = get(patch, "feishu");
     if (feishu !== undefined) {
       if (!isObject(feishu)) throw CoreError.invalid(t("core-misc.params.not_text"));
@@ -550,6 +565,13 @@ export class ConnectFlows {
       if (get(feishu, "lark") !== undefined && typeof feishu.lark !== "boolean") throw CoreError.invalid(t("core-misc.params.not_bool"));
       if (get(feishu, "way") !== undefined && feishu.way !== "scan" && feishu.way !== "app") throw CoreError.invalid(t("core-misc.connect.not_ready"));
       for (const field of ["way", "appId", "appSecret", "lark"]) if (get(feishu, field) !== undefined) d.value.feishu[field] = feishu[field];
+    }
+    const x = get(patch, "x");
+    if (x !== undefined) {
+      if (!isObject(x)) throw CoreError.invalid(t("core-misc.params.not_text"));
+      for (const field of [...X_KEYS, "allow"]) if (get(x, field) !== undefined && typeof x[field] !== "string") throw CoreError.invalid(t("core-misc.params.not_text"));
+      for (const field of [...X_KEYS, "allow"]) if (get(x, field) !== undefined) d.value.x[field] = x[field];
+      if (get(x, "allow") !== undefined) d.value.x.error = null;
     }
     for (const field of ["team", "adding", "settings", "icon", "iconError", "config", "mode", "requireMention", "platform"]) if (get(patch, field) !== undefined) d.value[field] = patch[field];
     if (typeof get(patch, "config") === "string") d.value.config = patch.config.trim();
@@ -563,7 +585,8 @@ export class ConnectFlows {
     const step = str(view.step, "team");
     const allowed =
       to === "back" ||
-      (step === "platform" && (target === "team" || (target === "feishuBind" && view.platforms.includes("feishu")))) ||
+      (step === "platform" && (target === "team" || (target === "feishuBind" && view.platforms.includes("feishu")) || (target === "xBind" && view.platforms.includes("x")))) ||
+      (step === "xBind" && target === "xApp" && view.canCreate === true) ||
       (step === "feishuBind" && target === "feishuWay" && view.canCreate === true) ||
       (step === "feishuWay" && target === "feishuApp") ||
       ((step === "feishuScan" || step === "feishuApp") && target === "feishuWay") ||
@@ -575,7 +598,7 @@ export class ConnectFlows {
     const d = this.#own(topic, owner);
     if (d.pending) throw CoreError.invalid(t("core-misc.connect.busy"));
     if (step === "feishuScan" && target !== "feishuScan") this.#letGo(topic, d);
-    if (step === "platform") d.value.platform = target === "team" ? "slack" : "feishu";
+    if (step === "platform") d.value.platform = target === "team" ? "slack" : target === "xBind" ? "x" : "feishu";
     d.value.step = target;
     this.#store.invalidate(topic);
     return {};
@@ -596,14 +619,19 @@ export class ConnectFlows {
     const picked = p !== undefined ? p.ok : null;
     // A station without the Feishu connect (one from before it) says no `feishuRegistrations`: Slack's at once.
     const feishuOffered = Array.isArray(get(overview, "feishuRegistrations"));
-    v.platforms = feishuOffered ? ["slack", "feishu"] : ["slack"];
+    // One without X's connects says no `xConnects`.
+    const xOffered = get(overview, "xConnects") === true;
+    v.platforms = ["slack", ...(feishuOffered ? ["feishu"] : []), ...(xOffered ? ["x"] : [])];
+    const choosing = feishuOffered || xOffered;
     let step = str(v.step, "team");
-    if (step === "platform" && !feishuOffered) step = "team";
+    if (step === "platform" && !choosing) step = "team";
     v.step = step;
     const feishu = v.platform === "feishu" && (FEISHU_STEPS.includes(step) || step === "done");
+    const onX = v.platform === "x" && (X_STEPS.includes(step) || step === "done");
     const mobile = v.mobile === true;
     const title = step === "platform" ? "core-misc.connect.title.platform"
-      : step === "feishuBind" ? "core-misc.connect.title.bind"
+      : step === "feishuBind" || step === "xBind" ? "core-misc.connect.title.bind"
+      : step === "xApp" ? "core-misc.connect.title.xApp"
       : FEISHU_STEPS.includes(step) ? `core-misc.connect.title.${step}`
       : step === "team" && !mobile && teams.length === 0
         ? "core-misc.connect.title.get_token"
@@ -617,14 +645,16 @@ export class ConnectFlows {
     const slackOrder = step === "manual" || (step === "bind" && (v.madeId === null || v.madeId === undefined)) ? ["manual", "bind"] : ["team", "app", "install", "bind"];
     const order = feishu
       ? ["platform", "feishuBind", "feishuWay", step === "feishuApp" ? "feishuApp" : "feishuScan"]
-      : feishuOffered && typeof v.resume !== "string" ? ["platform", ...slackOrder] : slackOrder;
+      : onX ? ["platform", "xBind", "xApp"]
+      : choosing && typeof v.resume !== "string" ? ["platform", ...slackOrder] : slackOrder;
     const back =
       step === "platform" ? "close"
-        : step === "feishuBind" ? "platform"
+        : step === "feishuBind" || step === "xBind" ? "platform"
+        : step === "xApp" ? "xBind"
         : step === "feishuWay" ? "feishuBind"
         : step === "feishuScan" || step === "feishuApp" ? "feishuWay"
         : step === "team"
-        ? feishuOffered && typeof v.resume !== "string" ? "platform" : "close"
+        ? choosing && typeof v.resume !== "string" ? "platform" : "close"
         : step === "token" || step === "app" || step === "manual"
           ? "team"
           : step === "install" && typeof v.resume === "string"
@@ -649,7 +679,8 @@ export class ConnectFlows {
     v.made = made;
     v.pick = picked;
     v.feishu = feishuView(v.feishu, overview, d.pending);
-    v.modeWords = present.modeWords(feishu ? "feishu" : null);
+    v.x = xView(v.x ?? xBlank(), d.pending, v.canCreate === true);
+    v.modeWords = present.modeWords(feishu ? "feishu" : onX ? "x" : null);
     v.sections = present.slackSections();
     return v;
   }
@@ -670,6 +701,8 @@ export class ConnectFlows {
       const app = step === "feishuApp" ? feishuApp(v.feishu) : { registration: get(v.feishu.registration, "id") };
       [name, p] = ["feishu.createConnect", { feishu: app, bind: bindOf(v.pick), mode: v.mode, requireMention: v.requireMention }];
     }
+    else if (action === "verify" && step === "xApp" && v.x.canVerify === true) [name, p] = ["x.verify", xKeys(v.x)];
+    else if (action === "create" && step === "xApp" && v.x.canCreate === true) [name, p] = ["x.createConnect", { x: { ...xKeys(v.x), allow: str(v.x.allow) }, bind: bindOf(v.pick), mode: v.mode, requireMention: v.requireMention }];
     else if (action === "create" && step === "bind" && v.canCreate === true && verified) {
       let slack: J = { ...tokenInput };
       if (typeof get(v.made, "state") === "string") slack = { appToken: tokenInput.appToken ?? null, install: v.made.state };
@@ -682,6 +715,7 @@ export class ConnectFlows {
     d.pending = true;
     if (name === "feishu.createConnect") Object.assign(d.value.feishu, { creating: true, error: null });
     if (name === "feishu.register") d.value.feishu.error = null;
+    if (name === "x.createConnect") Object.assign(d.value.x, { creating: true, error: null });
     this.#store.invalidate(topic);
     return [d.generation, name, p];
   }
@@ -714,7 +748,9 @@ export class ConnectFlows {
     if (!d || d.generation !== generation) return false;
     d.pending = false;
     if (action === "create") d.value.feishu.creating = false;
+    if (action === "create" && d.value.x) d.value.x.creating = false;
     if ("err" in result && d.value.platform === "feishu" && (action === "create" || action === "register")) d.value.feishu.error = result.err.message;
+    if ("err" in result && d.value.platform === "x" && action === "create") d.value.x.error = result.err.message;
     if ("ok" in result) {
       const r = result.ok;
       if (action === "config") Object.assign(d.value, { team: get(r, "teamId") ?? null, config: "", adding: false, step: "app" });
@@ -728,7 +764,12 @@ export class ConnectFlows {
         d.value.feishu.connect = get(r, "id") ?? null;
         d.value.step = "done";
       }
+      else if (action === "create" && d.value.platform === "x" && X_STEPS.includes(d.value.step)) {
+        d.value.x.connect = get(r, "id") ?? null;
+        d.value.step = "done";
+      }
       else if (action === "create") d.value.step = "done";
+      else if (action === "verify" && d.value.step === "xApp") Object.assign(d.value.x, { identity: get(r, "identity") ?? null, errors: arr(get(r, "errors")).filter((e) => typeof e === "string"), checked: xKey(d.value.x) });
       else if (action === "verify" && d.value.step === "feishuApp") Object.assign(d.value.feishu, { identity: get(r, "identity") ?? null, errors: arr(get(r, "errors")).filter((e) => typeof e === "string"), checked: feishuKey(d.value.feishu) });
       else if (action === "verify" && get(r, "identity") !== undefined && r.identity !== null && Array.isArray(get(r, "errors")) && r.errors.length === 0) d.value.step = "bind";
     }
@@ -753,6 +794,30 @@ function qrOf(url: string): ReturnType<typeof qr> {
 
 /// An app of one's own as the station takes it.
 const feishuApp = (f: J): J => ({ appId: str(f.appId).trim(), appSecret: str(f.appSecret).trim(), domain: f.lark === true ? "lark" : "feishu" });
+
+/// An X account's keys as the station takes them.
+const xKeys = (x: J): J => Object.fromEntries(X_KEYS.map((k) => [k, str(x[k]).trim()]));
+
+/// The X path as drawn: what is typed, whether the keys were verified as they are and as whom, whether it can be added
+/// (someone on its list, a model to run), and the connect being added and why that failed.
+function xView(x: J, pending: boolean, runs: boolean): J {
+  const verified = x.checked === xKey(x);
+  const errors: string[] = verified ? arr(x.errors).filter((e): e is string => typeof e === "string") : [];
+  const ok = verified && x.identity !== null && x.identity !== undefined && errors.length === 0;
+  const out: J = {
+    ...Object.fromEntries(X_KEYS.map((k) => [k, str(x[k])])),
+    allow: str(x.allow),
+    canVerify: !pending && X_KEYS.every((k) => str(x[k]).trim() !== ""),
+    verified: ok,
+    errors,
+    canCreate: !pending && ok && runs && str(x.allow).trim() !== "",
+    creating: x.creating === true,
+    error: x.error ?? null,
+    connect: x.connect ?? null,
+  };
+  if (verified && x.identity) out.identity = x.identity;
+  return out;
+}
 
 /// The Feishu path as drawn: what is typed and whether it was verified as it is, the bot being made by scanning (its
 /// QR code while it waits, where it stands in words), the connect being added and why that failed.

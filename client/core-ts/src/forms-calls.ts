@@ -155,8 +155,9 @@ export function installForms(inner: Inner): Forms {
       const station = topic.station as string;
       const tokenTopic = tokensOf(station, topic.form as string);
       const view = yield* attempt(() => forms.connects.value(topic));
-      // Slack's tokens are the token form's; the Feishu path has none.
-      const slack = !String(view?.step ?? "").startsWith("feishu");
+      // Slack's tokens are the token form's; the Feishu and X paths have none.
+      const step = String(view?.step ?? "");
+      const slack = !step.startsWith("feishu") && !(step === "xApp" || step === "xBind");
       let input: J = {};
       let verified = false;
       if (slack) {

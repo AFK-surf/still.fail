@@ -321,6 +321,7 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
   }
   let slack = text(chat, "slackUrl")
   let feishu = text(chat, "feishuUrl")
+  let x_url = text(chat, "xUrl")
   let xshare = field(chat, "xshare")
   let (archived, offline) = match view {
     Some(v) => (v.archived, v.offline)
@@ -553,6 +554,15 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
             chevron(c)
           }) {
           open_outside(feishu)
+        }
+        if x_url != "" &&
+          info_row(c, "info/x", fn() {
+            @sf.x_mark(c, 16.0) |> ignore
+            c.box(style=@sf.full_width, fn() { c.text(tr("web-mobile.chat.openX"), style=info_words) |> ignore })
+            |> ignore
+            chevron(c)
+          }) {
+          open_outside(x_url)
         }
         // into the archive, back to the list at once
         if open &&
