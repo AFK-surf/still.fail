@@ -23,6 +23,12 @@ D="$(cd "$(dirname "$0")" && pwd)"
 ROOT=$(cd "$D/../.." && pwd)
 SF=$(cd "$ROOT/../.." && pwd)
 w() { cygpath -w "$1"; }
+# The run's release key handed to Windows programs as it is: a key (base64) may start with /, which Git Bash takes for
+# a path and rewrites, in what a Windows program is given, as a Windows one (C:/Program Files/Git/…): one run in 64 had
+# the desktop app refuse a release signed by it (a key "/p67Mm…="). Checked: a value that starts with / reaches one so.
+export MSYS2_ENV_CONV_EXCL="STILLFAIL_RELEASE_KEYS${MSYS2_ENV_CONV_EXCL:+;$MSYS2_ENV_CONV_EXCL}"
+[ "$(STILLFAIL_RELEASE_KEYS=/k node -e 'process.stdout.write(process.env.STILLFAIL_RELEASE_KEYS)')" = /k ] ||
+  { echo "$(basename "$0"): Git Bash rewrites STILLFAIL_RELEASE_KEYS for Windows programs (MSYS2_ENV_CONV_EXCL not taken)" >&2; exit 1; }
 VARIANT=${HANDOFF_VARIANT:-beta}
 case $VARIANT in
   # (DIR: its folder's name in %LOCALAPPDATA%\Programs, scripts/win.sh's variant's: the desktop app's package's)
