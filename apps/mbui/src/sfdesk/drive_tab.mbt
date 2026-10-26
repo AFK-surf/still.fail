@@ -38,6 +38,7 @@ let ftab : FChatTab = {
 ///|
 fn tab_reset() -> Unit {
   panel_screens.clear()
+  panel_screen_pages.clear()
   ftab.building = false
   ftab.places.clear()
   ftab.scope = ""

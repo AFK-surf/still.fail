@@ -35,7 +35,11 @@ fn station_files_scope(r : ChatRef, station : String) -> String {
 ///|
 pub fn station_page_beside(src : Source, r : ChatRef, p : Page) -> Bool {
   let tab = match p {
-    Screen(at) => station_tab_key("screen", at.station, screen=at.screen)
+    Screen(at) => {
+      let tab = station_tab_key("screen", at.station, screen=at.screen)
+      panel_screen_pages[tabs_key(r) + "/" + tab] = at
+      tab
+    }
     Drive(at) => {
       tab_place_set(station_files_scope(r, at.station), Some(at))
       station_tab_key("drive", at.station)
@@ -68,6 +72,10 @@ fn station_tab_name(src : Source, tab : String) -> String? {
 }
 
 ///|
+/// Keep the opening intent per chat: login browsers close their tab when gone.
+let panel_screen_pages : Map[String, @sfbase.ScreenAt] = {}
+
+///|
 let panel_screens : Map[String, (String, String, Int)] = {}
 
 ///|
@@ -77,7 +85,8 @@ fn station_tab_pane(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, tab :
   match kind {
     "screen" => {
       panel_screens[tab] = (station, screen, c.frame_number())
-      @sfpages.screen_page(c, src, { station, screen, title: "", until_gone: false }, frame,
+      let at = panel_screen_pages.get(tabs_key(r) + "/" + tab).unwrap_or({ station, screen, title: "", until_gone: false })
+      @sfpages.screen_page(c, src, at, frame,
         on_close=fn() { side_change(src, r, "close", Some(tab)) })
     }
     "drive" => files_tab(c, src, w.id, tabs_key(r), station, only_station=true, scope=station_files_scope(r, station))

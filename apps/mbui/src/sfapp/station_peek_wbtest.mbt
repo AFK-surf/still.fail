@@ -215,3 +215,37 @@ test "station tabs show their page beside the chat, preserve folders and release
   assert_true(!t.awake())
 
 }
+
+///|
+test "a login screen opened beside a chat closes its tab when the login browser is gone" {
+  reset()
+  let base = fixture("chat")
+  let receive : Ref[((Json, Bytes?) -> Unit)?] = Ref(None)
+  let src : Source = {
+    ..base,
+    stream: fn(name, params, bytes, value, done) {
+      if name == "screen.view" {
+        receive.val = Some(value)
+        7001
+      } else { (base.stream)(name, params, bytes, value, done) }
+    },
+  }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  open_chat(r)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  t.run_for(@ui.nav_push_ms)
+  // The same settings callback used by the chat's login card.
+  let core = @sfbase.settings_core(src, { id: "ws1", name: "", emoji: "", icon: "", email: "" })
+  (core.open_screen)("ws1/st1", "desktop")
+  t.run_for(@sfdesk.side_in_ms)
+  assert_true(app.nav.top() is Chat(_))
+  assert_eq(side_now(r).1, "screen:[\"ws1/st1\",\"desktop\"]")
+  (receive.val.unwrap())({ "state": { "phase": "gone" } }, None)
+  t.frame()
+  t.frame()
+  t.run_for(@sfdesk.side_out_ms)
+  t.frame()
+  assert_true(app.nav.top() is Chat(_))
+  assert_true(!side_now(r).0.contains("screen:[\"ws1/st1\",\"desktop\"]"))
+  assert_true(!t.awake())
+}
