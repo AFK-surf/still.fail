@@ -330,7 +330,7 @@ pub fn settings_side_rows(
     for i, row in part.rows {
       let key = "settings-nav/" + row.key
       let id = c.id(key)
-      let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), lit == Some(row.route))
+      let ground = @sf.nav_ground(c, key, c.lit(id) || c.pressed(id), lit == Some(row.route))
       // (a sidebar's row of one line, as its others are: its mark, its words, how things stand at its end, left out
       // where the row has not the room: its words whole till then, cut only where they alone have not)
       let draw = fn() {

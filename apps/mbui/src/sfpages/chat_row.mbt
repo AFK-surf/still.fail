@@ -216,7 +216,7 @@ pub fn chat_row(
         0L
       }
     } else {
-      nav_ground(c, "row/" + key, hover || pressed, on)
+      @sf.nav_ground(c, "row/" + key, hover || pressed, on)
     }
     // (what shows of it over the list's: what its faces' rings are cut in)
     let face_ground = @sf.over(list_ground, ground)
