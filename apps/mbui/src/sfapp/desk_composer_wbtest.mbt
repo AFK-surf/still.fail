@@ -375,6 +375,74 @@ test "desk composer: an image sent while it goes up is among its message's files
 }
 
 ///|
+/// A picture in the desk composer's draft, as the core says it (`as`: its file's fields put or taken off), sent: whether
+/// a spinner turned over its tile as it waited there, and over what is drawn where its tile was till it sets off.
+fn spun_tile_and_face(as_ : (Map[String, Json]) -> Unit) -> (Bool, Bool) raise {
+  let calls : Array[Made] = []
+  let heard : Ref[Topic?] = Ref(None)
+  let (t, src) = desk_composer_tester(calls, over=fn(name, now) {
+    match heard.val {
+      Some(before) if name == "composer" => before
+      _ => now
+    }
+  })
+  desk_focus(t)
+  let w = @sfbase.writing(src, "ws1/st1:s-c1")
+  @sfbase.writing_add(src, w, "ws1/st1", "照片.png", png_head())
+  t.frame()
+  let now = (src.topic)("composer", { "key": Json::string("ws1/st1:s-c1") })
+  let files = items(now.value, "files").map(fn(f) {
+    guard f is Object(m) else { f }
+    let g = m.copy()
+    as_(g)
+    Json::object(g)
+  })
+  guard now.value is Some(Object(v)) else { abort("no draft") }
+  let before = v.copy()
+  before["files"] = Json::array(files)
+  heard.val = Some({ value: Some(Json::object(before)), error: None, version: now.version + 1 })
+  t.frame()
+  let lines = t.drawn_lines()
+  t.enter()
+  t.frame()
+  let flying = match send_flight.val {
+    Some(f) => f.files
+    None => fail("nothing flies")
+  }
+  assert_eq(flying.length(), 1)
+  let (x, y, fw, fh) = flying[0].from
+  let tile = lines.iter().any(fn(l) { l.0 >= x && l.0 <= x + fw && l.1 >= y && l.1 <= y + fh })
+  let face = @ui.Tester::new(fn(_) { (flying[0].face)() }, w=200.0, h=200.0)
+  // (its bytes again: a tester of its own starts with none)
+  @ui.add_image(flying[0].picture, png_head())
+  face.draw()
+  assert_eq(face.image_loads().length(), 1)
+  let spun = face.drawn_lines().length() > 0
+  send_flight.val = None
+  (tile, spun)
+}
+
+///|
+test "desk composer: a picture sent is drawn where its tile was as the composer drew it till it sets off: a spinner over it while it goes up, none over a new chat's waiting for its message" {
+  // going up: a spinner over its tile, and over it till it sets off
+  assert_eq(
+    spun_tile_and_face(fn(g) {
+      g.remove("done")
+      g["sent"] = Json::number(1.0)
+    }),
+    (true, true),
+  )
+  // a new chat's, waiting for its message (composer.ts `waits`): nothing going up, no spinner over either
+  assert_eq(
+    spun_tile_and_face(fn(g) {
+      g.remove("done")
+      g["waits"] = Json::boolean(true)
+    }),
+    (false, false),
+  )
+}
+
+///|
 test "desk composer: a reference to another workspace's chat is asked about first (OutsideShare.tsx), Enter again shares it and it goes" {
   let calls : Array[Made] = []
   let (t, src) = desk_composer_tester(calls)
