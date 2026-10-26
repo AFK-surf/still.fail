@@ -357,6 +357,13 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
   }
   LRESULT taken = 0;
   if (life_message(msg, wp, lp, &taken)) return taken;
+  // the taskbar's button made anew (the window shown again from its tray): its number put on it again
+  static UINT button_made;
+  if (!button_made) button_made = RegisterWindowMessageW(L"TaskbarButtonCreated");
+  if (msg == button_made) {
+    mb_win_badge_again(h);
+    return 0;
+  }
   switch (msg) {
     case WM_PAINT: {
       PAINTSTRUCT ps;
@@ -988,8 +995,8 @@ void mb_host_window_drag(void) {
 }
 
 // The pointer's shape (@hostapi.set_cursor), shown at once where it is over the window.
-// The number on the app's icon (@hostapi.set_badge): none on Windows here (its taskbar's overlay is not drawn yet).
-void mb_host_set_badge(int32_t n) { (void)n; }
+// The number on the app's icon (@hostapi.set_badge): its taskbar button's overlay (win_notify.cpp).
+void mb_host_set_badge(int32_t n) { mb_win_badge(hwnd, n); }
 // (this machine's station: win_station.h)
 // The keys held now (@hostapi.mods_held), as a key's are told.
 int32_t mb_host_mods_held(void) { return mods_now(); }

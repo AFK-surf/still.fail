@@ -74,6 +74,10 @@ const wchar_t *mb_win_env(const wchar_t *name);
 #define WM_MB_TAPPED (0x8000 + 4)  /* WM_APP + 4 */
 // notifications (win_notify.cpp): a scripted run's tap (1) or look (0) at the one whose words hold `text`: 1 found
 int32_t mb_notice_drive(int32_t tap, const wchar_t *text);
+// the number on the window's taskbar button (win_notify.cpp: its overlay; 0 none), and put on again as the taskbar
+// makes the button anew
+void mb_win_badge(void *hwnd, int n);
+void mb_win_badge_again(void *hwnd);
 // the window (HWND) and its scale (pixels per point)
 void *mb_app_hwnd(void);
 double mb_app_scale(void);
