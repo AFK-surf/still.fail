@@ -44,9 +44,29 @@ echo old > "$INTO/left-from-before.dll"
 check "put in again over what was there (it exited 0)" '[ $? = 0 ] && [ -f "$INTO/$EXE.exe" ]'
 check "what the one before had and this does not, gone" '[ ! -f "$INTO/left-from-before.dll" ]'
 
+# again, a file of the one there held open by another process (sharing nothing, as one of the old app's not yet gone
+# or a scanner reading it holds it) till the installer says it waits on it: it waits for it to be let go, then puts
+# the new one in place. The holder lets go as a named event is set, set once the installer's line is out (its output
+# read as it comes: waitfor.mjs --tee).
+held=$(w "$INTO/$EXE.exe")
+powershell.exe -NoProfile -Command "\$e = New-Object Threading.EventWaitHandle(\$false, 'AutoReset', 'mbui-setup-held'); \$f = [IO.File]::Open('$held', 'Open', 'Read', 'None'); 'holding' | Out-File -Encoding ascii '$(w "$RUNNER_TEMP/setup-holding")'; [void]\$e.WaitOne(60000); \$f.Close()" > "$OUT/held.log" 2>&1 &
+holder=$!
+node "$(w "$D/../../scripts/waitfor.mjs")" --deadline 30 --what "the file held" --exists "$(w "$RUNNER_TEMP/setup-holding")" > /dev/null
+rm -f "$RUNNER_TEMP/setup-waits"
+node "$(w "$D/../../scripts/waitfor.mjs")" --tee "$(w "$OUT/held-update.log")" --line ' held by ' --mark "$(w "$RUNNER_TEMP/setup-waits")" -- \
+  "$(w "$SETUP")" /S --updated "/D=$(w "$INTO")" &
+setup_run=$!
+node "$(w "$D/../../scripts/waitfor.mjs")" --deadline 60 --what "the installer's word that it waits on the file held" \
+  --exists "$(w "$RUNNER_TEMP/setup-waits")" > /dev/null
+powershell.exe -NoProfile -Command "([Threading.EventWaitHandle]::OpenExisting('mbui-setup-held')).Set()" > /dev/null 2>&1
+wait $setup_run
+check "put in again over a file held a while, waited for till it was let go (it exited 0)" \
+  '[ $? = 0 ] && grep -q "held by" "$OUT/held-update.log" && grep -q "its files in place" "$OUT/held-update.log" && ! grep -q "not written" "$OUT/held-update.log"'
+wait $holder 2> /dev/null
+
 cp "$INTO/Uninstall $NAME.exe" "$RUNNER_TEMP/setup-uninstall.exe"
 "$RUNNER_TEMP/setup-uninstall.exe" --uninstall-from "$(w "$INTO")" /S > "$OUT/uninstall.log" 2>&1
 check "taken away: the folder, its uninstall entry, its shortcut" '[ ! -d "$INTO" ] && [ -z "$(entry InstallLocation)" ] && [ ! -f "$(cygpath -u "$menu")/$NAME.lnk" ]'
-for f in install update uninstall; do echo "== $f.log"; tail -15 "$OUT/$f.log"; done
+for f in install update held-update uninstall; do echo "== $f.log"; tail -15 "$OUT/$f.log"; done
 echo "setup: $fails failed" | tee -a "$OUT/result.txt"
 [ $fails = 0 ]

@@ -30,6 +30,7 @@
 #include <compressapi.h>
 #include <objbase.h>
 #include <propsys.h>
+#include <restartmanager.h>
 #include <shlobj.h>
 #include <shobjidl.h>
 #include <tlhelp32.h>
@@ -46,6 +47,7 @@
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "propsys.lib")
+#pragma comment(lib, "rstrtmgr.lib")
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "userenv.lib")
@@ -323,6 +325,92 @@ static void end_running(const wchar_t *dir) {
   }
 }
 
+// The first file under `dir` another process has open so that it may not be taken away (into `held`): 0 when none is.
+static int held_file(const wchar_t *dir, wchar_t *held, size_t cap) {
+  wchar_t glob[MAX_PATH * 2];
+  _snwprintf(glob, MAX_PATH * 2, L"%ls\\*", dir);
+  WIN32_FIND_DATAW e;
+  HANDLE h = FindFirstFileW(glob, &e);
+  if (h == INVALID_HANDLE_VALUE) return 0;
+  int found = 0;
+  do {
+    if (!wcscmp(e.cFileName, L".") || !wcscmp(e.cFileName, L"..")) continue;
+    wchar_t p[MAX_PATH * 2];
+    _snwprintf(p, MAX_PATH * 2, L"%ls\\%ls", dir, e.cFileName);
+    if (e.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+      if (!(e.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) found = held_file(p, held, cap);
+      continue;
+    }
+    // (opened to be taken away, sharing nothing: what another holds without letting it go refuses it)
+    HANDLE f = CreateFileW(p, DELETE, 0, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    if (f != INVALID_HANDLE_VALUE) {
+      CloseHandle(f);
+    } else if (GetLastError() == ERROR_SHARING_VIOLATION || GetLastError() == ERROR_ACCESS_DENIED) {
+      lstrcpynW(held, p, (int)cap);
+      found = 1;
+    }
+  } while (!found && FindNextFileW(h, &e));
+  FindClose(h);
+  return found;
+}
+
+// The processes that hold `path` open, as the system's Restart Manager has them: their handles (opened to be waited
+// for and ended), at most `cap`; how many.
+static int holders(const wchar_t *path, HANDLE *out, int cap) {
+  DWORD session = 0;
+  WCHAR key[CCH_RM_SESSION_KEY + 1] = {0};
+  if (RmStartSession(&session, 0, key) != ERROR_SUCCESS) return 0;
+  int n = 0;
+  LPCWSTR files[1] = {path};
+  UINT need = 0, have = 16;
+  RM_PROCESS_INFO info[16];
+  DWORD why = 0;
+  if (RmRegisterResources(session, 1, files, 0, NULL, 0, NULL) == ERROR_SUCCESS &&
+      (RmGetList(session, &need, &have, info, &why) == ERROR_SUCCESS || have > 0)) {
+    for (UINT i = 0; i < have && n < cap; i++) {
+      HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE | PROCESS_TERMINATE, FALSE,
+                             info[i].Process.dwProcessId);
+      if (!h) h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, FALSE, info[i].Process.dwProcessId);
+      if (h) out[n++] = h;
+    }
+  }
+  RmEndSession(session);
+  return n;
+}
+
+// What is put aside let go of first: what runs from it ended (end_running); then, while a file of it is still held (a
+// process of its own not yet gone as its windows closed, one that ended with its files not yet let go, a scanner
+// reading what was just written), those holding it (the Restart Manager's) ended where their program is in it, waited
+// for else, as each lets go, 30 s at most, after which what is held is written over where it can be.
+static void let_go(const wchar_t *dir) {
+  end_running(dir);
+  size_t dn = wcslen(dir);
+  wchar_t held[MAX_PATH * 2], last[MAX_PATH * 2] = L"";
+  for (ULONGLONG t0 = GetTickCount64(); held_file(dir, held, MAX_PATH * 2);) {
+    ULONGLONG spent = GetTickCount64() - t0;
+    if (spent >= 30000) {
+      say(L"%ls still held after %llu ms", held, spent);
+      return;
+    }
+    HANDLE hs[16];
+    int n = holders(held, hs, 16);
+    if (wcscmp(held, last) != 0) say(L"%ls held by %d (%llu ms)", held, n, spent);
+    lstrcpynW(last, held, MAX_PATH * 2);
+    for (int i = 0; i < n; i++) {
+      wchar_t path[MAX_PATH * 2];
+      DWORD pn = MAX_PATH * 2;
+      if (QueryFullProcessImageNameW(hs[i], 0, path, &pn) && !_wcsnicmp(path, dir, dn) && path[dn] == L'\\') {
+        say(L"%ls holds it: ended", path);
+        TerminateProcess(hs[i], 1);
+      }
+    }
+    // (waited for: one of them gone, or a while for one that lets go of the file and goes on)
+    if (n > 0) WaitForMultipleObjects((DWORD)n, hs, FALSE, 500);
+    else Sleep(100);
+    for (int i = 0; i < n; i++) CloseHandle(hs[i]);
+  }
+}
+
 // `dir` and everything in it gone, as far as it can be: 1 when it is
 static int remove_tree(const wchar_t *dir) {
   wchar_t glob[MAX_PATH * 2];
@@ -428,7 +516,7 @@ static int install(int silent, int run_after, const wchar_t *dir_given) {
   int fresh = GetFileAttributesW(install_dir) == INVALID_FILE_ATTRIBUTES;
   say(L"%ls %ls into %ls (%ls)", app_name, version, install_dir, fresh ? L"first" : L"over what is there");
   if (!silent) CloseHandle(CreateThread(NULL, 0, window_thread, NULL, 0, NULL));
-  end_running(install_dir);
+  if (!fresh) let_go(install_dir);
   // made beside, then put in its place: the old one aside first (else, its files held, written over)
   wchar_t next[MAX_PATH], old[MAX_PATH];
   _snwprintf(next, MAX_PATH, L"%ls.new", install_dir);
