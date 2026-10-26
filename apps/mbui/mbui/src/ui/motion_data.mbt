@@ -48,8 +48,10 @@ struct MoverEntry {
   who : Mover
   mut m : &Moving
   mut what : String
-  /// the part kept while it is the same (Ctx::kept_part) being built as it was told, whose drawing it moves (0: none)
+  /// the part kept while it is the same (Ctx::kept_part) being built as it was told, whose drawing it moves (0: none);
+  /// the list's row kept so (kept_rows.mbt)
   mut part : Int
+  mut row : Int
 }
 
 ///|
@@ -95,15 +97,17 @@ pub fn Ctx::moving_as(self : Ctx, who : Mover, m : &Moving, what : String) -> Un
   if part != 0 {
     who.part = part
   }
+  let row = part_now.row
   for e in self.movers {
     if physical_equal(e.who, who) {
       e.m = m
       e.what = what
       e.part = part
+      e.row = row
       return
     }
   }
-  self.movers.push({ who, m, what, part })
+  self.movers.push({ who, m, what, part, row })
 }
 
 ///|

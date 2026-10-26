@@ -550,7 +550,8 @@ fn Ctx::place_list(
   // what the rows built hold near the list's top (Ctx::stick): from where in `stuck`, each row's
   let stuck_from = self.stuck.length()
   let lay = fn(k : Int, y : Double) -> (Int, Double) {
-    let r = self.build_row(li, st, k)
+    // (kept as its last build drew it where nothing it shows changed: kept_rows.mbt)
+    let r = self.row_of(li, st, k, iw)
     let h = self.layout(r, ix, y, iw, nan)
     st.set_height(k, h)
     (r, h)
@@ -566,6 +567,8 @@ fn Ctx::place_list(
   let mut blocked_top = 0.0
   let mut hit_end = false
   let mut hit_top = false
+  // how far the rows are laid from where the list says they are (set on the pixels), until an end puts them there
+  let mut snap = 0.0
   if st.stick_end && st.at_end && st.pending >= 0.0 {
     blocked_end = st.pending
     hit_end = st.pending > 0.0
@@ -579,11 +582,18 @@ fn Ctx::place_list(
     last = st.count - 1
   } else {
     let a = imax(imin(st.anchor, st.count - 1), 0)
+    // (where rows are kept, laid on the device's pixels: the row it is said from set on them, the others from it, so
+    // that as the list moves its rows move by whole pixels, what is in them set on the pixels as it was: a row drawn
+    // again moved as far as its laying out would move it, kept_rows.mbt; where the list stands is said again without
+    // it)
     let y = iy - st.anchor_off - st.pending
-    let (r, h) = lay(a, y)
+    if self.rows_on() {
+      snap = on_pixels(y, self.scale) - y
+    }
+    let (r, h) = lay(a, y + snap)
     rows.push(r)
-    top = y
-    bottom = y + h
+    top = y + snap
+    bottom = y + snap + h
     first = a
     last = a
   }
@@ -612,6 +622,7 @@ fn Ctx::place_list(
       pinned_end = true
       blocked_end = blocked_end + d
       hit_end = true
+      snap = 0.0
     }
     while top > iy && first > 0 {
       first = first - 1
@@ -634,6 +645,7 @@ fn Ctx::place_list(
       top = iy
       bottom = bottom + d
       pinned_end = false
+      snap = 0.0
     } else {
       break
     }
@@ -667,7 +679,7 @@ fn Ctx::place_list(
       if st.vis_first < 0 {
         st.vis_first = rn.item
         st.anchor = rn.item
-        st.anchor_off = iy - rn.y
+        st.anchor_off = iy - (rn.y - snap)
       }
       st.vis_last = rn.item
     }
@@ -688,16 +700,16 @@ fn Ctx::place_list(
     }
     st.anchor_off = iy - (bottom_edge - below_top)
   }
-  st.at_end = last == st.count - 1 && (pinned_end || bottom <= bottom_edge + 0.5)
-  st.below = if last == st.count - 1 { bottom - bottom_edge } else { 1.0e9 }
+  st.at_end = last == st.count - 1 && (pinned_end || bottom - snap <= bottom_edge + 0.5)
+  st.below = if last == st.count - 1 { bottom - snap - bottom_edge } else { 1.0e9 }
   // (what the view built this frame read of how the list stood, a way back to the end, the rows in view told, is read
   // back where it was read: Ctx::list_info; a list scrolled that nothing read builds nothing again)
   if st.glide {
     // how far it is above its end: the rows not laid out by their heights as known (measured, or estimated)
     let to_end = if last == st.count - 1 {
-      bottom - bottom_edge
+      bottom - snap - bottom_edge
     } else {
-      st.above(st.count) - st.above(last + 1) + (bottom - bottom_edge)
+      st.above(st.count) - st.above(last + 1) + (bottom - snap - bottom_edge)
     }
     // a row followed from its top: its top `follow_margin` under the view's, or the end, whichever comes first
     // (Follow.kt left)
@@ -706,7 +718,7 @@ fn Ctx::place_list(
       for r in order {
         let rn = self.nodes[r]
         if rn.item == st.follow_item {
-          left = dmin(to_end, rn.y - iy - st.follow_margin)
+          left = dmin(to_end, rn.y - snap - iy - st.follow_margin)
         }
       }
     }
@@ -741,12 +753,27 @@ fn Ctx::place_list(
   } else if st.vel < 0.0 && hit_top {
     self.absorb(st, 1, st.vel)
   }
-  // iOS's rubber band moves the rows past the end
+  // iOS's rubber band moves the rows past the end (as its curve has it: a row drawn again where it moves them by part
+  // of a pixel is built, kept_rows.mbt)
   let off = st.over_offset()
   if off != 0.0 {
     for r in order {
       self.shift(r, off)
     }
+  }
+  // the rows kept, built after all where they show what their last build did not draw (kept_rows.mbt)
+  if self.rows_placed(li, st, order, ix, iy, iw, ih) {
+    let mut prev = -1
+    for r in order {
+      if prev >= 0 {
+        self.nodes[prev].next = r
+      } else {
+        n.first = r
+      }
+      self.nodes[r].next = -1
+      prev = r
+    }
+    n.last = prev
   }
   self.stick_in(li, stuck_from, iy)
 }
@@ -787,12 +814,15 @@ fn Ctx::stick_in(self : Ctx, li : Int, from : Int, top : Double) -> Unit {
     let p = self.nodes[n.parent]
     // where its parent lays it (a subtree placed as before keeps where it was held last frame)
     self.replace(s, p.x, p.y)
+    let laid = n.y
     let held = top + n.stick - n.y
     let room = p.y + p.fh - p.pad_b - n.fh - n.y
     let dy = dmin(held, room)
     if dy > 0.0 {
       self.shift(s, dy)
     }
+    // (a row being built: drawn again, it is built again once what it holds is held: kept_rows.mbt)
+    self.row_stuck(s, laid, n.stick, room)
   }
 }
 

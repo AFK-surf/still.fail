@@ -227,7 +227,8 @@ fn kept_list_view(builds : Ref[Int]) -> (Ctx) -> Unit {
 }
 
 ///|
-/// Every frame `steps` draws with the part kept where it can be (`keep`) or built every frame, as numbers.
+/// Every frame `steps` draws with the part kept where it can be (`keep`) or built every frame (its drawing taken as
+/// when it is kept), as numbers.
 fn kept_frames(
   keep : Bool,
   platform : Int,
@@ -235,7 +236,8 @@ fn kept_frames(
   pointing? : Pointing = Finger,
 ) -> Array[Array[Double]] {
   let t = Tester::new(kept_list_view(Ref(0)), w=300.0, h=400.0, platform~, pointing~)
-  t.keep_parts(keep)
+  t.keep_parts(true)
+  t.drawn_again(keep)
   let frames = []
   frame_hook.val = Some(fn() {
     let c = g()

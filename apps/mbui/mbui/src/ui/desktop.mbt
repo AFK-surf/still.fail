@@ -422,6 +422,10 @@ pub fn Ctx::cursor(self : Ctx, id : Int, cursor : Cursor) -> Unit {
   ignore(self)
   if id != 0 {
     desk.next_cursors[id] = cursor.code()
+    match row_building() {
+      Some(rk) => rk.cursors.push((id, cursor.code()))
+      None => ()
+    }
   }
 }
 
@@ -433,6 +437,10 @@ pub fn Ctx::takes_presses(self : Ctx, id : Int) -> Unit {
   ignore(self)
   if id != 0 {
     desk.next_takers.add(id)
+    match row_building() {
+      Some(rk) => rk.takers.push(id)
+      None => ()
+    }
   }
 }
 
@@ -458,6 +466,10 @@ pub fn Ctx::right_clicked(self : Ctx, id : Int) -> (Double, Double)? {
 pub fn Ctx::menu_asked(self : Ctx, id : Int) -> (Double, Double)? {
   if id != 0 {
     desk.next_askers.push(id)
+    match row_building() {
+      Some(rk) => rk.askers.push(id)
+      None => ()
+    }
   }
   let mut at : (Double, Double)? = None
   for m in desk.menus {
@@ -498,6 +510,10 @@ pub fn Ctx::window_drag(self : Ctx, id : Int) -> Unit {
   ignore(self)
   if id != 0 {
     desk.next_drags.push(id)
+    match row_building() {
+      Some(rk) => rk.drags.push(id)
+      None => ()
+    }
   }
 }
 
@@ -508,6 +524,10 @@ pub fn Ctx::window_drag(self : Ctx, id : Int) -> Unit {
 pub fn Ctx::mouse_drags_lists(self : Ctx, on : Bool) -> Unit {
   ignore(self)
   desk.next_mouse_drags = on
+  match row_building() {
+    Some(rk) => rk.mouse_drags = Some(on)
+    None => ()
+  }
 }
 
 ///|
@@ -770,6 +790,10 @@ fn select_press(x : Double, y : Double, clicks : Int) -> Unit {
 pub fn Ctx::keeps_selection(self : Ctx, id : Int) -> Unit {
   ignore(self)
   desk.next_keeps.push(id)
+  match row_building() {
+    Some(rk) => rk.keeps.push(id)
+    None => ()
+  }
 }
 
 ///|

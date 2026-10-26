@@ -299,6 +299,13 @@ fn clamp_inst_clip(
 }
 
 ///|
+/// `v` set on the device's pixels (`sc` of them a point): the nearest (half way, away from 0, as runs kept from a
+/// device's frames have it: their frames are told apart by hash).
+fn on_pixels(v : Double, sc : Double) -> Double {
+  (v * sc).round() / sc
+}
+
+///|
 fn Ctx::push_inst(
   self : Ctx,
   x : Double,
@@ -518,8 +525,8 @@ fn Ctx::emit_text(
     } else {
       0.0
     }
-    let gx = ((ox + dx + tl.xs[c] + s.pad + g.ox / z) * sc).round() / sc
-    let gy = ((top + tl.ascent + g.oy / z) * sc).round() / sc
+    let gx = on_pixels(ox + dx + tl.xs[c] + s.pad + g.ox / z, sc)
+    let gy = on_pixels(top + tl.ascent + g.oy / z, sc)
     let adaptive = glass_paint.ink_r > 0.0 && !g.color
     self.push_inst(
       gx,
@@ -731,12 +738,8 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   if (n.hit || n.points) && n.id != 0 {
     self.push_hit(n.id, dmax(n.x, cx0), dmax(n.y, cy0), dmin(n.x + n.fw, cx1), dmin(n.y + n.fh, cy1))
     if n.points {
-      self.next_points[n.id] = true
-      // (a part kept: said again as it is drawn again, kept_part.mbt)
-      match kept_parts.get(part_now.painting) {
-        Some(st) => st.points.push(n.id)
-        None => ()
-      }
+      // (and of a part kept, a list's row kept being painted: said again as they are drawn again)
+      self.point_said(n.id)
     }
   }
   // a modal's ground: the wheel stops at it too (overlay.mbt); and what says it stops it (Ctx::stop_wheel), what

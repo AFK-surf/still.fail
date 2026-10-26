@@ -410,6 +410,10 @@ pub fn Ctx::after_build(self : Ctx, key : String, f : () -> Unit) -> Unit {
     Some(k) => self.tells[k] = (id, f)
     None => self.tells.push((id, f))
   }
+  match row_building() {
+    Some(rk) => rk.tells.push((0, id, f))
+    None => ()
+  }
 }
 
 ///|
@@ -1449,6 +1453,10 @@ pub fn Ctx::tell(self : Ctx, key : String, f : () -> Unit) -> Unit {
     match self.told.search_by(fn(t) { t.0 == id }) {
       Some(k) => self.told[k] = (id, f)
       None => self.told.push((id, f))
+    }
+    match row_building() {
+      Some(rk) => rk.tells.push((1, id, f))
+      None => ()
     }
   } else {
     f()

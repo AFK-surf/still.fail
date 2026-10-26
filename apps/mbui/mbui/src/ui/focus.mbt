@@ -67,7 +67,13 @@ pub fn Ctx::focusable(self : Ctx, id : Int, node? : Int = -1, keys? : Int = 3, o
   if id == 0 {
     return
   }
-  self.focusables.push({ id, group: self.group_cur, layer: self.layer_cur, node, keys, on_press })
+  let f = { id, group: self.group_cur, layer: self.layer_cur, node, keys, on_press }
+  self.focusables.push(f)
+  // (a list's row: said again as it is drawn again, kept_rows.mbt)
+  match row_building() {
+    Some(rk) => rk.focus.push(f)
+    None => ()
+  }
 }
 
 ///|

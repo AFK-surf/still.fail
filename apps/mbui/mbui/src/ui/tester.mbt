@@ -340,6 +340,7 @@ pub fn Tester::new(
   // (every frame built whole: what a test reads of a frame's nodes reads all of it; a test of the parts kept says so,
   // Tester::keep_parts)
   parts_on.val = false
+  drawn_again_on.val = true
   // (after the globals are put back: what came from outside before the run's first frame, posted here, would be lost
   // with them, and the first frame drawn without it: the system's bars round an edge-to-edge window)
   if run is Some(r) {
