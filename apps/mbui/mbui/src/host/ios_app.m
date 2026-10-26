@@ -107,6 +107,10 @@ static int frames_drawn;
 // how much later than its time the frame before reached the screen (mb_host_frame_late), and that frame's time (the
 // display link's target it was drawn for; -1: none drawn since the link was paused)
 static double frame_late, last_target = -1;
+// The frame the app waits for (@hostapi.wake_after: a resident cycle's next step), by the time it is for (ms, the
+// display link's targets' clock), or -1; the time of the frame being built (what wake_after counts from), and the
+// display's frame (ms).
+static double wake_for = -1, building_for = -1, link_period = 1000.0 / 120.0;
 // How far the soft keyboard reaches over the view's foot past the safe area's, in points, where it is on the screen
 // now (its motion followed frame by frame: the controller's), and whether it is moving.
 static double ime_over(void);
@@ -182,6 +186,15 @@ static void run_script_step(int step);
 }
 
 - (void)tick:(CADisplayLink *)l {
+  link_period = (l.targetTimestamp - l.timestamp) * 1000.0;
+  // a frame waited for (wake_after): the first whose time is at or past it, on the display's frames (not when a timer
+  // happens to fire and the link wakes after it: a step a frame or two late, by as much as the timer and the link's
+  // wake fall, so a resident cycle's steps 75 to 108 ms apart, not 100); the ticks before it draw nothing
+  if (!self.wantFrame && wake_for >= 0) {
+    if (l.targetTimestamp * 1000.0 < wake_for - 0.5) return;
+    wake_for = -1;
+    self.wantFrame = YES;
+  }
   if (!self.wantFrame) {
     l.paused = YES;
     last_target = -1;
@@ -206,7 +219,11 @@ static void run_script_step(int step);
   // CACurrentMediaTime's clock as the touches' times are), as Android's is its vsync's, not when it happens to be built;
   // in one Core Animation transaction, the native views' moves and the drawable that shows their holes (mac_app.m's)
   [CATransaction begin];
+  // (what it waits for said again by the frame, if it still does)
+  wake_for = -1;
+  building_for = l.targetTimestamp * 1000.0;
   mb_cb.frame(s.width, h, scale, l.targetTimestamp * 1000.0);
+  building_for = -1;
   [CATransaction commit];
   last_target = l.targetTimestamp * 1000.0;
   if (frames_drawn == 0)
@@ -950,9 +967,18 @@ static void mb_post_wake(void) {
   });
 }
 
+// `ms` after the frame being built's time (the app's clock: the display's targets), else after now: the frame for that
+// time drawn (tick), the link woken a little before it (two display frames: its first tick after waking is for the
+// frame after the next) and drawing nothing until then.
 void mb_host_wake_after(double ms) {
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(ms * 1e6)), dispatch_get_main_queue(),
-                 ^{ [the_view requestFrame]; });
+  double at = (building_for >= 0 ? building_for : mb_now_ms()) + ms;
+  if (wake_for >= 0 && wake_for <= at) return;
+  wake_for = at;
+  double lead = at - mb_now_ms() - 2.0 * link_period;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(MAX(lead, 0) * 1e6)), dispatch_get_main_queue(), ^{
+    // (a wake asked later since, or met already: not this one's)
+    if (wake_for == at) the_view.link.paused = NO;
+  });
 }
 
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
