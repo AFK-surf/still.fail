@@ -22,6 +22,8 @@ test "wide: 接力到频道… from a row's menu: the dialog lists the bot's pla
   assert_eq(named(calls, "chat.relayPlaces").length(), 1)
   t.frame()
   assert_true(t.find("接力到频道") is Some(_))
+  // its search typed into at once: the keyboard's focus there as it opens (the presenters' `field`)
+  assert_true(t.ctx().field_focused(), msg="the search not focused as the relay opened with keyboard and mouse")
   assert_true(t.find("#dev") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("🔒 #ops") is Some(_))
   // relayed to before: first

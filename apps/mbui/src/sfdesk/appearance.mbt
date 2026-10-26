@@ -63,8 +63,9 @@ fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       })
     },
   ]
-  // files dragged into a chat, keyboard and mouse's: named by their path (the default), or sent as files
-  if @sf.native_input() is Mouse {
+  // files dragged into a chat from outside (where they can be: @ui.takes_drops): named by their path (the default), or
+  // sent as files
+  if @ui.takes_drops() {
     blocks.push(fn() {
       section(@sf.t("web-pages.appearance.drop.title"), @sf.t("web-pages.appearance.drop.description"), true, fn() {
         choice("dropAs", [("", "web-pages.appearance.drop.path"), ("file", "web-pages.appearance.drop.file")], @settings.pref(core, "dropAs"))

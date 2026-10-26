@@ -23,7 +23,8 @@ fn relay_focus_reset() -> Unit {
 /// Relays chat `thread` of `r`'s station: its places asked for (sfbase relay.mbt), the picking presented from `from`.
 pub fn open_relay(src : Source, r : ChatRef, thread : Double, from~ : @sf.Anchor) -> Unit {
   relay_open(src, r.station, thread)
-  relay_focus.val = if @sf.native_input() is Finger { "" } else { "relay/search" }
+  relay_focus.val = ""
+  // (its search typed into at once where the keyboard is at hand: the presenters', `field`)
   @sf.panel(
     @sf.t("web-main.relay.title"),
     fn(c, _) {
@@ -31,6 +32,7 @@ pub fn open_relay(src : Source, r : ChatRef, thread : Double, from~ : @sf.Anchor
       relay_body(c, src, view, opt_text(view, "link"), relaying.picked)
     },
     from~,
+    field="relay/search",
     description=@sf.t("web-main.relay.lead"),
     live=fn() { (@sf.t("web-main.relay.title"), "", @sf.t("web-main.relay.lead")) },
     foot=fn(c, close) {

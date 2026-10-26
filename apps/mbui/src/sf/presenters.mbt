@@ -77,6 +77,8 @@ priv struct PanelOf {
   ruled : Bool
   lists : Bool
   form : Bool
+  /// the field given the keyboard's focus as it opens where it is not a sheet ("" none: panel's `field`)
+  field : String
 }
 
 ///|
@@ -196,7 +198,9 @@ pub fn pick(title : String, choices : Array[Choice], chosen : String, choose : (
 /// picker's models: what goes with the one picked beside them). `form`: what is filled in and said (its fields, its
 /// own buttons to say it: the web's AddStationDialog, adding people), a dialog in the middle whatever opened it (a sheet
 /// with touch short of Large), as the web's are; what is only chosen from or looked at (a pick, a card) stands beside
-/// what opened it.
+/// what opened it. `field`: the editor (by its key) given the keyboard's focus as it opens, where the keyboard is at hand
+/// (a dialog's, beside what opened it), not in a sheet (a phone's keyboard raised over what it shows): typed into at
+/// once with keyboard and mouse, looked at first with touch.
 pub fn panel(
   title : String,
   body : (@ui.Ctx, () -> Unit) -> Unit,
@@ -213,8 +217,9 @@ pub fn panel(
   ruled? : Bool = false,
   lists? : Bool = false,
   form? : Bool = false,
+  field? : String = "",
 ) -> Unit {
-  present(Panel({ title, description, body, foot, w, wide, live, tall, grows, focus, ruled, lists, form }), from, gone~)
+  present(Panel({ title, description, body, foot, w, wide, live, tall, grows, focus, ruled, lists, form, field }), from, gone~)
 }
 
 ///|
@@ -232,10 +237,15 @@ let panel_sides_in : Ref[Double] = { val: 0.0 }
 
 ///|
 /// A panel's body drawn (its `body` given what closes it), saying meanwhile that what is drawn is a panel's (in_panel).
-fn draw_panel_body(x : PanelOf, c : @ui.Ctx, close : () -> Unit) -> Unit {
+fn draw_panel_body(x : PanelOf, c : @ui.Ctx, close : () -> Unit, keyed? : Presented) -> Unit {
   panel_body_now.val += 1
   (x.body)(c, close)
   panel_body_now.val -= 1
+  // (its field given the focus as it opens, where it is `keyed`: a dialog, beside what opened it, not a sheet)
+  match keyed {
+    Some(p) if x.field != "" => focus_once(c, p, x.field)
+    _ => ()
+  }
 }
 
 ///|
@@ -960,13 +970,13 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
       words_in_now.val = text_in
       rule_over_now.val = if x.ruled && x.foot is Some(_) { panel_pad } else { 0.0 }
       if x.tall > 0.0 {
-        c.box(style=panel_grows, fn() { draw_panel_body(x, c, close) }) |> ignore
+        c.box(style=panel_grows, fn() { draw_panel_body(x, c, close, keyed=p) }) |> ignore
       } else {
         // (scrolling, where it does, out to the panel's sides, what it holds as far in as without: what reaches them
         // still does; told so as it is drawn, panel_held)
         let k = key + "/panel"
         panel_held_now.val = @kit.held_in_room(c, beside_given.val, key=k)
-        @kit.in_room(c, beside_given.val, key=k, reach=held_reach(), style=held_in(), fn() { draw_panel_body(x, c, close) }) |> ignore
+        @kit.in_room(c, beside_given.val, key=k, reach=held_reach(), style=held_in(), fn() { draw_panel_body(x, c, close, keyed=p) }) |> ignore
         panel_held_now.val = false
       }
       panel_sides_in.val = 0.0
@@ -1031,10 +1041,10 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
           Some(want) => dmin(want, share)
           None => share
         }
-        measured_body(c, p.serial, id, @ui.style(w=Full, h=Fixed(h)), fn() { draw_panel_body(x, c, close) })
+        measured_body(c, p.serial, id, @ui.style(w=Full, h=Fixed(h)), fn() { draw_panel_body(x, c, close, keyed=p) })
       } else {
         panel_whole_now.val += 1
-        draw_panel_body(x, c, close)
+        draw_panel_body(x, c, close, keyed=p)
         panel_whole_now.val -= 1
       }
       panel_sides_in.val = was
