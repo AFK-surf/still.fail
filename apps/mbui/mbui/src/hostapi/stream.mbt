@@ -17,8 +17,8 @@
 // Hosts: Android (Streams.java: MediaCodec onto a SurfaceTexture, driven by the framework, copied into a texture of the
 // frame's size as it is shown; JPEG by BitmapFactory), macOS and iOS (apple_stream.m: VideoToolbox into Metal-compatible pixel buffers;
 // JPEG by ImageIO), the browser (web/host.js: WebCodecs' VideoDecoder where there is one; JPEG by createImageBitmap),
-// Windows (win_stream.cpp: JPEG by WIC; no H.264, `h264_here` false), Linux (linux_stream.c: JPEG by gdk-pixbuf; no
-// H.264 either).
+// Windows (win_stream.cpp: JPEG by WIC; no H.264, `h264_here` false), Linux (linux_stream.c: H.264 by GStreamer's
+// decodebin, live, where it has a decoder of it; JPEG by gdk-pixbuf).
 
 ///|
 /// What an instance's image (scene.mbt's slot 20) is when it draws a stream: this plus the stream's id (images' own ids

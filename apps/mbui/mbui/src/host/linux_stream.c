@@ -1,9 +1,12 @@
 // Streams on Linux (src/hostapi/stream.mbt, @ui's Stream): JPEG frames decoded by gdk-pixbuf on a thread of a small
-// pool, a stream's one after another in the order they came, each kept as pixels until the app shows it ("f TS W H",
-// then mb_host_stream_show) or a later one; one that does not decode is let go ("d TS"). The one shown becomes the
-// stream's texture as the renderer first draws it (mb_stream_tex, in the GL context), so it is drawn in the frame
-// that showed it. No H.264 here (h264_here is false: the sender is asked for JPEG only); an H.264 frame handed over
-// anyway is let go. Each event asks for a frame (mb_app_wake). As Windows' win_stream.cpp has it.
+// pool, a stream's one after another in the order they came; H.264 by GStreamer (linux_gst.h: where it is, with a
+// decoder of H.264, h264_here is true), a live pipeline of the stream's own from its config (appsrc ! decodebin, the
+// system's best decoder, VA-API's where it has one, else gst-libav's, which takes a live stream on slice threads,
+// holding no frame back; then RGBA). Each frame decoded is kept as pixels until the app shows it ("f TS W H", then
+// mb_host_stream_show) or a later one; one that does not decode, or that its decoder passed over, is let go ("d TS");
+// the decoder failing says "b" and starts anew from the next key frame. The one shown becomes the stream's texture as
+// the renderer first draws it (mb_stream_tex, in the GL context), so it is drawn in the frame that showed it. Each
+// event asks for a frame (mb_app_wake). As Windows' win_stream.cpp has its JPEG.
 #include <epoxy/gl.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <glib.h>
@@ -13,14 +16,34 @@
 #include <string.h>
 #include "linux.h"
 
+#define vlog(...) (fprintf(stdout, __VA_ARGS__), fputc('\n', stdout), fflush(stdout))
+#include "linux_gst.h"
+
 typedef struct {
   double ts;
   int w, h;
   uint8_t *px;  // RGBA, w × h (opaque: a JPEG's)
 } Frame;
 
+// A stream's H.264 decoder (its config's: started anew with each, and as it fails): its pipeline, its source, its bus;
+// the config's caps (avcC as codec_data, an access unit a buffer); whether it waits for a key frame; each frame's time
+// in it a count (`next`, ms), and those fed it not out of it yet, oldest first, by it (under lock)
+typedef struct {
+  void *pipe, *src, *bus;
+  char *caps;
+  int need_key;
+  guint64 next;
+  GQueue fed;
+} Decoder;
+
+typedef struct {
+  guint64 n;
+  double ts;
+} Fed;
+
 typedef struct {
   int id, closed, busy;
+  Decoder *dec;
   // (under lock) what it says, oldest first; frames decoded, not shown yet; JPEGs waiting, their stamps
   GQueue events, decoded, jobs;
   // (the main thread's) the one shown: its pixels until they are its texture, then its texture
@@ -146,14 +169,191 @@ int32_t mb_host_stream_open(void) {
   return s->id;
 }
 
+// ---- H.264 (GStreamer's) ----
+
+// whether GStreamer is here with a decoder of H.264 (0 not looked for, 1 here, -1 not)
+static int h264_state;
+
+static int h264_decodes(void) {
+  if (h264_state) return h264_state > 0;
+  h264_state = -1;
+  if (!gs_here()) return 0;
+  GList *all = gs.gst_element_factory_list_get_elements(GFACTORY_DECODER | GFACTORY_VIDEO, GRANK_MARGINAL);
+  void *caps = gs.gst_caps_from_string("video/x-h264");
+  GList *ok = caps ? gs.gst_element_factory_list_filter(all, caps, GPAD_SINK, FALSE) : NULL;
+  if (ok) h264_state = 1;
+  else vlog("streams: GStreamer has no decoder of H.264 (gst-libav's, VA-API's): JPEG only");
+  gs.gst_plugin_feature_list_free(ok);
+  gs.gst_plugin_feature_list_free(all);
+  if (caps) gs.gst_mini_object_unref(caps);
+  return h264_state > 0;
+}
+
+// (under lock) the frames fed it up to `n` (all: -1) let go, said as one "d" of the last one's time
+static void fed_let_go(Stream *s, guint64 n) {
+  Fed *last = NULL, *f;
+  while ((f = g_queue_peek_head(&s->dec->fed)) && f->n <= n) {
+    g_free(last);
+    last = g_queue_pop_head(&s->dec->fed);
+  }
+  if (last) {
+    char *t = stamp(last->ts);
+    say_locked(s, g_strdup_printf("d %s", t));
+    g_free(t);
+    g_free(last);
+  }
+}
+
+// a frame decoded (a streaming thread's): it kept and said, those fed before it and not out passed over
+static int on_decoded(void *sink, gpointer data) {
+  Stream *s = data;
+  void *sample = NULL;
+  g_signal_emit_by_name(sink, "pull-sample", &sample);
+  if (!sample) return 0;
+  GstBufferHead *b = gs.gst_sample_get_buffer(sample);
+  void *caps = gs.gst_sample_get_caps(sample), *st = caps ? gs.gst_caps_get_structure(caps, 0) : NULL;
+  int w = 0, h = 0;
+  if (st) gs.gst_structure_get_int(st, "width", &w), gs.gst_structure_get_int(st, "height", &h);
+  uint8_t *px = NULL;
+  if (b && w > 0 && h > 0 && gs.gst_buffer_get_size(b) >= (gsize)w * h * 4) {
+    px = g_malloc((size_t)w * h * 4);
+    gs.gst_buffer_extract(b, 0, px, (gsize)w * h * 4);
+  }
+  guint64 n = b && b->pts != GCLOCK_NONE ? b->pts / 1000000 : 0;
+  gs.gst_mini_object_unref(sample);
+  g_mutex_lock(&lock);
+  Fed *f = NULL;
+  if (s->dec && !s->closed) {
+    if (n > 0) fed_let_go(s, n - 1);
+    f = g_queue_peek_head(&s->dec->fed);
+    if (f && f->n == n) g_queue_pop_head(&s->dec->fed);
+    else f = NULL;
+  }
+  if (f && px) {
+    Frame *fr = g_new0(Frame, 1);
+    fr->ts = f->ts, fr->w = w, fr->h = h, fr->px = px;
+    g_queue_push_tail(&s->decoded, fr);
+    char *t = stamp(f->ts);
+    say_locked(s, g_strdup_printf("f %s %d %d", t, w, h));
+    g_free(t);
+    px = NULL;
+  } else if (f) {
+    char *t = stamp(f->ts);
+    say_locked(s, g_strdup_printf("d %s", t));
+    g_free(t);
+  }
+  g_mutex_unlock(&lock);
+  g_free(f);
+  g_free(px);
+  mb_app_wake();
+  return 0;
+}
+
+static void decoder_start(Stream *s);
+
+// the decoder let go of (its streams stopped: none of its callbacks after), the frames in it said let go
+static void decoder_stop(Stream *s) {
+  Decoder *d = s->dec;
+  if (!d->pipe) return;
+  g_signal_handlers_disconnect_matched(d->bus, G_SIGNAL_MATCH_DATA, 0, 0, NULL, NULL, GINT_TO_POINTER(s->id));
+  gs.gst_bus_remove_signal_watch(d->bus);
+  gs.gst_object_unref(d->bus);
+  gs.gst_element_set_state(d->pipe, GSTATE_NULL);
+  gs.gst_object_unref(d->src);
+  gs.gst_object_unref(d->pipe);
+  d->pipe = d->src = d->bus = NULL;
+  g_mutex_lock(&lock);
+  fed_let_go(s, (guint64)-1);
+  g_mutex_unlock(&lock);
+  mb_app_wake();
+}
+
+// it failed (its bus's word, on the main thread): said, and anew from the next key frame
+static void on_decoder_error(void *bus, void *msg, gpointer data) {
+  (void)bus;
+  Stream *s = stream_of(GPOINTER_TO_INT(data));
+  if (!s || !s->dec || s->closed) return;
+  GError *e = NULL;
+  char *dbg = NULL;
+  gs.gst_message_parse_error(msg, &e, &dbg);
+  vlog("stream %d: its decoder failed: %s", s->id, e ? e->message : "?");
+  g_clear_error(&e);
+  g_free(dbg);
+  decoder_stop(s);
+  g_mutex_lock(&lock);
+  say_locked(s, g_strdup("b"));
+  g_mutex_unlock(&lock);
+  decoder_start(s);
+}
+
+static void decoder_start(Stream *s) {
+  Decoder *d = s->dec;
+  d->need_key = 1;
+  GError *e = NULL;
+  void *pipe = gs.gst_parse_launch(
+      "appsrc name=in is-live=true format=time ! decodebin ! videoconvert ! video/x-raw,format=RGBA ! "
+      "appsink name=out sync=false emit-signals=true",
+      &e);
+  void *src = pipe ? gs.gst_bin_get_by_name(pipe, "in") : NULL, *sink = pipe ? gs.gst_bin_get_by_name(pipe, "out") : NULL;
+  void *caps = gs.gst_caps_from_string(d->caps);
+  if (!src || !sink || !caps) {
+    vlog("stream %d: no decoder (%s)", s->id, e ? e->message : "its config's caps");
+    g_clear_error(&e);
+    if (src) gs.gst_object_unref(src);
+    if (sink) gs.gst_object_unref(sink);
+    if (pipe) gs.gst_object_unref(pipe);
+    if (caps) gs.gst_mini_object_unref(caps);
+    return;
+  }
+  g_clear_error(&e);
+  g_object_set(src, "caps", caps, NULL);
+  gs.gst_mini_object_unref(caps);
+  g_signal_connect(sink, "new-sample", G_CALLBACK(on_decoded), s);
+  gs.gst_object_unref(sink);
+  d->pipe = pipe, d->src = src;
+  d->bus = gs.gst_element_get_bus(pipe);
+  gs.gst_bus_add_signal_watch(d->bus);
+  g_signal_connect(d->bus, "message::error", G_CALLBACK(on_decoder_error), GINT_TO_POINTER(s->id));
+  gs.gst_element_set_state(pipe, GSTATE_PLAYING);
+}
+
 void mb_host_stream_h264(int32_t id, moonbit_bytes_t avcc, int32_t w, int32_t h) {
-  (void)id, (void)avcc, (void)w, (void)h;
+  Stream *s = stream_of(id);
+  if (!s || s->closed || !h264_decodes()) return;
+  if (!s->dec) {
+    s->dec = g_new0(Decoder, 1);
+    g_queue_init(&s->dec->fed);
+  }
+  decoder_stop(s);
+  // (its avcC as the caps' codec_data, a buffer written as hex)
+  int32_t n = Moonbit_array_length(avcc);
+  GString *c = g_string_new("video/x-h264,stream-format=avc,alignment=au,codec_data=(buffer)");
+  for (int32_t i = 0; i < n; i++) g_string_append_printf(c, "%02x", avcc[i]);
+  g_string_append_printf(c, ",width=%d,height=%d", w, h);
+  g_free(s->dec->caps);
+  s->dec->caps = g_string_free(c, FALSE);
+  decoder_start(s);
 }
 
 void mb_host_stream_frame(int32_t id, moonbit_bytes_t data, int32_t key, double ts) {
-  (void)data, (void)key;
   Stream *s = stream_of(id);
-  if (s) say_dropped(s, ts);
+  if (!s || s->closed) return;
+  Decoder *d = s->dec;
+  if (!d || !d->pipe || (d->need_key && !key)) {
+    say_dropped(s, ts);
+    return;
+  }
+  d->need_key = 0;
+  GstBufferHead *b = gs.gst_buffer_new_memdup(data, (gsize)Moonbit_array_length(data));
+  b->pts = ++d->next * 1000000;
+  Fed *f = g_new(Fed, 1);
+  f->n = d->next, f->ts = ts;
+  g_mutex_lock(&lock);
+  g_queue_push_tail(&d->fed, f);
+  g_mutex_unlock(&lock);
+  int flow = 0;
+  g_signal_emit_by_name(d->src, "push-buffer", b, &flow);
+  gs.gst_mini_object_unref(b);
 }
 
 void mb_host_stream_jpeg(int32_t id, moonbit_bytes_t data, double ts) {
@@ -223,13 +423,21 @@ void mb_host_stream_close(int32_t id) {
   g_mutex_unlock(&lock);
   frame_free(s->shown);
   s->shown = NULL;
+  if (s->dec) {
+    decoder_stop(s);
+    g_mutex_lock(&lock);
+    g_queue_clear_full(&s->dec->fed, g_free);
+    g_mutex_unlock(&lock);
+    g_free(s->dec->caps);
+    g_clear_pointer(&s->dec, g_free);
+  }
   // (its texture let go as the next frame begins, in the GL context: mb_streams_upload; the stream itself kept, as a
   // decode under way still holds it: it does nothing more)
 }
 
-int32_t mb_host_h264_here(void) { return 0; }
+int32_t mb_host_h264_here(void) { return h264_decodes(); }
 
-// (no H.264 here, so nothing for the framework to drive: @hostapi.stream_feeds)
+// (its H.264 decoded here, nothing for the framework to drive: @hostapi.stream_feeds)
 int32_t mb_host_stream_feeds(void) { return 0; }
 void mb_host_stream_codec(int32_t id, moonbit_string_t cmd, moonbit_bytes_t data) { (void)id, (void)cmd, (void)data; }
 
