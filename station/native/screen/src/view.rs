@@ -194,6 +194,9 @@ impl View {
         if !options.jpeg {
             super::cursor::follow(out.clone());
         }
+        if let Some(white) = capture.hdr_white() {
+            out.json(4, json!({ "hdr": { "sdrWhiteNits": white } }));
+        }
         let (width, height) = fitted((rect.right - rect.left) as u32, (rect.bottom - rect.top) as u32, options.max.0, options.max.1);
         let mut view = View {
             gpu,

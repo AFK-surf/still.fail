@@ -13,7 +13,7 @@ use windows::Win32::Devices::Display::{
 #[cfg(windows)]
 use windows::Win32::Foundation::{ERROR_SUCCESS, LUID};
 #[cfg(windows)]
-use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MONITORINFOEXW};
+use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, HMONITOR, MONITORINFOEXW};
 
 #[cfg(windows)]
 use super::view::main_display;
@@ -45,7 +45,12 @@ struct SetScale {
 #[cfg(windows)]
 /// The main display's source: its adapter and id, as the display configuration has them.
 fn main_source() -> Option<(LUID, u32)> {
-    let (monitor, _) = main_display();
+    path(main_display().0).map(|p| (p.sourceInfo.adapterId, p.sourceInfo.id))
+}
+
+#[cfg(windows)]
+/// A display's path in the display configuration (its source and its target, the monitor).
+pub fn path(monitor: HMONITOR) -> Option<DISPLAYCONFIG_PATH_INFO> {
     let mut info = MONITORINFOEXW::default();
     info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
     unsafe {
@@ -62,13 +67,13 @@ fn main_source() -> Option<(LUID, u32)> {
             return None;
         }
         path.truncate(paths as usize);
-        path.iter().find_map(|p| {
+        path.into_iter().find(|p| {
             let mut name = DISPLAYCONFIG_SOURCE_DEVICE_NAME::default();
             name.header.r#type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
             name.header.size = std::mem::size_of::<DISPLAYCONFIG_SOURCE_DEVICE_NAME>() as u32;
             name.header.adapterId = p.sourceInfo.adapterId;
             name.header.id = p.sourceInfo.id;
-            (DisplayConfigGetDeviceInfo(&mut name.header) == 0 && name.viewGdiDeviceName == info.szDevice).then_some((p.sourceInfo.adapterId, p.sourceInfo.id))
+            DisplayConfigGetDeviceInfo(&mut name.header) == 0 && name.viewGdiDeviceName == info.szDevice
         })
     }
 }
