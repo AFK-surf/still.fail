@@ -1499,8 +1499,10 @@ pub fn clipboard_set(s : String) -> Unit {
 }
 
 ///|
-/// A secret put on the system's clipboard: marked sensitive where the system masks such (Android 13 on), and taken
-/// off `clear_ms` later unless something else was copied meanwhile (0: kept). Elsewhere as clipboard_set.
+/// A secret put on the system's clipboard: marked sensitive where the system masks such (Android 13 on), kept out of
+/// the clipboard's history and the cloud's where it keeps them (Windows), and taken off `clear_ms` later unless
+/// something else was copied meanwhile (0: kept; Windows: as the app ends before then too). Elsewhere as
+/// clipboard_set.
 pub fn clipboard_set_secret(s : String, clear_ms~ : Double) -> Unit {
   current.val.clipboard_set_secret(s, clear_ms)
 }

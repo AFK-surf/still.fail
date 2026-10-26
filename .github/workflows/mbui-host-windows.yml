@@ -10,6 +10,7 @@ on:
       - "apps/mbui/mbui/src/ui/native.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/viewcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/playcheck.mbt"
+      - "apps/mbui/mbui/src/kitdemo/gallery/secretcheck.mbt"
       - "apps/mbui/mbui/src/host/win_*"
       - "apps/mbui/mbui/src/host/win.h"
       - "apps/mbui/mbui/src/host/mini_json.h"
@@ -62,6 +63,9 @@ jobs:
       - name: "The runner's contract: a file written in the run's directory is told as it comes (done X)"
         if: success() || failure()
         run: scripts/host_contract.sh windows runner
+      - name: "Secrets copied: kept out of the clipboard's history, taken off as the app ends, left when something else was copied since"
+        if: success() || failure()
+        run: scripts/host_contract.sh windows secret
       - name: "PDFs: test/host/pdfcheck.pdf's two pages read and drawn by Windows' own (Windows.Data.Pdf)"
         if: success() || failure()
         run: scripts/host_contract.sh windows pdf
