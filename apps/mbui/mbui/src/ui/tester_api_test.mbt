@@ -77,6 +77,19 @@ test "what the system says between frames comes on its channel, once, kept on th
   assert_eq(t.clipboard_secret(), Some(secret_ms))
   t.ctx().copy_text("words")
   assert_eq(t.clipboard_secret(), None)
+  // taken off on the app's clock unless copied over meanwhile: the words copied after the first stay; a second
+  // secret, copied halfway through the first's time, goes at its own time, not the first's
+  t.run_for(secret_ms)
+  assert_eq(t.clipboard(), "words")
+  let between = secret_ms / 2.0
+  t.ctx().copy_secret("first", clear_ms=secret_ms)
+  t.run_for(between)
+  t.ctx().copy_secret("second", clear_ms=secret_ms)
+  t.run_for(secret_ms - between)
+  assert_eq(t.clipboard(), "second")
+  t.run_for(between)
+  assert_eq(t.clipboard(), "")
+  assert_eq(t.clipboard_secret(), None)
   @ui.install_package("app.apk", b"PK")
   assert_eq(t.installs(), ["app.apk"])
   @ui.hold_words(channel="Login", title="Login to Studio", body="Waiting for the browser")

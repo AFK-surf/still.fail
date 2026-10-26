@@ -2049,11 +2049,22 @@ pub fn Ctx::copy_image(self : Ctx, data : Bytes) -> Unit {
 }
 
 ///|
-/// Puts a secret on the system's clipboard: marked sensitive (Android masks its preview), taken off `clear_ms` later
-/// unless something else was copied meanwhile (the host's own timer: nothing the app waits on).
+/// Puts a secret on the system's clipboard: marked sensitive (Android masks its preview, Windows keeps it out of the
+/// clipboard's history), taken off `clear_ms` later (0: kept) unless something else was copied meanwhile or another
+/// secret since: on the app's clock (a host keeps no time of its own), nothing the app waits on.
 pub fn Ctx::copy_secret(self : Ctx, s : String, clear_ms~ : Double) -> Unit {
   ignore(self)
   h_clipboard_secret(s, clear_ms)
+  secret_copies.val += 1
+  let copy = secret_copies.val
+  if clear_ms > 0.0 {
+    fx.val.after(
+      clear_ms.to_int(),
+      fn() { if copy == secret_copies.val { h_clipboard_secret_off() } },
+      later=true,
+      who="clipboard: a secret taken off",
+    )
+  }
 }
 
 ///|

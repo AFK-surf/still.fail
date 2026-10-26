@@ -300,11 +300,13 @@ final class Host {
         });
     }
 
+    /** The last secret put on the clipboard (clipboardSecret), till it is taken off (clipboardSecretOff). */
+    static String secretCopied;
+
     /**
      * A secret on the clipboard (@hostapi.clipboard_set_secret, still.fail's Vault.kt copy): marked sensitive (the
      * system's preview of it masked, Android 13 on: ClipDescription.EXTRA_IS_SENSITIVE, by its value, which older
-     * systems pass over), and cleared `clearMs` later unless something else was copied meanwhile (when the clipboard
-     * cannot be read then, the app not in front, it is cleared all the same: a secret left there is worse).
+     * systems pass over). The app takes it off `clearMs` later (clipboardSecretOff).
      */
     static void clipboardSecret(String s, double clearMs) {
         main.post(() -> {
@@ -315,23 +317,34 @@ final class Host {
             extras.putBoolean("android.content.extra.IS_SENSITIVE", true);
             clip.getDescription().setExtras(extras);
             cm.setPrimaryClip(clip);
-            if (clearMs <= 0) return;
-            main.postDelayed(() -> {
-                String now = null;
+            secretCopied = s;
+        });
+    }
+
+    /**
+     * The last secret copied taken off (@hostapi.clipboard_secret_off) unless something else was copied since (when the
+     * clipboard cannot be read, the app not in front, it is taken off all the same: a secret left there is worse).
+     */
+    static void clipboardSecretOff() {
+        main.post(() -> {
+            String s = secretCopied;
+            secretCopied = null;
+            if (s == null || activity == null) return;
+            ClipboardManager cm = (ClipboardManager) activity.getApplicationContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            String now = null;
+            try {
+                ClipData c = cm.getPrimaryClip();
+                if (c != null && c.getItemCount() > 0 && c.getItemAt(0).getText() != null) now = c.getItemAt(0).getText().toString();
+            } catch (RuntimeException e) {
+                // not readable now (the app not in front)
+            }
+            if (now == null || now.equals(s)) {
                 try {
-                    ClipData c = cm.getPrimaryClip();
-                    if (c != null && c.getItemCount() > 0 && c.getItemAt(0).getText() != null) now = c.getItemAt(0).getText().toString();
+                    cm.clearPrimaryClip();
                 } catch (RuntimeException e) {
-                    // not readable now (the app not in front)
+                    log("clipboard: not cleared: " + e);
                 }
-                if (now == null || now.equals(s)) {
-                    try {
-                        cm.clearPrimaryClip();
-                    } catch (RuntimeException e) {
-                        log("clipboard: not cleared: " + e);
-                    }
-                }
-            }, (long) clearMs);
+            }
         });
     }
 

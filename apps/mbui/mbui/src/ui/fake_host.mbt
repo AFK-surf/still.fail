@@ -418,6 +418,11 @@ impl @hostapi.Host for FakeHost with clipboard_set_secret(_, s, clear_ms) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with clipboard_secret_off(_) {
+  h_clipboard_secret_off()
+}
+
+///|
 impl @hostapi.Host for FakeHost with clipboard_set_image(_, data) {
   h_clipboard_image(data)
 }

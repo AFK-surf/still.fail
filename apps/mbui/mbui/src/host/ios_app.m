@@ -1024,6 +1024,9 @@ void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) {
   [UIPasteboard.generalPasteboard setItems:@[ @{UTTypeUTF8PlainText.identifier : mb_ns_from_string(s)} ] options:opts];
 }
 
+// The secret copied taken off (@hostapi.clipboard_secret_off): the system has, at its expiration date.
+void mb_host_clipboard_secret_off(void) {}
+
 
 // The app's log: the system's (os_log, `log stream`) and stderr as it is (unbuffered: `simctl launch --stderr`, which a
 // scripted run reads line by line as the app goes: scripts/ios.sh run, still.fail's e2e).

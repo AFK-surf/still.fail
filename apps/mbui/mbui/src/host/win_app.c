@@ -840,11 +840,23 @@ void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, in
 // no menu bar of the app's here
 void mb_host_edit_can(int32_t can) { (void)can; }
 
-void mb_host_clipboard_set(moonbit_string_t s) {
+// a DWORD put on the open clipboard in the format named so
+static void clipboard_dword(const WCHAR *format, DWORD v) {
+  UINT f = RegisterClipboardFormatW(format);
+  HGLOBAL h = f ? GlobalAlloc(GMEM_MOVEABLE, sizeof(DWORD)) : NULL;
+  if (!h) return;
+  *(DWORD *)GlobalLock(h) = v;
+  GlobalUnlock(h);
+  if (!SetClipboardData(f, h)) GlobalFree(h);
+}
+
+// words on the clipboard; a secret's kept out of the clipboard's history and of the cloud's (Win+V, its sync to the
+// person's other devices: the formats Windows reads for that, which other programs' secrets carry too). 1: put there
+static int clipboard_words(moonbit_string_t s, int secret) {
   int n = Moonbit_array_length(s), k = 0;
   // other Windows programs expect CR LF
   HGLOBAL h = GlobalAlloc(GMEM_MOVEABLE, ((size_t)n * 2 + 1) * sizeof(WCHAR));
-  if (!h) return;
+  if (!h) return 0;
   WCHAR *p = (WCHAR *)GlobalLock(h);
   for (int i = 0; i < n; i++) {
     if (s[i] == '\n' && (i == 0 || s[i - 1] != '\r')) p[k++] = '\r';
@@ -854,18 +866,52 @@ void mb_host_clipboard_set(moonbit_string_t s) {
   GlobalUnlock(h);
   if (!OpenClipboard(hwnd)) {
     GlobalFree(h);
-    return;
+    return 0;
   }
   EmptyClipboard();
-  if (!SetClipboardData(CF_UNICODETEXT, h)) GlobalFree(h);
+  int put = SetClipboardData(CF_UNICODETEXT, h) != NULL;
+  if (!put) GlobalFree(h);
+  if (put && secret) {
+    clipboard_dword(L"ExcludeClipboardContentFromMonitorProcessing", 0);
+    clipboard_dword(L"CanIncludeInClipboardHistory", 0);
+    clipboard_dword(L"CanUploadToCloudClipboard", 0);
+  }
   CloseClipboard();
+  return put;
 }
 
-// A secret on the clipboard (@hostapi.clipboard_set_secret): as any words here (no sensitive mark, nothing cleared yet).
-void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) {
-  (void)clear_ms;
-  mb_host_clipboard_set(s);
+void mb_host_clipboard_set(moonbit_string_t s) { clipboard_words(s, 0); }
+
+// The secret this app put on the clipboard, to be taken off: the clipboard's sequence number just after (another
+// copy since, the app's or another program's, changes it), 0 for none
+static DWORD secret_seq;
+
+// the secret taken off, unless something else was copied since (at the app's end too: `quitting`, its window gone)
+static void secret_off(int quitting) {
+  if (!secret_seq) return;
+  int ours = GetClipboardSequenceNumber() == secret_seq;
+  secret_seq = 0;
+  if (ours && OpenClipboard(quitting ? NULL : hwnd)) {
+    EmptyClipboard();
+    CloseClipboard();
+  }
+  fputs(ours ? "win: the secret copied taken off the clipboard\n" : "win: the secret copied left: something else copied since\n", stdout);
+  fflush(stdout);
 }
+static void secret_off_at_end(void) { secret_off(1); }
+
+// A secret on the clipboard (@hostapi.clipboard_set_secret): kept out of its history and the cloud's; one to be taken
+// off (clear_ms: the app does it then, mb_host_clipboard_secret_off) taken off as the app ends before then.
+void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) {
+  static int at_end;
+  secret_seq = 0;
+  if (!clipboard_words(s, 1) || clear_ms <= 0) return;
+  secret_seq = GetClipboardSequenceNumber();
+  if (!at_end) atexit(secret_off_at_end), at_end = 1;
+}
+
+// The last secret copied taken off (@hostapi.clipboard_secret_off), unless something else was copied since.
+void mb_host_clipboard_secret_off(void) { secret_off(0); }
 
 // A picture on the clipboard (@hostapi.clipboard_set_image): a PNG's bytes under the "PNG" format other programs paste
 // (Office, browsers, Paint.NET); what is not a PNG is put nowhere.

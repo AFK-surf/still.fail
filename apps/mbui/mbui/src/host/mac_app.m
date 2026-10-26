@@ -1793,8 +1793,25 @@ void mb_host_clipboard_set(moonbit_string_t s) {
   [pb setString:mb_ns_from_string(s) forType:NSPasteboardTypeString];
 }
 
-// A secret on the clipboard (@hostapi.clipboard_set_secret): as any words here (no sensitive mark, nothing cleared yet).
-void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) { mb_host_clipboard_set(s); }
+// The pasteboard's change count once a secret was put there, to be taken off (another copy since changes it), -1 none
+static NSInteger secret_count = -1;
+
+// A secret on the clipboard (@hostapi.clipboard_set_secret): marked concealed, as clipboard managers read it
+// (nspasteboard.org: not shown, not kept in their history).
+void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) {
+  NSPasteboard *pb = [NSPasteboard generalPasteboard];
+  [pb clearContents];
+  [pb setString:mb_ns_from_string(s) forType:NSPasteboardTypeString];
+  [pb setString:@"" forType:@"org.nspasteboard.ConcealedType"];
+  secret_count = clear_ms > 0 ? pb.changeCount : -1;
+}
+
+// The last secret copied taken off (@hostapi.clipboard_secret_off), unless something else was copied since.
+void mb_host_clipboard_secret_off(void) {
+  NSPasteboard *pb = [NSPasteboard generalPasteboard];
+  if (secret_count >= 0 && pb.changeCount == secret_count) [pb clearContents];
+  secret_count = -1;
+}
 
 // A picture on the clipboard (@hostapi.clipboard_set_image): the image the bytes are, as other apps paste one.
 void mb_host_clipboard_image(moonbit_bytes_t data) {

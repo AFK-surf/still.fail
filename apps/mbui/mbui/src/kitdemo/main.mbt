@@ -30,6 +30,8 @@ fn main {
   let station = @ui.env("MBUI_STATIONCHECK")
   // MBUI_BADGECHECK=<n>: the number on the app's icon set, for the desktop's side to be asked (badgecheck.mbt)
   let badge = @ui.env("MBUI_BADGECHECK")
+  // MBUI_SECRETCHECK=kept|taken|left|end: a secret copied, the app ending, for the clipboard to be read (secretcheck.mbt)
+  let secret = @ui.env("MBUI_SECRETCHECK")
   if linked {
     @ui.on_message(@hostapi.system_channel, fn(json, _) { @gallery.link_check_said(json) })
   }
@@ -48,6 +50,8 @@ fn main {
       @gallery.station_check_run(c, station)
     } else if badge != "" {
       @gallery.badge_check_run(c, badge)
+    } else if secret != "" {
+      @gallery.secret_check_run(c, secret)
     } else if sited {
       @gallery.site_check_run(c)
     } else if viewed {

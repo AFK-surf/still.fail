@@ -809,17 +809,28 @@ void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, in
 // no menu bar of the app's here
 void mb_host_edit_can(int32_t can) { (void)can; }
 
+// whether the clipboard's words are the last secret this app copied, to be taken off (while the clipboard is the
+// app's still: gdk_clipboard_is_local)
+static int secret_on;
+
 void mb_host_clipboard_set(moonbit_string_t s) {
   char *u = utf8(s);
   gdk_clipboard_set_text(gtk_widget_get_clipboard(area), u);
   g_free(u);
+  secret_on = 0;
 }
 
-// A secret on the clipboard (@hostapi.clipboard_set_secret): as any words here (no sensitive mark, nothing cleared
-// yet).
+// A secret on the clipboard (@hostapi.clipboard_set_secret): as any words here (no sensitive mark).
 void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) {
-  (void)clear_ms;
   mb_host_clipboard_set(s);
+  secret_on = clear_ms > 0;
+}
+
+// The last secret copied taken off (@hostapi.clipboard_secret_off), unless something else was copied since.
+void mb_host_clipboard_secret_off(void) {
+  GdkClipboard *cb = gtk_widget_get_clipboard(area);
+  if (secret_on && gdk_clipboard_is_local(cb)) gdk_clipboard_set_content(cb, NULL);
+  secret_on = 0;
 }
 
 // A picture on the clipboard (@hostapi.clipboard_set_image): a PNG's, as a picture GTK offers in the formats other
@@ -830,6 +841,7 @@ void mb_host_clipboard_image(moonbit_bytes_t data) {
   g_bytes_unref(b);
   if (!t) return;
   gdk_clipboard_set_texture(gtk_widget_get_clipboard(area), t);
+  secret_on = 0;
   g_object_unref(t);
 }
 

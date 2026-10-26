@@ -787,6 +787,24 @@ fn h_clipboard_secret(s : String, clear_ms : Double) -> Unit {
 }
 
 ///|
+/// How many secrets were copied (Ctx::copy_secret): one's taking off is for it alone, not a later one's.
+let secret_copies : Ref[Int] = Ref(0)
+
+///|
+/// The last secret copied taken off unless something else was copied since (@hostapi.clipboard_secret_off); the fake
+/// host's while it is there still (Tester::clipboard empty again, Tester::clipboard_secret None).
+fn h_clipboard_secret_off() -> Unit {
+  match fake.val {
+    Some(f) =>
+      if f.clipboard_secret >= 0.0 {
+        f.clipboard = ""
+        f.clipboard_secret = -1.0
+      }
+    None => @hostapi.clipboard_secret_off()
+  }
+}
+
+///|
 /// The word of `text` around `off` as the host's word boundaries have it, (-1, -1) where it has none (the fake host:
 /// words.mbt's own).
 fn h_word_at(text : String, off : Int) -> (Int, Int) {

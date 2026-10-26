@@ -50,6 +50,10 @@
 #   scripts/host_contract.sh linux links        (a session bus: dbus-run-session's) the app started with a link of its
 #        schemes, said to it; started again with one while it runs, handed over to the one running (once for its
 #        person: src/host/linux_life.h), which says it
+#   scripts/host_contract.sh windows secret     a secret copied (kitdemo's MBUI_SECRETCHECK, src/kitdemo/gallery/
+#        secretcheck.mbt), the clipboard read after the app's end: its words there, kept out of the clipboard's history
+#        and the cloud's (Windows' formats for that); one to be taken off, gone when the app's clock says, and as the
+#        app ends before then; one with other words copied after it, those left
 #   scripts/host_contract.sh ios free|done      (iOS) before the runs: the simulator not in another's use (booted with an
 #        app of its running: this fails, saying so); after them: shut down again when these runs booted it
 #
@@ -660,6 +664,38 @@ INSTALL
       echo "play contract ($H): the host said \"$have\", not \"$want\""; tail -30 $O/play.log; exit 1
     fi
     echo "play contract ($H): $have" ;;
+  secret)
+    [ "$H" = windows ] || { echo "secret contract: Windows' (Android's marks it in Host.java; the others put words)"; exit 1; }
+    # the clipboard's words, then what it says of its history: CanIncludeInClipboardHistory's DWORD (none: -), and
+    # whether ExcludeClipboardContentFromMonitorProcessing is there
+    clip() {
+      powershell.exe -NoProfile -STA -Command '
+        Add-Type -AssemblyName System.Windows.Forms
+        $d = [System.Windows.Forms.Clipboard]::GetDataObject()
+        $t = ""; $h = "-"; $x = "no"
+        if ($d) {
+          if ($d.GetDataPresent([System.Windows.Forms.DataFormats]::UnicodeText)) { $t = $d.GetData([System.Windows.Forms.DataFormats]::UnicodeText) }
+          if ($d.GetDataPresent("CanIncludeInClipboardHistory")) { $m = $d.GetData("CanIncludeInClipboardHistory"); $b = New-Object byte[] 4; [void]$m.Read($b, 0, 4); $h = [BitConverter]::ToUInt32($b, 0) }
+          if ($d.GetDataPresent("ExcludeClipboardContentFromMonitorProcessing")) { $x = "excluded" }
+        }
+        "$t|$h|$x"' | tr -d '\r'
+    }
+    failed=0
+    for how in kept taken left end; do
+      run "MBUI_SECRETCHECK=$how" $O/secret-$how.log || true
+      grep -aq "SECRETCHECK put $how" $O/secret-$how.log || { echo "secret contract: no secret put ($how)"; tail -20 $O/secret-$how.log; exit 1; }
+      have=$(clip)
+      case $how in
+        kept) want="SECRETCHECK kept|0|excluded" ;;
+        taken) want="|-|no" ;;
+        left) want="SECRETCHECK other|-|no" ;;
+        end) want="|-|no" ;;
+      esac
+      if [ "$have" = "$want" ]; then echo "secret contract ($how): $have"; else
+        echo "secret contract ($how): the clipboard holds \"$have\", not \"$want\""; grep -a "^win: " $O/secret-$how.log; failed=1
+      fi
+    done
+    [ $failed = 0 ] ;;
   pdf)
     # (each page at most 400 pixels on its longer side: red on the side its left half went to, blue on the other's)
     run "MBUI_PDFCHECK=$(base64 < test/host/pdfcheck.pdf | tr -d '\n\r')" $O/pdf.log || true
@@ -757,5 +793,5 @@ INSTALL
     echo "links contract (mac): opened with a link of its own scheme, the app said it" ;;
   kinds)
     scripts/chk outside-kinds $H ;;
-  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, play, station, badge; ios: free, done)" >&2; exit 1 ;;
+  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, play, station, badge, secret; ios: free, done)" >&2; exit 1 ;;
 esac
