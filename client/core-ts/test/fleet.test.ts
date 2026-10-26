@@ -48,7 +48,7 @@ test("the card shared says how many chats are at work now, and on how many stati
   // archived on the 25th (two, on two stations) and the 26th (four: one on g), and long before the week
   const on = (d: number, h: number) => Date.UTC(2026, 9, d, h);
   // tasks run on d for a's chats: 3's (idle on a: at work so), 1's (at work already); one waiting in d's queue, one
-  // over, a watch, and one for a chat of a station down: none of them. Over the week, a's 1 ran three on d, its 3 one
+  // over, a watch, and one for a chat of a station down: none of them. Over the week, a's 1 ran three on h, its 3 one
   // (and one long before); one ran on c, down
   const task = (session: string, more: J = {}): J => ({ id: session, session: `remote:w:${session}`, state: "running", ...more });
   const v = fleetView(
@@ -67,6 +67,15 @@ test("the card shared says how many chats are at work now, and on how many stati
         rows: [],
         archived: [],
         jobs: [task("a:s-3"), task("a:s-1"), task("a:s-9", { queued: true }), task("a:s-3", { state: "exited" }), task("a:s-3", { watch: true }), task("c:s-5")],
+        runs: [],
+      },
+      // the tasks a's chats ran on h, none running now
+      {
+        station: "w/h",
+        online: true,
+        rows: [],
+        archived: [],
+        jobs: [],
         runs: [[1, "s-1"], [25, "s-1"], [25, "s-1"], [26, "s-1"], [26, "s-3"]].map(([d, k], i) => ({ at: on(d as number, i), session: `remote:w:a:${k}` })),
       },
     ],
@@ -74,8 +83,8 @@ test("the card shared says how many chats are at work now, and on how many stati
     usage,
     Date.UTC(2026, 9, 26, 4, 12),
   );
-  // today's on a and b (at work), e and g (at rest); not on f, nor on d (it runs tasks for them: not where they are)
-  assert.deepEqual([v.chats, v.chatsText, v.where, v.at], [4, "4 个对话正在运行", "今天用了 4 台设备", "10月26日 04:12"]);
+  // used today: a and b (chats at work), e and g (at rest), d (running their tasks) and h (it ran some today); not f
+  assert.deepEqual([v.chats, v.chatsText, v.where, v.at], [4, "4 个对话正在运行", "今天用了 6 台设备", "10月26日 04:12"]);
   assert.deepEqual([v.tasksText, v.tasksPer], ["近 7 天 agent 跨设备执行了 4 个任务", "平均每个对话 2 个"]);
   assert.equal(v.quota[0].usedText, "50%");
   assert.deepEqual(v.today, { title: "今天", stats: [{ label: "归档的对话", value: "4 个" }, { label: "折合费用", value: "$8" }] });
