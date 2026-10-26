@@ -3,7 +3,8 @@
 # GitHub's own runners (no machine of ours: 2026-10-21, a push to four packages in three minutes): its Android app
 # signed with every still.fail Android release's key (/releases/latest/android-mbui, its feed android/mbui/latest.json,
 # still.fail's AppRelease), its macOS app signed with still.fail's Developer ID (/releases/latest/mac-mbui), its
-# Windows app zipped (/releases/latest/win-mbui), its Linux app tarred with its installer (/releases/latest/linux-mbui),
+# Windows app zipped (/releases/latest/win-mbui), its Linux app tarred with its installer for x64 and arm64
+# (/releases/latest/linux-mbui, linux-arm64-mbui),
 # side by side; its iOS app built unsigned for a device and kept as an Actions artifact. TestFlight is the separate manual mbui-testflight.yml workflow.
 # A workflow of its own, not a job of pipeline.yml: nothing of the pipeline waits for it or fails with it. As asked
 # (2026-10-19), its tests do not hold it back: it is a test app (Windows' e2e runs after its zip is out). A feed moves
@@ -64,6 +65,8 @@ jobs:
           for p in android mac win linux ios; do
             # iOS has no feed: build every matching main push, independently of Android.
             if [ "$p" != ios ] && [ "$GITHUB_REF" = refs/heads/main ] && [ "$GITHUB_EVENT_NAME" = push ]; then v=$(bash apps/mbui/scripts/beta.sh changed "$p"); else v=yes; fi
+            # (Linux's two machines each have a feed: a package for both when either's is behind, as arm64's before its first)
+            if [ "$p" = linux ] && [ "$v" = no ]; then v=$(bash apps/mbui/scripts/beta.sh changed linux-arm64); fi
             case "$branch$p" in 1mac|1ios) v=no ;; esac
             echo "$p=$v" >> "$GITHUB_OUTPUT"
             echo "$p: $v"
@@ -144,12 +147,20 @@ jobs:
           path: .ci/apk
           key: ${{ env.APK_KEY }}
 
-  # The Linux app (apps/mbui/scripts/linux.sh: GTK 4, the engine and shell prebuilt for linux-x64, core.hbc), on
-  # GitHub's Ubuntu: built on every push that changes it; on main tarred with its installer and put (beta.sh linux).
+  # The Linux app (apps/mbui/scripts/linux.sh: GTK 4, the engine and shell prebuilt for the machine, core.hbc), for x64
+  # and arm64, each on GitHub's Ubuntu of that machine (a public repository's: free): built on every push that changes
+  # it; on main tarred with its installer and put, each on its machine's feed (beta.sh linux: the part linux, linux-arm64).
   linux:
     needs: what
     if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.linux == 'yes'
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x64, os: ubuntu-24.04, part: linux }
+          - { arch: arm64, os: ubuntu-24.04-arm, part: linux-arm64 }
+    name: linux (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
     timeout-minutes: 10
     env:
@@ -163,7 +174,7 @@ jobs:
       # (GTK 4 and what the host and the core link beside it: libsoup, libsecret)
       - uses: ./.github/actions/apt
         with:
-          name: mbui-linux
+          name: mbui-linux-${{ matrix.arch }}
           packages: libgtk-4-dev libepoxy-dev libsoup-3.0-dev libsecret-1-dev clang
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/mbui-moonbit
@@ -173,13 +184,13 @@ jobs:
           path: |
             .ci/mbc-store
             .ci/hbc
-          key: mbui-linux-${{ github.sha }}
-          restore-keys: mbui-linux-
+          key: mbui-linux-${{ matrix.arch }}-${{ github.sha }}
+          restore-keys: mbui-linux-${{ matrix.arch }}-
       - name: Tools (the Linux engine and shell prebuilt, the core's packages)
         run: |
           sh apps/mbui/scripts/mbui.sh > /dev/null
-          node scripts/native.ts fetch engine linux-x64
-          node scripts/native.ts fetch shell linux-x64
+          node scripts/native.ts fetch engine linux-${{ matrix.arch }}
+          node scripts/native.ts fetch shell linux-${{ matrix.arch }}
           (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           touch "$RUNNER_TEMP/start"
       - name: Build (APP=stillfail)
@@ -190,15 +201,15 @@ jobs:
         if: github.ref == 'refs/heads/main'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: bash apps/mbui/scripts/beta.sh publish linux
+        run: bash apps/mbui/scripts/beta.sh publish ${{ matrix.part }}
       - uses: actions/upload-artifact@v4
         if: github.ref != 'refs/heads/main'
-        with: { name: "mbui-linux-${{ github.sha }}", path: .ci/release/release/linux, retention-days: 7 }
+        with: { name: "mbui-linux-${{ matrix.arch }}-${{ github.sha }}", path: ".ci/release/release/${{ matrix.part }}", retention-days: 7 }
       - name: The caches' keys, by what they hold
         if: github.ref == 'refs/heads/main'
         run: |
           sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store
-          echo "STORE_KEY=mbui-linux-$(sh apps/mbui/scripts/held.sh .ci/mbc-store .ci/hbc)" >> "$GITHUB_ENV"
+          echo "STORE_KEY=mbui-linux-${{ matrix.arch }}-$(sh apps/mbui/scripts/held.sh .ci/mbc-store .ci/hbc)" >> "$GITHUB_ENV"
       - if: github.ref == 'refs/heads/main' && env.STORE_KEY != steps.store.outputs.cache-matched-key
         uses: actions/cache/save@v4
         with:

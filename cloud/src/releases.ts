@@ -159,6 +159,7 @@ const FEEDS: Record<string, string> = {
   "mac-mbui": "mac/mbui/latest.json",
   "win-mbui": "win/mbui/latest.json",
   "linux-mbui": "linux/mbui/latest.json",
+  "linux-arm64-mbui": "linux-arm64/mbui/latest.json",
 };
 
 /**

@@ -230,6 +230,8 @@ test("the test channel's releases: served by name, installed with ?channel=beta,
     assert.equal(await latest("win-mbui"), "/releases/win/stillfail-mbui-4-x64-win.exe");
     await bucket.put("linux/mbui/latest.json", JSON.stringify({ versionCode: 3, file: "linux/stillfail-mbui-3-x64-linux.tar.gz" }));
     assert.equal(await latest("linux-mbui"), "/releases/linux/stillfail-mbui-3-x64-linux.tar.gz");
+    await bucket.put("linux-arm64/mbui/latest.json", JSON.stringify({ versionCode: 3, file: "linux/stillfail-mbui-3-arm64-linux.tar.gz" }));
+    assert.equal(await latest("linux-arm64-mbui"), "/releases/linux/stillfail-mbui-3-arm64-linux.tar.gz");
     await bucket.put("desktop/stillfail-mac.yml", "version: 0.1.1\npath: stillfail-0.1.1-arm64-mac.zip\n");
     await bucket.put("desktop/stillfail-beta-mac.yml", "version: 0.1.2\npath: stillfail-beta-0.1.2-arm64-mac.zip\n");
     assert.equal(await latest("mac"), "/releases/desktop/stillfail-0.1.1-arm64-mac.zip");
