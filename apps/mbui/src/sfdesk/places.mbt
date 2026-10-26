@@ -313,12 +313,13 @@ let place_use : @ui.TextStyle = @ui.text_style(color=AccentText)
 fn stations_first(c : @ui.Ctx, core : Core, here : Here, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
   let read = (src.topic)("stations", { "scope": Json::string(w.id) }).value is Some(_)
+  // (while they are read: a station's page, the one picked once they are, in its bones)
+  if !read {
+    @sfpages.station_waiting(c, core, here, @sf.no_frame, "Station", @sf.t("common.readingStations"))
+    return
+  }
   desk_page(c, core, "stations-first", "Station", [
     fn() {
-      if !read {
-        @sf.waiting(c, shape=Cards, note={ reading: true, text: @sf.t("common.readingStations"), failing: [] })
-        return
-      }
       @sf.first_one(
         c,
         @sf.t("web-pages.settings.stations.add"),

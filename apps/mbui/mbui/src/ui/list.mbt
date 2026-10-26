@@ -383,6 +383,7 @@ pub fn Ctx::list(
         pending: 0.0,
         row,
         seed: 0,
+        bones: 0L,
         vis_first: -1,
         vis_last: -1,
         owner: self.owner,
@@ -441,6 +442,7 @@ pub fn Ctx::list(
   st.count = count
   st.row = row
   st.seed = self.id_seed
+  st.bones = self.bones
   st.owner = self.owner
   st.vw = self.width
   st.vh = self.height
@@ -490,6 +492,7 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   let saved_cur = self.cur
   let saved_seed = self.id_seed
   let saved_owner = self.owner
+  let saved_bones = self.bones
   let (saved_w, saved_h) = (self.width, self.height)
   let saved_sel = desk.selecting
   let (saved_theme, saved_dir, saved_layer) = (self.theme, self.direction, self.layer_cur)
@@ -500,6 +503,7 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   self.cur = li
   self.id_seed = st.seed
   self.owner = st.owner
+  self.bones = st.bones
   // built for the size the list was given (Ctx::sized), not the window's
   if st.vw > 0.0 {
     self.width = st.vw
@@ -513,6 +517,7 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   self.id_seed = saved_seed
   self.cur = saved_cur
   self.owner = saved_owner
+  self.bones = saved_bones
   self.width = saved_w
   self.height = saved_h
   desk.selecting = saved_sel

@@ -72,11 +72,9 @@ pub(all) struct ChatList {
   heading : @ui.Style
   heading_in : Double
   heading_words : @ui.TextStyle
-  /// read the first time: how many rows breathe while it reads, and while what it waits on says so; dense (a
-  /// computer's)
+  /// read the first time: how many rows are shown in their bones while it reads, and while what it waits on says so
   waiting_rows : Int
   waiting_noted : Int
-  waiting_dense : Bool
   /// whether the screen has keys to find and choose with: ⌘K, ↑ ↓ and Enter in what is found, the one chosen shown so (a
   /// computer's); else the search is at the list's top, scrolled to (touch's: Home.kt top)
   keys : Bool
@@ -135,9 +133,8 @@ pub let mouse_chat_list : ChatList = {
   heading: @ui.css("w=Full pt=S3_5 pb=S1"),
   heading_in: 8.0,
   heading_words: @ui.text_style(size=Meta, color=Muted, leading=L5, wrap=false),
-  waiting_rows: 6,
+  waiting_rows: 10,
   waiting_noted: 6,
-  waiting_dense: true,
   keys: true,
   found: mouse_found,
   slide: @motion.tween(list_slide_ms, ease=Out),
@@ -190,9 +187,8 @@ pub let touch_chat_list : ChatList = {
   heading: @ui.css("w=Full pt=S3_5 pb=S1_5"),
   heading_in: touch_band_pad,
   heading_words: @ui.text_style(size=Body, weight=Semibold, color=Fg, wrap=false),
-  waiting_rows: 7,
+  waiting_rows: 9,
   waiting_noted: 4,
-  waiting_dense: false,
   keys: false,
   found: touch_found,
   slide: @motion.tween(list_slide_ms, ease=Standard),

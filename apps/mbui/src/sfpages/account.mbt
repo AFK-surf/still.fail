@@ -128,11 +128,17 @@ fn acc_devices(c : @ui.Ctx, core : Core, look : Look, here : Here) -> Unit {
     _ => {
       match topic.error {
         Some(e) => @sf.page_note(c, @sf.t("web-pages.settings.account.sessionsFailed", args=[("error", error_text(e))]), bad=true)
-        None => @sf.group_waiting(c, text=@sf.t("common.reading"))
+        None => @sf.waiting(c, fn() { devices_list(c, core.quiet(), look, here, devices_sample()) }, text=@sf.t("common.reading"))
       }
       return
     }
   }
+  devices_list(c, core, look, here, list)
+}
+
+///|
+/// The devices the account is signed in on (`list`): each its name, 当前 or 退出, when it signed in and until when.
+fn devices_list(c : @ui.Ctx, core : Core, look : Look, here : Here, list : Array[Json]) -> Unit {
   let narrow = look == Narrow
   @sf.group(c, fn() {
     for d in list {
@@ -202,3 +208,17 @@ pub let acc_delete_words : @ui.TextStyle = @sf.body.then(@sf.bad)
 /// (a narrow page's foot: what takes something away, 16 over it)
 // kept across runs: a value (no field of it changes)
 pub let acc_narrow_foot : @ui.Style = @ui.css("w=Full pt=S4")
+
+///|
+/// Devices made up, for what is shown while they are read (devices_list in its bones): this one and two others.
+fn devices_sample() -> Array[Json] {
+  [(6, true), (9, false), (7, false)].mapi(fn(i, d) {
+    Json::object({
+      "id": Json::string("sample" + i.to_string()),
+      "name": Json::string(@sf.sample_words(d.0)),
+      "current": Json::boolean(d.1),
+      "created_at": { "ago": Json::string(@sf.sample_words(4)) },
+      "expires_at": { "until": Json::string(@sf.sample_words(4)) },
+    })
+  })
+}

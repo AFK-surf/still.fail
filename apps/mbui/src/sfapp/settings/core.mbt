@@ -690,3 +690,10 @@ fn int_of(s : String, or_else : Int) -> Int {
   }
   n
 }
+
+///|
+/// `core` as what a page will show is drawn over it in its bones (@sf.waiting's `sample`: made of made-up words): its
+/// topics say nothing and its calls are never answered, so what is only shown asks the real core for nothing.
+pub fn Core::quiet(self : Core) -> Core {
+  { ..self, topic: fn(_, _) { { value: None, error: None, version: 0 } }, call: fn(_, _, _) {  }, picture: fn(_, _) { "" } }
+}

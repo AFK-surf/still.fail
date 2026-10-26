@@ -50,7 +50,7 @@ pub fn usage_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> U
       body.push(fn() {
         c.text(@sf.t("web-pages.settings.usage.failed", args=[("error", error_text(e))]), style=desk_note_bad) |> ignore
       })
-    (None, None) => body.push(fn() { @sf.waiting(c, shape=Cards) })
+    (None, None) => body.push(fn() { @sf.waiting(c, fn() { usage_body(c, core.quiet(), look, Some(usage_sample())) }) })
   }
   @sf.page(c, on_back=core.pop, frame~, "usage/" + days.to_string(),
     @sf.t("web-pages.settings.usage.title"),
@@ -85,26 +85,83 @@ fn usage_body(c : @ui.Ctx, core : Core, look : Look, v : Json?) -> Unit {
       let wait = field(v, "wait")
       let failing = failing_of(wait)
       if flag(wait, "reading") || failing.length() > 0 {
-        @sf.waiting(c, shape=Cards, count=2, note={ reading: flag(wait, "reading"), text: "", failing })
+        @sf.waiting(c, fn() { usage_shown(c, core.quiet(), look, Some(usage_sample())) }, note={
+          reading: flag(wait, "reading"),
+          text: "",
+          failing,
+        })
       } else {
         c.box(style=ug_empty_box, fn() { c.text(@sf.t("web-main.usage.none"), style=ug_empty) |> ignore }) |> ignore
       }
     } else {
-      // (narrow: each on a card, as the narrow app's)
-      match look {
-        Narrow => {
-          c.box(style=ug_narrow_card, fn() { usage_chart(c, v) }) |> ignore
-          c.box(style=ug_narrow_card, fn() { usage_rankings(c, core, v) }) |> ignore
-        }
-        Wide => {
-          usage_chart(c, v)
-          usage_rankings(c, core, v)
-        }
-      }
+      usage_shown(c, core, look, v)
     }
     usage_notes(c, v)
   })
   |> ignore
+}
+
+///|
+/// What was spent (`v`): the days, the lists; narrow, each on a card, as the narrow app's.
+fn usage_shown(c : @ui.Ctx, core : Core, look : Look, v : Json?) -> Unit {
+  match look {
+    Narrow => {
+      c.box(style=ug_narrow_card, fn() { usage_chart(c, v) }) |> ignore
+      c.box(style=ug_narrow_card, fn() { usage_rankings(c, core, v) }) |> ignore
+    }
+    Wide => {
+      usage_chart(c, v)
+      usage_rankings(c, core, v)
+    }
+  }
+}
+
+///|
+/// What was spent, made up, for what the page shows while it is read (usage_body in its bones): the four totals, a
+/// week's days, the people's list.
+fn usage_sample() -> Json {
+  let w = fn(n : Int) { Json::string(@sf.sample_words(n)) }
+  let costs = [3.0, 5.0, 2.0, 6.0, 4.0, 7.0, 5.0]
+  let top = 8.0
+  {
+    "tiles": Json::array([0, 1, 2, 3].map(fn(_) { Json::object({ "label": w(2), "value": w(4), "sub": w(5) }) })),
+    "daily": Json::array(
+      costs.mapi(fn(i, cost) {
+        Json::object({
+          "day": Json::string("sample" + i.to_string()),
+          "name": w(3),
+          "costText": w(4),
+          "callsText": w(3),
+          "cost": Json::number(cost),
+          "parts": [Json::number(cost)],
+        })
+      }),
+    ),
+    "series": [{ "key": "sample" }],
+    "top": Json::number(top),
+    "ticks": [{ "value": Json::number(top / 2.0), "label": w(2) }, { "value": Json::number(top), "label": w(2) }],
+    "lists": [
+      {
+        "key": "people",
+        "title": w(2),
+        "items": Json::array(
+          [0.5, 0.3, 0.15, 0.05].mapi(fn(i, share) {
+            Json::object({
+              "key": Json::string("sample" + i.to_string()),
+              "title": w(4),
+              "sub": w(6),
+              "costText": w(3),
+              "shareText": w(2),
+              "share": Json::number(share),
+            })
+          }),
+        ),
+      },
+      { "key": "chats", "title": w(2), "items": [] },
+      { "key": "models", "title": w(2), "items": [] },
+    ],
+    "basis": w(24),
+  }
 }
 
 ///|
@@ -839,8 +896,7 @@ pub fn usage_prices_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFram
       blocks.push(fn() {
         @sf.waiting(
           c,
-          shape=Cards,
-          count=2,
+          fn() { prices_sample(c) },
           error=match topic.error {
             Some(e) => @sf.t("web-pages.settings.prices.failed", args=[("error", @settings.error_text(e))])
             None => ""
@@ -852,39 +908,12 @@ pub fn usage_prices_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFram
       let wait = field(v, "wait")
       // none yet while stations are still read (each failure said), else none to show
       if tables.length() == 0 && (flag(wait, "reading") || failing_of(wait).length() > 0) {
-        blocks.push(fn() { waiting_rows(c, wait, count=2) })
+        blocks.push(fn() { block_waiting(c, fn() { prices_sample(c) }, wait~) })
       } else if tables.length() == 0 {
         blocks.push(fn() { up_said(c, look, @sf.t("web-main.usage.noPrices")) })
       }
       for table in tables {
-        let tv = Some(table)
-        blocks.push(fn() {
-          @sf.page_card(c, fn() {
-            c.text(text(tv, "station"), style=up_station) |> ignore
-            c.text(text(tv, "note"), style=desk_note) |> ignore
-            let rows = items(tv, "rows")
-            if rows.length() == 0 {
-              c.text(@sf.t("web-main.usage.noModelUsage"), style=desk_note) |> ignore
-            } else {
-              // a table as a message's (its model, then each rate)
-              let head = [@sf.t("web-main.model.models")]
-              head.append(items(Some(rows[0]), "rates").map(fn(r) { text(Some(r), "label") }))
-              let line = fn(cells : Array[String]) { "| " + cells.map(fn(x) { x.replace_all(old="|", new="\\|") }).join(" | ") + " |" }
-              let md = [line(head), line(head.map(fn(_) { "---" }))]
-              for r in rows {
-                let cells = [text(Some(r), "model")]
-                cells.append(items(Some(r), "rates").map(fn(x) { text(Some(x), "value") }))
-                md.push(line(cells))
-              }
-              // (across the card's foot, its ground reaching past the card's words to the ladder's inset, round by
-              // the ladder's next step there: concentric with the card's foot corners)
-              c.box(style=up_table_across, fn() {
-                @sf.markdown(c, md.join("\n"), key="prices/" + text(tv, "station"), size=@sf.text_scale.base.0) |> ignore
-              })
-              |> ignore
-            }
-          })
-        })
+        blocks.push(fn() { price_card(c, Some(table)) })
       }
     }
   }
@@ -893,6 +922,52 @@ pub fn usage_prices_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFram
     lead=@sf.t("web-pages.settings.prices.lead"),
     blocks,
   )
+}
+
+///|
+/// A station's prices (`tv`) on a card of its own: its name, what its prices are, and a table of its models and their
+/// rates, as a message's table is drawn (`tree`: that table read already, a made-up one's).
+fn price_card(c : @ui.Ctx, tv : Json?, tree? : Json? = None) -> Unit {
+  @sf.page_card(c, fn() {
+    c.text(text(tv, "station"), style=up_station) |> ignore
+    c.text(text(tv, "note"), style=desk_note) |> ignore
+    let rows = items(tv, "rows")
+    if rows.length() == 0 {
+      c.text(@sf.t("web-main.usage.noModelUsage"), style=desk_note) |> ignore
+    } else {
+      // a table as a message's (its model, then each rate)
+      let head = [@sf.t("web-main.model.models")]
+      head.append(items(Some(rows[0]), "rates").map(fn(r) { text(Some(r), "label") }))
+      let line = fn(cells : Array[String]) { "| " + cells.map(fn(x) { x.replace_all(old="|", new="\\|") }).join(" | ") + " |" }
+      let md = [line(head), line(head.map(fn(_) { "---" }))]
+      for r in rows {
+        let cells = [text(Some(r), "model")]
+        cells.append(items(Some(r), "rates").map(fn(x) { text(Some(x), "value") }))
+        md.push(line(cells))
+      }
+      // (across the card's foot, its ground reaching past the card's words to the ladder's inset, round by
+      // the ladder's next step there: concentric with the card's foot corners)
+      c.box(style=up_table_across, fn() {
+        @sf.markdown(c, md.join("\n"), key="prices/" + text(tv, "station"), tree~, size=@sf.text_scale.base.0) |> ignore
+      })
+      |> ignore
+    }
+  })
+}
+
+///|
+/// The prices to come while they are read (the library's Waiting, in its bones): a made-up station's card and its
+/// table, as price_card draws them.
+fn prices_sample(c : @ui.Ctx) -> Unit {
+  let w = fn(n : Int) { Json::string(@sf.sample_words(n)) }
+  let models = [6, 8, 5, 7]
+  let rows = models.map(fn(n) {
+    Json::object({ "model": w(n), "rates": Json::array([0, 1, 2].map(fn(_) { Json::object({ "label": w(3), "value": w(4) }) })) })
+  })
+  let cell = fn(n : Int) { Json::array([Json::string("td"), Json::array([w(n)])]) }
+  let row = fn(first : Int) { Json::array([Json::string("tr"), Json::array([cell(first), cell(3), cell(3), cell(3)])]) }
+  let table = Json::array([Json::string("table"), Json::array([row(3)] + models.map(row))])
+  price_card(c, Some({ "station": w(4), "note": w(18), "rows": Json::array(rows) }), tree=Some(Json::array([table])))
 }
 
 ///|

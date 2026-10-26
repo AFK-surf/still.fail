@@ -104,13 +104,16 @@ pub fn files_places(
   let rows : Array[PlaceItem] = [PTop(top)]
   match (known, error) {
     (None, Some(e)) => rows.push(PTrouble(e))
-    (None, None) => rows.push(PReading)
     _ => ()
   }
   if known is Some(_) && stations.length() == 0 {
     rows.push(PNone)
   }
   rows.push(PFavorites)
+  // (while they are read, the stations to come in their bones where they will be)
+  if known is None && error is None {
+    rows.push(PReading)
+  }
   if stations.length() > 0 {
     rows.push(PHeading("Station"))
   }
@@ -133,7 +136,7 @@ pub fn files_places(
       match rows[i] {
         PTop(h) | PFoot(h) => c.box(style=@ui.style(h=Fixed(h)), fn() {  }) |> ignore
         PTrouble(e) => c.text(e, style=nav_trouble) |> ignore
-        PReading => @sf.waiting(c, dense=true, count=6)
+        PReading => @sf.waiting(c, fn() { places_sample(c) })
         PNone =>
           c.box(style=nav_note, fn() { c.text(@sf.t("web-main.rail.filesNone"), style=nav_meta()) |> ignore }) |> ignore
         PFavorites => places_favorites(c, src, ws, views, go)
@@ -314,6 +317,22 @@ fn station_row(
     })
     |> ignore
   })
+}
+
+///|
+/// The stations to come while they are read (the library's Waiting, in its bones): their heading and two made-up
+/// stations' rows, as station_row draws them.
+fn places_sample(c : @ui.Ctx) -> Unit {
+  @sf.list_heading(c, "Station", Side)
+  for i, n in [5, 3] {
+    let s = @sfbase.dv_station({
+      "station": Json::string("sample/" + i.to_string()),
+      "name": Json::string(@sf.sample_words(n)),
+      "online": true,
+      "overview": { "disk": { "totalBytes": 2.0, "freeBytes": 1.0 } },
+    })
+    station_row(c, @sfbase.sample_source, s, false, false, i == 0, fn(_) {  })
+  }
 }
 
 ///|

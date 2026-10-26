@@ -2,7 +2,7 @@
 // (back, the title, its people and its agents' marks with the station they run on, "…"), the messages as the core's
 // `chat` view gives them, newest at the bottom, the list following its newest while it is at its end and "jump to
 // the newest" over the composer's room otherwise; the page before loaded as the reader nears the top, what is in view
-// staying put. While the chat is read the first time, the messages to come breathing (Waiting.kt Messages), what is
+// staying put. While the chat is read the first time, the messages to come in their bones (the library's Waiting), what is
 // wrong over them in red.
 //
 // What the page tells the core of the reader (the chat shown and its end seen: `client.focus`, which marks it read;
@@ -66,7 +66,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
     match view {
       None => {
         // until the core has it, already a chat's page: its bar with the title it was opened by (a row's, a new
-        // chat's), the messages to come breathing
+        // chat's), the messages to come in their bones
         bar_frame(c, r.title, fn() {  }, fn() {  }, false)
         let failed = match error {
           Some(e) =>
@@ -647,11 +647,10 @@ fn avatar(
 }
 
 ///|
-/// The chat read the first time (the library's Waiting: @sf.waiting, its messages): the messages to come breathing,
-/// theirs with a picture on the left, the viewer's on the right; what could not be read over them in red (the shapes
-/// still).
+/// The chat read the first time (the library's Waiting): its messages to come in their bones, as its list draws them,
+/// the first as far under the bar as the list's first row; what could not be read over them in red (the bones still).
 fn waiting_messages(c : @ui.Ctx, failed : String?) -> Unit {
-  @sf.waiting(c, shape=Messages, error=failed.unwrap_or(""))
+  @sf.waiting(c, fn() { @sfpages.chat_messages_sample(c, list_top() - top_bar_h()) }, error=failed.unwrap_or(""))
 }
 
 ///|

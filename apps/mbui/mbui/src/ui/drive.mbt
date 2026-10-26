@@ -433,7 +433,8 @@ fn on_screen_nodes(
             }
         })
     }
-    if hit && n.fw > 0.0 && n.fh > 0.0 && !c.in_draw_only(i) {
+    // (not what a page's bones are made of: not there yet, bones.mbt)
+    if hit && n.bones == 0L && n.fw > 0.0 && n.fh > 0.0 && !c.in_draw_only(i) {
       // where it is laid out: where it is tapped (a look moves only what is drawn: draw.mbt); in rich text, the
       // middle of the words looked for (a link in a paragraph, a word in a long line of code), and their box
       let whole = (n.x, n.y, n.x + n.fw, n.y + n.fh)

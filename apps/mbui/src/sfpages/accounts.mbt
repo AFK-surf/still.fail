@@ -71,9 +71,10 @@ pub fn profile_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, ad
   let o = field(s, "overview")
   let key = "profile/" + address + "/" + id
   guard o is Some(Object(_)) else {
-    @sf.page(c, on_back=core.pop, frame~, key, "Profile", [
-      fn() { @sf.waiting(c, shape=Cards, note={ reading: true, text: @sf.t("web-pages.profiles.loading"), failing: [] }) },
-    ])
+    @sf.page_waiting(c, "Profile", text=@sf.t("web-pages.profiles.loading"), fn() {
+      let p = profile_sample()
+      profile_view(c, core.quiet(), here, frame, Some({ "station": "sample", "name": Json::string(@sf.sample_words(4)) }), Some({ "profiles": [p] }), Some(p))
+    })
   }
   match items(o, "profiles").search_by(fn(p) { text(Some(p), "id") == id }) {
     Some(i) => profile_view(c, core, here, frame, s, o, Some(items(o, "profiles")[i]))
@@ -1852,7 +1853,7 @@ pub fn pick_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame
   let title = @sf.t("web-pages.profiles.pickModels.title")
   guard o is Some(Object(_)) else {
     @sf.page(c, on_back=core.pop, frame~, key, title, [
-      fn() { @sf.waiting(c, shape=Cards, note={ reading: true, text: @sf.t("web-pages.profiles.loading"), failing: [] }) },
+      fn() { @sf.waiting(c, fn() { models_sample(c, core, look) }, text=@sf.t("web-pages.profiles.loading")) },
     ])
   }
   guard items(o, "profiles").search_by(fn(p) { text(Some(p), "id") == id }) is Some(i) else {
@@ -1891,18 +1892,7 @@ pub fn pick_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame
           )
           |> ignore
         } else {
-          // (narrow, on a card of its own: what is first and last on it in its corners, unless a failure is said under it)
-          let carded = look is Narrow
-          let foot = carded && failed_of(core, ["profile.put"], [("station", address), ("id", text(p, "id"))]) is None
-          c.box(style=pf_models_body, fn() {
-            if listed {
-              model_checklist(c, core, address, p, head=carded)
-            }
-            if flag(p, "canAddModel") {
-              add_model(c, core, address, id, foot~)
-            }
-          })
-          |> ignore
+          models_pool(c, core, look, address, id, p)
         }
       })
     },
@@ -1935,7 +1925,7 @@ pub fn profile_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFr
         if o is Some(Object(_)) {
           @sf.page_note(c, @sf.t("web-pages.profiles.notFound", args=[("id", id)]))
         } else {
-          @sf.waiting(c, shape=Cards, note={ reading: true, text: @sf.t("web-pages.profiles.loading"), failing: [] })
+          @sf.waiting(c, fn() { models_sample(c, core, look) }, text=@sf.t("web-pages.profiles.loading"))
         }
       },
     ])
@@ -1970,22 +1960,57 @@ pub fn profile_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFr
       // what they are for (the narrow app's note)
       fn() { @sf.page_note(c, @sf.t("android-settings.models.note")) },
       fn() {
-        models_body(c, core, look, address, p, fn() {
-          let carded = look is Narrow
-          let foot = carded && failed_of(core, ["profile.put"], [("station", address), ("id", text(p, "id"))]) is None
-          c.box(style=pf_models_body, fn() {
-            if items(p, "available").length() > 0 {
-              model_checklist(c, core, address, p, head=carded)
-            }
-            if flag(p, "canAddModel") {
-              add_model(c, core, address, id, foot~)
-            }
-          })
-          |> ignore
-        })
+        models_body(c, core, look, address, p, fn() { models_pool(c, core, look, address, id, p) })
       },
     ],
   )
+}
+
+///|
+/// A profile made up, for what its page shows while it is read (profile_view in its bones): its name, how it stands,
+/// its allowance, the models it may use.
+fn profile_sample() -> Json {
+  let models = [7, 9, 6, 8, 5].mapi(fn(i, n) { ("sample" + i.to_string(), @sf.sample_words(n)) })
+  let w = fn(n : Int) { Json::string(@sf.sample_words(n)) }
+  let window = fn(left : Int) -> Json { { "left": Json::number(left.to_double()), "level": "ok", "label": w(3), "refills": w(5) } }
+  {
+    "id": "sample",
+    "name": Json::string(@sf.sample_words(8)),
+    "kindText": w(4),
+    "checkTone": "green",
+    "checkLine": w(4),
+    "check": { "time": { "checkedAt": { "ago": w(5) } } },
+    "quota": { "state": "ok", "windows": [window(60), window(20)], "time": { "checkedAt": { "ago": w(5) } } },
+    "available": Json::array(models.map(fn(m) { Json::string(m.0) })),
+    "models": Json::array(models.map(fn(m) { Json::string(m.0) })),
+    "names": Json::object(Map::from_array(models.map(fn(m) { (m.0, Json::string(m.1)) }))),
+  }
+}
+
+///|
+/// A profile's models to come while they are read (the library's Waiting, in its bones): the list to tick, made up, as
+/// the page draws it.
+fn models_sample(c : @ui.Ctx, core : Core, look : Look) -> Unit {
+  let p = Some(profile_sample())
+  let core = core.quiet()
+  models_body(c, core, look, "sample", p, fn() { models_pool(c, core, look, "sample", "sample", p) })
+}
+
+///|
+/// A profile's models to tick (those listed) and one to name by hand (where it can be); narrow, on a card of its own:
+/// what is first and last on it in its corners, unless a failure is said under it.
+fn models_pool(c : @ui.Ctx, core : Core, look : Look, address : String, id : String, p : Json?) -> Unit {
+  let carded = look is Narrow
+  let foot = carded && failed_of(core, ["profile.put"], [("station", address), ("id", text(p, "id"))]) is None
+  c.box(style=pf_models_body, fn() {
+    if items(p, "available").length() > 0 {
+      model_checklist(c, core, address, p, head=carded)
+    }
+    if flag(p, "canAddModel") {
+      add_model(c, core, address, id, foot~)
+    }
+  })
+  |> ignore
 }
 
 ///|

@@ -136,7 +136,7 @@ fn station_pick_places(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   let (list, error) = dv_stations(src, ws)
   let stations = match list {
     None => {
-      @sf.waiting(c, count=5, error=error.unwrap_or(""))
+      @sf.waiting(c, fn() { places_pick_sample(c) }, error=error.unwrap_or(""))
       return
     }
     Some(l) => l.filter(fn(s) { s.drive })
@@ -156,36 +156,55 @@ fn station_pick_places(c : @ui.Ctx, src : Source, ws : String) -> Unit {
       rows.push((s, r.path, r.name, false))
     }
   }
-  @sf.rows_list(c, "station-pick/places", rows.length(), narrow_row_est, fn(i) {
-    let (s, path, name, home) = rows[i]
-    if path == "" && name == "" {
-      c.box(style=narrow_count_box, fn() {
-        let words = if s.online { s.name } else { s.name + " · " + @sf.t("web-pages.stations.offline") }
-        c.text(words, style=narrow_count_words) |> ignore
-      })
-      |> ignore
-    } else {
-      let first = i > 0 && rows[i - 1].1 == ""
-      let last = i == rows.length() - 1 || rows[i + 1].1 == ""
-      let id = c.id("station-pick/place/" + s.station + "|" + path)
-      if c.clicked(id) {
-        spick.at = Some({ station: s.station, station_name: s.name, root: path, root_name: name, path: "" })
-      }
-      @sf.group_row(c, first, last, id~, fn() {
-        let b = c.box(style=narrow_entry, fn() {
-          @sf.icon(c, if home { "server" } else { "folder" }, size=narrow_kind_icon, color=t.p.muted) |> ignore
-          c.box(style=narrow_entry_words, fn() {
-            c.text(name, style=narrow_entry_name) |> ignore
-            c.text(path, style=narrow_entry_meta) |> ignore
-          })
-          |> ignore
-          @sf.icon(c, "chevron-right", size=narrow_chevron_icon, color=t.p.subtle) |> ignore
+  @sf.rows_list(c, "station-pick/places", rows.length(), narrow_row_est, fn(i) { place_line(c, rows, i) }) |> ignore
+}
+
+///|
+/// Line `i` of the places (`rows`: each a station, a place's path, its name, whether it is the home): a station's name
+/// over its places, or a place on its card.
+fn place_line(c : @ui.Ctx, rows : Array[(DvStation, String, String, Bool)], i : Int) -> Unit {
+  let t = @sf.theme()
+  let (s, path, name, home) = rows[i]
+  if path == "" && name == "" {
+    c.box(style=narrow_count_box, fn() {
+      let words = if s.online { s.name } else { s.name + " · " + @sf.t("web-pages.stations.offline") }
+      c.text(words, style=narrow_count_words) |> ignore
+    })
+    |> ignore
+  } else {
+    let first = i > 0 && rows[i - 1].1 == ""
+    let last = i == rows.length() - 1 || rows[i + 1].1 == ""
+    let id = c.id("station-pick/place/" + s.station + "|" + path)
+    if c.clicked(id) {
+      spick.at = Some({ station: s.station, station_name: s.name, root: path, root_name: name, path: "" })
+    }
+    @sf.group_row(c, first, last, id~, fn() {
+      let b = c.box(style=narrow_entry, fn() {
+        @sf.icon(c, if home { "server" } else { "folder" }, size=narrow_kind_icon, color=t.p.muted) |> ignore
+        c.box(style=narrow_entry_words, fn() {
+          c.text(name, style=narrow_entry_name) |> ignore
+          c.text(path, style=narrow_entry_meta) |> ignore
         })
-        c.semantics(b, Button, id~, label=name)
+        |> ignore
+        @sf.icon(c, "chevron-right", size=narrow_chevron_icon, color=t.p.subtle) |> ignore
       })
+      c.semantics(b, Button, id~, label=name)
+    })
+  }
+}
+
+///|
+/// The places to come while the stations are read (the library's Waiting, in its bones): a made-up station's name
+/// and its places, as place_line draws them.
+fn places_pick_sample(c : @ui.Ctx) -> Unit {
+  let s = @sfbase.dv_station({ "station": "sample", "name": Json::string(@sf.sample_words(4)), "online": true })
+  let rows = [(s, "", "", false), (s, @sf.sample_words(12), @sf.sample_words(3), true)] +
+    [(18, 5), (14, 7), (20, 4)].map(fn(n) { (s, @sf.sample_words(n.0), @sf.sample_words(n.1), false) })
+  @sf.rows_room(c, fn() {
+    for i in 0..<rows.length() {
+      place_line(c, rows, i)
     }
   })
-  |> ignore
 }
 
 ///|
@@ -244,7 +263,16 @@ fn station_pick_folder(c : @ui.Ctx, src : Source, at : PickAt) -> Unit {
     None =>
       match topic.error {
         Some(e) => narrow_retry(c, dv_error(e), narrow_failed_words, fn() {  })
-        None => @sf.waiting(c, count=5)
+        None =>
+          // (read the first time: made-up entries' rows, in their bones)
+          @sf.waiting(c, fn() {
+            @sf.rows_room(c, fn() {
+              let names = [5, 9, 7, 12, 6]
+              for i, n in names {
+                row("sample/" + i.to_string(), i == 0, i == names.length() - 1, if i < 2 { "folder" } else { "file" }, @sf.sample_words(n), @sf.sample_words(if i == 0 { 14 } else { 6 }), false, fn() {  })
+              }
+            })
+          })
       }
     Some(_) => {
       let n = shown.length() + 1

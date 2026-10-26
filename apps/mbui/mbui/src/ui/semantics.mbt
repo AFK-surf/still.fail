@@ -269,7 +269,8 @@ pub fn Ctx::semantics_tree(self : Ctx) -> Array[SemNode] {
     let said_before = out.length()
     // (a part its row left out, Ctx::box `drop`: laid out nowhere, not read out either)
     let left = p >= 0 && n.fl.left_out() && self.nodes[p].fl.style.fits
-    let parent_hid = (p >= 0 && hid[p]) || hidden_node[i] || left
+    // (and what a page's bones are made of, wherever it was built: bones.mbt)
+    let parent_hid = (p >= 0 && hid[p]) || hidden_node[i] || left || n.bones != 0L
     let parent_named = p >= 0 && named[p]
     if p >= 0 && in_modal[p] {
       in_modal[i] = true

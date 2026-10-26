@@ -163,7 +163,16 @@ pub fn archiving_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) 
       @sf.section(c, @sf.t("web-pages.archiving.auto.title"), heads=true, note=if look == Wide { @sf.t("web-pages.archiving.auto.description") } else { "" }, fn() {
         // (read the first time: rows' shapes where their card's rows will be, not a wait's line over an empty card)
         if read is None {
-          @sf.group_waiting(c, count=2, text=@sf.t("common.readingStations"))
+          @sf.group_waiting(c, text=@sf.t("common.readingStations"), fn() {
+            for i, n in [5, 3] {
+              archiving_row(c, core.quiet(), look, Some({
+                "station": Json::string("sample/" + i.to_string()),
+                "name": Json::string(@sf.sample_words(n)),
+                "online": true,
+                "overview": { "archiving": { "lineText": Json::string(@sf.sample_words(12)) } },
+              }))
+            }
+          })
         } else {
           @sf.group(c, fn() {
             for s in stations {

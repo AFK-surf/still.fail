@@ -2,8 +2,9 @@
 // docs/ui-panels.md「对比度」). Words as WCAG 2's AA asks: 4.5:1, 3:1 where they are large (24 and up, or 18.66 and up
 // in bold); an icon (Ctx::shapes) 3:1, as its non-text contrast asks of what is understood by its shape. What is drawn
 // with nothing in it, its ground or (where that does not show) its edge alone saying what it is: a gauge's cell, a
-// bar's track, a line (Ctx::lines too), a placeholder's block, a sheet's grip: at least `contrast_mark_least`, WCAG
-// 2's ratio. A ground under words, a picture or an icon is not asked: what is in it carries it. Each is measured where
+// bar's track, a line (Ctx::lines too), a sheet's grip, each bar and shape of a page's bones (bones.mbt): at least
+// `contrast_mark_least`, WCAG 2's ratio. A ground under words, a picture or an icon is not asked: what is in it
+// carries it (and under bones, as under the words they stand for). Each is measured where
 // it is drawn, against what the frame drew under it there (its instances before it, as the renderers lay them: fills,
 // and glass's tint over what it frosts); what lies on a picture, a video or another app's view, or is covered by what
 // is drawn after it (a dialog's scrim, a bar's glass over a list), is not asked, nor a picture drawn of something else
@@ -30,6 +31,7 @@ fn inst_owners_clear() -> Unit {
   inst_owners.painting = -1
   inst_owners.owner.clear()
   inst_owners.own_colours.clear()
+  bone_insts.clear()
 }
 
 ///|
@@ -520,7 +522,9 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
     let is_words = kind == 1.0 &&
       (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor)
     let is_line = kind == 10.0 || kind == 11.0 || is_words
-    if !(is_line || (kind == 0.0 && n.kind == kind_box && !n.blocks)) {
+    // (a page's bones: each is what has nothing in it, whatever drew it, bones.mbt)
+    let bone = bone_insts.contains(k)
+    if !(is_line || bone || (kind == 0.0 && n.kind == kind_box && !n.blocks)) {
       continue
     }
     let px = a[b] + a[b + 2] / 2.0
@@ -584,7 +588,7 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
     // a box with nothing in it (nothing drawn in it, nor over it after: a choice's thumb under its words holds them; a
     // ring round a dot is the dot's ground), seen by its ground or by its edge (a box to tick, white with a line round
     // it): the one that stands further off what it lies on
-    if holding[o] || self.drawn_over(k, o, px, py) {
+    if !bone && (holding[o] || self.drawn_over(k, o, px, py)) {
       continue
     }
     // (ratio, what is said): its ground's, its edge's (at the middle of its left side), each that shows and is not cut

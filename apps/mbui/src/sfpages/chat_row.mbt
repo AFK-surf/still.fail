@@ -362,6 +362,41 @@ pub fn chat_row(
 }
 
 ///|
+/// Chats' rows to come while their list is read the first time (the library's Waiting, in its bones): under a day's
+/// heading, `count` rows as chat_row draws them where their list stands (`at`), of made-up words: each a title and the
+/// line under it, an agent's mark at its end.
+pub fn chat_rows_sample(c : @ui.Ctx, count : Int, at : @sf.ListAt) -> Unit {
+  @sf.list_heading(c, @sf.sample_words(2), at)
+  for i in 0..<count {
+    chat_row(c, @sfbase.sample_source, sample_chat(i), "agents", at~, more=i + 1 < count, found=true) |> ignore
+  }
+}
+
+///|
+/// The made-up chat of row `i` of a chats' list in its bones (chat_rows_sample): its title and line as long as a chat's
+/// are, an agent in it.
+pub fn sample_chat(i : Int) -> ChatItem {
+  let title = sample_titles[i % sample_titles.length()]
+  let line = sample_lines[i % sample_lines.length()]
+  @sfbase.chat_item({
+    "id": Json::string("sample/" + i.to_string()),
+    "session": Json::string("sample/" + i.to_string()),
+    "title": Json::string(@sf.sample_words(title)),
+    "last": { "preview": Json::string(@sf.sample_words(line)) },
+    "agents": [{ "key": "sample", "maker": { "id": "anthropic" } }],
+  })
+}
+
+///|
+/// How long the made-up chats' titles and lines are (letters).
+// kept across runs: a table, never written
+let sample_titles : Array[Int] = [7, 10, 6, 12, 8, 9, 5, 11]
+
+///|
+// kept across runs: a table, never written
+let sample_lines : Array[Int] = [14, 11, 16, 9, 13, 15, 10, 12]
+
+///|
 /// How long a row going ahead of others has a ground of its own (motion's lift).
 let lift_ms : Double = 480.0
 

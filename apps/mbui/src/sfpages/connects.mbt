@@ -100,7 +100,7 @@ pub fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame 
   }
   if !first {
     if shown.length() == 0 && topic.error is None && (loading || items(wait, "failing").length() > 0) {
-      blocks.push(fn() { gutter(fn() { waiting_rows(c, wait) }) })
+      blocks.push(fn() { gutter(fn() { block_waiting(c, fn() { connects_sample(c, core, look, only) }, wait~) }) })
     } else if shown.length() == 0 {
       blocks.push(fn() {
         c.box(style=if look == Wide { cn_none_room } else { cn_filter_room_narrow }, fn() {
@@ -112,52 +112,12 @@ pub fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame 
         |> ignore
       })
     } else {
-      match look {
-        Wide =>
-          blocks.push(fn() {
-            c.box(style=cn_list_room, fn() {
-              c.box(style=@sf.desk_list, fn() {
-                for x in shown {
-                  let xv = Some(x)
-                  let address = text(xv, "station")
-                  cn_row(c, core, look, address, text(xv, "stationName"), station_of(address), field(xv, "connect"))
-                }
-              })
-              |> ignore
-            })
-            |> ignore
-          })
-        // (narrow: each station's under its name, as a card; one offline said so)
-        Narrow => {
-          // (the stations in the order their connects come, each once)
-          let addresses : Array[String] = []
-          for x in shown {
-            let a = text(Some(x), "station")
-            if !addresses.contains(a) {
-              addresses.push(a)
-            }
-          }
-          for address in addresses {
-            let here_list = shown.filter(fn(x) { text(Some(x), "station") == address })
-            let sv = station_of(address)
-            let name = text(Some(here_list[0]), "stationName")
-            blocks.push(fn() {
-              if only == "" {
-                @sf.heading(c, if sv is None || flag(sv, "online") { name } else { @sf.t("android-settings.connects.offline", args=[("name", name)]) },
-                )
-              }
-              @sf.group(c, fn() {
-                for x in here_list {
-                  cn_row(c, core, look, address, name, sv, field(Some(x), "connect"))
-                }
-              })
-            })
-          }
-        }
-      }
+      blocks.append(connects_list(c, core, look, shown, only, station_of))
       // what the list still waits on: a row's shape for a station not read yet, each failure said
       if flag(wait, "reading") || items(wait, "failing").length() > 0 {
-        blocks.push(fn() { gutter(fn() { waiting_rows(c, wait, count=1) }) })
+        blocks.push(fn() { gutter(fn() { @sf.wait_more(c, Some({ reading: flag(wait, "reading"), text: "", failing: failing_of(wait) }), fn() {
+            connects_sample(c, core, look, only, count=1)
+          }) }) })
       }
     }
   }
@@ -174,6 +134,86 @@ pub fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame 
     actions?=if frame.named { None } else { add },
     blocks,
   )
+}
+
+///|
+/// The connects (`shown`, of station `only`, else every station's): wide, a list of them; narrow, each station's under
+/// its name, as a card (one offline said so).
+fn connects_list(
+  c : @ui.Ctx,
+  core : Core,
+  look : Look,
+  shown : Array[Json],
+  only : String,
+  station_of : (String) -> Json?,
+) -> Array[() -> Unit] {
+  let blocks : Array[() -> Unit] = []
+  match look {
+    Wide =>
+      blocks.push(fn() {
+        c.box(style=cn_list_room, fn() {
+          c.box(style=@sf.desk_list, fn() {
+            for x in shown {
+              let xv = Some(x)
+              let address = text(xv, "station")
+              cn_row(c, core, look, address, text(xv, "stationName"), station_of(address), field(xv, "connect"))
+            }
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+    // (narrow: each station's under its name, as a card; one offline said so)
+    Narrow => {
+      // (the stations in the order their connects come, each once)
+      let addresses : Array[String] = []
+      for x in shown {
+        let a = text(Some(x), "station")
+        if !addresses.contains(a) {
+          addresses.push(a)
+        }
+      }
+      for address in addresses {
+        let here_list = shown.filter(fn(x) { text(Some(x), "station") == address })
+        let sv = station_of(address)
+        let name = text(Some(here_list[0]), "stationName")
+        blocks.push(fn() {
+          if only == "" {
+            @sf.heading(c, if sv is None || flag(sv, "online") { name } else { @sf.t("android-settings.connects.offline", args=[("name", name)]) },
+            )
+          }
+          @sf.group(c, fn() {
+            for x in here_list {
+              cn_row(c, core, look, address, name, sv, field(Some(x), "connect"))
+            }
+          })
+        })
+      }
+    }
+  }
+  blocks
+}
+
+///|
+/// The connects to come while they are read (the library's Waiting, in its bones): `count` made-up ones on a station,
+/// as connects_list draws them.
+fn connects_sample(c : @ui.Ctx, core : Core, look : Look, only : String, count? : Int = 3) -> Unit {
+  let name = @sf.sample_words(4)
+  let shown = [8, 6, 10][:count].to_array().map(fn(n) {
+    Json::object({
+      "station": "sample",
+      "stationName": Json::string(name),
+      "connect": {
+        "id": Json::string("sample" + n.to_string()),
+        "name": Json::string(@sf.sample_words(n)),
+        "modeText": Json::string(@sf.sample_words(4)),
+        "runtimeText": Json::string(@sf.sample_words(3)),
+      },
+    })
+  })
+  for b in connects_list(c, core.quiet(), look, shown, only, fn(_) { None }) {
+    b()
+  }
 }
 
 ///|

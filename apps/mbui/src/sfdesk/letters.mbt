@@ -19,6 +19,48 @@ pub fn letters_to_list(r : ChatRef) -> Unit {
 }
 
 ///|
+/// The chats that wrote each other (`chats`), a row each: its title, how many letters and when, the last; pressed,
+/// opened in the tab of chat `key`.
+fn letters_list_of(c : @ui.Ctx, key : String, chats : Array[Json]) -> Unit {
+  c.box(style=letters_list, fn() {
+    for ch in chats {
+      let cv = Some(ch)
+      let ck = text(cv, "key")
+      let id = c.id("letters/row/" + ck)
+      if c.clicked(id) {
+        letters_opened[key] = ck
+      }
+      let b = c.box(style=letters_row, id~, fn() {
+        c.box(style=letters_row_head, fn() {
+          c.box(style=letters_grow, fn() { c.text(text(cv, "title"), style=letters_row_title) |> ignore })
+          |> ignore
+          let n = @sf.t("web-main.letters.count", args=[("n", items(cv, "letters").length().to_string())])
+          let ago = text(field(field(cv, "time"), "lastActiveAt"), "ago")
+          c.text(if ago == "" { n } else { n + " · " + ago }, style=letters_row_meta) |> ignore
+        })
+        |> ignore
+        c.text(text(cv, "last"), style=letters_row_last) |> ignore
+      })
+      c.semantics(b, Button, id~, label=text(cv, "title"))
+    }
+  })
+  |> ignore
+}
+
+///|
+/// Chats that wrote each other, made up, for what the tab shows while they are read (letters_list_of in its bones).
+fn letters_sample() -> Array[Json] {
+  [(8, 18), (6, 22), (10, 14), (7, 20)].mapi(fn(i, n) {
+    Json::object({
+      "key": Json::string("sample" + i.to_string()),
+      "title": Json::string(@sf.sample_words(n.0)),
+      "last": Json::string(@sf.sample_words(n.1)),
+      "time": { "lastActiveAt": { "ago": Json::string(@sf.sample_words(3)) } },
+    })
+  })
+}
+
+///|
 /// Chat `r`'s letters (its view `v`, its thread `thread`): its list, or the chat opened in it, its messages each drawn
 /// as the chat draws one, its files kept by the chat's sessions; a chat's title pressed opened as a link in it is.
 fn letters_tab(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, thread : Double) -> Unit {
@@ -27,7 +69,7 @@ fn letters_tab(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, thread : Do
   let chats = items(view, "chats")
   let whole = flag(view, "whole")
   if !(view is Some(Object(_))) || (chats.length() == 0 && !whole) {
-    @sf.waiting(c, shape=Rows, fill=true)
+    @sf.waiting(c, fill=true, fn() { letters_list_of(c, "sample", letters_sample()) })
     return
   }
   if chats.length() == 0 {
@@ -41,31 +83,7 @@ fn letters_tab(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, thread : Do
   let rows : Array[() -> Unit] = []
   match opened {
     None =>
-      rows.push(fn() {
-        c.box(style=letters_list, fn() {
-          for ch in chats {
-            let cv = Some(ch)
-            let ck = text(cv, "key")
-            let id = c.id("letters/row/" + ck)
-            if c.clicked(id) {
-              letters_opened[key] = ck
-            }
-            let b = c.box(style=letters_row, id~, fn() {
-              c.box(style=letters_row_head, fn() {
-                c.box(style=letters_grow, fn() { c.text(text(cv, "title"), style=letters_row_title) |> ignore })
-                |> ignore
-                let n = @sf.t("web-main.letters.count", args=[("n", items(cv, "letters").length().to_string())])
-                let ago = text(field(field(cv, "time"), "lastActiveAt"), "ago")
-                c.text(if ago == "" { n } else { n + " · " + ago }, style=letters_row_meta) |> ignore
-              })
-              |> ignore
-              c.text(text(cv, "last"), style=letters_row_last) |> ignore
-            })
-            c.semantics(b, Button, id~, label=text(cv, "title"))
-          }
-        })
-        |> ignore
-      })
+      rows.push(fn() { letters_list_of(c, key, chats) })
     Some(ch) => {
       let cv = Some(ch)
       rows.push(fn() {

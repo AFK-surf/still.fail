@@ -281,7 +281,8 @@ pub fn agent_avatar(
 ) -> Unit {
   let t = @sf.theme()
   let id = if agent != "" { c.id("msg-avatar/" + key) } else { 0 }
-  c.box(style=agent_avatar_ground, id~, fn() {
+  // (in a page's bones, one disc)
+  let b = c.box(style=agent_avatar_ground, id~, fn() {
     if maker != "" || runtime != "" {
       @sf.maker_mark(c, maker, if runtime != "" { runtime } else { "claude" }, agent_mark_side) |> ignore
     } else {
@@ -291,7 +292,7 @@ pub fn agent_avatar(
       place_corner(c, slack)
     }
   })
-  |> ignore
+  c.bone_whole(b)
   if agent != "" {
     let station = here.station
     hover(c, "agent-hover/" + key, id, tile=true, fn() {

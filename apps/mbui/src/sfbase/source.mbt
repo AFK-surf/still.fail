@@ -123,3 +123,36 @@ pub fn made_source(
     read_only: false,
   }
 }
+
+///|
+/// The core a page's bones are drawn over (@sf.waiting's `sample`: what it will show, of made-up words): it says
+/// nothing and answers nothing, so what is only shown asks the real core for nothing, reads nothing ahead and opens no
+/// picture.
+// kept across runs: a value (nothing in it is written: its topics none, its calls never answered)
+pub let sample_source : Source = { ..made_source(call=fn(_, _, _) {  }), read_only: true }
+
+///|
+/// A decision made up, for what the 奏 page shows while it is read (its card in its bones): an agent's question of a
+/// few lines, two options under it.
+pub fn sample_decision() -> Json {
+  let w = fn(n : Int) { Json::string(@sf.sample_words(n)) }
+  let words = [60, 28].map(@sf.sample_words)
+  {
+    "station": "sample",
+    "session": "sample",
+    "title": w(6),
+    "message": {
+      "ts": "sample",
+      "authorKind": "agent",
+      "text": Json::string(words.join("\n\n")),
+      "md": Json::array(words.map(fn(p) { Json::array([Json::string("p"), Json::array([Json::string(p)])]) })),
+      "by": { "name": w(6), "maker": { "id": "anthropic" } },
+      "time": { "createdAt": { "ago": w(3), "full": "" } },
+    },
+    "card": {
+      "type": "options",
+      "assigneeText": w(6),
+      "options": [{ "label": w(4), "detail": w(12) }, { "label": w(5), "detail": w(10) }],
+    },
+  }
+}

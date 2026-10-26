@@ -249,6 +249,59 @@ pub fn chat_list(
 }
 
 ///|
+/// A chat's messages to come while it is read the first time (the library's Waiting, in its bones): made-up messages
+/// as its list draws them (row_box, message_row: the viewer's in their bubble, an agent's words under its picture, name
+/// and time), as far apart and as far in as the list has them, `top` over the first as over the list's first row.
+pub fn chat_messages_sample(c : @ui.Ctx, top : Double) -> Unit {
+  let narrow = c.width <= chat_narrow_w
+  let gap = if narrow { list_gap_narrow } else { list_gap }
+  let side = if narrow { row_side_narrow } else { row_side(c) }
+  let view = @sfbase.chat_view_made({ "title": Json::string(""), "messages": [] })
+  let here : MessageHere = {
+    station: "",
+    session: "",
+    view,
+    go: None,
+    inline: narrow,
+    gutter: if narrow { side } else { 0.0 },
+    list: None,
+    core: None,
+  }
+  c.box(style=row_column, fn() {
+    c.box(style=@ui.style(h=Fixed(top)), fn() {  }) |> ignore
+    for i, m in sample_messages {
+      let (mine, lines) = m
+      let words = lines.map(@sf.sample_words)
+      let said = @sfbase.message_of({
+        "ts": Json::string("sample/" + i.to_string()),
+        "authorKind": Json::string(if mine { "person" } else { "agent" }),
+        "mine": Json::boolean(mine),
+        "text": Json::string(words.join("\n\n")),
+        "md": Json::array(words.map(fn(w) { Json::array([Json::string("p"), Json::array([Json::string(w)])]) })),
+        "by": { "name": Json::string(@sf.sample_words(if mine { 2 } else { 6 })), "maker": { "id": "anthropic" } },
+        "time": { "createdAt": { "ago": Json::string(@sf.sample_words(3)), "full": "" } },
+      })
+      row_box(c, side, if i == 0 { 0.0 } else { gap }, fn() { message_row(c, @sfbase.sample_source, here, said) })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The made-up messages of chat_messages_sample: whether each is the viewer's, and how long each of its paragraphs is
+/// (letters): a short ask, an answer of a few lines, and so on, as a chat goes.
+// kept across runs: a table, never written
+let sample_messages : Array[(Bool, Array[Int])] = [
+  (true, [14]),
+  (false, [70, 36]),
+  (true, [22]),
+  (false, [110, 48, 24]),
+  (true, [9]),
+  (false, [56]),
+]
+
+///|
 /// Where a row of chat `r`'s list is, and how it moves there.
 pub fn here_of(
   r : ChatRef,

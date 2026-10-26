@@ -104,22 +104,24 @@ fn decisions_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 let decisions_body : @ui.Style = @ui.css("w=Full h=Full pt=S1")
 
 ///|
-/// Cards to come, breathing (Waiting.kt Waiting, WaitShape.Cards): what went wrong over them in red.
+/// The cards to come while they are read (the library's Waiting): a made-up decision's card in its bones, as the deck
+/// shows one; what went wrong over it in red.
 fn waiting_cards(c : @ui.Ctx, error : Json?) -> Unit {
   let t = @sf.theme()
-  c.box(w=Fill(1.0), padx=16.0, pt=8.0, gap=12.0, fn() {
-    match error {
-      Some(e) =>
-        c.box(w=Fill(1.0), align=ACenter, fn() { @sf.wait_pill(c, error_words(e), error=true) })
-        |> ignore
-      None => ()
-    }
-    let breath = @sf.breath(c, failed=error is Some(_))
-    for _ in 0..<2 {
-      c.box(w=Fill(1.0), h=Px(132.0), radius=20.0, bg=t.p.line, opacity=breath, fn() {  }) |> ignore
-    }
-  })
-  |> ignore
+  @sf.waiting(
+    c,
+    fill=true,
+    fn() {
+      c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
+        decision_face(c, @sfbase.sample_source, @sfbase.sample_decision(), fn(_) {  }, fn() {  }, false)
+      })
+      |> ignore
+    },
+    error=match error {
+      Some(e) => error_words(e)
+      None => ""
+    },
+  )
 }
 
 ///|

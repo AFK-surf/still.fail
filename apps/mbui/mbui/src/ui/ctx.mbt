@@ -22,6 +22,8 @@ struct ListState {
   // how to build a row, and the id scope it is built in
   mut row : (Int) -> Unit
   mut seed : Int
+  // the bones its rows are built in, as the list was (Ctx::bones: 0 none)
+  mut bones : Int64
   // rows in view after the last layout, first to last (-1 when none)
   mut vis_first : Int
   mut vis_last : Int
@@ -219,6 +221,8 @@ pub struct Ctx {
   mut build_no : Int
   /// how many sideways boxes' content is being built now (Ctx::sideways): what is made in it is marked in_sideways
   mut sideways_depth : Int
+  /// the colour what is built now is drawn in as its bones (Ctx::bones), 0 none: what is made is marked so
+  mut bones : Int64
   // the layout epoch: when it moves on, nothing laid out before is reused
   // (Ctx::flex_tree)
   mut epoch : Int
@@ -541,6 +545,7 @@ fn Ctx::new() -> Ctx {
     words_k: 1.0,
     build_no: 0,
     sideways_depth: 0,
+    bones: 0L,
     epoch: 0,
     wants_frame: false,
     wake_at: -1.0,
@@ -783,6 +788,7 @@ fn Ctx::alloc_part(self : Ctx, kind : Int, look : Bool, words : Bool) -> Int {
   let n = self.nodes[i]
   n.kind = kind
   n.in_sideways = self.sideways_depth > 0
+  n.bones = self.bones
   n.parent = self.cur
   if self.cur >= 0 {
     let p = self.nodes[self.cur]

@@ -702,12 +702,13 @@ pub fn Tester::backspace(self : Tester) -> Unit {
 }
 
 ///|
-/// The centre of the first text node (or editor placeholder) containing `s`.
+/// The centre of the first text node (or editor placeholder) containing `s`. Here and in what else finds words, none
+/// of a page's bones: no words are drawn there (bones.mbt).
 pub fn Tester::find(self : Tester, s : String) -> (Double, Double)? {
   let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
-    if (n.kind == kind_text || n.kind == kind_editor || n.kind == kind_rich) &&
+    if n.bones == 0L && (n.kind == kind_text || n.kind == kind_editor || n.kind == kind_rich) &&
       n.text.contains(s) {
       return Some((n.x + n.fw / 2.0, n.y + n.fh / 2.0))
     }
@@ -736,7 +737,7 @@ pub fn Tester::find_last(self : Tester, s : String) -> (Double, Double)? {
       return
     }
     let n = c.nodes[i]
-    if (n.kind == kind_text || n.kind == kind_editor || n.kind == kind_rich) &&
+    if n.bones == 0L && (n.kind == kind_text || n.kind == kind_editor || n.kind == kind_rich) &&
       n.text.contains(s) {
       found.val = Some((n.x + n.fw / 2.0, n.y + n.fh / 2.0))
     }
@@ -1040,7 +1041,7 @@ pub fn Tester::words(self : Tester) -> Array[(String, Double, Double, Double, Do
   for i in 0..<c.count {
     let n = c.nodes[i]
     // (a field's placeholder too, as Android's hint is words of their own)
-    if (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor) && n.text != "" {
+    if n.bones == 0L && (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor) && n.text != "" {
       let (x, y) = c.drawn_at(i)
       let mut alpha = 1.0
       let mut p = i
@@ -1067,7 +1068,7 @@ pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Do
   let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
-    if (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor) &&
+    if n.bones == 0L && (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor) &&
       n.text.contains(s) {
       return Some((n.x, n.y, n.fw, n.fh))
     }
@@ -1104,7 +1105,7 @@ pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
   let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
-    if n.kind == kind_text && n.text.contains(s) {
+    if n.bones == 0L && n.kind == kind_text && n.text.contains(s) {
       match n.tl {
         Some(tl) =>
           return Array::makei(tl.line_start.length(), fn(l) {
@@ -1114,7 +1115,7 @@ pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
         None => ()
       }
     }
-    if n.kind == kind_rich && n.text.contains(s) {
+    if n.bones == 0L && n.kind == kind_rich && n.text.contains(s) {
       match n.rl {
         Some(rl) =>
           return Array::makei(rl.line_count(), fn(l) {
@@ -1542,7 +1543,7 @@ pub fn Tester::rich_of(self : Tester, s : String) -> (RichLayout, Double, Double
   let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
-    if n.kind == kind_rich && n.text.contains(s) {
+    if n.bones == 0L && n.kind == kind_rich && n.text.contains(s) {
       match n.rl {
         Some(rl) => return Some((rl, n.x + n.pad_l, n.y + n.pad_t))
         None => ()
@@ -1663,7 +1664,7 @@ pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
   let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
-    if (n.kind == kind_text || n.kind == kind_rich) && n.text.contains(s) {
+    if n.bones == 0L && (n.kind == kind_text || n.kind == kind_rich) && n.text.contains(s) {
       return Some(c.drawn_at(i))
     }
   }
@@ -1679,7 +1680,7 @@ pub fn Tester::shown_of(self : Tester, s : String) -> (Double, Double, Double, D
   let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
-    if (n.kind == kind_text || n.kind == kind_rich) && n.text.contains(s) {
+    if n.bones == 0L && (n.kind == kind_text || n.kind == kind_rich) && n.text.contains(s) {
       let (x, y) = c.drawn_at(i)
       let mut x0 = x
       let mut y0 = y
@@ -1770,7 +1771,7 @@ fn Tester::node_named(self : Tester, what : String) -> Int {
     }
     for i in 0..<c.count {
       let n = c.nodes[i]
-      if (n.kind == kind_text || n.kind == kind_rich) &&
+      if n.bones == 0L && (n.kind == kind_text || n.kind == kind_rich) &&
         (match exact {
           Some(e) => n.text == e
           None => n.text.contains(what)

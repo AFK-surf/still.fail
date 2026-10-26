@@ -224,54 +224,26 @@ let peek_meters_room : @ui.Style = @ui.css("w=Full py=S1")
 let peek_meters : @ui.Style = @ui.css("row h=S5 gap=S2 align=ACenter")
 
 ///|
-/// Its boxes' places before it is read, 4 apart (Bar 46, 52, 50 by 20, 6 round).
-// kept across runs: a value (no field of it changes)
-let peek_meters_unread : @ui.Style = @ui.css("row h=S5 gap=S1 align=ACenter")
+/// A machine's CPU, memory and disk made up, for what shows while they are read (their chips in their bones).
+fn sample_meters(c : @ui.Ctx, key : String) -> Unit {
+  @sf.bones(c, fn() {
+    c.box(style=peek_meters, fn() {
+      for i, n in [50, 60, 40] {
+        @sf.meter_chip(c, Some(obj([("short", str(@sf.sample_words(1))), ("remaining", str(@sf.sample_words(3))), ("left", Json::number(n.to_double()))])), key=key + "/sample" + i.to_string())
+      }
+    })
+    |> ignore
+  })
+}
 
 ///|
-// kept across runs: a table, never written
-let unread_meters : Array[Double] = [46.0, 52.0, 50.0]
-
-///|
-let unread_meter_h : Double = 20.0
-
-///|
-/// (where a chip goes, its corner)
-let unread_meter_r : Double = @sf.fill_chip_corner
-
-///|
-/// Its network 6 under the boxes; until it is read, as tall as a real one but unseen, grey bars over it.
+/// Its network 6 under the boxes.
 // kept across runs: a value (no field of it changes)
 let peek_net : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
-// kept across runs: a value (no field of it changes)
-let peek_net_unseen : @ui.Style = @ui.css("w=Full opacity=O0")
-
-///|
-/// The bars over it, centred across its height: two on its left, two on its right (Bar 34 and 96, 132 and 132).
-// kept across runs: a value (no field of it changes)
-let peek_net_bars : @ui.Style = @ui.css("row w=Full h=Full align=ACenter")
-
-///|
-/// Each side's two, 9 apart: 8, and a pixel more over the second (the scale has no 9).
-// kept across runs: a value (no field of it changes)
-let peek_net_side : @ui.Style = @ui.css("gap=S2")
-
-///|
-// kept across runs: a value (no field of it changes)
-let peek_net_side_fill : @ui.Style = @ui.css("w=Full gap=S2")
-
-///|
-// kept across runs: a value (no field of it changes)
-let peek_net_second : @ui.Style = @ui.css("pt=SPx")
-
-///|
-let net_bar_h : Double = 10.0
-
-///|
-/// The machine in brief: what is left of it in the allowance's boxes (grey bars until it is read), its network under
-/// them (Stations.kt StationFigures, `peek`).
+/// The machine in brief: what is left of it in the allowance's boxes (in their bones until it is read), its network
+/// under them (Stations.kt StationFigures, `peek`).
 fn peek_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
   let host = field(s, "host")
   let net = station_net(core, s)
@@ -286,13 +258,7 @@ fn peek_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
             }
           })
           |> ignore
-        _ =>
-          c.box(style=peek_meters_unread, fn() {
-            for w in unread_meters {
-              @sf.bar(c, Px(w), unread_meter_h, radius=unread_meter_r, breathing=true)
-            }
-          })
-          |> ignore
+        _ => sample_meters(c, "station-peek/" + text(s, "station"))
       }
     })
     |> ignore
@@ -300,35 +266,15 @@ fn peek_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
       // the room under the 6, the bars laid over that alone (matchParentSize inside the Box's padding: a layer covers
       // its parent's padding too)
       c.box(style=@sf.full_width, fn() {
-        c.box(style=if net is Some(_) { @sf.full_width } else { peek_net_unseen }, fn() { net_line(c, net) }) |> ignore
-        if net is None {
-          c.layer(fn() { net_bars(c) }) |> ignore
+        // (until it is read, a made-up one's in its bones)
+        match net {
+          Some(_) => net_line(c, net)
+          None => @sf.bones(c, fn() { net_line(c, None) })
         }
       })
       |> ignore
     })
     |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// The network's bars over its line's room, centred across it (Stations.kt's, in a station's card, its page and the
-/// list): two on its left (Bar 34 and 96), two on its right (132 and 132).
-fn net_bars(c : @ui.Ctx) -> Unit {
-  c.box(style=peek_net_bars, fn() {
-    net_side(c, peek_net_side_fill, 34.0, 96.0)
-    net_side(c, peek_net_side, 132.0, 132.0)
-  })
-  |> ignore
-}
-
-///|
-/// One side's two bars, `top` and `under` wide, breathing.
-fn net_side(c : @ui.Ctx, side : @ui.Style, top : Double, under : Double) -> Unit {
-  c.box(style=side, fn() {
-    @sf.bar(c, Px(top), net_bar_h, breathing=true)
-    c.box(style=peek_net_second, fn() { @sf.bar(c, Px(under), net_bar_h, breathing=true) }) |> ignore
   })
   |> ignore
 }

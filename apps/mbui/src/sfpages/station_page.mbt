@@ -33,40 +33,66 @@ pub fn station_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, ad
   match topic.value {
     Some(Array(list)) =>
       match list.search_by(fn(s) { text(Some(s), "station") == address }) {
-        Some(i) => {
-          let s = Some(list[i])
-          let blocks : Array[() -> Unit] = [fn() { station_parts_choice(c, address) }]
-          // (the part shown, by station: the settings' own, which a login's card also moves to 设置)
-          let part = match @settings.station_parts.get(address) {
-            Some(p) if station_part_names.contains(p) => p
-            _ => "overview"
-          }
-          let body = match part {
-            "processes" => station_processes(c, core, here, s)
-            "settings" => station_settings(c, core, s, manager)
-            "machine" => station_machine(c, core, s, manager)
-            _ => station_overview(c, core, here, s)
-          }
-          blocks.append(body)
-          // its head says its name: no title over it (StationSettings: Head, then Body)
-          @sf.page(c, on_back=core.pop, frame~, "station/" + address, text(s, "name"), blocks, small=@sf.t("android-misc.bar.place.stations"), head=fn() {
-            station_head(c, core, here, s, manager)
-          })
-        }
+        Some(i) => station_view(c, core, here, frame, Some(list[i]), manager)
         // (removed, or a link from before: its list)
-        None => @sf.page(c, on_back=core.pop, frame~, "station/" + address, back, [fn() { @sf.waiting(c, shape=Cards) }])
+        None => station_waiting(c, core, here, frame, back, "")
       }
-    _ =>
-      @sf.page(c, on_back=core.pop, frame~, "station/" + address, back, [
-        fn() { @sf.waiting(c, shape=Cards, note={ reading: true, text: @sf.t("common.readingStations"), failing: [] }) },
-      ])
+    _ => station_waiting(c, core, here, frame, back, @sf.t("common.readingStations"))
   }
+}
+
+///|
+/// Station `s`'s page: its head, then its parts one at a time.
+fn station_view(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, s : Json?, manager : Bool) -> Unit {
+  let address = text(s, "station")
+  let blocks : Array[() -> Unit] = [fn() { station_parts_choice(c, address) }]
+  // (the part shown, by station: the settings' own, which a login's card also moves to 设置)
+  let part = match @settings.station_parts.get(address) {
+    Some(p) if station_part_names.contains(p) => p
+    _ => "overview"
+  }
+  let body = match part {
+    "processes" => station_processes(c, core, here, s)
+    "settings" => station_settings(c, core, s, manager)
+    "machine" => station_machine(c, core, s, manager)
+    _ => station_overview(c, core, here, s)
+  }
+  blocks.append(body)
+  // its head says its name: no title over it (StationSettings: Head, then Body)
+  @sf.page(c, on_back=core.pop, frame~, "station/" + address, text(s, "name"), blocks, small=@sf.t("android-misc.bar.place.stations"), head=fn() {
+    station_head(c, core, here, s, manager)
+  })
+}
+
+///|
+/// A station's page while the stations are read (`text` what it waits on): a made-up one's, in its bones.
+pub fn station_waiting(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, title : String, text : String) -> Unit {
+  @sf.page_waiting(c, title, text~, fn() {
+    station_view(c, core.quiet(), here, frame, Some(station_sample()), false)
+  })
 }
 
 ///|
 /// The viewer's role in the workspace in view.
 fn role_of(core : Core, here : Here) -> String {
   text(workspace_view(core, here).value, "role")
+}
+
+///|
+/// A station made up, for what its page shows while the stations are read (station_view in its bones): its head, the
+/// machine's figures, a few profiles.
+fn station_sample() -> Json {
+  let w = fn(n : Int) { Json::string(@sf.sample_words(n)) }
+  let meter = fn(left : Int) -> Json { { "big": w(2), "unit": "%", "left": Json::number(left.to_double()), "level": "ok", "title": w(4), "total": w(5) } }
+  let profile = fn(i : Int, n : Int) -> Json { { "id": Json::string("sample" + i.to_string()), "name": w(n), "modelsText": w(12) } }
+  {
+    "station": "sample",
+    "name": w(5),
+    "online": true,
+    "version": w(4),
+    "host": { "identity": w(10), "meters": [meter(70), meter(40), meter(60)] },
+    "overview": { "profiles": [profile(0, 7), profile(1, 9), profile(2, 6)] },
+  }
 }
 
 ///|

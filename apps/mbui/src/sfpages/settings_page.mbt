@@ -92,17 +92,26 @@ pub let narrow_row_title : @ui.TextStyle = @sf.pg_row_title
 let narrow_chevron : Double = @sf.pg_chevron
 
 ///|
-/// The shapes of a page's cards to come (the library's Waiting, its cards), in the page's room; what could not be read
-/// over them in red.
-pub fn waiting_cards(c : @ui.Ctx, count? : Int = 3, error? : String = "", failing? : Array[String] = []) -> Unit {
-  @sf.waiting(c, shape=Cards, count~, error~, note={ reading: failing.length() == 0, text: "", failing })
+/// What a page shows while it is read the first time (the library's Waiting): `sample`, what it will show of made-up
+/// words, in its bones; what could not be read over it in red (`error`, and the core's `wait`'s failing: a list's
+/// stations not read yet), the bones then still.
+pub fn block_waiting(c : @ui.Ctx, sample : () -> Unit, error? : String = "", wait? : Json? = None) -> Unit {
+  let failing = failing_of(wait)
+  @sf.waiting(c, sample, error~, note={ reading: failing.length() == 0, text: "", failing })
 }
 
 ///|
-/// What a list still waits on (the core's `wait`: stations not read yet, each failure said): `count` rows' shapes.
-pub fn waiting_rows(c : @ui.Ctx, wait : Json?, count? : Int = 3) -> Unit {
-  let failing = failing_of(wait)
-  @sf.waiting(c, shape=Rows, count~, note={ reading: failing.length() == 0, text: "", failing })
+/// A workspace's stations made up (the `stations` topic's), for what a page shows of them while they are read: three,
+/// online, their names as long as a station's.
+pub fn sample_stations() -> Array[Json] {
+  [5, 3, 7].mapi(fn(i, n) {
+    Json::object({
+      "station": Json::string("sample/" + i.to_string()),
+      "id": Json::string("sample" + i.to_string()),
+      "name": Json::string(@sf.sample_words(n)),
+      "online": Json::boolean(true),
+    })
+  })
 }
 
 ///|

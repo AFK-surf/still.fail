@@ -482,6 +482,12 @@ pub fn markdown(
   paths? : Bool = false,
 ) -> Int {
   let t = theme()
+  // (in a page's bones, made-up words: each paragraph as it is, asking the core for nothing)
+  let tree = if tree is None && c.in_bones() {
+    Some(Json::array(text.split("\n\n").map(fn(p) { Json::array([Json::string("p"), Json::array([Json::string(p.to_string())])]) }).collect()))
+  } else {
+    tree
+  }
   let md = {
     c,
     size: if size > 0.0 { size } else { t.t.body },

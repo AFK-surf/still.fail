@@ -1220,11 +1220,11 @@ pub fn wait_line(c : @ui.Ctx, words : String, error? : Bool = false, pad? : Bool
 let wait_line_padded : @ui.Style = @ui.css("w=Full px=S5 py=S2")
 
 ///|
-/// The shapes of a settings page's cards to come (the library's Waiting: @sf.waiting, its cards), 12 in from the page's
-/// sides; what could not be read over them in red (the shapes then still).
-pub fn waiting_cards(c : @ui.Ctx, count? : Int = 3, error? : String = "", failing? : Array[String] = []) -> Unit {
+/// A settings page's cards to come (the library's Waiting): `sample`, what the page will show of made-up words, in its
+/// bones, 12 in from the page's sides; what could not be read over them in red (the bones then still).
+pub fn waiting_cards(c : @ui.Ctx, sample : () -> Unit, error? : String = "", failing? : Array[String] = []) -> Unit {
   c.box(style=wait_cards_in, fn() {
-    @sf.waiting(c, shape=Cards, count~, error~, note={ reading: failing.length() == 0, text: "", failing })
+    @sf.waiting(c, sample, error~, note={ reading: failing.length() == 0, text: "", failing })
   })
   |> ignore
 }
@@ -1234,9 +1234,10 @@ pub fn waiting_cards(c : @ui.Ctx, count? : Int = 3, error? : String = "", failin
 let wait_cards_in : @ui.Style = @ui.css("w=Full px=S3")
 
 ///|
-/// A list's rows to come (the library's Waiting: @sf.waiting, its rows); what could not be read over them in red.
-fn waiting_rows(c : @ui.Ctx, count? : Int = 3, error? : String = "", failing? : Array[String] = []) -> Unit {
-  @sf.waiting(c, shape=Rows, count~, error~, note={ reading: failing.length() == 0, text: "", failing })
+/// A list's rows to come (the library's Waiting): `sample`, its rows of made-up words, in their bones; what could not
+/// be read over them in red.
+fn waiting_rows(c : @ui.Ctx, sample : () -> Unit, error? : String = "", failing? : Array[String] = []) -> Unit {
+  @sf.waiting(c, sample, error~, note={ reading: failing.length() == 0, text: "", failing })
 }
 
 ///|

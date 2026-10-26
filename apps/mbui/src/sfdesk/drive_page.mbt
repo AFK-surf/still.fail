@@ -238,9 +238,9 @@ pub fn roots_page(
   }
   let body = fn() {
     match st {
-      _ if reading => @sf.waiting(c, count=6, error=error.unwrap_or(""))
+      _ if reading => @sf.waiting(c, fn() { roots_sample(c) }, error=error.unwrap_or(""))
       None => empty(@sf.t("web-pages.workspace.noSuchStation"), None)
-      Some(s) if !s.overview => @sf.waiting(c, count=6)
+      Some(s) if !s.overview => @sf.waiting(c, fn() { roots_sample(c) })
       Some(s) if !s.drive => empty(@sf.t("web-pages.drive.oldStation"), None)
       Some(s) if s.roots.length() == 0 =>
         empty(@sf.t(if manage { "web-pages.drive.noneManage" } else { "web-pages.drive.noneMember" }), if manage {
@@ -248,16 +248,7 @@ pub fn roots_page(
         } else {
           None
         })
-      Some(s) => {
-        // (how many, the title over their card, as far over it as any card's)
-        @sf.section(c, @sf.t("web-pages.drive.rootsCount", args=[("n", s.roots.length().to_string())]), fn() {
-          @sf.group(c, fn() {
-            for r in s.roots {
-              root_row(c, src, s, r, manage, go)
-            }
-          })
-        })
-      }
+      Some(s) => roots_section(c, src, s, manage, go)
     }
   }
   @sf.page(
@@ -278,6 +269,28 @@ pub fn roots_page(
       _ => None
     },
   )
+}
+
+///|
+/// The folders station `s` pins: how many, the title over their card (as far over it as any card's), a row each.
+fn roots_section(c : @ui.Ctx, src : Source, s : DvStation, manage : Bool, go : (DriveAt) -> Unit) -> Unit {
+  @sf.section(c, @sf.t("web-pages.drive.rootsCount", args=[("n", s.roots.length().to_string())]), fn() {
+    @sf.group(c, fn() {
+      for r in s.roots {
+        root_row(c, src, s, r, manage, go)
+      }
+    })
+  })
+}
+
+///|
+/// The folders to come while the station is read (the library's Waiting, in its bones): roots_section of made-up ones.
+fn roots_sample(c : @ui.Ctx) -> Unit {
+  let roots : Array[DvRoot] = [(5, 18), (3, 24), (6, 15), (4, 21)].map(fn(r) {
+    { path: @sf.sample_words(r.1), name: @sf.sample_words(r.0), state: "ok" }
+  })
+  let s = @sfbase.dv_station({ "station": "sample", "name": Json::string(@sf.sample_words(4)) })
+  roots_section(c, @sfbase.sample_source, { ..s, roots }, false, fn(_) {  })
 }
 
 ///|

@@ -46,7 +46,6 @@ using @sfpages {
   finger_ripple,
   narrow_row,
   narrow_row_title,
-  waiting_cards,
 }
 
 ///|

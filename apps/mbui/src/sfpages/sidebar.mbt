@@ -288,7 +288,7 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
           Top => list_space(c, frame.top + l.top_in)
           Foot => list_space(c, frame.foot + @sf.list_foot_in(frame.at))
           Part(p) => (p.draw)()
-          Wait(note, error) => list_waiting(c, note, error)
+          Wait(note, error) => list_waiting(c, note, error, frame.at)
           Empty(v) => list_empty(c, v, filter)
           Heading(label) => @sf.list_heading(c, label, frame.at)
           Row(item) => {
@@ -422,9 +422,9 @@ fn list_space(c : @ui.Ctx, h : Double) -> Unit {
 
 ///|
 /// The list read the first time, or no rows to show while it waits on a station or cannot read one (the library's
-/// Waiting, Status.tsx: the rows to come breathing, what is wrong over them in red), as many and as dense as the
-/// theme's chats' list has them.
-fn list_waiting(c : @ui.Ctx, note : ListNote?, error : String?) -> Unit {
+/// Waiting, Status.tsx: the rows to come in their bones, what is wrong over them in red), as many as the theme's chats'
+/// list has them, where it stands (`at`).
+fn list_waiting(c : @ui.Ctx, note : ListNote?, error : String?, at : @sf.ListAt) -> Unit {
   let l = @sf.theme().chat_list
   let reading = match note {
     Some(n) => n.reading
@@ -432,9 +432,7 @@ fn list_waiting(c : @ui.Ctx, note : ListNote?, error : String?) -> Unit {
   }
   @sf.waiting(
     c,
-    shape=Rows,
-    count=if reading { l.waiting_rows } else { l.waiting_noted },
-    dense=l.waiting_dense,
+    fn() { chat_rows_sample(c, if reading { l.waiting_rows } else { l.waiting_noted }, at) },
     text=@sf.t("common.reading"),
     error=error.unwrap_or(""),
     note?=match note {

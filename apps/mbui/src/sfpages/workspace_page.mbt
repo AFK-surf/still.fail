@@ -10,23 +10,59 @@
 /// The workspace's page (WorkspaceSettings, WorkspaceScreen), in the frame it is given.
 pub fn workspace_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
-  let t = @sf.theme()
   let topic = workspace_view(core, here)
   let v = topic.value
   let title = @sf.t("android-settings.workspace.title")
   guard v is Some(_) else {
-    @sf.page(c, on_back=core.pop, frame~, "workspace", title, [
-      fn() {
-        waiting_cards(
-          c,
-          error=match topic.error {
-            Some(e) => error_text(e)
-            None => ""
-          },
-        )
-      },
-    ])
+    // (read the first time: a made-up workspace's page, in its bones)
+    let error = match topic.error {
+      Some(e) => error_text(e)
+      None => ""
+    }
+    @sf.page_waiting(c, title, error~, fn() { workspace_shown(c, core.quiet(), here, frame, look, Some(workspace_sample())) })
   }
+  workspace_shown(c, core, here, frame, look, v)
+}
+
+///|
+/// The workspace's page as its view (`v`) says it.
+fn workspace_shown(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, look : Look, v : Json?) -> Unit {
+  let role = text(v, "role")
+  let manager = role == "owner" || role == "admin"
+  let name = text(v, "name")
+  let n = items(v, "members").length().to_string()
+  let blocks = workspace_blocks(c, core, here, look, v)
+  @sf.page(c, on_back=core.pop, frame~, "workspace",
+    name,
+    blocks,
+    // who the viewer is there and how many it holds
+    lead=@sf.t(if manager { "android-settings.workspace.aboutRename" } else { "android-settings.workspace.about" }, args=[
+      ("role", role_label(role)),
+      ("people", @sf.t("android-settings.members.count", args=[("n", n)])),
+      ("stations", @sf.t("android-settings.workspace.stations", args=[("n", items(v, "stations").length().to_string())])),
+    ]),
+    // adding people, by email or from Slack: its managers'
+    actions?=if manager {
+      Some(fn() {
+        let id = c.id("ws-add-people")
+        if c.clicked(id) {
+          open_add_people(core, here, v, from=Of(id))
+        }
+        let b = c.box(style=ws_add_box, id~, fn() { @sf.icon(c, "user-plus", size=ws_add_icon, color=@sf.link_ink()) |> ignore })
+        c.semantics(b, Button, id~, label=@sf.t("web-pages.settings.members.add"))
+      })
+    } else {
+      None
+    },
+  )
+}
+
+
+///|
+/// What the workspace's page holds (`v`, its view): its name and its mark, its people, its relays, leaving or deleting
+/// it.
+fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json?) -> Array[() -> Unit] {
+  let t = @sf.theme()
   let role = text(v, "role")
   let manager = role == "owner" || role == "admin"
   let ws = text(v, "id")
@@ -236,29 +272,27 @@ pub fn workspace_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) 
       }
     })
   })
-  @sf.page(c, on_back=core.pop, frame~, "workspace",
-    name,
-    blocks,
-    // who the viewer is there and how many it holds
-    lead=@sf.t(if manager { "android-settings.workspace.aboutRename" } else { "android-settings.workspace.about" }, args=[
-      ("role", role_label(role)),
-      ("people", @sf.t("android-settings.members.count", args=[("n", n)])),
-      ("stations", @sf.t("android-settings.workspace.stations", args=[("n", items(v, "stations").length().to_string())])),
-    ]),
-    // adding people, by email or from Slack: its managers'
-    actions?=if manager {
-      Some(fn() {
-        let id = c.id("ws-add-people")
-        if c.clicked(id) {
-          open_add_people(core, here, v, from=Of(id))
-        }
-        let b = c.box(style=ws_add_box, id~, fn() { @sf.icon(c, "user-plus", size=ws_add_icon, color=@sf.link_ink()) |> ignore })
-        c.semantics(b, Button, id~, label=@sf.t("web-pages.settings.members.add"))
-      })
-    } else {
-      None
-    },
-  )
+  blocks
+}
+
+///|
+/// A workspace made up, for what its page shows while it is read (workspace_blocks in its bones): its name, five
+/// people.
+fn workspace_sample() -> Json {
+  {
+    "name": Json::string(@sf.sample_words(4)),
+    "role": "owner",
+    "members": Json::array(
+      [4, 3, 5, 3, 4].mapi(fn(i, n) {
+        Json::object({
+          "sub": Json::string("sample" + i.to_string()),
+          "email": Json::string(@sf.sample_words(n + 8)),
+          "name": Json::string(@sf.sample_words(n)),
+          "role": "member",
+        })
+      }),
+    ),
+  }
 }
 
 ///|

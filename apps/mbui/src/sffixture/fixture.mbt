@@ -948,6 +948,22 @@ pub fn round_trip(base : Source, ms : Double) -> Source {
 }
 
 ///|
+/// `base` with the topics named in `held` never come (src/sffilm's MBUI_HOLD): what shows while they are read the
+/// first time, filmed.
+pub fn held_topics(base : Source, held : Array[String]) -> Source {
+  {
+    ..base,
+    topic: fn(name, params) {
+      if held.contains(name) {
+        @sfbase.topic_as_read(name, params, { value: None, error: None, version: -1 })
+      } else {
+        (base.topic)(name, params)
+      }
+    },
+  }
+}
+
+///|
 /// A source of made-up chats (see the top of this file for `mode`).
 pub fn fixture(mode : String) -> Source {
   fixture_preview(mode)

@@ -155,10 +155,25 @@ pub fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> 
   }
   let blocks : Array[() -> Unit] = []
   if notify is None {
-    blocks.push(fn() { waiting_cards(c) })
+    blocks.push(fn() {
+      block_waiting(c, fn() {
+        for b in notify_blocks(c, core.quiet(), here, look, Some({ "on": true, "permission": "granted" })) {
+          b()
+        }
+      })
+    })
     @sf.page(c, on_back=core.pop, frame~, "notify", @sf.t("web-pages.settings.nav.notifications"), blocks)
     return
   }
+  blocks.append(notify_blocks(c, core, here, look, notify))
+  @sf.page(c, on_back=core.pop, frame~, "notify", @sf.t("web-pages.settings.nav.notifications"), blocks)
+}
+
+///|
+/// What the page holds (`notify`, the core's view of how this device is told): the preview, the ways of telling, the
+/// kinds of things told of, the rest.
+fn notify_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, notify : Json?) -> Array[() -> Unit] {
+  let blocks : Array[() -> Unit] = []
   let permission = text(notify, "permission")
   let pending = is_doing(core, ["notify.set"], []) || notify_switched.val is Some(_)
   let on = match notify_switched.val {
@@ -242,7 +257,7 @@ pub fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> 
       })
     })
   })
-  @sf.page(c, on_back=core.pop, frame~, "notify", @sf.t("web-pages.settings.nav.notifications"), blocks)
+  blocks
 }
 
 ///|

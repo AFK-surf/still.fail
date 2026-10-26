@@ -154,10 +154,7 @@ pub fn changelog_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
         Some(e) => @settings.error_text(e)
         None => ""
       }
-      match look {
-        Narrow => waiting_cards(c, error~)
-        Wide => @sf.waiting(c, count=5, error~)
-      }
+      @sf.waiting(c, fn() { changelog_sample(c, look) }, error~)
     })
   } else if has(v, "error") {
     blocks.push(fn() { cl_said(c, look, text(v, "error"), bad=true) })
@@ -170,30 +167,7 @@ pub fn changelog_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       blocks.push(fn() { cl_said(c, look, @sf.t("web-pages.changelog.empty")) })
     }
     for day in days {
-      match look {
-        // the day's heading, its changes on a card under it
-        Narrow => {
-          blocks.push(fn() { @sf.heading(c, text(Some(day), "label")) })
-          blocks.push(fn() {
-            @sf.group(c, fn() {
-              for e in items(Some(day), "entries") {
-                change_narrow(c, Some(e))
-              }
-            })
-          })
-        }
-        Wide =>
-          blocks.push(fn() {
-            c.box(style=cl_day, fn() {
-              c.box(style=cl_heading_room, fn() { c.text(text(Some(day), "label"), style=cl_heading) |> ignore })
-              |> ignore
-              for e in items(Some(day), "entries") {
-                change_item(c, Some(e))
-              }
-            })
-            |> ignore
-          })
-      }
+      blocks.append(day_blocks(c, look, day))
     }
   }
   @sf.page(c, on_back=core.pop, frame~, "changelog/" + at.to_string(),
@@ -206,6 +180,61 @@ pub fn changelog_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
     blocks,
   )
 }
+
+///|
+/// A day of the changelog: its heading, its changes under it (narrow: on a card under it, the heading a block of its
+/// own).
+fn day_blocks(c : @ui.Ctx, look : Look, day : Json) -> Array[() -> Unit] {
+  match look {
+    Narrow =>
+      [
+        fn() { @sf.heading(c, text(Some(day), "label")) },
+        fn() {
+          @sf.group(c, fn() {
+            for e in items(Some(day), "entries") {
+              change_narrow(c, Some(e))
+            }
+          })
+        },
+      ]
+    Wide =>
+      [
+        fn() {
+          c.box(style=cl_day, fn() {
+            c.box(style=cl_heading_room, fn() { c.text(text(Some(day), "label"), style=cl_heading) |> ignore })
+            |> ignore
+            for e in items(Some(day), "entries") {
+              change_item(c, Some(e))
+            }
+          })
+          |> ignore
+        },
+      ]
+  }
+}
+
+///|
+/// The changes to come while they are read (the library's Waiting, in its bones): two days of made-up ones, as
+/// day_blocks draws them.
+fn changelog_sample(c : @ui.Ctx, look : Look) -> Unit {
+  for d, lines in changelog_sample_lines {
+    let entries = lines.map(fn(n) {
+      Json::object({
+        "lines": [{ "label": Json::string(@sf.sample_words(2)), "text": Json::string(@sf.sample_words(n)) }],
+        "versionName": Json::string(@sf.sample_words(5)),
+      })
+    })
+    let day : Json = { "label": Json::string(@sf.sample_words(if d == 0 { 2 } else { 5 })), "entries": Json::array(entries) }
+    for b in day_blocks(c, look, day) {
+      b()
+    }
+  }
+}
+
+///|
+/// How long each made-up change is (letters), day by day.
+// kept across runs: a table, never written
+let changelog_sample_lines : Array[Array[Int]] = [[18, 26, 12], [22, 15]]
 
 ///|
 /// What the page says in place of the changes (none yet, or why they could not be read: red).

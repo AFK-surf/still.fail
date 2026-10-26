@@ -225,23 +225,6 @@ fn home_filter_go(src : Source, w : Workspace, f : String) -> Unit {
 }
 
 ///|
-/// A page read the first time (the library's Waiting: @sf.waiting, its rows): rows to come breathing, what is wrong
-/// over them in red (the shapes then still); what it waits on said only to a screen reader while it reads.
-fn waiting(c : @ui.Ctx, n : Int, note : ListNote?, error : String?) -> Unit {
-  @sf.waiting(
-    c,
-    shape=Rows,
-    count=n,
-    text=tr("common.reading"),
-    error=error.unwrap_or(""),
-    note?=match note {
-      Some(nt) => Some({ reading: nt.reading, text: nt.text.unwrap_or(""), failing: nt.failing })
-      None => None
-    },
-  )
-}
-
-///|
 /// The workspaces opened from Home's top as it first draws (the fixture's home-sheet: newchat_fixture.mbt open_mode).
 // kept across runs: put back by reset, let go as Home reads it
 let home_sheet_at_start : Ref[Bool] = Ref(false)
