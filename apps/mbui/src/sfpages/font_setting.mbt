@@ -249,7 +249,7 @@ fn local_face_row(c : @ui.Ctx, core : Core, place : String, chosen : String) -> 
 
 ///|
 /// A chat as the faces set it (FontSetting.tsx Preview, Fonts.kt FontPreview): their message in its bubble, an agent's
-/// under its name and when, its words as a chat's are (@sfpages.body_size), on a card of the page; their bubble in its
+/// under its name and when, its words as a chat's are (body_size), on a card of the page; their bubble in its
 /// top right corner the ladder's inset in (a block of the ladder's, tall enough not to be a capsule), the agent's words
 /// 20 in. `ui_face`, `text_face`: the host faces tried in it (0: as the app is set now).
 fn font_preview(c : @ui.Ctx, ui_face : Int, text_face : Int) -> Unit {
@@ -275,7 +275,7 @@ fn font_preview(c : @ui.Ctx, ui_face : Int, text_face : Int) -> Unit {
           c,
           @sf.t("web-pages.appearance.fonts.sampleText") + "\n\n" + fp_sample_code + "\n\n" + @sf.t("web-pages.appearance.fonts.sampleAfter"),
           key="fonts/sample",
-          size=@sfpages.body_size,
+          size=body_size,
         )
         |> ignore
       })
@@ -371,7 +371,7 @@ let local_try_given : Ref[String] = Ref("")
 ///|
 /// Whether 本机字体's list is open, and what is typed to find one in it.
 // kept across runs: said by the tile and the list; font_setting_reset puts them back
-let local_open : Ref[Bool] = Ref(false)
+pub let local_open : Ref[Bool] = Ref(false)
 
 ///|
 // kept across runs: said by the list's field; font_setting_reset empties it

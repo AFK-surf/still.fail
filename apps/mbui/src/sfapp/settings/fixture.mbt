@@ -260,7 +260,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-vault-recover" => fixture_open.desk = "vault-recover"
     "settings-add-people" => up("add-people", "", 0)
     "settings-workspace-mark" => up("workspace-mark", "", 0)
-    // 外观's 本机字体 open (src/sfdesk font_setting.mbt local_tile: the families the host lists)
+    // 外观's 本机字体 open (src/sfpages font_setting.mbt local_tile: the families the host lists)
     "settings-local-fonts" => fixture_open.desk = "local-fonts"
     // the desktop's archive policy with a dialog up (src/sfdesk automatic_decisions.mbt): its words, an option of the
     // station's; its 安全 with one (security.mbt): a device's code to confirm, MBA to take in, turning it off

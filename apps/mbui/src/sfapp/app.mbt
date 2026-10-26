@@ -121,6 +121,7 @@ fn pages_shell() -> Shell {
         @sfdesk.show_page()
       }
     },
+    edit_rail: fn() { @sfdesk.wide.editing = true },
   }
 }
 

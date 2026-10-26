@@ -590,7 +590,7 @@ pub fn save_bars(core : Core, sets : Array[Array[String]], current : Int) -> Uni
 }
 
 ///|
-/// A bar just made on 下方栏's page (sfdesk bars.mbt), empty until a place is added (the core keeps no empty bar): let
+/// A bar just made on 下方栏's page (sfpages bars.mbt), empty until a place is added (the core keeps no empty bar): let
 /// go of as the page is left.
 pub let bar_adding : Ref[Bool] = Ref(false)
 

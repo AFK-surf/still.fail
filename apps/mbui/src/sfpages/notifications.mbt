@@ -136,7 +136,7 @@ fn set_kind(core : Core, kind : String, value : Json) -> Unit {
 ///|
 /// 通知 (NotificationsPage): until the core's settings have come, their cards' shapes; then the preview, 提醒方式's
 /// tiles, 通知类别's card of kinds, 其他.
-fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
+pub fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let notify = (core.topic)("notify", Map::new()).value
   // what was chosen, once the core says it
@@ -220,7 +220,8 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
   })
   blocks.push(fn() {
     @sf.section(c, @sf.t("web-pages.notifications.more.title"), heads=true, fn() {
-      c.box(style=more_card, fn() {
+      // (a card of words: its switch's row no ground of its own, 20 in from its corner)
+      @sf.page_card(c, fn() {
         let preview = flag(notify, "preview") || field(notify, "preview") is None
         let now = @sf.switch_row(
           c,
@@ -239,7 +240,6 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
           c.text(@sf.t("web-pages.notifications.sound", args=[("name", "still.fail")]), style=sound_words) |> ignore
         }
       })
-      |> ignore
     })
   })
   @sf.page(c, on_back=core.pop, frame~, "notify", @sf.t("web-pages.settings.nav.notifications"), blocks)
@@ -1038,10 +1038,6 @@ let way_row : @ui.Style = @ui.css("row w=Full min_h=S8 gap=S3 align=ACenter just
 let way_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=@sf.grow)
 
 ///|
-/// 其他's card (card: 20 in, its rows 14 apart); the sound's note (sound: the meta's 12 muted).
-// kept across runs: a value (no field of it changes)
-let more_card : @ui.Style = @ui.css("w=Full p=S5 gap=S3_5 radius=Xl3 bg=Card")
-
-///|
+/// 其他's sound note (sound: the meta's 12 muted).
 // kept across runs: a value (no field of it changes)
 let sound_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)

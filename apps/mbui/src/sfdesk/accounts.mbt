@@ -1980,7 +1980,7 @@ fn profile_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame,
           "models-refresh/" + key,
           @sf.t(if checking { "android-settings.refreshing" } else { "android-settings.models.refresh" }),
           color=@sf.link_ink(),
-          size=link_size,
+          size=@sfpages.link_size,
         ) &&
         !checking {
         @settings.act(

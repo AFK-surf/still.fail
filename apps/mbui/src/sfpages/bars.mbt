@@ -8,7 +8,7 @@
 ///|
 /// The page (BarSettingsScreen), in the frame it is given: what the bars are for under its title; each bar; 新建一栏;
 /// what is kept of them, under all.
-fn bars_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
+pub fn bars_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   let (made, cur) = (core.bars)()
   let sets : Array[Array[String]] = made.copy()
   if @settings.bar_adding.val {

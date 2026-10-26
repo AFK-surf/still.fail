@@ -1,7 +1,7 @@
-// What the desktop's settings pages share beside the library's page (src/sf page.mbt): a place's page across the
-// pane, a hint, a list's filter, a dialog, a page still laid out wide alone (desk_page). The pieces of one arrangement
-// they still draw themselves (desk_card, desk_list, narrow_row, …: the library's, named here) are counted by detlint's
-// page-look in the pages, each file's only falling.
+// What the desktop's settings pages not moved to sfpages yet share beside the library's page (src/sf page.mbt): a
+// place's page across the pane, a list's filter, a dialog, a page still laid out wide alone (desk_page). The pieces of
+// one arrangement they still draw themselves (desk_card, desk_list, narrow_row, …: the library's, named here, and
+// sfpages' settings_page.mbt) are counted by detlint's page-look in the pages, each file's only falling.
 
 using @sf {
   type Look,
@@ -35,17 +35,18 @@ using @sf {
 }
 
 ///|
-// kept across runs: a value (no field of it changes)
-let desk_list_row : @ui.Style = @sf.wide_list_row
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_note : @ui.TextStyle = @sf.wide_list_note
-
-///|
-/// How wide the page's column is (pageNarrow: 760 at most), for what is drawn to its width before it is laid out.
-fn desk_column(c : @ui.Ctx) -> Double {
-  dmin(desk_column_most, dmin(c.width - 2.0 * desk_lane_in, desk_lane_most) - 2.0 * desk_column_in)
+/// The pieces the settings' pages moved to sfpages draw with (sfpages settings_page.mbt), these pages' too.
+using @sfpages {
+  desk_list_row,
+  desk_note,
+  desk_column,
+  desk_said_line,
+  look_of,
+  narrow_note,
+  finger_ripple,
+  narrow_row,
+  narrow_row_title,
+  waiting_cards,
 }
 
 ///|
@@ -53,15 +54,6 @@ fn desk_column(c : @ui.Ctx) -> Double {
 fn desk_hint(c : @ui.Ctx, words : String) -> Unit {
   c.box(style=desk_hint_box, fn() { c.text(words, style=desk_hint_words) |> ignore }) |> ignore
 }
-
-///|
-/// A hint and its link in a line (8 under what is over it).
-// kept across runs: a value (no field of it changes)
-let desk_hint_line : @ui.Style = @ui.css("w=Full pt=S2 gap=S1")
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_said_line : @ui.Style = @ui.css("row w=Full align=ACenter")
 
 ///|
 /// A choice of a few (Segmented) as wide as its options, at the column's start.
@@ -186,12 +178,6 @@ fn desk_waiting_rows(c : @ui.Ctx, wait : Json?, count? : Int = 3) -> Unit {
 }
 
 ///|
-/// How the page being drawn is laid out, by the width of its box (a page still drawing one arrangement's pieces).
-fn look_of(c : @ui.Ctx) -> @sf.Look {
-  @sf.look_for(c.width)
-}
-
-///|
 /// A page of the desktop's settings still drawn with its desktop pieces alone: the library's page laid out wide (counted
 /// by page-look where a page asks for it), back over it on a page under another (`back` where it goes; `on_back`, else
 /// the page popped).
@@ -237,38 +223,7 @@ let narrow_card_room : @ui.Style = @sf.pg_card_room
 
 ///|
 // kept across runs: a value (no field of it changes)
-let narrow_note_box : @ui.Style = @sf.pg_note_box
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_note : @ui.TextStyle = @sf.pg_note
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_note_bad : @ui.TextStyle = @sf.pg_note_bad
-
-///|
-/// A note's words in a line, as wide as they are (a link after them).
-// kept across runs: a value (no field of it changes)
-let narrow_note_inline : @ui.TextStyle = @sf.secondary.then(@sf.one_line)
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_hint_inline : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
 let narrow_said_row : @ui.Style = @sf.pg_said_row
-
-///|
-/// A finger's press rippling over a row (ListRow's, its corner concentric with its card's).
-fn finger_ripple(c : @ui.Ctx, id : Int) -> Unit {
-  @sf.row_ripple(c, id)
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_row : @ui.Style = @sf.pg_row
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -276,14 +231,7 @@ let narrow_row_words : @ui.Style = @sf.pg_row_words
 
 ///|
 // kept across runs: a value (no field of it changes)
-let narrow_row_title : @ui.TextStyle = @sf.pg_row_title
-
-///|
-// kept across runs: a value (no field of it changes)
 let narrow_value : @ui.TextStyle = @sf.pg_value
-
-///|
-let narrow_chevron : Double = @sf.pg_chevron
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -296,10 +244,3 @@ let wide_heading : @ui.TextStyle = @sf.wide_heading
 ///|
 // kept across runs: a value (no field of it changes)
 let wide_value : @ui.TextStyle = @sf.wide_value
-
-///|
-/// The shapes of a page's cards to come (the library's Waiting, its cards), in the page's room; what could not be read
-/// over them in red.
-fn waiting_cards(c : @ui.Ctx, count? : Int = 3, error? : String = "", failing? : Array[String] = []) -> Unit {
-  @sf.waiting(c, shape=Cards, count~, error~, note={ reading: failing.length() == 0, text: "", failing })
-}

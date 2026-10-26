@@ -154,11 +154,11 @@ pub(all) enum Route {
   Changelog
   /// about this app, from settings' 关于 (SettingsHome.kt AboutScreen): this build, the changelog, the terms
   About
-  /// the desktop's own page (src/sfdesk shortcuts.mbt): 快捷键, each action's keys changed here
+  /// the web desktop's page, one for every frame (src/sfpages shortcuts.mbt): 快捷键, each action's keys changed here
   Shortcuts
   /// this machine's station (local_station.mbt)
   LocalStation
-  /// the wide frame's pages as the web's has them (src/sfdesk notifications.mbt, permissions.mbt): 通知, 权限, 归档
+  /// the wide frame's pages as the web's has them (src/sfpages notifications.mbt, permissions.mbt): 通知, 权限, 归档
   /// (whether a done chat suggests archiving it, each station's own), a station's archiving
   Notifications
   Permissions

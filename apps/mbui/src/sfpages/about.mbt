@@ -9,7 +9,7 @@
 /// 关于 (AboutPage; the narrow app's AboutScreen, Android's SettingsHome.kt AboutScreen): this build and the way to a
 /// newer one, what changed; whether this device sends usage statistics and error reports (not where nothing is sent);
 /// still.fail's terms and privacy policy on its site.
-fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
+pub fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let blocks : Array[() -> Unit] = []
   // this build, and what changed
@@ -119,7 +119,7 @@ fn changelog_reset() -> Unit {
 /// 更新日志 (ChangelogPage; the narrow app's ChangelogScreen): the core's `changelog`, a tab a part (the choice only where
 /// there is more than one), by day (narrow: each day's changes on a card); opened, what the last update brought is read
 /// (`changelog.seen`).
-fn changelog_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
+pub fn changelog_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let topic = (core.topic)("changelog", Map([]))
   let v = topic.value

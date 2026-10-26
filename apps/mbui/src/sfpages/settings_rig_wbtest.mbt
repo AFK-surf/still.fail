@@ -1,0 +1,80 @@
+// The settings' pages here (about.mbt, appearance.mbt, bars.mbt, notifications.mbt, permissions.mbt, shortcuts.mbt)
+// drawn alone over the made-up core's settings, in a box of each width, with a finger and with a mouse: what each is
+// for, laid out by its own width. What the shell does around them (the tier, its sidebar, the system's bars) is the
+// whole app's tests' (src/sfapp).
+
+///|
+/// The made-up workspace the settings' fixture is of.
+let rig_workspace : Workspace = { id: "ws1", name: "星火工作室", emoji: "", icon: "", email: "" }
+
+///|
+/// The settings' page `route` over the made-up core's `mode` (as `over` has it), `w` wide, pointed at as `platform`
+/// says (2 a phone's finger, 0 a Mac's mouse): opened under settings, drawn alone while it is the stack's top (another
+/// of them opened from it, that one), back over it to settings, the presenters over it.
+fn setting_tester(
+  route : @settings.Route,
+  w : Double,
+  platform? : Int = 0,
+  mode? : String = "settings",
+  over? : (Source) -> Source = fn(s) { s },
+) -> @ui.Tester {
+  @sfbase.reset()
+  reset()
+  @settings.reset()
+  @sffixture.fixture_reset()
+  @sf.presenters_reset()
+  @sf.set_words(@sfbase.fill)
+  let src = over(@sffixture.fixture(mode))
+  app.nav.push(Settings)
+  app.nav.push(Setting(route))
+  let t = @ui.Tester::new(
+    fn(c) {
+      @sf.begin(c) |> ignore
+      c.with_theme(@sf.ui_theme(), fn() {
+        match app.nav.top() {
+          Setting(r) => setting_alone(c, src, r)
+          _ => ()
+        }
+        @sf.presented(c)
+      })
+    },
+    w~,
+    h=900.0,
+    platform~,
+  )
+  t.draw()
+  t
+}
+
+///|
+/// The page of `route`, in the frame a page under another is given: back over it, no room kept for bars.
+fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
+  let core = @sfbase.settings_core(src, rig_workspace)
+  let here = @settings.here_of(core, rig_workspace.id, rig_workspace.name)
+  @settings.frame(core, here)
+  let frame : PageFrame = { back: app.nav.under().map(@sfbase.back_label), top: 0.0, foot: 0.0, named: false }
+  match route {
+    About => about_page(c, core, frame)
+    Changelog => changelog_page(c, core, frame)
+    Appearance => appearance_page(c, core, frame)
+    Fonts => fonts_page(c, core, frame)
+    BarSettings => bars_page(c, core, frame)
+    Permissions => permissions_page(c, core, frame)
+    Archiving => archiving_page(c, core, here, frame)
+    StationArchiving(s) => station_archiving_page(c, core, here, frame, s)
+    Notifications => notify_page(c, core, here, frame)
+    Shortcuts => shortcuts_page(c, core, frame)
+    _ => ()
+  }
+}
+
+///|
+/// Each width a page is drawn at and the hand it is pointed with: a phone's with a finger and with a mouse, a page
+/// between, a tablet's with a finger, a desktop's with a mouse.
+let page_cases : Array[(Double, Int)] = [(390.0, 2), (390.0, 0), (720.0, 0), (1100.0, 2), (1280.0, 0)]
+
+///|
+/// Whether a page `w` wide is laid out wide.
+fn laid_wide(w : Double) -> Bool {
+  @sf.look_for(w) is Wide
+}

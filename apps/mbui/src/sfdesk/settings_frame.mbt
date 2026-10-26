@@ -60,23 +60,23 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
       @sf.page(c, on_back=core.pop, frame~, "home", @sf.t("android-settings.title"), @sfpages.settings_blocks(c, core, here, fn(r) {
         (core.push)(r)
       }))
-    Appearance => appearance_page(c, core, frame)
-    Fonts => fonts_page(c, core, frame)
-    BarSettings => bars_page(c, core, frame)
-    About => about_page(c, core, frame)
-    Changelog => changelog_page(c, core, frame)
+    Appearance => @sfpages.appearance_page(c, core, frame)
+    Fonts => @sfpages.fonts_page(c, core, frame)
+    BarSettings => @sfpages.bars_page(c, core, frame)
+    About => @sfpages.about_page(c, core, frame)
+    Changelog => @sfpages.changelog_page(c, core, frame)
     Memories => memories_page(c, core, here, frame)
     Memory(a) => memory_page(c, core, here, frame, a)
     AutoDecisions => decisions_page(c, core, here, frame)
-    Permissions => permissions_page(c, core, frame)
+    Permissions => @sfpages.permissions_page(c, core, frame)
     UsagePrices(days) => usage_prices_page(c, core, here, frame, days)
     Usage => usage_page(c, core, here, frame)
-    Archiving => archiving_page(c, core, here, frame)
-    StationArchiving(st) => station_archiving_page(c, core, here, frame, st)
-    Notifications => notify_page(c, core, here, frame)
+    Archiving => @sfpages.archiving_page(c, core, here, frame)
+    StationArchiving(st) => @sfpages.station_archiving_page(c, core, here, frame, st)
+    Notifications => @sfpages.notify_page(c, core, here, frame)
     PickModels(a, id) => pick_models_page(c, core, here, frame, a, id)
     ProfileModels(a, id) => profile_models_page(c, core, here, frame, a, id)
-    Shortcuts => shortcuts_page(c, core, frame)
+    Shortcuts => @sfpages.shortcuts_page(c, core, frame)
     Me => me_page(c, core, here, frame)
     Workspace => workspace_page(c, core, here, frame)
     Security => security_page(c, core, here, frame)
@@ -112,7 +112,7 @@ fn settings_fixture(src : Source, core : Core) -> Unit {
       }
     "lock-join" => join_dialog(core, "ws1", "st2", "MBA")
     "lock-off" => turn_off_dialog(core, "ws1", "星火工作室")
-    "local-fonts" => local_open.val = true
+    "local-fonts" => @sfpages.local_open.val = true
     "connect-mode" =>
       match items((core.topic)("connects", { "scope": str("ws1"), "mine": Json::boolean(false) }).value, "items") {
         [item, ..] => cd_mode_dialog(core, "ws1/st1", Some(item))
@@ -129,7 +129,6 @@ fn settings_fixture(src : Source, core : Core) -> Unit {
 ///|
 /// What the settings pages here keep put back as the app begins anew.
 fn settings_reset() -> Unit {
-  notify_page_reset()
   ws_menu.val = ""
   mine_filter_open.clear()
   desk_dialogs.val = 0
