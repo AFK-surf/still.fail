@@ -1,8 +1,7 @@
 // mbui/core's native side: the engine's messages, which come on the core's own thread, posted to mbui's queue
 // (mb_post, mbui's src/host/post.h, handed over with the engine: core_client.h) on the channel "core": the window's
 // next frame takes them as it begins and hands them
-// to the app's handler (@ui.on_message_read("core", @core.receive_read)); the first since a frame took the last wakes
-// the host.
+// to the app's handler (@ui.on_message("core", @core.receive)); the first since a frame took the last wakes the host.
 // The engine itself is the app's (core_client.h, mbc_use).
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN

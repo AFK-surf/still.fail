@@ -1,7 +1,7 @@
 // The app's one core: the engine (src/host/core_api.h; Hermes on the Rust shell, on macOS, iOS, Android and Windows)
 // linked into the app, its messages posted by core_native.c to mbui's queue on the channel "core" (mb_post, any thread), which hands each to `receive`
-// on the UI thread as the next frame begins (the app's `@ui.on_message_read("core", @core.receive_read)`). On the web
-// there is no engine yet (js.mbt): `start` says so.
+// on the UI thread as the next frame begins (the app's `@ui.on_message("core", @core.receive)`). On the web there is no
+// engine yet (js.mbt): `start` says so.
 
 ///|
 priv struct Engine {
@@ -166,15 +166,6 @@ pub fn wall_ms() -> Double {
 }
 
 ///|
-/// The time of day a kept conversation gives (Replay::attach), 0 where it is the system's.
-fn given_wall() -> Double {
-  match wall_override.val {
-    Some(f) => f()
-    None => 0.0
-  }
-}
-
-///|
 /// Ends a subscription.
 pub fn unsubscribe(s : Sub) -> Unit {
   client.unsubscribe(s)
@@ -187,32 +178,17 @@ pub fn fatal() -> String? {
 }
 
 ///|
-/// What the core said, one message (its JSON, the bytes beside it), as `receive_read` takes it.
-pub fn receive(text : String, bytes : Bytes?) -> Unit {
-  receive_read(text, bytes) |> ignore
-}
-
-///|
 /// What the core said, one message (its JSON, the bytes beside it): the app's handler for mbui's channel "core"
-/// (`@ui.on_message_read("core", @core.receive_read)`), which mbui calls as a frame begins with everything posted since
-/// the last, in the order it came; so what came is seen whole at a frame's boundary, never part-way through one, and how
-/// much a frame sees depends on frames, not on when the core's thread answered. A kept conversation given again
-/// (replay.mbt) comes this way too. Whether all it changed is a topic's value, read through its signal (the core's
-/// subscriptions: Client::took_topic): what is kept as it was drawn is built again only where it read what changed.
-pub fn receive_read(text : String, bytes : Bytes?) -> Bool {
-  let msg = @json.parse(text) catch { _ => return false }
+/// (`@ui.on_message("core", @core.receive)`), which mbui calls as a frame begins with everything posted since the last,
+/// in the order it came; so what came is seen whole at a frame's boundary, never part-way through one, and how much a
+/// frame sees depends on frames, not on when the core's thread answered. A kept conversation given again (replay.mbt)
+/// comes this way too.
+pub fn receive(text : String, bytes : Bytes?) -> Unit {
+  let msg = @json.parse(text) catch { _ => return }
   match msg {
-    Object(m) if m.contains("mbui_auth") => {
-      web_auth_done(m)
-      false
-    }
-    Object(m) if m.contains("clocked") => {
-      clocked(m)
-      false
-    }
+    Object(m) if m.contains("mbui_auth") => web_auth_done(m)
+    Object(m) if m.contains("clocked") => clocked(m)
     _ => {
-      // (a kept conversation's wall clock goes on as its messages come: what read it is told so, from outside)
-      let wall = given_wall()
       match receive_hook.val {
         Some(f) => f()
         None => ()
@@ -226,9 +202,7 @@ pub fn receive_read(text : String, bytes : Bytes?) -> Bool {
           None => ()
         }
         restart()
-        return false
       }
-      client.took_topic() && given_wall() == wall
     }
   }
 }

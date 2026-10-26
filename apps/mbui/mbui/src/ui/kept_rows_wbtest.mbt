@@ -441,36 +441,6 @@ test "a list's row in a part kept shows a motion another part told: drawn as it 
 }
 
 ///|
-test "a list's rows as messages come: one all read through signals builds again only what read it, another all" {
-  let k = TestRows::new()
-  // (row 3 reads `mark`; a message on "rows-read" sets it, one on "rows-other" changes what is no signal)
-  on_message_read("rows-read", fn(json, _) {
-    k.mark.set(json.length())
-    true
-  })
-  on_message("rows-other", fn(_, _) {  })
-  let t = Tester::new(k.view(), w=320.0, h=420.0, platform=2)
-  t.keep_parts(true)
-  t.draw()
-  t.frame()
-  t.frame()
-  let builds = k.builds.copy()
-  t.post("rows-read", "12345")
-  t.frame()
-  assert_eq(t.messages_taken(), 1)
-  assert_true(t.find("row 3 mark 5") is Some(_))
-  assert_eq(k.builds[3], builds[3] + 1)
-  assert_eq(k.builds[2], builds[2])
-  assert_eq(k.builds[4], builds[4])
-  assert_true(t.rows_kept() > 0, msg="\{t.rows_kept()}")
-  t.post("rows-other", "x")
-  t.frame()
-  assert_eq(t.messages_taken(), 1)
-  assert_eq(t.rows_kept(), 0)
-  assert_eq(k.builds[2], builds[2] + 1)
-}
-
-///|
 test "a list's rows read out as they are dragged and flung: kept, read out as building them says them" {
   let run = fn(replay : Bool) -> (Array[String], Int) {
     let k = TestRows::new()
