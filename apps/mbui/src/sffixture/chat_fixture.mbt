@@ -1297,10 +1297,23 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       if vault {
         all.push(vault_post(f.mode == "chat-vault-typed"))
       }
-      // each answer's message, after the rest
+      // each answer's message, after the rest, quoting its post as the core's does (decisions.ts quoteOf)
       for seq, label in fix_replied {
+        let post = all.iter().find_first(fn(x) { number(Some(x), "seq").to_int() == seq })
+        let quoted : Map[String, Json] = {
+          "author": Json::string(text(field(post, "by"), "name")),
+          "text": Json::string(text(post, "text")),
+          "comment": Json::string(""),
+          "role": Json::string("agent"),
+          "ts": Json::string(text(post, "ts")),
+        }
         all.push(
-          msg(100 + seq, "person", by_person("林"), label, "刚刚", { "mine": true, "said": true, "createdAt": Json::number(1.0e9) }),
+          msg(100 + seq, "person", by_person("林"), label, "刚刚", {
+            "mine": true,
+            "said": true,
+            "createdAt": Json::number(1.0e9),
+            "quotes": Json::array(if post is Some(_) { [Json::object(quoted)] } else { [] }),
+          }),
         )
       }
       o["messages"] = Json::array(all)

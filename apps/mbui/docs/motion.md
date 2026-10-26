@@ -129,10 +129,13 @@ of them. Their numbers are the web's at the same place (paths from the repositor
   first tenth: beside every other send it read as a jump (the user, 2026-10-27: 「非 new chat 的发消息比 new chat 流畅很多」).
   The composer going down to its chat's foot as they set out goes on their way too, not a page's 340 ms ease-out, which
   went a fifth of 200 in its first frame, ahead of words still setting off (the user: 「composer 好像还是会一帧动老远」).
-- A card answered from here: the web's order (Decisions.tsx DecisionOptions, listQueue.ts reserveRow). Picked, none is
-  pressed any more; the answer's row comes in first, in a turn kept for it as it is picked (list_turns.mbt `keep_turn`),
-  and only once it is in do the options close, in the next turn. Closing them with the answer (#2222) read as the list
-  jumping about (the user, 2026-10-27: 「决策点完先 disable，决策消息上屏动效播完，然后决策再收起来」).
+- A card answered from here: the answer is the viewer's words sent, from the option rather than the composer
+  (decision.mbt `answered_here`, flight.mbt `flight_from`): in the list at once, its words flying there from the option
+  picked on the words' way (520 ms, its bubble's ground coming in round them), the options pressed no more meanwhile;
+  they close once it has landed, in the turn after it, as what is asked after words sent waits for them. The web only
+  has the answer come in before the options close (listQueue.ts reserveRow); closing them with the answer (#2222) read as
+  the list jumping about (the user, 2026-10-27: 「决策点完先 disable，决策消息上屏动效播完，然后决策再收起来」, then
+  「消息从决策按钮飘过去」). An option that closes the card says nothing: nothing flies (the core's `closes`).
 - The composer going to another page: 340 ms, the web's for it (the view transition), not a layout switched's 380: it
   is the composer moving with its page, not the page's layout changing.
 - Words sent keep the shape they were typed in, so that sending them only moves them (Android's SendText.kt, the

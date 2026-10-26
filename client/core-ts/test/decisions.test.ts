@@ -84,6 +84,9 @@ test("options_show_the_recommended_one_last", () => {
   assert.deepEqual(shown, [{ label: "先不改" }, { label: "改成本次" }, { label: "按今天累计", detail: "重连不清零", recommended: true }]);
   for (const o of shown) shape("DecisionOption", o);
   assert.deepEqual(d.optionsShown(null), []);
+  const closing = d.optionsShown([{ label: "合" }, { label: "不用了", action: "close" }]);
+  assert.deepEqual(closing, [{ label: "合" }, { label: "不用了", closes: true }]);
+  for (const o of closing) shape("DecisionOption", o);
 });
 
 test("the_list_asks_with_the_agents_need_else_the_whole_first_line", () => {

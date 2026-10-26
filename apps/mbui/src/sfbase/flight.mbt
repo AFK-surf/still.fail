@@ -79,6 +79,8 @@ pub(all) struct SendFlight {
   /// from (their bubble's corner, or the first file's tile without words)
   carried : Bool
   from_top : Double
+  /// said from a card in the list (a card's option picked: flight_from), not from the composer, which it leaves as it is
+  from_card : Bool
 }
 
 ///|
@@ -175,6 +177,7 @@ pub fn flight_start(
         gone: leaving(),
         carried: false,
         from_top: y - 8.0,
+        from_card: false,
       })
       hold(flight_wait_ms)
       // a turn among what changes the list's height, till they have landed: what comes after them waits for it, they
@@ -183,6 +186,52 @@ pub fn flight_start(
     }
     None => ()
   }
+}
+
+///|
+/// What the viewer says from a card in chat `chat`'s list rather than its composer (a card's option picked: its label
+/// `words`, laid out at `at`, x, y, w and h in the window) flies from there to row `key` (in the list from now:
+/// sent_local) as words sent do, the desktop's way, as one block, its bubble's ground coming in round it; what is asked
+/// in its list after it (the card's options closing) waits for it to land. The composer is left as it is.
+pub fn flight_from(
+  c : @ui.Ctx,
+  chat : String,
+  turns : String,
+  key : String,
+  words : String,
+  at : (Double, Double, Double, Double),
+) -> Unit {
+  send_flight.val = None
+  if @ui.reduced_motion() || words == "" {
+    return
+  }
+  let (x, y, w, h) = at
+  send_flight.val = Some({
+    chat,
+    turns,
+    text: words,
+    from_x: x,
+    from_y: y,
+    field_x: x,
+    field_y: y,
+    field_w: w,
+    field_h: h,
+    room: 0.0,
+    hold: fn(_) {  },
+    desk: true,
+    lines: None,
+    lead: 0,
+    files: [],
+    key,
+    placed: false,
+    placed_frame: -1,
+    way: @motion.Anim::new(0.0),
+    gone: leaving(),
+    carried: false,
+    from_top: y - 8.0,
+    from_card: true,
+  })
+  turns_of(turns).send(c, flight_wait_ms + flight_len(true))
 }
 
 ///|
@@ -244,6 +293,7 @@ pub fn flight_carry_start(
         gone: leaving(),
         carried: true,
         from_top,
+        from_card: false,
       })
       hold(flight_wait_ms)
     }
@@ -766,7 +816,8 @@ pub fn flight_bubble(c : @ui.Ctx, f : SendFlight, i : Int) -> Unit {
 /// up under them as it comes down), not yet out of it.
 pub fn flight_hint_away(c : @ui.Ctx, chat : String) -> Bool {
   match flight_of(chat) {
-    // (files alone leave it where it is)
+    // (files alone leave it where it is, and what flies from a card in the list)
+    Some(f) if f.from_card => false
     Some(f) if f.text != "" || f.files.iter().any(fn(ff) { ff.key.has_prefix(quote_prefix) }) =>
       !f.placed || flight_up_of(c, f) < 0.5
     _ => false
@@ -915,10 +966,17 @@ pub fn flight_landing(c : @ui.Ctx, f : SendFlight, i : Int, key : String, share?
 /// @sf.quote_sent_shift) to where it is laid out, across and up on the words' way, over everything; its ground from
 /// the composer's card to its own, its edges across and its top and bottom up, its colour from that card's as it goes
 /// up (as seen over anything: the composer's may be see-through). Where each is this frame laid out (@motion.placed), not a frame behind; its first frame not seen here (drawn
-/// where it was by flight_files).
+/// where it was by flight_files). Said from a card in the list (flight_from), it flies from nowhere: it comes in
+/// where it is.
 pub fn flight_quote_landing(c : @ui.Ctx, f : SendFlight, card : Int, key : String, shift : (Double, Double)) -> Unit {
   let ff = match flight_file_of(f, key) {
     Some(ff) => ff
+    // (said from a card in the list, its quote of the post from nowhere: it comes in where it is as the bubble's
+    // ground does round the words)
+    None if f.from_card => {
+      c.look(card, @ui.look(alpha=if f.placed { flight_ground_of(c, f) } else { 0.0 }))
+      return
+    }
     None => return
   }
   @motion.measure(c, card, "flight/to/" + key)

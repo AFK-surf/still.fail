@@ -15,13 +15,12 @@
 
 ///|
 /// What a turn is for: a row coming in (by its key), something under a post shown or not (by its key), words sent,
-/// messages coming out of avatars, the row of what the viewer just did here, not made yet (Turns::keep_turn).
+/// messages coming out of avatars.
 pub(all) enum TurnFor {
   Admit(String)
   Change(String)
   Send
   Emits
-  Kept
 } derive(Eq, Show)
 
 ///|
@@ -139,29 +138,6 @@ pub fn Turns::admit(self : Turns, c : @ui.Ctx, key : String, ms : Double, after?
   if self.waiting.contains(key) {
     return
   }
-  // the turn kept for the viewer's row (Turns::keep_turn), not an agent's line going after the others: it comes in that
-  // turn, waiting for it meanwhile, or at once, it being under way
-  if !after {
-    match self.asks.search_by(fn(a) { a.what == Kept }) {
-      Some(i) => {
-        self.asks[i] = { ..self.asks[i], what: Admit(key), ms }
-        self.waiting[key] = true
-        return
-      }
-      None => ()
-    }
-    if self.on == Some(Kept) && self.open {
-      let at = self.moment(c)
-      if at < self.until {
-        self.on = Some(Admit(key))
-        self.open = false
-        self.until = at + ms + turn_calm_ms
-        self.started[key] = at
-        self.list_rest = @double.infinity
-        return
-      }
-    }
-  }
   self.waiting[key] = true
   self.ask(c, Admit(key), ms, after~)
 }
@@ -208,18 +184,6 @@ pub fn Turns::in_turn(self : Turns, c : @ui.Ctx, key : String, target : Bool, ms
       shown
     }
   }
-}
-
-///|
-/// The row of what the viewer just did here (a card's option picked: their answer, in the outbox) takes its turn as
-/// they do it, before what comes of it (the options closing, asked once the core says they are answered): the next row
-/// asked comes in it (web/src/listQueue.ts reserveRow), the options still there, none pressed, meanwhile. No row by
-/// turn_most_ms (an option that closes the card without one), the turn goes.
-pub fn Turns::keep_turn(self : Turns, c : @ui.Ctx) -> Unit {
-  if self.asks.iter().any(fn(a) { a.what == Kept }) {
-    return
-  }
-  self.ask(c, Kept, @double.infinity)
 }
 
 ///|
@@ -324,7 +288,7 @@ pub fn Turns::step(self : Turns, c : @ui.Ctx, list_rest : Double) -> Unit {
         self.shown[k] = self.wants.get(k).unwrap_or(!self.shown.get(k).unwrap_or(false))
         self.started[k] = at
       }
-      Send | Kept => ()
+      Send => ()
       Emits => self.started[emits_turn] = at
     }
   }

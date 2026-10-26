@@ -95,16 +95,8 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
               }
             _ =>
               match (options, thread) {
-                (Some(list), Some(th)) if list.length() > 0 => decision_options(c, src, here, m, th, list, resolved, on_pick=fn() {
-                    // the answer's row comes in first, in a turn kept for it now, they close in the next; the list
-                    // following its end for it, as for words sent (Decisions.tsx DecisionOptions' pick)
-                    match turns {
-                      Some(tu) => {
-                        tu.keep_turn(c)
-                        c.list_to_end("chat/" + here.station + "/" + here.session)
-                      }
-                      None => ()
-                    }
+                (Some(list), Some(th)) if list.length() > 0 => decision_options(c, src, here, m, th, list, resolved, on_pick=fn(i) {
+                    answered_here(c, here, m, list[i], @sf.options_label_at(c, "options/" + m.ts, i))
                   })
                 _ => ()
               }
@@ -166,6 +158,41 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
     )
   })
   |> ignore
+}
+
+///|
+/// Option `o` of post `m`'s card picked in its chat (its label laid out at `at`): the answer is the viewer's words sent
+/// from here, as from the composer (sfbase's sent.mbt, flight.mbt): in the list at once, quoting the post as the core's
+/// answer will, its words flying there from the option, the list following its end for them; the options close once
+/// they have landed (what is asked in its list after words sent waits for them). An option that closes the card says
+/// nothing: none. What it answers takes the row away again, should the answer fail.
+fn answered_here(
+  c : @ui.Ctx,
+  here : MessageHere,
+  m : Message,
+  o : Choice,
+  at : (Double, Double, Double, Double)?,
+) -> () -> Unit {
+  guard here.list is Some(l) && !o.closes else { return fn() {  } }
+  // (the post quoted as the core quotes it: decisions.ts quoteOf)
+  let quote : Map[String, Json] = {
+    "author": Json::string(if m.by.name != "" { m.by.name } else { "agent" }),
+    "text": Json::string(m.text),
+    "comment": Json::string(""),
+    "role": Json::string("agent"),
+  }
+  if m.ts != "" {
+    quote["ts"] = Json::string(m.ts)
+  }
+  let row = @sfbase.sent_local(l.rk, Some(here.view), o.label, [], quotes=[Json::object(quote)])
+  let draft = here.station + ":" + here.session
+  match at {
+    Some(at) => @sfbase.flight_from(c, draft, l.rk, row, o.label, at)
+    None => ()
+  }
+  // (gliding there while nothing flies to it)
+  c.list_to_end("chat/" + here.station + "/" + here.session, glide=@sfbase.flight_of(draft) is None)
+  fn() { @sfbase.sent_local_gone(l.rk, row) }
 }
 
 ///|
@@ -250,7 +277,8 @@ pub fn mine_to(here : MessageHere, assignee : String) -> Bool {
 ///|
 /// A post's options in one card, numbered (DecisionOptions: the library's options card, as wide as what it says);
 /// pressing one answers with it (`decision.answer`), the one being sent turning; settled, none pressed any more, the
-/// one picked as it was.
+/// one picked as it was. `on_pick`: told of the one picked (its place among them) first, what it answers what to do
+/// should answering fail.
 pub fn decision_options(
   c : @ui.Ctx,
   src : Source,
@@ -259,7 +287,7 @@ pub fn decision_options(
   thread : Double,
   options : Array[Choice],
   resolved : Bool,
-  on_pick? : () -> Unit = fn() {  },
+  on_pick? : (Int) -> () -> Unit = fn(_) { fn() {  } },
 ) -> Unit {
   let on = [
     ("station", here.station),
@@ -306,14 +334,21 @@ pub fn decision_options(
       Some(i) if !resolved => {
         let label = options[i].label
         // (the 奏 page sends the decision on its way first: DecisionOptions' onPick)
-        on_pick()
+        let failed = on_pick(i)
         c.tell("options/" + m.ts, fn() {
-          act(src, @sf.t("web-main.decisions.answerWhat", args=[("option", label)]), "", "decision.answer", {
-            "station": Json::string(here.station),
-            "thread": Json::number(thread),
-            "seq": Json::number(m.seq),
-            "option": Json::string(label),
-          })
+          act(
+            src,
+            @sf.t("web-main.decisions.answerWhat", args=[("option", label)]),
+            "",
+            "decision.answer",
+            {
+              "station": Json::string(here.station),
+              "thread": Json::number(thread),
+              "seq": Json::number(m.seq),
+              "option": Json::string(label),
+            },
+            failed~,
+          )
         })
       }
       _ => ()

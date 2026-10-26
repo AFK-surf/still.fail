@@ -3548,7 +3548,9 @@ pub fn options_card(
             )
             |> ignore
             c.box(w=Fill(1.0), fn() {
-              c.text(o.0, size=ot.label, weight=500, color=t.p.text, line=ot.label_line) |> ignore
+              let label = c.text(o.0, size=ot.label, weight=500, color=t.p.text, line=ot.label_line)
+              // (where its words are: what is said with it flies from there, options_label_at)
+              @motion.measure(c, label, options_label_key(key, i))
               if o.1 != "" {
                 c.text(o.1, size=ot.detail, color=t.p.muted, line=ot.detail_line) |> ignore
               }
@@ -3577,6 +3579,17 @@ pub fn options_card(
   })
   |> ignore
   picked
+}
+
+///|
+/// Where the label of option `i` of the card of options `key` (options_card's) was last laid out, in the window.
+pub fn options_label_at(c : @ui.Ctx, key : String, i : Int) -> (Double, Double, Double, Double)? {
+  @motion.measured_rect(c, options_label_key(key, i))
+}
+
+///|
+fn options_label_key(key : String, i : Int) -> String {
+  "options-label/" + key + "/" + i.to_string()
 }
 
 ///|

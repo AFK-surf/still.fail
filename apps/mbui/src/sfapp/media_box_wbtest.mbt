@@ -92,6 +92,7 @@ test "a strip sent flies to its picture's place in the message, letterboxed ther
     gone: @motion.Anim::new(1.0),
     carried: false,
     from_top: 640.0,
+    from_card: false,
   }
   send_flight.val = Some(f)
   let t = @ui.Tester::new(
@@ -161,6 +162,7 @@ test "an image sent while it goes up flies on to its place once it is up: its me
     gone: @motion.Anim::new(1.0),
     carried: false,
     from_top: 640.0,
+    from_card: false,
   }
   send_flight.val = Some(f)
   let t = @ui.Tester::new(

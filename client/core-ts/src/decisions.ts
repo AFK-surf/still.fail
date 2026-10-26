@@ -34,6 +34,8 @@ export function optionsShown(options: J): J[] {
     const detail = trimmed(get(o, "detail"));
     if (detail !== null) shown.detail = detail;
     if (get(o, "recommended") === true) shown.recommended = true;
+    // Answered with, the card closes without a message from the viewer (closes, decision.close): an app says nothing as sent.
+    if (get(o, "action") === "close") shown.closes = true;
     all.push(shown);
   }
   return [...all.filter((o) => o.recommended === undefined), ...all.filter((o) => o.recommended !== undefined)];

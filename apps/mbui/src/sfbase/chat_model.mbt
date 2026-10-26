@@ -94,6 +94,8 @@ pub(all) struct Choice {
   label : String
   detail : String
   recommended : Bool
+  /// picked, the card closes and no message of the viewer's comes of it
+  closes : Bool
 }
 
 ///|
@@ -106,6 +108,7 @@ pub fn choices_of(v : Json?, key : String) -> Array[Choice]? {
             label: text(Some(o), "label"),
             detail: text(Some(o), "detail"),
             recommended: flag(Some(o), "recommended"),
+            closes: flag(Some(o), "closes"),
           }
         }),
       )
