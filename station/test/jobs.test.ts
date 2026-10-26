@@ -196,7 +196,7 @@ describe("jobs", { concurrency: true }, () => {
     await until("it ends", () => r.state(job.id) !== "running");
     const ended = r.store.getJob(job.id)!;
     assert.equal(ended.state, "exited");
-    const usage = "usage: stillfail-job notify <words> | stillfail-job screen <command>...";
+    const usage = "usage: stillfail-job notify <words> | stillfail-job screen <command>... | stillfail-job show <command>...";
     assert.equal(tail(ended.log, 10), `${usage}\n${usage}\nsame`);
     // Made again (a station starting over the same directory), the link stays one.
     const bin = join(r.dir, "jobs", "bin");
@@ -267,6 +267,34 @@ describe("jobs", { concurrency: true }, () => {
       const old = r.jobs.start("s3", "old", `STILLFAIL_JOB_SCREEN= stillfail-job screen sh -c 'exit 5'; echo "old $?"`, r.work, null, false);
       await until("it ends", () => r.state(old.id) !== "running");
       assert.equal(tail(r.store.getJob(old.id)!.log, 5), "old 5");
+    } finally {
+      await door.close(0);
+    }
+  });
+
+  test("stillfail-job show: waits while another has the screen, then puts its window up holding nothing", { skip: WINDOWS && "a fifo for the gate" }, async () => {
+    const r = new Rig();
+    const door = await openAgentsDoor(
+      { port: 0 }, new McpEndpoint(() => undefined, []), (auth, body) => notifyEndpoint(r.jobs, auth, body), () => null, () => [],
+      (auth, body) => screenEndpoint(r.jobs, auth, body),
+    );
+    r.jobs.setNotifyUrl(door.url.replace(/\/mcp$/, "/jobs/notify"));
+    try {
+      const go = gate(r.dir);
+      const shots = r.jobs.start("s1", "shots", `stillfail-job screen sh -c "touch shots.in; ${go.wait}"; echo "shots $?"`, r.work, null, false);
+      await until("the shots have the screen", () => existsSync(join(r.work, "shots.in")));
+      // a window kept up for a person: it waits for the shots (who has it said), then stays up holding nothing
+      const vm = r.jobs.start("s2", "a VM to try", `stillfail-job show sh -c 'touch vm.up; ${FOREVER}'`, r.work, null, false);
+      await until("the window waits", () => tail(r.store.getJob(vm.id)!.log, 5).includes("waiting for the screen (shots ("));
+      assert.equal(existsSync(join(r.work, "vm.up")), false);
+      await go.open();
+      await until("the window is up", () => existsSync(join(r.work, "vm.up")));
+      // and holds nothing: another command has the screen at once
+      const more = r.jobs.start("s3", "more shots", `stillfail-job screen sh -c 'exit 0'; echo "more $?"`, r.work, null, false);
+      await until("it ends", () => r.state(more.id) !== "running");
+      assert.match(tail(r.store.getJob(more.id)!.log, 5), /more 0$/);
+      assert.equal(r.state(vm.id), "running");
+      await r.jobs.stop(vm.id);
     } finally {
       await door.close(0);
     }

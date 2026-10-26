@@ -98,3 +98,10 @@ export function parseLsof(text: string, port: number): string[] {
   }
   return found;
 }
+
+/// How long the input has been idle (ms) by what `ioreg -c IOHIDSystem -r -k HIDIdleTime` says (its first
+/// HIDIdleTime, in ns); none when it says none.
+export function idleOfIoreg(text: string): number | null {
+  const m = /"HIDIdleTime"\s*=\s*([0-9]+)/.exec(text);
+  return m === null ? null : Number(m[1]) / 1e6;
+}

@@ -48,6 +48,18 @@ waited 20 minutes and more in line, the CPUs a third busy, 2026-10-25.)
   for a minute is not waited for: the command runs, and the log says so.
 - Scripts that open windows ask for it themselves: apps/mbui's (`on_screen`, scripts/env.sh), around each app they
   run in a window; what they draw offscreen (scripts/film.sh, corners.sh, squeeze.sh) and the Tester's tests do not.
+- The screen is for a machine's work, done in minutes. A window put up for a person and left there (a virtual machine
+  to try, a simulator or an app to look at) is no claim on it: `stillfail-job show <command>…` waits as `screen` does,
+  so the window does not come up under another task's work, then gives the screen back at once and runs the command,
+  holding nothing. (A Mac VM for trying a new user's way in ran as a `screen` claim and held Studio's screen 23 hours,
+  every task with pictures to take in line behind it, 2026-10-27.)
+- While a person uses the screen (macOS: the machine's input, `ioreg`'s HIDIdleTime, idle less than a minute; someone
+  at it, or working it through still.fail's view of it), nothing more is given it: no window comes up under their
+  hand. What holds it goes on, and a command of a task that has it still gets it. Elsewhere no person is seen.
+- Waiting, a command and a task are told who has the screen: the task's name and id, its chat, for how long (the
+  answer's `who`, which `stillfail-job` prints, and `station_task`'s `queue.holder`), or that a person uses it.
+- A command that has held the screen 10 minutes while another waits has its agent told once (the screen is for work
+  done in minutes; a window kept up is `show`'s). Nothing is taken from it: what it is for is its agent's to say.
 
 ## Memory (jobs/memory.ts)
 

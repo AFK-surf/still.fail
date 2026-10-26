@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { after, describe, test } from "node:test";
 import { type Clock, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
-import { BUSY_SPAN_MS, Busy, type Claim, LOOK_MS, RAMP_MS, type Pressure, claimsOf, cpusFor, pick, place, served } from "../src/jobs/admit.ts";
+import { BUSY_SPAN_MS, Busy, type Claim, HELD_LONG_MS, LOOK_MS, RAMP_MS, type Pressure, claimsOf, cpusFor, overstaying, pick, place, served } from "../src/jobs/admit.ts";
 import { Jobs, type Machine, STOP_LOOK_MS } from "../src/jobs/jobs.ts";
 import { signalGroup } from "../src/ops/group.ts";
 import { Store } from "../src/store/store.ts";
@@ -68,12 +68,33 @@ describe("which task starts", () => {
 });
 
 test("the screen goes to the first command that asked while no task has it, and at once to one whose task has it", () => {
-  const c = (job: string, pid: number, held = false): Claim => ({ job, pid, at: pid, held });
-  assert.deepEqual(served([c("a", 1), c("b", 2), c("a", 3)], new Set()), [c("a", 1, true), c("b", 2), c("a", 3, true)]);
-  assert.deepEqual(served([c("b", 2, true), c("a", 3)], new Set()), [c("b", 2, true), c("a", 3)], "b's until it gives it back");
-  assert.deepEqual(served([c("a", 1), c("t", 2)], new Set(["t"])), [c("a", 1), c("t", 2, true)], "inside a task that has it throughout");
+  const c = (job: string, pid: number, held = false, since?: number): Claim => ({ job, pid, at: pid, held, ...(since === undefined ? {} : { since }) });
+  assert.deepEqual(served([c("a", 1), c("b", 2), c("a", 3)], new Set(), 9), [c("a", 1, true, 9), c("b", 2), c("a", 3, true, 9)]);
+  assert.deepEqual(served([c("b", 2, true), c("a", 3)], new Set(), 9), [c("b", 2, true), c("a", 3)], "b's until it gives it back");
+  assert.deepEqual(served([c("a", 1), c("t", 2)], new Set(["t"]), 9), [c("a", 1), c("t", 2, true, 9)], "inside a task that has it throughout");
   assert.deepEqual(claimsOf([c("b", 2, true), c("a", 3), c("c", 4)]), { held: true, asked: 3 });
   assert.deepEqual(claimsOf([]), { held: false, asked: null });
+});
+
+test("while a person uses the screen nothing more is given it; what has it goes on, and a command of its own still gets it", () => {
+  const c = (job: string, pid: number, held = false, since?: number): Claim => ({ job, pid, at: pid, held, ...(since === undefined ? {} : { since }) });
+  assert.deepEqual(served([c("a", 1), c("b", 2)], new Set(), 9, true), [c("a", 1), c("b", 2)], "none given");
+  assert.deepEqual(served([c("a", 1, true, 5), c("a", 3)], new Set(), 9, true), [c("a", 1, true, 5), c("a", 3, true, 9)], "a's own");
+  // the queue's tasks that use the screen throughout wait for the person, said so; the others start
+  const screen = w("s", "x", 1, true);
+  assert.deepEqual(pick([screen], [], { busy: 0, pressure: "normal", person: true }, 0, null, never), { wait: "person" });
+  assert.deepEqual(pick([screen, w("p", "y", 2)], [], { busy: 0, pressure: "normal", person: true }, 0, null, never), { start: w("p", "y", 2) });
+  // another task's having it says so before the person
+  assert.deepEqual(pick([screen], [], { busy: 0, pressure: "normal", person: true }, 0, null, never, { held: true, asked: null }), { wait: "screen" });
+});
+
+test("a command that has held the screen long while another waits is told; none is while none waits", () => {
+  const c = (job: string, pid: number, held: boolean, since?: number): Claim => ({ job, pid, at: 0, held, ...(since === undefined ? {} : { since }) });
+  const long = c("vm", 1, true, 0);
+  assert.deepEqual(overstaying([long], HELD_LONG_MS), [], "no one waits");
+  assert.deepEqual(overstaying([long, c("pic", 2, false)], HELD_LONG_MS), [long]);
+  assert.deepEqual(overstaying([long, c("pic", 2, false)], HELD_LONG_MS - 1), [], "not long yet");
+  assert.deepEqual(overstaying([c("old", 3, true), c("pic", 2, false)], HELD_LONG_MS), [c("old", 3, true)], "an earlier station's: since it asked");
 });
 
 test("how busy the CPUs were is over the last seconds only, and unknown until they span enough of them", () => {
@@ -135,7 +156,7 @@ async function until(_what: string, check: () => boolean) {
 }
 
 /// A machine whose CPUs and memory the test says: `busy` the share since the last look.
-function machine(state: { busy: number; pressure: Pressure }): Machine {
+function machine(state: { busy: number; pressure: Pressure; idle?: number }): Machine {
   let [b, t] = [0, 0];
   return {
     cpus: () => 8,
@@ -145,10 +166,11 @@ function machine(state: { busy: number; pressure: Pressure }): Machine {
       return [b, t];
     },
     pressure: async () => state.pressure,
+    inputIdle: async () => state.idle ?? null,
   };
 }
 
-function rig(state: { busy: number; pressure: Pressure }, store?: Store, data?: string) {
+function rig(state: { busy: number; pressure: Pressure; idle?: number }, store?: Store, data?: string) {
   const dir = data ?? mkdtempSync(join(tmpdir(), "admit-test-"));
   if (data === undefined) dirs.push(dir);
   const work = join(dir, "work");
@@ -277,7 +299,10 @@ describe("the queue", { skip: WINDOWS && "jobs' groups and sh" }, () => {
     await looks(r.clock, () => r.store.getJob(tests.id)!.queued !== true);
     const p = aShell();
     const token = r.store.getJob(tests.id)!.token;
-    assert.deepEqual(r.jobs.screenAsked(token, "take", p.pid!), { screen: "waiting", place: 1 });
+    const asked = r.jobs.screenAsked(token, "take", p.pid!);
+    assert.equal(asked.screen, "waiting");
+    // (who has it, said: the task, its chat, how long)
+    assert.match("who" in asked ? asked.who ?? "" : "", /^shots \(remote_shots\) of chat remote:a, for \d+ min$/);
     // The task that has the screen throughout: its own commands have it at once.
     assert.deepEqual(r.jobs.screenAsked(r.store.getJob(shots.id)!.token, "take", aShell().pid!), { screen: "yours" });
     const later = r.start("later", "c", "true", true);
@@ -301,12 +326,49 @@ describe("the queue", { skip: WINDOWS && "jobs' groups and sh" }, () => {
     await r.jobs.shutdown();
     const again = rig(state, r.store, r.dir);
     again.jobs.relaunch();
-    assert.deepEqual(again.jobs.screenAsked(two.token, "take", p2.pid!), { screen: "waiting", place: 1 }, "the next station knows who has it");
+    const waiting = again.jobs.screenAsked(two.token, "take", p2.pid!);
+    assert.equal(waiting.screen, "waiting", "the next station knows who has it");
+    assert.match("who" in waiting ? waiting.who ?? "" : "", /^one \(.+\) of chat s1, for \d+ min$/);
     p1.kill("SIGKILL");
     await until("it is gone", () => p1.exitCode !== null || p1.signalCode !== null);
     assert.deepEqual(again.jobs.screenAsked(two.token, "take", p2.pid!), { screen: "yours" });
     assert.throws(() => again.jobs.screenAsked("nope", "take", p2.pid!), /unknown job token/);
   });
+});
+
+test("while a person uses the machine a command waits for the screen, told so; once they leave it has it", async () => {
+  const state = { busy: 0, pressure: "normal" as Pressure, idle: 5_000 };
+  const r = rig(state);
+  const one = r.jobs.start("s1", "one", FOREVER, join(r.dir, "work"), null, false);
+  const p = aShell();
+  // (the first ask reads the machine's input: the second answers by it)
+  r.jobs.screenAsked(one.token, "take", p.pid!);
+  await sleep(5);
+  r.jobs.screenAsked(one.token, "give", p.pid!);
+  const asked = r.jobs.screenAsked(one.token, "take", p.pid!);
+  assert.deepEqual(asked, { screen: "waiting", place: 1, who: "a person using this machine" });
+  state.idle = 10 * 60_000;
+  // (read as it is asked, apart from the answer: the next ask, a second later, has it)
+  await sleep(5);
+  r.jobs.screenAsked(one.token, "take", p.pid!);
+  await sleep(5);
+  assert.deepEqual(r.jobs.screenAsked(one.token, "take", p.pid!), { screen: "yours" });
+});
+
+test("a command that holds the screen long while another waits has its agent told, once", async () => {
+  const state = { busy: 0, pressure: "normal" as Pressure };
+  const r = rig(state);
+  const vm = r.jobs.start("s1", "vm", FOREVER, join(r.dir, "work"), null, false);
+  const pics = r.jobs.start("s2", "pictures", FOREVER, join(r.dir, "work"), null, false);
+  const [p1, p2] = [aShell(), aShell()];
+  const t0 = r.store.now();
+  assert.deepEqual(r.jobs.screenAsked(vm.token, "take", p1.pid!), { screen: "yours" });
+  r.store.now = () => t0 + HELD_LONG_MS;
+  r.jobs.screenAsked(pics.token, "take", p2.pid!);
+  r.jobs.screenAsked(pics.token, "take", p2.pid!);
+  const said = r.told.filter((t) => t.includes("has held this machine's screen"));
+  assert.equal(said.length, 1);
+  assert.match(said[0]!, /stillfail-job show/);
 });
 
 /// A process of the test's for a command that asks for the screen (its shell, as `stillfail-job screen`'s): there until
