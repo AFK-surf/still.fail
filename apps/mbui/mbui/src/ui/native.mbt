@@ -34,6 +34,8 @@ pub struct NativeView {
   /// the frame it was last painted in, and where: content x y w h, clip x0 y0 x1 y1
   priv mut painted : Int
   priv at : FixedArray[Double]
+  /// its hole as painted there (x y w h; w 0: none), to follow it to where the frame took it after (Ctx::follow_holes)
+  priv hole : FixedArray[Double]
   /// what the host was last told: the same 8 and shown
   priv told : FixedArray[Double]
   priv mut told_shown : Bool
@@ -210,6 +212,7 @@ fn NativeView::make(
     state: 0,
     painted: -1,
     at: FixedArray::make(9, 0.0),
+    hole: FixedArray::make(4, 0.0),
     told: FixedArray::make(9, -1.0),
     told_shown: false,
     closed: false,
@@ -714,6 +717,12 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
       sh / ch,
     )
     self.inst[(self.ninst - 1) * inst_size + 20] = (@hostapi.view_tex_base + v.id).to_double()
+    v.hole[0] = sx
+    v.hole[1] = sy
+    v.hole[2] = sw
+    v.hole[3] = sh
+  } else {
+    v.hole[2] = 0.0
   }
   // (by build: a frame built again paints again, and what the last build did not paint is not shown)
   v.painted = self.build_no
@@ -758,6 +767,7 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
   if open_views.length() == 0 {
     return
   }
+  self.follow_holes()
   for v in open_views.copy() {
     if v.closed {
       continue
@@ -857,6 +867,48 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
         }
       None => ()
     }
+  }
+}
+
+///|
+/// Each view painted this frame put where its hole ended up: what was painted is moved after (a look on what holds it,
+/// as a list's rows sliding while words sent fly; a row drawn again lower), its hole with it; the view, placed where its
+/// node was laid out, stayed there, out of step with its hole. The hole's move (and scale) taken to the view's content
+/// and clip, the clip cut by where the hole's own clip was taken.
+fn Ctx::follow_holes(self : Ctx) -> Unit {
+  let at : Map[Int, Int] = {}
+  let a = self.inst
+  for k in 0..<self.ninst {
+    let b = k * inst_size
+    if a[b + 5] == 9.0 {
+      at[a[b + 20].to_int() - @hostapi.view_tex_base] = b
+    }
+  }
+  if at.is_empty() {
+    return
+  }
+  for v in open_views {
+    if v.closed || v.painted != self.build_no || v.hole[2] <= 0.0 || v.hole[3] <= 0.0 {
+      continue
+    }
+    let b = match at.get(v.id) {
+      Some(b) => b
+      None => continue
+    }
+    let (kx, ky) = (a[b + 2] / v.hole[2], a[b + 3] / v.hole[3])
+    let (bx, by) = (a[b] - kx * v.hole[0], a[b + 1] - ky * v.hole[1])
+    if kx == 1.0 && ky == 1.0 && bx == 0.0 && by == 0.0 {
+      continue
+    }
+    v.at[0] = kx * v.at[0] + bx
+    v.at[1] = ky * v.at[1] + by
+    v.at[2] = kx * v.at[2]
+    v.at[3] = ky * v.at[3]
+    v.at[4] = dmax(kx * v.at[4] + bx, a[b + 16])
+    v.at[5] = dmax(ky * v.at[5] + by, a[b + 17])
+    v.at[6] = dmin(kx * v.at[6] + bx, a[b + 18])
+    v.at[7] = dmin(ky * v.at[7] + by, a[b + 19])
+    v.at[8] = v.at[8] * dmin(kx, ky)
   }
 }
 
