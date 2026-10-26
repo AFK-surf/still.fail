@@ -55,7 +55,6 @@ let wide_heading : (Double, Double) = (14.0, 22.0)
 ///|
 fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
   match route {
-    Stations => stations_page(c, core, here)
     Profiles(only) => profiles_page(c, core, here, only)
     AdbShare(a) => adb_page(c, core, here, a)
     NewProfile(a) => new_profile_page(c, core, here, a)
@@ -66,7 +65,7 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     // setting_route
     Home | Appearance | Fonts | BarSettings | Changelog | About | Memories | Memory(_) | AutoDecisions | UsagePrices(_) | Usage | PickModels(_, _) | ProfileModels(_, _) | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) => ()
     // the web's desktop pages, one for every frame (src/sfpages), drawn by the frame's setting_route too
-    Shortcuts | Notifications | Permissions | Archiving | StationArchiving(_) | LocalStation | MemoryDoc(_, _, _) | AutoCompletion | AutoPolicy(_) | Archive => ()
+    Shortcuts | Notifications | Permissions | Archiving | StationArchiving(_) | LocalStation | MemoryDoc(_, _, _) | AutoCompletion | AutoPolicy(_) | Archive | Stations => ()
     RunSettings(s, key) => run_settings_page(c, core, s, key)
   }
 }

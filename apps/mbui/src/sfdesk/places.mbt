@@ -95,7 +95,7 @@ fn place_split(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit
         if place == "profiles" {
           profiles_first(c, core, @settings.here_of(core, w.id, w.name), stations_listed(src, w))
         } else {
-          stations_first(c, core, @settings.here_of(core, w.id, w.name), src, w)
+          @sfpages.stations_first(c, src, core, @settings.here_of(core, w.id, w.name), w, @sf.no_frame)
         }
     }
   })
@@ -112,43 +112,21 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     side_top(c)
     nav_action(c, "stations/add", @sf.t("web-pages.settings.stations.add"), @settings.place_action(core, here, "stations"))
     side_scroll(c, "stations-nav/" + w.id, fn() {
-      let listed = stations_listed(src, w)
-      for i, s in listed {
-        let s = Some(s)
-        let address = text(s, "station")
-        let on = picked == Some(Route::Station(address))
-        station_side_row(c, src, s, on, i + 1 < listed.length(), fn() {
+      // (sfpages' stations.mbt: the list standing in the side column, the one picked its page beside it)
+      let chosen = match picked {
+        Some(Route::Station(a)) => Some(a)
+        _ => None
+      }
+      for line in @sfpages.stations_lines(c, src, core, w, Side, chosen, fn(address) {
           place_pick["stations"] = Route::Station(address)
           @sfbase.show_chosen()
-        })
+        }) {
+        line()
       }
     })
   })
   |> ignore
 }
-
-///|
-/// A station's row (StationRow): its mark and name, how it is at the end (@sfpages.station_state); while up, what is
-/// left of its CPU, memory and disk and how this device reaches it (@sfpages.station_figures); those two lines' room
-/// kept while it is away, every station's row as high.
-fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, more : Bool, pick : () -> Unit) -> Unit {
-  let t = @sf.theme()
-  if nav_item(
-      c,
-      "stations/" + text(s, "station"),
-      on,
-      fn() { @sf.station_icon(c, text(s, "emoji"), text(s, "icon"), nav_mark_side, t.p.text) },
-      fn() { nav_title(c, text(s, "name")) },
-      end=fn() { @sfpages.station_state(c, s) },
-      lines=fn() { @sfpages.station_figures(c, src, s) },
-      keep_lines=2,
-      more~,
-    ) {
-    pick()
-  }
-}
-
-// ── Profile ─────────────────────────────────────────────────────────────
 
 ///|
 /// The profiles' sidebar (ProfilesNav): 添加 Profile, a section each kind of account, a row an account; then each
@@ -307,36 +285,6 @@ let place_fill : @ui.TextStyle = @ui.text_style(w=Cut)
 /// 使用此账号 (ProfilesNav MachineLoginRow): the accent's words.
 // kept across runs: a value (no field of it changes)
 let place_use : @ui.TextStyle = @ui.text_style(color=AccentText)
-
-///|
-/// No station picked: while they are read, said so; none in the workspace, the first to add (its scene, 添加 station).
-fn stations_first(c : @ui.Ctx, core : Core, here : Here, src : Source, w : Workspace) -> Unit {
-  let t = @sf.theme()
-  let read = (src.topic)("stations", { "scope": Json::string(w.id) }).value is Some(_)
-  desk_page(c, core, "stations-first", "Station", [
-    fn() {
-      if !read {
-        @sf.waiting(c, shape=Cards, note={ reading: true, text: @sf.t("common.readingStations"), failing: [] })
-        return
-      }
-      @sf.first_one(
-        c,
-        @sf.t("web-pages.settings.stations.add"),
-        art=fn() { @sf.drawable(c, if t.dark { "illus_no_station_dark" } else { "illus_no_station" }, pl_art_w) |> ignore },
-        fn() {
-          // (its managers': the others wait for one)
-          match @settings.place_action(core, here, "stations") {
-            Some(add) =>
-              if @sf.button(c, @sf.t("web-pages.settings.stations.add"), key="stations-first/add", tone=Primary, icon="plus") {
-                add(Of(c.id("stations-first/add")))
-              }
-            None => c.text(@sf.t("web-pages.settings.stations.noneYet"), style=desk_muted_line) |> ignore
-          }
-        },
-      )
-    },
-  ])
-}
 
 ///|
 /// Not one profile yet (RuntimeSettings' first): what a profile is, then each station in a row, where one is added (an

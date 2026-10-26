@@ -51,9 +51,9 @@ pub fn nav_row(
 /// (Sidebar.css.ts navRow `& + &`: 2 over the one after; list_more), so the row
 /// pointed at and the page in view never touch and read as one block. The last of a run, a heading under it, as it
 /// is: the heading's room is its own.
-pub fn nav_apart(c : @ui.Ctx, more : Bool, row : () -> Unit) -> Unit {
+pub fn nav_apart(c : @ui.Ctx, more : Bool, row : () -> Unit, at? : ListAt = Side) -> Unit {
   if more {
-    c.box(style=list_more(Side), row) |> ignore
+    c.box(style=list_more(at), row) |> ignore
   } else {
     row()
   }
@@ -182,8 +182,9 @@ pub let nav_mark_side : Double = 16.0
 /// row, laid out as a chat's (list_row): its `mark` beside its first line, its `title` (nav_title) with what is at
 /// that line's `end` (muted, never cut: the title gives way), then the `lines` under them (list_row_line each; `keep_lines` of
 /// them always, empty where it says none: list_row `lines`); the pointer's
-/// ground on hover, the selected one's when it is the page in view; `more`, another row under it (nav_apart). True
-/// when pressed.
+/// ground on hover, the selected one's when it is the page in view; `more`, another row under it (nav_apart). Where
+/// its list stands (`at`): a side column's, or across the whole page (its own page of the list: its words in and its
+/// ground square so, list_row). True when pressed.
 pub fn nav_item(
   c : @ui.Ctx,
   key : String,
@@ -194,14 +195,15 @@ pub fn nav_item(
   lines? : () -> Unit,
   keep_lines? : Int = 0,
   more? : Bool = false,
+  at? : ListAt = Side,
 ) -> Bool {
   let id = c.id(key)
   let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), on)
-  nav_apart(c, more, fn() {
+  nav_apart(c, more, at~, fn() {
     list_row(
       c,
       id,
-      Side,
+      at,
       ground,
       mark~,
       fn() {

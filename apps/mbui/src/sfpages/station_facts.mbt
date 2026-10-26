@@ -1,5 +1,5 @@
 // What a station's row says of it wherever the workspace's stations are listed (StationsNav.tsx StationRow): the
-// stations' sidebar (sfdesk places.mbt station_side_row) and where a new chat runs (new_chat.mbt station_rows), the
+// stations' list (stations.mbt) and where a new chat runs (new_chat.mbt station_rows), the
 // same in both. The row itself (its mark, its name, its ground) is the list's or the panel's.
 
 ///|
