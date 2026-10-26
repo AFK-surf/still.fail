@@ -8,12 +8,6 @@
 pub let close_gap : @motion.Spec = @motion.spring(stiffness=350.0, threshold=0.002, delay=100.0)
 
 ///|
-/// The same spring with no wait: what changes under a post as the viewer's answer comes in (Turns::with_answer), on its
-/// moment, so the answer's room and theirs move as one.
-// kept across runs: a curve, never written
-pub let close_with_answer : @motion.Spec = @motion.spring(stiffness=350.0, threshold=0.002)
-
-///|
 /// How long the archive buttons take to come and go (Chat.kt ArchiveEase's 280 ms), 忽略 too.
 pub let archive_ms : Double = 280.0
 
