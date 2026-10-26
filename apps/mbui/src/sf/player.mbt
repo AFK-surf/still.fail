@@ -607,9 +607,11 @@ fn picture_place(
   w : Double,
   h : Double,
   still : String,
+  top? : Double = 0.0,
+  foot? : Double = 0.0,
 ) -> (Double, Double, Double, Double) {
   let z = v.zoom
-  z.boxed(w, h)
+  z.boxed(w, h - top - foot)
   if s.width > 0.0 && s.height > 0.0 {
     z.natural(s.width, s.height)
   } else {
@@ -624,9 +626,22 @@ fn picture_place(
     return p.picture_rect(s, w, h)
   }
   match z.rect() {
-    Some(r) => r
+    Some((x, y, pw, ph)) => (x, y + top, pw, ph)
     None => p.picture_rect(s, w, h)
   }
+}
+
+///|
+/// How far in from the stage's top and foot a film's picture is fitted (`top`, `foot`): laid out wider than Small,
+/// clear of the bar along the top and of the controls over the foot (and of the system's bars where they are over the
+/// window), so neither ever hides an edge of it (a screen's recording looked at closely, its time dragged along); it
+/// stays where it is as they come and go. Laid out Small (a phone's) edge to edge, its controls over it.
+pub fn player_room(width : Double) -> (Double, Double) {
+  if layout(width) is Small {
+    return (0.0, 0.0)
+  }
+  let (top, foot) = (viewer_host().room)()
+  (viewer_bar_h + top, media_bar_h + media_bar_in + foot)
 }
 
 ///|
@@ -892,6 +907,7 @@ fn desk_player(
     p.wake()
   }
   let z = v.zoom
+  let (room_top, room_foot) = player_room(c.width)
   // the keys (see the file's head)
   let char = fn(ch : Char) { c.key_pressed(@ui.key_of_char(ch)) }
   let shifted = fn(ch : Char) {
@@ -1000,7 +1016,7 @@ fn desk_player(
     if picture && z.nw > 0.0 && (wx != 0.0 || wy != 0.0) {
       if (mods & (@ui.wheel_mod_ctrl | @ui.wheel_mod_cmd)) != 0 {
         let fine = (mods & @ui.wheel_mod_ctrl) != 0 && wy.abs() < player_pinch_step
-        z.zoom_to(z.scale * @dmath.exp(-wy * (if fine { player_pinch_rate } else { player_wheel_rate })), px, py, false)
+        z.zoom_to(z.scale * @dmath.exp(-wy * (if fine { player_pinch_rate } else { player_wheel_rate })), px, py - room_top, false)
       } else if z.zoomed() {
         if (mods & @ui.wheel_mod_shift) != 0 && wx == 0.0 {
           z.pan(-wy, 0.0)
@@ -1014,7 +1030,7 @@ fn desk_player(
         let w = dmax(desk_none, c.width - panel)
         match p.native() {
           Some(n) if n.here() => {
-            let (x, y, pw, ph) = picture_place(v, p, s, w, c.height, still)
+            let (x, y, pw, ph) = picture_place(v, p, s, w, c.height, still, top=room_top, foot=room_foot)
             v.placed = Some((x, y, pw, ph))
             c.native(n, content=Some((x, y, pw, ph))) |> ignore
             player_still(c, n, still, x, y, pw, ph)
@@ -2113,7 +2129,7 @@ let desk_cue_words : @ui.TextStyle = @ui.text_style(size=Title, color=OnVeil, ce
 ///|
 /// The controls: 16 off the window's foot, in the middle of what the list leaves.
 // kept across runs: a value (no field of it changes)
-let desk_controls_place : @ui.Style = @ui.css("w=Full h=Full pb=S4 justify=JEnd")
+let desk_controls_place : @ui.Style = @ui.css("w=Full h=Full justify=JEnd").then(@ui.style(pb=room(media_bar_in)))
 
 ///|
 // kept across runs: a value (no field of it changes)
