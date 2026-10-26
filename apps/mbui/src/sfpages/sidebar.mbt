@@ -14,9 +14,12 @@
 /// row's faces' rings are cut in), what stands at a list's top before its words and rows (`before`) and after its
 /// words (`after`), each said for a list's filter and its view; the lists on the track after the three (each drawn the
 /// pane's whole), and which of all of them is shown (0 all, 1 mine, 2 watching, then the others'); where the lists
-/// stand (`at`: a side column's, their rows in and rounded, or across the whole screen: @sf.ListAt).
+/// stand (`at`: a side column's, their rows in and rounded, or across the whole screen: @sf.ListAt); how far down
+/// what is over them covers the box (`under`: the bar's foot, the room `top` keeps under it aside), what is tucked over
+/// a list's rows going out of view under it.
 pub(all) struct ListsFrame {
   top : Double
+  under : Double
   foot : Double
   inset : Double
   ground : Int64
@@ -39,7 +42,7 @@ pub(all) struct ListPart {
 ///|
 /// A frame's lists with nothing of the frame's own in them, standing `at`.
 pub fn bare_lists(top : Double, foot : Double, inset : Double, ground : Int64, shown : Int, at : @sf.ListAt) -> ListsFrame {
-  { top, foot, inset, ground, before: fn(_, _) { [] }, after: fn(_, _) { [] }, others: [], shown, at }
+  { top, under: top, foot, inset, ground, before: fn(_, _) { [] }, after: fn(_, _) { [] }, others: [], shown, at }
 }
 
 ///|
@@ -318,7 +321,8 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
     |> ignore
   })
   |> ignore
-  // the list's first time with its rows: at its first, what is tucked over it out of view, there once scrolled to
+  // the list's first time with its rows: what is tucked over them out of view, its foot at the foot of what covers the
+  // list (frame.under: a phone's top bar, not the room under it, where its rounded foot showed), there once scrolled to
   if !placed.contains(key) && view is Some(_) {
     placed[key] = true
     let mut at = -1
@@ -329,7 +333,7 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
       }
     }
     if at >= 0 {
-      c.list_scroll_to(key, at + 1, offset=-frame.top)
+      c.list_scroll_to(key, at + 1, offset=-(frame.under + tucked_foot))
     }
   }
 }

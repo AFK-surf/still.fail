@@ -225,9 +225,13 @@ fn search_field_room(band : @sf.ChatList) -> @ui.Style {
 }
 
 ///|
-/// The field at the list's top: 6 under it (how far in: search_field).
+/// The field at the list's top: 6 under it (how far in: search_field), what is under it when it is tucked over the
+/// rows (sidebar.mbt: its foot out of view under the bar with it).
 // kept across runs: a value (no field of it changes)
-let search_field_line : @ui.Style = @ui.css("w=Full pb=S1_5")
+let search_field_line : @ui.Style = @ui.css("w=Full").then(@ui.style(pb=@sf.room_of(tucked_foot)))
+
+///|
+let tucked_foot : Double = 6.0
 
 ///|
 /// Its words: the band's, muted (what to do in it, not yet done).

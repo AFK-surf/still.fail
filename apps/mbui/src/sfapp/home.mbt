@@ -24,6 +24,8 @@ fn home_page(
   let frame : @sfpages.ListsFrame = {
     // under the top bar, the status bar's height and its own (Home.kt padding: topBar + 8); over the bottom bar
     top: status_top() + bar_h + 8.0,
+    // (the bar's foot: what is tucked over the rows goes under it)
+    under: top_bar_h(),
     foot: nav_foot() + bar_room_now(),
     // (the search's bar under the status bar: sfpages' search.mbt)
     inset: status_top(),
