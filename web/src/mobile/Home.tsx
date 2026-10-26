@@ -372,8 +372,14 @@ const ChatPane = memo(function ChatPane({ chats, filter, onSearch }: { chats: To
   const pane = useRef<HTMLDivElement>(null);
   const made = useVirtualModel(`home:${scope}:${filter}`, 0, false);
   // Navigation starts at its head, unlike a conversation which follows its newest message.
-  const opened = useRef(false);
-  if (!opened.current) { made.model.goto("intro", "start"); opened.current = true; }
+  const opened = useRef<typeof made | null>(null);
+  if (opened.current !== made) {
+    // The intro can finish measuring before chats arrive. Even when it fits entirely, Home must keep its head
+    // rather than begin following the end of the list that arrives next.
+    made.model.reads(true);
+    made.model.goto("intro", "start");
+    opened.current = made;
+  }
   const content = useMemo(() => {
     const items: Item[] = [{ key: "intro", estimate: 100 }];
     const drawn = new Map<string, ReactNode>();
