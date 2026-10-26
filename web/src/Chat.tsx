@@ -61,6 +61,7 @@ import { after, claimReserved, listQueue, queueRow } from "./listQueue.ts";
 import { thumbId } from "./viewerFlight.ts";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { failure, useToast, useAct } from "@stillfail/ui/toast.tsx";
+import { clock } from "@stillfail/ui/viewer/playing.ts";
 import { MessageDecision } from "./Decisions.tsx";
 import { Settles } from "./settling.tsx";
 import { AgentHover, ChatAgentKeys, ChatAgents } from "./AgentCard.tsx";
@@ -1535,7 +1536,7 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
           </span>
           <span className={css.msgVideoName}>{download?.active
             ? <>{download.statusText}<Progress part={download.progress} label={download.statusText} className={css.msgVideoBar} /></>
-            : file.name}</span>
+            : <span className={css.msgVideoLine}><span>{file.name}</span>{file.duration ? <span>{clock(file.duration / 1000)}</span> : null}</span>}</span>
         </button></Tip>
         {preview}
       </>

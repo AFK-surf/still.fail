@@ -635,6 +635,13 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
       </RDialog.Content>
     );
   }
+  // Which of how many, its size, its kind; an image's size in pixels as its message says it (the station read it from
+  // its header).
+  const meta = [
+    `${count > 1 && at >= 0 ? `${at + 1} / ${count} · ` : ""}${fileSize(file.size)}`,
+    kind && KIND_LABEL[kind as PreviewKind] ? kindLabel(kind as PreviewKind) : null,
+    kind === "image" && file.width && file.height ? `${file.width}×${file.height}` : null,
+  ].filter(Boolean).join(" · ");
   return (
     <RDialog.Content ref={content} className={css2.fp} data-kind={kind ?? undefined} data-docked={docked || undefined} data-zoom-root="" aria-describedby={undefined} data-awake={awake || coming !== undefined || marking || undefined}
       // A mouse wakes the bars by moving; a finger has no hover, and a tap on the file shows or hides them.
@@ -655,7 +662,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
           // A picture: gone with the rest as the pointer rests (back as it moves); what is read down: as it is read down.
           hidden={kind === "image" ? !(awake || coming !== undefined || marking) : barOnScroll.hidden}
           name={<RDialog.Title asChild><span>{file.name}</span></RDialog.Title>}
-          meta={`${count > 1 && at >= 0 ? `${at + 1} / ${count} · ` : ""}${fileSize(file.size)}${kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}`}
+          meta={meta}
           tools={<>
             {coming !== undefined && <FileComing got={coming} size={file.size} inBar />}
             {controls}
@@ -671,7 +678,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
         onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; onBar.current = false; wake(); }}>
         <div className={css2.fpTitle}>
           <Tip label={file.path}><RDialog.Title className={css2.fpName}>{file.name}</RDialog.Title></Tip>
-          <span className={css2.fpMeta}>{count > 1 && at >= 0 ? `${at + 1} / ${count} · ` : ""}{fileSize(file.size)}{kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}</span>
+          <span className={css2.fpMeta}>{meta}</span>
         </div>
         {coming !== undefined && <FileComing got={coming} size={file.size} inBar />}
         {controls}

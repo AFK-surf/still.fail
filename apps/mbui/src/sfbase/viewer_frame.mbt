@@ -67,8 +67,9 @@ pub fn vf_kind_label(kind : PKind?) -> String {
 }
 
 ///|
-/// The line under the name (FilePreview.tsx meta): which of how many, its size, its kind. (A film's and a song's are
-/// their player's bar's: player.mbt.)
+/// The line under the name (FilePreview.tsx meta): which of how many, its size, its kind; an image's size in pixels
+/// after them, as its message says it (the station read it from its header), else as its whole picture was decoded.
+/// (A film's and a song's are their player's bar's: player.mbt.)
 pub fn vf_meta(vw : Viewer, src : Source) -> String {
   let (at, count) = viewer_place(vw, src)
   let parts : Array[String] = []
@@ -77,6 +78,19 @@ pub fn vf_meta(vw : Viewer, src : Source) -> String {
   let kind = vf_kind_label(vw.shown_kind())
   if kind != "" {
     parts.push(kind)
+  }
+  if vw.shown_kind() == Some(KImage) {
+    let (w, h) = if vw.file.width > 0.0 && vw.file.height > 0.0 {
+      (vw.file.width, vw.file.height)
+    } else if vw.image != "" {
+      // (its whole picture's, not what stands in for it meanwhile)
+      @ui.image_natural(vw.image).unwrap_or((0.0, 0.0))
+    } else {
+      (0.0, 0.0)
+    }
+    if w > 0.0 && h > 0.0 {
+      parts.push("\{w.to_int()}×\{h.to_int()}")
+    }
   }
   parts.join(" · ")
 }

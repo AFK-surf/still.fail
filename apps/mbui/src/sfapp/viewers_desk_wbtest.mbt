@@ -34,7 +34,8 @@ test "desk: an image on the canvas under the bar, back to its chat by name, whic
   let t = desk_tester("chat-preview-step")
   assert_true(@sfdesk.is_wide(t.ctx()))
   assert_true(t.find("界面草图.png") is Some(_))
-  assert_true(t.find("1 / 2 · 18 KB · 图片") is Some(_))
+  // (its size in pixels as its message says it)
+  assert_true(t.find("1 / 2 · 18 KB · 图片 · 600×400") is Some(_))
   // the zoom's tools in the bar, its close the way back (named by the chat)
   assert_true(t.find("100%") is Some(_))
   assert_true(t.find("1:1") is Some(_))
@@ -42,7 +43,7 @@ test "desk: an image on the canvas under the bar, back to its chat by name, whic
   // → the one after
   t.key(@ui.key_code_right)
   assert_eq(viewer.val.unwrap().file.name, "第二版.png")
-  assert_true(t.find("2 / 2 · 21 KB · 图片") is Some(_))
+  assert_true(t.find("2 / 2 · 21 KB · 图片 · 400×560") is Some(_))
   // Esc: gone at once, only drawn fading out
   t.key(@ui.key_escape)
   assert_true(viewer.val is None)

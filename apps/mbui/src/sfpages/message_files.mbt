@@ -273,7 +273,8 @@ fn image_box_style(w : Double, h : Double, shown : Bool) -> @ui.Style {
 
 ///|
 /// A video (FileItem's video): its still on black (the frame the preview was left at, else the station's), its play
-/// mark in its middle, its name at its foot over a dark band; while the core downloads it, how far there over a bar.
+/// mark in its middle, its name at its foot over a dark band, how long it is at the band's end; while the core
+/// downloads it, how far there over a bar.
 fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double) -> Unit {
 
   let open = c.id("msg-file/" + @sfbase.file_key(a))
@@ -303,9 +304,18 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
       c.box(style=video_foot_room, fn() {
         c.box(style=video_name_band, fn() {
           let coming = flag(dl, "active")
-          c.text(if coming { text(dl, "statusText") } else { a.name }, style=video_name) |> ignore
           if coming {
+            c.text(text(dl, "statusText"), style=video_name) |> ignore
             c.box(style=video_bar, fn() { @sf.progress(c, "video/" + a.path, Some(number(dl, "progress"))) }) |> ignore
+          } else {
+            // its name, cut short before how long it is (as its message says: the station read it from its header)
+            c.box(style=video_name_row, fn() {
+              c.text(a.name, style=video_name.then(@ui.text_style(w=Cut))) |> ignore
+              if a.duration > 0.0 {
+                c.text(@sf.clock(a.duration), style=video_name) |> ignore
+              }
+            })
+            |> ignore
           }
         })
         |> ignore
@@ -595,6 +605,11 @@ let video_name_band : @ui.Style = @ui.style(w=Full, px=S2, py=S1_5, bg=@sf.video
 ///|
 // kept across runs: a value (no field of it changes)
 let video_name : @ui.TextStyle = @ui.text_style(size=Caption, color=@sf.white_ink, wrap=false, max_lines=1)
+
+///|
+/// Its name and how long it is in one line, 8 apart, the length at its end.
+// kept across runs: a value (no field of it changes)
+let video_name_row : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter justify=JBetween")
 
 ///|
 // kept across runs: a value (no field of it changes)

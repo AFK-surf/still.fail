@@ -134,6 +134,34 @@ test "a video in the chat: the station's still of it (its poster) on the black, 
     t.drawn_images().iter().any(fn(i) { (i[2] - 300.0).abs() < 0.5 && (i[3] - h).abs() < 0.5 }),
   )
   assert_true(t.find("演示录屏.mp4") is Some(_))
+  // its message saying none, no length beside its name
+  assert_true(t.find("0:") is None)
+}
+
+///|
+test "a video in the chat says how long it is at its name's end, as its message does (the station read it from its header)" {
+  reset()
+  let src : Source = { ..fixture("chat"), poster: fn(_, _, name) { fixture_file(name) } }
+  let a : Attachment = {
+    name: "一段很长很长很长很长很长很长很长很长很长的屏幕录制.mp4",
+    path: "uploads/fx/录屏.mp4",
+    size: 5242880.0,
+    width: 1280.0,
+    height: 720.0,
+    thumbhash: "",
+    owner: "s-c1",
+    upload: "",
+    duration: 72500.0,
+    frames: 2175,
+  }
+  let t = @ui.Tester::new(fn(c) { chat_file(c, src, a) }, w=390.0, h=844.0)
+  t.draw()
+  t.run_for(@ui.image_fade_ms)
+  let (lx, ly) = t.find("1:13").unwrap()
+  let (nx, ny) = t.find("一段很长").unwrap()
+  // on the name's line, after it; the name cut short for it, nothing squeezed past that
+  assert_true((ly - ny).abs() < 1.0 && lx > nx)
+  assert_eq(t.squeeze_faults(), [])
 }
 
 ///|
