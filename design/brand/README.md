@@ -10,8 +10,10 @@ No character: words and one orange dot (2026-10-26; the rules for where it goes 
   `#18181B`), youdid.wtf on night (`#111114`, the s white), still.fail mbui on violet (`#5B4FD6`, the s white, the dot
   `#FFD66B`), the debug build on grey. `icon-<app>.svg` is the square a system rounds (iOS, a web app's icons),
   `icon-mac-<app>.svg` macOS's (an 824 tile at 100 of 1024, its corner 185, its shadow).
-- **The illustrations'** stations (web/public/illus-*.svg, each group marked `data-station`): a machine, a rounded
-  box with a light (orange; grey asleep) and a slot.
+- **The illustrations** (web/public/illus-*.svg, made by `illus.py`): devices and the wires that join them, as the
+  site draws its idea. One line weight; devices outlined in ink, what is on them in a lighter grey; orange only for a
+  live wire (its running dots) and a station's light. Not joined: a dashed grey wire; not there yet: a dashed outline;
+  cut off: a plug pulled out. A station is a machine, a rounded box with a light (grey asleep) and a slot.
 
 `make.py` makes all of it from Inter (the web app's, node_modules) and writes it where each app takes it:
 
