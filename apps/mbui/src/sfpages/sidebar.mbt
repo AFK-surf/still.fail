@@ -76,7 +76,7 @@ pub fn chats_lists(c : @ui.Ctx, src : Source, w : Workspace, frame : ListsFrame)
   // away under it, whatever opened it (its page over them: chats_search)
   search_start(c)
   let away = search_away(c)
-  c.box(style=lists_fill, fn() {
+  c.box(style=lists_window, fn() {
     let track = c.layer(fn() {
       for p in x.floor().to_int()..=x.ceil().to_int() {
         if p < 0 || p > last {
@@ -543,6 +543,12 @@ let empty_link : @ui.TextStyle = @ui.text_style(size=Ui, color=Link)
 ///|
 // kept across runs: a value (no field of it changes)
 let lists_fill : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+/// The window the track slides in (Sidebar.css.ts navSlider: overflow hidden): a list on its way out or in shows only
+/// in the lists' own box, never over what is beside it (the rail, beside a sidebar).
+// kept across runs: a value (no field of it changes)
+let lists_window : @ui.Style = @ui.css("w=Full h=Full clip")
 
 ///|
 /// The filter's menu last opened (its presenter).
