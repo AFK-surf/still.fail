@@ -298,6 +298,7 @@
   "station.quota.resetUnconfirmed": "OpenAI 没有确认重置结果，请查询额度",
   "station.quota.resetUnsupported": "此 station 不支持重置额度",
   "station.quota.signInExpired": "登录已过期或失效",
+  "station.quota.unreachable": "无法连接服务商，请检查此 station 的网络或代理",
   "station.session.continued": "继续本机 {runtime} 在 {cwd} 的会话 · [查看之前的对话]({link})",
   "station.session.cwdGone": "原目录 {cwd} 已不存在",
   "station.session.cwdDenied": "station 无权读取目录 {cwd}，agent 无法在此启动",

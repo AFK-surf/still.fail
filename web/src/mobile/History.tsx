@@ -10,18 +10,20 @@ import { useParams, useSearchParams } from "react-router";
 import { stationApi, useAgentCard, useChat, useHistory, useHistoryDetail, useHistoryOlder, useHost, useStationCall, useStations, type ChatAgent, type HistoryGroup, type HistoryItem, type HistoryPhase, type HistoryStep, type HistoryView, type ModelOption, type Place, type RunnableProfile } from "../api.ts";
 import { Agent, ArrowRight, Check, ChevronDown, Command, Copy, ChevronRight, Wait, Received, Send, Stop, Unplug } from "@stillfail/ui/icons.tsx";
 import { optionOf } from "../ModelTriple.tsx";
-import { usePick } from "../pick.ts";
+import { usePick, type Picking } from "../pick.ts";
 import { FromMark, openBorrow } from "./Borrow.tsx";
 import * as borrowCss from "./Borrow.css.ts";
 import { MdView } from "../Prose.tsx";
 import type { Md } from "../core/md.ts";
+import type { PickView, RuntimeKind } from "../core/shapes.ts";
 import { useLoadNear, Waited } from "../Chat.tsx";
 import { KeepRow, useKeepRow, useRowKept, useVirtualList, useVirtualModel } from "../virtual/list.tsx";
 import type { Item as ListItem, Virtual } from "../virtual/model.ts";
 import { stationBase, useStation } from "../station.tsx";
 import { useApp, type MobileApp } from "./app.tsx";
 import { GroupLabel, MakerIcon, Mark, ModelMark, NavBar, NavButton, ProviderMark, QuotaRings, Seg, SlackMark, stateOf, tNodes, type Icon } from "./parts.tsx";
-import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
+import { sampleWords, Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
+import { sampleHistory, samplePick } from "../samples.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as css from "./History.css.ts";
 import { ToolCall, ToolResult } from "../ToolStep.tsx";
@@ -66,17 +68,24 @@ export function HistoryScreen() {
   const history = useHistory(station, agentKey).value;
   const [tab, setTab] = useState(0);
   const agent = view.value?.agents.find((a) => a.session.key === agentKey);
-  if (!agent) return <div className={pagesCss.mScreen}>{bar}<Waiting fill dense count={12} error={view.error?.message} /></div>;
+  if (!agent) {
+    return (
+      <div className={pagesCss.mScreen}>
+        {bar}
+        <Waiting fill error={view.error?.message} sample={<>
+          <HistoryHead mark={<ModelMark runtime="claude" size={20} />} name={sampleWords(8)} tab={0} onTab={() => undefined} />
+          <div style={{ height: 8 }} />
+          <div className={css.mHBody}><HistoryLinesSample station={station} chat={chat} /></div>
+        </>} />
+      </div>
+    );
+  }
   const s = agent.session;
   return (
     <div className={pagesCss.mScreen}>
       {bar}
-      <div className={css.mHHead}>
-        <ModelMark maker={s.maker} runtime={s.runtime} size={20} state={stateOf(agent.badge)} />
-        <b>{s.agentText}</b>
-        <Actions station={station} agent={agent} />
-        <Seg options={[t("web-mobile.history.steps"), t("web-mobile.history.details")]} selected={tab} onSelect={setTab} />
-      </div>
+      <HistoryHead mark={<ModelMark maker={s.maker} runtime={s.runtime} size={20} state={stateOf(agent.badge)} />} name={s.agentText}
+        actions={<Actions station={station} agent={agent} />} tab={tab} onTab={setTab} />
       <Summary agent={agent} />
       <div className={css.mHBody}>
         {tab === 0 ? <Steps station={station} chat={chat} agent={agent} history={history} entry={entry} /> : <Details station={station} chat={chat} agent={agent} history={history} />}
@@ -84,6 +93,28 @@ export function HistoryScreen() {
     </div>
   );
 }
+
+/** The page's head: the agent's mark and name, what can be done to it (`actions`), its steps or its details (`tab`). */
+function HistoryHead({ mark, name, actions, tab, onTab }: { mark: ReactNode; name: string; actions?: ReactNode; tab: number; onTab(tab: number): void }) {
+  return (
+    <div className={css.mHHead}>
+      {mark}
+      <b>{name}</b>
+      {actions}
+      <Seg options={[t("web-mobile.history.steps"), t("web-mobile.history.details")]} selected={tab} onSelect={onTab} />
+    </div>
+  );
+}
+
+/** An agent's history made up, for what its steps show while they are read (in their bones): its lines. */
+function HistoryLinesSample({ station, chat }: { station: string; chat: string }) {
+  return (
+    <div className={css.mHSteps}>
+      {SAMPLE_HISTORY.map((item) => <div key={item.key} className={`m-h-line ${css.mHItem}`}><Item item={item} station={station} chat={chat} agentText="" /></div>)}
+    </div>
+  );
+}
+const SAMPLE_HISTORY = sampleHistory();
 
 /** What can be done to it right now: stop a turn, release an idle process. */
 function Actions({ station, agent }: { station: string; agent: ChatAgent }) {
@@ -171,7 +202,7 @@ function Steps({ station, chat, agent, history, entry }: { station: string; chat
     const timer = setTimeout(() => setMarked(null), 1600);
     return () => clearTimeout(timer);
   }, [history]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!history) return <Waiting dense count={12} text={t("web-mobile.history.reading")} />;
+  if (!history) return <Waiting text={t("web-mobile.history.reading")} sample={<HistoryLinesSample station={station} chat={chat} />} />;
   if (history.empty) return <Edge text={history.edge} />;
   // What each row is: only those the list makes are drawn.
   const byKey = new Map(items.map((item) => [`h:${item.key}`, item]));
@@ -462,10 +493,9 @@ export function RunSettingsScreen() {
   useEffect(() => pickSet({ open: true }), [pickSet]);
   // A long list (the models, the accounts) is a list of its own, picked from and back.
   const [list, setList] = useState<"model" | "account" | null>(null);
-  const busy = pick.saving;
   const title = list === "model" ? t("web-mobile.history.pickModel") : list === "account" ? t("web-mobile.history.pickAccount") : t("web-mobile.history.changeModel");
   const bar = <NavBar back={list ? t("web-mobile.history.changeModel") : t("common.back")} onBack={() => (list ? setList(null) : app.pop())} title={title} />;
-  if (!agent || !v) return <div className={pagesCss.mScreen}>{bar}<Waiting fill shape="cards" error={view.error?.message} /></div>;
+  if (!agent || !v) return <div className={pagesCss.mScreen}>{bar}<Waiting fill error={view.error?.message} sample={<RunPicked v={SAMPLE_PICK} runtime="claude" pick={SAMPLE_PICKING} onList={() => undefined} onSave={() => undefined} onBorrow={() => undefined} />} /></div>;
   const s = agent.session;
   const chosen = v.draft.profile ?? null;
   if (list === "model") return <div className={pagesCss.mScreen}>{bar}<ModelList models={v.options} runtime={s.runtime} picked={v.option ?? null} onPick={(m) => { pick.set({ model: m }); setList(null); }} /></div>;
@@ -481,10 +511,24 @@ export function RunSettingsScreen() {
     if (!v.changed || !v.option) return;
     pick.save().then(() => app.toast(t("web-mobile.history.changed")), (e: unknown) => app.toast(e instanceof Error ? e.message : String(e)));
   };
-  const effort = v.draft.effort ?? null;
   return (
     <div className={pagesCss.mScreen}>
       {bar}
+      <RunPicked v={v} runtime={s.runtime} pick={pick} onList={setList} onSave={save} onBorrow={() => openBorrow(app, station.address, `session:${key}`)} />
+    </div>
+  );
+}
+
+/** How an agent runs (`v`, picked in `pick`, of `runtime`), as its page shows it: what it was and becomes, the model, how
+ * hard it thinks, who runs it, each opening its list (`onList`); the button that saves it (`onSave`) or borrows it. */
+function RunPicked({ v, runtime, pick, onList, onSave, onBorrow }: {
+  v: PickView; runtime: RuntimeKind; pick: Picking; onList(list: "model" | "account"): void; onSave(): void; onBorrow(): void;
+}) {
+  const busy = pick.saving;
+  const chosen = v.draft.profile ?? null;
+  const effort = v.draft.effort ?? null;
+  return (
+    <>
       <div className={`${pagesCss.mScroll} ${partsCss.mPadX18}`}>
         {/* Always on top: what it was, and what it becomes, the changes marked; and when the account must change, why. */}
         <div className={css.mRunSummary}>
@@ -502,7 +546,7 @@ export function RunSettingsScreen() {
           <p className={`${partsCss.mSubtle} ${partsCss.mSmall}`}>{t("web-mobile.history.changeNote")}</p>
         </div>
         <GroupLabel>{t("web-mobile.history.model")}</GroupLabel>
-        <SettingRow onClick={() => setList("model")} leading={<MakerIcon maker={v.maker} runtime={s.runtime} size={18} />}>
+        <SettingRow onClick={() => onList("model")} leading={<MakerIcon maker={v.maker} runtime={runtime} size={18} />}>
           <span className={historyCss.mSettingMain}>{v.modelText}</span>
         </SettingRow>
         {/* No efforts where the runtime sets none (Cursor). */}
@@ -521,7 +565,7 @@ export function RunSettingsScreen() {
           </div>
         </>}
         <GroupLabel>{t("web-mobile.history.account")}</GroupLabel>
-        <SettingRow onClick={() => setList("account")} leading={(() => { const p = v.accounts.find((a) => a.id === chosen); return p ? <ProviderMark runtime={p.runtime ?? s.runtime} kind={p.kind} mark={p.mark} size={18} /> : null; })()}>
+        <SettingRow onClick={() => onList("account")} leading={(() => { const p = v.accounts.find((a) => a.id === chosen); return p ? <ProviderMark runtime={p.runtime ?? runtime} kind={p.kind} mark={p.mark} size={18} /> : null; })()}>
           <span className={historyCss.mSettingMain}>{v.accountText}</span>
           <small className={partsCss.mMuted}>{v.accountNote}</small>
           {v.accountWarn && <small className={css.mWarn}>{t("web-mobile.history.accountWarn")}</small>}
@@ -531,17 +575,21 @@ export function RunSettingsScreen() {
       {/* The model picked is another station's: said so, and the button borrows it (asked again) rather than saving. */}
       {v.borrow && <p className={borrowCss.mBorrowNote}>{v.borrow.allowed ? v.borrow.note : v.borrow.why ?? v.borrow.note}</p>}
       {v.borrow
-        ? <button type="button" className={historyCss.mRunGo} data-changed disabled={!v.borrow.allowed || pick.borrowing} onClick={() => openBorrow(app, station.address, `session:${key}`)}>
+        ? <button type="button" className={historyCss.mRunGo} data-changed disabled={!v.borrow.allowed || pick.borrowing} onClick={onBorrow}>
           {pick.borrowing && <Spinner className={partsCss.mSpinOnColor} />}
           {v.borrow.action}
         </button>
-        : <button type="button" className={historyCss.mRunGo} data-changed={v.changed || undefined} disabled={busy} onClick={save}>
+        : <button type="button" className={historyCss.mRunGo} data-changed={v.changed || undefined} disabled={busy} onClick={onSave}>
           {busy && <Spinner className={partsCss.mSpinOnColor} />}
           {v.saveText}
         </button>}
-    </div>
+    </>
   );
 }
+
+/** How an agent runs made up, for what its page shows while it is read (in its bones). */
+const SAMPLE_PICK = samplePick();
+const SAMPLE_PICKING: Picking = { view: SAMPLE_PICK, set: () => undefined, save: () => Promise.resolve({ saved: false }) };
 
 /** A line that leads to a list: what is chosen, and an arrow. */
 export function SettingRow({ onClick, leading, children }: { onClick: () => void; leading?: ReactNode; children: ReactNode }) {

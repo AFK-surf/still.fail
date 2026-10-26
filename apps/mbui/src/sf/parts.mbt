@@ -1083,6 +1083,7 @@ pub fn dropdown(
   entries : Array[@kit.Entry],
   icons : Map[String, String],
   w : Double,
+  submenu? : Bool = false,
   side? : @ui.Side = Bottom,
   along? : @ui.Along = Start,
   offset? : Double = 6.0,
@@ -1104,6 +1105,7 @@ pub fn dropdown(
     open,
     trigger,
     entries,
+    submenu~,
     side~,
     along~,
     offset~,
@@ -1156,6 +1158,7 @@ pub(all) struct MenuItem {
   danger : Bool
   disabled : Bool
   chosen : Bool?
+  heading : Bool
   select : () -> Unit
 }
 
@@ -1167,8 +1170,9 @@ pub fn menu_item_of(
   danger? : Bool = false,
   disabled? : Bool = false,
   chosen? : Bool,
+  heading? : Bool = false,
 ) -> MenuItem {
-  { label, icon, danger, disabled, chosen, select }
+  { label, icon, danger, disabled, chosen, heading, select }
 }
 
 ///|
@@ -1181,6 +1185,7 @@ let menu_open_at : Ref[(Double, Double)] = Ref((0.0, 0.0))
 ///|
 /// No menu open, no mark's words (the app begun again).
 pub fn parts_reset() -> Unit {
+  submenu_hover.val = ""
   held_felt.clear()
   presenters_reset()
   menu_open.val = ""
@@ -1196,6 +1201,7 @@ fn menu_items(
   key : String,
   trigger : Int,
   items : Array[MenuItem?],
+  submenu? : Bool = false,
   side? : @ui.Side = Bottom,
   along? : @ui.Along = Start,
   offset? : Double = 6.0,
@@ -1211,10 +1217,10 @@ fn menu_items(
       Some(item) => {
         let v = i.to_string()
         entries.push(
-          match item.chosen {
+          if item.heading { @kit.menu_label(item.label) } else { match item.chosen {
             Some(on) => @kit.menu_radio(v, on, label=item.label, disabled=item.disabled)
             None => @kit.menu_item(v, label=item.label, disabled=item.disabled)
-          },
+          } },
         )
         if item.icon != "" {
           icons[v] = item.icon
@@ -1225,7 +1231,7 @@ fn menu_items(
       }
     }
   }
-  let m = dropdown(c, key, open, trigger, entries, icons, menu_w, side~, along~, offset~, at?, danger~)
+  let m = dropdown(c, key, open, trigger, entries, icons, menu_w, submenu~, side~, along~, offset~, at?, danger~)
   if open && !m.open {
     menu_open.val = ""
   }
@@ -2226,7 +2232,7 @@ let field_hint : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Mut
 /// A line to type in (controls.css.ts input, a one-line one: a pill as the buttons beside it are, 36 high at least,
 /// 16 in, a line of the strong grey, the field's hover grey pointed at or written in, on the canvas, its words 14, the
 /// placeholder subtle): mbui's field (@kit.text_field), its editor `key`'s; `field`: what it holds, the view's own;
-/// `small`: 32 high (a small panel's, as its rows: input_box_small); `solid`: on a card's ground in a chat (field_solid);
+/// `small`: 34 high (a small panel's, as its rows: input_box_small); `solid`: on a card's ground in a chat (field_solid);
 /// `shorter`: other ways to say the placeholder where the field has less room (Ctx::editor's). What is in it now, and
 /// whether Enter was pressed in it.
 pub fn input(
@@ -2383,10 +2389,11 @@ let field_solid : @ui.Style = @ui.css("bg=Bg border_color=Bg")
 let field_solid_hot : @ui.Style = @ui.css("bg=Bg")
 
 ///|
-/// `small`: 32 high, a small panel's (its search): a capsule its padding in from its corner, concentric with it
-/// (capsule_in(r_menu, 32) = panel_pad), as its rows are.
+/// `small`: a small panel's (its search), as high as its rows (menu_row_min), so a capsule its padding in from its
+/// corner, concentric with it (capsule_in(r_menu, 34) = panel_pad), as its rows are; its words' line (the body's 22, not
+/// a row's 20: menu_row_over would make it 36) in its middle.
 // kept across runs: a value (no field of it changes)
-let input_box_small : @ui.Style = input_box.then(@ui.style(min_h=Fixed(menu_row_min), py=room(menu_row_over)))
+let input_box_small : @ui.Style = input_box.then(@ui.style(h=Fixed(menu_row_min)))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3461,7 +3468,9 @@ let options_card_radius : Double = list_card_corner
 /// leads to (`options`: each its label, its detail, whether recommended); half there when not `enabled`, a spinner on
 /// the one being answered (`busy`, none pressed meanwhile; `chosen` stays whole); its measures the theme's for the
 /// screen (option_type). Under a post as the web's (`wide`: as wide as what it says, `room` at most, on the text at
-/// 5%); its row's ground under the pointer. The option tapped, on the frame after.
+/// 5%); its row's ground under the pointer. `history` keeps the original choices fully legible and read-only,
+/// with a check beside the chosen one; its presenter supplies the only ground and padding. The option tapped,
+/// on the frame after.
 pub fn options_card(
   c : @ui.Ctx,
   key : String,
@@ -3471,14 +3480,17 @@ pub fn options_card(
   chosen? : Int? = None,
   wide? : Bool = false,
   room? : Double = 0.0,
+  history? : Bool = false,
 ) -> Int? {
   let t = theme()
-  let free = enabled && busy is None
+  let free = enabled && busy is None && !history
   let mut picked : Int? = None
   let ot = option_type()
+  let ground = if history { 0L } else if wide { alpha(t.p.text, 0.05) } else { t.p.chip }
+  let padding = if history { 0.0 } else { options_card_pad }
   // (in the wide frame as wide as what it says and 460 at least, on the text at 5%: Decisions.css.ts options)
   c.box(w=Fill(1.0), align=if wide { AStart } else { AStretch }, fn() {
-    c.box(w=options_w(options, ot, wide, room), radius=options_card_radius, bg=if wide { alpha(t.p.text, 0.05) } else { t.p.chip }, pad=options_card_pad, fn() {
+    c.box(w=options_w(options, ot, wide, room), radius=options_card_radius, bg=ground, pad=padding, fn() {
       // (nothing drawn between two: SettingParts.kt DecisionOptions)
       for i, o in options {
         let id = c.id(key + "/" + i.to_string())
@@ -3499,7 +3511,7 @@ pub fn options_card(
           align=AStart,
           radius=option_row_corner,
           bg=if hot { t.p.hover } else { 0L },
-          opacity=if enabled || chosen == Some(i) { 1.0 } else { 0.5 },
+          opacity=if history || enabled || chosen == Some(i) { 1.0 } else { 0.5 },
           id~,
           fn() {
             c.box(
@@ -3529,6 +3541,12 @@ pub fn options_card(
             if busy == Some(i) {
               c.box(h=Px(ot.label_line), justify=JCenter, fn() { spinner(c, size=12.0) |> ignore })
               |> ignore
+            }
+            if history && chosen == Some(i) {
+              let check_room = @ui.style(h=Fixed(ot.label_line), justify=JCenter)
+              c.box(style=check_room, fn() {
+                icon(c, "check", size=14.0, color=t.p.accent) |> ignore
+              }) |> ignore
             }
             // SettingParts.kt options: clickable while free, its ripple in the ink (ripple(color = C.ink))
             if free {

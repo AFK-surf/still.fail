@@ -45,7 +45,8 @@
 //   iroh.relayStatus {id}; conn.remoteId {id};
 //   conn.closeReason {id}; conn.paths {id}; conn.stats {id}; release {id} (a handle let go); text.collate {names} →
 //   each one's place in the order people read them (the system's collation; a shell without it: an error, and the
-//   core orders them by hand).
+//   core orders them by hand); ed25519.sign {seed, message} (hex) → {publicKey, signature} (hex; a shell without it:
+//   an error, and the core signs in JS: Host.ed25519Sign).
 import { Effect, type Scope } from "effect";
 import { Core } from "../core.ts";
 import { FileSource } from "../file-source.ts";
@@ -157,6 +158,20 @@ export class BridgeHost implements Host {
       // A shell from before it.
     }
     this.#collates = false;
+    return null;
+  }
+
+  /// The shell's Ed25519 (`ed25519.sign`), until it says it has none.
+  #signs = true;
+  ed25519Sign(seed: Uint8Array, message: Uint8Array): { publicKey: Uint8Array; signature: Uint8Array } | null {
+    if (!this.#signs) return null;
+    try {
+      const out = this.#bridge.sync("ed25519.sign", { seed: hex(seed), message: hex(message) }) as J;
+      if (typeof out?.publicKey === "string" && typeof out?.signature === "string") return { publicKey: unhex(out.publicKey), signature: unhex(out.signature) };
+    } catch {
+      // A shell from before it.
+    }
+    this.#signs = false;
     return null;
   }
 

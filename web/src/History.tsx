@@ -33,6 +33,7 @@ import * as shellCss from "./styles/shell.css.ts";
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
 import { ReadWhole, useWhole } from "./brief.ts";
+import { sampleHistory } from "./samples.ts";
 
 /** The room between two items of a history (History.css.ts `historyBody`). */
 const GAP_PX = 14;
@@ -182,7 +183,7 @@ export function History({ station, sessionKey, head, summary, details, focusEntr
         <dl className={css.usage}>{usage.map((u) => <div key={u.label}><dt>{u.label}</dt><dd>{u.value}</dd></div>)}</dl>
       )}
       <div className={css.historyBody} ref={body}>
-        {!history || (history.empty && !history.loaded) ? <Waiting count={6} text={history?.edge ?? t("web-main.history.reading")} />
+        {!history || (history.empty && !history.loaded) ? <Waiting text={history?.edge ?? t("web-main.history.reading")} sample={<HistorySample />} />
           : history.empty ? <p className={css.historyEdge}>{history.edge}</p> : (
           <>
             {virtual.layout.rows.flatMap((row, i) => [virtual.above(row, i === 0), drawn.get(row.key)?.()])}
@@ -254,6 +255,17 @@ const HistoryRow = memo(function HistoryRow({ item, rail, enter, station, sessio
     </div>
   );
 });
+
+/** An agent's history made up, for what it shows while it is read (in its bones): its items, on the turn's rail. */
+function HistorySample() {
+  return SAMPLE_HISTORY.map((item, i) => (
+    <div key={item.key} className={css.hItem}>
+      {item.turn && <TurnRule turn={item.turn} />}
+      <div className={css.hMain} data-rail={i < SAMPLE_HISTORY.length - 1 || undefined}><HistoryItemView item={item} /></div>
+    </div>
+  ));
+}
+const SAMPLE_HISTORY = sampleHistory();
 
 /** Where a turn begins: when, and what it did (the core's words), on a rule; at its end, the turn's link to copy. */
 function TurnRule({ turn, children }: { turn: HistoryTurn; children?: ReactNode }) {

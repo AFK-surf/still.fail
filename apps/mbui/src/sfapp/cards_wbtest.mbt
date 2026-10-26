@@ -4,7 +4,7 @@
 
 ///|
 /// The fixture's chat open (the first row's), its calls kept in `calls` and answered by the fixture.
-fn cards_core(calls : Array[Made], mode? : String = "chat") -> @ui.Tester {
+fn cards_core(calls : Array[Made], mode? : String = "chat", platform? : Int = 2) -> @ui.Tester {
   reset()
   let base = fixture(mode)
   let src : Source = {
@@ -16,7 +16,7 @@ fn cards_core(calls : Array[Made], mode? : String = "chat") -> @ui.Tester {
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   open_cards_fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform~)
   // the chat pushed in over Home
   t.run_for(@ui.nav_push_ms)
   t
@@ -26,6 +26,42 @@ fn cards_core(calls : Array[Made], mode? : String = "chat") -> @ui.Tester {
 /// Answered options gone: faded out, their room closed on the rows' spring (a little late), how it went faded in.
 fn options_gone_ms() -> Double {
   dmax(close_gap.duration(1.0, 0.0, 0.0), 2.0 * options_out_ms)
+}
+
+///|
+test "answered options can be read again by hovering or holding the outcome, without answering again" {
+  for platform in [0, 2] {
+    let calls : Array[Made] = []
+    let t = cards_core(calls, platform~)
+    scroll_to_words(t, "把首页和聊天页的截图都更新")
+    tap_now(t, "把首页和聊天页的截图都更新")
+    let at = close_turn_start(t)
+    t.run_for(at + options_gone_ms() + @sfpages.reveal_ms - t.time())
+    assert_true(t.find("这次只改列表，截图下次再说") is None)
+    let (x, y) = t.find("你 选择了「一起换」").unwrap()
+    let (_, _, width, _) = t.rect_of("你 选择了「一起换」").unwrap()
+    assert_true(width < 250.0)
+    if platform == 0 {
+      t.move(x, y)
+      t.run_for(@sfpages.hover_open_ms)
+    } else {
+      t.press_at(x, y)
+      t.run_for(@ui.long_press_ms)
+    }
+    t.draw()
+    assert_true(t.find("把首页和聊天页的截图都更新") is Some(_))
+    assert_true(t.find("这次只改列表，截图下次再说") is Some(_))
+    if platform == 2 { t.release(x, y) }
+    // A pointer can enter the card and read it without the history disappearing.
+    if platform == 0 {
+      let (cx, cy) = t.find("这次只改列表，截图下次再说").unwrap()
+      t.move(cx, cy)
+      t.run_for(@sfpages.hover_close_ms)
+      assert_true(t.find("把首页和聊天页的截图都更新") is Some(_))
+    }
+    tap_now(t, "这次只改列表，截图下次再说")
+    assert_eq(named(calls, "decision.answer").length(), 1)
+  }
 }
 
 ///|

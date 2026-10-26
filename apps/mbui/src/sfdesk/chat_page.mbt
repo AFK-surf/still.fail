@@ -208,8 +208,8 @@ fn archive(src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
 }
 
 ///|
-/// The chat's bar (ChatPage.tsx header, sidebar.css.ts pageBar: 45 high, its line at its foot): the title, its station's
-/// update, its station while no agent is in it, its people, its agents; at its end what is done with it, or ⌘F's bar.
+/// The chat's bar (ChatPage.tsx header, sidebar.css.ts pageBar: 45 high, its line at its foot): the title, its station
+/// while no agent is in it, its people, its agents; at its end what is done with it, or ⌘F's bar.
 fn chat_bar(
   c : @ui.Ctx,
   src : Source,
@@ -260,13 +260,12 @@ fn chat_bar(
     room(room_l)
     c.box(style=chat_bar_inner, fn() {
       // the title, its people and agents 10 apart, 8 in from the bar's padding (conversation.css.ts pageBarTitle)
-      // (short of room, its people leave first, then its station's update, then its agents but the first, the title cut
+      // (short of room, its people leave first, then its agents but the first, the title cut
       // short meanwhile)
       c.box(style=chat_bar_title_row, keep=true, fn() {
         chat_title(c, src, r, v)
         match v {
           Some(view) => {
-            c.box(drop=chat_bar_drop_update, fn() { @sfpages.station_update(c, src, r.station, view.station_update) }) |> ignore
             if view.agents.length() == 0 {
               chat_station(c, r.station, station)
             }
@@ -487,7 +486,7 @@ fn agent_tile(c : @ui.Ctx, src : Source, r : ChatRef, a : Agent, marked : Bool, 
   let hot = c.lit(id)
   match station {
     Some(s) =>
-      c.box(style=if marked { agent_station_on } else { agent_station }, fn() {
+      c.box(style=if marked { agent_station_on } else { agent_station }, keep=true, fn() {
         let b = c.box(style=if hot { agent_station_agent_hot } else { agent_station_agent }, id~, fn() {
           agent_mark(c, a.maker, a.runtime, a.badge, said=text(field(aj, "session"), "badgeText"))
         })
@@ -517,7 +516,7 @@ fn agent_tile(c : @ui.Ctx, src : Source, r : ChatRef, a : Agent, marked : Bool, 
       })
       |> ignore
     None => {
-      let b = c.box(style=if marked { agent_mark_btn_on } else { agent_mark_btn }, id~, fn() {
+      let b = c.box(style=if marked { agent_mark_btn_on } else { agent_mark_btn }, keep=true, id~, fn() {
         agent_mark(c, a.maker, a.runtime, a.badge, said=text(field(aj, "session"), "badgeText"))
       })
       c.semantics(b, Button, id~, label=said)
@@ -781,7 +780,7 @@ fn info_time(c : @ui.Ctx, key : String, stamp : Json?) -> Unit {
 /// it. True on the frame after a press.
 fn info_row(c : @ui.Ctx, key : String, icon : String, label : String, end : String) -> Bool {
   let id = c.id(key)
-  let b = c.box(style=info_tool, id~, fn() {
+  let b = c.box(style=info_tool(), id~, fn() {
     c.box(style=info_tool_icon, fn() { @sf.icon(c, icon, size=14.0, color=@sf.theme().p.muted) |> ignore }) |> ignore
     // (what it says of it at the line's end, under its words where the line has not the room: its words whole)
     c.box(style=info_label_flow, flow=true, line_gap=0.0, fn() {
@@ -841,15 +840,12 @@ let chat_bar_title_row : @ui.Style = @ui.style(row=true, w=@sf.grow, pl=S2, pr=S
 let chat_title_room : @ui.Style = @ui.css("row")
 
 ///|
-/// What leaves the bar's title row first, short of room: its people, then its station's update, then its agents but the
+/// What leaves the bar's title row first, short of room: its people, then its agents but the
 /// first (the last of them first).
 let chat_bar_drop_people : Int = 1
 
 ///|
-let chat_bar_drop_update : Int = 2
-
-///|
-let chat_bar_drop_agents : Int = 3
+let chat_bar_drop_agents : Int = 2
 
 ///|
 /// How wide the title may be: 42% of the bar, 80 at least.
@@ -1128,14 +1124,20 @@ let info_mark_side : Double = 14.0
 let info_agent_line : @ui.Style = @ui.css("w=Full pl=S6")
 
 ///|
-/// What is done with it (infoTools, PanelRow): 8 under what is over it, 2 apart; a row 32 high at least, its icon's
-/// 14 column and words 10 apart, 10 in, round with the panel, the pointer's ground on it.
+/// What is done with it (infoTools, PanelRow): 8 under what is over it, 2 apart; a row a small panel's (@sf.pick_high:
+/// in its foot corners concentric with them, as a menu's item is), its icon's 14 column and words 10 apart, 10 in,
+/// round with the panel, the pointer's ground on it.
 // kept across runs: a value (no field of it changes)
 let info_tools : @ui.Style = @ui.css("w=Full pt=S2 gap=S0_5")
 
 ///|
+fn info_tool() -> @ui.Style {
+  info_tool_base.then(@sf.pick_high())
+}
+
+///|
 // kept across runs: a value (no field of it changes)
-let info_tool : @ui.Style = @ui.css("row w=Full min_h=S8 px=S2_5 gap=S2_5 align=ACenter radius=Inner hovered{bg=Hover}")
+let info_tool_base : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2_5 align=ACenter radius=Inner hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)

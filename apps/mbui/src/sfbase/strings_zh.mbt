@@ -1053,6 +1053,9 @@ let zh : Map[String, String] = {
   "web-main.profile.blocked": "已停用",
   "web-main.profile.machineSignedIn": "已登录",
   "web-main.profile.signedIn": "已登录",
+  "web-main.prose.copyCsv": "复制为 CSV",
+  "web-main.prose.copyMarkdown": "复制为 Markdown",
+  "web-main.prose.copyTable": "复制表格",
   "web-main.quota.left": "{label}剩余 {left}%",
   "web-main.quota.leftAlone": "剩余 {left}%",
   "web-main.quota.unchecked": "尚未查询额度",
@@ -1926,4 +1929,7 @@ let zh : Map[String, String] = {
   "web-pages.workspace.owner": "所属账号",
   "web-pages.workspace.people": "{n} 人",
   "web-pages.workspace.resizeSidebar": "调整侧边栏宽度",
+  "web-pages.drive.viewAll": "查看所有文件",
+  "web-pages.drive.pinnedFolders": "固定文件夹",
+  "web-pages.screen.none": "暂无屏幕",
 }

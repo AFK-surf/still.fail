@@ -38,7 +38,7 @@ fn profiles_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
     let offers = fn(sv : Json?) {
       if flag(sv, "online") {
         let station = text(sv, "station")
-        blocks.append(machine_login_offers(c, core, station, field(sv, "overview"), fn(_) { (core.push)(NewProfile(station)) }))
+        blocks.append(machine_login_offers(c, core, sv, fn(_) { (core.push)(NewProfile(station)) }))
       }
     }
     if only == "" {
@@ -183,7 +183,7 @@ fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit
   if list.length() == 0 {
     blocks.push(fn() {
       list_card(c, fn() {
-        list_row(c, fn() { row_title(c, tr("android-settings.profiles.empty"), color=t.p.muted) }) |> ignore
+        list_row(c, fn() { row_title(c, tr("web-pages.settings.profiles.none"), color=t.p.muted) }) |> ignore
       })
       place_empty(c, tr("android-settings.profiles.note"))
     })

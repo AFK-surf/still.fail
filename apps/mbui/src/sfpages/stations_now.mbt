@@ -28,7 +28,7 @@ pub fn share_card_open(src : Source, w : Workspace) -> Unit {
     // (its title said as it is drawn, in the language then)
     live=fn() { (@sf.t("web-main.stations.shareCard"), "", "") },
     foot=fn(c, _) {
-      let (label, icon) = picture_out_way()
+      let (label, icon) = @sf.picture_out_way()
       if @sf.button(c, label, key="share-card/copy", tone=Primary, icon~) {
         c.take_shot(share_shot, fn(png) { picture_out(c, png) |> ignore }, scale=share_scale)
       }

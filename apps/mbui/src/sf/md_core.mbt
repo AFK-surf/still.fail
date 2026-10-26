@@ -25,7 +25,8 @@ priv struct MdList { ordered : Bool; start : Int; tight : Bool; items : Array[Md
 /// How a table's column is aligned (GFM's `:--`, `:-:`, `--:`; none said).
 priv enum MdAlign { Plain; Left; Center; Right }
 ///|
-priv struct MdTable { align : Array[MdAlign]; head : Array[Array[MdInline]]; rows : Array[Array[Array[MdInline]]] }
+/// `md`, `csv`: the table to copy, as Markdown and as CSV, as the core wrote it (markdown.ts tableMarkdown, tableCsv).
+priv struct MdTable { align : Array[MdAlign]; head : Array[Array[MdInline]]; rows : Array[Array[Array[MdInline]]]; md : String; csv : String }
 ///|
 priv enum MdBlock {
   Paragraph(Array[MdInline])
@@ -124,7 +125,7 @@ fn core_blocks(nodes : Array[Json], text : String) -> Array[MdBlock] {
       "table" => {
         let rows = kids.map(fn(r) { let (_,cells,_) = md_parts(r); cells.map(fn(c) { let (_,k,_) = md_parts(c); core_inlines(k,text) }) })
         let align = math_array(math_field(a,"align")).map(fn(x) { match math_string(x) { "left" => MdAlign::Left; "center" => MdAlign::Center; "right" => MdAlign::Right; _ => MdAlign::Plain } })
-        out.push(Table({ align, head:if rows.length()>0 {rows[0]}else{[]}, rows:if rows.length()>1 {rows[1:].to_array()}else{[]} }))
+        out.push(Table({ align, head:if rows.length()>0 {rows[0]}else{[]}, rows:if rows.length()>1 {rows[1:].to_array()}else{[]}, md:math_string(math_field(a,"md")), csv:math_string(math_field(a,"csv")) }))
       }
       "hr" => out.push(Rule)
       _ => if kids.length() > 0 { out.append(core_blocks(kids,text)) }

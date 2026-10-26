@@ -60,9 +60,13 @@ export function shortCode(base: string): string {
   return `${out.slice(0, 3)}-${out.slice(3)}`;
 }
 
-/// The device's claim for an endpoint, signed with its base key (the mesh's device key, an Ed25519 seed).
-export function lockClaim(secret: Uint8Array, ws: string, endpoint: string): LockClaim {
-  return { device: hex(ed25519.getPublicKey(secret)), proof: hex(ed25519.sign(endpointBytes(ws, endpoint), secret)) };
+/// The device's claim for an endpoint, signed with its base key (the mesh's device key, an Ed25519 seed): by the host
+/// where it signs (Host.ed25519Sign: a native app's shell), else here.
+export function lockClaim(secret: Uint8Array, ws: string, endpoint: string, host?: Pick<Host, "ed25519Sign">): LockClaim {
+  const message = endpointBytes(ws, endpoint);
+  const signed = host?.ed25519Sign?.(secret, message);
+  if (signed) return { device: hex(signed.publicKey), proof: hex(signed.signature) };
+  return { device: hex(ed25519.getPublicKey(secret)), proof: hex(ed25519.sign(message, secret)) };
 }
 
 /// This app's signing key (`lock-signer`): an Ed25519 seed kept by the app, apart from the device key. Only an app keeps

@@ -99,7 +99,7 @@ fn publish_go(c : @ui.Ctx) -> Unit {
   publishing.busy = true
   c.take_shot(publish_shot, fn(png) {
     publishing.busy = false
-    let (_, icon) = picture_out_way()
+    let (_, icon) = @sf.picture_out_way()
     if picture_out(c, png, copy_said=icon == "copy") && icon == "copy" {
       publishing.copied += 1
     }
@@ -163,7 +163,7 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
       // what it is for: on a wide screen the bar a file opened has (back to the chat), 复制图片 at its end; on a small
       // one 取消 and 保存到相册 at the foot
       c.layer(fn() {
-        let (label, _) = picture_out_way()
+        let (label, _) = @sf.picture_out_way()
         // (copied: 已复制 a moment after)
         let shown = publishing.copied > 0 &&
           !@kit.after(c, "publish/copied/\{publishing.copied}", true, @sf.copied_ms)

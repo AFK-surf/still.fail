@@ -33,6 +33,7 @@ import * as chatCss from "./Chat.css.ts";
 import { t } from "./i18n.ts";
 import { Option1, Option2, Option3, Option4, Option5, Option6 } from "@stillfail/ui/icons.tsx";
 import { Spinner, Waiting, type WaitNote } from "@stillfail/ui/waiting.tsx";
+import { sampleDecisions } from "./samples.ts";
 
 /** How far (of its width) the decision is swiped before letting go takes it, and how fast a fling has to be (px/ms). */
 const TAKES = 0.35;
@@ -327,8 +328,8 @@ export function DecisionDeck({ workspace, inline, onOpen, className }: {
 
   let body: ReactNode;
   if (!front) {
-    // None while stations are still read: their shapes; read and none: what was done today.
-    body = queue.waiting ? <Waiting shape="cards" count={2} note={queue.waiting} />
+    // None while stations are still read: one made up, in its bones; read and none: what was done today.
+    body = queue.waiting ? <Waiting note={queue.waiting} sample={<DecisionSample d={SAMPLE_DECISION} />} />
       : view.value ? <DecisionsIdle view={view.value} onOpen={onOpen} />
       : view.error ? <p className={css.empty}>{view.error.message}</p> : null;
   } else {
@@ -366,6 +367,23 @@ export function DecisionDeck({ workspace, inline, onOpen, className }: {
         </div>
       )}
       {body}
+    </div>
+  );
+}
+
+/** A decision made up, for what the pages show while the decisions are read (in its bones). */
+const SAMPLE_DECISION = sampleDecisions()[0]!;
+
+/** A decision's card (`d`) as the pages draw it while they read the decisions, in its bones: its post, its options. */
+export function DecisionSample({ d }: { d: DecisionItem }) {
+  return (
+    <div className={css.card}>
+      <div className={css.scroll}>
+        <div className={css.column}>
+          <DecisionMessages d={d} inline={false} />
+          <DecisionPicks d={d} onAnswered={() => undefined} onOpen={() => undefined} />
+        </div>
+      </div>
     </div>
   );
 }

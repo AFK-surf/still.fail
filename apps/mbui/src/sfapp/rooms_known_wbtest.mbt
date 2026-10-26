@@ -6,8 +6,11 @@
 // (`at: rule: …`) when a count is off its bar.
 
 ///|
-/// The faults each rule still has (2026-10-26, as the rules came): they only fall.
-let rooms_known : Map[String, Int] = { "room": 2558, "apart": 7233, "hover": 28 }
+/// The faults each rule still has (2026-10-26, as the rules came): they only fall. (2026-10-27: settings-notify-denied
+/// showed the chats' list, its fixture naming no page, and shows the notifications page now: the chats' list's 10 room
+/// and 7 apart gone from it, the settings' list's 21 apart beside it in the wide windows come, the ones every settings
+/// screen there has: its rows 32 high, 34 apart. The same day the pages' rows the library's: 2 apart fewer.)
+let rooms_known : Map[String, Int] = { "room": 2548, "apart": 7247, "hover": 28 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.

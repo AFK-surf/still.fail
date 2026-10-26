@@ -2,8 +2,17 @@
 // takes from the others of its runtime, and the known outdated models unchecked once.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { adopted, OUTDATED, outdated, replacement, uncheckOutdated } from "../src/accounts/models.ts";
+import { adopted, OUTDATED, outdated, replacement, seesImages, VISION, uncheckOutdated } from "../src/accounts/models.ts";
 import { modelKey } from "../src/read/usage.ts";
+
+test("a model that reads images is known however it is spelled; one that was not checked is not", () => {
+  for (const m of ["deepseek-v4.1-flash", "openrouter/deepseek-v4.1-flash", "claude-haiku-5-5", "anthropic/claude-opus-5-5-20261001", "kimi-k3[1m]"]) assert.ok(seesImages(m), m);
+  for (const m of ["deepseek-v4-pro", "glm-5.3", "qwen3.7-max", "longcat-2.0", "kimi-k2.6"]) assert.ok(!seesImages(m), m);
+});
+
+test("the vision table lists models by key", () => {
+  for (const key of VISION) assert.equal(modelKey(key), key);
+});
 
 test("a model is outdated however it is spelled, and what replaced it is the newest of its line", () => {
   for (const m of ["claude-opus-4-5-20251101", "anthropic/claude-sonnet-4-5", "claude-opus-4-6[1m]", "openai/gpt-5.6-sol", "gpt-6-sol"]) assert.ok(outdated(m), m);

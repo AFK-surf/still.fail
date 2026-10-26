@@ -27,8 +27,8 @@ import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
 import { Button, Card, FailedMark, Field, Illustration, LinkButton, ListCard, ListRow, NavBar, NavButton, PickRow, PlaceHead, SectionHeader, Seg } from "./parts.tsx";
 import * as profilesCss from "./Profiles.css.ts";
-import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
-import * as waitCss from "@stillfail/ui/waiting.css.ts";
+import { Bones, sampleWords, Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
+import { sampleStations } from "../samples.ts";
 import { usePlaceActions } from "./placeActions.tsx";
 import { ScreensCard } from "./Screen.tsx";
 import { PermissionsCard } from "./StationPermissions.tsx";
@@ -66,59 +66,64 @@ export function StationsScreen() {
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       <PlaceHead title="Station" back={t("web-mobile.settings.title")} onBack={app.pop} primary={actions.stations} />
-      {!list ? <Waiting shape="cards" count={2} text={t("common.readingStations")} error={stations.error?.message} /> : list.map((s) => (
-        <Card key={s.station} onClick={() => app.push(app.at(`/s/${s.id}/overview`))}>
-          <span className={css.mStationHead}>
-            {/* Its own mark leads, the server's where it has none (what it is doing is said under its name). */}
-            <StationMark emoji={s.emoji} icon={s.icon} size={28} className={css.mMark} />
-            <span className={partsCss.mGrow}><b className={css.mStationName}>{s.name}</b><span className={css.mStationSummary}>{[joinedText(s), s.summary].filter(Boolean).join(" · ")}</span></span>
-            {s.reconnecting && <Reconnecting />}
-            <ChevronRight size={14} className={partsCss.mSubtle} />
-          </span>
-          <StationBody s={s} />
-        </Card>
-      ))}
+      {!list ? <Waiting text={t("common.readingStations")} error={stations.error?.message} sample={SAMPLE_STATIONS.map((s) => <StationCard key={s.station} s={s} />)} />
+        : list.map((s) => <StationCard key={s.station} s={s} />)}
       <div style={{ height: 30 }} />
     </div>
   );
 }
 
-/** Laid out while a station has no network to show, so that its card keeps the room. */
-const noNet: StationNet = { path: "直连", rtt: { text: "0 ms", level: "ok" }, rttHistory: [], down: " ", up: " ", total: "" };
-
 /**
  * An online station's machine on its page, as the wide screen's details (../cloud/StationCards.tsx MachineDetails): what
  * it is, what is left of it large, its network, the rest a row each, its agents' processes; in its room whether known
- * yet or not (grey bars until it is); reconnecting, as last heard, faded.
+ * yet or not (in its bones until it is); reconnecting, as last heard, faded.
  */
 function StationFigures({ s }: { s: StationView }) {
   const processes = s.overview?.processesText || null;
   return (
     <span className={css.mStationFaded} data-stale={s.reconnecting || undefined}>
-      {s.host ? <MachineDetails s={s} phone /> : (
-        // Not read yet: laid out unseen as when it is, grey bars over it, so nothing below moves as it comes.
-        <span className={css.mUnread}>
-          <span className={css.mUnreadLaid}><MachineDetails s={{ ...s, host: unreadHost, online: true }} phone /></span>
-          <span className={`${css.mUnreadBars} ${waitCss.shapes}`} aria-hidden><i style={{ width: "80%", height: 76 }} /><i style={{ width: 132 }} /><i style={{ width: 180 }} /><i style={{ width: 180 }} /><i style={{ width: 120 }} /></span>
-        </span>
-      )}
-      <Known text={processes} bar={120} />
+      {/* Not read yet: as it will be, made up, in its bones, so nothing below moves as it comes. */}
+      {s.host ? <MachineDetails s={s} phone /> : <Bones><MachineDetails s={{ ...s, host: SAMPLE_HOST, online: true }} phone /></Bones>}
+      <Known text={processes} letters={9} />
     </span>
   );
 }
 
-/** What a machine not read yet is laid out as, unseen: its figures and rows as tall as a real one's (their words in Chinese). */
-const unreadHost: Host = {
+/** A station's card in the list: its mark, name and what it is, opening its page; its load and network under them. */
+function StationCard({ s }: { s: StationView }) {
+  const app = useApp();
+  return (
+    <Card onClick={() => app.push(app.at(`/s/${s.id}/overview`))}>
+      <span className={css.mStationHead}>
+        {/* Its own mark leads, the server's where it has none (what it is doing is said under its name). */}
+        <StationMark emoji={s.emoji} icon={s.icon} size={28} className={css.mMark} />
+        <span className={partsCss.mGrow}><b className={css.mStationName}>{s.name}</b><span className={css.mStationSummary}>{[joinedText(s), s.summary].filter(Boolean).join(" · ")}</span></span>
+        {s.reconnecting && <Reconnecting />}
+        <ChevronRight size={14} className={partsCss.mSubtle} />
+      </span>
+      <StationBody s={s} />
+    </Card>
+  );
+}
+
+/** Stations made up, for what the list and a station's page show while they are read (in their bones). */
+const SAMPLE_STATIONS = sampleStations(2);
+
+/** A machine made up, for what its page shows while it is read (in its bones): its figures, its rows. */
+const SAMPLE_HOST: Host = {
   hostname: "", os: "", arch: "", cpus: 0, cpuModel: "", load: 0, uptimeSec: 0, memory: { totalBytes: 0, usedBytes: 0 }, disk: { path: "", totalBytes: 0, freeBytes: 0 },
   emberRssBytes: 0, checkedAt: 0, summary: "", line: "", facts: [], usage: "", emberText: "", identity: "",
-  meters: [0, 1, 2].map((i) => ({ label: String(i), short: "", percent: 0, left: 0, level: "ok", value: "", remaining: "", big: "0", unit: "%", title: "内存剩", total: "共 0 GB" })),
-  details: ["主机名", "芯片", "已运行", "进程"].map((label) => ({ label, value: "直连" })),
+  meters: [0, 1, 2].map((i) => ({ label: String(i), short: "", percent: 60, left: 40, level: "ok", value: "", remaining: "", big: sampleWords(2), unit: "%", title: sampleWords(3), total: sampleWords(4) })),
+  details: [3, 2, 3, 2].map((n, i) => ({ label: sampleWords(n), value: sampleWords(6 + i) })),
 };
 
-/** A grey line of text, one line however long; a grey bar `bar` wide in its room while it is not known, breathing as
- *  every wait's shapes (@stillfail/ui waiting.tsx), the line as tall either way. */
-function Known({ text, bar }: { text: string | null; bar: number }) {
-  return <span className={css.mStationLine} data-unknown={text === null || undefined}>{text ?? <i className={waitCss.shapes} style={{ width: bar }} />}</span>;
+/** A station's network made up, for what its card shows while it is read (in its bones). */
+const SAMPLE_NET: StationNet = { path: sampleWords(2), rtt: { text: sampleWords(4), level: "ok" }, rttHistory: [], down: sampleWords(6), up: sampleWords(6), total: "" };
+
+/** A grey line of text, one line however long; while it is not known, `letters` made up in its bones (@stillfail/ui
+ *  waiting.tsx), the line as tall either way. */
+function Known({ text, letters }: { text: string | null; letters: number }) {
+  return <span className={css.mStationLine}>{text ?? <Bones>{sampleWords(letters)}</Bones>}</span>;
 }
 
 /** The station is up but not reached just now: what shows of it is from before. */
@@ -129,7 +134,7 @@ function Reconnecting() {
 /**
  * Under a station's name in the list: what of its load runs low (as the desktop's cards: none while all is well) and its network, in the same room whatever state it is in —
  * online, offline, or not yet read — so no card grows, shrinks or pushes the ones below it as states change.
- * Offline, a small picture of it asleep and a line saying so are there; not read yet, grey bars where the figures go.
+ * Offline, a small picture of it asleep and a line saying so are there; not read yet, its network in its bones.
  */
 function StationBody({ s }: { s: StationView }) {
   const host = s.online ? s.host : undefined;
@@ -138,16 +143,12 @@ function StationBody({ s }: { s: StationView }) {
     <span className={css.mStationBody}>
       <span className={css.mStationLoad} data-stale={s.reconnecting || undefined}>
         <span className={css.mStationRings} data-hidden={!host || undefined}><MeterChips meters={host?.meters ?? []} bare alerts /></span>
-        <span className={css.mStationNet} data-hidden={!net || undefined}><Net net={net ?? noNet} stacked /></span>
-      </span>
-      {!s.online ? (
-        <span className={css.mStationNap}><img src={illustrationUrl("station-offline")} alt="" decoding="sync" /><span>{t("web-mobile.stations.longGone", { name: NAME })}</span></span>
-      ) : (
-        <span className={`${css.mStationBars} ${waitCss.shapes}`} aria-hidden>
-          <span className={css.mBarChips}>{!host && [46, 52, 50].map((w) => <i key={w} style={{ width: w }} />)}</span>
-          {!net && <span className={css.mBarNet}><span><i style={{ width: 34 }} /><i style={{ width: 96 }} /></span><span><i style={{ width: 132 }} /><i style={{ width: 132 }} /></span></span>}
+        {/* (offline: laid out unseen, keeping its room; not read yet: as it will be, in its bones) */}
+        <span className={css.mStationNet} data-hidden={!s.online || undefined}>
+          {net ? <Net net={net} stacked /> : s.online ? <Bones><Net net={SAMPLE_NET} stacked /></Bones> : <Net net={SAMPLE_NET} stacked />}
         </span>
-      )}
+      </span>
+      {!s.online && <span className={css.mStationNap}><img src={illustrationUrl("station-offline")} alt="" decoding="sync" /><span>{t("web-mobile.stations.longGone", { name: NAME })}</span></span>}
     </span>
   );
 }
@@ -283,37 +284,44 @@ export function StationScreen() {
     <div className={pagesCss.mScreen}>
       <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s?.reconnecting ? <Reconnecting /> : s ? <span className={barsCss.mNavbarNote}>{[joinedText(s), s.host?.identity || (s.online ? t("web-mobile.stations.online") : s.blocked ? s.summary : t("web-mobile.stations.offline"))].filter(Boolean).join(" · ")}</span> : undefined}
         trailing={s && manager ? <NavButton icon={More} label={t("common.more")} onClick={() => app.sheet({ height: 0.34, content: () => <StationMenu s={s} /> })} /> : undefined} />
-      {!s ? <Waiting fill shape="cards" count={3} error={stations.error?.message} /> : (
-        <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
-          {/* Every part keeps its room as what it shows comes and goes (not read yet: grey bars); only being online or
-              offline changes what the page is. */}
-          {s.online ? <Card><StationFigures s={s} /></Card> : (
-            <Card><span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>{s.blocked ?? t("web-mobile.stations.offlineNote", { name: NAME })}</span><RetryPill trying={s.link.retrying === true} /></span></Card>
-          )}
-          {/* What runs on it is in settings' lists, every station's together; here, how much of it there is (once read), and its versions. */}
-          <SectionHeader title={t("web-mobile.stations.onThis")} start={24} />
-          <ListCard>
-            <GoRow title={t("web-mobile.settings.connects")} value={s.overview ? t("web-mobile.settings.connectsCount", { n: s.overview.connects.length }) : undefined} onClick={() => app.push(app.at(`/settings/connects?station=${s.id}`))} />
-            <GoRow title="Profile" value={s.overview ? t("web-mobile.settings.profilesCount", { n: s.overview.profiles.length }) : undefined} onClick={() => app.push(app.at(`/settings/profiles?station=${s.id}`))} />
-            <GoRow title={t("web-mobile.settings.memory")} onClick={() => app.push(app.at(`/s/${s.id}/memory`))} />
-            {/* Its drive, where the station has one (one from before it has none: nothing offered). */}
-            {s.overview?.drive && <GoRow title={t("web-pages.drive.title")} value={s.overview.drive.roots.length ? t("web-pages.drive.rootsCount", { n: s.overview.drive.roots.length }) : t("web-pages.drive.notShared")}
-              onClick={() => app.push(app.at(`/s/${s.id}/files`))} />}
-          </ListCard>
-          {/* Its screens, to see and drive (docs/remote-screens.md). */}
-          <ScreensCard station={s.station} />
-          {/* What macOS lets its still.fail Helper do (a Mac's station only), each grant asked for from here. */}
-          {s.online && s.overview?.permissions && <PermissionsCard station={s.station} permissions={s.overview.permissions} />}
-          {/* What its search finds of the machine (docs/search.md): the person's own data only where its managers say. */}
-          {s.online && s.overview?.search?.files === "spotlight" && <SearchCard station={s.station} personal={s.overview.search.personal} manager={manager} />}
-          <Logins station={s.station} marked={login ?? null} />
-          {/* The variables what it starts for its agents runs with (docs/agent-env.md); none from a station from before them. */}
-          {s.overview?.agentEnv && <AgentEnv station={s.station} env={s.overview.agentEnv} manager={manager} />}
-          {manager && <Workspaces s={s} />}
-          {s.online && s.overview && <Versions station={s.station} updates={s.overview.updates} manager={manager} beta={s.betaOffered ?? false} />}
-          <div style={{ height: 30 }} />
-        </div>
+      {!s ? <Waiting fill error={stations.error?.message} sample={<StationPage s={SAMPLE_STATIONS[0]!} manager={false} login={null} />} />
+        : <StationPage s={s} manager={manager} login={login ?? null} />}
+    </div>
+  );
+}
+
+/** A station's page under its bar: how its machine is, what runs on it, its screens, logins, settings and versions. */
+function StationPage({ s, manager, login }: { s: StationView; manager: boolean; login: string | null }) {
+  const app = useApp();
+  return (
+    <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
+      {/* Every part keeps its room as what it shows comes and goes (not read yet: in its bones); only being online or
+          offline changes what the page is. */}
+      {s.online ? <Card><StationFigures s={s} /></Card> : (
+        <Card><span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>{s.blocked ?? t("web-mobile.stations.offlineNote", { name: NAME })}</span><RetryPill trying={s.link.retrying === true} /></span></Card>
       )}
+      {/* What runs on it is in settings' lists, every station's together; here, how much of it there is (once read), and its versions. */}
+      <SectionHeader title={t("web-mobile.stations.onThis")} start={24} />
+      <ListCard>
+        <GoRow title={t("web-mobile.settings.connects")} value={s.overview ? t("web-mobile.settings.connectsCount", { n: s.overview.connects.length }) : undefined} onClick={() => app.push(app.at(`/settings/connects?station=${s.id}`))} />
+        <GoRow title="Profile" value={s.overview ? t("web-mobile.settings.profilesCount", { n: s.overview.profiles.length }) : undefined} onClick={() => app.push(app.at(`/settings/profiles?station=${s.id}`))} />
+        <GoRow title={t("web-mobile.settings.memory")} onClick={() => app.push(app.at(`/s/${s.id}/memory`))} />
+        {/* Its drive, where the station has one (one from before it has none: nothing offered). */}
+        {s.overview?.drive && <GoRow title={t("web-pages.drive.title")} value={s.overview.drive.roots.length ? t("web-pages.drive.rootsCount", { n: s.overview.drive.roots.length }) : t("web-pages.drive.notShared")}
+          onClick={() => app.push(app.at(`/s/${s.id}/files`))} />}
+      </ListCard>
+      {/* Its screens, to see and drive (docs/remote-screens.md). */}
+      <ScreensCard station={s.station} />
+      {/* What macOS lets its still.fail Helper do (a Mac's station only), each grant asked for from here. */}
+      {s.online && s.overview?.permissions && <PermissionsCard station={s.station} permissions={s.overview.permissions} />}
+      {/* What its search finds of the machine (docs/search.md): the person's own data only where its managers say. */}
+      {s.online && s.overview?.search?.files === "spotlight" && <SearchCard station={s.station} personal={s.overview.search.personal} manager={manager} />}
+      <Logins station={s.station} marked={login} />
+      {/* The variables what it starts for its agents runs with (docs/agent-env.md); none from a station from before them. */}
+      {s.overview?.agentEnv && <AgentEnv station={s.station} env={s.overview.agentEnv} manager={manager} />}
+      {manager && <Workspaces s={s} />}
+      {s.online && s.overview && <Versions station={s.station} updates={s.overview.updates} manager={manager} beta={s.betaOffered ?? false} />}
+      <div style={{ height: 30 }} />
     </div>
   );
 }

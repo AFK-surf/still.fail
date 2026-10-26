@@ -60,7 +60,10 @@ let post: (message: unknown) => void = () => undefined;
  * demo's own: a topic's value or a call's answer, undefined for the demo's. The site adds none.
  */
 export interface DemoExtension {
-  /** A `CoreError` instead: the topic fails as the core would say (a cloud from before without it, say). */
+  /**
+   * A `CoreError` instead: the topic fails as the core would say (a cloud from before without it, say); `HELD`: it is
+   * never answered, as one the core is still reading (its page waiting).
+   */
   topic?(topic: Topic): unknown;
   /** The demo's own value for a topic, changed (or undefined: as it is). */
   then?(topic: Topic, value: unknown): unknown;
@@ -72,17 +75,19 @@ export interface DemoExtension {
   stream?(name: string, params: Record<string, unknown>, emit: (value: unknown, bytes?: Uint8Array) => void, signal: AbortSignal): Promise<unknown> | undefined;
 }
 const extensions: DemoExtension[] = [];
+/** A topic an extension holds (`topic`): the core says nothing of it yet. */
+export const HELD = Symbol("held");
 export function extendDemo(extension: DemoExtension): void { extensions.push(extension); }
 
 function valueOf(topic: Topic): unknown {
+  const value = chineseValueOf(topic);
   // On the site's English page, what the demo makes up is said in English too (english.ts).
-  if (language === "en") return inEnglish(chineseValueOf(topic));
-  return chineseValueOf(topic);
+  return language === "en" && value !== HELD ? inEnglish(value) : value;
 }
 
 function chineseValueOf(topic: Topic): unknown {
   const value = extendedValueOf(topic);
-  if (topic.topic !== "chat" || !value || value instanceof CoreError) return value;
+  if (topic.topic !== "chat" || !value || value instanceof CoreError || value === HELD) return value;
   const chat = value as ChatView;
   // Like the real core, send prose with the message, before the row's first layout. Stories may change its words
   // in an extension: read the final text, so the source offsets and the tree always describe those same words.
@@ -309,16 +314,17 @@ function shareOpen(source: string, station: string, id: string | undefined, titl
 
 // Every topic starts at its value: the first render shows the demo at once (and so does the site built to HTML). One
 // that fails is loading until its error comes.
-setTopicSource((topic) => { const v = valueOf(topic); return v instanceof CoreError ? undefined : v; });
+setTopicSource((topic) => { const v = valueOf(topic); return v instanceof CoreError || v === HELD ? undefined : v; });
 
-/** A topic's value as the core sends it, or its error. */
+/** A topic's value as the core sends it, or its error; null while it is held. */
 function said(id: number, topic: Topic): unknown {
   const v = valueOf(topic);
+  if (v === HELD) return null;
   return v instanceof CoreError ? { id, error: { code: v.code, message: v.message, ...(v.status !== undefined ? { status: v.status } : {}) } } : { id, value: v };
 }
 
 function publish() {
-  for (const [id, topic] of subs) post(said(id, topic));
+  for (const [id, topic] of subs) { const m = said(id, topic); if (m) post(m); }
 }
 
 // What the visitor sends is answered as an account its provider has banned would be: the turn fails, still.fail says why in
@@ -496,7 +502,8 @@ setCore(new CoreClient((onMessage) => {
       if (message.subscribe) {
         subs.set(message.id, message.subscribe);
         seen.set(JSON.stringify(message.subscribe), message.subscribe);
-        post(said(message.id, message.subscribe));
+        const m = said(message.id, message.subscribe);
+        if (m) post(m);
       } else if (message.unsubscribe) {
         subs.delete(message.id);
       } else if (message.cancel) {
@@ -621,7 +628,7 @@ export const demoCore = { chats, publish };
 export function demoTape(extra: Topic[] = []): { topic: Topic; value: unknown }[] {
   const all = new Map(seen);
   for (const t of extra) all.set(JSON.stringify(t), t);
-  return [...all.values()].flatMap((topic) => { const v = valueOf(topic); return v instanceof CoreError || v === undefined ? [] : [{ topic, value: v }]; });
+  return [...all.values()].flatMap((topic) => { const v = valueOf(topic); return v instanceof CoreError || v === undefined || v === HELD ? [] : [{ topic, value: v }]; });
 }
 
 /** The demo's chats stop where they are, nobody at work any more (the stories' tests, to look at a page that holds still). */
@@ -693,8 +700,8 @@ export function mountDemo(element: HTMLElement, options: DemoOptions = {}): Moun
     focus.call(this, { ...options, preventScroll: true });
   };
   // A link out of the demo (Slack, a web service, an app's settings) opens nothing: it too needs a real still.fail instance. Only the
-  // app's own links count, in its box or its dialogs and menus on the page; the page's own, and the note's, go.
-  const inApp = (el: Element) => !el.closest("[data-real-stillfail]") && (root.contains(el) || !!el.closest("[role=dialog], [role=menu], [data-radix-popper-content-wrapper]"));
+  // app's own links count, in its box or its dialogs and menus on the page; the page's own go.
+  const inApp = (el: Element) => root.contains(el) || !!el.closest("[role=dialog], [role=menu], [data-radix-popper-content-wrapper]");
   document.addEventListener("click", (event) => {
     const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
     if (!link || !inApp(link)) return;

@@ -113,18 +113,19 @@ test "a Windows window laid out Small: its buttons in the band over the page; on
     }
   }
   // laid out Medium: on the tape's line, concentric with the top right corner of the panel at the window's edge (its
-  // 30, 6 in: 20), the sidebar in use and the page's strip at the right as wide as holds them (the rule's 8 before
+  // 28, 6 in: 18), the sidebar in use and the page's strip at the right as wide as holds them (the rule's 8 before
   // them on it, its edge 6 past that)
   let t = wide_tester(calls, mode="chat", w=690.0, h=840.0, platform=3, window_corner=8.0, window_inset=true)
   t.run_for(@ui.nav_push_ms)
   guard named_at(t, "关闭窗口") is Some((cx, cy, cw, _)) else { fail("no close button") }
-  assert_eq((cx + cw, cy), (670.0, 20.0))
+  let line = @sf.window_in + @sf.tape_line
+  assert_eq((cx + cw, cy), (690.0 - line, line))
   guard named_at(t, "最小化") is Some((mx, _, _, _)) else { fail("no minimize button") }
   assert_eq(@sfdesk.tape_shows_right(), 690.0 - (mx - 17.0) + 6.0)
   // the page's panel brought over: where they are the same, its bar's keys before them
   t.tap(650.0, 400.0)
   t.run_for(@sfdesk.side_move_ms * 2.0)
-  assert_eq(named_at(t, "关闭窗口").map(fn(r) { (r.0 + r.2, r.1) }), Some((670.0, 20.0)))
+  assert_eq(named_at(t, "关闭窗口").map(fn(r) { (r.0 + r.2, r.1) }), Some((690.0 - line, line)))
   assert_eq(past_rule(t, mx - 17.0), None)
 }
 

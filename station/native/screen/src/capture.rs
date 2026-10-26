@@ -1,5 +1,6 @@
 // The display's pictures: Windows.Graphics.Capture on a D3D11 device, each new one copied into a texture of the view's
-// own (the capture's buffers go back to it at once), and the video processor that scales that into the view's bounds
+// own (the capture's buffers go back to it at once; an HDR display's taken as FP16 and made SDR on the way, hdr.rs),
+// and the video processor that scales that into the view's bounds
 // as NV12 (for the encoder) or BGRA (for a JPEG).
 use std::sync::mpsc::Sender;
 
@@ -115,6 +116,9 @@ pub struct Capture {
     token: i64,
     item: GraphicsCaptureItem,
     closed: i64,
+    /// The pictures' format: FP16 on an HDR display (made SDR by `sdr`), else BGRA.
+    format: DirectXPixelFormat,
+    sdr: Option<super::hdr::ToSdr>,
     /// The display it captures.
     pub monitor: HMONITOR,
 }
@@ -127,7 +131,10 @@ impl Capture {
         let dxgi: IDXGIDevice = gpu.device.cast()?;
         let device: IDirect3DDevice = unsafe { CreateDirect3D11DeviceFromDXGIDevice(&dxgi)? }.cast()?;
         let size = item.Size()?;
-        let pool = Direct3D11CaptureFramePool::CreateFreeThreaded(&device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, size)?;
+        // HDR on: FP16, made SDR here (an HDR display read as BGRA comes out washed out). Without the shader, as BGRA.
+        let sdr = super::hdr::sdr_white(monitor).and_then(|white| super::hdr::ToSdr::new(&gpu.device, white).ok());
+        let format = if sdr.is_some() { DirectXPixelFormat::R16G16B16A16Float } else { DirectXPixelFormat::B8G8R8A8UIntNormalized };
+        let pool = Direct3D11CaptureFramePool::CreateFreeThreaded(&device, format, 2, size)?;
         let told = arrived.clone();
         let token = pool.FrameArrived(&TypedEventHandler::new(move |_, _| {
             let _ = told.send(super::view::Msg::Frame);
@@ -146,7 +153,12 @@ impl Capture {
         let _ = session.SetIsCursorCaptureEnabled(cursor);
         let _ = session.SetIsBorderRequired(false);
         session.StartCapture()?;
-        Ok(Capture { pool, session, device, size, token, item, closed, monitor })
+        Ok(Capture { pool, session, device, size, token, item, closed, format, sdr, monitor })
+    }
+
+    /// The SDR white (nits) an HDR display's pictures are made SDR at; none when they are not.
+    pub fn hdr_white(&self) -> Option<f32> {
+        self.sdr.as_ref().map(|s| s.white)
     }
 
     /// The newest picture since the last (copied into `into`, made or remade at its size), its time (µs, the system's
@@ -173,7 +185,7 @@ impl Capture {
         // The display changed size: the pool too, from the next picture (this one is the old size, cropped to the new).
         if size.Width != self.size.Width || size.Height != self.size.Height {
             self.size = size;
-            self.pool.Recreate(&self.device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, size)?;
+            self.pool.Recreate(&self.device, self.format, 2, size)?;
         }
         let (width, height) = (desc.Width.min(size.Width as u32), desc.Height.min(size.Height as u32));
         let fits = into.as_ref().is_some_and(|t| {
@@ -185,8 +197,12 @@ impl Capture {
             *into = Some(gpu.texture(width, height, DXGI_FORMAT_B8G8R8A8_UNORM, D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE)?);
         }
         let target = into.as_ref().unwrap();
-        let region = D3D11_BOX { left: 0, top: 0, front: 0, right: width, bottom: height, back: 1 };
-        unsafe { gpu.context.CopySubresourceRegion(target, 0, 0, 0, 0, &source, 0, Some(&region)) };
+        if let Some(sdr) = self.sdr.as_mut() {
+            sdr.run(&gpu.device, &gpu.context, &source, target, width, height)?;
+        } else {
+            let region = D3D11_BOX { left: 0, top: 0, front: 0, right: width, bottom: height, back: 1 };
+            unsafe { gpu.context.CopySubresourceRegion(target, 0, 0, 0, 0, &source, 0, Some(&region)) };
+        }
         frame.Close()?;
         Ok(Some(at))
     }

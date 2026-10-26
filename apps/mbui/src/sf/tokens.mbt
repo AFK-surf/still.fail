@@ -227,15 +227,17 @@ pub let lit_reach : Double = panel_pad
 pub let corner_fit : @ui.CornerFit = { least: 6.0, most: pane_corner, near: 4.0, far: 16.0 }
 
 ///|
-/// The corner of the tape's panels (laid out Medium) where they stand alone: a little less round than the ladder's pane
-/// corner a dialog has (the user, 2026-10-25: 中屏的页面圆角想办法搞小一点点). Linked (tape_corners), what lies in their
-/// corners follows it there (a composer, a bar's buttons, the rail's grounds), round as that makes it; what is in the
-/// middle of a page keeps the ladder's.
-pub let tape_corner : Double = 30.0
+/// The corner of the tape's panels (laid out Medium) where they stand alone: less round than the ladder's pane corner a
+/// dialog has (the user, 2026-10-25: 中屏的页面圆角想办法搞小一点点, 34 to 30; 2026-10-26: 最好能把这个中屏的页面圆角搞小
+/// 点点, 30 to 28). Linked (tape_corners), what lies in their corners follows it there (a composer, a bar's buttons, the
+/// rail's grounds), round as that makes it; what is in the middle of a page keeps the ladder's. A composer's capsule 48
+/// high is as high as stands concentric in it (28 less its half, 24: corner_fit's nearest, 4), and a finger's comes down
+/// to it (foot_capsule_h); opened, it is a card less round than the ladder's there (pane_foot_corner: 24.8, 4 in).
+pub let tape_corner : Double = 28.0
 
 ///|
 /// The tape's one line (laid out Medium): how far under its panels' tops their first row's round buttons stand, as far
-/// as a bar's (32 across) are concentric with the tape's corner (30 less their half, 14): every bar of the tape
+/// as a bar's (32 across) are concentric with the tape's corner (28 less their half, 12): every bar of the tape
 /// (tape_bar_over) and the sidebar's first row on it, whatever a panel's own corners are (the user, 2026-10-25: a page's
 /// bar and the sidebar's first row each where it stood alone, not on one line). The tape's own place for its own
 /// corner (corner_fit, for what follows a corner it does not choose: a window's).
@@ -286,7 +288,7 @@ pub fn tape_corners(left~ : Bool, right~ : Bool) -> FixedArray[@ui.CornerOf] {
 /// A panel of the tape's corners `k` (tape_corners: top left, then round it) as a style's corner, each linked to where
 /// it comes from: the tape's panels' alone (frame.mbt), their corners at the window's edge its, the others the tape's.
 pub fn corners_radius(k : FixedArray[@ui.CornerOf]) -> @ui.Radius {
-  // det-ok(corners-each): the tape's panels: their corners at the window's edge follow the window's, the others the tape's 30 (the user, 2026-10-25)
+  // det-ok(corners-each): the tape's panels: their corners at the window's edge follow the window's, the others the tape's 28 (the user, 2026-10-25, 2026-10-26)
   LinkedEach(k[0], k[1], k[2], k[3])
 }
 
@@ -465,9 +467,57 @@ pub fn pane_foot_in(holds? : Double = 0.0) -> Double {
 
 ///|
 /// Where a card stands in from a panel's corner `corner` round to be a card's corner of the ladder's there (the
-/// ladder's inset in a pane corner's 34, 10; in the tape's 30, 5): its corner its own wherever it follows the panel's.
+/// ladder's inset in a pane corner's 34, 10; in one of 30, 5), as near as corner_fit lets where that is nearer (the
+/// tape's 28: 4, less round than a card there, pane_foot_corner).
 fn foot_inset(corner : Double) -> Double {
   dmax(corner_fit.near, (corner - card_corner) * @ui.smooth_scale)
+}
+
+///|
+/// The corner of a box across the foot of what is built standing pane_foot_in(holds) in (a composer opened): concentric
+/// with the roundest of the panel's foot corners it follows from there, all its corners alike (one it cannot follow, a
+/// Mac window's at the page's right, as that one: InnerOr's own); a card's of the ladder's where it follows none (a
+/// window's whole, a panel's foot corners all too square). The tape's 28, 4 in: 24.8.
+pub fn pane_foot_corner(holds? : Double = 0.0) -> Double {
+  match pane_radii() {
+    Some(k) => {
+      let d = pane_foot_in(holds~)
+      let least = holds_least(holds)
+      let mut out = card_corner
+      let mut roundest = -1.0
+      for r in [k[3], k[2]] {
+        match fit_places(r, least~) {
+          Some((nearest, furthest)) if d >= nearest - 0.5 && d <= furthest + 0.5 && r > roundest => {
+            roundest = r
+            out = @ui.concentric(r, d)
+          }
+          _ => ()
+        }
+      }
+      out
+    }
+    None => card_corner
+  }
+}
+
+///|
+/// How high a capsule across the foot of what is built is (a composer's one line), `own` high alone, round controls
+/// `holds` across in its ends: in a panel of its own whose foot corners are too square for it to stand concentric in
+/// them (corner_fit's nearest place: its half that corner less 4), as high as stands so in the roundest of them, where
+/// what it holds still stands as near as that in its own ends (holds and 4 each side); else `own`. A finger's 52 (its
+/// 36 buttons 8 in) in the tape's 28: 48, its buttons 6 in (the user, 2026-10-26: 最好能把这个中屏的页面圆角搞小点点).
+pub fn foot_capsule_h(own : Double, holds : Double) -> Double {
+  match pane_radii() {
+    Some(k) => {
+      let most = 2.0 * (dmax(k[2], k[3]) - corner_fit.near)
+      if own > most + 0.5 && most >= holds + 2.0 * corner_fit.near - 0.5 {
+        most
+      } else {
+        own
+      }
+    }
+    None => own
+  }
 }
 
 ///|
@@ -2248,11 +2298,30 @@ pub fn rail_in_tape_room() -> @ui.Space {
 }
 
 ///|
-/// How far in from the composer's box its round controls stand in its foot corners, a card's corner of the ladder's
-/// (concentric with it as round ones are: capsule_in; below its padding where they are larger than it leaves room for:
-/// a phone's 36).
+/// The corner of the composer being built, opened (its place's: @sfpages.ComposerPlace), what waits in it and its round
+/// controls following it (composer_inner, composer_round_in): a card's of the ladder's alone (a new chat's in the
+/// middle of its page, a phone's); at a panel's foot, concentric with its corners where it stands (pane_composer_corner).
+// kept across runs: said by the composer as it builds, from where it stands
+pub let composer_round : Ref[Double] = Ref(card_corner)
+
+///|
+/// The composer's box's corner (composer_round).
+pub fn composer_corner() -> Double {
+  composer_round.val
+}
+
+///|
+/// The composer's box's corner at a panel's foot: concentric with its foot corners where it stands, its round controls
+/// followed in turn (pane_foot_corner: the tape's 28, 24.8).
+pub fn pane_composer_corner() -> Double {
+  pane_foot_corner(holds=theme().round.side)
+}
+
+///|
+/// How far in from the composer's box its round controls stand in its foot corners (concentric with its corner as round
+/// ones are: capsule_in; below its padding where they are larger than it leaves room for: a phone's 36).
 pub fn composer_round_in() -> Double {
-  capsule_in(card_corner, theme().round.side)
+  capsule_in(composer_corner(), theme().round.side)
 }
 
 ///|

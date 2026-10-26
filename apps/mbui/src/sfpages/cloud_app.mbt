@@ -96,11 +96,14 @@ let landing_error : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, w=Full
 
 ///|
 /// An invitation: a card of the ladder's on the surface, its words 20 in, its button under them in its foot corners
-/// (concentric with its corner: @sf.card_foot_in), 12 apart.
+/// (concentric with its corner: @sf.card_foot_in, as high as the screen's buttons are), 12 apart.
+fn invitation_row() -> @ui.Style {
+  invitation_card.then(@sf.foot_pad(@sf.button_height()))
+}
+
+///|
 // kept across runs: a value (no field of it changes)
-let invitation_row : @ui.Style = @ui.css("w=Full pt=S5 px=S5 gap=S3 radius=Xl3 bg=Surface").then(
-  @sf.foot_pad(@settings.settings_button_h),
-)
+let invitation_card : @ui.Style = @ui.css("w=Full pt=S5 px=S5 gap=S3 radius=Xl3 bg=Surface")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -257,7 +260,7 @@ fn landing_page_of(c : @ui.Ctx, src : Source, entries : Array[Json], by_link : (
         let (account, inv) = p
         let iv = Some(inv)
         let id = text(iv, "id")
-        c.box(style=invitation_row, fn() {
+        c.box(style=invitation_row(), fn() {
           c.box(style=@sf.full_width, fn() {
             c.text(text(iv, "name"), style=invitation_name) |> ignore
             c.text(

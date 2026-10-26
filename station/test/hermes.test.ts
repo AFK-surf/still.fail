@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { after, test } from "node:test";
 import { HermesDriver, hermesEnv, outcomeOf, hermesCatalog, HERMES_MODEL_LIMIT } from "../src/agents/hermes.ts";
 import type { OpenOptions, RuntimeEvent } from "../src/agents/runtime.ts";
@@ -179,4 +179,46 @@ test('an unconfigured Hermes profile surfaces its ACP detail without retrying', 
   options.profile.env = { ...options.profile.env as Record<string, string>, FAKE_HERMES_OPEN_ERROR: 'invalid_params: model: No default model configured' };
   await assert.rejects(driver.models(options.profile), /No default model configured/);
   assert.equal(readFileSync(dump, 'utf8').trim().split('\n').length, 1);
+});
+
+
+test('a profile may explicitly select an existing Hermes home', async () => {
+  const { options, driver, dump } = setup();
+  const native = join(data, 'existing-home'); mkdirSync(native, { recursive: true });
+  writeFileSync(join(native, 'SOUL.md'), 'Existing personal soul');
+  options.profile.env = { ...options.profile.env as Record<string, string>, HERMES_HOME: native };
+  const env = hermesEnv(options);
+  assert.equal(env.HERMES_HOME, native);
+  assert.equal(env.CLAUDE_CONFIG_DIR, join(native, 'claude'));
+  assert.equal(hermesEnv({ ...options, profile: { ...options.profile, env: { HERMES_HOME: '~/.hermes' } } }).HERMES_HOME, join(homedir(), '.hermes'));
+  assert.throws(() => hermesEnv({ ...options, profile: { ...options.profile, env: { HERMES_HOME: 'relative' } } }), /absolute path/);
+  assert.deepEqual(await driver.models(options.profile), ['openrouter:default', 'openrouter:test']);
+  assert.equal(JSON.parse(readFileSync(dump, 'utf8').trim().split('\n')[0]!).home, native);
+  assert.equal(readFileSync(join(native, 'SOUL.md'), 'utf8'), 'Existing personal soul');
+});
+
+test('switching Hermes homes applies to new conversations and keeps native resume in its original home', async () => {
+  const { options, driver, dump } = setup();
+  const firstHome = join(data, 'native-first'); const secondHome = join(data, 'native-second');
+  mkdirSync(firstHome, { recursive: true }); mkdirSync(secondHome, { recursive: true });
+  options.profile.env = { ...options.profile.env as Record<string, string>, HERMES_HOME: firstHome };
+  const first = await driver.open(options, () => {}); const id = first.id(); await first.dispose();
+  const transcript = transcriptPath('hermes', options.profile.home, id)!;
+  assert.equal(JSON.parse(readFileSync(transcript, 'utf8').split('\n')[0]!).hermesHome, firstHome);
+  options.profile.env = { ...options.profile.env as Record<string, string>, HERMES_HOME: secondHome };
+  const resumed = await driver.open({ ...options, resume: id }, () => {}); await resumed.dispose();
+  const next = await driver.open(options, () => {}); await next.dispose();
+  assert.deepEqual(readFileSync(dump, 'utf8').trim().split('\n').map(l => JSON.parse(l).home), [firstHome, firstHome, secondHome]);
+});
+
+test('a pre-home-selection transcript still resumes in the original private Hermes home', async () => {
+  const { options, driver } = setup();
+  const first = await driver.open(options, () => {}); const id = first.id(); await first.dispose();
+  const transcript = transcriptPath('hermes', options.profile.home, id)!;
+  const lines = readFileSync(transcript, 'utf8').trim().split('\n'); const header = JSON.parse(lines[0]!);
+  delete header.hermesHome; lines[0] = JSON.stringify(header); writeFileSync(transcript, lines.join('\n') + '\n');
+  const selected = join(data, 'another-home'); mkdirSync(selected, { recursive: true });
+  options.profile.env = { ...options.profile.env as Record<string, string>, HERMES_HOME: selected };
+  assert.equal(hermesEnv({ ...options, resume: id }).HERMES_HOME, join(options.profile.home, 'hermes'));
+  const resumed = await driver.open({ ...options, resume: id }, () => {}); await resumed.dispose();
 });

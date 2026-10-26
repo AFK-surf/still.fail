@@ -2,9 +2,9 @@
 // parsed here: an agent's message comes with its tree (the chat's `md`, read in the core's worker); other words (a
 // file, a memory) are read by the core's own reader, here, kept by their text. Code blocks in the colours the core
 // says (`ink`, client/core-ts/src/highlight.ts: vitesse light and dark, as every client paints them), with their
-// language named and a copy button.
+// language named and a copy button; tables with theirs, copying them as Markdown, as CSV or as a picture.
 import { Check, Copy } from "@stillfail/ui/icons.tsx";
-import { Fragment, isValidElement, lazy, memo, Suspense, useEffect, useMemo, useRef, useState, type ComponentProps, type ComponentType, type CSSProperties, type ReactNode } from "react";
+import { Fragment, isValidElement, lazy, memo, Suspense, useContext, useEffect, useMemo, useRef, useState, type ComponentProps, type ComponentType, type CSSProperties, type ReactNode } from "react";
 import type { Attachment } from "./core/shapes.ts";
 import type { Md, MdNode } from "./core/md.ts";
 import { inlineFile, inlineFiles } from "./Prose.css.ts";
@@ -23,8 +23,11 @@ import { isWords, wordsOf } from "../../client/core-ts/src/mdWords.ts";
 import { FileRef, LinkHover, pathIn } from "./Peeks.tsx";
 import { Tip } from "./ui.tsx";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
+import { InBones } from "@stillfail/ui/waiting.tsx";
 import { Mermaid } from "./Viz.tsx";
 import { t } from "./i18n.ts";
+import { IconButton, Menu, type MenuItem } from "@stillfail/ui/parts.tsx";
+import { longPicture } from "./longPicture.ts";
 
 // Only a math-containing view loads the shared alphabet. This chunk draws the core's layout; it has no TeX parser.
 const MathView = lazy<ComponentType<{ text: string; drawing?: MathDrawing | null | undefined }>>(() => import("./Math.tsx").then((m) => ({ default: m.Formula })).catch(() => ({ default: ({ text }: { text: string }) => <code>{text}</code> })));
@@ -67,6 +70,63 @@ export function Code({ text, language, ink }: { text: string; language?: string 
       <pre className={css.codePre}><code>{colours && text.length > 16000 ? <LongCode text={text} ink={colours} /> : coloured ?? text}</code></pre>
     </div>
   );
+}
+
+/** A table's picture: at least two pixels a CSS pixel (the screen's where it has more, three at most), its ground this
+ * far round it (as the app's: table_copy.mbt). */
+const TABLE_SHOT = { least: 2, most: 3, margin: 16 };
+
+/**
+ * A table as markdown shows one: wider than the message, it scrolls sideways within it, its cells keeping their words
+ * whole; its frame is the table's, scrolling with it. Its copy key past its right edge, in what scrolls (Prose.css.ts
+ * tableKey): beside it where the message has room, else past its end, scrolled to; its menu copies it as Markdown or
+ * as CSV, as the core wrote them (`md`, `csv`: markdown.ts tableMarkdown, tableCsv; none from a core before them), or
+ * as a picture of it whole on the page's ground (longPicture).
+ */
+function Table({ md, csv, children }: { md: string | undefined; csv: string | undefined; children: ReactNode }) {
+  const frame = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState(false);
+  const toast = useToast();
+  const done = () => {
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  const failed = (e: unknown) => toast(t("web-main.copyFailed", { error: failure(e) }));
+  const words = (text: string) => void navigator.clipboard.writeText(text).then(done, failed);
+  const picture = () => {
+    const el = frame.current;
+    if (!el) return;
+    try {
+      // (the picture as it is made: Safari takes a clipboard's item only within the press, as a promise)
+      const png = longPicture(el, { scale: Math.min(Math.max(window.devicePixelRatio || 1, TABLE_SHOT.least), TABLE_SHOT.most), background: groundOf(el), margin: TABLE_SHOT.margin });
+      void navigator.clipboard.write([new ClipboardItem({ "image/png": png })]).then(done, failed);
+    } catch (e) {
+      failed(e);
+    }
+  };
+  const items: MenuItem[] = [
+    ...(md ? [{ label: t("web-main.prose.copyMarkdown"), onSelect: () => words(md) }] : []),
+    ...(csv ? [{ label: t("web-main.prose.copyCsv"), onSelect: () => words(csv) }] : []),
+    { label: t("desktop.contextMenu.copyImage"), onSelect: picture },
+  ];
+  return (
+    <div className={css.tableScroll}>
+      <div ref={frame} className={css.tableFrame}>{children}</div>
+      {/* (left out of a picture of the chat: Publish.tsx takePicture) */}
+      <div className={css.tableKey} data-shot-off="">
+        <Menu items={items} trigger={<IconButton label={copied ? t("common.copied") : t("web-main.prose.copyTable")} icon={copied ? Check : Copy} />} />
+      </div>
+    </div>
+  );
+}
+
+/** The ground `el` is drawn on: the first of what holds it with one of its own (the page's at last). */
+function groundOf(el: Element): string {
+  for (let at = el.parentElement; at; at = at.parentElement) {
+    const ground = getComputedStyle(at).backgroundColor;
+    if (ground && ground !== "transparent" && !/^rgba\(.*,\s*0\)$/.test(ground)) return ground;
+  }
+  return "#fff";
 }
 
 /** Plain text is present even far offscreen: browser find, selection, and copying still see the whole block.
@@ -200,15 +260,17 @@ type Cx = {
  */
 export const Prose = memo(function Prose({ children, md, files, file }: { children: string; md?: Md | undefined; files?: Map<string, Attachment>; file?: (f: Attachment, as: "shown" | "link", words?: ReactNode) => ReactNode }) {
   const [read, setRead] = useState<{ text: string; md: Md }>();
+  const inBones = useContext(InBones);
   useEffect(() => {
-    if (md) return;
+    if (md || inBones) return;
     let active = true;
     void core().call("markdown", { text: children }).then((value) => {
       if (active) setRead({ text: children, md: (value as { md: Md }).md });
     }).catch(() => { if (active) setRead({ text: children, md: [["p", [children]]] }); });
     return () => { active = false; };
-  }, [md, children]);
-  const tree = md ?? (read?.text === children ? read.md : undefined);
+  }, [md, children, inBones]);
+  // (in a page's bones, made-up words: their paragraphs as they are, nothing asked of the core)
+  const tree = md ?? (inBones ? children.split("\n\n").map((p): MdNode => ["p", [p]]) : read?.text === children ? read.md : undefined);
   return tree ? <MdView md={tree} source={children} files={files} file={file} /> : null;
 });
 
@@ -308,9 +370,7 @@ function drawMd(node: MdNode, key: number, cx: Cx): ReactNode {
           return cell[0] === "th" ? <th key={j} style={style}>{inner}</th> : <td key={j} style={style}>{inner}</td>;
         })}</tr>;
       };
-      // A table wider than the message scrolls sideways within it, its cells keeping their words whole; its frame is
-      // the table's, scrolling with it.
-      return <div key={key} className={css.tableScroll}><div className={css.tableFrame}><table><thead>{row(head, 0)}</thead>{rows.length > 0 && <tbody>{rows.map((r, i) => row(r, i))}</tbody>}</table></div></div>;
+      return <Table key={key} md={str(a.md)} csv={str(a.csv)}><table><thead>{row(head, 0)}</thead>{rows.length > 0 && <tbody>{rows.map((r, i) => row(r, i))}</tbody>}</table></Table>;
     }
     case "hr": return <hr key={key} />;
     case "b": return <strong key={key}>{kids()}</strong>;

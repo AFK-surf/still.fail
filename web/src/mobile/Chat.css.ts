@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { jobDot } from "../Jobs.css.ts";
-import { mChat, mMessages } from "./styles/chat.css.ts";
+import { mChat, mListTop, mMessages } from "./styles/chat.css.ts";
 import { outsetTop } from "@stillfail/ui/styles/align.ts";
 import { STILL, stillAtOnce } from "@stillfail/ui/styles/still.ts";
 
@@ -49,7 +49,7 @@ export const mChatBar = style({
 });
 /** A chat's page before its chat is there: what it waits on under its bar (which floats over the page), where its
  *  messages start. */
-export const mChatWaiting = style({ paddingTop: "calc(var(--m-top) + 50px)" });
+export const mChatWaiting = style({ paddingTop: mListTop });
 export const mChatBack = style({
   display: "grid", placeItems: "center", flex: "none", width: "40px", height: "40px", padding: "0", border: "0",
   borderRadius: "50%", background: "none", color: "var(--m-accent) !important", cursor: "pointer",

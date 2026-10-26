@@ -6,7 +6,7 @@ import { useCall, useTopic } from "./core/react.ts";
 import type { ArchiveOptionView, ArchivePolicyDraft, ArchivePolicyView, AutomaticDecisionDraft, AutomaticDecisionView, SettingsView } from "./core/shapes.ts";
 import { useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing, useDoingFailed } from "./doing.ts";
-import { Button, Dialog, Field, Segmented, StatusDot, Switch, Spinner, Waiting, WaitLine } from "./ui.tsx";
+import { Button, Dialog, Field, Segmented, StatusDot, Switch, Spinner, Waiting } from "./ui.tsx";
 import { ModelTriple } from "./ModelTriple.tsx";
 import type { Picking } from "./pick.ts";
 import { ChevronRight, Plus, Trash } from "@stillfail/ui/icons.tsx";
@@ -15,6 +15,7 @@ import { stationBase } from "./station.tsx";
 import { StationNamed, StationNamedAt } from "./StationNamed.tsx";
 import * as pages from "./styles/pages.css.ts";
 import * as css from "./AutomaticDecisions.css.ts";
+import { sampleArchivePolicy, sampleStations } from "./samples.ts";
 
 /** Start with the decision point; each point opens the stations that configure it. */
 export function AutomaticDecisions({ workspace }: { workspace: string }) {
@@ -31,7 +32,8 @@ export function AutomaticDecisions({ workspace }: { workspace: string }) {
 export function AutomaticDecisionCompletion({ workspace }: { workspace: string }) {
   const stations = useStations(workspace);
   return <div className={css.content}>
-    {!stations.value && (stations.error ? <p className={css.note}>{stations.error.message}</p> : <Waiting count={2} text={t("common.readingStations")} />)}
+    {!stations.value && (stations.error ? <p className={css.note}>{stations.error.message}</p>
+      : <Waiting text={t("common.readingStations")} sample={<ul className={pages.list}>{SAMPLE_STATIONS.map((s) => <AutomaticDecisionRule key={s.station} workspace={workspace} station={s.station} name={s.name} view={SAMPLE_RULE} form={SAMPLE_FORM} />)}</ul>} />)}
     {stations.value?.length === 0 && <p className={css.note}>{t("web-pages.automaticDecisions.addStation")}</p>}
     <ul className={pages.list}>{stations.value?.map(s => s.online && s.overview?.automaticDecisions
       ? <AutomaticDecisionPanel key={s.station} workspace={workspace} station={s.station} name={s.name} view={s.overview.automaticDecisions} />
@@ -39,8 +41,22 @@ export function AutomaticDecisionCompletion({ workspace }: { workspace: string }
   </div>;
 }
 
+/** Stations and their rule made up, for what the page shows while they are read (in their bones): each a row, on. */
+const SAMPLE_STATIONS = sampleStations(2);
+export const SAMPLE_RULE: AutomaticDecisionView = { canEdit: true, settings: {}, models: [], recent: [] };
+const SAMPLE_DRAFT: AutomaticDecisionDraft = { enabled: true, model: "", dirty: false, pending: false };
+export const SAMPLE_FORM: AutomaticDecisionForm = {
+  d: SAMPLE_DRAFT, state: { value: SAMPLE_DRAFT, error: null, loading: false }, saving: false, refreshing: false, saveFailed: undefined, refreshFailed: undefined,
+  reviewing: false, reviewFailed: undefined, canReview: false, edit: () => undefined, save: () => undefined, refresh: () => undefined, review: () => undefined,
+};
+
 function AutomaticDecisionPanel({ workspace, station, name, view }: { workspace: string; station: string; name: string; view: AutomaticDecisionView }) {
-  const {d, state, saving, saveFailed, reviewing, reviewFailed, canReview, edit, save, review} = useAutomaticDecisionForm(station, view);
+  return <AutomaticDecisionRule workspace={workspace} station={station} name={name} view={view} form={useAutomaticDecisionForm(station, view)} />;
+}
+
+/** A station's rule (`view`) as its row draws it, being edited in `form`. */
+function AutomaticDecisionRule({ workspace, station, name, view, form }: { workspace: string; station: string; name: string; view: AutomaticDecisionView; form: AutomaticDecisionForm }) {
+  const {d, state, saving, saveFailed, reviewing, reviewFailed, canReview, edit, save, review} = form;
   const status = (text: string, waiting = false) => <li className={pages.listRow}><StatusDot state="online" /><span className={pages.listRowText}><span className={pages.listRowTitle}><StationNamedAt station={station} name={name} /></span><span className={css.note}>{waiting && <><Spinner inline />{" "}</>}{text}</span></span></li>;
   if (!view.canEdit) return status(t("web-pages.automaticDecisions.adminOnly"));
   if (!d) return state.error ? status(state.error.message) : status(t("web-pages.automaticDecisions.readingConfig"), true);
@@ -80,11 +96,14 @@ export function AutomaticDecisionPolicy({ workspace, station }: { workspace: str
   const s = stations.value?.find((x) => x.station === station);
   const policy = s?.online ? s.overview?.automaticDecisions?.policy : undefined;
   if (policy && s?.overview?.automaticDecisions?.canEdit) return <ArchivePolicy station={station} policy={policy} />;
-  if (!stations.value && !stations.error) return <WaitLine text={t("common.readingStations")} />;
+  if (!stations.value && !stations.error) return <Waiting text={t("common.readingStations")} sample={<ArchivePolicy station={station} policy={SAMPLE_POLICY} />} />;
   return <p className={css.note}>{stations.error?.message ?? (!stations.value ? t("common.readingStations")
     : !s?.online ? t("web-pages.automaticDecisions.offline") : !s.overview ? t("common.connecting")
     : s.overview.automaticDecisions && !s.overview.automaticDecisions.canEdit ? t("web-pages.automaticDecisions.adminOnly") : t("web-pages.automaticDecisions.upgrade"))}</p>;
 }
+
+/** An archive policy made up, for what its page shows while the stations are read (in its bones). */
+export const SAMPLE_POLICY = sampleArchivePolicy();
 
 /** The archive policy: its words, then its options in their two groups, each with how many chats the checks put
  *  there. Each part is edited on its own, in a dialog: the words, an option (with the chats it got), a new option. */
@@ -181,6 +200,9 @@ export function usePolicyDraft(station: string, form: string) {
   const save = () => call("automaticDecisions.policy.save", { station, form }).then(() => toast(t("web-pages.archivePolicy.saved")));
   return { form, d: state.value, saving, saveFailed, change, edit, reset, add, save };
 }
+
+/** A station's rule being edited (useAutomaticDecisionForm). */
+export type AutomaticDecisionForm = ReturnType<typeof useAutomaticDecisionForm>;
 
 /** Both layouts render the same core-owned draft and named actions. */
 export function useAutomaticDecisionForm(station: string, view: AutomaticDecisionView) {

@@ -511,6 +511,8 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       size=body_size,
       found=marked_of(here, m.ts),
       bleed=here.gutter,
+      // (none of its tables' copy keys in a picture of the chat)
+      copy=picturing.val is None,
       on_link=fn(h) {
         match placed.get(@sf.file_name_of(h)) {
           Some(a) if is_viz(a.name) => viz_open_full(a.name, here.station, owner_of(here, a), a.path, here.session, linked=true)

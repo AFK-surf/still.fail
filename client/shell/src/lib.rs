@@ -862,6 +862,15 @@ impl Inner {
             let path = storage_path(&self.dir, str_of(a, "key")?);
             return Ok(if path.is_file() { json!(path.to_string_lossy()) } else { Value::Null });
         }
+        // An Ed25519 key's public half and its signature of `message` (hex both ways): a lock claim's (client/core-ts
+        // lock.ts), signed for each workspace and endpoint as the core connects. In Hermes (no JIT) the JS one took ~8 ms
+        // each and longer the first time, on the core's thread before anything the UI had asked for.
+        if op == "ed25519.sign" {
+            let seed: [u8; 32] = hex::decode(str_of(a, "seed")?).map_err(err)?.try_into().map_err(|_| "the seed is not 32 bytes".to_string())?;
+            let key = SecretKey::from_bytes(&seed);
+            let message = hex::decode(str_of(a, "message")?).map_err(err)?;
+            return Ok(json!({ "publicKey": hex::encode(key.public().as_bytes()), "signature": hex::encode(key.sign(&message).to_bytes()) }));
+        }
         let handle = self.handle(id_of(a)?)?;
         match (op, handle) {
             ("iroh.endpointId", Handle::Endpoint(e, _)) => Ok(json!(hex::encode(e.id().as_bytes()))),
@@ -1219,6 +1228,21 @@ mod tests {
         assert!(sync("sql.open", r#"{"name":"../x"}"#)["error"].is_string());
         let memory = sync("sql.open", r#"{"name":":memory:"}"#)["value"]["id"].as_u64().unwrap();
         assert_eq!(sync("sql.all", &format!(r#"{{"id":{memory},"sql":"SELECT 2"}}"#))["value"], json!([[2]]));
+    }
+
+    #[test]
+    fn signs_with_an_ed25519_seed() {
+        let dir = TempDir::new();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        let sync = |op: &str, json: &str| -> Value { serde_json::from_slice(&shell.call_sync(op, json.as_bytes())).unwrap() };
+        // RFC 8032's test 2
+        let signed = sync("ed25519.sign", r#"{"seed":"4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb","message":"72"}"#);
+        assert_eq!(signed["value"]["publicKey"], json!("3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c"));
+        assert_eq!(
+            signed["value"]["signature"],
+            json!("92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00")
+        );
+        assert!(sync("ed25519.sign", r#"{"seed":"4ccd","message":"72"}"#)["error"].is_string());
     }
 
     #[test]

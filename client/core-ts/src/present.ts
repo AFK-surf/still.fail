@@ -1126,12 +1126,19 @@ function overview(value: J, c: Clock, station: string | null): J {
         plan !== "" &&
         !(get(l, "runtime") !== undefined && taken.some((r) => equal(r, get(l, "runtime")))) &&
         !(email !== undefined && subscriptions.some(([runtime, bound]) => equal(get(l, "runtime"), runtime) && email.trim().toLowerCase() === bound));
-      // Its plan as a name (pro: Pro), for its tag.
-      const planText = typeof plan === "string" && plan !== "" ? `${plan[0]!.toUpperCase()}${plan.slice(1)}` : "";
+      const planText = typeof plan === "string" ? planName(plan) : "";
       return isObject(l) ? { ...l, offered, planText } : l;
     });
   }
   return v;
+}
+
+/// A subscription's plan as its vendor names it, from the word its login keeps (Claude's `max`, ChatGPT's `plus`,
+/// `prolite`, `free_workspace`): those not plain words as said, the rest each word capitalized.
+const PLAN_NAMES: Record<string, string> = { prolite: "Pro Lite" };
+
+function planName(plan: string): string {
+  return PLAN_NAMES[plan.toLowerCase()] ?? plan.split(/[_\s]+/).filter((w) => w !== "").map((w) => `${w[0]!.toUpperCase()}${w.slice(1)}`).join(" ");
 }
 
 /// The days a station's automatic archiving offers to wait (设置 › 归档): once idle, and heard only in Slack (0: never).

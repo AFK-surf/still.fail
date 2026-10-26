@@ -1074,6 +1074,9 @@ let en : Map[String, String] = {
   "web-main.profile.blocked": "Disabled",
   "web-main.profile.machineSignedIn": "Signed in",
   "web-main.profile.signedIn": "Signed in",
+  "web-main.prose.copyCsv": "Copy as CSV",
+  "web-main.prose.copyMarkdown": "Copy as Markdown",
+  "web-main.prose.copyTable": "Copy table",
   "web-main.quota.left": "{label}: {left}% left",
   "web-main.quota.leftAlone": "{left}% left",
   "web-main.quota.unchecked": "Quota not checked yet",
@@ -1955,4 +1958,7 @@ let en : Map[String, String] = {
   "web-pages.workspace.people": "{n} people",
   "web-pages.workspace.people.one": "1 person",
   "web-pages.workspace.resizeSidebar": "Resize sidebar",
+  "web-pages.drive.viewAll": "View all files",
+  "web-pages.drive.pinnedFolders": "Pinned folders",
+  "web-pages.screen.none": "No screens yet",
 }

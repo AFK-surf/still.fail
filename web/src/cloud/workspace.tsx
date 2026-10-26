@@ -51,7 +51,7 @@ import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, S
 import { PeopleContext, profilesPage, scopeOf, StationContext, stationBase, useSidebarMode, useStationList, type Station } from "../station.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Select, Tip, Spinner, Waiting } from "../ui.tsx";
-import { toMadeChat } from "../Chat.tsx";
+import { ChatSample, toMadeChat } from "../Chat.tsx";
 import { ComposerDock } from "../dock.tsx";
 import { Previews } from "../Previews.tsx";
 import { useAccounts, useSignIn, type Account } from "./accounts.ts";
@@ -335,9 +335,9 @@ function Onboarding({ entry }: { entry: WorkspaceEntry }) {
 /** `stations` is undefined until the core has listed them. */
 function WorkspaceHome({ id, stations }: { id: string; stations: Station[] | undefined }) {
   const last = useLastChat(id, `/w/${id}/new`);
-  if (!stations) return <Waiting shape="messages" fill text={t("common.readingStations")} />;
+  if (!stations) return <Waiting fill text={t("common.readingStations")} sample={<ChatSample />} />;
   // With stations there is always a chat in view: the one last open (the core keeps it), or a new one.
-  if (stations.length) return last ? <Navigate to={last} replace /> : <Waiting shape="messages" fill />;
+  if (stations.length) return last ? <Navigate to={last} replace /> : <Waiting fill sample={<ChatSample />} />;
   return (
     <Empty>
       <Illustration name="no-station" />

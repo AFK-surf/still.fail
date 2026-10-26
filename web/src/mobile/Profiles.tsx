@@ -5,7 +5,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { stationApi, useAction, useMemberships, useOverview, useProfiles, useStationCall, useStations, type LoginJob, type Profile, type Quota, type StationView, type Tone } from "../api.ts";
-import type { MachineLogin, ProfileFlowView, RuntimeInstall, WorkspaceProfile } from "../core/shapes.ts";
+import type { ApiProvider, MachineLogin, ProfileFlowView, ProviderGroup, RuntimeInstall, WorkspaceProfile } from "../core/shapes.ts";
 import { hosts, profileGroups } from "../cloud/settings.tsx";
 import { ACCESS, KEYED, RUNTIME_LABEL } from "../format.ts";
 import { Check, ChevronRight, Key, More } from "@stillfail/ui/icons.tsx";
@@ -35,6 +35,7 @@ import { t } from "../i18n.ts";
 import { StationMark } from "../StationMark.tsx";
 import { useInStation } from "../screen/InStation.tsx";
 import { StationInWords, StationNamedAt } from "../StationNamed.tsx";
+import { sampleProfile, sampleProviders, sampleStation, sampleWords, sampleWorkspaceProfiles } from "../samples.ts";
 function useApi() {
   const station = useStation();
   const call = useStationCall(station.address);
@@ -71,7 +72,7 @@ export function ProfilesScreen() {
       {/* The workspace's: one list, each shared profile once (the core's `profiles`); a station's own: as before. */}
       {!one && <WorkspaceList scope={app.entry.id} />}
       {/* A station's own (?station=): its stations read first; the workspace's list waits on its own (WorkspaceList). */}
-      {!stations ? (only ? <Waiting shape="cards" count={2} text={t("common.readingStations")} /> : null) : stations.filter(() => !!one).map((s) => (
+      {!stations ? (only ? <Waiting text={t("common.readingStations")} sample={<ProfileSections s={SAMPLE_STATION} profiles={SAMPLE_PROFILES} />} /> : null) : stations.filter(() => !!one).map((s) => (
         <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
           {!one && <SectionHeader title={<StationInWords station={s.station} text={s.online ? s.name : t("web-mobile.connects.stationOfflineTitle", { station: s.name })} size={14} />} start={24} />}
           {!s.overview || s.overview.profiles.length === 0 ? (
@@ -79,13 +80,7 @@ export function ProfilesScreen() {
               <ListRow>{!s.overview && s.online ? <WaitLine />
                 : <span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{s.overview ? t("web-mobile.profiles.none") : t("web-mobile.profiles.offline")}</span>}</ListRow>
             </ListCard>
-          ) : profileGroups(s.overview.profiles).map((g) => (
-            // A section each kind of account, as the workspace's list (the core's order).
-            <Fragment key={g[0]!.group}>
-              <SectionHeader title={g[0]!.groupTitle ?? ""} start={24} mark={<GroupMark group={g[0]!.group} />} />
-              <ListCard>{g.map((p) => <ProfileRow key={p.id} station={s} p={p} />)}</ListCard>
-            </Fragment>
-          ))}
+          ) : <ProfileSections s={s} profiles={s.overview.profiles} />}
           {/* The machine's own logins not used yet, each offered as a profile. */}
           {s.online && s.overview && <MachineLoginOffers logins={s.overview.machineLogins} onSignIn={(kind) => app.push(app.at(`/s/${s.id}/profiles/new?kind=${kind}`))} />}
         </StationContext.Provider>
@@ -100,6 +95,23 @@ export function ProfilesScreen() {
   );
 }
 
+/** A station's `profiles`, a section each kind of account, as the workspace's list (the core's order). */
+function ProfileSections({ s, profiles }: { s: StationView; profiles: Profile[] }) {
+  return profileGroups(profiles).map((g) => (
+    <Fragment key={g[0]!.group}>
+      <SectionHeader title={g[0]!.groupTitle ?? ""} start={24} mark={<GroupMark group={g[0]!.group} />} />
+      <ListCard>{g.map((p) => <ProfileRow key={p.id} station={s} p={p} />)}</ListCard>
+    </Fragment>
+  ));
+}
+
+/** A station, its profiles and the workspace's made up, for what the screens show while they are read (in their bones). */
+const SAMPLE_STATION = sampleStation(0);
+const SAMPLE_PROFILES = [sampleProfile(6, 0), sampleProfile(9, 1)];
+const SAMPLE_PROFILE = SAMPLE_PROFILES[1]!;
+const SAMPLE_WORKSPACE = sampleWorkspaceProfiles();
+const SAMPLE_PROVIDERS = sampleProviders();
+
 /** A kind of account's mark, before its section's title: its vendor's for a subscription, a key for keys. */
 function GroupMark({ group }: { group?: string | undefined }) {
   if (group === "kimi") return <ProviderMark runtime="claude" kind="api-provider" mark="kimi" size={16} />;
@@ -113,36 +125,16 @@ function WorkspaceList({ scope }: { scope: string }) {
   const app = useApp();
   const profiles = useProfiles(scope);
   const view = profiles.value;
-  if (!view) return <Waiting shape="cards" count={2} error={profiles.error?.message} />;
+  if (!view) return <Waiting error={profiles.error?.message} sample={<WorkspaceGroups items={SAMPLE_WORKSPACE} />} />;
   // What it still waits on (the core's `wait`): with none to show, the cards to come under it; with some, a line after them.
   const wait = view.wait;
-  if (view.items.length === 0 && (wait.reading || wait.failing.length > 0)) return <Waiting shape="cards" count={2} note={wait} />;
-  const groups = profileGroups(view.items);
+  if (view.items.length === 0 && (wait.reading || wait.failing.length > 0)) return <Waiting note={wait} sample={<WorkspaceGroups items={SAMPLE_WORKSPACE} />} />;
   return (
     <>
-      {wait.empty && <ListCard><ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.none")}</span></ListRow></ListCard>}
+      {wait.empty && <ListCard><ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-pages.settings.profiles.none")}</span></ListRow></ListCard>}
       {/* What Profile is, said while there is none (the page says it nowhere else). */}
       {wait.empty && <PlaceNote>{t("web-mobile.profiles.note")}</PlaceNote>}
-      {/* A section each kind of account (the core's order). */}
-      {groups.map((g) => (
-        <Fragment key={g[0]!.group}>
-          <SectionHeader title={g[0]!.groupTitle} start={24} mark={<GroupMark group={g[0]!.group} />} />
-          <ListCard>
-            {g.map((e: WorkspaceProfile) => (
-              <ListRow key={e.key} onClick={() => app.push(app.at(hosts(e).length > 1 ? `/settings/profiles/account/${encodeURIComponent(e.key)}` : `/s/${e.stationId}/settings/accounts/${encodeURIComponent(e.profile.id)}`))}>
-                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`} style={e.usable ? undefined : { opacity: 0.55 }}>
-                  {/* How it is as the core says it (its dot in its tone, green where it says nothing); what needs a look said in its line. */}
-                  <span className={listsCss.mRowTitle}><Presence state={toneDot(e.state?.tone ?? "green")} /> {e.profile.name}</span>
-                  <span className={listsCss.mRowNote}>{e.look ? e.state?.text : e.where || `${e.profile.checkText} · ${e.profile.usesText || accessLabel(e.profile)}`}</span>
-                  {/* Its allowance a line of its own, so the name and where it is keep the row's width. */}
-                  {e.usable && e.profile.quota?.state === "ok" && e.profile.quota.windows.length > 0 && <span className={css.mRowQuota}><QuotaRings quota={e.profile.quota} /></span>}
-                </span>
-                <ChevronRight size={14} className={partsCss.mSubtle} />
-              </ListRow>
-            ))}
-          </ListCard>
-        </Fragment>
-      ))}
+      <WorkspaceGroups items={view.items} />
       {(wait.reading || wait.failing.length > 0) && (
         <ListCard>
           {wait.reading && <ListRow><WaitLine text={wait.text ?? t("common.reading")} /></ListRow>}
@@ -151,6 +143,30 @@ function WorkspaceList({ scope }: { scope: string }) {
       )}
     </>
   );
+}
+
+/** The workspace's profiles (`items`), a section each kind of account (the core's order). */
+function WorkspaceGroups({ items }: { items: WorkspaceProfile[] }) {
+  const app = useApp();
+  return profileGroups(items).map((g) => (
+    <Fragment key={g[0]!.group}>
+      <SectionHeader title={g[0]!.groupTitle} start={24} mark={<GroupMark group={g[0]!.group} />} />
+      <ListCard>
+        {g.map((e: WorkspaceProfile) => (
+          <ListRow key={e.key} onClick={() => app.push(app.at(hosts(e).length > 1 ? `/settings/profiles/account/${encodeURIComponent(e.key)}` : `/s/${e.stationId}/settings/accounts/${encodeURIComponent(e.profile.id)}`))}>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowText}`} style={e.usable ? undefined : { opacity: 0.55 }}>
+              {/* How it is as the core says it (its dot in its tone, green where it says nothing); what needs a look said in its line. */}
+              <span className={listsCss.mRowTitle}><Presence state={toneDot(e.state?.tone ?? "green")} /> {e.profile.name}</span>
+              <span className={listsCss.mRowNote}>{e.look ? e.state?.text : e.where || `${e.profile.checkText} · ${e.profile.usesText || accessLabel(e.profile)}`}</span>
+              {/* Its allowance a line of its own, so the name and where it is keep the row's width. */}
+              {e.usable && e.profile.quota?.state === "ok" && e.profile.quota.windows.length > 0 && <span className={css.mRowQuota}><QuotaRings quota={e.profile.quota} /></span>}
+            </span>
+            <ChevronRight size={14} className={partsCss.mSubtle} />
+          </ListRow>
+        ))}
+      </ListCard>
+    </Fragment>
+  ));
 }
 
 /** An account on several stations (as the desktop's ProfileAccountSettings): what they have in common, then each
@@ -165,7 +181,7 @@ export function ProfileAccountScreen() {
     return (
       <div className={pagesCss.mScreen}>
         <NavBar back="Profile" onBack={app.pop} title="Profile" />
-        {!view || view.wait.reading ? <Waiting fill shape="cards" error={profiles.error?.message} /> : <Gone text={t("web-mobile.profiles.notFound")} />}
+        {!view || view.wait.reading ? <Waiting fill error={profiles.error?.message} sample={<AccountBody e={SAMPLE_WORKSPACE[0]!} />} /> : <Gone text={t("web-mobile.profiles.notFound")} />}
       </div>
     );
   }
@@ -173,31 +189,40 @@ export function ProfileAccountScreen() {
   return (
     <div className={pagesCss.mScreen}>
       <NavBar back="Profile" onBack={app.pop} title={p.name} sub={<span className={barsCss.mNavbarNote}>{[p.email, accessLabel(p)].filter(Boolean).join(" · ")}</span>} />
-      <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
-        <div style={{ height: 12 }} />
-        <ListCard>
-          <ListRow>
+      <AccountBody e={e} />
+    </div>
+  );
+}
+
+/** What an account on several stations (`e`) has in common, then each station's part, each leading to its page there. */
+function AccountBody({ e }: { e: WorkspaceProfile }) {
+  const app = useApp();
+  const p = e.profile;
+  return (
+    <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
+      <div style={{ height: 12 }} />
+      <ListCard>
+        <ListRow>
+          <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+            <span className={listsCss.mRowTitle}><Presence state={toneDot(p.checkTone)} /> {p.checkText}</span>
+            <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{p.check ? p.check.detail : t("web-mobile.profiles.notChecked")}</span>
+          </span>
+        </ListRow>
+        {p.quota?.state === "ok" && p.quota.windows.length > 0 && <div className={css.mQuotaDials}><QuotaBars quota={p.quota} /></div>}
+      </ListCard>
+      <SectionHeader title={t("web-pages.profiles.account.each")} start={24} />
+      <ListCard>
+        {hosts(e).map((m) => (
+          <ListRow key={`${m.station}/${m.profileId}`} onClick={() => app.push(app.at(`/s/${m.stationId}/settings/accounts/${encodeURIComponent(m.profileId)}`))}>
             <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-              <span className={listsCss.mRowTitle}><Presence state={toneDot(p.checkTone)} /> {p.checkText}</span>
-              <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{p.check ? p.check.detail : t("web-mobile.profiles.notChecked")}</span>
+              <span className={listsCss.mRowTitle}><Presence state={!m.online ? "offline" : !m.usable ? "error" : toneDot(m.checkTone)} /> <StationNamedAt station={m.station} name={m.stationName} /></span>
+              <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{m.online ? m.about : t("web-mobile.profiles.offline")}</span>
             </span>
+            <ChevronRight size={14} className={partsCss.mSubtle} />
           </ListRow>
-          {p.quota?.state === "ok" && p.quota.windows.length > 0 && <div className={css.mQuotaDials}><QuotaBars quota={p.quota} /></div>}
-        </ListCard>
-        <SectionHeader title={t("web-pages.profiles.account.each")} start={24} />
-        <ListCard>
-          {hosts(e).map((m) => (
-            <ListRow key={`${m.station}/${m.profileId}`} onClick={() => app.push(app.at(`/s/${m.stationId}/settings/accounts/${encodeURIComponent(m.profileId)}`))}>
-              <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-                <span className={listsCss.mRowTitle}><Presence state={!m.online ? "offline" : !m.usable ? "error" : toneDot(m.checkTone)} /> <StationNamedAt station={m.station} name={m.stationName} /></span>
-                <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{m.online ? m.about : t("web-mobile.profiles.offline")}</span>
-              </span>
-              <ChevronRight size={14} className={partsCss.mSubtle} />
-            </ListRow>
-          ))}
-        </ListCard>
-        <div style={{ height: 30 }} />
-      </div>
+        ))}
+      </ListCard>
+      <div style={{ height: 30 }} />
     </div>
   );
 }
@@ -391,11 +416,24 @@ export function ProfileScreen() {
     return (
       <div className={pagesCss.mScreen}>
         <NavBar back={station.name ? <StationNamedAt station={station.address} name={station.name} /> : "Station"} onBack={app.pop} title="Profile" />
-        {overview.value ? <Gone text={t("web-mobile.profiles.notFound")} /> : <Waiting fill shape="cards" error={overview.error?.message} />}
+        {overview.value ? <Gone text={t("web-mobile.profiles.notFound")} /> : <Waiting fill error={overview.error?.message} sample={<ProfileBody p={SAMPLE_PROFILE} />} />}
       </div>
     );
   }
   return <ProfilePage p={p} />;
+}
+
+/** A profile's models to choose (`put`), what it is over them; while they are read, that. */
+function PickModels({ p, put }: { p: Profile; put: (models: string[]) => Promise<unknown> }) {
+  const listed = (p.available ?? []).length > 0;
+  return (
+    <div className={pagesCss.mScroll}>
+      <p className={css.mProfileNote}>{t("web-mobile.profiles.pickModels.lead", { name: p.name })}</p>
+      {p.modelsReading ? <WaitLine className={css.mProfileNote} text={t("web-mobile.profiles.pickModels.reading")} />
+        : !listed && !p.canAddModel ? <p className={css.mProfileNote}>{p.check?.state === "ok" ? t("web-mobile.profiles.pickModels.none") : p.check?.detail || p.checkText}</p>
+        : <Models p={p} put={put} bare />}
+    </div>
+  );
 }
 
 /**
@@ -416,20 +454,14 @@ export function PickModelsScreen() {
     return (
       <div className={pagesCss.mScreen}>
         <NavBar back="Profile" onBack={app.pop} title={title} />
-        {overview.value ? <Gone text={t("web-mobile.profiles.notFound")} /> : <Waiting fill shape="cards" error={overview.error?.message} />}
+        {overview.value ? <Gone text={t("web-mobile.profiles.notFound")} /> : <Waiting fill error={overview.error?.message} sample={<PickModels p={SAMPLE_PROFILE} put={() => Promise.resolve()} />} />}
       </div>
     );
   }
-  const listed = (p.available ?? []).length > 0;
   return (
     <div className={pagesCss.mScreen}>
       <NavBar back="Profile" onBack={leave} title={title} sub={p.models.length > 0 ? <span className={barsCss.mNavbarNote}>{t("web-mobile.profiles.pickModels.selected", { n: p.models.length })}</span> : undefined} />
-      <div className={pagesCss.mScroll}>
-        <p className={css.mProfileNote}>{t("web-mobile.profiles.pickModels.lead", { name: p.name })}</p>
-        {p.modelsReading ? <WaitLine className={css.mProfileNote} text={t("web-mobile.profiles.pickModels.reading")} />
-          : !listed && !p.canAddModel ? <p className={css.mProfileNote}>{p.check?.state === "ok" ? t("web-mobile.profiles.pickModels.none") : p.check?.detail || p.checkText}</p>
-          : <Models p={p} put={(models) => api.putProfile(p.id, { models })} bare />}
-      </div>
+      <PickModels p={p} put={(models) => api.putProfile(p.id, { models })} />
       <div className={css.mPickFoot}>
         <Button label={t("web-mobile.profiles.pickModels.skip")} primary={false} onClick={leave} />
         <Button label={t("common.done")} primary enabled={p.models.length > 0} onClick={leave} />
@@ -439,6 +471,22 @@ export function PickModelsScreen() {
 }
 
 function ProfilePage({ p }: { p: Profile }) {
+  const app = useApp();
+  const sheet = useStationSheet();
+  const station = useStation();
+  // A copy of another station's: shown, used, changed only there.
+  const copy = p.share?.role === "user";
+  return (
+    <div className={pagesCss.mScreen}>
+      <NavBar back={station.name ? <StationNamedAt station={station.address} name={station.name} /> : "Station"} onBack={app.pop} title={p.name} sub={<span className={barsCss.mNavbarNote}>{accessLabel(p)}</span>}
+        trailing={copy ? undefined : <NavButton icon={More} label={t("common.more")} onClick={() => sheet({ height: 0.5, content: () => <ProfileMenu p={p} /> })} />} />
+      <ProfileBody p={p} />
+    </div>
+  );
+}
+
+/** A profile's page under its bar: where it stands, its allowance, its variables, what uses it, how it runs, its sharing. */
+function ProfileBody({ p }: { p: Profile }) {
   const app = useApp();
   const sheet = useStationSheet();
   const api = useApi();
@@ -479,44 +527,40 @@ function ProfilePage({ p }: { p: Profile }) {
     </span>
   );
   return (
-    <div className={pagesCss.mScreen}>
-      <NavBar back={station.name ? <StationNamedAt station={station.address} name={station.name} /> : "Station"} onBack={app.pop} title={p.name} sub={<span className={barsCss.mNavbarNote}>{accessLabel(p)}</span>}
-        trailing={copy ? undefined : <NavButton icon={More} label={t("common.more")} onClick={() => sheet({ height: 0.5, content: () => <ProfileMenu p={p} /> })} />} />
-      <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
-        {/* Where it stands, on the account's one card: a subscription's heads its sign-in, a key's its key. */}
-        {signs ? <SignIn p={p} head={head} />
-          : keyed && !copy ? (
-            <ListCard>
-              <div className={`${settingsCss.mProfileHead} ${css.mHeadRow}`}>{head}</div>
-              <KeyRows p={p} />
-            </ListCard>
-          )
-          : <div className={`${listsCss.mCard} ${settingsCss.mProfileHead}`}>{head}</div>}
-        {p.trouble?.action !== "quota" && <Quota p={p} />}
-        {p.access.kind === "env" && !copy && (
-          <>
-            <SectionHeader title={t("web-mobile.profiles.env")} start={24} />
-            <ListCard>
-              {p.env.map((e) => <ListRow key={e.key}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={`${listsCss.mRowTitle} ${css.mMono}`}>{e.key}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{e.value}</span></span></ListRow>)}
-              <ListRow onClick={() => sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> })}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.editEnv")}</span></ListRow>
-            </ListCard>
-          </>
-        )}
-        <SectionHeader title={t("web-mobile.profiles.usedBy")} start={24} />
-        <ListCard>
-          {users.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.unused")}</span></ListRow>}
-          {users.map((c) => (
-            <ListRow key={c.id} onClick={() => app.push(`${stationBase(station.address)}/connects/${encodeURIComponent(c.id)}`)}>
-              <SlackMark kind={c.kind} size={15} /><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{c.name}</span><span className={listsCss.mRowNote}>{c.modelName ?? (p.model ? p.names[p.model] ?? p.model : t("web-mobile.profiles.defaultModel"))}</span>
-            </ListRow>
-          ))}
-        </ListCard>
-        {/* A decision model's models are said, not picked. */}
-        {!copy && p.decisionOnly && <Models p={p} put={(models) => api.putProfile(p.id, { models })} />}
-        {!copy && <RunRows p={p} />}
-        <Sharing p={p} />
-        <div style={{ height: 30 }} />
-      </div>
+    <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
+      {/* Where it stands, on the account's one card: a subscription's heads its sign-in, a key's its key. */}
+      {signs ? <SignIn p={p} head={head} />
+        : keyed && !copy ? (
+          <ListCard>
+            <div className={`${settingsCss.mProfileHead} ${css.mHeadRow}`}>{head}</div>
+            <KeyRows p={p} />
+          </ListCard>
+        )
+        : <div className={`${listsCss.mCard} ${settingsCss.mProfileHead}`}>{head}</div>}
+      {p.trouble?.action !== "quota" && <Quota p={p} />}
+      {p.access.kind === "env" && !copy && (
+        <>
+          <SectionHeader title={t("web-mobile.profiles.env")} start={24} />
+          <ListCard>
+            {p.env.map((e) => <ListRow key={e.key}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={`${listsCss.mRowTitle} ${css.mMono}`}>{e.key}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{e.value}</span></span></ListRow>)}
+            <ListRow onClick={() => sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> })}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.editEnv")}</span></ListRow>
+          </ListCard>
+        </>
+      )}
+      <SectionHeader title={t("web-mobile.profiles.usedBy")} start={24} />
+      <ListCard>
+        {users.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.unused")}</span></ListRow>}
+        {users.map((c) => (
+          <ListRow key={c.id} onClick={() => app.push(`${stationBase(station.address)}/connects/${encodeURIComponent(c.id)}`)}>
+            <SlackMark kind={c.kind} size={15} /><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{c.name}</span><span className={listsCss.mRowNote}>{c.modelName ?? (p.model ? p.names[p.model] ?? p.model : t("web-mobile.profiles.defaultModel"))}</span>
+          </ListRow>
+        ))}
+      </ListCard>
+      {/* A decision model's models are said, not picked. */}
+      {!copy && p.decisionOnly && <Models p={p} put={(models) => api.putProfile(p.id, { models })} />}
+      {!copy && <RunRows p={p} />}
+      <Sharing p={p} />
+      <div style={{ height: 30 }} />
     </div>
   );
 }
@@ -656,7 +700,8 @@ export function ProfileModelsScreen() {
     return (
       <div className={pagesCss.mScreen}>
         <NavBar back="Profile" onBack={app.pop} title={title} />
-        {overview.value ? <Gone text={t("web-mobile.profiles.notFound")} /> : <Waiting fill shape="cards" error={overview.error?.message} />}
+        {overview.value ? <Gone text={t("web-mobile.profiles.notFound")} />
+          : <Waiting fill error={overview.error?.message} sample={<div className={pagesCss.mScroll}><Models p={SAMPLE_PROFILE} put={() => Promise.resolve()} page /></div>} />}
       </div>
     );
   }
@@ -1138,6 +1183,32 @@ function EnvSheet({ p }: { p: Profile }) {
   );
 }
 
+/** The providers to add a profile of (`groups`), a card each kind, under what to do (`hint`) and the machine's own
+ *  logins offered (`offers`). */
+function ProviderPick({ hint, offers, groups, onPick }: { hint: string; offers?: ReactNode; groups: ProviderGroup[]; onPick(p: ApiProvider): void }) {
+  return (
+    <>
+      <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{hint}</p>
+      {offers}
+      {groups.map((g) => (
+        <div key={g.id}>
+          <SectionHeader title={g.title} start={6} />
+          <ListCard>
+            {g.providers.map((p) => (
+              <ListRow key={p.id} onClick={() => onPick(p)}>
+                <ProviderMark runtime={p.runtime ?? "claude"} kind={p.kind || "api-provider"} mark={p.mark} size={18} />
+                <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{p.name}</span>
+                <ChevronRight size={16} />
+              </ListRow>
+            ))}
+          </ListCard>
+        </div>
+      ))}
+    </>
+  );
+}
+const SAMPLE_HINT = sampleWords(30);
+
 /**
  * A new profile on the station in context, as the core's add flow has it (profileFlow.ts): the providers by group, then
  * how to connect the one picked (a plan signed in, or a key checked first: the profile is made only if it works).
@@ -1184,25 +1255,9 @@ export function NewProfileScreen() {
     <div className={pagesCss.mScreen}>
       <NavBar back={d && d.step !== "pick" ? t("common.back") : t("common.cancel")} onBack={leave} title={d?.title ?? t("web-mobile.newChat.addProfile")} sub={<span className={barsCss.mNavbarNote}><StationNamedAt station={station.address} name={station.name} /></span>} />
       <div className={`${pagesCss.mScroll} ${partsCss.mPadX18} ${settingsCss.mSteps}`}>
-        {!d ? <Waiting shape="cards" count={2} text={t("web-pages.profiles.loading")} /> : d.step === "pick" ? (
-          <>
-            <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{d.hint}</p>
-            {overview && <div><MachineLoginOffers inForm logins={overview.machineLogins} onSignIn={(c) => edit({ provider: c === "claude-sub" ? "anthropic" : "openai", method: "plan" })} /></div>}
-            {d.groups.map((g) => (
-              <div key={g.id}>
-                <SectionHeader title={g.title} start={6} />
-                <ListCard>
-                  {g.providers.map((p) => (
-                    <ListRow key={p.id} onClick={() => edit({ provider: p.id })}>
-                      <ProviderMark runtime={p.runtime ?? "claude"} kind={p.kind || "api-provider"} mark={p.mark} size={18} />
-                      <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{p.name}</span>
-                      <ChevronRight size={16} />
-                    </ListRow>
-                  ))}
-                </ListCard>
-              </div>
-            ))}
-          </>
+        {!d ? <Waiting text={t("web-pages.profiles.loading")} sample={<ProviderPick hint={SAMPLE_HINT} groups={SAMPLE_PROVIDERS} onPick={() => undefined} />} /> : d.step === "pick" ? (
+          <ProviderPick hint={d.hint} groups={d.groups} onPick={(p) => edit({ provider: p.id })}
+            offers={overview && <div><MachineLoginOffers inForm logins={overview.machineLogins} onSignIn={(c) => edit({ provider: c === "claude-sub" ? "anthropic" : "openai", method: "plan" })} /></div>} />
         ) : d.step === "method" ? (
           <ListCard>
             {d.choices.map((c) => <PickRow key={c.id} label={c.title} sub={c.hint} onClick={() => edit({ method: c.id })} leading={<ProviderMark runtime={runtime} kind={c.id === "plan" && d.tile?.kind !== "opencode-go" && d.tile?.id !== "moonshotai" ? "subscription" : d.tile?.kind ?? "api-provider"} mark={d.tile?.mark} size={18} />} />)}

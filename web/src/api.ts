@@ -9,7 +9,7 @@ import { createContext, useCallback, useContext, useMemo, useRef } from "react";
 import { core, useCall, useTopic, useTopicSelect, useTopics, type TopicState } from "./core/react.ts";
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
-import type { AgentCardView, ArchiveView, Attachment, ChatJobsView, ChatLettersView, ChatSearchView, ChatsView, Quote, SearchView, ChatView, ConnectsView, HistoryView, Host, JoinableView, Live, MembershipsView, Overview, ProfilesView, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
+import type { AgentCardView, ArchiveView, Attachment, ChatItem, ChatJobsView, ChatLettersView, ChatSearchView, ChatsView, Quote, SearchView, ChatView, ConnectsView, HistoryView, Host, JoinableView, Live, MembershipsView, Overview, ProfilesView, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
 import type { AccessKind, ConnectMode, Job, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackGroupSection, SlackIdentity } from "./core/shapes.ts";
 import type { ChatPublished, PublishPreview } from "./core/shapes.ts";
 import type { SlackPerson } from "./cloud/adding.ts";
@@ -88,6 +88,11 @@ export function stamp(of: object, field: string): Stamp | undefined {
 /** A scope's chat list: all, the viewer's (`mine`), or the watching ones (`watching`). */
 export function useChats(scope: string, mine: boolean, watching = false): TopicState<ChatsView> {
   return useTopic<ChatsView>({ topic: "chats", scope, mine, ...(watching ? { watching } : {}) });
+}
+
+/** A chat (by its key or its agent's session) as its workspace's list has it: its title while the chat itself is read. */
+export function useListedChat(station: string, chat: string): ChatItem | undefined {
+  return useChats(scopeOf(station), false).value?.days.flatMap((d) => d.items).find((i) => i.station === station && (i.id === chat || i.session === chat));
 }
 
 /**

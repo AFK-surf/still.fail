@@ -1498,7 +1498,11 @@ pub let table_images_md : Json = [
       ["tr", [["th", [[2, 4]]], ["th", [[7, 11]]]]],
       ["tr", [["td", [["img", { "src": "web%2Dfolded.png" }]]], ["td", [["img", { "src": "phone.png" }]]]]],
     ],
-    { "align": [Json::null(), Json::null()] },
+    {
+      "align": [Json::null(), Json::null()],
+      "md": "| 网页 | 手机网页 |\n| --- | --- |\n| ![](web%2Dfolded.png) | ![](phone.png) |",
+      "csv": "网页,手机网页\nweb%2Dfolded.png,phone.png",
+    },
   ],
 ]
 

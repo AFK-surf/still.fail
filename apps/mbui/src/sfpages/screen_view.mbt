@@ -132,7 +132,7 @@ let rail_say_ms : Double = 3000.0
 /// The viewer of `at.screen` on `at.station` (ScreenViewer): `at.title` until the core says one (the link's own, or the
 /// row's it was opened from); one opened until its screen is gone (a login's page) goes back by itself then. Inside
 /// the room its frame keeps over and under it (`frame`: the system's bars), unless full.
-pub fn screen_page(c : @ui.Ctx, src : Source, at : ScreenAt, frame : PageFrame) -> Unit {
+pub fn screen_page(c : @ui.Ctx, src : Source, at : ScreenAt, frame : PageFrame, on_close? : () -> Unit) -> Unit {
   let station = at.station
   let screen = at.screen
   let title = at.title
@@ -145,7 +145,10 @@ pub fn screen_page(c : @ui.Ctx, src : Source, at : ScreenAt, frame : PageFrame) 
       c.set_full_screen(false)
     }
     u.fulled = false
-    @sfbase.close_page(Screen(at)) |> ignore
+    match on_close {
+      Some(f) => f()
+      None => @sfbase.close_page(Screen(at)) |> ignore
+    }
   }
   // open while the app is in sight (ScreenActivity onStart / onStop): the last frame kept between
   let shown = @ui.app_visible()
@@ -293,6 +296,7 @@ pub fn screen_left(src : Source, station : String, screen : String) -> Unit {
   }
   match screen_uis.get(key) {
     Some(u) => {
+      if u.fulled && @ui.full_screen() { @ui.current().set_full_screen(false) }
       if u.sideways_told {
         @hostapi.set_sideways(false)
       }

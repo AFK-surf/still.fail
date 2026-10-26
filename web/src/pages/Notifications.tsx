@@ -39,34 +39,39 @@ export function NotificationsPage({ back, workspace }: { back: string; workspace
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={back} label={t("web-pages.settings.title")} />
       <header className={pagesCss.pageHead}><div><h1>{t("web-pages.settings.nav.notifications")}</h1></div></header>
-      {/* Not the device's settings yet (the core's): their cards' shapes, not the defaults as if they were its. */}
-      {!s.read ? <Waiting shape="cards" /> : <>
-      <Preview s={s} kind={open ?? KINDS_SHOWN.find((k) => s.banner(k)) ?? "wait"} />
-      <Section title={t("web-pages.notifications.ways.title")} description={s.note}>
-        {CAN_NOTIFY && <div className={css.tiles}>
-          <Tile way="banner" on={s.state === "on"} busy={s.busy} disabled={s.state === "unsupported" || s.permission === "denied"}
-            action={s.permission === "denied" ? t("web-pages.notifications.enable.open") : s.permission === "default" ? t("web-pages.notifications.enable.allow") : undefined}
-            onChange={(on) => (s.permission === "default" ? void requestPermission() : s.permission !== "denied" && s.setBanner(on))} />
-        </div>}
-      </Section>
-      <Section title={t("web-pages.notifications.kinds.title")}>
-        <div className={`${pagesCss.card} ${css.kinds}`}>
-          {KINDS_SHOWN.map((k) => (
-            <KindRow key={k} kind={k} s={s} open={open === k} onOpen={() => setOpen(open === k ? null : k)} />
-          ))}
-        </div>
-      </Section>
-      <Section title={t("web-pages.notifications.more.title")}>
-        <div className={pagesCss.card}>
-          {/* (a browser's pushes follow it too: the cloud makes them as its registration says) */}
-          <SwitchRow title={t("web-pages.notifications.preview")} description={t("web-pages.notifications.previewNote")}
-            checked={s.preview} disabled={s.state !== "on"} onChange={s.setPreview} />
-          <p className={css.sound}>{t("web-pages.notifications.browserNote")}</p>
-        </div>
-      </Section>
-      </>}
+      {/* Not the device's settings yet (the core's): the page's bones, not the defaults as if they were its. */}
+      {!s.read ? <Waiting sample={<Settings s={s} open={null} onOpen={() => undefined} />} /> : <Settings s={s} open={open} onOpen={setOpen} />}
     </div>
   );
+}
+
+/** The settings as `s` has them, `open` the kind whose ways are shown (and the preview's). */
+function Settings({ s, open, onOpen }: { s: SettingsState; open: Kind | null; onOpen(kind: Kind | null): void }) {
+  return <>
+    <Preview s={s} kind={open ?? KINDS_SHOWN.find((k) => s.banner(k)) ?? "wait"} />
+    <Section title={t("web-pages.notifications.ways.title")} description={s.note}>
+      {CAN_NOTIFY && <div className={css.tiles}>
+        <Tile way="banner" on={s.state === "on"} busy={s.busy} disabled={s.state === "unsupported" || s.permission === "denied"}
+          action={s.permission === "denied" ? t("web-pages.notifications.enable.open") : s.permission === "default" ? t("web-pages.notifications.enable.allow") : undefined}
+          onChange={(on) => (s.permission === "default" ? void requestPermission() : s.permission !== "denied" && s.setBanner(on))} />
+      </div>}
+    </Section>
+    <Section title={t("web-pages.notifications.kinds.title")}>
+      <div className={`${pagesCss.card} ${css.kinds}`}>
+        {KINDS_SHOWN.map((k) => (
+          <KindRow key={k} kind={k} s={s} open={open === k} onOpen={() => onOpen(open === k ? null : k)} />
+        ))}
+      </div>
+    </Section>
+    <Section title={t("web-pages.notifications.more.title")}>
+      <div className={pagesCss.card}>
+        {/* (a browser's pushes follow it too: the cloud makes them as its registration says) */}
+        <SwitchRow title={t("web-pages.notifications.preview")} description={t("web-pages.notifications.previewNote")}
+          checked={s.preview} disabled={s.state !== "on"} onChange={s.setPreview} />
+        <p className={css.sound}>{t("web-pages.notifications.browserNote")}</p>
+      </div>
+    </Section>
+  </>;
 }
 
 /** Every setting the page shows, as the core keeps them, and their changing. */
@@ -110,7 +115,7 @@ function useSettings(workspace: string) {
     },
   };
 }
-type Settings = ReturnType<typeof useSettings>;
+type SettingsState = ReturnType<typeof useSettings>;
 
 export type Way = "banner" | "badge";
 
@@ -131,7 +136,7 @@ export function Tile({ way, on, onChange, busy, disabled, action }: { way: Way; 
 }
 
 /** A kind of thing that happens: what tells of it, in a line; opened, each way on or off. */
-function KindRow({ kind, s, open, onOpen }: { kind: Kind; s: Settings; open: boolean; onOpen(): void }) {
+function KindRow({ kind, s, open, onOpen }: { kind: Kind; s: SettingsState; open: boolean; onOpen(): void }) {
   const ways = [
     CAN_NOTIFY && s.banner(kind) ? (kind === "done" && s.kinds.done === "away" ? t("web-pages.notifications.sumBannerAway") : t("web-pages.notifications.ways.banner")) : null,
   ].filter(Boolean);
@@ -183,7 +188,7 @@ const SAMPLE: Record<Kind, () => { title: string; body: string }> = {
 /** A screen of this device's system as the settings make it (SYSTEM): the banner of `kind` (the latest one that came,
  * else a sample) where the system shows one, the app's icon among others with what it carries now: on Android the
  * system's own dot while a banner shows. */
-function Preview({ s, kind }: { s: Settings; kind: Kind }) {
+function Preview({ s, kind }: { s: SettingsState; kind: Kind }) {
   const latest = [...s.notices].reverse().find((n) => (n.kind === "block" ? "wait" : n.kind) === kind);
   const shown = latest ? { title: latest.title, body: latest.body } : SAMPLE[kind]();
   const body = s.preview ? shown.body : t(`web-pages.notifications.hidden.${kind}`);

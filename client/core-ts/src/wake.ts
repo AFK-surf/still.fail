@@ -161,6 +161,7 @@ export class WakingHost implements Host {
   readonly secureAsk?: Host["secureAsk"];
   readonly savedRead?: Host["savedRead"];
   readonly unzstd?: Host["unzstd"];
+  readonly ed25519Sign?: Host["ed25519Sign"];
 
   constructor(inner: Host, wakes: Wakes) {
     this.inner = inner;
@@ -182,6 +183,13 @@ export class WakingHost implements Host {
     if (inner.savedRead) this.savedRead = (at, start, end) => inner.savedRead!(at, start, end);
     // A reply taken apart: on the device, as it comes.
     if (inner.unzstd) this.unzstd = () => inner.unzstd!();
+    // A signature: the device's, at once.
+    if (inner.ed25519Sign) this.ed25519Sign = (seed, message) => inner.ed25519Sign!(seed, message);
+  }
+
+  /// Names in the order people read them: the system's, at once (the files page's: drive-browse.ts).
+  collate(names: readonly string[]): number[] | null {
+    return this.inner.collate?.(names) ?? null;
   }
 
   /// Where a value is kept as a file: the device's, at once.

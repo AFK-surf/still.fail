@@ -416,7 +416,6 @@ android-settings.login.unfinished
 android-settings.machine.added
 android-settings.machine.signedIn
 android-settings.machine.someone
-android-settings.machine.title
 android-settings.machine.use
 android-settings.me.accounts
 android-settings.me.addAccount
@@ -1001,6 +1000,7 @@ web-mobile.connects.noSessions.feishu
 web-mobile.profiles.addModel
 web-mobile.profiles.addModelPlaceholder
 web-mobile.profiles.decisionModels
+web-mobile.profiles.machineLogins
 web-mobile.profiles.pick
 web-mobile.profiles.protocol
 web-mobile.profiles.region
@@ -1393,6 +1393,7 @@ web-pages.settings.nav.notifications
 web-pages.settings.nav.permissions
 web-pages.settings.nav.version
 web-pages.settings.profiles.hostAway
+web-pages.settings.profiles.none
 web-pages.settings.reading
 web-pages.settings.relays.add
 web-pages.settings.relays.addAction
@@ -1558,3 +1559,7 @@ web-pages.vault.uses.last
 web-pages.vault.uses.none
 web-pages.vault.uses.title
 web-pages.vault.vaults
+
+web-pages.drive.viewAll
+web-pages.drive.pinnedFolders
+web-pages.screen.none

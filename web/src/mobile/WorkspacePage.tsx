@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { stamp } from "../api.ts";
 import { cloud, errorText, useWorkspace, type LoginSession, type MemberView, type Role, type WorkspaceView } from "../cloud/api.ts";
 import { useTopic } from "../core/react.ts";
-import { ROLE_HINT, ROLE_LABEL } from "../cloud/settings.tsx";
+import { ROLE_HINT, ROLE_LABEL, sampleWorkspace } from "../cloud/settings.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { Check, ChevronRight, UserPlus } from "@stillfail/ui/icons.tsx";
 import { Avatar, Button, failedIn, Field, LargeTitle, LinkButton, ListCard, ListRow, NavButton, PickRow, SectionHeader, TopBack } from "./parts.tsx";
@@ -31,10 +31,25 @@ import { t } from "../i18n.ts";
 export function WorkspaceScreen() {
   const app = useApp();
   const view = useWorkspace(app.entry.id).value;
+  if (!view) {
+    return <div className={pagesCss.mScreen}><TopBack label={t("web-mobile.settings.title")} onBack={app.pop} />
+      <Waiting fill text={t("web-mobile.workspace.reading")} sample={<div className={pagesCss.mScroll}><WorkspaceShown view={sampleWorkspace(app.entry.id)} /></div>} /></div>;
+  }
+  const manager = view.role === "owner" || view.role === "admin";
+  const add = () => app.sheet({ height: 0.8, draggable: true, content: () => <AddSheet view={view} /> });
+  return (
+    <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
+      <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} trailing={manager ? <NavButton icon={UserPlus} iconSize={20} label={t("web-mobile.workspace.add")} onClick={add} /> : undefined} />
+      <WorkspaceShown view={view} />
+    </div>
+  );
+}
+
+/** The workspace (`view`) under its way back: its name and mark, its people, its relays, leaving it. */
+function WorkspaceShown({ view }: { view: WorkspaceView }) {
+  const app = useApp();
   const me = app.entry.account;
-  // Before the early return below: the same hooks on every render, read or not yet.
   const doing = useDoingList();
-  if (!view) return <div className={pagesCss.mScreen}><TopBack label={t("web-mobile.settings.title")} onBack={app.pop} /><Waiting fill shape="cards" text={t("web-mobile.workspace.reading")} /></div>;
   const manager = view.role === "owner" || view.role === "admin";
   const leave = () => confirm(app, {
     title: t("web-mobile.workspace.leaveAsk", { name: view.name }), text: t("web-mobile.workspace.leaveText"), action: t("web-mobile.workspace.leaveAction"), danger: true, atOnce: "web-mobile.workspace.leaveFailed",
@@ -47,15 +62,13 @@ export function WorkspaceScreen() {
   });
   const rename = () => ask(app, { title: t("web-mobile.workspace.renameTitle"), value: view.name, placeholder: t("web-mobile.workspaces.namePlaceholder"), action: t("common.save"), atOnce: "web-main.rename.failed",
     run: (name) => cloud.renameWorkspace(me.sub, view.id, name).then(() => app.toast(t("web-mobile.workspace.renamed"))) });
-  const add = () => app.sheet({ height: 0.8, draggable: true, content: () => <AddSheet view={view} /> });
   const waiting = manager ? view.added.length + view.invitations.length : 0;
   // A row's link waits, spinning, until still.fail cloud answers; the toast says how it ended (one that failed keeps the
   // failure mark a few seconds).
   const removing = (email: string) => doing.some((d) => !failed(d) && doingMatches(d, "workspace.removeAdded", { account: me.sub, workspace: view.id, email }));
   const revoking = (id: string) => doing.some((d) => !failed(d) && doingMatches(d, "workspace.revokeInvitation", { account: me.sub, workspace: view.id, invitation: id }));
   return (
-    <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} trailing={manager ? <NavButton icon={UserPlus} iconSize={20} label={t("web-mobile.workspace.add")} onClick={add} /> : undefined} />
+    <>
       <LargeTitle small="" big={view.name} />
       <p className={css.mLead}>{t("web-mobile.workspace.lead", { role: ROLE_LABEL[view.role], members: t("web-mobile.settings.members", { n: view.members.length }), stations: t("web-mobile.workspaces.stations", { n: view.stations.length }) })}</p>
       {/* Its name and its mark (its letter till it has one, picked in the stations' sheet): renamed and picked by its
@@ -101,7 +114,7 @@ export function WorkspaceScreen() {
         {view.role === "owner" && <ListRow onClick={remove}><span className={`${partsCss.mGrow} ${listsCss.mRowTitle} ${partsCss.mRed}`}>{t("web-mobile.workspace.delete")}</span></ListRow>}
       </ListCard>
       <div style={{ height: 30 }} />
-    </div>
+    </>
   );
 }
 

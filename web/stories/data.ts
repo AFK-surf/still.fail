@@ -191,6 +191,9 @@ const CODE_COLOURS_TEXT = [
   "```diff\n@@ -1,3 +1,3 @@ export function recent\n-  return rows;\n+  return rows.slice(0, limit);\n```",
 ].join("\n\n");
 export const CODE_COLOURS = { text: CODE_COLOURS_TEXT, md: markdown(CODE_COLOURS_TEXT) };
+/** An agent's table, to copy (Prose.tsx Table): as Markdown, as CSV, as a picture. */
+const TABLE_TEXT = "| 指标 | 修复前 | 修复后 |\n|---|--:|--:|\n| p50 | 95ms | 31ms |\n| p99 | 2.4s | 140ms |";
+export const TABLE = { text: TABLE_TEXT, md: markdown(TABLE_TEXT) };
 
 export const HISTORY: HistoryView = {
   items: HISTORY_ITEMS.map(({ body, turn }, n) => ({ key: `e${n}`, entries: [n, n], body, ...(turn ? { turn } : {}) })),

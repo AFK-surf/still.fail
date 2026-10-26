@@ -2,7 +2,6 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { mGrow } from "./styles/parts.css.ts";
 import { connectionRetry } from "../Connection.css.ts";
-import { CHIP_CORNER } from "../components.css.ts";
 
 export const mPad20 = style({ padding: "20px" });
 export const mMark = style({ flex: "none" });
@@ -30,20 +29,12 @@ export const mStationNap = style({
   fontSize: vars.textMeta, lineHeight: "18px", color: "var(--m-muted)",
 });
 globalStyle(`${mStationNap} img`, { display: "block", height: "100%", width: "auto", flex: "none" });
-/** Not read yet: grey bars where the rings and the figures go. */
-export const mStationBars = style({ gridArea: "1 / 1", display: "flex", flexDirection: "column" });
-export const mBarChips = style({ display: "flex", gap: "4px", height: "20px", marginTop: "10px" });
-export const mBarNet = style({ flex: "1", display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "10px" });
-globalStyle(`${mBarNet} > span`, { display: "flex", flexDirection: "column", gap: "9px" });
-globalStyle(`${mStationBars} i`, { display: "block", height: "10px", borderRadius: "999px", background: vars.neutralBg });
-globalStyle(`${mBarChips} i`, { display: "block", height: "20px", borderRadius: CHIP_CORNER, cornerShape: vars.cornerShape, background: vars.neutralBg }); // own corner: a chip's, held for it
 export const mStationOffline = style({
   display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", paddingTop: "6px", textAlign: "center",
 });
 /** 重试 under it: as weighty as root.css.ts's `button { font: inherit }`, and after it. */
 globalStyle(`${mStationOffline} button${connectionRetry}`, { marginTop: "6px", fontSize: vars.textMeta });
 export const mStationLine = style({ display: "block", paddingTop: "8px", fontSize: vars.textMeta, lineHeight: "18px", color: "var(--m-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
-globalStyle(`${mStationLine}[data-unknown] i`, { display: "inline-block", verticalAlign: "middle", height: "10px", borderRadius: "999px", background: vars.neutralBg });
 globalStyle(`${mStationHead} ${mGrow}`, { display: "flex", flexDirection: "column" });
 /** A station's mark in its sheet: which grid, and (for emoji) a field taking any pasted or typed. */
 export const mMarkHead = style({ display: "flex", flexDirection: "column", gap: "10px", padding: "0 18px 10px" });
@@ -65,10 +56,5 @@ export const mMarkEmoji = style({});
 globalStyle(`${mMarkEmoji}${mMarkEmoji}`, { fontSize: `calc(${vars.textTitle} * 1.6)` });
 export const mMarkPicture = style({ width: "20px", height: "20px", objectFit: "cover", borderRadius: "24%", cornerShape: vars.cornerShape });
 
-/** A station's machine not read yet: what it will be laid out unseen, grey bars over it. */
-export const mUnread = style({ display: "grid" });
-export const mUnreadLaid = style({ gridArea: "1 / 1", visibility: "hidden" });
-export const mUnreadBars = style({ gridArea: "1 / 1", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: "10px" });
-globalStyle(`${mUnreadBars} > i`, { display: "block", height: "10px", borderRadius: "999px", background: vars.neutralBg });
 /** What a workspace has of the station, at its row's end: cut short with an ellipsis (the value's box is a flex one). */
 export const mMembershipLine = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: "0" });

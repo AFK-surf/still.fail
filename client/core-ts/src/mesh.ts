@@ -828,7 +828,7 @@ export class Mesh {
   /// This device's word, with its key, that `endpoint` (its main endpoint's or one made over for a relay) is its own
   /// in workspace `ws`: what a station with a workspace lock knows it by (lock.ts).
   lockClaim(ws: string, endpoint: string): LockClaim {
-    return lockClaim(this.#secret, ws, endpoint);
+    return lockClaim(this.#secret, ws, endpoint, this.#env.host);
   }
 
   /// This device's clock.

@@ -83,3 +83,21 @@ Later: the cloud's own (feedback), Slack channels' history.
 - The phones (web/src/mobile/Home.tsx `SearchPage`, Android screens/Search.kt): the same list and the same places.
 - A message found, and a chat found by words its title shows late or not at all (`foundText`), is listed by the line
   that has the words (they bold), who said it or where and when beside it, its chat's title under it.
+
+## Finding and reading project skills
+
+The agent's startup skill catalog is local. Before rediscovering a missing project workflow, use
+`search {query: "<project or task words>", kinds: ["skill"]}` without `station` to look across the workspace.
+Try the project name and task words separately when needed: every word of one query must match.
+Skill descriptions should name their actual workflows in the languages people use (for example, offscreen rendering
+and 离屏渲染), rather than relying on a single implementation name.
+
+Each skill hit includes a `skill_read {station, name}` call using the station id and exact skill name. This reads
+`SKILL.md` in full and lists the skill's adjacent Markdown references; pass `file` to read one of those by its listed
+name. It does not install, share, edit or execute the skill. Other assets and nested references still use the station's
+file/task workflow. An older station without `skill.read` reports an error; the search itself continues to work.
+
+`skill.read` travels over the authenticated workspace mesh. The destination selects its catalog from the workspace
+identified by the transport, never a caller-supplied filesystem path. Local reads use the session's workspace. Only
+skills and Markdown references already present in that catalog can be read; another workspace's catalog is not a
+fallback. Station names must be unique for reading; search supplies the id to avoid ambiguity.

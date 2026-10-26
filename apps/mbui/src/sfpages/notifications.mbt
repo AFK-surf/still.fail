@@ -334,14 +334,15 @@ fn kind_row(c : @ui.Ctx, core : Core, here : Here, notify : Json?, kind : String
     kind_open.val = if open { "" } else { kind }
   }
   let head = c.box(style=kind_head, id~, fn() {
-    c.box(style=kind_text, fn() {
-      c.text(@sf.t("web-pages.notifications.kinds." + kind), style=kind_title) |> ignore
-      c.text(@sf.t("web-pages.notifications.kinds." + kind + "Note"), style=kind_note) |> ignore
+    c.box(style=kind_top, fn() {
+      c.box(style=kind_text, fn() { c.text(@sf.t("web-pages.notifications.kinds." + kind), style=kind_title) |> ignore })
+      |> ignore
+      c.text(if ways.length() == 0 { @sf.t("web-pages.notifications.none") } else { ways.join(" · ") }, style=kind_sum)
+      |> ignore
+      @sf.icon(c, if open { "chevron-down" } else { "chevron-right" }, size=kind_chevron, color=t.p.muted) |> ignore
     })
     |> ignore
-    c.text(if ways.length() == 0 { @sf.t("web-pages.notifications.none") } else { ways.join(" · ") }, style=kind_sum)
-    |> ignore
-    @sf.icon(c, if open { "chevron-down" } else { "chevron-right" }, size=kind_chevron, color=t.p.muted) |> ignore
+    c.text(@sf.t("web-pages.notifications.kinds." + kind + "Note"), style=kind_note) |> ignore
   })
   c.semantics(head, Button, id~, label=@sf.t("web-pages.notifications.kinds." + kind), expanded=open)
   if !open {
@@ -899,8 +900,11 @@ let tile : @ui.Style = @ui.style(
 let tile_on : @ui.Style = tile.then(@ui.css("border_color=Accent"))
 
 ///|
+/// (its foot as far up as its way to allow it stands concentric with its corners: tile_action_button)
 // kept across runs: a value (no field of it changes)
-let tile_action : @ui.Style = tile.then(@ui.css("border_color=A(Danger,O55)"))
+let tile_action : @ui.Style = tile.then(@ui.css("border_color=A(Danger,O55)")).then(
+  @ui.style(pb=@sf.room_of(@sf.card_foot_in(tile_action_h))),
+)
 
 ///|
 /// A tile's picture (tilePicture: a screen drawn small, 72 by 46, 4 over its name, 8 round, the canvas on a line):
@@ -994,13 +998,19 @@ let tile_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Mediu
 let tile_state : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
-/// The way to allow it (tileAction: 4 over, 4 by 10 and 12 in, round, red; its words the meta's 12 in 500 white).
+/// The way to allow it (tileAction: 4 over, 26 high, its words 12 and 10 in, round, red; its words the meta's 12 in 500
+/// white): a capsule across the tile's foot, its ends in the tile's foot corners concentric with them (@sf.card_foot_in:
+/// 13 from its sides and foot), as a card's button at its foot is. As wide as its words, its ends came into those
+/// corners off their arcs where the tile is narrow (a phone's two side by side: 18.5 from its sides, 12 from its foot).
 let tile_action_chevron : Double = 14.0
 
 ///|
+let tile_action_h : Double = 26.0
+
+///|
 // kept across runs: a value (no field of it changes)
-let tile_action_button : @ui.Style = @ui.css(
-  #|row mt=S1 pl=S3 pr=S2_5 py=S1 gap=SPx align=ACenter radius=Full bg=Danger
+let tile_action_button : @ui.Style = @ui.css("row w=Full mt=S1 pl=S3 pr=S2_5 gap=SPx align=ACenter justify=JCenter radius=Full bg=Danger").then(
+  @ui.style(h=Fixed(tile_action_h), mx=@sf.room_of(@sf.card_foot_in(tile_action_h) - @ui.Space::px(S2_5))),
 )
 
 ///|
@@ -1017,14 +1027,20 @@ let kinds_card : @ui.Style = @ui.css("w=Full px=S5 py=S1_5 radius=Xl3 bg=Card")
 
 
 ///|
-/// A kind's head (kindHead: 12 over and under, 12 apart; its words the ui's 13, what it is muted 2 under; what tells of
-/// it the meta's 12 muted).
+/// A kind's head (kindHead: 12 over and under; its words the ui's 13, what tells of it the meta's 12 muted at that
+/// line's end, 12 apart, its chevron after them; what it is muted 2 under, across the row: beside what tells of it, it
+/// broke onto two lines on a phone where alone it fits one, the user, 2026-10-27, 「agent 暂停等待你：有卡片，或需要你 /
+/// 协助」).
 // kept across runs: a value (no field of it changes)
-let kind_head : @ui.Style = @ui.css("row w=Full py=S3 gap=S3 align=ACenter")
+let kind_head : @ui.Style = @ui.css("w=Full py=S3 gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let kind_text : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
+let kind_top : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let kind_text : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)

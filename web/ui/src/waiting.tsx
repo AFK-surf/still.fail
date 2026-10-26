@@ -1,11 +1,15 @@
 // Waiting, drawn one way everywhere (docs/ui-panels.md「等待」; Android ui/Waiting.kt the same). Three kinds:
-// - a page or list read for the first time: `Waiting`, placeholders shaped as what will come, breathing, no words (the
-//   page's frame, its bar, title and composer, drawn as ever around it); what could not be read said over them in red;
+// - a page or list read for the first time: `Waiting`, what will come drawn as it will be, by its own parts, of made-up
+//   words, in its bones (`Bones`: its words bars, its pictures and icons shapes, its outline its own), breathing, no
+//   words (the page's frame, its bar, title and composer, drawn as ever around it); what could not be read said over
+//   them in red;
 // - a row or button at work: `Spinner` in its place (DoingMark where it is a core call), in one of two sizes;
 // - what has a size on its way (a file, an update): `Progress`.
 // Words (a pill, a line) come only after a moment (LATER_MS), so what is there at once shows none; what failed says so
 // at once, in red.
-import { forwardRef, useContext, type HTMLAttributes, type ReactNode } from "react";
+import { forwardRef, useContext, useLayoutEffect, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
+import { bonesOf, type Bone } from "./bones.ts";
+import { InBones } from "./inBones.ts";
 import { Words } from "./words.tsx";
 import { t } from "./i18n.ts";
 import * as css from "./waiting.css.ts";
@@ -61,57 +65,59 @@ export interface WaitNote {
   failing?: readonly { text: string; message?: string | null | undefined }[] | undefined;
 }
 
-export type WaitShape = "rows" | "messages" | "cards";
+export { InBones };
 
-const TITLES = [150, 110, 170, 130, 96, 160, 120];
-const LINES = [230, 190, 250, 170, 210, 200, 180];
-const MESSAGES: [boolean, number, number][] = [[false, 220, 40], [false, 160, 58], [true, 180, 40], [false, 240, 76], [true, 120, 40], [false, 200, 40]];
-const CARDS = [120, 88, 152, 104];
+/** Made-up words `n` letters long, for what a page's bones are drawn of: only how long they are is seen, as a bar. */
+export const sampleWords = (n: number): string => "字".repeat(n);
 
-/** The shapes of what will come: rows (a list's: a title and a line), messages (a chat's) or cards (a settings page's). */
-export function WaitShapes({ shape = "rows", count, dense = false, still = false }: { shape?: WaitShape; count?: number; dense?: boolean; still?: boolean }) {
-  if (shape === "messages") {
-    return (
-      <div className={`${css.shapes} ${css.messages}`} data-still={still || undefined} data-placeholder="" aria-hidden="true">
-        {MESSAGES.map(([mine, w, h], i) => (
-          <div key={i} className={css.message} data-mine={mine || undefined}>
-            {!mine && <span className={css.face} />}
-            <span className={css.bubble} style={{ width: w, height: h }} />
-          </div>
-        ))}
-      </div>
-    );
-  }
-  if (shape === "cards") {
-    return (
-      <div className={`${css.shapes} ${css.cards}`} data-still={still || undefined} data-placeholder="" aria-hidden="true">
-        {Array.from({ length: count ?? 3 }, (_, i) => <span key={i} className={css.card} style={{ height: CARDS[i % CARDS.length] }} />)}
-      </div>
-    );
-  }
+/**
+ * What will come, in its bones (./bones.ts: its words bars, its pictures and icons shapes, on its own grounds, in the
+ * line's grey), breathing; still and whole (`still`) as what they wait on failed. `children`: what it will show, drawn
+ * by the parts that draw it when it comes, of made-up data (`sampleWords`), so that its outline is theirs. `fill`: it
+ * takes the room left (a page's body).
+ */
+export function Bones({ children, still = false, fill = false }: { children: ReactNode; still?: boolean; fill?: boolean }) {
+  const within = useContext(InBones);
+  const box = useRef<HTMLDivElement | null>(null);
+  const body = useRef<HTMLDivElement | null>(null);
+  const [bones, setBones] = useState<readonly Bone[]>([]);
+  useLayoutEffect(() => {
+    const b = box.current, o = body.current;
+    if (within || !b || !o) return;
+    // measured again as what it holds is laid out anew: its width, its words changed, the fonts come
+    let frame = 0;
+    const measure = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => setBones(bonesOf(b, o))); };
+    setBones(bonesOf(b, o));
+    const sizes = new ResizeObserver(measure);
+    sizes.observe(b);
+    const changes = new MutationObserver(measure);
+    changes.observe(o, { subtree: true, childList: true, characterData: true });
+    void document.fonts?.ready.then(measure);
+    return () => { cancelAnimationFrame(frame); sizes.disconnect(); changes.disconnect(); };
+  }, [within]);
+  // (in bones already, as they are: one breath)
+  if (within) return <>{children}</>;
   return (
-    <div className={css.shapes} data-still={still || undefined} data-placeholder="" aria-hidden="true">
-      {Array.from({ length: count ?? 7 }, (_, i) => (
-        <div key={i} className={css.row} data-dense={dense || undefined}>
-          <div className={css.rowLines}>
-            <span className={css.rowTitle} style={{ width: (dense ? 0.6 : 1) * TITLES[i % TITLES.length]! }} />
-            <span className={css.rowLine} style={{ width: (dense ? 0.6 : 1) * LINES[i % LINES.length]! }} />
-          </div>
-          {!dense && <span className={css.rowPicture} />}
+    <InBones.Provider value>
+      <div ref={box} className={fill ? `${css.bones} ${css.bonesFill}` : css.bones} data-still={still || undefined} aria-hidden="true" inert>
+        <div ref={body} className={css.boneBody}>{children}</div>
+        <div className={css.boneMarks} data-placeholder="">
+          {bones.map((b, i) => <span key={i} className={css.bone} style={{ left: b.x, top: b.y, width: b.w, height: b.h, borderRadius: b.r }} />)}
         </div>
-      ))}
-    </div>
+      </div>
+    </InBones.Provider>
   );
 }
 
 /**
- * A page's or list's content while it is read the first time: its shapes breathing, what it
- * waits on (`note`, else `text`, else 正在读取) said only to a screen reader; over them in red what could not be read
- * (`error`, `note.failing`), the shapes then still. `fill`: it takes the room left (a page's body); otherwise it is as
- * tall as its shapes (a list in a column).
+ * A page's or list's content while it is read the first time: what will come in its bones (`sample`: what it will
+ * show, made of made-up words by the parts that draw it, its rows, its cards, its messages), breathing; what it waits
+ * on (`note`, else `text`, else 正在读取) said only to a screen reader; over it in red what could not be read (`error`,
+ * `note.failing`), the bones then still. `fill`: it takes the room left (a page's body); otherwise it is as tall as
+ * its bones. What `children` holds goes between the pills and the bones.
  */
-export function Waiting({ shape = "rows", count, dense, text, error, note, fill = false, children }: {
-  shape?: WaitShape; count?: number; dense?: boolean; text?: string | undefined; error?: string | null | undefined;
+export function Waiting({ sample, text, error, note, fill = false, children }: {
+  sample: ReactNode; text?: string | undefined; error?: string | null | undefined;
   note?: WaitNote | null | undefined; fill?: boolean; children?: ReactNode;
 }) {
   const failing: { text: string; message?: string | null | undefined }[] = [...(error ? [{ text: error }] : []), ...(note?.failing ?? [])];
@@ -123,19 +129,20 @@ export function Waiting({ shape = "rows", count, dense, text, error, note, fill 
         {failing.map((f, i) => <WaitPill key={i} text={f.text} why={f.message} error />)}
       </div>}
       {children}
-      <WaitShapes shape={shape} {...(count !== undefined ? { count } : {})} {...(dense !== undefined ? { dense } : {})} still={!reading} />
+      <Bones still={!reading} fill={fill}>{sample}</Bones>
     </div>
   );
 }
 
 /**
  * A list with rows already, still waiting on some of it (a station not read yet, one that could not be): under its
- * rows, a row's shape for what is still read, and each failure in red. Nothing once it waits on nothing.
+ * rows one more of them in its bones (`sample`) for what is still read, and each failure in red. Nothing once it
+ * waits on nothing.
  */
-export function WaitMore({ note, className, dense }: { note: WaitNote | null | undefined; className?: string; dense?: boolean }) {
+export function WaitMore({ note, sample, className }: { note: WaitNote | null | undefined; sample: ReactNode; className?: string }) {
   if (!note) return null;
   return <>
-    {note.reading !== false && <div role="status" aria-label={note.text ?? t("common.reading")}><WaitShapes count={1} {...(dense !== undefined ? { dense } : {})} /></div>}
+    {note.reading !== false && <div role="status" aria-label={note.text ?? t("common.reading")}><Bones>{sample}</Bones></div>}
     {note.failing?.map((f, i) => <WaitLine key={i} text={f.text} error {...(className ? { className } : {})} />)}
   </>;
 }

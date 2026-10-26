@@ -8,7 +8,8 @@ import { useDoing } from "../doing.ts";
 import { BackLink, Button, IconButton, Pill, Section, Spinner, Time, Waiting } from "../ui.tsx";
 import { stationBase } from "../station.tsx";
 import { Editor, KindIcon, Secret } from "./Vault.tsx";
-import { formOf, useVaultCall, useVaultItems, useVaultUses, useVaults, type Opened, type VaultUse } from "../vault.ts";
+import { formOf, useVaultCall, useVaultItems, useVaultUses, useVaults, type Opened, type VaultItemRow, type VaultRow, type VaultUse } from "../vault.ts";
+import { sampleVaultItems, sampleVaults, sampleVaultUses } from "../samples.ts";
 import { t } from "../i18n.ts";
 import { StationInWords } from "../StationNamed.tsx";
 import type { WorkspaceEntry } from "./workspace.tsx";
@@ -19,6 +20,24 @@ export function VaultItemPage({ entry }: { entry: WorkspaceEntry }) {
   const { vault = "", item = "" } = useParams();
   const view = useVaults(entry.id);
   const items = useVaultItems(entry.id, vault);
+  const v = view?.vaults.find((x) => x.id === vault);
+  const row = items?.items.find((i) => i.id === item);
+  const back = <BackLink to={`/w/${entry.id}/settings/vault/all`} label={t("web-pages.vault.all")} />;
+  if (!view || !items) {
+    return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>{back}<Waiting sample={<ItemShown entry={entry} v={SAMPLE_VAULT} row={SAMPLE_ITEM} plain={false} />} /></div>;
+  }
+  if (!v || !row) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>{back}<p className={css.note}>{t("web-pages.vault.empty")}</p></div>;
+  return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>{back}<ItemShown entry={entry} v={v} row={row} plain={view.plain === true} /></div>;
+}
+
+/** A secret made up, in its vault, and its uses, for what its page shows while they are read (in their bones). */
+const SAMPLE_VAULT = sampleVaults().vaults[0]!;
+const SAMPLE_ITEM = sampleVaultItems()[0]!;
+const SAMPLE_USES = sampleVaultUses();
+
+/** A secret's page under its way back: `row`, kept in `v` (`plain`: a library not locked). */
+function ItemShown({ entry, v, row, plain }: { entry: WorkspaceEntry; v: VaultRow; row: VaultItemRow; plain: boolean }) {
+  const vault = v.id, item = row.id;
   const uses = useVaultUses(entry.id, vault, item);
   const run = useVaultCall();
   const [opened, setOpened] = useState<Opened | null>(null);
@@ -26,20 +45,13 @@ export function VaultItemPage({ entry }: { entry: WorkspaceEntry }) {
   const [reveal, setReveal] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const opening = useDoing("vault.open", { workspace: entry.id, item });
-  const v = view?.vaults.find((x) => x.id === vault);
-  const row = items?.items.find((i) => i.id === item);
-  const back = <BackLink to={`/w/${entry.id}/settings/vault/all`} label={t("web-pages.vault.all")} />;
-  if (!view || !items) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>{back}<Waiting shape="cards" count={2} /></div>;
-  if (!v || !row) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>{back}<p className={css.note}>{t("web-pages.vault.empty")}</p></div>;
-  const plain = view.plain === true;
   const open = (then?: (o: Opened) => void) => void run<Opened>("vault.open", { workspace: entry.id, item }, t("web-pages.vault.openWhat")).then((o) => {
     if (!o) return;
     setOpened(o);
     then?.(o);
   });
   return (
-    <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
-      {back}
+    <>
       <header className={pagesCss.identity}>
         <span className={pagesCss.mark} style={{ width: 48, height: 48 }}><KindIcon kind={row.kind} size={24} /></span>
         <div className={pagesCss.identityText}>
@@ -85,14 +97,14 @@ export function VaultItemPage({ entry }: { entry: WorkspaceEntry }) {
       </Section>
 
       <Section title={t("web-pages.vault.uses.title")}>
-        {!uses ? <Waiting count={2} dense />
+        {!uses ? <Waiting sample={<div className={css.uses}>{SAMPLE_USES.map((u, i) => <UseRow key={i} workspace={entry.id} use={u} />)}</div>} />
           : uses.uses.length === 0 ? <p className={css.note}>{t("web-pages.vault.uses.none")}</p>
           : <div className={css.uses}>{uses.uses.map((u, i) => <UseRow key={i} workspace={entry.id} use={u} />)}</div>}
       </Section>
 
       {editing && opened && <Editor workspace={entry.id} vault={vault} first={formOf(opened, row)} id={opened.id} plain={plain}
         onClose={() => { setEditing(false); setOpened(null); setReveal(null); }} />}
-    </div>
+    </>
   );
 }
 

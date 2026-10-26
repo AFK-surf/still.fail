@@ -46,6 +46,7 @@ import type { ChatAsk, ChatCcTo, ChatSentElsewhere, DownloadShown, NoticeShown, 
 import * as partsCss from "@stillfail/ui/parts.css.ts";
 import * as historyCss from "./History.css.ts";
 import * as css from "./Chat.css.ts";
+import { sampleMessages } from "./samples.ts";
 import * as refCss from "./ChatRef.css.ts";
 import { core, useCall } from "./core/react.ts";
 import { ChatRefMenu, LinkedChats, markBefore, refAt, RefMirror, WithRefs } from "./ChatRef.tsx";
@@ -641,7 +642,6 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   useQueuedEntries(list);
 
   usePlace(virtual, place, messages, short, leave);
-  useHistoryFade(list, messages);
   // Without a chat there is nothing older (or newer) to load.
   const older = () => (id === null ? Promise.resolve() : sending.older(id));
   // Loaded as far as entries go, not messages: a page of what is not a message here (letters, edits) moves it too.
@@ -760,20 +760,6 @@ function useToEnd(list: RefObject<HTMLElement | null>, virtual: VirtualList, cha
     if (!short) virtual.toEnd();
     else toLatest.current();
   };
-}
-
-/** New historical rows share one short opacity fade; existing rows never replay when their status changes. */
-function useHistoryFade(list: RefObject<HTMLElement | null>, messages: ChatMessage[]): void {
-  // By message, not by row: a row made again as the reader scrolls back to it does not fade in again.
-  const seen = useRef(new Set<string>());
-  useLayoutEffect(() => {
-    for (const row of list.current?.querySelectorAll<HTMLElement>(":scope > [data-ts]") ?? []) {
-      const ts = row.dataset.ts!;
-      if (seen.current.has(ts)) continue;
-      seen.current.add(ts);
-      if (row.hasAttribute("data-caught") && document.visibilityState === "visible") row.dataset.historyFade = "";
-    }
-  });
 }
 
 /**
@@ -1141,6 +1127,15 @@ export function StaticMessage({ message, keeper }: { message: ChatMessage; /** T
     </FileKeeper.Provider>
   );
 }
+
+/**
+ * A chat's messages made up, for what its page shows while it is read (in their bones), as its list draws them: in a
+ * list of `className` (the wide screen's, unless said).
+ */
+export function ChatSample({ className = `${sessionCss.chatList} ${css.chatMessages}` }: { className?: string }) {
+  return <div className={className}>{SAMPLE_MESSAGES.map((m) => <StaticMessage key={m.seq} message={m} keeper="" />)}</div>;
+}
+const SAMPLE_MESSAGES = sampleMessages();
 
 type Data = { [key: `data-${string}`]: string | number | boolean | undefined };
 

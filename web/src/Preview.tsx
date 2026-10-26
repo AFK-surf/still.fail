@@ -132,6 +132,15 @@ interface Bar {
   fixed?: boolean;
 }
 
+/** A service's preview as it will open, for what shows while its service is read (in its bones): its bar, its frame. */
+export function PreviewSample({ name }: { name: string }) {
+  return (
+    <div className={css.preview}>
+      <PreviewBar name={name} at="/" go={() => undefined} reload={() => undefined} back={() => undefined} forward={() => undefined} />
+    </div>
+  );
+}
+
 /** Back, forward, reload, where it is (typed to go elsewhere), and its page of its own: over the frame. */
 function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canForward = false, external, extra, instead, size, loading, fixed = false }: Bar) {
   const [typed, setTyped] = useState(at ?? "/");

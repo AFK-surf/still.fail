@@ -2,8 +2,8 @@
 // side_rows.mbt).
 
 ///|
-/// The band's first row (Sidebar.css.ts brand): beside the rail only a margin (8); in a window with its buttons in the
-/// app's top row, their row (44), which drags the window; none in the closed bar, which starts under that row: where
+/// The band's first row (Sidebar.css.ts brand): beside the rail only a margin (8); in a window with its buttons at the
+/// left of the app's top row, their row (44), which drags the window; none in the closed bar: where
 /// the block's move has got to (frame's --brand).
 pub fn side_top(c : @ui.Ctx) -> Unit {
   let id = c.id("side/top")

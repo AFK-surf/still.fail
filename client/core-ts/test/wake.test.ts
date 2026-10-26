@@ -5,7 +5,7 @@ import { Effect, Exit, Queue, type Fiber } from "effect";
 import { HostError } from "../src/error.ts";
 import type { HttpRequest, HttpResponse, Pull } from "../src/host.ts";
 import { FakeHost, flush, jsonResponse } from "../src/testing.ts";
-import { DROPPED, GONE, HEDGE, NETWORK, QUIET_MS, STREAM_AWAY_MS, Wake, Wakes, hedgeable, hedged, quietEnds, unlessDropped } from "../src/wake.ts";
+import { DROPPED, GONE, HEDGE, NETWORK, QUIET_MS, STREAM_AWAY_MS, Wake, WakingHost, Wakes, hedgeable, hedged, quietEnds, unlessDropped } from "../src/wake.ts";
 
 const wake = (at: number, away: number) => new Wake(at, away, false, false);
 
@@ -43,6 +43,17 @@ test("a_request_long_unanswered_fails_when_the_page_is_back", async () => {
   // Sent while the page was away (an app in the background still runs a while), unanswered since: given up.
   wakes.wake(wake(60_000, 59_500));
   assert.equal(errorOf(await request.done()), DROPPED);
+});
+
+test("names_are_put_in_order_by_the_devices_host_through_the_cores", () => {
+  // (the files page's order, drive-browse.ts: the system's collation, not the core's by hand)
+  class Collating extends FakeHost {
+    collate(names: readonly string[]): number[] {
+      return names.map((_, i) => names.length - 1 - i);
+    }
+  }
+  assert.deepEqual(new WakingHost(new Collating(), new Wakes()).collate(["a", "b", "c"]), [2, 1, 0]);
+  assert.equal(new WakingHost(new FakeHost(), new Wakes()).collate(["a", "b"]), null);
 });
 
 const get: HttpRequest = { method: "GET", url: "https://x/y", headers: [], body: null };
