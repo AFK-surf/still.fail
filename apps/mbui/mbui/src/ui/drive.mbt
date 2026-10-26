@@ -54,6 +54,8 @@
 //   notice TEXT                 that notification, once there, tapped (as the system's shade sends the tap)
 //   log TEXT                    DRIVE LOG TEXT on the log (a mark for whoever watches it)
 //   exit                        ends the run: DRIVE PASS, exit 0
+//   ends                        the app ends by itself, its host quitting it (an update handed to its installer), within
+//                               the timeout; else the run fails. What follows it is never reached
 //   linger MS                   the run passed (DRIVE PASS said now), the app left running MS more for what the last
 //                               step set off (a share sheet, a download): a check beside the run looks at it
 //   answered CALL               a call to the core named CALL (drive.read; or a subscription's topic key, its first
@@ -1223,6 +1225,13 @@ fn drive_steps(c : Ctx) -> Unit {
         }
       "exit" => {
         drive_end(0)
+        return
+      }
+      "ends" => {
+        // (the host ends the app, the run with it; nothing here moves on)
+        if waited > d.timeout {
+          drive_fail(c, d, "the app did not end by itself within \{d.timeout.to_int()} ms")
+        }
         return
       }
       "linger" => {

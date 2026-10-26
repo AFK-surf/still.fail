@@ -2,9 +2,10 @@
 // desktop app took its installer (apps/desktop main.ts verifyWindowsUpdates, station/src/updates/signed.ts
 // verifyDesktop): the feed's release carries the installer's .sig (`signed`, scripts/release-sign.ts file --kind
 // stillfail-desktop-win), whose words say its version and build, its file, its SHA-256 and size; signed by one of the
-// release keys (station/src/updates/keys.ts), the same build the feed offers, the same file, hash and size. The host
-// checks the installer's bytes against that hash as they come (mbui's win_update.h): what the cloud serves cannot put
-// another program in the app's place.
+// release keys (station/src/updates/keys.ts; or one the app's environment adds, STILLFAIL_RELEASE_KEYS, as the station's
+// and the desktop app's do: a test's own releases, a dev cloud's), the same build the feed offers, the same file, hash
+// and size. The host checks the installer's bytes against that hash as they come (mbui's win_update.h): what the cloud
+// serves cannot put another program in the app's place.
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { RELEASE_KEYS } from "../../../station/src/updates/keys.ts";
 import { fromBase64, hex, sha256 } from "./util.ts";

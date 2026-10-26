@@ -118,12 +118,13 @@ sealed() {
   "$out/sealed_test_win.exe"
 }
 # setup: the installer (windows/setup.c) with the app as built and put (put: the program, its engine and shell, core.hbc)
-# packed after it, as MBUI_VARIANT has it: out/setup/<name> (MBUI_SETUP_NAME, else stillfail-setup-0.1.<n>.exe)
+# packed after it, as MBUI_VARIANT has it: <MBUI_SETUP_OUT, else out/setup>/<name> (MBUI_SETUP_NAME, else
+# stillfail-setup-0.1.<n>.exe)
 setup() {
   local n=${MBUI_BUILD:-$(git -C "$EMBER" rev-list --count HEAD 2>/dev/null || echo 1)} id name exe dir schemes extra
   variant || return 1
   . "$MBUI_DIR/scripts/env.sh"
-  local built=$MBUI_DIR/out/win/app/$(cd "$MBUI_DIR/out/win/app" && pkg_build $APP native ${MODE:-release}) out=$A/out/setup
+  local built=$MBUI_DIR/out/win/app/$(cd "$MBUI_DIR/out/win/app" && pkg_build $APP native ${MODE:-release}) out=${MBUI_SETUP_OUT:-$A/out/setup}
   [ -f "$built/stillfail.exe" ] || { echo "win.sh: no app built (win.sh build, put)" >&2; return 1; }
   rm -rf "$out" && mkdir -p "$out/files"
   (cd "$A" && cl.exe -nologo -O2 -W3 windows/setup.c -Fe"$(cygpath -w "$out/setup-bare.exe")" -Fo"$(cygpath -w "$out/")" > "$out/build.log") ||

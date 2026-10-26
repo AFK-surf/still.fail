@@ -264,10 +264,54 @@ driven notice 1100x760 notice_do
 check "put away, a notice shown (by the system: $(grep -c '^NOTICE shown by the system' "$OUT/notice.log" 2>/dev/null)), tapped, the app back at the chat" \
   '[ $station_ok = 1 ] && grep -q "^DRIVE PASS" "$OUT/notice.log" && grep -q "^NOTICE TAP " "$OUT/notice.log"'
 
+# the app keeping itself current (update.drive, mbui's src/host/win_update.h): this app's installer as the next build
+# (win.sh setup, MBUI_BUILD n+1, into a folder of this run's) signed by a key of this run's (scripts/release-sign.ts
+# keygen, file: CI takes no key but the release ones, so not as CI), in the local cloud's releases as its feed names it
+# (win/mbui/latest.json, scripts/win-feeds.sh); the app, given that key (STILLFAIL_RELEASE_KEYS, as a station and the
+# desktop app take one), finds it, and 关于's 更新到 pressed, downloads it, checks it and runs it as the desktop app's
+# updater ran its installer, quitting; the installer puts it in %LOCALAPPDATA%\Programs and opens it. That one ended,
+# then taken away by its uninstaller.
+NEXT=$(( $(git -C "$SF" rev-list --count HEAD) + 1 ))
+UPD=$WORK/update
+UP_NAME=stillfail-mbui-$NEXT-x64-win.exe
+PROGRAMS=$(cygpath -u "$LOCALAPPDATA")/Programs/stillfail-mbui
+rm -rf "$UPD" && mkdir -p "$UPD"
+up_key=
+if (cd "$ROOT" && MBUI_BUILD=$NEXT MBUI_SETUP_OUT="$UPD/setup" MBUI_SETUP_NAME=$UP_NAME bash scripts/win.sh setup) > "$OUT/update-seed.log" 2>&1 &&
+  up_key=$(cd "$SF" && node scripts/release-sign.ts keygen "$(w "$UPD/key.pem")" | cut -d' ' -f1) &&
+  (cd "$SF" && env -u CI RELEASE_SIGNING_KEY="$(cat "$UPD/key.pem")" \
+    node scripts/release-sign.ts file "$(w "$UPD/setup/$UP_NAME")" --kind stillfail-desktop-win --build $NEXT) >> "$OUT/update-seed.log" 2>&1 &&
+  mkdir -p "$SF/dist/releases/win/mbui" && cp "$UPD/setup/$UP_NAME" "$SF/dist/releases/win/" &&
+  sh "$SF/scripts/win-feeds.sh" "$UPD/setup/$UP_NAME" "win/$UP_NAME" $NEXT "$UPD/setup/$UP_NAME.sig" "$SF/dist/releases/win/mbui/latest.json"; then
+  # (the installer's log, in the temporary folder it is given: %TEMP%\stillfail-mbui-setup.log)
+  setup_log=$(cygpath -u "$(powershell.exe -NoProfile -Command '[IO.Path]::GetTempPath()' | tr -d '\r')")stillfail-mbui-setup.log
+  rm -f "$setup_log"
+  driven update 1100x760 true STILLFAIL_RELEASE_KEYS=$up_key
+  # what the installer opened once it said so (the app quit before it), then ended
+  node "$ROOT/scripts/waitfor.mjs" --deadline 120 --what "the installer's word on opening the app" --log "$(w "$setup_log")" \
+    --line 'stillfail\.exe (not )?opened' > /dev/null
+  opened=$(powershell.exe -NoProfile -Command "@(Get-Process stillfail -ErrorAction SilentlyContinue | ForEach-Object { \$_.Path }) -join ';'" | tr -d '\r')
+  taskkill //F //IM stillfail.exe > /dev/null 2>&1
+  cp "$setup_log" "$OUT/update-setup.log" 2>/dev/null
+else
+  echo "e2e: the next build not made: $(tail -3 "$OUT/update-seed.log" | tr '\r\n' '  ')"
+fi
+check "the next build offered (found by the core's app.update, signed by the key the app was given)" \
+  '[ -n "$up_key" ] && grep -q "update: 0.1.$NEXT ($NEXT) is newer than this build" "$OUT/update.log"'
+check "its installer downloaded from the cloud, checked and run as the desktop app's updater ran its own, the app quitting" \
+  'grep -q "update: .*/releases/win/$UP_NAME: $(wc -c < "$UPD/setup/$UP_NAME" 2>/dev/null) bytes to " "$OUT/update.log" && grep -q "update: .*$UP_NAME run: this one quits" "$OUT/update.log"'
+up_entry() { reg.exe query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\fail.still.mbui" //v "$1" 2>/dev/null | tr -d '\r' | sed -n "s/^ *$1 *REG_[A-Z_]* *//p"; }
+check "put in %LOCALAPPDATA%\\Programs (its uninstall entry 0.1.$NEXT) and opened from there (${opened:-none})" \
+  '[ -f "$PROGRAMS/stillfail.exe" ] && [ "$(up_entry DisplayVersion)" = "0.1.$NEXT" ] && grep -q "stillfail.exe opened" "$OUT/update-setup.log" && case "$opened" in *Programs\\stillfail-mbui\\stillfail.exe*) true ;; *) false ;; esac'
+if [ -f "$PROGRAMS/Uninstall still.fail mbui.exe" ]; then
+  cp "$PROGRAMS/Uninstall still.fail mbui.exe" "$UPD/uninstall.exe"
+  MSYS_NO_PATHCONV=1 "$UPD/uninstall.exe" --uninstall-from "$(w "$PROGRAMS")" /S > "$OUT/update-uninstall.log" 2>&1
+fi
+
 for p in ${station:-} $cloud $relay; do
   taskkill //F //T //PID "$(cat /proc/$p/winpid 2>/dev/null || echo 0)" > /dev/null 2>&1 || kill $p 2>/dev/null || true
 done
 echo "e2e: $fails failed" | tee -a "$OUT/result.txt"
-for f in signin again life files notice; do echo "== $f.log (the end)"; grep -v "^\[core trace\]" "$OUT/$f.log" | tail -25; done
+for f in signin again life files notice update; do echo "== $f.log (the end)"; grep -v "^\[core trace\]" "$OUT/$f.log" | tail -25; done
 [ $station_ok = 1 ] || for f in enroll station peer; do echo "== $f.log (the end)"; tail -20 "$OUT/$f.log" 2>/dev/null; done
 [ $fails = 0 ]

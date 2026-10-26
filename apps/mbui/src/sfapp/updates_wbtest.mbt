@@ -65,6 +65,33 @@ test "no source: nothing is asked; asked now, it says why" {
 }
 
 ///|
+test "still.fail cloud's feed asked with the release keys the app's environment adds (STILLFAIL_RELEASE_KEYS), none without" {
+  reset()
+  let base = fixture("home")
+  let asked : Array[String] = []
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      if name == "app.update" {
+        asked.push(params.stringify())
+        done(Ok(Json::null()))
+      } else {
+        (base.call)(name, params, done)
+      }
+    },
+  }
+  let updates = cloud_updates(src, "win/mbui", "https://example.test")
+  let _ = @ui.Tester::new(fn(_) {  }, env=[("STILLFAIL_RELEASE_KEYS", " k1=, k2= ,")])
+  (updates.check)(5, false, fn(_) {  })
+  let _ = @ui.Tester::new(fn(_) {  })
+  (updates.check)(5, true, fn(_) {  })
+  assert_eq(asked, [
+    "{\"platform\":\"win/mbui\",\"versionCode\":5,\"now\":false,\"keys\":[\"k1=\",\"k2=\"]}",
+    "{\"platform\":\"win/mbui\",\"versionCode\":5,\"now\":true}",
+  ])
+}
+
+///|
 test "an update's download answered otherwise: its status in Updates.kt's words" {
   assert_eq(update_error("status 404"), "下载返回 404")
   assert_eq(update_error("incomplete"), "下载的文件不完整，请重试")

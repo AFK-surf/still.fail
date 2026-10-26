@@ -5,7 +5,7 @@ import { get } from "./util.ts";
 
 export type Ask =
   | { kind: "linkParse"; url: string }
-  | { kind: "appUpdate"; platform: string; version: number; now: boolean }
+  | { kind: "appUpdate"; platform: string; version: number; now: boolean; keys: string[] }
   | { kind: "picture"; url: string }
   | { kind: "buddies" }
   | { kind: "devSignIn"; user: string };
@@ -24,7 +24,15 @@ export function parseAsk(name: string, params: unknown): Ask | null {
       const platform = text("platform");
       const version = get(params, "versionCode");
       if (typeof version !== "number" || !Number.isInteger(version)) throw CoreError.invalid(t("core-misc.params.missing", { field: "versionCode" }));
-      return { kind: "appUpdate", platform, version, now: get(params, "now") === true };
+      // (keys: release keys the app takes beside its own, its environment's STILLFAIL_RELEASE_KEYS: app-release.ts)
+      const keys = get(params, "keys");
+      return {
+        kind: "appUpdate",
+        platform,
+        version,
+        now: get(params, "now") === true,
+        keys: Array.isArray(keys) ? keys.filter((k): k is string => typeof k === "string" && k !== "") : [],
+      };
     }
     case "picture":
       return { kind: "picture", url: text("url") };

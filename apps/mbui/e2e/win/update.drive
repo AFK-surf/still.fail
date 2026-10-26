@@ -1,0 +1,16 @@
+# The app keeping itself current (mbui's src/host/win_update.h), on the files the sign-in left: the next build in the
+# local cloud's releases, signed by a key of this run's that the app is given (e2e/win.sh: STILLFAIL_RELEASE_KEYS),
+# found by the core's app.update once the app is signed in; 关于's version row offers it (更新到 0.1.<n+1>: the
+# highest of the two, the settings' 关于 row under it saying so too). Pressed,
+# it is asked for again, downloaded, checked against its signed SHA-256 and size and run as the desktop app's updater
+# ran its installer, and this app quits as it starts (the run ends with it: `ends`, not `exit`, which would end the app
+# before its host had started the installer); what came of it e2e/win.sh checks.
+timeout 90000
+answered {"topic":"accounts"}
+gone 登录或注册
+tap icon:settings
+tap =关于
+until 更新到 0.1.
+tap1 更新到 0.1.
+until 正在安装
+ends

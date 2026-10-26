@@ -93,6 +93,17 @@ pub fn cloud_updates(src : Source, feed : String, origin : String) -> UpdateSour
         "versionCode": Json::number(version.to_double()),
         "now": Json::boolean(now),
       }
+      // release keys taken beside the app's own (the core's app-release.ts): its environment's STILLFAIL_RELEASE_KEYS,
+      // comma-separated, as the station and the desktop app take them (a test's own releases, a dev cloud's)
+      let keys = @ui.env("STILLFAIL_RELEASE_KEYS")
+        .split(",")
+        .map(fn(k) { k.trim().to_string() })
+        .filter(fn(k) { k != "" })
+        .map(Json::string)
+        .collect()
+      if keys.length() > 0 {
+        params["keys"] = Json::array(keys)
+      }
       (src.call)("app.update", Json::object(params), fn(r) {
         match r {
           Ok(v) => done(Ok(v))

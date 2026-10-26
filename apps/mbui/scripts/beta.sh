@@ -15,9 +15,9 @@
 #                                        $RELEASE_DIR as mac/stillfail-mbui-<n>-arm64-mac.zip and mac/mbui/latest.json
 #                                        (MBUI_VARIANT=stable or beta: still.fail's Mac app itself, in the Electron
 #                                        app's place, for scripts/release.sh: $RELEASE_DIR/mac/app-<variant>.zip)
-#   apps/mbui/scripts/beta.sh win        the Windows app (scripts/win.sh's build, its engine, shell and core.hbc beside it),
-#                                        zipped into $RELEASE_DIR as win/stillfail-mbui-<n>-x64-win.zip and
-#                                        win/mbui/latest.json
+#   apps/mbui/scripts/beta.sh win        the Windows app's installer (scripts/win.sh setup: the build, its engine, shell
+#                                        and core.hbc packed in it), signed, into $RELEASE_DIR as
+#                                        win/stillfail-mbui-<n>-x64-win.exe and win/mbui/latest.json (carrying its .sig)
 #   apps/mbui/scripts/beta.sh linux      the Linux app (scripts/linux.sh's build, its engine, shell and core.hbc beside it),
 #                                        with its icon and linux/install.sh, in still.fail-mbui/, into $RELEASE_DIR as
 #                                        linux/stillfail-mbui-<n>-<x64|arm64>-linux.tar.gz and its machine's feed: x64's
@@ -54,7 +54,7 @@ build_number() { git -C "$REPO" rev-list --count HEAD; }
 # What the app is made of: its code, what it is built with (mbui, its Android host's Java and resources among it:
 # apps/mbui/android/apk.json; the core, the client's packages, media's, vendor's crates), not their tests, docs, the
 # scripts or CI (a push of those alone is no new package: 2026-10-21)
-APP_SRC=(apps/mbui/src apps/mbui/core apps/mbui/android apps/mbui/ios apps/mbui/engine
+APP_SRC=(apps/mbui/src apps/mbui/core apps/mbui/android apps/mbui/ios apps/mbui/windows apps/mbui/engine
   apps/mbui/mbui/src apps/mbui/mbui/android apps/mbui/mbui/moon.mod apps/mbui/moon.mod apps/mbui/moon.work client media vendor
   ':(exclude,glob)**/test/**' ':(exclude,glob)**/tests/**' ':(exclude,glob)**/*_test.mbt' ':(exclude,glob)**/*_wbtest.mbt' ':(exclude,glob)**/*.test.*'
   ':(exclude,glob)**/*.md')
@@ -144,20 +144,22 @@ for root, dirs, names in os.walk(dst):
 ' "$A" "$WORK"
 }
 
-# feed PART N NAME FILE: $RELEASE_DIR/PART/PART/mbui/latest.json (still.fail's AppRelease) for FILE, put as NAME; news:
-# what came since the build the feed names now (versionCode n is main's nth commit), of what the app is made of
+# feed PART N NAME FILE [SIGNED]: $RELEASE_DIR/PART/PART/mbui/latest.json (still.fail's AppRelease) for FILE, put as
+# NAME; news: what came since the build the feed names now (versionCode n is main's nth commit), of what the app is made
+# of; SIGNED: FILE's .sig, carried as `signed` (the Windows app's: the core offers it only as its signed words say it)
 feed() {
-  local part=$1 n=$2 name=$3 file=$4 prev_sha
+  local part=$1 n=$2 name=$3 file=$4 signed=${5:-} prev_sha
   prev_sha=$(released "$part")
   mkdir -p "$RELEASE_DIR/$part/$part/mbui"
   git -C "$REPO" log --format=%s ${prev_sha:+$prev_sha..}HEAD -n 30 -- "${APP_SRC[@]}" \
     | python3 -c '
 import json, sys
-n, name, sha, size, out = sys.argv[1:6]
+n, name, sha, size, out, signed = sys.argv[1:7]
 news = [l.strip() for l in sys.stdin if l.strip()]
-json.dump({"versionCode": int(n), "versionName": "0.1." + n, "file": name, "sha256": sha, "size": int(size), "news": news},
-          open(out, "w"), ensure_ascii=False)' "$n" "$name" "$(shasum -a 256 "$file" | cut -d' ' -f1)" "$(wc -c < "$file" | tr -d ' ')" \
-      "$RELEASE_DIR/$part/$part/mbui/latest.json"
+feed = {"versionCode": int(n), "versionName": "0.1." + n, "file": name, "sha256": sha, "size": int(size), "news": news}
+if signed: feed["signed"] = json.load(open(signed))
+json.dump(feed, open(out, "w"), ensure_ascii=False)' "$n" "$name" "$(shasum -a 256 "$file" | cut -d' ' -f1)" "$(wc -c < "$file" | tr -d ' ')" \
+      "$RELEASE_DIR/$part/$part/mbui/latest.json" "$signed"
 }
 
 build() {
@@ -244,21 +246,22 @@ mac() {
   summary "- $(grep '^mac-app.sh: .*\.app' "$C/mac-build.log" | sed 's/^mac-app.sh: //')"
 }
 
-# The Windows app as win.sh built and put it (the .exe, the engine's and the shell's DLLs, core.hbc), zipped
+# The Windows app's installer as win.sh setup made it (windows/setup.c: the program, the engine's and the shell's DLLs
+# and core.hbc packed after it, put into %LOCALAPPDATA%\Programs\stillfail-mbui), signed (RELEASE_SIGNING_KEY: its
+# .sig, which the feed carries; the app updates itself to it as still.fail's desktop app did)
 win() {
-  local t0=$(now) n dir zip name
+  local t0=$(now) n setup exe name
   n=$(build_number)
-  local MBUI_DIR
-  MBUI_DIR=$(sh "$A/scripts/mbui.sh")
-  . "$MBUI_DIR/scripts/env.sh"
-  dir=$MBUI_DIR/out/win/app/$(cd "$MBUI_DIR/out/win/app" && pkg_build stillfail native release)
-  [ -f "$dir/stillfail.exe" ] || { echo "beta: no stillfail.exe in $dir (win.sh build, put)" >&2; exit 1; }
-  rm -rf "$RELEASE_DIR/win" && mkdir -p "$RELEASE_DIR/win/win"
-  name=win/stillfail-mbui-$n-x64-win.zip
-  zip=$RELEASE_DIR/win/$name
-  (cd "$dir" && 7z a -tzip -mx=5 "$(cygpath -w "$zip" 2>/dev/null || echo "$zip")" stillfail.exe *.dll core.hbc > /dev/null)
-  feed win "$n" "$name" "$zip"
-  summary "- Windows app 0.1.$n: $(wc -c < "$zip" | tr -d ' ') bytes, zipped in $(secs $t0) s"
+  setup=$A/out/setup/stillfail-setup-0.1.$n.exe
+  [ -f "$setup" ] || { echo "beta: no $setup (win.sh setup)" >&2; exit 1; }
+  rm -rf "$RELEASE_DIR/win" "$C/win-sig" && mkdir -p "$RELEASE_DIR/win/win" "$C/win-sig"
+  name=win/stillfail-mbui-$n-x64-win.exe
+  exe=$C/win-sig/$(basename "$name")
+  cp "$setup" "$exe"
+  node "$REPO/scripts/release-sign.ts" file "$exe" --kind stillfail-desktop-win --build "$n"
+  cp "$exe" "$RELEASE_DIR/win/$name"
+  feed win "$n" "$name" "$exe" "$exe.sig"
+  summary "- Windows app 0.1.$n: its installer $(wc -c < "$exe" | tr -d ' ') bytes, signed in $(secs $t0) s"
 }
 
 # The Linux app as linux.sh built and put it (the program, the engine's and the shell's libraries, core.hbc), with its

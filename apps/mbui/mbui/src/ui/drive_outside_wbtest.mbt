@@ -53,6 +53,17 @@ test "outside_done fails where its name names more than one thing done" {
 }
 
 ///|
+test "ends waits for the host to end the app, moving on to nothing; past its timeout the run fails" {
+  // (300 frames of the Tester's are more than its 1000 ms)
+  let log = outside_run("timeout 1000\nends\nexit", fn(_) {  })
+  assert_false(log.iter().any(fn(l) { l.contains("DRIVE PASS") }), msg=log.join("\n"))
+  assert_true(
+    log.iter().any(fn(l) { l.contains("DRIVE FAIL line 2: ends: the app did not end by itself within 1000 ms") }),
+    msg=log.join("\n"),
+  )
+}
+
+///|
 test "shown waits for the host's word that the app is shown again after it was not" {
   let log = outside_run("timeout 3000\nshown\nexit", fn(n) {
     // (another app's page over it, then gone)
