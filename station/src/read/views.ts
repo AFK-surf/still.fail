@@ -629,7 +629,7 @@ function entryJson(e: EntryRow): Json {
 
 /// Entries with their authors' names; an agent's also with its session's model and runtime (`authorModel`,
 /// `authorRuntime`), so its mark is drawn before the client has read the session.
-function entryViews(api: Api, thread: number, entries: EntryRow[]): Json[] {
+export function entryViews(api: Api, thread: number, entries: EntryRow[]): Json[] {
   const names = authorNames(api, thread);
   const sessions = new Map<string, SessionRow | null>();
   return entries.map((e) => {

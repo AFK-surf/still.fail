@@ -1,23 +1,19 @@
-import { globalStyle, style } from "@vanilla-extract/css";
+import { style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { CARD_PAD, cardLook } from "./styles/pages.css.ts";
-import { DIALOG_INNER } from "@stillfail/ui/parts.css.ts";
+import { columns } from "@stillfail/ui/styles/align.ts";
 
-/** The picture's messages, as the chat draws them (their heads in line, the phone's way), on a card. */
-export const preview = style({
-  ...cardLook, display: "grid", gap: "16px", padding: CARD_PAD, maxHeight: "340px", overflowY: "auto", minHeight: "0",
-  selectors: {
-    // In the dialog its corners follow the dialog's (ui.css.ts DIALOG_INNER); on the phone's sheet, the cards' own.
-    "&:not([data-whole])": { borderRadius: DIALOG_INNER },
-    "&[data-whole]": { maxHeight: "none", minHeight: "auto", overflowY: "visible" },
-  },
+/** The picture's messages, as the chat's list lays them out: 28 apart (session.css.ts chatList), the phone's 20. */
+export const list = style({
+  display: "flex", flexDirection: "column", gap: "28px",
+  selectors: { "&[data-inline]": { gap: "20px" } },
 });
-/** Under a message: how many things in it were hidden (as looking secret), or its attachments' names. */
+/** A message and, under it, how much was hidden in it. */
+export const said = style({ display: "grid", gap: "6px", minWidth: "0" });
+/** Under a message: how many things in it were hidden (as looking secret); under the viewer's own, at its end. */
 export const note = style({
   display: "flex", alignItems: "center", gap: "6px", fontSize: vars.textMeta, color: vars.muted, minWidth: "0",
+  selectors: { "&[data-mine]": { justifySelf: "end" } },
 });
-/** Attachments under a message: as the chat lays them out, wrapping. */
-export const files = style({ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "8px", marginTop: "6px" });
 /** An attachment in a message, as the chat draws it, to tick: its box in its top right corner; unticked, it fades. */
 export const file = style({
   position: "relative", display: "inline-block", maxWidth: "100%", verticalAlign: "top", cursor: "pointer",
@@ -31,12 +27,15 @@ export const page = style({
   "@media": { "(max-width: 640px)": { padding: "32px 0 32px" } },
 });
 /**
- * The picture as it would be, on the page's ground (what it is drawn on when it is taken): its words 32 in, 32 from
- * its top and foot (18 in on a phone's), its parts 16 apart.
+ * The picture as it would be, on the page's ground (what it is drawn on when it is taken): 32 round what it holds, 32
+ * from its top and foot, its parts 16 apart; its words the messages' pictures' room further in than its end, as those
+ * stand out before them (align.ts columns.avatar). Their heads in line with their pictures (`data-inline`, the phone's
+ * list), its words 32 in (18 on a phone's).
  */
 export const paper = style({
-  display: "grid", gap: "16px", padding: "32px", background: vars.canvas, color: vars.text,
-  "@media": { "(max-width: 640px)": { padding: "32px 18px" } },
+  display: "grid", gap: "16px", padding: `32px 32px 32px ${32 + columns.avatar}px`, background: vars.canvas, color: vars.text,
+  selectors: { "&[data-inline]": { padding: "32px" } },
+  "@media": { "(max-width: 640px)": { selectors: { "&[data-inline]": { padding: "32px 18px" } } } },
 });
 /** The chat's name over its messages. */
 export const title = style({ margin: "0", fontSize: vars.textTitle, lineHeight: vars.leadingTitle, fontWeight: "600" });
@@ -67,5 +66,3 @@ export const linkAction = style({
     "&:disabled": { cursor: "default", opacity: "0.5" },
   },
 });
-/** The messages there are the picture's, not on a card of their own. */
-globalStyle(`${paper} > ${preview}`, { background: "none", padding: "0", borderRadius: "0" });

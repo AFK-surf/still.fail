@@ -109,12 +109,34 @@ function pictureOf(members: J[], email: string | null): string | null {
   return picture !== null && picture !== "" ? picture : null;
 }
 
+/// A message of a snapshot as its chat's page reads an entry (GET /threads/:id/entries), its attachments `own`: what
+/// a station from before it gave the chat's entries with the preview (`views`) is drawn from. A person by their address
+/// where the snapshot gives it (the viewer's own are told by it), an agent by its model and runtime.
+function entryOfSnapshot(e: J, own: J[]): J {
+  return {
+    kind: "message",
+    n: num(e.n),
+    at: num(e.at),
+    authorKind: str(e.authorKind) ?? "person",
+    author: str(e.person) ?? str(e.author) ?? "",
+    authorName: str(e.author) ?? "",
+    ...(str(e.model) !== null ? { authorModel: str(e.model) } : {}),
+    ...(str(e.runtime) !== null ? { authorRuntime: str(e.runtime) } : {}),
+    text: str(e.text) ?? "",
+    attachments: own.map((f) => f.file),
+    quotes: [],
+  };
+}
+
 /// What a station answers a preview with (`POST /threads/:thread/publish/preview`), for the panel that publishes it:
-/// its messages, each with how many things in it were hidden and its attachments (as the chat has them, to show alike),
-/// and all its attachments together.
-export function previewShown(answer: J, clock: present.Clock, members: J[] = []): J {
+/// its messages as the chat's page draws them (`list`: `listed` makes them of the chat's entries as the station read
+/// them, what looks like a secret hidden in all they say), each with how many things in it were hidden (`messages`, by
+/// its n), and all its attachments together, to tick. `messages` is also each as a snapshot holds it, for the panels
+/// from before pictures.
+export function previewShown(answer: J, clock: present.Clock, members: J[] = [], listed: (entries: J[]) => J[] = () => []): J {
+  const views = get(answer, "views");
   const hiddenAt = new Map<number, number>();
-  for (const r of arr(get(answer, "redacted"))) hiddenAt.set(num(get(r, "n")), (hiddenAt.get(num(get(r, "n"))) ?? 0) + num(get(r, "count")));
+  for (const r of arr(isObject(views) ? get(views, "hidden") : get(answer, "redacted"))) hiddenAt.set(num(get(r, "n")), (hiddenAt.get(num(get(r, "n"))) ?? 0) + num(get(r, "count")));
   const files = arr(get(answer, "files")).map((f) => {
     const size = num(f.size);
     const name = str(f.name) ?? "";
@@ -150,9 +172,11 @@ export function previewShown(answer: J, clock: present.Clock, members: J[] = [])
     };
   });
   const hidden = [...hiddenAt.values()].reduce((a, b) => a + b, 0);
+  const entries = isObject(views) ? arr(get(views, "entries")) : arr(get(answer, "entries")).map((e) => entryOfSnapshot(e, files.filter((f) => f.n === num(e.n))));
   return present.times({
     upto: num(get(answer, "upto")),
     title: str(get(answer, "title")) ?? "",
+    list: listed(entries),
     messages,
     files,
     hidden,
@@ -192,7 +216,8 @@ export function install(inner: Inner): void {
         inner.stations.requests.call(at, "POST", `/threads/${c.thread}/publish/preview`, { names: namesOf(inner, c.station) }, { ctx }),
         oldStation,
       );
-      return previewShown(answer, clock(), arr(get(inner.data.shared({ topic: "workspace", workspace: ofAddress(c.station) }), "members")));
+      const members = arr(get(inner.data.shared({ topic: "workspace", workspace: ofAddress(c.station) }), "members"));
+      return previewShown(answer, clock(), members, (entries) => inner.views.listed(c.station, c.thread, entries));
     });
   };
   handlers.chatPublish = (_inner, call, _progress, _at, ctx) => {

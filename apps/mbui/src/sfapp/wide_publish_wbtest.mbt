@@ -27,6 +27,9 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
   // its bar across the top, as a file opened has: what it is and how much was hidden
   assert_true(t.find("共隐藏 1 处疑似机密") is Some(_))
   assert_true(t.find("已隐藏 1 处") is Some(_))
+  // its messages as the chat's list draws them (the viewer's own at its end, an agent's vault request as it ended)
+  assert_true(picture_mine_at_end(t), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("已允许使用「Axiom 查询 token」") is Some(_))
   t.click(Button, label="复制图片")
   t.frame()
   assert_eq(named(calls, "chat.publish").length(), 0)

@@ -2904,8 +2904,9 @@ export const SHAPES: Record<string, Shape> = {
   PublishPreview: struct([
     ["upto", "i64", { client: "I54", doc: "The last message it holds: `chat.publish` takes it, so what is kept is what was seen." }],
     ["title", "String"],
-    ["messages", vec("PublishMessage")],
-    ["files", vec("PublishFile"), { doc: "Its messages' attachments, to tick (`chat.publish` takes those ticked by `k`)." }],
+    ["list", vec("ChatMessage"), { doc: "Its messages as the chat's page draws them (`ChatView.messages`, made of its entries as the station read\nthem, what looks like a secret hidden in all they say): a picture of the chat draws them as its list does." }],
+    ["messages", vec("PublishMessage"), { doc: "Each as a snapshot would hold it, and how many things in it were hidden (by its `n`, a `list` message's\n`seq`)." }],
+    ["files", vec("PublishFile"), { doc: "Its messages' attachments, to tick (`chat.publish` takes those ticked by `k`; a `list` message's by its `n`\nand `file.path`)." }],
     ["hidden", "u32", { doc: "How many things in all were hidden as looking secret." }],
     ["hiddenText", opt("String"), { doc: "That in words (隐藏了 3 处); absent when none." }],
   ], { doc: "What a snapshot of a chat would hold now (`chat.publishPreview`): nothing is kept until it is published." }),

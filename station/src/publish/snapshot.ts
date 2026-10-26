@@ -18,6 +18,10 @@ export type Draft = {
   /// How many things were hidden, by message (those with none left out).
   redacted: { n: number; count: number }[];
   files: DraftFile[];
+  /// The chat's entries up to it as its page reads them (GET /threads/:id/entries), what looks like a secret hidden in
+  /// all they say, and how many were in each message as its page shows it (its last edit's words for its first's): the
+  /// members' preview draws them as the chat's list does. Never in the snapshot.
+  views: { entries: Json[]; hidden: { n: number; count: number }[] };
 };
 
 /// What a draft's snapshot is, with the attachments `ticked` (`null`: all): the share page's snapshot.json.

@@ -8,7 +8,7 @@ import * as store from "./store.ts";
 import type { AuthorKind, MessageRow, Store } from "./store.ts";
 import { makerOf, modelName } from "../ops/model-name.ts";
 import { setLang, tr } from "./spoken.ts";
-import { HttpError, apiOf, authorNames, chatTitle, useNames } from "./views.ts";
+import { HttpError, apiOf, authorNames, chatTitle, entryViews, useNames } from "./views.ts";
 import { mime } from "./sessions.ts";
 import { dirname, join } from "node:path";
 import { clean, samePath } from "../ops/paths.ts";
@@ -84,5 +84,46 @@ export function publishDraft(s: Store, a: { thread: number; upto: number | null;
     return { n: m.n, at: m.createdAt, authorKind: m.authorKind, author, text: hidden.text, files: own, ...whoDrawn(s, m) };
   });
   // Its name is the first thing said in it when nobody gave it one: hidden alike.
-  return { title: redact(chatTitle(found, null), mark).text, upto: messages.at(-1)!.n, entries, redacted, files };
+  const upto = messages.at(-1)!.n;
+  return { title: redact(chatTitle(found, null), mark).text, upto, entries, redacted, files, views: viewsOf(s, a.thread, messages[0]!.n, upto, mark) };
+}
+
+/// The chat's entries from message `from` to message `upto` as its page reads them (entryViews), each edit of them
+/// since with them, every word they say (their text, what they quote, a card's) with what looks like a secret hidden;
+/// and how many were in each message as its page shows it: its words and what it quotes as its last edit has them,
+/// its card as the last that restated it (the clients' entries.ts `merge`).
+function viewsOf(s: Store, thread: number, from: number, upto: number, mark: string): Draft["views"] {
+  const rows = store.entriesBetween(s, thread, BigInt(from), BigInt(store.lastEntry(s, thread))).filter((e) => e.kind !== "message" || e.n <= upto);
+  const counts = new Map<number, { words: number; card: number; text: string }>();
+  const entries = entryViews(apiOf(s), thread, rows).map((v) => {
+    const words = hideIn(v, "text", mark) + hideIn(v, "quotes", mark);
+    const card = hideIn(v, "card", mark);
+    const n = v.kind === "message" ? v.n : v.target;
+    const was = counts.get(n);
+    if (v.kind === "message") counts.set(n, { words, card, text: v.text ?? "" });
+    else if (was !== undefined) {
+      if (v.card !== undefined) was.card = card;
+      if (v.card === undefined || (v.text ?? "") !== was.text) Object.assign(was, { words, text: v.text ?? "" });
+    }
+    return v;
+  });
+  const hidden = [...counts].flatMap(([n, c]) => (c.words + c.card > 0 ? [{ n, count: c.words + c.card }] : []));
+  return { entries, hidden };
+}
+
+/// What looks like a secret hidden in every word `v[key]` says (a string, or all the strings in it), and how many.
+function hideIn(v: Record<string, unknown>, key: string, mark: string): number {
+  let count = 0;
+  const walk = (x: unknown): unknown => {
+    if (typeof x === "string") {
+      const hidden = redact(x, mark);
+      count += hidden.count;
+      return hidden.text;
+    }
+    if (Array.isArray(x)) return x.map(walk);
+    if (x !== null && typeof x === "object") return Object.fromEntries(Object.entries(x).map(([k, y]) => [k, walk(y)]));
+    return x;
+  };
+  if (v[key] !== undefined) v[key] = walk(v[key]);
+  return count;
 }

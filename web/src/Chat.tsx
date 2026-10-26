@@ -10,7 +10,7 @@ import { sentFileKey, sentImage, sentImageKey, uploadImageKey } from "./sentImag
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { StationInWords, StationNamedAt } from "./StationNamed.tsx";
 import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Check, Close, Command, Edit, Folder, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Web } from "@stillfail/ui/icons.tsx";
-import { createContext, memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
+import { createContext, Fragment, memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { Link, useHref, useSearchParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
@@ -1437,9 +1437,17 @@ function ProseWithFiles({ text, md, files, session = null, from }: {
  * one is the ember-viz skill), any other shows as below the text.
  */
 function PlacedFile({ sessionKey, file }: { sessionKey: string | null; file: Attachment }) {
+  const tick = useContext(FileTick);
+  if (tick) return tick(file, sessionKey);
   if (sessionKey !== null && kindOf(file.name).kind === "html") return <VizFile sessionKey={sessionKey} file={file} failed={<FileItem sessionKey={sessionKey} file={file} />} />;
   return <FileItem sessionKey={sessionKey} file={file} />;
 }
+
+/**
+ * In a picture being made of the chat (Publish.tsx): what its messages' files are drawn as, each to tick (as it looks
+ * in the chat, FileLook), in place of each to open.
+ */
+export const FileTick = createContext<((file: Attachment, sessionKey: string | null) => ReactNode) | null>(null);
 
 /**
  * A link that names one of the chat's files (`?file=<name>`: what a post to Slack attached, which stays here): the
@@ -1476,7 +1484,11 @@ function Files({ files }: { files: Attachment[] | undefined }) {
   const owner = useKeeper();
   if (!files?.length) return null;
   // One still going up is on no station yet: drawn from this device alone.
-  return <div className={css.msgFiles}>{files.map((f) => <FileItem key={f.upload ?? f.path} sessionKey={f.upload && f.path === uploadImageKey(f.upload) ? null : owner(f)} file={f} />)}</div>;
+  const tick = useContext(FileTick);
+  return <div className={css.msgFiles}>{files.map((f) => {
+    const sessionKey = f.upload && f.path === uploadImageKey(f.upload) ? null : owner(f);
+    return tick ? <Fragment key={f.upload ?? f.path}>{tick(f, sessionKey)}</Fragment> : <FileItem key={f.upload ?? f.path} sessionKey={sessionKey} file={f} />;
+  })}</div>;
 }
 
 /** Images already brushed in on this page (session key and path): shown again, they just show. */

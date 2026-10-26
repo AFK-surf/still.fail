@@ -1,17 +1,17 @@
 // A chat shared as a picture (2026-10-26 用户：「静态分享功能改成分享图片吧，把内容直接渲染成一张长图」; ember
-// web/src/Publish.tsx PublishDialog, PublishMessages, FileToggle; Publish.css.ts, FilePreview.css.ts fp; the phone's
+// web/src/Publish.tsx PublishDialog, PublishPicture, FileToggle; Publish.css.ts, FilePreview.css.ts fp; the phone's
 // PublishSheet in mobile/Chat.tsx, the same), one on every screen: from its info's 分享图片, over the whole window as a
 // file is previewed, the picture as it would be (`chat.publishPreview`, asked as it opens: what the chat holds now,
-// what looks like a secret in it hidden): the chat's name, its messages laid out as the chat lays out messages, each
-// attachment where its message has it, pressed anywhere to tick it or not (all at first: FileToggle's label), and
-// still.fail's mark at its foot. What it is for is the library's viewer_frame_act (2026-10-26 用户, of a button filled
+// what looks like a secret in it hidden): the chat's name, its messages as the chat's list draws them (the preview's
+// `list`, drawn by its rows), each attachment where its message has it, pressed anywhere to tick it or not (all at
+// first: FileToggle's label), and still.fail's mark at its foot. What it is for is the library's viewer_frame_act (2026-10-26 用户, of a button filled
 // in a pill of its own over it: 「太不对劲了」「应该放下面，俩按钮，一个取消一个保存到相册，pc 的话直接跟附件预览一样，有顶栏」「pc
 // 也用文字按钮，不要用图标」): on a wide screen the bar a file opened has across the top (back to the chat by its name, 分享图片
 // and how much was hidden), the button 复制图片 at its end; on a small screen 取消 and 保存到相册 side by side at the foot
 // (picture_out). Pressed, the picture is drawn whole off the screen as one long picture (Ctx::shot), the attachments
 // left out not in it, nor the ticks and the notes of what was hidden that are for the one sharing it, its times as
 // dates; then handed out. Which files an agent's words place, and those words as Markdown, are the core's (the
-// preview's `placed`, `md`). The frames draw it over their pages (publish_layer). (A link once made of a chat,
+// list's `placed`, `md`). The frames draw it over their pages (publish_layer). (A link once made of a chat,
 // docs/public-share.md, is made no more; those made still open, and its info lists them.)
 
 ///|
@@ -121,7 +121,7 @@ pub fn publish_layer(c : @ui.Ctx, src : Source) -> Unit {
 /// foot); Esc closes it. While its picture is taken, the picture drawn whole off the screen.
 fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
   let p = publishing.preview
-  let messages = items(p, "messages")
+  let messages = items(p, "list")
   let here : MessageHere = {
     station: r.station,
     session: r.session,
@@ -200,18 +200,50 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
 
 ///|
 /// The picture, `w` wide (as it is taken: `taking`; else as the page shows it): on the page's ground, the chat's name
-/// over its messages, still.fail's mark and name at its foot.
+/// over its messages as the chat's list draws them (its rows, out of a list: message_row; 2026-10-26 用户, of a picture
+/// that drew them apart: 「渲染跟消息列表完全不一样」): the viewer's own in their bubbles at its end, an agent's cards as
+/// cards, the heads in line with their pictures and the rows as far apart and in as the list has them at that width
+/// (chat_list.mbt); still.fail's mark and name at its foot. On the page each attachment with its box to tick
+/// (publish_file) and, under a message with something hidden in it, how many; in the picture taken only those ticked,
+/// and its times dates (how long ago it was is not so for long).
 fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w : Double, taking : Bool) -> Unit {
-  // (the column's words' width)
-  let room = w - 2.0 * publish_page_in
-  c.box(style=publish_paper, fn() {
+  let narrow = w <= chat_narrow_w
+  let here = { ..here, inline: narrow }
+  // (how much was hidden in each, by its seq: the preview's `messages`, by their n)
+  let hidden : Map[Double, String] = {}
+  for m in items(p, "messages") {
+    match text(Some(m), "hiddenText") {
+      "" => ()
+      h => hidden[number(Some(m), "n")] = h
+    }
+  }
+  c.box(style=if narrow { publish_paper_narrow } else { publish_paper }, fn() {
     match text(p, "title") {
       "" => ()
       title => c.text(title, style=publish_title) |> ignore
     }
-    for m in items(p, "messages") {
-      publish_message(c, src, here, Some(m), room, taking)
-    }
+    c.box(style=if narrow { publish_list_narrow } else { publish_list }, fn() {
+      for j in items(p, "list") {
+        let m = picture_message(@sfbase.message_of(j), taking)
+        c.box(style=publish_said, fn() {
+          // (its files drawn each to tick: file_item asks picturing)
+          picturing.val = Some((m.seq, taking))
+          message_row(c, src, here, m)
+          picturing.val = None
+          match hidden.get(m.seq) {
+            Some(h) if !taking =>
+              c.box(style=if m.mine { publish_note_mine } else { publish_note_said }, fn() {
+                @sf.icon(c, "shield-check", size=publish_note_icon_small, color=@sf.theme().p.muted) |> ignore
+                c.text(h, style=publish_meta) |> ignore
+              })
+              |> ignore
+            _ => ()
+          }
+        })
+        |> ignore
+      }
+    })
+    |> ignore
     c.box(style=publish_foot, fn() {
       @sf.drawable(c, if @sf.theme().dark { "stillfail_mark_dark" } else { "stillfail_mark" }, publish_mark) |> ignore
       c.text("still.fail", style=publish_brand) |> ignore
@@ -222,103 +254,58 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
 }
 
 ///|
-/// A message of the picture's as the chat draws others' (PreviewMessage: each one's head in line with its avatar): an
-/// agent's Markdown with the attachments its words place where they place them, a person's as written; the rest under
-/// it. On the page each attachment to tick, and under one with something hidden how many; in the picture taken
-/// (`taking`) only those ticked, as the chat shows them, and its time a date (how long ago it was is not so for long).
-fn publish_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Json?, room : Double, taking : Bool) -> Unit {
-  let n = number(m, "n").to_int64().to_string()
-  let agent = flag(m, "agent")
-  let files = items(m, "files").filter(fn(f) { !taking || !publishing.off.contains(text(Some(f), "k")) })
-  let placed = items(m, "placed").map(fn(x) { match x { String(s) => s; _ => "" } })
-  let named : Map[String, Json] = {}
-  for f in files {
-    named[text(Some(f), "name")] = f
+/// While a message of the picture is drawn (publish_picture): its seq, and whether the picture is being taken. Its files
+/// are drawn each to tick then (file_item: publish_file), a page of HTML its words place as its card.
+// kept across runs: None again after each message of the picture
+let picturing : Ref[(Double, Bool)?] = Ref(None)
+
+///|
+/// Message `m` as the picture holds it: taken (`taking`), without the attachments left out, its time a date.
+fn picture_message(m : Message, taking : Bool) -> Message {
+  if !taking {
+    return m
   }
-  let under = files.filter(fn(f) { !placed.contains(text(Some(f), "name")) })
-  let time = match @sfbase.stamp_of(m, "createdAt") {
-    Some(s) if taking => Some({ ..s, ago: s.full })
-    s => s
+  let kept = m.attachments.filter(fn(a) { !publishing.off.contains(file_k(m.seq, a)) })
+  {
+    ..m,
+    attachments: kept,
+    placed: m.placed.filter(fn(n) { kept.iter().any(fn(a) { a.name == n }) }),
+    time: m.time.map(fn(s) { { ..s, ago: s.full } }),
   }
-  others_message(
-    c,
-    true,
-    "publish/" + n,
-    time,
-    fn() {
-      if agent {
-        agent_avatar(c, src, here, "publish/" + n, text(field(m, "maker"), "id"), text(m, "runtime"), "", "")
-      } else {
-        person_avatar(c, src, text(m, "author"), text(m, "author"), text(m, "picture"))
-      }
-    },
-    fn() { c.box(style=msg_name_room, fn() { c.text(text(m, "author"), style=msg_name) |> ignore }) |> ignore },
-    None,
-    fn() {
-      if agent {
-        @sf.markdown(
-          c,
-          text(m, "text"),
-          tree=field(m, "md"),
-          key="publish-md/" + n,
-          size=body_size,
-          files=fn(name) {
-            if placed.contains(name) {
-              named.get(name).map(fn(f) -> @sf.Placed {
-                let a = @sfbase.attachment_of(field(Some(f), "file").unwrap_or(Json::null()))
-                {
-                  draw: fn() { publish_file(c, src, here, f, room, taking) },
-                  image: image_ratio(a).map(fn(r) { (r, fn(w) { publish_file(c, src, here, f, w, taking) }) }),
-                }
-              })
-            } else {
-              None
-            }
-          },
-        )
-        |> ignore
-      } else {
-        person_words(c, text(m, "text"), "publish/" + n)
-      }
-      if under.length() > 0 {
-        c.box(style=publish_files, fn() {
-          for f in under {
-            publish_file(c, src, here, f, room, taking)
-          }
-        })
-        |> ignore
-      }
-      match text(m, "hiddenText") {
-        "" => ()
-        _ if taking => ()
-        hidden =>
-          c.box(style=publish_head_note, fn() {
-            @sf.icon(c, "shield-check", size=publish_note_icon_small, color=@sf.theme().p.muted) |> ignore
-            c.text(hidden, style=publish_meta) |> ignore
-          })
-          |> ignore
-      }
-    },
-  )
 }
 
 ///|
-/// An attachment in the picture, as the chat shows it (FileToggle). On the page, ticked (its box at its end, half
-/// way down: publish_tick) it goes in the picture; unticked, it fades. In the picture taken, as it is.
-fn publish_file(c : @ui.Ctx, src : Source, here : MessageHere, f : Json, room : Double, taking : Bool) -> Unit {
-  let k = text(Some(f), "k")
-  let on = !publishing.off.contains(k)
-  let a = @sfbase.attachment_of(field(Some(f), "file").unwrap_or(Json::null()))
-  // as wide as the chat draws it (message_files.mbt: an image's box, a file's card), the column's at most (`room`)
-  let w = match file_kind(a.name) {
-    "image" => dmin(image_box(a, image_least).0, room)
-    "video" => dmin(image_box(a, video_least).0, room)
-    _ => dmin(@sf.file_card_w, room)
+/// Attachment `a` of message `seq`'s number in the preview (its `files`' `k`, by the message's n and where it is); ""
+/// when it has none.
+fn file_k(seq : Double, a : Attachment) -> String {
+  for f in items(publishing.preview, "files") {
+    if number(Some(f), "n") == seq && text(field(Some(f), "file"), "path") == a.path {
+      return text(Some(f), "k")
+    }
   }
-  if taking {
-    c.box(style=publish_file_box.then(@ui.style(w=Fixed(w))), fn() { message_files(c, src, here, [a], false) }) |> ignore
+  ""
+}
+
+///|
+/// An attachment of message `seq` in the picture, `w` wide, as the chat shows it (file_drawn; FileToggle). On the page,
+/// ticked (its box at its end, half way down: publish_tick) it goes in the picture; unticked, it fades. In the picture
+/// taken (`taking`), as it is.
+fn publish_file(
+  c : @ui.Ctx,
+  src : Source,
+  here : MessageHere,
+  seq : Double,
+  taking : Bool,
+  a : Attachment,
+  w : Double,
+  by~ : (String, String, String)?,
+) -> Unit {
+  let k = file_k(seq, a)
+  if taking || k == "" {
+    file_drawn(c, src, here, a, w, by~)
     return
   }
+  let on = !publishing.off.contains(k)
   let toggle = fn(now : Bool) {
     if now {
       publishing.off.remove(k)
@@ -329,12 +316,12 @@ fn publish_file(c : @ui.Ctx, src : Source, here : MessageHere, f : Json, room : 
   // (pressed anywhere, ticked or not: FileToggle is a label round the file and its box)
   let id = c.id("publish/file/" + k)
   let mut ticked = false
-  let card = c.box(style=publish_file_box.then(@ui.style(w=Fixed(w))), fn() {
-    message_files(c, src, here, [a], false)
+  let card = c.box(style=publish_file_box, fn() {
+    file_drawn(c, src, here, a, w, by~)
     // (over the file, taking its presses: what the chat would open it by does not here)
     c.layer(fn() {
       c.box(style=publish_tick, id~, fn() {
-        let now = @kit.checkbox(c, "publish/tick/" + k, if on { On } else { Off }, label=text(Some(f), "name")).value
+        let now = @kit.checkbox(c, "publish/tick/" + k, if on { On } else { Off }, label=a.name).value
         if (now == On) != on {
           ticked = true
           toggle(now == On)
@@ -390,10 +377,27 @@ let publish_column_room : @ui.Style = @ui.css("w=Full align=ACenter")
 let publish_column : @ui.Style = @ui.style(w=Full, max_w=Fixed(publish_page_w))
 
 ///|
-/// The picture (page): its words 32 in, 32 down from its top and up from its foot, its parts 16 apart, on the page's
-/// ground (what it is drawn on when it is taken too).
+/// The picture (page): 32 round what it holds, 32 down from its top and up from its foot, its parts 16 apart, on the
+/// page's ground (what it is drawn on when it is taken too); its words the messages' pictures' room further in than
+/// its end, as those stand out before them (@sf.message_avatar_reach).
 // kept across runs: a value (no field of it changes)
-let publish_paper : @ui.Style = @ui.css("w=Full px=S8 py=S8 gap=S4 bg=Bg")
+let publish_paper : @ui.Style = @ui.style(
+  w=Full,
+  pl=@sf.room_of(publish_paper_in + @sf.message_avatar_reach),
+  pr=S8,
+  py=S8,
+  gap=S4,
+  bg=Bg,
+)
+
+///|
+/// How far in from its sides what it holds is (S8's 32).
+let publish_paper_in : Double = 32.0
+
+///|
+/// Narrow, its words as far in as the chat's list has them there (16: chat_list.mbt row_side_narrow).
+// kept across runs: a value (no field of it changes)
+let publish_paper_narrow : @ui.Style = @ui.style(w=Full, px=@sf.room_of(row_side_narrow), py=S8, gap=S4, bg=Bg)
 
 ///|
 /// The chat's name over its messages (the chat's bar's title, its size).
@@ -420,27 +424,37 @@ let publish_page_under : Double = 64.0
 let publish_page_w : Double = 760.0
 
 ///|
-/// How far in its words are (page: 32 each side).
-let publish_page_in : Double = 32.0
+/// How much was hidden in a message (note: its shield 6 before it, the meta's size, muted); under the viewer's own, at
+/// its end as the message is.
+// kept across runs: a value (no field of it changes)
+let publish_note_said : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
-/// How much was hidden (headNote, note: its shield 4 or 6 before it, the meta's size, muted).
 // kept across runs: a value (no field of it changes)
-let publish_head_note : @ui.Style = @ui.css("row gap=S1 align=ACenter")
+let publish_note_mine : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
 let publish_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
-/// The attachments under a message (files: 8 apart, 6 under its words), each as wide as the chat draws it.
+/// The picture's messages, as far apart as the chat's list has them (28; narrow, 20: chat_list.mbt list_gap).
 // kept across runs: a value (no field of it changes)
-let publish_files : @ui.Style = @ui.css("w=Full gap=S2 pt=S1_5 align=AStart")
+let publish_list : @ui.Style = @ui.style(w=Full, gap=@sf.room_of(list_gap))
+
+///|
+// kept across runs: a value (no field of it changes)
+let publish_list_narrow : @ui.Style = @ui.style(w=Full, gap=@sf.room_of(list_gap_narrow))
+
+///|
+/// A message and, under it, how much was hidden in it (6 under).
+// kept across runs: a value (no field of it changes)
+let publish_said : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
 /// An attachment to tick (file), its box at its end (tick).
 // kept across runs: a value (no field of it changes)
-let publish_file_box : @ui.Style = @ui.css("align=AStart")
+let publish_file_box : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// Its box (tick): at its end, half way down, the ladder's inset in: where a file card's own buttons are on the web
