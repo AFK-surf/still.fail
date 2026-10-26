@@ -8,8 +8,10 @@ export const newChatSub = style({
   textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere", margin: "0 0 8px", color: vars.muted,
   fontSize: vars.textUi, lineHeight: "20px",
 });
+/** A line of what is wrong for now, at the 常用 chips' corner under it (rField, 12; this one was a one-off 10, two
+ * under the chips and reading tighter than everything beside it). */
 export const spentNotice = style({
-  margin: "0 0 8px", padding: "8px 12px", borderRadius: `calc(10px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  margin: "0 0 8px", padding: "8px 12px", borderRadius: vars.rField, cornerShape: vars.cornerShape,
   background: `color-mix(in srgb, ${vars.amber} 12%, transparent)`, color: vars.text, fontSize: vars.textUi,
 });
 /** New chat: a centred composer with the choices of where and on what it runs. */
