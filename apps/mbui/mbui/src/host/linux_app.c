@@ -1028,8 +1028,7 @@ void mb_host_window_drag(void) {
   gdk_toplevel_begin_move(GDK_TOPLEVEL(s), press_device, press_button, press_x, press_y, press_time);
 }
 
-// The number on the app's icon (@hostapi.set_badge): none here yet.
-void mb_host_set_badge(int32_t n) { (void)n; }
+// (the number on the app's icon: linux_life.h)
 // (this machine's station: linux_station.h)
 
 // The keys held now (@hostapi.mods_held), as a key's are told.

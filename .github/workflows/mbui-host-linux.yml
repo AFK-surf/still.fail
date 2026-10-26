@@ -7,8 +7,8 @@
 # run's own), a notification (shown, kept, clicked), an update (a newer build put in place and opened), and the web
 # views (WebKitGTK 6.0's): one placed where the app told it, on whole device pixels, and a site and a page speaking with
 # the app; a stream's JPEG frames, each shown to its end (streamdemo); and a PDF's pages read and drawn (poppler's). On
-# GitHub's own Ubuntu (a public repository's: free); and this machine's station as the host says it. When the Linux
-# host changes.
+# GitHub's own Ubuntu (a public repository's: free); this machine's station as the host says it; and the number on
+# the app's icon as the docks are told it. When the Linux host changes.
 name: mbui-host-linux
 on:
   pull_request:
@@ -19,6 +19,7 @@ on:
       - "apps/mbui/mbui/src/streamdemo/**"
       - "apps/mbui/mbui/src/kitdemo/gallery/pdfcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/stationcheck.mbt"
+      - "apps/mbui/mbui/src/kitdemo/gallery/badgecheck.mbt"
       - "apps/mbui/mbui/src/host/linux*"
       - "apps/mbui/mbui/src/host/mini_json.h"
       - "apps/mbui/mbui/src/kitdemo/gallery/linkcheck.mbt"
@@ -64,7 +65,7 @@ jobs:
           packages: >-
             libgtk-4-dev libepoxy-dev libpango1.0-dev libcairo2-dev libfontconfig-dev libgdk-pixbuf-2.0-dev
             libsoup-3.0-dev zlib1g-dev libgl1-mesa-dri libegl-mesa0 xvfb xauth fonts-noto-cjk fonts-noto-color-emoji
-            fonts-dejavu-core dbus-daemon libwebkitgtk-6.0-4 libpoppler-glib8t64
+            fonts-dejavu-core dbus-daemon dbus-bin libwebkitgtk-6.0-4 libpoppler-glib8t64
       - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo
         run: scripts/host_contract.sh linux build
@@ -97,6 +98,9 @@ jobs:
       - name: "This machine's station's contract: one started by hand said and stopped, the service's said as running it"
         if: success() || failure()
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux station
+      - name: "The dock's number's contract: said to the docks on the session bus, given to one that asks"
+        if: success() || failure()
+        run: dbus-run-session -- xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux badge
       - name: "Streams: streamdemo's JPEG (gdk-pixbuf) said shown to its end (STREAM done)"
         if: success() || failure()
         run: |
