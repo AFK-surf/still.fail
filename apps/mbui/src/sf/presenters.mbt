@@ -128,6 +128,7 @@ let presented_how : Array[How] = []
 /// Nothing presented (the app begun again).
 pub fn presenters_reset() -> Unit {
   presented_now.clear()
+  lists_of.clear()
   presented_count.val = 0
   presented_alone.val = false
   presented_how.clear()
@@ -250,9 +251,66 @@ pub fn in_panel() -> Bool {
 let panel_body_now : Ref[Int] = Ref(0)
 
 ///|
+/// While the body of a panel a share of the window caps (`tall`) is drawn: whether its lists say what they hold, and
+/// what they said (each its box, as tall as its rows laid end to end).
+// kept across runs: said by measured_body round a capped panel's body
+let lists_said_now : Ref[Bool] = { val: false }
+
+///|
+// kept across runs: said by panel_list as it is drawn in a capped panel's body
+let lists_now : Array[(Int, Double)] = []
+
+///|
+/// A capped panel's lists as its body was last drawn, by the presented's serial: each its box and what it holds.
+// kept across runs: said by measured_body, let go of by presenters_reset
+let lists_of : Map[Int, Array[(Int, Double)]] = {}
+
+///|
+/// A capped panel's body (filling its share: `style`), its lists saying what they hold as it is drawn.
+fn measured_body(c : @ui.Ctx, serial : Int, id : Int, style : @ui.Style, body : () -> Unit) -> Unit {
+  let (said_was, were) = (lists_said_now.val, lists_now.copy())
+  lists_said_now.val = true
+  lists_now.clear()
+  c.box(style~, id~, body) |> ignore
+  lists_of[serial] = lists_now.copy()
+  lists_now.clear()
+  lists_now.append(were)
+  lists_said_now.val = said_was
+}
+
+///|
+/// How tall a capped panel's body would be, its lists as tall as what they hold (none: no list in it says, it fills
+/// its share): what else it held as the last layout had it, and its lists' rows laid end to end.
+fn capped_want(c : @ui.Ctx, serial : Int, id : Int) -> Double? {
+  let lists = lists_of.get(serial).unwrap_or([])
+  guard lists.length() > 0 else { return None }
+  guard c.laid_size(id) is Some((_, body)) else { return None }
+  let mut laid = 0.0
+  let mut holds = 0.0
+  for l in lists {
+    match c.laid_size(l.0) {
+      Some((_, h)) => laid = laid + h
+      None => ()
+    }
+    holds = holds + l.1
+  }
+  Some(dmax(body - laid, 0.0) + holds)
+}
+
+///|
 /// A long list in a panel's body (its rows laid out as they come into view: `Ctx::list`), its rows drawn as the panel
 /// has what it holds (its sides, its words' line, its rows' reach): they are drawn after the panel's body has said it.
-pub fn panel_list(c : @ui.Ctx, key : String, count : Int, est : Double, row : (Int) -> Unit) -> Int {
+/// The list spans the room the panel leaves its rows to reach across (rows_out: a list clips what it holds to itself),
+/// its rows' words that much further in from its edge, so a row's ground reaches the panel's sides as it does outside
+/// a list. `stick_end`: it starts at its end and stays there as rows come (Ctx::list's).
+pub fn panel_list(
+  c : @ui.Ctx,
+  key : String,
+  count : Int,
+  est : Double,
+  row : (Int) -> Unit,
+  stick_end? : Bool = false,
+) -> Int {
   let (sides, out, words, body, small) = (
     panel_sides_in.val,
     rows_out.val,
@@ -260,20 +318,36 @@ pub fn panel_list(c : @ui.Ctx, key : String, count : Int, est : Double, row : (I
     panel_body_now.val,
     small_panel_now.val,
   )
-  c.list(key, count, est, fn(i) {
-    let was = (panel_sides_in.val, rows_out.val, words_in_now.val, panel_body_now.val, small_panel_now.val)
-    panel_sides_in.val = sides
-    rows_out.val = out
-    words_in_now.val = words
-    panel_body_now.val = body
-    small_panel_now.val = small
-    row(i)
-    panel_sides_in.val = was.0
-    rows_out.val = was.1
-    words_in_now.val = was.2
-    panel_body_now.val = was.3
-    small_panel_now.val = was.4
+  let mut list = 0
+  // in a panel a share of the window caps: what it holds said, its rows laid end to end (those built at their height,
+  // the rest at `est`: none laid out to be measured), for the panel to be as tall as that up to its share
+  // (measured_body); it fills the room it is given
+  let room_id = c.id(key + "/room")
+  if lists_said_now.val {
+    let holds = match c.list_info_as(key, fn(i) { i.map(fn(x) { x.content }) }) {
+      Some(i) => i.content
+      None => est * count.to_double()
+    }
+    lists_now.push((room_id, holds))
+  }
+  c.box(style=sheet_grows.then(@ui.style(mx=room(-out))), id=room_id, taps=false, fn() {
+    list = c.list(key, count, est, stick_end~, fn(i) {
+      let was = (panel_sides_in.val, rows_out.val, words_in_now.val, panel_body_now.val, small_panel_now.val)
+      panel_sides_in.val = sides - out
+      rows_out.val = 0.0
+      words_in_now.val = words + out
+      panel_body_now.val = body
+      small_panel_now.val = small
+      row(i)
+      panel_sides_in.val = was.0
+      rows_out.val = was.1
+      words_in_now.val = was.2
+      panel_body_now.val = was.3
+      small_panel_now.val = was.4
+    })
   })
+  |> ignore
+  list
 }
 
 ///|
@@ -405,6 +479,21 @@ pub fn panel_words_in() -> @ui.Style {
 }
 
 ///|
+/// Something standing `by` out of a panel's words' line at its start (a round button whose mark is on the line): its
+/// margin the line less `by`.
+pub fn panel_words_out_by(by : Double) -> @ui.Style {
+  @ui.style(ml=room(words_in_now.val - by))
+}
+
+///|
+/// A row to press that a page lays out itself in a panel's body: its ground out across the room the panel leaves at its
+/// sides (rows_out: a dialog's column), its words on the panel's words' line (as row_line has the library's rows).
+pub fn panel_row_reach() -> @ui.Style {
+  let out = rows_out.val
+  @ui.style(mx=room(-out), px=room(out + words_in_now.val))
+}
+
+///|
 /// A row of a panel's body, its words so (panel_words_in), concentric with a small panel where it is in one; one to
 /// press (a box with an id), its ground under the hand (parts.css.ts panelRow: a button's :hover).
 pub fn panel_row_in() -> @ui.Style {
@@ -521,6 +610,12 @@ pub fn ask_here(
 /// Whether anything is presented now (the shell's own back waits while it is).
 pub fn presenting() -> Bool {
   presented_now.iter().any(fn(p) { p.open })
+}
+
+///|
+/// Closes everything presented, each going as it goes (a page opened from a link over all of it).
+pub fn close_all_presented() -> Unit {
+  close_from(0)
 }
 
 ///|
@@ -925,11 +1020,23 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
       words_in_now.val = 0.0
       column_given.val = true
       column_in_now.val = words
-      // as tall as what it holds, whatever share a sheet of it would take (the dialog's body scrolls in itself where
-      // it is taller than the window leaves it): what would scroll in itself lays itself out whole (panel_whole)
-      panel_whole_now.val += 1
-      draw_panel_body(x, c, close)
-      panel_whole_now.val -= 1
+      // as tall as what it holds (the dialog's body scrolls in itself where it is taller than the window leaves it):
+      // what would scroll in itself lays itself out whole (panel_whole); one a share of the window caps (`tall`, not a
+      // form) filling it, as tall as what it holds where its lists say so (measured_body), as in a sheet
+      if x.tall > 0.0 && !x.form {
+        let (_, wh) = c.window_size()
+        let id = c.id("sf-present/capped/\{p.serial}")
+        let share = x.tall * wh - dialog_frame_h
+        let h = match capped_want(c, p.serial, id) {
+          Some(want) => dmin(want, share)
+          None => share
+        }
+        measured_body(c, p.serial, id, @ui.style(w=Full, h=Fixed(h)), fn() { draw_panel_body(x, c, close) })
+      } else {
+        panel_whole_now.val += 1
+        draw_panel_body(x, c, close)
+        panel_whole_now.val -= 1
+      }
       panel_sides_in.val = was
       rows_out.val = rows_were
       words_in_now.val = words
@@ -949,6 +1056,29 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
   words_in_now.val = words_were
   (still && p.open, dialog_built(c, key, p.open))
 }
+
+///|
+/// A capped panel's body in a sheet and the sheet's whole, as present_sheet names them for sheet_body.
+// kept across runs: said by present_sheet round what a sheet holds
+let sheet_capped : Ref[Int] = { val: 0 }
+
+///|
+/// The share of the window a sheet of `shows` comes to at most (a capped panel's, else a sheet's most).
+fn sheet_cap(shows : Shows) -> Double {
+  match shows {
+    Panel(x) if x.tall > 0.0 && !x.form => x.tall
+    _ => sheet_most
+  }
+}
+
+///|
+/// How near its cap a sheet's measured height counts as at it (a sheet's height and its body's measured apart).
+let sheet_cap_slack : Double = 1.0
+
+///|
+/// What a dialog takes of a share of the window besides what it holds: the window's room round it, its padding over and
+/// under (dialog_room, dialog_pad).
+let dialog_frame_h : Double = dialog_room + dialog_pad + dialog_pad
 
 ///|
 /// A confirm in the middle of the window (parts.tsx Confirm: @sf.confirm_dialog).
@@ -1114,13 +1244,24 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
   if natural is Some(m) && m > wh * sheet_most {
     p.over = true
   }
+  // a panel a share of the window caps (tall, not a form): that share, or as tall as what it holds where its lists say
+  // so (measured_body), what the sheet takes besides its body as the last layout had it
+  let capped = match p.shows {
+    Panel(x) => x.tall > 0.0 && !x.form
+    _ => false
+  }
+  let body_id = c.id("sf-present/capped/\{p.serial}")
+  let whole_id = c.id("sf-present/whole/\{p.serial}")
+  sheet_capped.val = body_id
+  let want = match (capped, capped_want(c, p.serial, body_id), c.laid_size(whole_id), c.laid_size(body_id)) {
+    (true, Some(w), Some((_, whole)), Some((_, body))) => Some(w + dmax(whole - body, 0.0))
+    _ => None
+  }
   let over = p.over
   let share = match p.shows {
     Pick(_, choices, _, _) if choices.length() >= pick_search_from => Some(sheet_long_pick)
     Confirm(_, _, _, _, _) => Some(sheet_confirm)
     Ask(_, _, _, _, _, _, _, _) => Some(sheet_ask)
-    // (a form as tall as it is, as its dialog is: its buttons at its foot under what it holds, not at the foot of a
-    // share with room between)
     Panel(x) if x.tall > 0.0 && !x.form => Some(x.tall)
     Panel(_) if over => Some(sheet_most)
     _ => None
@@ -1130,16 +1271,26 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
     _ => false
   }
   let h = match (share, natural) {
-    (Some(s), _) => s * wh
+    (Some(s), _) =>
+      match want {
+        Some(w) => dmin(w, s * wh)
+        None => s * wh
+      }
     (None, Some(m)) => dmin(m, wh * sheet_most)
     // (before what it holds is first laid out: built again at once, as tall as it is)
     (None, None) => wh * 0.5
   }
   let look = if presented_alone.val { sheet_look(ground=theme().p.bg) } else { sheet_look() }
+  // (dragged between half and nearly all of the window; one its share caps, only where what it holds comes to that)
+  let grows = grows &&
+    (match want {
+      Some(w) => w >= wh * sheet_cap(p.shows) - sheet_cap_slack
+      None => true
+    })
   let r = @kit.sheet(c, key, p.open, h~, detents=if grows { sheet_grows_to } else { [] }, scrim=sheet_scrim, look~, fn() {
     match share {
       Some(_) =>
-        c.box(style=sheet_whole, fn() {
+        c.box(style=sheet_whole, id=whole_id, fn() {
           sheet_grab(c)
           sheet_body(c, key, p, scrolls=over)
           sheet_foot(c)
@@ -1271,10 +1422,12 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
       // unless its buttons are (sheet_foot_at): the sheet's, as a panel's padding beside what opened it is the
       // panel's, not what it holds
       let pressed = p.from != Unanchored
-      // (a form lays out its own sides as one filling a share does, but is as tall as it is: `fills` false)
-      let fills = x.tall > 0.0 && !x.form
-      let room = if fills {
-        sheet_grows
+      // (one a share of the window caps fills it, as tall as what it holds where its lists say so: measured_body; a form
+      // lays out its own sides as it does, and is as tall as it is)
+      let capped = x.tall > 0.0 && !x.form
+      let room = if capped {
+        // (the sheet's foot under what it holds, as a panel's in a sheet: sheet_panel_foot)
+        sheet_capped_room
       } else if x.tall > 0.0 {
         full_width
       } else if pressed {
@@ -1299,11 +1452,11 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
         }
         rule_over_now.val = if x.ruled && x.foot is Some(_) { sheet_rule_over } else { 0.0 }
         // (as tall as what it holds, what would scroll in itself laid out whole, as a dialog's body: panel_whole)
-        if !fills {
+        if capped {
+          draw_panel_body(x, c, close)
+        } else {
           panel_whole_now.val += 1
-        }
-        draw_panel_body(x, c, close)
-        if !fills {
+          draw_panel_body(x, c, close)
           panel_whole_now.val -= 1
         }
         panel_sides_in.val = 0.0
@@ -1311,10 +1464,10 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
         words_in_now.val = 0.0
         rule_over_now.val = 0.0
       }
-      if scrolls && !fills && x.lists {
+      if scrolls && !capped && x.lists {
         // (its own lists scroll in the room the sheet has: what it holds fills it)
         c.box(style=sheet_grows, fn() { c.box(style=room.then(sheet_fills), body) |> ignore }) |> ignore
-      } else if scrolls && !fills {
+      } else if scrolls && !capped {
         c.box(style=sheet_grows, fn() {
           c.capped(key + "/panel", wh_of(c), shrinks=true, fn() {
             panel_held_now.val = true
@@ -1325,8 +1478,13 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
         })
         |> ignore
       } else {
-        // (holding nothing this time, none of its room: its title and what it says straight over its foot)
-        c.box(style=room, gone_empty=true, body) |> ignore
+        // (holding nothing this time, none of its room: its title and what it says straight over its foot; one a share
+        // caps measured, its lists saying what they hold: measured_body)
+        if capped {
+          measured_body(c, p.serial, sheet_capped.val, room, body)
+        } else {
+          c.box(style=room, gone_empty=true, body) |> ignore
+        }
       }
       match x.foot {
         Some(f) => {
@@ -1519,7 +1677,16 @@ let sheet_search_at : @ui.Style = @ui.css("w=Full px=S5 pb=S2_5")
 /// What a panel holds in a sheet: 20 in from its sides as the phone's sheets' words are (PageParts.kt confirm, ask;
 /// Composer.kt askToShare), 24 under.
 // kept across runs: a value (no field of it changes)
-let sheet_panel : @ui.Style = @ui.css("w=Full px=S5 pb=S6 gap=S2_5")
+let sheet_panel : @ui.Style = @ui.style(w=Full, px=room(sheet_panel_sides), pb=room(sheet_panel_foot), gap=S2_5)
+
+///|
+/// What a sheet's panel leaves under what it holds, its foot (sheet_panel): 24.
+pub let sheet_panel_foot : Double = 24.0
+
+///|
+/// What a panel a share of the window caps holds in a sheet: the room the sheet leaves it, its foot under it.
+// kept across runs: a value (no field of it changes)
+let sheet_capped_room : @ui.Style = sheet_grows.then(@ui.style(pb=room(sheet_panel_foot)))
 
 ///|
 /// What a panel opened by a press holds in a sheet: as far in as a pick's rows (sheet_rows), 24 under.

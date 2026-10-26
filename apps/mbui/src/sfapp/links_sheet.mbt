@@ -332,9 +332,5 @@ fn accept_invite(src : Source, token : String, sub : String, name : String) -> U
 fn close_overlays() -> Unit {
   lower_sheet()
   app.menu = false
-  match dui.sheet {
-    Some(s) => dui.leaving = Some(s)
-    None => ()
-  }
-  dui.sheet = None
+  @sf.close_all_presented()
 }

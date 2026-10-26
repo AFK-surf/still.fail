@@ -391,9 +391,9 @@ test "the chat's sheet going down takes no tap: the field tapped through it is t
   // the scrim, tapped: let go of
   t.tap_once(195.0, 60.0)
   t.frame()
-  assert_true(dui.sheet is None)
+  assert_true(!@sf.presenting())
   // still going down, drawn over the field
-  assert_true(dui.leaving is Some(_))
+  assert_true(@sf.presented_drawn())
   assert_true(t.find("复制会话链接") is Some(_))
   let (x, y, w, h) = t.rect_of("发消息").unwrap()
   t.tap_once(x + w / 2.0, y + h / 2.0)
@@ -414,7 +414,7 @@ test "the chat's sheet going down: its own rows take no tap, the scrim none" {
   // sunk: on the sheet's spring, at most the window's height
   t.run_for(@motion.sheet_spring.duration(844.0, 0.0, 0.0))
   assert_eq(named(calls, "chat.pin").length(), 0)
-  assert_true(dui.sheet is None && dui.leaving is None)
+  assert_true(!@sf.presenting() && !@sf.presented_drawn())
 }
 
 ///|

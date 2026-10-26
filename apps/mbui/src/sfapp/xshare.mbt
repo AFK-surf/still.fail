@@ -22,7 +22,7 @@ let xshare_drop_where : Int = 1
 
 ///|
 /// The chat's xsharing in its sheet (ChatInfo.kt ShareRow).
-fn xshare_row(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double?, share : Json?) -> Unit {
+fn xshare_row(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double?, share : Json?, close : () -> Unit) -> Unit {
   let t = @sf.theme()
   let session = text(share, "session")
   let key = @sfpages.xshare_key(r.station, session)
@@ -44,7 +44,7 @@ fn xshare_row(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double?, share : 
       }
     }) {
     // (the chat's sheet put down, what changes it up in its place)
-    close_sheet(c)
+    close()
     @sfpages.open_xshare(src, r, thread, from=Unanchored)
   }
 }

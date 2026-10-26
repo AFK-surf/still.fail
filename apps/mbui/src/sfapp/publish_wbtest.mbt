@@ -27,8 +27,7 @@ fn publish_core(calls : Array[Made]) -> @ui.Tester {
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  open_fixture("chat-info")
+  open_fixture_over("chat-info", src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   t
@@ -63,7 +62,7 @@ test "公开分享: the sheet shows what a snapshot would hold; 发布 takes the
   // the chat's sheet put down (to where it rests, gone), the publishing over the whole screen (the pages', as on a
   // computer)
   t.frame()
-  t.run_for(@kit.sheet_rest("decide-sheet") - t.time())
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   let asked = named(calls, "chat.publishPreview")
   assert_eq(asked.length(), 1)
   assert_eq(text(Some(asked[0].params), "station"), "ws1/st1")

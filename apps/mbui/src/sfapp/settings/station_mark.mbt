@@ -411,7 +411,7 @@ fn mark_pick_body(
       |> ignore
     })
     c.box(style=mark_grid_room, fn() {
-      c.list("mark/" + serial.to_string() + (if emojis { "/e" } else { "/g" }), blocks.length(), mark_row_est, fn(i) {
+      @sf.panel_list(c, "mark/" + serial.to_string() + (if emojis { "/e" } else { "/g" }), blocks.length(), mark_row_est, fn(i) {
         (blocks[i])()
       })
       |> ignore
@@ -455,7 +455,8 @@ let mark_dot : Double = 18.0
 let mark_ring : Double = 2.0
 
 ///|
-/// What scrolls: the grid's rows, then a picture or none, in what is left of it.
+/// What scrolls: the grid's rows, then a picture or none, in what is left of it (its grid a @sf.panel_list: the sheet
+/// as tall as it comes to, up to its share).
 // kept across runs: a value (no field of it changes)
 let mark_grid_room : @ui.Style = @ui.style(w=Full, h=@sf.grow)
 

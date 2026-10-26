@@ -24,10 +24,8 @@ fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false, pointin
     },
   }
   decide_src.val = Some(src)
-  if mode.has_prefix("chat") {
-    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  }
-  open_fixture(mode)
+  // (opened as sffix opens it: fixture.mbt)
+  open_fixture_over(mode, src)
   let t = if wide {
     @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0, pointing?)
   } else {
@@ -228,15 +226,17 @@ test "a chat's link" {
 test "the chat's sheet and an agent's card as tall as what they show: their last row in it, no room under it to spare" {
   let calls : Array[Made] = []
   // (the chat's last: its public links' last, Bob's)
-  for case in [("chat-info", "2 天前 · Bob", chat_info_foot), ("chat-agent", "后台", agent_sheet_foot)] {
-    let (mode, last, foot) = case
+  // (its foot the presenters' sheet's, under what it holds: sheet_panel's)
+  for case in [("chat-info", "2 天前 · Bob"), ("chat-agent", "后台")] {
+    let (mode, last) = case
     let t = decide_core(calls, mode)
-    sheet_rested(t, "decide-sheet")
+    sheet_rested(t, "sf-present")
     let (_, sy, _, sh) = t.get(@ui.Dialog).rect
     let (_, ly, _, lh) = t.rect_of(last).unwrap()
     // under its last row's words: the rest of its row (and its card's padding), the sheet's foot, the bar's
     let under = sy + sh - (ly + lh)
-    assert_true(under >= foot + nav_foot() && under < foot + nav_foot() + 40.0, msg="\{mode}: \{under} under \{last}")
+    let foot = @sf.sheet_panel_foot + nav_foot()
+    assert_true(under >= foot && under < foot + 40.0, msg="\{mode}: \{under} under \{last} (sheet \{sy}+\{sh}, row \{ly}+\{lh})")
     assert_true(sh < 844.0 * @sf.sheet_most, msg="\{mode}: \{sh}")
   }
 }
@@ -318,8 +318,7 @@ test "接力到频道 on a phone: the pages' relay as a sheet, the places the bo
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  open_fixture("chat-info")
+  open_fixture_over("chat-info", src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   t.tap_text("接力到频道…")

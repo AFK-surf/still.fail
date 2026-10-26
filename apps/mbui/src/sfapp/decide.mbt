@@ -1,32 +1,14 @@
 // What a chat's cards and buttons do (slice 8: ember apps/android chat/screens/Decisions.kt DecisionUnder, OptionButton;
-// Chat.kt AskDismiss, ArchiveUnder, archiveChat; LoginCards.kt; AppState.kt act, isDoing), and the frame of the sheets
-// over a chat (ui/Sheet.kt SheetHost, SheetGrab, SheetHead; sheets.mbt draws what is in them). What is done is said to
+// Chat.kt AskDismiss, ArchiveUnder, archiveChat; LoginCards.kt; AppState.kt act, isDoing); a sheet's head (SheetHead). The
+// chat's sheets (sheets.mbt) are the library's presenters'. What is done is said to
 // the core as the Android app says it, under way on its button (a spinner), said in a toast when it could not be;
 // nothing with MBUI_READONLY=1.
-
-///|
-/// A sheet over the pages (Sheet.kt SheetSpec): one at a time.
-priv enum Sheet {
-  /// the chat's own, from "…" (ChatInfo.kt)
-  Info(ChatRef)
-  /// an agent of the chat, by its session (AgentSheet.kt)
-  AgentOf(ChatRef, String)
-  /// the chat's services and jobs (Jobs.kt openJobs)
-  JobsOf(ChatRef)
-  /// one job, by its id (Jobs.kt openJob)
-  JobOf(ChatRef, String)
-  /// what its agents and other chats' wrote each other (Letters.kt openLetters): its thread
-  LettersOf(ChatRef, Double)
-}
 
 ///|
 /// What this slice keeps while the app runs.
 priv struct Decide {
   /// asks let go here, before the core says so (Chat.kt AskDismiss `gone`), by station, thread and post
   gone : Map[String, Bool]
-  /// the sheet open; the one going (its motion is @kit.sheet's)
-  mut sheet : Sheet?
-  mut leaving : Sheet?
   /// the jobs' sheet shows all of them, not only those that matter now
   mut jobs_all : Bool
   /// the letters' sheet: the chat opened in it, by its key ("" the list of them)
@@ -60,8 +42,6 @@ priv struct Decide {
 ///|
 let dui : Decide = {
   gone: {},
-  sheet: None,
-  leaving: None,
   jobs_all: false,
   letters_open: "",
   letters_held: {},
@@ -84,8 +64,6 @@ let dui : Decide = {
 fn decide_reset() -> Unit {
   deck_anims.clear()
   dui.gone.clear()
-  dui.sheet = None
-  dui.leaving = None
   dui.jobs_all = false
   dui.letters_open = ""
   dui.letters_held.clear()
@@ -225,118 +203,7 @@ fn archive_chat(src : Source, r : ChatRef, v : ChatView) -> Unit {
   )
 }
 
-// ── the sheets' frame ───────────────────────────────────────────────────
-
-///|
-/// Opens `s` over the pages (one at a time: the one open goes).
-fn open_sheet(c : @ui.Ctx, s : Sheet) -> Unit {
-  dui.sheet = Some(s)
-  dui.leaving = None
-  c.blur()
-}
-
-///|
-/// Closes the sheet open, which goes down.
-fn close_sheet(c : @ui.Ctx) -> Unit {
-  match dui.sheet {
-    Some(s) => dui.leaving = Some(s)
-    None => ()
-  }
-  dui.sheet = None
-}
-
-///|
-/// What a fitted sheet shows, as wide as it and as tall as what it holds (measured for the sheet's height).
-// kept across runs: a value (no field of it changes)
-let sheet_fitted : @ui.Style = @ui.css("w=Full")
-
-///|
-/// Under what a sheet shows, the navigation bar's room: what it shows kept above the bar, its ground going on down to
-/// the screen's foot (Sheet.kt: windowInsetsPadding(keyboard.union(navigationBars)) inside the sheet).
-fn sheet_foot(c : @ui.Ctx) -> Unit {
-  if nav_foot() > 0.0 {
-    c.box(style=@ui.style(w=Full, h=Fixed(nav_foot())), fn() {  }) |> ignore
-  }
-}
-
-///|
-/// A sheet from the bottom (Sheet.kt SheetHost, mbui's @kit.sheet): the scrim (black at 28%) closing it when tapped;
-/// the sheet `tall` high (its share of the screen), or with `fit` as tall as what it shows as this frame lays it out
-/// (read back: laid out another height, the frame is built again; `tall` before it is first laid out), at most nearly
-/// all of the screen (@sf.sheet_most, as the library's presenters), what is more scrolling in it; its top corners 26
-/// round, frosted over the page and the scrim (@sf.sheet_look); it rises and sinks on the sheet's spring, drawn only as
-/// it goes (a tap meanwhile is what is under it's), and is as tall as what it shows asks for as that changes, at once
-/// (placed by its size, not chased: docs/motion.md). The decisions' sheets are one sheet: one asked in place of another
-/// is its height.
-fn sheet_frame(
-  c : @ui.Ctx,
-  key : String,
-  tall : Double,
-  body : () -> Unit,
-  fit? : Bool = false,
-  draggable? : Bool = false,
-) -> Unit {
-  let leaving = dui.sheet is None
-  let fit_id = c.id("sheet-fit/" + key)
-  let grab_id = c.id("sheet-fit/" + key + "/grab")
-  let height_of = fn(id : Int) {
-    match c.laid_size(id) {
-      Some((_, h)) => Some(h)
-      None => None
-    }
-  }
-  let h = match (fit, height_of(fit_id)) {
-    (true, Some(m)) => height_of(grab_id).unwrap_or(0.0) + m + nav_foot()
-    _ => tall
-  }
-  let r = @kit.sheet(
-    c,
-    "decide-sheet",
-    !leaving,
-    h=dmin(h, c.height * @sf.sheet_most),
-    // a draggable one between half (55%) and nearly all of the screen, a tap on its grabber to the other (Sheet.kt)
-    detents=if draggable { sheet_detents } else { [] },
-    scrim=@sf.sheet_scrim,
-    look=@sf.sheet_look(),
-    fn() {
-      if fit {
-        // the grabber, then what it shows laid out at what it needs (both read back for the sheet's height), in the
-        // room left over the navigation bar: all of it, or past the most it scrolls (Sheet.kt: the content's
-        // Column(weight(1f).verticalScroll))
-        c.box(style=sheet_fitted, id=grab_id, taps=false, fn() { @sf.sheet_grab(c) }) |> ignore
-        c.box(style=sheet_scrolled, fn() {
-          c.list("sheet-scroll/" + key, 1, tall, fn(_) {
-            c.box(style=sheet_fitted, id=fit_id, taps=false, fn() { body() }) |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
-        sheet_foot(c)
-      } else {
-        // its share: what it shows may fill it (a list scrolling in it)
-        @sf.sheet_grab(c)
-        body()
-        sheet_foot(c)
-      }
-    },
-  )
-  if !leaving && !r.open {
-    close_sheet(c)
-  }
-  if leaving && !r.shown {
-    dui.leaving = None
-  }
-}
-
-///|
-/// What a fitted sheet shows between its grabber and its foot: the room left there.
-// kept across runs: a value (no field of it changes)
-let sheet_scrolled : @ui.Style = @ui.style(w=Full, h=@sf.grow)
-
-///|
-/// Where a draggable sheet settles: half the screen and nearly all of it (Sheet.kt SheetHost: 0.55, 0.94).
-// kept across runs: a table, never written
-let sheet_detents : Array[Double] = [0.55, @sf.sheet_most]
+// ── a sheet's head ──────────────────────────────────────────────────────
 
 ///|
 /// A sheet's head (Sheet.kt SheetHead): its title, 17 bold.
@@ -348,19 +215,3 @@ fn sheet_head(c : @ui.Ctx, title : String) -> Unit {
   |> ignore
 }
 
-///|
-/// The sheet open over the pages, or the one going down.
-fn sheets(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let s = match (dui.sheet, dui.leaving) {
-    (Some(s), _) => s
-    (None, Some(s)) => s
-    _ => return
-  }
-  match s {
-    Info(r) => chat_info_sheet(c, src, w, r)
-    AgentOf(r, key) => agent_sheet(c, src, w, r, key)
-    JobsOf(r) => jobs_sheet(c, src, r)
-    JobOf(r, id) => job_sheet(c, src, r, id)
-    LettersOf(r, thread) => letters_sheet(c, src, r, thread)
-  }
-}

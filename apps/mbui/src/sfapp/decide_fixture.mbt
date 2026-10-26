@@ -3,7 +3,8 @@
 // "decisions-idle" (none left: the day so far), "history" (an agent's steps, a few opened), "history-details", the chat
 // with a sheet open over it: "chat-info", "chat-publish", "chat-agent", "chat-agent-unsaid" (an agent's card that knows
 // no figure of it, as a station from before tells none of an agent at rest), "chat-peek" (its station's card), "chat-jobs",
-// "chat-job"; "chat-letters-info" (the chat's sheet with its row for what its agents and other chats' wrote each
+// "chat-job"; "chat-letters-many" (their sheet, more chats written with than it holds at its share: its list
+// scrolling in it); "chat-letters-info" (the chat's sheet with its row for what its agents and other chats' wrote each
 // other), "chat-letters" (their sheet: the chats written with), "chat-letters-open" (one of them opened); the wide
 // frame's "chat-letters-pop" (the chat's "…" open), "chat-jobs-pop" (its services' popover), "chat-letters-side",
 // "chat-jobs-side", "chat-history-side" (what is opened beside it), "chat-tabs-side" (two of them: the history behind
@@ -20,7 +21,7 @@ fn decide_mode(mode : String) -> Bool {
   [
     "decisions", "decisions-text", "decisions-idle", "history", "history-details",
     "chat-info", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
-    "chat-letters-info", "chat-letters", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
+    "chat-letters-info", "chat-letters", "chat-letters-many", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
     "chat-jobs-side", "chat-history-side", "chat-tabs-side", "chat-model-pop", "chat-find", "chat-agent-card",
     "chat-station-tag", "home-attention",
   ].contains(mode)
@@ -483,7 +484,14 @@ fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Json]) 
         Some(base)
       }
     }
-    "chatLetters" => if f.mode.has_prefix("chat-letters") { Some(Some(fix_letters())) } else { None }
+    "chatLetters" =>
+      if f.mode == "chat-letters-many" {
+        Some(Some(fix_letters_many()))
+      } else if f.mode.has_prefix("chat-letters") {
+        Some(Some(fix_letters()))
+      } else {
+        None
+      }
     "decisions" => Some(Some(fix_decisions(f.mode)))
     "history" => Some(Some(fix_history()))
     "agentCard" if f.mode == "chat-agent-unsaid" =>
@@ -652,12 +660,6 @@ pub fn open_fixture(mode : String) -> Unit {
         @sfpages.history_open(["h2/group", "h2/group/1", "h4/group", "h4/group/0"])
       }
     }
-    "chat-info" | "chat-letters-info" => dui.sheet = Some(Info(r))
-    "chat-letters" => {
-      dui.letters_open = ""
-      dui.letters_held[r.station + "\u{1}" + r.session] = 7.0
-      dui.sheet = Some(LettersOf(r, 7.0))
-    }
     // the wide frame's (wide_panel.mbt): the chat's "…" open, its services' popover, what is opened beside it
     "chat-letters-pop" => @sfdesk.open_info_pop()
     "chat-jobs-pop" => @sfdesk.open_jobs_pop()
@@ -670,24 +672,67 @@ pub fn open_fixture(mode : String) -> Unit {
     "chat-model-pop" => @sfpages.open_triple(r.station, "session:s-c1")
     // (what is typed is looked for as the bar is first drawn)
     "chat-find" => @sfpages.find_preset(side_key(r), "截图")
-    "chat-letters-open" => {
-      dui.letters_open = fix_letters_link
-      dui.letters_held[r.station + "\u{1}" + r.session] = 7.0
-      dui.sheet = Some(LettersOf(r, 7.0))
-    }
     // the sheet that publishes the chat, what a snapshot would hold read (Publish.kt openPublish)
     "chat-publish" => {
       @sfpages.publish_set(r, 7.0, fix_preview())
     }
-    "chat-agent" | "chat-agent-unsaid" => dui.sheet = Some(AgentOf(r, "s-c1"))
     // its station's card, from the agent's (Stations.kt openStationPeek)
     "chat-peek" => @settings.open_station_peek(r.station, from=Unanchored)
-    "chat-jobs" => dui.sheet = Some(JobsOf(r))
+    _ => ()
+  }
+}
+
+///|
+/// What a fixture mode of this slice puts up over the chat once its source is made (open_fixture_src): the chat's
+/// sheet, its letters (one opened), an agent's card, its jobs, a job.
+fn open_decide_panels(mode : String, src : Source) -> Unit {
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  match mode {
+    "chat-info" | "chat-letters-info" => open_info(src, r)
+    "chat-letters" | "chat-letters-many" => open_letters(src, r, 7.0)
+    "chat-letters-open" => {
+      open_letters(src, r, 7.0)
+      dui.letters_open = fix_letters_link
+    }
+    "chat-agent" | "chat-agent-unsaid" => open_agent(src, r, "s-c1")
+    "chat-jobs" => open_chat_jobs(src, r)
     "chat-job" => {
       dui.job_tab = 0
-      dui.sheet = Some(JobOf(r, "j-ci"))
+      open_job(src, r, "j-ci")
     }
     _ => ()
+  }
+}
+
+///|
+/// The letters with 30 chats written with (`chat-letters-many`): fix_letters' first, again and again, each its own.
+fn fix_letters_many() -> Json {
+  let base = fix_letters()
+  let first = match items(Some(base), "chats") {
+    [c, ..] => c
+    _ => return base
+  }
+  let chats : Array[Json] = []
+  for i in 0..<30 {
+    match first {
+      Object(o) => {
+        let o = o.copy()
+        let key = "many-" + i.to_string()
+        o["key"] = Json::string(key)
+        o["link"] = Json::string(key)
+        o["title"] = Json::string("往来的对话 " + (i + 1).to_string())
+        chats.push(Json::object(o))
+      }
+      other => chats.push(other)
+    }
+  }
+  match base {
+    Object(o) => {
+      let o = o.copy()
+      o["chats"] = Json::array(chats)
+      Json::object(o)
+    }
+    other => other
   }
 }
 

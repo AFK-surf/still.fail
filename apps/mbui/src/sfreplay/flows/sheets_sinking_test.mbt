@@ -22,7 +22,7 @@ test "51-sheets-sinking" {
     f.run_for(@ui.nav_push_ms)
     f.see("发消息")
     f.tap("icon:more")
-    f.run_to(@kit.sheet_rest("decide-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.see("=固定到列表顶部")
     // its scrim tapped, and the composer tapped through it as it goes down: the words typed there, sent
     f.tap_at(195.0, 60.0)
@@ -31,7 +31,7 @@ test "51-sheets-sinking" {
     f.tap("icon:arrow-up")
     // the words flown to their bubble; the sheet sunk away after
     f.run_for(@sfapp.flight_ms)
-    f.run_to(@kit.sheet_rest("decide-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.see("穿过下去的面板 082939")
     f.gone("正在发送")
     // the test station's agent answers with a failure (no model there), its notice offering 上报: looked for, so the run

@@ -83,12 +83,18 @@ pub fn glass_action() -> @ui.Glass {
 }
 
 ///|
-/// A sheet over the page (Sheet.kt): the surface at 80% over a 28px blur (the scrim is drawn under it, so it is in
-/// what the glass frosts, as on the web).
+/// A sheet over the page (Sheet.kt): the surface at 90% over a 28px blur (the scrim is drawn under it, so it is in
+/// what the glass frosts, as on the web). 90%, not the 80% it was: what is written on a sheet keeps 4.5:1 whatever
+/// lies under it (the accent's words, the weakest ink a sheet's words are in, over the page at its darkest, black: the
+/// tint alone carries them), a sheet as tall as what it holds lying over any part of the page.
 pub fn glass_sheet() -> @ui.Glass {
   let t = theme()
-  @ui.Glass::frosted(blur=28.0, tint=alpha(t.p.canvas, 0.8), solid=t.p.bg)
+  @ui.Glass::frosted(blur=28.0, tint=alpha(t.p.canvas, sheet_tint), solid=t.p.bg)
 }
+
+///|
+/// How much of a sheet's glass is its surface's colour (glass_sheet).
+let sheet_tint : Double = 0.9
 
 ///|
 /// still.fail's sheet (Sheet.kt) as mbui's sheet draws it (@kit.sheet's look): the sheet's glass over the page, the

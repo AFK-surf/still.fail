@@ -17,17 +17,17 @@ test "26-history" {
     f.see_n(2, "文档目录看过了 083209")
     f.tap("icon:more")
     // the chat's sheet risen
-    f.run_to(@kit.sheet_rest("decide-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.see("复制会话链接")
     // (its first row's: under it, the public links' and the sharing's have one too)
     f.tap("icon:chevron-right", top=true)
     // the agent's card in the sheet's place, the sheet at its height
-    f.run_to(@kit.sheet_rest("decide-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.see("=历史")
     f.tap("=历史")
     // the history pushed over the chat, the sheet sunk away
     f.run_for(@ui.nav_push_ms)
-    f.run_to(@kit.sheet_rest("decide-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.see("执行历史")
     f.see("文档目录看过了 083209")
     f.tap("icon:chevron-right")

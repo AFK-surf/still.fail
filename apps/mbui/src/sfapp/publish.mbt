@@ -26,13 +26,21 @@ let published_words : @ui.TextStyle = @sf.secondary.then(@sf.one_line).then(@sf.
 /// Making the chat public, a card of its own in its sheet (Publish.kt PublishList): 公开分享 opens the sheet that
 /// publishes it, for those who may (not a read-only member); each of its links under it, when and by whom, 复制, and
 /// 撤销 for who published it or an owner or admin (asked first; gone from here at once).
-fn publish_list(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, p : Json?) -> Unit {
+fn publish_list(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, p : Json?, close : () -> Unit) -> Unit {
   let t = @sf.theme()
-  c.box(style=publish_card_top, fn() { publish_list_rows(c, src, r, thread, p, t) }) |> ignore
+  c.box(style=publish_card_top, fn() { publish_list_rows(c, src, r, thread, p, t, close) }) |> ignore
 }
 
 ///|
-fn publish_list_rows(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, p : Json?, t : @sf.Theme) -> Unit {
+fn publish_list_rows(
+  c : @ui.Ctx,
+  src : Source,
+  r : ChatRef,
+  thread : Double,
+  p : Json?,
+  t : @sf.Theme,
+  close : () -> Unit,
+) -> Unit {
   info_list(c, fn() {
     if flag(p, "may") &&
       info_row(c, "info/publish", fn() {
@@ -41,18 +49,18 @@ fn publish_list_rows(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, p 
         chevron(c)
       }) {
       // (the chat's sheet put down, the publishing over the window)
-      close_sheet(c)
+      close()
       @sfpages.open_publish(src, r, thread)
     }
     for l in items(p, "links") {
-      published_row(c, src, r.station, thread, Some(l))
+      published_row(c, src, r.station, thread, Some(l), close)
     }
   })
 }
 
 ///|
 /// One of the chat's links (Publish.kt PublishedRow): how long ago and by whom; 复制; 撤销 when the viewer may.
-fn published_row(c : @ui.Ctx, src : Source, station : String, thread : Double, l : Json?) -> Unit {
+fn published_row(c : @ui.Ctx, src : Source, station : String, thread : Double, l : Json?, close : () -> Unit) -> Unit {
   let id = text(l, "id")
   info_row(c, "", fn() {
     let said = [text(field(field(l, "time"), "createdAt"), "ago"), text(l, "byName")].filter(fn(s) { s != "" })
@@ -61,7 +69,7 @@ fn published_row(c : @ui.Ctx, src : Source, station : String, thread : Double, l
       copy_link(c, text(l, "link"))
     }
     if flag(l, "mayRevoke") && text_action(c, "publish/revoke/" + id, tr("web-pages.chat.publish.revoke")) {
-      close_sheet(c)
+      close()
       @sf.confirm(
         tr("web-pages.chat.publish.revokeAsk"),
         tr("web-pages.chat.publish.revokeNote"),

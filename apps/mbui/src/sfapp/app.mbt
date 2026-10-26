@@ -266,8 +266,6 @@ fn detail_where(src : Source, r : ChatRef, tab : String) -> Unit {
 /// Back to Home (the stack's root), the sheets and the menu closed.
 fn home() -> Unit {
   lower_sheet()
-  dui.sheet = None
-  dui.leaving = None
   nav_home()
 }
 
@@ -513,11 +511,9 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
           NoSheet => ()
         }
       })
-      // a chat's sheets (slice 8's: sheets.mbt, framed in decide.mbt)
-      sheets(c, src, w)
       // a new device waiting on this one's code, in any workspace of the person's, over whichever page is open
       // (App.kt LockPrompts): put up when no other sheet is
-      @settings.lock_prompts(settings_core(src, w), !sheet_open() && dui.sheet is None)
+      @settings.lock_prompts(settings_core(src, w), !sheet_open())
       // (the core what the settings put up over a page draws with, put up by what has none at hand)
       @settings.panels_frame(settings_core(src, w))
       // ⌘K's panel and ⌘/'s shortcuts, in every tier over the pages, under the presenters (sfdesk's switcher.mbt,

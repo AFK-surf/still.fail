@@ -43,8 +43,7 @@ fn main {
       @sfapp.fixture_update(@ui.env("MBUI_UPDATE"))
     }
     // what the mode opens over Home before the first frame (src/sfapp/fixture.mbt: screens_wbtest.mbt opens the same)
-    @sfapp.open_fixture_mode(mode)
-    @sfapp.open_fixture_src(mode, src)
+    @sfapp.open_fixture_over(mode, src)
     // MBUI_SAID=1: what people, agents and stations wrote at its longest (src/sfapp/fixture_said.mbt)
     if @ui.env("MBUI_SAID") == "1" {
       @sfapp.said_longest_source(src)
