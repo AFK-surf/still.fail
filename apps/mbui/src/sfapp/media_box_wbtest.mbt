@@ -14,6 +14,8 @@ fn strip(name : String) -> Attachment {
     thumbhash: "",
     owner: "s-c1",
     upload: "",
+    duration: 0.0,
+    frames: 0,
   }
 }
 
@@ -131,6 +133,8 @@ test "an image sent while it goes up flies on to its place once it is up: its me
       thumbhash: "",
       owner: "",
       upload: "u1",
+      duration: 0.0,
+      frames: 0,
     },
   }
   let faced = Ref(0)

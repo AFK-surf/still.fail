@@ -141,6 +141,8 @@ export const SHAPES: Record<string, Shape> = {
     ["width", opt("i64"), { client: opt("I54") }],
     ["height", opt("i64"), { client: opt("I54") }],
     ["thumbhash", opt("String"), { doc: "An image's ThumbHash (base64): a blurred likeness of it, shown until it loads." }],
+    ["duration", opt("i64"), { client: opt("I54"), doc: "A film's length in ms, as the station read it from its header: said before the film is read." }],
+    ["frames", opt("i64"), { client: opt("I54"), doc: "How many frames a film's picture has, as the station read them from its header." }],
     ["owner", opt("String"), { doc: "In a chat's page: the session whose workspace keeps it (its agent's, else the chat's first agent's), which\nits preview and download go through. Absent elsewhere." }],
     ["upload", opt("String"), { doc: "In a chat's page: the id of this device's upload it is (`composer.add`), while this device still has its\npicture; absent for every other file." }],
   ]),

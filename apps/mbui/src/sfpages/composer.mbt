@@ -1003,6 +1003,8 @@ fn composer_picture(
         thumbhash: "",
         owner: "",
         upload: "",
+        duration: 0.0,
+        frames: 0,
       }
       // the viewer's id of it (its station, no session, its path), its tile kept for it to fly from
       let seen = station + "//" + a.path

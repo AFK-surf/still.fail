@@ -2207,6 +2207,8 @@ fn draft_picture(c : @ui.Ctx, station : String, f : Pending, picture : String, r
     thumbhash: "",
     owner: "",
     upload: "",
+    duration: 0.0,
+    frames: 0,
   }
   // the viewer's id of it (Viewer::id: its station, no session, its path), its tile kept for it to fly from
   let thumb = station + "//" + a.path

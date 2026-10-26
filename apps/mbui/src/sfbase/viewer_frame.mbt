@@ -67,8 +67,8 @@ pub fn vf_kind_label(kind : PKind?) -> String {
 }
 
 ///|
-/// The line under the name (FilePreview.tsx meta): which of how many, its size, its kind; a video's own facts after
-/// them (the web player's bar: its size in pixels, how long, its rate).
+/// The line under the name (FilePreview.tsx meta): which of how many, its size, its kind. (A film's and a song's are
+/// their player's bar's: player.mbt.)
 pub fn vf_meta(vw : Viewer, src : Source) -> String {
   let (at, count) = viewer_place(vw, src)
   let parts : Array[String] = []
@@ -78,37 +78,7 @@ pub fn vf_meta(vw : Viewer, src : Source) -> String {
   if kind != "" {
     parts.push(kind)
   }
-  match vw.view() {
-    Some(n) if vw.shown_kind() == Some(KVideo) => {
-      let (w, h) = n.natural()
-      if w > 0.0 && h > 0.0 {
-        parts.push("\{w.to_int()}×\{h.to_int()}")
-        let dur = n.duration()
-        if dur > 0.0 {
-          parts.push(vf_clock(dur))
-        }
-        match n.frames() {
-          Some(list) if list.length() > 1 && dur > 0.0 =>
-            parts.push("\{(list.length().to_double() * 1000.0 / dur).round().to_int()} fps")
-          _ => ()
-        }
-      }
-    }
-    _ => ()
-  }
   parts.join(" · ")
-}
-
-///|
-/// A time as a video's facts say it (web/ui viewer/playing.ts clockMs): m:ss.mmm.
-pub fn vf_clock(ms : Double) -> String {
-  let total = ms.round().to_int()
-  let m = total / 60000
-  let s = total / 1000 % 60
-  let r = total % 1000
-  let ss = if s < 10 { "0\{s}" } else { "\{s}" }
-  let rr = if r < 10 { "00\{r}" } else if r < 100 { "0\{r}" } else { "\{r}" }
-  "\{m}:\{ss}.\{rr}"
 }
 
 ///|

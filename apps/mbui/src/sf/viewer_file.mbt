@@ -35,7 +35,8 @@ pub(all) struct ViewerEntry {
 /// A file opened. `read` reads it whole (at most `max` bytes, its progress told); `stream` reads a part of it to play
 /// it as it comes (offset, length, then its bytes as they come, the whole's size and whether more comes, stopped by
 /// what it gives back: @kit.MediaTrack's read; none: played from what `read` reads); `beside` reads a file beside it (a subtitle); `place` says where it was left on this device, as it is
-/// asked each frame; `keep_place` keeps where it is now (at, of); `save` saves it to the device.
+/// asked each frame; `keep_place` keeps where it is now (at, of); `save` saves it to the device; `facts`, what its
+/// message says of a film before it is read.
 pub(all) struct ViewerFile {
   name : String
   size : Double
@@ -54,7 +55,23 @@ pub(all) struct ViewerFile {
   place : () -> PlaceNow
   keep_place : (Double, Double) -> Unit
   save : () -> Unit
+  facts : FileFacts
 }
+
+///|
+/// What a film's message says of it, as the station read it from the film's header (Attachment): its size as shown,
+/// its length in ms and how many frames its picture has; 0 where it says none (a drive's file, a message from before).
+pub(all) struct FileFacts {
+  width : Double
+  height : Double
+  duration : Double
+  frames : Int
+}
+
+///|
+/// Nothing said of it.
+// kept across runs: a value (no field of it changes)
+pub let no_facts : FileFacts = { width: 0.0, height: 0.0, duration: 0.0, frames: 0 }
 
 ///|
 /// A file here already (a chat's, read by its preview): nothing kept of where it was left (file.ts blobFile).
@@ -83,5 +100,6 @@ pub fn blob_file(
     place: fn() { NeverLeft },
     keep_place: fn(_, _) {  },
     save,
+    facts: no_facts,
   }
 }

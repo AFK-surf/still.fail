@@ -39,6 +39,9 @@ pub(all) struct Attachment {
   /// the id of this device's upload it is (`composer.add`), sent before it was up: its picture is still here
   /// (composer.mbt sent_picture); "" for any other
   upload : String
+  /// a film's length (ms) and how many frames its picture has, as the station read them from its header (0: not said)
+  duration : Double
+  frames : Int
 }
 
 ///|
@@ -53,6 +56,8 @@ pub fn attachment_of(a : Json) -> Attachment {
     thumbhash: text(s, "thumbhash"),
     owner: text(s, "owner"),
     upload: text(s, "upload"),
+    duration: number(s, "duration"),
+    frames: number(s, "frames").to_int(),
   }
 }
 

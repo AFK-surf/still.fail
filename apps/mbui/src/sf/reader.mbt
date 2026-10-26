@@ -101,9 +101,11 @@ fn paper_by_key(key : String) -> ReaderPaper {
 }
 
 ///|
-/// The bar's colours on the paper (Reader.css.ts reader: --viewer-ground, -ink, -muted, -line).
+/// The bar's colours on the paper (Reader.css.ts reader: --viewer-ground, -ink, -muted, -line); its buttons lit as the
+/// page's are (the paper is night while the app is dark, a day's paper while it is light: reader_paper).
 pub fn paper_viewer_ink(p : ReaderPaper) -> ViewerInk {
-  { ground: p.ground, ink: p.ink, muted: p.muted, line: p.line }
+  let page = theme().p
+  { ground: p.ground, ink: p.ink, muted: p.muted, line: p.line, hover: page.hover, chosen: page.selected }
 }
 
 ///|

@@ -10,7 +10,7 @@
 /// The made-up files, by the name the preview fetches them by: the file as a message has it, and its bytes.
 fn preview_files() -> Array[(Attachment, () -> Bytes)] {
   let at = fn(name : String, size : Double, w : Double, h : Double) -> Attachment {
-    { name, path: "uploads/fx/" + name, size, width: w, height: h, thumbhash: "", owner: "s-c1", upload: "" }
+    { name, path: "uploads/fx/" + name, size, width: w, height: h, thumbhash: "", owner: "s-c1", upload: "", duration: 0.0, frames: 0 }
   }
   [
     (at("界面草图.png", 18000.0, 600.0, 400.0), fn() { fixture_png(600, 400) }),
@@ -18,7 +18,8 @@ fn preview_files() -> Array[(Attachment, () -> Bytes)] {
     // the chat's own picture (chat_fixture.mbt rich_chat), opened from its thumbnail there: the same picture
     (at("compare.png", 402000.0, 1600.0, 900.0), fn() { fixture_file_png("compare.png") }),
     (at("设计说明.pdf", 2400.0, 0.0, 0.0), fn() { fixture_pdf() }),
-    (at("演示录屏.mp4", 5242880.0, 1280.0, 720.0), fn() { b"" }),
+    // what its message says of it, as the station read it from its header: 12.5 s, 375 frames
+    ({ ..at("演示录屏.mp4", 5242880.0, 1280.0, 720.0), duration: 12500.0, frames: 375 }, fn() { b"" }),
     (at("会议录音.m4a", 1489000.0, 0.0, 0.0), fn() { b"" }),
     (at("报告.html", 900.0, 0.0, 0.0), fn() { @utf8.encode(fixture_html) }),
     // the chat's visualization (chat_fixture.mbt MBUI_FIXTURE=chat-viz)

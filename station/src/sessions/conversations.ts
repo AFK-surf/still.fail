@@ -31,7 +31,7 @@ import {
 } from "./args.ts";
 import { type ChatSurface, callApi } from "./chat.ts";
 import type { Hub } from "./hub.ts";
-import { shownSize } from "./image-size.ts";
+import { shownFacts } from "./image-size.ts";
 import { dir as thumbsDir, keep } from "../drive/thumbs.ts";
 import { INTERNAL_CONNECT } from "./internal.ts";
 import { namedLocalPaths, prepare } from "./local-links.ts";
@@ -187,11 +187,8 @@ export async function attach(hub: Hub, key: string, paths: string[], into: strin
       .join("");
     const copy = join(dir, `${stamp}-${safe}`);
     copyFileSync(path, copy);
-    // a picture or a film as it is shown, so pages hold its place
-    const size = shownSize(copy);
-    const attachment: Attachment = { name, path: copy, size: meta.size };
-    if (size) [attachment.width, attachment.height] = size;
-    return attachment;
+    // a picture or a film as it is shown, so pages hold its place (a film's length and frames with it)
+    return { name, path: copy, size: meta.size, ...shownFacts(copy) } satisfies Attachment;
   });
 }
 

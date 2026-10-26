@@ -46,7 +46,7 @@ import { agentHomePaths, workspaceAgentHome } from "./agent-home.ts";
 import { carrySubagents, startsAfresh, toldCleared } from "./afresh.ts";
 import { serves } from "./pool.ts";
 import { settled } from "./opened.ts";
-import { shownSize } from "./image-size.ts";
+import { shownFacts } from "./image-size.ts";
 
 type Json = any;
 
@@ -544,9 +544,7 @@ export class Hub {
           .join("");
         const path = join(dir, `${iso(this.now()).slice(0, 19).replace(/[:.]/g, "-")}-${file.id}-${safe}`);
         writeFileSync(path, bytes);
-        const attachment: Attachment = { name: file.name, path, size: bytes.length };
-        const size = shownSize(path);
-        if (size) [attachment.width, attachment.height] = size;
+        const attachment: Attachment = { name: file.name, path, size: bytes.length, ...shownFacts(path) };
         attachments.push(attachment);
       } catch (error) {
         log.warn("hub", "shared file not fetched", { session: key, file: file.id, error: (error as Error).message });

@@ -12,7 +12,7 @@ import { CHUNK, hash } from "../jobs/remote.ts";
 import { withLock, workspaceFile } from "./archive.ts";
 import { roomOf } from "./footprint.ts";
 import type { Hub } from "./hub.ts";
-import { shownSize } from "./image-size.ts";
+import { shownFacts } from "./image-size.ts";
 import { Refused } from "./neighbours.ts";
 import { fromBefore, named, reachable } from "./others.ts";
 
@@ -43,12 +43,10 @@ function uploadName(hub: Hub, name: string): string {
   return `${stamp}-${safe}`;
 }
 
-/// An attachment as messages keep it: pictures and films measured, so pages hold their place.
+/// An attachment as messages keep it: pictures and films measured, so pages hold their place (a film's length and
+/// frames with it).
 function attachment(name: string, path: string, size: number): Attachment {
-  const found: Attachment = { name, path, size };
-  const measured = shownSize(path);
-  if (measured) [found.width, found.height] = measured;
-  return found;
+  return { name, path, size, ...shownFacts(path) };
 }
 
 // ── a chat's attachments, read from another station ──────────────────────────────────────────────────────────────

@@ -74,7 +74,9 @@ export type AuthorKind = "person" | "agent" | "ember";
 export type EntryKind = "message" | "edit";
 
 export type Quote = { author: string; text: string; comment: string; ts?: string; role?: string; file?: string };
-export type Attachment = { name: string; path: string; size: number; width?: number; height?: number; thumbhash?: string };
+/// `width`, `height`: a picture's or a film's size as shown; `duration` (ms) and `frames`: a film's length and how many
+/// frames its picture has (sessions/image-size.ts shownFacts), so a page says them before it reads the film.
+export type Attachment = { name: string; path: string; size: number; width?: number; height?: number; thumbhash?: string; duration?: number; frames?: number };
 
 /// One entry of a thread's log (as the archive files hold them, one per line).
 export type EntryRow = {
@@ -276,10 +278,13 @@ const isU32 = (v: Json) => isU64(v) && v <= 0xffffffff;
 export function attachment(a: Json): Attachment {
   if (!isObj(a) || !isStr(a.name) || !isStr(a.path) || !isU64(a.size)) throw new Error("attachment");
   if (!optional(a.width, isU32) || !optional(a.height, isU32) || !optional(a.thumbhash, isStr)) throw new Error("attachment");
+  if (!optional(a.duration, isU64) || !optional(a.frames, isU32)) throw new Error("attachment");
   const v: Attachment = { name: a.name, path: a.path, size: a.size };
   if (a.width !== undefined && a.width !== null) v.width = a.width;
   if (a.height !== undefined && a.height !== null) v.height = a.height;
   if (a.thumbhash !== undefined && a.thumbhash !== null) v.thumbhash = a.thumbhash;
+  if (a.duration !== undefined && a.duration !== null) v.duration = a.duration;
+  if (a.frames !== undefined && a.frames !== null) v.frames = a.frames;
   return v;
 }
 

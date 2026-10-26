@@ -414,6 +414,10 @@ export interface Attachment {
 	height?: number;
 	/** An image's ThumbHash (base64): a blurred likeness of it, shown until it loads. */
 	thumbhash?: string;
+	/** A film's length in ms, as the station read it from its header: said before the film is read. */
+	duration?: number;
+	/** How many frames a film's picture has, as the station read them from its header. */
+	frames?: number;
 	/**
 	 * In a chat's page: the session whose workspace keeps it (its agent's, else the chat's first agent's), which
 	 * its preview and download go through. Absent elsewhere.
