@@ -590,13 +590,12 @@ fn drawn_pixels_of(
   r : Double,
   g : Double,
   b : Double,
-  x : Int,
-  y : Int,
+  scale : Double,
   w : Int,
   h : Int,
   out : FixedArray[Byte],
 ) -> Bool {
-  ignore((inst, count, r, g, b, x, y, w, h, out))
+  ignore((inst, count, r, g, b, scale, w, h, out))
   false
 }
 

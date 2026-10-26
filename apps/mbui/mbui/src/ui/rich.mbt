@@ -968,6 +968,32 @@ fn cut_rich(r : Rich, lay : RichLayout, w : Double) -> Rich {
 }
 
 ///|
+fn rich_zoomed_keys(r : Rich, lay : RichLayout) -> Array[Int]? {
+  if words_zoom.val == 1.0 || lay.run_c0.length() != r.runs.length() {
+    return None
+  }
+  let keys = lay.keys.copy()
+  for k, run in r.runs {
+    if run.drawing is Some(_) {
+      continue
+    }
+    let (c0, c1) = (lay.run_c0[k], lay.run_c1[k])
+    let s = shape(run.text, r.run_size(run), r.run_weight(run), style=run_style(run) | r.faces, spacing=r.spacing)
+    match zoomed_keys(run.text, s, r.run_size(run), r.run_weight(run), run_style(run) | r.faces, r.spacing) {
+      Some(big) if big.length() == c1 - c0 =>
+        for c in c0..<c1 {
+          keys[c] = big[c - c0]
+        }
+      _ =>
+        for c in c0..<c1 {
+          keys[c] = -1
+        }
+    }
+  }
+  Some(keys)
+}
+
+///|
 fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
   // its layout as the cache has it for these runs (Node::rich_layout: laid out again when they are not the ones it was
   // laid out from), in the width it was placed in
@@ -1062,6 +1088,8 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
       }
     }
   }
+  let zoom = words_zoom.val
+  let zoomed = rich_zoomed_keys(r, lay)
   for c in 0..<lay.starts.length() {
     let key = lay.keys[c]
     if key == -2 {
@@ -1075,7 +1103,7 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
           for path in d.paths { self.emit_shape(x, y, path, true, 0.0, false, color, alpha) }
           for word in d.words {
             let tl = layout_text(word.0, word.3, 400, 100000.0, false, style=@hostapi.style_serif)
-            self.emit_text(tl, x + word.1, y + word.2 - tl.ascent, color, alpha)
+            self.emit_text(tl, x + word.1, y + word.2 - tl.ascent, color, alpha, font=(word.3, 400, @hostapi.style_serif, 0.0))
           }
         }
         None => ()
@@ -1090,17 +1118,23 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
     if top > cy1 || top + lay.line_h[l] < cy0 {
       continue
     }
-    let g = glyph(key, sc)
+    // (made at the host's pixels a point; in a shot drawn at more, made that much larger and drawn that much smaller:
+    // emit_text)
+    let (key, z) = match zoomed {
+      Some(big) if big[c] >= 0 => (big[c], zoom)
+      _ => (key, 1.0)
+    }
+    let g = glyph(key, sc / zoom)
     if g.gw <= 0.0 {
       continue
     }
-    let gx = ((ox + lay.xs[c] + lay.pre[c] + g.ox) * sc).round() / sc
-    let gy = ((top + lay.line_base[l] + g.oy) * sc).round() / sc
+    let gx = ((ox + lay.xs[c] + lay.pre[c] + g.ox / z) * sc).round() / sc
+    let gy = ((top + lay.line_base[l] + g.oy / z) * sc).round() / sc
     self.push_inst(
       gx,
       gy,
-      g.gw,
-      g.gh,
+      g.gw / z,
+      g.gh / z,
       0.0,
       if g.color { 3.0 } else { 1.0 },
       0.0,
@@ -1109,8 +1143,8 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
       alpha,
       g.u,
       g.v,
-      g.gw * sc,
-      g.gh * sc,
+      g.gw * (sc / zoom),
+      g.gh * (sc / zoom),
     )
   }
   for k, run in r.runs {

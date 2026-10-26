@@ -376,7 +376,7 @@ pub fn panel_list(
 /// taller; past that it is drawn smaller (a look over its layout: what it is laid out as stays as it is, its words in
 /// their places). Put where it is in the room out of its flow, so the room is as large as the panel gives it, not as
 /// what it holds (which would hold it as large as the picture, never smaller). `id`: a box over it as large as it is
-/// drawn (what is read back of it: Ctx::drawn_pixels).
+/// drawn.
 pub fn whole_fitted(c : @ui.Ctx, key : String, id : Int, most : Double, draw : (Int) -> Int) -> Unit {
   let room_id = c.id(key + "/room")
   let whole_id = c.id(key + "/whole")

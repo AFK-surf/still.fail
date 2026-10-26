@@ -463,6 +463,7 @@ fn Ctx::emit_text(
   alpha : Double,
   center_in? : Double = -1.0,
   spans? : Array[(Int, Int, Int64)] = [],
+  font? : (Double, Int, Int, Double),
 ) -> Unit {
   let s = tl.shaped
   let n = s.starts.length()
@@ -470,6 +471,17 @@ fn Ctx::emit_text(
   let cy0 = clip_stack[k + 1]
   let cy1 = clip_stack[k + 3]
   let sc = self.scale
+  // in a shot drawn at more pixels a point than the host's glyphs are made at (words_zoom): its words' glyphs made
+  // that much larger, as crisp, drawn that much smaller, where its font is said (`font`: size, weight, style, spacing)
+  let zoom = words_zoom.val
+  let zoomed = match font {
+    Some((size, weight, style, spacing)) => zoomed_keys(tl.text, s, size, weight, style, spacing)
+    None => None
+  }
+  let (keys, z) = match zoomed {
+    Some(big) => (big, zoom)
+    None => (s.keys, 1.0)
+  }
   keep_text_runs(
     tl,
     ox,
@@ -485,7 +497,7 @@ fn Ctx::emit_text(
     cy1,
   )
   for c in 0..<n {
-    let key = s.keys[c]
+    let key = keys[c]
     if key < 0 {
       continue
     }
@@ -494,24 +506,26 @@ fn Ctx::emit_text(
     if top > cy1 || top + tl.line_h < cy0 {
       continue
     }
-    let g = glyph(key, sc)
+    // (made at the host's pixels a point)
+    let g = glyph(key, sc / zoom)
     if g.gw <= 0.0 {
       continue
     }
+    let (gw, gh) = (g.gw / z, g.gh / z)
     // centred: each line by half of what it leaves of the box
     let dx = if center_in >= 0.0 && line < tl.line_w.length() {
       dmax((center_in - tl.line_w[line]) / 2.0, 0.0)
     } else {
       0.0
     }
-    let gx = ((ox + dx + tl.xs[c] + s.pad + g.ox) * sc).round() / sc
-    let gy = ((top + tl.ascent + g.oy) * sc).round() / sc
+    let gx = ((ox + dx + tl.xs[c] + s.pad + g.ox / z) * sc).round() / sc
+    let gy = ((top + tl.ascent + g.oy / z) * sc).round() / sc
     let adaptive = glass_paint.ink_r > 0.0 && !g.color
     self.push_inst(
       gx,
       gy,
-      g.gw,
-      g.gh,
+      gw,
+      gh,
       0.0,
       if g.color { 3.0 } else if adaptive { 7.0 } else { 1.0 },
       0.0,
@@ -526,8 +540,9 @@ fn Ctx::emit_text(
       alpha,
       g.u,
       g.v,
-      g.gw * sc,
-      g.gh * sc,
+      // (its pixels in the atlas: as many as the host made)
+      g.gw * (sc / zoom),
+      g.gh * (sc / zoom),
     )
     if adaptive {
       let b = (self.ninst - 1) * inst_size
@@ -753,6 +768,7 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
           } else {
             -1.0
           },
+          font=(n.font_size, n.weight, n.words_style(), n.spacing),
         )
       None => ()
     }

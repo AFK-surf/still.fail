@@ -156,6 +156,29 @@ fn glyphs_forget() -> Unit {
 }
 
 ///|
+/// How many times as large as the host makes its glyphs (the window's pixels a point) what is painted now draws its
+/// words: a shot's pixels a point over the window's (shot.mbt), 1 elsewhere.
+// kept across runs: set only while a shot is painted, within one frame's paint, and put back
+let words_zoom : Ref[Double] = Ref::new(1.0)
+
+///|
+/// The glyphs of words `text`, shaped as `s` is in `size`, `weight`, `style` and `spacing`, shaped again words_zoom
+/// times as large, cluster for cluster: a shot drawn at more pixels a point than the window's draws its words by them,
+/// each made by the host as crisp as that. None at 1, or where they do not come to as many clusters.
+fn zoomed_keys(text : String, s : Shaped, size : Double, weight : Int, style : Int, spacing : Double) -> Array[Int]? {
+  let k = words_zoom.val
+  if k == 1.0 {
+    return None
+  }
+  let big = shape(text, size * k, weight, style~, spacing=spacing * k)
+  if big.keys.length() == s.keys.length() {
+    Some(big.keys)
+  } else {
+    None
+  }
+}
+
+///|
 /// Ascent, descent and line height of the system font at this size (its
 /// code face, slanted, its serif face: `style`, @hostapi.style_mono, style_italic, style_serif).
 fn font_metrics(

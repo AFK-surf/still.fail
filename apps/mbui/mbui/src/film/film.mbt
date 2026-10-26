@@ -12,6 +12,7 @@
 //   [MBUI_FILM_WINDOW_CORNER=16: how round the system draws the window's corners, a Mac's: @hostapi.window_corner]
 //   [MBUI_LOCALE=en-US: the app's language, as a device's] [MBUI_FONT_SCALE=1.3: the system's size of words, as a
 //   device's set bigger] [MBUI_FILM_LAST=<last.png>: the run's last frame as the renderer drew it]
+//   [MBUI_FILM_COPIED=<copied.png.b64>: the picture the app last put on the clipboard, a PNG in base64]
 // The film is H.264, lossy: each frame's pixels are the encoder's guess of them, and a guess that leans on the frames
 // before it and on how the encoder spends its bits. A picture compared to the byte (before and after a change) is the
 // last frame as drawn (MBUI_FILM_LAST), never one taken out of the film.
@@ -46,6 +47,7 @@ pub fn film(
   window_corner? : Double = 0.0,
   max? : Int = 3000,
   last? : String = "",
+  copied? : String = "",
 ) -> Bool {
   if !supported {
     say("film: this host has no film")
@@ -116,6 +118,12 @@ pub fn film(
   // (the last frame as drawn, before the film is closed: what was drawn last is still the renderer's)
   let shot = last == "" || drawn.val > 0 && snapshot(last)
   let closed = close(put.val)
+  // (what the app put on the clipboard as a picture last, as the host drew it: a shot's, Ctx::take_shot)
+  let copy = copied == "" ||
+    (match t.clipboard_png() {
+      Some(png) => write_text(copied, @codec.base64(png))
+      None => false
+    })
   let text = logs
     .filter(fn(l) { l.has_prefix("TEXTREC ") })
     .map(fn(l) { l.unsafe_substring(start=8, end=l.length()) })
@@ -133,9 +141,10 @@ pub fn film(
     (if closed { "" } else { ", not finished" }) +
     (if kept { "" } else { ", its text not kept" }) +
     (if shot { "" } else { ", its last frame not written" }) +
+    (if copy { "" } else { ", nothing copied to write" }) +
     (if passed { "" } else { ", the script did not pass" }),
   )
-  closed && lost.val == 0 && passed && shot
+  closed && lost.val == 0 && passed && shot && copy
 }
 
 ///|
@@ -208,6 +217,7 @@ pub fn run(view : (@ui.Ctx) -> Unit) -> Unit {
     window_corner~,
     max~,
     last=arg("MBUI_FILM_LAST"),
+    copied=arg("MBUI_FILM_COPIED"),
   )
   exit(if ok { 0 } else { 1 })
 }

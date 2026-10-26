@@ -858,12 +858,13 @@ int32_t mb_render_drawn_pixels(int32_t x, int32_t y, int32_t w, int32_t h, moonb
   return 1;
 }
 
-// Instances never presented (a shot's, mbui/src/ui/shot.mbt) drawn as a frame the window's size is, on the ground r,
-// g, b, and their pixels in the rectangle x, y, w × h into `out` as mb_render_drawn_pixels gives the frame's (the last
-// frame kept as it was): 1 when read, 0 where the rectangle is not all in it.
-int32_t mb_render_pixels_of(const double *inst, int32_t count, double r, double g, double b, int32_t x, int32_t y,
-                            int32_t w, int32_t h, moonbit_bytes_t out) {
-  if (!dev || count < 0 || w <= 0 || h <= 0 || x < 0 || y < 0) return 0;
+// Instances never presented (a shot's, mbui/src/ui/shot.mbt) drawn as a frame is, but `scale` pixels a point into a
+// picture of their own w × h (their 0, 0 its top left), on the ground r, g, b, and its pixels into `out` as
+// mb_render_drawn_pixels gives the frame's (the last frame kept as it was, the size frames are drawn at put back):
+// 1 when read.
+int32_t mb_render_pixels_of(const double *inst, int32_t count, double r, double g, double b, double scale, int32_t w,
+                            int32_t h, moonbit_bytes_t out) {
+  if (!dev || count < 0 || !(scale > 0) || w <= 0 || h <= 0) return 0;
   if ((size_t)Moonbit_array_length(out) < (size_t)w * h * 4) return 0;
   int ok = 0;
   @autoreleasepool {
@@ -871,12 +872,20 @@ int32_t mb_render_pixels_of(const double *inst, int32_t count, double r, double 
     float *f = malloc((n > 0 ? n : MB_INST) * sizeof(float));
     for (size_t i = 0; i < n; i++) f[i] = (float)inst[i];
     double bg[3] = {r, g, b};
+    // (drawn as a frame of that size is: read_of draws the size set, put back after)
+    double kw = vw, kh = vh, ks = vscale;
+    vscale = scale;
+    vw = w / scale;
+    vh = h / scale;
     int fw, fh;
     uint8_t *px = read_of(f, count, bg, &fw, &fh);
+    vw = kw;
+    vh = kh;
+    vscale = ks;
     free(f);
-    if (x + w <= fw && y + h <= fh) {
+    if (fw == w && fh == h) {
       for (int k = 0; k < h; k++) {
-        const uint8_t *s = px + ((size_t)(y + k) * fw + x) * 4;
+        const uint8_t *s = px + (size_t)k * fw * 4;
         uint8_t *d = out + (size_t)k * w * 4;
         for (int j = 0; j < w; j++, s += 4, d += 4) {
           d[0] = s[2];

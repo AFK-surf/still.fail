@@ -189,8 +189,8 @@ impl @hostapi.Host for FakeHost with drawn_pixels(_, a0, a1, a2, a3, a4) {
 }
 
 ///|
-impl @hostapi.Host for FakeHost with drawn_pixels_of(_, inst, count, _, _, _, x, y, w, h, out) {
-  h_drawn_pixels_of(inst, count, x, y, w, h, out)
+impl @hostapi.Host for FakeHost with drawn_pixels_of(_, inst, count, _, _, _, scale, w, h, out) {
+  h_drawn_pixels_of(inst, count, scale, w, h, out)
 }
 
 ///|

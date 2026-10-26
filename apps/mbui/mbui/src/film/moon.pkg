@@ -1,6 +1,7 @@
 import {
   "mbui/hostapi",
   "mbui/ui",
+  "mbui/codec",
   "moonbitlang/core/json",
 }
 

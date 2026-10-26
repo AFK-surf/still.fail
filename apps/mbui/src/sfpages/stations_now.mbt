@@ -3,8 +3,8 @@
 // (rail_cards.mbt) and the Station page's first card. The card to share: a
 // picture of the agents at work on the person's stations, copied whole to paste where others see it (a chat, a post):
 // a poster (the `fleet` view): the subscriptions' weekly quota used as rings, today and the last 7 days, the chats at
-// work now, still.fail's line (no QR code: 2026-10-26 用户「不用放 still fail 的二维码」); 复制图片 under it puts what is
-// drawn of it on the clipboard.
+// work now, still.fail's line (no QR code: 2026-10-26 用户「不用放 still fail 的二维码」); 复制图片 under it puts it on the
+// clipboard, drawn apart as sharp on any screen (Ctx::take_shot at share_scale).
 
 // ── the card to share ────────────────────────────────────────────────────
 
@@ -15,7 +15,11 @@
 pub fn share_card_open(src : Source, w : Workspace) -> Unit {
   @sf.panel(
     @sf.t("web-main.stations.shareCard"),
-    fn(c, _) { share_picture(c, src, w) },
+    fn(c, _) {
+      share_picture(c, src, w)
+      // what is handed out: the same poster drawn apart, all of it, its ground to its edges (Ctx::shot)
+      c.shot(share_shot, @sf.share_w_most, fn() { share_poster(c, src, w, 0, flat=true) |> ignore })
+    },
     from=Unanchored,
     // (as tall as the picture while the window has the room; past it, the picture drawn smaller: @sf.whole_fitted)
     tall=@sf.sheet_most,
@@ -24,22 +28,25 @@ pub fn share_card_open(src : Source, w : Workspace) -> Unit {
     foot=fn(c, _) {
       let (label, icon) = picture_out_way()
       if @sf.button(c, label, key="share-card/copy", tone=Primary, icon~) {
-        let picture = c.id(share_picture_key)
-        // (once the frame's builds are over: the picture as the last frame drew it, read back by the host's renderer)
-        c.tell("share-card/copy", fn() {
-          match c.drawn_pixels(picture, inset=pic_copy_in) {
-            @ui.PixelsRead(pw, ph, rgba) => picture_out(c, Some(@pixels.png(pw, ph, unpremultiplied(rgba)))) |> ignore
-            _ => picture_out(c, None) |> ignore
-          }
-        })
+        c.take_shot(share_shot, fn(png) { picture_out(c, png) |> ignore }, scale=share_scale)
       }
     },
   )
 }
 
 ///|
-/// The picture's key: what is copied is what was drawn of it.
+/// The picture's key, as the panel fits it in.
 let share_picture_key : String = "share-card/picture"
+
+///|
+/// The picture handed out (Ctx::shot).
+let share_shot : String = "share-card/shot"
+
+///|
+/// How many pixels a point the picture handed out has, whatever the screen it is shared from (1080 across): as sharp
+/// from a screen of one pixel a point as from a phone's three (2026-10-26 用户「现在做」, of the picture as sharp
+/// everywhere).
+let share_scale : Double = 3.0
 
 ///|
 /// The picture shared, a poster of what the agents did (the `fleet` view; 2026-10-26 用户：「改成 xx 个 xx 订阅账号的 xx% 周额度，
@@ -55,66 +62,72 @@ let share_picture_key : String = "share-card/picture"
 /// many, and under it how many a chat on average), the devices' icon before them; still.fail's line. With no quota
 /// read: the chats at work large in its place.
 fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  @sf.whole_fitted(c, share_picture_key, c.id(share_picture_key), @sf.share_w_most, fn(whole) {
+    share_poster(c, src, w, whole)
+  })
+}
+
+///|
+/// The poster (share_picture) as box `id`: round as a card, or `flat` (handed out: its ground to its edges).
+fn share_poster(c : @ui.Ctx, src : Source, w : Workspace, id : Int, flat? : Bool = false) -> Int {
   let fleet = (src.topic)("fleet", { "scope": Json::string(w.id) }).value
   let quota = items(fleet, "quota")
-  @sf.whole_fitted(c, share_picture_key, c.id(share_picture_key), @sf.share_w_most, fn(whole) {
-    c.box(style=pic_box, id=whole, fn() {
-      c.box(style=pic_head, fn() {
-        c.box(style=pic_grow, fn() {
-          c.rich([@ui.span("still"), @ui.span(".", color=@sf.share_orange), @ui.span("fail")], style=pic_brand) |> ignore
-        })
-        |> ignore
-        c.text(text(fleet, "at"), style=pic_at) |> ignore
+  c.box(style=if flat { pic_box_flat } else { pic_box }, id~, fn() {
+    c.box(style=pic_head, fn() {
+      c.box(style=pic_grow, fn() {
+        c.rich([@ui.span("still"), @ui.span(".", color=@sf.share_orange), @ui.span("fail")], style=pic_brand) |> ignore
       })
       |> ignore
-      if quota.length() > 0 {
-        // the first kind's said round its share, a sentence read down (用 6 个 Claude 订阅账号消耗了 | 489% | 的周额度:
-        // 2026-10-26 用户「你要么这么说"是用 x 个账号消耗了 xxx% 的周额度"」), what leads it over the rings and the share
-        let first = Some(quota[0])
-        pic_lead(c, first)
-        c.box(style=pic_hero, fn() {
-          pic_rings(c, quota)
-          c.box(style=pic_hero_words, fn() {
-            c.text(text(first, "usedText"), style=pic_number) |> ignore
-            c.text(text(first, "of"), style=pic_unit) |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
-        pic_other_kinds(c, quota)
-      } else {
-        c.box(style=pic_hero, fn() {
-          c.text(count(fleet, "chats").to_string(), style=pic_number) |> ignore
-          c.box(style=pic_hero_words, fn() { c.text(text(fleet, "chatsText"), style=pic_unit) |> ignore }) |> ignore
-        })
-        |> ignore
-      }
-      match (field(fleet, "today"), field(fleet, "week")) {
-        (Some(Object(_)) as today, Some(Object(_)) as week) => {
-          c.box(style=pic_spans, fn() {
-            pic_span(c, today)
-            pic_span(c, week)
-          })
-          |> ignore
-          pic_bars(c, week)
-        }
-        _ => ()
-      }
-      // the chats at work now (with the quota large: said here), the tasks chats ran on other stations over the week
-      let tasks = text(fleet, "tasksText")
-      if quota.length() > 0 || tasks != "" {
-        c.box(style=pic_lines, fn() {
-          if quota.length() > 0 {
-            pic_line(c, fn() { c.box(style=pic_live_dot, fn() {  }) |> ignore }, text(fleet, "chatsText"), text(fleet, "where"), false)
-          }
-          if tasks != "" {
-            pic_line(c, fn() { @sf.icon(c, "devices", size=pic_mark_side, color=@sf.share_ink) |> ignore }, tasks, text(fleet, "tasksPer"), true)
-          }
-        })
-        |> ignore
-      }
-      c.text(@sf.t("web-main.stations.shareTagline"), style=pic_tagline) |> ignore
+      c.text(text(fleet, "at"), style=pic_at) |> ignore
     })
+    |> ignore
+    if quota.length() > 0 {
+      // the first kind's said round its share, a sentence read down (用 6 个 Claude 订阅账号消耗了 | 489% | 的周额度:
+      // 2026-10-26 用户「你要么这么说"是用 x 个账号消耗了 xxx% 的周额度"」), what leads it over the rings and the share
+      let first = Some(quota[0])
+      pic_lead(c, first)
+      c.box(style=pic_hero, fn() {
+        pic_rings(c, quota)
+        c.box(style=pic_hero_words, fn() {
+          c.text(text(first, "usedText"), style=pic_number) |> ignore
+          c.text(text(first, "of"), style=pic_unit) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+      pic_other_kinds(c, quota)
+    } else {
+      c.box(style=pic_hero, fn() {
+        c.text(count(fleet, "chats").to_string(), style=pic_number) |> ignore
+        c.box(style=pic_hero_words, fn() { c.text(text(fleet, "chatsText"), style=pic_unit) |> ignore }) |> ignore
+      })
+      |> ignore
+    }
+    match (field(fleet, "today"), field(fleet, "week")) {
+      (Some(Object(_)) as today, Some(Object(_)) as week) => {
+        c.box(style=pic_spans, fn() {
+          pic_span(c, today)
+          pic_span(c, week)
+        })
+        |> ignore
+        pic_bars(c, week)
+      }
+      _ => ()
+    }
+    // the chats at work now (with the quota large: said here), the tasks chats ran on other stations over the week
+    let tasks = text(fleet, "tasksText")
+    if quota.length() > 0 || tasks != "" {
+      c.box(style=pic_lines, fn() {
+        if quota.length() > 0 {
+          pic_line(c, fn() { c.box(style=pic_live_dot, fn() {  }) |> ignore }, text(fleet, "chatsText"), text(fleet, "where"), false)
+        }
+        if tasks != "" {
+          pic_line(c, fn() { @sf.icon(c, "devices", size=pic_mark_side, color=@sf.share_ink) |> ignore }, tasks, text(fleet, "tasksPer"), true)
+        }
+      })
+      |> ignore
+    }
+    c.text(@sf.t("web-main.stations.shareTagline"), style=pic_tagline) |> ignore
   })
 }
 
@@ -253,9 +266,9 @@ fn pic_bars(c : @ui.Ctx, week : Json?) -> Unit {
 let pic_box : @ui.Style = @ui.css("w=Full p=S5 gap=S3 radius=Xl3 clip").then(@ui.style(bg=Data(@sf.share_ground)))
 
 ///|
-/// What is copied of the picture: its rectangle this far in from each side, its round corners (24) left out of it, so
-/// the picture copied is its ground to its edges.
-let pic_copy_in : Double = 8.0
+/// The picture handed out: its ground to its edges.
+// kept across runs: a value (no field of it changes)
+let pic_box_flat : @ui.Style = pic_box.then(@ui.css("radius=Sharp"))
 
 ///|
 // kept across runs: a value (no field of it changes)

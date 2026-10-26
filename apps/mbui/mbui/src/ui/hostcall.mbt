@@ -1162,14 +1162,14 @@ fn h_image_pixels(id : Int, out : FixedArray[Byte]) -> Bool {
 }
 
 ///|
-/// Instances never presented (a shot's: shot.mbt) drawn as a frame is on the frame's ground, and their pixels in a
-/// rectangle of it (as h_drawn_pixels) into `out`: a live Tester's host's, its pictures that host's own as a film draws a
-/// frame (film.mbt draw_frame: one it has not, nothing), the fake host's every pixel a mid grey, opaque.
+/// Instances never presented (a shot's: shot.mbt) drawn as a frame is on the frame's ground, `scale` pixels a point into
+/// a picture `w` by `h` of their own, and its pixels (as h_drawn_pixels) into `out`: a live Tester's host's, its
+/// pictures that host's own as a film draws a frame (film.mbt draw_frame: one it has not, nothing), the fake host's every
+/// pixel a mid grey, opaque.
 fn h_drawn_pixels_of(
   inst : FixedArray[Double],
   count : Int,
-  x : Int,
-  y : Int,
+  scale : Double,
   w : Int,
   h : Int,
   out : FixedArray[Byte],
@@ -1195,7 +1195,7 @@ fn h_drawn_pixels_of(
           }
         }
       }
-      l.host.drawn_pixels_of(mine, count, r, gg, b, x, y, w, h, out)
+      l.host.drawn_pixels_of(mine, count, r, gg, b, scale, w, h, out)
     }
     Some(_) => {
       for i in 0..<(w * h * 4) {
@@ -1203,7 +1203,7 @@ fn h_drawn_pixels_of(
       }
       true
     }
-    None => @hostapi.drawn_pixels_of(inst, count, r, gg, b, x, y, w, h, out)
+    None => @hostapi.drawn_pixels_of(inst, count, r, gg, b, scale, w, h, out)
   }
 }
 
