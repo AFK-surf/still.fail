@@ -55,8 +55,8 @@ fn folder_head(c : @ui.Ctx, src : Source, f : FolderOf, front_it : () -> Unit, t
   let (value, error) = drive_folder(src, at.station, root, at.path)
   let stations = dv_stations(src, f.ws).0.unwrap_or([])
   let (name, _) = pane_parts(at, stations)
-  // (in as far as its rows' words, as the page is arranged)
-  @sf.rows_head(c, fn() {
+  // (in as far as its rows' words, as the page is arranged; the first under the pane's tools)
+  @sf.rows_head(c, first=true, fn() {
     c.box(style=head_trail, fn() {
       station_switch(c, src, f, front_it)
       // the way down from the root to it (the root alone at the root), each but the last a way back to it
@@ -249,11 +249,13 @@ pub fn roots_page(
           None
         })
       Some(s) => {
-        @sf.page_note(c, @sf.t("web-pages.drive.rootsCount", args=[("n", s.roots.length().to_string())]))
-        @sf.group(c, fn() {
-          for r in s.roots {
-            root_row(c, src, s, r, manage, go)
-          }
+        // (how many, the title over their card, as far over it as any card's)
+        @sf.section(c, @sf.t("web-pages.drive.rootsCount", args=[("n", s.roots.length().to_string())]), fn() {
+          @sf.group(c, fn() {
+            for r in s.roots {
+              root_row(c, src, s, r, manage, go)
+            }
+          })
         })
       }
     }

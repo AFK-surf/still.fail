@@ -148,8 +148,9 @@ fn under_pane_bar(c : @ui.Ctx, bar : PageBar, barred : () -> Unit, alone : () ->
 }
 
 ///|
-/// Under a bar of the frame's that holds its title, back and what it does (`pane_bar`): a head of its own (as
-/// the arrangement has a head's room, 8 or 16 under the bar), what it is for, what it holds, laid out as `l` lays them.
+/// Under a bar of the frame's that holds its title, back and what it does (`pane_bar`): what is left of its head there
+/// (a head of its own, as the arrangement has a head's room, 8 or 16 under the bar; what it is for, the line under the
+/// title the bar holds, right under the bar), then what it holds as under a page's head, laid out as `l` lays them.
 fn barred_page(
   c : @ui.Ctx,
   key : String,
@@ -180,9 +181,9 @@ fn barred_page(
       narrow_list(c, key, blocks, foot)
     }
     Wide => {
+      // (what it holds as under a head: its first 16 under it, the head's own 12 over that)
       for i, b in content {
-        let first = i == 0 && blocks.length() == 0
-        blocks.push(fn() { c.box(style=if first { desk_first } else { desk_block }, fn() { b() }) |> ignore })
+        blocks.push(fn() { c.box(style=if i == 0 { desk_first } else { desk_block }, fn() { b() }) |> ignore })
       }
       desk_lanes(c, key, blocks, foot~)
     }
@@ -551,19 +552,41 @@ pub fn over_rows(c : @ui.Ctx, body : () -> Unit) -> Unit {
 
 ///|
 /// What stands over a group's rows and tells of them (a list's head: where it is, what it holds), in as far as their
-/// words: narrow, those on its card (20; 2 over, 8 under); wide, a wide list's rows' (12; 12 over, 8 under); 6 between
-/// its lines.
-pub fn rows_head(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=if look() is Narrow { rows_head_narrow } else { rows_head_wide }, body) |> ignore
+/// words: narrow, those on its card (20); wide, a wide list's rows' (12); 6 between its lines; the rows as far under
+/// it as under any small title over a card (title_card_gap). `first`: the first thing of a pane that keeps no room over
+/// what it shows (a folder's page under its tools): its own room over it (narrow 2, wide 12); in a page, what is over it
+/// is the page's to space.
+pub fn rows_head(c : @ui.Ctx, body : () -> Unit, first? : Bool = false) -> Unit {
+  let style = match look() {
+    Narrow => if first { rows_head_narrow_first } else { rows_head_narrow }
+    Wide => if first { rows_head_wide_first } else { rows_head_wide }
+  }
+  c.box(style~, body) |> ignore
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rows_head_narrow : @ui.Style = @ui.css("w=Full px=S2 pt=S0_5 pb=S2 gap=S1_5")
+let rows_head_narrow : @ui.Style = @ui.css("w=Full px=S2 gap=S1_5").then(@ui.style(pb=room(title_card_narrow)))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rows_head_wide : @ui.Style = @ui.css("w=Full px=S3 pt=S3 pb=S2 gap=S1_5")
+let rows_head_narrow_first : @ui.Style = rows_head_narrow.then(@ui.css("pt=S0_5"))
+
+///|
+// kept across runs: a value (no field of it changes)
+let rows_head_wide : @ui.Style = @ui.css("w=Full px=S3 gap=S1_5").then(@ui.style(pb=room(title_card_wide)))
+
+///|
+// kept across runs: a value (no field of it changes)
+let rows_head_wide_first : @ui.Style = rows_head_wide.then(@ui.css("pt=S3"))
+
+///|
+/// How far a card stands under the small title over it, whichever part says it (a section's title, a heading, a
+/// list's head): wide, the web's sectionHead's 10 (parts.css.ts); narrow, SectionHeader's 6 (Parts.kt).
+pub let title_card_wide : Double = 10.0
+
+///|
+pub let title_card_narrow : Double = 6.0
 
 ///|
 /// A row of rows together drawn one at a time (a long list's, each laid out as it comes into view), as `group` holds
@@ -1760,7 +1783,9 @@ let pg_heading_note : @ui.TextStyle = secondary.then(one_line)
 ///|
 /// SectionHeader's line: 24 from the page's side, 20 from its end (in its room, 12 and 8), 14 over, 6 under.
 // kept across runs: a value (no field of it changes)
-let pg_heading_line : @ui.Style = @ui.css("row w=Full pl=S3 pr=S2 pt=S3_5 pb=S1_5 gap=S2 align=AEnd")
+let pg_heading_line : @ui.Style = @ui.css("row w=Full pl=S3 pr=S2 pt=S3_5 gap=S2 align=AEnd").then(
+  @ui.style(pb=room(title_card_narrow)),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1884,7 +1909,7 @@ pub let pg_link_note : @ui.TextStyle = secondary.then(full_words)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_heading_line : @ui.Style = @ui.css("w=Full pt=S5")
+let wide_heading_line : @ui.Style = @ui.css("w=Full pt=S5").then(@ui.style(pb=room(title_card_wide)))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1992,9 +2017,10 @@ let desk_block : @ui.Style = @ui.css("w=Full px=S4")
 let desk_first : @ui.Style = desk_block.then(@ui.css("pt=S4"))
 
 ///|
-/// What the page is for under a bar of the frame's (barred_page), wide: in the column, as its blocks, 16 under the bar.
+/// What the page is for under a bar of the frame's (barred_page), wide: the line under the title the bar holds, right
+/// under the bar, in the column as its blocks; 12 under it as under a head (pageHead's), what it holds 16 under that.
 // kept across runs: a value (no field of it changes)
-let desk_barred_lead : @ui.Style = desk_first
+let desk_barred_lead : @ui.Style = @ui.css("w=Full px=S4 pb=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)

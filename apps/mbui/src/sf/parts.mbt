@@ -1493,7 +1493,9 @@ let section_box : @ui.Style = @ui.css("w=Full mb=S7")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let section_head : @ui.Style = @ui.css("row w=Full justify=JBetween align=ACenter gap=S3 mb=S2_5")
+let section_head : @ui.Style = @ui.css("row w=Full justify=JBetween align=ACenter gap=S3").then(
+  @ui.style(mb=room(title_card_wide)),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)

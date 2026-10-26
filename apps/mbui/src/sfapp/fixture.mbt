@@ -643,6 +643,8 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
   // a station's network as the core gives it: how this device reaches it (`way`) in the list, its figures in the
   // `stationNet` view of its own (the made-up stations say both as `net`)
   let value = match name {
+    // (files-reading: the stations with a drive not read yet, the files' sidebar waiting on them)
+    "stations" if params.get("drive") is Some(True) && f.mode == "files-reading" => None
     "stations" if params.get("drive") is Some(True) =>
       fix_browse_with_drive(f, fixture_stations_way(value), text(Some(Json::object(params)), "here"))
     "stations" => fixture_stations_way(value)
