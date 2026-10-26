@@ -1260,6 +1260,11 @@ export interface Profile {
 	 * only), as its home's managers set it (`profile.put` `input.workspaces`); to a member of a joined one, that one.
 	 */
 	workspaces?: string[];
+	/**
+	 * The chats of the viewer's workspace may run on it (absent: a station of before it, which says so in `workspaces`
+	 * of joined ones only): a copy of another station's serves only the workspaces that station shares it in.
+	 */
+	serves?: boolean;
 	/** What it is, in a word: the machine's own login (终端里的登录), its provider, else its kind of account. */
 	kindText?: string;
 	/** Who signing it in goes to: OpenCode, Kimi, Claude, Grok, Cursor, Devin, ChatGPT. */

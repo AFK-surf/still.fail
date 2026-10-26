@@ -144,10 +144,17 @@ export const runs = (profile: Profile, model: string): boolean => spelling(profi
 /// shapes model.rs `same`: two spellings are one model.
 export const sameModel = (a: string, b: string): boolean => a === b || modelKey(a) === modelKey(b);
 
-/// Whether sessions of workspace `ws` may run on a profile (docs/multi-workspace.md): those of the home workspace
-/// (`home`; null outside any, when there is no telling) on every profile, those of a joined one on every profile not
-/// withheld from it.
-export const allowedIn = (profile: Profile, ws: string | null, home: string | null): boolean => ws === null || home === null || ws === home || !(profile.withheld ?? []).includes(ws);
+/// Whether sessions of workspace `ws` (null: the home one's) may run on a profile (docs/multi-workspace.md): those of
+/// the home workspace (`home`; null outside any, when there is no telling) on every profile, those of a joined one on
+/// every profile not withheld from it. A copy of another station's profile (share/index.ts) only in the workspaces that
+/// station shares it in, as it says (`share.workspaces`): its account is for those workspaces' people alone.
+export const allowedIn = (profile: Profile, ws: string | null, home: string | null): boolean => {
+  const share = profile.share as { borrowed?: unknown; workspaces?: unknown } | undefined;
+  const only = share?.borrowed === true && Array.isArray(share.workspaces) ? share.workspaces : null;
+  const at = ws ?? home;
+  if (only !== null && at !== null && !only.includes(at)) return false;
+  return ws === null || home === null || ws === home || !(profile.withheld ?? []).includes(ws);
+};
 
 /// The profiles a connect's sessions can run on: every profile of its runtime allowed in its workspace.
 export const profilesFor = (config: HubConfig, connect: Connect, home: string | null = null): Profile[] =>

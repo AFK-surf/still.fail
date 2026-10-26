@@ -9,6 +9,7 @@ import { checkConfig } from "../src/accounts/check.ts";
 import { ConfigFile } from "../src/ops/config.ts";
 import { Sharing } from "../src/share/index.ts";
 import { Cloud } from "../src/cloud/state.ts";
+import { allowedIn } from "../src/sessions/config.ts";
 
 const A = "a".repeat(64);
 const B = "b".repeat(64);
@@ -166,17 +167,23 @@ function joinedWorkspaces() {
   return { cloud, h, o, r1, r2, every: [h, o, r1, r2] };
 }
 
-test("a profile is shared with the stations of every workspace it serves, whichever is theirs or its home; withheld from one, taken back there", async () => {
+test("a profile is shared with the stations of every workspace it serves, whichever is theirs or its home, its copies serving those only; withheld from one, taken back there", async () => {
   const { h, o, r1, r2, every } = joinedWorkspaces();
   await h.sharing.shareProfile("deepseek", true, null);
   await settle(...every);
   const id = h.config.raw().profiles[0].share.id;
   for (const s of [o, r1, r2]) assert.equal(s.config.raw().profiles.find((p: any) => p.share?.id === id)?.access.key, "sk-secret");
   assert.deepEqual(h.sharing.profileView(h.config.raw().profiles[0])!.users!.sort(), [O, R1, R2].sort());
-  // Kept from W2: taken from the stations only there, kept where it still serves.
+  // Each copy serves the workspaces H shares it in, not the others its station is in: on R2, W2's chats, not its home W3's.
+  const copy = (s: Station) => s.config.raw().profiles.find((p: any) => p.share?.id === id);
+  assert.deepEqual(copy(r2).share.workspaces, ["W1", "W2"]);
+  assert.deepEqual([allowedIn(copy(r2), "W2", "W3"), allowedIn(copy(r2), "W3", "W3"), allowedIn(copy(r2), null, "W3")], [true, false, false]);
+  assert.equal(allowedIn(copy(o), null, "W1"), true);
+  // Kept from W2: taken from the stations only there, kept where it still serves, there for W1 alone.
   h.config.update((raw) => (raw.profiles[0].withheld = ["W2"]));
   await settle(...every);
   assert.equal(o.config.raw().profiles.length, 1);
+  assert.deepEqual(copy(o).share.workspaces, ["W1"]);
   assert.equal(r1.config.raw().profiles.length, 0);
   assert.equal(r2.config.raw().profiles.length, 0);
   assert.deepEqual(h.sharing.profileView(h.config.raw().profiles[0])!.users, [O]);

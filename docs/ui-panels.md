@@ -251,7 +251,7 @@
 
 - mbui：按内容定宽的一块永远不比内容窄（`docs/style.md` 的 Short of room）；谁先收用 `Ctx::box` 的 `drop`，放收起来的东西的「⋯」用 `more`，工具栏用 `@sf.tools_row`。
 - 检查：`Tester::squeeze_faults` 找出叠在一起的、被裁掉一截的、截得一个字不剩的、折成一行一两个字母的、占位字截得一个字不剩的、被同一行别的东西挤得折行或截断的；`apps/mbui/src/sfapp/squeeze_wbtest.mbt` 在每种布局最窄的窗口上（电脑 600 宽的中屏、手指的 600 中屏和 840 大屏、360 的手机），中英文各量一遍每个页面，现在全都是 0，只许保持（`squeeze_known_wbtest.mbt`）；`apps/mbui/scripts/squeeze.sh` 用 Mac 的字给这些页面各出一张图。
-- 外来的字拉到最长再量一遍：假数据写多长页面就只量多长，可人、agent、station 写的字（名字、标题、通知、命令、错误）多长都有可能。core 的 schema 给这些字段标 `said`（`client/core-ts/src/shapes/schema.ts`，标的是会原样显示的字，不标 id 这类别处拿来找东西的、也不标 core 读成 Markdown 的正文），`scripts/shapes.ts` 生成每个 topic 里它们的位置（`apps/mbui/src/sfapp/said_paths.mbt`）；`squeeze_said_wbtest.mbt` 把这些字都接上一大段带换行、不好断开的字，同样的窗口把每个页面再量一遍，也只许是 0。新加的字段只要是外来的字就标 `said`。
+- 外来的字拉到最长再量一遍：假数据写多长页面就只量多长，可人、agent、station 写的字（名字、标题、通知、命令、错误）多长都有可能。core 的 schema 给这些字段标 `said`（`client/core-ts/src/shapes/schema.ts`，标的是会原样显示的字，不标 id 这类别处拿来找东西的、也不标 core 读成 Markdown 的正文），`scripts/shapes.ts` 生成每个 topic 里它们的位置（`apps/mbui/src/sffixture/said_paths.mbt`）；`squeeze_said_wbtest.mbt` 把这些字都接上一大段带换行、不好断开的字，同样的窗口把每个页面再量一遍，也只许是 0。新加的字段只要是外来的字就标 `said`。
 
 ## 浮在列表上的按钮
 

@@ -43,7 +43,7 @@
 - **host 主动告诉**（`share.changed`）：分享了、内容变了、不再给这台了、搬到哪台了。没联系上的记着，过一阵再告诉（1 分钟起，越来越久，最多 30 分钟）。
 - **使用方每次启动问一次**（`share.version`），补上自己离线期间的变化；对方说搬走了就转去问新的 host。
 - **一台 station 被移出 workspace**：它分享的副本在各台被删掉，它作为使用方被各 host 忘掉。
-- **一台 station 在几个 workspace 里**（docs/multi-workspace.md）：profile 发给它服务的每个 workspace 里的 station，skill 只发给主 workspace 的；收方认自己任一 workspace 里的分享方，收到的 skill 链进它来的那个 workspace 的 skills。两边不再同在任何一个相关的 workspace 里，就当被移出。
+- **一台 station 在几个 workspace 里**（docs/multi-workspace.md）：profile 发给它服务的每个 workspace 里的 station，skill 只发给主 workspace 的；收方认自己任一 workspace 里的分享方；收到的 profile 只给分享方分享它的那些 workspace 用（`share.workspaces`），收到的 skill 链进它来的那个 workspace 的 skills。两边不再同在任何一个相关的 workspace 里，就当被移出。
 
 ## station 之间：`share.*` 方法
 
