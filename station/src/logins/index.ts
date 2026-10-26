@@ -148,11 +148,14 @@ export class Logins {
 
   // ── the history ──
 
-  /// The logins done through still.fail on this station, newest first: how each ended, no page, code or output.
+  /// The logins done through still.fail on this station, newest first: how each ended, no page, code or output. Each
+  /// named by its command, as one under way is (one kept before names were the program's was named env).
   history(): Login[] {
     try {
       const v = JSON.parse(readFileSync(join(this.#data, "logins", "history.json"), "utf8"));
-      return Array.isArray(v) ? v.filter((l) => l && typeof l.id === "string") : [];
+      return Array.isArray(v)
+        ? v.filter((l) => l && typeof l.id === "string").map((l: Login) => (Array.isArray(l.command) ? { ...l, name: programOf(l.command) } : l))
+        : [];
     } catch {
       return [];
     }

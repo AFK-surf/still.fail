@@ -1,7 +1,7 @@
 // A station page's 登录 (ember apps/android shared/screens/LoginCards.kt StationLogins; docs/remote-login.md): only the
 // logins done there through still.fail. One under way is its card, as in its chat (Core's login_card); one ended a row
-// saying how it ended, which chat's agent started it and who ended it. Nothing at all when there are none (or the
-// station is from before them).
+// naming its program (devin, as its card does: its command line is the agent's way), which chat's agent started it and
+// how it ended. Nothing at all when there are none (or the station is from before them).
 
 ///|
 /// The cards under way: 12 from the page's sides, 10 under them, 2 apart.
@@ -50,14 +50,14 @@ fn station_logins(c : @ui.Ctx, core : Core, address : String) -> Array[() -> Uni
               "" => ""
               chat => fill("web-main.logins.startedIn", [("chat", chat)])
             },
-            text(lv, "doneByText"),
+            // who ended it says how it ended (张三 取消), else the status does (已取消); then when
+            if text(lv, "doneByText") != "" { text(lv, "doneByText") } else { text(lv, "statusText") },
             text(lv, "whenText"),
-            if text(lv, "doneByText") != "" { "" } else { text(lv, "statusText") },
           ].filter(fn(w) { w != "" })
           list_row(c, fn() {
             row_lines(
               c,
-              text(lv, "command"),
+              text(lv, "name"),
               join(said, " · "),
               wrap_title=false,
               sub_color?=if text(lv, "state") == "failed" { Some(t.p.red) } else { None },

@@ -256,7 +256,8 @@ export const LOGINS: Record<string, MachineLoginShown> = {
     statusText: "正在确认登录",
   }),
   question: login("question", "gh auth login", { state: "input", step: "terminal", waiting: true, statusText: "等 agent 回答命令的问题" }),
-  done: login("done", "gh auth login", { state: "done", active: false, statusText: "登录完成", endedText: "已在 Studio 上登录 gh", doneByText: "林 完成", chatTitle: "修 CI 的 token", whenText: "10/16 11:20", startedAt: LOGIN_AT - 86_400_000, endedAt: LOGIN_AT - 86_400_000 + 60_000 }),
+  // Its command as an agent ran it (its variables, the program's path): the row names it by its program.
+  done: login("done", "env GH_CONFIG_DIR=/Users/lin/.config/gh /opt/homebrew/bin/gh auth login --web", { name: "gh", title: "在 Studio 上登录 gh", state: "done", active: false, statusText: "登录完成", endedText: "已在 Studio 上登录 gh", doneByText: "林 完成", chatTitle: "修 CI 的 token", whenText: "10/16 11:20", startedAt: LOGIN_AT - 86_400_000, endedAt: LOGIN_AT - 86_400_000 + 60_000 }),
   failed: login("failed", "gcloud auth login", {
     state: "failed", active: false, statusText: "登录失败", endedText: "在 Studio 上登录 gcloud 失败：ERROR: (gcloud.auth.login) There was a problem with web authentication.", byText: "Ada", whenText: "10/15 09:05", endedAt: LOGIN_AT + 120_000,
     error: "Your browser has been opened to visit:\n\n    https://accounts.google.com/o/oauth2/auth?...\n\nERROR: (gcloud.auth.login) There was a problem with web authentication.\nTry running again with --no-browser.",

@@ -334,8 +334,8 @@ function Logins({ station, marked }: { station: string; marked: string | null })
       {past.length > 0 && (
         <ListCard>
           {past.map((l) => {
-            const said = [l.chatTitle ? t("web-main.logins.startedIn", { chat: l.chatTitle }) : null, l.doneByText, l.whenText, l.doneByText ? null : l.statusText].filter(Boolean).join(" · ");
-            return <ListRow key={l.id}><span className={loginsCss.phoneRowText}><span className={listsCss.mRowTitle}>{l.command}</span><span className={loginsCss.phoneState}>{said}</span></span></ListRow>;
+            const said = [l.chatTitle ? t("web-main.logins.startedIn", { chat: l.chatTitle }) : null, l.doneByText || l.statusText, l.whenText].filter(Boolean).join(" · ");
+            return <ListRow key={l.id}><span className={loginsCss.phoneRowText}><span className={listsCss.mRowTitle}>{l.name}</span><span className={loginsCss.phoneState}>{said}</span></span></ListRow>;
           })}
         </ListCard>
       )}

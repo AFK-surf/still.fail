@@ -313,7 +313,8 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
 
 ///|
 /// A station page's 登录 (LoginsSection): only the logins done there through still.fail; one under way its card (as in
-/// its chat), one ended a row saying how it ended. Nothing when there are none.
+/// its chat), one ended a row naming its program (devin, not its command line) and saying how it ended. Nothing when
+/// there are none.
 fn station_logins(c : @ui.Ctx, core : Core, station : String) -> Unit {
   let t = @sf.theme()
   let view = (core.topic)("machineLogins", { "station": str(station) }).value
@@ -336,8 +337,9 @@ fn station_logins(c : @ui.Ctx, core : Core, station : String) -> Unit {
       @sf.group(c, fn() {
         for l in past {
           let lv = Some(l)
+          // who ended it says how it ended (张三 取消), else the status does (已取消); then when
           let by = text(lv, "doneByText")
-          let rest = join([by, text(lv, "whenText"), if by == "" { text(lv, "statusText") } else { "" }], " · ")
+          let rest = join([if by == "" { text(lv, "statusText") } else { by }, text(lv, "whenText")], " · ")
           let started = if text(lv, "chat") != "" {
             @sf.t("web-main.logins.startedIn", args=[("chat", if text(lv, "chatTitle") == "" { @sf.t("web-main.logins.aChat") } else { text(lv, "chatTitle") })])
           } else {
@@ -346,7 +348,7 @@ fn station_logins(c : @ui.Ctx, core : Core, station : String) -> Unit {
           @sf.link_row(
             c,
             "",
-            text(lv, "command"),
+            text(lv, "name"),
             note=join([started, rest], " · "),
             goes=false,
             lead=fn() { st_row_mark(c, "key") },
