@@ -36,6 +36,7 @@ export class StationParts {
   readonly #door: DoorRoute[] = [];
   readonly #ended: ((session: string) => void)[] = [];
   readonly #streams = new Map<string, (ask: MemberAsk) => Promise<void>>();
+  readonly #connected: (() => void)[] = [];
   #doorUrl: string | null = null;
 
   /// A part's routes of the admin API (after the platform's own); made with what the admin API's routes are given
@@ -83,7 +84,17 @@ export class StationParts {
     this.#ended.push(ended);
   }
 
+  /// What a part does when a member's device connects (an app starting, say).
+  memberConnected(connected: () => void): void {
+    this.#connected.push(connected);
+  }
+
   // ── what is asked of them ──
+
+  /// A member's device connected (mesh/serve.ts).
+  connected(): void {
+    for (const connected of this.#connected) connected();
+  }
 
   doorRoutes(): readonly DoorRoute[] {
     return this.#door;
