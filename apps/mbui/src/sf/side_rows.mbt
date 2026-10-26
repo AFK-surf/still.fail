@@ -112,7 +112,7 @@ pub fn nav_words(c : @ui.Ctx, words : String, color? : Int64) -> Unit {
 /// The action over a list (SidebarList.tsx NavAction, in its band: Sidebar.css.ts navNew, 6 over it, 8 at its sides, 2
 /// under, the list's own 4 then): its ＋ (16, the row's mark column, ICON) and words, a row of its own; none, and no
 /// band, where it cannot be done. Pressed, `run` goes on with it as what opened what it puts up.
-pub fn nav_action(c : @ui.Ctx, key : String, label : String, run : ((Anchor) -> Unit)?) -> Unit {
+pub fn nav_action(c : @ui.Ctx, key : String, label : String, run : ((Beside) -> Unit)?) -> Unit {
   let t = theme()
   match run {
     Some(go) =>

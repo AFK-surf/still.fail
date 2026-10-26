@@ -563,7 +563,7 @@ pub fn within_room(c : @ui.Ctx, s : @kit.PopState, body : () -> Unit, inner? : @
 /// ground under the pointer, concentric with the panel. `panel`: a panel's
 /// row (parts.tsx PanelRow): its icon 18 in a column 20 wide (`word` in its
 /// place, a word for an icon: 奏), 10 from its words, `end` an icon at its
-/// end, quiet.
+/// end, quiet. `note`: what it is at now (a word or two) at its end; `under`: what it is, a line under its words.
 pub fn menu_item(
   c : @ui.Ctx,
   label : String,
@@ -573,6 +573,7 @@ pub fn menu_item(
   danger? : Bool = false,
   on? : Bool = false,
   note? : String = "",
+  under? : String = "",
   panel? : Bool = false,
   word? : String = "",
   end? : String = "",
@@ -607,16 +608,29 @@ pub fn menu_item(
       } else if icon != "" {
         draw_icon(c, icon, 16.0, if danger { t.p.red } else { t.p.muted })
       }
-      c.text(
-        label,
-        size=t.t.ui,
-        weight=if on { 500 } else { 400 },
-        color=ink,
-        wrap=false,
-        w=Fill(1.0),
-        line=20.0,
-      )
-      |> ignore
+      let words = fn() {
+        c.text(
+          label,
+          size=t.t.ui,
+          weight=if on { 500 } else { 400 },
+          color=ink,
+          wrap=false,
+          w=Fill(1.0),
+          line=20.0,
+        )
+        |> ignore
+      }
+      if under == "" {
+        words()
+      } else {
+        // (what it is under its words: menu_row's `note`)
+        c.box(fn() {
+          words()
+          c.text(under, style=menu_note) |> ignore
+        })
+        |> ignore
+        c.spacer()
+      }
       if note != "" {
         c.text(note, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
       }
@@ -862,7 +876,8 @@ pub fn panel_ground() -> Int64 {
 /// pick: 34, a finger's 44), 6 by 10 in, its words (13) after a column 14 wide (`lead`: the menu's items have one, so all their words are on one line) of its icon (muted)
 /// or, one of a choice (parts.tsx ChooserItem), its check where it is the one chosen, `gap` from its words; the
 /// pointer's or the keyboard's ground on it; one not to be chosen now (its entry disabled: never lit) in the subtle
-/// ink (menuItem[data-disabled]).
+/// ink (menuItem[data-disabled]). `note`: what it is, a line under its words (a pick's choice's: its icon, its name and
+/// that, as a sheet's row has them).
 pub fn menu_row(
   c : @ui.Ctx,
   s : @kit.MenuItemState,
@@ -872,6 +887,7 @@ pub fn menu_row(
   end : ((@ui.Ctx, @kit.MenuItemState) -> Unit)?,
   danger? : Bool = false,
   mark? : (@ui.Ctx, Double) -> Unit,
+  note? : String = "",
 ) -> Unit {
   let t = theme()
   let (choice, checked) = match s.entry.kind {
@@ -911,8 +927,18 @@ pub fn menu_row(
         Some(m) => c.box(style=menu_check, fn() { m(c, menu_check_w) }) |> ignore
         None => ()
       }
-      // (a danger's in red, its icon with it: menuItem[data-danger])
-      c.text(s.entry.label, style=if off { menu_words_off } else if danger { menu_words_danger } else { menu_words }) |> ignore
+      // (a danger's in red, its icon with it: menuItem[data-danger]; what it is under its words)
+      let words = if off { menu_words_off } else if danger { menu_words_danger } else { menu_words }
+      if note == "" {
+        c.text(s.entry.label, style=words) |> ignore
+      } else {
+        // (one under the other: a box's own way)
+        c.box(fn() {
+          c.text(s.entry.label, style=words) |> ignore
+          c.text(note, style=menu_note) |> ignore
+        })
+        |> ignore
+      }
       // what stands at its end (a ＋): pushed there
       match end {
         Some(f) => {
@@ -925,6 +951,11 @@ pub fn menu_row(
   )
   |> ignore
 }
+
+///|
+/// What an item is, under its words: the meta size, muted.
+// kept across runs: a value (no field of it changes)
+let menu_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)
 
 ///|
 /// Between an item's icon and its words (menuItem), its check's column and its words in a menu of choices alone
@@ -993,6 +1024,7 @@ pub fn dropdown(
   row_end? : (@ui.Ctx, @kit.MenuItemState) -> Unit,
   danger? : Array[String] = [],
   marks? : Map[String, (@ui.Ctx, Double) -> Unit] = {},
+  notes? : Map[String, String] = {},
 ) -> @kit.Menu {
   // (a column before every item's words where one has an icon or is one of a choice, so all their words are on one
   // line; a menu of choices alone, each chosen or not, its check 6 from its words)
@@ -1013,7 +1045,17 @@ pub fn dropdown(
     at?,
     look=fn(c, w, body) { small_panel(c, min_w=w, body) |> ignore },
     item_look=fn(c, s) {
-      menu_row(c, s, icons.get(s.entry.value).unwrap_or(""), lead, gap, row_end, danger=danger.contains(s.entry.value), mark?=marks.get(s.entry.value))
+      menu_row(
+        c,
+        s,
+        icons.get(s.entry.value).unwrap_or(""),
+        lead,
+        gap,
+        row_end,
+        danger=danger.contains(s.entry.value),
+        mark?=marks.get(s.entry.value),
+        note=notes.get(s.entry.value).unwrap_or(""),
+      )
     },
     // (a heading's words on its items' words' line: past the column before them, where there is one)
     heading_look=fn(c, label) {
@@ -2314,7 +2356,7 @@ pub fn select(
   if !disabled && c.clicked(id) {
     pick(
       label,
-      options.map(fn(o) { choice(o.0, o.1, note=hints.get(o.0).unwrap_or(""), icon=icons.get(o.0).unwrap_or("")) }),
+      options.map(fn(o) { choice(o.0, o.1, value=hints.get(o.0).unwrap_or(""), icon=icons.get(o.0).unwrap_or("")) }),
       value,
       choose,
       from=Of(id),

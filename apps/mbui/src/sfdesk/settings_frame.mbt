@@ -119,7 +119,7 @@ fn settings_fixture(src : Source, core : Core) -> Unit {
         _ => ()
       }
     "new-connect" => @sfpages.new_connect_dialog(src, core, @settings.here_of(core, "ws1", "星火工作室"), "ws1/st1")
-    "vault-add" => @sfpages.vault_add_dialog(core, @settings.here_of(core, "ws1", "星火工作室"))
+    "vault-add" => @sfpages.fx_vault_add_up.val = true
     "vault-editor" => @sfpages.vault_editor_dialog(core, "ws1", "v1", None, kind="token")
     "vault-recover" => @sfpages.vault_recover_dialog(core, "ws1")
     _ => ()

@@ -63,11 +63,11 @@ fn station_ids(core : Core, here : Here) -> Array[String]? {
 /// A place's primary action (PlaceAction: the bar's notch, a pushed page's ＋), None where it has none now: Station's
 /// adds a station (its owners and admins, once its stations are read), Profile's a profile (once a station is online).
 /// 连接's is its page's (src/sfpages connects.mbt connects_add).
-pub fn place_action(core : Core, here : Here, place : String) -> ((@sf.Anchor) -> Unit)? {
+pub fn place_action(core : Core, here : Here, place : String) -> ((@sf.Beside) -> Unit)? {
   match place {
     "stations" =>
       match station_ids(core, here) {
-        Some(ids) if manager_of(core, here) == Some(true) => Some(fn(from) { open_add_station(core, here, ids, from~) })
+        Some(ids) if manager_of(core, here) == Some(true) => Some(fn(from) { open_add_station(core, here, ids, from=from.anchor()) })
         _ => None
       }
     // a profile is added on a station online (the only one, without asking)

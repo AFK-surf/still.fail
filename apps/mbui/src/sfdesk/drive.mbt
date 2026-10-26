@@ -80,7 +80,7 @@ fn drive_reset() -> Unit {
 fn drive_row_menu(
   key : String,
   items : Array[@sf.MenuItem?],
-  from : @sf.Anchor,
+  from : @sf.Beside,
   along? : @ui.Along = Start,
   title? : String = "",
 ) -> Unit {

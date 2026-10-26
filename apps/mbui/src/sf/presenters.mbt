@@ -17,18 +17,39 @@ pub(all) enum Anchor {
 } derive(Eq)
 
 ///|
+/// What opened a menu or a pick, which stand beside it on Medium and Large (docs/architecture.md, rule 3: the steps one
+/// after another near each other): the box pressed (its id) or a rectangle of the window (a right click's point). Never
+/// nothing: no page can open one beside nothing, as a dialog in the middle of the window.
+pub(all) enum Beside {
+  Of(Int)
+  At(Double, Double, Double, Double)
+} derive(Eq)
+
+///|
+/// What opened it, as the presenters keep it.
+pub fn Beside::anchor(self : Beside) -> Anchor {
+  match self {
+    Of(id) => Anchor::Of(id)
+    At(x, y, w, h) => Anchor::At(x, y, w, h)
+  }
+}
+
+///|
 /// The point (`x`, `y`) of the window as what opened a presenter (a right click's).
-pub fn at_point(x : Double, y : Double) -> Anchor {
+pub fn at_point(x : Double, y : Double) -> Beside {
   At(x, y, 0.0, 0.0)
 }
 
 ///|
-/// One to pick (`pick`): what it is known by, its words, a line under or beside them (`note`), its icon (by name), or
-/// its mark (`mark`: what marks it elsewhere, drawn as large as the row's mark column says: a station's, a maker's).
+/// One to pick (`pick`): what it is known by, its words, what it is (`note`: a sentence, a line under its words), what
+/// it is at now (`value`: a word or two, a state, a count, at its row's end on its line), its icon (by name), or its
+/// mark (`mark`: what marks it elsewhere, drawn as large as the row's mark column says: a station's, a maker's). A page
+/// says which each is; the presenter lays each out as what it is, on every screen.
 pub(all) struct Choice {
   key : String
   label : String
   note : String
+  value : String
   icon : String
   mark : ((@ui.Ctx, Double) -> Unit)?
 }
@@ -38,10 +59,11 @@ pub fn choice(
   key : String,
   label : String,
   note? : String = "",
+  value? : String = "",
   icon? : String = "",
   mark? : (@ui.Ctx, Double) -> Unit,
 ) -> Choice {
-  { key, label, note, icon, mark }
+  { key, label, note, value, icon, mark }
 }
 
 ///|
@@ -50,7 +72,7 @@ priv enum Shows {
   /// a menu: its items (None a line between), its title ("" none), where a small panel lines up with what opened it
   Menu(Array[MenuItem?], String, @ui.Along)
   /// a pick: its title, the choices, the one chosen now, what choosing one does
-  Pick(String, Array[Choice], String, (String) -> Unit)
+  Pick(String, Array[Choice], String, (String) -> Unit, @ui.Along)
   /// a small panel, or with nothing that opened it a dialog (PanelOf)
   Panel(PanelOf)
   /// a confirm: its title, what it does, its action, whether that cannot be undone, what goes on once it is said
@@ -163,14 +185,14 @@ fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit
 ///|
 /// A menu of `items` (None: a line between; parts.tsx Menu), opened by `from`: chosen, it closes and the item's
 /// `select` goes on. `title` over them ("" none); `along`: how it lines up with what opened it beside it.
-pub fn menu(items : Array[MenuItem?], from~ : Anchor, title? : String = "", along? : @ui.Along = Start) -> Unit {
-  present(Menu(items, title, along), from)
+pub fn menu(items : Array[MenuItem?], from~ : Beside, title? : String = "", along? : @ui.Along = Start) -> Unit {
+  present(Menu(items, title, along), from.anchor())
 }
 
 ///|
 /// A link's menu (`href`), opened by `from`: open it (a web address's), copy it, each going on with `open` or `copy`.
 /// Its words the screen's: touch's the phone's (Links.kt), keyboard and mouse's its context menu's.
-pub fn link_menu(href : String, from~ : Anchor, open : () -> Unit, copy : () -> Unit) -> Unit {
+pub fn link_menu(href : String, from~ : Beside, open : () -> Unit, copy : () -> Unit) -> Unit {
   let touch = native_input() is Finger
   let items : Array[MenuItem?] = []
   if href.has_prefix("https://") || href.has_prefix("http://") {
@@ -185,8 +207,15 @@ pub fn link_menu(href : String, from~ : Anchor, open : () -> Unit, copy : () -> 
 ///|
 /// A pick of one of `choices` (`chosen` the one now), titled `title` ("" none), opened by `from`: chosen, it closes and `choose`
 /// goes on with its key. Longer than pick_search_from, a line to search them by is over them.
-pub fn pick(title : String, choices : Array[Choice], chosen : String, choose : (String) -> Unit, from~ : Anchor) -> Unit {
-  present(Pick(title, choices, chosen, choose), from)
+pub fn pick(
+  title : String,
+  choices : Array[Choice],
+  chosen : String,
+  choose : (String) -> Unit,
+  from~ : Beside,
+  along? : @ui.Along = Start,
+) -> Unit {
+  present(Pick(title, choices, chosen, choose, along), from.anchor())
 }
 
 ///|
@@ -780,7 +809,7 @@ fn how_of(shows : Shows, from : Anchor, sheet : Bool) -> How {
     (_, Panel(x)) if x.stage => AsDialog
     (true, _) => AsSheet
     (false, Panel(x)) if from == Unanchored || x.form => AsDialog
-    (false, Menu(_, _, _) | Pick(_, _, _, _) | Panel(_)) => AsPopover
+    (false, Menu(_, _, _) | Pick(_, _, _, _, _) | Panel(_)) => AsPopover
     (false, Confirm(_, _, _, _, _) | Ask(_, _, _, _, _, _, _, _)) => AsDialog
   }
 }
@@ -806,7 +835,7 @@ fn draw_presented_as(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
   }
   match p.shows {
     Menu(items, title, along) => menu_popover(c, key, p, items, title, along)
-    Pick(title, choices, chosen, choose) => pick_popover(c, key, p, title, choices, chosen, choose)
+    Pick(title, choices, chosen, choose, along) => pick_popover(c, key, p, title, choices, chosen, choose, along)
     Panel(x) if p.from == Unanchored || x.form => panel_centred(c, key, p, x)
     Panel(x) => panel_popover(c, key, p, x)
     Confirm(title, words, action, danger, run) => confirm_centred(c, key, p, title, words, action, danger, run)
@@ -860,7 +889,7 @@ fn pick_found(choices : Array[Choice], query : String) -> Array[Choice] {
     return choices
   }
   choices.filter(fn(x) {
-    let hay = (x.label + "\n" + x.note).to_lower()
+    let hay = (x.label + "\n" + x.note + "\n" + x.value).to_lower()
     words.iter().all(fn(w) { hay.contains(w.to_lower()) })
   })
 }
@@ -935,19 +964,28 @@ fn pick_popover(
   choices : Array[Choice],
   chosen : String,
   choose : (String) -> Unit,
+  along : @ui.Along,
 ) -> (Bool, Bool) {
   let (anchor, at) = anchor_of(c, p.from)
   // short: a menu of choices (controls.css.ts chooserMenu: the one chosen checked before its words, the arrows,
-  // letters and Enter a menu's), a choice's note at its end
+  // letters and Enter a menu's; none chosen, each its icon there), what each is under its words
   if choices.length() < pick_search_from {
     // (its title over the choices, as a menu's is)
     let entries : Array[@kit.Entry] = if title != "" { [@kit.menu_label(title)] } else { [] }
+    let one_chosen = choices.iter().any(fn(x) { x.key == chosen })
     for x in choices {
-      entries.push(@kit.menu_radio(x.key, x.key == chosen, label=x.label))
+      entries.push(
+        if one_chosen {
+          @kit.menu_radio(x.key, x.key == chosen, label=x.label)
+        } else {
+          @kit.menu_item(x.key, label=x.label)
+        },
+      )
     }
     let icons : Map[String, String] = {}
     let marks : Map[String, (@ui.Ctx, Double) -> Unit] = {}
     let notes : Map[String, String] = {}
+    let values : Map[String, String] = {}
     for x in choices {
       if x.icon != "" {
         icons[x.key] = x.icon
@@ -959,14 +997,17 @@ fn pick_popover(
       if x.note != "" {
         notes[x.key] = x.note
       }
+      if x.value != "" {
+        values[x.key] = x.value
+      }
     }
     let offset = match p.from {
       At(_, _, 0.0, 0.0) => 0.0
       _ => 6.0
     }
-    let m = dropdown(c, key, p.open, anchor, entries, icons, chooser_menu_w, offset~, at?, marks~, row_end=fn(c, s) {
-      match notes.get(s.entry.value) {
-        Some(n) => c.text(n, style=pick_note) |> ignore
+    let m = dropdown(c, key, p.open, anchor, entries, icons, chooser_menu_w, along~, offset~, at?, marks~, notes~, row_end=fn(c, s) {
+      match values.get(s.entry.value) {
+        Some(v) => c.text(v, style=pick_value) |> ignore
         None => ()
       }
     })
@@ -981,7 +1022,7 @@ fn pick_popover(
     key,
     p.open,
     anchor,
-    along=Start,
+    along~,
     at?,
     label=title,
     modal=true,
@@ -1005,7 +1046,7 @@ fn pick_popover(
       // (scrolling past pick_list_most, or what the room it has leaves it)
       @kit.in_room(c, beside_given.val, key=key + "/list", most=pick_list_most, fn() {
         for x in found {
-          if menu_item(c, x.label, key=key + "/" + x.key, icon=x.icon, mark?=x.mark, on=x.key == chosen, note=x.note, panel=x.icon != "" || x.mark is Some(_)) {
+          if menu_item(c, x.label, key=key + "/" + x.key, icon=x.icon, mark?=x.mark, on=x.key == chosen, note=x.value, under=x.note, panel=x.icon != "" || x.mark is Some(_)) {
             done_with(c, p, fn() { choose(x.key) })
           }
         }
@@ -1382,9 +1423,9 @@ fn close_from_serial(serial : Int) -> Unit {
 let panel_empty_at : @ui.Style = @ui.css("w=Full px=S2_5 py=S2")
 
 ///|
-/// A choice's note at its row's end in a menu of choices (13, muted).
+/// What a choice is at now at its row's end (a word or two: 当前, 离线; 13, muted).
 // kept across runs: a value (no field of it changes)
-let pick_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
+let pick_value : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1441,7 +1482,7 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
   }
   let over = p.over
   let share = match p.shows {
-    Pick(_, choices, _, _) if choices.length() >= pick_search_from => Some(sheet_long_pick)
+    Pick(_, choices, _, _, _) if choices.length() >= pick_search_from => Some(sheet_long_pick)
     Confirm(_, _, _, _, _) => Some(sheet_confirm)
     Ask(_, _, _, _, _, _, _, _) => Some(sheet_ask)
     Panel(x) if x.tall > 0.0 && !x.form => Some(x.tall)
@@ -1541,7 +1582,7 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
       })
       |> ignore
     }
-    Pick(title, choices, chosen, choose) => {
+    Pick(title, choices, chosen, choose, _) => {
       if title != "" {
         sheet_title(c, title)
       }
@@ -1571,7 +1612,7 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
           c.box(style=sheet_words_at, fn() { c.text(t("common.noMatch"), style=sheet_lead) |> ignore }) |> ignore
         }
         for x in found {
-          if sheet_row(c, key + "/" + x.key, x.label, note=x.note, icon=x.icon, mark?=x.mark, on=x.key == chosen) {
+          if sheet_row(c, key + "/" + x.key, x.label, note=x.note, value=x.value, icon=x.icon, mark?=x.mark, on=x.key == chosen) {
             done_with(c, p, fn() { choose(x.key) })
           }
         }
@@ -1755,6 +1796,7 @@ fn sheet_row(
   key : String,
   label : String,
   note? : String = "",
+  value? : String = "",
   icon? : String = "",
   mark? : (@ui.Ctx, Double) -> Unit,
   on? : Bool = false,
@@ -1786,6 +1828,10 @@ fn sheet_row(
       }
     })
     |> ignore
+    // (what it is at now, a word or two, at its end)
+    if value != "" {
+      c.text(value, style=pick_value) |> ignore
+    }
     if on {
       draw_icon(c, "check", sheet_row_check, th.p.accent)
     }

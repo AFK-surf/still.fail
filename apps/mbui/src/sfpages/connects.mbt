@@ -219,7 +219,7 @@ fn connects_sample(c : @ui.Ctx, core : Core, look : Look, only : String, count? 
 ///|
 /// 连接's primary action where the frame holds it (a phone's bar's notch): a connect added on the station online, the
 /// only one at once, else one picked first; None while none is online.
-pub fn connects_add(src : Source, core : Core, here : Here) -> (() -> Unit)? {
+pub fn connects_add(src : Source, core : Core, here : Here) -> ((@sf.Beside) -> Unit)? {
   let online = match @settings.stations_of(core, here).value {
     Some(Array(a)) => a.filter(fn(s) { flag(Some(s), "online") })
     _ => []
@@ -227,7 +227,7 @@ pub fn connects_add(src : Source, core : Core, here : Here) -> (() -> Unit)? {
   if online.length() == 0 {
     return None
   }
-  Some(fn() {
+  Some(fn(from) {
     if online.length() == 1 {
       new_connect_dialog(src, core, here, text(Some(online[0]), "station"))
       return
@@ -236,7 +236,7 @@ pub fn connects_add(src : Source, core : Core, here : Here) -> (() -> Unit)? {
       let station = text(Some(s), "station")
       Some(@sf.menu_item_of(text(Some(s), "name"), fn() { new_connect_dialog(src, core, here, station) }))
     })
-    @sf.menu(items, from=Unanchored, title=@sf.t("web-pages.connects.whichStation"))
+    @sf.menu(items, from~, title=@sf.t("web-pages.connects.whichStation"))
   })
 }
 

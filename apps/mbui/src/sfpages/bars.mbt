@@ -15,7 +15,7 @@ pub fn bars_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
     sets.push([])
   }
   // a place picked for bar `i` (one past the made ones: the one just made, kept with its first place)
-  let pick_for = fn(i : Int, from : @sf.Anchor) {
+  let pick_for = fn(i : Int, from : @sf.Beside) {
     let (now, _) = (core.bars)()
     let set = now.get(i).unwrap_or([])
     let left = @settings.all_places.filter(fn(p) { !set.contains(p) })
@@ -98,7 +98,7 @@ fn bar_place_name(place : String) -> String {
 /// A bar's places (BarCard), on its group's card: four slots, each its mark over its name with a "−" at its corner
 /// (none on the last place of the only bar), one held and moved sideways put where it is let go (by how many slots it
 /// went), a screen reader's step moving it one along; with room left, a slot that adds one (`add`, from where it is).
-fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool, add : (@sf.Anchor) -> Unit) -> Unit {
+fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool, add : (@sf.Beside) -> Unit) -> Unit {
   let t = @sf.theme()
   // BarSettingsScreen's onMove: the place at `j` put at `to`
   let move = fn(j : Int, to : Int) {

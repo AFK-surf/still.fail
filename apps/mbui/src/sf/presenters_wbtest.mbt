@@ -36,6 +36,16 @@ fn presenting_tester(at : (Int, Double, Double), open : (Anchor) -> Unit, button
 }
 
 ///|
+/// What opened it as a menu's or a pick's (what presenting_view opened it by: its 打开).
+fn beside_of(from : Anchor) -> Beside {
+  match from {
+    Anchor::Of(id) => Of(id)
+    Anchor::At(x, y, w, h) => At(x, y, w, h)
+    Unanchored => abort("a menu or a pick is opened beside what opened it")
+  }
+}
+
+///|
 /// 打开 pressed, and what it opened come in: a sheet risen, else the web's in.
 fn open_it(t : @ui.Tester) -> Unit {
   t.tap_text("打开")
@@ -67,7 +77,7 @@ fn menu_items_of(said : Array[String]) -> Array[MenuItem?] {
 ///|
 test "a menu with a finger at Small: a sheet from the foot; an item tapped closes it and does what it says" {
   let said : Array[String] = []
-  let t = presenting_tester(phone, fn(from) { menu(menu_items_of(said), from~) })
+  let t = presenting_tester(phone, fn(from) { menu(menu_items_of(said), from=beside_of(from)) })
   open_it(t)
   assert_eq(presented_how, [AsSheet])
   // in the sheet's rows, low in the window
@@ -80,7 +90,7 @@ test "a menu with a finger at Small: a sheet from the foot; an item tapped close
 ///|
 test "a menu with a mouse at Large: beside what opened it; Escape closes it, an item chosen does what it says" {
   let said : Array[String] = []
-  let t = presenting_tester(desk, fn(from) { menu(menu_items_of(said), from~) })
+  let t = presenting_tester(desk, fn(from) { menu(menu_items_of(said), from=beside_of(from)) })
   let (_, by) = where_is(t, "打开")
   open_it(t)
   assert_eq(presented_how, [AsPopover])
@@ -120,7 +130,7 @@ test "a menu with a mouse at Large: an item not to be chosen now in the subtle i
     Some(menu_item_of("重命名", fn() { said.push("rename") }, icon="edit")),
     Some(menu_item_of("启动", fn() { said.push("start") }, icon="play", disabled=true)),
   ]
-  let t = presenting_tester(desk, fn(from) { menu(items, from~) })
+  let t = presenting_tester(desk, fn(from) { menu(items, from=beside_of(from)) })
   open_it(t)
   assert_eq(presented_how, [AsPopover])
   let p = theme().p
@@ -141,7 +151,7 @@ fn choices_of(n : Int) -> Array[Choice] {
 ///|
 test "a pick with a finger at Small: a sheet of the choices; one tapped is chosen and it closes" {
   let chosen = Ref("c1")
-  let t = presenting_tester(phone, fn(from) { pick("选一个", choices_of(3), chosen.val, fn(k) { chosen.val = k }, from~) })
+  let t = presenting_tester(phone, fn(from) { pick("选一个", choices_of(3), chosen.val, fn(k) { chosen.val = k }, from=beside_of(from)) })
   open_it(t)
   assert_eq(presented_how, [AsSheet])
   assert_true(t.find("选一个") is Some(_))
@@ -155,7 +165,7 @@ test "a pick with a finger at Small: a sheet of the choices; one tapped is chose
 test "a long pick with a mouse at Large: its search over it finds by the words, Enter picks the first found" {
   let chosen = Ref("c1")
   let t = presenting_tester(desk, fn(from) {
-    pick("选一个", choices_of(pick_search_from + 4), chosen.val, fn(k) { chosen.val = k }, from~)
+    pick("选一个", choices_of(pick_search_from + 4), chosen.val, fn(k) { chosen.val = k }, from=beside_of(from))
   })
   open_it(t)
   assert_eq(presented_how, [AsPopover])
@@ -175,7 +185,7 @@ test "a long pick with a mouse at Large: its search over it finds by the words, 
 test "a long pick with a finger at Small: the search in its sheet finds by the words" {
   let chosen = Ref("c1")
   let t = presenting_tester(phone, fn(from) {
-    pick("选一个", choices_of(pick_search_from + 4), chosen.val, fn(k) { chosen.val = k }, from~)
+    pick("选一个", choices_of(pick_search_from + 4), chosen.val, fn(k) { chosen.val = k }, from=beside_of(from))
   })
   open_it(t)
   assert_eq(presented_how, [AsSheet])
@@ -466,7 +476,7 @@ test "a panel opened by nothing with a finger at Small: a sheet with its words a
 ///|
 test "a short pick with a mouse at Large: a menu of choices beside what opened it, the chosen checked; one clicked" {
   let chosen = Ref("c1")
-  let t = presenting_tester(desk, fn(from) { pick("选一个", choices_of(3), chosen.val, fn(k) { chosen.val = k }, from~) })
+  let t = presenting_tester(desk, fn(from) { pick("选一个", choices_of(3), chosen.val, fn(k) { chosen.val = k }, from=beside_of(from)) })
   let (_, by) = where_is(t, "打开")
   open_it(t)
   assert_eq(presented_how, [AsPopover])
