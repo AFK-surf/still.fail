@@ -1,5 +1,5 @@
-// Linux host: a GTK 4 window (Wayland or X11, as GTK finds the session) whose one widget is a GtkGLArea the app draws
-// in with OpenGL ES 3 (linux_render.c); frames from GTK's frame clock, asked for only while the app has something to
+// Linux host: a GTK 4 window (Wayland or X11, as GTK finds the session) whose canvas is a GtkGLArea the app draws in
+// with OpenGL ES 3 (linux_render.c), over the native views (linux_views.c: web pages, shown through it); frames from GTK's frame clock, asked for only while the app has something to
 // draw; input from the area's events, and the input method (IBus, Fcitx: GTK's) through a GtkIMContext while a field
 // has the focus. The window keeps the system's title bar (GTK's own on GNOME's Wayland, the window manager's where it
 // draws them): none of its buttons in the app's top row. A program that is an app (MBUI_APP_ID) runs once for its
@@ -29,7 +29,7 @@ static int go_back(void) {
   return 1;
 }
 
-static GtkWidget *win, *area;
+static GtkWidget *win, *area, *under;  // the window, its canvas, the native views' GtkFixed under it
 static GtkIMContext *im;
 static GtkEventController *keys;
 static int want_frame;
@@ -128,14 +128,43 @@ static void mb_post_wake(void) { mb_app_wake(); }
 
 double mb_app_scale(void) { return scale; }
 
+void *mb_app_under(void) { return under; }
+
+// The canvas: a GtkGLArea that holds no press where a native view shows (linux_views.c): the view under it has it.
+typedef struct {
+  GtkGLArea parent;
+} Canvas;
+typedef struct {
+  GtkGLAreaClass parent;
+} CanvasClass;
+G_DEFINE_TYPE(Canvas, canvas, GTK_TYPE_GL_AREA)
+
+static gboolean canvas_contains(GtkWidget *w, double x, double y) {
+  return !mb_views_pass_through(x, y) && GTK_WIDGET_CLASS(canvas_parent_class)->contains(w, x, y);
+}
+
+static void canvas_class_init(CanvasClass *k) { GTK_WIDGET_CLASS(k)->contains = canvas_contains; }
+
+static void canvas_init(Canvas *c) { (void)c; }
+
 static void device_tell(mb_outside_fn tell);  // linux_device.h: the clipboard's reads done
 static void pick_tell(mb_outside_fn tell);    // the files picked
 static void update_tell(mb_outside_fn tell);  // linux_update.h: how an update goes
 void mb_host_set_cursor(int32_t kind);
 
+// The area's context made current again for what is drawn: once WebKit is in the process (linux_views.c), its own GL
+// can leave another context current, or none, behind GDK's back, and GDK's make_current, which goes by the one it made
+// current last, would do nothing.
+static void gl_current(void) {
+  if (!mb_views_webkit()) return;
+  gdk_gl_context_clear_current();
+  gtk_gl_area_make_current(GTK_GL_AREA(area));
+}
+
 static gboolean on_render(GtkGLArea *a, GdkGLContext *c, gpointer data) {
   (void)c, (void)data;
   want_frame = 0;
+  gl_current();
   // what was decoded meanwhile made textures, then told: the app finds them ready
   mb_images_upload();
   mb_streams_upload();
@@ -143,9 +172,12 @@ static gboolean on_render(GtkGLArea *a, GdkGLContext *c, gpointer data) {
   device_tell(outside_cb);
   pick_tell(outside_cb);
   update_tell(outside_cb);
+  mb_views_tell(outside_cb);
   int w = gtk_widget_get_width(GTK_WIDGET(a)), h = gtk_widget_get_height(GTK_WIDGET(a));
   if (w <= 0 || h <= 0 || fb_pw <= 0 || fb_ph <= 0) return TRUE;
+  double was = scale;
   scale = fb_pw / (double)w;
+  if (scale != was) mb_views_rescale();
   frame_w = w;
   frame_h = h;
   mb_text_set_scale(scale);
@@ -380,6 +412,12 @@ static void touch(GdkEvent *ev, GdkEventType t, double x, double y) {
     mb_cb.pointer(end ? 6 : 5, x, y, 0);
     if (end) touch2 = NULL;
   }
+}
+
+void mb_app_scroll(void *event) {
+  double x = 0, y = 0;
+  area_point(event, &x, &y);
+  scroll(event, x, y);
 }
 
 static gboolean on_event(GtkEventControllerLegacy *c, GdkEvent *ev, gpointer data) {
@@ -646,7 +684,7 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   life_start(t);
   g_free(t);
 
-  area = gtk_gl_area_new();
+  area = g_object_new(canvas_get_type(), NULL);
   gtk_gl_area_set_allowed_apis(GTK_GL_AREA(area), GDK_GL_API_GLES);
   gtk_gl_area_set_required_version(GTK_GL_AREA(area), 3, 0);
   gtk_gl_area_set_auto_render(GTK_GL_AREA(area), FALSE);
@@ -681,7 +719,13 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   g_signal_connect(focus, "leave", G_CALLBACK(on_focus_out), NULL);
   gtk_widget_add_controller(area, focus);
 
-  gtk_window_set_child(GTK_WINDOW(win), area);
+  // the native views under the canvas (linux_views.c): the overlay's child, the canvas over it, as big as the canvas
+  under = gtk_fixed_new();
+  GtkWidget *overlay = gtk_overlay_new();
+  gtk_overlay_set_child(GTK_OVERLAY(overlay), under);
+  gtk_overlay_add_overlay(GTK_OVERLAY(overlay), area);
+  gtk_overlay_set_measure_overlay(GTK_OVERLAY(overlay), area, TRUE);
+  gtk_window_set_child(GTK_WINDOW(win), overlay);
   gtk_window_present(GTK_WINDOW(win));
   gtk_widget_grab_focus(area);
   schedule();
@@ -720,6 +764,7 @@ void mb_host_wake_after(double ms) {
 }
 
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
+  gl_current();  // (the frame may have opened a web view)
   mb_render_present(buf, count, r, g, b);
 }
 

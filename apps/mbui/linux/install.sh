@@ -7,7 +7,9 @@
 # (MBUI_UPDATE_FEED, MBUI_BETA: as the Mac's), which the app downloads and puts in place by running this script of
 # theirs (mbui's src/host/linux_update.h). Run from the unpacked archive:
 #   ./still.fail-mbui/install.sh
-# It needs GTK 4.12 or later, WebKit not yet: Ubuntu 24.04, Debian 13, Fedora 40 and newer.
+# It needs GTK 4.12 or later: Ubuntu 24.04, Debian 13, Fedora 40 and newer. Pages in messages and sites show where
+# WebKitGTK 6.0 is installed (Ubuntu's and Debian's libwebkitgtk-6.0-4, Fedora's webkitgtk6.0); without it the app
+# says it cannot show them.
 set -e
 from=$(cd "$(dirname "$0")" && pwd)
 data=${XDG_DATA_HOME:-$HOME/.local/share}
@@ -33,3 +35,5 @@ ENTRY
 command -v update-desktop-database > /dev/null && update-desktop-database -q "$data/applications" || true
 command -v gtk-update-icon-cache > /dev/null && gtk-update-icon-cache -q -t "$data/icons/hicolor" 2> /dev/null || true
 echo "still.fail mbui $(cat "$app/VERSION") installed: $app (in your applications as still.fail mbui)"
+{ ldconfig -p || /sbin/ldconfig -p; } 2> /dev/null | grep -q "libwebkitgtk-6.0.so.4" ||
+  echo "Pages in messages and sites need WebKitGTK 6.0: install libwebkitgtk-6.0-4 (Ubuntu, Debian) or webkitgtk6.0 (Fedora)"

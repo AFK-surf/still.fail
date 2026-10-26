@@ -15,10 +15,23 @@
 
 #define LOG(...) (fprintf(stderr, "mbui: " __VA_ARGS__), fputc('\n', stderr))
 
-// what an instance's image (slot 20) is drawn from: a stream's picture, a decoded image's (no native views' pictures
-// here: they show through the canvas)
+// The native views are under the canvas (linux_views.c): where one shows, the canvas is taken away (gles_render.h).
+#define MB_VIEWS_UNDER 1
+static GLuint white_tex;  // a view's picture here: one white texel (its coverage is what is drawn), in the context now
+
+// what an instance's image (slot 20) is drawn from: a stream's picture, a decoded image's, a view's white texel
 static GLuint image_tex(int id) {
-  if (id > MB_VIEW_TEX) return 0;
+  if (id > MB_VIEW_TEX) {
+    if (!white_tex) {
+      static const uint8_t white[4] = {255, 255, 255, 255};
+      glGenTextures(1, &white_tex);
+      glBindTexture(GL_TEXTURE_2D, white_tex);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, white);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    }
+    return white_tex;
+  }
   if (id > MB_STREAM_TEX) return (GLuint)mb_stream_tex(id - MB_STREAM_TEX);
   return (GLuint)mb_image_tex(id);
 }
@@ -69,6 +82,7 @@ void mb_render_setup(void) {
   n_puts = 0;
   mb_images_lost();
   mb_streams_lost();
+  white_tex = 0;
 }
 
 void mb_render_target(int pw, int ph, double w, double h, double scale) {
