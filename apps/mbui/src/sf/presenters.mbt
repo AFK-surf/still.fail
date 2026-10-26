@@ -1814,26 +1814,35 @@ fn sheet_row(
   }
   // (a list's item on this screen: Theme.items, as a folder's entries are)
   c.box(style=sheet_row_box.then(@ui.style(min_h=Fixed(th.items.least))), id=if disabled { 0 } else { id }, fn() {
-    match mark {
-      Some(m) => m(c, th.items.mark)
-      None =>
-        if icon != "" {
-          draw_icon(c, icon, th.items.mark, if danger { ink } else { th.p.muted })
-        }
-    }
-    c.box(style=sheet_row_words_at, fn() {
-      c.text(label, style=th.items.name.then(sheet_row_words).then(@ui.text_style(color=Data(ink)))) |> ignore
-      if note != "" {
-        c.text(note, style=sheet_row_note) |> ignore
+    let leads = fn() {
+      match mark {
+        Some(m) => m(c, th.items.mark)
+        None =>
+          if icon != "" {
+            draw_icon(c, icon, th.items.mark, if danger { ink } else { th.p.muted })
+          }
       }
-    })
-    |> ignore
-    // (what it is at now, a word or two, at its end)
-    if value != "" {
-      c.text(value, style=pick_value) |> ignore
     }
-    if on {
-      draw_icon(c, "check", sheet_row_check, th.p.accent)
+    let first = fn() {
+      c.box(style=sheet_row_words_at, fn() {
+        c.text(label, style=th.items.name.then(sheet_row_words).then(@ui.text_style(color=Data(ink)))) |> ignore
+      })
+      |> ignore
+      // (what it is at now, a word or two, at its end)
+      if value != "" {
+        c.text(value, style=pick_value) |> ignore
+      }
+      if on {
+        draw_icon(c, "check", sheet_row_check, th.p.accent)
+      }
+    }
+    if note == "" {
+      leads()
+      first()
+    } else {
+      // what it is under its words, what leads it by its first line (lead_by_first_line)
+      let lead_w = if mark is Some(_) || icon != "" { th.items.mark } else { 0.0 }
+      lead_by_first_line(c, lead_w, sheet_row_gap, leads, first, fn() { c.text(note, style=sheet_row_note) |> ignore })
     }
     if !disabled {
       @motion.ripple(c, id, row_corner)
@@ -1883,6 +1892,10 @@ let sheet_rule : @ui.Style = @ui.style(w=Full, h=hairline, mx=S2, my=S1, bg=Line
 /// A row: 8 by 12 in, 12 between its icon, its words and its check, rounded as a list's row.
 // kept across runs: a value (no field of it changes)
 let sheet_row_box : @ui.Style = @ui.css("row w=Full px=S2 py=S3 gap=S3 align=ACenter")
+
+///|
+/// Between a sheet's row's mark and its words (sheet_row_box's S3).
+let sheet_row_gap : Double = 12.0
 
 ///|
 // kept across runs: a value (no field of it changes)

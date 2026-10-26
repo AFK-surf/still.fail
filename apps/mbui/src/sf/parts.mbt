@@ -592,23 +592,26 @@ pub fn menu_item(
     radius=small_panel_inner(r_menu),
     id~,
     fn() {
-      if panel && (icon != "" || word != "" || mark is Some(_)) {
-        c.box(style=panel_row_icon, fn() {
-          match mark {
-            Some(m) => m(c, panel_icon)
-            None =>
-              if word != "" {
-                c.text(word, style=panel_row_word) |> ignore
-              } else {
-                draw_icon(c, icon, panel_icon, t.p.muted)
-              }
-          }
-        })
-        |> ignore
-      } else if icon != "" {
-        draw_icon(c, icon, 16.0, if danger { t.p.red } else { t.p.muted })
+      let paneled = panel && (icon != "" || word != "" || mark is Some(_))
+      let leads = fn() {
+        if paneled {
+          c.box(style=panel_row_icon, fn() {
+            match mark {
+              Some(m) => m(c, panel_icon)
+              None =>
+                if word != "" {
+                  c.text(word, style=panel_row_word) |> ignore
+                } else {
+                  draw_icon(c, icon, panel_icon, t.p.muted)
+                }
+            }
+          })
+          |> ignore
+        } else if icon != "" {
+          draw_icon(c, icon, menu_item_icon, if danger { t.p.red } else { t.p.muted })
+        }
       }
-      let words = fn() {
+      let first = fn() {
         c.text(
           label,
           size=t.t.ui,
@@ -619,23 +622,22 @@ pub fn menu_item(
           line=20.0,
         )
         |> ignore
+        if note != "" {
+          c.text(note, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
+        }
+        if end != "" {
+          draw_icon(c, end, panel_end_icon, t.p.subtle)
+        }
       }
       if under == "" {
-        words()
+        leads()
+        first()
       } else {
-        // (what it is under its words: menu_row's `note`)
-        c.box(fn() {
-          words()
+        // what it is under its words, what leads it by its first line (lead_by_first_line)
+        let lead_w = if paneled { panel_icon_col } else if icon != "" { menu_item_icon } else { 0.0 }
+        lead_by_first_line(c, lead_w, if panel { panel_row_gap } else { menu_row_gap }, leads, first, fn() {
           c.text(under, style=menu_note) |> ignore
         })
-        |> ignore
-        c.spacer()
-      }
-      if note != "" {
-        c.text(note, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
-      }
-      if end != "" {
-        draw_icon(c, end, panel_end_icon, t.p.subtle)
       }
     },
   )
@@ -656,6 +658,14 @@ let panel_icon : Double = 18.0
 
 ///|
 let panel_end_icon : Double = 14.0
+
+///|
+/// A menu item's icon, out of a panel's column (16).
+let menu_item_icon : Double = 16.0
+
+///|
+/// A panel row's icon's column's width (panel_row_icon's S5).
+let panel_icon_col : Double = 20.0
 
 ///|
 /// A panel row's icon's column (parts.css.ts panelRowIcon): 20 wide, the icon in its middle.
@@ -906,46 +916,51 @@ pub fn menu_row(
     radius=small_panel_inner(r_menu),
     bg=if s.hot { t.p.hover } else { 0L },
     fn() {
-      if lead {
-        c.box(style=menu_check, fn() {
-          if choice {
-            if checked {
-              icon(c, "check", size=14.0, color=t.p.text) |> ignore
+      let leads = fn() {
+        if lead {
+          c.box(style=menu_check, fn() {
+            if choice {
+              if checked {
+                icon(c, "check", size=14.0, color=t.p.text) |> ignore
+              }
+            } else if icon_name == "zou" {
+              // 奏 its word (Rail.css.ts zouSmall)
+              c.text("奏", style=menu_zou) |> ignore
+            } else if icon_name != "" {
+              icon(c, icon_name, size=14.0, color=if danger { if off { t.p.subtle } else { t.p.red } } else { t.p.muted })
+              |> ignore
             }
-          } else if icon_name == "zou" {
-            // 奏 its word (Rail.css.ts zouSmall)
-            c.text("奏", style=menu_zou) |> ignore
-          } else if icon_name != "" {
-            icon(c, icon_name, size=14.0, color=if danger { if off { t.p.subtle } else { t.p.red } } else { t.p.muted })
-            |> ignore
-          }
-        })
-        |> ignore
+          })
+          |> ignore
+        }
+        // its own mark (a station's, a maker's) after the check, before its words, as wide as the check's column
+        match mark {
+          Some(m) => c.box(style=menu_check, fn() { m(c, menu_check_w) }) |> ignore
+          None => ()
+        }
       }
-      // its own mark (a station's, a maker's) after the check, before its words, as wide as the check's column
-      match mark {
-        Some(m) => c.box(style=menu_check, fn() { m(c, menu_check_w) }) |> ignore
-        None => ()
-      }
-      // (a danger's in red, its icon with it: menuItem[data-danger]; what it is under its words)
+      // (a danger's in red, its icon with it: menuItem[data-danger])
       let words = if off { menu_words_off } else if danger { menu_words_danger } else { menu_words }
-      if note == "" {
+      let first = fn() {
         c.text(s.entry.label, style=words) |> ignore
+        // what stands at its end (a ＋): pushed there
+        match end {
+          Some(f) => {
+            c.spacer()
+            f(c, s)
+          }
+          None => ()
+        }
+      }
+      if note == "" {
+        leads()
+        first()
       } else {
-        // (one under the other: a box's own way)
-        c.box(fn() {
-          c.text(s.entry.label, style=words) |> ignore
+        // what it is under its words, what leads it by its first line
+        let lead_w = (if lead { menu_check_w + gap } else { 0.0 }) + (if mark is Some(_) { menu_check_w + gap } else { 0.0 })
+        lead_by_first_line(c, if lead_w > 0.0 { lead_w - gap } else { 0.0 }, gap, leads, first, fn() {
           c.text(note, style=menu_note) |> ignore
         })
-        |> ignore
-      }
-      // what stands at its end (a ＋): pushed there
-      match end {
-        Some(f) => {
-          c.spacer()
-          f(c, s)
-        }
-        None => ()
       }
     },
   )
@@ -956,6 +971,48 @@ pub fn menu_row(
 /// What an item is, under its words: the meta size, muted.
 // kept across runs: a value (no field of it changes)
 let menu_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)
+
+///|
+/// A row's words with a line under them (what it is), what leads it (`lead`: its icon, its check, its mark, `lead_w`
+/// wide, `gap` from its words) standing by its first line's middle, not the whole's, and what is under it as far in
+/// as its first line's words (the user, 2026-10-27: 「图标不要上下居中，跟第一行居中」): every row of a menu, a pick and
+/// a sheet so made. `first`: its first line (its words, what is at their end); `under`: the lines under it.
+pub fn lead_by_first_line(
+  c : @ui.Ctx,
+  lead_w : Double,
+  gap : Double,
+  lead : () -> Unit,
+  first : () -> Unit,
+  under : () -> Unit,
+) -> Unit {
+  c.box(style=lead_lines, fn() {
+    c.box(style=lead_first_line.then(@ui.style(gap=room(gap))), fn() {
+      lead()
+      first()
+    })
+    |> ignore
+    c.box(style=@ui.style(pl=room(lead_in(lead_w, gap))), under) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// How far in the lines under a row's first stand: past what leads it and the gap after it, where something does.
+fn lead_in(lead_w : Double, gap : Double) -> Double {
+  if lead_w > 0.0 {
+    lead_w + gap
+  } else {
+    0.0
+  }
+}
+
+///|
+/// (lead_by_first_line: the lines as wide as the row leaves them; the first a row, its parts by its middle)
+let lead_lines : @ui.Style = @ui.style(w=grow)
+
+///|
+// kept across runs: a value (no field of it changes)
+let lead_first_line : @ui.Style = @ui.css("row w=Full align=ACenter")
 
 ///|
 /// Between an item's icon and its words (menuItem), its check's column and its words in a menu of choices alone
@@ -2486,9 +2543,13 @@ pub fn choices(
       let v = at.map(fn(i) { options[i].0 }).unwrap_or("")
       let note = at.map(fn(i) { options[i].2 }).unwrap_or("")
       c.box(style=if s.on { choice_card_on } else if s.hovered { choice_card_hot } else { choice_card }, disabled=s.disabled, fn() {
-          c.box(style=choice_hit, fn() {
+          // (its icon by its title's line's middle, not the whole's: lead_by_first_line)
+          let by_title = fn(f : () -> Unit) {
+            c.box(style=@ui.style(min_h=Fixed(c.sp(choice_title_line(c))), justify=JCenter), f) |> ignore
+          }
+          c.box(style=if note == "" && note_of is None { choice_hit } else { choice_hit_top }, fn() {
             match icon {
-              Some(f) => f(v)
+              Some(f) => by_title(fn() { f(v) })
               None => ()
             }
             c.box(style=choice_words, fn() {
@@ -2503,10 +2564,14 @@ pub fn choices(
               }
             })
             |> ignore
-            c.box(style=if s.on { radio_mark_on } else { radio_mark }, fn() {
-              if s.on {
-                c.box(style=radio_dot, fn() {  }) |> ignore
-              }
+            // (its mark in its end's middle: concentric with the card's corners, docs/ui-panels.md)
+            c.box(style=choice_mark_at, fn() {
+              c.box(style=if s.on { radio_mark_on } else { radio_mark }, fn() {
+                if s.on {
+                  c.box(style=radio_dot, fn() {  }) |> ignore
+                }
+              })
+              |> ignore
             })
             |> ignore
           })
@@ -2554,6 +2619,23 @@ let choice_card_on : @ui.Style = choice_card.then(@ui.css("border=B2 border_colo
 /// What is pressed of it (choiceHit): 12 by 14 in, its parts 12 apart.
 // kept across runs: a value (no field of it changes)
 let choice_hit : @ui.Style = @ui.css("row w=Full px=S3_5 py=S3 gap=S3 align=ACenter")
+
+///|
+/// (a choice's radio mark in the middle of its end, the card's top to its foot)
+// kept across runs: a value (no field of it changes)
+let choice_mark_at : @ui.Style = @ui.css("h=Full justify=JCenter")
+
+///|
+/// How high a choice's title's line is (choice_title's L6).
+fn choice_title_line(c : @ui.Ctx) -> Double {
+  let (_, font_line) = c.text_size(Ui)
+  c.theme().leading(L6).unwrap_or(font_line)
+}
+
+///|
+/// (choice_hit with a description under its title: what is beside its words by its title's line)
+// kept across runs: a value (no field of it changes)
+let choice_hit_top : @ui.Style = @ui.css("row w=Full px=S3_5 py=S3 gap=S3 align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)
