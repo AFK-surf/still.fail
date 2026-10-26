@@ -57,6 +57,10 @@ test("the releases bucket serves the station's releases and the apps' builds, an
   assert.equal(releaseType("mac/latest.json"), "application/json");
   assert.equal(releaseType("mac/beta/latest.json"), "application/json");
   assert.equal(releaseType("mac/other/latest.json"), null);
+  // and the Windows one's (mbui's, the beta's first), naming the installers below.
+  assert.equal(releaseType("win/latest.json"), "application/json");
+  assert.equal(releaseType("win/beta/latest.json"), "application/json");
+  assert.equal(releaseType("win/other/latest.json"), null);
   // The Windows app's: its feed (named by the channel alone), its installer and that one's blockmap.
   assert.equal(releaseType("desktop/stillfail.yml"), "text/yaml; charset=utf-8");
   assert.equal(releaseType("desktop/stillfail-beta.yml"), "text/yaml; charset=utf-8");

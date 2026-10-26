@@ -53,6 +53,7 @@ jobs:
       modules: ${{ steps.plan.outputs.modules }}
       android_beta: ${{ steps.plan.outputs.android_beta }}
       mac_beta: ${{ steps.plan.outputs.mac_beta }}
+      win_beta: ${{ steps.plan.outputs.win_beta }}
       desktop: ${{ steps.plan.outputs.desktop }}
       desktop_web: ${{ steps.plan.outputs.desktop_web }}
       windows: ${{ steps.plan.outputs.windows }}
@@ -124,9 +125,15 @@ jobs:
           # client's, media's, vendor's) or to how it is built and released.
           mac_beta=false
           if has '^(apps/mbui/(src|core|engine)/|apps/mbui/mbui/src/|apps/mbui/(mbui/)?moon\.(mod|work)$|client/|media/|vendor/|scripts/(release|mac-feeds)\.sh$|scripts/native\.ts$|\.github/(release-desktop|mac_signing)\.py$|apps/mbui/scripts/(beta|mac-app|mac|core)\.sh$|apps/mbui/scripts/mac-icon\.swift$)'; then mac_beta=true; fi
-          # The Electron app (Windows' alone since the Mac's is mbui's) carries the core, a station and the web app. A
-          # change to the first two (its shell) is a new app; to the web app alone, a web release the beta app takes
-          # without one (scripts/desktop-web.ts, docs/desktop-web-updates.md): desktop=… and desktop_web=….
+          # The beta Windows app: mbui's in the Electron one's place (scripts/release.sh --beta desktop-win), released, as
+          # the Mac one, for a change to what apps/mbui's Windows app is made of (its code, mbui's with its Windows host,
+          # its installer, the client's, media's, vendor's) or to how it is built and released.
+          win_beta=false
+          if has '^(apps/mbui/(src|core|engine|windows)/|apps/mbui/mbui/src/|apps/mbui/(mbui/)?moon\.(mod|work)$|client/|media/|vendor/|scripts/(release|win-feeds)\.sh$|scripts/native\.ts$|apps/mbui/scripts/(win|core)\.sh$|apps/mbui/mbui/scripts/win\.sh$|apps/mbui/scripts/mac-icon\.swift$)'; then win_beta=true; fi
+          # The Electron app (the stable Windows app alone since the Mac's and the beta's are mbui's: stable.yml releases
+          # it) carries the core, a station and the web app. A change to the first two (its shell) is a new app; to the
+          # web app alone, a web release a beta Electron app not yet moved takes without one (scripts/desktop-web.ts,
+          # docs/desktop-web-updates.md): desktop=… and desktop_web=….
           eval "$(printf '%s\n' "$changed" | node scripts/desktop-web.ts plan)"
           # A branch's Windows app and its smoke run (windows-build, windows-smoke): only for what is Windows' own in it,
           # the app's code and its iroh addon (a change to the web app it carries is the Mac app's check too).
@@ -150,13 +157,14 @@ jobs:
             echo "modules=$modules"
             echo "android_beta=$android_beta"
             echo "mac_beta=$mac_beta"
+            echo "win_beta=$win_beta"
             echo "desktop=$desktop"
             echo "desktop_web=$desktop_web"
             echo "windows=$windows"
             echo "windows_natives=$windows_natives"
             echo "mbui=$mbui"
           } >> "$GITHUB_OUTPUT"
-          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station modules=$modules android_beta=$android_beta mac_beta=$mac_beta desktop=$desktop desktop_web=$desktop_web relay=$relay mbui=$mbui"
+          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station modules=$modules android_beta=$android_beta mac_beta=$mac_beta win_beta=$win_beta desktop=$desktop desktop_web=$desktop_web relay=$relay mbui=$mbui"
 
   # The native parts for this commit (scripts/native.ts): each one whose key the release native-artifacts lacks is
   # built here (once per key and machine: mini1's cache is shared by its runners and the checks beside this job wait
@@ -561,7 +569,7 @@ jobs:
 
   # The Mac app (fail.still.desktop.beta: mbui's, apps/mbui, in the Electron app's place), on mac/beta/latest.json and
   # desktop/stillfail-beta-mac.yml (which moves an installed Electron beta over): built, signed and notarized on the
-  # organization Mac, warm in a cache of its own there (scripts/release.sh desktop). The Windows app is Electron's still,
+  # organization Mac, warm in a cache of its own there (scripts/release.sh desktop). The beta Windows app, mbui's too, is
   # desktop-win's.
   desktop:
     needs: [plan, natives]
@@ -591,30 +599,68 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: "release-desktop-mac-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
 
-  # The Windows desktop app (beta, Electron's), on desktop/stillfail-beta.yml: built on the organization Mac (build.sh
-  # --win), for a change to the Electron app. Not code-signed; its installer's .sig is (docs/release-signing.md).
+  # The beta Windows app (fail.still.desktop.beta: mbui's, apps/mbui, in the Electron app's place, as the Mac one), on
+  # win/beta/latest.json and desktop/stillfail-beta.yml (which moves an installed Electron beta over): built on GitHub's
+  # Windows runner as mbui.yml's windows job builds still.fail mbui, from main's build as that job left it in the Actions
+  # cache (what is the same is not compiled again: mbui's scripts/mbc), packed in its installer (windows/setup.c) and
+  # signed: its .sig (docs/release-signing.md), which the Electron app and mbui's core check; not code-signed. The stable
+  # Windows app is Electron's still (stable.yml), until the beta's move is confirmed.
   desktop-win:
-    needs: [plan, natives]
-    if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop == 'true' }}
-    runs-on: [self-hosted, mini1]
+    needs: [plan]
+    if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.win_beta == 'true' }}
+    runs-on: windows-2025
     environment: production
     timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    env:
+      MSYS: winsymlinks:nativestrict
+      HBC_CACHE: ${{ github.workspace }}/.ci/hbc
     steps:
+      # (the natives' keys are git's blobs: the checkout as git has it)
+      - run: git config --global core.autocrlf false
       - uses: actions/checkout@v5
-        with: { fetch-depth: 0 }
-      - uses: ./.github/actions/setup-mac
-      - name: Build the beta Windows desktop app and sign its installer's .sig
+        with: { fetch-depth: 0, filter: "blob:none" } # its build is the commits in the history
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/msvc
+      - uses: ./.github/actions/mbui-moonbit
+      - name: The Windows natives' keys
+        id: native-keys
+        run: echo "key=natives-win32-x64-$(node scripts/native.ts key shell win32-x64)-$(node scripts/native.ts key engine win32-x64)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/AppData/Local/stillfail-native
+          key: ${{ steps.native-keys.outputs.key }}
+      - name: The Windows engine and shell, prebuilt
+        run: |
+          node scripts/native.ts fetch shell win32-x64
+          node scripts/native.ts fetch engine win32-x64
+      # (mbui.yml's windows job saves them, main's; read here, never saved)
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            apps/mbui/mbui/_build
+            apps/mbui/mbui/out
+          key: mbui-win-build-mono-${{ github.sha }}
+          restore-keys: mbui-win-build-mono-
+      - uses: actions/cache/restore@v4
+        with:
+          path: .ci/hbc
+          key: mbui-win-hbc-${{ github.sha }}
+          restore-keys: mbui-win-hbc-
+      - name: Build, pack and sign the beta Windows app
         env:
-          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
           # The installer's signature (its .sig): none is an error.
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
-        run: python3 .github/release-desktop.py --only win --out "$RUNNER_TEMP/release"
-      - name: Put its files (named by its version, nothing points at them until put writes the feed)
+          RELEASE_DIR: ${{ runner.temp }}/release
+        run: |
+          (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          sh scripts/release.sh --beta desktop-win
+      - name: Put its files (named by its version, nothing points at them until put writes the feeds)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
-          sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
+        run: sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
       - uses: actions/upload-artifact@v4
         with: { name: "release-desktop-win-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
 
@@ -793,7 +839,7 @@ jobs:
           planned '${{ needs.plan.outputs.modules }}' '${{ needs.modules.result }}' modules
           planned '${{ needs.plan.outputs.android_beta }}' '${{ needs.android.result }}' android
           planned '${{ needs.plan.outputs.mac_beta }}' '${{ needs.desktop.result }}' desktop
-          planned '${{ needs.plan.outputs.desktop }}' '${{ needs.desktop-win.result }}' desktop-win
+          planned '${{ needs.plan.outputs.win_beta }}' '${{ needs.desktop-win.result }}' desktop-win
           [ '${{ needs.plan.outputs.desktop }}' = true ] || planned '${{ needs.plan.outputs.desktop_web }}' '${{ needs.desktop-web.result }}' desktop-web
           if [ -n "$missed" ]; then echo "::error::changed, planned, and not released:$missed"; exit 1; fi
           echo "every planned part went out"

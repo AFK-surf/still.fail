@@ -16,8 +16,10 @@
 # name>\core, as its core says), not a place of its own, its core on the desktop app's channel.
 # HANDOFF_TO=<installer>: mbui's as released instead (signed by the release key, its .sig beside it), taken as it is.
 # Says what it checked in out/handoff/result.txt; fails if one does not hold. What it made is taken away after. It
-# refuses to run where the desktop app has data (a person's).
-#   apps/mbui/e2e/win/handoff.sh      (HANDOFF_FROM=<url or exe>, HANDOFF_TO=<exe>, HANDOFF_VARIANT=stable: still.fail's)
+# refuses to run where the desktop app has data (a person's). Without HANDOFF_VARIANT, each desktop app still Electron's
+# as released is rehearsed, one after another (beta, stable: mbui's own feed for it, win/<beta/>latest.json, not out
+# yet); one already mbui's has no move left to rehearse.
+#   apps/mbui/e2e/win/handoff.sh      (HANDOFF_FROM=<url or exe>, HANDOFF_TO=<exe>, HANDOFF_VARIANT=beta, stable)
 set -u
 D="$(cd "$(dirname "$0")" && pwd)"
 ROOT=$(cd "$D/../.." && pwd)
@@ -29,14 +31,27 @@ w() { cygpath -w "$1"; }
 export MSYS2_ENV_CONV_EXCL="STILLFAIL_RELEASE_KEYS${MSYS2_ENV_CONV_EXCL:+;$MSYS2_ENV_CONV_EXCL}"
 [ "$(STILLFAIL_RELEASE_KEYS=/k node -e 'process.stdout.write(process.env.STILLFAIL_RELEASE_KEYS)')" = /k ] ||
   { echo "$(basename "$0"): Git Bash rewrites STILLFAIL_RELEASE_KEYS for Windows programs (MSYS2_ENV_CONV_EXCL not taken)" >&2; exit 1; }
-VARIANT=${HANDOFF_VARIANT:-beta}
+if [ -z "${HANDOFF_VARIANT:-}" ]; then
+  failed=0 rehearsed=
+  for v in beta stable; do
+    case $v in beta) own=win/beta/latest.json ;; *) own=win/latest.json ;; esac
+    case $(curl -sS -o /dev/null -w '%{http_code}' --retry 3 "https://app.still.fail/releases/$own") in
+      404) rehearsed="$rehearsed $v"; HANDOFF_VARIANT=$v bash "$0" || failed=$((failed + 1)) ;;
+      200) echo "handoff: the $v desktop app is mbui's already (releases/$own is out): no move of it left to rehearse" ;;
+      *) echo "handoff: releases/$own neither out nor missing: whether the $v desktop app is Electron's still is not known" >&2; exit 1 ;;
+    esac
+  done
+  echo "handoff: rehearsed:${rehearsed:- none}; $failed failed"
+  exit $failed
+fi
+VARIANT=$HANDOFF_VARIANT
 case $VARIANT in
   # (DIR: its folder's name in %LOCALAPPDATA%\Programs, scripts/win.sh's variant's: the desktop app's package's)
   beta) ID=fail.still.desktop.beta NAME=youdid.wtf FEED=stillfail-beta.yml OWN=win/beta/latest.json PREFIX=stillfail-beta DIR=stillfail-beta ;;
   stable) ID=fail.still.desktop NAME=still.fail FEED=stillfail.yml OWN=win/latest.json PREFIX=stillfail DIR=stillfail ;;
   *) echo "handoff: HANDOFF_VARIANT is beta or stable, not $VARIANT" >&2; exit 1 ;;
 esac
-U=$ROOT/out/handoff
+U=$ROOT/out/handoff/$VARIANT
 DATA=$(cygpath -u "$APPDATA")/$NAME
 LOCAL=$(cygpath -u "$LOCALAPPDATA")
 # (an installer's switches given as written: Git Bash takes /S for a path)

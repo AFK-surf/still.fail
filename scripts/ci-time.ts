@@ -26,7 +26,7 @@ export const BUDGET = {
 } as const;
 
 const REPO = process.env.GITHUB_REPOSITORY ?? "AFK-surf/still.fail";
-const RELEASES = new Set(["station", "android", "desktop", "static"]);
+const RELEASES = new Set(["station", "android", "desktop", "desktop-win", "static"]);
 
 type Step = { name: string; started_at: string | null; completed_at: string | null };
 type Job = { name: string; conclusion: string | null; started_at: string | null; completed_at: string | null; steps?: Step[] };

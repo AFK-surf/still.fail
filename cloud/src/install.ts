@@ -80,6 +80,9 @@ const APP_FILES: [RegExp, string][] = [
   [/^desktop\/stillfail-(beta-)?[0-9.]+-x64-win\.exe\.blockmap$/, "application/octet-stream"],
   // Its signature (scripts/release-sign.ts), which the app checks before installing it (docs/release-signing.md).
   [/^desktop\/stillfail-(beta-)?[0-9.]+-x64-win\.exe\.sig$/, "application/json"],
+  // The beta's is mbui's (apps/mbui) in the Electron app's place (scripts/release.sh --beta desktop-win): its own
+  // updater's feeds, stable and beta (an AppRelease naming the installer above, its signed words in it), as the Mac's.
+  [/^win\/(beta\/)?latest\.json$/, "application/json"],
   // The web app the beta desktop app takes without a new app (docs/desktop-web-updates.md): its signed feed and the
   // archives it names.
   [/^desktop\/web\/stillfail-beta-web\.json$/, "application/json"],

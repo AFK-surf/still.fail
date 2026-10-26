@@ -6,7 +6,8 @@
 # The apps too, for their updaters: `desktop` (the Mac app: apps/mbui's in the Electron app's place, scripts/beta.sh mac
 # MBUI_VARIANT=stable: its zip in desktop/, its feeds mac/latest.json and stillfail-mac.yml, below),
 # `desktop-win` (build.sh --win, from the Mac too: the NSIS installer stillfail-<version>-x64-win.exe, its blockmap and
-# stillfail.yml, in desktop/; not signed yet) and
+# stillfail.yml, in desktop/; not code-signed yet; with --beta apps/mbui's in the Electron app's place, built on Windows,
+# below) and
 # `android` (apps/android/build.py --release: stillfail-<n>.apk and latest.json, in android/; the beta app mbui's in the
 # Kotlin one's place: apps/mbui/scripts/beta.sh build, MBUI_VARIANT=beta). Their version is the
 # commits in the history, so a release is made from a new commit; the latest is put last, once its files are there.
@@ -75,6 +76,11 @@ beta=""
 if [ "${1:-}" = --beta ]; then beta=yes; shift; fi
 platforms=${*:-darwin-arm64 linux-x64 linux-arm64 win32-x64}
 for platform in $platforms; do
+  # (the beta Windows app is mbui's, built on Windows: below)
+  if [ "$platform-$beta" = desktop-win-yes ]; then
+    case "$(uname -s)" in MINGW* | MSYS*) continue ;; esac
+    echo "the beta Windows app's release requires Windows (Git Bash, MSVC's environment: apps/mbui/scripts/win.sh)" >&2; exit 1
+  fi
   if [ "$platform" != android ] && [ "$platform" != modules ] && [ "$(uname -s)-$(uname -m)" != Darwin-arm64 ]; then
     echo "$platform releases require a Mac with Apple silicon" >&2; exit 1
   fi
@@ -142,8 +148,32 @@ for platform in $platforms; do
       put "$out/mac.yml" "desktop/stillfail${beta:+-beta}-mac.yml" "text/yaml; charset=utf-8"
       ;;
     desktop-win)
-      # The Windows app on stillfail.yml; with --beta the beta app on stillfail-beta.yml (electron-updater's feed for
-      # Windows is named by the channel alone).
+      if [ -n "$beta" ]; then
+        # The beta app (fail.still.desktop.beta) is mbui's (apps/mbui) in the Electron app's place, as the Mac one is:
+        # scripts/win.sh's beta variant (the Electron app's id, name, program and links, its data, sign-in and sealed
+        # keys where they were: src/host/win_core.c), packed in its installer (apps/mbui/windows/setup.c), which the
+        # Electron app's updater runs as it ran its own (--updated /S --force-run). Named as the Electron app's were
+        # (the site's download, /releases/latest/win-beta, and release-prune.ts go by the yml's), signed (its .sig,
+        # which that app checks before it runs it), on two feeds (scripts/win-feeds.sh): mbui's own updater's
+        # (win/beta/latest.json, an AppRelease carrying the signed words: what the core's app.update takes) and
+        # electron-updater's (stillfail-beta.yml), which moves an installed Electron app over.
+        exe="stillfail-beta-0.1.$build-x64-win.exe"
+        MBUI_VARIANT=beta MBUI_BUILD=$build bash "$root/apps/mbui/scripts/win.sh" build
+        MBUI_VARIANT=beta MBUI_BUILD=$build MBUI_SETUP_NAME=$exe bash "$root/apps/mbui/scripts/win.sh" setup
+        setup_out=$root/apps/mbui/out/setup
+        # what is in it checked before anything is uploaded: the app it replaces (its id, its program), its build
+        grep -qx 'APP_ID=fail.still.desktop.beta' "$setup_out/setup.env" && grep -qx 'EXE=youdid.wtf' "$setup_out/setup.env" &&
+          grep -qx "VERSION=0.1.$build" "$setup_out/setup.env" || { echo "release.sh: $exe is not fail.still.desktop.beta 0.1.$build: not released" >&2; cat "$setup_out/setup.env" >&2; exit 1; }
+        rm -f "$setup_out/$exe.sig"
+        node "$root/scripts/release-sign.ts" file "$setup_out/$exe" --kind stillfail-desktop-win --build "$build" ${RELEASE_DIR:+--unsigned-ok}
+        put "$setup_out/$exe" "desktop/$exe" application/vnd.microsoft.portable-executable
+        [ ! -f "$setup_out/$exe.sig" ] || put "$setup_out/$exe.sig" "desktop/$exe.sig" application/json
+        sh "$root/scripts/win-feeds.sh" "$setup_out/$exe" "desktop/$exe" "$build" "$setup_out/$exe.sig" "$out/win-latest.json" "$out/win.yml"
+        put "$out/win-latest.json" win/beta/latest.json application/json
+        put "$out/win.yml" desktop/stillfail-beta.yml "text/yaml; charset=utf-8"
+        continue
+      fi
+      # The Windows app on stillfail.yml (Electron's still: the stable one moves when the beta has, as asked)
       sh "$root/apps/desktop/build.sh" --win ${beta:+--beta}
       exe="stillfail${beta:+-beta}-0.1.$build-x64-win.exe"
       feed="stillfail${beta:+-beta}.yml"
