@@ -881,8 +881,9 @@ function PublishedRow({ here, thread, link }: { here: Here; thread: number; link
 
 /**
  * Shares the chat as a picture (the phone's; the wide screen's is Publish.tsx PublishDialog): the picture as it would
- * be, the attachments to tick (all at first), how much was hidden, 「保存图片」: the picture handed to the system's share
- * sheet (where it is saved to the photos, or sent), or saved as a file where there is none.
+ * be, the attachments to tick (all at first), how much was hidden; at its foot 「取消」 and 「保存图片」 (2026-10-26:
+ * 「应该放下面，俩按钮，一个取消一个保存到相册」): the picture handed to the system's share sheet (where it is saved to the
+ * photos, or sent), or saved as a file where there is none.
  */
 function PublishSheet({ here, thread }: { here: Here; thread: number }) {
   const app = useApp();
@@ -926,9 +927,12 @@ function PublishSheet({ here, thread }: { here: Here; thread: number }) {
           <>
             <PublishPicture preview={p!} ticking={ticking} paper={paper} />
             {p!.hiddenText && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{p!.hiddenText}</p>}
-            <Button primary label={t("web-pages.chat.shareImage.save")} busy={taking} onClick={() => void save()} />
           </>
         )}
+      </div>
+      <div className={sheetsCss.mSheetFoot}>
+        <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
+        <Button primary label={t("web-pages.chat.shareImage.save")} enabled={!!p && p.messages.length > 0} busy={taking} onClick={() => void save()} />
       </div>
     </>
   );

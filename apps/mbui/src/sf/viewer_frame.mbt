@@ -102,6 +102,100 @@ fn viewer_head(
 }
 
 ///|
+/// What is opened over the whole window to be done one way (a chat shared as a picture: sfpages' publish.mbt): on a
+/// wide screen the bar a file opened has (viewer_bar: back to `back` by name, `name` and `meta`), the doing its one tool
+/// (`icon`, named `label`); on a small screen no bar over it, but a band of glass along the window's foot with 取消 and
+/// the doing side by side, as wide as each other (2026-10-26 用户「应该放下面，俩按钮，一个取消一个保存到相册」「pc 的话直接跟附件预览
+/// 一样，有顶栏」). `busy`: the doing under way, not pressed again. What it gives back: whether it was closed (its way
+/// back, 取消), whether the doing was pressed, the frame after.
+pub fn viewer_frame_act(
+  c : @ui.Ctx,
+  key : String,
+  back : String,
+  name : String,
+  meta : String,
+  ink : ViewerInk,
+  icon : String,
+  label : String,
+  busy? : Bool = false,
+) -> (Bool, Bool) {
+  let mut closed = false
+  let mut acted = false
+  if layout(c.width) is Small {
+    c.box(style=vfr_act_room, fn() {
+      c.spacer()
+      let foot = (viewer_host().room)().1
+      c.box(style=vfr_act_band.then(@ui.style(pb=room(vfr_act_in + foot))), glass=glass_foot(), fn() {
+        c.box(style=vfr_act_row, fn() {
+          if button(c, t("common.cancel"), key=key + "/cancel", w=Fill(1.0)) {
+            closed = true
+          }
+          if button(c, label, key=key + "/act", tone=Primary, busy~, w=Fill(1.0)) {
+            acted = true
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  } else {
+    c.box(style=vfr_layer, fn() {
+      closed = viewer_bar(c, key + "/bar", back, name, meta, false, ink, fn() {
+        if viewer_tool(c, key + "/act", icon, label, ink, disabled=busy) {
+          acted = true
+        }
+      })
+    })
+    |> ignore
+  }
+  (closed, acted)
+}
+
+///|
+/// How much of the window's top what a thing opened to be done one way has over it takes (viewer_frame_act): the bar on
+/// a wide screen (viewer_bar_under), on a small one nothing of its own, only the page's bars over the window (a phone's
+/// status bar). What is under it starts that far down.
+pub fn viewer_act_head(c : @ui.Ctx) -> Double {
+  if layout(c.width) is Small {
+    (viewer_host().room)().0
+  } else {
+    viewer_bar_under()
+  }
+}
+
+///|
+/// How much of the window's foot the band of a thing opened to be done one way takes on a small screen
+/// (viewer_frame_act), the page's bar under it with it (a phone's navigation bar): what is under it is laid out that much
+/// clear of the foot. None on a wide screen (its bar is at the top).
+pub fn viewer_act_foot(c : @ui.Ctx) -> Double {
+  if layout(c.width) is Small {
+    vfr_act_in * 2.0 + button_height() + (viewer_host().room)().1
+  } else {
+    0.0
+  }
+}
+
+///|
+/// The band's buttons 12 in from its top and foot (the page's bar under it besides).
+let vfr_act_in : Double = 12.0
+
+///|
+/// What lays the band at the window's foot: the window's whole, the band at its end.
+// kept across runs: a value (no field of it changes)
+let vfr_act_room : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+/// The band: across the window, its buttons 16 in from its sides, 12 from its top, square at the window's foot.
+// kept across runs: a value (no field of it changes)
+let vfr_act_band : @ui.Style = @ui.css("w=Full pt=S3 px=S4 radius=InnerOr(Sharp)")
+
+///|
+/// Its two buttons side by side, 8 apart.
+// kept across runs: a value (no field of it changes)
+let vfr_act_row : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
+
+///|
 /// Frosted glass over a page of the theme's colours (FilePreview.css.ts pageGlass): the surface at 72% (dark, the
 /// raised one's) over a 20 blur, over the viewer's canvas.
 pub fn viewer_page_glass() -> @ui.Glass {

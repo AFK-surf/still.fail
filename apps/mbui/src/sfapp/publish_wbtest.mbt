@@ -56,7 +56,7 @@ test "分享图片: the chat's sheet opens it, and lists the public links made b
 }
 
 ///|
-test "分享图片: the page shows the picture as it would be; 保存到相册 keeps it in the album, without what was left out" {
+test "分享图片: the page shows the picture as it would be, 取消 and 保存到相册 at its foot; 保存到相册 keeps it in the album, without what was left out" {
   let calls : Array[Made] = []
   let t = publish_core(calls)
   t.tap_text("分享图片")
@@ -105,6 +105,10 @@ test "分享图片: the page shows the picture as it would be; 保存到相册 k
     None => fail("not a PNG")
   }
   assert_true(t.find("已保存到相册") is Some(_))
+  // 取消, beside it at the foot, closes it
+  t.click(Button, label="取消")
+  t.frame()
+  assert_true(t.find("部署登录页") is None)
 }
 
 ///|

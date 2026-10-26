@@ -4,20 +4,20 @@
 // file is previewed, the picture as it would be (`chat.publishPreview`, asked as it opens: what the chat holds now,
 // what looks like a secret in it hidden): the chat's name, its messages laid out as the chat lays out messages, each
 // attachment where its message has it, pressed anywhere to tick it or not (all at first: FileToggle's label), and
-// still.fail's mark at its foot; over it the bar every file opened over the window has (the library's
-// viewer_frame_bar: across the top, back to the chat by its name, 分享图片 and how much was hidden, its tool; on a
-// small screen floating, the tool and close), its one tool 复制图片 (on a phone 保存到相册: picture_out), as a picture
-// opened has its copy (2026-10-26 用户 of the button filled in a pill of its own: 「太不对劲了」). Pressed, the picture
-// is drawn whole off the screen as one long picture
-// (Ctx::shot), the attachments left out not in it, nor the ticks and the notes of what was hidden that are for the one
-// sharing it, its times as dates; then handed out. Which files an agent's words place, and those words as Markdown, are
-// the core's (the preview's `placed`, `md`). The frames draw it over their pages (publish_layer). (A link once made of
-// a chat, docs/public-share.md, is made no more; those made still open, and its info lists them.)
+// still.fail's mark at its foot. What it is for is the library's viewer_frame_act (2026-10-26 用户, of a button filled
+// in a pill of its own over it: 「太不对劲了」「应该放下面，俩按钮，一个取消一个保存到相册，pc 的话直接跟附件预览一样，有顶栏」): on a
+// wide screen the bar a file opened has across the top (back to the chat by its name, 分享图片 and how much was hidden),
+// 复制图片 its tool, as a picture opened has its copy; on a small screen 取消 and 保存到相册 side by side at the foot
+// (picture_out). Pressed, the picture is drawn whole off the screen as one long picture (Ctx::shot), the attachments
+// left out not in it, nor the ticks and the notes of what was hidden that are for the one sharing it, its times as
+// dates; then handed out. Which files an agent's words place, and those words as Markdown, are the core's (the
+// preview's `placed`, `md`). The frames draw it over their pages (publish_layer). (A link once made of a chat,
+// docs/public-share.md, is made no more; those made still open, and its info lists them.)
 
 ///|
 /// The sharing as it stands: the chat it is of and its thread (None: closed), the preview as read (0 being read, 1
-/// read, 2 not: `error` says why), the attachments left out (by their `k`), its picture being taken, how wide its
-/// floating bar has been (it only grows: viewer_frame_bar).
+/// read, 2 not: `error` says why), the attachments left out (by their `k`), its picture being taken, how many times it
+/// was copied (its tool a check a moment after).
 priv struct Publishing {
   mut of : (ChatRef, Double)?
   mut read : Int
@@ -25,7 +25,6 @@ priv struct Publishing {
   mut error : String
   off : Map[String, Bool]
   mut busy : Bool
-  mut head_w : Double
   mut copied : Int
 }
 
@@ -37,7 +36,6 @@ let publishing : Publishing = {
   error: "",
   off: {},
   busy: false,
-  head_w: 0.0,
   copied: 0,
 }
 
@@ -49,7 +47,6 @@ pub fn publish_reset() -> Unit {
   publishing.error = ""
   publishing.off.clear()
   publishing.busy = false
-  publishing.head_w = 0.0
   publishing.copied = 0
 }
 
@@ -119,9 +116,9 @@ pub fn publish_layer(c : @ui.Ctx, src : Source) -> Unit {
 }
 
 ///|
-/// The page that shares it (PublishDialog): over the whole window on the canvas, the bar a file opened has over it
-/// (分享图片, how much was hidden, 复制图片; back or close), the picture as it would be under it at the chat's width; Esc
-/// closes it. While its picture is taken, the picture drawn whole off the screen.
+/// The page that shares it (PublishDialog): over the whole window on the canvas, the picture as it would be at the
+/// chat's width, what it is for over it (viewer_frame_act: the bar a file opened has, or 取消 and 保存到相册 at the
+/// foot); Esc closes it. While its picture is taken, the picture drawn whole off the screen.
 fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
   let p = publishing.preview
   let messages = items(p, "messages")
@@ -151,7 +148,10 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
         _ =>
           c.list("publish/page/" + r.station + "/" + thread.to_string(), 1, c.height, fn(_) {
             c.box(style=publish_column_room, fn() {
-              c.box(style=publish_column.then(@ui.style(pt=@sf.system_top_room(publish_page_top))), fn() {
+              // (under what is over it at the top, over the band at the foot)
+              let top = @sf.room_of(@sf.viewer_act_head(c))
+              let foot = @sf.room_of(publish_page_under + @sf.viewer_act_foot(c))
+              c.box(style=publish_column.then(@ui.style(pt=top, pb=foot)), fn() {
                 publish_picture(c, src, here, p, column, false)
               })
               |> ignore
@@ -160,41 +160,26 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
           })
           |> ignore
       }
-      // its bar, as a file's opened over the window: across the top (back to the chat), or floating on a small screen
+      // what it is for: on a wide screen the bar a file opened has (back to the chat; the copy its tool); on a small one
+      // 取消 and 保存到相册 at the foot
       c.layer(fn() {
-        let ink = @sf.page_viewer_ink()
-        let (closed, wide) = @sf.viewer_frame_bar(
+        let (label, icon) = picture_out_way()
+        // (copied: a check a moment after, as a picture opened says its copy)
+        let shown = publishing.copied > 0 &&
+          !@kit.after(c, "publish/copied/\{publishing.copied}", true, @sf.copied_ms)
+        let (closed, acted) = @sf.viewer_frame_act(
           c,
           "publish",
           if r.title != "" { r.title } else { @sf.t("common.close") },
           @sf.t("web-pages.chat.shareImage"),
           text(p, "hiddenText"),
-          false,
-          true,
-          publishing.head_w,
-          1.0,
-          ink,
-          fn() {
-            if p is Some(_) && messages.length() > 0 {
-              let (label, icon) = picture_out_way()
-              // (copied: a check a moment after, as a picture opened says its copy)
-              let shown = publishing.copied > 0 &&
-                !@kit.after(c, "publish/copied/\{publishing.copied}", true, @sf.copied_ms)
-              if @sf.viewer_tool(
-                  c,
-                  "publish/go",
-                  if shown { "check" } else { icon },
-                  if shown { @sf.t("common.copied") } else { label },
-                  ink,
-                  disabled=publishing.busy,
-                ) {
-                publish_go(c)
-              }
-            }
-          },
+          @sf.page_viewer_ink(),
+          if shown { "check" } else { icon },
+          if shown { @sf.t("common.copied") } else { label },
+          busy=publishing.busy || p is None || messages.length() == 0,
         )
-        if wide > publishing.head_w {
-          publishing.head_w = wide
+        if acted && p is Some(_) && messages.length() > 0 {
+          publish_go(c)
         }
         if closed {
           publish_reset()
@@ -394,13 +379,15 @@ let publish_note_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 let publish_problem : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger)
 
 ///|
-/// What it would hold (page): the chat's width (760 at most) in the middle, 80 down (the bar over it), 96 under.
+/// What it would hold (page): the chat's width (760 at most) in the middle, right under what is over it at the top
+/// (the bar on a wide screen, the status bar on a small one: its own 32 the room under them), 64 under (and the band at
+/// the foot of a small screen).
 // kept across runs: a value (no field of it changes)
 let publish_column_room : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let publish_column : @ui.Style = @ui.css("w=Full pb=S24").then(@ui.style(max_w=Fixed(publish_page_w)))
+let publish_column : @ui.Style = @ui.style(w=Full, max_w=Fixed(publish_page_w))
 
 ///|
 /// The picture (page): its words 32 in, 32 down from its top and up from its foot, its parts 16 apart, on the page's
@@ -426,9 +413,8 @@ let publish_mark : Double = 16.0
 let publish_brand : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Muted, wrap=false)
 
 ///|
-/// Where the picture starts on the page: 80 under the window's top (the bar over it, 45 across the top or 60 floating
-/// down to its foot), under the system's bar where there is one; its own 32 in that.
-let publish_page_top : Double = 48.0
+/// How far under the picture the page ends: 64, over the band of 取消 and 保存到相册 on a small screen.
+let publish_page_under : Double = 64.0
 
 ///|
 let publish_page_w : Double = 760.0
