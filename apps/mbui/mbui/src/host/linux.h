@@ -12,8 +12,8 @@ typedef void (*mb_text_fn)(int32_t, moonbit_string_t, int32_t, int32_t);
 typedef void (*mb_outside_fn)(int32_t, int32_t, int32_t);
 // the kinds of what the host does for the app, named as src/ui/hostcall.mbt's outside_* (this host has no gallery,
 // marks or update of its own yet)
-enum { MB_OUTSIDE_IMAGE = 1, MB_OUTSIDE_VIEW = 2, MB_OUTSIDE_PICK = 3, MB_OUTSIDE_GRAB = 6, MB_OUTSIDE_STREAM = 8,
-       MB_OUTSIDE_CLIP = 9 };
+enum { MB_OUTSIDE_IMAGE = 1, MB_OUTSIDE_VIEW = 2, MB_OUTSIDE_PICK = 3, MB_OUTSIDE_GRAB = 6, MB_OUTSIDE_UPDATE = 7,
+       MB_OUTSIDE_STREAM = 8, MB_OUTSIDE_CLIP = 9 };
 
 typedef struct {
   mb_frame_fn frame;

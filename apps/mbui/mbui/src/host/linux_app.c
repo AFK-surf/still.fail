@@ -130,6 +130,7 @@ double mb_app_scale(void) { return scale; }
 
 static void device_tell(mb_outside_fn tell);  // linux_device.h: the clipboard's reads done
 static void pick_tell(mb_outside_fn tell);    // the files picked
+static void update_tell(mb_outside_fn tell);  // linux_update.h: how an update goes
 void mb_host_set_cursor(int32_t kind);
 
 static gboolean on_render(GtkGLArea *a, GdkGLContext *c, gpointer data) {
@@ -141,6 +142,7 @@ static gboolean on_render(GtkGLArea *a, GdkGLContext *c, gpointer data) {
   mb_images_tell(outside_cb);
   device_tell(outside_cb);
   pick_tell(outside_cb);
+  update_tell(outside_cb);
   int w = gtk_widget_get_width(GTK_WIDGET(a)), h = gtk_widget_get_height(GTK_WIDGET(a));
   if (w <= 0 || h <= 0 || fb_pw <= 0 || fb_ph <= 0) return TRUE;
   scale = fb_pw / (double)w;
@@ -466,8 +468,9 @@ static void on_active(GObject *o, GParamSpec *p, gpointer data) {
   app_state();
 }
 
-// the app's life: once for its person, put away to its icon, links, the network, sleep
+// the app's life: once for its person, put away to its icon, links, the network, sleep; and its updates
 #include "linux_life.h"
+#include "linux_update.h"
 
 // ---- the system's settings: its colours, its words' size and face, its animations ----
 
@@ -896,8 +899,6 @@ moonbit_bytes_t mb_host_shared_in_file(int32_t i) {
   return moonbit_make_bytes(0, 0);
 }
 
-// Updates (@hostapi.app_version, update_install, update_state): this app does not update itself here yet.
-int32_t mb_host_app_version(void) { return 0; }
 // A package for the system's installer (@hostapi.install_package): none here, said on the system channel (system.mbt):
 // its name, escaped for JSON.
 void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
@@ -911,10 +912,6 @@ void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
   g_free(u);
 }
 
-void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name) {
-  (void)url, (void)sha256, (void)size, (void)name;
-}
-moonbit_string_t mb_host_update_state(void) { return moonbit_make_string_raw(0); }
 
 // Turned sideways for a film (@hostapi.set_sideways): a window does not turn.
 void mb_host_set_sideways(int32_t on) { (void)on; }

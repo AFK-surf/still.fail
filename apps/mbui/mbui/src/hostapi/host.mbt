@@ -1662,7 +1662,8 @@ pub fn app_version() -> Int {
 
 ///|
 /// A newer build at `url` (its `sha256`, `size` bytes) downloaded as `name`, checked and handed to the system's
-/// installer (Android: still.fail's Updates.kt); nothing elsewhere. How it goes: `update_state`.
+/// installer (Android: still.fail's Updates.kt), or put in this app's place and opened as it quits (macOS: mac_app.m;
+/// Linux, its own installer run: linux_update.h); nothing elsewhere. How it goes: `update_state`.
 pub fn update_install(url : String, sha256 : String, size : Double, name : String) -> Unit {
   current.val.update_install(url, sha256, size, name)
 }

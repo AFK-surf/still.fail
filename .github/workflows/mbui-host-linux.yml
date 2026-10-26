@@ -4,8 +4,8 @@
 # with its scripted taps, its tape made a Tester's test and run here (every frame the same), then the committed tape's
 # text (linux_controls) asked of Pango again (every answer the same), the runner's files told as they come, and the
 # app's links (started with one, and handed one by itself started again: once for its person, on a session bus of the
-# run's own) and a notification (shown, kept, clicked). On GitHub's own Ubuntu (a public repository's: free). When the
-# Linux host changes.
+# run's own), a notification (shown, kept, clicked) and an update (a newer build put in place and opened). On GitHub's
+# own Ubuntu (a public repository's: free). When the Linux host changes.
 name: mbui-host-linux
 on:
   pull_request:
@@ -16,6 +16,7 @@ on:
       - "apps/mbui/mbui/src/host/mini_json.h"
       - "apps/mbui/mbui/src/kitdemo/gallery/linkcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/noticecheck.mbt"
+      - "apps/mbui/mbui/src/kitdemo/gallery/updatecheck.mbt"
       - "apps/mbui/mbui/src/host/gles_render.h"
       - "apps/mbui/mbui/src/host/corner_sl.h"
       - "apps/mbui/mbui/src/host/done_watch.h"
@@ -73,6 +74,9 @@ jobs:
       - name: "The notifications' contract: one shown, kept, and clicked"
         if: success() || failure()
         run: dbus-run-session -- xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux notices
+      - name: "The update's contract: another machine's build refused, this machine's put in place and opened"
+        if: success() || failure()
+        run: dbus-run-session -- xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux update
       - uses: actions/upload-artifact@v4
         if: always()
         with:
