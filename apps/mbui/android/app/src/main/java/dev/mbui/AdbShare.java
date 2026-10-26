@@ -231,10 +231,15 @@ final class AdbShare {
                         }
                     }
                 }
+                String station = p.optString("station");
+                // lent at the tap, as the core has it (the page's switch follows `adbShare`), its ports given as the
+                // service finds them: not first once Android has started the service and it has looked for them
+                AdbCore.call("adb.share", offer(c, station, null, null), null);
                 c.startForegroundService(new Intent(c, AdbShareService.class).setAction(START)
-                        .putExtra(STATION, p.optString("station")).putExtra(NAME, p.optString("name", "station")));
+                        .putExtra(STATION, station).putExtra(NAME, p.optString("name", "station")));
                 reply.ok("{}");
             } catch (Exception e) {
+                AdbCore.call("adb.stop", null, null);
                 reply.fail(String.valueOf(e));
             }
         });
@@ -271,6 +276,21 @@ final class AdbShare {
             @Override
             public void onActivityDestroyed(Activity a) {}
         });
+    }
+
+    /** What `adb.share` is asked with: lent to `station`, adbd's ports as found (null, none found). */
+    static JSONObject offer(Context c, String station, Integer connect, Integer pair) {
+        JSONObject p = new JSONObject();
+        try {
+            p.put("station", station);
+            if (connect != null) p.put("connect", connect);
+            if (pair != null) p.put("pair", pair);
+            p.put("device", Build.MODEL);
+            p.put("android", Build.VERSION.RELEASE);
+            p.put("package", c.getPackageName());
+        } catch (Exception ignored) {
+        }
+        return p;
     }
 
     static Notification notification(Context c, JSONObject view, String name, String said) {

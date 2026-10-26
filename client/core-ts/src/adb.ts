@@ -170,6 +170,9 @@ export class Adb {
   }
 
   #share(offer: Offer): void {
+    // The same offer again (the app lends at the tap, its service offers once it has started): nothing to make anew.
+    const now = this.#offer;
+    if (now !== null && (Object.keys(offer) as (keyof Offer)[]).every((k) => offer[k] === now[k])) return;
     if (this.#offer === null || this.#offer.station !== offer.station) {
       this.#station = null;
       this.#closeTunnels();

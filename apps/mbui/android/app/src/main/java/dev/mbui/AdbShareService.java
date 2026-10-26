@@ -211,17 +211,7 @@ public final class AdbShareService extends Service {
                 String key = connect + "/" + pair;
                 if (key.equals(offered)) return;
                 offered = key;
-                JSONObject p = new JSONObject();
-                try {
-                    p.put("station", station);
-                    if (connect != null) p.put("connect", connect);
-                    if (pair != null) p.put("pair", pair);
-                    p.put("device", Build.MODEL);
-                    p.put("android", Build.VERSION.RELEASE);
-                    p.put("package", getPackageName());
-                } catch (Exception ignored) {
-                }
-                AdbCore.call("adb.share", p, new AdbCore.Answer() {
+                AdbCore.call("adb.share", AdbShare.offer(this, station, connect, pair), new AdbCore.Answer() {
                     @Override
                     public void ok(Object value) {}
 
