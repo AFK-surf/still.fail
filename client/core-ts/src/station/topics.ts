@@ -20,13 +20,13 @@ import { PAGE, TRANSCRIPT_PAGE, entriesOf, transcriptOf } from "./channel-kinds.
 import type { StationsSync } from "./sync.ts";
 import type { LinkNet } from "./wire.ts";
 import { screenCard, screensChanged, screensView } from "../screens.ts";
-import { down, downWords } from "../views/views.ts";
+import { down, downWords, isLetter, members } from "../views/views.ts";
 import { type Link, MEMORY, filePeekKey, linkPreviewKey, logKey } from "./link.ts";
 import * as logins from "./machine-logins.ts";
 import { laterSleep } from "../runtime.ts";
 import * as looks from "../looks.ts";
 
-/// A chat shows a window of its thread's entries: at most this many.
+/// A chat shows a window of its thread's entries: at most this many of what it shows (shownTo).
 export const WINDOW = 3 * PAGE;
 /// How many entries a message found is to have on either side of it in the window, for the window to be left as it is.
 const AROUND = 10;
@@ -586,6 +586,23 @@ export class StationTopics implements Owner {
     return { ok: { entries, whole: held.size >= latest, thread: this.summary(station, id) } };
   }
 
+  /// Where a window kept from entry `from` on toward `to` (either way) ends to hold WINDOW of what its chat shows (its
+  /// messages, not what agents wrote each other nor edits: views.ts `#chat`), the last entry it keeps; null when all of
+  /// it fits. Counted by entries, a chat that is mostly letters showed less than a screen of a whole window: its page
+  /// before then dropped what was in view at its end, which asked for the page after, which dropped the start, on and on.
+  #shownTo(station: string, id: number, from: number, to: number): number | null {
+    const keys = new Set(members(this.summary(station, id)));
+    const held = this.#core.data.logRange("entry", station, String(id), Math.min(from, to), Math.max(from, to));
+    const step = to >= from ? 1 : -1;
+    let shown = 0;
+    for (let n = from; n !== to + step; n += step) {
+      const e = held.get(n);
+      if (!isObject(e) || e.kind !== "message" || isLetter(e, keys)) continue;
+      if (++shown > WINDOW) return n - step;
+    }
+    return null;
+  }
+
   #window(station: string, id: number): [string, Window] | null {
     const tk = topicKey({ topic: "thread", station, thread: id });
     const w = this.#windows.get(tk);
@@ -607,9 +624,9 @@ export class StationTopics implements Owner {
       while (first > Math.max(1, before - PAGE) && held.has(first - 1)) first--;
       if (first === before) return false;
       window.first = first;
-      // As many go at the other end: the window is short of its end from then on.
-      const top = window.last ?? this.#latest(station, id);
-      if (top - first + 1 > WINDOW) window.last = first + WINDOW - 1;
+      // What shows past WINDOW goes at the other end: the window is short of its end from then on.
+      const end = this.#shownTo(station, id, first, window.last ?? this.#latest(station, id));
+      if (end !== null) window.last = end;
       this.#core.store.invalidate({ topic: "thread", station, thread: id });
       return first > 1;
     });
@@ -631,8 +648,9 @@ export class StationTopics implements Owner {
       while (last < to && held.has(last + 1)) last++;
       window.last = last >= latest ? null : last;
       window.caught = Math.max(window.caught, last);
-      const over = last - window.first + 1 - WINDOW;
-      if (over > 0) window.first += over;
+      // What shows before WINDOW of it goes at its start.
+      const start = this.#shownTo(station, id, last, window.first);
+      if (start !== null) window.first = start;
       this.#core.store.invalidate({ topic: "thread", station, thread: id });
       return last < latest;
     });
