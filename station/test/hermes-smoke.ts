@@ -11,6 +11,12 @@ import type { OpenOptions, RuntimeEvent, TurnOutcome } from "../src/agents/runti
 const data = mkdtempSync(process.platform === "win32" ? join(tmpdir(), "hm-real-") : "/tmp/hm-real-");
 const home = join(data, "profile");
 mkdirSync(join(home, "hermes"), { recursive: true });
+const nativeHome = join(data, "existing-hermes");
+mkdirSync(join(nativeHome, "memories"), { recursive: true });
+writeFileSync(join(nativeHome, "SOUL.md"), "Hermes home selection soul marker.");
+writeFileSync(join(nativeHome, "memories", "MEMORY.md"), "Hermes home selection memory marker.");
+let soulSeen = false;
+let memorySeen = false;
 let turn = 1;
 let requests = 0;
 let restored = false;
@@ -42,6 +48,9 @@ const server = createServer(async (req, res) => {
   // Hermes probes local model metadata (Ollama, llama.cpp, etc.) before using an OpenAI-compatible endpoint.
   if (req.url !== "/v1/chat/completions") { res.statusCode = 404; res.end(); return; }
   requests++;
+  const context = JSON.stringify(body.messages ?? []);
+  soulSeen ||= context.includes("Hermes home selection soul marker.");
+  memorySeen ||= context.includes("Hermes home selection memory marker.");
   if (turn === 2 && body.messages?.some((m: any) => m.role === "assistant" && m.content === "Hermes turn 1 complete")) restored = true;
   const tools: string[] = body.tools?.map((t: any) => t.function?.name) ?? [];
   lastTools = tools;
@@ -71,9 +80,9 @@ const server = createServer(async (req, res) => {
 });
 await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
 const port = (server.address() as any).port;
-writeFileSync(join(home, "hermes", "config.yaml"), `model:\n  default: smoke-model\n  provider: openai-api\n  api_mode: chat_completions\n  base_url: http://127.0.0.1:${port}/v1\n  stream: false\nagent:\n  max_turns: 4\nmemory:\n  memory_enabled: false\n  user_profile_enabled: false\n`);
+writeFileSync(join(nativeHome, "config.yaml"), `model:\n  default: smoke-model\n  provider: openai-api\n  api_mode: chat_completions\n  base_url: http://127.0.0.1:${port}/v1\n  stream: false\nagent:\n  max_turns: 4\nmemory:\n  memory_enabled: true\n  user_profile_enabled: false\n`);
 const options: OpenOptions = {
-  key: "real-smoke", profile: { id: "hm", runtime: "hermes", home, access: { kind: "env" }, env: { OPENAI_API_KEY: "local-test-placeholder", OPENAI_BASE_URL: `http://127.0.0.1:${port}/v1`, HERMES_TELEMETRY_ENABLED: "false" } },
+  key: "real-smoke", profile: { id: "hm", runtime: "hermes", home, access: { kind: "env" }, env: { HERMES_HOME: nativeHome, OPENAI_API_KEY: "local-test-placeholder", OPENAI_BASE_URL: `http://127.0.0.1:${port}/v1`, HERMES_TELEMETRY_ENABLED: "false" } },
   cwd: data, instructions: "Use the stillfail chat_post tool to send the answer.", mcpToken: "smoke-token", mcpUrl: `http://127.0.0.1:${port}/mcp`, route: "smoke",
 };
 const driver = new HermesDriver({ data });
@@ -118,6 +127,8 @@ try {
   assert.equal(records.filter(r => r.type === "tool" && isPosting(r.name)).length, 2, "both real MCP posts are recognised in history");
   assert.equal(records.filter(r => r.type === "assistant" && r.text.trim() === "Hermes turn 1 complete").length, 1, "loading history does not duplicate the transcript");
   assert.deepEqual(violations, []);
+  assert.equal(soulSeen, true, "the model receives the selected home's SOUL");
+  assert.equal(memorySeen, true, "the model receives the selected home's memory");
   await resumed.dispose();
   console.log(`PASS real Hermes: authenticated MCP, two completed turns, native resume preserves prior messages, readable history (${requests} local model requests)`);
 } finally {
