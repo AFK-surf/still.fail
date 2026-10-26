@@ -60,6 +60,20 @@ void mb_streams_lost(void);
 void mb_app_wake(void);
 double mb_app_scale(void);
 double mb_now_ms(void);
+// the native views' GtkFixed, under the canvas (NULL before the window is made)
+void *mb_app_under(void);
+// a GdkEvent of a view's, a scroll the app takes (a page that gives it the wheel's upright scroll), as the canvas's own
+void mb_app_scroll(void *event);
+
+// ---- the native views (linux_views.c): widgets under the canvas ----
+// whether WebKitGTK is loaded (its GL in the process)
+int mb_views_webkit(void);
+// whether a press at (x, y), points in the canvas, is a view's (the canvas holds none there)
+int mb_views_pass_through(double x, double y);
+// each view placed again on the window's new scale
+void mb_views_rescale(void);
+// what was done for the app told: f(MB_OUTSIDE_VIEW or MB_OUTSIDE_GRAB, id, state)
+void mb_views_tell(mb_outside_fn f);
 
 // ---- text (linux_text.c) ----
 // drawn at this many pixels per point; a change starts a new atlas

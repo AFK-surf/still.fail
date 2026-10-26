@@ -1,6 +1,6 @@
 // A little JSON, read: what a host is given as JSON and reads in C (the app's menus, @hostapi.menu_setup: win_life.h's
-// icon in the notification area, linux_life.h's among the desktop's apps' icons). Each value parsed whole into a tree
-// of its own (jparse), freed with it (jv_free); a number kept only as one (its digits unread).
+// icon in the notification area, linux_life.h's among the desktop's apps' icons; a site's settings, linux_views.c's).
+// Each value parsed whole into a tree of its own (jparse), freed with it (jv_free); a number kept as its text (jnum).
 #ifndef MB_MINI_JSON_H
 #define MB_MINI_JSON_H
 #include <stdlib.h>
@@ -11,7 +11,7 @@ typedef struct jv {
   int n;      // an object's or an array's how many
   struct jv *at;
   char **keys;  // an object's
-  char *s;      // a string's, UTF-8
+  char *s;      // a string's, UTF-8; a number's text
 } jv;
 
 static void jv_free(jv *v) {
@@ -166,7 +166,12 @@ static int jparse(const char **p, jv *v, int depth) {
   if (!strncmp(*p, "null", 4)) return v->kind = 'z', *p += 4, 1;
   if (c == '-' || (c >= '0' && c <= '9')) {
     v->kind = 'n';
+    const char *from = *p;
     while (**p && strchr("+-.eE0123456789", **p)) (*p)++;
+    v->s = (char *)malloc((size_t)(*p - from) + 1);
+    if (!v->s) return 0;
+    memcpy(v->s, from, (size_t)(*p - from));
+    v->s[*p - from] = 0;
     return 1;
   }
   return 0;
@@ -183,6 +188,12 @@ static const jv *jget(const jv *o, const char *key) {
 static const char *jtext(const jv *o, const char *key) {
   const jv *v = jget(o, key);
   return v && v->kind == 's' ? v->s : "";
+}
+
+// an object's number field, or `none`
+static double jnum(const jv *o, const char *key, double none) {
+  const jv *v = jget(o, key);
+  return v && v->kind == 'n' ? strtod(v->s, NULL) : none;
 }
 
 #endif
