@@ -168,6 +168,7 @@ static gboolean on_render(GtkGLArea *a, GdkGLContext *c, gpointer data) {
   // what was decoded meanwhile made textures, then told: the app finds them ready
   mb_images_upload();
   mb_streams_upload();
+  mb_players_upload();
   mb_images_tell(outside_cb);
   device_tell(outside_cb);
   pick_tell(outside_cb);

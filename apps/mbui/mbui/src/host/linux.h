@@ -74,6 +74,12 @@ int mb_views_pass_through(double x, double y);
 void mb_views_rescale(void);
 // what was done for the app told: f(MB_OUTSIDE_VIEW or MB_OUTSIDE_GRAB, id, state)
 void mb_views_tell(mb_outside_fn f);
+// a player's (linux_player.h): whether a view is one, its picture's texture (GL context current; 0 none yet), the
+// textures of those closed deleted as a frame begins, a new context's
+int mb_view_is_player(int vid);
+unsigned mb_player_tex(int vid);
+void mb_players_upload(void);
+void mb_players_lost(void);
 
 // ---- text (linux_text.c) ----
 // drawn at this many pixels per point; a change starts a new atlas

@@ -6,8 +6,10 @@
 //   static GLuint image_tex(int id);  the texture an instance's image (slot 20) is drawn from; 0: none (yet)
 //   static void view_parts_in(int tid, int32_t start, int32_t end);  a native view's picture's run (draw_kept below)
 //   MB_VIEW_TEX                       the first of a native view picture's image ids (src/hostapi/host.mbt)
-//   MB_VIEWS_UNDER (optional)         the host keeps its native views under the surface (Linux's), not drawn in it
-//                                     (Android's): a view's run takes the canvas away where it shows (draw_kept below)
+//   MB_VIEWS_UNDER (optional)         the host keeps its native views under the surface (Linux's pages), not drawn in it
+//                                     (Android's; Linux's players): a view's run for which the host's
+//                                     static int view_under(int tid) is true takes the canvas away where it shows
+//                                     (draw_kept below)
 // What is drawn where is the host's to say: the frame's size in points and its scale (cur_w, cur_h, cur_scale), the
 // surface's in pixels (fb_w, fb_h), the framebuffer drawn into (target_fb); gl_setup once its context is current.
 
@@ -749,11 +751,12 @@ static void draw_kept(void) {
       // (a view under the surface: its picture a white texel, so what kind 9 draws is how much of each pixel it covers,
       // and that much of the canvas is taken away there: a hole the view shows through, its round edge as soft as a
       // drawn one's; what is drawn after it draws over it)
-      if (tid > MB_VIEW_TEX) glBlendFunc(GL_ZERO, GL_ONE_MINUS_SRC_ALPHA);
+      int under = tid > MB_VIEW_TEX && view_under(tid);
+      if (under) glBlendFunc(GL_ZERO, GL_ONE_MINUS_SRC_ALPHA);
 #endif
       glDrawArraysInstanced(GL_TRIANGLES, 0, 6, end - start);
 #ifdef MB_VIEWS_UNDER
-      if (tid > MB_VIEW_TEX) glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+      if (under) glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 #endif
     }
     start = end;

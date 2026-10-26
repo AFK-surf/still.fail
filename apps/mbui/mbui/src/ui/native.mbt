@@ -15,8 +15,9 @@
 //
 // Hosts: Android (NativeViews.java: Media3's ExoPlayer on a TextureView, a WebView), macOS and iOS (apple_views.m:
 // AVPlayerLayer, WKWebView), the browser (web/host.js: <video>, a sandboxed <iframe>), Windows (win_views.cpp: WebView2,
-// pages and sites only; no player yet, nor any view where WebView2's runtime is not installed: `here` is false, the app
-// says it cannot show it), Linux (linux_views.c: WebKitGTK 6.0, the same: pages and sites, none without it).
+// its players a page of its own with a <video>; no view where WebView2's runtime is not installed: `here` is false, the
+// app says it cannot show it), Linux (linux_views.c: WebKitGTK 6.0's pages and sites, none without it; its players
+// linux_player.h's, GStreamer's playbin, their pictures drawn in the canvas as Android's are, none without GStreamer).
 //
 // Also here: PDFs drawn by the host page by page into images (`Pdf`, shown with `Ctx::image(pdf.page_src(i))`), and
 // an image drawn at a rect of its own within its box (`Ctx::picture`: zoomed, panned).
@@ -369,8 +370,8 @@ pub fn NativeView::keeps_cookies(self : NativeView) -> Bool {
 }
 
 ///|
-/// Whether this host has such a view (none: the browser's sites, Windows' and Linux's players, Windows without
-/// WebView2, Linux without WebKitGTK 6.0).
+/// Whether this host has such a view (none: the browser's sites, Windows without WebView2, Linux without WebKitGTK 6.0
+/// for pages and sites or GStreamer for players).
 pub fn NativeView::here(self : NativeView) -> Bool {
   self.id != 0
 }

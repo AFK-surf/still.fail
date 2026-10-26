@@ -9,6 +9,7 @@ on:
     paths: &paths
       - "apps/mbui/mbui/src/ui/native.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/viewcheck.mbt"
+      - "apps/mbui/mbui/src/kitdemo/gallery/playcheck.mbt"
       - "apps/mbui/mbui/src/host/win_*"
       - "apps/mbui/mbui/src/host/win.h"
       - "apps/mbui/mbui/src/host/mini_json.h"
