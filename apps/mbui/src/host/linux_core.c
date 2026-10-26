@@ -1,9 +1,9 @@
 // The still.fail client core on Linux (core_api.h), as Windows runs it (win_core.c, whose shape this keeps): Hermes in-process on
-// the Rust shell, in the engine prebuilt for Linux (apps/mbui/engine as libstillfail_engine.so, beside
-// libstillfail_shell.so: scripts/native.ts parts `engine` and `shell`, linux-x64 and linux-arm64), the core as Hermes
-// bytecode (core.hbc beside the app, or $MB_CORE_BUNDLE: scripts/core.sh hermes). What the core says comes back through
-// the engine's `say`, through core_native.c into mbui's queue (mb_post), which asks for the frame that takes it
-// (linux_app.c); the calls only the app does are answered here, as win_core.c's:
+// the Rust shell, in the engine prebuilt for Linux (apps/mbui/engine as libstillfail_engine.so, with the ICU libraries it
+// carries, beside libstillfail_shell.so: scripts/native.ts parts `engine` and `shell`, linux-x64 and linux-arm64), the
+// core as Hermes bytecode (core.hbc beside the app, or $MB_CORE_BUNDLE: scripts/core.sh hermes). What the core says
+// comes back through the engine's `say`, through core_native.c into mbui's queue (mb_post), which asks for the frame
+// that takes it (linux_app.c); the calls only the app does are answered here, as win_core.c's:
 //   secure.* (ember hosts/bridge.ts): what the core keeps out of the files it syncs (the lock's signing seed, a vault's
 //     key), in the desktop's Secret Service (libsecret: GNOME Keyring, KWallet), each value a secret of its own under
 //     the schema fail.still.mbui.core (its key, and whether it is a `user` one: read only as it was kept); where there is

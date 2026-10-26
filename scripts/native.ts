@@ -70,9 +70,13 @@ const VENDORED = ["vendor/iroh", "vendor/iroh-mdns-address-lookup", "vendor/noq-
 /// facebook/hermes at the tag that Hermes is made from.
 const HERMES = { rn: "0.81.4", tag: "hermes-2025-07-07-RNv0.81.0-e0fc67142ec0763c6b6153ca2bf96df815539782" };
 /// How Hermes and the engine are built on Linux: clang, CMake and Ninja, a release with no debugger, position
-/// independent (linked into the engine's shared library), ICU linked in statically (Ubuntu's libicu-dev): the engine
-/// carries its own, the same on every distribution whatever ICU it has, as Windows' takes the system's.
-const HERMES_LINUX_CMAKE = ["-G", "Ninja", "-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DHERMES_ENABLE_DEBUGGER=OFF", "-DHERMES_ENABLE_TEST_SUITE=OFF", "-DHERMES_USE_STATIC_ICU=ON", "-DBUILD_SHARED_LIBS=OFF", "-DHERMES_BUILD_SHARED_JSI=OFF"];
+/// independent (linked into the engine's shared library), ICU the build machine's shared libraries (Ubuntu's: its
+/// static ones are not position independent on x86-64, and a shared library cannot take them), carried beside the
+/// engine and hermesc (ICU_LINUX), which find them there ($ORIGIN): the same ICU on every distribution whatever it has,
+/// as Windows' takes the system's.
+const HERMES_LINUX_CMAKE = ["-G", "Ninja", "-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DHERMES_ENABLE_DEBUGGER=OFF", "-DHERMES_ENABLE_TEST_SUITE=OFF", "-DHERMES_USE_STATIC_ICU=OFF", "-DCMAKE_BUILD_RPATH=$ORIGIN", "-DBUILD_SHARED_LIBS=OFF", "-DHERMES_BUILD_SHARED_JSI=OFF"];
+/// ICU's libraries the Linux engine carries: Ubuntu 24.04's (the prebuild workflow's), what its build links.
+const ICU_LINUX = ["libicuuc.so.74", "libicui18n.so.74", "libicudata.so.74"];
 /// How Hermes and the engine are built on Windows: clang-cl (MSVC's own fails on HadesGC.cpp at this tag), CMake and
 /// Ninja, as a release with no debugger.
 const HERMES_CMAKE = ["-G", "Ninja", "-DCMAKE_C_COMPILER=clang-cl", "-DCMAKE_CXX_COMPILER=clang-cl", "-DCMAKE_BUILD_TYPE=Release", "-DHERMES_ENABLE_DEBUGGER=OFF", "-DHERMES_ENABLE_TEST_SUITE=OFF"];
@@ -273,12 +277,12 @@ const PARTS: Record<string, Part> = {
   // on it, linked to the shell. Android's: hermes-android's libhermes.so (HERMES.rn) with the JSI built beside it, the
   // NDK's CMake (apps/mbui/engine/android). Windows': Hermes built from its source (HERMES) with clang-cl, static, in one
   // DLL with the loop; with that build's hermesc, for the core's bytecode. Linux's: the same from its source with
-  // clang, in one shared library, ICU linked in (HERMES_LINUX_CMAKE).
+  // clang, in one shared library, ICU's beside it (HERMES_LINUX_CMAKE).
   engine: {
     // With the NDK's C++ runtime it was linked against, which the CMake build packs.
     files: (t) =>
       t === "win32-x64" ? ["stillfail_engine.dll", "stillfail_engine.lib", "hermesc.exe"]
-      : LINUX(t) ? ["libstillfail_engine.so", "hermesc"]
+      : LINUX(t) ? ["libstillfail_engine.so", "hermesc", ...ICU_LINUX]
       : ["libjsi.so", "libstillfail_hermes.so", "libc++_shared.so"],
     targets: ["android-arm64", "win32-x64", "linux-x64", "linux-arm64"],
     msvc: true,
@@ -487,8 +491,8 @@ function hermesSource(work: string): string {
   return src;
 }
 /// The Linux engine (apps/mbui/engine), as Windows' is built on Windows: in Hermes's own CMake build, on a Linux machine
-/// of the target's (the prebuild workflow's Ubuntu), its libhermes and ICU linked into libstillfail_engine.so; with that
-/// build's hermesc.
+/// of the target's (the prebuild workflow's Ubuntu), its libhermes linked into libstillfail_engine.so; with that build's
+/// hermesc, and the ICU libraries both link (ICU_LINUX: those the loader finds for the engine, as they are named).
 function engineLinux(t: Target, out: string) {
   if (osPlatform() !== "linux" || host() !== t) throw new Error(`engine ${t} is built on a Linux ${t} machine (the prebuild workflow's)`);
   const work = targetDir(join(ROOT, "apps/mbui/engine/target"), "engine");
@@ -496,8 +500,18 @@ function engineLinux(t: Target, out: string) {
   const build = join(work, "build");
   run("cmake", ["-S", src, "-B", build, ...HERMES_LINUX_CMAKE]);
   run("cmake", ["--build", build, "--target", "stillfail_engine", "hermesc"]);
-  copyFileSync(join(build, "stillfail-engine", "libstillfail_engine.so"), join(out, "libstillfail_engine.so"));
+  const engine = join(build, "stillfail-engine", "libstillfail_engine.so");
+  copyFileSync(engine, join(out, "libstillfail_engine.so"));
   copyFileSync(join(build, "bin", "hermesc"), join(out, "hermesc"));
+  // (ldd's lines: `libicuuc.so.74 => /usr/lib/x86_64-linux-gnu/libicuuc.so.74 (0x…)`)
+  const icu = new Map<string, string>();
+  for (const line of execFileSync("ldd", [engine], { encoding: "utf8" }).split("\n")) {
+    const m = /^\s*(libicu\S+)\s+=>\s+(\S+)/.exec(line);
+    if (m) icu.set(m[1]!, m[2]!);
+  }
+  const names = [...icu.keys()].sort();
+  if (names.join(" ") !== [...ICU_LINUX].sort().join(" ")) throw new Error(`the engine links ICU's ${names.join(", ") || "none"}, not ICU_LINUX's ${ICU_LINUX.join(", ")}`);
+  for (const [name, path] of icu) copyFileSync(path, join(out, name));
 }
 /// How Android's engine is built (apps/mbui/engine/android): the NDK's toolchain for arm64, its C++ runtime shared, a
 /// release.

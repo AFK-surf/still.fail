@@ -277,7 +277,7 @@ linux() {
   stage=$C/linux-stage/still.fail-mbui
   rm -rf "$C/linux-stage" && mkdir -p "$stage"
   cp "$dir/stillfail.exe" "$stage/stillfail"
-  cp "$dir/libstillfail_engine.so" "$dir/libstillfail_shell.so" "$dir/core.hbc" "$A/linux/install.sh" "$stage/"
+  cp "$dir"/lib*.so* "$dir/core.hbc" "$A/linux/install.sh" "$stage/"
   cp "$icon" "$stage/icon.png"
   echo "0.1.$n" > "$stage/VERSION"
   rm -rf "$RELEASE_DIR/linux" && mkdir -p "$RELEASE_DIR/linux/linux"

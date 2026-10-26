@@ -29,7 +29,8 @@ jobs:
       - uses: actions/setup-node@v5
         with: { node-version-file: .node-version, package-manager-cache: false }
       # One job a Windows part (each its own build, minutes); Android's in one, the shell first (the engine links it);
-      # each Linux architecture's in one, on its own Ubuntu (built there: Hermes and its hermesc for that machine).
+      # one job a Linux part too (the engine leaves the shell's symbols to the loader: not linked to it), on its own
+      # architecture's Ubuntu (built there: Hermes and its hermesc for that machine).
       - id: what
         run: |
           missing=$(node scripts/native.ts missing --prebuilt)
@@ -37,8 +38,8 @@ jobs:
           builds=$(printf '%s\n' $missing | jq -R . | jq -sc '
             (map(select(endswith(":win32-x64"))) | map({name: ., os: "windows-2025", parts: .}))
             + (map(select(endswith(":android-arm64"))) | if length > 0 then [{name: "android-arm64", os: "ubuntu-24.04", parts: join(" ")}] else [] end)
-            + (map(select(endswith(":linux-x64"))) | if length > 0 then [{name: "linux-x64", os: "ubuntu-24.04", parts: join(" ")}] else [] end)
-            + (map(select(endswith(":linux-arm64"))) | if length > 0 then [{name: "linux-arm64", os: "ubuntu-24.04-arm", parts: join(" ")}] else [] end)')
+            + (map(select(endswith(":linux-x64"))) | map({name: ., os: "ubuntu-24.04", parts: .}))
+            + (map(select(endswith(":linux-arm64"))) | map({name: ., os: "ubuntu-24.04-arm", parts: .}))')
           echo "builds=$builds" >> "$GITHUB_OUTPUT"
 
   build:
@@ -81,8 +82,9 @@ jobs:
           sdkmanager=$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
           if [ "${{ steps.ndk.outputs.cache-hit }}" != true ]; then "$sdkmanager" 'ndk;28.2.13676358' > /dev/null; fi
           ls "$ANDROID_HOME/cmake" 2>/dev/null | grep -q . || "$sdkmanager" 'cmake;3.31.6' > /dev/null
-      # Linux's engine: Hermes built with clang, CMake and Ninja, ICU linked in (scripts/native.ts HERMES_LINUX_CMAKE)
-      - if: startsWith(matrix.name, 'linux-')
+      # Linux's engine: Hermes built with clang, CMake and Ninja, ICU's shared libraries beside it (scripts/native.ts
+      # HERMES_LINUX_CMAKE)
+      - if: contains(matrix.name, ':linux-')
         run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends clang cmake ninja-build libicu-dev
       - name: Build ${{ matrix.parts }}, put it in the release
         env:

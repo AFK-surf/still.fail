@@ -26,7 +26,8 @@ put() {
   . "$MBUI_DIR/scripts/env.sh"
   # (mbui's linux.sh builds this module in its copy, out/linux/app beside mbui's own)
   dir=$MBUI_DIR/out/linux/app/$(cd "$MBUI_DIR/out/linux/app" && pkg_build $APP native ${MODE:-release})
-  cp "$engine/libstillfail_engine.so" "$shell/libstillfail_shell.so" "$dir/" || return 1
+  # (the engine's libraries: its own, and ICU's it carries)
+  cp "$engine"/lib*.so* "$shell/libstillfail_shell.so" "$dir/" || return 1
   [ "${1:-}" != core ] || cp "$A/out/core/core.hbc" "$dir/" || return 1
   ls -la "$dir"
 }
