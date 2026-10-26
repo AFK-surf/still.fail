@@ -744,13 +744,18 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   // (a square window: the panels' corners all the tape's)
   assert_eq(@sf.tape_edge.radius(), @sf.tape_corner)
   let panel = @sf.tape_corner
-  // one line: a capsule (its half: a pill in the panel's corner keeps its own, as round as the panel's less the inset
-  // where its buttons are keyboard and mouse's 32), its buttons round in its ends; the screen's buttons (a touch screen's
-  // larger), the same shape
+  // one line: a capsule (its half: a pill in the panel's corner keeps its own, the panel's less how far in it stands),
+  // its buttons round in its ends; the screen's buttons (a touch screen's larger), the same shape
   let side = @sf.theme().round.side
   guard composer_corners(t) is Some((k, s, h)) else { fail("no composer") }
   assert_eq(k, h / 2.0)
   assert_eq(s, side / 2.0)
+  // its ends concentric with the panel's foot corners as high as it is: as far in from its sides and foot as the
+  // panel's corner less its half (the user, 2026-10-26: a finger's, 52 high, stood where keyboard and mouse's 48 would)
+  guard composer_and_panel(t) is Some((b, p)) else { fail("no composer in a panel") }
+  let at = (b.x - p.x, p.x + p.w - (b.x + b.w), p.y + p.h - (b.y + b.h), 0.0)
+  let concentric = @sf.capsule_in(panel, h)
+  assert_true(near4(at, (concentric, concentric, concentric, 0.0)), msg="the capsule from the panel's edges: \{at}")
   assert_eq(t.corner_faults(), [])
   // lines more: the box concentric with the panel, the send button with the box, 12 in
   t.tap_text("发消息")

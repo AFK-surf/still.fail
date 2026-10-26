@@ -1091,14 +1091,18 @@ let thumb_side : Double = 56.0
 let on_veil : Int64 = 0xFFFFFFFFL
 
 ///|
-/// The capsule (composerBox, one line): its parts on its centre line, 2 apart, 8 in all round, a pill 48 high (so in a
-/// panel's corners, the ladder's inset in, concentric with them: the tape's page).
+/// The capsule (composerBox, one line): its parts on its centre line, 2 apart, 8 in all round, a pill as high as that
+/// makes it (capsule_h: so in a panel's corners, where that makes it concentric with them: the tape's page).
 // kept across runs: a value (no field of it changes)
 let composer_box : @ui.Style = @ui.css("row w=Full gap=SPx pl=S2 pr=S2 py=S2 radius=InnerOr(Full) align=ACenter")
 
 ///|
-/// How high the capsule is: its buttons (32) 8 in.
-let capsule_h : Double = 32.0 + 2.0 * 8.0
+/// How high the capsule is: its round buttons (the theme's: keyboard and mouse's 32, a finger's 36) 8 in (composer_box's
+/// py=S2), so in a panel's corners it stands where it is concentric with them as high as it is (the user, 2026-10-26: a
+/// finger's, 52 high, stood where a 48 would, its ends not on the page's corners).
+fn capsule_h() -> Double {
+  @sf.theme().round.side + 2.0 * 8.0
+}
 
 ///|
 /// The capsule further in than the box by `capsule_in` (composer's), from its left, its right and its foot.
@@ -1130,7 +1134,7 @@ pub fn composer_place(pane : Double) -> ComposerPlace {
   if !@sf.in_pane() || composer_width(pane) < pane - 2.0 * d - 0.5 {
     return composer_alone
   }
-  let (l, r, b) = @sf.foot_capsule(capsule_h, @sf.corner_inset, @sf.corner_inset)
+  let (l, r, b) = @sf.foot_capsule(capsule_h(), @sf.corner_inset, @sf.corner_inset)
   { capsule_in: (l - d, r - d, b - d) }
 }
 

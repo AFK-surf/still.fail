@@ -257,10 +257,13 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       // its two sides) is set in a corner only where the container is round all along that axis (a capsule's end: a
       // switch's knob in its track, a send button in a capsule field, a chip's dot): a card's trailing × in the middle
       // of a card taller than its corners are round is in none. (Where it stands, not how it is laid out: one in the
-      // middle of a short row along a container's edge, a bar's button by a panel's corner, is in that corner.)
+      // middle of a short row along a container's edge, a bar's button by a panel's corner, is in that corner.) A
+      // capsule long along that axis reaches across it, its ends in the corners at its two ends (a composer's capsule
+      // across a panel's foot: the user, 2026-10-26, a finger's not concentric with the page's corners, not found)
       let round = rb >= dmin(b.fw, b.fh) / 2.0 - 0.5
       if round {
-        if ((t - d).abs() <= 0.5 && ra < a.fh / 2.0 - 0.5) || ((l - r).abs() <= 0.5 && ra < a.fw / 2.0 - 0.5) {
+        if ((t - d).abs() <= 0.5 && ra < a.fh / 2.0 - 0.5 && b.fh <= b.fw + 0.5) ||
+          ((l - r).abs() <= 0.5 && ra < a.fw / 2.0 - 0.5 && b.fw <= b.fh + 0.5) {
           continue
         }
         // a mark smaller than the gap it would leave round it standing concentric (the corner's radius less its own
