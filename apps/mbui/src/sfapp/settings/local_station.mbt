@@ -4,6 +4,32 @@
 // starting, stopping and restarting it, its log and its data opened. Which workspace it is in is only said.
 
 ///|
+/// Whether this machine's station is the app's to add and to bring up to date (its host runs the station's installer:
+/// macOS's, Windows', Linux's); a phone's and a page's are not.
+pub fn local_station_managed() -> Bool {
+  let p = @ui.platform()
+  p == 0 || p == 3 || p == 5
+}
+
+///|
+/// This machine called as the person would call it: a Mac, else a computer (Windows', Linux's: 这台电脑).
+pub fn local_machine_pc() -> Bool {
+  @ui.platform() == 3 || @ui.platform() == 5
+}
+
+///|
+/// Its data shown in the system's own file manager, named as the system names it (Finder, Explorer, a Linux desktop's).
+pub fn local_folder_label() -> String {
+  tr(
+    match @ui.platform() {
+      3 => "web-pages.localStation.openFolderPc"
+      5 => "web-pages.localStation.openFolderFiles"
+      _ => "web-pages.localStation.openFolder"
+    },
+  )
+}
+
+///|
 /// 本机 Station's page: read as it is shown and every few seconds (a station starts, stops and updates on its own time).
 fn local_station_page(c : @ui.Ctx, core : Core) -> Unit {
   ignore(c.every(local_read_ms))
@@ -22,11 +48,11 @@ fn local_station_page(c : @ui.Ctx, core : Core) -> Unit {
       blocks.push(fn() { local_progress(c, s, doing) })
     } else {
       blocks.push(fn() { section_note(c, tr("desktop.local.noService")) })
-      if (@ui.platform() == 0 || @ui.platform() == 3) {
+      if local_station_managed() {
         blocks.push(fn() {
           list_card(c, boxed=true, fn() {
             if list_row(c, key="local/install", fn() {
-                row_title(c, tr(if @ui.platform() == 3 { "web-pages.settings.thisPc.add" } else { "web-pages.settings.thisMac.add" }))
+                row_title(c, tr(if local_machine_pc() { "web-pages.settings.thisPc.add" } else { "web-pages.settings.thisMac.add" }))
               }) {
               (core.local_install)(true)
             }
@@ -42,7 +68,7 @@ fn local_station_page(c : @ui.Ctx, core : Core) -> Unit {
   let service = field(s, "service") is Some(_)
   let workspace = field(s, "workspace")
   let name = match text(workspace, "stationName") {
-    "" => tr(if @ui.platform() == 3 { "web-pages.localStation.thisPc" } else { "web-pages.localStation.thisMac" })
+    "" => tr(if local_machine_pc() { "web-pages.localStation.thisPc" } else { "web-pages.localStation.thisMac" })
     n => n
   }
   let state = if doing != "" {
@@ -100,11 +126,11 @@ fn local_station_page(c : @ui.Ctx, core : Core) -> Unit {
     }
   }
   // brought up to the latest release (the installer, which makes one with no service a service), not one started by hand
-  if doing == "" && text(s, "runner") != "other" && (@ui.platform() == 0 || @ui.platform() == 3) {
+  if doing == "" && text(s, "runner") != "other" && local_station_managed() {
     acts.push(("update", tr("web-pages.localStation.update")))
   }
   acts.push(("log", tr("web-pages.localStation.openLog")))
-  acts.push(("folder", tr(if @ui.platform() == 3 { "web-pages.localStation.openFolderPc" } else { "web-pages.localStation.openFolder" })))
+  acts.push(("folder", local_folder_label()))
   blocks.push(fn() {
     list_card(c, boxed=true, fn() {
       for a in acts {

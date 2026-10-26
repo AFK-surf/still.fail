@@ -24,6 +24,8 @@ fn main {
   let noticed = @ui.env("MBUI_NOTICECHECK") == "1"
   // MBUI_PDFCHECK=<a PDF, base64>: its pages read and drawn by the host, said on the log (pdfcheck.mbt)
   let pdf = @ui.env("MBUI_PDFCHECK")
+  // MBUI_STATIONCHECK=read|stop: this machine's station as the host says it, and stopped (stationcheck.mbt)
+  let station = @ui.env("MBUI_STATIONCHECK")
   if linked {
     @ui.on_message(@hostapi.system_channel, fn(json, _) { @gallery.link_check_said(json) })
   }
@@ -36,6 +38,8 @@ fn main {
       @gallery.notice_check_run(c)
     } else if pdf != "" {
       @gallery.pdf_check_run(c, pdf)
+    } else if station != "" {
+      @gallery.station_check_run(c, station)
     } else if sited {
       @gallery.site_check_run(c)
     } else if viewed {

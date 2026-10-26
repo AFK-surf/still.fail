@@ -37,6 +37,9 @@
 #   scripts/host_contract.sh HOST pdf           test/host/pdfcheck.pdf's two pages read and drawn by the host, the
 #        second turned a quarter clockwise as its /Rotate says: their sizes, and each drawn page's colours (kitdemo's
 #        MBUI_PDFCHECK, src/kitdemo/gallery/pdfcheck.mbt)
+#   scripts/host_contract.sh linux station      this machine's station as the host says it, in a home of the run's own
+#        (kitdemo's MBUI_STATIONCHECK, src/kitdemo/gallery/stationcheck.mbt): one started by hand said so, with its
+#        release, workspace and data, and stopped; then one the installer's service runs said so
 #   scripts/host_contract.sh linux links        (a session bus: dbus-run-session's) the app started with a link of its
 #        schemes, said to it; started again with one while it runs, handed over to the one running (once for its
 #        person: src/host/linux_life.h), which says it
@@ -583,6 +586,36 @@ INSTALL
     kill $pid
     rm -rf "$HOME/Library/Caches/dev.mbui.kitdemo.update"
     echo "update contract (mac): refused one signed otherwise; put 2 in 1's place and opened it" ;;
+  station)
+    [ "$H" = linux ] || { echo "station contract: Linux's (the Mac's and Windows' are not checked here)"; exit 1; }
+    # a home of the run's own: a station's data (~/.stillfail) whose run/station.json names a process of the run's, alive
+    # until it is stopped (a stand-in for the station), and whose mesh/cloud.json names its workspace
+    S=$PWD/$O/station
+    rm -rf "$S" && mkdir -p "$S/.stillfail/run" "$S/.stillfail/mesh" "$S/.stillfail/app"
+    printf '{"workspace":"ws1","workspace_name":"星火","station":"st1","name":"Studio","removed_at":null}' \
+      > "$S/.stillfail/mesh/cloud.json"
+    tail -f /dev/null & ST=$!
+    printf '{"pid":%d,"version":"0.1.4321"}' $ST > "$S/.stillfail/run/station.json"
+    run "HOME=$S XDG_CONFIG_HOME=$S/.config MBUI_STATIONCHECK=stop" $O/station-stop.log || true
+    read=$(grep -a "STATIONCHECK read" $O/station-stop.log); after=$(grep -a "STATIONCHECK after" $O/station-stop.log)
+    echo "$read"; echo "$after"
+    for want in '"runner":"other"' '"version":"0.1.4321"' '"installed":true' "\"data\":\"$S/.stillfail\"" \
+      '"workspace":{"id":"ws1","name":"星火","station":"st1","stationName":"Studio","removed":false}'; do
+      case "$read" in *"$want"*) ;; *) kill $ST 2> /dev/null; echo "station contract (linux): not said: $want"; exit 1 ;; esac
+    done
+    case "$after" in *'"runner":"none"'*) ;; *) kill $ST 2> /dev/null; echo "station contract (linux): not stopped"; exit 1 ;; esac
+    if kill -0 $ST 2> /dev/null; then kill $ST; echo "station contract (linux): said stopped, still running"; exit 1; fi
+    # the installer's service there (its unit, where systemd looks for a user's): what runs it
+    mkdir -p "$S/.config/systemd/user" && : > "$S/.config/systemd/user/stillfail-station.service"
+    tail -f /dev/null & ST=$!
+    printf '{"pid":%d,"version":"0.1.4321"}' $ST > "$S/.stillfail/run/station.json"
+    run "HOME=$S XDG_CONFIG_HOME=$S/.config MBUI_STATIONCHECK=read" $O/station-read.log || true
+    kill $ST
+    read=$(grep -a "STATIONCHECK read" $O/station-read.log)
+    echo "$read"
+    case "$read" in *'"runner":"service"'*'"service":{"kind":"systemd","name":"stillfail-station.service"}'*) ;;
+      *) echo "station contract (linux): its service not said"; exit 1 ;; esac
+    echo "station contract (linux): one started by hand said and stopped; the service's said as running it" ;;
   pdf)
     # (each page at most 400 pixels on its longer side: red on the side its left half went to, blue on the other's)
     run "MBUI_PDFCHECK=$(base64 < test/host/pdfcheck.pdf | tr -d '\n\r')" $O/pdf.log || true
@@ -680,5 +713,5 @@ INSTALL
     echo "links contract (mac): opened with a link of its own scheme, the app said it" ;;
   kinds)
     scripts/chk outside-kinds $H ;;
-  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf; ios: free, done)" >&2; exit 1 ;;
+  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, station; ios: free, done)" >&2; exit 1 ;;
 esac

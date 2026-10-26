@@ -1553,6 +1553,7 @@ let zh : Map[String, String] = {
   "web-pages.localStation.openLog": "打开日志",
   "web-pages.localStation.openFolder": "在 Finder 中显示数据",
   "web-pages.localStation.openFolderPc": "在资源管理器中显示数据",
+  "web-pages.localStation.openFolderFiles": "在文件管理器中显示数据",
   "web-pages.localStation.doing.install": "正在下载并安装",
   "web-pages.settings.thisMac.add": "添加这台 Mac",
   "web-pages.settings.thisPc.add": "添加这台电脑",
