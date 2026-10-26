@@ -6,7 +6,7 @@ import { conform } from "./conform.ts";
 import { railView } from "./rail.ts";
 import type { Data } from "./data.ts";
 import { CoreError } from "./error.ts";
-import { fromLocale, follows, setCurrent, t, tr, type Lang } from "./i18n.ts";
+import { current, fromLocale, follows, setCurrent, t, tr, type Lang } from "./i18n.ts";
 import * as keymap from "./keymap.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
@@ -244,8 +244,9 @@ export function inviteUsed(data: Data): void {
   }
 }
 
-/// What the device is, from what its host says (`client.device`: app, build, userAgent, model, locale, and `client`, the
-/// name of an app other than still.fail's own that runs this core).
+/// What the device is, from what its host says (`client.device`: app, build, userAgent, model, locale, `machine`, the
+/// name its owner knows it by (a computer's name, a phone's as its settings say), and `client`, the name of an app other
+/// than still.fail's own that runs this core).
 export function device(data: Data, facts: unknown): void {
   const said = (k: string) => {
     const v = isObject(facts) ? facts[k] : undefined;
@@ -256,6 +257,7 @@ export function device(data: Data, facts: unknown): void {
   const build = said("build");
   const agent = said("userAgent");
   const model = said("model");
+  const machine = said("machine").slice(0, 60);
   const has = (words: string[]) => words.some((w) => agent.toLowerCase().includes(w.toLowerCase()));
   const phone = app === "android" || app === "ios" || (app === "web" && has(["Android", "iPhone", "iPad"]));
   const os = has(["iPhone", "iPad"]) ? "iOS" : agent.includes("Mac OS X") ? "macOS" : agent.includes("Windows") ? "Windows" : agent.includes("Android") ? "Android" : agent.includes("Linux") ? "Linux" : "";
@@ -276,13 +278,42 @@ export function device(data: Data, facts: unknown): void {
   if (client !== "") told.client = client;
   brand.setOwnApp(client === "");
   const name = client !== "" ? client : brand.name();
+  // which machine it is where it says (the person's several Macs, their phone as they named it), else what kind
   let deviceName: string;
-  if (app === "android") deviceName = tr(lang, "core-misc.device.android", { brand: name, more: withMore(model) });
-  else if (app === "ios") deviceName = tr(lang, "core-misc.device.ios", { brand: name, more: withMore(model) });
-  else if (app === "desktop") deviceName = tr(lang, "core-misc.device.desktop", { brand: name, more: withMore(os) });
+  if (app === "android") deviceName = tr(lang, "core-misc.device.android", { brand: name, more: withMore(machine || model) });
+  else if (app === "ios") deviceName = tr(lang, "core-misc.device.ios", { brand: name, more: withMore(machine || model) });
+  else if (app === "desktop") deviceName = tr(lang, "core-misc.device.desktop", { brand: name, more: withMore(machine || os) });
   else deviceName = tr(lang, "core-misc.device.web", { brand: name, browser: browser === "" ? tr(lang, "core-misc.device.browser") : browser, more: withMore(os) });
   told.name = deviceName;
   data.set(PREFS, prefs);
+}
+
+/// The apps a device names itself as (`device`, core-misc.device.*).
+const APPS = ["desktop", "android", "ios", "web"] as const;
+
+/// An app's words in a device's name, after its brand, in `lang`: " 桌面版" ("{brand} 桌面版 · {machine}"), " Web".
+function appWords(lang: Lang, app: (typeof APPS)[number]): string {
+  return tr(lang, `core-misc.device.${app}`, { brand: "", browser: "\u0000", more: "" }).split(" · ")[0] ?? "";
+}
+
+/// A device's name as `device` makes it, taken apart: which app it is (`group`, the same whichever language it was
+/// named in; `app`, its brand's in this language: still.fail 桌面版) and the machine it is on (左子健的 MacBook Air,
+/// Chrome · macOS; empty where it said none). A name `device` did not make (one given when it was approved, an older
+/// client's) is all machine, its app not known.
+export function deviceParts(label: string): { group: string | null; app: string | null; machine: string } {
+  // (its brand is what comes before the first of the apps' words in it: a web page's machine may end in Android)
+  let found: { at: number; words: string; app: (typeof APPS)[number] } | null = null;
+  for (const lang of ["zh", "en"] as const) {
+    for (const app of APPS) {
+      const words = appWords(lang, app);
+      const before = label.indexOf(`${words} · `);
+      const at = before >= 0 ? before : label.endsWith(words) ? label.length - words.length : -1;
+      if (at > 0 && (found === null || at < found.at)) found = { at, words, app };
+    }
+  }
+  if (found === null || label.slice(0, found.at).includes(" · ")) return { group: null, app: null, machine: label };
+  const brand = label.slice(0, found.at);
+  return { group: `${found.app} ${brand}`, app: brand + appWords(current(), found.app), machine: label.slice(found.at + found.words.length + 3) };
 }
 
 /// The language things are said in (`lang`): as chosen, else as the device is; the core says its words in it.

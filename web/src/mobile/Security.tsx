@@ -11,7 +11,8 @@ import { StationInWords, StationNamedAt } from "../StationNamed.tsx";
 import { CodeEntry, spacedCode, useLock, useLockPrompts, type LockDraft, type LockPairing, type LockRequest, type LockView } from "../cloud/Security.tsx";
 import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
 import { useApp } from "./app.tsx";
-import { Button, LargeTitle, ListCard, ListRow, PickRow, SectionHeader, TopBack } from "./parts.tsx";
+import { Button, LargeTitle, LinkButton, ListCard, ListRow, PickRow, SectionHeader, TopBack } from "./parts.tsx";
+import { confirm } from "./sheets.tsx";
 import { Spinner, Waiting } from "@stillfail/ui/waiting.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -101,8 +102,13 @@ function On({ lock }: { lock: LockView }) {
         {lock.members.map((m) => (
           <div key={m.sub}>
             <ListRow><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{m.nameText}</span><span className={partsCss.mSubtle}>{m.roleText}</span></ListRow>
-            {m.devices.map((d) => (
-              <DeviceRow key={d.id} d={d} renew={lock.signs ? () => void run("lock.renew", { workspace: ws, device: d.id }, t("web-pages.security.renew"), t("web-pages.security.renewed")) : undefined} />
+            {m.groups.map((g) => (
+              <div key={g.appText}>
+                <div className={css.mDeviceApp}>{g.appText}</div>
+                {g.devices.map((d) => (
+                  <DeviceRow key={d.id} d={d} renew={lock.signs ? () => void run("lock.renew", { workspace: ws, device: d.id }, t("web-pages.security.renew"), t("web-pages.security.renewed")) : undefined} />
+                ))}
+              </div>
             ))}
           </div>
         ))}
@@ -131,16 +137,30 @@ function On({ lock }: { lock: LockView }) {
   );
 }
 
-function DeviceRow({ d, renew }: { d: LockView["members"][number]["devices"][number]; renew?: (() => void) | undefined }) {
+/** A device in the lock: which machine it is (its group says the app), when it was last used; 续期 a web page's, 移除
+ *  (asked first in a sheet) where this one may, in a line of their own under its words: its name, of no length known,
+ *  never squeezed by them. */
+function DeviceRow({ d, renew }: { d: LockView["members"][number]["groups"][number]["devices"][number]; renew?: (() => void) | undefined }) {
   const app = useApp();
-  const renewing = useDoing("lock.renew", { workspace: app.entry.id, device: d.id });
+  const call = useCall();
+  const ws = app.entry.id;
+  const renewing = useDoing("lock.renew", { workspace: ws, device: d.id });
+  const removing = useDoing("lock.removeDevice", { workspace: ws, device: d.id });
+  const remove = () => confirm(app, {
+    title: t("web-pages.security.removeTitle", { name: d.fullText }), text: t("web-pages.security.removeBody"),
+    action: t("web-pages.security.remove"), danger: true,
+    run: () => call("lock.removeDevice", { workspace: ws, device: d.id }).then(() => app.toast(t("web-pages.security.removed"))),
+  });
   return (
-    <ListRow onClick={d.daysLeft != null && renew && !renewing ? renew : undefined}>
+    <ListRow>
       <span className={`${partsCss.mGrow} ${listsCss.mRowText} ${css.mDevice}`}>
         <span>{d.nameText}</span>
         <span className={d.renewSoon ? css.mWarn : listsCss.mRowNote}>{d.metaText}</span>
+        {((d.daysLeft != null && renew) || d.removable) && <span className={css.mDeviceActs}>
+          {d.daysLeft != null && renew && <LinkButton label={t("web-pages.security.renew")} busy={renewing} onClick={renew} />}
+          {d.removable && <LinkButton label={t("web-pages.security.remove")} busy={removing} onClick={remove} />}
+        </span>}
       </span>
-      {renewing ? <Spinner inline /> : d.daysLeft != null && renew && <span className={partsCss.mAccent}>{t("web-pages.security.renew")}</span>}
     </ListRow>
   );
 }

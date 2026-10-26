@@ -561,6 +561,29 @@ test("the_language_is_as_chosen_else_as_the_device_is", async () => {
   core.close();
 });
 
+test("a_devices_name_comes_apart_as_its_app_and_its_machine_whichever_language_named_it", async () => {
+  // The security page groups a person's devices by app and names each by its machine (views/lock.ts): the names the
+  // hosts' devices are given, in either language, taken apart again (a web page's machine may end in Android); one
+  // given otherwise is all machine.
+  const { host, core } = await stationCore();
+  const ui = core.connect();
+  const phone = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36";
+  let id = 0;
+  const parts = async (params: Record<string, string>) => {
+    call(core, ui, ++id, "client.device", params);
+    await host.settle();
+    return prefs.deviceParts(prefs.deviceName(core.inner.data) ?? "");
+  };
+  for (const locale of ["zh-CN", "en-US"]) {
+    assert.deepEqual(await parts({ app: "desktop", userAgent: "Macintosh; Mac OS X", machine: "林的 MacBook Air", client: "still.fail mbui", locale }),
+      { group: "desktop still.fail mbui", app: "still.fail mbui 桌面版", machine: "林的 MacBook Air" }, locale);
+    assert.deepEqual(await parts({ app: "web", userAgent: phone, locale }), { group: "web still.fail", app: "still.fail 网页版", machine: "Chrome · Android" }, locale);
+    assert.deepEqual(await parts({ app: "android", model: "", locale }), { group: "android still.fail", app: "still.fail Android", machine: "" }, locale);
+  }
+  assert.deepEqual(prefs.deviceParts("这台手机"), { group: null, app: null, machine: "这台手机" });
+  core.close();
+});
+
 test("a_draft_is_kept_on_the_device_until_emptied", async () => {
   const { host, core } = await stationCore();
   const ui = core.connect();

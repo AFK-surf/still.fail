@@ -168,11 +168,52 @@ test("the lock says its devices, people and waiting devices in words, as every p
   const owner = v.members.find((m: { sub: string }) => m.sub === "s1");
   const other = v.members.find((m: { sub: string }) => m.sub === "s2");
   assert.deepEqual([owner.roleText, other.roleText], ["Owner", "成员"]);
-  assert.deepEqual(owner.devices.map((d: { nameText: string; metaText: string }) => [d.nameText, d.metaText]), [["this", "客户端 · 受信任 · 此设备"]]);
-  assert.deepEqual(other.devices.map((d: { nameText: string; metaText: string }) => [d.nameText, d.metaText]), [["旧版客户端", "网页版"]]);
+  const groups = (m: { groups: { appText: string; devices: { nameText: string; metaText: string }[] }[] }) =>
+    m.groups.map((g) => [g.appText, g.devices.map((d) => [d.nameText, d.metaText])]);
+  // (names that say no app together)
+  assert.deepEqual(groups(owner), [["其他", [["this", "此设备 · 受信任"]]]]);
+  // (whether it is a web page its mark says; when it was last used, nothing where the cloud would not say)
+  assert.deepEqual(groups(other), [["其他", [["旧版客户端", ""]]]]);
   assert.equal(other.nameText, other.name || "b@x.com");
   assert.deepEqual(v.requests.map((x: { whoText: string; deviceText: string }) => [x.deviceText]), [["Pixel 8"]]);
   assert.equal(v.requests[0].whoText, v.requests[0].name || "b@x.com");
+});
+
+test("the people's devices by app say which machine each is and when it was last used, the most lately used first; what this device may take out", async () => {
+  const phone = { id: PHONE, sub: "s1", kind: "app", label: "still.fail Android · OPPO PLP110", sign_key: "ed25519:" + "01".repeat(32) };
+  const page = { id: "ef".repeat(32), sub: "s1", kind: "web", label: "still.fail Web · Chrome · macOS" };
+  const gone = { id: "12".repeat(32), sub: "s1", kind: "app", label: "" };
+  const theirs = { id: "34".repeat(32), sub: "s2", kind: "app", label: "Pixel 8" };
+  const older = { id: "56".repeat(32), sub: "s2", kind: "web", label: "", endpoints: ["e-older"] };
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], {}, ME, [gone, page, phone, theirs, older]) }));
+  const now = Math.floor(r.host.nowMs() / 1000);
+  // What each told the cloud as it last asked for a credential (a web page's two endpoints: the latest says), an older
+  // client by its endpoint; the one with no name said, not in 31 days.
+  r.cloud.devices.set("ws", [
+    { sub: "s1", device: "e-phone", base: PHONE, kind: "app", label: "still.fail mbui Android · OPPO Find N5", last_seen: now - 3600 },
+    { sub: "s1", device: "e-page-1", base: page.id, kind: "web", label: "still.fail Web · Chrome · macOS", last_seen: now - 12 * 86400 },
+    { sub: "s1", device: "e-page-2", base: page.id, kind: "web", label: "still.fail 网页版 · Chrome · macOS", last_seen: now - 3 * 86400 - 50 },
+    { sub: "s2", device: "e-theirs", base: theirs.id, kind: "app", label: null, last_seen: now - 2 * 86400 },
+    { sub: "s2", device: "e-older", base: null, kind: null, label: null, last_seen: now - 40 * 3600 },
+  ]);
+  const v = await (await r.watch({ topic: "lock", workspace: "ws" }))();
+  type Row = { nameText: string; fullText: string; metaText: string; removable: boolean };
+  const groups = (sub: string) => v.members.find((m: { sub: string }) => m.sub === sub).groups
+    .map((g: { appText: string; devices: Row[] }) => [g.appText, g.devices.map((d) => [d.nameText, d.metaText, d.removable])]);
+  // (by the app each is, the group with this device first, then the one used most lately: those whose name says none,
+  // this one's, together)
+  assert.deepEqual(groups("s1"), [
+    ["其他", [["this", "此设备 · 受信任", false], ["客户端", "超过一个月未使用", true]]],
+    ["still.fail mbui Android", [["OPPO Find N5", "一天内使用过 · 受信任", true]]],
+    ["still.fail 网页版", [["Chrome · macOS", "3 天前使用过", true]]],
+  ]);
+  assert.deepEqual(groups("s2"), [["其他", [["旧版客户端", "1 天前使用过", true], ["Pixel 8", "2 天前使用过", true]]]]);
+  // (asked about in a line of its own: which machine, then which app)
+  const phoneRow = v.members.find((m: { sub: string }) => m.sub === "s1").groups[1].devices[0] as Row;
+  assert.equal(phoneRow.fullText, "OPPO Find N5 · still.fail mbui Android");
+  // Taken out: the entry this device signs, as any other change.
+  await r.ask("lock.removeDevice", { workspace: "ws", device: PHONE });
+  assert.deepEqual(r.cloud.posted.map((p) => [p.kind, p.id]), [["device.remove", PHONE]]);
 });
 
 test("turning the lock on says what it would sign in words: this device first, its people", async () => {

@@ -17,10 +17,46 @@ test "安全, at each width and with either hand: a device waiting with its code
     assert_true(t.find("不一致，拒绝") is Some(_), msg=at)
     @sf.close_presented()
     t.frame()
-    scrolled_to(t, w, "MacBook")
-    assert_true(t.find("MacBook") is Some(_), msg=at)
+    // (by app: its name over its devices, which machine each is, the most lately used first)
+    scrolled_to(t, w, "Mac Studio")
+    let (_, app) = t.find("still.fail 桌面版").unwrap()
+    let (_, pro) = t.find("林的 MacBook Pro").unwrap()
+    let (_, studio) = t.find("Mac Studio").unwrap()
+    assert_true(app < pro && pro < studio, msg=at)
+    scrolled_to(t, w, "Ana 的 MacBook Air")
+    assert_true(t.find("Ana 的 MacBook Air") is Some(_), msg=at)
+    assert_true(t.find("5 天前使用过 · 受信任") is Some(_), msg=at)
     scrolled_to(t, w, "受保护")
     assert_true(t.find("受保护") is Some(_), msg=at)
+  }
+}
+
+///|
+test "安全, at each width and with either hand: another device taken out of the lock, asked first; not this one" {
+  for case in page_cases {
+    let (w, platform) = case
+    let t = setting_tester(Security, w, platform~)
+    let at = "\{w} platform \{platform}"
+    let name = "Ana 的 MacBook Air"
+    scrolled_to(t, w, name)
+    // (移除 on each but this device's: Ana's MacBook's, the first not above its name, at its end wide, under its
+    // words narrow)
+    let (_, y) = t.find(name).unwrap()
+    let shown = t.words().filter(fn(x) { x.0 == "移除" && x.5 > 0.5 && x.2 + x.4 > y })
+    guard shown.length() > 0 else { fail("no 移除 drawn") }
+    let mut near = shown[0]
+    for x in shown {
+      if x.2 < near.2 {
+        near = x
+      }
+    }
+    t.tap(near.1 + near.3 / 2.0, near.2 + near.4 / 2.0)
+    t.frame()
+    assert_true(@sf.presenting(), msg=at)
+    assert_true(t.find("移除「Ana 的 MacBook Air · still.fail 桌面版」？") is Some(_), msg=at)
+    assert_true(t.find("该设备将无法再访问受保护的 station，重新批准后才能使用") is Some(_), msg=at)
+    @sf.close_presented()
+    t.frame()
   }
 }
 

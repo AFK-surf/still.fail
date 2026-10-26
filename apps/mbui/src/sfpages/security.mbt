@@ -114,7 +114,11 @@ fn sec_group(c : @ui.Ctx, look : Look, body : () -> Unit) -> Unit {
 
 ///|
 /// A row of a section, going nowhere: `mark` before it, its title, `note` under it (narrow) or after it (wide; amber
-/// where `warn`; where `drops`, whole or not at all where the row has not the room), `end` at its end.
+/// where `warn`; where `drops`, whole or not at all where the row has not the room), `end` at its end; `acts`, what
+/// it does where its title is words of no length known (a device's name): at its end wide, narrow a line of its own
+/// under its words, the title never squeezed by it (docs/ui-panels.md 字和别的东西并排时). `over`: the name of the
+/// rows it starts, over it at its mark (a person's devices of one app: still.fail 桌面版), `apart` from the rows
+/// before it.
 fn sec_line(
   c : @ui.Ctx,
   look : Look,
@@ -126,10 +130,16 @@ fn sec_line(
   indent? : Bool = false,
   mark? : () -> Unit,
   end? : () -> Unit,
+  acts? : () -> Unit,
+  over? : String = "",
+  apart? : Bool = false,
 ) -> Unit {
   match look {
-    Narrow =>
-      c.box(style=if indent { sec_narrow_row_in } else { @sf.pg_said_row }, fn() {
+    Narrow => {
+      if over != "" {
+        c.box(style=sec_narrow_over, fn() { c.text(over, style=sec_narrow_over_words) |> ignore }) |> ignore
+      }
+      let words = fn() {
         match mark {
           Some(f) => f()
           None => ()
@@ -149,9 +159,27 @@ fn sec_line(
             c.text(note, style=if warn { sec_narrow_warn } else { @sf.pg_link_note }) |> ignore
           }
         })
+      }
+      c.box(style=if indent { sec_narrow_row_in } else { @sf.pg_said_row }, fn() {
+        match acts {
+          None => words()
+          // (its mark beside its title and its note as in a row doing nothing, what it does under them all from
+          // where its words start)
+          Some(f) =>
+            c.box(style=sec_with_acts, fn() {
+              c.box(style=sec_mark_words, words) |> ignore
+              c.box(style=if mark is Some(_) { sec_acts_past_mark } else { sec_acts_under }, f) |> ignore
+            })
+            |> ignore
+        }
       })
       |> ignore
-    Wide =>
+    }
+    Wide => {
+      if over != "" {
+        c.box(style=if apart { sec_over_apart } else { sec_over }, fn() { c.text(over, style=sec_over_words) |> ignore })
+        |> ignore
+      }
       c.box(style=sec_row, fn() {
         match mark {
           Some(f) => f()
@@ -175,8 +203,13 @@ fn sec_line(
           Some(f) => f()
           None => ()
         }
+        match acts {
+          Some(f) => f()
+          None => ()
+        }
       })
       |> ignore
+    }
   }
 }
 
@@ -287,16 +320,20 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
       sec_group(c, look, fn() {
         for m in items(lock, "members") {
           let mv = Some(m)
-          let devices = items(mv, "devices")
+          let groups = items(mv, "groups")
           let body = fn() {
             match look {
               Narrow => sec_line(c, look, text(mv, "nameText"), end=fn() { sec_end_words(c, look, text(mv, "roleText")) })
               Wide => sec_line(c, look, text(mv, "nameText"), note=text(mv, "roleText"))
             }
-            if devices.length() > 0 {
+            if groups.length() > 0 {
               c.box(style=if look == Wide { sec_devices } else { @sf.full_width }, fn() {
-                for d in devices {
-                  sec_device_row(c, core, look, ws, d, signs)
+                // by the app each is (still.fail 桌面版), its name over the first: which machine each is
+                for i, g in groups {
+                  let gv = Some(g)
+                  for j, d in items(gv, "devices") {
+                    sec_device_row(c, core, look, ws, d, signs, over=if j == 0 { text(gv, "appText") } else { "" }, apart=i > 0)
+                  }
                 }
               })
               |> ignore
@@ -386,13 +423,26 @@ pub fn sec_section(c : @ui.Ctx, look : Look, title : String, count~ : Int, body 
 }
 
 ///|
-/// A device in the lock (DeviceRow): its mark (a web page's, an app's), its name, what it is in a line (amber where it
-/// is to be renewed soon); 续期 where this device signs.
-fn sec_device_row(c : @ui.Ctx, core : Core, look : Look, ws : String, d : Json, can_renew : Bool) -> Unit {
+/// A device in the lock (DeviceRow): its mark (a web page's, an app's), which machine it is (the app `over` the first
+/// of its group says), this device or when it was last used and the rest in a line (amber where it is to be renewed
+/// soon); 续期 where this device signs, 移除 (asked first) where it may take it out.
+fn sec_device_row(
+  c : @ui.Ctx,
+  core : Core,
+  look : Look,
+  ws : String,
+  d : Json,
+  can_renew : Bool,
+  over? : String = "",
+  apart? : Bool = false,
+) -> Unit {
   let t = @sf.theme()
   let dv = Some(d)
   let id = text(dv, "id")
   let renewing = is_doing(core, ["lock.renew"], [("workspace", ws), ("device", id)])
+  let removing = is_doing(core, ["lock.removeDevice"], [("workspace", ws), ("device", id)])
+  let renews = has(dv, "daysLeft") && can_renew
+  let removes = flag(dv, "removable")
   sec_line(
     c,
     look,
@@ -401,15 +451,37 @@ fn sec_device_row(c : @ui.Ctx, core : Core, look : Look, ws : String, d : Json, 
     warn=flag(dv, "renewSoon"),
     strong=false,
     indent=true,
+    over~,
+    apart~,
     mark=fn() {
       @sf.icon(c, if text(dv, "kind") == "web" { "web" } else { "monitor" }, size=sec_device_glyph, color=t.p.muted)
       |> ignore
     },
-    end=fn() {
-      if has(dv, "daysLeft") && can_renew &&
-        sec_do(c, look, "renew/" + id, @sf.t("web-pages.security.renew"), busy=renewing) {
-        lock_call(core, ws, "renew", @sf.t("web-pages.security.renew"), [("device", id)], done=@sf.t("web-pages.security.renewed"))
-      }
+    acts?=if renews || removes {
+      Some(fn() {
+        if renews && sec_do(c, look, "renew/" + id, @sf.t("web-pages.security.renew"), busy=renewing) {
+          lock_call(core, ws, "renew", @sf.t("web-pages.security.renew"), [("device", id)], done=@sf.t("web-pages.security.renewed"))
+        }
+        if removes && sec_do(c, look, "remove/" + id, @sf.t("web-pages.security.remove"), busy=removing) {
+          remove_dialog(core, ws, id, text(dv, "fullText"))
+        }
+      })
+    } else {
+      None
+    },
+  )
+}
+
+///|
+/// 移除「…」？ (Security.tsx's): a device taken out of the lock, said what that means first.
+pub fn remove_dialog(core : Core, ws : String, device : String, name : String) -> Unit {
+  @sf.confirm(
+    @sf.t("web-pages.security.removeTitle", args=[("name", name)]),
+    @sf.t("web-pages.security.removeBody"),
+    @sf.t("web-pages.security.remove"),
+    danger=true,
+    fn() {
+      lock_call(core, ws, "removeDevice", @sf.t("web-pages.security.remove"), [("device", device)], done=@sf.t("web-pages.security.removed"))
     },
   )
 }
@@ -833,6 +905,27 @@ let sec_rows : @ui.Style = @ui.css("w=Full gap=S3")
 let sec_title_room : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
+/// A narrow row with what it does under it: its mark and its words, then that.
+// kept across runs: a value (no field of it changes)
+let sec_with_acts : @ui.Style = @ui.style(w=@sf.grow)
+
+///|
+/// A narrow row's mark and words over what it does, as a row doing nothing has them.
+// kept across runs: a value (no field of it changes)
+let sec_mark_words : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
+
+///|
+/// What a narrow row does (a device's: 续期, 移除), a line of its own under its words (Security.tsx's mDeviceActs: 6
+/// under them, 20 apart).
+// kept across runs: a value (no field of it changes)
+let sec_acts_under : @ui.Style = @ui.css("row gap=S5 pt=S1_5")
+
+///|
+/// The same from where its words start, past its mark (a device's glyph, `sec_device_glyph`, and the row's 12 after it).
+// kept across runs: a value (no field of it changes)
+let sec_acts_past_mark : @ui.Style = @ui.css("row gap=S5 pt=S1_5 pl=S7")
+
+///|
 /// What a narrow row has at its end, at its top.
 // kept across runs: a value (no field of it changes)
 let sec_end_top : @ui.Style = @ui.css("row h=Full gap=S2 align=AStart")
@@ -879,8 +972,22 @@ let sec_warn : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=WarnI
 let sec_warn_state : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=WarnInk, wrap=false)
 
 ///|
+/// A person's devices, 42 in, 8 apart; by app, its name (the meta's 12 in 500, muted, on a line) over the first, a
+/// group 14 from the one before it (Security.tsx's devices, deviceGroup, deviceApp).
 // kept across runs: a value (no field of it changes)
 let sec_devices : @ui.Style = @ui.css("w=Full pl=S10 gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_over : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_over_apart : @ui.Style = @ui.css("w=Full pt=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_over_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=Muted, wrap=false, w=Cut)
 
 ///|
 /// A short code as the device shows it (code: the code face 14 in 600, 9 in, as tall as a row (so at a card's first or
@@ -927,6 +1034,16 @@ let sec_note_line : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 /// it is to be renewed soon; what a row says at its end (the secondary's, on one line).
 // kept across runs: a value (no field of it changes)
 let sec_narrow_row_in : @ui.Style = @ui.css("row w=Full pl=S6 pr=S3 py=S2_5 gap=S3 radius=Inner align=ACenter")
+
+///|
+/// Narrow: the app a person's devices under it are, at their marks (sec_narrow_row_in's), 6 over the first (Security.tsx's
+/// mobile mDeviceApp): the secondary's in 500, on a line.
+// kept across runs: a value (no field of it changes)
+let sec_narrow_over : @ui.Style = @ui.css("w=Full pl=S6 pr=S3 pt=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_narrow_over_words : @ui.TextStyle = @sf.secondary.then(@ui.text_style(weight=Medium, wrap=false, w=Cut))
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -11,5 +11,18 @@
 
 static const mbc_engine hermes_engine = {mb_core_start, mb_core_send, mb_core_stop, mb_core_data_dir, NULL, mb_post, mb_post_drop};
 
+// The computer's name (设置 › 系统 › 系统信息: its device name) in MBUI_DEVICE_NAME, the machine the core names this
+// device by where the person's devices are listed (signin.mbt tell_device): which of their computers it is. Not over
+// one given.
+static void device_name(void) {
+  WCHAR name[256];
+  DWORD n = 256;
+  if (_wgetenv(L"MBUI_DEVICE_NAME") || !GetComputerNameExW(ComputerNamePhysicalDnsHostname, name, &n) || n == 0) return;
+  _wputenv_s(L"MBUI_DEVICE_NAME", name);
+}
+
 // (MSVC's C has no constructor attribute: the app hands it over itself, before it starts the core, src/stillfail/win_engine.c)
-static void use_hermes_engine(void) { mbc_use(&hermes_engine); }
+static void use_hermes_engine(void) {
+  device_name();
+  mbc_use(&hermes_engine);
+}

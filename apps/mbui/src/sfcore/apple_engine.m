@@ -49,4 +49,16 @@ __attribute__((constructor)) static void device_model(void) {
   if (!sim && uname(&u) != 0) return;
   setenv("MBUI_DEVICE_MODEL", sim ? sim : u.machine, 0);
 }
+#else
+#include <SystemConfiguration/SystemConfiguration.h>
+// The Mac's name as its owner knows it (系统设置 › 通用 › 关于本机: 左子健的 MacBook Air) in MBUI_DEVICE_NAME, the
+// machine the core names this device by where the person's devices are listed (signin.mbt tell_device): which of their
+// Macs it is. Not over one given (a scripted run's empty one: e2e/run.sh, the same wherever it is recorded).
+__attribute__((constructor)) static void device_name(void) {
+  CFStringRef name = SCDynamicStoreCopyComputerName(NULL, NULL);
+  if (!name) return;
+  char utf8[256];
+  if (CFStringGetCString(name, utf8, sizeof utf8, kCFStringEncodingUTF8) && *utf8) setenv("MBUI_DEVICE_NAME", utf8, 0);
+  CFRelease(name);
+}
 #endif

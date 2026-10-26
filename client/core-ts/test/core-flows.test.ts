@@ -505,6 +505,25 @@ test("an_app_of_its_own_names_the_device_by_itself_not_by_still_fail", async () 
   core.close();
 });
 
+test("a_device_whose_host_says_its_own_name_is_named_by_it_which_of_the_persons_devices_it_is", async () => {
+  // The phone's name as its settings say, the Mac's own: in place of the model or the system
+  const { host, core } = await started();
+  const ui = core.connect();
+  call(core, ui, 1, "client.device", { app: "android", build: "0.1.5600", model: "OPPO PLP110", machine: " OPPO Find N5 ", client: "still.fail mbui", locale: "zh-CN" });
+  call(core, ui, 2, "auth.begin", { redirect_uri: "r", return_to: "/" });
+  await host.settle();
+  const emitted = host.takeEmitted().map(([, m]) => m as J);
+  const url = String(emitted.find((m) => m.id === 2 && "ok" in m).ok.url);
+  assert.ok(url.includes(`name=${encode("still.fail mbui Android · OPPO Find N5")}`), url);
+  call(core, ui, 3, "client.device", { app: "desktop", build: "0.1.5600", userAgent: "Macintosh; Mac OS X", machine: "林的 MacBook Air", client: "still.fail mbui", locale: "zh-CN" });
+  call(core, ui, 4, "auth.begin", { redirect_uri: "r", return_to: "/" });
+  await host.settle();
+  const again = host.takeEmitted().map(([, m]) => m as J);
+  const named = String(again.find((m) => m.id === 4 && "ok" in m).ok.url);
+  assert.ok(named.includes(`name=${encode("still.fail mbui 桌面版 · 林的 MacBook Air")}`), named);
+  core.close();
+});
+
 test("an_iphone_app_is_a_phone_named_by_its_model_and_its_messages_say_it", async () => {
   // still.fail mbui on iOS: a phone as Android's, its device named so, a message going with the app it is sent from
   const { host, core } = await started();

@@ -5,6 +5,7 @@
 // system's browser, mbui's linux_browser_login.c).
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "moonbit.h"
 #include "../host/linux_core.c"
 #include "../core/core_client.h"
@@ -26,4 +27,13 @@ __attribute__((constructor)) static void device_locale(void) {
   for (; l[n] && l[n] != '.' && l[n] != '@' && n + 1 < sizeof tag; n++) tag[n] = l[n] == '_' ? '-' : l[n];
   tag[n] = 0;
   if (n) setenv("MBUI_LOCALE", tag, 0);
+}
+
+// The machine's name (its host name) in MBUI_DEVICE_NAME, the machine the core names this device by where the person's
+// devices are listed (signin.mbt tell_device); not over one given.
+__attribute__((constructor)) static void device_name(void) {
+  char name[256];
+  if (gethostname(name, sizeof name) != 0) return;
+  name[sizeof name - 1] = 0;
+  if (*name) setenv("MBUI_DEVICE_NAME", name, 0);
 }

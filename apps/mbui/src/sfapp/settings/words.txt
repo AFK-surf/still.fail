@@ -1312,6 +1312,10 @@ web-pages.security.people
 web-pages.security.promptFor
 web-pages.security.protected
 web-pages.security.recent
+web-pages.security.remove
+web-pages.security.removeBody
+web-pages.security.removeTitle
+web-pages.security.removed
 web-pages.security.renew
 web-pages.security.renewed
 web-pages.security.request

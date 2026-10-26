@@ -93,8 +93,10 @@ pub fn begin() -> Unit {
 /// What the device is, to the core (`client.device`, as still.fail's apps tell it): the name the people who approve it
 /// in a workspace's safe mode see (and a sign-in's device) is still.fail mbui's, not still.fail's own app's: "still.fail
 /// mbui Android · <maker model>" (the model CoreHost.java puts in MBUI_DEVICE_MODEL), "still.fail mbui iOS · iPhone17,1"
-/// (apple_engine.m's), "still.fail mbui 桌面版 · macOS". Built as still.fail's Android app in its place (apk.json's
-/// stable and beta: MBUI_OWN=1), it is still.fail's own, named as that app named the device: "still.fail Android · …".
+/// (apple_engine.m's), "still.fail mbui 桌面版 · macOS"; where its host says the machine's own name (MBUI_DEVICE_NAME:
+/// the Mac's, the computer's, the phone's as its settings say), that in place of the model or the system, which of the
+/// person's devices it is. Built as still.fail's Android app in its place (apk.json's stable and beta: MBUI_OWN=1), it
+/// is still.fail's own, named as that app named the device: "still.fail Android · …".
 fn tell_device() -> Unit {
   let facts : Map[String, Json] = {}
   if @ui.env("MBUI_OWN") != "1" {
@@ -123,6 +125,11 @@ fn tell_device() -> Unit {
     }
     // (the browser: no kind of the core's for it yet)
     _ => return
+  }
+  // (none said where a host does not: a replay's, a scripted run's, e2e/run.sh)
+  let machine = @ui.env("MBUI_DEVICE_NAME")
+  if machine != "" {
+    facts["machine"] = Json::string(machine)
   }
   let version = @ui.app_version()
   if version > 0 {
