@@ -67,6 +67,9 @@ pub struct Client {
   /// where the app's attention is, as told last (`client.focus`): told again to a core started anew
   /// (StillFailCore.kt `focus`), which would else take the app for out of view
   priv mut focus : Json?
+  /// whether all the last message taken changed is a subscription's value or error (Sub.changes, a signal what read it
+  /// follows): Client::took_topic
+  priv mut topic_only : Bool
 }
 
 ///|
@@ -94,7 +97,15 @@ pub fn Client::new(
     sub_waits: {},
     echo_waits: {},
     timing: None,
+    topic_only: false,
   }
+}
+
+///|
+/// Whether all the last message it took changed is a subscription's value or error: told to what read it through its
+/// signal (Sub.changes), and to nothing else (no call answered, nothing failed).
+pub fn Client::took_topic(self : Client) -> Bool {
+  self.topic_only
 }
 
 ///|
@@ -361,6 +372,7 @@ pub fn Client::receive_json(
   bytes? : Bytes? = None,
 ) -> Unit {
   self.beside = bytes
+  self.topic_only = false
   self.take(msg)
   self.beside = None
 }
@@ -433,6 +445,7 @@ fn Client::take(self : Client, msg : Json) -> Unit {
       s.changed()
       self.end_sub_wait(id)
       self.draft_came(id)
+      self.topic_only = true
     }
     None =>
       // A call's answer; a value before it says how it goes (to a `stream`'s `on_value`)

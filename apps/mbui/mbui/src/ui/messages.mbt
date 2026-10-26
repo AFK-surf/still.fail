@@ -13,12 +13,24 @@
 ///|
 // kept across runs: the app's handlers are its code, given once as it starts (by a test's app before its Tester), the
 // same for every run; one a channel, a later one in its place
-let message_handlers : Map[String, (String, Bytes?) -> Unit] = Map::new()
+let message_handlers : Map[String, (String, Bytes?) -> Bool] = Map::new()
 
 ///|
 /// `handler` is given each message posted on `channel`: its JSON and the bytes beside it (None: none), as the frame
-/// after it begins, in the order they came. One handler a channel: the last given.
+/// after it begins, in the order they came. One handler a channel: the last given. What it changes is an event from
+/// outside (kept_part.mbt's head): what is kept as it was drawn is all built anew.
 pub fn on_message(channel : String, handler : (String, Bytes?) -> Unit) -> Unit {
+  message_handlers[channel] = fn(json, bytes) {
+    handler(json, bytes)
+    false
+  }
+}
+
+///|
+/// As on_message, `handler` saying of each message whether all it changed is read through signals (true: a core
+/// topic's value, followed by what read it): what is kept as it was drawn (a part, a list's rows) is built again only
+/// where it read what changed; false, it is an event from outside, and all of it is built anew.
+pub fn on_message_read(channel : String, handler : (String, Bytes?) -> Bool) -> Unit {
   message_handlers[channel] = handler
 }
 
@@ -129,7 +141,6 @@ fn take_messages() -> Unit {
 
 ///|
 fn hand_on(channel : String, json : String, bytes : Bytes?) -> Unit {
-  outside_came()
   if taping() {
     tape_line("MSG " + message_line(channel, json, bytes))
   }
@@ -138,16 +149,24 @@ fn hand_on(channel : String, json : String, bytes : Bytes?) -> Unit {
   }
   // the framework's own: what a screen reader asks of a widget (a11y.mbt)
   if channel == @hostapi.a11y_channel {
+    outside_came()
     messages_handed.val += 1
     a11y_took(json)
     return
   }
-  match message_handlers.get(channel) {
+  // (an event from outside, but where its handler says all it changed is read through signals: on_message_read)
+  let read = match message_handlers.get(channel) {
     Some(f) => {
       messages_handed.val += 1
       f(json, bytes)
     }
-    None => h_log("MSG on \{channel}: no handler for it (@ui.on_message): left")
+    None => {
+      h_log("MSG on \{channel}: no handler for it (@ui.on_message): left")
+      false
+    }
+  }
+  if !read || channel == @hostapi.system_channel {
+    outside_came()
   }
 }
 

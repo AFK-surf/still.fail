@@ -331,3 +331,20 @@ test "a subscription's changes are pushed: what read it in a computed follows ea
   assert_true(c.receive("{\"id\":2,\"value\":[7,8]}"))
   assert_eq(seen.get(), 2)
 }
+
+///|
+test "a subscription's message changes its topic alone, a call's answer does more" {
+  let (c, _) = recorder()
+  let s = c.subscribe("accounts")
+  assert_true(c.receive("{\"id\":1,\"value\":[]}"))
+  assert_true(c.took_topic())
+  assert_true(c.receive("{\"id\":1,\"delta\":[]}"))
+  assert_true(c.took_topic())
+  assert_eq(s.version, 2)
+  c.call("auth.begin", on_done=fn(_) {  }) |> ignore
+  assert_true(c.receive("{\"id\":2,\"ok\":null}"))
+  assert_true(!c.took_topic())
+  // (one nothing waits for: nothing a topic's either)
+  assert_true(c.receive("{\"id\":9,\"ok\":null}"))
+  assert_true(!c.took_topic())
+}

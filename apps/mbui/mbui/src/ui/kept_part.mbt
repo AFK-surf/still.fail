@@ -130,7 +130,8 @@ let parts_run : PartsRun = { ctx: None, steps: -1 }
 
 ///|
 /// How many events have come from outside the hand on another part (kept_part.mbt's head): an input other than a pointer
-/// moved or a wheel turned, a message, a host's answer, a step of the runtime's fibers or timers, a test's draw.
+/// moved or a wheel turned, a message (but one all of whose change is read through signals, a core topic's:
+/// on_message_read), a host's answer, a step of the runtime's fibers or timers, a test's draw.
 // kept across runs: it only counts on
 let outside_events : Ref[Int] = Ref(0)
 
