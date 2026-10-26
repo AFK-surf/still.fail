@@ -1818,15 +1818,15 @@ fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> In
 }
 
 ///|
-/// The least a target is across, each way, as a press reaches it (room_least, on every system and with either input:
-/// one room, press_reach's): for what a view reaches by hand itself (a drag area's own taps).
+/// The least a target is across, each way, as a press reaches it (room_least: one room, press_reach's): for what a
+/// view reaches by hand itself (a drag area's own taps).
 pub fn finger_target() -> Double {
-  room_least
+  room_least()
 }
 
 ///|
-/// The room a press has round what is drawn (x0, y0)–(x1, y1): each way it is drawn smaller than `room_least`, it grown
-/// to it round its middle (not drawn so, nor laid out); moved in where that passes an edge past which nothing is pressed
+/// The room a press has round what is drawn (x0, y0)–(x1, y1): each way it is drawn smaller than `room_least()`, it
+/// grown to it round its middle (not drawn so, nor laid out); moved in where that passes an edge past which nothing is pressed
 /// (`edge`: the window, what cuts it) rather than cut short there; cut where it passes what holds it that takes presses
 /// (`cut`: a row's small button keeps to its row, the row's own room round it the row's). What the hit test reaches
 /// (press_reach) and the room rules measure (rooms.mbt), one.
@@ -1844,7 +1844,7 @@ fn press_room(
 }
 
 ///|
-/// One way of press_room: `lo`–`hi` grown to room_least round its middle where shorter, moved in from `elo`–`ehi`'s
+/// One way of press_room: `lo`–`hi` grown to room_least() round its middle where shorter, moved in from `elo`–`ehi`'s
 /// ends, cut to `clo`–`chi`.
 fn room_across(
   lo : Double,
@@ -1856,10 +1856,11 @@ fn room_across(
 ) -> (Double, Double) {
   let mut a = lo
   let mut b = hi
-  if hi - lo < room_least {
+  let least = room_least()
+  if hi - lo < least {
     let mid = (lo + hi) / 2.0
-    a = mid - room_least / 2.0
-    b = mid + room_least / 2.0
+    a = mid - least / 2.0
+    b = mid + least / 2.0
     // (moved in from an edge it passes, not cut short at it)
     if a < elo {
       b = b + (elo - a)
@@ -1894,13 +1895,14 @@ fn press_reach(
   }
   let points = g().points
   let (ww, wh) = (g().width, g().height)
+  let least = room_least()
   let mut best = top
   let mut best_d = 1.0e18
   for k in (top + 1)..<ids.length() {
     let r = k * 4
     let (x0, y0, x1, y1) = (rects[r], rects[r + 1], rects[r + 2], rects[r + 3])
     let (w, h) = (x1 - x0, y1 - y0)
-    if points.contains(ids[k]) || w <= 0.0 || h <= 0.0 || (w >= room_least && h >= room_least) {
+    if points.contains(ids[k]) || w <= 0.0 || h <= 0.0 || (w >= least && h >= least) {
       continue
     }
     // cut to what the press is on (drawn in it), moved in from what cuts it (a list's edge) and the window

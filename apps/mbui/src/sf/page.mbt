@@ -2416,8 +2416,8 @@ pub let desk_muted : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color
 /// A list on a wide page: a list card (the narrow page's ListCard, at the column's edges: list_pad in, its rows 2
 /// apart), each row 52 high at least, 10 by 10 in, its parts 12 apart, its corner concentric with the card's; one that
 /// opens on the pointer's ground; its title in 500, what is under it the meta's 12 muted, red where it is wrong; a chevron 16.
-/// How high it is at least goes by the native input (the theme's items'): 44 with keyboard and mouse, a finger's 48 with
-/// touch, no taller than a press needs (rule 2; the user, 2026-10-26: 「浪费空间」).
+/// How high it is at least goes by the native input (the theme's items'): 36 with keyboard and mouse, a finger's 44 with
+/// touch, no taller than a press needs (rule 2; the user, 2026-10-26: 「浪费空间」; 2026-10-27: 大屏最小 36).
 pub fn desk_row_least() -> Double {
   theme().items.least
 }

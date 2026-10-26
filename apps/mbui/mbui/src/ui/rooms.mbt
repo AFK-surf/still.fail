@@ -3,12 +3,13 @@
 // rule, the boxes (Ctx::named) and by how much:
 //
 // room: what shows whole and takes presses (its click read, Ctx::clicked; or said, Ctx::takes_presses) has room to be
-//   pressed `room_least` across each way at least, on every screen with either input. A part of what holds it (a row's
-//   state line, its station's mark) is only pointed at (Ctx::box's `points`: a press on it is the row's, where in the
-//   row Ctx::clicked_on says), no target of its own. Drawn smaller, a press reaches it from round it, by a finger or a
-//   pointer alike (Ctx's press_reach): its room is it grown so round its middle, moved in from the window's edge
-//   rather than cut short there, within what holds it that takes presses (a row's button: in the row's room, not its
-//   neighbour's) (press_room); where two rooms meet, each has the part nearer it, as the hit test gives it.
+//   pressed `room_least()` across each way at least (by the native input: a finger's 44, a keyboard and mouse's 36).
+//   A part of what holds it (a row's state line, its station's mark) is only pointed at (Ctx::box's `points`: a
+//   press on it is the row's, where in the row Ctx::clicked_on says), no target of its own. Drawn smaller, a press
+//   reaches it from round it, by a finger or a pointer alike (Ctx's press_reach): its room is it grown so round its
+//   middle, moved in from the window's edge rather than cut short there, within what holds it that takes presses (a
+//   row's button: in the row's room, not its neighbour's) (press_room); where two rooms meet, each has the part
+//   nearer it, as the hit test gives it.
 // apart: two such in one layer, neither holding the other, are never drawn over each other: a press there would be
 //   either's.
 // hover: what is shown only under the hand (Ctx::hand_shown: a row's ⋯ under a resting pointer) and takes presses is a
@@ -17,8 +18,16 @@
 //   Measured on a frame built with all of it shown (Tester::lit_all), against the frame at rest.
 
 ///|
-/// How far across each way the room a press has is at least (iOS's 44 pt; still.fail's rule 2).
-pub let room_least : Double = 44.0
+/// How far across each way the room a press has is at least, by the native input (native_pointing): a finger's 44
+/// (iOS's 44 pt), a keyboard and mouse's 36 (still.fail's rule 2; the user, 2026-10-27: 大屏按最小 36 来设计，不用 44:
+/// a pointer is fine; a finger on a screen made for one, as the touch Mac is to be, reached from round what is
+/// small, press_reach).
+pub fn room_least() -> Double {
+  match native_pointing() {
+    Finger => 44.0
+    Mouse => 36.0
+  }
+}
 
 ///|
 /// Where the last frame breaks the rules of a press's room (see the file's head): one line for each fault, `room:` or
@@ -182,11 +191,12 @@ fn Ctx::room_faults(self : Ctx) -> Array[String] {
       }
     }
   }
+  let least = room_least()
   for j, i in targets {
     let (x0, y0, x1, y1) = rooms[j]
     let (w, h) = (x1 - x0, y1 - y0)
-    if w < room_least - gap_slack || h < room_least - gap_slack {
-      out.push("room: \{self.named(i)} has \{w.round()}×\{h.round()} to be pressed in, under \{room_least}")
+    if w < least - gap_slack || h < least - gap_slack {
+      out.push("room: \{self.named(i)} has \{w.round()}×\{h.round()} to be pressed in, under \{least}")
     }
   }
   out

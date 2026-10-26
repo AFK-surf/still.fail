@@ -17,8 +17,10 @@ Everything below follows from these; where something below says otherwise, these
 
 1. **Every function is as easy to reach with either input; the ways may differ.** Hover, a right click, ⌘K and the
    keys are keyboard and mouse's ways; a swipe and a long press are touch's. Nothing is reached by the keys alone.
-2. **What always shows and is pressed has room to be pressed, 44×44 at least, overlapping no other's**, on every
-   screen with either input. With keyboard and mouse it may be drawn smaller; its room is not. What shows only under a
+2. **What always shows and is pressed has room to be pressed, overlapping no other's: 44×44 at least with touch,
+   36×36 with keyboard and mouse** (by the native input; the user, 2026-10-27: 大屏按最小 36 来设计，不用 44, a large
+   screen being a computer's, made touch-friendly, not for touch first, as the touch Mac is to be). It may be drawn
+   smaller; its room is not: a press reaches it from round it, a finger's or a pointer's. What shows only under a
    hovering pointer is mouse's way, and may be mouse's size only where touch has an equal way to the same.
 3. **Steps one after another stay near each other.** On `Small` a menu, a pick and a confirm rise from the foot; on
    `Medium` and `Large` a menu and a pick float beside what opened them, a confirm in the middle. The screen decides
@@ -48,8 +50,8 @@ phone app", "a touch device", "the screen's kind".
 | 页面宽窄 | a page's width | `@sf.look()` | 窄排法 / 宽排法 (`Narrow`, `Wide`): how a page arranges itself in the box it is given, by that box's width. |
 
 The size things are drawn at (words, icons, row heights) follows the native input, not the tier: a tablet's 大屏 has
-touch's sizes, a computer's narrow window keyboard and mouse's. The room a thing always shown is pressed in follows
-neither: 44×44 at least everywhere, overlapping no other's (rule 2).
+touch's sizes, a computer's narrow window keyboard and mouse's. So does the room a thing always shown is pressed in:
+44×44 at least with touch, 36×36 with keyboard and mouse, overlapping no other's (rule 2).
 
 ## The screen and the input, each read in one place
 
@@ -73,7 +75,8 @@ upright after. A tablet and an opened fold's inner screen turn as they are held.
     on `Small` the search page).
   - **The native input** (the ways and the sizes, not the arrangement):
     - the sizes: the type scale, icons and row heights; touch's are the phone's, keyboard and mouse's the web's.
-      What is drawn smaller keeps its room to be pressed (rule 2: 44×44 at least, overlapping no other's; a button
+      What is drawn smaller keeps its room to be pressed (rule 2: 44×44 with touch, 36×36 with keyboard and mouse,
+      overlapping no other's; a button
       drawn its own size, a press reaching it from round it, a finger's or a pointer's alike, mbui's press_reach: what
       shows and what a press takes need not be the same, the user, 2026-10-26). The colours are neither the screen's nor the input's: one palette
       everywhere, the phone's (warm paper, white cards on it), light or dark as set. The panes side by side are told
@@ -125,7 +128,7 @@ What differs comes of two axes, and none of it is decided in a page:
 
 | What differs | By | Decided in |
 |---|---|---|
-| The size words, icons and rows are drawn at, and the density (never a press's room under 44×44, nor two overlapping: rule 2) | the native input | the theme, chosen once (`@sf.begin`) |
+| The size words, icons and rows are drawn at, and the density (never a press's room under 44×44 with touch, 36×36 with keyboard and mouse, nor two overlapping: rule 2) | the native input | the theme, chosen once (`@sf.begin`) |
 | What only a pointer's hover would show (a row's 归档, its time, its ⋯): touch's as easy a way to the same (the row's menu on a long press, a swipe), or always there | the native input | the library's parts (sf/hand.mbt) |
 | Reaching things: the search field over the chats' list or ⌘K; the keys | the native input | the shell |
 | Enter makes a new line or sends; the keyboard raised as a chat opens or not | the native input | the library's fields |
@@ -140,7 +143,7 @@ So:
   as it is held.
 - **A computer:** columns (Large), laid out wide, the web's sizes and density, menus and picks beside what opened
   them, dialogs, ⌘K and the keys, what a pointer's hover shows. A window made narrow takes the tape or the stack and
-  the narrow arrangement, at keyboard and mouse's sizes, its presses' room still 44×44.
+  the narrow arrangement, at keyboard and mouse's sizes, its presses' room still 36×36.
 
 ## Three kinds of UI code
 
@@ -307,7 +310,8 @@ one way in) names it until the last step.
   - The platform also says the tier with touch and the core's `client.device`, and a replay recorded on one
     platform keeps it.
 - **A press's room** (rules 1 and 2): on every screen the corner rule opens, in each window, what always shows and
-  takes presses has 44×44 to be pressed in, no two such rooms overlapping, and what shows only under a resting
+  takes presses has its room to be pressed in (44×44 with touch, 36×36 with keyboard and mouse), no two such rooms
+  overlapping, and what shows only under a resting
   pointer stands on what opens a menu on a hold (mbui's `rooms.mbt`, Tester::room_faults, hover_only_faults); each
   rule's faults kept to their bars in sfapp's `rooms_known_wbtest.mbt`, only falling.
 - **The screenshots** (`screens.sh`) cover the three tiers.

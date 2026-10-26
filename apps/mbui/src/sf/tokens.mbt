@@ -162,10 +162,11 @@ pub(all) struct Rows {
 }
 
 ///|
-/// A list's item on the screen in force (a folder's entries, the folders pinned): how high it is at least, its name's
-/// words and what is said of it (its size, its time: muted), its kind's mark. Touch's: a finger's (48; the
-/// phone's mRow: its name the body's 15 on 20, mMeta 12 on 16, the mark 22); keyboard and mouse's: the web's Drive row (44, with
-/// room for its ⋯; its name 13, its meta 12, KindIcon 20).
+/// A list's item on the screen in force (a folder's entries, the folders pinned): how high it is at least, the one
+/// least row height of every row (rule 2's room: 44 with touch, 36 with keyboard and mouse, the user, 2026-10-27), its
+/// name's words and what is said of it (its size, its time: muted), its kind's mark. Touch's: a finger's (the phone's
+/// mRow: its name the body's 15 on 20, mMeta 12 on 16, the mark 22); keyboard and mouse's: the web's Drive row's (its
+/// name 13, its meta 12, KindIcon 20).
 pub(all) struct Items {
   least : Double
   name : @ui.TextStyle
@@ -1003,10 +1004,9 @@ let wide_control_h : Double = 36.0
 let narrow_control_h : Double = 44.0
 
 ///|
-/// What a row takes at least: one least row height for the native input (the theme's `items.least`: 44 with keyboard
-/// and mouse, 48 with touch), narrow rows and wide, a sidebar's and a list's alike, what it shows in its middle (rule 2:
-/// what always shows is pressed in 44×44 at least; a row's room is its own height, its neighbours right over and under
-/// it). A button is drawn its own size: a press reaches one drawn smaller from round it (mbui's press_reach).
+/// What a row takes at least: one least row height for the native input (the theme's `items.least`: 36 with keyboard
+/// and mouse, 44 with touch), narrow rows and wide, a sidebar's and a list's alike, what it shows in its middle (rule 2:
+/// a press's room 36 or 44 at least; a row's room is its own height, its neighbours right over and under it). A button is drawn its own size: a press reaches one drawn smaller from round it (mbui's press_reach).
 pub fn row_least_h() -> @ui.Style {
   @ui.style(min_h=Fixed(theme().items.least))
 }
@@ -1052,7 +1052,7 @@ let bars_drawn : Bars = { key: 28.0, icon: 14.0, field: 30.0 }
 ///|
 // kept across runs: a value (no field of it changes)
 let wide_items : Items = {
-  least: 44.0,
+  least: 36.0,
   name: @ui.text_style(size=Ui, color=Fg, wrap=false),
   meta: @ui.text_style(size=Meta, color=Muted, wrap=false),
   mark: 20.0,
@@ -1061,7 +1061,7 @@ let wide_items : Items = {
 ///|
 // kept across runs: a value (no field of it changes)
 let narrow_items : Items = {
-  least: 48.0,
+  least: 44.0,
   name: @ui.text_style(size=Ui, leading=L6, color=Fg, wrap=false),
   meta: @ui.text_style(size=Meta, leading=L4, color=Muted, wrap=false),
   mark: 22.0,
