@@ -135,6 +135,28 @@ export function install(): void {
       }),
     );
   };
+  // What a visualization's widget kept: kept on the device too (as a thumbnail is: AccountDb.keptFile), so its page
+  // is drawn with it at once; what its station says after kept for the next time, unless it was kept here meanwhile.
+  handlers.widgetState = (inner, call, progress, at, ctx) => {
+    const c = call as Extract<Call, { kind: "widgetState" }>;
+    const station = (c.op.target as { station: string }).station;
+    const kept = () => inner.data.keptFile(station, c.key, c.path, "widget")?.bytes ?? null;
+    const keep = (state: unknown) => inner.data.keepFile(station, c.key, c.path, "widget", "application/json", JSON.stringify(state ?? null));
+    const ask = handlers.op!(inner, { kind: "op", op: c.op }, progress, at, ctx);
+    if (c.state !== undefined) {
+      keep(c.state);
+      return ask;
+    }
+    const was = kept();
+    const read = Effect.tap(ask, (answer) =>
+      Effect.sync(() => {
+        if (kept() === was) keep((answer as { state?: unknown } | null)?.state);
+      }),
+    );
+    if (was === null) return read;
+    inner.runner.fork(Effect.ignore(read));
+    return Effect.succeed({ state: JSON.parse(was) as unknown });
+  };
   handlers.chatOlder = (inner, call) => {
     const c = call as Extract<Call, { kind: "chatOlder" }>;
     return Effect.andThen(parse(c.station), Effect.map(inner.stationTopics.older(c.station, c.thread), (more) => ({ more })));

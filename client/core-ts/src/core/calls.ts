@@ -42,6 +42,7 @@ export type Call =
   | { kind: "profileModels"; op: ops.Request; id: string; models: unknown }
   | { kind: "chatArchive"; op: ops.Request; thread: number | null; session: string; archived: boolean }
   | { kind: "chatChange"; op: ops.Request; thread: number | null; session: string; title: string | null; pinned: boolean | null; keep: boolean | null }
+  | { kind: "widgetState"; op: ops.Request; key: string; path: string; state: unknown | undefined }
   | { kind: "chatXshare"; station: string; workspace: string | null; session: string; thread: number | null; to: string[]; write: boolean }
   | { kind: "stationJoin"; workspace: string; station: string; name: string | null }
   | { kind: "chatSend"; station: string; thread: number; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number; width?: number; height?: number }[]; quotes: unknown; client: string | null }
@@ -181,6 +182,7 @@ export function callStation(call: Call): string | null {
     case "profileModels":
     case "chatArchive":
     case "chatChange":
+    case "widgetState":
       return opStation(call.op);
     case "choose": {
       const s = call.params.station;
@@ -1093,6 +1095,14 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
     if (!Array.isArray(models) || !models.every((m) => typeof m === "string")) throw CoreError.invalid(t("core-misc.params.bad_models"));
     const id = get(params, "id");
     return { kind: "profileModels", op, id: typeof id === "string" ? id : "", models };
+  }
+  // What a visualization's widget kept, read (`state` undefined) or kept: kept on the device as well (station/calls.ts
+  // widgetState).
+  if (name === "widget.state" || name === "widget.setState") {
+    const p = orEmpty(params);
+    const op = ops.request(name, p)!;
+    const [key, path] = [get(p, "key"), get(p, "path")];
+    return { kind: "widgetState", op, key: typeof key === "string" ? key : "", path: typeof path === "string" ? path : "", state: name === "widget.state" ? undefined : (get(p, "state") ?? null) };
   }
   if (name === "chat.archive") {
     const p = orEmpty(params);

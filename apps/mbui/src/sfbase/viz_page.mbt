@@ -316,7 +316,7 @@ pub fn viz_file_of(
   subtle : Int64,
 ) -> Unit {
   let t = @sf.theme()
-  match viz_load(c, src, station, key, a.path) {
+  match viz_load(c, src, station, key, a.path, size=a.size) {
     Some(Err(_)) => failed()
     // its place, breathing as every wait's shapes, till the page comes
     None =>

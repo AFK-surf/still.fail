@@ -936,10 +936,21 @@ static WKWebViewConfiguration *page_config(MBNative *v) {
   return c;
 }
 
+// A page's (kind 2: a visualization) data, one store for them all, kept across runs: what they load from the CDNs
+// (a chart's library, mermaid, fonts) loaded once, from its cache after. A store of its own for each, as a site's, kept
+// nothing even from one page to the next: each page loaded its libraries anew from the network as it opened. Nothing
+// else of theirs is kept there: their documents have no origin of their own to keep cookies or storage for, and ask
+// nothing of a server (their CSP's connect-src 'none').
+static WKWebsiteDataStore *page_store(void) {
+  static WKWebsiteDataStore *store;
+  if (!store) store = [WKWebsiteDataStore defaultDataStore];
+  return store;
+}
+
 static MBNative *open_web(int32_t vid, NSString *html) {
   MBNative *v = [MBNative new];
   WKWebViewConfiguration *c = page_config(v);
-  c.websiteDataStore = [WKWebsiteDataStore nonPersistentDataStore];
+  c.websiteDataStore = page_store();
   c.defaultWebpagePreferences.allowsContentJavaScript = YES;
 #if TARGET_OS_IOS
   c.allowsInlineMediaPlayback = YES;
