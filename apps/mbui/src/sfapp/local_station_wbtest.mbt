@@ -26,8 +26,10 @@ test "本机 Station, none here: 添加这台 Mac asks the cloud for this worksp
   let made = calls.iter().filter(fn(m) { m.name == "workspace.enroll" }).collect()
   assert_eq(made.length(), 1)
   assert_true(text(Some(made[0].params), "workspace") != "")
-  // named as the cloud wants it (an enrollment without a name is refused: invalid_name)
+  // named as the cloud wants it (an enrollment without a name is refused: invalid_name), asked as the account the
+  // workspace is reached through (none: the core refuses it, 缺少 account)
   assert_true(text(Some(made[0].params), "name") != "")
+  assert_true(text(Some(made[0].params), "account") != "")
   // (the made-up core answers with its token: settings/fixture.mbt)
   t.frame()
   let acts = t.local_acts()
