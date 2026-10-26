@@ -117,13 +117,6 @@ export const entryIcon = style({ flex: "0 0 auto", color: vars.muted });
 export const entryName = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const note = style({ margin: "0", color: vars.muted });
 
-// ---- while it is read: bars where its lines will be (they breathe as every wait's: waiting.css.ts shapes) ----
-
-export const bar = style({
-  display: "block", height: "10px", borderRadius: "999px", background: vars.neutralBg,
-  selectors: { '&[data-bar="title"]': { width: "85%", height: "12px" }, '&[data-bar="meta"]': { width: "45%" }, '&[data-bar="detail"]': { width: "60%" } },
-});
-
 // ---- a file named in a message: a chip, its icon and name ----
 
 export const fileChip = style({

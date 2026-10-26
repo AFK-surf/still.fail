@@ -22,6 +22,20 @@ type Flow = ReturnType<typeof useConnectFlow>;
 /** The steps drawn here; the rest are Slack's (./Connects.tsx). */
 export const FEISHU_STEPS = ["platform", "feishuBind", "feishuWay", "feishuScan", "feishuApp", "done"];
 
+/** The platform a new connect is on, `platform` chosen: Slack, or Feishu where the station has it (`feishu`); then on. */
+export function PlatformPick({ platform, feishu, onPick, onNext }: { platform: string; feishu: boolean; onPick(platform: "slack" | "feishu"): void; onNext(): void }) {
+  return (
+    <>
+      <ListCard>
+        <PickRow label="Slack" sub={t("web-mobile.connects.feishu.slackNote")} leading={<SlackLogo size={20} />} checked={platform === "slack"} onClick={() => onPick("slack")} />
+        <PickRow label={t("web-mobile.connects.feishu.name")} sub={feishu ? t("web-mobile.connects.feishu.feishuNote") : t("web-mobile.connects.feishu.update")} leading={<FeishuLogo size={20} />}
+          checked={platform === "feishu"} enabled={feishu} onClick={() => onPick("feishu")} />
+      </ListCard>
+      <Button label={t("web-mobile.connects.next")} primary onClick={onNext} />
+    </>
+  );
+}
+
 /** One of those steps; `mode`: the mode picker, as the Slack path has it. Its connect added, its page replaces this one. */
 export function FeishuSteps({ view, flow, mode }: { view: ConnectFlowView; flow: Flow; mode: ReactNode }) {
   const app = useApp();
@@ -40,16 +54,7 @@ export function FeishuSteps({ view, flow, mode }: { view: ConnectFlowView; flow:
   if (view.step === "platform") {
     const platform = view.platform ?? "slack";
     const feishu = view.platforms.includes("feishu");
-    return (
-      <>
-        <ListCard>
-          <PickRow label="Slack" sub={t("web-mobile.connects.feishu.slackNote")} leading={<SlackLogo size={20} />} checked={platform === "slack"} onClick={() => flow.edit({ platform: "slack" })} />
-          <PickRow label={t("web-mobile.connects.feishu.name")} sub={feishu ? t("web-mobile.connects.feishu.feishuNote") : t("web-mobile.connects.feishu.update")} leading={<FeishuLogo size={20} />}
-            checked={platform === "feishu"} enabled={feishu} onClick={() => flow.edit({ platform: "feishu" })} />
-        </ListCard>
-        <Button label={t("web-mobile.connects.next")} primary onClick={() => flow.go(platform === "feishu" && feishu ? "feishuBind" : "team")} />
-      </>
-    );
+    return <PlatformPick platform={platform} feishu={feishu} onPick={(platform) => flow.edit({ platform })} onNext={() => flow.go(platform === "feishu" && feishu ? "feishuBind" : "team")} />;
   }
   if (view.step === "feishuBind") {
     const models = view.pick?.options ?? [];

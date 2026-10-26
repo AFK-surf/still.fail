@@ -1,9 +1,9 @@
-import type { MachineLogin, RuntimeInstall } from "../core/shapes.ts";
+import type { Connect, MachineLogin, RuntimeInstall } from "../core/shapes.ts";
 import { profilesPage, stationBase, useStation, useLink } from "../station.tsx";
 import { Chart, ChevronRight, Edit, External, LogIn, Plus, Refresh, Trash } from "@stillfail/ui/icons.tsx";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useAction, useApi, useMemberships, useOverview, useProfiles, type AccessKind, type LoginJob, type Overview, type ProfileInput, type Profile } from "../api.ts";
+import { useAction, useApi, useMemberships, useOverview, useProfiles, type AccessKind, type LoginJob, type ProfileInput, type Profile } from "../api.ts";
 import { KEYED, RUNTIME_LABEL } from "../format.ts";
 import { useUsage, usageCss } from "../Usage.tsx";
 import { pickModelsPath, useProfilesSidebar } from "../ProfilesNav.tsx";
@@ -32,6 +32,7 @@ import { useInStation } from "../screen/InStation.tsx";
 import { t } from "../i18n.ts";
 import { tx } from "../cloud/words.tsx";
 import * as pageCss from "@stillfail/ui/styles/page.css.ts";
+import { sampleProfile } from "../samples.ts";
 /** The plans a machine's own login can be signed in again with (the add page: a vendor's subscription). */
 export type Choice = "claude-sub" | "chatgpt-sub";
 
@@ -77,12 +78,18 @@ export function AccountPage() {
   const { id } = useParams();
   const overview = useOverview(useStation().address);
   const profile = overview.value?.profiles.find((p) => p.id === id);
-  if (!overview.value) return overview.error ? <Empty><p>{overview.error.message}</p></Empty> : <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting shape="cards" text={t("web-pages.profiles.loading")} /></div>;
+  if (!overview.value) return overview.error ? <Empty><p>{overview.error.message}</p></Empty>
+    : <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting text={t("web-pages.profiles.loading")} sample={<AccountView profile={SAMPLE_PROFILE} connects={[]} sharing={false} />} /></div>;
   if (!profile) return <Empty><p>{t("web-pages.profiles.notFound", { id: id ?? "" })}</p></Empty>;
-  return <AccountView key={profile.id} profile={profile} overview={overview.value} />;
+  return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><AccountView key={profile.id} profile={profile} connects={overview.value.connects} sharing={!!overview.value.sharing} /></div>;
 }
 
-function AccountView({ profile, overview }: { profile: Profile; overview: Overview }) {
+/** An account made up, for what its pages show while the station is read (in their bones). */
+const SAMPLE_PROFILE = sampleProfile(8);
+
+/** An account's page under its frame: who it is, its check, its models; the connects that run on it (of `connects`);
+ *  sharing it, where the station shares (`sharing`). */
+function AccountView({ profile, connects, sharing }: { profile: Profile; connects: Connect[]; sharing: boolean }) {
   const api = useApi();
   const station = useStation();
   const link = useLink();
@@ -106,7 +113,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
   };
   // Its last check, as the station has it (a check done here, or after a sign-in, comes back with the overview).
   const latest = profile.check;
-  const users = profile.usedBy.map((id) => overview.connects.find((c) => c.id === id)).filter((c) => c !== undefined);
+  const users = profile.usedBy.map((id) => connects.find((c) => c.id === id)).filter((c) => c !== undefined);
   const [deleting, setDeleting] = useState(false);
 
   // A subscription, or a profile on an account (OpenCode Go's, Kimi Code's): signed in (again) rather than given a key.
@@ -126,7 +133,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
     entry?.where,
   ].filter(Boolean).join(" · ");
   return (
-    <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
+    <>
       {!sidebar && <BackLink to={profilesPage(station)} label="Profile" />}
       {/* Who the account is and whether it works now: its provider, name, runtimes, and its last check. */}
       <header className={pagesCss.identity}>
@@ -161,7 +168,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
 
       {entry && hosts(entry).length > 1 && <StationsSection entry={entry} here={station.address} />}
 
-      {overview.sharing && <ShareSection profile={profile} />}
+      {sharing && <ShareSection profile={profile} />}
 
       {!copy && <WorkspacesSection profile={profile} />}
 
@@ -197,7 +204,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
       {/* Gone from here at once: the list shows it until the station has dropped it, a failure said by toast. */}
       <Confirm open={deleting} onClose={() => setDeleting(false)} onConfirm={() => { setDeleting(false); navigate(profilesPage(station)); void remove.run(); }}
         title={removal.title} action={removal.action} description={removal.description} />
-    </div>
+    </>
   );
 }
 
@@ -830,32 +837,41 @@ export function PickModelsPage() {
   const overview = useOverview(useStation().address);
   const profile = overview.value?.profiles.find((p) => p.id === id);
   const save = useAction((models: string[]) => api.putProfile(id, { models }));
-  if (!overview.value) return overview.error ? <Empty><p>{overview.error.message}</p></Empty> : <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting shape="cards" text={t("web-pages.profiles.loading")} /></div>;
+  if (!overview.value) return overview.error ? <Empty><p>{overview.error.message}</p></Empty>
+    : <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting text={t("web-pages.profiles.loading")} sample={<PickModels profile={SAMPLE_PROFILE} onSave={() => Promise.resolve()} onLeave={() => undefined} />} /></div>;
   if (!profile) return <Empty><p>{t("web-pages.profiles.notFound", { id })}</p></Empty>;
-  const leave = () => navigate(link(`/settings/accounts/${encodeURIComponent(id)}`), { replace: true });
+  return (
+    <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
+      <PickModels profile={profile} onSave={(models) => save.run(models)} onLeave={() => navigate(link(`/settings/accounts/${encodeURIComponent(id)}`), { replace: true })} />
+      {save.error && <p className={controlsCss.fieldError} role="alert">{save.error.message}</p>}
+    </div>
+  );
+}
+
+/** Choosing an account's models (`onSave`), or not (`onLeave`): what it is, the models it has by series. */
+function PickModels({ profile, onSave, onLeave }: { profile: Profile; onSave(models: string[]): Promise<unknown>; onLeave(): void }) {
   const found = profile.check?.models ?? null;
   const listed = (profile.available ?? []).length > 0;
   return (
-    <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
+    <>
       <header className={pagesCss.pageHead}>
         <div>
           <h1>{t("web-pages.profiles.pickModels.title")}</h1>
           <p className={shellCss.muted}>{t("web-pages.profiles.pickModels.lead", { name: profile.name })}</p>
         </div>
         <div className={css.pickModelsActions}>
-          <Button variant="ghost" onClick={leave}>{t("web-pages.profiles.pickModels.skip")}</Button>
-          <Button variant="primary" disabled={profile.models.length === 0} onClick={leave}>{t("common.done")}</Button>
+          <Button variant="ghost" onClick={onLeave}>{t("web-pages.profiles.pickModels.skip")}</Button>
+          <Button variant="primary" disabled={profile.models.length === 0} onClick={onLeave}>{t("common.done")}</Button>
         </div>
       </header>
       {profile.modelsReading ? <WaitLine text={t("web-pages.profiles.pickModels.reading")} />
         : !listed && !profile.canAddModel ? <p className={shellCss.muted}>{profile.check?.state === "ok" ? t("web-pages.profiles.pickModels.none") : profile.check?.detail || profile.checkText}</p>
         : (
           <div className={css.modelsBody}>
-            {listed && <ModelChecklist profile={profile} found={found} onSave={(models) => save.run(models)} />}
+            {listed && <ModelChecklist profile={profile} found={found} onSave={onSave} />}
             {profile.canAddModel && <AddModel profile={profile} />}
           </div>
         )}
-      {save.error && <p className={controlsCss.fieldError} role="alert">{save.error.message}</p>}
-    </div>
+    </>
   );
 }

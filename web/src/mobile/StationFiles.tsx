@@ -5,7 +5,7 @@
 // dragged ones do. A card of one in the composer, tapped, says where it is and switches how it goes (RefSheet).
 import { useState } from "react";
 import { useStations } from "../api.ts";
-import type { DriveEntry, StationView } from "../core/shapes.ts";
+import type { DriveEntry, DriveRoots, StationView } from "../core/shapes.ts";
 import type { Dropped, Pending } from "../draft.ts";
 import { draggedOf, droppedFrom } from "../drive/drag.ts";
 import { KindIcon } from "../drive/KindIcon.tsx";
@@ -22,6 +22,7 @@ import * as sheetsCss from "./styles/sheets.css.ts";
 import * as connectsCss from "./Connects.css.ts";
 import * as own from "./StationFiles.css.ts";
 import { t } from "../i18n.ts";
+import { sampleDriveEntries, sampleDriveRoots, sampleStations } from "../samples.ts";
 
 /** Where the picker is: a folder of a station (its root, a path under it), or the places (null). */
 type Place = { station: string; stationName: string; root: string; rootName: string; path: string } | null;
@@ -79,15 +80,21 @@ function Picker({ scope, onAdd, onCancel }: { scope: string; onAdd: (items: Drop
 function Places({ scope, onGo }: { scope: string; onGo: (place: Place) => void }) {
   const stations = useStations(scope);
   const list = (stations.value ?? []).filter((s) => s.overview?.drive);
-  if (!stations.value) return <Waiting count={4} text={t("common.readingStations")} error={stations.error?.message} />;
+  const sample = SAMPLE_STATIONS.map((s) => <StationPlaces key={s.station} s={s} drive={SAMPLE_DRIVE} onGo={() => undefined} />);
+  if (!stations.value) return <Waiting text={t("common.readingStations")} error={stations.error?.message} sample={sample} />;
   // Their folders are in each station's overview: none yet while one online is not read.
-  if (!list.length && stations.value.some((s) => s.online && !s.overview)) return <Waiting count={4} />;
+  if (!list.length && stations.value.some((s) => s.online && !s.overview)) return <Waiting sample={sample} />;
   if (!list.length) return <p className={`${partsCss.mMuted} ${css.mSheetNote}`}>{t("web-main.rail.filesNone")}</p>;
-  return <>{list.map((s) => <StationPlaces key={s.station} s={s} onGo={onGo} />)}</>;
+  return <>{list.map((s) => <StationPlaces key={s.station} s={s} drive={s.overview!.drive!} onGo={onGo} />)}</>;
 }
 
-function StationPlaces({ s, onGo }: { s: StationView; onGo: (place: Place) => void }) {
-  const drive = s.overview!.drive!;
+/** Stations, their folders and a folder's entries made up, for what the sheet shows while they are read (in their bones). */
+const SAMPLE_STATIONS = sampleStations(2);
+const SAMPLE_DRIVE: DriveRoots = { roots: sampleDriveRoots().slice(0, 2) };
+const SAMPLE_ENTRIES = sampleDriveEntries();
+
+/** A station's places, as its `drive` lends them. */
+function StationPlaces({ s, drive, onGo }: { s: StationView; drive: DriveRoots; onGo: (place: Place) => void }) {
   const go = (root: string, rootName: string) => onGo({ station: s.station, stationName: s.name, root, rootName, path: "" });
   return (
     <>
@@ -119,13 +126,20 @@ function FolderRows({ place, ticked, onToggle, onEnter }: {
       <PickRow label={t("web-mobile.files.wholeFolder")} sub={here.ref.path} leading={<Folder size={20} />} checked={ticked(here)} onClick={() => onToggle(here)} />
       <div className={own.rule} />
       {folder.error ? <p className={`${partsCss.mRed} ${css.mSheetNote}`}>{folder.error.message}</p>
-        : !folder.value ? <Waiting count={5} />
+        : !folder.value ? <Waiting sample={<EntryRows entries={SAMPLE_ENTRIES} ticked={() => false} onToggle={() => undefined} onEnter={() => undefined} />} />
         : entries.length === 0 ? <p className={`${partsCss.mMuted} ${css.mSheetNote}`}>{t("web-pages.drive.emptyFolder")}</p>
-        : entries.map((e) => e.dir
-          ? <PickRow key={e.name} label={e.name} sub={e.timeText} leading={<KindIcon kind={e.kind} size={20} />} onClick={() => onEnter(e.name)} />
-          : <PickRow key={e.name} label={e.name} sub={[e.sizeText || fileSize(e.size), e.timeText].filter(Boolean).join(" · ")} leading={<KindIcon kind={e.kind} size={20} />} checked={ticked(of(e))} onClick={() => onToggle(of(e))} />)}
+        : <EntryRows entries={entries} ticked={(e) => ticked(of(e))} onToggle={(e) => onToggle(of(e))} onEnter={onEnter} />}
     </>
   );
+}
+
+/** What is in a folder: a folder entered, a file ticked. */
+function EntryRows({ entries, ticked, onToggle, onEnter }: {
+  entries: readonly DriveEntry[]; ticked: (e: DriveEntry) => boolean; onToggle: (e: DriveEntry) => void; onEnter: (name: string) => void;
+}) {
+  return entries.map((e) => e.dir
+    ? <PickRow key={e.name} label={e.name} sub={e.timeText} leading={<KindIcon kind={e.kind} size={20} />} onClick={() => onEnter(e.name)} />
+    : <PickRow key={e.name} label={e.name} sub={[e.sizeText || fileSize(e.size), e.timeText].filter(Boolean).join(" · ")} leading={<KindIcon kind={e.kind} size={20} />} checked={ticked(e)} onClick={() => onToggle(e)} />);
 }
 
 /**

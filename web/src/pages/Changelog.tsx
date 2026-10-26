@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { useChangelog, useChangelogSeen } from "../changelog.ts";
-import type { ChangelogItem } from "../core/shapes.ts";
+import type { ChangelogDay, ChangelogItem } from "../core/shapes.ts";
 import { Close, Sparks } from "@stillfail/ui/icons.tsx";
 import { MobileBack, Segmented, Tip, Waiting } from "../ui.tsx";
 import { t } from "../i18n.ts";
@@ -13,6 +13,7 @@ import * as pagesCss from "../styles/pages.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as css from "./Changelog.css.ts";
+import { sampleChangelog } from "../samples.ts";
 
 export function ChangelogPage({ back }: { back: string }) {
   const view = useChangelog().value;
@@ -35,18 +36,26 @@ export function ChangelogPage({ back }: { back: string }) {
       </header>
       {tab && view!.tabs.length > 1 && <div className={css.tabsRow}><Segmented className={css.tabs} label={t("web-pages.settings.nav.changelog")} value={tab.part}
         onChange={setPart} options={view!.tabs.map((x) => ({ value: x.part, label: x.label }))} /></div>}
-      {!view || view.loading ? <Waiting count={5} />
+      {!view || view.loading ? <Waiting sample={<Days days={SAMPLE_DAYS} />} />
         : view.error ? <p className={controlsCss.fieldError}>{view.error}</p>
         : !tab || tab.days.length === 0 ? <p className={shellCss.muted}>{t("web-pages.changelog.empty")}</p>
-        : tab.days.map((day) => (
-          <section key={day.label} aria-label={day.label}>
-            <div className={css.heading}>{day.label}</div>
-            {day.entries.map((item) => <Change key={item.version} item={item} />)}
-          </section>
-        ))}
+        : <Days days={tab.days} />}
     </div>
   );
 }
+
+/** A tab's changes, by day. */
+function Days({ days }: { days: ChangelogDay[] }) {
+  return days.map((day) => (
+    <section key={day.label} aria-label={day.label}>
+      <div className={css.heading}>{day.label}</div>
+      {day.entries.map((item) => <Change key={item.version} item={item} />)}
+    </section>
+  ));
+}
+
+/** What changed made up, for what the page shows while it is read (in its bones). */
+const SAMPLE_DAYS = sampleChangelog();
 
 /** One change: each line with its kind before it, the version at the end of the first; under them, what is not out yet. */
 function Change({ item }: { item: ChangelogItem }) {

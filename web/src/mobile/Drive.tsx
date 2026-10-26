@@ -22,7 +22,7 @@ import { childOf, drive, drivePath, filtered, named, rootTrouble, useDrive, type
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { Button, ListCard, NavBar, NavButton, PickRow, SectionHeader } from "./parts.tsx";
-import { Progress, Spinner, Waiting } from "@stillfail/ui/waiting.tsx";
+import { Progress, Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import * as barsCss from "./styles/bars.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -31,6 +31,7 @@ import * as sheetsCss from "./styles/sheets.css.ts";
 import * as css from "./Drive.css.ts";
 import { t } from "../i18n.ts";
 import { StationNamedAt } from "../StationNamed.tsx";
+import { sampleDriveEntries, sampleDriveRoots, sampleWords } from "../samples.ts";
 
 /** A sheet's share of the screen for a title and `rows` rows (a sheet is as tall as what it holds). */
 const fit = (rows: number) => Math.min(0.9, (96 + rows * 48 + 24) / window.innerHeight);
@@ -58,24 +59,33 @@ function RootsPage({ d }: { d: DriveState }) {
       <NavBar back={<StationNamedAt station={station.address} name={station.name} />} onBack={app.pop} title={t("web-pages.drive.title")}
         trailing={d.manage && d.offered && d.roots.length > 0 ? <NavButton icon={More} label={t("web-pages.drive.manage")} onClick={manage} /> : undefined} />
       <div className={pagesCss.mScroll}>
-        {d.loading ? <Waiting count={3} error={d.error} />
+        {d.loading ? <Waiting error={d.error} sample={<Roots roots={SAMPLE_ROOTS} manage={false} onOpen={() => undefined} />} />
           : !d.offered ? <Empty text={t("web-pages.drive.oldStation")} />
           : d.roots.length === 0 ? (
             <Empty text={d.manage ? t("web-pages.drive.noneManage") : t("web-pages.drive.noneMember")}
               action={d.manage ? <Button label={t("web-pages.drive.pick")} primary onClick={() => app.sheet({ height: 0.85, draggable: true, content: () => <PickerSheet station={station.address} roots={d.roots} /> })} /> : undefined} />
-          ) : (
-            <>
-              <p className={css.mCount}>{t("web-pages.drive.rootsCount", { n: d.roots.length })}</p>
-              <ListCard>
-                {d.roots.map((r) => <RootRow key={r.path} root={r} manage={d.manage} roots={d.roots} onOpen={() => app.push(drivePath(station.base, r.path))} />)}
-              </ListCard>
-            </>
-          )}
+          ) : <Roots roots={d.roots} manage={d.manage} onOpen={(r) => app.push(drivePath(station.base, r.path))} />}
         <div style={{ height: 30 }} />
       </div>
     </div>
   );
 }
+
+/** The folders lent (`roots`), how many, on a card; `manage`: each let go of by a long press. */
+function Roots({ roots, manage, onOpen }: { roots: DriveRoot[]; manage: boolean; onOpen(root: DriveRoot): void }) {
+  return (
+    <>
+      <p className={css.mCount}>{t("web-pages.drive.rootsCount", { n: roots.length })}</p>
+      <ListCard>
+        {roots.map((r) => <RootRow key={r.path} root={r} manage={manage} roots={roots} onOpen={() => onOpen(r)} />)}
+      </ListCard>
+    </>
+  );
+}
+
+/** Folders and their entries made up, for what the files' screens show while they are read (in their bones). */
+const SAMPLE_ROOTS = sampleDriveRoots();
+const SAMPLE_ENTRIES = sampleDriveEntries();
 
 /** A folder lent: its name, where it is; one that cannot be browsed now in red, with what to do about it. */
 function RootRow({ root, manage, roots, onOpen }: { root: DriveRoot; manage: boolean; roots: DriveRoot[]; onOpen: () => void }) {
@@ -172,7 +182,10 @@ function FolderPage({ d, root, path, top }: { d: DriveState; root: string; path:
             <span className={partsCss.mError}>{folder.error.message}</span>
             <button type="button" className={partsCss.mLink} onClick={reload}>{t("web-pages.drive.retry")}</button>
           </div>
-        ) : !folder.value ? <Waiting /> : (
+        ) : !folder.value ? <Waiting sample={<>
+          <p className={css.mCount}>{sampleWords(4)}</p>
+          <ListCard>{SAMPLE_ENTRIES.map((e) => <EntryRow key={e.name} at={at} entry={e} write={false} onOpen={() => undefined} />)}</ListCard>
+        </>} /> : (
           <>
             <p className={css.mCount}>{folder.value.countText}{folder.value.truncated ? ` · ${t("web-pages.drive.truncated")}` : ""}</p>
             {uploads.length > 0 && <ListCard>{uploads.map((u) => <UploadRow key={u.key} u={u} />)}</ListCard>}
@@ -391,7 +404,7 @@ export function PickerSheet({ station, roots }: { station: string; roots: DriveR
             <Folder size={36} strokeWidth={1.3} className={partsCss.mSubtle} />
             <p>{picker.shut.unreadable ? t("web-pages.drive.pickNeedsAccess") : picker.shut.message}</p>
           </div>
-        ) : !v ? <Waiting count={6} /> : (
+        ) : !v ? <Waiting sample={SAMPLE_ROOTS.map((r) => row({ name: r.name, path: r.path, unreadable: false }))} /> : (
           <>
             {atHome && v.places.length > 1 && <>
               <SectionHeader title={t("web-pages.drive.places")} />
@@ -546,7 +559,8 @@ function Missing({ back, error }: { back: string; error: string | null }) {
   return (
     <>
       <NavBar back={back} onBack={app.pop} title="" />
-      {error ? <div className={css.mProblem}><span className={partsCss.mError}>{error}</span></div> : <Waiting fill shape="cards" count={1} text={t("common.opening")} />}
+      {/* The file is opened as the files' page opens one (FilePreview.tsx): said in a line. */}
+      <div className={css.mProblem}>{error ? <span className={partsCss.mError}>{error}</span> : <WaitLine text={t("common.opening")} />}</div>
     </>
   );
 }

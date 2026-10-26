@@ -6,6 +6,8 @@ import { DropdownMenu } from "radix-ui";
 import { useState } from "react";
 import { Link } from "react-router";
 import { useAction, useApi, useConnects, useStations, type MadeSlackApp } from "../api.ts";
+import type { ConnectItem } from "../core/shapes.ts";
+import { sampleConnects } from "../samples.ts";
 import { MineFilter, OwnerLabel } from "../components.tsx";
 import { profilesPage, StationContext, stationBase, useOnlyMine, type Station } from "../station.tsx";
 import { About, Button, Confirm, ConnectAvatar, ConnectKindIcon, FirstOne, Menu, MobileBack, SlackLogo, StatusDot, Waiting, WaitMore } from "../ui.tsx";
@@ -91,32 +93,12 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
           </ul>
         </section>
       )}
-      {first ? null : shown.length === 0 && !connects.error && (loading || wait!.failing.length > 0) ? <Waiting note={wait} />
+      {first ? null : shown.length === 0 && !connects.error && (loading || wait!.failing.length > 0) ? <Waiting note={wait} sample={<ConnectRows items={SAMPLE_CONNECTS} />} />
         : shown.length === 0 ? (
         <p className={connects.error ? controlsCss.fieldError : shellCss.muted}>{connects.error?.message ?? (onlyMine ? t("web-pages.connects.noneMine") : t("web-pages.connects.none"))}</p>
       ) : (<>
-        <ul className={pagesCss.list}>
-          {shown.map(({ connect: c, station, stationName }) => (
-            <li key={`${station}/${c.id}`}>
-              <Link className={pagesCss.listRow} to={`${stationBase(station)}/connects/${c.id}`}>
-                <ConnectAvatar connect={c} />
-                <span className={pagesCss.listRowText}>
-                  <span className={pagesCss.listRowTitle}>{c.name}{c.team && <span className={css.connectTeam}><ConnectKindIcon kind={c.kind} size={11} />{c.team}</span>}</span>
-                  <span className={shellCss.muted}>{c.modeText} · {c.runtimeText}{c.bind.model ? ` · ${c.modelName ?? c.bind.model}` : ""}</span>
-                </span>
-                <span className={css.connectFacts}>
-                  <span className={cloudCss.stationTag}><StationNamedAt station={station} name={stationName} size={11} /></span>
-                  <OwnerLabel owner={c.createdBy} />
-                </span>
-                <span className={css.navNote}>{c.statusText}</span>
-                {/* Being deleted (asked on its page, which has gone back here): a ring until the station has dropped it. */}
-                <DoingMark calls="connect.delete" on={{ station, id: c.id }} inline label={t("web-main.activity.busy")} />
-                <StatusDot state={c.presence} label={c.statusText} />
-              </Link>
-            </li>
-          ))}
-        </ul>
-        <WaitMore note={wait} />
+        <ConnectRows items={shown} />
+        <WaitMore note={wait} sample={<ConnectRows items={SAMPLE_CONNECTS.slice(0, 1)} />} />
       </>)}
       </div>
       {adding && (
@@ -155,3 +137,32 @@ function WaitingApp({ app, stationName, emoji, icon, onGo }: { app: MadeSlackApp
   );
 }
 
+/** The connects of the list (`items`), a row each: its picture, name and team, how it runs, its station and who added it, how it is. */
+function ConnectRows({ items }: { items: ConnectItem[] }) {
+  return (
+    <ul className={pagesCss.list}>
+      {items.map(({ connect: c, station, stationName }) => (
+        <li key={`${station}/${c.id}`}>
+          <Link className={pagesCss.listRow} to={`${stationBase(station)}/connects/${c.id}`}>
+            <ConnectAvatar connect={c} />
+            <span className={pagesCss.listRowText}>
+              <span className={pagesCss.listRowTitle}>{c.name}{c.team && <span className={css.connectTeam}><ConnectKindIcon kind={c.kind} size={11} />{c.team}</span>}</span>
+              <span className={shellCss.muted}>{c.modeText} · {c.runtimeText}{c.bind.model ? ` · ${c.modelName ?? c.bind.model}` : ""}</span>
+            </span>
+            <span className={css.connectFacts}>
+              <span className={cloudCss.stationTag}><StationNamedAt station={station} name={stationName} size={11} /></span>
+              <OwnerLabel owner={c.createdBy} />
+            </span>
+            <span className={css.navNote}>{c.statusText}</span>
+            {/* Being deleted (asked on its page, which has gone back here): a ring until the station has dropped it. */}
+            <DoingMark calls="connect.delete" on={{ station, id: c.id }} inline label={t("web-main.activity.busy")} />
+            <StatusDot state={c.presence} label={c.statusText} />
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Connects made up, for what the list shows while they are read (in their bones). */
+const SAMPLE_CONNECTS = sampleConnects();

@@ -80,7 +80,7 @@ otherwise Home at the root of a `@ui.Nav` (src/sfapp, Home.kt and its parts):
   the agents' makers' marks and the people's faces, RowPicture.kt); the time
   (`time.lastActiveAt.ago`) while a row is held; a done row swiped left to
   archive it (`chat.archive`); the search field at its top; while it is read,
-  the rows to come breathing (WaitShapes), what is wrong over them; the empty
+  the rows to come breathing in their bones, what is wrong over them; the empty
   list's and the first station's illustrations.
 - A row tapped pushes its chat (its bar only: slice 4 fills it), swiped back
   from the left edge.

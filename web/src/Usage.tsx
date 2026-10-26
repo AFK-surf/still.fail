@@ -8,6 +8,7 @@ import { useTopic } from "./core/react.ts";
 import type { UsageDay, UsageItem, UsageList, UsageSeries, UsageView } from "./core/shapes.ts";
 import { stationBase } from "./station.tsx";
 import { Avatar, Segmented, Waiting } from "./ui.tsx";
+import { sampleUsage } from "./samples.ts";
 import * as css from "./Usage.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import * as proseCss from "./Prose.css.ts";
@@ -181,7 +182,7 @@ export function UsageBody({ view, pricesPath }: { view: UsageView; pricesPath?: 
   return (
     <div className={css.usage}>
       <Tiles view={view} pricesPath={pricesPath} />
-      {view.empty ? (view.wait.reading || view.wait.failing.length > 0 ? <Waiting shape="cards" count={2} note={view.wait} /> : <p className={css.empty}>{t("web-main.usage.none")}</p>) : (
+      {view.empty ? (view.wait.reading || view.wait.failing.length > 0 ? <Waiting note={view.wait} sample={<><DaysChart view={SAMPLE_USAGE} /><Rankings view={SAMPLE_USAGE} /></>} /> : <p className={css.empty}>{t("web-main.usage.none")}</p>) : (
         <>
           <DaysChart view={view} />
           <Rankings view={view} />
@@ -191,6 +192,9 @@ export function UsageBody({ view, pricesPath }: { view: UsageView; pricesPath?: 
     </div>
   );
 }
+
+/** What the agents spent made up, for what the pages show while it is read (in their bones). */
+export const SAMPLE_USAGE = sampleUsage();
 
 /** Prices come from each station, through the core; no independent table in a UI. */
 export function PriceTables({ view }: { view: UsageView }) {

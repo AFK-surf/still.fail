@@ -5,7 +5,8 @@ import { useReady } from "../core/react.ts";
 import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { useParams } from "react-router";
 import { useJob } from "../api.ts";
-import { fileSourceOf, StationPreview } from "../Preview.tsx";
+import { fileSourceOf, PreviewSample, StationPreview } from "../Preview.tsx";
+import { sampleWords } from "../samples.ts";
 import { useStation } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { draftKeyOf } from "./ChatHost.tsx";
@@ -42,8 +43,8 @@ export function PreviewScreen() {
   return (
     <div className={`${pagesCss.mScreen} ${css.mPreview}`}>
       <NavBar back={t("web-mobile.nav.chat")} onBack={app.pop} title={job?.name ?? t("web-mobile.preview.service")} sub={<span className={barsCss.mNavbarNote}><StationNamedAt station={station.address} name={station.name} /></span>} />
-      {/* Not read yet: the room it will fill, saying so (no blank page meanwhile). */}
-      {!error && !job && <Waiting fill shape="cards" count={1} />}
+      {/* Not read yet: the preview it will be, in its bones (no blank page meanwhile). */}
+      {!error && !job && <Waiting fill sample={<PreviewSample name={SAMPLE_NAME} />} />}
       {error && !job && <p className={homeCss.mNote}>{t("web-mobile.preview.notFound", { error })}</p>}
       {job && !up && <p className={homeCss.mNote}>{t("web-mobile.preview.stopped", { name: job.name })}</p>}
       {job && up && (
@@ -54,3 +55,5 @@ export function PreviewScreen() {
   );
 }
 
+/** A service's name made up, for its preview while it is read (in its bones). */
+const SAMPLE_NAME = sampleWords(6);

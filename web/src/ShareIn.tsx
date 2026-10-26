@@ -18,6 +18,7 @@ import * as switcherCss from "./Switcher.css.ts";
 import * as css from "./ShareIn.css.ts";
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
+import { sampleChats } from "./samples.ts";
 
 export function ShareInPanel({ scope }: { scope: string }) {
   const shared = useShared();
@@ -70,10 +71,14 @@ function Body({ scope, shared }: { scope: string; shared: Shared }) {
           // Esc lets go of the search first, then (pressed again) the panel.
           onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setQuery(null); } }} />
       )}
-      <div className={css.list}>{view && !view.loading ? <Places view={view} searching={!!query?.trim()} onOpen={open} /> : <Waiting shape="rows" dense count={3} />}</div>
+      <div className={css.list}>{view && !view.loading ? <Places view={view} searching={!!query?.trim()} onOpen={open} />
+        : <Waiting sample={<Places view={SAMPLE_PLACES} searching={false} onOpen={() => undefined} />} />}</div>
     </>
   );
 }
+
+/** Where it can go made up, for what the panel shows while that is read (in its bones): a few chats. */
+const SAMPLE_PLACES: ShareInView = { items: sampleChats(3), stations: [], loading: false };
 
 /** What is shared: its title (or its link's site), over what it is (the link, the text). */
 function What({ shared, site }: { shared: Shared; site: string | undefined }) {

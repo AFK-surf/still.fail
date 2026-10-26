@@ -11,7 +11,7 @@ import { useDoing } from "../doing.ts";
 import { useProfileFlow } from "../profileFlow.ts";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { BackLink, Button, Field, ProviderLogo, Segmented, Select, Waiting } from "../ui.tsx";
-import type { ApiProvider, ProfileFlowView } from "../core/shapes.ts";
+import type { ApiProvider, ProfileFlowView, ProviderGroup } from "../core/shapes.ts";
 import { InstallStep, MachineLoginOffers, LoginSteps } from "./Accounts.tsx";
 import { pickModelsPath } from "../ProfilesNav.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
@@ -19,6 +19,7 @@ import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./AddProfile.css.ts";
 import { t } from "../i18n.ts";
+import { sampleProviders, sampleWords } from "../samples.ts";
 
 /** Where the add page of a workspace is (the station it adds on, and a vendor to go straight to). */
 export function addProfilePath(workspace: string, station: string, provider?: string, method?: "plan"): string {
@@ -30,7 +31,7 @@ export function AddProfile({ workspace }: { workspace: string }) {
   const stations = useStations(workspace).value;
   const [params, setParams] = useSearchParams();
   const online = (stations ?? []).filter((s) => s.online);
-  if (!stations) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting shape="cards" text={t("common.readingStations")} /></div>;
+  if (!stations) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting text={t("common.readingStations")} sample={<ProvidersSample />} /></div>;
   const chosen = online.find((s) => s.station === params.get("station")) ?? online[0];
   if (!chosen) return <Navigate to={`/w/${workspace}/settings/profiles`} replace />;
   const station = { id: chosen.id, name: chosen.name, online: chosen.online, address: chosen.station, base: stationBase(chosen.station), settings: `/w/${workspace}/settings` };
@@ -92,7 +93,7 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
 
   const added = ({ id }: { id: string }) => { toast(t("web-pages.profiles.verifiedAdded")); pick(id); };
 
-  if (!d) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting shape="cards" /></div>;
+  if (!d) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting sample={<ProvidersSample />} /></div>;
   const picking = d.step === "pick";
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
@@ -113,19 +114,7 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
             </div>
           )}
           <div className={css.offers}><MachineLoginOffers logins={overview.value?.machineLogins} onAdd={(c) => navigate(addProfilePath(workspace, address, c === "claude-sub" ? "anthropic" : "openai", "plan"))} /></div>
-          {d.groups.map((g) => (
-            <section key={g.id} className={css.group} aria-label={g.title}>
-              <h3 className={css.groupHead}>{g.title}</h3>
-              <div className={css.tiles}>
-                {g.providers.map((p) => (
-                  <button key={p.id} type="button" className={css.tile} onClick={() => navigate(here(p.id))}>
-                    <span className={pagesCss.mark} style={{ width: 28, height: 28 }}><Mark p={p} /></span>
-                    <span className={css.tileName}>{p.name}</span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          ))}
+          <Providers groups={d.groups} onPick={(p) => navigate(here(p.id))} />
         </>
       ) : d.step === "method" ? (
         <div className={css.methods}>
@@ -149,6 +138,32 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
     </div>
   );
 }
+
+/** The providers to add an account of (`groups`), a section a kind, a tile each. */
+function Providers({ groups, onPick }: { groups: ProviderGroup[]; onPick(p: ApiProvider): void }) {
+  return groups.map((g) => (
+    <section key={g.id} className={css.group} aria-label={g.title}>
+      <h3 className={css.groupHead}>{g.title}</h3>
+      <div className={css.tiles}>
+        {g.providers.map((p) => (
+          <button key={p.id} type="button" className={css.tile} onClick={() => onPick(p)}>
+            <span className={pagesCss.mark} style={{ width: 28, height: 28 }}><Mark p={p} /></span>
+            <span className={css.tileName}>{p.name}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  ));
+}
+
+/** The page as it opens, made up, for what it shows while it is read (in its bones): its title, the providers' tiles. */
+function ProvidersSample() {
+  return <>
+    <header className={pagesCss.pageHead}><div><h1>{sampleWords(6)}</h1></div></header>
+    <Providers groups={SAMPLE_PROVIDERS} onPick={() => undefined} />
+  </>;
+}
+const SAMPLE_PROVIDERS = sampleProviders();
 
 /** A provider's mark: its maker's, or the generic plug (the variables by hand have their own). */
 function Mark({ p }: { p: ApiProvider }) {

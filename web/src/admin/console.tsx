@@ -9,6 +9,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { Wordmark } from "../brand.tsx";
 import { stamp, type Stamp } from "../api.ts";
+import { sampleStamp, sampleWords } from "../samples.ts";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, MobileBack, Pill, ResizeHandle, Segmented, Select, StatusDot, Switch, SwitchRow, Time, ICON, type Presence, type Tone, Waiting } from "../ui.tsx";
 import { useAccounts, useSignOut, type Account } from "../cloud/accounts.ts";
@@ -163,51 +164,90 @@ function Failed({ error }: { error: Error | null }) {
 
 function OverviewPage({ account }: { account: Account }) {
   const { value: view, error } = useKept<Overview>({ topic: "adminOverview", account: account.sub });
-  const max = Math.max(1, ...(view?.weeks.map((w) => w.count) ?? []));
   return (
     <div className={`${pagesCss.page} ${css.mid}`}>
       <MobileBack to="/" label={t("web-pages.admin.title")} />
       <header className={pagesCss.pageHead}><div><h1>{t("web-pages.admin.overview")}</h1></div></header>
       <Failed error={error} />
-      {!view ? !error && <Waiting shape="cards" /> : <>
-        <div className={css.stats}>
-          {view.stats.map((s) => (
-            <Link key={s.label} className={css.stat} to={`${PATH[s.list]}?filter=${s.filter}`}>
-              <span className={shellCss.muted}>{s.label}</span>
-              <span className={css.statValue}>{s.value}</span>
-              <span className={css.statNote}>{s.note}</span>
-            </Link>
-          ))}
-        </div>
-        <section className={css.chart} aria-label={t("web-pages.admin.weekly")}>
-          <div className={css.chartHead}><b>{t("web-pages.admin.weekly")}</b><span className={shellCss.muted}>{t("web-pages.admin.last12")}</span></div>
-          <div className={css.bars}>
-            {view.weeks.map((w, i) => (
-              <div key={i} className={css.bar} title={t("web-pages.admin.weekBar", { week: w.label, n: w.count })}>
-                <span className={css.barCount}>{w.count || ""}</span>
-                <span className={css.barFill} data-now={i === view.weeks.length - 1 || undefined} style={{ height: `${(w.count / max) * 100}%` }} />
-                <span className={css.barLabel}>{w.label}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-        {view.todo.length > 0 && <>
-          <h2 className={css.h2}>{t("web-pages.admin.todo")}</h2>
-          <div className={css.list}>
-            {view.todo.map((t) => (
-              <Link key={t.text} className={css.todo} to={`${PATH[t.list]}?filter=${t.filter}`}>
-                <StatusDot state={t.tone === "amber" ? "busy" : "offline"} />
-                <span className={css.todoText}>{t.text}</span>
-                <span className={css.todoHint}>{t.hint}</span>
-                <ChevronRight {...ICON} />
-              </Link>
-            ))}
-          </div>
-        </>}
-      </>}
+      {!view ? !error && <Waiting sample={<OverviewBody view={SAMPLE_OVERVIEW} />} /> : <OverviewBody view={view} />}
     </div>
   );
 }
+
+/** The overview under its title (`view`): its numbers, each opening its list; the weeks' sign-ups; what needs doing. */
+function OverviewBody({ view }: { view: Overview }) {
+  const max = Math.max(1, ...view.weeks.map((w) => w.count));
+  return (
+    <>
+    <div className={css.stats}>
+      {view.stats.map((s) => (
+        <Link key={s.label} className={css.stat} to={`${PATH[s.list]}?filter=${s.filter}`}>
+          <span className={shellCss.muted}>{s.label}</span>
+          <span className={css.statValue}>{s.value}</span>
+          <span className={css.statNote}>{s.note}</span>
+        </Link>
+      ))}
+    </div>
+    <section className={css.chart} aria-label={t("web-pages.admin.weekly")}>
+      <div className={css.chartHead}><b>{t("web-pages.admin.weekly")}</b><span className={shellCss.muted}>{t("web-pages.admin.last12")}</span></div>
+      <div className={css.bars}>
+        {view.weeks.map((w, i) => (
+          <div key={i} className={css.bar} title={t("web-pages.admin.weekBar", { week: w.label, n: w.count })}>
+            <span className={css.barCount}>{w.count || ""}</span>
+            <span className={css.barFill} data-now={i === view.weeks.length - 1 || undefined} style={{ height: `${(w.count / max) * 100}%` }} />
+            <span className={css.barLabel}>{w.label}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+    {view.todo.length > 0 && <>
+      <h2 className={css.h2}>{t("web-pages.admin.todo")}</h2>
+      <div className={css.list}>
+        {view.todo.map((t) => (
+          <Link key={t.text} className={css.todo} to={`${PATH[t.list]}?filter=${t.filter}`}>
+            <StatusDot state={t.tone === "amber" ? "busy" : "offline"} />
+            <span className={css.todoText}>{t.text}</span>
+            <span className={css.todoHint}>{t.hint}</span>
+            <ChevronRight {...ICON} />
+          </Link>
+        ))}
+      </div>
+    </>}
+    </>
+  );
+}
+
+/** The console's pages made up, for what they show while they are read (in their bones). */
+const SAMPLE_OVERVIEW: Overview = {
+  stats: [3, 4, 3, 4].map((n, i) => ({ label: sampleWords(n), value: 100 + i, note: sampleWords(n + 3), list: "users", filter: "" })),
+  weeks: [3, 5, 4, 6, 8, 5, 7, 9, 6, 8, 10, 7].map((count) => ({ count, label: sampleWords(2) })),
+  todo: [14, 10].map((n) => ({ text: sampleWords(n), hint: sampleWords(6), tone: "amber", list: "users", filter: "" })),
+};
+const SAMPLE_RELAYS: Relay[] = [6, 8].map((n, i) => ({
+  url: String(i), name: sampleWords(n), state: "online", seen: sampleWords(5), ticks: [],
+  numbers: [3, 4, 3].map((m) => ({ label: sampleWords(m), value: sampleWords(3) })),
+  charts: [4, 3].map((m, j) => ({ id: String(j), label: sampleWords(m), peak: sampleWords(3), series: [{ id: "", label: "", values: [2, 3, 5, 4, 6, 5, 7, 6, 8, 6] }] })),
+}));
+const sampleRows = (list: List): Row[] => [6, 8, 5, 7, 9, 6].map((n, i) => ({
+  id: `sample-${i}`, title: sampleWords(n), line: sampleWords(n + 8), marks: [], number: sampleWords(4),
+  ...(list === "users" ? { person: { name: sampleWords(n), email: "", picture: "" } } : {}), time: { last_seen: sampleStamp(3), created_at: sampleStamp(3) },
+}));
+const SAMPLE_TIME = { created_at: sampleStamp(4), last_seen: sampleStamp(4) };
+const SAMPLE_USER: UserPage = {
+  id: "", title: sampleWords(5), person: { name: sampleWords(5), email: "", picture: "" }, email: sampleWords(16), admin: false, admission: sampleWords(4), code: null,
+  mayCreate: false, mayCreateHint: sampleWords(14), mayCreateFixed: false, beta: false, blocked: false, time: SAMPLE_TIME,
+  workspaces: [6, 4].map((n, i) => ({ id: String(i), name: sampleWords(n), line: sampleWords(n + 4) })),
+};
+const SAMPLE_WORKSPACE: WorkspacePage = {
+  id: sampleWords(10), title: sampleWords(5), creator: { id: "", title: sampleWords(5) }, people: sampleWords(6), invitations: [], time: SAMPLE_TIME,
+  members: [5, 7].map((n, i) => ({ id: String(i), title: sampleWords(n), person: { name: sampleWords(n), email: "", picture: "" }, role: sampleWords(2), time: SAMPLE_TIME })),
+  stations: [5, 3].map((n, i) => ({ id: String(i), name: sampleWords(n), version: sampleWords(4), outdated: false, state: "online", time: SAMPLE_TIME })),
+};
+const SAMPLE_FEEDBACK: FeedbackPage = {
+  id: "", number: sampleWords(4), title: sampleWords(12), body: [40, 26].map(sampleWords).join("\n\n"), status: "new", statuses: [{ id: "new", label: sampleWords(2) }],
+  marks: [], channel: "", channelLabel: sampleWords(3), area: sampleWords(4), reporter: sampleWords(5), station: null, workspace: null, account: null,
+  context: [], logs: null, text: "", time: SAMPLE_TIME,
+};
 
 // ── the relays ──────────────────────────────────────────────────────────
 
@@ -229,7 +269,7 @@ function RelaysPage({ account }: { account: Account }) {
         )}
       </header>
       {none ? <p className={css.relaysNone}>{t("web-pages.admin.relays.none")}</p> : <Failed error={error} />}
-      {!view ? !error && <Waiting shape="cards" count={3} /> : !none && (
+      {!view ? !error && <Waiting sample={<div className={css.relays}>{SAMPLE_RELAYS.map((r) => <RelayCard key={r.url} relay={r} />)}</div>} /> : !none && (
         <div className={css.relays}>{view.relays.map((r) => <RelayCard key={r.url} relay={r} />)}</div>
       )}
     </div>
@@ -375,7 +415,10 @@ function ListPage({ account, list }: { account: Account; list: List }) {
         )}
         {/* A still.fail cloud from before bug reports has no such list. */}
         {list === "feedback" && error?.status === 404 ? <p className={css.empty}>{t("web-pages.admin.noFeedback")}</p> : <Failed error={error} />}
-        {!view ? !error && <Waiting /> : view.rows.length === 0 ? (
+        {!view ? !error && <Waiting sample={<div className={css.list}>{sampleRows(list).map((row) => list === "invite-codes"
+          ? <CodeRow key={row.id} account={account} row={row} />
+          : <ItemRow key={row.id} list={list} row={row} open={false} to="" />)}</div>} />
+          : view.rows.length === 0 ? (
           <p className={css.empty}>{query ? t("web-pages.admin.notFound") : t("web-pages.admin.empty")}</p>
         ) : (
           <div className={css.list}>
@@ -456,12 +499,16 @@ function CodeRow({ account, row }: { account: Account; row: Row }) {
 
 // ── an item's page, beside its list ─────────────────────────────────────
 
-function Detail({ close, head, children }: { close: string; head: React.ReactNode; children: React.ReactNode }) {
+/** An item's pane beside its list: its head (`head`), closed from its end, over what it holds; `bones`: made up, while
+ * the item is read, its head and all of it in their bones. */
+function Detail({ close, head, bones = false, children }: { close: string; head: React.ReactNode; bones?: boolean; children: React.ReactNode }) {
   return (
     <aside className={css.detail}>
       <MobileBack to={close} label={t("web-pages.admin.backToList")} />
-      <div className={css.detailHead}>{head}<Link className={css.close} to={close} aria-label={t("common.close")}><Close {...ICON} /></Link></div>
-      {children}
+      {bones ? <Waiting sample={<><div className={css.detailHead}>{head}</div>{children}</>} /> : <>
+        <div className={css.detailHead}>{head}<Link className={css.close} to={close} aria-label={t("common.close")}><Close {...ICON} /></Link></div>
+        {children}
+      </>}
     </aside>
   );
 }
@@ -470,9 +517,15 @@ function Detail({ close, head, children }: { close: string; head: React.ReactNod
 const PENDING = "email:";
 
 function UserDetail({ account, id, close, search }: { account: Account; id: string; close: string; search: string }) {
+  const { value: u, error } = useKept<UserPage>({ topic: "adminItem", account: account.sub, list: "users", id });
+  if (!u) return error ? <aside className={css.detail}><Failed error={error} /></aside> : <UserShown account={account} id={id} close={close} search={search} u={SAMPLE_USER} bones />;
+  return <UserShown account={account} id={id} close={close} search={search} u={u} />;
+}
+
+/** A user's pane (`u`): how they came in, when, their workspaces; what they may do, and blocking them. */
+function UserShown({ account, id, close, search, u, bones = false }: { account: Account; id: string; close: string; search: string; u: UserPage; bones?: boolean }) {
   const toast = useToast();
   const navigate = useNavigate();
-  const { value: u, error } = useKept<UserPage>({ topic: "adminItem", account: account.sub, list: "users", id });
   const email = id.startsWith(PENDING) ? id.slice(PENDING.length) : null;
   const mayCreate = useAction<boolean, unknown>((on) => email !== null ? admin.setPending(account.sub, email, { may_create: on }) : admin.setMayCreate(account.sub, id, on),
     (_, on) => toast(on ? t("web-pages.admin.user.mayCreateOn") : t("web-pages.admin.user.mayCreateOff")));
@@ -481,9 +534,8 @@ function UserDetail({ account, id, close, search }: { account: Account; id: stri
   const remove = useAction(() => admin.removePending(account.sub, email ?? ""), () => { toast(t("web-pages.admin.pending.removed")); navigate(close); });
   const [blocking, setBlocking] = useState(false);
   const block = useAction((on: boolean) => admin.block(account.sub, id, on), (_, on) => toast(on ? t("web-pages.admin.user.blocked") : t("web-pages.admin.user.unblocked")));
-  if (!u) return <aside className={css.detail}>{error ? <Failed error={error} /> : <Waiting shape="cards" count={2} />}</aside>;
   return (
-    <Detail close={close} head={<>
+    <Detail close={close} bones={bones} head={<>
       <Avatar account={u.person} size={40} />
       <span className={css.detailTitle}><b>{u.title}</b><span>{u.pending ? u.admission : u.email}</span></span>
     </>}>
@@ -544,16 +596,21 @@ function UserDetail({ account, id, close, search }: { account: Account; id: stri
 }
 
 function WorkspaceDetail({ account, id, close }: { account: Account; id: string; close: string }) {
+  const { value: w, error } = useKept<WorkspacePage>({ topic: "adminItem", account: account.sub, list: "workspaces", id });
+  if (!w) return error ? <aside className={css.detail}><Failed error={error} /></aside> : <WorkspaceShown account={account} id={id} close={close} w={SAMPLE_WORKSPACE} bones />;
+  return <WorkspaceShown account={account} id={id} close={close} w={w} />;
+}
+
+/** A workspace's pane (`w`): who made it, its plan, its people, stations and invitations; adding a station, its limits, deleting it. */
+function WorkspaceShown({ account, id, close, w, bones = false }: { account: Account; id: string; close: string; w: WorkspacePage; bones?: boolean }) {
   const toast = useToast();
   const navigate = useNavigate();
-  const { value: w, error } = useKept<WorkspacePage>({ topic: "adminItem", account: account.sub, list: "workspaces", id });
   const [deleting, setDeleting] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
   const [limiting, setLimiting] = useState(false);
   const remove = useAction(() => admin.deleteWorkspace(account.sub, id), () => toast(t("web-pages.settings.workspace.deleted")));
-  if (!w) return <aside className={css.detail}>{error ? <Failed error={error} /> : <Waiting shape="cards" count={2} />}</aside>;
   return (
-    <Detail close={close} head={<>
+    <Detail close={close} bones={bones} head={<>
       <span className={`${css.wsMark} ${css.wsMarkLarge}`}>{[...w.title][0]}</span>
       <span className={css.detailTitle}><b>{w.title}</b><span className={shellCss.mono}>{w.id}</span></span>
     </>}>
@@ -618,13 +675,18 @@ function WorkspaceDetail({ account, id, close }: { account: Account; id: string;
 }
 
 function FeedbackDetail({ account, id, close }: { account: Account; id: string; close: string }) {
-  const toast = useToast();
   const { value: f, error } = useKept<FeedbackPage>({ topic: "adminItem", account: account.sub, list: "feedback", id });
-  const status = useAction((to: FeedbackStatus) => admin.feedbackStatus(account.sub, id, to), (_, to) => toast(t("web-pages.admin.fb.marked", { status: f?.statuses.find((s) => s.id === to)?.label ?? to })));
-  const copy = () => void navigator.clipboard.writeText(f?.text ?? "").then(() => toast(t("web-pages.admin.fb.copied")), () => toast(t("web-pages.admin.fb.copyFailed")));
-  if (!f) return <aside className={css.detail}>{error ? <Failed error={error} /> : <Waiting shape="cards" count={2} />}</aside>;
+  if (!f) return error ? <aside className={css.detail}><Failed error={error} /></aside> : <FeedbackShown account={account} id={id} close={close} f={SAMPLE_FEEDBACK} bones />;
+  return <FeedbackShown account={account} id={id} close={close} f={f} />;
+}
+
+/** A bug report's pane (`f`): its status, copied whole; when, where and from whom; what it says, its context and logs. */
+function FeedbackShown({ account, id, close, f, bones = false }: { account: Account; id: string; close: string; f: FeedbackPage; bones?: boolean }) {
+  const toast = useToast();
+  const status = useAction((to: FeedbackStatus) => admin.feedbackStatus(account.sub, id, to), (_, to) => toast(t("web-pages.admin.fb.marked", { status: f.statuses.find((s) => s.id === to)?.label ?? to })));
+  const copy = () => void navigator.clipboard.writeText(f.text).then(() => toast(t("web-pages.admin.fb.copied")), () => toast(t("web-pages.admin.fb.copyFailed")));
   return (
-    <Detail close={close} head={
+    <Detail close={close} bones={bones} head={
       <span className={css.detailTitle}><b>{f.title}</b><span className={shellCss.mono}>{f.number}</span></span>
     }>
       <div className={css.fbBar}>

@@ -2,7 +2,7 @@ import { t } from "../i18n.ts";
 import { StationNamed, StationNamedAt } from "../StationNamed.tsx";
 import { Fragment, type ReactNode } from "react";
 import { useParams } from "react-router";
-import { useAutomaticDecisionForm, usePolicyDraft, usePolicyForm } from "../AutomaticDecisions.tsx";
+import { SAMPLE_FORM, SAMPLE_POLICY, SAMPLE_RULE, useAutomaticDecisionForm, usePolicyDraft, usePolicyForm, type AutomaticDecisionForm } from "../AutomaticDecisions.tsx";
 import { useStations } from "../api.ts";
 import type { ArchiveOptionView, ArchivePolicyView, AutomaticDecisionView } from "../core/shapes.ts";
 import { ChevronRight, Refresh } from "@stillfail/ui/icons.tsx";
@@ -18,6 +18,7 @@ import * as parts from "./styles/parts.css.ts";
 import * as lists from "./styles/lists.css.ts";
 import * as settings from "./styles/settings.css.ts";
 import * as connects from "./Connects.css.ts";
+import { sampleStations } from "../samples.ts";
 
 export function AutomaticDecisionsScreen() {
   const app=useApp();
@@ -36,7 +37,8 @@ export function AutomaticDecisionCompletionScreen() {
   return <div className={`${pages.mScreen} ${pages.mScroll}`}>
     <TopBack label={t("web-pages.automaticDecisions.title")} onBack={app.pop} />
     <LargeTitle small="" big={t("web-pages.automaticDecisions.completion")} />
-    {!stations.value && <Waiting shape="cards" count={2} text={t("common.readingStations")} error={stations.error?.message} />}
+    {!stations.value && <Waiting text={t("common.readingStations")} error={stations.error?.message}
+      sample={SAMPLE_STATIONS.map((s) => <DecisionRule key={s.station} station={s.station} name={s.name} view={SAMPLE_RULE} form={SAMPLE_FORM} />)} />}
     {stations.value?.length===0 && <p className={settings.mPageNote}>{t("web-pages.automaticDecisions.addStation")}</p>}
     {stations.value?.map(s => <Fragment key={s.station}>
       {s.online && s.overview?.automaticDecisions
@@ -47,9 +49,16 @@ export function AutomaticDecisionCompletionScreen() {
     <div style={{height:30}} />
   </div>;
 }
+/** Stations made up, for what the page shows while they are read (in their bones). */
+const SAMPLE_STATIONS = sampleStations(2);
+
 function DecisionPanel({station,name,view}:{station:string;name:string;view:AutomaticDecisionView}) {
+  return <DecisionRule station={station} name={name} view={view} form={useAutomaticDecisionForm(station,view)} />;
+}
+/** A station's rule (`view`) under its name, being edited in `form`. */
+function DecisionRule({station,name,view,form}:{station:string;name:string;view:AutomaticDecisionView;form:AutomaticDecisionForm}) {
   const app=useApp();
-  const {d,state,saving,refreshing,saveFailed,refreshFailed,reviewing,reviewFailed,canReview,edit,save,refresh,review}=useAutomaticDecisionForm(station,view);
+  const {d,state,saving,refreshing,saveFailed,refreshFailed,reviewing,reviewFailed,canReview,edit,save,refresh,review}=form;
   if (!view.canEdit) return <p className={settings.mPageNote}>{t("web-pages.automaticDecisions.adminOnly")}</p>;
   if (!d) return <WaitLine className={settings.mPageNote} text={state.error?.message ?? t("web-pages.automaticDecisions.readingConfig")} error={!!state.error} />;
   const busy=d.pending || saving;
@@ -91,7 +100,7 @@ export function AutomaticDecisionPolicyScreen() {
     <TopBack label={t("web-pages.automaticDecisions.completion")} onBack={app.pop} />
     <LargeTitle small={s?.name ?? ""} big={t("web-pages.archivePolicy.title")} />
     {view?.policy && view.canEdit ? <PolicySection station={station} policy={view.policy} />
-      : !stations.value ? <Waiting shape="cards" count={2} text={t("common.readingStations")} error={stations.error?.message} />
+      : !stations.value ? <Waiting text={t("common.readingStations")} error={stations.error?.message} sample={<PolicySection station={station} policy={SAMPLE_POLICY} />} />
       : s?.online && !s.overview ? <WaitLine className={settings.mPageNote} text={t("common.connecting")} />
       : <p className={settings.mPageNote}>{stations.error?.message ?? (!s?.online ? t("web-pages.automaticDecisions.offlineNote")
         : view && !view.canEdit ? t("web-pages.automaticDecisions.adminOnly") : t("web-pages.automaticDecisions.upgrade"))}</p>}

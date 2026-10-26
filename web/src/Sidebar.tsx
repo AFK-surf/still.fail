@@ -12,6 +12,7 @@ import { stationApi, useStationCall, useStatus, type ChatItem, type ChatsView } 
 import { prime, useTopic, useTopicSelect } from "./core/react.ts";
 import type { Topic } from "./core/client.ts";
 import { RowAside } from "./RowPicture.tsx";
+import { sampleChats, sampleWords } from "./samples.ts";
 import { Retry, Waiting as StatusWaiting, WaitingItems } from "./Status.tsx";
 import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { Confirm, ConnectKindIcon, ICON, Time, Tip, Waiting } from "./ui.tsx";
@@ -214,7 +215,7 @@ const ChatPane = memo(function ChatPane({ scope, filter, stationsPage, hidden }:
   return (
     <div ref={ref} className={nav.navScroll} aria-hidden={hidden || undefined} inert={hidden || undefined} {...pointer}>
       {chats.error && !view && <p className={`${nav.navEmpty} ${nav.navError}`}>{chats.error.message}</p>}
-      {days.length === 0 && (note.reading || note.failing.length > 0) && !chats.error && <Waiting shape="rows" dense note={note} />}
+      {days.length === 0 && (note.reading || note.failing.length > 0) && !chats.error && <Waiting note={note} sample={<ChatRowsSample lead={lead} />} />}
       {days.length === 0 && view && note.empty && (
         <p className={nav.navEmpty}>{filter === "mine" ? t("web-main.sidebar.noneMine")
           : filter === "watching" ? t("web-main.sidebar.noneWatching")
@@ -229,6 +230,12 @@ const ChatPane = memo(function ChatPane({ scope, filter, stationsPage, hidden }:
     </div>
   );
 });
+
+/** The list's rows made up, for what it shows while it is read (in their bones): a day of them. */
+export function ChatRowsSample({ lead }: { lead: "agents" | "people" }) {
+  return <NavSection title={sampleWords(2)}>{SAMPLE_CHATS.map((item) => <ChatRowOf key={item.id} item={item} lead={lead} />)}</NavSection>;
+}
+const SAMPLE_CHATS = sampleChats(8);
 
 /** A row pinned or let go moves at once, even while the list is held still under the pointer. */
 const pinMoved = (was: ChatItem, now: ChatItem): boolean => Boolean(was.pinned) !== Boolean(now.pinned);

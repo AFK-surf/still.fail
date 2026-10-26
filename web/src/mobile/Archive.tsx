@@ -20,6 +20,7 @@ import * as css from "./Archive.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as homeCss from "./Home.css.ts";
 import { t } from "../i18n.ts";
+import { sampleArchive, sampleWords } from "../samples.ts";
 
 export function ArchiveScreen() {
   const app = useApp();
@@ -51,8 +52,8 @@ export function ArchiveScreen() {
             onChange={(e) => { setQ(e.target.value); setLimit(ARCHIVE_PAGE); }} />
         </label>
       </div>
-      {!read ? <Waiting text={t("common.reading")} error={archive.error?.message} />
-        : waiting ? <Waiting note={wait} />
+      {!read ? <Waiting text={t("common.reading")} error={archive.error?.message} sample={<ArchiveSample />} />
+        : waiting ? <Waiting note={wait} sample={<ArchiveSample />} />
         : wait?.reading && <WaitLine className={css.mArchiveNote} text={wait.text ?? t("common.reading")} />}
       {!waiting && errors.map((e) => <p key={e.station} className={css.mArchiveNote} data-error>{e.text}</p>)}
       {note && !waiting && !wait?.reading && <p className={css.mArchiveNote}>{note}</p>}
@@ -69,6 +70,17 @@ export function ArchiveScreen() {
     </div>
   );
 }
+
+/** Archived chats made up, for what the page shows while it is read (in their bones): a day of them, as it draws them. */
+function ArchiveSample() {
+  return (
+    <section>
+      <SectionHeader title={sampleWords(2)} />
+      {SAMPLE_ARCHIVE.map((item) => <Row key={itemKey(item)} item={item} restore={() => Promise.resolve()} remove={() => Promise.resolve()} />)}
+    </section>
+  );
+}
+const SAMPLE_ARCHIVE = sampleArchive();
 
 /** A row, with its actions; while one is under way its spinner stands for both (it says how it ended in the toast), and
  *  one that failed leaves the failure mark before them a few seconds. */

@@ -26,6 +26,7 @@ import { NAME } from "./channel.ts";
 import { RUNTIME_LABEL } from "./format.ts";
 import { t } from "./i18n.ts";
 import { StationInWords } from "./StationNamed.tsx";
+import { sampleWorkspaceProfiles } from "./samples.ts";
 
 const WIDE = "(min-width: 701px)";
 
@@ -57,13 +58,9 @@ export function ProfilesNav({ scope, top }: { scope: string; top?: ReactNode }) 
     <>
       <NavTop top={top} action={online.length > 0 && <NavAction icon={<Plus {...ICON} />} label={t("web-pages.settings.profiles.add")} onClick={add} />} />
       <NavList>
-        {(!profiles || (items.length === 0 && profiles.wait.reading)) && <Waiting dense count={3} note={profiles?.wait} />}
+        {(!profiles || (items.length === 0 && profiles.wait.reading)) && <Waiting note={profiles?.wait} sample={<ProfileSections items={SAMPLE_PROFILES} scope={scope} />} />}
         {profiles && items.length === 0 && !profiles.wait.reading && <p className={nav.navEmpty}>{t("web-pages.settings.profiles.none")}</p>}
-        {profileGroups(items).map((g) => (
-          <NavSection key={g[0]!.group} title={g[0]!.groupTitle}>
-            {g.map((e) => <ProfileRow key={e.key} entry={e} scope={scope} />)}
-          </NavSection>
-        ))}
+        <ProfileSections items={items} scope={scope} />
         {online.map((s) => <MachineLogins key={s.id} station={s} scope={scope} />)}
         <Dialog open={choosing} onClose={() => setChoosing(false)} title={t("web-pages.settings.profiles.addWhere")} description={t("web-pages.settings.profiles.addWhereLead")}>
           <ul className={pagesCss.list}>
@@ -78,6 +75,18 @@ export function ProfilesNav({ scope, top }: { scope: string; top?: ReactNode }) 
     </>
   );
 }
+
+/** The profiles (`items`), a section each kind of account. */
+function ProfileSections({ items, scope }: { items: WorkspaceProfile[]; scope: string }) {
+  return profileGroups(items).map((g) => (
+    <NavSection key={g[0]!.group} title={g[0]!.groupTitle}>
+      {g.map((e) => <ProfileRow key={e.key} entry={e} scope={scope} />)}
+    </NavSection>
+  ));
+}
+
+/** Profiles made up, for what the list shows while they are read (in their bones). */
+const SAMPLE_PROFILES = sampleWorkspaceProfiles();
 
 /** Whether the page in view is this account's: its page on any of its stations, or its page across them. */
 function isHere(e: WorkspaceProfile, path: string, scope: string): boolean {

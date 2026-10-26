@@ -10,6 +10,7 @@ import { ChevronRight } from "@stillfail/ui/icons.tsx";
 import { MobileBack, Section, Segmented, StatusDot, Waiting } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
+import { sampleArchiving, sampleStations } from "../samples.ts";
 
 export function ArchivingPage({ back, workspace }: { back: string; workspace: string }) {
   const [hint, setHint] = useArchiveHint();
@@ -32,16 +33,20 @@ export function ArchivingPage({ back, workspace }: { back: string; workspace: st
         </p>}
       </Section>
       <Section title={t("web-pages.archiving.auto.title")} description={t("web-pages.archiving.auto.description")}>
-        {!stations.value && <Waiting count={1} text={t("common.readingStations")} />}
-        <ul className={pagesCss.list}>{stations.value?.map((s) => <StationRow key={s.station} workspace={workspace} s={s} />)}</ul>
+        {!stations.value && <Waiting text={t("common.readingStations")} sample={<ul className={pagesCss.list}>{SAMPLE_STATIONS.map((s) => <StationRow key={s.station} workspace={workspace} s={s} view={SAMPLE_ARCHIVING} />)}</ul>} />}
+        <ul className={pagesCss.list}>{stations.value?.map((s) => <StationRow key={s.station} workspace={workspace} s={s} view={s.online ? s.overview?.archiving : undefined} />)}</ul>
       </Section>
     </div>
   );
 }
 
-/** A station's row: how it archives on its own, in a line; it opens the station's page once it can say. */
-function StationRow({ workspace, s }: { workspace: string; s: StationView }) {
-  const view = s.online ? s.overview?.archiving : undefined;
+/** Stations and how they archive made up, for what the page shows while they are read (in their bones). */
+const SAMPLE_STATIONS = sampleStations(2);
+const SAMPLE_ARCHIVING = sampleArchiving();
+
+/** A station's row: how it archives on its own (`view`, none while it cannot say), in a line; it opens the station's
+ *  page once it can say. */
+function StationRow({ workspace, s, view }: { workspace: string; s: StationView; view: ArchivingView | undefined }) {
   const title = <span className={pagesCss.listRowTitle}><StationNamed emoji={s.emoji} icon={s.icon} name={s.name} /></span>;
   if (!view) {
     return (
@@ -72,7 +77,7 @@ export function StationArchiving({ workspace, station }: { workspace: string; st
   const s = stations.value?.find((x) => x.station === station);
   const view = s?.online ? s.overview?.archiving : undefined;
   if (s && view) return <StationArchivingForm workspace={workspace} s={s} view={view} />;
-  if (!stations.value && !stations.error) return <Waiting count={1} text={t("common.readingStations")} />;
+  if (!stations.value && !stations.error) return <Waiting text={t("common.readingStations")} sample={<StationArchivingForm workspace={workspace} s={SAMPLE_STATIONS[0]!} view={SAMPLE_ARCHIVING} />} />;
   return <p className={chatCss.archivingNote}>{stations.error?.message ?? (!s?.online ? t("web-pages.automaticDecisions.offline") : !s.overview ? t("common.connecting") : t("web-pages.archiving.upgrade"))}</p>;
 }
 

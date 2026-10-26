@@ -11,7 +11,7 @@ import { createContext, useContext, useLayoutEffect, useRef, useState, type Reac
 import { useLocation, useNavigate } from "react-router";
 import { animate } from "motion";
 import type { DecisionItem } from "./core/shapes.ts";
-import { DecisionAnswer, DecisionFoot, DecisionMessages, DecisionPicks, flyOff, keyOf, useDecisionQueue } from "./Decisions.tsx";
+import { DecisionAnswer, DecisionFoot, DecisionMessages, DecisionPicks, DecisionSample, flyOff, keyOf, useDecisionQueue } from "./Decisions.tsx";
 import { DecisionsIdle } from "./DecisionsIdle.tsx";
 import { StationContext, stationBase } from "./station.tsx";
 import { useShortcut } from "./keymap.ts";
@@ -25,6 +25,7 @@ import * as deckCss from "./Decisions.css.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as sidebarCss from "./styles/sidebar.css.ts";
 import { t } from "./i18n.ts";
+import { sampleDecisions } from "./samples.ts";
 
 /** Where 奏 was in the sidebar's foot when it was pressed, for the list to come out of (DecisionsEntry). */
 let openedFrom: { top: number; at: number } | null = null;
@@ -133,21 +134,31 @@ export function DecisionRows({ active, page }: { active: boolean; page: string }
       {items.map((x, i) => (
         <div key={keyOf(x)} data-flip={keyOf(x)} role="listitem" className={css.item}>
           {i === firstAside && <div className={css.group}>{t("web-main.decisions.defer")}</div>}
-          <button type="button" className={css.row} aria-current={(here && !!d && keyOf(x) === keyOf(d)) || undefined} data-aside={queue.isAside(x) || undefined}
-            onMouseDown={(e) => e.preventDefault()} onClick={() => choose(x)}>
-            <span className={css.question}>{question(x)}</span>
-            <span className={css.meta}>
-              <span className={css.metaWhere}>{x.title} · {(x.stationEmoji || x.stationIcon) && <StationMark emoji={x.stationEmoji} icon={x.stationIcon} size={12} className={markCss.inline} />}{x.stationName}</span>
-              <Time className={css.metaTime} stamp={x.message.time?.createdAt} fixed />
-            </span>
-          </button>
+          <DecisionRow x={x} current={here && !!d && keyOf(x) === keyOf(d)} aside={queue.isAside(x)} onChoose={() => choose(x)} />
         </div>
       ))}
-      {queue.waiting ? <Waiting dense note={queue.waiting} />
+      {queue.waiting ? <Waiting note={queue.waiting} sample={SAMPLE_DECISIONS.map((x) => <div key={keyOf(x)} className={css.item}><DecisionRow x={x} current={false} aside={false} onChoose={() => undefined} /></div>)} />
         : view.value && items.length === 0 && <div className={css.emptyList}>{t("web-main.decisions.empty")}</div>}
     </div>
   );
 }
+
+/** A decision in the list (`x`): its question, its chat and station, when (`current`: the one on the 奏 page; `aside`: set aside). */
+function DecisionRow({ x, current, aside, onChoose }: { x: DecisionItem; current: boolean; aside: boolean; onChoose(): void }) {
+  return (
+    <button type="button" className={css.row} aria-current={current || undefined} data-aside={aside || undefined}
+      onMouseDown={(e) => e.preventDefault()} onClick={onChoose}>
+      <span className={css.question}>{question(x)}</span>
+      <span className={css.meta}>
+        <span className={css.metaWhere}>{x.title} · {(x.stationEmoji || x.stationIcon) && <StationMark emoji={x.stationEmoji} icon={x.stationIcon} size={12} className={markCss.inline} />}{x.stationName}</span>
+        <Time className={css.metaTime} stamp={x.message.time?.createdAt} fixed />
+      </span>
+    </button>
+  );
+}
+
+/** Decisions made up, for what the list and the page show while they are read (in their bones). */
+const SAMPLE_DECISIONS = sampleDecisions();
 
 /** The 奏 page: the decision picked in the sidebar's 奏, as the phone's card shows it, its options and the chat's composer at its foot. */
 export function DecisionPage({ onOpen }: { onOpen: (path: string) => void }) {
@@ -196,7 +207,7 @@ export function DecisionPage({ onOpen }: { onOpen: (path: string) => void }) {
               </DecisionFoot>
             </div>
           </StationContext.Provider>
-        ) : queue.waiting ? <Waiting shape="cards" count={2} note={queue.waiting} />
+        ) : queue.waiting ? <Waiting note={queue.waiting} sample={<DecisionSample d={SAMPLE_DECISIONS[0]!} />} />
           : view.value ? <DecisionsIdle view={view.value} onOpen={onOpen} />
           : empty && <p className={deckCss.empty}>{empty}</p>}
       </div>

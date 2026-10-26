@@ -1,6 +1,7 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { page as settingsPage, pageHead, pageNarrow } from "../styles/pages.css.ts";
+import { page as settingsPage, pageHead } from "../styles/pages.css.ts";
+import { inNarrow } from "../styles/narrow.ts";
 import { neg, outset } from "@stillfail/ui/styles/align.ts";
 import { STILL, stillLoop } from "@stillfail/ui/styles/still.ts";
 
@@ -40,7 +41,7 @@ globalStyle(`${STILL} ${spin}[data-on] svg`, stillLoop("turn"));
 /** The entries: rows on the page, a row's ground on hover; files dropped on it go into the folder. */
 export const list = style({ position: "relative", display: "grid", gap: "2px", minHeight: "200px", borderRadius: vars.rCard, cornerShape: vars.cornerShape, outline: "none" });
 // As the settings lists: rows reaching a little past the column, their text in line with the page's.
-globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "none", marginLeft: `max(${neg(12)}, calc(50% - 392px))`, marginRight: `max(${neg(12)}, calc(50% - 392px))` });
+globalStyle(inNarrow(list), { maxWidth: "none", marginLeft: `max(${neg(12)}, calc(50% - 392px))`, marginRight: `max(${neg(12)}, calc(50% - 392px))` });
 /** A line about the folders where there are none to show (none lent yet, or none matching). */
 export const count = style({ margin: "0 12px 8px", color: vars.muted, fontSize: vars.textMeta });
 

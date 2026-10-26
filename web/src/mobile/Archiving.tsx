@@ -16,6 +16,7 @@ import * as listsCss from "./styles/lists.css.ts";
 import * as settingsCss from "./styles/settings.css.ts";
 import * as css from "./Settings.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
+import { sampleArchiving, sampleStations } from "../samples.ts";
 
 export function ArchivingScreen() {
   const app = useApp();
@@ -39,18 +40,23 @@ export function ArchivingScreen() {
       </div>}
       <div className={css.mSegNote}>{t("web-pages.appearance.archive.description")}</div>
       <SectionHeader title={t("web-pages.archiving.auto.title")} start={24} />
-      {!stations.value && <Waiting shape="cards" count={1} text={t("common.readingStations")} error={stations.error?.message} />}
-      {stations.value && <ListCard>{stations.value.map((s) => <StationRow key={s.station} s={s} />)}</ListCard>}
+      {!stations.value && <Waiting text={t("common.readingStations")} error={stations.error?.message}
+        sample={<ListCard>{SAMPLE_STATIONS.map((s) => <StationRow key={s.station} s={s} view={SAMPLE_ARCHIVING} />)}</ListCard>} />}
+      {stations.value && <ListCard>{stations.value.map((s) => <StationRow key={s.station} s={s} view={s.online ? s.overview?.archiving : undefined} />)}</ListCard>}
       <div className={css.mSegNote}>{t("web-pages.archiving.auto.description")}</div>
       <div style={{ height: 30 }} />
     </div>
   );
 }
 
-/** A station's row: how it archives on its own, in a line; it opens the station's screen once it can say. */
-function StationRow({ s }: { s: StationView }) {
+/** Stations and how they archive made up, for what the screen shows while they are read (in their bones). */
+const SAMPLE_STATIONS = sampleStations(2);
+const SAMPLE_ARCHIVING = sampleArchiving();
+
+/** A station's row: how it archives on its own (`view`, none while it cannot say), in a line; it opens the station's
+ *  screen once it can say. */
+function StationRow({ s, view }: { s: StationView; view: ArchivingView | undefined }) {
   const app = useApp();
-  const view = s.online ? s.overview?.archiving : undefined;
   const stalled = view?.stalled === true;
   const note = !view ? (!s.online ? t("web-pages.automaticDecisions.offline") : !s.overview ? t("common.connecting") : t("web-pages.archiving.upgrade"))
     : view.lineText ?? view.summaryText;
@@ -77,7 +83,7 @@ export function StationArchivingScreen() {
       <TopBack label={t("web-pages.archiving.title")} onBack={app.pop} />
       <LargeTitle small={t("web-pages.archiving.auto.title")} big={s?.name ?? ""} />
       {s && view ? <StationArchivingForm s={s} view={view} />
-        : !stations.value ? <Waiting shape="cards" count={1} text={t("common.readingStations")} error={stations.error?.message} />
+        : !stations.value ? <Waiting text={t("common.readingStations")} error={stations.error?.message} sample={<StationArchivingForm s={SAMPLE_STATIONS[0]!} view={SAMPLE_ARCHIVING} />} />
         : <div className={css.mSegNote}>{!s?.online ? t("web-pages.automaticDecisions.offline") : !s.overview ? t("common.connecting") : t("web-pages.archiving.upgrade")}</div>}
       <div style={{ height: 30 }} />
     </div>

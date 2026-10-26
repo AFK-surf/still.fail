@@ -1,6 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { CARD_PAD, LIST_PAD, ROW_CORNER, list, listCardLook, listRow, pageNarrow } from "./styles/pages.css.ts";
+import { inNarrow } from "./styles/narrow.ts";
 import { newChat } from "./NewChat.css.ts";
 import { profileCard } from "./ProfileCard.css.ts";
 import { pageBar as onePageBar } from "./styles/sidebar.css.ts";
@@ -53,14 +54,14 @@ export const brandPhone = style({
   },
 });
 /** Here rather than with its class: it comes after .illus, and wins over it. */
-globalStyle(`${pageNarrow} > *`, { maxWidth: "760px", marginLeft: "auto", marginRight: "auto" });
+globalStyle(inNarrow("*"), { maxWidth: "760px", marginLeft: "auto", marginRight: "auto" });
 /** Lists stand on spacing, not frames or rules: their rows' text lines up with the page's, a row's ground shows on hover. */
 /** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
 // One column no wider than the page, so a long title is cut short rather than widening its row past it.
 globalStyle(list, { listStyle: "none", marginBlock: "0", ...outset(12), padding: "0", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px" });
 /** A list right in a narrow page (not in a section): in the page's column like everything else there, its rows' grounds
  * out past it by their padding. Its own margin above would take the column's centring away (it comes later). */
-globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "none", marginLeft: `max(${neg(12)}, calc(50% - 392px))`, marginRight: `max(${neg(12)}, calc(50% - 392px))` });
+globalStyle(inNarrow(list), { maxWidth: "none", marginLeft: `max(${neg(12)}, calc(50% - 392px))`, marginRight: `max(${neg(12)}, calc(50% - 392px))` });
 /**
  * On a settings page a list is a list card, on every width as the narrow screen's and the app's are (docs/ui-panels.md
  * 页面卡片, 列表卡; the user, 2026-10-26: 「设置感觉很乱」, a wide page's rows were on the page or on cards for no reason):
@@ -69,6 +70,6 @@ globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "none", marginLeft: `max(${ne
  */
 globalStyle(`${pageNarrow} ${list}`, { ...listCardLook, padding: LIST_PAD, marginInline: "0" });
 // One right in the page is a block of its own, as far from what follows as a section (page.css.ts section).
-globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "760px", marginLeft: "auto", marginRight: "auto", marginBottom: "28px" });
+globalStyle(inNarrow(list), { maxWidth: "760px", marginLeft: "auto", marginRight: "auto", marginBottom: "28px" });
 // Its rows: a list's own and a profile's (ProfileCard.tsx, a row of a list but where it stands alone).
 globalStyle(`${pageNarrow} ${list} :is(${listRow}, ${profileCard})`, { borderRadius: ROW_CORNER, paddingInline: `${CARD_PAD - LIST_PAD}px` });

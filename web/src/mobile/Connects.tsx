@@ -3,7 +3,7 @@ import { useConnectFlow } from "../connect-flow.ts";
 // Connects on a narrow screen (what the desktop's ../pages/Connects.tsx and Connect.tsx do, in the Android app's
 // manner): the list, all or the viewer's; a connect's page (how it runs, how its conversations become sessions, its
 // Slack link, what is done to it less often under "…"); how it runs, picked on a page of its own; a new one, in steps.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { stationApi, useConnects, useOverview, useStationCall, useStations, type Connect, type ConnectItem, type ConnectMode, type MadeSlackApp, type ModelOption, type RuntimeKind, type SlackAppSettings, type SlackIdentity } from "../api.ts";
 import { useWorkspace } from "../cloud/api.ts";
@@ -21,7 +21,7 @@ import { Button, Field, FilterMenu, GroupLabel, LinkButton, Gone, ListCard, List
 import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { PickStation } from "./Profiles.tsx";
-import { FEISHU_STEPS, FeishuSteps } from "./FeishuConnect.tsx";
+import { FEISHU_STEPS, FeishuSteps, PlatformPick } from "./FeishuConnect.tsx";
 import * as settingsCss from "./styles/settings.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -38,6 +38,8 @@ import { NAME } from "../channel.ts";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { t } from "../i18n.ts";
 import { StationInWords, StationNamedAt } from "../StationNamed.tsx";
+import type { PickView } from "../core/shapes.ts";
+import { sampleConnects, samplePick } from "../samples.ts";
 /** A connect's presence as a dot: online green, at work orange, failing red, offline hollow. */
 export function Presence({ state }: { state: string }) {
   return <span className={settingsCss.mPresence} data-state={state} />;
@@ -162,7 +164,12 @@ export function ConnectsScreen() {
         ) : undefined} />
       {!(root && !one) && <div className={css.mListSeg}><Seg options={[t("web-mobile.home.filterAll"), t("web-mobile.connects.mine")]} selected={mine ? 1 : 0} onSelect={(i) => setMine(i === 1)} height={34} fill /></div>}
       {/* The stations known, each under its name at once; what is not there yet said in its card. */}
-      {!stations || (!connects.value && connects.error) ? <Waiting shape="cards" count={2} text={t("common.readingStations")} error={listing.error?.message ?? connects.error?.message} /> : stations.map((s) => {
+      {!stations || (!connects.value && connects.error) ? <Waiting text={t("common.readingStations")} error={listing.error?.message ?? connects.error?.message} sample={SAMPLE_GROUPS.map((items) => (
+        <Fragment key={items[0]!.station}>
+          {!one && <SectionHeader title={<StationInWords station={items[0]!.station} text={items[0]!.stationName} size={14} />} start={24} />}
+          <ListCard>{items.map((i) => <ConnectRow key={i.connect.id} connect={i.connect} onClick={() => undefined} />)}</ListCard>
+        </Fragment>
+      ))} /> : stations.map((s) => {
         const here = items.filter((i) => i.station === s.station);
         const waiting = s.overview?.slackApps ?? [];
         const failing = wait?.failing.find((f) => f.station === s.station);
@@ -197,7 +204,7 @@ export function ConnectScreen() {
     return (
       <div className={pagesCss.mScreen}>
         <NavBar back={t("web-mobile.settings.connects")} onBack={app.pop} title={t("web-mobile.settings.connects")} />
-        {error || loading ? <Waiting fill shape="cards" count={2} text={t("web-mobile.connects.reading")} error={error?.message} /> : <Gone text={t("web-mobile.connects.notFound")} />}
+        {error || loading ? <Waiting fill text={t("web-mobile.connects.reading")} error={error?.message} sample={<ConnectBody item={SAMPLE_CONNECTS[0]!} />} /> : <Gone text={t("web-mobile.connects.notFound")} />}
       </div>
     );
   }
@@ -206,87 +213,100 @@ export function ConnectScreen() {
 
 function ConnectPage({ item }: { item: ConnectItem }) {
   const app = useApp();
-  const station = useStation();
-  const { connect, bound, sessions } = item;
-  const c = connect.connection;
+  const { connect } = item;
   return (
     <div className={pagesCss.mScreen}>
       <NavBar back={t("web-mobile.settings.connects")} onBack={app.pop} title={connect.name} sub={<span className={barsCss.mNavbarNote}><Presence state={connect.presence} /> {connect.statusText}</span>}
         trailing={<NavButton icon={More} label={t("common.more")} onClick={() => app.sheet({ height: 0.6, content: () => <ConnectMenu connect={connect} /> })} />} />
-      <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
-        {/* Who it is in Slack: its bot's picture, its Slack workspace, whose it is. */}
-        <div className={`${listsCss.mCard} ${settingsCss.mProfileHead}`}>
-          <ConnectAvatar connect={connect} size={44} />
-          <span className={partsCss.mGrow}>
-            <span className={listsCss.mRowTitle}>{placeOf(connect)}</span>
-            <span className={listsCss.mRowNote}><StationNamedAt station={station.address} name={station.name} />{connect.createdBy ? t("web-mobile.connects.owner", { owner: connect.createdBy.shown?.display ?? connect.createdBy.name }) : ""}</span>
-          </span>
-        </div>
-        {(c.state === "no_tokens" || c.state === "error" || (c.state === "reconnecting" && c.lastError)) && (
-          <div className={settingsCss.mCallout}>
-            {c.state === "no_tokens" ? <>{t("web-mobile.connects.noTokens")}<button type="button" className={partsCss.mLink} onClick={() => openTokens(app, connect)}>{t("web-mobile.connects.fillToken")}</button></>
-              : c.state === "error" ? c.error : t("web-mobile.connects.reconnecting", { error: c.lastError ?? "" })}
-          </div>
-        )}
-        <SectionHeader title={t("web-mobile.connects.howRuns")} start={24} />
-        <ListCard>
-          <ListRow onClick={() => app.push(`${stationBase(station.address)}/connects/${encodeURIComponent(connect.id)}/run`)}>
-            <span className={historyCss.mRunLabel}>{t("web-mobile.history.model")}</span>
-            <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{connect.bind.model ? connect.modelName ?? connect.bind.model : t("web-mobile.history.pickModel")}<span className={partsCss.mMuted}> · {connect.bind.effort || t("web-mobile.newChat.effortDefault")} · {connect.bind.profile ? t("web-mobile.connects.pinnedAccount") : t("web-mobile.history.auto")}</span></span>
-            <ChevronRight size={14} className={partsCss.mSubtle} />
-          </ListRow>
-          <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <ModeSheet item={item} /> })}>
-            <span className={historyCss.mRunLabel}>{t("web-mobile.connects.session")}</span>
-            <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-              <span className={listsCss.mRowTitle}>{modeOf(connect.kind)[connect.mode].label}</span>
-              <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{modeOf(connect.kind)[connect.mode].description}{connect.mode === "single-session" && (connect.requireMention ? t("web-mobile.connects.mentionOnly") : t("web-mobile.connects.everyMessage"))}</span>
-            </span>
-            <ChevronRight size={14} className={partsCss.mSubtle} />
-          </ListRow>
-          {connect.mode === "single-session" && (
-            <ListRow onClick={() => app.sheet({ height: 0.7, draggable: true, content: () => <SessionSheet item={item} /> })}>
-              <span className={historyCss.mRunLabel}>{t("web-mobile.connects.current")}</span>
-              <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{bound ? bound.titleText : <span className={partsCss.mMuted}>{t("web-mobile.connects.noSession")}</span>}</span>
-              <ChevronRight size={14} className={partsCss.mSubtle} />
-            </ListRow>
-          )}
-        </ListCard>
-        <p className={settingsCss.mPageNote}>{t("web-mobile.connects.runtimeNote", { runtime: connect.runtimeText })}</p>
-        {connect.feishu && (
-          <>
-            <SectionHeader title={t("web-mobile.connects.feishu.section")} start={24} />
-            <ListCard>
-              <ListRow>
-                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-                  <span className={listsCss.mRowTitle}>App ID</span>
-                  <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{connect.feishu.appId}</span>
-                </span>
-              </ListRow>
-              <ListRow onClick={() => openSecret(app, connect)}>
-                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-                  <span className={listsCss.mRowTitle}>App Secret</span>
-                  <span className={listsCss.mRowNote}>{connect.feishu.appSecret || "••••••••"}</span>
-                </span>
-                <span className={partsCss.mLink}>{t("web-mobile.connects.feishu.replaceShort")}</span>
-              </ListRow>
-            </ListCard>
-          </>
-        )}
-        <SectionHeader title={t("web-mobile.app.recent")} start={24} />
-        <ListCard>
-          {sessions.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t(kindKey("web-mobile.connects.noSessions", connect.kind), { name: connect.name })}</span></ListRow>}
-          {sessions.map((s) => (
-            <ListRow key={s.key} onClick={() => app.push(`${stationBase(station.address)}/chats/${encodeURIComponent(s.key)}`)}>
-              <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{s.titleText}</span>
-              <span className={listsCss.mRowNote}><StatusText text={s.statusText} lead={s.statusLead} rest={s.statusRest} /></span>
-            </ListRow>
-          ))}
-        </ListCard>
-        <div style={{ height: 30 }} />
-      </div>
+      <ConnectBody item={item} />
     </div>
   );
 }
+
+/** A connect's page under its bar: who it is in Slack, how it runs, its Feishu app, its recent sessions. */
+function ConnectBody({ item }: { item: ConnectItem }) {
+  const app = useApp();
+  const station = useStation();
+  const { connect, bound, sessions } = item;
+  const c = connect.connection;
+  return (
+    <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
+      {/* Who it is in Slack: its bot's picture, its Slack workspace, whose it is. */}
+      <div className={`${listsCss.mCard} ${settingsCss.mProfileHead}`}>
+        <ConnectAvatar connect={connect} size={44} />
+        <span className={partsCss.mGrow}>
+          <span className={listsCss.mRowTitle}>{placeOf(connect)}</span>
+          <span className={listsCss.mRowNote}><StationNamedAt station={station.address} name={station.name} />{connect.createdBy ? t("web-mobile.connects.owner", { owner: connect.createdBy.shown?.display ?? connect.createdBy.name }) : ""}</span>
+        </span>
+      </div>
+      {(c.state === "no_tokens" || c.state === "error" || (c.state === "reconnecting" && c.lastError)) && (
+        <div className={settingsCss.mCallout}>
+          {c.state === "no_tokens" ? <>{t("web-mobile.connects.noTokens")}<button type="button" className={partsCss.mLink} onClick={() => openTokens(app, connect)}>{t("web-mobile.connects.fillToken")}</button></>
+            : c.state === "error" ? c.error : t("web-mobile.connects.reconnecting", { error: c.lastError ?? "" })}
+        </div>
+      )}
+      <SectionHeader title={t("web-mobile.connects.howRuns")} start={24} />
+      <ListCard>
+        <ListRow onClick={() => app.push(`${stationBase(station.address)}/connects/${encodeURIComponent(connect.id)}/run`)}>
+          <span className={historyCss.mRunLabel}>{t("web-mobile.history.model")}</span>
+          <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{connect.bind.model ? connect.modelName ?? connect.bind.model : t("web-mobile.history.pickModel")}<span className={partsCss.mMuted}> · {connect.bind.effort || t("web-mobile.newChat.effortDefault")} · {connect.bind.profile ? t("web-mobile.connects.pinnedAccount") : t("web-mobile.history.auto")}</span></span>
+          <ChevronRight size={14} className={partsCss.mSubtle} />
+        </ListRow>
+        <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <ModeSheet item={item} /> })}>
+          <span className={historyCss.mRunLabel}>{t("web-mobile.connects.session")}</span>
+          <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+            <span className={listsCss.mRowTitle}>{modeOf(connect.kind)[connect.mode].label}</span>
+            <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{modeOf(connect.kind)[connect.mode].description}{connect.mode === "single-session" && (connect.requireMention ? t("web-mobile.connects.mentionOnly") : t("web-mobile.connects.everyMessage"))}</span>
+          </span>
+          <ChevronRight size={14} className={partsCss.mSubtle} />
+        </ListRow>
+        {connect.mode === "single-session" && (
+          <ListRow onClick={() => app.sheet({ height: 0.7, draggable: true, content: () => <SessionSheet item={item} /> })}>
+            <span className={historyCss.mRunLabel}>{t("web-mobile.connects.current")}</span>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{bound ? bound.titleText : <span className={partsCss.mMuted}>{t("web-mobile.connects.noSession")}</span>}</span>
+            <ChevronRight size={14} className={partsCss.mSubtle} />
+          </ListRow>
+        )}
+      </ListCard>
+      <p className={settingsCss.mPageNote}>{t("web-mobile.connects.runtimeNote", { runtime: connect.runtimeText })}</p>
+      {connect.feishu && (
+        <>
+          <SectionHeader title={t("web-mobile.connects.feishu.section")} start={24} />
+          <ListCard>
+            <ListRow>
+              <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+                <span className={listsCss.mRowTitle}>App ID</span>
+                <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{connect.feishu.appId}</span>
+              </span>
+            </ListRow>
+            <ListRow onClick={() => openSecret(app, connect)}>
+              <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+                <span className={listsCss.mRowTitle}>App Secret</span>
+                <span className={listsCss.mRowNote}>{connect.feishu.appSecret || "••••••••"}</span>
+              </span>
+              <span className={partsCss.mLink}>{t("web-mobile.connects.feishu.replaceShort")}</span>
+            </ListRow>
+          </ListCard>
+        </>
+      )}
+      <SectionHeader title={t("web-mobile.app.recent")} start={24} />
+      <ListCard>
+        {sessions.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t(kindKey("web-mobile.connects.noSessions", connect.kind), { name: connect.name })}</span></ListRow>}
+        {sessions.map((s) => (
+          <ListRow key={s.key} onClick={() => app.push(`${stationBase(station.address)}/chats/${encodeURIComponent(s.key)}`)}>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{s.titleText}</span>
+            <span className={listsCss.mRowNote}><StatusText text={s.statusText} lead={s.statusLead} rest={s.statusRest} /></span>
+          </ListRow>
+        ))}
+      </ListCard>
+      <div style={{ height: 30 }} />
+    </div>
+  );
+}
+
+/** Connects made up, for what the screens show while they are read (in their bones): two stations', one with two. */
+const SAMPLE_CONNECTS = sampleConnects();
+const SAMPLE_GROUPS = [SAMPLE_CONNECTS.slice(0, 2).map((i) => ({ ...i, station: SAMPLE_CONNECTS[0]!.station })), SAMPLE_CONNECTS.slice(2)];
 
 /** What is done to a connect less often: reconnecting, its tokens, Slack, turning it off or on, its owner, deleting it. */
 function ConnectMenu({ connect }: { connect: Connect }) {
@@ -543,52 +563,63 @@ export function ConnectRunScreen() {
   const busy = pick.saving;
   const title = list === "model" ? t("web-mobile.history.pickModel") : list === "account" ? t("web-mobile.history.pickAccount") : t("web-mobile.history.changeModel");
   const bar = <NavBar back={list ? t("web-mobile.history.changeModel") : t("common.back")} onBack={() => (list ? setList(null) : app.pop())} title={title} />;
-  if (!item || !v) return <div className={pagesCss.mScreen}>{bar}<Waiting fill shape="cards" count={3} text={t("web-mobile.connects.reading")} /></div>;
+  if (!item || !v) {
+    return <div className={pagesCss.mScreen}>{bar}<Waiting fill text={t("web-mobile.connects.reading")}
+      sample={<ConnectRun v={SAMPLE_PICK} runtime="claude" noModels={null} busy={false} onList={() => undefined} onEffort={() => undefined} onGo={() => undefined} />} /></div>;
+  }
   const { connect } = item;
   const runtime = connect.bind.runtime;
-  const models = v.options;
-  const model = v.draft.model ?? null;
-  const effort = v.draft.effort ?? "";
-  const profile = v.draft.profile ?? null;
-  const accounts = v.accounts;
-  const efforts = v.efforts;
-  const changed = v.changed;
   const set = pick.set;
-  if (list === "model") return <div className={pagesCss.mScreen}>{bar}<ModelList models={models} runtime={runtime} picked={model} onPick={(m) => { set({ model: m }); setList(null); }} /></div>;
-  if (list === "account") return <div className={pagesCss.mScreen}>{bar}<AccountList accounts={accounts} runtime={runtime} picked={profile} onPick={(p) => { set({ profile: p }); setList(null); }} /></div>;
+  if (list === "model") return <div className={pagesCss.mScreen}>{bar}<ModelList models={v.options} runtime={runtime} picked={v.draft.model ?? null} onPick={(m) => { set({ model: m }); setList(null); }} /></div>;
+  if (list === "account") return <div className={pagesCss.mScreen}>{bar}<AccountList accounts={v.accounts} runtime={runtime} picked={v.draft.profile ?? null} onPick={(p) => { set({ profile: p }); setList(null); }} /></div>;
   return (
     <div className={pagesCss.mScreen}>
       {bar}
-      <div className={`${pagesCss.mScroll} ${partsCss.mPadX18}`}>
-        {models.length === 0 && <p className={settingsCss.mCallout}>{t("web-mobile.connects.noModels", { runtime: connect.runtimeText })}</p>}
-        <GroupLabel>{t("web-mobile.history.model")}</GroupLabel>
-        <SettingRow onClick={() => setList("model")} leading={<MakerIcon maker={v.maker} runtime={runtime} size={18} />}><span className={historyCss.mSettingMain}>{v.modelText}</span></SettingRow>
-        {/* No efforts where the runtime sets none (Cursor). */}
-        {efforts.length > 0 && <>
-          <GroupLabel>{t("web-mobile.newChat.pickEffort")}</GroupLabel>
-          <div className={historyCss.mChips}>
-            {["", ...efforts].map((e) => <button key={e || "-"} type="button" className={historyCss.mChip} data-on={e === effort || undefined} onClick={() => set({ effort: e })}>{e || t("web-mobile.newChat.default")}</button>)}
-          </div>
-        </>}
-        <GroupLabel>{t("web-mobile.history.account")}</GroupLabel>
-        <SettingRow onClick={() => setList("account")}>
-          <span className={historyCss.mSettingMain}>{v.accountText}</span>
-          <small className={partsCss.mMuted}>{v.accountNote}</small>
-        </SettingRow>
-        <p className={`${partsCss.mSmall} ${partsCss.mSubtle} ${historyCss.mEffortNote}`}>{t("web-mobile.connects.runNote")}</p>
-      </div>
-      <button type="button" className={historyCss.mRunGo} data-changed={changed || undefined} disabled={busy || (changed && !model)}
-        onClick={() => {
+      <ConnectRun v={v} runtime={runtime} noModels={v.options.length === 0 ? t("web-mobile.connects.noModels", { runtime: connect.runtimeText }) : null} busy={!!busy}
+        onList={setList} onEffort={(effort) => set({ effort })}
+        onGo={() => {
           // Back at once, not waiting on the station; failed, a toast says why.
           app.pop();
-          if (!changed) return;
+          if (!v.changed) return;
           pick.save().then(() => app.toast(t("web-mobile.connects.runSaved")), (e: Error) => app.toast(e.message));
-        }}>
-        {busy && <Spinner className={partsCss.mSpinOnColor} />}{v.saveText}
-      </button>
+        }} />
     </div>
   );
 }
+
+/** How a connect runs as `v` has it picked: its model, how hard it thinks, its account, each picked from (`onList`,
+ *  `onEffort`); why there is no model to pick (`noModels`); the button saying what it becomes (`onGo`). */
+function ConnectRun({ v, runtime, noModels, busy, onList, onEffort, onGo }: {
+  v: PickView; runtime: RuntimeKind; noModels: string | null; busy: boolean; onList(list: "model" | "account"): void; onEffort(effort: string): void; onGo(): void;
+}) {
+  const effort = v.draft.effort ?? "";
+  return <>
+    <div className={`${pagesCss.mScroll} ${partsCss.mPadX18}`}>
+      {noModels && <p className={settingsCss.mCallout}>{noModels}</p>}
+      <GroupLabel>{t("web-mobile.history.model")}</GroupLabel>
+      <SettingRow onClick={() => onList("model")} leading={<MakerIcon maker={v.maker} runtime={runtime} size={18} />}><span className={historyCss.mSettingMain}>{v.modelText}</span></SettingRow>
+      {/* No efforts where the runtime sets none (Cursor). */}
+      {v.efforts.length > 0 && <>
+        <GroupLabel>{t("web-mobile.newChat.pickEffort")}</GroupLabel>
+        <div className={historyCss.mChips}>
+          {["", ...v.efforts].map((e) => <button key={e || "-"} type="button" className={historyCss.mChip} data-on={e === effort || undefined} onClick={() => onEffort(e)}>{e || t("web-mobile.newChat.default")}</button>)}
+        </div>
+      </>}
+      <GroupLabel>{t("web-mobile.history.account")}</GroupLabel>
+      <SettingRow onClick={() => onList("account")}>
+        <span className={historyCss.mSettingMain}>{v.accountText}</span>
+        <small className={partsCss.mMuted}>{v.accountNote}</small>
+      </SettingRow>
+      <p className={`${partsCss.mSmall} ${partsCss.mSubtle} ${historyCss.mEffortNote}`}>{t("web-mobile.connects.runNote")}</p>
+    </div>
+    <button type="button" className={historyCss.mRunGo} data-changed={v.changed || undefined} disabled={busy || (v.changed && !v.draft.model)} onClick={onGo}>
+      {busy && <Spinner className={partsCss.mSpinOnColor} />}{v.saveText}
+    </button>
+  </>;
+}
+
+/** How a connect runs made up, for what its screen shows while it is read (in its bones). */
+const SAMPLE_PICK = samplePick();
 
 // ── a new connect ──────────────────────────────────────────────────────
 
@@ -610,7 +641,10 @@ export function NewConnectScreen() {
   const [settingsEcho, setSettingsEcho] = useState<SlackAppSettings | null>(null);
   const [configEcho, setConfigEcho] = useState("");
   const view = flow.view;
-  if (!view) return <div className={pagesCss.mScreen}><NavBar back={t("common.cancel")} onBack={app.pop} title={t("web-mobile.connects.add")} /><Waiting fill shape="cards" count={2} /></div>;
+  if (!view) {
+    return <div className={pagesCss.mScreen}><NavBar back={t("common.cancel")} onBack={app.pop} title={t("web-mobile.connects.add")} />
+      <Waiting fill sample={<div className={`${pagesCss.mScroll} ${partsCss.mPadX18} ${settingsCss.mSteps}`}><PlatformPick platform="slack" feishu onPick={() => undefined} onNext={() => undefined} /></div>} /></div>;
+  }
   const { step, teams, chosen, made, noProfile } = view;
   const models = view.pick?.options ?? [];
   const entry = view.pick?.valueOption;

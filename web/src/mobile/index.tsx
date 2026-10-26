@@ -126,9 +126,10 @@ function LockGate({ workspace, path, children }: { workspace: string; path: stri
 function InStation({ stations, children }: { stations: Station[] | undefined; children: React.ReactNode }) {
   const { station: id } = useParams();
   const app = useApp();
-  // Which page it is is not known before its station is: a bare bar, back, over what it waits on.
+  // Which page it is is not known before its station is: a bare bar, back, over what it waits on (no page's bones: which
+  // page's they would be is not known either).
   const bare = (body: React.ReactNode) => <div className={pagesCss.mScreen}><NavBar back={t("common.back")} onBack={app.pop} title="" />{body}</div>;
-  if (!stations) return bare(<Waiting fill text={t("common.readingStations")} />);
+  if (!stations) return bare(<Waiting fill text={t("common.readingStations")} sample={null} />);
   const station = stations.find((s) => s.id === id);
   if (!station) return bare(<Gone text={t("web-mobile.noStation")} />);
   return <StationContext.Provider value={station}>{children}</StationContext.Provider>;

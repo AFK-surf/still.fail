@@ -1,6 +1,6 @@
-// What waits looks the same everywhere (waiting.tsx; Android ui/Waiting.kt draws the same): placeholders shaped as
-// what will come, breathing, in red what could not be read, a bar for what has a size.
-import { keyframes, style } from "@vanilla-extract/css";
+// What waits looks the same everywhere (waiting.tsx; mbui's waiting.mbt draws the same): what will come in its bones,
+// breathing, in red what could not be read, a bar for what has a size.
+import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { appearKeyframes } from "./styles/keyframes.css.ts";
 import { pictureGlass } from "./styles/glass.ts";
@@ -33,26 +33,25 @@ export const line = style({
   display: "flex", alignItems: "center", gap: "8px", color: vars.muted, fontSize: vars.textMeta, lineHeight: "18px",
   animation: later, selectors: { "&[data-error]": { color: vars.red, animation: "none" } },
 });
-export const shapes = style({
-  animation: `${breathe} 1.4s ease-in-out infinite`,
+// A page's bones (waiting.tsx Bones, ./bones.ts): what is drawn of made-up data keeps its grounds and edges and none of
+// its ink (words, icons, pictures); a ground that says something by its colour, and what is drawn whole, nothing of
+// their own; over it the bones, breathing together.
+export const bones = style({
+  position: "relative", animation: `${breathe} 1.4s ease-in-out infinite`,
   selectors: { "&[data-still]": { animation: "none" }, [`${STILL} &`]: stillLoop() },
 });
+export const bonesFill = style({ flex: "1", display: "flex", flexDirection: "column", minHeight: 0 });
+export const boneBody = style({ selectors: { [`${bonesFill} > &`]: { flex: "1", display: "flex", flexDirection: "column", minHeight: 0 } } });
+globalStyle(`${boneBody}, ${boneBody} *`, { color: "transparent !important", textShadow: "none !important", caretColor: "transparent" });
+globalStyle(`${boneBody} ::placeholder`, { color: "transparent !important" });
+// (unseen, not gone: measured as they are, ./bones.ts)
+globalStyle(`${boneBody} :is(img, svg, video, canvas, picture)`, { filter: "opacity(0) !important" });
+globalStyle(`${boneBody} [data-bone-ground]`, { background: "transparent !important" });
+globalStyle(`${boneBody} [data-bone-whole]`, { background: "transparent !important", borderColor: "transparent !important", boxShadow: "none !important" });
+globalStyle(`${boneBody} [data-bone-whole] > *`, { visibility: "hidden" });
+export const boneMarks = style({ position: "absolute", inset: 0, pointerEvents: "none" });
 // (in the line's grey, as what is drawn with nothing in it: docs/ui-panels.md 对比度)
-const bar = { display: "block", background: vars.line, borderRadius: "999px" } as const;
-export const row = style({
-  display: "flex", alignItems: "center", gap: "12px", height: "66px", padding: "0 16px 0 22px", boxSizing: "border-box",
-  selectors: { "&[data-dense]": { height: "40px", padding: "0 10px" } },
-});
-export const rowLines = style({ flex: "1", display: "grid", gap: "10px", justifyItems: "start", selectors: { [`${row}[data-dense] &`]: { gap: "7px" } } });
-export const rowTitle = style({ ...bar, height: "13px", maxWidth: "100%", selectors: { [`${row}[data-dense] &`]: { height: "10px" } } });
-export const rowLine = style({ ...bar, height: "10px", maxWidth: "100%", selectors: { [`${row}[data-dense] &`]: { height: "8px" } } });
-export const rowPicture = style({ ...bar, width: "22px", height: "22px", borderRadius: "50%", flex: "none", selectors: { [`${row}[data-dense] &`]: { width: "16px", height: "16px" } } });
-export const messages = style({ display: "grid", gap: "14px", paddingTop: "8px" });
-export const message = style({ display: "flex", gap: "10px", padding: "0 16px", selectors: { "&[data-mine]": { justifyContent: "flex-end" } } });
-export const bubble = style({ ...bar, borderRadius: "18px", maxWidth: "70%" }); // own corner: a message bubble's
-export const face = style({ ...bar, width: "28px", height: "28px", borderRadius: "50%", flex: "none" });
-export const cards = style({ display: "grid", gap: "16px" });
-export const card = style({ ...bar, borderRadius: vars.rCard, cornerShape: vars.cornerShape });
+export const bone = style({ position: "absolute", background: vars.line });
 
 export const track = style({
   position: "relative", display: "block", flex: "none", height: "3px", borderRadius: "999px", overflow: "hidden",

@@ -34,6 +34,7 @@ import * as settingsCss from "./styles/settings.css.ts";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { RetryPill } from "../Connection.tsx";
+import { sampleWords } from "../samples.ts";
 export function NewChatScreen() {
   const app = useApp();
   // The station last started on (or picked) in this workspace and what it runs there, on either screen (../pick.ts).
@@ -45,7 +46,7 @@ export function NewChatScreen() {
   return (
     <div className={`${pagesCss.mScreen} ${css.mNewchatScreen}`}>
       <NavBar back={t("common.cancel")} onBack={app.pop} title={t("web-mobile.newChat.title")} />
-      {!choice?.stations ? <Waiting fill shape="cards" count={2} text={t("common.readingStations")} error={choice?.error ?? chat.error?.message} />
+      {!choice?.stations ? <Waiting fill text={t("common.readingStations")} error={choice?.error ?? chat.error?.message} sample={<div className={css.mNewBody}><NewChatAsk station={SAMPLE_STATION} /></div>} />
         : !view ? (
           !choice.any ? <FirstStation /> : (
             <div className={newChatCss.mNewNone}>
@@ -59,6 +60,18 @@ export function NewChatScreen() {
     </div>
   );
 }
+
+/** What a new chat asks, on `station`: its picture, what to say, where it goes. */
+function NewChatAsk({ station }: { station: string }) {
+  return <>
+    <Illustration name="new-chat" width={230} />
+    <h2>{t("web-mobile.newChat.ask")}</h2>
+    <p className={partsCss.mMuted}>{t("web-mobile.newChat.askNote", { station })}</p>
+  </>;
+}
+
+/** A station's name made up, for what the page shows while the stations are read (in its bones). */
+const SAMPLE_STATION = sampleWords(4);
 
 function NewChatOn({ choice, view, stations, pick, create }: {
   choice: NewChatView; view: StationView; stations: StationView[]; pick(p: PickPatch & { station?: string }): void; create(station: string): Promise<Made>;
@@ -121,9 +134,7 @@ function NewChatOn({ choice, view, stations, pick, create }: {
   return (
     <>
       <div className={css.mNewBody} ref={scene} data-made-leave="up">
-        <Illustration name="new-chat" width={230} />
-        <h2>{t("web-mobile.newChat.ask")}</h2>
-        <p className={partsCss.mMuted}>{t("web-mobile.newChat.askNote", { station: view.name })}</p>
+        <NewChatAsk station={view.name} />
         <FrequentCombos items={choice.frequent} onPick={pick} />
         {problem && <p className={css.mNewProblem} data-wait={choice.waiting || undefined}>{problem}</p>}
         {/* No profile yet: adding one is the first step, here (the machine's own logins, when there are any, offered too). */}

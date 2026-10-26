@@ -4,7 +4,7 @@
 // says (`ink`, client/core-ts/src/highlight.ts: vitesse light and dark, as every client paints them), with their
 // language named and a copy button; tables with theirs, copying them as Markdown, as CSV or as a picture.
 import { Check, Copy } from "@stillfail/ui/icons.tsx";
-import { Fragment, isValidElement, lazy, memo, Suspense, useEffect, useMemo, useRef, useState, type ComponentProps, type ComponentType, type CSSProperties, type ReactNode } from "react";
+import { Fragment, isValidElement, lazy, memo, Suspense, useContext, useEffect, useMemo, useRef, useState, type ComponentProps, type ComponentType, type CSSProperties, type ReactNode } from "react";
 import type { Attachment } from "./core/shapes.ts";
 import type { Md, MdNode } from "./core/md.ts";
 import { inlineFile, inlineFiles } from "./Prose.css.ts";
@@ -23,6 +23,7 @@ import { isWords, wordsOf } from "../../client/core-ts/src/mdWords.ts";
 import { FileRef, LinkHover, pathIn } from "./Peeks.tsx";
 import { Tip } from "./ui.tsx";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
+import { InBones } from "@stillfail/ui/waiting.tsx";
 import { Mermaid } from "./Viz.tsx";
 import { t } from "./i18n.ts";
 import { IconButton, Menu, type MenuItem } from "@stillfail/ui/parts.tsx";
@@ -259,15 +260,17 @@ type Cx = {
  */
 export const Prose = memo(function Prose({ children, md, files, file }: { children: string; md?: Md | undefined; files?: Map<string, Attachment>; file?: (f: Attachment, as: "shown" | "link", words?: ReactNode) => ReactNode }) {
   const [read, setRead] = useState<{ text: string; md: Md }>();
+  const inBones = useContext(InBones);
   useEffect(() => {
-    if (md) return;
+    if (md || inBones) return;
     let active = true;
     void core().call("markdown", { text: children }).then((value) => {
       if (active) setRead({ text: children, md: (value as { md: Md }).md });
     }).catch(() => { if (active) setRead({ text: children, md: [["p", [children]]] }); });
     return () => { active = false; };
-  }, [md, children]);
-  const tree = md ?? (read?.text === children ? read.md : undefined);
+  }, [md, children, inBones]);
+  // (in a page's bones, made-up words: their paragraphs as they are, nothing asked of the core)
+  const tree = md ?? (inBones ? children.split("\n\n").map((p): MdNode => ["p", [p]]) : read?.text === children ? read.md : undefined);
   return tree ? <MdView md={tree} source={children} files={files} file={file} /> : null;
 });
 

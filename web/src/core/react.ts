@@ -1,6 +1,7 @@
 // React on the core: `useTopic` renders a topic's current value, `useCall`
 // makes calls. Components that want the same topic share one subscription.
-import { use, useCallback, useRef, useSyncExternalStore } from "react";
+import { use, useCallback, useContext, useRef, useSyncExternalStore } from "react";
+import { InBones } from "@stillfail/ui/inBones.ts";
 import { connectCore, type CoreClient, type CoreError, type Topic } from "./client.ts";
 import { migrateChatRefs, migrateLegacy, migrateNewChat, migratePrefs } from "./migrate.ts";
 
@@ -131,8 +132,12 @@ function listen(key: string, topic: Topic, listener: () => void): () => void {
   };
 }
 
-/** A topic's current value, kept up to date by the core. `null` subscribes to nothing. */
+/**
+ * A topic's current value, kept up to date by the core. `null` subscribes to nothing; nor does a page's bones (what they are
+ * drawn of is made up: @stillfail/ui waiting.tsx Bones), nor is anything there called.
+ */
 export function useTopic<T = unknown>(topic: Topic | null): TopicState<T> {
+  if (useContext(InBones)) topic = null;
   const key = topic ? topicKey(topic) : null;
   // The topic object is new each render; its key is what counts.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -148,6 +153,7 @@ export function useTopic<T = unknown>(topic: Topic | null): TopicState<T> {
  * the same value), not each time anything else in the topic does. `select` may be a new function each render.
  */
 export function useTopicSelect<T, S>(topic: Topic | null, select: (state: TopicState<T>) => S, same: (a: S, b: S) => boolean = Object.is): S {
+  if (useContext(InBones)) topic = null;
   const key = topic ? topicKey(topic) : null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const subscribe = useCallback((listener: () => void) => (topic && key ? listen(key, topic, listener) : () => undefined), [key]);
@@ -172,6 +178,7 @@ export function useTopicSelect<T, S>(topic: Topic | null, select: (state: TopicS
  * transition), the page that was there stays until then instead of an empty one showing first. Once only per topic.
  */
 export function useReady(topic: Topic | null, ms: number): void {
+  if (useContext(InBones)) topic = null;
   const wait = topic ? waitFor(topicKey(topic), topic, ms) : null;
   if (wait) use(wait);
 }
@@ -214,6 +221,7 @@ export function prime(topic: Topic): void {
 
 /** Several topics at once (as many as there are, which may change): their states in the order given. */
 export function useTopics<T = unknown>(topics: Topic[]): TopicState<T>[] {
+  if (useContext(InBones)) topics = [];
   const keys = topics.map(topicKey);
   const joined = keys.join("\n");
   const given = useRef({ topics, keys });
@@ -235,6 +243,7 @@ export function useTopics<T = unknown>(topics: Topic[]): TopicState<T>[] {
 
 /** `call(name, params)` on the page's core. */
 export function useCall(): (name: string, params?: unknown, onProgress?: (value: unknown) => void, signal?: AbortSignal) => Promise<unknown> {
-  return useCallback((name: string, params?: unknown, onProgress?: (value: unknown) => void, signal?: AbortSignal) => core().call(name, params, onProgress, signal), []);
+  const quiet = useContext(InBones);
+  return useCallback((name: string, params?: unknown, onProgress?: (value: unknown) => void, signal?: AbortSignal) => quiet ? Promise.resolve(undefined) : core().call(name, params, onProgress, signal), [quiet]);
 }
 

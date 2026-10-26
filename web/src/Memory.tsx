@@ -18,6 +18,7 @@ import * as conversationCss from "./styles/conversation.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import { t } from "./i18n.ts";
+import { sampleMemory } from "./samples.ts";
 
 export type { SkillFile, StationMemory as Memory } from "./api.ts";
 
@@ -98,8 +99,16 @@ function MemoryRow({ to, title, sub, value, tags }: { to: string; title: string;
  * other skills, and the station's own folded in a row. `to` makes a page's address under this station's. */
 export function MemoryView({ station, to }: { station: string; to: (page: string) => string }) {
   const { memory, error } = useMemory(station);
+  if (!memory) return <Waiting error={error ? MEMORY_TEXT.failed(error) : null} sample={<MemoryLists station={station} memory={SAMPLE_MEMORY} to={to} />} />;
+  return <MemoryLists station={station} memory={memory} to={to} />;
+}
+
+/** A station's memory made up, for what its pages show while it is read (in their bones). */
+export const SAMPLE_MEMORY = sampleMemory();
+
+/** A station's `memory` as MemoryView lists it. */
+export function MemoryLists({ station, memory, to }: { station: string; memory: Memory; to: (page: string) => string }) {
   const [builtinOpen, setBuiltinOpen] = useState(false);
-  if (!memory) return <Waiting count={5} error={error ? MEMORY_TEXT.failed(error) : null} />;
   const { sections, projects, skills, builtin } = memoryParts(memory);
   const skillRow = (s: SkillFile) => (
     <MemoryRow key={s.name} to={to(`skill/${encodeURIComponent(s.name)}`)} title={s.name} sub={s.line ?? ""} value={s.size}
@@ -156,7 +165,17 @@ export function DocChips({ items, picked, onPick, className, chip }: { items: { 
  * ./cloud/settings.tsx): a skill with when it is read, its sharing and its files, or the global memory a part at a time. */
 export function MemoryDoc({ station, name, at, file, pick }: { station: string; name: string | null; at: number; file: string; pick: (key: "at" | "file", value: string | number) => void }) {
   const { memory, error } = useMemory(station);
-  if (!memory) return <Waiting count={4} error={error ? MEMORY_TEXT.failed(error) : null} />;
+  if (!memory) return <Waiting error={error ? MEMORY_TEXT.failed(error) : null} sample={<MemoryDocSample station={station} skill={name !== null} />} />;
+  return <MemoryPage station={station} memory={memory} name={name} at={at} file={file} pick={pick} />;
+}
+
+/** One of MemoryDoc's pages made up, for what it shows while the memory is read (in its bones): a skill's, or the global memory's. */
+export function MemoryDocSample({ station, skill }: { station: string; skill: boolean }) {
+  return <MemoryPage station={station} memory={SAMPLE_MEMORY} name={skill ? SAMPLE_MEMORY.skills[0]!.name : null} at={0} file="" pick={() => undefined} />;
+}
+
+/** A page of a station's `memory`, as MemoryDoc shows it. */
+function MemoryPage({ station, memory, name, at, file, pick }: { station: string; memory: Memory; name: string | null; at: number; file: string; pick: (key: "at" | "file", value: string | number) => void }) {
   const doc = (text: string) => <div className={`${css.memoryDoc} ${conversationCss.markdown}`}><Prose>{text}</Prose></div>;
   if (name === null) {
     const { sections } = memoryParts(memory);

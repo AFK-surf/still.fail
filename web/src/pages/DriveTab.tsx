@@ -21,7 +21,7 @@ import { useBrowse } from "../drive/browse.ts";
 import { absoluteOf, drive, drivePath, folderName, rootTrouble, trailOf, useDrive } from "../drive/useDrive.ts";
 import { draggedOf, droppedFrom } from "../drive/drag.ts";
 import { DrivePreview } from "../mobile/Drive.tsx";
-import { DriveRow, usePreviewShown } from "./Drive.tsx";
+import { DriveRow, DriveSample, usePreviewShown } from "./Drive.tsx";
 import { DrivePane, type Previewed } from "./DrivePane.tsx";
 import { ColumnsView, TreeView, useDriveView, ViewSwitch, type RowOf, type Shown } from "./DriveViews.tsx";
 import * as shellCss from "../styles/shell.css.ts";
@@ -49,7 +49,7 @@ export function DriveTab({ chat }: {
   const start: Place = d.anywhere && d.home ? { station: here.address, root: d.home, path: "" } : d.roots.length === 1 ? { station: here.address, root: d.roots[0]!.path, path: "" } : null;
   const place = asked === undefined ? start : asked;
   const [preview, setPreview] = useState<{ at: At; entries: readonly DriveEntry[]; entry: DriveEntry } | null>(null);
-  if (asked === undefined && d.loading) return <Waiting dense count={5} error={d.error} />;
+  if (asked === undefined && d.loading) return <Waiting error={d.error} sample={<DriveSample compact />} />;
   return (
     <div className={css.tab}>
       {place === null
@@ -222,7 +222,7 @@ function FolderList({ owner, station, root, path, chat, onGo, onPlaces, onOpen }
           : view === "tree" ? <TreeView key={path} at={at} shown={shown} compact />
           : folder.error ? (
           <div className={driveCss.problem}><p className={controlsCss.fieldError}>{folder.error.message}</p><Button variant="ghost" icon={Retry} onClick={reload}>{t("web-pages.drive.retry")}</Button></div>
-        ) : !folder.value || !arranged ? <Waiting dense count={5} />
+        ) : !folder.value || !arranged ? <Waiting sample={<DriveSample compact />} />
           : shownEntries.length === 0 ? <p className={`${shellCss.muted} ${css.note}`}>{t("web-pages.drive.emptyFolder")}</p>
           : shownEntries.map((e) => <DriveRow key={e.name} at={at} entry={e} row={rowOf(at, e)} compact />)}
       </div>

@@ -4,7 +4,7 @@ import { useConnectFlow } from "../connect-flow.ts";
 // bound to, and how its conversations become sessions.
 import { profilesPage, scopeOf, useStation, useLink } from "../station.tsx";
 import { CheckCircle, External, Key, Plus, Power, Refresh, Trash, User } from "@stillfail/ui/icons.tsx";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useConnects, useOverview, useStations, type ConnectInput, type ConnectItem, type ConnectMode, type Connect, type ModeChange, type ModeWords, type ModelOption, type Overview, type MadeSlackApp } from "../api.ts";
 import { kindKey, modeOf } from "../format.ts";
@@ -30,6 +30,7 @@ import * as shellCss from "../styles/shell.css.ts";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { StationNamedAt } from "../StationNamed.tsx";
+import { sampleConnects } from "../samples.ts";
 export function ConnectPage() {
   const { id } = useParams();
   const station = useStation();
@@ -40,11 +41,25 @@ export function ConnectPage() {
   if (!overview.value || !connects.value || (!item && (wait!.reading || wait!.failing.length > 0))) {
     const error = overview.error ?? connects.error;
     return error ? <Empty><p>{error.message}</p></Empty>
-      : <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting shape="cards" text={t("web-pages.connect.loading")} note={overview.value ? wait : undefined} /></div>;
+      : <ConnectFrame><Waiting text={t("web-pages.connect.loading")} note={overview.value ? wait : undefined} sample={<ConnectDetail item={SAMPLE_CONNECT} />} /></ConnectFrame>;
   }
   if (!item) return <Empty><p>{t("web-pages.connect.notFound", { id: id ?? "" })}</p></Empty>;
-  return <ConnectDetail key={item.connect.id} item={item} overview={overview.value} />;
+  return <ConnectFrame><ConnectDetail key={item.connect.id} item={item} /></ConnectFrame>;
 }
+
+/** A connect's page: the way back to the connects over what it holds. */
+function ConnectFrame({ children }: { children: ReactNode }) {
+  const station = useStation();
+  return (
+    <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
+      <BackLink to={`${station.settings}/connects`} label={t("web-pages.settings.nav.connects")} />
+      {children}
+    </div>
+  );
+}
+
+/** A connect made up, for what its page shows while it is read (in its bones). */
+const SAMPLE_CONNECT = sampleConnects()[0]!;
 
 /** Saving a connect's settings; `put(input, done)` runs `done` once saved. */
 function useSaveConnect(id: string) {
@@ -63,7 +78,7 @@ function useStationModels(): ModelOption[] {
   return useStationView()?.models ?? [];
 }
 
-function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overview }) {
+function ConnectDetail({ item }: { item: ConnectItem }) {
   const connect = item.connect;
   const api = useApi();
   const station = useStation();
@@ -91,8 +106,7 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
   const feishu = connect.kind === "feishu";
 
   return (
-    <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
-      <BackLink to={`${station.settings}/connects`} label={t("web-pages.settings.nav.connects")} />
+    <>
       {/* Who it is and whether it is up; what is done to it less often is in the menu. */}
       <header className={pagesCss.identity}>
         <ConnectAvatar connect={connect} size={52} />
@@ -137,7 +151,7 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
       <Confirm open={deleting} onClose={() => setDeleting(false)} onConfirm={() => { setDeleting(false); navigate(`${station.settings}/connects`); void remove.run(); }}
         title={t("web-pages.archive.deleteConfirm", { title: connect.name })} action={t("web-pages.connect.delete")}
         description={connect.sessions ? t(kindKey("web-pages.connect.deleteBodySessions", connect.kind), { n: connect.sessions }) : t(kindKey("web-pages.connect.deleteBody", connect.kind))} />
-    </div>
+    </>
   );
 }
 
