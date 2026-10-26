@@ -55,33 +55,69 @@ pub let narrow_most : Double = 640.0
 // ── the frame ───────────────────────────────────────────────────────────
 
 ///|
+/// What the frame a page is shown in gives it (the stack's, the pane's): where back goes, said as its words (None:
+/// nowhere, the page at the stack's root or beside a list that is the way back), how far down the page starts under
+/// what stands over it (the status bar, a place's top bar), the room it keeps at its foot (the navigation bar, the
+/// bottom bar), and whether the frame's own bar names the page already (a place's top page under Home's top bar: no
+/// title of its own then). The page draws its bar and what it shows within these and works none of them out itself.
+pub(all) struct PageFrame {
+  back : String?
+  top : Double
+  foot : Double
+  named : Bool
+}
+
+///|
+/// A frame that gives a page nothing: nowhere back, no room over or under it.
+pub let no_frame : PageFrame = { back: None, top: 0.0, foot: 0.0, named: false }
+
+///|
+/// What a page says of itself to a bar of the frame's over it (a panel of its own on the tape: the bar a chat's page
+/// has there): back (where it goes, said; what it does), its title, what it is for (`about`), what it is of (`small`),
+/// whether it has a head of its own that says its name (`own_head`), what it does.
+pub(all) struct PageBar {
+  back : (String, () -> Unit)?
+  title : String
+  about : String
+  small : String
+  own_head : Bool
+  actions : (() -> Unit)?
+}
+
+///|
+/// The frame's bar over a page in a panel of its own (`in_pane`): it draws its bar from what the page says of itself,
+/// then `page` under it. The shell's, given as the app starts (None: no such bar, the page its own head).
+// kept across runs: a wire, said once as the app starts
+pub let pane_bar : Ref[((@ui.Ctx, PageBar, () -> Unit) -> Unit)?] = Ref(None)
+
+///|
+/// What a place's top page under the frame's own bar does (its `named`), given to that bar as the page is drawn: the
+/// bar holds it at its end and takes it from here (PlacePage.kt: TopGlassBar's `actions`, 用量's days, 连接's filter).
+// kept across runs: said by the page as it is drawn, taken by the bar over it
+pub let named_actions : Ref[(() -> Unit)?] = Ref(None)
+
+///|
 /// A page titled `title`, holding `content` a block at a time (each laid out as it comes into view), laid out by the
-/// width of its box. What its frame gives it: `back`, the words of where back goes (None: nowhere, the page at the
-/// stack's root), `on_back` going there; `top`, the room over it (a status bar's); `foot`, the room under it; `named`,
-/// the frame's own bar names it already (a place's top page: no title of its own, `named_actions` given what it does).
+/// width of its box. What its frame gives it (`frame`): back, the room over and under it, whether the frame's bar names
+/// it (a place's top page: no title of its own, what it does given that bar, `named_actions`); `on_back` goes back.
 /// `lead`: what it is for, under its title; `about`: the same said by a mark beside the title (wide); `actions`: what
 /// it does, at its title's end; `head`: a head of its own in place of the title, which says its name (a station's, an
-/// account's); `small`: what the page is of, over its large title (narrow: LargeTitle's small line). `barred`: a bar of
-/// the frame's over it holds its title, back and what it does (a panel of its own on the tape, a chat's bar there:
-/// sfdesk pane_page): what it shows (a head of its own, what it is for, what it holds) right under that, nothing of
-/// those drawn here nor room kept for them.
+/// account's); `small`: what the page is of, over its large title (narrow: LargeTitle's small line). In a panel of its
+/// own (`in_pane`), under the frame's bar there (`pane_bar`), which holds its title, back and what it does: what it
+/// shows (a head of its own, what it is for, what it holds) right under that, nothing of those drawn here nor room
+/// kept for them.
 pub fn page(
   c : @ui.Ctx,
   key : String,
   title : String,
   content : Array[() -> Unit],
-  on_back : () -> Unit,
-  back? : String,
-  top? : Double = 0.0,
-  foot? : Double = 0.0,
-  named? : Bool = false,
-  named_actions? : (() -> Unit) -> Unit = fn(_) {  },
+  on_back~ : () -> Unit,
+  frame? : PageFrame = no_frame,
   lead? : String = "",
   about? : String = "",
   actions? : () -> Unit,
   head? : () -> Unit,
   small? : String = "",
-  barred? : Bool = false,
 ) -> Unit {
   let l = look_for(c.width)
   // (what it holds drawn as its list lays it out, maybe after this returns: each block says its look as it is drawn)
@@ -90,18 +126,29 @@ pub fn page(
     Some(h) => Some(fn() { with_look(l, h) })
     None => None
   }
-  with_look(l, fn() {
-    match l {
-      _ if barred => barred_page(c, key, l, content, foot, lead, head)
-      Wide => wide_page(c, key, title, content, on_back, back, top, foot, lead, about, actions, head)
-      Narrow =>
-        narrow_page(c, key, title, content, on_back, back, top, foot, named, named_actions, lead, actions, head, small)
-    }
+  let bar = { back: frame.back.map(fn(w) { (w, on_back) }), title, about, small, own_head: head is Some(_), actions }
+  under_pane_bar(c, bar, fn() { with_look(l, fn() { barred_page(c, key, l, content, frame.foot, lead, head) }) }, fn() {
+    with_look(l, fn() {
+      match l {
+        Wide =>
+          wide_page(c, key, title, content, on_back, frame.back, frame.top, frame.foot, lead, about, actions, head)
+        Narrow => narrow_page(c, key, title, content, on_back, frame, lead, actions, head, small)
+      }
+    })
   })
 }
 
 ///|
-/// Under a bar of the frame's that holds its title, back and what it does (`page`'s `barred`): a head of its own (as
+/// In a panel of its own with the frame's bar (`pane_bar`): that bar from `bar`, `barred` under it; else `alone`.
+fn under_pane_bar(c : @ui.Ctx, bar : PageBar, barred : () -> Unit, alone : () -> Unit) -> Unit {
+  match pane_bar.val {
+    Some(draw) if in_pane() => draw(c, bar, barred)
+    _ => alone()
+  }
+}
+
+///|
+/// Under a bar of the frame's that holds its title, back and what it does (`pane_bar`): a head of its own (as
 /// the arrangement has a head's room, 8 or 16 under the bar), what it is for, what it holds, laid out as `l` lays them.
 fn barred_page(
   c : @ui.Ctx,
@@ -150,27 +197,24 @@ pub fn page_wide(
   key : String,
   title : String,
   content : Array[() -> Unit],
-  on_back : () -> Unit,
-  back? : String,
-  top? : Double = 0.0,
-  foot? : Double = 0.0,
+  on_back~ : () -> Unit,
+  frame? : PageFrame = no_frame,
   lead? : String = "",
   about? : String = "",
   actions? : () -> Unit,
   head? : () -> Unit,
-  barred? : Bool = false,
 ) -> Unit {
   let content = content.map(fn(b) { fn() { with_look(Wide, b) } })
   let head = match head {
     Some(h) => Some(fn() { with_look(Wide, h) })
     None => None
   }
+  let back = frame.back.map(fn(w) { (w, on_back) })
+  let bar = { back, title, about, small: "", own_head: head is Some(_), actions }
   with_look(Wide, fn() {
-    if barred {
-      barred_page(c, key, Wide, content, foot, lead, head)
-    } else {
-      wide_page(c, key, title, content, on_back, back, top, foot, lead, about, actions, head)
-    }
+    under_pane_bar(c, bar, fn() { barred_page(c, key, Wide, content, frame.foot, lead, head) }, fn() {
+      wide_page(c, key, title, content, on_back, frame.back, frame.top, frame.foot, lead, about, actions, head)
+    })
   })
 }
 
@@ -183,16 +227,13 @@ fn narrow_page(
   title : String,
   content : Array[() -> Unit],
   on_back : () -> Unit,
-  back : String?,
-  top : Double,
-  foot : Double,
-  named : Bool,
-  named_actions : (() -> Unit) -> Unit,
+  frame : PageFrame,
   lead : String,
   actions : (() -> Unit)?,
   head : (() -> Unit)?,
   small : String,
 ) -> Unit {
+  let { back, top, foot, named } = frame
   let blocks : Array[() -> Unit] = []
   // under what stands over it (a status bar)
   if top > 0.0 {
@@ -213,7 +254,7 @@ fn narrow_page(
   // (a place's top page: the frame's bar over it names it, and holds what it does at its end)
   if named {
     match actions {
-      Some(f) => named_actions(f)
+      Some(f) => named_actions.val = Some(f)
       None => ()
     }
   }

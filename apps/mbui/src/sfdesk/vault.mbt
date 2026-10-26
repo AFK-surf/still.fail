@@ -22,7 +22,7 @@ fn vault_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit 
     Some(first) => first
     None => vault_library(c, core, look, ws, v)
   }
-  look_page(c, core, frame, "vault", @sf.t("web-pages.vault.title"), lead=@sf.t("web-pages.vault.lead"), body)
+  @sf.page(c, on_back=core.pop, frame~, "vault", @sf.t("web-pages.vault.title"), lead=@sf.t("web-pages.vault.lead"), body)
 }
 
 ///|
@@ -47,7 +47,7 @@ fn vault_items_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) ->
         }
     }
   }
-  look_page(c, core, frame, "vault-items", @sf.t("web-pages.vault.all"), actions?=if usable { Some(add) } else { None }, body)
+  @sf.page(c, on_back=core.pop, frame~, "vault-items", @sf.t("web-pages.vault.all"), actions?=if usable { Some(add) } else { None }, body)
 }
 
 ///|

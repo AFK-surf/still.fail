@@ -15,7 +15,7 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> U
   let v = topic.value
   let title = @sf.t("android-settings.workspace.title")
   guard v is Some(_) else {
-    look_page(c, core, frame, "workspace", title, [
+    @sf.page(c, on_back=core.pop, frame~, "workspace", title, [
       fn() {
         waiting_cards(
           c,
@@ -236,7 +236,7 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> U
       }
     })
   })
-  look_page(c, core, frame, "workspace",
+  @sf.page(c, on_back=core.pop, frame~, "workspace",
     name,
     blocks,
     // who the viewer is there and how many it holds

@@ -208,7 +208,7 @@ fn shortcuts_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       }
     })
   }
-  look_page(c, core, frame, "shortcuts", @sf.t("web-main.shortcuts.title"), blocks)
+  @sf.page(c, on_back=core.pop, frame~, "shortcuts", @sf.t("web-main.shortcuts.title"), blocks)
 }
 
 ///|

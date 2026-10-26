@@ -110,7 +110,7 @@ fn drive_back_label(src : Source, w : Workspace, under : Page) -> String {
       }
     }
     Files => tr("android-misc.bar.place.files")
-    p => @sfdesk.back_label(p)
+    p => @sfbase.back_label(p)
   }
 }
 

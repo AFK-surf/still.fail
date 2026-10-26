@@ -673,7 +673,7 @@ fn go_place(c : @ui.Ctx, place : String, sets : Array[Array[String]], cur : Int)
 /// bar, over the navigation bar. One not merged yet: the phone's copy (src/sfapp/settings).
 fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, r : @settings.Route) -> Unit {
   let frame : PageFrame = {
-    back: app.nav.under().map(@sfdesk.back_label),
+    back: app.nav.under().map(@sfbase.back_label),
     top: status_top(),
     foot: nav_foot(),
     named: false,

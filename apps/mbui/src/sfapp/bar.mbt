@@ -1787,11 +1787,11 @@ fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
 
 ///|
 /// A place's top bar at the stack's root (PlacePage.kt TopGlassBar): settings, the place's name, the page's actions
-/// (`@settings.root_bar_actions`); frosted over what runs under it, no line under it.
+/// (`@sf.named_actions`); frosted over what runs under it, no line under it.
 fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
   let t = @sf.theme()
-  let actions = @settings.root_bar_actions.val
-  @settings.root_bar_actions.val = None
+  let actions = @sf.named_actions.val
+  @sf.named_actions.val = None
   let glass_top = c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     // under the status bar (TopGlassBar: windowInsetsPadding(statusBars), then TopBarHeight)
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {

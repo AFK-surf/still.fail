@@ -19,7 +19,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
   // under 连接; the sidebar is the way to the others)
   let frame : PageFrame = {
     back: match under {
-      Some(u) if u is (Setting(_) | Place(_)) => Some(back_label(u))
+      Some(u) if u is (Setting(_) | Place(_)) => Some(@sfbase.back_label(u))
       _ => None
     },
     top: 0.0,
@@ -57,7 +57,7 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     // the settings' list as a page of its own (a small screen's: sfpages' settings_list.mbt), a row pressed its page
     // pushed
     Home =>
-      look_page(c, core, frame, "home", @sf.t("android-settings.title"), @sfpages.settings_blocks(c, core, here, fn(r) {
+      @sf.page(c, on_back=core.pop, frame~, "home", @sf.t("android-settings.title"), @sfpages.settings_blocks(c, core, here, fn(r) {
         (core.push)(r)
       }))
     Appearance => appearance_page(c, core, frame)

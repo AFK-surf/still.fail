@@ -85,7 +85,7 @@ fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       })
     })
   }
-  look_page(c, core, frame, "appearance", @sf.t("web-pages.appearance.title"), blocks)
+  @sf.page(c, on_back=core.pop, frame~, "appearance", @sf.t("web-pages.appearance.title"), blocks)
 }
 
 ///|
@@ -114,7 +114,7 @@ let appearance_line : @ui.Style = @ui.css("row w=Full align=ACenter")
 /// 字体's page, one for every frame (mobile/Fonts.tsx FontScreen, opened from 外观's row narrow): what it is for under
 /// its title, the setting (font_setting.mbt).
 fn fonts_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
-  look_page(c, core, frame, "fonts", @sf.t("web-pages.appearance.fonts.title"), fonts_blocks(c, core), lead=@sf.t(
+  @sf.page(c, on_back=core.pop, frame~, "fonts", @sf.t("web-pages.appearance.fonts.title"), fonts_blocks(c, core), lead=@sf.t(
     "web-pages.appearance.fonts.description",
   ))
 }

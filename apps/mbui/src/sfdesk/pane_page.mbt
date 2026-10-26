@@ -2,28 +2,23 @@
 // there (chat_page.mbt chat_bar), not a phone's large title nor the web's page head over what it shows: as high as a
 // chat's, its title in a chat's title's words where a chat's stands, back before it where there is somewhere to go back
 // to (a round button, concentric with the panel's top left corner), what the page is for said by a mark beside its
-// title, what it does at its end; what it shows right under it (the library's page, @sf.page's `barred`). The tape's
-// bars and the sidebar's first row on one line (@sf.tape_bar_over); no room left over the page (the user, 2026-10-25: a
-// large title pushed under the corners wasted the room and stood apart from the other pages).
+// title, what it does at its end; what it shows right under it (the library's page, which asks for this bar:
+// @sf.pane_bar). The tape's bars and the sidebar's first row on one line (@sf.tape_bar_over); no room left over the
+// page (the user, 2026-10-25: a large title pushed under the corners wasted the room and stood apart from the other
+// pages).
 
 ///|
-/// A page in a panel of its own: the bar (pane_bar), then `page` (the library's, under it). A page with a head of its
-/// own (`head`: a station's, a profile's, its name big there) has what it is of in its bar (`small`: Station, Profile),
-/// not its name again; one whose title names no one (an account's 账号) its title.
-fn pane_page(
-  c : @ui.Ctx,
-  back : (String, () -> Unit)?,
-  title : String,
-  about? : String = "",
-  small? : String = "",
-  actions? : () -> Unit,
-  head? : () -> Unit,
-  page : () -> Unit,
-) -> Unit {
+/// A page in a panel of its own: the bar (pane_bar), then `page` (the library's, under it), as @sf.page asks it
+/// (@sf.pane_bar, given as the app starts: desk.mbt). A page with a head of its own (a station's, a profile's, its name
+/// big there) has what it is of in its bar (`small`: Station, Profile), not its name again; one whose title names no one
+/// (an account's 账号) its title.
+fn pane_page(c : @ui.Ctx, bar : @sf.PageBar, page : () -> Unit) -> Unit {
+  let { back, title, about, small, own_head, actions } = bar
   c.box(style=pane_page_fill, fn() {
-    match head {
-      Some(_) if small != "" => pane_bar(c, back, small, about~, actions?)
-      _ => pane_bar(c, back, title, about~, small~, actions?)
+    if own_head && small != "" {
+      pane_bar(c, back, small, about~, actions?)
+    } else {
+      pane_bar(c, back, title, about~, small~, actions?)
     }
     c.box(style=pane_page_rest, fn() { page() }) |> ignore
   })

@@ -24,7 +24,7 @@ fn permissions_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
     },
     args=[("name", "still.fail")],
   )
-  look_page(c, core, frame, "permissions",
+  @sf.page(c, on_back=core.pop, frame~, "permissions",
     @sf.t("web-pages.settings.nav.permissions"),
     lead=@sf.t("web-pages.permissions.lead", args=[("name", "still.fail")]),
     [
@@ -134,7 +134,7 @@ fn archiving_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> U
   let reviews = text(said, "hintReviewText")
   let none_review = flag(said, "hintNoReview")
   let hints = ["off", "done", "reviewed"]
-  look_page(c, core, frame, "archiving", @sf.t("web-pages.archiving.title"), [
+  @sf.page(c, on_back=core.pop, frame~, "archiving", @sf.t("web-pages.archiving.title"), [
     fn() {
       @sf.section(c, @sf.t("web-pages.appearance.archive.title"), heads=true, note=if look == Wide { @sf.t("web-pages.appearance.archive.description") } else { "" }, fn() {
         let at = hints.search(hint_now).unwrap_or(1)
@@ -350,7 +350,7 @@ fn station_archiving_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFra
         )
       })
   }
-  look_page(c, core, frame, "station-archiving/" + station, title, blocks)
+  @sf.page(c, on_back=core.pop, frame~, "station-archiving/" + station, title, blocks)
 }
 
 ///|

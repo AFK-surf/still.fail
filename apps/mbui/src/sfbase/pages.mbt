@@ -44,16 +44,9 @@ pub(all) enum Page {
 } derive(Eq)
 
 ///|
-/// What the frame a page is shown in gives it (the stack's, the pane's): where back goes, said as its words (None:
-/// nowhere, the page at the stack's root or beside a list that is the way back), how far down the page starts under
-/// what stands over it (the status bar, a place's top bar), the room it keeps at its foot (the navigation bar, the
-/// bottom bar), and whether the frame's own bar names the page already (a place's top page under Home's top bar: no
-/// title of its own then). The page draws its bar and what it shows within these and works none of them out itself.
-pub(all) struct PageFrame {
-  back : String?
-  top : Double
-  foot : Double
-  named : Bool
+/// What the frame a page is shown in gives it: the library's (@sf.page's `frame`).
+pub using @sf {
+  type PageFrame,
 }
 
 ///|
@@ -287,4 +280,26 @@ pub fn feel_hold(c : @ui.Ctx, what : String) -> Unit {
       @ui.haptic(LongPress)
     }
   })
+}
+
+///|
+/// What back over a page says: the title of the page it goes back to.
+pub fn back_label(p : Page) -> String {
+  match p {
+    Home => @sf.t("android-misc.bar.place.chats")
+    Settings | Setting(@settings.Route::Home) => @sf.t("android-settings.title")
+    Setting(@settings.Route::About) => @sf.t("web-pages.settings.nav.about")
+    Setting(@settings.Route::Permissions) => @sf.t("web-pages.settings.nav.permissions")
+    Setting(@settings.Route::Memories) => @sf.t("web-pages.settings.memory.title")
+    Setting(@settings.Route::AutoDecisions) => @sf.t("web-pages.automaticDecisions.title")
+    Setting(@settings.Route::Archiving) => @sf.t("web-pages.archiving.title")
+    Setting(@settings.Route::Shortcuts) => @sf.t("web-main.shortcuts.title")
+    Setting(@settings.Route::Usage) => @sf.t("web-pages.settings.nav.usage")
+    Setting(@settings.Route::Security) => @sf.t("web-pages.security.title")
+    Setting(@settings.Route::Vault) => @sf.t("web-pages.vault.title")
+    Setting(@settings.Route::VaultItems) => @sf.t("web-pages.vault.all")
+    Setting(@settings.Route::Connects(_)) | Place("connects") => @sf.t("android-settings.connects.title")
+    Place("usage") => @sf.t("web-pages.settings.nav.usage")
+    _ => @sf.t("common.back")
+  }
 }

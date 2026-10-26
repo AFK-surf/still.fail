@@ -114,7 +114,7 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
       }
     })
   })
-  look_page(c, core, frame, "me", @sf.t("android-settings.me.title"), blocks)
+  @sf.page(c, on_back=core.pop, frame~, "me", @sf.t("android-settings.me.title"), blocks)
 }
 
 ///|

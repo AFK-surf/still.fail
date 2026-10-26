@@ -1,8 +1,10 @@
 // What the desktop's settings pages share beside the library's page (src/sf page.mbt): a place's page across the
-// pane, a hint, a list's filter, a dialog. The web's desktop pieces they still draw themselves (desk_card, desk_list,
-// …) are the library's, named here; detlint's page-look counts them in the pages, each file's only falling.
+// pane, a hint, a list's filter, a dialog, a page still laid out wide alone (desk_page). The pieces of one arrangement
+// they still draw themselves (desk_card, desk_list, narrow_row, …: the library's, named here) are counted by detlint's
+// page-look in the pages, each file's only falling.
 
 using @sf {
+  type Look,
   desk_lanes,
   desk_lane,
   desk_lane_column,
@@ -181,4 +183,123 @@ fn open_dialog(
 fn desk_waiting_rows(c : @ui.Ctx, wait : Json?, count? : Int = 3) -> Unit {
   let failing = failing_of(wait)
   @sf.waiting(c, shape=Rows, count~, note={ reading: failing.length() == 0, text: "", failing })
+}
+
+///|
+/// How the page being drawn is laid out, by the width of its box (a page still drawing one arrangement's pieces).
+fn look_of(c : @ui.Ctx) -> @sf.Look {
+  @sf.look_for(c.width)
+}
+
+///|
+/// A page of the desktop's settings still drawn with its desktop pieces alone: the library's page laid out wide (counted
+/// by page-look where a page asks for it), back over it on a page under another (`back` where it goes; `on_back`, else
+/// the page popped).
+fn desk_page(
+  c : @ui.Ctx,
+  core : Core,
+  key : String,
+  title : String,
+  content : Array[() -> Unit],
+  about? : String = "",
+  lead? : String = "",
+  back? : String = @sf.t("android-settings.title"),
+  actions? : () -> Unit,
+  head? : () -> Unit,
+  on_back? : () -> Unit,
+  deep? : Bool = settings_deep.val,
+) -> Unit {
+  let deep = deep || on_back is Some(_)
+  let go = match on_back {
+    Some(f) => f
+    None => core.pop
+  }
+  let frame = { ..@sf.no_frame, back: if deep { Some(back) } else { None } }
+  @sf.page_wide(c, key, title, content, on_back=go, frame~, lead~, about~, actions?, head?)
+}
+
+// ── one arrangement's pieces, as pages still draw them ──────────────────
+
+///|
+let narrow_most : Double = @sf.narrow_most
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_lead_box : @ui.Style = @sf.pg_lead_box
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_lead : @ui.TextStyle = @sf.pg_lead
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_card_room : @ui.Style = @sf.pg_card_room
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_note_box : @ui.Style = @sf.pg_note_box
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_note : @ui.TextStyle = @sf.pg_note
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_note_bad : @ui.TextStyle = @sf.pg_note_bad
+
+///|
+/// A note's words in a line, as wide as they are (a link after them).
+// kept across runs: a value (no field of it changes)
+let narrow_note_inline : @ui.TextStyle = @sf.secondary.then(@sf.one_line)
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_hint_inline : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_said_row : @ui.Style = @sf.pg_said_row
+
+///|
+/// A finger's press rippling over a row (ListRow's, its corner concentric with its card's).
+fn finger_ripple(c : @ui.Ctx, id : Int) -> Unit {
+  @sf.row_ripple(c, id)
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_row : @ui.Style = @sf.pg_row
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_row_words : @ui.Style = @sf.pg_row_words
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_row_title : @ui.TextStyle = @sf.pg_row_title
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_value : @ui.TextStyle = @sf.pg_value
+
+///|
+let narrow_chevron : Double = @sf.pg_chevron
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_link_note : @ui.TextStyle = @sf.pg_link_note
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_heading : @ui.TextStyle = @sf.wide_heading
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_value : @ui.TextStyle = @sf.wide_value
+
+///|
+/// The shapes of a page's cards to come (the library's Waiting, its cards), in the page's room; what could not be read
+/// over them in red.
+fn waiting_cards(c : @ui.Ctx, count? : Int = 3, error? : String = "", failing? : Array[String] = []) -> Unit {
+  @sf.waiting(c, shape=Cards, count~, error~, note={ reading: failing.length() == 0, text: "", failing })
 }

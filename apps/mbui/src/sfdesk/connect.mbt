@@ -23,7 +23,7 @@ fn connect_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : Pag
       Some(e) => error_text(e)
       None => ""
     }
-    look_page(c, core, frame, key, back, [
+    @sf.page(c, on_back=core.pop, frame~, key, back, [
       fn() {
         if error != "" {
           @sf.page_note(c, error, bad=true)
@@ -40,7 +40,7 @@ fn connect_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : Pag
   }
   match found {
     None =>
-      look_page(c, core, frame, key, back, [
+      @sf.page(c, on_back=core.pop, frame~, key, back, [
         fn() { @sf.page_note(c, @sf.t("web-pages.connect.notFound", args=[("id", id)])) },
       ])
     Some(item) => connect_detail(c, src, core, here, frame, Some(item))
@@ -74,7 +74,7 @@ fn connect_detail(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : P
     blocks.push(fn() { slack_app_section(c, core, station, cv) })
   }
   blocks.push(fn() { cd_sessions(c, core, station, item) })
-  look_page(c, core, frame, "connect/" + station + "/" + id, text(cv, "name"), blocks, small=@sf.t("android-misc.bar.place.connects"), head=fn() {
+  @sf.page(c, on_back=core.pop, frame~, "connect/" + station + "/" + id, text(cv, "name"), blocks, small=@sf.t("android-misc.bar.place.connects"), head=fn() {
     cd_identity(c, core, here, station, text(item, "stationName"), cv)
   })
 }

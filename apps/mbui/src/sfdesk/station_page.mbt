@@ -49,15 +49,15 @@ fn station_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, addres
           }
           blocks.append(body)
           // its head says its name: no title over it (StationSettings: Head, then Body)
-          look_page(c, core, frame, "station/" + address, text(s, "name"), blocks, small=@sf.t("android-misc.bar.place.stations"), head=fn() {
+          @sf.page(c, on_back=core.pop, frame~, "station/" + address, text(s, "name"), blocks, small=@sf.t("android-misc.bar.place.stations"), head=fn() {
             station_head(c, core, here, s, manager)
           })
         }
         // (removed, or a link from before: its list)
-        None => look_page(c, core, frame, "station/" + address, back, [fn() { @sf.waiting(c, shape=Cards) }])
+        None => @sf.page(c, on_back=core.pop, frame~, "station/" + address, back, [fn() { @sf.waiting(c, shape=Cards) }])
       }
     _ =>
-      look_page(c, core, frame, "station/" + address, back, [
+      @sf.page(c, on_back=core.pop, frame~, "station/" + address, back, [
         fn() { @sf.waiting(c, shape=Cards, note={ reading: true, text: @sf.t("common.readingStations"), failing: [] }) },
       ])
   }

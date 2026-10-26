@@ -125,10 +125,9 @@ page's width, and its parts take it from there. A part never measures its own bo
 of a wide page is a wide page's section, and a computer's 480 dialog is no narrow page: what a presenter holds is laid
 out as the presenter says), and a page never passes it to them. Each takes its sizes from the theme. So a page made of
 them is right in any box on either screen. There is one of each, and none draws one screen's
-or one width's look alone: a page cannot reach for a wrong one. (Today they are two sets: sfdesk's `page_look.mbt`
-`look_*` know both widths; the library's `@sf.section`, `@sf.switch_row` and the desk's card know only the web's
-desktop, and a page made of them is the desktop's on a phone (#1675's Profile, #1599's station, #1576's connect). They
-become one set, in the library.)
+or one width's look alone: a page cannot reach for a wrong one. (One page frame is left, the library's `@sf.page`; the
+settings' pages still draw some pieces of one arrangement themselves, `narrow_*` and `desk_*`, counted by detlint's
+`page-look`, until the settings' merge makes them the library's parts.)
 
 ### Pages
 
@@ -218,17 +217,23 @@ One shell. It arranges the same panes in every tier:
 
 ## The packages
 
+Four, at the end of the way there:
+
 | Package | Holds |
 |---|---|
-| `src/sf` | The library. |
-| `src/sfbase` | The model: `Source`, the core's views, the navigation (`Page`, `app.nav`), the app-level things, and the machinery pages share (drafts and references, flights, thumbnails). The settings' `Core` and `Route` stay where it reaches them. |
+| `src/sf` | The library: the parts, the presenters, a page's frame (`@sf.page`: what its frame gives it, `PageFrame`; what it says to a bar of the frame's over it, `PageBar`), the viewers. |
+| `src/sfbase` | The model: `Source`, the core's views, the navigation (`Page`, `app.nav`, `open_page`, `go_place`, what back over a page says), the app-level things, and the machinery pages share (drafts and references, flights, thumbnails). The settings' `Core` and `Route` stay where it reaches them. |
 | `src/sfpages` | The pages, each file named after the web's. |
 | `src/sfshell` | The shell, and the app's `view`, which the main calls. |
 
-- **What goes:** `src/sfapp` and `src/sfdesk`. A merged page moves into `sfpages`; the frames' pieces (the phone's
-  stack and bottom bar, the desk's frame, tape, rail and columns) move into `sfshell`.
-- **detlint holds it:** `sfpages` may not read `@sf.layout`, `wide_on`, `@ui.pointing()`, or the stack's or the tape's
-  state, and may not call a sheet or dialog host but through the presenters.
+- **What goes:** `src/sfapp` and `src/sfdesk`. A page moves into `sfpages`; the frames' pieces (the phone's stack,
+  bars and bottom bar, the desk's frame, tape, rail, columns and switcher) move into `sfshell`.
+- **Which way they import:** `sfshell` imports `sfpages`, `sfpages` imports `sfbase`, all three the library. What a
+  page needs of the shell it is given through sfbase or the library as the app starts (a wire: the bar over a page in a
+  panel of its own is the shell's, `@sf.pane_bar`), never by importing it.
+- **detlint holds it:** `page-shell-import` (`sfpages` imports no `sfshell`), `tier-outside-shell` (`@sf.layout`,
+  `wide_on`, the stack's and the tape's state read only in `sfshell`), and `page-screen` at 0 in `sfpages`; a page
+  calls no sheet or dialog host but through the presenters.
 
 ## Tests
 
@@ -245,60 +250,37 @@ One shell. It arranges the same panes in every tier:
 
 ## The way there
 
-1. **The screen and the input read once.** This is the shell's work (the chat 按屏幕分三档布局). The hidden axes go:
-   `wide_on`, `@settings.wide`, the viewer's `narrow`.
-   - To do (2026-10-25): what was put on the input that is the layout's goes back to the native input: `@sf.begin`'s
-     theme and density, the presenters' sheet, and every page's own read of `@ui.pointing()` for its look, its rows or
-     what it offers (the search field). The pages then read the input only through the library's primitives, and
-     detlint's fence holds it.
-   - Done: `wide_on` is gone (the shell reads `@sf.layout` where it arranges, and the phone pages' wide branches,
-     never drawn, with it), and `@sf.begin`'s theme follows `@ui.pointing()`, not the system: a finger's the phone's, a
-     mouse's the web's; laid out Small still the phone's whatever the hand, as the phone's pages carry its palette in
-     places, until step 4 makes them one with the web's. A Tester or a program says the hand apart from its system
-     (`Tester::new(pointing=…)`, `@ui.set_pointing`: the phone's screens recorded on a Mac are a finger's).
-   - Done too: the viewer host's `narrow` (the reader and the player go by the tier, as the file viewer's frame does).
-   - Left to the merge that rewrites its readers: `@settings.wide` (the settings pages, merged, go by their own width).
-2. **The presenters** land in the library, and the three sheet hosts and the desk's dialogs move onto them.
-3. **Navigation by what is opened,** with the pane table in the shell.
-   - Begun: sfbase's `Shell` has `open` (a `Page`) and `detail` (a chat's tab), called as `@sfbase.open_page` and
-     `@sfbase.open_detail`; the shell (sfapp's `pages_shell`) answers by the layout at the moment (`open_where`,
-     `detail_where`): Small the phone's stack (a new chat risen), the wide frame the page pushed and a chat's detail
-     its side panel's tab (sfdesk's `main_page` lays a detail asked as a page beside its chat, also when the layout
-     changes under a stack). sfbase's routers (links, search, jump, the settings' core) and sfpages open so; a merged
-     page does too. The phone's and the desk's own pages still push until they merge.
-   - A chat opened on the wide frame (`open_chat_beside`, from a list's row, a search, ⌘K, a link) is the page pane's
-     in place of what was there, never over it; from another place the chats come first; the chat open already,
-     nothing. On the tape whatever is opened to be shown in the page brings the page over (sfdesk's `show_page`, also
-     the chat open already, chosen again), and so does a row of a sidebar's list that shows its page itself; opened
-     from the page or its side panel in use, it goes over the page as on a phone (`page_goes_on`, `Nav::push_over`:
-     the pane's stack slides it in, back takes it off), chosen from the sidebar in its place.
-   - A place gone to is sfbase's `go_place`, for the bottom bar and the rail alike.
-   - Back is sfbase's `back_step` / `go_back` (`Shell`'s `back`), by the tiers' table: Small (sfapp's `back_where`)
-     a page popped, a place's top page back to the chats; Medium and Large sfdesk's `wide_back` (Large: none from the
-     new chat beside the chats alone, the page there never empty; Medium: another place's list back to the chats', as
-     Small's). Both frames take the system's back, the back key and ⌘[ through it; the Small stack's swipe is the
-     stack's own and pops as it does, and on the tape the panel back brings over follows the system's back gesture
-     as it goes (`Ctx::follow_back`, sfdesk's `tape_back`).
-     A page's own back (its bar's) is `go_back`; its 关闭 or 取消 (a screen, the reader, the player, a new chat, a
-     chat archived) is `close_page`, the page taken off where it lies. What still pops: the shell's own ways to the
-     root and the frames' (nav_home, desk_home, the rail's), and the routers that open a page where it goes.
-4. **The pages merge, by area, in parallel,** once 2 has landed:
-   - the settings and the places;
-   - the files and the viewer;
-   - the chat: the page, the message list, the composer, the side panel, the history, 奏;
-   - the lists and the way in: the chats' list, search and ⌘K, a new chat, sign-in, the landing, the places'
-     chooser.
-     - Done: the chats' lists (sfpages' `sidebar.mbt`, `chat_row.mbt`, `chat_mark.mbt`, `row_picture.mbt`,
-       `changelog.mbt`): one track of 全部, 我参与的, 监控中 and its rows in every tier, a finger's rows the phone's and a
-       mouse's the web's desktop's; the frame says what is over them and at their foot and what it adds to them
-       (`ListsFrame`: the phone's search field, the update's news and what is left up long, the desk's 奏 and 已归档). The filter's menu
-       is one (`filter_menu`), each bar's button opening it. The bars over the lists (Home's top bar, the sidebar's
-       band) are left for the places' chooser and the shell.
-     - Done: the page of a device waiting in the workspace's lock (sfpages' `lock_wait.mbt`, `pair_steps` also
-       设置 › 安全's): the web's mobile screen with touch, its desktop page with keyboard and mouse; the shell puts it in
-       the page's place (laid out Small under Home's bar, over the navigation bar).
+Before it (done): the screen and the input are read once (`@sf.layout`, `@sf.native_input()`; `wide_on` and the
+viewer's `narrow` gone, `@settings.wide` left to the settings' merge), the presenters are the library's and the sheet
+hosts and the desk's dialogs moved onto them, and a page opens by saying what (`@sfbase.open_page`,
+`@sfbase.open_detail`, `go_place`, `go_back`, `close_page`; the shell's `open_where` / `detail_where` and its back by
+the tiers' table). What still pops: the shell's own ways to the root and the frames' (nav_home, desk_home, the
+rail's), and the routers that open a page where it goes. Merged into `sfpages` so far: the chats' lists (one track of
+全部, 我参与的, 监控中 in every tier, `ListsFrame`), the device waiting in the workspace's lock, the composer, 接力.
 
-   Each merged page is drawn in all three tiers with both inputs and tested so, its old copies are deleted, and its
-   films (old and new) are made per tier.
-5. **The names and the fence:** `sfpages` and `sfshell` take the code, `sfapp` and `sfdesk` are gone, and detlint's rules
-   are in.
+Five steps, each one PR or a few. What changes nothing on screen merges once green; what changes something is
+shown before and after, a batch at a time.
+
+1. **The shell apart, `sfshell`.** The shell and the pages call each other today, so this goes in two halves:
+   - **1a, the pages' ways into the shell cut,** nothing on screen changed, one kind a PR:
+     - Done: the settings' pages' frame (sfdesk's `page_look.mbt`): they call the library's `@sf.page` itself, which
+       takes what its frame gives it (`PageFrame`), says a place's top page's actions to the bar over it
+       (`@sf.named_actions`) and, in a panel of its own on the tape, its title, back and actions to the shell's bar
+       there (`@sf.pane_bar`); what back says is sfbase's `back_label`. The pieces of one arrangement those pages still
+       draw (`narrow_*`, `desk_*`) wait in `settings_page.mbt` for the settings' merge (step 3).
+     - The sidebars' rows (`nav_row`, `band_row`) into the library, one with `@sf.list_row` where they are the same.
+     - The files' way and tabs (`way.mbt`, `tabs.mbt`) and the chat's side panel (`panel.mbt`) into `sfpages`.
+     - What pages read of the shell: `nav_foot`, `status_top` from `@ui.system_bars()`; `toast` the library's
+       (`sf/toast.mbt`); `settings_core` into sfbase; `show_page`, `rail_go` through `open_page`, `go_place`.
+   - **1b, the shell moved** as it is into `sfshell`, its `view` the main's; `tier-outside-shell` in, its bars as they
+     are then, only falling. The tape's files (`frame`, `chats`, `brand`) in one PR, merged the day it is made.
+2. **The pages of one copy moved** into `sfpages` by area (the screen and the player; the settings' pages only the
+   desk has; the rest), what they read of the tier handed to the library or the shell as they go.
+3. **The pages of two copies merged,** an area a PR, as the pages above are (what the page is for, said first; drawn
+   and tested in the three tiers with both inputs; both old copies deleted): the settings and the places, the files and
+   the viewer, the history and 奏, a new chat, the chat (the page, the message list, the side panel) last. Before each,
+   what each copy has is listed, so nothing is lost.
+4. **The tests and fixtures follow the code:** a page's into `sfpages`, the shell's into `sfshell`; sfapp's tests by
+   what they test (`open_fixture_over` with them).
+5. **Closed:** `sfapp` and `sfdesk` deleted, `page-shell-import` and `tier-outside-shell` at 0, `page-screen` 0 in
+   `sfpages`.

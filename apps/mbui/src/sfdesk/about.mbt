@@ -54,7 +54,7 @@ fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       })
     })
   })
-  look_page(c, core, frame, "about", @sf.t("web-pages.settings.nav.about"), blocks)
+  @sf.page(c, on_back=core.pop, frame~, "about", @sf.t("web-pages.settings.nav.about"), blocks)
 }
 
 ///|
@@ -196,7 +196,7 @@ fn changelog_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       }
     }
   }
-  look_page(c, core, frame, "changelog/" + at.to_string(),
+  @sf.page(c, on_back=core.pop, frame~, "changelog/" + at.to_string(),
     @sf.t("web-pages.settings.nav.changelog"),
     lead=if has(v, "build") && !(field(v, "build") is Some(Null)) {
       @sf.t("web-pages.changelog.build", args=[("build", count(v, "build").to_string())])
