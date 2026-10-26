@@ -181,7 +181,7 @@ pub fn recent_adding(c : @ui.Ctx, add : (@ui.Pick) -> Unit) -> Bool {
   let words = @sf.t("web-mobile.files.addCount", args=[("n", n.to_string())])
   let corner = attach_block_corner()
   c.box(style=recent_add_row.then(@ui.style(pb=@sf.room_of(attach_foot()))), fn() {
-    let b = c.box(style=recent_add.then(@ui.style(radius=Exact(corner))), id~, fn() {
+    let b = c.box(style=recent_add.then(@ui.style(radius=attach_block_radius())), id~, fn() {
       c.text(words, style=recent_add_words) |> ignore
       @motion.ripple(c, id, corner)
     })
@@ -270,13 +270,13 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
   c.drag_area(id, axis=Horizontal, w=Fill(1.0), fn() {
     c.box(style=recent_strip_row.then(@ui.style(pl=@sf.room_of(side), pr=@sf.room_of(side), pt=@sf.room_of(top))), fn() {
       c.box(style=recent_tiles, tx=off, fn() {
-        recent_tile(c, corner, fn() { @sf.icon(c, "camera", size=24.0, color=t.p.text) |> ignore })
+        recent_tile(c, fn() { @sf.icon(c, "camera", size=24.0, color=t.p.text) |> ignore })
         for p in photos {
           let n = match recent.chosen.search(p.src) {
             Some(k) => k + 1
             None => 0
           }
-          recent_tile(c, corner, fn() {
+          recent_tile(c, fn() {
             c.image(p.src, w=Px(recent_tile_w), h=Px(recent_tile_h), radius=corner, fit=FitCover, bg=0L) |> ignore
             c.layer(fn() {
               c.box(style=recent_marks.then(@ui.style(p=@sf.room_of(recent_mark_in(corner)))), fn() {
@@ -305,7 +305,7 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
         }
         match ask {
           Some(words) =>
-            recent_tile(c, corner, fn() {
+            recent_tile(c, fn() {
               c.box(style=recent_ask, fn() {
                 @sf.icon(c, "photo", size=22.0, color=t.p.muted) |> ignore
                 c.text(words, style=recent_ask_words) |> ignore
@@ -342,7 +342,7 @@ pub fn attach_foot() -> Double {
 ///|
 /// How far in the strip's tiles stand from the panel's sides and under its top: in a sheet 12 and 4 (Attach.kt
 /// RecentPhotos' contentPadding); in a small panel beside ＋, at its padding, as a menu's rows (the first tile in its
-/// corner, concentric with it: recent_corner).
+/// corner, concentric with it: attach_block_corner).
 fn recent_in() -> (Double, Double) {
   if @sf.in_small_panel() {
     (@sf.panel_pad, 0.0)
@@ -359,6 +359,16 @@ pub fn attach_block_corner() -> Double {
     @sf.small_panel_inner(@sf.r_menu)
   } else {
     @sf.row_corner
+  }
+}
+
+///|
+/// attach_block_corner as a style's: a small panel's panel_in, else a block's row_radius.
+pub fn attach_block_radius() -> @ui.Radius {
+  if @sf.in_small_panel() {
+    @sf.panel_in
+  } else {
+    @sf.row_radius
   }
 }
 
@@ -440,9 +450,9 @@ let recent_add_h : Double = 70.0
 let recent_add_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=OnPrimary, wrap=false)
 
 ///|
-/// A tile of the strip (92 × 122, the chip's grey under it), `corner` round (recent_corner).
-fn recent_tile(c : @ui.Ctx, corner : Double, body : () -> Unit) -> Unit {
-  c.box(style=recent_tile_box.then(@ui.style(radius=Exact(corner))), body) |> ignore
+/// A tile of the strip (92 × 122, the chip's grey under it), as round as attach_block_radius.
+fn recent_tile(c : @ui.Ctx, body : () -> Unit) -> Unit {
+  c.box(style=recent_tile_box.then(@ui.style(radius=attach_block_radius())), body) |> ignore
 }
 
 ///|

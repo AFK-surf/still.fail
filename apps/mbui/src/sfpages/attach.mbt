@@ -76,7 +76,7 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
       (station, @sf.t("web-pages.chat.files"), "server"),
     ] {
       let (id, label, icon) = item
-      c.box(style=attach_tile.then(@ui.style(radius=Exact(corner))), id~, fn() {
+      c.box(style=attach_tile.then(@ui.style(radius=attach_block_radius())), id~, fn() {
         @sf.icon(c, icon, size=attach_icon, color=p.text) |> ignore
         c.text(label, style=attach_words) |> ignore
         // (Attach.kt: clip(Smooth(14)).clickable; the ladder's block corner here, or a small panel's: attach_block_corner)
