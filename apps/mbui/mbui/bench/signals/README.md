@@ -1,4 +1,4 @@
-# bench/signals: mbui's signals against JavaScript's
+# bench/signals: mbui's signals against JavaScript's, and in still.fail's own use
 
 [js-reactivity-benchmark](https://github.com/transitive-bullshit/js-reactivity-benchmark) at 2c273f1 (2026-09-19:
 alien-signals 3.2.1, Preact Signals 1.14.4, Vue 3.5.43, Solid 1.9.15, Angular 22.1.7, Svelte 5.57 and nine more,
@@ -45,3 +45,32 @@ Before the port kept a node as one object, its stacks as arrays and its reads' c
 "Under reference counting"), native was 1.23× (create 1.83×). The machine's other work moves a run's JS engines by
 up to a third (alien-signals' own times from run to run): compare runs by alien-signals' times before reading ratios.
 What is left on kairo is mostly its numbers: a computed of a Double boxes its value in an Option each time it changes.
+
+## The app's own use: record.sh, replay.sh
+
+What still.fail's app does with the signals is not what the benchmark above does: no effects; each frame a few dozen
+to a hundred and thirty reads, nearly all of a value that did not change; one set (the frame); a computed run in
+some frames; parts kept on Medium read again for their part (`reading`) and invalidated. So the app's use is its own
+benchmark:
+
+```sh
+bench/signals/record.sh     # a Mac: the app filmed offscreen (src/sffilm) through scripted flows, every call into the
+                            # signals written down (record/trace.patch on a copy), a trace a flow in traces/
+bench/signals/replay.sh     # any machine: every trace done again on the signals as they are now, checked and timed
+```
+
+`replay` makes every signal and computed as the app did, in its order, and a computed's getter, run where the
+signals run it, does again what that run of the app's did; it stops where a computed runs a time more or less than it
+did in the app, so a change to the signals that changes what runs is caught too. Only the signals' own work is timed:
+the app's builds, layout and drawing are not in a trace. A flow whose script did not pass (files-browse,
+search-medium) is kept as far as it went: what the app did meanwhile is as real.
+
+2026-10-26, Studio (M2 Max), 18 flows, 7664 frames, phone, fold (Medium) and desktop windows:
+
+| | reads | runs | sets | µs |
+| --- | ---: | ---: | ---: | ---: |
+| a frame, on average | 93 | 0.4 | 1 | 0.47 |
+| the busiest flow's frame (fold-composer, tape-images) | 125 | 1 | 1.1 | 1.09 |
+
+A frame at 60 Hz has 16 667 µs: the signals take 0.003% of it, at most 0.007%. Make the signals faster for what this
+measures, not for the benchmark above; and a change that makes them slower here matters only if it shows in a frame.

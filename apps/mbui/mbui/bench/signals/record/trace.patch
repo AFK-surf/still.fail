@@ -1,0 +1,384 @@
+diff --git a/src/signals/moon.pkg b/src/signals/moon.pkg
+index e69de29bb..7934a0fb3 100644
+--- a/src/signals/moon.pkg
++++ b/src/signals/moon.pkg
+@@ -0,0 +1,3 @@
++options(
++  "native-stub": [ "trace.c" ],
++)
+diff --git a/src/signals/signals.mbt b/src/signals/signals.mbt
+index 65bd41fbf..e5cdf3cbc 100644
+--- a/src/signals/signals.mbt
++++ b/src/signals/signals.mbt
+@@ -175,12 +175,25 @@ pub fn active_sub() -> ReactiveNode? {
+ 
+ ///|
+ /// The node reading set; the one before.
+-pub fn set_active_sub(sub : ReactiveNode?) -> ReactiveNode? {
++fn set_active_sub_inner(sub : ReactiveNode?) -> ReactiveNode? {
+   let prev_sub = run.active_sub
+   run.active_sub = sub
+   prev_sub
+ }
+ 
++///|
++/// The node reading set; the one before (the app's: written down).
++pub fn set_active_sub(sub : ReactiveNode?) -> ReactiveNode? {
++  trace1(
++    "A",
++    match sub {
++      Some(n) => n.tid
++      None => -1
++    },
++  )
++  set_active_sub_inner(sub)
++}
++
+ ///|
+ pub fn batch_depth() -> Int {
+   run.batch_depth
+@@ -188,11 +201,13 @@ pub fn batch_depth() -> Int {
+ 
+ ///|
+ pub fn start_batch() -> Unit {
++  trace0("b")
+   run.batch_depth += 1
+ }
+ 
+ ///|
+ pub fn end_batch() -> Unit {
++  trace0("B")
+   run.batch_depth -= 1
+   if run.batch_depth == 0 {
+     flush()
+@@ -203,7 +218,7 @@ pub fn end_batch() -> Unit {
+ /// A signal holding `initial`.
+ pub fn[T] signal(initial : T, same? : (T, T) -> Bool) -> Signal[T] {
+   let state : SignalState[T] = { current: initial, pending: initial, same }
+-  Signal(
++  let s = Signal(
+     ReactiveNode::new(
+       MUTABLE,
+       SignalNode,
+@@ -211,13 +226,15 @@ pub fn[T] signal(initial : T, same? : (T, T) -> Bool) -> Signal[T] {
+       update=signal_update(state),
+     ),
+   )
++  trace1("S", s.0.tid)
++  s
+ }
+ 
+ ///|
+ /// A computed: `getter` worked out (given what it made last) as it is read after what it read changed.
+ pub fn[T] computed(getter : (T?) -> T, same? : (T, T) -> Bool) -> Computed[T] {
+   let state : ComputedState[T] = { value: None, getter, same }
+-  Computed(
++  let c = Computed(
+     ReactiveNode::new(
+       NONE,
+       ComputedNode,
+@@ -225,11 +242,14 @@ pub fn[T] computed(getter : (T?) -> T, same? : (T, T) -> Bool) -> Computed[T] {
+       update=computed_update(state),
+     ),
+   )
++  trace1("C", c.0.tid)
++  c
+ }
+ 
+ ///|
+ /// An effect: `fn` run now, and again as what it read changes; the function that stops it.
+ pub fn effect(f : () -> Unit) -> () -> Unit {
++  trace0("X")
+   effect_of(fn() {
+     f()
+     None
+@@ -239,13 +259,14 @@ pub fn effect(f : () -> Unit) -> () -> Unit {
+ ///|
+ /// An effect whose run returns its cleanup, run before it runs again and as it is stopped.
+ pub fn effect_cleanup(f : () -> (() -> Unit)) -> () -> Unit {
++  trace0("X")
+   effect_of(fn() { Some(f()) })
+ }
+ 
+ ///|
+ fn effect_of(f : () -> (() -> Unit)?) -> () -> Unit {
+   let e = ReactiveNode::new(WATCHING | RECURSED_CHECK, EffectNode, own=coerce(f))
+-  let prev_sub = set_active_sub(Some(e))
++  let prev_sub = set_active_sub_inner(Some(e))
+   match prev_sub {
+     Some(p) => {
+       link(e, p, 0)
+@@ -264,8 +285,9 @@ fn effect_of(f : () -> (() -> Unit)?) -> () -> Unit {
+ ///|
+ /// A scope: what `fn` makes (effects) stopped together by the function returned.
+ pub fn effect_scope(f : () -> Unit) -> () -> Unit {
++  trace0("X")
+   let e = ReactiveNode::new(MUTABLE, ScopeNode)
+-  let prev_sub = set_active_sub(Some(e))
++  let prev_sub = set_active_sub_inner(Some(e))
+   match prev_sub {
+     Some(p) => {
+       link(e, p, 0)
+@@ -281,8 +303,9 @@ pub fn effect_scope(f : () -> Unit) -> () -> Unit {
+ ///|
+ /// What `fn` reads told it changed (what follows it worked out again), whether or not it did.
+ pub fn trigger(f : () -> Unit) -> Unit {
++  trace0("X")
+   let sub = ReactiveNode::new(WATCHING | RECURSED_CHECK, TriggerNode)
+-  let prev_sub = set_active_sub(Some(sub))
++  let prev_sub = set_active_sub_inner(Some(sub))
+   run.batch_depth += 1
+   f()
+   run.active_sub = prev_sub
+@@ -329,18 +352,21 @@ fn[T] update_computed(c : ReactiveNode, state : ComputedState[T]) -> Bool {
+   }
+   c.deps_tail = None
+   c.flags = MUTABLE | RECURSED_CHECK
+-  let prev_sub = set_active_sub(Some(c))
++  let prev_sub = set_active_sub_inner(Some(c))
+   run.cycle += 1
+   let old_value = state.value
++  trace1("[", c.tid)
+   let value = (state.getter)(old_value)
+   state.value = Some(value)
+   run.active_sub = prev_sub
+   c.flags = c.flags & RECURSED_CHECK.lnot()
+   purge_deps(c)
+-  match old_value {
++  let changed = match old_value {
+     Some(old) => !same_as(state.same, old, value)
+     None => true
+   }
++  trace2("]", c.tid, if changed { 1 } else { 0 })
++  changed
+ }
+ 
+ ///|
+@@ -378,7 +404,7 @@ fn run_effect(e : ReactiveNode) -> Unit {
+     }
+     e.deps_tail = None
+     e.flags = WATCHING | RECURSED_CHECK
+-    let prev_sub = set_active_sub(Some(e))
++    let prev_sub = set_active_sub_inner(Some(e))
+     run.cycle += 1
+     run.run_depth += 1
+     if e.kind is EffectNode {
+@@ -410,6 +436,7 @@ fn flush() -> Unit {
+ /// The computed's value, worked out again first if what it read changed since (computedOper).
+ pub fn[T] Computed::get(self : Computed[T]) -> T {
+   let node = self.0
++  trace1("G", node.tid)
+   let state : ComputedState[T] = coerce(node.own)
+   let flags = node.flags
+   let stale = if (flags & DIRTY) != 0 {
+@@ -433,8 +460,10 @@ pub fn[T] Computed::get(self : Computed[T]) -> T {
+     }
+   } else if flags == 0 {
+     node.flags = MUTABLE | RECURSED_CHECK
+-    let prev_sub = set_active_sub(Some(node))
++    let prev_sub = set_active_sub_inner(Some(node))
++    trace1("[", node.tid)
+     state.value = Some((state.getter)(None))
++    trace2("]", node.tid, 1)
+     run.active_sub = prev_sub
+     node.flags = node.flags & RECURSED_CHECK.lnot()
+   }
+@@ -446,6 +475,7 @@ pub fn[T] Computed::get(self : Computed[T]) -> T {
+ /// The signal's value (signalOper read): what was set, once it is read after.
+ pub fn[T] Signal::get(self : Signal[T]) -> T {
+   let node = self.0
++  trace1("G", node.tid)
+   let state : SignalState[T] = coerce(node.own)
+   if (node.flags & DIRTY) != 0 {
+     if update_signal(node, state) {
+@@ -464,6 +494,7 @@ pub fn[T] Signal::get(self : Signal[T]) -> T {
+ pub fn[T] Signal::set(self : Signal[T], value : T) -> Unit {
+   let state : SignalState[T] = coerce(self.0.own)
+   let changed = !same_as(state.same, state.pending, value)
++  trace2("T", self.0.tid, if changed { 1 } else { 0 })
+   state.pending = value
+   if changed {
+     let node = self.0
+@@ -573,6 +604,7 @@ fn purge_deps(sub : ReactiveNode) -> Unit {
+ ///|
+ /// What the computed made last, not worked out again (none before it was first read).
+ pub fn[T] Computed::peek(self : Computed[T]) -> T? {
++  trace1("P", self.0.tid)
+   let state : ComputedState[T] = coerce(self.0.own)
+   state.value
+ }
+@@ -581,26 +613,31 @@ pub fn[T] Computed::peek(self : Computed[T]) -> T? {
+ /// The computed let go of what it read (as unwatched does with a computed nothing reads any more): what it read no
+ /// longer holds it, and it is worked out anew if it is read again.
+ pub fn[T] Computed::dispose(self : Computed[T]) -> Unit {
++  trace1("D", self.0.tid)
+   unwatched(self.0)
+ }
+ 
+ ///|
+ /// Whether anything reads the signal (a computed, an effect).
+ pub fn[T] Signal::watched(self : Signal[T]) -> Bool {
++  trace1("W", self.0.tid)
+   self.0.subs is Some(_)
+ }
+ 
+ ///|
+ /// Whether anything reads the computed (a computed, an effect): what follows it keeps it.
+ pub fn[T] Computed::watched(self : Computed[T]) -> Bool {
++  trace1("W", self.0.tid)
+   self.0.subs is Some(_)
+ }
+ 
+ ///|
+ /// What `f` makes, nothing it reads followed by what is reading now.
+ pub fn[T] untracked(f : () -> T) -> T {
+-  let prev_sub = set_active_sub(None)
++  trace0("U")
++  let prev_sub = set_active_sub_inner(None)
+   let v = f()
++  trace0("u")
+   run.active_sub = prev_sub
+   v
+ }
+@@ -610,6 +647,7 @@ pub fn[T] untracked(f : () -> T) -> T {
+ /// for one built again for what is no signal (a part kept, Ctx::kept_part: its key, the pointer over it).
+ pub fn[T] Computed::invalidate(self : Computed[T]) -> Unit {
+   let node = self.0
++  trace1("I", node.tid)
+   node.flags = node.flags | DIRTY
+   match node.subs {
+     Some(subs) => {
+@@ -627,8 +665,10 @@ pub fn[T] Computed::invalidate(self : Computed[T]) -> Unit {
+ /// is built for it after it ran (a list's rows, laid out after the part they are in was built). Let go as the
+ /// computed's run reads anew, as what it read is.
+ pub fn[T, U] Computed::reading(self : Computed[T], f : () -> U) -> U {
+-  let prev_sub = set_active_sub(Some(self.0))
++  trace1("(", self.0.tid)
++  let prev_sub = set_active_sub_inner(Some(self.0))
+   let v = f()
++  trace0(")")
+   run.active_sub = prev_sub
+   v
+ }
+@@ -637,6 +677,7 @@ pub fn[T, U] Computed::reading(self : Computed[T], f : () -> U) -> U {
+ /// What the computed read read by `to` as well, as though `to`'s run had read it after what it read (as
+ /// Computed::reading: a row's build, run by a computed of its own, read for the part it is in).
+ pub fn[T, U] Computed::lend(self : Computed[T], to : Computed[U]) -> Unit {
++  trace2("L", self.0.tid, to.0.tid)
+   let mut l = self.0.deps
+   while true {
+     match l {
+diff --git a/src/signals/system.mbt b/src/signals/system.mbt
+index 651d760d6..a0aaba616 100644
+--- a/src/signals/system.mbt
++++ b/src/signals/system.mbt
+@@ -22,6 +22,8 @@ pub struct ReactiveNode {
+   priv update : ((ReactiveNode) -> Bool)?
+   /// an effect's cleanup, as its fn returned it (EffectNode.cleanup)
+   priv mut cleanup : (() -> Unit)?
++  /// (bench/signals/record: the node's number in the trace)
++  priv tid : Int
+ }
+ 
+ ///|
+@@ -98,7 +100,18 @@ fn ReactiveNode::new(
+   own? : Own = no_own,
+   update? : (ReactiveNode) -> Bool,
+ ) -> ReactiveNode {
+-  { deps: None, deps_tail: None, subs: None, subs_tail: None, flags, kind, own, update, cleanup: None }
++  {
++    deps: None,
++    deps_tail: None,
++    subs: None,
++    subs_tail: None,
++    flags,
++    kind,
++    own,
++    update,
++    cleanup: None,
++    tid: trace_new_id(),
++  }
+ }
+ 
+ ///|
+diff --git a/src/signals/trace.c b/src/signals/trace.c
+new file mode 100644
+index 000000000..890440940
+--- /dev/null
++++ b/src/signals/trace.c
+@@ -0,0 +1,20 @@
++// bench/signals/record: the trace's lines appended to MBUI_SIGNALS_TRACE (none when it is not set).
++#include <stdio.h>
++#include <stdlib.h>
++#include "moonbit.h"
++
++static FILE *trace_file = NULL;
++static int trace_opened = 0;
++
++void mbui_signals_trace_line(moonbit_string_t s) {
++  if (!trace_opened) {
++    trace_opened = 1;
++    const char *p = getenv("MBUI_SIGNALS_TRACE");
++    if (p && *p) trace_file = fopen(p, "w");
++  }
++  if (!trace_file) return;
++  int32_t n = Moonbit_array_length(s);
++  for (int32_t i = 0; i < n; i++) fputc((char)s[i], trace_file);
++  fputc('\n', trace_file);
++  if (n == 1 && s[0] == 'F') fflush(trace_file);
++}
+diff --git a/src/signals/trace.mbt b/src/signals/trace.mbt
+new file mode 100644
+index 000000000..da7b9eff3
+--- /dev/null
++++ b/src/signals/trace.mbt
+@@ -0,0 +1,37 @@
++// bench/signals/record: every call of the app's into the signals written down, a line each, to the file
++// MBUI_SIGNALS_TRACE names (trace.c), for bench/signals' replay. Never in still.fail's own build: record.sh applies it
++// to a copy.
++
++///|
++#borrow(line)
++extern "C" fn trace_line(line : String) -> Unit = "mbui_signals_trace_line"
++
++///|
++let trace_ids : Ref[Int] = { val: 0 }
++
++///|
++fn trace_new_id() -> Int {
++  trace_ids.val += 1
++  trace_ids.val
++}
++
++///|
++fn trace0(op : String) -> Unit {
++  trace_line(op)
++}
++
++///|
++fn trace1(op : String, a : Int) -> Unit {
++  trace_line("\{op} \{a}")
++}
++
++///|
++fn trace2(op : String, a : Int, b : Int) -> Unit {
++  trace_line("\{op} \{a} \{b}")
++}
++
++///|
++/// A frame begins (kept_part.mbt's clock_frame_start).
++pub fn trace_frame() -> Unit {
++  trace_line("F")
++}
+diff --git a/src/ui/kept_part.mbt b/src/ui/kept_part.mbt
+index 12de968d0..a832309fe 100644
+--- a/src/ui/kept_part.mbt
++++ b/src/ui/kept_part.mbt
+@@ -603,6 +603,7 @@ pub fn Ctx::shows_until(self : Ctx, t : Double) -> Unit {
+ ///|
+ /// A frame begins (parts_frame_start): what read the frame told it changed, and what read a moment come.
+ fn clock_frame_start(c : Ctx) -> Unit {
++  @signals.trace_frame()
+   @signals.start_batch()
+   kept_clock.frame.set(c.frame_no)
+   let dues = kept_clock.dues
