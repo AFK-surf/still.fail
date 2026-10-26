@@ -78,3 +78,23 @@ test "a node's number is kept from frame to frame, and words of the same parent 
   t.draw()
   assert_eq(a11y_line(t.a11y_said(), "Text", "Hello there").unwrap()[0], first)
 }
+
+///|
+test "a screen reader writing in a field: told it takes words, they take the place of what it held, as typed" {
+  let field = @ui.Field::new(text="draft")
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() { c.editor("note", placeholder="Note", field~) |> ignore }) |> ignore
+  })
+  t.set_a11y(true)
+  t.draw()
+  let line = a11y_line(t.a11y_said(), "TextField", "Note").unwrap()
+  assert_eq(line[10], "draft")
+  assert_eq(line[15], "t")
+  t.post(
+    @hostapi.a11y_channel,
+    "{\"id\":\{line[2]},\"action\":\"set_text\",\"text\":\"from the reader\"}",
+  )
+  t.draw()
+  assert_eq(field.text(), "from the reader")
+  assert_eq(a11y_line(t.a11y_said(), "TextField", "Note").unwrap()[10], "from the reader")
+}

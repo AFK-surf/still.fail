@@ -1,7 +1,7 @@
 # The accessibility's contract on Windows (scripts/host_contract.sh windows a11y): kitdemo's MBUI_A11YCHECK run asked
 # for its widgets by UI Automation's client, as a reader asks: found by their names once the app tells them (its
-# window's tree said changed: UI Automation's event, no time guessed), each said; the checkbox's state read, the button
-# invoked; then the app's own end, which the invoke brings. Says what it found ("A11YCHECK ..."); exit 1 if one is not.
+# window's tree said changed: UI Automation's event, no time guessed), each said; the checkbox's state read, words put
+# in the field, the button invoked; then the app's own end, which the invoke brings. Says what it found ("A11YCHECK ..."); exit 1 if one is not.
 param([int]$AppId, [int]$Seconds = 60)
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 Add-Type -ReferencedAssemblies UIAutomationClient, UIAutomationTypes, WindowsBase -TypeDefinition @'
@@ -28,6 +28,11 @@ public static class A11yCheck {
     if (check == null) { Console.WriteLine("A11YCHECK no checkbox"); return 1; }
     var toggle = (TogglePattern)check.GetCurrentPattern(TogglePattern.Pattern);
     Console.WriteLine("A11YCHECK check " + check.Current.ControlType.ProgrammaticName + " " + toggle.Current.ToggleState);
+    var field = root.FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.NameProperty, "A11YCHECK field"));
+    if (field == null) { Console.WriteLine("A11YCHECK no field"); return 1; }
+    var value = (ValuePattern)field.GetCurrentPattern(ValuePattern.Pattern);
+    Console.WriteLine("A11YCHECK field " + field.Current.ControlType.ProgrammaticName + " read-only " + value.Current.IsReadOnly);
+    value.SetValue("written by a reader");
     ((InvokePattern)button.GetCurrentPattern(InvokePattern.Pattern)).Invoke();
     Console.WriteLine("A11YCHECK invoked");
     return 0;

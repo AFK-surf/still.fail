@@ -209,6 +209,10 @@ final class A11y extends AccessibilityNodeProvider {
         if (has(n.actions, 'c')) info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_COLLAPSE);
         if (has(n.actions, 'x')) info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_DISMISS);
         if (has(n.actions, 'f')) info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_FOCUS);
+        if (has(n.actions, 't')) {
+            info.setEditable(true);
+            info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_TEXT);
+        }
         info.setAccessibilityFocused(focused == id);
         info.addAction(focused == id ? AccessibilityNodeInfo.AccessibilityAction.ACTION_CLEAR_ACCESSIBILITY_FOCUS
                 : AccessibilityNodeInfo.AccessibilityAction.ACTION_ACCESSIBILITY_FOCUS);
@@ -254,6 +258,15 @@ final class A11y extends AccessibilityNodeProvider {
                 return ask(n, "dismiss", 'x');
             case AccessibilityNodeInfo.ACTION_FOCUS:
                 return ask(n, "focus", 'f');
+            case AccessibilityNodeInfo.ACTION_SET_TEXT: {
+                // words put in the field in place of what it held (the app's next frame, as typed)
+                CharSequence t = arguments == null ? null
+                        : arguments.getCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE);
+                if (!has(n.actions, 't') || n.widget == 0) return false;
+                Native.post("a11y", "{\"id\":" + n.widget + ",\"action\":\"set_text\",\"text\":"
+                        + org.json.JSONObject.quote(t == null ? "" : t.toString()) + "}");
+                return true;
+            }
             default:
                 return false;
         }

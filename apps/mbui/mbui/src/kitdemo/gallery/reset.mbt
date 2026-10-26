@@ -28,6 +28,7 @@ fn reset() -> Unit {
   secret_check_put.val = false
   a11y_check_box.val = Off
   font_scale_said.val = false
+  a11y_check_field.set("")
   cb.val = On
   size.val = "m"
   bold.val = true

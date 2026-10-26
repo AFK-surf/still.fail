@@ -13,7 +13,8 @@
 // `parent` its parent's (0: the view), `widget` the id its actions are asked of (0 none), `role` the Role's name;
 // `flags` letters: c checkable (C checked, M mixed), e expandable (E expanded), s selected, p pressable (P pressed), d
 // disabled, f has the keyboard's focus, m modal; its rect in points; its range (a slider's, a progress bar's) or three
-// empty fields; `actions` letters: a activate, i increment, d decrement, e expand, c collapse, x dismiss, f focus.
+// empty fields; `actions` letters: a activate, i increment, d decrement, e expand, c collapse, x dismiss, f focus, t
+// words put in it (set text: `{"action": "set_text", "text": words}` asked).
 
 ///|
 let a11y_sep : String = "\u{1F}"
@@ -127,6 +128,7 @@ fn a11y_actions(actions : Array[Action]) -> String {
         Collapse => "c"
         Dismiss => "x"
         Focus => "f"
+        SetText(_) => "t"
       },
     )
   }
@@ -186,6 +188,11 @@ fn a11y_took(json : String) -> Unit {
     "collapse" => Some(Collapse)
     "dismiss" => Some(Dismiss)
     "focus" => Some(Focus)
+    "set_text" =>
+      match m.get("text") {
+        Some(String(t)) => Some(SetText(t))
+        _ => None
+      }
     _ => None
   }
   match action {
