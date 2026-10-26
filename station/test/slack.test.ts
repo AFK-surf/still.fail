@@ -11,7 +11,7 @@ import { TestClock } from "effect/testing";
 import type { ChatEvent } from "../src/sessions/chat.ts";
 import { toolStatus } from "../src/sessions/chat.ts";
 import { answerOf, answeredBlocks, questionBlocks } from "../src/slack/cards.ts";
-import { NameBook } from "../src/slack/names.ts";
+import { NameBook } from "../src/connects/names.ts";
 import { ThreadStatus } from "../src/slack/status.ts";
 import { SlackSurface, personOf, toEvent, verifySlackTokens } from "../src/slack/surface.ts";
 import { SlackClient } from "../src/slack/web.ts";

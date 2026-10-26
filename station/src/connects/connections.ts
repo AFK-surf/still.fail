@@ -1,50 +1,29 @@
-// Keeps one chat connection per enabled connect with both tokens (connections.rs), following the config: a new or
-// re-credentialed connect is (re)connected, a removed or disabled one disconnected, the rest left alone. Rapid edits
-// apply in order.
+// A connect's live link to its chat platform (Slack's, Feishu's: config.json's `connects`), and one kept per enabled
+// connect that has what it connects with (connections.rs), following the config: a new or re-credentialed connect is
+// (re)connected, a removed or disabled one disconnected, the rest left alone. Rapid edits apply in order.
 import { log } from "../ops/log.ts";
 import type { ChatEvent, ChatSurface, Handler } from "../sessions/chat.ts";
-import { type SlackIdentity, type SocketStatus, shownIdentity } from "./surface.ts";
 
-type Json = any;
-
-/// A connect as config.json has it, as far as its connection goes (config.rs `Connect`, `SlackTokens`).
-export type SlackConnect = {
-  id: string;
-  enabled: boolean;
-  appToken: string;
-  botToken: string;
-  appId: string | null;
-  /// Its Slack workspace, as last seen.
-  team: { id: string; name: string } | null;
-  botName: string | null;
+/// Who a connect's bot is and where, as its platform says: its workspace (Slack's team, Feishu's company), its user
+/// there, the name and picture people see.
+export type BotIdentity = {
+  team: string;
+  teamId: string;
+  /// The workspace's address, e.g. https://acme.slack.com/ ("" where the platform has none).
+  url: string;
+  botUserId: string;
+  botName: string;
+  /// Its picture, as the platform shows it; null when it does not say.
   botImage: string | null;
-  /// The still.fail workspace it was added in (docs/multi-workspace.md); null: the station's home one.
-  workspace?: string | null;
+  /// Slack's bot id (B…), which its own messages carry besides its user; not for the pages.
+  botId: string;
 };
 
-/// What a connect is called: its bot's name in its Slack workspace, else its id.
-export const connectName = (c: SlackConnect) => c.botName ?? c.id;
+/// An identity as the pages are given it (without its bot id).
+export const shownIdentity = (i: BotIdentity) => ({ team: i.team, teamId: i.teamId, url: i.url, botUserId: i.botUserId, botName: i.botName, botImage: i.botImage });
 
-const nonEmpty = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
-
-/// config.json's Slack connects (those of no other kind), as their connections read them.
-export function slackConnects(raw: Json): SlackConnect[] {
-  return (Array.isArray(raw?.connects) ? raw.connects : []).filter((c: Json) => c?.kind === undefined || c?.kind === null || c?.kind === "slack").map((c: Json): SlackConnect => {
-    const slack = c?.slack ?? {};
-    const team = slack.team;
-    return {
-      id: String(c?.id ?? ""),
-      enabled: c?.enabled !== false,
-      appToken: typeof slack.appToken === "string" ? slack.appToken : "",
-      botToken: typeof slack.botToken === "string" ? slack.botToken : "",
-      appId: nonEmpty(slack.appId),
-      team: team !== null && typeof team === "object" && nonEmpty(team.id) !== null ? { id: team.id, name: typeof team.name === "string" ? team.name : "" } : null,
-      botName: nonEmpty(slack.botName),
-      botImage: nonEmpty(slack.botImage),
-      workspace: nonEmpty(c?.workspace),
-    };
-  });
-}
+/// Whether the platform's socket is up, and the last connection error.
+export type SocketStatus = { connected: boolean; lastError: string | null };
 
 /// A connect's link to its platform, as the pages show it.
 export type ConnectState =
@@ -59,22 +38,21 @@ export interface Connection extends ChatSurface {
   start(handler: Handler): Promise<void>;
   stop(): Promise<void>;
   socket(): SocketStatus;
-  identity(): SlackIdentity | null;
+  identity(): BotIdentity | null;
   /// Hears whenever `socket` or `identity` changes; gives the function that stops it.
   onChange(listener: () => void): () => void;
-  /// Reads again who the bot is and where (its name changed in Slack, say); listeners hear of it.
+  /// Reads again who the bot is and where (its name changed on the platform, say); listeners hear of it.
   refreshIdentity(): Promise<void>;
 }
 
-export type Create<C = SlackConnect> = (connect: C) => Connection;
+export type Create<C> = (connect: C) => Connection;
 export type OnEvent = (connect: string, event: ChatEvent) => Promise<void>;
 
 /// What a connect connects with, as one string (null: it has nothing to connect with yet): a change connects it again.
 export type Credentials<C> = (connect: C) => string | null;
-const slackCredentials: Credentials<SlackConnect> = (c) => (c.appToken === "" || c.botToken === "" ? null : `${c.appToken}\n${c.botToken}`);
 
-/// Slack's connects by default; Feishu's (src/feishu) keep theirs the same way, with their own credentials.
-export class Connections<C extends { id: string; enabled: boolean } = SlackConnect> {
+/// The connects of one platform (`kind`: what the log calls them), each by what it connects with.
+export class Connections<C extends { id: string; enabled: boolean }> {
   /// Live connections by connect id; the hub reads it on every use.
   private chats = new Map<string, Connection>();
   private unlisten = new Map<string, () => void>();
@@ -87,7 +65,10 @@ export class Connections<C extends { id: string; enabled: boolean } = SlackConne
   private chain: Promise<void> = Promise.resolve();
   private listeners = new Set<() => void>();
 
-  constructor(create: Create<C>, onEvent: OnEvent, credentials: Credentials<C> = slackCredentials as unknown as Credentials<C>) {
+  private kind: string;
+
+  constructor(kind: string, create: Create<C>, onEvent: OnEvent, credentials: Credentials<C>) {
+    this.kind = kind;
     this.create = create;
     this.onEvent = onEvent;
     this.credentials = credentials;
@@ -112,12 +93,12 @@ export class Connections<C extends { id: string; enabled: boolean } = SlackConne
       try {
         listener();
       } catch (error) {
-        log.warn("slack", "a listener of the connects failed", { error: (error as Error).message });
+        log.warn(this.kind, "a listener of the connects failed", { error: (error as Error).message });
       }
     }
   }
 
-  /// Reads again who a connect's bot is (its name, its workspace), as Slack says now.
+  /// Reads again who a connect's bot is (its name, its workspace), as its platform says now.
   async refreshIdentity(id: string) {
     await this.chat(id)?.refreshIdentity();
   }
@@ -171,7 +152,7 @@ export class Connections<C extends { id: string; enabled: boolean } = SlackConne
     for (const [id, chat] of [...this.chats]) {
       const want = wanted.get(id);
       if (want && this.tokens.get(id) === this.credentials(want)) continue;
-      log.info("slack", "disconnecting", { connect: id });
+      log.info(this.kind, "disconnecting", { connect: id });
       this.chats.delete(id);
       this.tokens.delete(id);
       this.drop(id);
@@ -188,12 +169,12 @@ export class Connections<C extends { id: string; enabled: boolean } = SlackConne
         this.unlisten.set(connect.id, chat.onChange(() => this.changed()));
         const id = connect.id;
         await chat.start((event) => this.onEvent(id, event));
-        log.info("slack", "connected", { connect: connect.id, botUserId: chat.botUserId() });
+        log.info(this.kind, "connected", { connect: connect.id, botUserId: chat.botUserId() });
         this.chats.set(connect.id, chat);
         this.tokens.set(connect.id, this.credentials(connect)!);
       } catch (e) {
         const error = (e as Error).message;
-        log.error("slack", "failed to connect", { connect: connect.id, error });
+        log.error(this.kind, "failed to connect", { connect: connect.id, error });
         this.drop(connect.id);
         // Started this far: what it opened is closed again.
         await chat?.stop().catch(() => {});

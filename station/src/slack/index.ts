@@ -1,35 +1,57 @@
-// Slack on the station (server.rs's part of it, connections.rs, admin/slack.rs `remember_identities`): the connects'
-// connections as config.json and the station's workspace say, the names Slack gives people and channels (kept in
-// <data>/slack-names.json), and the app API with the configuration tokens in config.json.
-//
-// Connects connect while the station is in its workspace (`bound`) and follow config edits; out of it they disconnect.
-// Each connected connect's surface is the hub's (`chats`), and what Slack says reaches the hub through `receive`.
-import { join } from "node:path";
+// Slack on the station (server.rs's part of it, admin/slack.rs `remember_identities`): its connects as every
+// platform's are kept (connects/connects.ts: connected as config.json and the station's workspace say, the names Slack
+// gives people and channels in <data>/slack-names.json), and the app API with the configuration tokens in config.json.
 import type { Clock } from "effect";
-import type { ConfigFile } from "../ops/config.ts";
+import type { Connection } from "../connects/connections.ts";
+import { type ConnectsOptions, makeConnects } from "../connects/connects.ts";
+import type { NameBook } from "../connects/names.ts";
 import { log } from "../ops/log.ts";
-import type { ChatEvent, ChatSurface } from "../sessions/chat.ts";
-import type { Store } from "../store/store.ts";
 import { type ConfigToken, SlackApps, type SlackAppLinks, slackAppLinks, upsertToken } from "./apps.ts";
-import { type ConnectState, type Connection, Connections, type SlackConnect, slackConnects } from "./connections.ts";
-import { NameBook } from "./names.ts";
 import { SlackSurface } from "./surface.ts";
 import { SlackClient } from "./web.ts";
 
 type Json = any;
 
-export type SlackOptions = {
-  data: string;
-  store: Store;
-  config: ConfigFile;
-  /// Takes what a connect's Slack says (the hub's `receive`); resolves once it is kept, and only then is Slack
-  /// acknowledged.
-  receive: (connect: string, event: ChatEvent) => Promise<void>;
-  /// Whether the station is in its workspace: only then are connects connected.
-  bound: () => boolean;
-  /// Whether the station is in a connect's workspace (null: its home one) now: a joined workspace's connects
-  /// disconnect once it leaves that workspace (docs/multi-workspace.md). Absent: every one.
-  inWorkspace?: (workspace: string | null) => boolean;
+/// A connect as config.json has it, as far as its connection goes (config.rs `Connect`, `SlackTokens`).
+export type SlackConnect = {
+  id: string;
+  enabled: boolean;
+  appToken: string;
+  botToken: string;
+  appId: string | null;
+  /// Its Slack workspace, as last seen.
+  team: { id: string; name: string } | null;
+  botName: string | null;
+  botImage: string | null;
+  /// The still.fail workspace it was added in (docs/multi-workspace.md); null: the station's home one.
+  workspace?: string | null;
+};
+
+/// What a connect is called: its bot's name in its Slack workspace, else its id.
+export const connectName = (c: SlackConnect) => c.botName ?? c.id;
+
+const nonEmpty = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
+
+/// config.json's Slack connects (those of no other kind), as their connections read them.
+export function slackConnects(raw: Json): SlackConnect[] {
+  return (Array.isArray(raw?.connects) ? raw.connects : []).filter((c: Json) => c?.kind === undefined || c?.kind === null || c?.kind === "slack").map((c: Json): SlackConnect => {
+    const slack = c?.slack ?? {};
+    const team = slack.team;
+    return {
+      id: String(c?.id ?? ""),
+      enabled: c?.enabled !== false,
+      appToken: typeof slack.appToken === "string" ? slack.appToken : "",
+      botToken: typeof slack.botToken === "string" ? slack.botToken : "",
+      appId: nonEmpty(slack.appId),
+      team: team !== null && typeof team === "object" && nonEmpty(team.id) !== null ? { id: team.id, name: typeof team.name === "string" ? team.name : "" } : null,
+      botName: nonEmpty(slack.botName),
+      botImage: nonEmpty(slack.botImage),
+      workspace: nonEmpty(c?.workspace),
+    };
+  });
+}
+
+export type SlackOptions = ConnectsOptions & {
   /// Where Slack's Web API is (tests: a stand-in); default $STILLFAIL_SLACK_API, else Slack.
   client?: SlackClient;
   /// Socket Mode's ping and silence limits (tests make them short).
@@ -67,22 +89,31 @@ export function madeApps(raw: Json): SlackAppMade[] {
 export type SlackParts = ReturnType<typeof makeConnections>;
 
 export function makeConnections(options: SlackOptions) {
-  const { config, store } = options;
+  const { config } = options;
   const client = options.client ?? new SlackClient();
-  // Slack's names for people and channels, kept on disk; learning new ones refreshes what shows them.
-  // Saved before the pages are told: the readers read the names from the file.
-  const names = new NameBook(join(options.data, "slack-names.json"), { saveAfterMs: 200, learnAfterMs: 400 });
-  // (The sessions shown: an archived one's summary is read again as it is shown, names and all.)
-  names.onLearn(() => {
-    for (const session of store.liveSessions()) store.notify(session.key);
-  });
   const create =
     options.create ??
     ((c: SlackConnect, book: NameBook, web: SlackClient) =>
-      new SlackSurface({ appToken: c.appToken, botToken: c.botToken, client: web, book, pingMs: options.pingMs, staleMs: options.staleMs, clock: options.clock }));
-  const connections = new Connections((c) => create(c, names, client), options.receive);
-  const connects = () => slackConnects(config.raw());
-  const connect = (id: string) => connects().find((c) => c.id === id);
+      new SlackSurface({ appToken: c.appToken, botToken: c.botToken, client: web, connect: c.id, book, pingMs: options.pingMs, staleMs: options.staleMs, clock: options.clock }));
+  const connects = makeConnects<SlackConnect>(options, {
+    kind: "slack",
+    names: "slack-names.json",
+    connects: slackConnects,
+    credentials: (c) => (c.appToken === "" || c.botToken === "" ? null : `${c.appToken}\n${c.botToken}`),
+    create: (c, book) => create(c, book, client),
+    // Its Slack workspace and its bot's name there, as Slack says now.
+    seen: (c, i) => {
+      if (i.teamId === "") return null;
+      if (c.team !== null && c.team.id === i.teamId && c.team.name === i.team && c.botName === i.botName && c.botImage === i.botImage) return null;
+      return (entry) => {
+        entry.slack = entry.slack !== null && typeof entry.slack === "object" ? entry.slack : {};
+        entry.slack.team = { id: i.teamId, name: i.team };
+        entry.slack.botName = i.botName;
+        if (i.botImage !== null) entry.slack.botImage = i.botImage;
+        else delete entry.slack.botImage;
+      };
+    },
+  });
 
   // The configuration tokens are config.json's; a rotated one is kept there.
   const apps = new SlackApps({
@@ -99,102 +130,13 @@ export function makeConnections(options: SlackOptions) {
     },
   });
 
-  let closed = false;
-  /// In line with config.json while in the workspace; out of it, none connected.
-  const reconcile = async () => {
-    if (closed) return;
-    if (options.bound()) await connections.reconcile(connects().filter((c) => options.inWorkspace?.(c.workspace ?? null) ?? true));
-    else await connections.stopAll();
-  };
-
-  /// Keeps what each connected connect is known by, its Slack workspace and its bot's name there, as Slack says now:
-  /// a connect shows by them while it is not connected too.
-  const rememberIdentities = () => {
-    const changed: [string, { id: string; name: string }, string, string | null][] = [];
-    for (const c of connects()) {
-      const state = connections.state(c);
-      if (state.state !== "connected" && state.state !== "reconnecting") continue;
-      const seen = state.workspace;
-      if (!seen || seen.teamId === "") continue;
-      const same = c.team !== null && c.team.id === seen.teamId && c.team.name === seen.team && c.botName === seen.botName && c.botImage === seen.botImage;
-      if (!same) changed.push([c.id, { id: seen.teamId, name: seen.team }, seen.botName, seen.botImage]);
-    }
-    if (changed.length === 0) return;
-    try {
-      config.update((raw) => {
-        for (const c of Array.isArray(raw.connects) ? raw.connects : []) {
-          const found = changed.find(([id]) => id === c.id);
-          if (!found) continue;
-          const [, team, botName, botImage] = found;
-          c.slack = c.slack !== null && typeof c.slack === "object" ? c.slack : {};
-          c.slack.team = team;
-          c.slack.botName = botName;
-          if (botImage !== null) c.slack.botImage = botImage;
-          else delete c.slack.botImage;
-        }
-      });
-    } catch (error) {
-      log.warn("slack", "slack identities not kept", { error: (error as Error).message });
-    }
-  };
-  // Looked at once after a burst of changes, not inside them.
-  let remembering = false;
-  const listeners = new Set<() => void>();
-  connections.onChange(() => {
-    for (const listener of listeners) {
-      try {
-        listener();
-      } catch {}
-    }
-    if (remembering || closed) return;
-    remembering = true;
-    setImmediate(() => {
-      remembering = false;
-      if (!closed) rememberIdentities();
-    });
-  });
-
-  // Edits apply as they are saved.
-  const unlisten = config.listen(() => {
-    void reconcile().catch((error) => log.warn("slack", "connects not brought in line with the config", { error: (error as Error).message }));
-  });
-
   return {
-    connections,
-    names,
+    ...connects,
     apps,
     client,
-    /// A connected connect's surface, for the hub (HubOptions.chats).
-    chats: (id: string): ChatSurface | undefined => connections.chat(id),
-    /// A connected connect's connection.
-    chat: (id: string): Connection | undefined => connections.chat(id),
-    /// config.json's connects, as their connections read them.
-    connects,
-    /// In line with config.json and the workspace now: connected while in it, disconnected out of it.
-    reconcile,
-    stopAll: () => connections.stopAll(),
-    refreshIdentity: (id: string) => connections.refreshIdentity(id),
-    /// A connect's link to Slack as the pages show it (the overview's `connection`).
-    state: (c: string | SlackConnect): ConnectState | null => {
-      const found = typeof c === "string" ? connect(c) : c;
-      return found ? connections.state(found) : null;
-    },
-    /// Hears whenever what `state` reports may have changed (the overview's events).
-    onChange: (listener: () => void) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
     /// What the overview says of Slack for a viewer (views.rs): the apps they made that wait for a connect, and the
     /// Slack workspaces they can make apps in (never a token).
     overview: (viewer: string) => slackOverview(config.raw(), viewer),
-    /// Stops listening, disconnects every connect, and keeps the names learned.
-    close: async () => {
-      closed = true;
-      unlisten();
-      listeners.clear();
-      await connections.stopAll();
-      await names.close();
-    },
   };
 }
 
@@ -224,11 +166,11 @@ export function slackOverview(raw: Json, by: string): { slackApps: Json[]; slack
   return { slackApps, slackTeams };
 }
 
-export { Connections, slackConnects, connectName } from "./connections.ts";
-export type { ConnectState, Connection, SlackConnect } from "./connections.ts";
-export { SlackSurface, toEvent, identityOf, verifySlackTokens, shownIdentity } from "./surface.ts";
-export type { SlackIdentity, SocketStatus } from "./surface.ts";
-export { NameBook } from "./names.ts";
+export { Connections, shownIdentity } from "../connects/connections.ts";
+export type { ConnectState, Connection, SocketStatus } from "../connects/connections.ts";
+export { SlackSurface, toEvent, identityOf, verifySlackTokens } from "./surface.ts";
+export type { SlackIdentity } from "./surface.ts";
+export { NameBook } from "../connects/names.ts";
 export { ThreadStatus } from "./status.ts";
 export { SlackClient, SlackApiError, apiBase } from "./web.ts";
 export * from "./apps.ts";

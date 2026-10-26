@@ -1,41 +1,25 @@
-// Slack as a chat surface (chat/slack.rs): Socket Mode for what Slack tells the station (no public endpoint needed, a
-// card's buttons too), the Web API for what the station and its agents say and ask. One SlackSurface per connected
-// connect; its Socket Mode loop is a fiber in the surface's scope, and stopping the surface closes the scope (the socket
-// with it).
+// Slack as a chat surface (chat/slack.rs), on a socket kept up as every connect's is (connects/surface.ts): Socket Mode
+// for what Slack tells the station (a card's buttons too), the Web API for what the station and its agents say and ask.
+// One SlackSurface per connected connect.
 import { readFile } from "node:fs/promises";
-import { Clock, Deferred, Effect, Exit, FiberSet, Result, Scope } from "effect";
+import type { Clock, Effect } from "effect";
 import WebSocket from "ws";
+import type { BotIdentity } from "../connects/connections.ts";
+import type { NameBook } from "../connects/names.ts";
+import { ConnectedSurface } from "../connects/surface.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Attachment } from "../store/store.ts";
-import { type ChatEvent, type ChatMessage, type ChatSurface, type Handler, type InboundFile, type Person, type Place, type ThreadRef, splitForSlack } from "../sessions/chat.ts";
+import { type ChatEvent, type ChatMessage, type Handler, type InboundFile, type Person, type Place, type ThreadRef, splitForSlack } from "../sessions/chat.ts";
 import { answerOf, answeredBlocks, markdown, questionBlocks } from "./cards.ts";
-import type { NameBook } from "./names.ts";
 import { ThreadStatus } from "./status.ts";
 import { type Params, SlackClient, field } from "./web.ts";
 import { wall } from "../ops/fibers.ts";
 
 type Json = any;
 
-/// Who a bot token belongs to, as Slack reports it.
-export type SlackIdentity = {
-  team: string;
-  teamId: string;
-  /// Workspace URL, e.g. https://acme.slack.com/
-  url: string;
-  botUserId: string;
-  botName: string;
-  /// Its bot's picture (the app's icon), as Slack shows it; null when Slack does not say.
-  botImage: string | null;
-  /// Its app's bot id (B…), which its own messages carry besides its user; not for the pages.
-  botId: string;
-};
-
-/// An identity as the pages are given it (without its bot id).
-export const shownIdentity = (i: SlackIdentity) => ({ team: i.team, teamId: i.teamId, url: i.url, botUserId: i.botUserId, botName: i.botName, botImage: i.botImage });
-
-/// Whether the socket is up, and the last connection error.
-export type SocketStatus = { connected: boolean; lastError: string | null };
+/// Who a bot token belongs to, as Slack reports it: its workspace's address, and its app's bot id besides.
+export type SlackIdentity = BotIdentity;
 
 const text = (v: unknown): string => (typeof v === "string" ? v : "");
 /// A number as Rust's `str::parse::<f64>` reads one (a Slack ts); null where it does not.
@@ -226,267 +210,94 @@ export type SlackSurfaceOptions = {
   appToken: string;
   botToken: string;
   client?: SlackClient;
+  /// The connect it is (for the log).
+  connect?: string;
   /// Keeps names across restarts and lets the admin API ask without waiting (knownPerson, knownChannel).
   book?: NameBook | null;
-  /// How often the socket is pinged, and how long it may say nothing before it is taken for dead.
+  /// How often the socket is pinged, and how long it may say nothing before it is taken for dead (connects/surface.ts).
   pingMs?: number;
   staleMs?: number;
-  /// The first wait before connecting again after a failure (doubling up to a minute).
   backoffMs?: number;
-  /// The clock its pings, its waits for a socket and between tries run on (a TestClock in tests).
   clock?: Clock.Clock;
-  /// Told each time a socket said something (a pong too): what a test waits for before it moves that clock on.
   onHeard?: () => void;
 };
-
-const MAX_BACKOFF_MS = 60_000;
 /// The most of a question's words its card carries (Slack takes 12,000 characters of Markdown in a message, and long
 /// options are listed with them).
 const QUESTION_CHARS = 8_000;
 
-export class SlackSurface implements ChatSurface {
-  readonly cards = true;
+export class SlackSurface extends ConnectedSurface {
+  protected readonly kind = "slack";
   readonly appToken: string;
   readonly botToken: string;
   readonly client: SlackClient;
-  private book: NameBook | null;
-  private me: SlackIdentity | null = null;
-  private names = new Map<string, Person>();
   private channels = new Map<string, string | null>();
-  private status: SocketStatus = { connected: false, lastError: null };
-  private listeners = new Set<() => void>();
-  /// Each thread an agent works for: its status line (status.ts).
-  private lines = new Map<string, ThreadStatus>();
   /// The questions answered (their messages' ts): a second press before the card changed is not said again.
   private answered = new Set<string>();
-  private pingMs: number;
-  private staleMs: number;
-  private backoffMs: number;
-  private clock: Clock.Clock | undefined;
-  private onHeard: () => void;
-  private stopped = false;
-  private scope: Scope.Closeable;
-  private run: (effect: Effect.Effect<void, never>) => Promise<void>;
 
   constructor(options: SlackSurfaceOptions) {
     if (!options.appToken.startsWith("xapp-")) throw new Error("slack.appToken must be an app-level token (xapp-…)");
     if (!options.botToken.startsWith("xoxb-")) throw new Error("slack.botToken must be a bot token (xoxb-…)");
+    // Like Slack's Python SDK (slack_sdk.socket_mode.builtin): a ping every 5 s, dead after 20 s of nothing (4 pings).
+    super({ ...options, pingMs: options.pingMs ?? 5_000, staleMs: options.staleMs ?? 20_000 });
     this.appToken = options.appToken;
     this.botToken = options.botToken;
     this.client = options.client ?? new SlackClient();
-    this.book = options.book ?? null;
-    // Like Slack's Python SDK (slack_sdk.socket_mode.builtin): a ping every 5 s, dead after 20 s of nothing (4 pings).
-    this.pingMs = options.pingMs ?? 5_000;
-    this.staleMs = options.staleMs ?? 20_000;
-    this.backoffMs = options.backoffMs ?? 1_000;
-    this.clock = options.clock;
-    this.onHeard = options.onHeard ?? (() => {});
-    this.scope = Effect.runSync(Scope.make());
-    const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope);
-    this.run = Effect.runSync(options.clock ? runtime.pipe(Effect.provideService(Clock.Clock, options.clock)) : runtime);
   }
 
-  identity(): SlackIdentity | null {
-    return this.me;
+  protected identify() {
+    return identityOf(this.client, this.botToken);
   }
 
-  socket(): SocketStatus {
-    return { ...this.status };
+  protected async address() {
+    const open = await this.client.api("apps.connections.open", [], this.appToken);
+    if (typeof open?.url !== "string") throw new Error("slack gave no socket url");
+    return open.url as string;
   }
 
-  /// Hears each change of the socket's status, and of the identity; gives the function that stops it.
-  onChange(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-
-  private changed() {
-    for (const listener of this.listeners) {
-      try {
-        listener();
-      } catch {}
-    }
-  }
-
-  private setStatus(connected: boolean, lastError: string | null) {
-    if (this.status.connected === connected && this.status.lastError === lastError) return;
-    this.status = { connected, lastError };
-    this.changed();
-  }
-
-  /// Reads again who the bot is and where (its name changed in Slack, say); listeners hear of it.
-  async refreshIdentity() {
-    this.me = await identityOf(this.client, this.botToken);
-    this.changed();
-  }
-
-  botUserId(): string {
-    return this.me?.botUserId ?? "";
-  }
-
-  botName(): string {
-    return this.me?.botName ?? "";
-  }
-
-  workspace(): string | null {
-    const team = this.me?.teamId ?? "";
-    return team === "" ? null : team;
-  }
-
-  async start(handler: Handler) {
-    const identity = await identityOf(this.client, this.botToken);
-    log.info("slack", "slack authenticated", { botUserId: identity.botUserId, team: identity.team });
-    this.me = identity;
-    void this.run(this.connectLoop(handler)).catch(() => {});
-  }
-
-  async stop() {
-    if (this.stopped) return;
-    this.stopped = true;
-    await Effect.runPromise(Scope.close(this.scope, Exit.void));
-  }
-
-  /// Connects again whenever the socket closes (Slack rotates connections routinely) or fails (after a wait that
-  /// doubles up to a minute), until the surface stops.
-  private connectLoop(handler: Handler): Effect.Effect<void> {
-    const self = this;
-    return Effect.gen(function* () {
-      let backoff = self.backoffMs;
-      for (;;) {
-        const ran = yield* Effect.result(
-          Effect.gen(function* () {
-            const open = yield* Effect.tryPromise({ try: () => self.client.api("apps.connections.open", [], self.appToken), catch: (e) => e as Error });
-            if (typeof open?.url !== "string") return yield* Effect.fail(new Error("slack gave no socket url"));
-            yield* self.runSocket(open.url, handler);
-          }),
-        );
-        if (Result.isSuccess(ran)) backoff = self.backoffMs;
-        else {
-          const said = ran.failure.message;
-          self.setStatus(false, said);
-          log.warn("slack", "slack socket failed", { error: said, retryInMs: backoff });
-          yield* Effect.sleep(backoff);
-          backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
-        }
-      }
-    });
-  }
-
-  /// One Socket Mode connection: ends when the socket closes, and fails when it went quiet: a connection cut off on the
-  /// way (a network blip) can look open forever, and nothing would come through it again (2026-09-30 on bft). So it is
-  /// pinged every `pingMs`, and taken for dead when it said nothing (not even a pong) for `staleMs`. Each event is
-  /// acknowledged once its handler kept it; one that failed is not, and Slack sends it again.
+  /// One Socket Mode connection (connects/surface.ts keeps it up). Each event is acknowledged once its handler kept it;
+  /// one that failed is not, and Slack sends it again.
   runSocket(url: string, handler: Handler): Effect.Effect<void, Error> {
-    const self = this;
-    const socket = Effect.gen(function* () {
-      const clock = yield* Clock.Clock;
-      const opened = yield* Deferred.make<void>();
-      let ws: WebSocket | undefined;
-      let heard = clock.currentTimeMillisUnsafe();
-      // The socket itself: ends when it closes, fails on its error. Interrupted (it went quiet, or the surface stops),
-      // it is cut off.
-      const open = Effect.callback<void, Error>((resume) => {
-        const socket = new WebSocket(url);
-        ws = socket;
-        let finished = false;
-        const cut = () => {
-          finished = true;
-          socket.removeAllListeners();
-          socket.on("error", () => {});
-          if (socket.readyState !== WebSocket.CLOSED) socket.terminate();
-        };
-        const end = (error: Error | null) => {
-          if (finished) return;
-          cut();
-          if (error !== null) resume(Effect.fail(error));
-          else {
-            self.setStatus(false, self.status.lastError);
-            resume(Effect.void);
-          }
-        };
-        const bot = self.botUserId();
-        const botId = self.me?.botId ?? "";
-        socket.on("open", () => {
-          heard = clock.currentTimeMillisUnsafe();
-          self.setStatus(true, null);
-          Deferred.doneUnsafe(opened, Effect.void);
-        });
-        const alive = () => {
-          heard = clock.currentTimeMillisUnsafe();
-          self.onHeard();
-        };
-        socket.on("pong", alive);
-        socket.on("ping", alive);
-        socket.on("message", (data, binary) => {
-          alive();
-          if (binary) return;
-          let envelope: Json;
+    const bot = this.botUserId();
+    const botId = this.me?.botId ?? "";
+    return this.socketTo(url, {
+      message: (socket, data, { binary, end }) => {
+        if (binary) return;
+        let envelope: Json;
+        try {
+          envelope = JSON.parse(data.toString());
+        } catch {
+          return;
+        }
+        if (envelope?.type === "disconnect") {
+          log.info("slack", "slack asked to reconnect", { reason: JSON.stringify(envelope.reason ?? null) });
           try {
-            envelope = JSON.parse(data.toString());
-          } catch {
+            socket.close();
+          } catch {}
+          return end(null);
+        }
+        // A card's button pressed: acknowledged at once (Slack waits 3 s), then said as the person's answer.
+        if (envelope?.type === "interactive") {
+          if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ envelope_id: envelope.envelope_id ?? null }));
+          if (envelope.payload?.type === "block_actions") {
+            void this.answer(envelope.payload, handler).catch((error) => log.error("slack", "failed to take a card's answer", { error: (error as Error).message }));
+          }
+          return;
+        }
+        if (envelope?.type !== "events_api") return;
+        const event = toEvent(envelope.payload?.event ?? null, bot, botId);
+        const envelopeId = envelope.envelope_id ?? null;
+        void (async () => {
+          try {
+            if (event !== null) await handler(event);
+          } catch (error) {
+            // Not acknowledged: Slack redelivers, and the store dedupes.
+            log.error("slack", "failed to accept slack event", { error: (error as Error).message });
             return;
           }
-          if (envelope?.type === "disconnect") {
-            log.info("slack", "slack asked to reconnect", { reason: JSON.stringify(envelope.reason ?? null) });
-            try {
-              socket.close();
-            } catch {}
-            return end(null);
-          }
-          // A card's button pressed: acknowledged at once (Slack waits 3 s), then said as the person's answer.
-          if (envelope?.type === "interactive") {
-            if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ envelope_id: envelope.envelope_id ?? null }));
-            if (envelope.payload?.type === "block_actions") {
-              void self.answer(envelope.payload, handler).catch((error) => log.error("slack", "failed to take a card's answer", { error: (error as Error).message }));
-            }
-            return;
-          }
-          if (envelope?.type !== "events_api") return;
-          const event = toEvent(envelope.payload?.event ?? null, bot, botId);
-          const envelopeId = envelope.envelope_id ?? null;
-          void (async () => {
-            try {
-              if (event !== null) await handler(event);
-            } catch (error) {
-              // Not acknowledged: Slack redelivers, and the store dedupes.
-              log.error("slack", "failed to accept slack event", { error: (error as Error).message });
-              return;
-            }
-            if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ envelope_id: envelopeId }));
-          })();
-        });
-        socket.on("close", () => end(null));
-        socket.on("error", (error) => end(error));
-        return Effect.sync(() => {
-          if (!finished) cut();
-        });
-      });
-      // Its watch: open within `staleMs`, then a ping every `pingMs`; it fails once the socket said nothing for `staleMs`.
-      const watch = Deferred.await(opened).pipe(
-        Effect.timeoutOrElse({
-          duration: self.staleMs,
-          orElse: () => Effect.fail(new Error(`slack socket did not open within ${self.staleMs / 1000}s`)),
-        }),
-        Effect.andThen(
-          Effect.forever(
-            Effect.sleep(self.pingMs).pipe(
-              Effect.andThen(
-                Effect.suspend(() => {
-                  const quiet = clock.currentTimeMillisUnsafe() - heard;
-                  if (quiet >= self.staleMs) return Effect.fail(new Error(`slack socket said nothing for ${quiet / 1000}s`));
-                  try {
-                    ws?.ping();
-                  } catch {}
-                  return Effect.void;
-                }),
-              ),
-            ),
-          ),
-        ),
-      );
-      return yield* Effect.raceFirst(open, watch);
+          if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ envelope_id: envelopeId }));
+        })();
+      },
     });
-    return this.clock ? socket.pipe(Effect.provideService(Clock.Clock, this.clock)) : socket;
   }
 
   /// Posted as written, in a markdown block (Slack draws the agent's Markdown as still.fail does, tables too); a long
@@ -717,30 +528,12 @@ export class SlackSurface implements ChatSurface {
     return null;
   }
 
-  private async profile(user: string): Promise<Person | null> {
-    const known = this.names.get(user);
-    if (known) return known;
-    let answer: Json;
+  protected async lookUp(user: string): Promise<Person | null> {
     try {
-      answer = await this.client.api("users.info", [["user", user]], this.botToken);
+      return personOf(await this.client.api("users.info", [["user", user]], this.botToken));
     } catch {
       return null;
     }
-    const person = personOf(answer);
-    this.names.set(user, person);
-    return person;
-  }
-
-  /// Display name via users.info, kept for the connection's lifetime.
-  async userName(user: string): Promise<string | null> {
-    const name = (await this.profile(user))?.name ?? "";
-    return name === "" ? null : name;
-  }
-
-  /// The person's email (users:read.email), which ties a Slack user to a still.fail cloud account.
-  async userEmail(user: string): Promise<string | null> {
-    const email = (await this.profile(user))?.email ?? "";
-    return email === "" ? null : email;
   }
 
   /// A person as far as already known, without waiting; an unknown one is looked up in the background, and so is one
@@ -817,16 +610,8 @@ export class SlackSurface implements ChatSurface {
     return this.client.api(method, form, this.botToken);
   }
 
-  working(thread: ThreadRef, messageTs: string | null, status: string) {
-    if (this.stopped) return;
-    const key = `${thread.channel}/${thread.threadTs}`;
-    let line = this.lines.get(key);
-    if (!line) {
-      const call = async (method: string, params: Params) => void (await this.client.api(method, params, this.botToken));
-      line = new ThreadStatus(call, this.run, thread.channel, thread.threadTs);
-      this.lines.set(key, line);
-    }
-    if (status === "" && this.lines.size > 200) this.lines.delete(key);
-    line.say(status, messageTs);
+  protected statusLine(thread: ThreadRef) {
+    const call = async (method: string, params: Params) => void (await this.client.api(method, params, this.botToken));
+    return new ThreadStatus(call, this.run, thread.channel, thread.threadTs);
   }
 }
