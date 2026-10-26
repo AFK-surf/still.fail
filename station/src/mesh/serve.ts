@@ -13,9 +13,9 @@ import type { Accepted } from "../cloud/provider.ts";
 import { type Admitted, readOnly, revoked, verifyMemberOf } from "./credential.ts";
 import { type Entry, LockRefusal, admit, asEntry, genesis, lowerRole } from "../cloud/lock.ts";
 import type { Connection, Stream } from "./native.ts";
-import { answerAdb, type Shares } from "./adb.ts";
 import { answerScreen } from "./screens.ts";
 import type { ScreenHub } from "../screens/hub.ts";
+import type { MemberAsk } from "../parts.ts";
 import { compressed } from "./compress.ts";
 import { Traces, parseParent, route } from "./traces.ts";
 import { FrameReader, SocketRefused, openSocket, previewTarget, pumpSocket } from "../jobs/preview.ts";
@@ -243,8 +243,8 @@ export type Members = {
   admin: Admin;
   /// Whether the station answers now (its parts started; not handing over).
   up(): boolean;
-  /// Phones lent to the agents.
-  shares: Shares;
+  /// The part that answers a kind of request on a member's link itself (parts.ts `streams`: a phone lent over it).
+  streams?: (head: any) => ((ask: MemberAsk) => Promise<void>) | undefined;
   /// The screens members see and drive (docs/remote-screens.md); none: no view is answered.
   screens?: ScreenHub;
   /// The mesh's spans, when traces are on.
@@ -431,12 +431,9 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
   if (!path.startsWith("/admin/api/") || path.includes("..")) {
     return answer(404, '{"error":"only the admin API is reachable over the mesh"}');
   }
-  // A phone lent to the agents, or asked about (adb.ts): its send side came finished, what it hears goes down the stream.
-  if (head.adb !== null && typeof head.adb === "object" && !Array.isArray(head.adb)) {
-    // Lending a phone is a change a read-only member does not make.
-    if (readOnly(viewer)) return answer(403, { error: "read-only members cannot lend or use phones" });
-    return answerAdb(m.shares, conn, viewer, head, stream, reader);
-  }
+  // One a part answers itself (a phone lent to the agents, adb/link.ts): it says what the member may.
+  const part = m.streams?.(head);
+  if (part !== undefined) return part({ conn, viewer, head, stream, reader });
   // A view of a screen (mesh/screens.ts): frames both ways for as long as it lasts. A read-only member views only.
   if (head.screen !== null && typeof head.screen === "object" && !Array.isArray(head.screen)) {
     if (m.screens === undefined) return answer(404, { error: "no screens on this station" });
