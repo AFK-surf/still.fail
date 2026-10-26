@@ -2,10 +2,10 @@
 // xx 个 xx 订阅账号的 xx% 周额度，分天和周统计，还有当前 chat 数量」「模型调用不需要」「不如归档 chat 多少个」): how much of
 // its subscriptions' weekly quota was used, by kind of subscription; how many chats were archived and what was spent
 // today and over the last 7 days, each day's chats archived; how many chats are at work now (a chat whose task runs on
-// another station at work too), and on how many stations today's chats are (「应该改成今天会话分布在几个设备而不是正在
-// 运行的会话」); how many tasks chats ran on other stations over the 7 days, and how many each chat that did, on average
-// (「一个 station 的 chat 在另一个 station 执行任务也需要统计」「应该是有一个额外的统计，比如总共跨设备执行了多少个任务，
-// 平均每个 chat 跨设备执行多少个任务」).
+// another station at work too), and how many stations were used today, by today's chats or for the tasks they ran
+// (「应该改成今天会话分布在几个设备而不是正在运行的会话」「那不是运行任务没有算进去」); how many tasks chats ran on other
+// stations over the 7 days, and how many each chat that did, on average (「一个 station 的 chat 在另一个 station 执行任务也
+// 需要统计」「应该是有一个额外的统计，比如总共跨设备执行了多少个任务，平均每个 chat 跨设备执行多少个任务」).
 import * as format from "../format.ts";
 import { t } from "../i18n.ts";
 import { isWatch, remoteOwner } from "../jobs.ts";
@@ -66,9 +66,9 @@ export function quotaOf(profiles: J[]): J[] {
 /// The card: `stations` as read, the workspace's profiles (the profiles view's items), the usage view of the last 7 days
 /// (null while it is not made yet), and when it is (`now`, said in words: 10月26日 04:12), on a clock `offset` minutes
 /// east of UTC (the usage view's days'). A chat is at work while its agents run, or while a task it started runs on
-/// another station (`remoteOwner`; one waiting in that station's queue not yet); today's chats are those at work and
-/// those whose last letter was written, or that were archived, today; the stations counted are those the chats are on
-/// (the tasks' are said apart: `days`).
+/// another station (`remoteOwner`; one waiting in that station's queue not yet); the stations used today are those of
+/// today's chats (at work, or their last letter written, or archived, today) and those that ran their tasks today (one
+/// running now, or begun today: `runs`).
 export function fleetView(stations: FleetStation[], profiles: J[], usage: J, now = 0, offset = 0): J {
   const online = stations.filter((s) => s.online);
   const day = localDay(now, offset);
@@ -80,7 +80,7 @@ export function fleetView(stations: FleetStation[], profiles: J[], usage: J, now
   for (const s of online) {
     archived.push(...s.archived);
     runs.push(...s.runs);
-    if (s.archived.some(today)) used.add(s.station);
+    if (s.archived.some(today) || s.runs.some((r) => today(r.at))) used.add(s.station);
     for (const row of s.rows) {
       if (today(get(row, "lastActiveAt"))) used.add(s.station);
       if (present.rowState(arr(get(row, "agents"))) !== "run") continue;
@@ -98,7 +98,7 @@ export function fleetView(stations: FleetStation[], profiles: J[], usage: J, now
       const row = home.rows.find((r) => get(r, "session") === owner.session) ??
         home.rows.find((r) => arr(get(r, "agents")).some((a) => get(a, "key") === owner.session));
       chats.add(`${home.station}\n${row ? (str(get(row, "id")) ?? "") : owner.session}`);
-      used.add(home.station);
+      used.add(home.station).add(s.station);
     }
   }
   return {
