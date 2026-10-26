@@ -354,7 +354,7 @@ fn chat_title(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?) -> Unit {
   let failed = core_failed(src, ["chat.rename"], on)
   if renaming != "" || failed is Some(_) {
     let id = c.id("chat-title/doing")
-    c.box(id~, taps=false, fn() { @settings.doing_mark(c, renaming != "", failed) }) |> ignore
+    c.box(id~, taps=false, points=true, fn() { @settings.doing_mark(c, renaming != "", failed) }) |> ignore
     @sf.tip(c, "chat-title/doing", id, match failed {
       Some(why) => why
       None => @sf.t("web-pages.settings.stations.renaming")
@@ -364,13 +364,11 @@ fn chat_title(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?) -> Unit {
 
 ///|
 /// The machine the chat runs on, beside its title while it has no agent to share a tile with (ChatStation): how it is
-/// reached a dot before it, its mark, its name, a quiet tag; pressed, its card.
+/// reached a dot before it, its mark, its name, a quiet tag; its card over it (station_card_on).
 fn chat_station(c : @ui.Ctx, station : String, s : Station?) -> Unit {
   guard s is Some(s) else { return }
   let id = c.id("bar-station")
-  if c.clicked(id) {
-    @settings.open_station_peek(station, from=Of(id))
-  }
+  station_card_on(c, "bar-station", station, id)
   let hot = c.lit(id)
   // (its dot in its round end, concentric with it: as far in from its edge as from its top, the line round it within)
   let look = if hot { chat_station_hot } else { chat_station_tag }
@@ -389,6 +387,19 @@ fn chat_station(c : @ui.Ctx, station : String, s : Station?) -> Unit {
     c.text(s.name, style=if hot { chat_station_words_hot } else { chat_station_words }) |> ignore
   })
   |> ignore
+}
+
+///|
+/// The card of the station a chat runs on (ChatPage.tsx StationHover, StationCard): over where the chat names it
+/// (`trigger`) while the pointer rests there; a finger, which rests on nothing, taps it for the card from the
+/// presenters (a sheet short of Large).
+fn station_card_on(c : @ui.Ctx, key : String, station : String, trigger : Int) -> Unit {
+  if @sf.pointer_rests() {
+    // (as wide as it holds: the machine's three chips whole on their line, none cut short)
+    hover(c, key + "/card", trigger, tile=true, padded=false, fn() { @settings.station_peek_card(c, station) }) |> ignore
+  } else if c.clicked(trigger) {
+    @settings.open_station_peek(station, from=Of(trigger))
+  }
 }
 
 ///|
@@ -474,7 +485,7 @@ fn agent_tile(c : @ui.Ctx, src : Source, r : ChatRef, a : Agent, marked : Bool, 
           }
         })
         |> ignore
-        @sf.tip(c, "bar-agent-station/" + a.key, part, s.name)
+        station_card_on(c, "bar-agent-station/" + a.key, r.station, part)
         if s.via != "" {
           c.layer(fn() {
             c.box(style=agent_station_dot_room, fn() { c.box(style=corner_dot_of(s.via), fn() {  }) |> ignore })
@@ -739,7 +750,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
 /// A time as the core says it (ui.tsx Time): how long ago, the date in its tip.
 fn info_time(c : @ui.Ctx, key : String, stamp : Json?) -> Unit {
   let id = c.id(key)
-  c.box(id~, taps=false, fn() { c.text(text(stamp, "ago"), style=info_words) |> ignore }) |> ignore
+  c.box(id~, taps=false, points=true, fn() { c.text(text(stamp, "ago"), style=info_words) |> ignore }) |> ignore
   @sf.tip(c, key, id, text(stamp, "full"))
 }
 

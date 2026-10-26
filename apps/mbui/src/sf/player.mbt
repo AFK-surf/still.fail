@@ -1021,7 +1021,7 @@ fn desk_player(
         ""
       }
       let meta = joined([if many && index >= 0 { "\{index + 1} / \{list.length()}" } else { "" }, file_size(file.size), facts], " · ")
-      if viewer_bar(c, key + "/bar", back_label, name, meta, !f.on && !listing, bar_ink, fn() {
+      if viewer_bar(c, key + "/bar", back_label, name, meta, !f.on && !listing, bar_ink, title=file.title, fn() {
           if many && viewer_tool(c, key + "/list", "list", t("web-pages.drive.player.list"), bar_ink, on=listing) {
             v.listing = !listing
           }

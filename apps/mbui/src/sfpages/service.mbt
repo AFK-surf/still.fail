@@ -818,10 +818,14 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
         _ => ()
       }
     }
-    c.box(style=if turnable { custom_turn } else { custom_turn_off }, id=if turnable { turn } else { 0 }, fn() {
+    let tb = c.box(style=if turnable { custom_turn } else { custom_turn_off }, id=if turnable { turn } else { 0 }, fn() {
       @sf.icon(c, "landscape", size=custom_turn_icon, color=t.p.text) |> ignore
     })
-    |> ignore
+    // (named, and said on hover: ViewportSize.tsx's Tip)
+    c.semantics(tb, Button, id=if turnable { turn } else { 0 }, label=@sf.t("web-main.viewport.turn"), disabled=!turnable)
+    if turnable {
+      @sf.tip(c, "service/custom-turn/tip", turn, @sf.t("web-main.viewport.turn"))
+    }
   })
   |> ignore
 }

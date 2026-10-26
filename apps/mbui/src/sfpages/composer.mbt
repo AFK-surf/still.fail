@@ -841,6 +841,8 @@ fn waiting_card(c : @ui.Ctx, key : String, v : Json?, restore~ : Bool) -> @sf.Fi
         key,
         url,
         0.0,
+        // (where it goes, over it while it is pointed at: Chat.tsx LinkCard's tip)
+        path=url,
         open=true,
         title=match text(l, "title") {
           "" => url

@@ -320,7 +320,10 @@ pub fn chat_row(
               None => @sf.name_words(c, item.last.unwrap_or(""), look.last) |> ignore
             }
             if shows_time {
-              c.text(item.ago, style=row_time) |> ignore
+              // (its day and time over it while it is pointed at: Time's tip, `fixed`)
+              let time = c.id("row/time/" + key)
+              c.box(id=time, taps=false, points=true, fn() { c.text(item.ago, style=row_time) |> ignore }) |> ignore
+              @sf.tip(c, "row/time-tip/" + key, time, item.full)
             } else if at == Whole {
               row_aside(c, src, item, lead, face_ground)
             }

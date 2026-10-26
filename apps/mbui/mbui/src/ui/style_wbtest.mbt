@@ -237,6 +237,42 @@ test "hover: what holds the one pointed at is pointed at too, as drawn; what lie
 }
 
 ///|
+test "hover: a box only pointed at is pointed at, and a press on it is what holds it's (a chip's tip in a row)" {
+  let pressed : Array[String] = []
+  let view = fn(c : Ctx) {
+    c.box(w=Px(200.0), h=Px(100.0), fn() {
+      // a row (0 … 160) and in it a chip (60 … 100) that says what it is on hover, pressing nothing of its own
+      let row = c.id("row")
+      if c.clicked(row) {
+        pressed.push("row")
+      }
+      c.cursor(row, Hand)
+      c.box(w=Px(160.0), h=Px(40.0), id=row, fn() {
+        c.box(w=Px(40.0), h=Px(20.0), ml=60.0, mt=10.0, id=c.id("chip"), taps=false, points=true, fn() {  }) |> ignore
+      })
+      |> ignore
+      // one only measured by: not pointed at
+      c.box(w=Px(20.0), h=Px(20.0), left=170.0, top=0.0, id=c.id("measured"), taps=false, fn() {  }) |> ignore
+    })
+    |> ignore
+  }
+  let t = Tester::new(view, w=200.0, h=100.0)
+  t.draw()
+  t.move(70.0, 20.0)
+  t.draw()
+  // the chip, and the row that holds it
+  assert_true(g().hovered(g().id("chip")) && g().hovered(g().id("row")))
+  assert_eq(g().rect_of(g().id("chip")), Some((60.0, 10.0, 40.0, 20.0)))
+  assert_eq(g().rect_of(g().id("measured")), None)
+  // the row's shape over it, the chip saying none
+  assert_eq(desk.shown, Cursor::Hand.code())
+  // pressed there, the row is
+  t.tap(70.0, 20.0)
+  t.draw()
+  assert_eq(pressed, ["row"])
+}
+
+///|
 test "style: the narrow theme in frames narrower than its bound, picked from the width; dark by the theme" {
   let s = style(bg=Bg, narrow=patch(radius=Sm), dark=patch(radius=Lg))
   let view = fn(c : Ctx) {

@@ -123,7 +123,7 @@ fn cd_identity(c : @ui.Ctx, core : Core, here : Here, station : String, station_
         c.text(text(cv, "statusText"), style=cd_sub_words) |> ignore
       }
       c.text(@sf.t("web-pages.connect.owner"), style=cd_sub_words) |> ignore
-      cn_owner(c, core, field(cv, "createdBy"))
+      cn_owner(c, core, station + "/" + text(cv, "id"), field(cv, "createdBy"))
     },
     actions=fn() { cd_menu(c, core, here, station, cv) },
   )

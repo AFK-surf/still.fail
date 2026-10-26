@@ -1928,6 +1928,63 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
 }
 
 ///|
+test "wide: an agent's card says over each of its allowance's chips what is left of it (QuotaBars' tip)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat-agent-card")
+  t.run_for(history_fade_ms)
+  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
+  // its card over its picture beside its last message
+  let names = word("Claude")
+  let last = match names.iter().fold(init=None, fn(acc : (String, Double, Double, Double, Double, Double)?, w) {
+      match acc {
+        Some(a) if a.2 >= w.2 => acc
+        _ => Some(w)
+      }
+    }) {
+    Some(w) => w
+    None => fail("no agent's message")
+  }
+  t.move(last.1 - 20.0, last.2 + last.4 / 2.0)
+  t.run_for(@sfpages.hover_open_ms * 2.0)
+  assert_eq(word("林的 Max").length(), 1, msg="its card")
+  // its weekly window's chip, 18% left: what it says over it once the pointer rests there (which window, what is
+  // left, when it refills, as the web's tip), the card staying open
+  let chip = word("18%")
+  assert_eq(chip.length(), 1, msg="\{chip}")
+  let tip = fn() {
+    t.words().filter(fn(w) { (w.0.contains("每周剩余 18%") || w.0.contains("2 天 4 小时后刷新")) && w.5 > 0.5 })
+  }
+  assert_eq(tip().length(), 0)
+  t.move(chip[0].1 + chip[0].3 / 2.0, chip[0].2 + chip[0].4 / 2.0)
+  t.run_for(@sf.tip_delay_ms * 2.0)
+  assert_true(
+    tip().iter().any(fn(w) { w.0.contains("每周剩余 18%") }) && tip().iter().any(fn(w) { w.0.contains("2 天 4 小时后刷新") }),
+    msg="its tip: \{tip()}",
+  )
+  assert_eq(word("林的 Max").length(), 1, msg="the card stays")
+}
+
+///|
+test "wide: the station a chat's agent runs on, beside its mark in the bar, has its card while the pointer rests on it (StationHover)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat-agent-card")
+  t.run_for(history_fade_ms)
+  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
+  // its part of the tile: in the chat's bar, named for what it is
+  let part = t.locate("=Studio").filter(fn(p) { p.1 < 60.0 && p.0 > 400.0 })
+  assert_eq(part.length(), 1, msg="\{t.locate("=Studio")}")
+  assert_eq(word("机器详情").length(), 0)
+  t.move(part[0].0, part[0].1)
+  t.run_for(@sfpages.hover_open_ms * 2.0)
+  // its card: its name, what it says of itself, where to go on from it
+  assert_eq(word("机器详情").length(), 1, msg="its card")
+  // gone once the pointer has left it
+  t.move(900.0, 400.0)
+  t.run_for(@sfpages.hover_close_ms * 2.0)
+  assert_eq(word("机器详情").length(), 0)
+}
+
+///|
 test "wide: a working agent's card has its stop in its top right corner, concentric with it (the corner rule sees it)" {
   reset()
   let base = fixture("chat-agent-card")

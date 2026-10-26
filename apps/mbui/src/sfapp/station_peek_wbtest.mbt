@@ -81,7 +81,7 @@ test "an agent's account: how it runs, the agent's sheet gone" {
 }
 
 ///|
-test "a chat with no agent yet, on a desktop: its station's tag in its bar opens the station's card beside it" {
+test "a chat with no agent yet, on a desktop: its station's card under its tag in its bar while the pointer rests there (StationHover)" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-station-tag", wide=true)
   // the tag: its name in the chat's bar (where it is: its middle)
@@ -89,11 +89,26 @@ test "a chat with no agent yet, on a desktop: its station's tag in its bar opens
   let tag = before.filter(fn(p) { p.1 < 40.0 })
   assert_true(tag.length() > 0, msg="the station's tag in the bar: \{before}")
   let (x, y) = tag[0]
-  t.tap(x, y)
+  t.move(x, y)
+  t.run_for(@sfpages.hover_open_ms * 2.0)
+  // the card's name (the name there now that was not before): beside the tag (under it), not in the window's middle
+  let card = t.locate("Studio").filter(fn(p) { !before.contains(p) })
+  assert_true(card.length() > 0, msg="its card")
+  assert_true(card.iter().all(fn(p) { p.1 > y && p.1 < 200.0 && (p.0 - x).abs() < 240.0 }), msg="under the tag: \{card}")
+  assert_true(t.find("机器详情") is Some(_), msg="its way on")
+  // gone once the pointer has left it
+  t.move(900.0, 400.0)
+  t.run_for(@sfpages.hover_close_ms * 2.0)
+  assert_true(t.find("机器详情") is None)
+}
+
+///|
+test "a chat with no agent yet, tapped by a finger on a desktop: its station's card from the presenters" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-station-tag", wide=true, pointing=Finger)
+  let tag = t.locate("Studio").filter(fn(p) { p.1 < 40.0 })
+  assert_true(tag.length() > 0)
+  t.tap(tag[0].0, tag[0].1)
   t.frame()
   assert_true(@sf.presenting(), msg="the station's card")
-  // the card's title (the name there now that was not before): beside the tag (under it), not in the window's middle
-  let card = t.locate("Studio").filter(fn(p) { !before.contains(p) })
-  assert_true(card.length() > 0, msg="its title")
-  assert_true(card.iter().all(fn(p) { p.1 > y && p.1 < 200.0 && (p.0 - x).abs() < 240.0 }), msg="under the tag: \{card}")
 }

@@ -498,7 +498,7 @@ fn job_detail(c : @ui.Ctx, src : Source, station : String, job : Json?) -> Unit 
     let command = text(job, "command")
     if command != "" {
       let cid = c.id("jobs-tab/command")
-      c.box(style=job_detail_command, id=cid, taps=false, fn() {
+      c.box(style=job_detail_command, id=cid, taps=false, points=true, fn() {
         c.rich([@ui.span(command, mono=true)], style=job_command_words) |> ignore
       })
       |> ignore

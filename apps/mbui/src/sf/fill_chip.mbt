@@ -30,6 +30,8 @@ pub fn level_color(level : String) -> Int64 {
 /// and its `mark` before it in the text's colour, whatever the level: the fill says the level, and over it the level's
 /// ink, or a grey a step quieter, read too faint (amber 3.3 to 1, the mark 3.9 to 1 in the dark; docs/ui-panels.md
 /// 对比度). Its words are the caption's, a screen's own (11 with keyboard and mouse, 12 with touch), 600, tabular.
+/// `said`: what it is, over it while it is pointed at (QuotaBars', MeterChips' tips: what is left of what and when it
+/// fills again, what is used of how much), the chip `key`'s (none: no tip).
 pub fn fill_chip(
   c : @ui.Ctx,
   fill : Int,
@@ -39,6 +41,8 @@ pub fn fill_chip(
   small? : Bool = false,
   drop? : Int = 0,
   keep? : Bool = false,
+  key? : String = "",
+  said? : String = "",
 ) -> Unit {
   let t = theme()
   let tone = level_color(level)
@@ -52,10 +56,12 @@ pub fn fill_chip(
   }
   let fill = if fill < 0 { 0 } else if fill > 100 { 100 } else { fill }
   let rest = 100 - fill
+  // (pointed at for its tip, never pressed: what holds it takes the press, a row's)
+  let id = if key == "" || said == "" { 0 } else { c.id("fill-chip/" + key) }
   // (its fill a plain rectangle its layer cuts along the chip's corners, its end square where it stops; the chip
   // itself cuts nothing: a box that cuts what it holds gives way to its row, which would cut its figure to an ellipsis
   // beside anything wider: @ui's docs/style.md, Short of room)
-  c.box(style=if small { chip_box_small } else { chip_box }, drop~, keep~, fn() {
+  c.box(style=if small { chip_box_small } else { chip_box }, drop~, keep~, id~, taps=false, points=true, fn() {
     if fill > 0 {
       c.layer(fn() {
         c.box(style=chip_fill_row, fn() {
@@ -77,6 +83,7 @@ pub fn fill_chip(
     |> ignore
   })
   |> ignore
+  tip(c, "fill-chip/" + key, id, said)
 }
 
 ///|

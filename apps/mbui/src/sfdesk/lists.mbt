@@ -341,18 +341,23 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
       fn() {
         @sf.name_words(c, title, l.title) |> ignore
         if @sf.has_station_mark(text(v, "stationEmoji"), text(v, "stationIcon")) {
-          c.box(style=@sfpages.kind_slot, fn() {
+          // (where it was, on hover: Archive.tsx's tip)
+          let kind = c.id("side/archived-kind/" + key)
+          c.box(style=@sfpages.kind_slot, id=kind, taps=false, points=true, fn() {
             @sf.station_mark(c, text(v, "stationEmoji"), text(v, "stationIcon"), @sfpages.kind_mark, t.p.muted)
           })
           |> ignore
+          @sf.tip(c, "side/archived-kind-tip/" + key, kind, text(v, "place"))
         }
       },
       fn() {
         c.box(style=l.meta, fn() {
           @sf.name_words(c, text(v, "last"), l.last) |> ignore
-          // (its clock while pointed at; always to a finger, which hovers over nothing)
+          // (its clock while pointed at; always to a finger, which hovers over nothing; how it was archived over it)
           if @sf.pointed_or_finger(c, c.hovered(id)) {
-            c.text(text(v, "clock"), style=arch_clock) |> ignore
+            let clock = c.id("side/archived-clock/" + key)
+            c.box(id=clock, taps=false, points=true, fn() { c.text(text(v, "clock"), style=arch_clock) |> ignore }) |> ignore
+            @sf.tip(c, "side/archived-clock-tip/" + key, clock, text(v, "how"))
           }
         })
         |> ignore
@@ -412,6 +417,7 @@ fn archive_actions(c : @ui.Ctx, src : Source, it : Json, back : Int, drop : Int,
       @sf.icon(c, "trash", size=arch_icon, color=if c.lit(drop) { t.p.red } else { t.p.muted }) |> ignore
     })
     c.semantics(d, Button, id=drop, label=@sf.t("web-pages.archive.deleteNamed", args=[("title", title)]))
+    @sf.tip(c, "side/archived-drop-tip/" + key, drop, @sf.t("common.delete"))
   }
 }
 

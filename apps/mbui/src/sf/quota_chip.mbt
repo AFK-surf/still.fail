@@ -13,17 +13,18 @@ pub fn has_quota(q : Json?) -> Bool {
 }
 
 ///|
-/// An allowance's windows (components.tsx QuotaChip each, ProfilesNav.tsx Windows): a chip per window, what is left in
-/// it, filled as far as that, its mark before it where `marked` (the web's default; a chat's agents only with more
-/// than one); `small`, a lower line; `gap` apart; nothing while the core cannot say (`state` not ok) or there is no
-/// window. `tip`: told each one's box (its id) and window, for words over it while it is pointed at.
+/// An allowance's windows (components.tsx QuotaBars compact, QuotaChip each, ProfilesNav.tsx Windows): a chip per
+/// window, what is left in it, filled as far as that, its mark before it where `marked` (the web's default; a chat's
+/// agents only with more than one); `small`, a lower line; `gap` apart; nothing while the core cannot say (`state` not
+/// ok) or there is no window. Each says over it while it is pointed at what is left of it and when it fills again;
+/// `key` names them where the same allowance shows more than once in a place (a list's rows: each its profile's).
 pub fn quota_chips(
   c : @ui.Ctx,
   q : Json?,
   small? : Bool = false,
   marked? : Bool = true,
   gap? : Double = 8.0,
-  tip? : (Int, Json) -> Unit,
+  key? : String = "quota",
 ) -> Unit {
   guard has_quota(q) else { return }
   let windows = match chip_field(q, "windows") {
@@ -32,36 +33,90 @@ pub fn quota_chips(
   }
   c.box(style=quota_chips_row.then(@ui.style(gap=room(gap))), fn() {
     for w in windows {
-      let wv = Some(w)
-      let left = chip_left(wv)
-      let chip = fn() {
-        fill_chip(c, left, chip_str(wv, "level"), if marked { chip_str(wv, "mark") } else { "" }, left.to_string() + "%", small~)
-      }
-      match tip {
-        Some(f) => {
-          let id = c.id("quota-chip/" + chip_str(wv, "mark"))
-          c.box(id~, taps=false, chip) |> ignore
-          f(id, w)
-        }
-        None => chip()
-      }
+      quota_chip(c, Some(w), small~, marked~, key~)
     }
   })
   |> ignore
 }
 
 ///|
+/// One window of an allowance (components.tsx QuotaChip), or the one an agent is short of: what is left in it, filled
+/// as far as that, its mark before it where `marked`; over it while it is pointed at, `said` (what is left of it and
+/// when it fills again: quota_said), the chip `key`'s.
+pub fn quota_chip(
+  c : @ui.Ctx,
+  w : Json?,
+  small? : Bool = false,
+  marked? : Bool = true,
+  key? : String = "quota",
+  said? : String,
+) -> Unit {
+  let left = chip_left(w)
+  fill_chip(
+    c,
+    left,
+    chip_str(w, "level"),
+    if marked { chip_str(w, "mark") } else { "" },
+    left.to_string() + "%",
+    small~,
+    key=key + "/" + chip_str(w, "mark"),
+    said=said.unwrap_or(quota_said(w)),
+  )
+}
+
+///|
+/// What is left of an allowance's window, in words (components.tsx quotaLeft: with its name where it has one), and
+/// when it fills again on a line of its own (QuotaBars' tip).
+pub fn quota_said(w : Json?) -> String {
+  let label = chip_str(w, "label")
+  let left = chip_left(w).to_string()
+  let said = if label != "" {
+    t("web-main.quota.left", args=[("label", label), ("left", left)])
+  } else {
+    t("web-main.quota.leftAlone", args=[("left", left)])
+  }
+  match chip_str(w, "refills") {
+    "" => said
+    refills => said + "\n" + refills
+  }
+}
+
+///|
 /// A machine's CPU, memory or disk (components.tsx MeterChip): its mark and what is left, filled as far as is used;
 /// `brief`, the figure alone with its unit's first letter, small (a station's row); `drop`, the turn it is left out of
 /// a line short of room in (Ctx::box's), `keep` never squeezed there.
-pub fn meter_chip(c : @ui.Ctx, m : Json?, brief? : Bool = false, drop? : Int = 0, keep? : Bool = false) -> Unit {
+pub fn meter_chip(
+  c : @ui.Ctx,
+  m : Json?,
+  brief? : Bool = false,
+  drop? : Int = 0,
+  keep? : Bool = false,
+  key? : String = "meter",
+) -> Unit {
   let unit = chip_str(m, "unit")
   let words = if brief && chip_str(m, "big") != "" {
     chip_str(m, "big") + (if unit == "%" || unit == "" { unit } else { unit.view(end_offset=1).to_string() })
   } else {
     chip_str(m, "remaining")
   }
-  fill_chip(c, 100 - chip_left(m), chip_str(m, "level"), chip_str(m, "short"), words, small=brief, drop~, keep~)
+  // what it is over it while pointed at (MeterChips' tip: its name, how much of how much, a note)
+  let note = chip_str(m, "note")
+  let said = match chip_str(m, "label") {
+    "" => ""
+    label => label + " " + chip_str(m, "value") + (if note != "" { " · " + note } else { "" })
+  }
+  fill_chip(
+    c,
+    100 - chip_left(m),
+    chip_str(m, "level"),
+    chip_str(m, "short"),
+    words,
+    small=brief,
+    drop~,
+    keep~,
+    key=key + "/" + chip_str(m, "short"),
+    said~,
+  )
 }
 
 ///|
@@ -69,7 +124,7 @@ pub fn meter_chip(c : @ui.Ctx, m : Json?, brief? : Bool = false, drop? : Int = 0
 /// another, so what holds it is as high however narrow (a station's row in a narrow sidebar). Where it is short of
 /// room, only what is still plenty is left out (level ok, grey: the last of them first); one running low (amber, red)
 /// always stays, being what the line is there to show (MeterChips `alerts`: those running low).
-pub fn meter_chips(c : @ui.Ctx, meters : Array[Json], brief? : Bool = false) -> Unit {
+pub fn meter_chips(c : @ui.Ctx, meters : Array[Json], brief? : Bool = false, key? : String = "meter") -> Unit {
   c.box(style=meter_chips_line, fn() {
     let low = fn(m : Json) { chip_str(Some(m), "level") is ("amber" | "red") }
     let plenty = meters.filter(fn(m) { !low(m) }).length()
@@ -81,7 +136,7 @@ pub fn meter_chips(c : @ui.Ctx, meters : Array[Json], brief? : Bool = false) -> 
       }
       // (the k-th of those still plenty, from the first: the last to go first; each whole or not there, never
       // squeezed with its figure cut)
-      meter_chip(c, Some(m), brief~, drop=if ok { plenty - k + 1 } else { 0 }, keep=true)
+      meter_chip(c, Some(m), brief~, drop=if ok { plenty - k + 1 } else { 0 }, keep=true, key~)
     }
   })
   |> ignore

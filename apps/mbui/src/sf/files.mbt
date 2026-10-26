@@ -312,6 +312,10 @@ pub fn file_card(
         } else {
           t("web-main.file.remove", args=[("name", name)])
         })
+        // (calling a download off says so on hover, as ↻ does: MessageFileCard's Tip)
+        if remove_label != "" {
+          tip(c, key + "/remove-tip", x, remove_label)
+        }
       }
       if slot {
         c.box(style=card_slot, fn() {  }) |> ignore

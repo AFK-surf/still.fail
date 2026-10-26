@@ -113,8 +113,9 @@ pub(all) struct ChatItem {
   /// ended and its station there: a finger's swipe left archives it (the core's swipeArchive)
   swipe_archive : Bool
   watch_ask : String?
-  /// lastActiveAt in words (3 分钟前)
+  /// lastActiveAt in words (3 分钟前), and as its day and time (its row's time's tip)
   ago : String
+  full : String
   agents : Array[RowAgent]
   people : Array[Person]
   creator : String
@@ -204,6 +205,7 @@ pub fn chat_item(v : Json) -> ChatItem {
     swipe_archive: flag(s, "swipeArchive"),
     watch_ask: opt_text(field(s, "watch"), "ask"),
     ago: text(time, "ago"),
+    full: text(time, "full"),
     agents: items(s, "agents").map(fn(a) {
       {
         key: text(Some(a), "key"),

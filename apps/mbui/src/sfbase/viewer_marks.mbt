@@ -1005,6 +1005,7 @@ pub fn marks_foot(c : @ui.Ctx) -> Unit {
           mark_swatch(c, marks_shown_color())
         })
         c.semantics(swatch_box, Button, id=swatch, label=pv("android-chat.marks.color"))
+        @sf.tip(c, "marks/palette/tip", swatch, pv("android-chat.marks.color"))
         if marking.picked >= 0 && picture_button(c, "marks/remove", "trash", dark_muted, true, said=pv("common.delete")) {
           marks_remove(marking.picked)
         }

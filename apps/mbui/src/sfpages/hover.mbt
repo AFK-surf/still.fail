@@ -9,7 +9,9 @@
 ///|
 /// `key`'s card over the trigger `trigger` (its id) while the pointer rests on it, holding `body`; to a finger, as it
 /// holds the trigger, or with `tap` (a trigger that does nothing else) as it taps it (@kit.hover_card). Under it and at
-/// its start, or on `side` lined up `along` it (beside the rail's places: their right, their tops). Whether it is open.
+/// its start, or on `side` lined up `along` it (beside the rail's places: their right, their tops); what it holds 10
+/// in from its padding, or (`padded` false) at its padding, for rows to lie there (a station's card's ways on). Whether
+/// it is open.
 pub fn hover(
   c : @ui.Ctx,
   key : String,
@@ -18,6 +20,7 @@ pub fn hover(
   tap? : Bool = false,
   side? : @ui.Side = Bottom,
   along? : @ui.Along = Start,
+  padded? : Bool = true,
   body : () -> Unit,
 ) -> Bool {
   @kit.hover_card(
@@ -34,7 +37,10 @@ pub fn hover(
     exit=hover_out,
     look=fn(c, s, body) {
       c.box(style=if tile { hover_tile } else { hover_card }, fn() {
-        @sf.small_panel(c, w=Fill(1.0), fn() { @sf.within_room(c, s, body, inner=hover_inner) }) |> ignore
+        @sf.small_panel(c, w=Fill(1.0), fn() {
+          @sf.within_room(c, s, body, inner=if padded { hover_inner } else { hover_bare })
+        })
+        |> ignore
       })
       |> ignore
     },
@@ -61,18 +67,22 @@ let hover_in : @motion.Trans = @motion.trans(fade=0.0, scale=0.96, spec=@motion.
 let hover_out : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, spec=@motion.tween(90.0, ease=Bezier(0.42, 0.0, 1.0, 1.0)))
 
 ///|
-/// Its width: 320; a tile's as wide as it holds, 220 at least.
+/// Its width: 320; a tile's as wide as it holds, 220 at least, 420 at most (Hover.css.ts cardTile).
 // kept across runs: a value (no field of it changes)
 let hover_card : @ui.Style = @ui.style(w=@sf.hover_card_w)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let hover_tile : @ui.Style = @ui.style(min_w=@sf.hover_tile_least)
+let hover_tile : @ui.Style = @ui.style(min_w=@sf.hover_tile_least, max_w=@sf.hover_tile_most)
 
 ///|
 /// What it holds, 10 in from the panel's padding (controls.css.ts panelCard), 8 apart (Hover.css.ts card).
 // kept across runs: a value (no field of it changes)
 let hover_inner : @ui.Style = @ui.css("w=Full p=S2_5 gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let hover_bare : @ui.Style = @ui.css("w=Full")
 
 // ── an agent's card ──────────────────────────────────────────────────────
 
@@ -150,23 +160,9 @@ pub fn agent_card(c : @ui.Ctx, src : Source, station : String, a : Json) -> Unit
       c.box(style=if last && windows.length() > 0 { agent_card_account_last } else { agent_card_account }, fn() {
         c.box(style=agent_card_name_room, fn() { c.text(text(account, "name"), style=agent_card_line) |> ignore })
         |> ignore
-        // each with what is left of it over it while it is pointed at, 4 apart
+        // each with what is left of it over it while it is pointed at (the chips' own tips), 4 apart
         if windows.length() > 0 {
-          @sf.quota_chips(c, quota, small=true, marked=windows.length() > 1, gap=agent_card_chips_gap.px(), tip=fn(
-            id,
-            w,
-          ) {
-            let said = @sf.t("web-main.quota.left", args=[
-              ("label", text(Some(w), "label")),
-              ("left", count(Some(w), "left").to_string()),
-            ])
-            let refills = text(Some(w), "refills")
-            @sf.tip(c, "agent-card/quota/" + text(Some(w), "mark"), id, if refills == "" {
-              said
-            } else {
-              said + "\n" + refills
-            })
-          })
+          @sf.quota_chips(c, quota, small=true, marked=windows.length() > 1, gap=agent_card_chips_gap.px(), key="agent-card/quota")
         }
       })
       |> ignore

@@ -166,7 +166,7 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : J
                   if trouble != "" {
                     c.text(trouble, size=t.t.caption, color=if blocked { t.p.red } else { t.p.muted }, w=Fill(1.0), line=17.0) |> ignore
                   }
-                  c.box(style=machine_chips, fn() { @sf.quota_chips(c, field(lv, "quota")) }) |> ignore
+                  c.box(style=machine_chips, fn() { @sf.quota_chips(c, field(lv, "quota"), key="machine-use/" + rt) }) |> ignore
                 })
                 |> ignore
               })

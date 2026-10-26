@@ -204,7 +204,7 @@ fn station_body(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
         c.box(style=seen(peek_meters, host is Some(_), faded), fn() {
           for m in items(host, "meters") {
             if text(Some(m), "level") != "ok" {
-              @sf.meter_chip(c, Some(m))
+              @sf.meter_chip(c, Some(m), key="station-body/" + text(s, "station"))
             }
           }
         })
@@ -323,17 +323,8 @@ pub fn meter_chips(c : @ui.Ctx, key : String, meters : Array[Json], alerts? : Bo
       if alerts && text(mv, "level") == "ok" {
         continue
       }
-      let id = c.id(key + "/meter/" + text(mv, "label"))
-      c.box(id~, taps=false, fn() {
-        @sf.meter_chip(c, mv)
-      })
-      |> ignore
-      let note = text(mv, "note")
-      @sf.tip(c, key + "/meter/" + text(mv, "label"), id, text(mv, "label") + " " + text(mv, "value") + (if note != "" {
-        " · " + note
-      } else {
-        ""
-      }))
+      // (what it is in the chip's own tip)
+      @sf.meter_chip(c, mv, key=key + "/meter")
     }
   })
   |> ignore

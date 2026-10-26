@@ -7,7 +7,7 @@ let decide_src : Ref[Source?] = Ref(None)
 ///|
 /// The app over the fixture in `mode` (its pages opened as sffix opens them), its calls kept in `calls` and answered;
 /// in a desktop's window when `wide`.
-fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false) -> @ui.Tester {
+fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false, pointing? : @ui.Pointing) -> @ui.Tester {
   reset()
   let base = fixture(mode)
   let src : Source = {
@@ -29,7 +29,7 @@ fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false) -> @ui.
   }
   open_fixture(mode)
   let t = if wide {
-    @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+    @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0, pointing?)
   } else {
     @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   }

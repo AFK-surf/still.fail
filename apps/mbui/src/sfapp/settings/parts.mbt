@@ -1192,13 +1192,19 @@ pub fn spinner(c : @ui.Ctx, inline? : Bool = false) -> Unit {
 
 ///|
 /// Where what someone set going shows how it is (Controls.kt DoingMark): a spinner while it is under way, a small red
-/// mark for a few seconds after it failed.
-pub fn doing_mark(c : @ui.Ctx, running : Bool, failed : String?, inline? : Bool = false) -> Unit {
+/// mark for a few seconds after it failed, why over it while it is pointed at (DoingMark.tsx DoingShown's tip: the
+/// row or the menu that asked may have gone, the toast too). Its tip named by where it is called, as its place is.
+#callsite(autofill(loc))
+pub fn doing_mark(c : @ui.Ctx, running : Bool, failed : String?, inline? : Bool = false, loc~ : SourceLoc) -> Unit {
   let t = @sf.theme()
   if running {
     spinner(c, inline~)
-  } else if failed is Some(_) {
-    @sf.icon(c, "info", size=if inline { 12.0 } else { 14.0 }, color=t.p.red) |> ignore
+  } else if failed is Some(why) {
+    let key = "doing-mark/" + loc.to_string()
+    let id = c.id(key)
+    c.box(id~, taps=false, points=true, fn() { @sf.icon(c, "info", size=if inline { 12.0 } else { 14.0 }, color=t.p.red) |> ignore })
+    |> ignore
+    @sf.tip(c, key, id, if why == "" { @sf.t("web-main.doing.failed") } else { why })
   }
 }
 

@@ -13,7 +13,8 @@ pub let viewer_small_w : Double = 640.0
 /// The viewer's bar in its place in the viewer's layer (`shown`: as the viewer fades in or out): floating at the top
 /// in the Small tier, awake while `awake` (fading out over 320 ms and in over 120 ms, as the web's `data-awake`), at
 /// least `widest` wide (what it was laid out at before: the second of what this gives back); across the top
-/// otherwise, gone while `hidden`, back to `back` by name. `tools`: the file's own, then download. The first of
+/// otherwise, gone while `hidden`, back to `back` by name (`title`, where the file is, over its name while pointed at).
+/// `tools`: the file's own, then download. The first of
 /// what it gives back is whether it was closed (its ×, or its way back), the frame after.
 pub fn viewer_frame_bar(
   c : @ui.Ctx,
@@ -27,12 +28,13 @@ pub fn viewer_frame_bar(
   shown : Double,
   ink : ViewerInk,
   tools : () -> Unit,
+  title? : String = "",
 ) -> (Bool, Double) {
   if layout(c.width) is Small {
     return viewer_head(c, key, name, meta, awake, widest, shown, ink, tools)
   }
   let mut went = false
-  let n = c.box(style=vfr_layer, fn() { went = viewer_bar(c, key + "/bar", back, name, meta, hidden, ink, tools) })
+  let n = c.box(style=vfr_layer, fn() { went = viewer_bar(c, key + "/bar", back, name, meta, hidden, ink, tools, title~) })
   c.look(n, @ui.look(alpha=shown))
   (went, 0.0)
 }
@@ -144,6 +146,10 @@ pub fn viewer_steps(c : @ui.Ctx, key : String, before : Bool, after : Bool, awak
         })
         c.semantics(b, Button, id~, label=t(side.3))
         c.look(b, @ui.look(alpha=seen * shown))
+        // (named with its key on hover: FilePreview.tsx's Tip)
+        if seen > 0.0 {
+          tip(c, key + "/go-tip/\{side.1}", id, t(side.3))
+        }
       } else {
         c.box(style=if small { vfr_step_none_small } else { vfr_step_none }, fn() {  }) |> ignore
       }

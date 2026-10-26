@@ -22,8 +22,9 @@ pub fn page_viewer_ink() -> ViewerInk {
 }
 
 ///|
-/// The bar (`key` its own): back to `back`, `name` and `meta` under it, `tools` at its end (viewer_tool,
-/// viewer_download); `hidden`, gone up out of the way. True on the frame after its way back was pressed.
+/// The bar (`key` its own): back to `back`, `name` and `meta` under it (`title`, where the file is, over them while
+/// they are pointed at: ViewerBar.tsx's title), `tools` at its end (viewer_tool, viewer_download); `hidden`, gone up
+/// out of the way. True on the frame after its way back was pressed.
 pub fn viewer_bar(
   c : @ui.Ctx,
   key : String,
@@ -33,6 +34,7 @@ pub fn viewer_bar(
   hidden : Bool,
   ink : ViewerInk,
   tools : () -> Unit,
+  title? : String = "",
 ) -> Bool {
   let gone = @motion.animate(c, key + "/gone", if hidden { 1.0 } else { 0.0 }, spec=@motion.tween(
       viewer_bar_ms,
@@ -79,13 +81,17 @@ pub fn viewer_bar(
       |> ignore
       // the middle, as wide as what it says, the sides kept for the way back and the tools
       let most = dmax(viewer_none, c.width - viewer_bar_sides)
-      c.box(style=viewer_bar_middle.then(@ui.style(max_w=Fixed(most))), fn() {
+      let middle = c.id(key + "/name")
+      c.box(style=viewer_bar_middle.then(@ui.style(max_w=Fixed(most))), id=if live && title != "" { middle } else { 0 }, taps=false, points=true, fn() {
         c.text(name, style=viewer_name_words.then(@ui.text_style(color=Data(ink.ink)))) |> ignore
         if meta != "" {
           c.text(meta, style=viewer_meta_words.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
         }
       })
       |> ignore
+      if live {
+        tip(c, key + "/name-tip", middle, title)
+      }
       // (short of room, the tools kept whole: the way back and the name give way)
       c.box(style=viewer_bar_end, keep=true, fn() {
         tools_across.val = true

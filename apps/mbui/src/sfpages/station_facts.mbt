@@ -31,7 +31,7 @@ pub fn station_figures(c : @ui.Ctx, src : Source, s : Json?) -> Unit {
     return
   }
   let net = (src.topic)("stationNet", { "station": Json::string(text(s, "station")) }).value
-  @sf.list_row_line(c, fn() { @sf.meter_chips(c, items(field(s, "host"), "meters"), brief=true) })
+  @sf.list_row_line(c, fn() { @sf.meter_chips(c, items(field(s, "host"), "meters"), brief=true, key="station-facts/" + text(s, "station")) })
   @sf.list_row_line(c, fn() {
     let words = match net {
       Some(Object(_)) =>
