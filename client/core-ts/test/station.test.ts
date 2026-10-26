@@ -151,6 +151,44 @@ test("a_chat_with_something_unread_opens_at_it_and_pages_back", async () => {
   core.close();
 });
 
+test("a_chat_window_holds_WINDOW_of_what_it_shows_so_a_chat_mostly_of_letters_keeps_both_its_ends", async () => {
+  // Agents writing each other (letters, not shown in the chat): 300 entries, 3 of them shown. Its window holds WINDOW
+  // of what it shows: paging back keeps its end, paging on its start (by entries, each dropped what the other brought,
+  // what was in view going and coming back, on and on). All of them shown, what is past WINDOW goes at the other end.
+  const opened = async (letters: boolean, read: number, unread: number) => {
+    const of = (from: number, to: number) => entries(from, to).map((e) => (!letters || [1, 120, 300].includes(e.n) ? e : { ...e, authorKind: "agent", author: "k1", letter: { way: "out", title: "备份", link: null } }));
+    const answers = base();
+    answers["GET /threads"] = [threadView(7, 300, read, unread)];
+    answers["GET /threads/7/entries?limit=50"] = { last: 300, entries: of(251, 300) };
+    for (let from = 1; from <= 251; from += 50) answers[`GET /threads/7/entries?from=${from}&to=${from + 49}`] = { last: 300, entries: of(from, from + 49) };
+    const { host, core } = await started(answers);
+    const ui = core.connect();
+    const values = new Map();
+    subscribe(core, ui, 1, { topic: "thread", station: "ws/st", thread: 7 });
+    await host.settle();
+    apply(host, values);
+    const window = () => [v(values, 1).first, v(values, 1).last, v(values, 1).end];
+    const page = async (id: number, name: string) => {
+      call(core, ui, id, name, { station: "ws/st", thread: 7 });
+      await host.time.pass(100);
+      apply(host, values);
+      return window();
+    };
+    return { core, window, page };
+  };
+  const pages = async (letters: boolean, read: number, unread: number, name: string, opens: unknown[], then: unknown[][]) => {
+    const s = await opened(letters, read, unread);
+    assert.deepEqual(s.window(), opens);
+    for (const [i, w] of then.entries()) assert.deepEqual(await s.page(i + 2, name), w, `${letters ? "letters" : "all shown"}: ${name} ${i + 1}`);
+    s.core.close();
+  };
+  // Opened at its end, paging back; opened at its first entry (unread), paging on.
+  await pages(true, 300, 0, "chat.older", [251, 300, true], [[201, 300, true], [151, 300, true], [101, 300, true], [51, 300, true], [1, 300, true]]);
+  await pages(true, 0, 300, "chat.newer", [1, 50, false], [[1, 100, false], [1, 150, false], [1, 200, false], [1, 250, false], [1, 300, true]]);
+  await pages(false, 300, 0, "chat.older", [251, 300, true], [[201, 300, true], [151, 300, true], [101, 250, false], [51, 200, false], [1, 150, false]]);
+  await pages(false, 0, 300, "chat.newer", [1, 50, false], [[1, 100, false], [1, 150, false], [51, 200, false], [101, 250, false], [151, 300, true]]);
+});
+
 test("a_write_answers_once_what_it_touched_is_read_again", async () => {
   const answers = base();
   answers["POST /sessions/k1/stop"] = { ok: true };
