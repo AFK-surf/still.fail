@@ -1718,6 +1718,26 @@ let first_actions : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter justify
 // Dialogs (parts.tsx Dialog; parts.css.ts dialog, dialogHead, dialogLead, dialogBody, dialogFoot, overlay)
 
 ///|
+/// How tall box `inner` that dialog `key` holds can show at most, in the window as it is now: the dialog as tall as it
+/// may be (the window less dialog_room) less what is not its body (its title, what it says, its buttons, its padding)
+/// and less what its body holds besides `inner` (its padding over it), as the last layout had them; None before it is
+/// laid out. What holds a share of the window (presenters' `tall`) is held to it, all of it in view rather than
+/// scrolled in a body taller than the dialog shows.
+pub fn dialog_body_most(c : @ui.Ctx, key : String, inner : Int) -> Double? {
+  match
+    (
+      c.laid_size(c.id(key + "/frame")),
+      c.laid_size(c.capped_id(key + "/body")),
+      c.laid_size(c.id(key + "/held")),
+      c.laid_size(inner),
+    ) {
+    (Some((_, framed)), Some((_, shown)), Some((_, held)), Some((_, laid))) =>
+      Some(dmax(0.0, c.height - dialog_room - (framed - shown) - (held - laid)))
+    _ => None
+  }
+}
+
+///|
 /// A dialog (parts.tsx Dialog: mbui's, @kit.dialog: the page under it dimmed and taking no press, the focus kept in
 /// it, Escape, the back and a press outside closing it) in the web's look: `w` wide (520; `wide` 640), 32 short of the
 /// window at most; its corner 42 (its padding 24 and a pill's half height, so a pill in its corner and the close
@@ -1754,6 +1774,7 @@ pub fn dialog(
     look=fn(c, s, inner) {
       c.box(
         style=dialog_box,
+        id=c.id(key + "/frame"),
         w=Px(s.w),
         max_h=c.height - dialog_room,
         radius=dialog_r,
@@ -1818,7 +1839,7 @@ pub fn dialog(
           let column = @ui.style(px=room(column_in))
           // (untitled: from its padding's top, its head its own)
           let top = if untitled { dialog_untitled_top } else { no_style }
-          c.box(style=(if footer is None { dialog_body_end } else { dialog_body }).then(column).then(top), gone_empty=true, fn() {
+          c.box(style=(if footer is None { dialog_body_end } else { dialog_body }).then(column).then(top), id=c.id(key + "/held"), gone_empty=true, fn() {
             // (its rows told they are in a dialog: dialog_rows; untitled, its close button over its corner)
             let (was, clear_was) = (in_dialog.val, untitled_clear_now.val)
             in_dialog.val = true

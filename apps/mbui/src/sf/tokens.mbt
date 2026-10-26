@@ -1248,7 +1248,7 @@ pub fn mix_seen(a : Int64, share : Double, b : Int64) -> Int64 {
 /// phone's root.css.ts), and mbui's two under Xs (Xs3 10, Xs2 11) on the same rule: Xs 12 (120 places), Sm 13 (292), Base 14 (156), Lg 15 (206: the body), Xl 16 (a bar's
 /// title, Parts.kt:527), Xl2 17 (back, Parts.kt:491), Xl3 22 (a title, bold: Security.kt:473, NewChat.kt:183,
 /// Usage.kt:130, Workspaces.kt:191), Xl4 32 (a large title, Parts.kt:559); past them Tailwind's own, on lines as tall as
-/// they are, for a number standing alone in a picture (the card shared of the agents at work: Xl7 72).
+/// they are, for a number standing alone in a picture (the card shared of the agents at work: Xl6 60).
 pub let text_scale : @ui.TextScale = {
   // (the roles: each screen's own, Type's, set by ui_theme: text_roles)
   caption: (11.0, 16.0),
@@ -1476,6 +1476,13 @@ pub let sign_in_side : @ui.Space = Exact(30.0)
 /// said of them, its cards the white barely, still.fail's orange only for its dot, its first ring, today and what is
 /// at work now, the other rings white and grey.
 pub let share_ground : Int64 = 0x111114FFL
+
+///|
+/// How wide it is laid out: one picture whatever it is seen on (2026-10-26 用户「感觉分享图片不应该分电脑和手机…按最合理的
+/// 布局生成」), a portrait poster as a phone shows what is shared (1080 pixels across at a phone's 3), laid out the one
+/// way (narrower only where its room is), drawn smaller where it has not the room's height (a short window:
+/// @sf.whole_fitted).
+pub let share_w_most : Double = 360.0
 
 ///|
 pub let share_ink : Int64 = 0xF4F4F5FFL
