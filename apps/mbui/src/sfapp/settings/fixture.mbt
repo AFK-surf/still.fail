@@ -133,6 +133,7 @@ fn fixture_reset() -> Unit {
   fx.marks.clear()
   fx.auto = false
   fx.none = false
+  fx_adb.val = ""
   fx.login = ""
   fx.login_station = false
   fx.new_login = false
@@ -203,6 +204,21 @@ pub fn fixture_page(mode : String) -> String {
     fixture_open.list = list
     fixture_open.block = block
     fixture_open.frames = 0
+  }
+  // 共享调试 as it stands with the phone (fx_adb_share), its host's word on the phone said already
+  fx_adb.val = ""
+  if m.has_prefix("settings-adb-") {
+    fx_adb.val = m.unsafe_substring(start=13, end=m.length())
+    adb_host.phone = Some(
+      obj([
+        ("supported", Json::boolean(true)),
+        ("developer", Json::boolean(true)),
+        ("wireless", Json::boolean(fx_adb.val != "off")),
+        ("wifi", Json::boolean(true)),
+        ("canSwitch", Json::boolean(false)),
+        ("reads", Json::boolean(false)),
+      ]),
+    )
   }
   match m {
     "settings-station-mark" => up("mark", "", 0)
@@ -296,7 +312,8 @@ pub fn fixture_page(mode : String) -> String {
       "station:ws1/st1"
     "settings-stations-add" | "settings-stations-existing" | "settings-stations-command" | "settings-first-station" =>
       "stations"
-    "settings-adb" => "adb:ws1/st1"
+    "settings-adb" | "settings-adb-off" | "settings-adb-unpaired" | "settings-adb-pairing" | "settings-adb-connected" | "settings-adb-failed" =>
+      "adb:ws1/st1"
     "settings-profile-menu" | "settings-profile-lower" | "settings-profile-login" | "settings-profile-login-station" =>
       "profile:ws1/st1#cc"
     "settings-new-profile" | "settings-new-profile-hermes" | "settings-new-profile-login" | "settings-new-profile-login-station" => "new-profile:ws1/st1"
@@ -1255,8 +1272,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
       )
     // what still.fail uses of Studio's machine (the `resources` view): a chat's agent and the station
     "resources" => Some(fx_resources())
-    "adbShare" =>
-      Some(obj([("sharing", Json::boolean(false)), ("phase", str("idle")), ("tunnels", Json::number(0.0))]))
+    "adbShare" => Some(fx_adb_share())
     "joinable" =>
       Some(
         obj([
@@ -2395,4 +2411,37 @@ fn fx_resources() -> Json {
     ("notes", []),
     ("basis", str("按 Activity Monitor 的口径：CPU 100% 是一个核")),
   ])
+}
+
+///|
+/// 共享调试 as a fixture's mode has it (MBUI_FIXTURE=settings-adb-<off|unpaired|pairing|connected|failed>; "" not lent).
+let fx_adb : Ref[String] = Ref("")
+
+///|
+/// The core's `adbShare` for fx_adb: lent to Studio (ws1/st1) and how its adb holds the phone, the ports the app found.
+fn fx_adb_share() -> Json {
+  let lent = fn(adb : String, fields : Array[(String, Json)]) {
+    obj(
+      [
+        ("sharing", Json::boolean(true)),
+        ("station", str("ws1/st1")),
+        ("phase", str("offered")),
+        ("serial", str("127.0.0.1:37762")),
+        ("adb", str(adb)),
+        ("tunnels", Json::number(0.0)),
+        ("connectPort", Json::number(41239.0)),
+      ]..append(fields),
+    )
+  }
+  match fx_adb.val {
+    "unpaired" => lent("unpaired", [])
+    "pairing" => lent("unpaired", [("pairPort", Json::number(37115.0))])
+    "connected" => lent("connected", [("tunnels", Json::number(1.0))])
+    "failed" =>
+      lent("failed", [
+        ("message", str("the phone did not reach adb: 无法连接手机上的 adb：Connection refused (os error 111)")),
+        ("refusedPort", Json::number(41239.0)),
+      ])
+    _ => obj([("sharing", Json::boolean(false)), ("phase", str("idle")), ("tunnels", Json::number(0.0))])
+  }
 }
