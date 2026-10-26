@@ -17,8 +17,11 @@
 //     status, headers} + the body -> {}; listen.close {id} -> {}.
 //   text.collate {names} -> {value: [place, …]}, at once (engine.h app_sync): the order people read names in, the
 //     system's (win_collate.h: 中文 by pinyin).
-// The app's files are under %LOCALAPPDATA%\fail.still.mbui\core ($MBUI_CORE_DATA instead), its own, never the desktop
-// app's. MB_CORE_TRACE=1 says what the core says (its first 300 bytes) and the app's calls on stderr; MB_CORE_DEBUG=1
+// The app's files are under %LOCALAPPDATA%\<its id>\core ($MBUI_CORE_DATA instead: fail.still.mbui's its own, never the
+// desktop app's); built in still.fail's desktop app's place (scripts/win.sh's stable and beta: MBUI_OWN), that app's
+// own, where it kept them (its userData, %APPDATA%\<its name>: still.fail, youdid.wtf; core\ there, as its core's:
+// apps/desktop/src/main.ts), signed in, its prefs and chats as they were, its sealed keys taken as they are first asked
+// for (win_electron_sealed.h), as apple_engine.m and apple_core.mm have it on the Mac. MB_CORE_TRACE=1 says what the core says (its first 300 bytes) and the app's calls on stderr; MB_CORE_DEBUG=1
 // the core's debug lines; MBUI_SECURE_TEST=1 round-trips secure.* once as the core starts (SECURE_TEST … on stderr).
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x0A00
@@ -35,6 +38,7 @@
 // file names mbui where the module's checkout has it, which win.sh's copy of the module does not
 #include <listen_api.h>
 #include "engine.h"
+#include "win_electron_sealed.h"
 #include "win_collate.h"
 
 #pragma comment(lib, "crypt32.lib")
@@ -204,6 +208,24 @@ static int jnum(const char *p, double *out) {
 
 static int jtrue(const char *p) { return p && strncmp(p, "true", 4) == 0; }
 
+// mbui's host's (win_life.h): the app's identity, its name, its own environment
+const wchar_t *mb_win_app_id(void);
+const wchar_t *mb_win_app_name(void);
+const wchar_t *mb_win_env(const wchar_t *name);
+
+// built in still.fail's desktop app's place (MBUI_OWN): that app's userData (%APPDATA%\<its name>, malloc'd), else NULL
+static WCHAR *desktop_app_data(void) {
+  const wchar_t *own = mb_win_env(L"MBUI_OWN"), *name = mb_win_app_name();
+  if (!own || wcscmp(own, L"1") != 0 || !name || !*name) return NULL;
+  PWSTR roaming = NULL;
+  if (SHGetKnownFolderPath(&FOLDERID_RoamingAppData, 0, NULL, &roaming) != S_OK) return NULL;
+  size_t n = wcslen(roaming) + wcslen(name) + 2;
+  WCHAR *dir = malloc(n * sizeof(WCHAR));
+  if (dir) swprintf(dir, n, L"%ls\\%ls", roaming, name);
+  CoTaskMemFree(roaming);
+  return dir;
+}
+
 // ── secure.* ──
 
 // <data>\secure\<the key's UTF-8 in hex>, `.user` after a `user` one's
@@ -302,6 +324,14 @@ static void core_secure(uint64_t id, const char *op, const char *json, const uin
     uint8_t *out = NULL;
     size_t len = 0;
     int got = secure_get(key, user, &out, &len, why, sizeof why);
+    // none here, in still.fail's desktop app's place: that app's, the first time asked, sealed again here
+    WCHAR *desktop = got == 0 ? desktop_app_data() : NULL;
+    if (desktop && electron_sealed_get(desktop, key, user, &out, &len)) {
+      char set_why[200] = "";
+      if (!secure_set(key, user, out, len, set_why, sizeof set_why)) fprintf(stderr, "[core] %s\n", set_why);
+      got = 1;
+    }
+    free(desktop);
     if (got > 0) answer(id, "{}", NULL, out, len);
     else if (got == 0) answer(id, "{\"none\":true}", NULL, NULL, 0);
     else answer(id, NULL, why, NULL, 0);
@@ -626,20 +656,28 @@ static uint8_t *read_all(const WCHAR *path, size_t *len) {
   return b;
 }
 
-/// %LOCALAPPDATA%\fail.still.mbui\core, or $MBUI_CORE_DATA (engine->data_dir in core_client.h): kept once asked.
+/// $MBUI_CORE_DATA, else still.fail's desktop app's in its place (its userData's core), else %LOCALAPPDATA%\<the app's
+/// id, fail.still.mbui>\core (engine->data_dir in core_client.h): kept once asked.
 const char *mb_core_data_dir(void) {
   static char *dir;
   if (dir) return dir;
   const WCHAR *env = _wgetenv(L"MBUI_CORE_DATA");
-  WCHAR *path = NULL;
+  WCHAR *path = NULL, *desktop = NULL;
   if (env && *env) {
     path = _wcsdup(env);
+  } else if ((desktop = desktop_app_data()) != NULL) {
+    size_t n = wcslen(desktop) + 8;
+    path = malloc(n * sizeof(WCHAR));
+    swprintf(path, n, L"%ls\\core", desktop);
+    free(desktop);
   } else {
     PWSTR local = NULL;
     if (SHGetKnownFolderPath(&FOLDERID_LocalAppData, 0, NULL, &local) != S_OK) return NULL;
-    size_t n = wcslen(local) + 40;
+    const wchar_t *id = mb_win_app_id();
+    if (!id || !*id) id = L"fail.still.mbui";
+    size_t n = wcslen(local) + wcslen(id) + 8;
     path = malloc(n * sizeof(WCHAR));
-    swprintf(path, n, L"%ls\\fail.still.mbui\\core", local);
+    swprintf(path, n, L"%ls\\%ls\\core", local, id);
     CoTaskMemFree(local);
   }
   SHCreateDirectoryExW(NULL, path, NULL);

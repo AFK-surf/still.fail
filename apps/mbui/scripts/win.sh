@@ -11,12 +11,17 @@
 #   scripts/win.sh core                    the core's bytecode (out/core/core.hbc)
 #   scripts/win.sh put                     the core's bytecode, the engine and the shell put beside the app
 #   scripts/win.sh collate                 the host's order of names (src/host/win_collate.h) checked
+#   scripts/win.sh sealed                  the desktop app's sealed values opened (src/host/win_electron_sealed.h) checked
 # Its identity (as mac-app.sh's Info.plist has the Mac app's), in the program's resources: its icon
 # (windows/AppIcon-<mac-icon.swift's hash>.ico: that script draws it on a Mac, `--ico`), its version (0.1.<MBUI_BUILD>,
 # else the commits in still.fail's history), its name, and its own environment (RCDATA MBUI_ENV, which mbui's host
-# reads as what the process's environment does not say: src/host/win_life.h): MBUI_APP_ID, MBUI_APP_NAME, MBUI_BETA.
-# Built as still.fail mbui (fail.still.mbui, an app beside still.fail's desktop app, on the test channel: it takes no
-# links, MBUI_SCHEMES, of that app's).
+# reads as what the process's environment does not say: src/host/win_life.h): MBUI_APP_ID, MBUI_APP_NAME,
+# MBUI_SCHEMES, MBUI_OWN, MBUI_BETA. MBUI_VARIANT, which app it is built as (as mac-app.sh's): mbui (the default) still.fail
+# mbui, an app beside still.fail's desktop app (fail.still.mbui, the test channel's, no links of that app's); stable and
+# beta still.fail's desktop app itself, to take its place (apps/desktop/package.json, build.sh): its id
+# (fail.still.desktop, .beta: its AppUserModelID, its pinned shortcuts'), its name (still.fail, youdid.wtf: its
+# userData, %APPDATA%\<name>, whose data, sign-in and sealed keys it takes: src/host/win_core.c), its links (stillfail
+# and ember, stillfail-beta), MBUI_OWN; the beta's core a beta's.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 export APP=${APP:-stillfail}
@@ -32,10 +37,17 @@ res() {
   local n=${MBUI_BUILD:-$(git -C "$EMBER" rev-list --count HEAD 2>/dev/null || echo 1)}
   local icon=$A/windows/AppIcon-$(sha256sum "$D/mac-icon.swift" | cut -c1-12).ico
   [ -f "$icon" ] || { echo "win.sh: no $icon (scripts/mac-icon.swift changed: swift scripts/mac-icon.swift --ico $icon, on a Mac)" >&2; return 1; }
-  local id=fail.still.mbui name="still.fail mbui" r=$A/out/win-res
+  # (exe: what the program is named where it is put, the desktop app's own program's name in its place: beta.sh win)
+  local id name exe extra r=$A/out/win-res
+  case "${MBUI_VARIANT:-mbui}" in
+    mbui) id=fail.still.mbui name="still.fail mbui" exe=stillfail extra='MBUI_BETA=1' ;;
+    stable) id=fail.still.desktop name=still.fail exe=still.fail extra='MBUI_SCHEMES=stillfail,ember\nMBUI_OWN=1' ;;
+    beta) id=fail.still.desktop.beta name=youdid.wtf exe=youdid.wtf extra='MBUI_SCHEMES=stillfail-beta\nMBUI_OWN=1\nMBUI_BETA=1' ;;
+    *) echo "win.sh: MBUI_VARIANT is mbui, stable or beta, not $MBUI_VARIANT" >&2; return 1 ;;
+  esac
   rm -rf "$r" && mkdir -p "$r"
   cp "$icon" "$r/app.ico"
-  printf 'MBUI_APP_ID=%s\nMBUI_APP_NAME=%s\nMBUI_BETA=1\n' "$id" "$name" > "$r/app.env"
+  printf "MBUI_APP_ID=%s\nMBUI_APP_NAME=%s\n$extra\n" "$id" "$name" > "$r/app.env"
   cat > "$r/app.rc" <<RC
 1 ICON "app.ico"
 MBUI_ENV RCDATA "app.env"
@@ -56,7 +68,7 @@ BEGIN
       VALUE "FileDescription", "$name"
       VALUE "FileVersion", "0.1.$n"
       VALUE "InternalName", "stillfail"
-      VALUE "OriginalFilename", "stillfail.exe"
+      VALUE "OriginalFilename", "$exe.exe"
       VALUE "ProductName", "$name"
       VALUE "ProductVersion", "0.1.$n"
     END
@@ -89,10 +101,20 @@ collate() {
     -Fo"$(cygpath -w "$out/")" > "$out/build.log") || { cat "$out/build.log"; return 1; }
   "$out/collate_test_win.exe"
 }
+# sealed: the desktop app's sealed values opened in its place (src/host/win_electron_sealed.h), checked by
+# core/sealed_test_win.c
+sealed() {
+  local out=$A/out/sealed
+  mkdir -p "$out"
+  (cd "$A" && cl.exe -nologo -O2 -W3 -Isrc/host core/sealed_test_win.c -Fe"$(cygpath -w "$out/sealed_test_win.exe")" \
+    -Fo"$(cygpath -w "$out/")" > "$out/build.log") || { cat "$out/build.log"; return 1; }
+  "$out/sealed_test_win.exe"
+}
 case "${1:-build}" in
   core) core; exit $? ;;
   put) put core; exit $? ;;
   collate) collate; exit $? ;;
+  sealed) sealed; exit $? ;;
 esac
 if [ "$APP" = stillfail ] && [ "${1:-build}" = build ] && [ "${MBUI_WIN_CORE:-1}" != 0 ]; then
   core || exit 1
