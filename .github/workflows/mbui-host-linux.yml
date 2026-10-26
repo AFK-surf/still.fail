@@ -28,6 +28,7 @@ on:
       - "apps/mbui/mbui/src/kitdemo/gallery/textcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/textrec_linux_*"
       - ".github/workflows/mbui-host-linux.yml"
+      - ".github/actions/apt/**"
   push:
     branches: [main]
     paths: *paths
@@ -46,13 +47,13 @@ jobs:
       # GTK 4 and what the host draws with (epoxy, Pango, cairo, gdk-pixbuf, libsoup), Mesa's software GL, Xvfb, and the
       # fonts the text is set in (the system's sans-serif, Han in Noto Sans CJK SC, Noto Color Emoji); D-Bus's daemon, for a
       # session bus of the links' run
-      - name: GTK 4, Mesa, Xvfb, the fonts
-        working-directory: ${{ github.workspace }}
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends libgtk-4-dev libepoxy-dev libpango1.0-dev libcairo2-dev \
-            libfontconfig-dev libgdk-pixbuf-2.0-dev libsoup-3.0-dev zlib1g-dev libgl1-mesa-dri libegl-mesa0 xvfb xauth \
-            fonts-noto-cjk fonts-noto-color-emoji fonts-dejavu-core dbus-daemon
+      - uses: ./.github/actions/apt
+        with:
+          name: mbui-host-linux
+          packages: >-
+            libgtk-4-dev libepoxy-dev libpango1.0-dev libcairo2-dev libfontconfig-dev libgdk-pixbuf-2.0-dev
+            libsoup-3.0-dev zlib1g-dev libgl1-mesa-dri libegl-mesa0 xvfb xauth fonts-noto-cjk fonts-noto-color-emoji
+            fonts-dejavu-core dbus-daemon
       - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo
         run: scripts/host_contract.sh linux build
