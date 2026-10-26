@@ -12,7 +12,8 @@
 // - goes on with its window closed, put away to its icon in the notification area (its core, its notifications on):
 //   the icon clicked, or the app started again, brings it back; the icon's menu (the app's words: menu_setup's
 //   `"role": "tray"` menu) brings it back or quits;
-// - is opened with a link of its schemes (MBUI_SCHEMES, "stillfail,ember"): as it starts, or the one running is.
+// - is opened with a link of its schemes (MBUI_SCHEMES, "stillfail,ember"): as it starts, or the one running is;
+//   built in still.fail's desktop app's place (MBUI_OWN), its schemes are claimed for it (links_claimed).
 // A program without one (a demo, a test app's scripted run) ends as its window closes, as before.
 // Said to the app on the system's channel (src/hostapi/system.mbt): `shown` with how long it was away as its window
 // comes back after it was put away and as the PC wakes from sleep, `link`, `network` as its default route goes
@@ -110,6 +111,7 @@ static const WCHAR *app_name(const WCHAR *title) {
 }
 const wchar_t *mb_win_app_id(void) { return app_id(); }
 const wchar_t *mb_win_app_name(void) { return app_name(L""); }
+const wchar_t *mb_win_env(const wchar_t *name) { return app_env(name); }
 
 // the window's class, by which the app started again finds the one running
 static void window_class(WCHAR *out, size_t cap) {
@@ -197,6 +199,41 @@ static const WCHAR *started_with(void) {
     if (app_link(argv[i])) link = _wcsdup(argv[i]);
   if (argv) LocalFree(argv);
   return link;
+}
+
+// The app's links its own (MBUI_OWN: built in still.fail's desktop app's place, its schemes that app's): each of its
+// schemes opens this program, as that app's setAsDefaultProtocolClient had them (HKCU\Software\Classes\<scheme>,
+// shell\open\command "<this program>" "%1"), said again as it starts (it may have moved, or another taken them)
+static void links_claimed(void) {
+  const WCHAR *own = app_env(L"MBUI_OWN"), *schemes = app_env(L"MBUI_SCHEMES");
+  if (!own || wcscmp(own, L"1") != 0 || !schemes || !*schemes) return;
+  WCHAR exe[MAX_PATH * 2], command[MAX_PATH * 2 + 16], key[256], label[300];
+  DWORD n = GetModuleFileNameW(NULL, exe, MAX_PATH * 2);
+  if (!n || n >= MAX_PATH * 2) return;
+  _snwprintf(command, MAX_PATH * 2 + 16, L"\"%ls\" \"%%1\"", exe);
+  command[MAX_PATH * 2 + 15] = 0;
+  for (const WCHAR *p = schemes; *p;) {
+    const WCHAR *e = wcschr(p, L',');
+    size_t k = e ? (size_t)(e - p) : wcslen(p);
+    if (k > 0 && k < 64) {
+      WCHAR scheme[64];
+      wcsncpy_s(scheme, 64, p, k);
+      HKEY h = NULL;
+      _snwprintf(key, 256, L"Software\\Classes\\%ls", scheme);
+      if (RegCreateKeyExW(HKEY_CURRENT_USER, key, 0, NULL, 0, KEY_SET_VALUE, NULL, &h, NULL) == ERROR_SUCCESS) {
+        _snwprintf(label, 300, L"URL:%ls", app_name(L""));
+        RegSetValueExW(h, NULL, 0, REG_SZ, (const BYTE *)label, (DWORD)((wcslen(label) + 1) * sizeof(WCHAR)));
+        RegSetValueExW(h, L"URL Protocol", 0, REG_SZ, (const BYTE *)L"", sizeof(WCHAR));
+        RegCloseKey(h);
+      }
+      _snwprintf(key, 256, L"Software\\Classes\\%ls\\shell\\open\\command", scheme);
+      if (RegCreateKeyExW(HKEY_CURRENT_USER, key, 0, NULL, 0, KEY_SET_VALUE, NULL, &h, NULL) == ERROR_SUCCESS) {
+        RegSetValueExW(h, NULL, 0, REG_SZ, (const BYTE *)command, (DWORD)((wcslen(command) + 1) * sizeof(WCHAR)));
+        RegCloseKey(h);
+      }
+    }
+    p += k + (e ? 1 : 0);
+  }
 }
 
 // ---- in front or not ----
@@ -569,6 +606,7 @@ static void life_start(const WCHAR *title) {
   HANDLE watch = NULL;
   network_look();
   NotifyRouteChange2(AF_UNSPEC, network_changed, NULL, FALSE, &watch);
+  links_claimed();
   const WCHAR *link = started_with();
   if (link) say_link(link, (int)wcslen(link));
   title_dark();

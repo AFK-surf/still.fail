@@ -454,6 +454,9 @@ jobs:
       # the order of names the host gives the core (text.collate: src/host/win_collate.h), checked (a C program, ~2 s)
       - name: The order of names (win.sh collate)
         run: bash apps/mbui/scripts/win.sh collate
+      # what still.fail's desktop app kept sealed, opened by the app built in its place (src/host/win_electron_sealed.h)
+      - name: The desktop app's sealed values (win.sh sealed)
+        run: bash apps/mbui/scripts/win.sh sealed
       - name: The core's bytecode (Hermes)
         run: |
           bash apps/mbui/scripts/win.sh core
