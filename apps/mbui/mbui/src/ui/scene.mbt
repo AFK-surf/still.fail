@@ -675,7 +675,14 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     n.first >= 0 &&
     (n.kind == kind_box || n.kind == kind_list || n.kind == kind_scroll)
   // (a picture's is what shows until it is in, drawn with it: paint_image)
-  let bg = if n.kind == kind_image { 0L } else { n.bg }
+  let bg = if n.kind == kind_image {
+    0L
+  } else {
+    match self.ground_bg_of(i) {
+      Some(b) if ground is Some(_) => b
+      _ => n.bg
+    }
+  }
   if (bg & 0xFFL) != 0L || (n.border_w > 0.0 && !border_over) {
     self.emit_rect(
       n.x,

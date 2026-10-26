@@ -131,6 +131,8 @@ priv struct Drawn {
   /// left, then round it) instead of where it is laid out: a shape on its way to its new one (motion's reshape); None
   /// as laid out
   mut ground : (Double, Double, Double, Double, (Double, Double, Double, Double))?
+  /// the colour of its ground there, when not its own (a card on its way from one place's ground to another's)
+  mut ground_bg : Int64?
 }
 
 ///|
@@ -290,6 +292,7 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     bottom: -1.0,
     top: -1.0,
     ground: None,
+    ground_bg: None,
   }
   dr.stamp[i] = dr.build
   dr.at[i] = dr.entries.length()
@@ -366,9 +369,10 @@ pub fn Ctx::draw_only(self : Ctx, i : Int) -> Unit {
 
 ///|
 /// Node `i`'s own ground (its colour, glass, shadow, border and corners) drawn in the box at `x`, `y`, `w` by `h`
-/// with corners `radii` (top left, then round it: node_radii's) (the window's, before its look), what it holds where
-/// it is laid out: a box on its way from the shape it had to its new one (motion's reshape). Tapped where it is laid
-/// out.
+/// with corners `radii` (top left, then round it: node_radii's) (the window's, before its look), in colour `bg` when
+/// given, what it holds where it is laid out: a box on its way from the shape it had to its new one (motion's
+/// reshape; a card flying from one place to another, its ground from the one's to the other's). Tapped where it is
+/// laid out.
 pub fn Ctx::draw_ground(
   self : Ctx,
   i : Int,
@@ -377,8 +381,17 @@ pub fn Ctx::draw_ground(
   w : Double,
   h : Double,
   radii : (Double, Double, Double, Double),
+  bg? : Int64,
 ) -> Unit {
-  self.drawn_of(i).ground = Some((x, y, w, h, radii))
+  let e = self.drawn_of(i)
+  e.ground = Some((x, y, w, h, radii))
+  e.ground_bg = bg
+}
+
+///|
+/// Node `i`'s own colour (its ground's, RRGGBBAA), as its style made it.
+pub fn Ctx::node_bg(self : Ctx, i : Int) -> Int64 {
+  self.nodes[i].bg
 }
 
 ///|
@@ -386,6 +399,15 @@ pub fn Ctx::draw_ground(
 fn Ctx::ground_of(self : Ctx, i : Int) -> (Double, Double, Double, Double, (Double, Double, Double, Double))? {
   match self.drawn_entry(i) {
     Some(e) => e.ground
+    None => None
+  }
+}
+
+///|
+/// The colour node `i`'s ground is drawn in this frame (draw_ground), if other than its own.
+fn Ctx::ground_bg_of(self : Ctx, i : Int) -> Int64? {
+  match self.drawn_entry(i) {
+    Some(e) => e.ground_bg
     None => None
   }
 }

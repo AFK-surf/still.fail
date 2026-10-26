@@ -739,26 +739,25 @@ pub fn quotes(
         Some(m) => m.seq
         None => -1.0
       }
-      // (in a box of its own: where a quote sent from the composer flies to)
-      let item = c.box(style=@sf.full_width, fn() {
-        let done = @sf.quote_card(
-          c,
-          "msg-quote/" + q.ts + "/" + i.to_string(),
-          q.author,
-          q.text,
-          role=q.role,
-          comment=q.comment,
-          jump=q.ts != "" && here.go is Some(_),
-          // (its own box, as the message's files have theirs: at most as wide as the card has room)
-          picture?=own.map(fn(a) { fn() { message_files(c, src, here, [a], false) } }),
-        )
-        match here.go {
-          Some(go) if done.jumped && seq >= 0.0 => go(seq)
-          _ => ()
-        }
-      })
+      let done = @sf.quote_card(
+        c,
+        "msg-quote/" + q.ts + "/" + i.to_string(),
+        q.author,
+        q.text,
+        role=q.role,
+        comment=q.comment,
+        jump=q.ts != "" && here.go is Some(_),
+        // (its own box, as the message's files have theirs: at most as wide as the card has room)
+        picture?=own.map(fn(a) { fn() { message_files(c, src, here, [a], false) } }),
+      )
+      match here.go {
+        Some(go) if done.jumped && seq >= 0.0 => go(seq)
+        _ => ()
+      }
+      // sent from the composer: it flies here from its card there
       match flight_here(here) {
-        Some(f) => flight_landing(c, f, item, @sfbase.quote_key(i), grow=false)
+        Some(f) =>
+          flight_quote_landing(c, f, done.card, @sfbase.quote_key(i), @sf.quote_sent_shift(q.author, q.role))
         None => ()
       }
     }

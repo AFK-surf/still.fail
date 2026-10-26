@@ -59,6 +59,9 @@ priv struct Composing {
   mut cc_open : Bool
   /// the cursor asked into it as it is next drawn, on any screen (composer_take_focus)
   mut wanted : Bool
+  /// each quote's card's colour as it was last drawn, by quote: where its ground sets out from as it is sent
+  /// (flying_quotes)
+  grounds : Map[String, Int64]
 }
 
 ///|
@@ -88,6 +91,7 @@ let composing : Composing = {
   menu_up: false,
   cc_open: false,
   wanted: false,
+  grounds: {},
 }
 
 ///|
@@ -96,6 +100,7 @@ fn composing_reset() -> Unit {
   composing.let_go = false
   composing.warmed.clear()
   composing.comments.clear()
+  composing.grounds.clear()
   composing.roomy = None
   composing.draft = ""
   composing.roomy_before = None
@@ -673,41 +678,39 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
           c.focus_editor(key)
           writing_focused(src, w)
         }
-        let done : Ref[@sf.QuoteCardDone] = Ref::new({ jumped: false, removed: false })
-        let card = c.box(style=@sf.full_width, fn() {
-          done.val = @sf.quote_card(
-            c,
-            key,
-            text(v, "author"),
-            text(v, "text"),
-            role=text(v, "role"),
-            composer=true,
-            remove=true,
-            comment_field=fn() {
-              let res = c.editor(
-                key,
-                placeholder=@sf.t("web-main.quote.commentPlaceholder"),
-                font_size=@sf.theme().t.ui,
-                line=@sf.theme().t.ui_line,
-                max_lines=1,
-                plain=true,
-                color=@sf.theme().p.text,
-                placeholder_color=@sf.theme().p.subtle,
-                caret_color=@sf.theme().p.accent,
-                field=f,
-              )
-              if res.text != text(v, "comment") {
-                writing_comment(src, w, id, res.text)
-              }
-              if res.submitted is Some(_) {
-                c.focus_editor(composer_field_key)
-              }
-            },
-          )
-        })
-        // (where it is: what flies from it as it is sent, flying_quotes)
-        @motion.measure(c, card, quote_card_key(id))
-        if done.val.removed {
+        let done = @sf.quote_card(
+          c,
+          key,
+          text(v, "author"),
+          text(v, "text"),
+          role=text(v, "role"),
+          composer=true,
+          remove=true,
+          comment_field=fn() {
+            let res = c.editor(
+              key,
+              placeholder=@sf.t("web-main.quote.commentPlaceholder"),
+              font_size=@sf.theme().t.ui,
+              line=@sf.theme().t.ui_line,
+              max_lines=1,
+              plain=true,
+              color=@sf.theme().p.text,
+              placeholder_color=@sf.theme().p.subtle,
+              caret_color=@sf.theme().p.accent,
+              field=f,
+            )
+            if res.text != text(v, "comment") {
+              writing_comment(src, w, id, res.text)
+            }
+            if res.submitted is Some(_) {
+              c.focus_editor(composer_field_key)
+            }
+          },
+        )
+        // (where it is and its colour: what flies from it as it is sent, flying_quotes)
+        @motion.measure(c, done.card, quote_card_key(id))
+        composing.grounds[id] = c.node_bg(done.card)
+        if done.removed {
           writing_unquote(src, w, id)
         }
       }
@@ -1293,6 +1296,7 @@ fn flying_files(c : @ui.Ctx, w : Writing) -> Array[FlyingFile] {
               |> ignore
             }
           },
+          ground: 0L,
         })
       }
       _ => None
@@ -1330,29 +1334,28 @@ fn quote_card_key(id : String) -> String {
 
 ///|
 /// The quotes of a draft, flying as it is sent to their cards in its message (quote_key: each by its place among
-/// them), each from its card here: its card there carried from where this one's corner is, off by as much as its words
-/// are further in here (quote_sent_shift), so that they set out from where they were; drawn there as its message
-/// draws it until it sets off.
+/// them), each from its card here (where it is, its colour: what its ground sets out from), drawn there as it was, what
+/// is said about it as written, until it sets off.
 fn flying_quotes(c : @ui.Ctx, w : Writing) -> Array[FlyingFile] {
-  let most = mine_most(c)
   let flying : Array[FlyingFile] = []
   for i, q in sent_quotes(w) {
     let id = text(Some(w.quotes[i]), "id")
     match @motion.measured_rect(c, quote_card_key(id)) {
       Some((x, y, wide, high)) => {
         let s = @sfbase.quote_of(q)
-        let (dx, dy) = @sf.quote_sent_shift(s.author, s.role)
         flying.push({
           key: @sfbase.quote_key(i),
-          from: (x + dx, y + dy, wide, high),
+          from: (x, y, wide, high),
           picture: "",
           face: fn() {
             let c = @ui.current()
-            c.box(style=quote_cards_end.then(@ui.style(max_w=Fixed(most))), fn() {
-              @sf.quote_card(c, "flying/quote/" + id, s.author, s.text, role=s.role, comment=s.comment) |> ignore
+            c.box(style=@ui.style(w=Fixed(wide)), fn() {
+              @sf.quote_card(c, "flying/quote/" + id, s.author, s.text, role=s.role, comment=s.comment, composer=true)
+              |> ignore
             })
             |> ignore
           },
+          ground: composing.grounds.get(id).unwrap_or(0L),
         })
       }
       None => ()
