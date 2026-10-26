@@ -72,6 +72,8 @@ export class Adb {
   #station: J = null;
   #problem: string | null = null;
   #tunnels = 0;
+  /// The connect port a tunnel last found nothing listening on: the app looks for adbd's ports anew as it hears of it.
+  #refused: number | null = null;
   /// The offer's keeper, and its tunnels' scope: closed as the offer stops or moves to another station.
   #keeper: Fiber.Fiber<unknown, unknown> | null = null;
   #tunnelScope: Scope.Closeable | null = null;
@@ -121,6 +123,7 @@ export class Adb {
       tunnels: this.#tunnels,
       connectPort: this.#offer?.connect ?? null,
       pairPort: this.#offer?.pair ?? null,
+      refusedPort: this.#offer !== null && this.#refused === this.#offer.connect ? this.#refused : null,
     };
   }
 
@@ -172,6 +175,7 @@ export class Adb {
       this.#closeTunnels();
       this.#until = this.#env.host.nowMs() + offer.minutes * 60_000;
     }
+    if (offer.connect !== this.#refused) this.#refused = null;
     this.#offer = offer;
     const run = ++this.#run;
     this.#problem = null;
@@ -234,7 +238,8 @@ export class Adb {
       const opened = yield* Effect.result(this.#link(offer.station));
       if (opened._tag === "Failure") return { lost: opened.failure.message, pause: true } as Ended;
       const [mesh, link] = opened.success;
-      const ask = { op: "share", phone: mesh.deviceId(), device: offer.device, android: offer.android, package: offer.package, adbd: offer.connect !== null, pair: offer.pair !== null };
+      // `connect`: the station connects anew as adbd's port changes (adbd turned off and on, its port with it).
+      const ask = { op: "share", phone: mesh.deviceId(), device: offer.device, android: offer.android, package: offer.package, adbd: offer.connect !== null, pair: offer.pair !== null, connect: offer.connect };
       const replied = yield* Effect.result(link.adb(head(), ask));
       if (replied._tag === "Failure") return { lost: replied.failure.message, pause: true } as Ended;
       const reply = replied.success;
@@ -321,7 +326,14 @@ export class Adb {
       const port = kind === "connect" ? offer.connect : kind === "pair" ? offer.pair : null;
       if (port === null) return yield* refuse(kind === "connect" ? "手机未开启无线调试" : kind === "pair" ? "手机未打开配对窗口" : "无法识别的通道");
       const tcp = yield* Effect.result(this.#env.host.tcp!(port));
-      if (tcp._tag === "Failure") return yield* refuse(`无法连接手机上的 adb：${tcp.failure.message}`);
+      if (tcp._tag === "Failure") {
+        // Nothing at the port the app found (adbd gone from it): said, so that it looks for the port again.
+        if (kind === "connect" && this.#offer === offer && this.#refused !== port) {
+          this.#refused = port;
+          this.#shown();
+        }
+        return yield* refuse(`无法连接手机上的 adb：${tcp.failure.message}`);
+      }
       const conn = tcp.success;
       const ok = yield* Effect.result(stream.write(utf8(`${JSON.stringify({ ok: true })}\n`)));
       if (ok._tag === "Failure") return;

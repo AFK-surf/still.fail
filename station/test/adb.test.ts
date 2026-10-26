@@ -11,7 +11,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { Clock, Duration, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
-import { GRACE, PORTS, SETTLE, Shares, answerAdb, bind, isPackage, text } from "../src/adb/link.ts";
+import { GRACE, PORTS, RETRY, SETTLE, Shares, answerAdb, bind, isPackage, text } from "../src/adb/link.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
 import type { Connection, Stream } from "../src/mesh/native.ts";
 import { Reader, writeLine } from "../src/mesh/serve.ts";
@@ -180,11 +180,18 @@ test("without adb the offer says missing; a phone the station cannot reach says 
   assert.equal(failed.message, "no streams here");
   assert.ok(adb.calls().some((c) => c[0] === "connect" && c[1] === failed.serial));
   assert.deepEqual(adb.calls().at(-1), ["disconnect", failed.serial]);
+  // Tried again by itself after RETRY, then after twice that: nobody shares again for it.
+  await time.asleep(RETRY);
+  await time.adjust(RETRY);
+  await until(() => adb.calls().filter((c) => c[0] === "connect").length === 2);
+  await time.asleep(RETRY * 2);
   await failing.reset();
   await time.asleep(GRACE);
   await time.adjust(GRACE);
   await offer;
-  await until(() => adb.calls().filter((c) => c[0] === "disconnect").length === 3);
+  // (the try due once the offer ended is not made)
+  await until(() => adb.calls().filter((c) => c[0] === "disconnect").length === 5);
+  assert.equal(adb.calls().filter((c) => c[0] === "connect").length, 2);
   await time.close();
 });
 
@@ -265,7 +272,16 @@ test("offers again as the phone's link moves: adb is asked again only when Wirel
     const on = await mesh.ask({ op: "share", phone: PHONE });
     await reaches(on.reader, "connected");
     assert.equal(connects(), 2);
-    for (const o of [first, again, pairing, off, on]) await o.stream.reset(0);
+    // adbd's port said, then another (Wireless debugging turned off and on: adb's connection to the old one gone):
+    // adb connects anew, not waiting for anything else to change.
+    const at = await mesh.ask({ op: "share", phone: PHONE, connect: 40001 });
+    await reaches(at.reader, "connected");
+    assert.equal(connects(), 2);
+    adb.say("state", "offline");
+    const moved = await mesh.ask({ op: "share", phone: PHONE, connect: 40002 });
+    await until(() => connects() === 3);
+    await reaches(moved.reader, "connected");
+    for (const o of [first, again, pairing, off, on, at, moved]) await o.stream.reset(0);
   } finally {
     await shares.close();
     await mesh.close();
@@ -324,8 +340,10 @@ class End implements Stream {
   stopped() {
     return this.stopping;
   }
-  /// Stops reading (and sending): the other end's writes fail from then, and it hears so.
+  /// Stops reading (and sending): the other end's writes fail from then, and it hears so; what this end sent that the
+  /// other has not read yet is lost (QUIC's RESET_STREAM).
   async reset() {
+    this.peer.queue = [];
     for (const end of [this, this.peer]) {
       end.broken = true;
       end.take(null);
@@ -388,7 +406,9 @@ async function link(shares: Shares) {
     }
   })();
   const tunnels: string[] = [];
-  const phoneSide = { refuse: null as string | null };
+  /// `heard`: each line the phone's adbd read; `hold`: what a pairing tunnel waits on after its first answer before it
+  /// reads on (a phone far away, its reads late).
+  const phoneSide = { refuse: null as string | null, heard: [] as string[], hold: null as Promise<void> | null };
   void (async () => {
     for (let s = await toStation.acceptBi(); s; s = await toStation.acceptBi()) {
       const stream = s;
@@ -404,8 +424,10 @@ async function link(shares: Shares) {
         let carry = reader.carry.toString();
         for (;;) {
           for (let at = carry.indexOf("\n"); at >= 0; at = carry.indexOf("\n")) {
+            phoneSide.heard.push(carry.slice(0, at));
             await stream.write(Buffer.from(`phone:${carry.slice(0, at)}\n`));
             carry = carry.slice(at + 1);
+            if (head.tunnel === "pair" && phoneSide.hold) await phoneSide.hold;
           }
           const more = await stream.read();
           if (more === null) break;
@@ -471,8 +493,16 @@ test("a phone offered over the mesh: adb connects through its tunnel, asks reach
     assert.deepEqual(mesh.tunnels, ["connect", "connect"]);
 
     // Asks: pairing through the phone's pairing port, the grant, in the asker's language.
+    // The phone reads late (far away: 2026-10-26, through a relay 150 ms off): what adb wrote last before it ended
+    // still reaches it. The pairing's end was taken as the tunnel's, its stream reset with adb's peer info in flight:
+    // adb said paired, the phone never had the station's key.
+    let reads!: () => void;
+    mesh.phoneSide.hold = new Promise((r) => (reads = r));
     const paired = await mesh.answer({ op: "pair", code: "12 34 56", phone: PHONE });
     assert.deepEqual(paired, { head: { status: 200, headers: { "content-type": "application/json" } }, body: { message: "已配对" } });
+    reads();
+    await until(() => mesh.phoneSide.heard.includes("PEER"));
+    mesh.phoneSide.hold = null;
     assert.ok(adb.dialed().includes("phone:PAIR 123456"));
     assert.ok(mesh.tunnels.includes("pair"));
     assert.ok(adb.calls().some((c) => c[0] === "pair" && c[2] === "123456"));

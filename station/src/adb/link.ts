@@ -39,6 +39,10 @@ const ADB_TIMEOUT = 30_000;
 export const GRACE = 5_000;
 /// How long a connected phone's state is looked at before it is taken as it is (adb says `offline` a moment first).
 export const SETTLE = 6_000;
+/// How long after adb failed to get in it is tried again, doubled each time it fails again (up to `RETRY_MOST`): what
+/// failed may pass (the phone's link moving, adbd starting), and nobody has to share again for it.
+export const RETRY = 2_000;
+export const RETRY_MOST = 60_000;
 
 export type AdbState = { serial: string; adb: string; message: string };
 
@@ -62,8 +66,8 @@ export class Share {
   readonly port: number;
   readonly owner: Viewer;
   /// What the phone says it is: `device`, `android`, `package`; `adbd` (Wireless debugging is on) and `pair` (its
-  /// pairing port is open).
-  info: { device: string; android: string; package: string; adbd: boolean; pair: boolean };
+  /// pairing port is open); `connect`, adbd's port on the phone (null from a phone before it said it).
+  info: { device: string; android: string; package: string; adbd: boolean; pair: boolean; connect: number | null };
   /// The connection its latest offer came on: where its tunnels go.
   conn: Connection;
   /// The language its latest offer asked in: what the phone is told of it is said in it.
@@ -79,6 +83,10 @@ export class Share {
   /// The `adb connect` under way, if one is; `again`: an offer came meanwhile, so it is done once more after.
   connecting: Promise<void> | null = null;
   again = false;
+  /// How many times in a row adb failed to get in: the next try waits `RETRY` doubled as many times.
+  failures = 0;
+  /// How many of its offers' streams are open: tried again only while one is (not in GRACE).
+  streams = 0;
   readonly server: net.Server;
   private waiters: (() => void)[] = [];
 
@@ -232,13 +240,14 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
     package: typeof ask.package === "string" && isPackage(ask.package) ? ask.package : "",
     adbd: typeof ask.adbd === "boolean" ? ask.adbd : true,
     pair: typeof ask.pair === "boolean" ? ask.pair : false,
+    connect: typeof ask.connect === "number" && Number.isInteger(ask.connect) && ask.connect > 0 && ask.connect < 65536 ? ask.connect : null,
   };
   const number = nextOffer++;
   let share = shares.byKey.get(device);
   // What adb is asked again on: only what changes how it reaches the phone. Offers come again and again as the phone's
   // link moves (relay, LAN, main endpoint: twenty in five minutes, 2026-10-17), and adb, once it has the phone, reaches
   // it again through the new link by itself; connecting anew each time held the page at 正在连接 adb for up to 100 s.
-  const before = share?.info.adbd;
+  const before = share?.info;
   if (share) {
     share.info = info;
     share.conn = conn;
@@ -264,9 +273,15 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
     }
   }
   await writeLine(stream, { status: 200, headers: { "content-type": "application/x-ndjson" } });
-  log.info("adb", "adb offer", { offer: number, ...about(conn), main: conn.remoteId() === ask.phone, adbd: info.adbd, pair: info.pair });
-  if (before === undefined || before !== info.adbd || share.state.adb === "failed" || share.state.adb === "missing") void connect(shares, share).catch(() => {});
+  log.info("adb", "adb offer", { offer: number, ...about(conn), main: conn.remoteId() === ask.phone, adbd: info.adbd, pair: info.pair, connect: info.connect });
+  // adbd's port changing (Wireless debugging turned off and on) is said by phones from 2026-10-26 on.
+  const moved = before !== undefined && before.connect !== null && info.connect !== null && before.connect !== info.connect;
+  if (before === undefined || before.adbd !== info.adbd || moved || share.state.adb === "failed" || share.state.adb === "missing") {
+    share.failures = 0;
+    void connect(shares, share).catch(() => {});
+  }
 
+  share.streams++;
   let unlisten = () => {};
   const removed = new Promise<"removed">((resolve) => {
     const cloud = shares.options.cloud;
@@ -301,6 +316,7 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
     }
   }
   unlisten();
+  share.streams--;
   if (ended === "stopping") return;
   // Only the latest offer takes the phone away (one that came on another link has it now), and only if no other comes
   // a moment after.
@@ -443,8 +459,25 @@ function connect(shares: Shares, share: Share): Promise<void> {
       share.connecting = null;
       log.info("adb", "adb holds the phone", { adb: share.state.adb, ms: wall.now() - started });
     }
+    if (share.state.adb === "failed") again(shares, share);
+    else share.failures = 0;
   })();
   return share.connecting;
+}
+
+/// adb tried again once `RETRY` (doubled for each failure before) is over, while an offer of the phone's stream is open
+/// and nothing else took adb on to it meanwhile (another offer, a pairing).
+function again(shares: Shares, share: Share) {
+  const wait = Math.min(RETRY * 2 ** share.failures, RETRY_MOST);
+  share.failures++;
+  const version = share.version;
+  void shares
+    .run(Effect.sleep(wait))
+    .then(() => {
+      if (shares.isStopping || share.streams === 0 || share.version !== version || share.connecting !== null) return;
+      return connect(shares, share);
+    })
+    .catch(() => {});
 }
 
 /// `adb connect` to the phone (unless adb holds it already), and how adb holds it then.
@@ -507,10 +540,11 @@ async function pair(shares: Shares, share: Share, typed: string, lang: Lang): Pr
   const conn = share.conn;
   const done = new AbortController();
   const timer = shares.limits.long === null ? () => {} : wall.after(shares.limits.long, () => server.close());
+  let tunnelled: Promise<void> = Promise.resolve();
   server.once("connection", (socket) => {
     timer();
     server.close();
-    tunnel(conn, "pair", socket, done.signal).catch((error) => log.info("adb", "adb pairing tunnel ended", { error: (error as Error).message, ...about(conn) }));
+    tunnelled = tunnel(conn, "pair", socket, done.signal).catch((error) => log.info("adb", "adb pairing tunnel ended", { error: (error as Error).message, ...about(conn) }));
   });
   let said: string;
   try {
@@ -518,7 +552,12 @@ async function pair(shares: Shares, share: Share, typed: string, lang: Lang): Pr
   } finally {
     timer();
     server.close();
-    done.abort();
+    // Not ended with adb: what it wrote last (its peer info, the station's key) is still on its way to the phone, which
+    // keeps the key only once it has it (2026-10-26: reset at once, the phone 150 ms off through a relay never had it;
+    // adb said paired, the phone listed nothing). The tunnel ends as both sides finish; reset only if the phone holds
+    // it open past TUNNEL_OPEN.
+    const late = wall.after(TUNNEL_OPEN, () => done.abort());
+    void tunnelled.finally(late);
   }
   if (!said.includes("Successfully paired")) throw new Error(tr(lang, "station.adb.pairFailed", { said }));
   void connect(shares, share).catch(() => {});
