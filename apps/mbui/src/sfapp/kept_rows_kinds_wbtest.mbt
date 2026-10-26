@@ -17,22 +17,32 @@ let kept_rows_kinds : Array[String] = [
 let kept_rows_still_ms : Double = 70.0
 
 ///|
-/// Chat `mode` opened and left as it is: what is drawn at each moment after (its instances, kept_rows_inst), the rows
-/// drawn again where they can be (`again`) or built every frame; `a11y`: something reading the widgets out.
-fn kept_rows_kind(mode : String, again : Bool, w : Double, h : Double, a11y? : Bool = false) -> Array[Array[String]] {
+/// Chat `mode` opened `w` by `h`: on 小屏 (a phone's width), on 中屏's tape (the page brought over the sidebar), or on
+/// 大屏 (a desktop's window, 1000 wide or more: with a mouse).
+fn kept_rows_open(mode : String, w : Double, h : Double) -> @ui.Tester {
   reset()
   let src = fixture(mode)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let large = w >= 1000.0
   // (two ways of drawing compared: the corner rule is held where the chats' pictures are tested)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=2, corners_held=false)
-  if w > 600.0 {
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=if large { 0 } else { 2 }, corners_held=false)
+  let tape = w > 600.0 && !large
+  if tape {
     say_room(t, "medium", "medium")
   }
   t.run_for(@ui.nav_push_ms)
-  if w > 600.0 {
+  if tape {
     t.tap(w - @sfdesk.tape_shows / 2.0, h / 2.0)
     t.run_for(@sfdesk.side_move_ms)
   }
+  t
+}
+
+///|
+/// Chat `mode` opened and left as it is: what is drawn at each moment after (its instances, kept_rows_inst), the rows
+/// drawn again where they can be (`again`) or built every frame; `a11y`: something reading the widgets out.
+fn kept_rows_kind(mode : String, again : Bool, w : Double, h : Double, a11y? : Bool = false) -> Array[Array[String]] {
+  let t = kept_rows_open(mode, w, h)
   t.keep_parts(true)
   t.drawn_again(again)
   t.set_a11y(a11y)
@@ -49,18 +59,7 @@ fn kept_rows_kind(mode : String, again : Bool, w : Double, h : Double, a11y? : B
 /// Chat `mode` dragged back and let go, then dragged on: what is drawn at each moment after, the rows drawn again where
 /// they can be (`again`) or built every frame.
 fn kept_rows_kind_scrolled(mode : String, again : Bool, w : Double, h : Double) -> Array[Array[String]] {
-  reset()
-  let src = fixture(mode)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=2, corners_held=false)
-  if w > 600.0 {
-    say_room(t, "medium", "medium")
-  }
-  t.run_for(@ui.nav_push_ms)
-  if w > 600.0 {
-    t.tap(w - @sfdesk.tape_shows / 2.0, h / 2.0)
-    t.run_for(@sfdesk.side_move_ms)
-  }
+  let t = kept_rows_open(mode, w, h)
   t.keep_parts(true)
   t.drawn_again(again)
   t.said() |> ignore
@@ -156,4 +155,71 @@ test "every kind of message scrolled on 中屏's tape: drawn again as building i
   if apart.length() > 0 {
     fail(apart.join("\n"))
   }
+}
+
+///|
+test "every kind of message left still on 大屏: what goes on in it drawn as building it draws it" {
+  let apart = kept_rows_kinds_apart(1280.0, 800.0)
+  if apart.length() > 0 {
+    fail(apart.join("\n"))
+  }
+}
+
+///|
+test "every kind of message scrolled on 大屏: drawn again as building it draws it" {
+  let apart = kept_rows_kinds_apart(1280.0, 800.0, scrolled=true)
+  if apart.length() > 0 {
+    fail(apart.join("\n"))
+  }
+}
+
+///|
+/// Words sent in chat `mode` opened `w` by `h` (kept_rows_open), then left: what is drawn at each moment from the send
+/// on (the words flying to their row, the rows above moving up, an avatar held at the list's top as its message goes
+/// up past it), the rows drawn again where they can be (`again`) or built every frame.
+fn kept_rows_sent(mode : String, again : Bool, w : Double, h : Double) -> (Array[Array[String]], Int) {
+  let t = kept_rows_open(mode, w, h)
+  t.keep_parts(true)
+  t.drawn_again(again)
+  t.tap_text("发消息")
+  t.type_text("刚发的这一句")
+  t.said() |> ignore
+  tap_send(t)
+  let out = []
+  let mut kept = 0
+  for _ in 0..<12 {
+    t.run_for(kept_rows_still_ms)
+    out.push(drawn_from(t, -1000.0).map(kept_rows_inst) + kept_rows_said(t))
+    kept = kept + t.rows_kept()
+  }
+  (out, kept)
+}
+
+///|
+/// Words sent in chat `mode` `w` by `h`: drawn the same with the rows drawn again as built, some drawn again.
+fn kept_rows_sent_same(mode : String, w : Double, h : Double) -> Unit raise {
+  let (kept, n) = kept_rows_sent(mode, true, w, h)
+  let (built, _) = kept_rows_sent(mode, false, w, h)
+  assert_true(n > 0, msg="rows drawn again: \{n}")
+  kept_rows_same(kept, built)
+}
+
+///|
+test "words sent on 大屏: the messages drawn again as building them draws them, the words flying to their row and the rows above moving up" {
+  kept_rows_sent_same("chat", 1280.0, 800.0)
+}
+
+///|
+test "words sent in a long chat on 小屏: drawn again as building them draws them, what is held at the top too" {
+  kept_rows_sent_same("chat-long", 390.0, 844.0)
+}
+
+///|
+test "words sent in a long chat on 中屏's tape: drawn again as building them draws them, what is held at the top too" {
+  kept_rows_sent_same("chat-long", 720.0, 800.0)
+}
+
+///|
+test "words sent in a long chat on 大屏: drawn again as building them draws them, what is held at the top too" {
+  kept_rows_sent_same("chat-long", 1280.0, 800.0)
 }

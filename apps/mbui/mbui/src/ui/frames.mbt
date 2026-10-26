@@ -20,7 +20,9 @@ pub fn Tester::frame_hash(self : Tester) -> Int64 {
 
 ///|
 /// What the last frame drew as text: the laid-out tree (`dump`), then each instance drawn, one a line (its 24
-/// numbers, positions and sizes in 1/64 px, colours in 1/255): what two frames' hashes part on, line by line.
+/// numbers, positions and sizes in 1/64 px, colours in 1/255): what two frames' hashes part on, line by line. A band of
+/// a shape says its pieces by what they are, not where they stand among the frame's (its hash takes them as they
+/// stand): what draws the same reads the same, whatever drew before it.
 pub fn Tester::drawn_text(self : Tester) -> String {
   ignore(self)
   drawn_text()
@@ -34,9 +36,18 @@ fn drawn_text() -> String {
   let named = image_numbers(c)
   let keys = glyph_keys()
   for k in 0..<c.ninst {
+    // (the pieces of the frame's shapes, none drawn: what each band of a shape draws from, said with it)
+    if c.inst[k * inst_size + 5] == 12.0 {
+      continue
+    }
     sb.write_string("inst")
     for j in 0..<inst_size {
-      sb.write_string(" \{(inst_named(c, named, keys, k, j) * 64.0).round().to_int64()}")
+      let v = if j == 12 && c.inst[k * inst_size + 5] == 11.0 {
+        shape_pieces_key(c, k)
+      } else {
+        inst_named(c, named, keys, k, j)
+      }
+      sb.write_string(" \{(v * 64.0).round().to_int64()}")
     }
     if c.inst[k * inst_size + 5] == 4.0 {
       let s = stream_drawn(c.inst[k * inst_size + 20].to_int())
@@ -47,6 +58,22 @@ fn drawn_text() -> String {
     sb.write_char('\n')
   }
   sb.to_string()
+}
+
+///|
+/// A shape's band (instance `k`, kind 11): its pieces by what they are (a hash of them, in 64ths), not where they stand
+/// among the frame's (shape.mbt: what drew before it, kept or built, puts them elsewhere).
+fn shape_pieces_key(c : Ctx, k : Int) -> Double {
+  let b = k * inst_size
+  let first = c.inst[b + 12].to_int()
+  let count = c.inst[b + 13].to_int()
+  let mut h = 0x811C9DC5
+  for v in (first * 4)..<((first + count) * 4) {
+    if v >= 0 && v < c.segs.length() {
+      h = (h ^ (c.segs[v] * 64.0).round().to_int()) * 0x01000193
+    }
+  }
+  (h & 0x3FFFFFFF).to_double()
 }
 
 ///|
