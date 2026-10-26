@@ -104,7 +104,7 @@ export type AccountsDeps = {
   /// Starts reviewing the done chats no decision has answered (review.ts): how many, or null without a usable model.
   reviewUndecided?: () => number | null;
   hub?: {
-    accounts: { setHealth(health: (id: string) => ProfileHealth): void; healthOf(id: string): ProfileHealth };
+    accounts: { setHealth(health: (id: string) => ProfileHealth): void; healthOf(id: string): ProfileHealth; setRecheck?(recheck: (id: string) => Promise<unknown>): void };
     /// A profile was deleted: its sessions are taken on by another, or stopped.
     profileGone?(id: string): Promise<void>;
   };
@@ -258,6 +258,7 @@ export class Accounts {
   /// followed, the checks after start, the allowance rounds, the machine's logins read.
   start() {
     this.deps.hub?.accounts.setHealth((id) => this.health(id));
+    this.deps.hub?.accounts.setRecheck?.((id) => this.check(id));
     this.uncheckOutdated();
     // A finished sign-in changes what the profile can do; it is checked again right away.
     this.stops.push(
@@ -998,10 +999,13 @@ export class Accounts {
       return this.quotas.get(id) ?? null;
     }
     if (!this.quotaFn) return this.quotas.get(id) ?? null;
-    const read = { ...(await this.quotaFn(profile)), checkedAt: this.background.now() };
+    const { signedOut, ...asked } = await this.quotaFn(profile);
+    const read = { ...asked, checkedAt: this.background.now() };
     this.quotas.set(id, read);
     this.deps.store.setProfileQuota(id, read);
     this.changed();
+    // Its login found over: its check says so, and the pool passes it over (as a Console or Kimi sign-in refused).
+    if (signedOut && this.checks.get(id)?.state !== "login") this.background.spawn(() => this.check(id).catch(() => undefined));
     return read;
   }
 

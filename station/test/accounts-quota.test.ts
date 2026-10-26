@@ -6,7 +6,8 @@ import { join } from "node:path";
 import { claudeOAuthToken, RefreshLock } from "../src/accounts/oauth.ts";
 import { readClaudeCredentials } from "../src/agents/machine-logins.ts";
 import { URLS } from "../src/accounts/profiles.ts";
-import { at, claudeUsage, claudeWithRefresh, codexQuota, codexUsage, codexWindows, windowLabel } from "../src/accounts/quota.ts";
+import { at, checkQuota, claudeUsage, claudeWithRefresh, codexQuota, codexUsage, codexWindows, windowLabel } from "../src/accounts/quota.ts";
+import { hubConfig } from "../src/sessions/config.ts";
 import { machine, provider, script, temp, until } from "./accounts-fakes.ts";
 
 describe("allowances and renewing", { concurrency: true }, () => {
@@ -151,6 +152,27 @@ describe("allowances and renewing", { concurrency: true }, () => {
     await p.close();
     p = await oauthProvider(200);
     assert.equal((await claudeOAuthToken({}, home, null, p.base))[0], "new");
+    await p.close();
+  });
+
+  test("a login that can no longer be renewed is over: its allowance says so, for its profile to be checked again", async () => {
+    const home = temp("over");
+    const path = join(home, ".credentials.json");
+    const profile = { ...hubConfig({ profiles: [{ id: "cc", home: "homes/cc", runtime: "claude", access: { kind: "subscription" } }] }, "/x").profiles[0]!, home };
+    let p = await oauthProvider(400);
+    const urls = { ...URLS, anthropic: p.base, claudeToken: p.base };
+    // Run out with nothing to renew it with, or its refresh token refused.
+    writeFileSync(path, JSON.stringify({ claudeAiOauth: { accessToken: "old", expiresAt: 1 } }));
+    const none = await checkQuota(profile, {}, undefined, urls, "zh");
+    assert.deepEqual([none.state, none.detail, none.signedOut], ["unavailable", "Claude 登录已过期且无法续期，请重新登录", true]);
+    writeFileSync(path, JSON.stringify(credentials(1)));
+    const refused = await checkQuota(profile, {}, undefined, urls, "zh");
+    assert.deepEqual([refused.state, refused.signedOut], ["unavailable", true]);
+    await p.close();
+    // Not renewed for now: nothing is said of the login.
+    p = await oauthProvider(503);
+    const later = await checkQuota(profile, {}, undefined, { ...urls, anthropic: p.base, claudeToken: p.base }, "zh");
+    assert.deepEqual([later.state, later.signedOut], ["unavailable", undefined]);
     await p.close();
   });
 

@@ -93,6 +93,8 @@ export type SessionDeps = {
   spend(key: string, ranOn: string | null): [string, string] | null;
   /// When session `key`'s profile, its allowance run out, is expected to run again (absent: in an hour).
   refillsAt?(key: string): number;
+  /// A runtime failed to sign in on `profile`: it is checked again (the pool passes over one whose login is over).
+  recheck?(profile: string): Promise<void>;
   mcpUrl(): string;
   /// Before input is handed to the agent: what the station put in the session's workspace since (its uploads, its
   /// instructions) copied to the agent's sandbox, when it runs in one (agents/sandbox.ts).
@@ -1108,6 +1110,8 @@ export class SessionActor {
       const agent = this.agent;
       this.agent = null;
       await this.endProcess(agent);
+      // Its account checked first: one whose login is over is left, and the turn goes on on another (`runOn`).
+      if (this.profile !== null) await this.deps.recheck?.(this.profile);
       log.info("session", "Claude authentication failed; reopening and continuing once", { session: this.key });
       return this.startTurn("auth_retry", GO_ON_AFTER_AUTH, turn.by);
     }

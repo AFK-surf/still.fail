@@ -391,6 +391,34 @@ test("claude auth retries once, then reports the profile and does not loop", asy
   await r.close();
 });
 
+test("a sign-in that failed has its account checked again first: one whose login is over is left, and the turn goes on on another", async () => {
+  const r = new Rig();
+  r.edit((raw) => {
+    raw.profiles[0].models = ["opus"];
+    raw.profiles.push({ ...raw.profiles[0], id: "cc2", name: "second" });
+  });
+  let over = false;
+  const checked: string[] = [];
+  r.hub.accounts.setHealth((id) => (id === "cc" && over ? { check: { state: "login", detail: "", models: null, checkedAt: 0 } } : {}));
+  r.hub.accounts.setRecheck(async (id) => {
+    checked.push(id);
+    over = true;
+  });
+  await r.accept(message());
+  await settle();
+  const first = r.claude.last();
+  assert.equal(first.options.profile.id, "cc");
+  first.end({ kind: "failed", reason: "auth", message: "401 OAuth token has expired" });
+  await settle();
+  assert.deepEqual(checked, ["cc"]);
+  assert.ok(first.disposed);
+  const next = r.claude.last();
+  assert.equal(next.options.profile.id, "cc2");
+  assert.ok(matches(next.prompts[0]!, [GO_ON_AFTER_AUTH]), next.prompts[0]);
+  assert.ok(!r.chat.texts().some((t) => t.includes("认证失败")), "it just goes on");
+  await r.close();
+});
+
 test("a turn whose sandbox connection was lost goes on once from its transcript, then is said to have ended", async () => {
   const r = new Rig();
   const m = message();

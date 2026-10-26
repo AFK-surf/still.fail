@@ -16,6 +16,7 @@ import { accessKind, KIMI_CODE, kimiSignedIn } from "../agents/profiles.ts";
 import { readKimi } from "./kimi.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { claudeOAuthToken } from "./oauth.ts";
+import { RenewRefused } from "./console.ts";
 import { type ProfileQuota, type QuotaWindow, URLS, type Urls } from "./profiles.ts";
 import { profileFetch } from "../ops/agent-env.ts";
 
@@ -195,6 +196,8 @@ export type CodexRateLimits = (profile: Profile) => Promise<Json>;
 
 function failed(error: unknown): ProfileQuota {
   const detail = error instanceof Error ? error.message : String(error);
+  // Its login over: its profile is checked again, to say so (Accounts).
+  if (error instanceof RenewRefused) return { ...quota("unavailable", [], detail), signedOut: true };
   return quota(blocked(detail) ? "blocked" : "unavailable", [], detail);
 }
 
