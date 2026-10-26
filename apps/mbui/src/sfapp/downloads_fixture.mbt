@@ -212,7 +212,7 @@ fn with_download_message(v : Json) -> Json {
       all.push(
         msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), "打好的发布包在这里，下载下来装一下看看。", "1 分钟前", {
           "ending": "all_done",
-          "attachments": [file("发布包.zip", 0, 0, 52428800), file("演示录屏.mp4", 1280, 720, 5242880)],
+          "attachments": [file("发布包.zip", 0, 0, 52428800), film_file("演示录屏.mp4", 1280, 720, 5242880, 12500, 375)],
         }),
       )
       o["messages"] = Json::array(all)

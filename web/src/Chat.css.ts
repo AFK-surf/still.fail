@@ -712,6 +712,10 @@ export const msgVideoName = style({
 });
 /** Under its words while the core downloads it (chatDownloads.ts): how far, 4 below them. */
 export const msgVideoBar = style({ display: "block", marginTop: "4px" });
+/** Its name cut short before how long it is (as its message says: the station read it from its header), 8 apart. */
+export const msgVideoLine = style({ display: "flex", gap: "8px", justifyContent: "space-between" });
+globalStyle(`${msgVideoLine} > span:first-child`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis" });
+globalStyle(`${msgVideoLine} > span + span`, { flex: "none" });
 
 export const msgVideoUnavailable = style({
   position: "absolute", inset: "0 0 30px", display: "flex", flexDirection: "column",

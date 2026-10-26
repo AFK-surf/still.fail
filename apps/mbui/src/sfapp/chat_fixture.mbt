@@ -78,6 +78,20 @@ fn file(name : String, w : Int, h : Int, size : Int) -> Json {
 }
 
 ///|
+/// A film as the station keeps it in a message: its size, and its length (ms) and frames as read from its header.
+fn film_file(name : String, w : Int, h : Int, size : Int, ms : Int, frames : Int) -> Json {
+  match file(name, w, h, size) {
+    Object(f) => {
+      let f = f.copy()
+      f["duration"] = Json::number(ms.to_double())
+      f["frames"] = Json::number(frames.to_double())
+      Json::object(f)
+    }
+    j => j
+  }
+}
+
+///|
 let long_reply : String =
   #|## 列表改成虚拟列表
   #|
