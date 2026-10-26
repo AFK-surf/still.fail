@@ -11,9 +11,10 @@
 ## 已定的规则
 
 - **主 workspace**：station 第一个加入的 workspace（`cloud.json` 顶层那个）。之后加入的叫**加入的 workspace**。主 workspace 被移走时，加入最早的那个接任。
-- **各 workspace 在 station 里同权**（2026-10-18 用户定，之前 station 级的东西只归主 workspace 管）：账号（profiles、订阅登录、API key）、更新和通道、`tools.access`、加入和退出 workspace、自动决策、station 分享（share）、继续本机的 Claude Code/Codex 会话（chat 开在发起人所在的 workspace），任何一个 workspace 的 owner/admin 都能管，成员能看到的也一样。主 workspace 只决定顶层 `cloud.json`、station 之间的分享走哪个 workspace 这类机器内部的事。
+- **各 workspace 在 station 里同权**（2026-10-18 用户定，之前 station 级的东西只归主 workspace 管）：账号（profiles、订阅登录、API key）、更新和通道、`tools.access`、加入和退出 workspace、自动决策、station 分享（share）、继续本机的 Claude Code/Codex 会话（chat 开在发起人所在的 workspace），任何一个 workspace 的 owner/admin 都能管，成员能看到的也一样。主 workspace 只决定顶层 `cloud.json` 这类机器内部的事。
 - **按 workspace 分开的**：chat（会话、thread、奏、归档和归档策略）、Slack connect、agent 的记忆和 skills（`agent/`）、文件根目录（`drive.roots`）、chat 分享（xshare）、station 之间的调用（session_send、chat_list、station_list、任务）都只在同一个 workspace 的 station 之间。
 - **账号共用**：每个 profile 默认给 station 所在的所有 workspace 用（2026-10-18 用户定，之前是默认只给主 workspace）；任一 workspace 的管理员可以对某个加入的 workspace 关掉（`profiles[].withheld`）。加入的 workspace 一个能用的 profile 都没有时，那里的 chat 开不了轮次，界面说明原因。
+- **station 分享（share）跟着 profile 走**（2026-10-26，之前只发给主 workspace 的 station，加入的 workspace 里的收不到）：分享出去的 profile 发给它服务的每个 workspace 里的 station（withheld 的 workspace 除外），`allow` 再从中挑；收方认自己所在任一 workspace 里的分享方，分享方不在任何一个共同的 workspace 里了才删副本。skill 按 workspace 分开：station 分享的是主 workspace 的 skills，只发给主 workspace 的 station；收到的 skill 链进它来的那个 workspace 的 skills（加入的 workspace 是 `agent/workspaces/<ws>/skills/`）。
 - **软隔离**：所有 agent 用同一个系统用户跑，A 的 agent 想读 B 的会话目录，物理上拦不住。这里隔离的是数据、列表和 agent 的工具，不是沙盒。界面上加入 workspace 时写明这一点。
 - **workspace 锁（安全模式）**（2026-10-17 用户定）：开了锁的 station 只能加入同样开了锁的 workspace。没锁的 workspace 的成员由 cloud 说了算，这正是主 workspace 的锁要去掉的信任。station 在每个开了锁的 workspace 里各钉一把那个 workspace 的锁：主 workspace 的在 `mesh/lock.json`，加入的在 `mesh/locks/<ws>.json`，各自只认各自锁链里的成员、设备和 station。没开锁的 station 照旧可以加入任何 workspace，加入开了锁的 workspace 时同样要钉住那把锁。
 
@@ -55,7 +56,7 @@
 
 - `revoke`：加 `workspace` 字段，说是哪个 workspace 的吊销。
 - `lock.get` / `lock.put` / `lock`：只针对主 workspace，不变。
-- 移除 station（`DELETE …/stations/:id`）：只删这个 workspace 的 membership。这是最后一条就像以前那样以 4004 断开；否则给 station 重发 `state`（被移走的那个不在里面了；被移走的是主 workspace，接任的那个就到了顶层）。删除 workspace 同理。
+- 移除 station（`DELETE …/stations/:id`）：只删这个 workspace 的 membership。这是最后一条就像以前那样以 4004 断开；否则给 station 重发 `state`（被移走的那个不在里面了；被移走的是主 workspace，接任的那个就到了顶层）。删除 workspace 同理。接任时 station 把接任的那个 workspace 的锁（`mesh/locks/<ws>.json`，还没钉住的话是加入时记下要钉的那个）挪成主 workspace 的（`mesh/lock.json`），旧主 workspace 的锁丢掉（`Cloud.succeed`）；主 workspace 开着锁、接任的那个的锁却没钉住时不接任，留在锁让它待的地方。
 
 ### notify 和 feedback
 

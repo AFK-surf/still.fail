@@ -348,6 +348,51 @@ test("a station in a second workspace pins that one's lock there: none of its me
 const VECTOR_HASH = "27e965570b626031e9640b781bdba3b5bb111ba2307b81bd9af8d14158f8578a";
 const VECTOR_CODE = "UJV-HA9";
 
+test("taken out of its home, a workspace it joined takes over: that one's lock goes along, its stations still only those it names", async () => {
+  const { existsSync } = await import("node:fs");
+  const { joinedLockPath } = await import("../src/cloud/state.ts");
+  const B = "01HBBBBBBBBBBBBBBBBBBBBBBB";
+  const w = workspace();
+  const b = workspace(B);
+  const me = w.stations[0]!.hex;
+  const intruder = ed().hex;
+  const inB = { workspace: B, workspace_name: "B", name: "s0", peers: [{ id: b.stations[0]!.hex }, { id: intruder }], revocations: [], lock: { seq: 0, hash: entryHash(b.first) }, locked: true };
+  const atHome = (lock: unknown) => JSON.stringify({ type: "state", workspace: WS, workspace_name: "Team", name: "s0", peers: w.stations.map((s) => ({ id: s.hex })), grant_keys: { keys: [w.grant.jwk] }, revocations: [], lock, workspaces: [inB] });
+  // What the plane says once the station is taken out of WS: B at the top.
+  const takenOver = JSON.stringify({ type: "state", workspace: B, workspace_name: "B", name: "s0", peers: inB.peers, grant_keys: { keys: [b.grant.jwk] }, revocations: [], lock: inB.lock, workspaces: [] });
+  const tops = (cloud: Cloud) => cloud.memberships().map((m) => [m.workspace, m.peers.map((p) => p.id)]);
+  // Its home locked, B's lock pinned.
+  const locked = stationData(w, me);
+  locked.takeLock([w.first]);
+  locked.takeLock([b.first], B);
+  applyState(locked, atHome({ seq: 0, hash: entryHash(w.first) }));
+  const sent: unknown[] = [];
+  applyState(locked, takenOver, (f) => sent.push(f));
+  assert.deepEqual(tops(locked), [[B, [b.stations[0]!.hex]]], "B at home, its roster as B's lock has it");
+  assert.equal(locked.locked()?.state?.genesis, entryHash(b.first));
+  assert.deepEqual(locked.grantKeys(), { keys: [b.grant.jwk] });
+  assert.equal(existsSync(joinedLockPath(locked.data, B)), false);
+  assert.deepEqual(sent, [], "level with the plane's lock of B");
+  assert.equal(new Cloud(locked.data).locked()?.state?.genesis, entryHash(b.first), "and so after a restart");
+  // Moved on by the plane to a workspace it is not in: refused, as any move of a locked station.
+  applyState(locked, hostile(b, new GrantKey("k9"), intruder));
+  assert.equal(locked.home(), B);
+  // Its home unlocked: B's lock goes along all the same, not forgotten with B's place among those it joined.
+  const open = stationData(w, me);
+  open.takeLock([b.first], B);
+  applyState(open, atHome(null));
+  applyState(open, takenOver);
+  assert.deepEqual(tops(open), [[B, [b.stations[0]!.hex]]]);
+  assert.equal(open.locked()?.state?.genesis, entryHash(b.first));
+  // Its home locked and B's lock not pinned here: it stays where its lock keeps it.
+  const stuck = stationData(w, me);
+  stuck.takeLock([w.first]);
+  applyState(stuck, atHome({ seq: 0, hash: entryHash(w.first) }));
+  applyState(stuck, takenOver);
+  assert.equal(stuck.home(), WS);
+  assert.equal(stuck.locked()?.state?.genesis, entryHash(w.first));
+});
+
 test("joining a locked workspace: the plane's frame comes before the join's answer, and its lock is asked for once joining names it; till then its members are told why", async () => {
   const { joinedPendingPath } = await import("../src/cloud/state.ts");
   const { mkdirSync, writeFileSync } = await import("node:fs");

@@ -13,18 +13,31 @@ import { Cloud } from "../src/cloud/state.ts";
 const A = "a".repeat(64);
 const B = "b".repeat(64);
 
-/// The workspace's roster as still.fail cloud gives it (the only thing it says here), and each station's view of it.
+/// Each workspace's roster as still.fail cloud gives it (the only thing it says here), and each station's view of them:
+/// its home workspace's at the top, the others it is in joined.
 class FakeCloud {
-  peers = [{ id: A, name: "studio" }, { id: B, name: "mini" }];
+  rosters: Record<string, { id: string; name: string }[]> = { w: [{ id: A, name: "studio" }, { id: B, name: "mini" }] };
+  /// Each station's home workspace (none said: "w").
+  homes: Record<string, string> = {};
+  get peers() {
+    return this.rosters.w!;
+  }
+  set peers(peers) {
+    this.rosters.w = peers;
+  }
   listeners = new Set<() => void>();
   cloudFor(station: string) {
     const cloud = this;
-    // On Cloud's own methods (memberships, home…), its state this roster.
+    // On Cloud's own methods (memberships, home…), its state these rosters.
     return Object.defineProperties(Object.create(Cloud.prototype), Object.getOwnPropertyDescriptors({
       peersCurrent: true,
       lock: null,
       get state() {
-        return { station, workspace: "w", workspace_name: "w", peers: cloud.peers, revocations: [] } as any;
+        const home = cloud.homes[station] ?? "w";
+        const joined = Object.entries(cloud.rosters)
+          .filter(([ws, peers]) => ws !== home && peers.some((p) => p.id === station))
+          .map(([ws, peers]) => ({ workspace: ws, workspace_name: ws, name: "", peers, revocations: [] }));
+        return { station, workspace: home, workspace_name: home, peers: cloud.rosters[home] ?? [], revocations: [], joined } as any;
       },
       listen(f: () => void) {
         cloud.listeners.add(f);
@@ -48,10 +61,14 @@ function station(cloud: FakeCloud, id: string, others: () => Map<string, Station
   const lent: string[] = [];
   const sharing = new Sharing({
     data, config, cloud: cloud.cloudFor(id),
-    ask: async (to, request) => {
+    // As the transport takes it (mesh/peer.ts `member`): in the workspace said, or the first of the asker's both are in.
+    ask: async (to, workspace, request) => {
       const other = others().get(to);
       if (!other) throw new Error("peer unavailable");
-      return other.sharing.handle(id, request);
+      const both = (ws: string) => [id, to].every((s) => cloud.rosters[ws]?.some((p) => p.id === s));
+      const ws = workspace ?? (cloud.cloudFor(id) as Cloud).memberships().find((m) => both(m.workspace))?.workspace;
+      if (ws === undefined || !both(ws)) throw new Error("peer is not another station in this workspace");
+      return other.sharing.handle(id, request, ws);
     },
     agentHome: () => join(data, "agent"),
     env: {},
@@ -123,6 +140,75 @@ test("a station left out of a share's stations does not get it, and refuses to b
   assert.equal(b.config.raw().profiles.length, 0);
   const id = a.config.raw().profiles[0].share.id;
   await assert.rejects(a.sharing.handle(B, { method: "share.get", id }), /not for this station/);
+});
+
+const H = "c".repeat(64);
+const O = "d".repeat(64);
+const R1 = "e".repeat(64);
+const R2 = "f".repeat(64);
+
+/// A station in two workspaces (H: home W1, joined W2) and the others of each: O only in W1, R1 at home in W2, R2 at
+/// home in W3 and joined to W2.
+function joinedWorkspaces() {
+  const cloud = new FakeCloud();
+  cloud.rosters = {
+    W1: [{ id: H, name: "mini" }, { id: O, name: "studio" }],
+    W2: [{ id: H, name: "mini" }, { id: R1, name: "macbook" }, { id: R2, name: "texas" }],
+    W3: [{ id: R2, name: "texas" }],
+  };
+  cloud.homes = { [H]: "W1", [O]: "W1", [R1]: "W2", [R2]: "W3" };
+  const all = new Map<string, Station>();
+  const h = station(cloud, H, () => all, [KEY]);
+  const o = station(cloud, O, () => all);
+  const r1 = station(cloud, R1, () => all);
+  const r2 = station(cloud, R2, () => all);
+  all.set(H, h).set(O, o).set(R1, r1).set(R2, r2);
+  return { cloud, h, o, r1, r2, every: [h, o, r1, r2] };
+}
+
+test("a profile is shared with the stations of every workspace it serves, whichever is theirs or its home; withheld from one, taken back there", async () => {
+  const { h, o, r1, r2, every } = joinedWorkspaces();
+  await h.sharing.shareProfile("deepseek", true, null);
+  await settle(...every);
+  const id = h.config.raw().profiles[0].share.id;
+  for (const s of [o, r1, r2]) assert.equal(s.config.raw().profiles.find((p: any) => p.share?.id === id)?.access.key, "sk-secret");
+  assert.deepEqual(h.sharing.profileView(h.config.raw().profiles[0])!.users!.sort(), [O, R1, R2].sort());
+  // Kept from W2: taken from the stations only there, kept where it still serves.
+  h.config.update((raw) => (raw.profiles[0].withheld = ["W2"]));
+  await settle(...every);
+  assert.equal(o.config.raw().profiles.length, 1);
+  assert.equal(r1.config.raw().profiles.length, 0);
+  assert.equal(r2.config.raw().profiles.length, 0);
+  assert.deepEqual(h.sharing.profileView(h.config.raw().profiles[0])!.users, [O]);
+  await assert.rejects(h.sharing.handle(R1, { method: "share.get", id }, "W2"), /not for this station/);
+});
+
+test("a skill is shared with its home workspace's stations only, and linked into the skills of the workspace it came in", async () => {
+  const { cloud, h, o, r1, r2, every } = joinedWorkspaces();
+  const skill = (s: Station, name: string) => {
+    const dir = join(s.data, "agent", "skills", name);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: 项目记忆：${name}\n---\n`);
+  };
+  // H's own skills are W1's.
+  skill(h, "w1-lessons");
+  await h.sharing.shareSkill("w1-lessons", true, null);
+  // R1's are W2's: H and R2 have them in W2's skills, not their home's.
+  skill(r1, "w2-lessons");
+  await r1.sharing.shareSkill("w2-lessons", true, null);
+  await settle(...every);
+  const linked = (s: Station, ...at: string[]) => existsSync(join(s.data, "agent", ...at, "SKILL.md"));
+  assert.ok(linked(o, "skills", "w1-lessons"));
+  for (const s of [r1, r2]) assert.equal(linked(s, "skills", "w1-lessons") || linked(s, "workspaces", "W2", "skills", "w1-lessons"), false);
+  for (const s of [h, r2]) {
+    assert.ok(linked(s, "workspaces", "W2", "skills", "w2-lessons"));
+    assert.equal(linked(s, "skills", "w2-lessons"), false);
+  }
+  assert.equal(linked(o, "skills", "w2-lessons"), false);
+  // R1 leaves W2: the copies of its skill go.
+  cloud.rosters.W2 = cloud.rosters.W2!.filter((p) => p.id !== R1);
+  await settle(h, r2);
+  for (const s of [h, r2]) assert.equal(linked(s, "workspaces", "W2", "skills", "w2-lessons"), false);
 });
 
 test("a shared subscription: the other borrows tokens from its host, with no login of its own; while the host is away, only the one lent before", async () => {

@@ -140,7 +140,7 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     machineLogins: d.accounts?.machineLogins() ?? [],
     // An OpenCode Go profile can be signed in to the OpenCode Console (accounts/console.ts) rather than given a key.
     consoleSignIn: d.accounts !== undefined,
-    // It shares profiles and skills with its workspace's other stations (share/index.ts).
+    // It shares profiles and skills with its workspaces' other stations (share/index.ts).
     sharing: d.accounts !== undefined,
     updates: d.updates?.get(lang) ?? [],
     // The folders pinned in its drive (drive/drive.ts), each with whether it can be browsed now; a member who may write
