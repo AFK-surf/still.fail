@@ -11,7 +11,7 @@ import { HostWire } from "../src/station/wire.ts";
 import { FakeHost, jsonResponse } from "../src/testing.ts";
 import { answers as answered, apply, call, readsOf, signIn, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
-import { type Answers, base, entries, entry, overview, session, started, stationHost, threadView } from "./station-fixture.ts";
+import { type Answers, base, entries, entry, overview, session, started, stationHost, stationLater, threadView } from "./station-fixture.ts";
 
 const gets = (host: FakeHost, path: string) => host.requests.flatMap(readsOf).filter((url) => url.endsWith(path)).length;
 
@@ -284,6 +284,51 @@ test("a_chat_with_something_unread_opens_from_what_is_held_while_what_is_before_
   apply(host, values);
   assert.equal(v(values, 1).at, 101);
   assert.deepEqual([v(values, 1).first, v(values, 1).last, v(values, 1).end], [71, 120, true]);
+  core.close();
+});
+
+test("a_chat_whose_unread_came_while_the_app_was_away_opens_at_once_with_what_is_held_and_what_came_joins_it", async () => {
+  // Read to 120 here; the app away while 121..125 were said. As it opens again its lists say so before those entries
+  // are on the device: the chat opens with what is held, where it opens (121) not here yet, and they join it as they
+  // come, the unread line over the first of them.
+  const answers = base();
+  answers["GET /threads"] = [threadView(7, 120)];
+  answers["GET /threads/7/entries?limit=50"] = { last: 120, entries: entries(71, 120) };
+  const first = await started(answers);
+  await run(first.core.inner.data.written);
+  first.core.close();
+  const host = first.host;
+  answers["GET /threads"] = [threadView(7, 125, 120, 5)];
+  // (its entries answered once let go; what came since, its agent's)
+  const asked: (() => void)[] = [];
+  stationLater(host, (req) => {
+    const query = /\/threads\/7\/entries\?(.*)$/.exec(req.url)?.[1];
+    if (query === undefined) return undefined;
+    const q = new URLSearchParams(query);
+    const from = q.has("after") ? Number(q.get("after")) + 1 : Number(q.get("from") ?? 76);
+    const to = Number(q.get("to") ?? 125);
+    const said = entries(from, to).map((e) => (e.n > 120 ? { ...e, authorKind: "agent", author: "k1" } : e));
+    return new Promise((answer) => asked.push(() => answer(jsonResponse(200, { last: 125, entries: said }))));
+  });
+  const core = await Core.create(host, { clock: host.time.clock, sample: 0, wire: () => new HostWire(host) });
+  await host.time.pass(500, 10);
+  assert.equal((core.inner.data.thread("ws/st", 7) as { unread?: number }).unread, 5, "its lists read");
+  assert.equal(core.inner.data.logSpan("entry", "ws/st", "7")?.max, 120, "what came not");
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "thread", station: "ws/st", thread: 7 });
+  subscribe(core, ui, 2, { topic: "chat", station: "ws/st", thread: 7, session: null });
+  await host.time.pass(50, 10);
+  apply(host, values);
+  assert.deepEqual([v(values, 1).at, v(values, 1).first, v(values, 1).last, v(values, 1).end], [121, 71, 120, true]);
+  assert.equal(v(values, 2).messages.at(-1).seq, 120);
+  assert.equal(v(values, 2).unreadLine, undefined, "none yet: nothing unread is here");
+  for (const answer of asked.splice(0)) answer();
+  await host.time.pass(500, 10);
+  apply(host, values);
+  assert.deepEqual([v(values, 1).first, v(values, 1).last], [71, 125]);
+  assert.equal(v(values, 2).messages.at(-1).seq, 125);
+  assert.equal(v(values, 2).unreadLine, 121);
   core.close();
 });
 

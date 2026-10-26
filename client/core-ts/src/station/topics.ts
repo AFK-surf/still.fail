@@ -517,13 +517,14 @@ export class StationTopics implements Owner {
         const to = Math.min(at + PAGE - 1, latest);
         let first = from;
         if (data.logCount("entry", station, String(id), from, to) !== to - from + 1) {
-          // Not all on the device yet: brought. What is held from where it opens on (the sync brings the latest first)
-          // opens it now, what is before it coming in as it does when read back; only with that not held either does
-          // it wait.
+          // Not all on the device yet: brought. What is held of it opens it now, what is not joining it as it comes: from
+          // where it opens, or, that not held (what came since it was read, the app away meanwhile), from what is held
+          // just before it, with what runs unbroken before that. Only with nothing of it held up to there does it wait.
           this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `range/${id}/${from}`, this.#sync.channels.range(entriesOf(station, id), from, to, { quiet: false }))));
           const held = data.logRange("entry", station, String(id), from, to);
-          for (let n = at; n <= to; n++) if (!held.has(n)) return undefined;
           first = at;
+          while (first >= from && !held.has(first)) first--;
+          if (first < from) return undefined;
           while (first > from && held.has(first - 1)) first--;
         }
         window = { first, last: to >= latest ? null : to, at, atOffset, caught: to };

@@ -799,7 +799,8 @@ fn Ctx::stick_in(self : Ctx, li : Int, from : Int, top : Double) -> Unit {
 ///|
 /// Scrolls list `key` (as given to Ctx::list in the same scope) so row
 /// `item` is at its top (`offset` below it: its top that far above the
-/// view's, or below it when negative), the end kept in view.
+/// view's, or below it when negative), the end kept in view. A glide to its
+/// end, and a row followed, end there: the row is where it goes.
 pub fn Ctx::list_scroll_to(
   self : Ctx,
   key : String,
@@ -812,6 +813,8 @@ pub fn Ctx::list_scroll_to(
     Some(st) if st.scroll_asked != (self.frame_no, item, offset) => {
       st.scroll_asked = (self.frame_no, item, offset)
       st.scroll_to(item)
+      st.glide = false
+      st.follow_item = -1
       st.anchor_off = offset
       self.app_scrolled(id, st)
       self.read_changed("a list scrolled to a row")
