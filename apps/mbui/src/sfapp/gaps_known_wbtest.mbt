@@ -1,22 +1,28 @@
-// The spacing rules (mbui's Tester::gap_faults, gaps.mbt: 1 what lights up apart, 3 blocks never at 0 or over each
-// other, 4 what a box with a ground holds in from its edges and as far from both sides, 5 a column's blocks on one
-// edge, 7 a row that lights up across what holds it the theme's lit_reach in from its edges) on the same screens and windows
+// The spacing rules (mbui's Tester::gap_faults, gaps.mbt: 1 what lights up apart, 2 neighbours of a kind equally
+// apart, 3 blocks never at 0 or over each other, 4 what a box with a ground holds in from its edges and as far from
+// both sides, 5 a column's blocks on one edge, 6 neighbours a step of the spacing scale apart, 7 a row that lights up
+// across what holds it the theme's lit_reach in from its edges) on the same screens and windows
 // the corner rule is held on (corners_wbtest.mbt, each screen opened once for both). Each rule's faults, all screens
 // in all windows in a language, keep to the bar here: one more fails, and one less until the bar comes down to it.
 // Every fault is printed (`at: rule n: …`) when a count is off its bar.
 
 ///|
-/// The faults each rule still has, in each language: they only fall (rule 4's two more with files-add-folder swept, its
+/// The faults each rule still has, in each language: they only fall (rule 6's nine the phone's 归档策略 options, their
+/// name and what it means 3 apart, on three screens; rule 4's two more with files-add-folder swept, its
 /// files' bar a phone's and a tablet's as the drive's other screens have it).
 let gaps_known : Map[String, Int] = {
   "zh rule 1": 0,
+  "zh rule 2": 0,
   "zh rule 3": 0,
   "zh rule 4": 94,
   "en rule 1": 0,
+  "en rule 2": 0,
   "en rule 3": 0,
   "en rule 4": 94,
   "zh rule 5": 1,
   "en rule 5": 1,
+  "zh rule 6": 9,
+  "en rule 6": 9,
   "zh rule 7": 0,
   "en rule 7": 0,
 }
@@ -26,14 +32,14 @@ let gaps_known : Map[String, Int] = {
 fn gaps_wrong(lang : String, gaps : Array[String]) -> String? {
   let counts : Map[String, Int] = {}
   for f in gaps {
-    for rule in ["rule 1", "rule 3", "rule 4", "rule 5", "rule 7"] {
+    for rule in ["rule 1", "rule 2", "rule 3", "rule 4", "rule 5", "rule 6", "rule 7"] {
       if f.contains(": \{rule}: ") {
         counts["\{lang} \{rule}"] = counts.get("\{lang} \{rule}").unwrap_or(0) + 1
       }
     }
   }
   let off : Array[String] = []
-  for rule in ["rule 1", "rule 3", "rule 4", "rule 5", "rule 7"] {
+  for rule in ["rule 1", "rule 2", "rule 3", "rule 4", "rule 5", "rule 6", "rule 7"] {
     let key = "\{lang} \{rule}"
     let have = counts.get(key).unwrap_or(0)
     let known = gaps_known.get(key).unwrap_or(0)

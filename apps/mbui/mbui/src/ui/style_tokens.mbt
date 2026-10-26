@@ -50,6 +50,97 @@ pub(all) enum Space {
 } derive(Eq, Show, Debug)
 
 ///|
+/// The spacing scale: every named step, in order (what each comes to: Space::px). What measures spacing against the
+/// scale (gaps.mbt's rule 6) reads it here, so the scale is said once.
+pub fn space_scale() -> Array[Space] {
+  [
+    S0,
+    SPx,
+    S0_5,
+    S1,
+    S1_25,
+    S1_5,
+    S2,
+    S2_5,
+    S3,
+    S3_5,
+    S4,
+    S4_5,
+    S5,
+    S6,
+    S7,
+    S8,
+    S9,
+    S10,
+    S11,
+    S12,
+    S14,
+    S16,
+    S20,
+    S24,
+    S28,
+    S32,
+    S36,
+    S40,
+    S44,
+    S48,
+    S52,
+    S56,
+    S60,
+    S64,
+    S72,
+    S80,
+    S96,
+  ]
+}
+
+///|
+/// Where a named step stands in the scale (space_scale), -1 for an `Exact` one: said for every step, so one added to
+/// Space is added to the scale (space_scale_wbtest.mbt holds the two together).
+fn Space::step(self : Space) -> Int {
+  match self {
+    S0 => 0
+    SPx => 1
+    S0_5 => 2
+    S1 => 3
+    S1_25 => 4
+    S1_5 => 5
+    S2 => 6
+    S2_5 => 7
+    S3 => 8
+    S3_5 => 9
+    S4 => 10
+    S4_5 => 11
+    S5 => 12
+    S6 => 13
+    S7 => 14
+    S8 => 15
+    S9 => 16
+    S10 => 17
+    S11 => 18
+    S12 => 19
+    S14 => 20
+    S16 => 21
+    S20 => 22
+    S24 => 23
+    S28 => 24
+    S32 => 25
+    S36 => 26
+    S40 => 27
+    S44 => 28
+    S48 => 29
+    S52 => 30
+    S56 => 31
+    S60 => 32
+    S64 => 33
+    S72 => 34
+    S80 => 35
+    S96 => 36
+    Exact(_) => -1
+  }
+}
+
+///|
 /// What a spacing token comes to, in logical pixels.
 pub fn Space::px(self : Space) -> Double {
   match self {
