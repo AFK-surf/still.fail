@@ -9,7 +9,8 @@
 # moon.work names mbui> (still.fail's apps/mbui): its app APP, built from a copy of it in out/win/app whose workspace
 # names that copy of mbui instead, its apps linking no Apple frameworks either; a package whose stubs are Apple's own
 # (.m: a core host's) takes its win_engine.c in their place where it has one (still.fail's: the core in Hermes on
-# Windows), else is left out.
+# Windows), else is left out. MBUI_WIN_RES=<a .res>: the app's resources (its icon, its version, its own environment:
+# still.fail's scripts/win.sh makes them), linked into APP's program.
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
@@ -71,7 +72,18 @@ sync_app() {
   for p in $SA/src/*/moon.pkg; do
     grep -q '"is-main"' $p && sed -i -e '/"cc-link-flags"/d' $p
   done
+  [ -z "${MBUI_WIN_RES:-}" ] || win_res $SA/src/$PKG/moon.pkg
   "$D/mbc" mirror $SA $AM
+}
+
+# The app's resources (MBUI_WIN_RES) in its link: its cc-link-flags, which moon puts after cl's /link for MSVC, where
+# link.exe takes a .res as it takes an object (and mbc's link, finding the file named there, goes by its content)
+win_res() {
+  local res
+  res=$(cygpath -m "$MBUI_WIN_RES")
+  case "$res" in *" "*) echo "win.sh: $res: a path with a space, which cc-link-flags cannot take" >&2; exit 1 ;; esac
+  grep -q '"native": *{' "$1" || { echo "win.sh: $1 has no native link options to put the resources in" >&2; exit 1; }
+  sed -i -e "s#\"native\": *{#\"native\": {\n      \"cc-link-flags\": \"$res\",#" "$1"
 }
 
 # WebView2's SDK, from NuGet (the header and the loader linked in statically; the browser is the system's own runtime)

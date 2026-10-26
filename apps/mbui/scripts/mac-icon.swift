@@ -1,17 +1,23 @@
-// still.fail mbui's macOS and iOS icons (the Android app's launcher icon, android/app/src/main/res: still.fail's face
-// under a crescent, on violet): drawn into the shape of a macOS app icon and made an .icns, or the iPhone's square
-// (the system rounds it) as the 1024-pixel PNG of an asset catalog's app icon (scripts/ios.sh).
+// still.fail mbui's macOS, iOS and Windows icons (the Android app's launcher icon, android/app/src/main/res: still.fail's
+// face under a crescent, on violet): drawn into the shape of a macOS app icon and made an .icns, the iPhone's square
+// (the system rounds it) as the 1024-pixel PNG of an asset catalog's app icon (scripts/ios.sh), or Windows' .ico.
 //   swift apps/mbui/scripts/mac-icon.swift OUT.icns
 //   swift apps/mbui/scripts/mac-icon.swift --ios OUT.png
+//   swift apps/mbui/scripts/mac-icon.swift --ico OUT.ico
 // The Android drawable's 108-unit viewport, of which a launcher shows the middle 72 (18 to 90), is laid on the icon's
-// 824-point rounded square (100 to 924 of 1024, Apple's grid), or on the whole of the iPhone's.
+// 824-point rounded square (100 to 924 of 1024, Apple's grid), on the whole of the iPhone's, or on Windows' square
+// (32 to 992: its icons fill their cell, a sliver of it left for the rounded corners' edge to be seen).
+// Windows' is not made where it is built (no AppKit there): its .ico is kept in the repository, named by this
+// script's hash (apps/mbui/windows/AppIcon-<hash>.ico, which scripts/win.sh asks for): this script changed, it is
+// made again here (on a Mac) and the one before removed.
 import AppKit
 import Foundation
 
-let ios = CommandLine.arguments.count > 2 && CommandLine.arguments[1] == "--ios"
-let out = ios ? CommandLine.arguments[2] : CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "AppIcon.icns"
+let mode = CommandLine.arguments.count > 2 ? CommandLine.arguments[1] : ""
+let ios = mode == "--ios", ico = mode == "--ico"
+let out = mode != "" ? CommandLine.arguments[2] : CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "AppIcon.icns"
 // where the square is on the 1024 grid, and its corners' radius
-let (edge, side, radius): (CGFloat, CGFloat, CGFloat) = ios ? (0, 1024, 0) : (100, 824, 185)
+let (edge, side, radius): (CGFloat, CGFloat, CGFloat) = ios ? (0, 1024, 0) : ico ? (32, 960, 192) : (100, 824, 185)
 let violet = NSColor(srgbRed: 0x5B / 255.0, green: 0x4F / 255.0, blue: 0xD6 / 255.0, alpha: 1)
 let moon = NSColor(srgbRed: 0xFF / 255.0, green: 0xD6 / 255.0, blue: 0x6B / 255.0, alpha: 1)
 let cheeks = NSColor(srgbRed: 0xB7 / 255.0, green: 0xB0 / 255.0, blue: 0xF2 / 255.0, alpha: 1)
@@ -60,6 +66,25 @@ func render(_ size: Int) -> Data {
 
 if ios {
   try render(1024).write(to: URL(fileURLWithPath: out))
+  exit(0)
+}
+// Windows': each size the shell asks for at 100-200 % scaling a PNG of its own (an .ico holds PNGs since Vista), the
+// largest 256 (said as 0 in its entry)
+if ico {
+  let sizes = [16, 20, 24, 32, 40, 48, 64, 96, 256]
+  let pngs = sizes.map { render($0) }
+  var file = Data()
+  func u16(_ v: Int) { file.append(contentsOf: [UInt8(v & 0xFF), UInt8((v >> 8) & 0xFF)]) }
+  func u32(_ v: Int) { u16(v & 0xFFFF); u16((v >> 16) & 0xFFFF) }
+  u16(0); u16(1); u16(sizes.count)
+  var at = 6 + 16 * sizes.count
+  for (s, png) in zip(sizes, pngs) {
+    file.append(contentsOf: [UInt8(s >= 256 ? 0 : s), UInt8(s >= 256 ? 0 : s), 0, 0])
+    u16(1); u16(32); u32(png.count); u32(at)
+    at += png.count
+  }
+  for png in pngs { file.append(png) }
+  try file.write(to: URL(fileURLWithPath: out))
   exit(0)
 }
 let set = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("mbui-\(getpid()).iconset")

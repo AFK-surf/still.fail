@@ -1863,6 +1863,7 @@ let en : Map[String, String] = {
   "desktop.menu.front": "Bring All to Front",
   "desktop.menu.help": "Help",
   "desktop.menu.shortcuts": "Keyboard Shortcuts",
+  "desktop.tray.open": "Open {app}",
   "android-misc.viz.cantRead": "Couldn't read this file",
   "android-misc.viz.cantSend": "Can't send messages in this chat now",
   "android-misc.viz.followupDrafted": "Added to the message box; review, then send",

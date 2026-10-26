@@ -1,0 +1,11 @@
+# The app as an app (mbui's src/host/win_life.h), on the files the sign-in left: started again with a link of its
+# schemes, it hands the link to the one that runs (this run) and ends; its window closed, this one goes on, put away;
+# started again, it comes back. What the runner does (e2e/win.sh life_do) it says done in MBUI_DONE_DIR.
+timeout 60000
+answered {"topic":"accounts"}
+log do: handed
+done handed
+log do: away
+done away
+shown
+exit

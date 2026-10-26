@@ -51,8 +51,9 @@
 // Android's (dev.mbui.MainActivity), iOS's (ios_app.m: `shown`, `link`, `network`, `size_class`, `fold`, `bars`
 // where its Info.plist's MBUIEdge lays it out edge to edge, as Android's manifest's dev.mbui.edge) and macOS's (mac_app.m:
 // `shown` as its window comes back after it was closed and as the Mac wakes from sleep, `network`, `menu`, `link` of
-// the schemes its Info.plist names); Windows's
-// posts none. While the app is
+// the schemes its Info.plist names) and Windows's (win_life.h: `shown` as its window comes back from the notification
+// area's icon it was put away to and as the PC wakes from sleep, `network` as the default route goes another way,
+// `link` of its schemes, MBUI_SCHEMES, `menu` as an action of its icon's menu is chosen). While the app is
 // on screen, Android's also holds a Wi-Fi multicast lock when its manifest asks for CHANGE_WIFI_MULTICAST_STATE (Android
 // drops the multicast that reaches the phone unless an app holds one: an mDNS lookup would hear no answer on the LAN).
 

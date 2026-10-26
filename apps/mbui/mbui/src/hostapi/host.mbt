@@ -1160,7 +1160,9 @@ pub fn set_badge(n : Int) -> Unit {
 /// `{"title": …, "action": …, "keys"?: "Mod+Shift+H", "enabled"?: false}` the app's (chosen, said on `system_channel` as
 /// `{"menu": action}`; its keys shown, the app's to take), or `{"separator": true}`; a menu `"role": "window"` is the
 /// system's list of windows too, `"role": "actions"` one of the app's actions only (their keys never taken by the
-/// menu). Given again as what it shows changes. Nothing where the system has no menu bar.
+/// menu), `"role": "tray"` the menu of the app's icon in Windows' notification area (no menu bar's: its items' roles
+/// `show`, the window brought back, and `quit`; the Mac leaves it out). Given again as what it shows changes. Nothing
+/// where the system has no menu bar nor such an icon.
 pub fn menu_setup(json : String) -> Unit {
   current.val.menu_setup(json)
 }

@@ -5,6 +5,8 @@
 # glyphs' edge rows one to three steps of a channel off, a glyph sampled from another place in the atlas. Made again
 # as the words' glyphs came to be kept a byte a texel (#1747, run 40161576657's artifact): 3975 pixels of the glyphs'
 # edges two to four steps of a channel off (SwiftShader filters the one-channel atlas apart), the picture looked at.
+# Made again as #1987 fitted the themes' greys and accent to read (WCAG's AA; run 40250980958's artifact, its a and b
+# the same to the byte): the controls' words, marks and accent in those colours.
 image ubuntu24 20261012.334.1
 emulator 37.2.12
 system android-34/default/x86_64 2

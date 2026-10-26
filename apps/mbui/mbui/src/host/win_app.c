@@ -1,7 +1,8 @@
 // Windows host: a per-monitor DPI-aware Win32 window drawn with Direct3D 11,
 // frames from a message loop that blocks while there is nothing to draw,
 // input from window messages, and the input method through IMM32 (TSF input
-// methods reach it through their IMM32 compatibility layer).
+// methods reach it through their IMM32 compatibility layer). A windowed program
+// (the GUI subsystem: no console of its own), its life as an app's (win_life.h).
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x0A00  // per-monitor DPI v2 (Windows 10 1703)
 #endif
@@ -27,6 +28,9 @@
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "advapi32.lib")
 #pragma comment(lib, "shell32.lib")
+// (a window's program, not a console's: started from Explorer, a shortcut or a link, no console window comes with it;
+// started from a terminal, its lines go there: win_life.h life_console)
+#pragma comment(linker, "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
 
 mb_callbacks mb_cb;
 
@@ -87,7 +91,8 @@ static void draw_frame(void) {
   mb_images_tell(outside_cb);
   mb_views_tell(outside_cb);
   device_tell(outside_cb);
-  if (rc.right <= 0 || rc.bottom <= 0) return;  // minimized; WM_SIZE asks again
+  // minimized, or put away (win_life.h): WM_SIZE, or the window back, asks again
+  if (rc.right <= 0 || rc.bottom <= 0 || !IsWindowVisible(hwnd)) return;
   double was = scale;
   scale = GetDpiForWindow(hwnd) / 96.0;
   if (scale != was) {
@@ -194,6 +199,8 @@ static int mods_now(void) {
 
 // the device beyond the window (device.mbt): a key catcher's keys, the clipboard, awake
 #include "win_device.h"
+// the app's life: once for its person, put away to the notification area, links, in front or not, light or dark
+#include "win_life.h"
 
 static void key_down(WPARAM vk) {
   // a key catcher's focus (win_device.h): its keys (a composition under way keeps them)
@@ -316,6 +323,8 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     }
     return 0;
   }
+  LRESULT taken = 0;
+  if (life_message(msg, wp, lp, &taken)) return taken;
   switch (msg) {
     case WM_PAINT: {
       PAINTSTRUCT ps;
@@ -524,29 +533,35 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   mb_cb = (mb_callbacks){frame, pointer_fn, wheel_fn, key, text};
   script = getenv("MBUI_SCRIPT");
   shot_dir = _wgetenv(L"MBUI_SHOT_DIR");
+  // (an app's console, its one run and its identity: decided as the program started, win_life.h life_begin)
   SetConsoleOutputCP(CP_UTF8);
   SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
   CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
 
+  WCHAR cls[300];
+  window_class(cls, 300);
   WNDCLASSEXW wc = {sizeof wc};
   wc.lpfnWndProc = wndproc;
   wc.hInstance = GetModuleHandleW(NULL);
   wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-  wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
-  wc.lpszClassName = L"mbui";
+  // the program's own icon (its resource 1), as large and as small as the system shows a window's
+  wc.hIcon = own_icon(GetSystemMetrics(SM_CXICON));
+  wc.hIconSm = own_icon(GetSystemMetrics(SM_CXSMICON));
+  wc.lpszClassName = cls;
   RegisterClassExW(&wc);
   int n = Moonbit_array_length(title);
-  WCHAR *t = (WCHAR *)calloc((size_t)n + 1, sizeof(WCHAR));
-  memcpy(t, title, (size_t)n * sizeof(WCHAR));
+  WCHAR *given = (WCHAR *)calloc((size_t)n + 1, sizeof(WCHAR));
+  memcpy(given, title, (size_t)n * sizeof(WCHAR));
+  // (the app's name, as its identity says it, where it has one: what its taskbar button and Alt+Tab show)
+  const WCHAR *t = app_name(given);
   DWORD style = WS_OVERLAPPEDWINDOW;
   // MBUI_WIN=<w>x<h>: the client area's size in points (a phone's, for the narrow layouts); else the app's own
   // (@hostapi.window_setup); 900 x 720 by default
   double ww = setup_w > 0 ? setup_w : 900, wh = setup_h > 0 ? setup_h : 720;
   const char *win = getenv("MBUI_WIN");
   if (win) sscanf(win, "%lfx%lf", &ww, &wh);
-  hwnd = CreateWindowExW(0, L"mbui", t, style, CW_USEDEFAULT, CW_USEDEFAULT, (int)ww, (int)wh, NULL, NULL,
+  hwnd = CreateWindowExW(0, cls, t, style, CW_USEDEFAULT, CW_USEDEFAULT, (int)ww, (int)wh, NULL, NULL,
                          wc.hInstance, NULL);
-  free(t);
   // that client area at the monitor's scale
   UINT dpi = GetDpiForWindow(hwnd);
   scale = dpi / 96.0;
@@ -556,6 +571,8 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   ImmAssociateContextEx(hwnd, NULL, 0);  // no input method until an editor has focus
   if (!mb_render_init(hwnd)) exit(1);
   ShowWindow(hwnd, SW_SHOW);
+  life_start(t);
+  free(given);
   want_frame = 1;
 
   for (;;) {
@@ -790,11 +807,9 @@ void mb_host_exit(int32_t code) { exit(code); }
 void mb_host_set_back(mb_back_fn f) { back_cb = f; }
 void mb_host_back_enabled(int32_t on) { back_on = on; }
 
-// The app in front or not (@hostapi.set_app_state): not told here yet (the app counts itself shown and in front).
-void mb_host_set_app_state(void (*f)(int32_t)) { (void)f; }
-
-// Whether the system is set to dark (@hostapi.system_dark): not read here yet (light).
-int32_t mb_host_system_dark(void) { return 0; }
+// The app in front or not (@hostapi.set_app_state), whether the system is set to dark (@hostapi.system_dark), the
+// title bar as the app is drawn (@hostapi.set_dark), the app's menus (@hostapi.menu_setup) and its environment
+// (@hostapi.env): win_life.h.
 // Words as the app sizes them (@hostapi.font_scale): the system's text scale not read here yet.
 double mb_host_font_scale(void) { return 1.0; }
 // What the app was started to be used with (@hostapi.native_pointing): touch where the machine has a touch screen ready
@@ -867,9 +882,6 @@ moonbit_string_t mb_host_update_state(void) { return moonbit_make_string_raw(0);
 
 // Turned sideways for a film (@hostapi.set_sideways): a window does not turn.
 void mb_host_set_sideways(int32_t on) { (void)on; }
-
-// The app drawn dark (@hostapi.set_dark): nothing of the host's own follows it here yet.
-void mb_host_set_dark(int32_t dark) { (void)dark; }
 
 // Notifications (notify.mbt): none shown here yet (the toast notifications and WNS are a later slice's): nothing kept, nothing tapped, no push; what the
 // system allows unknown.
@@ -968,8 +980,6 @@ void mb_host_window_drag(void) {
 // The pointer's shape (@hostapi.set_cursor), shown at once where it is over the window.
 // The number on the app's icon (@hostapi.set_badge): none on Windows here (its taskbar's overlay is not drawn yet).
 void mb_host_set_badge(int32_t n) { (void)n; }
-// The menu bar (@hostapi.menu_setup): none on Windows (its windows' own menus are not the app's).
-void mb_host_menu_setup(moonbit_string_t json) { (void)json; }
 // (this machine's station: managed from the macOS app only)
 moonbit_string_t mb_host_local_station(void) { return moonbit_make_string_raw(0); }
 void mb_host_local_station_act(moonbit_string_t a) { (void)a; }
@@ -980,18 +990,6 @@ void mb_host_set_cursor(int32_t kind) {
   cursor_kind = kind;
   POINT p;
   if (GetCursorPos(&p) && WindowFromPoint(p) == hwnd) SetCursor(LoadCursor(NULL, cursor_name(kind)));
-}
-
-moonbit_string_t mb_host_env(moonbit_string_t name) {
-  int n = Moonbit_array_length(name);
-  WCHAR *k = (WCHAR *)calloc((size_t)n + 1, sizeof(WCHAR));
-  memcpy(k, name, (size_t)n * sizeof(WCHAR));
-  const WCHAR *v = _wgetenv(k);
-  free(k);
-  int len = v ? (int)wcslen(v) : 0;
-  moonbit_string_t out = moonbit_make_string_raw(len);
-  if (len) memcpy(out, v, (size_t)len * sizeof(WCHAR));
-  return out;
 }
 
 // Windows' transparency effects (Settings > Personalization > Colors) turned off: glass drawn solid.
