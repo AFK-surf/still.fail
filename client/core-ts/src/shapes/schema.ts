@@ -292,6 +292,7 @@ export const SHAPES: Record<string, Shape> = {
     ["label", "String", { said: true }],
     ["detail", opt("String"), { said: true }],
     ["recommended", opt("bool")],
+    ["closes", opt("bool"), { doc: "Picked, the card closes and nothing is said in the chat (an option the agent made to close it): no\nmessage from the viewer comes of it." }],
   ], { doc: "One answer a decision offers (an agent's block post with chat_post `options`): a short phrase that reads on its own,\na line on what it leads to, and whether the agent recommends it." }),
   MessageDecision: struct([
     ["resolved", "bool"],

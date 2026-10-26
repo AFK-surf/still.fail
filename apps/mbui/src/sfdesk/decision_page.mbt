@@ -282,7 +282,7 @@ fn zou_picks(c : @ui.Ctx, src : Source, core : Core, here : MessageHere, x : Jso
       }
       match field(v, "message") {
         Some(mj) =>
-          decision_options(c, src, here, message_of(mj), number(v, "thread"), options, !live, on_pick=fn() {
+          decision_options(c, src, here, message_of(mj), number(v, "thread"), options, !live, on_pick=fn(_) {
             zou_leave(c, x, 3)
           })
         None => ()
