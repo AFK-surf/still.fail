@@ -2412,6 +2412,15 @@ pub let row_in : @ui.Space = room(row_in_y)
 pub let row_in_y : Double = 7.0
 
 ///|
+/// A chat's row's title's line (mouse_head_h, 20) with its middle as far down as the middle of a key concentric with the
+/// row's top corner (row_corner_keys: the row's corner, 18), so the marks at that line's end and its 归档 stand on one
+/// line (the user, 2026-10-27): 8 in from its top; the web's 7 and 7 kept between top and foot, 6 under its last line.
+pub let row_top_in_y : Double = row_corner - mouse_head_h / 2.0
+
+///|
+pub let row_foot_in_y : Double = 2.0 * row_in_y - row_top_in_y
+
+///|
 /// An agent's mark `side` across (the web's ui.css.ts agentMark): its corner .3 of its side (a 28 one's 8.4: an agent's
 /// card).
 pub fn agent_mark_corner(side : Double) -> @ui.Radius {

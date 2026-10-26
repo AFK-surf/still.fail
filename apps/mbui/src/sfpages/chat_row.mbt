@@ -693,7 +693,7 @@ fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
 fn rename_box() -> @ui.Style {
   let d = @sf.capsule_in(@sf.row_corner, rename_h)
   let side = @sf.theme().chat_list.band_pad - d
-  let over = @sf.row_in_y - d
+  let over = @sf.row_top_in_y - d
   rename_look.then(
     @ui.style(
       px=@sf.room_of(rename_words_in),
