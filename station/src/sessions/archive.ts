@@ -270,6 +270,27 @@ const lstatOrNull = async (path: string) => {
   }
 };
 
+/// `rm -r` that also takes directories their owner cannot write to (a Go module cache makes all of its own read-only):
+/// refused once, everything under `path` is given its owner's write (and a directory's read and search) and it goes.
+export async function removeTree(path: string, opts: { force?: boolean } = {}): Promise<void> {
+  try {
+    await rm(path, { recursive: true, force: opts.force ?? false });
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "EACCES" && code !== "EPERM") throw error;
+    await ownerWritable(path);
+    await rm(path, { recursive: true, force: opts.force ?? false });
+  }
+}
+
+async function ownerWritable(path: string): Promise<void> {
+  const there = await lstatOrNull(path);
+  if (!there || there.isSymbolicLink()) return;
+  const need = there.isDirectory() ? 0o700 : 0o200;
+  if ((there.mode & need) !== need) await chmod(path, (there.mode | need) & 0o7777);
+  if (there.isDirectory()) for (const name of await readdir(path)) await ownerWritable(join(path, name));
+}
+
 // ── transcripts ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /// Compress a transcript in place, leaving its filename discoverable as <original>.zst. Retry after a crash safely: an
@@ -476,7 +497,7 @@ export async function packWorkspaceIf(room: string, ready: () => boolean): Promi
     await rename(workspace, retiring);
     await mkdir(workspace);
     await chmod(workspace, (await stat(retiring)).mode & 0o7777);
-    await rm(retiring, { recursive: true });
+    await removeTree(retiring);
   } finally {
     await rm(temp, { force: true });
   }
@@ -490,6 +511,17 @@ type Refused = Map<string, string>;
 /// Copy files created since the snapshot into the restored tree. Originals stay intact until the final swap, so an
 /// interrupted/failed restoration can be retried without discarding new files or the archive.
 async function overlay(source: string, dest: string, refused: Refused): Promise<void> {
+  // The archive's directories come back with their modes, a read-only one too: written into for the overlay only.
+  const mode = (await stat(dest)).mode & 0o7777;
+  if ((mode & 0o700) !== 0o700) await chmod(dest, mode | 0o700);
+  try {
+    await overlayEntries(source, dest, refused);
+  } finally {
+    if ((mode & 0o700) !== 0o700) await chmod(dest, mode);
+  }
+}
+
+async function overlayEntries(source: string, dest: string, refused: Refused): Promise<void> {
   for (const entry of await readdir(source, { withFileTypes: true })) {
     const from = join(source, entry.name);
     const into = join(dest, entry.name);
@@ -517,7 +549,7 @@ export async function restoreWorkspace(room: string): Promise<void> {
   const archive = workspaceArchive(room);
   if (!(await exists(archive))) return unlockWorktrees(room);
   const stage = join(room, "workspace.restoring");
-  if (await exists(stage)) await rm(stage, { recursive: true });
+  if (await exists(stage)) await removeTree(stage);
   await mkdir(stage);
   await chmod(stage, 0o700);
   const stream = unzstd(archive);
@@ -537,7 +569,7 @@ export async function restoreWorkspace(room: string): Promise<void> {
   for (const live of [retiring, old, workspace]) {
     if (await isDir(live)) await overlay(live, stage, refused);
   }
-  if (await exists(old)) await rm(old, { recursive: true });
+  if (await exists(old)) await removeTree(old);
   if (await exists(workspace)) await rename(workspace, old);
   await rename(stage, workspace);
   // The links refused on the way, at their final path now: a junction or a copy stands in (a target that is not
@@ -548,8 +580,8 @@ export async function restoreWorkspace(room: string): Promise<void> {
   }
   await syncDir(room);
   // Everything is now back at its original path. Any interrupted deletion is harmless on the next restore.
-  if (await exists(retiring)) await rm(retiring, { recursive: true });
-  if (await exists(old)) await rm(old, { recursive: true });
+  if (await exists(retiring)) await removeTree(retiring);
+  if (await exists(old)) await removeTree(old);
   await unlink(archive);
   await unlockWorktrees(room);
 }
@@ -564,7 +596,7 @@ export async function emptyWorkspace(room: string): Promise<void> {
   await mkdir(workspace, { recursive: true });
   if (await exists(archive)) {
     const stage = join(room, "workspace.emptying");
-    if (await exists(stage)) await rm(stage, { recursive: true });
+    if (await exists(stage)) await removeTree(stage);
     await mkdir(stage);
     await chmod(stage, 0o700);
     const stream = unzstd(archive);
@@ -582,16 +614,16 @@ export async function emptyWorkspace(room: string): Promise<void> {
     }
     await takeUploads(stage, workspace);
     await unlink(archive);
-    await rm(stage, { recursive: true });
+    await removeTree(stage);
   }
   // What an interrupted packing or restoring left beside it (restoreWorkspace overlays these too).
   for (const left of ["workspace.retiring", "workspace.restored-old", "workspace.restoring"]) {
     if (!(await isDir(join(room, left)))) continue;
     await takeUploads(join(room, left), workspace);
-    await rm(join(room, left), { recursive: true });
+    await removeTree(join(room, left));
   }
   for (const entry of await readdir(workspace)) {
-    if (entry !== "uploads") await rm(join(workspace, entry), { recursive: true, force: true });
+    if (entry !== "uploads") await removeTree(join(workspace, entry), { force: true });
   }
   await unlockWorktrees(room);
 }
