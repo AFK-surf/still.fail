@@ -322,7 +322,7 @@ pub fn viz_file_of(
     None =>
       c.box(style=viz_wait_under, fn() {
         let i = c.box(style=viz_wait, fn() {  })
-        c.look(i, { ..@ui.still_look, alpha: @sf.breath(c) })
+        @sf.breathe(c, i)
       })
       |> ignore
     Some(Ok((html, state))) => {

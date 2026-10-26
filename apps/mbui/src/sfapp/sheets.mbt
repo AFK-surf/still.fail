@@ -989,16 +989,10 @@ fn job_tint(tone : String) -> Int64? {
 /// A job's status (JobDot): a small dot (a restarting service's breathes).
 fn job_dot(c : @ui.Ctx, tone : String) -> Unit {
   let t = @sf.theme()
-  let breath = if tone == "restart" { @sf.breath(c, low=0.35, resident=true) } else { 1.0 }
-  c.box(
-    w=Px(8.0),
-    h=Px(8.0),
-    radius=4.0,
-    opacity=breath,
-    bg=job_tint(tone).unwrap_or(t.p.subtle),
-    fn() {  },
-  )
-  |> ignore
+  let dot = c.box(w=Px(8.0), h=Px(8.0), radius=4.0, bg=job_tint(tone).unwrap_or(t.p.subtle), fn() {  })
+  if tone == "restart" {
+    @sf.breathe(c, dot, low=0.35, resident=true)
+  }
 }
 
 ///|

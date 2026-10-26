@@ -141,6 +141,8 @@ priv struct Drawn {
   /// a list's row: the row whose build said what it said of the frame (its id among the rows', 0 none), said where its
   /// list's rows say theirs (kept_rows.mbt's row_build_said)
   mut said_row : Int
+  /// a look by the clock (Ctx::cycle_look): what it draws tagged with it as it is painted
+  mut cycle : CycleLook?
 }
 
 ///|
@@ -171,6 +173,8 @@ priv struct DrawState {
   tops : Array[(Int, Int)]
   /// by node: the build something in it was last drawn moved in (Ctx::draw_carries)
   carry : Array[Int]
+  /// the node whose look by the clock is being painted (its instances tagged once it is: cycle_look.mbt)
+  mut cycling : Int
 }
 
 ///|
@@ -189,6 +193,7 @@ let dr : DrawState = {
   raising: false,
   tops: [],
   carry: [],
+  cycling: -1,
 }
 
 ///|
@@ -259,6 +264,7 @@ fn reset_drawing() -> Unit {
   dr.raising = false
   dr.tops.clear()
   dr.carry.clear()
+  dr.cycling = -1
   list_counts.clear()
   for f in reset_hooks {
     f()
@@ -331,6 +337,7 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     again: None,
     row: 0,
     said_row: 0,
+    cycle: None,
   }
   dr.stamp[i] = dr.build
   dr.at[i] = dr.entries.length()
@@ -562,6 +569,24 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     Some(e) => e
     None => return false
   }
+  // a look by the clock: what it draws painted as it would be without it, then tagged (cycle_look.mbt; not a part's or
+  // a row's box, whose recording is taken as it is painted)
+  match e.cycle {
+    Some(cy) if dr.cycling != i && dr.mode != mode_hits && e.part == 0 && e.row == 0 => {
+      let i0 = self.ninst
+      let was = dr.cycling
+      dr.cycling = i
+      if !self.drawn_paint(i, alpha) {
+        dr.bypass = i
+        self.paint(i, alpha)
+        dr.bypass = -1
+      }
+      dr.cycling = was
+      cycle_tag(self.inst, i0, self.ninst, cy)
+      return true
+    }
+    _ => ()
+  }
   // a part kept, drawn again as its build drew it, what its build's paint said of the frame said again where it said
   // it (kept_part.mbt, said.mbt), as its build's paint says it here: its drawing not where only targets are taken; a
   // list's row, where it is now (kept_rows.mbt)
@@ -571,10 +596,15 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       return true
     }
     Some(st) => {
+      // (in the clip it is in now, as its build's drawing is put there: part_band)
+      let k = clip_top()
+      let i0 = self.ninst
+      let g0 = self.segs.length()
       if dr.mode != mode_hits {
         self.part_paint_again(st)
+        self.row_clip_into(k, i0, g0, drops=true)
       }
-      self.say_again(st.said, unmoved)
+      self.say_again(st.said, part_band_moved(k))
       return true
     }
     None => ()
@@ -677,14 +707,36 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   if !look.is_still() || e.z >= 2 || e.only || cutting {
     dr.mode = mode_draw
   }
-  // (a part kept: what its build draws taken, with the glyphs' plots it draws from: kept_part.mbt)
+  // (a part kept: what its build draws taken, with the glyphs' plots it draws from, in its band, nothing round it
+  // cutting it; then put in the clip it is in, as what draws it again is: kept_part.mbt's part_band)
   let painting = if e.part != 0 { self.part_paint_begin(e.part) } else { 0 }
+  let k = clip_top()
+  let g0 = self.segs.length()
+  let ups = dr.tops.length() + dr.overlay.length() + dr.raised.length()
+  // (not where what each instance is of is followed, a frame measured for contrast: none is kept there, and none is
+  // dropped)
+  let band = e.part != 0 && !inst_owners.on
+  if band {
+    part_band()
+  }
   dr.bypass = i
   self.paint(i, alpha)
   dr.bypass = -1
   dr.mode = was
+  if band {
+    pop_clip()
+  }
   if e.part != 0 {
     self.part_paint_end(e.part, i, i0, painting)
+  }
+  if band {
+    self.part_clip_into(
+      e.part,
+      k,
+      i0,
+      g0,
+      drops=dr.tops.length() + dr.overlay.length() + dr.raised.length() == ups,
+    )
   }
   if cutting {
     pop_clip()

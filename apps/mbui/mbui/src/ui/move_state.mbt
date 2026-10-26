@@ -195,7 +195,8 @@ pub fn Ctx::move_state(
 
 ///|
 /// A value of the view's own, `name` (a `--` name, as the web's custom properties), as shown now: `target`, or where a
-/// move listing it (Ctx::move_state) has got from what it was shown as when that set out.
+/// move listing it (Ctx::move_state) has got from what it was shown as when that set out. Read while that goes on, what
+/// is built from it changes each frame: a part kept that reads it is built each frame until it is over (kept_part.mbt).
 pub fn Ctx::moved(self : Ctx, name : String, target : Double) -> Double {
   let mut v = target
   let mut k = self.move_runs.length() - 1
@@ -203,7 +204,13 @@ pub fn Ctx::moved(self : Ctx, name : String, target : Double) -> Double {
     let run = self.move_runs[k]
     if run.vars.contains(name) {
       match run.from.get(name) {
-        Some(f) => v = f.v[0] + (target - f.v[0]) * run.at(self.now)
+        Some(f) => {
+          let p = run.at(self.now)
+          v = f.v[0] + (target - f.v[0]) * p
+          if p < 1.0 {
+            part_live()
+          }
+        }
         None => ()
       }
       break
@@ -248,7 +255,14 @@ fn Ctx::move_node(self : Ctx, i : Int) -> Unit {
       match self.move_of(name, k) {
         Some(run) =>
           match run.from.get(key) {
-            Some(f) => shown[k] = move_mix(k, f.v, built, run.at(self.now))
+            Some(f) => {
+              let p = run.at(self.now)
+              shown[k] = move_mix(k, f.v, built, p)
+              // (shown otherwise each frame while it goes: what holds it, kept, built each frame till it is over)
+              if p < 1.0 {
+                part_live()
+              }
+            }
             None => ()
           }
         None => ()

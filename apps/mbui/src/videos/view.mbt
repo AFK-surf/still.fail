@@ -270,7 +270,7 @@ fn shapes(
   let t = @sf.theme()
   let pad = if small(c) { 6.0 } else { 8.0 }
   let inner = tile - 2.0 * pad
-  c.box(w=Fill(1.0), h=Fill(1.0), clip=true, gap~, opacity=@sf.breath(c, failed=error is Some(_)), fn() {
+  let wait = c.box(w=Fill(1.0), h=Fill(1.0), clip=true, gap~, fn() {
     for _ in 0..<2 {
       c.box(dir=Row, pl=inset, pr=inset, pt=12.0, gap~, align=AStart, fn() {
         for _ in 0..<cols {
@@ -285,7 +285,7 @@ fn shapes(
       |> ignore
     }
   })
-  |> ignore
+  @sf.breathe(c, wait, failed=error is Some(_))
 }
 
 ///|
@@ -365,12 +365,12 @@ fn detail_page(c : @ui.Ctx, src : Source, id : String) -> Unit {
         return
       }
       None => {
-        c.box(pl=40.0, pt=24.0, gap=12.0, opacity=@sf.breath(c), fn() {
+        let wait = c.box(pl=40.0, pt=24.0, gap=12.0, fn() {
           @sf.bar(c, Px(200.0), 22.0)
           @sf.bar(c, Px(320.0), 12.0)
           @sf.bar(c, Px(280.0), 12.0)
         })
-        |> ignore
+        @sf.breathe(c, wait)
         return
       }
     }

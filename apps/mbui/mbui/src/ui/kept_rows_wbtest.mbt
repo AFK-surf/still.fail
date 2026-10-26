@@ -418,6 +418,62 @@ test "a list's rows left still: a row going on with the clock built as it goes, 
 }
 
 ///|
+/// 30 rows, not in a part kept: row 2's mark turned by the clock (a spinner's), row 4's breathing and beating on the
+/// resident clock's steps (Ctx::cycle_look), the others still; how many times each was built.
+fn looked_rows(builds : Array[Int]) -> (Ctx) -> Unit {
+  fn(c) {
+    c.list("looked", 30, 50.0, fn(i) {
+      builds[i] = builds[i] + 1
+      c.box(h=Px(50.0), padx=10.0, dir=Row, gap=8.0, align=ACenter, fn() {
+        if i == 2 {
+          let mark = c.box(w=Px(14.0), h=Px(6.0), bg=0x3366FFFFL, fn() {  })
+          c.cycle_look(mark, looked_turn_ms, fn(f) { look(rot=f * 6.283185307179586) })
+        } else if i == 4 {
+          let mark = c.box(w=Px(14.0), h=Px(14.0), radius=7.0, bg=0xFF6633FFL, fn() {  })
+          c.cycle_look(mark, looked_breath_ms, fn(f) { look(alpha=0.35 + 0.65 * f, scale=1.0 + 0.3 * f) }, resident=true)
+        }
+        c.text("row \{i}", size=12.0) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
+/// How long looked_rows' turn takes, and its breath.
+let looked_turn_ms : Double = 800.0
+
+///|
+let looked_breath_ms : Double = 1400.0
+
+///|
+test "a list's rows left still: a row's look by the clock goes on as it is drawn again, the row not built for it" {
+  let run = fn(replay : Bool) -> (Array[Array[Double]], Array[Int]) {
+    let builds = Array::make(30, 0)
+    let t = Tester::new(looked_rows(builds), w=320.0, h=420.0, platform=2)
+    t.keep_parts(true)
+    drawn_again_on.val = replay
+    t.draw()
+    let frames = []
+    for _ in 0..<20 {
+      t.run_for(rows_still_ms)
+      frames.push(rows_frame())
+    }
+    drawn_again_on.val = true
+    (frames, builds)
+  }
+  let (kept, builds) = run(true)
+  let (built, _) = run(false)
+  // (built no more than a still row: nothing in them is read of the clock)
+  assert_eq(builds[2], builds[3])
+  assert_eq(builds[4], builds[3])
+  // (and drawn as they go on: turned, breathing)
+  assert_true(kept[1] != kept[2] && kept[1] != kept[19], msg="the looks stand still")
+  rows_same({ frames: kept, kept: 0, clicks: [] }, { frames: built, kept: 0, clicks: [] })
+}
+
+///|
 /// A part kept holding a list (`list_part`), another part beside it (`other`); row 3 of the list shows what `mark` says,
 /// which nothing but it reads, and row 5 is as wide as `spring` is now, a spring the other part sets going as it is
 /// built.

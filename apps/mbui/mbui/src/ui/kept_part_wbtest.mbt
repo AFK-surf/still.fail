@@ -104,6 +104,67 @@ test "a part kept: drawn again as it was drawn while a list beside it scrolls, n
 }
 
 ///|
+/// A part kept beside a list (as TestPart's), a mark in it turned and fading by the clock (Ctx::cycle_look); how many
+/// times it was built.
+fn looked_part(builds : Ref[Int]) -> (Ctx) -> Unit {
+  fn(c) {
+    c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), fn() {
+      c.box(w=Px(150.0), h=Fill(1.0), fn() {
+        c.list("rows", 40, 40.0, fn(i) {
+          c.box(h=Px(40.0), fn() { c.text("row \{i}", size=10.0) |> ignore }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+      c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+        c.kept_part(c.id("part"), "", fn() {
+          builds.val = builds.val + 1
+          c.box(w=Px(160.0), h=Px(60.0), bg=0x3366CCFFL, radius=8.0, align=ACenter, justify=JCenter, fn() {
+            let mark = c.box(w=Px(20.0), h=Px(8.0), bg=0xFFFFFFFFL, fn() {  })
+            c.cycle_look(mark, looked_turn_ms, fn(f) { look(rot=f * 6.283185307179586, alpha=0.5 + 0.5 * f) })
+          })
+          |> ignore
+        })
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
+test "a part kept: its look by the clock goes on as it is drawn again, the part not built for it" {
+  let run = fn(replay : Bool) -> (Array[Array[Double]], Int, Bool) {
+    let builds = Ref(0)
+    let t = Tester::new(looked_part(builds), w=400.0, h=300.0)
+    t.keep_parts(true)
+    drawn_again_on.val = replay
+    t.draw()
+    // a finger down on the list beside it, scrolling it: the part drawn again
+    t.press_at(75.0, 250.0)
+    t.move(75.0, 240.0)
+    let built = builds.val
+    let frames = []
+    for i in 1..=10 {
+      t.move(75.0, 240.0 - 10.0 * i.to_double())
+      t.run_for(rows_still_ms)
+      frames.push(kept_drawn())
+    }
+    let kept = g().part_kept(g().id("part"))
+    let builds = builds.val - built
+    t.release(75.0, 130.0)
+    drawn_again_on.val = true
+    (frames, builds, kept)
+  }
+  let (again, builds, kept) = run(true)
+  let (built, _, _) = run(false)
+  assert_true(kept, msg="the part was built")
+  assert_eq(builds, 0)
+  assert_true(again[0] != again[1], msg="its look stands still")
+  assert_eq(again, built)
+}
+
+///|
 test "a part kept is built again by what it read, its key, an event from outside, a message" {
   let k = TestPart::new()
   let t = Tester::new(k.view(), w=400.0, h=300.0)
