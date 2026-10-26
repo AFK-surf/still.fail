@@ -1,0 +1,10 @@
+timeout 20000
+until 整理发布清单
+wait 600
+tap 整理发布清单
+wait 1000
+wheel -900
+wait 1800
+until img:compare.png
+tap img:compare.png
+wait 1500
