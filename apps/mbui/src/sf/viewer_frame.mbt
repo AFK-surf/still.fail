@@ -103,11 +103,11 @@ fn viewer_head(
 
 ///|
 /// What is opened over the whole window to be done one way (a chat shared as a picture: sfpages' publish.mbt): on a
-/// wide screen the bar a file opened has (viewer_bar: back to `back` by name, `name` and `meta`), the doing its one tool
-/// (`icon`, named `label`); on a small screen no bar over it, but a band of glass along the window's foot with 取消 and
-/// the doing side by side, as wide as each other (2026-10-26 用户「应该放下面，俩按钮，一个取消一个保存到相册」「pc 的话直接跟附件预览
-/// 一样，有顶栏」). `busy`: the doing under way, not pressed again. What it gives back: whether it was closed (its way
-/// back, 取消), whether the doing was pressed, the frame after.
+/// wide screen the bar a file opened has (viewer_bar: back to `back` by name, `name` and `meta`), the doing a button in
+/// words (`label`) at its end; on a small screen no bar over it, but a band of glass along the window's foot with 取消
+/// and the doing side by side, as wide as each other (2026-10-26 用户「应该放下面，俩按钮，一个取消一个保存到相册」「pc 的话直接跟附件
+/// 预览一样，有顶栏」「pc 也用文字按钮，不要用图标」). `busy`: the doing under way; `disabled`: nothing to do it to yet. What it
+/// gives back: whether it was closed (its way back, 取消), whether the doing was pressed, the frame after.
 pub fn viewer_frame_act(
   c : @ui.Ctx,
   key : String,
@@ -115,9 +115,9 @@ pub fn viewer_frame_act(
   name : String,
   meta : String,
   ink : ViewerInk,
-  icon : String,
   label : String,
   busy? : Bool = false,
+  disabled? : Bool = false,
 ) -> (Bool, Bool) {
   let mut closed = false
   let mut acted = false
@@ -130,7 +130,7 @@ pub fn viewer_frame_act(
           if button(c, t("common.cancel"), key=key + "/cancel", w=Fill(1.0)) {
             closed = true
           }
-          if button(c, label, key=key + "/act", tone=Primary, busy~, w=Fill(1.0)) {
+          if button(c, label, key=key + "/act", tone=Primary, busy~, disabled~, w=Fill(1.0)) {
             acted = true
           }
         })
@@ -142,7 +142,7 @@ pub fn viewer_frame_act(
   } else {
     c.box(style=vfr_layer, fn() {
       closed = viewer_bar(c, key + "/bar", back, name, meta, false, ink, fn() {
-        if viewer_tool(c, key + "/act", icon, label, ink, disabled=busy) {
+        if button(c, label, key=key + "/act", tone=Primary, busy~, disabled~) {
           acted = true
         }
       })

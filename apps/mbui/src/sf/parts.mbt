@@ -36,8 +36,8 @@ pub(all) enum Tone {
 
 ///|
 /// A button (Button): a 36 pill on the wide screen, the phone's 38 one on a
-/// narrow; an icon before its words if given, a spinner in its place while
-/// `busy`; `reach`, where it stands in a card's foot corners: how its ground reaches past the card's words
+/// narrow, as tall as a bar's tools among them (viewer_bar's: 32); an icon before its words if given, a spinner in its
+/// place while `busy`; `reach`, where it stands in a card's foot corners: how its ground reaches past the card's words
 /// (foot_across); `hint`, what pressing it does in more words, over it while it is pointed at (a Button in a Tip). True
 /// on the frame after it was pressed.
 pub fn button(
@@ -84,7 +84,8 @@ pub fn button(
       Plain => (over(p.canvas, alpha(p.hover, h)), p.line_strong, p.text)
     }
   }
-  let height = button_height()
+  // (among the tools of a bar across the top: level with them and the window's buttons)
+  let height = if tools_across.val { viewer_tool_h } else { button_height() }
   let solid = tone == Primary || tone == DangerSolid
   // (at a sheet's foot, in a thumb's reach: its share of the foot's width, the presenters')
   let w = if w is Auto && foot_fills.val { @ui.Fill(1.0) } else { w }

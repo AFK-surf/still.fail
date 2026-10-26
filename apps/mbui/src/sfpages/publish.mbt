@@ -5,9 +5,9 @@
 // what looks like a secret in it hidden): the chat's name, its messages laid out as the chat lays out messages, each
 // attachment where its message has it, pressed anywhere to tick it or not (all at first: FileToggle's label), and
 // still.fail's mark at its foot. What it is for is the library's viewer_frame_act (2026-10-26 用户, of a button filled
-// in a pill of its own over it: 「太不对劲了」「应该放下面，俩按钮，一个取消一个保存到相册，pc 的话直接跟附件预览一样，有顶栏」): on a
-// wide screen the bar a file opened has across the top (back to the chat by its name, 分享图片 and how much was hidden),
-// 复制图片 its tool, as a picture opened has its copy; on a small screen 取消 and 保存到相册 side by side at the foot
+// in a pill of its own over it: 「太不对劲了」「应该放下面，俩按钮，一个取消一个保存到相册，pc 的话直接跟附件预览一样，有顶栏」「pc
+// 也用文字按钮，不要用图标」): on a wide screen the bar a file opened has across the top (back to the chat by its name, 分享图片
+// and how much was hidden), the button 复制图片 at its end; on a small screen 取消 and 保存到相册 side by side at the foot
 // (picture_out). Pressed, the picture is drawn whole off the screen as one long picture (Ctx::shot), the attachments
 // left out not in it, nor the ticks and the notes of what was hidden that are for the one sharing it, its times as
 // dates; then handed out. Which files an agent's words place, and those words as Markdown, are the core's (the
@@ -17,7 +17,7 @@
 ///|
 /// The sharing as it stands: the chat it is of and its thread (None: closed), the preview as read (0 being read, 1
 /// read, 2 not: `error` says why), the attachments left out (by their `k`), its picture being taken, how many times it
-/// was copied (its tool a check a moment after).
+/// was copied (its button 已复制 a moment after).
 priv struct Publishing {
   mut of : (ChatRef, Double)?
   mut read : Int
@@ -93,8 +93,8 @@ pub fn publish_left_out(k : String) -> Bool {
 let publish_shot : String = "publish/picture"
 
 ///|
-/// The picture taken (the attachments ticked in it, nothing else of the page's), then handed out as its tool says:
-/// copied, its tool a check a moment (as a picture opened says its copy), else what came of it said.
+/// The picture taken (the attachments ticked in it, nothing else of the page's), then handed out as its button says:
+/// copied, its button 已复制 a moment, else what came of it said.
 fn publish_go(c : @ui.Ctx) -> Unit {
   publishing.busy = true
   c.take_shot(publish_shot, fn(png) {
@@ -160,11 +160,11 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
           })
           |> ignore
       }
-      // what it is for: on a wide screen the bar a file opened has (back to the chat; the copy its tool); on a small one
-      // 取消 and 保存到相册 at the foot
+      // what it is for: on a wide screen the bar a file opened has (back to the chat), 复制图片 at its end; on a small
+      // one 取消 and 保存到相册 at the foot
       c.layer(fn() {
-        let (label, icon) = picture_out_way()
-        // (copied: a check a moment after, as a picture opened says its copy)
+        let (label, _) = picture_out_way()
+        // (copied: 已复制 a moment after)
         let shown = publishing.copied > 0 &&
           !@kit.after(c, "publish/copied/\{publishing.copied}", true, @sf.copied_ms)
         let (closed, acted) = @sf.viewer_frame_act(
@@ -174,9 +174,9 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
           @sf.t("web-pages.chat.shareImage"),
           text(p, "hiddenText"),
           @sf.page_viewer_ink(),
-          if shown { "check" } else { icon },
           if shown { @sf.t("common.copied") } else { label },
-          busy=publishing.busy || p is None || messages.length() == 0,
+          busy=publishing.busy,
+          disabled=p is None || messages.length() == 0,
         )
         if acted && p is Some(_) && messages.length() > 0 {
           publish_go(c)

@@ -12,8 +12,8 @@ import { Mark } from "./brand.tsx";
 import { longPicture } from "./longPicture.ts";
 import { Dialog as RDialog } from "radix-ui";
 import { Avatar, Button, Confirm, Time, Tip, WaitLine } from "./ui.tsx";
-import { Check, Close, Copy, ShieldCheck, Web } from "@stillfail/ui/icons.tsx";
-import { ViewerBar, ViewerTool } from "@stillfail/ui/viewer/ViewerBar.tsx";
+import { Close, ShieldCheck, Web } from "@stillfail/ui/icons.tsx";
+import { ViewerBar } from "@stillfail/ui/viewer/ViewerBar.tsx";
 import { useNarrow } from "./mobile/narrow.ts";
 import { useBackClose } from "@stillfail/ui/backClose.ts";
 import * as fpCss from "./FilePreview.css.ts";
@@ -177,7 +177,8 @@ export function savePicture(png: Blob): void {
  * Shares the chat as a picture (wide screen), as a file is previewed (FilePreview.tsx): over the whole window, the
  * picture as it would be, its attachments ticked in their messages (all at first), under the bar a file opened has
  * (with a mouse on a wide screen across the top, back to the chat by its name; else floating, with close): 分享图片, how
- * much was hidden, and its one tool, 复制图片, as a picture opened has its copy (a check a moment after).
+ * much was hidden, and at its end the button 复制图片 in words (已复制 a moment after; 2026-10-26: 「pc 也用文字按钮，不要用
+ * 图标」).
  */
 export function PublishDialog({ station, thread, onClose }: { station: string; thread: number; onClose(): void }) {
   const preview = usePublishPreview(station, thread);
@@ -210,10 +211,11 @@ export function PublishDialog({ station, thread, onClose }: { station: string; t
       </div>
     );
   }
-  const label = copied ? t("common.copied") : t("desktop.contextMenu.copyImage");
-  const tool = p && p.messages.length > 0
-    ? <ViewerTool label={label} onClick={go}>{copied ? <Check size={18} /> : <Copy size={18} />}</ViewerTool>
-    : null;
+  const tool = (
+    <Button variant="primary" busy={taking} disabled={!p || p.messages.length === 0} onClick={go}>
+      {copied ? t("common.copied") : t("desktop.contextMenu.copyImage")}
+    </Button>
+  );
   return (
     <RDialog.Root open onOpenChange={(o) => { if (!o) onClose(); }}>
       <RDialog.Portal>

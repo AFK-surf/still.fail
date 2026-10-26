@@ -2,7 +2,7 @@
 // info, over the whole window, the picture as it would be; 复制图片 puts it on the clipboard, one PNG of it all.
 
 ///|
-test "wide: 分享图片 from the chat's info: the picture as it would be over the window under its bar; 复制图片 copies it whole" {
+test "wide: 分享图片 from the chat's info: the picture as it would be over the window under its bar; 复制图片, a button in words at its end, copies it whole" {
   reset()
   let calls : Array[Made] = []
   let base = fixture("chat-info")
@@ -43,4 +43,7 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
       }
     None => fail("no picture copied")
   }
+  // its button says so a moment, in words
+  t.frame()
+  assert_true(t.find("已复制") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
 }

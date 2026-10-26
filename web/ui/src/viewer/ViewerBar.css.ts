@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
+import * as controlsCss from "../styles/controls.css.ts";
 
 /** How tall the bar is: as a page's bar (styles/sidebar.css.ts), a 32px button in it level with the desktop window's
  * buttons. What is under it starts below it, and goes under it as it is scrolled or as the bar goes. */
@@ -47,6 +48,8 @@ export const meta = style({
   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 export const tools = style({ justifySelf: "end", display: "flex", alignItems: "center", gap: "2px", minWidth: "0" });
+/** A button in words among the tools (a chat shared as a picture: 复制图片) as tall as they are, 32, level with them. */
+globalStyle(`${tools} > ${controlsCss.btn}`, { height: "32px" });
 /** A tool: the page's icon button, in the file's quieter ink until pointed at or on. */
 export const tool = style({
   color: `var(--viewer-muted, ${vars.muted})`,
