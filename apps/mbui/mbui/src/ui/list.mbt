@@ -812,10 +812,10 @@ fn Ctx::place_list(
 }
 
 ///|
-/// Row node `r` of a list, laid out `h` tall: where rows are kept (Ctx::rows_on), as tall as whole device pixels, its
-/// room to the next row what is left of the last one (the rows' tops on the pixels together: Ctx::rows_on_pixels).
+/// Row node `r` of a list, laid out `h` tall: as a host lays rows (Ctx::rows_on_grid), as tall as whole device pixels,
+/// its room to the next row what is left of the last one (the rows' tops on the pixels together: Ctx::rows_on_pixels).
 fn Ctx::row_slot(self : Ctx, r : Int, h : Double) -> Double {
-  if !self.rows_on() {
+  if !self.rows_on_grid() {
     return h
   }
   let sc = self.scale
@@ -826,14 +826,14 @@ fn Ctx::row_slot(self : Ctx, r : Int, h : Double) -> Double {
 
 ///|
 /// A list's rows (`order`, top to bottom, laid where the list stands, each as tall as whole device pixels: row_slot)
-/// set on the device's pixels, all moved alike, less than a pixel (where rows are kept: Ctx::rows_on). Each glyph is
+/// set on the device's pixels, all moved alike, less than a pixel (as a host lays them: Ctx::rows_on_grid). Each glyph is
 /// set on the pixels where it is (Ctx::emit_text, paint_rich), so a row put a part of a pixel off them has its lines
 /// set apart, one moved a pixel and the next not as the list moves it, its words crawling: so it is as the list
 /// stands at its end and what is under its rows grows (words sent flying in, an agent's line coming), the keyboard
 /// comes, an end stops it, it is said from another row. On the pixels, all of a row moves as one, by whole pixels, and
 /// a row drawn again is moved as its laying out there would move it (kept_rows.mbt).
 fn Ctx::rows_on_pixels(self : Ctx, order : Array[Int]) -> Unit {
-  if !self.rows_on() || order.length() == 0 {
+  if !self.rows_on_grid() || order.length() == 0 {
     return
   }
   let y = self.nodes[order[0]].y
