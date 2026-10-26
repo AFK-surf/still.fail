@@ -84,6 +84,7 @@ double mb_host_mem_bytes(void);
 static mb_outside_fn outside_cb;  // who is told as what the host does for the app is done (mb_host_set_outside)
 static void device_tell(mb_outside_fn tell);  // win_device.h: the clipboard's reads done
 static void pick_tell(mb_outside_fn tell);    // win_files.h: the picks read
+static void update_tell(mb_outside_fn tell);  // win_update.h: how an update goes
 
 // While the window is not shown (minimized, put away to the notification area: win_life.h), the app goes on as what
 // comes from outside asks (a message posted: the core's words, the system's say; an outside wait done: mb_app_wake),
@@ -103,6 +104,7 @@ static void draw_frame(void) {
   mb_views_tell(outside_cb);
   device_tell(outside_cb);
   pick_tell(outside_cb);
+  update_tell(outside_cb);
   int away = rc.right <= 0 || rc.bottom <= 0 || !IsWindowVisible(hwnd) || IsIconic(hwnd);
   if (away) {
     // (none drawn yet: nothing to build at)
@@ -226,6 +228,8 @@ static int mods_now(void) {
 #include "win_life.h"
 // this machine's station: what it is, started, stopped, installed
 #include "win_station.h"
+// the app keeping itself current: a newer build's installer downloaded, checked, run
+#include "win_update.h"
 
 static void key_down(WPARAM vk) {
   // a key catcher's focus (win_device.h): its keys (a composition under way keeps them)
@@ -883,8 +887,7 @@ int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_stri
 moonbit_string_t mb_host_shared_in(void) { return moonbit_make_string_raw(0); }
 moonbit_bytes_t mb_host_shared_in_file(int32_t i) { (void)i; return moonbit_make_bytes(0, 0); }
 
-// Updates (@hostapi.app_version, update_install, update_state): this app does not update itself here.
-int32_t mb_host_app_version(void) { return 0; }
+// Updates (@hostapi.app_version, update_install, update_state): win_update.h.
 // A package for the system's installer (@hostapi.install_package): none here, said on the system channel (system.mbt):
 // its name as UTF-8, escaped for JSON.
 void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
@@ -906,11 +909,6 @@ void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
   free(out);
   free(utf8);
 }
-
-void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name) {
-  (void)url; (void)sha256; (void)size; (void)name;
-}
-moonbit_string_t mb_host_update_state(void) { return moonbit_make_string_raw(0); }
 
 // Turned sideways for a film (@hostapi.set_sideways): a window does not turn.
 void mb_host_set_sideways(int32_t on) { (void)on; }

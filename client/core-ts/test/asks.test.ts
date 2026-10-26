@@ -169,6 +169,22 @@ test("an_explicit_update_gets_the_newest_build_or_fails_instead_of_using_the_cac
   assert.equal(await run(asks.update("android", 1100, true, false)), null);
 });
 
+test("a_windows_build_is_offered_only_as_its_signed_words_say_it", async () => {
+  // (taken where they verify: app-release.test.ts; one the feed says alone, or signed by another key, is not)
+  const host = new FakeHost();
+  let signed: J = undefined;
+  host.onFetch((req) => {
+    if (req.url !== "https://stillfail.test/releases/win/latest.json") return jsonResponse(404, {});
+    return jsonResponse(200, { versionCode: 1200, versionName: "0.1.1200", file: "desktop/stillfail-0.1.1200-x64-win.exe", sha256: "ab", size: 9, signed });
+  });
+  const asks = new Asks(host, nothing);
+  assert.equal(await run(asks.update("win", 1100, false, false)), null);
+  await assert.rejects(run(asks.update("win", 1100, true, false)), /签名校验/);
+  signed = { release: "e30=", signature: "AA==", key: "0000000000000000" };
+  await assert.rejects(run(asks.update("win", 1100, true, false)), /签名校验/);
+  assert.equal(await run(asks.update("android", 1100, true, false).pipe(Effect.orElseSucceed(() => null))), null);
+});
+
 test("a_beta_app_takes_its_builds_from_the_beta_feed", async () => {
   const release = (code: number) => ({ versionCode: code, versionName: `0.1.${code}`, file: `android/stillfail-${code}.apk`, sha256: "ab", size: 9 });
   const feeds = (req: { url: string }) =>

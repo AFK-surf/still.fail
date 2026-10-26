@@ -38,9 +38,9 @@ core() { HERMESC=$(cygpath -m "$engine/hermesc.exe") bash "$D/core.sh" hermes; }
 # its package name), and its own environment beyond those
 variant() {
   case "${MBUI_VARIANT:-mbui}" in
-    mbui) id=fail.still.mbui name="still.fail mbui" exe=stillfail dir=stillfail-mbui schemes= extra='MBUI_BETA=1' ;;
-    stable) id=fail.still.desktop name=still.fail exe=still.fail dir=stillfail schemes=stillfail,ember extra='MBUI_OWN=1' ;;
-    beta) id=fail.still.desktop.beta name=youdid.wtf exe=youdid.wtf dir=stillfail-beta schemes=stillfail-beta extra='MBUI_OWN=1\nMBUI_BETA=1' ;;
+    mbui) id=fail.still.mbui name="still.fail mbui" exe=stillfail dir=stillfail-mbui schemes= extra='MBUI_BETA=1\nMBUI_UPDATE_FEED=win/mbui' ;;
+    stable) id=fail.still.desktop name=still.fail exe=still.fail dir=stillfail schemes=stillfail,ember extra='MBUI_OWN=1\nMBUI_UPDATE_FEED=win' ;;
+    beta) id=fail.still.desktop.beta name=youdid.wtf exe=youdid.wtf dir=stillfail-beta schemes=stillfail-beta extra='MBUI_OWN=1\nMBUI_BETA=1\nMBUI_UPDATE_FEED=win' ;;
     *) echo "win.sh: MBUI_VARIANT is mbui, stable or beta, not $MBUI_VARIANT" >&2; return 1 ;;
   esac
 }

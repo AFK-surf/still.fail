@@ -2,6 +2,7 @@
 // app is out, a picture (fetched once and kept on the device), the buddies a Slack app can wear, a dev cloud's sign-in.
 import { Deferred, Effect, Semaphore } from "effect";
 import buddiesList from "../../../web/public/avatars/index.json" with { type: "json" };
+import { winReleaseUnverified } from "./app-release.ts";
 import { encodeComponent } from "./accounts.ts";
 import type { AccountSessions } from "./account-provider.ts";
 import type { Ask } from "./asks-parse.ts";
@@ -109,7 +110,14 @@ export class Asks {
       }
       const raw = response.success.status === 200 ? parseJson(response.success.body) : undefined;
       const shaped = raw !== undefined ? conform("AppRelease", raw) : null;
-      const release = shaped !== null && "ok" in shaped ? shaped.ok : null;
+      let release = shaped !== null && "ok" in shaped ? shaped.ok : null;
+      // the Windows app's installer taken only as its signed words say it (app-release.ts): else none is offered
+      const unverified = release !== null && platform.split("/")[0] === "win" ? winReleaseUnverified(raw) : "";
+      if (unverified !== "") {
+        console.warn(`app.update: ${feed}: ${unverified}`);
+        if (now) return yield* Effect.fail(new CoreError("app_update", t("core-misc.ask.update_unsigned")));
+        release = null;
+      }
       if (now && release === null) return yield* Effect.fail(new CoreError("app_update", t("core-misc.ask.update_retry")));
       if (release !== null) this.#releases.set(feed, [time, release]);
       return newer(this.#releases.get(feed)![1]);
