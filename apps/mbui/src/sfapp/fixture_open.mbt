@@ -32,6 +32,7 @@ pub fn open_cards_fixture(mode : String) -> Unit {
 pub fn open_fixture(mode : String) -> Unit {
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   match mode {
+    "chat-demo-drop" => @sfdesk.tab_place_set("ws1", Some({ station: "ws1/st1", root: Some(@sffixture.fix_docs), path: "" }))
     "decisions" | "decisions-text" | "decisions-idle" => app.nav.push(Decisions)
     "history" | "history-details" => {
       app.nav.push(Chat(r))

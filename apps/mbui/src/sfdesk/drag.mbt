@@ -634,9 +634,24 @@ fn clash_foot(c : @ui.Ctx) -> Unit {
 /// where it is would do.
 fn drag_ghost(c : @ui.Ctx, page : Int) -> Unit {
   let t = @sf.theme()
-  match (fdrag.item, c.rect_of(page)) {
+  match (dragged(), c.rect_of(page)) {
     (Some(i), Some((x0, y0, _, _))) => {
       let (px, py, _) = c.pointer()
+      if @sfbase.motion_demo.val {
+        let slot = @sfbase.demo_drop_slot.val
+        let p = @kit.animate(c, "demo/drop-snap", if slot is Some(_) { 1.0 } else { 0.0 }, transition=@motion.tween(@sf.dur_ms, ease=Out))
+        let (x, y) = match slot {
+          Some((x, y, _, _)) => (x, y)
+          None => (px + fdrag_ghost_off, py + fdrag_ghost_off)
+        }
+        let ghost = c.layer(fn() {
+          c.box(style=@ui.style(w=Fixed(@sf.file_card_w)), left=px+fdrag_ghost_off-x0+(x-px-fdrag_ghost_off)*p, top=py+fdrag_ghost_off-y0+(y-py-fdrag_ghost_off)*p, fn() {
+            @sf.file_card(c, "demo/carried", i.name, i.size, path=i.abs, named=true, composer=true, meta=i.station_name + " · " + @sf.t("web-main.file.modePath")) |> ignore
+          }) |> ignore
+        })
+        c.draw_only(ghost)
+        return
+      }
       c.layer(fn() {
         c.box(style=fdrag_ghost_place, tx=px - x0 + fdrag_ghost_off, ty=py - y0 + fdrag_ghost_off, fn() {
           c.box(style=fdrag_ghost_chip, fn() {

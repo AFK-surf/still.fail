@@ -136,6 +136,11 @@ pub fn composer(
 ) -> Unit {
   let p = @sf.theme().p
   let w = writing(src, spec.draft)
+  let demo_drag = @sfbase.motion_demo.val &&
+    (@sfbase.drag_carried.val)() is Some(_) && demo_over_composer(c)
+  if @sfbase.motion_demo.val && !demo_drag {
+    @sfbase.demo_drop_slot.val = None
+  }
   let no_files = spec.locked || spec.offline
   // (its corner where it stands, what waits in it and its ＋ and send following it)
   @sf.composer_round.val = place.corner
@@ -183,7 +188,7 @@ pub fn composer(
   // words just sent from it still in it: as tall as it was then, its field where it was and its ＋ and send at its foot
   // (composer_hold), so nothing in it moves until it comes down
   let sent_box = composer_held_box(c, spec.draft)
-  let multiline = spec.roomy ||
+  let multiline = demo_drag || spec.roomy ||
     focused ||
     held ||
     sent_box > 0.0 ||
@@ -287,7 +292,7 @@ pub fn composer(
   let holds = if whose != composing.draft_before && !moved {
     ""
   } else {
-    "\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{w.files.length()}|\{w.quotes.length()}|\{w.error != ""}|" +
+    "\{demo_drag}|\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{w.files.length()}|\{w.quotes.length()}|\{w.error != ""}|" +
     w.field.text()
   }
   let shape = @motion.tween(if moved { page_move_ms } else { morph_ms }, ease=Out)
@@ -718,10 +723,31 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
     |> ignore
   }
   // (a quote's picture is its own, not among them)
-  if w.files.length() > 0 {
+  let demo = @sfbase.motion_demo.val
+  let carried = if demo && demo_over_composer(c) { (@sfbase.drag_carried.val)() } else { None }
+  if w.files.length() > 0 || carried is Some(_) {
     c.box(style=files_flow(), flow=true, line_gap=files_lines(), fn() {
-      for f in w.files {
-        composer_file(c, src, spec, w, f)
+      match carried {
+        Some(d) => {
+          let slot_id = c.id("demo/drop-slot")
+          let slot = c.box(style=@ui.style(w=Fixed(@sf.file_card_w), radius=Lg, bg=Neutral), id=slot_id, fn() {
+            let preview = c.box(fn() { waiting_card(c, "demo/drop-preview", Some(dropped_of(d)), restore=false) |> ignore })
+            c.look(preview, @ui.look(alpha=0.18))
+            c.draw_only(preview)
+          })
+          c.draw_only(slot)
+          @sfbase.demo_drop_slot.val = c.laid_rect(slot_id)
+        }
+        None => ()
+      }
+      let files = if demo { w.files.rev() } else { w.files }
+      for f in files {
+        if demo {
+          let tile = c.box(fn() { composer_file(c, src, spec, w, f) })
+          @motion.layout(c, tile, "demo/file/" + text(Some(f), "id"), by="\{carried is Some(_)}|\{w.files.length()}", spec=@motion.tween(@sf.shape_ms, ease=Out))
+        } else {
+          composer_file(c, src, spec, w, f)
+        }
       }
     })
     |> ignore
@@ -1807,3 +1833,12 @@ fn composer_open_box() -> Double {
 /// A chat's foot: 12 over the composer, its room under it its pane's (composer_foot_in).
 // kept across runs: a value (no field of it changes)
 let chat_foot_top : @ui.Style = @ui.css("w=Full pt=S3 align=ACenter")
+
+///|
+fn demo_over_composer(c : @ui.Ctx) -> Bool {
+  let (px, py, _) = c.pointer()
+  match c.rect_of(c.id("composer/cap")) {
+    Some((x, y, w, h)) => px >= x && px < x+w && py >= y && py < y+h
+    None => false
+  }
+}

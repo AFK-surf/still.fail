@@ -37,6 +37,10 @@ pub fn reset() -> Unit {
   go_reset()
   attention_reset()
   page_switch_reset()
+  demo_chats.clear()
+  demo_spread.val = false
+  demo_selected.val = 0
+  @sfbase.demo_drop_slot.val = None
   history_reset()
   find_close()
   jobs_reset()

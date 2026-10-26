@@ -64,6 +64,10 @@ pub fn drop_hint(c : @ui.Ctx, pane : Int) -> Unit {
   if !inside(c.rect_of(pane), px, py) {
     return
   }
+  if @sfbase.motion_demo.val {
+    drag_ghost(c, pane)
+    return
+  }
   let l = c.layer(fn() {
     c.layer(fn() { c.box(style=drop_ground, glass=@sf.glass_floating(), fn() {  }) |> ignore }) |> ignore
     c.box(style=drop_hint_box, fn() {

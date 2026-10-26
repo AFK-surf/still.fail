@@ -1164,6 +1164,7 @@ pub fn seeded_draft(mode : String, key : String) -> Json {
         "quotes": [],
         "files": [],
       }
+    "chat-demo-drop" => { "text": "", "quotes": [], "files": [file("build.log", 0, 0, 18432)] }
     // chat-attach-row: a station's file before them (drive_fixture.mbt), the row wider than the capsule;
     // chat-attach-pic: its picture's tile drawn from the picture, as one picked here is (seeded_pictures)
     "chat-attach" | "chat-attach-row" | "chat-attach-pic" =>

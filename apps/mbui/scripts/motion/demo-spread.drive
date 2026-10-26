@@ -1,0 +1,7 @@
+timeout 20000
+wait 1500
+tap 摊开对话
+wait 1800
+tapxy 800 400
+wait 1600
+exit

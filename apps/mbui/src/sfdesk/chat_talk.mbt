@@ -34,7 +34,7 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
   }
   over()
   // a row of the 文件 tab carried over the pane: frosted under the composer (chat_layers.mbt)
-  if view is Some(_) {
+  if view is Some(_) && !@sfbase.motion_demo.val {
     drop_hint(c, pane)
   }
   c.layer(fn() {
@@ -42,6 +42,9 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
     @sfpages.chat_composer(c, src, w, r, view, apart=wide.tape)
   })
   |> ignore
+  if view is Some(_) && @sfbase.motion_demo.val {
+    drop_hint(c, pane)
+  }
   // over it, what is picked in the messages; a row let go over the pane, into the draft
   if view is Some(_) {
     chat_layers(c, src, r, draft, pane, room)

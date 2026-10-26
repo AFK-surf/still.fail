@@ -14,6 +14,7 @@ fn main {
   let mode = @film.arg("MBUI_FIXTURE")
   let dark = @film.arg("MBUI_DARK") == "1"
   let late = whole_ms(@film.arg("MBUI_CORE_MS"))
+  let motion_demo = @film.arg("MBUI_MOTION_DEMO") == "1"
   // (the app made as sffix makes it, at the Tester's first frame: the code face it carries given then, to the
   // Tester's text, which is this Mac's)
   let src : Ref[@sfapp.Source?] = Ref::new(None)
@@ -46,6 +47,7 @@ fn main {
         s
       }
     }
+    @sfbase.motion_demo.val = motion_demo
     @sfapp.view(c, s)
   })
 }

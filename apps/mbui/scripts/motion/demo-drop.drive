@@ -1,0 +1,6 @@
+timeout 20000
+wait 1500
+drag 1030 240 -540 430 2600
+move 950 500
+wait 1500
+exit

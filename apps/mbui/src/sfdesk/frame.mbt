@@ -1650,7 +1650,7 @@ fn main_page(
   page : Page,
 ) -> Unit {
   match page {
-    Chat(r) => chat_page(c, src, w, r)
+    Chat(r) => if @sfbase.motion_demo.val { demo_chat_page(c, src, w, r) } else { chat_page(c, src, w, r) }
     // an agent's history, asked as a page (a link's `?history=…&entry=…`): on the desktop its chat with the history
     // open beside it at the entry asked (ChatPage.tsx's `history`), the page the chat's
     History(r, key, entry) => {

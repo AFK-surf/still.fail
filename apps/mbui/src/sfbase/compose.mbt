@@ -58,6 +58,8 @@ let writing_n : Ref[Int] = { val: 0 }
 
 ///|
 pub fn writings_reset() -> Unit {
+  motion_demo.val = false
+  demo_drop_slot.val = None
   quoted_into.clear()
   files_put.clear()
   writing_stations.clear()
@@ -642,6 +644,14 @@ let files_put : Array[(String, Dragged)] = []
 /// What a row dragged now carries, as the frame that drags it says (sfdesk's drag.mbt), for a composer it goes over.
 // kept across runs: what the app says once as it starts
 pub let drag_carried : Ref[() -> Dragged?] = Ref(fn() { None })
+
+///|
+/// The experimental composer's landing slot, in window coordinates; absent outside the opt-in motion demo.
+pub let demo_drop_slot : Ref[(Double, Double, Double, Double)?] = Ref(None)
+
+///|
+/// Enabled only by the motion study entry point, never by the signed-in app.
+pub let motion_demo : Ref[Bool] = Ref(false)
 
 ///|
 /// The chat before (-1) or after (1) the one open, gone to by a composer's ↑ or ↓ (empty, focused), as the shell
