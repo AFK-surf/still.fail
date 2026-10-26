@@ -192,7 +192,7 @@ case "${1:-build}" in
     # launched: SpringBoard still taking the last one down answers a launch "Busy (Application failed preflight
     # checks)" (39467833461)
     old=$(app_pid "$ID")
-    xcrun simctl terminate "$ID" $BID 2>/dev/null || true
+    [ -z "$old" ] || bash "$D/ios-terminate.sh" "$ID" "$BID"
     [ -z "$old" ] || "$D/chk" logwait --pid "$old" --deadline 60 >/dev/null ||
       { echo "ios.sh: $BID's last run ($old) did not end" >&2; exit 1; }
     xcrun simctl install "$ID" $APPDIR
@@ -233,7 +233,9 @@ case "${1:-build}" in
     ;;
   stop)
     ID=$(device_id)
-    [ -z "$ID" ] || xcrun simctl terminate "$ID" $BID 2>/dev/null || true
+    if [ -n "$ID" ] && [ -n "$(app_pid "$ID")" ]; then
+      bash "$D/ios-terminate.sh" "$ID" "$BID"
+    fi
     ;;
   shot)
     ID=$(device)
