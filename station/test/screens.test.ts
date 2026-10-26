@@ -22,7 +22,7 @@ import { dropFolder } from "../src/drive/drive.ts";
 import { ScreenHub, ScreenRefused } from "../src/screens/hub.ts";
 import { CLICK_MS, FLAGS, KEYCODES, MacInput } from "../src/screens/mac-input.ts";
 import { USAGES, SimInput } from "../src/screens/sim-input.ts";
-import { Simulators, bootedOf, runtimeName, screenOf } from "../src/screens/simulator.ts";
+import { SIMCTL, Simulators, bootedOf, runtimeName, screenOf } from "../src/screens/simulator.ts";
 import { WindowsDesktop, screenBinary } from "../src/screens/win-desktop.ts";
 import { KEYS, WinInput } from "../src/screens/win-input.ts";
 import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions } from "../src/screens/source.ts";
@@ -1457,9 +1457,9 @@ test("a simulator a screen while it is booted: listed with its device's name and
   const runs: string[] = [];
   const run = async (file: string, args: string[]) => {
     runs.push([file, ...args].join(" "));
-    if (args.join(" ") === "simctl list -j devices")
+    if (file === SIMCTL && args.join(" ") === "list -j devices")
       return JSON.stringify({ devices: { "com.apple.CoreSimulator.SimRuntime.iOS-26-2": [{ udid, name: "iPhone 17", state: booted ? "Booted" : "Shutdown", deviceTypeIdentifier: "t17" }] } });
-    if (args.join(" ") === "simctl list -j devicetypes") return JSON.stringify({ devicetypes: [{ identifier: "t17", bundlePath: "/t17.simdevicetype" }] });
+    if (file === SIMCTL && args.join(" ") === "list -j devicetypes") return JSON.stringify({ devicetypes: [{ identifier: "t17", bundlePath: "/t17.simdevicetype" }] });
     if (file === "plutil") return JSON.stringify({ capabilities: { ScreenDimensionsCapability: { "main-screen-width": 1206, "main-screen-height": 2622 } } });
     throw new Error(`not run here: ${file}`);
   };
@@ -1499,7 +1499,7 @@ test("no simulators where there is no helper, nor where simctl cannot be run", a
   await new Simulators({ screens: hub, helper: null, run: async () => (asked++, "") }).start();
   assert.equal(asked, 0);
   const { app, dir } = helperRelease();
-  const failing = new Simulators({ screens: hub, helper: new HelperApp({ app, dir, launch: async () => {} }), run: async () => Promise.reject(new Error("xcrun: error: unable to find utility \"simctl\"")), devices: join(dir, "none") });
+  const failing = new Simulators({ screens: hub, helper: new HelperApp({ app, dir, launch: async () => {} }), run: async () => Promise.reject(new Error(`${SIMCTL} list -j devices: ENOENT`)), devices: join(dir, "none") });
   await failing.start();
   assert.equal(hub.list().length, 0);
   failing.close();

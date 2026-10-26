@@ -4,7 +4,7 @@
 // HID in vendor/serve-sim) reads the device's framebuffer and posts touches, keys and buttons to it; nothing of macOS's is
 // granted for it, and Simulator.app need not run.
 //
-// Which are booted is `xcrun simctl list`'s, looked at again when CoreSimulator rewrites a device's device.plist (it
+// Which are booted is CoreSimulator's own simctl's (`simctl list`), looked at again when CoreSimulator rewrites a device's device.plist (it
 // does as the device boots and shuts down) or the list of devices changes, and as the screens are asked for.
 import { execFile } from "node:child_process";
 import { type FSWatcher, existsSync, readdirSync, watch } from "node:fs";
@@ -50,6 +50,12 @@ export function screenOf(capabilities: unknown): { width: number; height: number
   const width = d?.["main-screen-width"], height = d?.["main-screen-height"];
   return typeof width === "number" && typeof height === "number" && width > 0 && height > 0 ? { width, height } : { width: 0, height: 0 };
 }
+
+/// CoreSimulator's simctl, not Xcode's (`xcrun simctl`): that one is a script that first runs `xcodebuild
+/// -runFirstLaunch` where CoreSimulator is older than the Xcode (an Xcode updated, its first launch not done), which asks
+/// for an administrator's password in a window of macOS's. Asked as the screens are, that window came back again and
+/// again, one more left open each time (the run's timeout ends the script, not the xcodebuild it started).
+export const SIMCTL = "/Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/Resources/bin/simctl";
 
 export type Run = (file: string, args: string[]) => Promise<string>;
 const run: Run = (file, args) =>
@@ -115,9 +121,9 @@ export class Simulators {
   async #look() {
     let booted: Booted[];
     try {
-      booted = bootedOf(JSON.parse(await this.#run("xcrun", ["simctl", "list", "-j", "devices"])));
+      booted = bootedOf(JSON.parse(await this.#run(SIMCTL, ["list", "-j", "devices"])));
     } catch (error) {
-      // No Xcode, or CoreSimulator too busy to answer (a device booting on a loaded Mac): what is listed stays, said once.
+      // No Xcode (no CoreSimulator), or CoreSimulator too busy to answer (a device booting on a loaded Mac): what is listed stays, said once.
       if (!this.#said) log.info("screens", "simctl did not list the simulators", { error: (error as Error).message.slice(0, 300) });
       this.#said = true;
       return;
@@ -145,7 +151,7 @@ export class Simulators {
     if (known) return known;
     let size = { width: 0, height: 0 };
     try {
-      const types = JSON.parse(await this.#run("xcrun", ["simctl", "list", "-j", "devicetypes"])).devicetypes as { identifier?: string; bundlePath?: string }[];
+      const types = JSON.parse(await this.#run(SIMCTL, ["list", "-j", "devicetypes"])).devicetypes as { identifier?: string; bundlePath?: string }[];
       const bundle = types.find((t) => t.identifier === type)?.bundlePath;
       if (bundle) {
         size = screenOf(JSON.parse(await this.#run("plutil", ["-convert", "json", "-o", "-", join(bundle, "Contents/Resources/capabilities.plist")])));
