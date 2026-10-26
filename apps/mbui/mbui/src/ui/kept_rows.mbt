@@ -74,6 +74,13 @@ priv struct RowKept {
   bars : Array[BarAt]
   /// how its list builds a row (Ctx::list's `row`, this build's): its part's build runs it
   mut build : (Int) -> Unit
+  /// what it says to what reads the widgets out (SemNode, as its build said it: where, from its node; under what, among
+  /// its own, -1 what holds it; how deep, below what holds it), and whether that was taken since it was last built
+  sems : Array[SemNode]
+  mut read_out : Bool
+  /// the words its build held, as what holds it is named by them (Ctx::words_in), and as a box pressed is (own_words)
+  mut read_words : String
+  mut read_own : String
 }
 
 ///|
@@ -107,6 +114,10 @@ fn RowKept::new(list : Int, item : Int) -> RowKept {
     runs: [],
     bars: [],
     build: fn(_) {  },
+    sems: [],
+    read_out: false,
+    read_words: "",
+    read_own: "",
   }
 }
 
@@ -124,6 +135,8 @@ fn RowKept::build_starts(self : RowKept) -> Unit {
   self.words.clear()
   self.sticks.clear()
   self.held = false
+  self.sems.clear()
+  self.read_out = false
 }
 
 ///|
@@ -190,9 +203,10 @@ let drawn_again_on : Ref[Bool] = Ref(true)
 
 ///|
 /// Whether a list's rows may be kept this frame: as parts are (Tester::keep_parts), and not while anything reads what
-/// each frame builds (a screen reader, a test's instance owners, a test lighting everything).
+/// each frame builds (a test's instance owners, a test lighting everything). What reads the widgets out (a screen
+/// reader) reads a row kept as its build said it (semantics.mbt's row_read_out).
 fn Ctx::rows_on(self : Ctx) -> Bool {
-  parts_on.val && !inst_owners.on && !self.lit_every && !h_a11y_on()
+  parts_on.val && !inst_owners.on && !self.lit_every
 }
 
 ///|
@@ -263,6 +277,8 @@ fn Ctx::row_of(self : Ctx, li : Int, st : ListState, k : Int, iw : Double, force
     kp.epoch == self.epoch &&
     kp.scale == self.scale &&
     kp.pointing == pointing() &&
+    // (read out: what it said taken as it was built, else built so that it is)
+    (rk.read_out || !self.reads_out) &&
     !moving
   rk.build = st.row
   if !same {
