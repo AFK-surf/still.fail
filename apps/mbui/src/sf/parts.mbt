@@ -586,14 +586,23 @@ pub fn menu_item(
   panel? : Bool = false,
   word? : String = "",
   end? : String = "",
+  at_top? : Bool = false,
+  at_foot? : Bool = false,
 ) -> Bool {
   let t = theme()
   let id = c.id(if key == "" { "sf-mi/" + label } else { key })
   let ink = if danger { t.p.red } else if on { t.p.accent_text } else { t.p.text }
+  // (a capsule in the panel's corners: past its padding to where it is concentric with them, at its sides, and at its
+  // top or foot where it is the first (`at_top`) or the last (`at_foot`) in it: menu_row_reach)
+  let reach = menu_row_reach(t.rows.pick)
+  let (over, under_by) = ends_reach(reach, at_top, at_foot)
   c.box(
     dir=Row,
     min_h=t.rows.pick,
-    padx=text_in,
+    mx=-reach,
+    mt=over,
+    mb=under_by,
+    padx=text_in + reach,
     pady=menu_row_over,
     gap=if panel { panel_row_gap } else { menu_row_gap },
     align=ACenter,
@@ -907,6 +916,8 @@ pub fn menu_row(
   danger? : Bool = false,
   mark? : (@ui.Ctx, Double) -> Unit,
   note? : String = "",
+  at_top? : Bool = false,
+  at_foot? : Bool = false,
 ) -> Unit {
   let t = theme()
   let (choice, checked) = match s.entry.kind {
@@ -914,11 +925,16 @@ pub fn menu_row(
     _ => (false, false)
   }
   let off = s.entry.disabled
+  let reach = menu_row_reach(t.rows.pick)
+  let (over, under_by) = ends_reach(reach, at_top, at_foot)
   c.box(
     dir=Row,
     w=Fill(1.0),
     min_h=t.rows.pick,
-    padx=text_in,
+    mx=-reach,
+    mt=over,
+    mb=under_by,
+    padx=text_in + reach,
     pady=menu_row_over,
     gap~,
     align=ACenter,
@@ -1123,6 +1139,8 @@ pub fn dropdown(
         danger=danger.contains(s.entry.value),
         mark?=marks.get(s.entry.value),
         note=notes.get(s.entry.value).unwrap_or(""),
+        at_top=entries.length() > 0 && entries[0].value == s.entry.value,
+        at_foot=entries.length() > 0 && entries[entries.length() - 1].value == s.entry.value,
       )
     },
     // (a heading's words on its items' words' line: past the column before them, where there is one)
@@ -3428,7 +3446,7 @@ fn option_type() -> OptionType {
   let disc = t.items.mark
   {
     disc,
-    pad_in: option_row_corner - disc / 2.0,
+    pad_in: capsule_in(option_row_corner, disc),
     label: t.t.ui,
     label_line: t.t.ui_line,
     detail: t.t.meta,

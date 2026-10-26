@@ -94,10 +94,10 @@ test "corners: a fault names what breaks the rule by its words and place" {
 
 ///|
 test "corners: a circle or a capsule in a corner: as far from both edges, the container's corner following it" {
-  // a circle of 11, 15 from both edges, in a corner of 26 (15 + 11): no fault
+  // a circle of 11, 15 from both edges, in a corner that reads to it as 26 (15 + 11: @ui.round_like): no fault
   let t = @ui.Tester::new(fn(c) {
     c.column(pad=20.0, fn() {
-      c.box(w=Px(200.0), h=Px(80.0), pad=15.0, bg=0xEEEEEEFFL, radius=26.0, fn() {
+      c.box(w=Px(200.0), h=Px(80.0), pad=15.0, bg=0xEEEEEEFFL, radius=@ui.round_like_out(26.0), fn() {
         c.box(w=Px(22.0), h=Px(22.0), bg=0x3366FFFFL, radius=11.0, fn() {  }) |> ignore
       })
       |> ignore
@@ -106,10 +106,10 @@ test "corners: a circle or a capsule in a corner: as far from both edges, the co
   })
   t.draw()
   assert_eq(t.corner_faults(), [])
-  // a capsule 24 high, 12 from both edges, in a corner of 24: no fault
+  // a capsule 24 high, 12 from both edges, in a corner that reads to it as 24: no fault
   let t = @ui.Tester::new(fn(c) {
     c.column(pad=20.0, fn() {
-      c.box(w=Px(200.0), h=Px(80.0), pad=12.0, bg=0xEEEEEEFFL, radius=24.0, fn() {
+      c.box(w=Px(200.0), h=Px(80.0), pad=12.0, bg=0xEEEEEEFFL, radius=@ui.round_like_out(24.0), fn() {
         c.box(w=Px(60.0), h=Px(24.0), bg=0x3366FFFFL, radius=12.0, fn() {  }) |> ignore
       })
       |> ignore
@@ -118,7 +118,7 @@ test "corners: a circle or a capsule in a corner: as far from both edges, the co
   })
   t.draw()
   assert_eq(t.corner_faults(), [])
-  // the same circle in a corner of 24: the container's fault, it wants 26
+  // the same circle in a corner of 24: the container's fault, it wants one that reads to it as 26 (27.18)
   let t = @ui.Tester::new(fn(c) {
     c.column(pad=20.0, fn() {
       c.box(w=Px(200.0), h=Px(80.0), pad=15.0, bg=0xEEEEEEFFL, radius=24.0, fn() {
@@ -131,7 +131,7 @@ test "corners: a circle or a capsule in a corner: as far from both edges, the co
   t.draw()
   let faults = t.corner_faults()
   assert_eq(faults.length(), 1)
-  assert_true(faults[0].contains("wants corner 26"))
+  assert_true(faults[0].contains("wants corner 27.18"))
   // a circle nearer one edge than the other: its own fault
   let t = @ui.Tester::new(fn(c) {
     c.column(pad=20.0, fn() {

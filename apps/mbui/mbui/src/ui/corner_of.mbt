@@ -69,11 +69,13 @@ pub fn CornerOf::source(self : CornerOf) -> Double? {
 }
 
 ///|
-/// Where a capsule or a circle `height` high stands in it to be concentric with it (its radius less the capsule's
-/// half, smooth.mbt: as round as it is there), where the theme's ranges let it stand there; None where they do not (it
-/// too square for the capsule, or too round).
+/// Where a capsule or a circle `height` high stands in it to be concentric with it (its radius as a circle reads it,
+/// less the capsule's half: smooth.mbt round_like, a panel's wholly smooth, the window's as round as the system draws
+/// it), where the theme's ranges let it stand there; None where they do not (it too square for the capsule, or too
+/// round).
 pub fn CornerOf::capsule_at(self : CornerOf, height : Double) -> Double? {
-  let d = self.radius() - height / 2.0
+  let r = self.radius()
+  let d = (if self is Window { r } else { round_like(r) }) - height / 2.0
   if place_fit_ok(d) {
     Some(d)
   } else {

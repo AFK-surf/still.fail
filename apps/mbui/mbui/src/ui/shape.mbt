@@ -88,7 +88,8 @@ fn Ctx::paint_shapes(self : Ctx, n : Node, alpha : Double) -> Unit {
 
 ///|
 /// One shape's fill (`fill`) or stroke (`hw` half its width) at (`ox`, `oy`): its pieces, then a band at a time those
-/// that reach it.
+/// that reach it. Its bands and its pieces' shares of them are worked out in its own coordinates, then the bands put
+/// at (`ox`, `oy`): the same numbers wherever it is drawn, as when it is drawn again moved (kept_rows.mbt).
 fn Ctx::emit_shape(
   self : Ctx,
   ox : Double,
@@ -109,14 +110,14 @@ fn Ctx::emit_shape(
     }
     if n == 1 {
       // a dot: a piece of no length, round
-      segs.append([ox + pts[0], oy + pts[1], ox + pts[0], oy + pts[1]])
+      segs.append([pts[0], pts[1], pts[0], pts[1]])
       continue
     }
     for k in 0..<(n - 1) {
-      segs.append([ox + pts[2 * k], oy + pts[2 * k + 1], ox + pts[2 * k + 2], oy + pts[2 * k + 3]])
+      segs.append([pts[2 * k], pts[2 * k + 1], pts[2 * k + 2], pts[2 * k + 3]])
     }
     if fill || closed {
-      segs.append([ox + pts[2 * n - 2], oy + pts[2 * n - 1], ox + pts[0], oy + pts[1]])
+      segs.append([pts[2 * n - 2], pts[2 * n - 1], pts[0], pts[1]])
     }
   }
   let count = segs.length() / 4
@@ -160,8 +161,8 @@ fn Ctx::emit_shape(
         self.segs.push((segs[4 * k + 3] - b0) / bh)
       }
       self.push_inst(
-        bx,
-        b0,
+        ox + bx,
+        oy + b0,
         bw,
         bh,
         hw,

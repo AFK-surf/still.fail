@@ -118,10 +118,12 @@ fn band_new_tape_over() -> Double {
   } else {
     alone
   }
-  if at < brand + lift {
+  // (as high as its row reaches where the line is a little higher still, its top at the band's: the line 10.78, a
+  // mouse's band's row 11, within the half a point the corner rule allows)
+  if at < brand + lift - 0.5 {
     0.0
   } else {
-    at - alone
+    dmax(at, brand + lift) - alone
   }
 }
 

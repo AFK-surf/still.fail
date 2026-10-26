@@ -472,7 +472,7 @@ let unkeep : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter radius
 
 ///|
 /// How far past its row's padding the remove stands (unkeep), its row's height and padding, its side.
-let unkeep_off : Double = @sf.capsule_in(unkeep_row_h / 2.0, unkeep_side) - unkeep_row_pad
+let unkeep_off : Double = @sf.capsule_in(unkeep_row_h / 2.0, unkeep_side, room=unkeep_row_h / 2.0) - unkeep_row_pad
 
 ///|
 let unkeep_row_h : Double = 32.0
