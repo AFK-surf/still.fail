@@ -297,9 +297,10 @@ pub struct Ctx {
   /// when the pointer's latest event (down, moved, up) came, its own time (Ctx::pointer_at)
   mut pointer_t : Double
   mut held_told : Double
-  /// what a press told held long (Ctx::long_press) was on, and in which frame
+  /// what a press told held long (Ctx::long_press) was on, and in which build (frame_body's pass: one built again sees
+  /// it no more, as it sees no click)
   mut held_on : Int
-  mut held_frame : Int
+  mut held_build : Int
   /// the press as frames see it (Ctx::press, press.mbt): as the frame it was last worked out in saw it, whether a
   /// frame saw it down, when one first did
   mut press_seen : Press
@@ -580,7 +581,7 @@ fn Ctx::new() -> Ctx {
     pointer_t: 0.0,
     held_told: -1.0,
     held_on: 0,
-    held_frame: -1,
+    held_build: -1,
     press_seen: no_press,
     press_seen_frame: -1,
     press_was_down: false,

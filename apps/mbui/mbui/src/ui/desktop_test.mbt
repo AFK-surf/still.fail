@@ -568,6 +568,26 @@ test "desktop: a menu is asked for by a mouse's right click, by a finger held st
 }
 
 ///|
+test "desktop: a finger held still asks for the menu once, though what the menu opens builds the frame again" {
+  let asked : Array[String] = []
+  let view = fn(c : @ui.Ctx) {
+    let row = c.id("row")
+    if c.menu_asked(row) is Some(_) {
+      asked.push("menu")
+      // (what opening it changes, as a sheet coming up does: the frame built again, which sees no more of the hold)
+      c.built_from_changed("menu")
+    }
+    c.box(id=row, w=Px(300.0), h=Px(40.0), fn() {  }) |> ignore
+  }
+  let t = @ui.Tester::new(view, platform=2)
+  t.press_at(50.0, 20.0)
+  t.draw()
+  t.run_for(@ui.long_press_ms)
+  t.release(50.0, 20.0)
+  assert_eq(asked, ["menu"])
+}
+
+///|
 test "desktop: a finger reaches a target smaller than a fingertip from round it, not its neighbour's; a mouse does not" {
   let clicks : Array[String] = []
   let view = fn(c : @ui.Ctx) {

@@ -109,11 +109,12 @@ pub fn Ctx::interact(
 }
 
 ///|
-/// Whether `id` has been held still long_press_ms since it was pressed: in the frame it comes to, to whoever asks
-/// (the widget's response, its tooltip); the press is then no tap. What a finger asks a menu or a tooltip by.
+/// Whether `id` has been held still long_press_ms since it was pressed: in the build it comes to, to whoever asks
+/// (the widget's response, its tooltip); the press is then no tap. What a finger asks a menu or a tooltip by. Like a
+/// click, an input of the frame's: the frame built again (frame_body) sees it no more, so what it opens opens once.
 pub fn Ctx::held_long(self : Ctx, id : Int) -> Bool {
   self.long_press(id) ||
-  (id != 0 && self.held_on == id && self.held_frame == self.frame_no && self.held_told == self.press_at)
+  (id != 0 && self.held_on == id && self.held_build == self.build_no && self.held_told == self.press_at)
 }
 
 ///|
@@ -130,7 +131,7 @@ fn Ctx::long_press(self : Ctx, id : Int) -> Bool {
   if held >= long_press_ms {
     self.held_told = self.press_at
     self.held_on = id
-    self.held_frame = self.frame_no
+    self.held_build = self.build_no
     self.take_press()
     true
   } else {
