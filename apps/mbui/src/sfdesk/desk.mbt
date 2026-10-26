@@ -44,7 +44,6 @@ pub fn reset() -> Unit {
   letters_reset()
   side_slide_reset()
   settings_reset()
-  profile_page_reset()
   memory_doc_reset()
   add_profile_reset()
   places_reset()

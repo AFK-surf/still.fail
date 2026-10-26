@@ -1,4 +1,4 @@
-// 83-profile (e2e/traces/settings-profile.trace): the profile's page (sfdesk accounts.mbt) → its name pressed (a
+// 83-profile (e2e/traces/settings-profile.trace): the profile's page (sfpages accounts.mbt) → its name pressed (a
 // phone's: its head's large title), the name asked in the presenters' sheet (profile.put), its head's 重新检查
 // (profile.check), named cc again; ＋: the providers, Anthropic → API key, a made-up key, 验证并添加: refused, nothing added;
 // back to the providers, back again out of the page.

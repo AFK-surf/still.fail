@@ -74,8 +74,8 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     Archiving => @sfpages.archiving_page(c, core, here, frame)
     StationArchiving(st) => @sfpages.station_archiving_page(c, core, here, frame, st)
     Notifications => @sfpages.notify_page(c, core, here, frame)
-    PickModels(a, id) => pick_models_page(c, core, here, frame, a, id)
-    ProfileModels(a, id) => profile_models_page(c, core, here, frame, a, id)
+    PickModels(a, id) => @sfpages.pick_models_page(c, core, here, frame, a, id)
+    ProfileModels(a, id) => @sfpages.profile_models_page(c, core, here, frame, a, id)
     Shortcuts => @sfpages.shortcuts_page(c, core, frame)
     Me => @sfpages.me_page(c, core, here, frame)
     Workspace => @sfpages.workspace_page(c, core, here, frame)
@@ -87,7 +87,7 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     Connects(only) => @sfpages.connects_page(c, src, core, here, frame, only)
     Connect(station, id) => @sfpages.connect_page(c, src, core, here, frame, station, id)
     Station(a) => @sfpages.station_page(c, core, here, frame, a)
-    Profile(a, id) => profile_page(c, core, here, frame, a, id)
+    Profile(a, id) => @sfpages.profile_page(c, core, here, frame, a, id)
     _ => ()
   }
   true

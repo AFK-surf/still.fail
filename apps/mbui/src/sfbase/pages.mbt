@@ -303,3 +303,10 @@ pub fn back_label(p : Page) -> String {
     _ => @sf.t("common.back")
   }
 }
+
+///|
+/// The page picked in a place with a list of its own (the stations', the profiles'), by place; none: the shell's first.
+/// Said by the place's list (a row pressed) and by a page that leads to another of its list or is gone from it (a
+/// profile's other stations, a profile deleted); the shell shows it (src/sfdesk places.mbt place_route).
+// kept across runs: said by a row or a page; the shell's places_reset empties it
+pub let place_pick : Map[String, @settings.Route] = {}
