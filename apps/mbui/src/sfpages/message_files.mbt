@@ -187,12 +187,23 @@ fn file_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : 
 }
 
 ///|
+/// Its message's file `a` quoted into the chat's draft, where it is a message's (`by`: whose, their role, its ts).
+fn quote_of(here : MessageHere, a : Attachment, owner : String, by : (String, String, String)?) -> (() -> Unit)? {
+  by.map(fn(b) {
+    let (author, role, ts) = b
+    let file = attachment_json(a, owner)
+    let draft = here.station + ":" + here.session
+    fn() { quote_file_into(draft, author, ts, role, file) }
+  })
+}
+
+///|
 /// A message's file as the chat draws it, by its kind.
 fn file_drawn(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?) -> Unit {
   match file_kind(a.name) {
     "image" => image_item(c, src, here, a, w, by~)
-    "video" => video_item(c, src, here, a, w)
-    _ => card_item(c, src, here, a)
+    "video" => video_item(c, src, here, a, w, by~)
+    _ => card_item(c, src, here, a, by~)
   }
 }
 
@@ -224,12 +235,7 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     }
   }
   let thumb = here.station + "/" + owner + "/" + a.path
-  image_menu(c, open, key, quote=by.map(fn(b) {
-    let (author, role, ts) = b
-    let file = attachment_json(a, owner)
-    let draft = here.station + ":" + here.session
-    fn() { quote_file_into(draft, author, ts, role, file) }
-  }))
+  file_menu(c, open, key, quote=quote_of(here, a, owner, by))
   // the picture covering the whole box; a letterboxed one's covering its own proportions centred in it, all it and
   // what it waits on take, the box's corners cutting it only where it reaches them (imageBox.ts letterbox)
   let (sw, sh) = picture_share(a, image_least)
@@ -284,14 +290,15 @@ fn image_box_style(w : Double, h : Double, shown : Bool) -> @ui.Style {
 ///|
 /// A video (FileItem's video): its still on black (the frame the preview was left at, else the station's), its play
 /// mark in its middle, its name at its foot over a dark band, how long it is at the band's end; while the core
-/// downloads it, how far there over a bar.
-fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double) -> Unit {
+/// downloads it, how far there over a bar. Held or right clicked, its menu (引用).
+fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?) -> Unit {
 
   let open = c.id("msg-file/" + @sfbase.file_key(a))
   let owner = owner_of(here, a)
   if c.clicked(open) {
     open_file(here, a)
   }
+  file_menu(c, open, "", quote=quote_of(here, a, owner, by))
   @sf.tip(c, "msg-file/" + @sfbase.file_key(a), open, a.name)
   let (bw, bh, letterbox) = image_box(a, video_least)
   let h = bh * w / bw
@@ -342,13 +349,14 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
 
 ///|
 /// Any other file as a card (MessageFileCard): pressed, the preview; while the core downloads it, how far in its size's
-/// place, ✕ at its end to call it off; failed, why, ↻ to ask it again.
-fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment) -> Unit {
+/// place, ✕ at its end to call it off; failed, why, ↻ to ask it again. Held or right clicked, its menu (引用).
+fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ : (String, String, String)?) -> Unit {
   let owner = owner_of(here, a)
   let dl = download_of(src, here.station, owner, stored_name(a.path))
   let active = flag(dl, "active")
   let failed = text(dl, "state") == "failed"
   let key = "msg-card/" + @sfbase.file_key(a)
+  file_menu(c, c.id(key), "", quote=quote_of(here, a, owner, by))
   let done = @sf.file_card(
     c,
     key,

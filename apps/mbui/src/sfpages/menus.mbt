@@ -1,6 +1,7 @@
-// What a message's link and picture offer, held with a finger or right clicked with a mouse (c.menu_asked, the rich
+// What a message's link and file offer, held with a finger or right clicked with a mouse (c.menu_asked, the rich
 // text's held link): one menu for both, the presenters' (@sf.menu: a sheet with a finger short of Large, else a small
-// panel at the pointer). A link: open it, copy it; a picture: copy it (read whole, onto the clipboard as a PNG).
+// panel at the pointer). A link: open it, copy it; a file: quote it, a picture also copied (read whole, onto the
+// clipboard as a PNG).
 // What a choice does is done in the frame after it, by the list that offered it (menus_frame).
 
 ///|
@@ -46,15 +47,15 @@ fn link_held(c : @ui.Ctx, href : String) -> Unit {
 }
 
 ///|
-/// A picture in a message (box `id`, its image `src`) held or right clicked: its menu there, as a passage's (pick.mbt):
-/// 引用 into the chat's draft (`quote`, where it is a message's), then copy it.
-fn image_menu(c : @ui.Ctx, id : Int, src : String, quote? : (() -> Unit)? = None) -> Unit {
+/// A file in a message (box `id`; a picture's image `src`, else "") held or right clicked: its menu there, as a
+/// passage's (pick.mbt): 引用 into the chat's draft (`quote`, where it is a message's), then a picture's copy.
+fn file_menu(c : @ui.Ctx, id : Int, src : String, quote? : (() -> Unit)? = None) -> Unit {
   match c.menu_asked(id) {
     Some((x, y)) => {
       menu_doing.offered = src
       // held with a finger: the press is the menu's (lifting it opens nothing), felt
-      if @sf.menu_held(c, "image") {
-        // (the press is the picture's menu's, not a passage's pick)
+      if @sf.menu_held(c, "file") {
+        // (the press is the file's menu's, not a passage's pick)
         pk.taken_at = c.press().frame
       }
       let items : Array[@sf.MenuItem?] = []

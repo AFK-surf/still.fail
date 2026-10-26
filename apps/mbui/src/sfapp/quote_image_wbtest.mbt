@@ -62,6 +62,30 @@ test "a person's image held: quoted (whose, the file named), its file once in th
 }
 
 ///|
+test "an agent's video and file card right clicked: 引用 quotes each, its file named, nothing played or opened" {
+  reset()
+  let src = fixture("chat-download")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  open_fixture_mode("chat-download")
+  t.run_for(@ui.nav_push_ms)
+  for name in ["演示录屏", "发布包"] {
+    let words = t.words().filter(fn(w) { w.0.has_prefix(name) })
+    assert_true(words.length() > 0, msg=name)
+    let w = words[0]
+    t.right_click(w.1 + 4.0, w.2 + 4.0)
+    t.draw()
+    t.tap_text("引用")
+    t.frame()
+    t.frame()
+  }
+  assert_true(viewer.val is None)
+  let d = chat_draft()
+  assert_eq(d.quotes.map(fn(q) { text(field(Some(q), "own"), "name") }), ["演示录屏.mp4", "发布包.zip"])
+  assert_eq(text(Some(d.quotes[0]), "role"), "agent")
+  assert_eq(d.files.length(), 0)
+}
+
+///|
 test "an agent's image held: quoted, not a passage of its words picked; whose it is the agent's" {
   let (t, x, y) = image_in_chat("compare.png")
   hold_quote(t, x, y)
