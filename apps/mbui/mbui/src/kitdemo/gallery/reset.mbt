@@ -23,6 +23,7 @@ fn reset() -> Unit {
   pdf_check_doc.val = 0
   pdf_check_images.val = []
   pdf_check_said.val = 0
+  station_check_stopped.val = false
   cb.val = On
   size.val = "m"
   bold.val = true

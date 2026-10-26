@@ -7,7 +7,8 @@
 # run's own), a notification (shown, kept, clicked), an update (a newer build put in place and opened), and the web
 # views (WebKitGTK 6.0's): one placed where the app told it, on whole device pixels, and a site and a page speaking with
 # the app; a stream's JPEG frames, each shown to its end (streamdemo); and a PDF's pages read and drawn (poppler's). On
-# GitHub's own Ubuntu (a public repository's: free). When the Linux host changes.
+# GitHub's own Ubuntu (a public repository's: free); and this machine's station as the host says it. When the Linux
+# host changes.
 name: mbui-host-linux
 on:
   pull_request:
@@ -17,6 +18,7 @@ on:
       - "apps/mbui/mbui/src/kitdemo/gallery/sitecheck.mbt"
       - "apps/mbui/mbui/src/streamdemo/**"
       - "apps/mbui/mbui/src/kitdemo/gallery/pdfcheck.mbt"
+      - "apps/mbui/mbui/src/kitdemo/gallery/stationcheck.mbt"
       - "apps/mbui/mbui/src/host/linux*"
       - "apps/mbui/mbui/src/host/mini_json.h"
       - "apps/mbui/mbui/src/kitdemo/gallery/linkcheck.mbt"
@@ -92,6 +94,9 @@ jobs:
       - name: "The PDFs' contract: a PDF's two pages read and drawn, the second turned as its /Rotate says"
         if: success() || failure()
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux pdf
+      - name: "This machine's station's contract: one started by hand said and stopped, the service's said as running it"
+        if: success() || failure()
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux station
       - name: "Streams: streamdemo's JPEG (gdk-pixbuf) said shown to its end (STREAM done)"
         if: success() || failure()
         run: |

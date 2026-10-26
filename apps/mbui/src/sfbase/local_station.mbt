@@ -1,25 +1,13 @@
-// This machine's station on the Mac and on Windows, as the app looks after it (the user, 2026-10-24: the app manages the station here,
-// the one there is; one is downloaded only as the person asks for it, 添加这台 Mac, never as the app opens). Still.fail's
-// desktop app ran one it carried (apps/desktop/src/station.ts); this app runs the station's own installer
-// (mac_app.m local_station_act), which makes it a launchd service:
+// This machine's station on the Mac, on Windows and on Linux, as the app looks after it (the user, 2026-10-24: the app
+// manages the station here, the one there is; one is downloaded only as the person asks for it, 添加这台 Mac, never as
+// the app opens; on which systems: settings' local_station_managed). Still.fail's desktop app ran one it carried
+// (apps/desktop/src/station.ts); this app runs the station's own installer (mac_app.m, win_station.h, linux_station.h
+// local_station_act), which makes it a service (launchd's, a scheduled task, a systemd user service):
 // - 添加这台 Mac, none here: a one-time token for the workspace (`workspace.enroll`, which the cloud gives only its owner
 //   and admins) and the installer run with it (`install`): downloaded, joined, run as a service;
 // - 更新到最新版: the installer run without a token (`update`): the station here brought up to the latest release and
 //   run as a service as it is (one still.fail's desktop app ran, with none, becomes one), in the workspaces it is in.
 // How far it is goes on 本机 Station's page as it runs (settings/local_station.mbt).
-
-///|
-/// Whether this machine's station is the app's to add and to bring up to date (its host runs the station's installer:
-/// macOS's, Windows'); a phone's and a page's are not.
-pub fn local_station_managed() -> Bool {
-  @ui.platform() == 0 || @ui.platform() == 3
-}
-
-///|
-/// This machine called as the person would call it: a Mac, else a PC (Windows').
-pub fn local_machine_pc() -> Bool {
-  @ui.platform() == 3
-}
 
 ///|
 /// What the installer is told (mac_app.m local_install): the cloud, the workspace's token (none: the station here as it

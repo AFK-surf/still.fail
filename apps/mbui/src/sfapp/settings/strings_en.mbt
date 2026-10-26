@@ -1594,6 +1594,7 @@ let en : Map[String, String] = {
   "web-pages.localStation.openLog": "Open log",
   "web-pages.localStation.openFolder": "Show data in Finder",
   "web-pages.localStation.openFolderPc": "Show data in Explorer",
+  "web-pages.localStation.openFolderFiles": "Show data in the file manager",
   "web-pages.localStation.doing.install": "Downloading and installing",
   "web-pages.settings.thisMac.add": "Add this Mac",
   "web-pages.settings.thisPc.add": "Add this PC",

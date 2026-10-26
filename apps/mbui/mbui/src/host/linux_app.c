@@ -509,6 +509,7 @@ static void on_active(GObject *o, GParamSpec *p, gpointer data) {
 // the app's life: once for its person, put away to its icon, links, the network, sleep; and its updates
 #include "linux_life.h"
 #include "linux_update.h"
+#include "linux_station.h"
 
 // ---- the system's settings: its colours, its words' size and face, its animations ----
 
@@ -1029,9 +1030,7 @@ void mb_host_window_drag(void) {
 
 // The number on the app's icon (@hostapi.set_badge): none here yet.
 void mb_host_set_badge(int32_t n) { (void)n; }
-// (this machine's station: managed from the macOS app only, yet)
-moonbit_string_t mb_host_local_station(void) { return moonbit_make_string_raw(0); }
-void mb_host_local_station_act(moonbit_string_t a) { (void)a; }
+// (this machine's station: linux_station.h)
 
 // The keys held now (@hostapi.mods_held), as a key's are told.
 int32_t mb_host_mods_held(void) {
