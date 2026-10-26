@@ -33,8 +33,6 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
   settings_fixture(src, core)
   match route {
     NewProfile(a) => add_profile_page(c, core, here, a)
-    AutoCompletion => completion_page(c, core, here)
-    AutoPolicy(s) => policy_page(c, core, here, s)
     _ => @settings.page(c, core, here, route)
   }
 }
@@ -44,7 +42,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (Home | Appearance | Fonts | BarSettings | About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) | LocalStation | MemoryDoc(_, _, _))) {
+  if !(route is (Home | Appearance | Fonts | BarSettings | About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) | LocalStation | MemoryDoc(_, _, _) | AutoCompletion | AutoPolicy(_))) {
     return false
   }
   let core = settings_core(src, w)
@@ -88,6 +86,8 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     Profile(a, id) => @sfpages.profile_page(c, core, here, frame, a, id)
     LocalStation => @sfpages.local_station_page(c, core, frame)
     MemoryDoc(a, skill, at) => @sfpages.memory_doc_page(c, core, frame, a, skill, at)
+    AutoCompletion => @sfpages.completion_page(c, core, here, frame)
+    AutoPolicy(s) => @sfpages.policy_page(c, core, here, frame, s)
     _ => ()
   }
   true
@@ -103,8 +103,8 @@ let settings_deep : Ref[Bool] = Ref(false)
 /// @settings.fixture_desk), once the page is drawn with what it needs.
 fn settings_fixture(src : Source, core : Core) -> Unit {
   match @settings.fixture_desk() {
-    "policy-text" => fx_policy_up.val = "text"
-    "policy-option" => fx_policy_up.val = "option"
+    "policy-text" => @sfpages.fx_policy_up.val = "text"
+    "policy-option" => @sfpages.fx_policy_up.val = "option"
     "lock-confirm" =>
       match items((core.topic)("lock", { "workspace": Json::string("ws1") }).value, "requests") {
         [r, ..] => confirm_dialog(core, "ws1", r)
@@ -129,7 +129,6 @@ fn settings_fixture(src : Source, core : Core) -> Unit {
 ///|
 /// What the settings pages here keep put back as the app begins anew.
 fn settings_reset() -> Unit {
-  fx_policy_up.val = ""
   settings_deep.val = false
 }
 

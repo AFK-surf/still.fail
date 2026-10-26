@@ -147,6 +147,8 @@ fn setting_way(r : @settings.Route) -> Array[@settings.Route] {
   match r {
     Memory(_) => [Memories]
     MemoryDoc(a, _, _) => [Memories, Memory(a)]
+    AutoCompletion => [AutoDecisions]
+    AutoPolicy(_) => [AutoDecisions, AutoCompletion]
     _ => []
   }
 }
@@ -306,6 +308,7 @@ pub fn back_label(p : Page) -> String {
     Setting(@settings.Route::Permissions) => @sf.t("web-pages.settings.nav.permissions")
     Setting(@settings.Route::Memories) | Setting(@settings.Route::Memory(_)) => @sf.t("web-pages.settings.memory.title")
     Setting(@settings.Route::AutoDecisions) => @sf.t("web-pages.automaticDecisions.title")
+    Setting(@settings.Route::AutoCompletion) => @sf.t("web-pages.automaticDecisions.completion")
     Setting(@settings.Route::Archiving) => @sf.t("web-pages.archiving.title")
     Setting(@settings.Route::Shortcuts) => @sf.t("web-main.shortcuts.title")
     Setting(@settings.Route::Usage) => @sf.t("web-pages.settings.nav.usage")

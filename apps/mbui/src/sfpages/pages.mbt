@@ -55,4 +55,5 @@ pub fn reset() -> Unit {
   profile_page_reset()
   local_menu.val = false
   memory_doc_reset()
+  fx_policy_up.val = ""
 }
