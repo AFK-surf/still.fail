@@ -151,7 +151,6 @@ let zh : Map[String, String] = {
   "android-misc.drive.row.none": "未开放",
   "android-misc.drive.title": "文件",
   "android-misc.failed": "失败",
-  "android-misc.localStation.lead": "这台 Mac 上单独安装或手动启动的 station 在这里管理：启动、停止、重启，打开日志和数据。加入哪个 workspace 在各 workspace 的 Station 设置中设定。",
   "android-misc.memory.builtin": "station 内置",
   "android-misc.memory.empty": "（空）",
   "android-misc.memory.global": "全局记忆",

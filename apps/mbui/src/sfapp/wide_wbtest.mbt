@@ -1313,28 +1313,6 @@ test "wide: 快捷键 changed by pressing new ones (keys.set), and the new keys 
 }
 
 ///|
-test "wide: 本机 Station as the system says it (a service running in a workspace), stopped from its card's menu" {
-  let calls : Array[Made] = []
-  let t = wide_tester(calls)
-  t.set_local_station(
-    #|{"data":"~/.stillfail","runner":"service","version":"0.1.4600","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","name":"星火工作室","stationName":"Studio","removed":false}}
-    ,
-  )
-  app.nav.replace(Setting(@settings.Route::LocalStation))
-  t.run_for(@ui.nav_push_ms)
-  for words in ["本机 Station", "Studio", "运行中", "单独安装（launchd）", "0.1.4600", "在 星火工作室", "~/.stillfail"] {
-    assert_true(t.find(words) is Some(_), msg=words)
-  }
-  // stopped from its card's menu (LocalStation.tsx: its ⋯, the card's)
-  t.click(Button, label="更多操作")
-  t.frame()
-  let (sx, sy) = t.find_last("停止").unwrap()
-  t.tap(sx, sy)
-  t.frame()
-  assert_eq(t.local_acts(), ["stop"])
-}
-
-///|
 test "wide: 文件's preview beside the list (⌘⇧P): the row chosen, its start read, what it is and where; a video or a folder says how to open it; kept (prefs.set driveViews.preview)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)

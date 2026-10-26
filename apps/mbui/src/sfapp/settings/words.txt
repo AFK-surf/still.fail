@@ -144,7 +144,6 @@ android-misc.drive.roots.count
 android-misc.drive.row.none
 android-misc.drive.title
 android-misc.failed
-android-misc.localStation.lead
 android-misc.memory.builtin
 android-misc.memory.empty
 android-misc.memory.global

@@ -53,4 +53,5 @@ pub fn reset() -> Unit {
   station_cards_reset()
   station_page_reset()
   profile_page_reset()
+  local_menu.val = false
 }

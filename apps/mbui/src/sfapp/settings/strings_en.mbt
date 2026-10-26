@@ -154,7 +154,6 @@ let en : Map[String, String] = {
   "android-misc.drive.row.none": "None shared",
   "android-misc.drive.title": "Files",
   "android-misc.failed": "Failed",
-  "android-misc.localStation.lead": "The station installed or started on this Mac is managed here: start, stop or restart it, open its log and its data. Which workspace it joins is set in each workspace’s Station settings.",
   "android-misc.memory.builtin": "Built-in",
   "android-misc.memory.empty": "(Empty)",
   "android-misc.memory.global": "Global memory",

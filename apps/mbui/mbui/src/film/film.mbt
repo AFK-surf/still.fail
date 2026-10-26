@@ -89,6 +89,11 @@ pub fn film(
     Some(f) if f > 0.0 => t.set_font_scale(f)
     _ => ()
   }
+  // (this machine's station as its host would say it: MBUI_LOCAL_STATION, its JSON, Tester::set_local_station)
+  match arg("MBUI_LOCAL_STATION") {
+    "" => ()
+    ls => t.set_local_station(ls)
+  }
   let pw = (w * scale).round().to_int()
   let ph = (h * scale).round().to_int()
   if !open(out, pw, ph, film_fps) {
@@ -185,7 +190,7 @@ pub fn run(view : (@ui.Ctx) -> Unit) -> Unit {
   let drive = arg("MBUI_FILM_DRIVE")
   if out == "" || drive == "" {
     say(
-      "film: MBUI_FILM=<out.mp4> MBUI_FILM_DRIVE=<script> [MBUI_WIN=390x844] [MBUI_FILM_SCALE=2] [MBUI_FILM_PLATFORM=0] [MBUI_KEYBOARD=1] [MBUI_DARK=1] [MBUI_FILM_INSET=1] [MBUI_FILM_FRAMES=3000]",
+      "film: MBUI_FILM=<out.mp4> MBUI_FILM_DRIVE=<script> [MBUI_WIN=390x844] [MBUI_FILM_SCALE=2] [MBUI_FILM_PLATFORM=0] [MBUI_KEYBOARD=1] [MBUI_DARK=1] [MBUI_FILM_INSET=1] [MBUI_FILM_FRAMES=3000] [MBUI_LOCAL_STATION=<json>]",
     )
     exit(2)
     return

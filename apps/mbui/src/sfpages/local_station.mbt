@@ -1,12 +1,15 @@
-// The desktop's 本机 Station (web/src/pages/LocalStation.tsx) on the library's parts: this machine's station as a
-// workspace's stations are shown (cloud/StationCards.css.ts card): its dot, its name and how it is, 启动 where it is
-// stopped, its menu (停止 or 启动, 重启, 更新到最新版, 打开日志, 在 Finder 中显示数据); under them who runs it, its
-// version, its workspace, its data; the installer's progress and what went wrong in it.
+// 本机 Station (web/src/pages/LocalStation.tsx; apps/desktop/src/main.ts localStation), one page in every frame: this
+// machine's station whoever runs it (the service the installer made, a process started by hand), as the system says
+// it (@ui.local_station), shown as a workspace's stations are (cloud/StationCards.css.ts card): its dot, its name and
+// how it is, 启动 where it is stopped, its menu (停止 or 启动, 重启, 更新到最新版, 打开日志, its data shown); under
+// them who runs it, its version, its workspace, its data, in lines as the room has them; the installer's progress and
+// what went wrong in it. None here: 添加这台 Mac where the app adds one. (The phone's copy, its rows a list each, is
+// gone: a station is shown the one way everywhere.)
 
 ///|
 /// 本机 Station (LocalStationPage): read again every few seconds (it starts, stops and updates on its own time).
-fn local_station_page(c : @ui.Ctx, core : Core) -> Unit {
-  ignore(c.every(local_read_ms))
+pub fn local_station_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
+  ignore(c.every(@settings.local_read_ms))
   let parsed = @json.parse(@ui.local_station()) catch { _ => Json::null() }
   let s = Some(parsed)
   let pc = @settings.local_machine_pc()
@@ -17,7 +20,7 @@ fn local_station_page(c : @ui.Ctx, core : Core) -> Unit {
     body.push(fn() {
       // (添加这台 Mac last, in the card's foot corner: concentric with it, out past its words: @sf.card_foot_in)
       let adds = doing == "" && @settings.local_station_managed()
-      c.box(style=if adds { desk_card.then(@sf.foot_pad(@sf.button_height())) } else { desk_card }, fn() {
+      c.box(style=if adds { @sf.desk_card.then(@sf.foot_pad(@sf.button_height())) } else { @sf.desk_card }, fn() {
         if doing != "" {
           local_progress(c, s, doing)
         } else {
@@ -25,7 +28,7 @@ fn local_station_page(c : @ui.Ctx, core : Core) -> Unit {
         }
         local_failed(c, s)
         if adds {
-          c.box(style=@sfpages.vt_actions.then(@sf.foot_across(@sf.button_height())), fn() {
+          c.box(style=vt_actions.then(@sf.foot_across(@sf.button_height())), fn() {
             if @sf.button(c, @sf.t(if pc { "web-pages.settings.thisPc.add" } else { "web-pages.settings.thisMac.add" }), key="local/install", tone=Primary) {
               (core.local_install)(true)
             }
@@ -38,7 +41,7 @@ fn local_station_page(c : @ui.Ctx, core : Core) -> Unit {
   } else {
     body.push(fn() { local_card(c, core, s, pc) })
   }
-  desk_page(c, core, "local-station", @sf.t("web-pages.localStation.title"), about=@sf.t(
+  @sf.page(c, on_back=core.pop, frame~, "local-station", @sf.t("web-pages.localStation.title"), about=@sf.t(
       if pc {
         "web-pages.localStation.leadPc"
       } else {
@@ -112,7 +115,7 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
       if c.clicked(mid) {
         local_menu.val = !open
       }
-      let b = c.box(style=ls_more, id=mid, fn() { @sf.icon(c, "more", size=@sfpages.ws_more_icon, color=t.p.muted) |> ignore })
+      let b = c.box(style=ls_more, id=mid, fn() { @sf.icon(c, "more", size=ws_more_icon, color=t.p.muted) |> ignore })
       c.semantics(b, Button, id=mid, label=@sf.t("web-main.menu.more"), expanded=open)
       let entries : Array[@kit.Entry] = []
       if running {
@@ -156,7 +159,7 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
     |> ignore
     // its facts (cardFoot): who runs it, its version, its workspace, its data, past its dot
     ls_past_dot(c, fn() {
-      c.box(style=ls_foot, fn() {
+      c.box(style=ls_foot, flow=true, line_gap=0.0, fn() {
         for line in [run_by, text(s, "version"), place, text(s, "data")] {
           if line != "" {
             c.text(line, style=ls_fact) |> ignore
@@ -179,7 +182,7 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
 /// What stands under its head past its dot (cardFoot's margin: the dot and the head's gap after it).
 fn ls_past_dot(c : @ui.Ctx, body : () -> Unit) -> Unit {
   c.box(style=ls_past, fn() {
-    c.box(style=dc_dot_room, fn() {  }) |> ignore
+    c.box(style=ls_dot_room, fn() {  }) |> ignore
     c.box(style=ls_under, body) |> ignore
   })
   |> ignore
@@ -223,13 +226,13 @@ fn local_failed(c : @ui.Ctx, s : Json?) -> Unit {
 
 ///|
 /// Whether its menu is open.
-// kept across runs: said by the page's ⋯; settings_reset puts it back
+// kept across runs: said by the page's ⋯; reset puts it back
 let local_menu : Ref[Bool] = Ref(false)
 
 ///|
 /// (card: its parts 10 apart, the card's padding and ground)
 // kept across runs: a value (no field of it changes)
-let ls_card : @ui.Style = desk_card.then(@ui.css("gap=S2_5"))
+let ls_card : @ui.Style = @sf.desk_card.then(@ui.css("gap=S2_5"))
 
 ///|
 /// (cardHead: its dot, its title, its buttons, 10 apart)
@@ -260,7 +263,7 @@ let ls_name : @ui.TextStyle = @ui.text_style(size=Body, leading=L7, weight=Semib
 let ls_state : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
 
 ///|
-/// (cardFoot: its facts 12 apart in lines, past its dot: 17 in)
+/// (cardFoot: its facts 12 apart, going on in lines where the room ends, past its dot: 17 in)
 // kept across runs: a value (no field of it changes)
 let ls_foot : @ui.Style = @ui.css("row w=Full gap=S3")
 
@@ -285,3 +288,8 @@ let ls_bar : @ui.Style = @ui.css("w=Full py=S1")
 /// (warn: red, the list's size, 500)
 // kept across runs: a value (no field of it changes)
 let ls_warn : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Danger, w=Full)
+
+///|
+/// Its dot's room, what stands under its head being past it.
+// kept across runs: a value (no field of it changes)
+let ls_dot_room : @ui.Style = @ui.style(w=@sf.dot_size)
