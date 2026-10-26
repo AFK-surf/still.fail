@@ -588,7 +588,7 @@ fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
         }
         close()
       }
-      c.box(style=size_option.then(@sf.panel_row_in()).then(@ui.style(min_h=r.least)), id~, fn() {
+      c.box(style=size_option.then(@sf.panel_row_in()).then(@ui.style(min_h=Fixed(@sf.theme().items.least))), id~, fn() {
         c.box(style=@ui.style(w=Fixed(r.check), align=ACenter), fn() {
           if checked {
             @sf.icon(c, "check", size=size_check_icon, color=t.p.accent) |> ignore
@@ -764,7 +764,7 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
     commit()
   }
   p.custom_typing = typing
-  c.box(style=custom_row.then(@ui.style(min_h=r.least)), fn() {
+  c.box(style=custom_row.then(@ui.style(min_h=Fixed(@sf.theme().items.least))), fn() {
     // (its name where the sizes' names are: past a column as wide as their check)
     c.box(style=@ui.style(w=Fixed(r.check)), fn() {  }) |> ignore
     c.box(style=custom_name, fn() { c.text(svc("android-chat.preview.custom"), style=r.title) |> ignore }) |> ignore

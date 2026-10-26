@@ -7,7 +7,7 @@
 #                                            perhaps with a drive step after them: `tapxy 830 450`, a pane beside it
 #                                            brought over)
 # WINDOW: phone390, phone360 (a phone's), touch600 (a tablet's, medium), tablet840, tablet1280 (expanded), desk600,
-# desk1280 (a Mac's: its window's corners 16), win600, win1280 (Windows 11's: 8); LANG: zh or en.
+# desk1280 (a Mac's: its window's corners 16; desk390 one made as narrow as a phone), win600, win1280 (Windows 11's: 8); LANG: zh or en.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
@@ -30,6 +30,7 @@ if [ $# -gt 0 ]; then printf '%s %s %s\n' "$@"; else cat; fi | while read -r win
     touch839) w=839; h=900; platform=2; system='system {"size_class":{"width":"medium","height":"medium"}}' ;;
     tablet840) w=840; h=900; platform=2; system='system {"size_class":{"width":"expanded","height":"medium"}}' ;;
     tablet1280) w=1280; h=900; platform=2; system='system {"size_class":{"width":"expanded","height":"medium"}}' ;;
+    desk390) w=390; h=760; platform=0; system=''; corner=16 ;;
     desk600) w=600; h=760; platform=0; system=''; corner=16 ;;
     desk1280) w=1280; h=800; platform=0; system=''; corner=16 ;;
     win600) w=600; h=760; platform=3; system=''; corner=8 ;;

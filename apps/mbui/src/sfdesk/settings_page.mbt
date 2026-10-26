@@ -26,7 +26,6 @@ using @sf {
   desk_mark,
   desk_list,
   desk_list_out,
-  desk_list_link,
   desk_list_text,
   desk_named,
   desk_list_title,
@@ -37,7 +36,6 @@ using @sf {
 ///|
 /// The pieces the settings' pages moved to sfpages draw with (sfpages settings_page.mbt), these pages' too.
 using @sfpages {
-  desk_list_row,
   desk_note,
   desk_column,
   desk_said_line,

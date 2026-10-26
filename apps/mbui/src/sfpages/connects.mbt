@@ -289,10 +289,6 @@ fn cn_add(
 /// its dot). Pressed, its page.
 fn cn_row(c : @ui.Ctx, core : Core, look : Look, station : String, station_name : String, s : Json?, cv : Json?) -> Unit {
   let id = text(cv, "id")
-  let rid = c.id("connect/" + station + "/" + id)
-  if hit(c, rid) {
-    (core.push)(Connect(station, id))
-  }
   let bind = field(cv, "bind")
   let model = match opt_text(bind, "model") {
     Some(m) => " · " + opt_text(cv, "modelName").unwrap_or(m)
@@ -300,54 +296,53 @@ fn cn_row(c : @ui.Ctx, core : Core, look : Look, station : String, station_name 
   }
   let how = text(cv, "modeText") + " · " + text(cv, "runtimeText") + model
   let on = [("station", station), ("id", id)]
-  let b = match look {
-    Wide =>
-      c.box(style=desk_list_link, id=rid, fn() {
-        cn_avatar(c, core, cv)
-        // its name and what is at its end on its first line, how it runs under them as wide as its words (a line of its
-        // own); short of room, its name kept: its team leaves its line, where it runs and who made it the row
-        @sf.row_lines(c, spaced=true, fn() {
-          c.box(style=cn_title_line.then(cn_title_grow), keep=true, fn() {
-            c.text(text(cv, "name"), style=cn_title) |> ignore
-            match opt_text(cv, "team") {
-              Some(team) =>
-                c.box(style=cn_team, drop=cn_drop_team, fn() {
-                  cn_kind(c, text(cv, "kind"), cn_team_icon)
-                  c.text(team, style=cn_meta) |> ignore
-                })
-                |> ignore
-              None => ()
-            }
-          })
-          |> ignore
+  // its Slack workspace after its name (short of room, its name kept: its team leaves its line first), what it
+  // connects to before it where its own picture leads the row (a platform's mark is said once on a row: where the row
+  // leads with it, not again)
+  let pictured = opt_text(cv, "botImage") is Some(_)
+  let team = match opt_text(cv, "team") {
+    Some(team) =>
+      Some(fn() {
+        c.box(style=cn_team, drop=cn_drop_team, fn() {
+          if pictured {
+            cn_kind(c, text(cv, "kind"), cn_team_icon)
+          }
+          c.text(team, style=cn_meta) |> ignore
+        })
+        |> ignore
+      })
+    None => None
+  }
+  if @sf.link_row(
+      c,
+      "connect/" + station + "/" + id,
+      text(cv, "name"),
+      note=how,
+      note_cut=true,
+      chevron=false,
+      lead=fn() { cn_avatar(c, core, cv) },
+      // (its own picture a face across the row's middle; what it connects to a mark by its first line)
+      face=pictured,
+      title_after?=team,
+      tail=fn() {
+        // (wide: where it runs and who made it, dropped before its name where the line has not the room)
+        if look == Wide {
           c.box(style=cn_facts, drop=cn_drop_facts, fn() {
             cn_station_tag(c, station_name, s)
             cn_owner(c, core, station + "/" + id, field(cv, "createdBy"))
           })
           |> ignore
-          c.text(text(cv, "statusText"), style=cn_meta) |> ignore
-          doing_mark(c, is_doing(core, ["connect.delete"], on), failed_of(core, ["connect.delete"], on))
+        }
+        doing_mark(c, is_doing(core, ["connect.delete"], on), failed_of(core, ["connect.delete"], on))
+        c.box(style=cn_narrow_state, fn() {
           @sf.status_dot(c, text(cv, "presence"))
-        }, fn() { c.text(how, style=cn_sub) |> ignore })
-      })
-    Narrow =>
-      c.box(style=narrow_row, id=rid, fn() {
-        cn_avatar(c, core, cv)
-        // its name, how it is on its first line; how it runs under them, a line of its own
-        @sf.row_lines(c, fn() {
-          @sf.name_words(c, text(cv, "name") + (match opt_text(cv, "team") { Some(team) => " · " + team; None => "" }), narrow_row_title)
-          |> ignore
-          doing_mark(c, is_doing(core, ["connect.delete"], on), failed_of(core, ["connect.delete"], on))
-          c.box(style=cn_narrow_state, fn() {
-            @sf.status_dot(c, text(cv, "presence"))
-            c.text(text(cv, "statusText"), style=cn_meta) |> ignore
-          })
-          |> ignore
-        }, fn() { c.text(how, style=cn_narrow_sub) |> ignore })
-        finger_ripple(c, rid)
-      })
+          c.text(text(cv, "statusText"), style=cn_meta) |> ignore
+        })
+        |> ignore
+      },
+    ) {
+    (core.push)(Connect(station, id))
   }
-  c.semantics(b, Link, id=rid, label=text(cv, "name"))
 }
 
 ///|
@@ -442,52 +437,60 @@ fn cn_waiting_app(c : @ui.Ctx, src : Source, core : Core, here : Here, look : Lo
       },
     )
   }
-  c.box(style=if look == Wide { desk_list_row } else { @sf.pg_said_row }, fn() {
-    c.box(style=cn_kind_box, fn() { @sf.slack_mark(c, cn_waiting_mark) |> ignore }) |> ignore
-    c.box(style=if look == Wide { cn_text } else { @sf.pg_row_words }, keep=true, fn() {
-      c.box(style=cn_title_line, fn() {
-        c.text(text(av, "name"), style=if look == Wide { cn_title } else { narrow_row_title }) |> ignore
-        match opt_text(av, "team") {
-          Some(team) =>
-            c.box(style=cn_team, drop=cn_drop_team, fn() {
-              @sf.slack_mark(c, cn_team_icon) |> ignore
-              c.text(team, style=cn_meta) |> ignore
-            })
-            |> ignore
-          None => ()
+  // its Slack workspace after its name, no mark again (the row leads with Slack's: a platform's mark said once on a row)
+  let team = match opt_text(av, "team") {
+    Some(team) =>
+      Some(fn() {
+        c.box(style=cn_team, drop=cn_drop_team, fn() {
+          c.text(team, style=cn_meta) |> ignore
+        })
+        |> ignore
+      })
+    None => None
+  }
+  @sf.link_row(
+    c,
+    "",
+    text(av, "name"),
+    note=where_,
+    note_cut=true,
+    goes=false,
+    lead=fn() { c.box(style=cn_kind_box, fn() { @sf.slack_mark(c, cn_waiting_mark) |> ignore }) |> ignore },
+    title_after?=team,
+    tail=fn() {
+      if look == Wide {
+        c.box(style=cn_facts, drop=cn_drop_facts, fn() { cn_station_tag(c, text(sv, "name"), sv) }) |> ignore
+      }
+      if !online {
+        c.text(@sf.t("web-pages.connects.stationOffline"), style=cn_meta) |> ignore
+      }
+      doing_mark(c, dropping, failed_of(core, ["slack.dropApp"], on))
+    },
+    control?=if online {
+      Some(fn() {
+        let go = match look {
+          Wide => @sf.button(c, @sf.t("web-pages.connects.continue"), key="waiting-go/" + app_id)
+          Narrow => tap_text(c, "waiting-go/" + app_id, @sf.t("web-pages.connects.continue"), color=@sf.link_ink())
+        }
+        if go {
+          new_connect_dialog(src, core, here, station, resume=app_id)
+        }
+        // dropped from under ⋯ (its menu), asked again first; it stays in Slack
+        if !dropping {
+          let mid = c.id("waiting-more/" + app_id)
+          if c.clicked(mid) {
+            @sf.menu([Some(@sf.menu_item_of(@sf.t("web-pages.connects.removeHere"), drop, danger=true))], from=Of(mid), along=End)
+          }
+          let b = c.box(style=cn_more, id=mid, fn() {
+            @sf.icon(c, "more", size=cn_more_icon, color=@sf.theme().p.muted) |> ignore
+          })
+          c.semantics(b, Button, id=mid, label=@sf.t("web-pages.connects.removeHere"))
         }
       })
-      |> ignore
-      c.text(where_, style=if look == Wide { cn_sub } else { cn_narrow_sub }) |> ignore
-    })
-    |> ignore
-    if look == Wide {
-      c.box(style=cn_facts, drop=cn_drop_facts, fn() { cn_station_tag(c, text(sv, "name"), sv) }) |> ignore
-    }
-    if online {
-      let go = match look {
-        Wide => @sf.button(c, @sf.t("web-pages.connects.continue"), key="waiting-go/" + app_id)
-        Narrow => tap_text(c, "waiting-go/" + app_id, @sf.t("web-pages.connects.continue"), color=@sf.link_ink())
-      }
-      if go {
-        new_connect_dialog(src, core, here, station, resume=app_id)
-      }
     } else {
-      c.text(@sf.t("web-pages.connects.stationOffline"), style=cn_meta) |> ignore
-    }
-    doing_mark(c, dropping, failed_of(core, ["slack.dropApp"], on))
-    // dropped from under ⋯ (its menu), asked again first; it stays in Slack
-    if online && !dropping {
-      let mid = c.id("waiting-more/" + app_id)
-      if c.clicked(mid) {
-        @sf.menu([Some(@sf.menu_item_of(@sf.t("web-pages.connects.removeHere"), drop, danger=true))], from=Of(mid), along=End)
-      }
-      let b = c.box(style=cn_more, id=mid, fn() {
-        @sf.icon(c, "more", size=cn_more_icon, color=@sf.theme().p.muted) |> ignore
-      })
-      c.semantics(b, Button, id=mid, label=@sf.t("web-pages.connects.removeHere"))
-    }
-  })
+      None
+    },
+  )
   |> ignore
 }
 
@@ -547,28 +550,6 @@ let cn_error : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Danger,
 let cn_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)
 
 ///|
-/// A row's words (listRowText: 2 apart, as wide as the row lets them; its title in 500, how it runs muted).
-// kept across runs: a value (no field of it changes)
-let cn_text : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cn_title_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
-
-///|
-/// Its name and team taking what its first line leaves what is at its end.
-// kept across runs: a value (no field of it changes)
-let cn_title_grow : @ui.Style = @ui.style(w=@sf.grow)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cn_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cn_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
-
-///|
 /// Its Slack workspace after its name (connectTeam: 8 after it, its mark 4 from its name, the meta's 12 muted).
 // kept across runs: a value (no field of it changes)
 let cn_team : @ui.Style = @ui.css("row gap=S1 align=ACenter")
@@ -621,10 +602,6 @@ let cn_more : @ui.Style = @ui.css("w=S8 h=S8 radius=Xl align=ACenter justify=JCe
 /// how it is at its end, its dot before the words.
 // kept across runs: a value (no field of it changes)
 let cn_filter_room_narrow : @ui.Style = @ui.css("w=Full pb=S2_5 align=AStart")
-
-///|
-// kept across runs: a value (no field of it changes)
-let cn_narrow_sub : @ui.TextStyle = @sf.secondary.then(@sf.one_line)
 
 ///|
 // kept across runs: a value (no field of it changes)

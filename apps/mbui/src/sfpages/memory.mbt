@@ -105,7 +105,7 @@ fn memory_body(c : @ui.Ctx, core : Core, look : Look, address : String, names : 
   let skill_row = fn(k : Json) {
     let kv = Some(k)
     // (the core's: when it is read, in a line)
-    if memory_row(c, look, "memory/" + address + "/skill/" + text(kv, "name"), text(kv, "name"), text(kv, "line"), text(kv, "size"), tag=skill_tag(kv, names)) {
+    if memory_row(c, "memory/" + address + "/skill/" + text(kv, "name"), text(kv, "name"), text(kv, "line"), text(kv, "size"), tag=skill_tag(kv, names)) {
       (core.push)(MemoryDoc(address, text(kv, "name"), 0))
     }
   }
@@ -122,7 +122,7 @@ fn memory_body(c : @ui.Ctx, core : Core, look : Look, address : String, names : 
     } else {
       @sf.group(c, fn() {
         for i, p in sections {
-          if memory_row(c, look, "memory/" + address + "/part/" + i.to_string(), p.0, "", p.2) {
+          if memory_row(c, "memory/" + address + "/part/" + i.to_string(), p.0, "", p.2) {
             (core.push)(MemoryDoc(address, "", i))
           }
         }
@@ -149,7 +149,6 @@ fn memory_body(c : @ui.Ctx, core : Core, look : Look, address : String, names : 
         if builtin.length() > 0 {
           if memory_row(
               c,
-              look,
               "memory/" + address + "/builtin",
               @sf.t("web-main.memory.builtin"),
               if open {
@@ -174,11 +173,10 @@ fn memory_body(c : @ui.Ctx, core : Core, look : Look, address : String, names : 
 }
 
 ///|
-/// A row that opens a page, or folds a group open (MemoryRow): its name and whose, a line under it (cut short), how
-/// much is in it, a chevron 14 in the subtle grey. True on the frame it is pressed.
+/// A row that opens a page, or folds a group open (MemoryRow): a library row, its name and whose after it, a line
+/// under it (cut short), how much is in it at its end. True on the frame it is pressed.
 fn memory_row(
   c : @ui.Ctx,
-  look : Look,
   key : String,
   title : String,
   sub : String,
@@ -186,33 +184,16 @@ fn memory_row(
   tag? : String = "",
   open? : Bool = false,
 ) -> Bool {
-  let t = @sf.theme()
-  let id = c.id(key)
-  let narrow = look == Narrow
-  let b = c.box(style=if narrow { narrow_row } else { desk_list_link }, id~, fn() {
-    c.box(style=desk_list_text, fn() {
-      c.box(style=mem_title_line, fn() {
-        c.text(title, style=if narrow { mem_narrow_title } else { desk_list_title }) |> ignore
-        if tag != "" {
-          c.text(tag, style=mem_tag) |> ignore
-        }
-      })
-      |> ignore
-      if sub != "" {
-        c.text(sub, style=if narrow { mem_narrow_sub } else { mem_sub }) |> ignore
-      }
-    })
-    |> ignore
-    if value != "" {
-      c.text(value, style=if narrow { @sf.pg_value } else { mem_tag_muted }) |> ignore
-    }
-    @sf.icon(c, if open { "chevron-down" } else { "chevron-right" }, size=memory_chevron, color=t.p.subtle) |> ignore
-    if narrow {
-      finger_ripple(c, id)
-    }
-  })
-  c.semantics(b, Link, id~, label=title, expanded?=if key.has_suffix("/builtin") { Some(open) } else { None })
-  c.clicked(id)
+  @sf.link_row(
+    c,
+    key,
+    title,
+    note=sub,
+    note_cut=true,
+    value~,
+    title_after?=if tag != "" { Some(fn() { c.text(tag, style=mem_tag) |> ignore }) } else { None },
+    folds?=if key.has_suffix("/builtin") { Some(open) } else { None },
+  )
 }
 
 ///|
