@@ -124,7 +124,32 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       close=@motion.Snap(0.0),
       fn() {
         match outcome {
-          Some(w) => c.text(w, style=settled_line) |> ignore
+          Some(w) => {
+            let id = c.id("outcome-options/" + key)
+            c.box(style=settled_room, fn() {
+              c.box(id~, fn() { c.text(w, style=settled_line) |> ignore }) |> ignore
+            }) |> ignore
+            match options {
+              Some(list) if list.length() > 0 => {
+                let chosen = match m.decision {
+                  Some(d) => d.chosen
+                  None => None
+                }
+                hover(c, "outcome-options/" + key, id, padded=false, fn() {
+                  @sf.options_card(
+                    c,
+                    "history-options/" + key,
+                    list.map(fn(o) { (o.label, o.detail, o.recommended) }),
+                    false,
+                    None,
+                    chosen=list.search_by(fn(o) { Some(o.label) == chosen }),
+                    history=true,
+                  ) |> ignore
+                }) |> ignore
+              }
+              _ => ()
+            }
+          }
           None => ()
         }
       },
@@ -367,6 +392,10 @@ let options_room : @ui.Style = @ui.css("w=Full pt=S0_5 align=AStart")
 /// How it was settled, who decides (settledLine): 12 on 18, the subtle ink.
 // kept across runs: a value (no field of it changes)
 let settled_line : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle)
+
+///|
+// kept across runs: a value (no field of it changes)
+let settled_room : @ui.Style = @ui.css("align=AStart")
 
 ///|
 /// 忽略 (askDismiss): 6 under the options, 12 on 18 in the subtle ink, the text's and underlined under the pointer.
