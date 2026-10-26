@@ -31,7 +31,7 @@ import { allLeft, existingRunners } from "../agents/runner.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
 import { homesFirst, iso, sessionPlaces, transcriptPaths } from "../read/transcript.ts";
-import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, feishuSurface, slackSurface, type ThreadRow } from "../store/store.ts";
+import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, feishuSurface, slackSurface, type ThreadRow, xSurface } from "../store/store.ts";
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
 import { Places } from "../ops/places.ts";
@@ -899,10 +899,13 @@ export class Hub {
   }
 
   /// Where a connect's threads live; the rule the v10 migration follows too. A Feishu connect's are its own (its people's
-  /// ids are the app's own, so another bot's in the same chat are other people: docs/feishu.md).
+  /// ids are the app's own, so another bot's in the same chat are other people: docs/feishu.md), as an X connect's are
+  /// (docs/x.md).
   surface(connect: string): string {
     if (connect === INTERNAL_CONNECT) return STILLFAIL_SURFACE;
-    if (this.config().connects.find((c) => c.id === connect)?.kind === "feishu") return feishuSurface(connect);
+    const kind = this.config().connects.find((c) => c.id === connect)?.kind;
+    if (kind === "feishu") return feishuSurface(connect);
+    if (kind === "x") return xSurface(connect);
     return slackSurface(connect, this.chatOf(connect)?.workspace() ?? null);
   }
 

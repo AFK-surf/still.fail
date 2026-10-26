@@ -44,7 +44,7 @@ export type SocketHooks = {
 };
 
 export abstract class ConnectedSurface implements Connection {
-  readonly cards = true;
+  readonly cards: boolean = true;
   /// What the log calls the platform ("slack", "feishu").
   protected abstract readonly kind: string;
   protected readonly connect: string | undefined;
@@ -113,7 +113,7 @@ export abstract class ConnectedSurface implements Connection {
     }
   }
 
-  private setStatus(connected: boolean, lastError: string | null) {
+  protected setStatus(connected: boolean, lastError: string | null) {
     if (this.status.connected === connected && this.status.lastError === lastError) return;
     this.status = { connected, lastError };
     this.changed();

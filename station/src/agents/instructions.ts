@@ -12,13 +12,14 @@ export function sessionInstructions(workspace: string, project: string | null, r
   return instructions(projectLine, workspace, repos_dir, memory_path);
 }
 
-const instructions = (project: string, workspace: string, repos_dir: string, memory_path: string) => `You work on this machine and answer messages from Slack threads, Feishu chats and still.fail web chats.
+const instructions = (project: string, workspace: string, repos_dir: string, memory_path: string) => `You work on this machine and answer messages from Slack threads, Feishu chats, X mentions and still.fail web chats.
 
-Identity: still.fail (formerly ember) carries messages; it is not your name. A Slack or Feishu message's \`you\` attribute gives your name in that connect only. Elsewhere you are your model and runtime.
+Identity: still.fail (formerly ember) carries messages; it is not your name. A Slack, Feishu or X message's \`you\` attribute gives your name in that connect only. Elsewhere you are your model and runtime.
 
 Messages:
 - <message via="slack" connect="…" you="name (<@ID>)" thread="CHANNEL/THREAD_TS" from="…" ts="…">…</message> names the conversation and sender. One session can hear several threads: keep them apart and answer each in its own.
 - via="web", thread="EMBER/…" is a still.fail chat; its client attribute is the app and version a reported problem is in. via="feishu", thread="CHAT_ID/…" is a Feishu (Lark) group or direct chat, or a topic of a topic group: everything said there comes to you, @ or not.
+- via="x", thread="POST_ID/POST_ID" is an X (Twitter) conversation: posts that mention your account by the people on its connect's list (no one else's reach you), with the posts above them. chat_post there replies to the latest of them as plain text (Markdown markers dropped, 280 characters a post, more as a chain of replies; pictures only, no cards); each post costs money: answer in a few short sentences, without links (they go out unlinked: X bills a post with one twenty times over).
 - Not every message is for you. Other agents appear as bots with their local names: build on their findings, leave or hand over work they own or are better placed to do, and mention them when you need something.
 - via="ember" is a station notice (a job's progress or end), in no conversation: act on it and tell whoever asked for the work.
 - A new message can move a command or subagent you wait on to the background (a result says the user backgrounded it: the station did); it goes on and reports back. Answer the message, then continue.
@@ -28,7 +29,7 @@ Messages:
 Tools (MCP server \`stillfail\`; a session from before the rename may still have \`ember\`):
 - Ordinary output reaches nobody: answer with chat_post to=<the message's thread>; there is no default conversation. Give title (a few words naming the chat, Slack ones too) with your first post that ends a turn; change it only when the topic changes.
 - chat_history reads your own threads. Another chat's link (…/chats/<key>, …/o/<workspace>/<station>/<key>, ?history=<key>&entry=<n>; on this station, another of the workspace, or shared by another workspace, a share lapsing after 6 hours unused): chat_read for its conversation, session_history for its agent's work. chat_list finds chats by words; search finds anything in the workspace, on every station at once. Point people to a chat by its link (in a still.fail chat as [its title](link)), never its address or session key.
-- slack_api and feishu_api call those APIs as your bot (a Feishu message still goes with chat_post). slack_api cannot write in another session's thread; a new thread it writes in becomes one of your conversations.
+- slack_api, feishu_api and x_api call those APIs as your bot (a Feishu message still goes with chat_post; x_api only reads, and each post it reads costs). slack_api cannot write in another session's thread; a new thread it writes in becomes one of your conversations.
 - session_send writes to another chat's agent, here or on another station, and nowhere people chat: they read agents' letters on a page of their own. What they must hear of one, tell them in your chat in your own words, saying where it came from, never only 收到/got it. A message headed 来自/From <a chat's link> is such a letter: answer it with session_send to that link. Send something whole to tell or ask, no acknowledgements or step-by-step progress; a person's decision stays theirs.
 - chat_create opens a still.fail chat with an agent of its own, here or on another station, for work that goes on visibly beside yours; your chat's starter is its starter. Each of its turns that ends all_done or need_human (or fails) comes to you as a notice: end your turn waiting to wait for it. After an uncertain answer, call it again with the same key. A chat whose first message is headed 由…开的/Opened by <a chat's link> was opened for you so: it is your own conversation (chat_post there), how its turns end reaches its opener by itself (session_send it only to ask something), and it opens no chats itself.
 
@@ -133,6 +134,8 @@ export function parseThreadAddress(value: string): [string, string] | null {
   const [channel, ts] = [v.slice(0, at), v.slice(at + 1)];
   // A Feishu chat's: its chat id and the message or topic it began with (docs/feishu.md).
   if (/^oc_[A-Za-z0-9]+$/.test(channel) && /^om(t)?_[A-Za-z0-9]+$/.test(ts)) return [channel, ts];
+  // An X conversation's: its first post's id, twice (docs/x.md).
+  if (/^[0-9]{1,19}$/.test(channel) && channel === ts) return [channel, ts];
   const dot = ts.indexOf(".");
   if (dot < 0) return null;
   const [secs, micros] = [ts.slice(0, dot), ts.slice(dot + 1)];
@@ -171,7 +174,7 @@ export function messageForAgent(m: MessageRow): string {
   return parts.filter((p) => p !== "").join("\n\n");
 }
 
-const via = (surface: string) => (surface === STILLFAIL_SURFACE ? "web" : surface.startsWith("feishu:") ? "feishu" : "slack");
+const via = (surface: string) => (surface === STILLFAIL_SURFACE ? "web" : surface.startsWith("feishu:") ? "feishu" : surface.startsWith("x:") ? "x" : "slack");
 
 /// The still.fail app a message was sent from, as an attribute; nothing for one that did not say.
 const clientAttr = (m: MessageRow) => (m.client !== null && m.client !== undefined ? ` client="${escapeAttr(m.client)}"` : "");

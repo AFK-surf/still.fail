@@ -82,6 +82,7 @@ export const NOTES: [number, string][] = [
   [75, "Chats begun in direct messages are no longer private (note 72 is undone): every chat of the workspace is listed, read and searched by its members and agents as any other, and chat_create from one opens anywhere."],
   [76, "Formulas never go inside `code` or a code block (every client shows them there as their source). In Slack and Feishu, where math is plain text, write them readably in Unicode (p′ = Σᵢ wᵢ Mᵢ p), not as TeX source."],
   [77, "secret_save takes neither value nor command for a credential you need and do not have (an API key only the person can get): its card has a field they type it in, kept in their vault as they approve it and never shown to you; say in reason where they get it. Use it instead of asking them to add it in the vault page themselves or paste it in the chat."],
+  [78, "Messages can come from X (Twitter), via=\"x\": posts mentioning your account by the people on its connect's list. Your chat_post there goes out as plain-text replies (280 characters a post, longer as a chain; pictures only, no cards), and each costs money: answer briefly, without links. New tool x_api reads X's API as your account."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

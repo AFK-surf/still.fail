@@ -27,7 +27,7 @@ export async function cc(hub: Hub, thread: number, who: string, said: string, fi
       const chat = hub.store.getThread(thread);
       const here = hub.store.threadSessions(thread)[0];
       if (chat === null || here === undefined) return;
-      const place = o.thread.surface.startsWith("feishu:") ? "Feishu" : "Slack";
+      const place = o.thread.surface.startsWith("feishu:") ? "Feishu" : o.thread.surface.startsWith("x:") ? "X" : "Slack";
       const note = tr(stationLang(), "station.cc.failed", { place, error: (error as Error).message });
       try {
         const at = await hub.chat(here.connect).post({ channel: chat.channel, threadTs: chat.threadTs }, note, []);
