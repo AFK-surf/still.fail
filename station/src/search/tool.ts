@@ -4,6 +4,7 @@
 import type { Asker, Group, Hit } from "./match.ts";
 import type { Search } from "./search.ts";
 import type { Tool } from "../tools/mcp.ts";
+import { skillTools } from "./skills.ts";
 import { wall } from "../ops/fibers.ts";
 
 /// What another station is asked.
@@ -18,6 +19,7 @@ const KINDS = ["chat", "message", "history", "job", "skill", "memory", "profile"
 
 export type SearchDeps = {
   search: Search;
+  readSkill(workspace: string | undefined, name: string, file: string): string;
   /// The workspace a session's chat is in (null: the station's home one) and whether that is the station's home one.
   workspaceOf(session: string): { workspace: string; home: boolean } | null;
   /// A chat's link (`…/o/<workspace>/<station>/<key>`), the one to give people.
@@ -63,22 +65,23 @@ function hitLine(h: Hit): string {
   return `- ${title}${one(h.text)}${at}${where.length > 0 ? ` — ${where.join(", ")}` : ""}`;
 }
 
-function said(name: string, groups: Group[]): string {
+function said(name: string, groups: Group[], station: string): string {
   if (groups.length === 0) return `## ${name}\nNothing found.`;
   const parts = groups.map((g) => {
     const left = g.left ? `\n- … ${g.left} older sessions' history not looked through (out of time): narrow the words, or ask this station alone` : "";
     const more = g.more && !g.left ? "\n- … more: ask with kinds=[\"" + g.kind + "\"] and a higher limit" : "";
-    return `### ${g.kind}\n${g.hits.map(hitLine).join("\n")}${more}${left}`;
+    return `### ${g.kind}\n${g.hits.map((h) => hitLine(h) + (g.kind === "skill" && typeof h.skill === "string" ? ` — read with skill_read ${JSON.stringify({ station, name: h.skill })}` : "")).join("\n")}${more}${left}`;
   });
   return `## ${name}\n${parts.join("\n")}`;
 }
 
 export function searchTools(deps: SearchDeps): Tool[] {
   return [
+    ...skillTools(deps),
     {
       name: "search",
       description:
-        "Search everything in this workspace, on all its stations at once: chats (titles, archived ones too), every message, agents' execution histories (what they said, thought and ran, and what it gave), services and tasks, skills and memory, profiles, and the files on each station's machine (names and what they say). Looked through as they are now (nothing indexed): the execution histories take a few seconds, the most recently active sessions first. Words are matched anywhere in the text, case aside; every word must match. Results are grouped by station and kind, newest first after title matches, with chat links to give people or read with chat_read and session_history.",
+        "Search everything in this workspace, on all its stations at once: chats (titles, archived ones too), every message, agents' execution histories (what they said, thought and ran, and what it gave), services and tasks, skills and memory, profiles, and the files on each station's machine (names and what they say). Looked through as they are now (nothing indexed): the execution histories take a few seconds, the most recently active sessions first. Words are matched anywhere in the text, case aside; every word must match. Results are grouped by station and kind, newest first after title matches, with chat links to give people or read with chat_read and session_history. For project workflows missing from your local skill catalog, search kinds=[\"skill\"] across stations first; read a matching skill in full with skill_read.",
       inputSchema: {
         type: "object",
         properties: {
@@ -115,10 +118,10 @@ export function searchTools(deps: SearchDeps): Tool[] {
             try {
               if (s.here) {
                 const found = await deps.search.query(query, { ...place, scopes: ["write"] }, { kinds, limit });
-                return said(name, linked(found.groups, deps.link));
+                return said(name, linked(found.groups, deps.link), s.id || s.name);
               }
-              const answer = await wall.within(WAIT_MS, deps.ask(s.id, { method: SEARCH, session, query, kinds, limit }), `did not answer within ${WAIT_MS / 1000} s`);
-              return said(name, Array.isArray(answer?.groups) ? answer.groups : []);
+              const answer = await wall.within(WAIT_MS, deps.ask(s.id, { method: SEARCH, session, workspace: place.workspace, query, kinds, limit }), `did not answer within ${WAIT_MS / 1000} s`);
+              return said(name, Array.isArray(answer?.groups) ? answer.groups : [], s.id);
             } catch (error) {
               return `## ${name}\nNot searched: ${(error as Error).message}`;
             }
