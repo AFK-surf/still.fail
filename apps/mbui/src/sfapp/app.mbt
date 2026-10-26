@@ -407,8 +407,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
             c.layer(fn() { @sfpages.screen_page(c, src, at, system_frame()) }) |> ignore
           // a drive's text read, a film played: over the whole window too, as the web's pages of a file opened
           // (Drive.css.ts opened: fixed over everything)
-          DriveRead(at) => c.layer(fn() { reader_page(c, src, at) }) |> ignore
-          DrivePlay(at) => c.layer(fn() { play_page(c, src, at) }) |> ignore
+          DriveRead(at) => c.layer(fn() { @sfpages.reader_page(c, src, at) }) |> ignore
+          DrivePlay(at) => c.layer(fn() { @sfpages.play_page(c, src, at) }) |> ignore
           _ => ()
         }
         // what opens over them (sfdesk's overlays.mbt)
@@ -571,8 +571,8 @@ fn page_view(
         // 文件: a place of the bar at the stack's root, else a page pushed
         Files => files_page(c, src, w, place=root)
         Drive(at) => drive_page(c, src, w, at)
-        DriveRead(at) => reader_page(c, src, at)
-        DrivePlay(at) => play_page(c, src, at)
+        DriveRead(at) => @sfpages.reader_page(c, src, at)
+        DrivePlay(at) => @sfpages.play_page(c, src, at)
         Service(station, job) => service_page(c, src, station, job)
         PreviewFile(station, key, path, name) => preview_file_page(c, src, station, key, path, name)
         Archived => setting_page(c, src, w, @settings.Route::Archive)

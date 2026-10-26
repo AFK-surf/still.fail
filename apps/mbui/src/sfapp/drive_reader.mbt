@@ -1,11 +1,5 @@
-// A text of a drive, read (Screen.DriveRead): the library's reader (@sf.reader, the web's Reader) over a drive's file
-// (sfbase drive_viewer.mbt) on the phone's page, its bars a tap brings, its panels the drive's sheets (viewer_host.mbt).
-
-///|
-/// The text `at.path` of `at.root` on `at.station`, read.
-pub fn reader_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
-  drive_reader(c, src, at, fn() { @sfbase.close_page(DriveRead(at)) |> ignore })
-}
+// A reader on top as the shell has it (its page sfpages' drive_play.mbt): its paper's darkness for the system bars'
+// icons.
 
 ///|
 /// The paper's darkness while a reader is on top (the system bars' icons readable on it), None otherwise.

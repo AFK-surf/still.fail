@@ -466,60 +466,11 @@ pub fn open_mode(mode : String) -> Unit {
 }
 
 ///|
-/// MBUI_FIXTURE=player-video | player-audio | player-ended | player-opening: the folder's page under the player.
+/// MBUI_FIXTURE=player-…: the made-up drive's film (the made-up core's: play_fixture) played over its folder's pages,
+/// where its player stands.
 fn open_play_fixture(mode : String) -> Unit {
-  let (file, pin) : (String, @kit.MediaStatus?) = match mode {
-    "player-video" =>
-      (
-        "第02集.mp4",
-        Some({
-          state: 1,
-          duration: 1404000.0,
-          position: 312000.0,
-          buffered: 420000.0,
-          playing: false,
-          buffering: false,
-          ended: false,
-          width: 1280.0,
-          height: 720.0,
-        }),
-      )
-    "player-audio" =>
-      (
-        "片尾曲.m4a",
-        Some({
-          state: 1,
-          duration: 214000.0,
-          position: 63000.0,
-          buffered: 214000.0,
-          playing: false,
-          buffering: false,
-          ended: false,
-          width: 0.0,
-          height: 0.0,
-        }),
-      )
-    "player-ended" =>
-      (
-        "第01集.mp4",
-        Some({
-          state: 1,
-          duration: 1396000.0,
-          position: 1396000.0,
-          buffered: 1396000.0,
-          playing: false,
-          buffering: false,
-          ended: true,
-          width: 1280.0,
-          height: 720.0,
-        }),
-      )
-    "player-opening" => ("第10集.mp4", None)
-    _ => return
-  }
-  @sffixture.fix_folders[@sffixture.fix_docs + "\n" + @sffixture.fix_films] = @sffixture.fix_film_entries()
-  let docs : DriveAt = { station: "ws1/st1", root: Some(@sffixture.fix_docs), path: "" }
-  let at = { ..docs, path: @sffixture.fix_films + "/" + file }
+  guard @sffixture.play_fixture(mode) is Some((at, pin)) else { return }
+  let docs : DriveAt = { ..at, path: "" }
   app.nav.push(Files)
   app.nav.push(Drive(docs))
   app.nav.push(Drive({ ..docs, path: @sffixture.fix_films }))
