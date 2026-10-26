@@ -386,6 +386,9 @@ jobs:
           (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null && pnpm run build > /dev/null)
+      # the order of names the host gives the core (text.collate: src/host/win_collate.h), checked (a C program, ~2 s)
+      - name: The order of names (win.sh collate)
+        run: bash apps/mbui/scripts/win.sh collate
       - name: The core's bytecode (Hermes)
         run: |
           bash apps/mbui/scripts/win.sh core
