@@ -822,10 +822,30 @@ pub fn page_card(c : @ui.Ctx, body : () -> Unit, footed? : Bool = false) -> Unit
     in_words.val -= 1
   }
   match look() {
+    Narrow if in_layers.val > 0 => c.box(style=card, words) |> ignore
     Narrow => c.box(style=pg_card_room, fn() { c.box(style=card, words) |> ignore }) |> ignore
     Wide => wide_alone(c, fn() { c.box(style=card, words) |> ignore })
   }
 }
+
+///|
+/// The layers of one thing on a page, one under another (a document's head, the tabs over its text, its text): one
+/// block of the page, the room between them `body`'s own (what it says under each), not the room between a page's
+/// blocks. A card in it (page_card) is the card alone, none of a block's room round it.
+pub fn layers(c : @ui.Ctx, body : () -> Unit) -> Unit {
+  in_layers.val += 1
+  c.box(style=layers_box, body) |> ignore
+  in_layers.val -= 1
+}
+
+///|
+/// How many layers of one thing what is drawn is in (layers).
+// kept across runs: counted up and down round what layers draws (0 between them)
+let in_layers : Ref[Int] = Ref(0)
+
+///|
+// kept across runs: a value (no field of it changes)
+let layers_box : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// How many cards of words (page_card) what is drawn now stands in: a switch's row there is words beside their switch,

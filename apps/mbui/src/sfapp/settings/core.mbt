@@ -535,7 +535,6 @@ pub fn reset() -> Unit {
   connects_mine.val = false
   chosen.clear()
   builtin_open.clear()
-  doc_picked.clear()
   panels_core.val = None
   frame_core.val = None
   at_root.val = false

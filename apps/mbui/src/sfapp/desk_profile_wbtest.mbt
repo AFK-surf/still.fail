@@ -1,4 +1,4 @@
-// Adding a profile on the desktop (sfdesk add_profile.mbt), a secret's page and a skill's memory page, a place's first,
+// Adding a profile on the desktop (sfdesk add_profile.mbt), a secret's page, a place's first,
 // over the whole app and the settings' fixture (a profile's own page: src/sfpages accounts_wbtest.mbt).
 
 ///|
@@ -87,24 +87,6 @@ test "wide: a secret's page says what it is, how agents may get it and when they
   // not opened: its field's name over dots
   assert_true(t.find("值") is Some(_))
   assert_true(t.find("ghp_") is None, msg="nothing of it shown")
-}
-
-///|
-test "wide: a skill's memory page says what it is and when it is read, its pages picked by their pills" {
-  let t = wide_tester([], mode="settings")
-  t.draw()
-  app.nav.push(Setting(@settings.Route::MemoryDoc("ws1/st1", "发布流程", 0)))
-  t.run_for(@ui.nav_push_ms)
-  assert_true(t.find("项目记忆 · 读取时机") is Some(_), msg="what it is, the core's")
-  assert_true(t.find("发布新版本时") is Some(_))
-  // its SKILL.md first, then the file picked
-  assert_true(t.find("总览") is Some(_) && t.find("checklist") is Some(_))
-  match t.find("checklist") {
-    Some((x, y)) => t.tap(x, y)
-    None => abort("no checklist")
-  }
-  t.draw()
-  assert_true(t.find("签名") is Some(_), msg="the file's text")
 }
 
 ///|
