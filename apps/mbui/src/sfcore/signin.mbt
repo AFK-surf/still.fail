@@ -117,6 +117,10 @@ fn tell_device() -> Unit {
       facts["app"] = Json::string("desktop")
       facts["userAgent"] = Json::string("Windows")
     }
+    5 => {
+      facts["app"] = Json::string("desktop")
+      facts["userAgent"] = Json::string("Linux")
+    }
     // (the browser: no kind of the core's for it yet)
     _ => return
   }

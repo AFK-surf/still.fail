@@ -2614,7 +2614,7 @@ pub fn Viewer::pdf_stage(self : Viewer, c : @ui.Ctx, b : Bytes, stage : Int) -> 
     tap_stage(c, v, stage)
     v.note(c, fn() {
       c.text(
-        pv_fill("android-chat.file.pdf.failed", [("error", if @ui.platform() == 3 || @ui.platform() == 4 {
+        pv_fill("android-chat.file.pdf.failed", [("error", if @ui.platform() >= 3 {
  @sf.t("android-chat.preview.noPdf") } else { "" })]),
         size=t.t.body,
         color=t.p.muted,

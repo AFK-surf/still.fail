@@ -19,12 +19,13 @@
 //   node scripts/native.ts iroh-pkg [dir]              the web's iroh (iroh-wasm) put in web/src/core/iroh-pkg
 //   node scripts/native.ts status                      every part and target: key, and whether cached / published
 //   node scripts/native.ts missing [--windows] [part[:target]…]    those (default: all of ours) the release lacks, one a line
-//   node scripts/native.ts missing --prebuilt          the prebuilt ones (`msvc`: the shell and engine, Android's and
-//        Windows', which the mbui app's jobs only fetch) in neither the store nor the release, one a line
+//   node scripts/native.ts missing --prebuilt          the prebuilt ones (`msvc`: the shell and engine, Android's,
+//        Windows' and Linux', which the mbui app's jobs only fetch) in neither the store nor the release, one a line
 //   node scripts/native.ts ensure [--windows] [--publish] [--outbox DIR] [part[:target]…]
 //        CI: each (default: all) in the cache, built when not prebuilt; --publish uploads what the release lacks
 //        (gh, main only); --outbox copies the artifacts the release lacks there (a branch's run artifact)
 //        The default leaves out what only Windows builds (MSVC's: the mbui app's shell and engine); --windows is those.
+//        Never what only Linux builds (the mbui app's Linux shell and engine: the prebuild workflow's alone).
 //   node scripts/native.ts prune [N]                   the release keeps the newest N (20) of each part and target
 //   node scripts/native.ts prebuild [--release] [part:target…]   each (default: the Windows parts) in neither the store
 //        (STORE: the releases bucket's natives/) nor the release, got or built here (Windows builds the Windows ones, a
@@ -68,6 +69,10 @@ const VENDORED = ["vendor/iroh", "vendor/iroh-mdns-address-lookup", "vendor/noq-
 /// apps/mbui/scripts/android-core.sh packs it), and on Windows, which has no prebuilt one with its C++ API,
 /// facebook/hermes at the tag that Hermes is made from.
 const HERMES = { rn: "0.81.4", tag: "hermes-2025-07-07-RNv0.81.0-e0fc67142ec0763c6b6153ca2bf96df815539782" };
+/// How Hermes and the engine are built on Linux: clang, CMake and Ninja, a release with no debugger, position
+/// independent (linked into the engine's shared library), ICU linked in statically (Ubuntu's libicu-dev): the engine
+/// carries its own, the same on every distribution whatever ICU it has, as Windows' takes the system's.
+const HERMES_LINUX_CMAKE = ["-G", "Ninja", "-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DHERMES_ENABLE_DEBUGGER=OFF", "-DHERMES_ENABLE_TEST_SUITE=OFF", "-DHERMES_USE_STATIC_ICU=ON", "-DBUILD_SHARED_LIBS=OFF", "-DHERMES_BUILD_SHARED_JSI=OFF"];
 /// How Hermes and the engine are built on Windows: clang-cl (MSVC's own fails on HadesGC.cpp at this tag), CMake and
 /// Ninja, as a release with no debugger.
 const HERMES_CMAKE = ["-G", "Ninja", "-DCMAKE_C_COMPILER=clang-cl", "-DCMAKE_CXX_COMPILER=clang-cl", "-DCMAKE_BUILD_TYPE=Release", "-DHERMES_ENABLE_DEBUGGER=OFF", "-DHERMES_ENABLE_TEST_SUITE=OFF"];
@@ -111,6 +116,7 @@ const TRIPLES: Record<string, string> = {
   "android-arm64": "aarch64-linux-android",
 };
 const TRIPLE = (t: Target): string => TRIPLES[t] ?? fail(`no Rust target for ${t}`);
+const LINUX = (t: Target): boolean => t === "linux-x64" || t === "linux-arm64";
 function fail(message: string): never {
   throw new Error(message);
 }
@@ -214,17 +220,22 @@ const PARTS: Record<string, Part> = {
     },
   },
   // The core's native shell (client/shell): HTTP, the cloud's socket, files, SQLite and iroh, behind a C ABI. Android's,
-  // and the mbui app's on Windows (MSVC's: a DLL and its import library, which the engine links).
+  // and the mbui app's on Windows (MSVC's: a DLL and its import library, which the engine links) and Linux (a shared
+  // library the app links beside the engine).
   shell: {
     // Windows': with its tests, built beside it, for a Windows machine to run (CI's natives-win)
     files: (t) => (t === "win32-x64" ? ["stillfail_shell.dll", "stillfail_shell.dll.lib", "tests"] : ["libstillfail_shell.so"]),
-    targets: ["android-arm64", "win32-x64"],
+    targets: ["android-arm64", "win32-x64", "linux-x64", "linux-arm64"],
     msvc: true,
     inputs: ["client/shell", "client/Cargo.toml", "client/Cargo.lock", ...VENDORED],
-    recipe: (t) => (t === "win32-x64" ? { cargo: SHELL_TESTS, xwin: XWIN } : { ndk: NDK, api: ANDROID_API, cargo: shellCommand(), rustflags: SHELL_RUSTFLAGS }),
+    recipe: (t) =>
+      t === "win32-x64" ? { cargo: SHELL_TESTS, xwin: XWIN }
+      : LINUX(t) ? { cargo: shellLinux(t) }
+      : { ndk: NDK, api: ANDROID_API, cargo: shellCommand(), rustflags: SHELL_RUSTFLAGS },
     build(t, out) {
       const target = targetDir(join(ROOT, "client/target"), "shell");
       if (t === "win32-x64") return shellWin(out);
+      if (LINUX(t)) return shellLinuxBuild(t, target, out);
       cargo(shellCommand(), join(ROOT, "client"), { CARGO_TARGET_DIR: target, ...ndkEnv() });
       copyFileSync(join(target, "aarch64-linux-android/release/libstillfail_shell.so"), join(out, "libstillfail_shell.so"));
     },
@@ -261,16 +272,24 @@ const PARTS: Record<string, Part> = {
   // The core's engine (apps/mbui/engine: one source, its C API engine.h the mbui app calls): Hermes and the core's loop
   // on it, linked to the shell. Android's: hermes-android's libhermes.so (HERMES.rn) with the JSI built beside it, the
   // NDK's CMake (apps/mbui/engine/android). Windows': Hermes built from its source (HERMES) with clang-cl, static, in one
-  // DLL with the loop; with that build's hermesc, for the core's bytecode.
+  // DLL with the loop; with that build's hermesc, for the core's bytecode. Linux's: the same from its source with
+  // clang, in one shared library, ICU linked in (HERMES_LINUX_CMAKE).
   engine: {
     // With the NDK's C++ runtime it was linked against, which the CMake build packs.
-    files: (t) => (t === "win32-x64" ? ["stillfail_engine.dll", "stillfail_engine.lib", "hermesc.exe"] : ["libjsi.so", "libstillfail_hermes.so", "libc++_shared.so"]),
-    targets: ["android-arm64", "win32-x64"],
+    files: (t) =>
+      t === "win32-x64" ? ["stillfail_engine.dll", "stillfail_engine.lib", "hermesc.exe"]
+      : LINUX(t) ? ["libstillfail_engine.so", "hermesc"]
+      : ["libjsi.so", "libstillfail_hermes.so", "libc++_shared.so"],
+    targets: ["android-arm64", "win32-x64", "linux-x64", "linux-arm64"],
     msvc: true,
     inputs: ["apps/mbui/engine"],
-    recipe: (t) => (t === "win32-x64" ? { hermes: HERMES, cmake: HERMES_CMAKE, targets: ["stillfail_engine", "hermesc"] } : { ndk: NDK, api: ANDROID_API, hermes: HERMES.rn, cmake: ENGINE_ANDROID_CMAKE }),
+    recipe: (t) =>
+      t === "win32-x64" ? { hermes: HERMES, cmake: HERMES_CMAKE, targets: ["stillfail_engine", "hermesc"] }
+      : LINUX(t) ? { hermes: HERMES, cmake: HERMES_LINUX_CMAKE, targets: ["stillfail_engine", "hermesc"] }
+      : { ndk: NDK, api: ANDROID_API, hermes: HERMES.rn, cmake: ENGINE_ANDROID_CMAKE },
     build(t, out) {
       if (t === "win32-x64") return engineWin(out);
+      if (LINUX(t)) return engineLinux(t, out);
       engineAndroid(out);
     },
   },
@@ -372,6 +391,18 @@ const shellCommand = () => [
   // Named by its file (SONAME): the engine that links it is then given its name, not where it was built.
   "--", "-C", "link-arg=-Wl,-soname,libstillfail_shell.so",
 ];
+/// The Linux shell: the crate's cdylib, built on Linux (the prebuild workflow's Ubuntu: glibc 2.39, as the app's GTK 4 needs a
+/// system that new anyway), named by its file as Android's.
+const shellLinux = (t: Target) => [
+  "rustc", "--locked", "-p", "stillfail-shell", "--lib", "--crate-type", "cdylib", "--target", TRIPLE(t), "--release",
+  "--", "-C", "link-arg=-Wl,-soname,libstillfail_shell.so",
+];
+function shellLinuxBuild(t: Target, target: string, out: string) {
+  if (osPlatform() !== "linux" || host() !== t) throw new Error(`shell ${t} is built on a Linux ${t} machine (the prebuild workflow's)`);
+  rustTarget(TRIPLE(t));
+  cargo(shellLinux(t), join(ROOT, "client"), { CARGO_TARGET_DIR: target });
+  copyFileSync(join(target, TRIPLE(t), "release/libstillfail_shell.so"), join(out, "libstillfail_shell.so"));
+}
 /// The Windows shell: the crate's cdylib (a DLL with its import library, which the engine links) and its tests, in one
 /// build, the tests' (whose library is the DLL: the crate has no dev-dependency to build what is below it with other
 /// features), not run (a Mac builds them; CI's Windows runs them). Two builds took 2 of the 8 minutes, 2026-10-23.
@@ -425,6 +456,16 @@ function engineWin(out: string) {
   // natively on Windows; on a Mac with clang-cl and xwin's SDK (cargo-xwin's), Hermes's own tools built for the Mac
   const cross = osPlatform() === "darwin";
   const work = cross ? join(BUILD(), "hermes") : targetDir(join(ROOT, "apps/mbui/engine/target"), "engine");
+  const src = hermesSource(work);
+  const build = join(work, "build");
+  run("cmake", ["-S", src, "-B", build, ...(cross ? hermesCross(src, work) : HERMES_CMAKE)]);
+  run("cmake", ["--build", build, "--target", "stillfail_engine", "hermesc"]);
+  for (const f of ["stillfail_engine.dll", "stillfail_engine.lib"]) copyFileSync(join(build, "stillfail-engine", f), join(out, f));
+  copyFileSync(join(build, "bin", "hermesc.exe"), join(out, "hermesc.exe"));
+}
+/// Hermes's source at HERMES.tag in `work`/hermes (got once), with the engine's in it as one of its directories (it
+/// links Hermes's own targets), put there afresh: its checkout.
+function hermesSource(work: string): string {
   const src = join(work, "hermes");
   mkdirSync(work, { recursive: true });
   if (!existsSync(join(src, ".stillfail-tag")) || readFileSync(join(src, ".stillfail-tag"), "utf8") !== HERMES.tag) {
@@ -435,7 +476,6 @@ function engineWin(out: string) {
     run("curl", ["-fsSL", "--retry", "5", "--retry-all-errors", "--retry-delay", "5", "-o", tgz, `https://github.com/facebook/hermes/archive/refs/tags/${HERMES.tag}.tar.gz`]);
     run(TAR, ["-xzf", tgz, "-C", src, "--strip-components=1"]);
     rmSync(tgz, { force: true });
-    // the loop in Hermes's tree, as one of its directories (it links Hermes's own targets)
     writeFileSync(join(src, "CMakeLists.txt"), readFileSync(join(src, "CMakeLists.txt"), "utf8") + "\nadd_subdirectory(stillfail-engine)\n");
     writeFileSync(join(src, ".stillfail-tag"), HERMES.tag);
   }
@@ -444,11 +484,20 @@ function engineWin(out: string) {
   for (const e of readdirSync(join(ROOT, "apps/mbui/engine"), { withFileTypes: true })) {
     if (e.isFile()) copyFileSync(join(ROOT, "apps/mbui/engine", e.name), join(src, "stillfail-engine", e.name));
   }
+  return src;
+}
+/// The Linux engine (apps/mbui/engine), as Windows' is built on Windows: in Hermes's own CMake build, on a Linux machine
+/// of the target's (the prebuild workflow's Ubuntu), its libhermes and ICU linked into libstillfail_engine.so; with that
+/// build's hermesc.
+function engineLinux(t: Target, out: string) {
+  if (osPlatform() !== "linux" || host() !== t) throw new Error(`engine ${t} is built on a Linux ${t} machine (the prebuild workflow's)`);
+  const work = targetDir(join(ROOT, "apps/mbui/engine/target"), "engine");
+  const src = hermesSource(work);
   const build = join(work, "build");
-  run("cmake", ["-S", src, "-B", build, ...(cross ? hermesCross(src, work) : HERMES_CMAKE)]);
+  run("cmake", ["-S", src, "-B", build, ...HERMES_LINUX_CMAKE]);
   run("cmake", ["--build", build, "--target", "stillfail_engine", "hermesc"]);
-  for (const f of ["stillfail_engine.dll", "stillfail_engine.lib"]) copyFileSync(join(build, "stillfail-engine", f), join(out, f));
-  copyFileSync(join(build, "bin", "hermesc.exe"), join(out, "hermesc.exe"));
+  copyFileSync(join(build, "stillfail-engine", "libstillfail_engine.so"), join(out, "libstillfail_engine.so"));
+  copyFileSync(join(build, "bin", "hermesc"), join(out, "hermesc"));
 }
 /// How Android's engine is built (apps/mbui/engine/android): the NDK's toolchain for arm64, its C++ runtime shared, a
 /// release.
@@ -535,6 +584,9 @@ const P = (name: string): Part => PARTS[name] ?? fail(`no such part: ${name} (${
 const inputsFor = (p: Part, t: Target): string[] => (typeof p.inputs === "function" ? p.inputs(t) : p.inputs ?? []);
 /// Built only on Windows (msvc).
 const onWindows = (part: string, t: Target): boolean => t === "win32-x64" && P(part).msvc === true;
+/// Built only on Linux, a machine of the target's (msvc's Linux targets: the prebuild workflow's Ubuntu): never by the
+/// Mac's natives job nor Windows'.
+const onLinux = (part: string, t: Target): boolean => LINUX(t) && P(part).msvc === true;
 /// This machine's when the part is built for it, else the part's first target (Android's shell and engine on a Mac).
 const defaultTarget = (part: string): Target => {
   const { targets } = P(part);
@@ -689,6 +741,7 @@ async function download(part: string, target: Target, k: string): Promise<string
 function buildHere(part: string, target: Target, k: string): string {
   const started = Date.now();
   if (onWindows(part, target) && !["win32", "darwin"].includes(osPlatform())) throw new Error(`${part} ${target} ${k} is not prebuilt: Windows builds it, or a Mac cross-builds it (node scripts/native.ts prebuild ${part}:${target})`);
+  if (onLinux(part, target) && osPlatform() !== "linux") throw new Error(`${part} ${target} ${k} is not prebuilt: a Linux ${target} machine builds it (the prebuild workflow, gh workflow run prebuild.yml -R ${REPO} --ref <branch>)`);
   log(`${part} ${target} ${k}: not prebuilt; building it here${P(part).inputs && P(part).rust !== false ? " (cargo)" : ""}…`);
   const tmp = fresh(part);
   try {
@@ -717,7 +770,7 @@ async function get(part: string, target: Target, mode: "any" | "fetch" | "build"
       if (got) return got;
     }
     // What is prebuilt (`msvc`) CI builds only in the prebuild workflow, run by hand: anywhere else said, with how.
-    if (mode !== "prebuild" && P(part).msvc && (mode === "fetch" || (onWindows(part, target) && process.env.CI))) {
+    if (mode !== "prebuild" && P(part).msvc && (mode === "fetch" || ((onWindows(part, target) || onLinux(part, target)) && process.env.CI))) {
       throw new Error(`${part} ${target} ${k} is not prebuilt: run the prebuild workflow on the branch, gh workflow run prebuild.yml -R ${REPO} --ref ${process.env.GITHUB_REF_NAME || "<branch>"} (or on a Mac, node scripts/native.ts prebuild ${part}:${target})`);
     }
     if (mode === "fetch" || policy === "offline") throw new Error(`${part} ${target} ${k} is not prebuilt (STILLFAIL_NATIVE=${policy || "-"}, ${mode})`);
@@ -925,7 +978,7 @@ async function main(argv: string[]) {
       const windows = args.includes("--windows");
       const wanted: [string, Target][] = [];
       for (const a of args.filter((a) => a !== "--windows")) { const [p, t] = a.split(":"); wanted.push(pair(t ? [p!, t] : [p!])); }
-      if (wanted.length === 0) for (const [p, t] of ours()) if (onWindows(p, t) === windows) wanted.push([p, t]);
+      if (wanted.length === 0) for (const [p, t] of ours()) if (onWindows(p, t) === windows && !onLinux(p, t)) wanted.push([p, t]);
       const remote = (await published()) ?? fail("the release's assets could not be listed");
       for (const [p, t] of wanted) if (!remote.has(asset(p, t, key(p, t)))) console.log(`${p}:${t}`);
       return;
@@ -940,7 +993,7 @@ async function main(argv: string[]) {
         else { const [p, t] = args[i]!.split(":"); wanted.push(pair(t ? [p!, t] : [p!])); }
       }
       // Default: all of ours that this kind of machine builds (--windows: what only Windows does).
-      if (wanted.length === 0) for (const [p, t] of ours()) if (onWindows(p, t) === windows) wanted.push([p, t]);
+      if (wanted.length === 0) for (const [p, t] of ours()) if (onWindows(p, t) === windows && !onLinux(p, t)) wanted.push([p, t]);
       const remote = (await published()) ?? new Set<string>();
       if (publish && !gh(["release", "view", RELEASE, "-R", REPO, "--json", "name"], { allowFail: true })) {
         throw new Error(`the release ${RELEASE} is not on ${REPO}: make it once (docs/development.md, "Native parts")`);

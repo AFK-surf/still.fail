@@ -24,10 +24,11 @@ SA=out/linux/stage/app
 if [ -n "$APPMOD" ]; then
   EXE=$AM/_build/native/$MODE/build/$(sed -n 's/^name *= *"\(.*\)"/\1/p' "$APPMOD/moon.mod")/$PKG/$PKG.exe
 fi
-# GTK 4 and what the host files use beside it
+# GTK 4 and what the host files use beside it; an app's own (MBUI_LINUX_CFLAGS, MBUI_LINUX_LDFLAGS: still.fail's core,
+# its scripts/linux.sh) after them
 LIBS="gtk4 epoxy pangocairo pangoft2 fontconfig gdk-pixbuf-2.0 libsoup-3.0 zlib"
-CFLAGS=$(pkg-config --cflags $LIBS)
-LDFLAGS="$(pkg-config --libs $LIBS) -lm -lpthread"
+CFLAGS="$(pkg-config --cflags $LIBS) ${MBUI_LINUX_CFLAGS:-}"
+LDFLAGS="$(pkg-config --libs $LIBS) -lm -lpthread ${MBUI_LINUX_LDFLAGS:-}"
 STUBS='"linux_app.c", "linux_render.c", "linux_text.c", "linux_image.c", "linux_views.c", "linux_stream.c", "linux_listen.c", "linux_browser_login.c"'
 
 # A package's moon.pkg for Linux: its native stubs compiled with GTK's flags (Objective-C's ARC flag dropped), a

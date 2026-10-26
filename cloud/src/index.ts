@@ -91,7 +91,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
       return serveRelease(request, env.RELEASES, release, type);
     }
     // The apps' latest builds at links that stay (the site's download buttons; under /releases/, which cloud's routes send here).
-    const app = /^\/releases\/latest\/(mac|android|win|mac-beta|android-beta|win-beta|android-mbui|mac-mbui|win-mbui)$/.exec(path)?.[1];
+    const app = /^\/releases\/latest\/(mac|android|win|mac-beta|android-beta|win-beta|android-mbui|mac-mbui|win-mbui|linux-mbui)$/.exec(path)?.[1];
     if (app) {
       const file = await latestDownload(env.RELEASES, app);
       if (!file || !releaseType(file)) return notFound();

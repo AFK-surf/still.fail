@@ -219,7 +219,7 @@ pub fn settings_parts(c : @ui.Ctx, core : Core, here : @settings.Here) -> Array[
     device.push(settings_row(BarSettings, "bars", "view-columns", @sf.t("android-misc.bar.title"), value=@settings.bars_value(core)))
   }
   let platform = @ui.platform()
-  if platform == 0 || platform == 3 {
+  if platform == 0 || platform == 3 || platform == 5 {
     device.push(settings_row(Shortcuts, "shortcuts", "command", @sf.t("web-pages.settings.nav.shortcuts")))
   }
   if platform == 0 {
