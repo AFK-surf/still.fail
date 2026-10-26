@@ -761,6 +761,9 @@ web-main.chat.copyTranscript
 web-main.chat.deleteFailed
 web-main.chat.empty
 web-main.chat.fromSlack
+web-main.chat.keep
+web-main.chat.keep.done
+web-main.chat.keep.what
 web-main.chat.linkCopied
 web-main.chat.newMessages
 web-main.chat.notSent
@@ -776,6 +779,9 @@ web-main.chat.toLatest
 web-main.chat.transcriptCopied
 web-main.chat.transcriptNone
 web-main.chat.transcriptsCopied
+web-main.chat.unkeep
+web-main.chat.unkeep.done
+web-main.chat.unkeep.what
 web-main.chat.unpin
 web-main.chat.unpinFailed
 web-main.chat.unreadLine

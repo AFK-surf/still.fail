@@ -1102,7 +1102,7 @@ let en : Map[String, String] = {
   "web-pages.archivePolicy.textLead": "The decision model reads this first when judging a chat; options are listed below",
   "web-pages.archivePolicy.title": "Archive policy",
   "web-pages.archiving.adminOnly": "Only workspace managers can change this.",
-  "web-pages.archiving.auto.description": "A station puts finished chats that have been idle for a while into the archive on its own: nothing running, nothing waiting for someone, nothing unread by whoever started it. Archived chats can be restored any time; pinned chats are never archived on their own. Each station has its own setting, which only workspace managers can change.",
+  "web-pages.archiving.auto.description": "A station puts finished chats that have been idle for a while into the archive on its own: nothing running, nothing waiting for someone, nothing unread by whoever started it. Archived chats can be restored any time; pinned and kept chats are never archived on their own. Each station has its own setting, which only workspace managers can change.",
   "web-pages.archiving.auto.title": "Automatic archiving",
   "web-pages.archiving.days": "{n} days",
   "web-pages.archiving.hintNoReview": "No station has archive suggestions on, so After review suggests nothing; turn them on in Automatic decisions to use it.",

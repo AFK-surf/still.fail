@@ -281,15 +281,15 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   const works = agent(null, "running");
   const row = (agents: J[], unread: boolean): J => ({ agents: structuredClone(agents), unread });
   assert.ok(p.settled(row([done], false)));
-  // Pinned, it is never offered for the archive; nor one a station from before pins kept out of it says it keeps.
-  const kept = row([done], false);
-  kept.pinned = 1700000000000;
-  assert.ok(p.pinned(kept));
-  assert.ok(!p.archivable(kept));
+  // Pinned, it is never offered for the archive; nor one the viewer kept (保留), pinned or not.
+  const pinned = row([done], false);
+  pinned.pinned = 1700000000000;
+  assert.ok(p.pinned(pinned));
+  assert.ok(!p.archivable(pinned));
   assert.ok(!p.pinned(row([done], false)));
-  const keptBefore = row([done], false);
-  keptBefore.archiveReminderDismissed = true;
-  assert.ok(!p.archivable(keptBefore));
+  const kept = row([done], false);
+  kept.archiveReminderDismissed = true;
+  assert.ok(!p.archivable(kept));
   assert.equal(p.rowStateText(row([done], false)), "已完成");
   // A recommendation shows in how the row is drawn (archivable, below), not in its words.
   const recommended = row([done], false);

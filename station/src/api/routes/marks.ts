@@ -1,5 +1,5 @@
 // What a viewer marks on chats and sessions, written straight to the store (admin/mod.rs): read positions, names,
-// pins (keeping, as clients from before ask it), dismissing, closing a card, widget states. What needs a running session (messages, archiving, stopping)
+// pins, keeping, dismissing, closing a card, widget states. What needs a running session (messages, archiving, stopping)
 // is the hub's (routes/hub.ts).
 import { type Request, type Answer, error, json, percentDecode } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
@@ -124,25 +124,20 @@ export const routes = ({ read, store }: Tools): Route[] => {
           }),
       }),
     ),
-    // A chat kept out of the archive (PUT), or let go, as clients from before a pin did that ask it (their 保留): the
-    // pin of the session the chat is the item of (its home, else the first to join it).
-    ...["PUT", "DELETE"].map(
-      (method): Route => ({
-        method,
-        pattern: /^\/*threads\/+([^/]+)\/+keep(?:\/.*)?$/,
-        handle: (r, [rawId]) =>
-          write((s) => {
-            const t = thread(s, segment(rawId!));
-            const key = t.home ?? s.threadSessions(t.id)[0]?.session;
-            if (key === undefined) throw new Refused(404, `unknown thread ${t.id}`);
-            s.setPin(r.viewer.email, key, method === "PUT");
-            return ok({ kept: method === "PUT" });
-          }),
-      }),
-    ),
+    // A chat the viewer kept (PUT …/keep, below) let go.
+    {
+      method: "DELETE",
+      pattern: /^\/*threads\/+([^/]+)\/+keep(?:\/.*)?$/,
+      handle: (r, [rawId]) =>
+        write((s) => {
+          const t = thread(s, segment(rawId!));
+          s.unkeepChat(r.viewer.email, t.id);
+          return ok({ kept: false });
+        }),
+    },
     {
       method: "PUT",
-      pattern: /^\/*threads\/+([^/]+)\/+(read|title|dismissed|closed-card)(?:\/.*)?$/,
+      pattern: /^\/*threads\/+([^/]+)\/+(read|title|keep|dismissed|closed-card)(?:\/.*)?$/,
       handle: (r, [rawId, action]) =>
         write(async (s) => {
           const t = thread(s, segment(rawId!));
@@ -159,6 +154,9 @@ export const routes = ({ read, store }: Tools): Route[] => {
               s.setThreadTitle(t.id, title(input(r)));
               return threadView(r, t.id);
             }
+            case "keep":
+              s.keepChat(viewer, t.id);
+              return ok({ kept: true });
             // A card (or a need) the viewer will not take up (its post's entry `n`): off their list, on every device of
             // theirs; still pending for everyone else.
             case "dismissed": {

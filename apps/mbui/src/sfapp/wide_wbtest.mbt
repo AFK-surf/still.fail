@@ -91,6 +91,31 @@ test "wide: a row's menu from its right click pins it (chat.pin) and closes" {
 }
 
 ///|
+test "wide: a row's menu keeps its chat out of the archive (保留, chat.keep) and lets it go (取消保留); pinned, none: a pin keeps it already" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="home-pins")
+  let menu = fn(title : String) {
+    let (x, y) = t.find(title).unwrap()
+    t.right_click(x, y)
+  }
+  menu("夜里的构建又失败了")
+  assert_true(t.query(MenuItem, label="固定") is Some(_))
+  t.click(MenuItem, label="保留")
+  let kept = named(calls, "chat.keep")
+  assert_eq(kept.length(), 1)
+  assert_true(flag(Some(kept[0].params), "kept"))
+  t.key(@ui.key_escape)
+  menu("盯着 CI，绿了告诉我")
+  t.click(MenuItem, label="取消保留")
+  assert_true(!flag(Some(named(calls, "chat.keep")[1].params), "kept"))
+  t.key(@ui.key_escape)
+  menu("给设置页加一个深色模式开关")
+  assert_true(t.query(MenuItem, label="取消固定") is Some(_))
+  assert_true(t.query(MenuItem, label="保留") is None)
+  assert_true(t.query(MenuItem, label="取消保留") is None)
+}
+
+///|
 test "wide: a row's menu's 复制 session 文件路径 copies where each agent's session is kept (session.transcript)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)

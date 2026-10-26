@@ -4,7 +4,7 @@
 // `mode`: "home" (signed in, the chats), "signin" (signed out), "loading" (the list being read), "empty" (a
 // workspace with nothing in it yet); "chat" (the first row's chat open: chat_fixture.mbt), "chat-loading" (it being
 // read), "chat-long" (thousands of messages in it); "long" (the chats and many weeks more of them: for flinging,
-// scripts/android.sh fling-test).
+// scripts/android.sh fling-test); "home-pins" (the chats as a station that knows pins says them: one pinned, one kept).
 
 ///|
 pub(all) struct Fixture {
@@ -385,6 +385,24 @@ pub fn webdemo_days() -> Array[Json] {
 }
 
 ///|
+/// A row as a station that knows pins says it (home-pins): 给设置页加一个深色模式开关 pinned, 盯着 CI，绿了告诉我 kept
+/// (保留), the rest neither.
+fn fix_pins(r : Json) -> Json {
+  match r {
+    Object(m) => {
+      let o = m.copy()
+      let id = text(Some(r), "id")
+      o["pinned"] = Json::boolean(id == "c4")
+      if id == "c5" {
+        o["kept"] = Json::boolean(true)
+      }
+      Json::object(o)
+    }
+    other => other
+  }
+}
+
+///|
 /// The chats of the first workspace, newest first, by day.
 pub fn fixture_days(f : Fixture) -> Array[Json] {
   if f.mode == "webdemo" {
@@ -433,6 +451,8 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
       "watch": { "text": "监控中：主干构建", "ask": "它会在归档里继续盯着。" },
     }),
   ]
+  // home-pins: rows from a station that knows pins, for their menus' 固定 and 保留
+  let today = if f.mode == "home-pins" { today.map(fix_pins) } else { today }
   let yesterday = [
     row("c6", "和 Ana 一起看新版的引导页", "ws1/st1", "昨天 21:14", {
       "tone": "other",

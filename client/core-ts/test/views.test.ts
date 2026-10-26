@@ -827,7 +827,7 @@ test("groups_by_the_viewers_day_newest_first", async () => {
   assert.deepEqual(v.stations, [{ station: "ws/st", id: "st", name: "studio", state: "online", running: 0, doing: "正在连接" }]);
 });
 
-test("a_chat_a_station_from_before_pins_keeps_out_of_the_archive_has_the_rows_color_and_order", async () => {
+test("a_chat_the_viewer_kept_out_of_the_archive_has_the_rows_color_and_order", async () => {
   const t = setup();
   const now = t.host.nowMs();
   const u = ui();
@@ -846,6 +846,8 @@ test("a_chat_a_station_from_before_pins_keeps_out_of_the_archive_has_the_rows_co
     const shown = v.days[0].items.find((r: J) => r.id === "done");
     assert.equal(shown.settled, dismissed ? undefined : true);
     assert.equal(shown.archivable, dismissed ? undefined : true);
+    // Kept by the viewer: the row says so (its menu lets it go).
+    assert.equal(shown.kept, dismissed ? true : undefined);
     assert.equal(shown.stateText, "已完成");
   }
 });

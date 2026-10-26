@@ -1481,6 +1481,25 @@ test("pinned chats survive idle archiving, their agent's other chats too, but ca
   await r.close();
 });
 
+test("kept chats survive idle archiving but can be archived by hand", async () => {
+  const r = new Rig();
+  const [key, thread] = newSession(r.hub, chat());
+  r.store.keepChat("alice", thread.id);
+  autoArchive(r.hub, Date.now() + 3 * 86_400_000);
+  assert.equal(r.session(key).archivedAt, null);
+  assert.equal(r.store.getThread(thread.id)!.hiddenAt, null);
+  const second = openChat(r.hub, key, "alice", null);
+  r.store.keepChat("alice", second.id);
+  autoArchive(r.hub, Date.now() + 3 * 86_400_000);
+  assert.equal(r.store.getThread(second.id)!.hiddenAt, null);
+  archiveChat(r.hub, second.id, true);
+  assert.ok(r.store.getThread(second.id)!.hiddenAt !== null);
+  archiveChat(r.hub, thread.id, true);
+  assert.ok(r.session(key).archivedAt !== null);
+  await settle();
+  await r.close();
+});
+
 test("where only what the archive review recommended is archived on its own, an idle chat waits for its recommendation", async () => {
   const r = new Rig();
   const later = Date.now() + 3 * 86_400_000;

@@ -307,6 +307,7 @@ export function autoArchive(hub: Hub, now: number): number | null {
   const busy = (key: string) => working(key) || stats.get(key)?.lastTurn?.declared === "block";
   // A chat someone pinned stays in the lists until put away by hand.
   const pinned = store.pinnedSessions();
+  const kept = store.keptChats(null);
   // Where only what the archive review recommended goes (`autoArchiveReviewed`): none while the review is off.
   const recommended = (thread: number) => !autoArchiveReviewed || (automaticDecisions.completion.enabled && store.archiveSuggested(thread));
   for (const s of live) {
@@ -317,13 +318,13 @@ export function autoArchive(hub: Hub, now: number): number | null {
     const lingering = slack && idle([s.lastActiveAt, s.shownAt], slackArchiveMs) && !working(s.key);
     if (!done && !lingering) continue;
     if (!lingering && !threads.every((t) => recommended(t.thread.id))) continue;
-    if (threads.some((t) => unread(t.thread))) continue;
+    if (threads.some((t) => kept.has(t.thread.id) || unread(t.thread))) continue;
     log.info("hub", "archiving an idle session", { session: s.key });
     archiveBy(hub, s.key, true, AUTO);
   }
   for (const t of own) {
     const said = store.lastMessage(t.id)?.createdAt ?? null;
-    if (!idle([t.createdAt, said, t.shownAt]) || unread(t) || !recommended(t.id)) continue;
+    if (kept.has(t.id) || !idle([t.createdAt, said, t.shownAt]) || unread(t) || !recommended(t.id)) continue;
     if (store.threadSessions(t.id).some((m) => pinned.has(m.session) || busy(m.session))) continue;
     log.info("hub", "archiving an idle chat", { thread: t.id });
     store.setThreadHidden(t.id, true, AUTO);

@@ -1075,7 +1075,7 @@ let zh : Map[String, String] = {
   "web-pages.archivePolicy.textLead": "决策模型判断 chat 时先读取这段说明；选项逐项列在下方",
   "web-pages.archivePolicy.title": "归档策略",
   "web-pages.archiving.adminOnly": "只有 workspace 管理员能修改。",
-  "web-pages.archiving.auto.description": "station 会把做完、又空闲了一段时间的 chat 自动收进归档：没有任务在跑、没在等人、发起人没有未读。归档后随时可以在归档里还原；固定的 chat 不会被自动归档。每台 station 分开设置，只有 workspace 管理员能改。",
+  "web-pages.archiving.auto.description": "station 会把做完、又空闲了一段时间的 chat 自动收进归档：没有任务在跑、没在等人、发起人没有未读。归档后随时可以在归档里还原；固定和「保留」的 chat 不会被自动归档。每台 station 分开设置，只有 workspace 管理员能改。",
   "web-pages.archiving.auto.title": "自动归档",
   "web-pages.archiving.days": "{n} 天",
   "web-pages.archiving.hintNoReview": "现在没有 station 开启归档建议，所以「按模型判断」不会有任何提示；要用它，先在自动决策里开启。",
