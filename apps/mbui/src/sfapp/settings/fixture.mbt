@@ -337,6 +337,8 @@ pub fn fixture_page(mode : String) -> String {
     "settings-local-fonts" => "fonts"
     "settings-security-confirm" | "settings-security-join" | "settings-security-off" => "security"
     "settings-notify-off" | "settings-lock-prompt" => "home"
+    // (the notifications' page, the system having refused them: its banner's way to allow them)
+    "settings-notify-denied" => "notifications"
     "settings-station" => "station:ws1/st1"
     "settings-station-offline" => "station:ws1/st2"
     "settings-memory" => "memory:ws1/st1"
