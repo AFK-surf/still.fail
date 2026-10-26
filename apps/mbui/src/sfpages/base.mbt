@@ -89,6 +89,7 @@ using @sfbase {
   flash_of,
   flight_bubble,
   flight_carried,
+  flight_desk_ms,
   flight_carry_shift,
   flight_ground_of,
   flight_landing,

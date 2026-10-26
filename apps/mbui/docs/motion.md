@@ -127,6 +127,8 @@ of them. Their numbers are the web's at the same place (paths from the repositor
 - A new chat's first words: words sent like any (520 ms on the flight's curve, the list coming up with them on their
   way up), not the web's 480 ms on `--m-ease` (madeChat.ts toMadeChat), which lands three quarters of the way in its
   first tenth: beside every other send it read as a jump (the user, 2026-10-27: 「非 new chat 的发消息比 new chat 流畅很多」).
+  The composer going down to its chat's foot as they set out goes on their way too, not a page's 340 ms ease-out, which
+  went a fifth of 200 in its first frame, ahead of words still setting off (the user: 「composer 好像还是会一帧动老远」).
 - A card answered from here: its options close as the answer comes in, one motion (list_turns.mbt `answered_here`),
   not in a turn after it: the list went up for the answer and then down again for the options (the user, 2026-10-27:
   「点决策感觉动效怪怪的」).

@@ -616,28 +616,30 @@ test "wide: a new chat becomes its chat as the web's: its scene up and away, the
   let typed = seen_once(t, words)
   assert_true(typed.1 > by && typed.1 < by + bh)
   assert_at((bx, by), { let (x, y, _, _) = composer_glass(t); (x, y) })
-  // half way: the scene gone up as it fades, the composer on its way down and wider
+  // half way: the scene gone up as it fades
   t.run_for(new_leave_ms / 2.0)
   let up = match heading() {
     Some(y) => y
     None => fail("the scene gone at once")
   }
   assert_true(up < title - 8.0, msg="the scene goes up: \{title} → \{up}")
+  // the scene gone at 140 ms
+  t.run_for(new_leave_ms / 2.0 + 1.0)
+  assert_true(heading() is None)
+  // half the words' way: the composer on its way down and wider, on their way (flight.mbt)
+  t.run_for(sent + flight_desk_ms / 2.0 - t.time())
   let (mx, my, mw, mh) = composer_glass(t)
   // (as tall as the new chat's box was, about: focused, the chat's is a box too, Chat.tsx multiline)
   ignore(mh)
   assert_true(my > by + 20.0 && mx < bx && mw > bw, msg="the composer on its way: \{(mx, my, mw, mh)} from \{(bx, by, bw, bh)}")
-  // the scene gone at 140 ms
-  t.run_for(new_leave_ms / 2.0 + 1.0)
-  assert_true(heading() is None)
-  // the composer at the chat's foot at 340 ms, a capsule as wide as the column and its curves
-  t.run_for(sent + @sfpages.page_move_ms + 1.0 - t.time())
+  // the composer at the chat's foot as the words land (520 ms), a capsule as wide as the column and its curves
+  t.run_for(sent + flight_desk_ms + 1.0 - t.time())
   let (ex, ey, ew, eh) = composer_glass(t)
   assert_true(ey + eh > 800.0 - 30.0, msg="at the foot: \{(ex, ey, ew, eh)}")
   assert_true(ew > bw)
   t.frame()
   assert_at((ex, ey), { let (x, y, _, _) = composer_glass(t); (x, y) })
-  // the words in their bubble under the chat's bar at 480 ms, gone across to its right
+  // the words in their bubble under the chat's bar, gone across to its right
   t.run_for(sent + flight_carry_ms + 34.0 - t.time())
   assert_true(send_flight.val is None)
   let landed = seen_once(t, words)
