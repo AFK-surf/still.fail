@@ -57,6 +57,8 @@ priv struct Md {
   code : (String, String) -> (() -> Unit)?
   /// links to screens and 共享调试 as a chat draws them
   screens : Screens?
+  /// the title of the chat a link written bare names (the core's, with the message): what the link reads as
+  chat_title : (String) -> String?
   /// the files its paths name are a session's (an agent's message): drawn as chips that tell of them (path_link)
   paths : Bool
   /// the lines' height over the words' size (0: Markdown.kt's 1.65)
@@ -423,6 +425,21 @@ fn bare_screens(xs : Array[MdInline], out : Array[String]) -> Unit {
 }
 
 ///|
+/// The links to chats written bare among these words, as bare_screens finds those to screens.
+fn bare_chats(xs : Array[MdInline], out : Array[String]) -> Unit {
+  for x in xs {
+    match x {
+      Link(href, c) =>
+        if is_chat_link(href) && is_bare_link(md_plain(c), href) && !out.contains(href) {
+          out.push(href)
+        }
+      Emph(c) | Strong(c) | Strike(c) => bare_chats(c, out)
+      _ => ()
+    }
+  }
+}
+
+///|
 /// The web's own tones where the message's parts use them (the wide
 /// screen's palette, as Markdown.kt's webMuted, webSubtle, webLine).
 fn web() -> Palette {
@@ -441,7 +458,8 @@ fn web() -> Palette {
 /// `bleed`: how far past the column either side the page lets its tables scroll (Md::table: a chat's margin).
 /// `line`: the lines' height over the size (0: Markdown's own); `one_line`: its first block's words alone, on one line
 /// as wide as they are, cut with an ellipsis where the column is narrower (a notice closed: Chat.css.ts
-/// `msgSystemBox:not([data-open])`).
+/// `msgSystemBox:not([data-open])`). `chat_title`: the title of the chat a link written bare names, its reference
+/// reading as it (the message's chats, as the core says them).
 pub fn markdown(
   c : @ui.Ctx,
   text : String,
@@ -458,6 +476,7 @@ pub fn markdown(
   found? : Array[String] = [],
   code? : (String, String) -> (() -> Unit)? = fn(_, _) { None },
   screens? : Screens? = None,
+  chat_title? : (String) -> String? = fn(_) { None },
   document? : Bool = false,
   bleed? : Double = 0.0,
   paths? : Bool = false,
@@ -475,6 +494,7 @@ pub fn markdown(
     found,
     code,
     screens,
+    chat_title,
     paths,
     line,
     serif: false,
@@ -592,6 +612,7 @@ pub fn markdown_part(
     found,
     code: fn(_, _) { None },
     screens: None,
+    chat_title: fn(_) { None },
     paths: false,
     line,
     serif,
@@ -1017,6 +1038,15 @@ fn Md::words(
     }
     None => ()
   }
+  // a bare link to a chat reads as its title too, where the message says it (a reference: `@` and its title)
+  let chats = []
+  bare_chats(xs, chats)
+  for href in chats {
+    match (self.chat_title)(href) {
+      Some(title) => titles[href] = title
+      None => ()
+    }
+  }
   // bold for a heading's 700; a table's head's 500 (medium) is the paragraph's own weight
   // (a chat's mention in the accent's ink, which reads in words; the accent itself was 2.5 to 1 on the page)
   runs_of(xs, runs, weight >= 600, false, false, "", p.accent_text, titles, self.paths)
@@ -1090,15 +1120,20 @@ fn runs_of(
       Emph(c) => runs_of(c, out, bold, true, strike, link, accent, titles, paths)
       Strong(c) => runs_of(c, out, true, italic, strike, link, accent, titles, paths)
       Strike(c) => runs_of(c, out, bold, italic, true, link, accent, titles, paths)
+      Link(href, c) if link == "" && is_chat_link(href) => {
+        // a reference to another chat: `@` and its title (a bare link's as the message says it), in the accent's
+        // ink (the `@` not lighter: at 70% it was 2.5 to 1)
+        let words = md_plain(c)
+        let shown = match titles.get(href) {
+          Some(title) if is_bare_link(words, href) => title
+          _ => words
+        }
+        out.push(@ui.span("@", bold~, italic~, strike~, link=href, color=accent))
+        out.push(@ui.span(shown, bold~, italic~, strike~, link=href, color=accent))
+      }
       // a bare link to a screen or a station's 共享调试: its title, leading where it does
       Link(href, c) if link == "" && titles.get(href) is Some(title) && is_bare_link(md_plain(c), href) =>
         out.push(@ui.span(title, bold~, italic~, strike~, link=href))
-      Link(href, c) if link == "" && is_chat_link(href) => {
-        // a reference to another chat: `@` and its title, in the accent's
-        // ink (the `@` not lighter: at 70% it was 2.5 to 1)
-        out.push(@ui.span("@", bold~, italic~, strike~, link=href, color=accent))
-        out.push(@ui.span(md_plain(c), bold~, italic~, strike~, link=href, color=accent))
-      }
       Link(href, c) => runs_of(c, out, bold, italic, strike, href, accent, titles, paths)
       Image(src, alt) => {
         // its file's name, as read (`web%2Dfolded.png` is web-folded.png: Markdown.kt fileNameOf)

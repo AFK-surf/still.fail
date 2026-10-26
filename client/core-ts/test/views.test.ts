@@ -1312,6 +1312,24 @@ test("a_notice_comes_with_its_words_read_as_markdown_a_chat_it_opened_a_link_to_
   assert.equal(u.value.messages[1].md, undefined);
 });
 
+test("a_message_says_the_chats_it_links_to_their_titles_and_which_are_archived", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  t.set({ topic: "archivedRows", station: "ws/a" }, [{ ...row("c-old", now), title: "旧的", archived: { at: now, by: "auto" } }]);
+  t.set(rows("ws/a"), [row("c-live", now)]);
+  const live = "https://app.still.fail/o/ws/a/c-live";
+  const old = "https://app.still.fail/o/ws/a/c-old";
+  // One linked bare, one archived in a reference, one no list has; a message with none says none.
+  t.set(pageOf("ws/a", 7), page(1, [`看 ${live} 和 [那个](${old})，还有 https://app.still.fail/o/ws/a/c-none`, "没有链接"], null));
+  t.set(overview("ws/a"), overviewOf([], []));
+  await t.read(u, 1);
+  assert.deepEqual(u.value.messages.map((m: J) => m.chats), [[{ href: old, title: "旧的", archived: true, note: "已归档" }, { href: live, title: "c-live 的标题" }], undefined]);
+});
+
 test("a_card_answered_from_here_stays_answered_once_its_message_leaves_the_outbox", () => {
   const t = setup();
   const views = t.views;

@@ -1873,6 +1873,18 @@ export interface RuntimeInstall {
 	percent?: number;
 }
 
+/** A chat a message links to (views.ts #linkedChats). */
+export interface LinkedChat {
+	/** The link as it is written in the message. */
+	href: string;
+	/** The chat's title as its list says it: what a link to it written bare reads as. */
+	title: string;
+	/** It is archived (its station's archivedRows). Absent otherwise. */
+	archived?: boolean;
+	/** Where it stands in words, where its list's row is not there to say it: 已归档. Absent otherwise. */
+	note?: string;
+}
+
 /** still.fail's notice as a chat shows it (core views.ts noticeOf). */
 export interface NoticeShown {
 	/** It says something failed (the station began it with ⚠️): drawn in red. */
@@ -2006,6 +2018,11 @@ export interface ChatMessage {
 	 * than it.
 	 */
 	install?: RuntimeInstall;
+	/**
+	 * In a chat's page: the chats its words link to that their stations' lists have (archived ones too), each
+	 * once. Absent when none.
+	 */
+	chats?: LinkedChat[];
 	/**
 	 * still.fail's own notice as the chat shows it (views.ts noticeOf): whether it says a failure, its words as a line
 	 * of the UI, where its link to `profile` begins. Absent for every other message.

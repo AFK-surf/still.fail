@@ -9,7 +9,7 @@
 ///|
 /// A link a message's words draw (`id`: its words' own, @ui's rich text `on_link_shown`; `words`: what they say of it)
 /// in a chat of station `station`: its card over it while the pointer rests on it, a file's its message's agent
-/// `agent` names (file_peek), a chat's (chat_peek) or a web link's.
+/// `agent` names (file_peek), a chat's (chat_peek: as the message's `chats` say it, one archived) or a web link's.
 pub fn link_peek(
   c : @ui.Ctx,
   src : Source,
@@ -18,6 +18,7 @@ pub fn link_peek(
   words : String,
   id : Int,
   agent? : String = "",
+  chats? : Array[LinkedChat] = [],
 ) -> Unit {
   if station == "" {
     return
@@ -32,7 +33,7 @@ pub fn link_peek(
     None => ()
   }
   if @sf.is_chat_link(href) {
-    chat_peek(c, src, station, href, id)
+    chat_peek(c, src, station, href, id, chats.iter().find_first(fn(l) { l.href == href }))
     return
   }
   if !(href.has_prefix("https://") || href.has_prefix("http://")) {
@@ -684,20 +685,37 @@ fn chat_named(src : Source, here : String, href : String) -> Named {
 
 ///|
 /// A reference to a chat (`href`) in a chat of station `here`: its card over it while the pointer rests on it, read as
-/// the pointer comes onto it.
-fn chat_peek(c : @ui.Ctx, src : Source, here : String, href : String, id : Int) -> Unit {
+/// the pointer comes onto it; `linked`, the chat as its message says it.
+fn chat_peek(c : @ui.Ctx, src : Source, here : String, href : String, id : Int, linked : LinkedChat?) -> Unit {
   if c.hovered(id) {
     ignore(chat_named(src, here, href))
   }
-  hover(c, "chat-peek/" + id.to_string(), id, fn() { chat_card(c, src, here, href) }) |> ignore
+  hover(c, "chat-peek/" + id.to_string(), id, fn() { chat_card(c, src, here, href, linked) }) |> ignore
 }
 
 ///|
 /// The card (RefPreview), from the workspace's list: the chat's mark, its title (one line, 500) and when it was last
 /// active (muted, at the end); where it is when that is another station (its mark and name), and that the link is its
-/// agent's execution history; then where it stands, or the last thing said in it (three lines at most). A chat not in
-/// the list (archived, or another workspace's) says only that; bars while the list or the link is read.
-fn chat_card(c : @ui.Ctx, src : Source, here : String, href : String) -> Unit {
+/// agent's execution history; then where it stands, or the last thing said in it (three lines at most). One archived
+/// (as its message says it: `linked`), its title and that it is; any other chat not in the list (another workspace's)
+/// says only that; bars while the list or the link is read.
+fn chat_card(c : @ui.Ctx, src : Source, here : String, href : String, linked : LinkedChat?) -> Unit {
+  match linked {
+    Some(l) if l.archived => {
+      c.box(style=peek_rich, fn() {
+        c.box(style=peek_chat_title, fn() {
+          c.box(style=peek_ref, fn() { c.text(l.title, style=peek_title) |> ignore }) |> ignore
+        })
+        |> ignore
+        if l.note != "" {
+          c.text(l.note, style=peek_excerpt) |> ignore
+        }
+      })
+      |> ignore
+      return
+    }
+    _ => ()
+  }
   let (station, key, history) = match chat_named(src, here, href) {
     Chat(station, key, history) => (station, key, history)
     Asking => {

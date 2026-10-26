@@ -7,15 +7,16 @@
 pub let absolute_times : Ref[Bool] = { val: false }
 
 ///|
-/// Plain words as a message draws them (Markdown.kt withRefs, the web's ChatRef.tsx WithRefs): `[title](…/chats/…)` a
-/// reference to that chat (`@` a little lighter, its title, in `accent`), a web address written bare a link.
-pub fn message_runs(s : String, accent : Int64) -> Array[@ui.Run] {
+/// Plain words as a message draws them (Markdown.kt withRefs, the web's ChatRef.tsx WithRefs): `[title](its link)` a
+/// reference to that chat (`@` a little lighter, its title, in `accent`), a web address written bare a link, one to a
+/// chat a reference too, reading as its title where `chat_title` says it (the message's chats, as the core says them).
+pub fn message_runs(s : String, accent : Int64, chat_title? : (String) -> String? = fn(_) { None }) -> Array[@ui.Run] {
   let out : Array[@ui.Run] = []
   let words = StringBuilder()
   let flush = fn() {
     let w = words.to_string()
     if w != "" {
-      bare_links(w, out)
+      bare_links(w, out, accent, chat_title)
     }
     words.reset()
   }
@@ -32,7 +33,7 @@ pub fn message_runs(s : String, accent : Int64) -> Array[@ui.Run] {
           match rest.find(")") {
             Some(end) if !title.contains("\n") => {
               let href = rest.view(end_offset=end).to_string()
-              if href.contains("/chats/") && !href.contains(" ") {
+              if @sf.is_chat_link(href) && !href.contains(" ") {
                 flush()
                 out.push(@ui.span("@", link=href, color=@sf.alpha(accent, 0.7)))
                 out.push(@ui.span(title, link=href, color=accent))
@@ -54,8 +55,9 @@ pub fn message_runs(s : String, accent : Int64) -> Array[@ui.Run] {
 }
 
 ///|
-/// Words with the web addresses in them as links (bareLinks.ts: one ends at a space or at Chinese).
-fn bare_links(s : String, out : Array[@ui.Run]) -> Unit {
+/// Words with the web addresses in them as links (bareLinks.ts: one ends at a space or at Chinese); one to a chat a
+/// reference to it (message_runs).
+fn bare_links(s : String, out : Array[@ui.Run], accent : Int64, chat_title : (String) -> String?) -> Unit {
   let mut from = 0
   let mut i = 0
   let n = s.length()
@@ -80,7 +82,12 @@ fn bare_links(s : String, out : Array[@ui.Run]) -> Unit {
           out.push(@ui.plain(s.view(start_offset=from, end_offset=i).to_string()))
         }
         let href = s.view(start_offset=i, end_offset=j).to_string()
-        out.push(@ui.link(href, href))
+        if @sf.is_chat_link(href) {
+          out.push(@ui.span("@", link=href, color=@sf.alpha(accent, 0.7)))
+          out.push(@ui.span(chat_title(href).unwrap_or(href), link=href, color=accent))
+        } else {
+          out.push(@ui.link(href, href))
+        }
         from = j
         i = j
         continue

@@ -1,8 +1,8 @@
 // What a chat offers as Android's does, over the fixture's chat with its views edited for each case: its station's tag
 // opens the station's card (PageParts.kt ChatStationChip), a notice's word installs a runtime or reports a failure,
 // one about a profile leads to it, one saying a chat was opened links to it (Chat.kt SystemNotice), a waiting message's
-// line installs (BlockedLine), a Slack user's name in a history offers 这是我 (History.kt SlackName), and the chat's
-// sheet opens it in Slack or Feishu.
+// line installs (BlockedLine), a link to an archived chat reads as its title and its card says so (ChatRef.tsx), a
+// Slack user's name in a history offers 这是我 (History.kt SlackName), and the chat's sheet opens it in Slack or Feishu.
 
 ///|
 /// `v` with `more` said over its fields (an object; anything else as it is).
@@ -50,6 +50,7 @@ fn edited_core(
   edit : (String, Json) -> Json,
   answer? : (String) -> Json = fn(_) { Json::object({}) },
   epoch? : Ref[Int] = Ref::new(0),
+  platform? : Int = 2,
 ) -> @ui.Tester {
   reset()
   let base = fixture(mode)
@@ -70,7 +71,7 @@ fn edited_core(
     },
   }
   open_fixture_over(mode, src)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform~)
   t.run_for(@ui.nav_push_ms)
   t
 }
@@ -240,6 +241,38 @@ test "a notice that a chat was opened: its line is its Markdown drawn, the chat'
     Chat(r) => assert_eq(r.session, "s-c2")
     _ => fail("not a chat")
   }
+}
+
+///|
+test "an agent's link to an archived chat written bare: its title as the core says it, its card saying it is archived" {
+  let calls : Array[Made] = []
+  let link = "https://app.still.fail/o/ws1/st1/c-old"
+  let words = "看 \{link}"
+  let t = edited_core(
+    calls,
+    "chat",
+    fn(name, v) {
+      if name == "chat" {
+        // (the core's tree of its words, and the chats they link to as their lists have them: views.ts drawn)
+        with_chat_message(v, 11.0, [
+          ("text", Json::string(words)),
+          ("md", [["p", [[0, 2], ["a", [[2, 40]], { "href": Json::string(link) }]]]]),
+          ("chats", [{ "href": Json::string(link), "title": "旧的对话", "archived": true, "note": "已归档" }]),
+        ])
+      } else {
+        v
+      }
+    },
+    // (a mouse's: what a link shows while the pointer rests on it)
+    platform=0,
+  )
+  assert_true(t.find("看 @旧的对话") is Some(_), msg="its title, not its link")
+  assert_true(t.find(link) is None)
+  assert_true(t.find("已归档") is None)
+  let (x, y, w, h) = t.run_rects("旧的对话")[0]
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.run_for(@sfpages.hover_open_ms * 2.0)
+  assert_true(t.find("已归档") is Some(_), msg="its card: that it is archived")
 }
 
 ///|
