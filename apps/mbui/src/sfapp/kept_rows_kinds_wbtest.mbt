@@ -36,10 +36,11 @@ fn kept_rows_kind(mode : String, again : Bool, w : Double, h : Double, a11y? : B
   t.keep_parts(true)
   t.drawn_again(again)
   t.set_a11y(a11y)
+  t.said() |> ignore
   let out = []
   for _ in 0..<24 {
     t.run_for(kept_rows_still_ms)
-    out.push(drawn_from(t, -1000.0).map(kept_rows_inst) + kept_rows_read_out(t, a11y))
+    out.push(drawn_from(t, -1000.0).map(kept_rows_inst) + kept_rows_read_out(t, a11y) + kept_rows_said(t))
   }
   out
 }
@@ -62,17 +63,18 @@ fn kept_rows_kind_scrolled(mode : String, again : Bool, w : Double, h : Double) 
   }
   t.keep_parts(true)
   t.drawn_again(again)
+  t.said() |> ignore
   let out = []
   let x = w * 0.7
   t.drag(x, h * 0.3, x, h * 0.7, steps=8)
   for _ in 0..<5 {
     t.run_for(kept_rows_step_ms)
-    out.push(drawn_from(t, -1000.0).map(kept_rows_inst))
+    out.push(drawn_from(t, -1000.0).map(kept_rows_inst) + kept_rows_said(t))
   }
   t.drag(x, h * 0.7, x, h * 0.35, steps=8)
   for _ in 0..<5 {
     t.run_for(kept_rows_step_ms)
-    out.push(drawn_from(t, -1000.0).map(kept_rows_inst))
+    out.push(drawn_from(t, -1000.0).map(kept_rows_inst) + kept_rows_said(t))
   }
   out
 }

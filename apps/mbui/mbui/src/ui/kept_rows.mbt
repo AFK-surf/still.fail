@@ -15,11 +15,13 @@
 // Its list's rows are laid on the pixels, each as tall as whole pixels (Ctx::row_slot, rows_on_pixels): a row is drawn
 // again only moved by whole device pixels, as its laying out there would set its words and boxes.
 //
-// Drawn again, it says again what its build and its paint said of the frame: its targets (where presses, the wheel and
-// the pointer go), what takes the focus, what asks for a menu, the pointer's shape, what tells outside, its words. Its
-// instances are recorded in the band (its list's clip as built, row_reach past it) unclipped by its list, and put in
-// its list's clip as it is drawn (row_clip_into), built or drawn again alike: a row drawn again is drawn as its build
-// would draw it there.
+// Drawn again, it says again what its build and its paint said of the frame: what takes the focus, what asks for a
+// menu, the pointer's shape, what tells outside, its words; and what its paint said (said.mbt: its targets, where
+// presses, the wheel and the pointer go, and the rest of the frame's paint lists), taken by its range and said again by
+// one rule. Its instances are recorded in the band (its list's clip as built, row_reach past it) unclipped by its list,
+// and put in its list's clip as it is drawn (row_clip_into), built or drawn again alike, what its paint said too (only
+// what shows there): a row drawn again is drawn as its build would draw it there. A part drawn again holds the rows it
+// drew (kept_part.mbt).
 
 ///|
 /// How far past its list's clip a row's build draws what is recorded of it (the band): what it may scroll by before
@@ -30,9 +32,10 @@ let row_reach : Double = 480.0
 /// What a row kept holds besides its drawing (KeptPart's `row`): where it was built, what of it was drawn, and what its
 /// build and its paint said of the frame, said again each frame it is drawn again.
 priv struct RowKept {
-  /// its list's id, its item
+  /// its list's id, its item; the part its list was built in (0: none), which drawn again draws it again with it
   list : Int
   item : Int
+  mut part : Int
   /// where its node was laid out as it was built, and how tall
   mut x : Double
   mut y : Double
@@ -50,10 +53,12 @@ priv struct RowKept {
   /// held (moved from where it is laid out): drawn again, the row is built again where one would be
   sticks : Array[(Double, Double, Double)]
   mut held : Bool
-  /// this pass: drawn again (not built), its node; how far below where it was built it is drawn
+  /// this pass: drawn again (not built), its node; how far below where it was built it is drawn, and how far down its
+  /// list's rows (on_drawn_again's)
   mut kept : Bool
   mut node : Int
   mut dy : Double
+  mut rel : Double
   /// where its box was as it was last drawn (x, y, w, h: the pointer over it lights what it points at)
   mut last : (Double, Double, Double, Double)
   // what its build said of the frame
@@ -68,10 +73,6 @@ priv struct RowKept {
   tells : Array[(Int, Int, () -> Unit)]
   /// the words it marked (Ctx::words), as laid out
   words : Array[(String, Words)]
-  /// a Tester's: the lines of words it drew (Tester::text_runs); the bars of what scrolls sideways in it (where the
-  /// pointer drags them); what else its paint said of the frame is its part's (KeptPart's hit_ids and on)
-  runs : Array[TextRun]
-  bars : Array[BarAt]
   /// how its list builds a row (Ctx::list's `row`, this build's): its part's build runs it
   mut build : (Int) -> Unit
   /// how far down its list's rows it was as its build was drawn (ListState::above)
@@ -90,6 +91,7 @@ fn RowKept::new(list : Int, item : Int) -> RowKept {
   {
     list,
     item,
+    part: 0,
     x: 0.0,
     y: 0.0,
     h: 0.0,
@@ -103,6 +105,7 @@ fn RowKept::new(list : Int, item : Int) -> RowKept {
     kept: false,
     node: -1,
     dy: 0.0,
+    rel: 0.0,
     last: (0.0, 0.0, 0.0, 0.0),
     focus: [],
     cursors: [],
@@ -113,8 +116,6 @@ fn RowKept::new(list : Int, item : Int) -> RowKept {
     mouse_drags: None,
     tells: [],
     words: [],
-    runs: [],
-    bars: [],
     build: fn(_) {  },
     above: 0.0,
     sems: [],
@@ -292,6 +293,7 @@ fn Ctx::row_of(self : Ctx, li : Int, st : ListState, k : Int, iw : Double, force
     (rk.read_out || !self.reads_out) &&
     !moving
   rk.build = st.row
+  rk.part = st.part
   if !same {
     kp.tracker.invalidate()
   }
@@ -497,8 +499,9 @@ fn Ctx::rows_placed(
     }
     if whole && !held && n.x == rk.x && top >= rk.band0 + dy && bottom <= rk.band1 + dy && !pointed {
       rk.dy = dy
+      rk.rel = st.above(n.item) - rk.above
       self.row_said_again(rk)
-      self.drawn_again_told((1, kp.id), dy, st.above(n.item) - rk.above)
+      self.drawn_again_told((1, kp.id), dy, rk.rel)
       continue
     }
     // built where it is
@@ -565,7 +568,7 @@ fn row_building() -> RowKept? {
 ///|
 /// Row `id`'s build (node `i`) painted, as its list paints it: in the band (its list's clip, row_reach past it both
 /// ways, nothing else of its list's), what it draws and what it says of the frame taken; then put in its list's clip,
-/// as what drawing it again puts there.
+/// as what drawing it again puts there (what it said, said in it by the rule it is said again by: said.mbt's Moved).
 fn Ctx::row_paint_record(self : Ctx, i : Int, id : Int, alpha : Double) -> Unit {
   let kp = match kept_rows.get(id) {
     Some(st) => st
@@ -581,20 +584,14 @@ fn Ctx::row_paint_record(self : Ctx, i : Int, id : Int, alpha : Double) -> Unit 
   let s = clip_stack
   let (x0, y0, x1, y1) = (s[k], s[k + 1], s[k + 2], s[k + 3])
   let i0 = self.ninst
-  let h0 = self.next_hit_ids.length()
-  let s0 = self.next_scroll_ids.length()
-  let sel0 = desk.next_sels.length()
-  let r0 = text_runs.runs.length()
   let g0 = self.segs.length()
-  let b0 = self.next_bars.length()
   let a0 = self.across_seen.length()
   let t0 = dr.tops.length()
   let o0 = dr.overlay.length()
-  kp.points.clear()
   kp.plots.clear()
   kp.plot_seen.clear()
   kp.images.clear()
-  kp.from = (h0, s0, sel0)
+  self.paint_marks(kp.marks)
   // (the band: a clip of its own, nothing of its list's, nor any outer)
   for v in [x0, y0 - row_reach, x1, y1 + row_reach] {
     clip_stack.push(v)
@@ -631,15 +628,13 @@ fn Ctx::row_paint_record(self : Ctx, i : Int, id : Int, alpha : Double) -> Unit 
   rk.band_l = x0
   rk.band_r = x1
   rk.dy = 0.0
-  self.take_said(kp)
-  rk.runs.clear()
-  for j in r0..<text_runs.runs.length() {
-    rk.runs.push(text_runs.runs[j])
-  }
-  rk.bars.clear()
-  for j in b0..<self.next_bars.length() {
-    rk.bars.push(self.next_bars[j])
-  }
+  rk.rel = 0.0
+  // what its paint said, as said in the band: what the hand is found on; what is said again, said now in its list's
+  // clip as it is when it is drawn again
+  self.take_found(kp)
+  self.paint_take(kp.marks, kp.said)
+  self.paint_cut(kp.marks)
+  self.paint_again(kp.said, rk.moved(0.0, k))
   // (what must be built each frame: drawn over everything, a scroll bar of its rows', a native view's hole, a field, a
   // list of its own)
   rk.keepable = rk.keepable &&
@@ -649,26 +644,27 @@ fn Ctx::row_paint_record(self : Ctx, i : Int, id : Int, alpha : Double) -> Unit 
     !kp.holds_native() &&
     !self.holds_built(i)
   // in its list's clip
-  self.row_clip_into(k, i0, h0, s0, sel0, r0, g0, b0, drops=dr.tops.length() == t0 && dr.overlay.length() == o0)
+  self.row_clip_into(k, i0, g0, drops=dr.tops.length() == t0 && dr.overlay.length() == o0)
   rk.last = (n.x, n.y, n.fw, n.fh)
   kp.lit = self.part_lit(kp)
 }
 
 ///|
+/// Where what row `self`'s paint said is said: `dy` below where it was built, in the clip at `k` (its list's).
+fn RowKept::moved(self : RowKept, dy : Double, k : Int) -> Moved {
+  { dy, cut: k, band_l: self.band_l, band_t: self.band0, band_r: self.band_r, band_b: self.band1 }
+}
+
+///|
 /// Row part `kp` drawn again (node `i`), as its build drew it, moved down by how far its node is below where it was
-/// built: its instances, its targets and what scrolls in it, its paragraphs that can be picked; put in its list's clip.
+/// built: its instances, and what its paint said of the frame (said.mbt); put in its list's clip.
 fn Ctx::row_paint_again(self : Ctx, i : Int, kp : KeptPart) -> Unit {
   let rk = kp.row.unwrap()
   let dy = self.nodes[i].y - rk.y
   rk.dy = dy
   let k = clip_top()
   let i0 = self.ninst
-  let h0 = self.next_hit_ids.length()
-  let s0 = self.next_scroll_ids.length()
-  let sel0 = desk.next_sels.length()
-  let r0 = text_runs.runs.length()
   let g0 = self.segs.length()
-  let b0 = self.next_bars.length()
   if dr.mode != mode_hits {
     self.part_paint_again(kp)
     let a = self.inst
@@ -688,80 +684,18 @@ fn Ctx::row_paint_again(self : Ctx, i : Int, kp : KeptPart) -> Unit {
       }
     }
   }
-  if dr.mode != mode_draw {
-    for j in 0..<kp.hit_ids.length() {
-      self.next_hit_ids.push(kp.hit_ids[j])
-      self.next_hit_ends.push(kp.hit_ends[j] + h0)
-      let v = j * 4
-      self.next_hit_rects.push(kp.hit_rects[v])
-      self.next_hit_rects.push(kp.hit_rects[v + 1] + dy)
-      self.next_hit_rects.push(kp.hit_rects[v + 2])
-      self.next_hit_rects.push(kp.hit_rects[v + 3] + dy)
-      let c = j * clip_n
-      let hc = kp.hit_clips
-      let outer = hc[c + 16] > 0.0 || hc[c + 17] > 0.0 || hc[c + 18] > 0.0 || hc[c + 19] > 0.0
-      let from = self.next_hit_clips.length()
-      for m in 0..<clip_n {
-        self.next_hit_clips.push(hc[c + m])
-      }
-      // (the y of its own rect's edges, and its outer's where it has one)
-      let nc = self.next_hit_clips
-      rk.unband_hit(nc, from)
-      nc[from + 1] = nc[from + 1] + dy
-      nc[from + 3] = nc[from + 3] + dy
-      if outer {
-        nc[from + 13] = nc[from + 13] + dy
-        nc[from + 15] = nc[from + 15] + dy
-      }
-    }
-    for id in kp.points {
-      self.point_said(id)
-    }
-    for j in 0..<kp.scroll_ids.length() {
-      self.next_scroll_ids.push(kp.scroll_ids[j])
-      let v = j * 4
-      self.next_scroll_rects.push(kp.scroll_rects[v])
-      self.next_scroll_rects.push(kp.scroll_rects[v + 1] + dy)
-      self.next_scroll_rects.push(kp.scroll_rects[v + 2])
-      self.next_scroll_rects.push(kp.scroll_rects[v + 3] + dy)
-    }
-    for t in kp.sels {
-      selectable_painted(t.base, t.at, t.lay, t.text, t.ox, t.oy + dy, t.x0, t.y0 + dy, t.x1, t.y1 + dy)
-    }
-    for b in rk.bars {
-      self.next_bars.push({ ..b, y0: b.y0 + dy, y1: b.y1 + dy, ty: b.ty + dy })
-    }
-  }
-  if dr.mode != mode_hits && text_runs.on {
-    for t in rk.runs {
-      text_runs.runs.push({ ..t, base: t.base + dy, top: t.top + dy, bottom: t.bottom + dy })
-    }
-  }
-  self.row_clip_into(k, i0, h0, s0, sel0, r0, g0, b0, drops=true)
+  self.paint_again(kp.said, rk.moved(dy, k))
+  self.row_clip_into(k, i0, g0, drops=true)
   let n = self.nodes[i]
   rk.last = (n.x, n.y, n.fw, n.fh)
 }
 
 ///|
-/// What a row painted from instance `i0`, target `h0`, scrolling target `s0`, paragraph `sel0`, line of words `r0`, its
-/// shapes' pieces from `g0` (in the frame's `segs`), scroll bar `b0` on put in the clip at `k` (its list's): each cut by
-/// it where they meet (clip_into), the rects of its targets, of what scrolls in it and of its bars cut to it, the lines
-/// of words outside it left out; with `drops` (nothing of it put off to be drawn over everything), what it leaves
-/// nothing of dropped (row_drop).
-fn Ctx::row_clip_into(
-  self : Ctx,
-  k : Int,
-  i0 : Int,
-  h0 : Int,
-  s0 : Int,
-  sel0 : Int,
-  r0 : Int,
-  g0 : Int,
-  b0 : Int,
-  drops~ : Bool,
-) -> Unit {
-  let s = clip_stack
-  let (x0, y0, x1, y1) = (s[k], s[k + 1], s[k + 2], s[k + 3])
+/// What a row drew from instance `i0` (its shapes' pieces from `g0`, in the frame's `segs`) put in the clip at `k` (its
+/// list's): each cut by it where they meet (clip_into); with `drops` (nothing of it put off to be drawn over
+/// everything), what it leaves nothing of dropped (row_drop). (What it said of the frame is put there as it is said:
+/// said.mbt's Moved.)
+fn Ctx::row_clip_into(self : Ctx, k : Int, i0 : Int, g0 : Int, drops~ : Bool) -> Unit {
   let c = clip_scratch
   let a = self.inst
   for q in i0..<self.ninst {
@@ -787,51 +721,6 @@ fn Ctx::row_clip_into(
   if drops {
     self.row_drop(i0, g0)
   }
-  for h in h0..<self.next_hit_ids.length() {
-    let v = h * 4
-    let r = self.next_hit_rects
-    r[v] = dmax(r[v], x0)
-    r[v + 1] = dmax(r[v + 1], y0)
-    r[v + 2] = dmin(r[v + 2], x1)
-    r[v + 3] = dmin(r[v + 3], y1)
-    let hc = self.next_hit_clips
-    let base = h * clip_n
-    for m in 0..<clip_n {
-      c[m] = hc[base + m]
-    }
-    clip_into(k, c)
-    for m in 0..<clip_n {
-      hc[base + m] = c[m]
-    }
-  }
-  for j in s0..<self.next_scroll_ids.length() {
-    let v = j * 4
-    let r = self.next_scroll_rects
-    r[v] = dmax(r[v], x0)
-    r[v + 1] = dmax(r[v + 1], y0)
-    r[v + 2] = dmin(r[v + 2], x1)
-    r[v + 3] = dmin(r[v + 3], y1)
-  }
-  for j in sel0..<desk.next_sels.length() {
-    let t = desk.next_sels[j]
-    desk.next_sels[j] = { ..t, x0: dmax(t.x0, x0), y0: dmax(t.y0, y0), x1: dmin(t.x1, x1), y1: dmin(t.y1, y1) }
-  }
-  for j in b0..<self.next_bars.length() {
-    let b = self.next_bars[j]
-    self.next_bars[j] = { ..b, y0: dmax(b.y0, y0), y1: dmin(b.y1, y1) }
-  }
-  // (as keep_text_runs keeps those inside the clip alone)
-  let runs = text_runs.runs
-  let mut w = r0
-  for j in r0..<runs.length() {
-    let t = runs[j]
-    if t.top > y1 || t.bottom < y0 {
-      continue
-    }
-    runs[w] = t
-    w = w + 1
-  }
-  runs.truncate(w)
 }
 
 ///|
@@ -1006,23 +895,6 @@ pub fn Tester::drawn_again(self : Tester, on : Bool) -> Unit {
 /// what cuts it: as far off as nothing cuts, so that its list's clip where it is drawn again cuts it there as it would
 /// have cut its build there.
 fn RowKept::unband(self : RowKept, a : FixedArray[Double], at : Int) -> Unit {
-  if a[at] == self.band_l {
-    a[at] = -1.0e9
-  }
-  if a[at + 1] == self.band0 {
-    a[at + 1] = -1.0e9
-  }
-  if a[at + 2] == self.band_r {
-    a[at + 2] = 1.0e9
-  }
-  if a[at + 3] == self.band1 {
-    a[at + 3] = 1.0e9
-  }
-}
-
-///|
-/// The same of a target's clip (from `at` in the frame's targets' clips).
-fn RowKept::unband_hit(self : RowKept, a : Array[Double], at : Int) -> Unit {
   if a[at] == self.band_l {
     a[at] = -1.0e9
   }

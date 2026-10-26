@@ -18,9 +18,10 @@
 // in it, whenever it was told: a list flung before the part was kept flings on in it), a press held down on it or a
 // wheel turned over it (what it holds may take them), the mouse's pointer over it (it lights what it points at). It is
 // built whole the first frames it shows, while a motion going on as it came may still move what it holds. Drawn again,
-// what its build's paint said of the frame is said again, where it was: its targets, what scrolls in it, the words
-// that can be picked, so presses, the wheel and the pointer find in it what they found as it was built. It is never
-// read out, built or not, so what is read out does not come and go with it.
+// what its build's paint said of the frame is said again, where it was, all of it by one rule (said.mbt): its targets,
+// what scrolls in it, the words that can be picked, its scroll bars, so presses, the wheel and the pointer find in it
+// what they found as it was built. It is never read out, built or not, so what is read out does not come and go with
+// it.
 
 ///|
 /// A part kept (Ctx::kept_part): what its build drew (its instances, where they were; the pieces of its shapes; the
@@ -60,18 +61,15 @@ priv struct KeptPart {
   /// what its build drew covers (x, y, w, h: its instances where they show): a press held or a wheel turned there is
   /// its; the mouse's pointer there lights what is in it
   mut rect : (Double, Double, Double, Double)
-  /// what its build's paint said of the frame, said again as it is drawn again: its targets (where presses go: their
-  /// ids, their ends from the first, their rects, their clips), what is only pointed at, what scrolls (ids, rects), the
-  /// paragraphs that can be picked; where they began among the frame's as it was painted
+  /// what its build's paint said of the frame (said.mbt), said again as it is drawn again; where each of the frame's
+  /// paint lists stood as it began
+  said : Array[&SaidAgain]
+  marks : Array[Int]
+  /// of what its paint said, what the hand is found on: its targets' ids (what the pointer is over among them lights
+  /// it), what scrolls in it (ids, rects as painted: a wheel turned there is its)
   hit_ids : Array[Int]
-  hit_ends : Array[Int]
-  hit_rects : Array[Double]
-  hit_clips : Array[Double]
-  points : Array[Int]
   scroll_ids : Array[Int]
   scroll_rects : Array[Double]
-  sels : Array[SelTarget]
-  mut from : (Int, Int, Int)
   /// whether what the pointer is over was one of its targets as it was built (Ctx::hovered: it lights what it points
   /// at)
   mut lit : Bool
@@ -368,6 +366,19 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
     // drawn again: what it draws from kept through this frame, the frame it asked for coming
     e.again = Some(st)
     self.drawn_again_told((0, id), 0.0, 0.0)
+    // (the rows of its lists its drawing holds, those its last frame showed: shown with it, not let go, and the
+    // packages told of them as of it)
+    for _, rp in kept_rows {
+      match rp.row {
+        Some(rk) if rk.part == id && rp.shown == self.frame_no - 1 => {
+          rp.shown = self.frame_no
+          rp.again = true
+          rk.kept = true
+          self.drawn_again_told((1, rp.id), rk.dy, rk.rel)
+        }
+        _ => ()
+      }
+    }
     for p in st.plots {
       if p >= part_colour_plot {
         atlas_for(true).0.drawn(p - part_colour_plot)
@@ -421,15 +432,11 @@ fn kept_new(id : Int) -> KeptPart {
     again: false,
     words: [],
     rect: (0.0, 0.0, 0.0, 0.0),
+    said: [],
+    marks: [],
     hit_ids: [],
-    hit_ends: [],
-    hit_rects: [],
-    hit_clips: [],
-    points: [],
     scroll_ids: [],
     scroll_rects: [],
-    sels: [],
-    from: (0, 0, 0),
     lit: false,
     row: None,
     reads,
@@ -687,7 +694,8 @@ fn KeptPart::plot_used(self : KeptPart, p : Int) -> Unit {
 }
 
 ///|
-/// Part `id`'s build about to be painted from instance `i0`: its plots taken anew as its glyphs are drawn.
+/// Part `id`'s build about to be painted from instance `i0`: its plots taken anew as its glyphs are drawn; where the
+/// frame's paint lists stand.
 fn Ctx::part_paint_begin(self : Ctx, id : Int) -> Int {
   let was = part_now.painting
   match kept_parts.get(id) {
@@ -695,8 +703,7 @@ fn Ctx::part_paint_begin(self : Ctx, id : Int) -> Int {
       st.plots.clear()
       st.plot_seen.clear()
       st.images.clear()
-      st.points.clear()
-      st.from = (self.next_hit_ids.length(), self.next_scroll_ids.length(), desk.next_sels.length())
+      self.paint_marks(st.marks)
     }
     None => ()
   }
@@ -706,12 +713,13 @@ fn Ctx::part_paint_begin(self : Ctx, id : Int) -> Int {
 
 ///|
 /// Part `id`'s build painted (its box node `node`), instances `i0` to the frame's last so far: kept as they are, where
-/// they are, with the pieces of their shapes.
+/// they are, with the pieces of their shapes, and what its paint said of the frame (said.mbt).
 fn Ctx::part_paint_end(self : Ctx, id : Int, node : Int, i0 : Int, was : Int) -> Unit {
   part_now.painting = was
   match kept_parts.get(id) {
     Some(st) => {
-      self.take_said(st)
+      self.take_found(st)
+      self.paint_take(st.marks, st.said)
       st.lit = self.part_lit(st)
       st.take_insts(self, i0)
       st.drawn = self.frame_no
@@ -726,23 +734,14 @@ fn Ctx::part_paint_end(self : Ctx, id : Int, node : Int, i0 : Int, was : Int) ->
 }
 
 ///|
-/// What part `st`'s paint said of the frame from where it began (`from`) taken: its targets, what scrolls in it, its
-/// paragraphs that can be picked (what is only pointed at is taken as it is said: Ctx::point_said).
-fn Ctx::take_said(self : Ctx, st : KeptPart) -> Unit {
-  let (h0, s0, sel0) = st.from
+/// Of what part `st`'s paint said from where it began (its marks), what the hand is found on: its targets' ids, what
+/// scrolls in it, as painted.
+fn Ctx::take_found(self : Ctx, st : KeptPart) -> Unit {
+  let h0 = st.marks[said_hits]
+  let s0 = st.marks[said_scrolls]
   st.hit_ids.clear()
-  st.hit_ends.clear()
-  st.hit_rects.clear()
-  st.hit_clips.clear()
   for h in h0..<self.next_hit_ids.length() {
     st.hit_ids.push(self.next_hit_ids[h])
-    st.hit_ends.push(self.next_hit_ends[h] - h0)
-  }
-  for v in (h0 * 4)..<self.next_hit_rects.length() {
-    st.hit_rects.push(self.next_hit_rects[v])
-  }
-  for v in (h0 * clip_n)..<self.next_hit_clips.length() {
-    st.hit_clips.push(self.next_hit_clips[v])
   }
   st.scroll_ids.clear()
   st.scroll_rects.clear()
@@ -752,29 +751,13 @@ fn Ctx::take_said(self : Ctx, st : KeptPart) -> Unit {
   for v in (s0 * 4)..<self.next_scroll_rects.length() {
     st.scroll_rects.push(self.next_scroll_rects[v])
   }
-  st.sels.clear()
-  for j in sel0..<desk.next_sels.length() {
-    st.sels.push(desk.next_sels[j])
-  }
 }
 
 ///|
-/// `id` is only pointed at (Ctx::box `points`), said as it is painted: and of the part kept and the list's row kept
-/// being painted, said again as they are drawn again.
+/// `id`, the target said last (Ctx::push_hit), is only pointed at (Ctx::box `points`), said as it is painted.
 fn Ctx::point_said(self : Ctx, id : Int) -> Unit {
   self.next_points[id] = true
-  if part_now.painting != 0 {
-    match kept_parts.get(part_now.painting) {
-      Some(st) => st.points.push(id)
-      None => ()
-    }
-  }
-  if part_now.painting_row != 0 {
-    match kept_rows.get(part_now.painting_row) {
-      Some(st) => st.points.push(id)
-      None => ()
-    }
-  }
+  self.next_point_hits.push(self.next_hit_ids.length() - 1)
 }
 
 ///|
@@ -925,28 +908,6 @@ fn Ctx::part_paint_again(self : Ctx, st : KeptPart) -> Unit {
     }
   }
   self.ninst = i0 + count
-}
-
-///|
-/// Part `st` drawn again: what its build's paint said of the frame said again, where it said it (nothing round it
-/// moved: its key the same): its targets, what is only pointed at, what scrolls in it, its paragraphs that can be
-/// picked. So presses, the wheel and the pointer find in it what they found as it was built.
-fn Ctx::part_targets_again(self : Ctx, st : KeptPart) -> Unit {
-  let h0 = self.next_hit_ids.length()
-  for j in 0..<st.hit_ids.length() {
-    self.next_hit_ids.push(st.hit_ids[j])
-    self.next_hit_ends.push(st.hit_ends[j] + h0)
-  }
-  self.next_hit_rects.append(st.hit_rects)
-  self.next_hit_clips.append(st.hit_clips)
-  for id in st.points {
-    self.point_said(id)
-  }
-  self.next_scroll_ids.append(st.scroll_ids)
-  self.next_scroll_rects.append(st.scroll_rects)
-  for t in st.sels {
-    selectable_painted(t.base, t.at, t.lay, t.text, t.ox, t.oy, t.x0, t.y0, t.x1, t.y1)
-  }
 }
 
 ///|
