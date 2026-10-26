@@ -3129,7 +3129,7 @@ export const SHAPES: Record<string, Shape> = {
     ["until", opt("i64"), { client: opt("I54") }],
     ["seconds", opt("i64"), { client: opt("I54") }],
     ["what", opt("String"), { said: true, doc: "What it waited for, in its own words (chat_state's `for`); absent when it did not say." }],
-  ], { doc: "A wait in an agent's history: from its mark (`since`) until the next word brought it back (`until`, absent while it\nstill waits: count on from `since`), at most `seconds`." }),
+  ], { doc: "A wait in an agent's history: from its mark (`since`) until what moved it on (`until`: a prompt bringing it back, or\na call of its own after the mark; absent while it still waits: count on from `since`), at most `seconds`." }),
   HistoryGroup: struct([
     ["summary", "String", { said: true }],
     ["title", "String", { said: true }],

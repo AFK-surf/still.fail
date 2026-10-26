@@ -403,9 +403,16 @@ export function presentHistory(live: J, cx: Context): J {
           const since = at(first);
           let until: number | null = null;
           if (since !== null) {
+            // The wait is over at what moves the agent on: a prompt bringing it back, or a call of its own after the
+            // mark (it went on working instead; a later state stands in its place). Words it posts as its turn ends
+            // are part of the ending, not more work.
             for (let j = first + 1; j < timeline.length; j++) {
-              if (s(timeline[j], "kind") === "user" && !flag(timeline[j], "subagent")) {
-                until = at(j);
+              const e = timeline[j];
+              if (flag(e, "subagent")) continue;
+              const kind = s(e, "kind");
+              const posting = kind === "tool_call" && toolName(s(e, "tool")) === "chat_post" && typeof args(s(e, "text"))?.kind !== "string";
+              if (kind === "user" || (kind === "tool_call" && !posting)) {
+                until = at(j) ?? since;
                 break;
               }
             }
