@@ -122,7 +122,15 @@ fn open_add_station(
       join_existing(c, core, here, rows, flag(joinable, "loading"))
     } else {
       c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-        scroll_page(c, "add-station/" + adding.serial.to_string(), [
+        let blocks : Array[() -> Unit] = []
+        // this machine, where it has none: added here, no command to run (before a command is made)
+        if adding.made is None && local_station_addable() {
+          blocks.push(fn() {
+            c.box(style=@sf.panel_words_in().then(here_room), fn() { add_this_machine(c, core, fn() { close() }) })
+            |> ignore
+          })
+        }
+        blocks.append([
           fn() {
             c.box(style=@sf.panel_words_in(), w=Fill(1.0), pb=10.0, fn() {
               c.text(
@@ -143,6 +151,7 @@ fn open_add_station(
             |> ignore
           },
         ])
+        scroll_page(c, "add-station/" + adding.serial.to_string(), blocks)
       })
       |> ignore
     }
@@ -512,6 +521,9 @@ fn first_station(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           // (the page's own steps: a new start each time the page has no station)
           if !@sf.presenting() && adding.known.length() > 0 {
             adding_reset([], false)
+          }
+          if local_station_addable() {
+            add_this_machine(c, core, fn() {  })
           }
           add_station_steps(
             c,

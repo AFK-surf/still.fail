@@ -1597,6 +1597,9 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   record_dir = getenv("MBUI_RECORD");
   if (getenv("MBUI_RECORD_FROM")) record_from = atoi(getenv("MBUI_RECORD_FROM"));
   if (getenv("MBUI_RECORD_FRAMES")) record_frames = atoi(getenv("MBUI_RECORD_FRAMES"));
+  // this machine's name (MBUI_MACHINE, @ui.env): what a station added from here is called (sfbase local_machine_name)
+  char machine[256];
+  if (!getenv("MBUI_MACHINE") && gethostname(machine, sizeof machine) == 0) setenv("MBUI_MACHINE", machine, 0);
   @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];

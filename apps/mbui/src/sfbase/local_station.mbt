@@ -24,19 +24,39 @@ fn local_install_ask(token : String) -> String {
 }
 
 ///|
-/// 添加这台 Mac: the station's installer run here with a token for `workspace`, asked of the cloud first (only its owner
-/// and admins are given one: anyone else's ask fails, and nothing is run).
+/// 添加这台 Mac: the station's installer run here with a token for `workspace`, asked of the cloud first under this
+/// machine's name (only its owner and admins are given one: anyone else's ask fails, said so, and nothing is run).
 fn local_station_install(src : Source, workspace : String) -> Unit {
-  (src.call)("workspace.enroll", { "workspace": Json::string(workspace) }, fn(r) {
+  let pc = @settings.local_machine_pc()
+  let failed = fn(error : String) {
+    toast_later(fill(if pc { "web-pages.settings.thisPc.failed" } else { "web-pages.settings.thisMac.failed" }, [("error", error)]))
+  }
+  // (the cloud names the station by its token: a token asked without a name is refused, invalid_name)
+  (src.call)("workspace.enroll", { "workspace": Json::string(workspace), "name": Json::string(local_machine_name()) }, fn(r) {
     match r {
       Ok(v) =>
         match text(Some(v), "token") {
-          "" => ()
+          "" => failed(tr("web-pages.settings.thisMac.noAnswer"))
           token => @ui.local_station_act("install " + local_install_ask(token))
         }
-      Err(_) => ()
+      // refused (not its owner or admin, the workspace's stations full): said, not passed over
+      Err(e) => failed(@settings.error_text(e))
     }
   })
+}
+
+///|
+/// What a station added from here is called in its workspace (still.fail's desktop app: the computer's name): the
+/// host's name for this machine (MBUI_MACHINE: mac_app.m, linux_app.c; Windows' own COMPUTERNAME), its `.local` cut;
+/// none said, the machine as the person would call it.
+pub fn local_machine_name() -> String {
+  for name in ["MBUI_MACHINE", "COMPUTERNAME"] {
+    let v = @ui.env(name).trim(chars=" \t\n").to_string()
+    if v != "" {
+      return if v.has_suffix(".local") { v.view(end_offset=v.length() - 6).to_string() } else { v }
+    }
+  }
+  if @settings.local_machine_pc() { "PC" } else { "Mac" }
 }
 
 ///|

@@ -1810,6 +1810,9 @@ web-pages.settings.stations.removeAction
 web-pages.settings.stations.removeConfirmBody
 web-pages.settings.stations.rename
 web-pages.settings.stations.renaming
+web-pages.settings.thisMac.failed
+web-pages.settings.thisMac.noAnswer
+web-pages.settings.thisPc.failed
 web-pages.settings.title
 web-pages.settings.usage.failed
 web-pages.settings.usage.title

@@ -26,6 +26,8 @@ test "本机 Station, none here: 添加这台 Mac asks the cloud for this worksp
   let made = calls.iter().filter(fn(m) { m.name == "workspace.enroll" }).collect()
   assert_eq(made.length(), 1)
   assert_true(text(Some(made[0].params), "workspace") != "")
+  // named as the cloud wants it (an enrollment without a name is refused: invalid_name)
+  assert_true(text(Some(made[0].params), "name") != "")
   // (the made-up core answers with its token: settings/fixture.mbt)
   t.frame()
   let acts = t.local_acts()
@@ -35,6 +37,85 @@ test "本机 Station, none here: 添加这台 Mac asks the cloud for this worksp
   assert_eq(text(ask, "token"), "made-up")
   assert_eq(text(ask, "channel"), "stable")
   assert_true(text(ask, "origin").has_prefix("http"))
+}
+
+///|
+test "添加这台 Mac names the station after this machine, its .local cut" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.set_env("MBUI_MACHINE", "Pengs-Mac-Mini-2.local")
+  t.set_local_station("")
+  app.nav.replace(Setting(@settings.Route::LocalStation))
+  t.run_for(@ui.nav_push_ms)
+  let (x, y) = t.find("添加这台 Mac").unwrap()
+  t.tap(x, y)
+  t.frame()
+  let made = calls.iter().filter(fn(m) { m.name == "workspace.enroll" }).collect()
+  assert_eq(text(Some(made[0].params), "name"), "Pengs-Mac-Mini-2")
+}
+
+///|
+test "添加这台 Mac refused by the cloud: said why, nothing installed" {
+  let calls : Array[Made] = []
+  reset()
+  let base = fixture("home")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      if name == "workspace.enroll" {
+        done(Err({ "code": "forbidden", "message": "只有 owner 和 admin 可以添加 station" }))
+      } else {
+        (base.call)(name, params, done)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0)
+  t.set_local_station("")
+  app.nav.replace(Setting(@settings.Route::LocalStation))
+  t.run_for(@ui.nav_push_ms)
+  let (x, y) = t.find("添加这台 Mac").unwrap()
+  t.tap(x, y)
+  t.frame()
+  assert_eq(app.toast, "无法添加这台 Mac：只有 owner 和 admin 可以添加 station")
+  assert_eq(t.local_acts(), [])
+}
+
+///|
+test "添加 station's sheet offers 添加这台 Mac while this machine has none: pressed, added here and 本机 Station shown" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.set_local_station("")
+  app.nav.replace(Place("stations"))
+  t.run_for(@ui.nav_push_ms)
+  t.click(Button, label="添加 station")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("也可以直接添加这台 Mac：在这里下载 station 并加入这个 workspace，不用到终端里执行命令。") is Some(_))
+  t.click(Button, label="添加这台 Mac")
+  t.run_for(@ui.nav_push_ms)
+  let made = calls.iter().filter(fn(m) { m.name == "workspace.enroll" }).collect()
+  assert_eq(made.length(), 1)
+  assert_true(text(Some(made[0].params), "name") != "")
+  let acts = t.local_acts()
+  assert_eq(acts.length(), 1)
+  assert_eq(local_ask_of(acts[0]).0, "install")
+  assert_true(t.find("本机 Station") is Some(_))
+}
+
+///|
+test "添加 station's sheet: no 添加这台 Mac where this machine has a station" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.set_local_station(
+    #|{"data":"~/.stillfail","runner":"service","version":"0.1.4600","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","name":"星火工作室","stationName":"Studio","removed":false}}
+    ,
+  )
+  app.nav.replace(Place("stations"))
+  t.run_for(@ui.nav_push_ms)
+  t.click(Button, label="添加 station")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("生成命令") is Some(_))
+  assert_true(t.find("添加这台 Mac") is None)
 }
 
 ///|
