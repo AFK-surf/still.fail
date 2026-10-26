@@ -376,9 +376,9 @@ fn profiles_first(c : @ui.Ctx, core : Core, here : Here, stations : Array[Json])
                 })
                 |> ignore
                 if online {
-                  machine_offers(c, core, sv, fn(rt) {
+                  @sfpages.machine_offers(c, core, sv, fn(rt) {
                     // the machine's login signed in again as its vendor's plan, on the add page
-                    add_profile_start[address] = [("provider", str(if rt == "claude" { "anthropic" } else { "openai" })), ("method", str("plan"))]
+                    @sfpages.add_profile_start[address] = [("provider", str(if rt == "claude" { "anthropic" } else { "openai" })), ("method", str("plan"))]
                     (core.push)(NewProfile(address))
                   })
                 }

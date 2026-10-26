@@ -295,14 +295,8 @@ using @sf {
 
 ///|
 using @sfpages {
-  login_steps,
-  pf_tag,
-  pf_tag_words,
-  profile_field,
   figure,
   quota_dials,
-  pf_card_foot,
-  pf_name_line,
   open_dialog,
   desk_dialogs,
   sec_section,

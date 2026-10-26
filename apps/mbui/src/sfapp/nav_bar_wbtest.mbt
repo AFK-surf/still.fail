@@ -5,7 +5,7 @@
 test "nav bar: back, title and what is at its end on one line (settings' pages)" {
   for mode in [
     "settings-archive",
-    "settings-profiles", "settings-stations", "settings-new-profile", "settings-run-models",
+    "settings-profiles", "settings-stations", "settings-run-models",
   ] {
     reset()
     @settings.reset()
@@ -60,7 +60,7 @@ fn bar_line_under(mode : String, top : Double) -> Array[(String, Double)] {
 
 ///|
 test "nav bar: under the status bar on the pages that go back a step of their own (the new profile's, a connect's, a run's lists)" {
-  for mode in ["settings-new-profile", "settings-run-models"] {
+  for mode in ["settings-run-models"] {
     let mids = bar_line_under(mode, 24.0)
     let said = mids.map(fn(m) { m.0 + "@" + m.1.to_string() }).join(", ")
     println("under a 24 status bar \{mode}: \{said}")

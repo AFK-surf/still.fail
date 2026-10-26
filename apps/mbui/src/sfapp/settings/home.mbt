@@ -59,7 +59,6 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     Profiles(only) => profiles_page(c, core, here, only)
     Archive => archive_page(c, core, here)
     AdbShare(a) => adb_page(c, core, here, a)
-    NewProfile(a) => new_profile_page(c, core, here, a)
     ProfileAccount(k) => profile_account_page(c, core, here, k)
     KeptFiles => kept_page(c, core)
     KeptChat(s, thread) => kept_chat_page(c, core, s, thread)
@@ -67,7 +66,7 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     // setting_route
     Home | Appearance | Fonts | BarSettings | Changelog | About | Memories | Memory(_) | AutoDecisions | UsagePrices(_) | Usage | PickModels(_, _) | ProfileModels(_, _) | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) => ()
     // the web's desktop pages, one for every frame (src/sfpages), drawn by the frame's setting_route too
-    Shortcuts | Notifications | Permissions | Archiving | StationArchiving(_) | LocalStation | MemoryDoc(_, _, _) | AutoCompletion | AutoPolicy(_) => ()
+    Shortcuts | Notifications | Permissions | Archiving | StationArchiving(_) | LocalStation | MemoryDoc(_, _, _) | AutoCompletion | AutoPolicy(_) | NewProfile(_) => ()
     RunSettings(s, key) => run_settings_page(c, core, s, key)
   }
 }

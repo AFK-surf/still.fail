@@ -1,4 +1,4 @@
-// Adding a profile on the desktop (sfdesk add_profile.mbt), a secret's page, a place's first,
+// A new profile's models, a secret's page, a place's first on the desktop,
 // over the whole app and the settings' fixture (a profile's own page: src/sfpages accounts_wbtest.mbt).
 
 ///|
@@ -11,50 +11,6 @@ fn desk_shown(t : @ui.Tester, words : String) -> Unit {
       _ => t.wheel(800.0, 400.0, 300.0)
     }
   }
-}
-
-///|
-test "wide: adding a profile picks its provider from the core's groups, the machine's own login offered first" {
-  let calls : Array[Made] = []
-  let t = wide_tester(calls, mode="settings")
-  t.draw()
-  app.nav.push(Setting(@settings.Route::NewProfile("ws1/st1")))
-  t.run_for(@ui.nav_push_ms)
-  // the core's step: its title and hint, its groups and their providers
-  assert_true(t.find("选择服务商") is Some(_))
-  assert_true(t.find("模型厂商") is Some(_) && t.find("中转站") is Some(_))
-  assert_true(t.find("OpenRouter") is Some(_))
-  // Studio's own Codex login, used as it is
-  assert_true(t.find("使用此账号") is Some(_), msg="the machine's login offered")
-  // a provider picked: told to the core
-  match t.find("DeepSeek") {
-    Some((x, y)) => t.tap(x, y)
-    None => abort("no DeepSeek")
-  }
-  t.draw()
-  assert_true(
-    calls.iter().any(fn(m) { m.name == "profile.flow.edit" && text(field(Some(m.params), "input"), "provider") == "deepseek" }),
-    msg="the provider told to the core",
-  )
-}
-
-///|
-test "wide: the station's Hermes profile can be selected from its custom variables" {
-  let calls : Array[Made] = []
-  let t = wide_tester(calls, mode="settings-new-profile-hermes")
-  t.draw()
-  app.nav.push(Setting(@settings.Route::NewProfile("ws1/st1")))
-  t.run_for(@ui.nav_push_ms)
-  desk_shown(t, "Hermes Agent")
-  match t.find("Hermes Agent") {
-    Some((x, y)) => t.tap(x, y)
-    None => abort("no Hermes Agent")
-  }
-  t.draw()
-  assert_true(
-    calls.iter().any(fn(m) { m.name == "profile.flow.edit" && text(field(Some(m.params), "input"), "provider") == "env-hermes" }),
-    msg="the selected Hermes profile told to the core",
-  )
 }
 
 ///|
