@@ -54,6 +54,34 @@ test "a GIF handed over moves: its frames in turn on the frames' clock; held sti
 }
 
 ///|
+test "a GIF in a part kept moves with nothing else changing: built again as its next frame comes, the pointer away" {
+  @ui.add_image("mem:gif", two_frames())
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.kept_part(c.id("part"), "", fn() {
+        c.image("mem:gif", w=Px(20.0), h=Px(10.0), fade=false) |> ignore
+      })
+    },
+    w=100.0,
+    h=100.0,
+    images=[("mem:gif", 2, 1), ("mem:gif#0", 2, 1), ("mem:gif#1", 2, 1)],
+  )
+  t.keep_parts(true)
+  @ui.add_image("mem:gif", two_frames())
+  t.draw()
+  let shown = fn() {
+    t.drawlist().split("\n").filter(fn(l) { l.has_prefix("image ") }).map(fn(l) { l.to_owned() }).to_array()
+  }
+  t.move(90.0, 90.0)
+  t.run_for(a_moment)
+  assert_true(shown().iter().any(fn(l) { l.contains("\"mem:gif#0\"") }))
+  t.run_for(gif_frame)
+  assert_true(shown().iter().any(fn(l) { l.contains("\"mem:gif#1\"") }))
+  t.run_for(gif_frame)
+  assert_true(shown().iter().any(fn(l) { l.contains("\"mem:gif#0\"") }))
+}
+
+///|
 /// How long each frame of the GIF above stays, and a moment into one.
 let gif_frame : Double = 100.0
 

@@ -289,6 +289,12 @@ pub fn Ctx::image(
   n.fade = fade
   // a GIF that moves held at its first frame (gif.mbt)
   n.still = still
+  // (its frame is picked as it is painted, after the build: what is built kept as it was drawn (a part, a list's row)
+  // reads here when its next frame comes, so it is built again then and moves with nothing else changing)
+  match moving_images.get(src) {
+    Some(m) if !still && part_building() => ignore(self.loop_at(m.ends[m.ends.length() - 1], m.ends))
+    _ => ()
+  }
   n.text = src
   n.w = w
   n.h = h
