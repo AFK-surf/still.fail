@@ -490,6 +490,8 @@ pub struct Ctx {
   told : Array[(Int, () -> Unit)]
   /// the shots being taken, by their keys' (shot.mbt)
   shots : Map[Int, Shot]
+  /// while a shot taken at its own pixels a point is built, those (Ctx::drawn_scale); else 0
+  mut shot_scale : Double
   mut layer_cur : Int
   /// the layer the keys go to this frame (the topmost open one that takes them, as the frame before built it; 0: the
   /// page): what is built under it reads none (Ctx::key_pressed, Ctx::keys)
@@ -695,6 +697,7 @@ fn Ctx::new() -> Ctx {
     tells: [],
     told: [],
     shots: Map::new(),
+    shot_scale: 0.0,
     layer_cur: 0,
     keys_layer: 0,
     dismissals: Map::new(),

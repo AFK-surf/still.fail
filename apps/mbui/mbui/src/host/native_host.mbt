@@ -416,8 +416,8 @@ impl @hostapi.Host for Native with drawn_pixels(_, x, y, w, h, out) {
 }
 
 ///|
-impl @hostapi.Host for Native with drawn_pixels_of(_, inst, count, r, g, b, x, y, w, h, out) {
-  drawn_pixels_of(inst, count, r, g, b, x, y, w, h, out)
+impl @hostapi.Host for Native with drawn_pixels_of(_, inst, count, r, g, b, scale, w, h, out) {
+  drawn_pixels_of(inst, count, r, g, b, scale, w, h, out)
 }
 
 ///|

@@ -686,17 +686,19 @@ int32_t mb_render_drawn_pixels(int32_t x, int32_t y, int32_t w, int32_t h, moonb
   return 1;
 }
 
-// Instances never presented (a shot's, mbui/src/ui/shot.mbt) drawn as a frame the surface's size is, on the ground r, g,
-// b, and their pixels in the rectangle x, y, w × h into `out` as mb_render_drawn_pixels gives the frame's: the frame
-// kept set aside while they are drawn in its place, then put back (what a native view's picture redraws is the frame
-// as it was). 1 when read, 0 where the rectangle is not all in it.
-int32_t mb_render_pixels_of(const double *inst, int32_t count, double r, double g, double b, int32_t x, int32_t y,
-                            int32_t w, int32_t h, moonbit_bytes_t out) {
-  if (count <= 0) return 0;
+// Instances never presented (a shot's, mbui/src/ui/shot.mbt) drawn as a frame is, but `scale` pixels a point into a
+// picture of their own w × h (their 0, 0 its top left), on the ground r, g, b, and its pixels into `out` as
+// mb_render_drawn_pixels gives the frame's: the frame kept, and the size frames are drawn at, set aside while they are
+// drawn in its place, then put back (what a native view's picture redraws is the frame as it was). 1 when read.
+int32_t mb_render_pixels_of(const double *inst, int32_t count, double r, double g, double b, double scale, int32_t w,
+                            int32_t h, moonbit_bytes_t out) {
+  if (count <= 0 || !(scale > 0) || w <= 0 || h <= 0) return 0;
   float *kf = fbuf;
   size_t kc = fcap;
   int32_t kn = kept_count;
   double kr = kept_r, kg = kept_g, kb = kept_b;
+  int kfw = fb_w, kfh = fb_h;
+  double kw = cur_w, kh = cur_h, ks = cur_scale;
   size_t n = (size_t)count * MB_INST;
   // (a row of the shapes' pieces more: segs_upload reads whole rows)
   fcap = n + SEGS_ROW * 4;
@@ -706,7 +708,12 @@ int32_t mb_render_pixels_of(const double *inst, int32_t count, double r, double 
   kept_r = r;
   kept_g = g;
   kept_b = b;
-  int32_t ok = mb_render_drawn_pixels(x, y, w, h, out);
+  fb_w = w;
+  fb_h = h;
+  cur_scale = scale;
+  cur_w = w / scale;
+  cur_h = h / scale;
+  int32_t ok = mb_render_drawn_pixels(0, 0, w, h, out);
   free(fbuf);
   fbuf = kf;
   fcap = kc;
@@ -714,6 +721,11 @@ int32_t mb_render_pixels_of(const double *inst, int32_t count, double r, double 
   kept_r = kr;
   kept_g = kg;
   kept_b = kb;
+  fb_w = kfw;
+  fb_h = kfh;
+  cur_w = kw;
+  cur_h = kh;
+  cur_scale = ks;
   return ok;
 }
 

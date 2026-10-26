@@ -939,20 +939,26 @@ static int fill_vbuf(const float *f, int32_t count) {
   return 1;
 }
 
-// Instances never presented (a shot's, mbui/src/ui/shot.mbt) drawn as a frame the window's size is, on the ground r,
-// g, b, and their pixels in the rectangle x, y, w × h into `out` as mb_render_drawn_pixels gives the frame's; the
-// vertex buffer given back the frame's after (a snapshot draws it again). 1 when read, 0 where the rectangle is not
-// all in it.
-extern "C" int32_t mb_render_pixels_of(const double *inst, int32_t count, double r, double g, double b, int32_t x,
-                                       int32_t y, int32_t w, int32_t h, moonbit_bytes_t out) {
-  int fw = fb_w, fh = fb_h;
-  if (!dev || count <= 0 || fw <= 0 || fh <= 0 || w <= 0 || h <= 0 || x < 0 || y < 0 || x + w > fw || y + h > fh) return 0;
+// Instances never presented (a shot's, mbui/src/ui/shot.mbt) drawn as a frame is, but `scale` pixels a point into a
+// picture of their own w × h (their 0, 0 its top left), on the ground r, g, b, and its pixels into `out` as
+// mb_render_drawn_pixels gives the frame's; the size frames are drawn at put back after, and the vertex buffer given
+// back the frame's (a snapshot draws it again). 1 when read.
+extern "C" int32_t mb_render_pixels_of(const double *inst, int32_t count, double r, double g, double b, double scale,
+                                       int32_t w, int32_t h, moonbit_bytes_t out) {
+  if (!dev || count <= 0 || !(scale > 0) || w <= 0 || h <= 0) return 0;
   if ((size_t)Moonbit_array_length(out) < (size_t)w * h * 4) return 0;
   size_t n = (size_t)count * MB_INST;
   float *f = (float *)malloc(n * sizeof(float));
   for (size_t i = 0; i < n; i++) f[i] = (float)inst[i];
   float bg[3] = {(float)r, (float)g, (float)b};
-  ID3D11Texture2D *staging = fill_vbuf(f, count) ? redrawn_of(fw, fh, count, bg, f) : NULL;
+  double kw = vw, kh = vh, ks = vscale;
+  vscale = scale;
+  vw = w / scale;
+  vh = h / scale;
+  ID3D11Texture2D *staging = fill_vbuf(f, count) ? redrawn_of(w, h, count, bg, f) : NULL;
+  vw = kw;
+  vh = kh;
+  vscale = ks;
   free(f);
   // (the frame's own back where it was)
   if (last_inst) fill_vbuf(last_inst, last_count);
@@ -961,7 +967,7 @@ extern "C" int32_t mb_render_pixels_of(const double *inst, int32_t count, double
   D3D11_MAPPED_SUBRESOURCE m;
   if (SUCCEEDED(ctx->Map(staging, 0, D3D11_MAP_READ, 0, &m))) {
     for (int k = 0; k < h; k++) {
-      const uint8_t *s = (const uint8_t *)m.pData + (size_t)(y + k) * m.RowPitch + (size_t)x * 4;
+      const uint8_t *s = (const uint8_t *)m.pData + (size_t)k * m.RowPitch;
       uint8_t *d = out + (size_t)k * w * 4;
       for (int j = 0; j < w; j++, s += 4, d += 4) {
         d[0] = s[2];

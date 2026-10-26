@@ -865,29 +865,27 @@ extern "C" fn ffi_drawn_pixels_of(
   r : Double,
   g : Double,
   b : Double,
-  x : Int,
-  y : Int,
+  scale : Double,
   w : Int,
   h : Int,
   out : FixedArray[Byte],
 ) -> Int = "mb_render_pixels_of"
 
 ///|
-/// Instances `inst` drawn as a frame on the ground `r`, `g`, `b`, and their pixels in the rectangle `x`, `y`, `w` by `h`
-/// as drawn_pixels gives the frame's: false where it is not all in the frame.
+/// Instances `inst` drawn as a frame on the ground `r`, `g`, `b`, `scale` pixels a point into a picture `w` by `h`, and
+/// its pixels as drawn_pixels gives the frame's: false where it cannot be drawn.
 fn drawn_pixels_of(
   inst : FixedArray[Double],
   count : Int,
   r : Double,
   g : Double,
   b : Double,
-  x : Int,
-  y : Int,
+  scale : Double,
   w : Int,
   h : Int,
   out : FixedArray[Byte],
 ) -> Bool {
-  ffi_drawn_pixels_of(inst, count, r, g, b, x, y, w, h, out) == 1
+  ffi_drawn_pixels_of(inst, count, r, g, b, scale, w, h, out) == 1
 }
 
 // A sign-in in the browser that comes back here (browser_login.mbt; apple_browser_login.m, and on Android

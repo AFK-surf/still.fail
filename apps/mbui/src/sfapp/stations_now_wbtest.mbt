@@ -14,12 +14,12 @@ test "wide: the rail's 用量 place, the pointer resting on it, offers 分享卡
   assert_eq(t.corner_faults(), [])
   t.click(Button, label="复制图片")
   t.frame()
-  // what was drawn of the picture on the clipboard, as a PNG as large as it is drawn
+  // the picture on the clipboard, as a PNG three pixels a point (as sharp from this window's two)
   match t.clipboard_png() {
     Some(png) =>
       match png_size(png) {
         Some((pw, ph)) => {
-          assert_true(pw > 300 && ph > 300, msg="\{(pw, ph)}")
+          assert_true(pw == 1080 && ph > 600, msg="\{(pw, ph)}")
           assert_eq(t.clipboard_label(), "still.fail")
         }
         None => fail("not a PNG")
@@ -45,7 +45,7 @@ test "the card to share is one picture, in a dialog as on a phone: what leads th
 }
 
 ///|
-test "the card to share in a short window, in a 360 phone's sheet: all of it seen, drawn smaller, what is copied or kept the same picture smaller" {
+test "the card to share in a short window, in a 360 phone's sheet: all of it seen, drawn smaller; what is copied or kept the same picture, as large, wherever it is shared from" {
   let shared = fn(w : Double, h : Double, platform : Int) -> (Int, Int) raise {
     let src = fixture_app("share-card")
     let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~)
@@ -63,12 +63,11 @@ test "the card to share in a short window, in a 360 phone's sheet: all of it see
     png_size(png).unwrap()
   }
   let (w0, h0) = shared(1440.0, 1000.0, 0)
-  let k0 = h0.to_double() / w0.to_double()
+  assert_eq(w0, 1080)
   for at in [(1280.0, 800.0, 0), (1280.0, 640.0, 0), (360.0, 740.0, 2)] {
-    let (w, h) = shared(at.0, at.1, at.2)
-    // (as tall for as wide as where it has the room: the whole picture, not the part of it a scroll shows)
-    let k = h.to_double() / w.to_double()
-    assert_true(k > k0 - 0.03 && k < k0 + 0.03, msg="\{(at, w, h, w0, h0)}")
+    // (the whole picture, not the part of it a scroll shows; drawn apart, not as the window shows it)
+    let got = shared(at.0, at.1, at.2)
+    assert_true(got == (w0, h0), msg="\{(at, got, w0, h0)}")
   }
 }
 
@@ -108,13 +107,13 @@ test "the card to share on a phone: the picture as wide as its sheet lets it, no
   let src = fixture_app("share-card")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   share_card_laid(t)
-  // a phone keeps pictures in its photo album: what is drawn of the picture kept there, a PNG, said once it is
+  // a phone keeps pictures in its photo album: the picture kept there, a PNG three pixels a point, said once it is
   assert_true(t.query(Button, label="复制图片") is None)
   t.click(Button, label="保存到相册")
   t.run_for(@kit.presence_in_ms)
   assert_eq(t.kept_ways().map(fn(k) { (k.0, k.1.to_string()) }), [("still.fail.png", "Photos")])
   match png_size(t.kept()[0].2) {
-    Some((pw, ph)) => assert_true(pw > 300 && ph > 300, msg="\{(pw, ph)}")
+    Some((pw, ph)) => assert_true(pw == 1080 && ph > 900, msg="\{(pw, ph)}")
     None => fail("not a PNG")
   }
   assert_true(t.find("已保存到相册") is Some(_))

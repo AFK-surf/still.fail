@@ -92,7 +92,7 @@ pub(open) trait Host {
   image_free(Self, Int) -> Unit = _
   image_pixels(Self, Int, FixedArray[Byte]) -> Bool = _
   drawn_pixels(Self, Int, Int, Int, Int, FixedArray[Byte]) -> Bool = _
-  drawn_pixels_of(Self, FixedArray[Double], Int, Double, Double, Double, Int, Int, Int, Int, FixedArray[Byte]) -> Bool = _
+  drawn_pixels_of(Self, FixedArray[Double], Int, Double, Double, Double, Double, Int, Int, FixedArray[Byte]) -> Bool = _
   view_site_next(Self, Int) -> String = _
   view_site_body(Self, Int, Int) -> Bytes = _
   view_site_head(Self, Int, Int, Int, String) -> Unit = _
@@ -600,7 +600,7 @@ impl Host with drawn_pixels(_, _, _, _, _, _) {
 }
 
 ///|
-impl Host with drawn_pixels_of(_, _, _, _, _, _, _, _, _, _, _) {
+impl Host with drawn_pixels_of(_, _, _, _, _, _, _, _, _, _) {
   false
 }
 
@@ -1800,22 +1800,22 @@ pub fn drawn_pixels(x : Int, y : Int, w : Int, h : Int, out : FixedArray[Byte]) 
 
 ///|
 /// Instances never presented (`count` of them in `inst`, as `present` takes a frame's: a shot's, mbui/src/ui/shot.mbt)
-/// drawn by the renderer as a frame of the window's size is, on its ground `r`, `g`, `b`, and their pixels in the
-/// rectangle `x`, `y`, `w` by `h` into `out` as drawn_pixels gives the frame's; the frame presented stays as it was
-/// (drawn again, it is the same). False where the rectangle is not all in it, or nothing can be read back here.
+/// drawn by the renderer as a frame is, but `scale` device pixels a point (whatever the window's) into a picture of
+/// their own `w` by `h` device pixels, their 0, 0 its top left, on its ground `r`, `g`, `b`, and its pixels into `out`
+/// as drawn_pixels gives the frame's (RGBA premultiplied, rows from the top); the frame presented stays as it was
+/// (drawn again, it is the same). False where nothing can be read back here.
 pub fn drawn_pixels_of(
   inst : FixedArray[Double],
   count : Int,
   r : Double,
   g : Double,
   b : Double,
-  x : Int,
-  y : Int,
+  scale : Double,
   w : Int,
   h : Int,
   out : FixedArray[Byte],
 ) -> Bool {
-  current.val.drawn_pixels_of(inst, count, r, g, b, x, y, w, h, out)
+  current.val.drawn_pixels_of(inst, count, r, g, b, scale, w, h, out)
 }
 
 ///|
