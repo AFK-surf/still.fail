@@ -717,6 +717,11 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     self.push_hit(n.id, dmax(n.x, cx0), dmax(n.y, cy0), dmin(n.x + n.fw, cx1), dmin(n.y + n.fh, cy1))
     if n.points {
       self.next_points[n.id] = true
+      // (a part kept: said again as it is drawn again, kept_part.mbt)
+      match kept_parts.get(part_now.painting) {
+        Some(st) => st.points.push(n.id)
+        None => ()
+      }
     }
   }
   // a modal's ground: the wheel stops at it too (overlay.mbt); and what says it stops it (Ctx::stop_wheel), what

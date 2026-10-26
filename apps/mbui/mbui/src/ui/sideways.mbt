@@ -164,6 +164,10 @@ fn Ctx::scroll_state(self : Ctx, id : Int, vertical : Bool) -> Sideways {
       s
     }
   }
+  // (what moves it, in the part it is built in: Mover's `part`)
+  if building.val {
+    st.mover.part = part_now.part
+  }
   if !st.held && st.rest >= 0.0 {
     if st.t0 == @double.infinity {
       // its first step: it sets out now, its way solved once (where it stops, when)

@@ -379,6 +379,43 @@ test "on the tape the sidebar's list scrolled with a finger: the page beside dra
 }
 
 ///|
+/// How far apart the moments are that a flung list is looked at in the test below.
+let tape_fling_step_ms : Double = 150.0
+
+///|
+/// The sidebar's list flung and the page brought over while it flings on: what is drawn as the tape has moved, and at
+/// moments after, the sidebar kept where it can be (`keep`) or built every frame.
+fn tape_flung(keep : Bool) -> Array[String] {
+  // (many weeks of chats in the sidebar: far to fling)
+  reset()
+  let src = fixture("long")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=690.0, h=840.0, platform=2)
+  say_room(t, "medium", "medium")
+  t.run_for(@ui.nav_push_ms)
+  t.keep_parts(keep)
+  t.drag(150.0, 760.0, 150.0, 260.0, steps=6)
+  t.tap(690.0 - @sfdesk.tape_shows / 2.0, 400.0)
+  let out = []
+  t.run_for(@sfdesk.side_move_ms)
+  out.push(drawn_from(t, -1000.0).join("\n"))
+  t.run_for(tape_fling_step_ms)
+  out.push(drawn_from(t, -1000.0).join("\n"))
+  t.run_for(tape_fling_step_ms)
+  out.push(drawn_from(t, -1000.0).join("\n"))
+  out
+}
+
+///|
+test "on the tape the sidebar's list flung, the page brought over: the sidebar flings on behind it as it would built" {
+  let kept = tape_flung(true)
+  let built = tape_flung(false)
+  // (it still flings as it is looked at)
+  assert_true(built[1] != built[2])
+  assert_eq(kept, built)
+}
+
+///|
 test "on the tape a chat's side panel is a panel of its own after the page's: opened it comes over, back the page" {
   let t = tape_chat(0, 720.0, 800.0)
   page_over(t, 720.0)

@@ -31,12 +31,15 @@ impl Moving with sample(self, now) {
 /// number: whatever context it was made in, and whatever was made or told before it, it is no other's.
 pub struct Mover {
   priv mut told : Int
+  /// the part kept (Ctx::kept_part) what it moves was last built in (0 none): what it says moves that part's drawing,
+  /// whenever it is said (a list flung before its panel was kept flings on in it)
+  priv mut part : Int
 }
 
 ///|
 /// A mover of its own, for what moves.
 pub fn Mover::new() -> Mover {
-  { told: 0 }
+  { told: 0, part: 0 }
 }
 
 ///|
@@ -89,6 +92,9 @@ fn Ctx::movers_sample(self : Ctx) -> Unit {
 pub fn Ctx::moving_as(self : Ctx, who : Mover, m : &Moving, what : String) -> Unit {
   who.told = who.told + 1
   let part = part_now.part
+  if part != 0 {
+    who.part = part
+  }
   for e in self.movers {
     if physical_equal(e.who, who) {
       e.m = m
