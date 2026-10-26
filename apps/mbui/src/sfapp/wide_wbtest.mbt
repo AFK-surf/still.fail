@@ -906,6 +906,37 @@ test "wide: words picked in a message with the pointer: 引用 over them quotes 
 }
 
 ///|
+test "wide: words picked with the pointer from a message's heading into its list: 引用 over them quotes all of them, a line each" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  t.run_for(history_fade_ms)
+  for _ in 0..<12 {
+    match t.run_rects("做了什么") {
+      [(_, y, _, _), ..] if y > 100.0 && y < 500.0 => break
+      _ => t.wheel(900.0, 400.0, -200.0)
+    }
+  }
+  t.run_for(history_fade_ms)
+  let (hx, hy, _, hh) = words_rect(t, "做了什么")
+  let (ix, iy, iw, ih) = words_rect(t, "滚动位置记成")
+  t.drag(hx + 1.0, hy + hh / 2.0, ix + iw - 1.0, iy + ih / 2.0)
+  t.frame()
+  let picked = t.ctx().selected_text()
+  assert_true(picked.has_prefix("做了什么\n") && picked.has_suffix("滚动位置记成"), msg=picked)
+  // the pill over what is picked, the message's
+  let (qx, qy) = match t.words().filter(fn(w) { w.0 == "引用" && w.2 < hy && w.2 > hy - 60.0 }) {
+    [w, ..] => (w.1, w.2)
+    _ => fail("no 引用 over what is picked")
+  }
+  t.tap(qx + 4.0, qy + 4.0)
+  t.frame()
+  let quoted = named(calls, "composer.quote")
+  assert_eq(quoted.length(), 1)
+  assert_eq(text(field(Some(quoted[0].params), "quote"), "text"), picked)
+  assert_eq(text(field(Some(quoted[0].params), "quote"), "ts"), "ts3")
+}
+
+///|
 test "wide: settings' pages as the web's: 通知 (提醒方式, each kind), 权限, 归档 (the hint, each station's), a station's archiving" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)

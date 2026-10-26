@@ -328,6 +328,97 @@ test "desktop: words of a selectable paragraph are picked by a drag and copied; 
 }
 
 ///|
+/// Three selectable paragraphs, one under the other (a message's), and one that is not.
+fn three_paragraphs() -> @ui.Tester {
+  @ui.Tester::new(
+    fn(c) {
+      c.mouse_drags_lists(false)
+      c.column(w=Fill(1.0), fn() {
+        c.selectable(fn() {
+          c.column(w=Fill(1.0), gap=12.0, fn() {
+            c.rich([@ui.plain("first words here")], size=15.0) |> ignore
+            c.rich([@ui.plain("the middle")], size=15.0) |> ignore
+            c.rich([@ui.plain("last words there")], size=15.0) |> ignore
+          })
+          |> ignore
+        })
+        c.box(h=Px(40.0), fn() {  }) |> ignore
+        c.rich([@ui.plain("not this one")], size=15.0) |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+  )
+}
+
+///|
+test "desktop: a drag from one paragraph into another picks the rest of the first, all between and the start of the last, the same dragged either way; ⌘C copies them a line each" {
+  let t = three_paragraphs()
+  t.draw()
+  let (ax, ay, aw, ah) = t.run_rects("first words here")[0]
+  let (bx, by, bw, bh) = t.run_rects("last words there")[0]
+  let (x0, y0) = (ax + aw / 2.0, ay + ah / 2.0)
+  let (x1, y1) = (bx + bw / 2.0, by + bh / 2.0)
+  t.drag(x0, y0, x1, y1)
+  let down = t.ctx().selected_text()
+  let lines = down.split("\n").map(fn(l) { l.to_string() }).collect()
+  assert_eq(lines.length(), 3, msg=down)
+  assert_true(lines[0] != "" && lines[0] != "first words here" && "first words here".has_suffix(lines[0]), msg=down)
+  assert_eq(lines[1], "the middle")
+  assert_true(lines[2] != "" && lines[2] != "last words there" && "last words there".has_prefix(lines[2]), msg=down)
+  // the one between drawn picked, all of it
+  let (mx, my, mw, mh) = t.run_rects("the middle")[0]
+  let ground = 0x3B82F64DL
+  assert_true(
+    t.drawn_rects().iter().any(fn(r) { r.4 == ground && r.1 <= my + mh / 2.0 && r.1 + r.3 >= my + mh / 2.0 && r.0 <= mx + 1.0 && r.0 + r.2 >= mx + mw - 1.0 }),
+  )
+  t.key(@ui.key_code_copy, mods=@ui.mod_cmd)
+  assert_eq(t.clipboard(), down)
+  // dragged up from the last to the first: the same words
+  t.drag(x1, y1, x0, y0)
+  assert_eq(t.ctx().selected_text(), down)
+  // the pointer let go past the words, under them all: to the end of the last
+  t.drag(x0, y0, x0, 290.0)
+  assert_true(t.ctx().selected_text().has_suffix("\nthe middle\nlast words there"), msg=t.ctx().selected_text())
+  let (_, y2, _, h2) = t.rect_of("not this one").unwrap()
+  t.tap(10.0, y2 + h2 / 2.0)
+  assert_eq(t.ctx().selected_text(), "")
+}
+
+///|
+test "desktop: words picked on down a list the wheel scrolls under the held pointer: the rows gone out of view stay picked, in order" {
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.mouse_drags_lists(false)
+      c.selectable(fn() {
+        c.list("l", 40, 40.0, fn(i) {
+          c.box(h=Px(40.0), fn() { c.rich([@ui.plain("row \{i} words")], size=15.0) |> ignore }) |> ignore
+        })
+        |> ignore
+      })
+    },
+    w=300.0,
+    h=200.0,
+  )
+  t.draw()
+  let (x, y, _, h) = t.rect_of("row 1 words").unwrap()
+  t.press_at(x + 0.5, y + h / 2.0)
+  t.move(x + 20.0, 170.0)
+  // five rows scrolled under the pointer as it is held (the wheel's ease run out)
+  t.wheel(x + 20.0, 170.0, 200.0)
+  t.run_for(@ui.wheel_ease_ms)
+  assert_true(t.rect_of("row 1 words") is None)
+  t.release(x + 20.0, 170.0)
+  let lines = t.ctx().selected_text().split("\n").map(fn(l) { l.to_string() }).collect()
+  assert_true(lines.length() >= 8, msg=t.ctx().selected_text())
+  for k in 0..<(lines.length() - 1) {
+    assert_eq(lines[k], "row \{k + 1} words")
+  }
+  assert_true("row \{lines.length()} words".has_prefix(lines[lines.length() - 1]), msg=t.ctx().selected_text())
+}
+
+///|
 test "desktop: with a field focused, words picked with the pointer are what ⌘C copies; picking them lets go of the field's" {
   let f = @ui.Field::new(text="draft words")
   let t = @ui.Tester::new(

@@ -125,7 +125,7 @@ fn leaked_state() -> Array[String] {
   check("desk.cursors", desk.cursors.length() + desk.next_cursors.length())
   check("desk.takers", desk.takers.length() + desk.next_takers.length())
   check("desk.sels", desk.sels.length() + desk.next_sels.length())
-  check("picked", picked.base)
+  check("picked", (if picked.from.base != 0 { 1 } else { 0 }) + picked.spans.length())
   check("image_cache", image_cache.length())
   check("image_data", image_data.length())
   check("pagers", pagers.length())

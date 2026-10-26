@@ -287,6 +287,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   }
   // the parts kept that this frame did not show let go (kept_part.mbt)
   parts_frame_end(c)
+  // words picked with the pointer held: to what is under it as laid out now (desktop.mbt), drawn so
+  c.select_after_layout()
   // what the last build said to tell outside, told now, once (Ctx::after_build)
   let tells = c.tells.copy()
   c.tells.clear()
@@ -660,9 +662,9 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
     // picking them lets go of what the focused field had picked, the focus staying its (focus.mbt): one thing picked
     // in the window, as in a browser, and it is what ⌘C copies
     if !c.editors.contains(target) && !keeps_selection_on(target) {
-      select_press(x, y, c.clicks)
+      c.select_press(x, y, c.clicks)
       match c.editors.get(c.focus) {
-        Some(st) if picked.base != 0 => st.anchor = st.caret
+        Some(st) if picked.from.base != 0 => st.anchor = st.caret
         _ => ()
       }
     }
@@ -841,7 +843,7 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
         }
       } else if c.edge > 0 && c.edge_move(x, y, t) {
         ()
-      } else if select_move(x, y) {
+      } else if c.select_move(x, y) {
         // picking words: the press is no tap
         c.active = 0
       } else if c.editor_drag {
