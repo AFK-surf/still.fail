@@ -8,7 +8,7 @@ let conf_text : String =
   #| "globals": {"roots": ["src/app"]},
   #| "flows": ["flows/*.drive"],
   #| "scripts": ["scripts/*.sh", "scripts/*.mjs"],
-  #| "hosts": ["android/*.java", "src/host/*.m"],
+  #| "hosts": ["android/*.java", "src/host/*.m", "src/host/*.c"],
   #| "counts": {}}
 
 ///|
@@ -1600,9 +1600,13 @@ test "host-delay" {
         "src/host/mac_views.m",
         "static void later(void) {\n  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 500), q, ^{ go(); });\n}\n",
       ),
+      (
+        "src/host/linux_views.c",
+        "static void later(void) {\n  g_timeout_add(500, go, NULL);\n}\n",
+      ),
     ],
     "host-delay",
-    2,
+    3,
   )
   |> ignore
   // on the event it is for; a comment naming one; the app's own wake, said

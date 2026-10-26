@@ -35,8 +35,8 @@ pub fn request_frame() -> Unit {
 }
 
 ///|
-/// The system: 0 macOS, 1 iOS, 2 Android, 3 Windows, 4 a browser (a Tester's `platform`; a program's over its host's:
-/// set_platform).
+/// The system: 0 macOS, 1 iOS, 2 Android, 3 Windows, 4 a browser, 5 Linux (a Tester's `platform`; a program's over its
+/// host's: set_platform).
 pub fn platform() -> Int {
   match fake.val {
     Some(_) => h_platform()

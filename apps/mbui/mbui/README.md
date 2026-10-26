@@ -3,8 +3,8 @@
 mbui is a cross-platform UI framework written in MoonBit: one core that
 builds, lays out and paints a tree every frame and draws everything itself on
 the GPU, and thin hosts that put it on the screen and feed it input — macOS
-and iOS (Metal), Windows (Direct3D 11), Android (OpenGL ES), and a WebGL2
-host for tests and previews. Its flexbox passes Yoga's tests and its text
+and iOS (Metal), Windows (Direct3D 11), Android and Linux (OpenGL ES), and a
+WebGL2 host for tests and previews. Its flexbox passes Yoga's tests and its text
 segmentation Unicode's own. It is what [still.fail](https://still.fail)'s
 native clients are being rebuilt in: that app, its design system and pages,
 live in still.fail's repository (`apps/mbui`, built by these scripts with
@@ -62,6 +62,9 @@ src/host    the platform boundary
   win_render.cpp  Direct3D 11 renderer (WARP without a GPU)
   win_text.cpp    DirectWrite shaping, Direct2D glyphs, put in the atlas where MoonBit says
   win_app.c       Win32 window, per-monitor DPI, IMM32 input method
+  gles_render.h   OpenGL ES 3 renderer (Android and Linux)
+  linux_app.c     GTK 4 window (Wayland or X11), its GtkGLArea, GtkIMContext input method
+  linux_text.c    Pango shaping (HarfBuzz, fontconfig's fallback), cairo glyphs, put in the atlas where MoonBit says
 web/        browser host: WebGL2, canvas-2D text, hidden textarea for IME
 src/demo    the demo: a chat screen with 10,000 messages
 src/bench   a headless benchmark after nanoui's hill-climb (bench/README.md)
@@ -116,6 +119,17 @@ scripts/shots.sh windows                        # screenshot compared with golde
 
 CI (the repository's `.github/workflows/mbui-windows.yml`) builds it on `windows-latest`, runs the
 `shot` and `ime` scripts and compares the screenshot with the golden.
+
+On Linux (MoonBit, a C compiler, GTK 4.12 or later with its development files: Ubuntu 24.04's `libgtk-4-dev
+libsoup-3.0-dev`):
+
+```sh
+scripts/linux.sh build && scripts/linux.sh run    # GTK 4 window (Wayland or X11; Xvfb's under xvfb-run)
+scripts/linux.sh script ime                       # scripted IME run, snapshots in out/ime
+```
+
+CI (the repository's `.github/workflows/mbui-host-linux.yml`) builds kitdemo on `ubuntu-24.04` and runs the host's
+contracts in Xvfb, drawn by Mesa's llvmpipe.
 
 ## Licence
 

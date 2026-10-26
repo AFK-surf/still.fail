@@ -1239,7 +1239,7 @@ pub fn frame_late() -> Double {
 }
 
 ///|
-/// The system: 0 macOS, 1 iOS, 2 Android, 3 Windows, 4 a browser.
+/// The system: 0 macOS, 1 iOS, 2 Android, 3 Windows, 4 a browser, 5 Linux.
 pub fn platform() -> Int {
   current.val.platform()
 }

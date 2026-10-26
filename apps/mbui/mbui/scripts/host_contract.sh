@@ -33,7 +33,8 @@
 #        app of its running: this fails, saying so); after them: shut down again when these runs booted it
 #
 # HOST: android (an emulator booted already, SERIAL: emulator-5554 by default; ABI=x86_64 for an x86_64 one), windows
-# (Git Bash with MSVC), web (headless Chromium, Playwright's), mac, ios (a simulator of scripts/ios.sh: MBUI_IOS_DEVICE,
+# (Git Bash with MSVC), linux (a display: Xvfb's on CI, xvfb-run), web (headless Chromium, Playwright's), mac, ios (a
+# simulator of scripts/ios.sh: MBUI_IOS_DEVICE,
 # ios-mbui-sf by default, which another may use too: `free` first). Nothing here waits on a time: each run ends itself
 # (DRIVE PASS, TEXTCHECK done, then the app's exit) and what is waited for is that.
 set -e
@@ -52,11 +53,12 @@ case $H in
   android) PLATFORM=2 ;;
   windows) PLATFORM=3 ;;
   web) PLATFORM=4 ;;
+  linux) PLATFORM=5 ;;
   ios) PLATFORM=1
     export MBUI_IOS_DEVICE=${MBUI_IOS_DEVICE:-ios-mbui-sf} APP=kitdemo
     # the simulator's lock, shared with still.fail's iOS smoke (its scripts/ios-smoke.sh take_lock)
     IOS_LOCK=${MBUI_IOS_LOCK:-$HOME/.mbui-ios-sim.lock} ;;
-  *) echo "host_contract.sh: no host $H (android, windows, web, mac, ios)" >&2; exit 1 ;;
+  *) echo "host_contract.sh: no host $H (android, windows, linux, web, mac, ios)" >&2; exit 1 ;;
 esac
 DRIVE=$(base64 < test/host/controls.drive | tr -d '\n\r')
 # (MBUI_DRAW_DUMP=1: the first frame also drawn as text, for what a Tester that parts there is compared with)
@@ -139,6 +141,8 @@ run() {
       on_screen env MBUI_BENCH=-1 MBUI_WIN=960x720 $1 ./_build/native/release/build/kitdemo/kitdemo.exe > "$2" 2>&1 ;;
     windows)
       env MBUI_BENCH=-1 MBUI_WIN=960x720 $1 ./out/win/mod/_build/native/release/build/kitdemo/kitdemo.exe > "$2" 2>&1 ;;
+    linux)
+      on_screen env MBUI_BENCH=-1 MBUI_WIN=960x720 $1 ./out/linux/mod/_build/native/release/build/kitdemo/kitdemo.exe > "$2" 2>&1 ;;
     web)
       node scripts/host-web.mjs "bench=-1&$(echo "$1" | tr ' ' '&' | sed 's/+/%2B/g; s|/|%2F|g')" "$2" 960 720 ;;
     android)
@@ -180,6 +184,7 @@ case $CMD in
     case $H in
       mac) APP=kitdemo bash scripts/mac.sh build ;;
       windows) APP=kitdemo bash scripts/win.sh build ;;
+      linux) APP=kitdemo bash scripts/linux.sh build ;;
       web) APP=kitdemo bash scripts/web.sh build
         if [ ! -d out/node/node_modules/playwright ]; then
           (mkdir -p out/node && cd out/node && { [ -f package.json ] || npm init -y >/dev/null; } && npm i playwright >/dev/null 2>&1 \
@@ -303,16 +308,17 @@ case $CMD in
     # runner (scripts/done_runner.py, reading its log as it comes) for `ok` and for `bad`: `done ok` passes once ok's
     # file is there, `done bad` fails saying what bad's file says; anything else (a file never told: the run's
     # timeout) breaks the contract
-    case $H in mac|windows|android) ;; *) echo "runner contract: $H watches no runner's directory"; exit 1 ;; esac
+    case $H in mac|windows|linux|android) ;; *) echo "runner contract: $H watches no runner's directory"; exit 1 ;; esac
     DRV=$(printf 'timeout 20000\nlog do: ok\ndone ok\nlog do: bad\ndone bad\nexit\n' | base64 | tr -d '\n\r')
     SAID="--said bad=failed_on_purpose"
     case $H in
-      mac|windows)
+      mac|windows|linux)
         rm -rf $O/done && mkdir -p $O/done
         DIR=$PWD/$O/done
         [ "$H" = windows ] && DIR=$(cygpath -m "$DIR")
         EXE=./_build/native/release/build/kitdemo/kitdemo.exe
         [ "$H" = windows ] && EXE=./out/win/mod/_build/native/release/build/kitdemo/kitdemo.exe
+        [ "$H" = linux ] && EXE=./out/linux/mod/_build/native/release/build/kitdemo/kitdemo.exe
         on_screen env MBUI_BENCH=-1 MBUI_WIN=960x720 MBUI_DRIVE_B64=$DRV MBUI_DONE_DIR="$DIR" $EXE 2>&1 \
           | "$PY" scripts/done_runner.py --log $O/done.log --dir "$DIR" $SAID || true ;;
       android)

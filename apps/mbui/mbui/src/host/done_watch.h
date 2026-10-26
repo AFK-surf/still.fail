@@ -2,11 +2,12 @@
 // run) writes each thing it was asked to do and has done as a file of the directory the run names (MBUI_DONE_DIR, else
 // $MBUI_SHOT_DIR/done), named as the thing, its words what came of it ("ok", or what went wrong), written as .NAME and
 // then renamed NAME, so that it is whole as it comes. The host is told of the directory's change by its system (macOS
-// and iOS: kqueue's EVFILT_VNODE; Android: inotify; Windows: ReadDirectoryChangesW), never by looking again and again,
-// and posts each name that comes there on channel "runner" as {"done": NAME, "said": WORDS} (post.h): the frame it
-// wakes hands it to the drive. What was there as the watch began is an earlier run's: not posted.
+// and iOS: kqueue's EVFILT_VNODE; Android and Linux: inotify; Windows: ReadDirectoryChangesW), never by looking again
+// and again, and posts each name that comes there on channel "runner" as {"done": NAME, "said": WORDS} (post.h): the
+// frame it wakes hands it to the drive. What was there as the watch began is an earlier run's: not posted.
 //
-// Included once by each host's own file, after post.h (mac_app.m, ios_app.m, android_host.c, win_app.c):
+// Included once by each host's own file, after post.h (mac_app.m, ios_app.m, android_host.c, win_app.c,
+// linux_app.c):
 //   mb_done_watch(text)   the watch begun on the directory `text` (a MoonBit string), made when it is not there; 1
 //                         when it watches (or did already), 0 when it cannot
 #pragma once
