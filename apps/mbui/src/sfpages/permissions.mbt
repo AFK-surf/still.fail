@@ -217,8 +217,8 @@ fn archiving_row(c : @ui.Ctx, core : Core, look : Look, s : Json?) -> Unit {
   let narrow = look == Narrow
   c.box(style=match (narrow, opens) {
     (true, _) => narrow_row
-    (false, true) => desk_list_link
-    (false, false) => desk_list_row
+    (false, true) => desk_list_link()
+    (false, false) => desk_list_row()
   }, id~, fn() {
     if !narrow {
       @sf.status_dot(c, if flag(s, "online") { "online" } else { "offline" })

@@ -570,6 +570,24 @@ pub fn section(
 }
 
 ///|
+/// A setting of a few (a choice of a few, a switch, a button): its `title`, what it is for (`note`) and its `control`.
+/// Wide: one line, its words at its start, the control at its end by its title (a section's head with the control
+/// for its actions: rule 5, what goes together on one line, the control at the line's end); narrow: its title over the
+/// control, what it is for under it (the phone's SectionHeader and its note under the choice).
+pub fn setting(c : @ui.Ctx, title : String, control : () -> Unit, note? : String = "") -> Unit {
+  match look() {
+    Wide => wide_section(c, title, fn() {  }, note~, actions=control)
+    Narrow => {
+      heading(c, title)
+      control()
+      if note != "" {
+        page_note(c, note)
+      }
+    }
+  }
+}
+
+///|
 /// A heading over a group (narrow: SectionHeader, 24 in, its words strong, what the group holds or does at its end;
 /// wide: a section's title, 20 over it).
 pub fn heading(c : @ui.Ctx, title : String, note? : String = "", actions? : () -> Unit) -> Unit {
@@ -1115,10 +1133,10 @@ pub fn link_row(
         }
       })
     Wide =>
-      c.box(style=(if under { (if goes { desk_list_link } else { wide_list_row }).then(row_top) } else if goes {
-        desk_list_link
+      c.box(style=(if under { (if goes { desk_list_link() } else { wide_list_row() }).then(row_top) } else if goes {
+        desk_list_link()
       } else {
-        wide_list_row
+        wide_list_row()
       }).then(row_line(false)), id~, fn() {
         match lead {
           Some(f) => if under { row_lead(c, Wide, f) } else { f() }
@@ -1400,7 +1418,7 @@ pub fn choice_row(
       }
     })
   } else {
-    c.box(style=(if goes { desk_list_link } else { wide_list_row }).then(line).then(top), id=if goes { id } else { 0 }, fn() {
+    c.box(style=(if goes { desk_list_link() } else { wide_list_row() }).then(line).then(top), id=if goes { id } else { 0 }, fn() {
       match body {
         Some(f) => f()
         None => words()
@@ -1437,7 +1455,7 @@ pub fn dialog_foot_rows(c : @ui.Ctx, style : @ui.Style, body : () -> Unit) -> Un
 /// stands concentric with its corner.
 fn foot_rows_out() -> Double {
   // (and across the room a panel's dialog stands what it holds in from its padding: column_in_now)
-  dialog_pad - capsule_in(dialog_r, desk_row_least) + column_in_now.val
+  dialog_pad - capsule_in(dialog_r, desk_row_least()) + column_in_now.val
 }
 
 ///|
@@ -1499,7 +1517,7 @@ pub fn switch_row(
     Wide =>
       if in_list.val > 0 {
         let mut now = on
-        c.box(style=wide_in_list, fn() { now = wide_switch_row(c, key, title, on, note~, disabled~, busy~) }) |> ignore
+        c.box(style=wide_in_list(), fn() { now = wide_switch_row(c, key, title, on, note~, disabled~, busy~) }) |> ignore
         now
       } else {
         wide_switch_row(c, key, title, on, note~, disabled~, busy~)
@@ -1541,7 +1559,7 @@ pub fn switch_row(
 /// pointer).
 pub fn said_row(c : @ui.Ctx, title : String, note : String, value? : () -> Unit) -> Unit {
   let narrow = look() == Narrow
-  c.box(style=(if narrow { narrow_row(false) } else { wide_list_row }).then(row_line(narrow)), fn() {
+  c.box(style=(if narrow { narrow_row(false) } else { wide_list_row() }).then(row_line(narrow)), fn() {
     match value {
       // its title, and at its end, in the room the title leaves, a control (a model's picker) where a value is said
       Some(f) => {
@@ -1571,14 +1589,14 @@ let pg_row_end : @ui.Style = @ui.css("row justify=JEnd align=ACenter").then(@ui.
 /// narrow, a card's row (12 in, its corner concentric with the card's); wide, the web's list row.
 pub fn item_row(c : @ui.Ctx, body : () -> Unit) -> Unit {
   let narrow = look() == Narrow
-  c.box(style=(if narrow { narrow_row(false) } else { wide_list_row }).then(row_line(narrow)), body) |> ignore
+  c.box(style=(if narrow { narrow_row(false) } else { wide_list_row() }).then(row_line(narrow)), body) |> ignore
 }
 
 ///|
 /// What a group holds that is not a row (a part's figures, its chips): narrow, on its card as far in as its rows'
 /// words, 12 over and under; wide, on the page as it is. What it holds 12 apart.
 pub fn block(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=if look() == Narrow { pg_block } else if in_list.val > 0 { wide_block.then(wide_in_list) } else { wide_block }, body)
+  c.box(style=if look() == Narrow { pg_block } else if in_list.val > 0 { wide_block.then(wide_in_list()) } else { wide_block }, body)
   |> ignore
 }
 
@@ -2244,7 +2262,11 @@ pub let desk_muted : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color
 /// A list on a wide page: a list card (the narrow page's ListCard, at the column's edges: list_pad in, its rows 2
 /// apart), each row 52 high at least, 10 by 10 in, its parts 12 apart, its corner concentric with the card's; one that
 /// opens on the pointer's ground; its title in 500, what is under it the meta's 12 muted, red where it is wrong; a chevron 16.
-pub let desk_row_least : Double = 52.0
+/// How high it is at least goes by the native input (the theme's items'): 44 with keyboard and mouse, a finger's 48 with
+/// touch, no taller than a press needs (rule 2; the user, 2026-10-26: 「浪费空间」).
+pub fn desk_row_least() -> Double {
+  theme().items.least
+}
 
 ///|
 pub let desk_chevron : Double = 16.0
@@ -2260,11 +2282,15 @@ pub let desk_list : @ui.Style = @ui.style(w=Full, p=list_room, gap=S0_5, radius=
 pub let desk_list_out : Double = 12.0
 
 ///|
+pub fn wide_list_row() -> @ui.Style {
+  wide_list_row_ground.then(@ui.style(min_h=Fixed(desk_row_least())))
+}
+
+///|
 // kept across runs: a value (no field of it changes)
-pub let wide_list_row : @ui.Style = @ui.style(
+let wide_list_row_ground : @ui.Style = @ui.style(
   row=true,
   w=Full,
-  min_h=Fixed(desk_row_least),
   px=list_words_room,
   py=S2_5,
   gap=S3,
@@ -2273,8 +2299,13 @@ pub let wide_list_row : @ui.Style = @ui.style(
 )
 
 ///|
+pub fn desk_list_link() -> @ui.Style {
+  wide_list_row().then(link_hover)
+}
+
+///|
 // kept across runs: a value (no field of it changes)
-pub let desk_list_link : @ui.Style = wide_list_row.then(@ui.css("hovered{bg=Hover}"))
+let link_hover : @ui.Style = @ui.css("hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2460,9 +2491,14 @@ let head_mark_narrow_side : Double = 40.0
 /// card's list_pad), 10 over and under: a row of it as its rows are, as high as one at least (desk_row_least), what it
 /// holds in its middle, its corner the card's less the ladder's step (what stands in it, a switch at its end, is in
 /// its corners, not the card's).
+fn wide_in_list() -> @ui.Style {
+  wide_in_list_ground.then(@ui.style(min_h=Fixed(desk_row_least())))
+}
+
+///|
 // kept across runs: a value (no field of it changes)
-let wide_in_list : @ui.Style = @ui.css("w=Full py=S2_5 justify=JCenter").then(
-  @ui.style(px=list_words_room, min_h=Fixed(desk_row_least), radius=InnerOr(Xl2)),
+let wide_in_list_ground : @ui.Style = @ui.css("w=Full py=S2_5 justify=JCenter").then(
+  @ui.style(px=list_words_room, radius=InnerOr(Xl2)),
 )
 
 ///|

@@ -189,7 +189,7 @@ fn memory_row(
   let t = @sf.theme()
   let id = c.id(key)
   let narrow = look == Narrow
-  let b = c.box(style=if narrow { narrow_row } else { desk_list_link }, id~, fn() {
+  let b = c.box(style=if narrow { narrow_row } else { desk_list_link() }, id~, fn() {
     c.box(style=desk_list_text, fn() {
       c.box(style=mem_title_line, fn() {
         c.text(title, style=if narrow { mem_narrow_title } else { desk_list_title }) |> ignore

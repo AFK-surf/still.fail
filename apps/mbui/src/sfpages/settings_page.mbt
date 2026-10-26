@@ -25,8 +25,9 @@ using @sf {
 }
 
 ///|
-// kept across runs: a value (no field of it changes)
-pub let desk_list_row : @ui.Style = @sf.wide_list_row
+pub fn desk_list_row() -> @ui.Style {
+  @sf.wide_list_row()
+}
 
 ///|
 // kept across runs: a value (no field of it changes)

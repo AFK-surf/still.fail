@@ -146,7 +146,7 @@ fn devices_list(c : @ui.Ctx, core : Core, look : Look, here : Here, list : Array
       let id = text(dv, "id")
       let current = flag(dv, "current")
       // its name, 当前 or 退出 on its first line; when it signed in and until when under them, a line of its own
-      c.box(style=if narrow { @sf.pg_said_row } else { desk_list_row }, fn() {
+      c.box(style=if narrow { @sf.pg_said_row } else { desk_list_row() }, fn() {
         @sf.row_lines(c, spaced=true, fn() {
           c.box(style=desk_named.then(acc_device_head), fn() {
             c.text(

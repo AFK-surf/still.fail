@@ -313,8 +313,8 @@ fn ws_person(
   let style = match (narrow, id != 0) {
     (true, true) => narrow_row
     (true, false) => @sf.pg_said_row
-    (false, true) => desk_list_link
-    (false, false) => desk_list_row
+    (false, true) => desk_list_link()
+    (false, false) => desk_list_row()
   }
   c.box(style~, id~, fn() {
     picture()

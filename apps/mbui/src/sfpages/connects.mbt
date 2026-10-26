@@ -302,7 +302,7 @@ fn cn_row(c : @ui.Ctx, core : Core, look : Look, station : String, station_name 
   let on = [("station", station), ("id", id)]
   let b = match look {
     Wide =>
-      c.box(style=desk_list_link, id=rid, fn() {
+      c.box(style=desk_list_link(), id=rid, fn() {
         cn_avatar(c, core, cv)
         // its name and what is at its end on its first line, how it runs under them as wide as its words (a line of its
         // own); short of room, its name kept: its team leaves its line, where it runs and who made it the row
@@ -442,7 +442,7 @@ fn cn_waiting_app(c : @ui.Ctx, src : Source, core : Core, here : Here, look : Lo
       },
     )
   }
-  c.box(style=if look == Wide { desk_list_row } else { @sf.pg_said_row }, fn() {
+  c.box(style=if look == Wide { desk_list_row() } else { @sf.pg_said_row }, fn() {
     c.box(style=cn_kind_box, fn() { @sf.slack_mark(c, cn_waiting_mark) |> ignore }) |> ignore
     c.box(style=if look == Wide { cn_text } else { @sf.pg_row_words }, keep=true, fn() {
       c.box(style=cn_title_line, fn() {

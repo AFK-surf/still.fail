@@ -2149,7 +2149,9 @@ pub fn field(
   error? : String = "",
   aside? : () -> Unit,
 ) -> Unit {
-  c.box(style=field_box, fn() {
+  // (on a wide page not the column's whole width: as wide as what is typed in it needs, rule 5; in a panel, its width)
+  let wide_page = look() is Wide && !in_panel()
+  c.box(style=if wide_page { field_box_wide } else { field_box }, fn() {
     c.box(style=field_top, fn() {
       c.text(label, style=field_label) |> ignore
       match aside {
@@ -2171,6 +2173,13 @@ pub fn field(
 ///|
 // kept across runs: a value (no field of it changes)
 let field_box : @ui.Style = @ui.css("w=Full gap=S1_5")
+
+///|
+/// A field on a wide page: 420 at most (rule 5: what is typed not the column's whole width).
+let field_box_wide : @ui.Style = field_box.then(@ui.style(max_w=Fixed(field_wide_most)))
+
+///|
+pub let field_wide_most : Double = 420.0
 
 ///|
 // kept across runs: a value (no field of it changes)
