@@ -244,8 +244,9 @@ export const msgMain = style({
 });
 /**
  * A message's own table (not one in a list item or a quote) scrolls through the room its list leaves beside the words
- * too, where that room is only the page's margin (`--list-gutter`, set by such a list: the phone's; the wide screen's
- * holds the avatars): scrolled, it runs to the screen's edge, and at either end it lines up with the words.
+ * too, where that room is only the page's margin (`--list-gutter`, set by such a list: the phone's, the wide screen's,
+ * whose avatars stand by their heads' line): scrolled, it runs to the pane's edge, and at either end it lines up with
+ * the words.
  */
 globalStyle(`${msgMain} > ${markdown} > ${tableScroll}`, { ...bleedX("var(--list-gutter, 0px)"), maxWidth: "calc(100% + 2 * var(--list-gutter, 0px))" });
 export const msgAvatarAgent = style({

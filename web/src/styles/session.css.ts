@@ -46,6 +46,10 @@ export const chatPane = style({
 export const chatList = style({
   flex: "1", minHeight: "0", overflowY: "auto", padding: "24px 40px", display: "flex", flexDirection: "column",
   gap: "28px", position: "relative", overflowAnchor: "none",
+  // Its sides are only margin, its rows' 760 in its middle (later.css.ts) and the pictures by their heads' line: a
+  // message's table scrolls out over them to the pane's edge (../Chat.css.ts), measured on the list's own width.
+  containerType: "inline-size",
+  vars: { "--list-gutter": "calc(40px + max(0px, (100cqw - 760px) / 2))" },
   selectors: {
     // What floats over its foot: its scrollbar (scrollbars.ts) ends a little above the composer, not under it.
     [`${chat}[data-under-composer] &`]: {
@@ -61,6 +65,7 @@ export const chatList = style({
   "@media": {
     "(max-width: 700px)": {
       padding: "16px",
+      vars: { "--list-gutter": "16px" },
       paddingRight: "calc(16px + var(--avoid-previews, 0px))",
     },
   },

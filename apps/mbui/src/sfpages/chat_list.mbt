@@ -67,8 +67,9 @@ pub fn chat_list(
   // under the viewer's own message, at the column's end where the bell is)
   let ask_clear = if asks_of(v).is_empty() { 0.0 } else { float_lift + float_side }
   let side = if narrow { row_side_narrow } else { row_side(c) }
-  // the sides are only margin where the pictures are inline; wider, the margin holds them
-  let gutter = if narrow { side } else { 0.0 }
+  // the sides are only the page's margin either way: wide, the pictures out in it stand by their heads' line, not by
+  // the words under it, so a table scrolls out over it to the pane's edges as it does narrow
+  let gutter = side
   let list_box = c.box(style=chat_list_box, fn() {
     c.list(
       key,
@@ -256,7 +257,7 @@ pub fn chat_messages_sample(c : @ui.Ctx, top : Double) -> Unit {
     view,
     go: None,
     inline: narrow,
-    gutter: if narrow { side } else { 0.0 },
+    gutter: side,
     list: None,
     core: None,
   }
