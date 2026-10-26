@@ -302,3 +302,76 @@ test "a part kept is built while the mouse's pointer is over it: what it points 
   let built = kept_frames(false, 0, steps, pointing=Mouse)
   kept_same(kept, built)
 }
+
+///|
+/// A list of rows at the left, a part kept at the right holding two buttons, a button under it: what takes the focus,
+/// in Tab's order, the part's first; how many times the part was built.
+fn focus_part_view(ids : Array[Int], builds : Ref[Int]) -> (Ctx) -> Unit {
+  fn(c) {
+    c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), fn() {
+      c.box(w=Px(150.0), h=Fill(1.0), fn() {
+        c.list("rows", 40, 40.0, fn(i) {
+          c.box(h=Px(40.0), fn() { c.text("row \{i}", size=10.0) |> ignore }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+      c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+        c.box(h=Px(100.0), fn() {
+          c.kept_part(c.id("part"), "", fn() {
+            builds.val = builds.val + 1
+            for k in 0..<2 {
+              let id = c.id("in \{k}")
+              ids[k] = id
+              c.interact(id) |> ignore
+              c.box(id~, w=Px(80.0), h=Px(30.0), bg=0x3366CCFFL, fn() { c.text("in \{k}", size=10.0) |> ignore })
+              |> ignore
+            }
+          })
+        })
+        |> ignore
+        let id = c.id("under")
+        ids[2] = id
+        c.interact(id) |> ignore
+        c.box(id~, w=Px(80.0), h=Px(30.0), bg=0x3366CCFFL, fn() { c.text("under", size=10.0) |> ignore }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
+/// The list beside the part scrolled by the wheel, then Tab: where the focus went, and whether the part was drawn again
+/// (not built) as Tab came.
+fn tab_beside(t : Tester, builds : Ref[Int], went : Array[Int]) -> Bool {
+  t.wheel(75.0, 200.0, 40.0)
+  t.run_for(kept_ease_ms)
+  let before = builds.val
+  t.frame()
+  let again = builds.val == before
+  t.tab()
+  went.push(g().focused_id())
+  again
+}
+
+///|
+test "a part kept drawn again: what takes the focus in it is in Tab's order, as built" {
+  let run = fn(replay : Bool) -> (Array[Int], Array[Int], Array[Bool]) {
+    let ids = [0, 0, 0]
+    let builds = Ref(0)
+    let t = Tester::new(focus_part_view(ids, builds), w=420.0, h=400.0, platform=0)
+    t.keep_parts(true)
+    drawn_again_on.val = replay
+    t.draw()
+    let went = []
+    let again = [tab_beside(t, builds, went), tab_beside(t, builds, went), tab_beside(t, builds, went)]
+    drawn_again_on.val = true
+    (went, ids, again)
+  }
+  let (went_kept, ids, again) = run(true)
+  let (went_built, _, _) = run(false)
+  assert_eq(again, [true, true, true])
+  assert_eq(went_kept, ids)
+  assert_eq(went_built, went_kept)
+}

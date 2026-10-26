@@ -343,6 +343,7 @@ pub fn Tester::new(
   rows_kept_on.val = false
   drawn_again_on.val = true
   said_log.on = false
+  said_log.built.reset()
   said_log.sb.reset()
   said_log.ids.clear()
   // (after the globals are put back: what came from outside before the run's first frame, posted here, would be lost

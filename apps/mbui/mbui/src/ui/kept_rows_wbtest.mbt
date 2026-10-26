@@ -564,3 +564,53 @@ test "a list's row drawn again keeps what its build read of the layout: built ag
   t.frame()
   assert_eq(read, [true])
 }
+
+///|
+/// 30 rows, each saying once a frame's builds are over that it showed (Ctx::after_build), its button telling once of a
+/// tap on it (Ctx::tell): how many times each said it showed, how many taps were told.
+fn telling_rows(seen : Array[Int], taps : Ref[Int]) -> (Ctx) -> Unit {
+  fn(c) {
+    c.list("telling", 30, 50.0, fn(i) {
+      let go = c.id("go")
+      if c.clicked(go) {
+        c.tell("tapped", fn() { taps.val = taps.val + 1 })
+      }
+      c.after_build("shown", fn() { seen[i] = seen[i] + 1 })
+      c.box(h=Px(50.0), dir=Row, padx=10.0, align=ACenter, fn() {
+        c.box(w=Fill(1.0), fn() { c.text("row \{i}", size=12.0) |> ignore }) |> ignore
+        c.box(id=go, w=Px(60.0), h=Px(30.0), bg=0x3366CCFFL, fn() { c.text("go \{i}", size=10.0) |> ignore })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
+test "a list's row drawn again says again what every build of it says, but tells what one build saw only once" {
+  let run = fn(replay : Bool) -> (Array[Int], Int, Int) {
+    let seen = Array::make(30, 0)
+    let taps = Ref(0)
+    let t = Tester::new(telling_rows(seen, taps), w=320.0, h=420.0, platform=2)
+    t.keep_parts(true)
+    drawn_again_on.val = replay
+    t.draw()
+    t.run_for(rows_notch_ms)
+    let (x, y, w, h) = t.rect_of("go 2").unwrap()
+    t.tap(x + w / 2.0, y + h / 2.0)
+    let kept = Ref(0)
+    frame_hook.val = Some(fn() { kept.val = kept.val + t.rows_kept() })
+    t.run_for(rows_fling_ms)
+    frame_hook.val = None
+    drawn_again_on.val = true
+    (seen, taps.val, kept.val)
+  }
+  let (seen_kept, taps_kept, kept) = run(true)
+  let (seen_built, taps_built, _) = run(false)
+  // (drawn again after the tap's build: what it told not told again)
+  assert_true(kept > 0, msg="rows drawn again: \{kept}")
+  assert_eq(taps_kept, 1)
+  assert_eq(taps_built, 1)
+  assert_eq(seen_kept, seen_built)
+}

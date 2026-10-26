@@ -138,6 +138,9 @@ priv struct Drawn {
   mut part : Int
   mut again : KeptPart?
   mut row : Int
+  /// a list's row: the row whose build said what it said of the frame (its id among the rows', 0 none), said where its
+  /// list's rows say theirs (kept_rows.mbt's row_build_said)
+  mut said_row : Int
 }
 
 ///|
@@ -314,6 +317,7 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     part: 0,
     again: None,
     row: 0,
+    said_row: 0,
   }
   dr.stamp[i] = dr.build
   dr.at[i] = dr.entries.length()
@@ -555,7 +559,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       if dr.mode != mode_hits {
         self.part_paint_again(st)
       }
-      self.paint_again(st.said, unmoved)
+      self.say_again(st.said, unmoved)
       return true
     }
     None => ()

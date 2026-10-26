@@ -1,20 +1,26 @@
-// What a frame's paint says of it besides what it draws: where presses go (its targets), what is only pointed at, what
-// the wheel and a finger scroll, the words that can be picked, the scroll bars, a Tester's lines of words. Each is a
-// list of the frame's (a SaidList, one of `paint_lists`), added to in drawing order.
+// What a frame's builds and its paint say of it besides what they draw. Its builds: what takes the focus, the
+// pointer's shape over a target, what takes presses, what drags the window, what keeps what is picked, what asks for a
+// menu, whether the mouse drags lists, what is told outside once the builds are over. Its paint: where presses go (its
+// targets), what is only pointed at, what the wheel and a finger scroll, the words that can be picked, the scroll
+// bars, a Tester's lines of words. Each is a list of the frame's (a SaidList, one of `build_lists` or `paint_lists`),
+// added to in the order said.
 //
-// A part kept or a list's row kept (kept_part.mbt, kept_rows.mbt) takes from each list what its paint added, from where
-// the list stood as its paint began, and says it again, moved to where it is drawn now, each frame it is drawn again:
-// all of what it said by one rule, none of it kept list by list by hand. A list the frame's paint adds to is said again
-// with the rest by being one of `paint_lists`, and only so. What a row's paint said is put in its list's clip by the
-// same rule as it is said (Moved), recorded or said again alike: what a row drawn again says is what its build says
-// there. (Zed's GPUI keeps a frame's hitboxes, listeners and the rest in its Frame, and a cached view's range of each
-// given again: `reuse_paint`.)
+// A part kept or a list's row kept (kept_part.mbt, kept_rows.mbt) takes from each list what its build and its paint
+// added, from where the list stood as they began, and says it again, moved to where it is drawn now, each frame it is
+// drawn again: all of what it said by one rule, none of it kept list by list by hand. A list the frame's builds or its
+// paint add to is said again with the rest by being one of `build_lists` or `paint_lists`, and only so. A list's rows
+// say what their builds said in their order, built or drawn again (Ctx::rows_placed), and a part drawn again what the
+// rows it holds said, where they said it (as its box is laid out). What a row's paint said is put in its list's clip by
+// the same rule as it is said (Moved), recorded or said again alike: what a row drawn again says is what its build says
+// there. (Zed's GPUI keeps a frame's hitboxes, listeners, focus and the rest in its Frame, and a cached view's range of
+// each given again: `reuse_prepaint`, `reuse_paint`.)
 
 ///|
 /// Where what a part's or a row's paint said is said again: `dy` down the window from where it was said. A list's row's
 /// is put in its list's clip (`cut`, its place in clip_stack), what of a clip was its recording's band (its own clip as
 /// recorded, band_l to band_r across and band_t to band_b down: kept_rows.mbt) left as far off as nothing cuts. `cut`
-/// -1: as it was said (a part's: nothing round it moved).
+/// -1: as it was said (a part's: nothing round it moved). What its build said of a node, said of `node` (its box's now:
+/// what it built is not built; -1, as it was said).
 priv struct Moved {
   dy : Double
   cut : Int
@@ -22,12 +28,19 @@ priv struct Moved {
   band_t : Double
   band_r : Double
   band_b : Double
+  node : Int
 }
 
 ///|
 /// What is said again where it was said.
 // kept across runs: never written
-let unmoved : Moved = { dy: 0.0, cut: -1, band_l: 0.0, band_t: 0.0, band_r: 0.0, band_b: 0.0 }
+let unmoved : Moved = { dy: 0.0, cut: -1, band_l: 0.0, band_t: 0.0, band_r: 0.0, band_b: 0.0, node: -1 }
+
+///|
+/// What a build said said again of node `node` (a part's or a row's box drawn again).
+fn moved_to(node : Int) -> Moved {
+  { ..unmoved, node: node }
+}
 
 ///|
 /// Rect (x0 y0 x1 y1) moved, in the clip it is put in.
@@ -126,6 +139,44 @@ let paint_lists : Array[&SaidList] = [
 ]
 
 ///|
+/// The lists the frame's builds add to, each said again by what is kept: what takes the focus, the pointer's shape,
+/// what takes presses, what drags the window, what keeps what is picked, what asks for a menu, whether the mouse drags
+/// lists, what is told once the builds are over.
+// kept across runs: never written
+let build_lists : Array[&SaidList] = [
+  FocusSaid::{  },
+  CursorsSaid::{  },
+  TakersSaid::{  },
+  DragsSaid::{  },
+  KeepsSaid::{  },
+  AskersSaid::{  },
+  MouseDragsSaid::{  },
+  TellsSaid::{  },
+]
+
+///|
+/// Where each of the frame's build lists stands now (`marks`, filled).
+fn Ctx::build_marks(self : Ctx, marks : Array[Int]) -> Unit {
+  marks.clear()
+  for l in build_lists {
+    marks.push(l.said_len(self))
+  }
+}
+
+///|
+/// What the builds added to each list since `marks`, taken into `into` (what was there let go); with `cut`, each list
+/// cut back to where it stood (to be said again where it belongs: a list's row, in its rows' order).
+fn Ctx::build_take(self : Ctx, marks : Array[Int], into : Array[&SaidAgain], cut~ : Bool) -> Unit {
+  into.clear()
+  for j, l in build_lists {
+    into.push(l.said_take(self, marks[j]))
+    if cut {
+      l.said_cut(self, marks[j])
+    }
+  }
+}
+
+///|
 /// The targets' place among the paint lists, and what scrolls' (a part's marks: what the hand is found on).
 let said_hits : Int = 0
 
@@ -159,26 +210,28 @@ fn Ctx::paint_cut(self : Ctx, marks : Array[Int]) -> Unit {
 }
 
 ///|
-/// What was taken said again, moved (`m`).
-fn Ctx::paint_again(self : Ctx, said : Array[&SaidAgain], m : Moved) -> Unit {
+/// What was taken (of the builds' lists or the paint's) said again, moved (`m`).
+fn Ctx::say_again(self : Ctx, said : Array[&SaidAgain], m : Moved) -> Unit {
   for s in said {
     s.said_again(self, m)
   }
 }
 
 ///|
-/// What the last frame's paint said, kept for a Tester that asks (Tester::said): each paint list's, as it holds it; the
-/// ids said, numbered in the order they were first said in the run (an id is the same in every run of the same view
-/// but for what is numbered across runs: a page's scope, nav.mbt's nav_serial).
+/// What the last frame's builds and paint said, kept for a Tester that asks (Tester::said): each list's, as it holds
+/// it; the ids said, numbered in the order they were first said in the frame (an id is the same in every run of the
+/// same view but for what is numbered across runs: a page's scope, nav.mbt's nav_serial; numbered by frame, as what a
+/// frame says is the same whatever frames came before it).
 priv struct SaidLog {
   mut on : Bool
+  built : StringBuilder
   sb : StringBuilder
   ids : Map[Int, Int]
 }
 
 ///|
 // kept across runs: put back by each Tester (Tester::new)
-let said_log : SaidLog = { on: false, sb: StringBuilder(), ids: {} }
+let said_log : SaidLog = { on: false, built: StringBuilder(), sb: StringBuilder(), ids: {} }
 
 ///|
 /// Id `id` as shown (SaidLog's `ids`; 0 none).
@@ -197,6 +250,19 @@ fn said_id(id : Int) -> Int {
 }
 
 ///|
+/// The frame's builds over: what they said, shown where a Tester asks.
+fn Ctx::said_built_logged(self : Ctx) -> Unit {
+  if !said_log.on {
+    return
+  }
+  said_log.built.reset()
+  said_log.ids.clear()
+  for l in build_lists {
+    l.said_take(self, 0).said_show(said_log.built)
+  }
+}
+
+///|
 /// The frame painted: what its paint said, shown where a Tester asks.
 fn Ctx::said_logged(self : Ctx) -> Unit {
   if !said_log.on {
@@ -209,14 +275,14 @@ fn Ctx::said_logged(self : Ctx) -> Unit {
 }
 
 ///|
-/// What the last frame's paint said of it besides its drawing (said.mbt's paint lists: its targets and which of them
-/// are only pointed at, what scrolls, the words that can be picked, the scroll bars, the lines of words), a line each, lengths
-/// in 64ths of a point, ids numbered as first said in the run: what a part or a row drawn again must say as its build
+/// What the last frame's builds and paint said of it besides its drawing (said.mbt's build lists: what takes the focus
+/// and the rest; its paint lists: its targets and which of them are only pointed at, what scrolls, the words that can be picked, the scroll bars, the lines of words), a line each, lengths
+/// in 64ths of a point, ids numbered as first said in the frame: what a part or a row drawn again must say as its build
 /// does. Shown from the frame after the first that asks.
 pub fn Tester::said(self : Tester) -> String {
   ignore(self)
   said_log.on = true
-  said_log.sb.to_string()
+  said_log.built.to_string() + said_log.sb.to_string()
 }
 
 ///|
@@ -225,7 +291,278 @@ fn said_num(v : Double) -> Int64 {
   (v * 64.0).round().to_int64()
 }
 
-// ── the lists ───────────────────────────────────────────────────────────
+// ── the builds' lists ───────────────────────────────────────────────────
+
+///|
+/// What takes the focus (Ctx::focusable), in Tab's order.
+priv struct FocusSaid {}
+
+///|
+priv struct FocusTaken {
+  all : Array[Focusable]
+}
+
+///|
+impl SaidList for FocusSaid with said_len(_, c) {
+  c.focusables.length()
+}
+
+///|
+impl SaidList for FocusSaid with said_take(_, c, from) {
+  FocusTaken::{ all: c.focusables[from:].to_owned() }
+}
+
+///|
+impl SaidList for FocusSaid with said_cut(_, c, len) {
+  c.focusables.truncate(len)
+}
+
+///|
+impl SaidAgain for FocusTaken with said_again(self, c, m) {
+  for f in self.all {
+    c.focusables.push(if m.node >= 0 { { ..f, node: m.node } } else { f })
+  }
+}
+
+///|
+impl SaidAgain for FocusTaken with said_show(self, sb) {
+  for f in self.all {
+    sb.write_string(
+      "focus \{said_id(f.id)} \{said_id(f.group)} \{said_id(f.layer)} \{f.keys} \{f.on_press}\n",
+    )
+  }
+}
+
+///|
+/// The pointer's shape over a target (Ctx::cursor): its id, the shape's code.
+priv struct CursorsSaid {}
+
+///|
+priv struct PairsTaken {
+  name : String
+  all : Array[(Int, Int)]
+  to : Array[(Int, Int)]
+}
+
+///|
+impl SaidList for CursorsSaid with said_len(_, c) {
+  ignore(c)
+  desk.next_cursors.length()
+}
+
+///|
+impl SaidList for CursorsSaid with said_take(_, c, from) {
+  ignore(c)
+  PairsTaken::{ name: "cursor", all: desk.next_cursors[from:].to_owned(), to: desk.next_cursors }
+}
+
+///|
+impl SaidList for CursorsSaid with said_cut(_, c, len) {
+  ignore(c)
+  desk.next_cursors.truncate(len)
+}
+
+///|
+impl SaidAgain for PairsTaken with said_again(self, c, _) {
+  ignore(c)
+  self.to.append(self.all)
+}
+
+///|
+impl SaidAgain for PairsTaken with said_show(self, sb) {
+  for p in self.all {
+    sb.write_string("\{self.name} \{said_id(p.0)} \{p.1}\n")
+  }
+}
+
+///|
+/// Ids said by what is built (each of the lists of them: what takes presses, what drags the window, what keeps what is
+/// picked, what asks for a menu).
+priv struct IdsTaken {
+  name : String
+  all : Array[Int]
+  to : Array[Int]
+}
+
+///|
+impl SaidAgain for IdsTaken with said_again(self, c, _) {
+  ignore(c)
+  self.to.append(self.all)
+}
+
+///|
+impl SaidAgain for IdsTaken with said_show(self, sb) {
+  for id in self.all {
+    sb.write_string("\{self.name} \{said_id(id)}\n")
+  }
+}
+
+///|
+/// What takes presses (Ctx::takes_presses, and what reads its click).
+priv struct TakersSaid {}
+
+///|
+impl SaidList for TakersSaid with said_len(_, c) {
+  ignore(c)
+  desk.next_takers.length()
+}
+
+///|
+impl SaidList for TakersSaid with said_take(_, c, from) {
+  ignore(c)
+  IdsTaken::{ name: "takes", all: desk.next_takers[from:].to_owned(), to: desk.next_takers }
+}
+
+///|
+impl SaidList for TakersSaid with said_cut(_, c, len) {
+  ignore(c)
+  desk.next_takers.truncate(len)
+}
+
+///|
+/// What drags the window (Ctx::window_drag).
+priv struct DragsSaid {}
+
+///|
+impl SaidList for DragsSaid with said_len(_, c) {
+  ignore(c)
+  desk.next_drags.length()
+}
+
+///|
+impl SaidList for DragsSaid with said_take(_, c, from) {
+  ignore(c)
+  IdsTaken::{ name: "drags", all: desk.next_drags[from:].to_owned(), to: desk.next_drags }
+}
+
+///|
+impl SaidList for DragsSaid with said_cut(_, c, len) {
+  ignore(c)
+  desk.next_drags.truncate(len)
+}
+
+///|
+/// What keeps what is picked with the pointer (Ctx::keeps_selection).
+priv struct KeepsSaid {}
+
+///|
+impl SaidList for KeepsSaid with said_len(_, c) {
+  ignore(c)
+  desk.next_keeps.length()
+}
+
+///|
+impl SaidList for KeepsSaid with said_take(_, c, from) {
+  ignore(c)
+  IdsTaken::{ name: "keeps", all: desk.next_keeps[from:].to_owned(), to: desk.next_keeps }
+}
+
+///|
+impl SaidList for KeepsSaid with said_cut(_, c, len) {
+  ignore(c)
+  desk.next_keeps.truncate(len)
+}
+
+///|
+/// What asks for a menu (Ctx::menu_asked).
+priv struct AskersSaid {}
+
+///|
+impl SaidList for AskersSaid with said_len(_, c) {
+  ignore(c)
+  desk.next_askers.length()
+}
+
+///|
+impl SaidList for AskersSaid with said_take(_, c, from) {
+  ignore(c)
+  IdsTaken::{ name: "asks", all: desk.next_askers[from:].to_owned(), to: desk.next_askers }
+}
+
+///|
+impl SaidList for AskersSaid with said_cut(_, c, len) {
+  ignore(c)
+  desk.next_askers.truncate(len)
+}
+
+///|
+/// Whether the mouse drags lists as a finger does (Ctx::mouse_drags_lists): the last said holds.
+priv struct MouseDragsSaid {}
+
+///|
+priv struct BoolsTaken {
+  all : Array[Bool]
+}
+
+///|
+impl SaidList for MouseDragsSaid with said_len(_, c) {
+  ignore(c)
+  desk.next_mouse_drags.length()
+}
+
+///|
+impl SaidList for MouseDragsSaid with said_take(_, c, from) {
+  ignore(c)
+  BoolsTaken::{ all: desk.next_mouse_drags[from:].to_owned() }
+}
+
+///|
+impl SaidList for MouseDragsSaid with said_cut(_, c, len) {
+  ignore(c)
+  desk.next_mouse_drags.truncate(len)
+}
+
+///|
+impl SaidAgain for BoolsTaken with said_again(self, c, _) {
+  ignore(c)
+  desk.next_mouse_drags.append(self.all)
+}
+
+///|
+impl SaidAgain for BoolsTaken with said_show(self, sb) {
+  for on in self.all {
+    sb.write_string("mouse_drags \{on}\n")
+  }
+}
+
+///|
+/// What is told outside once the frame's builds are over (Ctx::after_build): by its id, once (the last said). What a
+/// build alone saw (Ctx::tell: an input it took) is told once, never again as what said it is drawn again.
+priv struct TellsSaid {}
+
+///|
+priv struct TellsTaken {
+  all : Array[(Int, () -> Unit)]
+}
+
+///|
+impl SaidList for TellsSaid with said_len(_, c) {
+  c.tells.length()
+}
+
+///|
+impl SaidList for TellsSaid with said_take(_, c, from) {
+  TellsTaken::{ all: c.tells[from:].to_owned() }
+}
+
+///|
+impl SaidList for TellsSaid with said_cut(_, c, len) {
+  c.tells.truncate(len)
+}
+
+///|
+impl SaidAgain for TellsTaken with said_again(self, c, _) {
+  c.tells.append(self.all)
+}
+
+///|
+impl SaidAgain for TellsTaken with said_show(self, sb) {
+  for t in self.all {
+    sb.write_string("tells \{said_id(t.0)}\n")
+  }
+}
+
+// ── the paint's lists ───────────────────────────────────────────────────
 
 ///|
 /// The targets (Ctx::push_hit): ids, how many of those from each are drawn in it (its end), their rects, their clips;
