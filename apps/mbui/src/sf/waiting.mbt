@@ -3,7 +3,8 @@
 // - a page or a list read for the first time: `waiting`, placeholders shaped as what will come (`wait_shapes`: rows,
 //   messages, cards), breathing, no words; what could not be read said over them in red;
 // - a row or a button at work: `spinner` in its place, in one of two sizes (14, 12 in a line of small text);
-// - what has a size on its way: `progress`.
+// - what has a size on its way: `progress`; in a spinner's place (a line saying how far, a picture going up),
+//   `progress_spinner`.
 // Words (a pill, a line) come only after a moment (later_ms), so what is there at once shows none; what failed says so
 // at once, in red.
 
@@ -172,6 +173,32 @@ pub fn spinner(
     w=Px(size),
     h=Px(size),
   )
+}
+
+///|
+/// The spinner, or how far what it waits on has come once that is known (docs/ui-panels.md 等待: a transfer in a
+/// spinner's place, a message's files going up, a picture going up, an update round its key's mark): the same ring,
+/// the accent from its top as far round as it has come (`coming`, 0 to 1), going to a part told anew as a progress
+/// bar's fill does (`key` its own); None, the spinner's quarter turning. `size` across.
+pub fn progress_spinner(c : @ui.Ctx, key : String, coming : Double?, size? : Double = 14.0) -> Int {
+  match coming {
+    None => spinner(c, size~)
+    Some(k) => {
+      let t = theme()
+      let pi = 3.141592653589793
+      let mid = size / 2.0
+      let r = mid - spin_stroke / 2.0
+      let k = if k < 0.0 { 0.0 } else if k > 1.0 { 1.0 } else { k }
+      let shown = @motion.animate(c, key + "/coming", k, spec=@motion.tween(@kit.progress_ms, ease=Out))
+      let ring = @ui.arc(mid, mid, r, from=0.0, sweep=2.0 * pi)
+      let lines = [@ui.line(ring, width=spin_stroke, color=t.p.line_strong)]
+      if shown > 0.0 {
+        let arc = @ui.arc(mid, mid, r, from=-0.5 * pi, sweep=shown * 2.0 * pi)
+        lines.push(@ui.line(arc, width=spin_stroke, color=t.p.accent))
+      }
+      c.lines(lines, w=Px(size), h=Px(size))
+    }
+  }
 }
 
 ///|

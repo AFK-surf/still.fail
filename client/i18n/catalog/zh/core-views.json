@@ -177,6 +177,7 @@
   "core-views.memberships.home": "主 workspace",
   "core-views.named_error": "{name}：{error}",
   "core-views.new_chat": "新对话",
+  "core-views.outbox.uploading": "正在上传 {percent}%",
   "core-views.pinned": "已固定",
   "core-views.xshare.none": "未分享",
   "core-views.xshare.read": "只读",

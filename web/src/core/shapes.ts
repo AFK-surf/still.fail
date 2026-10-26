@@ -2296,6 +2296,11 @@ export interface Outgoing {
 	 * words: under it in place of 正在发送. Absent otherwise.
 	 */
 	waits?: string;
+	/**
+	 * Its files going up (`waits` says so, 正在上传 42%): how much of them all the station has, 0 to 1. Absent
+	 * while one has not said yet (a station's file copied across), and otherwise.
+	 */
+	progress?: number;
 }
 
 /** A station's mesh link: connecting | online | offline | error. */

@@ -281,6 +281,21 @@ test "a message held: its words quoted into the draft, with a line for a comment
 }
 
 ///|
+/// A picture sent while it went up said only 正在上传 under it, however long it took (2026-10-26): how far, as the core
+/// says it, once it has been on its way a while.
+test "a message going up says how far it has gone" {
+  reset()
+  let src = fixture("chat-uploading")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("第二屏的截图，帮我看看") is Some(_))
+  t.run_for(@sfpages.sending_shows_ms)
+  assert_true(t.find("正在上传 42%") is Some(_))
+  t.assert_idle()
+}
+
+///|
 test "the fixture's station: sending, then the message, then an answer; a failure, then 重试" {
   reset()
   let clock : Ref[Double] = { val: 0.0 }

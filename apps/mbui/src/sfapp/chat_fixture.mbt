@@ -1111,6 +1111,17 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
 }
 
 ///|
+/// chat-uploading's picture still going up, as its message names it (views.ts goingUp: its upload).
+let going_up_picture : Json = {
+  "name": "compare.png",
+  "path": "upload:up-seed",
+  "size": 402000,
+  "width": 1600,
+  "height": 900,
+  "upload": "up-seed",
+}
+
+///|
 /// The first row's chat's draft as each composer mode has it (none in any other); a new chat's with a picture and words
 /// (newchat-attach: scripts/motion/send-newchat-picture.drive).
 fn seeded_draft(mode : String, key : String) -> Json {
@@ -1139,6 +1150,16 @@ fn seeded_draft(mode : String, key : String) -> Json {
         "quotes": [],
         "files": [file("compare.png", 1600, 900, 402000), file("build.log", 0, 0, 18432)],
       }
+    // chat-uploading: another picture going up meanwhile, how much of it the station has (`sent`: seeded_files)
+    "chat-uploading" =>
+      match file("compare.png", 1600, 900, 402000) {
+        Object(m) => {
+          let going = m.copy()
+          going["sent"] = Json::number(160800.0)
+          { "text": "", "quotes": [], "files": [Json::object(going)] }
+        }
+        _ => Json::null()
+      }
     "chat-quote" =>
       {
         "text": "",
@@ -1163,6 +1184,18 @@ fn seeded_outbox(mode : String) -> Array[Json] {
   let words : Json = { "text": "好，就按这个改，顺便把深色模式的截图也换掉" }
   match mode {
     "chat-sending" => [outgoing_json("o-seed", words, "sending", "")]
+    // a picture sent while it went up, among its files from here (views.ts goingUp), how far it is said under it
+    "chat-uploading" =>
+      match outgoing_json("o-seed", { "text": "第二屏的截图，帮我看看", "attachments": [going_up_picture] }, "sending", "") {
+        Object(m) => {
+          @sfbase.sent_pictures["upload\u{1}up-seed"] = fixture_file("compare.png")
+          let o = m.copy()
+          o["waits"] = Json::string("正在上传 42%")
+          o["progress"] = Json::number(0.42)
+          [Json::object(o)]
+        }
+        o => [o]
+      }
     "chat-failed" => [outgoing_json("o-seed", words, "failed", "Studio 没有回应")]
     _ => []
   }

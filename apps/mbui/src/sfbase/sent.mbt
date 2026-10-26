@@ -131,6 +131,7 @@ pub fn sent_local(rk : String, v : ChatView?, words : String, files : Array[Json
       seq: -1.0,
       time: None,
       waits: if going.length() > 0 { @sf.t("common.uploading") } else { "" },
+      progress: None,
       uploads: cards,
       created_at: @ui.current().now,
       final: false,

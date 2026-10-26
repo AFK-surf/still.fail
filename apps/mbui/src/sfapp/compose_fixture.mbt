@@ -5,9 +5,10 @@
 
 ///|
 /// The pictures of a mode's seeded draft drawn from them in its tiles, as a picture picked here is (the composer's
-/// `writing_pictures`): newchat-attach's and chat-attach-pic's (the films of sending them: scripts/motion).
+/// `writing_pictures`): newchat-attach's and chat-attach-pic's (the films of sending them: scripts/motion), and
+/// chat-uploading's going up.
 fn seeded_pictures(mode : String, files : Array[Json]) -> Unit {
-  if mode != "newchat-attach" && mode != "chat-attach-pic" {
+  if mode != "newchat-attach" && mode != "chat-attach-pic" && mode != "chat-uploading" {
     return
   }
   for i, a in files {
@@ -52,18 +53,22 @@ fn fix_write(f : Fixture, key : String) -> FixWrite {
       }
       fix_writes[key] = w
       // its files up already, as the core keeps them in the draft (after what a screen put in first: a station's file,
-      // fix_draft_ref)
+      // fix_draft_ref); one saying how much of it the station has (`sent`) still going up
       let seeded = items(seed, "files")
       let have = fix_composers.get(key).unwrap_or([])
       if !seeded.is_empty() && !have.iter().any(fn(x) { text(Some(x), "id").has_prefix("seed-") }) {
         fix_composers[key] = have +
           seeded.mapi(fn(i, a) {
-            {
+            let f : Map[String, Json] = {
               "id": Json::string("seed-\{i}"),
               "name": Json::string(text(Some(a), "name")),
               "size": Json::number(number(Some(a), "size")),
-              "done": a,
             }
+            match field(Some(a), "sent") {
+              Some(sent) => f["sent"] = sent
+              None => f["done"] = a
+            }
+            Json::object(f)
           })
         seeded_pictures(f.mode, seeded)
       }

@@ -2737,6 +2737,7 @@ export const SHAPES: Record<string, Shape> = {
     ["followed", opt("bool"), { doc: "Another sent soon after it: as a message's `followed` (sending, it says so under the last only)." }],
     ["joined", opt("bool"), { doc: "Sent soon after the viewer's message or outgoing one before it: as a message's `joined`." }],
     ["waits", opt("String"), { doc: "Sending, why it has not reached the station yet (its station is updating, its files still going up), in\nwords: under it in place of 正在发送. Absent otherwise." }],
+    ["progress", opt("f64"), { doc: "Its files going up (`waits` says so, 正在上传 42%): how much of them all the station has, 0 to 1. Absent\nwhile one has not said yet (a station's file copied across), and otherwise." }],
   ], { doc: "A message sent from here that the chat does not show yet: sending, sent (the station has it as `seq`; its entry not here\nyet) or failed." }),
   Person: struct([
     ["id", "String"],

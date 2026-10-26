@@ -31,9 +31,10 @@ fn chat_empty(c : @ui.Ctx) -> Unit {
 /// What was sent from here and is not in the chat yet (OutboxRow): as the viewer's message (its quotes, its files, its
 /// images still going up among them already; any other still going up a card saying how far: the core's; its words:
 /// message.mbt mine_message's order),
-/// and under it "正在发送" (or what it waits on) once it has been on its way a while (800 ms from when it was sent)
-/// until the station takes it, then its time; not sent, said briefly (why in its tip), with sending it again (or,
-/// refused as it is, its words back in the composer: 编辑) and dropping it right beside.
+/// and under it "正在发送" (or what it waits on: its files going up, how far they are together, its ring filling so)
+/// once it has been on its way a while (800 ms from when it was sent) until the station takes it, then its time; not
+/// sent, said briefly (why in its tip), with sending it again (or, refused as it is, its words back in the composer:
+/// 编辑) and dropping it right beside.
 fn outbox_row(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Unit {
   let failed = o.state == "failed"
   c.box(style=mine_column, fn() {
@@ -74,7 +75,7 @@ fn outbox_row(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Un
       // (shown once it has been on its way a while: from when its row was first drawn)
       let shows = @kit.after(c, "sending/" + o.id, true, sending_shows_ms)
       let w = c.box(style=msg_waiting, fn() {
-        @sf.spinner(c, size=waiting_spin) |> ignore
+        @sf.progress_spinner(c, "sending/" + o.id, o.progress, size=waiting_spin) |> ignore
         c.text(words, style=msg_time) |> ignore
       })
       // (while its words fly here, its room kept and nothing of it seen)

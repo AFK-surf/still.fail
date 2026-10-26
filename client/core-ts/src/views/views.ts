@@ -2255,7 +2255,9 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
 /// An outgoing message's files still going up (`uploads`) as its row draws them: an image among its files at once, in
 /// its place and shape, drawn from the picture this device has of it (`upload`; on no station yet, its path names the
 /// upload), as its message draws it once up, not a card that turns into it then; any other a card saying how far, as
-/// it is a card once up. While any goes up, 正在上传 under it (`waits`), unless something else holds it.
+/// it is a card once up. While any goes up, 正在上传 under it (`waits`), unless something else holds it, and how far all
+/// of them together are (`progress`, 正在上传 42%) once each says how much of it the station has (a station's file
+/// copied across says nothing until it is there).
 function goingUp(o: J): J {
   const { uploads, ...rest } = o as Record<string, unknown>;
   const going = arr(uploads).filter((u) => isObject(u));
@@ -2263,11 +2265,16 @@ function goingUp(o: J): J {
   const images = going.filter((u) => isImage(str(u.name) ?? ""));
   const shown = images.map((u) => ({ name: u.name, path: `upload:${u.id}`, size: u.size, ...(u.width && u.height ? { width: u.width, height: u.height } : {}), upload: u.id }));
   const cards = going.filter((u) => !images.includes(u));
+  const size = going.reduce((n, u) => n + (u64(u.size) ?? 0), 0);
+  const told = going.every((u) => u64(u.sent) !== null) && size > 0;
+  const progress = told ? Math.min(going.reduce((n, u) => n + u64(u.sent)!, 0) / size, 1) : null;
   return {
     ...rest,
     attachments: [...arr(o.attachments), ...shown],
     ...(cards.length > 0 ? { uploads: cards } : {}),
-    ...(o.state === "sending" && typeof o.waits !== "string" ? { waits: t("common.uploading") } : {}),
+    ...(o.state === "sending" && typeof o.waits !== "string"
+      ? progress !== null ? { waits: t("core-views.outbox.uploading", { percent: Math.floor(progress * 100) }), progress } : { waits: t("common.uploading") }
+      : {}),
   };
 }
 

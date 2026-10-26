@@ -730,7 +730,7 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
   // (a new chat's waits for its message: nothing going up yet)
   let pending = done is None && error == "" && field(v, "waits") is None
   match writing_pictures.get(id) {
-    Some(picture) => composer_picture(c, src, w, key, id, name, picture, pending, error)
+    Some(picture) => composer_picture(c, src, w, key, id, name, picture, pending, gone_up(v), error)
     None => {
       // as wide as a card is (236), however little the row has: a card hugging its words in a row that wraps had none
       // left for them (its words squeezed to …); its ✕ hung on its corner, as a picture's (@sf.with_corner_remove)
@@ -857,13 +857,35 @@ fn remove_label(v : Json?, name : String) -> String {
 }
 
 ///|
-/// A picture's tile (56): darkened with a spinner while it goes up, ↻ over it when it failed (`again` what a tap there
-/// is). Its node; `id` what a tap on it is.
-fn picture_tile(c : @ui.Ctx, picture : String, pending : Bool, error : String, id? : Int = 0, again? : Int = 0) -> Int {
+/// How much of a waiting file the station has (its `sent` of its size), once it says.
+fn gone_up(v : Json?) -> Double? {
+  match field(v, "sent") {
+    Some(Number(sent, ..)) => Some(sent / dmax(number(v, "size"), 1.0))
+    _ => None
+  }
+}
+
+///|
+/// A picture's tile (56): darkened while it goes up, a ring over it filling as it goes (`part`: turning until it says),
+/// ↻ over it when it failed (`again` what a tap there is). Its node; `id` what a tap on it is.
+fn picture_tile(
+  c : @ui.Ctx,
+  picture : String,
+  pending : Bool,
+  part : Double?,
+  error : String,
+  id? : Int = 0,
+  again? : Int = 0,
+) -> Int {
   c.box(style=if error != "" { thumb_failed } else { thumb_box }, id~, fn() {
     c.image(picture, w=Px(thumb_side), h=Px(thumb_side), fit=FitCover) |> ignore
     if pending {
-      c.layer(fn() { c.box(style=thumb_veil, fn() { @sf.spinner(c, size=@sf.theme().round.glyph) |> ignore }) |> ignore })
+      c.layer(fn() {
+        c.box(style=thumb_veil, fn() {
+          @sf.progress_spinner(c, "composer/going/" + picture, part, size=@sf.theme().round.glyph) |> ignore
+        })
+        |> ignore
+      })
       |> ignore
     }
     if error != "" {
@@ -877,8 +899,8 @@ fn picture_tile(c : @ui.Ctx, picture : String, pending : Bool, error : String, i
 }
 
 ///|
-/// A picture waiting (composerThumb): its own picture from here, a turning ring over it while it goes up, red-edged
-/// when it failed (↻ over it); its ✕ on its corner (@sf.with_corner_remove); its name its tip.
+/// A picture waiting (composerThumb): its own picture from here, a ring over it filling while it goes up (`part`),
+/// red-edged when it failed (↻ over it); its ✕ on its corner (@sf.with_corner_remove); its name its tip.
 fn composer_picture(
   c : @ui.Ctx,
   src : Source,
@@ -888,6 +910,7 @@ fn composer_picture(
   name : String,
   picture : String,
   pending : Bool,
+  part : Double?,
   error : String,
 ) -> Unit {
   let thumb = c.id(key)
@@ -896,7 +919,7 @@ fn composer_picture(
   // (its picture's box, its ✕ hung on its corner as every waiting file's)
   let tile = Ref(-1)
   let removed = @sf.with_corner_remove(c, key, @sf.t("web-main.file.remove", args=[("name", name)]), thumb_corner, w=thumb_side, fn() {
-    tile.val = picture_tile(c, picture, pending, error, id=thumb, again~)
+    tile.val = picture_tile(c, picture, pending, part, error, id=thumb, again~)
   })
   if removed {
     writing_remove(src, w, id)
@@ -1202,7 +1225,7 @@ fn flying_files(c : @ui.Ctx, w : Writing) -> Array[FlyingFile] {
           face: fn() {
             let c = @ui.current()
             if picture != "" {
-              picture_tile(c, picture, field(v, "done") is None, "") |> ignore
+              picture_tile(c, picture, field(v, "done") is None, gone_up(v), "") |> ignore
             } else {
               @sf.file_card(c, "flying/" + id, text(v, "name"), number(v, "size")) |> ignore
             }

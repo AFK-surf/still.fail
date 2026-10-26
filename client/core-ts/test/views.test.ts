@@ -1616,7 +1616,7 @@ test("an_image_sent_while_going_up_is_among_its_messages_files_at_once", async (
   let [o] = u.value.outbox;
   assert.deepEqual(o.attachments, [up, { name: "shot.PNG", path: "upload:u1", size: 300, width: 1200, height: 800, upload: "u1" }]);
   assert.deepEqual(o.uploads.map((f: J) => [f.id, f.sent]), [["u2", 10]]);
-  assert.equal(o.waits, "正在上传");
+  assert.deepEqual([o.waits, o.progress], ["正在上传 31%", 110 / 350]);
   // Up: the station's file in its place, still drawn from here (its upload); nothing left going up.
   t.views.local.outboxUploaded("ws/a", 7, id, [{ name: "shot.PNG", path: "/w/uploads/shot.png", size: 300, width: 1200, height: 800 }, { name: "notes.pdf", path: "/w/uploads/notes.pdf", size: 50 }]);
   await t.read(u, 1);
@@ -1629,6 +1629,35 @@ test("an_image_sent_while_going_up_is_among_its_messages_files_at_once", async (
   await t.read(u, 1);
   const f = u.value.outbox.find((m: J) => m.id === failed);
   assert.deepEqual([f.attachments.map((a: J) => a.path), f.uploads, f.waits], [["upload:u3"], undefined, undefined]);
+});
+
+// A message going up said only 正在上传, however long it took (mbui, 2026-10-26): under it, how far all its files are
+// together, as each says how much of it the station has; until every one has said (a station's file copied across says
+// nothing until it is there), only that they go up.
+test("a_message_going_up_says_how_far_its_files_are_together", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  t.set(threads("ws/a"), [thread(7, [], t.host.nowMs())]);
+  t.set(pageOf("ws/a", 7), page(5, ["早"], null));
+  await t.read(u, 1);
+  const id = t.views.outboxAdd("ws/a", 7, { text: "看看", attachments: [], quotes: [], uploads: [
+    { id: "u1", name: "shot.png", size: 300, sent: 0 },
+    { id: "u2", name: "notes.pdf", size: 100, sent: 50 },
+  ] });
+  await t.read(u, 1);
+  const shown = () => { const o = u.value.outbox.find((m: J) => m.id === id); return [o.waits, o.progress]; };
+  assert.deepEqual(shown(), ["正在上传 12%", 50 / 400]);
+  t.views.local.uploadChanged("u1", { sent: 300 });
+  await t.read(u, 1);
+  assert.deepEqual(shown(), ["正在上传 87%", 350 / 400]);
+  const copied = t.views.outboxAdd("ws/a", 7, { text: "再看", attachments: [], quotes: [], uploads: [
+    { id: "u3", name: "a.png", size: 10, sent: 5 },
+    { id: "u4", name: "b.zip", size: 10 },
+  ] });
+  await t.read(u, 1);
+  const o = u.value.outbox.find((m: J) => m.id === copied);
+  assert.deepEqual([o.waits, o.progress], ["正在上传", undefined]);
 });
 
 // The UIs keep an outgoing message's id past the core that gave it (a restarted core, the page still up): the Android

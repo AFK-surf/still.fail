@@ -401,6 +401,8 @@ pub(all) struct Outgoing {
   time : Stamp?
   /// why it has not reached the station yet, in place of 正在发送 ("" none)
   waits : String
+  /// its files going up (`waits` says so): how much of them all the station has, 0 to 1 (None: not said)
+  progress : Double?
   /// its files still going up before it goes but its images, among its `attachments` already (`uploads`): each one's
   /// name, size and how much of it the station has
   uploads : Array[(String, Int, Int)]
@@ -566,6 +568,7 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
         seq: opt_number(s, "seq").unwrap_or(-1.0),
         time: stamp_of(s, "createdAt"),
         waits: text(s, "waits"),
+        progress: opt_number(s, "progress"),
         uploads: items(s, "uploads").map(fn(u) {
           (text(Some(u), "name"), number(Some(u), "size").to_int(), number(Some(u), "sent").to_int())
         }),
