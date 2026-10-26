@@ -3,6 +3,9 @@
 // pages), taken in here by name.
 
 pub using @sfbase {
+  // the app's words (strings.mbt and its tables)
+  tr,
+  fill,
   feel_hold,
   shared_into,
   station_files_asked,
@@ -88,7 +91,6 @@ pub using @sfbase {
   pv_leaving,
   pv_strip,
   pv_thumbs,
-  pv_zh,
   reading_pill,
   rest_ms,
   runs_by_line,
@@ -129,7 +131,6 @@ pub using @sfbase {
   viz_tokens,
   viz_tokens_json,
   viz_tr,
-  viz_zh,
   type VizLoad,
   viz_css,
   viz_bridge,
@@ -207,7 +208,6 @@ pub using @sfbase {
   svc_keep,
   svc_presets,
   svc_viewports,
-  svc_zh,
   tag_end,
   tag_place,
   tagging_new,
@@ -592,7 +592,6 @@ pub using @sfbase {
   trim_slash,
   menu_bar,
   menu_bar_json,
-  menu_zh,
   link_src,
   link_later,
   link_target,

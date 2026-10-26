@@ -9,58 +9,10 @@
 // menu is the menu of the app's icon in the notification area ("role": "tray": 打开 and 退出, as the desktop app's
 // tray had them), where the app goes as its window closes; the Mac leaves it out.
 
-///|
-// kept across runs: a table, never written
-pub let menu_zh : Map[String, String] = {
-  "desktop.menu.about": "关于 {app}",
-  "desktop.menu.checkUpdates": "检查更新…",
-  "desktop.menu.settings": "设置…",
-  "desktop.menu.services": "服务",
-  "desktop.menu.hide": "隐藏 {app}",
-  "desktop.menu.hideOthers": "隐藏其他",
-  "desktop.menu.showAll": "全部显示",
-  "desktop.menu.quit": "退出 {app}",
-  "desktop.menu.file": "文件",
-  "desktop.menu.chat.new": "新建对话",
-  "desktop.menu.chat.switch": "快速切换对话…",
-  "desktop.menu.composer.file": "发送文件…",
-  "desktop.menu.edit": "编辑",
-  "desktop.menu.undo": "撤销",
-  "desktop.menu.redo": "重做",
-  "desktop.menu.view": "显示",
-  "desktop.menu.sidebar.toggle": "收起/展开侧边栏",
-  "desktop.menu.chat.history": "执行历史",
-  "desktop.menu.chat.jobs": "服务和后台任务",
-  "desktop.menu.go": "前往",
-  "desktop.menu.chat.prev": "上一个对话",
-  "desktop.menu.chat.next": "下一个对话",
-  "desktop.menu.chat.latest": "跳到最新",
-  "desktop.menu.chat.find": "在对话中查找",
-  "desktop.menu.chat": "对话",
-  "desktop.menu.chat.stop": "停止当前任务",
-  "desktop.menu.chat.archive": "归档对话",
-  "desktop.menu.window": "窗口",
-  "desktop.menu.minimize": "最小化",
-  "desktop.menu.zoom": "缩放",
-  "desktop.menu.fullScreen": "进入/退出全屏",
-  "desktop.menu.close": "关闭窗口",
-  "desktop.menu.front": "前置全部窗口",
-  "desktop.menu.help": "帮助",
-  "desktop.menu.shortcuts": "快捷键一览",
-  "desktop.tray.open": "打开 {app}",
-  // the window's own buttons where the app draws them (Windows': @sf.window_keys)
-  "desktop.window.maximize": "最大化",
-  "desktop.window.restore": "还原",
-}
 
 ///|
 fn menu_tr(key : String) -> String {
-  // (the app's words first, as its tables have them: English, the editing items' the context menu's; else the menu's)
-  let w = @sf.t(key)
-  if w != key {
-    return w
-  }
-  menu_zh.get(key).unwrap_or(key)
+  tr(key)
 }
 
 ///|

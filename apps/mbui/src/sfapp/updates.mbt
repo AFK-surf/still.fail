@@ -4,32 +4,6 @@
 // 检查更新) and the dialog it and the menu bar open are both frames' (sfbase updates.mbt).
 
 ///|
-// kept across runs: a table, never written
-let up_zh : Map[String, String] = {
-  "android-chat.home.update": "更新到 {version}",
-  "android-misc.updates.allowInstall": "允许 {app} 安装应用后，再点一次更新",
-  "android-misc.updates.checkFailed": "检查更新失败：{error}",
-  "android-misc.updates.checking": "正在检查最新版本",
-  "android-misc.updates.downloading": "下载中",
-  "android-misc.updates.downloadingPercent": "下载中 {percent}%",
-  "android-misc.updates.failed": "无法更新：{error}",
-  "android-misc.updates.incomplete": "下载的文件不完整，请重试",
-  "android-misc.updates.httpStatus": "下载返回 {status}",
-  "android-misc.updates.installing": "正在安装",
-  "android-misc.updates.latest": "已是最新",
-  "android-misc.updates.retrying": "网络中断，正在继续下载",
-  "android-settings.version.check": "检查更新",
-  "android-settings.version.checking": "正在检查",
-  "android-settings.version.update": "更新到 {version}",
-  "desktop.update.available": "有新版本 {version}",
-  "desktop.update.checkFailed": "检查更新失败",
-  "desktop.update.dev": "开发版不检查更新",
-  "desktop.update.later": "稍后",
-  "desktop.update.latest": "已是最新版本",
-  "desktop.update.update": "更新",
-}
-
-///|
 fn up(key : String, args? : Array[(String, String)] = []) -> String {
   fill(key, args)
 }

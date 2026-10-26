@@ -21,34 +21,8 @@
 // macOS's sharing picker); 本机没有可打开此文件的应用 when nothing takes it.
 
 ///|
-// kept across runs: a table, never written
-let share_zh : Map[String, String] = {
-  "android-misc.shareIn.to": "发到",
-  "android-misc.shareIn.search": "搜索",
-  "android-misc.shareIn.find": "找 chat",
-  "android-misc.shareIn.newChat": "新 chat",
-  "android-misc.shareIn.on": "在 {name} 上开",
-  "android-misc.shareIn.failed": "没能打开：{error}",
-  "android-misc.shareIn.update": "这台手机上的 still.fail 需要更新才能分享",
-  "android-misc.drive.noApp": "本机没有可打开此文件的应用",
-  "android-chat.ref.none.match": "没有标题匹配的对话",
-  "common.cancel": "取消",
-  "android-settings.files.count": "{n} 个文件",
-  "common.reading": "正在读取",
-  "android-misc.shareIn.signIn": "先在 still.fail 里登录，再来分享",
-  "android-misc.shareIn.openApp": "打开 still.fail",
-}
-
-///|
 fn sh(key : String, args? : Array[(String, String)] = []) -> String {
-  let mut s = match english(key, args~) {
-    Some(w) => w
-    None => share_zh.get(key).unwrap_or(tr(key))
-  }
-  for a in args {
-    s = s.replace_all(old="{" + a.0 + "}", new=a.1)
-  }
-  s
+  fill(key, args)
 }
 
 ///|

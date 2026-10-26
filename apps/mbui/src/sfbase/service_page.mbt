@@ -6,76 +6,10 @@
 // size and its place on its stage, its marks (service_marks.mbt). The phone's page draws it in sfapp's service.mbt, the
 // desktop's in sfdesk's side panel.
 
-///|
-// kept across runs: a table, never written
-pub let svc_zh : Map[String, String] = {
-  "android-chat.link.failed": "无法打开此链接",
-  "android-chat.load.failed": "失败",
-  "android-chat.load.label": "资源加载 {percent}% · {finished}/{total}",
-  "android-chat.load.label.failed": "资源加载 {percent}% · {finished}/{total} · {failed} 个失败",
-  "android-chat.load.note": "按已发现的服务请求计算 · 新资源出现时更新",
-  "android-chat.load.waiting": "等待页面请求",
-  "android-chat.preview.auto": "自动",
-  "android-chat.preview.back": "对话",
-  "android-chat.preview.custom": "自定义",
-  "android-chat.preview.fit": "自适应",
-  "android-chat.preview.fit.note": "跟随预览区",
-  "android-chat.preview.fitView": "适应",
-  "android-chat.preview.mark.comment": "为此{kind}添加说明",
-  "android-chat.preview.mark.file": "{name}-标注{n}-{stamp}.png",
-  "android-chat.preview.mark.gone": "标注 {n} 已不在页面上",
-  "android-chat.preview.mark.quote": "网页 {name} 标注 {n}",
-  "android-chat.preview.marked": "已标注 {n} 处",
-  "android-chat.preview.move": "移动页面",
-  "android-chat.preview.move.note": "开着时手指拖动的是画布，不点网页",
-  "android-chat.preview.moveOff": "停止移动页面",
-  "android-chat.preview.pick": "点选页面上的元素",
-  "android-chat.preview.pickMore": "可继续点选",
-  "android-chat.preview.put": "添加到对话",
-  "android-chat.preview.put.done": "已添加到对话，返回对话发送",
-  "android-chat.preview.put.failed": "无法添加到对话：{error}",
-  "android-chat.preview.shooting": "正在截图",
-  "android-chat.preview.shot.failed": "截图生成失败",
-  "android-chat.preview.where.component": "组件：{name}",
-  "android-chat.preview.where.element": "元素：{label} · 选择器：{selector}",
-  "android-chat.preview.where.page": "页面：{path}（视口 {width}×{height}），截图 {shot} 为窗口中的可见内容，仅标出此处",
-  "android-chat.preview.where.text": "{kind}「{text}」",
-  "android-chat.preview.width": "宽",
-  "android-chat.preview.notFound": "找不到此服务：{error}",
-  "android-chat.preview.preset.desktop": "桌面",
-  "android-chat.preview.preset.laptop": "笔记本",
-  "android-chat.preview.preset.phone": "手机",
-  "android-chat.preview.preset.tablet": "平板",
-  "android-chat.preview.reloads": "恢复后自动刷新",
-  "android-chat.preview.restarting": "{name}正在重启",
-  "android-chat.preview.restarts": "第 {n} 次 · 恢复后自动刷新",
-  "android-chat.preview.service": "服务",
-  "android-chat.preview.size.title": "页面尺寸",
-  "android-chat.preview.stopped": "「{name}」已停止",
-  "android-chat.web.badBody": "请求内容无效",
-  "android-chat.web.badRedirect": "网页重定向到无法识别的地址：{location}",
-  "android-chat.web.badRequest": "请求无效",
-  "android-chat.web.noAnswer": "station 未响应",
-  "android-chat.web.offsite": "网页重定向到其他地址：{location}",
-  "android-chat.web.redirects": "重定向次数过多",
-  "android-chat.web.slow": "网页读得太慢，已停止",
-  "android-chat.web.timeout": "station {s} 秒内未响应",
-  "android-chat.web.unreachable": "无法从 station 获取：{error}",
-  "common.reading": "正在读取",
-}
 
 ///|
 pub fn svc(key : String, args? : Array[(String, String)] = []) -> String {
-  // (the app's words first, as its tables have them; else the page's own)
-  let w = @sf.t(key, args~)
-  if w != key {
-    return w
-  }
-  let mut s = svc_zh.get(key).unwrap_or(key)
-  for a in args {
-    s = s.replace_all(old="{" + a.0 + "}", new=a.1)
-  }
-  s
+  fill(key, args)
 }
 
 ///|

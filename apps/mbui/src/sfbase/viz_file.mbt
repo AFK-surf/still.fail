@@ -3,31 +3,10 @@
 // `widget.setState`), fetched once a file (`station.file`); served to a page of its own (a service's page's `file:`,
 // service_page.mbt) with what it kept. Drawing it is each frame's own.
 
-///|
-// kept across runs: a table, never written
-pub let viz_zh : Map[String, String] = {
-  "android-misc.viz.cantRead": "无法读取此文件",
-  "android-misc.viz.cantSend": "此对话当前无法发送消息",
-  "android-misc.viz.followupDrafted": "已添加到输入框，确认后发送",
-  "android-misc.viz.fullscreen": "全屏打开",
-  "android-misc.viz.mermaidFailed": "mermaid 加载失败",
-  "android-misc.viz.openAside": "在侧边打开",
-  "android-chat.preview.unreadable": "无法读取「{name}」",
-  "common.opening": "正在打开",
-}
 
 ///|
 pub fn viz_tr(key : String, args? : Array[(String, String)] = []) -> String {
-  // (the app's words first, as its tables have them; else the visualization's own)
-  let w = @sf.t(key, args~)
-  if w != key {
-    return w
-  }
-  let mut s = viz_zh.get(key).unwrap_or(key)
-  for a in args {
-    s = s.replace_all(old="{" + a.0 + "}", new=a.1)
-  }
-  s
+  fill(key, args)
 }
 
 ///|
