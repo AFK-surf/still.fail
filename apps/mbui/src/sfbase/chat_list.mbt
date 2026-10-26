@@ -1293,11 +1293,20 @@ pub fn list_frame(
   follow_newest(c, rd, list, keys, key, top~)
   flight_frame(c, draft)
   let flight = flight_of(draft)
-  // (the first of what was sent from here not in the chat yet: a message out of an avatar comes in over it, emit.mbt)
-  em.out_key = match list.search_by(fn(e) { e is Out(_) }) {
-    Some(i) => keys[i]
-    None => ""
+  // (the first of what was sent from here not in the chat yet: a message out of an avatar comes in over it, emit.mbt;
+  // the outbox lies at the list's end, before its agents at work and its foot (entries_of): looked for from there, not
+  // through a long chat's thousands of messages each frame)
+  let mut out_at = -1
+  let mut i = list.length() - 1
+  while i >= 0 {
+    match list[i] {
+      Out(_) => out_at = i
+      Working(_) | Foot => ()
+      _ => break
+    }
+    i = i - 1
   }
+  em.out_key = if out_at >= 0 { keys[out_at] } else { "" }
   // what comes at its end glides after it when it is new to the list (said while it shows, sent, an agent starting:
   // row_keys's fresh), not what was there or caught up on (the chat opened, its pages coming in), at once
   let glides = rd.came_frame == c.frame_number()
