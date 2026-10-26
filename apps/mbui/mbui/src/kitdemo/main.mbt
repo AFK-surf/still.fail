@@ -20,6 +20,8 @@ fn main {
   let updated = @ui.env("MBUI_UPDATECHECK")
   // MBUI_LINKCHECK=1: the links the system opens it with, said on the log (linkcheck.mbt)
   let linked = @ui.env("MBUI_LINKCHECK") == "1"
+  // MBUI_NOTICECHECK=1: a notification shown, what the one clicked opens said on the log (noticecheck.mbt)
+  let noticed = @ui.env("MBUI_NOTICECHECK") == "1"
   if linked {
     @ui.on_message(@hostapi.system_channel, fn(json, _) { @gallery.link_check_said(json) })
   }
@@ -28,6 +30,8 @@ fn main {
       @gallery.update_check_run(c, updated)
     } else if linked {
       @gallery.link_check_run(c)
+    } else if noticed {
+      @gallery.notice_check_run(c)
     } else if sited {
       @gallery.site_check_run(c)
     } else if viewed {

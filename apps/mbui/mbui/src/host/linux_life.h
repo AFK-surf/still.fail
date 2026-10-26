@@ -7,7 +7,8 @@
 //   was started with, and this one ends, as the program starts, before any of it runs (its core on the same files:
 //   life_begin, among the program's constructors). GApplication's own way, on the session bus: a GtkApplication of the
 //   id (MbLifeApp), whose call carries the launcher's activation token along, so that the desktop lets the window come
-//   to the front. The desktop's own Quit (GNOME's dash) asks the app's `quit` action: the app ends;
+//   to the front. The desktop's own Quit (GNOME's dash) asks the app's `quit` action: the app ends; its notifications
+//   are the desktop's (GNotification), a click on one the app's `notice` action;
 // - goes on with its window closed where the desktop shows apps' icons (a StatusNotifierWatcher on the session bus:
 //   KDE's, Ubuntu's GNOME, Xfce's, Cinnamon's), put away to its icon there (its core, its notifications on): the icon
 //   clicked, or the app started again, brings it back; the icon's menu (the app's words: menu_setup's `"role": "tray"`
@@ -153,6 +154,137 @@ static gboolean on_close(GtkWindow *w, gpointer data) {
   return TRUE;
 }
 
+// ---- notifications (notify.mbt) ----
+// The desktop's (GNotification, through the app's GApplication: GNOME Shell's own, or the freedesktop notification
+// server KDE's and the others run) when the program is an app: one per tag (sent with it as its id: a newer one
+// replaces it), clicked it brings the app to the front with what it opens (the app's `notice` action, its target the
+// tag and what it opens). A program that is none shows nothing: what would be shown is only kept. Either way it is kept
+// (one per tag) and said on the log (NOTICE <tag>\t<title>\t<body>), and a scripted run clicks one by its words
+// (drive 6), which gives the app what it opens as a click would. What the desktop allows is not asked here (it shows
+// an app's unless the person turned them off in its settings, which it does not tell): allowed where the program is
+// an app.
+
+typedef struct {
+  char *tag, *title, *body, *opens;
+} notice_kept;
+static GPtrArray *notices;   // notice_kept, the oldest first
+static char *notice_opened;  // what the one clicked since the last look opens (NULL: none)
+
+static void notice_free(gpointer p) {
+  notice_kept *n = p;
+  g_free(n->tag), g_free(n->title), g_free(n->body), g_free(n->opens);
+  g_free(n);
+}
+
+// the one of `tag` no more kept: 1 when it was
+static int notice_drop(const char *tag) {
+  for (guint i = 0; notices && i < notices->len; i++)
+    if (!strcmp(((notice_kept *)g_ptr_array_index(notices, i))->tag, tag)) {
+      g_ptr_array_remove_index(notices, i);
+      return 1;
+    }
+  return 0;
+}
+
+// one clicked (on the desktop, or by a scripted run): what it opens to the app, the window to the front
+static void notice_clicked(const char *tag, const char *opens) {
+  fprintf(stdout, "NOTICE TAP %s\n", tag);
+  fflush(stdout);
+  g_free(notice_opened);
+  notice_opened = g_strdup(opens);
+  notice_drop(tag);
+  bring_back();
+}
+
+static void on_notice(GSimpleAction *a, GVariant *v, gpointer data) {
+  (void)a, (void)data;
+  const char *tag = NULL, *opens = NULL;
+  g_variant_get(v, "(&s&s)", &tag, &opens);
+  notice_clicked(tag, opens);
+}
+
+void mb_host_notice_show(moonbit_string_t channel, moonbit_string_t tag, moonbit_string_t title, moonbit_string_t body,
+                         moonbit_string_t opens) {
+  (void)channel;  // one kind of notification here: the desktop's settings list the app's, not channels
+  notice_kept *n = g_new0(notice_kept, 1);
+  n->tag = utf8(tag), n->title = utf8(title), n->body = utf8(body), n->opens = utf8(opens);
+  if (!notices) notices = g_ptr_array_new_with_free_func(notice_free);
+  notice_drop(n->tag);
+  g_ptr_array_add(notices, n);
+  fprintf(stdout, "NOTICE %s\t%s\t%s\n", n->tag, n->title, n->body);
+  fflush(stdout);
+  if (!life_app) return;
+  GNotification *g = g_notification_new(n->title);
+  g_notification_set_body(g, n->body);
+  g_notification_set_default_action_and_target(g, "app.notice", "(ss)", n->tag, n->opens);
+  g_application_send_notification(G_APPLICATION(life_app), n->tag, g);
+  g_object_unref(g);
+}
+
+void mb_host_notice_cancel(moonbit_string_t tag) {
+  char *t = utf8(tag);
+  if (notice_drop(t)) {
+    fprintf(stdout, "NOTICE CANCEL %s\n", t);
+    fflush(stdout);
+  }
+  if (life_app) g_application_withdraw_notification(G_APPLICATION(life_app), t);
+  g_free(t);
+}
+
+// the desktop's settings of notifications opened: its own first (XDG_CURRENT_DESKTOP), else any of them there is
+static int notice_settings(void) {
+  static const struct {
+    const char *desktop, *program, *page;
+  } ways[] = {{"GNOME", "gnome-control-center", "notifications"},
+              {"KDE", "systemsettings", "kcm_notifications"},
+              {"XFCE", "xfce4-notifyd-config", NULL}};
+  const char *now = getenv("XDG_CURRENT_DESKTOP");
+  for (int pass = 0; pass < 2; pass++)
+    for (size_t i = 0; i < G_N_ELEMENTS(ways); i++) {
+      if (pass == 0 && !(now && strstr(now, ways[i].desktop))) continue;
+      char *path = g_find_program_in_path(ways[i].program);
+      char *argv[] = {path, (char *)ways[i].page, NULL};
+      gboolean ok = path && g_spawn_async(NULL, argv, NULL, G_SPAWN_DEFAULT, NULL, NULL, NULL, NULL);
+      g_free(path);
+      if (ok) return 1;
+    }
+  return 0;
+}
+
+// 0: what the desktop allows (1 where the program is an app, 0 not known); 1: ask it (nothing to ask here: 0); 2: its
+// answer to an ask (none: -1); 3: its settings of notifications opened (1); 4: the number on the app's icon shown (not
+// drawn here: 0)
+int32_t mb_host_notice_state(int32_t what) {
+  if (what == 0) return life_app ? 1 : 0;
+  if (what == 2) return -1;
+  if (what == 3) return notice_settings();
+  return 0;
+}
+
+// the one clicked since the last look, once; no push here
+moonbit_string_t mb_host_notice_text(int32_t what) {
+  if (what != 0 || !notice_opened) return moonbit_make_string_raw(0);
+  moonbit_string_t s = mstr(notice_opened);
+  g_clear_pointer(&notice_opened, g_free);
+  return s;
+}
+
+// a scripted run's (drive 6, 7): the first kept whose title or words hold `words`, clicked (6) or only looked for
+static int32_t notice_drive(int click, const char *words) {
+  for (guint i = 0; notices && i < notices->len; i++) {
+    notice_kept *n = g_ptr_array_index(notices, i);
+    if (!strstr(n->title, words) && !strstr(n->body, words)) continue;
+    if (click) {
+      char *tag = g_strdup(n->tag), *opens = g_strdup(n->opens);
+      if (life_app) g_application_withdraw_notification(G_APPLICATION(life_app), tag);
+      notice_clicked(tag, opens);
+      g_free(tag), g_free(opens);
+    }
+    return 1;
+  }
+  return 0;
+}
+
 // ---- once for its person ----
 
 // the app's GtkApplication: started again, the call it hands over with carries the launcher's activation token (its
@@ -208,6 +340,10 @@ __attribute__((constructor)) static void life_begin(void) {
   g_signal_connect(q, "activate", G_CALLBACK(on_life_quit), NULL);
   g_action_map_add_action(G_ACTION_MAP(life_app), G_ACTION(q));
   g_object_unref(q);
+  GSimpleAction *notice = g_simple_action_new("notice", G_VARIANT_TYPE("(ss)"));
+  g_signal_connect(notice, "activate", G_CALLBACK(on_notice), NULL);
+  g_action_map_add_action(G_ACTION_MAP(life_app), G_ACTION(notice));
+  g_object_unref(notice);
   GError *e = NULL;
   if (!g_application_register(G_APPLICATION(life_app), NULL, &e)) {
     // (no session bus: it runs, though not once for its person)

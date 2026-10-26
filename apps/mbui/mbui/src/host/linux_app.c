@@ -925,29 +925,16 @@ void mb_host_set_dark(int32_t dark) {
   if (s) g_object_set(s, "gtk-application-prefer-dark-theme", dark ? TRUE : FALSE, NULL);
 }
 
-// Notifications (notify.mbt): none shown here yet: nothing kept, nothing tapped, no push; what the system allows
-// unknown.
-void mb_host_notice_show(moonbit_string_t channel, moonbit_string_t tag, moonbit_string_t title, moonbit_string_t body,
-                         moonbit_string_t opens) {
-  (void)channel, (void)tag, (void)title, (void)body, (void)opens;
-}
-
-void mb_host_notice_cancel(moonbit_string_t tag) { (void)tag; }
-
-int32_t mb_host_notice_state(int32_t what) { return what == 2 ? -1 : 0; }
-
-moonbit_string_t mb_host_notice_text(int32_t what) {
-  (void)what;
-  return moonbit_make_string_raw(0);
-}
-
-// Scripted runs' input given to the host (src/ui/drive.mbt): the window's picture saved (4), the window resized to
-// "<w>x<h>" points (8), the runner's directory watched (9); the rest is sent to the app itself.
+// Scripted runs' input given to the host (src/ui/drive.mbt): the window's picture saved (4), a notification clicked
+// (6) or looked for (7) by its words (linux_life.h), the window resized to "<w>x<h>" points (8), the runner's directory
+// watched (9); the rest is sent to the app itself.
 int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
   if (kind == 9) return mb_done_watch(text);
   char *u = utf8(text);
   int done = 0;
-  if (kind == 4) {
+  if (kind == 6 || kind == 7) {
+    done = notice_drive(kind == 6, u);
+  } else if (kind == 4) {
     int ok = mb_render_snapshot(u);
     fprintf(stdout, "SHOT %s %s\n", u, ok ? "ok" : "failed");
     fflush(stdout);
