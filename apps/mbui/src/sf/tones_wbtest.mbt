@@ -5,7 +5,7 @@
 ///|
 test "tones: each tone's ground seen and its ink read on every ground of every palette" {
   let wrong : Array[String] = []
-  for p in [("wide light", wide_light), ("wide dark", wide_dark), ("touch light", narrow_light), ("touch dark", narrow_dark)] {
+  for p in [("light", light_palette), ("dark", dark_palette), ("web light", web_light), ("web dark", web_dark)] {
     let (name, pal) = p
     let grounds = [
       ("page", pal.bg),

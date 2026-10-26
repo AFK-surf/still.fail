@@ -40,9 +40,8 @@ fn init {
     dark_set.val = None
     current.val = {
       dark: false,
-      narrow: false,
       touch: false,
-      p: wide_light,
+      p: light_palette,
       t: wide_type,
       rows: wide_rows,
       control_h: wide_control_h,

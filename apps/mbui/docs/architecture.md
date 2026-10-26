@@ -72,12 +72,12 @@ upright after. A tablet and an opened fold's inner screen turn as they are held.
     pick beside what opened it, a confirm in the middle), and where ⌘K's search shows (its panel over the window, or
     on `Small` the search page).
   - **The native input** (the ways and the sizes, not the arrangement):
-    - the look: the theme's palette, type scale, icons and row heights; touch's is the phone's, keyboard and mouse's
-      the web's. What is drawn smaller keeps its room to be pressed (rule 2: 44×44 at least, overlapping no other's;
-      a button drawn its own size, a press reaching it from round it, mbui's finger_reach: what shows and what a press
-      takes need not be the same, the user, 2026-10-26). The panes side by side are told apart by their grounds in
-      both, as the web's: the sidebar a step under the page's ground (touch: the page's beige `bg`, the sidebar a step
-      under it, what is chosen in it a step under that);
+    - the sizes: the type scale, icons and row heights; touch's are the phone's, keyboard and mouse's the web's.
+      What is drawn smaller keeps its room to be pressed (rule 2: 44×44 at least, overlapping no other's; a button
+      drawn its own size, a press reaching it from round it, mbui's finger_reach: what shows and what a press takes
+      need not be the same, the user, 2026-10-26). The colours are neither the screen's nor the input's: one palette
+      everywhere, the phone's (warm paper, white cards on it), light or dark as set. The panes side by side are told
+      apart by their grounds: the sidebar a step under the page's beige `bg`, what is chosen in it a step under that;
     - what a page offers to reach things (rule 1, each input a way as easy): with touch the search field at the top of
       the chats' list, with keyboard and mouse ⌘K;
     - the keyboard: with keyboard and mouse Enter sends and the composer takes the focus as a chat opens; with touch

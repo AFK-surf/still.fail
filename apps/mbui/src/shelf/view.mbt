@@ -113,11 +113,11 @@ fn dmax(a : Double, b : Double) -> Double {
 /// the line the page's words are on, the covers stand on it).
 fn grid(c : @ui.Ctx) -> (Int, Double, Double, Double) {
   let t = @sf.theme()
-  let pad = if t.narrow { 16.0 } else { 40.0 }
-  let tile_pad = tile_pad()
+  let pad = if small(c) { 16.0 } else { 40.0 }
+  let tile_pad = tile_pad(c)
   let room = dmin(c.width - 2.0 * pad, 1120.0) + 2.0 * tile_pad
-  let gap = if t.narrow { 2.0 } else { 4.0 }
-  let least = if t.narrow { 104.0 } else { 152.0 }
+  let gap = if small(c) { 2.0 } else { 4.0 }
+  let least = if small(c) { 104.0 } else { 152.0 }
   let mut cols = ((room + gap) / (least + gap)).floor().to_int()
   if cols < 2 {
     cols = 2
@@ -127,8 +127,8 @@ fn grid(c : @ui.Ctx) -> (Int, Double, Double, Double) {
 }
 
 ///|
-fn tile_pad() -> Double {
-  if @sf.theme().narrow {
+fn tile_pad(c : @ui.Ctx) -> Double {
+  if small(c) {
     6.0
   } else {
     8.0
@@ -153,7 +153,7 @@ fn shelf(c : @ui.Ctx, src : Source) -> Unit {
   }
   c.column(w=Fill(1.0), h=Fill(1.0), bg=p.bg, fn() {
     // the phone's head stays over what scrolls; the wide page's goes with it
-    if t.narrow {
+    if small(c) {
       c.box(pl=20.0, pr=12.0, pt=14.0, pb=6.0, fn() { @sf.page_head(c, "书架", meta~) })
       |> ignore
     }
@@ -169,14 +169,14 @@ fn shelf(c : @ui.Ctx, src : Source) -> Unit {
       }
     }
     if books.length() == 0 {
-      if !t.narrow {
+      if !small(c) {
         c.box(pl=40.0, pr=40.0, pt=32.0, fn() { @sf.page_head(c, "书架") }) |> ignore
       }
       empty(c)
       return
     }
     let rows = (books.length() + cols - 1) / cols
-    let head = if t.narrow { 0 } else { 1 }
+    let head = if small(c) { 0 } else { 1 }
     c.list("shelf", rows + head + 1, cover_h(tile) + 60.0, fn(r) {
       if r < head {
         c.box(pl=40.0, pr=40.0, pt=32.0, pb=12.0, fn() {
@@ -185,7 +185,7 @@ fn shelf(c : @ui.Ctx, src : Source) -> Unit {
         |> ignore
       } else if r == rows + head {
         // room under the last row (the page's 80 at its foot)
-        c.box(h=Px(if t.narrow { 40.0 } else { 72.0 }), fn() {  }) |> ignore
+        c.box(h=Px(if small(c) { 40.0 } else { 72.0 }), fn() {  }) |> ignore
       } else {
         let row = r - head
         c.box(dir=Row, pl=inset, pr=inset, pb=gap, gap~, align=AStart, fn() {
@@ -216,11 +216,11 @@ fn book_tile(c : @ui.Ctx, b : BookInfo, tile : Double) -> Unit {
   if c.clicked(id) {
     open(b)
   }
-  let pad = tile_pad()
+  let pad = tile_pad(c)
   let inner = tile - 2.0 * pad
   let ground = if c.pressed(id) {
     @sf.alpha(p.text, 0.06)
-  } else if c.hovered(id) && !t.narrow {
+  } else if c.hovered(id) && !small(c) {
     p.hover
   } else {
     0L
@@ -317,7 +317,7 @@ fn waiting(
   let t = @sf.theme()
   let failed = error is Some(_)
   c.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
-    if !t.narrow {
+    if !small(c) {
       c.box(pl=40.0, pr=40.0, pt=32.0, pb=12.0, fn() { @sf.page_head(c, "书架") })
       |> ignore
     }
@@ -329,7 +329,7 @@ fn waiting(
         |> ignore
       None => ()
     }
-    let pad = tile_pad()
+    let pad = tile_pad(c)
     let inner = tile - 2.0 * pad
     c.box(gap~, opacity=@sf.breath(c, failed~), fn() {
       for _ in 0..<3 {
@@ -383,4 +383,11 @@ fn empty(c : @ui.Ctx) -> Unit {
     },
   )
   |> ignore
+}
+
+///|
+/// Laid out for a small screen (the window's width alone, @sf.layout): edge to edge, a phone's measures. The screen
+/// says how the page is laid out; the colours are one on every screen (@sf.begin).
+fn small(c : @ui.Ctx) -> Bool {
+  @sf.layout(c.window_size().0) is Small
 }

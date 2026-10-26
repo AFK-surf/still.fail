@@ -64,31 +64,29 @@ pub fn button(
       Primary | DangerSolid => (mix(0xFFFFFFFFL, h, share_ink), 0L, share_ground)
       _ => (mix(stage_plain_lit, h, stage_plain), 0L, share_ink)
     }
-  } else if t.narrow {
-    match tone {
-      Primary => (p.text, p.text, p.bg)
-      // (white on the light theme's deep red, the page's ink on the dark one's light red: white was 2.4 to 1 there)
-      DangerSolid => (p.red, p.red, if t.dark { p.bg } else { 0xFFFFFFFFL })
-      Danger => (p.chip, p.chip, p.red)
-      Ghost => (alpha(p.hover, h), 0L, p.text)
-      GhostDanger => (alpha(p.hover, h), 0L, p.red)
-      Plain => (p.chip, p.chip, p.text)
-    }
   } else {
+    // the phone's (Parts.kt): the ink with the paper's words, the chip's ground, no outline; pointed at or pressed, a
+    // solid ground a step towards the page and a quiet one the hover's step darker (docs/ui-panels.md 悬停)
     match tone {
       Primary => {
         let g = mix(p.primary_hover, h, p.primary)
-        (g, g, p.on_primary)
+        (g, g, p.bg)
       }
-      // a solid ground pointed at: a step towards the page, as the primary's (docs/ui-panels.md 悬停)
+      // (white on the light theme's deep red, the page's ink on the dark one's light red: white was 2.4 to 1 there)
       DangerSolid => {
         let g = mix(mix(p.red, 0.85, p.canvas), h, p.red)
-        (g, g, p.on_primary)
+        (g, g, if t.dark { p.bg } else { 0xFFFFFFFFL })
+      }
+      Danger => {
+        let g = over(p.chip, alpha(p.hover, h))
+        (g, g, p.red)
       }
       Ghost => (alpha(p.hover, h), 0L, p.text)
       GhostDanger => (alpha(p.hover, h), 0L, p.red)
-      Danger => (over(p.canvas, alpha(p.hover, h)), p.line_strong, p.red)
-      Plain => (over(p.canvas, alpha(p.hover, h)), p.line_strong, p.text)
+      Plain => {
+        let g = over(p.chip, alpha(p.hover, h))
+        (g, g, p.text)
+      }
     }
   }
   // (among the tools of a bar across the top: level with them and the window's buttons)

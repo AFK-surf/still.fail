@@ -69,11 +69,11 @@ priv enum Row {
 ///|
 fn grid(c : @ui.Ctx) -> (Int, Double, Double, Double) {
   let t = @sf.theme()
-  let pad = if t.narrow { 16.0 } else { 40.0 }
-  let tile_pad = if t.narrow { 6.0 } else { 8.0 }
+  let pad = if small(c) { 16.0 } else { 40.0 }
+  let tile_pad = if small(c) { 6.0 } else { 8.0 }
   let room = dmin(c.width - 2.0 * pad, 1400.0) + 2.0 * tile_pad
-  let gap = if t.narrow { 2.0 } else { 4.0 }
-  let least = if t.narrow { 108.0 } else { 160.0 }
+  let gap = if small(c) { 2.0 } else { 4.0 }
+  let least = if small(c) { 108.0 } else { 160.0 }
   let mut cols = ((room + gap) / (least + gap)).floor().to_int()
   if cols < 3 {
     cols = 3
@@ -87,7 +87,7 @@ fn library_page(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.theme()
   let p = t.p
   let (cols, tile, gap, inset) = grid(c)
-  let pad = if t.narrow { 20.0 } else { 40.0 }
+  let pad = if small(c) { 20.0 } else { 40.0 }
   c.column(w=Fill(1.0), h=Fill(1.0), bg=p.bg, fn() {
     let lib = match (src.library)() {
       Some(Ok(l)) => l
@@ -130,7 +130,7 @@ fn library_page(c : @ui.Ctx, src : Source) -> Unit {
         Section(name, n) =>
           c.box(
             dir=Row,
-            pl=if t.narrow { 20.0 } else { 40.0 },
+            pl=if small(c) { 20.0 } else { 40.0 },
             pr=pad,
             pt=20.0,
             pb=8.0,
@@ -154,7 +154,7 @@ fn library_page(c : @ui.Ctx, src : Source) -> Unit {
             }
           })
           |> ignore
-        Foot => c.box(h=Px(if t.narrow { 24.0 } else { 64.0 }), fn() {  }) |> ignore
+        Foot => c.box(h=Px(if small(c) { 24.0 } else { 64.0 }), fn() {  }) |> ignore
       }
     })
     |> ignore
@@ -167,9 +167,9 @@ fn head(c : @ui.Ctx, pad : Double, meta : String) -> Unit {
   let t = @sf.theme()
   c.box(
     pl=pad,
-    pr=if t.narrow { 12.0 } else { pad },
-    pt=if t.narrow { 14.0 } else { 32.0 },
-    pb=if t.narrow { 6.0 } else { 4.0 },
+    pr=if small(c) { 12.0 } else { pad },
+    pt=if small(c) { 14.0 } else { 32.0 },
+    pb=if small(c) { 6.0 } else { 4.0 },
     fn() { @sf.page_head(c, "影视", meta~) },
   )
   |> ignore
@@ -216,11 +216,11 @@ fn poster_tile(c : @ui.Ctx, src : Source, it : Title, tile : Double, recent : Bo
     state.open = Some(it.id)
     state.season = 0
   }
-  let pad = if t.narrow { 6.0 } else { 8.0 }
+  let pad = if small(c) { 6.0 } else { 8.0 }
   let inner = tile - 2.0 * pad
   let ground = if c.pressed(id) {
     @sf.alpha(p.text, 0.06)
-  } else if c.hovered(id) && !t.narrow {
+  } else if c.hovered(id) && !small(c) {
     p.hover
   } else {
     0L
@@ -268,7 +268,7 @@ fn shapes(
     None => ()
   }
   let t = @sf.theme()
-  let pad = if t.narrow { 6.0 } else { 8.0 }
+  let pad = if small(c) { 6.0 } else { 8.0 }
   let inner = tile - 2.0 * pad
   c.box(w=Fill(1.0), h=Fill(1.0), clip=true, gap~, opacity=@sf.breath(c, failed=error is Some(_)), fn() {
     for _ in 0..<2 {
@@ -334,7 +334,7 @@ fn detail_page(c : @ui.Ctx, src : Source, id : String) -> Unit {
   let title = find_title(src, id)
   c.column(w=Fill(1.0), h=Fill(1.0), bg=p.bg, fn() {
     // the way back, as a page's bar
-    c.box(dir=Row, h=Px(48.0), padx=if t.narrow { 6.0 } else { 28.0 }, align=ACenter, fn() {
+    c.box(dir=Row, h=Px(48.0), padx=if small(c) { 6.0 } else { 28.0 }, align=ACenter, fn() {
       let bid = c.id("video-back")
       if c.clicked(bid) {
         state.open = None
@@ -414,8 +414,8 @@ fn detail_rows(d : Detail) -> Array[DRow] {
 fn detail_top(c : @ui.Ctx, src : Source, id : String, title : Title?, d : Detail) -> Unit {
   let t = @sf.theme()
   let p = t.p
-  let side = if t.narrow { 20.0 } else { 40.0 }
-  let poster_w = if t.narrow { 120.0 } else { 200.0 }
+  let side = if small(c) { 20.0 } else { 40.0 }
+  let poster_w = if small(c) { 120.0 } else { 200.0 }
   let words = fn() {
     c.box(w=Fill(1.0), gap=8.0, fn() {
       c.text(d.title, size=t.t.heading, weight=600, color=p.text, line=t.t.heading_line)
@@ -473,7 +473,7 @@ fn detail_top(c : @ui.Ctx, src : Source, id : String, title : Title?, d : Detail
     })
     |> ignore
   }
-  c.box(dir=Row, pl=side, pr=side, pt=12.0, pb=16.0, gap=if t.narrow { 16.0 } else { 28.0 }, align=AStart, fn() {
+  c.box(dir=Row, pl=side, pr=side, pt=12.0, pb=16.0, gap=if small(c) { 16.0 } else { 28.0 }, align=AStart, fn() {
     match title {
       Some(it) => poster(c, src, it, poster_w, @sf.r_field, None)
       None => ()
@@ -505,7 +505,7 @@ fn next_episode(d : Detail) -> (Episode, Double)? {
 ///|
 fn seasons(c : @ui.Ctx, d : Detail) -> Unit {
   let t = @sf.theme()
-  c.box(pl=if t.narrow { 20.0 } else { 40.0 }, pt=8.0, pb=8.0, fn() {
+  c.box(pl=if small(c) { 20.0 } else { 40.0 }, pt=8.0, pb=8.0, fn() {
     if d.seasons.length() > 1 {
       let labels = d.seasons.map(fn(s) { "第 \{s.season} 季" })
       state.season = @sf.segmented(c, "season", labels, state.season, item_w=84.0)
@@ -531,7 +531,7 @@ fn episode_row(c : @ui.Ctx, src : Source, e : Episode) -> Unit {
     }
     (src.play)(e.id, at)
   }
-  let side = if t.narrow { 8.0 } else { 28.0 }
+  let side = if small(c) { 8.0 } else { 28.0 }
   c.box(pl=side, pr=side, fn() {
     c.box(
       dir=Row,
@@ -582,4 +582,11 @@ fn episode_row(c : @ui.Ctx, src : Source, e : Episode) -> Unit {
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// Laid out for a small screen (the window's width alone, @sf.layout): edge to edge, a phone's measures. The screen
+/// says how the page is laid out; the colours are one on every screen (@sf.begin).
+fn small(c : @ui.Ctx) -> Bool {
+  @sf.layout(c.window_size().0) is Small
 }

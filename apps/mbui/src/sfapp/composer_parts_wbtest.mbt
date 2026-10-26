@@ -127,9 +127,8 @@ test "a waiting file's card stands off the composer's frosted ground by its own 
       None => fail("no card for build.log (platform \{platform})")
     }
     let near = fn(a : Double, b : Double) { (a - b).abs() < 0.5 }
-    // (the page's on a computer, whose composer is greyer; on a touch device, whose capsule is whiter, the neutral)
-    let p = @sf.theme().p
-    let ground = if @sf.theme().narrow { p.neutral_bg } else { p.bg }
+    // (the capsule whiter than its paper: the neutral)
+    let ground = @sf.theme().p.neutral_bg
     let drawn = t.drawn_rects().filter(fn(r) { near(r.0, x) && near(r.1, y) && near(r.2, cw) && near(r.3, ch) })
     assert_true(drawn.iter().any(fn(r) { r.4 == ground }), msg="its ground (platform \{platform}): \{drawn.map(fn(r) { r.4 })}, not \{ground}")
     assert_false(t.drawn_shadows().iter().any(fn(s) { near(s.0, x) && near(s.2, cw) }), msg="a shadow under it (platform \{platform})")

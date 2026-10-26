@@ -71,7 +71,7 @@ test "a pill is 22 high; a status dot 7 round, online in the online green, offli
     None => fail("no pill")
   }
   let dots = t.drawn_rects().filter(fn(r) { r.2 == 7.0 && r.3 == 7.0 })
-  assert_true(dots.iter().any(fn(r) { r.4 == wide_light.online }))
+  assert_true(dots.iter().any(fn(r) { r.4 == light_palette.online }))
 }
 
 ///|

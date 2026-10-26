@@ -1773,8 +1773,8 @@ fn composer_bar(
   }
   let send_button = fn() {
     // not ready: the ink faint over the capsule's own ground, its arrow that ground (Composer.kt: 18% ink over
-    // C.surface, the phone's canvas; the web's over --raised on a desktop's width)
-    let ground = if t.narrow { t.p.canvas } else { t.p.raised }
+    // C.surface, the canvas)
+    let ground = t.p.canvas
     // (its ink a step lighter under a mouse's pointer, in any layout: Chat.css.ts sendBtn, the text at 82%)
     let hot = @sf.pointer_rests() && ready && c.lit(send)
     let b = c.box(
