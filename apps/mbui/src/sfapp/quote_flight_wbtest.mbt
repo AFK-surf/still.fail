@@ -59,6 +59,50 @@ fn hint_seen(t : @ui.Tester) -> Bool {
 }
 
 ///|
+/// How much of a quote's ✕ is seen now (its round, 20 across, in the ink): 0 none.
+fn x_seen(t : @ui.Tester) -> Double {
+  let ink = @sf.theme().p.text
+  let mut most = 0.0
+  for r in t.drawn_rects() {
+    let (_, _, w, h, colour) = r
+    if w >= 16.0 && w <= 21.0 && (h - w).abs() < 0.5 && colour >> 8 == ink >> 8 {
+      let a = (colour & 0xFFL).to_double() / 255.0
+      if a > most {
+        most = a
+      }
+    }
+  }
+  most
+}
+
+///|
+/// The send button's ground as drawn now: its round.
+fn send_ground(t : @ui.Tester) -> Int64 raise {
+  let (x, y, w, h) = match t.query(Button, label=@sf.t("web-main.composer.send")) {
+    Some(b) => b.rect
+    None => fail("no send button")
+  }
+  // (its round: the largest round about its middle, what it is pressed in reaching past it)
+  let (mx, my) = (x + w / 2.0, y + h / 2.0)
+  let mut round : (Double, Double, Double, Double, Int64)? = None
+  for r in t.drawn_rects() {
+    if (r.0 + r.2 / 2.0 - mx).abs() < 1.0 && (r.1 + r.3 / 2.0 - my).abs() < 1.0 && (r.2 - r.3).abs() < 0.5 {
+      match round {
+        Some(b) if b.2 >= r.2 => ()
+        _ => round = Some(r)
+      }
+    }
+  }
+  match round {
+    Some(r) => r.4
+    None => {
+      let near = t.drawn_rects().filter(fn(r) { r.0 < x + w && r.0 + r.2 > x && r.1 < y + h && r.1 + r.3 > y })
+      fail("nothing drawn as the send button at \{(x, y, w, h)}: \{near}")
+    }
+  }
+}
+
+///|
 /// The chat's composer with the passage quoted in it, what is said about it typed in its line.
 fn quoting(calls : Array[Made]) -> @ui.Tester {
   let made : Ref[Source?] = Ref(None)
@@ -139,4 +183,36 @@ test "words sent with a quote land under its card, which is in their row from th
     Some((_, wy)) => assert_true(qy < wy, msg="the quote at \{qy}, the words at \{wy}")
     None => fail("the words not drawn")
   }
+}
+
+///|
+test "sent, a quote's ✕ leaves with its card and the send button fades to faint: neither at once" {
+  let calls : Array[Made] = []
+  let t = quoting(calls)
+  // (as it came up when the draft could be sent)
+  t.run_for(@sf.dur_ms)
+  let ready = send_ground(t)
+  assert_true(x_seen(t) > 0.9)
+  tap_send(t)
+  let xs = [x_seen(t)]
+  let grounds = [send_ground(t)]
+  let sent_at = t.time()
+  while t.time() < sent_at + @sf.leave_ms + 50.0 {
+    t.frame()
+    xs.push(x_seen(t))
+    grounds.push(send_ground(t))
+  }
+  // the ✕: seen as it sets out, fading on (never back), gone once it has left
+  assert_true(xs[0] > 0.9, msg="\{xs}")
+  assert_true(xs.iter().any(fn(a) { a > 0.1 && a < 0.9 }), msg="\{xs}")
+  assert_eq(xs[xs.length() - 1], 0.0)
+  for k in 1..<xs.length() {
+    if xs[k] > xs[k - 1] + 0.01 {
+      fail("the ✕ came back: \{xs}")
+    }
+  }
+  // the send button: through what lies between its two grounds, not from one to the other at once
+  let faint = grounds[grounds.length() - 1]
+  assert_true(faint != ready)
+  assert_true(grounds.iter().any(fn(g) { g != ready && g != faint }), msg="\{grounds}")
 }

@@ -366,9 +366,7 @@ pub fn with_corner_remove(
         body()
         c.layer(fn() {
           c.box(style=corner_remove_at, fn() {
-            let b = c.box(style=corner_remove_box, id=x, tx=reach, ty=-reach, fn() {
-              icon(c, "close", size=card_close_icon, color=theme().p.canvas) |> ignore
-            })
+            let b = c.box(style=corner_remove_box, id=x, tx=reach, ty=-reach, fn() { corner_remove_mark(c) })
             c.semantics(b, Button, id=x, label~)
           })
           |> ignore
@@ -395,6 +393,20 @@ let corner_remove_side : Double = 20.0
 ///|
 // kept across runs: a value (no field of it changes)
 let corner_remove_at : @ui.Style = @ui.css("w=Full align=AEnd")
+
+///|
+/// The ✕ on it: the page's colour on the ink's.
+fn corner_remove_mark(c : @ui.Ctx) -> Unit {
+  icon(c, "close", size=card_close_icon, color=theme().p.canvas) |> ignore
+}
+
+///|
+/// A ✕ hung on a corner as with_corner_remove hangs it, drawn and nothing more (its box; where it goes is the caller's:
+/// its top right as far past the corner's top and right edge as corner_remove_reach): a quote sent leaves with its ✕
+/// as it sets off from the composer (sfbase's flight.mbt).
+pub fn corner_remove_face(c : @ui.Ctx) -> Int {
+  c.box(style=corner_remove_box, fn() { corner_remove_mark(c) })
+}
 
 ///|
 // kept across runs: a value (no field of it changes)

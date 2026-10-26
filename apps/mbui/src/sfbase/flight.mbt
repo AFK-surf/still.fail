@@ -23,10 +23,11 @@
 // share of its box), the picture cropped to it as it is (opening out from the tile's square crop), on no ground and
 // with a file's corner, as the tile and the message draw it; any other file's card carried there, from the tile's size
 // to its own. The quotes sent with them go from their cards in the composer, each its card in the message: its words
-// from where they were to where it has them, its ground from the composer's card to its own (its edges across and
-// its colour, its top and bottom up, on the words' way: the composer's card is as wide as the composer, its own as
-// wide as it needs), drawn where its card was, as the composer drew it, until it sets off. Sent with no words, the
-// row comes in where it is, its files and quotes flying into it, and the composer's hint stays.
+// from where they were to where it has them, its ground from the composer's card to its own (its edges across, its
+// top and bottom and its colour up, on the words' way: the composer's card is as wide as the composer, its own as
+// wide as it needs), drawn where its card was, as the composer drew it, until it sets off; its ✕ going with it as it
+// sets out, leaving as what leaves goes. Sent with no words, the row comes in where it is, its files and quotes flying
+// into it, and the composer's hint stays away while a quote is over it.
 //
 // A new chat's first words are carried (ChatHost.kt Flight.carried, web madeChat.ts): drawn where they were typed from
 // the frame they are sent, over the new chat's composer and then its chat's (newchat.mbt makes the chat, the page
@@ -70,6 +71,9 @@ pub(all) struct SendFlight {
   mut placed : Bool
   mut placed_frame : Int
   way : @motion.Anim
+  /// what was the composer's alone (a quote's ✕) leaving with them as they set out: from the frame they were sent, as
+  /// what leaves goes (@sf.leave)
+  gone : @motion.Anim
   /// a new chat's first words: the list comes up with them (flight_carry_start). Where what they go to is to start
   /// from (their bubble's corner, or the first file's tile without words)
   carried : Bool
@@ -167,6 +171,7 @@ pub fn flight_start(
         placed: false,
         placed_frame: -1,
         way: @motion.Anim::new(0.0),
+        gone: leaving(),
         carried: false,
         from_top: y - 8.0,
       })
@@ -177,6 +182,14 @@ pub fn flight_start(
     }
     None => ()
   }
+}
+
+///|
+/// What leaves as what was sent sets out (SendFlight's `gone`), set off now.
+fn leaving() -> @motion.Anim {
+  let a = @motion.Anim::new(0.0)
+  a.animate(1.0, @motion.tween(@sf.leave_ms, ease=CssOut))
+  a
 }
 
 ///|
@@ -227,6 +240,7 @@ pub fn flight_carry_start(
         placed: false,
         placed_frame: -1,
         way: @motion.Anim::new(0.0),
+        gone: leaving(),
         carried: true,
         from_top,
       })
@@ -832,6 +846,29 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
             @ui.look(dx=fx - tx, dy=fy - ty)
           })
         }
+      }
+      // a quote's ✕, hung on its card's corner as the composer hung it: it goes with the card as it sets out, leaving
+      // as what leaves goes (@sf.leave: fading, down to 0.9) from the frame it was sent
+      let gone = f.gone.get()
+      if ff.key.has_prefix(quote_prefix) && gone < 1.0 {
+        let across = flight_across_of(c, f)
+        let up = flight_up_of(c, f)
+        let reach = @sf.corner_remove_reach(@sf.composer_inner)
+        let x = @sf.corner_remove_face(c)
+        @motion.placed(c, x, fn() {
+          // (on the card's ground as this frame draws it: flight_quote_landing's)
+          let (gx, gy, gw) = match (landing, @motion.measured_rect(c, to)) {
+            (Some(_), Some((bx, by, bw, _))) => (fx + (bx - fx) * across, fy + (by - fy) * up, fw + (bw - fw) * across)
+            _ => (fx, fy, fw)
+          }
+          let (xx, xy, xw, _) = c.node_rect(x)
+          @ui.look(
+            alpha=1.0 - gone,
+            scale=1.0 - (1.0 - @sf.leave_scale) * gone,
+            dx=gx + gw + reach - xw - xx,
+            dy=gy - reach - xy,
+          )
+        })
       }
     }
   })

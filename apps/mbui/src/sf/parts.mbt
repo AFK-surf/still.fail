@@ -4,8 +4,9 @@
 // ways of waiting.
 
 ///|
-/// A hover's or a press's ground coming and going over --dur on the ease-out (dur_ms).
-fn ease_to(c : @ui.Ctx, key : String, on : Bool) -> Double {
+/// A control answering (--dur on the ease-out, dur_ms: global.css.ts's buttons' background): a hover's or a press's
+/// ground coming and going, a button's that can be pressed or not; how far it is on (0 … 1).
+pub fn ease_to(c : @ui.Ctx, key : String, on : Bool) -> Double {
   @motion.animate(c, key, if on { 1.0 } else { 0.0 }, spec=@motion.tween(dur_ms, ease=Out))
 }
 

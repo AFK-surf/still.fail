@@ -87,6 +87,7 @@ test "a strip sent flies to its picture's place in the message, letterboxed ther
     placed: false,
     placed_frame: -1,
     way: @motion.Anim::new(0.0),
+    gone: @motion.Anim::new(1.0),
     carried: false,
     from_top: 640.0,
   }
@@ -153,6 +154,7 @@ test "an image sent while it goes up flies on to its place once it is up: its me
     placed: false,
     placed_frame: -1,
     way: @motion.Anim::new(0.0),
+    gone: @motion.Anim::new(1.0),
     carried: false,
     from_top: 640.0,
   }
