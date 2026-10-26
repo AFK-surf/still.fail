@@ -27,6 +27,8 @@
 #        src/ui/hostcall.mbt's outside_kinds numbers them, none told as a bare number (scripts/chk outside-kinds)
 #   scripts/host_contract.sh mac update         a newer build of the app put in its place by the host and opened
 #        (kitdemo's MBUI_UPDATECHECK, src/kitdemo/gallery/updatecheck.mbt), one signed otherwise refused (below)
+#   scripts/host_contract.sh linux update       (a session bus) the same on Linux: its build for this machine put in
+#        place by its own installer and opened, another machine's refused
 #   scripts/host_contract.sh mac links          a link of a scheme the app's Info.plist names, opened while it runs, said to the app
 #        (kitdemo's MBUI_LINKCHECK, src/kitdemo/gallery/linkcheck.mbt)
 #   scripts/host_contract.sh linux notices      (a session bus) a notification the app shows kept, and clicked by the
@@ -439,13 +441,91 @@ open(sys.argv[2],'wb').write(base64.b64decode(''.join(parts)))
       exit 1
     fi ;;
   update)
+    # serve DIR: DIR's files over HTTP on this machine (ranges too: a download picks up where it was cut), as SRV, its
+    # port PORT once it listens
+    serve() {
+      mkfifo "$1/port"
+      node -e '
+const http = require("http"), fs = require("fs"), path = require("path");
+const s = http.createServer((q, r) => {
+  const f = path.join(process.argv[1], path.basename(q.url));
+  fs.stat(f, (e, st) => {
+    if (e) { r.writeHead(404); return r.end(); }
+    const m = /bytes=(\d+)-/.exec(q.headers.range || ""), from = m ? +m[1] : 0;
+    if (m && from >= st.size) { r.writeHead(416); return r.end(); }
+    r.writeHead(m ? 206 : 200, { "content-length": st.size - from });
+    fs.createReadStream(f, { start: from }).pipe(r);
+  });
+});
+s.listen(0, "127.0.0.1", () => console.log(s.address().port));' "$1" > "$1/port" &
+      SRV=$!
+      read -r PORT < "$1/port"
+    }
+    if [ "$H" = linux ]; then
+      # (Linux, a session bus: dbus-run-session's) a newer build put in the app's place by the host (kitdemo's
+      # MBUI_UPDATECHECK; src/host/linux_update.h): kitdemo installed as an app of its own (dev.mbui.kitdemo.update: a
+      # folder with the program, its VERSION, 0.1.1, and an installer that copies its folder over the installed one),
+      # its builds 2 (for this machine) and 3 (named for the other architecture) tarred as releases are and served over
+      # HTTP on this machine. Handed 3, the host refuses it and the run ends; handed 2, it downloads it, checks it, runs
+      # its installer and opens the program again as 1 quits: the program at 1's path is 2, and says so.
+      U=$PWD/$O/update
+      CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/dev.mbui.kitdemo.update
+      rm -rf "$U" "$CACHE"
+      mkdir -p "$U"
+      arch=$(uname -m | sed 's/x86_64/x64/; s/aarch64/arm64/')
+      other=x64
+      [ "$arch" != x64 ] || other=arm64
+      build() {
+        local f=$U/v$1/kitdemo
+        mkdir -p "$f"
+        cp ./out/linux/mod/_build/native/release/build/kitdemo/kitdemo.exe "$f/kitdemo"
+        echo "0.1.$1" > "$f/VERSION"
+        cat > "$f/install.sh" <<INSTALL
+#!/bin/sh
+set -e
+from=\$(cd "\$(dirname "\$0")" && pwd)
+rm -rf "$U/app.new"
+cp -r "\$from" "$U/app.new"
+rm -rf "$U/app"
+mv "$U/app.new" "$U/app"
+echo "kitdemo \$(cat "$U/app/VERSION") installed"
+INSTALL
+      }
+      build 1
+      sh "$U/v1/kitdemo/install.sh"
+      build 2
+      build 3
+      tar -C "$U/v2" -czf "$U/kitdemo-2-$arch-linux.tar.gz" kitdemo
+      tar -C "$U/v3" -czf "$U/kitdemo-3-$other-linux.tar.gz" kitdemo
+      serve "$U"
+      asked() { echo "http://127.0.0.1:$PORT/$1|$(sha256sum "$U/$1" | cut -d' ' -f1)|$(stat -c%s "$U/$1")|$1"; }
+      EXE=$U/app/kitdemo
+      export MBUI_APP_ID=dev.mbui.kitdemo.update MBUI_BENCH=-1 MBUI_WIN=480x320
+      MBUI_UPDATECHECK="$(asked "kitdemo-3-$other-linux.tar.gz")" timeout 60 "$EXE" > "$U/refused.log" 2>&1 || true
+      grep -a UPDATECHECK "$U/refused.log"
+      if ! grep -aq '"phase":"failed".*another machine' "$U/refused.log"; then
+        kill $SRV; wait $SRV 2> /dev/null || true; echo "update contract (linux): another machine's build was not refused"; exit 1
+      fi
+      # (2 opened again with this run's environment: handed 2 again, not newer, it ends itself)
+      MBUI_UPDATECHECK="$(asked "kitdemo-2-$arch-linux.tar.gz")" timeout 60 "$EXE" > "$U/updated.log" 2>&1 || true
+      ok=1
+      scripts/chk logwait --log "$U/updated.log" --line "UPDATECHECK version 2" --deadline 60 > /dev/null || ok=0
+      kill $SRV; wait $SRV 2> /dev/null || true
+      grep -a "UPDATECHECK\|^update:" "$U/updated.log"
+      cat "$CACHE/update.log" 2> /dev/null || true
+      [ "$(cat "$U/app/VERSION")" = 0.1.2 ] || { echo "update contract (linux): the app at 1's place is $(cat "$U/app/VERSION"), not 0.1.2"; exit 1; }
+      [ $ok = 1 ] || { echo "update contract (linux): 2 was put in place but did not run"; exit 1; }
+      rm -rf "$CACHE"
+      echo "update contract (linux): refused another machine's build; put 2 in 1's place and opened it"
+      exit 0
+    fi
     # (macOS) a newer build put in the app's place by the host (kitdemo's MBUI_UPDATECHECK, src/kitdemo/gallery/
     # updatecheck.mbt; mac_app.m's Updates): kitdemo bundled as an app of its own (dev.mbui.kitdemo.update), built as 1
     # and 2 signed by an identity of this run's (made here, in a keychain of its own that is never on the search list)
     # and as 3 signed ad hoc, the zips of 2 and 3 served over HTTP on this machine. Handed 3, the host refuses it (not
     # signed as this app) and the run ends; handed 2, it downloads it, checks it, puts it in 1's place and opens it as 1
     # quits: the app at 1's path is 2, and runs.
-    [ "$H" = mac ] || { echo "update contract: macOS only (the others do not put a build in place themselves)"; exit 1; }
+    [ "$H" = mac ] || { echo "update contract: macOS and Linux only (the others do not put a build in place themselves)"; exit 1; }
     U=$PWD/$O/update
     rm -rf "$U" "$HOME/Library/Caches/dev.mbui.kitdemo.update"
     mkdir -p "$U"
@@ -477,23 +557,7 @@ open(sys.argv[2],'wb').write(base64.b64decode(''.join(parts)))
     bundle 3 -
     security delete-keychain "$KC"
     for v in 2 3; do (cd "$U/v$v" && ditto -c -k --keepParent kitdemo.app "$U/kitdemo-$v.zip"); done
-    # the zips over HTTP (ranges too: a download picks up where it was cut), its port said once it listens
-    mkfifo "$U/port"
-    node -e '
-const http = require("http"), fs = require("fs"), path = require("path");
-const s = http.createServer((q, r) => {
-  const f = path.join(process.argv[1], path.basename(q.url));
-  fs.stat(f, (e, st) => {
-    if (e) { r.writeHead(404); return r.end(); }
-    const m = /bytes=(\d+)-/.exec(q.headers.range || ""), from = m ? +m[1] : 0;
-    if (m && from >= st.size) { r.writeHead(416); return r.end(); }
-    r.writeHead(m ? 206 : 200, { "content-length": st.size - from });
-    fs.createReadStream(f, { start: from }).pipe(r);
-  });
-});
-s.listen(0, "127.0.0.1", () => console.log(s.address().port));' "$U" > "$U/port" &
-    SRV=$!
-    read -r PORT < "$U/port"
+    serve "$U"
     asked() { echo "http://127.0.0.1:$PORT/kitdemo-$1.zip|$(shasum -a 256 "$U/kitdemo-$1.zip" | cut -d' ' -f1)|$(stat -f%z "$U/kitdemo-$1.zip")|kitdemo-$1.zip"; }
     EXE=$U/v1/kitdemo.app/Contents/MacOS/kitdemo
     env MBUI_BENCH=-1 MBUI_WIN=480x320 MBUI_UPDATECHECK="$(asked 3)" "$EXE" > "$U/refused.log" 2>&1 || true

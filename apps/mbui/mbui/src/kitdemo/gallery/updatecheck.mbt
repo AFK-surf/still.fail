@@ -1,6 +1,7 @@
-// The update's contract (scripts/host_contract.sh mac update): on a real host, the app a bundle signed as the build
-// it is handed, MBUI_UPDATECHECK=<url>|<sha256>|<size>|<name>: that build handed to the host to put in this one's
-// place (@hostapi.update_install, as still.fail's app hands it what the core found), this build's version on the log
+// The update's contract (scripts/host_contract.sh mac update, linux update): on a real host, the app a bundle signed as
+// the build it is handed (Linux: a folder installed as an app, its VERSION beside it),
+// MBUI_UPDATECHECK=<url>|<sha256>|<size>|<name>: that build handed to the host to put in this one's place
+// (@hostapi.update_install, as still.fail's app hands it what the core found), this build's version on the log
 // (`UPDATECHECK version N`), then how it goes each time that changes (`UPDATECHECK state {…}`). Once the new build
 // is in place the host quits this app and opens that one; one it does not take is `failed`, and why, on the log, and
 // the run ends.
