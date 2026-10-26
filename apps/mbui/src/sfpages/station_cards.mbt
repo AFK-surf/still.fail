@@ -25,7 +25,7 @@ fn meter_dials(c : @ui.Ctx, meters : Array[Json]) -> Unit {
 ///|
 /// An allowance's windows on its profile's page (QuotaBars, not compact): each what is left large over its cells, as
 /// far as is left, its name and when it refills.
-fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
+pub fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
   @sf.dials(
     c,
     windows.map(fn(w) {
@@ -84,7 +84,7 @@ fn station_net(c : @ui.Ctx, net : Json?) -> Unit {
 
 ///|
 /// A figure (Figure): bold in the words' ink, in its level's colour when off.
-fn figure(c : @ui.Ctx, f : Json?) -> Unit {
+pub fn figure(c : @ui.Ctx, f : Json?) -> Unit {
   c.text(
     text(f, "text"),
     style=match text(f, "level") {

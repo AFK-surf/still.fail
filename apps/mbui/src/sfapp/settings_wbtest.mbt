@@ -172,7 +172,7 @@ test "a station renamed from its page's …: the new name is the station's" {
   assert_true(t.find("MBA") is Some(_))
   t.tap_text("Studio")
   t.run_for(@ui.nav_push_ms)
-  // its page (src/sfdesk station_page.mbt), its overview first
+  // its page (src/sfpages station_page.mbt), its overview first
   assert_true(t.find("概览") is Some(_))
   // its ⋯ (the presenters' menu, a sheet on a phone) → 重命名, the name asked
   let log = t.drive(

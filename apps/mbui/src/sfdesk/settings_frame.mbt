@@ -86,7 +86,7 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     VaultItem(v, item) => @sfpages.vault_item_page(c, core, here, frame, v, item)
     Connects(only) => @sfpages.connects_page(c, src, core, here, frame, only)
     Connect(station, id) => @sfpages.connect_page(c, src, core, here, frame, station, id)
-    Station(a) => station_page(c, core, here, frame, a)
+    Station(a) => @sfpages.station_page(c, core, here, frame, a)
     Profile(a, id) => profile_page(c, core, here, frame, a, id)
     _ => ()
   }

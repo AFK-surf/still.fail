@@ -112,7 +112,7 @@ let update_arrow_keep : Double = 30.0
 ///|
 /// The popover (a small panel's corner, raised, a soft shadow), what is in it a panel's padding in from every side (its
 /// close button in its top corner and 立即更新 in its foot corner, concentric with them); its words where a card's
-/// stand (as the desktop's, sfdesk/station_update.mbt), its rows 8 apart.
+/// stand (as the desktop's, sfpages/station_update.mbt), its rows 8 apart.
 // kept across runs: a value (no field of it changes)
 let update_pop : @ui.Style = @ui.style(
   w=Full,

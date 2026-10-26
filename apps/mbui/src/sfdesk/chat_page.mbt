@@ -245,7 +245,7 @@ fn chat_bar(
         chat_title(c, src, r, v)
         match v {
           Some(view) => {
-            c.box(drop=chat_bar_drop_update, fn() { station_update(c, src, r.station, view.station_update) }) |> ignore
+            c.box(drop=chat_bar_drop_update, fn() { @sfpages.station_update(c, src, r.station, view.station_update) }) |> ignore
             if view.agents.length() == 0 {
               chat_station(c, r.station, station)
             }

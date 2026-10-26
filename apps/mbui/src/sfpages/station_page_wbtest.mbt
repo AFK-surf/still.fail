@@ -1,19 +1,12 @@
-// A station's page in its three parts (src/sfdesk station_page.mbt, one page in every frame; the web's
-// StationPage.tsx Body) over the settings' fixture: Studio (ws1/st1), online. At a phone's width with a finger, in a
-// window tall enough for all of a part.
+// A station's page in its three parts (station_page.mbt, resources.mbt; the web's StationPage.tsx Body) alone over the
+// settings' fixture: Studio (ws1/st1), online. At a phone's width with a finger, in a box tall enough for all of a
+// part.
 
 ///|
 /// Station `address`'s page, its part `part` (overview 概览, processes 进程, settings 设置, machine 软件与设备) shown;
 /// `w` wide, pointed at as `platform` says (a phone's finger, else 0 a Mac's mouse).
 fn station_tester(address : String, part? : String = "overview", w? : Double = 390.0, platform? : Int = 2) -> @ui.Tester {
-  reset()
-  let src = fixture("settings")
-  @settings.station_parts[address] = part
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=2400.0, platform~)
-  t.draw()
-  app.nav.push(Settings)
-  app.nav.push(Setting(@settings.Route::Station(address)))
-  t.draw()
+  let t = setting_tester(Station(address), w, platform~, h=2400.0, ready=fn() { @settings.station_parts[address] = part })
   t.run_for(@ui.nav_push_ms)
   t
 }
@@ -52,14 +45,9 @@ test "a station's page, its parts chosen by its choice: 设置 pressed shows it"
 
 ///|
 test "a login's link opens its station's page at 设置, where its card is" {
-  reset()
-  let src = fixture("settings")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=2400.0, platform=2)
-  @settings.mark_login("ws1/st1", "login-2")
-  t.draw()
-  app.nav.push(Settings)
-  app.nav.push(Setting(@settings.Route::Station("ws1/st1")))
-  t.draw()
+  let t = setting_tester(Station("ws1/st1"), 390.0, platform=2, h=2400.0, ready=fn() {
+    @settings.mark_login("ws1/st1", "login-2")
+  })
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("更多") is None, msg="not the overview")
   assert_true(t.find("在 Studio 上登录 codex") is Some(_))
@@ -68,7 +56,7 @@ test "a login's link opens its station's page at 设置, where its card is" {
 ///|
 test "a station's page opened again begins at its overview" {
   let t = station_tester("ws1/st1", part="machine")
-  @settings.left(@settings.Route::Station("ws1/st1"))
+  @settings.left(Station("ws1/st1"))
   t.draw()
   assert_true(t.find("更多") is Some(_))
 }
@@ -165,4 +153,48 @@ test "a station's 进程 on a computer's wide page: its totals four in a row, ea
   assert_eq(title.1 + title.3 / 2.0, figure.1 + figure.3 / 2.0, msg="its figures beside its name")
   assert_true(t.find("名称") is Some(_), msg="the names' head")
   lined_up(t, processes_columns)
+}
+
+///|
+/// A station's variables (station_page.mbt station_env_editor, in its page's 设置): the field shows the core's draft as
+/// it changes while nothing typed here waits on it.
+test "the variables' field follows the core's text that comes after the page opened" {
+  let env : Ref[(String, Int)] = Ref(("", 1))
+  let over = fn(base : Source) -> Source {
+    {
+      ..base,
+      topic: fn(name, params) {
+        if name == "agentEnvForm" {
+          let (words, v) = env.val
+          {
+            value: Some(
+              Json::object({
+                "text": Json::string(words),
+                "lines": Json::array([]),
+                "errors": Json::number(0.0),
+                "dirty": Json::boolean(false),
+                "pending": Json::boolean(false),
+              }),
+            ),
+            error: None,
+            version: v,
+          }
+        } else {
+          (base.topic)(name, params)
+        }
+      },
+    }
+  }
+  // in the page's 设置, its variables' editor in it (a manager's), the page tall enough for all of it
+  let t = setting_tester(Station("ws1/st1"), 390.0, platform=2, h=2400.0, over~, ready=fn() {
+    @settings.station_parts["ws1/st1"] = "settings"
+  })
+  t.run_for(@ui.nav_push_ms)
+  // opened on the text before a save the core tells a moment later
+  assert_false(t.dump().contains("\"E2E_A=1\""))
+  env.val = ("E2E_A=1", 2)
+  t.draw()
+  t.draw()
+  // (the field's words: the drawn tree's editor holds them)
+  assert_true(t.dump().contains("\"E2E_A=1\""), msg="the core's text, come after the page opened, in the field")
 }

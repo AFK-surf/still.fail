@@ -1,5 +1,5 @@
 // The settings' pages here (about.mbt, appearance.mbt, automatic_decisions.mbt, bars.mbt, memory.mbt,
-// notifications.mbt, permissions.mbt, shortcuts.mbt, usage.mbt, account.mbt, workspace_page.mbt, security.mbt, vault.mbt, vault_item.mbt, connects.mbt, connect.mbt)
+// notifications.mbt, permissions.mbt, shortcuts.mbt, usage.mbt, account.mbt, workspace_page.mbt, security.mbt, vault.mbt, vault_item.mbt, connects.mbt, connect.mbt, station_page.mbt)
 // drawn alone over the made-up core's settings, in a box of each width, with a finger and with a mouse: what each is
 // for, laid out by its own width. What the shell does around them (the tier, its sidebar, the system's bars) is the
 // whole app's tests' (src/sfapp).
@@ -10,14 +10,17 @@ let rig_workspace : Workspace = { id: "ws1", name: "星火工作室", emoji: "",
 
 ///|
 /// The settings' page `route` over the made-up core's `mode` (as `over` has it), `w` wide, pointed at as `platform`
-/// says (2 a phone's finger, 0 a Mac's mouse): opened under settings, drawn alone while it is the stack's top (another
-/// of them opened from it, that one), back over it to settings, the presenters over it.
+/// says (2 a phone's finger, 0 a Mac's mouse), `h` high: opened under settings, drawn alone while it is the stack's top
+/// (another of them opened from it, that one), back over it to settings, the presenters over it. `ready`: what the test
+/// sets before it is first drawn (the settings' own state: a station's part shown, a login marked).
 fn setting_tester(
   route : @settings.Route,
   w : Double,
   platform? : Int = 0,
   mode? : String = "settings",
   over? : (Source) -> Source = fn(s) { s },
+  h? : Double = 900.0,
+  ready? : () -> Unit = fn() {  },
 ) -> @ui.Tester {
   @sfbase.reset()
   reset()
@@ -30,6 +33,7 @@ fn setting_tester(
     @settings.fixture_page(mode) |> ignore
   }
   let src = over(@sffixture.fixture(mode))
+  ready()
   app.nav.push(Settings)
   app.nav.push(Setting(route))
   let t = @ui.Tester::new(
@@ -44,7 +48,7 @@ fn setting_tester(
       })
     },
     w~,
-    h=900.0,
+    h~,
     platform~,
   )
   t.draw()
@@ -78,6 +82,7 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     VaultItem(v, item) => vault_item_page(c, core, here, frame, v, item)
     Connects(only) => connects_page(c, src, core, here, frame, only)
     Connect(station, id) => connect_page(c, src, core, here, frame, station, id)
+    Station(a) => station_page(c, core, here, frame, a)
     Memories => memories_page(c, core, here, frame)
     Memory(a) => memory_page(c, core, here, frame, a)
     AutoDecisions => decisions_page(c, core, here, frame)

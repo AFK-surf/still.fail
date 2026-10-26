@@ -1,4 +1,4 @@
-// A station page's 登录 (src/sfdesk station_cards.mbt station_logins, in its 设置) over the settings' fixture: Studio's
+// A station page's 登录 (station_cards.mbt station_logins, in its 设置) over the settings' fixture: Studio's
 // codex login under way as its card, gh's done yesterday as a row.
 
 ///|
