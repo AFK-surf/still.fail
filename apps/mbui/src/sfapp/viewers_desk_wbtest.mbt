@@ -75,6 +75,19 @@ test "desk: a chat's film fitted clear of the bar and the controls, never under 
 }
 
 ///|
+test "desk: Esc closes a chat's film as it flies in, before its player is up" {
+  reset()
+  let src = fixture("chat-preview-video")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  t.draw()
+  t.run_for(fly_open_ms / 4.0)
+  assert_true(viewer.val is Some(_))
+  t.key(@ui.key_escape)
+  assert_true(viewer.val is None)
+}
+
+///|
 test "desk: a click on the image does nothing, one round it closes the preview" {
   let t = desk_tester("chat-preview-image")
   // 600 × 400 in 1280 × 800, fitted 32 in: in the middle as it is

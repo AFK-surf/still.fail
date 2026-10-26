@@ -2369,6 +2369,15 @@ fn Viewer::video_rect(self : Viewer, c : @ui.Ctx) -> (Double, Double, Double, Do
 }
 
 ///|
+/// Esc closes the viewer, while nothing in it reads Esc of its own first (the player's menus and its list, once it is
+/// up; marking's marks: vf_bar).
+fn Viewer::shut_on_escape(self : Viewer, c : @ui.Ctx) -> Unit {
+  if !self.closing && c.key_pressed(@ui.key_escape) {
+    self.shut(c)
+  }
+}
+
+///|
 /// The player's view of a film or a song (the system's player in a native view), while one is open.
 pub fn Viewer::view(self : Viewer) -> @ui.NativeView? {
   match self.media {
@@ -2388,6 +2397,7 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
     Some(m) => m
     None => {
       tap_stage(c, v, stage)
+      v.shut_on_escape(c)
       return
     }
   }
@@ -2428,6 +2438,8 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
       Some(r) => v.draw_flight(c, if v.fly_pic != "" { v.fly_pic } else { still }, r, v.flying(), ground=0x000000FFL)
       None => ()
     }
+    // (the player not up yet, its Esc not read: the viewer's, as it is over an image in flight)
+    v.shut_on_escape(c)
     return
   }
   let file : @sf.ViewerFile = {
