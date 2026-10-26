@@ -99,23 +99,22 @@ pub fn viewer_bar(
       if live {
         tip(c, key + "/name-tip", middle, title)
       }
-      // (short of room, the tools kept whole: the way back and the name give way)
-      c.box(style=viewer_bar_end, keep=true, fn() {
-        tools_across.val = true
-        tools()
-        tools_across.val = false
-      })
-      |> ignore
       // clear of the window's buttons at its right where they are the app's (Windows': window_keys); else at the
       // window's corner as a page's bar's last is
       let end = if @ui.window_keys_own() {
-        window_keys_room_at(c.width)
+        window_keys_room_at(c.width) + viewer_bar_in
       } else if capsule_end {
         window_clear_in(viewer_bar_in)
       } else {
         window_end_in(viewer_bar_in)
       }
-      c.box(style=@ui.style(w=Fixed(end), h=Full), fn() {  }) |> ignore
+      // (short of room, the tools kept whole: the way back and the name give way)
+      c.box(style=viewer_bar_end.then(@ui.style(pr=room(end))), keep=true, fn() {
+        tools_across.val = true
+        tools()
+        tools_across.val = false
+      })
+      |> ignore
     })
     |> ignore
   })
