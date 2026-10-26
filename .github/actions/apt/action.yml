@@ -1,0 +1,38 @@
+# Ubuntu's packages for a Linux job, their .debs kept in GitHub's cache between runs. Fetched from the runner's mirror
+# (azure.archive.ubuntu.com) they came at 12 MB/s one run and 67 kB/s the next: GTK 4's 22.7 MB in 5 min 38 s (the
+# release's linux job, run 40255577144, 481 s of its 10 minutes' timeout; 215 and 387 s in others, 25 s when the
+# mirror is quick). apt takes what is in its archive directory as fetched, so only a .deb Ubuntu has updated since is
+# fetched again; what no version installed any longer is put away (autoclean). Kept from main's runs, as the other
+# caches are: a branch's runs take main's.
+name: apt
+description: Ubuntu's packages installed, their .debs kept in the cache
+inputs:
+  packages:
+    description: the packages, as apt-get install takes them
+    required: true
+  name:
+    description: the cache's name (the jobs that install the same packages share it)
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache/restore@v4
+      id: debs
+      with:
+        path: .ci/apt
+        key: apt-${{ inputs.name }}-${{ github.sha }}
+        restore-keys: apt-${{ inputs.name }}-
+    - shell: bash
+      run: |
+        d="$GITHUB_WORKSPACE/.ci/apt"
+        mkdir -p "$d/partial"
+        sudo apt-get update -q
+        sudo apt-get install -y -q --no-install-recommends -o Dir::Cache::Archives="$d" ${{ inputs.packages }}
+        sudo apt-get autoclean -q -o Dir::Cache::Archives="$d"
+        sudo chown -R "$(id -u)" "$d"
+        echo "APT_KEY=apt-${{ inputs.name }}-$(cd "$d" && ls *.deb | sha256sum | cut -c1-16)" >> "$GITHUB_ENV"
+    - if: github.ref == 'refs/heads/main' && env.APT_KEY != steps.debs.outputs.cache-matched-key
+      uses: actions/cache/save@v4
+      with:
+        path: .ci/apt
+        key: ${{ env.APT_KEY }}

@@ -29,6 +29,7 @@ on:
       - ".github/workflows/mbui.yml"
       - ".github/actions/setup/**"
       - ".github/actions/msvc/**"
+      - ".github/actions/apt/**"
   workflow_dispatch:
 # main: one at a time, a push meanwhile waits as one run of the newest; a branch: only its newest push matters.
 concurrency:
@@ -159,10 +160,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # the build's number is the commits in the history
-      - name: GTK 4 and what the host and the core link beside it (libsoup, libsecret)
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends libgtk-4-dev libepoxy-dev libsoup-3.0-dev libsecret-1-dev clang
+      # (GTK 4 and what the host and the core link beside it: libsoup, libsecret)
+      - uses: ./.github/actions/apt
+        with:
+          name: mbui-linux
+          packages: libgtk-4-dev libepoxy-dev libsoup-3.0-dev libsecret-1-dev clang
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/mbui-moonbit
       - uses: actions/cache/restore@v4
