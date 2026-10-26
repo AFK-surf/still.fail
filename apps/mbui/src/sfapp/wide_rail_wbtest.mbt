@@ -691,6 +691,27 @@ test "wide: the lists' filter (components.tsx MineFilter): its tip; its menu has
 }
 
 ///|
+test "wide: the lists slide in a window of their own (Sidebar.css.ts navSlider): the one left goes out at the sidebar's edge, never over the rail's places" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  let (fx, fy, fw, fh) = t.query(Button, label="筛选会话：全部").unwrap().rect
+  t.tap(fx + fw / 2.0, fy + fh / 2.0)
+  t.frame()
+  t.tap_text("我参与的")
+  // an eighth of the way: 全部's row (the first of the two lists drawn) moved left across the rail's places' edge,
+  // nothing of it shown over them
+  t.run_for(@sfpages.list_slide_ms / 8.0)
+  let row = "夜里的构建又失败了"
+  let (rx, _, rw, _) = t.query(Button, label="文件").unwrap().rect
+  let edge = rx + rw
+  let (dx, _) = t.drawn_of(row).unwrap()
+  let (_, _, w, _) = t.rect_of(row).unwrap()
+  assert_true(dx < edge && dx + w > edge, msg="drawn \{dx} to \{dx + w}, the rail's places to \{edge}")
+  let (sx, _, sw, _) = t.shown_of(row).unwrap()
+  assert_true(sw == 0.0 || sx >= edge, msg="shown from \{sx}, \{sw} wide; the rail's places to \{edge}")
+}
+
+///|
 test "wide: folded, the window made narrow enough for the tape: the sidebar on the tape at once, not moved for the window" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
