@@ -1,13 +1,14 @@
 // Referring to another chat from the composer: `@` and a few letters of its title list the station's chats (the core's
 // `chatSearch`), and the one chosen goes into the text as a chip (chatRefs.ts), sent as a link, [its title](its page).
 // The agent reads that chat by the link (the station's chat_read and session_history tools).
-import { Fragment, useEffect, useRef, type ReactNode, type RefObject } from "react";
+import { createContext, Fragment, useContext, useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { hrefOf } from "./go.ts";
 import { stationApi, useChats, useChatSearch, useStationCall, useStationLook, type ChatItem } from "./api.ts";
 import { ChatMark, stateLine } from "./ChatMark.tsx";
 import { StationMark } from "./StationMark.tsx";
 import { scopeOf, useStation } from "./station.tsx";
 import type { AccountWorkspaces } from "./cloud/api.ts";
+import type { LinkedChat } from "./core/shapes.ts";
 import { useTopicSelect } from "./core/react.ts";
 import { ModelLogo, Time, WaitLine } from "./ui.tsx";
 import { chatOfLink, copyChatLink, REF_LINK, REF_MARK, shareLink, splitBy, stationOfLink } from "./chatRefs.ts";
@@ -18,6 +19,9 @@ import { CardSkeleton, Hover } from "./Peeks.tsx";
 
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
+/** The chats the message being drawn links to, as the core says them (its `chats`): what a link written bare reads as, and which are archived. */
+export const LinkedChats = createContext<readonly LinkedChat[] | undefined>(undefined);
+
 /** How many chats the menu offers at once. */
 const SHOWN = 8;
 
@@ -67,10 +71,14 @@ function useRefChat(href: string, here: string): { of: { station: string; id: st
   return { of, item: found ?? (chats ? undefined : seenChats.get(href)), listed: !!chats };
 }
 
-/** A bare link's title (the link written as it is, not `[its title](link)`): the chat's, as the list has it; else its key. */
+/**
+ * A bare link's title (the link written as it is, not `[its title](link)`): the chat's, as the core says it with the
+ * message (archived ones too), or as the list has it; else its key.
+ */
 function RefTitle({ href, here }: { href: string; here: string }) {
+  const linked = useContext(LinkedChats)?.find((c) => c.href === href);
   const { of, item } = useRefChat(href, here);
-  return <>{item?.title || of?.id || href}</>;
+  return <>{linked?.title || item?.title || of?.id || href}</>;
 }
 
 /**
@@ -79,7 +87,17 @@ function RefTitle({ href, here }: { href: string; here: string }) {
  * workspace's) says only that.
  */
 function RefPreview({ href, here, station, emoji, icon }: { href: string; here: string; station: string | null; emoji?: string | null | undefined; icon?: string | null | undefined }) {
+  const linked = useContext(LinkedChats)?.find((c) => c.href === href);
   const { of, item, listed } = useRefChat(href, here);
+  // One archived: its title and that it is, as the core says them with the message.
+  if (!item && linked?.archived) {
+    return (
+      <div className={hover.rich}>
+        <div className={hover.fileTitle}><span className={hover.title}>{linked.title}</span></div>
+        {linked.note && <p className={hover.excerpt}>{linked.note}</p>}
+      </div>
+    );
+  }
   if (!item) return listed ? <p className={hover.note}>{t("web-main.chatRef.previewGone")}</p> : <CardSkeleton />;
   const state = stateLine(item);
   return (

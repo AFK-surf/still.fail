@@ -46,6 +46,7 @@ using @sfbase {
   type Emits,
   type Entry,
   type Install,
+  type LinkedChat,
   type Message,
   type Outgoing,
   type Quote,

@@ -262,6 +262,16 @@ pub fn install_of(v : Json?, key : String) -> Install? {
 }
 
 ///|
+/// A chat a message links to, as the core says it (LinkedChat): its link as written, its title (what the link written
+/// bare reads as), whether it is archived and its words for where it stands then (已归档).
+pub(all) struct LinkedChat {
+  href : String
+  title : String
+  archived : Bool
+  note : String
+}
+
+///|
 /// A message of the chat (ChatMessage), with what the core decides of it.
 pub(all) struct Message {
   seq : Double
@@ -304,6 +314,8 @@ pub(all) struct Message {
   notice_words : String
   notice_link : Int
   notice_md : Json?
+  /// the chats its words link to that their lists have (archived ones too)
+  chats : Array[LinkedChat]
 }
 
 ///|
@@ -390,7 +402,17 @@ pub fn message_of(m : Json) -> Message {
       None => -1
     },
     notice_md: field(field(s, "notice"), "md"),
+    chats: items(s, "chats").map(fn(c) -> LinkedChat {
+      let c = Some(c)
+      { href: text(c, "href"), title: text(c, "title"), archived: flag(c, "archived"), note: text(c, "note") }
+    }),
   }
+}
+
+///|
+/// The chat a message's link `href` names, as the core says it with the message (Message's `chats`).
+pub fn Message::linked(self : Message, href : String) -> LinkedChat? {
+  self.chats.iter().find_first(fn(c) { c.href == href })
 }
 
 ///|

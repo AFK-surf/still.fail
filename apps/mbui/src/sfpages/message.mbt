@@ -122,7 +122,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
       if m.author_kind == "person" {
         if m.text != "" {
           picking(here, c, m.ts, m.by.name, "person", m.text, fn() {
-            person_words(c, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here))
+            person_words(c, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats), chat_title=chat_title_of(m))
           })
         }
         message_files(c, src, here, files, false, by=Some((m.by.name, "person", m.ts)))
@@ -152,7 +152,7 @@ fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> U
     message_files(c, src, here, beside_quotes(m.quotes, m.attachments), true, by=Some((@sf.t("web-main.chat.you"), "person", m.ts)))
     if m.text != "" {
       picking(here, c, m.ts, @sf.t("web-main.chat.you"), "person", m.text, fn() {
-        mine_bubble(c, here, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here))
+        mine_bubble(c, here, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats), chat_title=chat_title_of(m))
       }, fill=false)
     }
     if !m.followed {
@@ -374,17 +374,19 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
 
 ///|
 /// What a person wrote (PersonWords): plain, as they wrote it (set as it was typed: the theme's `words`), references to
-/// chats as their chips and web addresses as links, a link's card over it where `peek` (link_peeks).
+/// chats as their chips (one linked bare reading as `chat_title` says) and web addresses as links, a link's card over
+/// it where `peek` (link_peeks).
 pub fn person_words(
   c : @ui.Ctx,
   words : String,
   key : String,
   found? : Array[String] = [],
   peek? : ((String, String, Int) -> Unit)? = None,
+  chat_title? : (String) -> String? = fn(_) { None },
 ) -> Unit {
   let p = @sf.theme().p
   c.rich(
-    @sf.found_weight(message_runs(words, p.accent), found),
+    @sf.found_weight(message_runs(words, p.accent, chat_title~), found),
     key="msg-words/" + key,
     style=@sf.theme().t.words,
     link_color=p.blue,
@@ -400,8 +402,20 @@ pub fn person_words(
 /// What a message's links show while they are pointed at, the chat's station reading them (peeks.mbt): a web link's
 /// card, a chat's; and where `agent` (the agent that wrote it) says whose working directory its paths are read in, a
 /// file's.
-fn link_peeks(c : @ui.Ctx, src : Source, here : MessageHere, agent? : String = "") -> ((String, String, Int) -> Unit)? {
-  Some(fn(href, words, id) { link_peek(c, src, here.station, href, words, id, agent~) })
+fn link_peeks(
+  c : @ui.Ctx,
+  src : Source,
+  here : MessageHere,
+  agent? : String = "",
+  chats? : Array[LinkedChat] = [],
+) -> ((String, String, Int) -> Unit)? {
+  Some(fn(href, words, id) { link_peek(c, src, here.station, href, words, id, agent~, chats~) })
+}
+
+///|
+/// The title the core says with message `m` of the chat a link of its written bare names (its `chats`).
+fn chat_title_of(m : Message) -> (String) -> String? {
+  fn(href) { m.linked(href).map(fn(l) { l.title }) }
 }
 
 ///|
@@ -423,6 +437,7 @@ fn mine_bubble(
   key : String,
   found? : Array[String] = [],
   peek? : ((String, String, Int) -> Unit)? = None,
+  chat_title? : (String) -> String? = fn(_) { None },
 ) -> Unit {
   // words sent flying here: the bubble's ground comes in round them on their way (sfbase's flight.mbt)
   let flight = flight_here(here)
@@ -448,11 +463,11 @@ fn mine_bubble(
       // words sent flying here land on its words, piece by piece (sfbase's flight.mbt)
       match flight {
         Some(f) => {
-          let w = c.box(fn() { person_words(c, words, key, found~, peek~) })
+          let w = c.box(fn() { person_words(c, words, key, found~, peek~, chat_title~) })
           flight_landing_words(c, f, w)
           flight_pieces_in(c, f, bubble_node)
         }
-        None => person_words(c, words, key, found~, peek~)
+        None => person_words(c, words, key, found~, peek~, chat_title~)
       }
     },
   )
@@ -505,7 +520,8 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
         }
       },
       on_link_hold=Some(fn(href, _) { if @sf.path_of_link(href) is None { link_held(c, href) } }),
-      on_link_shown=link_peeks(c, src, here, agent=m.by.agent),
+      on_link_shown=link_peeks(c, src, here, agent=m.by.agent, chats=m.chats),
+      chat_title=chat_title_of(m),
       // the files its paths name are its agent's (Chat.tsx ProseWithFiles' PathSession): their chips
       paths=m.by.agent != "",
       files=fn(name) {
@@ -611,6 +627,7 @@ fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Un
               one_line=!open,
               ink=if failed { @sf.theme().p.red } else { 0L },
               on_link=fn(h) { open_link(h) },
+              chat_title=chat_title_of(m),
             )
             |> ignore
           }

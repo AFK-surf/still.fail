@@ -49,7 +49,7 @@ import * as historyCss from "./History.css.ts";
 import * as css from "./Chat.css.ts";
 import * as refCss from "./ChatRef.css.ts";
 import { core, useCall } from "./core/react.ts";
-import { ChatRefMenu, markBefore, refAt, RefMirror, WithRefs } from "./ChatRef.tsx";
+import { ChatRefMenu, LinkedChats, markBefore, refAt, RefMirror, WithRefs } from "./ChatRef.tsx";
 import { useOutsideShare } from "./OutsideShare.tsx";
 import { useMorph } from "./morph.ts";
 import * as cloudCss from "./styles/cloud.css.ts";
@@ -319,7 +319,7 @@ export function ChatRows({ chat, rows, to }: { chat: ChatView; rows: ReturnType<
   for (const m of messages) {
     if (visible.has(`m:${m.seq}`)) drawn.set(`m:${m.seq}`, () => {
       const { enter, emitted, caught } = rowOf(m);
-      return <MessageRow key={`m:${m.seq}`} message={m} enter={enter} emitted={emitted} caught={caught} thread={thread} />;
+      return <LinkedChats.Provider key={`m:${m.seq}`} value={m.chats}><MessageRow message={m} enter={enter} emitted={emitted} caught={caught} thread={thread} /></LinkedChats.Provider>;
     });
     sent(m.elsewhere);
   }
@@ -1138,7 +1138,7 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s }: { sent: ChatSentE
 export function StaticMessage({ message, keeper }: { message: ChatMessage; /** The session that keeps its files. */ keeper: string }) {
   return (
     <FileKeeper.Provider value={keeper}>
-      <MessageRow message={message} enter={undefined} emitted={null} caught={undefined} thread={null} options={false} />
+      <LinkedChats.Provider value={message.chats}><MessageRow message={message} enter={undefined} emitted={null} caught={undefined} thread={null} options={false} /></LinkedChats.Provider>
     </FileKeeper.Provider>
   );
 }

@@ -21,6 +21,7 @@ import * as looks from "../looks.ts";
 import * as present from "../present.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import * as refs from "../refs.ts";
+import { chatsLinked } from "../refLinks.ts";
 import type { Value, Watch } from "../store.ts";
 import { arr as arrU, deepFreeze, get as getU, isObject } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
@@ -844,6 +845,11 @@ export class Views implements Owner {
           // Its sharing names the viewer's other workspaces.
           { topic: "workspaces" },
         );
+        // The chats its messages link to, as their stations' lists have them, archived ones too (#linkedChats).
+        for (const s of this.#linkedStations(station, arr(get(this.ok({ topic: "thread", station, thread }), "entries")))) {
+          if (s !== station) topics.push({ topic: "chatRows", station: s });
+          topics.push({ topic: "archivedRows", station: s });
+        }
         return topics;
       }
       default:
@@ -900,6 +906,35 @@ export class Views implements Owner {
     if (v === undefined) return undefined;
     if ("err" in v) return v;
     return this.stations(scope);
+  }
+
+  /// The stations whose chats what was said in a chat on `station` links to (its entries' words): its own, and those of
+  /// the viewer's workspaces online.
+  #linkedStations(station: string, entries: J[]): string[] {
+    const out: string[] = [];
+    for (const e of entries) {
+      const text = str(get(e, "text")) ?? "";
+      if (!text.includes("/chats/") && !text.includes("/o/")) continue;
+      for (const c of chatsLinked(text, station)) {
+        if (out.includes(c.station)) continue;
+        if (c.station === station || (this.stations(ofAddress(c.station)) ?? []).some((s) => s.address === c.station && s.online)) out.push(c.station);
+      }
+    }
+    return out;
+  }
+
+  /// The chats `text`, said in a chat on `station`, links to, as their stations' lists have them: each found its link,
+  /// its title as its row says it, and whether it is archived (archivedRows), said so. One no list has is left out.
+  #linkedChats(station: string, text: string): J[] {
+    if (!text.includes("/chats/") && !text.includes("/o/")) return [];
+    return chatsLinked(text, station).flatMap((c) => {
+      const named = (row: J) => str(get(row, "id")) === c.id || str(get(row, "session")) === c.id;
+      const live = arr(this.ok({ topic: "chatRows", station: c.station })).find(named);
+      const gone = live === undefined ? arr(this.ok({ topic: "archivedRows", station: c.station })).find((r) => named(r) && isObject(get(r, "archived"))) : undefined;
+      const row = live ?? gone;
+      if (row === undefined) return [];
+      return [{ href: c.href, title: str(get(row, "title")) || t("core-views.new_chat"), ...(gone !== undefined ? { archived: true, note: t("core-views.search.archived") } : {}) }];
+    });
   }
 
   /// Who is looking: the account that reaches the workspace.
@@ -1070,7 +1105,7 @@ export class Views implements Owner {
         const draw = <V extends Value | undefined>(out: V) => {
           const thread = out !== undefined && "ok" in out ? u64(get(get(out.ok, "thread"), "id")) : null;
           const of = thread !== null ? `t:${thread}` : typeof view.thread === "number" ? `t:${view.thread}` : `s:${String(view.session ?? "")}`;
-          return this.#vaultCards(view, drawn(out, (path) => this.local.uploadOf(station, path), this.#core.data.mdStore(station, of)));
+          return this.#vaultCards(view, drawn(out, (path) => this.local.uploadOf(station, path), this.#core.data.mdStore(station, of), (text) => this.#linkedChats(station, text)));
         };
         if (typeof view.thread === "number") return draw(this.#chat(station, view.thread));
         const session = typeof view.session === "string" ? view.session : null;
@@ -2252,12 +2287,13 @@ export class Views implements Owner {
 /// When each pinned list row was pinned (the rows say only `pinned: true`).
 const pinnedAt = new WeakMap<object, number>();
 
-/// What a chat's page draws by each message, decided here so the page only draws it (docs/client-core.md): whether the
+/// What a chat's page draws by each message, decided here so the page only draws it (docs/client-core.md): the chats it
+/// links to (`linked`: each its title and whether it is archived), whether the
 /// agent who said it is one of the chat's (its name opens its history), whose workspace keeps each of its files (and the
 /// outbox's) and which of them went up from here after it was sent (`uploadOf`: their pictures are still here), which of an agent's files its text places (placed.ts), and what its
 /// agents sent to Slack or were given there after it (`elsewhere`; the chat's own `elsewhere` keeps what came before
 /// its first message), and which of the viewer's go close together with their next one, its time under that one (`followed`, `joined`).
-function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) => string | undefined, md?: MdStore): V {
+function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) => string | undefined, md?: MdStore, linked?: (text: string) => J[]): V {
   if (out === undefined || !("ok" in out) || !isObject(out.ok)) return out;
   // Everything said here goes on copies: what the view is made of may be the core's kept values, frozen (a message's
   // files, the outbox's), and writing on one of them threw and took the core down.
@@ -2286,6 +2322,9 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
     if (!isObject(m)) return m;
     const files = own(m.attachments);
     const out: J = { ...m, by: here(m.by), attachments: files };
+    // The chats it links to, each with its title (one linked bare reads as it) and whether it is archived.
+    const chats = linked?.(str(m.text) ?? "") ?? [];
+    if (chats.length > 0) out.chats = chats;
     // A person's words are drawn as they wrote them and place nothing: their files are all below them. An agent's are
     // Markdown, read here (once: markdown.ts keeps it by the words); still.fail's notice's are too, as its pill says
     // them (noticeOf: a chat it opened is a link to it).

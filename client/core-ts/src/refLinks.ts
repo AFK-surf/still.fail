@@ -4,6 +4,8 @@
 // (web/src/chatRefs.ts), as it takes markdown.ts's words; nothing here reads the device or the station. The core's own
 // keeping of a mark's link until it is sent is refs.ts's.
 
+import { bareLinks } from "./bareLinks.ts";
+
 /// A reference as the composer holds it.
 export const REF_MARK = /@\[([^\]\n]{1,120})\]/g;
 /// A reference as sent: a link to a chat's page, or its still.fail link (…/o/<workspace>/<station>/<key>, as copied).
@@ -60,6 +62,32 @@ export function chatOfLink(href: string): { station: string; id: string; history
   if (!m) return null;
   try {
     return { station: `${m[1]}/${m[2]}`, id: decodeURIComponent(m[3]!), history: m[4] ?? "" };
+  } catch {
+    return null;
+  }
+}
+
+/// The chats what is written links to, each link once: in a reference (`[its title](link)`), then written bare
+/// (bareLinks.ts); each its link, its station and its key as chatOfLink reads them, a link with no station of its own
+/// (`…/chats/<id>`) one of `here`'s.
+export function chatsLinked(text: string, here: string): { href: string; station: string; id: string }[] {
+  const out: { href: string; station: string; id: string }[] = [];
+  const add = (href: string) => {
+    if (!isChatLink(href) || out.some((c) => c.href === href)) return;
+    const of = chatOfLink(href) ?? ownChat(href, here);
+    if (of !== null) out.push({ href, station: of.station, id: of.id });
+  };
+  for (const m of text.matchAll(/\]\((\S+?)\)/g)) add(m[1]!);
+  for (const part of bareLinks(text)) if (typeof part !== "string") add(part.url);
+  return out;
+}
+
+/// The chat a link with no station of its own names (`…/chats/<id>`): one of `here`'s.
+function ownChat(href: string, here: string): { station: string; id: string } | null {
+  const m = /\/chats\/([^/?#\s]+)\/?(?:[?#]|$)/.exec(href);
+  if (!m) return null;
+  try {
+    return { station: here, id: decodeURIComponent(m[1]!) };
   } catch {
     return null;
   }

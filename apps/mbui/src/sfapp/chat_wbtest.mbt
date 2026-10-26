@@ -158,6 +158,18 @@ test "references and addresses in plain words" {
 }
 
 ///|
+test "references in plain words: a still.fail link's, and one linked bare reading as its message says its chat" {
+  let old = "https://app.still.fail/o/ws1/st1/c-old"
+  let runs = message_runs(
+    "[首页](https://app.still.fail/o/ws1/st1/s-c2) 和 \{old} 还有 https://app.still.fail/o/ws1/st1/c-none",
+    @sf.theme().p.accent,
+    chat_title=fn(h) { if h == old { Some("旧的对话") } else { None } },
+  )
+  assert_eq(runs.map(fn(r) { r.text }), ["@", "首页", " 和 ", "@", "旧的对话", " 还有 ", "@", "https://app.still.fail/o/ws1/st1/c-none"])
+  assert_eq(runs[4].link, old)
+}
+
+///|
 test "images take their own proportions before they load" {
   let a : Attachment = {
     name: "a.png",

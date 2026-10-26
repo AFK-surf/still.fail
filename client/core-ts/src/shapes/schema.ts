@@ -206,6 +206,7 @@ export const SHAPES: Record<string, Shape> = {
     ["profile", opt("String"), { doc: "still.fail's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it." }],
     ["runtime", opt("String"), { doc: "still.fail's notice that the station does not have a chat's runtime installed: its id (claude | codex | dsh | grok | cursor | devin)." }],
     ["install", opt("RuntimeInstall"), { doc: "With `runtime`: installing it from the chat, as it stands now (the station's updates). Absent from a station older\nthan it." }],
+    ["chats", opt(vec("LinkedChat")), { doc: "In a chat's page: the chats its words link to that their stations' lists have (archived ones too), each\nonce. Absent when none." }],
     ["notice", opt("NoticeShown"), { doc: "still.fail's own notice as the chat shows it (views.ts noticeOf): whether it says a failure, its words as a line\nof the UI, where its link to `profile` begins. Absent for every other message." }],
     ["reportable", opt("bool"), { doc: "still.fail's notice of a failure, on a station that takes bug reports: sending it to the still.fail team\n(`chat.report` {station, thread, seq}) is offered with it. Absent otherwise." }],
     ["blocked", opt("RuntimeInstall"), { doc: "In a chat's page: the viewer's message waiting for a runtime the station does not have (the notices saying so,\nfolded into it): said under it in place of its waiting, with installing it. Absent otherwise." }],
@@ -237,6 +238,12 @@ export const SHAPES: Record<string, Shape> = {
     ["time", opt(map("Stamp")), { doc: "`lastActiveAt` in words." }],
     ["letters", vec("ChatMessage"), { doc: "Both ways, in the order written (`way`): one coming in by that chat's agent, named by the chat; one going out by\nthis chat's agent." }],
   ], { doc: "The letters between a chat and another: a row of the page's list, its letters once it is opened." }),
+  LinkedChat: struct([
+    ["href", "String", { doc: "The link as it is written in the message." }],
+    ["title", "String", { said: true, doc: "The chat's title as its list says it: what a link to it written bare reads as." }],
+    ["archived", opt("bool"), { doc: "It is archived (its station's archivedRows). Absent otherwise." }],
+    ["note", opt("String"), { doc: "Where it stands in words, where its list's row is not there to say it: 已归档. Absent otherwise." }],
+  ], { doc: "A chat a message links to (views.ts #linkedChats)." }),
   NoticeShown: struct([
     ["failed", "bool", { doc: "It says something failed (the station began it with ⚠️): drawn in red." }],
     ["words", "String", { said: true, doc: "What it says, ⚠️ and a closing 。 left out." }],
