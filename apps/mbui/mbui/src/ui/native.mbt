@@ -406,8 +406,8 @@ pub fn NativeView::play(self : NativeView) -> Unit {
 
 ///|
 /// A video's frames' times (ms, in time order), read from its file as the system reads it (Android's MediaExtractor
-/// over the same reads as its player; Apple's sample cursor): asked once, None until they are here (and where the host
-/// reads none); empty when there were none to read.
+/// over the same reads as its player; Apple's sample cursor; Linux's parsebin, nothing decoded): asked once, None until
+/// they are here (and where the host reads none); empty when there were none to read.
 pub fn NativeView::frames(self : NativeView) -> Array[Double]? {
   if self.id == 0 || self.closed {
     return None

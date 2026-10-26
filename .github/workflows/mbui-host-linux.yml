@@ -95,7 +95,7 @@ jobs:
       - name: "The pages' contract: a page says to the app, runs its scripts, takes an event stream as it is sent"
         if: success() || failure()
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux site
-      - name: "The player: test/host/playcheck.mp4 read through the app, drawn in the canvas, played to its end, a frame grabbed (GStreamer's)"
+      - name: "The player: test/host/playcheck.mp4 read through the app, drawn in the canvas, its frames' times read, played to its end, a frame grabbed (GStreamer's)"
         if: success() || failure()
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux play
       - name: "The PDFs' contract: a PDF's two pages read and drawn, the second turned as its /Rotate says"

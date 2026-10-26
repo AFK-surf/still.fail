@@ -4,17 +4,19 @@
 // players are; once ready, its length to the tenth of a second and its picture's size said (`PLAYCHECK ready 1000
 // 64x48`); where the host draws its picture in the canvas (MBUI_PLAYCHECK_DRAWN=1: Linux's), once its first frame is
 // drawn, the middle of its picture as the canvas drew it (`PLAYCHECK drawn red`, else its colour: `PLAYCHECK drawn r g
-// b`); played, said once it has played to its end (`PLAYCHECK ended`); a frame at 500 ms grabbed, said once it is a
-// PNG (`PLAYCHECK grabbed`); then the app's end. `PLAYCHECK none` where the host has no player, `PLAYCHECK failed`
-// where it could not play it. The host asks for a frame as what it does changes: each frame's build only asks.
+// b`); where the host reads its frames' times (MBUI_PLAYCHECK_FRAMES=1: Linux's), how many and the first's and last's
+// start (`PLAYCHECK frames 10 0 900`); played, said once it has played to its end (`PLAYCHECK ended`); a frame at 500
+// ms grabbed, said once it is a PNG (`PLAYCHECK grabbed`); then the app's end. `PLAYCHECK none` where the host has no
+// player, `PLAYCHECK failed` where it could not play it. The host asks for a frame as what it does changes: each
+// frame's build only asks.
 
 ///|
 // kept across runs: the check's one run (kitdemo run with MBUI_PLAYCHECK), never reset
 let play_check_view : Ref[@ui.NativeView?] = Ref(None)
 
 ///|
-/// how far it has come: 0 opened, 1 ready said (where its drawn picture is read), 2 played, 3 its end said and a frame
-/// asked for
+/// how far it has come: 0 opened, 1 ready said, 2 its drawn picture said (where it is read), 3 its frames' times said
+/// (where they are read), 4 played, 5 its end said and a frame asked for
 // kept across runs: the check's one run, never reset
 let play_check_said : Ref[Int] = Ref(0)
 
@@ -27,25 +29,30 @@ let play_check_key : String = "play-check/picture"
 let play_check_size : (Double, Double) = (160.0, 120.0)
 
 ///|
-/// What the check does each frame, once its build is over: each step as it comes, and the app's end.
+/// What the check does each frame, once its build is over: each step in turn as far as what they wait on has come, and
+/// the app's end.
 fn play_check_step(c : @ui.Ctx, v : @ui.NativeView) -> Unit {
   if v.state() < 0 {
     @hostapi.log("PLAYCHECK failed")
     @hostapi.exit(1)
     return
   }
-  let drawn = @ui.env("MBUI_PLAYCHECK_DRAWN") == "1"
+  while play_check_next(c, v) {
+
+  }
+}
+
+///|
+/// The next step, once what it waits on has come (true: done, the one after looked at too).
+fn play_check_next(c : @ui.Ctx, v : @ui.NativeView) -> Bool {
   match play_check_said.val {
     0 if v.state() == 1 => {
       let tenths = (v.duration() / 100.0).round().to_int() * 100
       let (w, h) = v.natural()
       @hostapi.log("PLAYCHECK ready \{tenths} \{w.to_int()}x\{h.to_int()}")
       play_check_said.val = 1
-      if !drawn {
-        v.play()
-        play_check_said.val = 2
-      }
     }
+    1 if @ui.env("MBUI_PLAYCHECK_DRAWN") != "1" => play_check_said.val = 2
     // (the picture stretched to its view: the pixel at its middle the video's red, as the canvas drew it)
     1 if v.shown() => {
       match c.drawn_pixels(c.id(play_check_key)) {
@@ -65,15 +72,33 @@ fn play_check_step(c : @ui.Ctx, v : @ui.NativeView) -> Unit {
         }
         _ => @hostapi.log("PLAYCHECK drawn none")
       }
-      v.play()
       play_check_said.val = 2
     }
-    2 if v.ended() => {
+    2 if @ui.env("MBUI_PLAYCHECK_FRAMES") != "1" => play_check_said.val = 3
+    // (how many, the first's and the last's start, in ms)
+    2 =>
+      match v.frames() {
+        Some(list) => {
+          let ends = if list.length() > 0 {
+            " \{list[0].round().to_int()} \{list[list.length() - 1].round().to_int()}"
+          } else {
+            ""
+          }
+          @hostapi.log("PLAYCHECK frames \{list.length()}" + ends)
+          play_check_said.val = 3
+        }
+        None => return false
+      }
+    3 => {
+      v.play()
+      play_check_said.val = 4
+    }
+    4 if v.ended() => {
       @hostapi.log("PLAYCHECK ended")
       v.grab_frame(500.0)
-      play_check_said.val = 3
+      play_check_said.val = 5
     }
-    3 =>
+    5 =>
       match v.grabbed() {
         Some(png) => {
           let png_head = png.length() > 8 && png[1] == b'P' && png[2] == b'N' && png[3] == b'G'
@@ -87,11 +112,13 @@ fn play_check_step(c : @ui.Ctx, v : @ui.NativeView) -> Unit {
             },
           )
           @hostapi.exit(if png_head { 0 } else { 1 })
+          return false
         }
-        None => ()
+        None => return false
       }
-    _ => ()
+    _ => return false
   }
+  true
 }
 
 ///|
