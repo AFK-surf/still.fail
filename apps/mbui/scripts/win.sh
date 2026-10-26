@@ -12,6 +12,7 @@
 #   scripts/win.sh put                     the core's bytecode, the engine and the shell put beside the app
 #   scripts/win.sh collate                 the host's order of names (src/host/win_collate.h) checked
 #   scripts/win.sh sealed                  the desktop app's sealed values opened (src/host/win_electron_sealed.h) checked
+#   scripts/win.sh setup                   the installer (windows/setup.c) with the app built and put packed after it
 # Its identity (as mac-app.sh's Info.plist has the Mac app's), in the program's resources: its icon
 # (windows/AppIcon-<mac-icon.swift's hash>.ico: that script draws it on a Mac, `--ico`), its version (0.1.<MBUI_BUILD>,
 # else the commits in still.fail's history), its name, and its own environment (RCDATA MBUI_ENV, which mbui's host
@@ -32,19 +33,25 @@ if [ "$APP" = stillfail ]; then
   export CL="/I$(cygpath -w "$A/engine") /I$(cygpath -w "$MBUI_DIR/src/host") ${CL:-}"
 fi
 core() { HERMESC=$(cygpath -m "$engine/hermesc.exe") bash "$D/core.sh" hermes; }
+# variant: what MBUI_VARIANT builds the app as: its id, its name, its program's name where it is put (the desktop app's
+# own program's in its place), the folder it is put in (%LOCALAPPDATA%\Programs\<dir>: the desktop app's installer's,
+# its package name), and its own environment beyond those
+variant() {
+  case "${MBUI_VARIANT:-mbui}" in
+    mbui) id=fail.still.mbui name="still.fail mbui" exe=stillfail dir=stillfail-mbui schemes= extra='MBUI_BETA=1' ;;
+    stable) id=fail.still.desktop name=still.fail exe=still.fail dir=stillfail schemes=stillfail,ember extra='MBUI_OWN=1' ;;
+    beta) id=fail.still.desktop.beta name=youdid.wtf exe=youdid.wtf dir=stillfail-beta schemes=stillfail-beta extra='MBUI_OWN=1\nMBUI_BETA=1' ;;
+    *) echo "win.sh: MBUI_VARIANT is mbui, stable or beta, not $MBUI_VARIANT" >&2; return 1 ;;
+  esac
+}
 # res: the app's resources (out/win-res/app.res), for mbui's win.sh to link into it (MBUI_WIN_RES)
 res() {
   local n=${MBUI_BUILD:-$(git -C "$EMBER" rev-list --count HEAD 2>/dev/null || echo 1)}
   local icon=$A/windows/AppIcon-$(sha256sum "$D/mac-icon.swift" | cut -c1-12).ico
   [ -f "$icon" ] || { echo "win.sh: no $icon (scripts/mac-icon.swift changed: swift scripts/mac-icon.swift --ico $icon, on a Mac)" >&2; return 1; }
-  # (exe: what the program is named where it is put, the desktop app's own program's name in its place: beta.sh win)
-  local id name exe extra r=$A/out/win-res
-  case "${MBUI_VARIANT:-mbui}" in
-    mbui) id=fail.still.mbui name="still.fail mbui" exe=stillfail extra='MBUI_BETA=1' ;;
-    stable) id=fail.still.desktop name=still.fail exe=still.fail extra='MBUI_SCHEMES=stillfail,ember\nMBUI_OWN=1' ;;
-    beta) id=fail.still.desktop.beta name=youdid.wtf exe=youdid.wtf extra='MBUI_SCHEMES=stillfail-beta\nMBUI_OWN=1\nMBUI_BETA=1' ;;
-    *) echo "win.sh: MBUI_VARIANT is mbui, stable or beta, not $MBUI_VARIANT" >&2; return 1 ;;
-  esac
+  local id name exe dir schemes extra r=$A/out/win-res
+  variant || return 1
+  [ -z "$schemes" ] || extra="MBUI_SCHEMES=$schemes\n$extra"
   rm -rf "$r" && mkdir -p "$r"
   cp "$icon" "$r/app.ico"
   printf "MBUI_APP_ID=%s\nMBUI_APP_NAME=%s\n$extra\n" "$id" "$name" > "$r/app.env"
@@ -110,11 +117,31 @@ sealed() {
     -Fo"$(cygpath -w "$out/")" > "$out/build.log") || { cat "$out/build.log"; return 1; }
   "$out/sealed_test_win.exe"
 }
+# setup: the installer (windows/setup.c) with the app as built and put (put: the program, its engine and shell, core.hbc)
+# packed after it, as MBUI_VARIANT has it: out/setup/<name> (MBUI_SETUP_NAME, else stillfail-setup-0.1.<n>.exe)
+setup() {
+  local n=${MBUI_BUILD:-$(git -C "$EMBER" rev-list --count HEAD 2>/dev/null || echo 1)} id name exe dir schemes extra
+  variant || return 1
+  . "$MBUI_DIR/scripts/env.sh"
+  local built=$MBUI_DIR/out/win/app/$(cd "$MBUI_DIR/out/win/app" && pkg_build $APP native ${MODE:-release}) out=$A/out/setup
+  [ -f "$built/stillfail.exe" ] || { echo "win.sh: no app built (win.sh build, put)" >&2; return 1; }
+  rm -rf "$out" && mkdir -p "$out/files"
+  (cd "$A" && cl.exe -nologo -O2 -W3 windows/setup.c -Fe"$(cygpath -w "$out/setup-bare.exe")" -Fo"$(cygpath -w "$out/")" > "$out/build.log") ||
+    { cat "$out/build.log"; return 1; }
+  cp "$built/stillfail.exe" "$out/files/$exe.exe"
+  cp "$built/stillfail_engine.dll" "$built/stillfail_shell.dll" "$built/core.hbc" "$out/files/"
+  printf 'APP_NAME=%s\nAPP_ID=%s\nEXE=%s\nDIR=%s\nSCHEMES=%s\nVERSION=0.1.%s\n' "$name" "$id" "$exe" "$dir" "$schemes" "$n" > "$out/setup.env"
+  local to=$out/${MBUI_SETUP_NAME:-stillfail-setup-0.1.$n.exe}
+  local w=(); for f in "$out/files/"*; do w+=("$(cygpath -w "$f")"); done
+  "$out/setup-bare.exe" --pack "$(cygpath -w "$to")" "$(cygpath -w "$out/setup.env")" "${w[@]}" || return 1
+  echo "win.sh: $(basename "$to") $(wc -c < "$to") bytes ($name 0.1.$n)"
+}
 case "${1:-build}" in
   core) core; exit $? ;;
   put) put core; exit $? ;;
   collate) collate; exit $? ;;
   sealed) sealed; exit $? ;;
+  setup) setup; exit $? ;;
 esac
 if [ "$APP" = stillfail ] && [ "${1:-build}" = build ] && [ "${MBUI_WIN_CORE:-1}" != 0 ]; then
   core || exit 1
