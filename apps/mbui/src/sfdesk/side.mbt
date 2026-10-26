@@ -203,11 +203,18 @@ pub fn side_list() -> @ui.Style {
 let side_list_top : @ui.Style = @ui.css("pt=S1")
 
 ///|
-/// A sidebar's list under its band (side_list): what `rows` builds, scrolling under the band when it is taller than
-/// the room (a list of one: `key` keeps where it is scrolled to).
+/// A sidebar's list under its band (side_list): what `rows` builds and the room under its last (@sf.list_foot_in),
+/// scrolling under the band when it is taller than the room (a list of one: `key` keeps where it is scrolled to).
 pub fn side_scroll(c : @ui.Ctx, key : String, rows : () -> Unit) -> Unit {
   c.box(style=side_list(), fn() {
-    c.list(key, 1, side_scroll_est, fn(_) { c.box(style=side_full, fn() { rows() }) |> ignore }) |> ignore
+    c.list(key, 1, side_scroll_est, fn(_) {
+      c.box(style=side_full, fn() {
+        rows()
+        side_space(c, @sf.list_foot_in(Side))
+      })
+      |> ignore
+    })
+    |> ignore
   })
   |> ignore
 }

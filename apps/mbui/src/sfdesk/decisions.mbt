@@ -62,7 +62,7 @@ fn decisions_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           Row(k, d) => zou_row(c, src, w, d, here && k == front, i + 1 < lines.length() && lines[i + 1] is Row(_, _))
           Empty => c.box(style=zou_empty, fn() { c.text(@sf.t("web-main.decisions.empty"), style=zou_empty_words) |> ignore }) |> ignore
           Reading => side_breathing(c)
-          Foot => side_space(c, @sfpages.lists_foot_in)
+          Foot => side_space(c, @sf.list_foot_in(Side))
         }
       })
       if keys[i] != "" {

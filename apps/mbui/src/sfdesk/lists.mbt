@@ -172,6 +172,7 @@ priv enum ArchiveLine {
   Said(String)
   Day(String)
   Row(Json)
+  Foot
 }
 
 ///|
@@ -211,6 +212,7 @@ fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       }
     }
   }
+  lines.push(Foot)
   // opened: its newest chat beside it (ArchivePage)
   if app.nav.top() == Archived && !archive_side.landed && archive_side.q == "" {
     match days.get(0) {
@@ -246,6 +248,7 @@ fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         Said(words) => side_said(c, words, false)
         Day(label) => @sf.list_heading(c, label, Side)
         Row(it) => archive_side_row(c, src, it, i + 1 < lines.length() && lines[i + 1] is Row(_))
+        Foot => side_space(c, @sf.list_foot_in(Side))
       }
     })
     |> ignore
