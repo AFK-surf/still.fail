@@ -606,9 +606,9 @@ jobs:
           node apps/mbui/scripts/waitfor.mjs --deadline 600 --what "the e2e flow" --exists "$(cygpath -w "$E/status")" > /dev/null || { cat "$E/log"; exit 1; }
           cat "$E/log"
           [ "$(cat "$E/status")" = 0 ]
-      # The desktop app as released (Electron's beta), installed, moved over to this app built as it by its own updater
-      # (e2e/win/handoff.sh: ~1-2 min), for a change to what that goes by (the what job). Last: it builds the app again
-      # as the desktop app, in the place the e2e flow and the installer's put take it from.
+      # Each desktop app still Electron's as released (the beta, the stable one), installed, moved over to this app built
+      # as it by its own updater (e2e/win/handoff.sh: ~1-2 min each), for a change to what that goes by (the what job).
+      # Last: it builds the app again as the desktop app, in the place the e2e flow and the installer's put take it from.
       - name: The desktop app moved over to this app by its own updater (e2e/win/handoff.sh)
         if: needs.what.outputs.handoff == 'yes'
         run: bash apps/mbui/e2e/win/handoff.sh
@@ -622,6 +622,6 @@ jobs:
             !apps/mbui/out/e2e/windows/core/
             apps/mbui/out/setup/*.log
             apps/mbui/out/setup/result.txt
-            apps/mbui/out/handoff/*.log
-            apps/mbui/out/handoff/*.txt
+            apps/mbui/out/handoff/*/*.log
+            apps/mbui/out/handoff/*/*.txt
           if-no-files-found: warn
