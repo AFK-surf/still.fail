@@ -422,6 +422,16 @@ export interface Relayed { thread: number; to: string; place: string; link: stri
 
 /** The admin API of one station, by what each call does. */
 
+/**
+ * A chat into the archive, said in `toast` at once by its title: the core has it out of the lists already. Its station's
+ * no is the promise's (said in its own toast then, in place of this one).
+ */
+export function archiveSaid(api: ReturnType<typeof stationApi>, of: { thread?: number | null; session: string }, title: string, toast: (words: string) => void): Promise<unknown> {
+  const archived = api.archive(of, true);
+  toast(t("web-main.chat.archivedNamed", { title }));
+  return archived;
+}
+
 export function stationApi(t: StationCall) {
   const ops = bindStationOperations((name, params) => t.op(name, params));
   return {

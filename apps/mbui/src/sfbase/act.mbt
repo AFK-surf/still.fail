@@ -33,7 +33,8 @@ pub fn toast_later(words : String, action? : String = "", run? : () -> Unit = fn
 ///|
 /// Has the core do something (AppState.act): `key` under way until it answers (its button's spinner), `done` said
 /// when it did (with a button of `done_action`'s words doing `done_run`, "" none), why not said when it could not
-/// (`failed` told then). Nothing with MBUI_READONLY=1.
+/// (`failed` told then); `at_once`: `done` said as it is asked, where the core has it done on the device at once (its
+/// rows: an archive), the station's answer said only when it is a no. Nothing with MBUI_READONLY=1.
 pub fn act(
   src : Source,
   what : String,
@@ -43,6 +44,7 @@ pub fn act(
   done? : String = "",
   done_action? : String = "",
   done_run? : () -> Unit = fn() {  },
+  at_once? : Bool = false,
   ok? : (Json) -> Unit = fn(_) {  },
   failed? : () -> Unit = fn() {  },
 ) -> Unit {
@@ -55,6 +57,9 @@ pub fn act(
     acting.doing[key] = true
     acting.failed.remove(key)
   }
+  if at_once && done != "" {
+    toast_later(done, action=done_action, run=done_run)
+  }
   (src.call)(call, params, fn(res) {
     if key != "" {
       acting.doing.remove(key)
@@ -66,7 +71,7 @@ pub fn act(
     }
     match res {
       Ok(v) => {
-        if done != "" {
+        if done != "" && !at_once {
           toast_later(done, action=done_action, run=done_run)
         }
         ok(v)
@@ -152,7 +157,7 @@ fn doing_of(d : Json, calls : Array[String], on : Array[(String, String)]) -> Bo
 
 ///|
 /// What the toast saying a chat went into the archive offers (its 撤销): the chat archived by `params` (the
-/// `chat.archive` asked) back in the list, said once it is, or why not.
+/// `chat.archive` asked) back in the list, said at once (the core's list has it back), or why not.
 pub fn archive_undo(src : Source, params : Map[String, Json]) -> () -> Unit {
   fn() {
     let p = params.copy()
@@ -164,6 +169,7 @@ pub fn archive_undo(src : Source, params : Map[String, Json]) -> () -> Unit {
       "chat.archive",
       Json::object(p),
       done=@sf.t("android-misc.archive.restored"),
+      at_once=true,
     )
   }
 }

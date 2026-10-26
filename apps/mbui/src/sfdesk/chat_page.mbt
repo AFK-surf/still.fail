@@ -169,7 +169,7 @@ fn archive_asked(src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : 
 
 ///|
 /// The chat into the archive (ChatPage.tsx archive): on to the chat below it in the list (or above, at the end), so
-/// the keys go on working, the list if none; said once it is done, or why not.
+/// the keys go on working, the list if none; said at once, or why not.
 fn archive(src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
   let here = fn() {
     match app.nav.top() {
@@ -194,14 +194,15 @@ fn archive(src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
     Some(th) => p["thread"] = Json::number(th)
     None => ()
   }
+  // said at once, by its title (the core's list has it gone); why not, when not
+  toast_later(
+    @sf.t("web-main.chat.archivedNamed", args=[("title", v.title)]),
+    action=@sf.t("android-chat.archived.undo"),
+    run=@sfbase.archive_undo(src, p),
+  )
   (src.call)("chat.archive", Json::object(p), fn(res) {
     match res {
-      Ok(_) =>
-        toast_later(
-          @sf.t("web-pages.chat.archived"),
-          action=@sf.t("android-chat.archived.undo"),
-          run=@sfbase.archive_undo(src, p),
-        )
+      Ok(_) => ()
       Err(e) => toast_later(@sf.t("web-pages.chat.archiveFailed", args=[("error", error_words(e))]))
     }
   })

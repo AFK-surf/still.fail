@@ -163,6 +163,7 @@
   "web-main.chat.transcriptNone": "No session file yet: the agent writes it once it starts working",
   "web-main.chat.archiveNamed": "Archive \"{title}\"",
   "web-main.chat.archived": "Archived",
+  "web-main.chat.archivedNamed": "Archived \"{title}\"",
   "web-main.chat.archivedPlaceholder": "Restore to send",
   "web-main.chat.deleteFailed": "Couldn't delete: {error}",
   "web-main.chat.empty": "Send a message here; agents in this chat reply here",

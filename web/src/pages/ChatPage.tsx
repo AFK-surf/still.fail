@@ -18,7 +18,7 @@ import { ownOrigin } from "../stillfailLink.ts";
 import { changeTabs } from "../chatTabs.ts";
 import { usePrefs } from "../prefs.ts";
 import type { ChatJobsView, ChatPublish, ChatShare, Host, StationView } from "../core/shapes.ts";
-import { stationApi, useAction, useApi, useStatus, useChat, useChatJobs, useListedChat, useHistory, useHost, useStationCall, useStationLook, useAgentCard, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
+import { archiveSaid, stationApi, useAction, useApi, useStatus, useChat, useChatJobs, useListedChat, useHistory, useHost, useStationCall, useStationLook, useAgentCard, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { StationCornerDot, StationDot, useStationLink } from "../StationLink.tsx";
@@ -281,8 +281,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
     // On to the chat below it in the list (or above, at the end), so the keys go on working; the list page if none.
     if (!goToNeighbour(1) && !goToNeighbour(-1)) navigate(link("/chats"));
     try {
-      await api.archive({ thread, session: keeper }, true);
-      toast(t("web-pages.chat.archived"));
+      await archiveSaid(api, { thread, session: keeper }, chatView.value?.title ?? "", toast);
     } catch (error) {
       toast(t("web-pages.chat.archiveFailed", { error: error instanceof Error ? error.message : String(error) }));
     }

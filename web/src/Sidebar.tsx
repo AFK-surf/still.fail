@@ -8,7 +8,7 @@ import { SidebarActions } from "./SidebarActions.tsx";
 import { NavSection, NavTop } from "./SidebarList.tsx";
 import { NavLink, useLocation } from "react-router";
 import { useGo, useHere } from "./go.ts";
-import { stationApi, useStationCall, useStatus, type ChatItem, type ChatsView } from "./api.ts";
+import { archiveSaid, stationApi, useStationCall, useStatus, type ChatItem, type ChatsView } from "./api.ts";
 import { prime, useTopic, useTopicSelect } from "./core/react.ts";
 import type { Topic } from "./core/client.ts";
 import { RowAside } from "./RowPicture.tsx";
@@ -401,8 +401,7 @@ function useArchive(item: ChatItem, to: string) {
     // a chat opened meanwhile.
     if (decodeURIComponent(here()) === decodeURIComponent(to) && !goToNeighbour(1) && !goToNeighbour(-1)) navigate(`${stationBase(item.station)}/chats`);
     try {
-      await api.archive(item, true);
-      toast(t("web-main.chat.archived"));
+      await archiveSaid(api, item, item.title, toast);
     } catch (error) {
       toast(t("web-main.chat.archiveFailed", { error: error instanceof Error ? error.message : String(error) }));
     }

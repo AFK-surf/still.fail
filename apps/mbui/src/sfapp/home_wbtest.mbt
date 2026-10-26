@@ -166,11 +166,12 @@ test "a row archived: an archivable row under it closes over it whole, its swipe
   let t = tester("home")
   let under = "把旧的截图都换成新的"
   let (_, y_was, _, h) = t.rect_of(under).unwrap()
+  assert_false(t.locate("=Slack 里问的报销流程").is_empty())
   hold_row(t, "Slack 里问的报销流程")
   // the menu's 归档 (its last item)
   let (lx, ly) = t.find_last("归档").unwrap()
   t.tap(lx, ly)
-  assert_true(t.find("Slack 里问的报销流程") is None)
+  assert_true(t.locate("=Slack 里问的报销流程").is_empty())
   // laid out a row up at once, drawn where it was, all of it
   let (_, y_now, _, _) = t.rect_of(under).unwrap()
   assert_true(y_now < y_was - 1.0, msg="\{y_now} \{y_was}")
@@ -465,8 +466,8 @@ test "a chat archived from its row says so with 撤销, which asks it back into 
   t.tap(lx, ly)
   assert_eq(named(calls, "chat.archive").length(), 1)
   t.draw()
-  assert_true(t.find("夜里的构建又失败了") is None)
-  assert_true(t.find("已归档") is Some(_))
+  assert_true(t.locate("=夜里的构建又失败了").is_empty())
+  assert_true(t.find("已归档「夜里的构建又失败了」") is Some(_))
   // (come in)
   t.run_for(@kit.presence_in_ms)
   t.tap_text("撤销")
@@ -531,6 +532,49 @@ test "a toast is a capsule while its words fit a line; its 撤销 a capsule in i
 }
 
 ///|
+test "a chat archived from its row: said at once by its title, its station not answered yet; why not once it says no" {
+  let calls : Array[Made] = []
+  reset()
+  let base = fixture("home")
+  // (chat.archive left waiting: its station's answer not come)
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      if name != "chat.archive" {
+        (base.call)(name, params, done)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  hold_row(t, "夜里的构建又失败了")
+  let (lx, ly) = t.find_last("归档").unwrap()
+  t.tap(lx, ly)
+  t.draw()
+  assert_true(t.find("已归档「夜里的构建又失败了」") is Some(_))
+  assert_true(t.find("撤销") is Some(_))
+  // no: why, in its place
+  (named(calls, "chat.archive")[0].done)(Err({ "message": "坏了" }))
+  t.draw()
+  assert_true(app.toast.contains("坏了"), msg=app.toast)
+}
+
+///|
+test "a toast naming a long title with its 撤销: inside the screen, its 撤销 inside it" {
+  for wide in [false, true] {
+    let calls : Array[Made] = []
+    let w = if wide { 1280.0 } else { 390.0 }
+    let t = if wide { wide_tester(calls) } else { wide_tester(calls, w~, h=844.0, platform=2) }
+    let words = "已归档「把首页对话列表改成按天分组并且在每一组的标题里写上那天的日期和星期几，再把置顶的对话单独放在最上面」"
+    let ((x, y, tw, th), button) = rested_toast(t, words, "撤销")
+    let (bx, by, bw, bh) = button.unwrap()
+    assert_true(x >= 0.0 && x + tw <= w, msg="\{wide} \{x} \{tw}")
+    assert_true(bx >= x && bx + bw <= x + tw && by >= y && by + bh <= y + th, msg="\{wide} \{button}")
+    t.run_for(@sf.toast_action_ms + @kit.presence_out_ms)
+  }
+}
+
+///|
 test "wide: a chat archived from its row with a mouse says so with 撤销 too, which asks it back (archived false)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
@@ -541,7 +585,7 @@ test "wide: a chat archived from its row with a mouse says so with 撤销 too, w
   t.tap(bx + bw / 2.0, by + bh / 2.0)
   assert_eq(named(calls, "chat.archive").length(), 1)
   t.draw()
-  assert_true(t.find("已归档") is Some(_))
+  assert_true(t.find("已归档「夜里的构建又失败了」") is Some(_))
   // (come in)
   t.run_for(@kit.presence_in_ms)
   t.tap_text("撤销")
