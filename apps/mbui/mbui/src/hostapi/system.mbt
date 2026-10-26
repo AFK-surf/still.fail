@@ -53,7 +53,8 @@
 // `shown` as its window comes back after it was closed and as the Mac wakes from sleep, `network`, `menu`, `link` of
 // the schemes its Info.plist names) and Windows's (win_life.h: `shown` as its window comes back from the notification
 // area's icon it was put away to and as the PC wakes from sleep, `network` as the default route goes another way,
-// `link` of its schemes, MBUI_SCHEMES, `menu` as an action of its icon's menu is chosen). While the app is
+// `link` of its schemes, MBUI_SCHEMES, `menu` as an action of its icon's menu is chosen) and Linux's (linux_life.h: the
+// same as Windows', its icon among the desktop's apps' icons, the computer's sleep logind's). While the app is
 // on screen, Android's also holds a Wi-Fi multicast lock when its manifest asks for CHANGE_WIFI_MULTICAST_STATE (Android
 // drops the multicast that reaches the phone unless an app holds one: an mDNS lookup would hear no answer on the LAN).
 

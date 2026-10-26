@@ -2,7 +2,8 @@
 // in with OpenGL ES 3 (linux_render.c); frames from GTK's frame clock, asked for only while the app has something to
 // draw; input from the area's events, and the input method (IBus, Fcitx: GTK's) through a GtkIMContext while a field
 // has the focus. The window keeps the system's title bar (GTK's own on GNOME's Wayland, the window manager's where it
-// draws them): none of its buttons in the app's top row.
+// draws them): none of its buttons in the app's top row. A program that is an app (MBUI_APP_ID) runs once for its
+// person, put away to its icon among the desktop's as its window closes (linux_life.h).
 #include <epoxy/gl.h>
 #include <gtk/gtk.h>
 #include <locale.h>
@@ -465,11 +466,8 @@ static void on_active(GObject *o, GParamSpec *p, gpointer data) {
   app_state();
 }
 
-static gboolean on_close(GtkWindow *w, gpointer data) {
-  (void)w, (void)data;
-  exit(0);
-  return FALSE;
-}
+// the app's life: once for its person, put away to its icon, links, the network, sleep
+#include "linux_life.h"
 
 // ---- the system's settings: its colours, its words' size and face, its animations ----
 
@@ -620,12 +618,10 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   script = getenv("MBUI_SCRIPT");
   shot_dir = getenv("MBUI_SHOT_DIR");
   setlocale(LC_ALL, "");
-  // its id (MBUI_APP_ID, as its desktop entry runs it: still.fail's linux/install.sh), what the desktop knows its window
-  // by (Wayland's app id, X11's class) and its icon's name
-  const char *id = getenv("MBUI_APP_ID");
-  if (id && *id) g_set_prgname(id);
+  // its icon's name its id (MBUI_APP_ID, as its desktop entry runs it: still.fail's linux/install.sh), which the
+  // desktop knows its window by too (life_begin)
   gtk_init();
-  if (id && *id) gtk_window_set_default_icon_name(id);
+  if (*app_id()) gtk_window_set_default_icon_name(app_id());
   GtkSettings *gs = gtk_settings_get_default();
   if (gs) {
     on_font_name(G_OBJECT(gs), NULL, NULL);
@@ -636,16 +632,16 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   win = gtk_window_new();
   char *t = utf8(title);
   gtk_window_set_title(GTK_WINDOW(win), t);
-  g_free(t);
   // MBUI_WIN=<w>x<h>: the area's size in points (a phone's, for the narrow layouts); else the app's own
   // (@hostapi.window_setup); 900 x 720 by default
   double ww = setup_w > 0 ? setup_w : 900, wh = setup_h > 0 ? setup_h : 720;
   const char *size = getenv("MBUI_WIN");
   if (size) sscanf(size, "%lfx%lf", &ww, &wh);
   gtk_window_set_default_size(GTK_WINDOW(win), (int)lround(ww), (int)lround(wh));
-  g_signal_connect(win, "close-request", G_CALLBACK(on_close), NULL);
   g_signal_connect(win, "notify::is-active", G_CALLBACK(on_active), NULL);
   g_signal_connect(win, "notify::visible", G_CALLBACK(on_active), NULL);
+  life_start(t);
+  g_free(t);
 
   area = gtk_gl_area_new();
   gtk_gl_area_set_allowed_apis(GTK_GL_AREA(area), GDK_GL_API_GLES);
@@ -908,11 +904,7 @@ void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
   (void)data;
   char *u = utf8(name);
   GString *out = g_string_new("{\"install\":{\"name\":\"");
-  for (const char *c = u; *c; c++) {
-    if (*c == '"' || *c == '\\') g_string_append_printf(out, "\\%c", *c);
-    else if ((unsigned char)*c < 0x20) g_string_append_printf(out, "\\u%04x", *c);
-    else g_string_append_c(out, *c);
-  }
+  json_put(out, u);
   g_string_append(out, "\",\"error\":\"unsupported\"}}");
   mb_post("system", out->str, out->len, NULL, 0);
   g_string_free(out, TRUE);
@@ -1008,8 +1000,6 @@ void mb_host_window_drag(void) {
 
 // The number on the app's icon (@hostapi.set_badge): none here yet.
 void mb_host_set_badge(int32_t n) { (void)n; }
-// The menu bar (@hostapi.menu_setup): none on Linux (the app's own keys are its shortcuts).
-void mb_host_menu_setup(moonbit_string_t json) { (void)json; }
 // (this machine's station: managed from the macOS app only, yet)
 moonbit_string_t mb_host_local_station(void) { return moonbit_make_string_raw(0); }
 void mb_host_local_station_act(moonbit_string_t a) { (void)a; }

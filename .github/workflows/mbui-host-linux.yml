@@ -2,8 +2,9 @@
 # where"; scripts/host_contract.sh), as mbui-host-windows.yml has Windows': kitdemo built for the GTK 4 host
 # (src/host/linux_*, scripts/linux.sh), its controls page run in a window of Xvfb's (Mesa's llvmpipe draws it: no GPU)
 # with its scripted taps, its tape made a Tester's test and run here (every frame the same), then the committed tape's
-# text (linux_controls) asked of Pango again (every answer the same), and the runner's files told as they come. On
-# GitHub's own Ubuntu (a public repository's: free). When the Linux host changes.
+# text (linux_controls) asked of Pango again (every answer the same), the runner's files told as they come, and the
+# app's links (started with one, and handed one by itself started again: once for its person, on a session bus of the
+# run's own). On GitHub's own Ubuntu (a public repository's: free). When the Linux host changes.
 name: mbui-host-linux
 on:
   pull_request:
@@ -11,6 +12,8 @@ on:
       - "apps/mbui/mbui/src/ui/native.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/viewcheck.mbt"
       - "apps/mbui/mbui/src/host/linux*"
+      - "apps/mbui/mbui/src/host/mini_json.h"
+      - "apps/mbui/mbui/src/kitdemo/gallery/linkcheck.mbt"
       - "apps/mbui/mbui/src/host/gles_render.h"
       - "apps/mbui/mbui/src/host/corner_sl.h"
       - "apps/mbui/mbui/src/host/done_watch.h"
@@ -41,14 +44,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # GTK 4 and what the host draws with (epoxy, Pango, cairo, gdk-pixbuf, libsoup), Mesa's software GL, Xvfb, and the
-      # fonts the text is set in (the system's sans-serif, Han in Noto Sans CJK SC, Noto Color Emoji)
+      # fonts the text is set in (the system's sans-serif, Han in Noto Sans CJK SC, Noto Color Emoji); D-Bus's daemon, for a
+      # session bus of the links' run
       - name: GTK 4, Mesa, Xvfb, the fonts
         working-directory: ${{ github.workspace }}
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q --no-install-recommends libgtk-4-dev libepoxy-dev libpango1.0-dev libcairo2-dev \
             libfontconfig-dev libgdk-pixbuf-2.0-dev libsoup-3.0-dev zlib1g-dev libgl1-mesa-dri libegl-mesa0 xvfb xauth \
-            fonts-noto-cjk fonts-noto-color-emoji fonts-dejavu-core
+            fonts-noto-cjk fonts-noto-color-emoji fonts-dejavu-core dbus-daemon
       - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo
         run: scripts/host_contract.sh linux build
@@ -60,6 +64,9 @@ jobs:
       - name: "The runner's contract: a file written in the run's directory is told as it comes (done X)"
         if: success() || failure()
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux runner
+      - name: "The links' contract: started with a link, and handed one by itself started again"
+        if: success() || failure()
+        run: dbus-run-session -- xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux links
       - uses: actions/upload-artifact@v4
         if: always()
         with:
