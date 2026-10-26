@@ -1819,7 +1819,9 @@ fn composer_bar(
       justify=JCenter,
       fn() {
         let hint = @motion.anim(c, "composer/hint", 1.0)
-        if flight_hint_away(c, d.key) {
+        // words sent are over the emptied field: its hint and its caret (at its start already) away till they leave
+        let away = flight_hint_away(c, d.key)
+        if away {
           hint.snap(0.0)
         } else {
           hint.follow(1.0, @motion.tween(@sf.hint_back_ms, ease=Arrive))
@@ -1839,7 +1841,7 @@ fn composer_bar(
           plain=true,
           color=t.p.text,
           placeholder_color=@sf.alpha(t.p.subtle, hint.get()),
-          caret_color=t.p.accent,
+          caret_color=if away { @sf.alpha(t.p.accent, 0.0) } else { t.p.accent },
           // pointed at with a mouse (a keyboard at hand) Enter sends and ⇧Enter is a new line; with a finger (the
           // screen's keyboard) Enter is a new line, whatever the layout (the web's `hover: hover`, mobile/Chat.tsx)
           enter_sends=@sf.enter_sends(),
