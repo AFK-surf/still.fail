@@ -24,6 +24,8 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
   t.frame()
   assert_eq(named(calls, "chat.publishPreview").length(), 1)
   assert_true(t.find("部署登录页") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  // its bar across the top, as a file opened has: what it is and how much was hidden
+  assert_true(t.find("共隐藏 1 处疑似机密") is Some(_))
   assert_true(t.find("已隐藏 1 处") is Some(_))
   t.click(Button, label="复制图片")
   t.frame()

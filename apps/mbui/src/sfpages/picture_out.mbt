@@ -19,13 +19,16 @@ pub fn picture_out_way() -> (String, String) {
 }
 
 ///|
-/// The picture `png` handed out as its button says (picture_out_way), what came of it said; None: it could not be
-/// made.
-pub fn picture_out(c : @ui.Ctx, png : Bytes?) -> Unit {
+/// The picture `png` handed out as its button says (picture_out_way), what came of it said (that it was copied, not
+/// where the button says so itself: `copy_said`); None: it could not be made. True once it is out.
+pub fn picture_out(c : @ui.Ctx, png : Bytes?, copy_said? : Bool = false) -> Bool {
   let album = picture_to_album()
   match png {
-    None => say(c, @sf.t(if album { "web-main.stations.saveToPhotosFailed" } else { "web-main.stations.shareFailed" }))
-    Some(png) if album =>
+    None => {
+      say(c, @sf.t(if album { "web-main.stations.saveToPhotosFailed" } else { "web-main.stations.shareFailed" }))
+      false
+    }
+    Some(png) if album => {
       @sfbase.keep_bytes(
         c,
         "still.fail.png",
@@ -35,11 +38,14 @@ pub fn picture_out(c : @ui.Ctx, png : Bytes?) -> Unit {
         saved=@sf.t("web-main.stations.savedToPhotos"),
         failed=@sf.t("web-main.stations.saveToPhotosFailed"),
       )
+      true
+    }
     Some(png) => {
       @ui.clipboard_set_png(png, label="still.fail")
-      if !@ui.copy_shown() {
+      if !@ui.copy_shown() && !copy_said {
         say(c, @sf.t("common.copied"))
       }
+      true
     }
   }
 }

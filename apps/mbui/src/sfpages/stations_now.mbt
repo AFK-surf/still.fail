@@ -28,8 +28,8 @@ pub fn share_card_open(src : Source, w : Workspace) -> Unit {
         // (once the frame's builds are over: the picture as the last frame drew it, read back by the host's renderer)
         c.tell("share-card/copy", fn() {
           match c.drawn_pixels(picture, inset=pic_copy_in) {
-            @ui.PixelsRead(pw, ph, rgba) => picture_out(c, Some(@pixels.png(pw, ph, unpremultiplied(rgba))))
-            _ => picture_out(c, None)
+            @ui.PixelsRead(pw, ph, rgba) => picture_out(c, Some(@pixels.png(pw, ph, unpremultiplied(rgba)))) |> ignore
+            _ => picture_out(c, None) |> ignore
           }
         })
       }

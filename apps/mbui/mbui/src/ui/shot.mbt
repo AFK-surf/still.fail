@@ -55,8 +55,9 @@ pub fn Ctx::shot(self : Ctx, key : String, w : Double, body : () -> Unit) -> Uni
   let w = dmin(w, self.window_w)
   let mut root = -1
   let o = self.overlay("\u{2}shot/" + key, inert=true, escape=false, outside=false, fn() {
-    // (its ids its own: what the view builds of the same on the screen keeps its state apart)
-    root = self.box(left=0.0, top=0.0, w=Px(w), fn() { self.scope(shot_id(key), body) })
+    // (at the layer's corner, the window's, as tall as it is; its ids its own: what the view builds of the same on the
+    // screen keeps its state apart)
+    root = self.box(style=style(w=Fixed(w)), fn() { self.scope(shot_id(key), body) })
   })
   self.nodes[o.node].shot = true
   s.layer = o.node

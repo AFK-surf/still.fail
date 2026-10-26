@@ -896,7 +896,7 @@ function PublishSheet({ here, thread }: { here: Here; thread: number }) {
     setTaking(true);
     try {
       const png = await takePicture(paper.current);
-      const file = new File([png], "still.fail.png", { type: "image/png" });
+      const file = new globalThis.File([png], "still.fail.png", { type: "image/png" });
       if (!navigator.canShare?.({ files: [file] })) savePicture(png);
       else {
         // (the press long past by the time it is made, where the browser holds a share to it: saved as a file then)

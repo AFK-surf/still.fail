@@ -12,7 +12,9 @@ import { Mark } from "./brand.tsx";
 import { longPicture } from "./longPicture.ts";
 import { Dialog as RDialog } from "radix-ui";
 import { Avatar, Button, Confirm, Time, Tip, WaitLine } from "./ui.tsx";
-import { Close, Copy, ShieldCheck, Web } from "@stillfail/ui/icons.tsx";
+import { Check, Close, Copy, ShieldCheck, Web } from "@stillfail/ui/icons.tsx";
+import { ViewerBar, ViewerTool } from "@stillfail/ui/viewer/ViewerBar.tsx";
+import { useNarrow } from "./mobile/narrow.ts";
 import { useBackClose } from "@stillfail/ui/backClose.ts";
 import * as fpCss from "./FilePreview.css.ts";
 import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
@@ -140,22 +142,23 @@ function FileToggle({ file: f, ticking }: { file: PublishFile; ticking: Ticking 
 }
 
 /**
- * Hands the picture out on the wide screen: on the clipboard, copied whole (said once it is). What a browser cannot
- * put there (no ClipboardItem) is saved as a file instead.
+ * Hands the picture out on the wide screen: on the clipboard, copied whole. What a browser cannot put there (no
+ * ClipboardItem) is saved as a file instead. True once it is there.
  */
-export function useCopyPicture(): (paper: HTMLElement) => Promise<void> {
+export function useCopyPicture(): (paper: HTMLElement) => Promise<boolean> {
   const toast = useToast();
   return async (paper) => {
     try {
       if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) {
         savePicture(await takePicture(paper));
-        return;
+        return true;
       }
       // (the picture as it is made: Safari takes a clipboard's item only within the press, as a promise)
       await navigator.clipboard.write([new ClipboardItem({ "image/png": takePicture(paper) })]);
-      toast(t("common.copied"));
+      return true;
     } catch (e) {
       toast(t("web-pages.chat.shareImage.failed", { error: failure(e) }));
+      return false;
     }
   };
 }
@@ -172,21 +175,29 @@ export function savePicture(png: Blob): void {
 
 /**
  * Shares the chat as a picture (wide screen), as a file is previewed (FilePreview.tsx): over the whole window, the
- * picture as it would be, its attachments ticked in their messages (all at first), a bar floating on top with how
- * much was hidden, 「复制图片」 and close.
+ * picture as it would be, its attachments ticked in their messages (all at first), under the bar a file opened has
+ * (with a mouse on a wide screen across the top, back to the chat by its name; else floating, with close): 分享图片, how
+ * much was hidden, and its one tool, 复制图片, as a picture opened has its copy (a check a moment after).
  */
 export function PublishDialog({ station, thread, onClose }: { station: string; thread: number; onClose(): void }) {
   const preview = usePublishPreview(station, thread);
   const ticking = useTicking();
   const paper = useRef<HTMLDivElement | null>(null);
   const copy = useCopyPicture();
+  const docked = !useNarrow();
   const [taking, setTaking] = useState(false);
+  const [copied, setCopied] = useState(false);
   useBackClose(true, onClose);
   const p = "ok" in preview ? preview.ok : null;
   const go = () => {
     if (!paper.current || taking) return;
     setTaking(true);
-    void copy(paper.current).finally(() => setTaking(false));
+    void copy(paper.current).then((done) => {
+      if (done) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1600);
+      }
+    }).finally(() => setTaking(false));
   };
   let body: ReactNode;
   if ("reading" in preview) body = <div className={fpCss.fpNote}><WaitLine text={t("web-pages.chat.publish.reading")} /></div>;
@@ -199,18 +210,28 @@ export function PublishDialog({ station, thread, onClose }: { station: string; t
       </div>
     );
   }
+  const label = copied ? t("common.copied") : t("desktop.contextMenu.copyImage");
+  const tool = p && p.messages.length > 0
+    ? <ViewerTool label={label} onClick={go}>{copied ? <Check size={18} /> : <Copy size={18} />}</ViewerTool>
+    : null;
   return (
     <RDialog.Root open onOpenChange={(o) => { if (!o) onClose(); }}>
       <RDialog.Portal>
         <RDialog.Content className={fpCss.fp} aria-describedby={undefined} data-awake="">
-          <header className={`${fpCss.fpHead} ${css.head}`}>
-            <div className={fpCss.fpTitle}>
-              <RDialog.Title className={fpCss.fpName}>{t("web-pages.chat.shareImage")}</RDialog.Title>
-              {p?.hiddenText && <span className={`${fpCss.fpMeta} ${css.headNote}`}><ShieldCheck size={14} />{p.hiddenText}</span>}
-            </div>
-            <Button variant="primary" icon={Copy} busy={taking} disabled={!p || p.messages.length === 0} onClick={go}>{t("desktop.contextMenu.copyImage")}</Button>
-            <Tip label={t("web-main.preview.closeKey")}><RDialog.Close className={pageCss.iconBtn} aria-label={t("common.close")}><Close size={18} /></RDialog.Close></Tip>
-          </header>
+          {docked ? (
+            <ViewerBar back={{ label: p?.title || t("common.close"), onClick: onClose }}
+              name={<RDialog.Title asChild><span>{t("web-pages.chat.shareImage")}</span></RDialog.Title>}
+              meta={p?.hiddenText} tools={tool} />
+          ) : (
+            <header className={fpCss.fpHead}>
+              <div className={fpCss.fpTitle}>
+                <RDialog.Title className={fpCss.fpName}>{t("web-pages.chat.shareImage")}</RDialog.Title>
+                {p?.hiddenText && <span className={`${fpCss.fpMeta} ${css.headNote}`}><ShieldCheck size={14} />{p.hiddenText}</span>}
+              </div>
+              {tool}
+              <Tip label={t("web-main.preview.closeKey")}><RDialog.Close className={pageCss.iconBtn} aria-label={t("common.close")}><Close size={18} /></RDialog.Close></Tip>
+            </header>
+          )}
           <div className={fpCss.fpBody}>{body}</div>
         </RDialog.Content>
       </RDialog.Portal>

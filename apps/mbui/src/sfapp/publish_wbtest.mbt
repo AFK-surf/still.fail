@@ -68,10 +68,10 @@ test "分享图片: the page shows the picture as it would be; 保存到相册 k
   assert_eq(text(Some(asked[0].params), "station"), "ws1/st1")
   assert_eq(number(Some(asked[0].params), "thread"), 7.0)
   // the picture as it would be: the chat's name over its messages, still.fail's at its foot; what was hidden said
+  // under its message (the floating bar of a small screen says no more than its name)
   assert_true(t.find("部署登录页") is Some(_))
   assert_true(t.find("截图、日志和构建缓存都附上了") is Some(_))
   assert_true(t.find("已隐藏 1 处") is Some(_))
-  assert_true(t.find("共隐藏 1 处疑似机密") is Some(_))
   // the log and the cache left out: tapped, each is unticked (nothing opens); brought up from under the screen's foot
   // (a file's card says its name's stem and its extension apart, as the chat's)
   for _ in 0..<6 {

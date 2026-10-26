@@ -4,8 +4,11 @@
 // file is previewed, the picture as it would be (`chat.publishPreview`, asked as it opens: what the chat holds now,
 // what looks like a secret in it hidden): the chat's name, its messages laid out as the chat lays out messages, each
 // attachment where its message has it, pressed anywhere to tick it or not (all at first: FileToggle's label), and
-// still.fail's mark at its foot; a bar floating at the top, under the system's, with how much was hidden, 复制图片 (on
-// a phone 保存到相册: picture_out) and close. Pressed, the picture is drawn whole off the screen as one long picture
+// still.fail's mark at its foot; over it the bar every file opened over the window has (the library's
+// viewer_frame_bar: across the top, back to the chat by its name, 分享图片 and how much was hidden, its tool; on a
+// small screen floating, the tool and close), its one tool 复制图片 (on a phone 保存到相册: picture_out), as a picture
+// opened has its copy (2026-10-26 用户 of the button filled in a pill of its own: 「太不对劲了」). Pressed, the picture
+// is drawn whole off the screen as one long picture
 // (Ctx::shot), the attachments left out not in it, nor the ticks and the notes of what was hidden that are for the one
 // sharing it, its times as dates; then handed out. Which files an agent's words place, and those words as Markdown, are
 // the core's (the preview's `placed`, `md`). The frames draw it over their pages (publish_layer). (A link once made of
@@ -13,7 +16,8 @@
 
 ///|
 /// The sharing as it stands: the chat it is of and its thread (None: closed), the preview as read (0 being read, 1
-/// read, 2 not: `error` says why), the attachments left out (by their `k`), its picture being taken.
+/// read, 2 not: `error` says why), the attachments left out (by their `k`), its picture being taken, how wide its
+/// floating bar has been (it only grows: viewer_frame_bar).
 priv struct Publishing {
   mut of : (ChatRef, Double)?
   mut read : Int
@@ -21,6 +25,8 @@ priv struct Publishing {
   mut error : String
   off : Map[String, Bool]
   mut busy : Bool
+  mut head_w : Double
+  mut copied : Int
 }
 
 ///|
@@ -31,6 +37,8 @@ let publishing : Publishing = {
   error: "",
   off: {},
   busy: false,
+  head_w: 0.0,
+  copied: 0,
 }
 
 ///|
@@ -41,6 +49,8 @@ pub fn publish_reset() -> Unit {
   publishing.error = ""
   publishing.off.clear()
   publishing.busy = false
+  publishing.head_w = 0.0
+  publishing.copied = 0
 }
 
 ///|
@@ -86,12 +96,16 @@ pub fn publish_left_out(k : String) -> Bool {
 let publish_shot : String = "publish/picture"
 
 ///|
-/// The picture taken (the attachments ticked in it, nothing else of the page's), then handed out as its button says.
+/// The picture taken (the attachments ticked in it, nothing else of the page's), then handed out as its tool says:
+/// copied, its tool a check a moment (as a picture opened says its copy), else what came of it said.
 fn publish_go(c : @ui.Ctx) -> Unit {
   publishing.busy = true
   c.take_shot(publish_shot, fn(png) {
     publishing.busy = false
-    picture_out(c, png)
+    let (_, icon) = picture_out_way()
+    if picture_out(c, png, copy_said=icon == "copy") && icon == "copy" {
+      publishing.copied += 1
+    }
   })
 }
 
@@ -105,9 +119,9 @@ pub fn publish_layer(c : @ui.Ctx, src : Source) -> Unit {
 }
 
 ///|
-/// The page that shares it (PublishDialog): over the whole window on the canvas, its bar floating at its top (分享图片,
-/// how much was hidden, 复制图片, close), the picture as it would be under it at the chat's width; Esc closes it. While
-/// its picture is taken, the picture drawn whole off the screen.
+/// The page that shares it (PublishDialog): over the whole window on the canvas, the bar a file opened has over it
+/// (分享图片, how much was hidden, 复制图片; back or close), the picture as it would be under it at the chat's width; Esc
+/// closes it. While its picture is taken, the picture drawn whole off the screen.
 fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
   let p = publishing.preview
   let messages = items(p, "messages")
@@ -146,43 +160,45 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
           })
           |> ignore
       }
-      // its bar, floating at the top (fpHead with Publish.css.ts head: a pill, 20 in at its start, 4 at its end)
+      // its bar, as a file's opened over the window: across the top (back to the chat), or floating on a small screen
       c.layer(fn() {
-        c.box(style=publish_bar_room.then(@ui.style(pt=@sf.system_top_room(publish_bar_top))), fn() {
-          c.box(style=publish_bar, glass=@sf.glass_floating(), fn() {
-            // (where the bar has not the room even so, its name: what it does is its button's)
-            c.box(drop=publish_drop_name, fn() { c.text(@sf.t("web-pages.chat.shareImage"), style=publish_name) |> ignore }) |> ignore
-            match text(p, "hiddenText") {
-              "" => ()
-              hidden =>
-                // (where the bar has not the room, a phone's in English, left out: each message says its own)
-                c.box(style=publish_head_note, drop=publish_drop_note, fn() {
-                  @sf.icon(c, "shield-check", size=publish_note_icon, color=@sf.theme().p.muted) |> ignore
-                  c.text(hidden, style=publish_meta) |> ignore
-                })
-                |> ignore
+        let ink = @sf.page_viewer_ink()
+        let (closed, wide) = @sf.viewer_frame_bar(
+          c,
+          "publish",
+          if r.title != "" { r.title } else { @sf.t("common.close") },
+          @sf.t("web-pages.chat.shareImage"),
+          text(p, "hiddenText"),
+          false,
+          true,
+          publishing.head_w,
+          1.0,
+          ink,
+          fn() {
+            if p is Some(_) && messages.length() > 0 {
+              let (label, icon) = picture_out_way()
+              // (copied: a check a moment after, as a picture opened says its copy)
+              let shown = publishing.copied > 0 &&
+                !@kit.after(c, "publish/copied/\{publishing.copied}", true, @sf.copied_ms)
+              if @sf.viewer_tool(
+                  c,
+                  "publish/go",
+                  if shown { "check" } else { icon },
+                  if shown { @sf.t("common.copied") } else { label },
+                  ink,
+                  disabled=publishing.busy,
+                ) {
+                publish_go(c)
+              }
             }
-            let (label, icon) = picture_out_way()
-            if @sf.button(
-                c,
-                label,
-                key="publish/go",
-                tone=Primary,
-                icon~,
-                busy=publishing.busy,
-                disabled=p is None || messages.length() == 0,
-              ) {
-              publish_go(c)
-            }
-            let close = c.id("publish/close")
-            if @sf.icon_button(c, "close", key="publish/close", round=true, label=@sf.t("common.close")) {
-              publish_reset()
-            }
-            @sf.tip(c, "publish/close-tip", close, @sf.t("web-main.preview.closeKey"))
-          })
-          |> ignore
-        })
-        |> ignore
+          },
+        )
+        if wide > publishing.head_w {
+          publishing.head_w = wide
+        }
+        if closed {
+          publish_reset()
+        }
       })
       |> ignore
     })
@@ -357,9 +373,6 @@ fn publish_file(c : @ui.Ctx, src : Source, here : MessageHere, f : Json, room : 
 let publish_off_alpha : Double = 0.45
 
 ///|
-let publish_note_icon : Double = 14.0
-
-///|
 let publish_note_icon_small : Double = 13.0
 
 ///|
@@ -413,8 +426,8 @@ let publish_mark : Double = 16.0
 let publish_brand : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Muted, wrap=false)
 
 ///|
-/// Where the picture starts on the page: 80 under the window's top (the bar over it), under the system's bar where
-/// there is one; its own 32 in that.
+/// Where the picture starts on the page: 80 under the window's top (the bar over it, 45 across the top or 60 floating
+/// down to its foot), under the system's bar where there is one; its own 32 in that.
 let publish_page_top : Double = 48.0
 
 ///|
@@ -423,34 +436,6 @@ let publish_page_w : Double = 760.0
 ///|
 /// How far in its words are (page: 32 each side).
 let publish_page_in : Double = 32.0
-
-///|
-/// The bar's place: in the middle.
-// kept across runs: a value (no field of it changes)
-let publish_bar_room : @ui.Style = @ui.css("w=Full px=S4 align=ACenter")
-
-///|
-/// The bar's 16 under the window's top, under the system's bar where there is one (a phone's).
-let publish_bar_top : Double = 16.0
-
-///|
-/// The bar (fpHead, Publish.css.ts head): 44 high, a pill, 20 in at its start and 6 at its end (its close, round, as far
-/// from its end as from its top: concentric with it), its parts 12 apart, a line round it and a shadow under it.
-// kept across runs: a value (no field of it changes)
-let publish_bar : @ui.Style = @ui.css("row max_w=Full h=S11 pl=S5 pr=S1_5 gap=S3 radius=Full align=ACenter border=B1 border_color=Line shadow=Md")
-
-///|
-/// What was hidden, beside its name, is the first to give way where the bar has not the room (a phone's, in English):
-/// left out whole (each message under says its own), its button and close never.
-let publish_drop_note : Int = 1
-
-///|
-/// Its name gives way next (a phone's in English: 「Share as image」 beside 「Save to Photos」).
-let publish_drop_name : Int = 2
-
-///|
-// kept across runs: a value (no field of it changes)
-let publish_name : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// How much was hidden (headNote, note: its shield 4 or 6 before it, the meta's size, muted).
