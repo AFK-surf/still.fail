@@ -52,7 +52,9 @@ pub fn fill_chip(
   }
   let fill = if fill < 0 { 0 } else if fill > 100 { 100 } else { fill }
   let rest = 100 - fill
-  // (its fill a plain rectangle the chip's clip cuts along its corners; its end square where it stops)
+  // (its fill a plain rectangle its layer cuts along the chip's corners, its end square where it stops; the chip
+  // itself cuts nothing: a box that cuts what it holds gives way to its row, which would cut its figure to an ellipsis
+  // beside anything wider: @ui's docs/style.md, Short of room)
   c.box(style=if small { chip_box_small } else { chip_box }, drop~, keep~, fn() {
     if fill > 0 {
       c.layer(fn() {
@@ -91,7 +93,7 @@ let chip_text : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, le
 ///|
 /// The chip: on the neutral ground, round by the ladder's small corner (fill_chip_corner), its words in its middle.
 // kept across runs: a value (no field of it changes)
-let chip_box : @ui.Style = @ui.style(h=Fixed(fill_chip_h), radius=rounded(fill_chip_corner), bg=Neutral, clip=true, justify=JCenter)
+let chip_box : @ui.Style = @ui.style(h=Fixed(fill_chip_h), radius=rounded(fill_chip_corner), bg=Neutral, justify=JCenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -99,7 +101,7 @@ let chip_box_small : @ui.Style = chip_box.then(@ui.style(h=Fixed(fill_chip_small
 
 ///|
 // kept across runs: a value (no field of it changes)
-let chip_fill_row : @ui.Style = @ui.css("row w=Full h=Full")
+let chip_fill_row : @ui.Style = @ui.style(row=true, w=Full, h=Full, radius=rounded(fill_chip_corner), clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
