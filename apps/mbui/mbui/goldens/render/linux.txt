@@ -1,0 +1,12 @@
+# The renderer's pixel references on Linux (docs/determinism.md): made and checked on GitHub's ubuntu-24.04 runner,
+# GLES 3 on Mesa's llvmpipe (x86-64: an arm64 machine's llvmpipe draws other bytes), offscreen. Checked: the system
+# (with its machine), Mesa's version, the text stack's (Pango, HarfBuzz, FreeType) and the fonts' bytes; the rest is
+# said. Any new: every reference made again in one PR (the render-linux workflow's artifact), said there; or, where the
+# new one draws every reference the same to the byte, a line of it beside the old. First made from #2062's own run
+# (40263201270: its a and b the same to the byte), the picture looked at beside the Windows one.
+image ubuntu24 20261023.334.3
+system Ubuntu 24.04.5 LTS x86_64
+mesa 25.2.8-0ubuntu0.24.04.4
+text pango 1.52.1 harfbuzz 8.3.0 freetype 26.1.20
+fonts 46a5776e52ac319ba6942039a7f90da9
+cpu AMD EPYC 9V45 96-Core Processor

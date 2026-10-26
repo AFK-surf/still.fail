@@ -157,6 +157,10 @@ Nothing else in a build tells outside (detlint's build-effect): those two are it
   - **Windows** (render-windows.yml, scripts/render_windows.sh, goldens/render/windows-*.png): Direct3D 11 on WARP
     (always WARP offscreen, whatever the machine has), DirectWrite's text, on `windows-2025`. Checked: the system,
     WARP's and DirectWrite's versions and the fonts' bytes.
+  - **Linux** (render-linux.yml, scripts/render_linux.sh, goldens/render/linux-*.png): the GLES 3 renderer
+    (linux_render.c, Android's gles_render.h: a framebuffer of its own) on EGL's surfaceless platform, Mesa's llvmpipe
+    (always, whatever the machine has), Pango's text, on `ubuntu-24.04`. Checked: the system, Mesa's version, the text
+    stack's (Pango, HarfBuzz, FreeType) and the fonts' bytes.
   - **Web** (render-web.yml, scripts/render_web.sh, goldens/render/web-*.png): web/host.js's WebGL2 renderer in
     headless Chromium on SwiftShader (Playwright pinned, and with it the browser), on `ubuntu-24.04`. Checked: the
     browser and the system's fonts' bytes.

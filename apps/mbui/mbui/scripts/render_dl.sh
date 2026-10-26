@@ -1,7 +1,8 @@
 #!/bin/bash
 # The draw list the renderer's references are of (kitdemo's controls page over mini1's kept text,
 # src/kitdemo/gallery/dl_print_wbtest.mbt), as a Tester prints it: into $1 (default out/render/controls.dl). Sourced by the
-# hosts' render scripts (scripts/render_android.sh, render_windows.sh, render_web.sh) from the repository's root.
+# hosts' render scripts (scripts/render_android.sh, render_windows.sh, render_linux.sh, render_web.sh) from the
+# repository's root.
 render_dl() {
   local out=${1:-out/render/controls.dl}
   mkdir -p "$(dirname "$out")"
