@@ -146,6 +146,9 @@ static int32_t edit_can_now = -1;
 // how much later than its time the frame before reached the screen (mb_host_frame_late), and when the display link's
 // last frame began (-1: none since the link was paused, or a frame drawn with the window's change between)
 static double frame_late, last_tick = -1;
+// The frame the app waits for (@hostapi.wake_after: a resident cycle's next step), by its time (ms, mb_now_ms's
+// clock), or -1; the time of the frame being built (what wake_after counts from); the display's frame (ms).
+static double wake_for = -1, building_for = -1, link_period = 1000.0 / 60.0;
 
 @implementation MBView
 
@@ -290,7 +293,11 @@ static double record_t0 = -1;
   // one Core Animation transaction: the native views' moves (apple_views.m) and the drawable that shows their holes,
   // presented in it where a view moved (apple_render.m), committed together as the frame ends
   [CATransaction begin];
-  mb_cb.frame(s.width, s.height, scale, settle ? settle_clock : mb_now_ms());
+  // (what it waits for said again by the frame, if it still does)
+  wake_for = -1;
+  building_for = settle ? -1 : mb_now_ms();
+  mb_cb.frame(s.width, s.height, scale, settle ? settle_clock : building_for);
+  building_for = -1;
   [CATransaction commit];
   in_app_frame = NO;
 }
@@ -376,6 +383,15 @@ static void pump(void) {
 // the resize with it.
 - (void)tick:(CADisplayLink *)l {
   if (CACurrentMediaTime() - self.drawnWithWindowAt < l.targetTimestamp - l.timestamp) return;
+  link_period = (l.targetTimestamp - l.timestamp) * 1000.0;
+  // a frame waited for (wake_after): the first of the display's frames at or past its time (not when a timer happens
+  // to fire and the link wakes after it, a step a frame or two late by as much as they fall, so a resident cycle's
+  // steps unevenly apart); the ticks before it draw nothing (ios_app.m's the same)
+  if (!self.wantFrame && wake_for >= 0) {
+    if (mb_now_ms() < wake_for - 0.5) return;
+    wake_for = -1;
+    self.wantFrame = YES;
+  }
   if (!self.wantFrame) {
     l.paused = YES;
     last_tick = -1;
@@ -1780,8 +1796,16 @@ void mb_host_wake_after(double ms) {
     pump_soon();
     return;
   }
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(ms * 1e6)), dispatch_get_main_queue(),
-                 ^{ [the_view requestFrame]; });
+  // `ms` after the frame being built's time, else after now: the frame for that time drawn (tick), the link woken a
+  // little before it (two display frames) and drawing nothing until then
+  double at = (building_for >= 0 ? building_for : mb_now_ms()) + ms;
+  if (wake_for >= 0 && wake_for <= at) return;
+  wake_for = at;
+  double lead = at - mb_now_ms() - 2.0 * link_period;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(MAX(lead, 0) * 1e6)), dispatch_get_main_queue(), ^{
+    // (a wake asked later since, or met already: not this one's)
+    if (wake_for == at) the_view.link.paused = NO;
+  });
 }
 
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {

@@ -38,7 +38,11 @@
     resize();
     inFrame = true;
     const t = shotAt >= 0 ? clock : performance.now();
+    // (what it waits for said again by the frame, if it still does: H.wakeAfter, from its time)
+    wakeFor = -1;
+    buildingFor = t;
     cb.frame(cssW, cssH, dpr, t);
+    buildingFor = -1;
     inFrame = false;
     frames++;
     if (shotAt === -2) {
@@ -66,7 +70,35 @@
     }
   };
   // (a run to a declared moment draws every frame to it: its timers are on its clock, due at the frame they fall in)
-  H.wakeAfter = (ms) => { if (shotAt < 0) setTimeout(H.requestFrame, ms); };
+  // The frame `ms` after the one being built (its time), else after now: drawn at the first of the display's frames at
+  // or past it, the ones before drawing nothing (not the one after a timer happens to fire: a step a frame or two
+  // late by as much as that falls, a resident cycle's steps unevenly apart), the timer two frames before it.
+  let wakeFor = -1, buildingFor = -1;
+  // the display's frame (ms), as two of its frames come apart while a wait is due (60 a second until one has)
+  let displayFrame = 1000 / 60, lastDue = -1;
+  H.wakeAfter = (ms) => {
+    if (shotAt >= 0) return;
+    const at = (buildingFor >= 0 ? buildingFor : performance.now()) + ms;
+    if (wakeFor >= 0 && wakeFor <= at) return;
+    wakeFor = at;
+    const due = (ts) => {
+      if (lastDue >= 0 && ts - lastDue > 0 && ts - lastDue < 100) displayFrame = ts - lastDue;
+      lastDue = ts;
+      if (wakeFor !== at) return;
+      if (performance.now() < at - 0.5) {
+        requestAnimationFrame(due);
+        return;
+      }
+      wakeFor = -1;
+      lastDue = -1;
+      if (!pending && cb && known && window.__done === undefined && window.__shot === undefined) {
+        pending = true;
+        tick();
+      }
+    };
+    const lead = Math.max(0, at - performance.now() - 2 * displayFrame);
+    setTimeout(() => requestAnimationFrame(due), lead);
+  };
   H.now = () => (shotAt >= 0 ? clock : performance.now());
   H.ownClock = () => shotAt >= 0;
   // the time of day (@hostapi.wall_ms): a run to a declared moment's from a fixed day (@ui.tester_wall's), on with its

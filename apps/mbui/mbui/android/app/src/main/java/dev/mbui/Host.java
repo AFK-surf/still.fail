@@ -226,8 +226,19 @@ final class Host {
         if (view != null) view.wantFrame();
     }
 
+    /**
+     * The frame `ms` after the one being built (its time, the vsync's), else after now: drawn at the first vsync at or
+     * past it (MBView.wakeAt), asked for two display frames before.
+     */
     static void wakeAfter(double ms) {
-        main.postDelayed(Host::requestFrame, (long) Math.max(1, ms));
+        MBView v = view;
+        if (v == null) return;
+        double base = v.buildingFor >= 0 ? v.buildingFor : System.nanoTime() / 1e6;
+        double at = base + ms;
+        if (v.wakeFor >= 0 && v.wakeFor <= at) return;
+        v.wakeFor = at;
+        double lead = at - System.nanoTime() / 1e6 - 2 * v.framePeriodMs();
+        main.postDelayed(() -> v.wakeAt(at), (long) Math.max(0, lead));
     }
 
     /** The input method's edits sent to MoonBit (MBView.MBInput.edited, main thread) and taken by it (GL thread). */

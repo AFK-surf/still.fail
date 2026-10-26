@@ -228,7 +228,11 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         lastVsync = v;
         // the system's back said before this frame's vsync (back(), below); what was said after it, the next frame's
         boolean later = takeBacks(v != 0 ? v : began);
+        // (what it waits for said again by the frame, if it still does: Host.wakeAfter, from its time)
+        wakeFor = -1;
+        buildingFor = now;
         boolean more = Native.frame(w, h, density, now, late);
+        buildingFor = -1;
         showAt(at[1]);
         askedAtEnd = more || later;
         drawn++;
@@ -283,6 +287,11 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
      * each vsync's timelines (main thread).
      */
     private volatile long framePeriod = 16_666_667L;
+
+    /** The display's frame, ms. */
+    double framePeriodMs() {
+        return framePeriod / 1e6;
+    }
 
     private final android.hardware.display.DisplayManager.DisplayListener displays =
             new android.hardware.display.DisplayManager.DisplayListener() {
@@ -490,6 +499,35 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         vsyncAt = new long[] {System.nanoTime(), 0};
         wanted.set(false);
         requestRender();
+    }
+
+    /**
+     * The frame the app waits for (Host.wakeAfter: a resident cycle's next step), by its time (ms, System.nanoTime's
+     * clock as the vsyncs'), or -1; and the time of the frame being built (GL thread), what a wait counts from.
+     */
+    volatile double wakeFor = -1;
+    volatile double buildingFor = -1;
+
+    /**
+     * The frame for time `at` drawn (main thread, a little before it): asked for at the vsync before the first at or past
+     * it, so drawn for that one, the vsyncs before it drawing nothing (not the vsync after a timer happens to fire: a step a frame or two late by as much as that
+     * falls, a resident cycle's steps unevenly apart).
+     */
+    void wakeAt(double at) {
+        if (wakeFor != at) return;
+        Choreographer.getInstance().postFrameCallback(new Choreographer.FrameCallback() {
+            @Override
+            public void doFrame(long t) {
+                if (wakeFor != at) return;
+                // (the vsync after this one is the frame's: asked for as any other, with its timelines)
+                if ((t + framePeriod) / 1e6 < at - 0.5) {
+                    Choreographer.getInstance().postFrameCallback(this);
+                    return;
+                }
+                wakeFor = -1;
+                wantFrame();
+            }
+        });
     }
 
     /** A frame at the next vsync (from any thread). */
