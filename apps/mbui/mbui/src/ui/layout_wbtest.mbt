@@ -811,6 +811,7 @@ test "a list's running sums are its rows' heights added up" {
     over_v: 0.0,
     back: BackPath::new(),
         ease: 0.0,
+        ease_v: 0.0,
         ease_t0: 0.0,
         ease_done: 0.0,
         ease_mover: Mover::new(),

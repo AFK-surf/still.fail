@@ -1196,7 +1196,7 @@ fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Un
     // a wheel's notch (phase 4): eased over a few frames, as a browser does; a trackpad's (and its momentum's)
     // follows the fingers as it comes
     if phase == 4 {
-      c.ease_list(target, dy)
+      c.ease_list(target, dy, h_event_time())
     } else {
       c.scroll_list(target, dy)
     }

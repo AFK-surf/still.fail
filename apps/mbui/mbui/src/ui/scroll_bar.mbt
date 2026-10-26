@@ -532,6 +532,7 @@ fn Ctx::bar_press(self : Ctx, target : Int) -> Bool {
             Some(st) => {
               st.stop()
               st.ease = 0.0
+              st.ease_v = 0.0
               st.ease_done = 0.0
               st.glide = false
             }

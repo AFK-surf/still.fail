@@ -80,9 +80,10 @@ struct ListState {
   mut over_state : Int
   mut over_v : Double
   mut back : BackPath
-  // a wheel's notches eased in (Ctx::ease_list): what they come to all told (0 none), from when, how much of it has
-  // come by the last frame, and what it is said to move by (Ctx::moving)
+  // a wheel's notches eased in (Ctx::ease_list): what they come to all told (0 none), how fast it set out (px a ms),
+  // from when, how much of it has come by the last frame, and what it is said to move by (Ctx::moving)
   mut ease : Double
+  mut ease_v : Double
   mut ease_t0 : Double
   mut ease_done : Double
   ease_mover : Mover
