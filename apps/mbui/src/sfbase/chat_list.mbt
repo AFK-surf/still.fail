@@ -100,9 +100,6 @@ pub(all) struct Reading {
   /// rows asked a turn to come in (turns.mbt: Chat.kt admitted); each row's rise in, by key, while it rises
   admitted : Map[String, Bool]
   rises : Map[String, @motion.Anim]
-  /// in the wide frame, the messages that were there as they came into the list (the chat opened, the page before),
-  /// fading in, all that came at once together (Chat.tsx useHistoryFade), by key, while they fade
-  history : Map[String, @motion.Anim]
   /// its list, read as it was last laid out (its glide after what came set out there): a turn waits for that glide's
   /// end (ListInfo's `glide_rest`), not for the reader's hand (listQueue.ts listStill: following, and there)
   mut list_read : @ui.ListReader?
@@ -161,7 +158,6 @@ pub struct RowsMade {
   v : ChatView
   following : Bool
   rise_ms : Double
-  history_fade : Bool
   known : Int
   list : Array[Entry]
   keys : Array[String]
@@ -212,7 +208,6 @@ pub fn reading_of(key : String) -> Reading {
         makes_way: {},
         admitted: {},
         rises: {},
-        history: {},
         list_read: None,
         newest: "",
         following_row: false,
@@ -781,7 +776,6 @@ pub fn row_keys(
   em : Emits,
   flight : SendFlight?,
   rise_ms~ : Double,
-  history_fade~ : Bool,
 ) -> (Array[Entry], Array[String]) {
   let info = c.list_info_as(key, follows)
   let following = match info {
@@ -802,7 +796,6 @@ pub fn row_keys(
       physical_equal(m.v, v) &&
       m.following == following &&
       m.rise_ms == rise_ms &&
-      m.history_fade == history_fade &&
       m.known == rd.known.length() &&
       sending.is_empty() &&
       turns.waiting.is_empty() => return (m.list, m.keys)
@@ -982,10 +975,6 @@ pub fn row_keys(
       }
     }
   }
-  // in the wide frame what was there as it came into the list (the chat opened, the page before it) fades in, all of
-  // it at once (Chat.tsx useHistoryFade, Chat.css.ts data-history-fade: 180 ms, the ease out); not what is new (it
-  // rises in) nor what was sent from here
-  let mut came : @motion.Anim? = None
   // what each row that makes way saw come in over it last: the newest of the rows over it that came, by whose avatar
   // they came out of (an agent's line not for its own: its avatar away, it comes back to where the line now is)
   let newest : Map[String, (Int, String)] = {}
@@ -1015,18 +1004,6 @@ pub fn row_keys(
         }
       None => ()
     }
-    if history_fade && !rd.known.contains(k) && !rd.fresh.contains(k) && list[i] is Said(_) {
-      let a = match came {
-        Some(a) => a
-        None => {
-          let a = @motion.Anim::new(0.0)
-          a.animate(1.0, @motion.tween(history_fade_ms, ease=Out))
-          came = Some(a)
-          a
-        }
-      }
-      rd.history[k] = a
-    }
     rd.known[k] = true
     if list[i] is Working(_) {
       rd.acts[k] = true
@@ -1034,7 +1011,7 @@ pub fn row_keys(
   }
   rd.drawn = true
   rd.rows_made = if made_whole && turns.waiting.is_empty() {
-    Some({ all: given, v, following, rise_ms, history_fade, known: rd.known.length(), list, keys })
+    Some({ all: given, v, following, rise_ms, known: rd.known.length(), list, keys })
   } else {
     None
   }
@@ -1236,15 +1213,11 @@ pub fn tell_place(src : Source, r : ChatRef, v : ChatView, rd : Reading) -> Unit
 }
 
 ///|
-/// How long what was there as it came into a chat's list fades in (Chat.css.ts data-history-fade).
-pub let history_fade_ms : Double = 180.0
-
-///|
 /// What a chat's list is made of this frame, as both frames make it, before they draw it (sfapp's messages, sfdesk's
 /// chat_list): its rows and their keys (`read`, its entries; those coming out of an avatar held out of it till their
 /// turn), its turns and its messages out of avatars played on, the list following its newest, words sent flying from
 /// the composer of draft `draft`, whether what comes at its end glides, and the page before come in above what is
-/// in view keeping it where it is. `rise_ms`, `history_fade`, `top`, `in_front`: as row_keys', follow_newest's,
+/// in view keeping it where it is. `rise_ms`, `top`, `in_front`: as row_keys', follow_newest's,
 /// chat_tick's.
 pub fn list_frame(
   c : @ui.Ctx,
@@ -1254,7 +1227,6 @@ pub fn list_frame(
   key~ : String,
   draft~ : String,
   rise_ms~ : Double,
-  history_fade~ : Bool,
   top~ : Double,
   in_front~ : Bool,
 ) -> ListFrame {
@@ -1288,7 +1260,6 @@ pub fn list_frame(
     em,
     flight_of(draft),
     rise_ms~,
-    history_fade~,
   )
   follow_newest(c, rd, list, keys, key, top~)
   flight_frame(c, draft)

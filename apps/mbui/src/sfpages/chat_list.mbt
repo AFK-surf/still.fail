@@ -5,7 +5,7 @@
 // where the reader is told the core: all of that as the phone's list has it too (sfbase's chat_list.mbt: list_frame
 // before the rows are drawn, list_after once they are). What comes in does so in its turn (list_turns.mbt): a message
 // eases in, an agent's comes out of its activity's picture (emit.mbt), the viewer's own flies in from the composer the
-// frame it is sent (flight.mbt), what was there as the chat opened fades in all at once. Over it, the way to its end
+// frame it is sent (flight.mbt), existing messages show at once. Over it, the way to its end
 // (⌘↓) and to what waits to be decided.
 
 ///|
@@ -51,7 +51,6 @@ pub fn chat_list(
     key~,
     draft~,
     rise_ms=@sf.enter_ms,
-    history_fade=true,
     top=list_top,
     in_front=app_in_front(),
   )
@@ -202,12 +201,6 @@ pub fn chat_list(
                   c.look(ri, @ui.look(alpha=p, dy=@sf.enter_rise * (1.0 - p)))
                 }
               }
-              None => ()
-            }
-            // what was there as it came into the list fades in, all at once (useHistoryFade)
-            match rd.history.get(keys[i]) {
-              Some(a) if a.get() < 1.0 => c.look(ri, @ui.look(alpha=a.get()))
-              Some(_) => rd.history.remove(keys[i]) |> ignore
               None => ()
             }
           }

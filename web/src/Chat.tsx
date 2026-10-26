@@ -641,7 +641,6 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   useQueuedEntries(list);
 
   usePlace(virtual, place, messages, short, leave);
-  useHistoryFade(list, messages);
   // Without a chat there is nothing older (or newer) to load.
   const older = () => (id === null ? Promise.resolve() : sending.older(id));
   // Loaded as far as entries go, not messages: a page of what is not a message here (letters, edits) moves it too.
@@ -760,20 +759,6 @@ function useToEnd(list: RefObject<HTMLElement | null>, virtual: VirtualList, cha
     if (!short) virtual.toEnd();
     else toLatest.current();
   };
-}
-
-/** New historical rows share one short opacity fade; existing rows never replay when their status changes. */
-function useHistoryFade(list: RefObject<HTMLElement | null>, messages: ChatMessage[]): void {
-  // By message, not by row: a row made again as the reader scrolls back to it does not fade in again.
-  const seen = useRef(new Set<string>());
-  useLayoutEffect(() => {
-    for (const row of list.current?.querySelectorAll<HTMLElement>(":scope > [data-ts]") ?? []) {
-      const ts = row.dataset.ts!;
-      if (seen.current.has(ts)) continue;
-      seen.current.add(ts);
-      if (row.hasAttribute("data-caught") && document.visibilityState === "visible") row.dataset.historyFade = "";
-    }
-  });
 }
 
 /**

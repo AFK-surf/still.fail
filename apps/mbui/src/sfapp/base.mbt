@@ -250,7 +250,6 @@ pub using @sfbase {
   follow_margin,
   follow_newest,
   follows,
-  history_fade_ms,
   kept_places,
   linger_fade_ms,
   linger_ms,
