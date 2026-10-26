@@ -367,6 +367,12 @@ static void pointer_button(int kind, LPARAM lp, int button) {
 // selection). A finger that goes down on a web view is left to the system, its mouse the page's (mb_views_input).
 static UINT32 touch_taken[10];  // the fingers down that this window takes (0: a free place)
 static UINT32 touch_first, touch_second;
+// the first finger's place on the screen (pixels); a finger moving the window from the app's top row
+// (mb_host_window_drag in its press): where it and the window were then, the window following it till it lifts
+// (Windows' own move goes by the mouse)
+static POINT touch_screen, touch_move_from;
+static RECT touch_move_rect;
+static int touch_moving;
 static int touch_at(UINT32 id) {
   for (int i = 0; i < 10; i++)
     if (touch_taken[i] == id) return i;
@@ -379,6 +385,13 @@ static int touch(HWND h, UINT msg, WPARAM wp) {
   POINTER_INFO info;
   if (!id || !GetPointerType(id, &type) || type != PT_TOUCH || !GetPointerInfo(id, &info)) return 0;
   POINT p = info.ptPixelLocation;
+  if (id == touch_first || (msg == WM_POINTERDOWN && !touch_first)) touch_screen = p;
+  // (the window moved by the finger: its moves the window's, its lift calls the press off for the app)
+  if (touch_moving && id == touch_first && msg == WM_POINTERUPDATE) {
+    SetWindowPos(h, NULL, touch_move_rect.left + p.x - touch_move_from.x, touch_move_rect.top + p.y - touch_move_from.y, 0,
+                 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    return 1;
+  }
   ScreenToClient(h, &p);
   double x = p.x / scale, y = p.y / scale;
   int at = touch_at(id), kind = -1;
@@ -403,7 +416,11 @@ static int touch(HWND h, UINT msg, WPARAM wp) {
       touch_taken[at] = 0;
       if (id == touch_second) touch_second = 0, kind = 6;
       else if (id == touch_first && touch_second) touch_first = touch_second, touch_second = 0, kind = 6;
-      else if (id == touch_first) touch_first = 0, kind = msg == WM_POINTERUP && !IS_POINTER_CANCELED_WPARAM(wp) ? 2 : 3;
+      else if (id == touch_first) {
+      touch_first = 0;
+      kind = msg == WM_POINTERUP && !IS_POINTER_CANCELED_WPARAM(wp) && !touch_moving ? 2 : 3;
+      touch_moving = 0;
+    }
     }
   }
   if (kind >= 0) pointer_by(1, kind, x, y, 0);
@@ -1231,7 +1248,9 @@ double mb_host_window_corner(void) {
 void mb_host_window_drag(void) {
   DWORD now = GetTickCount();
   POINT at;
-  GetCursorPos(&at);
+  // (a finger's: where it is, not the cursor, which it does not move)
+  if (event_by == 1) at = touch_screen;
+  else GetCursorPos(&at);
   if (drag_time && now - drag_time <= GetDoubleClickTime() &&
       abs(at.x - drag_at.x) <= GetSystemMetrics(SM_CXDOUBLECLK) / 2 &&
       abs(at.y - drag_at.y) <= GetSystemMetrics(SM_CYDOUBLECLK) / 2) {
@@ -1242,6 +1261,11 @@ void mb_host_window_drag(void) {
   }
   drag_time = now;
   drag_at = at;
+  if (event_by == 1) {
+    // (a maximized window stays: its title bar's drag would make it as it was first)
+    if (!IsZoomed(hwnd)) touch_moving = 1, touch_move_from = at, GetWindowRect(hwnd, &touch_move_rect);
+    return;
+  }
   PostMessageW(hwnd, WM_MB_DRAG, 0, 0);
 }
 
