@@ -17,24 +17,25 @@ pub fn english(key : String, args? : Array[(String, String)] = []) -> String? {
 }
 
 ///|
-/// The words for `key`.
+/// The words for `key` with `{name}`s put in from `args`.
 pub fn tr(key : String, args? : Array[(String, String)] = []) -> String {
-  if english(key, args~) is Some(s) {
-    return s
-  }
-  match zh.get(key) {
+  let mut s = match english(key, args~) {
     Some(s) => s
-    // (the settings' own words: the desktop's settings pages say them too)
-    None => @settings.said(key, args).unwrap_or(key)
+    None =>
+      match zh.get(key) {
+        Some(s) => s
+        // (the settings' own words: the desktop's settings pages say them too)
+        None => @settings.said(key, args).unwrap_or(key)
+      }
   }
-}
-
-///|
-/// The words for `key` with `{name}`s put in.
-pub fn fill(key : String, args : Array[(String, String)]) -> String {
-  let mut s = tr(key, args~)
   for a in args {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)
   }
   s
+}
+
+///|
+/// The words for `key` with `{name}`s put in (tr's, as @sf.set_words is told).
+pub fn fill(key : String, args : Array[(String, String)]) -> String {
+  tr(key, args~)
 }

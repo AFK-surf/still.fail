@@ -197,7 +197,7 @@ fn archive_chat(src : Source, r : ChatRef, v : ChatView) -> Unit {
     "archive/" + r.station + "/" + r.session,
     "chat.archive",
     Json::object(p),
-    done=tr("web-main.chat.archivedNamed", args=[("title", v.title)]),
+    done=@sf.t("web-main.chat.archivedNamed", args=[("title", v.title)]),
     done_action=tr("android-chat.archived.undo"),
     done_run=@sfbase.archive_undo(src, p),
     at_once=true,
