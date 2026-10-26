@@ -90,6 +90,14 @@ jobs:
               - "scripts/host_contract.sh"
               - ".github/workflows/mbui-host-mac.yml"
               - "src/host/moon.pkg"
+            a11y:
+              - "src/host/mac_app.m"
+              - "src/ui/a11y.mbt"
+              - "src/ui/semantics.mbt"
+              - "src/kitdemo/gallery/a11ycheck.mbt"
+              - "src/kitdemo/main.mbt"
+              - "scripts/host_contract.sh"
+              - ".github/workflows/mbui-host-mac.yml"
         run: python3 scripts/ci_paths.py
       - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo
@@ -109,6 +117,9 @@ jobs:
       - name: "The runner's contract: a file written in the run's directory is told as it comes (done X)"
         if: (success() || failure()) && steps.f.outputs.host != 'false'
         run: scripts/host_contract.sh mac runner
+      - name: "The widgets told VoiceOver as it walks them, words put in a field and a button pressed through them"
+        if: (success() || failure()) && steps.f.outputs.a11y != 'false'
+        run: scripts/host_contract.sh mac a11y
       - name: "The marks' contract: test/marks drawn by Core Graphics = goldens/marks/mac.png"
         if: (success() || failure()) && steps.f.outputs.marks != 'false'
         run: scripts/host_contract.sh mac marks

@@ -52,6 +52,8 @@
 #        person: src/host/linux_life.h), which says it
 #   scripts/host_contract.sh windows fontscale  the system's Text size (Accessibility's: 150%) as the host gives it to
 #        the app (kitdemo's MBUI_FONTSCALECHECK, src/kitdemo/gallery/fontscalecheck.mbt): 1.5
+#   scripts/host_contract.sh mac a11y           the app's widgets as VoiceOver walks the view's elements (in the app:
+#        MBUI_A11Y_SELFCHECK), words put in a field and a button pressed through them
 #   scripts/host_contract.sh windows a11y       the app's widgets read out by UI Automation's client (kitdemo's
 #        MBUI_A11YCHECK, src/kitdemo/gallery/a11ycheck.mbt; test/host/a11ycheck.ps1): a button and a checkbox found by
 #        their names, as their control types and the checkbox's state, words put in a field, the button invoked and the
@@ -684,7 +686,18 @@ INSTALL
     [ "$have" = "FONTSCALE 1.5" ] || { echo "fontscale contract (windows): the host said \"$have\", not FONTSCALE 1.5 (Text size 150%)"; tail -20 $O/fontscale.log; exit 1; }
     echo "fontscale contract (windows): Text size 150% given the app as 1.5" ;;
   a11y)
-    [ "$H" = windows ] || { echo "a11y contract: Windows' (Android's is TalkBack's on its emulator; the others tell no reader yet)"; exit 1; }
+    if [ "$H" = mac ]; then
+      # (the Mac: the view's elements walked in the app itself as VoiceOver walks them, MBUI_A11Y_SELFCHECK, as a
+      # process of this machine's is not let drive another app's: Accessibility's access is the person's to give)
+      run "MBUI_A11YCHECK=1 MBUI_A11Y_SELFCHECK=1" $O/a11y.log || true
+      grep -a "^A11Y\|A11YCHECK" $O/a11y.log
+      grep -aq "A11Y node AXButton A11YCHECK press" $O/a11y.log && grep -aq "A11Y node AXCheckBox" $O/a11y.log &&
+        grep -aq "A11Y field AXTextField settable 1" $O/a11y.log && grep -aq "A11YCHECK activated written by a reader" $O/a11y.log ||
+        { echo "a11y contract (mac): not told VoiceOver, written in and pressed as told"; tail -20 $O/a11y.log; exit 1; }
+      echo "a11y contract (mac): a field, a button and a checkbox told VoiceOver, words written in the field and the button pressed through them"
+      exit 0
+    fi
+    [ "$H" = windows ] || { echo "a11y contract: Windows' and the Mac's (Android's is TalkBack's on its emulator)"; exit 1; }
     # the app's widgets as UI Automation's client finds them (test/host/a11ycheck.ps1), the button pressed through it
     A=$PWD/$O/a11y
     rm -rf "$A" && mkdir -p "$A"
