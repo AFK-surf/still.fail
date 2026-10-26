@@ -244,7 +244,7 @@ fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         // (its 4 under it, as the web's margins: in a heading's 14 over it, not on top of it)
         Search => archive_search_side(c, i + 1 < lines.length() && lines[i + 1] is (Waiting | Row(_)))
         Failing(words) => side_said(c, words, true)
-        Waiting => side_breathing(c)
+        Waiting => @sf.waiting(c, dense=true, count=6)
         Said(words) => side_said(c, words, false)
         Day(label) => @sf.list_heading(c, label, Side)
         Row(it) => archive_side_row(c, src, it, i + 1 < lines.length() && lines[i + 1] is Row(_))

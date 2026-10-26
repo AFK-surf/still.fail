@@ -133,7 +133,7 @@ pub fn files_places(
       match rows[i] {
         PTop(h) | PFoot(h) => c.box(style=@ui.style(h=Fixed(h)), fn() {  }) |> ignore
         PTrouble(e) => c.text(e, style=nav_trouble) |> ignore
-        PReading => side_breathing(c)
+        PReading => @sf.waiting(c, dense=true, count=6)
         PNone =>
           c.box(style=nav_note, fn() { c.text(@sf.t("web-main.rail.filesNone"), style=nav_meta()) |> ignore }) |> ignore
         PFavorites => places_favorites(c, src, ws, views, go)

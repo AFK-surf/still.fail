@@ -1,6 +1,6 @@
 // A sidebar's rows (ember web/src/Sidebar.css.ts navRow, navNew, navScroll; SidebarList.tsx NavItem, NavAction): a
-// row of one line, a row laid out as a chat's (list_row), the band's action over a list, the list under the band,
-// rows to come breathing; a row's ground as the web moves it. The sidebar's frame (its top row, its width, its fold)
+// row of one line, a row laid out as a chat's (list_row), the band's action over a list, the list under the band; a
+// row's ground as the web moves it. The sidebar's frame (its top row, its width, its fold)
 // is the shell's.
 
 ///|
@@ -107,52 +107,6 @@ pub fn nav_words(c : @ui.Ctx, words : String, color? : Int64) -> Unit {
   }
   c.text(words, style=look) |> ignore
 }
-
-///|
-/// Rows to come, breathing (Waiting shape rows, dense): six, each a title and a line under it.
-pub fn side_breathing(c : @ui.Ctx) -> Unit {
-  let breath = breath(c)
-  c.box(style=breathing_list, fn() {
-    for k in 0..<6 {
-      let row = c.box(style=breathing_row, fn() {
-        c.box(style=if k % 2 == 0 { breathing_title } else { breathing_title_long }, fn() {  }) |> ignore
-        c.box(style=breathing_line, fn() {  }) |> ignore
-      })
-      c.look(row, @ui.look(alpha=breath))
-    }
-  })
-  |> ignore
-}
-
-///|
-/// The waiting rows' bars: a title 120 or 150 long and 12 high, a line 180 long and 10 high (Waiting dense).
-let breath_title_w : Double = 120.0
-
-///|
-let breath_title_long_w : Double = 150.0
-
-///|
-let breath_line_w : Double = 180.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let breathing_list : @ui.Style = @ui.css("w=Full pt=S2 gap=S3 px=S2_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let breathing_row : @ui.Style = @ui.css("w=Full gap=S1_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let breathing_title : @ui.Style = @ui.style(w=Fixed(breath_title_w), h=S3, radius=Full, bg=Line)
-
-///|
-// kept across runs: a value (no field of it changes)
-let breathing_title_long : @ui.Style = @ui.style(w=Fixed(breath_title_long_w), h=S3, radius=Full, bg=Line)
-
-///|
-// kept across runs: a value (no field of it changes)
-let breathing_line : @ui.Style = @ui.style(w=Fixed(breath_line_w), h=S2_5, radius=Full, bg=Line)
 
 ///|
 /// The action over a list (SidebarList.tsx NavAction, in its band: Sidebar.css.ts navNew, 6 over it, 8 at its sides, 2
