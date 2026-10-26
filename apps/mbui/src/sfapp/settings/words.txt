@@ -145,9 +145,6 @@ android-misc.drive.row.none
 android-misc.drive.title
 android-misc.failed
 android-misc.memory.builtin
-android-misc.memory.empty
-android-misc.memory.global
-android-misc.memory.loadFailed
 android-misc.memory.noWhen
 android-misc.memory.note
 android-misc.memory.offline
@@ -156,7 +153,6 @@ android-misc.memory.projects.none
 android-misc.memory.row
 android-misc.memory.skills
 android-misc.memory.sub
-android-misc.memory.title
 android-misc.mode.multi
 android-misc.mode.multi.text
 android-misc.mode.single

@@ -125,15 +125,29 @@ pub fn new_nav() -> @ui.Nav[Page] {
 
 ///|
 /// A page of the settings opened over Home from the start (screenshots of them, a scripted run): by its name
-/// (@settings.route_of).
+/// (@settings.route_of), through the pages one comes to it by (setting_way: a memory page under its station's memory,
+/// under 记忆), so what is over it and back says are as a person finds them.
 pub fn open_setting(name : String) -> Unit {
   match @settings.route_of(name) {
     Some(@settings.Route::Home) => open_page(Settings)
     Some(r) => {
       open_page(Settings)
+      for w in setting_way(r) {
+        open_page(Setting(w))
+      }
       open_page(Setting(r))
     }
     None => ()
+  }
+}
+
+///|
+/// The settings' pages one comes through to `r` from their list, where it is not on it.
+fn setting_way(r : @settings.Route) -> Array[@settings.Route] {
+  match r {
+    Memory(_) => [Memories]
+    MemoryDoc(a, _, _) => [Memories, Memory(a)]
+    _ => []
   }
 }
 
@@ -290,7 +304,7 @@ pub fn back_label(p : Page) -> String {
     Settings | Setting(@settings.Route::Home) => @sf.t("android-settings.title")
     Setting(@settings.Route::About) => @sf.t("web-pages.settings.nav.about")
     Setting(@settings.Route::Permissions) => @sf.t("web-pages.settings.nav.permissions")
-    Setting(@settings.Route::Memories) => @sf.t("web-pages.settings.memory.title")
+    Setting(@settings.Route::Memories) | Setting(@settings.Route::Memory(_)) => @sf.t("web-pages.settings.memory.title")
     Setting(@settings.Route::AutoDecisions) => @sf.t("web-pages.automaticDecisions.title")
     Setting(@settings.Route::Archiving) => @sf.t("web-pages.archiving.title")
     Setting(@settings.Route::Shortcuts) => @sf.t("web-main.shortcuts.title")

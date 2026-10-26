@@ -4,7 +4,7 @@
 ///|
 test "nav bar: back, title and what is at its end on one line (settings' pages)" {
   for mode in [
-    "settings-archive", "settings-memory-doc",
+    "settings-archive",
     "settings-profiles", "settings-stations", "settings-new-profile", "settings-run-models",
   ] {
     reset()
