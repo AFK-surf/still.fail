@@ -4,10 +4,9 @@
 // those words' bytes, by the key `key` names. The cloud stores and serves them but cannot make them: a station updates
 // only to a release whose words verify, and only to a newer build than its own (back to the stable channel from the
 // beta excepted, which a person asks for). The installer it runs is the one in its own release, which got here verified
-// (cloud/src/install.ts, bin/install.<lang>.sh), told what the archive and Node must hash to. The Windows desktop app's
-// installer is signed the same way (its .sig beside it: verifyDesktop), and so is the web app the beta desktop app takes
-// without a new app (desktop/web/stillfail-beta-web.json: verifyDesktopWeb), and the packages of the modules a station
-// installs itself (releases/modules/<id>/: verifyModule).
+// (cloud/src/install.ts, bin/install.<lang>.sh), told what the archive and Node must hash to. The Windows app's
+// installer is signed the same way (its .sig beside it, which the apps' core verifies: client/core-ts/src/app-release.ts),
+// and so are the packages of the modules a station installs itself (releases/modules/<id>/: verifyModule).
 import { createHash, createPublicKey, verify } from "node:crypto";
 import { RELEASE_KEYS } from "./keys.ts";
 
@@ -36,13 +35,6 @@ export type Release = {
   node: string;
   builds: Record<string, Build>;
 };
-
-/// The Windows desktop app's installer's signed words (desktop/<installer>.exe.sig).
-export type DesktopRelease = { kind: "stillfail-desktop-win"; version: string; build: number; file: string; sha256: string; size: number };
-
-/// The web app a desktop app takes in place of the one it carries (docs/desktop-web-updates.md): its archive, and the
-/// oldest app it works in (`needs`: the build of the last commit that changed what the app carries besides the web).
-export type DesktopWebRelease = { kind: "stillfail-desktop-web"; version: string; build: number; needs: number; file: string; sha256: string; size: number };
 
 /// A module's package (docs/station-modules.md): what its feed (releases/modules/<id>/<id>[-beta].json) signs. The archive
 /// of each platform it is built for (`any`: one for every machine, as a module in TypeScript is), and the oldest
@@ -124,32 +116,6 @@ export function expected(release: Release, platform: string | null): Build {
   const b = platform !== null ? release.builds[platform] : undefined;
   if (!b) throw new Unverified(`the release has no build for ${platform ?? "this machine"}`);
   return b;
-}
-
-/// The Windows desktop app's installer `bytes`, as its .sig (`sig`, JSON) says it: signed, for the version the feed
-/// offers (`version`), newer than the app's own (`current`, its build), and these very bytes. Throws Unverified
-/// otherwise.
-export function verifyDesktop(sig: any, bytes: Uint8Array, version: string, current: number, trusted: Map<string, string> = trustedKeys()): DesktopRelease {
-  const r = verifySigned(sig, trusted);
-  if (r?.kind !== "stillfail-desktop-win" || !Number.isSafeInteger(r.build) || r.version !== `0.1.${r.build}`) throw new Unverified("the words are not a Windows desktop release");
-  if (r.version !== version) throw new Unverified(`the installer is signed as ${r.version}, offered as ${version}`);
-  if (r.build <= current) throw new Unverified(`the installer is ${r.version}, not newer than this app`);
-  if (r.size !== bytes.length || r.sha256 !== sha256(bytes)) throw new Unverified("the installer is not the one signed");
-  return r as DesktopRelease;
-}
-
-/// The web app a feed (desktop/web/<channel>-web.json) offers, verified: signed, well formed, for an app as old as this
-/// one (`app`, its build) or older, and newer than the web app it runs (`current`). The archive's bytes are checked
-/// against it by the caller as they come (sha256, size). Throws Unverified otherwise.
-export function verifyDesktopWeb(feed: any, app: number, current: number, trusted: Map<string, string> = trustedKeys()): DesktopWebRelease {
-  const r = verifySigned(feed, trusted);
-  if (r?.kind !== "stillfail-desktop-web" || !Number.isSafeInteger(r.build) || r.version !== `0.1.${r.build}` || !Number.isSafeInteger(r.needs) || r.needs > r.build)
-    throw new Unverified("the words are not a desktop web release");
-  if (!SHA.test(r.sha256 ?? "") || !Number.isSafeInteger(r.size) || typeof r.file !== "string" || !/^[\w.-]+$/.test(r.file)) throw new Unverified("the web release is not well formed");
-  if (feed.version !== undefined && feed.version !== r.version) throw new Unverified("the feed's version is not the signed one");
-  if (r.needs > app) throw new Unverified(`the web app ${r.version} needs the app 0.1.${r.needs} or newer, this is 0.1.${app}`);
-  if (r.build <= current) throw new Unverified(`the web app ${r.version} is not newer than the one this app runs (0.1.${current})`);
-  return r as DesktopWebRelease;
 }
 
 export const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");

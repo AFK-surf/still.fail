@@ -1,5 +1,5 @@
-// What makes a web service's WebSockets work in its preview, on the web (cloud/src/preview.ts) and in the desktop app
-// (apps/desktop/src/main.ts): a script first in each of the service's pages gives it a WebSocket that, for the
+// What makes a web service's WebSockets work in its preview, on the web (cloud/src/preview.ts; the Electron app had a
+// host of its own): a script first in each of the service's pages gives it a WebSocket that, for the
 // preview's own host (a dev server's live reload), goes to the station and on to the service's port; any other stays
 // the browser's own. How it gets there is each host's `link`.
 import { browserWords } from "./i18n.ts";

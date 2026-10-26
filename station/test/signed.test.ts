@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { RELEASE_KEYS, Unverified, allowed, expected, keyId, sha256, trustedKeys, verifyDesktop, verifyFeed, verifySigned } from "../src/updates/signed.ts";
+import { RELEASE_KEYS, Unverified, allowed, expected, keyId, sha256, trustedKeys, verifyFeed, verifySigned } from "../src/updates/signed.ts";
 import { updateCommand } from "../src/updates/command.ts";
 import { platform } from "../src/updates/versions.ts";
 import { KEY, OTHER, SHA_A, SHA_B, feedOf, signed, trusted, words } from "./release-fakes.ts";
@@ -60,18 +60,6 @@ describe("signed releases", () => {
     assert.ok(allowed(r, null, "stable", "stable"), "a release that says no build");
   });
 
-  test("the Windows desktop installer: signed, as offered, newer, these very bytes", () => {
-    const bytes = Buffer.from("an installer");
-    const sig = (w: object, key = KEY) => signed({ kind: "stillfail-desktop-win", version: "0.1.1310", build: 1310, file: "x.exe", sha256: sha256(bytes), size: bytes.length, ...w }, key);
-    assert.equal(verifyDesktop(sig({}), bytes, "0.1.1310", 1300, trusted).build, 1310);
-    unverified(() => verifyDesktop(sig({}, OTHER), bytes, "0.1.1310", 1300, trusted), /does not take/);
-    unverified(() => verifyDesktop(sig({}), Buffer.from("another"), "0.1.1310", 1300, trusted), /not the one signed/);
-    unverified(() => verifyDesktop(sig({}), bytes, "0.1.1320", 1300, trusted), /offered as 0\.1\.1320/);
-    unverified(() => verifyDesktop(sig({}), bytes, "0.1.1310", 1310, trusted), /not newer/);
-    unverified(() => verifyDesktop(sig({ kind: "stillfail-station-release" }), bytes, "0.1.1310", 1300, trusted), /not a Windows desktop release/);
-    unverified(() => verifySigned({ release: "e30=", signature: "", key: keyId(KEY.raw) }, trusted), /does not verify/);
-  });
-
   test("scripts/release-sign.ts signs a station release as stations verify it, and refuses to sign none in CI", () => {
     const dir = temp();
     // Two platforms' archives, and their Nodes as node-dist.sh keeps them: bin/node in a tarball, node.exe in
@@ -118,8 +106,8 @@ describe("signed releases", () => {
       env: { PATH: process.env.PATH, RELEASE_SIGNING_KEY: KEY.pem }, encoding: "utf8",
     });
     assert.equal(file.status, 0, file.stderr);
-    const d = verifyDesktop(JSON.parse(readFileSync(join(dir, "x.exe.sig"), "utf8")), readFileSync(join(dir, "x.exe")), "0.1.1310", 1300, trusted);
-    assert.equal(d.file, "x.exe");
+    const d = verifySigned(JSON.parse(readFileSync(join(dir, "x.exe.sig"), "utf8")), trusted);
+    assert.deepEqual(d, { kind: "stillfail-desktop-win", version: "0.1.1310", build: 1310, file: "x.exe", sha256: sha256(readFileSync(join(dir, "x.exe"))), size: 12 });
   });
 
   test("`stillfail-station update` sets the channel asked, verifies the latest, and says what to run", async (t) => {

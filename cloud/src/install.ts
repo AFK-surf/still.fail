@@ -73,18 +73,18 @@ const APP_FILES: [RegExp, string][] = [
   [/^mac\/(beta\/)?latest\.json$/, "application/json"],
   // Its blockmap, for the updater to download only what changed since the zip it has (releases.ts).
   [/^desktop\/stillfail-(beta-)?[0-9.]+-arm64-mac\.zip\.blockmap$/, "application/octet-stream"],
-  // The Windows app's (apps/desktop/build.sh --win): its feed (electron-updater's, named by the channel alone), its NSIS
-  // installer and that one's blockmap.
+  // The Windows app's: its feed for an installed Electron app's updater (electron-updater's, named by the channel
+  // alone), its installer and, of the Electron app's own installers, their blockmaps.
   [/^desktop\/stillfail\.yml$/, "text/yaml; charset=utf-8"],
   [/^desktop\/stillfail-(beta-)?[0-9.]+-x64-win\.exe$/, "application/vnd.microsoft.portable-executable"],
   [/^desktop\/stillfail-(beta-)?[0-9.]+-x64-win\.exe\.blockmap$/, "application/octet-stream"],
   // Its signature (scripts/release-sign.ts), which the app checks before installing it (docs/release-signing.md).
   [/^desktop\/stillfail-(beta-)?[0-9.]+-x64-win\.exe\.sig$/, "application/json"],
-  // The beta's is mbui's (apps/mbui) in the Electron app's place (scripts/release.sh --beta desktop-win): its own
-  // updater's feeds, stable and beta (an AppRelease naming the installer above, its signed words in it), as the Mac's.
+  // It is mbui's (apps/mbui) in the Electron app's place (scripts/release.sh desktop-win): its own updater's feeds,
+  // stable and beta (an AppRelease naming the installer above, its signed words in it), as the Mac's.
   [/^win\/(beta\/)?latest\.json$/, "application/json"],
-  // The web app the beta desktop app takes without a new app (docs/desktop-web-updates.md): its signed feed and the
-  // archives it names.
+  // The web app the beta Electron app took without a new app, until it was moved to mbui's (2026-10-26): its signed
+  // feed and the archives it names.
   [/^desktop\/web\/stillfail-beta-web\.json$/, "application/json"],
   [/^desktop\/web\/stillfail-beta-web-[0-9.]+\.tar\.gz$/, "application/gzip"],
   // The packages of the modules stations install themselves (scripts/module-bundle.ts, docs/station-modules.md): each

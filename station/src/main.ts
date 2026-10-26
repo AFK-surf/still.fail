@@ -54,9 +54,6 @@ import { takeQueries } from "./store/timed.ts";
 import { platform } from "./platform/index.ts";
 import { keepRunnerIn } from "./platform/processes.ts";
 
-// Run by the desktop app on its own Electron as Node (apps/desktop/src/station.ts): what this starts (agents, jobs,
-// their tools, the next station at a handover through the launcher, which keeps its own) is not told to be Node too.
-delete process.env.ELECTRON_RUN_AS_NODE;
 // What reads HOME (the machine's logins, its transcripts) finds the user's home there, where the machine names it
 // otherwise (Windows: USERPROFILE).
 if (!process.env.HOME && platform.home(process.env)) process.env.HOME = platform.home(process.env);

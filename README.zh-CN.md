@@ -76,8 +76,8 @@ cd cloud && pnpm install --frozen-lockfile && pnpm run types && pnpm test
 | `station/` | station（`stillfail-station`）：agent runtime、Slack 和飞书、任务、文件、屏幕、密钥库；原生组件在 `station/native/` |
 | `client/` | 共用的客户端 core（`core-ts`）、它的原生外壳和翻译（`i18n`） |
 | `web/` | 网页版、官网和组件 stories |
-| `apps/desktop/`、`apps/android/` | Electron 桌面版和原生安卓客户端 |
-| `apps/mbui/` | 用 mbui（`apps/mbui/mbui`）写的安卓和 macOS 客户端，测试中 |
+| `apps/mbui/` | 各端 app（安卓、iOS、macOS、Windows、Linux），用 mbui（`apps/mbui/mbui`）写 |
+| `apps/android/` | 以前用 Kotlin 写的安卓 app，已冻结 |
 | `cloud/` | Cloudflare 上的账号、workspace、中继和发布 |
 | `media/` | 基于同一平台的照片、影视和书架 app，开发中 |
 | `docs/` | 设计和运维文档；发布说明在 `docs/releases/` |

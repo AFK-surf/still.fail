@@ -24,7 +24,7 @@ mesh=$(node "$root/scripts/native.ts" file mesh "$platform")
 dir="$out/stillfail-core"
 rm -rf "$dir"
 mkdir -p "$dir"
-# As the desktop app bundles it (apps/desktop/build.sh): the addon and ws's optional natives are not bundled.
+# The addon and ws's optional natives are not bundled (the app loads the addon beside it; ws runs without them).
 (cd "$root/client/core-ts" && pnpm exec esbuild src/hosts/node.ts --bundle --platform=node --format=cjs --target=node22 --outfile="$dir/core-ts.js" \
   --external:electron --external:bufferutil --external:utf-8-validate --log-level=error)
 cp "$mesh" "$dir/mesh.node"

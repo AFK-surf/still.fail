@@ -66,8 +66,8 @@ export interface PlaceHelper {
 /// its last line.
 export type Probe = { command: string; args: (script: string, argv: string[]) => string[]; env?: NodeJS.ProcessEnv };
 
-/// The station's own Node (Electron as Node in the desktop app).
-export const nodeProbe: Probe = { command: process.execPath, args: (script, argv) => ["-e", script, ...argv], env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" } };
+/// The station's own Node.
+export const nodeProbe: Probe = { command: process.execPath, args: (script, argv) => ["-e", script, ...argv] };
 
 const codeOf = `const codeOf = (e) => e.code === "ENOENT" || e.code === "ENOTDIR" ? "gone" : e.code === "EPERM" || e.code === "EACCES" ? "denied" : "error";
 const say = (o) => process.stdout.write(JSON.stringify(o) + "\\n");`;

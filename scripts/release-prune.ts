@@ -3,8 +3,8 @@
 // (zip, exe, apk) and 30 .blockmap/.sig. Older installers are deleted, and older beta blockmaps; a stable release's
 // blockmaps all stay (a few hundred KB each). A desktop app updates from the version it runs by fetching that
 // version's blockmap (when it has not kept it) and the new file's changed blocks: no old installer is needed, so a beta
-// up to 30 releases behind still updates by difference. The beta desktop app's web archives (docs/desktop-web-updates.md):
-// the one its feed names, any newer, and the newest 5. What a station's job staged (staged/<when>-<commit>/:
+// up to 30 releases behind still updates by difference. The web archives the beta Electron app took without a new app
+// (made until 2026-10-26, when that app was moved to mbui's): the one its feed names, any newer, and the newest 5. What a station's job staged (staged/<when>-<commit>/:
 // scripts/release-put.sh --stage) and no put took back and deleted: after two days. The stations', Node and the feeds
 // are never touched.
 // CI runs it after `put` (.github/workflows/pipeline.yml).
@@ -22,7 +22,7 @@ const INSTALLER = /^((?:desktop|android|mac|win)\/stillfail-(?:beta-|mbui-)?)(\d
 /** How many of a beta's newest installers, and of its blockmaps, stay. */
 const BETA_INSTALLERS = 5;
 const BETA_BLOCKMAPS = 30;
-/** The beta desktop app's web app: its feed, its archives, and how many of the newest stay. */
+/** The beta Electron app's web app: its feed, its archives, and how many of the newest stay. */
 const WEB_FEED = "desktop/web/stillfail-beta-web.json";
 const WEB_ARCHIVE = /^desktop\/web\/stillfail-beta-web-0\.1\.(\d+)\.tar\.gz$/;
 const WEB_ARCHIVES = 5;

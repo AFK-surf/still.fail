@@ -240,7 +240,7 @@ export class Packages {
     });
   }
 
-  /// Module `spec` as it is run: the station's own Node (the desktop app's Electron as Node) on the entry of the build
+  /// Module `spec` as it is run: the station's own Node on the entry of the build
   /// installed, told where the package's own programs are when it has some (MODULE_BIN_DIR: its bin/, the media
   /// service's ffmpeg and ffprobe); null while none is.
   runnable(spec: PackageSpec): ModuleSpec | null {
@@ -256,7 +256,7 @@ export class Packages {
       id: spec.id,
       command: process.execPath,
       args: [join(dir, entry), ...spec.args],
-      env: { ...spec.env, ELECTRON_RUN_AS_NODE: "1", ...(binOf(dir).length > 0 ? { MODULE_BIN_DIR: join(dir, BIN) } : {}) },
+      env: { ...spec.env, ...(binOf(dir).length > 0 ? { MODULE_BIN_DIR: join(dir, BIN) } : {}) },
       installed: { package: spec.package, build: current },
     };
   }

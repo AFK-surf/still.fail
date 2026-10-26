@@ -63,7 +63,8 @@ const RELEASE = process.env.STILLFAIL_NATIVE_RELEASE ?? "native-artifacts";
 /// The store of the parts prebuilt on a development machine (`prebuild`): the releases bucket's natives/, served by
 /// still.fail cloud (install.ts releaseType) to anyone, as the release is by GitHub.
 const STORE = process.env.STILLFAIL_NATIVE_STORE ?? "https://app.still.fail/releases/natives";
-const HELPER_ICON = "apps/desktop/icon.png";
+/// still.fail Helper's icon (design/brand/make.py draws it): in its own directory, one of its inputs.
+const HELPER_ICON = "station/native/helper/icon.png";
 const VENDORED = ["vendor/iroh", "vendor/iroh-mdns-address-lookup", "vendor/noq-udp", "vendor/swarm-discovery"];
 /// The Hermes of the core's engine: React Native's `rn` (on Android its hermes-android, libhermes.so and its headers, as
 /// apps/mbui/scripts/android-core.sh packs it), and on Windows, which has no prebuilt one with its C++ API,
@@ -146,7 +147,7 @@ function stationCrate(dir: string, artifact: (t: Target) => string, name: string
     },
   };
 }
-/// napi-build links a MinGW addon to libnode.dll, which neither Node nor Electron has on Windows: their Node-API is in
+/// napi-build links a MinGW addon to libnode.dll, which Node does not have on Windows: its Node-API is in
 /// the executable, and napi-sys (dyn-symbols, its default) looks every function up there when the addon loads. So it
 /// is given an empty import library to link (nothing is taken from it) and a libnode.dll to find beside it.
 function noLibnode(target: string): Record<string, string> {
@@ -179,20 +180,10 @@ function withHidden(part: Part): Part {
 const MESH_LIB = (t: Target) => (t === "darwin-arm64" ? "libstillfail_mesh.dylib" : t === "win32-x64" ? "stillfail_mesh.dll" : "libstillfail_mesh.so");
 
 const PARTS: Record<string, Part> = {
-  // Windows' native maximize hit target, under the desktop page's self-drawn controls (Snap Layouts).
-  "window-controls": {
-    ...stationCrate("apps/desktop/window-controls", () => "stillfail_window_controls.dll", "window-controls.node"),
-    targets: ["win32-x64"],
-  },
-  // Whether the system lets the desktop app show notifications (its notification settings show it).
-  "notify-permission": {
-    ...stationCrate("apps/desktop/notify-permission", (t) => (t === "win32-x64" ? "stillfail_notify_permission.dll" : "libstillfail_notify_permission.dylib"), "notify-permission.node"),
-    targets: ["darwin-arm64", "win32-x64"],
-  },
-  // The station's iroh and image codecs, a Node addon (docs/station-ts-native.md §3); the desktop's core uses it too.
+  // The station's iroh and image codecs, a Node addon (docs/station-ts-native.md §3); the core on Node (its tests,
+  // apps/mbui's e2e peer) uses it too.
   mesh: {
     ...stationCrate("station/native/mesh", MESH_LIB, "mesh.node", VENDORED),
-    // Windows for the desktop app's core and the station there.
     targets: STATION_BINS,
     env: "STILLFAIL_MESH_NATIVE",
   },
@@ -299,13 +290,13 @@ const PARTS: Record<string, Part> = {
   },
   // still.fail Helper (station/native/helper, docs/station-ts-native.md §4): the station's macOS app for what macOS
   // grants an app (the screen, docs/remote-screens.md), Swift built with the Mac's Xcode, put in its bundle with its
-  // Info.plist and the desktop app's icon (its permission window and System Settings show it) and signed ad hoc (a
+  // Info.plist and still.fail's icon (its permission window and System Settings show it) and signed ad hoc (a
   // release signs it again, scripts/station-bundle.sh).
   helper: {
     files: () => [HELPER_APP],
     targets: ["darwin-arm64"],
     env: "STILLFAIL_HELPER",
-    inputs: ["station/native/helper", "vendor/PermissionFlow", "vendor/serve-sim", HELPER_ICON],
+    inputs: ["station/native/helper", "vendor/PermissionFlow", "vendor/serve-sim"],
     recipe: () => ({ swift: SWIFT_BUILD, app: HELPER_APP }),
     build(_t, out) {
       const dir = join(ROOT, "station/native/helper");

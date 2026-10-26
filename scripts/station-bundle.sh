@@ -2,8 +2,8 @@
 # Lays out the still.fail station's release in DIR/stillfail for PLATFORM (default darwin-arm64): the station in
 # TypeScript (station/, docs/station-ts.md) with its native parts, prebuilt (scripts/native.ts: launcher, mesh, runner),
 # and the version of the Node it runs on, which is not in it: the installer gets that once per version
-# (scripts/node-dist.sh, cloud/src/install.ts) and links it at stillfail/node; the desktop app runs it on Electron's. scripts/release.sh packs it for install.sh; the desktop app (apps/desktop/build.sh) carries
-# it and runs it itself. The layout:
+# (scripts/node-dist.sh, cloud/src/install.ts) and links it at stillfail/node. scripts/release.sh packs it for
+# install.sh. The layout:
 #   stillfail/bin/stillfail                               (the command people and services run; bin/ember beside it)
 #   stillfail/bin/install.{zh,en}.sh                      (the installer the station updates itself by, verified with
 #                                                          the release: scripts/installers.ts, docs/release-signing.md)
@@ -81,10 +81,9 @@ cp -R "$root/station/dist/skills" "$app/station/skills"
 # DeepSeek Harness loads the station's driver from here (agents/dsh.ts); Cursor's runs from here (agents/cursor.ts).
 cp "$root/station/dist/dsh-bridge.mjs" "$root/station/dist/cursor-bridge.mjs" "$root/station/dist/sandbox-bridge.mjs" "$app/station/"
 # The bundle is an ES module: said, so Node neither guesses nor takes the type of a package.json above the release
-# (the desktop app built in apps/desktop has one: every command warned).
+# (the Electron app had one around the station it carried: every command warned).
 printf '{"type":"module"}\n' > "$app/station/package.json"
-# The Node it runs on, every release and CI alike (.node-version): what the tests ran on. The desktop app's runs on its
-# Electron's (apps/desktop/build.sh), the same but for a security release Electron has not taken in yet.
+# The Node it runs on, every release and CI alike (.node-version): what the tests ran on.
 cp "$root/.node-version" "$app/NODE_VERSION"
 git -C "$root" rev-parse HEAD > "$app/VERSION"
 git -C "$root" rev-list --count HEAD > "$app/BUILD"
