@@ -801,69 +801,6 @@ fn Ctx::part_lit(self : Ctx, st : KeptPart) -> Bool {
 }
 
 ///|
-/// A part's band, pushed as its build is painted: nothing cuts it (what is round it, the window and the panes, is not
-/// its: drawn again where a look round it moved it, a tape's panel behind the one in use, it is cut there as its build
-/// would be). Its drawing is put in the clip it is in after (Ctx::part_clip_into), built or drawn again alike, as a
-/// list's row is in its list's (kept_rows.mbt's band).
-fn part_band() -> Unit {
-  for v in [-1.0e9, -1.0e9, 1.0e9, 1.0e9] {
-    clip_stack.push(v)
-  }
-  for _ in 0..<20 {
-    clip_stack.push(0.0)
-  }
-}
-
-///|
-/// Where what a part's paint said in its band is said: as it was, in the clip at `k` (the one it is drawn in).
-fn part_band_moved(k : Int) -> Moved {
-  { dy: 0.0, cut: k, band_l: -1.0e9, band_t: -1.0e9, band_r: 1.0e9, band_b: 1.0e9, node: -1 }
-}
-
-///|
-/// Part `id`'s build, painted in its band from instance `i0` (its shapes' pieces from `g0`) and taken, put in the clip at
-/// `k`, what it drew (row_clip_into; with `drops`, what shows nothing there dropped) and what its paint said (as what
-/// draws it again says it there); what it covers there.
-fn Ctx::part_clip_into(self : Ctx, id : Int, k : Int, i0 : Int, g0 : Int, drops~ : Bool) -> Unit {
-  match kept_parts.get(id) {
-    Some(st) => {
-      self.paint_cut(st.marks)
-      self.say_again(st.said, part_band_moved(k))
-      self.row_clip_into(k, i0, g0, drops~)
-      st.rect = cover_of(self.inst, i0, self.ninst)
-    }
-    None => ()
-  }
-}
-
-///|
-/// What instances `i0` to `i1` of `a` cover (x, y, w, h: their rects within their cuts).
-fn cover_of(a : FixedArray[Double], i0 : Int, i1 : Int) -> (Double, Double, Double, Double) {
-  let mut x0 = @double.infinity
-  let mut y0 = @double.infinity
-  let mut x1 = -@double.infinity
-  let mut y1 = -@double.infinity
-  for k in i0..<i1 {
-    let q = k * inst_size
-    let l = dmax(a[q], a[q + 16])
-    let t = dmax(a[q + 1], a[q + 17])
-    let r = dmin(a[q] + a[q + 2], a[q + 18])
-    let b = dmin(a[q + 1] + a[q + 3], a[q + 19])
-    if r > l && b > t {
-      x0 = dmin(x0, l)
-      y0 = dmin(y0, t)
-      x1 = dmax(x1, r)
-      y1 = dmax(y1, b)
-    }
-  }
-  if x1 > x0 {
-    (x0, y0, x1 - x0, y1 - y0)
-  } else {
-    (0.0, 0.0, 0.0, 0.0)
-  }
-}
-
-///|
 /// The frame's instances from `i0` to its last so far taken as part `self`'s drawing, as they are, where they are, with
 /// the pieces of their shapes and the looks by the clock they are tagged with; what they cover (`rect`).
 fn KeptPart::take_insts(self : KeptPart, c : Ctx, i0 : Int) -> Unit {
@@ -877,6 +814,11 @@ fn KeptPart::take_insts(self : KeptPart, c : Ctx, i0 : Int) -> Unit {
   st.floats = floats
   st.segs.clear()
   st.cycles.clear()
+  // (what it covers, where its instances show: their rects within their cuts)
+  let mut x0 = @double.infinity
+  let mut y0 = @double.infinity
+  let mut x1 = -@double.infinity
+  let mut y1 = -@double.infinity
   let d = st.insts
   let mut q = 0
   while q < floats {
@@ -895,10 +837,19 @@ fn KeptPart::take_insts(self : KeptPart, c : Ctx, i0 : Int) -> Unit {
         None => ()
       }
     }
+    let l = dmax(d[q], d[q + 16])
+    let t = dmax(d[q + 1], d[q + 17])
+    let r = dmin(d[q] + d[q + 2], d[q + 18])
+    let b = dmin(d[q + 1] + d[q + 3], d[q + 19])
+    if r > l && b > t {
+      x0 = dmin(x0, l)
+      y0 = dmin(y0, t)
+      x1 = dmax(x1, r)
+      y1 = dmax(y1, b)
+    }
     q = q + inst_size
   }
-  // (what it covers, where its instances show: their rects within their cuts)
-  st.rect = cover_of(d, 0, floats / inst_size)
+  st.rect = if x1 > x0 { (x0, y0, x1 - x0, y1 - y0) } else { (0.0, 0.0, 0.0, 0.0) }
 }
 
 ///|

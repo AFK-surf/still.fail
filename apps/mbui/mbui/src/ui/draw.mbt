@@ -596,15 +596,10 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       return true
     }
     Some(st) => {
-      // (in the clip it is in now, as its build's drawing is put there: part_band)
-      let k = clip_top()
-      let i0 = self.ninst
-      let g0 = self.segs.length()
       if dr.mode != mode_hits {
         self.part_paint_again(st)
-        self.row_clip_into(k, i0, g0, drops=true)
       }
-      self.say_again(st.said, part_band_moved(k))
+      self.say_again(st.said, unmoved)
       return true
     }
     None => ()
@@ -707,36 +702,14 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   if !look.is_still() || e.z >= 2 || e.only || cutting {
     dr.mode = mode_draw
   }
-  // (a part kept: what its build draws taken, with the glyphs' plots it draws from, in its band, nothing round it
-  // cutting it; then put in the clip it is in, as what draws it again is: kept_part.mbt's part_band)
+  // (a part kept: what its build draws taken, with the glyphs' plots it draws from: kept_part.mbt)
   let painting = if e.part != 0 { self.part_paint_begin(e.part) } else { 0 }
-  let k = clip_top()
-  let g0 = self.segs.length()
-  let ups = dr.tops.length() + dr.overlay.length() + dr.raised.length()
-  // (not where what each instance is of is followed, a frame measured for contrast: none is kept there, and none is
-  // dropped)
-  let band = e.part != 0 && !inst_owners.on
-  if band {
-    part_band()
-  }
   dr.bypass = i
   self.paint(i, alpha)
   dr.bypass = -1
   dr.mode = was
-  if band {
-    pop_clip()
-  }
   if e.part != 0 {
     self.part_paint_end(e.part, i, i0, painting)
-  }
-  if band {
-    self.part_clip_into(
-      e.part,
-      k,
-      i0,
-      g0,
-      drops=dr.tops.length() + dr.overlay.length() + dr.raised.length() == ups,
-    )
   }
   if cutting {
     pop_clip()
