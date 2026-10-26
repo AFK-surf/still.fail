@@ -847,18 +847,33 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
           })
         }
       }
-      // a quote's ✕, hung on its card's corner as the composer hung it: it goes with the card as it sets out, leaving
-      // as what leaves goes (@sf.leave: fading, down to 0.9) from the frame it was sent
-      let gone = f.gone.get()
-      if ff.key.has_prefix(quote_prefix) && gone < 1.0 {
-        let across = flight_across_of(c, f)
-        let up = flight_up_of(c, f)
-        let reach = @sf.corner_remove_reach(@sf.composer_inner)
+    }
+  })
+  // drawn only (ChatHost.kt FlightLayer draws them): not the files, which are the message's
+  c.draw_only(l)
+  // a quote's ✕, hung on its card's corner as the composer hung it: it goes with the card as it sets out, leaving as
+  // what leaves goes (@sf.leave: fading, down to 0.9) from the frame it was sent; over its card, which is over
+  // everything as it flies (so in a layer of its own: what is in one only drawn is over the rest of that one alone)
+  let gone = f.gone.get()
+  if gone < 1.0 && f.files.iter().any(fn(ff) { ff.key.has_prefix(quote_prefix) }) {
+    let across = flight_across_of(c, f)
+    let up = flight_up_of(c, f)
+    let flying = f.placed && f.placed_frame != c.frame_number()
+    let reach = @sf.corner_remove_reach(@sf.composer_inner)
+    c.layer(fn() {
+      for ff in f.files {
+        if !ff.key.has_prefix(quote_prefix) {
+          continue
+        }
+        let (fx, fy, fw, _) = ff.from
+        let to = "flight/to/" + ff.key
         let x = @sf.corner_remove_face(c)
+        c.put_over(x, z=2)
+        c.draw_only(x)
         @motion.placed(c, x, fn() {
           // (on the card's ground as this frame draws it: flight_quote_landing's)
-          let (gx, gy, gw) = match (landing, @motion.measured_rect(c, to)) {
-            (Some(_), Some((bx, by, bw, _))) => (fx + (bx - fx) * across, fy + (by - fy) * up, fw + (bw - fw) * across)
+          let (gx, gy, gw) = match @motion.measured_rect(c, to) {
+            Some((bx, by, bw, _)) if flying => (fx + (bx - fx) * across, fy + (by - fy) * up, fw + (bw - fw) * across)
             _ => (fx, fy, fw)
           }
           let (xx, xy, xw, _) = c.node_rect(x)
@@ -870,10 +885,9 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
           )
         })
       }
-    }
-  })
-  // drawn only (ChatHost.kt FlightLayer draws them): not the files, which are the message's
-  c.draw_only(l)
+    })
+    |> ignore
+  }
 }
 
 ///|
