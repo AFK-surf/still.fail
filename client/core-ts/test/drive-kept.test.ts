@@ -288,6 +288,8 @@ test("what is left of those kept in part: the first of each not kept, the most l
   await run(kept.keep(chatKeptId(ST, "k1", "a.mp4"), "chat", 0, 50, "video/mp4", 0, bytesOf(10)));
   assert.equal((await run(kept.unfinished(["played"]))).length, 2);
   assert.deepEqual((await run(kept.unfinished(["chat"]))).map((f) => [f.at, f.length]), [[10, 40]]);
+  // only those read since a time: the song and the big one read after the film was
+  assert.deepEqual((await run(kept.unfinished(["played"], host.nowMs() - 61_000))).map((f) => f.id), [song]);
 });
 
 test("a chat's file opened is kept with its chat: read again from the device, listed with it, let go one at a time or with it", async () => {
