@@ -1,5 +1,6 @@
-// Files dragged in from outside the app (Finder) and let go on its window: the host says where they are held as they
-// move and, once let go, the pick their reading is (macOS's MBView: its `mbui.drop` messages, {"type":"over","x","y"},
+// Files dragged in from outside the app (Finder, Explorer) and let go on its window: the host says where they are held
+// as they move and, once let go, the pick their reading is (macOS's MBView, Windows' drop target in win_files.h: their
+// `mbui.drop` messages, {"type":"over","x","y"},
 // {"type":"left"}, {"type":"drop","x","y","pick"}), taken as any message is, at a frame's start. A view asks where they
 // are held now (files_held: what it would take them shows so) and takes each drop once (take_drop), its files read as
 // a pick's are (Pick::files: a folder's by their way down, each folder itself named with a "/" at its end). Under a

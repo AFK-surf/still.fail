@@ -1,7 +1,7 @@
-// The device beyond the window on Windows (src/hostapi/device.mbt): a key catcher's keys, the clipboard read and written
-// (words; a picture under the registered "PNG" format, as browsers and Office put it there: a bitmap alone is said
-// unreadable, not converted), the display kept on. No soft keyboard's height (0), no haptics. Included by win_app.c
-// before its keys (its hwnd, ime_active, marked_len, mods_now, outside_cb above).
+// The device beyond the window on Windows (src/hostapi/device.mbt): a key catcher's keys, the clipboard read (words, a
+// picture, files: below) and written (words; a picture under the registered "PNG" format, as browsers and Office put
+// it there), the display kept on. No soft keyboard's height (0), no haptics. Included by win_app.c before its keys
+// (its hwnd, ime_active, marked_len, mods_now, outside_cb above), after win_files.h (files read whole).
 
 void mb_host_clipboard_set(moonbit_string_t s);
 
@@ -49,129 +49,231 @@ int32_t mb_host_copy_shown(void) { return 0; }
 
 // ---- the clipboard read ----
 
+// Its words, a picture (a PNG under "PNG", as browsers and Office put it there; else a bitmap, CF_DIB, made a PNG) and
+// its files (Explorer's copied ones, CF_HDROP: each read whole, a folder left out, over 1 GB too): what is the
+// clipboard's taken as it is read (it is the window thread's to open), then the bitmap made a PNG and the files read on
+// a thread of their own, told as the next frame after begins (device_tell).
 enum { CLIP_NONE = 0, CLIP_PNG = 1, CLIP_TOO_LARGE = 2, CLIP_UNREADABLE = 3 };
 #define CLIP_READS 8
-static struct {
+#define CLIP_PNG_MOST (8u * 1024 * 1024)
+typedef struct {
   int32_t id;
+  volatile LONG done;    // all of it read
+  volatile LONG owners;  // who holds it (the window's slot, its thread): the last to let go frees it
   int told;
   int picture;
   WCHAR *text;
   int text_len;
   unsigned char *png;
   size_t png_len;
-} clip_reads[CLIP_READS];
+  unsigned char *dib;  // a bitmap's, to be made a PNG
+  size_t dib_len;
+  WCHAR **paths;  // its files', to be read
+  int npaths;
+  file_list files;
+} clip_read;
+static clip_read *clip_reads[CLIP_READS];
 static int32_t clip_next = 1;
 
-static int clip_slot(int32_t id) {
+static void clip_let_go(clip_read *r) {
+  if (InterlockedDecrement(&r->owners) != 0) return;
+  free(r->text);
+  free(r->png);
+  free(r->dib);
+  for (int i = 0; i < r->npaths; i++) free(r->paths[i]);
+  free(r->paths);
+  files_free(&r->files);
+  free(r);
+}
+
+static clip_read *clip_of(int32_t id) {
   for (int i = 0; i < CLIP_READS; i++)
-    if (clip_reads[i].id == id && id) return i;
-  return -1;
+    if (clip_reads[i] && clip_reads[i]->id == id && id) return clip_reads[i];
+  return NULL;
 }
 
 void mb_host_clip_end(int32_t id) {
-  int i = clip_slot(id);
-  if (i < 0) return;
-  free(clip_reads[i].text);
-  free(clip_reads[i].png);
-  memset(&clip_reads[i], 0, sizeof clip_reads[i]);
+  for (int i = 0; i < CLIP_READS; i++)
+    if (clip_reads[i] && clip_reads[i]->id == id && id) {
+      clip_read *r = clip_reads[i];
+      clip_reads[i] = NULL;
+      clip_let_go(r);
+    }
 }
 
-// Read at once (the clipboard is the window thread's to open), told as the next frame begins (device_tell).
+// the bitmap made a PNG, the files read
+static DWORD WINAPI clip_thread(void *arg) {
+  clip_read *r = (clip_read *)arg;
+  CoInitializeEx(NULL, COINIT_MULTITHREADED);
+  if (r->dib) {
+    unsigned char *png = NULL;
+    size_t n = 0;
+    if (!mb_png_of_dib(r->dib, r->dib_len, &png, &n)) {
+      r->picture = CLIP_UNREADABLE;
+    } else if (n > CLIP_PNG_MOST) {
+      free(png);
+      r->picture = CLIP_TOO_LARGE;
+    } else {
+      r->png = png;
+      r->png_len = n;
+      r->picture = CLIP_PNG;
+    }
+  }
+  for (int i = 0; i < r->npaths; i++) {
+    DWORD at = GetFileAttributesW(r->paths[i]);
+    if (at != INVALID_FILE_ATTRIBUTES && !(at & FILE_ATTRIBUTE_DIRECTORY)) files_read(&r->files, r->paths[i], path_last(r->paths[i]));
+  }
+  CoUninitialize();
+  InterlockedExchange(&r->done, 1);
+  mb_app_wake();
+  clip_let_go(r);
+  return 0;
+}
+
 int32_t mb_host_clip_read(void) {
   int i = -1;
   for (int k = 0; k < CLIP_READS; k++)
-    if (!clip_reads[k].id) { i = k; break; }
+    if (!clip_reads[k]) {
+      i = k;
+      break;
+    }
   if (i < 0) return 0;
-  int32_t id = clip_next++;
-  clip_reads[i].id = id;
+  clip_read *r = (clip_read *)calloc(1, sizeof *r);
+  if (!r) return 0;
+  r->id = clip_next++;
+  r->owners = 1;
+  clip_reads[i] = r;
   if (OpenClipboard(hwnd)) {
     HANDLE h = GetClipboardData(CF_UNICODETEXT);
     const WCHAR *w = h ? (const WCHAR *)GlobalLock(h) : NULL;
     if (w) {
       int n = (int)wcslen(w), k = 0;
-      clip_reads[i].text = (WCHAR *)malloc(((size_t)n + 1) * sizeof(WCHAR));
+      r->text = (WCHAR *)malloc(((size_t)n + 1) * sizeof(WCHAR));
       // CR LF as the app's LF
-      for (int j = 0; j < n; j++)
-        if (!(w[j] == '\r' && w[j + 1] == '\n')) clip_reads[i].text[k++] = w[j];
-      clip_reads[i].text_len = k;
+      for (int j = 0; r->text && j < n; j++)
+        if (!(w[j] == '\r' && w[j + 1] == '\n')) r->text[k++] = w[j];
+      r->text_len = r->text ? k : 0;
       GlobalUnlock(h);
     }
+    // its files: their paths, read after (a folder left out there)
+    HANDLE hd = GetClipboardData(CF_HDROP);
+    HDROP drop = hd ? (HDROP)GlobalLock(hd) : NULL;
+    if (drop) {
+      UINT n = DragQueryFileW(drop, 0xFFFFFFFF, NULL, 0);
+      r->paths = (WCHAR **)calloc(n ? n : 1, sizeof(WCHAR *));
+      for (UINT k = 0; r->paths && k < n; k++) {
+        UINT len = DragQueryFileW(drop, k, NULL, 0);
+        WCHAR *p = (WCHAR *)calloc((size_t)len + 1, sizeof(WCHAR));
+        if (p && DragQueryFileW(drop, k, p, len + 1)) r->paths[r->npaths++] = p;
+        else free(p);
+      }
+      GlobalUnlock(hd);
+    }
+    // a picture, where there are no files (Explorer's copied picture files are the files, not their icon)
     UINT png_format = RegisterClipboardFormatW(L"PNG");
-    HANDLE p = GetClipboardData(png_format);
+    HANDLE p = r->npaths ? NULL : GetClipboardData(png_format);
     const unsigned char *b = p ? (const unsigned char *)GlobalLock(p) : NULL;
     if (b) {
       size_t n = GlobalSize(p);
       static const unsigned char sig[8] = {0x89, 'P', 'N', 'G', 13, 10, 26, 10};
       if (n < 8 || memcmp(b, sig, 8) != 0) {
-        clip_reads[i].picture = CLIP_UNREADABLE;
-      } else if (n > 8u * 1024 * 1024) {
-        clip_reads[i].picture = CLIP_TOO_LARGE;
-      } else {
-        clip_reads[i].png = (unsigned char *)malloc(n);
-        memcpy(clip_reads[i].png, b, n);
-        clip_reads[i].png_len = n;
-        clip_reads[i].picture = CLIP_PNG;
+        r->picture = CLIP_UNREADABLE;
+      } else if (n > CLIP_PNG_MOST) {
+        r->picture = CLIP_TOO_LARGE;
+      } else if ((r->png = (unsigned char *)malloc(n)) != NULL) {
+        memcpy(r->png, b, n);
+        r->png_len = n;
+        r->picture = CLIP_PNG;
       }
       GlobalUnlock(p);
-    } else if (IsClipboardFormatAvailable(CF_DIB) || IsClipboardFormatAvailable(CF_BITMAP)) {
-      clip_reads[i].picture = CLIP_UNREADABLE;
+    } else if (!r->npaths) {
+      // a bitmap (a screenshot's, Paint's): CF_DIB, which Windows makes of CF_DIBV5 and CF_BITMAP too
+      HANDLE d = GetClipboardData(CF_DIB);
+      const void *bits = d ? GlobalLock(d) : NULL;
+      if (bits) {
+        size_t n = GlobalSize(d);
+        if ((r->dib = (unsigned char *)malloc(n ? n : 1)) != NULL) {
+          memcpy(r->dib, bits, n);
+          r->dib_len = n;
+        }
+        GlobalUnlock(d);
+      }
     }
     CloseClipboard();
   }
+  if (r->dib || r->npaths) {
+    InterlockedIncrement(&r->owners);
+    HANDLE t = CreateThread(NULL, 0, clip_thread, r, 0, NULL);
+    if (t) {
+      CloseHandle(t);
+    } else {
+      r->owners--;
+      r->done = 1;
+    }
+  } else {
+    r->done = 1;
+  }
   want_frame = 1;
-  return id;
+  return r->id;
 }
 
 // The reads done since the last frame, told before it is drawn (draw_frame).
 static void device_tell(mb_outside_fn tell) {
   for (int i = 0; i < CLIP_READS; i++) {
-    if (clip_reads[i].id && !clip_reads[i].told) {
-      clip_reads[i].told = 1;
-      if (tell) tell(MB_OUTSIDE_CLIP, clip_reads[i].id, 1);
+    clip_read *r = clip_reads[i];
+    if (r && !r->told && InterlockedCompareExchange(&r->done, 1, 1)) {
+      r->told = 1;
+      if (tell) tell(MB_OUTSIDE_CLIP, r->id, 1);
     }
   }
 }
 
 int32_t mb_host_clip_state(int32_t id) {
-  int i = clip_slot(id);
-  return i < 0 ? -1 : clip_reads[i].told ? 1 : 0;
+  clip_read *r = clip_of(id);
+  return !r ? -1 : r->told ? 1 : 0;
 }
 
 int32_t mb_host_clip_picture(int32_t id) {
-  int i = clip_slot(id);
-  return i < 0 ? CLIP_NONE : clip_reads[i].picture;
+  clip_read *r = clip_of(id);
+  return r && r->told ? r->picture : CLIP_NONE;
 }
 
 moonbit_string_t mb_host_clip_text(int32_t id) {
-  int i = clip_slot(id);
-  int n = i < 0 ? 0 : clip_reads[i].text_len;
+  clip_read *r = clip_of(id);
+  int n = r && r->told ? r->text_len : 0;
   moonbit_string_t s = moonbit_make_string_raw(n);
-  if (n) memcpy(s, clip_reads[i].text, (size_t)n * sizeof(WCHAR));
+  if (n) memcpy(s, r->text, (size_t)n * sizeof(WCHAR));
   return s;
 }
 
 moonbit_bytes_t mb_host_clip_png(int32_t id) {
-  int i = clip_slot(id);
-  size_t n = i < 0 ? 0 : clip_reads[i].png_len;
+  clip_read *r = clip_of(id);
+  size_t n = r && r->told ? r->png_len : 0;
   moonbit_bytes_t b = moonbit_make_bytes((int32_t)n, 0);
-  if (n) memcpy(b, clip_reads[i].png, n);
+  if (n) memcpy(b, r->png, n);
   return b;
 }
 
-// No files read off the clipboard here yet (Explorer's copied files, CF_HDROP: Ctrl+V types their words).
 int32_t mb_host_clip_files(int32_t id) {
-  (void)id;
-  return 0;
+  clip_read *r = clip_of(id);
+  return r && r->told ? r->files.n : 0;
 }
 
 moonbit_string_t mb_host_clip_file_name(int32_t id, int32_t i) {
-  (void)id, (void)i;
-  return moonbit_make_string_raw(0);
+  clip_read *r = clip_of(id);
+  const WCHAR *s = r && r->told && i >= 0 && i < r->files.n ? r->files.names[i] : L"";
+  int n = (int)wcslen(s);
+  moonbit_string_t out = moonbit_make_string_raw(n);
+  if (n) memcpy(out, s, (size_t)n * sizeof(WCHAR));
+  return out;
 }
 
 moonbit_bytes_t mb_host_clip_file(int32_t id, int32_t i) {
-  (void)id, (void)i;
-  return moonbit_make_bytes(0, 0);
+  clip_read *r = clip_of(id);
+  size_t n = r && r->told && i >= 0 && i < r->files.n ? r->files.lens[i] : 0;
+  moonbit_bytes_t b = moonbit_make_bytes((int32_t)n, 0);
+  if (n) memcpy(b, r->files.datas[i], n);
+  return b;
 }
 
 // ---- the clipboard written: words (as @hostapi.clipboard_set), or a PNG under "PNG" (no label on Windows) ----
