@@ -98,12 +98,12 @@ jobs:
           # (mbc's account of each program's build, its units compiled and its link, said after: moon shows a
           # compiler's output only when it fails, and where a part's time went was not to be seen)
           export MBC_LOG="$RUNNER_TEMP/mbc.log"
-          # (sfapp's page tests in two processes, SFAPP_SHARDS=2, each its files one after another, the screen sweeps
-          # a process each beside them and the part's other packages: what one file leaves behind that a later one in
-          # its process trips on shows here, which five shards' few files each mostly hide; the run the longest of
-          # them, not their sum. In one, 131 files, it was the run's longest, 162-196 s on main where the whole run's
-          # work over CI's four cores is about 150, the others done a minute before it, 2026-10-26)
-          TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ matrix.part }} SFAPP_SHARDS=2 LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
+          # (sfapp's page tests in one process, SFAPP_SHARDS=1, their files one after another, the screen sweeps a
+          # process each beside them and the part's other packages: what one file leaves behind that a later one trips
+          # on shows here, which shards' fewer files each partly hide; the run the longest of them, not their sum. The
+          # pages were 162-196 s on main in one with kept_rows_kinds_wbtest.mbt's sweep among them, 70 s of their 128
+          # run alone; in two by name, 207 s and 84, 2026-10-26; that sweep a process of its own now, test.sh)
+          TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ matrix.part }} SFAPP_SHARDS=1 LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
       - name: The mbui app's check (detlint, then native type-checked)
         if: matrix.part == 'replay'
         # (after the tests: its type-check over the tests' build, not the build after it, 2026-10-23. On the replay
