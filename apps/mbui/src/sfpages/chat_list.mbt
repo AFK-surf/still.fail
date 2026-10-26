@@ -121,7 +121,10 @@ pub fn chat_list(
               // what else moves it (the page before come in above, words sent flying in, its own message out of its
               // avatar, which comes back to where it now is) puts it there at once
               @motion.layout(c, ri, mk, spec=@sf.move_spring, by=way)
-              c.look(ri, @ui.look(alpha=p * fade, scale=0.5 + 0.5 * p, ox=(side + 9.0) / c.width, oy=0.5))
+              // (growing from its picture's middle: where the messages' pictures are, at the row's start narrow, out
+              // in the margin before the words wider)
+              let face = side + (if narrow { 0.0 } else { -@sf.columns.avatar }) + avatar_side / 2.0
+              c.look(ri, @ui.look(alpha=p * fade, scale=0.5 + 0.5 * p, ox=face / c.width, oy=0.5))
             })
           }
           _ => {

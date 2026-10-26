@@ -497,20 +497,22 @@ let unsent_label_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=
 let activity_row_box : @ui.Style = @ui.css("row w=Full gap=S1 align=ACenter")
 
 ///|
-/// Its line (activityLine): out in the margin with the pictures (columns.activity: 35 before the words), the picture
-/// and what it does 8 apart, 6 round.
+/// Its line (activityLine): its picture where the messages' pictures are, out in the margin before the words
+/// (message_avatar_out), the picture and what it does 8 apart, 6 round.
 // kept across runs: a value (no field of it changes)
-let activity_line : @ui.Style = @ui.style(row=true, gap=S2, radius=Md, align=ACenter, ml=@sf.activity_out)
+let activity_line : @ui.Style = @ui.style(row=true, gap=S2, radius=Md, align=ACenter, ml=@sf.message_avatar_out)
 
 ///|
-/// Narrow (Chat.css.ts activityLine, max-width 700: columns.activityNarrow): 9 out into the list's 16.
+/// Narrow: its picture at the row's start, as the messages' are there (inlineHeads).
 // kept across runs: a value (no field of it changes)
-let activity_line_narrow : @ui.Style = @ui.style(row=true, gap=S2, radius=Md, align=ACenter, ml=@sf.activity_out_narrow)
+let activity_line_narrow : @ui.Style = @ui.css("row gap=S2 radius=Md align=ACenter")
 
 ///|
-/// Its picture with the ring round it (activityAvatar): 24 across, the picture in its middle.
+/// Its picture with the ring round it (activityAvatar): 24 across, the picture in its middle; the ring reaching 3 past
+/// the picture on either side (activityRing inset -3), into no room of the line's: what the line lines up is the
+/// picture, in the messages' pictures' column.
 // kept across runs: a value (no field of it changes)
-let activity_face : @ui.Style = @ui.css("w=S6 h=S6 align=ACenter justify=JCenter")
+let activity_face : @ui.Style = @ui.css("w=S6 h=S6 align=ACenter justify=JCenter").then(@sf.outset(ring_room))
 
 ///|
 // kept across runs: a value (no field of it changes)
