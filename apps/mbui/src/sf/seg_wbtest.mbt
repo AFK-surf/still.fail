@@ -130,6 +130,45 @@ test "a filling Seg whose options do not fit side by side even at the system's o
 }
 
 ///|
+/// The thumb on the dark theme's track on every ground it may lie on: seen off it (1.25 to 1, docs/ui-panels.md 对比度)
+/// and the chosen words read on it. (The light one is white with a shadow round it, the track grey: what a shadow does
+/// a ratio does not say.) The canvas and an opaque grey were 1.02 and 1.05 to 1 off it (2026-10-27).
+test "the dark theme's segmented thumb seen off its track on every ground, its words read on it" {
+  let lifted = @ui.Theme::narrow_dark().lifted
+  let wrong : Array[String] = []
+  for p in [("dark", dark_palette), ("web dark", web_dark)] {
+    let (name, pal) = p
+    let grounds = [
+      ("page", pal.bg),
+      ("canvas", pal.canvas),
+      ("raised", pal.raised),
+      ("sidebar", pal.sidebar),
+      ("list", pal.list),
+      ("selected", pal.selected),
+      ("paper", pal.paper),
+      ("card", pal.card),
+      ("card2", pal.card2),
+      ("chip", pal.chip),
+    ]
+    for g in grounds {
+      let track = over(g.1, alpha(pal.text, 0.06))
+      let thumb = over(track, lifted)
+      let seen = @ui.contrast_ratio(thumb, track)
+      let read = @ui.contrast_ratio(pal.text, thumb)
+      if seen < 1.25 {
+        wrong.push("\{name}: the thumb on a track on the \{g.0} \{seen}:1, under 1.25")
+      }
+      if read < 4.5 {
+        wrong.push("\{name}: the chosen words on the thumb on the \{g.0} \{read}:1, under 4.5")
+      }
+    }
+  }
+  if wrong.length() > 0 {
+    fail(wrong.join("\n"))
+  }
+}
+
+///|
 test "segmented whose options do not fit side by side even at the system's own size: the chosen one and a chevron; a pick of them all, one picked chosen" {
   let parts = ["Overview", "Software and devices", "Settings"]
   let chosen = Ref::new(0)

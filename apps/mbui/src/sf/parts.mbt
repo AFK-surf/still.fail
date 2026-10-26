@@ -311,8 +311,8 @@ let segmented_gap : Double = 2.0
 let segmented_strip : @ui.Style = @ui.css("row gap=S0_5")
 
 ///|
-/// A choice of a few (Segmented; the kit's sliding toggle group): a quiet pill track, the chosen raised on the canvas
-/// and sliding to it; its options equal columns, as wide as the widest in the chosen weight with 12 either side
+/// A choice of a few (Segmented; the kit's sliding toggle group): a quiet pill track, the chosen lifted out of it (the
+/// theme's lifted) and sliding to it; its options equal columns, as wide as the widest in the chosen weight with 12 either side
 /// (segmented, segmentedOption, segmentedSizer), `item_w` at least, the track never wider than where it is. Where those
 /// columns need more room than there is, the track takes what there is and its options share it as option_widths has
 /// them: as alike as their words let them, their sides narrower, else their words smaller alike (to the system's own
@@ -346,7 +346,7 @@ pub fn segmented(
   }
   let t = theme()
   let ink = ink.unwrap_or(t.p.text)
-  let thumb = thumb.unwrap_or(t.p.canvas)
+  let thumb = thumb.unwrap_or(c.theme().lifted)
   // its words as drawn (the system's size of words applied), in the chosen weight (as wide unchosen as chosen: no
   // column changes as the choice does)
   let size = c.sp(t.t.ui)

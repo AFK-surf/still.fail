@@ -68,7 +68,7 @@ export const mSegThumb = style({
   position: "absolute", top: "0", bottom: "0", left: "0",
   background: "color-mix(in srgb, var(--m-ink) 8%, transparent)",
   selectors: {
-    [`${mSeg}[data-track] &`]: { background: "var(--m-thumb)", boxShadow: "inset 0 0 0 0.5px var(--m-line)" },
+    [`${mSeg}[data-track] &`]: { background: "var(--m-lifted)", boxShadow: "inset 0 0 0 0.5px var(--m-line)" },
     [`${mSeg}[data-smooth] &`]: { cornerShape: vars.cornerShape },
     [`:root[data-theme="dark"] ${m} ${mSeg}:not([data-track]) &`]: { background: "color-mix(in srgb, var(--m-ink) 13%, transparent)" },
     "&[data-moved]": {

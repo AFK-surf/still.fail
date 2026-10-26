@@ -207,14 +207,14 @@ pub fn toggle_group(
 }
 
 ///|
-/// A sliding group's default thumb (still.fail's segmented choice): `w` by `h`, raised on the page's ground with a
-/// hairline and a soft shadow.
+/// A sliding group's default thumb (still.fail's segmented choice): `w` by `h`, lifted out of the track (the theme's
+/// lifted) with a hairline and a soft shadow.
 pub fn group_thumb_look(c : @ui.Ctx, w : Double, h : Double) -> Unit {
   let t = c.theme()
   c.box(
     w=Px(w),
     h=Px(h),
-    bg=pick(t.dark, t.surface, t.bg),
+    bg=t.lifted,
     radius=h / 2.0,
     border=0.5,
     border_color=t.line,
@@ -272,7 +272,7 @@ pub fn group_look(c : @ui.Ctx, s : GroupState, items : () -> Unit) -> Unit {
 
 ///|
 /// A toggle group's default item (still.fail's segmented choice): its words, muted until pressed; pressed, raised on
-/// the page's ground with a hairline and a soft shadow.
+/// the track (the theme's lifted) with a hairline and a soft shadow.
 pub fn group_item_look(c : @ui.Ctx, s : ToggleState) -> Unit {
   let t = c.theme()
   let live = !s.disabled
@@ -283,7 +283,7 @@ pub fn group_item_look(c : @ui.Ctx, s : ToggleState) -> Unit {
     padx=12.0,
     align=ACenter,
     justify=JCenter,
-    bg=if s.on { pick(t.dark, t.surface, t.bg) } else { 0L },
+    bg=if s.on { t.lifted } else { 0L },
     radius=15.0,
     border=if s.on { 0.5 } else { 0.0 },
     border_color=t.line,
