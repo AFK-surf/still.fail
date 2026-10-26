@@ -100,6 +100,8 @@ pub fn vf_meta(vw : Viewer, src : Source) -> String {
 /// fades (`shown`), and as the pointer rests over an image; its tools by what it shows. The pointer's moves wake it.
 pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
   let v = vw
+  // (beside the system's bars, an iPhone Duo's: its tabs put away while a file is looked at, the user 2026-10-27)
+  let native = @sf.native_over_up(v.file.name)
   // read in the reader, played in the player: their own bars
   if vf_reads(v) || v.shown_kind() == Some(KAudio) || v.shown_kind() == Some(KVideo) {
     return
@@ -133,6 +135,11 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
     }
     @sf.viewer_zoom_keys(c, v.zoom)
   }
+  // (a picture's actions the system's bars' there, marking's its own)
+  if native && kind == Some(KImage) && !marking.on {
+    vf_native(v, c, src)
+    return
+  }
   // a picture's bar goes as the pointer rests (not while it comes, nor marking); what is read stays
   let hidden = kind == Some(KImage) && !v.bars_shown()
   let awake = v.bars_shown() || v.coming() || marking.on
@@ -163,6 +170,42 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
   }
   if closed && !v.closing {
     v.shut(c)
+  }
+}
+
+///|
+/// A picture's bar where the system has bars of its own (an iPhone Duo's): its actions in them, the system's glass
+/// (the user, 2026-10-27: as Slack's), gone with the rest as a tap hides them: close at their lead; fitted again or as
+/// it is (the zoom between by the fingers); marked, copied, downloaded as the bar's tools are (vf_tools).
+fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
+  if v.closing || !(v.bars_shown() || v.coming()) {
+    return
+  }
+  @sf.native_over_act("close", @sf.t("common.close"), "close", fn() { if !v.closing { v.shut(c) } }, lead=true)
+  if v.coming() {
+    return
+  }
+  let z = v.zoom
+  if !z.fitted {
+    @sf.native_over_act("fit", @sf.t("web-main.preview.fitKey"), "shrink", fn() { z.reset() })
+  } else if z.fit() < 1.0 {
+    @sf.native_over_act("actual", @sf.t("web-main.preview.actualKey"), "expand", fn() {
+      z.zoom_to(1.0, z.bw / 2.0, z.bh / 2.0, true)
+    })
+  }
+  match v.bytes {
+    Some(b) => {
+      @sf.native_over_act("mark", @sf.t("web-main.annotate.image"), "edit", fn() { marks_start() })
+      @sf.native_over_act("copy", @sf.t("common.copy"), "copy", fn() {
+        c.copy_image(b)
+        v.copied += 1
+      })
+    }
+    None => ()
+  }
+  let dl = v.download(src)
+  if (v.bytes is Some(_) || (v.told_of() && !v.asked)) && !downloading(dl) {
+    @sf.native_over_act("download", @sf.t("android-chat.file.download"), "download", fn() { v.ask_save(c) })
   }
 }
 

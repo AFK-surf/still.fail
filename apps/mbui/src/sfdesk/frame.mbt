@@ -234,7 +234,9 @@ fn wide_reset() -> Unit {
 /// Whether the window is drawn as this frame: laid out Medium or Large (@sf.layout), by the window's width (not the
 /// box being built's: asked from within the sidebar too).
 pub fn is_wide(c : @ui.Ctx) -> Bool {
-  !(@sf.layout(c.window_size().0) is Small)
+  // (or where the system lays out its tabs in every pose, the cards across on each screen: an iPhone Duo's outer one too,
+  // rail_native.mbt)
+  !(@sf.layout(c.window_size().0) is Small) || @sf.native_able()
 }
 
 ///|
@@ -277,7 +279,7 @@ fn side_on_fold() -> Double? {
   for d in @ui.system_fold().divisions {
     let (x, _, w, h) = d
     if h > w {
-      return Some(dmax(side_min, dmin(side_max, x + w / 2.0 - rail_w)))
+      return Some(dmax(side_min, dmin(side_max, x + w / 2.0 - rail_left())))
     }
   }
   None
@@ -427,19 +429,19 @@ fn dock(
   // buttons in its top row), 8 from the page's panel
   let apart = wide.tape && !bar
   // (under the window's buttons where they are the system's, at its left: macOS's)
-  let above = if @ui.window_keys_left() { closed_bar_top } else { closed_bar_in }
-  let ml = c.moved("--dock-ml", if bar || apart { closed_bar_in } else { 0.0 })
-  let mt = c.moved("--dock-mt", if bar { above } else if apart { closed_bar_in } else { 0.0 })
+  let above = if @ui.window_keys_left() { closed_bar_top } else { bar_in_now() }
+  let ml = c.moved("--dock-ml", if bar || apart { bar_in_now() } else { 0.0 })
+  let mt = c.moved("--dock-mt", if bar { above } else if apart { bar_in_now() } else { 0.0 })
   let mr = c.moved("--dock-mr", if apart {
-    closed_bar_gap
+    bar_gap_now()
   } else if !bar {
     0.0
   } else if peek {
-    closed_bar_gap - s
+    bar_gap_now() - s
   } else {
-    closed_bar_gap
+    bar_gap_now()
   })
-  let mb = c.moved("--dock-mb", if bar || apart { closed_bar_in } else { 0.0 })
+  let mb = c.moved("--dock-mb", if bar || apart { bar_in_now() } else { 0.0 })
   let (blur, shadow_y, shadow_k) = if peek {
     closed_peek_shadow
   } else if bar || apart {
@@ -453,7 +455,7 @@ fn dock(
   let showing = c.moved("--side-shown", if !bar || peek { 1.0 } else { 0.0 })
   let shown = !bar || peek || showing > 0.0
   // the sidebar beside the rail: open its own width and 8 more, reaching 8 into the rail's; the group's in the bar
-  let side_w = if bar { s } else { s + side_into_rail }
+  let side_w = if bar || @sf.native_on() { s } else { s + side_into_rail }
   // (a panel's corners the tape's sidebar's, the closed bar's its own: each in the window's the window's less its 6 from
   // it where it follows it)
   let look = if apart {
@@ -465,6 +467,9 @@ fn dock(
   }
   let look = look.then(@ui.style(bg=Data(dock_ground(bar))))
   let dock_w = dmax(0.0, col - ml - mr)
+  // (open beside the system's tabs, its ground to the window's foot as the system's own sidebars are, its list under the
+  // home indicator: rail_native.mbt)
+  let foot = if side_full_height(bar) { 0.0 } else { foot }
   let dock_h = dmax(0.0, c.height - top - foot - mt - mb)
   c.layer(fn() {
     c.box(style=dock_column.then(@ui.style(w=Fixed(col))), tx=x, fn() {
@@ -477,11 +482,14 @@ fn dock(
             shadow=Cast(blur, shadow_y, @sf.alpha(t.p.shadow, shadow_k)),
           ),
         ),
-        moves="dock",
+        // (along a screen whose corners it follows, an iPhone Duo's, none of the block's moves: its corners as they are)
+        moves=if @sf.native_card_corner() > 0.0 { "" } else { "dock" },
         left=ml,
         top=top + mt,
         fn() {
-          rail(c, src, w, all, bar)
+          if !@sf.native_on() {
+            rail(c, src, w, all, bar)
+          }
           c.box(style=dock_side.then(@ui.style(w=Fixed(side_w))), moves="sidebar", fn() {
             if shown && s > 0.0 {
               // (in the bar: what the web's sidebar does there, at once, as the bar starts out; the bar's as long as it
@@ -543,10 +551,10 @@ fn peek_shift(c : @ui.Ctx, shown : (Double, Double)?, from : Double, s : Double)
   match shown {
     Some((left, right)) => {
       // (the folded page's middle where the page then had its own)
-      let moved = (rail_w - from) / 2.0
-      let reach = closed_bar_in + rail_closed_w + s + peek_gap
+      let moved = (rail_left() - from) / 2.0
+      let reach = bar_in_now() + rail_closed_w + s + peek_gap
       let room = c.width - 2.0 * peek_gap - dmin(right + moved, c.width)
-      dmax(0.0, dmin(s, dmin(room, reach - dmax(left + moved, rail_w)))).round()
+      dmax(0.0, dmin(s, dmin(room, reach - dmax(left + moved, rail_left())))).round()
     }
     None => 0.0
   }
@@ -576,13 +584,20 @@ pub fn frame(
   side_follow(c, src, w.id)
   let own = !gated && !bare
   // laid out Medium, with a sidebar to show: the rail and the sidebar beside the page on the tape
-  wide.tape = own && @sf.layout(c.width) is Medium
+  // (the cards across, whatever the window's width, beside the column of the system's glass the rail's places are in:
+  // rail_native.mbt)
+  // (beside the system's tab bar, the cards across whatever the window's width: one design upright and on its side,
+  // rail_native.mbt)
+  wide.tape = own && (@sf.layout(c.width) is Medium || @sf.native_on() || @sf.native_able())
+  // the rail's places the system's tabs where it has its own bars (an iPhone Duo's: rail_native.mbt), what was chosen
+  // there gone to
+  native_frame(c, src, w, all)
   // (off the tape, a phone's or a tablet's screen with less than a phone's width for the page beside it: folded
   // whatever was chosen)
   wide.crowded = own &&
     !wide.tape &&
     (@sf.native_input() is Finger) &&
-    c.width - rail_w - side_on_fold().unwrap_or(wide.side_w) < page_beside_least
+    c.width - rail_left() - side_on_fold().unwrap_or(wide.side_w) < page_beside_least
   side_crowded()
   // (on a fold standing upright, the sidebar ends on it while it is not folded away, but on the tape)
   let on_fold = if side_folded() || wide.tape { None } else { side_on_fold() }
@@ -592,21 +607,27 @@ pub fn frame(
   // follows the pointer at once
   let bar = (own && side_folded()) || bare
   // (on the tape its own, the page beside it what the window leaves: tape_side_w)
+  // (on the tape, what the window leaves beside the column of the system's glass at its right, its glass over the
+  // window's ground alone: @sf.side_clear)
+  let tw = c.width - @sf.native_clear()
   let s = if gated {
     0.0
   } else if wide.tape {
-    tape_side_w(c.width, wide.side_w)
+    tape_side_w(tw, wide.side_w)
   } else {
     on_fold.unwrap_or(wide.side_w)
   }
   let bars = @ui.system_bars()
   let top = bars.top
-  let foot = bars.bottom
+  // (the cards beside the column of the system's glass to the window's foot but the home indicator's own line: what
+  // is in them keeps its padding over it; rail_native.mbt)
+  // (down the side, the cards to the column's own foot, the home indicator's line under their ground: cards_foot)
+  let foot = if @sf.native_side() { dmin(bars.bottom, cards_foot) } else { bars.bottom }
   let inset = @ui.window_inset()
-  let peek_r = rail_w - closed_bar_gap + (if wide.peeking { s } else { 0.0 })
+  let peek_r = rail_left() - bar_gap_now() + (if wide.peeking { s } else { 0.0 })
   // (under the window's buttons where they are the system's, at its left: macOS's)
-  let peek_top = if @ui.window_keys_left() { closed_bar_top } else { closed_bar_in }
-  side_peek(c, closed_bar_in, top + peek_top, peek_r, c.height - foot - closed_bar_in)
+  let peek_top = if @ui.window_keys_left() { closed_bar_top } else { bar_in_now() }
+  side_peek(c, bar_in_now(), top + peek_top, peek_r, c.height - foot - bar_in_now())
   let peek = own && side_folded() && wide.peeking
   // what the page shows across as the last frame laid it out (its bars left out): what it moves aside for, shown a
   // while
@@ -636,7 +657,7 @@ pub fn frame(
   // wider as its rail shows more there, its places in the panel's corners concentric with it: rail_open_tape)
   let col = c.moved(
     "--side-col",
-    rail_w + (if bar { 0.0 } else { s }) + (if wide.tape { tape_apart + rail_tape_more() } else { 0.0 }),
+    rail_left() + (if bar { 0.0 } else { s }) + (if wide.tape { bar_in_now() + bar_gap_now() + rail_more() } else { 0.0 }),
   )
   wide.page_from = col
   // on the tape: a chat's side panel open beside it, a panel of its own after the page's; each as wide as the window
@@ -644,17 +665,24 @@ pub fn frame(
   // is; which is in use and how far the tape is moved
   let panel_of = if wide.tape { side_open_for(src, w, app.nav.top()) } else { None }
   let panel_w = match panel_of {
-    Some(_) => tape_panel_w(c.width)
+    Some(_) => tape_panel_w(tw)
     None => 0.0
   }
+  // (room for the page whole beside the sidebar whole, no side panel open: both in use at once, the tape where it is
+  // with the sidebar's, nothing to slide over)
+  // (beside the system's tabs only: an iPhone Duo's; elsewhere the tape as it was)
+  let both = @sf.native_on() && wide.tape && panel_of is None && tw - col - bar_in_now() >= tape_both_least
   let main_w = if !wide.tape {
     dmax(0.0, c.width - col)
+  } else if both {
+    tw - col - bar_in_now()
   } else if panel_of is Some(_) {
-    dmax(0.0, c.width - tape_shows_left() - tape_shows_right() - 2.0 * closed_bar_gap)
+    dmax(0.0, tw - tape_shows_left() - tape_shows_right() - 2.0 * bar_gap_now())
   } else {
-    tape_one_beside(c.width, tape_shows_left())
+    tape_one_beside(tw, tape_shows_left())
   }
-  let at = tape_at(c.width, col, main_w, panel_w)
+  let at = tape_at(tw, col, main_w, panel_w)
+  let at = if both { (at.0, at.0, at.2) } else { at }
   // (the chat shown has its view: what its side panel shows is known)
   let known = match app.nav.top() {
     Chat(r) | History(r, _, _) => (src.topic)("chat", chat_params(r)).value is Some(_)
@@ -691,7 +719,7 @@ pub fn frame(
     bar_in
   })
   wide.bar_ml = c.moved("--bar-ml", if over_bars {
-    dmax(0.0, s - closed_bar_gap - shift)
+    dmax(0.0, s - bar_gap_now() - shift)
   } else if peek {
     -shift
   } else {
@@ -706,6 +734,8 @@ pub fn frame(
     0.0
   } else if keys_left {
     side_top_inset
+  } else if side_full_height(bar) {
+    side_top_web + top
   } else {
     side_top_web
   })
@@ -716,8 +746,8 @@ pub fn frame(
   land(src, w)
   let page_h = dmax(0.0, c.height - top - foot)
   // on the tape the page's panel 6 in from the bars' edges too
-  let panel_top = top + closed_bar_in
-  let panel_h = dmax(0.0, page_h - 2.0 * closed_bar_in)
+  let panel_top = top + bar_in_now()
+  let panel_h = dmax(0.0, page_h - 2.0 * bar_in_now())
   // the page in its pane, `ph` high
   // (its top row, a bar's height, the window's title bar under the page, whether the page has a bar there or not: a
   // new chat, settings, 奏: title_row)
@@ -744,7 +774,12 @@ pub fn frame(
           c.nav_flat(
             app.nav,
             fn(page) {
-              let moved = c.box(style=page_aside, tx=aside, fn() { main_page(c, src, w, all, invited, page) })
+              let moved = c.box(style=page_aside, tx=aside, fn() {
+                // (the page drawn: one on its way out, a stack's move, hands no actions to the system's bars)
+                drawn_page.val = Some(page)
+                main_page(c, src, w, all, invited, page)
+                drawn_page.val = None
+              })
               @motion.scope(c, moved, bottom=true)
             },
             bg=@sf.theme().p.bg,
@@ -775,13 +810,21 @@ pub fn frame(
       // tape has got (tx: moved as a whole, nothing in it laid out again frame by frame as the tape moves): the page's a
       // panel of its own, apart from the sidebar's (6 in from the bars, its corner the sidebar's panel's, a line round
       // it), and a chat's side panel open after it, 8 from it, as high
+      // (the last panel on to the window's edge under the column of the system's glass, its ground under the glass,
+      // what is in it as wide as beside it: @sf.side_clear, the user 2026-10-26)
+      let under = @sf.native_clear()
       c.box(style=frame_tape, fn() {
         // a right click in it: what is picked copied (context_menu.mbt)
         context_page(c, page_id)
         let page_corners = tape_pane_corners(Page, panel_of is Some(_))
+        let page_w = if panel_of is None { main_w + under } else { main_w }
         let pane = tape_behind(c, Page, fn() { c.box(
           style=page_apart.then(
-            @ui.style(w=Fixed(main_w), h=Fixed(panel_h), radius=@sf.corners_radius(page_corners)),
+            @ui.style(
+              w=Fixed(page_w),
+              h=Fixed(panel_h),
+              radius=@sf.corners_radius(page_corners),
+            ),
           ),
           left=col,
           top=panel_top,
@@ -789,9 +832,13 @@ pub fn frame(
           id=page_id,
           fn() {
             @sf.pane_round.val = Some(page_corners)
-            tape_part(c, Page, "\{col} \{panel_top} \{main_w} \{panel_h} \{tape_x} \{wide.bar_pl} \{wide.bar_ml} \{wide.bar_mr}", fn() {
-              page_in(panel_h)
+            // (what is in it as wide as beside the system's column: `under` its ground alone)
+            c.box(style=@ui.style(w=Fixed(main_w), h=Full), fn() {
+              tape_part(c, Page, "\{col} \{panel_top} \{main_w} \{panel_h} \{tape_x} \{wide.bar_pl} \{wide.bar_ml} \{wide.bar_mr}", fn() {
+                page_in(panel_h)
+              })
             })
+            |> ignore
             @sf.pane_round.val = None
           },
         ) })
@@ -803,19 +850,22 @@ pub fn frame(
             tape_behind(c, Panel, fn() { c.box(
               style=page_apart.then(
                 @ui.style(
-                  w=Fixed(panel_w),
+                  w=Fixed(panel_w + under),
                   h=Fixed(panel_h),
                   radius=@sf.corners_radius(tape_pane_corners(Panel, true)),
                 ),
               ),
-              left=col + main_w + closed_bar_gap,
+              left=col + main_w + bar_gap_now(),
               top=panel_top,
               tx=tape_x,
               fn() {
                 @sf.pane_round.val = Some(tape_pane_corners(Panel, true))
-                tape_part(c, Panel, "\{col} \{main_w} \{panel_top} \{panel_w} \{panel_h} \{tape_x} \{side.key()}", fn() {
-                  c.sized(panel_w, panel_h, fn() { tape_side(c, src, w, side) })
+                c.box(style=@ui.style(w=Fixed(panel_w), h=Full), fn() {
+                  tape_part(c, Panel, "\{col} \{main_w} \{panel_top} \{panel_w} \{panel_h} \{tape_x} \{side.key()}", fn() {
+                    c.sized(panel_w, panel_h, fn() { tape_side(c, src, w, side) })
+                  })
                 })
+                |> ignore
                 @sf.pane_round.val = None
               },
             ) })
@@ -844,8 +894,10 @@ pub fn frame(
       |> ignore
     }
     tape_behind(c, Side, fn() {
-      tape_part(c, Side, "\{s} \{col} \{top} \{foot} \{tape_x} \{c.width} \{c.height} \{wide.brand_h} \{wide.band}", fn() {
-        dock(c, src, w, all, bar, peek, s, col, top, foot, tape_x)
+      tape_part(c, Side, "\{s} \{col} \{top} \{foot} \{tape_x} \{c.width} \{c.height} \{wide.brand_h} \{wide.band} \{@sf.native_card_corner()}", fn() {
+        // (open beside the system's tabs off the tape, its ground from the window's top as the system's own sidebars'
+        // are, what is in it under the bars there: brand_h; rail_native.mbt)
+        dock(c, src, w, all, bar, peek, s, col, if side_full_height(bar) { 0.0 } else { top }, foot, tape_x)
       })
     })
     // (with the sidebar closed, where its first row is not shown: 更新 where the bar's start leaves room for it)
@@ -853,9 +905,9 @@ pub fn frame(
       update_button(c, src, inset, top)
     }
     if wide.tape {
-      let panels = [(Side, closed_bar_in, col - tape_apart), (Page, col, main_w)]
+      let panels = [(Side, bar_in_now(), col - bar_in_now() - bar_gap_now()), (Page, col, main_w)]
       if panel_of is Some(_) {
-        panels.push((Panel, col + main_w + closed_bar_gap, panel_w))
+        panels.push((Panel, col + main_w + bar_gap_now(), panel_w))
       }
       tape_covers(c, tape_x, at, panels, panel_top, panel_h)
       // the edge between the sidebar or the side panel in use and the page beside it: dragged, its width (the
@@ -867,13 +919,13 @@ pub fn frame(
             c,
             "tape/side-edge",
             @sf.t("web-pages.workspace.resizeSidebar"),
-            col - closed_bar_gap,
+            col - bar_gap_now(),
             tape_x,
             panel_top,
             panel_h,
             wide.side_w,
             side_min,
-            tape_side_most(c.width),
+            tape_side_most(tw),
             Right,
           )
           match said {
@@ -895,8 +947,8 @@ pub fn frame(
               panel_top,
               panel_h,
               panel_w,
-              dmin(panel_min, tape_one_beside(c.width, tape_shows_left())),
-              tape_one_beside(c.width, tape_shows_left()),
+              dmin(panel_min, tape_one_beside(tw, tape_shows_left())),
+              tape_one_beside(tw, tape_shows_left()),
               Left,
             ) {
             Dragging(x) | Dropped(x) => panel_own.width = Some(x)
@@ -912,7 +964,7 @@ pub fn frame(
   // a while; dragged, unless it is on the fold, folded for the page's room or on the tape)
   if !bare && on_fold is None && !wide.crowded && !wide.tape {
     let at = if !bar {
-      rail_w + s - edge_half
+      rail_left() + s - edge_half
     } else if peek {
       closed_edge + s
     } else {
@@ -1016,12 +1068,16 @@ let window_buttons_in : Double = 16.0
 let window_buttons_w : Double = 54.0
 
 ///|
+/// The least a page is wide on the tape for the sidebar and it to be in use at once (a chat's column and its margins).
+let tape_both_least : Double = 420.0
+
+///|
 /// How wide a panel is on the tape with one beside it, a window `width` wide: what the window leaves in use past what
 /// shows of the other (`shows`: at the window's left tape_shows_left, at its right tape_shows; 8 from it) and 6 from the
 /// window's other edge. The page's without a side panel and the side panel's (a strip at the window's left beside
 /// them), the sidebar's at most (the page's at the window's right).
 fn tape_one_beside(width : Double, shows : Double) -> Double {
-  dmax(0.0, width - shows - closed_bar_gap - closed_bar_in)
+  dmax(0.0, width - shows - bar_gap_now() - bar_in_now())
 }
 
 ///|
@@ -1029,7 +1085,7 @@ fn tape_one_beside(width : Double, shows : Double) -> Double {
 /// needs: the user, 2026-10-26, the chats' list stretched across the window had no need to be), the page beside it
 /// showing what the window leaves; at most as wide as a panel with one beside it (tape_one_beside), less the rail's.
 fn tape_side_w(width : Double, own : Double) -> Double {
-  dmax(0.0, dmin(own, tape_one_beside(width, tape_shows_right()) - rail_w - rail_tape_more()))
+  dmax(0.0, dmin(own, tape_one_beside(width, tape_shows_right()) - rail_left() - rail_more()))
 }
 
 ///|
@@ -1046,7 +1102,7 @@ let tape_moves : Array[(String, Array[String])] = [
 /// page 8 past what shows of the sidebar (tape_shows_left); the side panel 6 in from the window's right, the page beside
 /// it showing what it leaves (all of the window but that strip, as it is at first: tape_panel_w).
 fn tape_at(width : Double, d : Double, page_w : Double, panel_w : Double) -> (Double, Double, Double) {
-  (0.0, tape_shows_left() + closed_bar_gap - d, width - closed_bar_in - (d + page_w + closed_bar_gap + panel_w))
+  (0.0, tape_shows_left() + bar_gap_now() - d, width - bar_in_now() - (d + page_w + bar_gap_now() + panel_w))
 }
 
 ///|
@@ -1065,7 +1121,7 @@ fn tape_panel_w(width : Double) -> Double {
 /// The widest the sidebar is dragged to on the tape, a window `width` wide: a panel with a strip of the page beside it,
 /// less the rail's (tape_side_w), and the wide frame's most (side_max).
 fn tape_side_most(width : Double) -> Double {
-  dmax(side_min, dmin(side_max, tape_one_beside(width, tape_shows_right()) - rail_w - rail_tape_more()))
+  dmax(side_min, dmin(side_max, tape_one_beside(width, tape_shows_right()) - rail_left() - rail_more()))
 }
 
 ///|
@@ -1095,13 +1151,13 @@ fn tape_edge(
   let said = @sf.handle_drag(c, id, width, min=least, max=most, edge~)
   let held = c.pressed(id) || said is Dragging(_)
   // (the gap `before` from its left and `after` from its right, the look in its middle)
-  let (into_in, into_page) = @sf.edge_reach(closed_bar_gap)
+  let (into_in, into_page) = @sf.edge_reach(bar_gap_now())
   let (before, after) = if edge is Left { (into_page, into_in) } else { (into_in, into_page) }
   c.layer(fn() {
     let strip = c.box(
       style=@ui.style(
         row=true,
-        w=Fixed(before + closed_bar_gap + after),
+        w=Fixed(before + bar_gap_now() + after),
         h=Fixed(h),
         pl=@sf.room_of(before),
         pr=@sf.room_of(after),
@@ -1520,13 +1576,14 @@ fn tape_words(p : TapePane) -> String {
 
 ///|
 /// On the tape what keeps the sidebar's panel apart: 6 from the window's edge before it, 8 from the page's panel after
-/// it (the closed bar's: closed_bar_in, closed_bar_gap).
+/// it (the closed bar's: bar_in_now(), bar_gap_now()).
 let tape_apart : Double = closed_bar_in + closed_bar_gap
 
 ///|
 /// The ground the panels stand on, on the tape: the window's.
 // kept across runs: a value (no field of it changes)
 let frame_tape : @ui.Style = @ui.css("w=Full h=Full bg=Sidebar")
+
 
 ///|
 /// The page's panel on the tape: the page's ground, its corners the tape's (tape_pane_corners), a line round it,
@@ -1721,7 +1778,9 @@ fn side_follow(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   if prefs is None {
     return
   }
-  let group = side_group(src, ws)
+  // (beside the system's tabs one width whatever the tab, so the cards stay where they are as one is chosen: the user,
+  // 2026-10-27, the sidebar jumping from tab to tab)
+  let group = if @sf.native_on() { "tabs" } else { side_group(src, ws) }
   let key = ws + "\n" + group
   if wide.side_key != key {
     let said = text(field(prefs, "sidebars"), key)
@@ -1795,7 +1854,7 @@ fn side_peek(c : @ui.Ctx, bar_x : Double, bar_y : Double, bar_r : Double, bar_b 
       wide.peeking = true
     }
     match c.tapped_anywhere() {
-      Some((x, y)) if wide.peeking && !held && !on_bar(x, y) && x >= closed_bar_in + rail_closed_w + wide.side_w =>
+      Some((x, y)) if wide.peeking && !held && !on_bar(x, y) && x >= bar_in_now() + rail_closed_w + wide.side_w =>
         wide.peeking = false
       _ => ()
     }

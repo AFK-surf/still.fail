@@ -243,3 +243,51 @@ pub fn dashed_frame(c : @ui.Ctx, w : Double, h : Double, r : Double, line : Doub
   }
   draw_drawable(c, "dashed/\{w}/\{h}/\{r}/\{line}/\{color}", d, w + line, None)
 }
+
+///|
+/// The glyph at rest as an icon for the system's bars (@hostapi.NavItem `icon`: icon_data's groups, a 24 grid, in the
+/// one ink the system tints it with): the ring's arcs, the track's fainter (a group `4 a 0` the alpha of those after),
+/// the failing stations' dots, the robot with its eyes cut out of it (`5`: what it covers cleared). No blink, no
+/// breath: the system's tab bar draws it once.
+pub fn station_glyph_icon(g : GlyphCounts) -> String {
+  let (arcs, dots) = glyph_layout(g)
+  let whole = if g.asleep { 0.4 } else { 1.0 }
+  let out = StringBuilder()
+  let group = fn(kind : Int, width : Double, pts : Array[Double]) {
+    out.write_string("\{kind} \{num(width)} \{pts.length() / 2}")
+    for v in pts {
+      out.write_string(" " + num(v))
+    }
+    out.write_string(" ")
+  }
+  let alpha = fn(a : Double) { out.write_string("4 \{num(a)} 0 ") }
+  let shape = fn(d : String, kind : Int, width : Double) {
+    for sub in glyph_layer(d, 0L, 0L, 0.0).outlines(1.0, 4.0) {
+      group(kind, width, sub.0)
+    }
+  }
+  for a in arcs {
+    alpha(whole * (if a.lit { 1.0 } else { glyph_icon_track }))
+    shape(arc_path(a.from, a.to), 0, 1.8)
+  }
+  alpha(whole)
+  for d in dots {
+    let (x, y) = ring_at(d, glyph_r)
+    shape(ellipse_path(x, y, 1.25, 1.25), 2, 0.0)
+  }
+  shape(round_rect_path(7.1, 7.9, 9.8, 8.2, 3.0), 2, 0.0)
+  if g.asleep {
+    for x in [(9.2, 10.8), (13.2, 14.8)] {
+      shape(round_rect_path(x.0 - 0.6, 11.5, x.1 - x.0 + 1.2, 1.2, 0.6), 5, 0.0)
+    }
+  } else {
+    for x in [10.3, 13.7] {
+      shape(ellipse_path(x, 12.0, 1.1, 1.25), 5, 0.0)
+    }
+  }
+  out.to_string().trim_end(chars=" ").to_string()
+}
+
+///|
+/// The ring's track in the system's bars: fainter than the ink, as it is drawn, but seen on its glass.
+let glyph_icon_track : Double = 0.3

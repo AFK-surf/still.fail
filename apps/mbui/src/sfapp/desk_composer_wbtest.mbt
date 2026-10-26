@@ -483,7 +483,7 @@ test "desk composer: words with no reference go at once, the core not asked what
 }
 
 ///|
-test "a phone's ＋: the sheet of what can go in (Attach.kt); 照片 asks the system, held, and what it picks goes up (composer.add)" {
+test "a phone's ＋: the sheet of what can go in (Attach.kt); 照片和视频 asks the system, held, and what it picks goes up (composer.add)" {
   let calls : Array[Made] = []
   let (t, _) = desk_composer_tester(calls, pointing=Finger, platform=2)
   t.draw()
@@ -494,7 +494,7 @@ test "a phone's ＋: the sheet of what can go in (Attach.kt); 照片 asks the sy
   // (what the system's picker answers, said before it is asked; the tile, not the strip's last, which asks for the
   // gallery's 最近照片)
   t.picks([("photo.jpg", b"abcd")])
-  let (x, y) = t.locate("=照片")[0]
+  let (x, y) = t.locate("=照片和视频")[0]
   t.tap(x, y)
   assert_eq(t.pick_asks().length(), 1)
   assert_true(t.pick_asks()[0] == Photos)
@@ -525,7 +525,7 @@ test "a phone's ＋ opened again shows the gallery as it is then: a screenshot t
   assert_eq(strip_photos(t), [earlier.src])
   // put away by one of its tiles (照片, the system's picker called off), as a photo or the camera puts it away too
   t.picks([])
-  let (x, y) = t.locate("=照片")[0]
+  let (x, y) = t.locate("=照片和视频")[0]
   t.tap(x, y)
   t.draw()
   // a screenshot taken meanwhile, ＋ again

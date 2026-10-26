@@ -256,6 +256,11 @@ fn chat_bar(
   } else {
     room_r
   }
+  // (its agents in the system's bars where it has them, each its history's switch: rail_native.mbt)
+  let agents_in_bars = match v {
+    Some(view) => bar_agents(src, r, view.agents)
+    None => false
+  }
   c.box(style=if @sf.in_pane() { chat_bar_box_tape() } else { chat_bar_box }, id=bar, fn() {
     room(room_l)
     c.box(style=chat_bar_inner, fn() {
@@ -266,21 +271,24 @@ fn chat_bar(
         chat_title(c, src, r, v)
         match v {
           Some(view) => {
-            if view.agents.length() == 0 {
+            // (who is in it by its title, but where its agents are in the system's bars: rail_native.mbt bar_agents)
+            if !agents_in_bars && view.agents.length() == 0 {
               chat_station(c, r.station, station)
             }
-            if view.people.length() > 0 {
+            if !agents_in_bars && view.people.length() > 0 {
               c.box(drop=chat_bar_drop_people, fn() { people_stack(c, src, "bar-people", view.people, 5) }) |> ignore
             }
-            let (_, front) = side_of(view)
-            for i, a in view.agents {
-              let tile = fn() {
-                agent_tile(c, src, r, a, view.agents.length() > 1 && front == a.key, if i == 0 { station } else { None })
-              }
-              if i == 0 {
-                tile()
-              } else {
-                c.box(drop=chat_bar_drop_agents, tile) |> ignore
+            if !agents_in_bars {
+              let (_, front) = side_of(view)
+              for i, a in view.agents {
+                let tile = fn() {
+                  agent_tile(c, src, r, a, view.agents.length() > 1 && front == a.key, if i == 0 { station } else { None })
+                }
+                if i == 0 {
+                  tile()
+                } else {
+                  c.box(drop=chat_bar_drop_agents, tile) |> ignore
+                }
               }
             }
           }
@@ -294,20 +302,30 @@ fn chat_bar(
         Some(view) =>
           c.box(style=chat_bar_buttons, fn() {
             // nothing left in it (the core's `archivable`): archived with one press
+            // (each in the system's navigation bar where it has the rail's places: rail_native.mbt bar_action)
             if view.archivable && !view.archived {
-              if @sf.icon_button(c, "archive", key="chat-archive", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.archive"), shortcut="chat.archive") {
-                c.tell("chat/archive", fn() { archive_asked(src, w, r, view, chat) })
+              let archive = fn() { c.tell("chat/archive", fn() { archive_asked(src, w, r, view, chat) }) }
+              if !bar_action("archive", @sf.t("web-pages.chat.archive"), "archive", archive) &&
+                @sf.icon_button(c, "archive", key="chat-archive", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.archive"), shortcut="chat.archive") {
+                archive()
               }
             }
             jobs_trigger(c, src, r)
-            if view.thread is Some(_) && @sf.icon_button(c, "more", key="chat-more", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.info")) {
-              chat_own.info_open = !chat_own.info_open
+            if view.thread is Some(_) {
+              let info = fn() { chat_own.info_open = !chat_own.info_open }
+              // (its people's faces its bubble in the system's bars: rail_native.mbt bar_people)
+              if !bar_people(view.people, info) &&
+                @sf.icon_button(c, "more", key="chat-more", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.info")) {
+                info()
+              }
             }
-            // the side panel's switch while it is closed: the first agent's history in it
-            if side_of(view).0.length() == 0 &&
-              view.agents.length() > 0 &&
-              @sf.icon_button(c, "panel-open", key="chat-panel", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.openPanel"), shortcut="chat.history") {
-              side_change(src, r, "open", Some(view.agents[0].key))
+            // the side panel's switch while it is closed: the first agent's history in it (none where the agents are in
+            // the system's bars: each its own switch there)
+            if !agents_in_bars && side_of(view).0.length() == 0 && view.agents.length() > 0 {
+              let panel = fn() { side_change(src, r, "open", Some(view.agents[0].key)) }
+              if @sf.icon_button(c, "panel-open", key="chat-panel", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.openPanel"), shortcut="chat.history") {
+                panel()
+              }
             }
           })
           |> ignore
@@ -559,13 +577,20 @@ fn jobs_trigger(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
 ///|
 /// What opens under the chat's bar: its info's popover (ChatInfo) and its services' (JobsPanel), each by its button.
 fn bar_popovers(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
+  // (the window turned beside the system's tabs: what they opened from is elsewhere, closed: rail_native.mbt)
+  if native_turned(c, info_width) {
+    chat_own.info_open = false
+    chat_own.jobs_open = false
+  }
+  // (its ⋯ in the system's bars: from the mark where it was chosen, rail_native.mbt)
+  let (info_at, info_side, info_along) = bar_anchor(c.id("chat-more"), Bottom, End)
   let info = @kit.popover(
     c,
     "chat-info-pop",
     chat_own.info_open,
-    c.id("chat-more"),
-    side=Bottom,
-    along=End,
+    info_at,
+    side=info_side,
+    along=info_along,
     look=@sf.beside_look(@ui.Size::Px(chat_info_w)),
     fn() { chat_info(c, src, w, r, v, chat) },
   )
@@ -654,6 +679,21 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
       }
     })
     fact(@sf.t("web-pages.chat.info.people"), fn() {
+      // (beside the system's tabs, no pointer to rest on them for their names: each its face and its name, the people
+      // out of the chat's bar there, rail_native.mbt; the user 2026-10-27)
+      if @sf.native_on() && v.people.length() > 0 {
+        c.box(style=info_people_list, fn() {
+          for i, p in v.people {
+            c.box(style=info_inline, fn() {
+              people_stack(c, src, "info-person/\{i}", [p], 1)
+              c.text(p.display, style=info_words) |> ignore
+            })
+            |> ignore
+          }
+        })
+        |> ignore
+        return
+      }
       c.box(style=info_inline, fn() {
         if v.people.length() > 0 {
           people_stack(c, src, "info-people", v.people, 8)
@@ -1143,3 +1183,12 @@ let info_tool_base : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2_5 align=ACen
 // kept across runs: a value (no field of it changes)
 let info_tool_icon : @ui.Style = @ui.css("w=S3_5 align=ACenter")
 
+
+///|
+/// A chat's people each on a line of their own in its info (beside the system's tabs: chat_info).
+// kept across runs: a value (no field of it changes)
+let info_people_list : @ui.Style = @ui.css("gap=S1_5")
+
+///|
+/// The window's width as the chat's bar's popovers were last drawn (bar_popovers: a turn closes them).
+let info_width : FixedArray[Double] = [0.0]

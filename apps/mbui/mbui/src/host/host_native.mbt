@@ -1037,6 +1037,15 @@ extern "C" fn nt_show(
 #borrow(tag)
 extern "C" fn nt_cancel(tag : String) -> Unit = "mb_host_notice_cancel"
 
+// The system's own bars (nav.mbt): iOS's tab bar and navigation bar (ios_app.m); none elsewhere.
+
+///|
+#borrow(spec)
+extern "C" fn nv_bar(spec : String) -> Int = "mb_host_nav_bar"
+
+///|
+extern "C" fn nv_able() -> Int = "mb_host_nav_able"
+
 ///|
 extern "C" fn rn_dirty(x : Double, y : Double, w : Double, h : Double) -> Unit = "mb_host_render_dirty"
 

@@ -36,6 +36,7 @@ pub fn reset() -> Unit {
   nav_reset()
   go_reset()
   attention_reset()
+  rail_native_reset()
   page_switch_reset()
   history_reset()
   find_close()

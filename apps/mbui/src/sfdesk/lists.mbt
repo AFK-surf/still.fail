@@ -580,6 +580,8 @@ fn todo_all(src : Source, w : Workspace) -> Int {
 ///|
 /// Whether 待处理 is under 新建对话: no bell in the rail, and something there (or its panel open).
 fn todo_shown(src : Source, w : Workspace) -> Bool {
+  // (待处理 a tab of the system's: rail_native.mbt)
+  !@sf.native_on() &&
   !rail_items(src, w.id).contains("attention") && (todo_all(src, w) > 0 || wide.attention_open)
 }
 

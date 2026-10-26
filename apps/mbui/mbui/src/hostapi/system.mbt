@@ -47,6 +47,7 @@
 // - `{"install": {"name": …, "error": …}}`: a package handed to the system's installer could not be installed
 //   (written, or the installer said it failed; the person's no is not a failure).
 // - `{"menu": action}`: one of the app's items in the menu bar chosen (@hostapi.menu_setup: an item's `action`).
+// - `{"nav": id}`: a tab or an item of the system's own bars chosen (nav.mbt: iOS's tab bar and navigation bar).
 //
 // Android's (dev.mbui.MainActivity), iOS's (ios_app.m: `shown`, `link`, `network`, `size_class`, `fold`, `bars`
 // where its Info.plist's MBUIEdge lays it out edge to edge, as Android's manifest's dev.mbui.edge) and macOS's (mac_app.m:
@@ -85,6 +86,8 @@ pub(all) enum SystemSaid {
   InstallFailed(name~ : String, error~ : String)
   /// one of the app's items in the menu bar chosen (menu_setup's `action`)
   Menu(String)
+  /// a tab or an item of the system's own bars chosen (nav.mbt: its `id`)
+  NavTapped(String)
 } derive(Eq, Show)
 
 ///|
@@ -191,5 +194,25 @@ pub fn system_said(json : String) -> Array[SystemSaid] {
     Some(String(action)) => out.push(Menu(action))
     _ => ()
   }
+  match m.get("nav") {
+    Some(String(id)) => {
+      match m.get("at") {
+        Some(Array([Number(x, ..), Number(y, ..), Number(w, ..), Number(h, ..)])) => {
+          nav_tapped_at[0] = x
+          nav_tapped_at[1] = y
+          nav_tapped_at[2] = w
+          nav_tapped_at[3] = h
+        }
+        _ => ()
+      }
+      out.push(NavTapped(id))
+    }
+    _ => ()
+  }
   out
 }
+
+///|
+/// Where the item of the system's bars last chosen that said so is in the app's view (x y w h, points; w 0: none
+/// yet), for what opens from it (a popover at it).
+pub let nav_tapped_at : FixedArray[Double] = [0.0, 0.0, 0.0, 0.0]

@@ -505,3 +505,59 @@ let ring_hole : Double = 1.0
 /// How far apart rings are (rings): this much of one's width.
 let ring_apart : Double = 0.2
 
+
+///|
+/// A picture of the app's (`name`, drawable_data's) as an icon for the system's bars (@hostapi.NavItem `icon`:
+/// icon_data's groups on a 24 grid, in the one ink the system tints it with): each path's fill a shape of its pieces
+/// (`7`, by the even-odd rule where it is), each stroke its lines, each at its colour's alpha (`4 a 0`); "" for none.
+pub fn drawable_icon(name : String) -> String {
+  guard drawables.get(name) is Some(d) else { return "" }
+  let k = 24.0 / dmax(d.w, d.h)
+  let out = StringBuilder()
+  let num = fn(x : Double) { ((x * 1000.0).round() / 1000.0).to_string() }
+  for l in d.layers {
+    let colour = if l.fill != 0L { l.fill } else { l.stroke }
+    out.write_string("4 \{num((colour & 0xFFL).to_double() / 255.0)} 0 ")
+    for sub in l.outlines(k, 4.0) {
+      let (pts, closed) = sub
+      let kind = if l.fill != 0L {
+        7
+      } else if closed {
+        1
+      } else {
+        0
+      }
+      let width = if l.fill != 0L {
+        if l.even_odd { 1.0 } else { 0.0 }
+      } else {
+        l.width * k
+      }
+      out.write_string("\{kind} \{num(width)} \{pts.length() / 2}")
+      for v in pts {
+        out.write_string(" " + num(v))
+      }
+      out.write_string(" ")
+    }
+  }
+  out.to_string().trim_end(chars=" ").to_string()
+}
+
+///|
+/// An agent's maker's mark (maker_mark's) as an icon for the system's bars (drawable_icon).
+pub fn maker_icon(maker : String, runtime : String) -> String {
+  let known = maker != "" && drawables.contains("maker_" + maker.replace_all(old="-", new="_"))
+  let id = if known {
+    maker
+  } else {
+    match runtime {
+      "codex" => "openai"
+      "dsh" => "dsh"
+      "grok" => "xai"
+      "cursor" => "cursor"
+      "devin" => "devin"
+      "hermes" => "hermes"
+      _ => "anthropic"
+    }
+  }
+  drawable_icon("maker_" + id.replace_all(old="-", new="_"))
+}

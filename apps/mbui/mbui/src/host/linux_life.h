@@ -221,6 +221,14 @@ void mb_host_notice_show(moonbit_string_t channel, moonbit_string_t tag, moonbit
   g_object_unref(g);
 }
 
+// The system's own bars (@hostapi.nav_bar): none here, the app draws its own.
+int32_t mb_host_nav_bar(moonbit_string_t spec) {
+  (void)spec;
+  return 0;
+}
+
+int32_t mb_host_nav_able(void) { return 0; }
+
 void mb_host_notice_cancel(moonbit_string_t tag) {
   char *t = utf8(tag);
   if (notice_drop(t)) {

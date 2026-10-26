@@ -752,8 +752,14 @@ pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf, style? : @ui.Styl
       ),
     )
   }
-  if f.rights.write {
+  // (putting files up and a new folder in the system's column where it has the rail's places, the rest here:
+  // rail_native.mbt bar_action)
+  if f.rights.write &&
+    !bar_action("files/upload", @sf.t("web-pages.drive.upload"), "upload", fn() { dv_upload(c, at) }) {
     tools.push(@sf.tool_button(c, "files/upload", "upload", @sf.t("web-pages.drive.upload"), on_press=fn() { dv_upload(c, at) }, drop=folder_drop_upload))
+  }
+  if f.rights.write &&
+    !bar_action("files/mkdir", @sf.t("web-pages.drive.mkdir"), "folder-plus", fn() { b.new_folder(c, src, at.path) }) {
     tools.push(
       @sf.tool_button(c, "files/mkdir", "folder-plus", @sf.t("web-pages.drive.mkdir"), on_press=fn() { b.new_folder(c, src, at.path) }, drop=folder_drop_mkdir),
     )

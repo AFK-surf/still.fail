@@ -280,8 +280,12 @@ pub let tape_edge : @ui.CornerOf = window_follow(tape_corner)
 /// page's with none open beside it) the window's (tape_edge); the others, never in the window's corners, the tape's
 /// corner. Whether the panel is in use now or on its way over: where it will be.
 pub fn tape_corners(left~ : Bool, right~ : Bool) -> FixedArray[@ui.CornerOf] {
-  let l = if left { tape_edge } else { Own(tape_corner) }
-  let r = if right { tape_edge } else { Own(tape_corner) }
+  // (along a screen whose corners the host says, an iPhone Duo's: concentric with them, so the screen cuts none of a
+  // panel's line, the user 2026-10-27: native_bars.mbt)
+  let screen = native_card_corner()
+  let edge : @ui.CornerOf = if screen > 0.0 { Own(screen) } else { tape_edge }
+  let l = if left { edge } else { Own(tape_corner) }
+  let r = if right { edge } else { Own(tape_corner) }
   [l, r, r, l]
 }
 
@@ -1146,7 +1150,7 @@ pub(all) enum Layout {
 ///|
 /// The layout of a window `width` wide, in points, on every screen alike (medium_from, large_from): neither which way up
 /// it is held, nor its height, nor how large it is says how many panes there are (the user, 2026-10-25); the height
-/// only how much of them shows. One thing else: a fold half open on its back half is Small (a chat across the window,
+/// only how much of them shows. One thing else: a fold half open on its back half is Small where the system has no tabs of its own for the app (a chat across the window,
 /// its composer under the fold: sfapp's tabletop.mbt). While
 /// the app has the device turned sideways itself (a film, a station's screen over all of it: @hostapi.sideways), the
 /// one it had as it turned: the screen is the same, only what is over all of it turned.
@@ -1173,8 +1177,10 @@ let layout_held : Ref[Layout?] = Ref(None)
 ///|
 /// The layout by the screen alone (layout).
 fn screen_layout(width : Double) -> Layout {
-  // a fold half open, its crease across: a chat over the crease, whatever its width (the one thing other than the width)
-  if (native_input() is Finger) && @ui.system_tabletop() is Some(_) {
+  // a fold half open, its crease across: a chat over the crease, whatever its width (the one thing other than the width);
+  // not where the system lays out the app's tabs itself in every pose (an iPhone Duo's: native_able, the user,
+  // 2026-10-26)
+  if (native_input() is Finger) && @ui.system_tabletop() is Some(_) && !native_able() {
     return Small
   }
   if width < medium_from {

@@ -66,7 +66,8 @@ pub fn chat_list(
   // its last row as far over the bell as it is over the composer's room without it, not under it (the time, 正在发送
   // under the viewer's own message, at the column's end where the bell is)
   let ask_clear = if asks_of(v).is_empty() { 0.0 } else { float_lift + float_side }
-  let side = if narrow { row_side_narrow } else { row_side(c) }
+  // (an iPhone Duo's cards: 32 in however narrow the chat's, row_side)
+  let side = if narrow && !@sf.native_on() { row_side_narrow } else { row_side(c) }
   // the sides are only the page's margin either way: wide, the pictures out in it stand by their heads' line, not by
   // the words under it, so a table scrolls out over it to the pane's edges as it does narrow
   let gutter = side
@@ -553,8 +554,15 @@ fn list_reset() -> Unit {
 /// How far the rows stand in from the pane's sides: the column 760 wide at most in its middle, 40 in at least
 /// (session.css.ts chatList).
 fn row_side(c : @ui.Ctx) -> Double {
+  // (beside the system's bars, an iPhone Duo's: the rows across the pane, dense_row_side in)
+  if @sf.native_on() {
+    return dense_row_side
+  }
   dmax(row_side_least, (c.width - chat_column_w) / 2.0)
 }
+
+///|
+let dense_row_side : Double = 32.0
 
 ///|
 /// Where the round buttons over the list go: right over the send button, the composer's column in the pane's middle
@@ -722,6 +730,9 @@ let float_count : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=F
 /// The composer's width on a chat's page (dock.css.ts, the chat's: the column and the capsule's curve each side, 760
 /// and 22 each side at most, 12 clear of the pane's edges).
 pub fn composer_width(pane : Double) -> Double {
+  if @sf.native_on() {
+    return pane - 2.0 * composer_side()
+  }
   dmin(pane - 2.0 * composer_side(), composer_most)
 }
 

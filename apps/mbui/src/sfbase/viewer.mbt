@@ -1155,8 +1155,9 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
     v.install_after = false
     v.ask_install(c)
   }
-  // the bars fade when left alone (not while it comes, nor over a page whose taps are its own)
-  if v.awake && v.rest_len > 0.0 && @kit.after(c, "pv-rest/\{v.rest_n}", true, v.rest_len) {
+  // the bars fade when left alone (not while it comes, nor over a page whose taps are its own; nor where they are the
+  // system's, an iPhone Duo's: there until a tap hides them, as its own apps' are)
+  if v.awake && v.rest_len > 0.0 && !@sf.native_on() && @kit.after(c, "pv-rest/\{v.rest_n}", true, v.rest_len) {
     v.awake = false
   }
   let t = @sf.theme()
@@ -1174,7 +1175,7 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
   // over the window, a modal layer (the web's preview is a dialog): the keys its, what is under it reads none (the
   // chat's Space taking its composer, its Esc closing its panel); its own Esc and back, what it shows closed first;
   // going, inert (the page's again as it fades)
-  c.overlay("preview-layer", modal=true, escape=false, outside=false, initial_focus=0, inert=v.closing, fn() {
+  let body = fn() {
     c.layer(fn() {
       let stage = c.id("preview/stage")
       // (a ground: a click round the picture closes it, the bars come and go on a tap)
@@ -1205,6 +1206,22 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
       }
     })
     |> ignore
+  }
+  // (beside the column of the system's bars down the window's side, an iPhone Duo's on its side: the file laid out
+  // clear of it, its ground on under it, the user 2026-10-27)
+  let clear = @sf.native_clear()
+  c.overlay("preview-layer", modal=true, escape=false, outside=false, initial_focus=0, inert=v.closing, fn() {
+    if clear > 0.0 {
+      c.layer(fn() {
+        c.box(style=viewer_under.then(@ui.style(bg=Data(@sf.alpha(ground, shown * faded)))), fn() {  }) |> ignore
+      })
+      |> ignore
+      let w = dmax(0.0, c.width - clear)
+      c.layer(fn() { c.box(style=@ui.style(w=Fixed(w), h=Full), fn() { c.sized(w, c.height, body) }) |> ignore })
+      |> ignore
+    } else {
+      body()
+    }
   })
   |> ignore
   // 下载 tapped (on the page or its bar, just built): asked of the core, on by itself whatever becomes of this viewer
@@ -1219,6 +1236,11 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
     c.take_back(fn() { if marking.on { marks_back(c) } else { v.shut(c) } })
   }
 }
+
+///|
+/// The viewer's ground under the column of the system's bars (viewer_layer).
+// kept across runs: a value (no field of it changes)
+let viewer_under : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
@@ -2265,7 +2287,9 @@ pub fn Viewer::gestures(
     None => false
   }
   if c.clicked(stage) && v.moved <= 8.0 && !pinched && !v.caught {
-    if desk && !on_picture && !marking.on && v.shown_kind() == Some(KImage) {
+    // (on an iPhone Duo a finger's tap round it, fitted, closes it too: @hostapi.nav_bar_able, the user 2026-10-27;
+    // elsewhere a finger's tap shows or hides the bars, as it was)
+    if (desk || (!z.zoomed() && @sf.native_able())) && !on_picture && !marking.on && v.shown_kind() == Some(KImage) {
       v.shut(c)
     } else if at - v.tap_at < double_tap_ms && (px - v.tap_x).abs() < 40.0 && (py - v.tap_y).abs() < 40.0 {
       // the second of two: zoom (and the first's toggle undone)

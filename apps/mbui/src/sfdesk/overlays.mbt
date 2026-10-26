@@ -10,6 +10,7 @@ pub fn overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   context_menu(c)
   // the rail's menu, and what can be added beside it while it is changed (rail.mbt)
   rail_overlays(c, src, w)
+  rail_native_marks(c)
   attention_panel(c, src, w)
   // a chat made public (publish.mbt)
   @sfpages.publish_layer(c, src)

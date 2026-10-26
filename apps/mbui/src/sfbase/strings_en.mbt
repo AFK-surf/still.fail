@@ -35,7 +35,7 @@ let en : Map[String, String] = {
   "android-chat.asks.go": "Go to the message awaiting a decision",
   "android-chat.attach.camera": "Camera",
   "android-chat.attach.files": "Files",
-  "android-chat.attach.photos": "Photos",
+  "android-chat.attach.photos": "Photos & videos",
   "android-chat.attach.recent.allow": "Show recent photos",
   "android-chat.attach.recent.more": "Select more photos",
   "android-chat.attach.title": "Attach",
