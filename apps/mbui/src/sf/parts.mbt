@@ -2035,8 +2035,9 @@ let field_hint : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Mut
 /// A line to type in (controls.css.ts input, a one-line one: a pill as the buttons beside it are, 36 high at least,
 /// 16 in, a line of the strong grey, the field's hover grey pointed at or written in, on the canvas, its words 14, the
 /// placeholder subtle): mbui's field (@kit.text_field), its editor `key`'s; `field`: what it holds, the view's own;
-/// `small`: 32 high (a small panel's, as its rows: input_box_small); `shorter`: other ways to say the placeholder where
-/// the field has less room (Ctx::editor's). What is in it now, and whether Enter was pressed in it.
+/// `small`: 32 high (a small panel's, as its rows: input_box_small); `solid`: on a card's ground in a chat (field_solid);
+/// `shorter`: other ways to say the placeholder where the field has less room (Ctx::editor's). What is in it now, and
+/// whether Enter was pressed in it.
 pub fn input(
   c : @ui.Ctx,
   key : String,
@@ -2045,19 +2046,25 @@ pub fn input(
   secret? : Bool = false,
   disabled? : Bool = false,
   small? : Bool = false,
+  solid? : Bool = false,
   field? : @ui.Field,
 ) -> @kit.Field {
   // (its words the body's, as tall as the theme's controls: the web's with keyboard and mouse, a finger's with touch)
   let t = theme()
   @kit.text_field(c, key, placeholder~, shorter~, secret~, disabled~, size=t.t.body, line=t.t.body_line, field?, look=fn(c, s, editor) {
     let hot = s.hovered || s.focused
+    let look = match (small, hot) {
+      (false, false) => input_box.then(control_height()).then(field_corner())
+      (false, true) => input_box_hot.then(control_height()).then(field_corner())
+      (true, false) => input_box_small
+      (true, true) => input_box_small_hot
+    }
     c.box(
       id=s.id,
-      style=match (small, hot) {
-        (false, false) => input_box.then(control_height()).then(field_corner())
-        (false, true) => input_box_hot.then(control_height()).then(field_corner())
-        (true, false) => input_box_small
-        (true, true) => input_box_small_hot
+      style=if solid {
+        look.then(if hot { field_solid_hot } else { field_solid })
+      } else {
+        look
       },
       editor,
     )
@@ -2090,7 +2097,8 @@ fn field_corner() -> @ui.Style {
 /// under its top; the strong grey's line, the field's hover grey pointed at or written in, on the canvas; its words 14
 /// on lines 1.6 of them, at least
 /// `rows` lines high and growing to `most`; `field`: what it holds, the view's own; `corner`, the ladder's where it
-/// stands (first in a card, on its words' inset in its corners: the small block's 10). What is in it now.
+/// stands (first in a card, on its words' inset in its corners: the small block's 10); `solid`: on a card's ground in a
+/// chat (field_solid). What is in it now.
 pub fn textarea(
   c : @ui.Ctx,
   key : String,
@@ -2099,6 +2107,7 @@ pub fn textarea(
   placeholder? : String = "",
   field? : @ui.Field,
   corner? : Double,
+  solid? : Bool = false,
 ) -> String {
   let t = theme()
   let box_id = c.id(key + "/frame")
@@ -2109,7 +2118,9 @@ pub fn textarea(
     // (a field's corner, as a one-line field's ends: field_round)
     None => field_corner().then(@ui.style(min_h=Fixed(rows.to_double() * textarea_line + textarea_in)))
   }
-  c.box(id=box_id, style=(if hot { textarea_box_hot } else { textarea_box }).then(tall), fn() {
+  let look = if hot { textarea_box_hot } else { textarea_box }
+  let look = if solid { look.then(if hot { field_solid_hot } else { field_solid }) } else { look }
+  c.box(id=box_id, style=look.then(tall), fn() {
     words = c.editor(
       key,
       field?,
@@ -2168,6 +2179,17 @@ let input_box : @ui.Style = @ui.css(
 /// Pointed at or written in: the field's hover grey round it.
 // kept across runs: a value (no field of it changes)
 let input_box_hot : @ui.Style = input_box.then(@ui.css("border_color=FieldHover"))
+
+///|
+/// A field on a card's ground in a chat (a key typed in for an agent's request, as a login's code is: sfpages
+/// login_card.mbt lc_paste; MachineLogins.css.ts cardPaste, controls.css.ts inputSolid): solid, the page's own ground,
+/// no line of its own; pointed at or written in, the field's hover grey round it as any field's (`_hot`).
+// kept across runs: a value (no field of it changes)
+let field_solid : @ui.Style = @ui.css("bg=Bg border_color=Bg")
+
+///|
+// kept across runs: a value (no field of it changes)
+let field_solid_hot : @ui.Style = @ui.css("bg=Bg")
 
 ///|
 /// `small`: 32 high, a small panel's (its search): a capsule its padding in from its corner, concentric with it

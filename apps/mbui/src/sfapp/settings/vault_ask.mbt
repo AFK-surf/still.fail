@@ -359,13 +359,13 @@ pub fn vault_foot(
       c.box(style=if foot { ask_typed.then(@sf.over_foot_reach(@sf.button_height())) } else { ask_typed }, fn() {
         if ty.kind == "login" && ty.username == "" {
           let words = tr("android-settings.vault.ask.typed.username")
-          username = @sf.input(c, "vault/" + request + "/username", placeholder=words, disabled=under, field=typed_field(request, "/username")).text
+          username = @sf.input(c, "vault/" + request + "/username", placeholder=words, disabled=under, solid=true, field=typed_field(request, "/username")).text
         }
         let words = tr("android-settings.vault.ask.typed." + ty.kind)
         if ty.kind == "ssh_key" {
-          secret = @sf.textarea(c, "vault/" + request + "/secret", rows=4, placeholder=words, field=typed_field(request, "/secret"))
+          secret = @sf.textarea(c, "vault/" + request + "/secret", rows=4, placeholder=words, solid=true, field=typed_field(request, "/secret"))
         } else {
-          let f = @sf.input(c, "vault/" + request + "/secret", placeholder=words, secret=true, disabled=under, field=typed_field(request, "/secret"))
+          let f = @sf.input(c, "vault/" + request + "/secret", placeholder=words, secret=true, disabled=under, solid=true, field=typed_field(request, "/secret"))
           secret = f.text
           entered = f.submitted
         }

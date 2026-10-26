@@ -71,13 +71,13 @@ export function VaultActions({ workspace, id, who, onDecided, extra }: { workspa
   const fields = typed && (
     <div className={css.typed}>
       {namesNone && (
-        <input className={controlsCss.input} type="text" autoComplete="off" spellCheck={false} autoCapitalize="off" disabled={under}
+        <input className={`${controlsCss.input} ${controlsCss.inputSolid}`} type="text" autoComplete="off" spellCheck={false} autoCapitalize="off" disabled={under}
           value={username} placeholder={t("web-pages.vault.ask.typed.username")} aria-label={t("web-pages.vault.ask.typed.username")} onChange={(e) => setUsername(e.target.value)} />
       )}
       {kind === "ssh_key"
-        ? <textarea className={`${controlsCss.input} ${css.typedKey}`} rows={4} spellCheck={false} autoCapitalize="off" autoComplete="off" disabled={under}
+        ? <textarea className={`${controlsCss.input} ${controlsCss.inputSolid} ${css.typedKey}`} rows={4} spellCheck={false} autoCapitalize="off" autoComplete="off" disabled={under}
             value={secret} placeholder={t("web-pages.vault.ask.typed.ssh_key")} aria-label={t("web-pages.vault.ask.typed.ssh_key")} onChange={(e) => setSecret(e.target.value)} />
-        : <input className={controlsCss.input} type="password" autoComplete="off" spellCheck={false} disabled={under}
+        : <input className={`${controlsCss.input} ${controlsCss.inputSolid}`} type="password" autoComplete="off" spellCheck={false} disabled={under}
             value={secret} placeholder={t(`web-pages.vault.ask.typed.${kind}`)} aria-label={t(`web-pages.vault.ask.typed.${kind}`)} onChange={(e) => setSecret(e.target.value)} onKeyDown={enter} />}
     </div>
   );
