@@ -3857,7 +3857,7 @@ pub fn update_key(
 ///|
 /// The list catching up on what changed while away (the chats' `syncing`; docs/ui-panels.md 等待): beside the keys of
 /// the bar it stands in, `side` across, the refresh mark (`mark`, in the grey of what it says nothing of) turning, a
-/// turn each sync_turn_ms, slow at its ends; `text` its tip and what it is said to be. Only once it has gone on later_ms
+/// turn each sync_turn_ms, slow at its ends (by the clock as each frame is drawn: nothing built anew for it); `text` its tip and what it is said to be. Only once it has gone on later_ms
 /// (a moment's catching up shows nothing). Once all is here, the mark goes to a tick, there sync_done_ms, then fades.
 pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown : Bool, text : String) -> Unit {
   let t = theme()
@@ -3886,14 +3886,16 @@ pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown :
   let words = sync_said.get(key).unwrap_or(text)
   // the turning mark to the tick (in 200 ms, each growing from 0.6 as it comes)
   let done = @kit.animate(c, key + "/tick", if ticked { 1.0 } else { 0.0 }, transition=@motion.tween(sync_tick_ms, ease=Out))
-  let k = c.cycle(sync_turn_ms)
-  let turn = k * k * (3.0 - 2.0 * k) * 2.0 * 3.141592653589793
   let id = c.id(key)
   let b = c.box(style=update_key_box.then(@ui.style(w=Fixed(side), h=Fixed(side))), id~, fn() {
     if done < 1.0 {
       // (each in the whole key, in its middle: turned about it)
       let a = c.layer(fn() { c.box(style=update_ring_at, fn() { icon(c, "refresh", size=mark, color=t.p.muted) |> ignore }) |> ignore })
-      c.look(a, @ui.look(alpha=1.0 - done, scale=1.0 - 0.4 * done, rot=if ticked { 0.0 } else { turn }))
+      c.look(a, @ui.look(alpha=1.0 - done, scale=1.0 - 0.4 * done))
+      // turned by the clock as each frame is drawn (Ctx::cycle_look), slow at a turn's ends; still once ticked
+      if !ticked {
+        c.cycle_look(a, sync_turn_ms, fn(k) { @ui.look(rot=k * k * (3.0 - 2.0 * k) * 2.0 * 3.141592653589793) })
+      }
     }
     if done > 0.0 {
       let d = c.layer(fn() { c.box(style=update_ring_at, fn() { icon(c, "check", size=mark, color=t.p.muted) |> ignore }) |> ignore })
