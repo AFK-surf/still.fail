@@ -375,8 +375,8 @@ pub fn with_side(
   v : ChatView?,
   chat : () -> Unit,
 ) -> Unit {
-  // (on the tape, laid out Medium, the panel is a panel of its own beside the page's: the frame's, tape_side)
-  if wide.tape {
+  // (in a panel of its own, on the tape: the side panel is a panel of its own beside it, the frame's, tape_side)
+  if @sf.in_pane() {
     chat()
     return
   }

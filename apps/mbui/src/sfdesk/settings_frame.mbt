@@ -181,7 +181,7 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           }
         }
         app.nav.push(Setting(r))
-        show_page()
+        @sfbase.show_chosen()
       })
     })
   })

@@ -78,7 +78,7 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         Some(Object(_)) => {
           let go = c.id("side/station-trouble")
           if c.clicked(go) {
-            rail_go(c, src, w, "stations")
+            @sfbase.go_place("stations") |> ignore
           }
           c.box(style=foot_trouble, id=go, fn() {
             @sf.station_glyph(c, stations_at_glance(src, w.id).0, foot_glyph, t.p.text, t.p.red) |> ignore
@@ -321,7 +321,7 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
   let drop = c.id("side/archived-drop/" + key)
   if c.clicked(id) {
     archive_open(it)
-    show_page()
+    @sfbase.show_chosen()
   }
   let on = match app.nav.top() {
     Chat(r) => r.station == station && r.session == session

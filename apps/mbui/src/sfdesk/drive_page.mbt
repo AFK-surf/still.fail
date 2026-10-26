@@ -68,7 +68,7 @@ fn folder_head(c : @ui.Ctx, src : Source, f : FolderOf, front_it : () -> Unit, t
         levels.push((p, so_far))
       }
       c.box(style=head_way, fn() {
-        way_line(c, "files/way/" + f.key + "/" + at.station + "/" + root, levels.map(fn(l) { l.0 }), folder_crumb_way(), fn(i) {
+        @sf.way_line(c, "files/way/" + f.key + "/" + at.station + "/" + root, levels.map(fn(l) { l.0 }), folder_crumb_way(), fn(i) {
           front_it()
           (f.go)({ ..at, path: levels[i].1 }, false)
         })
@@ -115,7 +115,7 @@ fn head_retry(c : @ui.Ctx, words : String, bad : Bool, retry : () -> Unit) -> Un
 ///|
 /// The way's look (the crumbs): a step 4 round under the pointer, the way's words the row's note's (muted), where it
 /// is in the words' colour, the chevrons subtle.
-fn folder_crumb_way() -> WayLook {
+fn folder_crumb_way() -> @sf.WayLook {
   let note = @sf.theme().rows.note
   {
     line: folder_crumb_line,

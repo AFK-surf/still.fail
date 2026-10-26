@@ -185,7 +185,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
     group("Station", fn() {
       attention_item(c, "attention/trouble", "alert", trouble, "", "", None, fn() {
         close()
-        rail_go(c, src, w, "stations")
+        @sfbase.go_place("stations") |> ignore
       })
     })
   }
@@ -246,7 +246,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
             }
             app.nav.replace(Home)
             app.nav.push(Chat(chat))
-            show_page()
+            @sfbase.show_chosen()
           },
         )
       }

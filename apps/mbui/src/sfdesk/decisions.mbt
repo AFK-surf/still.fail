@@ -100,7 +100,7 @@ fn zou_row(c : @ui.Ctx, src : Source, w : Workspace, d : Json, on : Bool, more :
     if lit_place() != "decisions" {
       go_zou()
     }
-    show_page()
+    @sfbase.show_chosen()
   }
   let question = match text(v, "question") {
     "" => text(v, "title")

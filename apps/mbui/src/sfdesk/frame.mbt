@@ -26,19 +26,6 @@
 // chats'; each following the system's back gesture as it goes (the page's stack, Ctx::nav_flat's; the tape, tape_back).
 
 ///|
-/// What the settings' pages read and call, and how they move, as the desktop has them (sfbase's settings_core_of): its
-/// way home the stack's, a station's login its own card (login_card.mbt).
-fn settings_core(src : Source, w : Workspace) -> Core {
-  settings_core_of(
-    src,
-    w,
-    home=nav_home,
-    login_card=fn(c, station, id, marked) { login_card(c, settings_core(src, w), station, id, marked~) },
-    share_card=fn() { @sfpages.share_card_open(src, w) },
-  )
-}
-
-///|
 /// What the frame keeps of its own (the rest is the stack's and the core's): the sidebar's width and how it was left,
 /// how the block is moving, what is open from the rail and the lists.
 pub(all) struct Wide {
