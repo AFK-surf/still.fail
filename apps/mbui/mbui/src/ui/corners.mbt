@@ -955,6 +955,11 @@ fn Ctx::layer_grounds(self : Ctx) -> Map[Int, Int] {
 let inner_even : Double = 0.5
 
 ///|
+/// How far what is laid out may be from where it was worked out to stand by the sums of laying out alone (a box
+/// standing as far in as a corner is round, by a hair nearer).
+let laid_noise : Double = 0.01
+
+///|
 /// The corners said `Inner` (style.mbt), from where their boxes lie as laid out (the covers moved: after
 /// covers_after_layout, before anything is painted or its clip and hit target recorded): the corner of the container
 /// the corner rule measures against (corner_container: through boxes with no corner, a ground laid beside as a layer)
@@ -1009,17 +1014,22 @@ fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int], hung : 
   // row of a list in it scrolls past its top and foot, so what it is near is the sides it lies between; a card of a
   // strip scrolled sideways, past its sides, so what it is near is its top and foot)
   let (up_down, across) = self.scrolls_between(i, p)
-  let near = unhung(
-    n,
-    sides.filter(fn(s) {
-      s.1 >= -inner_even &&
-      s.1 < ra &&
+  // (an edge is near where it is nearer it than the rounder of the container's corners at the edge's two ends are
+  // round: of a container whose corners are not alike (a panel of the tape at a Mac window's edge, its corners there the
+  // window's 11.2), what stands clear of its squarer corners, as far in as they are round, is near the others' edges
+  // alone: a composer across a page's foot clear of its corner in the window's)
+  let edge_r = fn(k : Int, m : Int) { dmax(self.container_r(ct, k), self.container_r(ct, m)) }
+  let edges = [edge_r(0, 3), edge_r(0, 1), edge_r(1, 2), edge_r(2, 3)]
+  let within : Array[(String, Double)] = []
+  for e, s in sides {
+    if s.1 >= -inner_even &&
+      s.1 < edges[e] - laid_noise &&
       !(up_down && (s.0 == "top" || s.0 == "bottom")) &&
-      !(across && (s.0 == "left" || s.0 == "right"))
-    }),
-    hung,
-    ra,
-  )
+      !(across && (s.0 == "left" || s.0 == "right")) {
+      within.push(s)
+    }
+  }
+  let near = unhung(n, within, hung, ra)
   if near.is_empty() {
     match own {
       Some(r) => n.set_radii(r)

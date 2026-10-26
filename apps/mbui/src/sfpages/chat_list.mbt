@@ -510,10 +510,10 @@ fn row_side(c : @ui.Ctx) -> Double {
 }
 
 ///|
-/// Where the round buttons over the list go: right over the send button, the composer's column in the pane's middle
-/// (Chat.css.ts chatToBottom: 6 in from it).
+/// Where the round buttons over the list go: right over the send button, 6 in from the composer's right end
+/// (composer_right; Chat.css.ts chatToBottom).
 fn float_right(c : @ui.Ctx) -> Double {
-  (c.width - composer_width(c.width)) / 2.0 + float_in
+  composer_right(c.width) + float_in
 }
 
 ///|
@@ -675,7 +675,8 @@ let float_count : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=F
 /// The composer's width on a chat's page (dock.css.ts, the chat's: the column and the capsule's curve each side, 760
 /// and 22 each side at most, 12 clear of the pane's edges).
 pub fn composer_width(pane : Double) -> Double {
-  dmin(pane - 2.0 * composer_side(), composer_most)
+  let (l, r) = composer_sides()
+  dmin(pane - l - r, composer_most)
 }
 
 ///|
@@ -687,6 +688,49 @@ let composer_most : Double = 804.0
 /// follow in turn in its own: @sf.pane_foot_in.)
 pub fn composer_side() -> Double {
   @sf.pane_foot_in(holds=@sf.theme().round.side)
+}
+
+///|
+/// How far in from the pane's left and right it stands, reaching across it: composer_side, and from a foot corner too
+/// square for its round controls to follow in turn clear of it (@sf.pane_foot_sides: a Mac's page at the window's
+/// edge).
+pub fn composer_sides() -> (Double, Double) {
+  @sf.pane_foot_sides(holds=@sf.theme().round.side)
+}
+
+///|
+/// Whether it reaches across a pane `pane` wide (as wide as composer_sides leave it, not its widest in the middle).
+pub fn composer_across(pane : Double) -> Bool {
+  let (l, r) = composer_sides()
+  composer_width(pane) >= pane - l - r - 0.5
+}
+
+///|
+/// Where it stands in what holds it in its middle, a pane `pane` wide: reaching across it, as far from each side as
+/// composer_sides has it (not alike, moved over by a margin of the difference on the further side); else in the middle.
+pub fn composer_beside(pane : Double) -> @ui.Style {
+  let (l, r) = composer_sides()
+  if !composer_across(pane) || (l - r).abs() <= 0.01 {
+    composer_middle
+  } else if r > l {
+    @ui.style(mr=@sf.room_of(r - l))
+  } else {
+    @ui.style(ml=@sf.room_of(l - r))
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let composer_middle : @ui.Style = @ui.css("")
+
+///|
+/// How far its right end stands from the right of a pane `pane` wide (composer_beside).
+pub fn composer_right(pane : Double) -> Double {
+  if composer_across(pane) {
+    composer_sides().1
+  } else {
+    (pane - composer_width(pane)) / 2.0
+  }
 }
 
 ///|

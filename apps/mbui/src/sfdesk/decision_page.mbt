@@ -329,7 +329,7 @@ fn zou_answer(c : @ui.Ctx, src : Source, w : Workspace, x : Json, draft : String
   // (in a panel of its own, at its foot: its capsule where its ends stand concentric with the corners they are in)
   let place = @sfpages.composer_place(c.width)
   let foot = c.box(style=if @sf.in_pane() { zp_foot_tape() } else { zp_foot }, fn() {
-    c.box(style=@ui.style(w=Fixed(width)), fn() {
+    c.box(style=@ui.style(w=Fixed(width)).then(@sfpages.composer_beside(c.width)), fn() {
       c.sized(width, c.height, fn() {
         @sfpages.composer(c, src, w, spec, fn(wr) {
           if src.read_only {

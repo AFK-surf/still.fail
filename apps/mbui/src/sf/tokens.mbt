@@ -365,8 +365,9 @@ pub fn in_pane() -> Bool {
 /// Where a capsule `height` high across a page's foot (a wide button) stands from the panel's left, its right and its
 /// foot: in a panel of its own (pane_round), each end in the foot corner it is in, as far in as makes it concentric
 /// with it where corner_fit lets it stand there (capsule_fit), its foot as far in as such an end (the left's, where
-/// both are: the right's apart from it there alone); an end that cannot, `side` in, as alone; none, `side` and `foot`
-/// in, as in a window's whole.
+/// both are: the right's apart from it there alone); an end that cannot, as far in as one that does (else `side`), and
+/// clear of a corner too square for it (a Mac's page at the window's edge: as far in as that corner is round, as
+/// pane_foot_sides has a box there); none, `side` and `foot` in, as in a window's whole.
 pub fn foot_capsule(height : Double, side : Double, foot : Double) -> (Double, Double, Double) {
   match pane_radii() {
     None => (side, side, foot)
@@ -382,7 +383,8 @@ pub fn foot_capsule(height : Double, side : Double, foot : Double) -> (Double, D
       } else {
         foot
       }
-      // (an end that cannot follow its corner as far in as one that does: the capsule as far from both its sides)
+      // (an end that cannot follow its corner as far in as one that does: the capsule as far from both its sides; out
+      // of a corner too square for it: nothing of it in a corner it is not concentric with)
       let alone = if fits_l {
         at_l
       } else if fits_r {
@@ -390,7 +392,16 @@ pub fn foot_capsule(height : Double, side : Double, foot : Double) -> (Double, D
       } else {
         side
       }
-      (if fits_l { at_l } else { alone }, if fits_r { at_r } else { alone }, b)
+      let end = fn(fits : Bool, at : Double, corner : Double) {
+        if fits {
+          at
+        } else if at < corner_fit.near - 0.5 {
+          dmax(alone, corner)
+        } else {
+          alone
+        }
+      }
+      (end(fits_l, at_l, k[3]), end(fits_r, at_r, k[2]), b)
     }
   }
 }
@@ -455,6 +466,33 @@ pub fn pane_foot_in(holds? : Double = 0.0) -> Double {
   match pane_radii() {
     Some(k) => foot_fit(k[3], k[2], foot_inset(dmax(k[3], k[2])), least=holds_least(holds))
     None => corner_inset
+  }
+}
+
+///|
+/// How far in from the left and the right of what is built a box across its foot stands (a composer): from a side whose
+/// foot corner it follows, pane_foot_in; from one too square for it to follow, round enough for a circle `holds` across
+/// in its own corner to follow it in turn (a Mac's page at the window's edge, its corner the window's 11.2), clear of
+/// it, as far in as that corner is round, as a bar's last button keeps clear of the corner over it (line_end_in):
+/// nothing of the box in a corner it is not concentric with (the user, 2026-10-26: the composer's corner not the page's
+/// there). In a window's whole, the ladder's inset from both.
+pub fn pane_foot_sides(holds? : Double = 0.0) -> (Double, Double) {
+  let d = pane_foot_in(holds~)
+  match pane_radii() {
+    Some(k) => (foot_side(k[3], d, holds), foot_side(k[2], d, holds))
+    None => (d, d)
+  }
+}
+
+///|
+/// From the side of a foot corner `corner` round, how far in a box `d` in from the foot (pane_foot_sides) stands: `d`,
+/// where its corner concentric with that one is one it may have holding a circle `holds` across (holds_least); clear of
+/// it where that would be squarer.
+fn foot_side(corner : Double, d : Double, holds : Double) -> Double {
+  if @ui.concentric(corner, d) < dmax(holds_least(holds), corner_fit.least) - 0.5 {
+    dmax(d, corner)
+  } else {
+    d
   }
 }
 

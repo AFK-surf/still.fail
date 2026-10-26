@@ -1108,9 +1108,10 @@ fn capsule_place(capsule_in : (Double, Double, Double)) -> @ui.Style {
 }
 
 ///|
-/// Where the composer stands at a panel's foot (composer_place): how much further in than its box (composer_side) its
-/// capsule stands from the panel's left, its right and its foot. Its box, opened, is a card's corner wherever it is:
-/// as far in as makes that concentric with a panel's foot corner (@sf.pane_foot_in), alone in one too square for it.
+/// Where the composer stands at a panel's foot (composer_place): how much further in than its box (composer_sides,
+/// composer_side) its capsule stands from the panel's left, its right and its foot. Its box, opened, is a card's corner
+/// wherever it is: as far in as makes that concentric with a panel's foot corner (@sf.pane_foot_in), clear of one too
+/// square for it (@sf.pane_foot_sides).
 pub(all) struct ComposerPlace {
   capsule_in : (Double, Double, Double)
 }
@@ -1123,22 +1124,23 @@ pub let composer_alone : ComposerPlace = { capsule_in: (0.0, 0.0, 0.0) }
 ///|
 /// Where the composer stands at a panel's foot (`pane` wide): in a panel of its own (@sf.pane_round) whose foot corners
 /// it reaches (as wide as the panel leaves it: composer_width), its capsule's ends each as far in as makes it
-/// concentric with the corner it is in, an end that cannot the ladder's inset in, as it stands alone
+/// concentric with the corner it is in, an end that cannot as far in as the other, clear of a corner too square for it
 /// (@sf.foot_capsule); else as it stands alone (composer_alone).
 pub fn composer_place(pane : Double) -> ComposerPlace {
-  let d = composer_side()
-  if !@sf.in_pane() || composer_width(pane) < pane - 2.0 * d - 0.5 {
+  if !@sf.in_pane() || !composer_across(pane) {
     return composer_alone
   }
+  let (sl, sr) = composer_sides()
   let (l, r, b) = @sf.foot_capsule(capsule_h, @sf.corner_inset, @sf.corner_inset)
-  { capsule_in: (l - d, r - d, b - d) }
+  { capsule_in: (l - sl, r - sr, b - composer_side()) }
 }
 
 ///|
 /// The box (composerBox[data-multiline]): a column its padding in (@sf.composer_pad: its buttons round in its corners
 /// concentric with it), its parts 10 apart, a card's corner of the ladder's, all four alike: where it stands in a
-/// panel's foot corners (@sf.pane_foot_in) concentric with them; in a corner it would follow only in some of its corners
-/// (a phone's screen's, a Mac window's at a panel's foot), its own (InnerOr: corners not alike are a design's, said).
+/// panel's foot corners (@sf.pane_foot_in) concentric with them, clear of one too square for it (a Mac window's at a
+/// panel's foot: @sf.pane_foot_sides); in a corner it would follow only in some of its corners (a phone's screen's), its
+/// own (InnerOr: corners not alike are a design's, said).
 // kept across runs: a value (no field of it changes)
 let composer_box_open : @ui.Style = @ui.style(
   w=Full,
@@ -1523,7 +1525,7 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
       Some(v) => chat_notices(c, src, r, v)
       None => ()
     }
-    c.box(style=@ui.style(w=Fixed(width)), fn() {
+    c.box(style=@ui.style(w=Fixed(width)).then(composer_beside(c.width)), fn() {
       c.sized(width, c.height, fn() {
         composer(
           c,
@@ -1753,9 +1755,8 @@ pub fn composer_open_room(pane : Double) -> Double {
 /// alike (a phone's screen, a panel of its own: there in its corners, InnerOr); in a pane wider than it (a wide column,
 /// the composer 804 at most in its middle) the web's 16 (dock.css.ts).
 pub fn composer_foot_in(pane : Double) -> Double {
-  let d = composer_side()
-  if composer_width(pane) >= pane - 2.0 * d - 0.5 {
-    d
+  if composer_across(pane) {
+    composer_side()
   } else {
     composer_foot_wide
   }

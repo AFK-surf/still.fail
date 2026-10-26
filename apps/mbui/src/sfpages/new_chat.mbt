@@ -231,7 +231,7 @@ fn new_narrow(
         if !going {
           new_notices(c, v, station, width)
         }
-        c.box(style=@ui.style(w=Fixed(width)), fn() {
+        c.box(style=@ui.style(w=Fixed(width)).then(composer_beside(c.width)), fn() {
           new_choosers(c, src, w, frame, v, station, state)
           if !going {
             new_composer_place(c, src, w, frame, v, address, station, state, width)
@@ -241,7 +241,7 @@ fn new_narrow(
       })
       |> ignore
       if going {
-        c.box(style=@ui.style(w=Fixed(width), pb=under), fn() {
+        c.box(style=@ui.style(w=Fixed(width), pb=under).then(composer_beside(c.width)), fn() {
           new_composer_place(c, src, w, frame, v, address, station, state, width)
         })
         |> ignore
@@ -621,7 +621,9 @@ fn new_notices(c : @ui.Ctx, v : Json?, station : Json?, width : Double, part? : 
 ///|
 /// A line of what is wrong for now (spentNotice, mNewSpent): the amber's 12% under it, `width` wide.
 fn new_notice(c : @ui.Ctx, words : String, width : Double) -> Int {
-  c.box(style=new_notice_box.then(@ui.style(w=Fixed(width))), fn() { c.text(words, style=new_notice_words) |> ignore })
+  c.box(style=new_notice_box.then(@ui.style(w=Fixed(width))).then(composer_beside(c.width)), fn() {
+    c.text(words, style=new_notice_words) |> ignore
+  })
 }
 
 ///|
