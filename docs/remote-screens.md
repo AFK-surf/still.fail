@@ -208,9 +208,11 @@ asked for (`permissions.show {grants}`), a folder's row asking macOS's own promp
 
 ### Simulators (station/src/screens/simulator.ts, sim-input.ts; native/helper's SimulatorView.swift)
 
-Each iOS Simulator booted on a Mac station is a screen, `simulator:<udid>`, titled with its device and runtime
-("iPhone 17 · iOS 26.2") and sized as its device type's screen (its `capabilities.plist`), for people to see and use the
-app they are building and for agents to drive it with the `computer` tool. Which are booted is `xcrun simctl list`'s,
+Each iOS Simulator booted on a Mac station is a screen, `simulator:<udid>`, titled with its device and runtime ("iPhone
+17 · iOS 26.2") and sized as its device type's screen (its `capabilities.plist`), for people to see and use the app they
+are building and for agents to drive it with the `computer` tool. Which are booted is `simctl list`'s (CoreSimulator's
+own simctl, not `xcrun simctl`: Xcode's is a script that, where CoreSimulator is older than the Xcode, first runs
+`xcodebuild -runFirstLaunch`, which asks for an administrator's password in a window of macOS's, again each look),
 looked at again when CoreSimulator rewrites a device's `device.plist` (as it boots and shuts down: the station watches
 each device's folder, not what is below it, which a running device writes all the time) and as the screens are asked
 for; a device that shuts down leaves the list and its views end. A Mac without Xcode lists none.
