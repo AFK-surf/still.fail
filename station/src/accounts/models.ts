@@ -1,6 +1,7 @@
 // Which models a profile has enabled without anyone choosing them (2026-10-09): a profile just signed in takes those the
 // station's other profiles of its runtime have enabled, and models known to be outdated are unchecked, once each.
 import { modelKey } from "../read/usage.ts";
+import { facts } from "./catalog.ts";
 
 type Json = any;
 
@@ -81,16 +82,18 @@ export function replacement(model: string): string | null {
 /// Models that read images, by key: sent an image through the provider they were checked on, they answer what is in
 /// it. Each was checked with a drawn digit, and its opposite, on OpenCode Go (2026-10-27); it is a fact about the model
 /// there, not a promise for every endpoint serving that name: another may refuse the part, and its own error says so.
-/// A model not here is taken as text only, which is what a runtime's read tool acts on: it refuses an image and says to
-/// switch models, better than handing a model pixels it would answer around. Add a line for a model checked this way.
+/// A model neither here nor said by its maker to read images (the model catalog) is taken as text only, which is what a
+/// runtime's read tool acts on: it refuses an image and says to switch models, better than handing a model pixels it
+/// would answer around. Add a line for a model checked this way that the catalog does not say reads them.
 export const VISION = new Set<string>(["deepseek-v4.1-flash", "glm-5.3-flash", "kimi-k3", "omen-alpha", "qwen3.8-flash"]);
 /// Families whose every model reads images (Anthropic's API takes them throughout).
 const VISION_FAMILIES = ["claude-"];
 
-/// Whether a model takes image input, however a profile spells it.
+/// Whether a model takes image input, however a profile spells it: checked here, or its maker says so (the model
+/// catalog, accounts/catalog.ts).
 export const seesImages = (model: string): boolean => {
   const key = split(model)[0]!;
-  return VISION.has(key) || VISION_FAMILIES.some((family) => key.startsWith(family));
+  return VISION.has(key) || VISION_FAMILIES.some((family) => key.startsWith(family)) || (facts(model)?.input?.includes("image") ?? false);
 };
 
 /// The models a profile just signed in takes: those the station's other profiles of its runtime have enabled

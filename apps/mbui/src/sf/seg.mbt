@@ -4,7 +4,7 @@
 
 ///|
 /// A segmented choice (Seg): mbui's sliding toggle group (@kit.toggle_group: the arrows move along it, a screen reader
-/// reads its options) in Seg's look: a track the ink at 6%, a light thumb (a hairline round it) sliding to the one
+/// reads its options) in Seg's look: a track the ink at 6%, a thumb lifted out of it (the theme's lifted, a hairline round it) sliding to the one
 /// chosen. `fill`: as wide as where it is, each option an equal share, none narrower than its words (one that needs
 /// more keeps that, the others sharing what is left); where they all need more than its width, as option_widths has
 /// them: their sides narrower, else their words smaller alike (to the system's own size of words), else the chosen one
@@ -28,7 +28,7 @@ fn seg(
   let height = if pill { 36.0 } else { height }
   let radius = if pill { 18.0 } else { radius }
   let inset = 2.0
-  let thumb = if t.dark { 0x3A3B40FFL } else { 0xFFFFFFFFL }
+  let thumb = c.theme().lifted
   let items = options.mapi(fn(i, l) { @kit.item(i.to_string(), label=l) })
   let words_size : @ui.TextSize = if pill { Lg } else if fill { Base } else { Sm }
   // filling: where its options' words with their sides need more than the track (as last laid out: read back), as

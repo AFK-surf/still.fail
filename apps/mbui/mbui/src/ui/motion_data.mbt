@@ -227,9 +227,10 @@ pub fn Ctx::cycle(self : Ctx, period : Double, resident? : Bool = false, loc~ : 
 
 ///|
 /// Where a loop of `length` ms is now (ms into it) whose look changes at `ends` (ms into it, ascending: a moving
-/// picture's frames' ends), a frame as the next comes, none between. Said as a cycle (Ctx::cycle).
+/// picture's frames' ends, the steps of a mark's blink), a frame as the next comes, none between. Said as a cycle
+/// (Ctx::cycle).
 #callsite(autofill(loc))
-fn Ctx::loop_at(self : Ctx, length : Double, ends : Array[Double], loc~ : SourceLoc) -> Double {
+pub fn Ctx::loop_at(self : Ctx, length : Double, ends : Array[Double], loc~ : SourceLoc) -> Double {
   if !self.cycles.iter().any(fn(c) { c.1.to_string() == loc.to_string() }) {
     self.cycles.push((length, loc))
   }

@@ -81,6 +81,24 @@ test "a native view inside a clip shows only in it: its hole cut to the clip" {
 }
 
 ///|
+test "a native view in what is drawn moved (a look on what holds it): the host told where its hole was moved to" {
+  let cell : Ref[@ui.NativeView?] = { val: None }
+  let t = @ui.Tester::new(
+    fn(c) {
+      let v = once(cell, fn() { @ui.NativeView::page("<p>hi</p>") })
+      c.box(h=Px(100.0), fn() { () }) |> ignore
+      let row = c.box(w=Px(300.0), h=Px(200.0), fn() { c.native(v) |> ignore })
+      c.look(row, @ui.look(dx=10.0, dy=-30.0))
+    },
+    w=390.0,
+    h=844.0,
+  )
+  assert_eq(t.holes(), [(10.0, 70.0, 300.0, 200.0)])
+  assert_true(t.views().contains("place 1 10 70 300 200 in 10 70 310 270"))
+  cell.val.unwrap().close()
+}
+
+///|
 test "a native view scrolled partly out of its clip: its hole the part seen, and which part of its content that is" {
   let cell : Ref[@ui.NativeView?] = { val: None }
   let t = @ui.Tester::new(

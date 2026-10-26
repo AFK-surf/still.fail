@@ -27,23 +27,30 @@ pub fn done_waiting(c : @ui.Ctx, key : String) -> Unit {
 }
 
 ///|
-/// What waits breathing (the placeholders, to 0.5: waiting.css.ts breathe; a service restarting, its dot to 0.35:
-/// Jobs.css.ts jobBreathe), how much of it shows now: whole to `low` and back in breath_ms, each way on CSS's
-/// ease-in-out; still and whole when what it waits on failed (the red words over them say so: faded, they were drawn
-/// too faint to be seen, docs/ui-panels.md 对比度). `resident`: a state's for as long as it lasts (a service
-/// restarting), on the one clock's steps, not a wait's (Ctx::cycle).
-pub fn breath(
+/// What waits, node `node`, breathing (the placeholders, to 0.5: waiting.css.ts breathe; a service restarting, its dot
+/// to 0.35: Jobs.css.ts jobBreathe): whole to `low` and back in breath_ms, each way on CSS's ease-in-out, worked out as
+/// each frame is drawn, never built anew for it (Ctx::cycle_look); still and whole when what it waits on failed (the
+/// red words over them say so: faded, they were drawn too faint to be seen, docs/ui-panels.md 对比度). `resident`: a
+/// state's for as long as it lasts (a service restarting), on the one clock's steps, not a wait's (Ctx::cycle).
+pub fn breathe(
   c : @ui.Ctx,
+  node : Int,
   failed? : Bool = false,
   low? : Double = 0.5,
   resident? : Bool = false,
-) -> Double {
+) -> Unit {
   if failed {
-    return 1.0
+    return
   }
-  let f = c.cycle(breath_ms, resident~)
-  let way = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
-  1.0 - (1.0 - low) * @ui.Ease::InOut.at(way)
+  c.cycle_look(
+    node,
+    breath_ms,
+    fn(f) {
+      let way = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
+      @ui.look(alpha=1.0 - (1.0 - low) * @ui.Ease::InOut.at(way))
+    },
+    resident~,
+  )
 }
 
 ///|
@@ -57,16 +64,10 @@ pub fn bar(
   breathing? : Bool = false,
 ) -> Unit {
   let t = theme()
-  let seen = if breathing { breath(c) } else { 1.0 }
-  c.box(
-    w~,
-    h=Px(h),
-    bg=t.p.line,
-    radius=if radius >= 0.0 { radius } else { h / 2.0 },
-    opacity=seen,
-    fn() {  },
-  )
-  |> ignore
+  let b = c.box(w~, h=Px(h), bg=t.p.line, radius=if radius >= 0.0 { radius } else { h / 2.0 }, fn() {  })
+  if breathing {
+    breathe(c, b)
+  }
 }
 
 ///|
@@ -147,8 +148,8 @@ pub let spinner_turn_ms : Double = 800.0
 ///|
 /// The spinner (styles/spinner.css.ts, Waiting.kt Spinner): a ring of line_strong, a quarter of it in the accent,
 /// turning in 0.8s; 14, or 12 in a line of small text. `sweep` (of a turn) and `period` for other rings that turn (a
-/// chat's mark at work: three quarters, 1.2s). Its lines drawn as they are every frame (mbui's Ctx::lines), only where
-/// the arc starts going round with the clock: nothing to make, nothing to wait for.
+/// chat's mark at work: three quarters, 1.2s). Its lines drawn once (mbui's Ctx::lines), turned by the clock as each
+/// frame is drawn (Ctx::cycle_look): nothing built anew for it, nothing to make, nothing to wait for.
 pub fn spinner(
   c : @ui.Ctx,
   size? : Double = 14.0,
@@ -162,18 +163,19 @@ pub fn spinner(
   let arc = arc.unwrap_or(t.p.accent)
   let pi = 3.141592653589793
   // the line's middle 1 in from the edge; the arc from a quarter before the top (the web's: a border whose top is
-  // the arc), turned by the clock
+  // the arc), the two turned by the clock about the ring's middle
   let mid = size / 2.0
   let r = mid - spin_stroke / 2.0
-  let from = -0.75 * pi + c.cycle(period) * 2.0 * pi
-  c.lines(
+  let node = c.lines(
     [
       @ui.line(@ui.arc(mid, mid, r, from=0.0, sweep=2.0 * pi), width=spin_stroke, color=ring),
-      @ui.line(@ui.arc(mid, mid, r, from~, sweep=sweep * 2.0 * pi), width=spin_stroke, color=arc),
+      @ui.line(@ui.arc(mid, mid, r, from=-0.75 * pi, sweep=sweep * 2.0 * pi), width=spin_stroke, color=arc),
     ],
     w=Px(size),
     h=Px(size),
   )
+  c.cycle_look(node, period, fn(f) { @ui.look(rot=f * 2.0 * pi) })
+  node
 }
 
 ///|
@@ -233,10 +235,8 @@ pub fn bones(c : @ui.Ctx, sample : () -> Unit, still? : Bool = false, fill? : Bo
     sample()
     return
   }
-  c.box(style=if fill { wait_fill } else { bones_box }, opacity=breath(c, failed=still), fn() {
-    c.bones(theme().p.line, sample)
-  })
-  |> ignore
+  let b = c.box(style=if fill { wait_fill } else { bones_box }, fn() { c.bones(theme().p.line, sample) })
+  breathe(c, b, failed=still)
 }
 
 ///|

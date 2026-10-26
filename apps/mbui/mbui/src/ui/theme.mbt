@@ -93,7 +93,9 @@ pub(all) struct Theme {
   /// words said in warn's colour (Color's WarnInk): its amber dark enough to read on the theme's grounds (4.5:1, WCAG's
   /// AA), as accent_text is the accent's; `warn` itself is a mark's, a dot's, a bar's
   warn_ink : Int64
-  /// what is lifted out of a tinted track (Color's Lifted)
+  /// what is lifted out of a tinted track (Color's Lifted), drawn over the track: in the light opaque white, a shadow
+  /// lifting it; in the dark, where a shadow does not show, the ink at an opacity, a step lighter than the track on
+  /// whatever ground the track lies on (an opaque grey is lighter than a track on the page, darker than one on a card)
   lifted : Int64
   /// a quiet wash under what comes onto it (Color's Wash)
   wash : Int64
@@ -326,7 +328,10 @@ pub fn Theme::dark() -> Theme {
     sidebar: 0x19191BFFL,
     list: 0x1C1D20FFL,
     link: 0x8EB8FEFFL,
-    lifted: 0x3A3B40FFL,
+    // the ink at 12% over the track (the ink at 6%): 1.39 to 1 off it on the darkest ground and the lightest; the
+    // opaque 3A3B40 was 1.05 to 1 off a track on a raised ground, and the canvas the wide segmented had 1.02 off one
+    // on the page (2026-10-27: "dark mode 下单选滑块几乎分辨不清")
+    lifted: 0xE9E9EA1FL,
     // white at 5%
     wash: 0xFFFFFF0DL,
   }

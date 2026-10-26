@@ -11,18 +11,19 @@
 // while it shows (what follows a computed keeps it). What it reads of time is read so too (KeptClock): the frame, where
 // what it shows changes each frame (a motion going on read where it is now, a cycle drawn each frame, a layer it
 // opened), and the moment what it shows changes at (a clock's step, a timer's end), whoever told the motion or the
-// timer and wherever it was told; what the rows of a list in it read as they are laid out, after its build, is read by
-// it too (kept_rows.mbt). What is not a signal is caught by what changes it: an event from outside (outside_events:
-// what the host or the runtime did, not a pointer moved nor a wheel turned elsewhere), its `key` (what it is built from
-// by its caller), the layout's epoch, what moves what it holds (its own motions, and what moves a list or a box built
-// in it, whenever it was told: a list flung before the part was kept flings on in it), a press held down on it or a
-// wheel turned over it (what it holds may take them), the mouse's pointer over it (it lights what it points at). It is
-// built whole the first frames it shows, while a motion going on as it came may still move what it holds. Drawn again,
-// what its build and its paint said of the frame is said again, where it was, all of it by one rule (said.mbt): what
-// takes the focus, the pointer's shape, what asks for a menu, what is told outside, its targets, what scrolls in it,
-// the words that can be picked, its scroll bars, so keys, presses, the wheel and the pointer find in it what they found
-// as it was built; and what the rows of its lists said, where they said it. It is never read out, built or not, so
-// what is read out does not come and go with it.
+// timer and wherever it was told (a look by the clock is not read: what it draws carries it, cycle_look.mbt); what the
+// rows of a list in it read as they are laid out, after its build, is read by it too (kept_rows.mbt). What is not a
+// signal is caught by what changes it: an event from outside (outside_events: what the host or the runtime did, not a
+// pointer moved nor a wheel turned elsewhere), its `key` (what it is built from by its caller), the layout's epoch,
+// what moves what it holds (its own motions, and what moves a list or a box built in it, whenever it was told: a list
+// flung before the part was kept flings on in it), a press held down on it or a wheel turned over it (what it holds may
+// take them), the mouse's pointer over it (it lights what it points at). It is built whole the first frames it shows,
+// while a motion going on as it came may still move what it holds. Drawn again, what its build and its paint said of
+// the frame is said again, where it was, all of it by one rule (said.mbt): what takes the focus, the pointer's shape,
+// what asks for a menu, what is told outside, its targets, what scrolls in it, the words that can be picked, its scroll
+// bars, so keys, presses, the wheel and the pointer find in it what they found as it was built; and what the rows of
+// its lists said, where they said it. It is never read out, built or not, so what is read out does not come and go with
+// it.
 
 ///|
 /// A part kept (Ctx::kept_part): what its build drew (its instances, where they were; the pieces of its shapes; the
@@ -37,6 +38,8 @@ priv struct KeptPart {
   plots : Array[Int]
   plot_seen : Map[Int, Bool]
   images : Array[ImageEntry]
+  /// the looks by the clock its instances are tagged with, by tag (cycle_look.mbt): drawn again, they go on
+  cycles : Map[Int, CycleLook]
   /// its build, run by `tracker` as what it read changes or it is invalidated (what is no signal changed); the build
   /// now, and what the tracker answered as it last ran it
   tracker : @signals.Computed[Int]
@@ -61,8 +64,11 @@ priv struct KeptPart {
   mut built : Int
   mut drawn : Int
   mut shown : Int
-  /// the motions going on as it first showed: it is built while any of them still goes
+  /// the motions going on as it first showed: it is built while any of them still goes, and once more as they are
+  /// over (`moved_built`: its last build was while one was, so what it drew is where the motion had it then, as far as
+  /// the window showed it there)
   waits : Array[MoverEntry]
+  mut moved_built : Bool
   /// drawn again this frame (not built)
   mut again : Bool
   /// a Tester's: the words its build drew (KeptWord), what the Tester finds in it while it is drawn again
@@ -322,7 +328,8 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
     st.scale == self.scale &&
     st.pointing == pointing() &&
     st.waits.is_empty() &&
-    !moving
+    !moving &&
+    !st.moved_built
   st.body.val = body
   if !same {
     st.tracker.invalidate()
@@ -355,7 +362,10 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
   if ran {
     // (its rows say theirs as its lists are laid out)
     st.rows_said.clear()
-    st.built = self.frame_no
+    // (built while rows are not kept, a frame measured for contrast, parts off: its lists' rows said nothing to say
+    // again, so it is not drawn again from it)
+    st.built = if self.rows_on() { self.frame_no } else { -1 }
+    st.moved_built = !st.waits.is_empty() || moving
     st.key = key
     st.outside = outside_events.val
     st.epoch = self.epoch
@@ -413,6 +423,7 @@ fn kept_new(id : Int, row~ : Bool) -> KeptPart {
     plots: [],
     plot_seen: {},
     images: [],
+    cycles: {},
     tracker: @signals.computed(fn(_) {
       let c = g()
       let (layers, back) = (c.layers.length(), c.back_next)
@@ -443,6 +454,7 @@ fn kept_new(id : Int, row~ : Bool) -> KeptPart {
     drawn: -1,
     shown: -1,
     waits: [],
+    moved_built: false,
     again: false,
     words: [],
     rect: (0.0, 0.0, 0.0, 0.0),
@@ -789,8 +801,71 @@ fn Ctx::part_lit(self : Ctx, st : KeptPart) -> Bool {
 }
 
 ///|
+/// A part's band, pushed as its build is painted: nothing cuts it (what is round it, the window and the panes, is not
+/// its: drawn again where a look round it moved it, a tape's panel behind the one in use, it is cut there as its build
+/// would be). Its drawing is put in the clip it is in after (Ctx::part_clip_into), built or drawn again alike, as a
+/// list's row is in its list's (kept_rows.mbt's band).
+fn part_band() -> Unit {
+  for v in [-1.0e9, -1.0e9, 1.0e9, 1.0e9] {
+    clip_stack.push(v)
+  }
+  for _ in 0..<20 {
+    clip_stack.push(0.0)
+  }
+}
+
+///|
+/// Where what a part's paint said in its band is said: as it was, in the clip at `k` (the one it is drawn in).
+fn part_band_moved(k : Int) -> Moved {
+  { dy: 0.0, cut: k, band_l: -1.0e9, band_t: -1.0e9, band_r: 1.0e9, band_b: 1.0e9, node: -1 }
+}
+
+///|
+/// Part `id`'s build, painted in its band from instance `i0` (its shapes' pieces from `g0`) and taken, put in the clip at
+/// `k`, what it drew (row_clip_into; with `drops`, what shows nothing there dropped) and what its paint said (as what
+/// draws it again says it there); what it covers there.
+fn Ctx::part_clip_into(self : Ctx, id : Int, k : Int, i0 : Int, g0 : Int, drops~ : Bool) -> Unit {
+  match kept_parts.get(id) {
+    Some(st) => {
+      self.paint_cut(st.marks)
+      self.say_again(st.said, part_band_moved(k))
+      self.row_clip_into(k, i0, g0, drops~)
+      st.rect = cover_of(self.inst, i0, self.ninst)
+    }
+    None => ()
+  }
+}
+
+///|
+/// What instances `i0` to `i1` of `a` cover (x, y, w, h: their rects within their cuts).
+fn cover_of(a : FixedArray[Double], i0 : Int, i1 : Int) -> (Double, Double, Double, Double) {
+  let mut x0 = @double.infinity
+  let mut y0 = @double.infinity
+  let mut x1 = -@double.infinity
+  let mut y1 = -@double.infinity
+  for k in i0..<i1 {
+    let q = k * inst_size
+    let l = dmax(a[q], a[q + 16])
+    let t = dmax(a[q + 1], a[q + 17])
+    let r = dmin(a[q] + a[q + 2], a[q + 18])
+    let b = dmin(a[q + 1] + a[q + 3], a[q + 19])
+    if r > l && b > t {
+      x0 = dmin(x0, l)
+      y0 = dmin(y0, t)
+      x1 = dmax(x1, r)
+      y1 = dmax(y1, b)
+    }
+  }
+  if x1 > x0 {
+    (x0, y0, x1 - x0, y1 - y0)
+  } else {
+    (0.0, 0.0, 0.0, 0.0)
+  }
+}
+
+///|
 /// The frame's instances from `i0` to its last so far taken as part `self`'s drawing, as they are, where they are, with
-/// the pieces of their shapes; what they cover (`rect`).
+/// the pieces of their shapes and the looks by the clock they are tagged with; what they cover (`rect`).
 fn KeptPart::take_insts(self : KeptPart, c : Ctx, i0 : Int) -> Unit {
   let st = self
   let a = c.inst
@@ -801,11 +876,7 @@ fn KeptPart::take_insts(self : KeptPart, c : Ctx, i0 : Int) -> Unit {
   a.blit_to(st.insts, len=floats, src_offset=i0 * inst_size)
   st.floats = floats
   st.segs.clear()
-  // (what it covers, where its instances show: their rects within their cuts)
-  let mut x0 = @double.infinity
-  let mut y0 = @double.infinity
-  let mut x1 = -@double.infinity
-  let mut y1 = -@double.infinity
+  st.cycles.clear()
   let d = st.insts
   let mut q = 0
   while q < floats {
@@ -816,19 +887,18 @@ fn KeptPart::take_insts(self : KeptPart, c : Ctx, i0 : Int) -> Unit {
         st.segs.push(c.segs[v])
       }
     }
-    let l = dmax(d[q], d[q + 16])
-    let t = dmax(d[q + 1], d[q + 17])
-    let r = dmin(d[q] + d[q + 2], d[q + 18])
-    let b = dmin(d[q + 1] + d[q + 3], d[q + 19])
-    if r > l && b > t {
-      x0 = dmin(x0, l)
-      y0 = dmin(y0, t)
-      x1 = dmax(x1, r)
-      y1 = dmax(y1, b)
+    // (the looks by the clock it holds, kept with it)
+    let tag = cycle_tag_of(d, q)
+    if tag != 0 && !st.cycles.contains(tag) {
+      match cycle_frame.get(tag) {
+        Some(cy) => st.cycles[tag] = cy
+        None => ()
+      }
     }
     q = q + inst_size
   }
-  st.rect = if x1 > x0 { (x0, y0, x1 - x0, y1 - y0) } else { (0.0, 0.0, 0.0, 0.0) }
+  // (what it covers, where its instances show: their rects within their cuts)
+  st.rect = cover_of(d, 0, floats / inst_size)
 }
 
 ///|
@@ -899,6 +969,10 @@ fn Ctx::part_paint_again(self : Ctx, st : KeptPart) -> Unit {
   st.insts.blit_to(a, len=st.floats, dst_offset=base)
   let seg0 = (self.segs.length() / 4).to_double()
   self.segs.append(st.segs)
+  // (its looks by the clock, going on from where their cycles are now: cycle_look.mbt)
+  for tag, cy in st.cycles {
+    cycle_frame[tag] = cy
+  }
   let caps : Map[Int, Int] = {}
   for j in 0..<count {
     let b = base + j * inst_size

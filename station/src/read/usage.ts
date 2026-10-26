@@ -12,6 +12,7 @@ import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, remoteRunsSi
 import { type InWorkspace, sees } from "../store/rows.ts";
 import { titleOf } from "./views.ts";
 import { profileRuntimes } from "../agents/profiles.ts";
+import { facts } from "../accounts/catalog.ts";
 
 // ── prices (usage.rs) ──
 
@@ -19,7 +20,8 @@ import { profileRuntimes } from "../agents/profiles.ts";
 /// an hour; fast mode doubles all of it.
 type Price = { input: number; output: number; cacheRead: number };
 
-/// usage.rs PRICES: standard short-context API list prices (2026-10-02). Longer names first.
+/// usage.rs PRICES: standard short-context API list prices (2026-10-02), for a model the model catalog (accounts/catalog.ts)
+/// has no price for, or before it has said anything. Longer names first.
 const PRICES: [string, Price][] = [
   ["gpt-6-astra", { input: 10.0, output: 50.0, cacheRead: 1.0 }],
   ["gpt-6.1-sol", { input: 2.0, output: 10.0, cacheRead: 0.1 }],
@@ -36,22 +38,28 @@ const PRICES: [string, Price][] = [
   ["claude-opus-4-7", { input: 5.0, output: 25.0, cacheRead: 0.5 }],
   ["claude-opus-4-6", { input: 5.0, output: 25.0, cacheRead: 0.5 }],
   ["claude-opus-4-5", { input: 5.0, output: 25.0, cacheRead: 0.5 }],
-  ["claude-sonnet-5-5", { input: 2.0, output: 10.0, cacheRead: 0.2 }],
+  ["claude-sonnet-5-5", { input: 2.0, output: 10.0, cacheRead: 0.1 }],
   ["claude-sonnet-5", { input: 2.0, output: 10.0, cacheRead: 0.2 }],
   ["claude-sonnet-4-6", { input: 3.0, output: 15.0, cacheRead: 0.3 }],
   ["claude-sonnet-4-5", { input: 3.0, output: 15.0, cacheRead: 0.3 }],
   ["claude-haiku-4-5", { input: 1.0, output: 5.0, cacheRead: 0.1 }],
 ];
 
-/// price_table: the very same table `cost` uses, for inspecting a station's calculation from the usage page.
-export function priceTable(lang: Lang): Json {
+/// price_table: the very same prices `cost` uses, for inspecting a station's calculation from the usage page: those of the
+/// station's own table and of the `models` its rows name.
+export function priceTable(lang: Lang, models: (string | null)[] = []): Json {
+  const keys = [...new Set([...PRICES.map(([model]) => model), ...models.flatMap((m) => (m === null ? [] : [modelKey(m).split("[")[0]!]))])];
   return {
     note: tr(lang, "station.usage.priceNote"),
-    rows: PRICES.map(([model, p]) => ({
-      model, input: p.input, cacheRead: p.cacheRead,
-      cacheWrite: model.startsWith("claude-") ? p.input * 1.25 : null,
-      cacheWriteLong: model.startsWith("claude-") ? p.input * 2.0 : null, output: p.output,
-    })),
+    rows: keys.flatMap((model) => {
+      const p = price(model);
+      if (p === null) return [];
+      return [{
+        model, input: p.input, cacheRead: p.cacheRead,
+        cacheWrite: model.startsWith("claude-") ? p.input * 1.25 : null,
+        cacheWriteLong: model.startsWith("claude-") ? p.input * 2.0 : null, output: p.output,
+      }];
+    }),
   };
 }
 
@@ -89,9 +97,11 @@ export function modelKey(spelled: string): string {
   return m + context;
 }
 
-/// price: a model's prices, however a profile spells it (anthropic/claude-opus-5-5, claude-opus-5-5[1m]); none for a
-/// model without a list price here.
+/// price: a model's prices, however a profile spells it (anthropic/claude-opus-5-5, claude-opus-5-5[1m]): the model
+/// catalog's, else the station's own table's; none for a model without a list price in either.
 export function price(model: string): Price | null {
+  const told = facts(model)?.cost;
+  if (told !== undefined) return { input: told.input, output: told.output, cacheRead: told.cacheRead ?? told.input };
   const name = modelKey(model);
   return PRICES.find(([prefix]) => name === prefix || (name.startsWith(prefix) && name.slice(prefix.length).startsWith("[")))?.[1] ?? null;
 }
@@ -213,7 +223,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     to: i64(to),
     since: usageSince(s),
     reading,
-    prices: priceTable(lang),
+    prices: priceTable(lang, rows.map((r) => r.model)),
     rows,
     threads,
     people,

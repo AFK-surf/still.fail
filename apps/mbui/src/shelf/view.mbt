@@ -331,7 +331,7 @@ fn waiting(
     }
     let pad = tile_pad(c)
     let inner = tile - 2.0 * pad
-    c.box(gap~, opacity=@sf.breath(c, failed~), fn() {
+    let wait = c.box(gap~, fn() {
       for _ in 0..<3 {
         c.box(dir=Row, pl=inset, pr=inset, gap~, align=AStart, fn() {
           for _ in 0..<cols {
@@ -346,7 +346,7 @@ fn waiting(
         |> ignore
       }
     })
-    |> ignore
+    @sf.breathe(c, wait, failed~)
   })
   |> ignore
 }

@@ -301,7 +301,7 @@ fn shapes(
       |> ignore
     None => ()
   }
-  c.box(w=Fill(1.0), h=Fill(1.0), clip=true, gap~, opacity=@sf.breath(c, failed=error is Some(_)), fn() {
+  let wait = c.box(w=Fill(1.0), h=Fill(1.0), clip=true, gap~, fn() {
     c.box(pl=if small(c) { 16.0 } else { inset }, pt=4.0, pb=4.0, fn() {
       @sf.bar(c, Px(120.0), 13.0)
     })
@@ -315,7 +315,7 @@ fn shapes(
       |> ignore
     }
   })
-  |> ignore
+  @sf.breathe(c, wait, failed=error is Some(_))
 }
 
 ///|

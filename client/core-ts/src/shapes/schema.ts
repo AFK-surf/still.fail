@@ -2352,6 +2352,7 @@ export const SHAPES: Record<string, Shape> = {
     ["leading", opt("Lead"), { doc: "Whose pictures lead the rows: the device's setting (`prefs`), 自动 by `members` (unknown: as if alone)." }],
     ["glyph", opt("StationsGlyph"), { doc: "The stations at a glance, and what the list says with no rows; absent from a core before them." }],
     ["note", opt("ListNote")],
+    ["syncing", opt("String"), { said: true, doc: "While what changed since the device was last with the stations is still being brought (station/sync.ts\n`#catching`), what the mark at the list's top beside its filter says (its tip, and to a screen reader): 正在同步 while a\nstation has yet to say what changed, then how many chats are left (正在同步 · 还剩 12 个对话). Stations not reached are\nleft out (the list says so where it says what is wrong with them). Absent once all is here, and from a core before it." }],
   ], { keepNone: true }),
   Spent: struct([
     ["until", opt("f64")],

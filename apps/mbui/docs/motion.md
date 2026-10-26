@@ -27,7 +27,7 @@ Reduced motion is unchanged: the same clock going fast (docs/ui-panels.md 减少
 | 5. Another page | you went somewhere | pushed and popped, risen, another place on the bar, the tape | navigation | its way says where the page is (deeper, over, beside); what is on the page does not move of its own as it comes | `@ui.Nav`, the shell |
 | 6. Scrolled to | the view goes where you should look | new rows at the end followed, words sent, a message jumped to | its cause (rows came, a send, a jump) | one law, the glide | `Ctx::list_to_end`, `glide_on_growth` |
 | 7. A control answering | it took your hand, or its value changed | a ripple, a hover, a switch, a segmented thumb, a fill, "copied" | the control's own state | a value of its own look, never its layout | `@motion.animate` / `follow` on that state, `@motion.ripple`, `Ctx::cover` |
-| 8. Waiting | something is under way | the skeleton's breath, a spinner, a progress band | the clock, as a cycle, drawn each frame while it shows (gone when what it waits for comes); what stays up as long as something elsewhere lasts steps, below | only these three (docs/ui-panels.md 等待) | `Ctx::cycle`, `Ctx::every` |
+| 8. Waiting | something is under way | the skeleton's breath, a spinner, a progress band | the clock, as a cycle, drawn each frame while it shows (gone when what it waits for comes); what stays up as long as something elsewhere lasts steps, below | only these three (docs/ui-panels.md 等待) | `Ctx::cycle_look` (a look: never built anew for it), `Ctx::cycle`, `Ctx::every` |
 | 9. Emphasis | look here | a message jumped to, lit; a search's strokes; a mark's pop | its cause (the jump, the match) | lit, then gone | `Anim::animate` told at the cause |
 
 A mark that stays up for as long as something elsewhere goes on (a chat at work's spokes, a station's glyph blinking
@@ -35,6 +35,11 @@ while it works, a chat's waiting dots and watching beat, a service's breath whil
 wait: it can be up for hours, so it steps on one clock, a frame each 100 ms, never on each of the display's frames
 (still.fail's 「进行中」逐格走: `Ctx::cycle(resident=true)`, `@sf.spoke_step_ms`). A wait is short and watched, so it is
 drawn smooth, as the web's CSS loops are (2026-10-25, the user: waits stepped with the rest looked choppy, 「某些非常驻的不应该降」).
+What changes of such a mark is its look (how strong it is, how big, how far turned: the spokes and the segments turned
+an eighth a step, a spinner turned, a dot breathing or beating), so it is a look by the clock (`Ctx::cycle_look`):
+worked out as each frame is drawn, never read as it is built, so what holds it (a chats' list, a sidebar) is not built
+again for it (2026-10-27: each step of a chat's spokes built the phone's whole sidebar again, 10 ms ten times a
+second).
 
 Kind 7 is the only one where "its state changed, so it eases to the new value", what a CSS transition does, is
 right: the state is the control's alone and means one thing.

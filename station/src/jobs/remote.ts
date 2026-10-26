@@ -379,8 +379,12 @@ export class Remote {
   private queued(jobId: string): Json {
     const q = this.jobs.queueOf(jobId);
     if (q === null) return {};
-    const why = q.why === "memory" ? "the machine's memory is under pressure" : q.why === "screen" ? "another task that uses the screen runs" : "the machine is busy";
-    return { queue: { place: q.place, why: q.why, note: `Waiting in this station's queue (${q.place === 1 ? "next" : `number ${q.place}`}): ${why}. It starts by itself when there is room; you are told when it ends, as for any task.` } };
+    const why =
+      q.why === "memory" ? "the machine's memory is under pressure"
+      : q.why === "screen" ? `another task that uses the screen runs${q.holder !== undefined ? ` (${q.holder})` : ""}`
+      : q.why === "person" ? "a person is using this machine's screen (its input not idle): no task is given it meanwhile"
+      : "the machine is busy";
+    return { queue: { place: q.place, why: q.why, ...(q.holder !== undefined ? { holder: q.holder } : {}), note: `Waiting in this station's queue (${q.place === 1 ? "next" : `number ${q.place}`}): ${why}. It starts by itself when there is room; you are told when it ends, as for any task.` } };
   }
 
   private running(task: string): boolean {

@@ -861,10 +861,12 @@ static void make_web(View *v) {
         return S_OK;
       });
   HRESULT hr;
-  // InPrivate where the runtime has it: nothing of it kept (as Apple's non-persistent data store)
+  // InPrivate where the runtime has it: nothing of it kept (as Apple's non-persistent data store); but a page (kind 2:
+  // a visualization), in the environment's own profile, its folder's cache kept across runs (as Apple's page_store):
+  // what it loads from the CDNs loaded once
   ComPtr<ICoreWebView2Environment10> e10;
   ComPtr<ICoreWebView2ControllerOptions> opts;
-  if (SUCCEEDED(env.As(&e10)) && SUCCEEDED(e10->CreateCoreWebView2ControllerOptions(&opts))) {
+  if (v->kind != 2 && SUCCEEDED(env.As(&e10)) && SUCCEEDED(e10->CreateCoreWebView2ControllerOptions(&opts))) {
     opts->put_IsInPrivateModeEnabled(TRUE);
     hr = e10->CreateCoreWebView2CompositionControllerWithOptions(hwnd_main, opts.Get(), done.Get());
   } else {

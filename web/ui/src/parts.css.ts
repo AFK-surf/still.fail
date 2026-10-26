@@ -61,7 +61,7 @@ export const segmented = style({
 export const segmentedThumb = style({
   position: "absolute", zIndex: "-1", top: "var(--pad)", bottom: "var(--pad)", left: "var(--pad)",
   width: "calc((100% - 2 * var(--pad) - (var(--n) - 1) * var(--gap)) / var(--n))", borderRadius: "999px",
-  background: vars.canvas, boxShadow: `0 0 2px ${vars.shadow}, 0 0 0 .5px ${vars.line}`,
+  background: vars.lifted, boxShadow: `0 0 2px ${vars.shadow}, 0 0 0 .5px ${vars.line}`,
   transform: "translateX(calc(var(--i) * (100% + var(--gap))))", transition: `transform 240ms ${vars.easeOut}`,
 });
 export const segmentedOption = style({

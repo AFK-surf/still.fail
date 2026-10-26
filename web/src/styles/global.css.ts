@@ -41,6 +41,10 @@ globalStyle(":root", {
     // What floats over the canvas (the composer): a grey ground of its own, a step darker than the canvas in light and
     // a step lighter in dark, where a shadow does not show.
     "--raised": "#e4e4e8",
+    // What is lifted out of a tinted track (a segmented choice's thumb), drawn over the track: white, a shadow lifting
+    // it; in dark, where a shadow does not show, the ink at 12% over the track (the ink at 6%), a step lighter than it on
+    // whatever ground it lies on (the canvas was darker than a track on the page, 1.07:1).
+    "--lifted": "oklch(100% 0 0)",
     "--sidebar": "oklch(96.9% .005 85)",
     "--list": "oklch(98.5% .002 85)",
     "--text": "oklch(27% .009 255)",
@@ -113,6 +117,7 @@ globalStyle(":root:not([data-theme=\"light\"])", {
       vars: {
         "--canvas": "#1f2023",
         "--raised": "#2a2c31",
+        "--lifted": "rgb(233 233 234 / .12)",
         "--sidebar": "#19191b",
         "--list": "#1c1d20",
         "--text": "#e9e9ea",
@@ -154,6 +159,7 @@ globalStyle(":root[data-theme=\"dark\"]", {
   vars: {
     "--canvas": "#1f2023",
     "--raised": "#2a2c31",
+    "--lifted": "rgb(233 233 234 / .12)",
     "--sidebar": "#19191b",
     "--list": "#1c1d20",
     "--text": "#e9e9ea",

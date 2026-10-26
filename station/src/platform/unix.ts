@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import { wall } from "../ops/fibers.ts";
 import type { Env, Found, Host, Platform } from "./index.ts";
 import { holder } from "./processes.ts";
-import { field, firstWord, output, parseF64, parseLsof, parsePs, parseTopMem, parseU64, pressureOfAvailable, pressureOfLevel, procStatTicks, trim } from "./text.ts";
+import { field, firstWord, idleOfIoreg, output, parseF64, parseLsof, parsePs, parseTopMem, parseU64, pressureOfAvailable, pressureOfLevel, procStatTicks, trim } from "./text.ts";
 
 const MACOS = process.platform === "darwin";
 /// Names in the order people read them (numbers by value, case aside), as the drive sorts them.
@@ -472,6 +472,14 @@ export const unix: Platform = {
     return script === undefined ? null : [script, ["-qfec", inner.map(quoted).join(" "), "/dev/null"]];
   },
   descendants,
+  async inputIdleMs() {
+    if (!MACOS) return null;
+    try {
+      return idleOfIoreg((await run("ioreg", ["-c", "IOHIDSystem", "-d", "4", "-r", "-k", "HIDIdleTime"])).stdout);
+    } catch {
+      return null;
+    }
+  },
   async memoryPressure() {
     try {
       if (MACOS) return pressureOfLevel((await run("sysctl", ["-n", "kern.memorystatus_vm_pressure_level"])).stdout);

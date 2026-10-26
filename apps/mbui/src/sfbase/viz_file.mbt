@@ -314,9 +314,18 @@ pub fn viz_id(station : String, key : String, path : String) -> String {
 }
 
 ///|
-/// The file's page and what it kept: asked of its station the first time (`station.file`, `widget.state`; what an older
-/// station cannot say is nothing kept). None while it comes; Some(Err) when it cannot be read.
-pub fn viz_load(c : @ui.Ctx, src : Source, station : String, key : String, path : String) -> Result[(String, Json?), Unit]? {
+/// The file's page and what it kept: asked of the core the first time (`station.file`, `widget.state`; what an older
+/// station cannot say is nothing kept), both kept on the device there, the page by its `size` as its message says (none
+/// known: not kept), so it is drawn at once when the chat is next opened, the app run again. None while it comes;
+/// Some(Err) when it cannot be read.
+pub fn viz_load(
+  c : @ui.Ctx,
+  src : Source,
+  station : String,
+  key : String,
+  path : String,
+  size? : Double = 0.0,
+) -> Result[(String, Json?), Unit]? {
   let id = viz_id(station, key, path)
   let l = match viz_loads.get(id) {
     Some(l) => l
@@ -329,13 +338,15 @@ pub fn viz_load(c : @ui.Ctx, src : Source, station : String, key : String, path 
   if !l.asked {
     l.asked = true
     c.tell("viz/load/" + id, fn() {
+      let p : Map[String, Json] = {
+        "station": Json::string(station),
+        "key": Json::string(key),
+        "name": Json::string(viz_base_name(path)),
+      }
+      chat_keep(p, size)
       (src.read_bytes)(
         "station.file",
-        Json::object({
-          "station": Json::string(station),
-          "key": Json::string(key),
-          "name": Json::string(viz_base_name(path)),
-        }),
+        Json::object(p),
         fn(r) {
           match r {
             Ok((_, bytes)) => l.html = Some(@utf8.decode_lossy(bytes))

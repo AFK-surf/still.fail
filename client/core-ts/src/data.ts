@@ -1110,6 +1110,11 @@ export class Data {
     return this.of(station)?.threadIds(station) ?? [];
   }
 
+  /// The station's listed threads the device has yet to bring the latest of (db/account.ts `threadsBehind`).
+  threadsBehind(station: string): number[] {
+    return this.of(station)?.threadsBehind(station) ?? [];
+  }
+
   threadLast(station: string, id: number): number {
     if (!Number.isInteger(id)) return 0;
     return this.of(station)?.threadLast(station, id) ?? 0;

@@ -62,7 +62,9 @@ of a test (src/ui/motion_data.mbt).
   glyph blinking while it works) is at the step of one clock (a step each `cycle_step_ms`, 100, for all of them),
   drawn a frame each step, none between: drawn each of the display's frames it redrew the whole window 60 to 120
   times a second for hours. A moving picture is drawn a frame as its next frame comes (`Ctx::loop_at`); a player
-  playing each frame (a cycle of 0).
+  playing each frame (a cycle of 0). What a cycle changes only of a node's look (its opacity, its size, its turn) is
+  a look by the clock (`Ctx::cycle_look`): what the node draws carries it and takes it as the frame's drawing ends, so
+  what holds the node is not built again for it, and kept (a part, a list's row) it goes on, drawn again.
 - What changes every so often while shown (a run's time said each second) is periodic: `Ctx::every(period)` gives the
   periods passed and a frame at the next one's start, none between; a test's idle lists it (`Tester::periodic`), as it
   does a cycle, and is not broken by it.

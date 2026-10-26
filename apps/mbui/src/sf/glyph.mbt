@@ -140,6 +140,11 @@ fn glyph_layer(d : String, fill : Int64, stroke : Int64, width : Double, even_od
 let glyph_blink_period : Double = 2600.0
 
 ///|
+/// The steps of the resident clock in the blink's loop its eyes change at: shutting from 2288 ms, open again at its end.
+// kept across runs: a table, never written
+let glyph_blink_steps : Array[Double] = [2300.0, 2400.0, 2500.0]
+
+///|
 /// A link on its way: its arc's breath, 1.4 s, a declared endless decoration (resident).
 let glyph_breath_period : Double = 1400.0
 
@@ -154,7 +159,8 @@ pub fn station_glyph(c : @ui.Ctx, g : GlyphCounts, size : Double, tint : Int64, 
   // a blink: open most of the time, shut for a moment (2.6 s, shut at 93%: down over 130 ms, up over 182)
   let mut eye = 1.0
   if blinking > 0 && !still {
-    let t = c.cycle(glyph_blink_period, resident=true) * glyph_blink_period
+    // (on the resident clock's steps, a frame only at those of the blink: open, it is the same at every other)
+    let t = (c.loop_at(glyph_blink_period, glyph_blink_steps) / @ui.cycle_step_ms).floor() * @ui.cycle_step_ms
     if t >= 2288.0 {
       eye = if t < 2418.0 {
         1.0 - 0.9 * (t - 2288.0) / 130.0

@@ -1416,6 +1416,29 @@ test("what_a_chat_shows_small_is_read_once_and_kept_on_the_device", async () => 
   later.core.close();
 });
 
+test("what_a_widget_kept_is_kept_on_the_device_answered_at_once_and_read_again_behind", async () => {
+  const answers: J = { ...base(), "GET /sessions/k/widget-state?path=a.html": { state: { n: 1 } }, "PUT /sessions/k/widget-state": {} };
+  const s = await ui(answers);
+  const asked = async (c: { core: J; ui: number }, id: number, name: string, params: J) => {
+    call(c.core, c.ui, id, name, { station: ST, key: "k", path: "a.html", ...params });
+    await s.host.settle();
+    return (s.host.takeEmitted().map(([, m]) => m as J).find((m) => m.id === id && ("ok" in m || "error" in m)) as J)?.ok;
+  };
+  const reads = () => gets(s.host, "/sessions/k/widget-state?path=a.html");
+  assert.deepEqual(await asked(s, 1, "widget.state", {}), { state: { n: 1 } });
+  // The station's changed meanwhile (another device): what is kept answers at once, what it says now kept after.
+  answers["GET /sessions/k/widget-state?path=a.html"] = { state: { n: 2 } };
+  assert.deepEqual(await asked(s, 2, "widget.state", {}), { state: { n: 1 } });
+  assert.equal(reads(), 2);
+  // Kept here: kept on the device at once, as it goes to the station.
+  await asked(s, 3, "widget.setState", { state: { n: 3 } });
+  assert.equal(s.host.requests.filter((r) => r.method === "PUT" && r.url.endsWith("/sessions/k/widget-state")).length, 1);
+  // The app started anew: what was kept last.
+  const later = await reopen(s);
+  assert.deepEqual(await asked(later, 4, "widget.state", {}), { state: { n: 3 } });
+  later.core.close();
+});
+
 test("a_thread_opens_from_what_is_kept_and_asks_only_for_what_came_after", async () => {
   const answers: J = {
     ...base(),

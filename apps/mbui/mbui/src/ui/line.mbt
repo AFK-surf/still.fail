@@ -141,12 +141,24 @@ pub fn Tester::drawn_lines(self : Tester) -> Array[(Double, Double, Double, Doub
     let a = c.inst
     if a[b + 5] == 10.0 {
       let byte = fn(v : Double) { (v * 255.0 + 0.5).to_int64() & 0xFFL }
+      // (turned: where the renderers turn its ends to, by 32 about 33, 34)
+      let (ca, sa) = (@dmath.cos(a[b + 32]), @dmath.sin(a[b + 32]))
+      let at = fn(x : Double, y : Double) {
+        if a[b + 32] == 0.0 {
+          (x, y)
+        } else {
+          let (dx, dy) = (x - a[b + 33], y - a[b + 34])
+          (a[b + 33] + ca * dx - sa * dy, a[b + 34] + sa * dx + ca * dy)
+        }
+      }
+      let (x0, y0) = at(a[b] + a[b + 12] * a[b + 2], a[b + 1] + a[b + 13] * a[b + 3])
+      let (x1, y1) = at(a[b] + a[b + 14] * a[b + 2], a[b + 1] + a[b + 15] * a[b + 3])
       out.push(
         (
-          a[b] + a[b + 12] * a[b + 2],
-          a[b + 1] + a[b + 13] * a[b + 3],
-          a[b] + a[b + 14] * a[b + 2],
-          a[b + 1] + a[b + 15] * a[b + 3],
+          x0,
+          y0,
+          x1,
+          y1,
           a[b + 4] * 2.0,
           (byte(a[b + 8]) << 24) | (byte(a[b + 9]) << 16) | (byte(a[b + 10]) << 8) | byte(a[b + 11]),
         ),

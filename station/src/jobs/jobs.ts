@@ -27,7 +27,8 @@ import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
 import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "../ops/group.ts";
 import {
-  Busy, type Claim, LOOK_MS, type Pressure, type Started, type Waiting, type Why, claimsOf, cpusFor, pick, place, served,
+  Busy, type Claim, HELD_LONG_MS, LOOK_MS, PERSON_IDLE_MS, type Pressure, type Started, type Waiting, type Why, claimsOf, cpusFor,
+  overstaying, pick, place, served,
 } from "./admit.ts";
 import type { Ticks } from "../read/host.ts";
 
@@ -65,13 +66,19 @@ const quoted = (word: string) => `'${word.replace(/'/g, `'\\''`)}'`;
 /// What `stillfail-job` is, in each job's PATH: `stillfail-job notify <words>` (or the words on stdin) tells the agent;
 /// `stillfail-job screen <command>…` runs the command with the machine's screen (jobs/admit.ts: one task's at a time),
 /// asking for it again each second while another has it (/jobs/screen, `screenEndpoint`), and gives it back when the
-/// command ends; killed before it could, the station finds its shell gone. A job of a station from before it (no
+/// command ends; killed before it could, the station finds its shell gone. `stillfail-job show <command>…` puts up a
+/// window for a person and leaves it (a virtual machine, a simulator to look at): it waits as `screen` does, so the
+/// window does not come up under another task's work, then gives the screen back at once and runs the command,
+/// holding nothing however long it lasts. A job of a station from before it (no
 /// STILLFAIL_JOB_SCREEN) runs the command as it is; one whose station has not answered for a minute runs it, said.
 /// `ember-job`, its name before the rename, is a link to it; a job started then has only the EMBER_JOB_* variables.
 export const JOB_COMMAND = `#!/bin/sh
 # stillfail-job notify <words>: tells the agent that started this job (the words, or stdin's).
 # stillfail-job screen <command>...: runs the command with this machine's screen (windows, a simulator, screenshots),
-# one task's at a time: it waits while another task has it, and gives it back when the command ends.
+# one task's at a time: it waits while another task has it, and gives it back when the command ends. For work done in
+# minutes; a window kept up for a person is show's.
+# stillfail-job show <command>...: puts up a window for a person (a virtual machine, a simulator to look at) and leaves
+# it: waits for the screen to be free, then runs the command holding nothing.
 token=\${STILLFAIL_JOB_TOKEN:-\${EMBER_JOB_TOKEN:-}}
 notify=\${STILLFAIL_JOB_NOTIFY:-\${EMBER_JOB_NOTIFY:-}}
 case "$1" in
@@ -80,9 +87,10 @@ case "$1" in
     if [ "$#" -gt 0 ]; then printf '%s' "$*"; else cat; fi |
       curl -fsS -X POST -H "Authorization: Bearer $token" -H "content-type: text/plain; charset=utf-8" --data-binary @- "$notify" >/dev/null
     ;;
-  screen)
+  screen|show)
+    how=$1
     shift
-    [ "$#" -gt 0 ] || { echo "usage: stillfail-job screen <command>..." >&2; exit 2; }
+    [ "$#" -gt 0 ] || { echo "usage: stillfail-job $how <command>..." >&2; exit 2; }
     screen=\${STILLFAIL_JOB_SCREEN:-}
     [ -n "$screen" ] || exec "$@"
     # (the process the station looks at: under Git's sh on Windows, Windows' own)
@@ -96,8 +104,12 @@ case "$1" in
         *'"yours"'*) break ;;
         *'"waiting"'*)
           unheard=0
-          [ "$told" = 1 ] || echo "stillfail-job screen: waiting for the screen (another task has it)" >&2
-          told=1 ;;
+          # (who has it: said once, and again when it is someone else)
+          who=$(printf '%s' "$said" | sed -n 's/.*"who":"\\([^"]*\\)".*/\\1/p')
+          if [ "$told" != 1 ] || [ "$who" != "$was" ]; then
+            echo "stillfail-job $how: waiting for the screen (\${who:-another task has it})" >&2
+          fi
+          told=1 was=$who ;;
         *'"error"'*) echo "stillfail-job screen: $said" >&2; exit 1 ;;
         *)
           # (the station not answering: restarting, or gone)
@@ -110,6 +122,8 @@ case "$1" in
       sleep 1
     done
     give() { ask give >/dev/null; }
+    # (show: the screen free, the window put up holding nothing)
+    if [ "$how" = show ]; then give; exec "$@"; fi
     trap 'give; exit 129' HUP
     trap 'give; exit 130' INT
     trap 'give; exit 143' TERM
@@ -118,7 +132,7 @@ case "$1" in
     give
     exit "$code"
     ;;
-  *) echo "usage: stillfail-job notify <words> | stillfail-job screen <command>..." >&2; exit 2 ;;
+  *) echo "usage: stillfail-job notify <words> | stillfail-job screen <command>... | stillfail-job show <command>..." >&2; exit 2 ;;
 esac
 `;
 export const JOB_COMMAND_NAME = "stillfail-job";
@@ -130,13 +144,15 @@ export type Notify = (session: string, text: string) => void;
 /// service), when the station is in a workspace.
 export type Link = (session: string, job: string) => string | null;
 
-/// What the queue (jobs/admit.ts) measures of the machine: its CPUs, their ticks, what the system says of its memory.
-export type Machine = { cpus(): number; ticks(): Ticks | null; pressure(): Promise<Pressure | null> };
+/// What the queue (jobs/admit.ts) measures of the machine: its CPUs, their ticks, what the system says of its memory,
+/// and how long its input has been idle (ms; none where it is not read: no person is seen at it).
+export type Machine = { cpus(): number; ticks(): Ticks | null; pressure(): Promise<Pressure | null>; inputIdle?(): Promise<number | null> };
 
 export const liveMachine: Machine = {
   cpus: () => availableParallelism(),
   ticks: () => platform.host.cpuTicks(),
   pressure: () => platform.memoryPressure(),
+  inputIdle: () => platform.inputIdleMs(),
 };
 
 export type JobsOptions = {
@@ -225,11 +241,20 @@ function heldClaims(path: string): Claim[] {
     const kept: unknown = JSON.parse(readFileSync(path, "utf8"));
     if (!Array.isArray(kept)) return [];
     return kept.flatMap((c) =>
-      typeof c?.job === "string" && Number.isInteger(c?.pid) && typeof c?.at === "number" ? [{ job: c.job, pid: c.pid, at: c.at, held: true }] : [],
+      typeof c?.job === "string" && Number.isInteger(c?.pid) && typeof c?.at === "number"
+        ? [{ job: c.job, pid: c.pid, at: c.at, held: true, ...(typeof c?.since === "number" ? { since: c.since } : {}) }]
+        : [],
     );
   } catch {
     return [];
   }
+}
+
+/// The chat a session key is (another station's task: that station's chat, `remote:<workspace>:<station>:<key>`),
+/// as an agent reads it (chat_read takes the key).
+export function chatOf(session: string): string {
+  const remote = /^remote:[^:]+:([^:]+):(.+)$/.exec(session);
+  return remote !== null ? `chat ${remote[2]} on station ${remote[1].slice(0, 12)}` : `chat ${session}`;
 }
 
 /// How a job is named to its agent.
@@ -278,6 +303,12 @@ export class Jobs {
   /// The commands' claims on the screen (`stillfail-job screen`), in the order they asked. Those that hold it are kept
   /// in jobs/screen.json too: their commands go on through a restart, and the next station knows they have it.
   private claims: Claim[] = [];
+  /// Whether a person uses the screen (the machine's input idle less than PERSON_IDLE_MS, as last read), and whether it
+  /// is being read.
+  private person = false;
+  private readingPerson = false;
+  /// The claims whose agents were told they had held the screen long while others waited (job, pid, since).
+  private toldLong = new Set<string>();
 
   constructor(options: JobsOptions) {
     this.store = options.store;
@@ -430,7 +461,7 @@ export class Jobs {
     const { waiting, running } = this.line();
     // (the last started, while it runs: how busy since it started; one that ended holds nothing back)
     const ramp = running.some((r) => r.id === this.lastStarted) ? this.lastStart : null;
-    const chosen = pick(waiting, running, { busy: this.busy.share(ramp), pressure }, this.queueNow(), ramp, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
+    const chosen = pick(waiting, running, { busy: this.busy.share(ramp), pressure, person: this.person }, this.queueNow(), ramp, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
     this.why = chosen !== null && "wait" in chosen ? chosen.wait : null;
     return chosen;
   }
@@ -457,6 +488,7 @@ export class Jobs {
       } catch {
         this.pressure = null;
       }
+      await this.lookPerson();
       this.startNext();
     });
     void this.run(
@@ -480,6 +512,37 @@ export class Jobs {
     this.prune();
     this.admitNext();
     this.serve();
+    this.tellLong();
+  }
+
+  /// Reads whether a person uses the screen (one read at a time; none where the machine does not say).
+  private async lookPerson(): Promise<void> {
+    if (this.readingPerson || this.machine.inputIdle === undefined) return;
+    this.readingPerson = true;
+    try {
+      const idle = await this.machine.inputIdle();
+      this.person = idle !== null && idle < PERSON_IDLE_MS;
+    } catch {
+      this.person = false;
+    } finally {
+      this.readingPerson = false;
+    }
+  }
+
+  /// The agents of the commands that have held the screen HELD_LONG_MS while others wait told so, once each.
+  private tellLong(): void {
+    for (const c of overstaying(this.claims, this.store.now())) {
+      const key = `${c.job} ${c.pid} ${c.since ?? c.at}`;
+      if (this.toldLong.has(key)) continue;
+      this.toldLong.add(key);
+      const job = this.store.getJob(c.job);
+      if (!job) continue;
+      const waiting = this.claims.filter((w) => !w.held).length;
+      const text = `${named(job)} has held this machine's screen ${Math.round((this.store.now() - (c.since ?? c.at)) / 60_000)} min (its \`stillfail-job screen\` command, pid ${c.pid}) while ${waiting} other command${waiting === 1 ? "" : "s"} wait for it. The screen is for work done in minutes (screenshots, a scripted run, a simulator's tests); a window kept up for a person (a virtual machine, a simulator to look at) is \`stillfail-job show <command>\`'s, which holds nothing. Finish with the screen, or put the window up again that way.`;
+      if (job.sessionKey.startsWith("remote:")) this.store.addJobNotice(job.id, text);
+      else this.tell(job, text);
+      log.info("jobs", "a command told it holds the screen long", { job: job.id, pid: c.pid, waiting });
+    }
   }
 
   private admitNext(): void {
@@ -503,19 +566,48 @@ export class Jobs {
     if (this.line().waiting.length > 0) this.watchQueue();
   }
 
-  /// A waiting task's place in line (1: the next) and why the first waits; null for one not waiting.
-  queueOf(id: string): { place: number; why: Why | null } | null {
+  /// A waiting task's place in line (1: the next) and why the first waits; null for one not waiting. Waiting for the
+  /// screen, who has it (screenHolder).
+  queueOf(id: string): { place: number; why: Why | null; holder?: string } | null {
     const job = this.store.getJob(id);
     if (!job || job.state !== "running" || job.queued !== true) return null;
     const p = place(this.line().waiting, id, (s) => this.lastOf.get(s) ?? null);
-    return p === null ? null : { place: p, why: this.why };
+    if (p === null) return null;
+    const holder = this.why === "screen" ? this.screenHolder(id) : null;
+    return { place: p, why: this.why, ...(holder !== null ? { holder } : {}) };
+  }
+
+  /// Who has the screen, for one waiting for it (not `except`, a job of its own): the task's name, the chat it is
+  /// for and since when; a person using it; none when it is free.
+  screenHolder(except: string | null = null): string | null {
+    const now = this.store.now();
+    const ago = (at: number) => `${Math.max(1, Math.round((now - at) / 60_000))} min`;
+    const of = (id: string, since: number) => {
+      const job = this.store.getJob(id);
+      if (!job) return null;
+      // (no quotes: stillfail-job reads it out of the answer as it is)
+      return `${job.name.replace(/"/g, "'")} (${job.id}) of ${chatOf(job.sessionKey)}, for ${ago(since)}`;
+    };
+    for (const c of this.claims) {
+      if (c.held && c.job !== except) {
+        const said = of(c.job, c.since ?? c.at);
+        if (said !== null) return said;
+      }
+    }
+    for (const r of this.line().running) {
+      if (r.screen && r.id !== except) {
+        const job = this.store.getJob(r.id);
+        if (job) return of(r.id, job.startedAt);
+      }
+    }
+    return this.person ? "a person using this machine" : null;
   }
 
   // ── the screen (jobs/admit.ts: one task's at a time) ──
 
   /// `stillfail-job screen`: process `pid` of the job with this token asks for the screen (`take`, again each second
-  /// while it waits) or gives it back (`give`). Whether it has it now, or where it is in line.
-  screenAsked(token: string, ask: "take" | "give", pid: number): { screen: "yours" } | { screen: "waiting"; place: number } | { screen: "given" } {
+  /// while it waits) or gives it back (`give`). Whether it has it now, or where it is in line and who has it.
+  screenAsked(token: string, ask: "take" | "give", pid: number): { screen: "yours" } | { screen: "waiting"; place: number; who: string | null } | { screen: "given" } {
     const job = this.store.jobByToken(token);
     if (!job) throw new Error("unknown job token");
     if (job.state !== "running" || job.queued === true) throw new Error(`${named(job)} is not running`);
@@ -528,10 +620,12 @@ export class Jobs {
     }
     if (!pidAlive(pid)) throw new Error(`no process ${pid} on this machine`);
     if (!this.claims.some(mine)) this.claims.push({ job: job.id, pid, at: this.store.now(), held: false });
+    // (whether a person uses it, read for the next ask: they come each second while one waits)
+    void this.lookPerson();
     this.startNext();
     const waiting = this.claims.filter((c) => !c.held);
     const at = waiting.findIndex(mine);
-    return at < 0 ? { screen: "yours" } : { screen: "waiting", place: at + 1 };
+    return at < 0 ? { screen: "yours" } : { screen: "waiting", place: at + 1, who: this.screenHolder(job.id) };
   }
 
   /// The claims whose command is gone (killed before it gave the screen back) or whose job is over, dropped.
@@ -549,14 +643,14 @@ export class Jobs {
   private serve(): void {
     const screenJobs = new Set(this.line().running.filter((r) => r.screen).map((r) => r.id));
     const before = this.claims.filter((c) => c.held).length;
-    this.claims = served(this.claims, screenJobs);
+    this.claims = served(this.claims, screenJobs, this.store.now(), this.person);
     if (this.claims.filter((c) => c.held).length !== before) this.keepClaims();
   }
 
   /// The claims that hold the screen, written down for the next station (in place: a reader never sees half of it).
   private keepClaims(): void {
     const path = join(this.dir, SCREEN_FILE);
-    const held = this.claims.filter((c) => c.held).map(({ job, pid, at }) => ({ job, pid, at }));
+    const held = this.claims.filter((c) => c.held).map(({ job, pid, at, since }) => ({ job, pid, at, ...(since === undefined ? {} : { since }) }));
     try {
       writeFileSync(`${path}.${process.pid}`, JSON.stringify(held) + "\n");
       renameSync(`${path}.${process.pid}`, path);

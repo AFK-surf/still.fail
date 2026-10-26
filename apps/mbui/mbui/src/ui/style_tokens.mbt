@@ -568,7 +568,7 @@ pub(all) enum Color {
   OnVeil
   /// the ground a picture is shown on alone, edge to edge (a video's, a remote screen's in 全屏): black
   Theater
-  /// what is lifted out of a tinted track (a segmented choice's thumb: white; in the dark a step over the card)
+  /// what is lifted out of a tinted track (a segmented choice's thumb: white; in the dark the ink at an opacity over the track)
   Lifted
   /// a quiet wash under what comes onto it (still.fail's Android app's way of the web's --hover: a screen's preview
   /// before its picture, ScreenLinks.kt; the offline note, Chat.kt), the same on every width
