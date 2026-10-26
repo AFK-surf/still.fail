@@ -25,9 +25,10 @@ test("the card shared says how much of a week's quota each kind of subscription 
     account("opencode", 0),
     account("opencode", 0.2),
   ]);
-  assert.deepEqual(q.map((x: J) => [x.kind, x.accounts, x.used, x.usedText, x.share, x.text]), [
-    ["claude", 2, 170, "170%", 0.85, "2 个 Claude 订阅账号的周额度"],
-    ["chatgpt", 1, 45, "45%", 0.45, "1 个 ChatGPT 订阅账号的周额度"],
+  // said round its share: 用 2 个 Claude 订阅账号消耗了 170% 的周额度
+  assert.deepEqual(q.map((x: J) => [x.kind, x.accounts, x.used, x.usedText, x.share, x.lead, x.of]), [
+    ["claude", 2, 170, "170%", 0.85, "用 2 个 Claude 订阅账号消耗了", "的周额度"],
+    ["chatgpt", 1, 45, "45%", 0.45, "用 1 个 ChatGPT 订阅账号消耗了", "的周额度"],
   ]);
 });
 
@@ -67,7 +68,7 @@ test("the card shared says how many chats are at work now and on how many statio
     "10月26日 04:12",
   );
   // (d runs tasks for them: not where they are)
-  assert.deepEqual([v.chats, v.chatsText, v.where, v.at, v.quotaLead], [4, "4 个对话正在运行", "分布在 2 台设备", "10月26日 04:12", "本周用掉了"]);
+  assert.deepEqual([v.chats, v.chatsText, v.where, v.at], [4, "4 个对话正在运行", "分布在 2 台设备", "10月26日 04:12"]);
   assert.deepEqual([v.tasksText, v.tasksPer], ["近 7 天 agent 跨设备执行了 4 个任务", "平均每个对话 2 个"]);
   assert.equal(v.quota[0].usedText, "50%");
   assert.deepEqual(v.today, { title: "今天", stats: [{ label: "归档的对话", value: "4 个" }, { label: "折合费用", value: "$8" }] });

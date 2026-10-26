@@ -3272,8 +3272,10 @@ export interface FleetQuota {
 	usedText: string;
 	/** That as a share of all their accounts' weeks, what its ring draws (0 to 1: 170% of two, 0.85). */
 	share: number;
-	/** What it is of: 2 个 Claude 订阅账号的周额度. */
-	text: string;
+	/** What says it before the share: 用 6 个 Claude 订阅账号消耗了. */
+	lead: string;
+	/** What says it after: 的周额度. */
+	of: string;
 }
 
 export interface FleetStat {
@@ -3298,8 +3300,6 @@ export interface FleetWeek {
 export interface FleetView {
 	/** When this is, in words: 10月26日 04:12. */
 	at: string;
-	/** What leads the quota used: 本周用掉了. */
-	quotaLead: string;
 	/**
 	 * The subscriptions' weekly quota used, by kind, the most accounts first; a kind that used none left
 	 * out; none read: empty.

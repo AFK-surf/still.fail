@@ -1310,8 +1310,7 @@ fn fixture_fleet(f : Fixture) -> Json {
   if !f.mode.has_prefix("share-card") {
     return {
       "at": "10月26日 04:12",
-      "quotaLead": "本周用掉了",
-      "quota": [{ "kind": "claude", "accounts": 1, "used": 37, "usedText": "37%", "share": 0.37, "text": "1 个 Claude 订阅账号的周额度" }],
+      "quota": [{ "kind": "claude", "accounts": 1, "used": 37, "usedText": "37%", "share": 0.37, "lead": "用 1 个 Claude 订阅账号消耗了", "of": "的周额度" }],
       "chats": 1,
       "chatsText": "1 个对话正在运行",
       "where": "分布在 1 台设备",
@@ -1322,10 +1321,9 @@ fn fixture_fleet(f : Fixture) -> Json {
   let labels = ["10/20", "10/21", "10/22", "10/23", "10/24", "10/25", "10/26"]
   {
     "at": "10月26日 04:12",
-    "quotaLead": "本周用掉了",
     "quota": [
-      { "kind": "claude", "accounts": 6, "used": 489, "usedText": "489%", "share": 0.815, "text": "6 个 Claude 订阅账号的周额度" },
-      { "kind": "chatgpt", "accounts": 2, "used": 17, "usedText": "17%", "share": 0.085, "text": "2 个 ChatGPT 订阅账号的周额度" },
+      { "kind": "claude", "accounts": 6, "used": 489, "usedText": "489%", "share": 0.815, "lead": "用 6 个 Claude 订阅账号消耗了", "of": "的周额度" },
+      { "kind": "chatgpt", "accounts": 2, "used": 17, "usedText": "17%", "share": 0.085, "lead": "用 2 个 ChatGPT 订阅账号消耗了", "of": "的周额度" },
     ],
     "chats": 9,
     "chatsText": "9 个对话正在运行",

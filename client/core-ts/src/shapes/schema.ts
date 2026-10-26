@@ -2498,7 +2498,6 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "What the agents of a workspace spent over its last `days` (the `usage` view, client/core-ts/src/views/usage.ts): a few\ntotals (`tiles`), each day's cost split by the people who spent most (`series`, the rest as 其他), and lists of who,\nwhich chats, which accounts and which models spent the most, at the providers' API prices (`basis` says what that\nmeans). `notes`: what is missing or still being read, in lines; `loading` while a station has not answered.", keepNone: true }),
   FleetView: struct([
     ["at", "String", { doc: "When this is, in words: 10月26日 04:12." }],
-    ["quotaLead", "String", { doc: "What leads the quota used: 本周用掉了." }],
     ["quota", vec("FleetQuota"), { doc: "The subscriptions' weekly quota used, by kind, the most accounts first; a kind that used none left\nout; none read: empty." }],
     ["chats", "i64", { client: "I54", doc: "The chats at work now: their agents running, or a task of theirs running on another station." }],
     ["chatsText", "String", { doc: "That in words: 9 个对话正在运行." }],
@@ -2514,7 +2513,8 @@ export const SHAPES: Record<string, Shape> = {
     ["used", "i64", { client: "I54", doc: "How much of a week's quota they used, in percent of one account's: each account's share of its own\nadded up (80% and 90%: 170%)." }],
     ["usedText", "String", { doc: "170%." }],
     ["share", "f64", { doc: "That as a share of all their accounts' weeks, what its ring draws (0 to 1: 170% of two, 0.85)." }],
-    ["text", "String", { doc: "What it is of: 2 个 Claude 订阅账号的周额度." }],
+    ["lead", "String", { doc: "What says it before the share: 用 6 个 Claude 订阅账号消耗了." }],
+    ["of", "String", { doc: "What says it after: 的周额度." }],
   ]),
   FleetToday: struct([
     ["title", "String"],

@@ -161,14 +161,13 @@ let share_picture_key : String = "share-card/picture"
 /// 分天和周统计，还有当前 chat 数量」「不要小机器人」「这玩意儿是会超过 100% 的」「不如归档 chat 多少个」): on warm paper with a
 /// peach light on it, the same in either theme. still.fail's mark and name and when it is; the subscriptions' weekly
 /// quota used as rings, a kind each (Activity's rings: each the share of all its accounts' weeks, 489% of six 0.815 of
-/// it; 2026-10-26 用户「489% 就是 4.89 个号的周额度」), the first kind's share large beside them
-/// and what it is of, the others' under it; today and the last 7 days side by side (the chats archived, what was
-/// spent), each day's chats archived a bar under them (today's orange, each day's date under its bar); the chats at
-/// work now, a dot before them, and the tasks chats ran on other stations over the 7 days (how many, how many a chat
-/// on average), the devices' icon before them; still.fail's line. With no quota read: the chats at work
-/// large in its place. Laid out narrower than pic_narrow_most (a phone's sheet): the rings smaller, what the first
-/// kind's share is of and the others' under the rings and it, its number smaller, today over the last 7 days, all
-/// closer.
+/// it; 「489% 就是 4.89 个号的周额度」), beside them the first kind's said round its share large (用 6 个 Claude 订阅账号
+/// 消耗了 | 489% | 的周额度), each other kind a line under it; today and the last 7 days side by side (the chats
+/// archived, what was spent), each day's chats archived a bar under them (today's orange, each day's date under its
+/// bar); the chats at work now, a dot before them, and the tasks agents ran across devices over the 7 days (how many,
+/// how many a chat on average), the devices' icon before them; still.fail's line. With no quota read: the chats at
+/// work large in its place. Laid out narrower than pic_narrow_most (a phone's sheet): what leads the share over the
+/// rings, the rings and the number smaller, today over the last 7 days, the lines smaller, all closer.
 fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let fleet = (src.topic)("fleet", { "scope": Json::string(w.id) }).value
   let quota = items(fleet, "quota")
@@ -193,23 +192,33 @@ fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     })
     |> ignore
     if quota.length() > 0 {
+      // the first kind's said round its share, a sentence read down (用 6 个 Claude 订阅账号消耗了 | 489% | 的周额度:
+      // 2026-10-26 用户「你要么这么说"是用 x 个账号消耗了 xxx% 的周额度"」), what leads it over the rings and the share
+      // in a narrow picture (beside them it has no room there)
+      let first = Some(quota[0])
+      if narrow {
+        c.text(text(first, "lead"), style=pic_unit) |> ignore
+      }
       c.box(style=pic_hero, fn() {
         pic_rings(c, quota, narrow)
         c.box(style=pic_hero_words, fn() {
-          c.text(text(fleet, "quotaLead"), style=pic_lead) |> ignore
-          // (in its ring's colour; smaller in a narrow picture, as wide as 170% is beside the rings there)
-          let first = ring_color(0)
-          let number = if narrow { pic_number_narrow } else { pic_number }
-          c.text(text(Some(quota[0]), "usedText"), style=number.then(@ui.text_style(color=Data(first)))) |> ignore
           if !narrow {
-            pic_quota_words(c, quota)
+            c.text(text(first, "lead"), style=pic_unit) |> ignore
+          }
+          // (in its ring's colour; smaller in a narrow picture, as wide as 489% is beside the rings there)
+          let color = ring_color(0)
+          let number = if narrow { pic_number_narrow } else { pic_number }
+          c.text(text(first, "usedText"), style=number.then(@ui.text_style(color=Data(color)))) |> ignore
+          c.text(text(first, "of"), style=pic_unit) |> ignore
+          if !narrow {
+            pic_other_kinds(c, quota)
           }
         })
         |> ignore
       })
       |> ignore
       if narrow {
-        pic_quota_words(c, quota)
+        pic_other_kinds(c, quota)
       }
     } else {
       c.box(style=pic_hero, fn() {
@@ -234,10 +243,10 @@ fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     if quota.length() > 0 || tasks != "" {
       c.box(style=pic_lines, fn() {
         if quota.length() > 0 {
-          pic_line(c, fn() { c.box(style=pic_live_dot, fn() {  }) |> ignore }, text(fleet, "chatsText"), text(fleet, "where"), narrow)
+          pic_line(c, fn() { c.box(style=pic_live_dot, fn() {  }) |> ignore }, text(fleet, "chatsText"), text(fleet, "where"), narrow, false)
         }
         if tasks != "" {
-          pic_line(c, fn() { @sf.icon(c, "devices", size=pic_mark_side, color=@sf.share_ink) |> ignore }, tasks, text(fleet, "tasksPer"), narrow)
+          pic_line(c, fn() { @sf.icon(c, "devices", size=pic_mark_side, color=@sf.share_ink) |> ignore }, tasks, text(fleet, "tasksPer"), narrow, narrow)
         }
       })
       |> ignore
@@ -249,19 +258,24 @@ fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 
 ///|
 /// A line under the days: its mark (in a square of its own, the lines' words starting together), what it says, and
-/// more of it after a dot, dimmer; in a narrow picture smaller, the more under it (a line as long as the tasks' broken
-/// inside a word there: 「…312 个任」「务」).
-fn pic_line(c : @ui.Ctx, mark : () -> Unit, words : String, more : String, narrow : Bool) -> Unit {
-  c.box(style=if narrow { pic_live_narrow } else { pic_live }, fn() {
+/// more of it after a dot, dimmer; in a narrow picture smaller, and `apart`, the more under it (a line as long as the
+/// tasks' is broken inside a word there: 「…312 个任」「务」).
+fn pic_line(c : @ui.Ctx, mark : () -> Unit, words : String, more : String, narrow : Bool, apart : Bool) -> Unit {
+  c.box(style=if apart { pic_live_narrow } else { pic_live }, fn() {
     c.box(style=pic_mark_box, mark) |> ignore
-    if narrow {
+    if apart {
       c.box(style=pic_line_words, fn() {
         c.text(words, style=pic_line_lead) |> ignore
         c.text(more, style=pic_line_more) |> ignore
       })
       |> ignore
     } else {
-      c.rich([@ui.span(words, weight=700), @ui.span("  ·  " + more, color=@sf.share_dim)], style=pic_live_words) |> ignore
+      c.rich([@ui.span(words, weight=700), @ui.span("  ·  " + more, color=@sf.share_dim)], style=if narrow {
+        pic_line_narrow
+      } else {
+        pic_live_words
+      })
+      |> ignore
     }
   })
   |> ignore
@@ -274,11 +288,13 @@ fn ring_color(k : Int) -> Int64 {
 }
 
 ///|
-/// What the first kind's share is of (2 个 Claude 订阅账号的周额度), then each other kind's: its colour's dot, its share
-/// and what it is of.
-fn pic_quota_words(c : @ui.Ctx, quota : Array[Json]) -> Unit {
+/// Each kind but the first, a line: its colour's dot, the same sentence round its share (用 2 个 ChatGPT 订阅账号消耗了
+/// 17% 的周额度), the share in ink.
+fn pic_other_kinds(c : @ui.Ctx, quota : Array[Json]) -> Unit {
+  if quota.length() < 2 {
+    return
+  }
   c.box(style=@sf.full_width, fn() {
-    c.text(text(Some(quota[0]), "text"), style=pic_unit) |> ignore
     for k, q in quota {
       if k == 0 {
         continue
@@ -286,7 +302,14 @@ fn pic_quota_words(c : @ui.Ctx, quota : Array[Json]) -> Unit {
       let q = Some(q)
       c.box(style=pic_other, fn() {
         c.box(style=pic_key_dot.then(@ui.style(bg=Data(ring_color(k)))), fn() {  }) |> ignore
-        c.rich([@ui.span(text(q, "usedText") + " ", weight=700), @ui.span(text(q, "text"), color=@sf.share_dim)], style=pic_other_words)
+        c.rich(
+          [
+            @ui.span(text(q, "lead") + " ", color=@sf.share_dim),
+            @ui.span(text(q, "usedText"), weight=700),
+            @ui.span(" " + text(q, "of"), color=@sf.share_dim),
+          ],
+          style=pic_other_words,
+        )
         |> ignore
       })
       |> ignore
@@ -365,9 +388,9 @@ let pic_box : @ui.Style = @ui.css("w=Full p=S7 gap=S4 radius=Xl3 clip").then(@ui
 let pic_narrow_most : Double = 520.0
 
 ///|
-/// A narrow one: its parts 12 apart.
+/// A narrow one: 20 in (nothing at its corners but words: the corners' rule asks nothing of them), its parts 12 apart.
 // kept across runs: a value (no field of it changes)
-let pic_box_narrow : @ui.Style = @ui.css("w=Full p=S7 gap=S3 radius=Xl3 clip").then(@ui.style(bg=Data(@sf.share_paper)))
+let pic_box_narrow : @ui.Style = @ui.css("w=Full p=S5 gap=S3 radius=Xl3 clip").then(@ui.style(bg=Data(@sf.share_paper)))
 
 ///|
 /// Its corner (Xl3's), its light's picture's.
@@ -423,8 +446,8 @@ let pic_hero_words : @ui.Style = @ui.css("gap=S1").then(@ui.style(w=@sf.grow))
 let pic_rings_side : Double = 128.0
 
 ///|
-/// A narrow picture's: 96 across.
-let pic_rings_side_narrow : Double = 96.0
+/// A narrow picture's: 88 across, as tall as the share and what it is of beside them.
+let pic_rings_side_narrow : Double = 88.0
 
 ///|
 let pic_ring_w : Double = 12.0
@@ -435,9 +458,6 @@ let pic_ring_gap : Double = 4.0
 ///|
 let pic_track_alpha : Int64 = 0x4DL
 
-///|
-// kept across runs: a value (no field of it changes)
-let pic_lead : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Data(@sf.share_dim), wrap=false)
 
 ///|
 /// The number, as large as a picture's one number is (the scale's past its words', Xl7 72), drawn tight.
@@ -557,6 +577,11 @@ let pic_live_narrow : @ui.Style = @ui.css("row w=Full gap=S2 align=AStart")
 /// A narrow picture's words: what it says over the more of it, Meta's (13).
 // kept across runs: a value (no field of it changes)
 let pic_line_words : @ui.Style = @ui.css("gap=S0_5").then(@ui.style(w=@sf.grow))
+
+///|
+/// A narrow picture's line on one line, Meta's (13).
+// kept across runs: a value (no field of it changes)
+let pic_line_narrow : @ui.TextStyle = @ui.text_style(size=Meta, color=Data(@sf.share_ink), w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)

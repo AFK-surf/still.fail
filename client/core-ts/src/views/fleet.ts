@@ -52,7 +52,9 @@ export function quotaOf(profiles: J[]): J[] {
       const all = used.reduce((n, u) => n + u, 0);
       const percent = format.round(all);
       const share = Math.min(1, all / (used.length * 100));
-      return { kind, accounts: used.length, used: percent, usedText: `${percent}%`, share, text: t("core-logic.fleet.quota", { n: used.length, kind: groupTitle(kind as (typeof GROUPS)[number]) }) };
+      // said as a sentence round the share (「是用 x 个账号消耗了 xxx% 的周额度」): 用 6 个 Claude 订阅账号消耗了 | 489% | 的周额度
+      const lead = t("core-logic.fleet.quota_by", { n: used.length, kind: groupTitle(kind as (typeof GROUPS)[number]) });
+      return { kind, accounts: used.length, used: percent, usedText: `${percent}%`, share, lead, of: t("core-logic.fleet.quota_of") };
     })
     .filter((q) => q.used > 0);
 }
@@ -92,7 +94,6 @@ export function fleetView(stations: FleetStation[], profiles: J[], usage: J, at 
   }
   return {
     at,
-    quotaLead: t("core-logic.fleet.quota_lead"),
     quota: quotaOf(profiles),
     chats: chats.size,
     chatsText: t("core-logic.fleet.chats", { n: chats.size }),
