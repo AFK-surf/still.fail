@@ -74,6 +74,8 @@ priv struct RowKept {
   bars : Array[BarAt]
   /// how its list builds a row (Ctx::list's `row`, this build's): its part's build runs it
   mut build : (Int) -> Unit
+  /// how far down its list's rows it was as its build was drawn (ListState::above)
+  mut above : Double
   /// what it says to what reads the widgets out (SemNode, as its build said it: where, from its node; under what, among
   /// its own, -1 what holds it; how deep, below what holds it), and whether that was taken since it was last built
   sems : Array[SemNode]
@@ -114,6 +116,7 @@ fn RowKept::new(list : Int, item : Int) -> RowKept {
     runs: [],
     bars: [],
     build: fn(_) {  },
+    above: 0.0,
     sems: [],
     read_out: false,
     read_words: "",
@@ -487,6 +490,7 @@ fn Ctx::rows_placed(
     if whole && !held && n.x == rk.x && top >= rk.band0 + dy && bottom <= rk.band1 + dy && !pointed {
       rk.dy = dy
       self.row_said_again(rk)
+      self.drawn_again_told((1, kp.id), dy, st.above(n.item) - rk.above)
       continue
     }
     // built where it is
@@ -607,6 +611,13 @@ fn Ctx::row_paint_record(self : Ctx, i : Int, id : Int, alpha : Double) -> Unit 
   rk.x = n.x
   rk.y = n.y
   rk.h = n.fh
+  // (how far down its list's rows: what a package keeps of it is kept as it moves among them, on_drawn_again)
+  if n.parent >= 0 {
+    match self.lists.get(self.nodes[n.parent].id) {
+      Some(ls) => rk.above = ls.above(n.item)
+      None => ()
+    }
+  }
   rk.band0 = y0 - row_reach
   rk.band1 = y1 + row_reach
   rk.band_l = x0

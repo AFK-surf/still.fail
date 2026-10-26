@@ -208,6 +208,19 @@ pub fn on_after_layout(f : (Ctx) -> Unit) -> Unit {
 }
 
 ///|
+/// `f` told of each part and list's row kept that a frame draws again, its build not run (kept_part.mbt,
+/// kept_rows.mbt): which (Ctx::kept_building's), how far down the window from where its build laid it out it is drawn,
+/// and how far down its list's rows (what came above it grown or shrunk). What a package keeps of the nodes a build
+/// laid out keeps them for it so, as it would were it built.
+pub fn on_drawn_again(f : (Ctx, (Int, Int), Double, Double) -> Unit) -> Unit {
+  drawn_again_hooks.push(f)
+}
+
+///|
+// kept across runs: the packages over ui install theirs once in the process
+let drawn_again_hooks : Array[(Ctx, (Int, Int), Double, Double) -> Unit] = []
+
+///|
 /// `f` runs as each list is painted, before its rows, with the list's node: what it draws is under them.
 pub fn on_list_underlay(f : (Ctx, Int) -> Unit) -> Unit {
   underlay_hooks.push(f)
