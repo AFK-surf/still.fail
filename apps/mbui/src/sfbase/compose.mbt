@@ -113,7 +113,7 @@ fn writing_adopt(w : Writing, v : Json?, version : Int) -> Unit {
   w.files = items(v, "files")
   // a picture picked here (a quote's too: a mark's screenshot), up: its message drawn from it as picked, by the name
   // the station keeps it under (sent.mbt)
-  for f in w.files + w.quotes.filter_map(fn(q) { field(Some(q), "own") }) {
+  for f in writing_files(w) {
     let o = Some(f)
     match (writing_pictures.get(text(o, "id")), writing_stations.get(text(o, "id")), field(o, "done")) {
       (Some(picture), Some(station), Some(done)) if text(Some(done), "path") != "" =>
@@ -406,9 +406,27 @@ pub fn writing_quote(src : Source, w : Writing, quote : Json, file? : Json, pict
 }
 
 ///|
-/// What is said about a quote (`composer.comment`).
+/// Its files and its quotes' own pictures (the core's composer keeps both among its files; its message has both among
+/// its own).
+pub fn writing_files(w : Writing) -> Array[Json] {
+  w.files + w.quotes.filter_map(fn(q) { field(Some(q), "own") })
+}
+
+///|
+/// What is said about a quote (`composer.comment`), the page's at once as the words are.
 pub fn writing_comment(src : Source, w : Writing, id : String, words : String) -> Unit {
-  writing_act(src, w, "comment", { "id": Json::string(id), "comment": Json::string(words) })
+  writing_act(src, w, "comment", { "id": Json::string(id), "comment": Json::string(words) }, show=fn(w) {
+    w.quotes = w.quotes.map(fn(q) {
+      match q {
+        Object(m) if text(Some(q), "id") == id => {
+          let said = m.copy()
+          said["comment"] = Json::string(words)
+          Json::object(said)
+        }
+        _ => q
+      }
+    })
+  })
 }
 
 ///|

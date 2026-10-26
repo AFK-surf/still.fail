@@ -596,20 +596,7 @@ pub fn quote_card(
   let p = theme().p
   let source = c.id(key + "/source")
   let x = c.id(key + "/remove")
-  // a mark on a previewed page or an image: its pin's number
-  let pin = if role == "page" || role == "image" {
-    let digits = StringBuilder::new()
-    for ch in author.rev_iter() {
-      if ch >= '0' && ch <= '9' {
-        digits.write_char(ch)
-      } else {
-        break
-      }
-    }
-    digits.to_string().rev()
-  } else {
-    ""
-  }
+  let pin = pin_of(author, role)
   if jump {
     tip(c, key + "/jump-tip", source, t("web-main.quote.jump"))
   } else if pin != "" {
@@ -680,6 +667,36 @@ pub fn quote_card(
 }
 
 ///|
+/// A mark on a previewed page or an image (`role`): its pin's number, the digits `author` ends with; "" for any other
+/// quote.
+fn pin_of(author : String, role : String) -> String {
+  if role != "page" && role != "image" {
+    return ""
+  }
+  let digits = StringBuilder::new()
+  for ch in author.rev_iter() {
+    if ch >= '0' && ch <= '9' {
+      digits.write_char(ch)
+    } else {
+      break
+    }
+  }
+  digits.to_string().rev()
+}
+
+///|
+/// How much further in from its card's corner a quote's words are in the composer than in a message, across and down
+/// (quote_source_composer's padding and quote_source's; a pin as far in in both): sent, its card in the message sets
+/// out from its card in the composer by as much, so that its words set out from where they were.
+pub fn quote_sent_shift(author : String, role : String) -> (Double, Double) {
+  if pin_of(author, role) != "" {
+    (0.0, 0.0)
+  } else {
+    (quote_in_composer.px() - quote_in, quote_over_composer - quote_over)
+  }
+}
+
+///|
 /// A quote's mark (11, the accent's) in a box as tall as its line.
 let quote_icon : Double = 11.0
 
@@ -733,6 +750,9 @@ let quote_over : Double = 7.0
 let quote_end_composer : Double = 34.0
 
 ///|
+let quote_in_composer : @ui.Space = S4
+
+///|
 let quote_over_composer : Double = 9.0
 
 ///|
@@ -740,7 +760,12 @@ let quote_said_over : Double = 3.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let quote_source_composer : @ui.Style = @ui.style(w=Full, pl=S4, pr=room(quote_end_composer), pt=room(quote_over_composer))
+let quote_source_composer : @ui.Style = @ui.style(
+  w=Full,
+  pl=quote_in_composer,
+  pr=room(quote_end_composer),
+  pt=room(quote_over_composer),
+)
 
 ///|
 /// A page mark's quote: its pin (a capsule 16 high) the ladder's inset from its top and start, concentric with its
