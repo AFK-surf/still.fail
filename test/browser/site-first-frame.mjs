@@ -5,7 +5,7 @@
 //   PLAYWRIGHT_MODULE=… [PLAYWRIGHT_CHANNEL=chrome] [SHOTS=<dir>] node test/browser/site-first-frame.mjs [dist/site]
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 
 const dir = resolve(process.argv[2] ?? 'dist/site');
@@ -14,8 +14,10 @@ const out = process.env.SHOTS;
 if (out) mkdirSync(out, { recursive: true });
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json' };
+// Served as Cloudflare serves the site: a directory's index.html, a page's .html at its address without it.
 const server = createServer((req, res) => {
   let path = join(dir, decodeURIComponent(new URL(req.url, 'http://x').pathname));
+  if (!extname(path) && existsSync(`${path}.html`)) path = `${path}.html`;
   try { if (statSync(path).isDirectory()) path = join(path, 'index.html'); } catch { res.writeHead(404).end(); return; }
   try { res.writeHead(200, { 'content-type': TYPES[extname(path)] ?? 'application/octet-stream' }).end(readFileSync(path)); } catch { res.writeHead(404).end(); }
 });

@@ -150,8 +150,9 @@ export function OneComputer(props: DemoProps) {
     const narrow = innerWidth <= 860;
     // The phone's own app beside the computer's, a page of its own as wide as a phone (site/phone.html, in the page's
     // language), so that it is laid out as on one (its rules go by the screen's width); a wide screen only: on a narrow
-    // one the window is the phone.
-    if (!narrow && el.offsetParent !== null && phoneScreen.current && !phoneScreen.current.src) phoneScreen.current.src = lang === "en" ? "/en/phone.html" : "/phone.html";
+    // one the window is the phone. At the address it is served at, without .html (Cloudflare sends a page's .html address
+    // on to it: one more trip before the phone shows anything).
+    if (!narrow && el.offsetParent !== null && phoneScreen.current && !phoneScreen.current.src) phoneScreen.current.src = lang === "en" ? "/en/phone" : "/phone";
 
     // The rows, where the app has them in the window (in its own size), and each as it is drawn there, for the air;
     // read again until the app is there, when the room changes size, and once the app is drawn anew (the demo taking
