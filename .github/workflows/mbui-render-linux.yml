@@ -1,0 +1,80 @@
+# mbui (apps/mbui/mbui): the renderer's pixels on Linux (docs/determinism.md, "Pixel references belong to one kind of
+# machine"), as mbui-render-windows.yml has Windows': a Tester's draw list drawn offscreen by the GLES 3 renderer on
+# EGL's surfaceless platform, Mesa's llvmpipe (no GPU), on GitHub's ubuntu-24.04 runner, twice in each of two jobs at
+# once, against its reference (goldens/render/linux-controls.png) to the byte, on the system, Mesa, text stack and
+# fonts the reference was made with (goldens/render/linux.txt). The picture drawn is the artifact: what a PR that
+# changes it commits, saying why.
+name: mbui-render-linux
+on:
+  pull_request:
+    paths: &paths
+      - "apps/mbui/mbui/src/host/linux_render.c"
+      - "apps/mbui/mbui/src/host/linux_text.c"
+      - "apps/mbui/mbui/src/host/linux_image.c"
+      - "apps/mbui/mbui/src/host/gles_render.h"
+      - "apps/mbui/mbui/scripts/linux.sh"
+      - "apps/mbui/mbui/src/render/**"
+      - "apps/mbui/mbui/src/ui/drawlist.mbt"
+      - "apps/mbui/mbui/src/ui/scene.mbt"
+      - "apps/mbui/mbui/src/ui/line.mbt"
+      - "apps/mbui/mbui/tools/chk/pictures.mbt"
+      - "apps/mbui/mbui/src/kitdemo/gallery/dl_print_wbtest.mbt"
+      - "apps/mbui/mbui/src/ui/smooth.mbt"
+      - "apps/mbui/mbui/src/host/corner*"
+      - "apps/mbui/mbui/goldens/render/linux*"
+      - "apps/mbui/mbui/scripts/render_dl.sh"
+      - "apps/mbui/mbui/scripts/render_linux.sh"
+      - ".github/workflows/mbui-render-linux.yml"
+  push:
+    branches: [main]
+    paths: *paths
+  workflow_dispatch:
+
+jobs:
+  offscreen:
+    strategy:
+      fail-fast: false
+      matrix:
+        run: [a, b]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      # GTK 4 and what the host draws with (epoxy, Pango, cairo, gdk-pixbuf, libsoup), Mesa's EGL and llvmpipe, and the
+      # fonts the text is set in (the system's sans-serif, Han in Noto Sans CJK SC, Noto Color Emoji)
+      - uses: ./.github/actions/apt
+        with:
+          name: mbui-render-linux
+          packages: >-
+            libgtk-4-dev libepoxy-dev libpango1.0-dev libcairo2-dev libfontconfig-dev libgdk-pixbuf-2.0-dev
+            libsoup-3.0-dev zlib1g-dev libgl1-mesa-dri libegl-mesa0 fonts-noto-cjk fonts-noto-color-emoji fonts-dejavu-core
+      - uses: ./.github/actions/mbui-moonbit
+      - name: Drawn offscreen, twice (scripts/render_linux.sh)
+        run: scripts/render_linux.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: render-linux-${{ matrix.run }}
+          # (a rerun's own: the attempt before's put by, so `same` compares this attempt's pictures)
+          overwrite: true
+          path: apps/mbui/mbui/out/render/
+      - name: Against the reference, on the machine it was made on
+        run: scripts/render_linux.sh against
+
+  # the two jobs' pictures (two machines of the kind, at once): the same to the byte
+  same:
+    needs: offscreen
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { pattern: render-linux-*, path: runs }
+      - run: |
+          md5sum runs/*/controls.png
+          grep -h '^cpu ' runs/*/machine.txt
+          cmp runs/render-linux-a/controls.png runs/render-linux-b/controls.png && echo "the two jobs' pictures: the same to the byte"
