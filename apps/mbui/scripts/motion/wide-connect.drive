@@ -1,4 +1,4 @@
-# A connect's page on the desktop (sfdesk connect.mbt, the web's pages/Connect.tsx): MBUI_WIN=1280x800 over the
+# A connect's page on the desktop (sfpages connect.mbt, the web's pages/Connect.tsx): MBUI_WIN=1280x800 over the
 # made-up chat. 连接 from the rail, a connect opened; its ⋯; 更改: all its messages in one session chosen, what that
 # does said; back to the connects.
 timeout 30000

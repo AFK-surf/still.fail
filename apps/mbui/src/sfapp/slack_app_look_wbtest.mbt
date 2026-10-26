@@ -1,6 +1,6 @@
-// A Slack app's look in its pages (src/sfdesk slack_app.mbt; one in every frame): on a connect's page, its app's fold;
-// in a new connect's dialog, the app's step. Its icon picked from still.fail's buddies or the model makers' marks or
-// a picture of the person's own, drawn on its colour, and sent with the rest. On a phone's width with a finger.
+// A new Slack app's look in the new connect's dialog as its fixture puts it up over the whole app (src/sfpages
+// slack_app.mbt; a connect's page's fold: src/sfpages connects_wbtest.mbt): the app's step, its icon and colour sent
+// with the rest. On a phone's width with a finger.
 
 ///|
 /// A page of the settings' fixture (`mode` as MBUI_FIXTURE has it) at a phone's width with a finger, its calls kept in
@@ -26,22 +26,6 @@ fn look_tester(route : @settings.Route, calls : Array[Made], mode? : String = "s
   t.draw()
   t.run_for(@ui.nav_push_ms)
   t
-}
-
-///|
-test "a connect's Slack app, at a phone's width: its fold opened, the buddies and the makers to pick from, a picture to upload" {
-  let calls : Array[Made] = []
-  let t = look_tester(@settings.Route::Connect("ws1/st1", "k1"), calls)
-  let (x, y, w, h) = t.query(Link, label="Slack app").unwrap().rect
-  t.tap(x + w / 2.0, y + h / 2.0)
-  t.frame()
-  // the core's buddies asked for once, then the makers after them
-  assert_eq(calls.filter(fn(m) { m.name == "buddies" }).length(), 1)
-  for a in ["后端接口", "移动应用", "写文档", "Anthropic", "OpenAI"] {
-    assert_true(t.query(Button, label=a) is Some(_), msg=a)
-  }
-  // a picture of one's own: its icon's button
-  assert_true(t.query(Button, label="上传图片") is Some(_))
 }
 
 ///|

@@ -43,7 +43,7 @@ let nc_actions : Array[String] = [
 ///|
 /// A new connect on `station`, in a dialog (NewConnectDialog): from the start, or (`resume`) from a Slack app made
 /// before. Its wizard is opened once the frame is built, and let go of as the dialog closes.
-fn new_connect_dialog(src : Source, core : Core, here : Here, station : String, resume? : String = "") -> Unit {
+pub fn new_connect_dialog(src : Source, core : Core, here : Here, station : String, resume? : String = "") -> Unit {
   nc_made.val += 1
   let key = "new-connect/" + nc_made.val.to_string()
   let f : NcFlow = {
@@ -105,7 +105,7 @@ fn new_connect_dialog(src : Source, core : Core, here : Here, station : String, 
       nc_body(c, src, core, here, f, view(), fn() { nc_close(core, f, shut) })
     },
     fn(c, shut) { nc_foot(c, core, here, f, view(), fn() { nc_close(core, f, shut) }) },
-    gone=fn() { nc_drop(core, f) },
+    on_gone=fn() { nc_drop(core, f) },
   )
 }
 
@@ -343,7 +343,7 @@ fn nc_models(c : @ui.Ctx, src : Source, core : Core, f : NcFlow, v : Json?) -> U
         (core.push)(Profiles(f.station))
       }
     } else {
-      @sfpages.model_triple(c, src, f.station, "connect-new:" + f.form)
+      model_triple(c, src, f.station, "connect-new:" + f.form)
     }
   })
 }

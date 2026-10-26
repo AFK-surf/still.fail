@@ -47,4 +47,7 @@ pub fn reset() -> Unit {
   desk_dialogs.val = 0
   vault_reset()
   vault_item_reset()
+  mine_filter_open.clear()
+  connect_reset()
+  new_connect_reset()
 }

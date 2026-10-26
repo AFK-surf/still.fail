@@ -62,7 +62,7 @@ fn station_ids(core : Core, here : Here) -> Array[String]? {
 ///|
 /// A place's primary action (PlaceAction: the bar's notch, a pushed page's ＋), None where it has none now: Station's
 /// adds a station (its owners and admins, once its stations are read), Profile's a profile (once a station is online).
-/// 连接's is its page's (src/sfdesk connects.mbt connects_add).
+/// 连接's is its page's (src/sfpages connects.mbt connects_add).
 pub fn place_action(core : Core, here : Here, place : String) -> ((@sf.Anchor) -> Unit)? {
   match place {
     "stations" =>
