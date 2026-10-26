@@ -48,6 +48,9 @@ pub let menu_zh : Map[String, String] = {
   "desktop.menu.help": "帮助",
   "desktop.menu.shortcuts": "快捷键一览",
   "desktop.tray.open": "打开 {app}",
+  // the window's own buttons where the app draws them (Windows': @sf.window_keys)
+  "desktop.window.maximize": "最大化",
+  "desktop.window.restore": "还原",
 }
 
 ///|

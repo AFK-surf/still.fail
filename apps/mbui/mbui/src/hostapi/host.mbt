@@ -17,6 +17,10 @@ pub(open) trait Host {
   set_full_screen(Self, Bool) -> Unit = _
   window_corner(Self) -> Double = _
   window_drag(Self) -> Unit = _
+  window_act(Self, Int) -> Unit = _
+  window_zoomed(Self) -> Bool = _
+  window_snap(Self, Double, Double, Double, Double) -> Unit = _
+  window_snap_state(Self) -> Int = _
   set_cursor(Self, Int) -> Unit = _
   set_badge(Self, Int) -> Unit = _
   menu_setup(Self, String) -> Unit = _
@@ -217,6 +221,26 @@ impl Host with window_corner(_) {
 ///|
 impl Host with window_drag(_) {
   ()
+}
+
+///|
+impl Host with window_act(_, _) {
+  ()
+}
+
+///|
+impl Host with window_zoomed(_) {
+  false
+}
+
+///|
+impl Host with window_snap(_, _, _, _, _) {
+  ()
+}
+
+///|
+impl Host with window_snap_state(_) {
+  0
 }
 
 ///|
@@ -1135,6 +1159,37 @@ pub fn window_corner() -> Double {
 /// here, as its title bar's would be.
 pub fn window_drag() -> Unit {
   current.val.window_drag()
+}
+
+///|
+/// What the window's own buttons do, asked by the app where it draws them (a window whose top row is the app's and
+/// whose system draws no buttons in it: Windows'): 1 minimized, 2 maximized or back as it was, 3 closed (as its close
+/// button closes it). Nothing where there is no such window.
+pub fn window_act(what : Int) -> Unit {
+  current.val.window_act(what)
+}
+
+///|
+/// Whether the window is maximized now (Windows: what its maximize button brings back as it was). False where there
+/// is no such window.
+pub fn window_zoomed() -> Bool {
+  current.val.window_zoomed()
+}
+
+///|
+/// Where the app draws the window's maximize button this frame, in points in the window (w 0: none): the host's there,
+/// as its title bar's own (Windows: hit as its maximize button, so the system's Snap Layouts open from it as the
+/// pointer rests on it; the press on it the host's, which maximizes the window or brings it back). The pointer there is
+/// the host's, not the app's: window_snap_state says how it stands. Nothing where there is no such window.
+pub fn window_snap(x : Double, y : Double, w : Double, h : Double) -> Unit {
+  current.val.window_snap(x, y, w, h)
+}
+
+///|
+/// How the pointer stands on the window's maximize button the app draws (window_snap): 0 not on it, 1 on it, 2
+/// pressing it. The app is drawn again as it changes.
+pub fn window_snap_state() -> Int {
+  current.val.window_snap_state()
 }
 
 ///|

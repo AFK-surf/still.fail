@@ -1041,6 +1041,27 @@ fn window_drag() -> Unit {
 }
 
 ///|
+/// The window's own buttons (see host_native.mbt): a browser's page has none to draw.
+fn window_act(what : Int) -> Unit {
+  ignore(what)
+}
+
+///|
+fn window_zoomed() -> Bool {
+  false
+}
+
+///|
+fn window_snap(x : Double, y : Double, w : Double, h : Double) -> Unit {
+  ignore((x, y, w, h))
+}
+
+///|
+fn window_snap_state() -> Int {
+  0
+}
+
+///|
 /// The pointer's shape (see host_native.mbt): the canvas's CSS cursor.
 fn set_cursor(kind : Int) -> Unit {
   js_set_cursor(kind)

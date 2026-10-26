@@ -1029,6 +1029,13 @@ void mb_host_window_drag(void) {
   [w performWindowDragWithEvent:e];
 }
 
+// The window's own buttons, the app's to draw where the system draws none (@hostapi.window_act, window_zoomed,
+// window_snap, window_snap_state): Windows' alone; the system's here.
+void mb_host_window_act(int32_t what) { (void)what; }
+int32_t mb_host_window_zoomed(void) { return 0; }
+void mb_host_window_snap(double x, double y, double w, double h) { (void)x, (void)y, (void)w, (void)h; }
+int32_t mb_host_window_snap_state(void) { return 0; }
+
 // The keys held now (@hostapi.mods_held), as a key's are told: shift 1, control 2, option 4, command 8.
 int32_t mb_host_mods_held(void) {
   NSEventModifierFlags m = [NSEvent modifierFlags];

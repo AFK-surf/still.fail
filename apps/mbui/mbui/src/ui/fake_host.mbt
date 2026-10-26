@@ -334,6 +334,26 @@ impl @hostapi.Host for FakeHost with window_drag(_) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with window_act(_, what) {
+  h_window_act(what)
+}
+
+///|
+impl @hostapi.Host for FakeHost with window_zoomed(_) {
+  window_zoomed()
+}
+
+///|
+impl @hostapi.Host for FakeHost with window_snap(_, x, y, w, h) {
+  h_window_snap(x, y, w, h)
+}
+
+///|
+impl @hostapi.Host for FakeHost with window_snap_state(_) {
+  window_snap_state()
+}
+
+///|
 impl @hostapi.Host for FakeHost with shared_in(_) {
   shared_in()
 }

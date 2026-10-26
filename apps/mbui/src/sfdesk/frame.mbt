@@ -440,7 +440,8 @@ fn dock(
   // on the tape (open, apart from the page), a panel of its own as the closed bar is: 6 from the window's edges (its
   // buttons in its top row), 8 from the page's panel
   let apart = wide.tape && !bar
-  let above = if @ui.window_inset() { closed_bar_top } else { closed_bar_in }
+  // (under the window's buttons where they are the system's, at its left: macOS's)
+  let above = if @ui.window_keys_left() { closed_bar_top } else { closed_bar_in }
   let ml = c.moved("--dock-ml", if bar || apart { closed_bar_in } else { 0.0 })
   let mt = c.moved("--dock-mt", if bar { above } else if apart { closed_bar_in } else { 0.0 })
   let mr = c.moved("--dock-mr", if apart {
@@ -617,7 +618,9 @@ pub fn frame(
   let foot = bars.bottom
   let inset = @ui.window_inset()
   let peek_r = rail_w - closed_bar_gap + (if wide.peeking { s } else { 0.0 })
-  side_peek(c, closed_bar_in, top + (if inset { closed_bar_top } else { closed_bar_in }), peek_r, c.height - foot - closed_bar_in)
+  // (under the window's buttons where they are the system's, at its left: macOS's)
+  let peek_top = if @ui.window_keys_left() { closed_bar_top } else { closed_bar_in }
+  side_peek(c, closed_bar_in, top + peek_top, peek_r, c.height - foot - closed_bar_in)
   let peek = own && side_folded() && wide.peeking
   // what the page shows across as the last frame laid it out (its bars left out): what it moves aside for, shown a
   // while
@@ -661,7 +664,7 @@ pub fn frame(
   let main_w = if !wide.tape {
     dmax(0.0, c.width - col)
   } else if panel_of is Some(_) {
-    dmax(0.0, c.width - tape_shows_left() - tape_shows - 2.0 * closed_bar_gap)
+    dmax(0.0, c.width - tape_shows_left() - tape_shows_right() - 2.0 * closed_bar_gap)
   } else {
     tape_one_beside(c.width, tape_shows_left())
   }
@@ -686,15 +689,17 @@ pub fn frame(
   wide.closed = bar
   let updating = !gated && update_shown()
   // (where the move has got to, as the page beside them: every bar builds its room from these)
+  // (clear of the window's buttons at its left where they are the system's, macOS's: brand.css.ts's inset frame)
+  let keys_left = @ui.window_keys_left()
   wide.bar_pl = c.moved("--bar-pl", if !bar || over_bars {
     bar_in
   } else if updating {
-    if inset {
+    if keys_left {
       bar_update_inset
     } else {
       bar_update_in
     }
-  } else if inset {
+  } else if keys_left {
     bar_closed_inset
   } else {
     bar_in
@@ -990,13 +995,27 @@ pub let tape_shows : Double = 56.0
 
 ///|
 /// What shows at the window's left of the panel beside the one in use (the sidebar's, the page in use; the page's, the
-/// side panel in use): tape_shows; where the window's buttons are in the app's top row (a Mac's, not full screen), as
-/// wide as holds them with as much room past them as before them from the window's edge (the strip's own edge is off
-/// it), so they stand on what is at the window's left, in use or a strip, never over the panel beside it (the user,
-/// 2026-10-26: 红绿灯没有一个空位可以放).
+/// side panel in use): tape_shows; where the window's buttons are in the app's top row there (a Mac's, not full
+/// screen), as wide as holds them with as much room past them as before them from the window's edge (the strip's own
+/// edge is off it), so they stand on what is at the window's left, in use or a strip, never over the panel beside it
+/// (the user, 2026-10-26: 红绿灯没有一个空位可以放).
 pub fn tape_shows_left() -> Double {
-  if @ui.window_inset() {
+  if @ui.window_keys_left() {
     dmax(tape_shows, window_buttons_in + window_buttons_w + window_buttons_in)
+  } else {
+    tape_shows
+  }
+}
+
+///|
+/// What shows at the window's right of the panel beside the one in use (the page's, the sidebar in use; the side
+/// panel's, the page in use): tape_shows; where the window's buttons are the app's, at its right (Windows'), as wide
+/// as holds them (@sf.window_keys_room_tape: from the window's side to before their rule) with the panels' 6 past
+/// them, so they stand on what is at the window's right, in use or a strip, never over the panel beside it, as a Mac's
+/// at its left (tape_shows_left).
+pub fn tape_shows_right() -> Double {
+  if @ui.window_keys_own() {
+    dmax(tape_shows, @sf.window_keys_room_tape() + @sf.window_in)
   } else {
     tape_shows
   }
@@ -1024,7 +1043,7 @@ fn tape_one_beside(width : Double, shows : Double) -> Double {
 /// needs: the user, 2026-10-26, the chats' list stretched across the window had no need to be), the page beside it
 /// showing what the window leaves; at most as wide as a panel with one beside it (tape_one_beside), less the rail's.
 fn tape_side_w(width : Double, own : Double) -> Double {
-  dmax(0.0, dmin(own, tape_one_beside(width, tape_shows) - rail_w - rail_tape_more()))
+  dmax(0.0, dmin(own, tape_one_beside(width, tape_shows_right()) - rail_w - rail_tape_more()))
 }
 
 ///|
@@ -1060,7 +1079,7 @@ fn tape_panel_w(width : Double) -> Double {
 /// The widest the sidebar is dragged to on the tape, a window `width` wide: a panel with a strip of the page beside it,
 /// less the rail's (tape_side_w), and the wide frame's most (side_max).
 fn tape_side_most(width : Double) -> Double {
-  dmax(side_min, dmin(side_max, tape_one_beside(width, tape_shows) - rail_w - rail_tape_more()))
+  dmax(side_min, dmin(side_max, tape_one_beside(width, tape_shows_right()) - rail_w - rail_tape_more()))
 }
 
 ///|

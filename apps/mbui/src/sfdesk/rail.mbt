@@ -145,7 +145,9 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
     Some((x, y)) if wide.rail_menu is None => wide.rail_menu = Some(("", x, y))
     _ => ()
   }
-  let inset = @ui.window_inset()
+  // (under the window's buttons where they are the system's, at its left: macOS's; where they are the app's, at its
+  // right, Windows', a rail's top row as a browser's: Rail.css.ts, the custom frame's only drags)
+  let inset = @ui.window_keys_left()
   // Rail.css.ts rail, top: 56 wide, its places in its middle (9 from its edge; the sidebar reaches over its last 8, so
   // the rail is as wide as the rest), 9 under the last; its top row (41 under the window's buttons, else 5) 6 over its
   // first place; in the bar none, its first place 2 from the bar's top
@@ -181,8 +183,10 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
   c.box(style=look, moves="rail", id=rail_id, fn() {
     // its top row the window's title bar (the macOS app's buttons in it) across all of it, its padding too; not in the
     // closed bar
-    if inset && !bar {
-      title_row(c, "rail/top", top_h)
+    if @ui.window_inset() && !bar {
+      // (the window's top row across it at least, where its first place is higher than that: Windows', a browser's;
+      // what is pressed there its places')
+      title_row(c, "rail/top", dmax(top_h, closed_bar_top))
     }
     c.box(style=rail_head, fn() {
       c.box(style=rail_top.then(@ui.style(h=Fixed(top_h))), moves="rail-top", fn() {  }) |> ignore

@@ -1028,6 +1028,13 @@ void mb_host_window_drag(void) {
   gdk_toplevel_begin_move(GDK_TOPLEVEL(s), press_device, press_button, press_x, press_y, press_time);
 }
 
+// The window's own buttons, the app's to draw where the system draws none (@hostapi.window_act, window_zoomed,
+// window_snap, window_snap_state): Windows' alone; the system's here.
+void mb_host_window_act(int32_t what) { (void)what; }
+int32_t mb_host_window_zoomed(void) { return 0; }
+void mb_host_window_snap(double x, double y, double w, double h) { (void)x, (void)y, (void)w, (void)h; }
+int32_t mb_host_window_snap_state(void) { return 0; }
+
 // (the number on the app's icon: linux_life.h)
 // (this machine's station: linux_station.h)
 

@@ -256,6 +256,10 @@ pub fn Tester::new(
     site: [],
     cursor: 0,
     window_drags: 0,
+    window_acts: [],
+    zoomed: false,
+    snap: (0.0, 0.0, 0.0, 0.0),
+    snap_state: 0,
     opened: [],
     dark,
     inset: window_inset,
@@ -1820,6 +1824,34 @@ pub fn Tester::cursor(self : Tester) -> Cursor {
 /// How often a press asked the host to drag the window.
 pub fn Tester::window_drags(self : Tester) -> Int {
   self.fake.window_drags
+}
+
+///|
+/// What the app asked of the window's own buttons, oldest first (@hostapi.window_act: 1 minimize, 2 maximize or back,
+/// 3 close).
+pub fn Tester::window_acts(self : Tester) -> Array[Int] {
+  self.fake.window_acts.copy()
+}
+
+///|
+/// Where the app last said it draws the window's maximize button (@hostapi.window_snap): x, y, w, h (w 0: none).
+pub fn Tester::window_snap_rect(self : Tester) -> (Double, Double, Double, Double) {
+  self.fake.snap
+}
+
+///|
+/// The window maximized or not, from the next frame on (@hostapi.window_zoomed).
+pub fn Tester::set_window_zoomed(self : Tester, zoomed : Bool) -> Unit {
+  self.fake.zoomed = zoomed
+  self.fake.wants = true
+}
+
+///|
+/// How the pointer stands on the window's maximize button the app draws, as its host would say it (0 not on it, 1 on it,
+/// 2 pressing it), from the next frame on (@hostapi.window_snap_state).
+pub fn Tester::set_window_snap(self : Tester, state : Int) -> Unit {
+  self.fake.snap_state = state
+  self.fake.wants = true
 }
 
 ///|
