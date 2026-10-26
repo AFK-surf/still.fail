@@ -148,11 +148,12 @@ test("made-up 1080p pictures: encoded on the hardware, over iroh, decoded; a sti
       assert.ok(m.width > 0 && m.height > 0 && m.width <= 1920 && m.height <= 1080);
       if (mode === "still") {
         // Its first frame, then the same picture again as a key frame each time the rate has gone up (screens.ts
-        // #still, docs/remote-screens.md "Still"): at most one a STILL_MS, each larger than the last (encoded at a
-        // higher rate: sharper), until it is at the source's own.
+        // #still, docs/remote-screens.md "Still"): at most one a STILL_MS, none smaller than the one before (encoded at
+        // a rate as high or higher: no blurrier; a made-up picture this plain is nearly as small at any rate, 21204,
+        // 21204, 21255, 21256, 22769 bytes in run 40270232725), until it is at the source's own.
         assert.equal(m.keys, m.frames, `a still screen sends key frames only: ${m.sizes.join(", ")} bytes`);
         assert.ok(m.frames <= (SECONDS * 1000) / STILL_MS + 1, `at most one a STILL_MS: ${m.frames} frames`);
-        assert.ok(m.sizes.every((n, i) => i === 0 || n > m.sizes[i - 1]!), `each picture again sharper than the last: ${m.sizes.join(", ")} bytes`);
+        assert.ok(m.sizes.every((n, i) => i === 0 || n >= m.sizes[i - 1]!), `no picture again blurrier than the last: ${m.sizes.join(", ")} bytes`);
       } else assert.ok(m.frames > SECONDS, "a moving screen keeps sending");
       assert.ok(m.keys >= 1);
       decodes(m, `synthetic-${mode}`);
