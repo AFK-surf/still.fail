@@ -571,9 +571,17 @@ fn icons_with_mine(c : @ui.Ctx, other : @ui.Style, mine : @ui.Style, side : Doub
 }
 
 ///|
-/// The app's own icon as the system draws it (its launcher icon, src/sf's drawables): its square, rounded 22%.
+/// The app's own icon as the system draws it (its launcher icon, src/sf's drawables): its square, rounded 22%;
+/// still.fail's or youdid.wtf's where the app is still.fail's own (MBUI_OWN), else still.fail mbui's.
 fn app_icon(c : @ui.Ctx, side : Double) -> Unit {
-  c.box(style=app_icon_box, fn() { @sf.drawable(c, "launcher_icon", side) |> ignore }) |> ignore
+  let name = if @ui.env("MBUI_OWN") != "1" {
+    "launcher_icon"
+  } else if @ui.env("MBUI_BETA") == "1" {
+    "launcher_icon_beta"
+  } else {
+    "launcher_icon_stable"
+  }
+  c.box(style=app_icon_box, fn() { @sf.drawable(c, name, side) |> ignore }) |> ignore
 }
 
 ///|

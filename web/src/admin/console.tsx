@@ -7,7 +7,7 @@ import type { CoreError, Topic } from "../core/client.ts";
 import { Boxes, ChevronRight, Close, Copy, LogOut, Monitor, Plus, Said, Search, Server, Ticket, Users } from "@stillfail/ui/icons.tsx";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
-import { Lockup } from "../brand.tsx";
+import { Wordmark } from "../brand.tsx";
 import { stamp, type Stamp } from "../api.ts";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, MobileBack, Pill, ResizeHandle, Segmented, Select, StatusDot, Switch, SwitchRow, Time, ICON, type Presence, type Tone, Waiting } from "../ui.tsx";
@@ -124,7 +124,7 @@ export function Console({ account }: { account: Account }) {
     <div className={shellCss.shell} data-detail={!atIndex}>
       <nav className={nav.sidebar} aria-label={t("web-pages.admin.title")}>
         <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} />
-        <div className={`${nav.brand} ${nav.brandCompact}`}><Lockup /></div>
+        <div className={`${nav.brand} ${nav.brandCompact}`}><Wordmark size={24} /></div>
         <div className={nav.navScroll}>
           <div className={nav.navHeading}>{t("web-pages.admin.title")}</div>
           <NavLink className={nav.navRow} to="/overview"><Monitor {...ICON} />{t("web-pages.admin.overview")}</NavLink>

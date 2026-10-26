@@ -41,12 +41,12 @@ globalStyle(`${sidebar} :is(a, img, svg)`, { WebkitUserDrag: "none" });
 // Closing or opening, its contents keep their width and are cut, not laid out anew at every step.
 globalStyle(`${sidebar} > :not(${resizeHandle})`, { "@media": { [wide]: { minWidth: fallbackVar(vars.sidebarW, "240px") } } });
 
-/** The buddy's drawing starts a little inside the lockup: 16 px puts it on the rows' icons below. */
+/** The sidebar's top row: the name, 16 px in, over the rows' icons below. */
 export const brand = style({
   display: "flex", alignItems: "center", gap: 8, height: 56, padding: "0 16px",
   selectors: {
     // The desktop app has no title bar: the top row drags the window. On macOS it holds the window's buttons
-    // (apps/desktop/src/main.ts puts them in it), the buddy beside them; on Windows they are at the page's right.
+    // (apps/desktop/src/main.ts puts them in it); on Windows they are at the page's right.
     "[data-desktop] &": { height: 44, WebkitAppRegion: "drag" },
     '[data-desktop="inset"] &': { paddingLeft: 86 },
     // Beside the rail (Rail.css.ts), the window's buttons reach over it into this row.
@@ -57,7 +57,7 @@ export const brand = style({
   "@media": {
     // No rail on a narrow window: the buttons are all in this row.
     [narrow]: { selectors: { '[data-desktop="inset"] [data-rail] &': { paddingLeft: 86 } } },
-    // Beside the rail on the web, nothing is left in it (no name, no buddy, no window to drag): a margin only.
+    // Beside the rail on the web, nothing is left in it (no name, no window to drag): a margin only.
     // Nor in the desktop app full screen, its window's buttons gone, nor on Windows, whose buttons are at the right.
     // Closed (shown a while over the page, Rail.tsx peekSidebar), none either: the bar starts under the window's buttons,
     // its first row level with the rail's first place.
@@ -67,7 +67,7 @@ export const brand = style({
     } },
   },
 });
-/** 云端侧边栏：lockup 在 workspace 切换器上方（always with `brand`, whose desktop top row still wins） */
+/** 云端侧边栏：字标在 workspace 切换器上方（always with `brand`, whose desktop top row still wins） */
 export const brandCompact = style({ height: 48, padding: "0 16px" });
 
 /** The sidebar's top and foot are frosted bands over the lists, which scroll on under them (glassBands in Sidebar.tsx
@@ -245,7 +245,7 @@ export const sessionKind = style({
   },
 });
 globalStyle(`${sessionKind} ${kindIcon}`, { width: 14, height: 14 });
-// The buddy has air around it in its artwork: at 16px it reads as big as the 14px platform marks.
+// A mark has air around it in its artwork: at 16px it reads as big as the 14px platform marks.
 globalStyle(`${sessionKind} ${kindMark}`, oversize(1));
 /** Archive, beside a row while pointed at: centred on the title line (20px tall, 7px down the row). */
 export const rowArchive = style({

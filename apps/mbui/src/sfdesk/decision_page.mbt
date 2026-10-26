@@ -463,7 +463,7 @@ fn zou_call(src : Source, call : String, x : Json, what : String) -> Unit {
 }
 
 ///|
-/// None left (DecisionsIdle): its face, 奏折已全部批完 and where the next will show; the day in figures (answered, the
+/// None left (DecisionsIdle): 奏折已全部批完 and where the next will show; the day in figures (answered, the
 /// average wait, at work); the chats at work (the next may come from there) and what was answered today, each opening
 /// its chat.
 fn zou_idle(c : @ui.Ctx, view : Json?) -> Unit {
@@ -472,9 +472,6 @@ fn zou_idle(c : @ui.Ctx, view : Json?) -> Unit {
   c.box(style=zi_idle, fn() {
     c.box(style=zi_column, fn() {
       c.box(style=zi_head, fn() {
-        if @sf.has_drawable("buddy_idle") {
-          @sf.drawable(c, if t.dark { "buddy_idle_dark" } else { "buddy_idle" }, zi_face) |> ignore
-        }
         c.text(@sf.t("web-main.decisions.idle.title"), style=zi_title) |> ignore
         c.text(@sf.t("web-main.decisions.idle.note"), style=zi_note) |> ignore
         if today is Some(Object(_)) {
@@ -793,12 +790,9 @@ let zi_idle : @ui.Style = @ui.css("w=Full h=Full px=S6 py=S8 align=ACenter justi
 let zi_column : @ui.Style = @ui.style(w=Full, max_w=@sf.idle_column_w, gap=S7)
 
 ///|
-/// Its head (head): its face (72), the title (16, 600, 22) 6 under it, the note (13 muted), the figures 10 under them.
+/// Its head (head): the title (16, 600, 22), the note (13 muted), the figures 10 under them.
 // kept across runs: a value (no field of it changes)
 let zi_head : @ui.Style = @ui.css("w=Full gap=S1_5 align=ACenter")
-
-///|
-let zi_face : Double = 72.0
 
 ///|
 // kept across runs: a value (no field of it changes)

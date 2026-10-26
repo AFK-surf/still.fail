@@ -804,7 +804,7 @@ ipcMain.handle("station:act", async (event, action: unknown) => {
 
 // Keeping the app current: the cloud has the latest build (scripts/release.sh desktop puts it in /releases/desktop/,
 // stillfail-mac.yml; the beta app's, stillfail-beta-mac.yml beside it), looked for at start and every few hours. A newer one is said to the pages, which show 更新
-// beside the buddy (web/src/brand.tsx); clicked, it is downloaded, and once it is the app quits (the station stopped
+// at the sidebar's top (web/src/brand.tsx); clicked, it is downloaded, and once it is the app quits (the station stopped
 // first) and opens as the new one.
 const UPDATE_EVERY = 4 * 60 * 60 * 1000;
 

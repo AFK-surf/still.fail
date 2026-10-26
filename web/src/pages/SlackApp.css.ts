@@ -1,7 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { inputRow } from "../styles/additions.css.ts";
-import { sidebarBuddy } from "../brand.css.ts";
 
 export const colorSwatch = style({
   width: "36px", height: "36px", padding: "0", border: `1px solid ${vars.lineStrong}`,
@@ -85,8 +84,6 @@ globalStyle(`${appColour} ${colorSwatch}`, { width: "28px", height: "28px" });
 globalStyle(`${avatarTile} img`, { width: "100%", height: "100%", transform: "scale(1.18)" });
 globalStyle(`${avatarTile} img[data-mono]`, { filter: "brightness(0) invert(1)" });
 globalStyle(`${appPerms} summary`, { cursor: "pointer", color: vars.muted, padding: "6px 0" });
-/** Here rather than with its class: it comes after .app-avatar img, and wins over it. */
-globalStyle(`${sidebarBuddy} img`, { display: "block", width: "28px", height: "28px" });
 globalStyle(`${appFold} > summary`, {
   display: "flex", alignItems: "baseline", gap: "10px", cursor: "pointer", listStyle: "none", padding: "6px 0",
 });

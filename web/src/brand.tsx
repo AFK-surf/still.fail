@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useDark } from "./theme.ts";
 import type { AppUpdate } from "./core/client.ts";
@@ -9,21 +9,21 @@ import * as sidebarCss from "./styles/sidebar.css.ts";
 import * as railCss from "./Rail.css.ts";
 import * as listCss from "./Sidebar.css.ts";
 import * as bubblesCss from "./SystemBubbles.css.ts";
-import { motionMs, moveState } from "@stillfail/ui/motion.ts";
+import { moveState } from "@stillfail/ui/motion.ts";
 import { Tip } from "./ui.tsx";
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
-// still.fail's brand, from web/public (see the brand package's brand.md): the station
-// buddy mark, the lockup and the illustrations. Marks and lockup have -dark twins,
-// picked by the OS theme like the rest of the app; the illustrations switch themselves.
+// still.fail's brand, from web/public (design/brand/README.md): the mark (s. in Inter Bold, its dot still.fail's
+// orange), the wordmark and the illustrations. Mark and wordmark have -dark twins, picked by the page's 外观 like the
+// rest of the app; the illustrations switch themselves.
 
 const BASE = import.meta.env.BASE_URL;
 
 // On the test channel (app.youdid.wtf, the beta desktop app) the name is its own, drawn the same way.
 const OWN = NAME !== "still.fail";
-// youdid.wtf's y goes below the line: its drawing is taller (64 to still.fail's 60), at the same scale.
-const WORDMARK = OWN ? { name: "wordmark-beta", width: 128, height: 23.5 } : { name: "wordmark", width: 81, height: 22 };
-const LOCKUP = OWN ? { name: "lockup-beta", width: 371 } : { name: "lockup", width: 264 };
+// Each drawing's size, in still.fail's: youdid.wtf's y goes below the line, its drawing taller at the same scale.
+const WORDMARK = OWN ? { name: "wordmark-beta", width: 393.41, height: 79.39 } : { name: "wordmark", width: 255.16, height: 63.13 };
+const WORD_HEIGHT = 63.13;
 
 /** A light asset and its -dark twin, as the page's 外观 has it. */
 function Themed({ name, width, height, alt = "", className }: { name: string; width: number; height: number; alt?: string; className?: string | undefined }) {
@@ -31,36 +31,29 @@ function Themed({ name, width, height, alt = "", className }: { name: string; wi
   return <img className={className} src={`${BASE}${name}${dark ? "-dark" : ""}.svg`} alt={alt} width={width} height={height} />;
 }
 
-/** The buddy's face, idle (as a station with nothing to do has it; Android's buddy_idle). */
-export function IdleFace({ size, className }: { size: number; className?: string }) {
-  return <Themed name="idle" width={size} height={size} className={className} />;
-}
-
-/** The buddy: the simplified 16-grid drawing up to 16 px, the full one from 22 px. */
+/** The mark, s. (its square as wide as the s. nearly). */
 export function Mark({ size, className }: { size: number; className?: string }) {
-  return <Themed name={size <= 16 ? "mark-16" : "mark"} width={size} height={size} className={className} />;
+  return <Themed name="mark" width={size} height={size} className={className} />;
 }
 
-/** Buddy and name; 132 × 30 at the smallest. */
-export function Lockup({ height = 30, alt = NAME }: { height?: number; alt?: string }) {
-  return <Themed name={LOCKUP.name} width={Math.round((height * LOCKUP.width) / 60)} height={height} alt={alt} className={css.brandLockup} />;
+/** The name, still.fail (youdid.wtf on the test channel), `size` high as still.fail is drawn. */
+export function Wordmark({ size = 22, className }: { size?: number; className?: string }) {
+  const k = size / WORD_HEIGHT;
+  return <Themed name={WORDMARK.name} width={Math.round(WORDMARK.width * k)} height={Math.round(WORDMARK.height * k)} alt={NAME} className={className} />;
 }
 
 /** The macOS app's window: its buttons are in the page's top row at the left, no room for the name (Windows' are at the right). */
 const titleless = () => !!window.stillfailDesktop && (window.stillfailDesktop.frame ?? "inset") === "inset";
 
 /**
- * The sidebar's top. The buddy holds the sidebar open: it stands on the sidebar's edge pushing it, and a click closes
- * the sidebar while it hops to rest at the top left (beside the window's buttons in the desktop app); a click there
- * opens it again. On the web and in the Windows app the name stays at the top; on a phone, where the sidebar is a page, it is the lockup.
+ * The sidebar's top: the name (on a phone, where the sidebar is a page; and on the web and in the Windows app with no
+ * rail). Beside the rail (Rail.tsx) the top is the window's: its buttons, 更新; the rail opens and closes the sidebar.
  */
 export function SidebarBrand({ rail }: { rail?: boolean }) {
-  // Beside the rail (Rail.tsx) the top is the window's: its buttons, 更新; the rail opens and closes the sidebar.
   return (
     <>
-      {!titleless() && !rail && <Themed name={WORDMARK.name} width={WORDMARK.width} height={WORDMARK.height} alt={NAME} className={css.brandWordmark} />}
-      {!titleless() && <span className={css.brandPhone}><Lockup /></span>}
-      {!rail && <SidebarBuddy />}
+      {!titleless() && !rail && <Wordmark className={css.brandWordmark} />}
+      {!titleless() && <span className={css.brandPhone}><Wordmark size={24} className={css.brandBlock} /></span>}
       {/* Beside the rail the app's newer build is one of its bubbles (SystemBubbles.tsx). */}
       {!rail && <UpdateButton />}
     </>
@@ -69,10 +62,9 @@ export function SidebarBrand({ rail }: { rail?: boolean }) {
 
 /** The wordmark alone, for a page with no sidebar (a workspace's onboarding); none in the desktop app on macOS, whose window has its buttons there. */
 export function PageBrand() {
-  return titleless() ? null : <Themed name={WORDMARK.name} width={WORDMARK.width} height={WORDMARK.height} alt={NAME} className={css.brandWordmark} />;
+  return titleless() ? null : <Wordmark className={css.brandWordmark} />;
 }
 
-type Pose = "push" | "hop" | "rest";
 const SIDEBAR = "stillfail.sidebar";
 
 /** Whether the sidebar is closed: on the page's root (so the layout follows), and kept on this device. */
@@ -82,7 +74,7 @@ function closeSidebar(closed: boolean) {
   try { localStorage.setItem(SIDEBAR, closed ? "closed" : "open"); } catch { /* private mode: for this page only */ }
 }
 
-/** Where the buddy (and the update button by it) is put: the page, unless the app is drawn in a part of one (the site's demo). */
+/** Where the update button is put: the page, unless the app is drawn in a part of one (the site's demo). */
 let pageRoot: HTMLElement | null = null;
 export function setPageRoot(element: HTMLElement): void {
   pageRoot = element;
@@ -111,7 +103,6 @@ export function moveSidebar(change: () => void): void {
     ...moves(`.${shellCss.shell}`, ["grid-template-columns"]),
     // The page as wide as it was, moved aside for the folded sidebar shown a while (shell.css.ts main, Rail.tsx peekShift).
     ...moves(`.${shellCss.shell} > .${shellCss.main}`, ["left"]),
-    ...moves(`.${css.sidebarBuddy}`, ["left"]),
     ...moves(`.${css.sidebarUpdate}`, ["left", "transform"]),
     ...moves(`.${railCss.edge}`, ["left"]),
     // The rail as narrow as the closed bar and its places as far from its edges, with its margins (no transitions of
@@ -170,33 +161,11 @@ export function useSidebarToggle(moved?: (closed: boolean) => void, { keys: owns
     moveSidebar(() => closeSidebar(next));
     moved?.(next);
   };
-  // One place on the page holds the shortcut (the rail, or the buddy where there is none).
+  // One place on the page holds the shortcut (the rail).
   useShortcut("sidebar.toggle", owns ? toggle : null);
   useKeymap();
   const keys = shortcutOf("sidebar.toggle");
   return { closed, toggle, label: `${closed ? t("web-main.sidebar.open") : t("web-main.sidebar.close")}${keys ? `  ${keys}` : ""}` };
-}
-
-function SidebarBuddy() {
-  const [pose, setPose] = useState<Pose>(() => document.documentElement.dataset.sidebar === "closed" ? "rest" : "push");
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
-  // It hops on the way, and lands in the pose of where it goes.
-  const { closed, toggle, label } = useSidebarToggle((next) => {
-    setPose("hop");
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => setPose(next ? "rest" : "push"), motionMs(380));
-  });
-  // On the page itself, not in the sidebar: a closed sidebar clips what is in it, and the desktop app's window would
-  // then take a click on the buddy for a drag of the window.
-  const buddy = (
-    <Tip label={label}><button type="button" className={css.sidebarBuddy} data-pose={pose} onClick={toggle} aria-label={closed ? t("web-main.sidebar.open") : t("web-main.sidebar.close")}>
-      <Themed name={`buddy/${pose}`} width={28} height={28} />
-      {/* Its drawing unmoving, shown instead with motion reduced (brand.css.ts buddyStill): an <img>'s SVG goes by the system's setting, not the app's. */}
-      <Themed name={pose === "hop" ? "buddy/hop" : `buddy/${pose}-still`} width={28} height={28} className={css.buddyStill} />
-    </button></Tip>
-  );
-  return onPage(buddy);
 }
 
 /** The desktop app's newer build, as its main process says (null in a browser, or while there is none). */
@@ -214,7 +183,7 @@ export function useAppUpdate(): AppUpdate | null {
 }
 
 /**
- * The desktop app has a newer build: 更新 beside the buddy, wherever it stands. Clicked, the build is downloaded (the
+ * The desktop app has a newer build: 更新 at the sidebar's top. Clicked, the build is downloaded (the
  * button says how far) and the app restarts as it; a newer web app alone (kind "web") is downloaded already, and
  * clicked, the pages reload on it.
  */

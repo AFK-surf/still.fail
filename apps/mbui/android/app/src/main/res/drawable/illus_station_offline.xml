@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- web/public/illus-station-offline.svg as a VectorDrawable (design/brand/make.py, svg2vd's convert). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="320dp" android:height="160dp" android:viewportWidth="320" android:viewportHeight="160">
+    <path android:pathData="M 55 132 C 55 83 106 40 165 40 C 230 40 268 86 268 132 Z"
+        android:fillColor="#EAE6DF" />
+    <group android:translateX="80" android:translateY="53" android:scaleX="2.55" android:scaleY="2.55">
+        <path android:pathData="M7 13H25A4 4 0 0 1 29 17V26A4 4 0 0 1 25 30H7A4 4 0 0 1 3 26V17A4 4 0 0 1 7 13Z"
+            android:fillColor="#F5F3EF"
+            android:strokeColor="#24272B"
+            android:strokeWidth="1.6" />
+        <path android:pathData="M6.9 21.5A1.6 1.6 0 1 0 10.1 21.5A1.6 1.6 0 1 0 6.9 21.5Z"
+            android:fillColor="#ACAAA4" />
+        <path android:pathData="M 14 21.5 H 24"
+            android:strokeColor="#797B7E"
+            android:strokeWidth="1.5"
+            android:strokeLineCap="round" />
+    </group>
+    <path android:pathData="M 32 134 H 288"
+        android:strokeColor="#797B7E"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path android:pathData="M 157 121 h 20 q 14 0 14 -13 v -2 q 0 -10 10 -10 h 16"
+        android:strokeColor="#797B7E"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path android:pathData="M220 90H230A3 3 0 0 1 233 93V99A3 3 0 0 1 230 102H220A3 3 0 0 1 217 99V93A3 3 0 0 1 220 90Z"
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#797B7E"
+        android:strokeWidth="1.5" />
+    <path android:pathData="M 233 93 h 6 M 233 99 h 6"
+        android:strokeColor="#797B7E"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path android:pathData="M268 84H275A4 4 0 0 1 279 88V106A4 4 0 0 1 275 110H268A4 4 0 0 1 264 106V88A4 4 0 0 1 268 84Z"
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#797B7E"
+        android:strokeWidth="1.5" />
+    <path android:pathData="M 269 92 v 4 M 274 92 v 4"
+        android:strokeColor="#797B7E"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path android:pathData="M 177 52 h 8 l -8 9 h 8 M 191 39 h 6 l -6 7 h 6"
+        android:strokeColor="#797B7E"
+        android:strokeWidth="1.7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

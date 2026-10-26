@@ -791,8 +791,8 @@ pub let toast_action_ms : Double = @sf.toast_action_ms
 ///|
 /// The app starting, or waiting for what every page needs (Parts.kt Splash): the ground alone, as the system's own
 /// splash before the app's first frame is (Android's theme, iOS's launch screen), so an opening quicker than a second
-/// is one picture and then the page; once it takes a while (a second), still.fail's mark floating and what it waits
-/// for under it, from then on; at once when `now` (a failure). (The mark at once, on Android after the launcher's
+/// is one picture and then the page; once it takes a while (a second), still.fail's mark and what it waits for under
+/// it, from then on; at once when `now` (a failure). (The mark at once, on Android after the launcher's
 /// icon on the system's splash, then the page: three pictures in a second, 2026-10-26 「打开的时候感觉乱闪」.)
 fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
   let t = @sf.theme()
@@ -811,25 +811,7 @@ fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
     align=ACenter,
     justify=JCenter,
     fn() {
-      // up for half of splash_float_ms, down the other half, eased: a cycle while it shows
-      let lift = {
-        let f = c.cycle(splash_float_ms)
-        let p = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
-        p * p * (3.0 - 2.0 * p)
-      }
-      c.box(ty=-5.0 * lift, fn() {
-        @sf.drawable(
-          c,
-          if t.dark {
-            "stillfail_mark_dark"
-          } else {
-            "stillfail_mark"
-          },
-          56.0,
-        )
-        |> ignore
-      })
-      |> ignore
+      @sf.drawable(c, if t.dark { "stillfail_mark_dark" } else { "stillfail_mark" }, 56.0) |> ignore
       match label {
         Some(s) =>
           c.text(s, size=t.t.meta, color=t.p.muted, center=true, line=18.0)
@@ -844,10 +826,6 @@ fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
 ///|
 /// How long the splash shows the ground alone before it says that it waits, and for what.
 let splash_label_ms : Double = 1000.0
-
-///|
-/// The splash's mark floating: up and down once in this long.
-let splash_float_ms : Double = 1800.0
 
 ///|
 /// Whether the app's first splash has waited its second (splash_label_ms): its mark and what it waits for shown from

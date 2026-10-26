@@ -1,8 +1,8 @@
-// still.fail's pictures for mbui: this app's vector drawables, with legacy marks and illustrations from
-// apps/android/shared/src/main/res/drawable (the model makers' marks, Slack's, still.fail's own mark) and the
-// station glyphs of design/station-icons, and this app's own launcher icon (apps/mbui/android: launcher_face
-// on launcher_bg, the middle 72 of its 108 as a launcher shows it), into src/sf/drawable_data.mbt as mbui's
-// @pixels.Vector (path strings), which src/sf/picture.mbt draws.
+// still.fail's pictures for mbui: this app's vector drawables (still.fail's mark and its illustrations, design/brand),
+// with legacy marks from apps/android/shared/src/main/res/drawable (the model makers' marks, Slack's) and the station
+// glyphs of design/station-icons, and the apps' launcher icons (apps/mbui/android: launcher_face on launcher_bg, the
+// middle 72 of its 108 as a launcher shows it; still.fail mbui's, still.fail's and youdid.wtf's colours), into
+// src/sf/drawable_data.mbt as mbui's @pixels.Vector (path strings), which src/sf/picture.mbt draws.
 //
 //   scripts/drawables <repository> > src/sf/drawable_data.mbt
 //
@@ -18,9 +18,8 @@ let drawables : Array[String] = [
   "maker_baseten", "maker_dsh", "maker_cursor", "maker_devin", "maker_hermes", "slack", "feishu", "stillfail_mark", "stillfail_mark_dark",
   "illus_sign_in", "illus_sign_in_dark", "illus_new_chat", "illus_new_chat_dark", "illus_no_station", "illus_no_station_dark",
   "illus_no_profile", "illus_no_profile_dark",
-  // the stations' pages (src/sfapp/settings/stations.mbt): the buddy's faces, a station asleep
-  "buddy_idle", "buddy_idle_dark", "buddy_working", "buddy_working_dark", "buddy_offline", "buddy_offline_dark", "illus_station_offline",
-  "illus_station_offline_dark",
+  // the stations' pages (src/sfapp/settings/stations.mbt): a station asleep
+  "illus_station_offline", "illus_station_offline_dark",
 ]
 
 ///|
@@ -353,6 +352,32 @@ fn write_drawable(line : (String) -> Unit, name : String, w : Double, h : Double
 }
 
 ///|
+/// An app's icon as a launcher shows it, `name` in the table: its ground (launcher_bg), its mark (launcher_face, in the
+/// colours read last), the middle 72 of the 108.
+fn launcher(line : (String) -> Unit, name : String, face : String?) -> Unit {
+  match face {
+    Some(xml) => {
+      let layers : Array[Layer] = [
+        {
+          d: "M0 0H108V108H0Z",
+          fill: color(Some("@color/launcher_bg")),
+          stroke: 0L,
+          width: 0.0,
+          even_odd: false,
+          sx: 1.0,
+          sy: 1.0,
+          tx: -18.0,
+          ty: -18.0,
+        },
+      ]
+      walk(parse(xml), 1.0, 1.0, -18.0, -18.0, layers)
+      write_drawable(line, name, 72.0, 72.0, layers)
+    }
+    None => fail("no launcher_face.xml")
+  }
+}
+
+///|
 fn main {
   let argv = @env.args()
   if argv.length() < 2 {
@@ -390,28 +415,15 @@ fn main {
     walk(root, 1.0, 1.0, 0.0, 0.0, layers)
     write_drawable(line, name, num(root, "viewportWidth", 24.0), num(root, "viewportHeight", 24.0), layers)
   }
-  // this app's own icon, as a launcher shows it: its ground, its face, the middle 72 of the 108
-  let own = @sys.join(repo, "apps/mbui/android/app/src/main/res")
-  read_colors(@sys.read_text(@sys.join(own, "values/launcher.xml")).unwrap_or(""))
-  match @sys.read_text(@sys.join(own, "drawable/launcher_face.xml")) {
-    Some(xml) => {
-      let layers : Array[Layer] = [
-        {
-          d: "M0 0H108V108H0Z",
-          fill: color(Some("@color/launcher_bg")),
-          stroke: 0L,
-          width: 0.0,
-          even_odd: false,
-          sx: 1.0,
-          sy: 1.0,
-          tx: -18.0,
-          ty: -18.0,
-        },
-      ]
-      walk(parse(xml), 1.0, 1.0, -18.0, -18.0, layers)
-      write_drawable(line, "launcher_icon", 72.0, 72.0, layers)
+  // the apps' icons, as a launcher shows them: its ground, its mark, the middle 72 of the 108; still.fail mbui's
+  // (launcher_icon), still.fail's and youdid.wtf's (their colours over its)
+  let src = @sys.join(repo, "apps/mbui/android/app/src")
+  for app in [("launcher_icon", ""), ("launcher_icon_stable", "stable"), ("launcher_icon_beta", "beta")] {
+    read_colors(@sys.read_text(@sys.join(src, "main/res/values/launcher.xml")).unwrap_or(""))
+    if app.1 != "" {
+      read_colors(@sys.read_text(@sys.join(src, app.1 + "/res/values/launcher.xml")).unwrap_or(""))
     }
-    None => fail("no launcher_face.xml")
+    launcher(line, app.0, @sys.read_text(@sys.join(src, "main/res/drawable/launcher_face.xml")))
   }
   line("}")
   line("")

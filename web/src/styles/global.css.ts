@@ -1,7 +1,7 @@
 import { globalStyle } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { passageFlashHeldKeyframes, passageFlashKeyframes, searchStrokeKeyframes, splashFloatKeyframes, strokeRevealKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
-import { STILL, stillAtOnce, stillFlash, stillLoop } from "@stillfail/ui/styles/still.ts";
+import { passageFlashHeldKeyframes, passageFlashKeyframes, searchStrokeKeyframes, strokeRevealKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { STILL, stillAtOnce, stillFlash } from "@stillfail/ui/styles/still.ts";
 
 /**
  * Corners, after Codex: plain rounding by default; where the browser draws superellipses, rounded rectangles get a
@@ -239,13 +239,12 @@ globalStyle("[hidden]", { display: "none !important" });
 globalStyle(`${STILL} *, ${STILL} *::before, ${STILL} *::after`, {
   animationDuration: "1ms !important", animationIterationCount: "1 !important", transitionDuration: "0s !important",
 });
-/** The app starting: the buddy floats; what it waits for comes up only if it takes a while. */
+/** The app starting: the mark, still; what it waits for comes up only if it takes a while. */
 globalStyle(".splash", {
   position: "fixed", inset: "0", display: "grid", placeContent: "center", justifyItems: "center", gap: "16px",
   padding: "24px", background: vars.canvas, textAlign: "center",
 });
-globalStyle(".splash-mark", { display: "block", animation: `${splashFloatKeyframes} 1.8s ease-in-out infinite` });
-globalStyle(`${STILL} .splash-mark`, stillLoop());
+globalStyle(".splash-mark", { display: "block" });
 globalStyle("body[data-resizing]", { cursor: "col-resize", userSelect: "none" });
 /** The page itself never scrolls or bounces; only the panes inside do. */
 globalStyle("html, body", { height: "100%", overflow: "hidden", overscrollBehavior: "none" });

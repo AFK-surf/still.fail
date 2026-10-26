@@ -67,7 +67,7 @@ let share_picture_key : String = "share-card/picture"
 ///|
 /// The picture shared, a poster of what the agents did (the `fleet` view; 2026-10-26 用户：「改成 xx 个 xx 订阅账号的 xx% 周额度，
 /// 分天和周统计，还有当前 chat 数量」「不要小机器人」「这玩意儿是会超过 100% 的」「不如归档 chat 多少个」): on warm paper with a
-/// peach light on it, the same in either theme. still.fail's mark and name and when it is; the subscriptions' weekly
+/// peach light on it, the same in either theme. still.fail's name (its dot orange) and when it is; the subscriptions' weekly
 /// quota used as rings, a kind each (Activity's rings: each the share of all its accounts' weeks, 489% of six 0.815 of
 /// it; 「489% 就是 4.89 个号的周额度」), beside them the first kind's said round its share large (用 6 个 Claude 订阅账号
 /// 消耗了 | 489% | 的周额度), each other kind a line under it; today and the last 7 days side by side (the chats
@@ -91,9 +91,8 @@ fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     })
     |> ignore
     c.box(style=pic_head, fn() {
-      @sf.drawable(c, "stillfail_mark", pic_mark) |> ignore
       c.box(style=pic_grow, fn() {
-        c.rich([@ui.span("still"), @ui.span(".fail", color=@sf.share_orange_ink)], style=pic_brand) |> ignore
+        c.rich([@ui.span("still"), @ui.span(".", color=@sf.share_orange_ink), @ui.span("fail")], style=pic_brand) |> ignore
       })
       |> ignore
       c.text(text(fleet, "at"), style=pic_at) |> ignore
@@ -324,9 +323,6 @@ let pic_lights : Array[@sf.Glow] = [
 ///|
 // kept across runs: a value (no field of it changes)
 let pic_head : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
-
-///|
-let pic_mark : Double = 22.0
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -49,10 +49,12 @@ export const nav = style({
   background: `color-mix(in srgb, ${BG} 72%, transparent)`, backdropFilter: "blur(20px) saturate(1.4)", WebkitBackdropFilter: "blur(20px) saturate(1.4)",
 });
 export const navRow = style({ display: "flex", alignItems: "center", height: "64px", gap: "28px" });
-/** The name in the bar: the station buddy and still.fail, its .fail in still.fail's orange. */
-export const brand = style({ display: "flex", alignItems: "center", gap: "10px", fontSize: vars.textHeading, fontWeight: "600", letterSpacing: "-.03em", color: FG });
-export const brandTail = style({ color: ORANGE });
-export const logo = style({ display: "block", height: "28px", width: "auto" });
+/** The name in the bar, as the wordmark draws it (web/public/wordmark.svg): Inter Bold, its dot still.fail's orange and
+ *  drawn closer to the words it joins. */
+export const brand = style({ display: "flex", alignItems: "center", fontSize: vars.textHeading, fontWeight: "700", letterSpacing: "-.02em", color: FG });
+export const brandDot = style({ color: ORANGE, margin: "0 -.035em" });
+/** The headline's full stop: still.fail's dot. */
+export const titleDot = style({ color: ORANGE });
 // The logo on the left, the rest of the bar on the right.
 globalStyle(`${navRow} > :first-child`, { marginRight: "auto" });
 export const navLink = style({ transition: "color .2s", selectors: { "&:hover": { color: FG } } });
@@ -93,14 +95,7 @@ export const themeChoice = style({
   background: "transparent", color: DIM, cursor: "pointer", transition: "color .2s, background .2s",
   selectors: { "&:hover": { color: FG }, "&[aria-checked=\"true\"]": { background: ink(10), color: FG } },
 });
-/** Pictures drawn for a light ground and for a dark one (web/public's -dark twins): the one for the page's theme shows. */
-export const lightOnly = style({ display: "contents" });
-export const darkOnly = style({ display: "none" });
-globalStyle(`:root[data-theme="dark"] ${lightOnly}`, { display: "none" });
-globalStyle(`:root[data-theme="dark"] ${darkOnly}`, { display: "contents" });
-globalStyle(`:root:not([data-theme="light"]) ${lightOnly}`, { "@media": { "(prefers-color-scheme: dark)": { display: "none" } } });
-globalStyle(`:root:not([data-theme="light"]) ${darkOnly}`, { "@media": { "(prefers-color-scheme: dark)": { display: "contents" } } });
-// On a phone the bar keeps the logo and the theme; the hero has the buttons.
+// On a phone the bar keeps the name and the theme; the hero has the buttons.
 export const navButton = style({ "@media": { [NARROW]: { display: "none" } } });
 
 // ---- Buttons ----

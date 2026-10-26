@@ -5,7 +5,6 @@ import { chatList } from "./session.css.ts";
 import { composerWrap } from "./cloud.css.ts";
 import { runtimeTags } from "./waiting.css.ts";
 import { peopleStack, quotaNote } from "../components.css.ts";
-import { sidebarBuddy } from "../brand.css.ts";
 import { modelChips } from "../pages/Accounts.css.ts";
 import { slackTeamIcon } from "../pages/Connect.css.ts";
 import { appearanceSetting, modelPoolList, msgAvatar } from "./chat.css.ts";
@@ -136,10 +135,4 @@ globalStyle(appearanceSetting, { maxWidth: "320px" });
 globalStyle(slackTeamIcon, {
   width: "28px", height: "28px", flex: "none", display: "inline-grid", placeItems: "center",
   borderRadius: `calc(7px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, overflow: "hidden",
-});
-/** The buddy that holds the sidebar open: on its edge, pushing; closed, resting at the top left. */
-/** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
-globalStyle(sidebarBuddy, {
-  position: "fixed", zIndex: "40", top: "14px", left: "calc(var(--sidebar-w, 240px) - 28px)", width: "28px",
-  height: "28px", padding: "0", border: "0", background: "none", cursor: "pointer", WebkitAppRegion: "no-drag",
 });

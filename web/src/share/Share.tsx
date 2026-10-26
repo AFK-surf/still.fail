@@ -33,12 +33,8 @@ import { Unreachable, visit } from "./iroh.ts";
 import { parseLink, type ShareLink } from "./link.ts";
 import { MONO } from "../modelMarks.ts";
 import * as uiCss from "../ui.css.ts";
-import mark16 from "../../public/mark-16.svg";
-import mark16Dark from "../../public/mark-16-dark.svg";
-import idle from "../../public/idle.svg";
-import idleDark from "../../public/idle-dark.svg";
-import offline from "../../public/offline.svg";
-import offlineDark from "../../public/offline-dark.svg";
+import mark from "../../public/mark.svg";
+import markDark from "../../public/mark-dark.svg";
 import { Spinner } from "@stillfail/ui/waiting.tsx";
 
 /** The marks of models' makers (public/models), as the chat draws an agent by its maker's; one the page does not know: none. */
@@ -165,11 +161,11 @@ export function Share() {
   useEffect(() => {
     document.title = state.at === "shown" && state.snapshot.title ? `${state.snapshot.title} · still.fail` : t("web-share.title");
   }, [state]);
-  if (state.at === "connecting") return <StateLine picture="idle" line={<><Spinner inline />{t("web-share.connecting")}</>} />;
+  if (state.at === "connecting") return <StateLine line={<><Spinner inline />{t("web-share.connecting")}</>} />;
   if (state.at === "failed") {
     const again = state.why === "cloud" || state.why === "offline" || state.why === "busy";
     const line = state.why === "broken" ? t("web-share.broken", { error: state.error ?? "" }) : t(`web-share.${state.why}`);
-    return <StateLine picture={state.why === "offline" || state.why === "cloud" ? "offline" : "idle"} line={line}
+    return <StateLine line={line}
       action={again ? <button type="button" className={controlsCss.btn} onClick={retry}>{t("common.retry")}</button> : null} />;
   }
   return <Shown state={state} />;
@@ -179,11 +175,9 @@ function Themed({ light, dark, size, alt = "" }: { light: string; dark: string; 
   return <picture><source srcSet={dark} media="(prefers-color-scheme: dark)" /><img src={light} width={size} height={size} alt={alt} /></picture>;
 }
 
-function StateLine({ picture, line, action }: { picture: "idle" | "offline"; line: ReactNode; action?: ReactNode }) {
-  const [light, dark] = picture === "idle" ? [idle, idleDark] : [offline, offlineDark];
+function StateLine({ line, action }: { line: ReactNode; action?: ReactNode }) {
   return (
     <main className={css.state}>
-      <Themed light={light} dark={dark} size={72} />
       <p className={css.stateLine} role="status">{line}</p>
       {action}
     </main>
@@ -242,7 +236,7 @@ function Shown({ state }: { state: Extract<State, { at: "shown" }> }) {
               </div>
               <footer className={css.foot}>
                 <a className={css.footLink} href="https://still.fail" target="_blank" rel="noopener noreferrer">
-                  <Themed light={mark16} dark={mark16Dark} size={16} />{t("web-share.from")}
+                  <Themed light={mark} dark={markDark} size={16} />{t("web-share.from")}
                 </a>
               </footer>
             </main>
@@ -263,7 +257,7 @@ function Entry({ entry: e }: { entry: SharedEntry }) {
       {agent
         ? <span className={`${chatCss.msgAvatar} ${msgCss.msgAvatarAgent}`}>{markOf(e.maker)
           ? <img className={uiCss.modelLogo} src={markOf(e.maker)} alt="" width={12} height={12} data-mono={MONO.has(e.maker!) || undefined} />
-          : <Themed light={mark16} dark={mark16Dark} size={12} />}</span>
+          : <Themed light={mark} dark={markDark} size={12} />}</span>
         : <span className={chatCss.msgAvatar}><Avatar id={e.author} name={e.author} size={18} /></span>}
       <div className={msgCss.msgMain}>
         <div className={conversationCss.msgHead}>

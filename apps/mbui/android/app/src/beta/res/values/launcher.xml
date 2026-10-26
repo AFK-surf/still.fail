@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The beta app's face, as fail.still.android.beta's (apps/android app/build.gradle.kts, design/app-icon/face-beta.svg):
-     dark, its eyes white. -->
+<!-- The beta app's (fail.still.android.beta; design/brand/icon-beta.svg): night, the s white, the dot orange. -->
 <resources>
-    <color name="launcher_bg">#1C1D20</color>
-    <color name="launcher_eyes">#FFFFFF</color>
+    <color name="launcher_bg">#111114</color>
+    <color name="launcher_ink">#FAFAFA</color>
+    <color name="launcher_dot">#E5704A</color>
 </resources>
