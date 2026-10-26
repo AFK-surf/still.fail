@@ -6,6 +6,7 @@ import { extname } from "node:path";
 import { Clock, type Effect } from "effect";
 import WebSocket from "ws";
 import type { BotIdentity } from "../connects/connections.ts";
+import { channelKey, personKey } from "../connects/keys.ts";
 import type { NameBook } from "../connects/names.ts";
 import { ConnectedSurface } from "../connects/surface.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
@@ -434,12 +435,12 @@ export class FeishuSurface extends ConnectedSurface {
 
   knownPerson(user: string): Person | null {
     if (!this.book) return this.names.get(user) ?? null;
-    return this.book.person(`u:${this.connect}:${user}`, () => this.profile(user));
+    return this.book.person(personKey(this.connect, user), () => this.profile(user));
   }
 
   knownChannel(channel: string): string | null {
     if (!this.book) return this.chats.get(channel)?.name ?? null;
-    return this.book.channel(`c:${this.connect}:${channel}`, async () => (await this.chatInfo(channel)).name);
+    return this.book.channel(channelKey(this.connect, channel), async () => (await this.chatInfo(channel)).name);
   }
 
   async channelName(channel: string): Promise<string | null> {

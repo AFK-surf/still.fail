@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { Clock } from "effect";
 import type { Connection } from "../connects/connections.ts";
 import { type ConnectsOptions, makeConnects } from "../connects/connects.ts";
+import { NAMES_FILE } from "../connects/keys.ts";
 import type { NameBook } from "../connects/names.ts";
 import { Registrations } from "./register.ts";
 import { FeishuSurface } from "./surface.ts";
@@ -69,7 +70,7 @@ export function makeFeishu(options: FeishuOptions) {
     ((c: FeishuConnect, book: NameBook, t: FeishuThreads) => new FeishuSurface({ connect: c.id, appId: c.appId, appSecret: c.appSecret, domain: c.domain, threads: t, book, clock: options.clock }));
   const connects = makeConnects<FeishuConnect>(options, {
     kind: "feishu",
-    names: "feishu-names.json",
+    names: NAMES_FILE.feishu,
     connects: feishuConnects,
     credentials: (c) => (c.appId === "" || c.appSecret === "" ? null : `${c.domain}\n${c.appId}\n${c.appSecret}`),
     create: (c, book) => create(c, book, threads),

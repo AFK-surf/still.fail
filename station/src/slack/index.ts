@@ -4,6 +4,7 @@
 import type { Clock } from "effect";
 import type { Connection } from "../connects/connections.ts";
 import { type ConnectsOptions, makeConnects } from "../connects/connects.ts";
+import { NAMES_FILE } from "../connects/keys.ts";
 import type { NameBook } from "../connects/names.ts";
 import { log } from "../ops/log.ts";
 import { type ConfigToken, SlackApps, type SlackAppLinks, slackAppLinks, upsertToken } from "./apps.ts";
@@ -97,7 +98,7 @@ export function makeConnections(options: SlackOptions) {
       new SlackSurface({ appToken: c.appToken, botToken: c.botToken, client: web, connect: c.id, book, pingMs: options.pingMs, staleMs: options.staleMs, clock: options.clock }));
   const connects = makeConnects<SlackConnect>(options, {
     kind: "slack",
-    names: "slack-names.json",
+    names: NAMES_FILE.slack,
     connects: slackConnects,
     credentials: (c) => (c.appToken === "" || c.botToken === "" ? null : `${c.appToken}\n${c.botToken}`),
     create: (c, book) => create(c, book, client),
