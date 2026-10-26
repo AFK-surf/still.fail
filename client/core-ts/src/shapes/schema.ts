@@ -2567,7 +2567,7 @@ export const SHAPES: Record<string, Shape> = {
     ["quota", vec("FleetQuota"), { doc: "The subscriptions' weekly quota used, by kind, the most accounts first; a kind that used none left\nout; none read: empty." }],
     ["chats", "i64", { client: "I54", doc: "The chats at work now: their agents running, or a task of theirs running on another station." }],
     ["chatsText", "String", { doc: "That in words: 9 个对话正在运行." }],
-    ["where", "String", { doc: "On how many stations (theirs: not those that run tasks for them): 分布在 3 台设备." }],
+    ["where", "String", { doc: "On how many stations today's chats are (those at work, and those whose last letter was written, or that were\narchived, today; theirs: not those that run tasks for them): 今天的对话分布在 3 台设备." }],
     ["today", opt("FleetToday"), { doc: "The chats archived and what was spent today; absent while it is read, or with nothing spent nor archived." }],
     ["week", opt("FleetWeek"), { doc: "The same over the last 7 days, each day's chats archived; absent with it." }],
     ["tasksText", opt("String"), { doc: "How many tasks chats ran on other stations over the last 7 days: 近 7 天 agent 跨设备执行了 312 个任务;\nabsent with none, or with the days." }],

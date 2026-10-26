@@ -1303,7 +1303,7 @@ pub fn fixture_fleet(f : Fixture) -> Json {
       ],
       "chats": 1,
       "chatsText": "1 个对话正在运行",
-      "where": "分布在 1 台设备",
+      "where": "今天的对话分布在 1 台设备",
     }
   }
   // each day's chats archived (57 in all, 12 today), as a share of the most on a day
@@ -1348,7 +1348,7 @@ pub fn fixture_fleet(f : Fixture) -> Json {
     ],
     "chats": 9,
     "chatsText": "9 个对话正在运行",
-    "where": "分布在 3 台设备",
+    "where": "今天的对话分布在 3 台设备",
     "tasksText": "近 7 天 agent 跨设备执行了 312 个任务",
     "tasksPer": "平均每个对话 5.2 个",
     "today": {

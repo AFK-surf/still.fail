@@ -93,7 +93,7 @@
   "core-logic.rail.usage.none": "近 7 天没有用量",
   "core-logic.rail.usage.today": "今天",
   "core-logic.footprint.actions.none": "暂无可清理的内容",
-  "core-logic.fleet.machines": "分布在 {n} 台设备",
+  "core-logic.fleet.machines": "今天的对话分布在 {n} 台设备",
   "core-logic.fleet.chats": "{n} 个对话正在运行",
   "core-logic.fleet.quota_by": "用 {n} 个 {kind}账号消耗了",
   "core-logic.fleet.accounts": "{n} 个账号",
