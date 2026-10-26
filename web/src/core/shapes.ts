@@ -1584,6 +1584,11 @@ export interface DecisionOption {
 	label: string;
 	detail?: string;
 	recommended?: boolean;
+	/**
+	 * Picked, the card closes and nothing is said in the chat (an option the agent made to close it): no
+	 * message from the viewer comes of it.
+	 */
+	closes?: boolean;
 }
 
 /**

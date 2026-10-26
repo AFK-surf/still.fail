@@ -95,15 +95,16 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
               }
             _ =>
               match (options, thread) {
-                (Some(list), Some(th)) if list.length() > 0 => decision_options(c, src, here, m, th, list, resolved, on_pick=fn() {
+                (Some(list), Some(th)) if list.length() > 0 => decision_options(c, src, here, m, th, list, resolved, on_pick=fn(i) {
                     // the answer's row comes in first, in a turn kept for it now, they close in the next; the list
-                    // following its end for it, as for words sent (Decisions.tsx DecisionOptions' pick)
+                    // following its end for it, as for words sent (Decisions.tsx DecisionOptions' pick). An option
+                    // that closes the card says nothing: no row comes, nothing waits for one
                     match turns {
-                      Some(tu) => {
+                      Some(tu) if !list[i].closes => {
                         tu.keep_turn(c)
                         c.list_to_end("chat/" + here.station + "/" + here.session)
                       }
-                      None => ()
+                      _ => ()
                     }
                   })
                 _ => ()
@@ -250,7 +251,7 @@ pub fn mine_to(here : MessageHere, assignee : String) -> Bool {
 ///|
 /// A post's options in one card, numbered (DecisionOptions: the library's options card, as wide as what it says);
 /// pressing one answers with it (`decision.answer`), the one being sent turning; settled, none pressed any more, the
-/// one picked as it was.
+/// one picked as it was. `on_pick`: told of the one picked (its place among them) first.
 pub fn decision_options(
   c : @ui.Ctx,
   src : Source,
@@ -259,7 +260,7 @@ pub fn decision_options(
   thread : Double,
   options : Array[Choice],
   resolved : Bool,
-  on_pick? : () -> Unit = fn() {  },
+  on_pick? : (Int) -> Unit = fn(_) {  },
 ) -> Unit {
   let on = [
     ("station", here.station),
@@ -306,7 +307,7 @@ pub fn decision_options(
       Some(i) if !resolved => {
         let label = options[i].label
         // (the 奏 page sends the decision on its way first: DecisionOptions' onPick)
-        on_pick()
+        on_pick(i)
         c.tell("options/" + m.ts, fn() {
           act(src, @sf.t("web-main.decisions.answerWhat", args=[("option", label)]), "", "decision.answer", {
             "station": Json::string(here.station),
