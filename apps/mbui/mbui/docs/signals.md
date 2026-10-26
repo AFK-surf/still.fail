@@ -42,7 +42,8 @@ can, the algorithm unchanged:
 A change ported from alien-signals keeps to that: nothing made again on every read, write or update that is made once
 now, nothing bound and passed on that can be looked at where it is. (A computed of a value MoonBit keeps boxed in an
 Option, a Double, still boxes it every time it changes: the getter is given what it made last as `T?`. Int, Bool and
-references are not boxed.) `bench/signals` measures it against alien-signals and the other JS engines.
+references are not boxed.) `bench/signals` measures it against alien-signals and the other JS engines, and replays
+what still.fail's app itself does with the signals (its README).
 
 ## Tests
 

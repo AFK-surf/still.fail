@@ -1,4 +1,4 @@
-# bench/signals: mbui's signals against JavaScript's
+# bench/signals: mbui's signals against JavaScript's, and in still.fail's own use
 
 [js-reactivity-benchmark](https://github.com/transitive-bullshit/js-reactivity-benchmark) at 2c273f1 (2026-09-19:
 alien-signals 3.2.1, Preact Signals 1.14.4, Vue 3.5.43, Solid 1.9.15, Angular 22.1.7, Svelte 5.57 and nine more,
@@ -45,3 +45,37 @@ Before the port kept a node as one object, its stacks as arrays and its reads' c
 "Under reference counting"), native was 1.23× (create 1.83×). The machine's other work moves a run's JS engines by
 up to a third (alien-signals' own times from run to run): compare runs by alien-signals' times before reading ratios.
 What is left on kairo is mostly its numbers: a computed of a Double boxes its value in an Option each time it changes.
+
+## The app's own use: record.sh, replay.sh
+
+What still.fail's app does with the signals is not what the benchmark above does: no effects; each frame a few dozen
+to a hundred and thirty reads, nearly all of a value that did not change; one set (the frame); a computed run in
+some frames; parts kept on Medium read again for their part (`reading`). So the app's use is its own benchmark:
+
+```sh
+bench/signals/record.sh         # a Mac: the app filmed offscreen (src/sffilm) through scripted flows, every call into
+                                # the signals written down (record/trace.patch on a copy), parts kept as a host keeps
+                                # them; a trace a flow in traces/
+ROWS=1 bench/signals/record.sh  # … a list's rows kept too (off on a host since #2175): traces-rows/
+bench/signals/replay.sh         # any machine: every trace done again on the signals as they are now, checked, timed
+TRACES=traces-rows bench/signals/replay.sh
+```
+
+`replay` makes every signal and computed as the app did, in its order, and a computed's getter, run where the
+signals run it, does again what that run of the app's did; it stops where a computed runs a time more or less than it
+did in the app, so a change to the signals that changes what runs is caught too. Only the signals' own work is timed:
+the app's builds, layout and drawing are not in a trace. A flow whose script did not pass is kept as far as it went:
+what the app did meanwhile is as real (with rows kept, most of the Medium and desktop flows do not pass: the rows'
+words are not found while they are drawn again).
+
+2026-10-26, Mini1 (M4), 18 flows in a phone's window, a fold's (Medium) and a desktop's:
+
+| | frames | reads | getters run | sets | lends | µs a frame |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| as a host (parts kept) | 7664 | 85 | 0.1 | 1 | 0 | 0.44 |
+| rows kept too | 13661 | 78 | 0.5 | 1.1 | 0.8 | 0.35 |
+| the busiest flow (fold-composer, lists-medium) | | | | | | at most 0.9 |
+
+A frame at 60 Hz has 16 667 µs: the signals take 0.003% of it. Their own speed is not what limits how much the app or
+mbui itself relies on them (a hundred times the reads would still be tens of µs a frame); a change to them is worth
+making if it shows here, or in a frame.

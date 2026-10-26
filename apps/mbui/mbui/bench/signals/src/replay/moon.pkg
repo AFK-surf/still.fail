@@ -1,0 +1,10 @@
+import {
+  "mbui/signals",
+  "moonbitlang/core/env",
+}
+
+options(
+  "is-main": true,
+  "native-stub": [ "files.c" ],
+  link: { "native": { "stub-cc-flags": "-O2" } },
+)
