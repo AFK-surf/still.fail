@@ -140,7 +140,7 @@ test "Home: a row swiped off is archived once it has gone, and leaves no copy of
   assert_true(t.find("把旧的截图都换成新的") is Some(_))
   t.run_for(@sfpages.swipe_off_ms)
   t.frame()
-  assert_true(t.find("把旧的截图都换成新的") is None)
+  assert_true(t.locate("=把旧的截图都换成新的").is_empty())
   // gone with no copy fading where it was; the rows under it close over the room
   assert_true(t.moving().iter().all(fn(m) { !m.contains("c8 leaving") }), msg="\{t.moving()}")
 }

@@ -18,7 +18,7 @@ test "72-bar-archive" {
     f.see("=已归档「从栏上归档 085454」")
     f.see("=撤销")
     f.run_for(@sfapp.toast_action_ms)
-    f.gone("从栏上归档 085454")
+    f.gone("=从栏上归档 085454")
     // the toast gone
     // (its time out at the last frame: it starts going with the one after)
     f.t.draw()
@@ -42,7 +42,7 @@ test "run_to_rest: only what was said" {
   f.tap("icon:archive")
   f.see("=已归档「从栏上归档 085454」")
   f.run_for(@sfapp.toast_action_ms)
-  f.gone("从栏上归档 085454")
+  f.gone("=从栏上归档 085454")
   f.t.draw()
   // the toast going, to its end
   f.run_to(f.t.rest_of("toast"))
