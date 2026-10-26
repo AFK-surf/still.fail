@@ -94,6 +94,7 @@ fn ListState::scroll_to_end(self : ListState) -> Unit {
   self.anchor_off = 1.0e9
   self.pending = 0.0
   self.ease = 0.0
+  self.ease_v = 0.0
   self.ease_done = 0.0
   self.stop()
   self.unstretch()
@@ -114,19 +115,33 @@ fn Ctx::scroll_list(self : Ctx, id : Int, d : Double) -> Unit {
 }
 
 ///|
-/// A wheel's notch's ease out (ms): its time constant, 1 - 1/e of the notch come by then.
-pub let wheel_ease_ms : Double = 36.0
+/// A wheel's notch's ease (ms): the time constant of the follow its notches are eased in by, critically damped, as a
+/// browser eases one (Chromium's smooth scroll, ~200 ms a notch): one from rest sets out slowly, half of it come by
+/// 1.7 of these (71 ms), 95 in 100 by 4.7 (200 ms). A notch turned while another is coming carries on from where the
+/// list is and how fast it moves then, so a wheel turned on scrolls at its pace, not in a burst a notch (an ease out of
+/// 36 ms from each notch, 2026-10-26: a notch every 80 ms moved the list eight times faster at it than between).
+pub let wheel_ease_ms : Double = 42.0
 
 ///|
-/// A wheel's notch on list `id`: scrolled by `d` over the next frames (eased out, as a browser eases one), not at
-/// once.
-fn Ctx::ease_list(self : Ctx, id : Int, d : Double) -> Unit {
+/// A wheel's notch on list `id`, turned at `at` (the event's moment, not before the last frame): scrolled by `d` over
+/// the next frames (eased: ease_come), not at once. What had not come yet carries on into it: the follow taken over at
+/// `at`, where it is and as fast as it moves then (ease_state), toward all that is left of it and this notch.
+fn Ctx::ease_list(self : Ctx, id : Int, d : Double, at : Double) -> Unit {
   match self.lists.get(id) {
     Some(st) => {
-      // what had not come yet, and this notch: eased in from now (said once, as it sets out)
-      st.ease = st.ease - st.ease_done + d
-      st.ease_done = 0.0
-      st.ease_t0 = self.now
+      // (from the notch's own moment, said once as it sets out: a list at rest since its last frame, long ago, eases
+      // it in from now, not all of it at once at the next frame)
+      let at = dmax(at, self.now)
+      let (came, v) = if st.easing() {
+        ease_state(st.ease, st.ease_v, at - st.ease_t0)
+      } else {
+        (0.0, 0.0)
+      }
+      st.ease = st.ease - came + d
+      st.ease_v = v
+      // (what the last frame put on of it, from where it is taken over: short of it as far as it had come since)
+      st.ease_done = st.ease_done - came
+      st.ease_t0 = at
       self.scrolled(st)
       st.glide = false
       st.follow_item = -1
@@ -136,23 +151,48 @@ fn Ctx::ease_list(self : Ctx, id : Int, d : Double) -> Unit {
 }
 
 ///|
-/// How much of a wheel's ease of `total` has come `t` ms after it set out: solved for the time (an ease out of
-/// wheel_ease_ms), in whole 1/64 px, all of it from ease_end on. The same at any time whatever frames it went by.
-fn ease_come(total : Double, t : Double) -> Double {
-  if t >= ease_end(total) {
+/// Whether a wheel's ease is under way (its follow: a way to go, or a speed left as it was taken over just short of it).
+fn ListState::easing(self : ListState) -> Bool {
+  self.ease != 0.0 || self.ease_v != 0.0
+}
+
+///|
+/// How much of a wheel's ease of `total` has come `t` ms after it set out at `v0` (px a ms, the way `total` goes when
+/// positive): solved for the time (critically damped, wheel_ease_ms: what is left (total + (total / τ - v0) t)
+/// e^(-t / τ)), in whole 1/64 px, all of it from ease_end on. The same at any time whatever frames it went by.
+fn ease_come(total : Double, v0 : Double, t : Double) -> Double {
+  if t >= ease_end(total, v0) {
     total
   } else {
-    (total * (1.0 - @dmath.exp(-t / wheel_ease_ms)) * 64.0).round() / 64.0
+    let left = (total + (total / wheel_ease_ms - v0) * t) * @dmath.exp(-t / wheel_ease_ms)
+    ((total - left) * 64.0).round() / 64.0
   }
 }
 
 ///|
-/// When an ease of `total` has all come (ms after it set out): what is left under 1/128 px.
-fn ease_end(total : Double) -> Double {
-  if total.abs() * 128.0 <= 1.0 {
+/// Where an ease (ease_come) is `t` ms after it set out, and how fast it moves then (px a ms): what a notch turned then
+/// takes over (Ctx::ease_list).
+fn ease_state(total : Double, v0 : Double, t : Double) -> (Double, Double) {
+  let t = dmax(0.0, t)
+  if t >= ease_end(total, v0) {
+    (total, 0.0)
+  } else {
+    let k = total / wheel_ease_ms - v0
+    (ease_come(total, v0, t), (v0 + k * t / wheel_ease_ms) * @dmath.exp(-t / wheel_ease_ms))
+  }
+}
+
+///|
+/// When an ease of `total` set out at `v0` has all come (ms after it set out): what is left under 1/128 px from then on.
+/// What is left is at most (|total| + |k| t) e^(-t / τ) (k = total / τ - v0), and t e^(-t / 4τ) at most 4τ / e: so at
+/// most (|total| + 4 |k| τ / e) e^(-3t / 4τ), under 1/128 from the time solved here (a little after the least).
+fn ease_end(total : Double, v0 : Double) -> Double {
+  let k = (total / wheel_ease_ms - v0).abs()
+  let most = (total.abs() + 4.0 * k * wheel_ease_ms / @dmath.exp(1.0)) * 128.0
+  if most <= 1.0 {
     0.0
   } else {
-    wheel_ease_ms * @dmath.ln(total.abs() * 128.0)
+    wheel_ease_ms * 4.0 / 3.0 * @dmath.ln(most)
   }
 }
 
@@ -204,8 +244,8 @@ impl Moving for ListState with rest_at(self, now, frame) {
   }
   // (its own motions, and its bar's after them: a finger's list has none, its rest theirs)
   let mut t = self.bar.rest(now, self.shown_until())
-  if self.ease != 0.0 {
-    t = dmax(t, self.ease_t0 + ease_end(self.ease))
+  if self.easing() {
+    t = dmax(t, self.ease_t0 + ease_end(self.ease, self.ease_v))
   }
   if self.fling != 0 && self.vel != 0.0 {
     t = dmax(t, self.fling_rest())
@@ -232,8 +272,8 @@ fn ListState::own_rest(self : ListState) -> Double {
   if self.over_state == 2 {
     t = dmax(t, self.back_rest())
   }
-  if self.ease != 0.0 {
-    t = dmax(t, self.ease_t0 + ease_end(self.ease))
+  if self.easing() {
+    t = dmax(t, self.ease_t0 + ease_end(self.ease, self.ease_v))
   }
   if self.glide {
     t = dmax(t, self.glide_rest)
@@ -263,15 +303,17 @@ fn ListState::shown_until(self : ListState) -> Double {
 /// What of a wheel's notches has come by this frame (Ctx::ease_list): how much the ease has come to now (ease_come,
 /// solved for the time) less what had come by the last.
 fn Ctx::step_ease(self : Ctx, st : ListState) -> Unit {
-  if st.ease == 0.0 {
+  if !st.easing() {
     return
   }
-  let came = ease_come(st.ease, self.now - st.ease_t0)
+  let t = dmax(0.0, self.now - st.ease_t0)
+  let came = ease_come(st.ease, st.ease_v, t)
   st.pending = st.pending + (came - st.ease_done)
   st.ease_done = came
   self.scrolled(st)
-  if came == st.ease {
+  if t >= ease_end(st.ease, st.ease_v) {
     st.ease = 0.0
+    st.ease_v = 0.0
     st.ease_done = 0.0
   }
 }
@@ -373,6 +415,7 @@ pub fn Ctx::list(
         over_v: 0.0,
         back: BackPath::new(),
         ease: 0.0,
+        ease_v: 0.0,
         ease_t0: 0.0,
         ease_done: 0.0,
         ease_mover: Mover::new(),

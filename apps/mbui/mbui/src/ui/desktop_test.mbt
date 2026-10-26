@@ -453,6 +453,52 @@ test "a wheel's ease is solved for the time: in frames of 16 ms, of 8, or at onc
 }
 
 ///|
+test "a wheel's notch on a list at rest a while is eased from its own moment, not come all at once at the next frame" {
+  let rest = Ref(0.0)
+  let t = notched(rest~)
+  while rest.val > t.time() {
+    t.run_for(rest.val - t.time())
+  }
+  assert_eq(t.list_offset(), 120.0)
+  // no frame drawn for a while (a host draws none while nothing moves: as long as a notch's whole ease, many times
+  // over), then a notch: none of it come as it is turned
+  t.advance(@ui.wheel_ease_ms * 50.0)
+  t.wheel_phase(150.0, 200.0, 120.0, 4)
+  assert_eq(t.list_offset(), 120.0)
+  // a frame on, only the start of it
+  t.frame(ms=@ui.drag_step_ms)
+  assert_true(t.list_offset() > 120.0 && t.list_offset() < 140.0)
+}
+
+///|
+test "a wheel turned on scrolls on at its pace: a notch every 80 ms, the list near as fast between them as at them" {
+  let t = notched()
+  // a notch every five frames of 16 ms, the list looked at four times a frame (a 240 Hz display's) between
+  let every = @ui.drag_step_ms * 5.0
+  let look = @ui.drag_step_ms / 4.0
+  let start = t.time()
+  let mut next = start + every
+  let speeds : Array[Double] = []
+  let mut last = t.list_offset()
+  while t.time() + look <= start + every * 9.0 {
+    t.frame(ms=look)
+    // (once it is under way: from the fifth notch)
+    if t.time() > start + every * 4.0 {
+      speeds.push(t.list_offset() - last)
+    }
+    last = t.list_offset()
+    if t.time() >= next {
+      t.wheel_phase(150.0, 200.0, 120.0, 4)
+      next = next + every
+    }
+  }
+  let fastest = speeds.fold(init=0.0, fn(a, b) { if b > a { b } else { a } })
+  let slowest = speeds.fold(init=@double.infinity, fn(a, b) { if b < a { b } else { a } })
+  // (an ease out of each notch alone: 1.7 to 14.2, eight times as fast at it as just before the next)
+  assert_true(slowest > 0.0 && fastest < 2.0 * slowest, msg="\{slowest} to \{fastest} px in 4 ms")
+}
+
+///|
 test "desktop: two clicks on the same thing within double_click_ms are a double click; slower, two clicks" {
   let clicks : Array[String] = []
   let t = @ui.Tester::new(
