@@ -597,11 +597,22 @@ fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Un
               on_link=fn(_) { open_page(Setting(@settings.Route::Profile(station, m.profile))) },
             )
             |> ignore
-          } else if open {
-            @sf.markdown(c, said, key="notice/" + m.ts, size=body_size, ink=if failed { @sf.theme().p.red } else { 0L })
-            |> ignore
           } else {
-            c.text(first_line(said), style=notice_words.then(@ui.text_style(color=ink))) |> ignore
+            // its words as Markdown, as the core read them (a chat it opened: a link to it); closed, their first block
+            // on one line of the size it says
+            let (meta, _) = c.text_size(notice_size)
+            @sf.markdown(
+              c,
+              said,
+              key=(if open { "notice/" } else { "notice-line/" }) + m.ts,
+              tree=m.notice_md,
+              size=if open { body_size } else { meta },
+              line=if open { 0.0 } else { c.theme().leading(notice_leading).unwrap_or(0.0) / meta },
+              one_line=!open,
+              ink=if failed { @sf.theme().p.red } else { 0L },
+              on_link=fn(h) { open_link(h) },
+            )
+            |> ignore
           }
         })
         |> ignore
@@ -1081,13 +1092,22 @@ let notice_words_room : @ui.Style = @ui.css("clip")
 let notice_end : @ui.Style = @ui.css("row align=AEnd")
 
 ///|
-/// Its words (msgSystemBox markdown): 14 on 1.65, one line closed.
+/// Its words closed (msgSystemBox markdown): their size and their lines', its Markdown's too.
+// kept across runs: a value (never changed)
+let notice_size : @ui.TextSize = Meta
+
+///|
+// kept across runs: a value (never changed)
+let notice_leading : @ui.Leading = L7
+
+///|
+/// Its words about a profile (one line closed).
 // kept across runs: a value (no field of it changes)
-let notice_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7, wrap=false)
+let notice_words : @ui.TextStyle = @ui.text_style(size=notice_size, leading=notice_leading, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let notice_words_open : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7)
+let notice_words_open : @ui.TextStyle = @ui.text_style(size=notice_size, leading=notice_leading)
 
 ///|
 /// The dot before its word (blockedDot in a notice): 6 each side, the pill's ink at 60%; the word (blockedAction),

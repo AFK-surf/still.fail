@@ -16,6 +16,7 @@ import { FakeHost } from "../src/testing.ts";
 import { attention, choices, runnableOn } from "../src/views/models.ts";
 import { Views, betaOffered, blockedUnder, chatDerive, down, noticeOf, shownMessage } from "../src/views/views.ts";
 import { installView, profile as presentProfile } from "../src/present.ts";
+import { markdown } from "../src/markdown.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -1286,6 +1287,27 @@ test("a_failure_notice_is_offered_to_report_where_the_station_takes_bug_reports"
   t.set(overview("ws/a"), { ...overviewOf([], []), feedback: true });
   await t.read(u, 1);
   assert.deepEqual(reportable(), [[1, false], [2, true], [3, false]]);
+});
+
+test("a_notice_comes_with_its_words_read_as_markdown_a_chat_it_opened_a_link_to_it", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  // (as the station says it opened one in a still.fail chat: sessions/opened.ts sayOpened)
+  const link = "https://app.still.fail/o/ws/a/k2";
+  const opened = `已创建对话：[共享调试：配对后连不上](${link})`;
+  t.set(pageOf("ws/a", 7), { first: 1, last: 2, entries: [entry(1, "开始吧"), { ...entry(2, opened), authorKind: "ember", author: "ember" }], thread: null });
+  t.set(overview("ws/a"), overviewOf([], []));
+  await t.read(u, 1);
+  const notice = u.value.messages[1].notice;
+  assert.equal(notice.words, opened);
+  assert.deepEqual(notice.md, markdown(opened));
+  assert.ok(JSON.stringify(notice.md).includes(`"href":"${link}"`));
+  // (the words drawn are the notice's: the message's own not read besides)
+  assert.equal(u.value.messages[1].md, undefined);
 });
 
 test("a_card_answered_from_here_stays_answered_once_its_message_leaves_the_outbox", () => {

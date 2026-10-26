@@ -2286,8 +2286,10 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
     const files = own(m.attachments);
     const out: J = { ...m, by: here(m.by), attachments: files };
     // A person's words are drawn as they wrote them and place nothing: their files are all below them. An agent's are
-    // Markdown, read here (once: markdown.ts keeps it by the words).
-    if (m.authorKind !== "person") {
+    // Markdown, read here (once: markdown.ts keeps it by the words); still.fail's notice's are too, as its pill says
+    // them (noticeOf: a chat it opened is a link to it).
+    if (isObject(m.notice)) out.notice = { ...m.notice, md: markdown(str(m.notice.words) ?? "", md) };
+    else if (m.authorKind !== "person") {
       out.md = markdown(str(m.text) ?? "", md);
       if (Array.isArray(files) && files.length > 0) {
         const { placed } = placeFiles(str(m.text) ?? "", files as J[]);

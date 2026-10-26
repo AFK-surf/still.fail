@@ -439,12 +439,17 @@ fn web() -> Palette {
 /// leads, `on_link_shown` each link, its words and its id as it is drawn (its card over it); `files` and `screens` as
 /// the file's head says; `document`: its headings a document's (Md's `document`);
 /// `bleed`: how far past the column either side the page lets its tables scroll (Md::table: a chat's margin).
+/// `line`: the lines' height over the size (0: Markdown's own); `one_line`: its first block's words alone, on one line
+/// as wide as they are, cut with an ellipsis where the column is narrower (a notice closed: Chat.css.ts
+/// `msgSystemBox:not([data-open])`).
 pub fn markdown(
   c : @ui.Ctx,
   text : String,
   key? : String = "",
   tree? : Json? = None,
   size? : Double = 0.0,
+  line? : Double = 0.0,
+  one_line? : Bool = false,
   ink? : Int64 = 0L,
   on_link? : (String) -> Unit = fn(_) {  },
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
@@ -471,7 +476,7 @@ pub fn markdown(
     code,
     screens,
     paths,
-    line: 0.0,
+    line,
     serif: false,
     document,
     bleed,
@@ -494,12 +499,48 @@ pub fn markdown(
   let key = if key == "" { "sf-md/" + text } else { key }
   // words the core has not laid out yet: said so in the subtle tone, as Markdown.kt's 正在排版 (android-misc.markdown.
   // laying, the catalog's words) until it has
-  if blocks.is_empty() && text != "" && tree is None && markdown_read.val is Some(_) && !core_parsed.contains(text) {
-    let waiting = { ..md, ink: web().subtle }
+  let (md, blocks) = if blocks.is_empty() && text != "" && tree is None && markdown_read.val is Some(_) && !core_parsed.contains(text) {
     let words = if language() == "en" { "Formatting" } else { "正在排版" }
-    return waiting.column(key, waiting.pieces([Paragraph([Text(words)])], false))
+    ({ ..md, ink: web().subtle }, [Paragraph([Text(words)])])
+  } else {
+    (md, blocks)
+  }
+  if one_line {
+    let xs = first_words(blocks)
+    return c.box(fn() { c.scope(c.id(key), fn() { md.words(xs, md.size, 0, md.ink, None, wrap=false) }) })
   }
   md.column(key, md.pieces(blocks, false))
+}
+
+///|
+/// The words of the first of `blocks` that has any, for a line of them (`markdown`'s `one_line`): a quote's or a
+/// list's first item's, within; a code block's or a formula's source; a table's head row.
+fn first_words(blocks : Array[MdBlock]) -> Array[MdInline] {
+  for b in blocks {
+    let xs : Array[MdInline] = match b {
+      Paragraph(xs) | Heading(_, xs) => xs
+      Quote(inner) => first_words(inner)
+      List(l) => if l.items.is_empty() { [] } else { first_words(l.items[0].blocks) }
+      CodeBlock(_, code, _) => [Code(code)]
+      MathBlock(source, drawing) => [Formula(source, drawing)]
+      // (its cells apart by a bar, as a table's row is in words: Md::piece)
+      Table(t) => {
+        let out : Array[MdInline] = []
+        for i, cell in t.head {
+          if i > 0 {
+            out.push(Text(" | "))
+          }
+          out.append(cell)
+        }
+        out
+      }
+      Rule => []
+    }
+    if !xs.is_empty() {
+      return xs
+    }
+  }
+  []
 }
 
 ///|

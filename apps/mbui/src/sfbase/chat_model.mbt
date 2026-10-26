@@ -299,10 +299,11 @@ pub(all) struct Message {
   /// a failure still.fail says that the viewer may send to the still.fail team (`chat.report`)
   reportable : Bool
   /// still.fail's notice as the core says it is shown (NoticeShown): a failure (red), its words as a line, where its
-  /// link to `profile` begins (-1: none)
+  /// link to `profile` begins (-1: none), its words' Markdown as the core read them
   notice_failed : Bool
   notice_words : String
   notice_link : Int
+  notice_md : Json?
 }
 
 ///|
@@ -388,6 +389,7 @@ pub fn message_of(m : Json) -> Message {
       Some(n) => n.to_int()
       None => -1
     },
+    notice_md: field(field(s, "notice"), "md"),
   }
 }
 
