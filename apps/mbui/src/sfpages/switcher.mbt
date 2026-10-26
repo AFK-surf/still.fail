@@ -10,13 +10,16 @@
 ///|
 /// What can be done here, as the frame offers it (Switcher.tsx Offered): a key's action it answers now, or one of its
 /// own; for one the core does not name (a settings page), its `label`, `group`, other `words`, and whether it is only
-/// found by typing; its icon, its keys (a key's action's, as kept on this device), what it does.
+/// found by typing; for one whose name the core words with something, the version an update goes to and the station
+/// updated ("" none); its icon, its keys (a key's action's, as kept on this device), what it does.
 pub(all) struct Offered {
   id : String
   label : String
   group : String
   words : String
   typed : Bool
+  version : String
+  station : String
   icon : String
   keys : String
   run : () -> Unit
@@ -199,6 +202,12 @@ fn commands_of(c : @ui.Ctx, src : Source, query : String, offered : Array[Offere
         }
         if o.typed {
           m["typed"] = Json::boolean(true)
+        }
+        if o.version != "" {
+          m["version"] = Json::string(o.version)
+        }
+        if o.station != "" {
+          m["station"] = Json::string(o.station)
         }
         Json::object(m)
       }),

@@ -98,7 +98,8 @@ let chat_ground : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 ///|
 /// The chat's own keys (keymap.ts, ChatPage.tsx useShortcut): ⌘⇧E into the archive while nothing is left in it, ⌘⇧H
 /// its first agent's history beside it (one in front: the panel closed), ⌘. its agents at work stopped, its services
-/// and jobs (chat.jobs); Space with no field focused, the composer (composer.focus).
+/// and jobs (chat.jobs); ⌘U the system's file picker for its draft (composer.file); Space with no field focused, the
+/// composer (composer.focus).
 fn chat_keys(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
   if @settings.action_pressed(c, prefs, "chat.jobs") {
@@ -110,28 +111,48 @@ fn chat_keys(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
   if @settings.action_pressed(c, prefs, "chat.archive", in_field=true) && !v.archived && !v.offline {
     c.tell("chat/archive", fn() { archive_asked(src, w, r, v, chat) })
   }
-  // an agent's history in front: the panel closed; else the first agent's open, or the first agent's opened
   if @settings.action_pressed(c, prefs, "chat.history", in_field=true) && v.agents.length() > 0 {
-    let (tabs, front) = side_of(v)
-    let agent = fn(t : String) { v.agents.iter().any(fn(a) { a.key == t }) }
-    if agent(front) {
-      side_change(src, r, "clear", None)
-    } else {
-      side_change(src, r, "open", Some(tabs.iter().find_first(agent).unwrap_or(v.agents[0].key)))
-    }
+    history_toggle(src, r, v)
   }
   if @settings.action_pressed(c, prefs, "chat.stop", in_field=true) {
-    for a in v.agents {
-      if a.status == "running" || a.status == "queued" {
-        act(
-          src,
-          @sf.t("web-pages.chat.stop"),
-          "",
-          "session.stop",
-          { "station": Json::string(r.station), "key": Json::string(a.key) },
-          done=@sf.t("web-pages.chat.stopAsked"),
-        )
-      }
+    stop_agents(src, r, v)
+  }
+  if @settings.action_pressed(c, prefs, "composer.file", in_field=true) && !v.archived && !v.offline {
+    @sfpages.pick_files(writing(src, r.station + ":" + r.session))
+  }
+}
+
+///|
+/// ⌘⇧H: an agent's history in front, the panel closed; else the first agent's open, or the first agent's opened.
+fn history_toggle(src : Source, r : ChatRef, v : ChatView) -> Unit {
+  let (tabs, front) = side_of(v)
+  let agent = fn(t : String) { v.agents.iter().any(fn(a) { a.key == t }) }
+  if agent(front) {
+    side_change(src, r, "clear", None)
+  } else {
+    side_change(src, r, "open", Some(tabs.iter().find_first(agent).unwrap_or(v.agents[0].key)))
+  }
+}
+
+///|
+/// Whether one of the chat's agents is at work (or waiting to be): what ⌘. stops.
+fn agents_working(v : ChatView) -> Bool {
+  v.agents.iter().any(fn(a) { a.status == "running" || a.status == "queued" })
+}
+
+///|
+/// ⌘.: the chat's agents at work stopped.
+fn stop_agents(src : Source, r : ChatRef, v : ChatView) -> Unit {
+  for a in v.agents {
+    if a.status == "running" || a.status == "queued" {
+      act(
+        src,
+        @sf.t("web-pages.chat.stop"),
+        "",
+        "session.stop",
+        { "station": Json::string(r.station), "key": Json::string(a.key) },
+        done=@sf.t("web-pages.chat.stopAsked"),
+      )
     }
   }
 }

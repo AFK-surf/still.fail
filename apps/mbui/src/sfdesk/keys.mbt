@@ -18,7 +18,7 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       switcher_toggle(c)
       wide.attention_open = false
     } else {
-      @sfpages.search_summon(c, switcher_offered(c, src), app.nav.top() != Home)
+      @sfpages.search_summon(c, switcher_offered(c, src, w), app.nav.top() != Home)
     }
   }
   if pressed("chat.new") {
