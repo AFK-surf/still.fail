@@ -1,5 +1,6 @@
 // What the desktop's pages read of sfbase, by its own names (as sfapp/base.mbt takes them in).
 using @sfbase {
+  place_pick,
   files_into,
   quoted_into,
   quote_file_into,
@@ -294,16 +295,14 @@ using @sf {
 
 ///|
 using @sfpages {
+  login_steps,
+  pf_tag,
+  pf_tag_words,
+  profile_field,
   figure,
   quota_dials,
   pf_card_foot,
-  pf_head,
-  pf_identity,
-  pf_mark,
-  pf_name,
   pf_name_line,
-  pf_spin,
-  pf_sub,
   open_dialog,
   desk_dialogs,
   sec_section,

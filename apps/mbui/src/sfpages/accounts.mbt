@@ -52,7 +52,7 @@ fn profile_page_reset() -> Unit {
 
 ///|
 /// A field of the page, by its key, made once.
-fn profile_field(key : String) -> @ui.Field {
+pub fn profile_field(key : String) -> @ui.Field {
   match profile_fields.get(key) {
     Some(f) => f
     None => {
@@ -66,7 +66,7 @@ fn profile_field(key : String) -> @ui.Field {
 ///|
 /// A profile's page (AccountPage), by its station and id, one in every frame (the Small stack's, the wide frame's
 /// pane, the profiles' place): a wait until the station's overview is read; one gone, that it is not found.
-fn profile_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address : String, id : String) -> Unit {
+pub fn profile_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address : String, id : String) -> Unit {
   let s = @settings.station_of(core, here, address)
   let o = field(s, "overview")
   let key = "profile/" + address + "/" + id
@@ -425,7 +425,7 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, address : String, station_name : St
 /// station's name, whether it is being opened, and what opens it given what it is called), seldom used: in a ⋯ after
 /// the page's button (docs/ui-panels.md: what is used least goes into the row's ⋯). Its tab's view opens here, gone
 /// back from as the sign-in ends; Claude's comes back to its command there, with no code to paste.
-fn login_steps(
+pub fn login_steps(
   c : @ui.Ctx,
   core : Core,
   key : String,
@@ -1695,11 +1695,11 @@ let pf_tags : @ui.Style = @ui.css("row pl=S2 gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_tag : @ui.Style = @ui.css("row h=S4_5 px=S1 gap=SPx align=ACenter radius=Base bg=Hover")
+pub let pf_tag : @ui.Style = @ui.css("row h=S4_5 px=S1 gap=SPx align=ACenter radius=Base bg=Hover")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_tag_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, weight=Medium, color=Muted, wrap=false)
+pub let pf_tag_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, weight=Medium, color=Muted, wrap=false)
 
 
 ///|
@@ -1844,7 +1844,7 @@ let pf_run_rows : @ui.Style = @ui.css("w=Full gap=S3_5")
 /// 选择模型, right after a profile is added (PickModelsPage; the narrow app's PickModelsScreen): what it is for, the list
 /// to tick (or a wait while it is read, or why none is listed), a model named by hand where the provider lists none;
 /// 跳过 and 完成 (wide: at the head's end; narrow: over the list) go on to its page in this one's place.
-fn pick_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address : String, id : String) -> Unit {
+pub fn pick_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address : String, id : String) -> Unit {
   let look = look_of(c)
   let s = @settings.station_of(core, here, address)
   let o = field(s, "overview")
@@ -1923,7 +1923,7 @@ fn pick_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, ad
 /// 模型, which of a profile's models may be used, on a page of their own (the narrow app's ProfileModelsScreen; the
 /// wide page has the same list on the profile's): how many are on under its title, the list to tick, a model named by
 /// hand where the provider lists none.
-fn profile_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address : String, id : String) -> Unit {
+pub fn profile_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address : String, id : String) -> Unit {
   let look = look_of(c)
   let s = @settings.station_of(core, here, address)
   let o = field(s, "overview")
@@ -1954,7 +1954,7 @@ fn profile_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame,
           "models-refresh/" + key,
           @sf.t(if checking { "android-settings.refreshing" } else { "android-settings.models.refresh" }),
           color=@sf.link_ink(),
-          size=@sfpages.link_size,
+          size=link_size,
         ) &&
         !checking {
         @settings.act(

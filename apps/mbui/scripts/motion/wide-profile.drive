@@ -1,4 +1,4 @@
-# A profile's page on the desktop (sfdesk accounts.mbt, the web's Accounts.tsx): MBUI_WIN=1280x800 over the made-up
+# A profile's page on the desktop (sfpages accounts.mbt, the web's Accounts.tsx): MBUI_WIN=1280x800 over the made-up
 # chat. Profile from the rail (its first picked: who it is, its allowance), then down its page and the second's.
 timeout 30000
 until 发消息

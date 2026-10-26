@@ -52,4 +52,5 @@ pub fn reset() -> Unit {
   new_connect_reset()
   station_cards_reset()
   station_page_reset()
+  profile_page_reset()
 }

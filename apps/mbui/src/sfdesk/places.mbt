@@ -31,11 +31,6 @@ fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
 }
 
 ///|
-/// The page picked in a place with a list of its own (Station's, Profile's), by place; none: the first.
-// kept across runs: said by a row pressed; places_reset empties it
-let place_pick : Map[String, Route] = {}
-
-///|
 fn places_reset() -> Unit {
   place_pick.clear()
 }
@@ -90,10 +85,10 @@ fn place_split(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit
   let core = settings_core(src, w)
   c.box(style=place_pane, fn() {
     match place_route(src, w, place) {
-      // a station's: the desktop's own (station_page.mbt)
+      // a station's: one page in every frame (src/sfpages station_page.mbt)
       Some(Station(a)) => @sfpages.station_page(c, core, @settings.here_of(core, w.id, w.name), { back: None, top: 0.0, foot: 0.0, named: false }, a)
-      // a profile's: the desktop's own (accounts.mbt)
-      Some(Profile(a, id)) => profile_page(c, core, @settings.here_of(core, w.id, w.name), { back: None, top: 0.0, foot: 0.0, named: false }, a, id)
+      // a profile's: one page in every frame (src/sfpages accounts.mbt)
+      Some(Profile(a, id)) => @sfpages.profile_page(c, core, @settings.here_of(core, w.id, w.name), { back: None, top: 0.0, foot: 0.0, named: false }, a, id)
       Some(r) => @settings.page(c, core, @settings.here_of(core, w.id, w.name), r, root=true)
       // none to pick yet: the first to add (the web's StationsFirst, RuntimeSettings' first)
       None =>
