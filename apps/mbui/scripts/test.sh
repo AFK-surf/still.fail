@@ -5,8 +5,9 @@
 # on (native by default, as the apps are built; CI's check-mbui: native on Linux, and on macOS on main). PARTS: which
 # of the two (app: the design system, the pages, the screens, gallery and player; replay: the core and the flows seen
 # again), both by default; check-mbui runs each on a runner of its own. SFAPP_SHARDS: how many processes sfapp's test
-# files are run in side by side (5); 1, the pages' files all in one (the two screen sweeps a process each beside
-# them), as check-mbui runs them: what one file leaves behind that a later one trips on shows only there. mbui's own:
+# files are run in side by side (5); 1, the pages' files all in one (the screen sweeps a process each beside them):
+# what one file leaves behind that a later one trips on shows best there; check-mbui runs them in 2, each its files
+# one after another. mbui's own:
 # its scripts/test.sh.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
