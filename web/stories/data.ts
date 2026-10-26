@@ -2,7 +2,7 @@
 // a clip and a picture in a folder, the changelog's news. Made up here, the same every time.
 import type { DriveEntry, DriveKind, HistoryItem, HistoryStep, HistoryView, MachineLoginScreen, MachineLoginShown, MachineLoginsView } from "../src/core/shapes.ts";
 import { opensOf } from "../../client/core-ts/src/drive-kind.ts";
-import { markdown } from "../../client/core-ts/src/markdown.ts";
+import { lineOf, markdown } from "../../client/core-ts/src/markdown.ts";
 import clipUrl from "./assets/story-clip.mp4?url";
 import pictureUrl from "./assets/story-picture.png?url";
 
@@ -153,7 +153,7 @@ const call = (name: string, hint: string, meta: string): HistoryStep =>
 const told = (name: string, said: string, meta: string): HistoryStep => ({ ...call(name, "", meta), said });
 const posted = (text: string, ends?: string): HistoryItem["body"] =>
   ({ kind: "post", content: { text, md: markdown(text), place: { name: "看看我的 screencam 的 Windows 版本，我感觉某些 UI 还是粗糙", surface: "stillfail" }, block: false, failed: false, ...(ends ? { ends } : {}) } });
-const own = (text: string): HistoryItem["body"] => ({ kind: "text", content: { text, md: markdown(text), subagent: false } });
+const own = (text: string): HistoryItem["body"] => ({ kind: "text", content: { text, md: markdown(text), line: lineOf(markdown(text), text), subagent: false } });
 const WAITED_AT = Date.parse("2026-10-16T08:27:00Z");
 const WAITING_SINCE = Date.now() - 23_000;
 const HISTORY_ITEMS: { body: HistoryItem["body"]; turn?: HistoryItem["turn"] }[] = [
@@ -175,10 +175,10 @@ const HISTORY_ITEMS: { body: HistoryItem["body"]; turn?: HistoryItem["turn"] }[]
   { body: posted("中途会话重启了一次，两路的工作都已提交保存，没丢，现在已经让它们接着做。\n\n**摄像头 + 打包**（4 个提交，基本做完，正在补跑测试）：\n\n- 原生端新增摄像头 H.264 写入器和 DirectShow 采集图；\n- 摄像头录制改用共享的 QPC 时钟，跟录屏时间轴对齐；\n- 安装包里不再带 ffmpeg。\n\n**导出**（还在做）：剩下 GIF 和混音两项。") },
   { body: { kind: "mark", content: { text: "去 ffmpeg 两路收尾（重启后续跑） · 等待了 1m 54s / 1h", wait: { since: WAITED_AT, until: WAITED_AT + 114_000, seconds: 3600, what: "去 ffmpeg 两路收尾（重启后续跑）" }, ends: "waiting" } } },
   { body: own("The session restarted partway through, but both parts had already committed their work, so nothing was lost and both are running again.") },
-  { turn: { time: "16:30", text: "未发消息" }, body: { kind: "received", content: { tasks: [{ text: "任务已退出（退出码 1）：shot-win", agent: false, failed: true, result: "error: no display", md: markdown("```\nerror: no display\n```") }], messages: [
+  { turn: { time: "16:30", text: "未发消息" }, body: { kind: "received", content: { tasks: [{ text: "任务已退出（退出码 1）：shot-win", agent: false, failed: true, result: "error: no display", md: markdown("```\nerror: no display\n```"), line: "error: no display" }], messages: [
     { key: "m2", from: { name: "ci-time-watch", bound: false }, text: "OVER BUDGET: run 39026861305 (attempt 1, android, add-station-sheet-pinned 9791b9da) took 301 s of 240 s\nhttps://github.com/AFK-surf/still.fail/actions/runs/39026861305\n\njobs (start → seconds):\n  +   0 s    13 s  plan\n  +  16 s   285 s  check-android\n  +  16 s    26 s  check-linux\n  +  16 s    88 s  check-browser (stories 1/2)\n  +  16 s   152 s  check-browser (motion)", notice: "job" },
   ] } } },
-  { turn: { time: "16:31", text: "未发消息" }, body: { kind: "received", content: { tasks: [{ text: "子 agent 完成：Camera recording without ffmpeg", agent: true, failed: false, result: "Waiting for the NativeEngine results before sending the final report.", md: markdown("Waiting for the NativeEngine results before sending the final report.") }], messages: [] } } },
+  { turn: { time: "16:31", text: "未发消息" }, body: { kind: "received", content: { tasks: [{ text: "子 agent 完成：Camera recording without ffmpeg", agent: true, failed: false, result: "Waiting for the NativeEngine results before sending the final report.", md: markdown("Waiting for the NativeEngine results before sending the final report."), line: "Waiting for the NativeEngine results before sending the final report." }], messages: [] } } },
   { body: { kind: "mark", content: { text: "去 ffmpeg 两路收尾 · 等待中，最长 1h", wait: { since: WAITING_SINCE, seconds: 3600, what: "去 ffmpeg 两路收尾" }, ends: "waiting" } } },
   { body: own("Both parts of the ffmpeg removal are still finishing. The camera part is waiting on its last test run before reporting, and the export part is working through its remaining items.") },
 ];

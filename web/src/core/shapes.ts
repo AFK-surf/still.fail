@@ -3751,6 +3751,8 @@ export interface HistoryTask {
 	result?: string;
 	/** `result` read as Markdown (markdown.ts), its runs of words in `result`: what the clients draw. */
 	md?: unknown;
+	/** `result`'s first line of words, without the marks (markdown.ts lineOf): what its line shows closed. */
+	line?: string;
 }
 
 /**
@@ -3782,11 +3784,16 @@ export interface HistoryText {
 	text: string;
 	/** `text` read as Markdown (markdown.ts), its runs of words in `text`: what the clients draw. */
 	md: unknown;
+	/** Its first line of words, without the marks (markdown.ts lineOf): what its line shows closed. */
+	line: string;
 	subagent: boolean;
 }
 
 export interface HistoryThought {
 	text: string;
+	/** `text` read as Markdown (markdown.ts), its runs of words in `text`: what the clients draw. */
+	md: unknown;
+	/** Its first line of words, without the marks (markdown.ts lineOf): what its line shows closed. */
 	first: string;
 	/** Its transcript entry: what `history.detail` reads whole while it is `brief`. */
 	entries: number[];

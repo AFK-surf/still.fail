@@ -3144,7 +3144,8 @@ export const SHAPES: Record<string, Shape> = {
   ]),
   HistoryThought: struct([
     ["text", "String"],
-    ["first", "String", { said: true }],
+    ["md", "Value", { doc: "`text` read as Markdown (markdown.ts), its runs of words in `text`: what the clients draw." }],
+    ["first", "String", { said: true, doc: "Its first line of words, without the marks (markdown.ts lineOf): what its line shows closed." }],
     ["entries", vec("i64"), { client: vec("I54"), doc: "Its transcript entry: what `history.detail` reads whole while it is `brief`." }],
     ["brief", "bool", { doc: "`text` is its first line only (a station's in brief): opened, `history.detail` reads it whole." }],
   ], { keepNone: true }),
@@ -3170,10 +3171,12 @@ export const SHAPES: Record<string, Shape> = {
     ["failed", "bool", { doc: "It failed or was stopped." }],
     ["result", opt("String"), { said: true, doc: "What a sub-agent answered." }],
     ["md", opt("Value"), { doc: "`result` read as Markdown (markdown.ts), its runs of words in `result`: what the clients draw." }],
+    ["line", opt("String"), { said: true, doc: "`result`'s first line of words, without the marks (markdown.ts lineOf): what its line shows closed." }],
   ], { doc: "Work the agent started in the background telling it how it ended (a task notification)." }),
   HistoryText: struct([
     ["text", "String"],
     ["md", "Value", { doc: "`text` read as Markdown (markdown.ts), its runs of words in `text`: what the clients draw." }],
+    ["line", "String", { said: true, doc: "Its first line of words, without the marks (markdown.ts lineOf): what its line shows closed." }],
     ["subagent", "bool"],
   ], { doc: "The agent's own words; `subagent`: a sub-agent's.", keepNone: true }),
   HistoryPost: struct([

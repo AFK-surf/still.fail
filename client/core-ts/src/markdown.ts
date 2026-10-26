@@ -280,3 +280,32 @@ export function plainOf(md: Md, source: string): string {
   };
   return md.map(words).join("\n\n");
 }
+
+/// Its first line of words, without the marks, as plainOf reads them: what a line standing for it shows closed (a
+/// history's event). Within a list or a quote, its first item's; a table's head row, its cells apart by a bar; a code
+/// block's first line as written.
+export function lineOf(md: Md, source: string): string {
+  const BLOCKS = ["p", "h", "pre", "quote", "list", "li", "table", "tr", "hr"];
+  const block = (node: MdNode) => typeof node !== "string" && typeof node[0] === "string" && BLOCKS.includes(node[0]);
+  const kids = (node: MdNode): MdNode[] => (typeof node !== "string" && Array.isArray(node[1]) ? (node[1] as MdNode[]) : []);
+  // (words within a block, as a paragraph's: plainOf sets blocks apart)
+  const inline = (nodes: MdNode[]) => plainOf([["p", nodes]], source);
+  const first = (nodes: MdNode[]): string => {
+    for (const node of nodes) {
+      const kind = typeof node !== "string" && typeof node[0] === "string" ? node[0] : null;
+      // (a tight list's item holds its words; a loose one's, its paragraphs)
+      const words =
+        kind === "quote" || kind === "list" || (kind === "li" && kids(node).some(block))
+          ? first(kids(node))
+          : kind === "table"
+            ? kids(kids(node)[0] ?? ["tr"]).map((cell) => inline(kids(cell)).trim()).join(" | ")
+            : kind === "li"
+              ? inline(kids(node))
+              : plainOf([node], source);
+      const line = words.split("\n").map((l) => l.trim()).find((l) => l !== "");
+      if (line !== undefined) return line;
+    }
+    return "";
+  };
+  return first(md);
+}

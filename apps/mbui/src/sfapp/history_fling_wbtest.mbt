@@ -38,12 +38,12 @@ fn fling_history(older : Int) -> Json {
     items.push(post("o\{k}-p"))
   }
   items.push(item("w1", "mark", { "wait": { "since": 0, "seconds": 3600, "until": 30000 }, "text": "后台助手做完了" }, false))
-  items.push(item("t1", "text", { "text": "主线上又超时了", "subagent": false }, false))
+  items.push(item("t1", "text", { "text": "主线上又超时了", "line": "主线上又超时了", "subagent": false }, false))
   items.push(item("r2", "received", { "tasks": [{ "text": "后台助手做完了：跳过安装", "agent": true }], "messages": [] }, true))
   items.push(item("g2", "group", { "summary": "等 CI 跑完再合并", "title": "等待", "failures": 0, "pending": 0, "rows": [] }, false))
   items.push(post("p2"))
   items.push(item("w2", "mark", { "wait": { "since": 0, "seconds": 3600, "what": "最终提交上的检查" }, "text": "" }, false))
-  items.push(item("t2", "text", { "text": "改动已经提交", "subagent": false }, false))
+  items.push(item("t2", "text", { "text": "改动已经提交", "line": "改动已经提交", "subagent": false }, false))
   { "items": Json::array(items), "live": [], "usage": [], "edge": "从 10/19 08:12 开始", "empty": false, "loaded": true, "more": false }
 }
 

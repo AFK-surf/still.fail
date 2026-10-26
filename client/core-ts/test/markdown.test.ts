@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createHash } from "node:crypto";
-import { MD_READING, type MdStore, markdown, mdKey, parse, plainOf } from "../src/markdown.ts";
+import { MD_READING, type MdStore, lineOf, markdown, mdKey, parse, plainOf } from "../src/markdown.ts";
 import { wordsIn } from "./md-words.ts";
 
 /// The tree of `text` with its runs read out of it, as a client draws it.
@@ -155,6 +155,19 @@ test("math_leaves_escaped_dollars_code_and_unmatched_inline_delimiters_alone", (
 test("markdown_words_without_marks", () => {
   const text = "# 题\n\n**一** `二`\n\n```\n三\n```";
   assert.equal(plainOf(parse(text), text), "题\n\n一 二\n\n三");
+});
+
+test("markdown_line_is_its_first_words_without_marks", () => {
+  const line = (text: string) => lineOf(parse(text), text);
+  assert.equal(line("**Planning the fix**\n\nI will read [the list](https://a.b/c) first."), "Planning the fix");
+  assert.equal(line("## 总结\n\n改好了"), "总结");
+  assert.equal(line("- **一** 改了 `list.mbt`\n- 二"), "一 改了 list.mbt");
+  assert.equal(line("1. 第一\n\n   第二段\n2. 二"), "第一");
+  assert.equal(line("> 引用的 *话*\n\n后面"), "引用的 话");
+  assert.equal(line("```\n\nerror: no display\nmore\n```"), "error: no display");
+  assert.equal(line("| 名 | 值 |\n|---|---|\n| a | 1 |"), "名 | 值");
+  assert.equal(line("---\n\n第二块"), "第二块");
+  assert.equal(line(""), "");
 });
 
 test("markdown_words_are_runs_of_the_text_so_they_go_once", () => {

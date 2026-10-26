@@ -404,7 +404,7 @@ fn item_view(c : @ui.Ctx, src : Source, station : String, key : String, ik : Str
             |> ignore
           })
           |> ignore
-        }, first_line(words), "", fn() { md_view(c, ik + "/text-md", words, field(content, "md"), small=true) })
+        }, text(content, "line"), "", fn() { md_view(c, ik + "/text-md", words, field(content, "md"), small=true) })
       })
     "post" => {
       let ends = text(content, "ends")
@@ -468,6 +468,12 @@ let words_line : Double = 20.0
 fn md_view(c : @ui.Ctx, key : String, words : String, md : Json?, small? : Bool = false) -> Unit {
   let t = @sf.theme()
   @sf.markdown(c, words, key~, tree=md, size=if small { 12.0 } else { 13.0 }, ink=if small { t.p.muted } else { 0L }) |> ignore
+}
+
+///|
+/// A thought whole: its Markdown small and grey, as the agent's own words are (the core's tree of them).
+fn thought_md(c : @ui.Ctx, rk : String, content : Json?) -> Unit {
+  md_view(c, rk + "/md", text(content, "text"), field(content, "md"), small=true)
 }
 
 ///|
@@ -668,7 +674,7 @@ fn task_view(c : @ui.Ctx, key : String, task : Json?, rail : Bool, rail_last : B
         md_view(c, key + "/md", answer, field(task, "md"), small=true)
       })
       if !steps_own.opened.contains(key) {
-        c.box(style=h_one, fn() { c.text(first_line(answer), style=h_one_words) |> ignore }) |> ignore
+        c.box(style=h_one, fn() { c.text(text(task, "line"), style=h_one_words) |> ignore }) |> ignore
       }
     }
   })
@@ -801,10 +807,10 @@ fn group_view(c : @ui.Ctx, src : Source, station : String, key : String, ik : St
               opened(c, src, station, key, rk, content, false, fn() {
                 c.text(@sf.t("web-main.history.thinking"), style=h_step_name) |> ignore
                 c.box(style=h_grow_clip, fn() { c.text(text(content, "first"), style=h_step_hint) |> ignore }) |> ignore
-              }, fn() { c.box(style=h_step_body, fn() { c.text(text(content, "text"), style=h_thinking_muted) |> ignore }) |> ignore })
+              }, fn() { c.box(style=h_step_body, fn() { thought_md(c, rk, content) }) |> ignore })
             } else {
               whole(c, src, station, key, rk, content, fn() {
-                c.box(style=h_thinking, fn() { c.text(text(content, "text"), style=h_thinking_muted) |> ignore }) |> ignore
+                c.box(style=h_thinking, fn() { thought_md(c, rk, content) }) |> ignore
               })
             }
           } else {
