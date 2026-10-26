@@ -148,6 +148,58 @@ test("one read long ago is left as it is: only what was opened lately is brought
   core.close();
 });
 
+test("what is brought is listed as it stands; one stopped goes, what was kept of it with it; the prefs turn it off or bound it", async () => {
+  const film = bytesOf(10 * MB, 3);
+  const clip = bytesOf(6 * MB, 4);
+  const big = bytesOf(8 * MB, 5);
+  const t = await started();
+  files(t.host, new Map([["film.mp4", film], ["clip.mp4", clip], ["big.mp4", big]]));
+  const r = await rig(t);
+  const keeping = () => (t.core.inner.downloads.view().keeping as { name: string; state: string; loaded: number; statusText: string }[]);
+  for (const [name, f] of [["film.mp4", film], ["clip.mp4", clip], ["big.mp4", big]] as const) {
+    await r.ask("station.file.part", { station: ST, key: "k1", name, offset: 0, length: MB, keep: true, size: f.length });
+  }
+  // listed as they are let go, before any comes: the one read last first
+  assert.deepEqual(keeping().map((k) => [k.name, k.loaded]), [["big.mp4", MB], ["clip.mp4", MB], ["film.mp4", MB]]);
+  assert.ok(keeping().every((k) => k.statusText.length > 0));
+  // the one coming, while its part comes
+  const held = t.host.hold(`name=big.mp4&offset=${MB}&length=${4 * MB}`);
+  await t.host.time.pass(IDLE_MS + 100);
+  assert.deepEqual(keeping().map((k) => [k.name, k.state]), [["big.mp4", "going"], ["clip.mp4", "queued"], ["film.mp4", "queued"]]);
+  // stopped: no longer listed, nothing of it kept; the next goes on (held as it comes)
+  const id = chatKeptId(ST, "k1", "big.mp4");
+  const next = t.host.hold(`name=clip.mp4&offset=${MB}&length=${4 * MB}`);
+  await r.ask("fill.stop", { id });
+  held();
+  await t.host.settle();
+  assert.equal(await Effect.runPromise(t.core.inner.driveKept.has(id)), false);
+  assert.deepEqual(keeping().map((k) => [k.name, k.state]), [["clip.mp4", "going"], ["film.mp4", "queued"]]);
+  // turned off: none listed, the part coming stopped, none brought
+  await r.ask("prefs.set", { fillOff: true });
+  assert.deepEqual(keeping(), []);
+  next();
+  const before = r.parts("film.mp4") + r.parts("clip.mp4");
+  await t.host.time.pass(IDLE_MS * 3);
+  assert.equal(r.parts("film.mp4") + r.parts("clip.mp4"), before);
+  assert.equal(await r.whole(chatKeptId(ST, "k1", "clip.mp4"), clip.length), false);
+  // on again, up to 7 MB: the clip, not the film
+  await r.ask("prefs.set", { fillOff: null, fillMax: 7 * MB });
+  await t.host.time.pass(IDLE_MS + 100);
+  assert.equal(await r.whole(chatKeptId(ST, "k1", "clip.mp4"), clip.length), true);
+  assert.equal(await r.whole(chatKeptId(ST, "k1", "film.mp4"), film.length), false);
+  assert.deepEqual(keeping(), []);
+  // any size (its part held as it comes), then all of them stopped at once
+  const last = t.host.hold(`name=film.mp4&offset=${MB}&length=${4 * MB}`);
+  await r.ask("prefs.set", { fillMax: 0 });
+  assert.deepEqual(keeping().map((k) => k.name), ["film.mp4"]);
+  await r.ask("fill.stopAll", {});
+  last();
+  await t.host.settle();
+  assert.deepEqual(keeping(), []);
+  assert.equal(await Effect.runPromise(t.core.inner.driveKept.has(chatKeptId(ST, "k1", "film.mp4"))), false);
+  t.core.close();
+});
+
 test("a drive's video a player let go of goes on as a chat's file does", async () => {
   const clip = bytesOf(6 * MB, 1);
   const t = await started();

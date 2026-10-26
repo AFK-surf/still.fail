@@ -12,13 +12,17 @@ import { Effect } from "effect";
 import type { Inner } from "./core.ts";
 import { handlers } from "./core/execute.ts";
 import type { Call } from "./core/calls.ts";
-import type { CoreError } from "./error.ts";
+import { CoreError } from "./error.ts";
 import { Beside } from "./protocol.ts";
 import { Kind } from "./trace.ts";
 import { Priority } from "./sync/scheduler.ts";
 import { DOWNLOAD_PART } from "./views/downloads.ts";
+import type { Unfinished } from "./drive-kept.ts";
+import { bytes } from "./format.ts";
+import { t } from "./i18n.ts";
+import { get, isObject } from "./util.ts";
 
-/// The most a file is brought whole by itself.
+/// The most a file is brought whole by itself, unless the prefs say otherwise (`fillMax`).
 export const FILL_MAX = 1024 * 1024 * 1024;
 /// How lately a file must have been read to be brought whole.
 export const FILL_RECENT_MS = 3 * 24 * 3600_000;
@@ -29,19 +33,30 @@ export const IDLE_MS = 3_000;
 const unreached = (e: CoreError) => e.status === undefined && (e.code === "host" || e.code === "mesh" || e.code === "timeout");
 
 /// A kept file's part to bring: the call that reads it (with `keep`, `quiet`) and its station.
-function partOf(f: { id: string; mtime: number; size: number; at: number; length: number }): Call | null {
+function partOf(f: Unfinished): Extract<Call, { kind: "stationFilePart" | "driveRead" }> | null {
   const length = Math.min(DOWNLOAD_PART, f.length);
   const [first, ...rest] = f.id.split("\n");
   // a chat's (chatKeptId): `chat`, its station, its session, its name
   if (first === "chat") {
     const [station, key, ...name] = rest;
     if (station === undefined || key === undefined || name.length === 0) return null;
-    return { kind: "stationFilePart", station, key, name: name.join("\n"), offset: f.at, length, progress: false, stream: false, keep: f.size, quiet: true };
+    return { kind: "stationFilePart", station, key, name: name.join("\n"), offset: f.at, length, progress: true, stream: false, keep: f.size, quiet: true };
   }
   // a drive's (keptId): its station, its root, its path
   const [root, ...path] = rest;
   if (root === undefined || path.length === 0) return null;
   return { kind: "driveRead", station: first, root, path: path.join("\n"), offset: f.at, length, progress: false, stream: false, keep: "played", mtime: f.mtime, size: f.size, quiet: true };
+}
+
+/// One being brought, as the pages list it (`downloads`' `keeping`): coming now, given way to what a person waits on,
+/// waiting for its station, or after the others.
+type KeepingState = "going" | "yielding" | "waiting" | "queued";
+
+/// How sure a file is to be brought: on (`prefs.fillOff` not so) and up to how big (`prefs.fillMax`: 0 none).
+function bounds(inner: Inner): { on: boolean; most: number } {
+  const prefs = inner.data.get({ topic: "prefs" });
+  const most = get(prefs, "fillMax");
+  return { on: get(prefs, "fillOff") !== true, most: typeof most === "number" && Number.isSafeInteger(most) && most >= 0 ? (most === 0 ? Number.POSITIVE_INFINITY : most) : FILL_MAX };
 }
 
 export class Fill {
@@ -55,6 +70,16 @@ export class Fill {
   /// Poked since the files were last looked at.
   #dirty = false;
   #started = false;
+  /// What is left to bring, as last looked at, in its order.
+  #list: Unfinished[] = [];
+  /// The one coming now, and how much of it is here; given way to what is waited on (`yielding`).
+  #going: { id: string; loaded: number } | null = null;
+  #yielding = false;
+  /// Stopped as it came (`stop`): let go once its part has stopped.
+  readonly #stopping = new Set<string>();
+  #stop: (() => void) | null = null;
+  /// The percents last told, by file.
+  readonly #told = new Map<string, number>();
 
   constructor(inner: Inner) {
     this.#inner = inner;
@@ -67,8 +92,10 @@ export class Fill {
     this.#inner.runner.fork(Effect.forever(this.#step()));
   }
 
-  /// Something may have been let go (a viewer's read ended): looked at again.
+  /// Something may have been let go (a viewer's read ended), or the prefs changed: looked at again.
   poke(): void {
+    // (listed at once, whether or not it may come now)
+    if (this.#started) this.#inner.runner.fork(Effect.asVoid(this.#look()));
     this.#dirty = true;
     const poked = this.#poked;
     this.#poked = null;
@@ -81,12 +108,80 @@ export class Fill {
     this.poke();
   }
 
+  /// What is left to bring as the pages list it, the one coming first (`downloads`' `keeping`).
+  shown(): Record<string, unknown>[] {
+    const out: Record<string, unknown>[] = [];
+    for (const f of this.#list) {
+      const going = this.#going?.id === f.id ? this.#going : null;
+      const loaded = Math.min(f.size, going?.loaded ?? f.have);
+      const call = partOf(f);
+      const station = call?.station ?? "";
+      const state: KeepingState = going !== null ? (this.#yielding ? "yielding" : "going")
+        : this.#away.has(station) || !this.#reached(station) ? "waiting"
+        : this.#yielding && out.length === 0 ? "yielding"
+        : "queued";
+      const percent = f.size > 0 ? Math.floor((loaded / f.size) * 100) : 0;
+      const statusText = state === "going" ? t("core-logic.keeping.going", { percent, total: bytes(f.size) })
+        : state === "yielding" ? t("core-logic.keeping.yielding", { percent })
+        : state === "waiting" ? t("core-logic.download.waiting", { percent })
+        : t("core-logic.keeping.queued", { percent });
+      const where = call === null ? {} : call.kind === "stationFilePart" ? { key: call.key } : { root: call.root, path: call.path };
+      const name = call === null ? f.id : call.kind === "stationFilePart" ? call.name : (call.path.split("/").pop() ?? call.path);
+      out.push({ id: f.id, station, ...where, name, size: f.size, loaded, progress: f.size > 0 ? loaded / f.size : 0, state, statusText });
+    }
+    // what comes now first
+    return out.sort((a, b) => Number(b.state === "going" || b.state === "yielding") - Number(a.state === "going" || a.state === "yielding"));
+  }
+
+  /// Not brought any more, what was kept of it let go (`fill.stop`); all of them (`fill.stopAll`).
+  stop(ids: string[] | null): Effect.Effect<void> {
+    const self = this;
+    return Effect.gen(function* () {
+      for (const id of ids ?? self.#list.map((f) => f.id)) {
+        if (self.#going?.id === id) {
+          self.#stopping.add(id);
+          self.#stop?.();
+        } else yield* self.#inner.driveKept.forget(id);
+        self.#list = self.#list.filter((f) => f.id !== id);
+      }
+      self.#told.clear();
+      self.#changed();
+      self.poke();
+    });
+  }
+
+  #changed(): void {
+    this.#inner.store.invalidateAll((topic) => topic.topic === "downloads");
+  }
+
+  /// Told again as one moves on a whole percent, or what it is doing changes.
+  #moved(id: string, loaded: number, size: number): void {
+    if (this.#going?.id === id) this.#going.loaded = loaded;
+    const percent = size > 0 ? Math.floor((loaded / size) * 100) : 0;
+    if (this.#told.get(id) === percent) return;
+    this.#told.set(id, percent);
+    this.#changed();
+  }
+
+  #reached(station: string): boolean {
+    const stations = this.#inner.stations;
+    return stations.link(station) !== undefined && stations.reachable(station);
+  }
+
+  #yield(yielding: boolean): void {
+    if (this.#yielding === yielding) return;
+    this.#yielding = yielding;
+    this.#changed();
+  }
+
   /// Once nothing has been waited on a while: the next part brought, or, none left, waited for a poke.
   #step(): Effect.Effect<void> {
     const inner = this.#inner;
     const self = this;
     return Effect.gen(function* () {
+      if (inner.waited.count > 0 && self.#list.length > 0) self.#yield(true);
       yield* inner.waited.idle(IDLE_MS);
+      self.#yield(false);
       self.#dirty = false;
       const next = yield* self.#next();
       if (next === null) {
@@ -102,21 +197,37 @@ export class Fill {
       const read = handlers[call.kind]!;
       const span = inner.tracer.span("file.fill", Kind.Internal, null);
       span.set("stillfail.station", station);
-      // (one begun as it waited its turn: nothing; one begun as it goes stops it, what came kept: `ended` false)
+      // (one begun as it waited its turn: nothing; one begun as it goes stops it, what came kept: `ended` false; so
+      // does its being stopped here)
       let ended = false;
       let answer: unknown = null;
+      self.#going = { id, loaded: f.have };
+      self.#changed();
+      const stopped = Effect.callback<void>((resume) => {
+        self.#stop = () => resume(Effect.void);
+      });
+      const heard = (v: unknown) => {
+        const loaded = isObject(v) && typeof v.loaded === "number" ? v.loaded : 0;
+        self.#moved(id, f.have + loaded, f.size);
+      };
       const part = Effect.suspend(() =>
         inner.waited.count > 0
           ? Effect.void
           : Effect.raceFirst(
-              Effect.map(read(inner, call, () => {}, [0, 0], span.context), (got) => {
+              Effect.map(read(inner, call, heard, [0, 0], span.context), (got) => {
                 [ended, answer] = [true, got];
               }),
-              inner.waited.begun(),
+              Effect.raceFirst(inner.waited.begun(), stopped),
             ),
       );
       const done = yield* Effect.result(inner.scheduler.ask(station, `${station} fill`, Priority.idle, part));
       span.end();
+      self.#going = null;
+      self.#stop = null;
+      if (self.#stopping.delete(id)) {
+        yield* inner.driveKept.forget(id);
+        return;
+      }
       if (done._tag === "Success") {
         // read through and still not kept (the station says it is another size than its message did): not again
         const said = (answer instanceof Beside ? answer.value : answer) as { total?: unknown } | null;
@@ -131,15 +242,28 @@ export class Fill {
     });
   }
 
-  /// The file to bring a part of next, and the call that reads it: the most lately read whose station is reached.
-  #next(): Effect.Effect<[{ id: string; size: number }, Extract<Call, { kind: "stationFilePart" | "driveRead" }>] | null> {
+  /// What is left to bring looked at again: `#list`, told where it changed.
+  #look(): Effect.Effect<Unfinished[]> {
     const inner = this.#inner;
     return Effect.map(inner.driveKept.unfinished(["chat", "played"], inner.host.nowMs() - FILL_RECENT_MS), (files) => {
-      for (const f of files) {
-        if (f.size > FILL_MAX || this.#failed.has(f.id) || inner.downloads.has(f.id)) continue;
+      const { on, most } = bounds(inner);
+      const list = on ? files.filter((f) => f.size <= most && !this.#failed.has(f.id) && !this.#stopping.has(f.id) && !inner.downloads.has(f.id) && partOf(f) !== null) : [];
+      // the one coming no longer to be (turned off, past the bound now): its part stops, what came of it kept
+      if (this.#going !== null && !list.some((f) => f.id === this.#going?.id)) this.#stop?.();
+      const was = this.#list;
+      this.#list = list;
+      if (was.length !== list.length || was.some((f, i) => f.id !== list[i].id || f.have !== list[i].have)) this.#changed();
+      return list;
+    });
+  }
+
+  /// The file to bring a part of next, and the call that reads it: the most lately read whose station is reached.
+  #next(): Effect.Effect<[Unfinished, Extract<Call, { kind: "stationFilePart" | "driveRead" }>] | null> {
+    return Effect.map(this.#look(), (list) => {
+      for (const f of list) {
         const call = partOf(f);
-        if (call === null || (call.kind !== "stationFilePart" && call.kind !== "driveRead")) continue;
-        if (this.#away.has(call.station) || inner.stations.link(call.station) === undefined || !inner.stations.reachable(call.station)) continue;
+        if (call === null) continue;
+        if (this.#away.has(call.station) || !this.#reached(call.station)) continue;
         return [f, call];
       }
       return null;
@@ -149,4 +273,10 @@ export class Fill {
 
 export function install(inner: Inner): void {
   inner.fill = new Fill(inner);
+  handlers.fill = (core, call) => {
+    const c = call as Extract<Call, { kind: "fill" }>;
+    const id = c.params.id;
+    if (c.action === "stop" && (typeof id !== "string" || id === "")) return Effect.fail(CoreError.invalid(t("core-misc.params.missing", { field: "id" })));
+    return Effect.as(core.fill.stop(c.action === "stop" ? [id as string] : null), {});
+  };
 }

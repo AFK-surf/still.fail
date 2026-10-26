@@ -607,6 +607,8 @@ pub let said_paths : Map[String, Array[String]] = {
     "downloads.*.name",
     "downloads.*.statusText",
     "downloads.*.error",
+    "keeping.*.name",
+    "keeping.*.statusText",
   ],
   "draft": [
     "quotes.*.text",

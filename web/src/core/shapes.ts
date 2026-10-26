@@ -3052,10 +3052,41 @@ export interface DownloadShown {
 	startedAt: number;
 }
 
+/** How a file brought after everything else stands: coming now, given way to what is waited on, waiting for its station to be reached, or after the others. */
+export type KeepingState = "going" | "yielding" | "waiting" | "queued";
+
+/** A file opened and let go before all of it came, brought whole after everything else (fill.ts), as the pages show it. */
+export interface KeepingShown {
+	/** Its own (`fill.stop`). */
+	id: string;
+	station: string;
+	/** A chat's file's: the session that keeps it. */
+	key?: string;
+	/** A drive's file's: the root it is in. */
+	root?: string;
+	/** A drive's file's: where it is in its root. */
+	path?: string;
+	/** A chat's file's name as the station keeps it; a drive's file's name. */
+	name: string;
+	size: number;
+	/** How much of it is here. */
+	loaded: number;
+	/** How much of it is here, 0 to 1. */
+	progress: number;
+	state: KeepingState;
+	/** How it stands, in a line: 后台缓存 42% · 18.3 MB · 已暂停，先下载正在查看的 · 排队中 . */
+	statusText: string;
+}
+
 /** The files being downloaded to this device (the `downloads` topic): under way, ready to be saved, or failed. */
 export interface DownloadsView {
 	/** This device's, newest first. */
 	downloads: DownloadShown[];
+	/**
+	 * What was opened and let go, being brought after everything else: the one coming first, then in the
+	 * order it comes.
+	 */
+	keeping?: KeepingShown[];
 }
 
 /**
@@ -5265,6 +5296,13 @@ export interface PrefsView {
 	badgeKinds?: BadgeKinds;
 	/** The invite code a page was opened with, kept through signing in until a workspace is made with it. */
 	invite?: string;
+	/**
+	 * Files opened and let go before all of them came are not brought whole after everything else on this
+	 * device (fill.ts); none: they are.
+	 */
+	fillOff?: boolean;
+	/** The most a file opened and let go is brought whole by itself on this device, in bytes: 0 any; none: 1 GB. */
+	fillMax?: number;
 	device?: DeviceView;
 	/** How the drive's reader lays text out (always whole: the core fills in what is not kept). */
 	reader?: ReaderPrefs;

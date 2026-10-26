@@ -66,6 +66,10 @@ export function outboxKeptId(id: string): string {
   return `outbox\n${id}`;
 }
 
+/// A file kept in part (`unfinished`): what it is kept as, `have` bytes of it, the first of it not kept (`at`,
+/// `length` bytes on from there).
+export type Unfinished = { id: string; kind: KeepKind; mtime: number; size: number; have: number; at: number; length: number };
+
 /// A chat's file kept: where it is, its size, the bytes kept of it (fewer: a part of it read), when it was last read.
 export type ChatKept = { station: string; key: string; name: string; size: number; bytes: number; used: number };
 
@@ -252,14 +256,14 @@ export class DriveKept {
     });
   }
 
-  /// The files of `kinds` a part of which is kept and not all, read since `since` (ms), the most lately read first,
+  /// The files of `kinds` a part of which is kept and not all (`have` bytes of it), read since `since` (ms), the most lately read first,
   /// each with where the first of it not kept is (`at`, `length` bytes on from there): those whose rest fits in what
   /// their kind keeps beside all else kept of it (bringing it would not push out another, nor then itself), and none
   /// being written now.
-  unfinished(kinds: readonly KeepKind[], since = 0): Effect.Effect<{ id: string; kind: KeepKind; mtime: number; size: number; at: number; length: number }[]> {
+  unfinished(kinds: readonly KeepKind[], since = 0): Effect.Effect<Unfinished[]> {
     return Effect.map(this.#db(), (sql) => {
       if (sql === null) return [];
-      const found: { id: string; kind: KeepKind; mtime: number; size: number; at: number; length: number; used: number }[] = [];
+      const found: (Unfinished & { used: number })[] = [];
       for (const kind of kinds) {
         const rows = sql.all("SELECT k.id, k.mtime, k.size, k.used FROM kept k WHERE k.kind = ?", [kind]);
         const parts = new Map<string, [number, number][]>();
@@ -286,7 +290,7 @@ export class DriveKept {
           }
           if (gap === null && end < size) gap = [end, size];
           if (gap === null || total - have + size > this.#most[kind]) continue;
-          found.push({ id, kind, mtime, size, at: gap[0], length: gap[1] - gap[0], used });
+          found.push({ id, kind, mtime, size, have: Math.min(have, size), at: gap[0], length: gap[1] - gap[0], used });
         }
       }
       return found.sort((a, b) => b.used - a.used || (a.id < b.id ? -1 : 1)).map(({ used: _, ...f }) => f);

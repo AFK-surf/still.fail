@@ -13,7 +13,8 @@
 //
 // Topic:
 //   downloads {}                  this device's downloads, newest first: under way, waiting for their station, all
-//                                 here to be saved, being saved, or failed
+//                                 here to be saved, being saved, or failed; and (`keeping`) what was opened and let go,
+//                                 being brought after everything else (fill.ts)
 // Calls:
 //   download.start {station, key, name, size}
 //                                 a chat's file (its session `key`, its `name` at the station, its `size` as the message
@@ -148,8 +149,8 @@ export class Downloads {
   }
 
   /// The `downloads` topic: newest first.
-  view(): { downloads: Record<string, unknown>[] } {
-    return { downloads: [...this.#held.values()].sort((a, b) => b.startedAt - a.startedAt).map(shown) };
+  view(): { downloads: Record<string, unknown>[]; keeping: Record<string, unknown>[] } {
+    return { downloads: [...this.#held.values()].sort((a, b) => b.startedAt - a.startedAt).map(shown), keeping: this.#inner.fill?.shown() ?? [] };
   }
 
   /// How far it has come: told again as it moves on a whole percent.
