@@ -345,3 +345,37 @@ test "should rerun effect once when writing a signal after reading it" {
   assert_eq(triggers.val, 2)
   assert_eq(src1.get(), 2)
 }
+
+///|
+test "a computed reading what is built for it after it ran, and what another read" {
+  let a = signal(1)
+  let b = signal(10)
+  let runs = Ref(0)
+  let holder = computed(fn(_) {
+    runs.val = runs.val + 1
+    a.get()
+  })
+  assert_eq(holder.get(), 1)
+  // (read for it after its run: b changed, it runs again)
+  holder.reading(fn() { b.get() }) |> ignore
+  b.set(11)
+  assert_eq(holder.get(), 1)
+  assert_eq(runs.val, 2)
+  // its run read b no more: let go
+  b.set(12)
+  assert_eq(holder.get(), 1)
+  assert_eq(runs.val, 2)
+  // what another computed read, lent to it
+  let c = signal(100)
+  let other = computed(fn(_) { c.get() })
+  assert_eq(other.get(), 100)
+  other.lend(holder)
+  c.set(101)
+  assert_eq(holder.get(), 1)
+  assert_eq(runs.val, 3)
+  // (its run read c no more)
+  c.set(102)
+  holder.get() |> ignore
+  assert_eq(runs.val, 3)
+  assert_eq(other.get(), 102)
+}

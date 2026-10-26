@@ -16,6 +16,10 @@ own source, not from what the port seems to want.
   with a computed nothing reads any more: under reference counting a computed left linked to a signal would never be
   let go), `Signal::watched`, `Computed::watched` (a part kept as it was drawn, `Ctx::kept_part`, follows what its
   build read: what follows a computed keeps it), `untracked`.
+- Added for a computed that holds what is built for it after it ran (a part kept holds its list's rows, laid out
+  after the part's build): `Computed::reading` (what a function reads, read by the computed as well, as though its
+  run read it last) and `Computed::lend` (what one computed read, read by another as well). Let go as the computed's
+  run reads anew, as what it read is.
 
 ## Tests
 

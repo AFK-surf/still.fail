@@ -114,15 +114,24 @@ pub fn Value::new(v : Double) -> Value {
 }
 
 ///|
-/// Where it is now (the frame's time, on the runtime's clock): its run's closed form there, read as it is asked.
+/// Where it is now (the frame's time, on the runtime's clock): its run's closed form there, read as it is asked (what
+/// is built from it, built again as it is set going and each frame as it runs: Ctx::shows_motion).
 pub fn Value::get(self : Value) -> Double {
+  self.shown()
   self.sample(@ui.runtime().now()).0
 }
 
 ///|
 /// How fast it moves now (per second).
 pub fn Value::velocity(self : Value) -> Double {
+  self.shown()
   self.sample(@ui.runtime().now()).1
+}
+
+///|
+/// Read where it is now: what is being built from it changes as it is set going and each frame while it runs.
+fn Value::shown(self : Value) -> Unit {
+  @ui.current().shows_motion(self.mover, self.run is Some(_))
 }
 
 ///|
@@ -186,6 +195,9 @@ fn Value::halt(self : Value) -> Unit {
 ///|
 /// There at once, still: its animation stopped (Motion's jump).
 pub fn Value::set(self : Value, x : Double) -> Unit {
+  if x != self.v || self.run is Some(_) {
+    self.mover.changed()
+  }
   self.halt()
   self.v = x
   self.vel = 0.0

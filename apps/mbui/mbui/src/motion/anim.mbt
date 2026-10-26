@@ -162,20 +162,32 @@ pub fn Anim::ends(self : Anim) -> Double {
 /// to be seen still (docs/motion.md: no logic reads whether a motion runs). Never told: it has; told between frames,
 /// not before it starts; with motion reduced, as it was told.
 pub fn Anim::over(self : Anim) -> Bool {
-  (self.start < 0.0 && self.asked < 0) || @ui.current().now() >= self.ends()
+  let c = @ui.current()
+  let over = (self.start < 0.0 && self.asked < 0) || c.now() >= self.ends()
+  // (what is built from it changes as it is told, and at its end, or the next frame where it starts then)
+  c.shows_motion(self.id, !over && self.ends() == @double.infinity)
+  if !over && self.ends() < @double.infinity {
+    c.shows_until(self.ends())
+  }
+  over
 }
 
 ///|
-/// Where it is this frame.
+/// Where it is this frame (what is built from it, built again as it is told and each frame as it goes:
+/// Ctx::shows_motion).
 pub fn Anim::get(self : Anim) -> Double {
-  self.step(@ui.current())
+  let c = @ui.current()
+  self.step(c)
+  c.shows_motion(self.id, self.running)
   self.value
 }
 
 ///|
 /// Whether it is on its way.
 pub fn Anim::moving(self : Anim) -> Bool {
-  self.step(@ui.current())
+  let c = @ui.current()
+  self.step(c)
+  c.shows_motion(self.id, self.running)
   self.running
 }
 
@@ -254,6 +266,10 @@ pub fn Anim::animate(
   }
   let over = start_at is Some(at) && at + self.dur <= c.now()
   if c.still() || over || (self.dur <= 0.0 && self.from == self.end) {
+    // (there at once: what was built from where it was, built again)
+    if self.value != self.end {
+      self.id.changed()
+    }
     self.finish()
   } else {
     self.running = true
@@ -284,6 +300,9 @@ pub fn Anim::follow(self : Anim, target : Double, spec : Spec, loc~ : SourceLoc)
 ///|
 /// There at once, still (Animatable.snapTo).
 pub fn Anim::snap(self : Anim, v : Double) -> Unit {
+  if self.value != v || self.target != v || self.running {
+    self.id.changed()
+  }
   self.value = v
   self.target = v
   self.end = v
