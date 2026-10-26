@@ -59,8 +59,12 @@ test "sideways: in a row drawn again as the list scrolled, a finger up or down o
   t.draw()
   let (_, y, _, _) = t.rect_of("xxxx").unwrap()
   t.drag(250.0, y + 5.0, 50.0, y + 5.0)
-  // (its fling run out)
-  t.run_for(2000.0)
+  // (its fling run out, and its bar gone)
+  let rest = t.rest_of("a fling")
+  if rest > t.time() {
+    t.run_for(rest - t.time())
+  }
+  t.run_for(@ui.scrollbar_hold_ms + @ui.scrollbar_fade_ms)
   let was = at.val
   assert_true(was > 150.0)
   // the list dragged up a little by another row, slowly (no fling): the rows drawn again as it moves, not built
@@ -69,9 +73,10 @@ test "sideways: in a row drawn again as the list scrolled, a finger up or down o
     t.move(150.0, 250.0 - 5.0 * i.to_double())
   }
   assert_true(t.rows_kept() > 0, msg="\{t.rows_kept()}")
-  t.run_for(500.0)
+  // (held still past what the finger's speed is read from: let go, no fling)
+  t.run_for(2.0 * @ui.tracker_horizon_ms)
   t.release(150.0, 220.0)
-  t.run_for(1200.0)
+  t.run_for(@ui.scrollbar_hold_ms + @ui.scrollbar_fade_ms)
   let scrolled = t.list_offset()
   assert_true(scrolled > 10.0 && scrolled < 30.0, msg="\{scrolled}")
   // a finger on the line, up: the list's
