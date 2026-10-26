@@ -704,7 +704,7 @@ pub fn frame(
   // (更新 is in the first row, before the filter: update_in_row, no row of its own)
   wide.brand_h = c.moved("--brand", if bar {
     0.0
-  } else if inset {
+  } else if keys_left {
     side_top_inset
   } else {
     side_top_web

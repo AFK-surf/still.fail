@@ -331,25 +331,23 @@ test "the chat's sheet: one from Slack or Feishu opens there" {
 }
 
 ///|
-test "a station's update in the bar: its word opens it (the core's), the popover's 立即更新 updates the station" {
+test "a station's failed update stays out of the chat bar even when its notice was open" {
   let calls : Array[Made] = []
-  let open = Ref::new(false)
-  let epoch = Ref::new(0)
-  let t = edited_core(calls, "chat", epoch~, fn(name, v) {
+  let t = edited_core(calls, "chat", platform=3, fn(name, v) {
     if name == "chat" {
       with_fields(v, [
         (
           "stationUpdate",
           {
-            "tone": "update",
-            "text": "Studio 有新版本",
-            "label": "可更新",
+            "tone": "trouble",
+            "text": "Studio 更新失败",
+            "label": "更新失败",
             "station": "Studio",
             "detail": "更新时正在运行的 agent 会稍后继续。",
             "from": "1.2.0",
             "to": "1.3.0",
             "version": "1.3.0",
-            "open": Json::boolean(open.val),
+            "open": true,
             "canUpdate": true,
             "dismissible": true,
           },
@@ -359,25 +357,14 @@ test "a station's update in the bar: its word opens it (the core's), the popover
       v
     }
   })
-  t.tap_text("可更新")
-  let asked = named(calls, "station.updateNotice")
-  assert_eq(asked.length(), 1)
-  assert_eq(text(Some(asked[0].params), "action"), "open")
-  assert_eq(text(Some(asked[0].params), "version"), "1.3.0")
-  // the core says it is open
-  open.val = true
-  epoch.val += 1
-  t.frame()
-  assert_true(t.find("1.2.0 → 1.3.0") is Some(_))
-  assert_true(t.find("更新时正在运行的 agent 会稍后继续。") is Some(_))
-  t.tap_text("立即更新")
-  let updated = named(calls, "software.update")
-  assert_eq(updated.length(), 1)
-  assert_eq(text(Some(updated[0].params), "id"), "station")
-  // a tap beside it closes it
-  t.tap(195.0, 700.0)
-  let asked = named(calls, "station.updateNotice")
-  assert_eq(text(Some(asked[asked.length() - 1].params), "action"), "close")
+  assert_true(t.find("更新失败") is None)
+  assert_true(t.find("1.2.0 → 1.3.0") is None)
+  t.resize(1280.0, 800.0)
+  t.draw()
+  assert_true(t.find("更新失败") is None)
+  assert_true(t.find("1.2.0 → 1.3.0") is None)
+  assert_eq(named(calls, "station.updateNotice").length(), 0)
+  assert_eq(named(calls, "software.update").length(), 0)
 }
 
 ///|

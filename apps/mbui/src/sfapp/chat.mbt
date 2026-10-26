@@ -113,8 +113,6 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         flight_files(c, draft_key(r))
         // a passage picked: its handles and its bar over the list (pick.mbt)
         pick_layer(c, src, r)
-        // the station's update opened under the bar's word (station_update.mbt)
-        station_update_popover(c, src, r.station, v.station_update)
       }
     }
   })
@@ -184,15 +182,11 @@ let ask_turns : Map[String, Int] = {}
 let ask_lift_ms : Double = 200.0
 
 ///|
-/// The least of a chat's title its bar keeps (64), and the order what follows it leaves the bar in short of room: its
-/// people, then its station's update.
+/// The least of a chat's title its bar keeps (64); its people leave the bar first when it is short of room.
 let bar_title_least : Double = 64.0
 
 ///|
 let bar_drop_people : Int = 1
-
-///|
-let bar_drop_update : Int = 2
 
 ///|
 /// The bar's frame (Chat.kt BarFrame), the same while the chat is read and once it is: back, the title, what follows
@@ -283,8 +277,6 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
             None => ()
           }
         }
-        // its station's update (station_update.mbt)
-        c.box(drop=bar_drop_update, fn() { station_update_control(c, src, r.station, v.station_update) }) |> ignore
         if people.length() > 0 {
           c.box(drop=bar_drop_people, fn() { people_stack(c, src, people, 16.0) }) |> ignore
         }
