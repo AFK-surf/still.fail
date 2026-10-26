@@ -725,114 +725,43 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
   let id = text(v, "id")
   let key = "composer/file/" + id
   let name = text(v, "name")
-  let error = text(v, "error")
-  let done = field(v, "done")
-  // (a new chat's waits for its message: nothing going up yet)
-  let pending = done is None && error == "" && field(v, "waits") is None
   match writing_pictures.get(id) {
-    Some(picture) => composer_picture(c, src, w, key, id, name, picture, pending, gone_up(v), error)
+    Some(picture) => composer_picture(c, src, w, key, id, name, picture, going_now(v), gone_up(v), text(v, "error"))
     None => {
       // as wide as a card is (236), however little the row has: a card hugging its words in a row that wraps had none
       // left for them (its words squeezed to …); its ✕ hung on its corner, as a picture's (@sf.with_corner_remove)
       let removed = @sf.with_corner_remove(c, key, remove_label(v, name), @sf.composer_inner, w=dmin(@sf.file_card_w, c.width), fn() {
-        let ref_ = field(v, "ref")
-        let said = match ref_ {
-          // named by its path: its station and that it goes as a path, its card the named one's (RefCard)
-          Some(Object(_)) if text(ref_, "mode") != "file" =>
-            @sf.file_card(
-              c,
-              key,
-              name,
-              number(v, "size"),
-              path=text(ref_, "path"),
-              dir=field(ref_, "dir") is Some(True),
-              named=true,
-              meta=text(ref_, "stationName") + " · " + @sf.t("web-main.file.modePath"),
-              open=true,
-              composer=true,
-            )
-          // a link shared in (share-in.ts): its title and its site, drawn as a file is; tapped, it opens (Composer.kt
-          // LinkCard); sent as words, nothing going up
-          _ if field(v, "link") is Some(Object(_)) => {
-            let l = field(v, "link")
-            let url = text(l, "url")
-            let card = @sf.file_card(
-              c,
-              key,
-              url,
-              0.0,
-              open=true,
-              title=match text(l, "title") {
-                "" => url
-                t => t
-              },
-              meta=text(l, "site"),
-              composer=true,
-            )
-            if card.opened {
+        let said = waiting_card(c, key, v, restore=restorable(w, v))
+        match waiting_as(v) {
+          // a link: tapped, it opens (Composer.kt LinkCard)
+          Link =>
+            if said.opened {
+              let url = text(field(v, "link"), "url")
               c.tell("composer/link/" + id, fn() { open_link(url) })
             }
-            card
-          }
-          // pasted words (PendingFile's pasted card): what they begin with, how many, put back as words while not too
-          // long; failed, made again from them
-          _ if field(v, "pasted") is Some(Object(_)) => {
-            let info = field(v, "pasted")
-            let can_restore = field(info, "text") is Some(String(_)) && !w.starting
-            let card = @sf.file_card(
-              c,
-              key,
-              name,
-              number(v, "size"),
-              pending~,
-              error~,
-              title=match text(info, "preview") {
-                "" => @sf.t("web-main.composer.pastedText")
-                first => first
-              },
-              meta=@sf.t("web-main.composer.pasteAttachment", args=[("count", @sf.grouped(number(info, "characters")))]),
-              retry=error != "",
-              restore=can_restore,
-              composer=true,
-            )
-            if card.restored {
-              let words = if w.text == "" { text(info, "text") } else { w.text + "\n" + text(info, "text") }
+          // pasted words: put back as words; failed, made again from them
+          Pasted => {
+            if said.restored {
+              let back = text(field(v, "pasted"), "text")
+              let words = if w.text == "" { back } else { w.text + "\n" + back }
               @sfbase.refs_put(w.key, w.field, words)
               writing_text(src, w, words)
               writing_remove(src, w, id)
               c.focus_editor(composer_field_key)
             }
-            if card.retried {
+            if said.retried {
               @sfbase.writing_paste_again(src, w, id)
             }
-            { ..card, retried: false }
           }
-          // (a station's folder going as the file: the zip it goes as, RefCard's `${name}.zip`)
-          _ =>
-            @sf.file_card(
-              c,
-              key,
-              if field(ref_, "dir") is Some(True) { name + ".zip" } else { name },
-              number(done, "size") + (if done is None { number(v, "size") } else { 0.0 }),
-              path=text(done, "path"),
-              pending~,
-              sent=match field(v, "sent") {
-                Some(Number(n, ..)) => Some(n)
-                _ => None
-              },
-              error~,
-              // (a station's file going as the file: how it goes, pressed)
-              open=ref_ is Some(Object(_)),
-              retry=error != "" && field(v, "pasted") is None,
-              composer=true,
-            )
-        }
-        // a station's file (by its path or as the file): pressed, how it goes (composer_ref.mbt)
-        if said.opened && field(v, "ref") is Some(Object(_)) {
-          c.tell(key + "/ref", fn() { ref_panel(src, w, spec.station, id, name, c.id(key)) })
-        }
-        if said.retried {
-          writing_retry(src, w, id)
+          // a station's file (by its path or as the file): pressed, how it goes (composer_ref.mbt)
+          ByPath | AnyFile => {
+            if said.opened && field(v, "ref") is Some(Object(_)) {
+              c.tell(key + "/ref", fn() { ref_panel(src, w, spec.station, id, name, c.id(key)) })
+            }
+            if said.retried {
+              writing_retry(src, w, id)
+            }
+          }
         }
       })
       if removed {
@@ -840,7 +769,128 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
       }
     }
   }
-  ignore(spec)
+}
+
+///|
+/// Whether a file waiting is going up now (its tile darkened with a spinner, its card saying how far): not up, not
+/// failed, nor a new chat's, which waits for its message (nothing going up yet).
+fn going_now(v : Json?) -> Bool {
+  field(v, "done") is None && text(v, "error") == "" && field(v, "waits") is None
+}
+
+///|
+/// What a file waiting that is no picture is drawn as (waiting_card): a station's file named by its path, a link shared
+/// in, pasted words, or any other file.
+priv enum WaitingAs {
+  ByPath
+  Link
+  Pasted
+  AnyFile
+}
+
+///|
+fn waiting_as(v : Json?) -> WaitingAs {
+  let ref_ = field(v, "ref")
+  match ref_ {
+    Some(Object(_)) if text(ref_, "mode") != "file" => ByPath
+    _ if field(v, "link") is Some(Object(_)) => Link
+    _ if field(v, "pasted") is Some(Object(_)) => Pasted
+    _ => AnyFile
+  }
+}
+
+///|
+/// Whether pasted words waiting can be put back as words (✎ on their card): while they are kept, and no chat is being
+/// made for them.
+fn restorable(w : Writing, v : Json?) -> Bool {
+  field(field(v, "pasted"), "text") is Some(String(_)) && !w.starting
+}
+
+///|
+/// A file waiting that is no picture, as its card (`key`), its ✕ aside: what the composer draws (composer_file) and
+/// what flies from there as it is sent drawn as it was until it sets off (flying_files).
+fn waiting_card(c : @ui.Ctx, key : String, v : Json?, restore~ : Bool) -> @sf.FileCardDone {
+  let name = text(v, "name")
+  let error = text(v, "error")
+  let pending = going_now(v)
+  let ref_ = field(v, "ref")
+  match waiting_as(v) {
+    // named by its path: its station and that it goes as a path, its card the named one's (RefCard)
+    ByPath =>
+      @sf.file_card(
+        c,
+        key,
+        name,
+        number(v, "size"),
+        path=text(ref_, "path"),
+        dir=field(ref_, "dir") is Some(True),
+        named=true,
+        meta=text(ref_, "stationName") + " · " + @sf.t("web-main.file.modePath"),
+        open=true,
+        composer=true,
+      )
+    // a link shared in (share-in.ts): its title and its site, drawn as a file is (Composer.kt LinkCard); sent as
+    // words, nothing going up
+    Link => {
+      let l = field(v, "link")
+      let url = text(l, "url")
+      @sf.file_card(
+        c,
+        key,
+        url,
+        0.0,
+        open=true,
+        title=match text(l, "title") {
+          "" => url
+          t => t
+        },
+        meta=text(l, "site"),
+        composer=true,
+      )
+    }
+    // pasted words (PendingFile's pasted card): what they begin with, how many, put back as words while not too long
+    // (`restore`); failed, made again from them
+    Pasted => {
+      let info = field(v, "pasted")
+      @sf.file_card(
+        c,
+        key,
+        name,
+        number(v, "size"),
+        pending~,
+        error~,
+        title=match text(info, "preview") {
+          "" => @sf.t("web-main.composer.pastedText")
+          first => first
+        },
+        meta=@sf.t("web-main.composer.pasteAttachment", args=[("count", @sf.grouped(number(info, "characters")))]),
+        retry=error != "",
+        restore~,
+        composer=true,
+      )
+    }
+    // (a station's folder going as the file: the zip it goes as, RefCard's `${name}.zip`)
+    AnyFile => {
+      let done = field(v, "done")
+      @sf.file_card(
+        c,
+        key,
+        if field(ref_, "dir") is Some(True) { name + ".zip" } else { name },
+        number(done, "size") + (if done is None { number(v, "size") } else { 0.0 }),
+        path=text(done, "path"),
+        pending~,
+        sent=match field(v, "sent") {
+          Some(Number(n, ..)) => Some(n)
+          _ => None
+        },
+        error~,
+        // (a station's file going as the file: how it goes, pressed)
+        open=ref_ is Some(Object(_)),
+        retry=error != "" && field(v, "pasted") is None,
+        composer=true,
+      )
+    }
+  }
 }
 
 ///|
@@ -1218,16 +1268,21 @@ fn flying_files(c : @ui.Ctx, w : Writing) -> Array[FlyingFile] {
     match c.rect_of(c.id("composer/file/" + id)) {
       Some(from) if key != "" => {
         let picture = writing_pictures.get(id).unwrap_or("")
+        let restore = restorable(w, v)
+        let (_, _, wide, _) = from
         Some({
           key,
           from,
           picture,
+          // as the composer drew it (composer_file), but its ✕: a new chat's picture waiting for its message not going
+          // up, no spinner over it; a card on the composer's ground, as wide as there
           face: fn() {
             let c = @ui.current()
             if picture != "" {
-              picture_tile(c, picture, field(v, "done") is None, gone_up(v), "") |> ignore
+              picture_tile(c, picture, going_now(v), gone_up(v), text(v, "error")) |> ignore
             } else {
-              @sf.file_card(c, "flying/" + id, text(v, "name"), number(v, "size")) |> ignore
+              c.box(style=@ui.style(w=Fixed(wide)), fn() { waiting_card(c, "flying/" + id, v, restore~) |> ignore })
+              |> ignore
             }
           },
         })
