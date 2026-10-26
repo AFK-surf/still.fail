@@ -5,9 +5,10 @@
 // reads them as one (read/tail.ts ChainTail).
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { afresh, cleared, threadAddress } from "../agents/instructions.ts";
+import { afresh, cleared, resumeLost, threadAddress } from "../agents/instructions.ts";
 import type { Profile } from "../agents/runtime.ts";
 import { log } from "../ops/log.ts";
+import { find as findMachineSession } from "../read/machine.ts";
 import { homesFirst, transcriptPaths } from "../read/transcript.ts";
 import type { Hub } from "./hub.ts";
 
@@ -22,6 +23,19 @@ export function startsAfresh(hub: Hub, key: string, id: string, to: Profile, was
 /// What a session whose context was cleared by hand is told as its new runtime session starts: its chats to read back.
 export function toldCleared(hub: Hub, key: string): string {
   return cleared(key, hub.store.sessionThreads(key).map((t) => threadAddress(t.thread.channel, t.thread.threadTs)));
+}
+
+/// What a session whose runtime session could not be resumed is told as its new one starts: where its earlier
+/// conversation is, to read back.
+/// One continued from a terminal is told where that conversation is on the machine: its own transcript there (not the
+/// station's copy, which may be what failed).
+export function toldResumeLost(hub: Hub, key: string): string {
+  const threads = hub.store.sessionThreads(key).map((t) => threadAddress(t.thread.channel, t.thread.threadTs));
+  const row = hub.store.getSession(key);
+  const first = hub.store.runtimeSessions(key)[0];
+  const runtime = row?.runtime === "claude" || row?.runtime === "codex" ? row.runtime : null;
+  const terminal = row?.cwd && first !== undefined && runtime !== null ? (findMachineSession(hub.machineRoots(), runtime, first)?.path ?? null) : null;
+  return resumeLost(key, threads, terminal);
 }
 
 /// Claude's subagents `ids` of runtime session `from`, stopped with its process, copied to session `to` (just started on

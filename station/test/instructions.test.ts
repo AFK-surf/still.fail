@@ -14,9 +14,10 @@ test("the session instructions name the session's places, and a project only whe
 });
 
 test("the fixed prompts", () => {
-  for (const name of ["NUDGE", "RESUME_AFTER_RESTART", "GO_ON_AFTER_AUTH", "GO_ON_AFTER_SPENT", "RESUME_LOST"] as const) assert.ok(ts[name].length > 20, name);
+  for (const name of ["NUDGE", "RESUME_AFTER_RESTART", "GO_ON_AFTER_AUTH", "GO_ON_AFTER_SPENT"] as const) assert.ok(ts[name].length > 20, name);
   assert.ok(ts.waitOver(90).includes("(90 seconds)"));
   assert.ok(ts.continuedHere("X").endsWith("<stillfail-instructions>\nX\n</stillfail-instructions>"));
+  assert.ok(ts.resumeLost("k", ["C1/1.0"]).includes("session_history with chat k") && ts.resumeLost("k", ["C1/1.0"]).includes("chat_history for C1/1.0"));
 });
 
 test("the migration notes are numbered 1, 2, 3…, and told once", () => {

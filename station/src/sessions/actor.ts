@@ -8,7 +8,7 @@
 import { join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, BackgroundTask, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, TOOLS_LOST, backgroundStopped, cleared, continuedHere, formatInbound, formatWidgetModels, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, backgroundStopped, cleared, continuedHere, formatInbound, formatWidgetModels, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
 import { CONNECTION_LOST } from "../agents/sandbox.ts";
 import { chars } from "../agents/live.ts";
 import { CommandMissing } from "../agents/runner.ts";
@@ -119,6 +119,9 @@ export type SessionDeps = {
   startsAfresh?(key: string, id: string, to: Profile, was: string | null): string | null;
   /// What a session whose context was cleared is told with its next prompt (sessions/afresh.ts `toldCleared`).
   cleared?(key: string): string;
+  /// What a session whose runtime session could not be resumed is told with its next prompt (sessions/afresh.ts
+  /// `toldResumeLost`).
+  resumeLost?(key: string): string;
   /// Its subagents `ids` of runtime session `from`, stopped with its process, taken to runtime session `to` begun on
   /// `on`, so that they are taken up there (sessions/afresh.ts): the ids taken.
   carrySubagents?(from: string, to: string, on: Profile, ids: string[]): string[];
@@ -865,7 +868,7 @@ export class SessionActor {
       const continued = row && row.cwd && !store.hasTurns(this.key) ? continuedHere(sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath(this.key))) : null;
       const lost = this.resumeLost;
       this.resumeLost = false;
-      let prompt = lost ? `${RESUME_LOST}\n\n${text}` : text;
+      let prompt = lost ? `${this.deps.resumeLost?.(this.key) ?? resumeLost(this.key, [])}\n\n${text}` : text;
       const stopped = this.stoppedNote;
       this.stoppedNote = null;
       if (stopped !== null) prompt = `${stopped}\n\n${prompt}`;

@@ -941,6 +941,9 @@ test("when the runtime session cannot be resumed, a new one starts and is told t
   assert.notEqual(now, old);
   assert.equal(now.options.resume, undefined);
   assert.ok(matches(now.prompts[0]!, ["could not be restored", "still there?"]));
+  // Told where its earlier conversation is, to read it itself: its execution history and its threads.
+  const key = sessionKey("cl", "C1", m.threadTs);
+  assert.ok(now.prompts[0]!.includes(`session_history with chat ${key}`) && now.prompts[0]!.includes(`chat_history for C1/${m.threadTs}`), now.prompts[0]);
   await r.close();
 });
 
@@ -2314,6 +2317,29 @@ test("a session the machine kept goes on in a chat, run in its own directory, wi
   await deleteSession(r.hub, key);
   assert.ok(existsSync(join(project, "main.rs")));
   assert.ok(existsSync(found.path));
+  await r.close();
+});
+
+test("a continued session that cannot be resumed is told to read the terminal's own transcript", async () => {
+  const { find } = await import("../src/read/machine.ts");
+  const { continueMachineSession } = await import("../src/sessions/lifecycle.ts");
+  const r = new Rig();
+  const root = join(r.dir, "machine");
+  const project = join(root, "app");
+  mkdirSync(project, { recursive: true });
+  const roots = machine(root, project);
+  r.roots = roots;
+  const found = find(roots, "claude", "11111111-aaaa-bbbb-cccc-000000000001")!;
+  const [key, thread] = await continueMachineSession(r.hub, roots, found, "local");
+  r.claude.unresumable.add(found.id);
+  sayIn(r.hub, thread.id, "local", "具体什么问题");
+  await settle();
+  const opened = r.claude.last();
+  assert.equal(opened.options.resume, undefined);
+  const first = opened.prompts[0]!;
+  // The machine's own transcript, not the station's copy of it.
+  assert.ok(first.includes(`what was said there is in ${found.path}`) && !first.includes(join(r.dir, "transcripts")), first);
+  assert.ok(first.includes(`session_history with chat ${key}`), first);
   await r.close();
 });
 

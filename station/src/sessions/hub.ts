@@ -43,7 +43,8 @@ import { INTERNAL_CONNECT, type InternalChat, nextTsAt } from "./internal.ts";
 import { LiveHub } from "./live.ts";
 import type { Jobs } from "./neighbours.ts";
 import { agentHomePaths, workspaceAgentHome } from "./agent-home.ts";
-import { carrySubagents, startsAfresh, toldCleared } from "./afresh.ts";
+import { type Roots, roots as machineRoots } from "../read/machine.ts";
+import { carrySubagents, startsAfresh, toldCleared, toldResumeLost } from "./afresh.ts";
 import { serves } from "./pool.ts";
 import { settled } from "./opened.ts";
 import { shownFacts } from "./image-size.ts";
@@ -116,6 +117,8 @@ export type HubOptions = {
   cold?: ColdStorage;
   /// Its time, and its sessions' (a TestClock in tests).
   clock?: Clock.Clock;
+  /// Where the machine's own Claude Code and Codex keep their sessions (default: read/machine.ts `roots`).
+  machineRoots?: () => Roots;
 };
 
 /// The handover file, in the data directory.
@@ -132,6 +135,7 @@ export class Hub {
   readonly accounts: Accounts;
   readonly clock: Clock.Clock;
   readonly places: Places;
+  readonly machineRoots: () => Roots;
   /// Told when a session's runtime was not found on PATH as it started (the pages read it again).
   private runtimeMissing: (runtime: RuntimeKind) => void = () => {};
   /// What running turns are doing, for the pages' live view.
@@ -173,6 +177,7 @@ export class Hub {
     this.link = options.link ?? (() => undefined);
     this.workspaces = options.workspaces ?? (() => []);
     this.cold = options.cold ?? NOTHING_COLD;
+    this.machineRoots = options.machineRoots ?? machineRoots;
     this.places = options.places ?? new Places();
     this.accounts = new Accounts({
       config: () => this.config(),
@@ -1025,6 +1030,7 @@ export class Hub {
       live: this.live,
       startsAfresh: (key, id, to, was) => startsAfresh(this, key, id, to, was),
       cleared: (key) => toldCleared(this, key),
+      resumeLost: (key) => toldResumeLost(this, key),
       carrySubagents: (from, to, on, ids) => carrySubagents(this, from, to, on, ids),
       ranIn: (key, id, profile) => this.store.ranIn(key, id, profile),
       idle: (key) => this.idleNow(key),
