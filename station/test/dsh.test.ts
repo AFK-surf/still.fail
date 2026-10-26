@@ -348,4 +348,16 @@ describe("what a profile runs DeepSeek Harness on", () => {
     assert.deepEqual(profileRuntimes(profile({ kind: "opencode-go", key: "k" }, { runtime: "claude" })), ["claude", "codex", "dsh"]);
     assert.deepEqual(profileRuntimes(profile({ kind: "anthropic-api", key: "k" }, { runtime: "claude" })), ["claude", "dsh"]);
   });
+
+  test("a model dsh is started on declares image input when it reads images, and nothing when it does not", () => {
+    const route = dshRoute(profile({ kind: "opencode-go", key: "k" }));
+    const models = (model: string) => {
+      const setup = dshSetup(route, model, undefined, "", "/h", "r", "http://127.0.0.1:1/mcp");
+      return setup.patch.find((p) => p.id === "llm-pi-ai").config.providers.stillfail.models;
+    };
+    // dsh's read tool refuses an image for a route whose model does not declare one (tool-fs: inputModalities).
+    assert.deepEqual(models("deepseek-v4.1-flash"), [{ id: "deepseek-v4.1-flash", input: ["text", "image"] }]);
+    assert.deepEqual(models("deepseek-v4-pro"), [{ id: "deepseek-v4-pro" }], "a model not known to read images is left text only");
+    assert.deepEqual(models("anthropic/claude-sonnet-5"), [{ id: "anthropic/claude-sonnet-5", input: ["text", "image"] }], "however the profile spells it");
+  });
 });

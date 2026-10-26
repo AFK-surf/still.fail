@@ -15,6 +15,7 @@ import { mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { seesImages } from "../accounts/models.ts";
 import { log } from "../ops/log.ts";
 import { peerHttpBase } from "../tools/http.ts";
 import { LiveFromDsh, chars, type DshLiveState } from "./live.ts";
@@ -70,7 +71,7 @@ export function dshSetup(route: DshRoute | null, model: string | undefined, effo
   let chosen: { provider: string; model: string } | undefined;
   if (route?.kind === "pi") {
     if (model === undefined) throw new Error("the profile names no model for DeepSeek Harness");
-    const entry: Json = { id: model };
+    const entry: Json = { id: model, ...(seesImages(model) ? { input: ["text", "image"] } : {}) };
     const provider: Json = { displayName: route.name, api: route.api, baseURL: route.baseURL, apiKeyEnv: DSH_KEY, models: [entry] };
     if (route.headers) provider.headers = expandRoute(route.headers, sessionRoute);
     const reasoning = piEffort(effort);
