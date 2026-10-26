@@ -11,7 +11,8 @@
 // scrubbed; buffering while it is to play and waits on the app's bytes; its frame shown grabbed as a JPEG (grab_shown);
 // a frame of its file at a time grabbed as a PNG (grab_frame) by a playbin of its own, paused there, its bytes read
 // through the app as the player's are (a second stream of reads of the same view, as Apple's image generator and
-// Windows' second <video> read theirs); no list of its frames' times (that answers none).
+// Windows' second <video> read theirs); its frames' times read from its file (frames()) by a parsebin of its own over
+// a third such stream, nothing decoded, as Android's MediaExtractor and Apple's sample cursor read theirs.
 //
 // Threads: GStreamer's streaming threads ask for bytes (need-data, seek-data) and hand frames over (new-sample), under
 // the player's lock; everything else, its buses' messages among them, on the main thread. The app's bytes go into a
@@ -27,6 +28,19 @@ enum { GSEEK_FLUSH = 1 << 0, GSEEK_ACCURATE = 1 << 1, GSEEK_KEY_UNIT = 1 << 2 };
 enum { GSEEK_TYPE_NONE = 0, GSEEK_TYPE_SET = 1 };
 enum { GAPP_SEEKABLE = 1 };
 enum { GPLAY_VIDEO = 1 << 0 };
+#define GCLOCK_NONE ((guint64)-1)
+
+// GstBuffer's head, as gst/gstminiobject.h and gstbuffer.h have it (public, the same through 1.x): its times
+typedef struct {
+  GType type;
+  gint refcount, lockstate;
+  guint flags;
+  void *copy, *dispose, *free;
+  guint priv_uint;
+  gpointer priv_pointer;
+  void *pool;
+  guint64 pts, dts, duration, offset, offset_end;
+} GstBufferHead;
 
 #define GST_FNS(X)                                                                                                   \
   X(gboolean, gst_init_check, (int *, char ***, GError **))                                                          \
@@ -49,7 +63,16 @@ enum { GPLAY_VIDEO = 1 << 0 };
   X(gboolean, gst_structure_get_int, (void *, const char *, int *))                                                  \
   X(gsize, gst_buffer_get_size, (void *))                                                                            \
   X(gsize, gst_buffer_extract, (void *, gsize, void *, gsize))                                                       \
-  X(void, gst_mini_object_unref, (void *))
+  X(void, gst_mini_object_unref, (void *))                                                                           \
+  X(void *, gst_parse_launch, (const char *, GError **))                                                             \
+  X(gboolean, gst_bin_add, (void *, void *))                                                                         \
+  X(gboolean, gst_element_sync_state_with_parent, (void *))                                                          \
+  X(void *, gst_element_get_static_pad, (void *, const char *))                                                      \
+  X(int, gst_pad_link, (void *, void *))                                                                             \
+  X(void *, gst_pad_get_current_caps, (void *))                                                                      \
+  X(const char *, gst_structure_get_name, (void *))                                                                  \
+  X(void *, gst_sample_get_segment, (void *))                                                                        \
+  X(guint64, gst_segment_to_stream_time, (void *, int, guint64))
 
 #define GST_FIELD(ret, name, args) ret(*name) args;
 static struct {
@@ -111,6 +134,16 @@ typedef struct {
   int sought;
 } Grab;
 
+// Its frames' times read: a parsebin of its file's bytes (appsrc ! parsebin), its first video stream's buffers' times
+// (in its stream's time, as the player seeks: its segment's) gathered as fast as they come, its other streams let go
+// (fakesinks); once at its end, said
+typedef struct {
+  void *pipe, *bus;
+  Source in;
+  int video;     // its video stream taken (one only)
+  GArray *times;  // (under the player's lock) ns
+} Scan;
+
 typedef struct Player {
   int vid;
   void *bin;   // playbin
@@ -119,6 +152,8 @@ typedef struct Player {
   GMutex lock;
   Source in;
   Grab *grab;  // the frame of its file being grabbed (grab_frame), if one is
+  Scan *scan;  // its frames' times being read, if they are
+  char *frames;  // its frames' times once read ("ms,ms,…" in time order; "" none to read), else NULL
   // (under lock) its sources' reads' ids, those let go for the app to be told of (minus their ids), how many bytes it
   // was given, the file's size (-1 not known)
   int next_read;
@@ -326,8 +361,9 @@ static void *play_bin(Player *p, void *video, Source *in, void **bus, GCallback 
   return bin;
 }
 
-// A playbin and its bus let go of (its streams stopped: none of its callbacks after), its source's read let go.
-static void play_bin_end(Player *p, void *bin, void *bus, Source *in) {
+// A pipeline (a playbin, a scan's) and its bus let go of (its streams stopped: none of its callbacks after), its
+// source's read let go.
+static void pipe_end(Player *p, void *bin, void *bus, Source *in) {
   g_signal_handlers_disconnect_matched(bus, G_SIGNAL_MATCH_DATA, 0, 0, NULL, NULL, GINT_TO_POINTER(p->vid));
   gs.gst_bus_remove_signal_watch(bus);
   gs.gst_object_unref(bus);
@@ -344,7 +380,7 @@ static void grab_end(Player *p) {
   Grab *g = p->grab;
   if (!g) return;
   p->grab = NULL;
-  play_bin_end(p, g->bin, g->bus, &g->in);
+  pipe_end(p, g->bin, g->bus, &g->in);
   gs.gst_object_unref(g->sink);
   g_free(g);
 }
@@ -418,6 +454,140 @@ static void player_grab_frame(Player *p, double ms) {
   gs.gst_element_set_state(g->bin, GSTATE_PAUSED);
 }
 
+// ---- its frames' times read (frames()) ----
+
+static void scan_end(Player *p) {
+  Scan *sc = p->scan;
+  if (!sc) return;
+  p->scan = NULL;
+  pipe_end(p, sc->pipe, sc->bus, &sc->in);
+  g_array_unref(sc->times);
+  g_free(sc);
+}
+
+// a buffer of its video stream (a streaming thread's): its time, in its stream's
+static int on_scan_sample(void *sink, gpointer data) {
+  Player *p = data;
+  void *sample = NULL;
+  g_signal_emit_by_name(sink, "pull-sample", &sample);
+  if (!sample) return 0;
+  GstBufferHead *b = gs.gst_sample_get_buffer(sample);
+  void *seg = gs.gst_sample_get_segment(sample);
+  guint64 t = b ? (b->pts != GCLOCK_NONE ? b->pts : b->dts) : GCLOCK_NONE;
+  if (t != GCLOCK_NONE && seg) t = gs.gst_segment_to_stream_time(seg, GFORMAT_TIME, t);
+  if (t != GCLOCK_NONE) {
+    g_mutex_lock(&p->lock);
+    if (p->scan) g_array_append_val(p->scan->times, t);
+    g_mutex_unlock(&p->lock);
+  }
+  gs.gst_mini_object_unref(sample);
+  return 0;
+}
+
+// a stream of its file (a streaming thread's): the first video one's buffers taken, every other let go
+static void on_scan_pad(void *parse, void *pad, gpointer data) {
+  (void)parse;
+  Player *p = data;
+  Scan *sc = p->scan;
+  void *caps = gs.gst_pad_get_current_caps(pad);
+  void *st = caps ? gs.gst_caps_get_structure(caps, 0) : NULL;
+  const char *name = st ? gs.gst_structure_get_name(st) : "";
+  int video = g_str_has_prefix(name, "video/") && !g_atomic_int_get(&sc->video);
+  if (caps) gs.gst_mini_object_unref(caps);
+  void *sink = gs.gst_element_factory_make(video ? "appsink" : "fakesink", NULL);
+  if (!sink) return;
+  if (video) {
+    g_atomic_int_set(&sc->video, 1);
+    g_object_set(sink, "emit-signals", TRUE, NULL);
+    g_signal_connect(sink, "new-sample", G_CALLBACK(on_scan_sample), p);
+  }
+  g_object_set(sink, "sync", FALSE, NULL);
+  gs.gst_bin_add(sc->pipe, sink);
+  gs.gst_element_sync_state_with_parent(sink);
+  void *in = gs.gst_element_get_static_pad(sink, "sink");
+  gs.gst_pad_link(pad, in);
+  gs.gst_object_unref(in);
+}
+
+static gint by_time(gconstpointer a, gconstpointer b) {
+  guint64 x = *(const guint64 *)a, y = *(const guint64 *)b;
+  return x < y ? -1 : x > y;
+}
+
+// at its end (or failed: none read), its times said, in time order
+static void scan_said(Player *p, int failed) {
+  Scan *sc = p->scan;
+  GString *out = g_string_new(NULL);
+  g_mutex_lock(&p->lock);
+  if (!failed) {
+    g_array_sort(sc->times, by_time);
+    char n[G_ASCII_DTOSTR_BUF_SIZE];
+    for (guint i = 0; i < sc->times->len; i++) {
+      if (i) g_string_append_c(out, ',');
+      g_string_append(out, g_ascii_formatd(n, sizeof n, "%.3f", g_array_index(sc->times, guint64, i) / 1e6));
+    }
+  }
+  g_mutex_unlock(&p->lock);
+  vlog("view %d: %u frames' times read", p->vid, failed ? 0 : sc->times->len);
+  scan_end(p);
+  g_free(p->frames);
+  p->frames = g_string_free(out, FALSE);
+  mb_app_wake();
+}
+
+static void on_scan_eos(void *bus, void *msg, gpointer data) {
+  (void)bus, (void)msg;
+  Player *p = player_of(GPOINTER_TO_INT(data));
+  if (p && p->scan) scan_said(p, 0);
+}
+
+static void on_scan_error(void *bus, void *msg, gpointer data) {
+  (void)bus;
+  Player *p = player_of(GPOINTER_TO_INT(data));
+  if (!p || !p->scan) return;
+  GError *e = NULL;
+  char *dbg = NULL;
+  gs.gst_message_parse_error(msg, &e, &dbg);
+  vlog("view %d: its frames' times not read: %s", p->vid, e ? e->message : "?");
+  g_clear_error(&e);
+  g_free(dbg);
+  scan_said(p, 1);
+}
+
+// its frames' times asked for (once: what is read is kept)
+static void player_frames(Player *p) {
+  if (p->frames || p->scan) return;
+  GError *e = NULL;
+  void *pipe = gs.gst_parse_launch("appsrc name=src ! parsebin name=parse", &e);
+  g_clear_error(&e);
+  void *src = pipe ? gs.gst_bin_get_by_name(pipe, "src") : NULL;
+  void *parse = pipe ? gs.gst_bin_get_by_name(pipe, "parse") : NULL;
+  if (!src || !parse) {
+    vlog("view %d: its frames' times not read: no parsebin", p->vid);
+    if (src) gs.gst_object_unref(src);
+    if (parse) gs.gst_object_unref(parse);
+    if (pipe) gs.gst_object_unref(pipe);
+    p->frames = g_strdup("");
+    mb_app_wake();
+    return;
+  }
+  Scan *sc = g_new0(Scan, 1);
+  sc->pipe = pipe;
+  sc->times = g_array_new(FALSE, FALSE, sizeof(guint64));
+  sc->in.p = p;
+  p->scan = sc;
+  on_source(NULL, src, &sc->in);
+  g_signal_connect(parse, "pad-added", G_CALLBACK(on_scan_pad), p);
+  gs.gst_object_unref(src);
+  gs.gst_object_unref(parse);
+  sc->bus = gs.gst_element_get_bus(pipe);
+  gs.gst_bus_add_signal_watch(sc->bus);
+  gpointer id = GINT_TO_POINTER(p->vid);
+  g_signal_connect(sc->bus, "message::error", G_CALLBACK(on_scan_error), id);
+  g_signal_connect(sc->bus, "message::eos", G_CALLBACK(on_scan_eos), id);
+  gs.gst_element_set_state(pipe, GSTATE_PLAYING);
+}
+
 // ---- the player ----
 
 static int player_open(moonbit_string_t type) {
@@ -464,7 +634,9 @@ static void player_close(Player *p) {
   while (*at && *at != p) at = &(*at)->next;
   if (*at) *at = p->next;
   grab_end(p);
-  play_bin_end(p, p->bin, p->bus, &p->in);
+  scan_end(p);
+  pipe_end(p, p->bin, p->bus, &p->in);
+  g_free(p->frames);
   gs.gst_object_unref(p->sink);
   g_queue_clear(&p->gone);
   g_free(p->px);
@@ -539,6 +711,7 @@ static void player_control(Player *p, int op, double value) {
       p->volume = fmin(1, fmax(0, value));
       g_object_set(p->bin, "volume", p->volume, NULL);
       break;
+    case 20: player_frames(p); break;
     case 21: player_grab_frame(p, value); break;
     case 22:
       grab_end(p);
@@ -572,13 +745,13 @@ static int player_info(Player *p, double *out) {
 
 // (under lock) the source whose read the app has not been given yet, or whose read is `rid` (when it is not 0)
 static Source *source_of(Player *p, int rid) {
-  Source *ss[2] = {&p->in, p->grab ? &p->grab->in : NULL};
-  for (int i = 0; i < 2; i++)
+  Source *ss[3] = {&p->in, p->grab ? &p->grab->in : NULL, p->scan ? &p->scan->in : NULL};
+  for (int i = 0; i < 3; i++)
     if (ss[i] && ss[i]->read && (rid ? ss[i]->read->rid == rid : !ss[i]->read->asked)) return ss[i];
   return NULL;
 }
 
-// the next read the app is to answer, the player's or its grab's: its id, from where, how much; minus the id of one let
+// the next read the app is to answer, the player's, its grab's or its scan's: its id, from where, how much; minus the id of one let
 // go; 0 none
 static int player_read_next(Player *p, double *out) {
   int id = 0;
@@ -602,7 +775,8 @@ static void player_read_answer(Player *p, int rid, moonbit_bytes_t data, double 
   int failed = total == -2;
   g_mutex_lock(&p->lock);
   Source *s = source_of(p, rid);
-  int grab = s && s != &p->in;
+  // (whose: 1 the player's, 2 its grab's, 3 its scan's)
+  int whose = !s ? 0 : s == &p->in ? 1 : p->grab && s == &p->grab->in ? 2 : 3;
   if (total >= 0 && p->total < 0) {
     p->total = total;
     if (p->in.src) g_object_set(p->in.src, "size", (gint64)total, NULL);
@@ -616,7 +790,7 @@ static void player_read_answer(Player *p, int rid, moonbit_bytes_t data, double 
       gs.gst_mini_object_unref(buf);
     }
     s->at += n;
-    if (!grab) p->given += n;
+    if (whose == 1) p->given += n;
     s->read->length -= n;
     if (!more || s->read->length <= 0) {
       // (fewer than asked and no more: the file's end, its size known by it)
@@ -633,11 +807,14 @@ static void player_read_answer(Player *p, int rid, moonbit_bytes_t data, double 
   // (what it waited on here: the app, which looks no more while it is buffering, looks again, as Media3's and
   // AVPlayer's word that it plays on has it do; till its read is in, each part of it)
   if (p->waiting && n > 0) mb_app_wake();
-  if (failed && s && grab) {
+  if (failed && whose == 2) {
     vlog("view %d: no frame grabbed: its file could not be read", p->vid);
     grab_end(p);
     player_grabbed(p, NULL);
-  } else if (failed && s && p->state >= 0) {
+  } else if (failed && whose == 3) {
+    vlog("view %d: its frames' times not read: its file could not be read", p->vid);
+    scan_said(p, 1);
+  } else if (failed && whose == 1 && p->state >= 0) {
     vlog("view %d: its file could not be read", p->vid);
     player_tell(p, -1);
   }

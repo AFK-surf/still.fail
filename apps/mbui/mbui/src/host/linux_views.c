@@ -962,17 +962,22 @@ void mb_host_view_read_answer(int32_t id, int32_t req, moonbit_bytes_t data, dou
   if (pl) player_read_answer(pl, req, data, total, more);
 }
 
-// a grab, a page's (its PNG) or a player's (its frame shown, a JPEG): how it stands (what 2); a player's frames' times
-// (what 1) none read here
+// a grab, a page's (its PNG) or a player's (its frame shown, a JPEG; a frame of its file, a PNG): how it stands (what
+// 2); a player's frames' times (what 1), once read
 moonbit_string_t mb_host_view_text(int32_t vid, int32_t what) {
   Player *pl = player_of(vid);
   View *v = pl ? NULL : find(vid);
+  if (pl && what == 1) return mstr(pl->frames ? pl->frames : "");
   if ((!pl && !v) || what != 2) return moonbit_make_string_raw(0);
   char n[16];
   snprintf(n, sizeof n, "%d", pl ? pl->still_state : v->still_state);
   return mstr(n);
 }
-int32_t mb_host_view_text_known(int32_t vid, int32_t what) { return (player_of(vid) || find(vid)) && what == 2; }
+int32_t mb_host_view_text_known(int32_t vid, int32_t what) {
+  Player *pl = player_of(vid);
+  if (pl && what == 1) return pl->frames != NULL;
+  return (pl || find(vid)) && what == 2;
+}
 moonbit_bytes_t mb_host_view_still(int32_t vid) {
   Player *pl = player_of(vid);
   if (pl) {

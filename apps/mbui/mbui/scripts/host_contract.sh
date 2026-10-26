@@ -38,8 +38,8 @@
 #        second turned a quarter clockwise as its /Rotate says: their sizes, and each drawn page's colours (kitdemo's
 #        MBUI_PDFCHECK, src/kitdemo/gallery/pdfcheck.mbt)
 #   scripts/host_contract.sh HOST play          test/host/playcheck.mp4 played by the host's player, its bytes read
-#        through the app: its length and size once ready, (Linux, which draws its picture in the canvas) the middle of
-#        its first frame as drawn red, played to its end, a frame grabbed (kitdemo's MBUI_PLAYCHECK,
+#        through the app: its length and size once ready, (Linux) the middle of its first frame as the canvas drew it
+#        red and its frames' times read, played to its end, a frame grabbed (kitdemo's MBUI_PLAYCHECK,
 #        src/kitdemo/gallery/playcheck.mbt)
 #   scripts/host_contract.sh linux station      this machine's station as the host says it, in a home of the run's own
 #        (kitdemo's MBUI_STATIONCHECK, src/kitdemo/gallery/stationcheck.mbt): one started by hand said so, with its
@@ -646,11 +646,13 @@ INSTALL
     echo "station contract (linux): one started by hand said and stopped; the service's said as running it" ;;
   play)
     # (a second of red, 64 × 48 at 10 frames a second, H.264: its bytes read through the app, played to its end, a frame
-    # grabbed; where the host draws its picture in the canvas, Linux's, the middle of its first frame as drawn first)
+    # grabbed; Linux's, which draws its picture in the canvas and reads its frames' times, the middle of its first frame
+    # as drawn and its ten frames' times first)
     vars="MBUI_PLAYCHECK=$(base64 < test/host/playcheck.mp4 | tr -d '\n\r')"
     want="PLAYCHECK ready 1000 64x48|PLAYCHECK ended|PLAYCHECK grabbed"
     if [ "$H" = linux ]; then
-      vars="MBUI_PLAYCHECK_DRAWN=1 $vars" want="PLAYCHECK ready 1000 64x48|PLAYCHECK drawn red|PLAYCHECK ended|PLAYCHECK grabbed"
+      vars="MBUI_PLAYCHECK_DRAWN=1 MBUI_PLAYCHECK_FRAMES=1 $vars"
+      want="PLAYCHECK ready 1000 64x48|PLAYCHECK drawn red|PLAYCHECK frames 10 0 900|PLAYCHECK ended|PLAYCHECK grabbed"
     fi
     run "$vars" $O/play.log || true
     have=$(grep -a "PLAYCHECK" $O/play.log | sed 's/.*PLAYCHECK/PLAYCHECK/' | tr -d '\r' | paste -sd'|' -)
