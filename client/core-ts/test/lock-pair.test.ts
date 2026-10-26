@@ -9,6 +9,7 @@ import { randomBytes } from "node:crypto";
 import { test } from "node:test";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { Effect, Queue } from "effect";
+import { HostError } from "../src/error.ts";
 import { PAIR_ALPN, PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../src/pair.ts";
 import { base64url as toB64url, utf8 } from "../src/util.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
@@ -162,6 +163,17 @@ test("ended on the trusted device, the new device is told why: turned away there
   assert.deepEqual((await late.prompts()).pairing, [], "no longer shown");
   assert.equal(why(await late.prove(old)), "pair_late");
   assert.deepEqual([denied.cloud.posted, tried.cloud.posted, late.cloud.posted], [[], [], []]);
+});
+
+test("approved but signed in nowhere (the trusted device's key not read back): no approval, and the new device is told why", async () => {
+  const m = await met();
+  await m.hello();
+  const code = (await m.prompts()).pairing[0].code;
+  m.host.secureGet = () => Effect.fail(new HostError("the keystore said no"));
+  const done = await m.prove(code);
+  assert.ok("err" in done && done.err.code === "pair_unsigned", JSON.stringify(done));
+  assert.match(done.err.message, /the keystore said no/);
+  assert.deepEqual(m.cloud.posted, []);
 });
 
 test("an app in the lock that does not sign (let in before it kept a key) is made one that signs, as a new one is approved", async () => {

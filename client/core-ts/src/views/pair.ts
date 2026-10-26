@@ -16,7 +16,8 @@
 // sign_key}`; trusted → `code {workspaces}` (the ones it approves) or `no {error}`; new → `pake {y}`; trusted → `pake
 // {y, mac}`; new → `confirm {mac}` when the trusted one's MAC is right, else `wrong`; trusted → `approved {workspaces,
 // failed}`, or `wrong {left}` / `no`. A `no` says why: `tries` (out of them), `denied` (turned away there), `late` (the
-// code too old), `bad_share`; a trusted device from before `late` closes the stream then with no word.
+// code too old), `bad_share`; a trusted device from before `late` closes the stream then with no word. An `approved`
+// that signed it in nowhere (each workspace in `failed`, with why) is no approval: the new device says why.
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { Deferred, Effect } from "effect";
 import type { Inner } from "../core.ts";
@@ -362,12 +363,12 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
     const results = yield* Effect.forEach([...y.met.values()], (m) => Effect.map(Effect.result(tryOne(inner, m, base, code)), (r) => [m, r] as const), { concurrency: "unbounded" });
     let approved: J | null = null;
     let left = 0;
-    const ends: string[] = [];
+    const ends: CoreError[] = [];
     for (const [m, r] of results) {
       if (r._tag === "Success" && "approved" in r.success) approved = r.success.approved;
       else if (r._tag === "Success" && "left" in r.success) left = Math.max(left, r.success.left);
       else {
-        if (r._tag === "Failure") ends.push(r.failure.code);
+        if (r._tag === "Failure") ends.push(r.failure);
         m.d.close();
         y.met.delete(m.id);
       }
@@ -390,12 +391,21 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
 }
 
 /// What the new device says once no trusted device takes a code any more, as they ended (`tryOne`'s errors): one
-/// turned it away, ran out of tries, kept the code too long; else none could be reached.
-function endedText(ends: string[]): string {
-  if (ends.includes("pair_denied")) return t("core-misc.lock.pairDenied");
-  if (ends.includes("pair_tries")) return t("core-misc.lock.pairTries");
-  if (ends.includes("pair_late")) return t("core-misc.lock.pairLate");
+/// could not sign it in, turned it away, ran out of tries, kept the code too long; else none could be reached.
+function endedText(ends: CoreError[]): string {
+  const codes = ends.map((e) => e.code);
+  const unsigned = ends.find((e) => e.code === "pair_unsigned");
+  if (unsigned) return t("core-misc.lock.pairUnsigned", { error: unsigned.message });
+  if (codes.includes("pair_denied")) return t("core-misc.lock.pairDenied");
+  if (codes.includes("pair_tries")) return t("core-misc.lock.pairTries");
+  if (codes.includes("pair_late")) return t("core-misc.lock.pairLate");
   return t("core-misc.lock.pairGone");
+}
+
+/// An `approved` that signed this device in nowhere: why, as the trusted device said it of each workspace.
+function unsigned(answer: J): CoreError {
+  const why = arr(answer.failed).map((f) => str(get(f, "error"))).filter((e): e is string => !!e);
+  return new CoreError("pair_unsigned", [...new Set(why)].join(t("core-misc.lock.listSep")) || "nothing signed");
 }
 
 /// A trusted device's answer that ends it (`no {error}`, or the stream's end): why, as an error's code.
@@ -418,7 +428,7 @@ export function tryOne(inner: Inner, m: Met, base: string, code: string): Effect
     if (keys !== null && sameMac(keys.theirs, unhex(str(r.mac) ?? ""))) {
       yield* m.d.send({ t: "confirm", mac: hex(keys.mine) });
       const a = yield* m.d.next();
-      if (isObject(a) && a.t === "approved") return { approved: a };
+      if (isObject(a) && a.t === "approved") return arr(a.workspaces).length > 0 ? { approved: a } : yield* Effect.fail(unsigned(a));
       return yield* Effect.fail(ended(a));
     }
     yield* m.d.send({ t: "wrong" });
