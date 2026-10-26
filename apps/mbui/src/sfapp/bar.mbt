@@ -1798,12 +1798,13 @@ fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
       if nav_button(c, "settings", 22.0, key="place-settings", said=tr("android-chat.home.settings")) {
         app.nav.push(Settings)
       }
-      c.box(w=Fill(1.0), h=Px(34.0), justify=JCenter, fn() {
+      // (its words whole: what the page does at its end gives way where the bar has not the room, @sf.head_end)
+      c.box(dir=Row, w=Fill(1.0), h=Px(34.0), align=ACenter, keep=true, fn() {
         top_bar_title(c, place_label(place)) |> ignore
       })
       |> ignore
       match actions {
-        Some(a) => a()
+        Some(a) => @sf.head_end(c, a)
         None => ()
       }
     })

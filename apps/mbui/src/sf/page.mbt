@@ -39,6 +39,29 @@ pub fn with_look(l : Look, body : () -> Unit) -> Unit {
 }
 
 ///|
+/// How many heads' ends what is drawn now is at (head_end).
+// kept across runs: counted up and down round what a head's end draws (0 between them)
+let head_ends : Ref[Int] = Ref(0)
+
+///|
+/// What a page does, at the end of its head's line (a place's bar, a narrow page's title line: the web's PlaceHead
+/// `trailing`), 10 apart: as wide as it is beside the title, which keeps its words whole; where the line has not the
+/// room, what is here gives way first (a choice in it fitted to the room left: `segmented`), the title cut only where
+/// it is longer than the line leaves it then. A choice here is as wide as its options, not filling the line
+/// (web/src/mobile/Usage.tsx: its days' Seg, not `fill`).
+pub fn head_end(c : @ui.Ctx, actions : () -> Unit) -> Unit {
+  head_ends.val = head_ends.val + 1
+  c.box(style=pg_head_end, actions) |> ignore
+  head_ends.val = head_ends.val - 1
+}
+
+///|
+/// Whether what is drawn now is at a head's end (head_end).
+pub fn at_head_end() -> Bool {
+  head_ends.val > 0
+}
+
+///|
 /// The arrangement of a page as wide as `w`.
 pub fn look_for(w : Double) -> Look {
   if w < narrow_most {
@@ -255,7 +278,8 @@ fn narrow_page(
   // (a place's top page: the frame's bar over it names it, and holds what it does at its end)
   if named {
     match actions {
-      Some(f) => named_actions.val = Some(f)
+      // (drawn in the frame's bar, as the page's own head: in its arrangement)
+      Some(f) => named_actions.val = Some(fn() { with_look(Narrow, f) })
       None => ()
     }
   }
@@ -269,9 +293,10 @@ fn narrow_page(
           c.text(small, style=secondary) |> ignore
         }
         c.box(style=pg_title_line, fn() {
-          c.box(style=pg_title_words, fn() { c.text(title, style=pg_title) |> ignore }) |> ignore
+          // (its words whole while what it does at its end can give way: head_end)
+          c.box(style=pg_title_words, keep=true, fn() { c.text(title, style=pg_title, keep=true) |> ignore }) |> ignore
           match actions {
-            Some(f) => f()
+            Some(f) => head_end(c, f)
             None => ()
           }
         })
@@ -293,7 +318,9 @@ fn narrow_page(
   for b in content {
     blocks.push(b)
   }
-  narrow_list(c, key, blocks, foot, chrome~)
+  // (each drawn as its list lays it out, after this returns: its back, its title's line and what it does there in the
+  // page's arrangement, as what it holds is)
+  narrow_list(c, key, blocks.map(fn(b) { fn() { with_look(Narrow, b) } }), foot, chrome~)
 }
 
 ///|
@@ -1777,6 +1804,12 @@ let pg_title_line : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let pg_title_words : @ui.Style = @ui.style(w=grow, min_w=S20)
+
+///|
+/// A head's end (head_end): what is in it in a line, 10 apart, as wide as it is where the head's line has the room, as
+/// narrow as what is in it gives way to where it has less.
+// kept across runs: a value (no field of it changes)
+let pg_head_end : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
