@@ -186,10 +186,11 @@ export class Virtual {
   }
   /** The pane was scrolled to `top`: by the reader, unless it is where this put it. */
   scrolled(at: number, now = performance.now()): void {
-    const top = at + this.drift;
     // Scrolled to an end of what the pane has while more is held past it: the pane is put where it should be now
     // (the scroll has nowhere to go on to).
     if ((this.drift > 0 && at <= 1) || (this.drift < 0 && at >= this.bottom() - this.drift - 1)) this.drift = 0;
+    // Use the released drift at the boundary too: using its old value would send a pane at zero back down.
+    const top = at + this.drift;
     if (Math.abs(top - this.top) < 1) return;
     this.moving = true;
     const elapsed = this.scrolledAt === null ? 1000 / 60 : Math.max(1, now - this.scrolledAt);

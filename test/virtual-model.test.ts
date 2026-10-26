@@ -423,6 +423,34 @@ test("virtual_under_a_scroll_the_pane_is_not_moved_what_would_move_it_is_held_un
   assert.equal(v.layout().scrollTop, 9900);
 });
 
+test("virtual_reaching_the_top_releases_measurement_drift_without_scrolling_back_down", () => {
+  const v = made(new Virtual({ gap: 0, overscan: 400, holds: false }));
+  v.setItems(list(0, 100));
+  v.scrolled(5000);
+  v.measured([["m:0", 250]]);
+  assert.equal(v.layout().drift, 150);
+  v.scrolled(0);
+  assert.equal(v.layout().drift, 0);
+  assert.equal(v.layout().scrollTop, 0);
+  v.rested();
+  assert.equal(v.layout().scrollTop, 0);
+  // A second trip must agree with the first, once the height is known.
+  v.scrolled(5000);
+  v.scrolled(0);
+  assert.equal(v.layout().scrollTop, 0);
+});
+
+test("virtual_navigation_keeps_its_head_when_rows_arrive_after_the_intro_was_measured", () => {
+  const v = made(new Virtual({ gap: 0, overscan: 400, holds: false }));
+  v.reads(true);
+  v.goto("intro", "start");
+  v.setItems([{ key: "intro", estimate: 100 }]);
+  v.measured([["intro", 44]]);
+  v.setItems([{ key: "intro", estimate: 100 }, ...list(0, 100)]);
+  assert.equal(v.mode.kind, "read");
+  assert.equal(v.layout().scrollTop, 0);
+});
+
 test("virtual_a_list_opening_makes_only_what_shows_the_rows_past_its_edges_once_asked", () => {
   const items = list(0, 200);
   const v = new Virtual({ gap: GAP, overscan: 300 });
