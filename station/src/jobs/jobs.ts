@@ -623,6 +623,8 @@ export class Jobs {
     if (pgid === undefined) throw new Error("the job ended before it started");
     this.store.recordProcess(pgid, this.store.now(), "job", `job: ${job.name}`);
     this.store.jobStarted(job.id, pgid, restarted);
+    // another station's chat's task, begun: remembered past it and its session (the workspace's card counts them)
+    if (!restarted && job.sessionKey.startsWith("remote:")) this.store.noteRemoteRun(job.id, job.sessionKey, this.store.now());
     const exited = new Promise<number | null>((resolve) => child.once("exit", (code) => resolve(code)));
     const running = this.track(job.id, pgid, exited.then(() => undefined));
     const began = this.store.now();

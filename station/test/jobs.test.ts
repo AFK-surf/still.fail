@@ -21,6 +21,7 @@ import { McpEndpoint } from "../src/tools/mcp.ts";
 import { agentNice } from "../src/ops/nice.ts";
 import { jobTools } from "../src/tools/jobs.ts";
 import { Store } from "../src/store/store.ts";
+import { remoteRunsSince } from "../src/read/store.ts";
 import { WINDOWS, platform } from "../src/platform/index.ts";
 
 const dirs: string[] = [];
@@ -510,6 +511,21 @@ describe("jobs", { concurrency: true }, () => {
     assert.deepEqual(notifyEndpoint(r.jobs, `Bearer ${job.token}`, Buffer.alloc(64 * 1024 + 1, 97)).status, 400);
     assert.deepEqual(r.said(), [`Job "long" (${job.id}) says: built ✓`]);
     await r.jobs.stop(job.id);
+  });
+
+  test("a task another station's chat runs here is remembered as it begins, after it and its session are gone, 90 days", async () => {
+    const r = new Rig();
+    const runs = () => remoteRunsSince({ db: r.store.db } as never, 0n).map((x) => x.session);
+    // a task of a session here is not
+    const own = r.jobs.start("s1", "own", "exit 0", r.work, null, false);
+    const job = r.jobs.startId("remote:ws:peer:s", "t", "exit 0", r.work, null, false, "remote_run");
+    await until("they end", () => r.state(job.id) === "exited" && r.state(own.id) === "exited");
+    assert.deepEqual(runs(), ["remote:ws:peer:s"]);
+    r.store.clearEndedJobs("remote:ws:peer:s");
+    assert.deepEqual(runs(), ["remote:ws:peer:s"]);
+    // one begun 90 days and more after it: that one is let go
+    r.store.noteRemoteRun("later", "remote:ws:peer:t", Date.now() + 91 * 24 * 3600 * 1000);
+    assert.deepEqual(runs(), ["remote:ws:peer:t"]);
   });
 
   test("a remote task's end is not told to a session here", async () => {

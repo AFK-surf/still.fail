@@ -160,10 +160,12 @@ let share_picture_key : String = "share-card/picture"
 /// The picture shared, a poster of what the agents did (the `fleet` view; 2026-10-26 用户：「改成 xx 个 xx 订阅账号的 xx% 周额度，
 /// 分天和周统计，还有当前 chat 数量」「不要小机器人」「这玩意儿是会超过 100% 的」「不如归档 chat 多少个」): on warm paper with a
 /// peach light on it, the same in either theme. still.fail's mark and name and when it is; the subscriptions' weekly
-/// quota used as rings, a kind each (Activity's rings, round again past 100%), the first kind's share large beside them
+/// quota used as rings, a kind each (Activity's rings: each the share of all its accounts' weeks, 489% of six 0.815 of
+/// it; 2026-10-26 用户「489% 就是 4.89 个号的周额度」), the first kind's share large beside them
 /// and what it is of, the others' under it; today and the last 7 days side by side (the chats archived, what was
 /// spent), each day's chats archived a bar under them (today's orange, each day's date under its bar); the chats at
-/// work now, a dot before them; still.fail's line. With no quota read: the chats at work
+/// work now, a dot before them, and the tasks chats ran on other stations over the 7 days (how many, how many a chat
+/// on average), the devices' icon before them; still.fail's line. With no quota read: the chats at work
 /// large in its place. Laid out narrower than pic_narrow_most (a phone's sheet): the rings smaller, what the first
 /// kind's share is of and the others' under the rings and it, its number smaller, today over the last 7 days, all
 /// closer.
@@ -227,16 +229,40 @@ fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       }
       _ => ()
     }
-    // the chats at work now (with the quota large: said here)
-    if quota.length() > 0 {
-      c.box(style=pic_live, fn() {
-        c.box(style=pic_live_dot, fn() {  }) |> ignore
-        c.rich([@ui.span(text(fleet, "chatsText"), weight=700), @ui.span("  ·  " + text(fleet, "where"), color=@sf.share_dim)], style=pic_live_words)
-        |> ignore
+    // the chats at work now (with the quota large: said here), the tasks chats ran on other stations over the week
+    let tasks = text(fleet, "tasksText")
+    if quota.length() > 0 || tasks != "" {
+      c.box(style=pic_lines, fn() {
+        if quota.length() > 0 {
+          pic_line(c, fn() { c.box(style=pic_live_dot, fn() {  }) |> ignore }, text(fleet, "chatsText"), text(fleet, "where"), narrow)
+        }
+        if tasks != "" {
+          pic_line(c, fn() { @sf.icon(c, "devices", size=pic_mark_side, color=@sf.share_ink) |> ignore }, tasks, text(fleet, "tasksPer"), narrow)
+        }
       })
       |> ignore
     }
     c.text(@sf.t("web-main.stations.shareTagline"), style=pic_tagline) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A line under the days: its mark (in a square of its own, the lines' words starting together), what it says, and
+/// more of it after a dot, dimmer; in a narrow picture smaller, the more under it (a line as long as the tasks' broken
+/// inside a word there: 「…312 个任」「务」).
+fn pic_line(c : @ui.Ctx, mark : () -> Unit, words : String, more : String, narrow : Bool) -> Unit {
+  c.box(style=if narrow { pic_live_narrow } else { pic_live }, fn() {
+    c.box(style=pic_mark_box, mark) |> ignore
+    if narrow {
+      c.box(style=pic_line_words, fn() {
+        c.text(words, style=pic_line_lead) |> ignore
+        c.text(more, style=pic_line_more) |> ignore
+      })
+      |> ignore
+    } else {
+      c.rich([@ui.span(words, weight=700), @ui.span("  ·  " + more, color=@sf.share_dim)], style=pic_live_words) |> ignore
+    }
   })
   |> ignore
 }
@@ -271,14 +297,14 @@ fn pic_quota_words(c : @ui.Ctx, quota : Array[Json]) -> Unit {
 
 ///|
 /// The rings: a kind of subscription each, from the outside in (as many as there are colours), as much of each drawn as
-/// the share of its weekly quota used (@sf.rings); smaller in a narrow picture.
+/// its accounts' weeks used (the core's `share`: @sf.rings); smaller in a narrow picture.
 fn pic_rings(c : @ui.Ctx, quota : Array[Json], narrow : Bool) -> Unit {
   let rings : Array[(Double, Int64)] = []
   for k, q in quota {
     if k >= @sf.share_rings.length() {
       break
     }
-    rings.push((number(Some(q), "used") / 100.0, ring_color(k)))
+    rings.push((number(Some(q), "share"), ring_color(k)))
   }
   @sf.rings(c, rings, if narrow { pic_rings_side_narrow } else { pic_rings_side }, pic_ring_w, pic_ring_gap, pic_track_alpha)
   |> ignore
@@ -513,9 +539,40 @@ let pic_day_label : @ui.TextStyle = @ui.text_style(size=Caption, color=Data(@sf.
 let pic_day_today : @ui.TextStyle = @ui.text_style(size=Caption, weight=Bold, color=Data(@sf.share_orange_ink), wrap=false)
 
 ///|
-/// The chats at work now: a dot, their number in words, where they are.
+/// The lines under the days (the chats at work, the tasks run across devices), 8 apart.
+// kept across runs: a value (no field of it changes)
+let pic_lines : @ui.Style = @ui.css("w=Full gap=S2")
+
+///|
+/// A line: its mark, what it says.
 // kept across runs: a value (no field of it changes)
 let pic_live : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
+
+///|
+/// A narrow picture's: its mark by its first line.
+// kept across runs: a value (no field of it changes)
+let pic_live_narrow : @ui.Style = @ui.css("row w=Full gap=S2 align=AStart")
+
+///|
+/// A narrow picture's words: what it says over the more of it, Meta's (13).
+// kept across runs: a value (no field of it changes)
+let pic_line_words : @ui.Style = @ui.css("gap=S0_5").then(@ui.style(w=@sf.grow))
+
+///|
+// kept across runs: a value (no field of it changes)
+let pic_line_lead : @ui.TextStyle = @ui.text_style(size=Meta, weight=Bold, color=Data(@sf.share_ink), w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pic_line_more : @ui.TextStyle = @ui.text_style(size=Meta, color=Data(@sf.share_dim), w=Full)
+
+///|
+/// A line's mark: a dot (the chats at work), the devices' icon (the tasks across devices), in a square 16 across.
+// kept across runs: a value (no field of it changes)
+let pic_mark_box : @ui.Style = @ui.css("w=S4 h=S4 align=ACenter justify=JCenter")
+
+///|
+let pic_mark_side : Double = 16.0
 
 ///|
 // kept across runs: a value (no field of it changes)

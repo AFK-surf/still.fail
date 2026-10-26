@@ -1304,13 +1304,14 @@ fn fixture_station_files(src : Source) -> Unit {
 ///|
 /// The card shared of the agents at work (the core's `fleet` view, views/fleet.ts), as the made-up workspace has it:
 /// its one Claude subscription's week, Studio's one chat at work; the card to share's (share-card, share-card-…) two
-/// kinds of subscription (two Claude accounts' past one's quota), nine chats at work on three stations, and their week.
+/// kinds of subscription (six Claude accounts' 489%, 4.89 accounts' weeks), nine chats at work on three stations, and
+/// their week.
 fn fixture_fleet(f : Fixture) -> Json {
   if !f.mode.has_prefix("share-card") {
     return {
       "at": "10月26日 04:12",
       "quotaLead": "本周用掉了",
-      "quota": [{ "kind": "claude", "accounts": 1, "used": 37, "usedText": "37%", "text": "1 个 Claude 订阅账号的周额度" }],
+      "quota": [{ "kind": "claude", "accounts": 1, "used": 37, "usedText": "37%", "share": 0.37, "text": "1 个 Claude 订阅账号的周额度" }],
       "chats": 1,
       "chatsText": "1 个对话正在运行",
       "where": "分布在 1 台设备",
@@ -1323,12 +1324,14 @@ fn fixture_fleet(f : Fixture) -> Json {
     "at": "10月26日 04:12",
     "quotaLead": "本周用掉了",
     "quota": [
-      { "kind": "claude", "accounts": 2, "used": 170, "usedText": "170%", "text": "2 个 Claude 订阅账号的周额度" },
-      { "kind": "chatgpt", "accounts": 1, "used": 45, "usedText": "45%", "text": "1 个 ChatGPT 订阅账号的周额度" },
+      { "kind": "claude", "accounts": 6, "used": 489, "usedText": "489%", "share": 0.815, "text": "6 个 Claude 订阅账号的周额度" },
+      { "kind": "chatgpt", "accounts": 2, "used": 17, "usedText": "17%", "share": 0.085, "text": "2 个 ChatGPT 订阅账号的周额度" },
     ],
     "chats": 9,
     "chatsText": "9 个对话正在运行",
     "where": "分布在 3 台设备",
+    "tasksText": "近 7 天 agent 跨设备执行了 312 个任务",
+    "tasksPer": "平均每个对话 5.2 个",
     "today": {
       "title": "今天",
       "stats": [{ "label": "归档的对话", "value": "12 个" }, { "label": "折合费用", "value": "$362" }],

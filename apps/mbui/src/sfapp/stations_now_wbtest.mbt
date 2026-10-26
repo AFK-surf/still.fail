@@ -26,7 +26,7 @@ test "wide: the rail's Station place, the pointer resting on it, says how many a
   t.click(Button, label="分享卡片")
   t.run_for(@kit.presence_in_ms)
   assert_true(t.find("1 个 Claude 订阅账号的周额度") is Some(_), msg="the picture's words beside its number")
-  assert_true(t.find("在任何一台上，用所有设备") is Some(_))
+  assert_true(t.find("拿起任何一台，就能用上所有设备") is Some(_))
   assert_eq(t.corner_faults(), [])
   t.click(Button, label="复制图片")
   t.frame()
@@ -74,11 +74,11 @@ fn share_card_laid(t : @ui.Tester, narrow : Bool) -> Unit raise {
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   // the first kind's share large; what it is of beside the rings under it, or under them both; the other kind's in a
   // line of its own
-  let share = word("170%")
-  let of = word("2 个 Claude 订阅账号的周额度")
+  let share = word("489%")
+  let of = word("6 个 Claude 订阅账号的周额度")
   assert_true(share.length() == 1 && of.length() == 1 && share[0].4 > of[0].4 * 2.0, msg="\{(share, of)}")
   assert_true(of[0].2 > share[0].2 && (of[0].1 < share[0].1) == narrow, msg="\{(share, of)}")
-  assert_true(t.find("45% 1 个 ChatGPT 订阅账号的周额度") is Some(_))
+  assert_true(t.find("17% 2 个 ChatGPT 订阅账号的周额度") is Some(_))
   // today and the last 7 days side by side, or one over the other (under the share: 今天 is the chats' heading too);
   // each day's date under its bar
   let today = word("今天").filter(fn(w) { w.2 > share[0].2 })
@@ -92,9 +92,16 @@ fn share_card_laid(t : @ui.Tester, narrow : Bool) -> Unit raise {
   assert_true(word("12 个").length() == 1 && word("57 个").length() == 1 && word("$1,911").length() == 1)
   let days = ["10/20", "10/26"].map(fn(d) { word(d) })
   assert_true(days.iter().all(fn(d) { d.length() == 1 }) && days[0][0].1 < days[1][0].1, msg="\{days}")
-  // the chats at work now, and still.fail's line
+  // the chats at work now, the tasks run across devices, and still.fail's line
   assert_true(t.find("9 个对话正在运行") is Some(_) && t.find("分布在 3 台设备") is Some(_))
-  assert_true(t.find("在任何一台上，用所有设备") is Some(_))
+  assert_true(t.find("近 7 天 agent 跨设备执行了 312 个任务") is Some(_) && t.find("平均每个对话 5.2 个") is Some(_))
+  if narrow {
+    // what it says on a line of its own, the more of it under it: neither broken onto two
+    let lead = word("近 7 天 agent 跨设备执行了 312 个任务")
+    let more = word("平均每个对话 5.2 个")
+    assert_true(lead.length() == 1 && more.length() == 1 && lead[0].4 == more[0].4 && more[0].2 > lead[0].2, msg="\{(lead, more)}")
+  }
+  assert_true(t.find("拿起任何一台，就能用上所有设备") is Some(_))
   assert_eq(t.squeeze_faults(), [])
   assert_eq(t.corner_faults(), [])
   assert_eq(t.contrast_faults(), [])

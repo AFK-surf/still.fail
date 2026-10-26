@@ -378,6 +378,15 @@ CREATE TABLE IF NOT EXISTS relayed_to (
   at INTEGER NOT NULL,
   PRIMARY KEY (connect, channel)
 );
+-- Each task another station's chat ran here, as it began running (jobs/jobs.ts spawn: a remote: session's job, not
+-- a service started again): its job, when, and whose (its session's key, remote:<workspace>:<station>:<session>),
+-- kept 90 days whatever comes of the task and its session (store.ts noteRemoteRun), for what a workspace's card says of
+-- the tasks its chats ran on other stations (read/usage.ts remoteRuns).
+CREATE TABLE IF NOT EXISTS remote_runs (
+  job TEXT PRIMARY KEY,
+  at INTEGER NOT NULL,
+  session TEXT NOT NULL
+);
 -- How many entries each session's transcript has, as the station last read it while the session was at work
 -- (sessions/live.ts): its summary says so, and a device that missed some of them knows to read them.
 CREATE TABLE IF NOT EXISTS transcript_lengths (

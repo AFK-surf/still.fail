@@ -92,6 +92,8 @@
   "core-logic.fleet.week": "近 7 天",
   "core-logic.fleet.archived": "归档的对话",
   "core-logic.fleet.archived_value": "{n} 个",
+  "core-logic.fleet.tasks": "近 7 天 agent 跨设备执行了 {n} 个任务",
+  "core-logic.fleet.tasks_per": "平均每个对话 {n} 个",
   "core-logic.footprint.actions.not_allowed": "只有 workspace 的 owner 和管理员可以清理",
   "core-logic.footprint.all": "全部",
   "core-logic.footprint.archived.action": "删除…",

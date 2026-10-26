@@ -3270,6 +3270,8 @@ export interface FleetQuota {
 	used: number;
 	/** 170%. */
 	usedText: string;
+	/** That as a share of all their accounts' weeks, what its ring draws (0 to 1: 170% of two, 0.85). */
+	share: number;
 	/** What it is of: 2 个 Claude 订阅账号的周额度. */
 	text: string;
 }
@@ -3298,18 +3300,28 @@ export interface FleetView {
 	at: string;
 	/** What leads the quota used: 本周用掉了. */
 	quotaLead: string;
-	/** The subscriptions' weekly quota used, by kind, the most accounts first; none read: empty. */
+	/**
+	 * The subscriptions' weekly quota used, by kind, the most accounts first; a kind that used none left
+	 * out; none read: empty.
+	 */
 	quota: FleetQuota[];
-	/** The chats at work now. */
+	/** The chats at work now: their agents running, or a task of theirs running on another station. */
 	chats: number;
 	/** That in words: 9 个对话正在运行. */
 	chatsText: string;
-	/** On how many stations: 分布在 3 台设备. */
+	/** On how many stations (theirs: not those that run tasks for them): 分布在 3 台设备. */
 	where: string;
 	/** The chats archived and what was spent today; absent while it is read, or with nothing spent nor archived. */
 	today?: FleetToday;
 	/** The same over the last 7 days, each day's chats archived; absent with it. */
 	week?: FleetWeek;
+	/**
+	 * How many tasks chats ran on other stations over the last 7 days: 近 7 天 agent 跨设备执行了 312 个任务;
+	 * absent with none, or with the days.
+	 */
+	tasksText?: string;
+	/** How many each chat that ran any did, on average: 平均每个对话 5.2 个. */
+	tasksPer?: string;
 }
 
 export interface FlowChoice {
