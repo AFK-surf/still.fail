@@ -1,101 +1,10 @@
-// The workspace's stations at a glance and the card to share of them (2026-10-26 用户：「需要有一个地方可以显示当前多少个
-// chat 正在工作，有利于 app 传播」「hover 这个出一个卡片」「有个复制图片应该就行」). Over the rail's Station place, a
-// card: how many agents are at work on them all, each station and what it is doing (the chats' view: its glyph's `now`,
-// each station's `doing`, as the core says them), and while any agent is at work, 分享卡片. The card to share: a
+// The card to share of the workspace's agents at work (2026-10-26 用户：「需要有一个地方可以显示当前多少个 chat 正在工作，
+// 有利于 app 传播」「hover 这个出一个卡片」「有个复制图片应该就行」), opened from the rail's Station place's card
+// (rail_cards.mbt) and the Station page's first card. The card to share: a
 // picture of the agents at work on the person's stations, copied whole to paste where others see it (a chat, a post):
 // a poster (the `fleet` view): the subscriptions' weekly quota used as rings, today and the last 7 days, the chats at
 // work now, still.fail's line (no QR code: 2026-10-26 用户「不用放 still fail 的二维码」); 复制图片 under it puts what is
 // drawn of it on the clipboard.
-
-///|
-/// The stations of workspace `w` at a glance (the rail's Station place's hover card): how many agents are at work on
-/// them all, a line each with what it is doing (red where it cannot be reached), and 分享卡片 while any is at work.
-pub fn stations_now(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let chats = (src.topic)("chats", { "scope": Json::string(w.id), "mine": Json::boolean(false) }).value
-  let glyph = field(chats, "glyph")
-  c.box(style=now_box, fn() {
-    c.text(stations_now_line(glyph), style=now_head) |> ignore
-    c.box(style=now_rows, fn() {
-      for s in items(chats, "stations") {
-        let s = Some(s)
-        c.box(style=now_row, fn() {
-          c.box(style=now_name_room, fn() { c.text(text(s, "name"), style=now_name) |> ignore }) |> ignore
-          c.text(text(s, "doing"), style=if text(s, "state") == "error" { now_doing_red } else { now_doing })
-          |> ignore
-        })
-        |> ignore
-      }
-    })
-    |> ignore
-    if count(glyph, "running") > 0 {
-      let id = c.id("stations-now/share")
-      if c.clicked(id) {
-        share_card_open(src, w)
-      }
-      c.box(style=now_share, id~, label=@sf.t("web-main.stations.shareCard"), fn() {
-        @sf.icon(c, "photo", size=16.0, color=@sf.theme().p.text) |> ignore
-        c.text(@sf.t("web-main.stations.shareCard"), style=now_share_words) |> ignore
-      })
-      |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
-/// How many agents are at work, in a line (the glyph's `now`; from a core before it, its stations in words).
-pub fn stations_now_line(glyph : Json?) -> String {
-  match text(glyph, "now") {
-    "" => text(glyph, "label")
-    now => now
-  }
-}
-
-///|
-/// The card's parts 10 apart; the stations 6 apart.
-// kept across runs: a value (no field of it changes)
-let now_box : @ui.Style = @ui.css("w=Full gap=S2_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let now_head : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let now_rows : @ui.Style = @ui.css("w=Full gap=S1_5")
-
-///|
-/// A station's line: its name, what it is doing at its end.
-// kept across runs: a value (no field of it changes)
-let now_row : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
-
-///|
-/// Its name's room: what what it is doing leaves of the line.
-// kept across runs: a value (no field of it changes)
-let now_name_room : @ui.Style = @ui.style(w=@sf.grow)
-
-///|
-// kept across runs: a value (no field of it changes)
-let now_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Cut)
-
-///|
-// kept across runs: a value (no field of it changes)
-let now_doing : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let now_doing_red : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
-
-///|
-/// 分享卡片: a block across the card at its foot, round as its corners (login_card's lc_open).
-// kept across runs: a value (no field of it changes)
-let now_share : @ui.Style = @ui.css(
-  "row w=Full h=S8 mt=S1 px=S3 gap=S1_5 radius=Inner bg=A(Fg,O5) align=ACenter justify=JCenter hovered{bg=Hover}",
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-let now_share_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 // ── the card to share ────────────────────────────────────────────────────
 

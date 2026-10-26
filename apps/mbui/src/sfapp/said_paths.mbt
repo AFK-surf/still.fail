@@ -1061,6 +1061,9 @@ let said_paths : Map[String, Array[String]] = {
     "wait.failing.*.text",
     "wait.failing.*.message",
   ],
+  "railCard": [
+    "rows.*.name",
+  ],
   "screenCard": [
     "title",
     "line",

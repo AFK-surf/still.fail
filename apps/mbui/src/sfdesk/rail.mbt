@@ -560,11 +560,11 @@ fn rail_place(
       } else {
         @sf.icon(c, rail_icon(place), size=rail_icon_size, color~) |> ignore
       }
-    }, label~, tipped=place != "stations")
-    // Station's: how many agents are at work on each station, and the card to share of them, beside it as the pointer
-    // rests on it (in place of its tip: what it said is in the card)
-    if place == "stations" && !wide.editing {
-      @sfpages.hover(c, "rail/stations-now", id, side=Right, along=Start, fn() { @sfpages.stations_now(c, src, w) })
+    }, label~, tipped=!rail_carded(place))
+    // 对话's, Station's, Profile's, 用量's: what the place is about at a glance, beside it as the pointer rests on it (in
+    // place of its tip: what it said is in the card; Station's with the card to share of the agents at work)
+    if rail_carded(place) && !wide.editing {
+      @sfpages.hover(c, "rail/card/" + place, id, side=Right, along=Start, fn() { @sfpages.rail_card(c, src, w, place) })
       |> ignore
     }
     // what wants the person in a list, as its rows' marks: on its icon's corner while the sidebar is folded (open,
@@ -588,6 +588,13 @@ fn rail_place(
       |> ignore
     }
   })
+}
+
+///|
+/// Whether place `place` has a card as the pointer rests on it (the core's `railCard`: 对话, Station, Profile, 用量); the
+/// others keep their tip.
+fn rail_carded(place : String) -> Bool {
+  place == "chats" || place == "stations" || place == "profiles" || place == "usage"
 }
 
 ///|

@@ -83,6 +83,32 @@
   "core-logic.decisions.replied": "{name} replied",
   "core-logic.decisions.waited.under_minute": "<1 min",
   "core-logic.decisions.you": "You",
+  "core-logic.rail.chats.head": {
+    "one": "1 chat running",
+    "other": "{n} chats running"
+  },
+  "core-logic.rail.chats.none": "No chat running",
+  "core-logic.rail.chats.wait": "Waiting for you",
+  "core-logic.rail.chats.alert": "Went wrong",
+  "core-logic.rail.chats.unread": "Unread",
+  "core-logic.rail.chats.archived": "Archived today",
+  "core-logic.rail.stations.online": "Stations online",
+  "core-logic.rail.stations.tasks": "Tasks running",
+  "core-logic.rail.profiles.head": {
+    "one": "1 subscription",
+    "other": "{n} subscriptions"
+  },
+  "core-logic.rail.profiles.out_head": {
+    "one": "1 account used up",
+    "other": "{n} accounts used up"
+  },
+  "core-logic.rail.profiles.room": "With room",
+  "core-logic.rail.profiles.near": "Nearly through",
+  "core-logic.rail.profiles.out": "Used up",
+  "core-logic.rail.profiles.soonest": "{name}: {when}",
+  "core-logic.rail.usage.head": "{cost} over the last 7 days",
+  "core-logic.rail.usage.none": "Nothing spent in the last 7 days",
+  "core-logic.rail.usage.today": "Today",
   "core-logic.footprint.actions.none": "Nothing to clean up",
   "core-logic.fleet.machines": {
     "one": "On 1 machine",

@@ -34,7 +34,8 @@ import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
 import { askAnswers } from "./vault.ts";
 import * as marks from "./marks.ts";
 import { usageView } from "./usage.ts";
-import { fleetView } from "./fleet.ts";
+import { fleetView, quotaOf } from "./fleet.ts";
+import { chatsCard, profilesCard, stationsCard, usageCard } from "./rail-cards.ts";
 import { resourcesView } from "./resources.ts";
 import { workspaceProfiles } from "./profiles.ts";
 import { settingsView } from "./settings.ts";
@@ -59,7 +60,7 @@ const DAY_MS = 86_400_000;
 export const HEAD = 80;
 export const HEAD_FROM = 500;
 
-const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "chatLetters", "imageNear", "longJobs", "usage", "fleet", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays"]);
+const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "chatLetters", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them, whether the 奏 page lists it.
@@ -749,6 +750,22 @@ export class Views implements Owner {
         scope = view.scope as string;
         perStation = (s) => [{ topic: "chatRows", station: s }, { topic: "archivedRows", station: s }, { topic: "jobs", station: s }, { topic: "overview", station: s }, { topic: "link", station: s }, { topic: "host", station: s }, { topic: "way", station: s }, { topic: "stationUsage", station: s }];
         break;
+      case "railCard": {
+        // (the cards over the rail's places: views/rail-cards.ts) what the place's card is made of
+        scope = view.scope as string;
+        const place = view.place;
+        perStation = (s) => [
+          { topic: "chatRows", station: s },
+          { topic: "overview", station: s },
+          { topic: "link", station: s },
+          ...(place === "chats" ? [{ topic: "archivedRows", station: s }] : []),
+          ...(place === "stations" || place === "profiles" ? [{ topic: "host", station: s }, { topic: "way", station: s }] : []),
+          ...(place === "stations" ? [{ topic: "jobs", station: s }] : []),
+          ...(place === "usage" ? [{ topic: "stationUsage", station: s }] : []),
+        ];
+        if (place === "chats") topics.push({ topic: "prefs" }, { topic: "workspaces" });
+        break;
+      }
       case "resources":
         scope = view.scope as string;
         // One station's (its page's 进程), or every station's.
@@ -1152,6 +1169,47 @@ export class Views implements Owner {
         });
         const offset = this.#core.host.utcOffsetMin(now);
         return { ok: fleetView(read, profiles, usage, format.dateClock(now, offset), offset) };
+      }
+      case "railCard": {
+        const scope = view.scope as string;
+        const chats = this.#chats(scope, false, false);
+        if (chats === undefined || !("ok" in chats)) return chats;
+        const now = this.#core.host.nowMs();
+        const offset = this.#core.host.utcOffsetMin(now);
+        const online = (this.stations(scope) ?? []).filter((s) => s.online);
+        switch (view.place) {
+          case "chats": {
+            const rows = arr(get(chats.ok, "days")).flatMap((d) => arr(get(d, "items")));
+            const mark = get(get(get(marks.marks(this, this.local, scope), "ok"), "workspaces"), scope);
+            // when each archived chat was, as the archive has it (views/archive.ts)
+            const archived = online.flatMap((s) =>
+              arr(this.ok({ topic: "archivedRows", station: s.address }))
+                .filter((c) => isObject(get(c, "archived")))
+                .map((c) => get(get(c, "archived"), "at") ?? get(c, "lastActiveAt"))
+                .filter((x): x is number => typeof x === "number"),
+            );
+            return { ok: chatsCard(rows, mark, archived, now, offset) };
+          }
+          case "stations": {
+            const read = arr(get(chats.ok, "stations")).map((st) => {
+              const hostRaw = this.ok({ topic: "host", station: str(get(st, "station")) ?? "" });
+              return { station: st, host: hostRaw === undefined ? null : present.host(hostRaw), jobs: arr(this.ok({ topic: "jobs", station: str(get(st, "station")) ?? "" })) };
+            });
+            return { ok: stationsCard(get(chats.ok, "glyph"), read) };
+          }
+          case "profiles": {
+            const listed = this.#stationsView(scope);
+            const items = listed !== undefined && "ok" in listed ? arr(get(workspaceProfiles(listed.ok as J[]), "items")) : [];
+            return { ok: profilesCard(items, quotaOf(items), now) };
+          }
+          case "usage": {
+            const stations = this.#stationsOr(scope);
+            if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
+            const sources = stations.map((s) => ({ address: s.address, name: s.name, online: s.online, value: s.online ? this.value({ topic: "stationUsage", station: s.address }) : undefined }));
+            return { ok: usageCard(usageView(sources, 7, now, offset, this.me(scope), arr(get(this.ok({ topic: "workspace", workspace: scope }), "members")))) };
+          }
+        }
+        return undefined;
       }
       case "resources": {
         const stations = this.#stationsOr(view.scope as string);
