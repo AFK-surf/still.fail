@@ -679,7 +679,7 @@ pub fn fix_preview() -> Json {
 /// This slice's calls in the fixture: taken as a station would.
 pub fn decide_fixture_call(name : String) -> Result[Json, Json]? {
   match name {
-    "decision.answer" | "decision.dismiss" | "decision.defer" | "decision.reply" | "chat.pin" | "chat.rename" | "session.stop" | "session.evict" | "session.compact" | "session.clear" | "job.stop" | "job.clearEnded" | "history.detail" | "history.older" | "machineLogin.cancel" | "chat.unpublish" =>
+    "decision.answer" | "decision.dismiss" | "decision.defer" | "decision.reply" | "chat.keep" | "chat.pin" | "chat.rename" | "session.stop" | "session.evict" | "session.compact" | "session.clear" | "job.stop" | "job.clearEnded" | "history.detail" | "history.older" | "machineLogin.cancel" | "chat.unpublish" =>
       Some(Ok(Json::object({})))
     "chat.publishPreview" => Some(Ok(fix_preview()))
     _ => None

@@ -167,6 +167,12 @@
   "web-main.chat.deleteFailed": "Couldn't delete: {error}",
   "web-main.chat.empty": "Send a message here; agents in this chat reply here",
   "web-main.chat.fromSlack": "From ",
+  "web-main.chat.unkeep": "Stop keeping",
+  "web-main.chat.unkeep.done": "No longer kept: suggested for archiving again once done",
+  "web-main.chat.unkeep.what": "stop keeping this chat",
+  "web-main.chat.keep": "Keep",
+  "web-main.chat.keep.done": "Kept: no more archive suggestions, and it is never archived on its own",
+  "web-main.chat.keep.what": "keep this chat",
   "web-main.chat.label": "Chat",
   "web-main.chat.newMessages": {
     "one": "1 new message",

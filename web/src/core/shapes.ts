@@ -1759,10 +1759,12 @@ export interface ChatItem {
 	archivable?: boolean;
 	/**
 	 * It has ended (each of its agents ended all_done, no card waiting for the viewer) and its station is online:
-	 * a finger's swipe left archives it (`chat.archive`), unread, pinned or not recommended by its station's
+	 * a finger's swipe left archives it (`chat.archive`), unread, pinned, kept or not recommended by its station's
 	 * archive review alike. Absent otherwise.
 	 */
 	swipeArchive?: boolean;
+	/** The viewer kept it (`chat.keep`): never offered for archiving, nor archived on its own; `chat.keep {kept: false}` lets it go. Absent otherwise. */
+	kept?: boolean;
 	/**
 	 * Where it stands, in words, for its second line, its agents' states first: 要你帮忙：…, 出问题：…; then 奏 · … (a
 	 * card waiting for the viewer, even while an agent works); then 在等：…, 做完了(：…). Absent while it is at work with
