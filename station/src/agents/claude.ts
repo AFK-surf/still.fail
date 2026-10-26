@@ -21,9 +21,10 @@ import { claudeProject } from "../read/transcript.ts";
 import { LiveFromClaude, chars, type ClaudeLiveState } from "./live.ts";
 import { CLAUDE_TOKEN_MARGIN_MS, machineClaudeToken, type Env, type MachineToken } from "./machine-logins.ts";
 import { fileCredentials, takeBack } from "./no-keychain.ts";
-import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
+import { type Events, OwnProcessDriver, OwnProcessSession, parseLine } from "./own-process.ts";
 import { bothNames, expandRoute, isMachine, keyFile, profileEnv, profileModel } from "./profiles.ts";
-import { TOOL_SERVERS, cleanEnv, unreachable, uuid, type AgentDriver, type AgentSession, type BackgroundTask, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
+import type { RunnerInfo } from "./runner.ts";
+import { TOOL_SERVERS, cleanEnv, unreachable, uuid, type BackgroundTask, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import { wall } from "../ops/fibers.ts";
 import { peerHttpBase } from "../tools/http.ts";
 
@@ -239,25 +240,14 @@ export function onFrame(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => 
   }
 }
 
-const parse = (line: string): Json | undefined => {
-  try {
-    return JSON.parse(line);
-  } catch {
-    debug("agents::claude", "claude non-json line", { line: line.slice(0, 500) });
-    return undefined;
-  }
-};
-
-export class ClaudeDriver implements AgentDriver {
-  private readonly data: string;
+export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
   private readonly command: string;
   private readonly env: Env;
   private readonly machineToken: (env: Env, rejected?: string) => Promise<MachineToken>;
   private readonly lent: ClaudeDriverOptions["lent"];
-  private live = new Set<ClaudeSession>();
 
   constructor(options: ClaudeDriverOptions) {
-    this.data = options.data;
+    super(options.data);
     this.command = options.command ?? "claude";
     this.env = options.env ?? process.env;
     this.machineToken = options.machineToken ?? machineClaudeToken;
@@ -268,7 +258,12 @@ export class ClaudeDriver implements AgentDriver {
     return "claude";
   }
 
-  async open(options: OpenOptions, events: (event: RuntimeEvent) => void): Promise<AgentSession> {
+  /// Its process is named by its session id in the log.
+  protected label(_options: OpenOptions, session: ClaudeSession) {
+    return `claude ${session.id()}`;
+  }
+
+  async open(options: OpenOptions, events: Events): Promise<ClaudeSession> {
     const home = options.profile.home;
     mkdirSync(home, { recursive: true });
     if (options.resume !== undefined && !transcriptExists(home, options.resume, options.cwd)) {
@@ -324,10 +319,8 @@ export class ClaudeDriver implements AgentDriver {
     // Renewed while it runs, it is never started again for its token; one read from a file again after a 401 is not
     // stopped at the first.
     const session = new ClaudeSession(this, sessionId, { busy: false, aborting: false, authFailure: null, closed: false, renews: machine !== undefined || file !== undefined }, null, new LiveFromClaude(), events, options.effort, renew, machine?.token ?? null);
-    const label = `claude ${sessionId}`;
     session.toolsUrl = options.mcpUrl;
-    session.attach(await AgentProcess.start(this.data, runnerId("claude", options.key), this.command, args, env, options.cwd, session.processOptions(label)));
-    this.live.add(session);
+    await this.start(session, options, this.command, args, env);
     return session;
   }
 
@@ -340,122 +333,66 @@ export class ClaudeDriver implements AgentDriver {
     return null;
   }
 
-  async adopt(options: OpenOptions, snapshot: unknown | null, events: (event: RuntimeEvent) => void): Promise<AgentSession> {
-    const handed = snapshot as ClaudeSnapshot | null;
-    const id = handed?.runner ?? runnerId("claude", options.key);
-    const info = findRunner(this.data, id);
-    if (!info) throw new Error(`no runner keeps claude for ${options.key}`);
-    let session: ClaudeSession;
-    if (handed) {
-      log.info("agents::claude", "taking up a claude process handed over", { session: handed.id, pgid: info.pgid, busy: handed.turn.busy });
-      session = new ClaudeSession(this, handed.id, { ...handed.turn, closed: false }, handed.machineExpires, new LiveFromClaude(handed.live), events, flagOf(info.args, "--effort"), this.renewer(options.profile), null);
-    } else {
-      // The previous station crashed: what it had handled (stdout up to where it acknowledged) is read again, silently,
-      // to know where the turn stands; the rest comes as it would have.
-      const at = await ackedOffset(info, outFile(this.data, id));
-      const turn: Turn = { busy: false, aborting: false, authFailure: null, closed: false };
-      const live = new LiveFromClaude();
-      for (const line of linesBefore(outFile(this.data, id), at)) {
-        const frame = parse(line);
-        if (frame === undefined) continue;
-        live.feed(frame);
-        onFrame(frame, turn, () => {}, () => {});
-      }
-      const flag = info.args.findIndex((a) => a === "--session-id" || a === "--resume");
-      const sessionId = flag >= 0 ? info.args[flag + 1]! : (options.resume ?? "");
-      log.info("agents::claude", "taking up a claude process after a crash", { session: sessionId, pgid: info.pgid, busy: turn.busy, from: at });
-      // Its token is not known, nor whether it asks for a new one: as if about to run out, so its next turn starts it
-      // again with a current one (a machine login's or a lent one).
-      const renew = this.renewer(options.profile);
-      session = new ClaudeSession(this, sessionId, turn, renew ? wall.now() : null, live, events, flagOf(info.args, "--effort"), renew, null);
-      // A turn is running that this station did not start.
-      if (turn.busy) events({ type: "turnStarted" });
-    }
+  protected handedOver(options: OpenOptions, handed: ClaudeSnapshot, info: RunnerInfo, events: Events) {
+    const session = new ClaudeSession(this, handed.id, { ...handed.turn, closed: false }, handed.machineExpires, new LiveFromClaude(handed.live), events, flagOf(info.args, "--effort"), this.renewer(options.profile), null);
     // The address it was told is in its arguments: the station's may have moved since (hub.ts `toolsAt`).
     session.toolsUrl = mcpUrlOf(info.args);
-    session.attach(AgentProcess.adopt(info, session.processOptions(`claude ${session.id()}`)));
-    this.live.add(session);
     return session;
   }
 
-  forget(session: ClaudeSession) {
-    this.live.delete(session);
-  }
-
-  async shutdown() {
-    const live = [...this.live];
-    this.live.clear();
-    await Promise.all(live.map((s) => s.dispose()));
-  }
-
-  detach() {
-    for (const session of this.live) session.detach();
-    this.live.clear();
+  /// What the station before had handled (stdout up to where it acknowledged) says where the turn stands.
+  protected crashed(options: OpenOptions, lines: Iterable<string>, info: RunnerInfo, events: Events) {
+    const turn: Turn = { busy: false, aborting: false, authFailure: null, closed: false };
+    const live = new LiveFromClaude();
+    for (const line of lines) {
+      const frame = parseLine("claude", line);
+      if (frame === undefined) continue;
+      live.feed(frame);
+      onFrame(frame, turn, () => {}, () => {});
+    }
+    const flag = info.args.findIndex((a) => a === "--session-id" || a === "--resume");
+    const sessionId = flag >= 0 ? info.args[flag + 1]! : (options.resume ?? "");
+    // Its token is not known, nor whether it asks for a new one: as if about to run out, so its next turn starts it
+    // again with a current one (a machine login's or a lent one).
+    const renew = this.renewer(options.profile);
+    const session = new ClaudeSession(this, sessionId, turn, renew ? wall.now() : null, live, events, flagOf(info.args, "--effort"), renew, null);
+    session.toolsUrl = mcpUrlOf(info.args);
+    return session;
   }
 }
 
 /// A current token for a process, renewed first when `rejected` is the one given.
 type Renew = (rejected?: string) => Promise<MachineToken>;
 
-export class ClaudeSession implements AgentSession {
-  private proc!: AgentProcess;
-  private driver: ClaudeDriver;
-  private sessionId: string;
-  private turn: Turn;
+export class ClaudeSession extends OwnProcessSession<Turn> {
   /// The machine login's token this process runs on (machine profiles): when it runs out.
   private machineExpires: number | null;
   private live: LiveFromClaude;
-  private events: (event: RuntimeEvent) => void;
   /// The effort it was started with: fixed for the process (`--effort` has no switch while it runs).
   private effort: string | undefined;
-  /// The address of the station's tools it was started with (fixed for the process too).
-  toolsUrl: string | null = null;
   /// Its calls to the station's tools not answered yet (toolsLostIn).
   private calls = new Set<string>();
   /// Where it gets a new token when it asks (RENEWED), and the one it was given last (null when not known here).
   private renew: Renew | null;
   private token: string | null;
 
-  constructor(driver: ClaudeDriver, sessionId: string, turn: Turn, machineExpires: number | null, live: LiveFromClaude, events: (event: RuntimeEvent) => void, effort: string | undefined, renew: Renew | null, token: string | null) {
-    this.driver = driver;
+  constructor(driver: ClaudeDriver, sessionId: string, turn: Turn, machineExpires: number | null, live: LiveFromClaude, events: Events, effort: string | undefined, renew: Renew | null, token: string | null) {
+    super(driver, sessionId, turn, events);
     this.renew = renew;
     this.token = token;
     this.effort = effort;
-    this.sessionId = sessionId;
-    this.turn = turn;
     this.machineExpires = machineExpires;
     this.live = live;
-    this.events = events;
   }
 
-  processOptions(label: string) {
-    return {
-      label,
-      line: (line: string) => {
-        const frame = parse(line);
-        if (frame === undefined) return;
-        for (const event of this.live.feed(frame)) this.events({ type: "live", event });
-        const lost = toolsLostIn(frame, this.calls);
-        if (lost !== null) this.events({ type: "toolsLost", why: lost });
-        if (frame?.type === "control_request" && frame.request?.subtype === "oauth_token_refresh") void this.renewToken(String(frame.request_id ?? ""));
-        onFrame(frame, this.turn, this.events, () => this.proc.write(interruptRequest()));
-      },
-      exit: (said: string, stderr: string) => {
-        this.turn.closed = true;
-        const busy = this.turn.busy;
-        this.turn.busy = false;
-        // What it wrote to stderr last is the only word of why one that fails as it starts gives (`claude exited (1)`
-        // alone says nothing).
-        const why = stderr === "" ? "" : `: ${stderr}`;
-        if (busy) this.events({ type: "turnEnded", outcome: { kind: "failed", reason: "exited", message: `claude exited (${said}) during the turn${why}` } });
-        this.events({ type: "closed", why: `claude exited (${said})${why}` });
-        this.driver.forget(this);
-      },
-    };
-  }
-
-  attach(proc: AgentProcess) {
-    this.proc = proc;
+  protected heard(line: string) {
+    const frame = parseLine("claude", line);
+    if (frame === undefined) return;
+    for (const event of this.live.feed(frame)) this.events({ type: "live", event });
+    const lost = toolsLostIn(frame, this.calls);
+    if (lost !== null) this.events({ type: "toolsLost", why: lost });
+    if (frame?.type === "control_request" && frame.request?.subtype === "oauth_token_refresh") void this.renewToken(String(frame.request_id ?? ""));
+    onFrame(frame, this.turn, this.events, () => this.proc.write(interruptRequest()));
   }
 
   /// It was refused with its token and asks for a new one (RENEWED): given one other than the token refused, or told
@@ -478,18 +415,6 @@ export class ClaudeSession implements AgentSession {
     this.proc.write(JSON.stringify({ type: "control_response", response: { subtype: "success", request_id: requestId, response } }));
   }
 
-  id() {
-    return this.sessionId;
-  }
-
-  mcpUrl() {
-    return this.toolsUrl;
-  }
-
-  busy() {
-    return this.turn.busy;
-  }
-
   background() {
     return backgroundOf(this.turn);
   }
@@ -508,8 +433,7 @@ export class ClaudeSession implements AgentSession {
   }
 
   private begin() {
-    if (this.turn.closed) throw new Error("claude session is closed");
-    if (this.turn.busy) throw new Error("a turn is already running");
+    this.startable();
     // Taken up without knowing whether it renews its token (RENEWED): about to run out, it is started again (resuming)
     // with a current one.
     if (this.machineExpires !== null && this.machineExpires - wall.now() < CLAUDE_TOKEN_MARGIN_MS) throw new Error("the machine login's token runs out");
@@ -545,15 +469,8 @@ export class ClaudeSession implements AgentSession {
     return true;
   }
 
-  async dispose() {
-    this.driver.forget(this);
-    await this.proc.kill(5000);
-  }
-
-  /// Stops hearing it: the turn stands as its last handled line left it, and the lines after are the next station's.
   snapshot(): ClaudeSnapshot {
-    this.proc.freeze();
-    this.turn.closed = true;
+    this.handOver();
     return {
       runtime: "claude",
       id: this.sessionId,
@@ -562,11 +479,5 @@ export class ClaudeSession implements AgentSession {
       machineExpires: this.machineExpires,
       live: this.live.state(),
     };
-  }
-
-  detach() {
-    this.turn.closed = true;
-    this.driver.forget(this);
-    this.proc.detach();
   }
 }

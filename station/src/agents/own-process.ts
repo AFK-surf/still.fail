@@ -1,5 +1,5 @@
-// A runtime that runs each session in a process of its own (DeepSeek Harness, Cursor, Grok Build, Devin, Hermes Agent;
-// not Codex, whose sessions share their profile's app-server): the process under a runner whose id comes from the
+// A runtime that runs each session in a process of its own (Claude Code, DeepSeek Harness, Cursor, Grok Build, Devin,
+// Hermes Agent; not Codex, whose sessions share their profile's app-server): the process under a runner whose id comes from the
 // session key (./runner.ts), so that a station starting again takes it up, from the snapshot the one before left at
 // handover or, after a crash, from what that one had handled of its output, read again silently. What every such driver
 // does is here: the sessions it has, starting a process and taking one up, its requests waiting for their answers, the
@@ -38,10 +38,10 @@ export class Waiting {
   private waits = new Map<string, { answered: (answer: Json) => void; failed: (error: Error) => void }>();
 
   /// The answer to the request `id` (to be sent once this is asked): one `refused` makes an error of rejects, and so
-  /// does no answer within `ms`.
-  wait(id: string, refused: (answer: Json) => Error | null, ms = ANSWER_MS): Promise<Json> {
+  /// does no answer within `ms` (saying `late`, where there is a likely why).
+  wait(id: string, refused: (answer: Json) => Error | null, late?: string, ms = ANSWER_MS): Promise<Json> {
     return new Promise((resolve, reject) => {
-      const cancel = wall.after(ms, () => this.fail(id, new Error(`no answer to ${id} in ${ms / 1000} s`)));
+      const cancel = wall.after(ms, () => this.fail(id, new Error(late ?? `no answer to ${id} in ${ms / 1000} s`)));
       this.waits.set(id, {
         answered: (answer) => {
           cancel();
