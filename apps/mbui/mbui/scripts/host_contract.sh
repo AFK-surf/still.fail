@@ -40,6 +40,9 @@
 #   scripts/host_contract.sh linux station      this machine's station as the host says it, in a home of the run's own
 #        (kitdemo's MBUI_STATIONCHECK, src/kitdemo/gallery/stationcheck.mbt): one started by hand said so, with its
 #        release, workspace and data, and stopped; then one the installer's service runs said so
+#   scripts/host_contract.sh linux badge        (a session bus) the number on the app's icon as a dock is told it
+#        (Canonical's LauncherEntry: its Update signal) and given it when it asks (Query) (kitdemo's MBUI_BADGECHECK,
+#        src/kitdemo/gallery/badgecheck.mbt)
 #   scripts/host_contract.sh linux links        (a session bus: dbus-run-session's) the app started with a link of its
 #        schemes, said to it; started again with one while it runs, handed over to the one running (once for its
 #        person: src/host/linux_life.h), which says it
@@ -586,6 +589,27 @@ INSTALL
     kill $pid
     rm -rf "$HOME/Library/Caches/dev.mbui.kitdemo.update"
     echo "update contract (mac): refused one signed otherwise; put 2 in 1's place and opened it" ;;
+  badge)
+    [ "$H" = linux ] || { echo "badge contract: Linux's"; exit 1; }
+    # a dock's side: what is said on the bus heard from before the app starts, and what the app gives when asked
+    B=$PWD/$O/badge
+    rm -rf "$B" && mkdir -p "$B"
+    dbus-monitor --session "type='signal',interface='com.canonical.Unity.LauncherEntry'" > "$B/heard.log" 2>&1 & MON=$!
+    env MBUI_BENCH=-1 MBUI_WIN=480x320 MBUI_APP_ID=dev.mbui.kitdemo.badge MBUI_BADGECHECK=3 \
+      ./out/linux/mod/_build/native/release/build/kitdemo/kitdemo.exe > "$B/run.log" 2>&1 & APPPID=$!
+    ok=1
+    scripts/chk logwait --log "$B/run.log" --line "BADGECHECK set 3" --deadline 60 > /dev/null || ok=0
+    asked=$(gdbus call --session --dest dev.mbui.kitdemo.badge --object-path /com/canonical/unity/launcherentry/mbui \
+      --method com.canonical.Unity.LauncherEntry.Query 2>&1)
+    kill $APPPID 2> /dev/null; wait $APPPID 2> /dev/null || true
+    kill $MON 2> /dev/null; wait $MON 2> /dev/null || true
+    echo "asked: $asked"
+    [ $ok = 1 ] || { echo "badge contract (linux): the app did not set it"; tail -20 "$B/run.log"; exit 1; }
+    case "$asked" in *"'application://dev.mbui.kitdemo.badge.desktop', {'count': <int64 3>, 'count-visible': <true>}"*) ;;
+      *) echo "badge contract (linux): a dock asking was not given 3"; exit 1 ;; esac
+    grep -q "string \"application://dev.mbui.kitdemo.badge.desktop\"" "$B/heard.log" && grep -q "int64 3" "$B/heard.log" ||
+      { echo "badge contract (linux): 3 was not said on the bus"; cat "$B/heard.log"; exit 1; }
+    echo "badge contract (linux): 3 said to the docks and given to one asking" ;;
   station)
     [ "$H" = linux ] || { echo "station contract: Linux's (the Mac's and Windows' are not checked here)"; exit 1; }
     # a home of the run's own: a station's data (~/.stillfail) whose run/station.json names a process of the run's, alive
@@ -713,5 +737,5 @@ INSTALL
     echo "links contract (mac): opened with a link of its own scheme, the app said it" ;;
   kinds)
     scripts/chk outside-kinds $H ;;
-  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, station; ios: free, done)" >&2; exit 1 ;;
+  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, station, badge; ios: free, done)" >&2; exit 1 ;;
 esac

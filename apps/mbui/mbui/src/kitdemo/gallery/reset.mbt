@@ -24,6 +24,7 @@ fn reset() -> Unit {
   pdf_check_images.val = []
   pdf_check_said.val = 0
   station_check_stopped.val = false
+  badge_check_set.val = false
   cb.val = On
   size.val = "m"
   bold.val = true

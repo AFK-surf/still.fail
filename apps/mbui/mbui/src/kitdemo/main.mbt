@@ -26,6 +26,8 @@ fn main {
   let pdf = @ui.env("MBUI_PDFCHECK")
   // MBUI_STATIONCHECK=read|stop: this machine's station as the host says it, and stopped (stationcheck.mbt)
   let station = @ui.env("MBUI_STATIONCHECK")
+  // MBUI_BADGECHECK=<n>: the number on the app's icon set, for the desktop's side to be asked (badgecheck.mbt)
+  let badge = @ui.env("MBUI_BADGECHECK")
   if linked {
     @ui.on_message(@hostapi.system_channel, fn(json, _) { @gallery.link_check_said(json) })
   }
@@ -40,6 +42,8 @@ fn main {
       @gallery.pdf_check_run(c, pdf)
     } else if station != "" {
       @gallery.station_check_run(c, station)
+    } else if badge != "" {
+      @gallery.badge_check_run(c, badge)
     } else if sited {
       @gallery.site_check_run(c)
     } else if viewed {

@@ -763,6 +763,52 @@ static void on_system_bus(GObject *o, GAsyncResult *r, gpointer data) {
                                      "/org/freedesktop/login1", NULL, G_DBUS_SIGNAL_FLAGS_NONE, on_sleep, NULL, NULL);
 }
 
+// ---- the number on its icon in the desktop's dock (@hostapi.set_badge) ----
+// Canonical's LauncherEntry, which Ubuntu's dock and KDE's task manager draw (GNOME's own dock shows none): the count
+// said on the session bus for the app's desktop entry (application://<id>.desktop) as it changes, and given to a dock
+// that asks for it (Query: one started after it was said). Only where the program is an app (its id: its entry's name).
+#define BADGE_PATH "/com/canonical/unity/launcherentry/mbui"
+static int badge_n;
+static guint badge_object;
+
+static GVariant *badge_state(void) {
+  char *uri = g_strdup_printf("application://%s.desktop", app_id());
+  GVariantBuilder b;
+  g_variant_builder_init(&b, G_VARIANT_TYPE("a{sv}"));
+  g_variant_builder_add(&b, "{sv}", "count", g_variant_new_int64(badge_n));
+  g_variant_builder_add(&b, "{sv}", "count-visible", g_variant_new_boolean(badge_n > 0));
+  GVariant *v = g_variant_new("(sa{sv})", uri, &b);
+  g_free(uri);
+  return v;
+}
+
+static void on_badge_call(GDBusConnection *c, const char *sender, const char *path, const char *iface,
+                          const char *method, GVariant *args, GDBusMethodInvocation *inv, gpointer data) {
+  (void)c, (void)sender, (void)path, (void)iface, (void)args, (void)data;
+  if (!strcmp(method, "Query")) g_dbus_method_invocation_return_value(inv, badge_state());
+  else g_dbus_method_invocation_return_dbus_error(inv, "org.freedesktop.DBus.Error.UnknownMethod", method);
+}
+
+void mb_host_set_badge(int32_t n) {
+  if (n < 0) n = 0;
+  if (n == badge_n && badge_object) return;
+  badge_n = n;
+  GDBusConnection *bus = life_app && *app_id() ? g_application_get_dbus_connection(G_APPLICATION(life_app)) : NULL;
+  if (!bus) return;
+  if (!badge_object) {
+    static const char xml[] =
+        "<node><interface name='com.canonical.Unity.LauncherEntry'>"
+        "<method name='Query'><arg type='s' direction='out'/><arg type='a{sv}' direction='out'/></method>"
+        "<signal name='Update'><arg type='s'/><arg type='a{sv}'/></signal></interface></node>";
+    static const GDBusInterfaceVTable vt = {on_badge_call, NULL, NULL, {0}};
+    GDBusNodeInfo *info = g_dbus_node_info_new_for_xml(xml, NULL);
+    badge_object = g_dbus_connection_register_object(bus, BADGE_PATH, info->interfaces[0], &vt, NULL, NULL, NULL);
+    g_dbus_node_info_unref(info);
+  }
+  g_dbus_connection_emit_signal(bus, NULL, BADGE_PATH, "com.canonical.Unity.LauncherEntry", "Update", badge_state(),
+                                NULL);
+}
+
 // ---- as the window is made ----
 
 // once the window is made, before it shows: the app's (the desktop knows it by the app's id, its Quit asks the app's),
