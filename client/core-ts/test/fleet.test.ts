@@ -25,11 +25,12 @@ test("the card shared says how much of a week's quota each kind of subscription 
     account("opencode", 0),
     account("opencode", 0.2),
   ]);
-  // said round its share: 用 2 个 Claude 订阅账号消耗了 170% 的周额度
+  // said round its share: 用 2 个 Claude 订阅账号消耗了 170% 的周额度; as its ring's key: Claude 订阅 · 2 个账号 … 170%
   assert.deepEqual(q.map((x: J) => [x.kind, x.accounts, x.used, x.usedText, x.share, x.lead, x.of]), [
     ["claude", 2, 170, "170%", 0.85, "用 2 个 Claude 订阅账号消耗了", "的周额度"],
     ["chatgpt", 1, 45, "45%", 0.45, "用 1 个 ChatGPT 订阅账号消耗了", "的周额度"],
   ]);
+  assert.deepEqual(q.map((x: J) => [x.name, x.accountsText]), [["Claude 订阅", "2 个账号"], ["ChatGPT 订阅", "1 个账号"]]);
 });
 
 test("the card shared says how many chats are at work now and on how many stations; today's and the last 7 days' chats archived and what was spent; the tasks chats ran on other stations over them", () => {

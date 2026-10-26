@@ -1340,7 +1340,8 @@ pub fn open_fixture_src(mode : String, src : Source) -> Unit {
   if mode == "files-add-folder" {
     @sfdesk.add_folder(src, "ws1", @sfdesk.pin_stations(src, "ws1"))
   }
-  if mode == "share-card" {
+  // (share-card-dark: over the dark theme)
+  if mode == "share-card" || mode == "share-card-dark" {
     @sfpages.share_card_open(src, { id: "ws1", name: "星火工作室", emoji: "", icon: "", email: "lin@example.com" })
   }
   if mode == "chat-station-files" {
@@ -1371,14 +1372,26 @@ fn fixture_station_files(src : Source) -> Unit {
 
 ///|
 /// The card shared of the agents at work (the core's `fleet` view, views/fleet.ts), as the made-up workspace has it:
-/// its one Claude subscription's week, Studio's one chat at work; the card to share's (share-card, share-card-…) two
-/// kinds of subscription (six Claude accounts' 489%, 4.89 accounts' weeks), nine chats at work on three stations, and
-/// their week.
+/// its one Claude subscription's week, Studio's one chat at work; the card to share's (share-card, share-card-…) three
+/// kinds of subscription (six Claude accounts' 489%, 4.89 accounts' weeks; two ChatGPT's, two OpenCode Go's), nine
+/// chats at work on three stations, and their week.
 fn fixture_fleet(f : Fixture) -> Json {
   if !f.mode.has_prefix("share-card") {
     return {
       "at": "10月26日 04:12",
-      "quota": [{ "kind": "claude", "accounts": 1, "used": 37, "usedText": "37%", "share": 0.37, "lead": "用 1 个 Claude 订阅账号消耗了", "of": "的周额度" }],
+      "quota": [
+        {
+          "kind": "claude",
+          "name": "Claude 订阅",
+          "accounts": 1,
+          "accountsText": "1 个账号",
+          "used": 37,
+          "usedText": "37%",
+          "share": 0.37,
+          "lead": "用 1 个 Claude 订阅账号消耗了",
+          "of": "的周额度",
+        },
+      ],
       "chats": 1,
       "chatsText": "1 个对话正在运行",
       "where": "分布在 1 台设备",
@@ -1390,8 +1403,39 @@ fn fixture_fleet(f : Fixture) -> Json {
   {
     "at": "10月26日 04:12",
     "quota": [
-      { "kind": "claude", "accounts": 6, "used": 489, "usedText": "489%", "share": 0.815, "lead": "用 6 个 Claude 订阅账号消耗了", "of": "的周额度" },
-      { "kind": "chatgpt", "accounts": 2, "used": 17, "usedText": "17%", "share": 0.085, "lead": "用 2 个 ChatGPT 订阅账号消耗了", "of": "的周额度" },
+      {
+        "kind": "claude",
+        "name": "Claude 订阅",
+        "accounts": 6,
+        "accountsText": "6 个账号",
+        "used": 489,
+        "usedText": "489%",
+        "share": 0.815,
+        "lead": "用 6 个 Claude 订阅账号消耗了",
+        "of": "的周额度",
+      },
+      {
+        "kind": "chatgpt",
+        "name": "ChatGPT 订阅",
+        "accounts": 2,
+        "accountsText": "2 个账号",
+        "used": 17,
+        "usedText": "17%",
+        "share": 0.085,
+        "lead": "用 2 个 ChatGPT 订阅账号消耗了",
+        "of": "的周额度",
+      },
+      {
+        "kind": "opencode",
+        "name": "OpenCode Go 订阅",
+        "accounts": 2,
+        "accountsText": "2 个账号",
+        "used": 6,
+        "usedText": "6%",
+        "share": 0.03,
+        "lead": "用 2 个 OpenCode Go 订阅账号消耗了",
+        "of": "的周额度",
+      },
     ],
     "chats": 9,
     "chatsText": "9 个对话正在运行",

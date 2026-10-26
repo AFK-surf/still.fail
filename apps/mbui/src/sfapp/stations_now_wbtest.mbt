@@ -125,7 +125,8 @@ fn share_card_laid(t : @ui.Tester) -> Unit raise {
   t.run_for(@kit.presence_in_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   // the first kind's said round its share, read down: what leads it over the rings and the share, the share large,
-  // what it is of under it; the other kind's the same in a line of its own
+  // what it is of under it; each other kind a line of its own, its ring's key: its name, its accounts, its share at
+  // the line's end (the shares one under another)
   let lead = word("用 6 个 Claude 订阅账号消耗了")
   let share = word("489%")
   let of = word("的周额度")
@@ -134,7 +135,14 @@ fn share_card_laid(t : @ui.Tester) -> Unit raise {
     lead[0].2 < share[0].2 && of[0].2 > share[0].2 && of[0].1 == share[0].1 && lead[0].1 < share[0].1,
     msg="\{(lead, share, of)}",
   )
-  assert_true(t.find("用 2 个 ChatGPT 订阅账号消耗了 17% 的周额度") is Some(_))
+  let keys = [("ChatGPT 订阅", "17%"), ("OpenCode Go 订阅", "6%")].map(fn(k) { (word(k.0), word("2 个账号"), word(k.1)) })
+  for k in keys {
+    let (name, accounts, used) = k
+    assert_true(name.length() == 1 && accounts.length() == 2 && used.length() == 1, msg="\{k}")
+    // (on its line: its accounts after its name, its share at the end)
+    assert_true(used[0].1 > name[0].1 + name[0].3 && (used[0].2 - name[0].2).abs() < 2.0, msg="\{k}")
+  }
+  assert_true((keys[0].2[0].1 + keys[0].2[0].3 - (keys[1].2[0].1 + keys[1].2[0].3)).abs() < 0.5, msg="\{keys}")
   // today over the last 7 days (under the share: 今天 is the chats' heading too); each day's date under its bar
   let today = word("今天").filter(fn(w) { w.2 > share[0].2 })
   let week = word("近 7 天")
@@ -153,8 +161,8 @@ fn share_card_laid(t : @ui.Tester) -> Unit raise {
     None => t.query(Button, label="复制图片").unwrap()
   }
   assert_true(line.length() == 1 && line[0].2 + line[0].4 <= button.rect.1, msg="\{(line, button.rect)}")
-  // the other kind's line and the chats at work's each on one line (as tall as each other, both Meta's)
-  match (t.rect_of("用 2 个 ChatGPT 订阅账号消耗了"), t.rect_of("9 个对话正在运行")) {
+  // another kind's line and the chats at work's each on one line (as tall as each other, both Meta's)
+  match (t.rect_of("OpenCode Go 订阅"), t.rect_of("9 个对话正在运行")) {
     (Some((_, _, _, oh)), Some((_, _, _, ch))) => assert_true(oh == ch, msg="\{(oh, ch)}")
     _ => fail("no other kind's line, or no chats at work")
   }
