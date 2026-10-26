@@ -33,6 +33,13 @@ export function parseDeclared(kind: string, wait: number): DeclaredState | null 
 /// The turn ended as the agent's to take up again only when a person (or nothing) brings it back: not waiting.
 const settled = (d: DeclaredState) => d.kind !== "waiting";
 
+/// What a turn ends in, as recorded and as acted on: the state it declared, but a wait only when the turn completed. One
+/// that failed or was stopped after it said it would wait is asked again by nothing (what it went on doing after saying
+/// so is cut off, its process may be gone): recorded waiting, its chat would show it waiting on, unseen, instead of how
+/// it ended.
+const endedIn = (declared: DeclaredState | null, outcome: TurnOutcome["kind"]): DeclaredState | null =>
+  declared?.kind === "waiting" && outcome !== "completed" ? null : declared;
+
 export type TurnFor = { profile: string | null; person: string | null; thread: number | null };
 const nobody: TurnFor = { profile: null, person: null, thread: null };
 
@@ -63,6 +70,7 @@ export type SessionStore = {
   setAbout(turn: string, about: [number, number, string] | null): void;
   lastTurn(key: string): any | null;
   stopWait(key: string): void;
+  forgetWait(key: string): void;
   listJobs(session: string | null): any[];
   latestThread(key: string): any | null;
   entriesBefore(thread: number, n: number | null, limit: number): any[];
@@ -427,6 +435,22 @@ export class SessionActor {
     });
   }
 
+  /// After a restart: the wait its last turn is recorded ending in, when this actor does not keep it (the station before
+  /// stopped without handing it over), asks again when it would have, at once if that is past. One a station from
+  /// before `endedIn` recorded for a turn that did not complete was never kept: recorded as the turn ended instead.
+  takeWait(): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.waiting !== null || this.turn || this.archived()) return;
+      const store = this.deps.store;
+      const last = store.lastTurn(this.key);
+      if (!last || last.endedAt === null || last.declared !== "waiting") return;
+      if (last.outcome !== "completed") return store.forgetWait(this.key);
+      const seconds = last.waitSeconds ?? 0;
+      log.info("session", "taking up a wait on record", { session: this.key, seconds });
+      this.waitMs(seconds, last.endedAt + seconds * 1000 - this.now());
+    });
+  }
+
   /// Turns were held and are no longer: what waited meanwhile goes on.
   release(): Promise<void> {
     return this.enqueue(async () => {
@@ -593,7 +617,7 @@ export class SessionActor {
       const resume = (turn !== null || busy) && !(turn?.declared && settled(turn.declared));
       log.info("session", "ending the runtime process: the station is in no workspace", { session: this.key, resume });
       await agent?.session.dispose();
-      if (turn) store.endTurn(turn.id, "aborted", "other: the station left its workspace", turn.declared?.kind ?? null, null);
+      if (turn) store.endTurn(turn.id, "aborted", "other: the station left its workspace", endedIn(turn.declared, "aborted")?.kind ?? null, null);
       store.setRunning(this.key, resume);
       if (turn || busy) store.markUndelivered(this.key, steered);
       this.deps.live?.turnEnded(this.key);
@@ -1086,10 +1110,10 @@ export class SessionActor {
     const stopRequested = this.stopRequested;
     this.stopRequested = false;
     store.setRunning(this.key, false);
+    const ends = turn ? endedIn(turn.declared, outcome.kind) : null;
     if (turn) {
       const detail = outcome.kind === "failed" ? `${outcome.reason}: ${outcome.message}` : null;
-      const wait = turn.declared?.kind === "waiting" ? turn.declared.seconds : null;
-      store.endTurn(turn.id, outcome.kind, detail, turn.declared?.kind ?? null, wait);
+      store.endTurn(turn.id, outcome.kind, detail, ends?.kind ?? null, ends?.kind === "waiting" ? ends.seconds : null);
     }
     // Its process could not reach the station's tools: what it said through them reached nobody, and its next turn
     // would fare no better. It ends; the next one (resuming) is given the station's tools as they are now.
@@ -1180,9 +1204,9 @@ export class SessionActor {
     if (store.pendingMessages(this.key).length > 0) return this.pump();
     if (this.notices.length > 0) return this.giveNotices();
     const declared = turn?.declared ?? null;
-    if (outcome.kind === "completed" && declared?.kind === "waiting") {
+    if (ends?.kind === "waiting") {
       this.nudges = 0;
-      this.wait(declared.seconds);
+      this.wait(ends.seconds);
       this.deps.idle(this.key);
       return;
     }

@@ -1502,6 +1502,20 @@ export class Store {
     });
   }
 
+  /// The session's latest turn ended waiting though it did not complete (as stations recorded it before they recorded
+  /// only the waits they keep): nothing waits for it, so it is recorded as it ended, not waiting.
+  forgetWait(session: string): void {
+    this.#with((changes) => {
+      const n = this.#run(
+        `UPDATE turns SET declared = NULL, wait_seconds = NULL
+         WHERE id = (SELECT id FROM turns WHERE session_key = ?1 ORDER BY started_at DESC LIMIT 1) AND declared = 'waiting' AND ended_at IS NOT NULL
+           AND outcome <> 'completed'`,
+        session,
+      );
+      if (n > 0) changes.push({ type: "session", key: session });
+    });
+  }
+
   /// The session's latest turn.
   lastTurn(session: string): TurnSummary | null {
     const r = this.#one("SELECT * FROM turns WHERE session_key = ? ORDER BY started_at DESC, rowid DESC LIMIT 1", session);

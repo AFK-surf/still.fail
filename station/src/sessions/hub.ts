@@ -601,6 +601,15 @@ export class Hub {
       const row = this.store.getSession(key);
       if (row && this.online(row)) void this.actor(row).kick();
     }
+    // Waits on record that were not handed over (the station before stopped without a handover): taken up, so each asks
+    // again when it would have (or put right, SessionActor.takeWait). Over the sessions shown: an archived one waits on
+    // nothing.
+    const live = this.store.liveSessions();
+    const stats = this.store.statsOf(live.map((s) => s.key));
+    for (const row of live) {
+      const last = stats.get(row.key)?.lastTurn;
+      if (last?.declared === "waiting" && last.endedAt !== null && this.online(row)) void this.actor(row).takeWait();
+    }
   }
 
   /// What to do when a session's runtime was not found as it started.
