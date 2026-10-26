@@ -5,6 +5,7 @@ import { TestClock } from "effect/testing";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Roots } from "../src/read/machine.ts";
 import { CommandMissing } from "../src/agents/runner.ts";
 import type { AgentDriver, AgentSession, BackgroundTask, OpenOptions, RuntimeEvent, TurnOutcome } from "../src/agents/runtime.ts";
 import type { ChatMessage, ChatSurface, InboundFile, InboundMessage, ThreadRef } from "../src/sessions/chat.ts";
@@ -291,6 +292,8 @@ export class Rig {
   codex = new FakeDriver("codex");
   hub: Hub;
   clock: Clock.Clock | undefined;
+  /// The machine's own sessions (read/machine.ts `roots`): none until a test makes some.
+  roots: Roots | null = null;
 
   constructor(o: Setup = {}) {
     this.clock = o.clock;
@@ -339,6 +342,7 @@ export class Rig {
       runners: () => [],
       cold: o.cold,
       clock: this.clock,
+      machineRoots: () => this.roots ?? { claude: join(this.dir, "no-machine/claude"), codex: join(this.dir, "no-machine/codex") },
     });
   }
 

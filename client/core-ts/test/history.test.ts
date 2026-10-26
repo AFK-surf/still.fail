@@ -6,6 +6,7 @@ import { args, doing } from "../src/activity.ts";
 import { activity, hint, parsePrompt, parseTasks, presentHistory, type Context } from "../src/history.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { markdown } from "../src/markdown.ts";
+import { readItem } from "../src/elsewhere.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -74,6 +75,15 @@ test("a_prompt_is_the_messages_it_carried_and_embers_words_around_them", () => {
   const [old] = parsePrompt('<slack user="U2" bot ts="3.4">\nyo\n</slack>');
   assert.equal(old[0].user, "U2");
   assert.equal(old[0].text, "yo");
+});
+
+test("the_instructions_a_continued_session_is_given_carry_no_messages", () => {
+  // station instructions.ts `continuedHere`, its instructions showing a message's shape, then the first message.
+  const told = 'This session began in a terminal.\n\n<stillfail-instructions>\n- <message via="slack" connect="…" you="name (<@ID>)" thread="CHANNEL/THREAD_TS" from="…" ts="…">…</message> names the conversation.\n</stillfail-instructions>';
+  const [messages, note] = parsePrompt(`${told}\n\n<message via="ember" thread="EMBER/1.0" from="Ada (ada@x)" ts="2.0">\n具体什么问题\n</message>`);
+  assert.deepEqual(messages.map((m) => [m.thread, m.text]), [["EMBER/1.0", "具体什么问题"]]);
+  assert.equal(note, told);
+  assert.equal(readItem(0, { kind: "user", text: told, at: "2026-10-26T06:14:00Z" }), null);
 });
 
 test("a_message_the_station_cut_short_is_still_read_as_one", () => {

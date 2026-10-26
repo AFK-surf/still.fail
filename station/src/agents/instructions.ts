@@ -92,7 +92,10 @@ export const GO_ON_AFTER_REFILL = `Your last turn was cut off: the account it ra
 
 export const TOOLS_LOST = `Your last turn could not reach the station's tools (chat_post, chat_state and the rest failed or were not connected), so nothing you said reached anyone. The station restarted your process; the tools work again. Check where you were, then post what people still need to see (your answer, results, questions) and end the turn with a state as usual.`;
 
-export const RESUME_LOST = `Your earlier conversation could not be restored. Read the relevant threads with chat_history to catch up before answering.`;
+/// Its runtime session could not be taken up, so a new one started: where its earlier conversation is, for it to read
+/// (its execution history reads the runtime sessions it ran in as one); `terminal`: the machine's own transcript of the
+/// terminal session it was continued from.
+export const resumeLost = (key: string, threads: string[], terminal: string | null = null) => `Your earlier conversation could not be restored: this is a new one. Before you answer, read back what you need from where it is: ${terminal === null ? "" : `this session began in a terminal, and what was said there is in ${terminal} (its runtime's own transcript: read it from its end); `}session_history with chat ${key} (the latest entries first; older ones with before)${threads.length === 0 ? "" : `, and chat_history for ${threads.join(", ")}`}.`;
 
 /// It goes on in a new runtime session: the earlier one is not taken up; it reads back what it needs from it.
 export const afresh = (key: string, threads: string[]) => `This is a new conversation: your earlier one in this session is no longer used. Before you act on what comes below, read back from it what you need: session_history with chat ${key} (the latest entries first; older ones with before)${threads.length === 0 ? "" : `, and chat_history for ${threads.join(", ")}`}.`;

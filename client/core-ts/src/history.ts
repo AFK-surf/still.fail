@@ -159,6 +159,16 @@ export function parsePrompt(text: string): [Sourced[], string] {
   for (;;) {
     const open = text.indexOf("<message ", at);
     if (open < 0) break;
+    // still.fail's instructions given to a session continued from a terminal (station instructions.ts
+    // `continuedHere`) show the shape of a message (thread="CHANNEL/THREAD_TS"): they carry none.
+    const told = text.indexOf("<stillfail-instructions>", at);
+    if (told >= 0 && told < open) {
+      const end = text.indexOf("</stillfail-instructions>", told);
+      const past = end < 0 ? text.length : end + "</stillfail-instructions>".length;
+      rest += text.slice(at, past);
+      at = past;
+      continue;
+    }
     const headEnd = tagEnd(text, open);
     if (headEnd === null) break;
     const b = body(text, headEnd + 1, "</message>");
