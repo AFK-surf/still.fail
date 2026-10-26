@@ -102,6 +102,57 @@ test "the search's way in by the hand: a finger's field at the lists' top in eve
 }
 
 ///|
+/// The search's field as drawn: the list's (its words, `editor` false) or come up from it (the page's, its placeholder
+/// the same words): how big its words are and how high what holds them is.
+fn search_field_drawn(t : @ui.Tester, editor : Bool) -> (Double, Double)? {
+  let bs = t.boxes()
+  for b in bs {
+    let it = if editor {
+      b.kind == "editor" && b.text == "搜索全部内容"
+    } else {
+      b.kind == "text" && (b.text == "搜索全部内容" || b.text == "搜索")
+    }
+    if it {
+      // (the editor in a box of its own, beside the mark; the list's words beside it)
+      let row = if editor { bs[bs[b.parent].parent] } else { bs[b.parent] }
+      return Some((b.font_size, row.h))
+    }
+  }
+  None
+}
+
+///|
+test "a finger's search field comes up from the list and goes back as itself: its words as big, it as high, in every tier" {
+  for case in [(390.0, false), (720.0, false), (1280.0, true)] {
+    let (w, regular) = case
+    let calls : Array[Made] = []
+    let t = wide_tester(calls, w~, h=900.0, platform=2)
+    if regular {
+      let log = t.drive("system {\"size_class\":{\"width\":\"regular\",\"height\":\"regular\"}}\n")
+      assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
+    }
+    t.draw()
+    t.scroll_to(0)
+    t.draw()
+    let at = w.to_string()
+    guard search_field_drawn(t, false) is Some(list) else { fail("\{at}: no field in the list") }
+    tap_search_field(t)
+    t.run_for(@sfpages.search_in_ms)
+    assert_eq(search_field_drawn(t, true), Some(list), msg="\{at}: come up")
+    // 取消: on its way back, then the list's again, as it was
+    guard t.find_last("取消") is Some((x, y)) else { fail("\{at}: no 取消") }
+    t.tap(x, y)
+    t.run_for(@sfpages.search_out_ms / 2.0)
+    assert_true(@sfpages.search_leaving(), msg=at)
+    assert_eq(search_field_drawn(t, true), Some(list), msg="\{at}: going back")
+    t.run_for(@sfpages.search_out_ms)
+    t.draw()
+    assert_false(@sfpages.search_opened(), msg=at)
+    assert_eq(search_field_drawn(t, false), Some(list), msg="\{at}: back")
+  }
+}
+
+///|
 test "a finger's search on a wide frame: in the lists' column; a row pressed, its chat beside it, the search still there" {
   let t = finder_tester(1280.0, 2, true, "签名")
   // the results in the sidebar's column, left of the page

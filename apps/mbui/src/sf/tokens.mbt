@@ -1490,11 +1490,9 @@ pub let share_glow_sun : Int64 = 0xFFE3B36BL
 pub let pick_sub_line : @ui.Leading = Exact(17.0)
 
 ///|
-/// The search (Search.kt): its field 38 high (FIELD) on the ink at 6%; a row found 66 high (HitRow, ItemRow; 50 an item
-/// with no line of words), its first line 22; what a row found says starts 22 in.
-pub let search_field_h : @ui.Len = Fixed(38.0)
-
-///|
+/// The search (Search.kt): its field on the ink at 6% (as high as what stands over a sidebar's list: ChatList band_h,
+/// 38 with touch as FIELD); a row found 66 high (HitRow, ItemRow; 50 an item with no line of words), its first line 22;
+/// what a row found says starts 22 in.
 pub let search_ground : @ui.Color = A(Fg, Exact(0.06))
 
 ///|
