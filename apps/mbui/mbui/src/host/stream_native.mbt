@@ -1,4 +1,5 @@
-// Streams (stream.mbt) on a native host: android_host.c with Streams.java, apple_stream.m, win_stream.cpp.
+// Streams (stream.mbt) on a native host: android_host.c with Streams.java, apple_stream.m, win_stream.cpp,
+// linux_stream.c.
 
 ///|
 extern "C" fn st_open() -> Int = "mb_host_stream_open"

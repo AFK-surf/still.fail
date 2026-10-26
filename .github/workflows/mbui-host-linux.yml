@@ -6,7 +6,8 @@
 # app's links (started with one, and handed one by itself started again: once for its person, on a session bus of the
 # run's own), a notification (shown, kept, clicked), an update (a newer build put in place and opened), and the web
 # views (WebKitGTK 6.0's): one placed where the app told it, on whole device pixels, and a site and a page speaking with
-# the app. On GitHub's own Ubuntu (a public repository's: free). When the Linux host changes.
+# the app; and a stream's JPEG frames, each shown to its end (streamdemo). On GitHub's own Ubuntu (a public
+# repository's: free). When the Linux host changes.
 name: mbui-host-linux
 on:
   pull_request:
@@ -14,6 +15,7 @@ on:
       - "apps/mbui/mbui/src/ui/native.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/viewcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/sitecheck.mbt"
+      - "apps/mbui/mbui/src/streamdemo/**"
       - "apps/mbui/mbui/src/host/linux*"
       - "apps/mbui/mbui/src/host/mini_json.h"
       - "apps/mbui/mbui/src/kitdemo/gallery/linkcheck.mbt"
@@ -85,6 +87,15 @@ jobs:
       - name: "The pages' contract: a page says to the app, runs its scripts, takes an event stream as it is sent"
         if: success() || failure()
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux site
+      - name: "Streams: streamdemo's JPEG (gdk-pixbuf) said shown to its end (STREAM done)"
+        if: success() || failure()
+        run: |
+          APP=streamdemo bash scripts/linux.sh build > /dev/null
+          mkdir -p out/host
+          xvfb-run -a -s "-screen 0 1280x1024x24" env MBUI_BENCH=-1 MBUI_WIN=720x480 MBUI_STREAM=jpeg MBUI_STREAM_EXIT=1 \
+            ./out/linux/mod/_build/native/release/build/streamdemo/streamdemo.exe > out/host/stream-jpeg.log 2>&1 || true
+          grep -a STREAM out/host/stream-jpeg.log | tail -5
+          grep -q 'STREAM done' out/host/stream-jpeg.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
