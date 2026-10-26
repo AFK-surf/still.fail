@@ -61,6 +61,9 @@ jobs:
       - name: "The runner's contract: a file written in the run's directory is told as it comes (done X)"
         if: success() || failure()
         run: scripts/host_contract.sh windows runner
+      - name: "PDFs: test/host/pdfcheck.pdf's two pages read and drawn by Windows' own (Windows.Data.Pdf)"
+        if: success() || failure()
+        run: scripts/host_contract.sh windows pdf
       - name: "Streams: streamdemo's JPEG (WIC) said shown to its end (STREAM done)"
         if: success() || failure()
         timeout-minutes: 10
