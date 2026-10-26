@@ -5,9 +5,11 @@
 
 ///|
 /// The pointer's shape over something: the arrow, a hand (what takes presses), the text's I-beam, a resizing edge's
-/// (sideways, up and down), an open hand (what is dragged). What it is over says it (Ctx::show_cursor): a field the
-/// I-beam, what takes presses the hand, words picked with the pointer the I-beam; what is none of those as it is
-/// (an edge, what a press on goes to a field) is said so (Ctx::cursor).
+/// (sideways, up and down), an open hand (what is dragged), and what another machine's pointer may be drawn as besides
+/// (a remote screen's: a closed hand dragging, a crosshair, what cannot be done). What it is over says it
+/// (Ctx::show_cursor): a field the I-beam, what takes presses the hand, words picked with the pointer the I-beam; what
+/// is none of those as it is (an edge, what a press on goes to a field, a remote screen's pointer) is said so
+/// (Ctx::cursor).
 pub(all) enum Cursor {
   Arrow
   Hand
@@ -15,6 +17,9 @@ pub(all) enum Cursor {
   ResizeX
   ResizeY
   Grab
+  Grabbing
+  Crosshair
+  NotAllowed
 } derive(Eq, Show, Debug)
 
 ///|
@@ -26,6 +31,9 @@ fn Cursor::code(self : Cursor) -> Int {
     ResizeX => 3
     ResizeY => 4
     Grab => 5
+    Grabbing => 6
+    Crosshair => 7
+    NotAllowed => 8
   }
 }
 

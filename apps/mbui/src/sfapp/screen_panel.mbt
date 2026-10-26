@@ -1,5 +1,6 @@
 // What the screen's bar has beside 只看/控制, as the web's (web/src/screen/ScreenPanel.tsx): how the view goes (a signal
-// mark and how long it has been seen; pressed, its figures under the round trip, 复制诊断) and 控制中心, what can be done
+// mark and how long it has been seen, under the title on a phone, a chip of the viewer's bar with keyboard and mouse;
+// pressed, its figures under the round trip, 复制诊断) and 控制中心 (a round button, or one of the bar's tools), what can be done
 // with the view: 画质 (how large a picture is asked for), 缩放 (the screen's own display scale, where its station changes it: Windows), 组合键 (the keys a phone has none of, or its own
 // system would keep: ⌘Tab, Alt+Tab, the Windows key…), sending files, 全屏 and 断开. Each opens through the library's
 // presenters: a sheet from a phone's foot, a small panel beside its button with keyboard and mouse.
@@ -334,9 +335,60 @@ let diag_said_ms : Double = 1500.0
 fn center_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, close : () -> Unit) -> Unit {
   let key = "screen-center"
   if round_button(c, key, "sliders", tr("web-pages.screen.panel")) || u.asked_panel == "center" {
+    center_open(c, s, u, key, close)
+  }
+}
+
+///|
+/// 控制中心's panel, beside what opened it (`key`).
+fn center_open(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String, close : () -> Unit) -> Unit {
+  u.asked_panel = ""
+  let from : @sf.Anchor = Of(c.id(key))
+  @sf.panel(tr("web-pages.screen.panel"), fn(c, done) { center_panel(c, s, u, from, close, done) }, from~, focus=false)
+}
+
+///|
+/// 控制中心 in the viewer's bar: one of its tools (@sf.viewer_tool, its mark, named on hover); pressed, its panel under it.
+fn center_chip(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, close : () -> Unit) -> Unit {
+  let key = "screen-center"
+  if @sf.viewer_tool(c, key, "sliders", tr("web-pages.screen.panel"), @sf.page_viewer_ink()) ||
+    u.asked_panel == "center" {
+    center_open(c, s, u, key, close)
+  }
+}
+
+///|
+/// How the view goes, in the viewer's bar (the web's NetChip): the signal mark on its tile, coloured as the round trip
+/// is, and how long it has been seen; pressed, the view's figures under it.
+fn net_chip(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
+  let id = c.id("screen-net")
+  let b = c.box(style=net_chip_box, id~, fn() {
+    c.box(style=net_mark_tile, fn() { signal_bars(c, text(field(screen_net(s), "rtt"), "level")) }) |> ignore
+    c.text(seen_for(u), style=screen_time_words) |> ignore
+  })
+  c.semantics(b, Button, id~, label=tr("web-pages.screen.stats"), actions=[Activate])
+  if c.clicked(id) || u.asked_panel == "net" {
     u.asked_panel = ""
-    let from : @sf.Anchor = Of(c.id(key))
-    @sf.panel(tr("web-pages.screen.panel"), fn(c, done) { center_panel(c, s, u, from, close, done) }, from~, focus=false)
+    net_panel_open(s, u, Of(id))
+  }
+}
+
+///|
+/// Whether 全屏 is on: the screen alone on a phone (ScreenUi's), the window filling the screen with keyboard and mouse.
+fn full_now(u : ScreenUi) -> Bool {
+  u.full || @ui.full_screen()
+}
+
+///|
+/// 全屏 asked for, or let go of: on a phone the screen alone, turned sideways, its tools folded into one button; with
+/// keyboard and mouse the window made to fill the screen, the bar kept (as the web's page in its browser's full screen).
+fn full_asked(c : @ui.Ctx, u : ScreenUi) -> Unit {
+  if @sf.soft_keyboard() {
+    u.full = !u.full
+  } else {
+    let on = !@ui.full_screen()
+    c.set_full_screen(on)
+    u.fulled = on
   }
 }
 
@@ -418,9 +470,10 @@ fn center_panel(
       send_asked(c, s, u)
     }
     if s.open_now() {
-      let label = tr(if u.full { "android-misc.screen.unfull" } else { "android-misc.screen.full" })
-      if @sf.menu_item(c, label, key="screen-center-full", panel=true, icon=if u.full { "shrink" } else { "expand" }) {
-        u.full = !u.full
+      let full = full_now(u)
+      let label = tr(if full { "android-misc.screen.unfull" } else { "android-misc.screen.full" })
+      if @sf.menu_item(c, label, key="screen-center-full", panel=true, icon=if full { "shrink" } else { "expand" }) {
+        full_asked(c, u)
         done()
       }
     }

@@ -1,5 +1,5 @@
-// A station's screen in the viewer (screen_view.mbt, screen_stage.mbt) on a fake core, as Android's
-// ScreenViewerTest has it: `screen.view` held open, its states and JPEG frames said as the core would (bytes beside the
+// A station's screen in the viewer (screen_view.mbt, screen_stage.mbt) on a fake core, on a phone (with keyboard and
+// mouse: screen_mouse_wbtest.mbt), as Android's ScreenViewerTest has it: `screen.view` held open, its states and JPEG frames said as the core would (bytes beside the
 // JSON), the frames shown by the Tester's stream (stream_shows) and acknowledged; a tap a click at the right place in
 // the frame, a press held a right click, a drag a drag, the trackpad's pointer moved; 只看 sends nothing. Driving it,
 // the clipboard goes both ways and files picked go onto its machine.
@@ -32,7 +32,7 @@ fn screen_rig(
   h? : Double = 844.0,
   dark? : Bool = false,
   touch? : String = "",
-  platform? : Int = 0,
+  platform? : Int = 2,
   until_gone? : Bool = false,
 ) -> ScreenRig {
   reset()
@@ -378,7 +378,10 @@ test "turned sideways the same view goes on, the controls down the side" {
 ///|
 test "a trackpad moves the pointer and clicks where it points; two fingers tapped right-click; the keys row" {
   let r = screen_rig()
-  r.live(others=[])
+  // a desktop's screen (a page of the station's browser is laid out for the phone, and tapped where it is)
+  r.state("live", others=[], more={ "kind": "desktop" })
+  r.config()
+  r.frame(1000.0)
   assert_true(r.sess().pad(r.sess().src))
   // a tap far from the pointer: a click where it points (the middle)
   r.tap_at(0.1, 0.1)
@@ -639,7 +642,7 @@ test "over: ended, outdated, gone, denied said in the screen's place; 重新打�
 
 ///|
 test "on a phone a page of the station's browser is laid out for the stage it is shown on, and a tap is where it is; one opened for a login goes back by itself once its tab is gone" {
-  let r = screen_rig(platform=2, until_gone=true)
+  let r = screen_rig(until_gone=true)
   let u = r.ui()
   let fit = field(Some(r.told("screen.view")[0]), "fit")
   assert_true(u.box_w > 0.0 && u.box_h > 0.0)
@@ -659,14 +662,14 @@ test "on a phone a page of the station's browser is laid out for the stage it is
 
 ///|
 test "a computer lays nothing out for itself; a screen opened from its list stays once it is gone" {
-  let r = screen_rig()
+  let r = mouse_rig()
   assert_true(field(Some(r.told("screen.view")[0]), "fit") is None)
   r.live()
   r.state("gone", others=[], message="此屏幕已不存在")
   r.finish()
   nav_rested(r.t)
   assert_true(app.nav.top() is Screen(_))
-  screen_done(r.t)
+  mouse_done(r)
 }
 
 ///|
@@ -846,6 +849,7 @@ test "files go onto the machine one after another, the first beside the one of i
 /// A test's end: what moves when it ends run to its declared rest (the bar's springs as the viewer comes and goes, a
 /// toast's time out then its leaving), then nothing left moving or waited on.
 fn screen_done(t : @ui.Tester) -> Unit {
+  to_sheet_rest(t)
   if @kit.toast_rest("toast") != -1.0 {
     t.run_for(toast_ms)
     let rest = @kit.toast_rest("toast")

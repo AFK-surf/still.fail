@@ -1787,6 +1787,9 @@ pub fn Tester::cursor(self : Tester) -> Cursor {
     3 => ResizeX
     4 => ResizeY
     5 => Grab
+    6 => Grabbing
+    7 => Crosshair
+    8 => NotAllowed
     _ => Arrow
   }
 }

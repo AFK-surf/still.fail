@@ -442,6 +442,9 @@ static NSCursor *cursor_of(int kind) {
     case 3: return NSCursor.resizeLeftRightCursor;
     case 4: return NSCursor.resizeUpDownCursor;
     case 5: return NSCursor.openHandCursor;
+    case 6: return NSCursor.closedHandCursor;
+    case 7: return NSCursor.crosshairCursor;
+    case 8: return NSCursor.operationNotAllowedCursor;
     default: return NSCursor.arrowCursor;
   }
 }
@@ -1341,7 +1344,7 @@ void mb_host_set_badge(int32_t n) {
 }
 
 // The pointer's shape (@hostapi.set_cursor): 0 the arrow, 1 a hand, 2 the I-beam, 3 and 4 resizing sideways and up and
-// down, 5 an open hand.
+// down, 5 an open hand, 6 a closed one, 7 a crosshair, 8 what cannot be done.
 void mb_host_set_cursor(int32_t kind) {
   cursor_kind = kind;
   [cursor_of(kind) set];

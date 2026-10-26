@@ -8,6 +8,12 @@
 // are, over the frame's foot). How the view is (connecting, reconnecting, ended…) is the core's: on its way, said over
 // the frame as it was last shown; over (ended, gone…), said in the screen's place, gone dark. While it is in sight the
 // device stays awake; out of sight the view is let go of, and opened again from the frame it showed.
+//
+// That is touch's. With keyboard and mouse (web/src/screen/ScreenViewer.tsx's, not a phone's) there is nothing to make
+// up for a phone's hand: the viewer's bar across the window's top (the way back, the screen's name and the core's line,
+// how the view goes, 控制中心, 只看/控制), the picture under it; the mouse is the screen's pointer where it is (its moves,
+// its buttons, its wheel: screen_mouse), the keyboard types into it once it is pressed, ⌘V pastes this device's
+// clipboard there, and 全屏 is the window's.
 
 ///|
 /// What the viewer keeps of a view beside the session: the frame's zoom, the trackpad's pointer, the modifiers held,
@@ -17,6 +23,8 @@ priv struct ScreenUi {
   pad : PadPointer
   held : HeldKeys
   mut full : Bool
+  /// the window made to fill the screen by its 全屏 (keyboard and mouse's), put back as it closes
+  mut fulled : Bool
   mut tools_open : Bool
   mut saying : Bool
   /// how many times the rail's line was asked for: its 3 s start again from each
@@ -30,6 +38,8 @@ priv struct ScreenUi {
   mut fit_for : (Int, Int)?
   mut over_seen : Bool
   gesture : Gesture
+  /// a mouse on the stage (screen_mouse)
+  mouse : MouseDrive
   /// the picker asked for files, and where they go (as the state said when it was asked for)
   mut picking : @ui.Pick?
   mut drop_to : DropTo?
@@ -73,6 +83,7 @@ fn screen_ui(key : String) -> ScreenUi {
         pad: { x: 0.5, y: 0.5, moves: 0 },
         held: { mods: 0 },
         full: false,
+        fulled: false,
         tools_open: false,
         saying: false,
         sayings: 0,
@@ -83,6 +94,7 @@ fn screen_ui(key : String) -> ScreenUi {
         fit_for: None,
         over_seen: false,
         gesture: gesture_new(),
+        mouse: mouse_drive_new(),
         picking: None,
         drop_to: None,
         reading: None,
@@ -124,17 +136,23 @@ fn screen_page(c : @ui.Ctx, src : Source, at : ScreenAt) -> Unit {
   let screen = at.screen
   let title = at.title
   let key = screen_key(station, screen)
-  // its 关闭: closed through the shell, the page it is
-  let close = fn() { @sfbase.close_page(Screen(at)) |> ignore }
   let s = screen_sess(src, station, screen)
   let u = screen_ui(key)
+  // its 关闭: closed through the shell, the page it is; the window back as it was where its 全屏 filled the screen
+  let close = fn() {
+    if u.fulled && @ui.full_screen() {
+      c.set_full_screen(false)
+    }
+    u.fulled = false
+    @sfbase.close_page(Screen(at)) |> ignore
+  }
   // open while the app is in sight (ScreenActivity onStart / onStop): the last frame kept between
   let shown = @ui.app_visible()
   c.after_build("screen-open/" + key, fn() {
     s.own_stream()
     // on a phone or a tablet, a page of the station's browser is laid out for the stage it is shown on, as this
     // device's own browser would lay it out (the station takes no notice of it for other screens)
-    if (@sf.native_input() is Finger) && u.box_w > 0.0 && u.box_h > 0.0 && s.fit is None {
+    if @sf.soft_keyboard() && u.box_w > 0.0 && u.box_h > 0.0 && s.fit is None {
       s.fit = Some((u.box_w, u.box_h, c.scale))
     }
     if shown {
@@ -203,6 +221,11 @@ fn screen_page(c : @ui.Ctx, src : Source, at : ScreenAt) -> Unit {
         |> ignore
       })
       |> ignore
+    } else if !@sf.soft_keyboard() {
+      // keyboard and mouse: the viewer's bar across the window's top, always there, the picture under it (what is at
+      // the top of the screen, its windows' title bars, never under the bar); the keyboard and the mouse its own
+      screen_viewer_bar(c, s, u, title, close)
+      screen_stage(c, s, u, key)
     } else if sideways {
       c.box(style=screen_row, fn() {
         screen_rail(c, s, u, typing, catcher, close)
@@ -454,6 +477,11 @@ fn screen_keys_in(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, keys : Array[@ui.Ke
   for k in keys {
     match k {
       Text(words) => type_words(send, u.held, words)
+      // ⌘V (Ctrl+V): this device's clipboard onto the screen's and pasted there, where it carries one, as a paste is
+      // on the web's page (its keys are not sent)
+      Key(down~, code="KeyV", mods~, ..) if (mods & (mod_meta | mod_ctrl)) != 0 &&
+        (mods & mod_alt) == 0 &&
+        s.pastes() => if down { paste_asked(c, s, u) }
       Key(down~, key~, code~, mods~) => {
         let extra = if down {
           let m = u.held.take()
@@ -550,6 +578,41 @@ fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, clo
     }
   })
   |> ignore
+}
+
+///|
+/// With keyboard and mouse: the viewer's bar across the window's top (@sf.viewer_bar, as the web's ViewerBar): back by
+/// its name, the screen's name and the core's line (只看 or 控制, who else is on it) in its middle, and its tools: live,
+/// how the view goes (pressed, its figures), 控制中心 while it is open, then 只看/控制; while someone else drives it, who
+/// does and 接管 in their place.
+fn screen_viewer_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, close : () -> Unit) -> Unit {
+  let said = match opt_text(s.state, "title") {
+    Some(t) if t != "" => t
+    _ => if title != "" { title } else { tr("android-misc.screen.title") }
+  }
+  let line = if s.open_now() && !s.can_take_over() { text(s.state, "line") } else { "" }
+  let ink = @sf.page_viewer_ink()
+  let back = @sf.viewer_bar(c, "screen-bar", tr("common.back"), said, line, false, ink, fn() {
+    if s.can_take_over() {
+      take_over(c, s, in_bar=true)
+      return
+    }
+    if s.phase() == "live" {
+      net_chip(c, s, u)
+    }
+    if s.open_now() {
+      center_chip(c, s, u, close)
+    }
+    if s.choosable() {
+      let now = control_seg(c, "screen-mode/" + s.view, s.controlling())
+      if now != s.controlling() {
+        control_chosen(c, s, now)
+      }
+    }
+  })
+  if back {
+    close()
+  }
 }
 
 ///|
@@ -861,15 +924,15 @@ fn keys_capsule(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 ///|
 /// Someone else drives it (an agent at work) and this view only looks: who, and 接管 in one tap (`screen.control` true:
 /// their input waits while this person drives; the line then says so).
-fn take_over(c : @ui.Ctx, s : ScreenSess) -> Unit {
+fn take_over(c : @ui.Ctx, s : ScreenSess, in_bar? : Bool = false) -> Unit {
   let who = items(s.state, "controllers").filter_map(fn(j) {
     match j {
       String(n) => Some(n)
       _ => None
     }
   })
-  // a capsule round a 32 high button 6 in from its edge: its corner 6 + 16
-  c.box(style=take_over_box, fn() {
+  // a capsule round a 32 high button 6 in from its edge: its corner 6 + 16; in the viewer's bar, a row of its tools
+  c.box(style=if in_bar { take_over_bar_row } else { take_over_box }, fn() {
     c.box(style=take_over_dot, fn() {  }) |> ignore
     c.box(style=take_over_words_box, fn() {
       c.text(

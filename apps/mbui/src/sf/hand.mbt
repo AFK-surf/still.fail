@@ -27,6 +27,17 @@ pub fn more_held() -> Bool {
 }
 
 ///|
+/// Whether this device types on a keyboard raised on asking and short of a computer's keys (Esc, Tab, the arrows, ⌘
+/// held), and points with a finger resting on nothing (touch's: the native input, docs/architecture.md). What drives
+/// another machine's screen from it makes up for both: a keyboard to raise, a keys row, a finger as a trackpad, its
+/// tools under the thumb, and a page of the machine's browser laid out as this device's own browser would lay it out.
+/// With keyboard and mouse none of that: the keyboard types into the screen as it is, the mouse is its pointer, and its
+/// tools are the viewer bar's across the window's top (viewer_bar), as every full-window layer's are.
+pub fn soft_keyboard() -> Bool {
+  native_input() is Finger
+}
+
+///|
 /// How far an edge standing in a gap `gap` wide between two panels (the tape's, sfdesk's tape_edge) takes presses past
 /// the gap, into the panel it sizes and into the one beside it: with touch none of its own (a row there is swiped
 /// across) and edge_finger_reach of the other, the gap and that as wide as a finger aims at a thing that thin; with
